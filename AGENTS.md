@@ -22,6 +22,12 @@ it's a web based interface that exposes a 3d work area for importing SubParts, a
 
 - `KSA` - Kitten Space Agency (a game)
 
+# technology
+
+- preact for UI framework where needed
+- vite / rolldown for build and packaging tools
+- typescript for language
+
 # KSA
 
 ## technology

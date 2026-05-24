@@ -50,11 +50,7 @@
   }
 }
 
-body {
-  margin: 0;
-}
-
-#app {
+#root {
   width: 1126px;
   max-width: 100%;
   margin: 0 auto;
@@ -64,6 +60,10 @@ body {
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+}
+
+body {
+  margin: 0;
 }
 
 h1,

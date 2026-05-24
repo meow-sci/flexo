@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { createGrid } from './Grid'
 
 /**
@@ -16,6 +17,7 @@ export class Viewport {
 
   private readonly host: HTMLElement
   private readonly resizeObserver: ResizeObserver
+  private readonly envRenderTarget: THREE.WebGLRenderTarget
 
   constructor(host: HTMLElement) {
     this.host = host
@@ -30,6 +32,10 @@ export class Viewport {
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.setSize(w, h)
+    // PBR output: filmic tonemapping + sRGB output, matching KSA's composite pass.
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping
+    this.renderer.toneMappingExposure = 1.0
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace
     host.appendChild(this.renderer.domElement)
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
@@ -37,7 +43,13 @@ export class Viewport {
     this.controls.target.set(0, 0, 0)
     this.controls.update()
 
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x404050, 1.0)
+    // Image-based lighting so PBR metals reflect and aren't black (KSA uses IBL).
+    const pmrem = new THREE.PMREMGenerator(this.renderer)
+    this.envRenderTarget = pmrem.fromScene(new RoomEnvironment(), 0.04)
+    this.scene.environment = this.envRenderTarget.texture
+    pmrem.dispose()
+
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x404050, 0.4)
     this.scene.add(hemi)
     const dir = new THREE.DirectionalLight(0xffffff, 2.0)
     dir.position.set(5, 10, 7)
@@ -68,6 +80,7 @@ export class Viewport {
     this.renderer.setAnimationLoop(null)
     this.resizeObserver.disconnect()
     this.controls.dispose()
+    this.envRenderTarget.dispose()
     this.renderer.dispose()
     if (this.renderer.domElement.parentNode === this.host) {
       this.host.removeChild(this.renderer.domElement)

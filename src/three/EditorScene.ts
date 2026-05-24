@@ -4,6 +4,7 @@ import { SubPartObject } from './SubPartObject'
 import { SelectionManager } from './SelectionManager'
 import { TransformGizmo } from './TransformGizmo'
 import { readPlacementTransform } from './coords'
+import { initTextureSupport } from './textureSupport'
 import type { CatalogSubPart } from '../ksa/catalog'
 import type { EditingPart } from '../ksa/types'
 import {
@@ -40,6 +41,9 @@ export class EditorScene {
 
   constructor(host: HTMLElement) {
     this.viewport = new Viewport(host)
+    // Must precede the store subscriptions below (they build SubParts, which
+    // request textures through the loader initialized here).
+    initTextureSupport(this.viewport.renderer)
     this.root.name = 'flexo-part'
     this.viewport.scene.add(this.root)
 

@@ -14,4 +14,7 @@ export default defineConfig({
     environment: 'happy-dom',
     include: ['src/**/*.test.ts'],
   },
+  server: {
+    host: "0.0.0.0",
+  },
 })

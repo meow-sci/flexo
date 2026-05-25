@@ -18,19 +18,36 @@ Undo/redo stacks are module-private arrays (depth 50), not atoms.
 
 ## Actions (plain exported functions)
 
-`addSubPart(templateId)`, `removeSelected()`, `duplicateSelected()`,
+`addSubPart(templateId)`, `addPart(placements, connectors, tags)`, `addConnector()`,
+`setConnectorFlags(index, flags)`, `removeSelected()`, `duplicateSelected()`,
 `selectPlacement(index)`, `updatePlacementTransform(index, {position,rotation,scale})`,
-`setPartId(id)`, `setToolMode(mode)`, `setSnap(snap)`, `newPart()`, `pushUndo()`,
-`undo()`, `redo()`.
+`updateSelectedTransform(t)`, `setPartId(id)`, `setEditorTags(tags)`,
+`setToolMode(mode)`, `setSnap(snap)`, `newPart()`, `pushUndo()`, `undo()`, `redo()`.
 
 Conventions:
 - Instance ids: `lastDotSegment(templateId).toLowerCase() + "_" + (count+1)`
   (e.g. `Core.Screw.A` → `a_1`, `a_2`).
 - Mutating actions clone `$part` (`structuredClone`), edit, then `$part.set(next)`.
-- `pushUndo()` snapshots before a change and clears the redo stack. **Interactive
-  edits push undo once at the start** (gizmo drag start; inspector field focus), and
-  `updatePlacementTransform` itself does **not** push — so a drag or a typing session
-  is one undo step.
+
+### Undo/redo invariant (must maintain)
+
+History snapshots **`$part` only** (the serialized document). Selection, `$toolMode`
+and `$snap` are ephemeral UI and are intentionally excluded; selection is *clamped*
+(not restored) after undo/redo. Every action that mutates `$part` MUST enroll in
+undo via exactly one of two patterns:
+
+1. **Discrete** (one gesture = one change): the action calls `pushUndo()` itself.
+   `addSubPart`, `addPart`, `addConnector`, `removeSelected`, `duplicateSelected`,
+   `setConnectorFlags`, `setEditorTags`.
+2. **Streaming** (rapid updates that collapse to one step — a gizmo drag or a typing
+   session): the action does **not** push; the caller pushes once at interaction
+   start (gizmo drag-start; field focus). `updatePlacementTransform(s)`,
+   `updateConnectorTransform`, `updateSelectedTransform`, and `setPartId` (focus-pushed
+   by `PartDataButton`).
+
+`newPart()` clears both stacks (a new document has no history). Adding a `$part`
+mutator that picks neither pattern silently bypasses undo — that's a bug. The invariant
+is also documented at the top of the undo/redo section in `editorStore.ts`.
 
 ## Selectors — `src/state/selectors.ts`
 
@@ -60,5 +77,7 @@ UI settings and user preferences that should survive page refresh use **localSto
 
 ## Tests
 `src/state/editorStore.test.ts` covers instance-id generation, add/remove/duplicate,
-selection clamping, and undo/redo (incl. that `updatePlacementTransform` adds no undo
-step).
+selection clamping, and undo/redo — including that discrete mutations self-record
+(`setEditorTags`, `setConnectorFlags`), that streaming mutations add no step on their
+own (`updatePlacementTransform`; `setPartId` reverts only when the caller pushed at
+interaction start).

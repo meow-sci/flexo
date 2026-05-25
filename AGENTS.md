@@ -29,7 +29,7 @@ Feature docs live in `docs/`. Read the relevant one before working on an area, a
 - [docs/architecture.md](docs/architecture.md) - module layering, data flow, the nanostores single-source-of-truth, key invariants
 - [docs/3d-workspace.md](docs/3d-workspace.md) - the three.js viewport, scene reconciliation, selection, transform gizmos, lighting
 - [docs/subpart-catalog.md](docs/subpart-catalog.md) - how SubParts are discovered and how GLB meshes / textures are resolved
-- [docs/editor-state.md](docs/editor-state.md) - nanostores stores + actions, undo/redo, two-way binding
+- [docs/editor-state.md](docs/editor-state.md) - nanostores stores + actions, **undo/redo invariant**, two-way binding
 - [docs/state-persistence.md](docs/state-persistence.md) - localStorage persistence for UI settings and user preferences via `@nanostores/persistent`; what to persist and what not to
 - [docs/coordinates.md](docs/coordinates.md) - KSA <-> three.js transform mapping (`coords.ts`) and the `?debug=dockingport` calibration
 - [docs/xml-io.md](docs/xml-io.md) - Part XML serialize/parse, `formatG6`, transform omission rules
@@ -41,6 +41,7 @@ Feature docs live in `docs/`. Read the relevant one before working on an area, a
 - AGENTS.md MUST be maintained with up to date references to repository areas
 - when a feature changes, update its corresponding file in `docs/` (and add a new `docs/*.md` + link above for any new major feature)
 - **Default pattern for state**: Any user-facing settings, UI panel visibility, tool modes, or view preferences SHOULD use localStorage persistence via `@nanostores/persistent` (see [state-persistence.md](docs/state-persistence.md)). By default, persist state unless there's a specific reason not to.
+- **Undo/redo MUST be maintained**: the editor has snapshot-based undo/redo over `$part` (the serialized document). When you add, remove, or change any feature that mutates the document (`$part`: `partId`, `editorTags`, `placements`, `connectors`), it MUST enroll in undo/redo via one of the two patterns documented in [editor-state.md](docs/editor-state.md#undoredo-invariant-must-maintain) and at the top of the undo/redo section in `src/state/editorStore.ts`: (1) **discrete** mutations call `pushUndo()` internally; (2) **streaming** mutations (gizmo drag / typing session) let the caller push once at interaction start. Ephemeral UI state (selection, tool mode, snap) is intentionally excluded. A document mutator that enrolls in neither pattern silently bypasses undo — that is a bug. Add/extend a test in `src/state/editorStore.test.ts` for the new mutation's undo behavior.
 
 # glossary
 

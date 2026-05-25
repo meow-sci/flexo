@@ -8,7 +8,9 @@ import {
   addPart,
   addSubPart,
   setEditorTags,
+  setPartId,
   duplicateSelected,
+  pushUndo,
   removeSelected,
   newPart,
   redo,
@@ -125,6 +127,27 @@ describe('editorStore', () => {
     expect($part.get().connectors[0].flags).toBe('ToSurface')
     // 'Existing' kept, 'Electrical' added, no duplicate.
     expect($part.get().editorTags).toEqual(['Existing', 'Electrical'])
+  })
+
+  it('setEditorTags is undoable (self-records)', () => {
+    setEditorTags(['Electrical'])
+    setEditorTags(['Electrical', 'Structural'])
+    expect($part.get().editorTags).toEqual(['Electrical', 'Structural'])
+    undo()
+    expect($part.get().editorTags).toEqual(['Electrical'])
+    undo()
+    expect($part.get().editorTags).toEqual([])
+  })
+
+  it('setPartId reverts under undo when the caller pushed at interaction start', () => {
+    // Mirrors PartDataButton: pushUndo() on field focus, setPartId() per keystroke.
+    pushUndo()
+    setPartId('p')
+    setPartId('part_id')
+    expect($part.get().partId).toBe('part_id')
+    // A single undo reverts the whole typing session (only one snapshot was pushed).
+    undo()
+    expect($part.get().partId).toBe('fixme_part_id')
   })
 
   it('updatePlacementTransform does not create an undo step', () => {

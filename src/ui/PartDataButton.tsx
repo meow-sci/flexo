@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { Input, Popup, PopupContent, SectionTitle, ToolbarButton } from '@cladd-ui/react'
-import { $part, setEditorTags, setPartId } from '../state/editorStore'
+import { $part, pushUndo, setEditorTags, setPartId } from '../state/editorStore'
 import { EditorTagsField } from './EditorTagsField'
 
 /**
@@ -27,6 +27,7 @@ export function PartDataButton() {
             size="sm"
             value={part.partId}
             inputClassName="font-mono"
+            onFocus={() => pushUndo()}
             onChange={(v: string) => setPartId(v)}
             placeholder="part_id"
             className="mt-2"

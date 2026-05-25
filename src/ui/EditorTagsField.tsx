@@ -72,7 +72,7 @@ export function EditorTagsField({
             Add tag…
           </Button>
         </PopoverTrigger>
-        <Popover className="w-64" offset={8} position="bottom-start">
+        <Popover className="w-64 rounded-lg" offset={8} position="bottom-start">
           <SectionTitle className="px-4 pt-4">Editor Tags</SectionTitle>
           <SearchField
             size="sm"

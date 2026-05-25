@@ -43,6 +43,10 @@ Feature docs live in `docs/`. Read the relevant one before working on an area, a
 - MUST ensure the project code remains clean, well structure and well architected
 - MUST ensure architecture aligns with the general concept of a 3d editor / graphics editor workflow that is tailor made for KSA game Part creation
 
+# UI design
+
+- **`<Popover>` MUST use `rounded-lg`**: every `<Popover>` component MUST include `rounded-lg` in its `className`. The default rounding from cladd is too large for this UI; `rounded-lg` is the correct standard. Example: `<Popover className="w-64 rounded-lg" ...>`.
+
 
 
 # repository maintenance

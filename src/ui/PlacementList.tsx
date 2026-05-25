@@ -244,7 +244,7 @@ function ChangeLayerSubmenu({
           <ChevronRight className="size-4 opacity-70" />
         </Button>
       </PopoverTrigger>
-      <Popover position="right-start" offset={4} className="w-44" contentClassName="p-1">
+      <Popover position="right-start" offset={4} className="w-44 rounded-lg" contentClassName="p-1">
         <div className="flex flex-col gap-0.5">
           {layers.map((l) => (
             <Button

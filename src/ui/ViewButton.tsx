@@ -42,7 +42,7 @@ export function ViewButton() {
       <PopoverTrigger>
         <ToolbarButton>View</ToolbarButton>
       </PopoverTrigger>
-      <Popover position="bottom" className="w-64" contentClassName="p-3">
+      <Popover position="bottom" className="w-64 rounded-lg" contentClassName="p-3">
         <SectionTitle>Camera Snap</SectionTitle>
         <div className="mt-2 flex flex-col gap-1.5">
           {SNAP_ROWS.map(([a, b]) => (

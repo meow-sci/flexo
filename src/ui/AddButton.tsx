@@ -21,7 +21,7 @@ export function AddButton() {
             </span>
           </ToolbarButton>
         </PopoverTrigger>
-        <Popover position="bottom-start" className="w-52">
+        <Popover position="bottom-start" className="w-52 rounded-lg">
           <List>
             <ListTitle>Add</ListTitle>
             <ListButton size="md" onClick={() => { setOpen(false); setSubPartOpen(true) }}>

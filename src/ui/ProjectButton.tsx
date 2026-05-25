@@ -48,7 +48,7 @@ export function ProjectButton() {
             </span>
           </ToolbarButton>
         </PopoverTrigger>
-        <Popover position="bottom-start" className="w-64" contentClassName="p-3">
+        <Popover position="bottom-start" className="w-64 rounded-lg" contentClassName="p-3">
           <SectionTitle>Project Name</SectionTitle>
           {/* key={name} remounts the input (re-seeding its draft) when the
               underlying project changes via load / new. */}

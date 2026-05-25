@@ -1,8 +1,18 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '@nanostores/react'
-import { Button, Popup, PopupContent, Surface, ToolbarButton } from '@cladd-ui/react'
+import {
+  Button,
+  Popup,
+  PopupContent,
+  Segmented,
+  SegmentedButton,
+  Surface,
+  ToolbarButton,
+} from '@cladd-ui/react'
 import { $part } from '../state/editorStore'
-import { serializePart } from '../ksa/partXmlSerializer'
+import { serializeGameData, serializePart } from '../ksa/partXmlSerializer'
+
+type Tab = 'part' | 'gamedata'
 
 /** Returns human-readable warnings about the current part prior to export. */
 function validate(partId: string, instanceIds: string[]): string[] {
@@ -21,14 +31,20 @@ function validate(partId: string, instanceIds: string[]): string[] {
 
 /**
  * Top-surface "Export" action: serializes the current Part to KSA XML and shows
- * it in a Popup with copy-to-clipboard (plus pre-export warnings).
+ * it in a Popup with a Part / GameData tab switcher and copy-to-clipboard (plus
+ * pre-export warnings). The Part doc holds geometry + connector transforms; the
+ * GameData doc holds connector connection Flags.
  */
 export function ExportButton() {
   const part = useStore($part)
   const [open, setOpen] = useState(false)
+  const [tab, setTab] = useState<Tab>('part')
   const [copied, setCopied] = useState(false)
 
-  const xml = useMemo(() => (open ? serializePart(part) : ''), [open, part])
+  const partXml = useMemo(() => (open ? serializePart(part) : ''), [open, part])
+  const gameDataXml = useMemo(() => (open ? serializeGameData(part) : ''), [open, part])
+  const xml = tab === 'part' ? partXml : gameDataXml
+
   const warnings = useMemo(
     () => validate(part.partId, part.placements.map((p) => p.instanceId)),
     [part],
@@ -51,7 +67,7 @@ export function ExportButton() {
         open={open}
         onOpenChange={setOpen}
         contentClassName="max-w-2xl"
-        headerLeft={<span className="px-2 pb-1 text-cladd-sm font-semibold">Export Part XML</span>}
+        headerLeft={<span className="px-2 pb-1 text-cladd-sm font-semibold">Export XML</span>}
       >
         <PopupContent>
           <div className="flex flex-col gap-2">
@@ -67,6 +83,14 @@ export function ExportButton() {
                 ))}
               </Surface>
             )}
+            <Segmented>
+              <SegmentedButton active={tab === 'part'} onClick={() => setTab('part')}>
+                Part XML
+              </SegmentedButton>
+              <SegmentedButton active={tab === 'gamedata'} onClick={() => setTab('gamedata')}>
+                GameData XML
+              </SegmentedButton>
+            </Segmented>
             <textarea
               readOnly
               value={xml}

@@ -4,6 +4,8 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import type { CatalogSubPart } from '../ksa/catalog'
 import type { CatalogPart } from '../ksa/partCatalog'
 import { SubPartObject } from './SubPartObject'
+import { ConnectorObject } from './ConnectorObject'
+import { $connectorSettings } from '../state/settingsStore'
 import { initTextureSupport } from './textureSupport'
 
 /**
@@ -23,6 +25,7 @@ export class PartPreviewViewport {
   private readonly envRenderTarget: THREE.WebGLRenderTarget
 
   private objects: SubPartObject[] = []
+  private connectorObjects: ConnectorObject[] = []
   /** Bumped on each setPart so a superseded async load discards its result. */
   private loadToken = 0
 
@@ -78,6 +81,14 @@ export class PartPreviewViewport {
     this.clearObjects()
     if (!part) return
 
+    // Connectors build synchronously (cube + arrow), so add them up front.
+    const settings = $connectorSettings.get()
+    for (const connector of part.connectors) {
+      const obj = new ConnectorObject(connector, settings.size)
+      this.connectorObjects.push(obj)
+      this.scene.add(obj.group)
+    }
+
     try {
       const built = await Promise.all(
         part.placements.map(async (placement) => {
@@ -107,12 +118,18 @@ export class PartPreviewViewport {
       obj.dispose()
     }
     this.objects = []
+    for (const obj of this.connectorObjects) {
+      this.scene.remove(obj.group)
+      obj.dispose()
+    }
+    this.connectorObjects = []
   }
 
   /** Frames the camera to the combined bounding box of the assembled Part. */
   private frame(): void {
     const box = new THREE.Box3()
     for (const obj of this.objects) box.expandByObject(obj.group)
+    for (const obj of this.connectorObjects) box.expandByObject(obj.group)
     if (box.isEmpty()) return
 
     const sphere = box.getBoundingSphere(new THREE.Sphere())

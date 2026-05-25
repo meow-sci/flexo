@@ -1,5 +1,5 @@
 import { atom } from 'nanostores'
-import type { EditingPart, EulerXYZ, SubPartPlacement, Vec3 } from '../ksa/types'
+import type { Connector, ConnectorFlag, EditingPart, EulerXYZ, SubPartPlacement, Vec3 } from '../ksa/types'
 import { createEmptyPart } from '../ksa/types'
 
 /**
@@ -25,7 +25,10 @@ export interface PlacementTransform {
 }
 
 export const $part = atom<EditingPart>(createEmptyPart())
+/** Selected SubPart index, or -1. At most one of this / {@link $selectedConnectorIndex} is >= 0. */
 export const $selectedIndex = atom<number>(-1)
+/** Selected connector index, or -1. Mutually exclusive with {@link $selectedIndex}. */
+export const $selectedConnectorIndex = atom<number>(-1)
 export const $toolMode = atom<ToolMode>('translate')
 export const $snap = atom<SnapSettings>({})
 export const $canUndo = atom(false)
@@ -45,9 +48,13 @@ function refreshHistoryFlags(): void {
 }
 
 function clampSelection(): void {
-  const max = $part.get().placements.length - 1
-  const i = $selectedIndex.get()
-  if (i > max) $selectedIndex.set(max)
+  const part = $part.get()
+  if ($selectedIndex.get() > part.placements.length - 1) {
+    $selectedIndex.set(part.placements.length - 1)
+  }
+  if ($selectedConnectorIndex.get() > part.connectors.length - 1) {
+    $selectedConnectorIndex.set(part.connectors.length - 1)
+  }
 }
 
 /** Snapshot current state onto the undo stack (call before a mutation). */
@@ -95,17 +102,21 @@ export function addSubPart(templateId: string): void {
     scale: { x: 1, y: 1, z: 1 },
   })
   $part.set(part)
-  $selectedIndex.set(part.placements.length - 1)
+  selectPlacement(part.placements.length - 1)
 }
 
 /**
  * Imports a whole Part by appending all of its SubPart instances to the current
- * project, preserving each one's position/rotation/scale. InstanceIds are
- * regenerated (using the same naming scheme as {@link addSubPart}) so they never
- * collide with placements already in the project. The last added is selected.
+ * project, preserving each one's position/rotation/scale, along with the Part's
+ * connectors (transforms + flags). InstanceIds and connector ids are regenerated
+ * so they never collide with entities already in the project. The last added
+ * SubPart is selected (or the last connector if the Part has no SubParts).
  */
-export function addPart(placements: readonly SubPartPlacement[]): void {
-  if (placements.length === 0) return
+export function addPart(
+  placements: readonly SubPartPlacement[],
+  connectors: readonly Connector[] = [],
+): void {
+  if (placements.length === 0 && connectors.length === 0) return
   pushUndo()
   const part = clone($part.get())
   for (const src of placements) {
@@ -119,11 +130,65 @@ export function addPart(placements: readonly SubPartPlacement[]): void {
       scale: { ...src.scale },
     })
   }
+  for (const src of connectors) {
+    part.connectors.push({
+      id: nextConnectorId(part), // regenerated against the growing list
+      position: { ...src.position },
+      rotation: { ...src.rotation },
+      scale: { ...src.scale },
+      flags: src.flags,
+    })
+  }
   $part.set(part)
-  $selectedIndex.set(part.placements.length - 1)
+  if (part.placements.length > 0) selectPlacement(part.placements.length - 1)
+  else selectConnector(part.connectors.length - 1)
 }
 
+/** Adds a connector at the origin (facing local +X) and selects it. */
+export function addConnector(): void {
+  pushUndo()
+  const part = clone($part.get())
+  part.connectors.push({
+    id: nextConnectorId(part),
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+    flags: 'None',
+  })
+  $part.set(part)
+  selectConnector(part.connectors.length - 1)
+}
+
+/** Returns the next free "_connectorN" id (max existing N + 1). */
+function nextConnectorId(part: EditingPart): string {
+  let max = 0
+  for (const c of part.connectors) {
+    const m = /^_connector(\d+)$/.exec(c.id)
+    if (m) max = Math.max(max, Number.parseInt(m[1], 10))
+  }
+  return `_connector${max + 1}`
+}
+
+export function setConnectorFlags(index: number, flags: ConnectorFlag): void {
+  const current = $part.get()
+  if (index < 0 || index >= current.connectors.length) return
+  pushUndo()
+  const part = clone(current)
+  part.connectors[index].flags = flags
+  $part.set(part)
+}
+
+/** Removes the selected entity (SubPart or connector) and clamps selection. */
 export function removeSelected(): void {
+  const ci = $selectedConnectorIndex.get()
+  if (ci >= 0 && ci < $part.get().connectors.length) {
+    pushUndo()
+    const part = clone($part.get())
+    part.connectors.splice(ci, 1)
+    $part.set(part)
+    $selectedConnectorIndex.set(Math.min(ci, part.connectors.length - 1))
+    return
+  }
   const i = $selectedIndex.get()
   if (i < 0 || i >= $part.get().placements.length) return
   pushUndo()
@@ -133,7 +198,24 @@ export function removeSelected(): void {
   $selectedIndex.set(Math.min(i, part.placements.length - 1))
 }
 
+/** Duplicates the selected entity (SubPart or connector) and selects the copy. */
 export function duplicateSelected(): void {
+  const ci = $selectedConnectorIndex.get()
+  const srcConnector = $part.get().connectors[ci]
+  if (ci >= 0 && srcConnector) {
+    pushUndo()
+    const part = clone($part.get())
+    part.connectors.push({
+      id: nextConnectorId(part),
+      position: { ...srcConnector.position },
+      rotation: { ...srcConnector.rotation },
+      scale: { ...srcConnector.scale },
+      flags: srcConnector.flags,
+    })
+    $part.set(part)
+    selectConnector(part.connectors.length - 1)
+    return
+  }
   const i = $selectedIndex.get()
   const src = $part.get().placements[i]
   if (!src) return
@@ -149,11 +231,25 @@ export function duplicateSelected(): void {
     scale: { ...src.scale },
   })
   $part.set(part)
-  $selectedIndex.set(part.placements.length - 1)
+  selectPlacement(part.placements.length - 1)
 }
 
+/** Selects a SubPart by index (clears any connector selection). */
 export function selectPlacement(index: number): void {
+  $selectedConnectorIndex.set(-1)
   $selectedIndex.set(index)
+}
+
+/** Selects a connector by index (clears any SubPart selection). */
+export function selectConnector(index: number): void {
+  $selectedIndex.set(-1)
+  $selectedConnectorIndex.set(index)
+}
+
+/** Clears all selection. */
+export function clearSelection(): void {
+  $selectedIndex.set(-1)
+  $selectedConnectorIndex.set(-1)
 }
 
 /**
@@ -171,6 +267,31 @@ export function updatePlacementTransform(index: number, t: PlacementTransform): 
   $part.set(part)
 }
 
+/** Like {@link updatePlacementTransform} but for a connector. No undo (see above). */
+export function updateConnectorTransform(index: number, t: PlacementTransform): void {
+  const current = $part.get()
+  if (index < 0 || index >= current.connectors.length) return
+  const part = clone(current)
+  const c = part.connectors[index]
+  c.position = { ...t.position }
+  c.rotation = { ...t.rotation }
+  c.scale = { ...t.scale }
+  $part.set(part)
+}
+
+/**
+ * Updates the transform of whichever entity is selected (SubPart or connector).
+ * No undo — the caller pushes once at interaction start.
+ */
+export function updateSelectedTransform(t: PlacementTransform): void {
+  const ci = $selectedConnectorIndex.get()
+  if (ci >= 0) {
+    updateConnectorTransform(ci, t)
+    return
+  }
+  updatePlacementTransform($selectedIndex.get(), t)
+}
+
 export function setPartId(partId: string): void {
   const part = clone($part.get())
   part.partId = partId
@@ -182,7 +303,7 @@ export function newPart(): void {
   redoStack.length = 0
   refreshHistoryFlags()
   $part.set(createEmptyPart())
-  $selectedIndex.set(-1)
+  clearSelection()
 }
 
 export function setToolMode(mode: ToolMode): void {

@@ -31,7 +31,7 @@ export class SubPartObject {
     this.baseEmissive = material.emissive.clone()
     this.baseEmissiveIntensity = material.emissiveIntensity
     this.group.name = `subpart:${instanceId}`
-    this.group.userData.instanceId = instanceId
+    this.group.userData.selectable = { kind: 'subpart', id: instanceId }
     this.group.add(mesh)
   }
 
@@ -52,7 +52,7 @@ export class SubPartObject {
       emissive: !!material.emissiveMap,
     })
     const mesh = new THREE.Mesh(geometry, material)
-    mesh.userData.instanceId = placement.instanceId
+    mesh.userData.selectable = { kind: 'subpart', id: placement.instanceId }
     const obj = new SubPartObject(placement.instanceId, mesh, material)
     obj.setPlacement(placement)
     return obj

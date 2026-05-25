@@ -3,9 +3,11 @@ import { Button, Toolbar as CladdToolbar, ToolbarSeparator } from '@cladd-ui/rea
 import { $canRedo, $canUndo, redo, undo } from '../state/editorStore'
 import { AddSubPartButton } from './AddSubPartButton'
 import { AddPartButton } from './AddPartButton'
+import { AddConnectorButton } from './AddConnectorButton'
 import { PartDataButton } from './PartDataButton'
 import { ExportButton } from './ExportButton'
 import { ViewButton } from './ViewButton'
+import { SettingsButton } from './SettingsButton'
 
 /**
  * Top toolbar: part actions (add/import/part-data/export), the View popover
@@ -20,6 +22,7 @@ export function EditorToolbar() {
     <CladdToolbar size="sm">
       <AddSubPartButton />
       <AddPartButton />
+      <AddConnectorButton />
       <PartDataButton />
       <ExportButton />
 
@@ -33,6 +36,10 @@ export function EditorToolbar() {
       <Button size="sm" disabled={!canRedo} onClick={() => redo()}>
         Redo
       </Button>
+
+      <ToolbarSeparator />
+
+      <SettingsButton />
     </CladdToolbar>
   )
 }

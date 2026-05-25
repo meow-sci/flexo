@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { DOMParser } from '@xmldom/xmldom'
 import type { Document as XmlDocument, Element as XmlElement } from '@xmldom/xmldom'
-import { serializePart } from './partXmlSerializer'
-import type { EditingPart, SubPartPlacement } from './types'
+import { serializeGameData, serializePart } from './partXmlSerializer'
+import type { Connector, EditingPart, SubPartPlacement } from './types'
 import { EULER_ZERO, VEC3_ONE, VEC3_ZERO } from './types'
 
 function placement(p: Partial<SubPartPlacement>): SubPartPlacement {
@@ -41,6 +41,7 @@ describe('serializePart', () => {
   const part: EditingPart = {
     partId: 'CoreCouplingA_Prefab_DockingPort1WA',
     editorTags: [],
+    connectors: [],
     placements: [
       placement({
         instanceId: 'identity_1',
@@ -115,5 +116,81 @@ describe('serializePart', () => {
 
   it('includes the XML declaration', () => {
     expect(xml.startsWith('<?xml version="1.0" encoding="utf-8"?>')).toBe(true)
+  })
+})
+
+function connector(c: Partial<Connector>): Connector {
+  return {
+    id: '_connector1',
+    position: { ...VEC3_ZERO },
+    rotation: { ...EULER_ZERO },
+    scale: { ...VEC3_ONE },
+    flags: 'None',
+    ...c,
+  }
+}
+
+describe('serializePart connectors', () => {
+  const part: EditingPart = {
+    partId: 'P',
+    editorTags: [],
+    placements: [],
+    connectors: [
+      connector({ id: '_connector1' }), // identity
+      connector({
+        id: '_connector2',
+        position: { x: -1, y: 0, z: 0 },
+        rotation: { x: Math.PI, y: 0, z: Math.PI },
+        scale: { x: 2, y: 2, z: 2 },
+      }),
+    ],
+  }
+  const doc = parse(serializePart(part))
+
+  it('emits a <Connector> per connector with its Id', () => {
+    const ids = tags(doc, 'Connector').map((e) => e.getAttribute('Id'))
+    expect(ids).toEqual(['_connector1', '_connector2'])
+  })
+
+  it('omits <Transform> for an identity connector', () => {
+    const c = tags(doc, 'Connector').find((e) => e.getAttribute('Id') === '_connector1')!
+    expect(child(c, 'Transform')).toBeNull()
+  })
+
+  it('emits position/rotation/scale for a transformed connector', () => {
+    const c = tags(doc, 'Connector').find((e) => e.getAttribute('Id') === '_connector2')!
+    expect(child(c, 'Position')!.getAttribute('X')).toBe('-1')
+    expect(child(c, 'Rotation')!.getAttribute('X')).toBe('3.14159')
+    expect(child(c, 'Scale')!.getAttribute('X')).toBe('2')
+  })
+
+  it('never puts <Flags> in the Part document', () => {
+    expect(tags(doc, 'Flags').length).toBe(0)
+  })
+})
+
+describe('serializeGameData', () => {
+  const part: EditingPart = {
+    partId: 'P',
+    editorTags: [],
+    placements: [],
+    connectors: [
+      connector({ id: '_connector1', flags: 'None' }),
+      connector({ id: '_connector2', flags: 'ToSurface' }),
+      connector({ id: '_connector3', flags: 'Internal' }),
+    ],
+  }
+  const doc = parse(serializeGameData(part))
+
+  it('roots a <PartGameData> with the part id', () => {
+    const gd = tags(doc, 'PartGameData')[0]
+    expect(gd.getAttribute('Id')).toBe('P')
+  })
+
+  it('emits only flagged connectors, with their <Flags>', () => {
+    const connectors = tags(doc, 'Connector')
+    expect(connectors.map((e) => e.getAttribute('Id'))).toEqual(['_connector2', '_connector3'])
+    expect(child(connectors[0], 'Flags')!.textContent).toBe('ToSurface')
+    expect(child(connectors[1], 'Flags')!.textContent).toBe('Internal')
   })
 })

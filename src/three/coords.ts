@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { EulerXYZ, SubPartPlacement, Vec3 } from '../ksa/types'
+import type { EulerXYZ, Transform, Vec3 } from '../ksa/types'
 
 /**
  * The single chokepoint for converting between KSA Part-space transforms (as
@@ -19,7 +19,7 @@ import type { EulerXYZ, SubPartPlacement, Vec3 } from '../ksa/types'
 
 const EULER_ORDER = 'XYZ' as const
 
-export function applyPlacement(obj: THREE.Object3D, p: SubPartPlacement): void {
+export function applyPlacement(obj: THREE.Object3D, p: Transform): void {
   obj.position.set(p.position.x, p.position.y, p.position.z)
   obj.rotation.set(p.rotation.x, p.rotation.y, p.rotation.z, EULER_ORDER)
   obj.scale.set(p.scale.x, p.scale.y, p.scale.z)

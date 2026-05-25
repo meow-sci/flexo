@@ -9,8 +9,8 @@
  */
 
 import { ASSET_FILES, toUrl } from './catalog'
-import { placementsFromPartElement } from './partXmlParser'
-import type { SubPartPlacement } from './types'
+import { connectorsFromPartElement, placementsFromPartElement } from './partXmlParser'
+import type { Connector, SubPartPlacement } from './types'
 
 export interface CatalogPart {
   /** Part id as declared in the Assets XML, e.g. "CoreFuelTankA_Prefab_LF1W1HA". */
@@ -19,6 +19,8 @@ export interface CatalogPart {
   editorTags: string[]
   /** The SubPart instances composing this Part, with their relative transforms. */
   placements: SubPartPlacement[]
+  /** The connector attachment points of this Part, with their relative transforms. */
+  connectors: Connector[]
   /** Originating XML file (for debugging / grouping). */
   sourceFile: string
 }
@@ -40,7 +42,8 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
       .filter((v): v is string => !!v)
     const placements = placementsFromPartElement(part)
     if (placements.length === 0) continue // nothing renderable/importable
-    out.push({ id, editorTags, placements, sourceFile })
+    const connectors = connectorsFromPartElement(part)
+    out.push({ id, editorTags, placements, connectors, sourceFile })
   }
 }
 

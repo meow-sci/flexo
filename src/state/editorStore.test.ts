@@ -2,12 +2,15 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import {
   $part,
   $selectedIndex,
+  $selectedConnectorIndex,
   $canUndo,
+  addConnector,
   addSubPart,
   duplicateSelected,
   removeSelected,
   newPart,
   redo,
+  setConnectorFlags,
   undo,
   updatePlacementTransform,
 } from './editorStore'
@@ -60,6 +63,46 @@ describe('editorStore', () => {
     expect($part.get().placements.map((p) => p.instanceId)).toEqual(['a_1'])
     redo()
     expect($part.get().placements.map((p) => p.instanceId)).toEqual(['a_1', 'b_1'])
+  })
+
+  it('adds connectors with sequential _connectorN ids and selects the connector', () => {
+    addConnector()
+    addConnector()
+    expect($part.get().connectors.map((c) => c.id)).toEqual(['_connector1', '_connector2'])
+    expect($selectedConnectorIndex.get()).toBe(1)
+    expect($selectedIndex.get()).toBe(-1)
+  })
+
+  it('keeps SubPart and connector selection mutually exclusive', () => {
+    addSubPart('Core.A')
+    expect($selectedIndex.get()).toBe(0)
+    addConnector()
+    expect($selectedIndex.get()).toBe(-1)
+    expect($selectedConnectorIndex.get()).toBe(0)
+  })
+
+  it('removeSelected deletes the selected connector', () => {
+    addConnector()
+    addConnector()
+    removeSelected()
+    expect($part.get().connectors.map((c) => c.id)).toEqual(['_connector1'])
+    expect($selectedConnectorIndex.get()).toBe(0)
+  })
+
+  it('reuses the next free connector id after deletion', () => {
+    addConnector() // _connector1
+    addConnector() // _connector2
+    removeSelected() // removes _connector2 (selected)
+    addConnector() // max existing is 1 -> _connector2
+    expect($part.get().connectors.map((c) => c.id)).toEqual(['_connector1', '_connector2'])
+  })
+
+  it('sets connector flags with undo support', () => {
+    addConnector()
+    setConnectorFlags(0, 'ToSurface')
+    expect($part.get().connectors[0].flags).toBe('ToSurface')
+    undo()
+    expect($part.get().connectors[0].flags).toBe('None')
   })
 
   it('updatePlacementTransform does not create an undo step', () => {

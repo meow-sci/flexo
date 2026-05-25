@@ -25,6 +25,7 @@ it's a web based interface that exposes a 3d work area for importing SubParts, a
 
 Feature docs live in `docs/`. Read the relevant one before working on an area, and update it when behavior changes.
 
+- [docs/ksa-part-connector-notes.md](docs/ksa-part-connector-notes.md) - notes on KSA Part connectors which have four flags: [no flags], internal, ToSurface, FromSurface which are hints for the vehicle editor on how to orient the Part when connecting it in surface mode or connector mode to the vehicle being built
 - [docs/architecture.md](docs/architecture.md) - module layering, data flow, the nanostores single-source-of-truth, key invariants
 - [docs/3d-workspace.md](docs/3d-workspace.md) - the three.js viewport, scene reconciliation, selection, transform gizmos, lighting
 - [docs/subpart-catalog.md](docs/subpart-catalog.md) - how SubParts are discovered and how GLB meshes / textures are resolved

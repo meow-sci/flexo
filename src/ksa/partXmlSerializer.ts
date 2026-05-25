@@ -1,6 +1,6 @@
 import { DOMImplementation, XMLSerializer } from '@xmldom/xmldom'
 import type { Document as XmlDocument, Element as XmlElement } from '@xmldom/xmldom'
-import type { EditingPart, EulerXYZ, SubPartPlacement, Vec3 } from './types'
+import type { Connector, EditingPart, EulerXYZ, SubPartPlacement, Transform, Vec3 } from './types'
 import { formatG6 } from './formatG6'
 
 /**
@@ -17,8 +17,9 @@ import { formatG6 } from './formatG6'
  * compatible, also runs in node tests), then pretty-printed with 4-space
  * indentation to match the Core XML style.
  *
- * NOTE: Connectors / GameData are out of scope for the initial pass (see the
- * plan's Phase 9). The <Part> currently emits SubPart placements + EditorTags.
+ * The <Part> emits EditorTags, SubPart placements, and Connector transforms.
+ * Connector <Flags> live on the separate GameData document — see
+ * {@link serializeGameData}.
  */
 
 const EPSILON = 1e-9
@@ -40,7 +41,39 @@ export function serializePart(part: EditingPart): string {
     partEl.appendChild(buildSubPartElement(doc, placement))
   }
 
+  for (const connector of part.connectors) {
+    partEl.appendChild(buildConnectorElement(doc, connector))
+  }
+
   assets.appendChild(partEl)
+
+  const body = new XMLSerializer().serializeToString(doc)
+  return '<?xml version="1.0" encoding="utf-8"?>\n' + prettyXml(body) + '\n'
+}
+
+/**
+ * Serializes the <PartGameData> document, which carries connector connection
+ * Flags (the per-connector behavior). Mirrors space-tape's game-data export:
+ * connectors with the default "None" flag emit no <Connector> entry (they use
+ * the implicit connect-to-anything mode).
+ */
+export function serializeGameData(part: EditingPart): string {
+  const doc = new DOMImplementation().createDocument(null, 'Assets', null)
+  const assets = doc.documentElement!
+  const gameData = doc.createElement('PartGameData')
+  gameData.setAttribute('Id', part.partId)
+
+  for (const connector of part.connectors) {
+    if (connector.flags === 'None') continue
+    const el = doc.createElement('Connector')
+    el.setAttribute('Id', connector.id)
+    const flags = doc.createElement('Flags')
+    flags.appendChild(doc.createTextNode(connector.flags))
+    el.appendChild(flags)
+    gameData.appendChild(el)
+  }
+
+  assets.appendChild(gameData)
 
   const body = new XMLSerializer().serializeToString(doc)
   return '<?xml version="1.0" encoding="utf-8"?>\n' + prettyXml(body) + '\n'
@@ -55,11 +88,19 @@ function buildSubPartElement(doc: XmlDocument, placement: SubPartPlacement): Xml
   return el
 }
 
-/** Returns a <Transform> element, or null if the placement is identity. */
-function buildTransformElement(doc: XmlDocument, placement: SubPartPlacement): XmlElement | null {
-  const pos = buildVectorElement(doc, 'Position', placement.position, 0)
-  const rot = buildRotationElement(doc, placement.rotation)
-  const scale = buildVectorElement(doc, 'Scale', placement.scale, 1)
+function buildConnectorElement(doc: XmlDocument, connector: Connector): XmlElement {
+  const el = doc.createElement('Connector')
+  el.setAttribute('Id', connector.id)
+  const transform = buildTransformElement(doc, connector)
+  if (transform) el.appendChild(transform)
+  return el
+}
+
+/** Returns a <Transform> element, or null if the transform is identity. */
+function buildTransformElement(doc: XmlDocument, t: Transform): XmlElement | null {
+  const pos = buildVectorElement(doc, 'Position', t.position, 0)
+  const rot = buildRotationElement(doc, t.rotation)
+  const scale = buildVectorElement(doc, 'Scale', t.scale, 1)
 
   if (!pos && !rot && !scale) return null
 

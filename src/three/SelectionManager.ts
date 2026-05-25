@@ -1,10 +1,16 @@
 import * as THREE from 'three'
 
+/** What a hit object resolves to: a SubPart instance or a connector. */
+export interface Selectable {
+  kind: 'subpart' | 'connector'
+  id: string
+}
+
 /**
  * Click-to-select via raycasting. Selection fires on pointerup only when the
  * pointer barely moved (so camera-orbit drags and gizmo drags don't count as
- * clicks). Resolves the hit mesh's owning SubPart instance id from userData and
- * reports it (null when empty space is clicked).
+ * clicks). Resolves the hit object's owning entity from `userData.selectable`
+ * and reports it (null when empty space is clicked).
  */
 export class SelectionManager {
   private readonly raycaster = new THREE.Raycaster()
@@ -16,13 +22,13 @@ export class SelectionManager {
   private readonly camera: THREE.Camera
   private readonly domElement: HTMLElement
   private readonly root: THREE.Object3D
-  private readonly onSelect: (instanceId: string | null) => void
+  private readonly onSelect: (selected: Selectable | null) => void
 
   constructor(
     camera: THREE.Camera,
     domElement: HTMLElement,
     root: THREE.Object3D,
-    onSelect: (instanceId: string | null) => void,
+    onSelect: (selected: Selectable | null) => void,
   ) {
     this.camera = camera
     this.domElement = domElement
@@ -54,9 +60,9 @@ export class SelectionManager {
 
     const hits = this.raycaster.intersectObjects(this.root.children, true)
     for (const hit of hits) {
-      const id = findInstanceId(hit.object)
-      if (id) {
-        this.onSelect(id)
+      const selectable = findSelectable(hit.object)
+      if (selectable) {
+        this.onSelect(selectable)
         return
       }
     }
@@ -69,11 +75,11 @@ export class SelectionManager {
   }
 }
 
-function findInstanceId(object: THREE.Object3D): string | null {
+function findSelectable(object: THREE.Object3D): Selectable | null {
   let node: THREE.Object3D | null = object
   while (node) {
-    const id = node.userData?.instanceId
-    if (typeof id === 'string') return id
+    const selectable = node.userData?.selectable as Selectable | undefined
+    if (selectable) return selectable
     node = node.parent
   }
   return null

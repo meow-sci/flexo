@@ -1,15 +1,25 @@
 import { useStore } from '@nanostores/react'
 import { Button, List, ListButton, ListItem, Surface } from '@cladd-ui/react'
-import { $part, $selectedIndex, duplicateSelected, removeSelected, selectPlacement } from '../state/editorStore'
+import {
+  $part,
+  $selectedConnectorIndex,
+  $selectedIndex,
+  duplicateSelected,
+  removeSelected,
+  selectConnector,
+  selectPlacement,
+} from '../state/editorStore'
 
 /**
- * Lists the placed SubPart instances. Clicking a row selects it (kept in sync
- * with 3D selection via the shared store). Delete / Duplicate act on the
- * selection.
+ * Lists the placed SubPart instances and connectors. Clicking a row selects it
+ * (kept in sync with 3D selection via the shared store). Delete / Duplicate act
+ * on the current selection, whichever kind it is.
  */
 export function PlacementList() {
   const part = useStore($part)
-  const selected = useStore($selectedIndex)
+  const selectedSub = useStore($selectedIndex)
+  const selectedCon = useStore($selectedConnectorIndex)
+  const hasSelection = selectedSub >= 0 || selectedCon >= 0
 
   return (
     <Surface outline className="flex h-full min-h-0 flex-col rounded-xl" contentClassName="flex min-h-0 flex-col gap-2 p-2">
@@ -18,19 +28,10 @@ export function PlacementList() {
           Placed ({part.placements.length})
         </span>
         <div className="flex gap-1">
-          <Button
-            size="xs"
-            disabled={selected < 0}
-            onClick={() => duplicateSelected()}
-          >
+          <Button size="xs" disabled={!hasSelection} onClick={() => duplicateSelected()}>
             Duplicate
           </Button>
-          <Button
-            size="xs"
-            color="red"
-            disabled={selected < 0}
-            onClick={() => removeSelected()}
-          >
+          <Button size="xs" color="red" disabled={!hasSelection} onClick={() => removeSelected()}>
             Delete
           </Button>
         </div>
@@ -44,7 +45,7 @@ export function PlacementList() {
               <ListButton
                 key={p.instanceId}
                 size="sm"
-                selected={i === selected}
+                selected={i === selectedSub}
                 color="brand"
                 onClick={() => selectPlacement(i)}
                 footer={p.subPartTemplateId}
@@ -54,6 +55,28 @@ export function PlacementList() {
             ))
           )}
         </List>
+
+        {part.connectors.length > 0 && (
+          <>
+            <span className="mt-2 block px-1 text-xs uppercase tracking-wide text-cladd-fg-softer">
+              Connectors ({part.connectors.length})
+            </span>
+            <List>
+              {part.connectors.map((c, i) => (
+                <ListButton
+                  key={c.id}
+                  size="sm"
+                  selected={i === selectedCon}
+                  color="brand"
+                  onClick={() => selectConnector(i)}
+                  footer={c.flags === 'None' ? 'no flags' : c.flags}
+                >
+                  <span className="truncate font-mono">{c.id}</span>
+                </ListButton>
+              ))}
+            </List>
+          </>
+        )}
       </div>
     </Surface>
   )

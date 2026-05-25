@@ -79,7 +79,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
 
   const add = () => {
     if (!selected) return
-    addPart(selected.placements)
+    addPart(selected.placements, selected.connectors)
     setAdded((n) => n + 1)
   }
 
@@ -180,6 +180,9 @@ function PartDetails({
         </span>
         <span className="text-cladd-fg-soft">
           <span className="text-cladd-fg-softer">Unique types:</span> {breakdown.length}
+        </span>
+        <span className="text-cladd-fg-soft">
+          <span className="text-cladd-fg-softer">Connectors:</span> {part.connectors.length}
         </span>
         <span className="text-cladd-fg-soft">
           <span className="text-cladd-fg-softer">Source:</span>{' '}

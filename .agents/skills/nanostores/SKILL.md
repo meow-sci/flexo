@@ -5,7 +5,8 @@ description: nanostores state manager
 
 # React integration
 
-See [React](./react.md)  for react integration notes
+See [react.md](./react.md)  for react integration notes
+See [persistent.md](./persistent.md)  for persistent store integration notes
 
 # Nano Stores
 

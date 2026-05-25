@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { Viewport } from './Viewport'
 import { SubPartObject } from './SubPartObject'
+import { ConnectorObject } from './ConnectorObject'
 import { SelectionManager } from './SelectionManager'
 import { TransformGizmo } from './TransformGizmo'
 import { readPlacementTransform } from './coords'
@@ -9,15 +10,25 @@ import type { CatalogSubPart } from '../ksa/catalog'
 import type { EditingPart } from '../ksa/types'
 import {
   $part,
+  $selectedConnectorIndex,
   $selectedIndex,
   $snap,
   $toolMode,
+  clearSelection,
   pushUndo,
+  selectConnector,
   selectPlacement,
-  updatePlacementTransform,
+  updateSelectedTransform,
 } from '../state/editorStore'
 import { $catalogIndex } from '../state/catalogStore'
+import { $connectorSettings, type ConnectorSettings } from '../state/settingsStore'
 import { $cameraSnap, $grids } from '../state/viewStore'
+
+/** A highlightable scene entity — both SubPartObject and ConnectorObject match. */
+interface SelectableObject {
+  readonly group: THREE.Group
+  setSelected(selected: boolean): void
+}
 
 /**
  * Owns the three.js {@link Viewport} and keeps the rendered scene in sync with
@@ -32,13 +43,15 @@ export class EditorScene {
   readonly viewport: Viewport
   private readonly root = new THREE.Group()
   private readonly objects = new Map<string, SubPartObject>()
+  private readonly connectorObjects = new Map<string, ConnectorObject>()
   private readonly building = new Set<string>()
   private index: Map<string, CatalogSubPart> = new Map()
+  private connectorSettings: ConnectorSettings = $connectorSettings.get()
   private readonly unsubscribers: Array<() => void> = []
   private readonly selection: SelectionManager
   private readonly gizmo: TransformGizmo
-  private highlightedId: string | null = null
-  private attachedId: string | null = null
+  private highlighted: SelectableObject | null = null
+  private attachedGroup: THREE.Group | null = null
 
   constructor(host: HTMLElement) {
     this.viewport = new Viewport(host)
@@ -52,11 +65,18 @@ export class EditorScene {
       this.viewport.camera,
       this.viewport.renderer.domElement,
       this.root,
-      (instanceId) => {
-        const index = instanceId
-          ? $part.get().placements.findIndex((p) => p.instanceId === instanceId)
-          : -1
-        selectPlacement(index)
+      (selected) => {
+        if (!selected) {
+          clearSelection()
+          return
+        }
+        if (selected.kind === 'subpart') {
+          selectPlacement(
+            $part.get().placements.findIndex((p) => p.instanceId === selected.id),
+          )
+        } else {
+          selectConnector($part.get().connectors.findIndex((c) => c.id === selected.id))
+        }
       },
     )
 
@@ -67,11 +87,7 @@ export class EditorScene {
       this.viewport.controls,
       {
         onDragStart: () => pushUndo(),
-        onChange: (object) => {
-          const index = $selectedIndex.get()
-          if (index < 0) return
-          updatePlacementTransform(index, readPlacementTransform(object))
-        },
+        onChange: (object) => updateSelectedTransform(readPlacementTransform(object)),
         onDraggingChanged: (dragging) => this.selection.setSuppressed(dragging),
       },
     )
@@ -85,6 +101,13 @@ export class EditorScene {
     )
     this.unsubscribers.push($part.subscribe((part) => this.reconcile(part)))
     this.unsubscribers.push($selectedIndex.subscribe(() => this.updateSelection()))
+    this.unsubscribers.push($selectedConnectorIndex.subscribe(() => this.updateSelection()))
+    this.unsubscribers.push(
+      $connectorSettings.subscribe((settings) => {
+        this.connectorSettings = settings
+        this.rebuildConnectors()
+      }),
+    )
     this.unsubscribers.push($toolMode.subscribe((mode) => this.gizmo.setMode(mode)))
     this.unsubscribers.push($snap.subscribe((snap) => this.gizmo.setSnap(snap)))
     this.unsubscribers.push($grids.subscribe((grids) => this.viewport.grids.setConfig(grids)))
@@ -146,27 +169,69 @@ export class EditorScene {
         })
     }
 
+    this.reconcileConnectors(part)
     this.updateSelection()
   }
 
-  /** Syncs the selection highlight and gizmo attachment to $selectedIndex. */
-  private updateSelection(): void {
-    const index = $selectedIndex.get()
-    const selectedId = $part.get().placements[index]?.instanceId ?? null
+  /** Connectors build synchronously (cube + arrow), so reconciliation is simple. */
+  private reconcileConnectors(part: EditingPart): void {
+    const wanted = new Set(part.connectors.map((c) => c.id))
+    for (const [id, obj] of this.connectorObjects) {
+      if (!wanted.has(id)) {
+        this.root.remove(obj.group)
+        obj.dispose()
+        this.connectorObjects.delete(id)
+      }
+    }
+    for (const connector of part.connectors) {
+      const existing = this.connectorObjects.get(connector.id)
+      if (existing) {
+        existing.setConnector(connector)
+        continue
+      }
+      const obj = new ConnectorObject(connector, this.connectorSettings.size)
+      this.root.add(obj.group)
+      this.connectorObjects.set(connector.id, obj)
+    }
+  }
 
-    // Highlight (toggle emissive on the affected objects).
-    if (selectedId !== this.highlightedId) {
-      if (this.highlightedId) this.objects.get(this.highlightedId)?.setSelected(false)
-      if (selectedId) this.objects.get(selectedId)?.setSelected(true)
-      this.highlightedId = selectedId
+  /** Rebuilds every connector from scratch (cube/arrow sizes are global settings). */
+  private rebuildConnectors(): void {
+    for (const obj of this.connectorObjects.values()) {
+      this.root.remove(obj.group)
+      obj.dispose()
+    }
+    this.connectorObjects.clear()
+    this.reconcileConnectors($part.get())
+    this.updateSelection()
+  }
+
+  /** Resolves the currently selected scene object (SubPart or connector), if built. */
+  private selectedObject(): SelectableObject | null {
+    const part = $part.get()
+    const placement = part.placements[$selectedIndex.get()]
+    if (placement) return this.objects.get(placement.instanceId) ?? null
+    const connector = part.connectors[$selectedConnectorIndex.get()]
+    if (connector) return this.connectorObjects.get(connector.id) ?? null
+    return null
+  }
+
+  /** Syncs the selection highlight and gizmo attachment to the current selection. */
+  private updateSelection(): void {
+    const selected = this.selectedObject()
+
+    if (selected !== this.highlighted) {
+      this.highlighted?.setSelected(false)
+      selected?.setSelected(true)
+      this.highlighted = selected
     }
 
     // Gizmo attachment — never re-attach mid-drag (it would reset the drag).
     if (this.gizmo.isDragging) return
-    if (selectedId !== this.attachedId) {
-      const obj = selectedId ? this.objects.get(selectedId) : undefined
-      this.gizmo.attach(obj?.group ?? null)
-      this.attachedId = obj ? selectedId : null
+    const group = selected?.group ?? null
+    if (group !== this.attachedGroup) {
+      this.gizmo.attach(group)
+      this.attachedGroup = group
     }
   }
 
@@ -177,6 +242,8 @@ export class EditorScene {
     this.gizmo.dispose()
     for (const obj of this.objects.values()) obj.dispose()
     this.objects.clear()
+    for (const obj of this.connectorObjects.values()) obj.dispose()
+    this.connectorObjects.clear()
     this.viewport.dispose()
   }
 }

@@ -1,11 +1,10 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
-import { Input, Surface } from '@cladd-ui/react'
-import { $selectedIndex } from '../state/editorStore'
-import { $selectedPlacement } from '../state/selectors'
-import { pushUndo, updatePlacementTransform } from '../state/editorStore'
+import { Input, Select, Surface } from '@cladd-ui/react'
+import { pushUndo, setConnectorFlags, updateSelectedTransform } from '../state/editorStore'
 import type { PlacementTransform } from '../state/editorStore'
-import type { SubPartPlacement } from '../ksa/types'
+import { $selectedEntity } from '../state/selectors'
+import { CONNECTOR_FLAGS, type ConnectorFlag } from '../ksa/types'
 
 const RAD2DEG = 180 / Math.PI
 const DEG2RAD = Math.PI / 180
@@ -60,30 +59,32 @@ function ScalarField(props: {
 type Axis = 'x' | 'y' | 'z'
 
 /**
- * Numeric transform inspector for the selected placement. Two-way bound with the
- * 3D gizmo: both edit the SAME store (updatePlacementTransform), so typing moves
- * the model live and gizmo drags update these fields live. Rotation is shown in
- * degrees but stored/exported in radians.
+ * Numeric transform inspector for the selected entity (SubPart or connector).
+ * Two-way bound with the 3D gizmo: both edit the SAME store
+ * (updateSelectedTransform), so typing moves the model live and gizmo drags
+ * update these fields live. Rotation is shown in degrees but stored/exported in
+ * radians. Connectors additionally expose their connection Flags.
  */
 export function TransformInspector() {
-  const placement = useStore($selectedPlacement)
-  const index = useStore($selectedIndex)
-  if (!placement) return null
+  const entity = useStore($selectedEntity)
+  if (!entity) return null
+
+  const transform = entity.kind === 'subpart' ? entity.placement : entity.connector
 
   const commit = (mutate: (t: PlacementTransform) => void) => {
     const next: PlacementTransform = {
-      position: { ...placement.position },
-      rotation: { ...placement.rotation },
-      scale: { ...placement.scale },
+      position: { ...transform.position },
+      rotation: { ...transform.rotation },
+      scale: { ...transform.scale },
     }
     mutate(next)
-    updatePlacementTransform(index, next)
+    updateSelectedTransform(next)
   }
 
   const posField = (axis: Axis) => (
     <ScalarField
       label={axis.toUpperCase()}
-      value={placement.position[axis]}
+      value={transform.position[axis]}
       onInteractionStart={pushUndo}
       onCommit={(n) => commit((t) => (t.position[axis] = n))}
     />
@@ -91,7 +92,7 @@ export function TransformInspector() {
   const rotField = (axis: Axis) => (
     <ScalarField
       label={axis.toUpperCase()}
-      value={placement.rotation[axis] * RAD2DEG}
+      value={transform.rotation[axis] * RAD2DEG}
       onInteractionStart={pushUndo}
       onCommit={(deg) => commit((t) => (t.rotation[axis] = deg * DEG2RAD))}
     />
@@ -99,7 +100,7 @@ export function TransformInspector() {
   const scaleField = (axis: Axis) => (
     <ScalarField
       label={axis.toUpperCase()}
-      value={placement.scale[axis]}
+      value={transform.scale[axis]}
       onInteractionStart={pushUndo}
       onCommit={(n) => commit((t) => (t.scale[axis] = n))}
     />
@@ -107,7 +108,11 @@ export function TransformInspector() {
 
   return (
     <Surface outline className="rounded-xl" contentClassName="flex flex-col gap-2 p-2">
-      <InstanceHeader placement={placement} />
+      {entity.kind === 'subpart' ? (
+        <SubPartHeader instanceId={entity.placement.instanceId} templateId={entity.placement.subPartTemplateId} />
+      ) : (
+        <ConnectorHeader index={entity.index} id={entity.connector.id} flags={entity.connector.flags} />
+      )}
       <Section title="Position (m)">
         {posField('x')}
         {posField('y')}
@@ -136,15 +141,38 @@ function Section(props: { title: string; children: React.ReactNode }) {
   )
 }
 
-function InstanceHeader({ placement }: { placement: SubPartPlacement }) {
+function SubPartHeader({ instanceId, templateId }: { instanceId: string; templateId: string }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="truncate font-mono text-sm" title={placement.instanceId}>
-        {placement.instanceId}
+      <span className="truncate font-mono text-sm" title={instanceId}>
+        {instanceId}
       </span>
-      <span className="truncate text-xs text-cladd-fg-softer" title={placement.subPartTemplateId}>
-        {placement.subPartTemplateId}
+      <span className="truncate text-xs text-cladd-fg-softer" title={templateId}>
+        {templateId}
       </span>
+    </div>
+  )
+}
+
+function ConnectorHeader({ index, id, flags }: { index: number; id: string; flags: ConnectorFlag }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="truncate font-mono text-sm" title={id}>
+        {id}
+      </span>
+      <label className="flex items-center gap-2">
+        <span className="text-xs text-cladd-fg-softer">Flags</span>
+        <Select
+          size="sm"
+          className="flex-1"
+          title="Connector flags"
+          options={CONNECTOR_FLAGS as ConnectorFlag[]}
+          value={flags}
+          onChange={(v) => setConnectorFlags(index, v as ConnectorFlag)}
+        >
+          {flags}
+        </Select>
+      </label>
     </div>
   )
 }

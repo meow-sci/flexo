@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { ViewportCanvas } from './three/ViewportCanvas'
 import { EditorToolbar } from './ui/Toolbar'
-import { SubPartToolbar } from './ui/SubPartToolbar'
+import { SelectionToolbar } from './ui/SelectionToolbar'
 import { RightPanel } from './ui/RightPanel'
 import { ensureCatalogLoaded } from './state/catalogStore'
 import { ensurePartCatalogLoaded } from './state/partCatalogStore'
@@ -21,9 +21,9 @@ function App() {
         <EditorToolbar />
       </div>
 
-      {/* Below the main toolbar: per-SubPart tools, only when one is selected */}
+      {/* Below the main toolbar: per-selection tools, only when something is selected */}
       <div className="absolute left-1/2 top-16 -translate-x-1/2">
-        <SubPartToolbar />
+        <SelectionToolbar />
       </div>
 
       {/* Right: collapsible transform inspector + placed instances */}

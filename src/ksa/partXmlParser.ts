@@ -1,4 +1,4 @@
-import type { EulerXYZ, SubPartPlacement, Vec3 } from './types'
+import type { Connector, ConnectorFlag, EulerXYZ, SubPartPlacement, Vec3 } from './types'
 
 /**
  * Parses SubPart placements out of a KSA Assets <Part> definition — the inverse
@@ -54,6 +54,32 @@ export function placementsFromPartElement(part: Element): SubPartPlacement[] {
     })
   }
   return placements
+}
+
+const CONNECTOR_FLAG_SET = new Set<ConnectorFlag>(['None', 'Internal', 'ToSurface', 'FromSurface'])
+
+/**
+ * Extracts the connector attachment points from a single <Part> element, with
+ * their relative transforms. Core Assets <Part> definitions carry connector
+ * transforms but not <Flags> (those live on <PartGameData>), so flags default to
+ * 'None' unless a <Flags> child is present inline.
+ */
+export function connectorsFromPartElement(part: Element): Connector[] {
+  const connectors: Connector[] = []
+  for (const conn of directChildren(part, 'Connector')) {
+    const id = conn.getAttribute('Id')
+    if (!id) continue
+    const transform = directChildren(conn, 'Transform')[0] ?? null
+    const rawFlags = directChildren(conn, 'Flags')[0]?.textContent?.trim() as ConnectorFlag | undefined
+    connectors.push({
+      id,
+      position: readVec(transform, 'Position', 0),
+      rotation: readVec(transform, 'Rotation', 0) as EulerXYZ,
+      scale: readVec(transform, 'Scale', 1),
+      flags: rawFlags && CONNECTOR_FLAG_SET.has(rawFlags) ? rawFlags : 'None',
+    })
+  }
+  return connectors
 }
 
 export function directChildren(parent: Element, tag: string): Element[] {

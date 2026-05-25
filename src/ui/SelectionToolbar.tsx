@@ -13,7 +13,7 @@ import {
   setToolMode,
   type ToolMode,
 } from '../state/editorStore'
-import { $selectedPlacement } from '../state/selectors'
+import { $selectedEntity } from '../state/selectors'
 
 const MODES: { mode: ToolMode; label: string }[] = [
   { mode: 'translate', label: 'Move' },
@@ -22,12 +22,13 @@ const MODES: { mode: ToolMode; label: string }[] = [
 ]
 
 /**
- * Floating toolbar that appears centered below the main toolbar only while a
- * SubPart is selected. Holds actions specific to that SubPart: the transform
- * tool mode (drives the 3D gizmo via $toolMode) plus duplicate/delete.
+ * Floating toolbar that appears centered below the main toolbar only while an
+ * entity (SubPart or connector) is selected. Holds the transform tool mode
+ * (drives the 3D gizmo via $toolMode) plus duplicate/delete, both of which act
+ * on whichever entity is selected.
  */
-export function SubPartToolbar() {
-  const selected = useStore($selectedPlacement)
+export function SelectionToolbar() {
+  const selected = useStore($selectedEntity)
   const mode = useStore($toolMode)
 
   if (!selected) return null

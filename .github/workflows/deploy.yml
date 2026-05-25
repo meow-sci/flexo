@@ -38,7 +38,7 @@ jobs:
         with:
           repository: meow-sci/flexo-private-assets
           path: .tmp/flexo-private-assets
-          ssh-key: ${{ secrets.FLEXO_PRIVATE_ASSETS_SSH_KEY }}
+          token: ${{ secrets.FLEXO_PRIVATE_ASSETS_PAT }}
           persist-credentials: false
           ref: main
 

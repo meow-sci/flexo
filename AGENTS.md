@@ -30,6 +30,7 @@ Feature docs live in `docs/`. Read the relevant one before working on an area, a
 - [docs/3d-workspace.md](docs/3d-workspace.md) - the three.js viewport, scene reconciliation, selection, transform gizmos, lighting
 - [docs/subpart-catalog.md](docs/subpart-catalog.md) - how SubParts are discovered and how GLB meshes / textures are resolved
 - [docs/editor-state.md](docs/editor-state.md) - nanostores stores + actions, undo/redo, two-way binding
+- [docs/state-persistence.md](docs/state-persistence.md) - localStorage persistence for UI settings and user preferences via `@nanostores/persistent`; what to persist and what not to
 - [docs/coordinates.md](docs/coordinates.md) - KSA <-> three.js transform mapping (`coords.ts`) and the `?debug=dockingport` calibration
 - [docs/xml-io.md](docs/xml-io.md) - Part XML serialize/parse, `formatG6`, transform omission rules
 - [docs/texturing.md](docs/texturing.md) - KTX2 (BC7/BC5/BC4) loading, PBR material mapping, normal-map shader patch, IBL/tonemapping
@@ -39,6 +40,7 @@ Feature docs live in `docs/`. Read the relevant one before working on an area, a
 
 - AGENTS.md MUST be maintained with up to date references to repository areas
 - when a feature changes, update its corresponding file in `docs/` (and add a new `docs/*.md` + link above for any new major feature)
+- **Default pattern for state**: Any user-facing settings, UI panel visibility, tool modes, or view preferences SHOULD use localStorage persistence via `@nanostores/persistent` (see [state-persistence.md](docs/state-persistence.md)). By default, persist state unless there's a specific reason not to.
 
 # glossary
 

@@ -54,6 +54,10 @@ Rotation is shown in **degrees**, stored/exported in **radians**.
 - `Toolbar.tsx` — tool mode (Segmented), snap (NumberField), undo/redo.
 - `PartHeader.tsx` — Part id field + Export XML dialog (see [xml-io.md](./xml-io.md)).
 
+## Persistence
+
+UI settings and user preferences that should survive page refresh use **localStorage persistence** via `@nanostores/persistent`. See [state-persistence.md](./state-persistence.md) for patterns on what to persist (panel visibility, tool modes, view settings) and what not to (transient selections, undo/redo stacks).
+
 ## Tests
 `src/state/editorStore.test.ts` covers instance-id generation, add/remove/duplicate,
 selection clamping, and undo/redo (incl. that `updatePlacementTransform` adds no undo

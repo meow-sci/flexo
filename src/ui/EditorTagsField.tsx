@@ -1,12 +1,25 @@
-import { useMemo, useState } from 'react'
-import { Chip, CloseIcon, Input, List, ListButton } from '@cladd-ui/react'
+import { useState } from 'react'
+import {
+  Button,
+  Chip,
+  CloseIcon,
+  List,
+  ListButton,
+  ListItem,
+  Popover,
+  PopoverRoot,
+  PopoverTrigger,
+  SearchField,
+  SectionTitle,
+} from '@cladd-ui/react'
 import { KNOWN_EDITOR_TAGS } from '../ksa/types'
 
 /**
- * Editor-tag combobox for the Part Data dialog: an autocomplete input over the
- * KSA {@link KNOWN_EDITOR_TAGS}, plus removable chips for the current tags.
- * Typing filters the known tags; if the typed text matches none, it can still be
- * added verbatim (KSA accepts arbitrary tag strings), so custom tags are allowed.
+ * Editor-tag combobox for the Part Data dialog: a trigger button opens a Popover
+ * with a SearchField over the KSA {@link KNOWN_EDITOR_TAGS}. Removable chips show
+ * the current tags. The filter doubles as free-form entry — if the typed text
+ * matches no known tag it can still be added verbatim (KSA accepts arbitrary tag
+ * strings). Selecting keeps the popover open so several tags can be added in a row.
  */
 export function EditorTagsField({
   tags,
@@ -15,28 +28,23 @@ export function EditorTagsField({
   tags: string[]
   onChange: (tags: string[]) => void
 }) {
-  const [draft, setDraft] = useState('')
-  const [focused, setFocused] = useState(false)
+  const [query, setQuery] = useState('')
 
   const addTag = (raw: string) => {
     const tag = raw.trim()
     if (tag && !tags.includes(tag)) onChange([...tags, tag])
-    setDraft('')
+    setQuery('')
   }
   const removeTag = (tag: string) => onChange(tags.filter((t) => t !== tag))
 
-  const query = draft.trim().toLowerCase()
-  const suggestions = useMemo(
-    () =>
-      KNOWN_EDITOR_TAGS.filter(
-        (t) => !tags.includes(t) && (query === '' || t.toLowerCase().includes(query)),
-      ),
-    [query, tags],
+  const q = query.trim().toLowerCase()
+  const suggestions = KNOWN_EDITOR_TAGS.filter(
+    (t) => !tags.includes(t) && (q === '' || t.toLowerCase().includes(q)),
   )
   const showCustom =
-    query !== '' &&
-    !tags.some((t) => t.toLowerCase() === query) &&
-    !KNOWN_EDITOR_TAGS.some((t) => t.toLowerCase() === query)
+    q !== '' &&
+    !tags.some((t) => t.toLowerCase() === q) &&
+    !KNOWN_EDITOR_TAGS.some((t) => t.toLowerCase() === q)
 
   return (
     <div className="mt-2 flex flex-col gap-2">
@@ -58,47 +66,39 @@ export function EditorTagsField({
         </div>
       )}
 
-      <div className="relative">
-        <Input
-          size="sm"
-          value={draft}
-          onChange={setDraft}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              addTag(draft)
-            }
-          }}
-          placeholder="Add tag…"
-        />
-        {focused && (showCustom || suggestions.length > 0) && (
-          <div className="absolute left-0 right-0 top-full z-10 mt-1 max-h-48 overflow-auto rounded-lg border border-cladd-outline bg-cladd-bg">
-            <List>
-              {showCustom && (
-                <ListButton
-                  size="sm"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => addTag(draft)}
-                >
-                  Add “{draft.trim()}”
-                </ListButton>
-              )}
-              {suggestions.map((t) => (
-                <ListButton
-                  key={t}
-                  size="sm"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => addTag(t)}
-                >
+      <PopoverRoot onOpenChange={(open) => !open && setQuery('')}>
+        <PopoverTrigger>
+          <Button size="sm" className="w-full">
+            Add tag…
+          </Button>
+        </PopoverTrigger>
+        <Popover className="w-64" offset={8} position="bottom-start">
+          <SectionTitle className="px-4 pt-4">Editor Tags</SectionTitle>
+          <SearchField
+            size="sm"
+            value={query}
+            onChange={setQuery}
+            placeholder="Filter or add a tag"
+            className="mx-2 mt-2 w-auto"
+          />
+          <List>
+            {showCustom && (
+              <ListButton size="sm" onClick={() => addTag(query)}>
+                Add “{query.trim()}”
+              </ListButton>
+            )}
+            {suggestions.length === 0 && !showCustom ? (
+              <ListItem className="text-cladd-fg-softer">No matches</ListItem>
+            ) : (
+              suggestions.map((t) => (
+                <ListButton key={t} size="sm" onClick={() => addTag(t)}>
                   {t}
                 </ListButton>
-              ))}
-            </List>
-          </div>
-        )}
-      </div>
+              ))
+            )}
+          </List>
+        </Popover>
+      </PopoverRoot>
     </div>
   )
 }

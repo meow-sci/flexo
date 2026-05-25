@@ -35,10 +35,11 @@ describe('catalog parsing (real Core XML)', () => {
     expect(structural.length).toBeGreaterThan(20)
     const truss = structural.find((s) => s.id === 'CoreStructuralA_Subpart_TrussBarA')!
     expect(truss).toBeDefined()
-    expect(truss.atlasUrl).toBe('/ksa/Meshes/CoreStructuralA_MeshAtlas.glb')
+    const base = import.meta.env.BASE_URL
+    expect(truss.atlasUrl).toBe(`${base}ksa/Meshes/CoreStructuralA_MeshAtlas.glb`)
     expect(truss.meshNodeName).toBe('CoreStructuralA_Subpart_TrussBarA')
     expect(truss.materialId).toBe('CoreStructuralA_Material')
-    expect(truss.diffuseUrl).toContain('/ksa/Textures/')
+    expect(truss.diffuseUrl).toContain(`${base}ksa/Textures/`)
   })
 
   it('does not include Part SubPart instances (only templates)', () => {

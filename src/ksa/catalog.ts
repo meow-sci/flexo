@@ -46,7 +46,8 @@ export const ASSET_FILES = [
   'PartAssets.xml',
 ]
 
-const KSA_BASE = '/ksa/'
+// Respects Vite's `base` (e.g. "/flexo/") so /ksa/ URLs resolve under a sub-path deploy.
+const KSA_BASE = `${import.meta.env.BASE_URL}ksa/`
 
 export function toUrl(relPath: string): string {
   return KSA_BASE + relPath.replace(/^\/+/, '')

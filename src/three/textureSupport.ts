@@ -17,7 +17,9 @@ let bcSupported = false
 /** Initialize once, after the WebGLRenderer exists. Idempotent. */
 export function initTextureSupport(renderer: THREE.WebGLRenderer): void {
   if (loader) return
-  loader = new KTX2Loader().setTranscoderPath('/basis/').detectSupport(renderer)
+  loader = new KTX2Loader()
+    .setTranscoderPath(`${import.meta.env.BASE_URL}basis/`)
+    .detectSupport(renderer)
 
   const gl = renderer.getContext()
   bcSupported =

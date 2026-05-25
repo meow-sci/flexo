@@ -1,126 +1,74 @@
-import { copyFileSync, createReadStream, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname, extname, join, normalize } from 'node:path'
-import { DOMParser } from '@xmldom/xmldom'
-import type { Plugin } from 'vite'
+import { cpSync, createReadStream, existsSync, statSync } from 'node:fs'
+import { extname, join, normalize, resolve, sep } from 'node:path'
+import { loadEnv, type Plugin } from 'vite'
 
 /**
- * Serves the KSA "Core" mod assets (XML, GLB, textures) under the `/ksa/` URL
- * prefix, mapped from `thirdparty/ksa/Content/Core`. This keeps large binary game
- * assets out of `public/` while letting the app `fetch('/ksa/...')`.
+ * Serves the KSA "Core" mod assets (catalog XML + GLB/GLTF meshes and KTX2/DDS
+ * textures) under the `/ksa/` URL prefix, sourced entirely from the directory
+ * named by the `KSA_ASSETS_DIR` env var.
  *
- * - dev (`configureServer`): streams files on demand.
- * - build (`writeBundle`): copies the catalog XML plus ONLY the GLB/KTX2 files those
- *   XML reference (the Content/Core/Meshes + Textures trees also contain huge,
- *   unrelated planet/cloud assets, so a wholesale copy is avoided) into `dist/ksa/`.
- *   See docs/asset-pipeline.md.
+ * That directory is produced by `scripts/copy-ksa-assets-to-private-repo.ts`,
+ * which already prunes the upstream asset tree down to just the Part/SubPart
+ * catalog XML and the binaries those reference. The licensed binaries live in a
+ * separate private repo (they must stay out of this open-source repo) and are
+ * pulled in at build time. So the plugin no longer needs to know anything about
+ * the catalog — it just serves/copies the contents of `KSA_ASSETS_DIR` verbatim.
+ *
+ * - dev (`configureServer`): streams files on demand from `KSA_ASSETS_DIR`.
+ * - build (`writeBundle`): copies the whole `KSA_ASSETS_DIR` tree into `dist/ksa/`.
+ *
+ * See docs/asset-pipeline.md.
  */
-const CORE_DIR = 'thirdparty/ksa/Content/Core'
-
-// Catalog asset XML files (flat at the Core root). Keep in sync with
-// ASSET_FILES in src/ksa/catalog.ts.
-const CATALOG_XML = [
-  'CoreStructuralAAssets.xml',
-  'CoreCouplingAAssets.xml',
-  'CoreFuelTankAAssets.xml',
-  'CoreCommandAAssets.xml',
-  'CorePropulsionAAssets.xml',
-  'CorePropulsionBAssets.xml',
-  'CoreElectricalAAssets.xml',
-  'CoreFairingAAssets.xml',
-  'CorePassageAAssets.xml',
-  'CoreLandingAAssets.xml',
-  'CoreServiceModuleAAssets.xml',
-  'CoreIVAPropAAssets.xml',
-  'CoreIVASpaceAAssets.xml',
-  'PartAssets.xml',
-]
-
-// Sibling *GameData.xml files (connector flags + editor tags). Not every asset
-// file has one; missing siblings are skipped silently. See src/ksa/partCatalog.ts.
-const GAMEDATA_XML = CATALOG_XML.map((f) => f.replace(/Assets\.xml$/, 'GameData.xml'))
-
-// PbrMaterial child elements the app actually loads (see src/ksa/catalog.ts).
-const TEXTURE_ELEMENTS = ['Diffuse', 'Normal', 'AoRoughMetal', 'Emissive']
-
-/**
- * Parses the catalog XML and returns the set of relative asset paths they
- * reference (e.g. "Meshes/X.glb", "Textures/Y.ktx2") — the minimal file set the
- * app fetches at runtime.
- */
-function collectReferencedAssets(srcRoot: string): Set<string> {
-  const refs = new Set<string>()
-  const parser = new DOMParser()
-  for (const file of CATALOG_XML) {
-    const path = join(srcRoot, file)
-    if (!existsSync(path)) continue
-    // Some KSA XML files start with a UTF-8 BOM, which strict @xmldom rejects.
-    // eslint-disable-next-line no-irregular-whitespace -- BOM is invisible but real
-    const text = readFileSync(path, 'utf-8').replace(/^﻿/, '')
-    const doc = parser.parseFromString(text, 'application/xml')
-    for (const atlas of Array.from(doc.getElementsByTagName('MeshAtlas'))) {
-      const p = atlas.getAttribute('Path')
-      if (p) refs.add(p)
-    }
-    for (const tag of TEXTURE_ELEMENTS) {
-      for (const el of Array.from(doc.getElementsByTagName(tag))) {
-        const p = el.getAttribute('Path')
-        if (p) refs.add(p)
-      }
-    }
-  }
-  return refs
-}
 
 const MIME: Record<string, string> = {
   '.glb': 'model/gltf-binary',
   '.gltf': 'model/gltf+json',
   '.xml': 'application/xml',
   '.ktx2': 'image/ktx2',
+  '.dds': 'image/vnd-ms.dds',
   '.png': 'image/png',
   '.json': 'application/json',
 }
 
 export function ksaAssets(): Plugin {
   let root = process.cwd()
+  let assetsDir = ''
+  // URL prefix the app fetches from, including Vite's `base` (e.g. "/flexo/ksa/").
+  let urlPrefix = '/ksa/'
   return {
     name: 'flexo-ksa-assets',
     configResolved(config) {
       root = config.root
+      urlPrefix = `${config.base}ksa/`
+      // loadEnv with an empty prefix reads unprefixed vars from .env* files and
+      // the shell (Vite only exposes VITE_-prefixed vars to import.meta.env).
+      const dir = loadEnv(config.mode, config.root, '').KSA_ASSETS_DIR
+      if (dir) assetsDir = resolve(config.root, dir)
     },
     // Emit the assets the app fetches at /ksa/* into dist/ksa/ for production.
     writeBundle(options) {
-      const srcRoot = join(root, CORE_DIR)
+      if (!assetsDir || !existsSync(assetsDir)) {
+        this.warn(
+          `KSA_ASSETS_DIR is unset or missing (${assetsDir || 'unset'}); no /ksa assets emitted`,
+        )
+        return
+      }
       const outDir = options.dir ?? join(root, 'dist')
-      const dstRoot = join(outDir, 'ksa')
-
-      const copy = (rel: string) => {
-        const src = join(srcRoot, rel)
-        if (!existsSync(src)) {
-          this.warn(`ksaAssets: referenced asset missing, skipped: ${rel}`)
-          return
-        }
-        const dst = join(dstRoot, rel)
-        mkdirSync(dirname(dst), { recursive: true })
-        copyFileSync(src, dst)
-      }
-
-      // Catalog XML (the app fetches these by name) + only the GLB/KTX2 they reference.
-      for (const file of CATALOG_XML) copy(file)
-      // GameData siblings — copy only those that exist (most asset files lack one).
-      for (const file of GAMEDATA_XML) {
-        if (existsSync(join(srcRoot, file))) copy(file)
-      }
-      for (const rel of collectReferencedAssets(srcRoot)) copy(rel)
+      cpSync(assetsDir, join(outDir, 'ksa'), { recursive: true })
     },
     configureServer(server) {
-      const root = server.config.root
-      const baseDir = join(root, CORE_DIR)
+      if (!assetsDir || !existsSync(assetsDir)) {
+        server.config.logger.warn(
+          `[ksaAssets] KSA_ASSETS_DIR is unset or missing (${assetsDir || 'unset'}); /ksa requests will 404`,
+        )
+      }
+      const baseDir = assetsDir
       server.middlewares.use((req, res, next) => {
-        if (!req.url || !req.url.startsWith('/ksa/')) return next()
+        if (!req.url || !req.url.startsWith(urlPrefix) || !baseDir) return next()
         // Strip query string and decode, then prevent path traversal.
-        const rel = decodeURIComponent(req.url.slice('/ksa/'.length).split('?')[0])
+        const rel = decodeURIComponent(req.url.slice(urlPrefix.length).split('?')[0])
         const abs = normalize(join(baseDir, rel))
-        if (!abs.startsWith(baseDir)) {
+        if (abs !== baseDir && !abs.startsWith(baseDir + sep)) {
           res.statusCode = 403
           res.end('Forbidden')
           return

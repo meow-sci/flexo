@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { loadCoreCatalog, indexCatalog } from '../ksa/catalog'
+import { loadCoreCatalog, indexCatalog, toUrl } from '../ksa/catalog'
 import { parsePartPlacements } from '../ksa/partXmlParser'
 import { SubPartObject } from './SubPartObject'
 
@@ -11,7 +11,7 @@ import { SubPartObject } from './SubPartObject'
  *
  * If it looks scrambled, fix the Euler order / axis mapping in three/coords.ts.
  */
-const DOCKING_PORT_FILE = '/ksa/CoreCouplingAAssets.xml'
+const DOCKING_PORT_FILE = toUrl('CoreCouplingAAssets.xml')
 const DOCKING_PORT_ID = 'CoreCouplingA_Prefab_DockingPort1WA'
 
 export async function loadDockingPortCalibration(scene: THREE.Scene): Promise<void> {

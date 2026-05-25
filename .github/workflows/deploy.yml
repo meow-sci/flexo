@@ -1,0 +1,76 @@
+name: Deploy to GitHub Pages
+
+on:
+  # Deploy on every push to main.
+  push:
+    branches: [main]
+  # Allow manual runs from the Actions tab.
+  workflow_dispatch:
+
+# Permissions needed to deploy to GitHub Pages via the artifact flow.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One in-flight deployment at a time; let a newer push supersede an older run.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # The private assets repo exposes its content under /assets. The ksaAssets
+      # Vite plugin reads KSA_ASSETS_DIR and copies that tree into dist/ksa/.
+      KSA_ASSETS_DIR: ${{ github.workspace }}/.tmp/flexo-private-assets/assets
+    steps:
+      - name: Checkout flexo
+        uses: actions/checkout@v5
+
+      # The licensed KSA binaries live in a separate private repo (kept out of
+      # this open-source repo). Needs an SSH deploy key — add the matching public
+      # key as a read-only Deploy Key on meow-sci/flexo-private-assets, and store
+      # the private key as the FLEXO_PRIVATE_ASSETS_SSH_KEY repo secret.
+      - name: Checkout private KSA assets
+        uses: actions/checkout@v5
+        with:
+          repository: meow-sci/flexo-private-assets
+          path: .tmp/flexo-private-assets
+          ssh-key: ${{ secrets.FLEXO_PRIVATE_ASSETS_SSH_KEY }}
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10 # pnpm-lock.yaml is lockfileVersion 9.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # base is '/flexo/' (vite.config.ts); served at meow.science.fail/flexo/.
+      - name: Build
+        run: pnpm run build
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

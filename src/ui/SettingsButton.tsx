@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
-import { NumberField, Popup, PopupContent, SectionTitle, ToolbarButton, Tooltip } from '@cladd-ui/react'
+import { Popup, PopupContent, SectionTitle, ToolbarButton, Tooltip } from '@cladd-ui/react'
 import { $connectorSettings, setConnectorSettings } from '../state/settingsStore'
+import { PreciseNumberInput } from './PreciseNumberInput'
 import { Settings } from 'lucide-react'
 
 
@@ -33,13 +34,11 @@ export function SettingsButton() {
             <label className="flex items-center justify-between gap-3">
               <span className="text-cladd-sm text-cladd-fg-soft">Connector size</span>
               <div className="flex items-center gap-1">
-                <NumberField
-                  size="sm"
+                <PreciseNumberInput
                   className="w-40"
                   min={0.01}
-                  step={0.05}
                   value={connectors.size}
-                  onChange={(size) => setConnectorSettings({ size })}
+                  onCommit={(size) => setConnectorSettings({ size })}
                 />
                 <span className="text-xs text-cladd-fg-softer">m</span>
               </div>

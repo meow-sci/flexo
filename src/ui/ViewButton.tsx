@@ -2,7 +2,6 @@ import { useStore } from '@nanostores/react'
 import {
   Button,
   Checkbox,
-  NumberField,
   Popover,
   PopoverRoot,
   PopoverTrigger,
@@ -16,6 +15,7 @@ import {
   type Axis,
   type CameraDir,
 } from '../state/viewStore'
+import { PreciseNumberInput } from './PreciseNumberInput'
 
 const SNAP_ROWS: [CameraDir, CameraDir][] = [
   ['left', 'right'],
@@ -69,13 +69,11 @@ export function ViewButton() {
                   onChange={(enabled) => setGrid(axis, { enabled })}
                 />
                 <span className="w-4 text-cladd-sm text-cladd-fg-soft">{label}</span>
-                <NumberField
-                  size="sm"
+                <PreciseNumberInput
                   className="flex-1"
                   min={0.05}
-                  step={0.1}
                   value={cfg.spacing}
-                  onChange={(spacing) => setGrid(axis, { spacing })}
+                  onCommit={(spacing) => setGrid(axis, { spacing })}
                 />
                 <span className="text-xs text-cladd-fg-softer">m</span>
               </div>

@@ -27,19 +27,20 @@ jobs:
       KSA_ASSETS_DIR: ${{ github.workspace }}/.tmp/flexo-private-assets/assets
     steps:
       - name: Checkout flexo
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       # The licensed KSA binaries live in a separate private repo (kept out of
       # this open-source repo). Needs an SSH deploy key — add the matching public
       # key as a read-only Deploy Key on meow-sci/flexo-private-assets, and store
       # the private key as the FLEXO_PRIVATE_ASSETS_SSH_KEY repo secret.
       - name: Checkout private KSA assets
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
         with:
           repository: meow-sci/flexo-private-assets
           path: .tmp/flexo-private-assets
           ssh-key: ${{ secrets.FLEXO_PRIVATE_ASSETS_SSH_KEY }}
           persist-credentials: false
+          ref: main
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4

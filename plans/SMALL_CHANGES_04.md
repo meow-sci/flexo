@@ -1,0 +1,1 @@
+- the SubPart details panel should be making the Id editable.  currently we auto generate one, and that is fine, but it needs to be an editable field.

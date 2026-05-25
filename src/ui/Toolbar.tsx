@@ -1,5 +1,6 @@
 import { useStore } from '@nanostores/react'
-import { Button, Toolbar as CladdToolbar, ToolbarSeparator } from '@cladd-ui/react'
+import { Toolbar as CladdToolbar, ToolbarButton, ToolbarSeparator, useToast } from '@cladd-ui/react'
+import { Undo, Redo } from 'lucide-react'
 import { $canRedo, $canUndo, redo, undo } from '../state/editorStore'
 import { AddButton } from './AddButton'
 import { PartDataButton } from './PartDataButton'
@@ -15,6 +16,7 @@ import { SettingsButton } from './SettingsButton'
 export function EditorToolbar() {
   const canUndo = useStore($canUndo)
   const canRedo = useStore($canRedo)
+  const toast = useToast()
 
   return (
     <CladdToolbar size="sm">
@@ -26,12 +28,14 @@ export function EditorToolbar() {
 
       <ViewButton />
 
-      <Button size="sm" disabled={!canUndo} onClick={() => undo()}>
-        Undo
-      </Button>
-      <Button size="sm" disabled={!canRedo} onClick={() => redo()}>
-        Redo
-      </Button>
+      <ToolbarSeparator />
+
+      <ToolbarButton disabled={!canUndo} onClick={() => { undo(); toast({ title: 'Undo', timeout: 1500 }) }}>
+        <Undo size={16} />
+      </ToolbarButton>
+      <ToolbarButton disabled={!canRedo} onClick={() => { redo(); toast({ title: 'Redo', timeout: 1500 }) }}>
+        <Redo size={16} />
+      </ToolbarButton>
 
       <ToolbarSeparator />
 

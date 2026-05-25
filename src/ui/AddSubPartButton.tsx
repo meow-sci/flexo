@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import {
   Button,
@@ -9,6 +9,7 @@ import {
   PopupContent,
   SearchField,
   ToolbarButton,
+  useToast,
 } from '@cladd-ui/react'
 import { $catalog, $catalogLoading } from '../state/catalogStore'
 import { addSubPart } from '../state/editorStore'
@@ -52,7 +53,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
   const loading = useStore($catalogLoading)
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [added, setAdded] = useState(0)
+  const toast = useToast()
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -60,17 +61,10 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
     return matches.slice(0, MAX_RESULTS)
   }, [catalog, query])
 
-  // Clear the transient "Added" confirmation shortly after each add.
-  useEffect(() => {
-    if (added === 0) return
-    const t = setTimeout(() => setAdded(0), 1500)
-    return () => clearTimeout(t)
-  }, [added])
-
   const add = () => {
     if (!selectedId) return
     addSubPart(selectedId)
-    setAdded((n) => n + 1)
+    toast({ title: 'SubPart Added', text: selectedId, timeout: 2500 })
   }
 
   return (
@@ -117,7 +111,6 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
             {selectedId ?? ''}
           </span>
           <div className="flex items-center gap-2">
-            {added > 0 && <span className="text-xs text-cladd-fg-soft">Added ✓</span>}
             <Button size="sm" onClick={onClose}>
               Close
             </Button>

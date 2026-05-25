@@ -5,6 +5,7 @@ import {
   $selectedIndices,
   pushUndo,
   setConnectorFlags,
+  setSubPartInstanceId,
   updatePlacementTransforms,
   updateSelectedTransform,
 } from '../state/editorStore'
@@ -133,7 +134,7 @@ export function TransformInspector() {
   return (
     <Surface outline className="rounded-xl" contentClassName="flex flex-col gap-2 p-2">
       {entity.kind === 'subpart' ? (
-        <SubPartHeader instanceId={entity.placement.instanceId} templateId={entity.placement.subPartTemplateId} />
+        <SubPartHeader index={entity.index} instanceId={entity.placement.instanceId} templateId={entity.placement.subPartTemplateId} locked={locked} />
       ) : (
         <ConnectorHeader index={entity.index} id={entity.connector.id} flags={entity.connector.flags} locked={locked} />
       )}
@@ -165,12 +166,36 @@ function Section(props: { title: string; children: React.ReactNode }) {
   )
 }
 
-function SubPartHeader({ instanceId, templateId }: { instanceId: string; templateId: string }) {
+function SubPartHeader({
+  index,
+  instanceId,
+  templateId,
+  locked,
+}: {
+  index: number
+  instanceId: string
+  templateId: string
+  locked: boolean
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="truncate font-mono text-sm" title={instanceId}>
-        {instanceId}
-      </span>
+      <Input
+        size="sm"
+        value={draft ?? instanceId}
+        inputClassName="font-mono"
+        disabled={locked}
+        onFocus={() => {
+          setDraft(instanceId)
+          pushUndo()
+        }}
+        onChange={(v: string) => {
+          setDraft(v)
+          if (v.trim()) setSubPartInstanceId(index, v.trim())
+        }}
+        onBlur={() => setDraft(null)}
+      />
       <span className="truncate text-xs text-cladd-fg-softer" title={templateId}>
         {templateId}
       </span>

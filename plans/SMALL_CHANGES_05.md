@@ -1,0 +1,4 @@
+- undo and redo should not be special buttons like they are now.  they should be simple icon buttons similar to the add button.  
+  - use lucide "Undo" for the undo icon, and lucide "Redo" for the redo icon.
+- there should be a separator between View and Undo/Redo
+- the global settings number input for connector size rounds to two decimal places, which is no good.  i don't want any rounding down to 4 decimal places.  this is also a problem on the grid size inputs in the view popover.  nothing should be interfering/rounding the numbers the user inputs, these need to be precise.

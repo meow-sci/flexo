@@ -437,6 +437,20 @@ export function setPartId(partId: string): void {
   $part.set(part)
 }
 
+/**
+ * Sets the instanceId of the SubPart at `index`. Streaming mutation (per-keystroke
+ * from a text field): does NOT push undo — the caller pushes once on field focus so
+ * a typing session collapses into a single undo step. No-op when blank.
+ */
+export function setSubPartInstanceId(index: number, instanceId: string): void {
+  if (!instanceId.trim()) return
+  const part = clone($part.get())
+  const placement = part.placements[index]
+  if (!placement) return
+  placement.instanceId = instanceId
+  $part.set(part)
+}
+
 /** Replaces the editor tags. Discrete mutation (add/remove one tag) → self-records undo. */
 export function setEditorTags(editorTags: readonly string[]): void {
   pushUndo()

@@ -1,4 +1,5 @@
 import { atom } from 'nanostores'
+import { persistentJSON } from '@nanostores/persistent'
 
 /**
  * Viewport "View" settings (nanostores): per-axis reference grids and one-shot
@@ -23,7 +24,7 @@ export type GridsState = Record<Axis, GridConfig>
  * plane (the default "floor"), `z` → XY plane. Y starts on to match the editor's
  * original ground grid.
  */
-export const $grids = atom<GridsState>({
+export const $grids = persistentJSON<GridsState>('flexo:grids', {
   x: { enabled: false, spacing: 1 },
   y: { enabled: true, spacing: 1 },
   z: { enabled: false, spacing: 1 },

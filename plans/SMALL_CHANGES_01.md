@@ -11,3 +11,4 @@ modes.
     - change this area to be a single surface
     - each section we need to render (selected item inspector, subpart list) should be a sub-surface
     - the main surface needs to be horizontally resizable.  we'll need a drag handle when we hover the left edge that allows for a resize.  when resized, it should change the horizontal size to match the mouse drag.  save this in a nanostores
+- make the subpart list and connectors be above the dynamically shown/hidden inspector (show below), make the subpart / connector list have a overflow scroll so that the inspector panel renders its natural full height since that is the main focus when active

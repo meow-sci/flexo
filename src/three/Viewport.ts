@@ -66,13 +66,16 @@ export class Viewport {
   }
 
   /**
-   * Snaps the camera to an axis-aligned orthographic-style view of the controls
-   * target, preserving the current distance (zoom). `up` is adjusted for the
-   * top/bottom views so the camera doesn't gimbal-lock looking straight down/up.
+   * Snaps the camera to an axis-aligned orthographic-style view, recentering the
+   * controls target on the origin so the snapped view looks straight down the
+   * axis at (0,0,0). Preserves the current distance (zoom). `up` is adjusted for
+   * the top/bottom views so the camera doesn't gimbal-lock looking straight
+   * down/up.
    */
   snapCamera(dir: CameraDir): void {
     const target = this.controls.target
     const distance = this.camera.position.distanceTo(target)
+    target.set(0, 0, 0)
 
     const offset = new THREE.Vector3()
     const up = new THREE.Vector3(0, 1, 0)

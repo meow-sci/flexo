@@ -2,9 +2,8 @@ import * as THREE from 'three'
 import type { Connector } from '../ksa/types'
 import { applyPlacement } from './coords'
 
-const CUBE_COLOR = 0x8a93a6
-const CONE_COLOR = 0xffc14d
-const HIGHLIGHT = 0x2a4d6e
+const COLOR_DEFAULT = 0xf2f0e9
+const COLOR_SELECTED = 0x22dd44
 
 /**
  * A connector in the scene: an untextured cube (the attachment point) plus a
@@ -30,7 +29,7 @@ export class ConnectorObject {
 
     this.cubeGeometry = new THREE.BoxGeometry(size, size, size)
     this.cubeMaterial = new THREE.MeshStandardMaterial({
-      color: CUBE_COLOR,
+      color: COLOR_DEFAULT,
       roughness: 0.6,
       metalness: 0.1,
     })
@@ -43,7 +42,7 @@ export class ConnectorObject {
     const coneLength = size * 1.5
     this.coneGeometry = new THREE.ConeGeometry(size / 2, coneLength, 24)
     this.coneMaterial = new THREE.MeshStandardMaterial({
-      color: CONE_COLOR,
+      color: COLOR_DEFAULT,
       roughness: 0.5,
       metalness: 0.1,
     })
@@ -61,14 +60,11 @@ export class ConnectorObject {
     applyPlacement(this.group, connector)
   }
 
-  /** Toggles the selection highlight (emissive tint on cube + cone). */
+  /** Bright green when selected, offwhite otherwise (cube + cone). */
   setSelected(selected: boolean): void {
-    const hex = selected ? HIGHLIGHT : 0x000000
-    const intensity = selected ? 1 : 0
-    this.cubeMaterial.emissive.setHex(hex)
-    this.cubeMaterial.emissiveIntensity = intensity
-    this.coneMaterial.emissive.setHex(hex)
-    this.coneMaterial.emissiveIntensity = intensity
+    const hex = selected ? COLOR_SELECTED : COLOR_DEFAULT
+    this.cubeMaterial.color.setHex(hex)
+    this.coneMaterial.color.setHex(hex)
   }
 
   dispose(): void {

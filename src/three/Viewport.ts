@@ -1,7 +1,8 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
-import { createGrid } from './Grid'
+import { GridManager } from './Grid'
+import type { CameraDir } from '../state/viewStore'
 
 /**
  * Framework-agnostic 3D workspace: renderer, scene, perspective camera, lighting,
@@ -14,6 +15,7 @@ export class Viewport {
   readonly camera: THREE.PerspectiveCamera
   readonly renderer: THREE.WebGLRenderer
   readonly controls: OrbitControls
+  readonly grids = new GridManager()
 
   private readonly host: HTMLElement
   private readonly resizeObserver: ResizeObserver
@@ -55,12 +57,38 @@ export class Viewport {
     dir.position.set(5, 10, 7)
     this.scene.add(dir)
 
-    this.scene.add(createGrid())
+    this.scene.add(this.grids.group)
 
     this.resizeObserver = new ResizeObserver(() => this.handleResize())
     this.resizeObserver.observe(host)
 
     this.renderer.setAnimationLoop(this.renderFrame)
+  }
+
+  /**
+   * Snaps the camera to an axis-aligned orthographic-style view of the controls
+   * target, preserving the current distance (zoom). `up` is adjusted for the
+   * top/bottom views so the camera doesn't gimbal-lock looking straight down/up.
+   */
+  snapCamera(dir: CameraDir): void {
+    const target = this.controls.target
+    const distance = this.camera.position.distanceTo(target)
+
+    const offset = new THREE.Vector3()
+    const up = new THREE.Vector3(0, 1, 0)
+    switch (dir) {
+      case 'right': offset.set(1, 0, 0); break
+      case 'left': offset.set(-1, 0, 0); break
+      case 'front': offset.set(0, 0, 1); break
+      case 'back': offset.set(0, 0, -1); break
+      case 'top': offset.set(0, 1, 0); up.set(0, 0, -1); break
+      case 'bottom': offset.set(0, -1, 0); up.set(0, 0, 1); break
+    }
+
+    this.camera.up.copy(up)
+    this.camera.position.copy(target).addScaledVector(offset, distance)
+    this.camera.lookAt(target)
+    this.controls.update()
   }
 
   private handleResize(): void {
@@ -80,6 +108,7 @@ export class Viewport {
     this.renderer.setAnimationLoop(null)
     this.resizeObserver.disconnect()
     this.controls.dispose()
+    this.grids.dispose()
     this.envRenderTarget.dispose()
     this.renderer.dispose()
     if (this.renderer.domElement.parentNode === this.host) {

@@ -17,6 +17,7 @@ import {
   updatePlacementTransform,
 } from '../state/editorStore'
 import { $catalogIndex } from '../state/catalogStore'
+import { $cameraSnap, $grids } from '../state/viewStore'
 
 /**
  * Owns the three.js {@link Viewport} and keeps the rendered scene in sync with
@@ -86,6 +87,12 @@ export class EditorScene {
     this.unsubscribers.push($selectedIndex.subscribe(() => this.updateSelection()))
     this.unsubscribers.push($toolMode.subscribe((mode) => this.gizmo.setMode(mode)))
     this.unsubscribers.push($snap.subscribe((snap) => this.gizmo.setSnap(snap)))
+    this.unsubscribers.push($grids.subscribe((grids) => this.viewport.grids.setConfig(grids)))
+    this.unsubscribers.push(
+      $cameraSnap.subscribe((cmd) => {
+        if (cmd) this.viewport.snapCamera(cmd.dir)
+      }),
+    )
   }
 
   /** Returns the scene object for a placed instance, if built. */

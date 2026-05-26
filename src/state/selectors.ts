@@ -1,5 +1,5 @@
 import { computed } from 'nanostores'
-import { $activeLayerId, $part, $selectedConnectorIndex, $selectedIndices } from './editorStore'
+import { $activeLayerId, $part, $selectedConnectorIndex, $selectedConnectorIndices, $selectedIndices } from './editorStore'
 import type { Connector, Layer, SubPartPlacement } from '../ksa/types'
 
 /** The currently selected placement when exactly one SubPart is selected, else null. */
@@ -25,10 +25,10 @@ export const $selectedPlacements = computed(
     }),
 )
 
-/** True when anything (one or more SubParts, or a connector) is selected. */
+/** True when anything (one or more SubParts, or one or more connectors) is selected. */
 export const $hasSelection = computed(
-  [$selectedIndices, $selectedConnectorIndex],
-  (indices, conIndex): boolean => indices.length > 0 || conIndex >= 0,
+  [$selectedIndices, $selectedConnectorIndices],
+  (indices, conIndices): boolean => indices.length > 0 || conIndices.length > 0,
 )
 
 /**

@@ -39,8 +39,21 @@ export const $selectedIndices = atom<number[]>([])
 export const $selectedIndex = computed($selectedIndices, (indices) =>
   indices.length > 0 ? indices[indices.length - 1] : -1,
 )
-/** Selected connector index, or -1. Mutually exclusive with {@link $selectedIndices}. */
-export const $selectedConnectorIndex = atom<number>(-1)
+/**
+ * Selected connector indices (multi-select), ordered by selection. Mutually
+ * exclusive with {@link $selectedIndices} — when this is non-empty,
+ * {@link $selectedIndices} is [].
+ */
+export const $selectedConnectorIndices = atom<number[]>([])
+/**
+ * Primary selected connector index (the last one added to the selection), or -1.
+ * Derived from {@link $selectedConnectorIndices}; drives single-entity behavior
+ * (gizmo attach, the per-entity inspector) and back-compat for existing readers.
+ */
+export const $selectedConnectorIndex = computed(
+  $selectedConnectorIndices,
+  (indices) => (indices.length > 0 ? indices[indices.length - 1] : -1),
+)
 /**
  * The layer new SubParts/connectors are added to. Ephemeral UI state (like
  * selection) — NOT persisted and NOT in undo history. Always clamped to an
@@ -133,9 +146,8 @@ function clampSelection(): void {
   const current = $selectedIndices.get()
   const filtered = current.filter((i) => i >= 0 && i <= max)
   if (filtered.length !== current.length) $selectedIndices.set(filtered)
-  if ($selectedConnectorIndex.get() > part.connectors.length - 1) {
-    $selectedConnectorIndex.set(part.connectors.length - 1)
-  }
+  const clampedCon = $selectedConnectorIndices.get().filter((i) => i < part.connectors.length)
+  if (clampedCon.length !== $selectedConnectorIndices.get().length) $selectedConnectorIndices.set(clampedCon)
 }
 
 /** Resets the active layer to Default if it no longer exists (e.g. after undo). */
@@ -361,15 +373,23 @@ export function setConnectorFlags(index: number, flags: ConnectorFlag): void {
   $part.set(part)
 }
 
-/** Removes the selected entity/entities (SubParts or a connector) and clamps selection. */
+/** Removes the selected entity/entities (SubParts or connectors) and clamps selection. */
 export function removeSelected(): void {
-  const ci = $selectedConnectorIndex.get()
-  if (ci >= 0 && ci < $part.get().connectors.length) {
-    pushUndo('delete connector', $part.get().connectors[ci]?.id ?? '')
-    const part = clone($part.get())
-    part.connectors.splice(ci, 1)
+  const conIndices = $selectedConnectorIndices.get()
+  if (conIndices.length > 0) {
+    const part0 = $part.get()
+    const valid = conIndices.filter((i) => i >= 0 && i < part0.connectors.length)
+    if (valid.length === 0) return
+    const names = valid.map((i) => part0.connectors[i]?.id).filter(Boolean)
+    pushUndo(valid.length > 1 ? 'delete connectors' : 'delete connector', names.length === 1 ? names[0] : `${names.length} connectors`)
+    const part = clone(part0)
+    for (const i of [...valid].sort((a, b) => b - a)) part.connectors.splice(i, 1)
     $part.set(part)
-    $selectedConnectorIndex.set(Math.min(ci, part.connectors.length - 1))
+    if (valid.length === 1 && part.connectors.length > 0) {
+      $selectedConnectorIndices.set([Math.min(valid[0], part.connectors.length - 1)])
+    } else {
+      $selectedConnectorIndices.set([])
+    }
     return
   }
   const indices = $selectedIndices.get()
@@ -411,23 +431,32 @@ export function removePlacement(index: number): void {
   else if (next.some((v, k) => v !== sel[k])) $selectedIndices.set(next)
 }
 
-/** Duplicates the selected entity/entities (SubParts or a connector) and selects the copies. */
+/** Duplicates the selected entity/entities (SubParts or connectors) and selects the copies. */
 export function duplicateSelected(): void {
-  const ci = $selectedConnectorIndex.get()
-  const srcConnector = $part.get().connectors[ci]
-  if (ci >= 0 && srcConnector) {
-    pushUndo('duplicate', srcConnector.id)
-    const part = clone($part.get())
-    part.connectors.push({
-      id: nextConnectorId(part),
-      position: { ...srcConnector.position },
-      rotation: { ...srcConnector.rotation },
-      scale: { ...srcConnector.scale },
-      flags: srcConnector.flags,
-      layerId: srcConnector.layerId,
-    })
+  const conIndices = $selectedConnectorIndices.get()
+  if (conIndices.length > 0) {
+    const part0 = $part.get()
+    const valid = conIndices.filter((i) => i >= 0 && i < part0.connectors.length)
+    if (valid.length === 0) return
+    const names = valid.map((i) => part0.connectors[i]?.id).filter(Boolean)
+    pushUndo('duplicate', names.length === 1 ? names[0] : `${names.length} connectors`)
+    const part = clone(part0)
+    const newIndices: number[] = []
+    for (const i of [...valid].sort((a, b) => a - b)) {
+      const src = part.connectors[i]
+      if (!src) continue
+      part.connectors.push({
+        id: nextConnectorId(part),
+        position: { ...src.position },
+        rotation: { ...src.rotation },
+        scale: { ...src.scale },
+        flags: src.flags,
+        layerId: src.layerId,
+      })
+      newIndices.push(part.connectors.length - 1)
+    }
     $part.set(part)
-    selectConnector(part.connectors.length - 1)
+    setSelectedConnectors(newIndices)
     return
   }
   const indices = $selectedIndices.get()
@@ -458,13 +487,13 @@ export function duplicateSelected(): void {
 
 /** Replaces the SubPart selection with a single index (clears any connector selection). */
 export function selectPlacement(index: number): void {
-  $selectedConnectorIndex.set(-1)
+  $selectedConnectorIndices.set([])
   $selectedIndices.set(index >= 0 ? [index] : [])
 }
 
 /** Replaces the SubPart selection with the given indices (deduped, order-preserving). */
 export function setSelectedPlacements(indices: readonly number[]): void {
-  $selectedConnectorIndex.set(-1)
+  $selectedConnectorIndices.set([])
   const seen = new Set<number>()
   const next: number[] = []
   for (const i of indices) {
@@ -479,7 +508,7 @@ export function setSelectedPlacements(indices: readonly number[]): void {
 /** Adds or removes a SubPart index from the current selection (clears connector selection). */
 export function togglePlacement(index: number): void {
   if (index < 0) return
-  $selectedConnectorIndex.set(-1)
+  $selectedConnectorIndices.set([])
   const current = $selectedIndices.get()
   $selectedIndices.set(
     current.includes(index) ? current.filter((i) => i !== index) : [...current, index],
@@ -489,13 +518,27 @@ export function togglePlacement(index: number): void {
 /** Selects a connector by index (clears any SubPart selection). */
 export function selectConnector(index: number): void {
   $selectedIndices.set([])
-  $selectedConnectorIndex.set(index)
+  $selectedConnectorIndices.set(index >= 0 ? [index] : [])
+}
+
+/** Replaces connector selection with the given indices (deduped, order-preserving). Clears SubPart selection. */
+export function setSelectedConnectors(indices: readonly number[]): void {
+  $selectedIndices.set([])
+  const seen = new Set<number>()
+  const next: number[] = []
+  for (const i of indices) {
+    if (i >= 0 && !seen.has(i)) {
+      seen.add(i)
+      next.push(i)
+    }
+  }
+  $selectedConnectorIndices.set(next)
 }
 
 /** Clears all selection. */
 export function clearSelection(): void {
   $selectedIndices.set([])
-  $selectedConnectorIndex.set(-1)
+  $selectedConnectorIndices.set([])
 }
 
 /**
@@ -758,8 +801,8 @@ export function deselectLayer(layerId: string): void {
   const current = $selectedIndices.get()
   const kept = current.filter((i) => part.placements[i]?.layerId !== layerId)
   if (kept.length !== current.length) $selectedIndices.set(kept)
-  const ci = $selectedConnectorIndex.get()
-  if (ci >= 0 && part.connectors[ci]?.layerId === layerId) $selectedConnectorIndex.set(-1)
+  const keptCon = $selectedConnectorIndices.get().filter((i) => part.connectors[i]?.layerId !== layerId)
+  if (keptCon.length !== $selectedConnectorIndices.get().length) $selectedConnectorIndices.set(keptCon)
 }
 
 export function newPart(): void {

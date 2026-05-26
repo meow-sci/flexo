@@ -6,13 +6,13 @@ import { Button, Dialog, Popover, PopoverRoot, PopoverTrigger, Surface } from '@
 import {
   $activeLayerId,
   $part,
-  $selectedConnectorIndex,
+  $selectedConnectorIndices,
   $selectedIndices,
   duplicateSelected,
   movePlacementToLayer,
   removePlacement,
   removeSelected,
-  selectConnector,
+  setSelectedConnectors,
   setSelectedPlacements,
 } from '../state/editorStore'
 import { CONNECTOR_LAYER_ID, type SubPartPlacement } from '../ksa/types'
@@ -30,9 +30,9 @@ import { CONNECTOR_LAYER_ID, type SubPartPlacement } from '../ksa/types'
 export function PlacementList() {
   const part = useStore($part)
   const selectedIndices = useStore($selectedIndices)
-  const selectedCon = useStore($selectedConnectorIndex)
+  const selectedConIndices = useStore($selectedConnectorIndices)
   const activeLayerId = useStore($activeLayerId)
-  const hasSelection = selectedIndices.length > 0 || selectedCon >= 0
+  const hasSelection = selectedIndices.length > 0 || selectedConIndices.length > 0
 
   // GridList items need a stable `id`; SubPart placements key on `instanceId`.
   // Only show placements belonging to the active layer, but preserve real indices
@@ -62,14 +62,21 @@ export function PlacementList() {
     [part.connectors, activeLayerId],
   )
   const connectorSelectedKeys = useMemo<Selection>(
-    () => (part.connectors[selectedCon] ? new Set([part.connectors[selectedCon].id]) : new Set()),
-    [selectedCon, part.connectors],
+    () => new Set(selectedConIndices.flatMap((i) => (part.connectors[i] ? [part.connectors[i].id] : []))),
+    [selectedConIndices, part.connectors],
   )
 
   const onConnectorSelectionChange = (keys: Selection) => {
-    if (keys === 'all') return
-    const key = [...keys][0]
-    selectConnector(key == null ? -1 : part.connectors.findIndex((c) => c.id === String(key)))
+    if (keys === 'all') {
+      setSelectedConnectors(connectorItems.map((item) => item.index))
+      return
+    }
+    setSelectedConnectors(
+      [...keys].flatMap((key) => {
+        const i = part.connectors.findIndex((c) => c.id === String(key))
+        return i >= 0 ? [i] : []
+      }),
+    )
   }
 
   const onSelectionChange = (keys: Selection) => {
@@ -85,14 +92,18 @@ export function PlacementList() {
     )
   }
 
-  const activeSelectedCount = items.filter((item) => selectedIndices.includes(item.index)).length
+  const isConnectorLayer = activeLayerId === CONNECTOR_LAYER_ID
+  const activeSelectedCount = isConnectorLayer
+    ? selectedConIndices.length
+    : items.filter((item) => selectedIndices.includes(item.index)).length
+  const listCount = isConnectorLayer ? connectorItems.length : items.length
   const selectedLabel = activeSelectedCount > 0 ? ` · ${activeSelectedCount} selected` : ''
 
   return (
     <Surface outline className="flex h-full min-h-0 flex-col rounded-xl" contentClassName="flex min-h-0 flex-col gap-2 p-2">
       <div className="flex items-center justify-between px-1">
         <span className="text-xs uppercase tracking-wide text-cladd-fg-softer">
-          Placed ({items.length}){selectedLabel}
+          {isConnectorLayer ? 'Connectors' : 'SubParts'} ({listCount}){selectedLabel}
         </span>
         <div className="flex gap-1">
           <Button size="xs" disabled={!hasSelection} onClick={() => duplicateSelected()}>
@@ -140,43 +151,38 @@ export function PlacementList() {
         </GridList>
 
         {connectorItems.length > 0 && (
-          <>
-            <span className="mt-2 block px-1 text-xs uppercase tracking-wide text-cladd-fg-softer">
-              Connectors ({connectorItems.length})
-            </span>
-            <GridList
-              aria-label="Connectors"
-              selectionMode="single"
-              selectionBehavior="replace"
-              items={connectorItems}
-              selectedKeys={connectorSelectedKeys}
-              onSelectionChange={onConnectorSelectionChange}
-              className="flex flex-col gap-0.5 outline-none"
-            >
-              {(item) => (
-                <GridListItem
-                  id={item.id}
-                  textValue={item.connector.id}
-                  className={({ isSelected, isFocusVisible }) =>
-                    [
-                      'flex cursor-default select-none items-center gap-1 rounded-md px-2 py-1 text-cladd-fg outline-none',
-                      isSelected
-                        ? 'bg-cladd-surface-press ring-2 ring-inset ring-cladd-primary'
-                        : 'hover:bg-cladd-surface-hover',
-                      isFocusVisible && !isSelected ? 'ring-1 ring-inset ring-cladd-primary' : '',
-                    ].join(' ')
-                  }
-                >
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate font-mono text-sm">{item.connector.id}</span>
-                    <span className="truncate text-xs opacity-70">
-                      {item.connector.flags === 'None' ? 'no flags' : item.connector.flags}
-                    </span>
-                  </div>
-                </GridListItem>
-              )}
-            </GridList>
-          </>
+          <GridList
+            aria-label="Connectors"
+            selectionMode="multiple"
+            selectionBehavior="replace"
+            items={connectorItems}
+            selectedKeys={connectorSelectedKeys}
+            onSelectionChange={onConnectorSelectionChange}
+            className="flex flex-col gap-0.5 outline-none"
+          >
+            {(item) => (
+              <GridListItem
+                id={item.id}
+                textValue={item.connector.id}
+                className={({ isSelected, isFocusVisible }) =>
+                  [
+                    'flex cursor-default select-none items-center gap-1 rounded-md px-2 py-1 text-cladd-fg outline-none',
+                    isSelected
+                      ? 'bg-cladd-surface-press ring-2 ring-inset ring-cladd-primary'
+                      : 'hover:bg-cladd-surface-hover',
+                    isFocusVisible && !isSelected ? 'ring-1 ring-inset ring-cladd-primary' : '',
+                  ].join(' ')
+                }
+              >
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate font-mono text-sm">{item.connector.id}</span>
+                  <span className="truncate text-xs opacity-70">
+                    {item.connector.flags === 'None' ? 'no flags' : item.connector.flags}
+                  </span>
+                </div>
+              </GridListItem>
+            )}
+          </GridList>
         )}
       </div>
     </Surface>

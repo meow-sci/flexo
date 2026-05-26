@@ -18,6 +18,7 @@ import {
   $activeLayerId,
   $part,
   $selectedConnectorIndex,
+  $selectedConnectorIndices,
   $selectedIndices,
   $snap,
   $toolMode,
@@ -152,7 +153,7 @@ export class EditorScene {
     )
     this.unsubscribers.push($part.subscribe((part) => this.reconcile(part)))
     this.unsubscribers.push($selectedIndices.subscribe(() => this.updateSelection()))
-    this.unsubscribers.push($selectedConnectorIndex.subscribe(() => this.updateSelection()))
+    this.unsubscribers.push($selectedConnectorIndices.subscribe(() => this.updateSelection()))
     this.unsubscribers.push(
       $connectorSettings.subscribe((settings) => {
         this.connectorSettings = settings
@@ -279,14 +280,18 @@ export class EditorScene {
     this.updateSelection()
   }
 
-  /** Resolves the currently selected scene objects (SubParts or a connector) that are built. */
+  /** Resolves the currently selected scene objects (SubParts or connectors) that are built. */
   private selectedObjects(): SelectableObject[] {
     const part = $part.get()
-    const conIndex = $selectedConnectorIndex.get()
-    if (conIndex >= 0) {
-      const connector = part.connectors[conIndex]
-      const obj = connector && this.connectorObjects.get(connector.id)
-      return obj ? [obj] : []
+    const conIndices = $selectedConnectorIndices.get()
+    if (conIndices.length > 0) {
+      const out: SelectableObject[] = []
+      for (const i of conIndices) {
+        const connector = part.connectors[i]
+        const obj = connector && this.connectorObjects.get(connector.id)
+        if (obj) out.push(obj)
+      }
+      return out
     }
     const out: SelectableObject[] = []
     for (const index of $selectedIndices.get()) {
@@ -336,10 +341,10 @@ export class EditorScene {
     // Suppress the gizmo when any selected entity is in a locked layer (items
     // can be selected from the Placed list for inspection but must not be moved).
     const part = $part.get()
-    const conIndex = $selectedConnectorIndex.get()
+    const conIndices = $selectedConnectorIndices.get()
     const anyLocked =
       indices.some((i) => isLayerLocked(part.placements[i]?.layerId ?? '')) ||
-      (conIndex >= 0 && isLayerLocked(part.connectors[conIndex]?.layerId ?? ''))
+      conIndices.some((ci) => isLayerLocked(part.connectors[ci]?.layerId ?? ''))
     if (anyLocked) {
       target = null
     } else if (multi) {

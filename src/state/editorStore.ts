@@ -270,7 +270,8 @@ export function addSubPart(templateId: string): void {
  * connectors (transforms + flags) and editor tags. InstanceIds and connector ids
  * are regenerated so they never collide with entities already in the project; the
  * imported editor tags are unioned into the project's tags. Imported SubParts land
- * in the active layer; connectors always go to the built-in Connectors layer
+ * in `targetLayerId` when given (and it exists), else the active layer; connectors
+ * always go to the built-in Connectors layer
  * (layers are editor-only and absent from KSA XML). The last added SubPart is
  * selected (or the last connector if the Part has no SubParts).
  */
@@ -278,6 +279,7 @@ export function addPart(
   placements: readonly SubPartPlacement[],
   connectors: readonly Connector[] = [],
   editorTags: readonly string[] = [],
+  targetLayerId?: string,
 ): void {
   if (placements.length === 0 && connectors.length === 0) return
   const importDetail = placements.length > 0 && connectors.length === 0
@@ -287,7 +289,10 @@ export function addPart(
       : `${placements.length} parts, ${connectors.length} connectors`
   pushUndo('import', importDetail)
   const part = clone($part.get())
-  const layerId = currentLayerId(part)
+  const layerId =
+    targetLayerId && part.layers.some((l) => l.id === targetLayerId)
+      ? targetLayerId
+      : currentLayerId(part)
   for (const tag of editorTags) {
     if (!part.editorTags.includes(tag)) part.editorTags.push(tag)
   }

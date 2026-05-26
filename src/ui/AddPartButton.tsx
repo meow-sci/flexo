@@ -9,16 +9,33 @@ import {
   PopupContent,
   SearchField,
   SectionTitle,
+  Select,
   ToolbarButton,
   useToast,
 } from '@cladd-ui/react'
 import type { CatalogPart } from '../ksa/partCatalog'
+import type { Layer } from '../ksa/types'
 import { $catalogIndex } from '../state/catalogStore'
 import { $partCatalog, $partCatalogLoading } from '../state/partCatalogStore'
-import { addPart } from '../state/editorStore'
+import { $part, addPart, createLayer } from '../state/editorStore'
 import { PartPreview } from './PartPreview'
 
 const MAX_RESULTS = 200
+
+const NEW_LAYER = '__new_layer__'
+const CURRENT_LAYER = '__current_layer__'
+
+type LayerChoice = Pick<Layer, 'id' | 'name'>
+
+/** Next free "New Layer N" name (max existing numeric suffix + 1). */
+function nextNewLayerName(layers: readonly Layer[]): string {
+  let max = 0
+  for (const l of layers) {
+    const m = /^New Layer (\d+)$/.exec(l.name)
+    if (m) max = Math.max(max, Number.parseInt(m[1], 10))
+  }
+  return `New Layer ${max + 1}`
+}
 
 /**
  * Top-surface "+ Part" action: opens a full-screen browser Popup with a
@@ -44,7 +61,7 @@ export function PartPopup({ open, onOpenChange }: { open: boolean; onOpenChange:
     <Popup
       open={open}
       onOpenChange={onOpenChange}
-      contentClassName="max-w-5xl"
+      contentClassName="max-w-5xl [&>.rounded-cladd-popup]:rounded-lg"
       headerLeft={<span className="px-2 pb-1 text-cladd-sm font-semibold">Add Part</span>}
     >
       {open && <BrowserBody onClose={() => onOpenChange(false)} />}
@@ -56,9 +73,20 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
   const catalog = useStore($partCatalog)
   const loading = useStore($partCatalogLoading)
   const subPartIndex = useStore($catalogIndex)
+  const part = useStore($part)
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [targetLayer, setTargetLayer] = useState<string>(NEW_LAYER)
   const toast = useToast()
+
+  const layerOptions = useMemo<LayerChoice[]>(
+    () => [
+      { id: NEW_LAYER, name: 'New Layer' },
+      { id: CURRENT_LAYER, name: 'Current Layer' },
+      ...part.layers.map((l) => ({ id: l.id, name: l.name })),
+    ],
+    [part.layers],
+  )
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -79,7 +107,13 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
 
   const add = () => {
     if (!selected) return
-    addPart(selected.placements, selected.connectors, selected.editorTags)
+    const layerId =
+      targetLayer === NEW_LAYER
+        ? createLayer(nextNewLayerName(part.layers))
+        : targetLayer === CURRENT_LAYER
+          ? undefined
+          : targetLayer
+    addPart(selected.placements, selected.connectors, selected.editorTags, layerId)
     toast({ title: 'Part Added', text: selected.id, timeout: 2500 })
   }
 
@@ -138,8 +172,22 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
               {selectedId ?? ''}
             </span>
             <div className="flex items-center gap-2">
+              <Select
+                size="sm"
+                title="Import into layer"
+                options={layerOptions}
+                value={targetLayer}
+                getOptionValue={(l) => l.id}
+                onChange={(v) => setTargetLayer(v as string)}
+                renderOption={({ value }) => value.name}
+                renderBeforeOption={(_value, index) =>
+                  index === 2 ? <div className="my-1 border-t border-cladd-outline" /> : null
+                }
+              >
+                {layerOptions.find((l) => l.id === targetLayer)?.name}
+              </Select>
               <Button size="sm" color="brand" disabled={!selected} onClick={add}>
-                Import Part to Project
+                Import Part
               </Button>
               <Button size="sm" onClick={onClose}>
                 Close

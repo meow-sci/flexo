@@ -40,7 +40,7 @@ export function SubPartPopup({ open, onOpenChange }: { open: boolean; onOpenChan
     <Popup
       open={open}
       onOpenChange={onOpenChange}
-      contentClassName="max-w-5xl"
+      contentClassName="max-w-5xl [&>.rounded-cladd-popup]:rounded-lg"
       headerLeft={<span className="px-2 pb-1 text-cladd-sm font-semibold">Add SubPart</span>}
     >
       {open && <BrowserBody onClose={() => onOpenChange(false)} />}

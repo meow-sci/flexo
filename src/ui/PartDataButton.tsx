@@ -18,7 +18,7 @@ export function PartDataButton() {
       <Popup
         open={open}
         onOpenChange={setOpen}
-        contentClassName="max-w-md"
+        contentClassName="max-w-md [&>.rounded-cladd-popup]:rounded-lg"
         headerLeft={<span className="px-2 pb-1 text-cladd-sm font-semibold">Part Data</span>}
       >
         <PopupContent>

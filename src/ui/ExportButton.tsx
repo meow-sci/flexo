@@ -63,7 +63,7 @@ export function ExportButton() {
       <Popup
         open={open}
         onOpenChange={setOpen}
-        contentClassName="max-w-2xl"
+        contentClassName="max-w-2xl [&>.rounded-cladd-popup]:rounded-lg"
         headerLeft={<span className="px-2 pb-1 text-cladd-sm font-semibold">Export</span>}
       >
         <PopupContent>

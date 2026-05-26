@@ -46,6 +46,7 @@ Feature docs live in `docs/`. Read the relevant one before working on an area, a
 # UI design
 
 - **`<Popover>` MUST use `rounded-lg`**: every `<Popover>` component MUST include `rounded-lg` in its `className`. The default rounding from cladd is too large for this UI; `rounded-lg` is the correct standard. Example: `<Popover className="w-64 rounded-lg" ...>`.
+- **Prefer `GridList` over `ListBox`**: when rendering selectable lists, use react-aria's `GridList`/`GridListItem` rather than `ListBox` (or cladd's `List`/`ListButton`). `GridList` supports richer functionality — rows can embed interactive controls (buttons, menus, links) while still participating in single/multi selection and keyboard navigation.
 
 
 

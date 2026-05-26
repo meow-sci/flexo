@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Lock, LockOpen, Scan, Trash2 } from 'lucide-react'
+import { Eye, EyeOff, Lock, LockOpen, Pencil, Save, Scan, Trash2 } from 'lucide-react'
 
 export function EyeIcon() { return <Eye className="size-4" /> }
 export function EyeOffIcon() { return <EyeOff className="size-4" /> }
@@ -12,4 +12,12 @@ export function SelectAllIcon() {
 
 export function TrashIcon() {
   return <Trash2 className="size-4" />;
+}
+
+export function PencilIcon() {
+  return <Pencil className="size-4" />;
+}
+
+export function SaveIcon() {
+  return <Save className="size-4" />;
 }

@@ -171,10 +171,11 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
             >
               {selectedId ?? ''}
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex min-w-0 flex-1 items-center gap-2">
               <Select
                 size="sm"
                 title="Import into layer"
+                className="min-w-0 flex-1"
                 options={layerOptions}
                 value={targetLayer}
                 getOptionValue={(l) => l.id}
@@ -186,10 +187,10 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
               >
                 {layerOptions.find((l) => l.id === targetLayer)?.name}
               </Select>
-              <Button size="sm" color="brand" disabled={!selected} onClick={add}>
+              <Button size="sm" color="brand" disabled={!selected} onClick={add} className="shrink-0">
                 Import Part
               </Button>
-              <Button size="sm" onClick={onClose}>
+              <Button size="sm" onClick={onClose} className="shrink-0">
                 Close
               </Button>
             </div>

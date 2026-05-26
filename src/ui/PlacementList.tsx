@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { GridList, GridListItem, type Selection } from 'react-aria-components'
 import { ChevronRight, MoreVertical } from 'lucide-react'
-import { Button, Dialog, List, ListButton, Popover, PopoverRoot, PopoverTrigger, Surface } from '@cladd-ui/react'
+import { Button, Dialog, Popover, PopoverRoot, PopoverTrigger, Surface } from '@cladd-ui/react'
 import {
   $activeLayerId,
   $part,
@@ -23,8 +23,9 @@ import { CONNECTOR_LAYER_ID, type SubPartPlacement } from '../ksa/types'
  * toggle, Shift to range-select), kept in sync with 3D selection via the shared
  * store. GridList (rather than ListBox) is used so each row can embed interactive
  * controls — here a per-row context menu (Delete / Change Layer). Connectors
- * remain a single-select cladd list. The top Delete / Duplicate buttons act on
- * the current selection (all selected SubParts, or the selected connector).
+ * are a single-select GridList kept in sync with the shared store. The top
+ * Delete / Duplicate buttons act on the current selection (all selected
+ * SubParts, or the selected connector).
  */
 export function PlacementList() {
   const part = useStore($part)
@@ -56,10 +57,20 @@ export function PlacementList() {
   const connectorItems = useMemo(
     () =>
       part.connectors
-        .map((connector, index) => ({ connector, index }))
+        .map((connector, index) => ({ id: connector.id, connector, index }))
         .filter(({ connector }) => connector.layerId === activeLayerId),
     [part.connectors, activeLayerId],
   )
+  const connectorSelectedKeys = useMemo<Selection>(
+    () => (part.connectors[selectedCon] ? new Set([part.connectors[selectedCon].id]) : new Set()),
+    [selectedCon, part.connectors],
+  )
+
+  const onConnectorSelectionChange = (keys: Selection) => {
+    if (keys === 'all') return
+    const key = [...keys][0]
+    selectConnector(key == null ? -1 : part.connectors.findIndex((c) => c.id === String(key)))
+  }
 
   const onSelectionChange = (keys: Selection) => {
     if (keys === 'all') {
@@ -133,20 +144,38 @@ export function PlacementList() {
             <span className="mt-2 block px-1 text-xs uppercase tracking-wide text-cladd-fg-softer">
               Connectors ({connectorItems.length})
             </span>
-            <List>
-              {connectorItems.map(({ connector, index }) => (
-                <ListButton
-                  key={connector.id}
-                  size="sm"
-                  selected={index === selectedCon}
-                  color="brand"
-                  onClick={() => selectConnector(index)}
-                  footer={connector.flags === 'None' ? 'no flags' : connector.flags}
+            <GridList
+              aria-label="Connectors"
+              selectionMode="single"
+              selectionBehavior="replace"
+              items={connectorItems}
+              selectedKeys={connectorSelectedKeys}
+              onSelectionChange={onConnectorSelectionChange}
+              className="flex flex-col gap-0.5 outline-none"
+            >
+              {(item) => (
+                <GridListItem
+                  id={item.id}
+                  textValue={item.connector.id}
+                  className={({ isSelected, isFocusVisible }) =>
+                    [
+                      'flex cursor-default select-none items-center gap-1 rounded-md px-2 py-1 text-cladd-fg outline-none',
+                      isSelected
+                        ? 'bg-cladd-surface-press ring-2 ring-inset ring-cladd-primary'
+                        : 'hover:bg-cladd-surface-hover',
+                      isFocusVisible && !isSelected ? 'ring-1 ring-inset ring-cladd-primary' : '',
+                    ].join(' ')
+                  }
                 >
-                  <span className="truncate font-mono">{connector.id}</span>
-                </ListButton>
-              ))}
-            </List>
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate font-mono text-sm">{item.connector.id}</span>
+                    <span className="truncate text-xs opacity-70">
+                      {item.connector.flags === 'None' ? 'no flags' : item.connector.flags}
+                    </span>
+                  </div>
+                </GridListItem>
+              )}
+            </GridList>
           </>
         )}
       </div>

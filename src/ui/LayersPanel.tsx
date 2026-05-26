@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
-import { ListBox, ListBoxItem, useDragAndDrop, type Selection } from 'react-aria-components'
+import { GridList, GridListItem, useDragAndDrop, type Selection } from 'react-aria-components'
 import { Button, Chip, Dialog, Input, ListTitle, Segmented, SegmentedButton, Select, Tooltip } from '@cladd-ui/react'
 import {
   $activeLayerId,
@@ -15,7 +15,7 @@ import {
 import { $layerView, layerViewState, toggleLayerLocked, toggleLayerVisible } from '../state/layerStore'
 import { $layerSummaries, type LayerSummary } from '../state/selectors'
 import { BUILT_IN_LAYER_IDS, DEFAULT_LAYER_ID, type Layer } from '../ksa/types'
-import { EyeIcon, EyeOffIcon, LockIcon, SelectAllIcon, TrashIcon, UnlockIcon } from './layerIcons'
+import { EyeIcon, EyeOffIcon, LockIcon, PencilIcon, SaveIcon, SelectAllIcon, TrashIcon, UnlockIcon } from './layerIcons'
 
 /** Moves the dragged keys to before/after the target id within `ids`. */
 function computeReorder(
@@ -34,11 +34,12 @@ function computeReorder(
 
 /**
  * The layers list shown inside the sidebar's Layers popover. A react-aria
- * ListBox whose single selection IS the active layer (new items land there),
- * with drag-and-drop reorder. Each row carries a SubPart+connector count chip,
- * eye (visibility) and lock toggles, a "select all in layer" action, and delete
- * (disabled for the built-in Default layer). Visibility/lock are persisted view
- * state (layerStore); creation/rename/reorder/delete mutate the document and are
+ * GridList (rather than ListBox) so each row can embed interactive controls —
+ * an inline rename input, eye/lock toggles, "select all", and delete. The single
+ * selection IS the active layer (new items land there), with drag-and-drop
+ * reorder. Each row carries a SubPart+connector count chip; delete is disabled
+ * for the built-in Default layer. Visibility/lock are persisted view state
+ * (layerStore); creation/rename/reorder/delete mutate the document and are
  * undoable (editorStore).
  */
 export function LayersPanel({ onLayerSelected }: { onLayerSelected?: () => void } = {}) {
@@ -95,7 +96,7 @@ export function LayersPanel({ onLayerSelected }: { onLayerSelected?: () => void 
         </Button>
       </div>
 
-      <ListBox
+      <GridList
         aria-label="Layers"
         selectionMode="single"
         selectionBehavior="replace"
@@ -104,10 +105,13 @@ export function LayersPanel({ onLayerSelected }: { onLayerSelected?: () => void 
         selectedKeys={new Set([activeId])}
         onSelectionChange={onSelectionChange}
         dragAndDropHooks={dragAndDropHooks}
+        // editingId is read by the row render fn but isn't part of `items`, so the
+        // collection cache must be invalidated explicitly when it changes.
+        dependencies={[editingId]}
         className="flex max-h-[50vh] flex-col gap-0.5 overflow-auto outline-none"
       >
         {(summary: LayerSummary) => (
-          <ListBoxItem
+          <GridListItem
             id={summary.layer.id}
             textValue={summary.layer.name}
             className={({ isSelected, isFocusVisible }) =>
@@ -127,9 +131,9 @@ export function LayersPanel({ onLayerSelected }: { onLayerSelected?: () => void 
               onEndRename={() => setEditingId(null)}
               onRequestDelete={() => setPendingDeleteId(summary.layer.id)}
             />
-          </ListBoxItem>
+          </GridListItem>
         )}
-      </ListBox>
+      </GridList>
 
       {pendingLayer && (
         <DeleteLayerDialog
@@ -187,6 +191,19 @@ function LayerRow({
       </Chip>
 
       <div className="flex shrink-0 items-center" onPointerDown={stopRowPress}>
+        {!isEditing && (
+          <Tooltip tooltip="Rename layer">
+            <Button
+              square
+              size="xs"
+              variant="transparent"
+              aria-label="Rename layer"
+              onClick={onStartRename}
+            >
+              <PencilIcon />
+            </Button>
+          </Tooltip>
+        )}
         <Tooltip tooltip={view.visible ? 'Hide layer' : 'Show layer'}>
           <Button
             square
@@ -246,19 +263,26 @@ function RenameInput({ layer, onDone }: { layer: Layer; onDone: () => void }) {
     onDone()
   }
   return (
-    <Input
-      size="sm"
-      autoFocus
-      value={draft}
-      onChange={setDraft}
-      onBlur={commit}
-      // Keep listbox typeahead/selection keys from stealing the keystrokes.
-      onKeyDown={(e) => {
-        e.stopPropagation()
-        if (e.key === 'Enter') commit()
-        else if (e.key === 'Escape') onDone()
-      }}
-    />
+    <div className="flex items-center gap-1">
+      <Input
+        size="sm"
+        autoFocus
+        className="min-w-0 flex-1"
+        value={draft}
+        onChange={setDraft}
+        // Keep grid typeahead/selection keys from stealing the keystrokes.
+        onKeyDown={(e) => {
+          e.stopPropagation()
+          if (e.key === 'Enter') commit()
+          else if (e.key === 'Escape') onDone()
+        }}
+      />
+      <Tooltip tooltip="Save name">
+        <Button square size="xs" variant="transparent" aria-label="Save name" onClick={commit}>
+          <SaveIcon />
+        </Button>
+      </Tooltip>
+    </div>
   )
 }
 

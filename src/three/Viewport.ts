@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { GridManager } from './Grid'
-import type { CameraDir } from '../state/viewStore'
+import { $cameraState, type CameraDir, type CameraState } from '../state/viewStore'
 
 /**
  * Framework-agnostic 3D workspace: renderer, scene, perspective camera, lighting,
@@ -44,6 +44,7 @@ export class Viewport {
     this.controls.enableDamping = true
     this.controls.target.set(0, 0, 0)
     this.controls.update()
+    this.controls.addEventListener('end', this.onControlsEnd)
 
     // Image-based lighting so PBR metals reflect and aren't black (KSA uses IBL).
     const pmrem = new THREE.PMREMGenerator(this.renderer)
@@ -92,6 +93,29 @@ export class Viewport {
     this.camera.position.copy(target).addScaledVector(offset, distance)
     this.camera.lookAt(target)
     this.controls.update()
+    $cameraState.set(this.readCameraState())
+  }
+
+  restoreCamera(state: CameraState): void {
+    this.camera.position.set(...state.position)
+    this.camera.up.set(...state.up)
+    this.controls.target.set(...state.target)
+    this.controls.update()
+  }
+
+  private readonly onControlsEnd = (): void => {
+    $cameraState.set(this.readCameraState())
+  }
+
+  private readCameraState(): CameraState {
+    const p = this.camera.position
+    const t = this.controls.target
+    const u = this.camera.up
+    return {
+      position: [p.x, p.y, p.z],
+      target: [t.x, t.y, t.z],
+      up: [u.x, u.y, u.z],
+    }
   }
 
   private handleResize(): void {
@@ -110,6 +134,7 @@ export class Viewport {
   dispose(): void {
     this.renderer.setAnimationLoop(null)
     this.resizeObserver.disconnect()
+    this.controls.removeEventListener('end', this.onControlsEnd)
     this.controls.dispose()
     this.grids.dispose()
     this.envRenderTarget.dispose()

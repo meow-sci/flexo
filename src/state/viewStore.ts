@@ -45,3 +45,34 @@ let snapNonce = 0
 export function snapCamera(dir: CameraDir): void {
   $cameraSnap.set({ dir, nonce: ++snapNonce })
 }
+
+export interface CameraState {
+  position: [number, number, number]
+  target: [number, number, number]
+  up: [number, number, number]
+}
+
+/** Current camera state — written by the Viewport on controls 'end' (once per gesture). */
+export const $cameraState = atom<CameraState | null>(null)
+
+/**
+ * One-shot camera-restore command, mirroring {@link $cameraSnap}.
+ * Written by projectStore on project load; applied by EditorScene on subscribe.
+ */
+export const $cameraRestore = atom<{ state: CameraState; nonce: number } | null>(null)
+let restoreNonce = 0
+export function setCameraRestore(state: CameraState): void {
+  $cameraRestore.set({ state, nonce: ++restoreNonce })
+}
+
+const DEFAULT_CAMERA_STATE: CameraState = {
+  position: [3, 2, 4],
+  target: [0, 0, 0],
+  up: [0, 1, 0],
+}
+
+/** Clears the saved camera state and restores the Viewport to its default position. */
+export function resetCamera(): void {
+  $cameraState.set(null)
+  setCameraRestore(DEFAULT_CAMERA_STATE)
+}

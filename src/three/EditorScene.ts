@@ -33,7 +33,7 @@ import {
 } from '../state/editorStore'
 import { $catalogIndex } from '../state/catalogStore'
 import { $connectorSettings, type ConnectorSettings } from '../state/settingsStore'
-import { $cameraSnap, $grids } from '../state/viewStore'
+import { $cameraRestore, $cameraSnap, $grids } from '../state/viewStore'
 import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../state/layerStore'
 
 /** A highlightable scene entity — both SubPartObject and ConnectorObject match. */
@@ -167,6 +167,11 @@ export class EditorScene {
     this.unsubscribers.push(
       $cameraSnap.subscribe((cmd) => {
         if (cmd) this.viewport.snapCamera(cmd.dir)
+      }),
+    )
+    this.unsubscribers.push(
+      $cameraRestore.subscribe((cmd) => {
+        if (cmd) this.viewport.restoreCamera(cmd.state)
       }),
     )
   }

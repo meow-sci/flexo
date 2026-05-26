@@ -11,6 +11,7 @@ import {
   type HistorySnapshot,
 } from './editorStore'
 import { $layerView, type LayerViewState } from './layerStore'
+import { $cameraState, resetCamera, setCameraRestore, type CameraState } from './viewStore'
 import { DEFAULT_LAYER_ID, type EditingPart } from '../ksa/types'
 
 /**
@@ -50,7 +51,7 @@ export const DEFAULT_PROJECT_NAME = 'Untitled'
 /** The current project's name (its identity / localStorage key). Live working state. */
 export const $projectName = atom<string>(DEFAULT_PROJECT_NAME)
 
-/** Everything needed to fully restore a project's workspace (camera excluded). */
+/** Everything needed to fully restore a project's workspace. */
 export interface ProjectSnapshot {
   version: number
   name: string
@@ -63,6 +64,8 @@ export interface ProjectSnapshot {
   history: HistorySnapshot
   /** Epoch millis of the last save — drives "most recent" ordering in the picker. */
   savedAt: number
+  /** Camera position/target/up — restored when the project loads. */
+  camera?: CameraState
 }
 
 /** A lightweight project descriptor for the load-project list (no full document). */
@@ -118,6 +121,7 @@ function serializeCurrentProject(): ProjectSnapshot {
     activeLayerId: $activeLayerId.get(),
     history: exportHistory(),
     savedAt: Date.now(),
+    camera: $cameraState.get() ?? undefined,
   }
 }
 
@@ -136,6 +140,12 @@ function applyProjectSnapshot(snap: ProjectSnapshot): void {
     $activeLayerId.set(activeValid ? snap.activeLayerId : DEFAULT_LAYER_ID)
     $layerView.set(snap.layerView ?? {})
     clearSelection()
+    if (snap.camera) {
+      // Pre-fill $cameraState so it's included in the next autosave, then signal
+      // EditorScene to reposition the Viewport (fires on subscribe when it mounts).
+      $cameraState.set(snap.camera)
+      setCameraRestore(snap.camera)
+    }
   } finally {
     suspended = false
   }
@@ -208,6 +218,7 @@ export function createProject(name: string): void {
   try {
     newPart()
     $layerView.set({})
+    resetCamera()
   } finally {
     suspended = false
   }
@@ -273,6 +284,7 @@ function startAutosave(): void {
   $activeLayerId.subscribe(scheduleSave)
   $layerView.subscribe(scheduleSave)
   $projectName.subscribe(scheduleSave)
+  $cameraState.subscribe(scheduleSave)
 }
 
 /**

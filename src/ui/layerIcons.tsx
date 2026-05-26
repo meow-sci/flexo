@@ -1,4 +1,4 @@
-import { Eye, EyeOff, Lock, LockOpen, Pencil, Save, Scan, Trash2 } from 'lucide-react'
+import { Eye, EyeOff, GripVertical, Lock, LockOpen, Pencil, Save, Scan, Trash2 } from 'lucide-react'
 
 export function EyeIcon() { return <Eye className="size-4" /> }
 export function EyeOffIcon() { return <EyeOff className="size-4" /> }
@@ -20,4 +20,8 @@ export function PencilIcon() {
 
 export function SaveIcon() {
   return <Save className="size-4" />;
+}
+
+export function GripVerticalIcon() {
+  return <GripVertical className="size-3.5" />;
 }

@@ -28,7 +28,7 @@ export function LayersButton() {
       </PopoverTrigger>
       {/* Padding lives on the inner content area (not the root) so the focus rings
           of the name input + rows aren't clipped by the content area's overflow. */}
-      <Popover position="bottom-end" className="w-[340px] rounded-lg" contentClassName="p-2">
+      <Popover position="bottom-end" className="w-[450px] rounded-lg" contentClassName="p-2">
         <LayersPanel onLayerSelected={() => setOpen(false)} />
       </Popover>
     </PopoverRoot>

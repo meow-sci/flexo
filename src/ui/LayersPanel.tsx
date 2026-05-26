@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
-import { GridList, GridListItem, useDragAndDrop, type Selection } from 'react-aria-components'
+import { Button as DragButton, GridList, GridListItem, useDragAndDrop, type Selection } from 'react-aria-components'
 import { Button, Chip, Dialog, Input, ListTitle, Segmented, SegmentedButton, Select, Tooltip } from '@cladd-ui/react'
 import {
   $activeLayerId,
@@ -15,7 +15,7 @@ import {
 import { $layerView, layerViewState, toggleLayerLocked, toggleLayerVisible } from '../state/layerStore'
 import { $layerSummaries, type LayerSummary } from '../state/selectors'
 import { BUILT_IN_LAYER_IDS, DEFAULT_LAYER_ID, type Layer } from '../ksa/types'
-import { EyeIcon, EyeOffIcon, LockIcon, PencilIcon, SaveIcon, SelectAllIcon, TrashIcon, UnlockIcon } from './layerIcons'
+import { EyeIcon, EyeOffIcon, GripVerticalIcon, LockIcon, PencilIcon, SaveIcon, SelectAllIcon, TrashIcon, UnlockIcon } from './layerIcons'
 
 /** Moves the dragged keys to before/after the target id within `ids`. */
 function computeReorder(
@@ -172,6 +172,13 @@ function LayerRow({
 
   return (
     <>
+      <DragButton
+        slot="drag"
+        className="flex shrink-0 cursor-grab items-center text-cladd-fg-softer outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-cladd-primary"
+        aria-label="Drag to reorder layer"
+      >
+        <GripVerticalIcon />
+      </DragButton>
       {isEditing ? (
         <div className="min-w-0 flex-1" onPointerDown={stopRowPress}>
           <RenameInput layer={layer} onDone={onEndRename} />
@@ -186,16 +193,16 @@ function LayerRow({
         </span>
       )}
 
-      <Chip size="sm" className="shrink-0 opacity-80" title={`${subParts} SubParts, ${connectors} connectors`}>
+      <Chip size="md" className="shrink-0 opacity-80" title={`${subParts} SubParts, ${connectors} connectors`}>
         {total}
       </Chip>
 
-      <div className="flex shrink-0 items-center" onPointerDown={stopRowPress}>
+      <div className="flex shrink-0 items-center gap-1" onPointerDown={stopRowPress}>
         {!isEditing && (
           <Tooltip tooltip="Rename layer">
             <Button
               square
-              size="xs"
+              size="sm"
               variant="transparent"
               aria-label="Rename layer"
               onClick={onStartRename}
@@ -207,7 +214,7 @@ function LayerRow({
         <Tooltip tooltip={view.visible ? 'Hide layer' : 'Show layer'}>
           <Button
             square
-            size="xs"
+            size="sm"
             variant="transparent"
             aria-label={view.visible ? 'Hide layer' : 'Show layer'}
             onClick={() => toggleLayerVisible(layer.id)}
@@ -218,7 +225,7 @@ function LayerRow({
         <Tooltip tooltip={locked ? 'Unlock layer' : 'Lock layer'}>
           <Button
             square
-            size="xs"
+            size="sm"
             variant="transparent"
             aria-label={locked ? 'Unlock layer' : 'Lock layer'}
             onClick={() => toggleLayerLocked(layer.id)}
@@ -229,7 +236,7 @@ function LayerRow({
         <Tooltip tooltip={locked ? 'Layer locked' : 'Select all in layer'}>
           <Button
             square
-            size="xs"
+            size="sm"
             variant="transparent"
             aria-label="Select all in layer"
             disabled={locked || total === 0}
@@ -241,7 +248,7 @@ function LayerRow({
         <Tooltip tooltip={isBuiltIn ? 'Built-in layer cannot be deleted' : 'Delete layer'}>
           <Button
             square
-            size="xs"
+            size="sm"
             variant="transparent"
             color="red"
             aria-label="Delete layer"

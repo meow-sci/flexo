@@ -1,0 +1,3 @@
+- refactor import Part and SubPart popups to use GridList for the list of items
+- EditorTag XML tags are not being emitted in the generated and exported XML for example: `<EditorTag Value="RCS" />`
+- 

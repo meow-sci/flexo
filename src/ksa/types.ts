@@ -10,7 +10,11 @@ export interface Vec3 {
   z: number
 }
 
-/** Euler rotation in radians, applied in XYZ order (matches KSA's serialization). */
+/**
+ * Euler rotation in radians, stored in KSA's "XYZ" convention (matches KSA's
+ * serialization). NOTE: KSA's "XYZ" composes to three.js's 'ZYX' order — the
+ * conversion to three.js Object3D rotation lives in `three/coords.ts`.
+ */
 export interface EulerXYZ {
   x: number
   y: number

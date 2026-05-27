@@ -14,10 +14,11 @@ import type { PlacementTransform } from '../state/editorStore'
  *   - rotate:    rotate every SubPart around a shared origin (default: centroid),
  *                rotating both its position about the origin AND its orientation.
  *
- * Rotation uses the same Euler order as {@link applyPlacement} in coords.ts.
+ * Rotation uses the same Euler order as {@link applyPlacement} in coords.ts:
+ * 'ZYX', because KSA's stored "XYZ" Euler equals three.js 'ZYX' (see coords.ts).
  */
 
-const EULER_ORDER = 'XYZ' as const
+const EULER_ORDER = 'ZYX' as const
 const DEG2RAD = Math.PI / 180
 
 const _pos = new THREE.Vector3()

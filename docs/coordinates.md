@@ -5,18 +5,30 @@ three.js `Object3D` transforms is isolated in **`src/three/coords.ts`**. If anyt
 about placement orientation looks wrong, fix it there — nowhere else does transform
 math.
 
-## The mapping (current hypothesis)
+## The mapping (calibrated against KSA's Brutal engine)
 
-glTF/GLB and three.js are both **right-handed, Y-up, meters**. KSA authors SubPart
-transforms against the same GLB space, so transforms are applied **directly**:
+KSA and three.js share the **same basis**: right-handed, **Y-up**, **-Z-forward**,
+meters. KSA's engine defines `Up=(0,1,0)`, `Right=(1,0,0)`, `Forward=(0,0,-1)`
+(`thirdparty/ksa/KSA/Double3Ex.cs`) — identical to glTF/three.js. So **position and
+scale are applied directly**, with no axis swap or sign flip.
+
+Rotation needs an **Euler-order** change. KSA stores rotation as Euler "XYZ" radians,
+but its quaternion conversion (`QuaternionEx.CreateFromXyzRadians` / `ToXyzRadians`)
+composes the axes in the **opposite multiplication order** from three.js's `'XYZ'`.
+Numerically, KSA's "XYZ" is **bit-for-bit three.js `'ZYX'`** (verified by reproducing
+both formulas). So:
 
 - `applyPlacement(obj, placement)`: `obj.position.set(x,y,z)`,
-  `obj.rotation.set(rx, ry, rz, 'XYZ')`, `obj.scale.set(sx,sy,sz)`.
+  `obj.rotation.set(rx, ry, rz, 'ZYX')`, `obj.scale.set(sx,sy,sz)`.
 - `readPlacementTransform(obj)`: inverse — reads position/scale and converts the
-  quaternion back to Euler `'XYZ'`.
+  quaternion back to Euler `'ZYX'`.
 
-Rotation is **Euler XYZ in radians** (matches KSA's `quat.ToXyzRadians()` and the XML
-`<Rotation>` element). No axis flip is currently applied.
+> Single-axis rotations are identical under `'XYZ'` and `'ZYX'`, which is why simple
+> parts (and the docking-port guide petals, which are pure X-rotations) looked correct
+> even before this fix. Only **multi-axis** rotations exposed the wrong order.
+
+The stored values in `$part` / the XML `<Rotation>` element are still KSA's Euler
+"XYZ" radians — the order conversion lives entirely in `coords.ts` / `bulkTransform.ts`.
 
 ## Calibration (`?debug=dockingport`)
 
@@ -27,8 +39,7 @@ with `http://localhost:5173/?debug=dockingport`. This loads the real Core part
 
 - **Correct** → it forms a coherent, radially-symmetric docking port.
 - **Scrambled** → adjust the Euler order or axis signs in `coords.ts` and document
-  what was verified. The `EULER_ORDER` constant and the `.set(..., 'XYZ')` calls are
-  the two knobs.
+  what was verified. The `EULER_ORDER` constant (currently `'ZYX'`) is the knob.
 
 ## Why everything routes through coords.ts
 

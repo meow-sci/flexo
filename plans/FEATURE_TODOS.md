@@ -1,3 +1,3 @@
 - refactor import Part and SubPart popups to use GridList for the list of items
 - EditorTag XML tags are not being emitted in the generated and exported XML for example: `<EditorTag Value="RCS" />`
-- 
+- can we show a spinner while ktx2/glb's are being downloaded?  in the subpart/part import dialog preview as an overlay

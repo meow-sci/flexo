@@ -1,6 +1,8 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js'
+import { computeMikkTSpaceTangents } from 'three/addons/utils/BufferGeometryUtils.js'
+import * as MikkTSpace from 'three/addons/libs/mikktspace.module.js'
 
 /**
  * Loads GLB mesh atlases and extracts per-SubPart geometry by node name,
@@ -51,8 +53,22 @@ export async function getSubPartGeometry(
   mesh.updateWorldMatrix(true, false)
   geometry.applyMatrix4(mesh.matrixWorld)
 
+  // KSA's GLBs ship no TANGENT attribute, so three.js would fall back to a
+  // screen-space derivative tangent frame — which has no per-vertex handedness
+  // and inverts normal-map detail on mirrored UV islands (same artifact as OG
+  // KSA's derivative cotangent_frame). MikkTSpace generates proper per-vertex
+  // tangents with a handedness sign matching the normal-map baker, fixing it.
+  await generateTangents(geometry)
+
   geometryCache.set(cacheKey, geometry)
   return geometry
+}
+
+/** Adds a MikkTSpace tangent attribute in place (de-indexes the geometry). */
+async function generateTangents(geometry: THREE.BufferGeometry): Promise<void> {
+  if (!geometry.hasAttribute('normal') || !geometry.hasAttribute('uv')) return
+  await MikkTSpace.ready
+  computeMikkTSpaceTangents(geometry, MikkTSpace)
 }
 
 function findFirstMesh(root: THREE.Object3D): THREE.Mesh | null {

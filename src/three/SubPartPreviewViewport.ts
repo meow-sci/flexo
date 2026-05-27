@@ -1,9 +1,10 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import type { CatalogSubPart } from '../ksa/catalog'
 import { getSubPartGeometry } from './MeshAtlasCache'
 import { getSharedMaterial } from './MaterialFactory'
+import { SceneEnvironment } from './SceneEnvironment'
+import { $lighting } from '../state/lightingStore'
 import { initTextureSupport } from './textureSupport'
 
 /**
@@ -22,7 +23,8 @@ export class SubPartPreviewViewport {
   private readonly controls: OrbitControls
   private readonly host: HTMLElement
   private readonly resizeObserver: ResizeObserver
-  private readonly envRenderTarget: THREE.WebGLRenderTarget
+  private readonly sceneEnv: SceneEnvironment
+  private readonly lightingUnsub: () => void
 
   private current: THREE.Mesh | null = null
   /** Bumped on each setSubPart so a superseded async load discards its result. */
@@ -41,8 +43,6 @@ export class SubPartPreviewViewport {
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.setSize(w, h)
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = 1.0
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     host.appendChild(this.renderer.domElement)
 
@@ -55,10 +55,9 @@ export class SubPartPreviewViewport {
     this.controls.target.set(0, 0, 0)
     this.controls.update()
 
-    const pmrem = new THREE.PMREMGenerator(this.renderer)
-    this.envRenderTarget = pmrem.fromScene(new RoomEnvironment(), 0.04)
-    this.scene.environment = this.envRenderTarget.texture
-    pmrem.dispose()
+    // Environment/tonemapping/background driven by the global $lighting store.
+    this.sceneEnv = new SceneEnvironment(this.renderer, this.scene)
+    this.lightingUnsub = $lighting.subscribe((s) => void this.sceneEnv.apply(s))
 
     const hemi = new THREE.HemisphereLight(0xffffff, 0x404050, 0.4)
     this.scene.add(hemi)
@@ -130,7 +129,8 @@ export class SubPartPreviewViewport {
     this.renderer.setAnimationLoop(null)
     this.resizeObserver.disconnect()
     this.controls.dispose()
-    this.envRenderTarget.dispose()
+    this.lightingUnsub()
+    this.sceneEnv.dispose()
     this.renderer.dispose()
     if (this.renderer.domElement.parentNode === this.host) {
       this.host.removeChild(this.renderer.domElement)

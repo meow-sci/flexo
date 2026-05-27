@@ -1,8 +1,9 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { GridManager } from './Grid'
+import { SceneEnvironment } from './SceneEnvironment'
 import { $cameraState, type CameraDir, type CameraState } from '../state/viewStore'
+import { $lighting } from '../state/lightingStore'
 
 /**
  * Framework-agnostic 3D workspace: renderer, scene, perspective camera, lighting,
@@ -19,7 +20,8 @@ export class Viewport {
 
   private readonly host: HTMLElement
   private readonly resizeObserver: ResizeObserver
-  private readonly envRenderTarget: THREE.WebGLRenderTarget
+  private readonly sceneEnv: SceneEnvironment
+  private readonly lightingUnsub: () => void
 
   constructor(host: HTMLElement) {
     this.host = host
@@ -34,9 +36,7 @@ export class Viewport {
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.setSize(w, h)
-    // PBR output: filmic tonemapping + sRGB output, matching KSA's composite pass.
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = 1.0
+    // sRGB output matching KSA's composite pass; tonemapping is driven by $lighting.
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     host.appendChild(this.renderer.domElement)
 
@@ -46,11 +46,10 @@ export class Viewport {
     this.controls.update()
     this.controls.addEventListener('end', this.onControlsEnd)
 
-    // Image-based lighting so PBR metals reflect and aren't black (KSA uses IBL).
-    const pmrem = new THREE.PMREMGenerator(this.renderer)
-    this.envRenderTarget = pmrem.fromScene(new RoomEnvironment(), 0.04)
-    this.scene.environment = this.envRenderTarget.texture
-    pmrem.dispose()
+    // Image-based lighting (so PBR metals reflect), tonemapping, and background,
+    // all driven by the global $lighting store. subscribe() fires immediately.
+    this.sceneEnv = new SceneEnvironment(this.renderer, this.scene)
+    this.lightingUnsub = $lighting.subscribe((s) => void this.sceneEnv.apply(s))
 
     const hemi = new THREE.HemisphereLight(0xffffff, 0x404050, 0.4)
     this.scene.add(hemi)
@@ -137,7 +136,8 @@ export class Viewport {
     this.controls.removeEventListener('end', this.onControlsEnd)
     this.controls.dispose()
     this.grids.dispose()
-    this.envRenderTarget.dispose()
+    this.lightingUnsub()
+    this.sceneEnv.dispose()
     this.renderer.dispose()
     if (this.renderer.domElement.parentNode === this.host) {
       this.host.removeChild(this.renderer.domElement)

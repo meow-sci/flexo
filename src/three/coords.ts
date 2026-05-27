@@ -5,19 +5,27 @@ import type { EulerXYZ, Transform, Vec3 } from '../ksa/types'
  * The single chokepoint for converting between KSA Part-space transforms (as
  * stored in XML / the editor store) and three.js Object3D transforms.
  *
- * COORDINATE HYPOTHESIS (default, pending visual calibration):
- *   glTF/GLB is right-handed, Y-up, meters; three.js is the same. KSA authors
- *   SubPart transforms against the same GLB space, so we apply them DIRECTLY:
- *   position as-is, rotation as Euler XYZ radians, scale as-is. No axis flip.
+ * COORDINATE MAPPING (calibrated against KSA's Brutal engine source):
+ *   KSA and three.js share the SAME basis — right-handed, Y-up, -Z-forward,
+ *   meters (KSA: Up=(0,1,0), Right=(1,0,0), Forward=(0,0,-1), see Double3Ex.cs).
+ *   So position and scale are applied DIRECTLY, no axis swap or sign flip.
+ *
+ *   Rotation needs an Euler-ORDER change, though. KSA stores rotation as Euler
+ *   "XYZ" radians, but its quat<->euler conversion (QuaternionEx.CreateFromXyzRadians /
+ *   ToXyzRadians) composes the axes in the opposite multiplication order from
+ *   three.js's 'XYZ'. Numerically, KSA's "XYZ" is bit-for-bit three.js 'ZYX'.
+ *   Single-axis rotations are identical under either order (which is why simple
+ *   parts looked fine), but multi-axis rotations only match with 'ZYX'.
  *
  * CALIBRATION: load the Core part `CoreCouplingA_Prefab_DockingPort1WA`
  * (open the app with `?debug=dockingport`) and confirm it assembles into a
- * coherent, radially-symmetric docking port. If it looks scrambled, adjust the
- * Euler order / axis signs HERE ONLY and update this comment with what was
- * verified — every other module routes transforms through these two functions.
+ * coherent, radially-symmetric docking port. If it ever looks scrambled, the
+ * Euler order / axis mapping is the knob — change it HERE ONLY; every other
+ * module routes transforms through these two functions.
  */
 
-const EULER_ORDER = 'XYZ' as const
+// KSA's Euler "XYZ" equals three.js 'ZYX' (opposite compose order) — see above.
+const EULER_ORDER = 'ZYX' as const
 
 export function applyPlacement(obj: THREE.Object3D, p: Transform): void {
   obj.position.set(p.position.x, p.position.y, p.position.z)

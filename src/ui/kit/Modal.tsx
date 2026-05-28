@@ -18,7 +18,7 @@ const overlay = tv({
       center: 'items-center justify-center p-4',
       sheet: 'items-end justify-center',
       fullscreen: 'items-stretch justify-center p-3 sm:p-6',
-      cover: 'items-stretch justify-stretch p-0',
+      cover: 'items-stretch justify-center p-0',
     },
   },
   defaultVariants: { variant: 'center' },

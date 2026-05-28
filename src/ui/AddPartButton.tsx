@@ -10,8 +10,10 @@ import {
   Select,
   ListBox,
   ListBoxItem,
+  SectionTitle,
   ToolbarButton,
   toast,
+  useIsPhone,
 } from './kit'
 import type { CatalogPart } from '../ksa/partCatalog'
 import type { Layer } from '../ksa/types'
@@ -21,7 +23,7 @@ import { $part, addPart, createLayer } from '../state/editorStore'
 import { closeBrowserPopup, openBrowserPopup } from '../state/loadProgressStore'
 import { PartPreview } from './PartPreview'
 import { PreviewLoadProgress } from './LoadProgress'
-import { VerticalSplit } from './VerticalSplit'
+import { VerticalSplit, HorizontalSplit } from './VerticalSplit'
 
 const MAX_RESULTS = 200
 const NEW_LAYER = '__new_layer__'
@@ -38,9 +40,10 @@ function nextNewLayerName(layers: readonly Layer[]): string {
 }
 
 /**
- * "+ Part" action: opens a full-viewport browser. The top row is search +
- * destination-layer Select + Add. Below it a vertically-split list and 3D
- * preview (50/50 by default, draggable divider, resets each open).
+ * "+ Part" action: opens a full-viewport browser. Top row is search +
+ * destination-layer Select + Add. On desktop the body is `list | (preview /
+ * details)` with two draggable dividers; on phone it collapses to a
+ * vertically-split list-over-preview. Both splits reset to 50/50 each open.
  */
 export function AddPartButton() {
   const [open, setOpen] = useState(false)
@@ -54,7 +57,13 @@ export function AddPartButton() {
 
 export function PartPopup({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
-    <Modal isOpen={open} onOpenChange={onOpenChange} isDismissable variant="cover">
+    <Modal
+      isOpen={open}
+      onOpenChange={onOpenChange}
+      isDismissable
+      variant="cover"
+      className="sm:w-[95vw] sm:max-w-[75rem]"
+    >
       <Dialog className="h-full">
         <DialogHeader title="Add Part" onClose={() => onOpenChange(false)} />
         {open && <BrowserBody />}
@@ -71,6 +80,7 @@ function BrowserBody() {
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [targetLayer, setTargetLayer] = useState<string>(NEW_LAYER)
+  const isPhone = useIsPhone()
 
   useEffect(() => {
     openBrowserPopup()
@@ -111,6 +121,56 @@ function BrowserBody() {
     toast({ title: 'Part Added', description: selected.id }, { timeout: 2500 })
   }
 
+  const listPane = (
+    <div className="h-full overflow-auto rounded-lg border border-border bg-panel-sunken">
+      {loading ? (
+        <div className="p-3 text-sm text-fg-subtle">Loading parts…</div>
+      ) : filtered.length === 0 ? (
+        <div className="p-3 text-sm text-fg-subtle">No matches</div>
+      ) : (
+        <ListBox
+          aria-label="Parts"
+          selectionMode="single"
+          selectedKeys={selectedId ? [selectedId] : []}
+          onSelectionChange={onSelection}
+          items={filtered}
+        >
+          {(p) => (
+            <ListBoxItem id={p.id} textValue={p.id}>
+              <span className="flex w-full items-center justify-between gap-2">
+                <span className="truncate">{p.id}</span>
+                <span className="shrink-0 text-xs text-fg-subtle">{p.placements.length}</span>
+              </span>
+            </ListBoxItem>
+          )}
+        </ListBox>
+      )}
+    </div>
+  )
+
+  const previewPane = (
+    <div className="relative h-full overflow-hidden rounded-lg border border-border bg-panel-sunken">
+      {selected ? (
+        <PartPreview part={selected} />
+      ) : (
+        <div className="flex h-full items-center justify-center text-fg-subtle">
+          Select a Part to preview
+        </div>
+      )}
+      <PreviewLoadProgress />
+    </div>
+  )
+
+  const detailsPane = (
+    <div className="h-full overflow-auto rounded-lg border border-border bg-panel-sunken p-3">
+      {selected ? (
+        <PartDetails part={selected} subPartIndex={subPartIndex} />
+      ) : (
+        <span className="text-sm text-fg-subtle">Select a Part to see its details.</span>
+      )}
+    </div>
+  )
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5">
       <div className="flex shrink-0 items-center gap-2">
@@ -143,56 +203,32 @@ function BrowserBody() {
       </div>
 
       <div className="min-h-0 flex-1">
-        <VerticalSplit
-          top={
-            <div className="h-full overflow-auto rounded-lg border border-border bg-panel-sunken">
-              {loading ? (
-                <div className="p-3 text-sm text-fg-subtle">Loading parts…</div>
-              ) : filtered.length === 0 ? (
-                <div className="p-3 text-sm text-fg-subtle">No matches</div>
-              ) : (
-                <ListBox
-                  aria-label="Parts"
-                  selectionMode="single"
-                  selectedKeys={selectedId ? [selectedId] : []}
-                  onSelectionChange={onSelection}
-                  items={filtered}
-                >
-                  {(p) => (
-                    <ListBoxItem id={p.id} textValue={p.id}>
-                      <span className="flex w-full items-center justify-between gap-2">
-                        <span className="truncate">{p.id}</span>
-                        <span className="shrink-0 text-xs text-fg-subtle">{p.placements.length}</span>
-                      </span>
-                    </ListBoxItem>
-                  )}
-                </ListBox>
-              )}
-            </div>
-          }
-          bottom={
-            <div className="flex h-full flex-col gap-1.5 overflow-hidden">
-              {selected && <PartSummary part={selected} subPartIndex={subPartIndex} />}
-              <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-panel-sunken">
-                {selected ? (
-                  <PartPreview part={selected} />
-                ) : (
-                  <div className="flex h-full items-center justify-center text-fg-subtle">
-                    Select a Part to preview
-                  </div>
-                )}
-                <PreviewLoadProgress />
+        {isPhone ? (
+          <VerticalSplit
+            top={listPane}
+            bottom={
+              <div className="flex h-full flex-col gap-1.5 overflow-hidden">
+                {selected && <CompactPartSummary part={selected} subPartIndex={subPartIndex} />}
+                <div className="min-h-0 flex-1">{previewPane}</div>
               </div>
-            </div>
-          }
-        />
+            }
+          />
+        ) : (
+          <HorizontalSplit
+            left={listPane}
+            right={<VerticalSplit top={previewPane} bottom={detailsPane} />}
+          />
+        )}
       </div>
     </div>
   )
 }
 
-/** Compact one-line summary above the 3D preview (counts + tags + warnings). */
-function PartSummary({
+/**
+ * Compact horizontal strip used on phone (above the preview) — counts + source
+ * + tags in one wrappable row. Desktop uses the richer {@link PartDetails}.
+ */
+function CompactPartSummary({
   part,
   subPartIndex,
 }: {
@@ -224,24 +260,98 @@ function PartSummary({
       <span className="text-fg-muted">
         <span className="text-fg-subtle">Connectors:</span> {part.connectors.length}
       </span>
-      <span className="text-fg-muted">
-        <span className="text-fg-subtle">Source:</span>{' '}
-        <span className="font-mono">{part.sourceFile}</span>
-      </span>
       {missing > 0 && (
         <span className="text-warning" title="These SubParts have no renderable mesh in the catalog and won't appear in the preview, but are still imported.">
           {missing} type{missing === 1 ? '' : 's'} not previewable
         </span>
       )}
-      {part.editorTags.length > 0 && (
-        <span className="flex flex-wrap items-center gap-1">
-          {part.editorTags.map((tag) => (
-            <span key={tag} className="rounded border border-border px-1.5 py-0.5 text-fg-muted">
-              {tag}
-            </span>
-          ))}
+    </div>
+  )
+}
+
+/**
+ * Full details panel shown in the desktop right-bottom split: id + counts +
+ * source XML + editor tags + a per-template SubParts breakdown (with how many
+ * instances and whether each is previewable).
+ */
+function PartDetails({
+  part,
+  subPartIndex,
+}: {
+  part: CatalogPart
+  subPartIndex: Map<string, unknown>
+}) {
+  const breakdown = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const p of part.placements) {
+      counts.set(p.subPartTemplateId, (counts.get(p.subPartTemplateId) ?? 0) + 1)
+    }
+    return Array.from(counts, ([templateId, count]) => ({ templateId, count })).sort(
+      (a, b) => b.count - a.count || a.templateId.localeCompare(b.templateId),
+    )
+  }, [part])
+
+  const missing = breakdown.filter((b) => !subPartIndex.has(b.templateId)).length
+
+  return (
+    <div className="flex flex-col gap-3 text-xs">
+      <div className="flex flex-col gap-0.5">
+        <span className="font-mono text-sm text-fg">{part.id}</span>
+        <span className="text-fg-subtle">
+          <span className="text-fg-subtle/70">Source:</span>{' '}
+          <span className="font-mono text-fg-muted">{part.sourceFile}</span>
         </span>
+      </div>
+
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+        <span className="text-fg-muted">
+          <span className="text-fg-subtle">SubParts:</span> {part.placements.length}
+        </span>
+        <span className="text-fg-muted">
+          <span className="text-fg-subtle">Unique types:</span> {breakdown.length}
+        </span>
+        <span className="text-fg-muted">
+          <span className="text-fg-subtle">Connectors:</span> {part.connectors.length}
+        </span>
+        {missing > 0 && (
+          <span className="text-warning" title="These SubParts have no renderable mesh in the catalog and won't appear in the preview, but are still imported.">
+            {missing} type{missing === 1 ? '' : 's'} not previewable
+          </span>
+        )}
+      </div>
+
+      {part.editorTags.length > 0 && (
+        <div>
+          <SectionTitle>Editor Tags</SectionTitle>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {part.editorTags.map((tag) => (
+              <span key={tag} className="rounded border border-border px-1.5 py-0.5 text-fg-muted">
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
       )}
+
+      <div>
+        <SectionTitle>SubParts</SectionTitle>
+        <ul className="mt-1 flex flex-col gap-0.5">
+          {breakdown.map((b) => {
+            const previewable = subPartIndex.has(b.templateId)
+            return (
+              <li key={b.templateId} className="flex items-center justify-between gap-2">
+                <span
+                  className={`truncate font-mono ${previewable ? 'text-fg-muted' : 'text-fg-subtle'}`}
+                  title={b.templateId}
+                >
+                  {b.templateId}
+                </span>
+                <span className="shrink-0 text-fg-subtle">×{b.count}</span>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
     </div>
   )
 }

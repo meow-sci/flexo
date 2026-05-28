@@ -1,16 +1,16 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '@nanostores/react'
-import {
-  Button,
-  Popup,
-  PopupContent,
-  Segmented,
-  SegmentedButton,
-  Surface,
-  ToolbarButton,
-  useToast,
-} from '@cladd-ui/react'
 import { CheckCircle2, Download, FolderInput, FolderSync } from 'lucide-react'
+import {
+  Modal,
+  Dialog,
+  DialogHeader,
+  Button,
+  ToggleButtonGroup,
+  ToggleButton,
+  ToolbarButton,
+  toast,
+} from './kit'
 import { $part } from '../state/editorStore'
 import { $projectName } from '../state/projectStore'
 import {
@@ -40,12 +40,17 @@ function validate(partId: string, instanceIds: string[]): string[] {
   return warnings
 }
 
+function singleSelect(keys: Iterable<string | number>): string | undefined {
+  return [...keys][0] as string | undefined
+}
+
+const warningBox = 'rounded-lg border border-warning/40 bg-warning/10 p-2 text-xs text-warning'
+
 /**
  * Top-surface "Export" action. Two modes:
  *   - XML: shows the raw Part / GameData KSA XML with copy-to-clipboard.
  *   - Mod: writes a KSA part mod (mod.toml + per-project XML) either into a
- *     user-granted `…/mods` folder (File System Access API, grant persisted in
- *     IndexedDB) or as a downloadable zip. See src/ksa/modExport.ts.
+ *     user-granted `…/mods` folder or as a downloadable zip.
  */
 export function ExportButton() {
   const part = useStore($part)
@@ -59,39 +64,38 @@ export function ExportButton() {
 
   return (
     <>
-      <ToolbarButton onClick={() => setOpen(true)}>Export</ToolbarButton>
-      <Popup
-        open={open}
-        onOpenChange={setOpen}
-        contentClassName="max-w-2xl [&>.rounded-cladd-popup]:rounded-lg"
-        headerLeft={<span className="px-2 pb-1 text-cladd-sm font-semibold">Export</span>}
-      >
-        <PopupContent>
-          <div className="flex flex-col gap-2">
+      <ToolbarButton onPress={() => setOpen(true)}>Export</ToolbarButton>
+      <Modal isOpen={open} onOpenChange={setOpen} isDismissable variant="fullscreen" className="max-w-2xl">
+        <Dialog>
+          <DialogHeader title="Export" onClose={() => setOpen(false)} />
+          <div className="flex flex-col gap-2 overflow-auto p-3">
             {warnings.length > 0 && (
-              <Surface
-                color="yellow"
-                variant="solid-fill"
-                className="rounded-lg"
-                contentClassName="p-2 text-xs"
-              >
+              <div className={warningBox}>
                 {warnings.map((w) => (
                   <div key={w}>⚠ {w}</div>
                 ))}
-              </Surface>
+              </div>
             )}
-            <Segmented>
-              <SegmentedButton active={mode === 'xml'} onClick={() => setMode('xml')}>
+            <ToggleButtonGroup
+              selectionMode="single"
+              disallowEmptySelection
+              selectedKeys={[mode]}
+              onSelectionChange={(keys) => {
+                const next = singleSelect(keys)
+                if (next) setMode(next as Mode)
+              }}
+            >
+              <ToggleButton id="xml" size="sm">
                 XML
-              </SegmentedButton>
-              <SegmentedButton active={mode === 'mod'} onClick={() => setMode('mod')}>
+              </ToggleButton>
+              <ToggleButton id="mod" size="sm">
                 Part Mod
-              </SegmentedButton>
-            </Segmented>
+              </ToggleButton>
+            </ToggleButtonGroup>
             {mode === 'xml' ? <XmlPanel /> : <ModPanel />}
           </div>
-        </PopupContent>
-      </Popup>
+        </Dialog>
+      </Modal>
     </>
   )
 }
@@ -119,22 +123,30 @@ function XmlPanel() {
 
   return (
     <div className="flex flex-col gap-2">
-      <Segmented>
-        <SegmentedButton active={tab === 'part'} onClick={() => setTab('part')}>
+      <ToggleButtonGroup
+        selectionMode="single"
+        disallowEmptySelection
+        selectedKeys={[tab]}
+        onSelectionChange={(keys) => {
+          const next = singleSelect(keys)
+          if (next) setTab(next as Tab)
+        }}
+      >
+        <ToggleButton id="part" size="sm">
           Part XML
-        </SegmentedButton>
-        <SegmentedButton active={tab === 'gamedata'} onClick={() => setTab('gamedata')}>
+        </ToggleButton>
+        <ToggleButton id="gamedata" size="sm">
           GameData XML
-        </SegmentedButton>
-      </Segmented>
+        </ToggleButton>
+      </ToggleButtonGroup>
       <textarea
         readOnly
         value={xml}
-        className="h-96 w-full resize-none rounded-lg bg-cladd-bg p-2 font-mono text-xs text-cladd-fg outline-none"
+        className="h-96 w-full resize-none rounded-lg border border-border bg-panel-sunken p-2 font-mono text-xs text-fg outline-none"
         spellCheck={false}
       />
       <div className="flex justify-end">
-        <Button size="sm" color="brand" onClick={copy}>
+        <Button size="sm" variant="primary" onPress={copy}>
           {copied ? 'Copied!' : 'Copy to clipboard'}
         </Button>
       </div>
@@ -147,7 +159,6 @@ function ModPanel() {
   const part = useStore($part)
   const projectName = useStore($projectName)
   const folder = useStore($modFolder)
-  const toast = useToast()
   const [busy, setBusy] = useState(false)
 
   const writeToFolder = async () => {
@@ -155,19 +166,18 @@ function ModPanel() {
     try {
       const dir = await getWritableModFolder()
       if (!dir) {
-        toast({ title: 'Folder access required', text: 'Grant write access to your mods folder first.', color: 'yellow' })
+        toast({ title: 'Folder access required', description: 'Grant write access to your mods folder first.', variant: 'warning' })
         return
       }
       const result = await writeModToFolder(dir, part, projectName)
       toast({
         title: 'Exported to folder',
-        text: `${result.partFile} + ${result.gameDataFile} → ${dir.name}/flexo-parts`,
-        color: 'green',
-        icon: CheckCircle2,
+        description: `${result.partFile} + ${result.gameDataFile} → ${dir.name}/flexo-parts`,
+        variant: 'success',
       })
     } catch (err) {
       console.warn('mod folder export failed', err)
-      toast({ title: 'Export failed', text: String((err as Error)?.message ?? err), color: 'red' })
+      toast({ title: 'Export failed', description: String((err as Error)?.message ?? err), variant: 'danger' })
     } finally {
       setBusy(false)
     }
@@ -187,29 +197,28 @@ function ModPanel() {
 
   return (
     <div className="flex flex-col gap-3">
-      <Surface outline className="rounded-lg" contentClassName="p-3 text-cladd-sm">
+      <div className="rounded-lg border border-border bg-panel-sunken p-3 text-sm text-fg-muted">
         <p>
-          Writes a <span className="font-mono text-cladd-xs">flexo-parts</span> part mod —{' '}
-          <span className="font-mono text-cladd-xs">mod.toml</span> plus{' '}
-          <span className="font-mono text-cladd-xs">{projectName || 'Mod'}</span> Part &amp; GameData
-          XML.
+          Writes a <span className="font-mono text-xs">flexo-parts</span> part mod —{' '}
+          <span className="font-mono text-xs">mod.toml</span> plus{' '}
+          <span className="font-mono text-xs">{projectName || 'Mod'}</span> Part &amp; GameData XML.
         </p>
         <p>Existing XML in the folder is never overwritten.</p>
-      </Surface>
+      </div>
 
       <FolderGrant status={folder.status} name={folder.name} />
 
       <div className="flex flex-col gap-1.5">
         <Button
           size="lg"
-          color="brand"
-          disabled={folder.status === 'unsupported' || busy}
-          onClick={writeToFolder}
+          variant="primary"
+          isDisabled={folder.status === 'unsupported' || busy}
+          onPress={writeToFolder}
         >
-          <FolderInput size={22} /> {busy ? 'Exporting...' : 'Export to mods folder'}
+          <FolderInput size={20} /> {busy ? 'Exporting...' : 'Export to mods folder'}
         </Button>
-        <Button size="lg" variant="transparent" onClick={downloadZip}>
-          <Download size={22} /> Download mod zip
+        <Button size="lg" variant="ghost" onPress={downloadZip}>
+          <Download size={20} /> Download mod zip
         </Button>
       </div>
     </div>
@@ -220,27 +229,22 @@ function ModPanel() {
 function FolderGrant({ status, name }: { status: string; name: string | null }) {
   if (status === 'unsupported') {
     return (
-      <Surface
-        color="yellow"
-        variant="solid-fill"
-        className="rounded-lg"
-        contentClassName="p-2 text-cladd-xs"
-      >
+      <div className={warningBox}>
         This browser can't write to folders. Use “Download mod zip” instead.
-      </Surface>
+      </div>
     )
   }
 
   if (status === 'ready') {
     return (
-      <div className="flex items-center justify-between gap-2 rounded-lg px-1 text-cladd-sm">
-        <span className="flex min-w-0 items-center gap-1.5 text-cladd-fg-soft">
-          <CheckCircle2 size={22} className="shrink-0 text-green-400" />
+      <div className="flex items-center justify-between gap-2 rounded-lg px-1 text-sm">
+        <span className="flex min-w-0 items-center gap-1.5 text-fg-muted">
+          <CheckCircle2 size={20} className="shrink-0 text-accent" />
           <span className="truncate">
-            Mods folder: <span className="font-large text-cladd-fg">{name}</span>
+            Mods folder: <span className="text-fg">{name}</span>
           </span>
         </span>
-        <Button size="lg" variant="transparent" onClick={() => void pickModFolder()}>
+        <Button size="md" variant="ghost" onPress={() => void pickModFolder()}>
           Change
         </Button>
       </div>
@@ -249,26 +253,19 @@ function FolderGrant({ status, name }: { status: string; name: string | null }) 
 
   if (status === 'needs-permission') {
     return (
-      <Surface
-        color="yellow"
-        variant="solid-fill"
-        className="rounded-lg"
-        contentClassName="flex items-center justify-between gap-2 p-2 text-cladd-xs"
-      >
-        <span className="truncate">
-          Access to “{name}” needs to be re-granted.
-        </span>
-        <Button size="lg" color="yellow" onClick={() => void requestModFolderPermission()}>
-          <FolderSync size={22} /> Re-Grant Folder Access
+      <div className={`${warningBox} flex items-center justify-between gap-2`}>
+        <span className="truncate">Access to “{name}” needs to be re-granted.</span>
+        <Button size="md" onPress={() => void requestModFolderPermission()}>
+          <FolderSync size={18} /> Re-Grant
         </Button>
-      </Surface>
+      </div>
     )
   }
 
   // 'none'
   return (
-    <Button size="lg" onClick={() => void pickModFolder()}>
-      <FolderInput size={22} /> Choose mods folder...
+    <Button size="lg" onPress={() => void pickModFolder()}>
+      <FolderInput size={20} /> Choose mods folder...
     </Button>
   )
 }

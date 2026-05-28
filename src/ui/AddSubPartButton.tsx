@@ -1,37 +1,37 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '@nanostores/react'
+import type { Selection } from 'react-aria-components'
 import {
+  Modal,
+  Dialog,
+  DialogHeader,
   Button,
-  List,
-  ListButton,
-  ListItem,
-  Popup,
-  PopupContent,
   SearchField,
+  ListBox,
+  ListBoxItem,
   ToolbarButton,
-  useToast,
-} from '@cladd-ui/react'
+  toast,
+} from './kit'
 import { $catalog, $catalogLoading } from '../state/catalogStore'
 import { addSubPart } from '../state/editorStore'
 import { closeBrowserPopup, openBrowserPopup } from '../state/loadProgressStore'
 import { SubPartPreview } from './SubPartPreview'
 import { PreviewLoadProgress } from './LoadProgress'
+import { VerticalSplit } from './VerticalSplit'
 
 const MAX_RESULTS = 200
 
 /**
- * Top-surface "+ SubPart" action: opens a full-screen browser Popup with a
- * searchable SubPart list (left) and a live 3D preview of the highlighted entry
- * (right). Selecting only previews — the user must click "Add SubPart to
- * Project" to place it, and the popup stays open so several can be added in a
- * row.
+ * "+ SubPart" action: opens a full-viewport browser. The top row is search +
+ * Add. Below it a vertically-split list and live 3D preview (50/50 by default,
+ * draggable divider, resets each open).
  */
 export function AddSubPartButton() {
   const [open, setOpen] = useState(false)
 
   return (
     <>
-      <ToolbarButton onClick={() => setOpen(true)}>+ SubPart</ToolbarButton>
+      <ToolbarButton onPress={() => setOpen(true)}>+ SubPart</ToolbarButton>
       <SubPartPopup open={open} onOpenChange={setOpen} />
     </>
   )
@@ -39,23 +39,20 @@ export function AddSubPartButton() {
 
 export function SubPartPopup({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
-    <Popup
-      open={open}
-      onOpenChange={onOpenChange}
-      contentClassName="max-w-5xl [&>.rounded-cladd-popup]:rounded-lg"
-      headerLeft={<span className="px-2 pb-1 text-cladd-sm font-semibold">Add SubPart</span>}
-    >
-      {open && <BrowserBody onClose={() => onOpenChange(false)} />}
-    </Popup>
+    <Modal isOpen={open} onOpenChange={onOpenChange} isDismissable variant="cover">
+      <Dialog className="h-full">
+        <DialogHeader title="Add SubPart" onClose={() => onOpenChange(false)} />
+        {open && <BrowserBody />}
+      </Dialog>
+    </Modal>
   )
 }
 
-function BrowserBody({ onClose }: { onClose: () => void }) {
+function BrowserBody() {
   const catalog = useStore($catalog)
   const loading = useStore($catalogLoading)
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const toast = useToast()
 
   useEffect(() => {
     openBrowserPopup()
@@ -68,67 +65,72 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
     return matches.slice(0, MAX_RESULTS)
   }, [catalog, query])
 
+  const onSelection = (keys: Selection) => {
+    if (keys === 'all') return
+    setSelectedId((([...keys][0] as string) ?? null))
+  }
+
   const add = () => {
     if (!selectedId) return
     addSubPart(selectedId)
-    toast({ title: 'SubPart Added', text: selectedId, timeout: 2500 })
+    toast({ title: 'SubPart Added', description: selectedId }, { timeout: 2500 })
   }
 
   return (
-    <PopupContent contentClassName="!h-auto w-full p-3">
-      <div className="flex h-[65vh] min-h-0 w-full gap-3">
-      <div className="flex w-72 min-h-0 flex-col gap-2">
-        <SearchField size="sm" value={query} onChange={setQuery} placeholder="Search SubParts" />
-        <div className="min-h-0 flex-1 overflow-auto rounded-lg bg-cladd-bg">
-          <List>
-            {loading ? (
-              <ListItem className="text-cladd-fg-softer">Loading catalog…</ListItem>
-            ) : filtered.length === 0 ? (
-              <ListItem className="text-cladd-fg-softer">No matches</ListItem>
-            ) : (
-              filtered.map((s) => (
-                <ListButton
-                  key={s.id}
-                  size="sm"
-                  color="brand"
-                  selected={s.id === selectedId}
-                  onClick={() => setSelectedId(s.id)}
-                  title={s.id}
-                >
-                  <span className="truncate">{s.id}</span>
-                </ListButton>
-              ))
-            )}
-          </List>
-        </div>
+    <div className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5">
+      <div className="flex shrink-0 items-center gap-2">
+        <SearchField
+          size="sm"
+          className="min-w-0 flex-1"
+          value={query}
+          onChange={setQuery}
+          placeholder="Search SubParts"
+          aria-label="Search SubParts"
+        />
+        <Button size="sm" variant="primary" isDisabled={!selectedId} onPress={add}>
+          Add
+        </Button>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-2">
-        <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg bg-cladd-bg">
-          {selectedId ? (
-            <SubPartPreview subPartId={selectedId} />
-          ) : (
-            <div className="flex h-full items-center justify-center text-cladd-fg-softer">
-              Select a SubPart to preview
+      <div className="min-h-0 flex-1">
+        <VerticalSplit
+          top={
+            <div className="h-full overflow-auto rounded-lg border border-border bg-panel-sunken">
+              {loading ? (
+                <div className="p-3 text-sm text-fg-subtle">Loading catalog…</div>
+              ) : filtered.length === 0 ? (
+                <div className="p-3 text-sm text-fg-subtle">No matches</div>
+              ) : (
+                <ListBox
+                  aria-label="SubParts"
+                  selectionMode="single"
+                  selectedKeys={selectedId ? [selectedId] : []}
+                  onSelectionChange={onSelection}
+                  items={filtered}
+                >
+                  {(s) => (
+                    <ListBoxItem id={s.id} textValue={s.id}>
+                      {s.id}
+                    </ListBoxItem>
+                  )}
+                </ListBox>
+              )}
             </div>
-          )}
-          <PreviewLoadProgress />
-        </div>
-        <div className="flex shrink-0 items-center justify-between gap-2">
-          <span className="truncate font-mono text-xs text-cladd-fg-softer" title={selectedId ?? ''}>
-            {selectedId ?? ''}
-          </span>
-          <div className="flex items-center gap-2">
-            <Button size="sm" color="brand" disabled={!selectedId} onClick={add}>
-              Add SubPart to Project
-            </Button>
-            <Button size="sm" onClick={onClose}>
-              Close
-            </Button>
-          </div>
-        </div>
+          }
+          bottom={
+            <div className="relative h-full overflow-hidden rounded-lg border border-border bg-panel-sunken">
+              {selectedId ? (
+                <SubPartPreview subPartId={selectedId} />
+              ) : (
+                <div className="flex h-full items-center justify-center text-fg-subtle">
+                  Select a SubPart to preview
+                </div>
+              )}
+              <PreviewLoadProgress />
+            </div>
+          }
+        />
       </div>
-      </div>
-    </PopupContent>
+    </div>
   )
 }

@@ -1,8 +1,8 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { CladdProvider } from '@cladd-ui/react'
 import './index.css'
 import App from './app.tsx'
+import { GlobalToastRegion } from './ui/kit'
 import { hydrateProjectOnBoot } from './state/projectStore'
 import { initModFolder } from './state/modFolderStore'
 
@@ -15,8 +15,7 @@ void initModFolder()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <CladdProvider>
-      <App />
-    </CladdProvider>
+    <App />
+    <GlobalToastRegion />
   </StrictMode>,
 )

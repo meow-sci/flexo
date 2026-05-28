@@ -1,8 +1,16 @@
 import { useMemo, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { GridList, GridListItem, type Selection } from 'react-aria-components'
-import { ChevronRight, MoreVertical } from 'lucide-react'
-import { Button, Dialog, Popover, PopoverRoot, PopoverTrigger, Surface } from '@cladd-ui/react'
+import { MoreVertical } from 'lucide-react'
+import {
+  Button,
+  ConfirmDialog,
+  MenuTrigger,
+  Menu,
+  MenuItem,
+  SubmenuTrigger,
+  Popover,
+} from './kit'
 import {
   $activeLayerId,
   $part,
@@ -17,15 +25,19 @@ import {
 } from '../state/editorStore'
 import { CONNECTOR_LAYER_ID, type SubPartPlacement } from '../ksa/types'
 
+const rowClass = ({ isSelected, isFocusVisible }: { isSelected: boolean; isFocusVisible: boolean }) =>
+  [
+    'flex cursor-default select-none items-center gap-1 rounded-md px-2 py-1 text-fg outline-none',
+    isSelected ? 'bg-white/[0.08] ring-2 ring-inset ring-accent' : 'hover:bg-white/[0.06]',
+    isFocusVisible && !isSelected ? 'ring-1 ring-inset ring-accent' : '',
+  ].join(' ')
+
 /**
  * Lists the placed SubPart instances and connectors. The SubPart list is a
- * react-aria GridList supporting multi-select (click to replace, Ctrl/Cmd to
- * toggle, Shift to range-select), kept in sync with 3D selection via the shared
- * store. GridList (rather than ListBox) is used so each row can embed interactive
- * controls — here a per-row context menu (Delete / Change Layer). Connectors
- * are a single-select GridList kept in sync with the shared store. The top
- * Delete / Duplicate buttons act on the current selection (all selected
- * SubParts, or the selected connector).
+ * react-aria GridList supporting multi-select, kept in sync with 3D selection via
+ * the shared store. Each row embeds a per-row menu (Delete / Change Layer).
+ * Connectors are a single-select GridList. The top Delete / Duplicate buttons
+ * act on the current selection.
  */
 export function PlacementList() {
   const part = useStore($part)
@@ -34,9 +46,6 @@ export function PlacementList() {
   const activeLayerId = useStore($activeLayerId)
   const hasSelection = selectedIndices.length > 0 || selectedConIndices.length > 0
 
-  // GridList items need a stable `id`; SubPart placements key on `instanceId`.
-  // Only show placements belonging to the active layer, but preserve real indices
-  // into part.placements so selection/deletion/etc still address the right element.
   const items = useMemo(
     () =>
       part.placements
@@ -53,7 +62,6 @@ export function PlacementList() {
     [selectedIndices, part.placements],
   )
 
-  // Connectors filtered to the active layer (only non-empty when the Connectors layer is active).
   const connectorItems = useMemo(
     () =>
       part.connectors
@@ -100,16 +108,16 @@ export function PlacementList() {
   const selectedLabel = activeSelectedCount > 0 ? ` · ${activeSelectedCount} selected` : ''
 
   return (
-    <Surface outline className="flex h-full min-h-0 flex-col rounded-xl" contentClassName="flex min-h-0 flex-col gap-2 p-2">
+    <div className="flex h-full min-h-0 flex-col gap-2 rounded-xl border border-border bg-panel p-2">
       <div className="flex items-center justify-between px-1">
-        <span className="text-xs uppercase tracking-wide text-cladd-fg-softer">
+        <span className="text-xs uppercase tracking-wide text-fg-subtle">
           {isConnectorLayer ? 'Connectors' : 'SubParts'} ({listCount}){selectedLabel}
         </span>
         <div className="flex gap-1">
-          <Button size="xs" disabled={!hasSelection} onClick={() => duplicateSelected()}>
+          <Button size="sm" isDisabled={!hasSelection} onPress={() => duplicateSelected()}>
             Duplicate
           </Button>
-          <Button size="xs" color="red" disabled={!hasSelection} onClick={() => removeSelected()}>
+          <Button size="sm" variant="danger-ghost" isDisabled={!hasSelection} onPress={() => removeSelected()}>
             Delete
           </Button>
         </div>
@@ -123,27 +131,15 @@ export function PlacementList() {
           selectedKeys={selectedKeys}
           onSelectionChange={onSelectionChange}
           renderEmptyState={() => (
-            <span className="block px-1 py-1 text-sm text-cladd-fg-softer">No SubParts placed</span>
+            <span className="block px-1 py-1 text-sm text-fg-subtle">No SubParts placed</span>
           )}
           className="flex flex-col gap-0.5 outline-none"
         >
           {(item) => (
-            <GridListItem
-              id={item.id}
-              textValue={item.placement.instanceId}
-              className={({ isSelected, isFocusVisible }) =>
-                [
-                  'flex cursor-default select-none items-center gap-1 rounded-md px-2 py-1 text-cladd-fg outline-none',
-                  isSelected
-                    ? 'bg-cladd-surface-press ring-2 ring-inset ring-cladd-primary'
-                    : 'hover:bg-cladd-surface-hover',
-                  isFocusVisible && !isSelected ? 'ring-1 ring-inset ring-cladd-primary' : '',
-                ].join(' ')
-              }
-            >
+            <GridListItem id={item.id} textValue={item.placement.instanceId} className={rowClass}>
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm">{item.placement.instanceId}</span>
-                <span className="truncate text-xs opacity-70">{item.placement.subPartTemplateId}</span>
+                <span className="truncate text-xs text-fg-subtle">{item.placement.subPartTemplateId}</span>
               </div>
               <SubPartMenu index={item.index} placement={item.placement} />
             </GridListItem>
@@ -161,22 +157,10 @@ export function PlacementList() {
             className="flex flex-col gap-0.5 outline-none"
           >
             {(item) => (
-              <GridListItem
-                id={item.id}
-                textValue={item.connector.id}
-                className={({ isSelected, isFocusVisible }) =>
-                  [
-                    'flex cursor-default select-none items-center gap-1 rounded-md px-2 py-1 text-cladd-fg outline-none',
-                    isSelected
-                      ? 'bg-cladd-surface-press ring-2 ring-inset ring-cladd-primary'
-                      : 'hover:bg-cladd-surface-hover',
-                    isFocusVisible && !isSelected ? 'ring-1 ring-inset ring-cladd-primary' : '',
-                  ].join(' ')
-                }
-              >
+              <GridListItem id={item.id} textValue={item.connector.id} className={rowClass}>
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate font-mono text-sm">{item.connector.id}</span>
-                  <span className="truncate text-xs opacity-70">
+                  <span className="truncate text-xs text-fg-subtle">
                     {item.connector.flags === 'None' ? 'no flags' : item.connector.flags}
                   </span>
                 </div>
@@ -185,120 +169,68 @@ export function PlacementList() {
           </GridList>
         )}
       </div>
-    </Surface>
+    </div>
   )
 }
 
 /**
- * Per-row context menu for a placed SubPart: a "⋮" button opening a popover with
- * "Change Layer" (a submenu of layer buttons) and "Delete" (guarded by a confirm
- * dialog). Acts on this row's SubPart by index, independent of the multi-selection.
+ * Per-row menu for a placed SubPart: a "⋮" button opening a menu with "Change
+ * Layer" (a submenu of layers) and "Delete" (guarded by a confirm dialog). Acts
+ * on this row's SubPart by index, independent of the multi-selection.
  */
 function SubPartMenu({ index, placement }: { index: number; placement: SubPartPlacement }) {
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-
-  return (
-    <>
-      <PopoverRoot open={menuOpen} onOpenChange={setMenuOpen}>
-        <PopoverTrigger>
-          <Button
-            square
-            size="xs"
-            variant="transparent"
-            aria-label="SubPart options"
-            className="shrink-0"
-            // Keep the GridList row from treating the menu click as a row press.
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            <MoreVertical className="size-4" />
-          </Button>
-        </PopoverTrigger>
-        <Popover position="bottom-end" className="w-44 rounded-lg" contentClassName="p-1">
-          <div className="flex flex-col gap-0.5">
-            <ChangeLayerSubmenu
-              index={index}
-              currentLayerId={placement.layerId}
-              onMoved={() => setMenuOpen(false)}
-            />
-            <Button
-              size="sm"
-              color="red"
-              variant="transparent"
-              className="justify-start"
-              onClick={() => {
-                setMenuOpen(false)
-                setConfirmDelete(true)
-              }}
-            >
-              Delete
-            </Button>
-          </div>
-        </Popover>
-      </PopoverRoot>
-
-      <Dialog
-        open={confirmDelete}
-        onOpenChange={(open) => {
-          if (!open) setConfirmDelete(false)
-        }}
-        title="Delete SubPart"
-        text={`Delete “${placement.instanceId}”?`}
-        cancelButtonText="Cancel"
-        confirmButtonText="Delete"
-        confirmButtonColor="red"
-        onConfirm={() => {
-          removePlacement(index)
-          setConfirmDelete(false)
-        }}
-      />
-    </>
-  )
-}
-
-/** "Change Layer" entry that opens a nested popover of layer buttons. */
-function ChangeLayerSubmenu({
-  index,
-  currentLayerId,
-  onMoved,
-}: {
-  index: number
-  currentLayerId: string
-  onMoved: () => void
-}) {
   const part = useStore($part)
-  const [open, setOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   // SubParts don't belong in the built-in Connectors layer.
   const layers = part.layers.filter((l) => l.id !== CONNECTOR_LAYER_ID)
 
   return (
-    <PopoverRoot open={open} onOpenChange={setOpen}>
-      <PopoverTrigger>
-        <Button size="sm" variant="transparent" className="w-full justify-between">
-          Change Layer
-          <ChevronRight className="size-4 opacity-70" />
+    <>
+      <MenuTrigger>
+        <Button
+          iconOnly
+          size="sm"
+          variant="ghost"
+          aria-label="SubPart options"
+          className="shrink-0"
+          // Keep the GridList row from treating the menu click as a row press.
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          <MoreVertical className="size-4" />
         </Button>
-      </PopoverTrigger>
-      <Popover position="right-start" offset={4} className="w-44 rounded-lg" contentClassName="p-1">
-        <div className="flex flex-col gap-0.5">
-          {layers.map((l) => (
-            <Button
-              key={l.id}
-              size="sm"
-              variant="transparent"
-              className="justify-start"
-              disabled={l.id === currentLayerId}
-              onClick={() => {
-                movePlacementToLayer(index, l.id)
-                setOpen(false)
-                onMoved()
-              }}
-            >
-              {l.name}
-            </Button>
-          ))}
-        </div>
-      </Popover>
-    </PopoverRoot>
+        <Popover placement="bottom end" className="w-44">
+          <Menu>
+            <SubmenuTrigger>
+              <MenuItem>Change Layer</MenuItem>
+              <Popover className="w-44">
+                <Menu
+                  disabledKeys={[placement.layerId]}
+                  onAction={(key) => movePlacementToLayer(index, String(key))}
+                >
+                  {layers.map((l) => (
+                    <MenuItem key={l.id} id={l.id}>
+                      {l.name}
+                    </MenuItem>
+                  ))}
+                </Menu>
+              </Popover>
+            </SubmenuTrigger>
+            <MenuItem variant="danger" onAction={() => setConfirmDelete(true)}>
+              Delete
+            </MenuItem>
+          </Menu>
+        </Popover>
+      </MenuTrigger>
+
+      <ConfirmDialog
+        isOpen={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title="Delete SubPart"
+        text={`Delete “${placement.instanceId}”?`}
+        confirmLabel="Delete"
+        confirmVariant="danger"
+        onConfirm={() => removePlacement(index)}
+      />
+    </>
   )
 }

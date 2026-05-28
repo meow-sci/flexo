@@ -1,41 +1,43 @@
 import { useState } from 'react'
-import { List, ListButton, ListTitle, Popover, PopoverRoot, PopoverTrigger, ToolbarButton } from '@cladd-ui/react'
 import { CirclePlus } from 'lucide-react'
+import {
+  MenuTrigger,
+  Menu,
+  MenuItem,
+  MenuHeader,
+  Popover,
+  ToolbarButton,
+} from './kit'
 import { addConnector } from '../state/editorStore'
 import { SubPartPopup } from './AddSubPartButton'
 import { PartPopup } from './AddPartButton'
 
 export function AddButton() {
-  const [open, setOpen] = useState(false)
   const [subPartOpen, setSubPartOpen] = useState(false)
   const [partOpen, setPartOpen] = useState(false)
 
   return (
     <>
-      <PopoverRoot open={open} onOpenChange={setOpen}>
-        <PopoverTrigger>
-          <ToolbarButton>
-            <span className="flex items-center gap-1.5">
-              <CirclePlus size={16} />
-              Add
-            </span>
-          </ToolbarButton>
-        </PopoverTrigger>
-        <Popover position="bottom-start" className="w-52 rounded-lg">
-          <List>
-            <ListTitle>Add</ListTitle>
-            <ListButton size="md" onClick={() => { setOpen(false); setSubPartOpen(true) }}>
-              SubPart
-            </ListButton>
-            <ListButton size="md" onClick={() => { setOpen(false); addConnector() }}>
-              Connector
-            </ListButton>
-            <ListButton size="md" onClick={() => { setOpen(false); setPartOpen(true) }}>
-              Import built-in Part
-            </ListButton>
-          </List>
+      <MenuTrigger>
+        <ToolbarButton>
+          <CirclePlus size={16} />
+          Add
+        </ToolbarButton>
+        <Popover placement="bottom start" className="w-52">
+          <Menu
+            onAction={(key) => {
+              if (key === 'subpart') setSubPartOpen(true)
+              else if (key === 'connector') addConnector()
+              else if (key === 'part') setPartOpen(true)
+            }}
+          >
+            <MenuHeader>Add</MenuHeader>
+            <MenuItem id="subpart">SubPart</MenuItem>
+            <MenuItem id="connector">Connector</MenuItem>
+            <MenuItem id="part">Import built-in Part</MenuItem>
+          </Menu>
         </Popover>
-      </PopoverRoot>
+      </MenuTrigger>
       <SubPartPopup open={subPartOpen} onOpenChange={setSubPartOpen} />
       <PartPopup open={partOpen} onOpenChange={setPartOpen} />
     </>

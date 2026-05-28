@@ -1,11 +1,5 @@
 import { useStore } from '@nanostores/react'
-import {
-  Button,
-  Toolbar as CladdToolbar,
-  Segmented,
-  SegmentedButton,
-  ToolbarSeparator,
-} from '@cladd-ui/react'
+import { Toolbar, ToolbarSeparator, ToggleButtonGroup, ToggleButton, Button } from './kit'
 import {
   $toolMode,
   duplicateSelected,
@@ -34,27 +28,32 @@ export function SelectionToolbar() {
   if (!hasSelection) return null
 
   return (
-    <CladdToolbar size="sm">
-      <Segmented>
+    <Toolbar aria-label="Selection actions">
+      <ToggleButtonGroup
+        className="w-auto"
+        selectionMode="single"
+        disallowEmptySelection
+        selectedKeys={[mode]}
+        onSelectionChange={(keys) => {
+          const next = [...keys][0]
+          if (next) setToolMode(next as ToolMode)
+        }}
+      >
         {MODES.map((m) => (
-          <SegmentedButton
-            key={m.mode}
-            active={m.mode === mode}
-            onClick={() => setToolMode(m.mode)}
-          >
+          <ToggleButton key={m.mode} id={m.mode} size="sm">
             {m.label}
-          </SegmentedButton>
+          </ToggleButton>
         ))}
-      </Segmented>
+      </ToggleButtonGroup>
 
       <ToolbarSeparator />
 
-      <Button size="sm" onClick={() => duplicateSelected()}>
+      <Button size="sm" onPress={() => duplicateSelected()}>
         Duplicate
       </Button>
-      <Button size="sm" color="red" onClick={() => removeSelected()}>
+      <Button size="sm" variant="danger" onPress={() => removeSelected()}>
         Delete
       </Button>
-    </CladdToolbar>
+    </Toolbar>
   )
 }

@@ -28,9 +28,9 @@ function FileBar({ download }: { download: DownloadInfo }) {
       className="block"
     >
       {({ percentage, isIndeterminate }) => (
-        <div className="relative h-2 overflow-hidden rounded-full bg-cladd-surface-cut outline outline-1 -outline-offset-1 outline-cladd-outline">
+        <div className="relative h-2 overflow-hidden rounded-full bg-panel-sunken outline outline-1 -outline-offset-1 outline-border">
           <div
-            className={`h-full rounded-full bg-cladd-primary ${isIndeterminate ? 'animate-pulse' : ''}`}
+            className={`h-full rounded-full bg-accent ${isIndeterminate ? 'animate-pulse' : ''}`}
             style={{ width: `${isIndeterminate ? 40 : percentage}%` }}
           />
         </div>
@@ -55,7 +55,7 @@ function Panel({ state }: { state: LoadProgressState }) {
   const size = total > 0 ? ` (${mb(loaded)} of ${mb(total)} MB)` : ''
   return (
     <div className="flex w-72 max-w-full flex-col gap-0.5">
-      <div className="text-xs tabular-nums text-cladd-fg-soft">
+      <div className="text-xs tabular-nums text-fg-muted">
         Loading {count} asset{count === 1 ? '' : 's'}…{size}
       </div>
       {state.downloads.map((download) => (
@@ -72,7 +72,7 @@ export function WorkspaceLoadProgress() {
   if (!state.active || popupCount > 0) return null
   return (
     <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2">
-      <div className="rounded-lg bg-cladd-surface/90 px-3 py-2 shadow-lg backdrop-blur">
+      <div className="rounded-lg border border-border bg-panel/90 px-3 py-2 shadow-lg backdrop-blur">
         <Panel state={state} />
       </div>
     </div>
@@ -84,8 +84,8 @@ export function PreviewLoadProgress() {
   const state = useStore($loadProgress)
   if (!state.active) return null
   return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-cladd-backdrop/60 backdrop-blur-sm">
-      <div className="rounded-lg bg-cladd-surface px-4 py-3 shadow-lg">
+    <div className="absolute inset-0 z-10 flex items-center justify-center bg-overlay/60 backdrop-blur-sm">
+      <div className="rounded-lg border border-border bg-panel px-4 py-3 shadow-lg">
         <Panel state={state} />
       </div>
     </div>

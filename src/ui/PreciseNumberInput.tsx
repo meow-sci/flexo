@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { Input } from '@cladd-ui/react'
+import { TextField } from './kit'
 
 /**
  * Numeric input that preserves the user's exact typed value — no step-snapping
- * or decimal rounding (unlike `NumberField`). Free-types while focused via a
- * local string draft; commits the parsed value (clamped to `[min, max]`) on
- * every valid keystroke, and reflects external store changes when not focused.
+ * or decimal rounding (unlike a stepper NumberField). Free-types while focused
+ * via a local string draft; commits the parsed value (clamped to `[min, max]`)
+ * on every valid keystroke, and reflects external store changes when not focused.
  */
 export function PreciseNumberInput(props: {
   value: number
@@ -13,18 +13,21 @@ export function PreciseNumberInput(props: {
   min?: number
   max?: number
   className?: string
-  disabled?: boolean
+  isDisabled?: boolean
+  'aria-label': string
 }) {
-  const { value, onCommit, min, max, className, disabled } = props
+  const { value, onCommit, min, max, className, isDisabled } = props
   const [draft, setDraft] = useState<string | null>(null)
 
   return (
-    <Input
+    <TextField
       size="sm"
       type="number"
+      inputMode="decimal"
+      aria-label={props['aria-label']}
       className={className}
       inputClassName="font-mono"
-      disabled={disabled}
+      isDisabled={isDisabled}
       value={draft ?? String(value)}
       onChange={(v: string) => {
         setDraft(v)

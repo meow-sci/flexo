@@ -1,8 +1,8 @@
 import * as THREE from 'three'
-import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
+import { HDRLoader } from 'three/addons/loaders/HDRLoader.js'
 import { withProgress } from './trackedLoad'
 
-const loader = new RGBELoader()
+const loader = new HDRLoader()
 const cache = new Map<string, Promise<THREE.DataTexture>>()
 
 /**

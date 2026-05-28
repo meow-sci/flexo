@@ -1,14 +1,15 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
-import {
-  Button,
-  Toolbar as CladdToolbar,
-  Dialog,
-  Popover,
-  PopoverRoot,
-  PopoverTrigger,
-} from '@cladd-ui/react'
 import { Layers } from 'lucide-react'
+import {
+  Toolbar,
+  Button,
+  MenuTrigger,
+  Menu,
+  MenuItem,
+  Popover,
+  ConfirmDialog,
+} from './kit'
 import {
   $part,
   $selectedIndices,
@@ -21,8 +22,7 @@ import { CONNECTOR_LAYER_ID } from '../ksa/types'
 /**
  * Floating toolbar stacked beneath {@link SelectionToolbar}, shown only when more
  * than one entity is selected. Holds actions that are specific to a multi-selection
- * (bulk layer move, bulk delete) and act on the whole selection at once. New
- * multi-select-only actions belong here.
+ * (bulk layer move, bulk delete) and act on the whole selection at once.
  */
 export function MultiSelectToolbar() {
   const hasMultiSelection = useStore($hasMultiSelection)
@@ -31,47 +31,35 @@ export function MultiSelectToolbar() {
   if (!hasMultiSelection) return null
 
   return (
-    <CladdToolbar size="sm">
+    <Toolbar aria-label="Multi-selection actions">
       <ChangeLayerButton />
       <DeleteAllButton count={count} />
-    </CladdToolbar>
+    </Toolbar>
   )
 }
 
-/** "Change Layer" popover: picks a destination layer for the whole selection. */
+/** "Change Layer" menu: picks a destination layer for the whole selection. */
 function ChangeLayerButton() {
   const part = useStore($part)
-  const [open, setOpen] = useState(false)
   // SubParts never belong to the built-in Connectors layer.
   const layers = part.layers.filter((l) => l.id !== CONNECTOR_LAYER_ID)
 
   return (
-    <PopoverRoot open={open} onOpenChange={setOpen}>
-      <PopoverTrigger>
-        <Button size="sm">
-          <Layers className="size-4" />
-          Change Layer
-        </Button>
-      </PopoverTrigger>
-      <Popover position="bottom-start" className="w-48 rounded-lg" contentClassName="p-1">
-        <div className="flex flex-col gap-0.5">
+    <MenuTrigger>
+      <Button size="sm">
+        <Layers className="size-4" />
+        Change Layer
+      </Button>
+      <Popover placement="bottom start" className="w-48">
+        <Menu onAction={(key) => moveSelectedPlacementsToLayer(String(key))}>
           {layers.map((l) => (
-            <Button
-              key={l.id}
-              size="sm"
-              variant="transparent"
-              className="justify-start"
-              onClick={() => {
-                moveSelectedPlacementsToLayer(l.id)
-                setOpen(false)
-              }}
-            >
+            <MenuItem key={l.id} id={l.id}>
               {l.name}
-            </Button>
+            </MenuItem>
           ))}
-        </div>
+        </Menu>
       </Popover>
-    </PopoverRoot>
+    </MenuTrigger>
   )
 }
 
@@ -81,24 +69,18 @@ function DeleteAllButton({ count }: { count: number }) {
 
   return (
     <>
-      <Button size="sm" color="red" onClick={() => setConfirmDelete(true)}>
+      <Button size="sm" variant="danger" onPress={() => setConfirmDelete(true)}>
         Delete All ({count})
       </Button>
 
-      <Dialog
-        open={confirmDelete}
-        onOpenChange={(open) => {
-          if (!open) setConfirmDelete(false)
-        }}
+      <ConfirmDialog
+        isOpen={confirmDelete}
+        onOpenChange={setConfirmDelete}
         title="Delete SubParts"
         text={`Delete all ${count} selected SubParts?`}
-        cancelButtonText="Cancel"
-        confirmButtonText="Delete All"
-        confirmButtonColor="red"
-        onConfirm={() => {
-          removeSelected()
-          setConfirmDelete(false)
-        }}
+        confirmLabel="Delete All"
+        confirmVariant="danger"
+        onConfirm={() => removeSelected()}
       />
     </>
   )

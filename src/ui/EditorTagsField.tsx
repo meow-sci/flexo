@@ -1,25 +1,22 @@
 import { useState } from 'react'
 import {
-  Button,
-  Chip,
-  CloseIcon,
-  List,
-  ListButton,
-  ListItem,
+  DialogTrigger,
   Popover,
-  PopoverRoot,
-  PopoverTrigger,
+  PopoverDialog,
+  Button,
   SearchField,
   SectionTitle,
-} from '@cladd-ui/react'
+  TagGroup,
+  TagList,
+  Tag,
+} from './kit'
 import { KNOWN_EDITOR_TAGS } from '../ksa/types'
 
 /**
- * Editor-tag combobox for the Part Data dialog: a trigger button opens a Popover
- * with a SearchField over the KSA {@link KNOWN_EDITOR_TAGS}. Removable chips show
- * the current tags. The filter doubles as free-form entry — if the typed text
- * matches no known tag it can still be added verbatim (KSA accepts arbitrary tag
- * strings). Selecting keeps the popover open so several tags can be added in a row.
+ * Editor-tag combobox for the Part Data dialog: removable tag chips plus a
+ * popover with a search field over the KSA {@link KNOWN_EDITOR_TAGS}. The filter
+ * doubles as free-form entry — text matching no known tag can still be added
+ * verbatim. Selecting keeps the popover open so several tags can be added in a row.
  */
 export function EditorTagsField({
   tags,
@@ -35,7 +32,8 @@ export function EditorTagsField({
     if (tag && !tags.includes(tag)) onChange([...tags, tag])
     setQuery('')
   }
-  const removeTag = (tag: string) => onChange(tags.filter((t) => t !== tag))
+  const removeTags = (keys: Set<React.Key>) =>
+    onChange(tags.filter((t) => !keys.has(t)))
 
   const q = query.trim().toLowerCase()
   const suggestions = KNOWN_EDITOR_TAGS.filter(
@@ -49,56 +47,46 @@ export function EditorTagsField({
   return (
     <div className="mt-2 flex flex-col gap-2">
       {tags.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {tags.map((tag) => (
-            <Chip
-              key={tag}
-              size="sm"
-              as="button"
-              clickable
-              icon={CloseIcon}
-              onClick={() => removeTag(tag)}
-              title={`Remove ${tag}`}
-            >
-              {tag}
-            </Chip>
-          ))}
-        </div>
+        <TagGroup aria-label="Editor tags" onRemove={removeTags}>
+          <TagList items={tags.map((id) => ({ id }))}>
+            {(item) => <Tag id={item.id}>{item.id}</Tag>}
+          </TagList>
+        </TagGroup>
       )}
 
-      <PopoverRoot onOpenChange={(open) => !open && setQuery('')}>
-        <PopoverTrigger>
-          <Button size="sm" className="w-full">
-            Add tag…
-          </Button>
-        </PopoverTrigger>
-        <Popover className="w-64 rounded-lg" offset={8} position="bottom-start">
-          <SectionTitle className="px-4 pt-4">Editor Tags</SectionTitle>
-          <SearchField
-            size="sm"
-            value={query}
-            onChange={setQuery}
-            placeholder="Filter or add a tag"
-            className="mx-2 mt-2 w-auto"
-          />
-          <List>
-            {showCustom && (
-              <ListButton size="sm" onClick={() => addTag(query)}>
-                Add “{query.trim()}”
-              </ListButton>
-            )}
-            {suggestions.length === 0 && !showCustom ? (
-              <ListItem className="text-cladd-fg-softer">No matches</ListItem>
-            ) : (
-              suggestions.map((t) => (
-                <ListButton key={t} size="sm" onClick={() => addTag(t)}>
-                  {t}
-                </ListButton>
-              ))
-            )}
-          </List>
+      <DialogTrigger onOpenChange={(open) => !open && setQuery('')}>
+        <Button size="sm" className="w-full">
+          Add tag…
+        </Button>
+        <Popover placement="bottom start" className="w-64">
+          <PopoverDialog className="flex flex-col gap-2 p-2">
+            <SectionTitle className="px-1">Editor Tags</SectionTitle>
+            <SearchField
+              size="sm"
+              aria-label="Filter or add a tag"
+              value={query}
+              onChange={setQuery}
+              placeholder="Filter or add a tag"
+            />
+            <div className="flex max-h-60 flex-col gap-0.5 overflow-auto">
+              {showCustom && (
+                <Button size="sm" variant="ghost" className="justify-start" onPress={() => addTag(query)}>
+                  Add “{query.trim()}”
+                </Button>
+              )}
+              {suggestions.length === 0 && !showCustom ? (
+                <span className="px-2 py-1.5 text-sm text-fg-subtle">No matches</span>
+              ) : (
+                suggestions.map((t) => (
+                  <Button key={t} size="sm" variant="ghost" className="justify-start" onPress={() => addTag(t)}>
+                    {t}
+                  </Button>
+                ))
+              )}
+            </div>
+          </PopoverDialog>
         </Popover>
-      </PopoverRoot>
+      </DialogTrigger>
     </div>
   )
 }

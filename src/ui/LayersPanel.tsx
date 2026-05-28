@@ -1,7 +1,24 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
-import { Button as DragButton, GridList, GridListItem, useDragAndDrop, type Selection } from 'react-aria-components'
-import { Button, Chip, Dialog, Input, ListTitle, Segmented, SegmentedButton, Select, Tooltip } from '@cladd-ui/react'
+import {
+  Button as DragButton,
+  GridList,
+  GridListItem,
+  useDragAndDrop,
+  type Selection,
+} from 'react-aria-components'
+import {
+  Button,
+  Chip,
+  ConfirmDialog,
+  TextField,
+  ToggleButtonGroup,
+  ToggleButton,
+  Select,
+  ListBoxItem,
+  Tooltip,
+  SectionTitle,
+} from './kit'
 import {
   $activeLayerId,
   createLayer,
@@ -32,15 +49,19 @@ function computeReorder(
   return [...rest.slice(0, insertAt), ...moving, ...rest.slice(insertAt)]
 }
 
+const rowClass = ({ isSelected, isFocusVisible }: { isSelected: boolean; isFocusVisible: boolean }) =>
+  [
+    'flex min-w-0 cursor-default select-none items-center gap-1 rounded-md px-2 py-1 text-fg outline-none',
+    isSelected ? 'bg-white/[0.08] ring-2 ring-inset ring-accent' : 'hover:bg-white/[0.06]',
+    isFocusVisible && !isSelected ? 'ring-1 ring-inset ring-accent' : '',
+  ].join(' ')
+
 /**
- * The layers list shown inside the sidebar's Layers popover. A react-aria
- * GridList (rather than ListBox) so each row can embed interactive controls —
- * an inline rename input, eye/lock toggles, "select all", and delete. The single
- * selection IS the active layer (new items land there), with drag-and-drop
- * reorder. Each row carries a SubPart+connector count chip; delete is disabled
- * for the built-in Default layer. Visibility/lock are persisted view state
- * (layerStore); creation/rename/reorder/delete mutate the document and are
- * undoable (editorStore).
+ * The layers list shown inside the Layers popover. A react-aria GridList so each
+ * row can embed interactive controls — inline rename, eye/lock toggles, select-all,
+ * delete. The single selection IS the active layer (new items land there), with
+ * drag-and-drop reorder. Visibility/lock are persisted view state; creation/
+ * rename/reorder/delete mutate the document and are undoable.
  */
 export function LayersPanel({ onLayerSelected }: { onLayerSelected?: () => void } = {}) {
   const summaries = useStore($layerSummaries)
@@ -79,10 +100,11 @@ export function LayersPanel({ onLayerSelected }: { onLayerSelected?: () => void 
 
   return (
     <div className="flex w-full flex-col gap-2">
-      <ListTitle>Layers</ListTitle>
+      <SectionTitle>Layers</SectionTitle>
       <div className="flex items-center gap-1">
-        <Input
+        <TextField
           size="sm"
+          aria-label="New layer name"
           className="min-w-0 flex-1"
           value={newName}
           onChange={setNewName}
@@ -91,7 +113,7 @@ export function LayersPanel({ onLayerSelected }: { onLayerSelected?: () => void 
             if (e.key === 'Enter') createFromInput()
           }}
         />
-        <Button size="sm" onClick={createFromInput} disabled={!newName.trim()}>
+        <Button size="sm" onPress={createFromInput} isDisabled={!newName.trim()}>
           Add
         </Button>
       </div>
@@ -105,25 +127,11 @@ export function LayersPanel({ onLayerSelected }: { onLayerSelected?: () => void 
         selectedKeys={new Set([activeId])}
         onSelectionChange={onSelectionChange}
         dragAndDropHooks={dragAndDropHooks}
-        // editingId is read by the row render fn but isn't part of `items`, so the
-        // collection cache must be invalidated explicitly when it changes.
         dependencies={[editingId]}
         className="flex max-h-[50vh] flex-col gap-0.5 overflow-auto outline-none"
       >
         {(summary: LayerSummary) => (
-          <GridListItem
-            id={summary.layer.id}
-            textValue={summary.layer.name}
-            className={({ isSelected, isFocusVisible }) =>
-              [
-                'flex min-w-0 cursor-default select-none items-center gap-1 rounded-md px-2 py-1 text-cladd-fg outline-none',
-                // Keep text/icons in the normal foreground (so the transparent icon
-                // buttons stay legible); mark the active layer with a soft fill + ring.
-                isSelected ? 'bg-cladd-surface-press ring-2 ring-inset ring-cladd-primary' : 'hover:bg-cladd-surface-hover',
-                isFocusVisible && !isSelected ? 'ring-1 ring-inset ring-cladd-primary' : '',
-              ].join(' ')
-            }
-          >
+          <GridListItem id={summary.layer.id} textValue={summary.layer.name} className={rowClass}>
             <LayerRow
               summary={summary}
               isEditing={editingId === summary.layer.id}
@@ -166,15 +174,14 @@ function LayerRow({
   const locked = view.locked
   const isBuiltIn = BUILT_IN_LAYER_IDS.includes(layer.id)
 
-  // Stops react-aria's row press (pointerdown-based) from firing when the user
-  // interacts with the row's controls, so they don't change the active layer.
+  // Stops react-aria's row press from firing when interacting with row controls.
   const stopRowPress = (e: React.PointerEvent) => e.stopPropagation()
 
   return (
     <>
       <DragButton
         slot="drag"
-        className="flex shrink-0 cursor-grab items-center text-cladd-fg-softer outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-cladd-primary"
+        className="flex shrink-0 cursor-grab items-center text-fg-subtle outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-accent"
         aria-label="Drag to reorder layer"
       >
         <GripVerticalIcon />
@@ -184,76 +191,65 @@ function LayerRow({
           <RenameInput layer={layer} onDone={onEndRename} />
         </div>
       ) : (
-        <span
-          className="min-w-0 flex-1 truncate text-sm"
-          title="Double-click to rename"
-          onDoubleClick={onStartRename}
-        >
+        <span className="min-w-0 flex-1 truncate text-sm" title="Double-click to rename" onDoubleClick={onStartRename}>
           {layer.name}
         </span>
       )}
 
-      <Chip size="md" className="shrink-0 opacity-80" title={`${subParts} SubParts, ${connectors} connectors`}>
+      <Chip className="shrink-0" title={`${subParts} SubParts, ${connectors} connectors`}>
         {total}
       </Chip>
 
-      <div className="flex shrink-0 items-center gap-1" onPointerDown={stopRowPress}>
+      <div className="flex shrink-0 items-center gap-0.5" onPointerDown={stopRowPress}>
         {!isEditing && (
-          <Tooltip tooltip="Rename layer">
-            <Button
-              square
-              size="sm"
-              variant="transparent"
-              aria-label="Rename layer"
-              onClick={onStartRename}
-            >
+          <Tooltip content="Rename layer">
+            <Button iconOnly size="sm" variant="ghost" aria-label="Rename layer" onPress={onStartRename}>
               <PencilIcon />
             </Button>
           </Tooltip>
         )}
-        <Tooltip tooltip={view.visible ? 'Hide layer' : 'Show layer'}>
+        <Tooltip content={view.visible ? 'Hide layer' : 'Show layer'}>
           <Button
-            square
+            iconOnly
             size="sm"
-            variant="transparent"
+            variant="ghost"
             aria-label={view.visible ? 'Hide layer' : 'Show layer'}
-            onClick={() => toggleLayerVisible(layer.id)}
+            onPress={() => toggleLayerVisible(layer.id)}
           >
             {view.visible ? <EyeIcon /> : <EyeOffIcon />}
           </Button>
         </Tooltip>
-        <Tooltip tooltip={locked ? 'Unlock layer' : 'Lock layer'}>
+        <Tooltip content={locked ? 'Unlock layer' : 'Lock layer'}>
           <Button
-            square
+            iconOnly
             size="sm"
-            variant="transparent"
+            variant="ghost"
             aria-label={locked ? 'Unlock layer' : 'Lock layer'}
-            onClick={() => toggleLayerLocked(layer.id)}
+            onPress={() => toggleLayerLocked(layer.id)}
           >
             {locked ? <LockIcon /> : <UnlockIcon />}
           </Button>
         </Tooltip>
-        <Tooltip tooltip={locked ? 'Layer locked' : 'Select all in layer'}>
+        <Tooltip content={locked ? 'Layer locked' : 'Select all in layer'}>
           <Button
-            square
+            iconOnly
             size="sm"
-            variant="transparent"
+            variant="ghost"
             aria-label="Select all in layer"
-            disabled={locked || total === 0}
-            onClick={() => selectLayerEntities(layer.id)}
+            isDisabled={locked || total === 0}
+            onPress={() => selectLayerEntities(layer.id)}
           >
             <SelectAllIcon />
           </Button>
         </Tooltip>
-        <Tooltip tooltip={isBuiltIn ? 'Built-in layer cannot be deleted' : 'Delete layer'}>
+        <Tooltip content={isBuiltIn ? 'Built-in layer cannot be deleted' : 'Delete layer'}>
           <Button
-            square
+            iconOnly
             size="sm"
-            variant="transparent"
-            color="red"
+            variant="danger-ghost"
             aria-label="Delete layer"
-            disabled={isBuiltIn}
-            onClick={onRequestDelete}
+            isDisabled={isBuiltIn}
+            onPress={onRequestDelete}
           >
             <TrashIcon />
           </Button>
@@ -271,9 +267,10 @@ function RenameInput({ layer, onDone }: { layer: Layer; onDone: () => void }) {
   }
   return (
     <div className="flex items-center gap-1">
-      <Input
+      <TextField
         size="sm"
         autoFocus
+        aria-label="Layer name"
         className="min-w-0 flex-1"
         value={draft}
         onChange={setDraft}
@@ -284,8 +281,8 @@ function RenameInput({ layer, onDone }: { layer: Layer; onDone: () => void }) {
           else if (e.key === 'Escape') onDone()
         }}
       />
-      <Tooltip tooltip="Save name">
-        <Button square size="xs" variant="transparent" aria-label="Save name" onClick={commit}>
+      <Tooltip content="Save name">
+        <Button iconOnly size="sm" variant="ghost" aria-label="Save name" onPress={commit}>
           <SaveIcon />
         </Button>
       </Tooltip>
@@ -306,61 +303,64 @@ function DeleteLayerDialog({
   const total = subParts + connectors
   const [mode, setMode] = useState<DeleteLayerOptions['mode']>('move-items')
   const [targetId, setTargetId] = useState(others[0]?.id ?? DEFAULT_LAYER_ID)
-  const targetLayer = others.find((l) => l.id === targetId) ?? others[0]
-
-  const confirm = () => {
-    deleteLayer(layer.id, { mode, targetLayerId: targetId })
-  }
 
   return (
-    <Dialog
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose()
-      }}
+    <ConfirmDialog
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
       title={`Delete layer “${layer.name}”`}
       text={
         total === 0
           ? 'This layer is empty.'
           : `This layer has ${subParts} SubPart${subParts === 1 ? '' : 's'} and ${connectors} connector${connectors === 1 ? '' : 's'}.`
       }
-      cancelButtonText="Cancel"
-      confirmButtonText="Delete layer"
-      confirmButtonColor="red"
-      onConfirm={confirm}
+      confirmLabel="Delete layer"
+      confirmVariant="danger"
+      onConfirm={() => deleteLayer(layer.id, { mode, targetLayerId: targetId })}
     >
       {total > 0 && (
         <div className="flex flex-col gap-3">
-          <Segmented>
-            <SegmentedButton active={mode === 'move-items'} onClick={() => setMode('move-items')}>
+          <ToggleButtonGroup
+            selectionMode="single"
+            disallowEmptySelection
+            selectedKeys={[mode]}
+            onSelectionChange={(keys) => {
+              const next = [...keys][0]
+              if (next) setMode(next as DeleteLayerOptions['mode'])
+            }}
+          >
+            <ToggleButton id="move-items" size="sm">
               Move items
-            </SegmentedButton>
-            <SegmentedButton active={mode === 'delete-items'} onClick={() => setMode('delete-items')}>
+            </ToggleButton>
+            <ToggleButton id="delete-items" size="sm">
               Delete items
-            </SegmentedButton>
-          </Segmented>
+            </ToggleButton>
+          </ToggleButtonGroup>
 
           {mode === 'move-items' ? (
-            <label className="flex items-center justify-between gap-2 text-cladd-sm text-cladd-fg-soft">
+            <label className="flex items-center justify-between gap-2 text-sm text-fg-muted">
               <span>Move items to</span>
               <Select
                 size="sm"
-                options={others}
-                value={targetId}
-                getOptionValue={(l) => l.id}
-                onChange={(v) => setTargetId(v as string)}
-                renderOption={({ value }) => value.name}
+                aria-label="Move items to layer"
+                selectedKey={targetId}
+                onSelectionChange={(k) => setTargetId(String(k))}
+                items={others}
               >
-                {targetLayer?.name}
+                {(l) => (
+                  <ListBoxItem id={l.id} textValue={l.name}>
+                    {l.name}
+                  </ListBoxItem>
+                )}
               </Select>
             </label>
           ) : (
-            <span className="text-cladd-sm text-cladd-fg-softer">
+            <span className="text-sm text-fg-subtle">
               The {total} item{total === 1 ? '' : 's'} in this layer will be permanently removed.
             </span>
           )}
         </div>
       )}
-    </Dialog>
+    </ConfirmDialog>
   )
 }

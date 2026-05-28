@@ -76,7 +76,7 @@ export const DEFAULT_LIGHTING: LightingSettings = {
   environmentIntensity: 1,
   showEnvironmentBackground: false,
   backgroundBlur: 0,
-  exposure: 0.7,
+  exposure: 0.85,
   toneMapping: 'neutral',
 }
 

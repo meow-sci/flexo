@@ -1,7 +1,7 @@
 import { useStore } from '@nanostores/react'
-import { Button, Surface, Toolbar as CladdToolbar, Tooltip } from '@cladd-ui/react'
-import { TransformInspector } from './TransformInspector'
-import { PlacementList } from './PlacementList'
+import { PanelRight } from 'lucide-react'
+import { Button, Toolbar, Tooltip } from './kit'
+import { InspectorContent } from './InspectorContent'
 import { LayersButton } from './LayersButton'
 import {
   $inspectorVisible,
@@ -9,12 +9,6 @@ import {
   setInspectorVisible,
   setInspectorWidth,
 } from '../state/uiStore'
-import { PanelRight } from 'lucide-react'
-
-/** A panel-with-divided-right-column glyph that reads as an inspector panel. */
-function InspectorIcon() {
-  return <PanelRight className="size-4" />;
-}
 
 /**
  * Thin grab strip on the panel's left edge. Dragging left widens the panel,
@@ -44,33 +38,30 @@ function ResizeHandle() {
       className="group absolute -left-1 top-0 bottom-0 z-10 w-2 cursor-col-resize"
       aria-label="Resize inspector"
     >
-      <div className="mx-auto h-full w-0.5 bg-transparent transition-colors group-hover:bg-cladd-fg-soft" />
+      <div className="mx-auto h-full w-0.5 bg-transparent transition-colors group-hover:bg-border-strong" />
     </div>
   )
 }
 
 /**
- * The right-side editor inspector. A single surface holds two sub-surfaces: the
- * placed-instance + connector list on top (scrolls when long) and the transform
- * inspector below at its natural height (the focus when something is selected).
- * A left-edge drag handle resizes the panel; visibility and width persist via
- * uiStore. The hide/show toggle keeps a fixed top-right position in both states.
+ * Desktop right-side inspector. A left-edge drag handle resizes the panel;
+ * visibility and width persist via uiStore. The phone variant is a bottom sheet
+ * — see {@link MobileInspector}.
  */
 export function RightPanel() {
   const visible = useStore($inspectorVisible)
   const width = useStore($inspectorWidth)
 
   const toggleButton = (
-    <Tooltip tooltip={visible ? 'Hide inspector' : 'Show inspector'}>
+    <Tooltip content={visible ? 'Hide inspector' : 'Show inspector'}>
       <Button
-        square
-        rounded
+        iconOnly
         size="sm"
-        variant="solid"
-        onClick={() => setInspectorVisible(!visible)}
+        variant="secondary"
+        onPress={() => setInspectorVisible(!visible)}
         aria-label={visible ? 'Hide inspector' : 'Show inspector'}
       >
-        <InspectorIcon />
+        <PanelRight className="size-4" />
       </Button>
     </Tooltip>
   )
@@ -83,23 +74,14 @@ export function RightPanel() {
     <div className="absolute right-3 top-3 bottom-3 flex flex-col gap-2" style={{ width }}>
       <ResizeHandle />
       <div className="flex shrink-0 items-center gap-2">
-        <CladdToolbar size="sm" className="min-w-0 flex-1" contentClassName="w-full">
+        <Toolbar aria-label="Layers" className="min-w-0 flex-1">
           <LayersButton />
-        </CladdToolbar>
+        </Toolbar>
         {toggleButton}
       </div>
-      <Surface
-        outline
-        className="flex min-h-0 flex-1 flex-col rounded-xl"
-        contentClassName="flex min-h-0 flex-1 flex-col gap-2 p-2"
-      >
-        <div className="min-h-0 flex-1">
-          <PlacementList />
-        </div>
-        <div className="shrink-0">
-          <TransformInspector />
-        </div>
-      </Surface>
+      <div className="min-h-0 flex-1">
+        <InspectorContent />
+      </div>
     </div>
   )
 }

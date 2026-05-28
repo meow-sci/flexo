@@ -1,5 +1,47 @@
 @import 'tailwindcss';
-@import '@cladd-ui/react/css';
+@plugin 'tailwindcss-react-aria-components';
+
+/* ============================================================================
+   Design tokens — refreshed dark theme, radioactive-green accent (#2cfa1f).
+   Semantic names so component classes never hardcode raw colors. Exposed as
+   Tailwind utilities via @theme (bg-panel, text-fg-muted, ring-accent, ...).
+   ========================================================================== */
+@theme {
+  /* Surfaces (back -> front) */
+  --color-canvas: #0b0c0e; /* app base, behind the 3D viewport */
+  --color-panel: #161719; /* default surface: toolbars, inspector */
+  --color-panel-raised: #1f2125; /* elevated: popovers, menus, dialogs */
+  --color-panel-sunken: #0e0f11; /* inset: inputs, lists, code */
+  --color-overlay: #000000; /* modal scrim (used with opacity) */
+
+  /* Borders */
+  --color-border: #2a2d32;
+  --color-border-strong: #3a3e45;
+
+  /* Foreground text */
+  --color-fg: #e8eaed;
+  --color-fg-muted: #9aa0a8;
+  --color-fg-subtle: #61666e;
+
+  /* Accent — radioactive green */
+  --color-accent: #2cfa1f;
+  --color-accent-hover: #54fb4a;
+  --color-accent-press: #1fd615;
+  --color-accent-fg: #052008; /* near-black-green text/icons on accent fill */
+
+  /* Semantic */
+  --color-danger: #ef4444;
+  --color-danger-fg: #ffffff;
+  --color-warning: #f5c542;
+  --color-warning-fg: #1a1400;
+
+  /* Elevation */
+  --shadow-popover: 0 16px 48px -12px rgb(0 0 0 / 0.6);
+}
+
+:root {
+  color-scheme: dark;
+}
 
 html,
 body,
@@ -11,4 +53,11 @@ body,
 
 #root {
   overflow: hidden;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-fg);
+  font-family:
+    ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }

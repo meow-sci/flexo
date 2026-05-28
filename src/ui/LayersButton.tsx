@@ -1,36 +1,30 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
-import { Popover, PopoverRoot, PopoverTrigger, ToolbarButton, Tooltip } from '@cladd-ui/react'
+import { Layers } from 'lucide-react'
+import { DialogTrigger, Popover, PopoverDialog, Button } from './kit'
 import { $activeLayer } from '../state/selectors'
 import { LayersPanel } from './LayersPanel'
-import { Layers } from 'lucide-react'
 
 /**
- * Sidebar-toolbar "Layers" action: opens a popover with the layer list (create,
- * reorder, visibility/lock, select-all, delete). The trigger shows the active
- * layer's name so it's clear where new items will land.
+ * "Layers" action: opens a popover with the layer list (create, reorder,
+ * visibility/lock, select-all, delete). The trigger shows the active layer's
+ * name so it's clear where new items will land.
  */
 export function LayersButton() {
   const activeLayer = useStore($activeLayer)
   const [open, setOpen] = useState(false)
 
   return (
-    <PopoverRoot open={open} onOpenChange={setOpen}>
-      <PopoverTrigger>
-        <Tooltip tooltip="Layers">
-          <ToolbarButton aria-label="Layers" className="w-full justify-start">
-            <span className="flex w-full min-w-0 items-center gap-1.5">
-              <Layers size={18}/>
-              <span className="truncate">{activeLayer?.name ?? 'Layers'}</span>
-            </span>
-          </ToolbarButton>
-        </Tooltip>
-      </PopoverTrigger>
-      {/* Padding lives on the inner content area (not the root) so the focus rings
-          of the name input + rows aren't clipped by the content area's overflow. */}
-      <Popover position="bottom-end" className="w-[450px] rounded-lg" contentClassName="p-2">
-        <LayersPanel onLayerSelected={() => setOpen(false)} />
+    <DialogTrigger isOpen={open} onOpenChange={setOpen}>
+      <Button variant="secondary" size="sm" className="w-full min-w-0 justify-start" aria-label="Layers">
+        <Layers size={16} className="shrink-0" />
+        <span className="truncate">{activeLayer?.name ?? 'Layers'}</span>
+      </Button>
+      <Popover placement="bottom end" className="w-[min(450px,calc(100vw-1.5rem))]">
+        <PopoverDialog className="p-2">
+          <LayersPanel onLayerSelected={() => setOpen(false)} />
+        </PopoverDialog>
       </Popover>
-    </PopoverRoot>
+    </DialogTrigger>
   )
 }

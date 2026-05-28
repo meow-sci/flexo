@@ -1,6 +1,6 @@
 import { useStore } from '@nanostores/react'
-import { Toolbar as CladdToolbar, ToolbarButton, ToolbarSeparator, useToast } from '@cladd-ui/react'
 import { Undo, Redo } from 'lucide-react'
+import { Toolbar, ToolbarButton, ToolbarSeparator, toast } from './kit'
 import { $canRedo, $canUndo, redo, undo } from '../state/editorStore'
 import { AddButton } from './AddButton'
 import { ProjectButton } from './ProjectButton'
@@ -18,10 +18,9 @@ import { HistoryButton } from './HistoryButton'
 export function EditorToolbar() {
   const canUndo = useStore($canUndo)
   const canRedo = useStore($canRedo)
-  const toast = useToast()
 
   return (
-    <CladdToolbar size="sm">
+    <Toolbar aria-label="Editor actions" className="flex-wrap lg:flex-nowrap">
       <ProjectButton />
 
       <ToolbarSeparator />
@@ -36,10 +35,24 @@ export function EditorToolbar() {
 
       <ToolbarSeparator />
 
-      <ToolbarButton disabled={!canUndo} onClick={() => { const d = undo(); if (d) toast({ title: `Undo: ${d}`, timeout: 1500 }) }}>
+      <ToolbarButton
+        isDisabled={!canUndo}
+        aria-label="Undo"
+        onPress={() => {
+          const d = undo()
+          if (d) toast({ title: `Undo: ${d}` }, { timeout: 1500 })
+        }}
+      >
         <Undo size={16} />
       </ToolbarButton>
-      <ToolbarButton disabled={!canRedo} onClick={() => { const d = redo(); if (d) toast({ title: `Redo: ${d}`, timeout: 1500 }) }}>
+      <ToolbarButton
+        isDisabled={!canRedo}
+        aria-label="Redo"
+        onPress={() => {
+          const d = redo()
+          if (d) toast({ title: `Redo: ${d}` }, { timeout: 1500 })
+        }}
+      >
         <Redo size={16} />
       </ToolbarButton>
       <HistoryButton />
@@ -47,6 +60,6 @@ export function EditorToolbar() {
       <ToolbarSeparator />
 
       <SettingsButton />
-    </CladdToolbar>
+    </Toolbar>
   )
 }

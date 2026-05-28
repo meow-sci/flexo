@@ -1,22 +1,17 @@
 import { useStore } from '@nanostores/react'
 import {
+  DialogTrigger,
+  Popover,
+  PopoverDialog,
+  ToolbarButton,
   Button,
   Checkbox,
-  Popover,
-  PopoverRoot,
-  PopoverTrigger,
-  SectionTitle,
   Select,
+  ListBoxItem,
   Slider,
-  ToolbarButton,
-} from '@cladd-ui/react'
-import {
-  $grids,
-  setGrid,
-  snapCamera,
-  type Axis,
-  type CameraDir,
-} from '../state/viewStore'
+  SectionTitle,
+} from './kit'
+import { $grids, setGrid, snapCamera, type Axis, type CameraDir } from '../state/viewStore'
 import {
   $lighting,
   setLighting,
@@ -40,152 +35,154 @@ const GRID_AXES: { axis: Axis; label: string }[] = [
 ]
 
 /**
- * Top-surface "View" action: a Popover with camera-snap buttons (snap to an
- * axis-aligned view, keeping the current zoom) and per-axis reference grids
- * (checkbox + meters spacing). Both drive the three.js layer via viewStore.
+ * "View" action: a popover with camera-snap buttons (snap to an axis-aligned
+ * view, keeping the current zoom), per-axis reference grids, and lighting/
+ * environment controls. All drive the three.js layer via viewStore / lightingStore.
  */
-const ENV_LABELS: Record<EnvironmentPreset, string> = Object.fromEntries(
-  ENVIRONMENT_PRESETS.map((p) => [p.id, p.label]),
-) as Record<EnvironmentPreset, string>
-
-const TONE_LABELS: Record<ToneMappingMode, string> = Object.fromEntries(
-  TONE_MAPPING_MODES.map((m) => [m.id, m.label]),
-) as Record<ToneMappingMode, string>
-
 export function ViewButton() {
   const grids = useStore($grids)
   const lighting = useStore($lighting)
   const envHasSky = ENVIRONMENT_PRESETS.find((p) => p.id === lighting.environment)?.file != null
 
   return (
-    <PopoverRoot>
-      <PopoverTrigger>
-        <ToolbarButton>View</ToolbarButton>
-      </PopoverTrigger>
-      <Popover position="bottom" className="w-96 rounded-lg" contentClassName="p-3">
-        <SectionTitle>Camera Snap</SectionTitle>
-        <div className="mt-2 flex flex-col gap-1.5">
-          {SNAP_ROWS.map(([a, b]) => (
-            <div key={a} className="flex gap-1.5">
-              <Button size="sm" className="flex-1 capitalize" onClick={() => snapCamera(a)}>
-                {a}
-              </Button>
-              <Button size="sm" className="flex-1 capitalize" onClick={() => snapCamera(b)}>
-                {b}
-              </Button>
-            </div>
-          ))}
-        </div>
-
-        <SectionTitle className="mt-4">Grids</SectionTitle>
-        <div className="mt-2 flex flex-col gap-2">
-          {GRID_AXES.map(({ axis, label }) => {
-            const cfg = grids[axis]
-            return (
-              <div key={axis} className="flex items-center gap-2">
-                <Checkbox
-                  size="sm"
-                  checked={cfg.enabled}
-                  onChange={(enabled) => setGrid(axis, { enabled })}
-                />
-                <span className="w-4 text-cladd-sm text-cladd-fg-soft">{label}</span>
-                <PreciseNumberInput
-                  className="flex-1"
-                  min={0.05}
-                  value={cfg.spacing}
-                  onCommit={(spacing) => setGrid(axis, { spacing })}
-                />
-                <span className="text-xs text-cladd-fg-softer">m</span>
+    <DialogTrigger>
+      <ToolbarButton>View</ToolbarButton>
+      <Popover placement="bottom" className="w-[min(24rem,calc(100vw-1.5rem))]">
+        <PopoverDialog className="flex max-h-[80vh] flex-col gap-4 overflow-auto p-3">
+          <section className="flex flex-col gap-2">
+            <SectionTitle>Camera Snap</SectionTitle>
+            {SNAP_ROWS.map(([a, b]) => (
+              <div key={a} className="flex gap-1.5">
+                <Button size="sm" className="flex-1 capitalize" onPress={() => snapCamera(a)}>
+                  {a}
+                </Button>
+                <Button size="sm" className="flex-1 capitalize" onPress={() => snapCamera(b)}>
+                  {b}
+                </Button>
               </div>
-            )
-          })}
-        </div>
+            ))}
+          </section>
 
-        <SectionTitle className="mt-4">Lighting</SectionTitle>
-        <div className="mt-2 flex flex-col gap-2.5">
-          <div className="flex items-center gap-2">
-            <span className="w-20 shrink-0 text-cladd-sm text-cladd-fg-soft">Environment</span>
-            <Select
-              size="sm"
-              className="flex-1"
-              value={lighting.environment}
-              options={ENVIRONMENT_PRESETS.map((p) => p.id)}
-              renderOption={({ value }) => ENV_LABELS[value]}
-              onChange={(v) => setLighting({ environment: v as EnvironmentPreset })}
-            >
-              {ENV_LABELS[lighting.environment]}
-            </Select>
-          </div>
+          <section className="flex flex-col gap-2">
+            <SectionTitle>Grids</SectionTitle>
+            {GRID_AXES.map(({ axis, label }) => {
+              const cfg = grids[axis]
+              return (
+                <div key={axis} className="flex items-center gap-2">
+                  <Checkbox
+                    aria-label={`Show ${label} grid`}
+                    isSelected={cfg.enabled}
+                    onChange={(enabled) => setGrid(axis, { enabled })}
+                  />
+                  <span className="w-4 text-sm text-fg-muted">{label}</span>
+                  <PreciseNumberInput
+                    aria-label={`${label} grid spacing (m)`}
+                    className="flex-1"
+                    min={0.05}
+                    value={cfg.spacing}
+                    onCommit={(spacing) => setGrid(axis, { spacing })}
+                  />
+                  <span className="text-xs text-fg-subtle">m</span>
+                </div>
+              )
+            })}
+          </section>
 
-          <div className="flex items-center gap-2">
-            <span className="w-20 shrink-0 text-cladd-sm text-cladd-fg-soft">Tone map</span>
-            <Select
-              size="sm"
-              className="flex-1"
-              value={lighting.toneMapping}
-              options={TONE_MAPPING_MODES.map((m) => m.id)}
-              renderOption={({ value }) => TONE_LABELS[value]}
-              onChange={(v) => setLighting({ toneMapping: v as ToneMappingMode })}
-            >
-              {TONE_LABELS[lighting.toneMapping]}
-            </Select>
-          </div>
+          <section className="flex flex-col gap-2.5">
+            <SectionTitle>Lighting</SectionTitle>
+            <div className="flex items-center gap-2">
+              <span className="w-20 shrink-0 text-sm text-fg-muted">Environment</span>
+              <Select
+                size="sm"
+                className="flex-1"
+                aria-label="Environment"
+                selectedKey={lighting.environment}
+                items={ENVIRONMENT_PRESETS}
+                onSelectionChange={(k) => setLighting({ environment: k as EnvironmentPreset })}
+              >
+                {(p) => (
+                  <ListBoxItem id={p.id} textValue={p.label}>
+                    {p.label}
+                  </ListBoxItem>
+                )}
+              </Select>
+            </div>
 
-          <label className="flex flex-col gap-1">
-            <span className="flex justify-between text-cladd-sm text-cladd-fg-soft">
-              <span>Exposure</span>
-              <span className="text-cladd-fg-softer">{lighting.exposure.toFixed(2)}</span>
-            </span>
-            <Slider
-              min={0.1}
-              max={3}
-              step={0.05}
-              value={lighting.exposure}
-              onChange={(exposure) => setLighting({ exposure })}
-            />
-          </label>
+            <div className="flex items-center gap-2">
+              <span className="w-20 shrink-0 text-sm text-fg-muted">Tone map</span>
+              <Select
+                size="sm"
+                className="flex-1"
+                aria-label="Tone mapping"
+                selectedKey={lighting.toneMapping}
+                items={TONE_MAPPING_MODES}
+                onSelectionChange={(k) => setLighting({ toneMapping: k as ToneMappingMode })}
+              >
+                {(m) => (
+                  <ListBoxItem id={m.id} textValue={m.label}>
+                    {m.label}
+                  </ListBoxItem>
+                )}
+              </Select>
+            </div>
 
-          <label className="flex flex-col gap-1">
-            <span className="flex justify-between text-cladd-sm text-cladd-fg-soft">
-              <span>Reflections</span>
-              <span className="text-cladd-fg-softer">{lighting.environmentIntensity.toFixed(2)}</span>
-            </span>
-            <Slider
-              min={0}
-              max={3}
-              step={0.05}
-              value={lighting.environmentIntensity}
-              onChange={(environmentIntensity) => setLighting({ environmentIntensity })}
-            />
-          </label>
-
-          <div className="flex items-center gap-2">
-            <Checkbox
-              size="sm"
-              disabled={!envHasSky}
-              checked={envHasSky && lighting.showEnvironmentBackground}
-              onChange={(showEnvironmentBackground) => setLighting({ showEnvironmentBackground })}
-            />
-            <span className="text-cladd-sm text-cladd-fg-soft">Show sky background</span>
-          </div>
-
-          {envHasSky && lighting.showEnvironmentBackground && (
             <label className="flex flex-col gap-1">
-              <span className="flex justify-between text-cladd-sm text-cladd-fg-soft">
-                <span>Sky blur</span>
-                <span className="text-cladd-fg-softer">{lighting.backgroundBlur.toFixed(2)}</span>
+              <span className="flex justify-between text-sm text-fg-muted">
+                <span>Exposure</span>
+                <span className="text-fg-subtle">{lighting.exposure.toFixed(2)}</span>
               </span>
               <Slider
-                min={0}
-                max={1}
-                step={0.01}
-                value={lighting.backgroundBlur}
-                onChange={(backgroundBlur) => setLighting({ backgroundBlur })}
+                aria-label="Exposure"
+                minValue={0.1}
+                maxValue={3}
+                step={0.05}
+                value={lighting.exposure}
+                onChange={(exposure) => setLighting({ exposure: exposure as number })}
               />
             </label>
-          )}
-        </div>
+
+            <label className="flex flex-col gap-1">
+              <span className="flex justify-between text-sm text-fg-muted">
+                <span>Reflections</span>
+                <span className="text-fg-subtle">{lighting.environmentIntensity.toFixed(2)}</span>
+              </span>
+              <Slider
+                aria-label="Reflections"
+                minValue={0}
+                maxValue={3}
+                step={0.05}
+                value={lighting.environmentIntensity}
+                onChange={(v) => setLighting({ environmentIntensity: v as number })}
+              />
+            </label>
+
+            <Checkbox
+              isDisabled={!envHasSky}
+              isSelected={envHasSky && lighting.showEnvironmentBackground}
+              onChange={(showEnvironmentBackground) => setLighting({ showEnvironmentBackground })}
+            >
+              Show sky background
+            </Checkbox>
+
+            {envHasSky && lighting.showEnvironmentBackground && (
+              <label className="flex flex-col gap-1">
+                <span className="flex justify-between text-sm text-fg-muted">
+                  <span>Sky blur</span>
+                  <span className="text-fg-subtle">{lighting.backgroundBlur.toFixed(2)}</span>
+                </span>
+                <Slider
+                  aria-label="Sky blur"
+                  minValue={0}
+                  maxValue={1}
+                  step={0.01}
+                  value={lighting.backgroundBlur}
+                  onChange={(v) => setLighting({ backgroundBlur: v as number })}
+                />
+              </label>
+            )}
+          </section>
+        </PopoverDialog>
       </Popover>
-    </PopoverRoot>
+    </DialogTrigger>
   )
 }

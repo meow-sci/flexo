@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import {
   Button,
@@ -18,7 +18,9 @@ import type { Layer } from '../ksa/types'
 import { $catalogIndex } from '../state/catalogStore'
 import { $partCatalog, $partCatalogLoading } from '../state/partCatalogStore'
 import { $part, addPart, createLayer } from '../state/editorStore'
+import { closeBrowserPopup, openBrowserPopup } from '../state/loadProgressStore'
 import { PartPreview } from './PartPreview'
+import { PreviewLoadProgress } from './LoadProgress'
 
 const MAX_RESULTS = 200
 
@@ -78,6 +80,11 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [targetLayer, setTargetLayer] = useState<string>(NEW_LAYER)
   const toast = useToast()
+
+  useEffect(() => {
+    openBrowserPopup()
+    return closeBrowserPopup
+  }, [])
 
   const layerOptions = useMemo<LayerChoice[]>(
     () => [
@@ -152,7 +159,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col gap-2">
-          <div className="min-h-0 flex-1 overflow-hidden rounded-lg bg-cladd-bg">
+          <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg bg-cladd-bg">
             {selected ? (
               <PartPreview part={selected} />
             ) : (
@@ -160,6 +167,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
                 Select a Part to preview
               </div>
             )}
+            <PreviewLoadProgress />
           </div>
 
           {selected && <PartDetails part={selected} subPartIndex={subPartIndex} />}

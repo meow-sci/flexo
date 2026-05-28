@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js'
+import { withProgress } from './trackedLoad'
 
 /**
  * Loads GLB mesh atlases and extracts per-SubPart geometry by node name,
@@ -15,7 +16,7 @@ const geometryCache = new Map<string, THREE.BufferGeometry>()
 function loadAtlas(atlasUrl: string): Promise<GLTF> {
   let pending = atlasCache.get(atlasUrl)
   if (!pending) {
-    pending = loader.loadAsync(atlasUrl)
+    pending = withProgress(atlasUrl, (onProgress) => loader.loadAsync(atlasUrl, onProgress))
     atlasCache.set(atlasUrl, pending)
   }
   return pending

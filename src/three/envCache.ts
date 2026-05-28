@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js'
+import { withProgress } from './trackedLoad'
 
 const loader = new RGBELoader()
 const cache = new Map<string, Promise<THREE.DataTexture>>()
@@ -12,7 +13,7 @@ const cache = new Map<string, Promise<THREE.DataTexture>>()
 export function loadEquirectHDR(url: string): Promise<THREE.DataTexture> {
   let pending = cache.get(url)
   if (!pending) {
-    pending = loader.loadAsync(url).then((texture) => {
+    pending = withProgress(url, (onProgress) => loader.loadAsync(url, onProgress)).then((texture) => {
       texture.mapping = THREE.EquirectangularReflectionMapping
       return texture
     })

@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { getKtx2Loader } from './textureSupport'
+import { withProgress } from './trackedLoad'
 
 /**
  * Loads and caches KSA texture atlases (one per URL, shared across every SubPart
@@ -17,16 +18,16 @@ export function loadTexture(url: string, kind: TexKind): Promise<THREE.Texture> 
   const key = `${url}|${kind}`
   let pending = cache.get(key)
   if (!pending) {
-    pending = getKtx2Loader()
-      .loadAsync(url)
-      .then((tex) => {
+    pending = withProgress(url, (onProgress) => getKtx2Loader().loadAsync(url, onProgress)).then(
+      (tex) => {
         tex.colorSpace = kind === 'srgb' ? THREE.SRGBColorSpace : THREE.NoColorSpace
         // KSA samples Vulkan-style (top-left origin); KTX2Loader leaves flipY=false
         // (compressed textures can't be CPU-flipped). GLB UVs are authored to match.
         tex.anisotropy = 8
         tex.needsUpdate = true
         return tex
-      })
+      },
+    )
     cache.set(key, pending)
   }
   return pending

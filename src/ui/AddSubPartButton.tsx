@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import {
   Button,
@@ -13,7 +13,9 @@ import {
 } from '@cladd-ui/react'
 import { $catalog, $catalogLoading } from '../state/catalogStore'
 import { addSubPart } from '../state/editorStore'
+import { closeBrowserPopup, openBrowserPopup } from '../state/loadProgressStore'
 import { SubPartPreview } from './SubPartPreview'
+import { PreviewLoadProgress } from './LoadProgress'
 
 const MAX_RESULTS = 200
 
@@ -54,6 +56,11 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const toast = useToast()
+
+  useEffect(() => {
+    openBrowserPopup()
+    return closeBrowserPopup
+  }, [])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -97,7 +104,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-2">
-        <div className="min-h-0 flex-1 overflow-hidden rounded-lg bg-cladd-bg">
+        <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg bg-cladd-bg">
           {selectedId ? (
             <SubPartPreview subPartId={selectedId} />
           ) : (
@@ -105,6 +112,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
               Select a SubPart to preview
             </div>
           )}
+          <PreviewLoadProgress />
         </div>
         <div className="flex shrink-0 items-center justify-between gap-2">
           <span className="truncate font-mono text-xs text-cladd-fg-softer" title={selectedId ?? ''}>

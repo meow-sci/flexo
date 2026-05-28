@@ -4,6 +4,7 @@ import { EditorToolbar } from './ui/Toolbar'
 import { SelectionToolbar } from './ui/SelectionToolbar'
 import { MultiSelectToolbar } from './ui/MultiSelectToolbar'
 import { RightPanel } from './ui/RightPanel'
+import { WorkspaceLoadProgress } from './ui/LoadProgress'
 import { ensureCatalogLoaded } from './state/catalogStore'
 import { ensurePartCatalogLoaded } from './state/partCatalogStore'
 
@@ -31,6 +32,9 @@ function App() {
 
       {/* Right: collapsible transform inspector + placed instances */}
       <RightPanel />
+
+      {/* Bottom-center: live download progress for HDR environments */}
+      <WorkspaceLoadProgress />
     </div>
   )
 }

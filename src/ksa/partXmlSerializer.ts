@@ -1,6 +1,16 @@
 import { DOMImplementation, XMLSerializer } from '@xmldom/xmldom'
 import type { Document as XmlDocument, Element as XmlElement } from '@xmldom/xmldom'
-import type { Connector, EditingPart, EulerXYZ, SubPartPlacement, Transform, Vec3 } from './types'
+import type {
+  Connector,
+  ConnectorFlag,
+  EditingPart,
+  EulerXYZ,
+  PartGameData,
+  SubPartPlacement,
+  Tank,
+  Transform,
+  Vec3,
+} from './types'
 import { formatG6 } from './formatG6'
 
 /**
@@ -17,25 +27,25 @@ import { formatG6 } from './formatG6'
  * compatible, also runs in node tests), then pretty-printed with 4-space
  * indentation to match the Core XML style.
  *
- * The <Part> emits EditorTags, SubPart placements, and Connector transforms.
- * Connector <Flags> live on the separate GameData document — see
- * {@link serializeGameData}.
+ * The <Part> emits SubPart placements and Connector transforms (+ <Flags>).
+ * Editor tags and all other GameData (display name, mass, tanks, power,
+ * coupling) live on the separate <PartGameData> document — see
+ * {@link serializeGameData}. (Connector <Flags> are emitted in BOTH documents,
+ * matching space-tape's serializers.)
  */
 
 const EPSILON = 1e-9
+
+/** ", "-joined flag list (e.g. "Internal, ToSurface"), or null when empty. */
+function flagsString(flags: readonly ConnectorFlag[]): string | null {
+  return flags.length > 0 ? flags.join(', ') : null
+}
 
 export function serializePart(part: EditingPart): string {
   const doc = new DOMImplementation().createDocument(null, 'Assets', null)
   const assets = doc.documentElement! // 'Assets' root, created above
   const partEl = doc.createElement('Part')
   partEl.setAttribute('Id', part.partId)
-
-  for (const tag of part.editorTags) {
-    if (!tag.trim()) continue
-    const el = doc.createElement('EditorTag')
-    el.setAttribute('Value', tag)
-    partEl.appendChild(el)
-  }
 
   for (const placement of part.placements) {
     partEl.appendChild(buildSubPartElement(doc, placement))
@@ -52,31 +62,108 @@ export function serializePart(part: EditingPart): string {
 }
 
 /**
- * Serializes the <PartGameData> document, which carries connector connection
- * Flags (the per-connector behavior). Mirrors space-tape's game-data export:
- * connectors with the default "None" flag emit no <Connector> entry (they use
- * the implicit connect-to-anything mode).
+ * Serializes the <PartGameData> document — the per-part metadata KSA reads
+ * separately from the geometry <Part>. Mirrors space-tape's
+ * GameDataXmlSerializer.cs: DisplayName attribute, editor tags, custom mass,
+ * tanks, batteries/generators/power-consumers, every connector's id (with
+ * <Flags> only when set), and the optional decoupler/docking-port/EVA-door.
+ * Each piece is omitted entirely when empty/default.
  */
 export function serializeGameData(part: EditingPart): string {
   const doc = new DOMImplementation().createDocument(null, 'Assets', null)
   const assets = doc.documentElement!
-  const gameData = doc.createElement('PartGameData')
-  gameData.setAttribute('Id', part.partId)
+  const gd = doc.createElement('PartGameData')
+  gd.setAttribute('Id', part.partId)
+  const game: PartGameData = part.gameData
 
-  for (const connector of part.connectors) {
-    if (connector.flags === 'None') continue
-    const el = doc.createElement('Connector')
-    el.setAttribute('Id', connector.id)
-    const flags = doc.createElement('Flags')
-    flags.appendChild(doc.createTextNode(connector.flags))
-    el.appendChild(flags)
-    gameData.appendChild(el)
+  if (game.displayName.trim()) gd.setAttribute('DisplayName', game.displayName)
+
+  for (const tag of part.editorTags) {
+    if (!tag.trim()) continue
+    const el = doc.createElement('EditorTag')
+    el.setAttribute('Value', tag)
+    gd.appendChild(el)
   }
 
-  assets.appendChild(gameData)
+  if (game.customMass != null && game.customMass > 0) {
+    const custom = doc.createElement('CustomMass')
+    custom.appendChild(elWithAttr(doc, 'Mass', 'Kg', formatG6(game.customMass)))
+    gd.appendChild(custom)
+  }
+
+  for (const tank of game.tanks) gd.appendChild(buildTankElement(doc, tank))
+
+  for (const b of game.batteries) {
+    const el = doc.createElement('Battery')
+    el.appendChild(elWithAttr(doc, 'MaximumCapacity', 'KWh', formatG6(b.capacityKWh)))
+    gd.appendChild(el)
+  }
+  for (const g of game.generators) {
+    const el = doc.createElement('Generator')
+    el.appendChild(elWithAttr(doc, 'Produced', 'W', formatG6(g.outputWatts)))
+    gd.appendChild(el)
+  }
+  for (const pc of game.powerConsumers) {
+    const el = doc.createElement('PowerConsumer')
+    el.appendChild(elWithAttr(doc, 'Consumed', 'W', formatG6(pc.consumedWatts)))
+    gd.appendChild(el)
+  }
+
+  for (const connector of part.connectors) {
+    const el = doc.createElement('Connector')
+    el.setAttribute('Id', connector.id)
+    const flags = flagsString(connector.flags)
+    if (flags) {
+      const flagsEl = doc.createElement('Flags')
+      flagsEl.appendChild(doc.createTextNode(flags))
+      el.appendChild(flagsEl)
+    }
+    gd.appendChild(el)
+  }
+
+  if (game.decoupler) {
+    const el = doc.createElement('Decoupler')
+    el.setAttribute('ConnectorId', game.decoupler.connectorId)
+    el.setAttribute('Force', formatG6(game.decoupler.force))
+    gd.appendChild(el)
+  }
+  if (game.dockingPort) {
+    const el = doc.createElement('DockingPort')
+    el.setAttribute('ConnectorId', game.dockingPort.connectorId)
+    el.setAttribute('Force', formatG6(game.dockingPort.force))
+    gd.appendChild(el)
+  }
+  if (game.evaDoor) {
+    const el = doc.createElement('EVADoor')
+    el.setAttribute('ConnectorId', game.evaDoor.connectorId)
+    gd.appendChild(el)
+  }
+
+  assets.appendChild(gd)
 
   const body = new XMLSerializer().serializeToString(doc)
   return '<?xml version="1.0" encoding="utf-8"?>\n' + prettyXml(body) + '\n'
+}
+
+/** Creates an element with a single attribute, e.g. <Mass Kg="100"/>. */
+function elWithAttr(doc: XmlDocument, name: string, attr: string, value: string): XmlElement {
+  const el = doc.createElement(name)
+  el.setAttribute(attr, value)
+  return el
+}
+
+/** <CylindricalTank>/<SphericalTank> with Material/Length/OuterRadius/WallThickness. */
+function buildTankElement(doc: XmlDocument, tank: Tank): XmlElement {
+  const el = doc.createElement(tank.shape === 'Cylindrical' ? 'CylindricalTank' : 'SphericalTank')
+  if (tank.wallMaterialId.trim()) {
+    el.appendChild(elWithAttr(doc, 'Material', 'Id', tank.wallMaterialId))
+  }
+  if (tank.shape === 'Cylindrical') {
+    el.appendChild(elWithAttr(doc, 'Length', 'M', formatG6(tank.lengthM)))
+  }
+  el.appendChild(elWithAttr(doc, 'OuterRadius', 'M', formatG6(tank.outerRadiusM)))
+  el.appendChild(elWithAttr(doc, 'WallThickness', 'Mm', formatG6(tank.wallThicknessMm)))
+  return el
 }
 
 function buildSubPartElement(doc: XmlDocument, placement: SubPartPlacement): XmlElement {
@@ -93,6 +180,12 @@ function buildConnectorElement(doc: XmlDocument, connector: Connector): XmlEleme
   el.setAttribute('Id', connector.id)
   const transform = buildTransformElement(doc, connector)
   if (transform) el.appendChild(transform)
+  const flags = flagsString(connector.flags)
+  if (flags) {
+    const flagsEl = doc.createElement('Flags')
+    flagsEl.appendChild(doc.createTextNode(flags))
+    el.appendChild(flagsEl)
+  }
   return el
 }
 

@@ -13,7 +13,8 @@ import {
 import { $layerView, type LayerViewState } from './layerStore'
 import { $cameraState, resetCamera, setCameraRestore, type CameraState } from './viewStore'
 import { $measurements, type LineMeasurement } from './measurementStore'
-import { DEFAULT_LAYER_ID, type EditingPart } from '../ksa/types'
+import { createEmptyGameData, DEFAULT_LAYER_ID } from '../ksa/types'
+import type { Connector, ConnectorFlag, EditingPart, PartGameData } from '../ksa/types'
 
 /**
  * PROJECTS — the editing experience is "project"-based. A project bundles all of
@@ -46,7 +47,9 @@ import { DEFAULT_LAYER_ID, type EditingPart } from '../ksa/types'
 
 const PROJECT_KEY_PREFIX = 'flexo:project:'
 const CURRENT_PROJECT_KEY = 'flexo:currentProject'
-const PROJECT_VERSION = 1
+// v2: added EditingPart.gameData and changed Connector.flags from a single value
+// to a ConnectorFlag[]. {@link migratePart} upgrades v1 snapshots on load.
+const PROJECT_VERSION = 2
 export const DEFAULT_PROJECT_NAME = 'Untitled'
 
 /** The current project's name (its identity / localStorage key). Live working state. */
@@ -135,9 +138,39 @@ function serializeCurrentProject(): ProjectSnapshot {
  * layer is clamped to a layer that exists in the loaded document; selection is
  * cleared (a fresh slate, like a normal page load).
  */
+/**
+ * Upgrades a possibly-legacy EditingPart in place to the current (v2) shape:
+ *  - adds the {@link PartGameData} block if absent (introduced in project v2);
+ *  - coerces each connector's `flags` from the old single value
+ *    (`'None' | ConnectorFlag`) to the current `ConnectorFlag[]` ([] = none).
+ */
+function migratePart(part: EditingPart | undefined | null): void {
+  if (!part) return
+  const withGameData = part as EditingPart & { gameData?: PartGameData }
+  if (!withGameData.gameData) withGameData.gameData = createEmptyGameData()
+  for (const c of part.connectors ?? []) {
+    const legacy = c as Connector & { flags: unknown }
+    if (Array.isArray(legacy.flags)) continue
+    legacy.flags = legacy.flags && legacy.flags !== 'None' ? [legacy.flags as ConnectorFlag] : []
+  }
+}
+
+/** Migrates the document + every history-snapshot part within a loaded snapshot. */
+function migrateSnapshot(snap: ProjectSnapshot): void {
+  migratePart(snap.part)
+  const entries = [...(snap.history?.undo ?? []), ...(snap.history?.redo ?? [])]
+  for (const e of entries) {
+    // Normal entries are { part, description, detail }; legacy saves stored a
+    // bare EditingPart — migrate whichever shape this is.
+    const entry = e as { part?: EditingPart }
+    migratePart(entry.part ?? (e as unknown as EditingPart))
+  }
+}
+
 function applyProjectSnapshot(snap: ProjectSnapshot): void {
   suspended = true
   try {
+    migrateSnapshot(snap)
     importHistory(snap.history ?? { undo: [], redo: [] })
     $part.set(snap.part)
     const activeValid = snap.part.layers.some((l) => l.id === snap.activeLayerId)

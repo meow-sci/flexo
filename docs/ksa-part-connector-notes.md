@@ -2,6 +2,11 @@
 
 Connectors define how parts attach to other parts in KSA assemblies. Each connector type has specific attachment rules.
 
+Flags are **independent toggles that may combine** — in flexo a connector's `flags`
+is a `ConnectorFlag[]` (`Internal` / `ToSurface` / `FromSurface`), edited as three
+checkboxes in the inspector and serialized as a `", "`-joined `<Flags>` (e.g.
+`Internal, ToSurface`). An empty array is the default mode below and emits no `<Flags>`.
+
 ## Default (no flag)
 
 **Behavior:** Bidirectional connector-to-connector attachment.

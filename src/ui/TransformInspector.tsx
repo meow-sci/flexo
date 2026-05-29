@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
-import { Button, TextField, Select, ListBoxItem } from './kit'
+import { Button, TextField, Checkbox } from './kit'
 import {
   $selectedIndices,
   pushUndo,
@@ -318,30 +318,33 @@ function VectorApply(props: {
   )
 }
 
-function ConnectorHeader({ index, id, flags, locked }: { index: number; id: string; flags: ConnectorFlag; locked: boolean }) {
+function ConnectorHeader({ index, id, flags, locked }: { index: number; id: string; flags: ConnectorFlag[]; locked: boolean }) {
+  // Toggle one flag, re-emitting the full set in canonical order so the XML and
+  // the inspector stay stable regardless of click order.
+  const toggle = (flag: ConnectorFlag, on: boolean) => {
+    const next = new Set(flags)
+    if (on) next.add(flag)
+    else next.delete(flag)
+    setConnectorFlags(index, CONNECTOR_FLAGS.filter((f) => next.has(f)))
+  }
   return (
     <div className="flex flex-col gap-1.5">
       <span className="truncate font-mono text-sm" title={id}>
         {id}
       </span>
-      <label className="flex items-center gap-2">
-        <span className="text-xs text-fg-subtle">Flags</span>
-        <Select
-          size="sm"
-          className="flex-1"
-          aria-label="Connector flags"
-          selectedKey={flags}
-          isDisabled={locked}
-          onSelectionChange={(k) => setConnectorFlags(index, k as ConnectorFlag)}
-          items={CONNECTOR_FLAGS.map((f) => ({ id: f }))}
-        >
-          {(item) => (
-            <ListBoxItem id={item.id} textValue={item.id}>
-              {item.id}
-            </ListBoxItem>
-          )}
-        </Select>
-      </label>
+      <span className="text-xs uppercase tracking-wide text-fg-subtle">Flags</span>
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        {CONNECTOR_FLAGS.map((f) => (
+          <Checkbox
+            key={f}
+            isSelected={flags.includes(f)}
+            isDisabled={locked}
+            onChange={(on) => toggle(f, on)}
+          >
+            {f}
+          </Checkbox>
+        ))}
+      </div>
     </div>
   )
 }

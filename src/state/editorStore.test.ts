@@ -23,6 +23,13 @@ import {
   newPart,
   redo,
   setConnectorFlags,
+  addTank,
+  removeTank,
+  setTankShape,
+  updateTank,
+  setCustomMassEnabled,
+  setDecouplerEnabled,
+  setDecouplerForce,
   undo,
   updatePlacementTransform,
 } from './editorStore'
@@ -110,12 +117,12 @@ describe('editorStore', () => {
     expect($part.get().connectors.map((c) => c.id)).toEqual(['_connector1', '_connector2'])
   })
 
-  it('sets connector flags with undo support', () => {
+  it('sets connector flags (multi) with undo support', () => {
     addConnector()
-    setConnectorFlags(0, 'ToSurface')
-    expect($part.get().connectors[0].flags).toBe('ToSurface')
+    setConnectorFlags(0, ['Internal', 'ToSurface'])
+    expect($part.get().connectors[0].flags).toEqual(['Internal', 'ToSurface'])
     undo()
-    expect($part.get().connectors[0].flags).toBe('None')
+    expect($part.get().connectors[0].flags).toEqual([])
   })
 
   it('addPart imports connector flags and unions editor tags into the project', () => {
@@ -128,15 +135,49 @@ describe('editorStore', () => {
           position: { x: 0, y: 0, z: 0 },
           rotation: { x: 0, y: 0, z: 0 },
           scale: { x: 1, y: 1, z: 1 },
-          flags: 'ToSurface',
+          flags: ['ToSurface'],
           layerId: DEFAULT_LAYER_ID,
         },
       ],
       ['Electrical', 'Existing'],
     )
-    expect($part.get().connectors[0].flags).toBe('ToSurface')
+    expect($part.get().connectors[0].flags).toEqual(['ToSurface'])
     // 'Existing' kept, 'Electrical' added, no duplicate.
     expect($part.get().editorTags).toEqual(['Existing', 'Electrical'])
+  })
+
+  it('adds/removes tanks as discrete undo steps and patches fields (streaming)', () => {
+    addTank()
+    expect($part.get().gameData.tanks.length).toBe(1)
+    setTankShape(0, 'Spherical')
+    expect($part.get().gameData.tanks[0].shape).toBe('Spherical')
+    // updateTank is streaming (no internal undo) — emulate the field focus push.
+    pushUndo('edit tank')
+    updateTank(0, { outerRadiusM: 1.5 })
+    expect($part.get().gameData.tanks[0].outerRadiusM).toBe(1.5)
+    undo() // undo the radius edit
+    expect($part.get().gameData.tanks[0].outerRadiusM).toBe(0.5)
+    undo() // undo the shape change
+    expect($part.get().gameData.tanks[0].shape).toBe('Cylindrical')
+    removeTank(0)
+    expect($part.get().gameData.tanks.length).toBe(0)
+    undo()
+    expect($part.get().gameData.tanks.length).toBe(1)
+  })
+
+  it('toggles custom mass and decoupler with undo', () => {
+    setCustomMassEnabled(true)
+    expect($part.get().gameData.customMass).toBe(100)
+    undo()
+    expect($part.get().gameData.customMass).toBeNull()
+
+    setDecouplerEnabled(true)
+    expect($part.get().gameData.decoupler).not.toBeNull()
+    pushUndo('edit decoupler')
+    setDecouplerForce(900)
+    expect($part.get().gameData.decoupler?.force).toBe(900)
+    undo()
+    expect($part.get().gameData.decoupler?.force).toBe(500)
   })
 
   it('setEditorTags is undoable (self-records)', () => {

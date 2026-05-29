@@ -10,13 +10,16 @@ import { TextField } from './kit'
 export function PreciseNumberInput(props: {
   value: number
   onCommit: (n: number) => void
+  /** Called once when the field gains focus — use to push a single undo step
+   *  so a whole typing session collapses into one undo (see editor-state docs). */
+  onInteractionStart?: () => void
   min?: number
   max?: number
   className?: string
   isDisabled?: boolean
   'aria-label': string
 }) {
-  const { value, onCommit, min, max, className, isDisabled } = props
+  const { value, onCommit, onInteractionStart, min, max, className, isDisabled } = props
   const [draft, setDraft] = useState<string | null>(null)
 
   return (
@@ -37,7 +40,10 @@ export function PreciseNumberInput(props: {
         if (max !== undefined && n > max) return
         onCommit(n)
       }}
-      onFocus={() => setDraft(String(value))}
+      onFocus={() => {
+        setDraft(String(value))
+        onInteractionStart?.()
+      }}
       onBlur={() => setDraft(null)}
     />
   )

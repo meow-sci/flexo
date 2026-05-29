@@ -32,6 +32,7 @@ export { Popover, PopoverDialog } from './Popover'
 export { Modal, Dialog, DialogHeader } from './Modal'
 export { ConfirmDialog, type ConfirmDialogProps } from './ConfirmDialog'
 
+export { DisclosureSection } from './Disclosure'
 export { Checkbox } from './Checkbox'
 export { Switch } from './Switch'
 export { Slider } from './Slider'

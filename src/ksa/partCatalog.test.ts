@@ -38,16 +38,16 @@ describe('parseGameDataFile + mergeGameData', () => {
     const parts: CatalogPart[] = []
     parsePartsFile(parse(ASSETS_XML), 'CoreElectricalAAssets.xml', parts)
 
-    // From the Assets <Part> alone the flag is None and there are no editor tags.
+    // From the Assets <Part> alone there are no flags and no editor tags.
     expect(parts).toHaveLength(1)
-    expect(parts[0].connectors[0].flags).toBe('None')
+    expect(parts[0].connectors[0].flags).toEqual([])
     expect(parts[0].editorTags).toEqual([])
 
     const gameData = new Map<string, PartGameData>()
     parseGameDataFile(parse(GAMEDATA_XML), gameData)
     mergeGameData(parts, gameData)
 
-    expect(parts[0].connectors[0].flags).toBe('ToSurface')
+    expect(parts[0].connectors[0].flags).toEqual(['ToSurface'])
     expect(parts[0].editorTags).toEqual(['Electrical'])
   })
 
@@ -63,8 +63,8 @@ describe('parseGameDataFile + mergeGameData', () => {
       gameData,
     )
     mergeGameData(parts, gameData)
-    // Bogus flag ignored -> stays None; _connectorX has no geometry connector -> skipped.
+    // Bogus flag ignored -> stays empty; _connectorX has no geometry connector -> skipped.
     expect(parts[0].connectors.map((c) => c.id)).toEqual(['_connector6'])
-    expect(parts[0].connectors[0].flags).toBe('None')
+    expect(parts[0].connectors[0].flags).toEqual([])
   })
 })

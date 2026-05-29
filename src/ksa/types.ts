@@ -46,25 +46,22 @@ export interface SubPartPlacement extends Transform {
 }
 
 /**
- * Connector connection behavior, serialized as <Flags> on the <PartGameData>
- * <Connector>. "None" emits no <Flags> (the default connect-to-anything mode).
- * See docs/ksa-part-connector-notes.md for what each flag means in-game.
+ * Connector connection behavior, serialized into the comma-separated <Flags> on
+ * the <PartGameData> (and <Part>) <Connector>. These are independent toggles
+ * that may combine (matching space-tape's three checkboxes); an empty
+ * {@link Connector.flags} array is the default connect-to-anything mode and
+ * emits no <Flags>. See docs/ksa-part-connector-notes.md for what each means.
  */
-export type ConnectorFlag = 'None' | 'Internal' | 'ToSurface' | 'FromSurface'
+export type ConnectorFlag = 'Internal' | 'ToSurface' | 'FromSurface'
 
-export const CONNECTOR_FLAGS: readonly ConnectorFlag[] = [
-  'None',
-  'Internal',
-  'ToSurface',
-  'FromSurface',
-]
+export const CONNECTOR_FLAGS: readonly ConnectorFlag[] = ['Internal', 'ToSurface', 'FromSurface']
 
 /** A connector attachment point within the Part. Faces local +X (its arrow). */
 export interface Connector extends Transform {
   /** Connector id used in the exported XML, e.g. "_connector1". */
   id: string
-  /** Connection behavior flag. */
-  flags: ConnectorFlag
+  /** Connection behavior flags (independent, may combine). Empty = default mode. */
+  flags: ConnectorFlag[]
   /** Id of the {@link Layer} this connector belongs to (editor-only grouping). */
   layerId: string
 }
@@ -128,12 +125,117 @@ export const KNOWN_EDITOR_TAGS: readonly string[] = [
   'Tanks',
 ]
 
+/**
+ * Tank cross-section shape. Cylindrical tanks have a length; spherical ones are
+ * defined by radius alone. Mirrors space-tape's `TankShape`.
+ */
+export type TankShape = 'Cylindrical' | 'Spherical'
+
+/**
+ * A fuel/oxidizer tank definition (a part may have several). Parametric — no 3D
+ * workspace geometry; edited as numbers in the Part Data dialog. Serialized as
+ * <CylindricalTank>/<SphericalTank> on <PartGameData>. Mirrors `TankState`.
+ */
+export interface Tank {
+  shape: TankShape
+  /** Wall material id, e.g. "Aluminum.2014(s)". Blank omits <Material>. */
+  wallMaterialId: string
+  /** Cylinder length in meters (ignored/omitted for spherical tanks). */
+  lengthM: number
+  /** Outer radius in meters. */
+  outerRadiusM: number
+  /** Wall thickness in millimeters. */
+  wallThicknessMm: number
+}
+
+/** Battery storage (multiple allowed). Serialized as <Battery><MaximumCapacity KWh/>. */
+export interface Battery {
+  capacityKWh: number
+}
+
+/** Power generator (multiple allowed). Serialized as <Generator><Produced W/>. */
+export interface Generator {
+  outputWatts: number
+}
+
+/** Power consumer (multiple allowed). Serialized as <PowerConsumer><Consumed W/>. */
+export interface PowerConsumer {
+  consumedWatts: number
+}
+
+/** Decoupler bound to a connector. Serialized as <Decoupler ConnectorId Force/>. */
+export interface Decoupler {
+  connectorId: string
+  /** Separation force in newtons. */
+  force: number
+}
+
+/** Docking port bound to a connector. Serialized as <DockingPort ConnectorId Force/>. */
+export interface DockingPort {
+  connectorId: string
+  /** Docking force in newtons. */
+  force: number
+}
+
+/** EVA hatch bound to a connector. Serialized as <EVADoor ConnectorId/>. */
+export interface EvaDoor {
+  connectorId: string
+}
+
+/**
+ * Per-part GameData carried in the sibling <PartGameData> document — the
+ * "popup-only" metadata that has no 3D representation (connectors live on
+ * {@link EditingPart.connectors} instead, since they ARE 3D). Mirrors
+ * space-tape's `PartGameDataState` (GameDataModels.cs / PartEditorState.cs).
+ */
+export interface PartGameData {
+  /** In-game display name (PartGameData DisplayName attribute). Blank omits it. */
+  displayName: string
+  /** Mass override in kg, or null for the part's default mass. */
+  customMass: number | null
+  tanks: Tank[]
+  batteries: Battery[]
+  generators: Generator[]
+  powerConsumers: PowerConsumer[]
+  decoupler: Decoupler | null
+  dockingPort: DockingPort | null
+  evaDoor: EvaDoor | null
+}
+
+/** Default tank: 2 m cylinder, 0.5 m radius, 2 mm aluminium wall (matches TankState). */
+export function createTank(): Tank {
+  return {
+    shape: 'Cylindrical',
+    wallMaterialId: 'Aluminum.2014(s)',
+    lengthM: 2.0,
+    outerRadiusM: 0.5,
+    wallThicknessMm: 2.0,
+  }
+}
+
+/** An empty GameData block (no display name, default mass, no sub-items). */
+export function createEmptyGameData(): PartGameData {
+  return {
+    displayName: '',
+    customMass: null,
+    tanks: [],
+    batteries: [],
+    generators: [],
+    powerConsumers: [],
+    decoupler: null,
+    dockingPort: null,
+    evaDoor: null,
+  }
+}
+
 /** The full Part being assembled in the editor. */
 export interface EditingPart {
   /** Part id used in the exported XML (must be unique), e.g. "fixme_part_id". */
   partId: string
-  /** Optional editor tags emitted as <EditorTag Value="..."/> in the Assets <Part>. */
+  /** Editor tags emitted as <EditorTag Value="..."/> on the <PartGameData>. */
   editorTags: string[]
+  /** Optional popup-only GameData (display name, mass, tanks, power, coupling). */
+  gameData: PartGameData
   /** Editor-only layers; array order is the display order. Always includes Default. */
   layers: Layer[]
   /** All placed SubPart instances. */
@@ -146,6 +248,7 @@ export function createEmptyPart(): EditingPart {
   return {
     partId: 'fixme_part_id',
     editorTags: [],
+    gameData: createEmptyGameData(),
     layers: [createDefaultLayer(), createConnectorLayer()],
     placements: [],
     connectors: [],

@@ -1,6 +1,22 @@
 import { atom, computed } from 'nanostores'
-import type { Connector, ConnectorFlag, EditingPart, EulerXYZ, SubPartPlacement, Vec3 } from '../ksa/types'
-import { BUILT_IN_LAYER_IDS, CONNECTOR_LAYER_ID, createEmptyPart, DEFAULT_LAYER_ID } from '../ksa/types'
+import type {
+  Connector,
+  ConnectorFlag,
+  EditingPart,
+  EulerXYZ,
+  PartGameData,
+  SubPartPlacement,
+  Tank,
+  TankShape,
+  Vec3,
+} from '../ksa/types'
+import {
+  BUILT_IN_LAYER_IDS,
+  CONNECTOR_LAYER_ID,
+  createEmptyPart,
+  createTank,
+  DEFAULT_LAYER_ID,
+} from '../ksa/types'
 
 /**
  * Framework-agnostic editor state (nanostores). No React / three.js imports —
@@ -326,7 +342,7 @@ export function addPart(
       position: { ...src.position },
       rotation: { ...src.rotation },
       scale: { ...src.scale },
-      flags: src.flags,
+      flags: [...src.flags],
       layerId: CONNECTOR_LAYER_ID, // connectors always live in the Connectors layer
     })
   }
@@ -347,7 +363,7 @@ export function addConnector(): void {
     position: { x: 0, y: 0, z: 0 },
     rotation: { x: 0, y: 0, z: 0 },
     scale: { x: 1, y: 1, z: 1 },
-    flags: 'None',
+    flags: [],
     layerId: CONNECTOR_LAYER_ID,
   })
   $part.set(part)
@@ -364,12 +380,12 @@ function nextConnectorId(part: EditingPart): string {
   return `_connector${max + 1}`
 }
 
-export function setConnectorFlags(index: number, flags: ConnectorFlag): void {
+export function setConnectorFlags(index: number, flags: readonly ConnectorFlag[]): void {
   const current = $part.get()
   if (index < 0 || index >= current.connectors.length) return
-  pushUndo('connector flags', `${current.connectors[index].id} → ${flags}`)
+  pushUndo('connector flags', `${current.connectors[index].id} → ${flags.length ? flags.join(', ') : 'none'}`)
   const part = clone(current)
-  part.connectors[index].flags = flags
+  part.connectors[index].flags = [...flags]
   $part.set(part)
 }
 
@@ -450,7 +466,7 @@ export function duplicateSelected(): void {
         position: { ...src.position },
         rotation: { ...src.rotation },
         scale: { ...src.scale },
-        flags: src.flags,
+        flags: [...src.flags],
         layerId: src.layerId,
       })
       newIndices.push(part.connectors.length - 1)
@@ -636,6 +652,190 @@ export function setEditorTags(editorTags: readonly string[]): void {
   const part = clone($part.get())
   part.editorTags = [...editorTags]
   $part.set(part)
+}
+
+// ---------------------------------------------------------------------------
+// GameData (popup-only metadata: display name, mass, tanks, power, coupling)
+//
+// These live on part.gameData and follow the same undo invariant as everything
+// else (file header). Free-text / numeric field edits are STREAMING mutations
+// (no internal pushUndo — the field focus-pushes once, like setPartId). Discrete
+// gestures — add/remove a list item, flip a checkbox, pick from a Select —
+// self-record undo via {@link commitGameData}.
+// ---------------------------------------------------------------------------
+
+/** Default separation/docking force (N) when a coupling is first enabled (matches space-tape). */
+const DEFAULT_COUPLING_FORCE = 500
+/** Default mass (kg) when the custom-mass override is first enabled. */
+const DEFAULT_CUSTOM_MASS_KG = 100
+
+/** Streaming gameData mutation: no undo push (caller focus-pushes). */
+function mutateGameData(mutate: (g: PartGameData) => void): void {
+  const part = clone($part.get())
+  mutate(part.gameData)
+  $part.set(part)
+}
+
+/** Discrete gameData mutation: records one undo step, then mutates. */
+function commitGameData(label: string, detail: string, mutate: (g: PartGameData) => void): void {
+  pushUndo(label, detail)
+  mutateGameData(mutate)
+}
+
+/** Streaming: set the in-game display name. Caller pushes undo on field focus. */
+export function setDisplayName(name: string): void {
+  mutateGameData((g) => {
+    g.displayName = name
+  })
+}
+
+/** Discrete: enable/disable the custom-mass override (off → null, on → default). */
+export function setCustomMassEnabled(enabled: boolean): void {
+  commitGameData('custom mass', enabled ? 'on' : 'off', (g) => {
+    g.customMass = enabled ? (g.customMass ?? DEFAULT_CUSTOM_MASS_KG) : null
+  })
+}
+
+/** Streaming: set the custom mass in kg. Caller pushes undo on field focus. */
+export function setCustomMass(massKg: number): void {
+  mutateGameData((g) => {
+    g.customMass = massKg
+  })
+}
+
+// --- Tanks ---
+
+/** Discrete: append a default tank. */
+export function addTank(): void {
+  commitGameData('add tank', '', (g) => g.tanks.push(createTank()))
+}
+
+/** Discrete: remove the tank at `index`. */
+export function removeTank(index: number): void {
+  if (index < 0 || index >= $part.get().gameData.tanks.length) return
+  commitGameData('remove tank', '', (g) => g.tanks.splice(index, 1))
+}
+
+/** Discrete: change a tank's shape (cylindrical/spherical). */
+export function setTankShape(index: number, shape: TankShape): void {
+  if (index < 0 || index >= $part.get().gameData.tanks.length) return
+  commitGameData('tank shape', shape, (g) => {
+    g.tanks[index].shape = shape
+  })
+}
+
+/** Streaming: patch a tank's numeric/material fields. Caller pushes undo on field focus. */
+export function updateTank(index: number, patch: Partial<Tank>): void {
+  if (index < 0 || index >= $part.get().gameData.tanks.length) return
+  mutateGameData((g) => {
+    g.tanks[index] = { ...g.tanks[index], ...patch }
+  })
+}
+
+// --- Power (batteries / generators / consumers) ---
+
+/** Discrete: append a battery (default capacity). */
+export function addBattery(): void {
+  commitGameData('add battery', '', (g) => g.batteries.push({ capacityKWh: 0.01 }))
+}
+/** Discrete: remove battery at `index`. */
+export function removeBattery(index: number): void {
+  if (index < 0 || index >= $part.get().gameData.batteries.length) return
+  commitGameData('remove battery', '', (g) => g.batteries.splice(index, 1))
+}
+/** Streaming: set a battery's capacity (kWh). Caller pushes undo on field focus. */
+export function setBatteryCapacity(index: number, capacityKWh: number): void {
+  if (index < 0 || index >= $part.get().gameData.batteries.length) return
+  mutateGameData((g) => {
+    g.batteries[index].capacityKWh = capacityKWh
+  })
+}
+
+/** Discrete: append a generator (default output). */
+export function addGenerator(): void {
+  commitGameData('add generator', '', (g) => g.generators.push({ outputWatts: 5 }))
+}
+/** Discrete: remove generator at `index`. */
+export function removeGenerator(index: number): void {
+  if (index < 0 || index >= $part.get().gameData.generators.length) return
+  commitGameData('remove generator', '', (g) => g.generators.splice(index, 1))
+}
+/** Streaming: set a generator's output (W). Caller pushes undo on field focus. */
+export function setGeneratorOutput(index: number, outputWatts: number): void {
+  if (index < 0 || index >= $part.get().gameData.generators.length) return
+  mutateGameData((g) => {
+    g.generators[index].outputWatts = outputWatts
+  })
+}
+
+/** Discrete: append a power consumer (default draw). */
+export function addPowerConsumer(): void {
+  commitGameData('add consumer', '', (g) => g.powerConsumers.push({ consumedWatts: 2 }))
+}
+/** Discrete: remove power consumer at `index`. */
+export function removePowerConsumer(index: number): void {
+  if (index < 0 || index >= $part.get().gameData.powerConsumers.length) return
+  commitGameData('remove consumer', '', (g) => g.powerConsumers.splice(index, 1))
+}
+/** Streaming: set a consumer's draw (W). Caller pushes undo on field focus. */
+export function setPowerConsumerWatts(index: number, consumedWatts: number): void {
+  if (index < 0 || index >= $part.get().gameData.powerConsumers.length) return
+  mutateGameData((g) => {
+    g.powerConsumers[index].consumedWatts = consumedWatts
+  })
+}
+
+// --- Coupling (decoupler / docking port / EVA door) — each references a connector ---
+
+/** Discrete: enable/disable the decoupler. */
+export function setDecouplerEnabled(enabled: boolean): void {
+  commitGameData('decoupler', enabled ? 'on' : 'off', (g) => {
+    g.decoupler = enabled ? (g.decoupler ?? { connectorId: '', force: DEFAULT_COUPLING_FORCE }) : null
+  })
+}
+/** Discrete: bind the decoupler to a connector id. */
+export function setDecouplerConnector(connectorId: string): void {
+  commitGameData('decoupler connector', connectorId, (g) => {
+    if (g.decoupler) g.decoupler.connectorId = connectorId
+  })
+}
+/** Streaming: set decoupler force (N). Caller pushes undo on field focus. */
+export function setDecouplerForce(force: number): void {
+  mutateGameData((g) => {
+    if (g.decoupler) g.decoupler.force = force
+  })
+}
+
+/** Discrete: enable/disable the docking port. */
+export function setDockingPortEnabled(enabled: boolean): void {
+  commitGameData('docking port', enabled ? 'on' : 'off', (g) => {
+    g.dockingPort = enabled ? (g.dockingPort ?? { connectorId: '', force: DEFAULT_COUPLING_FORCE }) : null
+  })
+}
+/** Discrete: bind the docking port to a connector id. */
+export function setDockingPortConnector(connectorId: string): void {
+  commitGameData('docking connector', connectorId, (g) => {
+    if (g.dockingPort) g.dockingPort.connectorId = connectorId
+  })
+}
+/** Streaming: set docking port force (N). Caller pushes undo on field focus. */
+export function setDockingPortForce(force: number): void {
+  mutateGameData((g) => {
+    if (g.dockingPort) g.dockingPort.force = force
+  })
+}
+
+/** Discrete: enable/disable the EVA door. */
+export function setEvaDoorEnabled(enabled: boolean): void {
+  commitGameData('EVA door', enabled ? 'on' : 'off', (g) => {
+    g.evaDoor = enabled ? (g.evaDoor ?? { connectorId: '' }) : null
+  })
+}
+/** Discrete: bind the EVA door to a connector id. */
+export function setEvaDoorConnector(connectorId: string): void {
+  commitGameData('EVA connector', connectorId, (g) => {
+    if (g.evaDoor) g.evaDoor.connectorId = connectorId
+  })
 }
 
 // ---------------------------------------------------------------------------

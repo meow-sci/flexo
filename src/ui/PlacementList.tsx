@@ -161,7 +161,7 @@ export function PlacementList() {
                 <div className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate font-mono text-sm">{item.connector.id}</span>
                   <span className="truncate text-xs text-fg-subtle">
-                    {item.connector.flags === 'None' ? 'no flags' : item.connector.flags}
+                    {item.connector.flags.length === 0 ? 'no flags' : item.connector.flags.join(', ')}
                   </span>
                 </div>
               </GridListItem>

@@ -9,7 +9,12 @@
  */
 
 import { ASSET_FILES, fetchXmlFile } from './catalog'
-import { connectorsFromPartElement, directChildren, placementsFromPartElement } from './partXmlParser'
+import {
+  connectorsFromPartElement,
+  directChildren,
+  parseGameDataElement,
+  placementsFromPartElement,
+} from './partXmlParser'
 import type { Connector, ConnectorFlag, SubPartPlacement } from './types'
 
 export interface CatalogPart {
@@ -47,11 +52,9 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
  */
 export interface PartGameData {
   editorTags: string[]
-  /** connector id -> flag (only non-'None' flags are recorded). */
-  connectorFlags: Map<string, ConnectorFlag>
+  /** connector id -> its flags (only connectors carrying <Flags> are recorded). */
+  connectorFlags: Map<string, ConnectorFlag[]>
 }
-
-const CONNECTOR_FLAG_SET = new Set<ConnectorFlag>(['Internal', 'ToSurface', 'FromSurface'])
 
 /** GameData sibling of each catalog asset file (e.g. CoreElectricalAAssets.xml -> CoreElectricalAGameData.xml). Not every asset file has one. */
 const GAMEDATA_FILES = ASSET_FILES.map((f) => f.replace(/Assets\.xml$/, 'GameData.xml'))
@@ -61,17 +64,12 @@ export function parseGameDataFile(doc: Document, out: Map<string, PartGameData>)
   for (const gd of Array.from(doc.getElementsByTagName('PartGameData'))) {
     const id = gd.getAttribute('Id')
     if (!id) continue
+    const parsed = parseGameDataElement(gd)
     const entry: PartGameData = out.get(id) ?? { editorTags: [], connectorFlags: new Map() }
-    for (const tag of directChildren(gd, 'EditorTag')) {
-      const v = tag.getAttribute('Value')
-      if (v && !entry.editorTags.includes(v)) entry.editorTags.push(v)
+    for (const tag of parsed.editorTags) {
+      if (!entry.editorTags.includes(tag)) entry.editorTags.push(tag)
     }
-    for (const conn of directChildren(gd, 'Connector')) {
-      const connId = conn.getAttribute('Id')
-      if (!connId) continue
-      const raw = directChildren(conn, 'Flags')[0]?.textContent?.trim() as ConnectorFlag | undefined
-      if (raw && CONNECTOR_FLAG_SET.has(raw)) entry.connectorFlags.set(connId, raw)
-    }
+    for (const [connId, flags] of parsed.connectorFlags) entry.connectorFlags.set(connId, flags)
     out.set(id, entry)
   }
 }
@@ -98,8 +96,8 @@ export function mergeGameData(parts: CatalogPart[], gameData: Map<string, PartGa
       if (!part.editorTags.includes(tag)) part.editorTags.push(tag)
     }
     for (const conn of part.connectors) {
-      const flag = gd.connectorFlags.get(conn.id)
-      if (flag) conn.flags = flag
+      const flags = gd.connectorFlags.get(conn.id)
+      if (flags) conn.flags = flags
     }
   }
 }

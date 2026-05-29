@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { getKtx2Loader } from './textureSupport'
+import { getKtx2Loader, getMaxAnisotropy } from './textureSupport'
 import { withProgress } from './trackedLoad'
 
 /**
@@ -23,7 +23,7 @@ export function loadTexture(url: string, kind: TexKind): Promise<THREE.Texture> 
         tex.colorSpace = kind === 'srgb' ? THREE.SRGBColorSpace : THREE.NoColorSpace
         // KSA samples Vulkan-style (top-left origin); KTX2Loader leaves flipY=false
         // (compressed textures can't be CPU-flipped). GLB UVs are authored to match.
-        tex.anisotropy = 8
+        tex.anisotropy = getMaxAnisotropy()
         tex.needsUpdate = true
         return tex
       },

@@ -13,6 +13,7 @@ import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
  */
 let loader: KTX2Loader | null = null
 let bcSupported = false
+let maxAnisotropy = 1
 
 /** Initialize once, after the WebGLRenderer exists. Idempotent. */
 export function initTextureSupport(renderer: THREE.WebGLRenderer): void {
@@ -20,6 +21,8 @@ export function initTextureSupport(renderer: THREE.WebGLRenderer): void {
   loader = new KTX2Loader()
     .setTranscoderPath(`${import.meta.env.BASE_URL}basis/`)
     .detectSupport(renderer)
+
+  maxAnisotropy = renderer.capabilities.getMaxAnisotropy()
 
   const gl = renderer.getContext()
   bcSupported =
@@ -42,4 +45,13 @@ export function getKtx2Loader(): KTX2Loader {
 
 export function isTextureSupported(): boolean {
   return bcSupported
+}
+
+/**
+ * Max anisotropic-filtering level the GPU supports (typically 16). Applied to
+ * every loaded texture so the full-resolution level-0 mip stays sharp at grazing
+ * angles instead of falling back to a blurrier lower mip. 1 until init runs.
+ */
+export function getMaxAnisotropy(): number {
+  return maxAnisotropy
 }

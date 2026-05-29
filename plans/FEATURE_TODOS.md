@@ -9,3 +9,9 @@
     - automatic width/height/depth lines on each axis?
     - blueprint mode?
     - max dimensions w/h/d ?
+- "soft" layers .. 
+    - make selection possible on multiple layers at a time? 
+    - anything visible and unlocked? 
+    - multiple layers of parts in list simultaneously to ease selection? (including connectors?)
+- orient a part at a orthagonal vector to a point on a surface
+    - start a right click/context menu of specific features?

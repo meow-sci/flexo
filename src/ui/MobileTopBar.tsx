@@ -15,6 +15,7 @@ import { ProjectButton } from './ProjectButton'
 import { PartDataButton } from './PartDataButton'
 import { ExportButton } from './ExportButton'
 import { ViewButton } from './ViewButton'
+import { MeasureButton } from './MeasureButton'
 import { HistoryButton } from './HistoryButton'
 import { SettingsButton } from './SettingsButton'
 
@@ -72,6 +73,7 @@ export function MobileTopBar() {
             <PartDataButton />
             <ExportButton />
             <ViewButton />
+            <MeasureButton />
             <HistoryButton />
             <SettingsButton />
           </PopoverDialog>

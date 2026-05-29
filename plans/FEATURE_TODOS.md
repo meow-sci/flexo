@@ -1,3 +1,11 @@
 - refactor import Part and SubPart popups to use GridList for the list of items
 - EditorTag XML tags are not being emitted in the generated and exported XML for example: `<EditorTag Value="RCS" />`
 - phase out cladd.io for custom react aria components
+- canvas flickers on window resize
+- license info (OSS and RW/Dean to distribute textures and models)
+- help screen + hot keys legend
+- on-screen measure tools.. 
+    - direct measrement? tape measure?
+    - automatic width/height/depth lines on each axis?
+    - blueprint mode?
+    - max dimensions w/h/d ?

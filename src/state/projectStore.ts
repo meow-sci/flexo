@@ -12,6 +12,7 @@ import {
 } from './editorStore'
 import { $layerView, type LayerViewState } from './layerStore'
 import { $cameraState, resetCamera, setCameraRestore, type CameraState } from './viewStore'
+import { $measurements, type LineMeasurement } from './measurementStore'
 import { DEFAULT_LAYER_ID, type EditingPart } from '../ksa/types'
 
 /**
@@ -66,6 +67,8 @@ export interface ProjectSnapshot {
   savedAt: number
   /** Camera position/target/up — restored when the project loads. */
   camera?: CameraState
+  /** Placed measurement lines (editor aid; never written to the exported XML). */
+  measurements?: LineMeasurement[]
 }
 
 /** A lightweight project descriptor for the load-project list (no full document). */
@@ -122,6 +125,7 @@ function serializeCurrentProject(): ProjectSnapshot {
     history: exportHistory(),
     savedAt: Date.now(),
     camera: $cameraState.get() ?? undefined,
+    measurements: $measurements.get(),
   }
 }
 
@@ -139,6 +143,7 @@ function applyProjectSnapshot(snap: ProjectSnapshot): void {
     const activeValid = snap.part.layers.some((l) => l.id === snap.activeLayerId)
     $activeLayerId.set(activeValid ? snap.activeLayerId : DEFAULT_LAYER_ID)
     $layerView.set(snap.layerView ?? {})
+    $measurements.set(snap.measurements ?? [])
     clearSelection()
     if (snap.camera) {
       // Pre-fill $cameraState so it's included in the next autosave, then signal
@@ -285,6 +290,7 @@ function startAutosave(): void {
   $layerView.subscribe(scheduleSave)
   $projectName.subscribe(scheduleSave)
   $cameraState.subscribe(scheduleSave)
+  $measurements.subscribe(scheduleSave)
 }
 
 /**

@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import { GridManager } from './Grid'
 import { SceneEnvironment } from './SceneEnvironment'
 import { $cameraState, type CameraDir, type CameraState } from '../state/viewStore'
@@ -15,6 +16,8 @@ export class Viewport {
   readonly scene = new THREE.Scene()
   readonly camera: THREE.PerspectiveCamera
   readonly renderer: THREE.WebGLRenderer
+  /** HTML-label renderer overlaid on the canvas — used for 3D-anchored measurement labels. */
+  readonly labelRenderer: CSS2DRenderer
   readonly controls: OrbitControls
   readonly grids = new GridManager()
 
@@ -39,6 +42,17 @@ export class Viewport {
     // sRGB output matching KSA's composite pass; tonemapping is driven by $lighting.
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
     host.appendChild(this.renderer.domElement)
+
+    // HTML labels overlaid on the canvas (measurement dimensions). The overlay
+    // must not eat pointer events meant for orbit/selection.
+    this.labelRenderer = new CSS2DRenderer()
+    this.labelRenderer.setSize(w, h)
+    const labelEl = this.labelRenderer.domElement
+    labelEl.style.position = 'absolute'
+    labelEl.style.top = '0'
+    labelEl.style.left = '0'
+    labelEl.style.pointerEvents = 'none'
+    host.appendChild(labelEl)
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
     this.controls.enableDamping = true
@@ -123,11 +137,13 @@ export class Viewport {
     this.camera.aspect = w / h
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(w, h)
+    this.labelRenderer.setSize(w, h)
   }
 
   private readonly renderFrame = (): void => {
     this.controls.update()
     this.renderer.render(this.scene, this.camera)
+    this.labelRenderer.render(this.scene, this.camera)
   }
 
   dispose(): void {
@@ -141,6 +157,9 @@ export class Viewport {
     this.renderer.dispose()
     if (this.renderer.domElement.parentNode === this.host) {
       this.host.removeChild(this.renderer.domElement)
+    }
+    if (this.labelRenderer.domElement.parentNode === this.host) {
+      this.host.removeChild(this.labelRenderer.domElement)
     }
   }
 }

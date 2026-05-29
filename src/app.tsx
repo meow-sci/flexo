@@ -7,6 +7,8 @@ import { MultiSelectToolbar } from './ui/MultiSelectToolbar'
 import { RightPanel } from './ui/RightPanel'
 import { MobileInspector } from './ui/MobileInspector'
 import { WorkspaceLoadProgress } from './ui/LoadProgress'
+import { MeasurementInfo } from './ui/MeasurementInfo'
+import { MeasurementEditor } from './ui/MeasurementEditor'
 import { useIsPhone } from './ui/kit'
 import { ensureCatalogLoaded } from './state/catalogStore'
 import { ensurePartCatalogLoaded } from './state/partCatalogStore'
@@ -52,6 +54,13 @@ function App() {
 
       {/* Inspector: right-side resizable panel on desktop, bottom sheet on phone. */}
       {isPhone ? <MobileInspector /> : <RightPanel />}
+
+      {/* Editor for the active line measurement (left card on desktop, bottom
+          sheet on phone — handled within the component). */}
+      <MeasurementEditor />
+
+      {/* Bottom-left: live selection bounding-box dimensions. */}
+      <MeasurementInfo />
 
       {/* Bottom-center: live download progress for HDR environments. */}
       <WorkspaceLoadProgress />

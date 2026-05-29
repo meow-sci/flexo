@@ -4,6 +4,7 @@ import { SubPartObject } from './SubPartObject'
 import { ConnectorObject } from './ConnectorObject'
 import { SelectionManager } from './SelectionManager'
 import { TransformGizmo } from './TransformGizmo'
+import { MeasurementLayer } from './MeasurementLayer'
 import { readPlacementTransform } from './coords'
 import {
   centroidOf,
@@ -32,6 +33,15 @@ import {
   type PlacementTransform,
 } from '../state/editorStore'
 import { $catalogIndex } from '../state/catalogStore'
+import {
+  $activeMeasurementId,
+  $measureTool,
+  addMeasurement,
+  removeMeasurement,
+  setActiveMeasurement,
+  setMeasureTool,
+  updateMeasurement,
+} from '../state/measurementStore'
 import { $connectorSettings, type ConnectorSettings } from '../state/settingsStore'
 import { $cameraRestore, $cameraSnap, $grids } from '../state/viewStore'
 import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../state/layerStore'
@@ -62,6 +72,7 @@ export class EditorScene {
   private readonly unsubscribers: Array<() => void> = []
   private readonly selection: SelectionManager
   private readonly gizmo: TransformGizmo
+  private readonly measurements: MeasurementLayer
   private highlighted: SelectableObject[] = []
   private attachedObject: THREE.Object3D | null = null
   /**
@@ -72,6 +83,11 @@ export class EditorScene {
   private readonly pivot = new THREE.Group()
   /** Per-SubPart starting transforms captured at the start of a bulk gizmo drag. */
   private bulkSnapshot: { centroid: Vec3; items: { index: number; base: PlacementTransform }[] } | null = null
+
+  // Point-to-point measurement picking.
+  private readonly raycaster = new THREE.Raycaster()
+  private pendingMeasurementId: string | null = null
+  private pickPointerDown: { x: number; y: number } | null = null
 
   constructor(host: HTMLElement) {
     this.viewport = new Viewport(host)
@@ -92,6 +108,7 @@ export class EditorScene {
           if (!additive) clearSelection()
           return
         }
+        setActiveMeasurement(null) // selecting a mesh closes any measurement edit
         const activeLayerId = $activeLayerId.get()
         if (selected.kind === 'subpart') {
           const placements = $part.get().placements
@@ -142,6 +159,29 @@ export class EditorScene {
           if (!dragging) this.endBulkDrag()
         },
       },
+    )
+
+    this.measurements = new MeasurementLayer(this.viewport, () =>
+      this.selectedObjects().map((o) => o.group),
+    )
+
+    const dom = this.viewport.renderer.domElement
+    dom.addEventListener('pointerdown', this.onPickPointerDown)
+    dom.addEventListener('pointerup', this.onPickPointerUp)
+    this.unsubscribers.push(
+      $measureTool.subscribe((tool) => {
+        const picking = tool !== 'none'
+        this.selection.setSuppressed(picking)
+        dom.style.cursor = picking ? 'crosshair' : ''
+        if (!picking) this.cancelPendingMeasurement()
+      }),
+    )
+    // Editing a measurement and selecting a mesh are mutually exclusive, so only
+    // one gizmo is ever active at a time.
+    this.unsubscribers.push(
+      $activeMeasurementId.subscribe((id) => {
+        if (id) clearSelection()
+      }),
     )
 
     // nanostores `subscribe` fires immediately with the current value.
@@ -333,6 +373,7 @@ export class EditorScene {
     for (const obj of this.highlighted) if (!next.has(obj)) obj.setSelected(false)
     for (const obj of selected) obj.setSelected(true)
     this.highlighted = selected
+    this.measurements.refresh()
 
     // Gizmo attachment — never re-attach mid-drag (it would reset the drag).
     if (this.gizmo.isDragging) return
@@ -430,15 +471,104 @@ export class EditorScene {
     this.repositionPivot()
   }
 
+  private readonly onPickPointerDown = (e: PointerEvent): void => {
+    if ($measureTool.get() === 'none') return
+    this.pickPointerDown = { x: e.clientX, y: e.clientY }
+  }
+
+  private readonly onPickPointerUp = (e: PointerEvent): void => {
+    if ($measureTool.get() === 'none') return
+    const down = this.pickPointerDown
+    this.pickPointerDown = null
+    // Treat >4px of movement as an orbit drag, not a pick.
+    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) return
+
+    const point = this.pickWorldPoint(e)
+    if (!point) return
+
+    if (this.pendingMeasurementId === null) {
+      const id = addMeasurement({ source: 'point', a: point, b: point })
+      this.pendingMeasurementId = id
+      setActiveMeasurement(null) // keep the editor/gizmo away until the 2nd click
+    } else {
+      updateMeasurement(this.pendingMeasurementId, { b: point })
+      setActiveMeasurement(this.pendingMeasurementId)
+      this.pendingMeasurementId = null
+      setMeasureTool('none')
+    }
+  }
+
+  /** Raycasts the pointer against part meshes, snapping to the nearest face vertex. */
+  private pickWorldPoint(e: PointerEvent): Vec3 | null {
+    const dom = this.viewport.renderer.domElement
+    const rect = dom.getBoundingClientRect()
+    const ndc = new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1,
+    )
+    this.raycaster.setFromCamera(ndc, this.viewport.camera)
+    const hits = this.raycaster.intersectObjects(this.root.children, true)
+    const hit = hits[0]
+    if (hit) {
+      const snapped = nearestFaceVertex(hit)
+      const p = snapped ?? hit.point
+      return { x: p.x, y: p.y, z: p.z }
+    }
+    // No mesh under the cursor: fall back to the Y=0 ground plane so points can
+    // be placed in empty space.
+    const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+    const target = new THREE.Vector3()
+    if (this.raycaster.ray.intersectPlane(ground, target)) {
+      return { x: target.x, y: target.y, z: target.z }
+    }
+    return null
+  }
+
+  private cancelPendingMeasurement(): void {
+    if (this.pendingMeasurementId !== null) {
+      removeMeasurement(this.pendingMeasurementId)
+      this.pendingMeasurementId = null
+    }
+  }
+
   dispose(): void {
+    const dom = this.viewport.renderer.domElement
+    dom.removeEventListener('pointerdown', this.onPickPointerDown)
+    dom.removeEventListener('pointerup', this.onPickPointerUp)
+    dom.style.cursor = ''
     for (const unsub of this.unsubscribers) unsub()
     this.unsubscribers.length = 0
     this.selection.dispose()
     this.gizmo.dispose()
+    this.measurements.dispose()
     for (const obj of this.objects.values()) obj.dispose()
     this.objects.clear()
     for (const obj of this.connectorObjects.values()) obj.dispose()
     this.connectorObjects.clear()
     this.viewport.dispose()
   }
+}
+
+/**
+ * Snaps a raycast hit to the nearest of its triangle's three vertices (in world
+ * space), so point measurements land on geometry corners. Returns null if the
+ * intersection has no usable face/geometry.
+ */
+function nearestFaceVertex(hit: THREE.Intersection): THREE.Vector3 | null {
+  const face = hit.face
+  const mesh = hit.object as THREE.Mesh
+  const geom = mesh.geometry as THREE.BufferGeometry | undefined
+  const pos = geom?.attributes?.position as THREE.BufferAttribute | undefined
+  if (!face || !pos) return null
+  let best: THREE.Vector3 | null = null
+  let bestDist = Infinity
+  for (const idx of [face.a, face.b, face.c]) {
+    const v = new THREE.Vector3().fromBufferAttribute(pos, idx).applyMatrix4(mesh.matrixWorld)
+    const d = v.distanceToSquared(hit.point)
+    if (d < bestDist) {
+      bestDist = d
+      best = v
+    }
+  }
+  return best
 }

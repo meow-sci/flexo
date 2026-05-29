@@ -7,6 +7,7 @@ import { ProjectButton } from './ProjectButton'
 import { PartDataButton } from './PartDataButton'
 import { ExportButton } from './ExportButton'
 import { ViewButton } from './ViewButton'
+import { MeasureButton } from './MeasureButton'
 import { SettingsButton } from './SettingsButton'
 import { HistoryButton } from './HistoryButton'
 
@@ -32,6 +33,7 @@ export function EditorToolbar() {
       <ToolbarSeparator />
 
       <ViewButton />
+      <MeasureButton />
 
       <ToolbarSeparator />
 

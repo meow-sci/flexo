@@ -8,6 +8,7 @@ import {
   SectionTitle,
   TextField,
   ToolbarButton,
+  useIsPhone,
 } from './kit'
 import { $part, pushUndo, setEditorTags, setPartId } from '../state/editorStore'
 import { EditorTagsField } from './EditorTagsField'
@@ -19,18 +20,17 @@ import {
   TanksSection,
 } from './GameDataSections'
 
-/**
- * Top-surface "Part Data" action: opens a modal exposing every Part-level field
- * that has no 3D representation — the Part Id + the {@link PartGameData} block
- * (display name, custom mass, tanks, power, coupling) and the editor tags.
- * Connectors are NOT here; they're edited in the 3D workspace.
- *
- * Fields are grouped into collapsible sections in one scrollable body, so the
- * same layout works on desktop (centered fullscreen-ish modal) and on mobile
- * (a tall scroll sheet). Mirrors space-tape's GameData editor sections.
- */
-export function PartDataButton() {
-  const [open, setOpen] = useState(false)
+interface Props {
+  isOpen?: boolean
+  onOpenChange?: (v: boolean) => void
+}
+
+export function PartDataButton({ isOpen: externalOpen, onOpenChange: externalOnChange }: Props = {}) {
+  const [internalOpen, setInternalOpen] = useState(false)
+  const isPhone = useIsPhone()
+  const isControlled = externalOpen !== undefined
+  const open = isControlled ? externalOpen! : internalOpen
+  const setOpen = isControlled ? (v: boolean) => externalOnChange?.(v) : setInternalOpen
   const part = useStore($part)
   const { gameData } = part
 
@@ -41,8 +41,13 @@ export function PartDataButton() {
 
   return (
     <>
-      <ToolbarButton onPress={() => setOpen(true)}>Part Data</ToolbarButton>
-      <Modal isOpen={open} onOpenChange={setOpen} isDismissable variant="fullscreen">
+      {!isControlled && <ToolbarButton onPress={() => setOpen(true)}>Part Data</ToolbarButton>}
+      <Modal
+        isOpen={open}
+        onOpenChange={setOpen}
+        isDismissable
+        variant={isPhone ? 'cover' : 'fullscreen'}
+      >
         <Dialog className="min-h-0 flex-1">
           <DialogHeader title="Part Data" onClose={() => setOpen(false)} />
           <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto p-4">

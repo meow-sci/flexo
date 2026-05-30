@@ -16,19 +16,7 @@
   - move settings to be a menu item
   - move shortcut help here as "Shortcuts"
   - move the initial "🔥 Reset Everything 🔥" here (still show the confirm dialog once pressed)
-
-- separators render weird
-- make the bounding boxes off by default
-- canvas flickers on window resize
-- license info (OSS and RW/Dean to distribute textures and models)
-- "soft" layers .. 
-    - make selection possible on multiple layers at a time? 
-    - anything visible and unlocked? 
-    - multiple layers of parts in list simultaneously to ease selection? (including connectors?)
-- orient a part at a orthagonal vector to a point on a surface
-    - start a right click/context menu of specific features?  floating FAB button for mobile?
-    - connectors too
-- can we render the kitten meshes?  
+- ✅ can we render the kitten meshes?  
     - do a deep dive on
       - vehicle definition: @thirdparty/ksa/Content/Core/defaultvehicles/Hunter/vehicle.xml
       - KittenBackPackPart part definition in: thirdparty/ksa/Content/Core/PartAssets.xml
@@ -39,6 +27,19 @@
     - make a detailed plan for how to implement this, and if it's possible, support all three kittens Hunter, Polaris and Banjo and under the main "Add" menu add an option for "Kitten" and a sub menu for each of the hunter/polaris/banjo
     - must be on a new hard-coded kittens layer only (they cannot participate in Part definitions), they will exist only as visual aides
     - DO NOT export into the game part/gamedata XML in any way, they must exist as part data only
+
+- flatten the existing mobile menu that contains Part Data, Export, View Measure to be a burger menu icon and contain the same items PLUS the desktop burger menu items so it's not a double-depth menu
+- separators render weird
+- make the bounding boxes disabled by default (currently enabled)
+- canvas flickers on window resize
+- license info (OSS and RW/Dean to distribute textures and models)
+- "soft" layers .. 
+    - make selection possible on multiple layers at a time? 
+    - anything visible and unlocked? 
+    - multiple layers of parts in list simultaneously to ease selection? (including connectors?)
+- orient a part at a orthagonal vector to a point on a surface
+    - start a right click/context menu of specific features?  floating FAB button for mobile?
+    - connectors too
 - measurement features
   - add visual bounding container feature for visual reference.  set dimensions and location (inputs and gizmos).
     - add reference button in measure popover, opens a menu with the shape types that can be added

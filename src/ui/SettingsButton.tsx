@@ -18,35 +18,44 @@ import { $connectorSettings, setConnectorSettings } from '../state/settingsStore
 import { openHelp } from '../state/helpStore'
 import { PreciseNumberInput } from './PreciseNumberInput'
 
-async function nukeAndReload(): Promise<void> {
-  try {
-    localStorage.clear()
-    sessionStorage.clear()
-    // indexedDB.databases() is supported in Chromium/WebKit; some older Firefox
-    // builds lack it, in which case we can't enumerate — localStorage is still
-    // cleared and the page still reloads.
-    if (typeof indexedDB !== 'undefined' && 'databases' in indexedDB) {
-      const dbs = await indexedDB.databases()
-      await Promise.all(
-        dbs.map((db) =>
-          db.name
-            ? new Promise<void>((resolve) => {
-                const req = indexedDB.deleteDatabase(db.name!)
-                req.onsuccess = req.onerror = req.onblocked = () => resolve()
-              })
-            : Promise.resolve(),
-        ),
-      )
-    }
-  } finally {
-    window.location.reload()
-  }
+import { nukeAndReload } from './nukeAndReload'
+
+export function SettingsModal({
+  isOpen,
+  onOpenChange,
+}: {
+  isOpen: boolean
+  onOpenChange: (v: boolean) => void
+}) {
+  const connectors = useStore($connectorSettings)
+  return (
+    <Modal isOpen={isOpen} onOpenChange={onOpenChange} isDismissable variant="center">
+      <Dialog>
+        <DialogHeader title="Settings" onClose={() => onOpenChange(false)} />
+        <div className="flex flex-col gap-3 overflow-auto p-4">
+          <SectionTitle>Connectors</SectionTitle>
+          <label className="flex items-center justify-between gap-3">
+            <span className="text-sm text-fg-muted">Connector size</span>
+            <div className="flex items-center gap-1">
+              <PreciseNumberInput
+                aria-label="Connector size (m)"
+                className="w-40"
+                min={0.01}
+                value={connectors.size}
+                onCommit={(size) => setConnectorSettings({ size })}
+              />
+              <span className="text-xs text-fg-subtle">m</span>
+            </div>
+          </label>
+        </div>
+      </Dialog>
+    </Modal>
+  )
 }
 
 export function SettingsButton() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
-  const connectors = useStore($connectorSettings)
 
   return (
     <>
@@ -73,27 +82,7 @@ export function SettingsButton() {
         </Popover>
       </MenuTrigger>
 
-      <Modal isOpen={settingsOpen} onOpenChange={setSettingsOpen} isDismissable variant="center">
-        <Dialog>
-          <DialogHeader title="Settings" onClose={() => setSettingsOpen(false)} />
-          <div className="flex flex-col gap-3 overflow-auto p-4">
-            <SectionTitle>Connectors</SectionTitle>
-            <label className="flex items-center justify-between gap-3">
-              <span className="text-sm text-fg-muted">Connector size</span>
-              <div className="flex items-center gap-1">
-                <PreciseNumberInput
-                  aria-label="Connector size (m)"
-                  className="w-40"
-                  min={0.01}
-                  value={connectors.size}
-                  onCommit={(size) => setConnectorSettings({ size })}
-                />
-                <span className="text-xs text-fg-subtle">m</span>
-              </div>
-            </label>
-          </div>
-        </Dialog>
-      </Modal>
+      <SettingsModal isOpen={settingsOpen} onOpenChange={setSettingsOpen} />
 
       <ConfirmDialog
         isOpen={confirmReset}

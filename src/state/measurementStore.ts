@@ -61,7 +61,7 @@ export const $measurements = atom<LineMeasurement[]>([])
 export const $measurementSettings = persistentJSON<MeasurementSettings>('flexo:measure', {
   unit: 'm',
   boundsMode: 'world',
-  showSelectionBounds: true,
+  showSelectionBounds: false,
   showPerMesh: false,
   showMeshDistance: false,
 })

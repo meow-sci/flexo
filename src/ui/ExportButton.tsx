@@ -52,10 +52,18 @@ const warningBox = 'rounded-lg border border-warning/40 bg-warning/10 p-2 text-x
  *   - Mod: writes a KSA part mod (mod.toml + per-project XML) either into a
  *     user-granted `…/mods` folder or as a downloadable zip.
  */
-export function ExportButton() {
+interface ExportButtonProps {
+  isOpen?: boolean
+  onOpenChange?: (v: boolean) => void
+}
+
+export function ExportButton({ isOpen: externalOpen, onOpenChange: externalOnChange }: ExportButtonProps = {}) {
   const part = useStore($part)
-  const [open, setOpen] = useState(false)
+  const [internalOpen, setInternalOpen] = useState(false)
   const [mode, setMode] = useState<Mode>('xml')
+  const isControlled = externalOpen !== undefined
+  const open = isControlled ? externalOpen! : internalOpen
+  const setOpen = isControlled ? (v: boolean) => externalOnChange?.(v) : setInternalOpen
 
   const warnings = useMemo(
     () => validate(part.partId, part.placements.map((p) => p.instanceId)),
@@ -64,7 +72,7 @@ export function ExportButton() {
 
   return (
     <>
-      <ToolbarButton onPress={() => setOpen(true)}>Export</ToolbarButton>
+      {!isControlled && <ToolbarButton onPress={() => setOpen(true)}>Export</ToolbarButton>}
       <Modal isOpen={open} onOpenChange={setOpen} isDismissable variant="fullscreen" className="max-w-2xl">
         <Dialog>
           <DialogHeader title="Export" onClose={() => setOpen(false)} />

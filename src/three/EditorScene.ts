@@ -473,6 +473,12 @@ export class EditorScene {
     for (const obj of selected) obj.setSelected(true)
     this.highlighted = selected
     this.measurements.refresh()
+    // Recompute container out-of-bounds warnings here too: this runs after
+    // reconcile (so removed meshes are already gone) and inside the async SubPart
+    // build callback (so newly-added meshes exist with geometry loaded). The
+    // layer's own `$part` subscription only catches mesh *moves*, firing before
+    // reconcile — too early to see adds/removes.
+    this.containers.refresh()
 
     // Gizmo attachment — never re-attach mid-drag (it would reset the drag).
     if (this.gizmo.isDragging) return

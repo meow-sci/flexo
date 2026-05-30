@@ -163,6 +163,9 @@ function migratePart(part: EditingPart | undefined | null): void {
   if (!part.layers?.some((l) => l.id === KITTEN_LAYER_ID)) {
     ;(part.layers ??= []).push(createKittenLayer())
   }
+  // Custom assets (textures/meshes) were added later; default for older projects.
+  if (!Array.isArray(part.customTextures)) part.customTextures = []
+  if (!Array.isArray(part.customMeshes)) part.customMeshes = []
 }
 
 /** Migrates the document + every history-snapshot part within a loaded snapshot. */

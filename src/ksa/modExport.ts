@@ -1,6 +1,10 @@
 import type { EditingPart } from './types'
 import { serializeGameData, serializePart } from './partXmlSerializer'
-import { createZip } from '../util/zip'
+import { serializeAssets, type AssetsSubPartPlan } from './assetsXmlSerializer'
+import { buildMeshAtlasGlb } from './exportGlb'
+import { buildPrimitiveGeometry } from '../three/primitives'
+import { assetKeys, getAsset } from '../state/assetDb'
+import { createZip, type ZipEntry } from '../util/zip'
 
 /**
  * KSA part-mod export. A "part mod" is a folder the game loads from
@@ -71,23 +75,102 @@ export function buildModContent(part: EditingPart, projectName: string): ModCont
   }
 }
 
+/** A token safe for an asset filename segment (letters/digits only). */
+function sanitizeAssetToken(name: string): string {
+  return name.replace(/[^A-Za-z0-9]+/g, '') || 'asset'
+}
+
+/** A custom-asset bundle for export: the Assets XML + the binary files it references. */
+export interface CustomBundle {
+  /** Desired Assets XML filename, or null when there are no custom assets to emit. */
+  assetsFile: string | null
+  assetsXml: string | null
+  /** Binary files, each path relative to the mod folder (e.g. "Meshes/X.glb"). */
+  binaries: { path: string; data: Uint8Array }[]
+}
+
 /**
- * Builds a downloadable zip containing `flexo-parts/` with a fresh mod.toml and
- * the project's Part + GameData XML. Filenames are the un-suffixed desired names
- * (a zip is always a clean slate, so there's nothing to conflict with).
+ * Builds the custom-asset bundle for a project: a geometry mesh-atlas GLB (one named
+ * node per custom SubPart actually placed), the diffuse .ktx2 for each referenced
+ * custom texture, and the Assets XML that declares the MeshAtlas/PbrMaterial/SubPart.
+ * Returns an empty bundle when no custom SubParts are placed.
+ *
+ * The .ktx2 bytes come from IndexedDB (encoded at upload time); the GLB is generated
+ * fresh from the stored primitive params.
  */
-export function buildModZip(part: EditingPart, projectName: string): Blob {
+export async function buildCustomBundle(part: EditingPart, base: string): Promise<CustomBundle> {
+  const placed = new Set(part.placements.map((p) => p.subPartTemplateId))
+  const meshes = part.customMeshes.filter((m) => placed.has(m.subPartId))
+  if (meshes.length === 0) return { assetsFile: null, assetsXml: null, binaries: [] }
+
+  const binaries: { path: string; data: Uint8Array }[] = []
+
+  // One combined geometry GLB, mirroring a Core mesh atlas.
+  const meshAtlasPath = `Meshes/${base}_MeshAtlas.glb`
+  const nodes = meshes.map((m) => ({ name: m.subPartId, geometry: buildPrimitiveGeometry(m.primitive) }))
+  try {
+    binaries.push({ path: meshAtlasPath, data: await buildMeshAtlasGlb(nodes) })
+  } finally {
+    for (const n of nodes) n.geometry.dispose()
+  }
+
+  const texById = new Map(part.customTextures.map((t) => [t.id, t]))
+  const texPath = new Map<string, string>() // texId -> relative path (dedupe shared textures)
+  const subParts: AssetsSubPartPlan[] = []
+  for (const m of meshes) {
+    let diffusePath: string | null = null
+    let materialId: string | null = null
+    const tex = m.textureId ? texById.get(m.textureId) : undefined
+    if (tex) {
+      let rel = texPath.get(tex.id)
+      if (!rel) {
+        const blob = await getAsset(assetKeys.textureKtx2(tex.id))
+        if (blob) {
+          rel = `Textures/${sanitizeAssetToken(tex.name)}_${sanitizeAssetToken(tex.id)}_Diffuse.ktx2`
+          texPath.set(tex.id, rel)
+          binaries.push({ path: rel, data: new Uint8Array(await blob.arrayBuffer()) })
+        }
+      }
+      if (rel) {
+        diffusePath = rel
+        materialId = `${m.subPartId}_Material`
+      }
+    }
+    subParts.push({ subPartId: m.subPartId, materialId, diffusePath })
+  }
+
+  return {
+    assetsFile: `${base}Assets.xml`,
+    assetsXml: serializeAssets({ meshAtlasPath, subParts }),
+    binaries,
+  }
+}
+
+/**
+ * Builds a downloadable zip containing `flexo-parts/` with a fresh mod.toml, the
+ * project's Part + GameData XML, and — when custom SubParts are placed — an Assets
+ * XML plus the referenced Meshes/*.glb and Textures/*.ktx2. Filenames are the
+ * un-suffixed desired names (a zip is always a clean slate).
+ */
+export async function buildModZip(part: EditingPart, projectName: string): Promise<Blob> {
   const content = buildModContent(part, projectName)
+  const bundle = await buildCustomBundle(part, content.base)
   const encoder = new TextEncoder()
-  const assets = [content.partFile, content.gameDataFile]
-  return createZip([
-    { name: `${MOD_FOLDER_NAME}/${MOD_TOML_NAME}`, data: encoder.encode(serializeModToml(assets)) },
+  const xmlAssets = [content.partFile, content.gameDataFile]
+  if (bundle.assetsFile) xmlAssets.push(bundle.assetsFile)
+
+  const entries: ZipEntry[] = [
+    { name: `${MOD_FOLDER_NAME}/${MOD_TOML_NAME}`, data: encoder.encode(serializeModToml(xmlAssets)) },
     { name: `${MOD_FOLDER_NAME}/${content.partFile}`, data: encoder.encode(content.partXml) },
-    {
-      name: `${MOD_FOLDER_NAME}/${content.gameDataFile}`,
-      data: encoder.encode(content.gameDataXml),
-    },
-  ])
+    { name: `${MOD_FOLDER_NAME}/${content.gameDataFile}`, data: encoder.encode(content.gameDataXml) },
+  ]
+  if (bundle.assetsFile && bundle.assetsXml) {
+    entries.push({ name: `${MOD_FOLDER_NAME}/${bundle.assetsFile}`, data: encoder.encode(bundle.assetsXml) })
+  }
+  for (const b of bundle.binaries) {
+    entries.push({ name: `${MOD_FOLDER_NAME}/${b.path}`, data: b.data })
+  }
+  return createZip(entries)
 }
 
 const isXml = (name: string) => name.toLowerCase().endsWith('.xml')
@@ -112,9 +195,27 @@ async function writeTextFile(
   await writable.close()
 }
 
+/** Writes binary bytes at a "Sub/Dir/file.ext" path under `root`, creating subdirs. */
+async function writeBinaryAtPath(
+  root: FileSystemDirectoryHandle,
+  relPath: string,
+  data: Uint8Array,
+): Promise<void> {
+  const segments = relPath.split('/')
+  const fileName = segments.pop()!
+  let dir = root
+  for (const seg of segments) dir = await dir.getDirectoryHandle(seg, { create: true })
+  const fileHandle = await dir.getFileHandle(fileName, { create: true })
+  const writable = await fileHandle.createWritable()
+  await writable.write(data as unknown as BufferSource)
+  await writable.close()
+}
+
 export interface WriteResult {
   partFile: string
   gameDataFile: string
+  /** Assets XML filename when custom assets were written, else null. */
+  assetsFile: string | null
   assets: string[]
 }
 
@@ -134,16 +235,29 @@ export async function writeModToFolder(
   const modDir = await modsDir.getDirectoryHandle(MOD_FOLDER_NAME, { create: true })
   const content = buildModContent(part, projectName)
 
+  const bundle = await buildCustomBundle(part, content.base)
+
   const taken = new Set((await listFileNames(modDir)).map((n) => n.toLowerCase()))
   const partFile = uniqueFileName(taken, `${content.base}Part`, 'xml')
   taken.add(partFile.toLowerCase())
   const gameDataFile = uniqueFileName(taken, `${content.base}GameData`, 'xml')
+  taken.add(gameDataFile.toLowerCase())
 
   await writeTextFile(modDir, partFile, content.partXml)
   await writeTextFile(modDir, gameDataFile, content.gameDataXml)
 
+  // Custom assets: the Assets XML respects the non-overwrite contract (suffixed on
+  // collision); the binaries it references are regenerated deterministically and
+  // written into Meshes/ and Textures/ (overwrite is fine — same content).
+  let assetsFile: string | null = null
+  if (bundle.assetsFile && bundle.assetsXml) {
+    assetsFile = uniqueFileName(taken, `${content.base}Assets`, 'xml')
+    await writeTextFile(modDir, assetsFile, bundle.assetsXml)
+    for (const b of bundle.binaries) await writeBinaryAtPath(modDir, b.path, b.data)
+  }
+
   const assets = (await listFileNames(modDir)).filter(isXml).sort((a, b) => a.localeCompare(b))
   await writeTextFile(modDir, MOD_TOML_NAME, serializeModToml(assets))
 
-  return { partFile, gameDataFile, assets }
+  return { partFile, gameDataFile, assetsFile, assets }
 }

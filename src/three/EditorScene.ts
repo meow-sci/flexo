@@ -37,7 +37,7 @@ import {
   updateSelectedTransform,
   type PlacementTransform,
 } from '../state/editorStore'
-import { $catalogIndex } from '../state/catalogStore'
+import { $catalogIndex, $customCatalog } from '../state/catalogStore'
 import {
   $activeMeasurementId,
   $measureTool,
@@ -233,6 +233,26 @@ export class EditorScene {
       $catalogIndex.subscribe((index) => {
         this.index = index
         this.reconcile($part.get())
+      }),
+    )
+    // A custom template's geometry/texture can change in place (the catalog entry's
+    // atlas/diffuse blob URL changes) while its placements keep the same template id.
+    // reconcile() never rebuilds existing objects, so dispose the affected ones and
+    // let reconcile re-create them from the fresh entry.
+    this.unsubscribers.push(
+      $customCatalog.subscribe((custom) => {
+        const customIds = new Set(custom.map((c) => c.id))
+        const part = $part.get()
+        for (const [id, obj] of this.objects) {
+          const placement = part.placements.find((p) => p.instanceId === id)
+          if (placement && customIds.has(placement.subPartTemplateId)) {
+            this.root.remove(obj.group)
+            obj.dispose()
+            this.objects.delete(id)
+          }
+        }
+        this.index = $catalogIndex.get()
+        this.reconcile(part)
       }),
     )
     this.unsubscribers.push($part.subscribe((part) => this.reconcile(part)))

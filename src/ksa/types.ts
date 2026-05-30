@@ -269,6 +269,80 @@ export function createEmptyGameData(): PartGameData {
   }
 }
 
+/**
+ * CUSTOM ASSETS — user-authored textures and primitive meshes (see
+ * plans/FLEXO_CUSTOM_ASSETS.md). These descriptors are lightweight and live in
+ * the document ({@link EditingPart}) so they persist with the project and are
+ * undo-tracked. The heavy binaries (the source image, the encoded .ktx2, and the
+ * generated .glb) are NEVER stored here — they live in IndexedDB (see
+ * src/state/assetDb.ts) keyed by these ids, and are regenerated/exported on demand.
+ */
+
+/** Parametric primitive shape kinds offered by the mesh creator (v1). */
+export type PrimitiveKind = 'box' | 'cylinder' | 'sphere' | 'plane'
+
+export interface BoxParams {
+  width: number
+  height: number
+  depth: number
+}
+export interface CylinderParams {
+  radius: number
+  height: number
+  radialSegments: number
+}
+export interface SphereParams {
+  radius: number
+  /** Vertical segments; horizontal = 2× this. */
+  segments: number
+}
+export interface PlaneParams {
+  width: number
+  height: number
+}
+
+/** A primitive shape + its parameters (framework-agnostic; built in three/primitives.ts). */
+export type PrimitiveSpec =
+  | { kind: 'box'; params: BoxParams }
+  | { kind: 'cylinder'; params: CylinderParams }
+  | { kind: 'sphere'; params: SphereParams }
+  | { kind: 'plane'; params: PlaneParams }
+
+/**
+ * A user-uploaded texture. v1 carries a single diffuse image; the raw image bytes
+ * and the encoded KTX2 live in IndexedDB under {@link id}.
+ */
+export interface CustomTexture {
+  /** Stable unique id (also the IndexedDB key), e.g. "tex_ab12cd". */
+  id: string
+  /** User-facing label, also the basis for the exported .ktx2 filename. */
+  name: string
+  /** Base level dimensions of the encoded texture (post-decode/resize). */
+  width: number
+  height: number
+}
+
+/**
+ * A user-created primitive mesh + the texture applied to it. Becomes a custom
+ * SubPart template: placements reference {@link subPartId} via subPartTemplateId,
+ * exactly like a Core template id. The generated GLB node is named {@link subPartId}.
+ */
+export interface CustomMesh {
+  /** Stable unique id (IndexedDB key for the generated GLB), e.g. "mesh_ab12cd". */
+  id: string
+  /** User-facing label, also the basis for the SubPart/material names. */
+  name: string
+  /**
+   * Stable SubPart template id (== GLB node name == Assets.xml SubPart Id). Decoupled
+   * from {@link name}/project name so renames never break existing placements.
+   */
+  subPartId: string
+  /** The primitive shape + parameters. */
+  primitive: PrimitiveSpec
+  /** Id of the {@link CustomTexture} applied as diffuse (empty = untextured). */
+  textureId: string
+}
+
 /** The full Part being assembled in the editor. */
 export interface EditingPart {
   /** Part id used in the exported XML (must be unique), e.g. "fixme_part_id". */
@@ -285,6 +359,10 @@ export interface EditingPart {
   connectors: Connector[]
   /** Editor-only kitten visual aides (never serialized to export). */
   kittens: KittenInstance[]
+  /** User-uploaded textures (descriptors only; binaries in IndexedDB). */
+  customTextures: CustomTexture[]
+  /** User-created primitive meshes / custom SubPart templates. */
+  customMeshes: CustomMesh[]
 }
 
 export function createEmptyPart(): EditingPart {
@@ -296,5 +374,7 @@ export function createEmptyPart(): EditingPart {
     placements: [],
     connectors: [],
     kittens: [],
+    customTextures: [],
+    customMeshes: [],
   }
 }

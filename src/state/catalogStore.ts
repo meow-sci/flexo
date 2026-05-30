@@ -5,8 +5,18 @@ import { indexCatalog, loadCoreCatalog, type CatalogSubPart } from '../ksa/catal
 export const $catalog = atom<CatalogSubPart[]>([])
 export const $catalogLoading = atom<boolean>(true)
 
-/** id -> entry index, recomputed when the catalog changes. */
-export const $catalogIndex = computed($catalog, indexCatalog)
+/**
+ * User-created custom SubPart templates (blob-URL backed GLB + KTX2), maintained
+ * by src/state/customAssetStore.ts. Kept separate from the Core {@link $catalog}
+ * so loading Core never clobbers custom entries and vice-versa; both feed the
+ * merged {@link $catalogIndex} the scene resolves placements against.
+ */
+export const $customCatalog = atom<CatalogSubPart[]>([])
+
+/** id -> entry index over BOTH the Core catalog and custom templates. */
+export const $catalogIndex = computed([$catalog, $customCatalog], (core, custom) =>
+  indexCatalog([...core, ...custom]),
+)
 
 let started = false
 

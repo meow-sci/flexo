@@ -53,7 +53,7 @@ describe('buildModContent', () => {
 
 describe('buildModZip', () => {
   it('produces a zip archive containing the flexo-parts entries', async () => {
-    const blob = buildModZip(createEmptyPart(), 'Project1')
+    const blob = await buildModZip(createEmptyPart(), 'Project1')
     expect(blob.type).toBe('application/zip')
     const bytes = new Uint8Array(await blob.arrayBuffer())
     const text = new TextDecoder('latin1').decode(bytes)

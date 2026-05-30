@@ -127,3 +127,46 @@ How to get them rendering / where the data comes from:
 - **Not the Part catalog — the Character system.** Kitten visuals are defined in `thirdparty/ksa/Content/Core/CharacterAssets.xml` (`<Character>`, `<CharacterAttachment>`, `<GltfFile>`, `<PbrMaterial>`), not in PartAssets. `KittenBackPackPart` has no mesh. The body is `Characters/Kitten/KSA_Cat.gltf` (a skinned mesh); helmet/visor/MMU-backpack are separate gltfs socketed to skeleton bones. The 3 kittens differ ONLY in head diffuse (Bengal/Siamese/Tuxedo) + eye diffuse (green/blue/yellow); body suit/normals/ORM are shared. Body gltf materials map to meshes: `Kitty_Suit`=suit, `KittyHead_mt`=face, `M_CHA_Kitten_Head`=fur shell (the visible furry head+ears — give it the head texture), `KittyEye_mt`=iris (carries the FULL per-kitten eye texture incl. whites; eye look-at is bone-driven via `CatEyeAnim`, so bind pose already faces forward), `Eyes_KittySklera_mt`=the clear corneal dome that sits just in front of the iris. KSA renders the cornea with a special refractive `EyeRenderer` shader; we have no equivalent and an opaque stand-in just occludes the iris, so `HIDDEN_BODY_MATERIALS` (in `kittenAssets.ts`) hides it and the iris shows through.
 - **Asset serving.** These licensed binaries are NOT served by default — the catalog copy script (`scripts/copy-ksa-assets-to-private-repo.ts`) only walks `<Part>/<SubPart>` XML and `Path=` refs, so `CharacterAssets.xml`'s gltf/textures (and `.bin` companions) are pulled in via its `COPY_DIRS = ['Characters','Textures/Characters']` verbatim-copy pass. Re-run the script + commit the private assets repo after asset changes. Every kitten gltf references an embedded `DefaultORM.png` that does not exist; `KittenObject` redirects it (via a `LoadingManager` URL modifier) to the real `EmptyAoRoughMetallic.png`, and re-textures every mesh so the embedded materials never show.
 - **Mesh POSITION/ROTATION data — where it comes from.** The body's pose comes from the gltf **bind-pose skeleton**, and `KittenObject` **bakes** that into static geometry (`SkeletonUtils.clone` → `updateMatrixWorld` → `SkinnedMesh.getVertexPosition()` per vertex; the gltf's authored smooth **normals** are preserved + transformed by the normal matrix, NOT recomputed — recomputing yields faceted shading from the seam-split vertices) so there is NO runtime GPU skinning. Materials render **`DoubleSide`**: the body mesh mirrors limbs (one glove's winding is reversed vs its authored normals), which back-face-culls to black under FrontSide — a 242-bone skeleton that fails to skin would otherwise collapse every mesh to the origin (the "everything renders at 0,0,0" failure). Attachments are placed at their **socket bone's** bind-pose `matrixWorld` (Head_M for helmet+visor, Chest_M for MMU) times `ATTACHMENT_CORRECTION = RotX(-90)·RotZ(-90)`. That correction is REQUIRED (without it the cm-space attachments land beside/below the socket); it is KSA's socket correction `RotZ(-90)·RotX(-90)` (see `thirdparty/ksa/KSA/KittenRenderable.cs` `UpdateRenderData` + `AnimatedRenderable.GetBoneTransform`) reordered for the glTF-imported, column-major three.js frame. If the helmet/backpack ever look mis-oriented, that matrix in `KittenObject.ts` is the only knob. Animations are intentionally out of scope (bind pose only); fur shells are skipped.
+
+## Custom assets (user textures + primitive meshes)
+
+Users can upload an image → KTX2 texture, create a primitive mesh (box/cylinder/
+sphere/plane), texture it, and export it as a KSA part mod. Full design:
+`plans/FLEXO_CUSTOM_ASSETS.md`.
+
+Key modules:
+- `src/ktx/` — `decodeImage` (image → RGBA8 + mips), `encodeKtx2` (→ KTX2 bytes),
+  `zstd` (WASM Zstd compress). `encodeKtx2.ts` is the ONLY place that knows the
+  on-disk texture format.
+- `src/three/primitives.ts` — primitive `BufferGeometry` builders (shape/param
+  TYPES live in `ksa/types.ts` so the document model stays framework-agnostic).
+- `src/ksa/exportGlb.ts` — geometry-only GLB ("mesh atlas") via `GLTFExporter`.
+- `src/ksa/assetsXmlSerializer.ts` — the `<MeshAtlas>/<PbrMaterial>/<SubPart>` XML.
+- `src/state/customAssetStore.ts` — ties descriptors ↔ IndexedDB binaries ↔ blob
+  URLs ↔ the synthetic `$customCatalog` entries the scene renders (custom meshes
+  flow through the EXISTING SubPartObject pipeline; `EditorScene` rebuilds them
+  when `$customCatalog` changes).
+- `src/state/assetDb.ts` — IndexedDB blob store (binaries are too big for the
+  localStorage `ProjectSnapshot`; only lightweight descriptors persist there).
+
+### v1 scope (deliberate limitations)
+- **Diffuse only.** No Normal / AoRoughMetal / Emissive yet (KSA `PbrMaterial`
+  supports all four; built-in parts use all four).
+- **One texture per whole mesh** (the primitive's default UVs); no per-face/multi-
+  material texturing.
+- **Uncompressed `R8G8B8A8` + Zstd** KTX2, NOT block-compressed. KSA's own atlases
+  are raw `BC7_UNORM`/`BC5`/`BC4` + Zstd; we don't byte-match them because there's
+  no turnkey in-browser BC7 encoder. Uncompressed RGBA8 is the most compatible
+  format and loads through three's `KTX2Loader` for live preview. Larger VRAM use.
+
+### To reach full feature parity later
+- **Full PBR channels:** add upload slots + encoder formats for Normal (BC5; needs
+  the `normalMapPatch` decode + GLB tangents via `computeTangents`), AoRoughMetal
+  (packed AO/Rough/Metal), Emissive (BC4); emit the matching `<Normal>/
+  <AoRoughMetal>/<Emissive>` lines in `assetsXmlSerializer`.
+- **BC7/BC5/BC4 block compression** to byte-match KSA + cut VRAM: swap ONLY
+  `src/ktx/encodeKtx2.ts` to a BC7 WASM encoder (e.g. a `bc7enc`/libktx WASM
+  build). Container assembly (`ktx-parse`), mips, and Zstd stay.
+- **Per-face / multi-material** texturing via geometry groups + multiple materials.
+- **Confirm what KSA accepts in-game** — the chosen KTX2 flavor's real acceptance
+  test is dropping an exported `flexo-parts/` into KSA's mods folder.

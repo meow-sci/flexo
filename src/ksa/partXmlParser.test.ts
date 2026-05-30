@@ -19,6 +19,8 @@ function editingPart(over: Partial<EditingPart>): EditingPart {
     placements: [],
     connectors: [],
     kittens: [],
+    customTextures: [],
+    customMeshes: [],
     ...over,
   }
 }

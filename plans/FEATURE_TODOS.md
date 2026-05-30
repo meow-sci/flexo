@@ -55,6 +55,11 @@
     - i would like to be able to let the user upload images into the workspace and then add them to a ktx2 texture container and apply them to a mesh
     - ideally this feature would let us create NEW glb meshes that follow the same patterns as the built-in KSA ones we have as reference. these could just be simple shapes like cylinders, spheres, rectangles for initial pass and apply our texture to them or faces of them.  i am not an expert on how this work so i'm using laymans terms here, the implementation should align with the reality of how these formats and systems actually work.
     - the export zip or write to mod folder should write out the ktx2 and glb files and the exported SubPart XML should reference them appropriately (use existing SubPart XMLs as reference how this works)
+    - for now i added a file @public/dean_face.png which can be used as a PNG to try and put into a ktx2 texture
+    - this MUST all take place in-browser using NPM packages and WebAssembly/npm for the parts that need it (transoders?)
+    - i am open to other NPM packages that can fulfill these capabilities, the ones listed are just some I found that seemed reasonable.  if there are better options, you can use those
+    - you can search the web for information as needed
+    - this is a BIG feature, do massive deep research and implement it expertly
 
     - Deans image on hunter silence of the lambs style?
 - use https://react-aria.adobe.com/ColorPicker for color pickers and support alpha?
@@ -70,3 +75,4 @@
 - orient a part at a orthagonal vector to a point on a surface
     - start a right click/context menu of specific features?  floating FAB button for mobile?
     - connectors too
+- prettyXml is super janky, look at pebkac for how i did it there for a DOM/Element native solution

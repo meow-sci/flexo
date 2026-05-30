@@ -231,8 +231,9 @@ function buildRotationElement(doc: XmlDocument, rot: EulerXYZ): XmlElement | nul
 /**
  * Re-indents the flat XMLSerializer output with 4-space indentation. Safe here
  * because the document contains only elements/attributes (no mixed text nodes).
+ * Exported so the Assets-XML serializer (custom assets) emits identical style.
  */
-function prettyXml(xml: string): string {
+export function prettyXml(xml: string): string {
   const lines = xml.replace(/></g, '>\n<').split('\n')
   const out: string[] = []
   let depth = 0

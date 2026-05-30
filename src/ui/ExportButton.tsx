@@ -191,16 +191,21 @@ function ModPanel() {
     }
   }
 
-  const downloadZip = () => {
-    const blob = buildModZip(part, projectName)
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = 'flexo-parts.zip'
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
+  const downloadZip = async () => {
+    try {
+      const blob = await buildModZip(part, projectName)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'flexo-parts.zip'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.warn('mod zip export failed', err)
+      toast({ title: 'Export failed', description: String((err as Error)?.message ?? err), variant: 'danger' })
+    }
   }
 
   return (

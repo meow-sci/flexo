@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@bokuweb/zstd-wasm':
+        specifier: 0.0.27
+        version: 0.0.27
       '@nanostores/persistent':
         specifier: 1.3.4
         version: 1.3.4(nanostores@1.3.0)
@@ -17,6 +20,9 @@ importers:
       '@xmldom/xmldom':
         specifier: 0.9.10
         version: 0.9.10
+      ktx-parse:
+        specifier: 1.1.0
+        version: 1.1.0
       lucide-react:
         specifier: 1.16.0
         version: 1.16.0(react@19.2.6)
@@ -36,13 +42,13 @@ importers:
         specifier: 5.3.2
         version: 5.3.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       tailwind-merge:
-        specifier: ^3.6.0
+        specifier: 3.6.0
         version: 3.6.0
       tailwind-variants:
-        specifier: ^3.2.2
+        specifier: 3.2.2
         version: 3.2.2(tailwind-merge@3.6.0)(tailwindcss@4.3.0)
       tailwindcss-react-aria-components:
-        specifier: ^2.1.0
+        specifier: 2.1.0
         version: 2.1.0(tailwindcss@4.3.0)
       three:
         specifier: 0.184.0
@@ -85,7 +91,7 @@ importers:
         specifier: 20.9.0
         version: 20.9.0
       playwright:
-        specifier: ^1.60.0
+        specifier: 1.60.0
         version: 1.60.0
       tailwindcss:
         specifier: 4.3.0
@@ -171,6 +177,9 @@ packages:
   '@babel/types@7.29.0':
     resolution: {integrity: sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A==}
     engines: {node: '>=6.9.0'}
+
+  '@bokuweb/zstd-wasm@0.0.27':
+    resolution: {integrity: sha512-GDm2uOTK3ESjnYmSeLQifJnBsRCWajKLvN32D2ZcQaaCIJI/Hse9s74f7APXjHit95S10UImsRGkTsbwHmrtmg==}
 
   '@dimforge/rapier3d-compat@0.12.0':
     resolution: {integrity: sha512-uekIGetywIgopfD97oDL5PfeezkFpNhwlzlaEYNOA0N6ghdsOvh/HYjSMek5Q2O1PYvRSDFcqFVJl4r4ZBwOow==}
@@ -929,6 +938,9 @@ packages:
   keyv@4.5.4:
     resolution: {integrity: sha512-oxVHkHR/EJf2CNXnWxRLW6mg7JyCCUcG0DtEGmL2ctUo1PNTin1PUil+r/+4r5MpVgC/fn1kjsx7mjSujKqIpw==}
 
+  ktx-parse@1.1.0:
+    resolution: {integrity: sha512-mKp3y+FaYgR7mXWAbyyzpa/r1zDWeaunH+INJO4fou3hb45XuNSwar+7llrRyvpMWafxSIi99RNFJ05MHedaJQ==}
+
   levn@0.4.1:
     resolution: {integrity: sha512-+bT2uH4E5LGE7h/n3evcS/sQlJXCpIp6ym8OWJ5eV6+67Dsql/LaaT7qJBAt2rzfoa/5QBGBhxDix1dMt2kQKQ==}
     engines: {node: '>= 0.8.0'}
@@ -1489,6 +1501,8 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
+
+  '@bokuweb/zstd-wasm@0.0.27': {}
 
   '@dimforge/rapier3d-compat@0.12.0': {}
 
@@ -2182,6 +2196,8 @@ snapshots:
   keyv@4.5.4:
     dependencies:
       json-buffer: 3.0.1
+
+  ktx-parse@1.1.0: {}
 
   levn@0.4.1:
     dependencies:

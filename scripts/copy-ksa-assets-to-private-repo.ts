@@ -23,6 +23,15 @@ const CORE_DIR = resolve(import.meta.dir, '../thirdparty/ksa/Content/Core')
 // Binary asset types referenced by the catalog that must travel with it.
 const BINARY_EXTENSIONS = ['.glb', '.gltf', '.ktx2', '.dds']
 
+// Self-contained asset directories copied verbatim (recursively), independent of
+// the Part/SubPart catalog discovery. The kitten CHARACTER meshes/textures live
+// here: they are referenced from CharacterAssets.xml (which has no <Part>/<SubPart>
+// and so is skipped by the catalog scan above) and, crucially, the kitten .gltf
+// files reference companion .bin via internal `uri`s rather than XML `Path=`
+// attributes — so the binary-ref scan would miss them. Copying these dirs
+// wholesale captures everything. Powers flexo's "Kittens" editor-only visual aides.
+const COPY_DIRS = ['Characters', 'Textures/Characters']
+
 const { values } = parseArgs({
   args: process.argv.slice(2),
   options: {
@@ -143,6 +152,24 @@ for (const rel of [...binaryRefs].sort()) {
     console.warn(`MISSING (skipped): ${rel}`)
     missing.push(rel)
   }
+}
+
+// --- 4. Copy self-contained directories verbatim (e.g. kitten character assets) ---
+
+for (const dir of COPY_DIRS) {
+  const dirAbs = join(CORE_DIR, dir)
+  let dirCount = 0
+  const fileGlob = new Glob('**/*')
+  for await (const rel of fileGlob.scan({ cwd: dirAbs, onlyFiles: true })) {
+    if (await copyRelative(join(dir, rel))) {
+      dirCount++
+      copied++
+    } else {
+      missing.push(join(dir, rel))
+    }
+  }
+  if (dirCount === 0) console.warn(`COPY_DIR empty or missing (skipped): ${dir}`)
+  else console.log(`Copied dir:    ${dir} (${dirCount} file(s))`)
 }
 
 console.log(`\nDone. Copied ${copied} file(s) to ${targetDir}.`)

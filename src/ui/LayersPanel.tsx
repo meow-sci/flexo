@@ -167,8 +167,13 @@ function LayerRow({
   onEndRename: () => void
   onRequestDelete: () => void
 }) {
-  const { layer, subParts, connectors } = summary
-  const total = subParts + connectors
+  const { layer, subParts, connectors, kittens } = summary
+  const total = subParts + connectors + kittens
+  const countTitle = [
+    `${subParts} SubParts`,
+    `${connectors} connectors`,
+    ...(kittens > 0 ? [`${kittens} kittens`] : []),
+  ].join(', ')
   const layerView = useStore($layerView)
   const view = layerViewState(layerView, layer.id)
   const locked = view.locked
@@ -196,7 +201,7 @@ function LayerRow({
         </span>
       )}
 
-      <Chip className="shrink-0" title={`${subParts} SubParts, ${connectors} connectors`}>
+      <Chip className="shrink-0" title={countTitle}>
         {total}
       </Chip>
 
@@ -299,8 +304,8 @@ function DeleteLayerDialog({
   others: Layer[]
   onClose: () => void
 }) {
-  const { layer, subParts, connectors } = summary
-  const total = subParts + connectors
+  const { layer, subParts, connectors, kittens } = summary
+  const total = subParts + connectors + kittens
   const [mode, setMode] = useState<DeleteLayerOptions['mode']>('move-items')
   const [targetId, setTargetId] = useState(others[0]?.id ?? DEFAULT_LAYER_ID)
 

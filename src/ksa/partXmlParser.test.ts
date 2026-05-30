@@ -18,6 +18,7 @@ function editingPart(over: Partial<EditingPart>): EditingPart {
     layers: [createDefaultLayer()],
     placements: [],
     connectors: [],
+    kittens: [],
     ...over,
   }
 }

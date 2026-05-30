@@ -17,6 +17,7 @@
   - move shortcut help here as "Shortcuts"
   - move the initial "🔥 Reset Everything 🔥" here (still show the confirm dialog once pressed)
 
+- separators render weird
 - make the bounding boxes off by default
 - canvas flickers on window resize
 - license info (OSS and RW/Dean to distribute textures and models)
@@ -39,7 +40,10 @@
     - must be on a new hard-coded kittens layer only (they cannot participate in Part definitions), they will exist only as visual aides
     - DO NOT export into the game part/gamedata XML in any way, they must exist as part data only
 - measurement features
-  - add visual bounding container for visual reference.  set dimensions and location (inputs and gizmos).
+  - add visual bounding container feature for visual reference.  set dimensions and location (inputs and gizmos).
+    - add reference button in measure popover, opens a menu with the shape types that can be added
+    - floating window to modify its settings while it's actively being edited, and show gizmos in 3d space
+    - once the floating window is closed, deselect it in 3d and stays in place.  re-edit from the measure menu similar to our reference lines etc.
     - shapes
       - rect
       - cylinder

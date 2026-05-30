@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { Viewport } from './Viewport'
 import { SubPartObject } from './SubPartObject'
 import { ConnectorObject } from './ConnectorObject'
+import { KittenObject } from './KittenObject'
 import { SelectionManager } from './SelectionManager'
 import { TransformGizmo } from './TransformGizmo'
 import { MeasurementLayer } from './MeasurementLayer'
@@ -21,11 +22,14 @@ import {
   $selectedConnectorIndex,
   $selectedConnectorIndices,
   $selectedIndices,
+  $selectedKittenIndex,
+  $selectedKittenIndices,
   $snap,
   $toolMode,
   clearSelection,
   pushUndo,
   selectConnector,
+  selectKitten,
   selectPlacement,
   togglePlacement,
   updatePlacementTransforms,
@@ -66,7 +70,9 @@ export class EditorScene {
   private readonly root = new THREE.Group()
   private readonly objects = new Map<string, SubPartObject>()
   private readonly connectorObjects = new Map<string, ConnectorObject>()
+  private readonly kittenObjects = new Map<string, KittenObject>()
   private readonly building = new Set<string>()
+  private readonly kittenBuilding = new Set<string>()
   private index: Map<string, CatalogSubPart> = new Map()
   private connectorSettings: ConnectorSettings = $connectorSettings.get()
   private readonly unsubscribers: Array<() => void> = []
@@ -96,6 +102,7 @@ export class EditorScene {
     initTextureSupport(this.viewport.renderer)
     this.root.name = 'flexo-part'
     this.viewport.scene.add(this.root)
+    if (import.meta.env.DEV) (window as unknown as { __editorScene?: EditorScene }).__editorScene = this
     this.pivot.name = 'bulk-pivot'
     this.root.add(this.pivot)
 
@@ -120,7 +127,7 @@ export class EditorScene {
           if (layerId !== activeLayerId) return // only select within the active layer
           if (additive) togglePlacement(index)
           else selectPlacement(index)
-        } else {
+        } else if (selected.kind === 'connector') {
           const connectors = $part.get().connectors
           const index = connectors.findIndex((c) => c.id === selected.id)
           if (index < 0) return
@@ -129,6 +136,15 @@ export class EditorScene {
           if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
           if (layerId !== activeLayerId) return // only select within the active layer
           selectConnector(index)
+        } else {
+          const kittens = $part.get().kittens
+          const index = kittens.findIndex((k) => k.id === selected.id)
+          if (index < 0) return
+          const layerId = kittens[index].layerId
+          if (isLayerLocked(layerId)) return
+          if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
+          if (layerId !== activeLayerId) return // only select within the active layer
+          selectKitten(index)
         }
       },
     )
@@ -145,7 +161,10 @@ export class EditorScene {
           const p = $part.get()
           const sel = $selectedIndices.get()
           const ci = $selectedConnectorIndex.get()
-          const detail = ci >= 0
+          const ki = $selectedKittenIndex.get()
+          const detail = ki >= 0
+            ? (p.kittens[ki]?.id ?? '')
+            : ci >= 0
             ? (p.connectors[ci]?.id ?? '')
             : sel.length === 1
               ? (p.placements[sel[0]]?.instanceId ?? '')
@@ -194,6 +213,7 @@ export class EditorScene {
     this.unsubscribers.push($part.subscribe((part) => this.reconcile(part)))
     this.unsubscribers.push($selectedIndices.subscribe(() => this.updateSelection()))
     this.unsubscribers.push($selectedConnectorIndices.subscribe(() => this.updateSelection()))
+    this.unsubscribers.push($selectedKittenIndices.subscribe(() => this.updateSelection()))
     this.unsubscribers.push(
       $connectorSettings.subscribe((settings) => {
         this.connectorSettings = settings
@@ -269,8 +289,48 @@ export class EditorScene {
     }
 
     this.reconcileConnectors(part)
+    this.reconcileKittens(part)
     this.applyLayerVisibility()
     this.updateSelection()
+  }
+
+  /** Builds/updates/removes kitten visual aides (async, like SubParts). */
+  private reconcileKittens(part: EditingPart): void {
+    const wanted = new Set(part.kittens.map((k) => k.id))
+    for (const [id, obj] of this.kittenObjects) {
+      if (!wanted.has(id)) {
+        this.root.remove(obj.group)
+        obj.dispose()
+        this.kittenObjects.delete(id)
+      }
+    }
+    for (const kitten of part.kittens) {
+      const existing = this.kittenObjects.get(kitten.id)
+      if (existing) {
+        existing.setInstance(kitten)
+        continue
+      }
+      if (this.kittenBuilding.has(kitten.id)) continue
+      this.kittenBuilding.add(kitten.id)
+      void KittenObject.create(kitten.kind, kitten)
+        .then((obj) => {
+          this.kittenBuilding.delete(kitten.id)
+          const latest = $part.get().kittens.find((k) => k.id === kitten.id)
+          if (!latest || latest.kind !== kitten.kind) {
+            obj.dispose() // removed or changed kind while loading
+            return
+          }
+          obj.setInstance(latest)
+          this.root.add(obj.group)
+          this.kittenObjects.set(kitten.id, obj)
+          this.applyLayerVisibility()
+          this.updateSelection()
+        })
+        .catch((err) => {
+          this.kittenBuilding.delete(kitten.id)
+          console.warn(`EditorScene: failed to build kitten '${kitten.id}'`, err)
+        })
+    }
   }
 
   /**
@@ -288,6 +348,10 @@ export class EditorScene {
     for (const c of part.connectors) {
       const obj = this.connectorObjects.get(c.id)
       if (obj) obj.group.visible = layerViewState(view, c.layerId).visible
+    }
+    for (const k of part.kittens) {
+      const obj = this.kittenObjects.get(k.id)
+      if (obj) obj.group.visible = layerViewState(view, k.layerId).visible
     }
   }
 
@@ -328,6 +392,16 @@ export class EditorScene {
   /** Resolves the currently selected scene objects (SubParts or connectors) that are built. */
   private selectedObjects(): SelectableObject[] {
     const part = $part.get()
+    const kitIndices = $selectedKittenIndices.get()
+    if (kitIndices.length > 0) {
+      const out: SelectableObject[] = []
+      for (const i of kitIndices) {
+        const kitten = part.kittens[i]
+        const obj = kitten && this.kittenObjects.get(kitten.id)
+        if (obj) out.push(obj)
+      }
+      return out
+    }
     const conIndices = $selectedConnectorIndices.get()
     if (conIndices.length > 0) {
       const out: SelectableObject[] = []
@@ -388,9 +462,11 @@ export class EditorScene {
     // can be selected from the Placed list for inspection but must not be moved).
     const part = $part.get()
     const conIndices = $selectedConnectorIndices.get()
+    const kitIndices = $selectedKittenIndices.get()
     const anyLocked =
       indices.some((i) => isLayerLocked(part.placements[i]?.layerId ?? '')) ||
-      conIndices.some((ci) => isLayerLocked(part.connectors[ci]?.layerId ?? ''))
+      conIndices.some((ci) => isLayerLocked(part.connectors[ci]?.layerId ?? '')) ||
+      kitIndices.some((ki) => isLayerLocked(part.kittens[ki]?.layerId ?? ''))
     if (anyLocked) {
       target = null
     } else if (multi) {
@@ -545,6 +621,8 @@ export class EditorScene {
     this.objects.clear()
     for (const obj of this.connectorObjects.values()) obj.dispose()
     this.connectorObjects.clear()
+    for (const obj of this.kittenObjects.values()) obj.dispose()
+    this.kittenObjects.clear()
     this.viewport.dispose()
   }
 }

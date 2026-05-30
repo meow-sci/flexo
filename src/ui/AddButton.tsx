@@ -6,9 +6,11 @@ import {
   MenuItem,
   MenuHeader,
   Popover,
+  SubmenuTrigger,
   ToolbarButton,
 } from './kit'
-import { addConnector } from '../state/editorStore'
+import { addConnector, addKitten } from '../state/editorStore'
+import type { KittenKind } from '../ksa/types'
 import { SubPartPopup } from './AddSubPartButton'
 import { PartPopup } from './AddPartButton'
 
@@ -35,6 +37,16 @@ export function AddButton() {
             <MenuItem id="subpart">SubPart</MenuItem>
             <MenuItem id="connector">Connector</MenuItem>
             <MenuItem id="part">Import built-in Part</MenuItem>
+            <SubmenuTrigger>
+              <MenuItem id="kitten">Kitten</MenuItem>
+              <Popover className="w-40">
+                <Menu onAction={(key) => addKitten(key as KittenKind)}>
+                  <MenuItem id="hunter">Hunter</MenuItem>
+                  <MenuItem id="polaris">Polaris</MenuItem>
+                  <MenuItem id="banjo">Banjo</MenuItem>
+                </Menu>
+              </Popover>
+            </SubmenuTrigger>
           </Menu>
         </Popover>
       </MenuTrigger>

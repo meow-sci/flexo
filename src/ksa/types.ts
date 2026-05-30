@@ -67,6 +67,31 @@ export interface Connector extends Transform {
 }
 
 /**
+ * Which of the three default KSA kittens to render. They share the same body mesh
+ * and EVA suit; only the head pattern and eye color differ. See src/ksa/kittenAssets.ts.
+ */
+export type KittenKind = 'hunter' | 'polaris' | 'banjo'
+
+/** All kitten kinds, in menu order. */
+export const KITTEN_KINDS: readonly KittenKind[] = ['hunter', 'polaris', 'banjo']
+
+/**
+ * A placed kitten EVA character — a purely visual aide (scale/placement reference).
+ * Unlike {@link SubPartPlacement}, a kitten has NO catalog template and NO KSA XML
+ * representation: it lives only in the editor document ({@link EditingPart.kittens})
+ * and is never serialized to export. Always pinned to the built-in
+ * {@link KITTEN_LAYER_ID} layer.
+ */
+export interface KittenInstance extends Transform {
+  /** Unique instance id within this Part, e.g. "kitten_1". */
+  id: string
+  /** Which kitten to render (hunter/polaris/banjo). */
+  kind: KittenKind
+  /** Always {@link KITTEN_LAYER_ID}; present for parity with other layered entities. */
+  layerId: string
+}
+
+/**
  * An editor-only grouping of placements/connectors, like a graphics program's
  * layers. Layers organize the workspace (visibility, locking, bulk selection)
  * but have NO representation in KSA XML — they are never serialized to export.
@@ -90,6 +115,13 @@ export const DEFAULT_LAYER_ID = 'default'
  */
 export const CONNECTOR_LAYER_ID = 'connectors'
 
+/**
+ * Id of the built-in "Kittens" layer. Kitten visual aides ({@link KittenInstance})
+ * always live here so they can be hidden/locked separately from the part. They are
+ * editor-only and are NEVER serialized to export. Cannot be deleted.
+ */
+export const KITTEN_LAYER_ID = 'kittens'
+
 /** The built-in Default layer (for SubParts) that every new Part starts with. */
 export function createDefaultLayer(): Layer {
   return { id: DEFAULT_LAYER_ID, name: 'Default' }
@@ -100,8 +132,17 @@ export function createConnectorLayer(): Layer {
   return { id: CONNECTOR_LAYER_ID, name: 'Connectors' }
 }
 
+/** The built-in Kittens layer that every new Part starts with (editor-only visual aides). */
+export function createKittenLayer(): Layer {
+  return { id: KITTEN_LAYER_ID, name: 'Kittens' }
+}
+
 /** The built-in layers present in every Part (and never deletable). */
-export const BUILT_IN_LAYER_IDS: readonly string[] = [DEFAULT_LAYER_ID, CONNECTOR_LAYER_ID]
+export const BUILT_IN_LAYER_IDS: readonly string[] = [
+  DEFAULT_LAYER_ID,
+  CONNECTOR_LAYER_ID,
+  KITTEN_LAYER_ID,
+]
 
 /**
  * The editor tags KSA's Core data uses to bucket parts in the in-game part
@@ -242,6 +283,8 @@ export interface EditingPart {
   placements: SubPartPlacement[]
   /** All connector attachment points. */
   connectors: Connector[]
+  /** Editor-only kitten visual aides (never serialized to export). */
+  kittens: KittenInstance[]
 }
 
 export function createEmptyPart(): EditingPart {
@@ -249,8 +292,9 @@ export function createEmptyPart(): EditingPart {
     partId: 'fixme_part_id',
     editorTags: [],
     gameData: createEmptyGameData(),
-    layers: [createDefaultLayer(), createConnectorLayer()],
+    layers: [createDefaultLayer(), createConnectorLayer(), createKittenLayer()],
     placements: [],
     connectors: [],
+    kittens: [],
   }
 }

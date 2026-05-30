@@ -9,6 +9,7 @@ import {
   createTank,
   DEFAULT_LAYER_ID,
   EULER_ZERO,
+  KITTEN_LAYER_ID,
   VEC3_ONE,
   VEC3_ZERO,
 } from './types'
@@ -34,6 +35,7 @@ function editingPart(over: Partial<EditingPart>): EditingPart {
     layers: [createDefaultLayer()],
     placements: [],
     connectors: [],
+    kittens: [],
     ...over,
   }
 }
@@ -277,5 +279,31 @@ describe('serializeGameData', () => {
     expect(tags(bare, 'CustomMass').length).toBe(0)
     expect(tags(bare, 'CylindricalTank').length).toBe(0)
     expect(tags(bare, 'Decoupler').length).toBe(0)
+  })
+
+  // Kittens are editor-only visual aides — they must never leak into export.
+  it('never serializes kittens into Part or GameData XML', () => {
+    const withKitten = editingPart({
+      partId: 'HostPart',
+      placements: [placement({ instanceId: 'p_1', subPartTemplateId: 'Core.A' })],
+      kittens: [
+        {
+          id: 'kitten_1',
+          kind: 'hunter',
+          position: { ...VEC3_ZERO },
+          rotation: { ...EULER_ZERO },
+          scale: { ...VEC3_ONE },
+          layerId: KITTEN_LAYER_ID,
+        },
+      ],
+    })
+    const partXml = serializePart(withKitten)
+    const gameXml = serializeGameData(withKitten)
+    for (const xml of [partXml, gameXml]) {
+      expect(xml.toLowerCase()).not.toContain('kitten')
+      expect(xml).not.toContain('hunter')
+    }
+    // The real part content is still emitted.
+    expect(partXml).toContain('Core.A')
   })
 })

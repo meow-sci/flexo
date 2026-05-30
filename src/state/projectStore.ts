@@ -13,7 +13,7 @@ import {
 import { $layerView, type LayerViewState } from './layerStore'
 import { $cameraState, resetCamera, setCameraRestore, type CameraState } from './viewStore'
 import { $measurements, type LineMeasurement } from './measurementStore'
-import { createEmptyGameData, DEFAULT_LAYER_ID } from '../ksa/types'
+import { createEmptyGameData, createKittenLayer, DEFAULT_LAYER_ID, KITTEN_LAYER_ID } from '../ksa/types'
 import type { Connector, ConnectorFlag, EditingPart, PartGameData } from '../ksa/types'
 
 /**
@@ -152,6 +152,12 @@ function migratePart(part: EditingPart | undefined | null): void {
     const legacy = c as Connector & { flags: unknown }
     if (Array.isArray(legacy.flags)) continue
     legacy.flags = legacy.flags && legacy.flags !== 'None' ? [legacy.flags as ConnectorFlag] : []
+  }
+  // Kittens (editor-only visual aides) were added later: default the array and
+  // ensure the built-in Kittens layer exists so older projects load cleanly.
+  if (!Array.isArray(part.kittens)) part.kittens = []
+  if (!part.layers?.some((l) => l.id === KITTEN_LAYER_ID)) {
+    ;(part.layers ??= []).push(createKittenLayer())
   }
 }
 

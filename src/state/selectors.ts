@@ -74,21 +74,25 @@ export interface LayerSummary {
   layer: Layer
   subParts: number
   connectors: number
+  kittens: number
 }
 
-/** Every layer (in display order) with its SubPart/connector counts. */
+/** Every layer (in display order) with its SubPart/connector/kitten counts. */
 export const $layerSummaries = computed(
   [$part],
   (part): LayerSummary[] => {
     const subCounts = new Map<string, number>()
     const conCounts = new Map<string, number>()
+    const kitCounts = new Map<string, number>()
     for (const p of part.placements) subCounts.set(p.layerId, (subCounts.get(p.layerId) ?? 0) + 1)
     for (const c of part.connectors) conCounts.set(c.layerId, (conCounts.get(c.layerId) ?? 0) + 1)
+    for (const k of part.kittens) kitCounts.set(k.layerId, (kitCounts.get(k.layerId) ?? 0) + 1)
     return part.layers.map((layer) => ({
       id: layer.id,
       layer,
       subParts: subCounts.get(layer.id) ?? 0,
       connectors: conCounts.get(layer.id) ?? 0,
+      kittens: kitCounts.get(layer.id) ?? 0,
     }))
   },
 )

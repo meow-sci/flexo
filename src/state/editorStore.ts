@@ -5,6 +5,7 @@ import type {
   ConnectorFlag,
   EditingPart,
   EulerXYZ,
+  KittenKind,
   PartGameData,
   SubPartPlacement,
   Tank,
@@ -17,6 +18,7 @@ import {
   createEmptyPart,
   createTank,
   DEFAULT_LAYER_ID,
+  KITTEN_LAYER_ID,
 } from '../ksa/types'
 
 /**
@@ -77,6 +79,16 @@ export const $selectedConnectorIndices = atom<number[]>([])
 export const $selectedConnectorIndex = computed(
   $selectedConnectorIndices,
   (indices) => (indices.length > 0 ? indices[indices.length - 1] : -1),
+)
+/**
+ * Selected kitten indices (multi-select), ordered by selection. Mutually exclusive
+ * with {@link $selectedIndices} and {@link $selectedConnectorIndices} — selecting a
+ * kitten clears the other two. Kittens are editor-only visual aides.
+ */
+export const $selectedKittenIndices = atom<number[]>([])
+/** Primary selected kitten index (last added to the selection), or -1. */
+export const $selectedKittenIndex = computed($selectedKittenIndices, (indices) =>
+  indices.length > 0 ? indices[indices.length - 1] : -1,
 )
 /**
  * The layer new SubParts/connectors are added to. Ephemeral UI state (like
@@ -186,6 +198,8 @@ function clampSelection(): void {
   if (filtered.length !== current.length) $selectedIndices.set(filtered)
   const clampedCon = $selectedConnectorIndices.get().filter((i) => i < part.connectors.length)
   if (clampedCon.length !== $selectedConnectorIndices.get().length) $selectedConnectorIndices.set(clampedCon)
+  const clampedKit = $selectedKittenIndices.get().filter((i) => i >= 0 && i < part.kittens.length)
+  if (clampedKit.length !== $selectedKittenIndices.get().length) $selectedKittenIndices.set(clampedKit)
 }
 
 /** Resets the active layer to Default if it no longer exists (e.g. after undo). */
@@ -392,6 +406,34 @@ export function addConnector(): void {
   selectConnector(part.connectors.length - 1)
 }
 
+/** Adds a kitten visual aide at the origin (on the built-in Kittens layer) and selects it. */
+export function addKitten(kind: KittenKind): void {
+  const current = $part.get()
+  const newId = nextKittenId(current)
+  pushUndo('add kitten', kind)
+  const part = clone(current)
+  part.kittens.push({
+    id: newId,
+    kind,
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+    layerId: KITTEN_LAYER_ID,
+  })
+  $part.set(part)
+  selectKitten(part.kittens.length - 1)
+}
+
+/** Returns the next free "kitten_N" id (max existing N + 1). */
+function nextKittenId(part: EditingPart): string {
+  let max = 0
+  for (const k of part.kittens) {
+    const m = /^kitten_(\d+)$/.exec(k.id)
+    if (m) max = Math.max(max, Number.parseInt(m[1], 10))
+  }
+  return `kitten_${max + 1}`
+}
+
 /** Returns the next free "_connectorN" id (max existing N + 1). */
 function nextConnectorId(part: EditingPart): string {
   let max = 0
@@ -411,8 +453,25 @@ export function setConnectorFlags(index: number, flags: readonly ConnectorFlag[]
   $part.set(part)
 }
 
-/** Removes the selected entity/entities (SubParts or connectors) and clamps selection. */
+/** Removes the selected entity/entities (SubParts, connectors, or kittens) and clamps selection. */
 export function removeSelected(): void {
+  const kitIndices = $selectedKittenIndices.get()
+  if (kitIndices.length > 0) {
+    const part0 = $part.get()
+    const valid = kitIndices.filter((i) => i >= 0 && i < part0.kittens.length)
+    if (valid.length === 0) return
+    const names = valid.map((i) => part0.kittens[i]?.id).filter(Boolean)
+    pushUndo(valid.length > 1 ? 'delete kittens' : 'delete kitten', names.length === 1 ? names[0] : `${names.length} kittens`)
+    const part = clone(part0)
+    for (const i of [...valid].sort((a, b) => b - a)) part.kittens.splice(i, 1)
+    $part.set(part)
+    if (valid.length === 1 && part.kittens.length > 0) {
+      $selectedKittenIndices.set([Math.min(valid[0], part.kittens.length - 1)])
+    } else {
+      $selectedKittenIndices.set([])
+    }
+    return
+  }
   const conIndices = $selectedConnectorIndices.get()
   if (conIndices.length > 0) {
     const part0 = $part.get()
@@ -469,8 +528,34 @@ export function removePlacement(index: number): void {
   else if (next.some((v, k) => v !== sel[k])) $selectedIndices.set(next)
 }
 
-/** Duplicates the selected entity/entities (SubParts or connectors) and selects the copies. */
+/** Duplicates the selected entity/entities (SubParts, connectors, or kittens) and selects the copies. */
 export function duplicateSelected(): void {
+  const kitIndices = $selectedKittenIndices.get()
+  if (kitIndices.length > 0) {
+    const part0 = $part.get()
+    const valid = kitIndices.filter((i) => i >= 0 && i < part0.kittens.length)
+    if (valid.length === 0) return
+    const names = valid.map((i) => part0.kittens[i]?.id).filter(Boolean)
+    pushUndo('duplicate', names.length === 1 ? names[0] : `${names.length} kittens`)
+    const part = clone(part0)
+    const newIndices: number[] = []
+    for (const i of [...valid].sort((a, b) => a - b)) {
+      const src = part.kittens[i]
+      if (!src) continue
+      part.kittens.push({
+        id: nextKittenId(part),
+        kind: src.kind,
+        position: { ...src.position },
+        rotation: { ...src.rotation },
+        scale: { ...src.scale },
+        layerId: KITTEN_LAYER_ID,
+      })
+      newIndices.push(part.kittens.length - 1)
+    }
+    $part.set(part)
+    setSelectedKittens(newIndices)
+    return
+  }
   const conIndices = $selectedConnectorIndices.get()
   if (conIndices.length > 0) {
     const part0 = $part.get()
@@ -523,15 +608,17 @@ export function duplicateSelected(): void {
   setSelectedPlacements(newIndices)
 }
 
-/** Replaces the SubPart selection with a single index (clears any connector selection). */
+/** Replaces the SubPart selection with a single index (clears any connector/kitten selection). */
 export function selectPlacement(index: number): void {
   $selectedConnectorIndices.set([])
+  $selectedKittenIndices.set([])
   $selectedIndices.set(index >= 0 ? [index] : [])
 }
 
 /** Replaces the SubPart selection with the given indices (deduped, order-preserving). */
 export function setSelectedPlacements(indices: readonly number[]): void {
   $selectedConnectorIndices.set([])
+  $selectedKittenIndices.set([])
   const seen = new Set<number>()
   const next: number[] = []
   for (const i of indices) {
@@ -543,25 +630,28 @@ export function setSelectedPlacements(indices: readonly number[]): void {
   $selectedIndices.set(next)
 }
 
-/** Adds or removes a SubPart index from the current selection (clears connector selection). */
+/** Adds or removes a SubPart index from the current selection (clears connector/kitten selection). */
 export function togglePlacement(index: number): void {
   if (index < 0) return
   $selectedConnectorIndices.set([])
+  $selectedKittenIndices.set([])
   const current = $selectedIndices.get()
   $selectedIndices.set(
     current.includes(index) ? current.filter((i) => i !== index) : [...current, index],
   )
 }
 
-/** Selects a connector by index (clears any SubPart selection). */
+/** Selects a connector by index (clears any SubPart/kitten selection). */
 export function selectConnector(index: number): void {
   $selectedIndices.set([])
+  $selectedKittenIndices.set([])
   $selectedConnectorIndices.set(index >= 0 ? [index] : [])
 }
 
-/** Replaces connector selection with the given indices (deduped, order-preserving). Clears SubPart selection. */
+/** Replaces connector selection with the given indices (deduped, order-preserving). Clears SubPart/kitten selection. */
 export function setSelectedConnectors(indices: readonly number[]): void {
   $selectedIndices.set([])
+  $selectedKittenIndices.set([])
   const seen = new Set<number>()
   const next: number[] = []
   for (const i of indices) {
@@ -573,10 +663,33 @@ export function setSelectedConnectors(indices: readonly number[]): void {
   $selectedConnectorIndices.set(next)
 }
 
+/** Selects a kitten by index (clears any SubPart/connector selection). */
+export function selectKitten(index: number): void {
+  $selectedIndices.set([])
+  $selectedConnectorIndices.set([])
+  $selectedKittenIndices.set(index >= 0 ? [index] : [])
+}
+
+/** Replaces kitten selection with the given indices (deduped, order-preserving). Clears SubPart/connector selection. */
+export function setSelectedKittens(indices: readonly number[]): void {
+  $selectedIndices.set([])
+  $selectedConnectorIndices.set([])
+  const seen = new Set<number>()
+  const next: number[] = []
+  for (const i of indices) {
+    if (i >= 0 && !seen.has(i)) {
+      seen.add(i)
+      next.push(i)
+    }
+  }
+  $selectedKittenIndices.set(next)
+}
+
 /** Clears all selection. */
 export function clearSelection(): void {
   $selectedIndices.set([])
   $selectedConnectorIndices.set([])
+  $selectedKittenIndices.set([])
 }
 
 /**
@@ -649,11 +762,28 @@ export function updateConnectorTransforms(
   $part.set(part)
 }
 
+/** Like {@link updatePlacementTransform} but for a kitten. No undo (see above). */
+export function updateKittenTransform(index: number, t: PlacementTransform): void {
+  const current = $part.get()
+  if (index < 0 || index >= current.kittens.length) return
+  const part = clone(current)
+  const k = part.kittens[index]
+  k.position = { ...t.position }
+  k.rotation = { ...t.rotation }
+  k.scale = { ...t.scale }
+  $part.set(part)
+}
+
 /**
- * Updates the transform of whichever entity is selected (SubPart or connector).
- * No undo — the caller pushes once at interaction start.
+ * Updates the transform of whichever entity is selected (SubPart, connector, or
+ * kitten). No undo — the caller pushes once at interaction start.
  */
 export function updateSelectedTransform(t: PlacementTransform): void {
+  const ki = $selectedKittenIndex.get()
+  if (ki >= 0) {
+    updateKittenTransform(ki, t)
+    return
+  }
   const ci = $selectedConnectorIndex.get()
   if (ci >= 0) {
     updateConnectorTransform(ci, t)

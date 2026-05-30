@@ -32,7 +32,7 @@
     - line thickness picker
     - toggle mode which shows a red (color picker available) translucent plane (default to red 0.2 alpha) when the bounding container has meshes that are outside of its bounds.  the idea is that it shows a working area to stay inside of and shows a warning when exceeded.  for the rect, if we can show red on just the plane violated that would be nice, for cylinder that would be top/bottom/side as 3 separate things to highlight, sphere would be the whole sphere highlighted
 
-- change settings cog to be a burger menu that shows a menu
+- ✅ change settings cog to be a burger menu that shows a menu
   - move settings to be a menu item
   - move shortcut help here as "Shortcuts"
   - move the initial "🔥 Reset Everything 🔥" here (still show the confirm dialog once pressed)

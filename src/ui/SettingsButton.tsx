@@ -1,25 +1,23 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
-import { Settings, Keyboard } from 'lucide-react'
+import { Menu as MenuIcon } from 'lucide-react'
 import {
+  MenuTrigger,
+  Menu,
+  MenuItem,
+  MenuSeparator,
   Modal,
   Dialog,
   DialogHeader,
   SectionTitle,
   ToolbarButton,
-  Button,
   ConfirmDialog,
+  Popover,
 } from './kit'
 import { $connectorSettings, setConnectorSettings } from '../state/settingsStore'
 import { openHelp } from '../state/helpStore'
 import { PreciseNumberInput } from './PreciseNumberInput'
 
-/**
- * Wipes all client-persisted state — Web Storage (localStorage + sessionStorage)
- * AND every IndexedDB database (e.g. the granted mods-folder handle). Used by
- * the "RESET EVERYTHING" action; the page is reloaded immediately after so the
- * editor boots from defaults.
- */
 async function nukeAndReload(): Promise<void> {
   try {
     localStorage.clear()
@@ -45,42 +43,41 @@ async function nukeAndReload(): Promise<void> {
   }
 }
 
-/**
- * Top-surface "Settings" action (cog, last button): opens a modal of global
- * editor settings. Currently the Connectors section (cube size), which drives
- * the 3D connector gizmos via settingsStore, plus a destructive "Reset
- * Everything" action that wipes all client storage.
- */
 export function SettingsButton() {
-  const [open, setOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const connectors = useStore($connectorSettings)
 
   return (
     <>
-      <ToolbarButton onPress={() => setOpen(true)} aria-label="Settings">
-        <Settings size={16} />
-        {/* Label visible only on phone (overflow menu); desktop toolbar stays icon-only. */}
-        <span className="sm:hidden">Settings</span>
-      </ToolbarButton>
-      <Modal isOpen={open} onOpenChange={setOpen} isDismissable variant="center">
-        <Dialog>
-          <DialogHeader title="Settings" onClose={() => setOpen(false)} />
-          <div className="flex flex-col gap-3 overflow-auto p-4">
-            <SectionTitle>Help</SectionTitle>
-            <Button
-              variant="secondary"
-              size="md"
-              onPress={() => {
-                setOpen(false)
-                openHelp()
-              }}
-            >
-              <Keyboard size={16} />
-              Keyboard Shortcuts
-            </Button>
+      <MenuTrigger>
+        <ToolbarButton aria-label="Menu">
+          <MenuIcon size={16} />
+          <span className="sm:hidden">Menu</span>
+        </ToolbarButton>
+        <Popover placement="bottom end" className="w-44">
+          <Menu
+            onAction={(key) => {
+              if (key === 'settings') setSettingsOpen(true)
+              else if (key === 'shortcuts') openHelp()
+              else if (key === 'reset') setConfirmReset(true)
+            }}
+          >
+            <MenuItem id="settings">Settings</MenuItem>
+            <MenuItem id="shortcuts">Shortcuts</MenuItem>
+            <MenuSeparator />
+            <MenuItem id="reset" variant="danger">
+              Reset Everything 🔥
+            </MenuItem>
+          </Menu>
+        </Popover>
+      </MenuTrigger>
 
-            <SectionTitle className="mt-4">Connectors</SectionTitle>
+      <Modal isOpen={settingsOpen} onOpenChange={setSettingsOpen} isDismissable variant="center">
+        <Dialog>
+          <DialogHeader title="Settings" onClose={() => setSettingsOpen(false)} />
+          <div className="flex flex-col gap-3 overflow-auto p-4">
+            <SectionTitle>Connectors</SectionTitle>
             <label className="flex items-center justify-between gap-3">
               <span className="text-sm text-fg-muted">Connector size</span>
               <div className="flex items-center gap-1">
@@ -94,11 +91,6 @@ export function SettingsButton() {
                 <span className="text-xs text-fg-subtle">m</span>
               </div>
             </label>
-
-            <SectionTitle className="mt-4">Danger Zone</SectionTitle>
-            <Button variant="danger" size="md" onPress={() => setConfirmReset(true)}>
-              RESET EVERYTHING 🔥
-            </Button>
           </div>
         </Dialog>
       </Modal>

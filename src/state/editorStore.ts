@@ -1,4 +1,5 @@
 import { atom, computed } from 'nanostores'
+import { persistentJSON } from '@nanostores/persistent'
 import type {
   Connector,
   ConnectorFlag,
@@ -37,7 +38,7 @@ export interface SnapSettings {
 /**
  * The single world axis the arrow-key nudge tool moves along: ↑/↓ translate the
  * selection by ±step on this axis, ←/→ cycle which axis is active (see
- * src/three/nudgeSelection.ts). Ephemeral UI state.
+ * src/three/nudgeSelection.ts). A persisted global tool preference (see {@link $nudgeAxis}).
  */
 export type NudgeAxis = 'x' | 'y' | 'z'
 
@@ -85,10 +86,20 @@ export const $selectedConnectorIndex = computed(
 export const $activeLayerId = atom<string>(DEFAULT_LAYER_ID)
 export const $toolMode = atom<ToolMode>('translate')
 export const $snap = atom<SnapSettings>({})
+// Nudge/rotate tool preferences. Global (not per-project) and persisted to
+// localStorage so they survive reloads and apply across every project; cleared by
+// "Reset Everything" (which wipes localStorage). React reads via `useStore`.
 /** Active nudge axis. Default 'y' — the vertical/world-up axis. */
-export const $nudgeAxis = atom<NudgeAxis>('y')
+export const $nudgeAxis = persistentJSON<NudgeAxis>('flexo:nudgeAxis', 'y')
 /** Distance (m) each arrow-key nudge moves the selection. Adjusted by the M keys. */
-export const $nudgeStep = atom<number>(0.1)
+export const $nudgeStep = persistentJSON<number>('flexo:nudgeStep', 0.1)
+/** Degrees each rotate key (W/S, A/D, Q/E) turns the selection. Adjusted by F/⇧F. */
+export const $rotateStep = persistentJSON<number>('flexo:rotateStep', 45)
+/**
+ * Cyclic offset (0/1/2) applied to every rotate pair's base axis, advanced by the
+ * R key. 0 = the default mapping (W/S=X, A/D=Y, Q/E=Z); see {@link rotatePairAxis}.
+ */
+export const $rotateAxisOffset = persistentJSON<number>('flexo:rotateAxisOffset', 0)
 export const $canUndo = atom(false)
 export const $canRedo = atom(false)
 /** Description of the action that will be undone next (empty when nothing to undo). */
@@ -1056,7 +1067,7 @@ export function setSnap(snap: SnapSettings): void {
 }
 
 // ---------------------------------------------------------------------------
-// Nudge plane / step (ephemeral tool state, like toolMode — not in undo history).
+// Nudge plane / step actions (persisted global tool prefs — not in undo history).
 // ---------------------------------------------------------------------------
 
 const NUDGE_AXIS_ORDER: readonly NudgeAxis[] = ['x', 'y', 'z']
@@ -1119,4 +1130,45 @@ export function decrementNudgeStep(): void {
   // When v sits at its decade floor (v ≈ d), step down by the finer 1/10 increment.
   const increment = Math.abs(v - d) < d * 1e-6 ? d / 10 : d
   $nudgeStep.set(Math.max(MIN_NUDGE_STEP, roundStep(v - increment)))
+}
+
+// ---------------------------------------------------------------------------
+// Rotate axes / step actions (persisted global tool prefs — not in undo history).
+// ---------------------------------------------------------------------------
+
+/** The three rotate key pairs (W/S, A/D, Q/E), in keyboard order. */
+export const ROTATE_PAIRS = ['ws', 'ad', 'qe'] as const
+export type RotatePair = (typeof ROTATE_PAIRS)[number]
+
+/** Each pair's axis at offset 0; R rotates the whole mapping forward (x→y→z). */
+const ROTATE_BASE_AXIS: Record<RotatePair, NudgeAxis> = { ws: 'x', ad: 'y', qe: 'z' }
+
+export const MIN_ROTATE_STEP = 15
+export const MAX_ROTATE_STEP = 180
+const ROTATE_STEP_INCREMENT = 15
+
+/** The world axis a pair currently rotates about, given {@link $rotateAxisOffset}. */
+export function rotatePairAxis(pair: RotatePair): NudgeAxis {
+  const order = NUDGE_AXIS_ORDER
+  const base = order.indexOf(ROTATE_BASE_AXIS[pair])
+  return order[(base + $rotateAxisOffset.get()) % order.length]
+}
+
+/**
+ * Cycles every pair's axis assignment together (the R hotkey). `direction` 1 steps
+ * the mapping forward (x→y→z), -1 backward; wraps around either way.
+ */
+export function cycleRotateAxes(direction: 1 | -1 = 1): void {
+  const n = NUDGE_AXIS_ORDER.length
+  $rotateAxisOffset.set(($rotateAxisOffset.get() + direction + n) % n)
+}
+
+/** Increases the rotate step by 15°, clamped at {@link MAX_ROTATE_STEP} (F). */
+export function increaseRotateStep(): void {
+  $rotateStep.set(Math.min(MAX_ROTATE_STEP, $rotateStep.get() + ROTATE_STEP_INCREMENT))
+}
+
+/** Decreases the rotate step by 15°, clamped at {@link MIN_ROTATE_STEP} (⇧F). */
+export function decreaseRotateStep(): void {
+  $rotateStep.set(Math.max(MIN_ROTATE_STEP, $rotateStep.get() - ROTATE_STEP_INCREMENT))
 }

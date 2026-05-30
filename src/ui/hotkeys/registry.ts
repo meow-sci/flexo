@@ -1,9 +1,10 @@
 import type { Keys, Options } from 'react-hotkeys-hook'
 import { redo, removeSelected, undo } from '../../state/editorStore'
 import { toggleHelp } from '../../state/helpStore'
-import { rotateSelectionBy } from '../../three/rotateSelection'
+import { rotateSelectionAroundPair } from '../../three/rotateSelection'
 import { FAST_NUDGE_MULTIPLIER, nudgeSelectionBy } from '../../three/nudgeSelection'
 import { changeNudgeAxis, lowerNudgeStep, raiseNudgeStep } from '../nudgeControls'
+import { changeRotateAxes, lowerRotateStep, raiseRotateStep } from '../rotateControls'
 import { toast } from '../kit'
 
 /**
@@ -38,8 +39,6 @@ export interface HotkeyGroup {
   bindings: HotkeyBinding[]
 }
 
-const QUARTER = 90
-
 /** Undo/redo wrappers that mirror the toolbar buttons (run the action, toast the label). */
 function runUndo(): void {
   const d = undo()
@@ -55,32 +54,39 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
     title: 'Rotate selection',
     bindings: [
       {
-        id: 'rotate-pitch-forward',
-        label: 'Pitch forward (90°)',
-        keys: 'w',
-        chords: [['W']],
-        run: () => rotateSelectionBy({ x: -QUARTER, y: 0, z: 0 }),
+        id: 'rotate-ws',
+        label: 'Rotate selection — W/S pair',
+        keys: ['w', 's'],
+        chords: [['W', 'S']],
+        run: (e) => rotateSelectionAroundPair('ws', e.key.toLowerCase() === 'w' ? -1 : 1),
       },
       {
-        id: 'rotate-pitch-back',
-        label: 'Pitch back (90°)',
-        keys: 's',
-        chords: [['S']],
-        run: () => rotateSelectionBy({ x: QUARTER, y: 0, z: 0 }),
+        id: 'rotate-ad',
+        label: 'Rotate selection — A/D pair',
+        keys: ['a', 'd'],
+        chords: [['A', 'D']],
+        run: (e) => rotateSelectionAroundPair('ad', e.key.toLowerCase() === 'a' ? 1 : -1),
       },
       {
-        id: 'rotate-yaw-left',
-        label: 'Yaw left (90°)',
-        keys: 'a',
-        chords: [['A']],
-        run: () => rotateSelectionBy({ x: 0, y: QUARTER, z: 0 }),
+        id: 'rotate-qe',
+        label: 'Rotate selection — Q/E pair',
+        keys: ['q', 'e'],
+        chords: [['Q', 'E']],
+        run: (e) => rotateSelectionAroundPair('qe', e.key.toLowerCase() === 'q' ? 1 : -1),
       },
       {
-        id: 'rotate-yaw-right',
-        label: 'Yaw right (90°)',
-        keys: 'd',
-        chords: [['D']],
-        run: () => rotateSelectionBy({ x: 0, y: -QUARTER, z: 0 }),
+        id: 'rotate-cycle-axes',
+        label: 'Cycle rotation axes',
+        keys: 'r',
+        chords: [['R']],
+        run: () => changeRotateAxes(),
+      },
+      {
+        id: 'rotate-step',
+        label: 'Rotation step (F larger · ⇧F smaller)',
+        keys: ['f', 'shift+f'],
+        chords: [['F'], ['shift', 'F']],
+        run: (e) => (e.shiftKey ? lowerRotateStep() : raiseRotateStep()),
       },
     ],
   },

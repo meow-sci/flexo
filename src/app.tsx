@@ -9,7 +9,7 @@ import { MobileInspector } from './ui/MobileInspector'
 import { WorkspaceLoadProgress } from './ui/LoadProgress'
 import { MeasurementInfo } from './ui/MeasurementInfo'
 import { MeasurementEditor } from './ui/MeasurementEditor'
-import { NudgeToolbar } from './ui/NudgeToolbar'
+import { TransformHud } from './ui/TransformHud'
 import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys'
 import { HelpDialog } from './ui/hotkeys/HelpDialog'
 import { useIsPhone } from './ui/kit'
@@ -72,8 +72,8 @@ function App() {
       {/* Bottom-center: live download progress for HDR environments. */}
       <WorkspaceLoadProgress />
 
-      {/* Bottom-center bubble: active nudge plane + step (arrow-key tool). */}
-      <NudgeToolbar />
+      {/* Bottom-center bubble: rotate-key axes/step + arrow-key nudge axis/step. */}
+      <TransformHud />
     </div>
   )
 }

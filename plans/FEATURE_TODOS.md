@@ -1,14 +1,25 @@
-- refactor import Part and SubPart popups to use GridList for the list of items
-- EditorTag XML tags are not being emitted in the generated and exported XML for example: `<EditorTag Value="RCS" />`
-- phase out cladd.io for custom react aria components
-- canvas flickers on window resize
-- license info (OSS and RW/Dean to distribute textures and models)
-- help screen + hot keys legend
-- on-screen measure tools.. 
+- ✅ refactor import Part and SubPart popups to use GridList for the list of items
+- ✅ EditorTag XML tags are not being emitted in the generated and exported XML for example: `<EditorTag Value="RCS" />`
+- ✅ phase out cladd.io for custom react aria components
+- ✅ help screen + hot keys legend
+- ✅ on-screen measure tools.. 
     - direct measrement? tape measure?
     - automatic width/height/depth lines on each axis?
     - blueprint mode?
     - max dimensions w/h/d ?
+- ✅ more axis rotations
+  - add Q/E to rotation for third axis
+  - add to bottom info bar the QE / WS / AD axis information, use a colored arrow icon for each that matches the axis colors and use an arrow icon which points in the same direction as the given plane (assuming the default camera orientation to the axis, which is Y up/down, Z is forward/back and X is left/right for lack of a better word).  
+    - use "r" as a hotkey to rotate what axis each keypair is assigned to
+    - use "f" as a hotkey to change the rotation increment by 15 deg and shift "f" to decrease it
+- ✅ change settings cog to be a burger menu that shows a menu
+  - move settings to be a menu item
+  - move shortcut help here as "Shortcuts"
+  - move the initial "🔥 Reset Everything 🔥" here (still show the confirm dialog once pressed)
+
+- make the bounding boxes off by default
+- canvas flickers on window resize
+- license info (OSS and RW/Dean to distribute textures and models)
 - "soft" layers .. 
     - make selection possible on multiple layers at a time? 
     - anything visible and unlocked? 
@@ -16,12 +27,17 @@
 - orient a part at a orthagonal vector to a point on a surface
     - start a right click/context menu of specific features?  floating FAB button for mobile?
     - connectors too
-- more axis rotations
-  - add Q/E to rotation for third axis
-  - add to bottom info bar the QE / WS / AD axis information, use a colored arrow icon for each that matches the axis colors and use an arrow icon which points in the same direction as the given plane (assuming the default camera orientation to the axis, which is Y up/down, Z is forward/back and X is left/right for lack of a better word).  
-    - use "r" as a hotkey to rotate what axis each keypair is assigned to
-    - use "f" as a hotkey to change the rotation increment by 15 deg and shift "f" to decrease it
-- can we render the kitten meshes?
+- can we render the kitten meshes?  
+    - do a deep dive on
+      - vehicle definition: @thirdparty/ksa/Content/Core/defaultvehicles/Hunter/vehicle.xml
+      - KittenBackPackPart part definition in: thirdparty/ksa/Content/Core/PartAssets.xml
+    - i am not sure how the XML definitions relate to mesh and texture files, i am not seeing an obvious link in the part/vehicle XML like other SubParts, they may be special.
+    - see @thirdparty/ksa/Content/Core/Characters/ folder for where kitten assets are (meshes, textures)
+    - we DO NOT need to support animations etc, we just want to render the same kitten model the game does, which should be a kitten character and its eva backpack
+    search the KSA decompiled source code under @thirdparty/ksa/ as needed
+    - make a detailed plan for how to implement this, and if it's possible, support all three kittens Hunter, Polaris and Banjo and under the main "Add" menu add an option for "Kitten" and a sub menu for each of the hunter/polaris/banjo
+    - must be on a new hard-coded kittens layer only (they cannot participate in Part definitions), they will exist only as visual aides
+    - DO NOT export into the game part/gamedata XML in any way, they must exist as part data only
 - measurement features
   - add visual bounding container for visual reference.  set dimensions and location (inputs and gizmos).
     - shapes
@@ -31,8 +47,3 @@
     - line color picker (including alpha)
     - line thickness picker
     - toggle mode which shows a red (color picker available) translucent plane (default to red 0.2 alpha) when the bounding container has meshes that are outside of its bounds.  the idea is that it shows a working area to stay inside of and shows a warning when exceeded.  for the rect, if we can show red on just the plane violated that would be nice, for cylinder that would be top/bottom/side as 3 separate things to highlight, sphere would be the whole sphere highlighted
-
-- ✅ change settings cog to be a burger menu that shows a menu
-  - move settings to be a menu item
-  - move shortcut help here as "Shortcuts"
-  - move the initial "🔥 Reset Everything 🔥" here (still show the confirm dialog once pressed)

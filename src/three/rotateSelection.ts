@@ -1,4 +1,5 @@
 import type { EulerXYZ } from '../ksa/types'
+import { $rotateStep, rotatePairAxis, type RotatePair } from '../state/editorStore'
 import { quatFromEulerDeg, rotatedAroundOriginTransform } from './bulkTransform'
 import { applySelectionTransform } from './selectionTransform'
 
@@ -14,4 +15,20 @@ export function rotateSelectionBy(deg: EulerXYZ): void {
   applySelectionTransform('rotate', (current, centroid) =>
     rotatedAroundOriginTransform(current, deltaQuat, centroid),
   )
+}
+
+/**
+ * Rotates the selection about the axis currently assigned to a key pair (W/S, A/D,
+ * Q/E) by the live {@link $rotateStep} amount; `sign` picks the direction (the two
+ * keys of the pair). The axis mapping is rotated by the R hotkey — see
+ * {@link rotatePairAxis}. Thin wrapper over {@link rotateSelectionBy}.
+ */
+export function rotateSelectionAroundPair(pair: RotatePair, sign: 1 | -1): void {
+  const axis = rotatePairAxis(pair)
+  const amount = $rotateStep.get() * sign
+  rotateSelectionBy({
+    x: axis === 'x' ? amount : 0,
+    y: axis === 'y' ? amount : 0,
+    z: axis === 'z' ? amount : 0,
+  })
 }

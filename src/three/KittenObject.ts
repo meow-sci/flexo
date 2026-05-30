@@ -284,6 +284,11 @@ async function resolveMaterial(
   const mat = spec
     ? await buildKittenMaterial(spec)
     : new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0, roughness: 0.85 })
+  // Render two-sided: the KSA body mesh mirrors limbs (one glove's winding is
+  // reversed relative to its authored normals), which back-face culls to black
+  // under FrontSide. DoubleSide flips the normal for back faces so both sides light
+  // correctly — the right fix for these imported meshes, and free for a static aide.
+  mat.side = THREE.DoubleSide
   owned.push(mat)
   return mat
 }

@@ -94,12 +94,6 @@ async function buildKittenMaterial(spec: KittenMaterialSpec): Promise<THREE.Mesh
   return mat
 }
 
-/**
- * How to place attachments relative to their socket bone. Calibration knob via URL:
- * `?katt=rz,rx,order` (degrees; order = pre|post for correction multiply) or
- * `?katt=group` to use the body root transform instead of the bone. Default is the
- * calibrated value.
- */
 const D = Math.PI / 180
 
 /**
@@ -121,16 +115,24 @@ const ATTACHMENT_CORRECTION = new THREE.Matrix4()
  * SkinnedMesh this evaluates the bind pose on the CPU via {@link THREE.SkinnedMesh.getVertexPosition}
  * so the result needs NO runtime GPU skinning — the kitten is a no-animation visual
  * aide, and baking makes it render identically on every GPU (a 242-bone skeleton
- * that fails to skin would otherwise collapse every mesh to the origin). Normals are
- * recomputed from the baked positions; UVs/index are carried over so the KSA
- * (derivative-tangent) normal maps still work.
+ * that fails to skin would otherwise collapse every mesh to the origin).
+ *
+ * The gltf's AUTHORED (smooth) normals are preserved and transformed by the mesh's
+ * normal matrix — NOT recomputed. Recomputing from baked positions yields faceted
+ * shading because the meshes are vertex-split at UV/normal seams. In the default
+ * (bind) pose, CPU skinning is identity (verified: baked positions equal the authored
+ * gltf positions), so the world normal is simply `normalMatrix(matrixWorld)·normal`.
+ * UVs/index are carried over so the KSA (derivative-tangent) normal maps still work.
  */
 function bakeMesh(mesh: THREE.Mesh, material: THREE.Material, id: string): THREE.Mesh {
   const src = mesh.geometry
   const posAttr = src.attributes.position as THREE.BufferAttribute
+  const normAttr = src.attributes.normal as THREE.BufferAttribute | undefined
   const n = posAttr.count
-  const out = new Float32Array(n * 3)
+  const pos = new Float32Array(n * 3)
+  const nrm = normAttr ? new Float32Array(n * 3) : null
   const v = new THREE.Vector3()
+  const nm = new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld)
   const skinned =
     (mesh as THREE.SkinnedMesh).isSkinnedMesh &&
     typeof (mesh as THREE.SkinnedMesh).getVertexPosition === 'function'
@@ -139,15 +141,22 @@ function bakeMesh(mesh: THREE.Mesh, material: THREE.Material, id: string): THREE
     if (skinned) (mesh as THREE.SkinnedMesh).getVertexPosition(i, v)
     else v.fromBufferAttribute(posAttr, i)
     v.applyMatrix4(mesh.matrixWorld) // → body-root space
-    out[i * 3] = v.x
-    out[i * 3 + 1] = v.y
-    out[i * 3 + 2] = v.z
+    pos[i * 3] = v.x
+    pos[i * 3 + 1] = v.y
+    pos[i * 3 + 2] = v.z
+    if (nrm && normAttr) {
+      v.fromBufferAttribute(normAttr, i).applyMatrix3(nm).normalize()
+      nrm[i * 3] = v.x
+      nrm[i * 3 + 1] = v.y
+      nrm[i * 3 + 2] = v.z
+    }
   }
   const geo = new THREE.BufferGeometry()
-  geo.setAttribute('position', new THREE.BufferAttribute(out, 3))
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
   if (src.attributes.uv) geo.setAttribute('uv', (src.attributes.uv as THREE.BufferAttribute).clone())
   if (src.index) geo.setIndex(src.index.clone())
-  geo.computeVertexNormals()
+  if (nrm) geo.setAttribute('normal', new THREE.BufferAttribute(nrm, 3))
+  else geo.computeVertexNormals() // fallback for meshes with no authored normals
   const baked = new THREE.Mesh(geo, material)
   baked.userData.selectable = { kind: 'kitten', id }
   return baked

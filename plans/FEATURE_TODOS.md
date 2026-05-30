@@ -42,6 +42,22 @@
     - line thickness picker
     - toggle mode which shows a red (color picker available) translucent plane (default to red 0.2 alpha) when the bounding container has meshes that are outside of its bounds.  the idea is that it shows a working area to stay inside of and shows a warning when exceeded.  for the rect, if we can show red on just the plane violated that would be nice, for cylinder that would be top/bottom/side as 3 separate things to highlight, sphere would be the whole sphere highlighted
 
+- ✅ default container (all box, sphere and cylinder types) line alpha to 20% and 1px thick and default enable "Highlight meshes outside bounds" and rename that to "Detect out of bounds"
+- ✅ for point to point and reference lines, update to have the same line color, alpha and thickness settings we have for the bounding boxes, and default to 50% alpha and 2px thick
+
+- bounding containers are not part of undo/redo stack, they should be first-class members (addition/removal/resize/move/rotate, their settings changes, etc)
+- reference lines and point to point lines should be part of undo/redo stack (addition/removal/settings/position changes etc)
+- can we manipulate or create ktx2 texture files 100% in browser?
+    - let user upload/paste custom image data and put into a texture?
+    - a way to add space agency branding?
+    - possibly https://www.npmjs.com/package/ktx-parse for npm package for ktx2 container format
+    - possibly https://www.npmjs.com/package/@h00w/basis-universal-transcoder for the transcoding?
+    - i would like to be able to let the user upload images into the workspace and then add them to a ktx2 texture container and apply them to a mesh
+    - ideally this feature would let us create NEW glb meshes that follow the same patterns as the built-in KSA ones we have as reference. these could just be simple shapes like cylinders, spheres, rectangles for initial pass and apply our texture to them or faces of them.  i am not an expert on how this work so i'm using laymans terms here, the implementation should align with the reality of how these formats and systems actually work.
+    - the export zip or write to mod folder should write out the ktx2 and glb files and the exported SubPart XML should reference them appropriately (use existing SubPart XMLs as reference how this works)
+
+    - Deans image on hunter silence of the lambs style?
+- use https://react-aria.adobe.com/ColorPicker for color pickers and support alpha?
 - project export/import to/from JSON
 - fps counter
 - separators render weird

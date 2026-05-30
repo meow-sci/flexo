@@ -41,6 +41,7 @@ Feature docs live in `docs/`. Read the relevant one before working on an area, a
 - [docs/xml-io.md](docs/xml-io.md) - Part XML serialize/parse, `formatG6`, transform omission rules
 - [docs/texturing.md](docs/texturing.md) - KTX2 (BC7/BC5/BC4) loading, PBR material mapping, normal-map shader patch, IBL/tonemapping
 - [docs/asset-pipeline.md](docs/asset-pipeline.md) - `/ksa/` dev serving AND what must be done to bundle models/textures into `pnpm build`
+- [docs/custom-assets.md](docs/custom-assets.md) - user-authored textures (image→KTX2) + primitive meshes (→geometry GLB), exported as a KSA part mod; the on-disk format decisions and v1 shortcomings
 
 # project constitution
 
@@ -131,8 +132,20 @@ How to get them rendering / where the data comes from:
 ## Custom assets (user textures + primitive meshes)
 
 Users can upload an image → KTX2 texture, create a primitive mesh (box/cylinder/
-sphere/plane), texture it, and export it as a KSA part mod. Full design:
-`plans/FLEXO_CUSTOM_ASSETS.md`.
+sphere/plane), texture it, and export it as a KSA part mod that **loads and renders
+in-game** (validated 2026-05-30). **Primary doc: [docs/custom-assets.md](docs/custom-assets.md)**
+(maintenance reference: modules, format decisions, shortcomings). Design rationale +
+format research: `plans/FLEXO_CUSTOM_ASSETS.md`.
+
+Two non-obvious KSA constraints the export MUST satisfy (each caused an in-game crash
+on the first attempt — full detail in docs/custom-assets.md):
+- **GLB mesh naming.** KSA reads the SubPart id from the glTF `meshes[i].name`, but
+  `THREE.GLTFExporter` only writes the *node* name. `exportGlb.ts` post-processes the
+  GLB JSON chunk to copy node names onto meshes (else `NullReferenceException`).
+- **Synthetic Normal + AoRoughMetal.** KSA's thumbnail renderer dereferences both
+  channels without a null check, so every `<PbrMaterial>` must carry all three
+  channels — `modExport.ts` emits shared 1×1 flat-normal + neutral-ORM `.ktx2` even
+  though v1 is diffuse-only.
 
 Key modules:
 - `src/ktx/` — `decodeImage` (image → RGBA8 + mips), `encodeKtx2` (→ KTX2 bytes),
@@ -150,8 +163,10 @@ Key modules:
   localStorage `ProjectSnapshot`; only lightweight descriptors persist there).
 
 ### v1 scope (deliberate limitations)
-- **Diffuse only.** No Normal / AoRoughMetal / Emissive yet (KSA `PbrMaterial`
-  supports all four; built-in parts use all four).
+- **Diffuse only (user-authored).** No user Normal / AoRoughMetal / Emissive yet
+  (KSA `PbrMaterial` supports all four; built-in parts use all four). We DO emit
+  shared synthetic 1×1 flat-normal + neutral-ORM textures, but only to satisfy KSA's
+  null-check-free renderer — they carry no detail.
 - **One texture per whole mesh** (the primitive's default UVs); no per-face/multi-
   material texturing.
 - **Uncompressed `R8G8B8A8` + Zstd** KTX2, NOT block-compressed. KSA's own atlases

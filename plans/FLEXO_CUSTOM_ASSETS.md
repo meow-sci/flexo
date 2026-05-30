@@ -79,6 +79,37 @@ lazily. KTX2 Zstd supercompression = zstd over the (mip-level) data; `ktx-parse`
 proves problematic, fall back to `supercompressionScheme = 0` / none for v1 — still a valid
 KTX2; flexo + libktx load it. Zstd is a size optimization, not a correctness requirement.)
 
+### GLB mesh naming — CRITICAL (caused in-game NRE on first attempt)
+
+KSA's `MeshAtlasFileReference.DoLoad()` (decompiled, `thirdparty/ksa/KSA/`) builds mesh ids by
+iterating the glTF **`meshes[]`** array and reading **`meshes[i].name`** — NOT node names:
+```csharp
+for (int i = 0; i < gltfJson.Meshes.Length; i++)
+  if (!gltfJson.Meshes[i].Name.StartsWith('_')) {           // null name → NullReferenceException
+    meshReference.Id = gltfJson.Meshes[i].Name; ...          // mesh name == SubPart <Mesh Id>
+```
+In glTF the **mesh name** and the **node name** are distinct. `THREE.GLTFExporter` writes
+`Object3D.name` only to the **node** and never emits `meshes[i].name` at all, so a fresh GLB has
+null mesh names → KSA throws `NullReferenceException` in `DoLoad()`, registers no `MeshReference`,
+then fails with "MeshReference is null for '<id>'".
+
+**Implemented fix** (`exportGlb.ts` `nameMeshesFromNodes`): an earlier attempt set `geometry.name`
+hoping GLTFExporter would derive the mesh name from it — it does not. So after export we
+**post-process the binary GLB**: parse the JSON chunk, copy each node's name onto the mesh it
+references (`meshes[node.mesh].name = node.name`), and re-pack both chunks with correct 4-byte
+(space) padding + updated lengths. Both fields end up the SubPart id — the **mesh** name is what
+KSA reads, the **node** name is what flexo's own `MeshAtlasCache.getObjectByName` reads. Also: mesh
+names must not start with `_` (KSA skips those). Guarded by `exportGlb.test.ts`.
+
+### PbrMaterial channels — CRITICAL (second in-game NRE)
+
+KSA's thumbnail renderer (`ThumbnailRenderResources.AddDraw`) dereferences `Material.NormalReference`
+**and** `Material.PBRMap` with NO null check, so a `<PbrMaterial>` with only `<Diffuse>` throws a
+`NullReferenceException` at startup. Even though v1 is diffuse-only, every material must carry all
+three channels. `modExport.ts` (`makeSolid1x1Ktx2`) emits shared 1×1 synthetic textures — flat
+normal `(128,128,255)` and neutral ORM `(AO=255,Rough=128,Metal=0)` — and `assetsXmlSerializer.ts`
+emits the matching `<Normal>`/`<AoRoughMetal>` lines whenever any subpart is textured.
+
 ### GLB mesh reality
 
 - Built-in atlases are **geometry-only GLBs**; textures live in separate `.ktx2` referenced by

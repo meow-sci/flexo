@@ -5,6 +5,7 @@ import { buildMeshAtlasGlb } from './exportGlb'
 import { buildPrimitiveGeometry } from '../three/primitives'
 import { assetKeys, getAsset } from '../state/assetDb'
 import { createZip, type ZipEntry } from '../util/zip'
+import { encodeImageToKtx2 } from '../ktx/encodeKtx2'
 
 /**
  * KSA part-mod export. A "part mod" is a folder the game loads from
@@ -80,6 +81,19 @@ function sanitizeAssetToken(name: string): string {
   return name.replace(/[^A-Za-z0-9]+/g, '') || 'asset'
 }
 
+/**
+ * Encodes a 1×1 solid-color RGBA8 KTX2 (linear/UNORM + Zstd). Used to supply
+ * synthetic Normal and AoRoughMetal textures for custom PbrMaterials — KSA's
+ * ThumbnailRenderResources.AddDraw dereferences both fields without null checks.
+ */
+function makeSolid1x1Ktx2(r: number, g: number, b: number): Promise<Uint8Array> {
+  const rgba = new Uint8Array([r, g, b, 255])
+  return encodeImageToKtx2(
+    { width: 1, height: 1, levels: [{ width: 1, height: 1, rgba }] },
+    { srgb: false, zstd: true },
+  )
+}
+
 /** A custom-asset bundle for export: the Assets XML + the binary files it references. */
 export interface CustomBundle {
   /** Desired Assets XML filename, or null when there are no custom assets to emit. */
@@ -139,9 +153,22 @@ export async function buildCustomBundle(part: EditingPart, base: string): Promis
     subParts.push({ subPartId: m.subPartId, materialId, diffusePath })
   }
 
+  // KSA's ThumbnailRenderResources.AddDraw dereferences NormalReference and PBRMap
+  // without null checks, so every PbrMaterial must include all three channels.
+  // Emit shared synthetic 1×1 textures when any sub-part is textured.
+  let normalPath: string | undefined
+  let aoRoughMetalPath: string | undefined
+  if (subParts.some((sp) => sp.materialId !== null)) {
+    normalPath = `Textures/${base}_FlatNormal.ktx2`
+    aoRoughMetalPath = `Textures/${base}_NeutralORM.ktx2`
+    // flat normal = (128,128,255) ≈ +Z in tangent space; neutral ORM = AO=255, Rough=128, Metal=0
+    binaries.push({ path: normalPath, data: await makeSolid1x1Ktx2(128, 128, 255) })
+    binaries.push({ path: aoRoughMetalPath, data: await makeSolid1x1Ktx2(255, 128, 0) })
+  }
+
   return {
     assetsFile: `${base}Assets.xml`,
-    assetsXml: serializeAssets({ meshAtlasPath, subParts }),
+    assetsXml: serializeAssets({ meshAtlasPath, subParts, normalPath, aoRoughMetalPath }),
     binaries,
   }
 }

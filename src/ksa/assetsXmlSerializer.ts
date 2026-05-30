@@ -29,6 +29,18 @@ export interface AssetsPlan {
   /** Relative path to the geometry mesh-atlas GLB, e.g. "Meshes/MyMod_MeshAtlas.glb". */
   meshAtlasPath: string
   subParts: AssetsSubPartPlan[]
+  /**
+   * Relative path to a shared flat-normal .ktx2 (RGB 128,128,255 = +Z).
+   *
+   * REQUIRED whenever any subpart is textured. KSA's thumbnail renderer
+   * (ThumbnailRenderResources.AddDraw) dereferences `Material.NormalReference`
+   * and `Material.PBRMap` WITHOUT a null check, so a <PbrMaterial> with only
+   * <Diffuse> throws a NullReferenceException at startup. We emit synthetic
+   * Normal + AoRoughMetal channels so every material is complete.
+   */
+  normalPath?: string
+  /** Relative path to a shared AO/Rough/Metal .ktx2 (AO=255, Rough=128, Metal=0). */
+  aoRoughMetalPath?: string
 }
 
 export function serializeAssets(plan: AssetsPlan): string {
@@ -40,6 +52,10 @@ export function serializeAssets(plan: AssetsPlan): string {
   assets.appendChild(atlas)
 
   // Materials first (Core lists PbrMaterials above the SubParts that use them).
+  // Every material gets all three channels KSA dereferences unconditionally in
+  // its thumbnail renderer: <Diffuse>, <Normal>, <AoRoughMetal>. The latter two
+  // point at shared synthetic textures (flat normal / neutral ORM) — omitting
+  // them crashes KSA at startup (see AssetsPlan.normalPath).
   for (const sp of plan.subParts) {
     if (!sp.materialId || !sp.diffusePath) continue
     const mat = doc.createElement('PbrMaterial')
@@ -48,6 +64,18 @@ export function serializeAssets(plan: AssetsPlan): string {
     diffuse.setAttribute('Path', sp.diffusePath)
     diffuse.setAttribute('Category', 'Vessel')
     mat.appendChild(diffuse)
+    if (plan.normalPath) {
+      const normal = doc.createElement('Normal')
+      normal.setAttribute('Path', plan.normalPath)
+      normal.setAttribute('Category', 'Vessel')
+      mat.appendChild(normal)
+    }
+    if (plan.aoRoughMetalPath) {
+      const orm = doc.createElement('AoRoughMetal')
+      orm.setAttribute('Path', plan.aoRoughMetalPath)
+      orm.setAttribute('Category', 'Vessel')
+      mat.appendChild(orm)
+    }
     assets.appendChild(mat)
   }
 

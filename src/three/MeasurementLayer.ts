@@ -274,6 +274,8 @@ export class MeasurementLayer {
       }
       const color = new THREE.Color(m.color)
       gfx.line.material.color.copy(color)
+      gfx.line.material.opacity = m.lineOpacity ?? 0.5
+      gfx.line.material.linewidth = m.lineWidth ?? 2
       gfx.markerMat.color.copy(color)
 
       const geom = gfx.line.lines.geometry as LineSegmentsGeometry

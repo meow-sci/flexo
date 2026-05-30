@@ -1,7 +1,8 @@
 import { useStore } from '@nanostores/react'
 import { Lock, Unlock, X } from 'lucide-react'
-import { Button, ToggleButton, ToggleButtonGroup, SectionTitle, useIsPhone } from './kit'
+import { Button, ToggleButton, ToggleButtonGroup, SectionTitle, Slider, useIsPhone } from './kit'
 import { PreciseNumberInput } from './PreciseNumberInput'
+import { ColorAlphaField } from './ColorAlphaField'
 import {
   $activeEndpoint,
   $activeMeasurementId,
@@ -87,13 +88,6 @@ export function MeasurementEditor() {
           {m.source === 'point' ? 'Point measurement' : 'Reference line'}
         </span>
         <div className="flex items-center gap-1">
-          <input
-            type="color"
-            aria-label="Color"
-            className="h-6 w-6 cursor-pointer rounded border border-border bg-transparent"
-            value={m.color}
-            onChange={(e) => updateMeasurement(m.id, { color: e.target.value })}
-          />
           <Button
             size="sm"
             aria-label={m.locked ? 'Unlock' : 'Lock'}
@@ -177,6 +171,31 @@ export function MeasurementEditor() {
                 </ToggleButton>
               ))}
             </ToggleButtonGroup>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <SectionTitle>Line</SectionTitle>
+            <ColorAlphaField
+              label="Color"
+              color={m.color}
+              opacity={m.lineOpacity ?? 0.5}
+              onChange={({ color, opacity }) => updateMeasurement(m.id, { color, lineOpacity: opacity })}
+            />
+            <div className="flex items-center gap-2">
+              <span className="w-12 shrink-0 text-xs text-fg-muted">Width</span>
+              <Slider
+                aria-label="Line width"
+                className="flex-1"
+                minValue={1}
+                maxValue={10}
+                step={1}
+                value={m.lineWidth ?? 2}
+                onChange={(v) => updateMeasurement(m.id, { lineWidth: v as number })}
+              />
+              <span className="w-8 shrink-0 text-right font-mono text-[11px] text-fg-subtle">
+                {m.lineWidth ?? 2}px
+              </span>
+            </div>
           </div>
 
           <Button

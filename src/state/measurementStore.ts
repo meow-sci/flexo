@@ -30,6 +30,10 @@ export interface LineMeasurement {
   axisLock: AxisLock
   /** Hex color, e.g. '#38bdf8'. */
   color: string
+  /** Line opacity 0..1. */
+  lineOpacity: number
+  /** Line thickness in px (fat-line linewidth). */
+  lineWidth: number
   /** When locked, editing gizmos/inputs are hidden and the line is read-only. */
   locked: boolean
   /** Creation method; rendering is identical. */
@@ -54,6 +58,8 @@ export interface SelectionBounds {
 }
 
 const DEFAULT_COLOR = '#38bdf8'
+const DEFAULT_LINE_OPACITY = 0.5
+const DEFAULT_LINE_WIDTH = 2
 
 /** Placed line measurements (persisted with the project, never exported). */
 export const $measurements = atom<LineMeasurement[]>([])
@@ -85,8 +91,8 @@ function newId(): string {
 
 /** Adds a measurement and makes it the active (editable) one. Returns its id. */
 export function addMeasurement(
-  m: Omit<LineMeasurement, 'id' | 'color' | 'locked' | 'axisLock'> &
-    Partial<Pick<LineMeasurement, 'color' | 'locked' | 'axisLock'>>,
+  m: Omit<LineMeasurement, 'id' | 'color' | 'locked' | 'axisLock' | 'lineOpacity' | 'lineWidth'> &
+    Partial<Pick<LineMeasurement, 'color' | 'locked' | 'axisLock' | 'lineOpacity' | 'lineWidth'>>,
 ): string {
   const id = newId()
   const measurement: LineMeasurement = {
@@ -96,6 +102,8 @@ export function addMeasurement(
     source: m.source,
     axisLock: m.axisLock ?? 'none',
     color: m.color ?? DEFAULT_COLOR,
+    lineOpacity: m.lineOpacity ?? DEFAULT_LINE_OPACITY,
+    lineWidth: m.lineWidth ?? DEFAULT_LINE_WIDTH,
     locked: m.locked ?? false,
   }
   $measurements.set([...$measurements.get(), measurement])

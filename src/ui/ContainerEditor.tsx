@@ -189,7 +189,7 @@ export function ContainerEditor() {
               isSelected={c.warnEnabled}
               onChange={(warnEnabled) => updateContainer(c.id, { warnEnabled })}
             >
-              Highlight meshes outside bounds
+              Detect out of bounds
             </Switch>
             {c.warnEnabled && (
               <ColorAlphaField

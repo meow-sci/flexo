@@ -9,6 +9,7 @@ import { MobileInspector } from './ui/MobileInspector'
 import { WorkspaceLoadProgress } from './ui/LoadProgress'
 import { MeasurementInfo } from './ui/MeasurementInfo'
 import { MeasurementEditor } from './ui/MeasurementEditor'
+import { ContainerEditor } from './ui/ContainerEditor'
 import { TransformHud } from './ui/TransformHud'
 import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys'
 import { HelpDialog } from './ui/hotkeys/HelpDialog'
@@ -65,6 +66,9 @@ function App() {
       {/* Editor for the active line measurement (left card on desktop, bottom
           sheet on phone — handled within the component). */}
       <MeasurementEditor />
+
+      {/* Editor for the active reference container (same placement as above). */}
+      <ContainerEditor />
 
       {/* Bottom-left: live selection bounding-box dimensions. */}
       <MeasurementInfo />

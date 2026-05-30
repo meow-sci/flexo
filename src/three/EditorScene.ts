@@ -6,6 +6,7 @@ import { KittenObject } from './KittenObject'
 import { SelectionManager } from './SelectionManager'
 import { TransformGizmo } from './TransformGizmo'
 import { MeasurementLayer } from './MeasurementLayer'
+import { ContainerLayer } from './ContainerLayer'
 import { readPlacementTransform } from './coords'
 import {
   centroidOf,
@@ -46,6 +47,7 @@ import {
   setMeasureTool,
   updateMeasurement,
 } from '../state/measurementStore'
+import { $activeContainerId, setActiveContainer } from '../state/containerStore'
 import { $connectorSettings, type ConnectorSettings } from '../state/settingsStore'
 import { $cameraRestore, $cameraSnap, $grids } from '../state/viewStore'
 import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../state/layerStore'
@@ -79,6 +81,7 @@ export class EditorScene {
   private readonly selection: SelectionManager
   private readonly gizmo: TransformGizmo
   private readonly measurements: MeasurementLayer
+  private readonly containers: ContainerLayer
   private highlighted: SelectableObject[] = []
   private attachedObject: THREE.Object3D | null = null
   /**
@@ -183,6 +186,9 @@ export class EditorScene {
     this.measurements = new MeasurementLayer(this.viewport, () =>
       this.selectedObjects().map((o) => o.group),
     )
+    this.containers = new ContainerLayer(this.viewport, () =>
+      [...this.objects.values()].map((o) => o.group),
+    )
 
     const dom = this.viewport.renderer.domElement
     dom.addEventListener('pointerdown', this.onPickPointerDown)
@@ -195,13 +201,32 @@ export class EditorScene {
         if (!picking) this.cancelPendingMeasurement()
       }),
     )
-    // Editing a measurement and selecting a mesh are mutually exclusive, so only
-    // one gizmo is ever active at a time.
+    // Editing a measurement, editing a container, and selecting a mesh are all
+    // mutually exclusive, so only one gizmo is ever active at a time.
     this.unsubscribers.push(
       $activeMeasurementId.subscribe((id) => {
-        if (id) clearSelection()
+        if (id) {
+          clearSelection()
+          setActiveContainer(null)
+        }
       }),
     )
+    this.unsubscribers.push(
+      $activeContainerId.subscribe((id) => {
+        if (id) {
+          clearSelection()
+          setActiveMeasurement(null)
+        }
+      }),
+    )
+    // Selecting any mesh closes container editing (its gizmo would otherwise fight
+    // the selection gizmo).
+    const clearContainerOnSelect = () => {
+      if (this.selectedObjects().length > 0) setActiveContainer(null)
+    }
+    this.unsubscribers.push($selectedIndices.subscribe(clearContainerOnSelect))
+    this.unsubscribers.push($selectedConnectorIndices.subscribe(clearContainerOnSelect))
+    this.unsubscribers.push($selectedKittenIndices.subscribe(clearContainerOnSelect))
 
     // nanostores `subscribe` fires immediately with the current value.
     this.unsubscribers.push(
@@ -617,6 +642,7 @@ export class EditorScene {
     this.selection.dispose()
     this.gizmo.dispose()
     this.measurements.dispose()
+    this.containers.dispose()
     for (const obj of this.objects.values()) obj.dispose()
     this.objects.clear()
     for (const obj of this.connectorObjects.values()) obj.dispose()

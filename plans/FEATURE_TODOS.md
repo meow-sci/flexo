@@ -27,20 +27,9 @@
     - make a detailed plan for how to implement this, and if it's possible, support all three kittens Hunter, Polaris and Banjo and under the main "Add" menu add an option for "Kitten" and a sub menu for each of the hunter/polaris/banjo
     - must be on a new hard-coded kittens layer only (they cannot participate in Part definitions), they will exist only as visual aides
     - DO NOT export into the game part/gamedata XML in any way, they must exist as part data only
-
-- flatten the existing mobile menu that contains Part Data, Export, View Measure to be a burger menu icon and contain the same items PLUS the desktop burger menu items so it's not a double-depth menu
-- separators render weird
-- make the bounding boxes disabled by default (currently enabled)
-- canvas flickers on window resize
-- license info (OSS and RW/Dean to distribute textures and models)
-- "soft" layers .. 
-    - make selection possible on multiple layers at a time? 
-    - anything visible and unlocked? 
-    - multiple layers of parts in list simultaneously to ease selection? (including connectors?)
-- orient a part at a orthagonal vector to a point on a surface
-    - start a right click/context menu of specific features?  floating FAB button for mobile?
-    - connectors too
-- measurement features
+- ✅ flatten the existing mobile menu that contains Part Data, Export, View Measure to be a burger menu icon and contain the same items PLUS the desktop burger menu items so it's not a double-depth menu
+- ✅ make the bounding boxes disabled by default (currently enabled)
+- ✅ measurement features
   - add visual bounding container feature for visual reference.  set dimensions and location (inputs and gizmos).
     - add reference button in measure popover, opens a menu with the shape types that can be added
     - floating window to modify its settings while it's actively being edited, and show gizmos in 3d space
@@ -52,3 +41,16 @@
     - line color picker (including alpha)
     - line thickness picker
     - toggle mode which shows a red (color picker available) translucent plane (default to red 0.2 alpha) when the bounding container has meshes that are outside of its bounds.  the idea is that it shows a working area to stay inside of and shows a warning when exceeded.  for the rect, if we can show red on just the plane violated that would be nice, for cylinder that would be top/bottom/side as 3 separate things to highlight, sphere would be the whole sphere highlighted
+
+- project export/import to/from JSON
+- fps counter
+- separators render weird
+- canvas flickers on window resize
+- license info (OSS and RW/Dean to distribute textures and models)
+- "soft" layers .. 
+    - make selection possible on multiple layers at a time? 
+    - anything visible and unlocked? 
+    - multiple layers of parts in list simultaneously to ease selection? (including connectors?)
+- orient a part at a orthagonal vector to a point on a surface
+    - start a right click/context menu of specific features?  floating FAB button for mobile?
+    - connectors too

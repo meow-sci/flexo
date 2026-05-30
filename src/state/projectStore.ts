@@ -13,6 +13,7 @@ import {
 import { $layerView, type LayerViewState } from './layerStore'
 import { $cameraState, resetCamera, setCameraRestore, type CameraState } from './viewStore'
 import { $measurements, type LineMeasurement } from './measurementStore'
+import { $containers, type ReferenceContainer } from './containerStore'
 import { createEmptyGameData, createKittenLayer, DEFAULT_LAYER_ID, KITTEN_LAYER_ID } from '../ksa/types'
 import type { Connector, ConnectorFlag, EditingPart, PartGameData } from '../ksa/types'
 
@@ -72,6 +73,8 @@ export interface ProjectSnapshot {
   camera?: CameraState
   /** Placed measurement lines (editor aid; never written to the exported XML). */
   measurements?: LineMeasurement[]
+  /** Placed reference containers (editor aid; never written to the exported XML). */
+  containers?: ReferenceContainer[]
 }
 
 /** A lightweight project descriptor for the load-project list (no full document). */
@@ -129,6 +132,7 @@ function serializeCurrentProject(): ProjectSnapshot {
     savedAt: Date.now(),
     camera: $cameraState.get() ?? undefined,
     measurements: $measurements.get(),
+    containers: $containers.get(),
   }
 }
 
@@ -183,6 +187,7 @@ function applyProjectSnapshot(snap: ProjectSnapshot): void {
     $activeLayerId.set(activeValid ? snap.activeLayerId : DEFAULT_LAYER_ID)
     $layerView.set(snap.layerView ?? {})
     $measurements.set(snap.measurements ?? [])
+    $containers.set(snap.containers ?? [])
     clearSelection()
     if (snap.camera) {
       // Pre-fill $cameraState so it's included in the next autosave, then signal
@@ -330,6 +335,7 @@ function startAutosave(): void {
   $projectName.subscribe(scheduleSave)
   $cameraState.subscribe(scheduleSave)
   $measurements.subscribe(scheduleSave)
+  $containers.subscribe(scheduleSave)
 }
 
 /**

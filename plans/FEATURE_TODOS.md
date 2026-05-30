@@ -44,10 +44,7 @@
 
 - ✅ default container (all box, sphere and cylinder types) line alpha to 20% and 1px thick and default enable "Highlight meshes outside bounds" and rename that to "Detect out of bounds"
 - ✅ for point to point and reference lines, update to have the same line color, alpha and thickness settings we have for the bounding boxes, and default to 50% alpha and 2px thick
-
-- bounding containers are not part of undo/redo stack, they should be first-class members (addition/removal/resize/move/rotate, their settings changes, etc)
-- reference lines and point to point lines should be part of undo/redo stack (addition/removal/settings/position changes etc)
-- can we manipulate or create ktx2 texture files 100% in browser?
+- ✅ can we manipulate or create ktx2 texture files 100% in browser?
     - let user upload/paste custom image data and put into a texture?
     - a way to add space agency branding?
     - possibly https://www.npmjs.com/package/ktx-parse for npm package for ktx2 container format
@@ -62,6 +59,12 @@
     - this is a BIG feature, do massive deep research and implement it expertly
 
     - Deans image on hunter silence of the lambs style?
+
+
+- bounding containers are not part of undo/redo stack, they should be first-class members (addition/removal/resize/move/rotate, their settings changes, etc)
+- reference lines and point to point lines should be part of undo/redo stack (addition/removal/settings/position changes etc)
+
+- reloading webapp when custom textures and meshes are in the project breaks (at least) the textures
 - use https://react-aria.adobe.com/ColorPicker for color pickers and support alpha?
 - project export/import to/from JSON
 - fps counter

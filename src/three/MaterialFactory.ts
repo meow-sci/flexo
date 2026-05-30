@@ -24,6 +24,12 @@ export function makeFlatMaterial(): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ color: 0xbfc4cc, metalness: 0.6, roughness: 0.5 })
 }
 
+/** Builds a diffuse-only material for a single custom-mesh face (v1 custom assets). */
+export async function buildCustomFaceMaterial(ktx2Url: string): Promise<THREE.MeshStandardMaterial> {
+  const texture = await loadTexture(ktx2Url, 'srgb')
+  return new THREE.MeshStandardMaterial({ map: texture, metalness: 0.1, roughness: 0.7 })
+}
+
 /** Resolves the shared material for a catalog entry (cached by material id). */
 export function getSharedMaterial(entry: CatalogSubPart): Promise<THREE.MeshStandardMaterial> {
   if (!isTextureSupported() || !entry.diffuseUrl) {

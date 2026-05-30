@@ -323,9 +323,25 @@ export interface CustomTexture {
 }
 
 /**
- * A user-created primitive mesh + the texture applied to it. Becomes a custom
- * SubPart template: placements reference {@link subPartId} via subPartTemplateId,
- * exactly like a Core template id. The generated GLB node is named {@link subPartId}.
+ * Per-face texture + UV configuration for a custom primitive mesh face.
+ * Face key names are defined by PRIMITIVE_FACE_KEYS in three/primitives.ts
+ * (e.g. 'right'/'left'/'top'/'bottom'/'front'/'back' for box,
+ * 'side'/'top'/'bottom' for cylinder, 'all' for sphere/plane).
+ */
+export interface FaceTextureConfig {
+  /** Id of the {@link CustomTexture} to use on this face (empty = untextured). */
+  textureId: string
+  /** UV tiling scale. { x: 1, y: 1 } = no tiling (default). */
+  uvScale: { x: number; y: number }
+  /** UV offset (translation). { x: 0, y: 0 } = no offset (default). */
+  uvOffset: { x: number; y: number }
+}
+
+/**
+ * A user-created primitive mesh + per-face texture/UV configuration. Becomes a
+ * custom SubPart template: placements reference {@link subPartId} via
+ * subPartTemplateId, exactly like a Core template id. The generated GLB node is
+ * named {@link subPartId}.
  */
 export interface CustomMesh {
   /** Stable unique id (IndexedDB key for the generated GLB), e.g. "mesh_ab12cd". */
@@ -339,8 +355,12 @@ export interface CustomMesh {
   subPartId: string
   /** The primitive shape + parameters. */
   primitive: PrimitiveSpec
-  /** Id of the {@link CustomTexture} applied as diffuse (empty = untextured). */
-  textureId: string
+  /**
+   * Per-face texture + UV configuration. Keys are primitive-kind-specific face names
+   * from PRIMITIVE_FACE_KEYS ('right'/'left'/… for box, 'side'/'top'/'bottom' for
+   * cylinder, 'all' for sphere/plane). Absent keys → untextured face, default UVs.
+   */
+  faceTextures: Partial<Record<string, FaceTextureConfig>>
 }
 
 /** The full Part being assembled in the editor. */

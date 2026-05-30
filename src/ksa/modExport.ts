@@ -2,7 +2,8 @@ import type { EditingPart } from './types'
 import { serializeGameData, serializePart } from './partXmlSerializer'
 import { serializeAssets, type AssetsSubPartPlan } from './assetsXmlSerializer'
 import { buildMeshAtlasGlb } from './exportGlb'
-import { buildPrimitiveGeometry } from '../three/primitives'
+import { buildPrimitiveGeometry, PRIMITIVE_FACE_KEYS, applyFaceUvTransforms } from '../three/primitives'
+import { getPrimaryTextureId } from '../state/customAssetStore'
 import { assetKeys, getAsset } from '../state/assetDb'
 import { createZip, type ZipEntry } from '../util/zip'
 import { encodeImageToKtx2 } from '../ktx/encodeKtx2'
@@ -119,9 +120,13 @@ export async function buildCustomBundle(part: EditingPart, base: string): Promis
 
   const binaries: { path: string; data: Uint8Array }[] = []
 
-  // One combined geometry GLB, mirroring a Core mesh atlas.
+  // One combined geometry GLB with UV transforms baked in, mirroring a Core mesh atlas.
   const meshAtlasPath = `Meshes/${base}_MeshAtlas.glb`
-  const nodes = meshes.map((m) => ({ name: m.subPartId, geometry: buildPrimitiveGeometry(m.primitive) }))
+  const nodes = meshes.map((m) => {
+    const geometry = buildPrimitiveGeometry(m.primitive)
+    applyFaceUvTransforms(geometry, PRIMITIVE_FACE_KEYS[m.primitive.kind], m.faceTextures)
+    return { name: m.subPartId, geometry }
+  })
   try {
     binaries.push({ path: meshAtlasPath, data: await buildMeshAtlasGlb(nodes) })
   } finally {
@@ -134,7 +139,9 @@ export async function buildCustomBundle(part: EditingPart, base: string): Promis
   for (const m of meshes) {
     let diffusePath: string | null = null
     let materialId: string | null = null
-    const tex = m.textureId ? texById.get(m.textureId) : undefined
+    // For KSA export, one material per SubPart — use the primary (first valid) face texture.
+    const primaryTexId = getPrimaryTextureId(m)
+    const tex = primaryTexId ? texById.get(primaryTexId) : undefined
     if (tex) {
       let rel = texPath.get(tex.id)
       if (!rel) {

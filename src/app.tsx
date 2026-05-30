@@ -10,6 +10,7 @@ import { WorkspaceLoadProgress } from './ui/LoadProgress'
 import { MeasurementInfo } from './ui/MeasurementInfo'
 import { MeasurementEditor } from './ui/MeasurementEditor'
 import { ContainerEditor } from './ui/ContainerEditor'
+import { ManageTexturesPanel } from './ui/ManageTexturesPanel'
 import { TransformHud } from './ui/TransformHud'
 import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys'
 import { HelpDialog } from './ui/hotkeys/HelpDialog'
@@ -69,6 +70,9 @@ function App() {
 
       {/* Editor for the active reference container (same placement as above). */}
       <ContainerEditor />
+
+      {/* Floating per-face texture editor for custom meshes. */}
+      <ManageTexturesPanel />
 
       {/* Bottom-left: live selection bounding-box dimensions. */}
       <MeasurementInfo />

@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import type {
   BoxParams,
   CylinderParams,
+  FaceTextureConfig,
   PlaneParams,
   PrimitiveKind,
   PrimitiveSpec,
@@ -83,3 +84,90 @@ export const PRIMITIVE_LABELS: Record<PrimitiveKind, string> = {
 }
 
 export const PRIMITIVE_KINDS: readonly PrimitiveKind[] = ['box', 'cylinder', 'sphere', 'plane']
+
+/**
+ * Ordered face-group key names for each primitive kind. The order matches
+ * Three.js geometry group materialIndex values for that primitive:
+ *   Box      → right(+X), left(−X), top(+Y), bottom(−Y), front(+Z), back(−Z)
+ *   Cylinder → side, top, bottom  (CylinderGeometry group order)
+ *   Sphere   → all  (no groups; treated as a single surface)
+ *   Plane    → all  (no groups)
+ */
+export const PRIMITIVE_FACE_KEYS: Record<PrimitiveKind, readonly string[]> = {
+  box: ['right', 'left', 'top', 'bottom', 'front', 'back'],
+  cylinder: ['side', 'top', 'bottom'],
+  sphere: ['all'],
+  plane: ['all'],
+}
+
+/** Long label for each face key (e.g. "Right (+X)" for 'right'). */
+export const FACE_LABELS: Record<string, string> = {
+  right: 'Right (+X)',
+  left: 'Left (−X)',
+  top: 'Top (+Y)',
+  bottom: 'Bottom (−Y)',
+  front: 'Front (+Z)',
+  back: 'Back (−Z)',
+  side: 'Side',
+  all: 'All Faces',
+}
+
+/**
+ * Applies per-face UV scale + offset transforms to a BufferGeometry's UV attribute
+ * in-place. Face groups are mapped to face keys via materialIndex into faceKeys[].
+ *
+ * For geometries with no groups (sphere, plane) the 'all' key is applied to the
+ * entire UV buffer. For indexed geometries a per-group visited-vertex set handles
+ * shared indices within a group correctly (Three.js primitives don't share vertices
+ * between groups, but do share within a group's triangles).
+ *
+ * Faces with no config entry, or with identity scale+zero offset, are skipped.
+ */
+export function applyFaceUvTransforms(
+  geometry: THREE.BufferGeometry,
+  faceKeys: readonly string[],
+  configs: Partial<Record<string, FaceTextureConfig>>,
+): void {
+  const uvAttr = geometry.getAttribute('uv') as THREE.BufferAttribute | undefined
+  if (!uvAttr) return
+
+  if (geometry.groups.length === 0) {
+    const cfg = configs['all']
+    if (!cfg) return
+    const { x: sx, y: sy } = cfg.uvScale
+    const { x: ox, y: oy } = cfg.uvOffset
+    if (sx === 1 && sy === 1 && ox === 0 && oy === 0) return
+    for (let i = 0; i < uvAttr.count; i++) {
+      uvAttr.setXY(i, uvAttr.getX(i) * sx + ox, uvAttr.getY(i) * sy + oy)
+    }
+    uvAttr.needsUpdate = true
+    return
+  }
+
+  const idx = geometry.index
+  for (const group of geometry.groups) {
+    const key = faceKeys[group.materialIndex]
+    if (!key) continue
+    const cfg = configs[key]
+    if (!cfg) continue
+    const { x: sx, y: sy } = cfg.uvScale
+    const { x: ox, y: oy } = cfg.uvOffset
+    if (sx === 1 && sy === 1 && ox === 0 && oy === 0) continue
+
+    const end = group.start + group.count
+    if (idx) {
+      const visited = new Set<number>()
+      for (let i = group.start; i < end; i++) {
+        const vi = idx.getX(i)
+        if (visited.has(vi)) continue
+        visited.add(vi)
+        uvAttr.setXY(vi, uvAttr.getX(vi) * sx + ox, uvAttr.getY(vi) * sy + oy)
+      }
+    } else {
+      for (let i = group.start; i < end; i++) {
+        uvAttr.setXY(i, uvAttr.getX(i) * sx + ox, uvAttr.getY(i) * sy + oy)
+      }
+    }
+    uvAttr.needsUpdate = true
+  }
+}

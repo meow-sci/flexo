@@ -24,6 +24,7 @@ import {
   setSelectedPlacements,
 } from '../state/editorStore'
 import { CONNECTOR_LAYER_ID, type SubPartPlacement } from '../ksa/types'
+import { setManagingMeshId } from '../state/customAssetStore'
 
 const rowClass = ({ isSelected, isFocusVisible }: { isSelected: boolean; isFocusVisible: boolean }) =>
   [
@@ -176,13 +177,15 @@ export function PlacementList() {
 /**
  * Per-row menu for a placed SubPart: a "⋮" button opening a menu with "Change
  * Layer" (a submenu of layers) and "Delete" (guarded by a confirm dialog). Acts
- * on this row's SubPart by index, independent of the multi-selection.
+ * on this row's SubPart by index, independent of the multi-selection. When the
+ * placement is a custom mesh, also offers "Manage Textures".
  */
 function SubPartMenu({ index, placement }: { index: number; placement: SubPartPlacement }) {
   const part = useStore($part)
   const [confirmDelete, setConfirmDelete] = useState(false)
   // SubParts don't belong in the built-in Connectors layer.
   const layers = part.layers.filter((l) => l.id !== CONNECTOR_LAYER_ID)
+  const customMesh = part.customMeshes.find((m) => m.subPartId === placement.subPartTemplateId)
 
   return (
     <>
@@ -198,8 +201,13 @@ function SubPartMenu({ index, placement }: { index: number; placement: SubPartPl
         >
           <MoreVertical className="size-4" />
         </Button>
-        <Popover placement="bottom end" className="w-44">
+        <Popover placement="bottom end" className="w-48">
           <Menu>
+            {customMesh && (
+              <MenuItem onAction={() => setManagingMeshId(customMesh.id)}>
+                Manage Textures
+              </MenuItem>
+            )}
             <SubmenuTrigger>
               <MenuItem>Change Layer</MenuItem>
               <Popover className="w-44">
@@ -226,7 +234,7 @@ function SubPartMenu({ index, placement }: { index: number; placement: SubPartPl
         isOpen={confirmDelete}
         onOpenChange={setConfirmDelete}
         title="Delete SubPart"
-        text={`Delete “${placement.instanceId}”?`}
+        text={`Delete "${placement.instanceId}"?`}
         confirmLabel="Delete"
         confirmVariant="danger"
         onConfirm={() => removePlacement(index)}

@@ -14,9 +14,6 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   SectionTitle,
-  MenuTrigger,
-  Menu,
-  MenuItem,
 } from './kit'
 import {
   $measureTool,
@@ -59,7 +56,8 @@ const BOUNDS_MODES: { id: BoundsMode; label: string }[] = [
   { id: 'oriented', label: 'Oriented' },
 ]
 
-function MeasureContent() {
+/** `close` dismisses the surrounding popover (desktop) or sheet (mobile). */
+function MeasureContent({ close }: { close: () => void }) {
   const settings = useStore($measurementSettings)
   const tool = useStore($measureTool)
   const containerSettings = useStore($containerSettings)
@@ -109,13 +107,22 @@ function MeasureContent() {
 
       <section className="flex flex-col gap-2">
         <SectionTitle>Tools</SectionTitle>
-        <Button size="sm" onPress={() => addReferenceLine()}>
+        <Button
+          size="sm"
+          onPress={() => {
+            addReferenceLine()
+            close()
+          }}
+        >
           Add reference line
         </Button>
         <Button
           size="sm"
           variant={tool === 'point' ? 'primary' : undefined}
-          onPress={() => setMeasureTool(tool === 'point' ? 'none' : 'point')}
+          onPress={() => {
+            setMeasureTool(tool === 'point' ? 'none' : 'point')
+            close()
+          }}
         >
           {tool === 'point' ? 'Point-to-point: click 2 points…' : 'Point-to-point'}
         </Button>
@@ -123,24 +130,27 @@ function MeasureContent() {
 
       <section className="flex flex-col gap-1">
         <SectionTitle>Measurements</SectionTitle>
-        <MeasurementList />
+        <MeasurementList onSelect={close} />
       </section>
 
       <section className="flex flex-col gap-2">
         <SectionTitle>Reference containers</SectionTitle>
-        <MenuTrigger>
-          <Button size="sm">Add container…</Button>
-          <Popover placement="bottom start" className="w-40">
-            <Menu onAction={(key) => addContainer(key as ReferenceShape)}>
-              {SHAPES.map((s) => (
-                <MenuItem key={s.id} id={s.id}>
-                  {s.label}
-                </MenuItem>
-              ))}
-            </Menu>
-          </Popover>
-        </MenuTrigger>
-        <ContainerList />
+        <div className="flex gap-2">
+          {SHAPES.map((s) => (
+            <Button
+              key={s.id}
+              size="sm"
+              className="flex-1"
+              onPress={() => {
+                addContainer(s.id)
+                close()
+              }}
+            >
+              {s.label}
+            </Button>
+          ))}
+        </div>
+        <ContainerList onSelect={close} />
         <div className="flex items-center gap-2">
           <span className="w-20 shrink-0 text-sm text-fg-muted">Warn check</span>
           <ToggleButtonGroup
@@ -198,10 +208,14 @@ export function MeasureButton({ isOpen: externalOpen, onOpenChange }: MeasureBut
     return (
       <Modal isOpen={externalOpen!} onOpenChange={onOpenChange} isDismissable variant="sheet">
         <Dialog>
-          <DialogHeader title="Measure" onClose={() => onOpenChange?.(false)} />
-          <div className="flex flex-col gap-4 overflow-auto p-3">
-            <MeasureContent />
-          </div>
+          {({ close }) => (
+            <>
+              <DialogHeader title="Measure" onClose={close} />
+              <div className="flex flex-col gap-4 overflow-auto p-3">
+                <MeasureContent close={close} />
+              </div>
+            </>
+          )}
         </Dialog>
       </Modal>
     )
@@ -212,7 +226,7 @@ export function MeasureButton({ isOpen: externalOpen, onOpenChange }: MeasureBut
       <ToolbarButton>Measure</ToolbarButton>
       <Popover placement="bottom" className="w-[min(22rem,calc(100vw-1.5rem))]">
         <PopoverDialog className="flex max-h-[80vh] flex-col gap-4 overflow-auto p-3">
-          <MeasureContent />
+          {({ close }) => <MeasureContent close={close} />}
         </PopoverDialog>
       </Popover>
     </DialogTrigger>

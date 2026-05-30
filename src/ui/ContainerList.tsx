@@ -27,7 +27,7 @@ const SHAPE_LABEL: Record<ReferenceShape, string> = {
  * List of placed reference containers. Selecting a row makes it active (opening
  * the editor); per-row lock and delete. Mirrors {@link MeasurementList}.
  */
-export function ContainerList() {
+export function ContainerList({ onSelect }: { onSelect?: () => void } = {}) {
   const containers = useStore($containers)
   const activeId = useStore($activeContainerId)
 
@@ -37,7 +37,9 @@ export function ContainerList() {
 
   const onSelectionChange = (keys: Selection) => {
     if (keys === 'all') return
-    setActiveContainer(([...keys][0] as string) ?? null)
+    const id = ([...keys][0] as string) ?? null
+    setActiveContainer(id)
+    if (id) onSelect?.()
   }
 
   return (

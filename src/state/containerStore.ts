@@ -1,5 +1,6 @@
 import { atom } from 'nanostores'
 import { persistentJSON } from '@nanostores/persistent'
+import { randomId } from './ids'
 import type { Vec3 } from '../ksa/types'
 
 /**
@@ -76,7 +77,7 @@ export const $activeContainerId = atom<string | null>(null)
 export const $containerGizmoMode = atom<ContainerGizmoMode>('translate')
 
 function newId(): string {
-  return crypto.randomUUID()
+  return randomId()
 }
 
 /**

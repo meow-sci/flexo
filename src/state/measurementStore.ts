@@ -1,5 +1,6 @@
 import { atom } from 'nanostores'
 import { persistentJSON } from '@nanostores/persistent'
+import { randomId } from './ids'
 import type { Vec3 } from '../ksa/types'
 
 /**
@@ -79,7 +80,7 @@ export const $activeEndpoint = atom<'a' | 'b'>('b')
 export const $selectionBounds = atom<SelectionBounds | null>(null)
 
 function newId(): string {
-  return crypto.randomUUID()
+  return randomId()
 }
 
 /** Adds a measurement and makes it the active (editable) one. Returns its id. */

@@ -18,7 +18,7 @@ import { formatLength } from '../measure/format'
  * makes it the active measurement (opening the editor); per-row lock and delete.
  * Mirrors {@link PlacementList}'s react-aria GridList pattern.
  */
-export function MeasurementList() {
+export function MeasurementList({ onSelect }: { onSelect?: () => void } = {}) {
   const measurements = useStore($measurements)
   const activeId = useStore($activeMeasurementId)
   const { unit } = useStore($measurementSettings)
@@ -29,7 +29,9 @@ export function MeasurementList() {
 
   const onSelectionChange = (keys: Selection) => {
     if (keys === 'all') return
-    setActiveMeasurement(([...keys][0] as string) ?? null)
+    const id = ([...keys][0] as string) ?? null
+    setActiveMeasurement(id)
+    if (id) onSelect?.()
   }
 
   return (

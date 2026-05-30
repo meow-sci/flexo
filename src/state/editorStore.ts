@@ -34,6 +34,13 @@ export interface SnapSettings {
   rotateDeg?: number
 }
 
+/**
+ * The single world axis the arrow-key nudge tool moves along: ↑/↓ translate the
+ * selection by ±step on this axis, ←/→ cycle which axis is active (see
+ * src/three/nudgeSelection.ts). Ephemeral UI state.
+ */
+export type NudgeAxis = 'x' | 'y' | 'z'
+
 export interface PlacementTransform {
   position: Vec3
   rotation: EulerXYZ
@@ -78,6 +85,10 @@ export const $selectedConnectorIndex = computed(
 export const $activeLayerId = atom<string>(DEFAULT_LAYER_ID)
 export const $toolMode = atom<ToolMode>('translate')
 export const $snap = atom<SnapSettings>({})
+/** Active nudge axis. Default 'y' — the vertical/world-up axis. */
+export const $nudgeAxis = atom<NudgeAxis>('y')
+/** Distance (m) each arrow-key nudge moves the selection. Adjusted by the M keys. */
+export const $nudgeStep = atom<number>(0.1)
 export const $canUndo = atom(false)
 export const $canRedo = atom(false)
 /** Description of the action that will be undone next (empty when nothing to undo). */
@@ -606,6 +617,28 @@ export function updateConnectorTransform(index: number, t: PlacementTransform): 
 }
 
 /**
+ * Applies several connector transforms in a single store update (one subscriber
+ * fire). The connector analogue of {@link updatePlacementTransforms}, used for
+ * bulk transforms of a multi-connector selection. Does NOT push undo — the caller
+ * pushes once at interaction start.
+ */
+export function updateConnectorTransforms(
+  updates: readonly { index: number; transform: PlacementTransform }[],
+): void {
+  if (updates.length === 0) return
+  const current = $part.get()
+  const part = clone(current)
+  for (const { index, transform } of updates) {
+    if (index < 0 || index >= part.connectors.length) continue
+    const c = part.connectors[index]
+    c.position = { ...transform.position }
+    c.rotation = { ...transform.rotation }
+    c.scale = { ...transform.scale }
+  }
+  $part.set(part)
+}
+
+/**
  * Updates the transform of whichever entity is selected (SubPart or connector).
  * No undo — the caller pushes once at interaction start.
  */
@@ -1020,4 +1053,70 @@ export function setToolMode(mode: ToolMode): void {
 
 export function setSnap(snap: SnapSettings): void {
   $snap.set(snap)
+}
+
+// ---------------------------------------------------------------------------
+// Nudge plane / step (ephemeral tool state, like toolMode — not in undo history).
+// ---------------------------------------------------------------------------
+
+const NUDGE_AXIS_ORDER: readonly NudgeAxis[] = ['x', 'y', 'z']
+/**
+ * Floor on the nudge step — also the finest increment granularity (1 mm). The
+ * step adapts its increment to its own magnitude (see below) but never goes finer
+ * than this, which also bounds it to 3 decimals for clean display/rounding.
+ */
+export const MIN_NUDGE_STEP = 0.001
+
+export function setNudgeAxis(axis: NudgeAxis): void {
+  $nudgeAxis.set(axis)
+}
+
+/**
+ * Cycles the nudge axis through x → y → z (the ←/→ hotkeys and the status-bubble
+ * click). `direction` 1 steps forward, -1 backward; wraps around either way.
+ */
+export function cycleNudgeAxis(direction: 1 | -1 = 1): void {
+  const order = NUDGE_AXIS_ORDER
+  const i = order.indexOf($nudgeAxis.get())
+  $nudgeAxis.set(order[(i + direction + order.length) % order.length])
+}
+
+/** Largest power of ten ≤ v (v > 0) — the increment for v's current decade. */
+function decade(v: number): number {
+  let d = 1
+  if (v >= 1) {
+    while (d * 10 <= v * (1 + 1e-9)) d *= 10
+  } else {
+    while (d > v * (1 + 1e-9)) d /= 10
+  }
+  return d
+}
+
+/** Rounds to 3 decimals ({@link MIN_NUDGE_STEP} granularity) to kill float drift. */
+function roundStep(v: number): number {
+  return Math.round(v * 1000) / 1000
+}
+
+/**
+ * Increases the nudge step by one decade-sized increment (the M hotkey). The
+ * increment tracks the value's magnitude — 0.1→0.2…0.9→1→2 — and below a decade
+ * boundary it's correspondingly finer (0.09→0.1 via 0.01). Symmetric with
+ * {@link decrementNudgeStep}.
+ */
+export function incrementNudgeStep(): void {
+  const v = $nudgeStep.get()
+  $nudgeStep.set(roundStep(v + decade(v)))
+}
+
+/**
+ * Decreases the nudge step by one decade-sized increment (Shift+M). At the bottom
+ * of a decade the increment refines to 1/10 (0.1→0.09, 0.01→0.009), clamped at
+ * {@link MIN_NUDGE_STEP}.
+ */
+export function decrementNudgeStep(): void {
+  const v = $nudgeStep.get()
+  const d = decade(v)
+  // When v sits at its decade floor (v ≈ d), step down by the finer 1/10 increment.
+  const increment = Math.abs(v - d) < d * 1e-6 ? d / 10 : d
+  $nudgeStep.set(Math.max(MIN_NUDGE_STEP, roundStep(v - increment)))
 }

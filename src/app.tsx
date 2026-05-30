@@ -9,6 +9,9 @@ import { MobileInspector } from './ui/MobileInspector'
 import { WorkspaceLoadProgress } from './ui/LoadProgress'
 import { MeasurementInfo } from './ui/MeasurementInfo'
 import { MeasurementEditor } from './ui/MeasurementEditor'
+import { NudgeToolbar } from './ui/NudgeToolbar'
+import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys'
+import { HelpDialog } from './ui/hotkeys/HelpDialog'
 import { useIsPhone } from './ui/kit'
 import { ensureCatalogLoaded } from './state/catalogStore'
 import { ensurePartCatalogLoaded } from './state/partCatalogStore'
@@ -23,6 +26,10 @@ function App() {
 
   return (
     <div className="fixed inset-0 bg-canvas text-fg">
+      {/* Global keyboard shortcuts (no UI) + the help overlay they open. */}
+      <GlobalHotkeys />
+      <HelpDialog />
+
       <ViewportCanvas />
 
       {/* Top: floating, centered editor toolbar on desktop/tablet; full-width
@@ -64,6 +71,9 @@ function App() {
 
       {/* Bottom-center: live download progress for HDR environments. */}
       <WorkspaceLoadProgress />
+
+      {/* Bottom-center bubble: active nudge plane + step (arrow-key tool). */}
+      <NudgeToolbar />
     </div>
   )
 }

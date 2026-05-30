@@ -14,4 +14,25 @@
     - anything visible and unlocked? 
     - multiple layers of parts in list simultaneously to ease selection? (including connectors?)
 - orient a part at a orthagonal vector to a point on a surface
-    - start a right click/context menu of specific features?
+    - start a right click/context menu of specific features?  floating FAB button for mobile?
+    - connectors too
+- more axis rotations
+  - add Q/E to rotation for third axis
+  - add to bottom info bar the QE / WS / AD axis information, use a colored arrow icon for each that matches the axis colors and use an arrow icon which points in the same direction as the given plane (assuming the default camera orientation to the axis, which is Y up/down, Z is forward/back and X is left/right for lack of a better word).  
+    - use "r" as a hotkey to rotate what axis each keypair is assigned to
+    - use "f" as a hotkey to change the rotation increment by 15 deg and shift "f" to decrease it
+- can we render the kitten meshes?
+- measurement features
+  - add visual bounding container for visual reference.  set dimensions and location (inputs and gizmos).
+    - shapes
+      - rect
+      - cylinder
+      - sphere
+    - line color picker (including alpha)
+    - line thickness picker
+    - toggle mode which shows a red (color picker available) translucent plane (default to red 0.2 alpha) when the bounding container has meshes that are outside of its bounds.  the idea is that it shows a working area to stay inside of and shows a warning when exceeded.  for the rect, if we can show red on just the plane violated that would be nice, for cylinder that would be top/bottom/side as 3 separate things to highlight, sphere would be the whole sphere highlighted
+
+- change settings cog to be a burger menu that shows a menu
+  - move settings to be a menu item
+  - move shortcut help here as "Shortcuts"
+  - move the initial "🔥 Reset Everything 🔥" here (still show the confirm dialog once pressed)

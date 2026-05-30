@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
-import { Settings } from 'lucide-react'
+import { Settings, Keyboard } from 'lucide-react'
 import {
   Modal,
   Dialog,
@@ -11,6 +11,7 @@ import {
   ConfirmDialog,
 } from './kit'
 import { $connectorSettings, setConnectorSettings } from '../state/settingsStore'
+import { openHelp } from '../state/helpStore'
 import { PreciseNumberInput } from './PreciseNumberInput'
 
 /**
@@ -66,7 +67,20 @@ export function SettingsButton() {
         <Dialog>
           <DialogHeader title="Settings" onClose={() => setOpen(false)} />
           <div className="flex flex-col gap-3 overflow-auto p-4">
-            <SectionTitle>Connectors</SectionTitle>
+            <SectionTitle>Help</SectionTitle>
+            <Button
+              variant="secondary"
+              size="md"
+              onPress={() => {
+                setOpen(false)
+                openHelp()
+              }}
+            >
+              <Keyboard size={16} />
+              Keyboard Shortcuts
+            </Button>
+
+            <SectionTitle className="mt-4">Connectors</SectionTitle>
             <label className="flex items-center justify-between gap-3">
               <span className="text-sm text-fg-muted">Connector size</span>
               <div className="flex items-center gap-1">

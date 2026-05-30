@@ -7,6 +7,10 @@ it's a web based interface that exposes a 3d work area for importing SubParts, a
 - the workspace can be serialized and saved for restoration as a Part project
 - the data can be exported to KSA compliance XML data suitable to include in a KSA game mod to use them in-game
 
+# agent instruction
+
+- MUST prefer simple commands.  complex compound commands with dynamic parts that are not statically analyzable cannot be added to claude or ai agent approval lists.  complex commands allowed only if necessary. run multiple simple commands sequentially when possible.
+
 # repository layout
 
 - `src/` - the flexo web app source (TypeScript). Layered: `src/ksa/` (pure domain logic + XML + catalog), `src/state/` (nanostores editor state), `src/three/` (three.js viewport/scene/materials), `src/ui/` (React + cladd panels). See [docs/architecture.md](docs/architecture.md).

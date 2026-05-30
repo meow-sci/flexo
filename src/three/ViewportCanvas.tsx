@@ -22,5 +22,16 @@ export function ViewportCanvas() {
     return () => scene.dispose()
   }, [])
 
-  return <div ref={hostRef} className="absolute inset-0" />
+  // `tabIndex={-1}` + focus-on-pointerdown makes the viewport the focus owner
+  // whenever the user interacts with the 3D scene (selecting, orbiting). That keeps
+  // global editor hotkeys that overlap react-aria's keyboard nav — the arrow-key
+  // nudges especially — from being swallowed by a still-focused toolbar/menu/list.
+  return (
+    <div
+      ref={hostRef}
+      tabIndex={-1}
+      onPointerDown={() => hostRef.current?.focus()}
+      className="absolute inset-0 outline-none"
+    />
+  )
 }

@@ -6,13 +6,20 @@ import { Modal, Dialog, DialogHeader, Button, Select, ListBoxItem, TextField, us
 import { $part } from '../state/editorStore'
 import { $managingMeshId, setManagingMeshId, updateMeshFaceConfig } from '../state/customAssetStore'
 import { PRIMITIVE_FACE_KEYS, FACE_LABELS } from '../three/primitives'
-import type { FaceTextureConfig } from '../ksa/types'
+import type { FaceTextureConfig, TextureWrap } from '../ksa/types'
 
 const DEFAULT_CONFIG: FaceTextureConfig = {
   textureId: '',
   uvScale: { x: 1, y: 1 },
   uvOffset: { x: 0, y: 0 },
+  wrap: 'repeat',
 }
+
+const WRAP_LABELS: { id: TextureWrap; label: string }[] = [
+  { id: 'repeat', label: 'Tile (repeat)' },
+  { id: 'mirror', label: 'Mirror' },
+  { id: 'clamp', label: 'Stretch edge' },
+]
 
 /**
  * Floating panel for per-face texture + UV configuration on a custom mesh.
@@ -141,9 +148,27 @@ function PanelContent({
         ))}
       </Select>
 
+      {/* Wrap mode — how the texture behaves where UVs exceed 0–1 (scale > 1, or
+          an offset that pushes past an edge). Disabled when no texture is set. */}
+      <Select
+        label="Wrap"
+        selectedKey={currentConfig.wrap ?? 'repeat'}
+        onSelectionChange={(k) => update(selectedFace, { wrap: k as TextureWrap })}
+        isDisabled={!currentConfig.textureId}
+      >
+        {WRAP_LABELS.map(({ id, label }) => (
+          <ListBoxItem key={id} id={id}>
+            {label}
+          </ListBoxItem>
+        ))}
+      </Select>
+
       {/* UV Scale */}
       <div className="flex flex-col gap-1">
         <span className="text-xs text-fg-muted">UV Scale</span>
+        <p className="text-[11px] leading-snug text-fg-subtle">
+          &gt;1 tiles the image, &lt;1 zooms into a region (pan it with offset).
+        </p>
         <div className="grid grid-cols-2 gap-2">
           <UvNumberField
             label="X"

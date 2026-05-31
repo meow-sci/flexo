@@ -331,11 +331,24 @@ export interface CustomTexture {
 export interface FaceTextureConfig {
   /** Id of the {@link CustomTexture} to use on this face (empty = untextured). */
   textureId: string
-  /** UV tiling scale. { x: 1, y: 1 } = no tiling (default). */
+  /**
+   * UV scale. { x: 1, y: 1 } = the whole image fills the face (default).
+   * Values > 1 tile the image (e.g. 3 → 3×3 repeats, honoring {@link wrap});
+   * values < 1 zoom into a sub-region (combine with {@link uvOffset} to pan).
+   */
   uvScale: { x: number; y: number }
-  /** UV offset (translation). { x: 0, y: 0 } = no offset (default). */
+  /** UV offset (translation), used to pan the sampled region. { x: 0, y: 0 } = no offset (default). */
   uvOffset: { x: number; y: number }
+  /**
+   * How the texture samples where UVs fall outside 0–1 (scale > 1, or an offset
+   * that pushes past an edge): 'repeat' tiles, 'mirror' tiles flipped each tile
+   * (seamless), 'clamp' stretches the edge pixels. Defaults to 'repeat' when absent.
+   */
+  wrap?: TextureWrap
 }
+
+/** UV wrap mode for a textured face — how samples outside the 0–1 range behave. */
+export type TextureWrap = 'repeat' | 'mirror' | 'clamp'
 
 /**
  * A user-created primitive mesh + per-face texture/UV configuration. Becomes a

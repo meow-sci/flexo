@@ -1,7 +1,8 @@
 import * as THREE from 'three'
 import type { CatalogSubPart } from '../ksa/catalog'
+import type { TextureWrap } from '../ksa/types'
 import { isTextureSupported } from './textureSupport'
-import { loadTexture } from './TextureCache'
+import { loadTexture, loadWrappedTexture } from './TextureCache'
 import { applyKsaShaderPatches } from './normalMapPatch'
 
 /**
@@ -25,8 +26,11 @@ export function makeFlatMaterial(): THREE.MeshStandardMaterial {
 }
 
 /** Builds a diffuse-only material for a single custom-mesh face (v1 custom assets). */
-export async function buildCustomFaceMaterial(ktx2Url: string): Promise<THREE.MeshStandardMaterial> {
-  const texture = await loadTexture(ktx2Url, 'srgb')
+export async function buildCustomFaceMaterial(
+  ktx2Url: string,
+  wrap: TextureWrap = 'repeat',
+): Promise<THREE.MeshStandardMaterial> {
+  const texture = await loadWrappedTexture(ktx2Url, 'srgb', wrap)
   return new THREE.MeshStandardMaterial({ map: texture, metalness: 0.1, roughness: 0.7 })
 }
 

@@ -118,7 +118,7 @@ async function refreshCatalog(): Promise<void> {
         const texId = ft[key]?.textureId
         const ktx2Url = texId ? textureKtx2Urls.get(texId) : undefined
         if (ktx2Url) {
-          materials.push(await buildCustomFaceMaterial(ktx2Url))
+          materials.push(await buildCustomFaceMaterial(ktx2Url, ft[key]?.wrap ?? 'repeat'))
         } else {
           materials.push(makeFlatMaterial())
         }

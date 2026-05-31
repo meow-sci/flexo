@@ -103,7 +103,7 @@
   - NOTE: a refresh of the webapp renders the mesh instances it, so it might just be a simple 3d viewport refresh trigger needed?
 
 
-
+- when clicking in 3d viewport and adding to selection, ensure that the selected subpart is scrolled into view in the asset grid list
 - emissives ... inanimate carbon rod wen?
 - engine building with combustion type control
 - make kittens into SubParts + Parts.. ? with connectors
@@ -122,3 +122,6 @@
     - connectors too
 - prettyXml is super janky, look at pebkac for how i did it there for a DOM/Element native solution
 
+
+default mesh selection color: fff266 / 35%
+default mesh for kittens: ff00f7 / 35%

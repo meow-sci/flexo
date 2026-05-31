@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '@nanostores/react'
-import { Trash2, Plus, Crosshair } from 'lucide-react'
-import { Button, TextField, Select, ListBoxItem, Slider, Checkbox, DisclosureSection, cn } from './kit'
-import { $part, pushUndo } from '../state/editorStore'
+import { Trash2, Plus, Crosshair, ChevronLeft, Move3d, RotateCcw } from 'lucide-react'
+import { Button, TextField, Select, ListBoxItem, Slider, Checkbox, cn } from './kit'
+import { $part, $toolMode, pushUndo } from '../state/editorStore'
 import { $selectedPlacements } from '../state/selectors'
 import {
   $activeAnimation,
@@ -25,6 +25,7 @@ import {
   removeKeyframe,
   setKeyframeTime,
   setJointPose,
+  selectKeyframeForEditing,
   setSolarTracking,
 } from '../state/animationStore'
 import { isAnimationExportable } from '../ksa/animationNaming'
@@ -36,6 +37,13 @@ const DEG2RAD = Math.PI / 180
 function fmt(n: number): string {
   if (!Number.isFinite(n)) return '0'
   return String(Math.round(n * 1e5) / 1e5)
+}
+
+/** Clears the active animation and its joint/keyframe sub-selection (back to the list). */
+function closeAnimation(): void {
+  $activeAnimationId.set(null)
+  $activeJointId.set(null)
+  $editKeyframeId.set(null)
 }
 
 /** A draft-aware numeric field (free-types while focused, reflects the store otherwise). */
@@ -73,16 +81,34 @@ function NumberField(props: {
   )
 }
 
-/** The Animations authoring section (collapsible). Lives in the inspector so the
- *  3D viewport stays visible for the live preview scrubber. */
-export function AnimationsPanel() {
+/**
+ * The full-sidebar Animations editor (inspector 'anim' mode). Shows the animation
+ * list on top with the active animation's editor filling the space below. Escape
+ * unwinds the deepest selection (keyframe → joint → animation). The 3D viewport
+ * drives the live preview + pose gizmos; this panel owns the structural editing.
+ */
+export function AnimationPanel() {
   const part = useStore($part)
   const active = useStore($activeAnimation)
   const exportableCount = part.animations.filter(isAnimationExportable).length
 
+  // Escape unwinds keyframe → joint → animation (ignored while typing in a field).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
+      if ($editKeyframeId.get()) $editKeyframeId.set(null)
+      else if ($activeJointId.get()) $activeJointId.set(null)
+      else if ($activeAnimationId.get()) closeAnimation()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   return (
-    <DisclosureSection title="Animations" badge={part.animations.length || ''}>
-      <div className="flex flex-col gap-1">
+    <div className="flex h-full min-h-0 flex-col gap-2 rounded-xl border border-border bg-panel p-2">
+      <div className="flex max-h-44 shrink-0 flex-col gap-1 overflow-auto">
         {part.animations.map((anim) => (
           <AnimationRow key={anim.id} anim={anim} active={anim.id === active?.id} />
         ))}
@@ -94,17 +120,20 @@ export function AnimationsPanel() {
         <Button size="sm" className="self-start" onPress={() => addAnimation()}>
           <Plus size={13} /> Animation
         </Button>
+        {part.animations.length > 0 && exportableCount < part.animations.length && (
+          <p className="text-xs text-warning">
+            {part.animations.length - exportableCount} animation(s) won’t export yet — each needs a
+            joint with attached parts and a pose at t&gt;0.
+          </p>
+        )}
       </div>
 
-      {active && <AnimationEditor anim={active} />}
-
-      {part.animations.length > 0 && exportableCount < part.animations.length && (
-        <p className="text-xs text-warning">
-          {part.animations.length - exportableCount} animation(s) won’t export yet — each needs a
-          joint with attached parts and a pose at t&gt;0.
-        </p>
+      {active && (
+        <div className="min-h-0 flex-1 overflow-auto">
+          <AnimationEditor anim={active} />
+        </div>
       )}
-    </DisclosureSection>
+    </div>
   )
 }
 
@@ -118,8 +147,9 @@ function AnimationRow({ anim, active }: { anim: PartAnimation; active: boolean }
     >
       <button
         className="flex-1 truncate text-left text-sm"
-        onClick={() => $activeAnimationId.set(anim.id)}
-        title={anim.name}
+        // Re-clicking the open animation collapses it back to the list (deselect).
+        onClick={() => (active ? closeAnimation() : $activeAnimationId.set(anim.id))}
+        title={active ? 'Click to close' : anim.name}
       >
         {anim.name}
         {!isAnimationExportable(anim) && <span className="ml-1 text-xs text-fg-subtle">(draft)</span>}
@@ -138,17 +168,23 @@ function AnimationEditor({ anim }: { anim: PartAnimation }) {
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-panel-sunken p-2">
-      <TextField
-        size="sm"
-        aria-label="Animation name"
-        value={nameDraft ?? anim.name}
-        onFocus={() => setNameDraft(anim.name)}
-        onChange={(v) => setNameDraft(v)}
-        onBlur={() => {
-          if (nameDraft != null) renameAnimation(anim.id, nameDraft)
-          setNameDraft(null)
-        }}
-      />
+      <div className="flex items-center gap-1">
+        <Button size="sm" variant="ghost" aria-label="Back to animation list" onPress={closeAnimation}>
+          <ChevronLeft size={16} />
+        </Button>
+        <TextField
+          size="sm"
+          aria-label="Animation name"
+          className="flex-1"
+          value={nameDraft ?? anim.name}
+          onFocus={() => setNameDraft(anim.name)}
+          onChange={(v) => setNameDraft(v)}
+          onBlur={() => {
+            if (nameDraft != null) renameAnimation(anim.id, nameDraft)
+            setNameDraft(null)
+          }}
+        />
+      </div>
 
       <div className="flex items-end gap-2">
         <Select
@@ -303,14 +339,23 @@ function JointRow({
       <div className="flex items-center gap-1">
         <button
           className="shrink-0 text-fg-subtle hover:text-fg"
-          title="Select joint (edit its pivot/pose below)"
-          onClick={() => $activeJointId.set(joint.id)}
+          title={active ? 'Deselect joint' : 'Select joint (edit its pivot/pose)'}
+          // Toggle: re-clicking the active joint deselects it (and closes the pose editor).
+          onClick={() => {
+            if (active) {
+              $activeJointId.set(null)
+              $editKeyframeId.set(null)
+            } else {
+              $activeJointId.set(joint.id)
+            }
+          }}
         >
           <Crosshair size={14} className={active ? 'text-accent' : ''} />
         </button>
         <TextField
           size="sm"
           aria-label="Joint name"
+          className="flex-1"
           value={nameDraft ?? joint.name}
           onFocus={() => setNameDraft(joint.name)}
           onChange={(v) => setNameDraft(v)}
@@ -363,7 +408,7 @@ function JointRow({
           ))}
         </div>
       ) : (
-        <span className="text-xs text-fg-subtle">No parts attached — select parts in the viewport, then Attach.</span>
+        <span className="text-xs text-fg-subtle">No parts attached — use Mesh Picker, or select parts in the viewport then Attach.</span>
       )}
     </div>
   )
@@ -392,8 +437,10 @@ function KeyframeRow({ anim, kf, editing }: { anim: PartAnimation; kf: Animation
     <div className={cn('flex items-center gap-1 rounded-md border px-1.5 py-1', editing ? 'border-accent bg-accent/10' : 'border-border')}>
       <button
         className="flex-1 text-left text-sm"
-        onClick={() => $editKeyframeId.set(kf.id)}
-        title="Edit this pose (pins the preview here)"
+        // Selecting a pose auto-picks the gizmo tool (Move pivot for Rest, Rotate for
+        // t>0); re-clicking the open pose deselects it (back to free scrub).
+        onClick={() => (editing ? $editKeyframeId.set(null) : selectKeyframeForEditing(anim.id, kf.id))}
+        title={editing ? 'Click to stop editing' : 'Edit this pose (pins the preview here)'}
       >
         {isRest ? 'Rest' : `${fmt(kf.timeSec)}s`}
         {editing && <span className="ml-1 text-xs text-accent">editing</span>}
@@ -412,17 +459,18 @@ function KeyframeRow({ anim, kf, editing }: { anim: PartAnimation; kf: Animation
   )
 }
 
-/** Numeric pose editor for the active joint at the edited keyframe (the snapshot UX). */
+/** Numeric pose editor for the active joint at the edited keyframe (mirrors the 3D gizmo). */
 function PoseEditor({ anim }: { anim: PartAnimation }) {
   const jointId = useStore($activeJointId)
   const kfId = useStore($editKeyframeId)
+  const tool = useStore($toolMode)
   const joint = anim.joints.find((j) => j.id === jointId)
   const kf = anim.keyframes.find((k) => k.id === kfId)
   if (!joint || !kf) {
     return (
       <p className="rounded-md bg-panel px-2 py-1.5 text-xs text-fg-subtle">
-        Select a joint (◎) and a pose to edit its position/rotation here. The “Rest” pose is the
-        pivot/axis; later poses are where it moves to.
+        Select a joint (◎) and a pose to edit it. The <b>Rest</b> pose is the pivot/rotation
+        anchor — move it with the gizmo; later poses are where the joint swings to.
       </p>
     )
   }
@@ -442,6 +490,13 @@ function PoseEditor({ anim }: { anim: PartAnimation }) {
       <span className="text-xs">
         Posing <b>{joint.name}</b> @ {isRest ? 'Rest (pivot)' : `${fmt(kf.timeSec)}s`}
       </span>
+      <div className="flex items-center gap-1 text-xs text-fg-subtle">
+        {tool === 'rotate' ? <RotateCcw size={12} /> : <Move3d size={12} />}
+        <span>
+          Drag the 3D gizmo, or type below.
+          {isRest ? ' Rest = pivot/anchor.' : ''}
+        </span>
+      </div>
       <div className="flex flex-col gap-1">
         <span className="text-xs uppercase tracking-wide text-fg-subtle">
           {isRest ? 'Pivot position (m)' : 'Position (m)'}

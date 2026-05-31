@@ -1,9 +1,9 @@
 import { atom, computed } from 'nanostores'
-import type { AnimationMode, EditingPart, PartAnimation, SolarTrackingSpec, Transform } from '../ksa/types'
+import type { AnimationMode, EditingPart, PartAnimation, SolarTrackingSpec, Transform, Vec3 } from '../ksa/types'
 import { createPartAnimation, identityTransform } from '../ksa/types'
 import { sampleJointLocal } from '../ksa/animationRig'
 import { transformFromMatrix } from '../three/coords'
-import { $part, pushUndo } from './editorStore'
+import { $part, $toolMode, pushUndo } from './editorStore'
 
 /**
  * Document actions + ephemeral editor state for custom animations (see
@@ -34,6 +34,17 @@ export const $animPreviewU = atom<number>(0)
 export const $activeAnimation = computed([$part, $activeAnimationId], (part, id) =>
   id ? part.animations.find((a) => a.id === id) ?? null : null,
 )
+
+/**
+ * Selects a keyframe for pose editing and auto-picks the 3D gizmo tool: Move for the
+ * rest pivot (t=0, so a drag relocates the rotation anchor) and Rotate for a later
+ * pose (so a drag swings the joint). The user can still switch tools afterwards.
+ */
+export function selectKeyframeForEditing(animId: string, keyframeId: string): void {
+  $editKeyframeId.set(keyframeId)
+  const k = $activeAnimation.get()?.keyframes.find((x) => x.id === keyframeId)
+  if (k && $activeAnimationId.get() === animId) $toolMode.set(k.timeSec === 0 ? 'translate' : 'rotate')
+}
 
 // ── undo plumbing (mirrors customAssetStore.mutate, minus the atlas flag) ─────
 
@@ -269,6 +280,30 @@ export function setJointPose(animId: string, keyframeId: string, jointId: string
   stream((p) => {
     const k = findAnim(p, animId)?.keyframes.find((x) => x.id === keyframeId)
     if (k) k.poses[jointId] = { position: { ...pose.position }, rotation: { ...pose.rotation }, scale: { ...pose.scale } }
+  })
+}
+
+/**
+ * Moves a joint's PIVOT — its rest (t=0) position — by `delta`, carrying every
+ * keyframe's pose position along so the pivot relocates rigidly: the joint's whole
+ * translation curve shifts by the same amount. Because each SubPart's leaf offset is
+ * `W_J(0)⁻¹ · placement` (recomputed every frame), shifting all poses equally leaves
+ * the rendered geometry unchanged at every t — only the rotation anchor moves. This is
+ * the "draggable rotation anchor": drag the rest pivot to e.g. a hinge edge, then t>0
+ * rotations swing around it. STREAMING (caller pushes undo at gizmo-drag start).
+ */
+export function moveJointPivot(animId: string, jointId: string, delta: Vec3): void {
+  stream((p) => {
+    const a = findAnim(p, animId)
+    if (!a) return
+    for (const k of a.keyframes) {
+      const pose = k.poses[jointId]
+      if (pose) {
+        pose.position.x += delta.x
+        pose.position.y += delta.y
+        pose.position.z += delta.z
+      }
+    }
   })
 }
 

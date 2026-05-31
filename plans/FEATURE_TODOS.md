@@ -102,7 +102,8 @@
 - deleting a custom mesh removes assets from the layers but when you undo to restore teh custom mesh, the asset re-appears but is not rendered, so something is broken with the undo/redo restoration when a custom mesh is deleted.  even adding a new instance of the custom mesh after it's been restored from an undo/redo doesnt work properly (we show the mesh in the list, but nothing is rendered)
   - NOTE: a refresh of the webapp renders the mesh instances it, so it might just be a simple 3d viewport refresh trigger needed?
 
-
+- can we re-define IVA SubPart's as non-IVA/internal mode reusing same meshes and textures?
+- stickers? this probably has to be a standalone code mode to work properly...
 - when clicking in 3d viewport and adding to selection, ensure that the selected subpart is scrolled into view in the asset grid list
 - emissives ... inanimate carbon rod wen?
 - engine building with combustion type control

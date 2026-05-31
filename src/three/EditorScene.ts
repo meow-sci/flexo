@@ -46,6 +46,8 @@ import {
   updateMeasurement,
 } from '../state/measurementStore'
 import { $activeContainerId, setActiveContainer } from '../state/containerStore'
+import { $activeAnimationId, $animPreviewU, $editKeyframeId } from '../state/animationStore'
+import { previewOverrideMatrix } from '../ksa/animationRig'
 import { $connectorSettings, $selectionHighlight, type ConnectorSettings } from '../state/settingsStore'
 import { $cameraRestore, $cameraSnap, $grids } from '../state/viewStore'
 import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../state/layerStore'
@@ -82,6 +84,8 @@ export class EditorScene {
   private readonly containers: ContainerLayer
   private highlighted: SelectableObject[] = []
   private attachedObject: THREE.Object3D | null = null
+  /** Instance ids whose group transform is currently overridden by the animation preview. */
+  private animOverridden = new Set<string>()
   /**
    * Empty group the gizmo attaches to when 2+ SubParts are selected. Positioned
    * at the selection centroid with identity rotation/scale; the gizmo drives it
@@ -243,6 +247,16 @@ export class EditorScene {
       }),
     )
     this.unsubscribers.push($part.subscribe((part) => this.reconcile(part)))
+    // Animation preview: re-apply the joint-driven transform override when the active
+    // animation, scrub position, or edited keyframe changes ($part changes already
+    // re-apply via reconcile). Fires immediately on subscribe (harmless no-op at rest).
+    const onPreviewChange = () => {
+      this.applyAnimationPreview()
+      this.updateSelection() // re-evaluate gizmo suppression for posed animated parts
+    }
+    this.unsubscribers.push($activeAnimationId.subscribe(onPreviewChange))
+    this.unsubscribers.push($animPreviewU.subscribe(onPreviewChange))
+    this.unsubscribers.push($editKeyframeId.subscribe(onPreviewChange))
     this.unsubscribers.push($selectedIndices.subscribe(() => this.updateSelection()))
     this.unsubscribers.push($selectedConnectorIndices.subscribe(() => this.updateSelection()))
     this.unsubscribers.push($selectedKittenIndices.subscribe(() => this.updateSelection()))
@@ -317,6 +331,7 @@ export class EditorScene {
           this.objects.set(placement.instanceId, obj)
           this.applyLayerVisibility() // respect the layer's visibility for the new object
           this.updateSelection() // highlight/attach if this is the selected one
+          this.applyAnimationPreview() // re-apply if this object is animation-driven
         })
         .catch((err) => {
           this.building.delete(placement.instanceId)
@@ -328,6 +343,67 @@ export class EditorScene {
     this.reconcileKittens(part)
     this.applyLayerVisibility()
     this.updateSelection()
+    this.applyAnimationPreview()
+  }
+
+  /**
+   * Drives the active animation's attached SubParts to the previewed pose in the
+   * viewport (editor-only; never mutates the document). The effective time is the
+   * edited keyframe's time when posing, else the scrub slider mapped to [0,duration].
+   * Each attached SubPart's group matrix is set to W_J(t)·W_J(0)⁻¹·placement (the same
+   * transform KSA will render); everything else stays at its static placement.
+   *
+   * Reconcile resets every group to its placement first (via setPlacement), so this
+   * just overlays the overrides on top; previously-overridden ids are reverted when
+   * the animation changes/clears.
+   */
+  /** True when the preview shows a posed (non-rest) frame: editing a keyframe, or scrubbed past 0. */
+  private isPreviewPosed(): boolean {
+    if ($editKeyframeId.get()) return true
+    return $activeAnimationId.get() != null && $animPreviewU.get() > 1e-6
+  }
+
+  /** True when any selected SubPart is attached to a joint of the active animation. */
+  private selectedIsAnimated(): boolean {
+    const animId = $activeAnimationId.get()
+    const part = $part.get()
+    const anim = animId ? part.animations.find((a) => a.id === animId) : null
+    if (!anim) return false
+    const members = new Set<string>()
+    for (const j of anim.joints) for (const id of j.memberInstanceIds) members.add(id)
+    return $selectedIndices.get().some((i) => members.has(part.placements[i]?.instanceId ?? ''))
+  }
+
+  private applyAnimationPreview(): void {
+    const part = $part.get()
+    const byId = new Map(part.placements.map((p) => [p.instanceId, p]))
+    // Revert last round's overrides to their static placement.
+    for (const id of this.animOverridden) {
+      const obj = this.objects.get(id)
+      const placement = byId.get(id)
+      if (obj && placement) obj.setPlacement(placement)
+    }
+    this.animOverridden.clear()
+
+    const animId = $activeAnimationId.get()
+    const anim = animId ? part.animations.find((a) => a.id === animId) : null
+    if (!anim) return
+    const editKf = $editKeyframeId.get()
+    const pinned = editKf ? anim.keyframes.find((k) => k.id === editKf) : null
+    const u = Math.min(1, Math.max(0, $animPreviewU.get()))
+    const t = pinned ? pinned.timeSec : u * anim.durationSec
+
+    for (const joint of anim.joints) {
+      for (const instId of joint.memberInstanceIds) {
+        const obj = this.objects.get(instId)
+        const placement = byId.get(instId)
+        if (!obj || !placement) continue
+        const m = previewOverrideMatrix(anim, instId, t, placement)
+        if (!m) continue
+        m.decompose(obj.group.position, obj.group.quaternion, obj.group.scale)
+        this.animOverridden.add(instId)
+      }
+    }
   }
 
   /** Builds/updates/removes kitten visual aides (async, like SubParts). */
@@ -493,7 +569,11 @@ export class EditorScene {
       indices.some((i) => isLayerLocked(part.placements[i]?.layerId ?? '')) ||
       conIndices.some((ci) => isLayerLocked(part.connectors[ci]?.layerId ?? '')) ||
       kitIndices.some((ki) => isLayerLocked(part.kittens[ki]?.layerId ?? ''))
-    if (anyLocked) {
+    // While the preview shows a POSED frame (t>0 / editing), an animated SubPart's
+    // group sits at its animated transform — suppress the gizmo so a drag can't write
+    // the posed transform back as the static placement. At rest (t=0) it's safe.
+    const previewLocked = this.isPreviewPosed() && this.selectedIsAnimated()
+    if (anyLocked || previewLocked) {
       target = null
     } else if (multi) {
       this.repositionPivot()

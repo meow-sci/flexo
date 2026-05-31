@@ -5,6 +5,7 @@ import type {
   ConnectorFlag,
   EditingPart,
   EulerXYZ,
+  PartAnimation,
   PartGameData,
   SubPartPlacement,
   Tank,
@@ -12,6 +13,7 @@ import type {
   Vec3,
 } from './types'
 import { formatG6 } from './formatG6'
+import { animGlbPath, animModuleId, isAnimationExportable } from './animationNaming'
 
 /**
  * Serializes an EditingPart to KSA "Assets" Part XML, mirroring the rules in
@@ -69,7 +71,7 @@ export function serializePart(part: EditingPart): string {
  * <Flags> only when set), and the optional decoupler/docking-port/EVA-door.
  * Each piece is omitted entirely when empty/default.
  */
-export function serializeGameData(part: EditingPart): string {
+export function serializeGameData(part: EditingPart, base = ''): string {
   const doc = new DOMImplementation().createDocument(null, 'Assets', null)
   const assets = doc.documentElement!
   const gd = doc.createElement('PartGameData')
@@ -83,6 +85,11 @@ export function serializeGameData(part: EditingPart): string {
     const el = doc.createElement('EditorTag')
     el.setAttribute('Value', tag)
     gd.appendChild(el)
+  }
+
+  for (const anim of part.animations) {
+    if (!isAnimationExportable(anim)) continue
+    gd.appendChild(buildAnimationModuleElement(doc, anim, base))
   }
 
   if (game.customMass != null && game.customMass > 0) {
@@ -174,6 +181,43 @@ function buildTankElement(doc: XmlDocument, tank: Tank): XmlElement {
   el.appendChild(elWithAttr(doc, 'OuterRadius', 'M', formatG6(tank.outerRadiusM)))
   el.appendChild(elWithAttr(doc, 'WallThickness', 'Mm', formatG6(tank.wallThicknessMm)))
   return el
+}
+
+/**
+ * Builds a `<KeyframeAnimationModule>` for one animation: the `<KeyframeAnimation
+ * Path/Id>` reference (path matches what {@link buildCustomBundle} writes) plus an
+ * optional `<SolarTracking>` child. `ShowDeployRetract="true"` is emitted only in
+ * deploy/retract mode (its absence gives KSA's Actuate slider).
+ */
+function buildAnimationModuleElement(
+  doc: XmlDocument,
+  anim: PartAnimation,
+  base: string,
+): XmlElement {
+  const moduleId = animModuleId(base, anim)
+  const mod = doc.createElement('KeyframeAnimationModule')
+  mod.setAttribute('Id', moduleId)
+  if (anim.mode === 'deployRetract') mod.setAttribute('ShowDeployRetract', 'true')
+
+  const ref = doc.createElement('KeyframeAnimation')
+  ref.setAttribute('Path', animGlbPath(base, anim))
+  ref.setAttribute('Id', moduleId)
+  mod.appendChild(ref)
+
+  const st = anim.solarTracking
+  if (st && st.subPartInstanceId.trim()) {
+    const stEl = doc.createElement('SolarTracking')
+    stEl.setAttribute('DegreesPerSecond', formatG6(st.degreesPerSecond))
+    stEl.setAttribute('SubPart', st.subPartInstanceId)
+    for (const ex of st.excludeInstanceIds) {
+      if (!ex.trim()) continue
+      const exEl = doc.createElement('ExcludeSubPart')
+      exEl.appendChild(doc.createTextNode(ex))
+      stEl.appendChild(exEl)
+    }
+    mod.appendChild(stEl)
+  }
+  return mod
 }
 
 function buildSubPartElement(doc: XmlDocument, placement: SubPartPlacement): XmlElement {

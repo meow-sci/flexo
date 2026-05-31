@@ -1,6 +1,7 @@
 import { AssetsToolbar } from './AssetsToolbar'
 import { AssetsList } from './AssetsList'
 import { TransformInspector } from './TransformInspector'
+import { AnimationsPanel } from './AnimationsPanel'
 
 /**
  * The body of the inspector: the Assets toolbar (Layers + Custom), the unified
@@ -15,8 +16,9 @@ export function InspectorContent() {
       <div className="min-h-0 flex-1">
         <AssetsList />
       </div>
-      <div className="shrink-0">
+      <div className="flex shrink-0 flex-col gap-2">
         <TransformInspector />
+        <AnimationsPanel />
       </div>
     </div>
   )

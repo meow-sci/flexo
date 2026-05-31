@@ -40,10 +40,10 @@ export interface SelectionHighlightSettings {
 }
 
 const DEFAULT_HIGHLIGHT: SelectionHighlightSettings = {
-  meshColor: '#2a4d6e',
-  meshAlpha: 1,
-  kittenColor: '#2a4d6e',
-  kittenAlpha: 1,
+  meshColor: '#fcff66',
+  meshAlpha: 0.35,
+  kittenColor: '#ff00f7',
+  kittenAlpha: 0.35,
 }
 
 export const $selectionHighlight = persistentJSON<SelectionHighlightSettings>(

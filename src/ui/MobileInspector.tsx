@@ -56,7 +56,7 @@ export function MobileInspector() {
             </Button>
           </div>
           <div className="min-h-0 flex-1 p-2">
-            <InspectorContent />
+            <InspectorContent showTransform />
           </div>
         </Dialog>
       </Modal>

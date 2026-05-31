@@ -6,6 +6,7 @@ import { SelectionToolbar } from './ui/SelectionToolbar'
 import { MultiSelectToolbar } from './ui/MultiSelectToolbar'
 import { RightPanel } from './ui/RightPanel'
 import { MobileInspector } from './ui/MobileInspector'
+import { FloatingInspector } from './ui/FloatingInspector'
 import { WorkspaceLoadProgress } from './ui/LoadProgress'
 import { MeasurementInfo } from './ui/MeasurementInfo'
 import { MeasurementEditor } from './ui/MeasurementEditor'
@@ -63,6 +64,10 @@ function App() {
 
       {/* Inspector: right-side resizable panel on desktop, bottom sheet on phone. */}
       {isPhone ? <MobileInspector /> : <RightPanel />}
+
+      {/* Selected-asset details as a floating, draggable window over the workspace
+          (desktop only — the phone sheet keeps it inline). */}
+      {!isPhone && <FloatingInspector />}
 
       {/* Editor for the active line measurement (left card on desktop, bottom
           sheet on phone — handled within the component). */}

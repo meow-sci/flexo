@@ -64,6 +64,7 @@
 - bounding containers are not part of undo/redo stack, they should be first-class members (addition/removal/resize/move/rotate, their settings changes, etc)
 - reference lines and point to point lines should be part of undo/redo stack (addition/removal/settings/position changes etc)
 
+- at "npm run build" time embed some build ID, and when loading the webapp if the build ID mismatches pop up a thing suggesting that they reset data due to a new build
 - stock animation system
 - emissives ... inanimate carbon rod wen?
 - engine building with combustion type control

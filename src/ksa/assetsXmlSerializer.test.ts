@@ -19,6 +19,9 @@ describe('serializeAssets', () => {
     expect(xml).toContain('<SubPart Id="flexo_panel_ab12cd"')
     expect(xml).toContain('<Mesh Id="flexo_panel_ab12cd"')
     expect(xml).toContain('<Material Id="flexo_panel_ab12cd_Material"')
+    // View mesh so the in-game vehicle editor can hover/select the placed part.
+    expect(xml).toContain('<MeshView>')
+    expect(xml).toContain('<Mesh Id="flexo_panel_ab12cd_VM"')
     expect(xml.startsWith('<?xml version="1.0" encoding="utf-8"?>')).toBe(true)
   })
 
@@ -31,5 +34,8 @@ describe('serializeAssets', () => {
     expect(xml).not.toContain('<Material ')
     expect(xml).toContain('<SubPart Id="s1"')
     expect(xml).toContain('<Mesh Id="s1"')
+    // Untextured parts still need a view mesh to be pickable in-game.
+    expect(xml).toContain('<MeshView>')
+    expect(xml).toContain('<Mesh Id="s1_VM"')
   })
 })

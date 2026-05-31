@@ -29,7 +29,16 @@ describe('buildMeshAtlasGlb', () => {
     ])
     const json = parseGlbJson(glb)
     const meshNames = (json.meshes ?? []).map((m) => m.name).sort()
-    expect(meshNames).toEqual(['flexo_A', 'flexo_B'])
+    // Each render mesh is paired with a _VM view (picking) mesh.
+    expect(meshNames).toEqual(['flexo_A', 'flexo_A_VM', 'flexo_B', 'flexo_B_VM'])
+  })
+
+  it('emits a paired _VM view mesh so the in-game editor can pick the part', async () => {
+    const geometry = new THREE.BoxGeometry(1, 1, 1)
+    const glb = await buildMeshAtlasGlb([{ name: 'flexo_Panel_abc123', geometry }])
+    const json = parseGlbJson(glb)
+    const meshNames = (json.meshes ?? []).map((m) => m.name).sort()
+    expect(meshNames).toEqual(['flexo_Panel_abc123', 'flexo_Panel_abc123_VM'])
   })
 
   it('produces a structurally valid GLB (4-byte aligned JSON chunk)', async () => {

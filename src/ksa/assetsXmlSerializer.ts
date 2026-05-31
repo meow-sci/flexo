@@ -1,5 +1,6 @@
 import { DOMImplementation, XMLSerializer } from '@xmldom/xmldom'
 import { prettyXml } from './partXmlSerializer'
+import { VIEW_MESH_SUFFIX } from './exportGlb'
 
 /**
  * Serializes the custom-asset "Assets" XML — the file that DEFINES user-created
@@ -92,6 +93,15 @@ export function serializeAssets(plan: AssetsPlan): string {
       model.appendChild(material)
     }
     sub.appendChild(model)
+    // View mesh wires the SubPart to its picking geometry. KSA's vehicle editor
+    // only raycasts SubParts that carry a MeshViewModule (built from <MeshView>);
+    // without it the placed part renders but can't be hovered/selected/right-clicked.
+    // The "<id>_VM" mesh is emitted into the atlas by buildMeshAtlasGlb.
+    const meshView = doc.createElement('MeshView')
+    const viewMesh = doc.createElement('Mesh')
+    viewMesh.setAttribute('Id', sp.subPartId + VIEW_MESH_SUFFIX)
+    meshView.appendChild(viewMesh)
+    sub.appendChild(meshView)
     assets.appendChild(sub)
   }
 

@@ -23,7 +23,18 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
  * is validated in-game (see plans/FLEXO_CUSTOM_ASSETS.md). If an axis fix is ever
  * needed, apply it HERE only (rotate the geometry before export) so the editor's
  * own re-import stays consistent.
+ *
+ * VIEW MESHES — every render mesh gets a paired "<id>_VM" node (same geometry). KSA's
+ * vehicle editor only raycasts a SubPart that carries a MeshViewModule, which is wired
+ * from a `<MeshView><Mesh Id="<id>_VM"/></MeshView>` element pointing at a mesh in this
+ * atlas (see RayCastEgoSubPart → Modules.Get<MeshViewModule>()). Without a _VM mesh a
+ * placed part renders but can't be hovered, selected, or right-clicked. Every built-in
+ * Core SubPart ships a distinct _VM mesh, so we mirror that exactly. The XML side of
+ * this contract lives in assetsXmlSerializer (it appends `_VM` to the SubPart id).
  */
+
+/** Suffix KSA's Core content uses for view (picking) meshes; see file header. */
+export const VIEW_MESH_SUFFIX = '_VM'
 
 export interface MeshAtlasNode {
   /** Node + mesh name == the SubPart Mesh Id, e.g. "MyMod_Subpart_Panel". */
@@ -38,15 +49,28 @@ export async function buildMeshAtlasGlb(nodes: MeshAtlasNode[]): Promise<Uint8Ar
   // A single shared placeholder material — KSA ignores GLB materials and applies
   // the XML PbrMaterial, but GLTFExporter requires meshes to have one.
   const placeholder = new THREE.MeshStandardMaterial()
+  const viewGeometries: THREE.BufferGeometry[] = []
   for (const node of nodes) {
     const mesh = new THREE.Mesh(node.geometry, placeholder)
     mesh.name = node.name // → glTF node name (what flexo's MeshAtlasCache resolves)
     scene.add(mesh)
+    // Paired view (picking) mesh so the in-game editor can hover/select the part.
+    // Same shape — flexo primitives are low-poly, so a simplified picking mesh buys
+    // nothing. The geometry must be a distinct instance (not node.geometry): GLTFExporter
+    // dedupes meshes that share geometry+material into ONE glTF mesh, which would collapse
+    // the render and view meshes and leave KSA only one registered name. Referenced from
+    // <MeshView> in the Assets XML. See file header.
+    const viewGeometry = node.geometry.clone()
+    viewGeometries.push(viewGeometry)
+    const viewMesh = new THREE.Mesh(viewGeometry, placeholder)
+    viewMesh.name = node.name + VIEW_MESH_SUFFIX
+    scene.add(viewMesh)
   }
 
   const exporter = new GLTFExporter()
   const result = await exporter.parseAsync(scene, { binary: true, onlyVisible: false })
   placeholder.dispose()
+  for (const g of viewGeometries) g.dispose()
   if (!(result instanceof ArrayBuffer)) {
     throw new Error('buildMeshAtlasGlb: expected binary GLB output')
   }

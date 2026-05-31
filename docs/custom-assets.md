@@ -78,10 +78,12 @@ of *placements* are all unchanged. A custom mesh is just a synthetic
   Y-up, centered on origin. The shape/param **types** live in `ksa/types.ts` so the
   framework-agnostic document model can reference them without importing three.
 - **`src/ksa/exportGlb.ts`** — `buildMeshAtlasGlb(nodes) → Uint8Array`. A
-  geometry-only binary GLB "mesh atlas" mirroring KSA's built-ins: one mesh per
-  SubPart, a single shared placeholder material (KSA ignores GLB materials and
-  applies the XML `<PbrMaterial>`), **no embedded textures**. See the GLB naming
-  decision below — this file post-processes the GLB JSON chunk.
+  geometry-only binary GLB "mesh atlas" mirroring KSA's built-ins: one render mesh
+  **plus a paired `<id>_VM` view (picking) mesh** per SubPart, a single shared
+  placeholder material (KSA ignores GLB materials and applies the XML
+  `<PbrMaterial>`), **no embedded textures**. See the GLB naming decision below — this
+  file post-processes the GLB JSON chunk. See **View meshes (pickability)** below for
+  why the `_VM` mesh exists.
 
 ### Assets XML
 
@@ -187,8 +189,8 @@ flexo-parts/
   mod.toml                          # assets = [ "...Part.xml", "...GameData.xml", "...Assets.xml" ]
   <Name>Part.xml                    # placements; custom SubParts via InstanceOf="<subPartId>"
   <Name>GameData.xml
-  <Name>Assets.xml                  # <MeshAtlas> + <PbrMaterial>(s) + <SubPart>(s)
-  Meshes/<Name>_MeshAtlas.glb       # one geometry GLB, one named mesh per placed custom subpart
+  <Name>Assets.xml                  # <MeshAtlas> + <PbrMaterial>(s) + <SubPart>(s, each with a <MeshView>)
+  Meshes/<Name>_MeshAtlas.glb       # one geometry GLB; per subpart: render mesh + <id>_VM view mesh
   Textures/<tex>_<id>_Diffuse.ktx2  # one per referenced custom texture (deduped)
   Textures/<Name>_FlatNormal.ktx2   # shared synthetic normal (when any subpart is textured)
   Textures/<Name>_NeutralORM.ktx2   # shared synthetic ORM   (when any subpart is textured)
@@ -210,13 +212,33 @@ Example `<Name>Assets.xml`:
             <Mesh Id="flexo_Panel_ab12cd" />
             <Material Id="flexo_Panel_ab12cd_Material" />
         </PartModel>
+        <MeshView>
+            <Mesh Id="flexo_Panel_ab12cd_VM" />
+        </MeshView>
     </SubPart>
 </Assets>
 ```
 
 `mod.toml`'s `assets` lists only **XML** files; meshes/textures are referenced by
 relative `Path` from the Assets XML (Core does the same). `<Mesh Id>` equals the
-named mesh inside the GLB. An untextured SubPart emits no `<PbrMaterial>` / `<Material>`.
+named mesh inside the GLB. An untextured SubPart emits no `<PbrMaterial>` / `<Material>`
+but **still** emits a `<MeshView>` (pickability is independent of texturing).
+
+### View meshes (pickability)
+
+A placed SubPart that has only a `<PartModel>` renders fine but is **invisible to the
+in-game vehicle editor's mouse picking** — you can't hover, click-to-reselect, or open
+its context menu. KSA's `Part.RayCastEgoSubPart` (decompiled, `thirdparty/ksa/KSA/Part.cs`)
+bails immediately unless the SubPart carries a `MeshViewModule`, which is built only from
+a `<MeshView>` element. The raycast then runs a watertight triangle test against that
+view mesh's vertices (`MeshReference.PositionCompare`).
+
+So every custom SubPart emits a `<MeshView>` pointing at a `<id>_VM` mesh, and
+`buildMeshAtlasGlb` writes that `_VM` mesh into the atlas (same geometry as the render
+mesh — flexo primitives are low-poly, so a separate simplified hull buys nothing). Every
+built-in Core SubPart ships a distinct `_VM` mesh; this mirrors that exactly. The `_VM`
+node must be a **distinct** geometry instance in the GLB, or `GLTFExporter` dedupes it
+with the render mesh into a single glTF mesh and KSA registers only one name.
 
 ## Tests
 

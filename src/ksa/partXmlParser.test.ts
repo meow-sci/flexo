@@ -15,6 +15,7 @@ function editingPart(over: Partial<EditingPart>): EditingPart {
     partId: 'TestPart',
     editorTags: [],
     gameData: createEmptyGameData(),
+    subPartGameData: [],
     layers: [createDefaultLayer()],
     placements: [],
     connectors: [],
@@ -145,6 +146,7 @@ describe('connectorsFromPartElement (round-trip with serializer)', () => {
 })
 
 describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
+  const TANK_TMPL = 'CoreFuelTankA_Subpart_Skin2W1HB'
   const source = editingPart({
     partId: 'GD',
     editorTags: ['Tanks', 'Structural'],
@@ -152,10 +154,6 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
       ...createEmptyGameData(),
       displayName: 'Round Trip',
       customMass: 42,
-      tanks: [
-        { ...createTank(), shape: 'Cylindrical', lengthM: 3, outerRadiusM: 0.8, wallThicknessMm: 2.5 },
-        { ...createTank(), shape: 'Spherical', wallMaterialId: 'Steel(s)', outerRadiusM: 1.2 },
-      ],
       batteries: [{ capacityKWh: 0.5 }],
       generators: [{ outputWatts: 12 }],
       powerConsumers: [{ consumedWatts: 3 }],
@@ -163,6 +161,15 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
       dockingPort: { connectorId: '_c3', force: 600 },
       evaDoor: { connectorId: '_c3' },
     },
+    subPartGameData: [
+      {
+        subPartTemplateId: TANK_TMPL,
+        tanks: [
+          { ...createTank(), shape: 'Cylindrical', lengthM: 3, outerRadiusM: 0.8, wallThicknessMm: 2.5 },
+          { ...createTank(), shape: 'Spherical', wallMaterialId: 'Steel(s)', outerRadiusM: 1.2 },
+        ],
+      },
+    ],
     connectors: [
       {
         id: '_c2',
@@ -183,10 +190,11 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
     expect(parsed.gameData.customMass).toBe(42)
   })
 
-  it('recovers tanks (shape, material, dims)', () => {
-    expect(parsed.gameData.tanks.map((t) => t.shape)).toEqual(['Cylindrical', 'Spherical'])
-    expect(parsed.gameData.tanks[0].lengthM).toBe(3)
-    expect(parsed.gameData.tanks[1].wallMaterialId).toBe('Steel(s)')
+  it('recovers tanks per SubPart template (shape, material, dims)', () => {
+    const spd = parsed.subPartGameData.find((s) => s.subPartTemplateId === TANK_TMPL)
+    expect(spd?.tanks.map((t) => t.shape)).toEqual(['Cylindrical', 'Spherical'])
+    expect(spd?.tanks[0].lengthM).toBe(3)
+    expect(spd?.tanks[1].wallMaterialId).toBe('Steel(s)')
   })
 
   it('recovers power and coupling', () => {

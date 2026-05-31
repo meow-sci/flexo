@@ -149,23 +149,25 @@ describe('editorStore', () => {
     expect($part.get().editorTags).toEqual(['Existing', 'Electrical'])
   })
 
-  it('adds/removes tanks as discrete undo steps and patches fields (streaming)', () => {
-    addTank()
-    expect($part.get().gameData.tanks.length).toBe(1)
-    setTankShape(0, 'Spherical')
-    expect($part.get().gameData.tanks[0].shape).toBe('Spherical')
+  it('adds/removes tanks per SubPart template as discrete undo steps and patches fields (streaming)', () => {
+    const tmpl = 'CoreFuelTankA_Subpart_Skin1W1HA'
+    addTank(tmpl)
+    const spd = () => $part.get().subPartGameData.find((s) => s.subPartTemplateId === tmpl)
+    expect(spd()?.tanks.length).toBe(1)
+    setTankShape(tmpl, 0, 'Spherical')
+    expect(spd()?.tanks[0].shape).toBe('Spherical')
     // updateTank is streaming (no internal undo) — emulate the field focus push.
     pushUndo('edit tank')
-    updateTank(0, { outerRadiusM: 1.5 })
-    expect($part.get().gameData.tanks[0].outerRadiusM).toBe(1.5)
+    updateTank(tmpl, 0, { outerRadiusM: 1.5 })
+    expect(spd()?.tanks[0].outerRadiusM).toBe(1.5)
     undo() // undo the radius edit
-    expect($part.get().gameData.tanks[0].outerRadiusM).toBe(0.5)
+    expect(spd()?.tanks[0].outerRadiusM).toBe(0.5)
     undo() // undo the shape change
-    expect($part.get().gameData.tanks[0].shape).toBe('Cylindrical')
-    removeTank(0)
-    expect($part.get().gameData.tanks.length).toBe(0)
+    expect(spd()?.tanks[0].shape).toBe('Cylindrical')
+    removeTank(tmpl, 0)
+    expect(spd()).toBeUndefined() // entry pruned when tanks empty
     undo()
-    expect($part.get().gameData.tanks.length).toBe(1)
+    expect(spd()?.tanks.length).toBe(1)
   })
 
   it('toggles custom mass and decoupler with undo', () => {

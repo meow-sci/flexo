@@ -146,7 +146,7 @@ export function applyFaceUvTransforms(
 
   const idx = geometry.index
   for (const group of geometry.groups) {
-    const key = faceKeys[group.materialIndex]
+    const key = group.materialIndex != null ? faceKeys[group.materialIndex] : undefined
     if (!key) continue
     const cfg = configs[key]
     if (!cfg) continue

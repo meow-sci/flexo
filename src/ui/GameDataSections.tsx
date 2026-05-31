@@ -27,7 +27,7 @@ import {
   setTankShape,
   updateTank,
 } from '../state/editorStore'
-import type { EditingPart, PartGameData, TankShape } from '../ksa/types'
+import type { EditingPart, PartGameData, Tank, TankShape } from '../ksa/types'
 
 /**
  * The "popup-only" GameData editors used inside the Part Data dialog — every
@@ -116,19 +116,19 @@ export function MassSection({ gameData }: { gameData: PartGameData }) {
   )
 }
 
-// --- Tanks ---
+// --- Tanks (per SubPart template) ---
 
-export function TanksSection({ gameData }: { gameData: PartGameData }) {
+export function TanksSection({ tanks, subPartTemplateId }: { tanks: Tank[]; subPartTemplateId: string }) {
   return (
     <div className="flex flex-col gap-2">
-      {gameData.tanks.map((tank, i) => (
-        <ItemCard key={i} title={`Tank ${i + 1}`} onRemove={() => removeTank(i)}>
+      {tanks.map((tank, i) => (
+        <ItemCard key={i} title={`Tank ${i + 1}`} onRemove={() => removeTank(subPartTemplateId, i)}>
           <Field label="Shape">
             <Select
               size="sm"
               aria-label="Tank shape"
               selectedKey={tank.shape}
-              onSelectionChange={(k) => setTankShape(i, k as TankShape)}
+              onSelectionChange={(k) => setTankShape(subPartTemplateId, i, k as TankShape)}
             >
               <ListBoxItem id="Cylindrical">Cylindrical</ListBoxItem>
               <ListBoxItem id="Spherical">Spherical</ListBoxItem>
@@ -141,7 +141,7 @@ export function TanksSection({ gameData }: { gameData: PartGameData }) {
               inputClassName="font-mono"
               value={tank.wallMaterialId}
               onFocus={() => pushUndo('edit tank', '')}
-              onChange={(v) => updateTank(i, { wallMaterialId: v })}
+              onChange={(v) => updateTank(subPartTemplateId, i, { wallMaterialId: v })}
             />
           </Field>
           {tank.shape === 'Cylindrical' && (
@@ -151,7 +151,7 @@ export function TanksSection({ gameData }: { gameData: PartGameData }) {
                 value={tank.lengthM}
                 min={0}
                 onInteractionStart={() => pushUndo('edit tank', '')}
-                onCommit={(n) => updateTank(i, { lengthM: n })}
+                onCommit={(n) => updateTank(subPartTemplateId, i, { lengthM: n })}
               />
             </Field>
           )}
@@ -161,7 +161,7 @@ export function TanksSection({ gameData }: { gameData: PartGameData }) {
               value={tank.outerRadiusM}
               min={0}
               onInteractionStart={() => pushUndo('edit tank', '')}
-              onCommit={(n) => updateTank(i, { outerRadiusM: n })}
+              onCommit={(n) => updateTank(subPartTemplateId, i, { outerRadiusM: n })}
             />
           </Field>
           <Field label="Wall Thickness (mm)">
@@ -170,12 +170,12 @@ export function TanksSection({ gameData }: { gameData: PartGameData }) {
               value={tank.wallThicknessMm}
               min={0}
               onInteractionStart={() => pushUndo('edit tank', '')}
-              onCommit={(n) => updateTank(i, { wallThicknessMm: n })}
+              onCommit={(n) => updateTank(subPartTemplateId, i, { wallThicknessMm: n })}
             />
           </Field>
         </ItemCard>
       ))}
-      <Button size="sm" onPress={addTank} className="self-start">
+      <Button size="sm" onPress={() => addTank(subPartTemplateId)} className="self-start">
         + Tank
       </Button>
     </div>

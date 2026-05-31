@@ -7,6 +7,7 @@ import type {
   EulerXYZ,
   KittenKind,
   PartGameData,
+  SubPartGameData,
   SubPartPlacement,
   Tank,
   TankShape,
@@ -877,32 +878,58 @@ export function setCustomMass(massKg: number): void {
   })
 }
 
-// --- Tanks ---
+// --- SubPart GameData (per-template) ---
 
-/** Discrete: append a default tank. */
-export function addTank(): void {
-  commitGameData('add tank', '', (g) => g.tanks.push(createTank()))
+function getOrCreateSubPartData(part: EditingPart, subPartTemplateId: string): SubPartGameData {
+  let spd = part.subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
+  if (!spd) {
+    spd = { subPartTemplateId, tanks: [] }
+    part.subPartGameData.push(spd)
+  }
+  return spd
 }
 
-/** Discrete: remove the tank at `index`. */
-export function removeTank(index: number): void {
-  if (index < 0 || index >= $part.get().gameData.tanks.length) return
-  commitGameData('remove tank', '', (g) => g.tanks.splice(index, 1))
+function mutateSubPartData(subPartTemplateId: string, mutate: (s: SubPartGameData) => void): void {
+  const part = clone($part.get())
+  mutate(getOrCreateSubPartData(part, subPartTemplateId))
+  part.subPartGameData = part.subPartGameData.filter((s) => s.tanks.length > 0)
+  $part.set(part)
+}
+
+function commitSubPartData(label: string, detail: string, subPartTemplateId: string, mutate: (s: SubPartGameData) => void): void {
+  pushUndo(label, detail)
+  mutateSubPartData(subPartTemplateId, mutate)
+}
+
+// --- Tanks (per SubPart template) ---
+
+/** Discrete: append a default tank for the given SubPart template. */
+export function addTank(subPartTemplateId: string): void {
+  commitSubPartData('add tank', '', subPartTemplateId, (s) => s.tanks.push(createTank()))
+}
+
+/** Discrete: remove the tank at `index` for the given SubPart template. */
+export function removeTank(subPartTemplateId: string, index: number): void {
+  const spd = $part.get().subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
+  if (!spd || index < 0 || index >= spd.tanks.length) return
+  commitSubPartData('remove tank', '', subPartTemplateId, (s) => s.tanks.splice(index, 1))
 }
 
 /** Discrete: change a tank's shape (cylindrical/spherical). */
-export function setTankShape(index: number, shape: TankShape): void {
-  if (index < 0 || index >= $part.get().gameData.tanks.length) return
-  commitGameData('tank shape', shape, (g) => {
-    g.tanks[index].shape = shape
+export function setTankShape(subPartTemplateId: string, index: number, shape: TankShape): void {
+  const spd = $part.get().subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
+  if (!spd || index < 0 || index >= spd.tanks.length) return
+  commitSubPartData('tank shape', shape, subPartTemplateId, (s) => {
+    s.tanks[index].shape = shape
   })
 }
 
 /** Streaming: patch a tank's numeric/material fields. Caller pushes undo on field focus. */
-export function updateTank(index: number, patch: Partial<Tank>): void {
-  if (index < 0 || index >= $part.get().gameData.tanks.length) return
-  mutateGameData((g) => {
-    g.tanks[index] = { ...g.tanks[index], ...patch }
+export function updateTank(subPartTemplateId: string, index: number, patch: Partial<Tank>): void {
+  const spd = $part.get().subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
+  if (!spd || index < 0 || index >= spd.tanks.length) return
+  mutateSubPartData(subPartTemplateId, (s) => {
+    s.tanks[index] = { ...s.tanks[index], ...patch }
   })
 }
 

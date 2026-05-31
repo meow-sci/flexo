@@ -120,8 +120,12 @@ export async function buildCustomBundle(part: EditingPart, base: string): Promis
 
   const binaries: { path: string; data: Uint8Array }[] = []
 
-  // One combined geometry GLB with UV transforms baked in, mirroring a Core mesh atlas.
-  const meshAtlasPath = `Meshes/${base}_MeshAtlas.glb`
+  // Derive a bundle token from base (project name) + the first mesh's random id suffix.
+  // Mesh ids contain a random UUID fragment generated at creation time, so this is
+  // unique across different parts even when they share the same default partId.
+  // Using base keeps the filename human-readable; the hash suffix makes it unique.
+  const bundleToken = `${base}_${meshes[0].id.replace(/^mesh_/, '')}`
+  const meshAtlasPath = `Meshes/${bundleToken}_MeshAtlas.glb`
   const nodes = meshes.map((m) => {
     const geometry = buildPrimitiveGeometry(m.primitive)
     applyFaceUvTransforms(geometry, PRIMITIVE_FACE_KEYS[m.primitive.kind], m.faceTextures)
@@ -166,8 +170,8 @@ export async function buildCustomBundle(part: EditingPart, base: string): Promis
   let normalPath: string | undefined
   let aoRoughMetalPath: string | undefined
   if (subParts.some((sp) => sp.materialId !== null)) {
-    normalPath = `Textures/${base}_FlatNormal.ktx2`
-    aoRoughMetalPath = `Textures/${base}_NeutralORM.ktx2`
+    normalPath = `Textures/${bundleToken}_FlatNormal.ktx2`
+    aoRoughMetalPath = `Textures/${bundleToken}_NeutralORM.ktx2`
     // flat normal = (128,128,255) ≈ +Z in tangent space; neutral ORM = AO=255, Rough=128, Metal=0
     binaries.push({ path: normalPath, data: await makeSolid1x1Ktx2(128, 128, 255) })
     binaries.push({ path: aoRoughMetalPath, data: await makeSolid1x1Ktx2(255, 128, 0) })

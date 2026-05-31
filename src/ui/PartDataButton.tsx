@@ -17,7 +17,6 @@ import {
   IdentityFields,
   MassSection,
   PowerSection,
-  TanksSection,
 } from './GameDataSections'
 
 interface Props {
@@ -34,8 +33,7 @@ export function PartDataButton({ isOpen: externalOpen, onOpenChange: externalOnC
   const part = useStore($part)
   const { gameData } = part
 
-  const powerCount =
-    gameData.batteries.length + gameData.generators.length + gameData.powerConsumers.length
+  const powerCount = gameData.batteries.length + gameData.generators.length + gameData.powerConsumers.length
   const couplingCount =
     (gameData.decoupler ? 1 : 0) + (gameData.dockingPort ? 1 : 0) + (gameData.evaDoor ? 1 : 0)
 
@@ -73,10 +71,6 @@ export function PartDataButton({ isOpen: externalOpen, onOpenChange: externalOnC
 
             <DisclosureSection title="Mass" defaultExpanded>
               <MassSection gameData={gameData} />
-            </DisclosureSection>
-
-            <DisclosureSection title="Tanks" badge={gameData.tanks.length || ''} defaultExpanded>
-              <TanksSection gameData={gameData} />
             </DisclosureSection>
 
             <DisclosureSection title="Power" badge={powerCount || ''} defaultExpanded>

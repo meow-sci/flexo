@@ -4,6 +4,7 @@ import type {
   ConnectorFlag,
   EulerXYZ,
   PartGameData,
+  SubPartGameData,
   SubPartPlacement,
   Tank,
   TankShape,
@@ -115,6 +116,7 @@ export interface ParsedGameData {
   /** connector id → its flags (only connectors that carry <Flags>). */
   connectorFlags: Map<string, ConnectorFlag[]>
   gameData: PartGameData
+  subPartGameData: SubPartGameData[]
 }
 
 function readNum(el: Element | null | undefined, attr: string): number | null {
@@ -152,9 +154,6 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   const mass = readNum(directChildren(directChildren(gd, 'CustomMass')[0] ?? gd, 'Mass')[0], 'Kg')
   game.customMass = mass != null && mass > 0 ? mass : null
 
-  for (const el of directChildren(gd, 'CylindricalTank')) game.tanks.push(tankFromElement(el, 'Cylindrical'))
-  for (const el of directChildren(gd, 'SphericalTank')) game.tanks.push(tankFromElement(el, 'Spherical'))
-
   for (const el of directChildren(gd, 'Battery'))
     game.batteries.push({ capacityKWh: readNum(directChildren(el, 'MaximumCapacity')[0], 'KWh') ?? 0 })
   for (const el of directChildren(gd, 'Generator'))
@@ -177,12 +176,31 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   const eva = directChildren(gd, 'EVADoor')[0]
   if (eva) game.evaDoor = { connectorId: eva.getAttribute('ConnectorId') ?? '' }
 
-  return { editorTags, connectorFlags, gameData: game }
+  return { editorTags, connectorFlags, gameData: game, subPartGameData: [] }
+}
+
+/** Parses all top-level <SubPartGameData> elements from an Assets document root. */
+function subPartGameDataFromRoot(root: Element): SubPartGameData[] {
+  const out: SubPartGameData[] = []
+  for (const spEl of directChildren(root, 'SubPartGameData')) {
+    const subPartTemplateId = spEl.getAttribute('Id')
+    if (!subPartTemplateId) continue
+    const tanks: Tank[] = []
+    for (const tankEl of directChildren(spEl, 'Tank')) {
+      const cylEl = directChildren(tankEl, 'CylindricalTank')[0]
+      const sphEl = directChildren(tankEl, 'SphericalTank')[0]
+      if (cylEl) tanks.push(tankFromElement(cylEl, 'Cylindrical'))
+      else if (sphEl) tanks.push(tankFromElement(sphEl, 'Spherical'))
+    }
+    if (tanks.length > 0) out.push({ subPartTemplateId, tanks })
+  }
+  return out
 }
 
 /**
- * Parses the <PartGameData Id="partId"> entry out of an Assets document. Returns
- * null when no matching entry exists. The inverse of {@link serializeGameData}.
+ * Parses the <PartGameData Id="partId"> entry out of an Assets document, and
+ * also collects all top-level <SubPartGameData> entries (tank data). Returns
+ * null when no matching PartGameData entry exists.
  */
 export function gameDataFromAssets(
   xmlText: string,
@@ -196,7 +214,10 @@ export function gameDataFromAssets(
   const gd = Array.from(doc.getElementsByTagName('PartGameData')).find(
     (g) => g.getAttribute('Id') === partId,
   )
-  return gd ? parseGameDataElement(gd) : null
+  if (!gd) return null
+  const parsed = parseGameDataElement(gd)
+  parsed.subPartGameData = subPartGameDataFromRoot(doc.documentElement as Element)
+  return parsed
 }
 
 export function directChildren(parent: Element, tag: string): Element[] {

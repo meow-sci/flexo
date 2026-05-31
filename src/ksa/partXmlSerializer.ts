@@ -91,8 +91,6 @@ export function serializeGameData(part: EditingPart): string {
     gd.appendChild(custom)
   }
 
-  for (const tank of game.tanks) gd.appendChild(buildTankElement(doc, tank))
-
   for (const b of game.batteries) {
     const el = doc.createElement('Battery')
     el.appendChild(elWithAttr(doc, 'MaximumCapacity', 'KWh', formatG6(b.capacityKWh)))
@@ -140,6 +138,18 @@ export function serializeGameData(part: EditingPart): string {
   }
 
   assets.appendChild(gd)
+
+  for (const spd of part.subPartGameData) {
+    if (spd.tanks.length === 0) continue
+    const spdEl = doc.createElement('SubPartGameData')
+    spdEl.setAttribute('Id', spd.subPartTemplateId)
+    for (const tank of spd.tanks) {
+      const tankWrapper = doc.createElement('Tank')
+      tankWrapper.appendChild(buildTankElement(doc, tank))
+      spdEl.appendChild(tankWrapper)
+    }
+    assets.appendChild(spdEl)
+  }
 
   const body = new XMLSerializer().serializeToString(doc)
   return '<?xml version="1.0" encoding="utf-8"?>\n' + prettyXml(body) + '\n'

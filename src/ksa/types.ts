@@ -234,13 +234,24 @@ export interface PartGameData {
   displayName: string
   /** Mass override in kg, or null for the part's default mass. */
   customMass: number | null
-  tanks: Tank[]
   batteries: Battery[]
   generators: Generator[]
   powerConsumers: PowerConsumer[]
   decoupler: Decoupler | null
   dockingPort: DockingPort | null
   evaDoor: EvaDoor | null
+}
+
+/**
+ * Per-SubPart-template GameData: tanks that belong to a specific SubPart template.
+ * Serialized as <SubPartGameData Id="subPartTemplateId"><Tank>...</Tank></SubPartGameData>
+ * inside the <PartGameData> document. Multiple instances of the same template share
+ * this data, matching KSA's SubPartGameData model.
+ */
+export interface SubPartGameData {
+  /** The SubPart template id this data belongs to, e.g. "CoreFuelTankA_Subpart_Skin2W1HB". */
+  subPartTemplateId: string
+  tanks: Tank[]
 }
 
 /** Default tank: 2 m cylinder, 0.5 m radius, 2 mm aluminium wall (matches TankState). */
@@ -259,7 +270,6 @@ export function createEmptyGameData(): PartGameData {
   return {
     displayName: '',
     customMass: null,
-    tanks: [],
     batteries: [],
     generators: [],
     powerConsumers: [],
@@ -382,8 +392,10 @@ export interface EditingPart {
   partId: string
   /** Editor tags emitted as <EditorTag Value="..."/> on the <PartGameData>. */
   editorTags: string[]
-  /** Optional popup-only GameData (display name, mass, tanks, power, coupling). */
+  /** Optional popup-only GameData (display name, mass, power, coupling). */
   gameData: PartGameData
+  /** Per-SubPart-template GameData (tanks). Keyed by subPartTemplateId. */
+  subPartGameData: SubPartGameData[]
   /** Editor-only layers; array order is the display order. Always includes Default. */
   layers: Layer[]
   /** All placed SubPart instances. */
@@ -403,6 +415,7 @@ export function createEmptyPart(): EditingPart {
     partId: 'fixme_part_id',
     editorTags: [],
     gameData: createEmptyGameData(),
+    subPartGameData: [],
     layers: [createDefaultLayer(), createConnectorLayer(), createKittenLayer()],
     placements: [],
     connectors: [],

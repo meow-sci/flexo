@@ -25,6 +25,7 @@ import {
 } from '../state/editorStore'
 import { CONNECTOR_LAYER_ID, type SubPartPlacement } from '../ksa/types'
 import { setManagingMeshId } from '../state/customAssetStore'
+import { ManageTanksModal } from './ManageTanksModal'
 
 const rowClass = ({ isSelected, isFocusVisible }: { isSelected: boolean; isFocusVisible: boolean }) =>
   [
@@ -183,6 +184,7 @@ export function PlacementList() {
 function SubPartMenu({ index, placement }: { index: number; placement: SubPartPlacement }) {
   const part = useStore($part)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [managingTanks, setManagingTanks] = useState(false)
   // SubParts don't belong in the built-in Connectors layer.
   const layers = part.layers.filter((l) => l.id !== CONNECTOR_LAYER_ID)
   const customMesh = part.customMeshes.find((m) => m.subPartId === placement.subPartTemplateId)
@@ -208,6 +210,9 @@ function SubPartMenu({ index, placement }: { index: number; placement: SubPartPl
                 Manage Textures
               </MenuItem>
             )}
+            <MenuItem onAction={() => setManagingTanks(true)}>
+              Manage Tanks
+            </MenuItem>
             <SubmenuTrigger>
               <MenuItem>Change Layer</MenuItem>
               <Popover className="w-44">
@@ -229,6 +234,13 @@ function SubPartMenu({ index, placement }: { index: number; placement: SubPartPl
           </Menu>
         </Popover>
       </MenuTrigger>
+
+      {managingTanks && (
+        <ManageTanksModal
+          subPartTemplateId={placement.subPartTemplateId}
+          onClose={() => setManagingTanks(false)}
+        />
+      )}
 
       <ConfirmDialog
         isOpen={confirmDelete}

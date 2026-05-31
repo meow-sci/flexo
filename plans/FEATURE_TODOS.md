@@ -64,6 +64,9 @@
 - bounding containers are not part of undo/redo stack, they should be first-class members (addition/removal/resize/move/rotate, their settings changes, etc)
 - reference lines and point to point lines should be part of undo/redo stack (addition/removal/settings/position changes etc)
 
+- emissives ... inanimate carbon rod wen?
+- engine building with combustion type control
+- make kittens into SubParts + Parts.. ? with connectors
 - reloading webapp when custom textures and meshes are in the project breaks (at least) the textures
 - use https://react-aria.adobe.com/ColorPicker for color pickers and support alpha?
 - project export/import to/from JSON

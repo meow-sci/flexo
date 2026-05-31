@@ -32,6 +32,7 @@ function editingPart(over: Partial<EditingPart>): EditingPart {
     partId: 'P',
     editorTags: [],
     gameData: createEmptyGameData(),
+    subPartGameData: [],
     layers: [createDefaultLayer()],
     placements: [],
     connectors: [],
@@ -201,16 +202,13 @@ describe('serializePart connectors', () => {
 })
 
 describe('serializeGameData', () => {
+  const TANK_TMPL = 'CoreFuelTankA_Subpart_Skin2W1HB'
   const part = editingPart({
     editorTags: ['Structural', 'RCS'],
     gameData: {
       ...createEmptyGameData(),
       displayName: 'My Tank',
       customMass: 250,
-      tanks: [
-        { ...createTank(), shape: 'Cylindrical', lengthM: 3, outerRadiusM: 0.8, wallThicknessMm: 2.5 },
-        { ...createTank(), shape: 'Spherical', wallMaterialId: 'Steel(s)', outerRadiusM: 1.2 },
-      ],
       batteries: [{ capacityKWh: 0.5 }],
       generators: [{ outputWatts: 12 }],
       powerConsumers: [{ consumedWatts: 3 }],
@@ -218,6 +216,15 @@ describe('serializeGameData', () => {
       dockingPort: { connectorId: '_connector3', force: 600 },
       evaDoor: { connectorId: '_connector3' },
     },
+    subPartGameData: [
+      {
+        subPartTemplateId: TANK_TMPL,
+        tanks: [
+          { ...createTank(), shape: 'Cylindrical', lengthM: 3, outerRadiusM: 0.8, wallThicknessMm: 2.5 },
+          { ...createTank(), shape: 'Spherical', wallMaterialId: 'Steel(s)', outerRadiusM: 1.2 },
+        ],
+      },
+    ],
     connectors: [
       connector({ id: '_connector1', flags: [] }),
       connector({ id: '_connector2', flags: ['ToSurface'] }),
@@ -240,14 +247,18 @@ describe('serializeGameData', () => {
     expect(child(gd, 'CustomMass')!.getElementsByTagName('Mass')[0].getAttribute('Kg')).toBe('250')
   })
 
-  it('emits cylindrical + spherical tanks (length only on the cylinder)', () => {
-    const cyl = tags(doc, 'CylindricalTank')[0]
-    expect(child(cyl, 'Length')!.getAttribute('M')).toBe('3')
-    expect(child(cyl, 'OuterRadius')!.getAttribute('M')).toBe('0.8')
-    expect(child(cyl, 'WallThickness')!.getAttribute('Mm')).toBe('2.5')
-    const sph = tags(doc, 'SphericalTank')[0]
-    expect(child(sph, 'Length')).toBeNull()
-    expect(child(sph, 'Material')!.getAttribute('Id')).toBe('Steel(s)')
+  it('emits tanks nested under <SubPartGameData><Tank><CylindricalTank/SphericalTank>', () => {
+    const spd = tags(doc, 'SubPartGameData')[0]
+    expect(spd.getAttribute('Id')).toBe(TANK_TMPL)
+    const tankEls = tags(spd, 'Tank')
+    expect(tankEls.length).toBe(2)
+    const cyl = tankEls[0].getElementsByTagName('CylindricalTank')[0]
+    expect(cyl.getElementsByTagName('Length')[0].getAttribute('M')).toBe('3')
+    expect(cyl.getElementsByTagName('OuterRadius')[0].getAttribute('M')).toBe('0.8')
+    expect(cyl.getElementsByTagName('WallThickness')[0].getAttribute('Mm')).toBe('2.5')
+    const sph = tankEls[1].getElementsByTagName('SphericalTank')[0]
+    expect(sph.getElementsByTagName('Length').length).toBe(0)
+    expect(sph.getElementsByTagName('Material')[0].getAttribute('Id')).toBe('Steel(s)')
   })
 
   it('emits batteries/generators/consumers with their units', () => {
@@ -279,7 +290,7 @@ describe('serializeGameData', () => {
     const bareGd = tags(bare, 'PartGameData')[0]
     expect(bareGd.hasAttribute('DisplayName')).toBe(false)
     expect(tags(bare, 'CustomMass').length).toBe(0)
-    expect(tags(bare, 'CylindricalTank').length).toBe(0)
+    expect(tags(bare, 'SubPartGameData').length).toBe(0)
     expect(tags(bare, 'Decoupler').length).toBe(0)
   })
 

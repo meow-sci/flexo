@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useStore } from '@nanostores/react'
 import { CirclePlus } from 'lucide-react'
 import {
   MenuTrigger,
@@ -9,7 +10,7 @@ import {
   SubmenuTrigger,
   ToolbarButton,
 } from './kit'
-import { addConnector, addKitten } from '../state/editorStore'
+import { $part, addConnector, addKitten, addSubPart } from '../state/editorStore'
 import type { KittenKind } from '../ksa/types'
 import { SubPartPopup } from './AddSubPartButton'
 import { PartPopup } from './AddPartButton'
@@ -17,6 +18,7 @@ import { CustomTextureDialog } from './CustomTextureDialog'
 import { CreateMeshDialog } from './CreateMeshDialog'
 
 export function AddButton() {
+  const part = useStore($part)
   const [subPartOpen, setSubPartOpen] = useState(false)
   const [partOpen, setPartOpen] = useState(false)
   const [textureOpen, setTextureOpen] = useState(false)
@@ -45,6 +47,20 @@ export function AddButton() {
             <MenuItem id="part">Import built-in Part</MenuItem>
             <MenuItem id="texture">Upload texture…</MenuItem>
             <MenuItem id="mesh">Create mesh…</MenuItem>
+            {part.customMeshes.length > 0 && (
+              <SubmenuTrigger>
+                <MenuItem id="custom-meshes">Custom Meshes</MenuItem>
+                <Popover className="w-52">
+                  <Menu onAction={(key) => addSubPart(String(key))}>
+                    {part.customMeshes.map((m) => (
+                      <MenuItem key={m.id} id={m.subPartId}>
+                        {m.name}
+                      </MenuItem>
+                    ))}
+                  </Menu>
+                </Popover>
+              </SubmenuTrigger>
+            )}
             <SubmenuTrigger>
               <MenuItem id="kitten">Kitten</MenuItem>
               <Popover className="w-40">

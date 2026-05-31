@@ -18,12 +18,9 @@ import { initTextureSupport } from './textureSupport'
 import type { CatalogSubPart } from '../ksa/catalog'
 import type { EditingPart, Vec3 } from '../ksa/types'
 import {
-  $activeLayerId,
   $part,
-  $selectedConnectorIndex,
   $selectedConnectorIndices,
   $selectedIndices,
-  $selectedKittenIndex,
   $selectedKittenIndices,
   $snap,
   $toolMode,
@@ -32,10 +29,11 @@ import {
   selectConnector,
   selectKitten,
   selectPlacement,
-  togglePlacement,
-  updatePlacementTransforms,
+  selectedTransformRefs,
+  toggleEntity,
   updateSelectedTransform,
-  type PlacementTransform,
+  updateSelectedTransforms,
+  type SelectedTransformRef,
 } from '../state/editorStore'
 import { $catalogIndex, $customCatalog } from '../state/catalogStore'
 import {
@@ -91,7 +89,7 @@ export class EditorScene {
    */
   private readonly pivot = new THREE.Group()
   /** Per-SubPart starting transforms captured at the start of a bulk gizmo drag. */
-  private bulkSnapshot: { centroid: Vec3; items: { index: number; base: PlacementTransform }[] } | null = null
+  private bulkSnapshot: { centroid: Vec3; items: SelectedTransformRef[] } | null = null
 
   // Point-to-point measurement picking.
   private readonly raycaster = new THREE.Raycaster()
@@ -119,7 +117,6 @@ export class EditorScene {
           return
         }
         setActiveMeasurement(null) // selecting a mesh closes any measurement edit
-        const activeLayerId = $activeLayerId.get()
         if (selected.kind === 'subpart') {
           const placements = $part.get().placements
           const index = placements.findIndex((p) => p.instanceId === selected.id)
@@ -127,8 +124,7 @@ export class EditorScene {
           const layerId = placements[index].layerId
           if (isLayerLocked(layerId)) return
           if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
-          if (layerId !== activeLayerId) return // only select within the active layer
-          if (additive) togglePlacement(index)
+          if (additive) toggleEntity('subpart', index)
           else selectPlacement(index)
         } else if (selected.kind === 'connector') {
           const connectors = $part.get().connectors
@@ -137,8 +133,8 @@ export class EditorScene {
           const layerId = connectors[index].layerId
           if (isLayerLocked(layerId)) return
           if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
-          if (layerId !== activeLayerId) return // only select within the active layer
-          selectConnector(index)
+          if (additive) toggleEntity('connector', index)
+          else selectConnector(index)
         } else {
           const kittens = $part.get().kittens
           const index = kittens.findIndex((k) => k.id === selected.id)
@@ -146,8 +142,8 @@ export class EditorScene {
           const layerId = kittens[index].layerId
           if (isLayerLocked(layerId)) return
           if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
-          if (layerId !== activeLayerId) return // only select within the active layer
-          selectKitten(index)
+          if (additive) toggleEntity('kitten', index)
+          else selectKitten(index)
         }
       },
     )
@@ -161,17 +157,8 @@ export class EditorScene {
         onDragStart: () => {
           const mode = $toolMode.get()
           const desc = mode === 'rotate' ? 'rotate' : mode === 'scale' ? 'scale' : 'move'
-          const p = $part.get()
-          const sel = $selectedIndices.get()
-          const ci = $selectedConnectorIndex.get()
-          const ki = $selectedKittenIndex.get()
-          const detail = ki >= 0
-            ? (p.kittens[ki]?.id ?? '')
-            : ci >= 0
-            ? (p.connectors[ci]?.id ?? '')
-            : sel.length === 1
-              ? (p.placements[sel[0]]?.instanceId ?? '')
-              : sel.length > 1 ? `${sel.length} parts` : ''
+          const refs = selectedTransformRefs()
+          const detail = refs.length === 1 ? refs[0].name : refs.length > 1 ? `${refs.length} items` : ''
           pushUndo(desc, detail)
           this.beginBulkDrag()
         },
@@ -434,47 +421,31 @@ export class EditorScene {
     this.updateSelection()
   }
 
-  /** Resolves the currently selected scene objects (SubParts or connectors) that are built. */
+  /** Resolves all currently selected scene objects (SubParts + connectors + kittens) that are built. */
   private selectedObjects(): SelectableObject[] {
     const part = $part.get()
-    const kitIndices = $selectedKittenIndices.get()
-    if (kitIndices.length > 0) {
-      const out: SelectableObject[] = []
-      for (const i of kitIndices) {
-        const kitten = part.kittens[i]
-        const obj = kitten && this.kittenObjects.get(kitten.id)
-        if (obj) out.push(obj)
-      }
-      return out
-    }
-    const conIndices = $selectedConnectorIndices.get()
-    if (conIndices.length > 0) {
-      const out: SelectableObject[] = []
-      for (const i of conIndices) {
-        const connector = part.connectors[i]
-        const obj = connector && this.connectorObjects.get(connector.id)
-        if (obj) out.push(obj)
-      }
-      return out
-    }
     const out: SelectableObject[] = []
-    for (const index of $selectedIndices.get()) {
-      const placement = part.placements[index]
+    for (const i of $selectedIndices.get()) {
+      const placement = part.placements[i]
       const obj = placement && this.objects.get(placement.instanceId)
+      if (obj) out.push(obj)
+    }
+    for (const i of $selectedConnectorIndices.get()) {
+      const connector = part.connectors[i]
+      const obj = connector && this.connectorObjects.get(connector.id)
+      if (obj) out.push(obj)
+    }
+    for (const i of $selectedKittenIndices.get()) {
+      const kitten = part.kittens[i]
+      const obj = kitten && this.kittenObjects.get(kitten.id)
       if (obj) out.push(obj)
     }
     return out
   }
 
-  /** Centroid of the currently selected SubParts, from store positions (not scene objects). */
+  /** Centroid of all selected entities (SubParts + connectors + kittens), from store positions. */
   private selectionCentroid(): Vec3 {
-    const part = $part.get()
-    return centroidOf(
-      $selectedIndices.get().flatMap((i) => {
-        const p = part.placements[i]
-        return p ? [p.position] : []
-      }),
-    )
+    return centroidOf(selectedTransformRefs().map((r) => r.transform.position))
   }
 
   /** Resets the pivot to the selection centroid with identity rotation/scale. */
@@ -505,15 +476,15 @@ export class EditorScene {
 
     // 2+ SubParts -> attach to the centroid pivot for bulk transforms; otherwise
     // attach directly to the single selected object (SubPart or connector).
+    const part = $part.get()
     const indices = $selectedIndices.get()
-    const multi = indices.length > 1
+    const conIndices = $selectedConnectorIndices.get()
+    const kitIndices = $selectedKittenIndices.get()
+    const multi = indices.length + conIndices.length + kitIndices.length > 1
     let target: THREE.Object3D | null
 
     // Suppress the gizmo when any selected entity is in a locked layer (items
-    // can be selected from the Placed list for inspection but must not be moved).
-    const part = $part.get()
-    const conIndices = $selectedConnectorIndices.get()
-    const kitIndices = $selectedKittenIndices.get()
+    // can be selected from the Assets list for inspection but must not be moved).
     const anyLocked =
       indices.some((i) => isLayerLocked(part.placements[i]?.layerId ?? '')) ||
       conIndices.some((ci) => isLayerLocked(part.connectors[ci]?.layerId ?? '')) ||
@@ -541,54 +512,41 @@ export class EditorScene {
     updateSelectedTransform(readPlacementTransform(object))
   }
 
-  /** Snapshots the selected SubParts' transforms at the start of a bulk gizmo drag. */
+  /** Snapshots all selected entities' transforms at the start of a bulk gizmo drag. */
   private beginBulkDrag(): void {
-    if ($selectedIndices.get().length <= 1) {
+    const refs = selectedTransformRefs()
+    if (refs.length <= 1) {
       this.bulkSnapshot = null
       return
     }
-    const part = $part.get()
-    const items = $selectedIndices.get().flatMap((index) => {
-      const p = part.placements[index]
-      if (!p) return []
-      return [
-        {
-          index,
-          base: {
-            position: { ...p.position },
-            rotation: { ...p.rotation },
-            scale: { ...p.scale },
-          },
-        },
-      ]
-    })
-    this.bulkSnapshot = { centroid: centroidOf(items.map((i) => i.base.position)), items }
+    this.bulkSnapshot = { centroid: centroidOf(refs.map((r) => r.transform.position)), items: refs }
   }
 
-  /** Applies the pivot's delta (per the active tool mode) to every snapshotted SubPart. */
+  /** Applies the pivot's delta (per the active tool mode) to every snapshotted entity. */
   private applyBulkFromPivot(): void {
     const snap = this.bulkSnapshot
     if (!snap) return
     const mode = $toolMode.get()
-    const updates = snap.items.map(({ index, base }) => {
+    const updates = snap.items.map(({ kind, index, transform: base }) => {
       if (mode === 'translate') {
         const delta = {
           x: this.pivot.position.x - snap.centroid.x,
           y: this.pivot.position.y - snap.centroid.y,
           z: this.pivot.position.z - snap.centroid.z,
         }
-        return { index, transform: translatedTransform(base, delta) }
+        return { kind, index, transform: translatedTransform(base, delta) }
       }
       if (mode === 'rotate') {
         return {
+          kind,
           index,
           transform: rotatedAroundOriginTransform(base, this.pivot.quaternion, snap.centroid),
         }
       }
       const factor = { x: this.pivot.scale.x, y: this.pivot.scale.y, z: this.pivot.scale.z }
-      return { index, transform: scaledInPlaceTransform(base, factor) }
+      return { kind, index, transform: scaledInPlaceTransform(base, factor) }
     })
-    updatePlacementTransforms(updates)
+    updateSelectedTransforms(updates)
   }
 
   /** Ends a bulk drag: drops the snapshot and re-centers the pivot on the new layout. */

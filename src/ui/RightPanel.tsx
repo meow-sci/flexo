@@ -1,8 +1,7 @@
 import { useStore } from '@nanostores/react'
 import { PanelRight } from 'lucide-react'
-import { Button, Toolbar, Tooltip } from './kit'
+import { Button, Tooltip } from './kit'
 import { InspectorContent } from './InspectorContent'
-import { LayersButton } from './LayersButton'
 import {
   $inspectorVisible,
   $inspectorWidth,
@@ -73,12 +72,7 @@ export function RightPanel() {
   return (
     <div className="absolute right-3 top-3 bottom-3 flex flex-col gap-2" style={{ width }}>
       <ResizeHandle />
-      <div className="flex shrink-0 items-center gap-2">
-        <Toolbar aria-label="Layers" className="min-w-0 flex-1">
-          <LayersButton />
-        </Toolbar>
-        {toggleButton}
-      </div>
+      <div className="flex shrink-0 items-center justify-end">{toggleButton}</div>
       <div className="min-h-0 flex-1">
         <InspectorContent />
       </div>

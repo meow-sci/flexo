@@ -2,15 +2,14 @@ import { useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { Button, TextField, Checkbox } from './kit'
 import {
-  $selectedIndices,
   pushUndo,
   setConnectorFlags,
   setSubPartInstanceId,
-  updatePlacementTransforms,
   updateSelectedTransform,
+  updateSelectedTransforms,
 } from '../state/editorStore'
 import type { PlacementTransform } from '../state/editorStore'
-import { $selectedEntity, $selectedPlacements } from '../state/selectors'
+import { $selectedEntity, $selectionCount, $selectedRefs } from '../state/selectors'
 import { $layerView, isLayerLocked } from '../state/layerStore'
 import {
   centroidOf,
@@ -83,10 +82,10 @@ type Axis = 'x' | 'y' | 'z'
  * degrees but stored/exported in radians. Connectors expose their connection Flags.
  */
 export function TransformInspector() {
-  const selectedIndices = useStore($selectedIndices)
+  const count = useStore($selectionCount)
   const entity = useStore($selectedEntity)
   useStore($layerView) // re-render when lock state changes
-  if (selectedIndices.length > 1) return <BulkTransformPanel />
+  if (count > 1) return <BulkTransformPanel />
   if (!entity) return null
 
   const layerId = entity.kind === 'subpart' ? entity.placement.layerId : entity.connector.layerId
@@ -207,52 +206,54 @@ function SubPartHeader({
 }
 
 /**
- * Bulk relative-transform panel shown when 2+ SubParts are selected. Each group
- * applies a delta to EVERY selected SubPart: Move adds the same offset, Scale
- * multiplies each one's scale in place, and Rotate spins them around the shared
- * centroid. Deltas are committed on Apply (single undo step) and reset afterward.
+ * Bulk relative-transform panel shown when 2+ entities are selected (SubParts,
+ * connectors, kittens — any mix). Each group applies a delta to EVERY selected
+ * entity: Move adds the same offset, Scale multiplies each one's scale in place,
+ * and Rotate spins them around the shared centroid. Deltas are committed on Apply
+ * (single undo step) and reset afterward.
  */
 function BulkTransformPanel() {
-  const selected = useStore($selectedPlacements)
+  const refs = useStore($selectedRefs)
   useStore($layerView) // re-render when lock state changes
-  const anyLocked = selected.some(({ placement }) => isLayerLocked(placement.layerId))
+  const anyLocked = refs.some((r) => isLayerLocked(r.layerId))
 
-  const bulkDetail = selected.length === 1 ? selected[0].placement.instanceId : `${selected.length} parts`
+  const bulkDetail = refs.length === 1 ? refs[0].name : `${refs.length} items`
 
   const applyMove = (delta: [number, number, number]) => {
-    if (selected.length === 0) return
+    if (refs.length === 0) return
     pushUndo('move', bulkDetail)
     const d = { x: delta[0], y: delta[1], z: delta[2] }
-    updatePlacementTransforms(
-      selected.map(({ index, placement }) => ({ index, transform: translatedTransform(placement, d) })),
+    updateSelectedTransforms(
+      refs.map((r) => ({ kind: r.kind, index: r.index, transform: translatedTransform(r.transform, d) })),
     )
   }
 
   const applyRotate = (deg: [number, number, number]) => {
-    if (selected.length === 0) return
+    if (refs.length === 0) return
     pushUndo('rotate', bulkDetail)
     const deltaQuat = quatFromEulerDeg({ x: deg[0], y: deg[1], z: deg[2] })
-    const origin = centroidOf(selected.map(({ placement }) => placement.position))
-    updatePlacementTransforms(
-      selected.map(({ index, placement }) => ({
-        index,
-        transform: rotatedAroundOriginTransform(placement, deltaQuat, origin),
+    const origin = centroidOf(refs.map((r) => r.transform.position))
+    updateSelectedTransforms(
+      refs.map((r) => ({
+        kind: r.kind,
+        index: r.index,
+        transform: rotatedAroundOriginTransform(r.transform, deltaQuat, origin),
       })),
     )
   }
 
   const applyScale = (factor: [number, number, number]) => {
-    if (selected.length === 0) return
+    if (refs.length === 0) return
     pushUndo('scale', bulkDetail)
     const f = { x: factor[0], y: factor[1], z: factor[2] }
-    updatePlacementTransforms(
-      selected.map(({ index, placement }) => ({ index, transform: scaledInPlaceTransform(placement, f) })),
+    updateSelectedTransforms(
+      refs.map((r) => ({ kind: r.kind, index: r.index, transform: scaledInPlaceTransform(r.transform, f) })),
     )
   }
 
   return (
     <div className={panelClass}>
-      <span className="font-mono text-sm">{selected.length} SubParts selected</span>
+      <span className="font-mono text-sm">{refs.length} items selected</span>
       <VectorApply title="Move by (m)" defaultValue={[0, 0, 0]} isDisabled={anyLocked} onApply={applyMove} />
       <VectorApply title="Rotate by (°) around centroid" defaultValue={[0, 0, 0]} isDisabled={anyLocked} onApply={applyRotate} />
       <VectorApply title="Scale by (×)" defaultValue={[1, 1, 1]} isDisabled={anyLocked} onApply={applyScale} />

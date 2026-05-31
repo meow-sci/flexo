@@ -291,8 +291,17 @@ export async function hydrateCustomAssets(): Promise<void> {
   await rebuildAtlas()
 }
 
-// Re-hydrate whenever the active project changes (load/rename) — and once on init.
-if (typeof indexedDB !== 'undefined' && typeof window !== 'undefined') {
+/**
+ * Wires the custom-asset hydration into the project lifecycle. Must be called
+ * once from main.tsx AFTER hydrateProjectOnBoot() so that the immediate
+ * subscriber callback reads the already-populated $part (not the initial empty
+ * createEmptyPart()). Calling it before hydrateProjectOnBoot() would hydrate
+ * against the wrong part, and for projects whose name equals the default
+ * ("Untitled") the $projectName atom would never re-fire (nanostores skips
+ * same-value sets), so the real project's assets would never load.
+ */
+export function initCustomAssets(): void {
+  if (typeof indexedDB === 'undefined' || typeof window === 'undefined') return
   $projectName.subscribe(() => {
     void hydrateCustomAssets().catch((err) => console.warn('flexo: custom-asset hydrate failed', err))
   })

@@ -1,5 +1,14 @@
 import { computed } from 'nanostores'
-import { $activeLayerId, $part, $selectedConnectorIndex, $selectedConnectorIndices, $selectedIndices, $selectedKittenIndices } from './editorStore'
+import {
+  $activeLayerId,
+  $part,
+  $selectedConnectorIndex,
+  $selectedConnectorIndices,
+  $selectedIndices,
+  $selectedKittenIndices,
+  selectedTransformRefs,
+  type SelectedTransformRef,
+} from './editorStore'
 import type { Connector, Layer, SubPartPlacement } from '../ksa/types'
 
 /** The currently selected placement when exactly one SubPart is selected, else null. */
@@ -33,13 +42,27 @@ export const $hasSelection = computed(
 )
 
 /**
- * True when more than one entity is selected — the trigger for the multi-select
- * toolbar. Only SubParts support multi-selection (connector selection is single),
- * so this keys solely on the SubPart indices.
+ * True when more than one entity is selected (across any kinds) — the trigger for
+ * the multi-select toolbar and the bulk transform panel.
  */
 export const $hasMultiSelection = computed(
-  $selectedIndices,
-  (indices): boolean => indices.length > 1,
+  [$selectedIndices, $selectedConnectorIndices, $selectedKittenIndices],
+  (sub, con, kit): boolean => sub.length + con.length + kit.length > 1,
+)
+
+/** Total number of selected entities across all kinds. */
+export const $selectionCount = computed(
+  [$selectedIndices, $selectedConnectorIndices, $selectedKittenIndices],
+  (sub, con, kit): number => sub.length + con.length + kit.length,
+)
+
+/**
+ * Every selected entity with its current transform (SubParts, then connectors,
+ * then kittens). Drives the bulk transform panel for a unified multi-selection.
+ */
+export const $selectedRefs = computed(
+  [$part, $selectedIndices, $selectedConnectorIndices, $selectedKittenIndices],
+  (): SelectedTransformRef[] => selectedTransformRefs(),
 )
 
 /**

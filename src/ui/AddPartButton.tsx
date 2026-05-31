@@ -20,6 +20,7 @@ import type { Layer } from '../ksa/types'
 import { $catalogIndex } from '../state/catalogStore'
 import { $partCatalog, $partCatalogLoading } from '../state/partCatalogStore'
 import { $part, addPart, createLayer } from '../state/editorStore'
+import { revealLayer } from '../state/layerStore'
 import { closeBrowserPopup, openBrowserPopup } from '../state/loadProgressStore'
 import { PartPreview } from './PartPreview'
 import { PreviewLoadProgress } from './LoadProgress'
@@ -117,7 +118,9 @@ function BrowserBody() {
         : targetLayer === CURRENT_LAYER
           ? undefined
           : targetLayer
-    addPart(selected.placements, selected.connectors, selected.editorTags, layerId)
+    // addPart selects the imported SubParts and returns the layer they landed on;
+    // reveal it (visible + in the Assets list) so the import is never hidden.
+    revealLayer(addPart(selected.placements, selected.connectors, selected.editorTags, layerId))
     toast({ title: 'Part Added', description: selected.id }, { timeout: 2500 })
   }
 

@@ -16,8 +16,8 @@ import {
   moveSelectedPlacementsToLayer,
   removeSelected,
 } from '../state/editorStore'
-import { $hasMultiSelection } from '../state/selectors'
-import { CONNECTOR_LAYER_ID } from '../ksa/types'
+import { $hasMultiSelection, $selectionCount } from '../state/selectors'
+import { CONNECTOR_LAYER_ID, KITTEN_LAYER_ID } from '../ksa/types'
 
 /**
  * Floating toolbar stacked beneath {@link SelectionToolbar}, shown only when more
@@ -26,13 +26,15 @@ import { CONNECTOR_LAYER_ID } from '../ksa/types'
  */
 export function MultiSelectToolbar() {
   const hasMultiSelection = useStore($hasMultiSelection)
-  const count = useStore($selectedIndices).length
+  const count = useStore($selectionCount)
+  const subCount = useStore($selectedIndices).length
 
   if (!hasMultiSelection) return null
 
   return (
     <Toolbar aria-label="Multi-selection actions">
-      <ChangeLayerButton />
+      {/* Only SubParts can change layer (connectors/kittens are pinned to theirs). */}
+      {subCount > 0 && <ChangeLayerButton />}
       <DeleteAllButton count={count} />
     </Toolbar>
   )
@@ -41,8 +43,8 @@ export function MultiSelectToolbar() {
 /** "Change Layer" menu: picks a destination layer for the whole selection. */
 function ChangeLayerButton() {
   const part = useStore($part)
-  // SubParts never belong to the built-in Connectors layer.
-  const layers = part.layers.filter((l) => l.id !== CONNECTOR_LAYER_ID)
+  // SubParts never belong to the built-in Connectors/Kittens layers.
+  const layers = part.layers.filter((l) => l.id !== CONNECTOR_LAYER_ID && l.id !== KITTEN_LAYER_ID)
 
   return (
     <MenuTrigger>
@@ -76,8 +78,8 @@ function DeleteAllButton({ count }: { count: number }) {
       <ConfirmDialog
         isOpen={confirmDelete}
         onOpenChange={setConfirmDelete}
-        title="Delete SubParts"
-        text={`Delete all ${count} selected SubParts?`}
+        title="Delete selection"
+        text={`Delete all ${count} selected items?`}
         confirmLabel="Delete All"
         confirmVariant="danger"
         onConfirm={() => removeSelected()}

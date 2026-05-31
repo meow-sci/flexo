@@ -5,6 +5,7 @@ import {
   $selectedIndex,
   $selectedIndices,
   $selectedConnectorIndex,
+  $selectedConnectorIndices,
   $selectedKittenIndex,
   $selectedKittenIndices,
   $canUndo,
@@ -20,7 +21,14 @@ import {
   setActiveLayer,
   setEditorTags,
   setPartId,
+  setSelection,
+  setSelectedPlacements,
+  toggleEntity,
+  updateSelectedTransforms,
+  duplicatePlacement,
   duplicateSelected,
+  movePlacementToLayer,
+  moveSelectedPlacementsToLayer,
   pushUndo,
   removeSelected,
   newPart,
@@ -373,5 +381,145 @@ describe('editorStore layers', () => {
     selectLayerEntities(CONNECTOR_LAYER_ID)
     expect($selectedIndices.get()).toEqual([])
     expect($selectedConnectorIndex.get()).toBe($part.get().connectors.length - 1)
+  })
+
+  it('duplicatePlacement copies one row by index, keeps its layer, selects the copy, and is undoable', () => {
+    addSubPart('Core.A') // active = Default
+    const engines = createLayer('Engines')
+    addSubPart('Core.B') // in Engines, index 1
+    updatePlacementTransform(1, {
+      position: { x: 4, y: 5, z: 6 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+    })
+    duplicatePlacement(1)
+    const p = $part.get().placements
+    expect(p.length).toBe(3)
+    expect(p[2].instanceId).toBe('b_2')
+    expect(p[2].layerId).toBe(engines)
+    expect(p[2].position).toEqual({ x: 4, y: 5, z: 6 })
+    expect($selectedIndices.get()).toEqual([2])
+    undo()
+    expect($part.get().placements.length).toBe(2)
+  })
+
+  it('movePlacementToLayer refuses the Connectors and Kittens layers', () => {
+    addSubPart('Core.A') // index 0, Default
+    movePlacementToLayer(0, CONNECTOR_LAYER_ID)
+    movePlacementToLayer(0, KITTEN_LAYER_ID)
+    expect($part.get().placements[0].layerId).toBe(DEFAULT_LAYER_ID)
+    // A normal layer still works.
+    const engines = createLayer('Engines')
+    movePlacementToLayer(0, engines)
+    expect($part.get().placements[0].layerId).toBe(engines)
+  })
+
+  it('moveSelectedPlacementsToLayer refuses special layers and does NOT change the active layer', () => {
+    const engines = createLayer('Engines') // active = Engines
+    setActiveLayer(DEFAULT_LAYER_ID)
+    addSubPart('Core.A') // index 0, Default
+    addSubPart('Core.B') // index 1, Default
+    setSelectedPlacements([0, 1])
+
+    moveSelectedPlacementsToLayer(KITTEN_LAYER_ID)
+    expect($part.get().placements.every((p) => p.layerId === DEFAULT_LAYER_ID)).toBe(true)
+
+    moveSelectedPlacementsToLayer(engines)
+    expect($part.get().placements.every((p) => p.layerId === engines)).toBe(true)
+    // The active layer is unchanged (selection spans layers; no forced snap).
+    expect($activeLayerId.get()).toBe(DEFAULT_LAYER_ID)
+  })
+
+  it('setSelection allows a selection that spans SubParts, connectors, and kittens', () => {
+    addSubPart('Core.A')
+    addConnector()
+    addKitten('hunter')
+    setSelection([0], [0], [0])
+    expect($selectedIndices.get()).toEqual([0])
+    expect($selectedConnectorIndices.get()).toEqual([0])
+    expect($selectedKittenIndices.get()).toEqual([0])
+  })
+
+  it('toggleEntity adds/removes one kind without clearing the others', () => {
+    addSubPart('Core.A')
+    addConnector()
+    setSelection([0], [], [])
+    toggleEntity('connector', 0)
+    expect($selectedIndices.get()).toEqual([0]) // SubPart kept
+    expect($selectedConnectorIndices.get()).toEqual([0]) // connector added
+    toggleEntity('connector', 0)
+    expect($selectedIndices.get()).toEqual([0])
+    expect($selectedConnectorIndices.get()).toEqual([]) // connector removed
+  })
+
+  it('removeSelected deletes a mixed selection in one undo step', () => {
+    addSubPart('Core.A')
+    addSubPart('Core.B')
+    addConnector()
+    addKitten('hunter')
+    setSelection([0, 1], [0], [0])
+    removeSelected()
+    expect($part.get().placements.length).toBe(0)
+    expect($part.get().connectors.length).toBe(0)
+    expect($part.get().kittens.length).toBe(0)
+    undo() // a single step restores all three kinds
+    expect($part.get().placements.length).toBe(2)
+    expect($part.get().connectors.length).toBe(1)
+    expect($part.get().kittens.length).toBe(1)
+  })
+
+  it('duplicateSelected copies every kind in a mixed selection and selects the copies', () => {
+    addSubPart('Core.A')
+    addConnector()
+    addKitten('hunter')
+    setSelection([0], [0], [0])
+    duplicateSelected()
+    expect($part.get().placements.length).toBe(2)
+    expect($part.get().connectors.length).toBe(2)
+    expect($part.get().kittens.length).toBe(2)
+    expect($selectedIndices.get()).toEqual([1])
+    expect($selectedConnectorIndices.get()).toEqual([1])
+    expect($selectedKittenIndices.get()).toEqual([1])
+  })
+
+  it('updateSelectedTransforms writes transforms across kinds in one store update', () => {
+    addSubPart('Core.A')
+    addConnector()
+    addKitten('hunter')
+    const t = (x: number) => ({ position: { x, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } })
+    updateSelectedTransforms([
+      { kind: 'subpart', index: 0, transform: t(1) },
+      { kind: 'connector', index: 0, transform: t(2) },
+      { kind: 'kitten', index: 0, transform: t(3) },
+    ])
+    expect($part.get().placements[0].position.x).toBe(1)
+    expect($part.get().connectors[0].position.x).toBe(2)
+    expect($part.get().kittens[0].position.x).toBe(3)
+  })
+
+  it('selectLayerEntities selects all kittens on the Kittens layer', () => {
+    addKitten('hunter')
+    addKitten('polaris')
+    selectLayerEntities(KITTEN_LAYER_ID)
+    expect($selectedKittenIndices.get()).toEqual([0, 1])
+  })
+
+  it('addPart returns the target layer and selects exactly the imported SubParts', () => {
+    addSubPart('Core.Existing') // pre-existing placement 0 on Default
+    const engines = createLayer('Engines')
+    const mk = (id: string) => ({
+      instanceId: id,
+      subPartTemplateId: id,
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+      layerId: DEFAULT_LAYER_ID,
+    })
+    const layerId = addPart([mk('Core.A'), mk('Core.B')], [], [], engines)
+    expect(layerId).toBe(engines)
+    expect($part.get().placements.length).toBe(3)
+    // Selection is exactly the two imported parts (indices 1 & 2), not the pre-existing one.
+    expect([...$selectedIndices.get()].sort((a, b) => a - b)).toEqual([1, 2])
+    expect($part.get().placements[1].layerId).toBe(engines)
   })
 })

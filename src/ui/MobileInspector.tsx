@@ -2,11 +2,10 @@ import { useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { ChevronUp, X } from 'lucide-react'
 import { Heading } from 'react-aria-components'
-import { Button, Modal, Dialog, Toolbar } from './kit'
-import { LayersButton } from './LayersButton'
+import { Button, Modal, Dialog } from './kit'
 import { InspectorContent } from './InspectorContent'
 import { $activeLayer } from '../state/selectors'
-import { $selectedConnectorIndices, $selectedIndices } from '../state/editorStore'
+import { $selectedConnectorIndices, $selectedIndices, $selectedKittenIndices } from '../state/editorStore'
 
 /**
  * Phone-only inspector: a pinned bottom-right button (showing the active layer +
@@ -17,7 +16,10 @@ import { $selectedConnectorIndices, $selectedIndices } from '../state/editorStor
 export function MobileInspector() {
   const [open, setOpen] = useState(false)
   const activeLayer = useStore($activeLayer)
-  const selectedCount = useStore($selectedIndices).length + useStore($selectedConnectorIndices).length
+  const selectedCount =
+    useStore($selectedIndices).length +
+    useStore($selectedConnectorIndices).length +
+    useStore($selectedKittenIndices).length
 
   return (
     <>
@@ -42,10 +44,7 @@ export function MobileInspector() {
           <Heading slot="title" className="sr-only">
             Inspector
           </Heading>
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-2 py-2">
-            <Toolbar aria-label="Layers" className="min-w-0 flex-1">
-              <LayersButton />
-            </Toolbar>
+          <div className="flex shrink-0 items-center justify-end gap-2 border-b border-border px-2 py-2">
             <Button
               iconOnly
               size="sm"

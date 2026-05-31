@@ -29,10 +29,10 @@ import {
   setActiveLayer,
   type DeleteLayerOptions,
 } from '../state/editorStore'
-import { $layerView, layerViewState, toggleLayerLocked, toggleLayerVisible } from '../state/layerStore'
+import { $layerView, layerViewState, toggleLayerListed, toggleLayerLocked, toggleLayerVisible } from '../state/layerStore'
 import { $layerSummaries, type LayerSummary } from '../state/selectors'
 import { BUILT_IN_LAYER_IDS, DEFAULT_LAYER_ID, type Layer } from '../ksa/types'
-import { EyeIcon, EyeOffIcon, GripVerticalIcon, LockIcon, PencilIcon, SaveIcon, SelectAllIcon, TrashIcon, UnlockIcon } from './layerIcons'
+import { EyeIcon, EyeOffIcon, GripVerticalIcon, ListedIcon, LockIcon, PencilIcon, SaveIcon, SelectAllIcon, TrashIcon, UnlistedIcon, UnlockIcon } from './layerIcons'
 
 /** Moves the dragged keys to before/after the target id within `ids`. */
 function computeReorder(
@@ -233,6 +233,17 @@ function LayerRow({
             onPress={() => toggleLayerLocked(layer.id)}
           >
             {locked ? <LockIcon /> : <UnlockIcon />}
+          </Button>
+        </Tooltip>
+        <Tooltip content={view.listed ? 'Hide from Assets list' : 'Show in Assets list'}>
+          <Button
+            iconOnly
+            size="sm"
+            variant="ghost"
+            aria-label={view.listed ? 'Hide from Assets list' : 'Show in Assets list'}
+            onPress={() => toggleLayerListed(layer.id)}
+          >
+            {view.listed ? <ListedIcon /> : <UnlistedIcon />}
           </Button>
         </Tooltip>
         <Tooltip content={locked ? 'Layer locked' : 'Select all in layer'}>

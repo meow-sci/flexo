@@ -18,9 +18,11 @@ import { deselectLayer } from './editorStore'
 export interface LayerViewState {
   visible: boolean
   locked: boolean
+  /** Whether the layer's entities appear in the inspector "Assets" list. */
+  listed: boolean
 }
 
-export const DEFAULT_LAYER_STATE: Readonly<LayerViewState> = { visible: true, locked: false }
+export const DEFAULT_LAYER_STATE: Readonly<LayerViewState> = { visible: true, locked: false, listed: true }
 
 /** Map of layerId → view state. Entries are sparse (defaults filled on read). */
 export const $layerView = persistentJSON<Record<string, LayerViewState>>('flexo:layerView', {})
@@ -40,6 +42,11 @@ export function isLayerLocked(id: string): boolean {
   return layerViewState($layerView.get(), id).locked
 }
 
+/** True when the layer's entities are shown in the Assets list (default true). */
+export function isLayerListed(id: string): boolean {
+  return layerViewState($layerView.get(), id).listed
+}
+
 function setLayerView(id: string, patch: Partial<LayerViewState>): void {
   const current = $layerView.get()
   $layerView.set({ ...current, [id]: { ...layerViewState(current, id), ...patch } })
@@ -48,6 +55,24 @@ function setLayerView(id: string, patch: Partial<LayerViewState>): void {
 /** Toggles a layer's visibility. Hidden layers render nothing in the viewport. */
 export function toggleLayerVisible(id: string): void {
   setLayerView(id, { visible: !isLayerVisible(id) })
+}
+
+/**
+ * Toggles whether a layer's entities appear in the Assets list. Purely a list-
+ * display preference — unlike lock, it does NOT prune selection (cross-layer
+ * selection persists even for layers hidden from the list).
+ */
+export function toggleLayerListed(id: string): void {
+  setLayerView(id, { listed: !isLayerListed(id) })
+}
+
+/**
+ * Ensures a layer is shown — visible in the viewport AND present in the Assets
+ * list (idempotent). Used after importing into a layer so the import is never
+ * hidden by a prior hide/unlist of that layer.
+ */
+export function revealLayer(id: string): void {
+  setLayerView(id, { visible: true, listed: true })
 }
 
 /**

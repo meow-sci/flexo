@@ -61,13 +61,52 @@
     - Deans image on hunter silence of the lambs style?
 - ✅ bounding containers are not part of undo/redo stack, they should be first-class members (addition/removal/resize/move/rotate, their settings changes, etc)
 - ✅ reference lines and point to point lines should be part of undo/redo stack (addition/removal/settings/position changes etc)
+- ✅ at "npm run build" time embed some build ID, and when loading the webapp if the build ID mismatches pop up a thing suggesting that they reset data due to a new build. DO NOT trigger this on "npm run dev" runs.  I would prefer this is read from environment and i would use .env locally so i can have it be static (even for prod builds) but update the GitHub Action to use the git commit hash for this value
+- ✅ reloading webapp when custom textures and meshes are in the project results in a broken state.  if i have an untextured mesh the meshes are just missing from the 3d workspace (but are listed under the subparts and custom assets).  and textures are listed under custom assets as well but appear broken, the thumbnail just shows black instead of a thumbnail of the actual texture image.  dive in and find out what is wrong, when the page reloads, everything in the project data in the workspace should be 100% restored
+- ✅ refactor of layer system
+    - make selection of objects for meshes and connectors possible on multiple layers at a time
+    - selection should work for anything visible and unlocked
+    - selection should NOT work for anything not visible or locked
+    - need a major refactor and redesign of the layer popover and subparts grid list, current usability is not good
+    - the "Subparts" GridList should just be called "Assets" to make it more generic, after this refactor it will contain data from multiple layers
+    - instead of working on one layer at a time like we do now, i want layers to be used to:
+        - group assets (what it does now)
+        - toggle 3d visibility (what it does now)
+        - toggle lock (what it does now)
+        - [new]: toggle in asset list.  when enabled, the assets appear in the Assets GridList. by default all layers have this enabled
+    - update the new assets GridList to use GridListHeader above the asset entries for each layer visible in the list
+    - We need a new "Assets toolbar" above the new "Assets" GridList which exposes functionality
+        - Layers button, says "[Icon] Layers (N)" with a count of layers.  reuse the existing layers popover and add in the new asset list toggle icon button
+        - Add
+    - Remove the old layers button in favor of the new one in the new Assets toolbar
+    - Move the existing "Duplicate" button in the old Subparts list into the context menu of each asset GridList entry
+    - Remove the existing "Delete" button in the old Subparts list (it already exists in the context menu of each asset entry)
+    - add a new search filter box where the old "Duplicate" and "Delete" buttons were in the asset grid list surface
+    - [bug to fix]: the asset entry context menu "Change Layer" allows trying to send meshes to the Kittens layer, the kittens layer is special like the connectors layer in that they can only hold kittens and connectors can only hold connectors
+    - Right now when we create custom meshes, they have an area where they float above the assets list and this is awkward and wastes space
+        - To add new custom mesh instances, if we have any custom meshes, under the main "Add" menu, add a "Custom Meshes" menu item with a submenu of each of our custom meshes
+        - To manage custom meshes (to e.g. delete them or also have another add button), move them to the new "Assets toolbar" with a button labeled "Custom (N)" where N is the combined count of custom meshes and uploaded textures.  this button opens a large modal (full screen on mobile) with a list for textures that can be deleted and a list for meshes that can be deleted (or an add button to add new instances of that mesh, which dismisses the modal)
+        - remove the old custom assets area
+- ✅ asset grid list shift selection doesn't do a contiguous selection.  i dont want to invent something completely custom here if we can help it, react-aria components has a lot of built-in capabilities for accessibility, check the react-aria skill and see if there's a setting we can enable.  if not, dont do anything.
+- ✅ cmd+a/ctrl+a select all hotkey in the asset grid list doesn't include connectors and kittens (but should).  it does sometimes include them if they are the only selectable types.  i dont want to have any special rules per type anymore, everything displayed in the asset grid should be equally selectable now
+- ✅ after importing a built-in part
+    - ensure the layer it was imported to is visible if it wasnt new, and is enabled in the asset list
+    - select all the subpart meshes of the imported part (not necessarily all meshes in the layer since there might've been existing)
+- ✅ layer popover select all button for connectors doesnt work reliably, it often only selects one of N connectors
+- ✅ layer popover select all button for kittens doesnt do anything
 
-- at "npm run build" time embed some build ID, and when loading the webapp if the build ID mismatches pop up a thing suggesting that they reset data due to a new build. DO NOT trigger this on "npm run dev" runs.  I would prefer this is read from environment and i would use .env locally so i can have it be static (even for prod builds) but update the GitHub Action to use the git commit hash for this value
-- stock animation system
+- the delete button for connectors and kitten layers SHOULD NOT delete the layer but show a dialog which asks if the user wants to delete all assets on the layer with a count and a confirm button
+- make right click on asset grid list show the same context menu as the icon button
+- regular subpart mesh selection is not showing a selection highlight shader. when kittens are selected they have a blue shading applied, when connectors are selecting they have a green mesh coloring.. but subparts have nothing.  add a color like we do for kittens.  make this a globally persistent color setting for the color and alpha for both kittens and meshes as separate settings in the global settings dialog and this should be persistent app-level user setting data.  i think this used to work on subpart meshes at some point so it might just be broken, but either way fix it and make the color and alpha settable as app level user settings.
+- on desktop, the resizable area on the right which holds out asset list and toolbar, when it overlaps with the top toolbar, it is preventing click throughs to the top toolbar.  visually they dont overlap because the asset toolbar and list are offset below it, but there must be a div preventing click through
+- deleting a custom mesh removes assets from the layers but when you undo to restore teh custom mesh, the asset re-appears but is not rendered, so something is broken with the undo/redo restoration when a custom mesh is deleted.  even adding a new instance of the custom mesh after it's been restored from an undo/redo doesnt work properly (we show the mesh in the list, but nothing is rendered)
+  - NOTE: a refresh of the webapp renders the mesh instances it, so it might just be a simple 3d viewport refresh trigger needed?
+
+
+
 - emissives ... inanimate carbon rod wen?
 - engine building with combustion type control
 - make kittens into SubParts + Parts.. ? with connectors
-- reloading webapp when custom textures and meshes are in the project breaks (at least) the textures
 - use https://react-aria.adobe.com/ColorPicker for color pickers and support alpha?
 - project export/import to/from JSON
 - fps counter
@@ -82,3 +121,4 @@
     - start a right click/context menu of specific features?  floating FAB button for mobile?
     - connectors too
 - prettyXml is super janky, look at pebkac for how i did it there for a DOM/Element native solution
+

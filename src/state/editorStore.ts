@@ -21,6 +21,8 @@ import {
   DEFAULT_LAYER_ID,
   KITTEN_LAYER_ID,
 } from '../ksa/types'
+import type { ReferenceContainer } from './containerStore'
+import type { LineMeasurement } from './measurementStore'
 
 /**
  * Framework-agnostic editor state (nanostores). No React / three.js imports —
@@ -120,9 +122,44 @@ export const $undoDescription = atom<string>('')
 /** Description of the action that will be redone next (empty when nothing to redo). */
 export const $redoDescription = atom<string>('')
 
+// ---------------------------------------------------------------------------
+// Editor-aid store registration
+//
+// containerStore and measurementStore are separate from $part but must be
+// snapshotted together with it for undo/redo. To avoid circular module
+// imports, the actual atom accessors are registered by main.tsx at startup
+// via registerEditorAidStores(). Until then, the stubs return/ignore empty
+// arrays (which is safe — no undo is possible before the app boots).
+// ---------------------------------------------------------------------------
+
+let _getContainers: () => ReferenceContainer[] = () => []
+let _setContainers: (c: ReferenceContainer[]) => void = () => {}
+let _getMeasurements: () => LineMeasurement[] = () => []
+let _setMeasurements: (m: LineMeasurement[]) => void = () => {}
+
+/**
+ * Wires containerStore and measurementStore into the undo/redo system. Call
+ * ONCE at app startup (before any user interactions) in main.tsx. The setter
+ * callbacks are responsible for clamping ephemeral state (active container /
+ * active measurement) when those ids no longer exist after a restore.
+ */
+export function registerEditorAidStores(opts: {
+  getContainers: () => ReferenceContainer[]
+  setContainers: (c: ReferenceContainer[]) => void
+  getMeasurements: () => LineMeasurement[]
+  setMeasurements: (m: LineMeasurement[]) => void
+}): void {
+  _getContainers = opts.getContainers
+  _setContainers = opts.setContainers
+  _getMeasurements = opts.getMeasurements
+  _setMeasurements = opts.setMeasurements
+}
+
 /** An entry in the undo or redo stack: the document snapshot plus a human-readable label. */
 export interface HistoryEntry {
   part: EditingPart
+  containers: ReferenceContainer[]
+  measurements: LineMeasurement[]
   description: string
   /** Contextual detail, e.g. entity name, layer name. Empty string if none. */
   detail: string
@@ -219,7 +256,13 @@ function currentLayerId(part: EditingPart): string {
 
 /** Snapshot current state onto the undo stack before a mutation. `description` labels the action; `detail` adds context (entity name, layer, etc.). */
 export function pushUndo(description: string, detail: string = ''): void {
-  undoStack.push({ part: clone($part.get()), description, detail })
+  undoStack.push({
+    part: clone($part.get()),
+    containers: structuredClone(_getContainers()),
+    measurements: structuredClone(_getMeasurements()),
+    description,
+    detail,
+  })
   if (undoStack.length > MAX_UNDO) undoStack.shift()
   redoStack.length = 0
   refreshHistoryFlags()
@@ -229,8 +272,16 @@ export function pushUndo(description: string, detail: string = ''): void {
 export function undo(): string {
   const entry = undoStack.pop()
   if (!entry) return ''
-  redoStack.push({ part: clone($part.get()), description: entry.description, detail: entry.detail })
+  redoStack.push({
+    part: clone($part.get()),
+    containers: structuredClone(_getContainers()),
+    measurements: structuredClone(_getMeasurements()),
+    description: entry.description,
+    detail: entry.detail,
+  })
   $part.set(entry.part)
+  _setContainers(entry.containers)
+  _setMeasurements(entry.measurements)
   clampSelection()
   clampActiveLayer()
   refreshHistoryFlags()
@@ -241,8 +292,16 @@ export function undo(): string {
 export function redo(): string {
   const entry = redoStack.pop()
   if (!entry) return ''
-  undoStack.push({ part: clone($part.get()), description: entry.description, detail: entry.detail })
+  undoStack.push({
+    part: clone($part.get()),
+    containers: structuredClone(_getContainers()),
+    measurements: structuredClone(_getMeasurements()),
+    description: entry.description,
+    detail: entry.detail,
+  })
   $part.set(entry.part)
+  _setContainers(entry.containers)
+  _setMeasurements(entry.measurements)
   clampSelection()
   clampActiveLayer()
   refreshHistoryFlags()
@@ -251,8 +310,8 @@ export function redo(): string {
 
 /** A serializable snapshot of the undo/redo stacks (newest-last), for project persistence. */
 export interface HistorySnapshot {
-  undo: Array<{ part: EditingPart; description: string; detail: string }>
-  redo: Array<{ part: EditingPart; description: string; detail: string }>
+  undo: Array<{ part: EditingPart; containers?: ReferenceContainer[]; measurements?: LineMeasurement[]; description: string; detail: string }>
+  redo: Array<{ part: EditingPart; containers?: ReferenceContainer[]; measurements?: LineMeasurement[]; description: string; detail: string }>
 }
 
 /**
@@ -262,8 +321,8 @@ export interface HistorySnapshot {
  */
 export function exportHistory(): HistorySnapshot {
   return {
-    undo: undoStack.map((e) => ({ part: clone(e.part), description: e.description, detail: e.detail })),
-    redo: redoStack.map((e) => ({ part: clone(e.part), description: e.description, detail: e.detail })),
+    undo: undoStack.map((e) => ({ part: clone(e.part), containers: structuredClone(e.containers), measurements: structuredClone(e.measurements), description: e.description, detail: e.detail })),
+    redo: redoStack.map((e) => ({ part: clone(e.part), containers: structuredClone(e.containers), measurements: structuredClone(e.measurements), description: e.description, detail: e.detail })),
   }
 }
 
@@ -277,12 +336,12 @@ export function importHistory(snapshot: HistorySnapshot): void {
   undoStack.length = 0
   redoStack.length = 0
   for (const raw of snapshot.undo as unknown[]) {
-    const e = raw as { part?: EditingPart; description?: string; detail?: string } & EditingPart
-    undoStack.push({ part: clone(e.part ?? (e as EditingPart)), description: e.description ?? 'edit', detail: e.detail ?? '' })
+    const e = raw as { part?: EditingPart; containers?: ReferenceContainer[]; measurements?: LineMeasurement[]; description?: string; detail?: string } & EditingPart
+    undoStack.push({ part: clone(e.part ?? (e as EditingPart)), containers: structuredClone(e.containers ?? []), measurements: structuredClone(e.measurements ?? []), description: e.description ?? 'edit', detail: e.detail ?? '' })
   }
   for (const raw of snapshot.redo as unknown[]) {
-    const e = raw as { part?: EditingPart; description?: string; detail?: string } & EditingPart
-    redoStack.push({ part: clone(e.part ?? (e as EditingPart)), description: e.description ?? 'edit', detail: e.detail ?? '' })
+    const e = raw as { part?: EditingPart; containers?: ReferenceContainer[]; measurements?: LineMeasurement[]; description?: string; detail?: string } & EditingPart
+    redoStack.push({ part: clone(e.part ?? (e as EditingPart)), containers: structuredClone(e.containers ?? []), measurements: structuredClone(e.measurements ?? []), description: e.description ?? 'edit', detail: e.detail ?? '' })
   }
   if (undoStack.length > MAX_UNDO) undoStack.splice(0, undoStack.length - MAX_UNDO)
   refreshHistoryFlags()

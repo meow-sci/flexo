@@ -59,12 +59,10 @@
     - this is a BIG feature, do massive deep research and implement it expertly
 
     - Deans image on hunter silence of the lambs style?
+- ✅ bounding containers are not part of undo/redo stack, they should be first-class members (addition/removal/resize/move/rotate, their settings changes, etc)
+- ✅ reference lines and point to point lines should be part of undo/redo stack (addition/removal/settings/position changes etc)
 
-
-- bounding containers are not part of undo/redo stack, they should be first-class members (addition/removal/resize/move/rotate, their settings changes, etc)
-- reference lines and point to point lines should be part of undo/redo stack (addition/removal/settings/position changes etc)
-
-- at "npm run build" time embed some build ID, and when loading the webapp if the build ID mismatches pop up a thing suggesting that they reset data due to a new build
+- at "npm run build" time embed some build ID, and when loading the webapp if the build ID mismatches pop up a thing suggesting that they reset data due to a new build. DO NOT trigger this on "npm run dev" runs.  I would prefer this is read from environment and i would use .env locally so i can have it be static (even for prod builds) but update the GitHub Action to use the git commit hash for this value
 - stock animation system
 - emissives ... inanimate carbon rod wen?
 - engine building with combustion type control

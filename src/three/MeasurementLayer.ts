@@ -23,6 +23,7 @@ import {
   updateMeasurement,
   type MeasurementSettings,
 } from '../state/measurementStore'
+import { pushUndo } from '../state/editorStore'
 import type { Vec3 } from '../ksa/types'
 
 const SELECTION_COLOR = 0x6ee7ff
@@ -332,7 +333,9 @@ export class MeasurementLayer {
     controls.setSpace('world')
     this.viewport.scene.add(controls.getHelper())
     controls.addEventListener('dragging-changed', (e) => {
-      this.viewport.controls.enabled = !(e.value as boolean)
+      const isDragging = e.value as boolean
+      if (isDragging) pushUndo('move endpoint')
+      this.viewport.controls.enabled = !isDragging
     })
     controls.addEventListener('objectChange', () => this.handleEndpointChange())
     this.endpointControls = controls

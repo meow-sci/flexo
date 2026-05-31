@@ -2,6 +2,7 @@ import { atom } from 'nanostores'
 import { persistentJSON } from '@nanostores/persistent'
 import { randomId } from './ids'
 import type { Vec3 } from '../ksa/types'
+import { pushUndo } from './editorStore'
 
 /**
  * Reference-container state (nanostores). Like {@link measurementStore} this has
@@ -99,6 +100,7 @@ export function normalizeSize(shape: ReferenceShape, size: Vec3): Vec3 {
 
 /** Adds a 1m default-sized container at the origin and makes it active. Returns its id. */
 export function addContainer(shape: ReferenceShape): string {
+  pushUndo('add container')
   const id = newId()
   const container: ReferenceContainer = {
     id,
@@ -120,16 +122,19 @@ export function addContainer(shape: ReferenceShape): string {
   return id
 }
 
+/** Streaming mutation: no undo push — the caller pushes once at interaction start. */
 export function updateContainer(id: string, patch: Partial<Omit<ReferenceContainer, 'id'>>): void {
   $containers.set($containers.get().map((c) => (c.id === id ? { ...c, ...patch } : c)))
 }
 
 export function removeContainer(id: string): void {
+  pushUndo('delete container')
   $containers.set($containers.get().filter((c) => c.id !== id))
   if ($activeContainerId.get() === id) $activeContainerId.set(null)
 }
 
 export function setContainerLocked(id: string, locked: boolean): void {
+  pushUndo(locked ? 'lock container' : 'unlock container')
   updateContainer(id, { locked })
 }
 

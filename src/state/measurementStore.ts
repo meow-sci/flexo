@@ -2,6 +2,7 @@ import { atom } from 'nanostores'
 import { persistentJSON } from '@nanostores/persistent'
 import { randomId } from './ids'
 import type { Vec3 } from '../ksa/types'
+import { pushUndo } from './editorStore'
 
 /**
  * Measurement state (nanostores). Like {@link editorStore} this has no React /
@@ -94,6 +95,7 @@ export function addMeasurement(
   m: Omit<LineMeasurement, 'id' | 'color' | 'locked' | 'axisLock' | 'lineOpacity' | 'lineWidth'> &
     Partial<Pick<LineMeasurement, 'color' | 'locked' | 'axisLock' | 'lineOpacity' | 'lineWidth'>>,
 ): string {
+  pushUndo(m.source === 'reference' ? 'add reference line' : 'add measurement')
   const id = newId()
   const measurement: LineMeasurement = {
     id,
@@ -111,16 +113,19 @@ export function addMeasurement(
   return id
 }
 
+/** Streaming mutation: no undo push — the caller pushes once at interaction start. */
 export function updateMeasurement(id: string, patch: Partial<Omit<LineMeasurement, 'id'>>): void {
   $measurements.set($measurements.get().map((m) => (m.id === id ? { ...m, ...patch } : m)))
 }
 
 export function removeMeasurement(id: string): void {
+  pushUndo('delete line')
   $measurements.set($measurements.get().filter((m) => m.id !== id))
   if ($activeMeasurementId.get() === id) $activeMeasurementId.set(null)
 }
 
 export function setMeasurementLocked(id: string, locked: boolean): void {
+  pushUndo(locked ? 'lock line' : 'unlock line')
   updateMeasurement(id, { locked })
 }
 

@@ -15,7 +15,7 @@ import {
   type ReferenceShape,
   type WarnPrecision,
 } from '../state/containerStore'
-import { $part } from '../state/editorStore'
+import { $part, pushUndo } from '../state/editorStore'
 import { evaluateViolations } from '../measure/containment'
 import type { Vec3 } from '../ksa/types'
 
@@ -364,9 +364,15 @@ export class ContainerLayer {
     controls.setSpace('local')
     this.viewport.scene.add(controls.getHelper())
     controls.addEventListener('dragging-changed', (e) => {
-      this.dragging = e.value as boolean
-      this.viewport.controls.enabled = !this.dragging
-      if (!this.dragging) this.refresh() // re-seed node from normalized store on release
+      const isDragging = e.value as boolean
+      if (isDragging) {
+        const mode = $containerGizmoMode.get()
+        const label = mode === 'translate' ? 'move container' : mode === 'rotate' ? 'rotate container' : 'resize container'
+        pushUndo(label)
+      }
+      this.dragging = isDragging
+      this.viewport.controls.enabled = !isDragging
+      if (!isDragging) this.refresh() // re-seed node from normalized store on release
     })
     controls.addEventListener('objectChange', () => this.handleGizmoChange())
     this.controls = controls

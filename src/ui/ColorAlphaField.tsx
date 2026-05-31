@@ -10,11 +10,13 @@ export function ColorAlphaField({
   color,
   opacity,
   onChange,
+  onInteractionStart,
 }: {
   label: string
   color: string
   opacity: number
   onChange: (next: { color: string; opacity: number }) => void
+  onInteractionStart?: () => void
 }) {
   return (
     <div className="flex items-center gap-2">
@@ -24,17 +26,20 @@ export function ColorAlphaField({
         aria-label={`${label} color`}
         className="h-6 w-6 shrink-0 cursor-pointer rounded border border-border bg-transparent"
         value={color}
+        onPointerDown={onInteractionStart}
         onChange={(e) => onChange({ color: e.target.value, opacity })}
       />
-      <Slider
-        aria-label={`${label} opacity`}
-        className="flex-1"
-        minValue={0}
-        maxValue={1}
-        step={0.01}
-        value={opacity}
-        onChange={(v) => onChange({ color, opacity: v as number })}
-      />
+      <div onPointerDown={onInteractionStart} className="flex-1">
+        <Slider
+          aria-label={`${label} opacity`}
+          className="w-full"
+          minValue={0}
+          maxValue={1}
+          step={0.01}
+          value={opacity}
+          onChange={(v) => onChange({ color, opacity: v as number })}
+        />
+      </div>
       <span className="w-8 shrink-0 text-right font-mono text-[11px] text-fg-subtle">
         {Math.round(opacity * 100)}%
       </span>

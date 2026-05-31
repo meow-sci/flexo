@@ -25,6 +25,7 @@ import {
   type ContainerGizmoMode,
   type ReferenceContainer,
 } from '../state/containerStore'
+import { pushUndo } from '../state/editorStore'
 import type { Vec3 } from '../ksa/types'
 
 const SHAPE_LABEL: Record<ReferenceContainer['shape'], string> = {
@@ -78,6 +79,11 @@ export function ContainerEditor() {
   const setEuler = (axis: keyof Vec3, val: number) =>
     updateContainer(c.id, { rotation: eulerDegToQuat({ ...euler, [axis]: val }) })
 
+  const pushCenter = () => pushUndo('container center')
+  const pushSize = () => pushUndo('container size')
+  const pushRotation = () => pushUndo('container rotation')
+  const pushStyle = () => pushUndo('container style')
+
   return (
     <div className={containerClass}>
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -130,13 +136,14 @@ export function ContainerEditor() {
           <VecRow
             label="Center"
             v={c.center}
+            onInteractionStart={pushCenter}
             onCommit={(axis, val) => updateContainer(c.id, { center: { ...c.center, [axis]: val } })}
           />
 
-          <Dimensions container={c} onSize={setSize} />
+          <Dimensions container={c} onSize={setSize} onInteractionStart={pushSize} />
 
           {c.shape !== 'rect' && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2" onPointerDown={pushStyle}>
               <span className="w-12 shrink-0 text-xs text-fg-muted">Lines</span>
               <Slider
                 aria-label="Surface lines"
@@ -155,7 +162,7 @@ export function ContainerEditor() {
 
           <div className="flex flex-col gap-1">
             <SectionTitle>Rotation°</SectionTitle>
-            <VecRow label="" v={euler} onCommit={(axis, val) => setEuler(axis, val)} />
+            <VecRow label="" v={euler} onInteractionStart={pushRotation} onCommit={(axis, val) => setEuler(axis, val)} />
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -164,9 +171,10 @@ export function ContainerEditor() {
               label="Color"
               color={c.color}
               opacity={c.lineOpacity}
+              onInteractionStart={pushStyle}
               onChange={({ color, opacity }) => updateContainer(c.id, { color, lineOpacity: opacity })}
             />
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2" onPointerDown={pushStyle}>
               <span className="w-12 shrink-0 text-xs text-fg-muted">Width</span>
               <Slider
                 aria-label="Line width"
@@ -187,7 +195,7 @@ export function ContainerEditor() {
             <SectionTitle>Containment warning</SectionTitle>
             <Switch
               isSelected={c.warnEnabled}
-              onChange={(warnEnabled) => updateContainer(c.id, { warnEnabled })}
+              onChange={(warnEnabled) => { pushUndo('container warning'); updateContainer(c.id, { warnEnabled }) }}
             >
               Detect out of bounds
             </Switch>
@@ -196,6 +204,7 @@ export function ContainerEditor() {
                 label="Warn"
                 color={c.warnColor}
                 opacity={c.warnOpacity}
+                onInteractionStart={pushStyle}
                 onChange={({ color, opacity }) =>
                   updateContainer(c.id, { warnColor: color, warnOpacity: opacity })
                 }
@@ -216,9 +225,11 @@ export function ContainerEditor() {
 function Dimensions({
   container: c,
   onSize,
+  onInteractionStart,
 }: {
   container: ReferenceContainer
   onSize: (size: Vec3) => void
+  onInteractionStart?: () => void
 }) {
   if (c.shape === 'rect') {
     return (
@@ -227,6 +238,7 @@ function Dimensions({
         <VecRow
           label=""
           v={c.size}
+          onInteractionStart={onInteractionStart}
           onCommit={(axis, val) => onSize({ ...c.size, [axis]: Math.max(0, val) })}
         />
       </div>
@@ -243,6 +255,7 @@ function Dimensions({
           className="min-w-0 flex-1"
           min={0}
           value={radius}
+          onInteractionStart={onInteractionStart}
           onCommit={(r) => onSize({ x: r * 2, y: c.shape === 'sphere' ? r * 2 : c.size.y, z: r * 2 })}
         />
       </div>
@@ -254,6 +267,7 @@ function Dimensions({
             className="min-w-0 flex-1"
             min={0}
             value={c.size.y}
+            onInteractionStart={onInteractionStart}
             onCommit={(h) => onSize({ ...c.size, y: Math.max(0, h) })}
           />
         </div>
@@ -266,10 +280,12 @@ function VecRow({
   label,
   v,
   onCommit,
+  onInteractionStart,
 }: {
   label: string
   v: Vec3
   onCommit: (axis: keyof Vec3, value: number) => void
+  onInteractionStart?: () => void
 }) {
   const axes: (keyof Vec3)[] = ['x', 'y', 'z']
   return (
@@ -281,6 +297,7 @@ function VecRow({
           aria-label={`${label} ${axis.toUpperCase()}`}
           className="min-w-0 flex-1"
           value={v[axis]}
+          onInteractionStart={onInteractionStart}
           onCommit={(val) => onCommit(axis, val)}
         />
       ))}

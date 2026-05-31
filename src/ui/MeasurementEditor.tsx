@@ -17,6 +17,7 @@ import {
   type AxisLock,
   type LineMeasurement,
 } from '../state/measurementStore'
+import { pushUndo } from '../state/editorStore'
 import { distance } from '../measure/bounds'
 import { formatLength } from '../measure/format'
 import type { Vec3 } from '../ksa/types'
@@ -81,6 +82,10 @@ export function MeasurementEditor() {
     }
   }
 
+  const pushEndpoint = () => pushUndo('line endpoint')
+  const pushLength = () => pushUndo('line length')
+  const pushStyle = () => pushUndo('line style')
+
   return (
     <div className={containerClass}>
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -127,7 +132,7 @@ export function MeasurementEditor() {
             </ToggleButtonGroup>
           </div>
 
-          <VecRow label="A" v={m.a} onCommit={(axis, val) => setEndpoint('a', axis, val)} />
+          <VecRow label="A" v={m.a} onInteractionStart={pushEndpoint} onCommit={(axis, val) => setEndpoint('a', axis, val)} />
           <VecRow
             label="B"
             v={m.b}
@@ -136,6 +141,7 @@ export function MeasurementEditor() {
                 ? undefined
                 : { x: m.axisLock !== 'x', y: m.axisLock !== 'y', z: m.axisLock !== 'z' }
             }
+            onInteractionStart={pushEndpoint}
             onCommit={(axis, val) => setEndpoint('b', axis, val)}
           />
 
@@ -146,6 +152,7 @@ export function MeasurementEditor() {
               className="flex-1"
               min={0}
               value={length}
+              onInteractionStart={pushLength}
               onCommit={(len) => updateMeasurement(m.id, { b: withLength(m, len) })}
             />
             <span className="text-xs text-fg-subtle">m</span>
@@ -161,6 +168,7 @@ export function MeasurementEditor() {
               onSelectionChange={(keys) => {
                 const next = [...keys][0] as AxisLock | undefined
                 if (!next) return
+                pushUndo('line axis lock')
                 const b = next === 'none' ? m.b : snappedToAxis(m.a, m.b, next)
                 updateMeasurement(m.id, { axisLock: next, b })
               }}
@@ -179,9 +187,10 @@ export function MeasurementEditor() {
               label="Color"
               color={m.color}
               opacity={m.lineOpacity ?? 0.5}
+              onInteractionStart={pushStyle}
               onChange={({ color, opacity }) => updateMeasurement(m.id, { color, lineOpacity: opacity })}
             />
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2" onPointerDown={pushStyle}>
               <span className="w-12 shrink-0 text-xs text-fg-muted">Width</span>
               <Slider
                 aria-label="Line width"
@@ -217,11 +226,13 @@ function VecRow({
   v,
   disabled,
   onCommit,
+  onInteractionStart,
 }: {
   label: string
   v: Vec3
   disabled?: { x: boolean; y: boolean; z: boolean }
   onCommit: (axis: keyof Vec3, value: number) => void
+  onInteractionStart?: () => void
 }) {
   const axes: (keyof Vec3)[] = ['x', 'y', 'z']
   return (
@@ -234,6 +245,7 @@ function VecRow({
           className="min-w-0 flex-1"
           value={v[axis]}
           isDisabled={disabled?.[axis]}
+          onInteractionStart={onInteractionStart}
           onCommit={(val) => onCommit(axis, val)}
         />
       ))}

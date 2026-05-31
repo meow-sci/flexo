@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './app.tsx'
 import { GlobalToastRegion } from './ui/kit'
+import { BuildIdMismatchDialog } from './ui/BuildIdMismatchDialog'
+import { checkBuildId } from './buildCheck'
 import { hydrateProjectOnBoot } from './state/projectStore'
 import { initModFolder } from './state/modFolderStore'
 import { $containers, $activeContainerId } from './state/containerStore'
@@ -31,6 +33,8 @@ registerEditorAidStores({
 // the workspace paints once with the right data (no second visual refresh).
 hydrateProjectOnBoot()
 
+checkBuildId()
+
 // Reflect any previously-granted mods folder (async; updates the export UI when ready).
 void initModFolder()
 
@@ -38,5 +42,6 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
     <GlobalToastRegion />
+    <BuildIdMismatchDialog />
   </StrictMode>,
 )

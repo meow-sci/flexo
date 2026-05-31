@@ -25,6 +25,7 @@ jobs:
       # The private assets repo exposes its content under /assets. The ksaAssets
       # Vite plugin reads KSA_ASSETS_DIR and copies that tree into dist/ksa/.
       KSA_ASSETS_DIR: ${{ github.workspace }}/.tmp/flexo-private-assets/assets
+      VITE_BUILD_ID: ${{ github.sha }}
     steps:
       - name: Checkout flexo
         uses: actions/checkout@v6

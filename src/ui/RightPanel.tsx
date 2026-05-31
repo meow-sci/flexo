@@ -34,7 +34,7 @@ function ResizeHandle() {
   return (
     <div
       onPointerDown={onPointerDown}
-      className="group absolute -left-1 top-0 bottom-0 z-10 w-2 cursor-col-resize"
+      className="group pointer-events-auto absolute -left-1 top-0 bottom-0 z-10 w-2 cursor-col-resize"
       aria-label="Resize inspector"
     >
       <div className="mx-auto h-full w-0.5 bg-transparent transition-colors group-hover:bg-border-strong" />
@@ -69,11 +69,21 @@ export function RightPanel() {
     return <div className="absolute right-3 top-3">{toggleButton}</div>
   }
 
+  // The container spans the full height (top-3 → bottom-3) but its visible content
+  // (toggle button, inspector card) doesn't fill its width near the top. Make the
+  // container itself transparent to pointer events and opt each interactive child
+  // back in, so the empty area above/left of the content doesn't swallow clicks
+  // meant for the top toolbar that sits behind it.
   return (
-    <div className="absolute right-3 top-3 bottom-3 flex flex-col gap-2" style={{ width }}>
+    <div
+      className="pointer-events-none absolute right-3 top-3 bottom-3 flex flex-col gap-2"
+      style={{ width }}
+    >
       <ResizeHandle />
-      <div className="flex shrink-0 items-center justify-end">{toggleButton}</div>
-      <div className="min-h-0 flex-1">
+      <div className="flex shrink-0 items-center justify-end">
+        <span className="pointer-events-auto">{toggleButton}</span>
+      </div>
+      <div className="pointer-events-auto min-h-0 flex-1">
         <InspectorContent />
       </div>
     </div>

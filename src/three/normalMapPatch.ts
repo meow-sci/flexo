@@ -10,11 +10,16 @@ import * as THREE from 'three'
  *    derivative tangent frame computed in `normal_fragment_begin` (verified against
  *    the installed three r0.184 chunk).
  *  - **BC4 emissive** stores one channel in R; KSA uses it as a mask. We broadcast
- *    `.rrr` so it isn't tinted red by three's RGB emissive multiply.
+ *    `.rrr` (boosted by {@link EMISSIVE_BOOST}) and ADD it to `totalEmissiveRadiance`
+ *    rather than multiplying. three initializes `totalEmissiveRadiance` from the
+ *    `emissive` uniform, so adding leaves that uniform free to drive the per-instance
+ *    selection highlight (a multiply would mask the tint with the black emissive map).
  *
  * Isolated here (like coords.ts for transforms): if normals look inverted, fix it
  * in this file only.
  */
+/** KSA's emissive intensity for the BC4 mask (mirrors the original vessel shader). */
+const EMISSIVE_BOOST = 1.25
 export function applyKsaShaderPatches(
   material: THREE.MeshStandardMaterial,
   opts: { normal: boolean; emissive: boolean },
@@ -37,7 +42,7 @@ export function applyKsaShaderPatches(
         '#include <emissivemap_fragment>',
         /* glsl */ `
           vec4 emissiveColor = texture2D( emissiveMap, vEmissiveMapUv );
-          totalEmissiveRadiance *= emissiveColor.rrr;
+          totalEmissiveRadiance += emissiveColor.rrr * ${EMISSIVE_BOOST.toFixed(2)};
         `,
       )
     }

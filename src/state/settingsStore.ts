@@ -20,3 +20,37 @@ export const $connectorSettings = persistentJSON<ConnectorSettings>('flexo:conne
 export function setConnectorSettings(patch: Partial<ConnectorSettings>): void {
   $connectorSettings.set({ ...$connectorSettings.get(), ...patch })
 }
+
+/**
+ * Selection-highlight appearance, applied as an emissive tint when an entity is
+ * selected. SubPart meshes and kitten visual aides each get their own color +
+ * strength (`alpha`, 0–1 = the emissive intensity of the tint). Connectors keep
+ * their fixed green and are not configurable. The three.js layer reads the parsed
+ * values via {@link src/three/highlightSettings.ts}; React edits via `useStore`.
+ */
+export interface SelectionHighlightSettings {
+  /** CSS hex (`#rrggbb`) emissive tint for selected SubPart meshes. */
+  meshColor: string
+  /** Tint strength for SubPart meshes (0–1). */
+  meshAlpha: number
+  /** CSS hex (`#rrggbb`) emissive tint for selected kittens. */
+  kittenColor: string
+  /** Tint strength for kittens (0–1). */
+  kittenAlpha: number
+}
+
+const DEFAULT_HIGHLIGHT: SelectionHighlightSettings = {
+  meshColor: '#2a4d6e',
+  meshAlpha: 1,
+  kittenColor: '#2a4d6e',
+  kittenAlpha: 1,
+}
+
+export const $selectionHighlight = persistentJSON<SelectionHighlightSettings>(
+  'flexo:selectionHighlight',
+  DEFAULT_HIGHLIGHT,
+)
+
+export function setSelectionHighlight(patch: Partial<SelectionHighlightSettings>): void {
+  $selectionHighlight.set({ ...$selectionHighlight.get(), ...patch })
+}

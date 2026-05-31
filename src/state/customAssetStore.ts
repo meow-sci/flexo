@@ -72,12 +72,25 @@ function sanitizeIdent(name: string): string {
 }
 
 // ── document mutation ────────────────────────────────────────────────────────
+/**
+ * True only while our own mutation helpers push a $part change. The {@link initCustomAssets}
+ * subscriber checks this so it ignores changes we already rebuild for explicitly,
+ * and reacts ONLY to external $part swaps (undo/redo, project load). nanostores
+ * notifies synchronously inside `set()`, so the flag reliably brackets the notify.
+ */
+let internalCustomChange = false
+
 function mutate(description: string, detail: string, fn: (part: EditingPart) => void): void {
   const current = $part.get()
   pushUndo(description, detail)
   const next = structuredClone(current)
   fn(next)
-  $part.set(next)
+  internalCustomChange = true
+  try {
+    $part.set(next)
+  } finally {
+    internalCustomChange = false
+  }
 }
 
 // ── face texture helpers ─────────────────────────────────────────────────────
@@ -93,7 +106,25 @@ export function getPrimaryTextureId(m: CustomMesh): string {
 
 // ── catalog + render cache ────────────────────────────────────────────────────
 
+/**
+ * Signature of the mesh state the runtime (atlas + render cache + `$customCatalog`)
+ * currently reflects. Compared against the live `$part` in the {@link initCustomAssets}
+ * subscriber so undo/redo (which restores `$part.customMeshes` without re-running the
+ * mutation helpers) re-triggers a rebuild. Covers geometry (primitive) and per-face
+ * texture assignments — the two inputs to the cache/atlas.
+ */
+let appliedMeshSig = ''
+
+function meshSignature(part: EditingPart): string {
+  return JSON.stringify(
+    part.customMeshes.map((m) => ({ s: m.subPartId, p: m.primitive, f: m.faceTextures })),
+  )
+}
+
 async function refreshCatalog(): Promise<void> {
+  // Whatever we build below reflects the current $part; record it so the $part
+  // subscriber doesn't treat our own rebuild as an external (undo/redo) change.
+  appliedMeshSig = meshSignature($part.get())
   if (!atlasUrl) {
     customMeshRenderCache.clear()
     $customCatalog.set([])
@@ -141,7 +172,7 @@ async function refreshCatalog(): Promise<void> {
 }
 
 /** Rebuilds the combined mesh-atlas GLB blob (for KSA export), then refreshes the catalog. */
-async function rebuildAtlas(): Promise<void> {
+async function rebuildAtlasNow(): Promise<void> {
   const part = $part.get()
   if (atlasUrl) {
     URL.revokeObjectURL(atlasUrl)
@@ -162,6 +193,34 @@ async function rebuildAtlas(): Promise<void> {
     }
   }
   await refreshCatalog()
+}
+
+let rebuilding: Promise<void> | null = null
+let rebuildAgain = false
+
+/**
+ * Serializes atlas rebuilds. Rebuilds revoke + recreate the shared atlas blob URL,
+ * so two overlapping {@link rebuildAtlasNow} runs would race on it. Concurrent
+ * callers (e.g. a mutation helper AND the $part undo/redo subscriber firing for the
+ * same change) coalesce onto the in-flight run, with one extra pass queued so the
+ * final rebuild always reflects the latest `$part` + texture URLs.
+ */
+function scheduleRebuild(): Promise<void> {
+  if (rebuilding) {
+    rebuildAgain = true
+    return rebuilding
+  }
+  rebuilding = (async () => {
+    try {
+      do {
+        rebuildAgain = false
+        await rebuildAtlasNow()
+      } while (rebuildAgain)
+    } finally {
+      rebuilding = null
+    }
+  })()
+  return rebuilding
 }
 
 // ── textures ─────────────────────────────────────────────────────────────────
@@ -235,7 +294,7 @@ export async function addCustomMesh(args: {
   mutate('add mesh', mesh.name, (p) => {
     p.customMeshes.push(mesh)
   })
-  await rebuildAtlas()
+  await scheduleRebuild()
   addSubPart(mesh.subPartId)
   return mesh
 }
@@ -248,7 +307,7 @@ export async function updateCustomMesh(
     const m = p.customMeshes.find((x) => x.id === id)
     if (m) Object.assign(m, patch)
   })
-  if (patch.primitive) await rebuildAtlas()
+  if (patch.primitive) await scheduleRebuild()
   else await refreshCatalog()
 }
 
@@ -272,7 +331,7 @@ export async function removeCustomMesh(id: string): Promise<void> {
     p.customMeshes = p.customMeshes.filter((x) => x.id !== id)
     if (mesh) p.placements = p.placements.filter((pl) => pl.subPartTemplateId !== mesh.subPartId)
   })
-  await rebuildAtlas()
+  await scheduleRebuild()
 }
 
 // ── hydration on project load ─────────────────────────────────────────────────
@@ -288,7 +347,7 @@ export async function hydrateCustomAssets(): Promise<void> {
     if (s) textureSrcUrls.set(t.id, URL.createObjectURL(s))
   }
   publishTextureUrls()
-  await rebuildAtlas()
+  await scheduleRebuild()
 }
 
 /**
@@ -304,5 +363,16 @@ export function initCustomAssets(): void {
   if (typeof indexedDB === 'undefined' || typeof window === 'undefined') return
   $projectName.subscribe(() => {
     void hydrateCustomAssets().catch((err) => console.warn('flexo: custom-asset hydrate failed', err))
+  })
+  // Undo/redo (and any external $part swap) restores customMeshes without running
+  // the mutation helpers, so the atlas / render cache / $customCatalog go stale and
+  // the restored — or any newly added — instances render nothing until reload. Watch
+  // for a mesh-set/geometry/face-texture change the runtime hasn't applied yet and
+  // rebuild. Cheap no-op on unrelated $part changes (transform edits, etc.).
+  $part.subscribe((part) => {
+    if (internalCustomChange) return // our own helpers rebuild explicitly
+    if (meshSignature(part) !== appliedMeshSig) {
+      void scheduleRebuild().catch((err) => console.warn('flexo: custom-mesh rebuild failed', err))
+    }
   })
 }

@@ -1294,6 +1294,29 @@ export function deleteLayer(id: string, opts: DeleteLayerOptions): void {
   clampSelection()
 }
 
+/**
+ * Removes every entity (SubParts, connectors, kittens) on a layer WITHOUT deleting
+ * the layer itself. Used by the protected built-in Connectors/Kittens layers, whose
+ * delete button clears their contents instead of removing the (undeletable) layer.
+ * Discrete mutation → one undo step. No-op when the layer is already empty.
+ */
+export function clearLayer(id: string): void {
+  const current = $part.get()
+  const onLayer = (e: { layerId: string }) => e.layerId === id
+  const total =
+    current.placements.filter(onLayer).length +
+    current.connectors.filter(onLayer).length +
+    current.kittens.filter(onLayer).length
+  if (total === 0) return
+  pushUndo('clear layer', current.layers.find((l) => l.id === id)?.name ?? id)
+  const part = clone(current)
+  part.placements = part.placements.filter((p) => p.layerId !== id)
+  part.connectors = part.connectors.filter((c) => c.layerId !== id)
+  part.kittens = part.kittens.filter((k) => k.layerId !== id)
+  $part.set(part)
+  clampSelection()
+}
+
 /** Reorders layers to `orderedIds` (must be a permutation of the existing ids). */
 export function reorderLayers(orderedIds: readonly string[]): void {
   const current = $part.get()

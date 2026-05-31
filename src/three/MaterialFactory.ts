@@ -11,13 +11,13 @@ import { applyKsaShaderPatches } from './normalMapPatch'
  *  - diffuse  -> map (sRGB)
  *  - AoRoughMetal (one texture) -> aoMap(.r) / roughnessMap(.g) / metalnessMap(.b)
  *  - normal (BC5 RG) -> normalMap with a custom decode (see normalMapPatch)
- *  - emissive (BC4 R) -> emissiveMap, broadcast .rrr, intensity 1.25
+ *  - emissive (BC4 R) -> emissiveMap, broadcast .rrr, boosted + ADDED in the
+ *    shader patch (so the `emissive` uniform stays free for the selection tint)
  *
  * Returns the shared per-material-id material; callers (SubPartObject) clone it
  * per instance so selection-highlight emissive edits don't bleed across parts.
  * Falls back to a flat material when textures are unsupported or missing.
  */
-const EMISSIVE_MULTIPLIER = 1.25
 
 const materialCache = new Map<string, Promise<THREE.MeshStandardMaterial>>()
 
@@ -81,8 +81,12 @@ async function buildTextured(entry: CatalogSubPart): Promise<THREE.MeshStandardM
 
   if (emissive) {
     mat.emissiveMap = emissive
-    mat.emissive = new THREE.Color(0xffffff)
-    mat.emissiveIntensity = EMISSIVE_MULTIPLIER
+    // The part's own emissive is derived from the map and ADDED in the shader
+    // patch (with the boost baked in there). We deliberately leave `mat.emissive`
+    // black / intensity at the default so the standard `emissive` uniform stays
+    // free to carry the per-instance selection highlight — otherwise the (often
+    // black) emissive map would multiply the highlight tint to nothing. See
+    // normalMapPatch + SubPartObject.setSelected.
   }
 
   applyKsaShaderPatches(mat, { normal: !!normal, emissive: !!emissive })

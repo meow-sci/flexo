@@ -10,11 +10,17 @@ import {
   Dialog,
   DialogHeader,
   SectionTitle,
+  Slider,
   ToolbarButton,
   ConfirmDialog,
   Popover,
 } from './kit'
-import { $connectorSettings, setConnectorSettings } from '../state/settingsStore'
+import {
+  $connectorSettings,
+  $selectionHighlight,
+  setConnectorSettings,
+  setSelectionHighlight,
+} from '../state/settingsStore'
 import { openHelp } from '../state/helpStore'
 import { PreciseNumberInput } from './PreciseNumberInput'
 
@@ -28,6 +34,7 @@ export function SettingsModal({
   onOpenChange: (v: boolean) => void
 }) {
   const connectors = useStore($connectorSettings)
+  const highlight = useStore($selectionHighlight)
   return (
     <Modal isOpen={isOpen} onOpenChange={onOpenChange} isDismissable variant="center">
       <Dialog>
@@ -47,9 +54,67 @@ export function SettingsModal({
               <span className="text-xs text-fg-subtle">m</span>
             </div>
           </label>
+
+          <SectionTitle>Selection highlight</SectionTitle>
+          <HighlightRow
+            label="Meshes"
+            color={highlight.meshColor}
+            alpha={highlight.meshAlpha}
+            onColor={(meshColor) => setSelectionHighlight({ meshColor })}
+            onAlpha={(meshAlpha) => setSelectionHighlight({ meshAlpha })}
+          />
+          <HighlightRow
+            label="Kittens"
+            color={highlight.kittenColor}
+            alpha={highlight.kittenAlpha}
+            onColor={(kittenColor) => setSelectionHighlight({ kittenColor })}
+            onAlpha={(kittenAlpha) => setSelectionHighlight({ kittenAlpha })}
+          />
         </div>
       </Dialog>
     </Modal>
+  )
+}
+
+/** A color swatch + strength slider row for one selection-highlight target. */
+function HighlightRow({
+  label,
+  color,
+  alpha,
+  onColor,
+  onAlpha,
+}: {
+  label: string
+  color: string
+  alpha: number
+  onColor: (hex: string) => void
+  onAlpha: (alpha: number) => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-sm text-fg-muted">{label}</span>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          aria-label={`${label} highlight color`}
+          value={color}
+          onChange={(e) => onColor(e.target.value)}
+          className="h-7 w-10 shrink-0 cursor-pointer rounded border border-border bg-transparent"
+        />
+        <Slider
+          aria-label={`${label} highlight strength`}
+          className="w-32"
+          minValue={0}
+          maxValue={1}
+          step={0.05}
+          value={alpha}
+          onChange={(v) => onAlpha(v as number)}
+        />
+        <span className="w-9 shrink-0 text-right text-xs tabular-nums text-fg-subtle">
+          {Math.round(alpha * 100)}%
+        </span>
+      </div>
+    </div>
   )
 }
 

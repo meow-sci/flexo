@@ -21,6 +21,7 @@ import {
 } from './kit'
 import {
   $activeLayerId,
+  clearLayer,
   createLayer,
   deleteLayer,
   renameLayer,
@@ -31,7 +32,7 @@ import {
 } from '../state/editorStore'
 import { $layerView, layerViewState, toggleLayerListed, toggleLayerLocked, toggleLayerVisible } from '../state/layerStore'
 import { $layerSummaries, type LayerSummary } from '../state/selectors'
-import { BUILT_IN_LAYER_IDS, DEFAULT_LAYER_ID, type Layer } from '../ksa/types'
+import { BUILT_IN_LAYER_IDS, CONNECTOR_LAYER_ID, DEFAULT_LAYER_ID, KITTEN_LAYER_ID, type Layer } from '../ksa/types'
 import { EyeIcon, EyeOffIcon, GripVerticalIcon, ListedIcon, LockIcon, PencilIcon, SaveIcon, SelectAllIcon, TrashIcon, UnlistedIcon, UnlockIcon } from './layerIcons'
 
 /** Moves the dragged keys to before/after the target id within `ids`. */
@@ -69,6 +70,7 @@ export function LayersPanel({ onLayerSelected }: { onLayerSelected?: () => void 
   const [newName, setNewName] = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [pendingClearId, setPendingClearId] = useState<string | null>(null)
 
   const orderedIds = summaries.map((s) => s.layer.id)
 
@@ -97,6 +99,7 @@ export function LayersPanel({ onLayerSelected }: { onLayerSelected?: () => void 
   }
 
   const pendingLayer = summaries.find((s) => s.layer.id === pendingDeleteId)
+  const pendingClearLayer = summaries.find((s) => s.layer.id === pendingClearId)
 
   return (
     <div className="flex w-full flex-col gap-2">
@@ -138,6 +141,7 @@ export function LayersPanel({ onLayerSelected }: { onLayerSelected?: () => void 
               onStartRename={() => setEditingId(summary.layer.id)}
               onEndRename={() => setEditingId(null)}
               onRequestDelete={() => setPendingDeleteId(summary.layer.id)}
+              onRequestClear={() => setPendingClearId(summary.layer.id)}
             />
           </GridListItem>
         )}
@@ -150,6 +154,10 @@ export function LayersPanel({ onLayerSelected }: { onLayerSelected?: () => void 
           onClose={() => setPendingDeleteId(null)}
         />
       )}
+
+      {pendingClearLayer && (
+        <ClearLayerDialog summary={pendingClearLayer} onClose={() => setPendingClearId(null)} />
+      )}
     </div>
   )
 }
@@ -160,12 +168,14 @@ function LayerRow({
   onStartRename,
   onEndRename,
   onRequestDelete,
+  onRequestClear,
 }: {
   summary: LayerSummary
   isEditing: boolean
   onStartRename: () => void
   onEndRename: () => void
   onRequestDelete: () => void
+  onRequestClear: () => void
 }) {
   const { layer, subParts, connectors, kittens } = summary
   const total = subParts + connectors + kittens
@@ -178,6 +188,15 @@ function LayerRow({
   const view = layerViewState(layerView, layer.id)
   const locked = view.locked
   const isBuiltIn = BUILT_IN_LAYER_IDS.includes(layer.id)
+  // The Connectors/Kittens layers can't be deleted, but their delete button instead
+  // clears the layer's contents (after a confirm). The Default layer stays fully
+  // protected. Custom layers use the normal delete-layer flow.
+  const isClearable = layer.id === CONNECTOR_LAYER_ID || layer.id === KITTEN_LAYER_ID
+  const deleteTooltip = isClearable
+    ? 'Delete all items in layer'
+    : isBuiltIn
+      ? 'Built-in layer cannot be deleted'
+      : 'Delete layer'
 
   // Stops react-aria's row press from firing when interacting with row controls.
   const stopRowPress = (e: React.PointerEvent) => e.stopPropagation()
@@ -258,14 +277,14 @@ function LayerRow({
             <SelectAllIcon />
           </Button>
         </Tooltip>
-        <Tooltip content={isBuiltIn ? 'Built-in layer cannot be deleted' : 'Delete layer'}>
+        <Tooltip content={deleteTooltip}>
           <Button
             iconOnly
             size="sm"
             variant="danger-ghost"
-            aria-label="Delete layer"
-            isDisabled={isBuiltIn}
-            onPress={onRequestDelete}
+            aria-label={isClearable ? 'Delete all items in layer' : 'Delete layer'}
+            isDisabled={isBuiltIn && !isClearable}
+            onPress={isClearable ? onRequestClear : onRequestDelete}
           >
             <TrashIcon />
           </Button>
@@ -378,5 +397,32 @@ function DeleteLayerDialog({
         </div>
       )}
     </ConfirmDialog>
+  )
+}
+
+/**
+ * Confirms clearing a protected built-in layer (Connectors/Kittens): the layer
+ * itself stays, but every item on it is removed. Used in place of {@link DeleteLayerDialog}
+ * for those layers, which can't be deleted.
+ */
+function ClearLayerDialog({ summary, onClose }: { summary: LayerSummary; onClose: () => void }) {
+  const { layer, subParts, connectors, kittens } = summary
+  const total = subParts + connectors + kittens
+  return (
+    <ConfirmDialog
+      isOpen
+      onOpenChange={(open) => !open && onClose()}
+      title={`Clear layer “${layer.name}”`}
+      text={
+        total === 0
+          ? 'This layer is empty.'
+          : `Permanently delete all ${total} item${total === 1 ? '' : 's'} on this layer? This can be undone.`
+      }
+      confirmLabel={total === 0 ? 'Close' : `Delete ${total} item${total === 1 ? '' : 's'}`}
+      confirmVariant={total === 0 ? 'primary' : 'danger'}
+      onConfirm={() => {
+        if (total > 0) clearLayer(layer.id)
+      }}
+    />
   )
 }

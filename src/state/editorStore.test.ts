@@ -13,6 +13,7 @@ import {
   addKitten,
   addPart,
   addSubPart,
+  clearLayer,
   createLayer,
   deleteLayer,
   renameLayer,
@@ -357,6 +358,34 @@ describe('editorStore layers', () => {
     expect($part.get().layers.map((l) => l.id)).toEqual([DEFAULT_LAYER_ID, CONNECTOR_LAYER_ID, KITTEN_LAYER_ID])
     expect($part.get().placements.length).toBe(1)
     expect($part.get().connectors.length).toBe(1)
+  })
+
+  it('clearLayer removes a built-in layer’s items but keeps the layer (undoable)', () => {
+    addConnector() // Connectors layer
+    addConnector()
+    addKitten('hunter') // Kittens layer
+    setActiveLayer(DEFAULT_LAYER_ID)
+    addSubPart('Core.A') // Default layer — must survive clearing Connectors
+    clearLayer(CONNECTOR_LAYER_ID)
+    expect($part.get().connectors.length).toBe(0)
+    expect($part.get().kittens.length).toBe(1)
+    expect($part.get().placements.length).toBe(1)
+    // The layer itself is untouched.
+    expect($part.get().layers.map((l) => l.id)).toEqual([
+      DEFAULT_LAYER_ID,
+      CONNECTOR_LAYER_ID,
+      KITTEN_LAYER_ID,
+    ])
+    undo()
+    expect($part.get().connectors.length).toBe(2)
+  })
+
+  it('clearLayer is a no-op for an empty layer (no undo entry)', () => {
+    addSubPart('Core.A')
+    const before = $canUndo.get()
+    clearLayer(CONNECTOR_LAYER_ID) // no connectors exist
+    expect($canUndo.get()).toBe(before)
+    expect($part.get().placements.length).toBe(1)
   })
 
   it('reorderLayers reorders by id and is undoable', () => {

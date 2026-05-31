@@ -17,8 +17,7 @@ import { makeFlatMaterial } from './MaterialFactory'
 import { applyKsaShaderPatches } from './normalMapPatch'
 import { applyPlacement } from './coords'
 import { withProgress } from './trackedLoad'
-
-const HIGHLIGHT = 0x2a4d6e
+import { kittenHighlight } from './highlightSettings'
 
 /**
  * The kitten gltfs reference an embedded "DefaultORM.png" that does not ship with
@@ -240,9 +239,10 @@ export class KittenObject {
   /** Toggles the selection highlight (emissive tint across all owned materials). */
   setSelected(selected: boolean): void {
     if (selected) {
+      const hl = kittenHighlight()
       for (const mat of this.materials) {
-        mat.emissive.setHex(HIGHLIGHT)
-        mat.emissiveIntensity = 1
+        mat.emissive.copy(hl.color)
+        mat.emissiveIntensity = hl.alpha
       }
     } else {
       for (const { mat, color, intensity } of this.baseEmissive) {

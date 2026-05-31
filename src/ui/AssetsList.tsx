@@ -244,6 +244,15 @@ export function AssetsList() {
                   <GridListItem
                     id={row.id}
                     textValue={row.name}
+                    // Right-click opens the same menu as the ⋮ button by triggering
+                    // a click on it — reusing react-aria's trigger so positioning and
+                    // dismissal behave identically.
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      e.currentTarget
+                        .querySelector<HTMLButtonElement>('button[aria-label="Asset options"]')
+                        ?.click()
+                    }}
                     className={(rp) => `${rowClass(rp)}${row.hidden ? ' opacity-40' : ''}`}
                   >
                     <div className="flex min-w-0 flex-1 flex-col">

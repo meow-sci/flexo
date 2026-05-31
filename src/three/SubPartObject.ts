@@ -6,8 +6,7 @@ import { getSharedMaterial } from './MaterialFactory'
 import { applyKsaShaderPatches } from './normalMapPatch'
 import { applyPlacement } from './coords'
 import { customMeshRenderCache } from '../state/customAssetStore'
-
-const HIGHLIGHT = 0x2a4d6e
+import { meshHighlight } from './highlightSettings'
 
 /**
  * A placed SubPart in the scene: a Group carrying its instance id (for raycast
@@ -86,13 +85,20 @@ export class SubPartObject {
     applyPlacement(this.group, placement)
   }
 
-  /** Toggles the selection highlight (emissive tint, restored on deselect). */
+  /**
+   * Toggles the selection highlight (emissive tint, restored on deselect). The
+   * color/strength come from the user's mesh-highlight setting. Textured KSA
+   * materials read their own emissive from the emissive *map* (added in the shader
+   * patch), leaving the standard `emissive` uniform free for this tint — see
+   * MaterialFactory + normalMapPatch.
+   */
   setSelected(selected: boolean): void {
+    const hl = meshHighlight()
     for (let i = 0; i < this.materials.length; i++) {
       const mat = this.materials[i]
       if (selected) {
-        mat.emissive.setHex(HIGHLIGHT)
-        mat.emissiveIntensity = 1
+        mat.emissive.copy(hl.color)
+        mat.emissiveIntensity = hl.alpha
       } else {
         mat.emissive.copy(this.baseEmissives[i].color)
         mat.emissiveIntensity = this.baseEmissives[i].intensity

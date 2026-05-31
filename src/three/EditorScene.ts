@@ -46,7 +46,7 @@ import {
   updateMeasurement,
 } from '../state/measurementStore'
 import { $activeContainerId, setActiveContainer } from '../state/containerStore'
-import { $connectorSettings, type ConnectorSettings } from '../state/settingsStore'
+import { $connectorSettings, $selectionHighlight, type ConnectorSettings } from '../state/settingsStore'
 import { $cameraRestore, $cameraSnap, $grids } from '../state/viewStore'
 import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../state/layerStore'
 
@@ -252,6 +252,10 @@ export class EditorScene {
         this.rebuildConnectors()
       }),
     )
+    // Re-apply the highlight tint to the current selection when the color/strength
+    // setting changes (fires immediately on subscribe — a harmless no-op when nothing
+    // is selected).
+    this.unsubscribers.push($selectionHighlight.subscribe(() => this.updateSelection()))
     this.unsubscribers.push($layerView.subscribe(() => this.applyLayerVisibility()))
     this.unsubscribers.push($toolMode.subscribe((mode) => this.gizmo.setMode(mode)))
     this.unsubscribers.push($snap.subscribe((snap) => this.gizmo.setSnap(snap)))

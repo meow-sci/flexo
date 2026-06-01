@@ -54,3 +54,32 @@ export const $selectionHighlight = persistentJSON<SelectionHighlightSettings>(
 export function setSelectionHighlight(patch: Partial<SelectionHighlightSettings>): void {
   $selectionHighlight.set({ ...$selectionHighlight.get(), ...patch })
 }
+
+/**
+ * How "Make Kitten Mesh" SubParts supply their KSA textures on export. The baked
+ * geometry GLB is always bundled; only the .ktx2 textures vary:
+ *  - 'reference' — emit an ABSOLUTE `<Diffuse Path="{contentCorePath}\…">` so KSA
+ *    loads the game's own textures in place (zero texture files in the mod). Tied to
+ *    that install location; not portable. (Relies on .NET Path.Combine returning a
+ *    rooted path as-is — see plans + thirdparty/ksa Mod.cs.)
+ *  - 'bundle' — copy the .ktx2 verbatim into the mod's Textures/ folder (portable).
+ */
+export interface KittenTextureExportSettings {
+  mode: 'reference' | 'bundle'
+  /** Game Content/Core folder, used to build absolute texture paths in 'reference' mode. */
+  contentCorePath: string
+}
+
+const DEFAULT_KITTEN_TEXTURE_EXPORT: KittenTextureExportSettings = {
+  mode: 'reference',
+  contentCorePath: 'C:\\Program Files\\Kitten Space Agency\\Content\\Core',
+}
+
+export const $kittenTextureExport = persistentJSON<KittenTextureExportSettings>(
+  'flexo:kittenTextureExport',
+  DEFAULT_KITTEN_TEXTURE_EXPORT,
+)
+
+export function setKittenTextureExport(patch: Partial<KittenTextureExportSettings>): void {
+  $kittenTextureExport.set({ ...$kittenTextureExport.get(), ...patch })
+}

@@ -11,16 +11,22 @@ import {
   DialogHeader,
   SectionTitle,
   Slider,
+  Select,
+  ListBoxItem,
+  TextField,
   ToolbarButton,
   ConfirmDialog,
   Popover,
 } from './kit'
 import {
   $connectorSettings,
+  $kittenTextureExport,
   $selectionHighlight,
   setConnectorSettings,
+  setKittenTextureExport,
   setSelectionHighlight,
 } from '../state/settingsStore'
+import type { KittenTextureExportSettings } from '../state/settingsStore'
 import { openHelp } from '../state/helpStore'
 import { PreciseNumberInput } from './PreciseNumberInput'
 
@@ -35,6 +41,7 @@ export function SettingsModal({
 }) {
   const connectors = useStore($connectorSettings)
   const highlight = useStore($selectionHighlight)
+  const kittenTex = useStore($kittenTextureExport)
   return (
     <Modal isOpen={isOpen} onOpenChange={onOpenChange} isDismissable variant="center">
       <Dialog>
@@ -70,6 +77,39 @@ export function SettingsModal({
             onColor={(kittenColor) => setSelectionHighlight({ kittenColor })}
             onAlpha={(kittenAlpha) => setSelectionHighlight({ kittenAlpha })}
           />
+
+          <SectionTitle>Kitten mesh textures (export)</SectionTitle>
+          <label className="flex items-center justify-between gap-3">
+            <span className="text-sm text-fg-muted">Source</span>
+            <Select
+              size="sm"
+              aria-label="Kitten mesh texture export mode"
+              className="w-52"
+              selectedKey={kittenTex.mode}
+              onSelectionChange={(k) =>
+                setKittenTextureExport({ mode: k as KittenTextureExportSettings['mode'] })
+              }
+            >
+              <ListBoxItem id="reference">Reference game install</ListBoxItem>
+              <ListBoxItem id="bundle">Bundle copies into mod</ListBoxItem>
+            </Select>
+          </label>
+          {kittenTex.mode === 'reference' && (
+            <label className="flex flex-col gap-1">
+              <span className="text-sm text-fg-muted">Content/Core path</span>
+              <TextField
+                aria-label="Game Content/Core folder path"
+                inputClassName="font-mono text-xs"
+                placeholder="C:\Program Files\Kitten Space Agency\Content\Core"
+                value={kittenTex.contentCorePath}
+                onChange={(v) => setKittenTextureExport({ contentCorePath: v })}
+              />
+              <span className="text-xs text-fg-subtle">
+                Kitten SubParts reference the game's own .ktx2 at this path (nothing copied into
+                the mod). Tied to this install location — switch to “Bundle” for a portable mod.
+              </span>
+            </label>
+          )}
         </div>
       </Dialog>
     </Modal>

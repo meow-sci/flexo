@@ -1,6 +1,23 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createEmptyPart, createPartAnimation, identityTransform } from './types'
 import type { EditingPart, PartAnimation } from './types'
+
+// Avoid loading the real kitten gltfs (GLTFLoader/fetch) — return tiny baked geometry.
+vi.mock('../three/kittenBake', () => ({
+  bakeKittenSubMeshes: vi.fn(async () => {
+    const THREE = await import('three')
+    const tri = () => {
+      const g = new THREE.BufferGeometry()
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3))
+      return g
+    }
+    return [
+      { specKey: 'suit', label: 'Suit', source: {}, geometry: tri() },
+      { specKey: 'eye', label: 'Eyes', source: {}, geometry: tri() },
+    ]
+  }),
+  buildKittenMaterial: vi.fn(async () => ({})),
+}))
 import {
   buildCustomBundle,
   buildModContent,
@@ -123,6 +140,60 @@ describe('animation export', () => {
     part.animations.push(createPartAnimation('anim_x', 'Empty'))
     expect(serializeGameData(part, 'P')).not.toContain('KeyframeAnimationModule')
     expect((await buildCustomBundle(part, 'P')).binaries).toHaveLength(0)
+  })
+})
+
+function partWithKittenMeshes(): EditingPart {
+  const part = createEmptyPart()
+  part.partId = 'KittenMod'
+  const add = (subPartId: string, kitten: EditingPart['customMeshes'][number]['kitten']) => {
+    part.customMeshes.push({ id: `mesh_${subPartId}`, name: subPartId, subPartId, kitten, faceTextures: {} })
+    part.placements.push({ instanceId: subPartId, subPartTemplateId: subPartId, ...identityTransform(), layerId: 'default' })
+  }
+  add('flexo_hunter_suit_a', {
+    kind: 'hunter',
+    specKey: 'suit',
+    diffuse: 'Textures/Characters/Kitten_EMU_A.ktx2',
+    normal: 'Textures/Characters/Kitten_EMU_N.ktx2',
+    aoRoughMetal: 'Textures/Characters/Kitten_EMU_ORM.ktx2',
+  })
+  add('flexo_hunter_eye_b', { kind: 'hunter', specKey: 'eye', diffuse: 'Textures/Characters/Kitten_Eye_Green2_A.ktx2' })
+  return part
+}
+
+describe('buildCustomBundle — part-ified kitten textures', () => {
+  it('reference mode emits absolute <Diffuse>/<Normal>/<AoRoughMetal> and copies no kitten textures', async () => {
+    const bundle = await buildCustomBundle(partWithKittenMeshes(), 'KittenMod', {
+      mode: 'reference',
+      contentCorePath: 'C:\\KSA\\Content\\Core',
+    })
+    expect(bundle.assetsXml).toContain('<Diffuse Path="C:\\KSA\\Content\\Core\\Textures\\Characters\\Kitten_EMU_A.ktx2"')
+    expect(bundle.assetsXml).toContain('<Normal Path="C:\\KSA\\Content\\Core\\Textures\\Characters\\Kitten_EMU_N.ktx2"')
+    expect(bundle.assetsXml).toContain('<AoRoughMetal Path="C:\\KSA\\Content\\Core\\Textures\\Characters\\Kitten_EMU_ORM.ktx2"')
+    // Eyes (diffuse only) fall back to the shared synthetic normal/ORM.
+    expect(bundle.assetsXml).toContain('_FlatNormal.ktx2')
+    expect(bundle.assetsXml).toContain('_NeutralORM.ktx2')
+    // No game textures are copied into the mod; the baked mesh atlas still ships.
+    expect(bundle.binaries.filter((b) => b.path.includes('Kitten_'))).toHaveLength(0)
+    expect(bundle.binaries.some((b) => b.path.endsWith('_MeshAtlas.glb'))).toBe(true)
+  })
+
+  it('bundle mode copies each unique kitten .ktx2 verbatim (deduped) and references them relatively', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer }))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const bundle = await buildCustomBundle(partWithKittenMeshes(), 'KittenMod', { mode: 'bundle', contentCorePath: '' })
+      const paths = bundle.binaries.map((b) => b.path)
+      expect(paths).toContain('Textures/Kitten_EMU_A.ktx2')
+      expect(paths).toContain('Textures/Kitten_EMU_N.ktx2')
+      expect(paths).toContain('Textures/Kitten_EMU_ORM.ktx2')
+      expect(paths).toContain('Textures/Kitten_Eye_Green2_A.ktx2')
+      expect(bundle.assetsXml).toContain('<Diffuse Path="Textures/Kitten_EMU_A.ktx2"')
+      // 4 unique subpaths → exactly 4 fetches (no duplicate copies).
+      expect(fetchMock).toHaveBeenCalledTimes(4)
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })
 

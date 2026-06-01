@@ -28,7 +28,10 @@ export function CustomAssetsModal({
 }) {
   const part = useStore($part)
   const thumbs = useStore($customTextureUrls)
-  const { customTextures, customMeshes } = part
+  const { customTextures } = part
+  // Part-ified kitten submeshes are managed as placed SubParts on their layer, not as
+  // editable primitives — keep them out of the custom-mesh manager.
+  const customMeshes = part.customMeshes.filter((m) => !m.kitten)
   const [pendingTexture, setPendingTexture] = useState<CustomTexture | null>(null)
   const [pendingMesh, setPendingMesh] = useState<CustomMesh | null>(null)
 
@@ -105,7 +108,7 @@ export function CustomAssetsModal({
                     className="flex items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-white/[0.04]"
                   >
                     <span className="min-w-0 flex-1 truncate" title={m.subPartId}>
-                      {m.name} <span className="text-xs text-fg-subtle">({m.primitive.kind})</span>
+                      {m.name} <span className="text-xs text-fg-subtle">({m.primitive?.kind})</span>
                     </span>
                     <Button size="sm" variant="secondary" onPress={() => addToScene(m)}>
                       <Plus size={14} />

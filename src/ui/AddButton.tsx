@@ -11,6 +11,7 @@ import {
   ToolbarButton,
 } from './kit'
 import { $part, addConnector, addKitten, addSubPart } from '../state/editorStore'
+import { makeKittenMeshPart } from '../state/customAssetStore'
 import type { KittenKind } from '../ksa/types'
 import { SubPartPopup } from './AddSubPartButton'
 import { PartPopup } from './AddPartButton'
@@ -19,6 +20,9 @@ import { CreateMeshDialog } from './CreateMeshDialog'
 
 export function AddButton() {
   const part = useStore($part)
+  // Kitten submeshes aren't user-editable primitives — they have their own "Make
+  // Kitten Mesh" entry and shouldn't clutter the "Custom Meshes" re-add submenu.
+  const customMeshes = part.customMeshes.filter((m) => !m.kitten)
   const [subPartOpen, setSubPartOpen] = useState(false)
   const [partOpen, setPartOpen] = useState(false)
   const [textureOpen, setTextureOpen] = useState(false)
@@ -47,12 +51,12 @@ export function AddButton() {
             <MenuItem id="part">Import built-in Part</MenuItem>
             <MenuItem id="texture">Upload texture…</MenuItem>
             <MenuItem id="mesh">Create mesh…</MenuItem>
-            {part.customMeshes.length > 0 && (
+            {customMeshes.length > 0 && (
               <SubmenuTrigger>
                 <MenuItem id="custom-meshes">Custom Meshes</MenuItem>
                 <Popover className="w-52">
                   <Menu onAction={(key) => addSubPart(String(key))}>
-                    {part.customMeshes.map((m) => (
+                    {customMeshes.map((m) => (
                       <MenuItem key={m.id} id={m.subPartId}>
                         {m.name}
                       </MenuItem>
@@ -65,6 +69,22 @@ export function AddButton() {
               <MenuItem id="kitten">Kitten</MenuItem>
               <Popover className="w-40">
                 <Menu onAction={(key) => addKitten(key as KittenKind)}>
+                  <MenuItem id="hunter">Hunter</MenuItem>
+                  <MenuItem id="polaris">Polaris</MenuItem>
+                  <MenuItem id="banjo">Banjo</MenuItem>
+                </Menu>
+              </Popover>
+            </SubmenuTrigger>
+            <SubmenuTrigger>
+              <MenuItem id="kitten-mesh">Make Kitten Mesh</MenuItem>
+              <Popover className="w-40">
+                <Menu
+                  onAction={(key) =>
+                    void makeKittenMeshPart(key as KittenKind).catch((err) =>
+                      console.error('flexo: make kitten mesh failed', err),
+                    )
+                  }
+                >
                   <MenuItem id="hunter">Hunter</MenuItem>
                   <MenuItem id="polaris">Polaris</MenuItem>
                   <MenuItem id="banjo">Banjo</MenuItem>

@@ -1,8 +1,18 @@
 import * as THREE from 'three'
 import { atom } from 'nanostores'
 import type { CatalogSubPart } from '../ksa/catalog'
-import type { CustomMesh, CustomTexture, EditingPart, FaceTextureConfig, PrimitiveSpec } from '../ksa/types'
-import { $part, pushUndo, addSubPart } from './editorStore'
+import { toUrl } from '../ksa/catalog'
+import type {
+  CustomMesh,
+  CustomTexture,
+  EditingPart,
+  FaceTextureConfig,
+  KittenKind,
+  KittenMeshSource,
+  PrimitiveSpec,
+} from '../ksa/types'
+import { KITTEN_LABELS } from '../ksa/types'
+import { $part, pushUndo, addSubPart, nextLayerId, setActiveLayer, setSelection } from './editorStore'
 import { $projectName } from './projectStore'
 import { $customCatalog } from './catalogStore'
 import { assetKeys, deleteAsset, getAsset, putAsset } from './assetDb'
@@ -11,6 +21,8 @@ import { buildMeshAtlasGlb } from '../ksa/exportGlb'
 import { decodeImage } from '../ktx/decodeImage'
 import { encodeImageToKtx2 } from '../ktx/encodeKtx2'
 import { buildCustomFaceMaterial, makeFlatMaterial } from '../three/MaterialFactory'
+import { kittenPartSubMeshes, kittenSpecFromSource } from '../ksa/kittenAssets'
+import { bakeKittenSubMeshes, buildKittenMaterial } from '../three/kittenBake'
 
 /**
  * Orchestrates user-created custom assets (textures + primitive meshes). Ties the
@@ -95,8 +107,20 @@ function mutate(description: string, detail: string, fn: (part: EditingPart) => 
 
 // ── face texture helpers ─────────────────────────────────────────────────────
 
+/** True for a part-ified kitten submesh (geometry baked from the kitten gltf, not a primitive). */
+export function isKittenMesh(m: CustomMesh): m is CustomMesh & { kitten: KittenMeshSource } {
+  return !!m.kitten
+}
+
+/** The shared cached baked geometry for a kitten submesh, or null if the bake failed. */
+async function bakedKittenGeometry(src: KittenMeshSource): Promise<THREE.BufferGeometry | null> {
+  const subs = await bakeKittenSubMeshes(src.kind)
+  return subs.find((s) => s.specKey === src.specKey)?.geometry ?? null
+}
+
 /** Returns the first valid textureId across all faces (for KSA single-material export). */
 export function getPrimaryTextureId(m: CustomMesh): string {
+  if (!m.primitive) return '' // kitten submeshes carry their texture in m.kitten, not customTextures
   for (const key of PRIMITIVE_FACE_KEYS[m.primitive.kind]) {
     const tid = m.faceTextures[key]?.textureId
     if (tid) return tid
@@ -117,8 +141,28 @@ let appliedMeshSig = ''
 
 function meshSignature(part: EditingPart): string {
   return JSON.stringify(
-    part.customMeshes.map((m) => ({ s: m.subPartId, p: m.primitive, f: m.faceTextures })),
+    part.customMeshes.map((m) => ({ s: m.subPartId, p: m.primitive, k: m.kitten, f: m.faceTextures })),
   )
+}
+
+/**
+ * Builds the render-cache entry + catalog entry for a part-ified kitten submesh:
+ * the shared cached baked geometry (never disposed — SubPartObject treats render-cache
+ * geometry as shared) + a KSA PBR material (DoubleSide, mirroring KittenObject).
+ */
+async function buildKittenCatalogEntry(m: CustomMesh, kitten: KittenMeshSource): Promise<CatalogSubPart> {
+  const geometry = await bakedKittenGeometry(kitten)
+  const mat = await buildKittenMaterial(kittenSpecFromSource(kitten))
+  mat.side = THREE.DoubleSide
+  if (geometry) customMeshRenderCache.set(m.subPartId, { geometry, materials: [mat] })
+  return {
+    id: m.subPartId,
+    atlasUrl: atlasUrl!,
+    meshNodeName: m.subPartId,
+    materialId: undefined,
+    diffuseUrl: toUrl(kitten.diffuse),
+    sourceFile: '(kitten)',
+  }
 }
 
 async function refreshCatalog(): Promise<void> {
@@ -136,11 +180,12 @@ async function refreshCatalog(): Promise<void> {
 
   const entries: CatalogSubPart[] = await Promise.all(
     part.customMeshes.map(async (m) => {
+      if (m.kitten) return buildKittenCatalogEntry(m, m.kitten)
       const ft = m.faceTextures
-      const faceKeys = PRIMITIVE_FACE_KEYS[m.primitive.kind]
+      const faceKeys = PRIMITIVE_FACE_KEYS[m.primitive!.kind]
 
       // Build geometry with UV transforms baked in.
-      const geometry = buildPrimitiveGeometry(m.primitive)
+      const geometry = buildPrimitiveGeometry(m.primitive!)
       applyFaceUvTransforms(geometry, faceKeys, ft)
 
       // One material per face group; flat fallback for untextured faces.
@@ -179,12 +224,20 @@ async function rebuildAtlasNow(): Promise<void> {
     atlasUrl = null
   }
   if (part.customMeshes.length > 0) {
-    const nodes = part.customMeshes.map((m) => {
-      const faceKeys = PRIMITIVE_FACE_KEYS[m.primitive.kind]
-      const geometry = buildPrimitiveGeometry(m.primitive)
-      applyFaceUvTransforms(geometry, faceKeys, m.faceTextures)
-      return { name: m.subPartId, geometry }
-    })
+    const nodes = await Promise.all(
+      part.customMeshes.map(async (m) => {
+        if (m.kitten) {
+          // Clone the shared cached bake so the post-build dispose() below frees the
+          // clone and leaves the cache (used by the render path) intact.
+          const baked = await bakedKittenGeometry(m.kitten)
+          return { name: m.subPartId, geometry: baked ? baked.clone() : new THREE.BufferGeometry() }
+        }
+        const faceKeys = PRIMITIVE_FACE_KEYS[m.primitive!.kind]
+        const geometry = buildPrimitiveGeometry(m.primitive!)
+        applyFaceUvTransforms(geometry, faceKeys, m.faceTextures)
+        return { name: m.subPartId, geometry }
+      }),
+    )
     try {
       const glb = await buildMeshAtlasGlb(nodes)
       atlasUrl = URL.createObjectURL(new Blob([glb.slice()], { type: 'model/gltf-binary' }))
@@ -297,6 +350,51 @@ export async function addCustomMesh(args: {
   await scheduleRebuild()
   addSubPart(mesh.subPartId)
   return mesh
+}
+
+/**
+ * "Make Kitten Mesh" — part-ifies a kitten (hunter/polaris/banjo) into exportable
+ * custom SubParts. In ONE undo step it creates a "<Name> Mesh" layer and adds the
+ * kitten's submeshes (suit, head, eyes, helmet, visor, pack…) as custom meshes +
+ * identity placements on that layer; the rebuild then bakes their geometry and
+ * publishes the catalog/render-cache so they render via the normal SubPart pipeline.
+ */
+export async function makeKittenMeshPart(kind: KittenKind): Promise<void> {
+  const subs = kittenPartSubMeshes(kind)
+  const label = KITTEN_LABELS[kind]
+  const layerId = nextLayerId($part.get())
+  const newPlacementIndices: number[] = []
+  mutate('make kitten mesh', label, (p) => {
+    p.layers.push({ id: layerId, name: `${label} Mesh` })
+    for (const sub of subs) {
+      const subPartId = `flexo_${kind}_${sub.specKey}_${shortId()}`
+      p.customMeshes.push({
+        id: `mesh_${shortId()}`,
+        name: `${label} ${sub.label}`,
+        subPartId,
+        kitten: sub.source,
+        faceTextures: {},
+      })
+      // Keep instanceId unique across the whole part (e.g. two part-ified Hunters).
+      const base = `${kind}_${sub.specKey}`
+      const taken = p.placements.filter(
+        (pl) => pl.instanceId === base || pl.instanceId.startsWith(`${base}_`),
+      ).length
+      p.placements.push({
+        instanceId: `${base}_${taken + 1}`,
+        subPartTemplateId: subPartId,
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        layerId,
+      })
+      newPlacementIndices.push(p.placements.length - 1)
+    }
+  })
+  await scheduleRebuild()
+  // Active layer + selection are ephemeral (not undo-tracked).
+  setActiveLayer(layerId)
+  setSelection(newPlacementIndices, [], [])
 }
 
 export async function updateCustomMesh(

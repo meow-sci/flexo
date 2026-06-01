@@ -1250,7 +1250,7 @@ export function setEvaDoorConnector(connectorId: string): void {
 // ---------------------------------------------------------------------------
 
 /** Returns the next free "layerN" id (max existing numeric suffix + 1). */
-function nextLayerId(part: EditingPart): string {
+export function nextLayerId(part: EditingPart): string {
   let max = 0
   for (const l of part.layers) {
     const m = /^layer(\d+)$/.exec(l.id)

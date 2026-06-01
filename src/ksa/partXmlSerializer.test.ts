@@ -39,6 +39,7 @@ function editingPart(over: Partial<EditingPart>): EditingPart {
     kittens: [],
     customTextures: [],
     customMeshes: [],
+    animations: [],
     ...over,
   }
 }

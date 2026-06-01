@@ -7,6 +7,7 @@ import { BuildIdMismatchDialog } from './ui/BuildIdMismatchDialog'
 import { checkBuildId } from './buildCheck'
 import { hydrateProjectOnBoot } from './state/projectStore'
 import { initCustomAssets } from './state/customAssetStore'
+import { initAnimationStore } from './state/animationStore'
 import { initModFolder } from './state/modFolderStore'
 import { $containers, $activeContainerId } from './state/containerStore'
 import { $measurements, $activeMeasurementId } from './state/measurementStore'
@@ -37,6 +38,9 @@ hydrateProjectOnBoot()
 // Wire custom-asset hydration AFTER the project is loaded so the immediate
 // subscriber callback reads the real $part (not the initial empty part).
 initCustomAssets()
+
+// Keep the active animation/joint/keyframe selection clamped across undo/redo.
+initAnimationStore()
 
 checkBuildId()
 

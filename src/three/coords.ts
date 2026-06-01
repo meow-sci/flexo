@@ -45,3 +45,33 @@ export function readPlacementTransform(obj: THREE.Object3D): {
     scale: { x: obj.scale.x, y: obj.scale.y, z: obj.scale.z },
   }
 }
+
+/**
+ * Builds the local matrix for a KSA-space {@link Transform}, routing the rotation
+ * through the SAME calibrated euler order ({@link EULER_ORDER}) as
+ * {@link applyPlacement}. The single source of truth for "Transform → matrix" used
+ * by the animation rig math (which must agree bit-for-bit with how placements are
+ * rendered, so an animation's rest pose matches the static pose).
+ */
+export function matrixFromTransform(t: Transform): THREE.Matrix4 {
+  const pos = new THREE.Vector3(t.position.x, t.position.y, t.position.z)
+  const quat = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(t.rotation.x, t.rotation.y, t.rotation.z, EULER_ORDER),
+  )
+  const scale = new THREE.Vector3(t.scale.x, t.scale.y, t.scale.z)
+  return new THREE.Matrix4().compose(pos, quat, scale)
+}
+
+/** Inverse of {@link matrixFromTransform}: decomposes a matrix back to a KSA Transform. */
+export function transformFromMatrix(m: THREE.Matrix4): Transform {
+  const pos = new THREE.Vector3()
+  const quat = new THREE.Quaternion()
+  const scale = new THREE.Vector3()
+  m.decompose(pos, quat, scale)
+  const euler = new THREE.Euler().setFromQuaternion(quat, EULER_ORDER)
+  return {
+    position: { x: pos.x, y: pos.y, z: pos.z },
+    rotation: { x: euler.x, y: euler.y, z: euler.z },
+    scale: { x: scale.x, y: scale.y, z: scale.z },
+  }
+}

@@ -7,7 +7,7 @@ import { SelectionManager } from './SelectionManager'
 import { TransformGizmo } from './TransformGizmo'
 import { MeasurementLayer } from './MeasurementLayer'
 import { ContainerLayer } from './ContainerLayer'
-import { readPlacementTransform } from './coords'
+import { readPlacementTransform, transformFromMatrix } from './coords'
 import {
   centroidOf,
   rotatedAroundOriginTransform,
@@ -46,6 +46,17 @@ import {
   updateMeasurement,
 } from '../state/measurementStore'
 import { $activeContainerId, setActiveContainer } from '../state/containerStore'
+import {
+  $activeAnimationId,
+  $activeJointId,
+  $animPreviewU,
+  $editKeyframeId,
+  moveJointPivot,
+  setJointPose,
+} from '../state/animationStore'
+import { jointWorld, previewOverrideMatrix } from '../ksa/animationRig'
+import type { PartAnimation } from '../ksa/types'
+import { $inspectorMode } from '../state/uiStore'
 import { $connectorSettings, $selectionHighlight, type ConnectorSettings } from '../state/settingsStore'
 import { $cameraRestore, $cameraSnap, $grids } from '../state/viewStore'
 import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../state/layerStore'
@@ -82,6 +93,8 @@ export class EditorScene {
   private readonly containers: ContainerLayer
   private highlighted: SelectableObject[] = []
   private attachedObject: THREE.Object3D | null = null
+  /** Instance ids whose group transform is currently overridden by the animation preview. */
+  private animOverridden = new Set<string>()
   /**
    * Empty group the gizmo attaches to when 2+ SubParts are selected. Positioned
    * at the selection centroid with identity rotation/scale; the gizmo drives it
@@ -90,6 +103,13 @@ export class EditorScene {
   private readonly pivot = new THREE.Group()
   /** Per-SubPart starting transforms captured at the start of a bulk gizmo drag. */
   private bulkSnapshot: { centroid: Vec3; items: SelectedTransformRef[] } | null = null
+  /**
+   * Empty group the gizmo attaches to while editing a joint pose. Positioned at the
+   * joint's world frame W_J(t) of the edited keyframe; a gizmo drag moves it, and
+   * {@link handlePoseGizmoChange} reads it back to the joint's local pose (Part-space
+   * since {@link root} is at identity). Takes precedence over the selection gizmo.
+   */
+  private readonly poseProxy = new THREE.Group()
 
   // Point-to-point measurement picking.
   private readonly raycaster = new THREE.Raycaster()
@@ -106,6 +126,8 @@ export class EditorScene {
     if (import.meta.env.DEV) (window as unknown as { __editorScene?: EditorScene }).__editorScene = this
     this.pivot.name = 'bulk-pivot'
     this.root.add(this.pivot)
+    this.poseProxy.name = 'pose-proxy'
+    this.root.add(this.poseProxy)
 
     this.selection = new SelectionManager(
       this.viewport.camera,
@@ -155,6 +177,13 @@ export class EditorScene {
       this.viewport.controls,
       {
         onDragStart: () => {
+          // Editing a joint pose: one undo step, no bulk snapshot.
+          const pose = this.attachedObject === this.poseProxy ? this.poseEditTarget() : null
+          if (pose) {
+            const when = pose.kf.timeSec === 0 ? 'rest' : `${pose.kf.timeSec}s`
+            pushUndo('pose', `${pose.joint.name} @ ${when}`)
+            return
+          }
           const mode = $toolMode.get()
           const desc = mode === 'rotate' ? 'rotate' : mode === 'scale' ? 'scale' : 'move'
           const refs = selectedTransformRefs()
@@ -162,10 +191,16 @@ export class EditorScene {
           pushUndo(desc, detail)
           this.beginBulkDrag()
         },
-        onChange: (object) => this.handleGizmoChange(object),
+        onChange: (object) => {
+          if (object === this.poseProxy) this.handlePoseGizmoChange()
+          else this.handleGizmoChange(object)
+        },
         onDraggingChanged: (dragging) => {
           this.selection.setSuppressed(dragging)
-          if (!dragging) this.endBulkDrag()
+          if (!dragging) {
+            this.endBulkDrag()
+            this.updateSelection() // re-snap the pose proxy to the committed pose
+          }
         },
       },
     )
@@ -243,6 +278,19 @@ export class EditorScene {
       }),
     )
     this.unsubscribers.push($part.subscribe((part) => this.reconcile(part)))
+    // Animation preview: re-apply the joint-driven transform override when the active
+    // animation, scrub position, or edited keyframe changes ($part changes already
+    // re-apply via reconcile). Fires immediately on subscribe (harmless no-op at rest).
+    const onPreviewChange = () => {
+      this.applyAnimationPreview()
+      this.updateSelection() // re-evaluate gizmo suppression for posed animated parts
+    }
+    this.unsubscribers.push($activeAnimationId.subscribe(onPreviewChange))
+    this.unsubscribers.push($activeJointId.subscribe(onPreviewChange))
+    this.unsubscribers.push($animPreviewU.subscribe(onPreviewChange))
+    this.unsubscribers.push($editKeyframeId.subscribe(onPreviewChange))
+    // Leaving/entering the Animation editor toggles the preview + pose gizmo on/off.
+    this.unsubscribers.push($inspectorMode.subscribe(onPreviewChange))
     this.unsubscribers.push($selectedIndices.subscribe(() => this.updateSelection()))
     this.unsubscribers.push($selectedConnectorIndices.subscribe(() => this.updateSelection()))
     this.unsubscribers.push($selectedKittenIndices.subscribe(() => this.updateSelection()))
@@ -317,6 +365,7 @@ export class EditorScene {
           this.objects.set(placement.instanceId, obj)
           this.applyLayerVisibility() // respect the layer's visibility for the new object
           this.updateSelection() // highlight/attach if this is the selected one
+          this.applyAnimationPreview() // re-apply if this object is animation-driven
         })
         .catch((err) => {
           this.building.delete(placement.instanceId)
@@ -328,6 +377,70 @@ export class EditorScene {
     this.reconcileKittens(part)
     this.applyLayerVisibility()
     this.updateSelection()
+    this.applyAnimationPreview()
+  }
+
+  /**
+   * Drives the active animation's attached SubParts to the previewed pose in the
+   * viewport (editor-only; never mutates the document). The effective time is the
+   * edited keyframe's time when posing, else the scrub slider mapped to [0,duration].
+   * Each attached SubPart's group matrix is set to W_J(t)·W_J(0)⁻¹·placement (the same
+   * transform KSA will render); everything else stays at its static placement.
+   *
+   * Reconcile resets every group to its placement first (via setPlacement), so this
+   * just overlays the overrides on top; previously-overridden ids are reverted when
+   * the animation changes/clears.
+   */
+  /** True when the preview shows a posed (non-rest) frame: editing a keyframe, or scrubbed past 0. */
+  private isPreviewPosed(): boolean {
+    if ($inspectorMode.get() !== 'anim') return false
+    if ($editKeyframeId.get()) return true
+    return $activeAnimationId.get() != null && $animPreviewU.get() > 1e-6
+  }
+
+  /** True when any selected SubPart is attached to a joint of the active animation. */
+  private selectedIsAnimated(): boolean {
+    const animId = $activeAnimationId.get()
+    const part = $part.get()
+    const anim = animId ? part.animations.find((a) => a.id === animId) : null
+    if (!anim) return false
+    const members = new Set<string>()
+    for (const j of anim.joints) for (const id of j.memberInstanceIds) members.add(id)
+    return $selectedIndices.get().some((i) => members.has(part.placements[i]?.instanceId ?? ''))
+  }
+
+  private applyAnimationPreview(): void {
+    const part = $part.get()
+    const byId = new Map(part.placements.map((p) => [p.instanceId, p]))
+    // Revert last round's overrides to their static placement.
+    for (const id of this.animOverridden) {
+      const obj = this.objects.get(id)
+      const placement = byId.get(id)
+      if (obj && placement) obj.setPlacement(placement)
+    }
+    this.animOverridden.clear()
+
+    // Preview only runs while the Animation editor is open (its atoms persist across
+    // inspector mode switches); in assets mode parts show their static placements.
+    const animId = $inspectorMode.get() === 'anim' ? $activeAnimationId.get() : null
+    const anim = animId ? part.animations.find((a) => a.id === animId) : null
+    if (!anim) return
+    const editKf = $editKeyframeId.get()
+    const pinned = editKf ? anim.keyframes.find((k) => k.id === editKf) : null
+    const u = Math.min(1, Math.max(0, $animPreviewU.get()))
+    const t = pinned ? pinned.timeSec : u * anim.durationSec
+
+    for (const joint of anim.joints) {
+      for (const instId of joint.memberInstanceIds) {
+        const obj = this.objects.get(instId)
+        const placement = byId.get(instId)
+        if (!obj || !placement) continue
+        const m = previewOverrideMatrix(anim, instId, t, placement)
+        if (!m) continue
+        m.decompose(obj.group.position, obj.group.quaternion, obj.group.scale)
+        this.animOverridden.add(instId)
+      }
+    }
   }
 
   /** Builds/updates/removes kitten visual aides (async, like SubParts). */
@@ -478,6 +591,20 @@ export class EditorScene {
     // Gizmo attachment — never re-attach mid-drag (it would reset the drag).
     if (this.gizmo.isDragging) return
 
+    // Pose-editing takes precedence: when a joint + keyframe are active, the gizmo
+    // edits the joint's pose via an empty proxy positioned at the joint's world frame.
+    const poseTarget = this.poseEditTarget()
+    if (poseTarget) {
+      const m = jointWorld(poseTarget.anim, poseTarget.joint.id, poseTarget.kf.timeSec)
+      m.decompose(this.poseProxy.position, this.poseProxy.quaternion, this.poseProxy.scale)
+      this.poseProxy.updateMatrixWorld(true)
+      if (this.attachedObject !== this.poseProxy) {
+        this.gizmo.attach(this.poseProxy)
+        this.attachedObject = this.poseProxy
+      }
+      return
+    }
+
     // 2+ SubParts -> attach to the centroid pivot for bulk transforms; otherwise
     // attach directly to the single selected object (SubPart or connector).
     const part = $part.get()
@@ -493,7 +620,11 @@ export class EditorScene {
       indices.some((i) => isLayerLocked(part.placements[i]?.layerId ?? '')) ||
       conIndices.some((ci) => isLayerLocked(part.connectors[ci]?.layerId ?? '')) ||
       kitIndices.some((ki) => isLayerLocked(part.kittens[ki]?.layerId ?? ''))
-    if (anyLocked) {
+    // While the preview shows a POSED frame (t>0 / editing), an animated SubPart's
+    // group sits at its animated transform — suppress the gizmo so a drag can't write
+    // the posed transform back as the static placement. At rest (t=0) it's safe.
+    const previewLocked = this.isPreviewPosed() && this.selectedIsAnimated()
+    if (anyLocked || previewLocked) {
       target = null
     } else if (multi) {
       this.repositionPivot()
@@ -514,6 +645,60 @@ export class EditorScene {
       return
     }
     updateSelectedTransform(readPlacementTransform(object))
+  }
+
+  /** The active pose-edit target (active animation + joint + keyframe), or null. */
+  private poseEditTarget(): {
+    anim: PartAnimation
+    joint: PartAnimation['joints'][number]
+    kf: PartAnimation['keyframes'][number]
+  } | null {
+    // Only while the Animation editor is open (its atoms persist across mode switches).
+    if ($inspectorMode.get() !== 'anim') return null
+    const animId = $activeAnimationId.get()
+    const jointId = $activeJointId.get()
+    const kfId = $editKeyframeId.get()
+    if (!animId || !jointId || !kfId) return null
+    const anim = $part.get().animations.find((a) => a.id === animId)
+    const joint = anim?.joints.find((j) => j.id === jointId)
+    const kf = anim?.keyframes.find((k) => k.id === kfId)
+    if (!anim || !joint || !kf) return null
+    return { anim, joint, kf }
+  }
+
+  /**
+   * Writes a pose-gizmo drag back to the joint's local pose. The proxy's local matrix
+   * is the joint's world frame (root is at identity), so the new local pose is
+   * parentWorld(t)⁻¹ · proxy. At the rest keyframe with the Move tool this is a PIVOT
+   * move — the delta is applied to every keyframe (the rotation anchor relocates with
+   * no mesh jump); otherwise it sets just this keyframe's pose. STREAMING (drag-start
+   * pushed undo once).
+   */
+  private handlePoseGizmoChange(): void {
+    const target = this.poseEditTarget()
+    if (!target) return
+    const { anim, joint, kf } = target
+    const proxyWorld = new THREE.Matrix4().compose(
+      this.poseProxy.position,
+      this.poseProxy.quaternion,
+      this.poseProxy.scale,
+    )
+    const parentWorld = joint.parentJointId
+      ? jointWorld(anim, joint.parentJointId, kf.timeSec)
+      : new THREE.Matrix4()
+    const newLocal = parentWorld.invert().multiply(proxyWorld)
+    const t = transformFromMatrix(newLocal)
+
+    if (kf.timeSec === 0 && $toolMode.get() === 'translate') {
+      const cur = kf.poses[joint.id]?.position ?? { x: 0, y: 0, z: 0 }
+      moveJointPivot(anim.id, joint.id, {
+        x: t.position.x - cur.x,
+        y: t.position.y - cur.y,
+        z: t.position.z - cur.z,
+      })
+    } else {
+      setJointPose(anim.id, kf.id, joint.id, t)
+    }
   }
 
   /** Snapshots all selected entities' transforms at the start of a bulk gizmo drag. */
@@ -629,6 +814,7 @@ export class EditorScene {
     this.unsubscribers.length = 0
     this.selection.dispose()
     this.gizmo.dispose()
+    this.root.remove(this.poseProxy)
     this.measurements.dispose()
     this.containers.dispose()
     for (const obj of this.objects.values()) obj.dispose()

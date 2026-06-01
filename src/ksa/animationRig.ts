@@ -1,0 +1,238 @@
+import * as THREE from 'three'
+import { matrixFromTransform } from '../three/coords'
+import { identityTransform } from './types'
+import type { PartAnimation, SubPartPlacement, Transform } from './types'
+
+/**
+ * Builds the joint-skeleton "rig" KSA's KeyframeAnimationModule requires, and the
+ * sampling math the in-editor preview shares with it.
+ *
+ * KSA RULE (KeyframeAnimationData.cs:178-204): animation channels must target
+ * JOINT nodes; each moving SubPart is a NON-animated leaf named === its instance
+ * Id, parented under its joint. KSA composes
+ *   world(leaf,t) = leafStatic · jointLocal(t) · …up the animated-ancestor chain
+ * and assigns the decomposed result to the SubPart's Part-local transform. So:
+ *   - joint node base TRS  = the joint's rest LOCAL pose (keyframe-0, relative to parent)
+ *   - joint channels       = the joint's local pose sampled at each keyframe
+ *   - leaf static (Oₗ)     = W_J(0)⁻¹ · placement   (the rest offset from the joint)
+ * giving world(leaf,t) = W_J(t) · W_J(0)⁻¹ · placement — exactly the static pose at
+ * t=0 (no load jump) and rigidly carried by the joint thereafter.
+ *
+ * All matrix math runs in three.js with the SAME calibrated mapping the editor uses
+ * for placements ({@link matrixFromTransform}); glTF carries rotations as
+ * quaternions in the shared KSA/three.js basis, so what the preview shows and what
+ * KSA renders agree.
+ */
+
+/** A plain-number glTF node (three.js-free) consumed by {@link buildAnimationGlb}. */
+export interface AnimRigNode {
+  name: string
+  translation: [number, number, number]
+  /** Quaternion, glTF xyzw order. */
+  rotation: [number, number, number, number]
+  scale: [number, number, number]
+  /** Indices into the rig's `nodes` array. */
+  children: number[]
+}
+
+/** One animation channel: keyframe times + flat TRS output for a target node. */
+export interface AnimRigChannel {
+  node: number
+  path: 'translation' | 'rotation' | 'scale'
+  /** Keyframe times in seconds. */
+  times: number[]
+  /** Flat output values: 3/key for translation|scale, 4/key (xyzw) for rotation. */
+  values: number[]
+}
+
+/** The full rig: a node tree (one root = the Part) + per-joint channels. */
+export interface AnimRig {
+  nodes: AnimRigNode[]
+  /** Scene root node indices (just the Part node). */
+  roots: number[]
+  channels: AnimRigChannel[]
+  /** Max keyframe time = KSA Duration. */
+  durationSec: number
+}
+
+const SCALE_EPS = 1e-6
+
+/** Keyframes sorted ascending by time (a fresh array; the store keeps t=0 first). */
+function sortedKeyframes(anim: PartAnimation) {
+  return [...anim.keyframes].sort((a, b) => a.timeSec - b.timeSec)
+}
+
+/** A joint's pose at keyframe `k`, defaulting to identity if it has no entry. */
+function poseOf(jointId: string, k: PartAnimation['keyframes'][number]): Transform {
+  return k.poses[jointId] ?? identityTransform()
+}
+
+function poseParts(t: Transform): { pos: THREE.Vector3; quat: THREE.Quaternion; scale: THREE.Vector3 } {
+  const pos = new THREE.Vector3()
+  const quat = new THREE.Quaternion()
+  const scale = new THREE.Vector3()
+  matrixFromTransform(t).decompose(pos, quat, scale)
+  return { pos, quat, scale }
+}
+
+/**
+ * The joint's LOCAL matrix (relative to its parent) at time `t`, linearly
+ * interpolating position/scale and slerping rotation between bracketing keyframes.
+ * Clamps to the end keyframes outside [0, lastTime] (mirroring KSA's clamp).
+ */
+export function sampleJointLocal(anim: PartAnimation, jointId: string, t: number): THREE.Matrix4 {
+  const kfs = sortedKeyframes(anim)
+  if (kfs.length === 0) return new THREE.Matrix4()
+  if (t <= kfs[0].timeSec) return matrixFromTransform(poseOf(jointId, kfs[0]))
+  const last = kfs[kfs.length - 1]
+  if (t >= last.timeSec) return matrixFromTransform(poseOf(jointId, last))
+  let i = 0
+  while (i < kfs.length - 1 && kfs[i + 1].timeSec <= t) i++
+  const a = kfs[i]
+  const b = kfs[i + 1]
+  const span = b.timeSec - a.timeSec
+  const alpha = span > 0 ? (t - a.timeSec) / span : 0
+  const pa = poseParts(poseOf(jointId, a))
+  const pb = poseParts(poseOf(jointId, b))
+  const pos = pa.pos.lerp(pb.pos, alpha)
+  const quat = pa.quat.slerp(pb.quat, alpha) // three.js slerp takes the shortest path
+  const scale = pa.scale.lerp(pb.scale, alpha)
+  return new THREE.Matrix4().compose(pos, quat, scale)
+}
+
+/**
+ * The joint's WORLD matrix (in Part space) at time `t`, composing its local pose up
+ * the parent-joint chain: W_J = L_root · … · L_J. Cycle- and missing-parent-safe.
+ */
+export function jointWorld(anim: PartAnimation, jointId: string, t: number): THREE.Matrix4 {
+  const byId = new Map(anim.joints.map((j) => [j.id, j]))
+  let m = sampleJointLocal(anim, jointId, t)
+  const seen = new Set<string>([jointId])
+  let pid = byId.get(jointId)?.parentJointId ?? null
+  while (pid && byId.has(pid) && !seen.has(pid)) {
+    seen.add(pid)
+    m = sampleJointLocal(anim, pid, t).multiply(m) // parentLocal · m
+    pid = byId.get(pid)!.parentJointId
+  }
+  return m
+}
+
+/** The joint a placement is attached to, or null if it's not animated. */
+export function findOwningJoint(anim: PartAnimation, instanceId: string): PartAnimation['joints'][number] | null {
+  return anim.joints.find((j) => j.memberInstanceIds.includes(instanceId)) ?? null
+}
+
+/**
+ * The editor-preview override matrix for an animated SubPart at time `t`:
+ * W_J(t) · W_J(0)⁻¹ · placement. Returns null when the SubPart isn't attached to
+ * any joint (it should keep its static placement).
+ */
+export function previewOverrideMatrix(
+  anim: PartAnimation,
+  instanceId: string,
+  t: number,
+  placement: Transform,
+): THREE.Matrix4 | null {
+  const joint = findOwningJoint(anim, instanceId)
+  if (!joint) return null
+  const Wt = jointWorld(anim, joint.id, t)
+  const W0inv = jointWorld(anim, joint.id, 0).invert()
+  return Wt.multiply(W0inv).multiply(matrixFromTransform(placement))
+}
+
+/** Every instance id attached to any joint in the animation. */
+export function animatedInstanceIds(anim: PartAnimation): Set<string> {
+  const out = new Set<string>()
+  for (const j of anim.joints) for (const id of j.memberInstanceIds) out.add(id)
+  return out
+}
+
+function decomposeToNode(name: string, m: THREE.Matrix4): AnimRigNode {
+  const pos = new THREE.Vector3()
+  const quat = new THREE.Quaternion()
+  const scale = new THREE.Vector3()
+  m.decompose(pos, quat, scale)
+  return {
+    name,
+    translation: [pos.x, pos.y, pos.z],
+    rotation: [quat.x, quat.y, quat.z, quat.w],
+    scale: [scale.x, scale.y, scale.z],
+    children: [],
+  }
+}
+
+/**
+ * Builds the {@link AnimRig} for one animation: a Part root node, a joint node per
+ * {@link PartAnimation.joints} (nested by parentJointId), a named leaf per attached
+ * placement, and translation/rotation (+ scale when it varies) channels per joint.
+ */
+export function buildAnimationRig(
+  anim: PartAnimation,
+  placements: readonly SubPartPlacement[],
+  partId: string,
+): AnimRig {
+  const placementById = new Map(placements.map((p) => [p.instanceId, p as Transform]))
+  const nodes: AnimRigNode[] = []
+  const push = (name: string, m: THREE.Matrix4): number => {
+    nodes.push(decomposeToNode(name, m))
+    return nodes.length - 1
+  }
+
+  // Root = the Part (identity). KSA finds the root as the node with no parent.
+  const rootIdx = push(partId, new THREE.Matrix4())
+
+  // One node per joint, base TRS = its rest LOCAL pose (keyframe 0, relative to parent).
+  const jointNodeIdx = new Map<string, number>()
+  for (const j of anim.joints) {
+    jointNodeIdx.set(j.id, push(`jt_${j.id}`, sampleJointLocal(anim, j.id, 0)))
+  }
+  // Wire joint parenting (root joints hang off the Part node).
+  for (const j of anim.joints) {
+    const parent =
+      j.parentJointId && jointNodeIdx.has(j.parentJointId) ? jointNodeIdx.get(j.parentJointId)! : rootIdx
+    nodes[parent].children.push(jointNodeIdx.get(j.id)!)
+  }
+  // One leaf per attached placement, static TRS = W_J(0)⁻¹ · placement.
+  for (const j of anim.joints) {
+    const w0inv = jointWorld(anim, j.id, 0).invert()
+    for (const instId of j.memberInstanceIds) {
+      const placement = placementById.get(instId)
+      if (!placement) continue // placement removed — skip its leaf
+      const offset = w0inv.clone().multiply(matrixFromTransform(placement))
+      nodes[jointNodeIdx.get(j.id)!].children.push(push(instId, offset))
+    }
+  }
+
+  // Channels: sample each joint's local pose at every keyframe.
+  const kfs = sortedKeyframes(anim)
+  const times = kfs.map((k) => k.timeSec)
+  const channels: AnimRigChannel[] = []
+  for (const j of anim.joints) {
+    const node = jointNodeIdx.get(j.id)!
+    const transl: number[] = []
+    const rot: number[] = []
+    const scl: number[] = []
+    let prev: THREE.Quaternion | null = null
+    let scaleVaries = false
+    let firstScale: THREE.Vector3 | null = null
+    for (const k of kfs) {
+      const { pos, quat, scale } = poseParts(poseOf(j.id, k))
+      transl.push(pos.x, pos.y, pos.z)
+      // Keep consecutive quaternions in the same hemisphere so KSA's slerp takes the
+      // short way (q and -q are the same rotation but slerp differently).
+      if (prev && prev.dot(quat) < 0) quat.set(-quat.x, -quat.y, -quat.z, -quat.w)
+      rot.push(quat.x, quat.y, quat.z, quat.w)
+      prev = quat
+      scl.push(scale.x, scale.y, scale.z)
+      if (!firstScale) firstScale = scale.clone()
+      else if (Math.abs(scale.x - firstScale.x) > SCALE_EPS || Math.abs(scale.y - firstScale.y) > SCALE_EPS || Math.abs(scale.z - firstScale.z) > SCALE_EPS) {
+        scaleVaries = true
+      }
+    }
+    channels.push({ node, path: 'translation', times, values: transl })
+    channels.push({ node, path: 'rotation', times, values: rot })
+    if (scaleVaries) channels.push({ node, path: 'scale', times, values: scl })
+  }
+
+  return { nodes, roots: [rootIdx], channels, durationSec: Math.max(0, ...times) }
+}

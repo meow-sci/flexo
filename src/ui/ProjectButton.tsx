@@ -15,6 +15,7 @@ import {
   ToolbarButton,
 } from './kit'
 import { TrashIcon } from './layerIcons'
+import { ExportProjectDialog, ImportProjectDialog } from './ProjectTransferDialogs'
 import {
   $projectName,
   createProject,
@@ -36,6 +37,8 @@ export function ProjectButton() {
   const name = useStore($projectName)
   const [popoverOpen, setPopoverOpen] = useState(false)
   const [loadOpen, setLoadOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
   return (
     <>
@@ -72,11 +75,38 @@ export function ProjectButton() {
                 New Project
               </Button>
             </div>
+            <div className="flex flex-col gap-2 border-t border-border pt-3">
+              <SectionTitle>Project Data</SectionTitle>
+              <div className="flex flex-col gap-1.5">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onPress={() => {
+                    setPopoverOpen(false)
+                    setExportOpen(true)
+                  }}
+                >
+                  Export...
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onPress={() => {
+                    setPopoverOpen(false)
+                    setImportOpen(true)
+                  }}
+                >
+                  Import...
+                </Button>
+              </div>
+            </div>
           </PopoverDialog>
         </Popover>
       </DialogTrigger>
 
       <LoadProjectDialog isOpen={loadOpen} onOpenChange={setLoadOpen} />
+      <ExportProjectDialog isOpen={exportOpen} onOpenChange={setExportOpen} />
+      <ImportProjectDialog isOpen={importOpen} onOpenChange={setImportOpen} />
     </>
   )
 }

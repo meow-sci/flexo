@@ -166,6 +166,8 @@ function migratePart(part: EditingPart | undefined | null): void {
   // Custom assets (textures/meshes) were added later; default for older projects.
   if (!Array.isArray(part.customTextures)) part.customTextures = []
   if (!Array.isArray(part.customMeshes)) part.customMeshes = []
+  // Animations were added later; default for older projects.
+  if (!Array.isArray(part.animations)) part.animations = []
 }
 
 /** Migrates the document + every history-snapshot part within a loaded snapshot. */

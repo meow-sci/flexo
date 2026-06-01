@@ -2,6 +2,9 @@ import type { EditingPart } from './types'
 import { serializeGameData, serializePart } from './partXmlSerializer'
 import { serializeAssets, type AssetsSubPartPlan } from './assetsXmlSerializer'
 import { buildMeshAtlasGlb } from './exportGlb'
+import { buildAnimationRig } from './animationRig'
+import { buildAnimationGlb } from './exportAnimationGlb'
+import { animGlbPath, isAnimationExportable } from './animationNaming'
 import { buildPrimitiveGeometry, PRIMITIVE_FACE_KEYS, applyFaceUvTransforms } from '../three/primitives'
 import { getPrimaryTextureId } from '../state/customAssetStore'
 import { assetKeys, getAsset } from '../state/assetDb'
@@ -73,7 +76,7 @@ export function buildModContent(part: EditingPart, projectName: string): ModCont
     partFile: `${base}Part.xml`,
     partXml: serializePart(part),
     gameDataFile: `${base}GameData.xml`,
-    gameDataXml: serializeGameData(part),
+    gameDataXml: serializeGameData(part, base),
   }
 }
 
@@ -114,11 +117,21 @@ export interface CustomBundle {
  * fresh from the stored primitive params.
  */
 export async function buildCustomBundle(part: EditingPart, base: string): Promise<CustomBundle> {
+  const binaries: { path: string; data: Uint8Array }[] = []
+
+  // Animations export independently of custom meshes (a Core-only part can still be
+  // animated): one Animations/<id>.glb per exportable animation, path-matched to the
+  // <KeyframeAnimation Path> emitted in the GameData XML.
+  for (const anim of part.animations) {
+    if (!isAnimationExportable(anim)) continue
+    const rig = buildAnimationRig(anim, part.placements, part.partId)
+    binaries.push({ path: animGlbPath(base, anim), data: buildAnimationGlb(rig) })
+  }
+
   const placed = new Set(part.placements.map((p) => p.subPartTemplateId))
   const meshes = part.customMeshes.filter((m) => placed.has(m.subPartId))
-  if (meshes.length === 0) return { assetsFile: null, assetsXml: null, binaries: [] }
-
-  const binaries: { path: string; data: Uint8Array }[] = []
+  // No custom SubParts → no Assets XML, but still ship any animation glbs above.
+  if (meshes.length === 0) return { assetsFile: null, assetsXml: null, binaries }
 
   // Derive a bundle token from base (project name) + the first mesh's random id suffix.
   // Mesh ids contain a random UUID fragment generated at creation time, so this is
@@ -286,13 +299,15 @@ export async function writeModToFolder(
 
   // Custom assets: the Assets XML respects the non-overwrite contract (suffixed on
   // collision); the binaries it references are regenerated deterministically and
-  // written into Meshes/ and Textures/ (overwrite is fine — same content).
+  // written into Meshes/, Textures/, and Animations/ (overwrite is fine — same content).
   let assetsFile: string | null = null
   if (bundle.assetsFile && bundle.assetsXml) {
     assetsFile = uniqueFileName(taken, `${content.base}Assets`, 'xml')
     await writeTextFile(modDir, assetsFile, bundle.assetsXml)
-    for (const b of bundle.binaries) await writeBinaryAtPath(modDir, b.path, b.data)
   }
+  // Binaries are written even with no Assets XML — an animation-only part (Core
+  // SubParts) ships an Animations/*.glb referenced by the GameData XML.
+  for (const b of bundle.binaries) await writeBinaryAtPath(modDir, b.path, b.data)
 
   const assets = (await listFileNames(modDir)).filter(isXml).sort((a, b) => a.localeCompare(b))
   await writeTextFile(modDir, MOD_TOML_NAME, serializeModToml(assets))

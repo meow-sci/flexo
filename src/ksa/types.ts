@@ -386,6 +386,111 @@ export interface CustomMesh {
   faceTextures: Partial<Record<string, FaceTextureConfig>>
 }
 
+/**
+ * CUSTOM ANIMATIONS — user-authored keyframe animations that drive a Part's
+ * SubParts via KSA's built-in `KeyframeAnimationModule` (see
+ * plans/FEATURE_ANIMATIONS_PLAN.md). PURE DATA: an animation exports as one
+ * `<KeyframeAnimationModule>` on the `<PartGameData>` plus one `Animations/*.glb`
+ * joint-skeleton file — no game-code mod.
+ *
+ * KSA mandate (verified in KeyframeAnimationData.cs): every moving SubPart must be
+ * a NON-animated leaf node named === its instance Id, parented under an ANIMATED
+ * JOINT node (a directly-animated SubPart node is silently a no-op). So an
+ * animation is authored as a small skeleton of {@link AnimationJoint}s + per-joint
+ * {@link AnimationKeyframe} poses; the export builds the leaf parenting + offsets.
+ */
+
+/** How the in-game part popup exposes the animation. Maps to `ShowDeployRetract`. */
+export type AnimationMode =
+  /** Deploy/Retract buttons (ShowDeployRetract="true"): binary stowed↔deployed. */
+  | 'deployRetract'
+  /** "Actuate" 0→1 slider (ShowDeployRetract absent): free manual positioning. */
+  | 'actuate'
+
+/**
+ * A pivot frame the animation rotates/translates. SubParts in
+ * {@link memberInstanceIds} are rigidly attached and follow it. Joints may nest
+ * via {@link parentJointId} to form kinematic chains (spider legs, multi-segment
+ * landing gear); a root joint (parentJointId=null) is posed in Part space.
+ */
+export interface AnimationJoint {
+  /** Stable unique id within the animation, e.g. "joint_ab12cd". */
+  id: string
+  /** User-facing label, e.g. "Hinge", "Hip", "Knee". */
+  name: string
+  /** Parent joint id for a chain, or null when posed directly in Part space. */
+  parentJointId: string | null
+  /** Instance ids of placements rigidly attached to this joint (become glb leaves). */
+  memberInstanceIds: string[]
+}
+
+/**
+ * A snapshot of every joint's LOCAL frame (relative to its parent joint, or Part
+ * space for root joints) at one point on the 0→durationSec timeline. The keyframe
+ * at timeSec=0 is the rest pose (must equal each SubPart's placement once composed).
+ */
+export interface AnimationKeyframe {
+  /** Stable unique id within the animation, e.g. "kf_ab12cd". */
+  id: string
+  /** Time in seconds (KSA: 1 s sim = 1 s timeline). The first keyframe is always 0. */
+  timeSec: number
+  /** jointId → that joint's local frame at this time. Every joint has an entry. */
+  poses: Record<string, Transform>
+}
+
+/**
+ * Optional passthrough to KSA's built-in `<SolarTracking>` extension — after the
+ * animation deploys, the named SubPart continuously rotates to face the sun.
+ * Only meaningful for real solar panels; requires {@link AnimationMode} deployRetract.
+ */
+export interface SolarTrackingSpec {
+  /** Tracking rotation speed, degrees per second. */
+  degreesPerSecond: number
+  /** Instance id of the SubPart that rotates to track the sun (the drive rotor). */
+  subPartInstanceId: string
+  /** Instance ids excluded from the tracking rotation (e.g. the fixed housing). */
+  excludeInstanceIds: string[]
+}
+
+/**
+ * A user-authored animation on the Part. Becomes one `<KeyframeAnimationModule>`
+ * (+ one `Animations/*.glb`). A SubPart should be attached to at most one
+ * animation — overlapping modules fight over its transform each frame.
+ */
+export interface PartAnimation {
+  /** Stable unique id (basis for the module Id + glb filename), e.g. "anim_ab12cd". */
+  id: string
+  /** User-facing label, e.g. "Bay Doors", "Deploy". */
+  name: string
+  /** Full deploy time in seconds = KSA Duration (the max keyframe time). */
+  durationSec: number
+  mode: AnimationMode
+  /** The pose skeleton. Single-joint for doors/hinges; nested for chains. */
+  joints: AnimationJoint[]
+  /** Poses over time, sorted by timeSec; keyframes[0].timeSec === 0 (rest). */
+  keyframes: AnimationKeyframe[]
+  /** Optional sun-tracking extension, or null. */
+  solarTracking: SolarTrackingSpec | null
+}
+
+/** An identity (rest) transform — position 0, rotation 0, scale 1. */
+export function identityTransform(): Transform {
+  return { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } }
+}
+
+/** A fresh, empty animation: one rest keyframe at t=0, no joints, 1 s actuate. */
+export function createPartAnimation(id: string, name: string): PartAnimation {
+  return {
+    id,
+    name: name.trim() || 'Animation',
+    durationSec: 1,
+    mode: 'actuate',
+    joints: [],
+    keyframes: [{ id: `${id}_kf0`, timeSec: 0, poses: {} }],
+    solarTracking: null,
+  }
+}
+
 /** The full Part being assembled in the editor. */
 export interface EditingPart {
   /** Part id used in the exported XML (must be unique), e.g. "fixme_part_id". */
@@ -408,6 +513,8 @@ export interface EditingPart {
   customTextures: CustomTexture[]
   /** User-created primitive meshes / custom SubPart templates. */
   customMeshes: CustomMesh[]
+  /** User-authored keyframe animations (KeyframeAnimationModule + Animations/*.glb). */
+  animations: PartAnimation[]
 }
 
 export function createEmptyPart(): EditingPart {
@@ -422,5 +529,6 @@ export function createEmptyPart(): EditingPart {
     kittens: [],
     customTextures: [],
     customMeshes: [],
+    animations: [],
   }
 }

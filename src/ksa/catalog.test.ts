@@ -56,4 +56,17 @@ describe('catalog parsing (real Core XML)', () => {
       .map((s) => s.meshNodeName)
     expect(missing).toEqual([])
   })
+
+  it('flags IVA (Internal) SubParts and leaves normal ones unmarked', () => {
+    const iva = parseFile('CoreIVAPropAAssets.xml')
+    const note = iva.find((s) => s.id === 'CoreIVAPropA_Subpart_WrittenNoteE')!
+    expect(note).toBeDefined()
+    expect(note.internal).toBe(true)
+    // The built-in Mesh + Material ids the de-IVA export variant reuses.
+    expect(note.meshNodeName).toBe('CoreIVAPropA_Subpart_WrittenNoteE')
+    expect(note.materialId).toBe('CoreIVAPropA_Material')
+    // A normal structural SubPart carries no Internal flag.
+    const truss = structural.find((s) => s.id === 'CoreStructuralA_Subpart_TrussBarA')!
+    expect(truss.internal).toBeUndefined()
+  })
 })

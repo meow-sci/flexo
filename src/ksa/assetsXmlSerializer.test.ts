@@ -67,6 +67,32 @@ describe('serializeAssets', () => {
     expect(xml).toContain('<AoRoughMetal Path="Textures/X_NeutralORM.ktx2" Category="Vessel"')
   })
 
+  it('emits reference SubParts (de-IVA props) reusing built-in Mesh/Material, no atlas/MeshView', () => {
+    const xml = serializeAssets({
+      // No meshAtlasPath: an IVA-only export declares no custom geometry.
+      subParts: [],
+      referenceSubParts: [
+        { subPartId: 'flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA', meshId: 'CoreIVAPropA_Subpart_ChairA', materialId: 'CoreIVAPropA_Material' },
+        { subPartId: 'flexo_MyShip_CoreIVAPropA_Subpart_NoteA_NotIVA', meshId: 'CoreIVAPropA_Subpart_NoteA', materialId: null },
+      ],
+    })
+    expect(xml).toContain('<SubPart Id="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA"')
+    // Fresh, unique PartModel id — must NOT reuse the built-in "..._Model" (KSA dedupes by id).
+    expect(xml).toContain('<PartModel Id="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA_Model"')
+    // Reuses the built-in Mesh + Material by id.
+    expect(xml).toContain('<Mesh Id="CoreIVAPropA_Subpart_ChairA"')
+    expect(xml).toContain('<Material Id="CoreIVAPropA_Material"')
+    // Untextured reference part omits <Material>.
+    expect(xml).toContain('<PartModel Id="flexo_MyShip_CoreIVAPropA_Subpart_NoteA_NotIVA_Model"')
+    expect(xml).toContain('<Mesh Id="CoreIVAPropA_Subpart_NoteA"')
+    // No atlas, no PbrMaterial, no MeshView, and never the IVA-only nodes.
+    expect(xml).not.toContain('MeshAtlas')
+    expect(xml).not.toContain('PbrMaterial')
+    expect(xml).not.toContain('MeshView')
+    expect(xml).not.toContain('<Internal>')
+    expect(xml).not.toContain('RayTracing')
+  })
+
   it('emits <PartModelGlass> for a glass SubPart (translucent path)', () => {
     const xml = serializeAssets({
       meshAtlasPath: 'Meshes/X.glb',

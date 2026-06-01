@@ -41,10 +41,32 @@ export interface AssetsSubPartPlan {
   glass?: boolean
 }
 
+/**
+ * A "reference" SubPart: a project-unique SubPart that REUSES an existing (built-in)
+ * Mesh + Material by id rather than declaring its own geometry/texture. Used to re-home
+ * KSA's IVA (interior) props onto a non-Internal PartModel so they render outside IVA
+ * mode (see buildIvaVariantMap in modExport.ts). Unlike {@link AssetsSubPartPlan} it emits
+ * NO <PbrMaterial> (the material is built-in), NO <MeshView> (the built-in mesh has no
+ * "_VM" view node), and needs no MeshAtlas.
+ */
+export interface ReferenceSubPartPlan {
+  /** New project-unique SubPart id (also the basis for its unique PartModel id). */
+  subPartId: string
+  /** Built-in <Mesh Id> to reference (NOT redeclared in this file). */
+  meshId: string
+  /** Built-in <Material Id> to reference, or null for an untextured SubPart. */
+  materialId: string | null
+}
+
 export interface AssetsPlan {
-  /** Relative path to the geometry mesh-atlas GLB, e.g. "Meshes/MyMod_MeshAtlas.glb". */
-  meshAtlasPath: string
+  /**
+   * Relative path to the geometry mesh-atlas GLB, e.g. "Meshes/MyMod_MeshAtlas.glb".
+   * Omit when this Assets file declares only {@link referenceSubParts} (no custom geometry).
+   */
+  meshAtlasPath?: string
   subParts: AssetsSubPartPlan[]
+  /** Reference-only SubParts that reuse built-in Mesh/Material (e.g. de-IVA'd props). */
+  referenceSubParts?: ReferenceSubPartPlan[]
   /**
    * Relative path to a shared flat-normal .ktx2 (RGB 128,128,255 = +Z).
    *
@@ -63,9 +85,13 @@ export function serializeAssets(plan: AssetsPlan): string {
   const doc = new DOMImplementation().createDocument(null, 'Assets', null)
   const assets = doc.documentElement!
 
-  const atlas = doc.createElement('MeshAtlas')
-  atlas.setAttribute('Path', plan.meshAtlasPath)
-  assets.appendChild(atlas)
+  // Reference-only SubParts (de-IVA'd props) reuse built-in geometry, so a file with
+  // only those needs no MeshAtlas. Emit it only when custom geometry is declared.
+  if (plan.meshAtlasPath) {
+    const atlas = doc.createElement('MeshAtlas')
+    atlas.setAttribute('Path', plan.meshAtlasPath)
+    assets.appendChild(atlas)
+  }
 
   // Materials first (Core lists PbrMaterials above the SubParts that use them).
   // Every material gets all three channels KSA dereferences unconditionally in
@@ -127,6 +153,28 @@ export function serializeAssets(plan: AssetsPlan): string {
     viewMesh.setAttribute('Id', sp.subPartId + VIEW_MESH_SUFFIX)
     meshView.appendChild(viewMesh)
     sub.appendChild(meshView)
+    assets.appendChild(sub)
+  }
+
+  // Reference SubParts: a fresh SubPart + a fresh PartModel pointing at a built-in Mesh
+  // (and Material). The PartModel Id MUST be unique — KSA dedupes PartModels by Template.Id,
+  // so reusing the built-in "<orig>_Model" id would collapse back onto the original (e.g. an
+  // IVA prop's Internal PartModel), defeating the de-IVA. No <MeshView> (no "_VM" view node
+  // exists for a built-in mesh) and no <PbrMaterial> (the material is built-in).
+  for (const sp of plan.referenceSubParts ?? []) {
+    const sub = doc.createElement('SubPart')
+    sub.setAttribute('Id', sp.subPartId)
+    const model = doc.createElement('PartModel')
+    model.setAttribute('Id', `${sp.subPartId}_Model`)
+    const mesh = doc.createElement('Mesh')
+    mesh.setAttribute('Id', sp.meshId)
+    model.appendChild(mesh)
+    if (sp.materialId) {
+      const material = doc.createElement('Material')
+      material.setAttribute('Id', sp.materialId)
+      model.appendChild(material)
+    }
+    sub.appendChild(model)
     assets.appendChild(sub)
   }
 

@@ -1,12 +1,12 @@
 import * as THREE from 'three'
 import type { EditingPart, KittenMeshSource } from './types'
 import { serializeGameData, serializePart } from './partXmlSerializer'
-import { serializeAssets, type AssetsSubPartPlan } from './assetsXmlSerializer'
+import { serializeAssets, type AssetsSubPartPlan, type ReferenceSubPartPlan } from './assetsXmlSerializer'
 import { buildMeshAtlasGlb } from './exportGlb'
 import { buildAnimationRig } from './animationRig'
 import { buildAnimationGlb } from './exportAnimationGlb'
 import { animGlbPath, isAnimationExportable } from './animationNaming'
-import { toUrl } from './catalog'
+import { toUrl, type CatalogSubPart } from './catalog'
 import { buildPrimitiveGeometry, PRIMITIVE_FACE_KEYS, applyFaceUvTransforms } from '../three/primitives'
 import { bakeKittenSubMeshes } from '../three/kittenBake'
 import { getPrimaryTextureId } from '../state/customAssetStore'
@@ -76,21 +76,85 @@ export interface ModContent {
   gameDataXml: string
 }
 
-/** Builds the desired filenames + XML bodies for a project (no conflict resolution). */
-export function buildModContent(part: EditingPart, projectName: string): ModContent {
+/**
+ * Builds the desired filenames + XML bodies for a project (no conflict resolution).
+ * `ivaRemap` (originalTemplateId → variant id, from {@link buildIvaVariantMap}) points
+ * IVA-prop placements at their non-Internal export variant; empty for IVA-free parts.
+ */
+export function buildModContent(
+  part: EditingPart,
+  projectName: string,
+  ivaRemap: ReadonlyMap<string, string> = new Map(),
+): ModContent {
   const base = sanitizeBaseName(projectName)
   return {
     base,
     partFile: `${base}Part.xml`,
-    partXml: serializePart(part),
+    partXml: serializePart(part, ivaRemap),
     gameDataFile: `${base}GameData.xml`,
-    gameDataXml: serializeGameData(part, base),
+    gameDataXml: serializeGameData(part, base, ivaRemap),
   }
 }
 
 /** A token safe for an asset filename segment (letters/digits only). */
 function sanitizeAssetToken(name: string): string {
   return name.replace(/[^A-Za-z0-9]+/g, '') || 'asset'
+}
+
+/**
+ * One placed IVA (Internal) SubPart and the non-Internal export variant it maps to.
+ * KSA only renders <Internal>true</Internal> props in IVA camera mode; we re-home each
+ * onto a fresh, non-Internal SubPart that reuses the SAME built-in Mesh + Material so it
+ * renders everywhere. See {@link buildIvaVariantMap}.
+ */
+export interface IvaVariant {
+  /** Built-in IVA SubPart template id placed in the part, e.g. "CoreIVAPropA_Subpart_ChairA". */
+  originalId: string
+  /** Project-unique export variant id referenced by the placement and declared in the Assets XML. */
+  variantId: string
+  /** Built-in <Mesh Id> the variant reuses (NOT redeclared). */
+  meshId: string
+  /** Built-in <Material Id> the variant reuses, or null when untextured. */
+  materialId: string | null
+}
+
+/**
+ * Builds the IVA→variant map for a part: one entry per DISTINCT placed IVA template
+ * (deduped across placements), keyed by the original template id. Non-IVA templates and
+ * templates absent from the catalog are skipped. Variant ids are namespaced by the project
+ * {@link base} so two flexo mods reusing the same built-in IVA part don't collide; the id is
+ * deterministic, so re-exports are stable. Empty when the part places no IVA props.
+ */
+export function buildIvaVariantMap(
+  part: EditingPart,
+  catalog: ReadonlyMap<string, CatalogSubPart>,
+  base: string,
+): Map<string, IvaVariant> {
+  const out = new Map<string, IvaVariant>()
+  for (const p of part.placements) {
+    const templateId = p.subPartTemplateId
+    if (out.has(templateId)) continue
+    const entry = catalog.get(templateId)
+    if (!entry?.internal) continue
+    // meshNodeName is the built-in <Mesh Id> (null only for the rare whole-atlas mesh,
+    // which no IVA prop uses). Without it we can't reference the geometry — leave as-is.
+    if (!entry.meshNodeName) {
+      console.warn(`flexo export: IVA SubPart '${templateId}' has no mesh node — left as IVA`)
+      continue
+    }
+    out.set(templateId, {
+      originalId: templateId,
+      variantId: `flexo_${base}_${templateId}_NotIVA`,
+      meshId: entry.meshNodeName,
+      materialId: entry.materialId ?? null,
+    })
+  }
+  return out
+}
+
+/** Derives the `originalTemplateId → variantId` remap consumed by the Part/GameData serializers. */
+function ivaRemapFromVariants(variants: Map<string, IvaVariant>): Map<string, string> {
+  return new Map([...variants.values()].map((v) => [v.originalId, v.variantId]))
 }
 
 /**
@@ -171,7 +235,9 @@ export interface CustomBundle {
  * Builds the custom-asset bundle for a project: a geometry mesh-atlas GLB (one named
  * node per custom SubPart actually placed), the diffuse .ktx2 for each referenced
  * custom texture, and the Assets XML that declares the MeshAtlas/PbrMaterial/SubPart.
- * Returns an empty bundle when no custom SubParts are placed.
+ * The Assets XML also declares any IVA-prop export variants (`ivaVariants`), which reuse
+ * built-in Mesh/Material and ship no binaries. Returns an empty bundle (animations only)
+ * when neither custom SubParts nor IVA variants are present.
  *
  * The .ktx2 bytes come from IndexedDB (encoded at upload time); the GLB is generated
  * fresh from the stored primitive params.
@@ -180,6 +246,7 @@ export async function buildCustomBundle(
   part: EditingPart,
   base: string,
   kittenTex: KittenTextureExportConfig = DEFAULT_KITTEN_TEXTURE_EXPORT,
+  ivaVariants: Map<string, IvaVariant> = new Map(),
 ): Promise<CustomBundle> {
   const binaries: { path: string; data: Uint8Array }[] = []
 
@@ -194,84 +261,99 @@ export async function buildCustomBundle(
 
   const placed = new Set(part.placements.map((p) => p.subPartTemplateId))
   const meshes = part.customMeshes.filter((m) => placed.has(m.subPartId))
-  // No custom SubParts → no Assets XML, but still ship any animation glbs above.
-  if (meshes.length === 0) return { assetsFile: null, assetsXml: null, binaries }
 
-  // Derive a bundle token from base (project name) + the first mesh's random id suffix.
-  // Mesh ids contain a random UUID fragment generated at creation time, so this is
-  // unique across different parts even when they share the same default partId.
-  // Using base keeps the filename human-readable; the hash suffix makes it unique.
-  const bundleToken = `${base}_${meshes[0].id.replace(/^mesh_/, '')}`
-  const meshAtlasPath = `Meshes/${bundleToken}_MeshAtlas.glb`
-  const nodes = await Promise.all(
-    meshes.map(async (m) => {
-      if (m.kitten) {
-        // Always bundle the baked geometry (KSA can't skin the source gltf); clone the
-        // shared cache so the post-build dispose() frees the clone, not the cache.
-        const subs = await bakeKittenSubMeshes(m.kitten.kind)
-        const geo = subs.find((s) => s.specKey === m.kitten!.specKey)?.geometry
-        return { name: m.subPartId, geometry: geo ? geo.clone() : new THREE.BufferGeometry() }
-      }
-      const geometry = buildPrimitiveGeometry(m.primitive!)
-      applyFaceUvTransforms(geometry, PRIMITIVE_FACE_KEYS[m.primitive!.kind], m.faceTextures)
-      return { name: m.subPartId, geometry }
-    }),
-  )
-  try {
-    binaries.push({ path: meshAtlasPath, data: await buildMeshAtlasGlb(nodes) })
-  } finally {
-    for (const n of nodes) n.geometry.dispose()
+  // De-IVA'd props: reference-only SubParts reusing built-in Mesh/Material (no binaries).
+  const referenceSubParts: ReferenceSubPartPlan[] = [...ivaVariants.values()].map((v) => ({
+    subPartId: v.variantId,
+    meshId: v.meshId,
+    materialId: v.materialId,
+  }))
+
+  // Nothing to declare → no Assets XML, but still ship any animation glbs above.
+  if (meshes.length === 0 && referenceSubParts.length === 0) {
+    return { assetsFile: null, assetsXml: null, binaries }
   }
 
-  const texById = new Map(part.customTextures.map((t) => [t.id, t]))
-  const texPath = new Map<string, string>() // texId -> relative path (dedupe shared textures)
-  const kittenTexPath = new Map<string, string>() // kitten subpath -> mod path (bundle mode)
+  // Custom geometry (primitive/kitten meshes) → build the mesh-atlas GLB, its textures, and
+  // the per-mesh PbrMaterial SubParts. Skipped entirely for an IVA-only part (no atlas needed).
+  let meshAtlasPath: string | undefined
   const subParts: AssetsSubPartPlan[] = []
-  for (const m of meshes) {
-    // Part-ified kitten submesh: full PBR from the KSA .ktx2 (referenced or bundled).
-    if (m.kitten) {
-      subParts.push(await planKittenSubPart(m.subPartId, m.kitten, kittenTex, kittenTexPath, binaries))
-      continue
-    }
-    let diffusePath: string | null = null
-    let materialId: string | null = null
-    // For KSA export, one material per SubPart — use the primary (first valid) face texture.
-    const primaryTexId = getPrimaryTextureId(m)
-    const tex = primaryTexId ? texById.get(primaryTexId) : undefined
-    if (tex) {
-      let rel = texPath.get(tex.id)
-      if (!rel) {
-        const blob = await getAsset(assetKeys.textureKtx2(tex.id))
-        if (blob) {
-          rel = `Textures/${sanitizeAssetToken(tex.name)}_${sanitizeAssetToken(tex.id)}_Diffuse.ktx2`
-          texPath.set(tex.id, rel)
-          binaries.push({ path: rel, data: new Uint8Array(await blob.arrayBuffer()) })
-        }
-      }
-      if (rel) {
-        diffusePath = rel
-        materialId = `${m.subPartId}_Material`
-      }
-    }
-    subParts.push({ subPartId: m.subPartId, materialId, diffusePath })
-  }
-
-  // KSA's ThumbnailRenderResources.AddDraw dereferences NormalReference and PBRMap
-  // without null checks, so every PbrMaterial must include all three channels.
-  // Emit shared synthetic 1×1 textures when any sub-part is textured.
   let normalPath: string | undefined
   let aoRoughMetalPath: string | undefined
-  if (subParts.some((sp) => sp.materialId !== null)) {
-    normalPath = `Textures/${bundleToken}_FlatNormal.ktx2`
-    aoRoughMetalPath = `Textures/${bundleToken}_NeutralORM.ktx2`
-    // flat normal = (128,128,255) ≈ +Z in tangent space; neutral ORM = AO=255, Rough=128, Metal=0
-    binaries.push({ path: normalPath, data: await makeSolid1x1Ktx2(128, 128, 255) })
-    binaries.push({ path: aoRoughMetalPath, data: await makeSolid1x1Ktx2(255, 128, 0) })
+  if (meshes.length > 0) {
+    // Derive a bundle token from base (project name) + the first mesh's random id suffix.
+    // Mesh ids contain a random UUID fragment generated at creation time, so this is
+    // unique across different parts even when they share the same default partId.
+    // Using base keeps the filename human-readable; the hash suffix makes it unique.
+    const bundleToken = `${base}_${meshes[0].id.replace(/^mesh_/, '')}`
+    meshAtlasPath = `Meshes/${bundleToken}_MeshAtlas.glb`
+    const nodes = await Promise.all(
+      meshes.map(async (m) => {
+        if (m.kitten) {
+          // Always bundle the baked geometry (KSA can't skin the source gltf); clone the
+          // shared cache so the post-build dispose() frees the clone, not the cache.
+          const subs = await bakeKittenSubMeshes(m.kitten.kind)
+          const geo = subs.find((s) => s.specKey === m.kitten!.specKey)?.geometry
+          return { name: m.subPartId, geometry: geo ? geo.clone() : new THREE.BufferGeometry() }
+        }
+        const geometry = buildPrimitiveGeometry(m.primitive!)
+        applyFaceUvTransforms(geometry, PRIMITIVE_FACE_KEYS[m.primitive!.kind], m.faceTextures)
+        return { name: m.subPartId, geometry }
+      }),
+    )
+    try {
+      binaries.push({ path: meshAtlasPath, data: await buildMeshAtlasGlb(nodes) })
+    } finally {
+      for (const n of nodes) n.geometry.dispose()
+    }
+
+    const texById = new Map(part.customTextures.map((t) => [t.id, t]))
+    const texPath = new Map<string, string>() // texId -> relative path (dedupe shared textures)
+    const kittenTexPath = new Map<string, string>() // kitten subpath -> mod path (bundle mode)
+    for (const m of meshes) {
+      // Part-ified kitten submesh: full PBR from the KSA .ktx2 (referenced or bundled).
+      if (m.kitten) {
+        subParts.push(await planKittenSubPart(m.subPartId, m.kitten, kittenTex, kittenTexPath, binaries))
+        continue
+      }
+      let diffusePath: string | null = null
+      let materialId: string | null = null
+      // For KSA export, one material per SubPart — use the primary (first valid) face texture.
+      const primaryTexId = getPrimaryTextureId(m)
+      const tex = primaryTexId ? texById.get(primaryTexId) : undefined
+      if (tex) {
+        let rel = texPath.get(tex.id)
+        if (!rel) {
+          const blob = await getAsset(assetKeys.textureKtx2(tex.id))
+          if (blob) {
+            rel = `Textures/${sanitizeAssetToken(tex.name)}_${sanitizeAssetToken(tex.id)}_Diffuse.ktx2`
+            texPath.set(tex.id, rel)
+            binaries.push({ path: rel, data: new Uint8Array(await blob.arrayBuffer()) })
+          }
+        }
+        if (rel) {
+          diffusePath = rel
+          materialId = `${m.subPartId}_Material`
+        }
+      }
+      subParts.push({ subPartId: m.subPartId, materialId, diffusePath })
+    }
+
+    // KSA's ThumbnailRenderResources.AddDraw dereferences NormalReference and PBRMap
+    // without null checks, so every PbrMaterial must include all three channels.
+    // Emit shared synthetic 1×1 textures when any sub-part is textured.
+    if (subParts.some((sp) => sp.materialId !== null)) {
+      normalPath = `Textures/${bundleToken}_FlatNormal.ktx2`
+      aoRoughMetalPath = `Textures/${bundleToken}_NeutralORM.ktx2`
+      // flat normal = (128,128,255) ≈ +Z in tangent space; neutral ORM = AO=255, Rough=128, Metal=0
+      binaries.push({ path: normalPath, data: await makeSolid1x1Ktx2(128, 128, 255) })
+      binaries.push({ path: aoRoughMetalPath, data: await makeSolid1x1Ktx2(255, 128, 0) })
+    }
   }
 
   return {
     assetsFile: `${base}Assets.xml`,
-    assetsXml: serializeAssets({ meshAtlasPath, subParts, normalPath, aoRoughMetalPath }),
+    assetsXml: serializeAssets({ meshAtlasPath, subParts, referenceSubParts, normalPath, aoRoughMetalPath }),
     binaries,
   }
 }
@@ -286,9 +368,11 @@ export async function buildModZip(
   part: EditingPart,
   projectName: string,
   kittenTex?: KittenTextureExportConfig,
+  catalog: ReadonlyMap<string, CatalogSubPart> = new Map(),
 ): Promise<Blob> {
-  const content = buildModContent(part, projectName)
-  const bundle = await buildCustomBundle(part, content.base, kittenTex)
+  const ivaVariants = buildIvaVariantMap(part, catalog, sanitizeBaseName(projectName))
+  const content = buildModContent(part, projectName, ivaRemapFromVariants(ivaVariants))
+  const bundle = await buildCustomBundle(part, content.base, kittenTex, ivaVariants)
   const encoder = new TextEncoder()
   const xmlAssets = [content.partFile, content.gameDataFile]
   if (bundle.assetsFile) xmlAssets.push(bundle.assetsFile)
@@ -366,11 +450,13 @@ export async function writeModToFolder(
   part: EditingPart,
   projectName: string,
   kittenTex?: KittenTextureExportConfig,
+  catalog: ReadonlyMap<string, CatalogSubPart> = new Map(),
 ): Promise<WriteResult> {
   const modDir = await modsDir.getDirectoryHandle(MOD_FOLDER_NAME, { create: true })
-  const content = buildModContent(part, projectName)
+  const ivaVariants = buildIvaVariantMap(part, catalog, sanitizeBaseName(projectName))
+  const content = buildModContent(part, projectName, ivaRemapFromVariants(ivaVariants))
 
-  const bundle = await buildCustomBundle(part, content.base, kittenTex)
+  const bundle = await buildCustomBundle(part, content.base, kittenTex, ivaVariants)
 
   const taken = new Set((await listFileNames(modDir)).map((n) => n.toLowerCase()))
   const partFile = uniqueFileName(taken, `${content.base}Part`, 'xml')

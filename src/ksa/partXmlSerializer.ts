@@ -43,14 +43,23 @@ function flagsString(flags: readonly ConnectorFlag[]): string | null {
   return flags.length > 0 ? flags.join(', ') : null
 }
 
-export function serializePart(part: EditingPart): string {
+/**
+ * Optional `originalTemplateId → exported template id` remap. Used to point IVA-prop
+ * placements at their non-Internal export variant (see buildIvaVariantMap in modExport.ts);
+ * a template not in the map keeps its own id (the common case).
+ */
+export type TemplateRemap = ReadonlyMap<string, string>
+
+const NO_REMAP: TemplateRemap = new Map()
+
+export function serializePart(part: EditingPart, ivaRemap: TemplateRemap = NO_REMAP): string {
   const doc = new DOMImplementation().createDocument(null, 'Assets', null)
   const assets = doc.documentElement! // 'Assets' root, created above
   const partEl = doc.createElement('Part')
   partEl.setAttribute('Id', part.partId)
 
   for (const placement of part.placements) {
-    partEl.appendChild(buildSubPartElement(doc, placement))
+    partEl.appendChild(buildSubPartElement(doc, placement, ivaRemap))
   }
 
   for (const connector of part.connectors) {
@@ -71,7 +80,11 @@ export function serializePart(part: EditingPart): string {
  * <Flags> only when set), and the optional decoupler/docking-port/EVA-door.
  * Each piece is omitted entirely when empty/default.
  */
-export function serializeGameData(part: EditingPart, base = ''): string {
+export function serializeGameData(
+  part: EditingPart,
+  base = '',
+  ivaRemap: TemplateRemap = NO_REMAP,
+): string {
   const doc = new DOMImplementation().createDocument(null, 'Assets', null)
   const assets = doc.documentElement!
   const gd = doc.createElement('PartGameData')
@@ -149,7 +162,8 @@ export function serializeGameData(part: EditingPart, base = ''): string {
   for (const spd of part.subPartGameData) {
     if (spd.tanks.length === 0) continue
     const spdEl = doc.createElement('SubPartGameData')
-    spdEl.setAttribute('Id', spd.subPartTemplateId)
+    // Remap to the exported variant id so data keyed on an IVA template still applies.
+    spdEl.setAttribute('Id', ivaRemap.get(spd.subPartTemplateId) ?? spd.subPartTemplateId)
     for (const tank of spd.tanks) {
       const tankWrapper = doc.createElement('Tank')
       tankWrapper.appendChild(buildTankElement(doc, tank))
@@ -220,10 +234,14 @@ function buildAnimationModuleElement(
   return mod
 }
 
-function buildSubPartElement(doc: XmlDocument, placement: SubPartPlacement): XmlElement {
+function buildSubPartElement(
+  doc: XmlDocument,
+  placement: SubPartPlacement,
+  ivaRemap: TemplateRemap,
+): XmlElement {
   const el = doc.createElement('SubPart')
   el.setAttribute('Id', placement.instanceId)
-  el.setAttribute('InstanceOf', placement.subPartTemplateId)
+  el.setAttribute('InstanceOf', ivaRemap.get(placement.subPartTemplateId) ?? placement.subPartTemplateId)
   const transform = buildTransformElement(doc, placement)
   if (transform) el.appendChild(transform)
   return el

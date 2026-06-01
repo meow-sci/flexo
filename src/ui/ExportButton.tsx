@@ -13,6 +13,7 @@ import {
 } from './kit'
 import { $part } from '../state/editorStore'
 import { $projectName } from '../state/projectStore'
+import { $catalogIndex } from '../state/catalogStore'
 import { $kittenTextureExport } from '../state/settingsStore'
 import {
   $modFolder,
@@ -169,6 +170,7 @@ function ModPanel() {
   const projectName = useStore($projectName)
   const folder = useStore($modFolder)
   const kittenTex = useStore($kittenTextureExport)
+  const catalog = useStore($catalogIndex)
   const [busy, setBusy] = useState(false)
 
   const writeToFolder = async () => {
@@ -179,7 +181,7 @@ function ModPanel() {
         toast({ title: 'Folder access required', description: 'Grant write access to your mods folder first.', variant: 'warning' })
         return
       }
-      const result = await writeModToFolder(dir, part, projectName, kittenTex)
+      const result = await writeModToFolder(dir, part, projectName, kittenTex, catalog)
       toast({
         title: 'Exported to folder',
         description: `${result.partFile} + ${result.gameDataFile} → ${dir.name}/flexo-parts`,
@@ -195,7 +197,7 @@ function ModPanel() {
 
   const downloadZip = async () => {
     try {
-      const blob = await buildModZip(part, projectName, kittenTex)
+      const blob = await buildModZip(part, projectName, kittenTex, catalog)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url

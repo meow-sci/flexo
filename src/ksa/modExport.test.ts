@@ -20,13 +20,15 @@ vi.mock('../three/kittenBake', () => ({
 }))
 import {
   buildCustomBundle,
+  buildIvaVariantMap,
   buildModContent,
   buildModZip,
   sanitizeBaseName,
   serializeModToml,
   uniqueFileName,
 } from './modExport'
-import { serializeGameData } from './partXmlSerializer'
+import { serializeGameData, serializePart } from './partXmlSerializer'
+import type { CatalogSubPart } from './catalog'
 import { animGlbPath } from './animationNaming'
 
 describe('sanitizeBaseName', () => {
@@ -194,6 +196,98 @@ describe('buildCustomBundle — part-ified kitten textures', () => {
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+})
+
+function ivaCatalog(): Map<string, CatalogSubPart> {
+  return new Map<string, CatalogSubPart>([
+    [
+      'CoreIVAPropA_Subpart_ChairA',
+      {
+        id: 'CoreIVAPropA_Subpart_ChairA',
+        atlasUrl: '/ksa/Meshes/CoreIVAPropA_MeshAtlas.glb',
+        meshNodeName: 'CoreIVAPropA_Subpart_ChairA',
+        materialId: 'CoreIVAPropA_Material',
+        internal: true,
+        sourceFile: 'CoreIVAPropAAssets.xml',
+      },
+    ],
+    [
+      'CoreStructuralA_Subpart_X',
+      {
+        id: 'CoreStructuralA_Subpart_X',
+        atlasUrl: '/ksa/Meshes/CoreStructuralA_MeshAtlas.glb',
+        meshNodeName: 'CoreStructuralA_Subpart_X',
+        materialId: 'CoreStructuralA_Material',
+        sourceFile: 'CoreStructuralAAssets.xml',
+      },
+    ],
+  ])
+}
+
+function partWithIvaAndCore(): EditingPart {
+  const part = createEmptyPart()
+  part.partId = 'MyShip'
+  part.placements.push(
+    { instanceId: 'chair_1', subPartTemplateId: 'CoreIVAPropA_Subpart_ChairA', ...identityTransform(), layerId: 'default' },
+    { instanceId: 'x_1', subPartTemplateId: 'CoreStructuralA_Subpart_X', ...identityTransform(), layerId: 'default' },
+  )
+  return part
+}
+
+describe('IVA (Internal) SubPart export variants', () => {
+  it('maps placed IVA templates to project-namespaced variants, skipping normal parts', () => {
+    const variants = buildIvaVariantMap(partWithIvaAndCore(), ivaCatalog(), 'MyShip')
+    expect(variants.size).toBe(1)
+    const v = variants.get('CoreIVAPropA_Subpart_ChairA')!
+    expect(v.variantId).toBe('flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA')
+    expect(v.meshId).toBe('CoreIVAPropA_Subpart_ChairA')
+    expect(v.materialId).toBe('CoreIVAPropA_Material')
+  })
+
+  it('dedupes repeated placements of the same IVA template', () => {
+    const part = partWithIvaAndCore()
+    part.placements.push({ instanceId: 'chair_2', subPartTemplateId: 'CoreIVAPropA_Subpart_ChairA', ...identityTransform(), layerId: 'default' })
+    expect(buildIvaVariantMap(part, ivaCatalog(), 'MyShip').size).toBe(1)
+  })
+
+  it('produces no variants for a part with no IVA props', () => {
+    const part = createEmptyPart()
+    part.placements.push({ instanceId: 'x_1', subPartTemplateId: 'CoreStructuralA_Subpart_X', ...identityTransform(), layerId: 'default' })
+    expect(buildIvaVariantMap(part, ivaCatalog(), 'P').size).toBe(0)
+  })
+
+  it('Part XML points IVA placements at the variant, normal placements unchanged', () => {
+    const part = partWithIvaAndCore()
+    const variants = buildIvaVariantMap(part, ivaCatalog(), 'MyShip')
+    const remap = new Map([...variants.values()].map((v) => [v.originalId, v.variantId]))
+    const xml = serializePart(part, remap)
+    expect(xml).toContain('InstanceOf="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA"')
+    expect(xml).toContain('InstanceOf="CoreStructuralA_Subpart_X"')
+    expect(xml).not.toContain('InstanceOf="CoreIVAPropA_Subpart_ChairA"') // the closing quote disambiguates from the variant
+  })
+
+  it('Assets XML declares the de-IVA variant (no Internal/RayTracing) even with no custom meshes', async () => {
+    const part = partWithIvaAndCore()
+    const variants = buildIvaVariantMap(part, ivaCatalog(), 'MyShip')
+    const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants)
+    expect(bundle.assetsFile).toBe('MyShipAssets.xml')
+    expect(bundle.assetsXml).toContain('<SubPart Id="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA"')
+    expect(bundle.assetsXml).toContain('<PartModel Id="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA_Model"')
+    expect(bundle.assetsXml).toContain('<Mesh Id="CoreIVAPropA_Subpart_ChairA"')
+    expect(bundle.assetsXml).toContain('<Material Id="CoreIVAPropA_Material"')
+    expect(bundle.assetsXml).not.toContain('<Internal>')
+    expect(bundle.assetsXml).not.toContain('RayTracing')
+    expect(bundle.assetsXml).not.toContain('MeshAtlas') // IVA-only → no custom geometry
+    expect(bundle.binaries).toHaveLength(0) // variants reuse built-in assets — nothing to ship
+  })
+
+  it('end-to-end: buildModZip threads the catalog into both Part and Assets XML', async () => {
+    const blob = await buildModZip(partWithIvaAndCore(), 'MyShip', undefined, ivaCatalog())
+    const text = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()))
+    expect(text).toContain('flexo-parts/MyShipAssets.xml')
+    expect(text).toContain('InstanceOf="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA"')
+    expect(text).toContain('<SubPart Id="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA"')
   })
 })
 

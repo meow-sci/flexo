@@ -24,6 +24,13 @@ export interface CatalogSubPart {
   normalUrl?: string
   aoRoughMetalUrl?: string
   emissiveUrl?: string
+  /**
+   * True when the SubPart's <PartModel> carries <Internal>true</Internal> — an "IVA"
+   * (interior) prop that KSA only renders in IVA camera mode. flexo renders it normally
+   * in the editor, and on mod export rewrites it to a non-Internal variant so it renders
+   * everywhere (see buildIvaVariantMap in modExport.ts).
+   */
+  internal?: boolean
   /** Originating XML file (for debugging). */
   sourceFile: string
 }
@@ -177,6 +184,10 @@ export function parseAssetsFile(doc: Document, sourceFile: string, out: CatalogS
     const materialId = firstChildByTag(partModel, 'Material')?.getAttribute('Id') ?? undefined
     const mat = materialId ? materials.get(materialId) : undefined
 
+    // <Internal>true</Internal> marks an IVA (interior) prop — see CatalogSubPart.internal.
+    const internal =
+      firstChildByTag(partModel, 'Internal')?.textContent?.trim().toLowerCase() === 'true'
+
     out.push({
       id,
       atlasUrl: toUrl(atlasPath),
@@ -186,6 +197,7 @@ export function parseAssetsFile(doc: Document, sourceFile: string, out: CatalogS
       normalUrl: mat?.normal ? toUrl(mat.normal) : undefined,
       aoRoughMetalUrl: mat?.aoRoughMetal ? toUrl(mat.aoRoughMetal) : undefined,
       emissiveUrl: mat?.emissive ? toUrl(mat.emissive) : undefined,
+      internal: internal || undefined,
       sourceFile,
     })
   }

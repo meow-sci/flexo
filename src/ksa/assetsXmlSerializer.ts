@@ -33,6 +33,12 @@ export interface AssetsSubPartPlan {
   normalPath?: string
   /** Per-SubPart AO/Rough/Metal .ktx2 path. `undefined` → fall back to {@link AssetsPlan.aoRoughMetalPath}. */
   aoRoughMetalPath?: string
+  /**
+   * Render through KSA's translucent glass path: emits `<PartModelGlass>` instead of
+   * `<PartModel>` (an alpha-blended shader), for glass surfaces like the kitten visor.
+   * The opaque `<PartModel>` path renders glass black/opaque.
+   */
+  glass?: boolean
 }
 
 export interface AssetsPlan {
@@ -95,7 +101,9 @@ export function serializeAssets(plan: AssetsPlan): string {
   for (const sp of plan.subParts) {
     const sub = doc.createElement('SubPart')
     sub.setAttribute('Id', sp.subPartId)
-    const model = doc.createElement('PartModel')
+    // Glass surfaces (the kitten visor) render through KSA's translucent <PartModelGlass>
+    // path; everything else uses the opaque <PartModel>. Both take the same Id/Mesh/Material.
+    const model = doc.createElement(sp.glass ? 'PartModelGlass' : 'PartModel')
     // The PartModel Id MUST be unique per SubPart. KSA's PartModel.Get dedupes
     // PartModels by Template.Id (PartModel.cs) — an empty/missing Id collapses every
     // SubPart onto the first one's mesh+material, so a multi-SubPart part renders only

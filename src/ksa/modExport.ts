@@ -154,6 +154,7 @@ async function planKittenSubPart(
     diffusePath: await resolve(src.diffuse),
     normalPath: src.normal ? await resolve(src.normal) : undefined,
     aoRoughMetalPath: src.aoRoughMetal ? await resolve(src.aoRoughMetal) : undefined,
+    glass: src.transparent, // the visor renders through KSA's translucent glass path
   }
 }
 

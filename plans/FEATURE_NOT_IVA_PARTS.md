@@ -38,4 +38,7 @@ i want these to be treated as first-class meshes in flexo just like any other, a
 
 there is very little overhead/cost since this is just data and reusing the PartModel with the mesh, so defining a new SubPart for each IVA part on export for each project is fine for simplicity.
 
-Note that we should OMIT the `<Internal>` AND `<RayTracing>` XML nodes on our new variants we export
+Note that we should OMIT the `<Internal>` AND `<RayTracing>` XML nodes on our new variants we export.
+
+- users of flexo should be able to simply use IVA SubParts, which they CAN right now
+- on export, instead of just referencing the built-in IVA parts, generate a new unique SubPart WITHOUT Internal and RayTracing and reference that SubPart instead of the built-in IVA SubPart

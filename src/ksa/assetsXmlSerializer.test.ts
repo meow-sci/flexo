@@ -66,4 +66,17 @@ describe('serializeAssets', () => {
     expect(xml).toContain('<Normal Path="Textures/X_FlatNormal.ktx2" Category="Vessel"')
     expect(xml).toContain('<AoRoughMetal Path="Textures/X_NeutralORM.ktx2" Category="Vessel"')
   })
+
+  it('emits <PartModelGlass> for a glass SubPart (translucent path)', () => {
+    const xml = serializeAssets({
+      meshAtlasPath: 'Meshes/X.glb',
+      subParts: [
+        { subPartId: 'visor', materialId: 'visor_Material', diffusePath: 'Textures/Visor.ktx2', glass: true },
+        { subPartId: 'suit', materialId: 'suit_Material', diffusePath: 'Textures/Suit.ktx2' },
+      ],
+    })
+    expect(xml).toContain('<PartModelGlass Id="visor_Model"')
+    expect(xml).toContain('<PartModel Id="suit_Model"')
+    expect(xml).not.toContain('<PartModel Id="visor_Model"') // visor must NOT be the opaque path
+  })
 })

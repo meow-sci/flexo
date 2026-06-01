@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import {
   Collection,
@@ -21,6 +21,7 @@ import {
 } from './kit'
 import {
   $part,
+  $revealEntity,
   $selectedConnectorIndices,
   $selectedIndices,
   $selectedKittenIndices,
@@ -104,7 +105,9 @@ export function AssetsList() {
   const selSub = useStore($selectedIndices)
   const selCon = useStore($selectedConnectorIndices)
   const selKit = useStore($selectedKittenIndices)
+  const reveal = useStore($revealEntity)
   const [search, setSearch] = useState('')
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   // Fast key → store-index lookups for onSelectionChange.
   const subIdx = useMemo(() => new Map(part.placements.map((p, i) => [p.instanceId, i])), [part.placements])
@@ -203,6 +206,18 @@ export function AssetsList() {
     setSelection(sub, con, kit)
   }
 
+  // A 3D-viewport click can't tell the list to scroll; it signals via $revealEntity
+  // instead. When that fires, scroll the matching row into view (no-op if filtered
+  // out by search), then consume the signal so it doesn't re-trigger on later renders.
+  useEffect(() => {
+    if (!reveal) return
+    const key = keyOf(reveal.kind, reveal.id)
+    scrollRef.current
+      ?.querySelector<HTMLElement>(`[data-asset-key="${CSS.escape(key)}"]`)
+      ?.scrollIntoView({ block: 'nearest' })
+    $revealEntity.set(null)
+  }, [reveal])
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 rounded-xl border border-border bg-panel p-2">
       <div className="px-1">
@@ -214,7 +229,7 @@ export function AssetsList() {
           onChange={setSearch}
         />
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
         <GridList
           aria-label="Assets"
           selectionMode="multiple"
@@ -243,6 +258,9 @@ export function AssetsList() {
                 {(row: Row) => (
                   <GridListItem
                     id={row.id}
+                    // Mirrors `id` onto the DOM (react-aria strips `id` from the rendered
+                    // element) so the $revealEntity scroll-into-view effect can find this row.
+                    data-asset-key={row.id}
                     textValue={row.name}
                     // Right-click opens the same menu as the ⋮ button by triggering
                     // a click on it — reusing react-aria's trigger so positioning and

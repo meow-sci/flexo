@@ -844,6 +844,21 @@ export function toggleEntity(kind: SelectableKind, index: number): void {
   store.set(cur.includes(index) ? cur.filter((i) => i !== index) : [...cur, index])
 }
 
+/**
+ * The entity the Assets list should scroll into view, identified by kind + stable
+ * id (instanceId / connector id / kitten id). Set when a selection originates from
+ * a 3D viewport click — the list has no other way to know the click happened. A
+ * fresh object is published on every reveal (even for the same entity, e.g. a
+ * deselect-then-reselect) so the list's effect re-fires; the list nulls it once
+ * consumed. Ephemeral UI state: not persisted, not in undo history.
+ */
+export const $revealEntity = atom<{ kind: SelectableKind; id: string } | null>(null)
+
+/** Asks the Assets list to scroll `id` (of `kind`) into view — used by 3D-click selection. */
+export function revealEntity(kind: SelectableKind, id: string): void {
+  $revealEntity.set({ kind, id })
+}
+
 /** A selected entity plus its current transform — the unit of bulk transform work. */
 export interface SelectedTransformRef {
   kind: SelectableKind

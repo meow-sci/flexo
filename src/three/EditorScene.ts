@@ -28,6 +28,7 @@ import {
   $toolMode,
   clearSelection,
   pushUndo,
+  revealEntity,
   selectConnector,
   selectKitten,
   selectPlacement,
@@ -148,8 +149,14 @@ export class EditorScene {
           const layerId = placements[index].layerId
           if (isLayerLocked(layerId)) return
           if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
-          if (additive) toggleEntity('subpart', index)
-          else selectPlacement(index)
+          if (additive) {
+            const added = !$selectedIndices.get().includes(index)
+            toggleEntity('subpart', index)
+            if (added) revealEntity('subpart', selected.id) // scroll the just-added row into view in the Assets list
+          } else {
+            selectPlacement(index)
+            revealEntity('subpart', selected.id)
+          }
         } else if (selected.kind === 'connector') {
           const connectors = $part.get().connectors
           const index = connectors.findIndex((c) => c.id === selected.id)
@@ -157,8 +164,14 @@ export class EditorScene {
           const layerId = connectors[index].layerId
           if (isLayerLocked(layerId)) return
           if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
-          if (additive) toggleEntity('connector', index)
-          else selectConnector(index)
+          if (additive) {
+            const added = !$selectedConnectorIndices.get().includes(index)
+            toggleEntity('connector', index)
+            if (added) revealEntity('connector', selected.id)
+          } else {
+            selectConnector(index)
+            revealEntity('connector', selected.id)
+          }
         } else {
           const kittens = $part.get().kittens
           const index = kittens.findIndex((k) => k.id === selected.id)
@@ -166,8 +179,14 @@ export class EditorScene {
           const layerId = kittens[index].layerId
           if (isLayerLocked(layerId)) return
           if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
-          if (additive) toggleEntity('kitten', index)
-          else selectKitten(index)
+          if (additive) {
+            const added = !$selectedKittenIndices.get().includes(index)
+            toggleEntity('kitten', index)
+            if (added) revealEntity('kitten', selected.id)
+          } else {
+            selectKitten(index)
+            revealEntity('kitten', selected.id)
+          }
         }
       },
     )

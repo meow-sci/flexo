@@ -103,8 +103,8 @@
     - this needs careful planning.  the desired end result for "smart" mode is that for example I can import a built-in Part with N SubParts pre-arranged, select all those SubPart's, and apply a scaling of e.g. 0.25 and all meshes should scale down to 0.25 of their size, AND their positions must be updated so they are all still consistently positioned/oriented to each other (which I'm not sure if that's a constant 1:1 factor change?)
 - ✅ can we re-define IVA SubPart's as non-IVA/internal mode reusing same meshes and textures?
 - ✅ the IVA part/subpart IDs are not unique enough.  do a UUID per IVA subpart mesh used (either in project meta and exported or at export time, whatever works best with the code design).  the goal here is to have a unique iva SubPart ID that will NEVER collide with other meshes from other flexo projects etc.  the issue is the default project name is colliding right now since most users dont bother to change the project name and this is what we used as part of the subpart id.
+- ✅ IVA re-exported SubPart's do not have a view mesh applied.  similar to custom meshes we create which create a view mesh, we'll need to do the same for the IVA SubParts we are creating dynamically.
 
-- IVA re-exported do not have a view mesh applied
 - stickers? this probably has to be a standalone code mode to work properly...
 - when clicking in 3d viewport and adding to selection, ensure that the selected subpart is scrolled into view in the asset grid list
 - emissives ... inanimate carbon rod wen?

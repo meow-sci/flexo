@@ -159,8 +159,8 @@ export function serializeAssets(plan: AssetsPlan): string {
   // Reference SubParts: a fresh SubPart + a fresh PartModel pointing at a built-in Mesh
   // (and Material). The PartModel Id MUST be unique — KSA dedupes PartModels by Template.Id,
   // so reusing the built-in "<orig>_Model" id would collapse back onto the original (e.g. an
-  // IVA prop's Internal PartModel), defeating the de-IVA. No <MeshView> (no "_VM" view node
-  // exists for a built-in mesh) and no <PbrMaterial> (the material is built-in).
+  // IVA prop's Internal PartModel), defeating the de-IVA. No <PbrMaterial> (the material is
+  // built-in).
   for (const sp of plan.referenceSubParts ?? []) {
     const sub = doc.createElement('SubPart')
     sub.setAttribute('Id', sp.subPartId)
@@ -175,6 +175,20 @@ export function serializeAssets(plan: AssetsPlan): string {
       model.appendChild(material)
     }
     sub.appendChild(model)
+    // View mesh — without a MeshViewModule (built from <MeshView>) KSA's editor won't
+    // raycast the SubPart, so a de-IVA'd prop renders but can't be hovered/selected/
+    // right-clicked. We point <MeshView> at the SAME built-in render mesh the PartModel
+    // reuses: it's guaranteed to exist (buildIvaVariantMap skips entries without a mesh
+    // node) and resolves cross-mod exactly like the render <Mesh> above. We deliberately
+    // do NOT reference "<meshId>_VM": built-in IVA atlases are inconsistent (CoreIVAPropA
+    // ships a _VM per subpart, CoreIVASpaceA has only a handful for 333 subparts), so a
+    // _VM reference would dangle for most parts. RayCastEgoSubPart only reads the view
+    // mesh's vertex positions + normals, which any render mesh has.
+    const meshView = doc.createElement('MeshView')
+    const viewMesh = doc.createElement('Mesh')
+    viewMesh.setAttribute('Id', sp.meshId)
+    meshView.appendChild(viewMesh)
+    sub.appendChild(meshView)
     assets.appendChild(sub)
   }
 

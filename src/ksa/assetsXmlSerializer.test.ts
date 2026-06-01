@@ -67,7 +67,7 @@ describe('serializeAssets', () => {
     expect(xml).toContain('<AoRoughMetal Path="Textures/X_NeutralORM.ktx2" Category="Vessel"')
   })
 
-  it('emits reference SubParts (de-IVA props) reusing built-in Mesh/Material, no atlas/MeshView', () => {
+  it('emits reference SubParts (de-IVA props) reusing built-in Mesh/Material, with a render-mesh MeshView', () => {
     const xml = serializeAssets({
       // No meshAtlasPath: an IVA-only export declares no custom geometry.
       subParts: [],
@@ -85,10 +85,17 @@ describe('serializeAssets', () => {
     // Untextured reference part omits <Material>.
     expect(xml).toContain('<PartModel Id="flexo_MyShip_CoreIVAPropA_Subpart_NoteA_NotIVA_Model"')
     expect(xml).toContain('<Mesh Id="CoreIVAPropA_Subpart_NoteA"')
-    // No atlas, no PbrMaterial, no MeshView, and never the IVA-only nodes.
+    // Each variant carries a <MeshView> so KSA's editor can raycast (hover/select/right-click)
+    // it. The view mesh reuses the built-in RENDER mesh id (NOT a "<id>_VM" suffix, which would
+    // dangle for IVA parts whose atlas ships no _VM) — so each render mesh id appears twice:
+    // once in the <PartModel>, once in the <MeshView>. Both textured and untextured parts get one.
+    expect(xml).toContain('<MeshView>')
+    expect(xml).not.toContain('_VM')
+    expect(xml.split('<Mesh Id="CoreIVAPropA_Subpart_ChairA"').length - 1).toBe(2)
+    expect(xml.split('<Mesh Id="CoreIVAPropA_Subpart_NoteA"').length - 1).toBe(2)
+    // No atlas, no PbrMaterial, and never the IVA-only nodes.
     expect(xml).not.toContain('MeshAtlas')
     expect(xml).not.toContain('PbrMaterial')
-    expect(xml).not.toContain('MeshView')
     expect(xml).not.toContain('<Internal>')
     expect(xml).not.toContain('RayTracing')
   })

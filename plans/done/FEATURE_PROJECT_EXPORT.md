@@ -1,27 +1,17 @@
-create a whole new export feature in the export dialog which can write a KSA game part mod output.
+# feature
 
-i want this to utilize the browser feature which allows an end-user to permission a folder for write access using the file system api. 
+need a project export that will export all project level data that covers all the project workspace stuff like
 
-i have built features with this and it works great.
+- meshes
+- layers
+- animations
 
-an important feature is that you can serialize the granted permission to IndexedDB which stores the opaque access grant so that on page reloads that the filesystem grants are still in place.  the UX needs to know if they need to be re-granted though and show this on a simple button in case the grant expires or is lost for some other reason.
+all their positions, etc.
 
-i want the end-user to select their `$HOME/Documents/Kitten Space Agency/mods` folder for write access, and then this new feature would create a "flexo-parts" folder under here and when doing exports would write and  update the XML and TOML files under this directory which make up a part mod.
+for phase 1 lets disable export if the project has custom assets uploaded and keep this a data only JSON export
 
-the files in the folder would be the:
+it will also need an import which lets you paste in a project XML and it will take the provided project JSON and add all of it's content to the workspace
 
-- mod.toml
-- XML files with the Part and GameData XMLs we generate from our project.  we should generate a XML file per Part and GameData and then update the mod.toml with the list of XML files to include them to keep things simple (instead of trying to merge multiple projects XML into shared files, which would complicate maintenance)
+i want the import to let it be additive to the current workspace
 
-the mod.toml looks like this:
-
-```toml
-name = "flexo-parts"
-assets = [ "Project1Part.xml", "Project1GameData.xml"]
-```
-
-I ALSO want a "download mod zip" button which would build a zip with a folder "flexo-parts" with the mod.toml single part + game data XML files.
-
-The feature which writes to the filesystem should be non-destructive by creating non-conflicting filenames for XML files if ones pre-exist, and update the mod.toml with the current complete set of XML files in the folder regardless of the current list of assets.
-
-the indexeddb filesystem grants should be a global thing in indexeddb unrelated to project-level data in any way.
+it should add new layers for all meshes added (and reuse the built-in connectors and kittens layers as per usual)

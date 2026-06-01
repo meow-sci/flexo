@@ -102,6 +102,7 @@
 - deleting a custom mesh removes assets from the layers but when you undo to restore teh custom mesh, the asset re-appears but is not rendered, so something is broken with the undo/redo restoration when a custom mesh is deleted.  even adding a new instance of the custom mesh after it's been restored from an undo/redo doesnt work properly (we show the mesh in the list, but nothing is rendered)
   - NOTE: a refresh of the webapp renders the mesh instances it, so it might just be a simple 3d viewport refresh trigger needed?
 
+- multi-select scale should have two modes: what it does now (scale at each mesh origin) or a "smart" mode which should be the default which scales everything down (mesh sizes and positions)
 - can we re-define IVA SubPart's as non-IVA/internal mode reusing same meshes and textures?
 - IVA re-exported do not have a view mesh applied
 - the IVA part/subpart IDs are not unique enough.  do a UUID per IVA subpart mesh used (either in project meta and exported or at export time, whatever works best with the code design).  the goal here is to have a unique iva SubPart ID that will NEVER collide with other meshes from other flexo projects etc.  the issue is the default project name is colliding right now since most users dont bother to change the project name and this is what we used as part of the subpart id.

@@ -1,7 +1,9 @@
 import type {
   Connector,
+  CustomMesh,
   EditingPart,
   KittenInstance,
+  KittenMeshSource,
   Layer,
   PartAnimation,
   PartGameData,
@@ -24,15 +26,17 @@ import { randomId } from './ids'
  * `instanceId` and GameData couplings reference connectors by id — so the merge
  * carries old→new maps and rewrites every reference through them.
  *
- * Phase 1 is data-only: custom assets (uploaded textures / primitive meshes) are
- * NOT exported — the UI blocks export when a project has any (see {@link hasCustomAssets}),
- * and they're stripped from the envelope defensively here too.
+ * Custom assets that carry uploaded binaries (textures, primitive meshes) are NOT
+ * exported — the UI blocks export when a project has any (see {@link hasCustomAssets}).
+ * Part-ified KITTEN meshes ARE carried, though: they're pure descriptors referencing
+ * built-in game assets (geometry re-bakes from the kitten gltf on load, textures resolve
+ * by Content/Core path), so they round-trip as data with no binary bundling.
  */
 
 export const PROJECT_EXPORT_FORMAT = 'flexo-project'
 export const PROJECT_EXPORT_VERSION = 1
 
-/** The in-scope workspace data carried by an export (everything but custom assets). */
+/** The in-scope workspace data carried by an export (everything but binary-backed assets). */
 export interface ProjectExportData {
   editorTags: string[]
   gameData: PartGameData
@@ -42,6 +46,8 @@ export interface ProjectExportData {
   connectors: Connector[]
   kittens: KittenInstance[]
   animations: PartAnimation[]
+  /** Part-ified kitten meshes only (descriptors referencing game assets — no binaries). */
+  customMeshes: CustomMesh[]
 }
 
 /** A versioned export envelope. `sourcePartId` is informational — never applied on import. */
@@ -73,14 +79,24 @@ export type ParseResult =
   | { ok: true; env: ProjectExportEnvelope }
   | { ok: false; error: string }
 
-/** True when the project has custom assets (uploaded textures / custom meshes). */
+/** A part-ified kitten submesh — pure data referencing game assets (no uploaded binary). */
+function isKittenMesh(m: CustomMesh): boolean {
+  return m.kitten != null
+}
+
+/**
+ * True when the project has custom assets that JSON export can't carry — uploaded
+ * textures or primitive meshes (their binaries live in IndexedDB). Kitten part-meshes
+ * DON'T count: they're data-only references to game assets and export fine.
+ */
 export function hasCustomAssets(part: EditingPart): boolean {
-  return part.customMeshes.length > 0 || part.customTextures.length > 0
+  return part.customTextures.length > 0 || part.customMeshes.some((m) => !isKittenMesh(m))
 }
 
 /**
  * Builds a data-only export envelope. Deep-copies the in-scope fields and stamps
- * provenance; `customMeshes`/`customTextures` are intentionally omitted (Phase 1).
+ * provenance. Only kitten part-meshes are carried in `customMeshes` (primitive meshes and
+ * `customTextures` are binary-backed and omitted — export is gated off when they exist).
  */
 export function buildProjectExport(part: EditingPart, projectName: string): ProjectExportEnvelope {
   return {
@@ -98,6 +114,7 @@ export function buildProjectExport(part: EditingPart, projectName: string): Proj
       connectors: part.connectors,
       kittens: part.kittens,
       animations: part.animations,
+      customMeshes: part.customMeshes.filter(isKittenMesh),
     }),
   }
 }
@@ -162,6 +179,8 @@ function normalizeEnvelope(obj: Record<string, unknown>, d: Record<string, unkno
       connectors: d.connectors as Connector[],
       kittens: d.kittens as KittenInstance[],
       animations: d.animations as PartAnimation[],
+      // Optional — absent in pre-kitten-mesh exports; only kitten meshes are ever carried.
+      customMeshes: Array.isArray(d.customMeshes) ? (d.customMeshes as CustomMesh[]) : [],
     },
   }
 }
@@ -169,11 +188,11 @@ function normalizeEnvelope(obj: Record<string, unknown>, d: Record<string, unkno
 /**
  * Additively merges an export envelope into `current`, returning a fresh part plus a
  * summary. Imported entities get collision-free ids; every cross-reference (animation
- * members, solar-tracking subparts, GameData couplings) is rewritten through the new
- * ids. Layer mapping: each source layer that holds meshes — INCLUDING the source's
- * Default — becomes a NEW layer (keeping its name) so imported content never merges
- * into the user's existing Default; connectors reuse the built-in Connectors layer and
- * kittens the Kittens layer.
+ * members, solar-tracking subparts, GameData couplings, and placements pointing at an
+ * imported kitten custom mesh) is rewritten through the new ids. Layer mapping: each
+ * source layer that holds meshes — INCLUDING the source's Default — becomes a NEW layer
+ * (keeping its name) so imported content never merges into the user's existing Default;
+ * connectors reuse the built-in Connectors layer and kittens the Kittens layer.
  */
 export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvelope): MergeResult {
   const part = structuredClone(current)
@@ -182,7 +201,26 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
   const instanceIdMap = new Map<string, string>()
   const connectorIdMap = new Map<string, string>()
   const layerIdMap = new Map<string, string>()
+  const subPartIdMap = new Map<string, string>() // imported customMesh subPartId -> fresh id
   const newLayerIds: string[] = []
+
+  // Custom (kitten) meshes — descriptors referencing game assets, no binaries. Give each a
+  // fresh id + subPartId so repeated additive imports never collide, and remember the
+  // old->new subPartId so placements/SubPartGameData below repoint at the new template.
+  // (Primitive/textured meshes never reach here — export is gated off when they exist.)
+  for (const src of data.customMeshes ?? []) {
+    if (!src.kitten) continue
+    const subPartId = newKittenSubPartId(src.kitten)
+    subPartIdMap.set(src.subPartId, subPartId)
+    part.customMeshes.push({
+      id: newMeshId(),
+      name: src.name,
+      subPartId,
+      kitten: { ...src.kitten },
+      faceTextures: {},
+    })
+  }
+  const mapTemplateId = (id: string): string => subPartIdMap.get(id) ?? id
 
   const sourceLayerName = new Map<string, string>()
   for (const l of data.layers) sourceLayerName.set(l.id, l.name)
@@ -201,13 +239,15 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
   }
 
   // Meshes — regenerate instanceId against the growing list (matches addSubPart/addPart).
+  // Template id is repointed when it names an imported (kitten) custom mesh.
   for (const src of data.placements) {
-    const base = lastSegmentLower(src.subPartTemplateId)
-    const count = part.placements.filter((p) => p.subPartTemplateId === src.subPartTemplateId).length
+    const templateId = mapTemplateId(src.subPartTemplateId)
+    const base = lastSegmentLower(templateId)
+    const count = part.placements.filter((p) => p.subPartTemplateId === templateId).length
     const instanceId = `${base}_${count + 1}`
     part.placements.push({
       instanceId,
-      subPartTemplateId: src.subPartTemplateId,
+      subPartTemplateId: templateId,
       position: vec(src.position, 0),
       rotation: vec(src.rotation, 0),
       scale: vec(src.scale, 1),
@@ -249,11 +289,13 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
   mergeGameData(part.gameData, data.gameData, connectorIdMap)
 
   // Per-SubPart tanks: append to an existing template entry, else add the entry.
+  // Repoint the template id if it names an imported custom mesh.
   for (const sg of data.subPartGameData) {
+    const templateId = mapTemplateId(sg.subPartTemplateId)
     const tanks = (sg.tanks ?? []).map((t) => ({ ...t }))
-    const existing = part.subPartGameData.find((x) => x.subPartTemplateId === sg.subPartTemplateId)
+    const existing = part.subPartGameData.find((x) => x.subPartTemplateId === templateId)
     if (existing) existing.tanks.push(...tanks)
-    else part.subPartGameData.push({ subPartTemplateId: sg.subPartTemplateId, tanks })
+    else part.subPartGameData.push({ subPartTemplateId: templateId, tanks })
   }
 
   // Animations: fresh id (so re-pasting the same export can't collide), members +
@@ -352,6 +394,21 @@ function nextKittenId(part: EditingPart): string {
   return `kitten_${max + 1}`
 }
 
+/** An 8-char random token (mirrors customAssetStore's shortId). */
+function shortHash(): string {
+  return randomId().replace(/-/g, '').slice(0, 8)
+}
+
 function newAnimId(): string {
-  return `anim_${randomId().replace(/-/g, '').slice(0, 8)}`
+  return `anim_${shortHash()}`
+}
+
+/** Fresh customMesh descriptor id (IndexedDB key shape; kitten meshes store no binary). */
+function newMeshId(): string {
+  return `mesh_${shortHash()}`
+}
+
+/** Fresh kitten SubPart template id, matching customAssetStore's `flexo_<kind>_<spec>_<rand>`. */
+function newKittenSubPartId(kitten: KittenMeshSource): string {
+  return `flexo_${kitten.kind}_${kitten.specKey}_${shortHash()}`
 }

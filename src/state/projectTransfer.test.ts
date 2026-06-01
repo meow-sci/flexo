@@ -63,34 +63,101 @@ function sourcePart(): EditingPart {
   return p
 }
 
+/** A part-ified kitten submesh descriptor (pure data — references game assets). */
+function kittenMesh(subPartId = 'flexo_hunter_suit_abc') {
+  return {
+    id: 'mesh_k',
+    name: 'Hunter Suit',
+    subPartId,
+    kitten: { kind: 'hunter' as const, specKey: 'suit', diffuse: 'Textures/Characters/Kitten_EMU_A.ktx2' },
+    faceTextures: {},
+  }
+}
+
+/** A primitive (binary-backed) custom mesh descriptor. */
+function primitiveMesh() {
+  return {
+    id: 'mesh_1',
+    name: 'M',
+    subPartId: 'sp_1',
+    primitive: { kind: 'box' as const, params: { width: 1, height: 1, depth: 1 } },
+    faceTextures: {},
+  }
+}
+
 describe('buildProjectExport', () => {
-  it('strips custom assets and stamps provenance', () => {
+  it('carries kitten meshes, drops primitive meshes + uploaded textures, stamps provenance', () => {
     const src = sourcePart()
     src.customTextures.push({ id: 'tex_1', name: 'T', width: 4, height: 4 })
-    src.customMeshes.push({
-      id: 'mesh_1',
-      name: 'M',
-      subPartId: 'sp_1',
-      primitive: { kind: 'box', params: { width: 1, height: 1, depth: 1 } },
-      faceTextures: {},
-    })
+    src.customMeshes.push(primitiveMesh(), kittenMesh())
     const env = buildProjectExport(src, 'MyShip')
     expect(env.format).toBe(PROJECT_EXPORT_FORMAT)
     expect(env.version).toBe(PROJECT_EXPORT_VERSION)
     expect(env.projectName).toBe('MyShip')
     expect(env.sourcePartId).toBe('source_part')
+    // Only the kitten mesh is carried; the primitive is dropped; textures never exported.
+    expect(env.data.customMeshes).toHaveLength(1)
+    expect(env.data.customMeshes[0].subPartId).toBe('flexo_hunter_suit_abc')
     const data = env.data as unknown as Record<string, unknown>
-    expect(data.customMeshes).toBeUndefined()
     expect(data.customTextures).toBeUndefined()
   })
 })
 
 describe('hasCustomAssets', () => {
-  it('is false for a clean part and true with any custom mesh or texture', () => {
+  it('flags uploaded textures and primitive meshes, but not kitten meshes', () => {
     expect(hasCustomAssets(createEmptyPart())).toBe(false)
+
     const withTex = createEmptyPart()
     withTex.customTextures.push({ id: 'tex_1', name: 'T', width: 1, height: 1 })
     expect(hasCustomAssets(withTex)).toBe(true)
+
+    const withPrimitive = createEmptyPart()
+    withPrimitive.customMeshes.push(primitiveMesh())
+    expect(hasCustomAssets(withPrimitive)).toBe(true)
+
+    const withKitten = createEmptyPart()
+    withKitten.customMeshes.push(kittenMesh())
+    expect(hasCustomAssets(withKitten)).toBe(false)
+  })
+})
+
+describe('mergeProjectImport with a kitten mesh', () => {
+  function kittenSource(): EditingPart {
+    const p = createEmptyPart()
+    p.layers.push({ id: 'layer1', name: 'Hunter Mesh' })
+    p.customMeshes.push(kittenMesh())
+    p.placements.push({
+      instanceId: 'hunter_suit_1',
+      subPartTemplateId: 'flexo_hunter_suit_abc',
+      layerId: 'layer1',
+      ...t(0),
+    })
+    return p
+  }
+
+  it('restores the kitten mesh under a fresh subPartId and repoints its placement', () => {
+    const env = buildProjectExport(kittenSource(), 'K')
+    const { part } = mergeProjectImport(createEmptyPart(), env)
+    expect(part.customMeshes).toHaveLength(1)
+    const mesh = part.customMeshes[0]
+    expect(mesh.kitten?.specKey).toBe('suit')
+    expect(mesh.subPartId).not.toBe('flexo_hunter_suit_abc') // fresh, collision-free id
+    expect(mesh.subPartId.startsWith('flexo_hunter_suit_')).toBe(true)
+    // The placement points at the NEW template id, and nothing references the source's.
+    expect(part.placements.some((pl) => pl.subPartTemplateId === mesh.subPartId)).toBe(true)
+    expect(part.placements.some((pl) => pl.subPartTemplateId === 'flexo_hunter_suit_abc')).toBe(false)
+  })
+
+  it('duplicates the kitten mesh under another fresh id on a second import (additive)', () => {
+    const env = buildProjectExport(kittenSource(), 'K')
+    const once = mergeProjectImport(createEmptyPart(), env).part
+    const twice = mergeProjectImport(once, env).part
+    const ids = twice.customMeshes.map((m) => m.subPartId)
+    expect(ids).toHaveLength(2)
+    expect(new Set(ids).size).toBe(2) // distinct ids, no collision
+    const kittenPlacements = twice.placements.filter((pl) => pl.subPartTemplateId.startsWith('flexo_hunter_suit_'))
+    expect(kittenPlacements).toHaveLength(2)
+    expect(kittenPlacements.every((pl) => new Set(ids).has(pl.subPartTemplateId))).toBe(true)
   })
 })
 
@@ -213,6 +280,7 @@ describe('parseProjectImport', () => {
     if (result.ok) {
       expect(result.env.data.editorTags).toEqual([])
       expect(result.env.data.subPartGameData).toEqual([])
+      expect(result.env.data.customMeshes).toEqual([])
       expect(result.env.data.gameData.customMass).toBeNull()
     }
   })

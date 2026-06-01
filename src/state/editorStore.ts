@@ -23,6 +23,8 @@ import {
 } from '../ksa/types'
 import type { ReferenceContainer } from './containerStore'
 import type { LineMeasurement } from './measurementStore'
+import { mergeProjectImport } from './projectTransfer'
+import type { ImportSummary, ProjectExportEnvelope } from './projectTransfer'
 
 /**
  * Framework-agnostic editor state (nanostores). No React / three.js imports —
@@ -450,6 +452,30 @@ export function addPart(
   if (importedSubIndices.length > 0) setSelection(importedSubIndices, [], [])
   else if (part.connectors.length > 0) selectConnector(part.connectors.length - 1)
   return layerId
+}
+
+/**
+ * Additively imports a project-export envelope (see src/state/projectTransfer.ts) into
+ * the current workspace in one undo step: meshes/connectors/kittens/animations/GameData
+ * are appended with collision-free ids and all cross-references remapped. Imported
+ * meshes land on freshly-created layers mirroring the source's (so the existing Default
+ * is untouched); the first new layer becomes active so the user lands on the import.
+ */
+export function importProjectData(env: ProjectExportEnvelope): ImportSummary {
+  const { part, summary, newLayerIds } = mergeProjectImport($part.get(), env)
+  const detail =
+    [
+      summary.meshes ? `${summary.meshes} mesh${summary.meshes === 1 ? '' : 'es'}` : '',
+      summary.connectors ? `${summary.connectors} connector${summary.connectors === 1 ? '' : 's'}` : '',
+      summary.animations ? `${summary.animations} animation${summary.animations === 1 ? '' : 's'}` : '',
+    ]
+      .filter(Boolean)
+      .join(', ') || 'nothing'
+  pushUndo('import project', detail)
+  $part.set(part)
+  // New layers aren't in $layerView (which defaults to visible), so no reveal needed.
+  if (newLayerIds.length > 0) $activeLayerId.set(newLayerIds[0])
+  return summary
 }
 
 /** Adds a connector at the origin (facing local +X) and selects it. Connectors

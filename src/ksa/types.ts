@@ -75,6 +75,13 @@ export type KittenKind = 'hunter' | 'polaris' | 'banjo'
 /** All kitten kinds, in menu order. */
 export const KITTEN_KINDS: readonly KittenKind[] = ['hunter', 'polaris', 'banjo']
 
+/** Human-facing kitten names (menus, "<Name> Mesh" layer names). */
+export const KITTEN_LABELS: Record<KittenKind, string> = {
+  hunter: 'Hunter',
+  polaris: 'Polaris',
+  banjo: 'Banjo',
+}
+
 /**
  * A placed kitten EVA character — a purely visual aide (scale/placement reference).
  * Unlike {@link SubPartPlacement}, a kitten has NO catalog template and NO KSA XML
@@ -361,10 +368,35 @@ export interface FaceTextureConfig {
 export type TextureWrap = 'repeat' | 'mirror' | 'clamp'
 
 /**
- * A user-created primitive mesh + per-face texture/UV configuration. Becomes a
- * custom SubPart template: placements reference {@link subPartId} via
- * subPartTemplateId, exactly like a Core template id. The generated GLB node is
- * named {@link subPartId}.
+ * A part-ified kitten submesh's geometry + material source. Present ONLY on a
+ * {@link CustomMesh} created by "Make Kitten Mesh" (see makeKittenMeshPart) — it is
+ * mutually exclusive with {@link CustomMesh.primitive}. Geometry is CPU-baked from
+ * the shared kitten gltf at runtime (cached, regenerated on load — never persisted),
+ * keyed by ({@link kind}, {@link specKey}). The texture URLs are Content/Core-relative
+ * subpaths (the same paths KSA's CharacterAssets.xml uses); the editor renders them
+ * via toUrl(), and export either references them by absolute path or bundles them
+ * verbatim (a user setting). All channels are KSA-native .ktx2 (full PBR).
+ */
+export interface KittenMeshSource {
+  /** Which kitten this submesh came from. */
+  kind: KittenKind
+  /** Stable per-submesh-type token (e.g. 'suit'|'head'|'eye'|'helmet'|'visor'|'pack'|'packLabels'). Drives the bake cache + subPart naming. */
+  specKey: string
+  /** Diffuse .ktx2 subpath, e.g. "Textures/Characters/Kitten_EMU_A.ktx2" (sRGB). */
+  diffuse: string
+  /** Tangent-space normal .ktx2 subpath (linear), if any. */
+  normal?: string
+  /** Packed AO/Rough/Metal .ktx2 subpath (linear), if any. */
+  aoRoughMetal?: string
+  /** Glass-like transparency (the visor) — editor render only; ignored on export. */
+  transparent?: boolean
+}
+
+/**
+ * A user-created custom SubPart — either a primitive mesh + per-face textures, or a
+ * part-ified kitten submesh ({@link kitten} set, {@link primitive} absent). Becomes a
+ * custom SubPart template: placements reference {@link subPartId} via subPartTemplateId,
+ * exactly like a Core template id. The generated GLB node is named {@link subPartId}.
  */
 export interface CustomMesh {
   /** Stable unique id (IndexedDB key for the generated GLB), e.g. "mesh_ab12cd". */
@@ -376,12 +408,15 @@ export interface CustomMesh {
    * from {@link name}/project name so renames never break existing placements.
    */
   subPartId: string
-  /** The primitive shape + parameters. */
-  primitive: PrimitiveSpec
+  /** The primitive shape + parameters. Absent for kitten submeshes ({@link kitten} set). */
+  primitive?: PrimitiveSpec
+  /** Part-ified kitten submesh source. When set, this mesh is a kitten submesh and {@link primitive} is absent. */
+  kitten?: KittenMeshSource
   /**
    * Per-face texture + UV configuration. Keys are primitive-kind-specific face names
    * from PRIMITIVE_FACE_KEYS ('right'/'left'/… for box, 'side'/'top'/'bottom' for
    * cylinder, 'all' for sphere/plane). Absent keys → untextured face, default UVs.
+   * Always empty ({}) for kitten submeshes (they carry their material in {@link kitten}).
    */
   faceTextures: Partial<Record<string, FaceTextureConfig>>
 }

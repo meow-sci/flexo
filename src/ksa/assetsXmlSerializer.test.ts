@@ -17,6 +17,9 @@ describe('serializeAssets', () => {
     expect(xml).toContain('<PbrMaterial Id="flexo_panel_ab12cd_Material"')
     expect(xml).toContain('<Diffuse Path="Textures/dean_ab12cd_Diffuse.ktx2" Category="Vessel"')
     expect(xml).toContain('<SubPart Id="flexo_panel_ab12cd"')
+    // PartModel needs a UNIQUE Id — KSA dedupes PartModels by Template.Id, so an
+    // empty Id collapses multi-SubPart parts onto the first piece.
+    expect(xml).toContain('<PartModel Id="flexo_panel_ab12cd_Model"')
     expect(xml).toContain('<Mesh Id="flexo_panel_ab12cd"')
     expect(xml).toContain('<Material Id="flexo_panel_ab12cd_Material"')
     // View mesh so the in-game vehicle editor can hover/select the placed part.
@@ -37,5 +40,30 @@ describe('serializeAssets', () => {
     // Untextured parts still need a view mesh to be pickable in-game.
     expect(xml).toContain('<MeshView>')
     expect(xml).toContain('<Mesh Id="s1_VM"')
+  })
+
+  it('per-SubPart normal/ORM override the shared synthetic; undefined falls back', () => {
+    const xml = serializeAssets({
+      meshAtlasPath: 'Meshes/X.glb',
+      normalPath: 'Textures/X_FlatNormal.ktx2',
+      aoRoughMetalPath: 'Textures/X_NeutralORM.ktx2',
+      subParts: [
+        // Kitten suit: carries its own real normal + ORM (overrides the shared synthetic).
+        {
+          subPartId: 'suit',
+          materialId: 'suit_Material',
+          diffusePath: 'Textures/Characters/Kitten_EMU_A.ktx2',
+          normalPath: 'Textures/Characters/Kitten_EMU_N.ktx2',
+          aoRoughMetalPath: 'Textures/Characters/Kitten_EMU_ORM.ktx2',
+        },
+        // Kitten eyes: diffuse only → undefined channels fall back to the shared synthetic.
+        { subPartId: 'eye', materialId: 'eye_Material', diffusePath: 'Textures/Characters/Kitten_Eye_A.ktx2' },
+      ],
+    })
+    expect(xml).toContain('<Normal Path="Textures/Characters/Kitten_EMU_N.ktx2" Category="Vessel"')
+    expect(xml).toContain('<AoRoughMetal Path="Textures/Characters/Kitten_EMU_ORM.ktx2" Category="Vessel"')
+    // The eye material falls back to the shared synthetic paths.
+    expect(xml).toContain('<Normal Path="Textures/X_FlatNormal.ktx2" Category="Vessel"')
+    expect(xml).toContain('<AoRoughMetal Path="Textures/X_NeutralORM.ktx2" Category="Vessel"')
   })
 })

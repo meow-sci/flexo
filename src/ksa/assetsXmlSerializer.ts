@@ -22,8 +22,17 @@ export interface AssetsSubPartPlan {
   subPartId: string
   /** Material id, or null for an untextured SubPart (no <Material>/<PbrMaterial>). */
   materialId: string | null
-  /** Relative path to the diffuse .ktx2, or null when untextured. */
+  /** Diffuse .ktx2 path (relative to the mod, or absolute for a referenced asset), or null when untextured. */
   diffusePath: string | null
+  /**
+   * Per-SubPart Normal .ktx2 path. `undefined` → fall back to the shared
+   * {@link AssetsPlan.normalPath} (synthetic flat normal); a string → use exactly this
+   * path (a real kitten normal map). Lets kitten SubParts carry their own PBR while
+   * primitive custom meshes keep using the shared synthetic.
+   */
+  normalPath?: string
+  /** Per-SubPart AO/Rough/Metal .ktx2 path. `undefined` → fall back to {@link AssetsPlan.aoRoughMetalPath}. */
+  aoRoughMetalPath?: string
 }
 
 export interface AssetsPlan {
@@ -59,21 +68,24 @@ export function serializeAssets(plan: AssetsPlan): string {
   // them crashes KSA at startup (see AssetsPlan.normalPath).
   for (const sp of plan.subParts) {
     if (!sp.materialId || !sp.diffusePath) continue
+    // Per-SubPart override (real kitten map) falls back to the shared synthetic.
+    const effNormal = sp.normalPath !== undefined ? sp.normalPath : plan.normalPath
+    const effOrm = sp.aoRoughMetalPath !== undefined ? sp.aoRoughMetalPath : plan.aoRoughMetalPath
     const mat = doc.createElement('PbrMaterial')
     mat.setAttribute('Id', sp.materialId)
     const diffuse = doc.createElement('Diffuse')
     diffuse.setAttribute('Path', sp.diffusePath)
     diffuse.setAttribute('Category', 'Vessel')
     mat.appendChild(diffuse)
-    if (plan.normalPath) {
+    if (effNormal) {
       const normal = doc.createElement('Normal')
-      normal.setAttribute('Path', plan.normalPath)
+      normal.setAttribute('Path', effNormal)
       normal.setAttribute('Category', 'Vessel')
       mat.appendChild(normal)
     }
-    if (plan.aoRoughMetalPath) {
+    if (effOrm) {
       const orm = doc.createElement('AoRoughMetal')
-      orm.setAttribute('Path', plan.aoRoughMetalPath)
+      orm.setAttribute('Path', effOrm)
       orm.setAttribute('Category', 'Vessel')
       mat.appendChild(orm)
     }
@@ -84,6 +96,11 @@ export function serializeAssets(plan: AssetsPlan): string {
     const sub = doc.createElement('SubPart')
     sub.setAttribute('Id', sp.subPartId)
     const model = doc.createElement('PartModel')
+    // The PartModel Id MUST be unique per SubPart. KSA's PartModel.Get dedupes
+    // PartModels by Template.Id (PartModel.cs) — an empty/missing Id collapses every
+    // SubPart onto the first one's mesh+material, so a multi-SubPart part renders only
+    // its first piece (stacked) in-game. Core always uses "<subPartId>_Model".
+    model.setAttribute('Id', `${sp.subPartId}_Model`)
     const mesh = doc.createElement('Mesh')
     mesh.setAttribute('Id', sp.subPartId)
     model.appendChild(mesh)

@@ -1,15 +1,23 @@
-import type { EditingPart } from './types'
+import * as THREE from 'three'
+import type { EditingPart, KittenMeshSource } from './types'
 import { serializeGameData, serializePart } from './partXmlSerializer'
 import { serializeAssets, type AssetsSubPartPlan } from './assetsXmlSerializer'
 import { buildMeshAtlasGlb } from './exportGlb'
 import { buildAnimationRig } from './animationRig'
 import { buildAnimationGlb } from './exportAnimationGlb'
 import { animGlbPath, isAnimationExportable } from './animationNaming'
+import { toUrl } from './catalog'
 import { buildPrimitiveGeometry, PRIMITIVE_FACE_KEYS, applyFaceUvTransforms } from '../three/primitives'
+import { bakeKittenSubMeshes } from '../three/kittenBake'
 import { getPrimaryTextureId } from '../state/customAssetStore'
 import { assetKeys, getAsset } from '../state/assetDb'
+import type { KittenTextureExportSettings } from '../state/settingsStore'
 import { createZip, type ZipEntry } from '../util/zip'
 import { encodeImageToKtx2 } from '../ktx/encodeKtx2'
+
+/** How part-ified kitten SubParts supply their textures on export (see settingsStore). */
+export type KittenTextureExportConfig = KittenTextureExportSettings
+const DEFAULT_KITTEN_TEXTURE_EXPORT: KittenTextureExportConfig = { mode: 'bundle', contentCorePath: '' }
 
 /**
  * KSA part-mod export. A "part mod" is a folder the game loads from
@@ -98,6 +106,57 @@ function makeSolid1x1Ktx2(r: number, g: number, b: number): Promise<Uint8Array> 
   )
 }
 
+/** Last path segment of a "Textures/Characters/Foo.ktx2" subpath, e.g. "Foo.ktx2". */
+function basename(subpath: string): string {
+  return subpath.split('/').pop() || subpath
+}
+
+/** Joins the game Content/Core prefix with a Content-relative subpath as a Windows absolute path. */
+function joinContentCore(prefix: string, subpath: string): string {
+  const root = prefix.replace(/[\\/]+$/, '') // drop a trailing separator
+  return `${root}\\${subpath.replace(/\//g, '\\')}`
+}
+
+/** Fetches a KSA .ktx2 (served under /ksa/) verbatim, for the 'bundle' export mode. */
+async function fetchKtx2(subpath: string): Promise<Uint8Array> {
+  const res = await fetch(toUrl(subpath))
+  if (!res.ok) throw new Error(`kitten texture fetch failed (${res.status}): ${subpath}`)
+  return new Uint8Array(await res.arrayBuffer())
+}
+
+/**
+ * Builds the Assets plan for one part-ified kitten SubPart. Resolves each KSA texture
+ * channel by the export mode: 'reference' → an absolute `{contentCorePath}\…` path (no
+ * file copied); 'bundle' → copy the .ktx2 verbatim into Textures/ (deduped by subpath
+ * across submeshes/kittens via `bundled`). Channels the submesh lacks (eyes/labels
+ * normal+ORM) stay `undefined` so serializeAssets falls back to the shared synthetic.
+ */
+async function planKittenSubPart(
+  subPartId: string,
+  src: KittenMeshSource,
+  cfg: KittenTextureExportConfig,
+  bundled: Map<string, string>,
+  binaries: { path: string; data: Uint8Array }[],
+): Promise<AssetsSubPartPlan> {
+  const resolve = async (subpath: string): Promise<string> => {
+    if (cfg.mode === 'reference') return joinContentCore(cfg.contentCorePath, subpath)
+    let rel = bundled.get(subpath)
+    if (!rel) {
+      rel = `Textures/${basename(subpath)}`
+      bundled.set(subpath, rel)
+      binaries.push({ path: rel, data: await fetchKtx2(subpath) })
+    }
+    return rel
+  }
+  return {
+    subPartId,
+    materialId: `${subPartId}_Material`,
+    diffusePath: await resolve(src.diffuse),
+    normalPath: src.normal ? await resolve(src.normal) : undefined,
+    aoRoughMetalPath: src.aoRoughMetal ? await resolve(src.aoRoughMetal) : undefined,
+  }
+}
+
 /** A custom-asset bundle for export: the Assets XML + the binary files it references. */
 export interface CustomBundle {
   /** Desired Assets XML filename, or null when there are no custom assets to emit. */
@@ -116,7 +175,11 @@ export interface CustomBundle {
  * The .ktx2 bytes come from IndexedDB (encoded at upload time); the GLB is generated
  * fresh from the stored primitive params.
  */
-export async function buildCustomBundle(part: EditingPart, base: string): Promise<CustomBundle> {
+export async function buildCustomBundle(
+  part: EditingPart,
+  base: string,
+  kittenTex: KittenTextureExportConfig = DEFAULT_KITTEN_TEXTURE_EXPORT,
+): Promise<CustomBundle> {
   const binaries: { path: string; data: Uint8Array }[] = []
 
   // Animations export independently of custom meshes (a Core-only part can still be
@@ -139,11 +202,20 @@ export async function buildCustomBundle(part: EditingPart, base: string): Promis
   // Using base keeps the filename human-readable; the hash suffix makes it unique.
   const bundleToken = `${base}_${meshes[0].id.replace(/^mesh_/, '')}`
   const meshAtlasPath = `Meshes/${bundleToken}_MeshAtlas.glb`
-  const nodes = meshes.map((m) => {
-    const geometry = buildPrimitiveGeometry(m.primitive)
-    applyFaceUvTransforms(geometry, PRIMITIVE_FACE_KEYS[m.primitive.kind], m.faceTextures)
-    return { name: m.subPartId, geometry }
-  })
+  const nodes = await Promise.all(
+    meshes.map(async (m) => {
+      if (m.kitten) {
+        // Always bundle the baked geometry (KSA can't skin the source gltf); clone the
+        // shared cache so the post-build dispose() frees the clone, not the cache.
+        const subs = await bakeKittenSubMeshes(m.kitten.kind)
+        const geo = subs.find((s) => s.specKey === m.kitten!.specKey)?.geometry
+        return { name: m.subPartId, geometry: geo ? geo.clone() : new THREE.BufferGeometry() }
+      }
+      const geometry = buildPrimitiveGeometry(m.primitive!)
+      applyFaceUvTransforms(geometry, PRIMITIVE_FACE_KEYS[m.primitive!.kind], m.faceTextures)
+      return { name: m.subPartId, geometry }
+    }),
+  )
   try {
     binaries.push({ path: meshAtlasPath, data: await buildMeshAtlasGlb(nodes) })
   } finally {
@@ -152,8 +224,14 @@ export async function buildCustomBundle(part: EditingPart, base: string): Promis
 
   const texById = new Map(part.customTextures.map((t) => [t.id, t]))
   const texPath = new Map<string, string>() // texId -> relative path (dedupe shared textures)
+  const kittenTexPath = new Map<string, string>() // kitten subpath -> mod path (bundle mode)
   const subParts: AssetsSubPartPlan[] = []
   for (const m of meshes) {
+    // Part-ified kitten submesh: full PBR from the KSA .ktx2 (referenced or bundled).
+    if (m.kitten) {
+      subParts.push(await planKittenSubPart(m.subPartId, m.kitten, kittenTex, kittenTexPath, binaries))
+      continue
+    }
     let diffusePath: string | null = null
     let materialId: string | null = null
     // For KSA export, one material per SubPart — use the primary (first valid) face texture.
@@ -203,9 +281,13 @@ export async function buildCustomBundle(part: EditingPart, base: string): Promis
  * XML plus the referenced Meshes/*.glb and Textures/*.ktx2. Filenames are the
  * un-suffixed desired names (a zip is always a clean slate).
  */
-export async function buildModZip(part: EditingPart, projectName: string): Promise<Blob> {
+export async function buildModZip(
+  part: EditingPart,
+  projectName: string,
+  kittenTex?: KittenTextureExportConfig,
+): Promise<Blob> {
   const content = buildModContent(part, projectName)
-  const bundle = await buildCustomBundle(part, content.base)
+  const bundle = await buildCustomBundle(part, content.base, kittenTex)
   const encoder = new TextEncoder()
   const xmlAssets = [content.partFile, content.gameDataFile]
   if (bundle.assetsFile) xmlAssets.push(bundle.assetsFile)
@@ -282,11 +364,12 @@ export async function writeModToFolder(
   modsDir: FileSystemDirectoryHandle,
   part: EditingPart,
   projectName: string,
+  kittenTex?: KittenTextureExportConfig,
 ): Promise<WriteResult> {
   const modDir = await modsDir.getDirectoryHandle(MOD_FOLDER_NAME, { create: true })
   const content = buildModContent(part, projectName)
 
-  const bundle = await buildCustomBundle(part, content.base)
+  const bundle = await buildCustomBundle(part, content.base, kittenTex)
 
   const taken = new Set((await listFileNames(modDir)).map((n) => n.toLowerCase()))
   const partFile = uniqueFileName(taken, `${content.base}Part`, 'xml')

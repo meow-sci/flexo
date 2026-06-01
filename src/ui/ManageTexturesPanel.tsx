@@ -37,7 +37,8 @@ export function ManageTexturesPanel() {
 
   const mesh = meshId ? part.customMeshes.find((m) => m.id === meshId) : undefined
 
-  const faceKeys = mesh ? PRIMITIVE_FACE_KEYS[mesh.primitive.kind] : []
+  // Only primitive meshes have per-face textures (kitten submeshes are never managed here).
+  const faceKeys = mesh?.primitive ? PRIMITIVE_FACE_KEYS[mesh.primitive.kind] : []
   // Persists the last user-chosen face; falls back to the first key when the mesh
   // changes (new faceKeys no longer include the stored value).
   const [selectedFace, setSelectedFace] = useState(faceKeys[0] ?? '')
@@ -83,7 +84,7 @@ export function ManageTexturesPanel() {
     <div className="absolute left-3 top-1/2 z-10 w-64 -translate-y-1/2 rounded-xl border border-border bg-panel/95 p-3 text-fg shadow-popover backdrop-blur-md">
       <div className="mb-3 flex items-center justify-between gap-2">
         <span className="text-[11px] uppercase tracking-wide text-fg-subtle">
-          {mesh.primitive.kind} · {mesh.name}
+          {mesh.primitive?.kind} · {mesh.name}
         </span>
         <AriaButton
           onPress={close}

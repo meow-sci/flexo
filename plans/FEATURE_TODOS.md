@@ -41,7 +41,6 @@
     - line color picker (including alpha)
     - line thickness picker
     - toggle mode which shows a red (color picker available) translucent plane (default to red 0.2 alpha) when the bounding container has meshes that are outside of its bounds.  the idea is that it shows a working area to stay inside of and shows a warning when exceeded.  for the rect, if we can show red on just the plane violated that would be nice, for cylinder that would be top/bottom/side as 3 separate things to highlight, sphere would be the whole sphere highlighted
-
 - ✅ default container (all box, sphere and cylinder types) line alpha to 20% and 1px thick and default enable "Highlight meshes outside bounds" and rename that to "Detect out of bounds"
 - ✅ for point to point and reference lines, update to have the same line color, alpha and thickness settings we have for the bounding boxes, and default to 50% alpha and 2px thick
 - ✅ can we manipulate or create ktx2 texture files 100% in browser?
@@ -57,7 +56,6 @@
     - i am open to other NPM packages that can fulfill these capabilities, the ones listed are just some I found that seemed reasonable.  if there are better options, you can use those
     - you can search the web for information as needed
     - this is a BIG feature, do massive deep research and implement it expertly
-
     - Deans image on hunter silence of the lambs style?
 - ✅ bounding containers are not part of undo/redo stack, they should be first-class members (addition/removal/resize/move/rotate, their settings changes, etc)
 - ✅ reference lines and point to point lines should be part of undo/redo stack (addition/removal/settings/position changes etc)
@@ -95,17 +93,18 @@
 - ✅ layer popover select all button for connectors doesnt work reliably, it often only selects one of N connectors
 - ✅ layer popover select all button for kittens doesnt do anything
 
-- the delete button for connectors and kitten layers SHOULD NOT delete the layer but show a dialog which asks if the user wants to delete all assets on the layer with a count and a confirm button
-- make right click on asset grid list show the same context menu as the icon button
-- regular subpart mesh selection is not showing a selection highlight shader. when kittens are selected they have a blue shading applied, when connectors are selecting they have a green mesh coloring.. but subparts have nothing.  add a color like we do for kittens.  make this a globally persistent color setting for the color and alpha for both kittens and meshes as separate settings in the global settings dialog and this should be persistent app-level user setting data.  i think this used to work on subpart meshes at some point so it might just be broken, but either way fix it and make the color and alpha settable as app level user settings.
-- on desktop, the resizable area on the right which holds out asset list and toolbar, when it overlaps with the top toolbar, it is preventing click throughs to the top toolbar.  visually they dont overlap because the asset toolbar and list are offset below it, but there must be a div preventing click through
-- deleting a custom mesh removes assets from the layers but when you undo to restore teh custom mesh, the asset re-appears but is not rendered, so something is broken with the undo/redo restoration when a custom mesh is deleted.  even adding a new instance of the custom mesh after it's been restored from an undo/redo doesnt work properly (we show the mesh in the list, but nothing is rendered)
+- ✅ the delete button for connectors and kitten layers SHOULD NOT delete the layer but show a dialog which asks if the user wants to delete all assets on the layer with a count and a confirm button
+- ✅ make right click on asset grid list show the same context menu as the icon button
+- ✅ regular subpart mesh selection is not showing a selection highlight shader. when kittens are selected they have a blue shading applied, when connectors are selecting they have a green mesh coloring.. but subparts have nothing.  add a color like we do for kittens.  make this a globally persistent color setting for the color and alpha for both kittens and meshes as separate settings in the global settings dialog and this should be persistent app-level user setting data.  i think this used to work on subpart meshes at some point so it might just be broken, but either way fix it and make the color and alpha settable as app level user settings.
+- ✅ on desktop, the resizable area on the right which holds out asset list and toolbar, when it overlaps with the top toolbar, it is preventing click throughs to the top toolbar.  visually they dont overlap because the asset toolbar and list are offset below it, but there must be a div preventing click through
+- ✅ deleting a custom mesh removes assets from the layers but when you undo to restore teh custom mesh, the asset re-appears but is not rendered, so something is broken with the undo/redo restoration when a custom mesh is deleted.  even adding a new instance of the custom mesh after it's been restored from an undo/redo doesnt work properly (we show the mesh in the list, but nothing is rendered)
   - NOTE: a refresh of the webapp renders the mesh instances it, so it might just be a simple 3d viewport refresh trigger needed?
+- ✅ multi-select scale should have two modes: what it does now (scale at each mesh origin) or a "smart" mode which should be the default which scales everything down (mesh sizes and positions)
+    - this needs careful planning.  the desired end result for "smart" mode is that for example I can import a built-in Part with N SubParts pre-arranged, select all those SubPart's, and apply a scaling of e.g. 0.25 and all meshes should scale down to 0.25 of their size, AND their positions must be updated so they are all still consistently positioned/oriented to each other (which I'm not sure if that's a constant 1:1 factor change?)
+- ✅ can we re-define IVA SubPart's as non-IVA/internal mode reusing same meshes and textures?
+- ✅ the IVA part/subpart IDs are not unique enough.  do a UUID per IVA subpart mesh used (either in project meta and exported or at export time, whatever works best with the code design).  the goal here is to have a unique iva SubPart ID that will NEVER collide with other meshes from other flexo projects etc.  the issue is the default project name is colliding right now since most users dont bother to change the project name and this is what we used as part of the subpart id.
 
-- multi-select scale should have two modes: what it does now (scale at each mesh origin) or a "smart" mode which should be the default which scales everything down (mesh sizes and positions)
-- can we re-define IVA SubPart's as non-IVA/internal mode reusing same meshes and textures?
 - IVA re-exported do not have a view mesh applied
-- the IVA part/subpart IDs are not unique enough.  do a UUID per IVA subpart mesh used (either in project meta and exported or at export time, whatever works best with the code design).  the goal here is to have a unique iva SubPart ID that will NEVER collide with other meshes from other flexo projects etc.  the issue is the default project name is colliding right now since most users dont bother to change the project name and this is what we used as part of the subpart id.
 - stickers? this probably has to be a standalone code mode to work properly...
 - when clicking in 3d viewport and adding to selection, ensure that the selected subpart is scrolled into view in the asset grid list
 - emissives ... inanimate carbon rod wen?
@@ -125,7 +124,3 @@
     - start a right click/context menu of specific features?  floating FAB button for mobile?
     - connectors too
 - prettyXml is super janky, look at pebkac for how i did it there for a DOM/Element native solution
-
-
-default mesh selection color: fff266 / 35%
-default mesh for kittens: ff00f7 / 35%

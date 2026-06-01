@@ -11,6 +11,7 @@ import { readPlacementTransform, transformFromMatrix } from './coords'
 import {
   centroidOf,
   rotatedAroundOriginTransform,
+  scaledAroundOriginTransform,
   scaledInPlaceTransform,
   translatedTransform,
 } from './bulkTransform'
@@ -18,6 +19,7 @@ import { initTextureSupport } from './textureSupport'
 import type { CatalogSubPart } from '../ksa/catalog'
 import type { EditingPart, Vec3 } from '../ksa/types'
 import {
+  $bulkScaleMode,
   $part,
   $selectedConnectorIndices,
   $selectedIndices,
@@ -733,7 +735,14 @@ export class EditorScene {
         }
       }
       const factor = { x: this.pivot.scale.x, y: this.pivot.scale.y, z: this.pivot.scale.z }
-      return { kind, index, transform: scaledInPlaceTransform(base, factor) }
+      return {
+        kind,
+        index,
+        transform:
+          $bulkScaleMode.get() === 'smart'
+            ? scaledAroundOriginTransform(base, factor, snap.centroid)
+            : scaledInPlaceTransform(base, factor),
+      }
     })
     updateSelectedTransforms(updates)
   }

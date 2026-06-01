@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { Button, TextField, Checkbox } from './kit'
 import {
+  $bulkScaleMode,
   pushUndo,
   setConnectorFlags,
   setSubPartInstanceId,
@@ -15,6 +16,7 @@ import {
   centroidOf,
   quatFromEulerDeg,
   rotatedAroundOriginTransform,
+  scaledAroundOriginTransform,
   scaledInPlaceTransform,
   translatedTransform,
 } from '../three/bulkTransform'
@@ -214,6 +216,7 @@ function SubPartHeader({
  */
 function BulkTransformPanel() {
   const refs = useStore($selectedRefs)
+  const scaleMode = useStore($bulkScaleMode)
   useStore($layerView) // re-render when lock state changes
   const anyLocked = refs.some((r) => isLayerLocked(r.layerId))
 
@@ -246,8 +249,15 @@ function BulkTransformPanel() {
     if (refs.length === 0) return
     pushUndo('scale', bulkDetail)
     const f = { x: factor[0], y: factor[1], z: factor[2] }
+    const origin = scaleMode === 'smart' ? centroidOf(refs.map((r) => r.transform.position)) : null
     updateSelectedTransforms(
-      refs.map((r) => ({ kind: r.kind, index: r.index, transform: scaledInPlaceTransform(r.transform, f) })),
+      refs.map((r) => ({
+        kind: r.kind,
+        index: r.index,
+        transform: origin
+          ? scaledAroundOriginTransform(r.transform, f, origin)
+          : scaledInPlaceTransform(r.transform, f),
+      })),
     )
   }
 
@@ -256,7 +266,21 @@ function BulkTransformPanel() {
       <span className="font-mono text-sm">{refs.length} items selected</span>
       <VectorApply title="Move by (m)" defaultValue={[0, 0, 0]} isDisabled={anyLocked} onApply={applyMove} />
       <VectorApply title="Rotate by (°) around centroid" defaultValue={[0, 0, 0]} isDisabled={anyLocked} onApply={applyRotate} />
-      <VectorApply title="Scale by (×)" defaultValue={[1, 1, 1]} isDisabled={anyLocked} onApply={applyScale} />
+      <div className="flex flex-col gap-1">
+        <VectorApply
+          title={scaleMode === 'smart' ? 'Scale by (×) around centroid' : 'Scale by (×) in place'}
+          defaultValue={[1, 1, 1]}
+          isDisabled={anyLocked}
+          onApply={applyScale}
+        />
+        <Checkbox
+          isSelected={scaleMode === 'smart'}
+          isDisabled={anyLocked}
+          onChange={(on) => $bulkScaleMode.set(on ? 'smart' : 'inPlace')}
+        >
+          Scale positions too (smart)
+        </Checkbox>
+      </div>
     </div>
   )
 }

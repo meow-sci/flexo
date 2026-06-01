@@ -117,6 +117,14 @@ export const $rotateStep = persistentJSON<number>('flexo:rotateStep', 45)
  * R key. 0 = the default mapping (W/S=X, A/D=Y, Q/E=Z); see {@link rotatePairAxis}.
  */
 export const $rotateAxisOffset = persistentJSON<number>('flexo:rotateAxisOffset', 0)
+/**
+ * How multi-select scale treats positions. 'smart' (default) scales the whole
+ * group about its centroid so both sizes and inter-object gaps shrink/grow by the
+ * same factor; 'inPlace' multiplies each item's own scale only, leaving positions
+ * fixed (the legacy behavior). Drives both the numeric inspector and the 3D gizmo.
+ */
+export type BulkScaleMode = 'smart' | 'inPlace'
+export const $bulkScaleMode = persistentJSON<BulkScaleMode>('flexo:bulkScaleMode', 'smart')
 export const $canUndo = atom(false)
 export const $canRedo = atom(false)
 /** Description of the action that will be undone next (empty when nothing to undo). */

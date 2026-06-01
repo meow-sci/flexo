@@ -9,8 +9,11 @@ import type { PlacementTransform } from '../state/editorStore'
  *
  * Semantics (per the editor's chosen behavior):
  *   - translate: add the same offset to every SubPart's position.
- *   - scale:     multiply every SubPart's own scale by the same factor, IN PLACE
- *                (positions unchanged) — the group does not spread/contract.
+ *   - scale:     two modes. "smart" (default) scales the group as a unit about a
+ *                shared origin (default: centroid) — both each SubPart's own scale
+ *                AND its position offset from the origin scale by the same factor,
+ *                so the arrangement contracts/expands proportionally. "in place"
+ *                only multiplies each SubPart's own scale, leaving positions fixed.
  *   - rotate:    rotate every SubPart around a shared origin (default: centroid),
  *                rotating both its position about the origin AND its orientation.
  *
@@ -54,6 +57,29 @@ export function translatedTransform(t: PlacementTransform, delta: Vec3): Placeme
 export function scaledInPlaceTransform(t: PlacementTransform, factor: Vec3): PlacementTransform {
   return {
     position: { ...t.position },
+    rotation: { ...t.rotation },
+    scale: { x: t.scale.x * factor.x, y: t.scale.y * factor.y, z: t.scale.z * factor.z },
+  }
+}
+
+/**
+ * Returns a copy of `t` scaled by `factor` about `origin`: the position offset
+ * from the origin is scaled componentwise AND the object's own scale is multiplied
+ * (rotation unchanged). With a uniform factor the whole group shrinks/grows as a
+ * unit about `origin`, preserving the relative arrangement (and leaving `origin`,
+ * e.g. the selection centroid, fixed).
+ */
+export function scaledAroundOriginTransform(
+  t: PlacementTransform,
+  factor: Vec3,
+  origin: Vec3,
+): PlacementTransform {
+  return {
+    position: {
+      x: origin.x + (t.position.x - origin.x) * factor.x,
+      y: origin.y + (t.position.y - origin.y) * factor.y,
+      z: origin.z + (t.position.z - origin.z) * factor.z,
+    },
     rotation: { ...t.rotation },
     scale: { x: t.scale.x * factor.x, y: t.scale.y * factor.y, z: t.scale.z * factor.z },
   }

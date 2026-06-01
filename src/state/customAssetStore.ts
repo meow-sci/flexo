@@ -6,21 +6,26 @@ import type {
   CustomMesh,
   CustomTexture,
   EditingPart,
+  EmissiveConfig,
   FaceTextureConfig,
+  GlassConfig,
   KittenKind,
   KittenMeshSource,
   PrimitiveSpec,
+  VisorSurface,
 } from '../ksa/types'
 import { KITTEN_LABELS } from '../ksa/types'
 import { $part, pushUndo, addSubPart, nextLayerId, setActiveLayer, setSelection } from './editorStore'
 import { $projectName } from './projectStore'
 import { $customCatalog } from './catalogStore'
+import { $simulateGlass } from './settingsStore'
 import { assetKeys, deleteAsset, getAsset, putAsset } from './assetDb'
 import { buildPrimitiveGeometry, PRIMITIVE_FACE_KEYS, applyFaceUvTransforms } from '../three/primitives'
 import { buildMeshAtlasGlb } from '../ksa/exportGlb'
-import { decodeImage } from '../ktx/decodeImage'
+import { decodeImage, type ImageLevel } from '../ktx/decodeImage'
 import { encodeImageToKtx2 } from '../ktx/encodeKtx2'
-import { buildCustomFaceMaterial, makeFlatMaterial } from '../three/MaterialFactory'
+import { compositeGlow, solidGlowBitmap, neutralBase, type GlowBitmap } from '../ktx/glowComposite'
+import { buildCustomFaceMaterial, makeFlatMaterial, buildGlowingFaceMaterial } from '../three/MaterialFactory'
 import { kittenPartSubMeshes, kittenSpecFromSource } from '../ksa/kittenAssets'
 import { bakeKittenSubMeshes, buildKittenMaterial } from '../three/kittenBake'
 
@@ -47,9 +52,19 @@ let atlasUrl: string | null = null
 const textureKtx2Urls = new Map<string, string>()
 /** texture id -> source-image blob URL (used for UI thumbnails). */
 const textureSrcUrls = new Map<string, string>()
+/** mesh id -> painted-glow-bitmap blob URL (used for the Glow panel thumbnail). */
+const emissivePaintUrls = new Map<string, string>()
 
 /** Reactive map of texture id -> source-image URL, for UI previews. */
 export const $customTextureUrls = atom<Record<string, string>>({})
+/** Reactive map of mesh id -> painted-glow-bitmap URL, for the Glow panel thumbnail. */
+export const $emissivePaintUrls = atom<Record<string, string>>({})
+
+function publishEmissivePaintUrls(): void {
+  const rec: Record<string, string> = {}
+  for (const [id, url] of emissivePaintUrls) rec[id] = url
+  $emissivePaintUrls.set(rec)
+}
 
 function publishTextureUrls(): void {
   const rec: Record<string, string> = {}
@@ -72,6 +87,13 @@ export const $managingMeshId = atom<string | null>(null)
 
 export function setManagingMeshId(id: string | null): void {
   $managingMeshId.set(id)
+}
+
+/** Id of the mesh whose glow is being painted in the GlowPaintDialog (null = closed). */
+export const $glowPaintMeshId = atom<string | null>(null)
+
+export function setGlowPaintMeshId(id: string | null): void {
+  $glowPaintMeshId.set(id)
 }
 
 function shortId(): string {
@@ -141,8 +163,40 @@ let appliedMeshSig = ''
 
 function meshSignature(part: EditingPart): string {
   return JSON.stringify(
-    part.customMeshes.map((m) => ({ s: m.subPartId, p: m.primitive, k: m.kitten, f: m.faceTextures })),
+    part.customMeshes.map((m) => ({
+      s: m.subPartId,
+      p: m.primitive,
+      k: m.kitten,
+      f: m.faceTextures,
+      e: m.emissive,
+      g: m.glass,
+      su: m.surface,
+    })),
   )
+}
+
+/** The glow bitmap (rgb=color, a=intensity) for a mesh's emissive config, or null when no glow. */
+export async function glowBitmapFor(m: CustomMesh): Promise<GlowBitmap | null> {
+  const e = m.emissive
+  if (!e) return null
+  if (e.shape === 'painted') {
+    const png = await getAsset(assetKeys.emissivePaint(m.id))
+    if (png) {
+      const lvl = (await decodeImage(png)).levels[0]
+      return { width: lvl.width, height: lvl.height, rgba: lvl.rgba }
+    }
+    // painted but no bitmap stored yet → fall back to the default color/strength as a solid.
+  }
+  return solidGlowBitmap(e.color, e.strength)
+}
+
+/** The decoded base diffuse for a primitive face (source image), or a neutral gray when untextured. */
+async function faceBaseImage(texId: string | undefined): Promise<ImageLevel> {
+  if (texId) {
+    const src = await getAsset(assetKeys.textureSource(texId))
+    if (src) return (await decodeImage(src)).levels[0]
+  }
+  return neutralBase()
 }
 
 /**
@@ -152,7 +206,7 @@ function meshSignature(part: EditingPart): string {
  */
 async function buildKittenCatalogEntry(m: CustomMesh, kitten: KittenMeshSource): Promise<CatalogSubPart> {
   const geometry = await bakedKittenGeometry(kitten)
-  const mat = await buildKittenMaterial(kittenSpecFromSource(kitten))
+  const mat = await buildKittenSubMeshMaterial(m, kitten)
   mat.side = THREE.DoubleSide
   if (geometry) customMeshRenderCache.set(m.subPartId, { geometry, materials: [mat] })
   return {
@@ -163,6 +217,45 @@ async function buildKittenCatalogEntry(m: CustomMesh, kitten: KittenMeshSource):
     diffuseUrl: toUrl(kitten.diffuse),
     sourceFile: '(kitten)',
   }
+}
+
+/**
+ * The editor material for a part-ified kitten submesh, honoring its glow / glass-tint / surface:
+ *  - opaque glow (any non-glass submesh with a glow, or a visor in 'glow' mode) → a solid
+ *    glow-color diffuse + white mask via {@link buildGlowingFaceMaterial} (matches export; the
+ *    kitten texture is replaced by the glow color = "the whole submesh glows").
+ *  - glass shell (visor 'glass'/'glassGlow') → the kitten material tinted + translucent; 'glassGlow'
+ *    adds an emissive-uniform glow that shows through (a single-material approximation of the
+ *    layered export). `$simulateGlass` mimics KSA's muted in-game glass.
+ *  - everything else → the plain kitten material.
+ */
+async function buildKittenSubMeshMaterial(
+  m: CustomMesh,
+  kitten: KittenMeshSource,
+): Promise<THREE.MeshStandardMaterial> {
+  const transparent = !!kitten.transparent
+  const surface = transparent ? (m.surface ?? 'glass') : undefined
+
+  const opaqueGlow = transparent ? surface === 'glow' : !!m.emissive
+  if (opaqueGlow && m.emissive) {
+    const glow = await glowBitmapFor(m)
+    if (glow) {
+      const { diffuse, mask } = compositeGlow(neutralBase(), glow)
+      return buildGlowingFaceMaterial(diffuse, mask)
+    }
+  }
+
+  const wantTint = surface === 'glass' || surface === 'glassGlow'
+  const glowUniform = surface === 'glassGlow' ? m.emissive : undefined
+  return buildKittenMaterial(
+    kittenSpecFromSource(kitten, {
+      tint: wantTint ? m.glass?.tint : undefined,
+      opacity: m.glass?.opacity,
+      simulateGlass: wantTint && !!m.glass?.tint && $simulateGlass.get(),
+      glowColor: glowUniform?.color,
+      glowStrength: glowUniform?.strength,
+    }),
+  )
 }
 
 async function refreshCatalog(): Promise<void> {
@@ -188,15 +281,20 @@ async function refreshCatalog(): Promise<void> {
       const geometry = buildPrimitiveGeometry(m.primitive!)
       applyFaceUvTransforms(geometry, faceKeys, ft)
 
-      // One material per face group; flat fallback for untextured faces.
+      // One material per face group. A glowing mesh composites its glow bitmap over each face's
+      // base diffuse (source image, or neutral gray when untextured) so editor == export; an
+      // un-glowing mesh keeps the diffuse-only path (flat fallback for untextured faces).
+      const glow = await glowBitmapFor(m)
       const materials: THREE.MeshStandardMaterial[] = []
       for (const key of faceKeys) {
         const texId = ft[key]?.textureId
-        const ktx2Url = texId ? textureKtx2Urls.get(texId) : undefined
-        if (ktx2Url) {
-          materials.push(await buildCustomFaceMaterial(ktx2Url, ft[key]?.wrap ?? 'repeat'))
+        const wrap = ft[key]?.wrap ?? 'repeat'
+        if (glow) {
+          const { diffuse, mask } = compositeGlow(await faceBaseImage(texId), glow)
+          materials.push(buildGlowingFaceMaterial(diffuse, mask, wrap))
         } else {
-          materials.push(makeFlatMaterial())
+          const ktx2Url = texId ? textureKtx2Urls.get(texId) : undefined
+          materials.push(ktx2Url ? await buildCustomFaceMaterial(ktx2Url, wrap) : makeFlatMaterial())
         }
       }
 
@@ -423,12 +521,78 @@ export async function updateMeshFaceConfig(
   await refreshCatalog()
 }
 
+/**
+ * Sets (or clears, with `undefined`) a mesh's emissive glow config. Covers Off / Whole and the
+ * color/strength controls. The painted bitmap is written separately by {@link setMeshGlowPainted}.
+ */
+export async function setMeshGlow(meshId: string, cfg: EmissiveConfig | undefined): Promise<void> {
+  mutate('edit glow', meshId, (p) => {
+    const m = p.customMeshes.find((x) => x.id === meshId)
+    if (m) m.emissive = cfg
+  })
+  await refreshCatalog()
+}
+
+/** Sets (or clears) the translucent-glass tint for a glass-capable (visor) mesh. */
+export async function setMeshGlass(meshId: string, cfg: GlassConfig | undefined): Promise<void> {
+  mutate('edit visor tint', meshId, (p) => {
+    const m = p.customMeshes.find((x) => x.id === meshId)
+    if (m) m.glass = cfg
+  })
+  await refreshCatalog()
+}
+
+const DEFAULT_GLASS_TINT: GlassConfig = { tint: { r: 120, g: 200, b: 255 }, opacity: 0.45 }
+const DEFAULT_GLOW: EmissiveConfig = { shape: 'whole', color: { r: 120, g: 220, b: 255 }, strength: 0.6 }
+
+/**
+ * Sets a glass-capable (visor) mesh's surface mode, seeding default tint/glow configs so the
+ * relevant controls have something to edit. Both configs persist across mode switches (the mode
+ * gates which one renders/exports), so toggling never discards the user's tint or glow settings.
+ */
+export async function setMeshSurface(meshId: string, surface: VisorSurface): Promise<void> {
+  mutate('visor surface', meshId, (p) => {
+    const m = p.customMeshes.find((x) => x.id === meshId)
+    if (!m) return
+    m.surface = surface
+    if ((surface === 'glass' || surface === 'glassGlow') && !m.glass) m.glass = { ...DEFAULT_GLASS_TINT }
+    if ((surface === 'glow' || surface === 'glassGlow') && !m.emissive) m.emissive = { ...DEFAULT_GLOW }
+  })
+  await refreshCatalog()
+}
+
+/**
+ * Stores a painted glow bitmap (RGBA PNG) for a mesh and sets its emissive shape to 'painted'.
+ * `defaults` seeds the descriptor's color/strength (the painter's brush defaults).
+ */
+export async function setMeshGlowPainted(
+  meshId: string,
+  png: Blob,
+  defaults: { color: { r: number; g: number; b: number }; strength: number },
+): Promise<void> {
+  await putAsset(assetKeys.emissivePaint(meshId), png, 'image/png')
+  const old = emissivePaintUrls.get(meshId)
+  if (old) URL.revokeObjectURL(old)
+  emissivePaintUrls.set(meshId, URL.createObjectURL(png))
+  publishEmissivePaintUrls()
+  mutate('paint glow', meshId, (p) => {
+    const m = p.customMeshes.find((x) => x.id === meshId)
+    if (m) m.emissive = { shape: 'painted', color: defaults.color, strength: defaults.strength }
+  })
+  await refreshCatalog()
+}
+
 export async function removeCustomMesh(id: string): Promise<void> {
   const mesh = $part.get().customMeshes.find((x) => x.id === id)
   mutate('remove mesh', mesh?.name ?? '', (p) => {
     p.customMeshes = p.customMeshes.filter((x) => x.id !== id)
     if (mesh) p.placements = p.placements.filter((pl) => pl.subPartTemplateId !== mesh.subPartId)
   })
+  const paintUrl = emissivePaintUrls.get(id)
+  if (paintUrl) URL.revokeObjectURL(paintUrl)
+  emissivePaintUrls.delete(id)
+  publishEmissivePaintUrls()
+  void deleteAsset(assetKeys.emissivePaint(id))
   await scheduleRebuild()
 }
 
@@ -436,6 +600,8 @@ export async function removeCustomMesh(id: string): Promise<void> {
 export async function hydrateCustomAssets(): Promise<void> {
   for (const id of [...textureKtx2Urls.keys(), ...textureSrcUrls.keys()]) revokeTexture(id)
   publishTextureUrls()
+  for (const url of emissivePaintUrls.values()) URL.revokeObjectURL(url)
+  emissivePaintUrls.clear()
 
   const part = $part.get()
   for (const t of part.customTextures) {
@@ -445,6 +611,14 @@ export async function hydrateCustomAssets(): Promise<void> {
     if (s) textureSrcUrls.set(t.id, URL.createObjectURL(s))
   }
   publishTextureUrls()
+  // Reload painted-glow bitmaps (the 'whole' shape is regenerated from color/strength — no blob).
+  for (const m of part.customMeshes) {
+    if (m.emissive?.shape === 'painted') {
+      const png = await getAsset(assetKeys.emissivePaint(m.id))
+      if (png) emissivePaintUrls.set(m.id, URL.createObjectURL(png))
+    }
+  }
+  publishEmissivePaintUrls()
   await scheduleRebuild()
 }
 
@@ -472,5 +646,10 @@ export function initCustomAssets(): void {
     if (meshSignature(part) !== appliedMeshSig) {
       void scheduleRebuild().catch((err) => console.warn('flexo: custom-mesh rebuild failed', err))
     }
+  })
+  // The "simulate in-game glass" preview toggle changes how tinted visor materials are built —
+  // rebuild the catalog (materials only) when it flips. `.listen` skips the initial value.
+  $simulateGlass.listen(() => {
+    void refreshCatalog().catch((err) => console.warn('flexo: glass-sim refresh failed', err))
   })
 }

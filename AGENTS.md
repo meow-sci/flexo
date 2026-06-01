@@ -163,10 +163,15 @@ Key modules:
   localStorage `ProjectSnapshot`; only lightweight descriptors persist there).
 
 ### v1 scope (deliberate limitations)
-- **Diffuse only (user-authored).** No user Normal / AoRoughMetal / Emissive yet
-  (KSA `PbrMaterial` supports all four; built-in parts use all four). We DO emit
-  shared synthetic 1×1 flat-normal + neutral-ORM textures, but only to satisfy KSA's
-  null-check-free renderer — they carry no detail.
+- **Diffuse + emissive glow (user-authored).** Normal / AoRoughMetal are still synthetic
+  (shared 1×1 flat-normal + neutral-ORM, only to satisfy KSA's null-check-free renderer — no
+  detail). **Glow IS shipped:** per-mesh `EmissiveConfig` (whole / painted-canvas) baked as a
+  composited diffuse + white `<Emissive>` mask (KSA glow is WHITE × mask × 1.25; the color lives in
+  the diffuse — there's no per-material emissive color). The kitten **visor** also gets a `surface`
+  mode (`glass` translucent+tint / `glow` opaque / `glassGlow` layered two-SubPart): KSA's glass
+  shader ignores emissive (glass can't glow) and derives only ~10% of its color from the diffuse, so
+  the tint is a solid diffuse and reads subtle in-game. See `plans/FEATURE_EMISSIVES_PLAN.md` +
+  `docs/custom-assets.md`. (`src/ktx/glowComposite.ts`, `modExport.expandGlassGlow`, `$simulateGlass`.)
 - **One texture per whole mesh** (the primitive's default UVs); no per-face/multi-
   material texturing.
 - **Uncompressed `R8G8B8A8` + Zstd** KTX2, NOT block-compressed. KSA's own atlases
@@ -175,10 +180,10 @@ Key modules:
   format and loads through three's `KTX2Loader` for live preview. Larger VRAM use.
 
 ### To reach full feature parity later
-- **Full PBR channels:** add upload slots + encoder formats for Normal (BC5; needs
-  the `normalMapPatch` decode + GLB tangents via `computeTangents`), AoRoughMetal
-  (packed AO/Rough/Metal), Emissive (BC4); emit the matching `<Normal>/
-  <AoRoughMetal>/<Emissive>` lines in `assetsXmlSerializer`.
+- **Remaining PBR channels:** add upload slots + encoder formats for Normal (BC5; needs
+  the `normalMapPatch` decode + GLB tangents via `computeTangents`) and AoRoughMetal
+  (packed AO/Rough/Metal); emit the matching `<Normal>/<AoRoughMetal>` lines in
+  `assetsXmlSerializer`. (Emissive is shipped — see custom-assets.md.)
 - **BC7/BC5/BC4 block compression** to byte-match KSA + cut VRAM: swap ONLY
   `src/ktx/encodeKtx2.ts` to a BC7 WASM encoder (e.g. a `bc7enc`/libktx WASM
   build). Container assembly (`ktx-parse`), mips, and Zstd stay.

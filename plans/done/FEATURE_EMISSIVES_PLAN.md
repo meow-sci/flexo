@@ -295,3 +295,107 @@ catalog→scene reconcile paths carry it once the material has `emissiveMap`.
 `ManageTexturesPanel` Glow section + `GlowPaintDialog` → 9. docs (`docs/custom-assets.md`,
 `docs/texturing.md`, AGENTS.md custom-assets note: emissive moves from "deferred" to "shipped:
 whole + painted, per-mesh, color baked into diffuse, white mask").
+
+---
+
+# Part 2 — Translucent‑tinted + emissive kitten visor (and kitten‑submesh glow)
+
+Builds on Part 1's shared primitives (`EmissiveConfig`, `compositeGlow`, `solidGlowBitmap`,
+`buildGlowingFaceMaterial`, `<Emissive>` serialization, `modExport` glow compositing). The visor
+is a part‑ified kitten submesh (`CustomMesh.kitten`), rendered/exported through a **separate**
+material path from primitives — this part wires tint + emissive through that path and adds the
+glass‑specific tint + layering.
+
+## Verified KSA reality (quote in code comments)
+
+- **`<PartModelGlass>` → `Shaders/Mesh/MeshGlassIndirect.frag`** (the visor's export path):
+  opacity hard‑coded `0.75` (line 78); `glassColor = mix(albedo, vec3(0.1), 0.9)` (line 81) — the
+  diffuse contributes only ~10% over a dark base; **emissive is never sampled** (the
+  `emissiveTextureIndex` field exists but `main()` never reads it). `ModelGlass.frag` (in‑game
+  character visor) is identical. ⇒ **glass can't glow; its tint is muted/dark.**
+- **`<PartModel>` → `MeshIndirect.frag`** samples emissive (white × `EMISSIVE_MULTIPLIER` 1.25,
+  added after lighting). ⇒ **a glowing visor must be opaque.**
+- **No CPU KTX2→RGBA decoder** in flexo (KSA `.ktx2` load only via the GPU `KTX2Loader`). ⇒
+  can't composite into the visor's detailed `.ktx2`; generate a **solid‑color diffuse** instead
+  (`makeSolidKtx2`) — faithful since glass mutes diffuse detail anyway, and consistent with Part 1's
+  glow‑only synthetic‑diffuse path.
+- **KSA's window = separate glass + opaque SubParts at one transform**
+  (`CoreIVASpaceAAssets.xml`). ⇒ **layered glass+glow = two SubParts**, the faithful pattern.
+
+## Data model — `src/ksa/types.ts`
+
+```ts
+export interface GlassConfig { tint: { r:number; g:number; b:number }; opacity?: number }
+export type VisorSurface = 'glass' | 'glow' | 'glassGlow'   // glass‑capable (transparent) meshes only
+export interface CustomMesh {
+  /* …existing… */
+  emissive?: EmissiveConfig   // (Part 1) opaque glow — now wired through the kitten paths too
+  glass?: GlassConfig         // glass tint; used when surface ∈ {glass, glassGlow}
+  surface?: VisorSurface      // only meaningful when kitten?.transparent (the visor); undefined ⇒ 'glass'
+}
+```
+Glass‑capable iff `m.kitten?.transparent`. `surface` is the source of truth for the visor; the UI
+writes the matching `{glass?, emissive?}`. Back‑compat: old visors (`surface` undefined) ⇒ 'glass',
+untinted ⇒ exact current behavior. Fix the stale `types.ts` "ignored on export" comment on
+`KittenMeshSource.transparent` (export DOES use it).
+
+## Editor preview (refinement over the harness plan)
+
+Kitten **glow** reuses Part 1's `buildGlowingFaceMaterial` (solid glow‑color diffuse + uniform white
+mask, KSA emissive patch ON) rather than a colored emissive uniform — keeps **editor == export** and
+avoids the `SubPartObject` patch‑reapply conflict (it toggles the emissive patch from `!!emissiveMap`).
+A colored kitten glow therefore replaces the kitten texture with a solid glow color (= "the whole
+mesh glows a color"; same as a primitive whole‑glow). Per‑mesh material by `surface`:
+- non‑glass kitten + `emissive` → `buildGlowingFaceMaterial` (opaque solid glow).
+- visor `glass` → `buildKittenMaterial` + `mat.color` tint, transparent. **`$simulateGlass`** on ⇒
+  bake the in‑game look (`color = mix(tint,0.1,0.9)`, `opacity 0.75`); off ⇒ vivid tint + `opacity`.
+- visor `glow` → `buildGlowingFaceMaterial` (opaque solid glow).
+- visor `glassGlow` → editor approximation: `buildKittenMaterial` tint + transparent + emissive
+  **uniform** glow (no map → `SubPartObject` keeps emissive patch off; glow shows through the shell).
+  Export is the layered truth (two SubParts).
+
+`$simulateGlass` = new atom in `settingsStore`; checkbox in the panel; change → `refreshCatalog()`.
+Thread `{glass,emissive,surface,simulateGlass}` into `buildKittenCatalogEntry`; extend
+`KittenMaterialSpec` + `kittenSpecFromSource`; make `buildKittenMaterial`'s `emissive` flag
+conditional (it's hard‑coded `false` today). Add `glass`/`surface`/`emissive` to `meshSignature`.
+
+## Export — `src/ksa/modExport.ts` (+ `src/ktx`)
+
+1. Generalize `makeSolid1x1Ktx2(r,g,b)` → `makeSolidKtx2(r,g,b,{srgb})` (host in `src/ktx`; existing
+   ORM/normal callers stay `srgb:false`; **tint diffuse uses `srgb:true`** — the glass shader does
+   `gammaToLinear(diffuse)`).
+2. `planKittenSubPart` takes the mesh‑level config:
+   - **glass / glassGlow shell:** `glass.tint` set → `diffusePath` = `makeSolidKtx2(tint,{srgb})`
+     bundled; keep normal/ORM; `glass:true`. No tint ⇒ current behavior (real visor diffuse).
+   - **glow surface:** delegate to Part 1's glow‑only compositing (neutral/solid base): composited
+     diffuse + mask, `glass:false`. (Painted glow on kittens composites over a neutral base.)
+3. **`expandGlassGlow(part): EditingPart`** — call once at the top of `buildModZip`/`writeModToFolder`,
+   pass the augmented part to **both** `buildModContent`→`serializePart` and `buildCustomBundle`. For
+   each placed `surface==='glassGlow'` mesh `m`: append a synthetic `CustomMesh`
+   `{subPartId:m.subPartId+'_Glow', kitten:m.kitten, surface:'glow', emissive:m.emissive, __inset:true,
+   faceTextures:{}}` and a parallel placement (cloned transform) referencing `_Glow`. In the node
+   builder, `__inset` ⇒ `insetGeometry(geo, ~0.99)` (scale toward centroid) so it sits inside the
+   75%‑opaque glass and shows through. `buildMeshAtlasGlb` auto‑adds `_Glow_VM`.
+
+## UI — `src/ui/ManageTexturesPanel.tsx` (+ `customAssetStore`)
+
+Allow the panel to open for kitten meshes (today it bails on non‑primitives). Extend Part 1's Glow
+section: glass‑capable mesh ⇒ a **Surface** Select (`Glass` · `Glow` · `Glass + Glow`) that writes
+`surface` + the matching config (Glass → tint via `ColorAlphaField` + editor opacity; Glow → Part 1
+glow controls; Glass+Glow → both) and a **"Simulate in‑game glass"** checkbox (`$simulateGlass`).
+Non‑glass kitten submeshes + primitives ⇒ just the Glow section (glow now on **all** kitten
+submeshes). New actions: `setMeshGlass`, `setMeshSurface` (clear the unused sibling), reuse
+`setMeshGlow`; all `mutate()` + `refreshCatalog()`.
+
+## Tests / verification / risks
+
+As in the approved plan: unit tests for `makeSolidKtx2` (sRGB tint vs linear ORM), serializer
+(glass + `_Glow` → `<PartModelGlass>` and `<PartModel>`+`<Emissive>`), `modExport`
+(glass‑tinted → solid `*_Diffuse.ktx2` + `<PartModelGlass>` no `<Emissive>`; opaque‑glow → `<PartModel>`
++ `*_Emissive.ktx2`; `glassGlow` → `expandGlassGlow` yields 2 placements + 2 subparts, `_Glow` inset
+opaque+emissive), `customAssetStore` (`setMeshSurface('glow')` clears glass; undo; `$simulateGlass`
+rebuild). Browser: part‑ify a kitten → Glass+tint (toggle simulate), Glow, Glass+Glow, glow on a
+helmet. Export zip/folder + in‑game acceptance. Risks: in‑game tint is subtle/dark (documented +
+simulate toggle); tinted/glowing kitten loses texture detail (solid diffuse); layered visor doubles
+the visor (inset ~0.99 is the z‑fight/dimming knob); painted‑glow on kittens composites over a
+neutral base; selection highlight overrides then restores the glow (verify `baseEmissives`).

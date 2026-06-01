@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { EditingPart, KittenMeshSource } from './types'
+import type { CustomMesh, CustomTexture, EditingPart } from './types'
 import { serializeGameData, serializePart } from './partXmlSerializer'
 import { serializeAssets, type AssetsSubPartPlan, type ReferenceSubPartPlan } from './assetsXmlSerializer'
 import { buildMeshAtlasGlb } from './exportGlb'
@@ -9,11 +9,13 @@ import { animGlbPath, isAnimationExportable } from './animationNaming'
 import { toUrl, type CatalogSubPart } from './catalog'
 import { buildPrimitiveGeometry, PRIMITIVE_FACE_KEYS, applyFaceUvTransforms } from '../three/primitives'
 import { bakeKittenSubMeshes } from '../three/kittenBake'
-import { getPrimaryTextureId } from '../state/customAssetStore'
+import { getPrimaryTextureId, glowBitmapFor } from '../state/customAssetStore'
 import { assetKeys, getAsset } from '../state/assetDb'
 import type { KittenTextureExportSettings } from '../state/settingsStore'
 import { createZip, type ZipEntry } from '../util/zip'
-import { encodeImageToKtx2 } from '../ktx/encodeKtx2'
+import { encodeImageToKtx2, makeSolidKtx2 } from '../ktx/encodeKtx2'
+import { decodeImage, buildMipChain, type ImageLevel } from '../ktx/decodeImage'
+import { compositeGlow, neutralBase, type GlowBitmap } from '../ktx/glowComposite'
 
 /** How part-ified kitten SubParts supply their textures on export (see settingsStore). */
 export type KittenTextureExportConfig = KittenTextureExportSettings
@@ -157,17 +159,41 @@ function ivaRemapFromVariants(variants: Map<string, IvaVariant>): Map<string, st
   return new Map([...variants.values()].map((v) => [v.originalId, v.variantId]))
 }
 
-/**
- * Encodes a 1×1 solid-color RGBA8 KTX2 (linear/UNORM + Zstd). Used to supply
- * synthetic Normal and AoRoughMetal textures for custom PbrMaterials — KSA's
- * ThumbnailRenderResources.AddDraw dereferences both fields without null checks.
- */
-function makeSolid1x1Ktx2(r: number, g: number, b: number): Promise<Uint8Array> {
-  const rgba = new Uint8Array([r, g, b, 255])
+/** Encodes a decoded image to a Zstd KTX2 (sRGB diffuse vs linear mask), generating its mip chain. */
+function encodeLevel(level: ImageLevel, srgb: boolean): Promise<Uint8Array> {
   return encodeImageToKtx2(
-    { width: 1, height: 1, levels: [{ width: 1, height: 1, rgba }] },
-    { srgb: false, zstd: true },
+    { width: level.width, height: level.height, levels: buildMipChain(level) },
+    { srgb, zstd: true },
   )
+}
+
+/**
+ * Composites a mesh's glow onto a base diffuse and writes BOTH the (color-baked) diffuse and the
+ * grayscale emissive mask as Textures/<token>_Diffuse.ktx2 / _Emissive.ktx2. The composited
+ * diffuse REPLACES any stored diffuse for a glowing mesh — the glow color lives in the diffuse,
+ * the mask is white (KSA adds white × 1.25 after lighting). Returns their relative paths.
+ */
+async function emitGlowTextures(
+  token: string,
+  base: ImageLevel,
+  glow: GlowBitmap,
+  binaries: { path: string; data: Uint8Array }[],
+): Promise<{ diffusePath: string; emissivePath: string }> {
+  const { diffuse, mask } = compositeGlow(base, glow)
+  const diffusePath = `Textures/${token}_Diffuse.ktx2`
+  const emissivePath = `Textures/${token}_Emissive.ktx2`
+  binaries.push({ path: diffusePath, data: await encodeLevel(diffuse, true) })
+  binaries.push({ path: emissivePath, data: await encodeLevel(mask, false) })
+  return { diffusePath, emissivePath }
+}
+
+/** The decoded base diffuse for a glowing primitive (its primary source image), or neutral gray. */
+async function exportBaseImage(tex: CustomTexture | undefined): Promise<ImageLevel> {
+  if (tex) {
+    const src = await getAsset(assetKeys.textureSource(tex.id))
+    if (src) return (await decodeImage(src)).levels[0]
+  }
+  return neutralBase()
 }
 
 /** Last path segment of a "Textures/Characters/Foo.ktx2" subpath, e.g. "Foo.ktx2". */
@@ -196,12 +222,29 @@ async function fetchKtx2(subpath: string): Promise<Uint8Array> {
  * normal+ORM) stay `undefined` so serializeAssets falls back to the shared synthetic.
  */
 async function planKittenSubPart(
-  subPartId: string,
-  src: KittenMeshSource,
+  m: CustomMesh,
   cfg: KittenTextureExportConfig,
   bundled: Map<string, string>,
   binaries: { path: string; data: Uint8Array }[],
+  bundleToken: string,
 ): Promise<AssetsSubPartPlan> {
+  const src = m.kitten!
+  const subPartId = m.subPartId
+  const transparent = !!src.transparent
+  const surface = transparent ? (m.surface ?? 'glass') : undefined
+
+  // Opaque emissive glow (a non-glass submesh with a glow, or a visor in 'glow' mode): emit a
+  // solid glow-color diffuse + grayscale mask through KSA's opaque <PartModel> path (glass can't
+  // glow). The kitten's own .ktx2 can't be CPU-decoded, so the glow composites over a neutral base.
+  const opaqueGlow = transparent ? surface === 'glow' : !!m.emissive
+  if (opaqueGlow && m.emissive) {
+    const glow = await glowBitmapFor(m)
+    if (glow) {
+      const paths = await emitGlowTextures(`${bundleToken}_${subPartId}`, neutralBase(), glow, binaries)
+      return { subPartId, materialId: `${subPartId}_Material`, glass: false, ...paths }
+    }
+  }
+
   const resolve = async (subpath: string): Promise<string> => {
     if (cfg.mode === 'reference') return joinContentCore(cfg.contentCorePath, subpath)
     let rel = bundled.get(subpath)
@@ -212,14 +255,91 @@ async function planKittenSubPart(
     }
     return rel
   }
+
+  // Glass shell (visor 'glass'/'glassGlow'): a chosen tint becomes a solid sRGB diffuse (KSA's
+  // glass shader derives only ~10% of its color from the diffuse, so a saturated solid reads as a
+  // subtle tinted glass); no tint keeps the real visor diffuse. Non-glass submeshes also land here.
+  const tint = surface === 'glass' || surface === 'glassGlow' ? m.glass?.tint : undefined
+  let diffusePath: string
+  if (tint) {
+    diffusePath = `Textures/${bundleToken}_${subPartId}_Diffuse.ktx2`
+    binaries.push({ path: diffusePath, data: await makeSolidKtx2(tint.r, tint.g, tint.b, { srgb: true }) })
+  } else {
+    diffusePath = await resolve(src.diffuse)
+  }
   return {
     subPartId,
     materialId: `${subPartId}_Material`,
-    diffusePath: await resolve(src.diffuse),
+    diffusePath,
     normalPath: src.normal ? await resolve(src.normal) : undefined,
     aoRoughMetalPath: src.aoRoughMetal ? await resolve(src.aoRoughMetal) : undefined,
-    glass: src.transparent, // the visor renders through KSA's translucent glass path
+    glass: transparent, // the visor renders through KSA's translucent glass path
   }
+}
+
+/**
+ * Insets a geometry by scaling its vertices toward the bounding-box center. Used for the layered
+ * 'glassGlow' visor: the emissive layer sits just inside the ~0.75-opaque glass shell so it shows
+ * through without z-fighting. Mutates + returns `geo` (caller passes a clone).
+ */
+function insetGeometry(geo: THREE.BufferGeometry, factor: number): THREE.BufferGeometry {
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute | undefined
+  if (!pos) return geo // nothing to inset (e.g. a missing/empty bake)
+  geo.computeBoundingBox()
+  const center = new THREE.Vector3()
+  geo.boundingBox!.getCenter(center)
+  for (let i = 0; i < pos.count; i++) {
+    pos.setXYZ(
+      i,
+      center.x + (pos.getX(i) - center.x) * factor,
+      center.y + (pos.getY(i) - center.y) * factor,
+      center.z + (pos.getZ(i) - center.z) * factor,
+    )
+  }
+  pos.needsUpdate = true
+  return geo
+}
+
+/** How far inside the glass shell the layered glow sits (1 = coincident → z-fights). */
+const GLASS_GLOW_INSET = 0.99
+
+/**
+ * Expands a part for export so each placed 'glassGlow' visor becomes TWO SubParts at one transform —
+ * the faithful KSA pattern (Core emits glass + opaque as sibling SubParts). For each such mesh we
+ * append a synthetic '<id>_Glow' kitten mesh (opaque emissive, geometry inset) plus a parallel
+ * placement at the original's transform. Returns the augmented part (fed to BOTH serializePart and
+ * buildCustomBundle so atlas/subparts/part-tree agree) + the set of subPartIds to inset. No-op
+ * (original part + empty set) when there are no glassGlow visors.
+ */
+export function expandGlassGlow(part: EditingPart): { part: EditingPart; insetIds: Set<string> } {
+  const placed = new Set(part.placements.map((p) => p.subPartTemplateId))
+  const layered = part.customMeshes.filter(
+    (m) => m.kitten?.transparent && m.surface === 'glassGlow' && placed.has(m.subPartId),
+  )
+  if (layered.length === 0) return { part, insetIds: new Set() }
+
+  const customMeshes = [...part.customMeshes]
+  const placements = [...part.placements]
+  const insetIds = new Set<string>()
+  for (const m of layered) {
+    const glowId = `${m.subPartId}_Glow`
+    insetIds.add(glowId)
+    customMeshes.push({
+      id: m.id, // share the IndexedDB key so a 'painted' glow's bitmap resolves
+      name: `${m.name} Glow`,
+      subPartId: glowId,
+      kitten: m.kitten,
+      faceTextures: {},
+      emissive: m.emissive,
+      surface: 'glow', // opaque emissive layer on export
+    })
+    for (const pl of part.placements) {
+      if (pl.subPartTemplateId === m.subPartId) {
+        placements.push({ ...pl, instanceId: `${pl.instanceId}_glow`, subPartTemplateId: glowId })
+      }
+    }
+  }
+  return { part: { ...part, customMeshes, placements }, insetIds }
 }
 
 /** A custom-asset bundle for export: the Assets XML + the binary files it references. */
@@ -247,6 +367,7 @@ export async function buildCustomBundle(
   base: string,
   kittenTex: KittenTextureExportConfig = DEFAULT_KITTEN_TEXTURE_EXPORT,
   ivaVariants: Map<string, IvaVariant> = new Map(),
+  insetIds: ReadonlySet<string> = new Set(),
 ): Promise<CustomBundle> {
   const binaries: { path: string; data: Uint8Array }[] = []
 
@@ -291,10 +412,13 @@ export async function buildCustomBundle(
       meshes.map(async (m) => {
         if (m.kitten) {
           // Always bundle the baked geometry (KSA can't skin the source gltf); clone the
-          // shared cache so the post-build dispose() frees the clone, not the cache.
+          // shared cache so the post-build dispose() frees the clone, not the cache. A layered
+          // 'glassGlow' glow layer is inset so it sits just inside its glass shell.
           const subs = await bakeKittenSubMeshes(m.kitten.kind)
           const geo = subs.find((s) => s.specKey === m.kitten!.specKey)?.geometry
-          return { name: m.subPartId, geometry: geo ? geo.clone() : new THREE.BufferGeometry() }
+          let cloned = geo ? geo.clone() : new THREE.BufferGeometry()
+          if (insetIds.has(m.subPartId)) cloned = insetGeometry(cloned, GLASS_GLOW_INSET)
+          return { name: m.subPartId, geometry: cloned }
         }
         const geometry = buildPrimitiveGeometry(m.primitive!)
         applyFaceUvTransforms(geometry, PRIMITIVE_FACE_KEYS[m.primitive!.kind], m.faceTextures)
@@ -311,9 +435,25 @@ export async function buildCustomBundle(
     const texPath = new Map<string, string>() // texId -> relative path (dedupe shared textures)
     const kittenTexPath = new Map<string, string>() // kitten subpath -> mod path (bundle mode)
     for (const m of meshes) {
-      // Part-ified kitten submesh: full PBR from the KSA .ktx2 (referenced or bundled).
+      // Part-ified kitten submesh: full PBR from the KSA .ktx2 (referenced/bundled), or a generated
+      // solid tint diffuse (glass) / glow textures (emissive) per the visor surface mode.
       if (m.kitten) {
-        subParts.push(await planKittenSubPart(m.subPartId, m.kitten, kittenTex, kittenTexPath, binaries))
+        subParts.push(await planKittenSubPart(m, kittenTex, kittenTexPath, binaries, bundleToken))
+        continue
+      }
+      // Glowing primitive: composite the glow into the diffuse (color baked in) + emit the
+      // grayscale emissive mask. Glow-only (untextured) meshes composite over a neutral base.
+      const glow = await glowBitmapFor(m)
+      if (glow) {
+        const primaryTexId = getPrimaryTextureId(m)
+        const base = await exportBaseImage(primaryTexId ? texById.get(primaryTexId) : undefined)
+        const paths = await emitGlowTextures(`${bundleToken}_${m.subPartId}`, base, glow, binaries)
+        subParts.push({
+          subPartId: m.subPartId,
+          materialId: `${m.subPartId}_Material`,
+          diffusePath: paths.diffusePath,
+          emissivePath: paths.emissivePath,
+        })
         continue
       }
       let diffusePath: string | null = null
@@ -346,8 +486,8 @@ export async function buildCustomBundle(
       normalPath = `Textures/${bundleToken}_FlatNormal.ktx2`
       aoRoughMetalPath = `Textures/${bundleToken}_NeutralORM.ktx2`
       // flat normal = (128,128,255) ≈ +Z in tangent space; neutral ORM = AO=255, Rough=128, Metal=0
-      binaries.push({ path: normalPath, data: await makeSolid1x1Ktx2(128, 128, 255) })
-      binaries.push({ path: aoRoughMetalPath, data: await makeSolid1x1Ktx2(255, 128, 0) })
+      binaries.push({ path: normalPath, data: await makeSolidKtx2(128, 128, 255) })
+      binaries.push({ path: aoRoughMetalPath, data: await makeSolidKtx2(255, 128, 0) })
     }
   }
 
@@ -370,9 +510,12 @@ export async function buildModZip(
   kittenTex?: KittenTextureExportConfig,
   catalog: ReadonlyMap<string, CatalogSubPart> = new Map(),
 ): Promise<Blob> {
-  const ivaVariants = buildIvaVariantMap(part, catalog, sanitizeBaseName(projectName))
-  const content = buildModContent(part, projectName, ivaRemapFromVariants(ivaVariants))
-  const bundle = await buildCustomBundle(part, content.base, kittenTex, ivaVariants)
+  // Layered 'glassGlow' visors expand into glass + inset-glow SubPart pairs; feed the augmented
+  // part to BOTH the Part/GameData serializers and the bundle so placements + geometry agree.
+  const { part: expandedPart, insetIds } = expandGlassGlow(part)
+  const ivaVariants = buildIvaVariantMap(expandedPart, catalog, sanitizeBaseName(projectName))
+  const content = buildModContent(expandedPart, projectName, ivaRemapFromVariants(ivaVariants))
+  const bundle = await buildCustomBundle(expandedPart, content.base, kittenTex, ivaVariants, insetIds)
   const encoder = new TextEncoder()
   const xmlAssets = [content.partFile, content.gameDataFile]
   if (bundle.assetsFile) xmlAssets.push(bundle.assetsFile)
@@ -453,10 +596,11 @@ export async function writeModToFolder(
   catalog: ReadonlyMap<string, CatalogSubPart> = new Map(),
 ): Promise<WriteResult> {
   const modDir = await modsDir.getDirectoryHandle(MOD_FOLDER_NAME, { create: true })
-  const ivaVariants = buildIvaVariantMap(part, catalog, sanitizeBaseName(projectName))
-  const content = buildModContent(part, projectName, ivaRemapFromVariants(ivaVariants))
+  const { part: expandedPart, insetIds } = expandGlassGlow(part)
+  const ivaVariants = buildIvaVariantMap(expandedPart, catalog, sanitizeBaseName(projectName))
+  const content = buildModContent(expandedPart, projectName, ivaRemapFromVariants(ivaVariants))
 
-  const bundle = await buildCustomBundle(part, content.base, kittenTex, ivaVariants)
+  const bundle = await buildCustomBundle(expandedPart, content.base, kittenTex, ivaVariants, insetIds)
 
   const taken = new Set((await listFileNames(modDir)).map((n) => n.toLowerCase()))
   const partFile = uniqueFileName(taken, `${content.base}Part`, 'xml')

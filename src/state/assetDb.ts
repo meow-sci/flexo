@@ -80,4 +80,6 @@ export const assetKeys = {
   textureSource: (id: string) => `tex-src:${id}`,
   textureKtx2: (id: string) => `tex-ktx2:${id}`,
   meshGlb: (id: string) => `mesh-glb:${id}`,
+  /** The painted RGBA glow bitmap (PNG) for a mesh's 'painted' emissive shape. */
+  emissivePaint: (id: string) => `emissive-paint:${id}`,
 }

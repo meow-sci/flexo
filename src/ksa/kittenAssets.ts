@@ -36,6 +36,16 @@ export interface KittenMaterialSpec {
   aoRoughMetalUrl?: string
   /** Glass-like transparency (the visor). */
   transparent?: boolean
+  /** Glass tint color 0..255, applied to a transparent material's base color (the visor tint). */
+  tint?: { r: number; g: number; b: number }
+  /** Editor opacity 0..1 for a transparent material (default 0.45; in-game is engine-fixed). */
+  opacity?: number
+  /** When tinting a transparent material, mimic KSA's muted in-game glass look (darker + ~0.75 opacity). */
+  simulateGlass?: boolean
+  /** 'glassGlow' editor approximation: an emissive-uniform glow color 0..255 shown through the shell. */
+  glowColor?: { r: number; g: number; b: number }
+  /** Strength 0..1 for {@link glowColor}. */
+  glowStrength?: number
 }
 
 /** A bone-socketed attachment gltf with per-gltf-material overrides. */
@@ -118,9 +128,15 @@ function urlSpec(src: MatSrc): KittenMaterialSpec {
   }
 }
 
-/** Builds a runtime (served-URL) material spec for a part-ify {@link KittenMeshSource}. */
-export function kittenSpecFromSource(src: KittenMeshSource): KittenMaterialSpec {
-  return urlSpec(src)
+/**
+ * Builds a runtime (served-URL) material spec for a part-ify {@link KittenMeshSource}, optionally
+ * overlaying per-mesh tint / glow / glass-simulation options (the visor surface controls).
+ */
+export function kittenSpecFromSource(
+  src: KittenMeshSource,
+  extra?: Partial<Pick<KittenMaterialSpec, 'tint' | 'opacity' | 'simulateGlass' | 'glowColor' | 'glowStrength'>>,
+): KittenMaterialSpec {
+  return { ...urlSpec(src), ...extra }
 }
 
 /**

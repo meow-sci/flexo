@@ -83,3 +83,15 @@ export const $kittenTextureExport = persistentJSON<KittenTextureExportSettings>(
 export function setKittenTextureExport(patch: Partial<KittenTextureExportSettings>): void {
   $kittenTextureExport.set({ ...$kittenTextureExport.get(), ...patch })
 }
+
+/**
+ * Editor preview toggle: simulate KSA's muted in-game glass look for tinted visors. KSA's glass
+ * shader (MeshGlassIndirect.frag) renders the tint darker/subtler — only ~10% of the diffuse —
+ * and at a fixed ~0.75 opacity. ON ⇒ the editor mimics that (WYSIWYG); OFF ⇒ it shows the chosen
+ * tint vividly (best for picking a color). Read by customAssetStore when building visor materials.
+ */
+export const $simulateGlass = persistentJSON<boolean>('flexo:simulateGlass', false)
+
+export function setSimulateGlass(value: boolean): void {
+  $simulateGlass.set(value)
+}

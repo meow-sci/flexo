@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { CatalogSubPart } from '../ksa/catalog'
 import type { TextureWrap } from '../ksa/types'
+import type { ImageLevel } from '../ktx/decodeImage'
 import { isTextureSupported } from './textureSupport'
 import { loadTexture, loadWrappedTexture } from './TextureCache'
 import { applyKsaShaderPatches } from './normalMapPatch'
@@ -32,6 +33,48 @@ export async function buildCustomFaceMaterial(
 ): Promise<THREE.MeshStandardMaterial> {
   const texture = await loadWrappedTexture(ktx2Url, 'srgb', wrap)
   return new THREE.MeshStandardMaterial({ map: texture, metalness: 0.1, roughness: 0.7 })
+}
+
+function wrapMode(wrap: TextureWrap): THREE.Wrapping {
+  if (wrap === 'mirror') return THREE.MirroredRepeatWrapping
+  if (wrap === 'clamp') return THREE.ClampToEdgeWrapping
+  return THREE.RepeatWrapping
+}
+
+/** A DataTexture from raw RGBA8, matching the KTX2/GLB UV convention (flipY=false; see TextureCache). */
+function makeDataTexture(level: ImageLevel, colorSpace: THREE.ColorSpace, wrap: TextureWrap): THREE.DataTexture {
+  const tex = new THREE.DataTexture(level.rgba, level.width, level.height, THREE.RGBAFormat, THREE.UnsignedByteType)
+  tex.colorSpace = colorSpace
+  tex.wrapS = tex.wrapT = wrapMode(wrap)
+  tex.flipY = false
+  tex.generateMipmaps = true
+  tex.minFilter = THREE.LinearMipmapLinearFilter
+  tex.magFilter = THREE.LinearFilter
+  tex.needsUpdate = true
+  return tex
+}
+
+/**
+ * Builds a glowing custom-mesh face material from pre-composited buffers (see
+ * src/ktx/glowComposite): `diffuse` carries the glow COLOR baked in (sRGB), `mask` is a grayscale
+ * emissive mask (linear; KSA reads R). Mirrors {@link buildTextured}'s emissive block — the
+ * `emissive` uniform stays free for the per-instance selection highlight, and the mask drives the
+ * glow via the KSA shader patch (broadcast `.rrr` × 1.25, ADDED). Shared by the primitive face
+ * path and the part-ified-kitten glow path; callers (SubPartObject) clone per instance.
+ */
+export function buildGlowingFaceMaterial(
+  diffuse: ImageLevel,
+  mask: ImageLevel,
+  wrap: TextureWrap = 'repeat',
+): THREE.MeshStandardMaterial {
+  const map = makeDataTexture(diffuse, THREE.SRGBColorSpace, wrap)
+  const emissiveMap = makeDataTexture(mask, THREE.NoColorSpace, wrap)
+  const mat = new THREE.MeshStandardMaterial({ map, metalness: 0.1, roughness: 0.7 })
+  mat.emissiveMap = emissiveMap
+  // emissive uniform deliberately left black (free for the selection highlight); the glow is
+  // ADDED from the mask in the shader patch — see normalMapPatch + SubPartObject.setSelected.
+  applyKsaShaderPatches(mat, { normal: false, emissive: true })
+  return mat
 }
 
 /** Resolves the shared material for a catalog entry (cached by material id). */

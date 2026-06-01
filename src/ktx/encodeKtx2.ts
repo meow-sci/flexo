@@ -108,6 +108,26 @@ export async function encodeImageToKtx2(
   return write(container, { keepWriter: false })
 }
 
+/**
+ * Encodes a 1×1 solid-color RGBA8 KTX2 (Zstd). `srgb` picks the transfer/format:
+ *  - `false` (default) → linear/UNORM — e.g. the synthetic Normal (128,128,255) / AoRoughMetal
+ *    (255,128,0) channels, or a single-channel emissive mask.
+ *  - `true` → sRGB — a solid DIFFUSE (a glass tint or a whole-mesh glow color). KSA samples the
+ *    diffuse through `gammaToLinear`, so the stored solid must be sRGB to yield the chosen color.
+ */
+export function makeSolidKtx2(
+  r: number,
+  g: number,
+  b: number,
+  options: { srgb?: boolean; a?: number } = {},
+): Promise<Uint8Array> {
+  const rgba = new Uint8Array([r, g, b, options.a ?? 255])
+  return encodeImageToKtx2(
+    { width: 1, height: 1, levels: [{ width: 1, height: 1, rgba }] },
+    { srgb: options.srgb ?? false, zstd: true },
+  )
+}
+
 /** One 8-bit UNORM DFD sample for a given bit offset + channel (with any qualifier flags). */
 function sample(bitOffset: number, channelType: number) {
   return {

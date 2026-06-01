@@ -42,6 +42,39 @@ describe('serializeAssets', () => {
     expect(xml).toContain('<Mesh Id="s1_VM"')
   })
 
+  it('emits <Emissive> after <AoRoughMetal> when emissivePath is set, and omits it otherwise', () => {
+    const xml = serializeAssets({
+      meshAtlasPath: 'Meshes/X.glb',
+      normalPath: 'Textures/X_FlatNormal.ktx2',
+      aoRoughMetalPath: 'Textures/X_NeutralORM.ktx2',
+      subParts: [
+        { subPartId: 'glow', materialId: 'glow_Material', diffusePath: 'Textures/X_glow_Diffuse.ktx2', emissivePath: 'Textures/X_glow_Emissive.ktx2' },
+        { subPartId: 'plain', materialId: 'plain_Material', diffusePath: 'Textures/X_plain_Diffuse.ktx2' },
+      ],
+    })
+    expect(xml).toContain('<Emissive Path="Textures/X_glow_Emissive.ktx2" Category="Vessel"')
+    // Emissive comes after AoRoughMetal in the glowing material.
+    expect(xml.indexOf('X_NeutralORM.ktx2')).toBeLessThan(xml.indexOf('X_glow_Emissive.ktx2'))
+    // The non-glow material has no <Emissive>.
+    const plainMat = xml.slice(xml.indexOf('plain_Material'))
+    expect(plainMat).not.toContain('Emissive')
+  })
+
+  it('a glass shell + its opaque glow sibling emit <PartModelGlass> and <PartModel>+<Emissive>', () => {
+    const xml = serializeAssets({
+      meshAtlasPath: 'Meshes/X.glb',
+      normalPath: 'Textures/X_FlatNormal.ktx2',
+      aoRoughMetalPath: 'Textures/X_NeutralORM.ktx2',
+      subParts: [
+        { subPartId: 'visor', materialId: 'visor_Material', diffusePath: 'Textures/X_visor_Diffuse.ktx2', glass: true },
+        { subPartId: 'visor_Glow', materialId: 'visor_Glow_Material', diffusePath: 'Textures/X_glow_Diffuse.ktx2', emissivePath: 'Textures/X_glow_Emissive.ktx2' },
+      ],
+    })
+    expect(xml).toContain('<PartModelGlass Id="visor_Model"')
+    expect(xml).toContain('<PartModel Id="visor_Glow_Model"')
+    expect(xml).toContain('<Emissive Path="Textures/X_glow_Emissive.ktx2"')
+  })
+
   it('per-SubPart normal/ORM override the shared synthetic; undefined falls back', () => {
     const xml = serializeAssets({
       meshAtlasPath: 'Meshes/X.glb',

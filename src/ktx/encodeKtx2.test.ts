@@ -7,7 +7,7 @@ import {
   KHR_SUPERCOMPRESSION_ZSTD,
   KHR_DF_MODEL_RGBSDA,
 } from 'ktx-parse'
-import { encodeImageToKtx2 } from './encodeKtx2'
+import { encodeImageToKtx2, makeSolidKtx2 } from './encodeKtx2'
 import { buildMipChain, type ImageLevel } from './decodeImage'
 
 function solid(width: number, height: number, color = [200, 100, 50, 255]): ImageLevel {
@@ -50,5 +50,19 @@ describe('encodeImageToKtx2', () => {
     expect(ktx.levels[0].uncompressedByteLength).toBe(8 * 8 * 4)
     // A solid color is highly compressible — stored bytes should be far smaller.
     expect(ktx.levels[0].levelData.byteLength).toBeLessThan(8 * 8 * 4)
+  })
+})
+
+describe('makeSolidKtx2', () => {
+  it('encodes a 1×1 sRGB diffuse when srgb:true (a glass tint / whole-glow color)', async () => {
+    const ktx = read(await makeSolidKtx2(200, 30, 30, { srgb: true }))
+    expect(ktx.vkFormat).toBe(VK_FORMAT_R8G8B8A8_SRGB)
+    expect(ktx.pixelWidth).toBe(1)
+    expect(ktx.pixelHeight).toBe(1)
+    expect(ktx.supercompressionScheme).toBe(KHR_SUPERCOMPRESSION_ZSTD)
+  })
+
+  it('defaults to a linear UNORM texture (synthetic normal/ORM/mask)', async () => {
+    expect(read(await makeSolidKtx2(128, 128, 255)).vkFormat).toBe(VK_FORMAT_R8G8B8A8_UNORM)
   })
 })

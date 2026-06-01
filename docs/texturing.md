@@ -72,6 +72,8 @@ is false and parts render flat-grey. The transcoder worker assets live in
 (Safari) path, see the offline-conversion appendix in `plans/FLEXO_TEXTURING.md`.
 
 ## Caveats / not done
+- This doc covers **built-in** KSA part textures. **User-authored** emissive (glow) and the kitten
+  visor glass tint reuse this exact emissive render path — see [custom-assets.md](./custom-assets.md).
 - Verify normal orientation visually; if relief looks inverted, toggle the
   `mapN.x = -mapN.x` line.
 - ThinFilm (`*_TFI.dds`) heat-glow and detail textures are intentionally not

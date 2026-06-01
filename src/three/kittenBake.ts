@@ -159,11 +159,36 @@ export async function buildKittenMaterial(spec: KittenMaterialSpec): Promise<THR
   }
   if (spec.transparent) {
     mat.transparent = true
-    mat.opacity = 0.45
     mat.depthWrite = false
+    if (spec.tint) {
+      const t = spec.tint
+      if (spec.simulateGlass) {
+        // Mirror KSA's glass shader (MeshGlassIndirect.frag): glassColor = mix(tint, 0.1, 0.9),
+        // opacity hard-coded ~0.75 — a muted/dark preview that matches in-game.
+        mat.color.setRGB(glassMuted(t.r), glassMuted(t.g), glassMuted(t.b), THREE.SRGBColorSpace)
+        mat.opacity = 0.75
+      } else {
+        mat.color.setRGB(t.r / 255, t.g / 255, t.b / 255, THREE.SRGBColorSpace)
+        mat.opacity = spec.opacity ?? 0.45
+      }
+    } else {
+      mat.opacity = spec.opacity ?? 0.45
+    }
+  }
+  // 'glassGlow' editor approximation: an emissive-uniform glow shown through the translucent shell.
+  // (Opaque glow uses the emissive-MAP path via buildGlowingFaceMaterial instead — see customAssetStore.)
+  if (spec.glowColor) {
+    const g = spec.glowColor
+    mat.emissive.setRGB(g.r / 255, g.g / 255, g.b / 255, THREE.SRGBColorSpace)
+    mat.emissiveIntensity = (spec.glowStrength ?? 0.6) * 1.25
   }
   applyKsaShaderPatches(mat, { normal: !!normal, emissive: false })
   return mat
+}
+
+/** KSA's in-game glass color per channel: mix(tint, 0.1, 0.9) = tint*0.1 + 0.09 (0..1 sRGB approx). */
+function glassMuted(c255: number): number {
+  return (c255 / 255) * 0.1 + 0.1 * 0.9
 }
 
 /** All meshes under `root`, in traversal order. */

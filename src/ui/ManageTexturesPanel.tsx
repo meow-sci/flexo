@@ -2,11 +2,21 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { X } from 'lucide-react'
 import { Button as AriaButton } from 'react-aria-components'
-import { Modal, Dialog, DialogHeader, Button, Select, ListBoxItem, TextField, useIsPhone } from './kit'
+import { Modal, Dialog, DialogHeader, Button, Select, ListBoxItem, TextField, Checkbox, useIsPhone } from './kit'
+import { ColorAlphaField } from './ColorAlphaField'
 import { $part } from '../state/editorStore'
-import { $managingMeshId, setManagingMeshId, updateMeshFaceConfig } from '../state/customAssetStore'
+import {
+  $managingMeshId,
+  setManagingMeshId,
+  updateMeshFaceConfig,
+  setMeshGlow,
+  setMeshGlass,
+  setMeshSurface,
+  setGlowPaintMeshId,
+} from '../state/customAssetStore'
+import { $simulateGlass, setSimulateGlass } from '../state/settingsStore'
 import { PRIMITIVE_FACE_KEYS, FACE_LABELS } from '../three/primitives'
-import type { FaceTextureConfig, TextureWrap } from '../ksa/types'
+import type { CustomMesh, EmissiveConfig, FaceTextureConfig, TextureWrap, VisorSurface } from '../ksa/types'
 
 const DEFAULT_CONFIG: FaceTextureConfig = {
   textureId: '',
@@ -21,14 +31,23 @@ const WRAP_LABELS: { id: TextureWrap; label: string }[] = [
   { id: 'clamp', label: 'Stretch edge' },
 ]
 
+const DEFAULT_GLOW: EmissiveConfig = { shape: 'whole', color: { r: 120, g: 220, b: 255 }, strength: 0.6 }
+
+function rgbToHex({ r, g, b }: { r: number; g: number; b: number }): string {
+  const h = (n: number) => Math.round(n).toString(16).padStart(2, '0')
+  return `#${h(r)}${h(g)}${h(b)}`
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const v = parseInt(hex.slice(1), 16)
+  return { r: (v >> 16) & 255, g: (v >> 8) & 255, b: v & 255 }
+}
+
 /**
- * Floating panel for per-face texture + UV configuration on a custom mesh.
- * Rendered at the app root level so it floats over the 3D viewport.
- *
- * Desktop: absolute-positioned card on the left side (mirrors ContainerEditor).
- * Mobile: fullscreen modal.
- *
- * State is driven by $managingMeshId — set to a mesh id to open, null to close.
+ * Floating panel for per-mesh material editing on a custom mesh: a Glow (emissive) / visor-surface
+ * section for every mesh, plus per-face texture + UV controls for primitive meshes. Rendered at the
+ * app root so it floats over the 3D viewport (desktop card / mobile fullscreen modal). Driven by
+ * $managingMeshId — set to a mesh id to open, null to close.
  */
 export function ManageTexturesPanel() {
   const meshId = useStore($managingMeshId)
@@ -37,10 +56,8 @@ export function ManageTexturesPanel() {
 
   const mesh = meshId ? part.customMeshes.find((m) => m.id === meshId) : undefined
 
-  // Only primitive meshes have per-face textures (kitten submeshes are never managed here).
+  // Per-face textures only exist for primitive meshes (kitten submeshes carry their own material).
   const faceKeys = mesh?.primitive ? PRIMITIVE_FACE_KEYS[mesh.primitive.kind] : []
-  // Persists the last user-chosen face; falls back to the first key when the mesh
-  // changes (new faceKeys no longer include the stored value).
   const [selectedFace, setSelectedFace] = useState(faceKeys[0] ?? '')
   const activeFace = faceKeys.includes(selectedFace) ? selectedFace : (faceKeys[0] ?? '')
 
@@ -60,6 +77,7 @@ export function ManageTexturesPanel() {
 
   const inner = (
     <PanelContent
+      mesh={mesh}
       faceKeys={faceKeys}
       selectedFace={activeFace}
       onFaceChange={setSelectedFace}
@@ -73,7 +91,7 @@ export function ManageTexturesPanel() {
     return (
       <Modal isOpen onOpenChange={(v) => !v && close()} isDismissable variant="fullscreen">
         <Dialog>
-          <DialogHeader title={`Textures: ${mesh.name}`} onClose={close} />
+          <DialogHeader title={mesh.name} onClose={close} />
           <div className="overflow-y-auto p-4">{inner}</div>
         </Dialog>
       </Modal>
@@ -84,7 +102,7 @@ export function ManageTexturesPanel() {
     <div className="absolute left-3 top-1/2 z-10 w-64 -translate-y-1/2 rounded-xl border border-border bg-panel/95 p-3 text-fg shadow-popover backdrop-blur-md">
       <div className="mb-3 flex items-center justify-between gap-2">
         <span className="text-[11px] uppercase tracking-wide text-fg-subtle">
-          {mesh.primitive?.kind} · {mesh.name}
+          {mesh.primitive?.kind ?? 'kitten'} · {mesh.name}
         </span>
         <AriaButton
           onPress={close}
@@ -100,6 +118,7 @@ export function ManageTexturesPanel() {
 }
 
 interface PanelContentProps {
+  mesh: CustomMesh
   faceKeys: readonly string[]
   selectedFace: string
   onFaceChange: (key: string) => void
@@ -109,6 +128,7 @@ interface PanelContentProps {
 }
 
 function PanelContent({
+  mesh,
   faceKeys,
   selectedFace,
   onFaceChange,
@@ -120,91 +140,202 @@ function PanelContent({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Face selector — hidden when there is only one face (sphere/plane). */}
-      {faceKeys.length > 1 && (
-        <Select
-          label="Face"
-          selectedKey={selectedFace}
-          onSelectionChange={(k) => onFaceChange(String(k))}
-        >
-          {faceKeys.map((key) => (
-            <ListBoxItem key={key} id={key}>
-              {FACE_LABELS[key] ?? key}
-            </ListBoxItem>
-          ))}
-        </Select>
+      <GlowSection mesh={mesh} />
+
+      {/* Per-face texture controls — primitive meshes only. */}
+      {mesh.primitive && (
+        <>
+          {/* Face selector — hidden when there is only one face (sphere/plane). */}
+          {faceKeys.length > 1 && (
+            <Select
+              label="Face"
+              selectedKey={selectedFace}
+              onSelectionChange={(k) => onFaceChange(String(k))}
+            >
+              {faceKeys.map((key) => (
+                <ListBoxItem key={key} id={key}>
+                  {FACE_LABELS[key] ?? key}
+                </ListBoxItem>
+              ))}
+            </Select>
+          )}
+
+          {/* Texture for this face */}
+          <Select
+            label="Texture"
+            selectedKey={currentConfig.textureId}
+            onSelectionChange={(k) => update(selectedFace, { textureId: String(k) })}
+          >
+            <ListBoxItem id="">(none)</ListBoxItem>
+            {part.customTextures.map((t) => (
+              <ListBoxItem key={t.id} id={t.id}>
+                {t.name}
+              </ListBoxItem>
+            ))}
+          </Select>
+
+          {/* Wrap mode — how the texture behaves where UVs exceed 0–1. Disabled when no texture. */}
+          <Select
+            label="Wrap"
+            selectedKey={currentConfig.wrap ?? 'repeat'}
+            onSelectionChange={(k) => update(selectedFace, { wrap: k as TextureWrap })}
+            isDisabled={!currentConfig.textureId}
+          >
+            {WRAP_LABELS.map(({ id, label }) => (
+              <ListBoxItem key={id} id={id}>
+                {label}
+              </ListBoxItem>
+            ))}
+          </Select>
+
+          {/* UV Scale */}
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-fg-muted">UV Scale</span>
+            <p className="text-[11px] leading-snug text-fg-subtle">
+              &gt;1 tiles the image, &lt;1 zooms into a region (pan it with offset).
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <UvNumberField
+                label="X"
+                value={currentConfig.uvScale.x}
+                onChange={(x) => update(selectedFace, { uvScale: { ...currentConfig.uvScale, x } })}
+              />
+              <UvNumberField
+                label="Y"
+                value={currentConfig.uvScale.y}
+                onChange={(y) => update(selectedFace, { uvScale: { ...currentConfig.uvScale, y } })}
+              />
+            </div>
+          </div>
+
+          {/* UV Offset */}
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-fg-muted">UV Offset</span>
+            <div className="grid grid-cols-2 gap-2">
+              <UvNumberField
+                label="X"
+                value={currentConfig.uvOffset.x}
+                onChange={(x) => update(selectedFace, { uvOffset: { ...currentConfig.uvOffset, x } })}
+              />
+              <UvNumberField
+                label="Y"
+                value={currentConfig.uvOffset.y}
+                onChange={(y) => update(selectedFace, { uvOffset: { ...currentConfig.uvOffset, y } })}
+              />
+            </div>
+          </div>
+        </>
       )}
-
-      {/* Texture for this face */}
-      <Select
-        label="Texture"
-        selectedKey={currentConfig.textureId}
-        onSelectionChange={(k) => update(selectedFace, { textureId: String(k) })}
-      >
-        <ListBoxItem id="">(none)</ListBoxItem>
-        {part.customTextures.map((t) => (
-          <ListBoxItem key={t.id} id={t.id}>
-            {t.name}
-          </ListBoxItem>
-        ))}
-      </Select>
-
-      {/* Wrap mode — how the texture behaves where UVs exceed 0–1 (scale > 1, or
-          an offset that pushes past an edge). Disabled when no texture is set. */}
-      <Select
-        label="Wrap"
-        selectedKey={currentConfig.wrap ?? 'repeat'}
-        onSelectionChange={(k) => update(selectedFace, { wrap: k as TextureWrap })}
-        isDisabled={!currentConfig.textureId}
-      >
-        {WRAP_LABELS.map(({ id, label }) => (
-          <ListBoxItem key={id} id={id}>
-            {label}
-          </ListBoxItem>
-        ))}
-      </Select>
-
-      {/* UV Scale */}
-      <div className="flex flex-col gap-1">
-        <span className="text-xs text-fg-muted">UV Scale</span>
-        <p className="text-[11px] leading-snug text-fg-subtle">
-          &gt;1 tiles the image, &lt;1 zooms into a region (pan it with offset).
-        </p>
-        <div className="grid grid-cols-2 gap-2">
-          <UvNumberField
-            label="X"
-            value={currentConfig.uvScale.x}
-            onChange={(x) => update(selectedFace, { uvScale: { ...currentConfig.uvScale, x } })}
-          />
-          <UvNumberField
-            label="Y"
-            value={currentConfig.uvScale.y}
-            onChange={(y) => update(selectedFace, { uvScale: { ...currentConfig.uvScale, y } })}
-          />
-        </div>
-      </div>
-
-      {/* UV Offset */}
-      <div className="flex flex-col gap-1">
-        <span className="text-xs text-fg-muted">UV Offset</span>
-        <div className="grid grid-cols-2 gap-2">
-          <UvNumberField
-            label="X"
-            value={currentConfig.uvOffset.x}
-            onChange={(x) => update(selectedFace, { uvOffset: { ...currentConfig.uvOffset, x } })}
-          />
-          <UvNumberField
-            label="Y"
-            value={currentConfig.uvOffset.y}
-            onChange={(y) => update(selectedFace, { uvOffset: { ...currentConfig.uvOffset, y } })}
-          />
-        </div>
-      </div>
 
       <Button size="sm" variant="ghost" className="mt-1 self-end" onPress={onClose}>
         Close
       </Button>
     </div>
+  )
+}
+
+/** Glow / visor-surface controls — a visor (glass-capable) gets the Surface selector; others a Glow mode. */
+function GlowSection({ mesh }: { mesh: CustomMesh }) {
+  return mesh.kitten?.transparent ? <VisorSurfaceControls mesh={mesh} /> : <GlowModeControls mesh={mesh} />
+}
+
+function SectionShell({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-border bg-panel-sunken/40 p-2">
+      <span className="text-[11px] uppercase tracking-wide text-fg-subtle">{title}</span>
+      {children}
+    </div>
+  )
+}
+
+function TintField({ mesh }: { mesh: CustomMesh }) {
+  const glass = mesh.glass ?? { tint: { r: 120, g: 200, b: 255 }, opacity: 0.45 }
+  return (
+    <ColorAlphaField
+      label="Tint"
+      color={rgbToHex(glass.tint)}
+      opacity={glass.opacity ?? 0.45}
+      onChange={({ color, opacity }) => void setMeshGlass(mesh.id, { tint: hexToRgb(color), opacity })}
+    />
+  )
+}
+
+/** Glow color + strength (the slider maps to emissive strength 0..1). */
+function GlowColorField({ mesh }: { mesh: CustomMesh }) {
+  const e = mesh.emissive ?? DEFAULT_GLOW
+  return (
+    <ColorAlphaField
+      label="Glow"
+      color={rgbToHex(e.color)}
+      opacity={e.strength}
+      onChange={({ color, opacity }) =>
+        void setMeshGlow(mesh.id, { ...e, color: hexToRgb(color), strength: opacity })
+      }
+    />
+  )
+}
+
+function VisorSurfaceControls({ mesh }: { mesh: CustomMesh }) {
+  const simulate = useStore($simulateGlass)
+  const surface: VisorSurface = mesh.surface ?? 'glass'
+  const showGlass = surface === 'glass' || surface === 'glassGlow'
+  const showGlow = surface === 'glow' || surface === 'glassGlow'
+  return (
+    <SectionShell title="Visor surface">
+      <Select
+        label="Surface"
+        selectedKey={surface}
+        onSelectionChange={(k) => void setMeshSurface(mesh.id, k as VisorSurface)}
+      >
+        <ListBoxItem id="glass">Glass (translucent)</ListBoxItem>
+        <ListBoxItem id="glow">Glow (opaque)</ListBoxItem>
+        <ListBoxItem id="glassGlow">Glass + Glow (layered)</ListBoxItem>
+      </Select>
+      {showGlass && (
+        <>
+          <TintField mesh={mesh} />
+          <Checkbox isSelected={simulate} onChange={setSimulateGlass}>
+            Simulate in-game glass
+          </Checkbox>
+        </>
+      )}
+      {showGlow && <GlowColorField mesh={mesh} />}
+      <p className="text-[11px] leading-snug text-fg-subtle">
+        In-game KSA renders glass darker/subtler than shown (it can&apos;t glow). “Glow” makes the
+        visor opaque; “Glass + Glow” keeps it see-through with a glow layer behind it.
+      </p>
+    </SectionShell>
+  )
+}
+
+function GlowModeControls({ mesh }: { mesh: CustomMesh }) {
+  const mode = mesh.emissive?.shape ?? 'off'
+  const setMode = (m: string) => {
+    if (m === 'off') {
+      void setMeshGlow(mesh.id, undefined)
+      return
+    }
+    const base = mesh.emissive ?? DEFAULT_GLOW
+    void setMeshGlow(mesh.id, { shape: m as 'whole' | 'painted', color: base.color, strength: base.strength })
+  }
+  return (
+    <SectionShell title="Glow (emissive)">
+      <Select label="Mode" selectedKey={mode} onSelectionChange={(k) => setMode(String(k))}>
+        <ListBoxItem id="off">Off</ListBoxItem>
+        <ListBoxItem id="whole">Whole mesh</ListBoxItem>
+        <ListBoxItem id="painted">Painted spots</ListBoxItem>
+      </Select>
+      {mesh.emissive && <GlowColorField mesh={mesh} />}
+      {mesh.emissive?.shape === 'painted' && (
+        <Button size="sm" variant="secondary" onPress={() => setGlowPaintMeshId(mesh.id)}>
+          Edit glow…
+        </Button>
+      )}
+      <p className="text-[11px] leading-snug text-fg-subtle">
+        Glow adds white light over the base color — pick a strong color + moderate strength; full
+        strength washes toward white (like real KSA parts).
+      </p>
+    </SectionShell>
   )
 }
 

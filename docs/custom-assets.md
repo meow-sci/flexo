@@ -248,11 +248,43 @@ with the render mesh into a single glTF mesh and KSA registers only one name.
 - `src/ksa/assetsXmlSerializer.test.ts` — Assets XML shape.
 - `src/ksa/modExport.test.ts` — bundle/zip/folder output.
 
+## Emissive (glow) + visor surface
+
+Shipped (see `plans/FEATURE_EMISSIVES_PLAN.md`). Per-mesh **glow**, and for the kitten **visor** a
+translucent **glass tint** — authored in the per-mesh panel (`ManageTexturesPanel` + the
+`GlowPaintDialog` paint canvas), previewed live, exported faithfully.
+
+**How KSA renders it (verified against the decompiled shaders):**
+- Opaque `<PartModel>` (`MeshIndirect.frag`) samples a **grayscale emissive mask** (`.x`) and ADDS
+  it as WHITE light × `EMISSIVE_MULTIPLIER` (1.25) after lighting. There is **no per-material
+  emissive color**, so the glow COLOR must live in the **diffuse** at the glowing texels (we
+  composite color into the diffuse; the mask is where/how-much). See `src/ktx/glowComposite.ts`.
+- Translucent `<PartModelGlass>` (`MeshGlassIndirect.frag`) hard-codes opacity ~0.75, derives only
+  ~10% of its color from the diffuse, and **never samples emissive**. So **glass can't glow**, and
+  its tint reads subtle/dark in-game.
+
+**The model:**
+- **Glow** (`CustomMesh.emissive: EmissiveConfig`): `whole` (uniform color + strength) or `painted`
+  (paint canvas; RGBA bitmap in IndexedDB under `assetKeys.emissivePaint`). On every primitive AND
+  kitten submesh. Exports a composited `*_Diffuse.ktx2` (color baked in) + `*_Emissive.ktx2` (white
+  mask) + `<Emissive>` in the Assets XML.
+- **Visor surface** (`CustomMesh.surface`, only on a `transparent` kitten submesh — the visor):
+  `glass` (translucent, tintable via `GlassConfig` → a solid sRGB diffuse on the `<PartModelGlass>`
+  path), `glow` (opaque emissive `<PartModel>`), or `glassGlow` (layered — export `expandGlassGlow`
+  emits a glass shell + an inset opaque emissive layer, two SubParts at one transform, KSA's own
+  window pattern). A **"Simulate in-game glass"** editor toggle (`$simulateGlass`) previews the
+  muted in-game look.
+
+Kitten `.ktx2` can't be CPU-decoded (they load only via the GPU `KTX2Loader`), so a tinted/glowing
+kitten submesh uses a **solid generated diffuse** — it drops the kitten texture under the glow/tint
+(fine: KSA glass mutes detail anyway, and "whole glow" means the mesh glows a color).
+
 ## v1 scope — deliberate limitations
 
-- **Diffuse only.** Normal / AoRoughMetal / Emissive are not user-authored; we emit
-  synthetic flat-normal + neutral-ORM only to satisfy KSA's renderer (above). KSA
-  `PbrMaterial` supports all four channels and built-in parts use all four.
+- **Diffuse + emissive glow.** Normal / AoRoughMetal are still not user-authored (we emit
+  synthetic flat-normal + neutral-ORM only to satisfy KSA's renderer, above). **Emissive (glow) IS
+  shipped** — see "Emissive (glow) + visor surface" above. KSA `PbrMaterial` supports all four
+  channels and built-in parts use all four.
 - **One texture per whole mesh** via the primitive's default UVs — no per-face /
   multi-material texturing.
 - **Uncompressed RGBA8 + Zstd**, not BC7/BC5/BC4 — larger VRAM, no byte-match to KSA.
@@ -264,10 +296,10 @@ with the render mesh into a single glTF mesh and KSA registers only one name.
 
 ### Reaching full parity later
 
-- **Full PBR channels:** add upload slots + encoder formats for Normal (BC5; needs the
-  `normalMapPatch` decode + GLB tangents via `computeTangents`), AoRoughMetal (packed),
-  Emissive (BC4); emit the matching lines in `assetsXmlSerializer`. (The synthetic
-  Normal/ORM scaffolding already proves the multi-channel `<PbrMaterial>` path.)
+- **Remaining PBR channels:** add upload slots + encoder formats for Normal (BC5; needs the
+  `normalMapPatch` decode + GLB tangents via `computeTangents`) and AoRoughMetal (packed); emit the
+  matching lines in `assetsXmlSerializer`. (Emissive is shipped — see above; the synthetic Normal/ORM
+  scaffolding already proves the multi-channel `<PbrMaterial>` path.)
 - **BC7/BC5/BC4 block compression** to byte-match KSA + cut VRAM: swap **only**
   `src/ktx/encodeKtx2.ts` to a BC7 WASM encoder (e.g. a `bc7enc`/libktx WASM build).
   Container assembly (`ktx-parse`), mips, and Zstd stay.

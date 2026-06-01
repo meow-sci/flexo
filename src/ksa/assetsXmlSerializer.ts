@@ -36,9 +36,16 @@ export interface AssetsSubPartPlan {
   /**
    * Render through KSA's translucent glass path: emits `<PartModelGlass>` instead of
    * `<PartModel>` (an alpha-blended shader), for glass surfaces like the kitten visor.
-   * The opaque `<PartModel>` path renders glass black/opaque.
+   * The opaque `<PartModel>` path renders glass black/opaque. NOTE: KSA's glass shader
+   * ignores the emissive texture, so a glass SubPart never carries {@link emissivePath}.
    */
   glass?: boolean
+  /**
+   * Emissive (glow) .ktx2 path (relative to the mod, or absolute for a referenced asset).
+   * `undefined` → no `<Emissive>`. KSA samples it as a grayscale mask (R) and ADDS it as white
+   * light × 1.25 after lighting; the glow COLOR lives in the (composited) diffuse.
+   */
+  emissivePath?: string
 }
 
 /**
@@ -120,6 +127,13 @@ export function serializeAssets(plan: AssetsPlan): string {
       orm.setAttribute('Path', effOrm)
       orm.setAttribute('Category', 'Vessel')
       mat.appendChild(orm)
+    }
+    // Emissive (glow) — emitted after AoRoughMetal, mirroring Core's PbrMaterial channel order.
+    if (sp.emissivePath) {
+      const emissive = doc.createElement('Emissive')
+      emissive.setAttribute('Path', sp.emissivePath)
+      emissive.setAttribute('Category', 'Vessel')
+      mat.appendChild(emissive)
     }
     assets.appendChild(mat)
   }

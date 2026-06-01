@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createEmptyPart, createPartAnimation, identityTransform } from './types'
-import type { EditingPart, PartAnimation } from './types'
+import type { CustomMesh, EditingPart, PartAnimation } from './types'
 
 // Avoid loading the real kitten gltfs (GLTFLoader/fetch) — return tiny baked geometry.
 vi.mock('../three/kittenBake', () => ({
@@ -23,6 +23,7 @@ import {
   buildIvaVariantMap,
   buildModContent,
   buildModZip,
+  expandGlassGlow,
   sanitizeBaseName,
   serializeModToml,
   uniqueFileName,
@@ -311,5 +312,93 @@ describe('buildModZip', () => {
     const blob = await buildModZip(partWithDoorAnimation(), 'My Part')
     const text = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()))
     expect(text).toContain(`flexo-parts/${animGlbPath('MyPart', partWithDoorAnimation().animations[0])}`)
+  })
+})
+
+// A part with a single visor (transparent kitten submesh). specKey 'suit' matches the mocked bake
+// above so the geometry node resolves; transparent:true is what makes it a visor.
+function partWithVisor(overrides: Partial<CustomMesh>): EditingPart {
+  const part = createEmptyPart()
+  part.partId = 'VisorMod'
+  const subPartId = 'flexo_hunter_visor_a'
+  part.customMeshes.push({
+    id: 'mesh_visor',
+    name: 'Visor',
+    subPartId,
+    kitten: { kind: 'hunter', specKey: 'suit', diffuse: 'Textures/Characters/Kitty_Helmet_Visor_A.ktx2', transparent: true },
+    faceTextures: {},
+    ...overrides,
+  })
+  part.placements.push({ instanceId: 'visor_1', subPartTemplateId: subPartId, ...identityTransform(), layerId: 'default' })
+  return part
+}
+
+const REF = { mode: 'reference', contentCorePath: 'C:\\KSA\\Content\\Core' } as const
+
+describe('visor glass tint + glow export', () => {
+  it('a plain visor exports through the glass path with its real diffuse and no emissive', async () => {
+    const bundle = await buildCustomBundle(partWithVisor({}), 'VisorMod', REF)
+    expect(bundle.assetsXml).toContain('<PartModelGlass')
+    expect(bundle.assetsXml).toContain('Kitty_Helmet_Visor_A.ktx2')
+    expect(bundle.assetsXml).not.toContain('<Emissive')
+  })
+
+  it('a glass-tinted visor emits a generated solid diffuse and stays on the glass path (no emissive)', async () => {
+    const part = partWithVisor({ surface: 'glass', glass: { tint: { r: 200, g: 30, b: 30 } } })
+    const bundle = await buildCustomBundle(part, 'VisorMod', REF)
+    expect(bundle.assetsXml).toContain('<PartModelGlass')
+    expect(bundle.assetsXml).not.toContain('<Emissive')
+    // A generated solid tint diffuse is bundled for this subpart, not the stock visor texture.
+    expect(bundle.binaries.some((b) => b.path.endsWith('flexo_hunter_visor_a_Diffuse.ktx2'))).toBe(true)
+    expect(bundle.assetsXml).not.toContain('Kitty_Helmet_Visor_A.ktx2')
+  })
+
+  it('an opaque-glow visor exports <PartModel> + an emissive mask, never <PartModelGlass>', async () => {
+    const part = partWithVisor({ surface: 'glow', emissive: { shape: 'whole', color: { r: 255, g: 180, b: 0 }, strength: 0.7 } })
+    const bundle = await buildCustomBundle(part, 'VisorMod', REF)
+    expect(bundle.assetsXml).toContain('<Emissive')
+    expect(bundle.assetsXml).not.toContain('<PartModelGlass')
+    expect(bundle.binaries.some((b) => b.path.endsWith('_Emissive.ktx2'))).toBe(true)
+  })
+
+  it('expandGlassGlow turns a glassGlow visor into a glass + inset-glow SubPart pair at one transform', () => {
+    const part = partWithVisor({
+      surface: 'glassGlow',
+      glass: { tint: { r: 10, g: 200, b: 10 } },
+      emissive: { shape: 'whole', color: { r: 10, g: 255, b: 10 }, strength: 0.6 },
+    })
+    const { part: expanded, insetIds } = expandGlassGlow(part)
+    expect(expanded.customMeshes).toHaveLength(2)
+    expect(expanded.placements).toHaveLength(2)
+    expect(insetIds.has('flexo_hunter_visor_a_Glow')).toBe(true)
+    const glow = expanded.customMeshes.find((m) => m.subPartId === 'flexo_hunter_visor_a_Glow')!
+    expect(glow.surface).toBe('glow')
+    expect(glow.emissive).toEqual(part.customMeshes[0].emissive)
+    // The glow placement shares the visor's transform (identity here) and a distinct instanceId.
+    const glowPlacement = expanded.placements.find((p) => p.subPartTemplateId === 'flexo_hunter_visor_a_Glow')!
+    expect(glowPlacement.instanceId).toBe('visor_1_glow')
+    expect(glowPlacement.position).toEqual({ x: 0, y: 0, z: 0 })
+  })
+
+  it('a glassGlow visor bundles a glass shell AND an opaque emissive layer', async () => {
+    const part = partWithVisor({
+      surface: 'glassGlow',
+      glass: { tint: { r: 10, g: 200, b: 10 } },
+      emissive: { shape: 'whole', color: { r: 10, g: 255, b: 10 }, strength: 0.6 },
+    })
+    const { part: expanded, insetIds } = expandGlassGlow(part)
+    const bundle = await buildCustomBundle(expanded, 'VisorMod', REF, new Map(), insetIds)
+    expect(bundle.assetsXml).toContain('<PartModelGlass') // the shell
+    expect(bundle.assetsXml).toContain('<PartModel ') // the opaque glow layer
+    expect(bundle.assetsXml).toContain('<Emissive')
+    expect(bundle.assetsXml).toContain('flexo_hunter_visor_a_Glow')
+    expect(bundle.binaries.some((b) => b.path.endsWith('_Emissive.ktx2'))).toBe(true)
+  })
+
+  it('expandGlassGlow is a no-op for a non-glassGlow part', () => {
+    const part = partWithVisor({ surface: 'glass' })
+    const { part: same, insetIds } = expandGlassGlow(part)
+    expect(same).toBe(part)
+    expect(insetIds.size).toBe(0)
   })
 })

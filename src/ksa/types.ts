@@ -388,9 +388,59 @@ export interface KittenMeshSource {
   normal?: string
   /** Packed AO/Rough/Metal .ktx2 subpath (linear), if any. */
   aoRoughMetal?: string
-  /** Glass-like transparency (the visor) — editor render only; ignored on export. */
+  /**
+   * Glass-like transparency (the visor). Drives BOTH the translucent editor material
+   * (see kittenBake `buildKittenMaterial`) AND the `<PartModelGlass>` export path (see
+   * modExport `planKittenSubPart` → assetsXmlSerializer). A mesh with this set is
+   * "glass-capable" and may carry a {@link CustomMesh.surface} mode + {@link GlassConfig}.
+   */
   transparent?: boolean
 }
+
+/**
+ * Emissive (glow) authoring shape for a custom mesh.
+ *  - 'whole'   — a uniform glow over the whole mesh (color + strength).
+ *  - 'painted' — an RGBA glow bitmap authored in the in-browser paint tool (stored in IndexedDB
+ *                under assetKeys.emissivePaint(meshId)); rgb = glow color, a = intensity.
+ */
+export type EmissiveShape = 'whole' | 'painted'
+
+/**
+ * Per-mesh emissive (glow). Absent on a {@link CustomMesh} ⇒ no glow. KSA's glow is WHITE ×
+ * mask × 1.25 ADDED after lighting (MeshIndirect.frag), so the COLOR comes from compositing
+ * {@link color} into the diffuse by the mask — never from a uniform. {@link strength} (0..1) is the
+ * mask's gray value (high washes toward white, matching real KSA parts).
+ */
+export interface EmissiveConfig {
+  shape: EmissiveShape
+  /** Glow color 0..255. Used by 'whole'; also the painter's default brush color for 'painted'. */
+  color: { r: number; g: number; b: number }
+  /** Glow intensity 0..1. 'whole': the uniform mask value. 'painted': default brush intensity. */
+  strength: number
+}
+
+/**
+ * Translucent-glass tint for a glass-capable (visor) mesh — one whose {@link KittenMeshSource}
+ * has `transparent: true`. The tint is baked into a solid sRGB diffuse on export; KSA's glass
+ * shader derives only ~10% of its color from the diffuse (MeshGlassIndirect.frag), so in-game the
+ * tint reads subtle/dark — the editor can preview either the vivid color or that muted look.
+ */
+export interface GlassConfig {
+  /** Glass tint color 0..255. */
+  tint: { r: number; g: number; b: number }
+  /** Editor-preview opacity 0..1 (default 0.45). In-game opacity is engine-fixed (~0.75). */
+  opacity?: number
+}
+
+/**
+ * Surface mode for a glass-capable (visor) mesh; only meaningful when its
+ * {@link KittenMeshSource.transparent} is set. Undefined ⇒ 'glass' (back-compat).
+ *  - 'glass'     — translucent, tintable (no glow; KSA glass can't glow).
+ *  - 'glow'      — opaque emissive (drops the glass shell so it actually glows in-game).
+ *  - 'glassGlow' — layered: a translucent glass shell + an inset opaque emissive layer behind it
+ *                  (two SubParts on export; a single approximated material in the editor).
+ */
+export type VisorSurface = 'glass' | 'glow' | 'glassGlow'
 
 /**
  * A user-created custom SubPart — either a primitive mesh + per-face textures, or a
@@ -419,6 +469,20 @@ export interface CustomMesh {
    * Always empty ({}) for kitten submeshes (they carry their material in {@link kitten}).
    */
   faceTextures: Partial<Record<string, FaceTextureConfig>>
+  /**
+   * Optional per-mesh emissive glow. For a glass-capable visor it is the glow layer used when
+   * {@link surface} ∈ {'glow','glassGlow'}. A 'painted' shape stores its RGBA bitmap in IndexedDB
+   * under assetKeys.emissivePaint(id).
+   */
+  emissive?: EmissiveConfig
+  /** Optional translucent-glass tint (visor); used when {@link surface} ∈ {'glass','glassGlow'}. */
+  glass?: GlassConfig
+  /**
+   * Surface mode for a glass-capable (visor) mesh — one whose {@link kitten} has `transparent`.
+   * Ignored for non-transparent meshes (their glow is driven by {@link emissive} alone).
+   * Undefined ⇒ 'glass'.
+   */
+  surface?: VisorSurface
 }
 
 /**

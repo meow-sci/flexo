@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { Trash2, Plus, Crosshair, ChevronLeft, Move3d, RotateCcw } from 'lucide-react'
-import { Button, TextField, Select, ListBoxItem, Slider, Checkbox, cn } from './kit'
+import { Button, TextField, Select, ListBoxItem, Slider, Checkbox, Tooltip, cn } from './kit'
 import { $part, $toolMode, pushUndo } from '../state/editorStore'
-import { $selectedPlacements } from '../state/selectors'
+import { $selectedPlacements, $selectedPlacement } from '../state/selectors'
 import {
   $activeAnimation,
   $activeAnimationId,
@@ -25,11 +25,12 @@ import {
   removeKeyframe,
   setKeyframeTime,
   setJointPose,
+  setJointPivot,
   selectKeyframeForEditing,
   setSolarTracking,
 } from '../state/animationStore'
 import { isAnimationExportable } from '../ksa/animationNaming'
-import { identityTransform, type AnimationJoint, type AnimationKeyframe, type AnimationMode, type PartAnimation } from '../ksa/types'
+import { identityTransform, type AnimationJoint, type AnimationKeyframe, type AnimationMode, type PartAnimation, type SubPartPlacement } from '../ksa/types'
 
 const RAD2DEG = 180 / Math.PI
 const DEG2RAD = Math.PI / 180
@@ -299,11 +300,16 @@ function SolarTrackingEditor({ anim }: { anim: PartAnimation }) {
 function JointsSection({ anim }: { anim: PartAnimation }) {
   const activeJointId = useStore($activeJointId)
   const selected = useStore($selectedPlacements)
+  const single = useStore($selectedPlacement)
   const selectedIds = selected.map((s) => s.placement.instanceId)
 
   return (
     <div className="flex flex-col gap-1">
       <span className="text-xs uppercase tracking-wide text-fg-subtle">Joints (pivots)</span>
+      <p className="text-xs text-fg-subtle">
+        A joint is a hinge — attached parts rotate around its <b>Rest</b> position. Select the
+        hinge part and <b>Set pivot</b> to place that anchor on it.
+      </p>
       {anim.joints.map((joint) => (
         <JointRow
           key={joint.id}
@@ -311,6 +317,7 @@ function JointsSection({ anim }: { anim: PartAnimation }) {
           joint={joint}
           active={joint.id === activeJointId}
           selectedIds={selectedIds}
+          singlePlacement={single}
         />
       ))}
       <Button size="sm" className="self-start" onPress={() => addJoint(anim.id)}>
@@ -325,11 +332,13 @@ function JointRow({
   joint,
   active,
   selectedIds,
+  singlePlacement,
 }: {
   anim: PartAnimation
   joint: AnimationJoint
   active: boolean
   selectedIds: string[]
+  singlePlacement: SubPartPlacement | null
 }) {
   const [nameDraft, setNameDraft] = useState<string | null>(null)
   const others = anim.joints.filter((j) => j.id !== joint.id)
@@ -396,6 +405,37 @@ function JointRow({
         )}
       </div>
 
+      <div className="flex items-center gap-1">
+        <Tooltip
+          content={
+            singlePlacement
+              ? `Snap this joint's pivot onto ${singlePlacement.instanceId} (position + orientation)`
+              : 'Select exactly one part (the hinge) in the viewport'
+          }
+        >
+          <Button
+            size="sm"
+            variant="secondary"
+            className="min-w-0 flex-1 truncate"
+            isDisabled={!singlePlacement}
+            onPress={() => singlePlacement && setJointPivot(anim.id, joint.id, singlePlacement, { orientation: true })}
+          >
+            Set pivot to {singlePlacement ? singlePlacement.instanceId : 'selection'}
+          </Button>
+        </Tooltip>
+        {singlePlacement && (
+          <Tooltip content="Set pivot position only — keep the joint's current orientation">
+            <Button
+              size="sm"
+              variant="ghost"
+              onPress={() => setJointPivot(anim.id, joint.id, singlePlacement, { orientation: false })}
+            >
+              pos only
+            </Button>
+          </Tooltip>
+        )}
+      </div>
+
       {joint.memberInstanceIds.length > 0 ? (
         <div className="flex flex-wrap gap-1">
           {joint.memberInstanceIds.map((id) => (
@@ -408,7 +448,7 @@ function JointRow({
           ))}
         </div>
       ) : (
-        <span className="text-xs text-fg-subtle">No parts attached — use Mesh Picker, or select parts in the viewport then Attach.</span>
+        <span className="text-xs text-fg-subtle">No parts attached — use Mesh Picker, or select parts in the viewport then Attach. Then Set pivot to your hinge.</span>
       )}
     </div>
   )
@@ -470,7 +510,8 @@ function PoseEditor({ anim }: { anim: PartAnimation }) {
     return (
       <p className="rounded-md bg-panel px-2 py-1.5 text-xs text-fg-subtle">
         Select a joint (◎) and a pose to edit it. The <b>Rest</b> pose is the pivot/rotation
-        anchor — move it with the gizmo; later poses are where the joint swings to.
+        anchor — move it with the gizmo; later poses are where the joint swings to. Or select
+        the hinge part and click <b>Set pivot</b> on the joint to place the anchor in one click.
       </p>
     )
   }

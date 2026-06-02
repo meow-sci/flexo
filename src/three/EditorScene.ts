@@ -55,6 +55,7 @@ import {
   $animPreviewU,
   $editKeyframeId,
   moveJointPivot,
+  reorientJointPivot,
   setJointPose,
 } from '../state/animationStore'
 import { jointWorld, previewOverrideMatrix } from '../ksa/animationRig'
@@ -113,6 +114,12 @@ export class EditorScene {
    * since {@link root} is at identity). Takes precedence over the selection gizmo.
    */
   private readonly poseProxy = new THREE.Group()
+  /**
+   * Always-on marker at the active joint's REST pivot (the rotation anchor) while the
+   * Animations editor is open, so it's obvious where attached parts swing from (and that
+   * a fresh joint's pivot sits at the origin until moved). Non-pickable, read-only.
+   */
+  private readonly pivotHelper = new THREE.AxesHelper(0.4)
 
   // Point-to-point measurement picking.
   private readonly raycaster = new THREE.Raycaster()
@@ -131,6 +138,10 @@ export class EditorScene {
     this.root.add(this.pivot)
     this.poseProxy.name = 'pose-proxy'
     this.root.add(this.poseProxy)
+    this.pivotHelper.name = 'joint-pivot'
+    this.pivotHelper.visible = false
+    this.pivotHelper.raycast = () => {} // never selectable / pickable
+    this.root.add(this.pivotHelper)
 
     this.selection = new SelectionManager(
       this.viewport.camera,
@@ -596,6 +607,7 @@ export class EditorScene {
 
   /** Syncs the selection highlight and gizmo attachment to the current selection. */
   private updateSelection(): void {
+    this.updatePivotHelper() // before any early-return below; tracks the pivot live during drags
     const selected = this.selectedObjects()
     const next = new Set(selected)
     for (const obj of this.highlighted) if (!next.has(obj)) obj.setSelected(false)
@@ -659,6 +671,30 @@ export class EditorScene {
     }
   }
 
+  /**
+   * Positions the always-on pivot marker at the active joint's REST world frame while the
+   * Animations editor is open with a joint selected; hides it otherwise. Read-only — safe
+   * under the preview lock and during drags. Driven from {@link updateSelection} (which
+   * runs on preview, selection, $part, and drag-end changes).
+   */
+  private updatePivotHelper(): void {
+    const animId = $activeAnimationId.get()
+    const jointId = $activeJointId.get()
+    const anim = animId ? $part.get().animations.find((a) => a.id === animId) : undefined
+    const joint = anim?.joints.find((j) => j.id === jointId)
+    if ($inspectorMode.get() !== 'anim' || !anim || !joint) {
+      this.pivotHelper.visible = false
+      return
+    }
+    const pos = new THREE.Vector3()
+    const quat = new THREE.Quaternion()
+    jointWorld(anim, joint.id, 0).decompose(pos, quat, new THREE.Vector3())
+    this.pivotHelper.position.copy(pos)
+    this.pivotHelper.quaternion.copy(quat)
+    this.pivotHelper.scale.setScalar(1) // strip any pivot scale; always a clean unit frame
+    this.pivotHelper.visible = true
+  }
+
   /** Streams a gizmo change back to the store (single entity) or all selected (bulk). */
   private handleGizmoChange(object: THREE.Object3D): void {
     if (this.bulkSnapshot) {
@@ -710,13 +746,21 @@ export class EditorScene {
     const newLocal = parentWorld.invert().multiply(proxyWorld)
     const t = transformFromMatrix(newLocal)
 
-    if (kf.timeSec === 0 && $toolMode.get() === 'translate') {
-      const cur = kf.poses[joint.id]?.position ?? { x: 0, y: 0, z: 0 }
-      moveJointPivot(anim.id, joint.id, {
-        x: t.position.x - cur.x,
-        y: t.position.y - cur.y,
-        z: t.position.z - cur.z,
-      })
+    if (kf.timeSec === 0) {
+      // The rest pose IS the pivot. Move relocates the anchor; Rotate re-orients it.
+      // Both preserve the t=0 geometry and rigidly carry t>0 motion; scale is ignored
+      // (a pivot must stay unit-scaled), so a scale drag at rest is a no-op.
+      if ($toolMode.get() === 'translate') {
+        const cur = kf.poses[joint.id]?.position ?? { x: 0, y: 0, z: 0 }
+        moveJointPivot(anim.id, joint.id, {
+          x: t.position.x - cur.x,
+          y: t.position.y - cur.y,
+          z: t.position.z - cur.z,
+        })
+      } else if ($toolMode.get() === 'rotate') {
+        // proxyWorld is the pivot's Part-space frame; rebase converts to parent-local.
+        reorientJointPivot(anim.id, joint.id, transformFromMatrix(proxyWorld))
+      }
     } else {
       setJointPose(anim.id, kf.id, joint.id, t)
     }
@@ -843,6 +887,8 @@ export class EditorScene {
     this.selection.dispose()
     this.gizmo.dispose()
     this.root.remove(this.poseProxy)
+    this.root.remove(this.pivotHelper)
+    this.pivotHelper.dispose()
     this.measurements.dispose()
     this.containers.dispose()
     for (const obj of this.objects.values()) obj.dispose()

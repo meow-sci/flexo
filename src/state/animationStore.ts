@@ -1,9 +1,11 @@
+import * as THREE from 'three'
 import { atom, computed } from 'nanostores'
 import type { AnimationMode, EditingPart, PartAnimation, SolarTrackingSpec, Transform, Vec3 } from '../ksa/types'
-import { createPartAnimation, identityTransform } from '../ksa/types'
-import { sampleJointLocal } from '../ksa/animationRig'
-import { transformFromMatrix } from '../three/coords'
-import { $part, $toolMode, pushUndo } from './editorStore'
+import { createPartAnimation, identityTransform, VEC3_ONE } from '../ksa/types'
+import { jointWorld, sampleJointLocal } from '../ksa/animationRig'
+import { matrixFromTransform, transformFromMatrix } from '../three/coords'
+import { $inspectorMode } from './uiStore'
+import { $part, $selectedIndices, $toolMode, pushUndo } from './editorStore'
 
 /**
  * Document actions + ephemeral editor state for custom animations (see
@@ -33,6 +35,17 @@ export const $animPreviewU = atom<number>(0)
 /** The active animation object, or null. */
 export const $activeAnimation = computed([$part, $activeAnimationId], (part, id) =>
   id ? part.animations.find((a) => a.id === id) ?? null : null,
+)
+
+/**
+ * True while the Animations editor has a joint + keyframe open for posing. The
+ * Move/Rotate/Scale toolbar normally appears only for a viewport selection, which is
+ * empty during pose editing — this lets {@link SelectionToolbar} show it so all three
+ * gizmos stay reachable while posing.
+ */
+export const $isPoseEditing = computed(
+  [$inspectorMode, $activeAnimationId, $activeJointId, $editKeyframeId],
+  (mode, animId, jointId, kfId) => mode === 'anim' && !!animId && !!jointId && !!kfId,
 )
 
 /**
@@ -143,17 +156,46 @@ export function setSolarTracking(animId: string, spec: SolarTrackingSpec | null)
 
 // ── joints ─────────────────────────────────────────────────────────────────--
 
-/** Adds a joint (with an identity rest pose in every keyframe), selects it, returns id. */
+/**
+ * Adds a joint, selects it, returns its id. The rest pose (in every keyframe) is seeded
+ * at the current viewport selection's centroid so a fresh joint hinges near its parts
+ * rather than at the part origin (identity when nothing is selected). Use
+ * {@link setJointPivot} to snap it precisely onto a hinge afterwards.
+ */
 export function addJoint(animId: string, name = 'Joint', parentJointId: string | null = null): string {
   const id = rid('joint')
+  const seed = selectionCentroidPose()
   mutate('add joint', name, (p) => {
     const a = findAnim(p, animId)
     if (!a) return
     a.joints.push({ id, name, parentJointId, memberInstanceIds: [] })
-    for (const k of a.keyframes) k.poses[id] = identityTransform()
+    for (const k of a.keyframes) k.poses[id] = cloneTransform(seed)
   })
   $activeJointId.set(id)
   return id
+}
+
+/** A deep copy of a Transform (poses must not share mutable refs across keyframes). */
+function cloneTransform(t: Transform): Transform {
+  return { position: { ...t.position }, rotation: { ...t.rotation }, scale: { ...t.scale } }
+}
+
+/** A rest pose at the current viewport selection's centroid (identity if none selected). */
+function selectionCentroidPose(): Transform {
+  const placements = $part.get().placements
+  const pts = $selectedIndices.get().map((i) => placements[i]).filter(Boolean)
+  if (pts.length === 0) return identityTransform()
+  const c = { x: 0, y: 0, z: 0 }
+  for (const pl of pts) {
+    c.x += pl.position.x
+    c.y += pl.position.y
+    c.z += pl.position.z
+  }
+  return {
+    position: { x: c.x / pts.length, y: c.y / pts.length, z: c.z / pts.length },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+  }
 }
 
 export function removeJoint(animId: string, jointId: string): void {
@@ -304,6 +346,80 @@ export function moveJointPivot(animId: string, jointId: string, delta: Vec3): vo
         pose.position.z += delta.z
       }
     }
+  })
+}
+
+/** The rotation component of a matrix, as a quaternion. */
+function quatOf(m: THREE.Matrix4): THREE.Quaternion {
+  const q = new THREE.Quaternion()
+  m.decompose(new THREE.Vector3(), q, new THREE.Vector3())
+  return q
+}
+
+/**
+ * Re-bases joint `jointId`'s REST (t=0) frame onto `Wtgt` (a Part-space WORLD matrix,
+ * scale already stripped) IN PLACE on `a`. Generalises {@link moveJointPivot} to an
+ * arbitrary frame (position + orientation): with `B = Wtgt · W_J(0)⁻¹` it rewrites every
+ * keyframe's local pose to `P'(t) = W_parent(t)⁻¹ · B · W_J(t)`. This keeps the t=0
+ * geometry exactly put (no load/preview jump — the leaf offset `W_J(0)⁻¹·placement` is
+ * recomputed) while rigidly carrying t>0 motion so it now swings about the new pivot.
+ * The per-keyframe worlds are PRECOMPUTED from the pre-mutation poses (the write loop
+ * must not read half-rewritten state).
+ */
+function rebaseJointToWorld(a: PartAnimation, jointId: string, Wtgt: THREE.Matrix4): void {
+  const joint = a.joints.find((j) => j.id === jointId)
+  if (!joint) return
+  const B = Wtgt.clone().multiply(jointWorld(a, jointId, 0).invert())
+  const precomputed = a.keyframes.map((k) => ({
+    k,
+    Wk: jointWorld(a, jointId, k.timeSec),
+    WpInv: joint.parentJointId ? jointWorld(a, joint.parentJointId, k.timeSec).invert() : new THREE.Matrix4(),
+  }))
+  for (const { k, Wk, WpInv } of precomputed) {
+    k.poses[jointId] = transformFromMatrix(WpInv.multiply(B.clone().multiply(Wk))) // W_parent⁻¹ · B · W_J
+  }
+}
+
+/** The desired new rest WORLD frame: `target` position, unit scale, and orientation from
+ *  `target` (when `useOrientation`) or kept from the joint's current rest world. */
+function pivotTargetWorld(a: PartAnimation, jointId: string, target: Transform, useOrientation: boolean): THREE.Matrix4 {
+  const pos = new THREE.Vector3(target.position.x, target.position.y, target.position.z)
+  const quat = useOrientation ? quatOf(matrixFromTransform({ ...target, scale: VEC3_ONE })) : quatOf(jointWorld(a, jointId, 0))
+  return new THREE.Matrix4().compose(pos, quat, new THREE.Vector3(1, 1, 1))
+}
+
+/**
+ * Snaps a joint's pivot (its REST frame) onto `target` — a Part-space frame, e.g. the
+ * hinge placement the door should swing on. Preserves the t=0 geometry and re-centers
+ * t>0 motion on the new pivot. `target.scale` is ignored (a pivot must stay unit-scaled).
+ * With `orientation:false` only the position is adopted (the joint keeps its current
+ * orientation, so you rotate about a world axis). DISCRETE → one undo step.
+ */
+export function setJointPivot(
+  animId: string,
+  jointId: string,
+  target: Transform,
+  opts: { orientation?: boolean } = {},
+): void {
+  const useOrientation = opts.orientation ?? true
+  mutate('set pivot', '', (p) => {
+    const a = findAnim(p, animId)
+    if (!a || !a.joints.some((j) => j.id === jointId)) return
+    rebaseJointToWorld(a, jointId, pivotTargetWorld(a, jointId, target, useOrientation))
+  })
+}
+
+/**
+ * Streaming counterpart to {@link setJointPivot} for the Rest-pose Rotate gizmo:
+ * re-bases the pivot to `worldFrame` (the gizmo proxy's Part-space frame; scale
+ * stripped), letting a drag re-orient (and/or move) the pivot live without distorting
+ * authored t>0 motion. No internal undo (drag-start pushed one).
+ */
+export function reorientJointPivot(animId: string, jointId: string, worldFrame: Transform): void {
+  stream((p) => {
+    const a = findAnim(p, animId)
+    if (!a || !a.joints.some((j) => j.id === jointId)) return
+    rebaseJointToWorld(a, jointId, matrixFromTransform({ ...worldFrame, scale: VEC3_ONE }))
   })
 }
 

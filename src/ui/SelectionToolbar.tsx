@@ -8,6 +8,7 @@ import {
   type ToolMode,
 } from '../state/editorStore'
 import { $hasSelection } from '../state/selectors'
+import { $isPoseEditing } from '../state/animationStore'
 
 const MODES: { mode: ToolMode; label: string }[] = [
   { mode: 'translate', label: 'Move' },
@@ -16,16 +17,20 @@ const MODES: { mode: ToolMode; label: string }[] = [
 ]
 
 /**
- * Floating toolbar that appears centered below the main toolbar whenever
- * anything is selected (one or more SubParts, or a connector). Holds the
- * transform tool mode (drives the 3D gizmo via $toolMode) plus duplicate/delete,
- * all of which act on the whole selection.
+ * Floating toolbar that appears centered below the main toolbar whenever anything is
+ * selected (one or more SubParts, or a connector) OR while posing an animation joint.
+ * Holds the transform tool mode (drives the 3D gizmo via $toolMode) plus
+ * duplicate/delete. During pose editing the viewport selection is empty (the joint +
+ * keyframe live in the Animations panel), so without this the Move/Rotate/Scale switcher
+ * would be hidden and the pose gizmo stuck on whichever tool was last active — hence we
+ * also show it for $isPoseEditing, but keep duplicate/delete gated on a real selection.
  */
 export function SelectionToolbar() {
   const hasSelection = useStore($hasSelection)
+  const isPoseEditing = useStore($isPoseEditing)
   const mode = useStore($toolMode)
 
-  if (!hasSelection) return null
+  if (!hasSelection && !isPoseEditing) return null
 
   return (
     <Toolbar aria-label="Selection actions">
@@ -46,14 +51,18 @@ export function SelectionToolbar() {
         ))}
       </ToggleButtonGroup>
 
-      <ToolbarSeparator />
+      {hasSelection && (
+        <>
+          <ToolbarSeparator />
 
-      <Button size="sm" onPress={() => duplicateSelected()}>
-        Duplicate
-      </Button>
-      <Button size="sm" variant="danger" onPress={() => removeSelected()}>
-        Delete
-      </Button>
+          <Button size="sm" onPress={() => duplicateSelected()}>
+            Duplicate
+          </Button>
+          <Button size="sm" variant="danger" onPress={() => removeSelected()}>
+            Delete
+          </Button>
+        </>
+      )}
     </Toolbar>
   )
 }

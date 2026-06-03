@@ -119,6 +119,7 @@
     - multiple layers of parts in list simultaneously to ease selection? (including connectors?)
 - ✅ fps counter
 
+- about screen doesnt overflow and scroll on mobile anymore
 - global reset should NOT delete the mod folder grant from IndexedDB
 - can we import the built-in animations for e.g. solar panel?  does it map cleanly to flexos representation of an animation system?
 - hotkeys for move/rotate/scale (make sure works in animation mode too)

@@ -25,7 +25,7 @@ export function AboutDialog() {
       onOpenChange={(o) => !o && closeAbout()}
       isDismissable
       variant={isPhone ? 'cover' : 'center'}
-      className={isPhone ? undefined : 'flex max-h-[85vh] w-full max-w-lg flex-col'}
+      className={isPhone ? undefined : 'flex max-h-[85vh] w-full max-w-2xl flex-col'}
     >
       <Dialog aria-label="About Flexo">
         <DialogHeader title="About Flexo" onClose={closeAbout} />
@@ -46,6 +46,13 @@ export function AboutDialog() {
                 from RocketWerkz. It renders the game's SubPart meshes and textures in a three.js 3D
                 workspace and lets you arrange SubParts into custom Parts using a WYSIWYG
                 workflow that needs no modeling, graphics or programming skills.
+              </p>
+
+              <p className="text-sm leading-relaxed text-fg-muted">
+                The projects you create with Flexo can be exported as KSA asset mods, which you install into: <br/><br/>
+                <code>$HOME\Documents\My Games\Kitten Space Agency\mods</code>
+                <br/><br/>
+                There's a feature to either download the mod as a ZIP or you can grant access to your mods folder and Flexo can directly write to the folder
               </p>
             </section>
 

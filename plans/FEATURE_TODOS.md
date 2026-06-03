@@ -119,6 +119,10 @@
     - multiple layers of parts in list simultaneously to ease selection? (including connectors?)
 - ✅ fps counter
 
+- global reset should NOT delete the mod folder grant from IndexedDB
+- can we import the built-in animations for e.g. solar panel?  does it map cleanly to flexos representation of an animation system?
+- hotkeys for move/rotate/scale (make sure works in animation mode too)
+- mod export (zip and folder) should also export the project json
 - can connectors be part of an animation joint and pose?
 - stickers? this probably has to be a standalone code mod to work properly...
 - emissives ... inanimate carbon rod wen?

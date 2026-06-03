@@ -95,3 +95,14 @@ export const $simulateGlass = persistentJSON<boolean>('flexo:simulateGlass', fal
 export function setSimulateGlass(value: boolean): void {
   $simulateGlass.set(value)
 }
+
+/**
+ * Show the stats.js FPS overlay in the 3D workspace. Defaults off; the three.js
+ * {@link src/three/Viewport.ts} subscribes and mounts/unmounts the panel. Cleared
+ * by the global data reset (it `localStorage.clear()`s every `flexo:` key).
+ */
+export const $showFpsCounter = persistentJSON<boolean>('flexo:showFpsCounter', false)
+
+export function setShowFpsCounter(value: boolean): void {
+  $showFpsCounter.set(value)
+}

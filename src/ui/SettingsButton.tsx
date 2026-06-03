@@ -14,6 +14,7 @@ import {
   Select,
   ListBoxItem,
   TextField,
+  Switch,
   ToolbarButton,
   ConfirmDialog,
   Popover,
@@ -22,9 +23,11 @@ import {
   $connectorSettings,
   $kittenTextureExport,
   $selectionHighlight,
+  $showFpsCounter,
   setConnectorSettings,
   setKittenTextureExport,
   setSelectionHighlight,
+  setShowFpsCounter,
 } from '../state/settingsStore'
 import type { KittenTextureExportSettings } from '../state/settingsStore'
 import { openHelp } from '../state/helpStore'
@@ -43,11 +46,22 @@ export function SettingsModal({
   const connectors = useStore($connectorSettings)
   const highlight = useStore($selectionHighlight)
   const kittenTex = useStore($kittenTextureExport)
+  const showFps = useStore($showFpsCounter)
   return (
     <Modal isOpen={isOpen} onOpenChange={onOpenChange} isDismissable variant="center">
       <Dialog>
         <DialogHeader title="Settings" onClose={() => onOpenChange(false)} />
         <div className="flex flex-col gap-3 overflow-auto p-4">
+          <SectionTitle>Viewport</SectionTitle>
+          <label className="flex items-center justify-between gap-3">
+            <span className="text-sm text-fg-muted">FPS counter</span>
+            <Switch
+              aria-label="Show FPS counter"
+              isSelected={showFps}
+              onChange={setShowFpsCounter}
+            />
+          </label>
+
           <SectionTitle>Connectors</SectionTitle>
           <label className="flex items-center justify-between gap-3">
             <span className="text-sm text-fg-muted">Connector size</span>

@@ -105,27 +105,28 @@
 - ✅ the IVA part/subpart IDs are not unique enough.  do a UUID per IVA subpart mesh used (either in project meta and exported or at export time, whatever works best with the code design).  the goal here is to have a unique iva SubPart ID that will NEVER collide with other meshes from other flexo projects etc.  the issue is the default project name is colliding right now since most users dont bother to change the project name and this is what we used as part of the subpart id.
 - ✅ IVA re-exported SubPart's do not have a view mesh applied.  similar to custom meshes we create which create a view mesh, we'll need to do the same for the IVA SubParts we are creating dynamically.
 - ✅ when clicking in 3d viewport and adding to selection, ensure that the selected subpart is scrolled into view in the asset grid list
-
-- can connectors be part of an animation joint and pose?
-- stickers? this probably has to be a standalone code mode to work properly...
-- can we do fun texture effects on the kitten visor parts?
+- ✅ can we do fun texture effects on the kitten visor parts?
     - solid gold?
     - emissive color?
     - translucent emissive color?
-    - analyze if this can be 
-- emissives ... inanimate carbon rod wen?
-- engine building with combustion type control
-- make kittens into SubParts + Parts.. ? with connectors
-- use https://react-aria.adobe.com/ColorPicker for color pickers and support alpha?
-- project export/import to/from JSON
-- fps counter
-- separators render weird
-- canvas flickers on window resize
-- license info (OSS and RW/Dean to distribute textures and models)
-- "soft" layers .. 
+    - analyze if this can be
+- ✅ make kittens into SubParts + Parts.. ? with connectors
+- ✅ project export/import to/from JSON
+- ✅ license info (OSS and RW/Dean to distribute textures and models)
+- ✅ "soft" layers .. 
     - make selection possible on multiple layers at a time? 
     - anything visible and unlocked? 
     - multiple layers of parts in list simultaneously to ease selection? (including connectors?)
+- ✅ fps counter
+
+- can connectors be part of an animation joint and pose?
+- stickers? this probably has to be a standalone code mod to work properly...
+- emissives ... inanimate carbon rod wen?
+- engine building with combustion type control
+- use https://react-aria.adobe.com/ColorPicker for color pickers and support alpha?
+
+- separators render weird
+- canvas flickers on window resize
 - orient a part at a orthagonal vector to a point on a surface
     - start a right click/context menu of specific features?  floating FAB button for mobile?
     - connectors too

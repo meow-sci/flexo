@@ -1,10 +1,12 @@
 import * as THREE from 'three'
+import Stats from 'stats.js'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import { GridManager } from './Grid'
 import { SceneEnvironment } from './SceneEnvironment'
 import { $cameraState, type CameraDir, type CameraState } from '../state/viewStore'
 import { $lighting } from '../state/lightingStore'
+import { $showFpsCounter } from '../state/settingsStore'
 
 /**
  * Framework-agnostic 3D workspace: renderer, scene, perspective camera, lighting,
@@ -25,6 +27,9 @@ export class Viewport {
   private readonly resizeObserver: ResizeObserver
   private readonly sceneEnv: SceneEnvironment
   private readonly lightingUnsub: () => void
+  /** FPS overlay (stats.js), mounted only while {@link $showFpsCounter} is on. */
+  private stats: Stats | null = null
+  private readonly fpsUnsub: () => void
 
   constructor(host: HTMLElement) {
     this.host = host
@@ -76,7 +81,32 @@ export class Viewport {
     this.resizeObserver = new ResizeObserver(() => this.handleResize())
     this.resizeObserver.observe(host)
 
+    // FPS overlay, driven by the global setting. subscribe() fires immediately,
+    // so a persisted-on counter mounts right away.
+    this.fpsUnsub = $showFpsCounter.subscribe((on) => this.setFpsCounter(on))
+
     this.renderer.setAnimationLoop(this.renderFrame)
+  }
+
+  /** Mount or remove the stats.js panel, pinned to the host's top-left corner. */
+  private setFpsCounter(on: boolean): void {
+    if (on === (this.stats !== null)) return
+    if (on) {
+      const stats = new Stats()
+      stats.showPanel(0) // 0: FPS
+      const el = stats.dom
+      // Scope it inside the host (the positioned viewport container) instead of
+      // document.body so it stays within the 3D workspace.
+      el.style.position = 'absolute'
+      el.style.top = '0'
+      el.style.left = '0'
+      el.style.zIndex = '10'
+      this.host.appendChild(el)
+      this.stats = stats
+    } else if (this.stats) {
+      this.stats.dom.remove()
+      this.stats = null
+    }
   }
 
   /**
@@ -141,13 +171,17 @@ export class Viewport {
   }
 
   private readonly renderFrame = (): void => {
+    this.stats?.begin()
     this.controls.update()
     this.renderer.render(this.scene, this.camera)
     this.labelRenderer.render(this.scene, this.camera)
+    this.stats?.end()
   }
 
   dispose(): void {
     this.renderer.setAnimationLoop(null)
+    this.fpsUnsub()
+    this.setFpsCounter(false)
     this.resizeObserver.disconnect()
     this.controls.removeEventListener('end', this.onControlsEnd)
     this.controls.dispose()

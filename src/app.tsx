@@ -16,6 +16,7 @@ import { GlowPaintDialog } from './ui/GlowPaintDialog'
 import { TransformHud } from './ui/TransformHud'
 import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys'
 import { HelpDialog } from './ui/hotkeys/HelpDialog'
+import { AboutDialog } from './ui/AboutDialog'
 import { useIsPhone } from './ui/kit'
 import { ensureCatalogLoaded } from './state/catalogStore'
 import { ensurePartCatalogLoaded } from './state/partCatalogStore'
@@ -33,6 +34,7 @@ function App() {
       {/* Global keyboard shortcuts (no UI) + the help overlay they open. */}
       <GlobalHotkeys />
       <HelpDialog />
+      <AboutDialog />
 
       <ViewportCanvas />
 

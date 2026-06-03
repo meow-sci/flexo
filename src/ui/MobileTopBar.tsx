@@ -24,6 +24,7 @@ import { HistoryButton } from './HistoryButton'
 import { SettingsModal } from './SettingsButton'
 import { nukeAndReload } from './nukeAndReload'
 import { openHelp } from '../state/helpStore'
+import { openAbout } from '../state/aboutStore'
 
 /**
  * Phone-only top toolbar. Primary actions (Project, Add, Undo/Redo) are always
@@ -93,6 +94,7 @@ export function MobileTopBar() {
                 else if (key === 'settings') setSettingsOpen(true)
                 else if (key === 'shortcuts') openHelp()
                 else if (key === 'reset') setConfirmReset(true)
+                else if (key === 'about') openAbout()
               }}
             >
               <MenuItem id="partData">Part Data</MenuItem>
@@ -103,6 +105,7 @@ export function MobileTopBar() {
               <MenuSeparator />
               <MenuItem id="settings">Settings</MenuItem>
               <MenuItem id="shortcuts">Shortcuts</MenuItem>
+              <MenuItem id="about">About</MenuItem>
               <MenuSeparator />
               <MenuItem id="reset" variant="danger">Reset Everything 🔥</MenuItem>
             </Menu>

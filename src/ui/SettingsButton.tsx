@@ -28,6 +28,7 @@ import {
 } from '../state/settingsStore'
 import type { KittenTextureExportSettings } from '../state/settingsStore'
 import { openHelp } from '../state/helpStore'
+import { openAbout } from '../state/aboutStore'
 import { PreciseNumberInput } from './PreciseNumberInput'
 
 import { nukeAndReload } from './nukeAndReload'
@@ -175,10 +176,12 @@ export function SettingsButton() {
               if (key === 'settings') setSettingsOpen(true)
               else if (key === 'shortcuts') openHelp()
               else if (key === 'reset') setConfirmReset(true)
+              else if (key === 'about') openAbout()
             }}
           >
             <MenuItem id="settings">Settings</MenuItem>
             <MenuItem id="shortcuts">Shortcuts</MenuItem>
+            <MenuItem id="about">About</MenuItem>
             <MenuSeparator />
             <MenuItem id="reset" variant="danger">
               Reset Everything 🔥

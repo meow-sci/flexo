@@ -119,6 +119,7 @@
     - multiple layers of parts in list simultaneously to ease selection? (including connectors?)
 - ✅ fps counter
 
+- part preview on mobile sucks now.  autofocus on search hides half the screen and a single tap is adding the part and dismissing the window
 - about screen doesnt overflow and scroll on mobile anymore
 - global reset should NOT delete the mod folder grant from IndexedDB
 - can we import the built-in animations for e.g. solar panel?  does it map cleanly to flexos representation of an animation system?

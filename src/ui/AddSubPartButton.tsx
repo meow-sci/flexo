@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '@nanostores/react'
-import type { Selection } from 'react-aria-components'
+import type { Key, Selection } from 'react-aria-components'
 import {
   Modal,
   Dialog,
   DialogHeader,
   Button,
   SearchField,
-  ListBox,
-  ListBoxItem,
+  GridList,
+  GridListItem,
   SectionTitle,
   ToolbarButton,
   toast,
@@ -52,13 +52,13 @@ export function SubPartPopup({ open, onOpenChange }: { open: boolean; onOpenChan
     >
       <Dialog className="h-full">
         <DialogHeader title="Add SubPart" onClose={() => onOpenChange(false)} />
-        {open && <BrowserBody />}
+        {open && <BrowserBody onClose={() => onOpenChange(false)} />}
       </Dialog>
     </Modal>
   )
 }
 
-function BrowserBody() {
+function BrowserBody({ onClose }: { onClose: () => void }) {
   const catalog = useStore($catalog)
   const loading = useStore($catalogLoading)
   const [query, setQuery] = useState('')
@@ -92,6 +92,13 @@ function BrowserBody() {
     toast({ title: 'SubPart Added', description: selectedId }, { timeout: 2500 })
   }
 
+  const addAndClose = (key: Key) => {
+    const id = String(key)
+    addSubPart(id)
+    toast({ title: 'SubPart Added', description: id }, { timeout: 2500 })
+    onClose()
+  }
+
   const listPane = (
     <div className="h-full overflow-auto rounded-lg border border-border bg-panel-sunken">
       {loading ? (
@@ -99,19 +106,23 @@ function BrowserBody() {
       ) : filtered.length === 0 ? (
         <div className="p-3 text-sm text-fg-subtle">No matches</div>
       ) : (
-        <ListBox
+        <GridList
           aria-label="SubParts"
           selectionMode="single"
+          // "replace" makes the arrow keys move selection (not just the focus
+          // ring), so keyboard navigation drives the preview/Add target directly.
+          selectionBehavior="replace"
           selectedKeys={selectedId ? [selectedId] : []}
           onSelectionChange={onSelection}
+          onAction={addAndClose}
           items={filtered}
         >
           {(s) => (
-            <ListBoxItem id={s.id} textValue={s.id}>
+            <GridListItem id={s.id} textValue={s.id}>
               {s.id}
-            </ListBoxItem>
+            </GridListItem>
           )}
-        </ListBox>
+        </GridList>
       )}
     </div>
   )
@@ -147,6 +158,7 @@ function BrowserBody() {
           onChange={setQuery}
           placeholder="Search SubParts"
           aria-label="Search SubParts"
+          autoFocus
         />
         <Button size="sm" variant="primary" isDisabled={!selectedId} onPress={add}>
           Add

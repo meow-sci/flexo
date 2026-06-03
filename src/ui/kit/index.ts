@@ -18,7 +18,7 @@ export {
 export { TextField, type TextFieldKitProps } from './TextField'
 export { SearchField, type SearchFieldKitProps } from './SearchField'
 export { Select, type SelectKitProps } from './Select'
-export { ListBox, ListBoxItem } from './ListBox'
+export { ListBox, ListBoxItem, GridList, GridListItem } from './ListBox'
 
 export {
   Menu,

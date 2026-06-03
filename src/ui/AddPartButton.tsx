@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useStore } from '@nanostores/react'
-import type { Selection } from 'react-aria-components'
+import type { Key, Selection } from 'react-aria-components'
 import {
   Modal,
   Dialog,
@@ -8,8 +8,9 @@ import {
   Button,
   SearchField,
   Select,
-  ListBox,
   ListBoxItem,
+  GridList,
+  GridListItem,
   SectionTitle,
   ToolbarButton,
   toast,
@@ -67,13 +68,13 @@ export function PartPopup({ open, onOpenChange }: { open: boolean; onOpenChange:
     >
       <Dialog className="h-full">
         <DialogHeader title="Add Part" onClose={() => onOpenChange(false)} />
-        {open && <BrowserBody />}
+        {open && <BrowserBody onClose={() => onOpenChange(false)} />}
       </Dialog>
     </Modal>
   )
 }
 
-function BrowserBody() {
+function BrowserBody({ onClose }: { onClose: () => void }) {
   const catalog = useStore($partCatalog)
   const loading = useStore($partCatalogLoading)
   const subPartIndex = useStore($catalogIndex)
@@ -110,18 +111,27 @@ function BrowserBody() {
     setSelectedId((([...keys][0] as string) ?? null))
   }
 
+  const resolveLayerId = () =>
+    targetLayer === NEW_LAYER
+      ? createLayer(nextNewLayerName(part.layers))
+      : targetLayer === CURRENT_LAYER
+        ? undefined
+        : targetLayer
+
   const add = () => {
     if (!selected) return
-    const layerId =
-      targetLayer === NEW_LAYER
-        ? createLayer(nextNewLayerName(part.layers))
-        : targetLayer === CURRENT_LAYER
-          ? undefined
-          : targetLayer
     // addPart selects the imported SubParts and returns the layer they landed on;
     // reveal it (visible + in the Assets list) so the import is never hidden.
-    revealLayer(addPart(selected.placements, selected.connectors, selected.editorTags, layerId))
+    revealLayer(addPart(selected.placements, selected.connectors, selected.editorTags, resolveLayerId()))
     toast({ title: 'Part Added', description: selected.id }, { timeout: 2500 })
+  }
+
+  const addAndClose = (key: Key) => {
+    const p = catalog.find((c) => c.id === String(key))
+    if (!p) return
+    revealLayer(addPart(p.placements, p.connectors, p.editorTags, resolveLayerId()))
+    toast({ title: 'Part Added', description: p.id }, { timeout: 2500 })
+    onClose()
   }
 
   const listPane = (
@@ -131,22 +141,26 @@ function BrowserBody() {
       ) : filtered.length === 0 ? (
         <div className="p-3 text-sm text-fg-subtle">No matches</div>
       ) : (
-        <ListBox
+        <GridList
           aria-label="Parts"
           selectionMode="single"
+          // "replace" makes the arrow keys move selection (not just the focus
+          // ring), so keyboard navigation drives the preview/Add target directly.
+          selectionBehavior="replace"
           selectedKeys={selectedId ? [selectedId] : []}
           onSelectionChange={onSelection}
+          onAction={addAndClose}
           items={filtered}
         >
           {(p) => (
-            <ListBoxItem id={p.id} textValue={p.id}>
+            <GridListItem id={p.id} textValue={p.id}>
               <span className="flex w-full items-center justify-between gap-2">
                 <span className="truncate">{p.id}</span>
                 <span className="shrink-0 text-xs text-fg-subtle">{p.placements.length}</span>
               </span>
-            </ListBoxItem>
+            </GridListItem>
           )}
-        </ListBox>
+        </GridList>
       )}
     </div>
   )
@@ -184,6 +198,7 @@ function BrowserBody() {
           onChange={setQuery}
           placeholder="Search Parts"
           aria-label="Search Parts"
+          autoFocus
         />
         <Select
           size="sm"

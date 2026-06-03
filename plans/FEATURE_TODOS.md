@@ -106,6 +106,7 @@
 - ✅ IVA re-exported SubPart's do not have a view mesh applied.  similar to custom meshes we create which create a view mesh, we'll need to do the same for the IVA SubParts we are creating dynamically.
 - ✅ when clicking in 3d viewport and adding to selection, ensure that the selected subpart is scrolled into view in the asset grid list
 
+- can connectors be part of an animation joint and pose?
 - stickers? this probably has to be a standalone code mode to work properly...
 - can we do fun texture effects on the kitten visor parts?
     - solid gold?

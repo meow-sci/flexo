@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { $buildMismatch } from '../buildCheck'
 import { nukeAndReload } from './nukeAndReload'
-import { Button, ConfirmDialog, Dialog, Modal } from './kit'
+import { Button, ConfirmDialog, Dialog, Modal, Switch } from './kit'
 import { Heading } from 'react-aria-components'
 
 export function BuildIdMismatchDialog() {
   const mismatch = useStore($buildMismatch)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [resetFsGrants, setResetFsGrants] = useState(false)
 
   if (!mismatch) return null
 
@@ -31,7 +32,13 @@ export function BuildIdMismatchDialog() {
             <Button variant="secondary" onPress={dismiss}>
               No thanks, I know what I&apos;m doing
             </Button>
-            <Button variant="danger" onPress={() => setConfirmOpen(true)}>
+            <Button
+              variant="danger"
+              onPress={() => {
+                setResetFsGrants(false)
+                setConfirmOpen(true)
+              }}
+            >
               Reset everything
             </Button>
           </div>
@@ -45,8 +52,12 @@ export function BuildIdMismatchDialog() {
         text="This will permanently delete all projects, containers, measurements, and settings stored in this browser. This cannot be undone."
         confirmLabel="Reset and reload"
         confirmVariant="danger"
-        onConfirm={() => void nukeAndReload()}
-      />
+        onConfirm={() => void nukeAndReload({ resetFsGrants })}
+      >
+        <Switch isSelected={resetFsGrants} onChange={setResetFsGrants}>
+          Reset folder access grants (if any)
+        </Switch>
+      </ConfirmDialog>
     </>
   )
 }

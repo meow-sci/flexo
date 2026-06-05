@@ -176,6 +176,7 @@ function HighlightRow({
 export function SettingsButton() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
+  const [resetFsGrants, setResetFsGrants] = useState(false)
 
   return (
     <>
@@ -189,8 +190,10 @@ export function SettingsButton() {
             onAction={(key) => {
               if (key === 'settings') setSettingsOpen(true)
               else if (key === 'shortcuts') openHelp()
-              else if (key === 'reset') setConfirmReset(true)
-              else if (key === 'about') openAbout()
+              else if (key === 'reset') {
+                setResetFsGrants(false)
+                setConfirmReset(true)
+              } else if (key === 'about') openAbout()
             }}
           >
             <MenuItem id="settings">Settings</MenuItem>
@@ -210,11 +213,15 @@ export function SettingsButton() {
         isOpen={confirmReset}
         onOpenChange={setConfirmReset}
         title="Reset everything?"
-        text="This permanently deletes every saved project, layer view state, the granted mods folder, and any other locally-stored data, then reloads the page. There's no undo."
+        text="This permanently deletes every saved project, layer view state, and any other locally-stored data, then reloads the page. There's no undo."
         confirmLabel="RESET EVERYTHING 🔥"
         confirmVariant="danger"
-        onConfirm={() => void nukeAndReload()}
-      />
+        onConfirm={() => void nukeAndReload({ resetFsGrants })}
+      >
+        <Switch isSelected={resetFsGrants} onChange={setResetFsGrants}>
+          Reset folder access grants (if any)
+        </Switch>
+      </ConfirmDialog>
     </>
   )
 }

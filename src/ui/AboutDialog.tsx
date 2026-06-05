@@ -27,9 +27,9 @@ export function AboutDialog() {
       variant={isPhone ? 'cover' : 'center'}
       className={isPhone ? undefined : 'flex max-h-[85vh] w-full max-w-2xl flex-col'}
     >
-      <Dialog aria-label="About Flexo">
+      <Dialog aria-label="About Flexo" className={isPhone ? 'flex-1 min-h-0' : undefined}>
         <DialogHeader title="About Flexo" onClose={closeAbout} />
-        <div className="overflow-auto p-4 sm:p-6">
+        <div className="min-h-0 flex-1 overflow-auto p-4 sm:p-6">
           <div className="flex flex-col gap-6">
             <section className="flex flex-col gap-2">
               <SectionTitle>What is Flexo?</SectionTitle>

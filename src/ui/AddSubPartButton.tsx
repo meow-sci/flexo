@@ -114,7 +114,10 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
           selectionBehavior="replace"
           selectedKeys={selectedId ? [selectedId] : []}
           onSelectionChange={onSelection}
-          onAction={addAndClose}
+          // On touch a single tap fires onAction, which would add-and-close
+          // before the preview is ever seen. On phone a tap only selects
+          // (driving the preview); the explicit Add button is the commit.
+          onAction={isPhone ? undefined : addAndClose}
           items={filtered}
         >
           {(s) => (
@@ -158,7 +161,9 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
           onChange={setQuery}
           placeholder="Search SubParts"
           aria-label="Search SubParts"
-          autoFocus
+          // Autofocus raises the soft keyboard, which covers the preview on a
+          // phone — only grab focus on desktop where typing-first is the norm.
+          autoFocus={!isPhone}
         />
         <Button size="sm" variant="primary" isDisabled={!selectedId} onPress={add}>
           Add
@@ -167,7 +172,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
 
       <div className="min-h-0 flex-1">
         {isPhone ? (
-          <VerticalSplit top={listPane} bottom={previewPane} />
+          <VerticalSplit initialSplit={45} top={listPane} bottom={previewPane} />
         ) : (
           <HorizontalSplit
             left={listPane}

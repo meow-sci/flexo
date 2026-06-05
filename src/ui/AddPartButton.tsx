@@ -149,7 +149,10 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
           selectionBehavior="replace"
           selectedKeys={selectedId ? [selectedId] : []}
           onSelectionChange={onSelection}
-          onAction={addAndClose}
+          // On touch a single tap fires onAction, which would add-and-close
+          // before the preview is ever seen. On phone a tap only selects
+          // (driving the preview); the explicit Add button is the commit.
+          onAction={isPhone ? undefined : addAndClose}
           items={filtered}
         >
           {(p) => (
@@ -190,39 +193,50 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5">
-      <div className="flex shrink-0 items-center gap-2">
+      {/*
+        Phone stacks search on its own full-width row (so it isn't squeezed
+        beside the 176px layer Select) with Select + Add on a second row; sm+
+        keeps the original single search | select | add row.
+      */}
+      <div className="flex shrink-0 flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
         <SearchField
           size="sm"
-          className="min-w-0 flex-1"
+          className="min-w-0 sm:flex-1"
           value={query}
           onChange={setQuery}
           placeholder="Search Parts"
           aria-label="Search Parts"
-          autoFocus
+          // Autofocus raises the soft keyboard, which covers the preview on a
+          // phone — only grab focus on desktop where typing-first is the norm.
+          autoFocus={!isPhone}
         />
-        <Select
-          size="sm"
-          aria-label="Import into layer"
-          className="w-44 shrink-0"
-          selectedKey={targetLayer}
-          onSelectionChange={(k) => setTargetLayer(String(k))}
-        >
-          <ListBoxItem id={NEW_LAYER}>New Layer</ListBoxItem>
-          <ListBoxItem id={CURRENT_LAYER}>Current Layer</ListBoxItem>
-          {part.layers.map((l) => (
-            <ListBoxItem key={l.id} id={l.id} textValue={l.name}>
-              {l.name}
-            </ListBoxItem>
-          ))}
-        </Select>
-        <Button size="sm" variant="primary" isDisabled={!selected} onPress={add}>
-          Add
-        </Button>
+        <div className="flex items-center gap-2">
+          <Select
+            size="sm"
+            aria-label="Import into layer"
+            className="min-w-0 flex-1 sm:w-44 sm:flex-none"
+            selectedKey={targetLayer}
+            onSelectionChange={(k) => setTargetLayer(String(k))}
+          >
+            <ListBoxItem id={NEW_LAYER}>New Layer</ListBoxItem>
+            <ListBoxItem id={CURRENT_LAYER}>Current Layer</ListBoxItem>
+            {part.layers.map((l) => (
+              <ListBoxItem key={l.id} id={l.id} textValue={l.name}>
+                {l.name}
+              </ListBoxItem>
+            ))}
+          </Select>
+          <Button size="sm" variant="primary" isDisabled={!selected} onPress={add}>
+            Add
+          </Button>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1">
         {isPhone ? (
           <VerticalSplit
+            // Favor the preview — browsing-to-preview is the point on phone.
+            initialSplit={45}
             top={listPane}
             bottom={
               <div className="flex h-full flex-col gap-1.5 overflow-hidden">

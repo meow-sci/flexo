@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { Trash2, Plus, Crosshair, ChevronLeft, Move3d, RotateCcw } from 'lucide-react'
-import { Button, TextField, Select, ListBoxItem, Slider, Checkbox, Tooltip, cn } from './kit'
+import { Button, TextField, Select, ListBoxItem, Slider, Switch, Tooltip, cn } from './kit'
 import { $part, $toolMode, pushUndo } from '../state/editorStore'
 import { $selectedPlacements, $selectedPlacement } from '../state/selectors'
 import {
@@ -241,7 +241,7 @@ function SolarTrackingEditor({ anim }: { anim: PartAnimation }) {
   const st = anim.solarTracking
   return (
     <div className="flex flex-col gap-1.5 rounded-md border border-border p-1.5">
-      <Checkbox
+      <Switch
         isSelected={!!st}
         onChange={(on) =>
           setSolarTracking(
@@ -251,7 +251,7 @@ function SolarTrackingEditor({ anim }: { anim: PartAnimation }) {
         }
       >
         Sun tracking (solar panel)
-      </Checkbox>
+      </Switch>
       {st && (
         <>
           <div className="flex items-end gap-2">
@@ -276,7 +276,7 @@ function SolarTrackingEditor({ anim }: { anim: PartAnimation }) {
             <div className="flex flex-col gap-0.5">
               <span className="text-xs text-fg-subtle">Stays fixed (doesn’t track):</span>
               {members.map((m) => (
-                <Checkbox
+                <Switch
                   key={m}
                   isSelected={st.excludeInstanceIds.includes(m)}
                   onChange={(on) =>
@@ -287,7 +287,7 @@ function SolarTrackingEditor({ anim }: { anim: PartAnimation }) {
                   }
                 >
                   <span className="font-mono text-xs">{m}</span>
-                </Checkbox>
+                </Switch>
               ))}
             </div>
           )}

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
-import { Button, TextField, Checkbox } from './kit'
+import { Button, TextField, Switch } from './kit'
 import {
   $bulkScaleMode,
   pushUndo,
@@ -273,13 +273,13 @@ function BulkTransformPanel() {
           isDisabled={anyLocked}
           onApply={applyScale}
         />
-        <Checkbox
+        <Switch
           isSelected={scaleMode === 'smart'}
           isDisabled={anyLocked}
           onChange={(on) => $bulkScaleMode.set(on ? 'smart' : 'inPlace')}
         >
           Scale positions too (smart)
-        </Checkbox>
+        </Switch>
       </div>
     </div>
   )
@@ -360,14 +360,14 @@ function ConnectorHeader({ index, id, flags, locked }: { index: number; id: stri
       <span className="text-xs uppercase tracking-wide text-fg-subtle">Flags</span>
       <div className="flex flex-wrap gap-x-3 gap-y-1">
         {CONNECTOR_FLAGS.map((f) => (
-          <Checkbox
+          <Switch
             key={f}
             isSelected={flags.includes(f)}
             isDisabled={locked}
             onChange={(on) => toggle(f, on)}
           >
             {f}
-          </Checkbox>
+          </Switch>
         ))}
       </div>
     </div>

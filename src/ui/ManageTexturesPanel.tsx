@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { X } from 'lucide-react'
 import { Button as AriaButton } from 'react-aria-components'
-import { Modal, Dialog, DialogHeader, Button, Select, ListBoxItem, TextField, Checkbox, useIsPhone } from './kit'
+import { Modal, Dialog, DialogHeader, Button, Select, ListBoxItem, TextField, Switch, useIsPhone } from './kit'
 import { ColorAlphaField } from './ColorAlphaField'
 import { $part } from '../state/editorStore'
 import {
@@ -294,9 +294,9 @@ function VisorSurfaceControls({ mesh }: { mesh: CustomMesh }) {
       {showGlass && (
         <>
           <TintField mesh={mesh} />
-          <Checkbox isSelected={simulate} onChange={setSimulateGlass}>
+          <Switch isSelected={simulate} onChange={setSimulateGlass}>
             Simulate in-game glass
-          </Checkbox>
+          </Switch>
         </>
       )}
       {showGlow && <GlowColorField mesh={mesh} />}

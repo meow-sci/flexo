@@ -118,6 +118,7 @@
     - anything visible and unlocked? 
     - multiple layers of parts in list simultaneously to ease selection? (including connectors?)
 - ✅ fps counter
+- ✅ view > grid axis checkboxes not working on mobile
 
 - part preview on mobile sucks now.  autofocus on search hides half the screen and a single tap is adding the part and dismissing the window
 - about screen doesnt overflow and scroll on mobile anymore

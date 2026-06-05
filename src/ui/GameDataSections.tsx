@@ -1,4 +1,4 @@
-import { Button, Checkbox, Select, ListBoxItem, TextField } from './kit'
+import { Button, Switch, Select, ListBoxItem, TextField } from './kit'
 import { PreciseNumberInput } from './PreciseNumberInput'
 import { pushUndo } from '../state/editorStore'
 import {
@@ -98,9 +98,9 @@ export function MassSection({ gameData }: { gameData: PartGameData }) {
   const enabled = gameData.customMass != null
   return (
     <div className="flex flex-col gap-2">
-      <Checkbox isSelected={enabled} onChange={setCustomMassEnabled}>
+      <Switch isSelected={enabled} onChange={setCustomMassEnabled}>
         Custom mass override
-      </Checkbox>
+      </Switch>
       {enabled && (
         <Field label="Mass (kg)">
           <PreciseNumberInput
@@ -304,9 +304,9 @@ export function CouplingSection({ part }: { part: EditingPart }) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
-        <Checkbox isSelected={decoupler != null} onChange={setDecouplerEnabled}>
+        <Switch isSelected={decoupler != null} onChange={setDecouplerEnabled}>
           Decoupler
-        </Checkbox>
+        </Switch>
         {decoupler && (
           <>
             <ConnectorSelect connectorIds={ids} value={decoupler.connectorId} onChange={setDecouplerConnector} />
@@ -324,9 +324,9 @@ export function CouplingSection({ part }: { part: EditingPart }) {
       </div>
 
       <div className="flex flex-col gap-2">
-        <Checkbox isSelected={dockingPort != null} onChange={setDockingPortEnabled}>
+        <Switch isSelected={dockingPort != null} onChange={setDockingPortEnabled}>
           Docking Port
-        </Checkbox>
+        </Switch>
         {dockingPort && (
           <>
             <ConnectorSelect connectorIds={ids} value={dockingPort.connectorId} onChange={setDockingPortConnector} />
@@ -344,9 +344,9 @@ export function CouplingSection({ part }: { part: EditingPart }) {
       </div>
 
       <div className="flex flex-col gap-2">
-        <Checkbox isSelected={evaDoor != null} onChange={setEvaDoorEnabled}>
+        <Switch isSelected={evaDoor != null} onChange={setEvaDoorEnabled}>
           EVA Door
-        </Checkbox>
+        </Switch>
         {evaDoor && (
           <ConnectorSelect connectorIds={ids} value={evaDoor.connectorId} onChange={setEvaDoorConnector} />
         )}

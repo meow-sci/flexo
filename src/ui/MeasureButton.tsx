@@ -8,7 +8,7 @@ import {
   DialogHeader,
   ToolbarButton,
   Button,
-  Checkbox,
+  Switch,
   Select,
   ListBoxItem,
   ToggleButton,
@@ -66,12 +66,12 @@ function MeasureContent({ close }: { close: () => void }) {
     <>
       <section className="flex flex-col gap-2">
         <SectionTitle>Selection bounds</SectionTitle>
-        <Checkbox
+        <Switch
           isSelected={settings.showSelectionBounds}
           onChange={(showSelectionBounds) => setMeasurementSettings({ showSelectionBounds })}
         >
           Show bounding box
-        </Checkbox>
+        </Switch>
         <div className="flex items-center gap-2">
           <span className="w-20 shrink-0 text-sm text-fg-muted">Orientation</span>
           <ToggleButtonGroup
@@ -91,18 +91,18 @@ function MeasureContent({ close }: { close: () => void }) {
             ))}
           </ToggleButtonGroup>
         </div>
-        <Checkbox
+        <Switch
           isSelected={settings.showPerMesh}
           onChange={(showPerMesh) => setMeasurementSettings({ showPerMesh })}
         >
           Per-mesh dimensions
-        </Checkbox>
-        <Checkbox
+        </Switch>
+        <Switch
           isSelected={settings.showMeshDistance}
           onChange={(showMeshDistance) => setMeasurementSettings({ showMeshDistance })}
         >
           Distance between two meshes
-        </Checkbox>
+        </Switch>
       </section>
 
       <section className="flex flex-col gap-2">

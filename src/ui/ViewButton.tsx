@@ -8,7 +8,7 @@ import {
   DialogHeader,
   ToolbarButton,
   Button,
-  Checkbox,
+  Switch,
   Select,
   ListBoxItem,
   Slider,
@@ -64,12 +64,13 @@ function ViewContent() {
           const cfg = grids[axis]
           return (
             <div key={axis} className="flex items-center gap-2">
-              <Checkbox
+              <Switch
                 aria-label={`Show ${label} grid`}
                 isSelected={cfg.enabled}
                 onChange={(enabled) => setGrid(axis, { enabled })}
-              />
-              <span className="w-4 text-sm text-fg-muted">{label}</span>
+              >
+                <span className="w-4 text-sm text-fg-muted">{label}</span>
+              </Switch>
               <PreciseNumberInput
                 aria-label={`${label} grid spacing (m)`}
                 className="flex-1"
@@ -151,13 +152,13 @@ function ViewContent() {
           />
         </label>
 
-        <Checkbox
+        <Switch
           isDisabled={!envHasSky}
           isSelected={envHasSky && lighting.showEnvironmentBackground}
           onChange={(showEnvironmentBackground) => setLighting({ showEnvironmentBackground })}
         >
           Show sky background
-        </Checkbox>
+        </Switch>
 
         {envHasSky && lighting.showEnvironmentBackground && (
           <label className="flex flex-col gap-1">

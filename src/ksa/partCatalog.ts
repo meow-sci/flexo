@@ -15,7 +15,7 @@ import {
   parseGameDataElement,
   placementsFromPartElement,
 } from './partXmlParser'
-import type { Connector, ConnectorFlag, SubPartPlacement } from './types'
+import type { CatalogAnimationModule, Connector, ConnectorFlag, SubPartPlacement } from './types'
 
 export interface CatalogPart {
   /** Part id as declared in the Assets XML, e.g. "CoreFuelTankA_Prefab_LF1W1HA". */
@@ -26,6 +26,8 @@ export interface CatalogPart {
   placements: SubPartPlacement[]
   /** The connector attachment points of this Part, with their relative transforms. */
   connectors: Connector[]
+  /** KeyframeAnimationModules (from GameData), decoded + imported alongside the Part. */
+  animationModules: CatalogAnimationModule[]
   /** Originating XML file (for debugging / grouping). */
   sourceFile: string
 }
@@ -40,7 +42,7 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
     const placements = placementsFromPartElement(part)
     if (placements.length === 0) continue // nothing renderable/importable
     const connectors = connectorsFromPartElement(part)
-    out.push({ id, editorTags, placements, connectors, sourceFile })
+    out.push({ id, editorTags, placements, connectors, animationModules: [], sourceFile })
   }
 }
 
@@ -54,6 +56,8 @@ export interface PartGameData {
   editorTags: string[]
   /** connector id -> its flags (only connectors carrying <Flags> are recorded). */
   connectorFlags: Map<string, ConnectorFlag[]>
+  /** KeyframeAnimationModules declared on this <PartGameData>. */
+  animationModules: CatalogAnimationModule[]
 }
 
 /** GameData sibling of each catalog asset file (e.g. CoreElectricalAAssets.xml -> CoreElectricalAGameData.xml). Not every asset file has one. */
@@ -65,11 +69,12 @@ export function parseGameDataFile(doc: Document, out: Map<string, PartGameData>)
     const id = gd.getAttribute('Id')
     if (!id) continue
     const parsed = parseGameDataElement(gd)
-    const entry: PartGameData = out.get(id) ?? { editorTags: [], connectorFlags: new Map() }
+    const entry: PartGameData = out.get(id) ?? { editorTags: [], connectorFlags: new Map(), animationModules: [] }
     for (const tag of parsed.editorTags) {
       if (!entry.editorTags.includes(tag)) entry.editorTags.push(tag)
     }
     for (const [connId, flags] of parsed.connectorFlags) entry.connectorFlags.set(connId, flags)
+    entry.animationModules.push(...parsed.animationModules)
     out.set(id, entry)
   }
 }
@@ -99,6 +104,7 @@ export function mergeGameData(parts: CatalogPart[], gameData: Map<string, PartGa
       const flags = gd.connectorFlags.get(conn.id)
       if (flags) conn.flags = flags
     }
+    if (gd.animationModules.length) part.animationModules = gd.animationModules
   }
 }
 

@@ -1,8 +1,18 @@
 import * as THREE from 'three'
 import { atom, computed } from 'nanostores'
-import type { AnimationMode, EditingPart, PartAnimation, SolarTrackingSpec, Transform, Vec3 } from '../ksa/types'
+import type {
+  AnimationKeyframe,
+  AnimationMode,
+  EasingConfig,
+  EditingPart,
+  PartAnimation,
+  SolarTrackingSpec,
+  Transform,
+  Vec3,
+} from '../ksa/types'
 import { createPartAnimation, identityTransform, VEC3_ONE } from '../ksa/types'
 import { jointWorld, sampleJointLocal } from '../ksa/animationRig'
+import { isLinearEasing } from '../ksa/easing'
 import { matrixFromTransform, transformFromMatrix } from '../three/coords'
 import { $inspectorMode } from './uiStore'
 import { $part, $selectedIndices, $toolMode, pushUndo } from './editorStore'
@@ -286,6 +296,12 @@ export function addKeyframe(animId: string, timeSec: number): string {
     for (const j of a.joints) poses[j.id] = transformFromMatrix(sampleJointLocal(a, j.id, t))
     a.keyframes.push({ id, timeSec: t, poses })
     sortKeyframes(a)
+    // Inserting into a segment halves the preceding keyframe's outgoing easing span —
+    // drop it so both sub-segments are linear through the on-curve pose we just
+    // sampled (re-author easing per sub-segment afterwards; see AnimationKeyframe).
+    const idx = a.keyframes.findIndex((k) => k.id === id)
+    const prev = idx > 0 ? a.keyframes[idx - 1] : null
+    if (prev?.easings) delete prev.easings
   })
   $editKeyframeId.set(id)
   return id
@@ -322,6 +338,44 @@ export function setJointPose(animId: string, keyframeId: string, jointId: string
   stream((p) => {
     const k = findAnim(p, animId)?.keyframes.find((x) => x.id === keyframeId)
     if (k) k.poses[jointId] = { position: { ...pose.position }, rotation: { ...pose.rotation }, scale: { ...pose.scale } }
+  })
+}
+
+// ── segment easing ─────────────────────────────────────────────────────────--
+
+/** Writes/clears one joint's outgoing easing on a keyframe (linear ⇒ delete the entry). */
+function applyEasing(k: AnimationKeyframe, jointId: string, cfg: EasingConfig): void {
+  if (isLinearEasing(cfg)) {
+    if (k.easings) {
+      delete k.easings[jointId]
+      if (Object.keys(k.easings).length === 0) delete k.easings
+    }
+    return
+  }
+  if (!k.easings) k.easings = {}
+  k.easings[jointId] = cfg
+}
+
+/**
+ * Sets (or clears) the easing for one joint over the segment LEAVING `keyframeId`. A
+ * linear/identity config is stored as "absent" so export stays byte-identical and the
+ * data stays clean. STREAMING: no undo push (caller pushes once at curve-drag start /
+ * preset change).
+ */
+export function setJointSegmentEasing(animId: string, keyframeId: string, jointId: string, cfg: EasingConfig): void {
+  stream((p) => {
+    const k = findAnim(p, animId)?.keyframes.find((x) => x.id === keyframeId)
+    if (k) applyEasing(k, jointId, cfg)
+  })
+}
+
+/** Sets the same easing on EVERY joint for the segment leaving `keyframeId` (discrete undo). */
+export function setSegmentEasingAllJoints(animId: string, keyframeId: string, cfg: EasingConfig): void {
+  mutate('segment easing', isLinearEasing(cfg) ? 'linear' : 'eased', (p) => {
+    const a = findAnim(p, animId)
+    const k = a?.keyframes.find((x) => x.id === keyframeId)
+    if (!a || !k) return
+    for (const j of a.joints) applyEasing(k, j.id, cfg)
   })
 }
 

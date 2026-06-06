@@ -20,7 +20,8 @@ import type { CatalogPart } from '../ksa/partCatalog'
 import type { Layer } from '../ksa/types'
 import { $catalogIndex } from '../state/catalogStore'
 import { $partCatalog, $partCatalogLoading } from '../state/partCatalogStore'
-import { $part, addPart, createLayer } from '../state/editorStore'
+import { $part, createLayer } from '../state/editorStore'
+import { importBuiltInPart } from '../state/partImport'
 import { revealLayer } from '../state/layerStore'
 import { closeBrowserPopup, openBrowserPopup } from '../state/loadProgressStore'
 import { PartPreview } from './PartPreview'
@@ -118,18 +119,19 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
         ? undefined
         : targetLayer
 
-  const add = () => {
+  const add = async () => {
     if (!selected) return
-    // addPart selects the imported SubParts and returns the layer they landed on;
-    // reveal it (visible + in the Assets list) so the import is never hidden.
-    revealLayer(addPart(selected.placements, selected.connectors, selected.editorTags, resolveLayerId()))
+    // importBuiltInPart imports the SubParts + any keyframe animations, selects the
+    // imported SubParts, and returns the layer they landed on; reveal it (visible + in
+    // the Assets list) so the import is never hidden.
+    revealLayer(await importBuiltInPart(selected, resolveLayerId()))
     toast({ title: 'Part Added', description: selected.id }, { timeout: 2500 })
   }
 
-  const addAndClose = (key: Key) => {
+  const addAndClose = async (key: Key) => {
     const p = catalog.find((c) => c.id === String(key))
     if (!p) return
-    revealLayer(addPart(p.placements, p.connectors, p.editorTags, resolveLayerId()))
+    revealLayer(await importBuiltInPart(p, resolveLayerId()))
     toast({ title: 'Part Added', description: p.id }, { timeout: 2500 })
     onClose()
   }

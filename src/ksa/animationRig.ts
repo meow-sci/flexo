@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { matrixFromTransform } from '../three/coords'
+import { evalEasing, isLinearEasing } from './easing'
 import { identityTransform } from './types'
 import type { PartAnimation, SubPartPlacement, Transform } from './types'
 
@@ -57,6 +58,13 @@ export interface AnimRig {
 
 const SCALE_EPS = 1e-6
 
+/**
+ * Frames per second used to bake eased segments into dense LINEAR samples on export
+ * (KSA only plays LINEAR/STEP samplers). Matches the density of KSA's own built-in
+ * animations (~24-30 fps). Linear segments stay sparse (2 keys).
+ */
+export const BAKE_FPS = 30
+
 /** Keyframes sorted ascending by time (a fresh array; the store keeps t=0 first). */
 function sortedKeyframes(anim: PartAnimation) {
   return [...anim.keyframes].sort((a, b) => a.timeSec - b.timeSec)
@@ -76,28 +84,70 @@ function poseParts(t: Transform): { pos: THREE.Vector3; quat: THREE.Quaternion; 
 }
 
 /**
- * The joint's LOCAL matrix (relative to its parent) at time `t`, linearly
- * interpolating position/scale and slerping rotation between bracketing keyframes.
- * Clamps to the end keyframes outside [0, lastTime] (mirroring KSA's clamp).
+ * The joint's LOCAL pose components (relative to its parent) at time `t`: linearly
+ * interpolating position/scale and slerping rotation between bracketing keyframes,
+ * with the segment progress warped by that joint's per-segment easing. Clamps to the
+ * end keyframes outside [0, lastTime] (mirroring KSA's clamp). At an EXACT keyframe
+ * time the result is that keyframe's pose verbatim (easing(0)=0, slerp/lerp at 0),
+ * which keeps export baking byte-identical for un-eased segments.
  */
-export function sampleJointLocal(anim: PartAnimation, jointId: string, t: number): THREE.Matrix4 {
+function sampleJointPartsLocal(
+  anim: PartAnimation,
+  jointId: string,
+  t: number,
+): { pos: THREE.Vector3; quat: THREE.Quaternion; scale: THREE.Vector3 } {
   const kfs = sortedKeyframes(anim)
-  if (kfs.length === 0) return new THREE.Matrix4()
-  if (t <= kfs[0].timeSec) return matrixFromTransform(poseOf(jointId, kfs[0]))
+  if (kfs.length === 0) return { pos: new THREE.Vector3(), quat: new THREE.Quaternion(), scale: new THREE.Vector3(1, 1, 1) }
+  if (t <= kfs[0].timeSec) return poseParts(poseOf(jointId, kfs[0]))
   const last = kfs[kfs.length - 1]
-  if (t >= last.timeSec) return matrixFromTransform(poseOf(jointId, last))
+  if (t >= last.timeSec) return poseParts(poseOf(jointId, last))
   let i = 0
   while (i < kfs.length - 1 && kfs[i + 1].timeSec <= t) i++
   const a = kfs[i]
   const b = kfs[i + 1]
   const span = b.timeSec - a.timeSec
-  const alpha = span > 0 ? (t - a.timeSec) / span : 0
+  const linear = span > 0 ? (t - a.timeSec) / span : 0
+  // Warp the segment progress by this joint's OUTGOING easing on keyframe `a`.
+  const alpha = evalEasing(a.easings?.[jointId], linear)
   const pa = poseParts(poseOf(jointId, a))
   const pb = poseParts(poseOf(jointId, b))
-  const pos = pa.pos.lerp(pb.pos, alpha)
-  const quat = pa.quat.slerp(pb.quat, alpha) // three.js slerp takes the shortest path
-  const scale = pa.scale.lerp(pb.scale, alpha)
+  return {
+    pos: pa.pos.lerp(pb.pos, alpha),
+    quat: pa.quat.slerp(pb.quat, alpha), // three.js slerp takes the shortest path
+    scale: pa.scale.lerp(pb.scale, alpha),
+  }
+}
+
+/**
+ * The joint's LOCAL matrix (relative to its parent) at time `t` — the composed form
+ * of {@link sampleJointPartsLocal}. Shared by the editor preview and export baking.
+ */
+export function sampleJointLocal(anim: PartAnimation, jointId: string, t: number): THREE.Matrix4 {
+  const { pos, quat, scale } = sampleJointPartsLocal(anim, jointId, t)
   return new THREE.Matrix4().compose(pos, quat, scale)
+}
+
+/**
+ * The per-joint set of times at which to bake its TRS channels: each eased segment is
+ * subdivided to ~`fps` (dense LINEAR samples that reproduce the curve under KSA's
+ * LINEAR playback); each linear segment contributes only its endpoint. For an
+ * all-linear joint this returns exactly the keyframe times (sparse, unchanged output).
+ */
+function jointSampleTimes(anim: PartAnimation, joint: PartAnimation['joints'][number], fps: number): number[] {
+  const kfs = sortedKeyframes(anim)
+  if (kfs.length === 0) return []
+  const times = [kfs[0].timeSec]
+  for (let i = 0; i < kfs.length - 1; i++) {
+    const a = kfs[i]
+    const b = kfs[i + 1]
+    const span = b.timeSec - a.timeSec
+    if (span > 0 && !isLinearEasing(a.easings?.[joint.id])) {
+      const n = Math.max(1, Math.ceil(span * fps))
+      for (let s = 1; s < n; s++) times.push(a.timeSec + (span * s) / n)
+    }
+    times.push(b.timeSec)
+  }
+  return times
 }
 
 /**
@@ -170,7 +220,9 @@ export function buildAnimationRig(
   anim: PartAnimation,
   placements: readonly SubPartPlacement[],
   partId: string,
+  opts: { fps?: number } = {},
 ): AnimRig {
+  const fps = opts.fps ?? BAKE_FPS
   const placementById = new Map(placements.map((p) => [p.instanceId, p as Transform]))
   const nodes: AnimRigNode[] = []
   const push = (name: string, m: THREE.Matrix4): number => {
@@ -203,23 +255,27 @@ export function buildAnimationRig(
     }
   }
 
-  // Channels: sample each joint's local pose at every keyframe.
+  // Channels: bake each joint's local pose over its own sample-time set — dense
+  // across eased segments (so KSA's LINEAR playback reproduces the curve), sparse
+  // (keyframe endpoints only) across linear segments.
   const kfs = sortedKeyframes(anim)
-  const times = kfs.map((k) => k.timeSec)
+  const durationSec = Math.max(0, ...kfs.map((k) => k.timeSec))
   const channels: AnimRigChannel[] = []
   for (const j of anim.joints) {
     const node = jointNodeIdx.get(j.id)!
+    const times = jointSampleTimes(anim, j, fps)
     const transl: number[] = []
     const rot: number[] = []
     const scl: number[] = []
     let prev: THREE.Quaternion | null = null
     let scaleVaries = false
     let firstScale: THREE.Vector3 | null = null
-    for (const k of kfs) {
-      const { pos, quat, scale } = poseParts(poseOf(j.id, k))
+    for (const t of times) {
+      const { pos, quat, scale } = sampleJointPartsLocal(anim, j.id, t)
       transl.push(pos.x, pos.y, pos.z)
       // Keep consecutive quaternions in the same hemisphere so KSA's slerp takes the
-      // short way (q and -q are the same rotation but slerp differently).
+      // short way (q and -q are the same rotation but slerp differently) — across the
+      // DENSE sample stream, not just keyframes.
       if (prev && prev.dot(quat) < 0) quat.set(-quat.x, -quat.y, -quat.z, -quat.w)
       rot.push(quat.x, quat.y, quat.z, quat.w)
       prev = quat
@@ -234,5 +290,5 @@ export function buildAnimationRig(
     if (scaleVaries) channels.push({ node, path: 'scale', times, values: scl })
   }
 
-  return { nodes, roots: [rootIdx], channels, durationSec: Math.max(0, ...times) }
+  return { nodes, roots: [rootIdx], channels, durationSec }
 }

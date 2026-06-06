@@ -1,5 +1,6 @@
 import { CONNECTOR_LAYER_ID, createEmptyGameData, DEFAULT_LAYER_ID } from './types'
 import type {
+  CatalogAnimationModule,
   Connector,
   ConnectorFlag,
   EulerXYZ,
@@ -117,6 +118,35 @@ export interface ParsedGameData {
   connectorFlags: Map<string, ConnectorFlag[]>
   gameData: PartGameData
   subPartGameData: SubPartGameData[]
+  /** Parsed <KeyframeAnimationModule>s (refs in ORIGINAL instance-id space). */
+  animationModules: CatalogAnimationModule[]
+}
+
+/** Parses the <KeyframeAnimationModule> children of a <PartGameData> element. */
+export function animationModulesFromGameData(gd: Element): CatalogAnimationModule[] {
+  const out: CatalogAnimationModule[] = []
+  for (const mod of directChildren(gd, 'KeyframeAnimationModule')) {
+    const kf = directChildren(mod, 'KeyframeAnimation')[0]
+    const glbPath = kf?.getAttribute('Path')
+    if (!glbPath) continue // a module without a GLB reference is unusable
+    const st = directChildren(mod, 'SolarTracking')[0] ?? null
+    out.push({
+      moduleId: mod.getAttribute('Id') ?? '',
+      showDeployRetract: (mod.getAttribute('ShowDeployRetract') ?? '').toLowerCase() === 'true',
+      glbPath,
+      glbId: kf?.getAttribute('Id') ?? '',
+      solarTracking: st
+        ? {
+            degreesPerSecond: readNum(st, 'DegreesPerSecond') ?? 0,
+            subPartOriginalId: st.getAttribute('SubPart') ?? '',
+            excludeOriginalIds: directChildren(st, 'ExcludeSubPart')
+              .map((e) => e.textContent?.trim() ?? '')
+              .filter(Boolean),
+          }
+        : null,
+    })
+  }
+  return out
 }
 
 function readNum(el: Element | null | undefined, attr: string): number | null {
@@ -176,7 +206,7 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   const eva = directChildren(gd, 'EVADoor')[0]
   if (eva) game.evaDoor = { connectorId: eva.getAttribute('ConnectorId') ?? '' }
 
-  return { editorTags, connectorFlags, gameData: game, subPartGameData: [] }
+  return { editorTags, connectorFlags, gameData: game, subPartGameData: [], animationModules: animationModulesFromGameData(gd) }
 }
 
 /** Parses all top-level <SubPartGameData> elements from an Assets document root. */

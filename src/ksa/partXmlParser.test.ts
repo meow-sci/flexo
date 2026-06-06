@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { DOMParser } from '@xmldom/xmldom'
 import {
+  animationModulesFromGameData,
   connectorsFromPartElement,
   gameDataFromAssets,
   parseConnectorFlags,
@@ -213,5 +214,42 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
 
   it('returns null for an unknown part id', () => {
     expect(gameDataFromAssets(serializeGameData(source), 'Nope', new DOMParser())).toBeNull()
+  })
+})
+
+describe('animationModulesFromGameData', () => {
+  const xml = `
+    <PartGameData Id="SolarPanelB">
+      <KeyframeAnimationModule Id="SolarPanelAnimation" ShowDeployRetract="true">
+        <KeyframeAnimation Path="Animations/SolarPanelB_Anim.glb" Id="SolarPanelB_Anim" />
+        <SolarTracking DegreesPerSecond="5" SubPart="DriveRotorB1">
+          <ExcludeSubPart>DriveHousingB1</ExcludeSubPart>
+        </SolarTracking>
+      </KeyframeAnimationModule>
+    </PartGameData>`
+  const gd = new DOMParser().parseFromString(xml, 'application/xml').getElementsByTagName('PartGameData')[0] as unknown as Element
+
+  it('parses the module, ShowDeployRetract, GLB path and solar tracking (original ids)', () => {
+    const [m] = animationModulesFromGameData(gd)
+    expect(m.moduleId).toBe('SolarPanelAnimation')
+    expect(m.showDeployRetract).toBe(true)
+    expect(m.glbPath).toBe('Animations/SolarPanelB_Anim.glb')
+    expect(m.solarTracking).toEqual({
+      degreesPerSecond: 5,
+      subPartOriginalId: 'DriveRotorB1',
+      excludeOriginalIds: ['DriveHousingB1'],
+    })
+  })
+
+  it('defaults ShowDeployRetract to false when absent', () => {
+    const x = new DOMParser()
+      .parseFromString(
+        `<PartGameData Id="X"><KeyframeAnimationModule Id="A"><KeyframeAnimation Path="Animations/A.glb" Id="A" /></KeyframeAnimationModule></PartGameData>`,
+        'application/xml',
+      )
+      .getElementsByTagName('PartGameData')[0] as unknown as Element
+    const [m] = animationModulesFromGameData(x)
+    expect(m.showDeployRetract).toBe(false)
+    expect(m.solarTracking).toBeNull()
   })
 })

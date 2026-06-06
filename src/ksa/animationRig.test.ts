@@ -72,6 +72,10 @@ function expectMatrixClose(a: THREE.Matrix4, b: THREE.Matrix4): void {
   for (let i = 0; i < 16; i++) expect(a.elements[i]).toBeCloseTo(b.elements[i], 5)
 }
 
+function expectMatrixCloseTo(a: THREE.Matrix4, b: THREE.Matrix4, digits: number): void {
+  for (let i = 0; i < 16; i++) expect(a.elements[i]).toBeCloseTo(b.elements[i], digits)
+}
+
 describe('buildAnimationRig — single joint (door/hinge)', () => {
   // A panel at x=1, a root joint pivoting about Y from 0° (rest) to 90° (open).
   const placement = pl('panel_1', tf({ pos: [1, 0, 0] }))
@@ -154,5 +158,57 @@ describe('buildAnimationRig — kinematic chain (spider leg / FK)', () => {
     const kneeIdx = rig.nodes.findIndex((n) => n.name === 'jt_knee')
     expect(rig.nodes[hipIdx].children).toContain(kneeIdx)
     expect(rig.nodes[kneeIdx].children).toContain(rig.nodes.findIndex((n) => n.name === 'foot_1'))
+  })
+})
+
+describe('buildAnimationRig — easing / export re-baking', () => {
+  const placement = pl('panel_1', tf({ pos: [1, 0, 0] }))
+  function door(easing?: { kind: 'preset'; preset: 'easeInOut' }): PartAnimation {
+    return {
+      id: 'anim_door',
+      name: 'Door',
+      durationSec: 1,
+      mode: 'actuate',
+      joints: [{ id: 'j', name: 'Hinge', parentJointId: null, memberInstanceIds: ['panel_1'] }],
+      keyframes: [
+        { id: 'k0', timeSec: 0, poses: { j: tf() }, ...(easing ? { easings: { j: easing } } : {}) },
+        { id: 'k1', timeSec: 1, poses: { j: tf({ rot: [0, Math.PI / 2, 0] }) } },
+      ],
+      solarTracking: null,
+    }
+  }
+
+  it('keeps linear-only segments sparse — channel times === keyframe times', () => {
+    const rig = buildAnimationRig(door(), [placement], 'MyPart')
+    for (const ch of rig.channels) expect(ch.times).toEqual([0, 1])
+  })
+
+  it('bakes an eased segment into dense LINEAR samples at ~fps', () => {
+    const rig = buildAnimationRig(door({ kind: 'preset', preset: 'easeInOut' }), [placement], 'MyPart', { fps: 30 })
+    const rot = rig.channels.find((c) => c.path === 'rotation')!
+    expect(rot.times.length).toBe(31) // ceil(1*30) subdivisions + 1
+    expect(rot.times[0]).toBe(0)
+    expect(rot.times[rot.times.length - 1]).toBe(1)
+  })
+
+  it('the dense-baked eased motion reconstructs the editor preview at every t', () => {
+    const anim = door({ kind: 'preset', preset: 'easeInOut' })
+    const rig = buildAnimationRig(anim, [placement], 'MyPart', { fps: 30 })
+    // KSA replays the dense channels with LINEAR interpolation; that must match the
+    // eased preview formula within the baking density tolerance.
+    // ~0.001 chord error is the LINEAR approximation of the curve between 30fps samples.
+    for (const t of [0.1, 0.25, 0.4, 0.5, 0.6, 0.75, 0.9]) {
+      expectMatrixCloseTo(evaluateLeafWorld(rig, 'panel_1', t), previewOverrideMatrix(anim, 'panel_1', t, placement)!, 2)
+    }
+  })
+
+  it('easing actually changes the motion vs. linear (lags before midpoint)', () => {
+    const eased = door({ kind: 'preset', preset: 'easeInOut' })
+    const linear = door()
+    // ease-in-out lags linear in the first half — the panel has swept a smaller angle.
+    const e = position(previewOverrideMatrix(eased, 'panel_1', 0.25, placement)!)
+    const l = position(previewOverrideMatrix(linear, 'panel_1', 0.25, placement)!)
+    // larger remaining x  ⇒ smaller swept angle
+    expect(e[0]).toBeGreaterThan(l[0])
   })
 })

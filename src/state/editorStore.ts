@@ -6,6 +6,7 @@ import type {
   EditingPart,
   EulerXYZ,
   KittenKind,
+  PartAnimation,
   PartGameData,
   SubPartGameData,
   SubPartPlacement,
@@ -414,6 +415,14 @@ export function addPart(
   connectors: readonly Connector[] = [],
   editorTags: readonly string[] = [],
   targetLayerId?: string,
+  /**
+   * Optional builder for animations imported alongside the Part. Receives the
+   * old→new instance-id map (instance ids are regenerated below to avoid collisions),
+   * so it can remap the animation's joint members / solar-tracking SubPart refs. Kept
+   * as a callback so editorStore stays three.js-free (the GLB decode lives in the
+   * importBuiltInPart wrapper).
+   */
+  buildAnimations?: (idMap: ReadonlyMap<string, string>) => PartAnimation[],
 ): string {
   if (placements.length === 0 && connectors.length === 0) return DEFAULT_LAYER_ID
   const importDetail = placements.length > 0 && connectors.length === 0
@@ -431,11 +440,16 @@ export function addPart(
     if (!part.editorTags.includes(tag)) part.editorTags.push(tag)
   }
   const importedSubIndices: number[] = []
+  // Original KSA instance id → regenerated id, so imported animations can rewire their
+  // joint members / solar-tracking refs (which target SubParts by their original id).
+  const idMap = new Map<string, string>()
   for (const src of placements) {
     const base = lastSegmentLower(src.subPartTemplateId)
     const count = part.placements.filter((p) => p.subPartTemplateId === src.subPartTemplateId).length
+    const instanceId = `${base}_${count + 1}`
+    idMap.set(src.instanceId, instanceId)
     part.placements.push({
-      instanceId: `${base}_${count + 1}`,
+      instanceId,
       subPartTemplateId: src.subPartTemplateId,
       position: { ...src.position },
       rotation: { ...src.rotation },
@@ -444,6 +458,7 @@ export function addPart(
     })
     importedSubIndices.push(part.placements.length - 1)
   }
+  if (buildAnimations) part.animations.push(...buildAnimations(idMap))
   for (const src of connectors) {
     part.connectors.push({
       id: nextConnectorId(part), // regenerated against the growing list

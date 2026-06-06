@@ -524,6 +524,32 @@ export interface AnimationJoint {
 }
 
 /**
+ * A named easing preset. Each maps to a fixed CSS-style cubic-bézier control-point
+ * tuple (see EASING_PRESETS in `easing.ts`). `linear` is the identity (no warp).
+ */
+export type EasingPreset =
+  | 'linear'
+  | 'easeIn'
+  | 'easeOut'
+  | 'easeInOut'
+  | 'easeInCubic'
+  | 'easeOutCubic'
+  | 'easeInOutCubic'
+  | 'easeInSine'
+  | 'easeOutSine'
+  | 'easeInOutSine'
+
+/**
+ * How a joint's pose interpolates across ONE keyframe segment. The canonical form is
+ * a CSS-style cubic-bézier (P0=(0,0), P1=(x1,y1), P2=(x2,y2), P3=(1,1)); presets are
+ * just named shortcuts that resolve to control points. Absent/`linear` = no warp.
+ * The reverse-fit importer produces `cubicBezier`; the editor offers both.
+ */
+export type EasingConfig =
+  | { kind: 'preset'; preset: EasingPreset }
+  | { kind: 'cubicBezier'; x1: number; y1: number; x2: number; y2: number }
+
+/**
  * A snapshot of every joint's LOCAL frame (relative to its parent joint, or Part
  * space for root joints) at one point on the 0→durationSec timeline. The keyframe
  * at timeSec=0 is the rest pose (must equal each SubPart's placement once composed).
@@ -535,6 +561,14 @@ export interface AnimationKeyframe {
   timeSec: number
   /** jointId → that joint's local frame at this time. Every joint has an entry. */
   poses: Record<string, Transform>
+  /**
+   * Optional easing for each joint over the OUTGOING segment [this kf → next kf].
+   * A missing jointId entry (or `linear`) means linear interpolation for that joint
+   * on this segment. Ignored on the final keyframe (it has no outgoing segment).
+   * Stored per-joint because keyframe times are global but joints animate in
+   * different sub-windows — on one segment joint A may ease while joint B holds.
+   */
+  easings?: Record<string, EasingConfig>
 }
 
 /**
@@ -570,6 +604,29 @@ export interface PartAnimation {
   keyframes: AnimationKeyframe[]
   /** Optional sun-tracking extension, or null. */
   solarTracking: SolarTrackingSpec | null
+}
+
+/**
+ * A `<KeyframeAnimationModule>` parsed from a built-in Part's GameData XML, before
+ * import. References (the solar-tracking SubParts) are in the ORIGINAL KSA instance-id
+ * space; {@link import('./animationImport').decodeAnimationGlb} + the importer remap
+ * them to the editor's regenerated instance ids. See docs in animationImport.ts.
+ */
+export interface CatalogAnimationModule {
+  /** Module Id attribute (e.g. "SolarPanelAnimation"). */
+  moduleId: string
+  /** Maps to {@link AnimationMode}: ShowDeployRetract="true" ⇒ deployRetract. */
+  showDeployRetract: boolean
+  /** Relative path to the animation GLB, e.g. "Animations/..._Anim.glb". */
+  glbPath: string
+  /** `<KeyframeAnimation Id>` of the GLB (informational). */
+  glbId: string
+  /** Optional sun-tracking, with SubPart refs in ORIGINAL instance-id space. */
+  solarTracking: {
+    degreesPerSecond: number
+    subPartOriginalId: string
+    excludeOriginalIds: string[]
+  } | null
 }
 
 /** An identity (rest) transform — position 0, rotation 0, scale 1. */

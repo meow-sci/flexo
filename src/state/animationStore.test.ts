@@ -22,6 +22,8 @@ import {
   setAnimationDuration,
   setJointPivot,
   moveJointPivot,
+  setJointSegmentEasing,
+  setSegmentEasingAllJoints,
 } from './animationStore'
 
 const anim0 = () => $part.get().animations[0]
@@ -253,5 +255,42 @@ describe('animationStore — joint pivots', () => {
     expect($isPoseEditing.get()).toBe(true)
     $activeJointId.set(null)
     expect($isPoseEditing.get()).toBe(false)
+  })
+
+  describe('segment easing', () => {
+    it('stores an eased curve on the outgoing keyframe segment for one joint', () => {
+      const { aid, jid } = setupDoor()
+      const restId = restKeyframeId(anim0())
+      setJointSegmentEasing(aid, restId, jid, { kind: 'preset', preset: 'easeInOut' })
+      const rest = anim0().keyframes.find((k) => k.id === restId)!
+      expect(rest.easings?.[jid]).toEqual({ kind: 'preset', preset: 'easeInOut' })
+    })
+
+    it('clears the entry (and the map) when set to linear — keeps export byte-identical', () => {
+      const { aid, jid } = setupDoor()
+      const restId = restKeyframeId(anim0())
+      setJointSegmentEasing(aid, restId, jid, { kind: 'cubicBezier', x1: 0.4, y1: 0, x2: 0.6, y2: 1 })
+      setJointSegmentEasing(aid, restId, jid, { kind: 'preset', preset: 'linear' })
+      const rest = anim0().keyframes.find((k) => k.id === restId)!
+      expect(rest.easings).toBeUndefined()
+    })
+
+    it('applies the same easing to every joint with "all joints"', () => {
+      const { aid, hip, knee } = setupLeg()
+      const restId = restKeyframeId(anim0())
+      setSegmentEasingAllJoints(aid, restId, { kind: 'preset', preset: 'easeOut' })
+      const rest = anim0().keyframes.find((k) => k.id === restId)!
+      expect(rest.easings?.[hip]).toEqual({ kind: 'preset', preset: 'easeOut' })
+      expect(rest.easings?.[knee]).toEqual({ kind: 'preset', preset: 'easeOut' })
+    })
+
+    it('clears the preceding segment easing when a keyframe splits it', () => {
+      const { aid, jid } = setupDoor()
+      const restId = restKeyframeId(anim0())
+      setJointSegmentEasing(aid, restId, jid, { kind: 'preset', preset: 'easeInOut' })
+      addKeyframe(aid, 0.5) // splits the [0 → 1] segment
+      const rest = anim0().keyframes.find((k) => k.id === restId)!
+      expect(rest.easings).toBeUndefined()
+    })
   })
 })

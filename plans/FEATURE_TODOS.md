@@ -123,7 +123,7 @@
 - ✅ about screen doesnt overflow and scroll on mobile anymore
 - ✅ global reset should NOT delete the mod folder grant from IndexedDB
 
-- can we import the built-in animations for e.g. solar panel?  does it map cleanly to flexos representation of an animation system?
+- can we import the built-in animations for e.g. solar panel?  does it map cleanly to flexos representation of an animation system? the built-in solar panel Part in question has Id "CoreElectricalA_Prefab_SolarPanelB"
 - hotkeys for move/rotate/scale (make sure works in animation mode too)
 - mod export (zip and folder) should also export the project json
 - can connectors be part of an animation joint and pose?

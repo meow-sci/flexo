@@ -26,11 +26,14 @@ import {
   setKeyframeTime,
   setJointPose,
   setJointPivot,
+  setJointSegmentEasing,
+  setSegmentEasingAllJoints,
   selectKeyframeForEditing,
   setSolarTracking,
 } from '../state/animationStore'
 import { isAnimationExportable } from '../ksa/animationNaming'
-import { identityTransform, type AnimationJoint, type AnimationKeyframe, type AnimationMode, type PartAnimation, type SubPartPlacement } from '../ksa/types'
+import { EasingEditor } from './EasingEditor'
+import { identityTransform, type AnimationJoint, type AnimationKeyframe, type AnimationMode, type EasingConfig, type PartAnimation, type SubPartPlacement } from '../ksa/types'
 
 const RAD2DEG = 180 / Math.PI
 const DEG2RAD = Math.PI / 180
@@ -517,6 +520,11 @@ function PoseEditor({ anim }: { anim: PartAnimation }) {
   }
   const pose = kf.poses[joint.id] ?? identityTransform()
   const isRest = kf.timeSec === 0
+  // The easing applies to the segment LEAVING this pose; only meaningful if a later
+  // pose exists for the joint to interpolate toward.
+  const sorted = [...anim.keyframes].sort((a, b) => a.timeSec - b.timeSec)
+  const hasNext = sorted.findIndex((k) => k.id === kf.id) < sorted.length - 1
+  const easing = kf.easings?.[joint.id]
 
   const commit = (mut: (t: ReturnType<typeof identityTransform>) => void) => {
     const next = { position: { ...pose.position }, rotation: { ...pose.rotation }, scale: { ...pose.scale } }
@@ -525,6 +533,7 @@ function PoseEditor({ anim }: { anim: PartAnimation }) {
   }
   const start = () => pushUndo('pose', `${joint.name} @ ${isRest ? 'rest' : `${fmt(kf.timeSec)}s`}`)
   const axes = ['x', 'y', 'z'] as const
+  const LINEAR: EasingConfig = { kind: 'preset', preset: 'linear' }
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-accent/40 bg-panel p-2">
@@ -568,6 +577,26 @@ function PoseEditor({ anim }: { anim: PartAnimation }) {
           ))}
         </div>
       </div>
+      {hasNext && (
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+            <span className="text-xs uppercase tracking-wide text-fg-subtle">Easing → next pose</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label="Apply this easing to every joint on this segment"
+              onPress={() => setSegmentEasingAllJoints(anim.id, kf.id, easing ?? LINEAR)}
+            >
+              All joints
+            </Button>
+          </div>
+          <EasingEditor
+            value={easing}
+            onEditStart={() => pushUndo('segment easing', `${joint.name} @ ${fmt(kf.timeSec)}s`)}
+            onChange={(cfg) => setJointSegmentEasing(anim.id, kf.id, joint.id, cfg)}
+          />
+        </div>
+      )}
     </div>
   )
 }

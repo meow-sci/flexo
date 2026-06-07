@@ -120,8 +120,8 @@ export function SettingsModal({
                 onChange={(v) => setKittenTextureExport({ contentCorePath: v })}
               />
               <span className="text-xs text-fg-subtle">
-                Kitten SubParts reference the game's own .ktx2 at this path (nothing copied into
-                the mod). Tied to this install location — switch to “Bundle” for a portable mod.
+                Kitten SubParts reference the game's own .ktx2 at this path (nothing copied into the
+                mod). Tied to this install location — switch to “Bundle” for a portable mod.
               </span>
             </label>
           )}

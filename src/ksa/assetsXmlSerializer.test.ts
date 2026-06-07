@@ -48,8 +48,17 @@ describe('serializeAssets', () => {
       normalPath: 'Textures/X_FlatNormal.ktx2',
       aoRoughMetalPath: 'Textures/X_NeutralORM.ktx2',
       subParts: [
-        { subPartId: 'glow', materialId: 'glow_Material', diffusePath: 'Textures/X_glow_Diffuse.ktx2', emissivePath: 'Textures/X_glow_Emissive.ktx2' },
-        { subPartId: 'plain', materialId: 'plain_Material', diffusePath: 'Textures/X_plain_Diffuse.ktx2' },
+        {
+          subPartId: 'glow',
+          materialId: 'glow_Material',
+          diffusePath: 'Textures/X_glow_Diffuse.ktx2',
+          emissivePath: 'Textures/X_glow_Emissive.ktx2',
+        },
+        {
+          subPartId: 'plain',
+          materialId: 'plain_Material',
+          diffusePath: 'Textures/X_plain_Diffuse.ktx2',
+        },
       ],
     })
     expect(xml).toContain('<Emissive Path="Textures/X_glow_Emissive.ktx2" Category="Vessel"')
@@ -66,8 +75,18 @@ describe('serializeAssets', () => {
       normalPath: 'Textures/X_FlatNormal.ktx2',
       aoRoughMetalPath: 'Textures/X_NeutralORM.ktx2',
       subParts: [
-        { subPartId: 'visor', materialId: 'visor_Material', diffusePath: 'Textures/X_visor_Diffuse.ktx2', glass: true },
-        { subPartId: 'visor_Glow', materialId: 'visor_Glow_Material', diffusePath: 'Textures/X_glow_Diffuse.ktx2', emissivePath: 'Textures/X_glow_Emissive.ktx2' },
+        {
+          subPartId: 'visor',
+          materialId: 'visor_Material',
+          diffusePath: 'Textures/X_visor_Diffuse.ktx2',
+          glass: true,
+        },
+        {
+          subPartId: 'visor_Glow',
+          materialId: 'visor_Glow_Material',
+          diffusePath: 'Textures/X_glow_Diffuse.ktx2',
+          emissivePath: 'Textures/X_glow_Emissive.ktx2',
+        },
       ],
     })
     expect(xml).toContain('<PartModelGlass Id="visor_Model"')
@@ -90,11 +109,17 @@ describe('serializeAssets', () => {
           aoRoughMetalPath: 'Textures/Characters/Kitten_EMU_ORM.ktx2',
         },
         // Kitten eyes: diffuse only → undefined channels fall back to the shared synthetic.
-        { subPartId: 'eye', materialId: 'eye_Material', diffusePath: 'Textures/Characters/Kitten_Eye_A.ktx2' },
+        {
+          subPartId: 'eye',
+          materialId: 'eye_Material',
+          diffusePath: 'Textures/Characters/Kitten_Eye_A.ktx2',
+        },
       ],
     })
     expect(xml).toContain('<Normal Path="Textures/Characters/Kitten_EMU_N.ktx2" Category="Vessel"')
-    expect(xml).toContain('<AoRoughMetal Path="Textures/Characters/Kitten_EMU_ORM.ktx2" Category="Vessel"')
+    expect(xml).toContain(
+      '<AoRoughMetal Path="Textures/Characters/Kitten_EMU_ORM.ktx2" Category="Vessel"',
+    )
     // The eye material falls back to the shared synthetic paths.
     expect(xml).toContain('<Normal Path="Textures/X_FlatNormal.ktx2" Category="Vessel"')
     expect(xml).toContain('<AoRoughMetal Path="Textures/X_NeutralORM.ktx2" Category="Vessel"')
@@ -105,8 +130,16 @@ describe('serializeAssets', () => {
       // No meshAtlasPath: an IVA-only export declares no custom geometry.
       subParts: [],
       referenceSubParts: [
-        { subPartId: 'flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA', meshId: 'CoreIVAPropA_Subpart_ChairA', materialId: 'CoreIVAPropA_Material' },
-        { subPartId: 'flexo_MyShip_CoreIVAPropA_Subpart_NoteA_NotIVA', meshId: 'CoreIVAPropA_Subpart_NoteA', materialId: null },
+        {
+          subPartId: 'flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA',
+          meshId: 'CoreIVAPropA_Subpart_ChairA',
+          materialId: 'CoreIVAPropA_Material',
+        },
+        {
+          subPartId: 'flexo_MyShip_CoreIVAPropA_Subpart_NoteA_NotIVA',
+          meshId: 'CoreIVAPropA_Subpart_NoteA',
+          materialId: null,
+        },
       ],
     })
     expect(xml).toContain('<SubPart Id="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA"')
@@ -137,7 +170,12 @@ describe('serializeAssets', () => {
     const xml = serializeAssets({
       meshAtlasPath: 'Meshes/X.glb',
       subParts: [
-        { subPartId: 'visor', materialId: 'visor_Material', diffusePath: 'Textures/Visor.ktx2', glass: true },
+        {
+          subPartId: 'visor',
+          materialId: 'visor_Material',
+          diffusePath: 'Textures/Visor.ktx2',
+          glass: true,
+        },
         { subPartId: 'suit', materialId: 'suit_Material', diffusePath: 'Textures/Suit.ktx2' },
       ],
     })

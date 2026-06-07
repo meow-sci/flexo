@@ -642,7 +642,11 @@ export interface CatalogAnimationModule {
 
 /** An identity (rest) transform — position 0, rotation 0, scale 1. */
 export function identityTransform(): Transform {
-  return { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } }
+  return {
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+  }
 }
 
 /** A fresh, empty animation: one rest keyframe at t=0, no joints, 1 s actuate. */

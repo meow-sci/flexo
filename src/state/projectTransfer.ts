@@ -75,9 +75,7 @@ export interface MergeResult {
   newLayerIds: string[]
 }
 
-export type ParseResult =
-  | { ok: true; env: ProjectExportEnvelope }
-  | { ok: false; error: string }
+export type ParseResult = { ok: true; env: ProjectExportEnvelope } | { ok: false; error: string }
 
 /** A part-ified kitten submesh — pure data referencing game assets (no uploaded binary). */
 function isKittenMesh(m: CustomMesh): boolean {
@@ -140,7 +138,10 @@ export function parseProjectImport(text: string): ParseResult {
 
   const obj = raw as Record<string, unknown>
   if (obj.format !== PROJECT_EXPORT_FORMAT) {
-    return { ok: false, error: `Not a flexo project export (format: ${JSON.stringify(obj.format)}).` }
+    return {
+      ok: false,
+      error: `Not a flexo project export (format: ${JSON.stringify(obj.format)}).`,
+    }
   }
   if (typeof obj.version !== 'number' || obj.version > PROJECT_EXPORT_VERSION) {
     return { ok: false, error: `Unsupported export version: ${JSON.stringify(obj.version)}.` }
@@ -159,7 +160,10 @@ export function parseProjectImport(text: string): ParseResult {
   return { ok: true, env: normalizeEnvelope(obj, d) }
 }
 
-function normalizeEnvelope(obj: Record<string, unknown>, d: Record<string, unknown>): ProjectExportEnvelope {
+function normalizeEnvelope(
+  obj: Record<string, unknown>,
+  d: Record<string, unknown>,
+): ProjectExportEnvelope {
   const gameData =
     d.gameData && typeof d.gameData === 'object'
       ? { ...createEmptyGameData(), ...(d.gameData as Partial<PartGameData>) }
@@ -173,7 +177,9 @@ function normalizeEnvelope(obj: Record<string, unknown>, d: Record<string, unkno
     data: {
       editorTags: Array.isArray(d.editorTags) ? (d.editorTags as string[]) : [],
       gameData,
-      subPartGameData: Array.isArray(d.subPartGameData) ? (d.subPartGameData as SubPartGameData[]) : [],
+      subPartGameData: Array.isArray(d.subPartGameData)
+        ? (d.subPartGameData as SubPartGameData[])
+        : [],
       layers: d.layers as Layer[],
       placements: d.placements as SubPartPlacement[],
       connectors: d.connectors as Connector[],
@@ -312,7 +318,10 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
         anim.solarTracking = null
       } else {
         anim.solarTracking.subPartInstanceId = driven
-        anim.solarTracking.excludeInstanceIds = remapIds(anim.solarTracking.excludeInstanceIds, instanceIdMap)
+        anim.solarTracking.excludeInstanceIds = remapIds(
+          anim.solarTracking.excludeInstanceIds,
+          instanceIdMap,
+        )
       }
     }
     part.animations.push(anim)
@@ -331,7 +340,11 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
   }
 }
 
-function mergeGameData(target: PartGameData, src: PartGameData, connectorIdMap: Map<string, string>): void {
+function mergeGameData(
+  target: PartGameData,
+  src: PartGameData,
+  connectorIdMap: Map<string, string>,
+): void {
   if (!target.displayName.trim() && src.displayName?.trim()) target.displayName = src.displayName
   if (target.customMass == null && src.customMass != null) target.customMass = src.customMass
   target.batteries.push(...(src.batteries ?? []).map((b) => ({ ...b })))

@@ -118,7 +118,13 @@ export function MassSection({ gameData }: { gameData: PartGameData }) {
 
 // --- Tanks (per SubPart template) ---
 
-export function TanksSection({ tanks, subPartTemplateId }: { tanks: Tank[]; subPartTemplateId: string }) {
+export function TanksSection({
+  tanks,
+  subPartTemplateId,
+}: {
+  tanks: Tank[]
+  subPartTemplateId: string
+}) {
   return (
     <div className="flex flex-col gap-2">
       {tanks.map((tank, i) => (
@@ -216,7 +222,12 @@ function PowerList({
               onCommit={(n) => onChange(i, n)}
             />
           </Field>
-          <Button size="sm" variant="ghost" onPress={() => onRemove(i)} aria-label={`Remove ${addLabel} ${i + 1}`}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onPress={() => onRemove(i)}
+            aria-label={`Remove ${addLabel} ${i + 1}`}
+          >
             Remove
           </Button>
         </div>
@@ -309,7 +320,11 @@ export function CouplingSection({ part }: { part: EditingPart }) {
         </Switch>
         {decoupler && (
           <>
-            <ConnectorSelect connectorIds={ids} value={decoupler.connectorId} onChange={setDecouplerConnector} />
+            <ConnectorSelect
+              connectorIds={ids}
+              value={decoupler.connectorId}
+              onChange={setDecouplerConnector}
+            />
             <Field label="Force (N)">
               <PreciseNumberInput
                 aria-label="Decoupler force in newtons"
@@ -329,7 +344,11 @@ export function CouplingSection({ part }: { part: EditingPart }) {
         </Switch>
         {dockingPort && (
           <>
-            <ConnectorSelect connectorIds={ids} value={dockingPort.connectorId} onChange={setDockingPortConnector} />
+            <ConnectorSelect
+              connectorIds={ids}
+              value={dockingPort.connectorId}
+              onChange={setDockingPortConnector}
+            />
             <Field label="Force (N)">
               <PreciseNumberInput
                 aria-label="Docking port force in newtons"
@@ -348,7 +367,11 @@ export function CouplingSection({ part }: { part: EditingPart }) {
           EVA Door
         </Switch>
         {evaDoor && (
-          <ConnectorSelect connectorIds={ids} value={evaDoor.connectorId} onChange={setEvaDoorConnector} />
+          <ConnectorSelect
+            connectorIds={ids}
+            value={evaDoor.connectorId}
+            onChange={setEvaDoorConnector}
+          />
         )}
       </div>
     </div>

@@ -144,7 +144,10 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
         id: 'redo',
         label: 'Redo',
         keys: ['mod+y', 'mod+shift+z'],
-        chords: [['mod', 'Y'], ['mod', 'shift', 'Z']],
+        chords: [
+          ['mod', 'Y'],
+          ['mod', 'shift', 'Z'],
+        ],
         run: runRedo,
       },
     ],

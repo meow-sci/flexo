@@ -23,14 +23,21 @@ export function CustomTextureDialog({ onClose }: CustomTextureDialogProps) {
   const fileInput = useRef<HTMLInputElement>(null)
 
   // Revoke the last preview object URL on unmount (cleanup only — no setState).
-  useEffect(() => () => {
-    if (previewUrl) URL.revokeObjectURL(previewUrl)
-  }, [previewUrl])
+  useEffect(
+    () => () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl)
+    },
+    [previewUrl],
+  )
 
   const pickFile = (f: File | null | undefined) => {
     if (!f) return
     if (!f.type.startsWith('image/')) {
-      toast({ title: 'Not an image', description: `“${f.name}” is not an image file.`, variant: 'warning' })
+      toast({
+        title: 'Not an image',
+        description: `“${f.name}” is not an image file.`,
+        variant: 'warning',
+      })
       return
     }
     setPreviewUrl((prev) => {
@@ -70,14 +77,24 @@ export function CustomTextureDialog({ onClose }: CustomTextureDialogProps) {
       onClose()
     } catch (err) {
       console.warn('texture encode failed', err)
-      toast({ title: 'Encode failed', description: String((err as Error)?.message ?? err), variant: 'danger' })
+      toast({
+        title: 'Encode failed',
+        description: String((err as Error)?.message ?? err),
+        variant: 'danger',
+      })
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <Modal isOpen onOpenChange={(v) => !v && onClose()} isDismissable variant="fullscreen" className="max-w-md">
+    <Modal
+      isOpen
+      onOpenChange={(v) => !v && onClose()}
+      isDismissable
+      variant="fullscreen"
+      className="max-w-md"
+    >
       <Dialog>
         <DialogHeader title="Upload texture" onClose={onClose} />
         <div className="flex flex-col gap-3 p-3">

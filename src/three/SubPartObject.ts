@@ -29,7 +29,11 @@ export class SubPartObject {
   private readonly materials: THREE.MeshStandardMaterial[]
   private readonly baseEmissives: Array<{ color: THREE.Color; intensity: number }>
 
-  private constructor(instanceId: string, mesh: THREE.Mesh, materials: THREE.MeshStandardMaterial[]) {
+  private constructor(
+    instanceId: string,
+    mesh: THREE.Mesh,
+    materials: THREE.MeshStandardMaterial[],
+  ) {
     this.instanceId = instanceId
     this.materials = materials
     this.baseEmissives = materials.map((m) => ({

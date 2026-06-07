@@ -28,8 +28,7 @@ const trigger = tv({
 })
 
 export interface SelectKitProps<T extends object>
-  extends Omit<AriaSelectProps<T>, 'children'>,
-    VariantProps<typeof trigger> {
+  extends Omit<AriaSelectProps<T>, 'children'>, VariantProps<typeof trigger> {
   label?: React.ReactNode
   items?: Iterable<T>
   children: React.ReactNode | ((item: T) => React.ReactNode)

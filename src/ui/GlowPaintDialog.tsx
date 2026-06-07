@@ -35,7 +35,9 @@ export function GlowPaintDialog() {
 function PaintBody({ mesh }: { mesh: CustomMesh }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const painting = useRef(false)
-  const [color, setColor] = useState(() => (mesh.emissive ? rgbToHex(mesh.emissive.color) : '#78dcff'))
+  const [color, setColor] = useState(() =>
+    mesh.emissive ? rgbToHex(mesh.emissive.color) : '#78dcff',
+  )
   const [brush, setBrush] = useState(48)
   const [intensity, setIntensity] = useState(() => mesh.emissive?.strength ?? 0.8)
   const [eraser, setEraser] = useState(false)
@@ -86,7 +88,8 @@ function PaintBody({ mesh }: { mesh: CustomMesh }) {
     const canvas = canvasRef.current
     if (!canvas) return
     const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
-    if (blob) await setMeshGlowPainted(mesh.id, blob, { color: hexToRgb(color), strength: intensity })
+    if (blob)
+      await setMeshGlowPainted(mesh.id, blob, { color: hexToRgb(color), strength: intensity })
     close()
   }
 
@@ -122,11 +125,31 @@ function PaintBody({ mesh }: { mesh: CustomMesh }) {
               className="h-6 w-6 cursor-pointer rounded border border-border bg-transparent"
             />
             <label className="ml-auto flex items-center gap-1.5 text-xs text-fg-muted">
-              <input type="checkbox" checked={eraser} onChange={(e) => setEraser(e.target.checked)} /> Eraser
+              <input
+                type="checkbox"
+                checked={eraser}
+                onChange={(e) => setEraser(e.target.checked)}
+              />{' '}
+              Eraser
             </label>
           </div>
-          <LabeledSlider label="Brush" min={4} max={128} step={1} value={brush} onChange={setBrush} />
-          <LabeledSlider label="Intensity" min={0} max={1} step={0.01} value={intensity} onChange={setIntensity} pct />
+          <LabeledSlider
+            label="Brush"
+            min={4}
+            max={128}
+            step={1}
+            value={brush}
+            onChange={setBrush}
+          />
+          <LabeledSlider
+            label="Intensity"
+            min={0}
+            max={1}
+            step={0.01}
+            value={intensity}
+            onChange={setIntensity}
+            pct
+          />
           <div className="flex justify-between gap-2">
             <Button size="sm" variant="ghost" onPress={clear}>
               Clear

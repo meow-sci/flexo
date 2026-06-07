@@ -221,7 +221,13 @@ describe('serializeGameData', () => {
       {
         subPartTemplateId: TANK_TMPL,
         tanks: [
-          { ...createTank(), shape: 'Cylindrical', lengthM: 3, outerRadiusM: 0.8, wallThicknessMm: 2.5 },
+          {
+            ...createTank(),
+            shape: 'Cylindrical',
+            lengthM: 3,
+            outerRadiusM: 0.8,
+            wallThicknessMm: 2.5,
+          },
           { ...createTank(), shape: 'Spherical', wallMaterialId: 'Steel(s)', outerRadiusM: 1.2 },
         ],
       },
@@ -241,7 +247,10 @@ describe('serializeGameData', () => {
   })
 
   it('emits editor tags here (not on the Part)', () => {
-    expect(tags(doc, 'EditorTag').map((e) => e.getAttribute('Value'))).toEqual(['Structural', 'RCS'])
+    expect(tags(doc, 'EditorTag').map((e) => e.getAttribute('Value'))).toEqual([
+      'Structural',
+      'RCS',
+    ])
   })
 
   it('emits custom mass in kg', () => {
@@ -270,7 +279,11 @@ describe('serializeGameData', () => {
 
   it('emits every connector, with <Flags> only when set', () => {
     const connectors = tags(doc, 'Connector')
-    expect(connectors.map((e) => e.getAttribute('Id'))).toEqual(['_connector1', '_connector2', '_connector3'])
+    expect(connectors.map((e) => e.getAttribute('Id'))).toEqual([
+      '_connector1',
+      '_connector2',
+      '_connector3',
+    ])
     expect(child(connectors[0], 'Flags')).toBeNull()
     expect(child(connectors[1], 'Flags')!.textContent).toBe('ToSurface')
     expect(child(connectors[2], 'Flags')!.textContent).toBe('Internal')

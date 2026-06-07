@@ -25,13 +25,28 @@ import type { Vec3 } from '../ksa/types'
 const RECT_EDGES = ((): number[] => {
   const h = 0.5
   const c: Record<string, [number, number, number]> = {
-    a: [-h, -h, -h], b: [h, -h, -h], cc: [h, -h, h], d: [-h, -h, h],
-    e: [-h, h, -h], f: [h, h, -h], g: [h, h, h], k: [-h, h, h],
+    a: [-h, -h, -h],
+    b: [h, -h, -h],
+    cc: [h, -h, h],
+    d: [-h, -h, h],
+    e: [-h, h, -h],
+    f: [h, h, -h],
+    g: [h, h, h],
+    k: [-h, h, h],
   }
   const edges: [string, string][] = [
-    ['a', 'b'], ['b', 'cc'], ['cc', 'd'], ['d', 'a'],
-    ['e', 'f'], ['f', 'g'], ['g', 'k'], ['k', 'e'],
-    ['a', 'e'], ['b', 'f'], ['cc', 'g'], ['d', 'k'],
+    ['a', 'b'],
+    ['b', 'cc'],
+    ['cc', 'd'],
+    ['d', 'a'],
+    ['e', 'f'],
+    ['f', 'g'],
+    ['g', 'k'],
+    ['k', 'e'],
+    ['a', 'e'],
+    ['b', 'f'],
+    ['cc', 'g'],
+    ['d', 'k'],
   ]
   return edges.flatMap(([p, q]) => [...c[p], ...c[q]])
 })()
@@ -120,17 +135,42 @@ type RegionSpec = { key: string; geom: THREE.BufferGeometry; pos: Vec3; rot: Vec
 
 const RECT_REGIONS: RegionSpec[] = [
   { key: 'x+', geom: PLANE_GEOM, pos: { x: 0.5, y: 0, z: 0 }, rot: { x: 0, y: Math.PI / 2, z: 0 } },
-  { key: 'x-', geom: PLANE_GEOM, pos: { x: -0.5, y: 0, z: 0 }, rot: { x: 0, y: -Math.PI / 2, z: 0 } },
-  { key: 'y+', geom: PLANE_GEOM, pos: { x: 0, y: 0.5, z: 0 }, rot: { x: -Math.PI / 2, y: 0, z: 0 } },
-  { key: 'y-', geom: PLANE_GEOM, pos: { x: 0, y: -0.5, z: 0 }, rot: { x: Math.PI / 2, y: 0, z: 0 } },
+  {
+    key: 'x-',
+    geom: PLANE_GEOM,
+    pos: { x: -0.5, y: 0, z: 0 },
+    rot: { x: 0, y: -Math.PI / 2, z: 0 },
+  },
+  {
+    key: 'y+',
+    geom: PLANE_GEOM,
+    pos: { x: 0, y: 0.5, z: 0 },
+    rot: { x: -Math.PI / 2, y: 0, z: 0 },
+  },
+  {
+    key: 'y-',
+    geom: PLANE_GEOM,
+    pos: { x: 0, y: -0.5, z: 0 },
+    rot: { x: Math.PI / 2, y: 0, z: 0 },
+  },
   { key: 'z+', geom: PLANE_GEOM, pos: { x: 0, y: 0, z: 0.5 }, rot: { x: 0, y: 0, z: 0 } },
   { key: 'z-', geom: PLANE_GEOM, pos: { x: 0, y: 0, z: -0.5 }, rot: { x: 0, y: Math.PI, z: 0 } },
 ]
 
 const CYLINDER_REGIONS: RegionSpec[] = [
   { key: 'side', geom: CYL_SIDE_GEOM, pos: { x: 0, y: 0, z: 0 }, rot: { x: 0, y: 0, z: 0 } },
-  { key: 'top', geom: CIRCLE_GEOM, pos: { x: 0, y: 0.5, z: 0 }, rot: { x: -Math.PI / 2, y: 0, z: 0 } },
-  { key: 'bottom', geom: CIRCLE_GEOM, pos: { x: 0, y: -0.5, z: 0 }, rot: { x: Math.PI / 2, y: 0, z: 0 } },
+  {
+    key: 'top',
+    geom: CIRCLE_GEOM,
+    pos: { x: 0, y: 0.5, z: 0 },
+    rot: { x: -Math.PI / 2, y: 0, z: 0 },
+  },
+  {
+    key: 'bottom',
+    geom: CIRCLE_GEOM,
+    pos: { x: 0, y: -0.5, z: 0 },
+    rot: { x: Math.PI / 2, y: 0, z: 0 },
+  },
 ]
 
 const SPHERE_REGIONS: RegionSpec[] = [
@@ -367,7 +407,12 @@ export class ContainerLayer {
       const isDragging = e.value as boolean
       if (isDragging) {
         const mode = $containerGizmoMode.get()
-        const label = mode === 'translate' ? 'move container' : mode === 'rotate' ? 'rotate container' : 'resize container'
+        const label =
+          mode === 'translate'
+            ? 'move container'
+            : mode === 'rotate'
+              ? 'rotate container'
+              : 'resize container'
         pushUndo(label)
       }
       this.dragging = isDragging

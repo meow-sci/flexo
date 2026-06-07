@@ -5,10 +5,7 @@ import { dirname, join } from 'node:path'
 import { DOMParser } from '@xmldom/xmldom'
 import { parseAssetsFile, type CatalogSubPart } from './catalog'
 
-const CORE_DIR = join(
-  dirname(fileURLToPath(import.meta.url)),
-  '../../thirdparty/ksa/Content/Core',
-)
+const CORE_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../thirdparty/ksa/Content/Core')
 
 function parseFile(name: string): CatalogSubPart[] {
   const text = readFileSync(join(CORE_DIR, name), 'utf-8')

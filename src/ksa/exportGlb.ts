@@ -93,7 +93,8 @@ function nameMeshesFromNodes(glb: Uint8Array): Uint8Array {
 
   // First chunk must be JSON.
   const jsonLen = dv.getUint32(12, true)
-  if (dv.getUint32(16, true) !== CHUNK_JSON) throw new Error('nameMeshesFromNodes: first chunk is not JSON')
+  if (dv.getUint32(16, true) !== CHUNK_JSON)
+    throw new Error('nameMeshesFromNodes: first chunk is not JSON')
   const jsonStart = 20
   const json = JSON.parse(new TextDecoder().decode(glb.subarray(jsonStart, jsonStart + jsonLen)))
 

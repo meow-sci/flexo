@@ -42,8 +42,18 @@ function wrapMode(wrap: TextureWrap): THREE.Wrapping {
 }
 
 /** A DataTexture from raw RGBA8, matching the KTX2/GLB UV convention (flipY=false; see TextureCache). */
-function makeDataTexture(level: ImageLevel, colorSpace: THREE.ColorSpace, wrap: TextureWrap): THREE.DataTexture {
-  const tex = new THREE.DataTexture(level.rgba, level.width, level.height, THREE.RGBAFormat, THREE.UnsignedByteType)
+function makeDataTexture(
+  level: ImageLevel,
+  colorSpace: THREE.ColorSpace,
+  wrap: TextureWrap,
+): THREE.DataTexture {
+  const tex = new THREE.DataTexture(
+    level.rgba,
+    level.width,
+    level.height,
+    THREE.RGBAFormat,
+    THREE.UnsignedByteType,
+  )
   tex.colorSpace = colorSpace
   tex.wrapS = tex.wrapT = wrapMode(wrap)
   tex.flipY = false

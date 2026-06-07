@@ -56,7 +56,10 @@ describe('editorStore', () => {
     addSubPart('CoreStructuralA_Subpart_TrussBarA')
     addSubPart('CoreStructuralA_Subpart_TrussBarA')
     const ids = $part.get().placements.map((p) => p.instanceId)
-    expect(ids).toEqual(['corestructurala_subpart_trussbara_1', 'corestructurala_subpart_trussbara_2'])
+    expect(ids).toEqual([
+      'corestructurala_subpart_trussbara_1',
+      'corestructurala_subpart_trussbara_2',
+    ])
     expect($selectedIndex.get()).toBe(1)
   })
 
@@ -281,7 +284,12 @@ describe('editorStore layers', () => {
 
   it('createLayer adds a layer, makes it active, and is undoable', () => {
     const id = createLayer('Engines')
-    expect($part.get().layers.map((l) => l.name)).toEqual(['Default', 'Connectors', 'Kittens', 'Engines'])
+    expect($part.get().layers.map((l) => l.name)).toEqual([
+      'Default',
+      'Connectors',
+      'Kittens',
+      'Engines',
+    ])
     expect($activeLayerId.get()).toBe(id)
     undo()
     // Layer removed AND the active layer falls back to Default (it no longer exists).
@@ -325,7 +333,11 @@ describe('editorStore layers', () => {
     setActiveLayer(DEFAULT_LAYER_ID)
     addSubPart('Core.B') // in Default
     deleteLayer(id, { mode: 'delete-items' })
-    expect($part.get().layers.map((l) => l.id)).toEqual([DEFAULT_LAYER_ID, CONNECTOR_LAYER_ID, KITTEN_LAYER_ID])
+    expect($part.get().layers.map((l) => l.id)).toEqual([
+      DEFAULT_LAYER_ID,
+      CONNECTOR_LAYER_ID,
+      KITTEN_LAYER_ID,
+    ])
     expect($part.get().placements.map((p) => p.subPartTemplateId)).toEqual(['Core.B'])
     expect($activeLayerId.get()).toBe(DEFAULT_LAYER_ID)
   })
@@ -336,7 +348,12 @@ describe('editorStore layers', () => {
     const b = createLayer('B')
     deleteLayer(a, { mode: 'move-items', targetLayerId: b })
     expect($part.get().placements[0].layerId).toBe(b)
-    expect($part.get().layers.map((l) => l.id)).toEqual([DEFAULT_LAYER_ID, CONNECTOR_LAYER_ID, KITTEN_LAYER_ID, b])
+    expect($part.get().layers.map((l) => l.id)).toEqual([
+      DEFAULT_LAYER_ID,
+      CONNECTOR_LAYER_ID,
+      KITTEN_LAYER_ID,
+      b,
+    ])
   })
 
   it('deleteLayer is undoable (restores layer + membership)', () => {
@@ -345,7 +362,12 @@ describe('editorStore layers', () => {
     deleteLayer(id, { mode: 'delete-items' })
     expect($part.get().placements.length).toBe(0)
     undo()
-    expect($part.get().layers.map((l) => l.id)).toEqual([DEFAULT_LAYER_ID, CONNECTOR_LAYER_ID, KITTEN_LAYER_ID, id])
+    expect($part.get().layers.map((l) => l.id)).toEqual([
+      DEFAULT_LAYER_ID,
+      CONNECTOR_LAYER_ID,
+      KITTEN_LAYER_ID,
+      id,
+    ])
     expect($part.get().placements[0].layerId).toBe(id)
   })
 
@@ -355,7 +377,11 @@ describe('editorStore layers', () => {
     deleteLayer(DEFAULT_LAYER_ID, { mode: 'delete-items' })
     deleteLayer(CONNECTOR_LAYER_ID, { mode: 'delete-items' })
     deleteLayer(KITTEN_LAYER_ID, { mode: 'delete-items' })
-    expect($part.get().layers.map((l) => l.id)).toEqual([DEFAULT_LAYER_ID, CONNECTOR_LAYER_ID, KITTEN_LAYER_ID])
+    expect($part.get().layers.map((l) => l.id)).toEqual([
+      DEFAULT_LAYER_ID,
+      CONNECTOR_LAYER_ID,
+      KITTEN_LAYER_ID,
+    ])
     expect($part.get().placements.length).toBe(1)
     expect($part.get().connectors.length).toBe(1)
   })
@@ -392,9 +418,21 @@ describe('editorStore layers', () => {
     const a = createLayer('A')
     const b = createLayer('B')
     reorderLayers([a, DEFAULT_LAYER_ID, CONNECTOR_LAYER_ID, KITTEN_LAYER_ID, b])
-    expect($part.get().layers.map((l) => l.id)).toEqual([a, DEFAULT_LAYER_ID, CONNECTOR_LAYER_ID, KITTEN_LAYER_ID, b])
+    expect($part.get().layers.map((l) => l.id)).toEqual([
+      a,
+      DEFAULT_LAYER_ID,
+      CONNECTOR_LAYER_ID,
+      KITTEN_LAYER_ID,
+      b,
+    ])
     undo()
-    expect($part.get().layers.map((l) => l.id)).toEqual([DEFAULT_LAYER_ID, CONNECTOR_LAYER_ID, KITTEN_LAYER_ID, a, b])
+    expect($part.get().layers.map((l) => l.id)).toEqual([
+      DEFAULT_LAYER_ID,
+      CONNECTOR_LAYER_ID,
+      KITTEN_LAYER_ID,
+      a,
+      b,
+    ])
   })
 
   it('selectLayerEntities prefers SubParts, else first connector', () => {
@@ -515,7 +553,11 @@ describe('editorStore layers', () => {
     addSubPart('Core.A')
     addConnector()
     addKitten('hunter')
-    const t = (x: number) => ({ position: { x, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } })
+    const t = (x: number) => ({
+      position: { x, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+    })
     updateSelectedTransforms([
       { kind: 'subpart', index: 0, transform: t(1) },
       { kind: 'connector', index: 0, transform: t(2) },

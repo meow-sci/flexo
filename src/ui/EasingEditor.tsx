@@ -138,18 +138,50 @@ export function EasingEditor({
         onPointerLeave={onPointerUp}
       >
         {/* unit square + linear reference diagonal */}
-        <rect x={0} y={0} width={S} height={S} fill="none" stroke="currentColor" strokeOpacity={0.15} />
-        <line x1={c0.x} y1={c0.y} x2={c1.x} y2={c1.y} stroke="currentColor" strokeOpacity={0.15} strokeDasharray="3 3" />
+        <rect
+          x={0}
+          y={0}
+          width={S}
+          height={S}
+          fill="none"
+          stroke="currentColor"
+          strokeOpacity={0.15}
+        />
+        <line
+          x1={c0.x}
+          y1={c0.y}
+          x2={c1.x}
+          y2={c1.y}
+          stroke="currentColor"
+          strokeOpacity={0.15}
+          strokeDasharray="3 3"
+        />
         {/* control-handle guide lines */}
-        <line x1={c0.x} y1={c0.y} x2={h1.x} y2={h1.y} stroke="var(--color-accent, #6ab)" strokeOpacity={0.5} />
-        <line x1={c1.x} y1={c1.y} x2={h2.x} y2={h2.y} stroke="var(--color-accent, #6ab)" strokeOpacity={0.5} />
+        <line
+          x1={c0.x}
+          y1={c0.y}
+          x2={h1.x}
+          y2={h1.y}
+          stroke="var(--color-accent, #6ab)"
+          strokeOpacity={0.5}
+        />
+        <line
+          x1={c1.x}
+          y1={c1.y}
+          x2={h2.x}
+          y2={h2.y}
+          stroke="var(--color-accent, #6ab)"
+          strokeOpacity={0.5}
+        />
         {/* the easing curve */}
         <path d={curvePath} fill="none" stroke="var(--color-accent, #6ab)" strokeWidth={2} />
         {/* draggable handles */}
-        {([
-          [h1, 0],
-          [h2, 1],
-        ] as const).map(([h, idx]) => (
+        {(
+          [
+            [h1, 0],
+            [h2, 1],
+          ] as const
+        ).map(([h, idx]) => (
           <circle
             key={idx}
             cx={h.x}

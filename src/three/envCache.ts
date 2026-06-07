@@ -13,10 +13,12 @@ const cache = new Map<string, Promise<THREE.DataTexture>>()
 export function loadEquirectHDR(url: string): Promise<THREE.DataTexture> {
   let pending = cache.get(url)
   if (!pending) {
-    pending = withProgress(url, (onProgress) => loader.loadAsync(url, onProgress)).then((texture) => {
-      texture.mapping = THREE.EquirectangularReflectionMapping
-      return texture
-    })
+    pending = withProgress(url, (onProgress) => loader.loadAsync(url, onProgress)).then(
+      (texture) => {
+        texture.mapping = THREE.EquirectangularReflectionMapping
+        return texture
+      },
+    )
     pending.catch(() => cache.delete(url)) // allow a retry after a failed load
     cache.set(url, pending)
   }

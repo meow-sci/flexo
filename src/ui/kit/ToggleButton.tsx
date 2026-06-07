@@ -25,8 +25,7 @@ const toggle = tv({
 })
 
 export interface ToggleButtonKitProps
-  extends ToggleButtonProps,
-    Pick<VariantProps<typeof toggle>, 'size'> {}
+  extends ToggleButtonProps, Pick<VariantProps<typeof toggle>, 'size'> {}
 
 /** Single toggle (also used as the item inside {@link ToggleButtonGroup}). */
 export function ToggleButton({ size, className, ...props }: ToggleButtonKitProps) {

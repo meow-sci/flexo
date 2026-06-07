@@ -1,15 +1,30 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { buildAnimationRig, previewOverrideMatrix, type AnimRig, type AnimRigChannel } from './animationRig'
+import {
+  buildAnimationRig,
+  previewOverrideMatrix,
+  type AnimRig,
+  type AnimRigChannel,
+} from './animationRig'
 import { matrixFromTransform } from '../three/coords'
 import type { PartAnimation, SubPartPlacement, Transform } from './types'
 
 /** A Transform with identity defaults, overridden per-axis. */
-function tf(over: { pos?: [number, number, number]; rot?: [number, number, number]; scale?: [number, number, number] } = {}): Transform {
+function tf(
+  over: {
+    pos?: [number, number, number]
+    rot?: [number, number, number]
+    scale?: [number, number, number]
+  } = {},
+): Transform {
   const [px, py, pz] = over.pos ?? [0, 0, 0]
   const [rx, ry, rz] = over.rot ?? [0, 0, 0]
   const [sx, sy, sz] = over.scale ?? [1, 1, 1]
-  return { position: { x: px, y: py, z: pz }, rotation: { x: rx, y: ry, z: rz }, scale: { x: sx, y: sy, z: sz } }
+  return {
+    position: { x: px, y: py, z: pz },
+    rotation: { x: rx, y: ry, z: rz },
+    scale: { x: sx, y: sy, z: sz },
+  }
 }
 
 function pl(instanceId: string, t: Transform): SubPartPlacement {
@@ -57,7 +72,10 @@ function sampleChannel(ch: AnimRigChannel, t: number): number[] {
   const a = get(i)
   const b = get(i + 1)
   if (ch.path === 'rotation') {
-    const q = new THREE.Quaternion(a[0], a[1], a[2], a[3]).slerp(new THREE.Quaternion(b[0], b[1], b[2], b[3]), alpha)
+    const q = new THREE.Quaternion(a[0], a[1], a[2], a[3]).slerp(
+      new THREE.Quaternion(b[0], b[1], b[2], b[3]),
+      alpha,
+    )
     return [q.x, q.y, q.z, q.w]
   }
   return a.map((v, k) => v + (b[k] - v) * alpha)
@@ -107,7 +125,10 @@ describe('buildAnimationRig — single joint (door/hinge)', () => {
 
   it('the glb-reconstructed motion matches the editor preview formula at every t', () => {
     for (const t of [0, 0.25, 0.5, 0.75, 1]) {
-      expectMatrixClose(evaluateLeafWorld(rig, 'panel_1', t), previewOverrideMatrix(anim, 'panel_1', t, placement)!)
+      expectMatrixClose(
+        evaluateLeafWorld(rig, 'panel_1', t),
+        previewOverrideMatrix(anim, 'panel_1', t, placement)!,
+      )
     }
   })
 
@@ -132,7 +153,11 @@ describe('buildAnimationRig — kinematic chain (spider leg / FK)', () => {
     ],
     keyframes: [
       { id: 'k0', timeSec: 0, poses: { hip: tf(), knee: tf({ pos: [1, 0, 0] }) } },
-      { id: 'k1', timeSec: 1, poses: { hip: tf({ rot: [0, Math.PI / 2, 0] }), knee: tf({ pos: [1, 0, 0] }) } },
+      {
+        id: 'k1',
+        timeSec: 1,
+        poses: { hip: tf({ rot: [0, Math.PI / 2, 0] }), knee: tf({ pos: [1, 0, 0] }) },
+      },
     ],
     solarTracking: null,
   }
@@ -184,7 +209,12 @@ describe('buildAnimationRig — easing / export re-baking', () => {
   })
 
   it('bakes an eased segment into dense LINEAR samples at ~fps', () => {
-    const rig = buildAnimationRig(door({ kind: 'preset', preset: 'easeInOut' }), [placement], 'MyPart', { fps: 30 })
+    const rig = buildAnimationRig(
+      door({ kind: 'preset', preset: 'easeInOut' }),
+      [placement],
+      'MyPart',
+      { fps: 30 },
+    )
     const rot = rig.channels.find((c) => c.path === 'rotation')!
     expect(rot.times.length).toBe(31) // ceil(1*30) subdivisions + 1
     expect(rot.times[0]).toBe(0)
@@ -198,7 +228,11 @@ describe('buildAnimationRig — easing / export re-baking', () => {
     // eased preview formula within the baking density tolerance.
     // ~0.001 chord error is the LINEAR approximation of the curve between 30fps samples.
     for (const t of [0.1, 0.25, 0.4, 0.5, 0.6, 0.75, 0.9]) {
-      expectMatrixCloseTo(evaluateLeafWorld(rig, 'panel_1', t), previewOverrideMatrix(anim, 'panel_1', t, placement)!, 2)
+      expectMatrixCloseTo(
+        evaluateLeafWorld(rig, 'panel_1', t),
+        previewOverrideMatrix(anim, 'panel_1', t, placement)!,
+        2,
+      )
     }
   })
 

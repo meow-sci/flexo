@@ -7,14 +7,7 @@ export { Button, button, type ButtonKitProps } from './Button'
 export { ToggleButton, ToggleButtonGroup, type ToggleButtonKitProps } from './ToggleButton'
 export { Toolbar, ToolbarSeparator, ToolbarButton } from './Toolbar'
 
-export {
-  Label,
-  Description,
-  FieldError,
-  FieldGroup,
-  SectionTitle,
-  inputStyles,
-} from './Field'
+export { Label, Description, FieldError, FieldGroup, SectionTitle, inputStyles } from './Field'
 export { TextField, type TextFieldKitProps } from './TextField'
 export { SearchField, type SearchFieldKitProps } from './SearchField'
 export { Select, type SelectKitProps } from './Select'
@@ -45,10 +38,4 @@ export { useIsPhone } from './useIsPhone'
 
 // Triggers / collection pieces that don't need styling are re-exported verbatim
 // so call sites only ever import from the kit.
-export {
-  DialogTrigger,
-  MenuTrigger,
-  SubmenuTrigger,
-  Heading,
-  Header,
-} from 'react-aria-components'
+export { DialogTrigger, MenuTrigger, SubmenuTrigger, Heading, Header } from 'react-aria-components'

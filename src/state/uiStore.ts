@@ -51,7 +51,10 @@ export interface FloatPosition {
  * 0.25rem off both edges. Once the user drags the window it stores explicit top-left
  * px. Persisted at app level and cleared by the global data reset (localStorage.clear).
  */
-export const $inspectorFloatPos = persistentJSON<FloatPosition | null>('flexo:inspectorFloatPos', null)
+export const $inspectorFloatPos = persistentJSON<FloatPosition | null>(
+  'flexo:inspectorFloatPos',
+  null,
+)
 
 export function setInspectorFloatPos(pos: FloatPosition | null): void {
   $inspectorFloatPos.set(pos)
@@ -63,7 +66,10 @@ export function setInspectorFloatPos(pos: FloatPosition | null): void {
  * top-center, just below the main toolbar. Stores explicit top-left px once dragged.
  * Persisted at app level and cleared by the global data reset (localStorage.clear).
  */
-export const $animPreviewFloatPos = persistentJSON<FloatPosition | null>('flexo:animPreviewFloatPos', null)
+export const $animPreviewFloatPos = persistentJSON<FloatPosition | null>(
+  'flexo:animPreviewFloatPos',
+  null,
+)
 
 export function setAnimPreviewFloatPos(pos: FloatPosition | null): void {
   $animPreviewFloatPos.set(pos)

@@ -137,9 +137,19 @@ export function TransformInspector() {
   return (
     <div className={panelClass}>
       {entity.kind === 'subpart' ? (
-        <SubPartHeader index={entity.index} instanceId={entity.placement.instanceId} templateId={entity.placement.subPartTemplateId} locked={locked} />
+        <SubPartHeader
+          index={entity.index}
+          instanceId={entity.placement.instanceId}
+          templateId={entity.placement.subPartTemplateId}
+          locked={locked}
+        />
       ) : (
-        <ConnectorHeader index={entity.index} id={entity.connector.id} flags={entity.connector.flags} locked={locked} />
+        <ConnectorHeader
+          index={entity.index}
+          id={entity.connector.id}
+          flags={entity.connector.flags}
+          locked={locked}
+        />
       )}
       <Section title="Position (m)">
         {posField('x')}
@@ -227,7 +237,11 @@ function BulkTransformPanel() {
     pushUndo('move', bulkDetail)
     const d = { x: delta[0], y: delta[1], z: delta[2] }
     updateSelectedTransforms(
-      refs.map((r) => ({ kind: r.kind, index: r.index, transform: translatedTransform(r.transform, d) })),
+      refs.map((r) => ({
+        kind: r.kind,
+        index: r.index,
+        transform: translatedTransform(r.transform, d),
+      })),
     )
   }
 
@@ -264,8 +278,18 @@ function BulkTransformPanel() {
   return (
     <div className={panelClass}>
       <span className="font-mono text-sm">{refs.length} items selected</span>
-      <VectorApply title="Move by (m)" defaultValue={[0, 0, 0]} isDisabled={anyLocked} onApply={applyMove} />
-      <VectorApply title="Rotate by (°) around centroid" defaultValue={[0, 0, 0]} isDisabled={anyLocked} onApply={applyRotate} />
+      <VectorApply
+        title="Move by (m)"
+        defaultValue={[0, 0, 0]}
+        isDisabled={anyLocked}
+        onApply={applyMove}
+      />
+      <VectorApply
+        title="Rotate by (°) around centroid"
+        defaultValue={[0, 0, 0]}
+        isDisabled={anyLocked}
+        onApply={applyRotate}
+      />
       <div className="flex flex-col gap-1">
         <VectorApply
           title={scaleMode === 'smart' ? 'Scale by (×) around centroid' : 'Scale by (×) in place'}
@@ -343,14 +367,27 @@ function VectorApply(props: {
   )
 }
 
-function ConnectorHeader({ index, id, flags, locked }: { index: number; id: string; flags: ConnectorFlag[]; locked: boolean }) {
+function ConnectorHeader({
+  index,
+  id,
+  flags,
+  locked,
+}: {
+  index: number
+  id: string
+  flags: ConnectorFlag[]
+  locked: boolean
+}) {
   // Toggle one flag, re-emitting the full set in canonical order so the XML and
   // the inspector stay stable regardless of click order.
   const toggle = (flag: ConnectorFlag, on: boolean) => {
     const next = new Set(flags)
     if (on) next.add(flag)
     else next.delete(flag)
-    setConnectorFlags(index, CONNECTOR_FLAGS.filter((f) => next.has(f)))
+    setConnectorFlags(
+      index,
+      CONNECTOR_FLAGS.filter((f) => next.has(f)),
+    )
   }
   return (
     <div className="flex flex-col gap-1.5">

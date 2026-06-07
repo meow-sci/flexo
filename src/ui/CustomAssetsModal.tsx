@@ -54,90 +54,106 @@ export function CustomAssetsModal({
 
   return (
     <>
-    <Modal isOpen={isOpen} onOpenChange={onOpenChange} isDismissable variant="fullscreen" className="max-w-2xl">
-      <Dialog>
-        <DialogHeader title="Custom Assets" onClose={() => onOpenChange(false)} />
-        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-auto p-4">
-          <section className="flex flex-col gap-2">
-            <SectionTitle>Textures ({customTextures.length})</SectionTitle>
-            {customTextures.length === 0 ? (
-              <p className="text-sm text-fg-subtle">
-                No textures. Use “Upload texture…” in the Add menu.
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-1">
-                {customTextures.map((t) => (
-                  <li
-                    key={t.id}
-                    className="flex items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-white/[0.04]"
-                  >
-                    <span className="h-9 w-9 shrink-0 overflow-hidden rounded border border-border bg-panel-sunken">
-                      {thumbs[t.id] && (
-                        <img src={thumbs[t.id]} alt={t.name} className="h-full w-full object-cover" />
-                      )}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate" title={`${t.name} (${t.width}×${t.height})`}>
-                      {t.name}
-                      <span className="ml-1 text-xs text-fg-subtle">
-                        {t.width}×{t.height}
+      <Modal
+        isOpen={isOpen}
+        onOpenChange={onOpenChange}
+        isDismissable
+        variant="fullscreen"
+        className="max-w-2xl"
+      >
+        <Dialog>
+          <DialogHeader title="Custom Assets" onClose={() => onOpenChange(false)} />
+          <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-auto p-4">
+            <section className="flex flex-col gap-2">
+              <SectionTitle>Textures ({customTextures.length})</SectionTitle>
+              {customTextures.length === 0 ? (
+                <p className="text-sm text-fg-subtle">
+                  No textures. Use “Upload texture…” in the Add menu.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-1">
+                  {customTextures.map((t) => (
+                    <li
+                      key={t.id}
+                      className="flex items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-white/[0.04]"
+                    >
+                      <span className="h-9 w-9 shrink-0 overflow-hidden rounded border border-border bg-panel-sunken">
+                        {thumbs[t.id] && (
+                          <img
+                            src={thumbs[t.id]}
+                            alt={t.name}
+                            className="h-full w-full object-cover"
+                          />
+                        )}
                       </span>
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="danger-ghost"
-                      aria-label={`Delete texture ${t.name}`}
-                      onPress={() => setPendingTexture(t)}
-                    >
-                      <Trash2 size={16} />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
+                      <span
+                        className="min-w-0 flex-1 truncate"
+                        title={`${t.name} (${t.width}×${t.height})`}
+                      >
+                        {t.name}
+                        <span className="ml-1 text-xs text-fg-subtle">
+                          {t.width}×{t.height}
+                        </span>
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="danger-ghost"
+                        aria-label={`Delete texture ${t.name}`}
+                        onPress={() => setPendingTexture(t)}
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
 
-          <section className="flex flex-col gap-2">
-            <SectionTitle>Meshes ({customMeshes.length})</SectionTitle>
-            {customMeshes.length === 0 ? (
-              <p className="text-sm text-fg-subtle">No meshes. Use “Create mesh…” in the Add menu.</p>
-            ) : (
-              <ul className="flex flex-col gap-1">
-                {customMeshes.map((m) => (
-                  <li
-                    key={m.id}
-                    className="flex items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-white/[0.04]"
-                  >
-                    <span className="min-w-0 flex-1 truncate" title={m.subPartId}>
-                      {m.name} <span className="text-xs text-fg-subtle">({m.primitive?.kind})</span>
-                    </span>
-                    <Button size="sm" variant="secondary" onPress={() => addToScene(m)}>
-                      <Plus size={14} />
-                      Add instance
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      aria-label={`Manage textures for ${m.name}`}
-                      onPress={() => manageTextures(m)}
+            <section className="flex flex-col gap-2">
+              <SectionTitle>Meshes ({customMeshes.length})</SectionTitle>
+              {customMeshes.length === 0 ? (
+                <p className="text-sm text-fg-subtle">
+                  No meshes. Use “Create mesh…” in the Add menu.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-1">
+                  {customMeshes.map((m) => (
+                    <li
+                      key={m.id}
+                      className="flex items-center gap-2 rounded-md px-1 py-1 text-sm hover:bg-white/[0.04]"
                     >
-                      <Palette size={16} />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="danger-ghost"
-                      aria-label={`Delete mesh ${m.name}`}
-                      onPress={() => setPendingMesh(m)}
-                    >
-                      <Trash2 size={16} />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </div>
-      </Dialog>
-    </Modal>
+                      <span className="min-w-0 flex-1 truncate" title={m.subPartId}>
+                        {m.name}{' '}
+                        <span className="text-xs text-fg-subtle">({m.primitive?.kind})</span>
+                      </span>
+                      <Button size="sm" variant="secondary" onPress={() => addToScene(m)}>
+                        <Plus size={14} />
+                        Add instance
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`Manage textures for ${m.name}`}
+                        onPress={() => manageTextures(m)}
+                      >
+                        <Palette size={16} />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger-ghost"
+                        aria-label={`Delete mesh ${m.name}`}
+                        onPress={() => setPendingMesh(m)}
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+        </Dialog>
+      </Modal>
 
       <ConfirmDialog
         isOpen={pendingTexture != null}

@@ -5,10 +5,16 @@ import { buildAnimationGlb } from './exportAnimationGlb'
 import { decodeAnimationGlb, remapImportedAnimation, parseGlb } from './animationImport'
 import type { CatalogAnimationModule, PartAnimation, SubPartPlacement, Transform } from './types'
 
-function tf(over: { pos?: [number, number, number]; rot?: [number, number, number] } = {}): Transform {
+function tf(
+  over: { pos?: [number, number, number]; rot?: [number, number, number] } = {},
+): Transform {
   const [px, py, pz] = over.pos ?? [0, 0, 0]
   const [rx, ry, rz] = over.rot ?? [0, 0, 0]
-  return { position: { x: px, y: py, z: pz }, rotation: { x: rx, y: ry, z: rz }, scale: { x: 1, y: 1, z: 1 } }
+  return {
+    position: { x: px, y: py, z: pz },
+    rotation: { x: rx, y: ry, z: rz },
+    scale: { x: 1, y: 1, z: 1 },
+  }
 }
 function pl(instanceId: string, t: Transform): SubPartPlacement {
   return { instanceId, subPartTemplateId: 'T', layerId: 'default', ...t }
@@ -17,7 +23,13 @@ function glbBuffer(rig: ReturnType<typeof buildAnimationRig>): ArrayBuffer {
   const u8 = buildAnimationGlb(rig)
   return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength) as ArrayBuffer
 }
-const MODULE: CatalogAnimationModule = { moduleId: 'Test', showDeployRetract: false, glbPath: '', glbId: '', solarTracking: null }
+const MODULE: CatalogAnimationModule = {
+  moduleId: 'Test',
+  showDeployRetract: false,
+  glbPath: '',
+  glbId: '',
+  solarTracking: null,
+}
 function counterId() {
   let n = 0
   return (prefix: string) => `${prefix}_${n++}`
@@ -37,12 +49,19 @@ describe('decodeAnimationGlb — export → decode round-trip', () => {
     ],
     keyframes: [
       { id: 'k0', timeSec: 0, poses: { hip: tf(), knee: tf({ pos: [1, 0, 0] }) } },
-      { id: 'k1', timeSec: 1, poses: { hip: tf({ rot: [0, Math.PI / 2, 0] }), knee: tf({ pos: [1, 0, 0] }) } },
+      {
+        id: 'k1',
+        timeSec: 1,
+        poses: { hip: tf({ rot: [0, Math.PI / 2, 0] }), knee: tf({ pos: [1, 0, 0] }) },
+      },
     ],
     solarTracking: null,
   }
   const rig = buildAnimationRig(orig, [foot], 'Rover')
-  const decoded = decodeAnimationGlb(glbBuffer(rig), { instanceIds: new Set(['foot_1']), module: MODULE })!
+  const decoded = decodeAnimationGlb(glbBuffer(rig), {
+    instanceIds: new Set(['foot_1']),
+    module: MODULE,
+  })!
 
   it('recovers the joint chain (parent links) and the leaf members', () => {
     expect(decoded.joints).toHaveLength(2)
@@ -69,12 +88,20 @@ describe('decodeAnimationGlb — export → decode round-trip', () => {
     const mod: CatalogAnimationModule = {
       ...MODULE,
       showDeployRetract: true,
-      solarTracking: { degreesPerSecond: 5, subPartOriginalId: 'foot_1', excludeOriginalIds: ['ghost_9'] },
+      solarTracking: {
+        degreesPerSecond: 5,
+        subPartOriginalId: 'foot_1',
+        excludeOriginalIds: ['ghost_9'],
+      },
     }
     const d = decodeAnimationGlb(glbBuffer(rig), { instanceIds: new Set(['foot_1']), module: mod })!
     const remapped = remapImportedAnimation(d, new Map([['foot_1', 'newfoot']]), counterId())
     expect(remapped.mode).toBe('deployRetract')
-    expect(remapped.solarTracking).toEqual({ degreesPerSecond: 5, subPartInstanceId: 'newfoot', excludeInstanceIds: [] })
+    expect(remapped.solarTracking).toEqual({
+      degreesPerSecond: 5,
+      subPartInstanceId: 'newfoot',
+      excludeInstanceIds: [],
+    })
   })
 })
 
@@ -108,7 +135,11 @@ describe('decodeAnimationGlb — modeled-rest detection (KSA model = deployed = 
   })
 
   it('anchored at the rest (last) keyframe: rest pose = placement, scrub to t=0 folds to stowed', () => {
-    const remapped = remapImportedAnimation(decodeWith(placements), new Map([['foot_1', 'foot_1']]), counterId())
+    const remapped = remapImportedAnimation(
+      decodeWith(placements),
+      new Map([['foot_1', 'foot_1']]),
+      counterId(),
+    )
     const last = remapped.keyframes.reduce((a, b) => (b.timeSec > a.timeSec ? b : a))
     const anim = { ...remapped, restKeyframeId: last.id }
     const pos = (t: number) => {
@@ -128,7 +159,11 @@ describe('decodeAnimationGlb — modeled-rest detection (KSA model = deployed = 
   })
 
   it('WITHOUT the rest anchor the deployed placement scatters (the original bug)', () => {
-    const remapped = remapImportedAnimation(decodeWith(placements), new Map([['foot_1', 'foot_1']]), counterId())
+    const remapped = remapImportedAnimation(
+      decodeWith(placements),
+      new Map([['foot_1', 'foot_1']]),
+      counterId(),
+    )
     // restKeyframeId absent ⇒ anchor t=0 ⇒ the whole deploy is re-applied to an already-
     // deployed foot, flinging it off the [0,0,-2] mark instead of holding it.
     const atRest = previewOverrideMatrix(remapped, 'foot_1', 1, deployedFoot)!
@@ -145,13 +180,19 @@ describe('decodeAnimationGlb — real KSA solar panel asset', () => {
     const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
     // The GLB leaf node names ARE the SubPart instance ids; gather them from the GLB itself.
     const { json } = parseGlb(ab)
-    const instanceIds = new Set((json.nodes ?? []).map((n) => n.name!).filter((nm) => /_Subpart_/.test(nm)))
+    const instanceIds = new Set(
+      (json.nodes ?? []).map((n) => n.name!).filter((nm) => /_Subpart_/.test(nm)),
+    )
     const mod: CatalogAnimationModule = {
       moduleId: 'SolarPanelAnimation',
       showDeployRetract: true,
       glbPath: PATH,
       glbId: 'CoreElectricalA_Prefab_SolarPanelB_Anim',
-      solarTracking: { degreesPerSecond: 5, subPartOriginalId: 'CoreStructuralA_Subpart_DriveRotorB1', excludeOriginalIds: ['CoreStructuralA_Subpart_DriveHousingB1'] },
+      solarTracking: {
+        degreesPerSecond: 5,
+        subPartOriginalId: 'CoreStructuralA_Subpart_DriveRotorB1',
+        excludeOriginalIds: ['CoreStructuralA_Subpart_DriveHousingB1'],
+      },
     }
     const decoded = decodeAnimationGlb(ab, { instanceIds, module: mod })!
     // 5 animated panel joints + RootJoint + RotaryJoint = 7 joints.

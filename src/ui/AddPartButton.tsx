@@ -58,7 +58,13 @@ export function AddPartButton() {
   )
 }
 
-export function PartPopup({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function PartPopup({
+  open,
+  onOpenChange,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
   return (
     <Modal
       isOpen={open}
@@ -95,8 +101,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
     const matches = q
       ? catalog.filter(
           (p) =>
-            p.id.toLowerCase().includes(q) ||
-            p.editorTags.some((t) => t.toLowerCase().includes(q)),
+            p.id.toLowerCase().includes(q) || p.editorTags.some((t) => t.toLowerCase().includes(q)),
         )
       : catalog
     return matches.slice(0, MAX_RESULTS)
@@ -109,7 +114,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
 
   const onSelection = (keys: Selection) => {
     if (keys === 'all') return
-    setSelectedId((([...keys][0] as string) ?? null))
+    setSelectedId(([...keys][0] as string) ?? null)
   }
 
   const resolveLayerId = () =>
@@ -295,7 +300,10 @@ function CompactPartSummary({
         <span className="text-fg-subtle">Connectors:</span> {part.connectors.length}
       </span>
       {missing > 0 && (
-        <span className="text-warning" title="These SubParts have no renderable mesh in the catalog and won't appear in the preview, but are still imported.">
+        <span
+          className="text-warning"
+          title="These SubParts have no renderable mesh in the catalog and won't appear in the preview, but are still imported."
+        >
           {missing} type{missing === 1 ? '' : 's'} not previewable
         </span>
       )}
@@ -348,7 +356,10 @@ function PartDetails({
           <span className="text-fg-subtle">Connectors:</span> {part.connectors.length}
         </span>
         {missing > 0 && (
-          <span className="text-warning" title="These SubParts have no renderable mesh in the catalog and won't appear in the preview, but are still imported.">
+          <span
+            className="text-warning"
+            title="These SubParts have no renderable mesh in the catalog and won't appear in the preview, but are still imported."
+          >
             {missing} type{missing === 1 ? '' : 's'} not previewable
           </span>
         )}

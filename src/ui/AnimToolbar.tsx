@@ -18,7 +18,12 @@ export function AnimToolbar() {
   return (
     <>
       <Toolbar aria-label="Animation">
-        <Button size="sm" variant="secondary" className="shrink-0" onPress={() => setPickerOpen(true)}>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="shrink-0"
+          onPress={() => setPickerOpen(true)}
+        >
           <Boxes size={16} className="shrink-0" />
           Mesh Picker
         </Button>

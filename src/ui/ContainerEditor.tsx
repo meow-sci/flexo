@@ -137,7 +137,9 @@ export function ContainerEditor() {
             label="Center"
             v={c.center}
             onInteractionStart={pushCenter}
-            onCommit={(axis, val) => updateContainer(c.id, { center: { ...c.center, [axis]: val } })}
+            onCommit={(axis, val) =>
+              updateContainer(c.id, { center: { ...c.center, [axis]: val } })
+            }
           />
 
           <Dimensions container={c} onSize={setSize} onInteractionStart={pushSize} />
@@ -162,7 +164,12 @@ export function ContainerEditor() {
 
           <div className="flex flex-col gap-1">
             <SectionTitle>Rotation°</SectionTitle>
-            <VecRow label="" v={euler} onInteractionStart={pushRotation} onCommit={(axis, val) => setEuler(axis, val)} />
+            <VecRow
+              label=""
+              v={euler}
+              onInteractionStart={pushRotation}
+              onCommit={(axis, val) => setEuler(axis, val)}
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -172,7 +179,9 @@ export function ContainerEditor() {
               color={c.color}
               opacity={c.lineOpacity}
               onInteractionStart={pushStyle}
-              onChange={({ color, opacity }) => updateContainer(c.id, { color, lineOpacity: opacity })}
+              onChange={({ color, opacity }) =>
+                updateContainer(c.id, { color, lineOpacity: opacity })
+              }
             />
             <div className="flex items-center gap-2" onPointerDown={pushStyle}>
               <span className="w-12 shrink-0 text-xs text-fg-muted">Width</span>
@@ -195,7 +204,10 @@ export function ContainerEditor() {
             <SectionTitle>Containment warning</SectionTitle>
             <Switch
               isSelected={c.warnEnabled}
-              onChange={(warnEnabled) => { pushUndo('container warning'); updateContainer(c.id, { warnEnabled }) }}
+              onChange={(warnEnabled) => {
+                pushUndo('container warning')
+                updateContainer(c.id, { warnEnabled })
+              }}
             >
               Detect out of bounds
             </Switch>
@@ -256,7 +268,9 @@ function Dimensions({
           min={0}
           value={radius}
           onInteractionStart={onInteractionStart}
-          onCommit={(r) => onSize({ x: r * 2, y: c.shape === 'sphere' ? r * 2 : c.size.y, z: r * 2 })}
+          onCommit={(r) =>
+            onSize({ x: r * 2, y: c.shape === 'sphere' ? r * 2 : c.size.y, z: r * 2 })
+          }
         />
       </div>
       {c.shape === 'cylinder' && (

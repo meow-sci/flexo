@@ -94,7 +94,8 @@ function downsampleHalf(src: ImageLevel): ImageLevel {
       const i11 = (sy1 * src.width + sx1) * 4
       const o = (y * dw + x) * 4
       for (let c = 0; c < 4; c++) {
-        out[o + c] = (src.rgba[i00 + c] + src.rgba[i01 + c] + src.rgba[i10 + c] + src.rgba[i11 + c] + 2) >> 2
+        out[o + c] =
+          (src.rgba[i00 + c] + src.rgba[i01 + c] + src.rgba[i10 + c] + src.rgba[i11 + c] + 2) >> 2
       }
     }
   }

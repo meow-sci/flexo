@@ -82,9 +82,8 @@ export const $selectedConnectorIndices = atom<number[]>([])
  * Derived from {@link $selectedConnectorIndices}; drives single-entity behavior
  * (gizmo attach, the per-entity inspector) and back-compat for existing readers.
  */
-export const $selectedConnectorIndex = computed(
-  $selectedConnectorIndices,
-  (indices) => (indices.length > 0 ? indices[indices.length - 1] : -1),
+export const $selectedConnectorIndex = computed($selectedConnectorIndices, (indices) =>
+  indices.length > 0 ? indices[indices.length - 1] : -1,
 )
 /**
  * Selected kitten indices (multi-select), ordered by selection. Mutually exclusive
@@ -230,11 +229,19 @@ function refreshHistoryFlags(): void {
   $redoDescription.set(redoStack.at(-1)?.description ?? '')
   const items: HistoryListItem[] = []
   for (let i = 0; i < redoStack.length; i++) {
-    items.push({ description: redoStack[i].description, detail: redoStack[i].detail, stepsFromCurrent: redoStack.length - i })
+    items.push({
+      description: redoStack[i].description,
+      detail: redoStack[i].detail,
+      stepsFromCurrent: redoStack.length - i,
+    })
   }
   items.push({ description: '', detail: '', stepsFromCurrent: 0 })
   for (let i = undoStack.length - 1; i >= 0; i--) {
-    items.push({ description: undoStack[i].description, detail: undoStack[i].detail, stepsFromCurrent: -(undoStack.length - i) })
+    items.push({
+      description: undoStack[i].description,
+      detail: undoStack[i].detail,
+      stepsFromCurrent: -(undoStack.length - i),
+    })
   }
   $historyList.set(items)
 }
@@ -246,9 +253,11 @@ function clampSelection(): void {
   const filtered = current.filter((i) => i >= 0 && i <= max)
   if (filtered.length !== current.length) $selectedIndices.set(filtered)
   const clampedCon = $selectedConnectorIndices.get().filter((i) => i < part.connectors.length)
-  if (clampedCon.length !== $selectedConnectorIndices.get().length) $selectedConnectorIndices.set(clampedCon)
+  if (clampedCon.length !== $selectedConnectorIndices.get().length)
+    $selectedConnectorIndices.set(clampedCon)
   const clampedKit = $selectedKittenIndices.get().filter((i) => i >= 0 && i < part.kittens.length)
-  if (clampedKit.length !== $selectedKittenIndices.get().length) $selectedKittenIndices.set(clampedKit)
+  if (clampedKit.length !== $selectedKittenIndices.get().length)
+    $selectedKittenIndices.set(clampedKit)
 }
 
 /** Resets the active layer to Default if it no longer exists (e.g. after undo). */
@@ -321,8 +330,20 @@ export function redo(): string {
 
 /** A serializable snapshot of the undo/redo stacks (newest-last), for project persistence. */
 export interface HistorySnapshot {
-  undo: Array<{ part: EditingPart; containers?: ReferenceContainer[]; measurements?: LineMeasurement[]; description: string; detail: string }>
-  redo: Array<{ part: EditingPart; containers?: ReferenceContainer[]; measurements?: LineMeasurement[]; description: string; detail: string }>
+  undo: Array<{
+    part: EditingPart
+    containers?: ReferenceContainer[]
+    measurements?: LineMeasurement[]
+    description: string
+    detail: string
+  }>
+  redo: Array<{
+    part: EditingPart
+    containers?: ReferenceContainer[]
+    measurements?: LineMeasurement[]
+    description: string
+    detail: string
+  }>
 }
 
 /**
@@ -332,8 +353,20 @@ export interface HistorySnapshot {
  */
 export function exportHistory(): HistorySnapshot {
   return {
-    undo: undoStack.map((e) => ({ part: clone(e.part), containers: structuredClone(e.containers), measurements: structuredClone(e.measurements), description: e.description, detail: e.detail })),
-    redo: redoStack.map((e) => ({ part: clone(e.part), containers: structuredClone(e.containers), measurements: structuredClone(e.measurements), description: e.description, detail: e.detail })),
+    undo: undoStack.map((e) => ({
+      part: clone(e.part),
+      containers: structuredClone(e.containers),
+      measurements: structuredClone(e.measurements),
+      description: e.description,
+      detail: e.detail,
+    })),
+    redo: redoStack.map((e) => ({
+      part: clone(e.part),
+      containers: structuredClone(e.containers),
+      measurements: structuredClone(e.measurements),
+      description: e.description,
+      detail: e.detail,
+    })),
   }
 }
 
@@ -347,12 +380,36 @@ export function importHistory(snapshot: HistorySnapshot): void {
   undoStack.length = 0
   redoStack.length = 0
   for (const raw of snapshot.undo as unknown[]) {
-    const e = raw as { part?: EditingPart; containers?: ReferenceContainer[]; measurements?: LineMeasurement[]; description?: string; detail?: string } & EditingPart
-    undoStack.push({ part: clone(e.part ?? (e as EditingPart)), containers: structuredClone(e.containers ?? []), measurements: structuredClone(e.measurements ?? []), description: e.description ?? 'edit', detail: e.detail ?? '' })
+    const e = raw as {
+      part?: EditingPart
+      containers?: ReferenceContainer[]
+      measurements?: LineMeasurement[]
+      description?: string
+      detail?: string
+    } & EditingPart
+    undoStack.push({
+      part: clone(e.part ?? (e as EditingPart)),
+      containers: structuredClone(e.containers ?? []),
+      measurements: structuredClone(e.measurements ?? []),
+      description: e.description ?? 'edit',
+      detail: e.detail ?? '',
+    })
   }
   for (const raw of snapshot.redo as unknown[]) {
-    const e = raw as { part?: EditingPart; containers?: ReferenceContainer[]; measurements?: LineMeasurement[]; description?: string; detail?: string } & EditingPart
-    redoStack.push({ part: clone(e.part ?? (e as EditingPart)), containers: structuredClone(e.containers ?? []), measurements: structuredClone(e.measurements ?? []), description: e.description ?? 'edit', detail: e.detail ?? '' })
+    const e = raw as {
+      part?: EditingPart
+      containers?: ReferenceContainer[]
+      measurements?: LineMeasurement[]
+      description?: string
+      detail?: string
+    } & EditingPart
+    redoStack.push({
+      part: clone(e.part ?? (e as EditingPart)),
+      containers: structuredClone(e.containers ?? []),
+      measurements: structuredClone(e.measurements ?? []),
+      description: e.description ?? 'edit',
+      detail: e.detail ?? '',
+    })
   }
   if (undoStack.length > MAX_UNDO) undoStack.splice(0, undoStack.length - MAX_UNDO)
   refreshHistoryFlags()
@@ -425,11 +482,14 @@ export function addPart(
   buildAnimations?: (idMap: ReadonlyMap<string, string>) => PartAnimation[],
 ): string {
   if (placements.length === 0 && connectors.length === 0) return DEFAULT_LAYER_ID
-  const importDetail = placements.length > 0 && connectors.length === 0
-    ? (placements.length === 1 ? lastSegmentLower(placements[0].subPartTemplateId) : `${placements.length} parts`)
-    : connectors.length > 0 && placements.length === 0
-      ? `${connectors.length} connector${connectors.length > 1 ? 's' : ''}`
-      : `${placements.length} parts, ${connectors.length} connectors`
+  const importDetail =
+    placements.length > 0 && connectors.length === 0
+      ? placements.length === 1
+        ? lastSegmentLower(placements[0].subPartTemplateId)
+        : `${placements.length} parts`
+      : connectors.length > 0 && placements.length === 0
+        ? `${connectors.length} connector${connectors.length > 1 ? 's' : ''}`
+        : `${placements.length} parts, ${connectors.length} connectors`
   pushUndo('import', importDetail)
   const part = clone($part.get())
   const layerId =
@@ -445,7 +505,9 @@ export function addPart(
   const idMap = new Map<string, string>()
   for (const src of placements) {
     const base = lastSegmentLower(src.subPartTemplateId)
-    const count = part.placements.filter((p) => p.subPartTemplateId === src.subPartTemplateId).length
+    const count = part.placements.filter(
+      (p) => p.subPartTemplateId === src.subPartTemplateId,
+    ).length
     const instanceId = `${base}_${count + 1}`
     idMap.set(src.instanceId, instanceId)
     part.placements.push({
@@ -489,8 +551,12 @@ export function importProjectData(env: ProjectExportEnvelope): ImportSummary {
   const detail =
     [
       summary.meshes ? `${summary.meshes} mesh${summary.meshes === 1 ? '' : 'es'}` : '',
-      summary.connectors ? `${summary.connectors} connector${summary.connectors === 1 ? '' : 's'}` : '',
-      summary.animations ? `${summary.animations} animation${summary.animations === 1 ? '' : 's'}` : '',
+      summary.connectors
+        ? `${summary.connectors} connector${summary.connectors === 1 ? '' : 's'}`
+        : '',
+      summary.animations
+        ? `${summary.animations} animation${summary.animations === 1 ? '' : 's'}`
+        : '',
     ]
       .filter(Boolean)
       .join(', ') || 'nothing'
@@ -561,7 +627,10 @@ function nextConnectorId(part: EditingPart): string {
 export function setConnectorFlags(index: number, flags: readonly ConnectorFlag[]): void {
   const current = $part.get()
   if (index < 0 || index >= current.connectors.length) return
-  pushUndo('connector flags', `${current.connectors[index].id} → ${flags.length ? flags.join(', ') : 'none'}`)
+  pushUndo(
+    'connector flags',
+    `${current.connectors[index].id} → ${flags.length ? flags.join(', ') : 'none'}`,
+  )
   const part = clone(current)
   part.connectors[index].flags = [...flags]
   $part.set(part)
@@ -585,20 +654,30 @@ export function removeSelected(): void {
     kinds > 1
       ? 'delete'
       : sub.length
-        ? sub.length === 1 ? 'delete part' : 'delete parts'
+        ? sub.length === 1
+          ? 'delete part'
+          : 'delete parts'
         : con.length
-          ? con.length === 1 ? 'delete connector' : 'delete connectors'
-          : kit.length === 1 ? 'delete kitten' : 'delete kittens'
+          ? con.length === 1
+            ? 'delete connector'
+            : 'delete connectors'
+          : kit.length === 1
+            ? 'delete kitten'
+            : 'delete kittens'
   const detail =
     total === 1
-      ? (sub.length ? part0.placements[sub[0]]?.instanceId
-        : con.length ? part0.connectors[con[0]]?.id
-        : part0.kittens[kit[0]]?.id) ?? ''
+      ? ((sub.length
+          ? part0.placements[sub[0]]?.instanceId
+          : con.length
+            ? part0.connectors[con[0]]?.id
+            : part0.kittens[kit[0]]?.id) ?? '')
       : [
           sub.length ? `${sub.length} part${sub.length === 1 ? '' : 's'}` : '',
           con.length ? `${con.length} connector${con.length === 1 ? '' : 's'}` : '',
           kit.length ? `${kit.length} kitten${kit.length === 1 ? '' : 's'}` : '',
-        ].filter(Boolean).join(', ')
+        ]
+          .filter(Boolean)
+          .join(', ')
   pushUndo(description, detail)
 
   const part = clone(part0)
@@ -650,12 +729,18 @@ export function duplicateSelected(): void {
   const kinds = (sub.length ? 1 : 0) + (con.length ? 1 : 0) + (kit.length ? 1 : 0)
   const detail =
     total === 1
-      ? (sub.length ? part0.placements[sub[0]]?.instanceId
-        : con.length ? part0.connectors[con[0]]?.id
-        : part0.kittens[kit[0]]?.id) ?? ''
+      ? ((sub.length
+          ? part0.placements[sub[0]]?.instanceId
+          : con.length
+            ? part0.connectors[con[0]]?.id
+            : part0.kittens[kit[0]]?.id) ?? '')
       : kinds > 1
         ? `${total} items`
-        : sub.length ? `${sub.length} parts` : con.length ? `${con.length} connectors` : `${kit.length} kittens`
+        : sub.length
+          ? `${sub.length} parts`
+          : con.length
+            ? `${con.length} connectors`
+            : `${kit.length} kittens`
   pushUndo('duplicate', detail)
 
   const part = clone(part0)
@@ -666,7 +751,9 @@ export function duplicateSelected(): void {
     const src = part.placements[i]
     if (!src) continue
     const base = lastSegmentLower(src.subPartTemplateId)
-    const count = part.placements.filter((p) => p.subPartTemplateId === src.subPartTemplateId).length
+    const count = part.placements.filter(
+      (p) => p.subPartTemplateId === src.subPartTemplateId,
+    ).length
     part.placements.push({
       instanceId: `${base}_${count + 1}`,
       subPartTemplateId: src.subPartTemplateId,
@@ -822,7 +909,11 @@ export type SelectableKind = 'subpart' | 'connector' | 'kitten'
 const dedupeIndices = (xs: readonly number[]): number[] => {
   const seen = new Set<number>()
   const out: number[] = []
-  for (const i of xs) if (i >= 0 && !seen.has(i)) { seen.add(i); out.push(i) }
+  for (const i of xs)
+    if (i >= 0 && !seen.has(i)) {
+      seen.add(i)
+      out.push(i)
+    }
   return out
 }
 
@@ -894,11 +985,19 @@ export function selectedTransformRefs(): SelectedTransformRef[] {
   const out: SelectedTransformRef[] = []
   for (const i of $selectedIndices.get()) {
     const p = part.placements[i]
-    if (p) out.push({ kind: 'subpart', index: i, transform: tx(p), layerId: p.layerId, name: p.instanceId })
+    if (p)
+      out.push({
+        kind: 'subpart',
+        index: i,
+        transform: tx(p),
+        layerId: p.layerId,
+        name: p.instanceId,
+      })
   }
   for (const i of $selectedConnectorIndices.get()) {
     const c = part.connectors[i]
-    if (c) out.push({ kind: 'connector', index: i, transform: tx(c), layerId: c.layerId, name: c.id })
+    if (c)
+      out.push({ kind: 'connector', index: i, transform: tx(c), layerId: c.layerId, name: c.id })
   }
   for (const i of $selectedKittenIndices.get()) {
     const k = part.kittens[i]
@@ -1059,9 +1158,10 @@ export function setSubPartInstanceId(index: number, instanceId: string): void {
 
 /** Replaces the editor tags. Discrete mutation (add/remove one tag) → self-records undo. */
 export function setEditorTags(editorTags: readonly string[]): void {
-  const tagsDetail = editorTags.length === 0
-    ? 'none'
-    : editorTags.slice(0, 2).join(', ') + (editorTags.length > 2 ? ', …' : '')
+  const tagsDetail =
+    editorTags.length === 0
+      ? 'none'
+      : editorTags.slice(0, 2).join(', ') + (editorTags.length > 2 ? ', …' : '')
   pushUndo('edit tags', tagsDetail)
   const part = clone($part.get())
   part.editorTags = [...editorTags]
@@ -1135,7 +1235,12 @@ function mutateSubPartData(subPartTemplateId: string, mutate: (s: SubPartGameDat
   $part.set(part)
 }
 
-function commitSubPartData(label: string, detail: string, subPartTemplateId: string, mutate: (s: SubPartGameData) => void): void {
+function commitSubPartData(
+  label: string,
+  detail: string,
+  subPartTemplateId: string,
+  mutate: (s: SubPartGameData) => void,
+): void {
   pushUndo(label, detail)
   mutateSubPartData(subPartTemplateId, mutate)
 }
@@ -1230,7 +1335,9 @@ export function setPowerConsumerWatts(index: number, consumedWatts: number): voi
 /** Discrete: enable/disable the decoupler. */
 export function setDecouplerEnabled(enabled: boolean): void {
   commitGameData('decoupler', enabled ? 'on' : 'off', (g) => {
-    g.decoupler = enabled ? (g.decoupler ?? { connectorId: '', force: DEFAULT_COUPLING_FORCE }) : null
+    g.decoupler = enabled
+      ? (g.decoupler ?? { connectorId: '', force: DEFAULT_COUPLING_FORCE })
+      : null
   })
 }
 /** Discrete: bind the decoupler to a connector id. */
@@ -1249,7 +1356,9 @@ export function setDecouplerForce(force: number): void {
 /** Discrete: enable/disable the docking port. */
 export function setDockingPortEnabled(enabled: boolean): void {
   commitGameData('docking port', enabled ? 'on' : 'off', (g) => {
-    g.dockingPort = enabled ? (g.dockingPort ?? { connectorId: '', force: DEFAULT_COUPLING_FORCE }) : null
+    g.dockingPort = enabled
+      ? (g.dockingPort ?? { connectorId: '', force: DEFAULT_COUPLING_FORCE })
+      : null
   })
 }
 /** Discrete: bind the docking port to a connector id. */
@@ -1343,7 +1452,9 @@ export function deleteLayer(id: string, opts: DeleteLayerOptions): void {
   pushUndo('delete layer', current.layers.find((l) => l.id === id)?.name ?? id)
   const part = clone(current)
   if (opts.mode === 'move-items') {
-    const valid = opts.targetLayerId && opts.targetLayerId !== id &&
+    const valid =
+      opts.targetLayerId &&
+      opts.targetLayerId !== id &&
       part.layers.some((l) => l.id === opts.targetLayerId)
     const target = valid ? opts.targetLayerId! : DEFAULT_LAYER_ID
     for (const p of part.placements) if (p.layerId === id) p.layerId = target
@@ -1406,7 +1517,10 @@ export function movePlacementToLayer(index: number, layerId: string): void {
   const placement = current.placements[index]
   if (!placement || placement.layerId === layerId) return
   if (!current.layers.some((l) => l.id === layerId)) return
-  pushUndo('move to layer', `${current.placements[index].instanceId} → ${current.layers.find((l) => l.id === layerId)?.name ?? layerId}`)
+  pushUndo(
+    'move to layer',
+    `${current.placements[index].instanceId} → ${current.layers.find((l) => l.id === layerId)?.name ?? layerId}`,
+  )
   const part = clone(current)
   part.placements[index].layerId = layerId
   $part.set(part)
@@ -1427,9 +1541,10 @@ export function moveSelectedPlacementsToLayer(layerId: string): void {
   const current = $part.get()
   if (!current.layers.some((l) => l.id === layerId)) return
   const destLayerName = current.layers.find((l) => l.id === layerId)?.name ?? layerId
-  const moveDetail = indices.length === 1
-    ? `${current.placements[indices[0]]?.instanceId ?? ''} → ${destLayerName}`
-    : `${indices.length} parts → ${destLayerName}`
+  const moveDetail =
+    indices.length === 1
+      ? `${current.placements[indices[0]]?.instanceId ?? ''} → ${destLayerName}`
+      : `${indices.length} parts → ${destLayerName}`
   pushUndo('move to layer', moveDetail)
   const part = clone(current)
   for (const i of indices) {
@@ -1463,8 +1578,11 @@ export function deselectLayer(layerId: string): void {
   const current = $selectedIndices.get()
   const kept = current.filter((i) => part.placements[i]?.layerId !== layerId)
   if (kept.length !== current.length) $selectedIndices.set(kept)
-  const keptCon = $selectedConnectorIndices.get().filter((i) => part.connectors[i]?.layerId !== layerId)
-  if (keptCon.length !== $selectedConnectorIndices.get().length) $selectedConnectorIndices.set(keptCon)
+  const keptCon = $selectedConnectorIndices
+    .get()
+    .filter((i) => part.connectors[i]?.layerId !== layerId)
+  if (keptCon.length !== $selectedConnectorIndices.get().length)
+    $selectedConnectorIndices.set(keptCon)
   const keptKit = $selectedKittenIndices.get().filter((i) => part.kittens[i]?.layerId !== layerId)
   if (keptKit.length !== $selectedKittenIndices.get().length) $selectedKittenIndices.set(keptKit)
 }

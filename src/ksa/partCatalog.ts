@@ -69,7 +69,11 @@ export function parseGameDataFile(doc: Document, out: Map<string, PartGameData>)
     const id = gd.getAttribute('Id')
     if (!id) continue
     const parsed = parseGameDataElement(gd)
-    const entry: PartGameData = out.get(id) ?? { editorTags: [], connectorFlags: new Map(), animationModules: [] }
+    const entry: PartGameData = out.get(id) ?? {
+      editorTags: [],
+      connectorFlags: new Map(),
+      animationModules: [],
+    }
     for (const tag of parsed.editorTags) {
       if (!entry.editorTags.includes(tag)) entry.editorTags.push(tag)
     }

@@ -10,12 +10,7 @@ import {
   toggleLayerListed,
   toggleLayerVisible,
 } from './layerStore'
-import {
-  $selectedIndices,
-  addSubPart,
-  newPart,
-  setSelectedPlacements,
-} from './editorStore'
+import { $selectedIndices, addSubPart, newPart, setSelectedPlacements } from './editorStore'
 import { DEFAULT_LAYER_ID } from '../ksa/types'
 
 beforeEach(() => {
@@ -41,7 +36,11 @@ describe('layerStore — listed flag', () => {
     // A persisted entry from before the `listed` flag existed.
     $layerView.set({ x: { visible: false, locked: true } as never })
     expect(isLayerListed('x')).toBe(true)
-    expect(layerViewState($layerView.get(), 'x')).toEqual({ visible: false, locked: true, listed: true })
+    expect(layerViewState($layerView.get(), 'x')).toEqual({
+      visible: false,
+      locked: true,
+      listed: true,
+    })
   })
 
   it('toggling listed does NOT prune the selection (unlike lock)', () => {

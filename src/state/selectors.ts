@@ -15,7 +15,7 @@ import type { Connector, Layer, SubPartPlacement } from '../ksa/types'
 export const $selectedPlacement = computed(
   [$part, $selectedIndices],
   (part, indices): SubPartPlacement | null =>
-    indices.length === 1 ? part.placements[indices[0]] ?? null : null,
+    indices.length === 1 ? (part.placements[indices[0]] ?? null) : null,
 )
 
 /** A selected SubPart paired with its index. */
@@ -102,24 +102,21 @@ export interface LayerSummary {
 }
 
 /** Every layer (in display order) with its SubPart/connector/kitten counts. */
-export const $layerSummaries = computed(
-  [$part],
-  (part): LayerSummary[] => {
-    const subCounts = new Map<string, number>()
-    const conCounts = new Map<string, number>()
-    const kitCounts = new Map<string, number>()
-    for (const p of part.placements) subCounts.set(p.layerId, (subCounts.get(p.layerId) ?? 0) + 1)
-    for (const c of part.connectors) conCounts.set(c.layerId, (conCounts.get(c.layerId) ?? 0) + 1)
-    for (const k of part.kittens) kitCounts.set(k.layerId, (kitCounts.get(k.layerId) ?? 0) + 1)
-    return part.layers.map((layer) => ({
-      id: layer.id,
-      layer,
-      subParts: subCounts.get(layer.id) ?? 0,
-      connectors: conCounts.get(layer.id) ?? 0,
-      kittens: kitCounts.get(layer.id) ?? 0,
-    }))
-  },
-)
+export const $layerSummaries = computed([$part], (part): LayerSummary[] => {
+  const subCounts = new Map<string, number>()
+  const conCounts = new Map<string, number>()
+  const kitCounts = new Map<string, number>()
+  for (const p of part.placements) subCounts.set(p.layerId, (subCounts.get(p.layerId) ?? 0) + 1)
+  for (const c of part.connectors) conCounts.set(c.layerId, (conCounts.get(c.layerId) ?? 0) + 1)
+  for (const k of part.kittens) kitCounts.set(k.layerId, (kitCounts.get(k.layerId) ?? 0) + 1)
+  return part.layers.map((layer) => ({
+    id: layer.id,
+    layer,
+    subParts: subCounts.get(layer.id) ?? 0,
+    connectors: conCounts.get(layer.id) ?? 0,
+    kittens: kitCounts.get(layer.id) ?? 0,
+  }))
+})
 
 /** The active layer object (where new items land), or null if none resolves. */
 export const $activeLayer = computed(

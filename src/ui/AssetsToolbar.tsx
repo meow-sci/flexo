@@ -25,7 +25,12 @@ export function AssetsToolbar() {
         <div className="min-w-0 flex-1">
           <LayersButton />
         </div>
-        <Button size="sm" variant="secondary" className="shrink-0" onPress={() => setCustomOpen(true)}>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="shrink-0"
+          onPress={() => setCustomOpen(true)}
+        >
           <Boxes size={16} className="shrink-0" />
           Custom ({customCount})
         </Button>

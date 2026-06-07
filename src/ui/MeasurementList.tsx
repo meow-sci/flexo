@@ -66,7 +66,12 @@ export function MeasurementList({ onSelect }: { onSelect?: () => void } = {}) {
           >
             {m.locked ? <Lock size={13} /> : <Unlock size={13} />}
           </Button>
-          <Button size="sm" variant="danger" aria-label="Delete" onPress={() => removeMeasurement(m.id)}>
+          <Button
+            size="sm"
+            variant="danger"
+            aria-label="Delete"
+            onPress={() => removeMeasurement(m.id)}
+          >
             <Trash2 size={13} />
           </Button>
         </GridListItem>

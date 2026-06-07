@@ -75,7 +75,11 @@ export function FloatingInspector() {
     : { left: MARGIN, bottom: MARGIN }
 
   return (
-    <div data-floating-inspector className="pointer-events-auto absolute z-30 flex w-72 flex-col gap-1" style={style}>
+    <div
+      data-floating-inspector
+      className="pointer-events-auto absolute z-30 flex w-72 flex-col gap-1"
+      style={style}
+    >
       <div
         onPointerDown={onHeaderPointerDown}
         className="flex cursor-grab touch-none select-none items-center gap-1.5 rounded-lg border border-border bg-panel/95 px-2 py-1 shadow-popover backdrop-blur-md active:cursor-grabbing"

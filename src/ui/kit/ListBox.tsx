@@ -30,8 +30,7 @@ export function ListBox<T extends object>({ className, ...props }: ListBoxProps<
 }
 
 export function ListBoxItem({ className, children, ...props }: ListBoxItemProps) {
-  const textValue =
-    props.textValue ?? (typeof children === 'string' ? children : undefined)
+  const textValue = props.textValue ?? (typeof children === 'string' ? children : undefined)
   return (
     <AriaListBoxItem
       {...props}
@@ -58,8 +57,7 @@ export function GridList<T extends object>({ className, ...props }: GridListProp
 }
 
 export function GridListItem({ className, children, ...props }: GridListItemProps) {
-  const textValue =
-    props.textValue ?? (typeof children === 'string' ? children : undefined)
+  const textValue = props.textValue ?? (typeof children === 'string' ? children : undefined)
   return (
     <AriaGridListItem
       {...props}
@@ -67,9 +65,7 @@ export function GridListItem({ className, children, ...props }: GridListItemProp
       className={composeRenderProps(className, (cls, { isSelected, isFocusVisible }) =>
         cn(
           gridItemBase,
-          isSelected
-            ? 'bg-white/[0.08] ring-2 ring-inset ring-accent'
-            : 'hover:bg-white/[0.06]',
+          isSelected ? 'bg-white/[0.08] ring-2 ring-inset ring-accent' : 'hover:bg-white/[0.06]',
           isFocusVisible && !isSelected ? 'ring-1 ring-inset ring-accent' : '',
           cls,
         ),

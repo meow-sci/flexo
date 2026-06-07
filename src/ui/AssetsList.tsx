@@ -68,7 +68,10 @@ const keyOf = (kind: Kind, raw: string) => `${PREFIX[kind]}:${raw}`
 function parseKey(key: string): { kind: Kind; raw: string } {
   const i = key.indexOf(':')
   const p = key.slice(0, i)
-  return { kind: p === 'sp' ? 'subpart' : p === 'con' ? 'connector' : 'kitten', raw: key.slice(i + 1) }
+  return {
+    kind: p === 'sp' ? 'subpart' : p === 'con' ? 'connector' : 'kitten',
+    raw: key.slice(i + 1),
+  }
 }
 
 const rowClass = ({
@@ -110,7 +113,10 @@ export function AssetsList() {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Fast key → store-index lookups for onSelectionChange.
-  const subIdx = useMemo(() => new Map(part.placements.map((p, i) => [p.instanceId, i])), [part.placements])
+  const subIdx = useMemo(
+    () => new Map(part.placements.map((p, i) => [p.instanceId, i])),
+    [part.placements],
+  )
   const conIdx = useMemo(() => new Map(part.connectors.map((c, i) => [c.id, i])), [part.connectors])
   const kitIdx = useMemo(() => new Map(part.kittens.map((k, i) => [k.id, i])), [part.kittens])
 
@@ -126,19 +132,46 @@ export function AssetsList() {
         if (l.id === CONNECTOR_LAYER_ID) {
           rows = part.connectors.flatMap((c, i) =>
             c.layerId === l.id && match(c.id, ...c.flags)
-              ? [{ id: keyOf('connector', c.id), kind: 'connector' as const, index: i, name: c.id, sub: c.flags.length ? c.flags.join(', ') : 'no flags', hidden }]
+              ? [
+                  {
+                    id: keyOf('connector', c.id),
+                    kind: 'connector' as const,
+                    index: i,
+                    name: c.id,
+                    sub: c.flags.length ? c.flags.join(', ') : 'no flags',
+                    hidden,
+                  },
+                ]
               : [],
           )
         } else if (l.id === KITTEN_LAYER_ID) {
           rows = part.kittens.flatMap((k, i) =>
             k.layerId === l.id && match(k.id, k.kind)
-              ? [{ id: keyOf('kitten', k.id), kind: 'kitten' as const, index: i, name: k.id, sub: k.kind, hidden }]
+              ? [
+                  {
+                    id: keyOf('kitten', k.id),
+                    kind: 'kitten' as const,
+                    index: i,
+                    name: k.id,
+                    sub: k.kind,
+                    hidden,
+                  },
+                ]
               : [],
           )
         } else {
           rows = part.placements.flatMap((p, i) =>
             p.layerId === l.id && match(p.instanceId, p.subPartTemplateId)
-              ? [{ id: keyOf('subpart', p.instanceId), kind: 'subpart' as const, index: i, name: p.instanceId, sub: p.subPartTemplateId, hidden }]
+              ? [
+                  {
+                    id: keyOf('subpart', p.instanceId),
+                    kind: 'subpart' as const,
+                    index: i,
+                    name: p.instanceId,
+                    sub: p.subPartTemplateId,
+                    hidden,
+                  },
+                ]
               : [],
           )
         }
@@ -165,9 +198,18 @@ export function AssetsList() {
   // SubParts, connectors, and kittens at once (native react-aria multi-select).
   const selectedKeys = useMemo<Selection>(() => {
     const keys = new Set<string>()
-    for (const i of selSub) { const p = part.placements[i]; if (p) keys.add(keyOf('subpart', p.instanceId)) }
-    for (const i of selCon) { const c = part.connectors[i]; if (c) keys.add(keyOf('connector', c.id)) }
-    for (const i of selKit) { const k = part.kittens[i]; if (k) keys.add(keyOf('kitten', k.id)) }
+    for (const i of selSub) {
+      const p = part.placements[i]
+      if (p) keys.add(keyOf('subpart', p.instanceId))
+    }
+    for (const i of selCon) {
+      const c = part.connectors[i]
+      if (c) keys.add(keyOf('connector', c.id))
+    }
+    for (const i of selKit) {
+      const k = part.kittens[i]
+      if (k) keys.add(keyOf('kitten', k.id))
+    }
     return keys
   }, [selSub, selCon, selKit, part])
 
@@ -199,9 +241,16 @@ export function AssetsList() {
     for (const id of next) {
       if (hiddenKeys.has(id)) continue
       const { kind, raw } = parseKey(id)
-      if (kind === 'subpart') { const i = subIdx.get(raw); if (i != null) sub.push(i) }
-      else if (kind === 'connector') { const i = conIdx.get(raw); if (i != null) con.push(i) }
-      else { const i = kitIdx.get(raw); if (i != null) kit.push(i) }
+      if (kind === 'subpart') {
+        const i = subIdx.get(raw)
+        if (i != null) sub.push(i)
+      } else if (kind === 'connector') {
+        const i = conIdx.get(raw)
+        if (i != null) con.push(i)
+      } else {
+        const i = kitIdx.get(raw)
+        if (i != null) kit.push(i)
+      }
     }
     setSelection(sub, con, kit)
   }
@@ -274,7 +323,9 @@ export function AssetsList() {
                     className={(rp) => `${rowClass(rp)}${row.hidden ? ' opacity-40' : ''}`}
                   >
                     <div className="flex min-w-0 flex-1 flex-col">
-                      <span className={`truncate text-sm${row.kind === 'connector' ? ' font-mono' : ''}`}>
+                      <span
+                        className={`truncate text-sm${row.kind === 'connector' ? ' font-mono' : ''}`}
+                      >
                         {row.name}
                       </span>
                       <span className="truncate text-xs text-fg-subtle">{row.sub}</span>
@@ -383,7 +434,8 @@ function SubPartRowMenu({ index }: { index: number }) {
 function SimpleRowMenu({ row }: { row: Row }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const label = row.kind === 'connector' ? 'connector' : 'kitten'
-  const select = () => (row.kind === 'connector' ? selectConnector(row.index) : selectKitten(row.index))
+  const select = () =>
+    row.kind === 'connector' ? selectConnector(row.index) : selectKitten(row.index)
 
   return (
     <>

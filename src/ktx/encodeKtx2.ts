@@ -67,9 +67,7 @@ export async function encodeImageToKtx2(
   // ktx-parse's write() emits exactly `levelCount` levels — it does NOT infer the
   // count from the levels array — so it must equal the mip chain length.
   container.levelCount = image.levels.length
-  container.supercompressionScheme = useZstd
-    ? KHR_SUPERCOMPRESSION_ZSTD
-    : KHR_SUPERCOMPRESSION_NONE
+  container.supercompressionScheme = useZstd ? KHR_SUPERCOMPRESSION_ZSTD : KHR_SUPERCOMPRESSION_NONE
 
   // levels[0] = base (largest); ktx-parse handles the on-disk level ordering/padding.
   container.levels = []

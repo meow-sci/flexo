@@ -45,7 +45,8 @@ export async function getSubPartGeometry(
   }
 
   const mesh = findFirstMesh(node)
-  if (!mesh) throw new Error(`MeshAtlasCache: no mesh under '${nodeName ?? '<scene>'}' in ${atlasUrl}`)
+  if (!mesh)
+    throw new Error(`MeshAtlasCache: no mesh under '${nodeName ?? '<scene>'}' in ${atlasUrl}`)
 
   const geometry = mesh.geometry.clone()
   // Bake the node's transform relative to the atlas scene so placement is faithful.

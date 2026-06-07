@@ -3,7 +3,7 @@
 Flexo is a browser-based Part editor and viewer for the game [Kitten Space Agency](https://ahwoo.com/app/100000/kitten-space-agency)
 
 - uses [three.js](https://threejs.org/) to create a 3D workspace to render the KSA game asset meshes and textures
-- bespoke editor UI focused on Part/SubPart editing based on [react-aria](https://react-aria.adobe.com/) 
+- bespoke editor UI focused on Part/SubPart editing based on [react-aria](https://react-aria.adobe.com/)
 
 ### Kitten Space Agency Part/SubPart information
 

@@ -41,7 +41,13 @@ export function AddSubPartButton() {
   )
 }
 
-export function SubPartPopup({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function SubPartPopup({
+  open,
+  onOpenChange,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}) {
   return (
     <Modal
       isOpen={open}
@@ -83,7 +89,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
 
   const onSelection = (keys: Selection) => {
     if (keys === 'all') return
-    setSelectedId((([...keys][0] as string) ?? null))
+    setSelectedId(([...keys][0] as string) ?? null)
   }
 
   const add = () => {
@@ -145,7 +151,9 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
 
   const detailsPane = (
     <div className="h-full overflow-auto rounded-lg border border-border bg-panel-sunken p-3">
-      {selected ? <SubPartDetails subPart={selected} /> : (
+      {selected ? (
+        <SubPartDetails subPart={selected} />
+      ) : (
         <span className="text-sm text-fg-subtle">Select a SubPart to see its details.</span>
       )}
     </div>

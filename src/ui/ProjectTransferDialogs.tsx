@@ -61,7 +61,13 @@ export function ExportProjectDialog({
   }
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={onOpenChange} isDismissable variant="fullscreen" className="max-w-2xl">
+    <Modal
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      isDismissable
+      variant="fullscreen"
+      className="max-w-2xl"
+    >
       <Dialog>
         <DialogHeader title="Export Project Data" onClose={() => onOpenChange(false)} />
         <div className="flex flex-col gap-2 overflow-auto p-3">
@@ -75,8 +81,8 @@ export function ExportProjectDialog({
             <>
               <p className="text-xs text-fg-subtle">
                 Copy or download this JSON, then paste it into another project via Import. It
-                carries meshes, layers, connectors, kittens, kitten meshes, animations, and
-                GameData — but no uploaded textures or primitive meshes.
+                carries meshes, layers, connectors, kittens, kitten meshes, animations, and GameData
+                — but no uploaded textures or primitive meshes.
               </p>
               <textarea readOnly value={json} className={textareaClass} spellCheck={false} />
               <div className="flex justify-end gap-2">
@@ -128,14 +134,20 @@ export function ImportProjectDialog({
   }
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={close} isDismissable variant="fullscreen" className="max-w-2xl">
+    <Modal
+      isOpen={isOpen}
+      onOpenChange={close}
+      isDismissable
+      variant="fullscreen"
+      className="max-w-2xl"
+    >
       <Dialog>
         <DialogHeader title="Import Project Data" onClose={() => close(false)} />
         <div className="flex flex-col gap-2 overflow-auto p-3">
           <p className="text-xs text-fg-subtle">
-            Paste JSON exported from another project. Its meshes, connectors, layers, and
-            animations are <span className="text-fg">added</span> to the current workspace —
-            your existing content is kept.
+            Paste JSON exported from another project. Its meshes, connectors, layers, and animations
+            are <span className="text-fg">added</span> to the current workspace — your existing
+            content is kept.
           </p>
           <textarea
             value={text}

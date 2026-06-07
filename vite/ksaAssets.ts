@@ -76,7 +76,10 @@ export function ksaAssets(): Plugin {
         try {
           const st = statSync(abs)
           if (!st.isFile()) return next()
-          res.setHeader('Content-Type', MIME[extname(abs).toLowerCase()] ?? 'application/octet-stream')
+          res.setHeader(
+            'Content-Type',
+            MIME[extname(abs).toLowerCase()] ?? 'application/octet-stream',
+          )
           res.setHeader('Content-Length', st.size)
           createReadStream(abs).pipe(res)
         } catch {

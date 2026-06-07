@@ -19,7 +19,10 @@ function solid(width: number, height: number, color = [200, 100, 50, 255]): Imag
 describe('encodeImageToKtx2', () => {
   it('writes an uncompressed sRGB RGBA8 KTX2 that ktx-parse can read back', async () => {
     const levels = buildMipChain(solid(4, 4)) // 4×4, 2×2, 1×1
-    const bytes = await encodeImageToKtx2({ width: 4, height: 4, levels }, { srgb: true, zstd: false })
+    const bytes = await encodeImageToKtx2(
+      { width: 4, height: 4, levels },
+      { srgb: true, zstd: false },
+    )
 
     const ktx = read(bytes)
     expect(ktx.vkFormat).toBe(VK_FORMAT_R8G8B8A8_SRGB)
@@ -38,13 +41,19 @@ describe('encodeImageToKtx2', () => {
 
   it('linear option uses VK_FORMAT_R8G8B8A8_UNORM', async () => {
     const levels = buildMipChain(solid(2, 2))
-    const bytes = await encodeImageToKtx2({ width: 2, height: 2, levels }, { srgb: false, zstd: false })
+    const bytes = await encodeImageToKtx2(
+      { width: 2, height: 2, levels },
+      { srgb: false, zstd: false },
+    )
     expect(read(bytes).vkFormat).toBe(VK_FORMAT_R8G8B8A8_UNORM)
   })
 
   it('zstd option supercompresses each level (uncompressedByteLength preserved)', async () => {
     const levels = buildMipChain(solid(8, 8))
-    const bytes = await encodeImageToKtx2({ width: 8, height: 8, levels }, { srgb: true, zstd: true })
+    const bytes = await encodeImageToKtx2(
+      { width: 8, height: 8, levels },
+      { srgb: true, zstd: true },
+    )
     const ktx = read(bytes)
     expect(ktx.supercompressionScheme).toBe(KHR_SUPERCOMPRESSION_ZSTD)
     expect(ktx.levels[0].uncompressedByteLength).toBe(8 * 8 * 4)

@@ -72,11 +72,7 @@ function Split({
         />
       </div>
       <div
-        className={
-          isVertical
-            ? 'min-h-0 flex-1 overflow-hidden'
-            : 'min-w-0 flex-1 overflow-hidden'
-        }
+        className={isVertical ? 'min-h-0 flex-1 overflow-hidden' : 'min-w-0 flex-1 overflow-hidden'}
       >
         {second}
       </div>
@@ -98,7 +94,16 @@ export function VerticalSplit({
   minPct?: number
   maxPct?: number
 }) {
-  return <Split direction="vertical" first={top} second={bottom} initialSplit={initialSplit} minPct={minPct} maxPct={maxPct} />
+  return (
+    <Split
+      direction="vertical"
+      first={top}
+      second={bottom}
+      initialSplit={initialSplit}
+      minPct={minPct}
+      maxPct={maxPct}
+    />
+  )
 }
 
 /** Lays two panes left/right with a draggable vertical divider. */
@@ -115,5 +120,14 @@ export function HorizontalSplit({
   minPct?: number
   maxPct?: number
 }) {
-  return <Split direction="horizontal" first={left} second={right} initialSplit={initialSplit} minPct={minPct} maxPct={maxPct} />
+  return (
+    <Split
+      direction="horizontal"
+      first={left}
+      second={right}
+      initialSplit={initialSplit}
+      minPct={minPct}
+      maxPct={maxPct}
+    />
+  )
 }

@@ -41,11 +41,21 @@ beforeEach(() => {
 
 // ── pivot test helpers ─────────────────────────────────────────────────────────
 const I3 = { x: 1, y: 1, z: 1 }
-function tf(over: { pos?: [number, number, number]; rot?: [number, number, number]; scale?: [number, number, number] } = {}): Transform {
+function tf(
+  over: {
+    pos?: [number, number, number]
+    rot?: [number, number, number]
+    scale?: [number, number, number]
+  } = {},
+): Transform {
   const [px, py, pz] = over.pos ?? [0, 0, 0]
   const [rx, ry, rz] = over.rot ?? [0, 0, 0]
   const [sx, sy, sz] = over.scale ?? [1, 1, 1]
-  return { position: { x: px, y: py, z: pz }, rotation: { x: rx, y: ry, z: rz }, scale: { x: sx, y: sy, z: sz } }
+  return {
+    position: { x: px, y: py, z: pz },
+    rotation: { x: rx, y: ry, z: rz },
+    scale: { x: sx, y: sy, z: sz },
+  }
 }
 function pl(instanceId: string, t: Transform): SubPartPlacement {
   return { instanceId, subPartTemplateId: 'T', layerId: 'default', ...t }
@@ -142,7 +152,11 @@ describe('animationStore', () => {
     const aid = addAnimation('A')
     const jid = addJoint(aid, 'J')
     const kid = addKeyframe(aid, 1)
-    setJointPose(aid, kid, jid, { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 1.5, z: 0 }, scale: { x: 1, y: 1, z: 1 } })
+    setJointPose(aid, kid, jid, {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 1.5, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+    })
     const kf = anim0().keyframes.find((k) => k.id === kid)!
     expect(kf.poses[jid].rotation.y).toBeCloseTo(1.5)
   })
@@ -176,7 +190,9 @@ describe('animationStore — joint pivots', () => {
   it('re-centers the swing on the hinge instead of the origin', () => {
     const { aid, jid } = setupDoor()
     // BEFORE: pivot at origin → the panel at x=1 swings out to (0,0,-1) at t=1.
-    expect(positionOf(previewOverrideMatrix(anim0(), 'panel_1', 1, tf({ pos: [1, 0, 0] }))!)[2]).toBeCloseTo(-1, 5)
+    expect(
+      positionOf(previewOverrideMatrix(anim0(), 'panel_1', 1, tf({ pos: [1, 0, 0] }))!)[2],
+    ).toBeCloseTo(-1, 5)
     // Snap the pivot onto the hinge (x=1); now the door hinges in place.
     setJointPivot(aid, jid, tf({ pos: [1, 0, 0] }))
     const p = positionOf(previewOverrideMatrix(anim0(), 'panel_1', 1, tf({ pos: [1, 0, 0] }))!)
@@ -205,7 +221,10 @@ describe('animationStore — joint pivots', () => {
     // The joint's rest WORLD frame becomes the hinge frame — but unit-scaled.
     expectMatrixClose(jointWorld(anim0(), jid, 0), matrixFromTransform({ ...hinge, scale: I3 }))
     // t=0 geometry is preserved (no jump): the leaf still renders at its placement.
-    expectMatrixClose(previewOverrideMatrix(anim0(), 'panel_1', 0, tf({ pos: [1, 0, 0] }))!, matrixFromTransform(tf({ pos: [1, 0, 0] })))
+    expectMatrixClose(
+      previewOverrideMatrix(anim0(), 'panel_1', 0, tf({ pos: [1, 0, 0] }))!,
+      matrixFromTransform(tf({ pos: [1, 0, 0] })),
+    )
   })
 
   it('re-bases a child joint to the target frame and leaves the parent untouched', () => {
@@ -232,7 +251,10 @@ describe('animationStore — joint pivots', () => {
   })
 
   it('addJoint seeds the pivot at the selection centroid (no orientation guess)', () => {
-    $part.set({ ...createEmptyPart(), placements: [pl('a', tf({ pos: [0, 0, 0] })), pl('b', tf({ pos: [2, 0, 0] }))] })
+    $part.set({
+      ...createEmptyPart(),
+      placements: [pl('a', tf({ pos: [0, 0, 0] })), pl('b', tf({ pos: [2, 0, 0] }))],
+    })
     $selectedIndices.set([0, 1])
     const aid = addAnimation('A')
     const jid = addJoint(aid, 'J')
@@ -269,7 +291,13 @@ describe('animationStore — joint pivots', () => {
     it('clears the entry (and the map) when set to linear — keeps export byte-identical', () => {
       const { aid, jid } = setupDoor()
       const restId = restKeyframeId(anim0())
-      setJointSegmentEasing(aid, restId, jid, { kind: 'cubicBezier', x1: 0.4, y1: 0, x2: 0.6, y2: 1 })
+      setJointSegmentEasing(aid, restId, jid, {
+        kind: 'cubicBezier',
+        x1: 0.4,
+        y1: 0,
+        x2: 0.6,
+        y2: 1,
+      })
       setJointSegmentEasing(aid, restId, jid, { kind: 'preset', preset: 'linear' })
       const rest = anim0().keyframes.find((k) => k.id === restId)!
       expect(rest.easings).toBeUndefined()

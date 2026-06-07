@@ -40,7 +40,11 @@ function toBlob(data: Blob | Uint8Array, type: string): Blob {
 }
 
 /** Stores bytes under `key`. Existing value is replaced. */
-export function putAsset(key: string, data: Blob | Uint8Array, type = 'application/octet-stream'): Promise<void> {
+export function putAsset(
+  key: string,
+  data: Blob | Uint8Array,
+  type = 'application/octet-stream',
+): Promise<void> {
   return tx('readwrite').then(
     (store) =>
       new Promise((resolve, reject) => {

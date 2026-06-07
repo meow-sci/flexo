@@ -8,7 +8,8 @@ export const button = tv({
   variants: {
     variant: {
       primary: 'bg-accent text-accent-fg hover:bg-accent-hover pressed:bg-accent-press',
-      secondary: 'border-border bg-white/[0.04] text-fg hover:bg-white/[0.09] pressed:bg-white/[0.13]',
+      secondary:
+        'border-border bg-white/[0.04] text-fg hover:bg-white/[0.09] pressed:bg-white/[0.13]',
       ghost: 'text-fg hover:bg-white/[0.08] pressed:bg-white/[0.04]',
       danger: 'bg-danger text-danger-fg hover:brightness-110 pressed:brightness-90',
       'danger-ghost': 'text-danger hover:bg-danger/15 pressed:bg-danger/25',

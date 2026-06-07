@@ -59,7 +59,10 @@ interface ExportButtonProps {
   onOpenChange?: (v: boolean) => void
 }
 
-export function ExportButton({ isOpen: externalOpen, onOpenChange: externalOnChange }: ExportButtonProps = {}) {
+export function ExportButton({
+  isOpen: externalOpen,
+  onOpenChange: externalOnChange,
+}: ExportButtonProps = {}) {
   const part = useStore($part)
   const [internalOpen, setInternalOpen] = useState(false)
   const [mode, setMode] = useState<Mode>('xml')
@@ -68,14 +71,24 @@ export function ExportButton({ isOpen: externalOpen, onOpenChange: externalOnCha
   const setOpen = isControlled ? (v: boolean) => externalOnChange?.(v) : setInternalOpen
 
   const warnings = useMemo(
-    () => validate(part.partId, part.placements.map((p) => p.instanceId)),
+    () =>
+      validate(
+        part.partId,
+        part.placements.map((p) => p.instanceId),
+      ),
     [part],
   )
 
   return (
     <>
       {!isControlled && <ToolbarButton onPress={() => setOpen(true)}>Export</ToolbarButton>}
-      <Modal isOpen={open} onOpenChange={setOpen} isDismissable variant="fullscreen" className="max-w-2xl">
+      <Modal
+        isOpen={open}
+        onOpenChange={setOpen}
+        isDismissable
+        variant="fullscreen"
+        className="max-w-2xl"
+      >
         <Dialog>
           <DialogHeader title="Export" onClose={() => setOpen(false)} />
           <div className="flex flex-col gap-2 overflow-auto p-3">
@@ -178,7 +191,11 @@ function ModPanel() {
     try {
       const dir = await getWritableModFolder()
       if (!dir) {
-        toast({ title: 'Folder access required', description: 'Grant write access to your mods folder first.', variant: 'warning' })
+        toast({
+          title: 'Folder access required',
+          description: 'Grant write access to your mods folder first.',
+          variant: 'warning',
+        })
         return
       }
       const result = await writeModToFolder(dir, part, projectName, kittenTex, catalog)
@@ -189,7 +206,11 @@ function ModPanel() {
       })
     } catch (err) {
       console.warn('mod folder export failed', err)
-      toast({ title: 'Export failed', description: String((err as Error)?.message ?? err), variant: 'danger' })
+      toast({
+        title: 'Export failed',
+        description: String((err as Error)?.message ?? err),
+        variant: 'danger',
+      })
     } finally {
       setBusy(false)
     }
@@ -208,7 +229,11 @@ function ModPanel() {
       URL.revokeObjectURL(url)
     } catch (err) {
       console.warn('mod zip export failed', err)
-      toast({ title: 'Export failed', description: String((err as Error)?.message ?? err), variant: 'danger' })
+      toast({
+        title: 'Export failed',
+        description: String((err as Error)?.message ?? err),
+        variant: 'danger',
+      })
     }
   }
 

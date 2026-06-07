@@ -62,7 +62,11 @@ import {
 import { jointWorld, previewOverrideMatrix } from '../ksa/animationRig'
 import type { PartAnimation } from '../ksa/types'
 import { $inspectorMode } from '../state/uiStore'
-import { $connectorSettings, $selectionHighlight, type ConnectorSettings } from '../state/settingsStore'
+import {
+  $connectorSettings,
+  $selectionHighlight,
+  type ConnectorSettings,
+} from '../state/settingsStore'
 import { $cameraRestore, $cameraSnap, $grids } from '../state/viewStore'
 import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../state/layerStore'
 
@@ -134,7 +138,8 @@ export class EditorScene {
     initTextureSupport(this.viewport.renderer)
     this.root.name = 'flexo-part'
     this.viewport.scene.add(this.root)
-    if (import.meta.env.DEV) (window as unknown as { __editorScene?: EditorScene }).__editorScene = this
+    if (import.meta.env.DEV)
+      (window as unknown as { __editorScene?: EditorScene }).__editorScene = this
     this.pivot.name = 'bulk-pivot'
     this.root.add(this.pivot)
     this.poseProxy.name = 'pose-proxy'
@@ -220,7 +225,8 @@ export class EditorScene {
           const mode = $toolMode.get()
           const desc = mode === 'rotate' ? 'rotate' : mode === 'scale' ? 'scale' : 'move'
           const refs = selectedTransformRefs()
-          const detail = refs.length === 1 ? refs[0].name : refs.length > 1 ? `${refs.length} items` : ''
+          const detail =
+            refs.length === 1 ? refs[0].name : refs.length > 1 ? `${refs.length} items` : ''
           pushUndo(desc, detail)
           this.beginBulkDrag()
         },
@@ -387,9 +393,7 @@ export class EditorScene {
       void SubPartObject.create(entry, placement)
         .then((obj) => {
           this.building.delete(placement.instanceId)
-          const latest = $part
-            .get()
-            .placements.find((p) => p.instanceId === placement.instanceId)
+          const latest = $part.get().placements.find((p) => p.instanceId === placement.instanceId)
           if (!latest) {
             obj.dispose() // removed while loading
             return

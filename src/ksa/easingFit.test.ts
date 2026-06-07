@@ -8,7 +8,11 @@ import { decodeAnimationGlb, remapImportedAnimation, parseGlb } from './animatio
 import type { CatalogAnimationModule, PartAnimation, Transform } from './types'
 
 function tf(rotY: number): Transform {
-  return { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: rotY, z: 0 }, scale: { x: 1, y: 1, z: 1 } }
+  return {
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: rotY, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+  }
 }
 
 /** A single-joint door whose Y-rotation follows `progress(t)` over [0,1] at `fps`. */
@@ -30,7 +34,11 @@ function denseDoor(progress: (t: number) => number, fps = 30): PartAnimation {
 }
 
 /** Largest position + angle discrepancy between two animations' joint worlds. */
-function maxJointError(a: PartAnimation, b: PartAnimation, ts: number[]): { pos: number; deg: number } {
+function maxJointError(
+  a: PartAnimation,
+  b: PartAnimation,
+  ts: number[],
+): { pos: number; deg: number } {
   let pos = 0
   let deg = 0
   for (const j of a.joints) {
@@ -93,26 +101,37 @@ describe('fitAnimationEasing — round-trip oracle', () => {
 
 describe('fitAnimationEasing — real KSA solar panel (staged, overlapping windows)', () => {
   const PATH = 'thirdparty/ksa/Content/Core/Animations/CoreElectricalA_Prefab_SolarPanelB_Anim.glb'
-  it.runIf(existsSync(PATH))('compacts ~230 baked keys to a handful and reproduces the motion', () => {
-    const buf = readFileSync(PATH)
-    const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
-    const { json } = parseGlb(ab)
-    const instanceIds = new Set((json.nodes ?? []).map((n) => n.name!).filter((nm) => /_Subpart_/.test(nm)))
-    const mod: CatalogAnimationModule = { moduleId: 'SolarPanelAnimation', showDeployRetract: true, glbPath: PATH, glbId: 'x', solarTracking: null }
-    const decoded = decodeAnimationGlb(ab, { instanceIds, module: mod })!
-    const idMap = new Map([...instanceIds].map((id) => [id, id]))
-    let n = 0
-    const dense = remapImportedAnimation(decoded, idMap, (p) => `${p}_${n++}`)
-    const fitted = fitAnimationEasing(dense)
+  it.runIf(existsSync(PATH))(
+    'compacts ~230 baked keys to a handful and reproduces the motion',
+    () => {
+      const buf = readFileSync(PATH)
+      const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+      const { json } = parseGlb(ab)
+      const instanceIds = new Set(
+        (json.nodes ?? []).map((n) => n.name!).filter((nm) => /_Subpart_/.test(nm)),
+      )
+      const mod: CatalogAnimationModule = {
+        moduleId: 'SolarPanelAnimation',
+        showDeployRetract: true,
+        glbPath: PATH,
+        glbId: 'x',
+        solarTracking: null,
+      }
+      const decoded = decodeAnimationGlb(ab, { instanceIds, module: mod })!
+      const idMap = new Map([...instanceIds].map((id) => [id, id]))
+      let n = 0
+      const dense = remapImportedAnimation(decoded, idMap, (p) => `${p}_${n++}`)
+      const fitted = fitAnimationEasing(dense)
 
-    expect(dense.keyframes.length).toBeGreaterThan(100)
-    expect(fitted.keyframes.length).toBeLessThan(12) // ~230 → a handful of editable keys
-    // Joint-world motion matches the dense baking across the deploy. The chain amplifies
-    // each joint's local-angle tolerance into tip position, so the mid-deploy transient
-    // is a few cm (endpoints are exact); this is visually faithful for a panel deploy.
-    const ts = Array.from({ length: 49 }, (_, i) => (i / 48) * dense.durationSec)
-    const err = maxJointError(dense, fitted, ts)
-    expect(err.pos).toBeLessThan(0.1) // < 10 cm tip transient on a multi-metre chain
-    expect(err.deg).toBeLessThan(3.5)
-  })
+      expect(dense.keyframes.length).toBeGreaterThan(100)
+      expect(fitted.keyframes.length).toBeLessThan(12) // ~230 → a handful of editable keys
+      // Joint-world motion matches the dense baking across the deploy. The chain amplifies
+      // each joint's local-angle tolerance into tip position, so the mid-deploy transient
+      // is a few cm (endpoints are exact); this is visually faithful for a panel deploy.
+      const ts = Array.from({ length: 49 }, (_, i) => (i / 48) * dense.durationSec)
+      const err = maxJointError(dense, fitted, ts)
+      expect(err.pos).toBeLessThan(0.1) // < 10 cm tip transient on a multi-metre chain
+      expect(err.deg).toBeLessThan(3.5)
+    },
+  )
 })

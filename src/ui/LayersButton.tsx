@@ -20,10 +20,17 @@ export function LayersButton() {
   return (
     <DialogTrigger isOpen={open} onOpenChange={setOpen}>
       <Tooltip content={activeLayer?.name ?? 'Layers'}>
-        <Button variant="secondary" size="sm" className="w-full min-w-0 justify-start" aria-label="Layers">
+        <Button
+          variant="secondary"
+          size="sm"
+          className="w-full min-w-0 justify-start"
+          aria-label="Layers"
+        >
           <Layers size={16} className="shrink-0" />
           <span className="shrink-0">Layers ({part.layers.length})</span>
-          {activeLayer && <span className="min-w-0 flex-1 truncate text-fg-muted">· {activeLayer.name}</span>}
+          {activeLayer && (
+            <span className="min-w-0 flex-1 truncate text-fg-muted">· {activeLayer.name}</span>
+          )}
         </Button>
       </Tooltip>
       <Popover placement="bottom end" className="w-[min(450px,calc(100vw-1.5rem))]">

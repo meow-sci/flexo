@@ -61,10 +61,7 @@ export function toUrl(relPath: string): string {
 }
 
 /** Result of fetching+parsing a /ksa/ XML file. 'missing' = file genuinely absent (real 404, or vite's SPA index.html fallback served with 200 for an unknown path). */
-export type XmlFetchResult =
-  | { kind: 'ok'; doc: Document }
-  | { kind: 'missing' }
-  | { kind: 'error' }
+export type XmlFetchResult = { kind: 'ok'; doc: Document } | { kind: 'missing' } | { kind: 'error' }
 
 function looksLikeHtmlFallback(text: string): boolean {
   const head = text.slice(0, 256).trimStart().toLowerCase()

@@ -65,9 +65,7 @@ export function ContainerList({ onSelect }: { onSelect?: () => void } = {}) {
             />
             <Icon size={14} className="shrink-0 text-fg-subtle" />
             <span className="flex-1 truncate text-xs">{SHAPE_LABEL[c.shape]}</span>
-            {c.warnEnabled && (
-              <span className="text-[10px] uppercase text-fg-subtle">warn</span>
-            )}
+            {c.warnEnabled && <span className="text-[10px] uppercase text-fg-subtle">warn</span>}
             <Button
               size="sm"
               aria-label={c.locked ? 'Unlock' : 'Lock'}

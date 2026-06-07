@@ -73,7 +73,8 @@ export function parseGlb(buffer: ArrayBuffer): { json: Gltf; bin: DataView } {
     const len = dv.getUint32(off, true)
     const type = dv.getUint32(off + 4, true)
     const start = off + 8
-    if (type === CHUNK_JSON) json = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, start, len)))
+    if (type === CHUNK_JSON)
+      json = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, start, len)))
     else if (type === CHUNK_BIN) bin = new DataView(buffer, start, len)
     off = start + len + ((4 - (len % 4)) % 4)
   }
@@ -85,7 +86,8 @@ export function parseGlb(buffer: ArrayBuffer): { json: Gltf; bin: DataView } {
 function readAccessor(json: Gltf, bin: DataView, index: number): number[][] {
   const acc = json.accessors?.[index]
   if (!acc) throw new Error(`animationImport: missing accessor ${index}`)
-  if (acc.componentType !== COMPONENT_FLOAT) throw new Error('animationImport: only FLOAT accessors supported')
+  if (acc.componentType !== COMPONENT_FLOAT)
+    throw new Error('animationImport: only FLOAT accessors supported')
   const bv = json.bufferViews?.[acc.bufferView]
   if (!bv) throw new Error('animationImport: missing bufferView')
   const comps = COMPS[acc.type] ?? 1
@@ -122,7 +124,10 @@ function sampleChannel(ch: Channel, t: number): number[] {
   if (ch.step) return a
   const u = (t - times[i]) / (times[i + 1] - times[i])
   if (a.length === 4) {
-    const q = new THREE.Quaternion(a[0], a[1], a[2], a[3]).slerp(new THREE.Quaternion(b[0], b[1], b[2], b[3]), u)
+    const q = new THREE.Quaternion(a[0], a[1], a[2], a[3]).slerp(
+      new THREE.Quaternion(b[0], b[1], b[2], b[3]),
+      u,
+    )
     return [q.x, q.y, q.z, q.w]
   }
   return a.map((v, k) => v + (b[k] - v) * u)
@@ -152,7 +157,11 @@ export interface ImportedAnimation {
    * to the last keyframe so the preview/export anchor on the deployed (modeled) pose.
    */
   restAtLastKeyframe: boolean
-  solarTracking: { degreesPerSecond: number; subPartOriginalId: string; excludeOriginalIds: string[] } | null
+  solarTracking: {
+    degreesPerSecond: number
+    subPartOriginalId: string
+    excludeOriginalIds: string[]
+  } | null
 }
 
 function uniqSorted(times: number[]): number[] {
@@ -185,11 +194,16 @@ export function decodeAnimationGlb(
 
   const childToParent = new Map<number, number>()
   nodes.forEach((n, i) => (n.children ?? []).forEach((c) => childToParent.set(c, i)))
-  const roots = new Set<number>((json.scenes?.[json.scene ?? 0]?.nodes ?? []).filter((i) => nodes[i]))
+  const roots = new Set<number>(
+    (json.scenes?.[json.scene ?? 0]?.nodes ?? []).filter((i) => nodes[i]),
+  )
   const isLeaf = (i: number) => !!nodes[i]?.name && opts.instanceIds.has(nodes[i].name!)
 
   // Per-node TRS channels.
-  const nodeChannels = new Map<number, { translation?: Channel; rotation?: Channel; scale?: Channel }>()
+  const nodeChannels = new Map<
+    number,
+    { translation?: Channel; rotation?: Channel; scale?: Channel }
+  >()
   for (const ch of anim.channels) {
     const s = anim.samplers[ch.sampler]
     if (!s) continue
@@ -213,12 +227,15 @@ export function decodeAnimationGlb(
     if (roots.has(i) || isLeaf(i)) return
     if (nodeChannels.has(i) || hasLeafDescendant(i)) jointNodeIndices.push(i)
   })
-  const jointArrayIndexByNode = new Map(jointNodeIndices.map((nodeIdx, arrIdx) => [nodeIdx, arrIdx]))
+  const jointArrayIndexByNode = new Map(
+    jointNodeIndices.map((nodeIdx, arrIdx) => [nodeIdx, arrIdx]),
+  )
 
   // Keyframe times = union of every channel's input times (always including 0).
   const allTimes: number[] = []
   for (const entry of nodeChannels.values())
-    for (const ch of [entry.translation, entry.rotation, entry.scale]) if (ch) allTimes.push(...ch.times)
+    for (const ch of [entry.translation, entry.rotation, entry.scale])
+      if (ch) allTimes.push(...ch.times)
   const keyframeTimes = uniqSorted(allTimes)
 
   const nearestJointAncestor = (nodeIdx: number): number | null => {
@@ -276,7 +293,12 @@ export function decodeAnimationGlb(
       return transformFromMatrix(m)
     })
     const memberOriginalIds = (node.children ?? []).filter(isLeaf).map((c) => nodes[c].name!)
-    return { name: node.name ?? 'Joint', parentIndex: nearestJointAncestor(nodeIdx), memberOriginalIds, poses }
+    return {
+      name: node.name ?? 'Joint',
+      parentIndex: nearestJointAncestor(nodeIdx),
+      memberOriginalIds,
+      poses,
+    }
   })
 
   // Which keyframe does the part's MODELED placement match — the first (t=0) or the

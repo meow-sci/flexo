@@ -8,10 +8,7 @@ import { composeTw } from './styles'
 
 export function Slider<T extends number | number[]>({ className, ...props }: SliderProps<T>) {
   return (
-    <AriaSlider
-      {...props}
-      className={composeTw('w-full touch-none select-none', className)}
-    >
+    <AriaSlider {...props} className={composeTw('w-full touch-none select-none', className)}>
       <SliderTrack className="relative flex h-5 w-full items-center">
         {({ state }) => (
           <>

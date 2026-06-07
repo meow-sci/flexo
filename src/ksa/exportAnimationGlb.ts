@@ -41,7 +41,13 @@ export function buildAnimationGlb(rig: AnimRig): Uint8Array {
     blobs.push(data)
     byteOffset += data.byteLength // Float32 arrays are inherently 4-byte aligned
     const count = values.length / comps
-    const acc: GltfAccessor = { bufferView: bufferViews.length - 1, byteOffset: 0, componentType: COMPONENT_FLOAT, count, type }
+    const acc: GltfAccessor = {
+      bufferView: bufferViews.length - 1,
+      byteOffset: 0,
+      componentType: COMPONENT_FLOAT,
+      count,
+      type,
+    }
     if (withMinMax) {
       const min = new Array<number>(comps).fill(Infinity)
       const max = new Array<number>(comps).fill(-Infinity)

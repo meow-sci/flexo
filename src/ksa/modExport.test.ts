@@ -8,7 +8,10 @@ vi.mock('../three/kittenBake', () => ({
     const THREE = await import('three')
     const tri = () => {
       const g = new THREE.BufferGeometry()
-      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3))
+      g.setAttribute(
+        'position',
+        new THREE.BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3),
+      )
       return g
     }
     return [
@@ -94,7 +97,17 @@ function partWithDoorAnimation(): EditingPart {
     joints: [{ id: 'j', name: 'Hinge', parentJointId: null, memberInstanceIds: ['panel_1'] }],
     keyframes: [
       { id: 'k0', timeSec: 0, poses: { j: identityTransform() } },
-      { id: 'k1', timeSec: 1, poses: { j: { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: Math.PI / 2, z: 0 }, scale: { x: 1, y: 1, z: 1 } } } },
+      {
+        id: 'k1',
+        timeSec: 1,
+        poses: {
+          j: {
+            position: { x: 0, y: 0, z: 0 },
+            rotation: { x: 0, y: Math.PI / 2, z: 0 },
+            scale: { x: 1, y: 1, z: 1 },
+          },
+        },
+      },
     ],
     solarTracking: null,
   }
@@ -130,7 +143,11 @@ describe('animation export', () => {
 
   it('emits <SolarTracking> with excludes when configured', () => {
     const part = partWithDoorAnimation()
-    part.animations[0].solarTracking = { degreesPerSecond: 5, subPartInstanceId: 'panel_1', excludeInstanceIds: ['base_1'] }
+    part.animations[0].solarTracking = {
+      degreesPerSecond: 5,
+      subPartInstanceId: 'panel_1',
+      excludeInstanceIds: ['base_1'],
+    }
     const xml = serializeGameData(part, 'MyPart')
     expect(xml).toContain('<SolarTracking')
     expect(xml).toContain('DegreesPerSecond="5"')
@@ -150,8 +167,19 @@ function partWithKittenMeshes(): EditingPart {
   const part = createEmptyPart()
   part.partId = 'KittenMod'
   const add = (subPartId: string, kitten: EditingPart['customMeshes'][number]['kitten']) => {
-    part.customMeshes.push({ id: `mesh_${subPartId}`, name: subPartId, subPartId, kitten, faceTextures: {} })
-    part.placements.push({ instanceId: subPartId, subPartTemplateId: subPartId, ...identityTransform(), layerId: 'default' })
+    part.customMeshes.push({
+      id: `mesh_${subPartId}`,
+      name: subPartId,
+      subPartId,
+      kitten,
+      faceTextures: {},
+    })
+    part.placements.push({
+      instanceId: subPartId,
+      subPartTemplateId: subPartId,
+      ...identityTransform(),
+      layerId: 'default',
+    })
   }
   add('flexo_hunter_suit_a', {
     kind: 'hunter',
@@ -160,7 +188,11 @@ function partWithKittenMeshes(): EditingPart {
     normal: 'Textures/Characters/Kitten_EMU_N.ktx2',
     aoRoughMetal: 'Textures/Characters/Kitten_EMU_ORM.ktx2',
   })
-  add('flexo_hunter_eye_b', { kind: 'hunter', specKey: 'eye', diffuse: 'Textures/Characters/Kitten_Eye_Green2_A.ktx2' })
+  add('flexo_hunter_eye_b', {
+    kind: 'hunter',
+    specKey: 'eye',
+    diffuse: 'Textures/Characters/Kitten_Eye_Green2_A.ktx2',
+  })
   return part
 }
 
@@ -170,9 +202,15 @@ describe('buildCustomBundle — part-ified kitten textures', () => {
       mode: 'reference',
       contentCorePath: 'C:\\KSA\\Content\\Core',
     })
-    expect(bundle.assetsXml).toContain('<Diffuse Path="C:\\KSA\\Content\\Core\\Textures\\Characters\\Kitten_EMU_A.ktx2"')
-    expect(bundle.assetsXml).toContain('<Normal Path="C:\\KSA\\Content\\Core\\Textures\\Characters\\Kitten_EMU_N.ktx2"')
-    expect(bundle.assetsXml).toContain('<AoRoughMetal Path="C:\\KSA\\Content\\Core\\Textures\\Characters\\Kitten_EMU_ORM.ktx2"')
+    expect(bundle.assetsXml).toContain(
+      '<Diffuse Path="C:\\KSA\\Content\\Core\\Textures\\Characters\\Kitten_EMU_A.ktx2"',
+    )
+    expect(bundle.assetsXml).toContain(
+      '<Normal Path="C:\\KSA\\Content\\Core\\Textures\\Characters\\Kitten_EMU_N.ktx2"',
+    )
+    expect(bundle.assetsXml).toContain(
+      '<AoRoughMetal Path="C:\\KSA\\Content\\Core\\Textures\\Characters\\Kitten_EMU_ORM.ktx2"',
+    )
     // Eyes (diffuse only) fall back to the shared synthetic normal/ORM.
     expect(bundle.assetsXml).toContain('_FlatNormal.ktx2')
     expect(bundle.assetsXml).toContain('_NeutralORM.ktx2')
@@ -182,10 +220,16 @@ describe('buildCustomBundle — part-ified kitten textures', () => {
   })
 
   it('bundle mode copies each unique kitten .ktx2 verbatim (deduped) and references them relatively', async () => {
-    const fetchMock = vi.fn(async () => ({ ok: true, arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer }))
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer,
+    }))
     vi.stubGlobal('fetch', fetchMock)
     try {
-      const bundle = await buildCustomBundle(partWithKittenMeshes(), 'KittenMod', { mode: 'bundle', contentCorePath: '' })
+      const bundle = await buildCustomBundle(partWithKittenMeshes(), 'KittenMod', {
+        mode: 'bundle',
+        contentCorePath: '',
+      })
       const paths = bundle.binaries.map((b) => b.path)
       expect(paths).toContain('Textures/Kitten_EMU_A.ktx2')
       expect(paths).toContain('Textures/Kitten_EMU_N.ktx2')
@@ -230,8 +274,18 @@ function partWithIvaAndCore(): EditingPart {
   const part = createEmptyPart()
   part.partId = 'MyShip'
   part.placements.push(
-    { instanceId: 'chair_1', subPartTemplateId: 'CoreIVAPropA_Subpart_ChairA', ...identityTransform(), layerId: 'default' },
-    { instanceId: 'x_1', subPartTemplateId: 'CoreStructuralA_Subpart_X', ...identityTransform(), layerId: 'default' },
+    {
+      instanceId: 'chair_1',
+      subPartTemplateId: 'CoreIVAPropA_Subpart_ChairA',
+      ...identityTransform(),
+      layerId: 'default',
+    },
+    {
+      instanceId: 'x_1',
+      subPartTemplateId: 'CoreStructuralA_Subpart_X',
+      ...identityTransform(),
+      layerId: 'default',
+    },
   )
   return part
 }
@@ -248,13 +302,23 @@ describe('IVA (Internal) SubPart export variants', () => {
 
   it('dedupes repeated placements of the same IVA template', () => {
     const part = partWithIvaAndCore()
-    part.placements.push({ instanceId: 'chair_2', subPartTemplateId: 'CoreIVAPropA_Subpart_ChairA', ...identityTransform(), layerId: 'default' })
+    part.placements.push({
+      instanceId: 'chair_2',
+      subPartTemplateId: 'CoreIVAPropA_Subpart_ChairA',
+      ...identityTransform(),
+      layerId: 'default',
+    })
     expect(buildIvaVariantMap(part, ivaCatalog(), 'MyShip').size).toBe(1)
   })
 
   it('produces no variants for a part with no IVA props', () => {
     const part = createEmptyPart()
-    part.placements.push({ instanceId: 'x_1', subPartTemplateId: 'CoreStructuralA_Subpart_X', ...identityTransform(), layerId: 'default' })
+    part.placements.push({
+      instanceId: 'x_1',
+      subPartTemplateId: 'CoreStructuralA_Subpart_X',
+      ...identityTransform(),
+      layerId: 'default',
+    })
     expect(buildIvaVariantMap(part, ivaCatalog(), 'P').size).toBe(0)
   })
 
@@ -273,8 +337,12 @@ describe('IVA (Internal) SubPart export variants', () => {
     const variants = buildIvaVariantMap(part, ivaCatalog(), 'MyShip')
     const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants)
     expect(bundle.assetsFile).toBe('MyShipAssets.xml')
-    expect(bundle.assetsXml).toContain('<SubPart Id="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA"')
-    expect(bundle.assetsXml).toContain('<PartModel Id="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA_Model"')
+    expect(bundle.assetsXml).toContain(
+      '<SubPart Id="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA"',
+    )
+    expect(bundle.assetsXml).toContain(
+      '<PartModel Id="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA_Model"',
+    )
     expect(bundle.assetsXml).toContain('<Mesh Id="CoreIVAPropA_Subpart_ChairA"')
     expect(bundle.assetsXml).toContain('<Material Id="CoreIVAPropA_Material"')
     expect(bundle.assetsXml).not.toContain('<Internal>')
@@ -311,7 +379,9 @@ describe('buildModZip', () => {
   it('includes the Animations/*.glb entry for an animated part', async () => {
     const blob = await buildModZip(partWithDoorAnimation(), 'My Part')
     const text = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()))
-    expect(text).toContain(`flexo-parts/${animGlbPath('MyPart', partWithDoorAnimation().animations[0])}`)
+    expect(text).toContain(
+      `flexo-parts/${animGlbPath('MyPart', partWithDoorAnimation().animations[0])}`,
+    )
   })
 })
 
@@ -325,11 +395,21 @@ function partWithVisor(overrides: Partial<CustomMesh>): EditingPart {
     id: 'mesh_visor',
     name: 'Visor',
     subPartId,
-    kitten: { kind: 'hunter', specKey: 'suit', diffuse: 'Textures/Characters/Kitty_Helmet_Visor_A.ktx2', transparent: true },
+    kitten: {
+      kind: 'hunter',
+      specKey: 'suit',
+      diffuse: 'Textures/Characters/Kitty_Helmet_Visor_A.ktx2',
+      transparent: true,
+    },
     faceTextures: {},
     ...overrides,
   })
-  part.placements.push({ instanceId: 'visor_1', subPartTemplateId: subPartId, ...identityTransform(), layerId: 'default' })
+  part.placements.push({
+    instanceId: 'visor_1',
+    subPartTemplateId: subPartId,
+    ...identityTransform(),
+    layerId: 'default',
+  })
   return part
 }
 
@@ -349,12 +429,17 @@ describe('visor glass tint + glow export', () => {
     expect(bundle.assetsXml).toContain('<PartModelGlass')
     expect(bundle.assetsXml).not.toContain('<Emissive')
     // A generated solid tint diffuse is bundled for this subpart, not the stock visor texture.
-    expect(bundle.binaries.some((b) => b.path.endsWith('flexo_hunter_visor_a_Diffuse.ktx2'))).toBe(true)
+    expect(bundle.binaries.some((b) => b.path.endsWith('flexo_hunter_visor_a_Diffuse.ktx2'))).toBe(
+      true,
+    )
     expect(bundle.assetsXml).not.toContain('Kitty_Helmet_Visor_A.ktx2')
   })
 
   it('an opaque-glow visor exports <PartModel> + an emissive mask, never <PartModelGlass>', async () => {
-    const part = partWithVisor({ surface: 'glow', emissive: { shape: 'whole', color: { r: 255, g: 180, b: 0 }, strength: 0.7 } })
+    const part = partWithVisor({
+      surface: 'glow',
+      emissive: { shape: 'whole', color: { r: 255, g: 180, b: 0 }, strength: 0.7 },
+    })
     const bundle = await buildCustomBundle(part, 'VisorMod', REF)
     expect(bundle.assetsXml).toContain('<Emissive')
     expect(bundle.assetsXml).not.toContain('<PartModelGlass')
@@ -375,7 +460,9 @@ describe('visor glass tint + glow export', () => {
     expect(glow.surface).toBe('glow')
     expect(glow.emissive).toEqual(part.customMeshes[0].emissive)
     // The glow placement shares the visor's transform (identity here) and a distinct instanceId.
-    const glowPlacement = expanded.placements.find((p) => p.subPartTemplateId === 'flexo_hunter_visor_a_Glow')!
+    const glowPlacement = expanded.placements.find(
+      (p) => p.subPartTemplateId === 'flexo_hunter_visor_a_Glow',
+    )!
     expect(glowPlacement.instanceId).toBe('visor_1_glow')
     expect(glowPlacement.position).toEqual({ x: 0, y: 0, z: 0 })
   })

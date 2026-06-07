@@ -124,12 +124,26 @@ export class Viewport {
     const offset = new THREE.Vector3()
     const up = new THREE.Vector3(0, 1, 0)
     switch (dir) {
-      case 'right': offset.set(1, 0, 0); break
-      case 'left': offset.set(-1, 0, 0); break
-      case 'front': offset.set(0, 0, 1); break
-      case 'back': offset.set(0, 0, -1); break
-      case 'top': offset.set(0, 1, 0); up.set(0, 0, -1); break
-      case 'bottom': offset.set(0, -1, 0); up.set(0, 0, 1); break
+      case 'right':
+        offset.set(1, 0, 0)
+        break
+      case 'left':
+        offset.set(-1, 0, 0)
+        break
+      case 'front':
+        offset.set(0, 0, 1)
+        break
+      case 'back':
+        offset.set(0, 0, -1)
+        break
+      case 'top':
+        offset.set(0, 1, 0)
+        up.set(0, 0, -1)
+        break
+      case 'bottom':
+        offset.set(0, -1, 0)
+        up.set(0, 0, 1)
+        break
     }
 
     this.camera.up.copy(up)

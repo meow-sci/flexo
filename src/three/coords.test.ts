@@ -41,31 +41,31 @@ describe('coords applyPlacement rotation order', () => {
     [2.0944, 0, 0], // single-axis: identical under any order
   ]
 
+  it.each(cases)('matches KSA CreateFromXyzRadians for (%f, %f, %f)', (x, y, z) => {
+    const obj = new THREE.Object3D()
+    applyPlacement(obj, makeTransform(x, y, z))
+    const expected = ksaQuatFromXyzRadians(x, y, z)
+    expect(obj.quaternion.angleTo(expected)).toBeLessThan(1e-6)
+  })
+
   it.each(cases)(
-    'matches KSA CreateFromXyzRadians for (%f, %f, %f)',
+    'round-trips position/rotation/scale via readPlacementTransform for (%f, %f, %f)',
     (x, y, z) => {
       const obj = new THREE.Object3D()
-      applyPlacement(obj, makeTransform(x, y, z))
-      const expected = ksaQuatFromXyzRadians(x, y, z)
-      expect(obj.quaternion.angleTo(expected)).toBeLessThan(1e-6)
+      const t: Transform = {
+        position: { x: 1.5, y: -2.25, z: 0.75 },
+        rotation: { x, y, z },
+        scale: { x: 1, y: 1, z: 1 },
+      }
+      applyPlacement(obj, t)
+      const back = readPlacementTransform(obj)
+      // Compare orientations via quaternion (Euler triples can differ but be equivalent).
+      const q1 = new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(back.rotation.x, back.rotation.y, back.rotation.z, 'ZYX'),
+      )
+      expect(q1.angleTo(ksaQuatFromXyzRadians(x, y, z))).toBeLessThan(1e-6)
+      expect(back.position).toEqual(t.position)
+      expect(back.scale).toEqual(t.scale)
     },
   )
-
-  it.each(cases)('round-trips position/rotation/scale via readPlacementTransform for (%f, %f, %f)', (x, y, z) => {
-    const obj = new THREE.Object3D()
-    const t: Transform = {
-      position: { x: 1.5, y: -2.25, z: 0.75 },
-      rotation: { x, y, z },
-      scale: { x: 1, y: 1, z: 1 },
-    }
-    applyPlacement(obj, t)
-    const back = readPlacementTransform(obj)
-    // Compare orientations via quaternion (Euler triples can differ but be equivalent).
-    const q1 = new THREE.Quaternion().setFromEuler(
-      new THREE.Euler(back.rotation.x, back.rotation.y, back.rotation.z, 'ZYX'),
-    )
-    expect(q1.angleTo(ksaQuatFromXyzRadians(x, y, z))).toBeLessThan(1e-6)
-    expect(back.position).toEqual(t.position)
-    expect(back.scale).toEqual(t.scale)
-  })
 })

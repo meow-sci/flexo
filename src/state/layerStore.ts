@@ -22,7 +22,11 @@ export interface LayerViewState {
   listed: boolean
 }
 
-export const DEFAULT_LAYER_STATE: Readonly<LayerViewState> = { visible: true, locked: false, listed: true }
+export const DEFAULT_LAYER_STATE: Readonly<LayerViewState> = {
+  visible: true,
+  locked: false,
+  listed: true,
+}
 
 /** Map of layerId → view state. Entries are sparse (defaults filled on read). */
 export const $layerView = persistentJSON<Record<string, LayerViewState>>('flexo:layerView', {})

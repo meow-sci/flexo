@@ -32,8 +32,7 @@ export function EditorTagsField({
     if (tag && !tags.includes(tag)) onChange([...tags, tag])
     setQuery('')
   }
-  const removeTags = (keys: Set<React.Key>) =>
-    onChange(tags.filter((t) => !keys.has(t)))
+  const removeTags = (keys: Set<React.Key>) => onChange(tags.filter((t) => !keys.has(t)))
 
   const q = query.trim().toLowerCase()
   const suggestions = KNOWN_EDITOR_TAGS.filter(
@@ -70,7 +69,12 @@ export function EditorTagsField({
             />
             <div className="flex max-h-60 flex-col gap-0.5 overflow-auto">
               {showCustom && (
-                <Button size="sm" variant="ghost" className="justify-start" onPress={() => addTag(query)}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="justify-start"
+                  onPress={() => addTag(query)}
+                >
                   Add “{query.trim()}”
                 </Button>
               )}
@@ -78,7 +82,13 @@ export function EditorTagsField({
                 <span className="px-2 py-1.5 text-sm text-fg-subtle">No matches</span>
               ) : (
                 suggestions.map((t) => (
-                  <Button key={t} size="sm" variant="ghost" className="justify-start" onPress={() => addTag(t)}>
+                  <Button
+                    key={t}
+                    size="sm"
+                    variant="ghost"
+                    className="justify-start"
+                    onPress={() => addTag(t)}
+                  >
                     {t}
                   </Button>
                 ))

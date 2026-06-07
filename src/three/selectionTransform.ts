@@ -32,6 +32,10 @@ export function applySelectionTransform(
   const centroid = centroidOf(refs.map((r) => r.transform.position))
   pushUndo(label, refs.length === 1 ? refs[0].name : `${refs.length} items`)
   updateSelectedTransforms(
-    refs.map((r) => ({ kind: r.kind, index: r.index, transform: transform(r.transform, centroid) })),
+    refs.map((r) => ({
+      kind: r.kind,
+      index: r.index,
+      transform: transform(r.transform, centroid),
+    })),
   )
 }

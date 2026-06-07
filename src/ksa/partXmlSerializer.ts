@@ -241,7 +241,10 @@ function buildSubPartElement(
 ): XmlElement {
   const el = doc.createElement('SubPart')
   el.setAttribute('Id', placement.instanceId)
-  el.setAttribute('InstanceOf', ivaRemap.get(placement.subPartTemplateId) ?? placement.subPartTemplateId)
+  el.setAttribute(
+    'InstanceOf',
+    ivaRemap.get(placement.subPartTemplateId) ?? placement.subPartTemplateId,
+  )
   const transform = buildTransformElement(doc, placement)
   if (transform) el.appendChild(transform)
   return el
@@ -310,11 +313,10 @@ export function prettyXml(xml: string): string {
   const out: string[] = []
   let depth = 0
   for (const line of lines) {
-    const isClosing = /^<\//.test(line)
+    const isClosing = line.startsWith('</')
     if (isClosing) depth = Math.max(0, depth - 1)
     out.push('    '.repeat(depth) + line)
-    const isOpening =
-      /^<[^/!?]/.test(line) && !/\/>$/.test(line) && !/<\/[^>]+>$/.test(line)
+    const isOpening = /^<[^/!?]/.test(line) && !line.endsWith('/>') && !/<\/[^>]+>$/.test(line)
     if (isOpening) depth++
   }
   return out.join('\n')

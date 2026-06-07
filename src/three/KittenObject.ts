@@ -42,7 +42,11 @@ export class KittenObject {
 
   /** Every per-instance material we own (for highlight + disposal). */
   private readonly materials: THREE.MeshStandardMaterial[]
-  private readonly baseEmissive: { mat: THREE.MeshStandardMaterial; color: THREE.Color; intensity: number }[]
+  private readonly baseEmissive: {
+    mat: THREE.MeshStandardMaterial
+    color: THREE.Color
+    intensity: number
+  }[]
 
   private constructor(id: string, materials: THREE.MeshStandardMaterial[]) {
     this.id = id

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { controlPointsOf, evalEasing, evalBezierPoints, isLinearEasing, EASING_PRESETS } from './easing'
+import {
+  controlPointsOf,
+  evalEasing,
+  evalBezierPoints,
+  isLinearEasing,
+  EASING_PRESETS,
+} from './easing'
 import type { EasingConfig } from './types'
 
 describe('evalEasing', () => {
@@ -22,7 +28,9 @@ describe('evalEasing', () => {
 
   it('matches the known CSS `ease` value at the midpoint', () => {
     // cubic-bezier(.25,.1,.25,1) at x=0.5 ≈ 0.8025 (browser reference)
-    expect(evalEasing({ kind: 'cubicBezier', x1: 0.25, y1: 0.1, x2: 0.25, y2: 1 }, 0.5)).toBeCloseTo(0.8025, 2)
+    expect(
+      evalEasing({ kind: 'cubicBezier', x1: 0.25, y1: 0.1, x2: 0.25, y2: 1 }, 0.5),
+    ).toBeCloseTo(0.8025, 2)
   })
 
   it('ease-in lags and ease-out leads at the midpoint', () => {
@@ -45,7 +53,8 @@ describe('evalEasing', () => {
     // a "back out" curve overshoots before settling
     const back: EasingConfig = { kind: 'cubicBezier', x1: 0.34, y1: 1.56, x2: 0.64, y2: 1 }
     let maxV = 0
-    for (let a = 0; a < 1; a += 0.02) maxV = Math.max(maxV, evalBezierPoints(controlPointsOf(back), a))
+    for (let a = 0; a < 1; a += 0.02)
+      maxV = Math.max(maxV, evalBezierPoints(controlPointsOf(back), a))
     expect(maxV).toBeGreaterThan(1)
   })
 

@@ -74,9 +74,11 @@ export function compositeGlow(
   const diffuse = new Uint8Array(width * height * 4)
   const mask = new Uint8Array(width * height * 4)
   for (let y = 0; y < height; y++) {
-    const gy = glow.height === height ? y : Math.min(glow.height - 1, Math.floor((y * glow.height) / height))
+    const gy =
+      glow.height === height ? y : Math.min(glow.height - 1, Math.floor((y * glow.height) / height))
     for (let x = 0; x < width; x++) {
-      const gx = glow.width === width ? x : Math.min(glow.width - 1, Math.floor((x * glow.width) / width))
+      const gx =
+        glow.width === width ? x : Math.min(glow.width - 1, Math.floor((x * glow.width) / width))
       const bi = (y * width + x) * 4
       const gi = (gy * glow.width + gx) * 4
       const t = glow.rgba[gi + 3] / 255

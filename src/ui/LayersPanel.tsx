@@ -30,10 +30,34 @@ import {
   setActiveLayer,
   type DeleteLayerOptions,
 } from '../state/editorStore'
-import { $layerView, layerViewState, toggleLayerListed, toggleLayerLocked, toggleLayerVisible } from '../state/layerStore'
+import {
+  $layerView,
+  layerViewState,
+  toggleLayerListed,
+  toggleLayerLocked,
+  toggleLayerVisible,
+} from '../state/layerStore'
 import { $layerSummaries, type LayerSummary } from '../state/selectors'
-import { BUILT_IN_LAYER_IDS, CONNECTOR_LAYER_ID, DEFAULT_LAYER_ID, KITTEN_LAYER_ID, type Layer } from '../ksa/types'
-import { EyeIcon, EyeOffIcon, GripVerticalIcon, ListedIcon, LockIcon, PencilIcon, SaveIcon, SelectAllIcon, TrashIcon, UnlistedIcon, UnlockIcon } from './layerIcons'
+import {
+  BUILT_IN_LAYER_IDS,
+  CONNECTOR_LAYER_ID,
+  DEFAULT_LAYER_ID,
+  KITTEN_LAYER_ID,
+  type Layer,
+} from '../ksa/types'
+import {
+  EyeIcon,
+  EyeOffIcon,
+  GripVerticalIcon,
+  ListedIcon,
+  LockIcon,
+  PencilIcon,
+  SaveIcon,
+  SelectAllIcon,
+  TrashIcon,
+  UnlistedIcon,
+  UnlockIcon,
+} from './layerIcons'
 
 /** Moves the dragged keys to before/after the target id within `ids`. */
 function computeReorder(
@@ -50,7 +74,13 @@ function computeReorder(
   return [...rest.slice(0, insertAt), ...moving, ...rest.slice(insertAt)]
 }
 
-const rowClass = ({ isSelected, isFocusVisible }: { isSelected: boolean; isFocusVisible: boolean }) =>
+const rowClass = ({
+  isSelected,
+  isFocusVisible,
+}: {
+  isSelected: boolean
+  isFocusVisible: boolean
+}) =>
   [
     'flex min-w-0 cursor-default select-none items-center gap-1 rounded-md px-2 py-1 text-fg outline-none',
     isSelected ? 'bg-white/[0.08] ring-2 ring-inset ring-accent' : 'hover:bg-white/[0.06]',
@@ -215,7 +245,11 @@ function LayerRow({
           <RenameInput layer={layer} onDone={onEndRename} />
         </div>
       ) : (
-        <span className="min-w-0 flex-1 truncate text-sm" title="Double-click to rename" onDoubleClick={onStartRename}>
+        <span
+          className="min-w-0 flex-1 truncate text-sm"
+          title="Double-click to rename"
+          onDoubleClick={onStartRename}
+        >
           {layer.name}
         </span>
       )}
@@ -227,7 +261,13 @@ function LayerRow({
       <div className="flex shrink-0 items-center gap-0.5" onPointerDown={stopRowPress}>
         {!isEditing && (
           <Tooltip content="Rename layer">
-            <Button iconOnly size="sm" variant="ghost" aria-label="Rename layer" onPress={onStartRename}>
+            <Button
+              iconOnly
+              size="sm"
+              variant="ghost"
+              aria-label="Rename layer"
+              onPress={onStartRename}
+            >
               <PencilIcon />
             </Button>
           </Tooltip>

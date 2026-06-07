@@ -84,7 +84,9 @@ type JointFit =
  * is ~0 for a there-and-back wobble (net-zero) — not reducible to one easing, so the
  * caller keeps such joints dense. `rotational` drives the slerp-arc splitting.
  */
-function scalarTrajectory(traj: Parts[]): { values: number[]; total: number; rotational: boolean } | null {
+function scalarTrajectory(
+  traj: Parts[],
+): { values: number[]; total: number; rotational: boolean } | null {
   const n = traj.length
   let maxRotDev = 0
   for (const p of traj) maxRotDev = Math.max(maxRotDev, angleBetween(traj[0].quat, p.quat))
@@ -103,11 +105,21 @@ function scalarTrajectory(traj: Parts[]): { values: number[]; total: number; rot
   if (maxPosDev < CONST_POS_EPS) return null
   if (posNet < CONST_POS_EPS) return { values: traj.map(() => 0), total: 0, rotational: false } // net-zero → dense
   dir.normalize()
-  return { values: traj.map((p) => p.pos.clone().sub(traj[0].pos).dot(dir)), total: posNet, rotational: false }
+  return {
+    values: traj.map((p) => p.pos.clone().sub(traj[0].pos).dot(dir)),
+    total: posNet,
+    rotational: false,
+  }
 }
 
 /** The time in [times[lo],times[hi]] where the progress `w` first reaches `target`. */
-function timeAtProgress(times: number[], w: number[], target: number, lo: number, hi: number): number {
+function timeAtProgress(
+  times: number[],
+  w: number[],
+  target: number,
+  lo: number,
+  hi: number,
+): number {
   for (let i = lo; i < hi; i++) {
     if ((w[i] <= target && w[i + 1] >= target) || (w[i] >= target && w[i + 1] <= target)) {
       const dw = w[i + 1] - w[i]
@@ -154,7 +166,13 @@ function fitOneSegment(times: number[], w: number[], t0: number, t1: number): Be
 }
 
 /** Worst rotation residual of slerping pose(t0)→pose(t1) by `easing` vs the dense data. */
-function segmentRotErr(times: number[], traj: Parts[], t0: number, t1: number, easing: BezierPoints): number {
+function segmentRotErr(
+  times: number[],
+  traj: Parts[],
+  t0: number,
+  t1: number,
+  easing: BezierPoints,
+): number {
   const p0 = sampleTraj(times, traj, t0)
   const p1 = sampleTraj(times, traj, t1)
   let mr = 0
@@ -172,12 +190,22 @@ function segmentRotErr(times: number[], traj: Parts[], t0: number, t1: number, e
  * exceeds {@link MAX_SEG_ANGLE_DEG} (otherwise the arc is ambiguous) OR a single bézier
  * can't fit it within tolerance — giving the extra DOF real KSA easings need.
  */
-function buildSegments(times: number[], w: number[], traj: Parts[], ta: number, tb: number, lo: number, hi: number): Segment[] {
+function buildSegments(
+  times: number[],
+  w: number[],
+  traj: Parts[],
+  ta: number,
+  tb: number,
+  lo: number,
+  hi: number,
+): Segment[] {
   const recurse = (t0: number, t1: number, depth: number): Segment[] => {
     const easing = fitOneSegment(times, w, t0, t1)
-    const arcDeg = angleBetween(sampleTraj(times, traj, t0).quat, sampleTraj(times, traj, t1).quat) * RAD2DEG
+    const arcDeg =
+      angleBetween(sampleTraj(times, traj, t0).quat, sampleTraj(times, traj, t1).quat) * RAD2DEG
     const errDeg = segmentRotErr(times, traj, t0, t1, easing) * RAD2DEG
-    if ((arcDeg <= MAX_SEG_ANGLE_DEG && errDeg <= ROT_TOL_DEG) || depth >= MAX_SEGMENT_DEPTH) return [{ t0, t1, easing }]
+    if ((arcDeg <= MAX_SEG_ANGLE_DEG && errDeg <= ROT_TOL_DEG) || depth >= MAX_SEGMENT_DEPTH)
+      return [{ t0, t1, easing }]
     const tm = timeAtProgress(times, w, (wAt(times, w, t0) + wAt(times, w, t1)) / 2, lo, hi)
     if (tm <= t0 + TIME_EPS || tm >= t1 - TIME_EPS) return [{ t0, t1, easing }]
     return [...recurse(t0, tm, depth + 1), ...recurse(tm, t1, depth + 1)]
@@ -191,14 +219,29 @@ function buildSegments(times: number[], w: number[], traj: Parts[], ta: number, 
  * poses (not window-endpoint interps) keeps large constant-axis turns exact; outside
  * [ta,tb] the assembly interpolates linearly, so we mirror that here.
  */
-function reconstructEased(times: number[], traj: Parts[], ta: number, tb: number, segments: Segment[], t: number): Parts {
+function reconstructEased(
+  times: number[],
+  traj: Parts[],
+  ta: number,
+  tb: number,
+  segments: Segment[],
+  t: number,
+): Parts {
   const t0 = times[0]
   const tEnd = times[times.length - 1]
   if (t <= ta) {
-    return ta > t0 ? interpParts(sampleTraj(times, traj, t0), sampleTraj(times, traj, ta), (t - t0) / (ta - t0)) : sampleTraj(times, traj, ta)
+    return ta > t0
+      ? interpParts(sampleTraj(times, traj, t0), sampleTraj(times, traj, ta), (t - t0) / (ta - t0))
+      : sampleTraj(times, traj, ta)
   }
   if (t >= tb) {
-    return tEnd > tb ? interpParts(sampleTraj(times, traj, tb), sampleTraj(times, traj, tEnd), (t - tb) / (tEnd - tb)) : sampleTraj(times, traj, tb)
+    return tEnd > tb
+      ? interpParts(
+          sampleTraj(times, traj, tb),
+          sampleTraj(times, traj, tEnd),
+          (t - tb) / (tEnd - tb),
+        )
+      : sampleTraj(times, traj, tb)
   }
   let seg = segments[0]
   for (const s of segments) if (t >= s.t0 - TIME_EPS) seg = s
@@ -207,7 +250,13 @@ function reconstructEased(times: number[], traj: Parts[], ta: number, tb: number
 }
 
 /** Worst-case position/rotation residual of the eased reconstruction vs the dense data. */
-function easedResidual(times: number[], traj: Parts[], ta: number, tb: number, segments: Segment[]): { pos: number; rot: number; scale: number } {
+function easedResidual(
+  times: number[],
+  traj: Parts[],
+  ta: number,
+  tb: number,
+  segments: Segment[],
+): { pos: number; rot: number; scale: number } {
   let pos = 0
   let rot = 0
   let scale = 0
@@ -308,7 +357,8 @@ const FIT_SEEDS: number[][] = [
 /** One Levenberg–Marquardt run from a seed; returns the fit and its sum-of-squares. */
 function lmFit(s: number[], w: number[], seed: number[]): { points: BezierPoints; cost: number } {
   const n = s.length
-  const evalP = (p: number[], x: number) => evalBezierPoints([clamp01(p[0]), p[1], clamp01(p[2]), p[3]], x)
+  const evalP = (p: number[], x: number) =>
+    evalBezierPoints([clamp01(p[0]), p[1], clamp01(p[2]), p[3]], x)
   const residuals = (p: number[]) => {
     const r = new Array<number>(n)
     for (let i = 0; i < n; i++) r[i] = evalP(p, s[i]) - w[i]
@@ -332,7 +382,12 @@ function lmFit(s: number[], w: number[], seed: number[]): { points: BezierPoints
       const rm = residuals(pm)
       J.push(rp.map((v, i) => (v - rm[i]) / (2 * eps)))
     }
-    const A: number[][] = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
+    const A: number[][] = [
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+      [0, 0, 0, 0],
+    ]
     const g = [0, 0, 0, 0]
     for (let a = 0; a < 4; a++) {
       for (let b = 0; b < 4; b++) {
@@ -347,7 +402,10 @@ function lmFit(s: number[], w: number[], seed: number[]): { points: BezierPoints
     let improved = false
     for (let tries = 0; tries < 8; tries++) {
       const M = A.map((row, i) => row.map((v, j) => (i === j ? v * (1 + lambda) : v)))
-      const d = solve4(M, g.map((v) => -v))
+      const d = solve4(
+        M,
+        g.map((v) => -v),
+      )
       if (d) {
         const pn = p.map((v, i) => v + d[i])
         const cn = cost(residuals(pn))
@@ -440,7 +498,12 @@ export function subdivideEasing(full: BezierPoints, s0: number, s1: number): Bez
 }
 
 function isLinear(p: BezierPoints): boolean {
-  return Math.abs(p[0]) < 1e-4 && Math.abs(p[1]) < 1e-4 && Math.abs(p[2] - 1) < 1e-4 && Math.abs(p[3] - 1) < 1e-4
+  return (
+    Math.abs(p[0]) < 1e-4 &&
+    Math.abs(p[1]) < 1e-4 &&
+    Math.abs(p[2] - 1) < 1e-4 &&
+    Math.abs(p[3] - 1) < 1e-4
+  )
 }
 
 // ── assembly ───────────────────────────────────────────────────────────────────
@@ -480,7 +543,13 @@ export function fitAnimationEasing(anim: PartAnimation): PartAnimation {
   if (dense.length <= 2) return anim
   const times = dense.map((k) => k.timeSec)
 
-  const fits = anim.joints.map((j) => fitJoint(j.id, times, dense.map((k) => toParts(k.poses[j.id] ?? identityTransform()))))
+  const fits = anim.joints.map((j) =>
+    fitJoint(
+      j.id,
+      times,
+      dense.map((k) => toParts(k.poses[j.id] ?? identityTransform())),
+    ),
+  )
 
   // Global keyframe set: endpoints + every eased joint's segment boundaries (window
   // bounds plus large-turn / fit-quality splits); dense joints (rare) pin all times.
@@ -498,10 +567,15 @@ export function fitAnimationEasing(anim: PartAnimation): PartAnimation {
   const gtimes = [...ctrl].sort((a, b) => a - b)
   if (gtimes.length >= times.length) return anim // no compaction possible
 
-  const keyframes: AnimationKeyframe[] = gtimes.map((t, i) => ({ id: `${anim.id}_kf${i}`, timeSec: t, poses: {} }))
+  const keyframes: AnimationKeyframe[] = gtimes.map((t, i) => ({
+    id: `${anim.id}_kf${i}`,
+    timeSec: t,
+    poses: {},
+  }))
 
   for (const f of fits) {
-    for (let i = 0; i < gtimes.length; i++) keyframes[i].poses[f.jointId] = fromParts(poseAt(f, times, gtimes[i]))
+    for (let i = 0; i < gtimes.length; i++)
+      keyframes[i].poses[f.jointId] = fromParts(poseAt(f, times, gtimes[i]))
     if (f.kind !== 'eased') continue
     for (let i = 0; i < gtimes.length - 1; i++) {
       const g0 = gtimes[i]
@@ -513,7 +587,13 @@ export function fitAnimationEasing(anim: PartAnimation): PartAnimation {
       const sub = subdivideEasing(seg.easing, (g0 - seg.t0) / span, (g1 - seg.t0) / span)
       if (!isLinear(sub)) {
         const kf = keyframes[i]
-        ;(kf.easings ??= {})[f.jointId] = { kind: 'cubicBezier', x1: sub[0], y1: sub[1], x2: sub[2], y2: sub[3] }
+        ;(kf.easings ??= {})[f.jointId] = {
+          kind: 'cubicBezier',
+          x1: sub[0],
+          y1: sub[1],
+          x2: sub[2],
+          y2: sub[3],
+        }
       }
     }
   }

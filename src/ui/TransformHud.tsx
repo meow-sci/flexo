@@ -112,7 +112,14 @@ export function TransformHud() {
 function RotateHint() {
   return (
     <div className="flex flex-col gap-1">
-      <HintRow chords={[['W', 'S'], ['A', 'D'], ['Q', 'E']]} label="Rotate selection" />
+      <HintRow
+        chords={[
+          ['W', 'S'],
+          ['A', 'D'],
+          ['Q', 'E'],
+        ]}
+        label="Rotate selection"
+      />
       <HintRow chords={[['R']]} label="Cycle rotation axes" />
       <HintRow chords={[['F'], ['shift', 'F']]} label="Rotation step (larger · smaller)" />
     </div>
@@ -124,9 +131,21 @@ function NudgeHint() {
   return (
     <div className="flex flex-col gap-1">
       <HintRow chords={[['↑'], ['↓']]} label="Nudge along axis" />
-      <HintRow chords={[['shift', '↑'], ['shift', '↓']]} label={`Nudge ×${FAST_NUDGE_MULTIPLIER}`} />
+      <HintRow
+        chords={[
+          ['shift', '↑'],
+          ['shift', '↓'],
+        ]}
+        label={`Nudge ×${FAST_NUDGE_MULTIPLIER}`}
+      />
       <HintRow chords={[['←'], ['→']]} label="Change nudge axis" />
-      <HintRow chords={[['shift', '←'], ['shift', '→']]} label="Change nudge step" />
+      <HintRow
+        chords={[
+          ['shift', '←'],
+          ['shift', '→'],
+        ]}
+        label="Change nudge step"
+      />
     </div>
   )
 }

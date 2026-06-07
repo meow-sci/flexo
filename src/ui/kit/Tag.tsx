@@ -17,10 +17,7 @@ export function TagGroup({ className, ...props }: TagGroupProps) {
 
 export function TagList<T extends object>({ className, ...props }: TagListProps<T>) {
   return (
-    <AriaTagList
-      {...props}
-      className={composeTw('flex flex-wrap gap-1 outline-none', className)}
-    />
+    <AriaTagList {...props} className={composeTw('flex flex-wrap gap-1 outline-none', className)} />
   )
 }
 

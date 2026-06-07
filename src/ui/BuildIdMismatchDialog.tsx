@@ -24,9 +24,8 @@ export function BuildIdMismatchDialog() {
             New version available
           </Heading>
           <p className="text-sm text-fg-muted">
-            A new build of Flexo was deployed since you last visited. Your saved
-            data may be incompatible — resetting clears all local data and
-            reloads the page.
+            A new build of Flexo was deployed since you last visited. Your saved data may be
+            incompatible — resetting clears all local data and reloads the page.
           </p>
           <div className="mt-1 flex justify-end gap-2">
             <Button variant="secondary" onPress={dismiss}>

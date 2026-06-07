@@ -15,17 +15,32 @@ import type {
   VisorSurface,
 } from '../ksa/types'
 import { KITTEN_LABELS } from '../ksa/types'
-import { $part, pushUndo, addSubPart, nextLayerId, setActiveLayer, setSelection } from './editorStore'
+import {
+  $part,
+  pushUndo,
+  addSubPart,
+  nextLayerId,
+  setActiveLayer,
+  setSelection,
+} from './editorStore'
 import { $projectName } from './projectStore'
 import { $customCatalog } from './catalogStore'
 import { $simulateGlass } from './settingsStore'
 import { assetKeys, deleteAsset, getAsset, putAsset } from './assetDb'
-import { buildPrimitiveGeometry, PRIMITIVE_FACE_KEYS, applyFaceUvTransforms } from '../three/primitives'
+import {
+  buildPrimitiveGeometry,
+  PRIMITIVE_FACE_KEYS,
+  applyFaceUvTransforms,
+} from '../three/primitives'
 import { buildMeshAtlasGlb } from '../ksa/exportGlb'
 import { decodeImage, type ImageLevel } from '../ktx/decodeImage'
 import { encodeImageToKtx2 } from '../ktx/encodeKtx2'
 import { compositeGlow, solidGlowBitmap, neutralBase, type GlowBitmap } from '../ktx/glowComposite'
-import { buildCustomFaceMaterial, makeFlatMaterial, buildGlowingFaceMaterial } from '../three/MaterialFactory'
+import {
+  buildCustomFaceMaterial,
+  makeFlatMaterial,
+  buildGlowingFaceMaterial,
+} from '../three/MaterialFactory'
 import { kittenPartSubMeshes, kittenSpecFromSource } from '../ksa/kittenAssets'
 import { bakeKittenSubMeshes, buildKittenMaterial } from '../three/kittenBake'
 
@@ -77,10 +92,13 @@ function publishTextureUrls(): void {
  * Rebuilt by refreshCatalog() on any face-config or texture change. SubPartObject
  * reads from this map to render per-face textures with baked UV transforms.
  */
-export const customMeshRenderCache = new Map<string, {
-  geometry: THREE.BufferGeometry
-  materials: THREE.MeshStandardMaterial[]
-}>()
+export const customMeshRenderCache = new Map<
+  string,
+  {
+    geometry: THREE.BufferGeometry
+    materials: THREE.MeshStandardMaterial[]
+  }
+>()
 
 /** Id of the custom mesh whose textures are currently being edited (null = panel closed). */
 export const $managingMeshId = atom<string | null>(null)
@@ -204,7 +222,10 @@ async function faceBaseImage(texId: string | undefined): Promise<ImageLevel> {
  * the shared cached baked geometry (never disposed — SubPartObject treats render-cache
  * geometry as shared) + a KSA PBR material (DoubleSide, mirroring KittenObject).
  */
-async function buildKittenCatalogEntry(m: CustomMesh, kitten: KittenMeshSource): Promise<CatalogSubPart> {
+async function buildKittenCatalogEntry(
+  m: CustomMesh,
+  kitten: KittenMeshSource,
+): Promise<CatalogSubPart> {
   const geometry = await bakedKittenGeometry(kitten)
   const mat = await buildKittenSubMeshMaterial(m, kitten)
   mat.side = THREE.DoubleSide
@@ -294,7 +315,9 @@ async function refreshCatalog(): Promise<void> {
           materials.push(buildGlowingFaceMaterial(diffuse, mask, wrap))
         } else {
           const ktx2Url = texId ? textureKtx2Urls.get(texId) : undefined
-          materials.push(ktx2Url ? await buildCustomFaceMaterial(ktx2Url, wrap) : makeFlatMaterial())
+          materials.push(
+            ktx2Url ? await buildCustomFaceMaterial(ktx2Url, wrap) : makeFlatMaterial(),
+          )
         }
       }
 
@@ -387,7 +410,12 @@ export async function addCustomTexture(file: Blob, name: string): Promise<Custom
   textureSrcUrls.set(id, URL.createObjectURL(file))
   publishTextureUrls()
 
-  const tex: CustomTexture = { id, name: name.trim() || 'texture', width: decoded.width, height: decoded.height }
+  const tex: CustomTexture = {
+    id,
+    name: name.trim() || 'texture',
+    width: decoded.width,
+    height: decoded.height,
+  }
   mutate('add texture', tex.name, (p) => {
     p.customTextures.push(tex)
   })
@@ -432,7 +460,11 @@ export async function addCustomMesh(args: {
   const faceTextures: Partial<Record<string, FaceTextureConfig>> = {}
   if (args.textureId) {
     for (const key of PRIMITIVE_FACE_KEYS[args.primitive.kind]) {
-      faceTextures[key] = { textureId: args.textureId, uvScale: { x: 1, y: 1 }, uvOffset: { x: 0, y: 0 } }
+      faceTextures[key] = {
+        textureId: args.textureId,
+        uvScale: { x: 1, y: 1 },
+        uvOffset: { x: 0, y: 0 },
+      }
     }
   }
   const mesh: CustomMesh = {
@@ -543,7 +575,11 @@ export async function setMeshGlass(meshId: string, cfg: GlassConfig | undefined)
 }
 
 const DEFAULT_GLASS_TINT: GlassConfig = { tint: { r: 120, g: 200, b: 255 }, opacity: 0.45 }
-const DEFAULT_GLOW: EmissiveConfig = { shape: 'whole', color: { r: 120, g: 220, b: 255 }, strength: 0.6 }
+const DEFAULT_GLOW: EmissiveConfig = {
+  shape: 'whole',
+  color: { r: 120, g: 220, b: 255 },
+  strength: 0.6,
+}
 
 /**
  * Sets a glass-capable (visor) mesh's surface mode, seeding default tint/glow configs so the
@@ -555,8 +591,10 @@ export async function setMeshSurface(meshId: string, surface: VisorSurface): Pro
     const m = p.customMeshes.find((x) => x.id === meshId)
     if (!m) return
     m.surface = surface
-    if ((surface === 'glass' || surface === 'glassGlow') && !m.glass) m.glass = { ...DEFAULT_GLASS_TINT }
-    if ((surface === 'glow' || surface === 'glassGlow') && !m.emissive) m.emissive = { ...DEFAULT_GLOW }
+    if ((surface === 'glass' || surface === 'glassGlow') && !m.glass)
+      m.glass = { ...DEFAULT_GLASS_TINT }
+    if ((surface === 'glow' || surface === 'glassGlow') && !m.emissive)
+      m.emissive = { ...DEFAULT_GLOW }
   })
   await refreshCatalog()
 }
@@ -634,7 +672,9 @@ export async function hydrateCustomAssets(): Promise<void> {
 export function initCustomAssets(): void {
   if (typeof indexedDB === 'undefined' || typeof window === 'undefined') return
   $projectName.subscribe(() => {
-    void hydrateCustomAssets().catch((err) => console.warn('flexo: custom-asset hydrate failed', err))
+    void hydrateCustomAssets().catch((err) =>
+      console.warn('flexo: custom-asset hydrate failed', err),
+    )
   })
   // Undo/redo (and any external $part swap) restores customMeshes without running
   // the mutation helpers, so the atlas / render cache / $customCatalog go stale and

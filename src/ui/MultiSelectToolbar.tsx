@@ -1,15 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { Layers } from 'lucide-react'
-import {
-  Toolbar,
-  Button,
-  MenuTrigger,
-  Menu,
-  MenuItem,
-  Popover,
-  ConfirmDialog,
-} from './kit'
+import { Toolbar, Button, MenuTrigger, Menu, MenuItem, Popover, ConfirmDialog } from './kit'
 import {
   $part,
   $selectedIndices,

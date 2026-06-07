@@ -36,11 +36,21 @@ function sourcePart(): EditingPart {
   p.partId = 'source_part'
   p.layers.push({ id: 'layer1', name: 'Engines' }, { id: 'layer2', name: 'Wings' })
   p.placements.push(
-    { instanceId: 'trussbara_1', subPartTemplateId: 'Core.TrussBarA', layerId: DEFAULT_LAYER_ID, ...t(1) },
+    {
+      instanceId: 'trussbara_1',
+      subPartTemplateId: 'Core.TrussBarA',
+      layerId: DEFAULT_LAYER_ID,
+      ...t(1),
+    },
     { instanceId: 'trussbara_2', subPartTemplateId: 'Core.TrussBarA', layerId: 'layer1', ...t(2) },
     { instanceId: 'wing_1', subPartTemplateId: 'Core.Wing', layerId: 'layer2', ...t(3) },
   )
-  p.connectors.push({ id: '_connector1', flags: ['Internal'], layerId: CONNECTOR_LAYER_ID, ...t(0) })
+  p.connectors.push({
+    id: '_connector1',
+    flags: ['Internal'],
+    layerId: CONNECTOR_LAYER_ID,
+    ...t(0),
+  })
   p.kittens.push({ id: 'kitten_1', kind: 'hunter', layerId: KITTEN_LAYER_ID, ...t(0) })
   p.editorTags.push('Structural')
   p.gameData.displayName = 'Source Display'
@@ -58,7 +68,11 @@ function sourcePart(): EditingPart {
       { id: 'kf0', timeSec: 0, poses: { joint_a: identityTransform() } },
       { id: 'kf1', timeSec: 2, poses: { joint_a: identityTransform() } },
     ],
-    solarTracking: { degreesPerSecond: 10, subPartInstanceId: 'trussbara_2', excludeInstanceIds: ['trussbara_1'] },
+    solarTracking: {
+      degreesPerSecond: 10,
+      subPartInstanceId: 'trussbara_2',
+      excludeInstanceIds: ['trussbara_1'],
+    },
   })
   return p
 }
@@ -69,7 +83,11 @@ function kittenMesh(subPartId = 'flexo_hunter_suit_abc') {
     id: 'mesh_k',
     name: 'Hunter Suit',
     subPartId,
-    kitten: { kind: 'hunter' as const, specKey: 'suit', diffuse: 'Textures/Characters/Kitten_EMU_A.ktx2' },
+    kitten: {
+      kind: 'hunter' as const,
+      specKey: 'suit',
+      diffuse: 'Textures/Characters/Kitten_EMU_A.ktx2',
+    },
     faceTextures: {},
   }
 }
@@ -145,7 +163,9 @@ describe('mergeProjectImport with a kitten mesh', () => {
     expect(mesh.subPartId.startsWith('flexo_hunter_suit_')).toBe(true)
     // The placement points at the NEW template id, and nothing references the source's.
     expect(part.placements.some((pl) => pl.subPartTemplateId === mesh.subPartId)).toBe(true)
-    expect(part.placements.some((pl) => pl.subPartTemplateId === 'flexo_hunter_suit_abc')).toBe(false)
+    expect(part.placements.some((pl) => pl.subPartTemplateId === 'flexo_hunter_suit_abc')).toBe(
+      false,
+    )
   })
 
   it('duplicates the kitten mesh under another fresh id on a second import (additive)', () => {
@@ -155,7 +175,9 @@ describe('mergeProjectImport with a kitten mesh', () => {
     const ids = twice.customMeshes.map((m) => m.subPartId)
     expect(ids).toHaveLength(2)
     expect(new Set(ids).size).toBe(2) // distinct ids, no collision
-    const kittenPlacements = twice.placements.filter((pl) => pl.subPartTemplateId.startsWith('flexo_hunter_suit_'))
+    const kittenPlacements = twice.placements.filter((pl) =>
+      pl.subPartTemplateId.startsWith('flexo_hunter_suit_'),
+    )
     expect(kittenPlacements).toHaveLength(2)
     expect(kittenPlacements.every((pl) => new Set(ids).has(pl.subPartTemplateId))).toBe(true)
   })
@@ -175,7 +197,10 @@ describe('mergeProjectImport into an empty project', () => {
 
   it('mirrors every source layer (including Default) as a NEW layer, leaving the existing Default empty', () => {
     expect(newLayerIds).toHaveLength(3)
-    const names = part.layers.filter((l) => newLayerIds.includes(l.id)).map((l) => l.name).sort()
+    const names = part.layers
+      .filter((l) => newLayerIds.includes(l.id))
+      .map((l) => l.name)
+      .sort()
     expect(names).toEqual(['Default', 'Engines', 'Wings'])
     // The built-in Default still exists but holds nothing imported.
     expect(part.layers.some((l) => l.id === DEFAULT_LAYER_ID)).toBe(true)
@@ -266,7 +291,9 @@ describe('parseProjectImport', () => {
     expect(parseProjectImport('not json').ok).toBe(false)
     expect(parseProjectImport('{}').ok).toBe(false)
     expect(parseProjectImport(JSON.stringify({ ...env, version: 999 })).ok).toBe(false)
-    expect(parseProjectImport(JSON.stringify({ format: PROJECT_EXPORT_FORMAT, version: 1 })).ok).toBe(false)
+    expect(
+      parseProjectImport(JSON.stringify({ format: PROJECT_EXPORT_FORMAT, version: 1 })).ok,
+    ).toBe(false)
   })
 
   it('backfills missing optional fields (editorTags, gameData, subPartGameData)', () => {

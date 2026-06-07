@@ -134,7 +134,9 @@ function urlSpec(src: MatSrc): KittenMaterialSpec {
  */
 export function kittenSpecFromSource(
   src: KittenMeshSource,
-  extra?: Partial<Pick<KittenMaterialSpec, 'tint' | 'opacity' | 'simulateGlass' | 'glowColor' | 'glowStrength'>>,
+  extra?: Partial<
+    Pick<KittenMaterialSpec, 'tint' | 'opacity' | 'simulateGlass' | 'glowColor' | 'glowStrength'>
+  >,
 ): KittenMaterialSpec {
   return { ...urlSpec(src), ...extra }
 }
@@ -185,8 +187,8 @@ export const KITTEN_ATTACHMENTS: readonly KittenAttachment[] = [
     gltfUrl: toUrl('Characters/KittenMMU/KSA_Cat_MMU.gltf'),
     socketBone: 'Chest_M',
     materials: {
-      'KSA_MMU_labels_mt': urlSpec(MMU_LABELS_SRC),
-      'KSA_MMU_mt': urlSpec(MMU_BODY_SRC),
+      KSA_MMU_labels_mt: urlSpec(MMU_LABELS_SRC),
+      KSA_MMU_mt: urlSpec(MMU_BODY_SRC),
     },
   },
 ]
@@ -222,22 +224,47 @@ export function kittenPartSubMeshes(kind: KittenKind): KittenPartSubMesh[] {
     transparent: src.transparent,
   })
   return [
-    { specKey: 'suit', label: 'Suit', materialNames: ['model:Kitty_Suit'], source: make('suit', SUIT_SRC) },
+    {
+      specKey: 'suit',
+      label: 'Suit',
+      materialNames: ['model:Kitty_Suit'],
+      source: make('suit', SUIT_SRC),
+    },
     {
       specKey: 'head',
       label: 'Head',
       materialNames: ['model:KittyHead_mt', 'model:M_CHA_Kitten_Head'],
       source: make('head', { diffuse: headDiffuse, normal: HEAD_NORMAL_SRC }),
     },
-    { specKey: 'eye', label: 'Eyes', materialNames: ['model:KittyEye_mt'], source: make('eye', { diffuse: eyeDiffuse }) },
-    { specKey: 'helmet', label: 'Helmet', materialNames: ['model:lambert4'], source: make('helmet', HELMET_SRC) },
+    {
+      specKey: 'eye',
+      label: 'Eyes',
+      materialNames: ['model:KittyEye_mt'],
+      source: make('eye', { diffuse: eyeDiffuse }),
+    },
+    {
+      specKey: 'helmet',
+      label: 'Helmet',
+      materialNames: ['model:lambert4'],
+      source: make('helmet', HELMET_SRC),
+    },
     {
       specKey: 'visor',
       label: 'Visor',
       materialNames: ['model:KittyHelmet_Visor_Glass_mt.002'],
       source: make('visor', VISOR_SRC),
     },
-    { specKey: 'pack', label: 'MMU Backpack', materialNames: ['KSA_MMU_mt'], source: make('pack', MMU_BODY_SRC) },
-    { specKey: 'packLabels', label: 'MMU Labels', materialNames: ['KSA_MMU_labels_mt'], source: make('packLabels', MMU_LABELS_SRC) },
+    {
+      specKey: 'pack',
+      label: 'MMU Backpack',
+      materialNames: ['KSA_MMU_mt'],
+      source: make('pack', MMU_BODY_SRC),
+    },
+    {
+      specKey: 'packLabels',
+      label: 'MMU Labels',
+      materialNames: ['KSA_MMU_labels_mt'],
+      source: make('packLabels', MMU_LABELS_SRC),
+    },
   ]
 }

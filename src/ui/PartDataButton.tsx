@@ -12,19 +12,17 @@ import {
 } from './kit'
 import { $part, pushUndo, setEditorTags, setPartId } from '../state/editorStore'
 import { EditorTagsField } from './EditorTagsField'
-import {
-  CouplingSection,
-  IdentityFields,
-  MassSection,
-  PowerSection,
-} from './GameDataSections'
+import { CouplingSection, IdentityFields, MassSection, PowerSection } from './GameDataSections'
 
 interface Props {
   isOpen?: boolean
   onOpenChange?: (v: boolean) => void
 }
 
-export function PartDataButton({ isOpen: externalOpen, onOpenChange: externalOnChange }: Props = {}) {
+export function PartDataButton({
+  isOpen: externalOpen,
+  onOpenChange: externalOnChange,
+}: Props = {}) {
   const [internalOpen, setInternalOpen] = useState(false)
   const isPhone = useIsPhone()
   const isControlled = externalOpen !== undefined
@@ -33,7 +31,8 @@ export function PartDataButton({ isOpen: externalOpen, onOpenChange: externalOnC
   const part = useStore($part)
   const { gameData } = part
 
-  const powerCount = gameData.batteries.length + gameData.generators.length + gameData.powerConsumers.length
+  const powerCount =
+    gameData.batteries.length + gameData.generators.length + gameData.powerConsumers.length
   const couplingCount =
     (gameData.decoupler ? 1 : 0) + (gameData.dockingPort ? 1 : 0) + (gameData.evaDoor ? 1 : 0)
 

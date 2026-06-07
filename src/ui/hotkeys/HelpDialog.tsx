@@ -43,8 +43,8 @@ export function HelpDialog() {
           ))}
         </div>
         <p className="shrink-0 border-t border-border px-4 py-2.5 text-xs text-fg-subtle">
-          Shortcuts are disabled while typing in a text field. Press{' '}
-          <Kbd>?</Kbd> any time to open this panel.
+          Shortcuts are disabled while typing in a text field. Press <Kbd>?</Kbd> any time to open
+          this panel.
         </p>
       </Dialog>
     </Modal>

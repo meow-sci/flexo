@@ -44,15 +44,19 @@ export function AboutDialog() {
                   Kitten Space Agency
                 </a>{' '}
                 from RocketWerkz. It renders the game's SubPart meshes and textures in a three.js 3D
-                workspace and lets you arrange SubParts into custom Parts using a WYSIWYG
-                workflow that needs no modeling, graphics or programming skills.
+                workspace and lets you arrange SubParts into custom Parts using a WYSIWYG workflow
+                that needs no modeling, graphics or programming skills.
               </p>
 
               <p className="text-sm leading-relaxed text-fg-muted">
-                The projects you create with Flexo can be exported as KSA asset mods, which you install into: <br/><br/>
+                The projects you create with Flexo can be exported as KSA asset mods, which you
+                install into: <br />
+                <br />
                 <code>$HOME\Documents\My Games\Kitten Space Agency\mods</code>
-                <br/><br/>
-                There's a feature to either download the mod as a ZIP or you can grant access to your mods folder and Flexo can directly write to the folder
+                <br />
+                <br />
+                There's a feature to either download the mod as a ZIP or you can grant access to
+                your mods folder and Flexo can directly write to the folder
               </p>
             </section>
 
@@ -60,19 +64,19 @@ export function AboutDialog() {
               <SectionTitle>License</SectionTitle>
               <p className="text-sm leading-relaxed text-fg-muted">
                 Flexo is open source and released under the{' '}
-                <span className="text-fg">MIT License</span>. Copyright © 2026 Alex Sherwin.
-                You're free to use, modify and redistribute it, including for commercial
-                purposes, provided the copyright notice and permission notice are kept.
+                <span className="text-fg">MIT License</span>. Copyright © 2026 Alex Sherwin. You're
+                free to use, modify and redistribute it, including for commercial purposes, provided
+                the copyright notice and permission notice are kept.
               </p>
             </section>
 
             <section className="flex flex-col gap-2">
               <SectionTitle>Asset attribution</SectionTitle>
               <p className="text-sm leading-relaxed text-fg-muted">
-                A license for the redistribution of KSA models and textures was generously
-                granted by <span className="text-fg">Dean Hall of RocketWerkz</span>. These
-                game assets remain the property of their respective owners and are not
-                covered by Flexo's MIT license.
+                A license for the redistribution of KSA models and textures was generously granted
+                by <span className="text-fg">Dean Hall of RocketWerkz</span>. These game assets
+                remain the property of their respective owners and are not covered by Flexo's MIT
+                license.
               </p>
             </section>
 

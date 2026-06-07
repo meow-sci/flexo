@@ -76,9 +76,13 @@ export function MeasurementEditor() {
   const setEndpoint = (key: 'a' | 'b', axis: keyof Vec3, value: number) => {
     const next: Vec3 = { ...m[key], [axis]: value }
     if (key === 'a') {
-      updateMeasurement(m.id, { a: m.axisLock === 'none' ? next : snappedToAxis(m.b, next, m.axisLock) })
+      updateMeasurement(m.id, {
+        a: m.axisLock === 'none' ? next : snappedToAxis(m.b, next, m.axisLock),
+      })
     } else {
-      updateMeasurement(m.id, { b: m.axisLock === 'none' ? next : snappedToAxis(m.a, next, m.axisLock) })
+      updateMeasurement(m.id, {
+        b: m.axisLock === 'none' ? next : snappedToAxis(m.a, next, m.axisLock),
+      })
     }
   }
 
@@ -127,12 +131,21 @@ export function MeasurementEditor() {
                 if (next) setActiveEndpoint(next as 'a' | 'b')
               }}
             >
-              <ToggleButton id="a" size="sm" className="flex-1">A</ToggleButton>
-              <ToggleButton id="b" size="sm" className="flex-1">B</ToggleButton>
+              <ToggleButton id="a" size="sm" className="flex-1">
+                A
+              </ToggleButton>
+              <ToggleButton id="b" size="sm" className="flex-1">
+                B
+              </ToggleButton>
             </ToggleButtonGroup>
           </div>
 
-          <VecRow label="A" v={m.a} onInteractionStart={pushEndpoint} onCommit={(axis, val) => setEndpoint('a', axis, val)} />
+          <VecRow
+            label="A"
+            v={m.a}
+            onInteractionStart={pushEndpoint}
+            onCommit={(axis, val) => setEndpoint('a', axis, val)}
+          />
           <VecRow
             label="B"
             v={m.b}
@@ -188,7 +201,9 @@ export function MeasurementEditor() {
               color={m.color}
               opacity={m.lineOpacity ?? 0.5}
               onInteractionStart={pushStyle}
-              onChange={({ color, opacity }) => updateMeasurement(m.id, { color, lineOpacity: opacity })}
+              onChange={({ color, opacity }) =>
+                updateMeasurement(m.id, { color, lineOpacity: opacity })
+              }
             />
             <div className="flex items-center gap-2" onPointerDown={pushStyle}>
               <span className="w-12 shrink-0 text-xs text-fg-muted">Width</span>

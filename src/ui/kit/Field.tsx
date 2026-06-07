@@ -31,9 +31,7 @@ export const fieldGroup = tv({
 })
 
 export function Label({ className, ...props }: LabelProps) {
-  return (
-    <AriaLabel {...props} className={cn('text-xs font-medium text-fg-muted', className)} />
-  )
+  return <AriaLabel {...props} className={cn('text-xs font-medium text-fg-muted', className)} />
 }
 
 export function Description({ className, ...props }: TextProps) {

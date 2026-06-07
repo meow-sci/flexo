@@ -1,7 +1,11 @@
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { loadEquirectHDR } from './envCache'
-import { ENVIRONMENT_PRESETS, type LightingSettings, type ToneMappingMode } from '../state/lightingStore'
+import {
+  ENVIRONMENT_PRESETS,
+  type LightingSettings,
+  type ToneMappingMode,
+} from '../state/lightingStore'
 
 const TONE_MAPPING: Record<ToneMappingMode, THREE.ToneMapping> = {
   aces: THREE.ACESFilmicToneMapping,

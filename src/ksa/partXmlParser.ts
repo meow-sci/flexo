@@ -185,11 +185,15 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   game.customMass = mass != null && mass > 0 ? mass : null
 
   for (const el of directChildren(gd, 'Battery'))
-    game.batteries.push({ capacityKWh: readNum(directChildren(el, 'MaximumCapacity')[0], 'KWh') ?? 0 })
+    game.batteries.push({
+      capacityKWh: readNum(directChildren(el, 'MaximumCapacity')[0], 'KWh') ?? 0,
+    })
   for (const el of directChildren(gd, 'Generator'))
     game.generators.push({ outputWatts: readNum(directChildren(el, 'Produced')[0], 'W') ?? 0 })
   for (const el of directChildren(gd, 'PowerConsumer'))
-    game.powerConsumers.push({ consumedWatts: readNum(directChildren(el, 'Consumed')[0], 'W') ?? 0 })
+    game.powerConsumers.push({
+      consumedWatts: readNum(directChildren(el, 'Consumed')[0], 'W') ?? 0,
+    })
 
   const connectorFlags = new Map<string, ConnectorFlag[]>()
   for (const conn of directChildren(gd, 'Connector')) {
@@ -200,13 +204,27 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   }
 
   const dec = directChildren(gd, 'Decoupler')[0]
-  if (dec) game.decoupler = { connectorId: dec.getAttribute('ConnectorId') ?? '', force: readNum(dec, 'Force') ?? 0 }
+  if (dec)
+    game.decoupler = {
+      connectorId: dec.getAttribute('ConnectorId') ?? '',
+      force: readNum(dec, 'Force') ?? 0,
+    }
   const dp = directChildren(gd, 'DockingPort')[0]
-  if (dp) game.dockingPort = { connectorId: dp.getAttribute('ConnectorId') ?? '', force: readNum(dp, 'Force') ?? 0 }
+  if (dp)
+    game.dockingPort = {
+      connectorId: dp.getAttribute('ConnectorId') ?? '',
+      force: readNum(dp, 'Force') ?? 0,
+    }
   const eva = directChildren(gd, 'EVADoor')[0]
   if (eva) game.evaDoor = { connectorId: eva.getAttribute('ConnectorId') ?? '' }
 
-  return { editorTags, connectorFlags, gameData: game, subPartGameData: [], animationModules: animationModulesFromGameData(gd) }
+  return {
+    editorTags,
+    connectorFlags,
+    gameData: game,
+    subPartGameData: [],
+    animationModules: animationModulesFromGameData(gd),
+  }
 }
 
 /** Parses all top-level <SubPartGameData> elements from an Assets document root. */

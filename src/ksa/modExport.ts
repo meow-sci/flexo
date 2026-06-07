@@ -1,13 +1,21 @@
 import * as THREE from 'three'
 import type { CustomMesh, CustomTexture, EditingPart } from './types'
 import { serializeGameData, serializePart } from './partXmlSerializer'
-import { serializeAssets, type AssetsSubPartPlan, type ReferenceSubPartPlan } from './assetsXmlSerializer'
+import {
+  serializeAssets,
+  type AssetsSubPartPlan,
+  type ReferenceSubPartPlan,
+} from './assetsXmlSerializer'
 import { buildMeshAtlasGlb } from './exportGlb'
 import { buildAnimationRig } from './animationRig'
 import { buildAnimationGlb } from './exportAnimationGlb'
 import { animGlbPath, isAnimationExportable } from './animationNaming'
 import { toUrl, type CatalogSubPart } from './catalog'
-import { buildPrimitiveGeometry, PRIMITIVE_FACE_KEYS, applyFaceUvTransforms } from '../three/primitives'
+import {
+  buildPrimitiveGeometry,
+  PRIMITIVE_FACE_KEYS,
+  applyFaceUvTransforms,
+} from '../three/primitives'
 import { bakeKittenSubMeshes } from '../three/kittenBake'
 import { getPrimaryTextureId, glowBitmapFor } from '../state/customAssetStore'
 import { assetKeys, getAsset } from '../state/assetDb'
@@ -19,7 +27,10 @@ import { compositeGlow, neutralBase, type GlowBitmap } from '../ktx/glowComposit
 
 /** How part-ified kitten SubParts supply their textures on export (see settingsStore). */
 export type KittenTextureExportConfig = KittenTextureExportSettings
-const DEFAULT_KITTEN_TEXTURE_EXPORT: KittenTextureExportConfig = { mode: 'bundle', contentCorePath: '' }
+const DEFAULT_KITTEN_TEXTURE_EXPORT: KittenTextureExportConfig = {
+  mode: 'bundle',
+  contentCorePath: '',
+}
 
 /**
  * KSA part-mod export. A "part mod" is a folder the game loads from
@@ -240,7 +251,12 @@ async function planKittenSubPart(
   if (opaqueGlow && m.emissive) {
     const glow = await glowBitmapFor(m)
     if (glow) {
-      const paths = await emitGlowTextures(`${bundleToken}_${subPartId}`, neutralBase(), glow, binaries)
+      const paths = await emitGlowTextures(
+        `${bundleToken}_${subPartId}`,
+        neutralBase(),
+        glow,
+        binaries,
+      )
       return { subPartId, materialId: `${subPartId}_Material`, glass: false, ...paths }
     }
   }
@@ -263,7 +279,10 @@ async function planKittenSubPart(
   let diffusePath: string
   if (tint) {
     diffusePath = `Textures/${bundleToken}_${subPartId}_Diffuse.ktx2`
-    binaries.push({ path: diffusePath, data: await makeSolidKtx2(tint.r, tint.g, tint.b, { srgb: true }) })
+    binaries.push({
+      path: diffusePath,
+      data: await makeSolidKtx2(tint.r, tint.g, tint.b, { srgb: true }),
+    })
   } else {
     diffusePath = await resolve(src.diffuse)
   }
@@ -493,7 +512,13 @@ export async function buildCustomBundle(
 
   return {
     assetsFile: `${base}Assets.xml`,
-    assetsXml: serializeAssets({ meshAtlasPath, subParts, referenceSubParts, normalPath, aoRoughMetalPath }),
+    assetsXml: serializeAssets({
+      meshAtlasPath,
+      subParts,
+      referenceSubParts,
+      normalPath,
+      aoRoughMetalPath,
+    }),
     binaries,
   }
 }
@@ -515,18 +540,33 @@ export async function buildModZip(
   const { part: expandedPart, insetIds } = expandGlassGlow(part)
   const ivaVariants = buildIvaVariantMap(expandedPart, catalog, sanitizeBaseName(projectName))
   const content = buildModContent(expandedPart, projectName, ivaRemapFromVariants(ivaVariants))
-  const bundle = await buildCustomBundle(expandedPart, content.base, kittenTex, ivaVariants, insetIds)
+  const bundle = await buildCustomBundle(
+    expandedPart,
+    content.base,
+    kittenTex,
+    ivaVariants,
+    insetIds,
+  )
   const encoder = new TextEncoder()
   const xmlAssets = [content.partFile, content.gameDataFile]
   if (bundle.assetsFile) xmlAssets.push(bundle.assetsFile)
 
   const entries: ZipEntry[] = [
-    { name: `${MOD_FOLDER_NAME}/${MOD_TOML_NAME}`, data: encoder.encode(serializeModToml(xmlAssets)) },
+    {
+      name: `${MOD_FOLDER_NAME}/${MOD_TOML_NAME}`,
+      data: encoder.encode(serializeModToml(xmlAssets)),
+    },
     { name: `${MOD_FOLDER_NAME}/${content.partFile}`, data: encoder.encode(content.partXml) },
-    { name: `${MOD_FOLDER_NAME}/${content.gameDataFile}`, data: encoder.encode(content.gameDataXml) },
+    {
+      name: `${MOD_FOLDER_NAME}/${content.gameDataFile}`,
+      data: encoder.encode(content.gameDataXml),
+    },
   ]
   if (bundle.assetsFile && bundle.assetsXml) {
-    entries.push({ name: `${MOD_FOLDER_NAME}/${bundle.assetsFile}`, data: encoder.encode(bundle.assetsXml) })
+    entries.push({
+      name: `${MOD_FOLDER_NAME}/${bundle.assetsFile}`,
+      data: encoder.encode(bundle.assetsXml),
+    })
   }
   for (const b of bundle.binaries) {
     entries.push({ name: `${MOD_FOLDER_NAME}/${b.path}`, data: b.data })
@@ -600,7 +640,13 @@ export async function writeModToFolder(
   const ivaVariants = buildIvaVariantMap(expandedPart, catalog, sanitizeBaseName(projectName))
   const content = buildModContent(expandedPart, projectName, ivaRemapFromVariants(ivaVariants))
 
-  const bundle = await buildCustomBundle(expandedPart, content.base, kittenTex, ivaVariants, insetIds)
+  const bundle = await buildCustomBundle(
+    expandedPart,
+    content.base,
+    kittenTex,
+    ivaVariants,
+    insetIds,
+  )
 
   const taken = new Set((await listFileNames(modDir)).map((n) => n.toLowerCase()))
   const partFile = uniqueFileName(taken, `${content.base}Part`, 'xml')

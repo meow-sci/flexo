@@ -3,7 +3,10 @@ import * as THREE from 'three'
 import { buildMeshAtlasGlb } from './exportGlb'
 
 /** Parses a binary GLB's JSON chunk back into an object. */
-function parseGlbJson(glb: Uint8Array): { meshes?: { name?: string }[]; nodes?: { name?: string; mesh?: number }[] } {
+function parseGlbJson(glb: Uint8Array): {
+  meshes?: { name?: string }[]
+  nodes?: { name?: string; mesh?: number }[]
+} {
   const dv = new DataView(glb.buffer, glb.byteOffset, glb.byteLength)
   expect(dv.getUint32(0, true)).toBe(0x46546c67) // glTF magic
   const jsonLen = dv.getUint32(12, true)
@@ -42,7 +45,9 @@ describe('buildMeshAtlasGlb', () => {
   })
 
   it('produces a structurally valid GLB (4-byte aligned JSON chunk)', async () => {
-    const glb = await buildMeshAtlasGlb([{ name: 'flexo_X', geometry: new THREE.PlaneGeometry(1, 1) }])
+    const glb = await buildMeshAtlasGlb([
+      { name: 'flexo_X', geometry: new THREE.PlaneGeometry(1, 1) },
+    ])
     const dv = new DataView(glb.buffer, glb.byteOffset, glb.byteLength)
     expect(dv.getUint32(8, true)).toBe(glb.length) // total length matches
     const jsonLen = dv.getUint32(12, true)

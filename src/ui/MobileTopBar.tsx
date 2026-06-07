@@ -46,10 +46,7 @@ export function MobileTopBar() {
 
   return (
     <>
-      <Toolbar
-        aria-label="Editor actions"
-        className="rounded-none border-x-0 border-t-0 px-2"
-      >
+      <Toolbar aria-label="Editor actions" className="rounded-none border-x-0 border-t-0 px-2">
         <ProjectButton />
 
         <div className="flex-1" />
@@ -107,7 +104,9 @@ export function MobileTopBar() {
               <MenuItem id="shortcuts">Shortcuts</MenuItem>
               <MenuItem id="about">About</MenuItem>
               <MenuSeparator />
-              <MenuItem id="reset" variant="danger">Reset Everything 🔥</MenuItem>
+              <MenuItem id="reset" variant="danger">
+                Reset Everything 🔥
+              </MenuItem>
             </Menu>
           </Popover>
         </MenuTrigger>

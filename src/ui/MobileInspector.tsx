@@ -5,7 +5,11 @@ import { Heading } from 'react-aria-components'
 import { Button, Modal, Dialog } from './kit'
 import { InspectorContent } from './InspectorContent'
 import { $activeLayer } from '../state/selectors'
-import { $selectedConnectorIndices, $selectedIndices, $selectedKittenIndices } from '../state/editorStore'
+import {
+  $selectedConnectorIndices,
+  $selectedIndices,
+  $selectedKittenIndices,
+} from '../state/editorStore'
 
 /**
  * Phone-only inspector: a pinned bottom-right button (showing the active layer +
@@ -39,7 +43,13 @@ export function MobileInspector() {
         )}
       </Button>
 
-      <Modal isOpen={open} onOpenChange={setOpen} isDismissable variant="sheet" className="h-[78vh]">
+      <Modal
+        isOpen={open}
+        onOpenChange={setOpen}
+        isDismissable
+        variant="sheet"
+        className="h-[78vh]"
+      >
         <Dialog className="h-full">
           <Heading slot="title" className="sr-only">
             Inspector

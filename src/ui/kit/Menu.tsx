@@ -60,7 +60,9 @@ export function MenuItem({ className, children, variant, ...props }: MenuItemKit
   )
 }
 
-export function MenuSection<T extends object>(props: React.ComponentProps<typeof AriaMenuSection<T>>) {
+export function MenuSection<T extends object>(
+  props: React.ComponentProps<typeof AriaMenuSection<T>>,
+) {
   return <AriaMenuSection {...props} />
 }
 
@@ -68,7 +70,10 @@ export function MenuHeader({ className, ...props }: React.ComponentProps<typeof 
   return (
     <Header
       {...props}
-      className={cn('px-2 pb-1 pt-1.5 text-xs font-semibold uppercase tracking-wide text-fg-subtle', className)}
+      className={cn(
+        'px-2 pb-1 pt-1.5 text-xs font-semibold uppercase tracking-wide text-fg-subtle',
+        className,
+      )}
     />
   )
 }

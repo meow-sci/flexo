@@ -153,7 +153,13 @@ function LoadProjectDialog({
   const projects: ProjectSummary[] = isOpen ? listProjects() : []
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={onOpenChange} isDismissable variant="center" className="max-w-lg">
+    <Modal
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
+      isDismissable
+      variant="center"
+      className="max-w-lg"
+    >
       <Dialog>
         <DialogHeader title="Load Project" onClose={() => onOpenChange(false)} />
         <div className="flex max-h-[60vh] flex-col gap-0.5 overflow-auto p-3">
@@ -163,14 +169,18 @@ function LoadProjectDialog({
             projects.map((p) => {
               const isCurrent = p.name === currentName
               return (
-                <div key={p.name} className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/[0.04]">
+                <div
+                  key={p.name}
+                  className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/[0.04]"
+                >
                   <div className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-sm text-fg">
                       {p.name}
                       {isCurrent && <span className="ml-1 text-fg-subtle">(current)</span>}
                     </span>
                     <span className="truncate text-xs text-fg-subtle">
-                      {p.subPartCount} SubPart{p.subPartCount === 1 ? '' : 's'} · {formatSavedAt(p.savedAt)}
+                      {p.subPartCount} SubPart{p.subPartCount === 1 ? '' : 's'} ·{' '}
+                      {formatSavedAt(p.savedAt)}
                     </span>
                   </div>
                   <Button

@@ -3,11 +3,7 @@ import { useStore } from '@nanostores/react'
 import { GridList, GridListItem, type Selection } from 'react-aria-components'
 import { Button, Dialog, DialogHeader, Modal, SearchField } from './kit'
 import { $part } from '../state/editorStore'
-import {
-  $activeAnimation,
-  $activeJointId,
-  attachToJoint,
-} from '../state/animationStore'
+import { $activeAnimation, $activeJointId, attachToJoint } from '../state/animationStore'
 
 /** One pickable SubPart row (a placed instance — the unit a joint drives). */
 interface PickRow {
@@ -86,7 +82,13 @@ export function MeshPickerModal({
   }
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={handleOpenChange} isDismissable variant="fullscreen" className="max-w-2xl">
+    <Modal
+      isOpen={isOpen}
+      onOpenChange={handleOpenChange}
+      isDismissable
+      variant="fullscreen"
+      className="max-w-2xl"
+    >
       <Dialog>
         <DialogHeader title="Mesh Picker" onClose={() => handleOpenChange(false)} />
         <div className="flex min-h-0 flex-1 flex-col gap-2 p-4">

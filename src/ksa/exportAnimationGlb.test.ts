@@ -6,7 +6,10 @@ import type { PartAnimation, SubPartPlacement } from './types'
 function parseGlb(glb: Uint8Array): {
   json: {
     nodes?: { name?: string; children?: number[] }[]
-    animations?: { channels: { sampler: number; target: { node: number; path: string } }[]; samplers: { interpolation: string }[] }[]
+    animations?: {
+      channels: { sampler: number; target: { node: number; path: string } }[]
+      samplers: { interpolation: string }[]
+    }[]
     accessors?: { type: string; count: number; min?: number[]; max?: number[] }[]
     buffers?: { byteLength: number }[]
   }
@@ -41,8 +44,28 @@ const anim: PartAnimation = {
   mode: 'deployRetract',
   joints: [{ id: 'j', name: 'Hinge', parentJointId: null, memberInstanceIds: ['panel_1'] }],
   keyframes: [
-    { id: 'k0', timeSec: 0, poses: { j: { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: { x: 1, y: 1, z: 1 } } } },
-    { id: 'k1', timeSec: 2, poses: { j: { position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: Math.PI / 2, z: 0 }, scale: { x: 1, y: 1, z: 1 } } } },
+    {
+      id: 'k0',
+      timeSec: 0,
+      poses: {
+        j: {
+          position: { x: 0, y: 0, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+        },
+      },
+    },
+    {
+      id: 'k1',
+      timeSec: 2,
+      poses: {
+        j: {
+          position: { x: 0, y: 0, z: 0 },
+          rotation: { x: 0, y: Math.PI / 2, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+        },
+      },
+    },
   ],
   solarTracking: null,
 }

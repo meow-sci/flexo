@@ -60,8 +60,10 @@ describe('closestPointsBetweenBoxes', () => {
   it('measures the gap between two separated boxes', () => {
     // A: x[0,1], B: x[3,4]; gap along x is 2
     const r = closestPointsBetweenBoxes(
-      { x: 0, y: 0, z: 0 }, { x: 1, y: 1, z: 1 },
-      { x: 3, y: 0, z: 0 }, { x: 4, y: 1, z: 1 },
+      { x: 0, y: 0, z: 0 },
+      { x: 1, y: 1, z: 1 },
+      { x: 3, y: 0, z: 0 },
+      { x: 4, y: 1, z: 1 },
     )
     expect(r.distance).toBeCloseTo(2)
     expect(r.a.x).toBeCloseTo(1)
@@ -70,8 +72,10 @@ describe('closestPointsBetweenBoxes', () => {
 
   it('returns 0 distance for overlapping boxes', () => {
     const r = closestPointsBetweenBoxes(
-      { x: 0, y: 0, z: 0 }, { x: 2, y: 2, z: 2 },
-      { x: 1, y: 1, z: 1 }, { x: 3, y: 3, z: 3 },
+      { x: 0, y: 0, z: 0 },
+      { x: 2, y: 2, z: 2 },
+      { x: 1, y: 1, z: 1 },
+      { x: 3, y: 3, z: 3 },
     )
     expect(r.distance).toBeCloseTo(0)
   })

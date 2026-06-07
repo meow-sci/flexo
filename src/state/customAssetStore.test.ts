@@ -7,8 +7,16 @@ vi.mock('../three/kittenBake', () => ({
     const THREE = await import('three')
     return ['suit', 'head', 'eye', 'helmet', 'visor', 'pack', 'packLabels'].map((specKey) => {
       const g = new THREE.BufferGeometry()
-      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3))
-      return { specKey, label: specKey, source: { kind: 'hunter', specKey, diffuse: 'd' }, geometry: g }
+      g.setAttribute(
+        'position',
+        new THREE.BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3),
+      )
+      return {
+        specKey,
+        label: specKey,
+        source: { kind: 'hunter', specKey, diffuse: 'd' },
+        geometry: g,
+      }
     })
   }),
   buildKittenMaterial: vi.fn(async () => {
@@ -37,7 +45,9 @@ describe('makeKittenMeshPart', () => {
     expect(p.customMeshes.every((m) => m.kitten?.kind === 'hunter' && !m.primitive)).toBe(true)
     expect(p.placements.every((pl) => pl.layerId === layer!.id)).toBe(true)
     // Identity placements (geometry carries the body-root offset).
-    expect(p.placements.every((pl) => pl.position.x === 0 && pl.position.y === 0 && pl.position.z === 0)).toBe(true)
+    expect(
+      p.placements.every((pl) => pl.position.x === 0 && pl.position.y === 0 && pl.position.z === 0),
+    ).toBe(true)
     // Unique instance ids.
     expect(new Set(p.placements.map((pl) => pl.instanceId)).size).toBe(7)
 

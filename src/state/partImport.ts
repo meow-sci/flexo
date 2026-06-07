@@ -1,6 +1,10 @@
 import { addPart } from './editorStore'
 import { toUrl } from '../ksa/catalog'
-import { decodeAnimationGlb, remapImportedAnimation, type ImportedAnimation } from '../ksa/animationImport'
+import {
+  decodeAnimationGlb,
+  remapImportedAnimation,
+  type ImportedAnimation,
+} from '../ksa/animationImport'
 import { fitAnimationEasing } from '../ksa/easingFit'
 import type { PartAnimation, Transform } from '../ksa/types'
 import type { CatalogPart } from '../ksa/partCatalog'
@@ -13,7 +17,10 @@ import type { CatalogPart } from '../ksa/partCatalog'
  * {@link addPart}, which regenerates instance ids and lets us remap the animations
  * through its old→new map in the same undo step. Returns the layer the Part landed on.
  */
-export async function importBuiltInPart(part: CatalogPart, targetLayerId?: string): Promise<string> {
+export async function importBuiltInPart(
+  part: CatalogPart,
+  targetLayerId?: string,
+): Promise<string> {
   const instanceIds = new Set(part.placements.map((p) => p.instanceId))
   const placements = new Map<string, Transform>(part.placements.map((p) => [p.instanceId, p]))
   const decoded: ImportedAnimation[] = []
@@ -24,7 +31,11 @@ export async function importBuiltInPart(part: CatalogPart, targetLayerId?: strin
         console.error(`flexo: animation GLB ${mod.glbPath} not found (${res.status})`)
         continue
       }
-      const imp = decodeAnimationGlb(await res.arrayBuffer(), { instanceIds, module: mod, placements })
+      const imp = decodeAnimationGlb(await res.arrayBuffer(), {
+        instanceIds,
+        module: mod,
+        placements,
+      })
       if (imp) decoded.push(imp)
     } catch (err) {
       console.error(`flexo: failed to import animation ${mod.glbPath}`, err)

@@ -2,7 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { X } from 'lucide-react'
 import { Button as AriaButton } from 'react-aria-components'
-import { Modal, Dialog, DialogHeader, Button, Select, ListBoxItem, TextField, Switch, useIsPhone } from './kit'
+import {
+  Modal,
+  Dialog,
+  DialogHeader,
+  Button,
+  Select,
+  ListBoxItem,
+  TextField,
+  Switch,
+  useIsPhone,
+} from './kit'
 import { ColorAlphaField } from './ColorAlphaField'
 import { $part } from '../state/editorStore'
 import {
@@ -16,7 +26,13 @@ import {
 } from '../state/customAssetStore'
 import { $simulateGlass, setSimulateGlass } from '../state/settingsStore'
 import { PRIMITIVE_FACE_KEYS, FACE_LABELS } from '../three/primitives'
-import type { CustomMesh, EmissiveConfig, FaceTextureConfig, TextureWrap, VisorSurface } from '../ksa/types'
+import type {
+  CustomMesh,
+  EmissiveConfig,
+  FaceTextureConfig,
+  TextureWrap,
+  VisorSurface,
+} from '../ksa/types'
 
 const DEFAULT_CONFIG: FaceTextureConfig = {
   textureId: '',
@@ -31,7 +47,11 @@ const WRAP_LABELS: { id: TextureWrap; label: string }[] = [
   { id: 'clamp', label: 'Stretch edge' },
 ]
 
-const DEFAULT_GLOW: EmissiveConfig = { shape: 'whole', color: { r: 120, g: 220, b: 255 }, strength: 0.6 }
+const DEFAULT_GLOW: EmissiveConfig = {
+  shape: 'whole',
+  color: { r: 120, g: 220, b: 255 },
+  strength: 0.6,
+}
 
 function rgbToHex({ r, g, b }: { r: number; g: number; b: number }): string {
   const h = (n: number) => Math.round(n).toString(16).padStart(2, '0')
@@ -147,11 +167,7 @@ function PanelContent({
         <>
           {/* Face selector — hidden when there is only one face (sphere/plane). */}
           {faceKeys.length > 1 && (
-            <Select
-              label="Face"
-              value={selectedFace}
-              onChange={(k) => onFaceChange(String(k))}
-            >
+            <Select label="Face" value={selectedFace} onChange={(k) => onFaceChange(String(k))}>
               {faceKeys.map((key) => (
                 <ListBoxItem key={key} id={key}>
                   {FACE_LABELS[key] ?? key}
@@ -215,12 +231,16 @@ function PanelContent({
               <UvNumberField
                 label="X"
                 value={currentConfig.uvOffset.x}
-                onChange={(x) => update(selectedFace, { uvOffset: { ...currentConfig.uvOffset, x } })}
+                onChange={(x) =>
+                  update(selectedFace, { uvOffset: { ...currentConfig.uvOffset, x } })
+                }
               />
               <UvNumberField
                 label="Y"
                 value={currentConfig.uvOffset.y}
-                onChange={(y) => update(selectedFace, { uvOffset: { ...currentConfig.uvOffset, y } })}
+                onChange={(y) =>
+                  update(selectedFace, { uvOffset: { ...currentConfig.uvOffset, y } })
+                }
               />
             </div>
           </div>
@@ -236,7 +256,11 @@ function PanelContent({
 
 /** Glow / visor-surface controls — a visor (glass-capable) gets the Surface selector; others a Glow mode. */
 function GlowSection({ mesh }: { mesh: CustomMesh }) {
-  return mesh.kitten?.transparent ? <VisorSurfaceControls mesh={mesh} /> : <GlowModeControls mesh={mesh} />
+  return mesh.kitten?.transparent ? (
+    <VisorSurfaceControls mesh={mesh} />
+  ) : (
+    <GlowModeControls mesh={mesh} />
+  )
 }
 
 function SectionShell({ title, children }: { title: string; children: React.ReactNode }) {
@@ -255,7 +279,9 @@ function TintField({ mesh }: { mesh: CustomMesh }) {
       label="Tint"
       color={rgbToHex(glass.tint)}
       opacity={glass.opacity ?? 0.45}
-      onChange={({ color, opacity }) => void setMeshGlass(mesh.id, { tint: hexToRgb(color), opacity })}
+      onChange={({ color, opacity }) =>
+        void setMeshGlass(mesh.id, { tint: hexToRgb(color), opacity })
+      }
     />
   )
 }
@@ -316,7 +342,11 @@ function GlowModeControls({ mesh }: { mesh: CustomMesh }) {
       return
     }
     const base = mesh.emissive ?? DEFAULT_GLOW
-    void setMeshGlow(mesh.id, { shape: m as 'whole' | 'painted', color: base.color, strength: base.strength })
+    void setMeshGlow(mesh.id, {
+      shape: m as 'whole' | 'painted',
+      color: base.color,
+      strength: base.strength,
+    })
   }
   return (
     <SectionShell title="Glow (emissive)">

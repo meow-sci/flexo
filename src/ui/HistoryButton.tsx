@@ -68,7 +68,10 @@ interface HistoryButtonProps {
  * History panel: undo/redo stack with jump-to support.
  * Desktop: opens as a positioned popover. Mobile menu: opens as a bottom sheet.
  */
-export function HistoryButton({ isOpen: externalOpen, onOpenChange: externalOnChange }: HistoryButtonProps = {}) {
+export function HistoryButton({
+  isOpen: externalOpen,
+  onOpenChange: externalOnChange,
+}: HistoryButtonProps = {}) {
   const [internalOpen, setInternalOpen] = useState(false)
   const historyList = useStore($historyList)
   const isControlled = externalOpen !== undefined
@@ -107,7 +110,10 @@ export function HistoryButton({ isOpen: externalOpen, onOpenChange: externalOnCh
       </ToolbarButton>
       <Popover placement="bottom end" className="w-56">
         <PopoverDialog>
-          <HistoryContent className="flex max-h-80 flex-col overflow-auto p-1" onJump={handleJump} />
+          <HistoryContent
+            className="flex max-h-80 flex-col overflow-auto p-1"
+            onJump={handleJump}
+          />
         </PopoverDialog>
       </Popover>
     </DialogTrigger>
@@ -123,7 +129,9 @@ function HistoryRow({
   label: 'Undo' | 'Redo'
   onPress: (item: HistoryListItem) => void
 }) {
-  const textValue = item.detail ? `${label}: ${item.description} · ${item.detail}` : `${label}: ${item.description}`
+  const textValue = item.detail
+    ? `${label}: ${item.description} · ${item.detail}`
+    : `${label}: ${item.description}`
   return (
     <GridListItem
       id={String(item.stepsFromCurrent)}

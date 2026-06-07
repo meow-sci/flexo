@@ -14,7 +14,12 @@ import { $layerView, type LayerViewState } from './layerStore'
 import { $cameraState, resetCamera, setCameraRestore, type CameraState } from './viewStore'
 import { $measurements, type LineMeasurement } from './measurementStore'
 import { $containers, type ReferenceContainer } from './containerStore'
-import { createEmptyGameData, createKittenLayer, DEFAULT_LAYER_ID, KITTEN_LAYER_ID } from '../ksa/types'
+import {
+  createEmptyGameData,
+  createKittenLayer,
+  DEFAULT_LAYER_ID,
+  KITTEN_LAYER_ID,
+} from '../ksa/types'
 import type { Connector, ConnectorFlag, EditingPart, PartGameData } from '../ksa/types'
 
 /**

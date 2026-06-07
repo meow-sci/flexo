@@ -167,7 +167,13 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
       {
         subPartTemplateId: TANK_TMPL,
         tanks: [
-          { ...createTank(), shape: 'Cylindrical', lengthM: 3, outerRadiusM: 0.8, wallThicknessMm: 2.5 },
+          {
+            ...createTank(),
+            shape: 'Cylindrical',
+            lengthM: 3,
+            outerRadiusM: 0.8,
+            wallThicknessMm: 2.5,
+          },
           { ...createTank(), shape: 'Spherical', wallMaterialId: 'Steel(s)', outerRadiusM: 1.2 },
         ],
       },
@@ -227,7 +233,9 @@ describe('animationModulesFromGameData', () => {
         </SolarTracking>
       </KeyframeAnimationModule>
     </PartGameData>`
-  const gd = new DOMParser().parseFromString(xml, 'application/xml').getElementsByTagName('PartGameData')[0] as unknown as Element
+  const gd = new DOMParser()
+    .parseFromString(xml, 'application/xml')
+    .getElementsByTagName('PartGameData')[0] as unknown as Element
 
   it('parses the module, ShowDeployRetract, GLB path and solar tracking (original ids)', () => {
     const [m] = animationModulesFromGameData(gd)

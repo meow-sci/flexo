@@ -1,8 +1,4 @@
-import {
-  SearchField as AriaSearchField,
-  Input,
-  type SearchFieldProps,
-} from 'react-aria-components'
+import { SearchField as AriaSearchField, Input, type SearchFieldProps } from 'react-aria-components'
 import { Search, X } from 'lucide-react'
 import { type VariantProps } from 'tailwind-variants'
 import { inputStyles } from './Field'
@@ -10,12 +6,16 @@ import { composeTw } from './styles'
 import { Button } from './Button'
 
 export interface SearchFieldKitProps
-  extends Omit<SearchFieldProps, 'children'>,
-    VariantProps<typeof inputStyles> {
+  extends Omit<SearchFieldProps, 'children'>, VariantProps<typeof inputStyles> {
   placeholder?: string
 }
 
-export function SearchField({ size = 'md', placeholder, className, ...props }: SearchFieldKitProps) {
+export function SearchField({
+  size = 'md',
+  placeholder,
+  className,
+  ...props
+}: SearchFieldKitProps) {
   return (
     <AriaSearchField
       {...props}

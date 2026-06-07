@@ -112,7 +112,8 @@ export function bakeGeometry(mesh: THREE.Mesh): THREE.BufferGeometry {
   }
   const geo = new THREE.BufferGeometry()
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
-  if (src.attributes.uv) geo.setAttribute('uv', (src.attributes.uv as THREE.BufferAttribute).clone())
+  if (src.attributes.uv)
+    geo.setAttribute('uv', (src.attributes.uv as THREE.BufferAttribute).clone())
   if (src.index) geo.setIndex(src.index.clone())
   if (nrm) geo.setAttribute('normal', new THREE.BufferAttribute(nrm, 3))
   else geo.computeVertexNormals() // fallback for meshes with no authored normals
@@ -125,7 +126,9 @@ export function bakeGeometry(mesh: THREE.Mesh): THREE.BufferGeometry {
  * ORM there), the surface is plainly non-metallic. Per-instance (not cached) so the
  * selection-highlight emissive never bleeds.
  */
-export async function buildKittenMaterial(spec: KittenMaterialSpec): Promise<THREE.MeshStandardMaterial> {
+export async function buildKittenMaterial(
+  spec: KittenMaterialSpec,
+): Promise<THREE.MeshStandardMaterial> {
   // Flat-color spec (e.g. eye whites): no textures to load.
   if (!spec.diffuseUrl) {
     return new THREE.MeshStandardMaterial({

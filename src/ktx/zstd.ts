@@ -21,7 +21,10 @@ function ensureInit(): Promise<void> {
 /** Default Zstd level — a balance of ratio vs. in-browser speed for textures. */
 export const DEFAULT_ZSTD_LEVEL = 10
 
-export async function compressZstd(data: Uint8Array, level = DEFAULT_ZSTD_LEVEL): Promise<Uint8Array> {
+export async function compressZstd(
+  data: Uint8Array,
+  level = DEFAULT_ZSTD_LEVEL,
+): Promise<Uint8Array> {
   await ensureInit()
   const out = compress(data, level)
   return out instanceof Uint8Array ? out : new Uint8Array(out)

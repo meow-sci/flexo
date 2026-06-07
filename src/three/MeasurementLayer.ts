@@ -34,13 +34,28 @@ const DISTANCE_COLOR = 0xfbbf24
 const UNIT_CUBE_EDGES = ((): number[] => {
   const h = 0.5
   const c: Record<string, [number, number, number]> = {
-    a: [-h, -h, -h], b: [h, -h, -h], c: [h, -h, h], d: [-h, -h, h],
-    e: [-h, h, -h], f: [h, h, -h], g: [h, h, h], k: [-h, h, h],
+    a: [-h, -h, -h],
+    b: [h, -h, -h],
+    c: [h, -h, h],
+    d: [-h, -h, h],
+    e: [-h, h, -h],
+    f: [h, h, -h],
+    g: [h, h, h],
+    k: [-h, h, h],
   }
   const edges: [string, string][] = [
-    ['a', 'b'], ['b', 'c'], ['c', 'd'], ['d', 'a'], // bottom
-    ['e', 'f'], ['f', 'g'], ['g', 'k'], ['k', 'e'], // top
-    ['a', 'e'], ['b', 'f'], ['c', 'g'], ['d', 'k'], // verticals
+    ['a', 'b'],
+    ['b', 'c'],
+    ['c', 'd'],
+    ['d', 'a'], // bottom
+    ['e', 'f'],
+    ['f', 'g'],
+    ['g', 'k'],
+    ['k', 'e'], // top
+    ['a', 'e'],
+    ['b', 'f'],
+    ['c', 'g'],
+    ['d', 'k'], // verticals
   ]
   return edges.flatMap(([p, q]) => [...c[p], ...c[q]])
 })()

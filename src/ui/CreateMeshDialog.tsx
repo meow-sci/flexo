@@ -50,7 +50,11 @@ export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
       case 'cylinder':
         return {
           kind,
-          params: { radius: params.radius, height: params.height, radialSegments: params.radialSegments },
+          params: {
+            radius: params.radius,
+            height: params.height,
+            radialSegments: params.radialSegments,
+          },
         }
       case 'sphere':
         return { kind, params: { radius: params.radius, segments: params.segments } }
@@ -67,7 +71,11 @@ export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
       onClose()
     } catch (err) {
       console.warn('mesh create failed', err)
-      toast({ title: 'Create failed', description: String((err as Error)?.message ?? err), variant: 'danger' })
+      toast({
+        title: 'Create failed',
+        description: String((err as Error)?.message ?? err),
+        variant: 'danger',
+      })
     } finally {
       setBusy(false)
     }
@@ -76,7 +84,13 @@ export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
   const fields = PARAM_FIELDS[kind]
 
   return (
-    <Modal isOpen onOpenChange={(v) => !v && onClose()} isDismissable variant="fullscreen" className="max-w-md">
+    <Modal
+      isOpen
+      onOpenChange={(v) => !v && onClose()}
+      isDismissable
+      variant="fullscreen"
+      className="max-w-md"
+    >
       <Dialog>
         <DialogHeader title="Create mesh" onClose={onClose} />
         <div className="flex flex-col gap-3 p-3">
@@ -123,7 +137,9 @@ export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
               ))}
             </Select>
           ) : (
-            <p className="text-xs text-fg-muted">No textures yet — upload one to texture this mesh.</p>
+            <p className="text-xs text-fg-muted">
+              No textures yet — upload one to texture this mesh.
+            </p>
           )}
 
           <div className="flex justify-end gap-2">

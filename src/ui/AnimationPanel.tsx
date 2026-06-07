@@ -1,7 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { Trash2, Plus, Crosshair, ChevronLeft, Move3d, RotateCcw } from 'lucide-react'
-import { Button, TextField, Select, ListBoxItem, GridList, GridListItem, Switch, Tooltip, cn } from './kit'
+import {
+  Button,
+  TextField,
+  Select,
+  ListBoxItem,
+  GridList,
+  GridListItem,
+  Switch,
+  Tooltip,
+  cn,
+} from './kit'
 import { $part, $toolMode, pushUndo } from '../state/editorStore'
 import { $selectedPlacements, $selectedPlacement } from '../state/selectors'
 import {
@@ -36,7 +46,15 @@ import {
 import { isAnimationExportable } from '../ksa/animationNaming'
 import { EasingEditor } from './EasingEditor'
 import { PreviewScrubber } from './PreviewScrubber'
-import { identityTransform, type AnimationJoint, type AnimationKeyframe, type AnimationMode, type EasingConfig, type PartAnimation, type SubPartPlacement } from '../ksa/types'
+import {
+  identityTransform,
+  type AnimationJoint,
+  type AnimationKeyframe,
+  type AnimationMode,
+  type EasingConfig,
+  type PartAnimation,
+  type SubPartPlacement,
+} from '../ksa/types'
 
 const RAD2DEG = 180 / Math.PI
 const DEG2RAD = Math.PI / 180
@@ -160,9 +178,16 @@ function AnimationRow({ anim, active }: { anim: PartAnimation; active: boolean }
         title={active ? 'Click to close' : anim.name}
       >
         {anim.name}
-        {!isAnimationExportable(anim) && <span className="ml-1 text-xs text-fg-subtle">(draft)</span>}
+        {!isAnimationExportable(anim) && (
+          <span className="ml-1 text-xs text-fg-subtle">(draft)</span>
+        )}
       </button>
-      <Button size="sm" variant="ghost" aria-label="Delete animation" onPress={() => removeAnimation(anim.id)}>
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-label="Delete animation"
+        onPress={() => removeAnimation(anim.id)}
+      >
         <Trash2 size={13} />
       </Button>
     </div>
@@ -175,7 +200,12 @@ function AnimationEditor({ anim }: { anim: PartAnimation }) {
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-panel-sunken p-2">
       <div className="flex items-center gap-1">
-        <Button size="sm" variant="ghost" aria-label="Back to animation list" onPress={closeAnimation}>
+        <Button
+          size="sm"
+          variant="ghost"
+          aria-label="Back to animation list"
+          onPress={closeAnimation}
+        >
           <ChevronLeft size={16} />
         </Button>
         <TextField
@@ -242,7 +272,12 @@ function PreviewProgressLabel() {
   const scrubbing = useStore($animScrubbing)
   return (
     <span className="text-xs uppercase tracking-wide text-fg-subtle">
-      Preview {editKfId ? '(pinned to edited pose)' : scrubbing ? `${Math.round(previewU * 100)}%` : '(drag, or ▶ to play)'}
+      Preview{' '}
+      {editKfId
+        ? '(pinned to edited pose)'
+        : scrubbing
+          ? `${Math.round(previewU * 100)}%`
+          : '(drag, or ▶ to play)'}
     </span>
   )
 }
@@ -259,7 +294,9 @@ function SolarTrackingEditor({ anim }: { anim: PartAnimation }) {
         onChange={(on) =>
           setSolarTracking(
             anim.id,
-            on ? { degreesPerSecond: 5, subPartInstanceId: members[0] ?? '', excludeInstanceIds: [] } : null,
+            on
+              ? { degreesPerSecond: 5, subPartInstanceId: members[0] ?? '', excludeInstanceIds: [] }
+              : null,
           )
         }
       >
@@ -282,7 +319,11 @@ function SolarTrackingEditor({ anim }: { anim: PartAnimation }) {
               ))}
             </Select>
             <div className="w-20">
-              <NumberField label="°/s" value={st.degreesPerSecond} onCommit={(n) => setSolarTracking(anim.id, { ...st, degreesPerSecond: n })} />
+              <NumberField
+                label="°/s"
+                value={st.degreesPerSecond}
+                onCommit={(n) => setSolarTracking(anim.id, { ...st, degreesPerSecond: n })}
+              />
             </div>
           </div>
           {members.length > 0 && (
@@ -295,7 +336,9 @@ function SolarTrackingEditor({ anim }: { anim: PartAnimation }) {
                   onChange={(on) =>
                     setSolarTracking(anim.id, {
                       ...st,
-                      excludeInstanceIds: on ? [...st.excludeInstanceIds, m] : st.excludeInstanceIds.filter((x) => x !== m),
+                      excludeInstanceIds: on
+                        ? [...st.excludeInstanceIds, m]
+                        : st.excludeInstanceIds.filter((x) => x !== m),
                     })
                   }
                 >
@@ -320,8 +363,8 @@ function JointsSection({ anim }: { anim: PartAnimation }) {
     <div className="flex flex-col gap-1">
       <span className="text-xs uppercase tracking-wide text-fg-subtle">Joints (pivots)</span>
       <p className="text-xs text-fg-subtle">
-        A joint is a hinge — attached parts rotate around its <b>Rest</b> position. Select the
-        hinge part and <b>Set pivot</b> to place that anchor on it.
+        A joint is a hinge — attached parts rotate around its <b>Rest</b> position. Select the hinge
+        part and <b>Set pivot</b> to place that anchor on it.
       </p>
       {anim.joints.map((joint) => (
         <JointRow
@@ -397,7 +440,12 @@ function JointRow({
             setNameDraft(null)
           }}
         />
-        <Button size="sm" variant="ghost" aria-label="Delete joint" onPress={() => removeJoint(anim.id, joint.id)}>
+        <Button
+          size="sm"
+          variant="ghost"
+          aria-label="Delete joint"
+          onPress={() => removeJoint(anim.id, joint.id)}
+        >
           <Trash2 size={13} />
         </Button>
       </div>
@@ -444,7 +492,10 @@ function JointRow({
             variant="secondary"
             className="min-w-0 flex-1 truncate"
             isDisabled={!singlePlacement}
-            onPress={() => singlePlacement && setJointPivot(anim.id, joint.id, singlePlacement, { orientation: true })}
+            onPress={() =>
+              singlePlacement &&
+              setJointPivot(anim.id, joint.id, singlePlacement, { orientation: true })
+            }
           >
             Set pivot to {singlePlacement ? singlePlacement.instanceId : 'selection'}
           </Button>
@@ -454,7 +505,9 @@ function JointRow({
             <Button
               size="sm"
               variant="ghost"
-              onPress={() => setJointPivot(anim.id, joint.id, singlePlacement, { orientation: false })}
+              onPress={() =>
+                setJointPivot(anim.id, joint.id, singlePlacement, { orientation: false })
+              }
             >
               pos only
             </Button>
@@ -480,7 +533,10 @@ function JointRow({
           ))}
         </GridList>
       ) : (
-        <span className="text-xs text-fg-subtle">No parts attached — use Mesh Picker, or select parts in the viewport then Attach. Then Set pivot to your hinge.</span>
+        <span className="text-xs text-fg-subtle">
+          No parts attached — use Mesh Picker, or select parts in the viewport then Attach. Then Set
+          pivot to your hinge.
+        </span>
       )}
     </div>
   )
@@ -496,22 +552,41 @@ function KeyframesSection({ anim }: { anim: PartAnimation }) {
       {sorted.map((kf) => (
         <KeyframeRow key={kf.id} anim={anim} kf={kf} editing={kf.id === editKfId} />
       ))}
-      <Button size="sm" className="self-start" onPress={() => addKeyframe(anim.id, anim.durationSec)}>
+      <Button
+        size="sm"
+        className="self-start"
+        onPress={() => addKeyframe(anim.id, anim.durationSec)}
+      >
         <Plus size={13} /> Pose at {fmt(anim.durationSec)}s
       </Button>
     </div>
   )
 }
 
-function KeyframeRow({ anim, kf, editing }: { anim: PartAnimation; kf: AnimationKeyframe; editing: boolean }) {
+function KeyframeRow({
+  anim,
+  kf,
+  editing,
+}: {
+  anim: PartAnimation
+  kf: AnimationKeyframe
+  editing: boolean
+}) {
   const isRest = kf.timeSec === 0
   return (
-    <div className={cn('flex items-center gap-1 rounded-md border px-1.5 py-1', editing ? 'border-accent bg-accent/10' : 'border-border')}>
+    <div
+      className={cn(
+        'flex items-center gap-1 rounded-md border px-1.5 py-1',
+        editing ? 'border-accent bg-accent/10' : 'border-border',
+      )}
+    >
       <button
         className="flex-1 text-left text-sm"
         // Selecting a pose auto-picks the gizmo tool (Move pivot for Rest, Rotate for
         // t>0); re-clicking the open pose deselects it (back to free scrub).
-        onClick={() => (editing ? $editKeyframeId.set(null) : selectKeyframeForEditing(anim.id, kf.id))}
+        onClick={() =>
+          editing ? $editKeyframeId.set(null) : selectKeyframeForEditing(anim.id, kf.id)
+        }
         title={editing ? 'Click to stop editing' : 'Edit this pose (pins the preview here)'}
       >
         {isRest ? 'Rest' : `${fmt(kf.timeSec)}s`}
@@ -519,11 +594,21 @@ function KeyframeRow({ anim, kf, editing }: { anim: PartAnimation; kf: Animation
       </button>
       {!isRest && (
         <div className="w-16">
-          <NumberField label="t" value={kf.timeSec} onFocus={() => pushUndo('keyframe time', anim.name)} onCommit={(n) => setKeyframeTime(anim.id, kf.id, n)} />
+          <NumberField
+            label="t"
+            value={kf.timeSec}
+            onFocus={() => pushUndo('keyframe time', anim.name)}
+            onCommit={(n) => setKeyframeTime(anim.id, kf.id, n)}
+          />
         </div>
       )}
       {!isRest && (
-        <Button size="sm" variant="ghost" aria-label="Delete pose" onPress={() => removeKeyframe(anim.id, kf.id)}>
+        <Button
+          size="sm"
+          variant="ghost"
+          aria-label="Delete pose"
+          onPress={() => removeKeyframe(anim.id, kf.id)}
+        >
           <Trash2 size={13} />
         </Button>
       )}
@@ -541,9 +626,9 @@ function PoseEditor({ anim }: { anim: PartAnimation }) {
   if (!joint || !kf) {
     return (
       <p className="rounded-md bg-panel px-2 py-1.5 text-xs text-fg-subtle">
-        Select a joint (◎) and a pose to edit it. The <b>Rest</b> pose is the pivot/rotation
-        anchor — move it with the gizmo; later poses are where the joint swings to. Or select
-        the hinge part and click <b>Set pivot</b> on the joint to place the anchor in one click.
+        Select a joint (◎) and a pose to edit it. The <b>Rest</b> pose is the pivot/rotation anchor
+        — move it with the gizmo; later poses are where the joint swings to. Or select the hinge
+        part and click <b>Set pivot</b> on the joint to place the anchor in one click.
       </p>
     )
   }
@@ -556,7 +641,11 @@ function PoseEditor({ anim }: { anim: PartAnimation }) {
   const easing = kf.easings?.[joint.id]
 
   const commit = (mut: (t: ReturnType<typeof identityTransform>) => void) => {
-    const next = { position: { ...pose.position }, rotation: { ...pose.rotation }, scale: { ...pose.scale } }
+    const next = {
+      position: { ...pose.position },
+      rotation: { ...pose.rotation },
+      scale: { ...pose.scale },
+    }
     mut(next)
     setJointPose(anim.id, kf.id, joint.id, next)
   }
@@ -609,7 +698,9 @@ function PoseEditor({ anim }: { anim: PartAnimation }) {
       {hasNext && (
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wide text-fg-subtle">Easing → next pose</span>
+            <span className="text-xs uppercase tracking-wide text-fg-subtle">
+              Easing → next pose
+            </span>
             <Button
               size="sm"
               variant="ghost"

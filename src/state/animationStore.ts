@@ -55,7 +55,7 @@ export const $animPlaying = atom<boolean>(false)
 
 /** The active animation object, or null. */
 export const $activeAnimation = computed([$part, $activeAnimationId], (part, id) =>
-  id ? part.animations.find((a) => a.id === id) ?? null : null,
+  id ? (part.animations.find((a) => a.id === id) ?? null) : null,
 )
 
 /**
@@ -244,7 +244,11 @@ export function setSolarTracking(animId: string, spec: SolarTrackingSpec | null)
  * rather than at the part origin (identity when nothing is selected). Use
  * {@link setJointPivot} to snap it precisely onto a hinge afterwards.
  */
-export function addJoint(animId: string, name = 'Joint', parentJointId: string | null = null): string {
+export function addJoint(
+  animId: string,
+  name = 'Joint',
+  parentJointId: string | null = null,
+): string {
   const id = rid('joint')
   const seed = selectionCentroidPose()
   mutate('add joint', name, (p) => {
@@ -265,7 +269,10 @@ function cloneTransform(t: Transform): Transform {
 /** A rest pose at the current viewport selection's centroid (identity if none selected). */
 function selectionCentroidPose(): Transform {
   const placements = $part.get().placements
-  const pts = $selectedIndices.get().map((i) => placements[i]).filter(Boolean)
+  const pts = $selectedIndices
+    .get()
+    .map((i) => placements[i])
+    .filter(Boolean)
   if (pts.length === 0) return identityTransform()
   const c = { x: 0, y: 0, z: 0 }
   for (const pl of pts) {
@@ -304,7 +311,11 @@ export function renameJoint(animId: string, jointId: string, name: string): void
 }
 
 /** Sets a joint's parent (for chains), guarding against cycles and self-parenting. */
-export function setJointParent(animId: string, jointId: string, parentJointId: string | null): void {
+export function setJointParent(
+  animId: string,
+  jointId: string,
+  parentJointId: string | null,
+): void {
   mutate('joint parent', '', (p) => {
     const a = findAnim(p, animId)
     if (!a) return
@@ -332,16 +343,25 @@ function wouldCycle(anim: PartAnimation, jointId: string, parentId: string): boo
  * Attaches placements to a joint (removing them from any other joint in the SAME
  * animation so a SubPart isn't driven twice within one module).
  */
-export function attachToJoint(animId: string, jointId: string, instanceIds: readonly string[]): void {
+export function attachToJoint(
+  animId: string,
+  jointId: string,
+  instanceIds: readonly string[],
+): void {
   if (instanceIds.length === 0) return
-  mutate('attach to joint', `${instanceIds.length} part${instanceIds.length === 1 ? '' : 's'}`, (p) => {
-    const a = findAnim(p, animId)
-    if (!a) return
-    const set = new Set(instanceIds)
-    for (const j of a.joints) j.memberInstanceIds = j.memberInstanceIds.filter((id) => !set.has(id))
-    const target = a.joints.find((j) => j.id === jointId)
-    if (target) target.memberInstanceIds.push(...instanceIds)
-  })
+  mutate(
+    'attach to joint',
+    `${instanceIds.length} part${instanceIds.length === 1 ? '' : 's'}`,
+    (p) => {
+      const a = findAnim(p, animId)
+      if (!a) return
+      const set = new Set(instanceIds)
+      for (const j of a.joints)
+        j.memberInstanceIds = j.memberInstanceIds.filter((id) => !set.has(id))
+      const target = a.joints.find((j) => j.id === jointId)
+      if (target) target.memberInstanceIds.push(...instanceIds)
+    },
+  )
 }
 
 export function detachFromJoint(animId: string, jointId: string, instanceId: string): void {
@@ -406,10 +426,20 @@ export function setKeyframeTime(animId: string, keyframeId: string, timeSec: num
  * Captures a joint's local pose at a keyframe — the core "pose snapshot". STREAMING:
  * no undo push (the caller pushes once at gizmo-drag start / field focus).
  */
-export function setJointPose(animId: string, keyframeId: string, jointId: string, pose: Transform): void {
+export function setJointPose(
+  animId: string,
+  keyframeId: string,
+  jointId: string,
+  pose: Transform,
+): void {
   stream((p) => {
     const k = findAnim(p, animId)?.keyframes.find((x) => x.id === keyframeId)
-    if (k) k.poses[jointId] = { position: { ...pose.position }, rotation: { ...pose.rotation }, scale: { ...pose.scale } }
+    if (k)
+      k.poses[jointId] = {
+        position: { ...pose.position },
+        rotation: { ...pose.rotation },
+        scale: { ...pose.scale },
+      }
   })
 }
 
@@ -434,7 +464,12 @@ function applyEasing(k: AnimationKeyframe, jointId: string, cfg: EasingConfig): 
  * data stays clean. STREAMING: no undo push (caller pushes once at curve-drag start /
  * preset change).
  */
-export function setJointSegmentEasing(animId: string, keyframeId: string, jointId: string, cfg: EasingConfig): void {
+export function setJointSegmentEasing(
+  animId: string,
+  keyframeId: string,
+  jointId: string,
+  cfg: EasingConfig,
+): void {
   stream((p) => {
     const k = findAnim(p, animId)?.keyframes.find((x) => x.id === keyframeId)
     if (k) applyEasing(k, jointId, cfg)
@@ -442,7 +477,11 @@ export function setJointSegmentEasing(animId: string, keyframeId: string, jointI
 }
 
 /** Sets the same easing on EVERY joint for the segment leaving `keyframeId` (discrete undo). */
-export function setSegmentEasingAllJoints(animId: string, keyframeId: string, cfg: EasingConfig): void {
+export function setSegmentEasingAllJoints(
+  animId: string,
+  keyframeId: string,
+  cfg: EasingConfig,
+): void {
   mutate('segment easing', isLinearEasing(cfg) ? 'linear' : 'eased', (p) => {
     const a = findAnim(p, animId)
     const k = a?.keyframes.find((x) => x.id === keyframeId)
@@ -499,7 +538,9 @@ function rebaseJointToWorld(a: PartAnimation, jointId: string, Wtgt: THREE.Matri
   const precomputed = a.keyframes.map((k) => ({
     k,
     Wk: jointWorld(a, jointId, k.timeSec),
-    WpInv: joint.parentJointId ? jointWorld(a, joint.parentJointId, k.timeSec).invert() : new THREE.Matrix4(),
+    WpInv: joint.parentJointId
+      ? jointWorld(a, joint.parentJointId, k.timeSec).invert()
+      : new THREE.Matrix4(),
   }))
   for (const { k, Wk, WpInv } of precomputed) {
     k.poses[jointId] = transformFromMatrix(WpInv.multiply(B.clone().multiply(Wk))) // W_parent⁻¹ · B · W_J
@@ -508,7 +549,12 @@ function rebaseJointToWorld(a: PartAnimation, jointId: string, Wtgt: THREE.Matri
 
 /** The desired new rest WORLD frame: `target` position, unit scale, and orientation from
  *  `target` (when `useOrientation`) or kept from the joint's current rest world. */
-function pivotTargetWorld(a: PartAnimation, jointId: string, target: Transform, useOrientation: boolean): THREE.Matrix4 {
+function pivotTargetWorld(
+  a: PartAnimation,
+  jointId: string,
+  target: Transform,
+  useOrientation: boolean,
+): THREE.Matrix4 {
   const pos = new THREE.Vector3(target.position.x, target.position.y, target.position.z)
   const quat = useOrientation
     ? quatOf(matrixFromTransform({ ...target, scale: VEC3_ONE }))
@@ -569,8 +615,10 @@ export function initAnimationStore(): void {
     }
     const anim = animId ? part.animations.find((a) => a.id === animId) : null
     if (anim) {
-      if ($activeJointId.get() && !anim.joints.some((j) => j.id === $activeJointId.get())) $activeJointId.set(null)
-      if ($editKeyframeId.get() && !anim.keyframes.some((k) => k.id === $editKeyframeId.get())) $editKeyframeId.set(null)
+      if ($activeJointId.get() && !anim.joints.some((j) => j.id === $activeJointId.get()))
+        $activeJointId.set(null)
+      if ($editKeyframeId.get() && !anim.keyframes.some((k) => k.id === $editKeyframeId.get()))
+        $editKeyframeId.set(null)
     }
   })
 }

@@ -77,7 +77,11 @@ function poseOf(jointId: string, k: PartAnimation['keyframes'][number]): Transfo
   return k.poses[jointId] ?? identityTransform()
 }
 
-function poseParts(t: Transform): { pos: THREE.Vector3; quat: THREE.Quaternion; scale: THREE.Vector3 } {
+function poseParts(t: Transform): {
+  pos: THREE.Vector3
+  quat: THREE.Quaternion
+  scale: THREE.Vector3
+} {
   const pos = new THREE.Vector3()
   const quat = new THREE.Quaternion()
   const scale = new THREE.Vector3()
@@ -99,7 +103,12 @@ function sampleJointPartsLocal(
   t: number,
 ): { pos: THREE.Vector3; quat: THREE.Quaternion; scale: THREE.Vector3 } {
   const kfs = sortedKeyframes(anim)
-  if (kfs.length === 0) return { pos: new THREE.Vector3(), quat: new THREE.Quaternion(), scale: new THREE.Vector3(1, 1, 1) }
+  if (kfs.length === 0)
+    return {
+      pos: new THREE.Vector3(),
+      quat: new THREE.Quaternion(),
+      scale: new THREE.Vector3(1, 1, 1),
+    }
   if (t <= kfs[0].timeSec) return poseParts(poseOf(jointId, kfs[0]))
   const last = kfs[kfs.length - 1]
   if (t >= last.timeSec) return poseParts(poseOf(jointId, last))
@@ -135,7 +144,11 @@ export function sampleJointLocal(anim: PartAnimation, jointId: string, t: number
  * LINEAR playback); each linear segment contributes only its endpoint. For an
  * all-linear joint this returns exactly the keyframe times (sparse, unchanged output).
  */
-function jointSampleTimes(anim: PartAnimation, joint: PartAnimation['joints'][number], fps: number): number[] {
+function jointSampleTimes(
+  anim: PartAnimation,
+  joint: PartAnimation['joints'][number],
+  fps: number,
+): number[] {
   const kfs = sortedKeyframes(anim)
   if (kfs.length === 0) return []
   const times = [kfs[0].timeSec]
@@ -170,7 +183,10 @@ export function jointWorld(anim: PartAnimation, jointId: string, t: number): THR
 }
 
 /** The joint a placement is attached to, or null if it's not animated. */
-export function findOwningJoint(anim: PartAnimation, instanceId: string): PartAnimation['joints'][number] | null {
+export function findOwningJoint(
+  anim: PartAnimation,
+  instanceId: string,
+): PartAnimation['joints'][number] | null {
   return anim.joints.find((j) => j.memberInstanceIds.includes(instanceId)) ?? null
 }
 
@@ -256,7 +272,9 @@ export function buildAnimationRig(
   // Wire joint parenting (root joints hang off the Part node).
   for (const j of anim.joints) {
     const parent =
-      j.parentJointId && jointNodeIdx.has(j.parentJointId) ? jointNodeIdx.get(j.parentJointId)! : rootIdx
+      j.parentJointId && jointNodeIdx.has(j.parentJointId)
+        ? jointNodeIdx.get(j.parentJointId)!
+        : rootIdx
     nodes[parent].children.push(jointNodeIdx.get(j.id)!)
   }
   // One leaf per attached placement, static TRS = W_J(rest)⁻¹ · placement (rest = the
@@ -298,7 +316,11 @@ export function buildAnimationRig(
       prev = quat
       scl.push(scale.x, scale.y, scale.z)
       if (!firstScale) firstScale = scale.clone()
-      else if (Math.abs(scale.x - firstScale.x) > SCALE_EPS || Math.abs(scale.y - firstScale.y) > SCALE_EPS || Math.abs(scale.z - firstScale.z) > SCALE_EPS) {
+      else if (
+        Math.abs(scale.x - firstScale.x) > SCALE_EPS ||
+        Math.abs(scale.y - firstScale.y) > SCALE_EPS ||
+        Math.abs(scale.z - firstScale.z) > SCALE_EPS
+      ) {
         scaleVaries = true
       }
     }

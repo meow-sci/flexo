@@ -22,10 +22,7 @@ export function ManageTanksModal({ subPartTemplateId, onClose }: Props) {
       variant={isPhone ? 'cover' : 'fullscreen'}
     >
       <Dialog className="min-h-0 flex-1">
-        <DialogHeader
-          title={`Tanks — ${subPartTemplateId}`}
-          onClose={onClose}
-        />
+        <DialogHeader title={`Tanks — ${subPartTemplateId}`} onClose={onClose} />
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto p-4">
           <TanksSection tanks={tanks} subPartTemplateId={subPartTemplateId} />
         </div>

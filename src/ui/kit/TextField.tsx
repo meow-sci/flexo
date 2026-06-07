@@ -8,8 +8,7 @@ import { type VariantProps } from 'tailwind-variants'
 import { inputStyles, Label, Description, FieldError, composeTw } from './Field'
 
 export interface TextFieldKitProps
-  extends Omit<TextFieldProps, 'children'>,
-    VariantProps<typeof inputStyles> {
+  extends Omit<TextFieldProps, 'children'>, VariantProps<typeof inputStyles> {
   label?: React.ReactNode
   description?: React.ReactNode
   errorMessage?: string

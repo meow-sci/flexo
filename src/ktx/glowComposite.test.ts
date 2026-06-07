@@ -56,7 +56,7 @@ describe('compositeGlow', () => {
     expect(diffuse.width).toBe(4)
     // every texel got the glow
     expect(diffuse.rgba[0]).toBe(255)
-    expect(diffuse.rgba[(15 * 4)]).toBe(255)
+    expect(diffuse.rgba[15 * 4]).toBe(255)
   })
 })
 

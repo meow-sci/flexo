@@ -127,8 +127,8 @@ export function TanksSection({ tanks, subPartTemplateId }: { tanks: Tank[]; subP
             <Select
               size="sm"
               aria-label="Tank shape"
-              selectedKey={tank.shape}
-              onSelectionChange={(k) => setTankShape(subPartTemplateId, i, k as TankShape)}
+              value={tank.shape}
+              onChange={(k) => setTankShape(subPartTemplateId, i, k as TankShape)}
             >
               <ListBoxItem id="Cylindrical">Cylindrical</ListBoxItem>
               <ListBoxItem id="Spherical">Spherical</ListBoxItem>
@@ -283,9 +283,9 @@ function ConnectorSelect({
         <Select
           size="sm"
           aria-label="Connector"
-          selectedKey={value || null}
           placeholder="Select a connector"
-          onSelectionChange={(k) => onChange(String(k))}
+          value={value || null}
+          onChange={(k) => onChange(String(k))}
         >
           {options.map((id) => (
             <ListBoxItem key={id} id={id} textValue={id}>

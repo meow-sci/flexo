@@ -197,8 +197,8 @@ function AnimationEditor({ anim }: { anim: PartAnimation }) {
           size="sm"
           label="Mode"
           className="flex-1"
-          selectedKey={anim.mode}
-          onSelectionChange={(k) => setAnimationMode(anim.id, k as AnimationMode)}
+          value={anim.mode}
+          onChange={(k) => setAnimationMode(anim.id, k as AnimationMode)}
         >
           <ListBoxItem id="actuate">Actuate (0→1 slider)</ListBoxItem>
           <ListBoxItem id="deployRetract">Deploy / Retract</ListBoxItem>
@@ -272,8 +272,8 @@ function SolarTrackingEditor({ anim }: { anim: PartAnimation }) {
               size="sm"
               label="Rotates to track"
               className="flex-1"
-              selectedKey={st.subPartInstanceId || undefined}
-              onSelectionChange={(k) => setSolarTracking(anim.id, { ...st, subPartInstanceId: String(k) })}
+              value={st.subPartInstanceId || undefined}
+              onChange={(k) => setSolarTracking(anim.id, { ...st, subPartInstanceId: String(k) })}
             >
               {members.map((m) => (
                 <ListBoxItem key={m} id={m}>
@@ -418,8 +418,8 @@ function JointRow({
             className="flex-1"
             searchable
             searchPlaceholder="Search joints…"
-            selectedKey={joint.parentJointId ?? 'none'}
-            onSelectionChange={(k) => setJointParent(anim.id, joint.id, k === 'none' ? null : String(k))}
+            value={joint.parentJointId ?? 'none'}
+            onChange={(k) => setJointParent(anim.id, joint.id, k === 'none' ? null : String(k))}
           >
             <ListBoxItem id="none">Root (Part)</ListBoxItem>
             {others.map((o) => (

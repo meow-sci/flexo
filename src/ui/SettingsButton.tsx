@@ -100,8 +100,8 @@ export function SettingsModal({
               size="sm"
               aria-label="Kitten mesh texture export mode"
               className="w-52"
-              selectedKey={kittenTex.mode}
-              onSelectionChange={(k) =>
+              value={kittenTex.mode}
+              onChange={(k) =>
                 setKittenTextureExport({ mode: k as KittenTextureExportSettings['mode'] })
               }
             >

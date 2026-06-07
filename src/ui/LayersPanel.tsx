@@ -378,8 +378,8 @@ function DeleteLayerDialog({
               <Select
                 size="sm"
                 aria-label="Move items to layer"
-                selectedKey={targetId}
-                onSelectionChange={(k) => setTargetId(String(k))}
+                value={targetId}
+                onChange={(k) => setTargetId(String(k))}
                 items={others}
               >
                 {(l) => (

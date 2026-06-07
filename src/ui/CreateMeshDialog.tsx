@@ -114,7 +114,7 @@ export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
           <TextField label="Name" value={name} onChange={setName} size="sm" />
 
           {textures.length > 0 ? (
-            <Select label="Texture" selectedKey={textureId} onSelectionChange={(k) => setTextureId(String(k))}>
+            <Select label="Texture" value={textureId} onChange={(k) => setTextureId(String(k))}>
               <ListBoxItem id="">(none)</ListBoxItem>
               {textures.map((t) => (
                 <ListBoxItem key={t.id} id={t.id}>

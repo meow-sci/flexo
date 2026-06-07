@@ -177,9 +177,9 @@ function MeasureContent({ close }: { close: () => void }) {
         <Select
           size="sm"
           aria-label="Display unit"
-          selectedKey={settings.unit}
+          value={settings.unit}
           items={UNITS}
-          onSelectionChange={(k) => setMeasurementSettings({ unit: k as MeasurementUnit })}
+          onChange={(k) => setMeasurementSettings({ unit: k as MeasurementUnit })}
         >
           {(u) => (
             <ListBoxItem id={u.id} textValue={u.label}>

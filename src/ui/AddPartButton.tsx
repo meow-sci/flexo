@@ -217,8 +217,8 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
             size="sm"
             aria-label="Import into layer"
             className="min-w-0 flex-1 sm:w-44 sm:flex-none"
-            selectedKey={targetLayer}
-            onSelectionChange={(k) => setTargetLayer(String(k))}
+            value={targetLayer}
+            onChange={(k) => setTargetLayer(String(k))}
           >
             <ListBoxItem id={NEW_LAYER}>New Layer</ListBoxItem>
             <ListBoxItem id={CURRENT_LAYER}>Current Layer</ListBoxItem>

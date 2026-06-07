@@ -149,8 +149,8 @@ function PanelContent({
           {faceKeys.length > 1 && (
             <Select
               label="Face"
-              selectedKey={selectedFace}
-              onSelectionChange={(k) => onFaceChange(String(k))}
+              value={selectedFace}
+              onChange={(k) => onFaceChange(String(k))}
             >
               {faceKeys.map((key) => (
                 <ListBoxItem key={key} id={key}>
@@ -163,8 +163,8 @@ function PanelContent({
           {/* Texture for this face */}
           <Select
             label="Texture"
-            selectedKey={currentConfig.textureId}
-            onSelectionChange={(k) => update(selectedFace, { textureId: String(k) })}
+            value={currentConfig.textureId}
+            onChange={(k) => update(selectedFace, { textureId: String(k) })}
           >
             <ListBoxItem id="">(none)</ListBoxItem>
             {part.customTextures.map((t) => (
@@ -177,8 +177,8 @@ function PanelContent({
           {/* Wrap mode — how the texture behaves where UVs exceed 0–1. Disabled when no texture. */}
           <Select
             label="Wrap"
-            selectedKey={currentConfig.wrap ?? 'repeat'}
-            onSelectionChange={(k) => update(selectedFace, { wrap: k as TextureWrap })}
+            value={currentConfig.wrap ?? 'repeat'}
+            onChange={(k) => update(selectedFace, { wrap: k as TextureWrap })}
             isDisabled={!currentConfig.textureId}
           >
             {WRAP_LABELS.map(({ id, label }) => (
@@ -284,8 +284,8 @@ function VisorSurfaceControls({ mesh }: { mesh: CustomMesh }) {
     <SectionShell title="Visor surface">
       <Select
         label="Surface"
-        selectedKey={surface}
-        onSelectionChange={(k) => void setMeshSurface(mesh.id, k as VisorSurface)}
+        value={surface}
+        onChange={(k) => void setMeshSurface(mesh.id, k as VisorSurface)}
       >
         <ListBoxItem id="glass">Glass (translucent)</ListBoxItem>
         <ListBoxItem id="glow">Glow (opaque)</ListBoxItem>

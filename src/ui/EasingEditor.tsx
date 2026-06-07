@@ -115,8 +115,8 @@ export function EasingEditor({
       <Select
         size="sm"
         aria-label="Easing preset"
-        selectedKey={selectedKey}
-        onSelectionChange={(k) => {
+        value={selectedKey}
+        onChange={(k) => {
           onEditStart?.()
           onChange({ kind: 'preset', preset: k as EasingPreset })
         }}

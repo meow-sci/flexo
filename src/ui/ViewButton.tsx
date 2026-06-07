@@ -92,9 +92,9 @@ function ViewContent() {
             size="sm"
             className="flex-1"
             aria-label="Environment"
-            selectedKey={lighting.environment}
+            value={lighting.environment}
             items={ENVIRONMENT_PRESETS}
-            onSelectionChange={(k) => setLighting({ environment: k as EnvironmentPreset })}
+            onChange={(k) => setLighting({ environment: k as EnvironmentPreset })}
           >
             {(p) => (
               <ListBoxItem id={p.id} textValue={p.label}>
@@ -110,9 +110,9 @@ function ViewContent() {
             size="sm"
             className="flex-1"
             aria-label="Tone mapping"
-            selectedKey={lighting.toneMapping}
+            value={lighting.toneMapping}
             items={TONE_MAPPING_MODES}
-            onSelectionChange={(k) => setLighting({ toneMapping: k as ToneMappingMode })}
+            onChange={(k) => setLighting({ toneMapping: k as ToneMappingMode })}
           >
             {(m) => (
               <ListBoxItem id={m.id} textValue={m.label}>

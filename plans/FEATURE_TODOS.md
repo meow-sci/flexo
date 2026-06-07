@@ -138,3 +138,7 @@
     - start a right click/context menu of specific features?  floating FAB button for mobile?
     - connectors too
 - prettyXml is super janky, look at pebkac for how i did it there for a DOM/Element native solution
+- part snapping
+- part overlap detection/warning
+- movement snaps
+- blueprint views

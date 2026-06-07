@@ -145,6 +145,13 @@ export interface ImportedAnimation {
   showDeployRetract: boolean
   keyframeTimes: number[]
   joints: ImportedJoint[]
+  /**
+   * True when the part's modeled placements match the LAST keyframe (the deployed end)
+   * rather than the first — i.e. the GLB is a deploy clip whose t=0 is the stowed state.
+   * The importer uses this to set {@link import('./types').PartAnimation.restKeyframeId}
+   * to the last keyframe so the preview/export anchor on the deployed (modeled) pose.
+   */
+  restAtLastKeyframe: boolean
   solarTracking: { degreesPerSecond: number; subPartOriginalId: string; excludeOriginalIds: string[] } | null
 }
 
@@ -162,7 +169,14 @@ function uniqSorted(times: number[]): number[] {
  */
 export function decodeAnimationGlb(
   buffer: ArrayBuffer,
-  opts: { instanceIds: ReadonlySet<string>; module: CatalogAnimationModule },
+  opts: {
+    instanceIds: ReadonlySet<string>
+    module: CatalogAnimationModule
+    /** Part-relative SubPart placements (original instance-id space) — used to detect
+     *  which keyframe the modeled assembly matches (see {@link ImportedAnimation.restAtLastKeyframe}).
+     *  Omitted ⇒ detection no-ops and rest stays the first keyframe (t=0). */
+    placements?: ReadonlyMap<string, Transform>
+  },
 ): ImportedAnimation | null {
   const { json, bin } = parseGlb(buffer)
   const nodes = json.nodes ?? []
@@ -222,6 +236,30 @@ export function decodeAnimationGlb(
     s: n.scale ?? [1, 1, 1],
   })
 
+  // A node's local / Part-space matrix at time `t` (mirrors the joint sampling above,
+  // but for ANY node — used to place member leaves for the rest-keyframe detection).
+  const nodeLocal = (i: number, t: number): THREE.Matrix4 => {
+    const ch = nodeChannels.get(i) ?? {}
+    const b = base(nodes[i])
+    const tr = ch.translation ? sampleChannel(ch.translation, t) : b.t
+    const ro = ch.rotation ? sampleChannel(ch.rotation, t) : b.r
+    const sc = ch.scale ? sampleChannel(ch.scale, t) : b.s
+    return new THREE.Matrix4().compose(
+      new THREE.Vector3(tr[0], tr[1], tr[2]),
+      new THREE.Quaternion(ro[0], ro[1], ro[2], ro[3]),
+      new THREE.Vector3(sc[0], sc[1], sc[2]),
+    )
+  }
+  const nodeWorld = (i: number, t: number): THREE.Matrix4 => {
+    let m = nodeLocal(i, t)
+    let cur = childToParent.get(i)
+    while (cur !== undefined && !roots.has(cur)) {
+      m = nodeLocal(cur, t).multiply(m)
+      cur = childToParent.get(cur)
+    }
+    return m
+  }
+
   const joints: ImportedJoint[] = jointNodeIndices.map((nodeIdx) => {
     const node = nodes[nodeIdx]
     const ch = nodeChannels.get(nodeIdx) ?? {}
@@ -241,12 +279,34 @@ export function decodeAnimationGlb(
     return { name: node.name ?? 'Joint', parentIndex: nearestJointAncestor(nodeIdx), memberOriginalIds, poses }
   })
 
+  // Which keyframe does the part's MODELED placement match — the first (t=0) or the
+  // last? KSA parts are modeled in their DEPLOYED configuration, but a deploy GLB runs
+  // stowed(t=0) → deployed(tEnd); for those the placements line up with the last
+  // keyframe. Compare each member leaf's GLB world position at the first vs last time
+  // against its placement and pick the closer end (ties / non-movers don't sway it).
+  const tFirst = keyframeTimes[0]
+  const tLast = keyframeTimes[keyframeTimes.length - 1]
+  let resFirst = 0
+  let resLast = 0
+  if (tLast > tFirst && opts.placements) {
+    for (let i = 0; i < nodes.length; i++) {
+      if (!isLeaf(i)) continue
+      const placement = opts.placements.get(nodes[i].name!)
+      if (!placement) continue
+      const p = new THREE.Vector3(placement.position.x, placement.position.y, placement.position.z)
+      resFirst += p.distanceTo(new THREE.Vector3().setFromMatrixPosition(nodeWorld(i, tFirst)))
+      resLast += p.distanceTo(new THREE.Vector3().setFromMatrixPosition(nodeWorld(i, tLast)))
+    }
+  }
+  const restAtLastKeyframe = resLast < resFirst
+
   return {
     name: opts.module.moduleId || anim.name || 'Animation',
     durationSec: keyframeTimes[keyframeTimes.length - 1] ?? 0,
     showDeployRetract: opts.module.showDeployRetract,
     keyframeTimes,
     joints,
+    restAtLastKeyframe,
     solarTracking: opts.module.solarTracking
       ? {
           degreesPerSecond: opts.module.solarTracking.degreesPerSecond,

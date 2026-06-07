@@ -53,6 +53,7 @@ import {
   $activeAnimationId,
   $activeJointId,
   $animPreviewU,
+  $animScrubbing,
   $editKeyframeId,
   moveJointPivot,
   reorientJointPivot,
@@ -320,6 +321,7 @@ export class EditorScene {
     this.unsubscribers.push($activeAnimationId.subscribe(onPreviewChange))
     this.unsubscribers.push($activeJointId.subscribe(onPreviewChange))
     this.unsubscribers.push($animPreviewU.subscribe(onPreviewChange))
+    this.unsubscribers.push($animScrubbing.subscribe(onPreviewChange))
     this.unsubscribers.push($editKeyframeId.subscribe(onPreviewChange))
     // Leaving/entering the Animation editor toggles the preview + pose gizmo on/off.
     this.unsubscribers.push($inspectorMode.subscribe(onPreviewChange))
@@ -423,11 +425,11 @@ export class EditorScene {
    * just overlays the overrides on top; previously-overridden ids are reverted when
    * the animation changes/clears.
    */
-  /** True when the preview shows a posed (non-rest) frame: editing a keyframe, or scrubbed past 0. */
+  /** True when the preview shows a posed (non-rest) frame: editing a keyframe, or scrubbing past 0. */
   private isPreviewPosed(): boolean {
     if ($inspectorMode.get() !== 'anim') return false
     if ($editKeyframeId.get()) return true
-    return $activeAnimationId.get() != null && $animPreviewU.get() > 1e-6
+    return $animScrubbing.get() && $animPreviewU.get() > 1e-6
   }
 
   /** True when any selected SubPart is attached to a joint of the active animation. */
@@ -458,6 +460,10 @@ export class EditorScene {
     const anim = animId ? part.animations.find((a) => a.id === animId) : null
     if (!anim) return
     const editKf = $editKeyframeId.get()
+    // Override only while actively posing a keyframe or dragging the scrubber; otherwise
+    // SubParts rest at their static modeled placement (an imported deploy clip's rest is
+    // its DEPLOYED last keyframe, so this keeps it shown deployed until you scrub).
+    if (!editKf && !$animScrubbing.get()) return
     const pinned = editKf ? anim.keyframes.find((k) => k.id === editKf) : null
     const u = Math.min(1, Math.max(0, $animPreviewU.get()))
     const t = pinned ? pinned.timeSec : u * anim.durationSec

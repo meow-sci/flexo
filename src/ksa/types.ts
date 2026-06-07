@@ -600,8 +600,19 @@ export interface PartAnimation {
   mode: AnimationMode
   /** The pose skeleton. Single-joint for doors/hinges; nested for chains. */
   joints: AnimationJoint[]
-  /** Poses over time, sorted by timeSec; keyframes[0].timeSec === 0 (rest). */
+  /** Poses over time, sorted by timeSec; keyframes[0].timeSec === 0. */
   keyframes: AnimationKeyframe[]
+  /**
+   * Id of the keyframe whose composed pose equals each SubPart's static placement —
+   * the "modeled rest" the in-editor preview and the GLB export anchor on
+   * (`world(leaf,t) = W_J(t)·W_J(rest)⁻¹·placement`). ABSENT ⇒ the earliest keyframe
+   * (t=0), the hand-authoring convention where you pose forward from the modeled pose.
+   * The built-in-Part importer sets it to the keyframe that matches the part's modeled
+   * assembly: a KSA deploy clip is modeled fully-DEPLOYED, which is its LAST keyframe
+   * (t=0 is the stowed start), so anchoring at t=0 would re-apply the whole deploy on
+   * top of an already-deployed part. Flexo-internal only — never serialized to KSA.
+   */
+  restKeyframeId?: string
   /** Optional sun-tracking extension, or null. */
   solarTracking: SolarTrackingSpec | null
 }

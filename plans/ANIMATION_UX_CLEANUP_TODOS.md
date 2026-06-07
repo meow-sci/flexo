@@ -1,0 +1,4 @@
+- the list of included SubParts under each joint should be changed to a GridList with two columns, the second being an icon button with a trash icon for remove
+- the "Attach selected" Select should be an Autocomplete so it gets search.  I want styling to be very similar to the Select is now though, with the addition of the search feature.  use the react-aria skill
+- clicking anywhere inside a joint panel should select that joint, not jut when pressing the little target icon
+- when animation editing is enabled, i want another slider for the preview to be in a floating window toolbar that is draggable/movable.  default to centered 0.5rem below the main top floating toolbar, or, similarly laid out to how other toolbars in this area are

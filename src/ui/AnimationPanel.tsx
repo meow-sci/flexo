@@ -10,6 +10,7 @@ import {
   $activeJointId,
   $editKeyframeId,
   $animPreviewU,
+  $animScrubbing,
   addAnimation,
   removeAnimation,
   renameAnimation,
@@ -48,6 +49,8 @@ function closeAnimation(): void {
   $activeAnimationId.set(null)
   $activeJointId.set(null)
   $editKeyframeId.set(null)
+  $animScrubbing.set(false)
+  $animPreviewU.set(0)
 }
 
 /** A draft-aware numeric field (free-types while focused, reflects the store otherwise). */
@@ -168,6 +171,7 @@ function AnimationRow({ anim, active }: { anim: PartAnimation; active: boolean }
 function AnimationEditor({ anim }: { anim: PartAnimation }) {
   const editKfId = useStore($editKeyframeId)
   const previewU = useStore($animPreviewU)
+  const scrubbing = useStore($animScrubbing)
   const [nameDraft, setNameDraft] = useState<string | null>(null)
 
   return (
@@ -211,10 +215,11 @@ function AnimationEditor({ anim }: { anim: PartAnimation }) {
         </div>
       </div>
 
-      {/* Live preview scrubber (drives the viewport). */}
+      {/* Live preview scrubber (drives the viewport). Spring-loaded: the override only
+          applies while you drag — release snaps back to the static modeled pose. */}
       <label className="flex flex-col gap-1">
         <span className="text-xs uppercase tracking-wide text-fg-subtle">
-          Preview {editKfId ? '(pinned to edited pose)' : `${Math.round(previewU * 100)}%`}
+          Preview {editKfId ? '(pinned to edited pose)' : scrubbing ? `${Math.round(previewU * 100)}%` : '(drag to preview)'}
         </span>
         <Slider
           aria-label="Preview"
@@ -223,8 +228,15 @@ function AnimationEditor({ anim }: { anim: PartAnimation }) {
           maxValue={1}
           step={0.01}
           onChange={(v) => {
+            if (!$animScrubbing.get()) $animScrubbing.set(true)
             $editKeyframeId.set(null)
             $animPreviewU.set(typeof v === 'number' ? v : v[0])
+          }}
+          onChangeEnd={() => {
+            // Release → back to the modeled (static) pose; reset so the next grab starts
+            // at the rest end (t=0) of the timeline.
+            $animScrubbing.set(false)
+            $animPreviewU.set(0)
           }}
         />
       </label>

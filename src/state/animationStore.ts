@@ -11,7 +11,7 @@ import type {
   Vec3,
 } from '../ksa/types'
 import { createPartAnimation, identityTransform, VEC3_ONE } from '../ksa/types'
-import { jointWorld, sampleJointLocal } from '../ksa/animationRig'
+import { jointWorld, restAnchorTime, sampleJointLocal } from '../ksa/animationRig'
 import { isLinearEasing } from '../ksa/easing'
 import { matrixFromTransform, transformFromMatrix } from '../three/coords'
 import { $inspectorMode } from './uiStore'
@@ -39,8 +39,16 @@ export const $activeAnimationId = atom<string | null>(null)
 export const $activeJointId = atom<string | null>(null)
 /** The keyframe being posed (pins the preview to its time); null = free scrub. */
 export const $editKeyframeId = atom<string | null>(null)
-/** Free preview scrub position 0→1 (mapped to 0→duration). 0 = rest pose. */
+/** Free preview scrub position 0→1 (mapped to 0→duration). 0 = the t=0 keyframe. */
 export const $animPreviewU = atom<number>(0)
+/**
+ * True while the user is actively dragging the preview scrubber. The viewport applies
+ * the joint override ONLY while scrubbing (or editing a keyframe); otherwise SubParts
+ * show their static modeled placement. This is what lets an imported KSA deploy clip —
+ * whose rest is the DEPLOYED last keyframe — sit deployed at rest yet still fold to
+ * stowed (t=0) while you drag, snapping back to the modeled pose on release.
+ */
+export const $animScrubbing = atom<boolean>(false)
 
 /** The active animation object, or null. */
 export const $activeAnimation = computed([$part, $activeAnimationId], (part, id) =>
@@ -60,13 +68,17 @@ export const $isPoseEditing = computed(
 
 /**
  * Selects a keyframe for pose editing and auto-picks the 3D gizmo tool: Move for the
- * rest pivot (t=0, so a drag relocates the rotation anchor) and Rotate for a later
- * pose (so a drag swings the joint). The user can still switch tools afterwards.
+ * rest pivot (the {@link restAnchorTime} keyframe, so a drag relocates the rotation
+ * anchor) and Rotate for any other pose (so a drag swings the joint). The user can
+ * still switch tools afterwards.
  */
 export function selectKeyframeForEditing(animId: string, keyframeId: string): void {
   $editKeyframeId.set(keyframeId)
-  const k = $activeAnimation.get()?.keyframes.find((x) => x.id === keyframeId)
-  if (k && $activeAnimationId.get() === animId) $toolMode.set(k.timeSec === 0 ? 'translate' : 'rotate')
+  const anim = $activeAnimation.get()
+  const k = anim?.keyframes.find((x) => x.id === keyframeId)
+  if (k && anim && $activeAnimationId.get() === animId) {
+    $toolMode.set(k.timeSec === restAnchorTime(anim) ? 'translate' : 'rotate')
+  }
 }
 
 // ── undo plumbing (mirrors customAssetStore.mutate, minus the atlas flag) ─────
@@ -111,6 +123,7 @@ export function addAnimation(name = 'Animation', mode: AnimationMode = 'actuate'
   $activeJointId.set(null)
   $editKeyframeId.set(null)
   $animPreviewU.set(0)
+  $animScrubbing.set(false)
   return id
 }
 
@@ -380,10 +393,10 @@ export function setSegmentEasingAllJoints(animId: string, keyframeId: string, cf
 }
 
 /**
- * Moves a joint's PIVOT — its rest (t=0) position — by `delta`, carrying every
- * keyframe's pose position along so the pivot relocates rigidly: the joint's whole
- * translation curve shifts by the same amount. Because each SubPart's leaf offset is
- * `W_J(0)⁻¹ · placement` (recomputed every frame), shifting all poses equally leaves
+ * Moves a joint's PIVOT — its rest position — by `delta`, carrying every keyframe's
+ * pose position along so the pivot relocates rigidly: the joint's whole translation
+ * curve shifts by the same amount. Because each SubPart's leaf offset is
+ * `W_J(rest)⁻¹ · placement` (recomputed every frame), shifting all poses equally leaves
  * the rendered geometry unchanged at every t — only the rotation anchor moves. This is
  * the "draggable rotation anchor": drag the rest pivot to e.g. a hinge edge, then t>0
  * rotations swing around it. STREAMING (caller pushes undo at gizmo-drag start).
@@ -411,19 +424,19 @@ function quatOf(m: THREE.Matrix4): THREE.Quaternion {
 }
 
 /**
- * Re-bases joint `jointId`'s REST (t=0) frame onto `Wtgt` (a Part-space WORLD matrix,
- * scale already stripped) IN PLACE on `a`. Generalises {@link moveJointPivot} to an
- * arbitrary frame (position + orientation): with `B = Wtgt · W_J(0)⁻¹` it rewrites every
- * keyframe's local pose to `P'(t) = W_parent(t)⁻¹ · B · W_J(t)`. This keeps the t=0
- * geometry exactly put (no load/preview jump — the leaf offset `W_J(0)⁻¹·placement` is
- * recomputed) while rigidly carrying t>0 motion so it now swings about the new pivot.
- * The per-keyframe worlds are PRECOMPUTED from the pre-mutation poses (the write loop
- * must not read half-rewritten state).
+ * Re-bases joint `jointId`'s REST frame onto `Wtgt` (a Part-space WORLD matrix, scale
+ * already stripped) IN PLACE on `a`. Generalises {@link moveJointPivot} to an arbitrary
+ * frame (position + orientation): with `B = Wtgt · W_J(rest)⁻¹` it rewrites every
+ * keyframe's local pose to `P'(t) = W_parent(t)⁻¹ · B · W_J(t)`. This keeps the rest
+ * ({@link restAnchorTime}) geometry exactly put (no load/preview jump — the leaf offset
+ * `W_J(rest)⁻¹·placement` is recomputed) while rigidly carrying other-keyframe motion so
+ * it now swings about the new pivot. The per-keyframe worlds are PRECOMPUTED from the
+ * pre-mutation poses (the write loop must not read half-rewritten state).
  */
 function rebaseJointToWorld(a: PartAnimation, jointId: string, Wtgt: THREE.Matrix4): void {
   const joint = a.joints.find((j) => j.id === jointId)
   if (!joint) return
-  const B = Wtgt.clone().multiply(jointWorld(a, jointId, 0).invert())
+  const B = Wtgt.clone().multiply(jointWorld(a, jointId, restAnchorTime(a)).invert())
   const precomputed = a.keyframes.map((k) => ({
     k,
     Wk: jointWorld(a, jointId, k.timeSec),
@@ -438,7 +451,9 @@ function rebaseJointToWorld(a: PartAnimation, jointId: string, Wtgt: THREE.Matri
  *  `target` (when `useOrientation`) or kept from the joint's current rest world. */
 function pivotTargetWorld(a: PartAnimation, jointId: string, target: Transform, useOrientation: boolean): THREE.Matrix4 {
   const pos = new THREE.Vector3(target.position.x, target.position.y, target.position.z)
-  const quat = useOrientation ? quatOf(matrixFromTransform({ ...target, scale: VEC3_ONE })) : quatOf(jointWorld(a, jointId, 0))
+  const quat = useOrientation
+    ? quatOf(matrixFromTransform({ ...target, scale: VEC3_ONE }))
+    : quatOf(jointWorld(a, jointId, restAnchorTime(a)))
   return new THREE.Matrix4().compose(pos, quat, new THREE.Vector3(1, 1, 1))
 }
 

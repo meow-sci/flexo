@@ -15,9 +15,11 @@ import type { PartAnimation, SubPartPlacement, Transform } from './types'
  * and assigns the decomposed result to the SubPart's Part-local transform. So:
  *   - joint node base TRS  = the joint's rest LOCAL pose (keyframe-0, relative to parent)
  *   - joint channels       = the joint's local pose sampled at each keyframe
- *   - leaf static (Oₗ)     = W_J(0)⁻¹ · placement   (the rest offset from the joint)
- * giving world(leaf,t) = W_J(t) · W_J(0)⁻¹ · placement — exactly the static pose at
- * t=0 (no load jump) and rigidly carried by the joint thereafter.
+ *   - leaf static (Oₗ)     = W_J(rest)⁻¹ · placement  (the offset from the joint at rest)
+ * giving world(leaf,t) = W_J(t) · W_J(rest)⁻¹ · placement — exactly the placement at
+ * the rest keyframe (no load jump) and rigidly carried by the joint thereafter.
+ * `rest` is {@link restAnchorTime}: the earliest keyframe (t=0) for hand-authored
+ * animations, but the LAST keyframe for an imported KSA deploy clip (modeled deployed).
  *
  * All matrix math runs in three.js with the SAME calibrated mapping the editor uses
  * for placements ({@link matrixFromTransform}); glTF carries rotations as
@@ -173,9 +175,22 @@ export function findOwningJoint(anim: PartAnimation, instanceId: string): PartAn
 }
 
 /**
+ * The timeline time of the animation's modeled-rest keyframe — the pose that equals
+ * each SubPart's static placement, which preview + export anchor on. Defaults to the
+ * earliest keyframe (t=0, the hand-authoring convention); an importer can point
+ * {@link PartAnimation.restKeyframeId} at a later keyframe (a KSA deploy clip is
+ * modeled fully-deployed = its LAST keyframe). Falls back to 0 if the id is stale.
+ */
+export function restAnchorTime(anim: PartAnimation): number {
+  if (!anim.restKeyframeId) return 0
+  return anim.keyframes.find((k) => k.id === anim.restKeyframeId)?.timeSec ?? 0
+}
+
+/**
  * The editor-preview override matrix for an animated SubPart at time `t`:
- * W_J(t) · W_J(0)⁻¹ · placement. Returns null when the SubPart isn't attached to
- * any joint (it should keep its static placement).
+ * W_J(t) · W_J(rest)⁻¹ · placement, where `rest` is {@link restAnchorTime} (t=0 for
+ * authored clips, the deployed LAST keyframe for an imported KSA deploy). Returns null
+ * when the SubPart isn't attached to any joint (it should keep its static placement).
  */
 export function previewOverrideMatrix(
   anim: PartAnimation,
@@ -186,8 +201,8 @@ export function previewOverrideMatrix(
   const joint = findOwningJoint(anim, instanceId)
   if (!joint) return null
   const Wt = jointWorld(anim, joint.id, t)
-  const W0inv = jointWorld(anim, joint.id, 0).invert()
-  return Wt.multiply(W0inv).multiply(matrixFromTransform(placement))
+  const Wrestinv = jointWorld(anim, joint.id, restAnchorTime(anim)).invert()
+  return Wt.multiply(Wrestinv).multiply(matrixFromTransform(placement))
 }
 
 /** Every instance id attached to any joint in the animation. */
@@ -244,9 +259,11 @@ export function buildAnimationRig(
       j.parentJointId && jointNodeIdx.has(j.parentJointId) ? jointNodeIdx.get(j.parentJointId)! : rootIdx
     nodes[parent].children.push(jointNodeIdx.get(j.id)!)
   }
-  // One leaf per attached placement, static TRS = W_J(0)⁻¹ · placement.
+  // One leaf per attached placement, static TRS = W_J(rest)⁻¹ · placement (rest = the
+  // modeled keyframe; t=0 for authored clips, the deployed LAST kf for a KSA import).
+  const anchorT = restAnchorTime(anim)
   for (const j of anim.joints) {
-    const w0inv = jointWorld(anim, j.id, 0).invert()
+    const w0inv = jointWorld(anim, j.id, anchorT).invert()
     for (const instId of j.memberInstanceIds) {
       const placement = placementById.get(instId)
       if (!placement) continue // placement removed — skip its leaf

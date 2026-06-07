@@ -2,7 +2,7 @@ import { addPart } from './editorStore'
 import { toUrl } from '../ksa/catalog'
 import { decodeAnimationGlb, remapImportedAnimation, type ImportedAnimation } from '../ksa/animationImport'
 import { fitAnimationEasing } from '../ksa/easingFit'
-import type { PartAnimation } from '../ksa/types'
+import type { PartAnimation, Transform } from '../ksa/types'
 import type { CatalogPart } from '../ksa/partCatalog'
 
 /**
@@ -15,6 +15,7 @@ import type { CatalogPart } from '../ksa/partCatalog'
  */
 export async function importBuiltInPart(part: CatalogPart, targetLayerId?: string): Promise<string> {
   const instanceIds = new Set(part.placements.map((p) => p.instanceId))
+  const placements = new Map<string, Transform>(part.placements.map((p) => [p.instanceId, p]))
   const decoded: ImportedAnimation[] = []
   for (const mod of part.animationModules ?? []) {
     try {
@@ -23,7 +24,7 @@ export async function importBuiltInPart(part: CatalogPart, targetLayerId?: strin
         console.error(`flexo: animation GLB ${mod.glbPath} not found (${res.status})`)
         continue
       }
-      const imp = decodeAnimationGlb(await res.arrayBuffer(), { instanceIds, module: mod })
+      const imp = decodeAnimationGlb(await res.arrayBuffer(), { instanceIds, module: mod, placements })
       if (imp) decoded.push(imp)
     } catch (err) {
       console.error(`flexo: failed to import animation ${mod.glbPath}`, err)
@@ -35,7 +36,14 @@ export async function importBuiltInPart(part: CatalogPart, targetLayerId?: strin
     part.editorTags,
     targetLayerId,
     (idMap): PartAnimation[] =>
-      decoded.map((d) => fitAnimationEasing(remapImportedAnimation(d, idMap, makeId))),
+      decoded.map((d) => {
+        const fitted = fitAnimationEasing(remapImportedAnimation(d, idMap, makeId))
+        // KSA deploy clips are modeled fully-deployed (their LAST keyframe), so anchor
+        // the preview/export there instead of the stowed t=0 (see restKeyframeId docs).
+        if (!d.restAtLastKeyframe || fitted.keyframes.length === 0) return fitted
+        const last = fitted.keyframes.reduce((a, b) => (b.timeSec > a.timeSec ? b : a))
+        return { ...fitted, restKeyframeId: last.id }
+      }),
   )
 }
 

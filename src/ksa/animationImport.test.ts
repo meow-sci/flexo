@@ -78,6 +78,65 @@ describe('decodeAnimationGlb — export → decode round-trip', () => {
   })
 })
 
+describe('decodeAnimationGlb — modeled-rest detection (KSA model = deployed = last keyframe)', () => {
+  // A one-joint deploy: hip turns +90° about Y over [0,1]; the foot leaf sits at +x 2.
+  // The GLB is authored KSA-style (t=0 = stowed): foot's static offset puts it at its
+  // t=0 world [2,0,0], so it traces [2,0,0] (stowed) → [0,0,-2] (deployed) by t=1.
+  const orig: PartAnimation = {
+    id: 'anim_arm',
+    name: 'Arm',
+    durationSec: 1,
+    mode: 'deployRetract',
+    joints: [{ id: 'hip', name: 'Hip', parentJointId: null, memberInstanceIds: ['foot_1'] }],
+    keyframes: [
+      { id: 'k0', timeSec: 0, poses: { hip: tf() } },
+      { id: 'k1', timeSec: 1, poses: { hip: tf({ rot: [0, Math.PI / 2, 0] }) } },
+    ],
+    solarTracking: null,
+  }
+  const rig = buildAnimationRig(orig, [pl('foot_1', tf({ pos: [2, 0, 0] }))], 'Arm')
+  const ab = glbBuffer(rig)
+  // But the part is MODELED deployed: the XML places the foot at its LAST-keyframe world.
+  const deployedFoot = pl('foot_1', tf({ pos: [0, 0, -2] }))
+  const placements = new Map<string, Transform>([['foot_1', deployedFoot]])
+  const decodeWith = (p?: Map<string, Transform>) =>
+    decodeAnimationGlb(ab, { instanceIds: new Set(['foot_1']), module: MODULE, placements: p })!
+
+  it('detects the placement matches the LAST keyframe (and defaults to first without placements)', () => {
+    expect(decodeWith(placements).restAtLastKeyframe).toBe(true)
+    expect(decodeWith(undefined).restAtLastKeyframe).toBe(false)
+  })
+
+  it('anchored at the rest (last) keyframe: rest pose = placement, scrub to t=0 folds to stowed', () => {
+    const remapped = remapImportedAnimation(decodeWith(placements), new Map([['foot_1', 'foot_1']]), counterId())
+    const last = remapped.keyframes.reduce((a, b) => (b.timeSec > a.timeSec ? b : a))
+    const anim = { ...remapped, restKeyframeId: last.id }
+    const pos = (t: number) => {
+      const m = previewOverrideMatrix(anim, 'foot_1', t, deployedFoot)!
+      return [m.elements[12], m.elements[13], m.elements[14]]
+    }
+    // At the rest anchor (t=1) the deployed placement is reproduced exactly (no load jump).
+    const [rx, ry, rz] = pos(1)
+    expect(rx).toBeCloseTo(0, 4)
+    expect(ry).toBeCloseTo(0, 4)
+    expect(rz).toBeCloseTo(-2, 4)
+    // Scrubbing to t=0 folds the foot back to its stowed world position [2,0,0].
+    const [sx, sy, sz] = pos(0)
+    expect(sx).toBeCloseTo(2, 4)
+    expect(sy).toBeCloseTo(0, 4)
+    expect(sz).toBeCloseTo(0, 4)
+  })
+
+  it('WITHOUT the rest anchor the deployed placement scatters (the original bug)', () => {
+    const remapped = remapImportedAnimation(decodeWith(placements), new Map([['foot_1', 'foot_1']]), counterId())
+    // restKeyframeId absent ⇒ anchor t=0 ⇒ the whole deploy is re-applied to an already-
+    // deployed foot, flinging it off the [0,0,-2] mark instead of holding it.
+    const atRest = previewOverrideMatrix(remapped, 'foot_1', 1, deployedFoot)!
+    const offMark = Math.hypot(atRest.elements[12] - 0, atRest.elements[14] - -2)
+    expect(offMark).toBeGreaterThan(1)
+  })
+})
+
 describe('decodeAnimationGlb — real KSA solar panel asset', () => {
   const PATH = 'thirdparty/ksa/Content/Core/Animations/CoreElectricalA_Prefab_SolarPanelB_Anim.glb'
   const present = existsSync(PATH)

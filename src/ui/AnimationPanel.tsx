@@ -170,9 +170,6 @@ function AnimationRow({ anim, active }: { anim: PartAnimation; active: boolean }
 }
 
 function AnimationEditor({ anim }: { anim: PartAnimation }) {
-  const editKfId = useStore($editKeyframeId)
-  const previewU = useStore($animPreviewU)
-  const scrubbing = useStore($animScrubbing)
   const [nameDraft, setNameDraft] = useState<string | null>(null)
 
   return (
@@ -220,9 +217,7 @@ function AnimationEditor({ anim }: { anim: PartAnimation }) {
           applies while you drag or play — release snaps back to the static modeled pose.
           Also available as a floating draggable toolbar over the workspace. */}
       <div className="flex flex-col gap-1">
-        <span className="text-xs uppercase tracking-wide text-fg-subtle">
-          Preview {editKfId ? '(pinned to edited pose)' : scrubbing ? `${Math.round(previewU * 100)}%` : '(drag, or ▶ to play)'}
-        </span>
+        <PreviewProgressLabel />
         <PreviewScrubber anim={anim} />
       </div>
 
@@ -231,6 +226,24 @@ function AnimationEditor({ anim }: { anim: PartAnimation }) {
       <PoseEditor anim={anim} />
       <SolarTrackingEditor anim={anim} />
     </div>
+  )
+}
+
+/**
+ * The "Preview NN%" status line. Isolated into its own leaf so the high-frequency
+ * {@link $animPreviewU} atom — set every requestAnimationFrame while playing/scrubbing —
+ * re-renders ONLY this span, not the whole {@link AnimationEditor} subtree (joints,
+ * keyframes, pose editor, and all their react-aria Selects/GridLists). Subscribing to it
+ * up in AnimationEditor cascaded a full-subtree reconcile ~120×/s and tanked playback FPS.
+ */
+function PreviewProgressLabel() {
+  const editKfId = useStore($editKeyframeId)
+  const previewU = useStore($animPreviewU)
+  const scrubbing = useStore($animScrubbing)
+  return (
+    <span className="text-xs uppercase tracking-wide text-fg-subtle">
+      Preview {editKfId ? '(pinned to edited pose)' : scrubbing ? `${Math.round(previewU * 100)}%` : '(drag, or ▶ to play)'}
+    </span>
   )
 }
 

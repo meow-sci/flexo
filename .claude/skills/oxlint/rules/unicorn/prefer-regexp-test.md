@@ -1,0 +1,77 @@
+---
+title: "unicorn/prefer-regexp-test"
+rule: "unicorn/prefer-regexp-test"
+category: "Pedantic"
+version: "0.0.16"
+default: false
+type_aware: false
+fix: "fixable_fix"
+upstream: "https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/prefer-regexp-test.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Pedantic |
+| Default | no |
+| Fix | fixable_fix |
+| Type-aware | no |
+
+
+### What it does
+
+Prefers `RegExp#test()` over `String#match()` and `String#exec()`.
+
+### Why is this bad?
+
+When you want to know whether a pattern is found in a string, use
+[`RegExp#test()`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
+instead of [`String#match()`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/match)
+or [`RegExp#exec()`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/exec),
+as it exclusively returns a boolean and therefore is more efficient.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```javascript
+if (string.match(/unicorn/)) {
+}
+if (/unicorn/.exec(string)) {
+}
+```
+
+Examples of **correct** code for this rule:
+
+```javascript
+if (/unicorn/.test(string)) {
+}
+Boolean(string.match(/unicorn/));
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "unicorn/prefer-regexp-test": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "unicorn/prefer-regexp-test": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.0.16.
+
+## References
+
+- [Upstream rule documentation](https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/prefer-regexp-test.md)

@@ -1,0 +1,197 @@
+---
+title: "eslint/no-restricted-exports"
+rule: "eslint/no-restricted-exports"
+category: "Nursery"
+version: "1.59.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://eslint.org/docs/latest/rules/no-restricted-exports"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Nursery |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+This rule disallows specified names from being used as exported names.
+
+By default, this rule doesn’t disallow any names. Only the names you specify in the configuration will be disallowed.
+
+### Why is this bad?
+
+In a project, certain names may be disallowed from being used as exported names for various reasons.
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### hasDefaultRestrictedNamedExport
+
+type: `boolean`
+
+### restrictDefaultExports
+
+type: `object`
+
+An object with boolean properties to restrict certain default export
+declarations. This option works only if the `restrictedNamedExports`
+option does not contain the `"default"` value.
+
+#### restrictDefaultExports.defaultFrom
+
+type: `boolean`
+
+default: `false`
+
+Whether to restrict `export { default } from` declarations.
+
+Example of **incorrect** code for `"restrictDefaultExports": { "defaultFrom": true }`:
+
+```js
+export { default } from "foo";
+```
+
+#### restrictDefaultExports.direct
+
+type: `boolean`
+
+default: `false`
+
+Whether to restrict `export default` declarations.
+
+Example of **incorrect** code for `"restrictDefaultExports": { "direct": true }`:
+
+```js
+const foo = 123;
+export default foo;
+```
+
+#### restrictDefaultExports.named
+
+type: `boolean`
+
+default: `false`
+
+Whether to restrict `export { foo as default }` declarations.
+
+Example of **incorrect** code for `"restrictDefaultExports": { "named": true }`:
+
+```js
+const foo = 123;
+export { foo as default };
+```
+
+#### restrictDefaultExports.namedFrom
+
+type: `boolean`
+
+default: `false`
+
+Whether to restrict `export { foo as default } from` declarations.
+
+Example of **incorrect** code for `"restrictDefaultExports": { "namedFrom": true }`:
+
+```js
+export { foo as default } from "foo";
+```
+
+#### restrictDefaultExports.namespaceFrom
+
+type: `boolean`
+
+default: `false`
+
+Whether to restrict `export * as default from` declarations.
+
+Example of **incorrect** code for `"restrictDefaultExports": { "namespaceFrom": true }`:
+
+```js
+export * as default from "foo";
+```
+
+### restrictedNamedExports
+
+type: `string[]`
+
+default: `[]`
+
+An array of strings, where each string is a name to be restricted.
+
+Example of **incorrect** code for `"restrictedNamedExports": ["foo"]`:
+
+```ts
+export const foo = 1;
+```
+
+Example of **correct** code for `"restrictedNamedExports": ["foo"]`:
+
+```ts
+export const bar = 1;
+```
+
+By design, this option doesn't disallow export default declarations. If
+you configure `default` as a restricted name, that restriction will apply
+only to named export declarations.
+
+Example of **incorrect** code for `"restrictedNamedExports": ["default"]`:
+
+```ts
+function foo() {}
+export { foo as default };
+
+export { default } from "some_module";
+```
+
+### restrictedNamedExportsPattern
+
+type: `string`
+
+A string representing a regular expression pattern. Named exports
+matching this pattern will be restricted. This option does not apply to
+default named exports.
+
+Example of **incorrect** code for `"restrictedNamedExportsPattern": "bar$":
+
+```ts
+export const foobar = 1;
+```
+
+Example of **correct** code for `"restrictedNamedExportsPattern": "bar$":
+
+```ts
+export const foo = 1;
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "eslint/no-restricted-exports": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "eslint/no-restricted-exports": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.59.0.
+
+## References
+
+- [Upstream rule documentation](https://eslint.org/docs/latest/rules/no-restricted-exports)

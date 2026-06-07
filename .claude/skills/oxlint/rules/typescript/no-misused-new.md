@@ -1,0 +1,102 @@
+---
+title: "typescript/no-misused-new"
+rule: "typescript/no-misused-new"
+category: "Correctness"
+version: "0.0.7"
+default: true
+type_aware: false
+fix: "none"
+upstream: "https://typescript-eslint.io/rules/no-misused-new/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Correctness |
+| Default | yes |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Enforces valid definition of new and constructor. This rule prevents classes from defining
+a method named `new`, interfaces from defining a method named `constructor`, and interfaces
+from defining a construct signature that returns the interface itself.
+
+### Why is this bad?
+
+JavaScript classes may define a constructor method that runs
+when a class instance is newly created.
+
+TypeScript allows interfaces that describe a static class object to
+define a `new()` signature (though this is rarely used in real world code). That construct
+signature should return the constructed instance type, not the interface for the constructor
+object itself.
+Developers new to JavaScript classes and/or TypeScript interfaces may
+sometimes confuse when to use constructor or new.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```typescript
+declare class C {
+  new(): C;
+}
+```
+
+```typescript
+interface I {
+  new (): I;
+}
+```
+
+```typescript
+interface I {
+  constructor(): void;
+}
+```
+
+Examples of **correct** code for this rule:
+
+```typescript
+declare class C {
+  constructor();
+}
+```
+
+```typescript
+class C {}
+
+interface I {
+  new (): C;
+}
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/no-misused-new": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/no-misused-new": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.0.7.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/no-misused-new/)

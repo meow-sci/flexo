@@ -1,0 +1,233 @@
+---
+title: "eslint/yoda"
+rule: "eslint/yoda"
+category: "Style"
+version: "0.14.1"
+default: false
+type_aware: false
+fix: "fixable_fix"
+upstream: "https://eslint.org/docs/latest/rules/yoda"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Style |
+| Default | no |
+| Fix | fixable_fix |
+| Type-aware | no |
+
+
+### What it does
+
+Require or disallow "Yoda" conditions.
+This rule aims to enforce consistent style of conditions which compare a variable to a literal value.
+
+### Why is this bad?
+
+Yoda conditions are so named because the literal value of the condition comes first while the variable comes second. For example, the following is a Yoda condition:
+
+```js
+if ("red" === color) {
+}
+```
+
+This is called a Yoda condition because it reads as, "if red equals the color", similar to the way the Star Wars character Yoda speaks. Compare to the other way of arranging the operands:
+
+```js
+if (color === "red") {
+  // ...
+}
+```
+
+This typically reads, "if the color equals red", which is arguably a more natural way to describe the comparison.
+Proponents of Yoda conditions highlight that it is impossible to mistakenly use `=` instead of `==` because you cannot assign to a literal value. Doing so will cause a syntax error and you will be informed of the mistake early on. This practice was therefore very common in early programming where tools were not yet available.
+Opponents of Yoda conditions point out that tooling has made us better programmers because tools will catch the mistaken use of `=` instead of `==` (ESLint will catch this for you). Therefore, they argue, the utility of the pattern doesn't outweigh the readability hit the code takes while using Yoda conditions.
+
+### Examples
+
+#### never
+
+Examples of **incorrect** code for the default `"never"` option:
+
+```js
+if ("red" === color) {
+  // ...
+}
+if (`red` === color) {
+  // ...
+}
+if (`red` === `${color}`) {
+  // ...
+}
+
+if (true == flag) {
+  // ...
+}
+
+if (0 <= x && x < 1) {
+  // ...
+}
+```
+
+Examples of **correct** code for the default `"never"` option:
+
+```js
+if (5 & value) {
+  // ...
+}
+
+if (value === "red") {
+  // ...
+}
+
+if (value === `red`) {
+  // ...
+}
+
+if (`${value}` === `red`) {
+}
+```
+
+#### exceptRange
+
+Examples of **correct** code for the `"never", { "exceptRange": true }` options:
+
+```js
+function isReddish(color) {
+  return color.hue < 60 || 300 < color.hue;
+}
+
+if (x < -1 || 1 < x) {
+  // ...
+}
+
+if (count < 10 && 0 <= rand && rand < 1) {
+  // ...
+}
+
+if (`blue` < x && x < `green`) {
+  // ...
+}
+
+function howLong(arr) {
+  return 0 <= arr.length && arr.length < 10 ? "short" : "long";
+}
+```
+
+#### onlyEquality
+
+Examples of **correct** code for the `"never", { "onlyEquality": true }` options:
+
+```js
+if (x < -1 || 9 < x) {
+}
+
+if (x !== "foo" && "bar" != x) {
+}
+
+if (x !== `foo` && `bar` != x) {
+}
+```
+
+#### always
+
+Examples of **incorrect** code for the `"always"` option:
+
+```js
+if (color == "blue") {
+  // ...
+}
+
+if (color == `blue`) {
+  // ...
+}
+```
+
+Examples of **correct** code for the `"always"` option:
+
+```js
+if ("blue" == value) {
+  // ...
+}
+
+if (`blue` == value) {
+  // ...
+}
+
+if (`blue` == `${value}`) {
+  // ...
+}
+
+if (-1 < str.indexOf(substr)) {
+  // ...
+}
+```
+
+## Configuration
+
+### The 1st option
+
+type: `"never" | "always"`
+
+#### `"never"`
+
+The default `"never"` option can have exception options in an object literal, via `exceptRange` and `onlyEquality`.
+
+#### `"always"`
+
+The `"always"` option requires that literal values must always come first in comparisons.
+
+### The 2nd option
+
+This option is an object with the following properties:
+
+#### exceptRange
+
+type: `boolean`
+
+default: `false`
+
+If the `"exceptRange"` property is `true`, the rule _allows_ yoda conditions
+in range comparisons which are wrapped directly in parentheses, including the
+parentheses of an `if` or `while` condition.
+A _range_ comparison tests whether a variable is inside or outside the range
+between two literal values.
+
+#### onlyEquality
+
+type: `boolean`
+
+default: `false`
+
+If the `"onlyEquality"` property is `true`, the rule reports yoda
+conditions _only_ for the equality operators `==` and `===`. The `onlyEquality`
+option allows a superset of the exceptions which `exceptRange` allows, thus
+both options are not useful together.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "eslint/yoda": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "eslint/yoda": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.14.1.
+
+## References
+
+- [Upstream rule documentation](https://eslint.org/docs/latest/rules/yoda)

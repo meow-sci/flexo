@@ -1,0 +1,120 @@
+---
+title: "eslint/no-bitwise"
+rule: "eslint/no-bitwise"
+category: "Restriction"
+version: "0.0.3"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://eslint.org/docs/latest/rules/no-bitwise"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Restriction |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Disallow bitwise operators.
+
+### Why is this bad?
+
+The use of bitwise operators in JavaScript is very rare and often `&` or `|` is simply a mistyped `&&` or `||`,
+which will lead to unexpected behavior.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```javascript
+var x = y | z;
+```
+
+```javascript
+var x = y ^ z;
+```
+
+```javascript
+var x = y >> z;
+```
+
+Examples of **correct** code for this rule:
+
+```javascript
+var x = y || z;
+```
+
+```javascript
+var x = y && z;
+```
+
+```javascript
+var x = y > z;
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allow
+
+type: `string[]`
+
+default: `[]`
+
+The `allow` option permits the given list of bitwise operators to be used
+as exceptions to this rule.
+
+For example `{ "allow": ["~"] }` would allow the use of the bitwise operator
+`~` without restriction. Such as in the following:
+
+```javascript
+~[1, 2, 3].indexOf(1) === -1;
+```
+
+### int32Hint
+
+type: `boolean`
+
+default: `false`
+
+When set to `true` the `int32Hint` option allows the use of bitwise OR in |0
+pattern for type casting.
+
+For example with `{ "int32Hint": true }` the following is permitted:
+
+```javascript
+const b = a | 0;
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "eslint/no-bitwise": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "eslint/no-bitwise": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.0.3.
+
+## References
+
+- [Upstream rule documentation](https://eslint.org/docs/latest/rules/no-bitwise)

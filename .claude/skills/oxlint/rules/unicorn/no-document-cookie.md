@@ -1,0 +1,86 @@
+---
+title: "unicorn/no-document-cookie"
+rule: "unicorn/no-document-cookie"
+category: "Restriction"
+version: "0.0.18"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/no-document-cookie.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Restriction |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Disallows direct use of
+[`document.cookie`](https://developer.mozilla.org/en-US/docs/Web/API/Document/cookie).
+
+### Why is this bad?
+
+It's not recommended to use
+[`document.cookie`](https://developer.mozilla.org/en-US/docs/Web/API/Document/cookie)
+directly as it's easy to get the string wrong. Instead, you should use
+the [Cookie Store
+API](https://developer.mozilla.org/en-US/docs/Web/API/Cookie_Store_API)
+or a [cookie library](https://npmx.dev/search?q=cookie).
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```javascript
+document.cookie =
+  "foo=bar" +
+  "; Path=/" +
+  "; Domain=example.com" +
+  "; expires=Fri, 31 Dec 9999 23:59:59 GMT" +
+  "; Secure";
+```
+
+Examples of **correct** code for this rule:
+
+```javascript
+async function storeCookies() {
+  await cookieStore.set({
+    name: "foo",
+    value: "bar",
+    expires: Date.now() + 24 * 60 * 60 * 1000,
+    domain: "example.com",
+  });
+}
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "unicorn/no-document-cookie": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "unicorn/no-document-cookie": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.0.18.
+
+## References
+
+- [Upstream rule documentation](https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/no-document-cookie.md)

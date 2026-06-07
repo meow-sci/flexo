@@ -1,0 +1,103 @@
+---
+title: "react/jsx-key"
+rule: "react/jsx-key"
+category: "Correctness"
+version: "0.0.14"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-key.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Correctness |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Enforce `key` prop for elements in an array.
+
+### Why is this bad?
+
+React [requires a `key` prop](https://react.dev/learn/rendering-lists#rendering-data-from-arrays)
+for elements in an array to help identify which items have changed, are added, or are removed.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```jsx
+[1, 2, 3].map((x) => <App />);
+[1, 2, 3]?.map((x) => <ListItem />);
+```
+
+Examples of **correct** code for this rule:
+
+```jsx
+[1, 2, 3].map((x) => <App key={x} />);
+[1, 2, 3]?.map((x) => <ListItem key={x} />);
+```
+
+NOTE: This rule's option defaults differ from the defaults in the original ESLint plugin. It is recommended to keep
+all options set to `true` for correctness reasons, but you may want to set them back to `false` to get behavior
+parity when migrating from ESLint.
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### checkFragmentShorthand
+
+type: `boolean`
+
+default: `true`
+
+When true, check fragment shorthand `<>` for keys
+
+### checkKeyMustBeforeSpread
+
+type: `boolean`
+
+default: `true`
+
+When true, require key prop to be placed before any spread props
+
+### warnOnDuplicates
+
+type: `boolean`
+
+default: `true`
+
+When true, warn on duplicate key values
+
+## How to use
+
+```json
+{
+  "rules": {
+    "react/jsx-key": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "react/jsx-key": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.0.14.
+
+## References
+
+- [Upstream rule documentation](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-key.md)

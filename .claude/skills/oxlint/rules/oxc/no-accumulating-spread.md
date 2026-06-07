@@ -1,0 +1,96 @@
+---
+title: "oxc/no-accumulating-spread"
+rule: "oxc/no-accumulating-spread"
+category: "Perf"
+version: "0.0.19"
+default: false
+type_aware: false
+fix: "none"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Perf |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Prevents using object or array spreads on accumulators in `Array.prototype.reduce()` and in loops.
+
+### Why is this bad?
+
+Object and array spreads create a new object or array on each iteration.
+In the worst case, they also cause O(n) copies (both memory and time complexity).
+When used on an accumulator, this can lead to `O(n^2)` memory complexity and
+`O(n^2)` time complexity.
+
+For a more in-depth explanation, see this [blog post](https://prateeksurana.me/blog/why-using-object-spread-with-reduce-bad-idea/)
+by Prateek Surana.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```javascript
+arr.reduce((acc, x) => ({ ...acc, [x]: fn(x) }), {});
+Object.keys(obj).reduce((acc, el) => ({ ...acc, [el]: fn(el) }), {});
+
+let foo = [];
+for (let i = 0; i < 10; i++) {
+  foo = [...foo, i];
+}
+```
+
+Examples of **correct** code for this rule:
+
+```javascript
+function fn(x) {
+  // ...
+}
+
+arr.reduce((acc, x) => acc.push(fn(x)), []);
+Object.keys(obj).reduce((acc, el) => {
+  acc[el] = fn(el);
+}, {});
+// spreading non-accumulators should be avoided if possible, but is not
+// banned by this rule
+Object.keys(obj).reduce((acc, el) => {
+  acc[el] = { ...obj[el] };
+  return acc;
+}, {});
+
+let foo = [];
+for (let i = 0; i < 10; i++) {
+  foo.push(i);
+}
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "oxc/no-accumulating-spread": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "oxc/no-accumulating-spread": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.0.19.
+
+## References
+

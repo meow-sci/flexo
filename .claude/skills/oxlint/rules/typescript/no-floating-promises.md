@@ -1,0 +1,279 @@
+---
+title: "typescript/no-floating-promises"
+rule: "typescript/no-floating-promises"
+category: "Correctness"
+version: "1.11.0"
+default: true
+type_aware: true
+fix: "fixable_suggestion"
+upstream: "https://typescript-eslint.io/rules/no-floating-promises/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Correctness |
+| Default | yes |
+| Fix | fixable_suggestion |
+| Type-aware | yes |
+
+
+### What it does
+
+This rule disallows "floating" Promises in TypeScript code, which is a Promise that is created without any code to handle its resolution or rejection.
+
+This rule will report Promise-valued statements that are not treated in one of the following ways:
+
+- Calling its `.then()` with two arguments
+- Calling its `.catch()` with one argument
+- `await`ing it
+- `return`ing it
+- `void`ing it
+
+This rule also reports when an Array containing Promises is created and not properly handled. The main way to resolve this is by using one of the Promise concurrency methods to create a single Promise, then handling that according to the procedure above. These methods include:
+
+- `Promise.all()`
+- `Promise.allSettled()`
+- `Promise.any()`
+- `Promise.race()`
+
+### Why is this bad?
+
+Floating Promises can cause several issues, such as improperly sequenced operations, ignored Promise rejections, and more.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```ts
+const promise = new Promise((resolve, reject) => resolve("value"));
+promise;
+
+async function returnsPromise() {
+  return "value";
+}
+returnsPromise().then(() => {});
+
+Promise.reject("value").catch();
+
+Promise.reject("value").finally();
+
+[1, 2, 3].map(async (x) => x + 1);
+```
+
+Examples of **correct** code for this rule:
+
+```ts
+const promise = new Promise((resolve, reject) => resolve("value"));
+await promise;
+
+async function returnsPromise() {
+  return "value";
+}
+
+void returnsPromise();
+
+returnsPromise().then(
+  () => {},
+  () => {},
+);
+
+Promise.reject("value").catch(() => {});
+
+await Promise.reject("value").finally(() => {});
+
+await Promise.all([1, 2, 3].map(async (x) => x + 1));
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allowForKnownSafeCalls
+
+type: `array`
+
+default: `[]`
+
+Allows specific calls to be ignored, specified as type or value specifiers.
+
+#### allowForKnownSafeCalls[n]
+
+type: `object | string`
+
+Type or value specifier for matching specific declarations
+
+Supports four types of specifiers:
+
+1. **String specifier** (deprecated): Universal match by name
+
+```json
+"Promise"
+```
+
+2. **File specifier**: Match types/values declared in local files
+
+```json
+{ "from": "file", "name": "MyType" }
+{ "from": "file", "name": ["Type1", "Type2"] }
+{ "from": "file", "name": "MyType", "path": "./types.ts" }
+```
+
+3. **Lib specifier**: Match TypeScript built-in lib types
+
+```json
+{ "from": "lib", "name": "Promise" }
+{ "from": "lib", "name": ["Promise", "PromiseLike"] }
+```
+
+4. **Package specifier**: Match types/values from npm packages
+
+```json
+{ "from": "package", "name": "Observable", "package": "rxjs" }
+{ "from": "package", "name": ["Observable", "Subject"], "package": "rxjs" }
+```
+
+##### allowForKnownSafeCalls[n].from
+
+type: `"file"`
+
+Must be "file"
+
+##### allowForKnownSafeCalls[n].name
+
+type: `array | string`
+
+The name(s) of the type or value to match
+
+Name specifier that can be a single string or array of strings
+
+###### allowForKnownSafeCalls[n].name[n]
+
+type: `string`
+
+##### allowForKnownSafeCalls[n].path
+
+type: `string`
+
+Optional file path to specify where the types or values must be declared.
+If omitted, all files will be matched.
+
+### allowForKnownSafePromises
+
+type: `array`
+
+default: `[]`
+
+Allows specific Promise types to be ignored, specified as type or value specifiers.
+
+#### allowForKnownSafePromises[n]
+
+type: `object | string`
+
+Type or value specifier for matching specific declarations
+
+Supports four types of specifiers:
+
+1. **String specifier** (deprecated): Universal match by name
+
+```json
+"Promise"
+```
+
+2. **File specifier**: Match types/values declared in local files
+
+```json
+{ "from": "file", "name": "MyType" }
+{ "from": "file", "name": ["Type1", "Type2"] }
+{ "from": "file", "name": "MyType", "path": "./types.ts" }
+```
+
+3. **Lib specifier**: Match TypeScript built-in lib types
+
+```json
+{ "from": "lib", "name": "Promise" }
+{ "from": "lib", "name": ["Promise", "PromiseLike"] }
+```
+
+4. **Package specifier**: Match types/values from npm packages
+
+```json
+{ "from": "package", "name": "Observable", "package": "rxjs" }
+{ "from": "package", "name": ["Observable", "Subject"], "package": "rxjs" }
+```
+
+##### allowForKnownSafePromises[n].from
+
+type: `"file"`
+
+Must be "file"
+
+##### allowForKnownSafePromises[n].name
+
+type: `array | string`
+
+The name(s) of the type or value to match
+
+Name specifier that can be a single string or array of strings
+
+###### allowForKnownSafePromises[n].name[n]
+
+type: `string`
+
+##### allowForKnownSafePromises[n].path
+
+type: `string`
+
+Optional file path to specify where the types or values must be declared.
+If omitted, all files will be matched.
+
+### checkThenables
+
+type: `boolean`
+
+default: `false`
+
+Check for thenable objects that are not necessarily Promises.
+
+### ignoreIIFE
+
+type: `boolean`
+
+default: `false`
+
+Ignore immediately invoked function expressions (IIFEs).
+
+### ignoreVoid
+
+type: `boolean`
+
+default: `true`
+
+Ignore Promises that are void expressions.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/no-floating-promises": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/no-floating-promises": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.11.0.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/no-floating-promises/)

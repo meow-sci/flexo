@@ -1,0 +1,111 @@
+---
+title: "eslint/no-plusplus"
+rule: "eslint/no-plusplus"
+category: "Restriction"
+version: "0.9.5"
+default: false
+type_aware: false
+fix: "conditional_suggestion"
+upstream: "https://eslint.org/docs/latest/rules/no-plusplus"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Restriction |
+| Default | no |
+| Fix | 💡 conditional suggestion |
+| Type-aware | no |
+
+
+### What it does
+
+Disallow the unary operators `++` and `--`.
+
+### Why is this bad?
+
+Because the unary `++` and `--` operators are subject to automatic semicolon insertion, differences in whitespace
+can change the semantics of source code. For example, these two code blocks are not equivalent:
+
+```js
+var i = 10;
+var j = 20;
+
+i++;
+j;
+// => i = 11, j = 20
+```
+
+```js
+var i = 10;
+var j = 20;
+
+i;
+++j;
+// => i = 10, j = 21
+```
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```js
+var x = 0;
+x++;
+var y = 0;
+y--;
+for (let i = 0; i < l; i++) {
+  doSomething(i);
+}
+```
+
+Examples of **correct** code for this rule:
+
+```js
+var x = 0;
+x += 1;
+var y = 0;
+y -= 1;
+for (let i = 0; i < l; i += 1) {
+  doSomething(i);
+}
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allowForLoopAfterthoughts
+
+type: `boolean`
+
+default: `false`
+
+Whether to allow `++` and `--` in for loop afterthoughts.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "eslint/no-plusplus": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "eslint/no-plusplus": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.9.5.
+
+## References
+
+- [Upstream rule documentation](https://eslint.org/docs/latest/rules/no-plusplus)

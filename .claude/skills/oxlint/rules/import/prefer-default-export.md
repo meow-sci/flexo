@@ -1,0 +1,104 @@
+---
+title: "import/prefer-default-export"
+rule: "import/prefer-default-export"
+category: "Style"
+version: "1.4.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/prefer-default-export.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Style |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+In exporting files, this rule checks if there is default export or not.
+
+### Why is this bad?
+
+This rule exists to standardize module exports by preferring default exports
+when a module only has one export, enhancing readability, maintainability.
+
+### Examples
+
+Examples of **incorrect** code for the `{ target: "single" }` option:
+
+```js
+export const foo = "foo";
+```
+
+Examples of **correct** code for the `{ target: "single" }` option:
+
+```js
+export const foo = "foo";
+const bar = "bar";
+export default bar;
+```
+
+Examples of **incorrect** code for the `{ target: "any" }` option:
+
+```js
+export const foo = "foo";
+export const baz = "baz";
+```
+
+Examples of **correct** code for the `{ target: "any" }` option:
+
+```js
+export default function bar() {}
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### target
+
+type: `"single" | "any"`
+
+default: `"single"`
+
+Configuration option to specify the target type for preferring default exports.
+
+#### `"single"`
+
+Prefer default export when there is only one export in the module.
+
+#### `"any"`
+
+Prefer default export in any module that has exports.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "import/prefer-default-export": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "import/prefer-default-export": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.4.0.
+
+## References
+
+- [Upstream rule documentation](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/prefer-default-export.md)

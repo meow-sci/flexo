@@ -1,0 +1,200 @@
+---
+title: "eslint/grouped-accessor-pairs"
+rule: "eslint/grouped-accessor-pairs"
+category: "Style"
+version: "0.15.12"
+default: false
+type_aware: false
+fix: "pending"
+upstream: "https://eslint.org/docs/latest/rules/grouped-accessor-pairs"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Style |
+| Default | no |
+| Fix | 🚧 fix pending |
+| Type-aware | no |
+
+
+### What it does
+
+Require grouped accessor pairs in object literals and classes.
+
+### Why is this bad?
+
+While it is allowed to define the pair for a getter or a setter anywhere in an object or class definition,
+it’s considered a best practice to group accessor functions for the same property.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```js
+const foo = {
+  get a() {
+    return this.val;
+  },
+  b: 1,
+  set a(value) {
+    this.val = value;
+  },
+};
+```
+
+Examples of **correct** code for this rule:
+
+```js
+const foo = {
+  get a() {
+    return this.val;
+  },
+  set a(value) {
+    this.val = value;
+  },
+  b: 1,
+};
+```
+
+Examples of **incorrect** code for this rule with the `getBeforeSet` option:
+
+```js
+const foo = {
+  set a(value) {
+    this.val = value;
+  },
+  get a() {
+    return this.val;
+  },
+};
+```
+
+Examples of **correct** code for this rule with the `getBeforeSet` option:
+
+```js
+const foo = {
+  get a() {
+    return this.val;
+  },
+  set a(value) {
+    this.val = value;
+  },
+};
+```
+
+Examples of **incorrect** code for this rule with the `setBeforeGet` option:
+
+```js
+const foo = {
+  get a() {
+    return this.val;
+  },
+  set a(value) {
+    this.val = value;
+  },
+};
+```
+
+Examples of **correct** code for this rule with the `setBeforeGet` option:
+
+```js
+const foo = {
+  set a(value) {
+    this.val = value;
+  },
+  get a() {
+    return this.val;
+  },
+};
+```
+
+## Configuration
+
+### The 1st option
+
+type: `"anyOrder" | "getBeforeSet" | "setBeforeGet"`
+
+#### `"anyOrder"`
+
+Accessors can be in any order. This is the default.
+
+#### `"getBeforeSet"`
+
+Getters must come before setters.
+
+#### `"setBeforeGet"`
+
+Setters must come before getters.
+
+### The 2nd option
+
+This option is an object with the following properties:
+
+#### enforceForTSTypes
+
+type: `boolean`
+
+default: `false`
+
+When `enforceForTSTypes` is enabled, this rule also applies to TypeScript interfaces
+and type aliases.
+
+Examples of **incorrect** TypeScript code:
+
+```ts
+interface Foo {
+  get a(): string;
+  someProperty: string;
+  set a(value: string);
+}
+
+type Bar = {
+  get b(): string;
+  someProperty: string;
+  set b(value: string);
+};
+```
+
+Examples of **correct** TypeScript code:
+
+```ts
+interface Foo {
+  get a(): string;
+  set a(value: string);
+  someProperty: string;
+}
+
+type Bar = {
+  get b(): string;
+  set b(value: string);
+  someProperty: string;
+};
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "eslint/grouped-accessor-pairs": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "eslint/grouped-accessor-pairs": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.15.12.
+
+## References
+
+- [Upstream rule documentation](https://eslint.org/docs/latest/rules/grouped-accessor-pairs)

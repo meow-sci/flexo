@@ -1,0 +1,112 @@
+---
+title: "typescript/no-base-to-string"
+rule: "typescript/no-base-to-string"
+category: "Correctness"
+version: "1.12.0"
+default: true
+type_aware: true
+fix: "none"
+upstream: "https://typescript-eslint.io/rules/no-base-to-string/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Correctness |
+| Default | yes |
+| Fix | none |
+| Type-aware | yes |
+
+
+### What it does
+
+This rule requires `toString()` and `toLocaleString()` calls to only be called on objects which provide useful information when stringified.
+
+### Why is this bad?
+
+JavaScript's `toString()` method returns '[object Object]' on plain objects, which is not useful information. This rule prevents `toString()` and `toLocaleString()` from being called on objects that return less useful strings.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```ts
+// These will evaluate to '[object Object]'
+({}).toString();
+({ foo: "bar" }).toString();
+({ foo: "bar" }).toLocaleString();
+
+// This will evaluate to 'Symbol()'
+Symbol("foo").toString();
+```
+
+Examples of **correct** code for this rule:
+
+```ts
+const someString = "Hello world";
+someString.toString();
+
+const someNumber = 42;
+someNumber.toString();
+
+const someBoolean = true;
+someBoolean.toString();
+
+class CustomToString {
+  toString() {
+    return "CustomToString";
+  }
+}
+new CustomToString().toString();
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### checkUnknown
+
+type: `boolean`
+
+default: `false`
+
+Whether to also check values of type `unknown`.
+When `true`, calling toString on `unknown` values will be flagged.
+Default is `false`.
+
+### ignoredTypeNames
+
+type: `string[]`
+
+default: `["Error", "RegExp", "URL", "URLSearchParams"]`
+
+A list of type names to ignore when checking for unsafe toString usage.
+These types are considered safe to call toString on even if they don't
+provide a custom implementation.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/no-base-to-string": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/no-base-to-string": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.12.0.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/no-base-to-string/)

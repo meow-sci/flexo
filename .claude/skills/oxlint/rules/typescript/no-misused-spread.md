@@ -1,0 +1,166 @@
+---
+title: "typescript/no-misused-spread"
+rule: "typescript/no-misused-spread"
+category: "Correctness"
+version: "1.12.0"
+default: true
+type_aware: true
+fix: "fixable_suggestion"
+upstream: "https://typescript-eslint.io/rules/no-misused-spread/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Correctness |
+| Default | yes |
+| Fix | fixable_suggestion |
+| Type-aware | yes |
+
+
+### What it does
+
+This rule disallows spreading syntax in places where it doesn't make sense or could cause runtime errors.
+
+### Why is this bad?
+
+The spread operator can be misused in ways that might not be immediately obvious but can cause runtime errors or unexpected behavior. This rule helps catch common misuses.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```ts
+// Spreading a non-iterable value in an array
+const num = 42;
+const arr = [...num]; // Runtime error: num is not iterable
+
+// Spreading a Promise in an array
+const promise = Promise.resolve([1, 2, 3]);
+const arr2 = [...promise]; // Runtime error: Promise is not iterable
+
+// Spreading non-object in object literal
+const str = "hello";
+const obj = { ...str }; // Creates { '0': 'h', '1': 'e', ... } which might be unexpected
+```
+
+Examples of **correct** code for this rule:
+
+```ts
+// Spreading arrays
+const arr1 = [1, 2, 3];
+const arr2 = [...arr1];
+
+// Spreading objects
+const obj1 = { a: 1, b: 2 };
+const obj2 = { ...obj1 };
+
+// Spreading resolved Promise
+const promise = Promise.resolve([1, 2, 3]);
+const arr3 = [...(await promise)];
+
+// Using Array.from for non-iterables if needed
+const str = "hello";
+const arr4 = Array.from(str); // ['h', 'e', 'l', 'l', 'o']
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allow
+
+type: `array`
+
+default: `[]`
+
+An array of type or value specifiers that are allowed to be spread
+even if they would normally be flagged as misused.
+
+#### allow[n]
+
+type: `object | string`
+
+Type or value specifier for matching specific declarations
+
+Supports four types of specifiers:
+
+1. **String specifier** (deprecated): Universal match by name
+
+```json
+"Promise"
+```
+
+2. **File specifier**: Match types/values declared in local files
+
+```json
+{ "from": "file", "name": "MyType" }
+{ "from": "file", "name": ["Type1", "Type2"] }
+{ "from": "file", "name": "MyType", "path": "./types.ts" }
+```
+
+3. **Lib specifier**: Match TypeScript built-in lib types
+
+```json
+{ "from": "lib", "name": "Promise" }
+{ "from": "lib", "name": ["Promise", "PromiseLike"] }
+```
+
+4. **Package specifier**: Match types/values from npm packages
+
+```json
+{ "from": "package", "name": "Observable", "package": "rxjs" }
+{ "from": "package", "name": ["Observable", "Subject"], "package": "rxjs" }
+```
+
+##### allow[n].from
+
+type: `"file"`
+
+Must be "file"
+
+##### allow[n].name
+
+type: `array | string`
+
+The name(s) of the type or value to match
+
+Name specifier that can be a single string or array of strings
+
+###### allow[n].name[n]
+
+type: `string`
+
+##### allow[n].path
+
+type: `string`
+
+Optional file path to specify where the types or values must be declared.
+If omitted, all files will be matched.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/no-misused-spread": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/no-misused-spread": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.12.0.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/no-misused-spread/)

@@ -1,0 +1,129 @@
+---
+title: "eslint/default-case"
+rule: "eslint/default-case"
+category: "Restriction"
+version: "0.4.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://eslint.org/docs/latest/rules/default-case"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Restriction |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Enforces that all `switch` statements include a `default` case,
+unless explicitly marked with a configured comment.
+
+### Why is this bad?
+
+Without a `default` case, it is unclear whether the omission was
+intentional or an oversight. Adding a `default` or a special comment
+makes the code more explicit and reduces mistakes.
+
+You may optionally include a `// no default` after the last case if there is
+no default case. The comment may be in any desired case, such as `// No Default`.
+
+Example configuration:
+
+```json
+{
+  "default-case": ["error", { "commentPattern": "^skip\\sdefault" }]
+}
+```
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```js
+switch (foo) {
+  case 1:
+    break;
+}
+```
+
+Examples of **correct** code for this rule:
+
+```js
+switch (a) {
+  case 1:
+    break;
+  default:
+    break;
+}
+
+switch (a) {
+  case 1:
+    break;
+  // no default
+}
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### commentPattern
+
+type: `string`
+
+A regex pattern used to detect comments that mark the absence
+of a `default` case as intentional.
+
+Default value: `no default`.
+
+Examples of **incorrect** code for this rule with the `{ "commentPattern": "^skip\\sdefault" }` option:
+
+```js
+switch (a) {
+  case 1:
+    break;
+  // no default
+}
+```
+
+Examples of **correct** code for this rule with the `{ "commentPattern": "^skip\\sdefault" }` option:
+
+```js
+switch (a) {
+  case 1:
+    break;
+  // skip default
+}
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "eslint/default-case": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "eslint/default-case": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.4.0.
+
+## References
+
+- [Upstream rule documentation](https://eslint.org/docs/latest/rules/default-case)

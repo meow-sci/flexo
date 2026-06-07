@@ -1,0 +1,141 @@
+---
+title: "import/no-absolute-path"
+rule: "import/no-absolute-path"
+category: "Suspicious"
+version: "0.15.13"
+default: false
+type_aware: false
+fix: "pending"
+upstream: "https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-absolute-path.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Suspicious |
+| Default | no |
+| Fix | 🚧 fix pending |
+| Type-aware | no |
+
+
+### What it does
+
+This rule forbids the import of modules using absolute paths.
+
+### Why is this bad?
+
+Node.js allows the import of modules using an absolute path such as `/home/xyz/file.js`.
+That is a bad practice as it ties the code using it to your computer,
+and therefore makes it unusable in packages distributed on npm for instance.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```js
+import f from "/foo";
+import f from "/some/path";
+var f = require("/foo");
+var f = require("/some/path");
+```
+
+Examples of **correct** code for this rule:
+
+```js
+import _ from "lodash";
+import foo from "foo";
+import foo from "./foo";
+
+var _ = require("lodash");
+var foo = require("foo");
+var foo = require("./foo");
+```
+
+Examples of **incorrect** code for the `{ amd: true }` option:
+
+```js
+define("/foo", function (foo) {});
+require("/foo", function (foo) {});
+```
+
+Examples of **correct** code for the `{ amd: true }` option:
+
+```js
+define("./foo", function (foo) {});
+require("./foo", function (foo) {});
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### amd
+
+type: `boolean`
+
+default: `false`
+
+If set to `true`, dependency paths for AMD-style define and require calls will be resolved:
+
+```js
+/* import/no-absolute-path: ["error", { "commonjs": false, "amd": true }] */
+define(["/foo"], function (foo) {
+  /*...*/
+}); // reported
+require(["/foo"], function (foo) {
+  /*...*/
+}); // reported
+
+const foo = require("/foo"); // ignored because of explicit `commonjs: false`
+```
+
+### commonjs
+
+type: `boolean`
+
+default: `true`
+
+If set to `true`, dependency paths for CommonJS-style require calls will be resolved:
+
+```js
+var foo = require("/foo"); // reported
+```
+
+### esmodule
+
+type: `boolean`
+
+default: `true`
+
+If set to `true`, dependency paths for ES module import statements will be resolved:
+
+```js
+import foo from "/foo"; // reported
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "import/no-absolute-path": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "import/no-absolute-path": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.15.13.
+
+## References
+
+- [Upstream rule documentation](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-absolute-path.md)

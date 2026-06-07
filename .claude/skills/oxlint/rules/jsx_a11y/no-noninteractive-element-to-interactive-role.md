@@ -1,0 +1,109 @@
+---
+title: "jsx-a11y/no-noninteractive-element-to-interactive-role"
+rule: "jsx-a11y/no-noninteractive-element-to-interactive-role"
+category: "Correctness"
+version: "1.64.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/no-noninteractive-element-to-interactive-role.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Correctness |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Non-interactive HTML elements indicate _content_ and _containers_ in the user interface.
+Non-interactive elements include `<main>`, `<area>`, `<h1>` (through `<h6>`), `<p>`,
+`<img>`, `<li>`, `<ul>`, and `<ol>`.
+
+Interactive HTML elements indicate _controls_ in the user interface.
+Interactive elements include `<a href>`, `<button>`, `<input>`, `<select>`,
+`<textarea>`.
+
+[WAI-ARIA roles](https://www.w3.org/TR/wai-aria-1.1/#usage_intro) should not be used
+to convert a non-interactive element to an interactive element. Interactive ARIA roles
+include `button`, `link`, `checkbox`, `menuitem`, `menuitemcheckbox`,
+`menuitemradio`, `option`, `radio`, `searchbox`, `switch`, and `textbox`.
+
+### Why is this bad?
+
+Overriding the semantic meaning of non-interactive elements with interactive roles
+creates confusion for assistive technology users. The element lacks the expected
+keyboard interaction patterns and focus management that interactive elements provide.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```jsx
+<h1 role="button">Click me</h1>
+<li role="link">Navigate</li>
+<article role="button">Submit</article>
+```
+
+Examples of **correct** code for this rule:
+
+```jsx
+<button>Click me</button>
+<a href="/page">Navigate</a>
+<div role="button">Submit</div>
+<ul role="menu"><li role="menuitem">Item</li></ul>
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allowed_roles
+
+type: `Record<string, array>`
+
+A mapping of HTML element names to arrays of ARIA role strings that are
+allowed overrides for that element. For example, `{ "ul": ["menu", "tablist"] }`
+permits `<ul role="menu" />` without triggering the rule.
+
+Defaults are:
+
+```json
+{
+  "ul": ["menu", "menubar", "radiogroup", "tablist", "tree", "treegrid"],
+  "ol": ["menu", "menubar", "radiogroup", "tablist", "tree", "treegrid"],
+  "li": ["menuitem", "menuitemcheckbox", "menuitemradio", "row", "tab", "treeitem"],
+  "fieldset": ["radiogroup", "presentation"]
+}
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "jsx-a11y/no-noninteractive-element-to-interactive-role": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "jsx-a11y/no-noninteractive-element-to-interactive-role": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.64.0.
+
+## References
+
+- [Upstream rule documentation](https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/no-noninteractive-element-to-interactive-role.md)

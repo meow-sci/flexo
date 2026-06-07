@@ -1,0 +1,83 @@
+---
+title: "jsdoc/check-access"
+rule: "jsdoc/check-access"
+category: "Restriction"
+version: "0.2.16"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/gajus/eslint-plugin-jsdoc/blob/main/docs/rules/checkAccess.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Restriction |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Checks that `@access` tags use one of the following values:
+
+- "package", "private", "protected", "public"
+
+Also reports:
+
+- Mixing of `@access` with `@public`, `@private`, `@protected`, or `@package` on the same doc block.
+- Use of multiple instances of `@access` (or the `@public`, etc) on the same doc block.
+
+### Why is this bad?
+
+It is important to have a consistent way of specifying access levels in JSDoc
+comments. Using invalid or multiple access level tags creates confusion about
+the intended visibility of documented elements and can lead to inconsistencies
+in API documentation generation. Mixing different access tags or using invalid
+values makes the documentation unclear and potentially misleading.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```javascript
+/** @access private @public */
+
+/** @access invalidlevel */
+```
+
+Examples of **correct** code for this rule:
+
+```javascript
+/** @access private */
+
+/** @private */
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "jsdoc/check-access": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "jsdoc/check-access": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.2.16.
+
+## References
+
+- [Upstream rule documentation](https://github.com/gajus/eslint-plugin-jsdoc/blob/main/docs/rules/checkAccess.md)

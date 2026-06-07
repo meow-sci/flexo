@@ -1,0 +1,115 @@
+---
+title: "jest/no-deprecated-functions"
+rule: "jest/no-deprecated-functions"
+category: "Style"
+version: "0.0.18"
+default: false
+type_aware: false
+fix: "fixable_fix"
+upstream: "https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/no-deprecated-functions.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Style |
+| Default | no |
+| Fix | fixable_fix |
+| Type-aware | no |
+
+
+### What it does
+
+Over the years Jest has accrued some debt in the form of functions that have
+either been renamed for clarity, or replaced with more powerful APIs.
+
+This rule can also autofix a number of these deprecations for you.
+
+#### `jest.resetModuleRegistry`
+
+This function was renamed to `resetModules` in Jest 15 and removed in Jest 27.
+
+#### `jest.addMatchers`
+
+This function was replaced with `expect.extend` in Jest 17 and removed in Jest 27.
+
+#### `require.requireActual` & `require.requireMock`
+
+These functions were replaced in Jest 21 and removed in Jest 26.
+
+Originally, the `requireActual` and `requireMock` functions were placed
+onto the `require` function.
+
+These functions were later moved onto the `jest` object in order to be easier
+for type checkers to handle, and their use via `require` deprecated. Finally,
+the release of Jest 26 saw them removed from the `require` function altogether.
+
+#### `jest.runTimersToTime`
+
+This function was renamed to `advanceTimersByTime` in Jest 22 and removed in Jest 27.
+
+#### `jest.genMockFromModule`
+
+This function was renamed to `createMockFromModule` in Jest 26, and is scheduled for removal in Jest 30.
+
+### Why is this bad?
+
+While typically these deprecated functions are kept in the codebase for a number
+of majors, eventually they are removed completely.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```javascript
+jest.resetModuleRegistry; // since Jest 15
+jest.addMatchers; // since Jest 17
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### jest
+
+type: `object`
+
+Jest configuration options.
+Deprecated config, it will be removed in future versions.
+Use please instead { "settings": { "jest": {"version": 29 } } } in `Oxlint config file`.
+Beware the value from the config have higher priority than the rule config.
+
+#### jest.version
+
+type: `string`
+
+default: `"29"`
+
+The version of Jest being used.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "jest/no-deprecated-functions": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "jest/no-deprecated-functions": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.0.18.
+
+## References
+
+- [Upstream rule documentation](https://github.com/jest-community/eslint-plugin-jest/blob/main/docs/rules/no-deprecated-functions.md)

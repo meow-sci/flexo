@@ -1,0 +1,96 @@
+---
+title: "eslint/for-direction"
+rule: "eslint/for-direction"
+category: "Correctness"
+version: "0.0.3"
+default: true
+type_aware: false
+fix: "fixable_dangerous_fix"
+upstream: "https://eslint.org/docs/latest/rules/for-direction"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Correctness |
+| Default | yes |
+| Fix | fixable_dangerous_fix |
+| Type-aware | no |
+
+
+### What it does
+
+Disallow `for` loops where the update clause moves the counter in the wrong
+direction, preventing the loop from reaching its stop condition.
+
+### Why is this bad?
+
+A `for` loop with a stop condition that can never be reached will run
+infinitely. While infinite loops can be intentional, they are usually written
+as `while` loops. More often, an infinite `for` loop is a bug.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```js
+/* for-direction: "error" */
+
+for (var i = 0; i < 10; i--) {}
+
+for (var i = 10; i >= 0; i++) {}
+
+for (var i = 0; i > 10; i++) {}
+
+for (var i = 0; 10 > i; i--) {}
+
+const n = -2;
+for (let i = 0; i < 10; i += n) {}
+```
+
+Examples of **correct** code for this rule:
+
+```js
+/* for-direction: "error" */
+
+for (var i = 0; i < 10; i++) {}
+
+for (var i = 0; 10 > i; i++) {
+  // with counter "i" on the right
+}
+
+for (let i = 10; i >= 0; i += this.step) {
+  // direction unknown
+}
+
+for (let i = MIN; i <= MAX; i -= 0) {
+  // not increasing or decreasing
+}
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "eslint/for-direction": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "eslint/for-direction": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.0.3.
+
+## References
+
+- [Upstream rule documentation](https://eslint.org/docs/latest/rules/for-direction)

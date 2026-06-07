@@ -1,0 +1,109 @@
+---
+title: "eslint/max-nested-callbacks"
+rule: "eslint/max-nested-callbacks"
+category: "Pedantic"
+version: "0.15.12"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://eslint.org/docs/latest/rules/max-nested-callbacks"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Pedantic |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Enforce a maximum depth that callbacks can be nested. This rule helps to limit
+the complexity of callback nesting, ensuring that callbacks do not become too
+deeply nested, improving code readability and maintainability.
+
+### Why is this bad?
+
+Many JavaScript libraries use the callback pattern to manage asynchronous
+operations. A program of any complexity will most likely need to manage several
+asynchronous operations at various levels of concurrency. A common pitfall is
+nesting callbacks excessively, making code harder to read and understand.
+
+### Examples
+
+Examples of **incorrect** code for this rule with the `{ "max": 3 }` option:
+
+```js
+foo1(function () {
+  foo2(function () {
+    foo3(function () {
+      foo4(function () {
+        // ...
+      });
+    });
+  });
+});
+```
+
+Examples of **correct** code for this rule with the `{ "max": 3 }` option:
+
+```js
+foo1(handleFoo1);
+
+function handleFoo1() {
+  foo2(handleFoo2);
+}
+
+function handleFoo2() {
+  foo3(handleFoo3);
+}
+
+function handleFoo3() {
+  foo4(handleFoo4);
+}
+
+function handleFoo4() {
+  foo5();
+}
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### max
+
+type: `integer`
+
+default: `10`
+
+The `max` enforces a maximum depth that callbacks can be nested.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "eslint/max-nested-callbacks": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "eslint/max-nested-callbacks": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.15.12.
+
+## References
+
+- [Upstream rule documentation](https://eslint.org/docs/latest/rules/max-nested-callbacks)

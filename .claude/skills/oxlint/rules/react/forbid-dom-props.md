@@ -1,0 +1,124 @@
+---
+title: "react/forbid-dom-props"
+rule: "react/forbid-dom-props"
+category: "Restriction"
+version: "1.24.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/forbid-dom-props.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Restriction |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+This rule prevents passing of props to elements. This rule only applies to DOM Nodes (e.g. `<div />`) and not Components (e.g. `<Component />`). The list of forbidden props can be customized with the forbid option.
+
+### Why is this bad?
+
+This rule checks all JSX elements and verifies that no forbidden props are used on DOM Nodes. This rule is off by default.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```jsx
+// [1, { "forbid": ["id"] }]
+<div id='Joe' />
+
+// [1, { "forbid": ["style"] }]
+<div style={{color: 'red'}} />
+```
+
+Examples of **correct** code for this rule:
+
+```jsx
+// [1, { "forbid": ["id"] }]
+<Hello id='foo' />
+
+// [1, { "forbid": ["id"] }]
+<Hello id={{color: 'red'}} />
+```
+
+## Configuration
+
+Configuration for the `forbid-dom-props` rule.
+
+This rule accepts a configuration object with the following properties:
+
+### forbid
+
+type: `array`
+
+An array of prop names or objects that are forbidden on DOM elements.
+
+Each array element can be a string with the property name, or an object
+with `propName`, an optional `disallowedFor` array of DOM node names,
+and an optional custom `message`.
+
+Examples:
+
+- `["error", { "forbid": ["id", "style"] }]`
+- `["error", { "forbid": [{ "propName": "className", "message": "Use class instead" }] }]`
+- `["error", { "forbid": [{ "propName": "style", "disallowedFor": ["div", "span"] }] }]`
+
+#### forbid[n]
+
+type: `object | string`
+
+A forbidden prop, either as a plain prop name string or with options.
+
+##### forbid[n].disallowedFor
+
+type: `string[]`
+
+A list of DOM element names (e.g. `["div", "span"]`) on which this
+prop is forbidden. If empty or omitted, the prop is forbidden on all
+DOM elements.
+
+##### forbid[n].message
+
+type: `string`
+
+A custom message to display when this prop is used.
+
+##### forbid[n].propName
+
+type: `string`
+
+The name of the prop to forbid.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "react/forbid-dom-props": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "react/forbid-dom-props": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.24.0.
+
+## References
+
+- [Upstream rule documentation](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/forbid-dom-props.md)

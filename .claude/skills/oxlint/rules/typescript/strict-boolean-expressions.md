@@ -1,0 +1,188 @@
+---
+title: "typescript/strict-boolean-expressions"
+rule: "typescript/strict-boolean-expressions"
+category: "Pedantic"
+version: "1.25.0"
+default: false
+type_aware: true
+fix: "pending"
+upstream: "https://typescript-eslint.io/rules/strict-boolean-expressions/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Pedantic |
+| Default | no |
+| Fix | 🚧 fix pending |
+| Type-aware | yes |
+
+
+### What it does
+
+Disallow certain types in boolean expressions.
+
+### Why is this bad?
+
+Forbids usage of non-boolean types in expressions where a boolean is expected.
+`boolean` and `never` types are always allowed. Additional types which are
+considered safe in a boolean context can be configured via options.
+
+The following nodes are checked:
+
+- Arguments to the `!`, `&&`, and `||` operators
+- The condition in a conditional expression (`cond ? x : y`)
+- Conditions for `if`, `for`, `while`, and `do-while` statements.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```ts
+const str = "hello";
+if (str) {
+  console.log("string");
+}
+
+const num = 42;
+if (num) {
+  console.log("number");
+}
+
+const obj = { foo: "bar" };
+if (obj) {
+  console.log("object");
+}
+
+declare const maybeString: string | undefined;
+if (maybeString) {
+  console.log(maybeString);
+}
+
+const result = str && num;
+const ternary = str ? "yes" : "no";
+```
+
+Examples of **correct** code for this rule:
+
+```ts
+const str = "hello";
+if (str !== "") {
+  console.log("string");
+}
+
+const num = 42;
+if (num !== 0) {
+  console.log("number");
+}
+
+const obj = { foo: "bar" };
+if (obj !== null) {
+  console.log("object");
+}
+
+declare const maybeString: string | undefined;
+if (maybeString !== undefined) {
+  console.log(maybeString);
+}
+
+const bool = true;
+if (bool) {
+  console.log("boolean");
+}
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allowAny
+
+type: `boolean`
+
+default: `false`
+
+Whether to allow `any` type in boolean contexts.
+
+### allowNullableBoolean
+
+type: `boolean`
+
+default: `false`
+
+Whether to allow nullable boolean types (e.g., `boolean | null`) in boolean contexts.
+
+### allowNullableEnum
+
+type: `boolean`
+
+default: `false`
+
+Whether to allow nullable enum types in boolean contexts.
+
+### allowNullableNumber
+
+type: `boolean`
+
+default: `false`
+
+Whether to allow nullable number types (e.g., `number | null`) in boolean contexts.
+
+### allowNullableObject
+
+type: `boolean`
+
+default: `true`
+
+Whether to allow nullable object types in boolean contexts.
+
+### allowNullableString
+
+type: `boolean`
+
+default: `false`
+
+Whether to allow nullable string types (e.g., `string | null`) in boolean contexts.
+
+### allowNumber
+
+type: `boolean`
+
+default: `true`
+
+Whether to allow number types in boolean contexts (checks for non-zero numbers).
+
+### allowString
+
+type: `boolean`
+
+default: `true`
+
+Whether to allow string types in boolean contexts (checks for non-empty strings).
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/strict-boolean-expressions": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/strict-boolean-expressions": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.25.0.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/strict-boolean-expressions/)

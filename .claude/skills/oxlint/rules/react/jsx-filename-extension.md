@@ -1,0 +1,113 @@
+---
+title: "react/jsx-filename-extension"
+rule: "react/jsx-filename-extension"
+category: "Restriction"
+version: "0.15.14"
+default: false
+type_aware: false
+fix: "pending"
+upstream: "https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-filename-extension.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Restriction |
+| Default | no |
+| Fix | 🚧 fix pending |
+| Type-aware | no |
+
+
+### What it does
+
+Enforces consistent use of the `.jsx` file extension.
+
+### Why is this bad?
+
+Some bundlers or parsers need to know by the file extension that it contains JSX
+in order to properly handle the files.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```jsx
+// filename: MyComponent.js
+function MyComponent() {
+  return <div />;
+}
+```
+
+Examples of **correct** code for this rule:
+
+```jsx
+// filename: MyComponent.jsx
+function MyComponent() {
+  return <div />;
+}
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allow
+
+type: `"always" | "as-needed"`
+
+default: `"always"`
+
+When to allow a JSX filename extension. By default all files may have a JSX extension.
+Set this to `as-needed` to only allow JSX file extensions in files that contain JSX syntax.
+
+#### `"always"`
+
+Always allow a `.jsx` file extension.
+
+#### `"as-needed"`
+
+Only allow `.jsx` file extension for files that contain JSX syntax.
+
+### extensions
+
+type: `string[]`
+
+default: `["jsx"]`
+
+The set of allowed file extensions.
+Can include or exclude the leading dot (e.g., "jsx" and ".jsx" are both valid).
+
+### ignoreFilesWithoutCode
+
+type: `boolean`
+
+default: `false`
+
+If enabled, files that do not contain code (i.e. are empty, contain only whitespaces or comments) will not be rejected.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "react/jsx-filename-extension": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "react/jsx-filename-extension": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.15.14.
+
+## References
+
+- [Upstream rule documentation](https://github.com/jsx-eslint/eslint-plugin-react/blob/master/docs/rules/jsx-filename-extension.md)

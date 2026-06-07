@@ -1,0 +1,85 @@
+---
+title: "unicorn/prefer-ternary"
+rule: "unicorn/prefer-ternary"
+category: "Style"
+version: "1.50.0"
+default: false
+type_aware: false
+fix: "pending"
+upstream: "https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/prefer-ternary.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Style |
+| Default | no |
+| Fix | 🚧 fix pending |
+| Type-aware | no |
+
+
+### What it does
+
+Prefers ternary expressions over simple `if`/`else` statements.
+
+### Why is this bad?
+
+Simple `if`/`else` branches for the same operation are often shorter and
+clearer when expressed as a ternary.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```js
+if (test) {
+  return a;
+} else {
+  return b;
+}
+```
+
+Examples of **correct** code for this rule:
+
+```js
+return test ? a : b;
+```
+
+## Configuration
+
+This rule accepts one of the following string values:
+
+### `"always"`
+
+Always enforce ternary usage when the branches can be safely merged.
+
+### `"only-single-line"`
+
+Only enforce ternary usage when the condition and both branches are single-line.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "unicorn/prefer-ternary": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "unicorn/prefer-ternary": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.50.0.
+
+## References
+
+- [Upstream rule documentation](https://github.com/sindresorhus/eslint-plugin-unicorn/blob/main/docs/rules/prefer-ternary.md)

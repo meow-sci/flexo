@@ -1,0 +1,163 @@
+---
+title: "typescript/no-deprecated"
+rule: "typescript/no-deprecated"
+category: "Pedantic"
+version: "1.26.0"
+default: false
+type_aware: true
+fix: "none"
+upstream: "https://typescript-eslint.io/rules/no-deprecated/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Pedantic |
+| Default | no |
+| Fix | none |
+| Type-aware | yes |
+
+
+### What it does
+
+Disallow using code marked as `@deprecated`.
+
+### Why is this bad?
+
+The JSDoc `@deprecated` tag can be used to document some piece of code
+being deprecated. It's best to avoid using code marked as deprecated.
+This rule reports on any references to code marked as `@deprecated`.
+
+TypeScript recognizes the `@deprecated` tag, allowing editors to visually
+indicate deprecated code — usually with a strikethrough. However, TypeScript
+doesn't report type errors for deprecated code on its own.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```ts
+/** @deprecated Use apiV2 instead. */
+declare function apiV1(): Promise<string>;
+declare function apiV2(): Promise<string>;
+
+await apiV1(); // Using deprecated function
+
+import { parse } from "node:url";
+// 'parse' is deprecated. Use the WHATWG URL API instead.
+const url = parse("/foo");
+```
+
+Examples of **correct** code for this rule:
+
+```ts
+/** @deprecated Use apiV2 instead. */
+declare function apiV1(): Promise<string>;
+declare function apiV2(): Promise<string>;
+
+await apiV2(); // Using non-deprecated function
+
+// Modern Node.js API, uses `new URL()`
+const url2 = new URL("/foo", "http://www.example.com");
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### allow
+
+type: `array`
+
+default: `[]`
+
+An array of type or value specifiers that are allowed to be used even if deprecated.
+Use this to allow specific deprecated APIs that you intentionally want to continue using.
+
+#### allow[n]
+
+type: `object | string`
+
+Type or value specifier for matching specific declarations
+
+Supports four types of specifiers:
+
+1. **String specifier** (deprecated): Universal match by name
+
+```json
+"Promise"
+```
+
+2. **File specifier**: Match types/values declared in local files
+
+```json
+{ "from": "file", "name": "MyType" }
+{ "from": "file", "name": ["Type1", "Type2"] }
+{ "from": "file", "name": "MyType", "path": "./types.ts" }
+```
+
+3. **Lib specifier**: Match TypeScript built-in lib types
+
+```json
+{ "from": "lib", "name": "Promise" }
+{ "from": "lib", "name": ["Promise", "PromiseLike"] }
+```
+
+4. **Package specifier**: Match types/values from npm packages
+
+```json
+{ "from": "package", "name": "Observable", "package": "rxjs" }
+{ "from": "package", "name": ["Observable", "Subject"], "package": "rxjs" }
+```
+
+##### allow[n].from
+
+type: `"file"`
+
+Must be "file"
+
+##### allow[n].name
+
+type: `array | string`
+
+The name(s) of the type or value to match
+
+Name specifier that can be a single string or array of strings
+
+###### allow[n].name[n]
+
+type: `string`
+
+##### allow[n].path
+
+type: `string`
+
+Optional file path to specify where the types or values must be declared.
+If omitted, all files will be matched.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/no-deprecated": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/no-deprecated": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.26.0.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/no-deprecated/)

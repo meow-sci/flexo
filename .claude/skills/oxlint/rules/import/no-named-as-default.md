@@ -1,0 +1,93 @@
+---
+title: "import/no-named-as-default"
+rule: "import/no-named-as-default"
+category: "Suspicious"
+version: "0.2.3"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-named-as-default.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Suspicious |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Reports use of an exported name as the locally imported name of a default export.
+This happens when an imported default export is assigned a name that conflicts
+with a named export from the same module.
+
+### Why is this bad?
+
+Using a named export's identifier for a default export can cause confusion
+and errors in understanding which value is being imported. It also reduces
+code clarity, making it harder for other developers to understand the intended
+imports.
+
+### Examples
+
+Given
+
+```javascript
+// foo.js
+export default "foo";
+export const bar = true;
+```
+
+Examples of **incorrect** code for this rule:
+
+```javascript
+// Invalid: using exported name 'bar' as the identifier for default export.
+import bar from "./foo.js";
+```
+
+Examples of **correct** code for this rule:
+
+```javascript
+// Valid: correctly importing default export with a non-conflicting name.
+import foo from "./foo.js";
+```
+
+### Differences compared to `eslint-plugin-import`
+
+If you see differences between this rule implementation and the original `eslint-plugin-import`
+rule, please note that the behavior may differ in certain cases due to differences in how
+module resolution is implemented and configured.
+
+For example, the original rule may require additional resolver configuration to handle certain
+imports, especially when TypeScript paths are used or in monorepo setups with multiple
+`tsconfig.json` files.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "import/no-named-as-default": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "import/no-named-as-default": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.2.3.
+
+## References
+
+- [Upstream rule documentation](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/no-named-as-default.md)

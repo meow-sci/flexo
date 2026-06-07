@@ -1,0 +1,105 @@
+---
+title: "import/max-dependencies"
+rule: "import/max-dependencies"
+category: "Pedantic"
+version: "0.5.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/max-dependencies.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Pedantic |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Forbid modules to have too many dependencies (`import` statements only).
+
+### Why is this bad?
+
+This is a useful rule because a module with too many dependencies is a code smell,
+and usually indicates the module is doing too much and/or should be broken up into
+smaller modules.
+
+**NOTE**: This rule only counts `import` statements, and does not count dependencies from
+CommonJS `require()` statements. This is a difference from the original
+eslint-import-plugin rule.
+
+### Examples
+
+Given `{ "max": 2 }`
+
+Examples of **incorrect** code for this rule:
+
+```javascript
+import a from "./a";
+import b from "./b";
+import c from "./c"; // Too many dependencies: 3 (max: 2)
+```
+
+Examples of **correct** code for this rule:
+
+```javascript
+import a from "./a";
+import b from "./b"; // Allowed: 2 dependencies (max: 2)
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### ignoreTypeImports
+
+type: `boolean`
+
+default: `false`
+
+Whether to ignore type imports when counting dependencies.
+
+```ts
+// Neither of these count as dependencies if `ignoreTypeImports` is true:
+import type { Foo } from "./foo";
+import { type Foo } from "./foo";
+```
+
+### max
+
+type: `integer`
+
+default: `10`
+
+Maximum number of dependencies allowed in a file.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "import/max-dependencies": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "import/max-dependencies": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.5.0.
+
+## References
+
+- [Upstream rule documentation](https://github.com/import-js/eslint-plugin-import/blob/main/docs/rules/max-dependencies.md)

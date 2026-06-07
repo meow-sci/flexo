@@ -1,0 +1,190 @@
+---
+title: "promise/always-return"
+rule: "promise/always-return"
+category: "Suspicious"
+version: "1.13.0"
+default: false
+type_aware: false
+fix: "none"
+upstream: "https://github.com/eslint-community/eslint-plugin-promise/blob/main/docs/rules/always-return.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Suspicious |
+| Default | no |
+| Fix | none |
+| Type-aware | no |
+
+
+### What it does
+
+Require returning inside each `then()` to create readable and reusable Promise chains.
+We also allow someone to throw inside a `then()` which is essentially the same as return `Promise.reject()`.
+
+### Why is this bad?
+
+Broken Promise Chain.
+Inside the first `then()` callback, a function is called but not returned.
+This causes the next `then()` in the chain to execute immediately without waiting for the called function to complete.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```javascript
+myPromise.then(function (val) {});
+myPromise.then(() => {
+  doSomething();
+});
+myPromise.then((b) => {
+  if (b) {
+    return "yes";
+  } else {
+    forgotToReturn();
+  }
+});
+```
+
+Examples of **correct** code for this rule:
+
+```javascript
+myPromise.then((val) => val * 2);
+myPromise.then(function (val) {
+  return val * 2;
+});
+myPromise.then(doSomething); // could be either
+myPromise.then((b) => {
+  if (b) {
+    return "yes";
+  } else {
+    return "no";
+  }
+});
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### ignoreAssignmentVariable
+
+type: `string[]`
+
+default: `["globalThis"]`
+
+You can pass an `{ ignoreAssignmentVariable: [] }` as an option to this rule
+with a list of variable names so that the last `then()` callback in a promise
+chain does not warn if it does an assignment to a global variable. Default is
+`["globalThis"]`.
+
+```javascript
+/* promise/always-return: ["error", { ignoreAssignmentVariable: ["globalThis"] }] */
+
+// OK
+promise.then((x) => {
+  globalThis = x;
+});
+
+promise.then((x) => {
+  globalThis.x = x;
+});
+
+// OK
+promise.then((x) => {
+  globalThis.x.y = x;
+});
+
+// NG
+promise.then((x) => {
+  anyOtherVariable = x;
+});
+
+// NG
+promise.then((x) => {
+  anyOtherVariable.x = x;
+});
+
+// NG
+promise.then((x) => {
+  x();
+});
+```
+
+### ignoreLastCallback
+
+type: `boolean`
+
+default: `false`
+
+You can pass an `{ ignoreLastCallback: true }` as an option to this rule so that
+the last `then()` callback in a promise chain does not warn if it does not have
+a `return`. Default is `false`.
+
+```javascript
+// OK
+promise.then((x) => {
+  console.log(x);
+});
+// OK
+void promise.then((x) => {
+  console.log(x);
+});
+// OK
+await promise.then((x) => {
+  console.log(x);
+});
+
+promise
+  // NG
+  .then((x) => {
+    console.log(x);
+  })
+  // OK
+  .then((x) => {
+    console.log(x);
+  });
+
+// NG
+const v = promise.then((x) => {
+  console.log(x);
+});
+// NG
+const v = await promise.then((x) => {
+  console.log(x);
+});
+function foo() {
+  // NG
+  return promise.then((x) => {
+    console.log(x);
+  });
+}
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "promise/always-return": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "promise/always-return": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.13.0.
+
+## References
+
+- [Upstream rule documentation](https://github.com/eslint-community/eslint-plugin-promise/blob/main/docs/rules/always-return.md)

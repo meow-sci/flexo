@@ -1,0 +1,81 @@
+---
+title: "promise/prefer-catch"
+rule: "promise/prefer-catch"
+category: "Style"
+version: "0.15.14"
+default: false
+type_aware: false
+fix: "pending"
+upstream: "https://github.com/eslint-community/eslint-plugin-promise/blob/main/docs/rules/prefer-catch.md"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Style |
+| Default | no |
+| Fix | 🚧 fix pending |
+| Type-aware | no |
+
+
+### What it does
+
+Prefer `catch` to `then(a, b)` and `then(null, b)`. This rule disallows the passing of an
+argument into the second parameter of `then` calls for handling promise errors.
+
+### Why is this bad?
+
+A `then` call with two arguments can make it more difficult to recognize that a catch error
+handler is present. Another issue with using the second argument in `then` calls is that
+the ordering of promise error handling is less obvious.
+
+For example on first glance it may appear that `prom.then(fn1, fn2)` is equivalent to
+`prom.then(fn1).catch(fn2)`. However they aren't equivalent. In fact
+`prom.catch(fn2).then(fn1)` is the equivalent. This kind of confusion is a good reason for
+preferring explicit `catch` calls over passing an argument to the second parameter of
+`then` calls.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```js
+prom.then(fn1, fn2);
+
+prom.then(null, fn2);
+```
+
+Examples of **correct** code for this rule:
+
+```js
+prom.catch(fn2).then(fn1);
+
+prom.catch(fn2);
+```
+
+## How to use
+
+```json
+{
+  "rules": {
+    "promise/prefer-catch": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "promise/prefer-catch": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v0.15.14.
+
+## References
+
+- [Upstream rule documentation](https://github.com/eslint-community/eslint-plugin-promise/blob/main/docs/rules/prefer-catch.md)

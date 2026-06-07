@@ -1,0 +1,170 @@
+---
+title: "typescript/no-misused-promises"
+rule: "typescript/no-misused-promises"
+category: "Pedantic"
+version: "1.11.0"
+default: false
+type_aware: true
+fix: "none"
+upstream: "https://typescript-eslint.io/rules/no-misused-promises/"
+---
+
+| Property | Value |
+|----------|-------|
+| Category | Pedantic |
+| Default | no |
+| Fix | none |
+| Type-aware | yes |
+
+
+### What it does
+
+This rule forbids providing Promises to logical locations such as if statements in places where the TypeScript
+compiler allows them but they are not handled properly. These situations can often arise due to a missing
+`await` keyword or just a misunderstanding of the way async functions are handled/awaited.
+
+### Why is this bad?
+
+Misused promises can cause crashes or other unexpected behavior, unless there are possibly some global unhandled promise handlers registered.
+
+### Examples
+
+Examples of **incorrect** code for this rule:
+
+```ts
+// Promises in conditionals:
+const promise = Promise.resolve("value");
+if (promise) {
+  // Do something
+}
+
+// Promises where `void` return was expected:
+[1, 2, 3].forEach(async (value) => {
+  await fetch(`/${value}`);
+});
+
+// Spreading Promises:
+const getData = () => fetch("/");
+console.log({ foo: 42, ...getData() });
+```
+
+Examples of **correct** code for this rule:
+
+```ts
+// Awaiting the Promise to get its value in a conditional:
+const promise = Promise.resolve("value");
+if (await promise) {
+  // Do something
+}
+
+// Using a `for-of` with `await` inside (instead of `forEach`):
+for (const value of [1, 2, 3]) {
+  await fetch(`/${value}`);
+}
+
+// Spreading data returned from Promise, instead of the Promise itself:
+const getData = () => fetch("/");
+console.log({ foo: 42, ...(await getData()) });
+```
+
+## Configuration
+
+This rule accepts a configuration object with the following properties:
+
+### checksConditionals
+
+type: `boolean`
+
+default: `true`
+
+Whether to check if Promises are used in conditionals.
+When true, disallows using Promises in conditions where a boolean is expected.
+
+### checksSpreads
+
+type: `boolean`
+
+default: `true`
+
+Whether to check if Promises are used in spread syntax.
+When true, disallows spreading Promise values.
+
+### checksVoidReturn
+
+type: `object | boolean`
+
+#### checksVoidReturn.arguments
+
+type: `boolean`
+
+default: `true`
+
+Whether to check Promise-returning functions passed as arguments to void-returning functions.
+
+#### checksVoidReturn.attributes
+
+type: `boolean`
+
+default: `true`
+
+Whether to check Promise-returning functions in JSX attributes expecting void.
+
+#### checksVoidReturn.inheritedMethods
+
+type: `boolean`
+
+default: `true`
+
+Whether to check Promise-returning methods that override void-returning inherited methods.
+
+#### checksVoidReturn.properties
+
+type: `boolean`
+
+default: `true`
+
+Whether to check Promise-returning functions assigned to object properties expecting void.
+
+#### checksVoidReturn.returns
+
+type: `boolean`
+
+default: `true`
+
+Whether to check Promise values returned from void-returning functions.
+
+#### checksVoidReturn.variables
+
+type: `boolean`
+
+default: `true`
+
+Whether to check Promise-returning functions assigned to variables typed as void-returning.
+
+## How to use
+
+```json
+{
+  "rules": {
+    "typescript/no-misused-promises": "error"
+  }
+}
+```
+
+With options:
+
+```json
+{
+  "rules": {
+    "typescript/no-misused-promises": ["error", { /* options */ }]
+  }
+}
+```
+
+## Version
+
+This rule was added in v1.11.0.
+
+## References
+
+- [Upstream rule documentation](https://typescript-eslint.io/rules/no-misused-promises/)

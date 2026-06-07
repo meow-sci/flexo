@@ -2,6 +2,8 @@ import {
   Select as AriaSelect,
   SelectValue,
   Button as AriaButton,
+  Autocomplete,
+  useFilter,
   composeRenderProps,
   type SelectProps as AriaSelectProps,
 } from 'react-aria-components'
@@ -11,6 +13,7 @@ import { Label } from './Field'
 import { focusRing, cn } from './styles'
 import { Popover } from './Popover'
 import { ListBox } from './ListBox'
+import { SearchField } from './SearchField'
 
 const trigger = tv({
   extend: focusRing,
@@ -33,11 +36,16 @@ export interface SelectKitProps<T extends object>
   className?: string
   triggerClassName?: string
   popoverClassName?: string
+  /** Adds a search field inside the dropdown to filter options (react-aria Autocomplete). */
+  searchable?: boolean
+  /** Placeholder/label for the in-dropdown search field (searchable selects only). */
+  searchPlaceholder?: string
 }
 
 /**
  * Dropdown select. Pass `items` + a child render fn (or static `ListBoxItem`s)
  * the react-aria way; selection is controlled via `selectedKey`/`onSelectionChange`.
+ * Set `searchable` to add an in-dropdown filter field (keeps the same trigger styling).
  */
 export function Select<T extends object>({
   label,
@@ -47,8 +55,11 @@ export function Select<T extends object>({
   className,
   triggerClassName,
   popoverClassName,
+  searchable,
+  searchPlaceholder,
   ...props
 }: SelectKitProps<T>) {
+  const { contains } = useFilter({ sensitivity: 'base' })
   return (
     <AriaSelect {...props} className={cn('flex flex-col gap-1', className)}>
       {label && <Label>{label}</Label>}
@@ -60,10 +71,34 @@ export function Select<T extends object>({
         <SelectValue className="flex-1 truncate text-left data-[placeholder]:text-fg-subtle" />
         <ChevronsUpDown size={size === 'sm' ? 13 : 15} className="shrink-0 text-fg-subtle" />
       </AriaButton>
-      <Popover className={cn('w-(--trigger-width)', popoverClassName)}>
-        <ListBox items={items} className="max-h-[inherit] overflow-auto">
-          {children}
-        </ListBox>
+      <Popover className={cn('w-(--trigger-width)', searchable && 'min-w-56', popoverClassName)}>
+        {searchable ? (
+          // Autocomplete wraps the ListBox so the SearchField filters it with virtual
+          // focus (type in the field, arrow into the results). Mounts fresh each open, so
+          // the query resets when the popover closes.
+          <Autocomplete filter={contains}>
+            <SearchField
+              size={size === 'sm' ? 'sm' : 'md'}
+              autoFocus
+              aria-label={searchPlaceholder ?? 'Search options'}
+              placeholder={searchPlaceholder ?? 'Search…'}
+              className="m-1"
+            />
+            <ListBox
+              items={items}
+              className="max-h-[inherit] overflow-auto"
+              renderEmptyState={() => (
+                <div className="px-2 py-1.5 text-xs text-fg-subtle">No matches</div>
+              )}
+            >
+              {children}
+            </ListBox>
+          </Autocomplete>
+        ) : (
+          <ListBox items={items} className="max-h-[inherit] overflow-auto">
+            {children}
+          </ListBox>
+        )}
       </Popover>
     </AriaSelect>
   )

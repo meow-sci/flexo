@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { Trash2, Plus, Crosshair, ChevronLeft, Move3d, RotateCcw } from 'lucide-react'
-import { Button, TextField, Select, ListBoxItem, Slider, Switch, Tooltip, cn } from './kit'
+import { Button, TextField, Select, ListBoxItem, GridList, GridListItem, Switch, Tooltip, cn } from './kit'
 import { $part, $toolMode, pushUndo } from '../state/editorStore'
 import { $selectedPlacements, $selectedPlacement } from '../state/selectors'
 import {
@@ -31,9 +31,11 @@ import {
   setSegmentEasingAllJoints,
   selectKeyframeForEditing,
   setSolarTracking,
+  stopAnimationPreview,
 } from '../state/animationStore'
 import { isAnimationExportable } from '../ksa/animationNaming'
 import { EasingEditor } from './EasingEditor'
+import { PreviewScrubber } from './PreviewScrubber'
 import { identityTransform, type AnimationJoint, type AnimationKeyframe, type AnimationMode, type EasingConfig, type PartAnimation, type SubPartPlacement } from '../ksa/types'
 
 const RAD2DEG = 180 / Math.PI
@@ -49,8 +51,7 @@ function closeAnimation(): void {
   $activeAnimationId.set(null)
   $activeJointId.set(null)
   $editKeyframeId.set(null)
-  $animScrubbing.set(false)
-  $animPreviewU.set(0)
+  stopAnimationPreview() // cancel any in-flight playback + snap back to rest
 }
 
 /** A draft-aware numeric field (free-types while focused, reflects the store otherwise). */
@@ -216,30 +217,14 @@ function AnimationEditor({ anim }: { anim: PartAnimation }) {
       </div>
 
       {/* Live preview scrubber (drives the viewport). Spring-loaded: the override only
-          applies while you drag — release snaps back to the static modeled pose. */}
-      <label className="flex flex-col gap-1">
+          applies while you drag or play — release snaps back to the static modeled pose.
+          Also available as a floating draggable toolbar over the workspace. */}
+      <div className="flex flex-col gap-1">
         <span className="text-xs uppercase tracking-wide text-fg-subtle">
-          Preview {editKfId ? '(pinned to edited pose)' : scrubbing ? `${Math.round(previewU * 100)}%` : '(drag to preview)'}
+          Preview {editKfId ? '(pinned to edited pose)' : scrubbing ? `${Math.round(previewU * 100)}%` : '(drag, or ▶ to play)'}
         </span>
-        <Slider
-          aria-label="Preview"
-          value={previewU}
-          minValue={0}
-          maxValue={1}
-          step={0.01}
-          onChange={(v) => {
-            if (!$animScrubbing.get()) $animScrubbing.set(true)
-            $editKeyframeId.set(null)
-            $animPreviewU.set(typeof v === 'number' ? v : v[0])
-          }}
-          onChangeEnd={() => {
-            // Release → back to the modeled (static) pose; reset so the next grab starts
-            // at the rest end (t=0) of the timeline.
-            $animScrubbing.set(false)
-            $animPreviewU.set(0)
-          }}
-        />
-      </label>
+        <PreviewScrubber anim={anim} />
+      </div>
 
       <JointsSection anim={anim} />
       <KeyframesSection anim={anim} />
@@ -359,7 +344,18 @@ function JointRow({
   const others = anim.joints.filter((j) => j.id !== joint.id)
 
   return (
-    <div className={cn('flex flex-col gap-1 rounded-md border p-1.5', active ? 'border-accent' : 'border-border')}>
+    <div
+      className={cn(
+        'flex flex-col gap-1 rounded-md border p-1.5',
+        active ? 'border-accent' : 'cursor-pointer border-border',
+      )}
+      // Click anywhere in the panel to select this joint. Inner controls still work — their
+      // clicks bubble here but a no-op re-select is harmless; deselect via the crosshair
+      // toggle or Escape. Guarded on `!active` so the crosshair's deselect isn't undone.
+      onClick={() => {
+        if (!active) $activeJointId.set(joint.id)
+      }}
+    >
       <div className="flex items-center gap-1">
         <button
           className="shrink-0 text-fg-subtle hover:text-fg"
@@ -407,12 +403,14 @@ function JointRow({
             size="sm"
             aria-label="Parent joint"
             className="flex-1"
+            searchable
+            searchPlaceholder="Search joints…"
             selectedKey={joint.parentJointId ?? 'none'}
             onSelectionChange={(k) => setJointParent(anim.id, joint.id, k === 'none' ? null : String(k))}
           >
             <ListBoxItem id="none">Root (Part)</ListBoxItem>
             {others.map((o) => (
-              <ListBoxItem key={o.id} id={o.id}>
+              <ListBoxItem key={o.id} id={o.id} textValue={`under ${o.name}`}>
                 under {o.name}
               </ListBoxItem>
             ))}
@@ -452,16 +450,22 @@ function JointRow({
       </div>
 
       {joint.memberInstanceIds.length > 0 ? (
-        <div className="flex flex-wrap gap-1">
+        <GridList aria-label={`Parts attached to ${joint.name}`} className="gap-1 p-0">
           {joint.memberInstanceIds.map((id) => (
-            <span key={id} className="flex items-center gap-0.5 rounded bg-panel px-1 py-0.5 font-mono text-xs">
-              {id}
-              <button className="text-fg-subtle hover:text-danger" onClick={() => detachFromJoint(anim.id, joint.id, id)}>
-                ×
-              </button>
-            </span>
+            <GridListItem key={id} id={id} textValue={id} className="gap-1 bg-panel px-2 py-0.5">
+              <span className="flex-1 truncate font-mono text-xs">{id}</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                iconOnly
+                aria-label={`Detach ${id}`}
+                onPress={() => detachFromJoint(anim.id, joint.id, id)}
+              >
+                <Trash2 size={13} />
+              </Button>
+            </GridListItem>
           ))}
-        </div>
+        </GridList>
       ) : (
         <span className="text-xs text-fg-subtle">No parts attached — use Mesh Picker, or select parts in the viewport then Attach. Then Set pivot to your hinge.</span>
       )}

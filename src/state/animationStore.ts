@@ -50,6 +50,9 @@ export const $animPreviewU = atom<number>(0)
  */
 export const $animScrubbing = atom<boolean>(false)
 
+/** True while {@link playAnimationPreview} is auto-advancing the scrubber (vs. a manual drag). */
+export const $animPlaying = atom<boolean>(false)
+
 /** The active animation object, or null. */
 export const $activeAnimation = computed([$part, $activeAnimationId], (part, id) =>
   id ? part.animations.find((a) => a.id === id) ?? null : null,
@@ -79,6 +82,62 @@ export function selectKeyframeForEditing(animId: string, keyframeId: string): vo
   if (k && anim && $activeAnimationId.get() === animId) {
     $toolMode.set(k.timeSec === restAnchorTime(anim) ? 'translate' : 'rotate')
   }
+}
+
+// ── preview playback ──────────────────────────────────────────────────────────
+
+/** Handle of the in-flight requestAnimationFrame loop (0 = idle). */
+let playRaf = 0
+
+/**
+ * Stops the auto-play loop but LEAVES the current scrub position/override in place — used
+ * when the user grabs the slider mid-play to take over scrubbing manually (the slider's
+ * own release then handles the spring-loaded snap-back).
+ */
+export function cancelPlayback(): void {
+  if (playRaf) cancelAnimationFrame(playRaf)
+  playRaf = 0
+  if ($animPlaying.get()) $animPlaying.set(false)
+}
+
+/**
+ * Stops playback AND snaps back to the modeled rest pose (scrubbing off, u→0) — exactly
+ * the spring-loaded reset the preview slider performs on release. Safe to call when idle.
+ */
+export function stopAnimationPreview(): void {
+  cancelPlayback()
+  if ($animScrubbing.get()) $animScrubbing.set(false)
+  if ($animPreviewU.get() !== 0) $animPreviewU.set(0)
+}
+
+/**
+ * Plays the active animation's preview through once at real speed (u 0→1 over
+ * `durationSec`), driving the spring-loaded scrubber, then resets to the rest pose. The
+ * preview override anchors on {@link restAnchorTime} just like a manual drag, so an
+ * imported deploy clip (modeled at its deployed last keyframe) folds stowed→deployed and
+ * snaps back to its modeled rest on completion. No-op if already playing the same clip or
+ * the animation is missing / zero-length.
+ */
+export function playAnimationPreview(animId: string): void {
+  const anim = $part.get().animations.find((a) => a.id === animId)
+  if (!anim || anim.durationSec <= 0) return
+  cancelPlayback()
+  $editKeyframeId.set(null) // unpin any edited keyframe; the timeline takes over
+  $animScrubbing.set(true)
+  $animPreviewU.set(0)
+  $animPlaying.set(true)
+  const durMs = anim.durationSec * 1000
+  let startTs = 0
+  const tick = (ts: number) => {
+    if (!$animPlaying.get()) return // stopped externally (stop already reset state)
+    if ($activeAnimationId.get() !== animId) return stopAnimationPreview() // clip switched/closed
+    if (!startTs) startTs = ts
+    const u = Math.min(1, (ts - startTs) / durMs)
+    $animPreviewU.set(u)
+    if (u < 1) playRaf = requestAnimationFrame(tick)
+    else stopAnimationPreview() // reached the end → snap back to the modeled rest pose
+  }
+  playRaf = requestAnimationFrame(tick)
 }
 
 // ── undo plumbing (mirrors customAssetStore.mutate, minus the atlas flag) ─────

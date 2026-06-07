@@ -56,3 +56,15 @@ export const $inspectorFloatPos = persistentJSON<FloatPosition | null>('flexo:in
 export function setInspectorFloatPos(pos: FloatPosition | null): void {
   $inspectorFloatPos.set(pos)
 }
+
+/**
+ * Position of the floating animation-preview toolbar (the draggable scrubber that hovers
+ * over the workspace while the Animation editor is open). `null` = the default anchor:
+ * top-center, just below the main toolbar. Stores explicit top-left px once dragged.
+ * Persisted at app level and cleared by the global data reset (localStorage.clear).
+ */
+export const $animPreviewFloatPos = persistentJSON<FloatPosition | null>('flexo:animPreviewFloatPos', null)
+
+export function setAnimPreviewFloatPos(pos: FloatPosition | null): void {
+  $animPreviewFloatPos.set(pos)
+}

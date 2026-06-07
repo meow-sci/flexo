@@ -2,3 +2,4 @@
 - the "Attach selected" Select should be an Autocomplete so it gets search.  I want styling to be very similar to the Select is now though, with the addition of the search feature.  use the react-aria skill
 - clicking anywhere inside a joint panel should select that joint, not jut when pressing the little target icon
 - when animation editing is enabled, i want another slider for the preview to be in a floating window toolbar that is draggable/movable.  default to centered 0.5rem below the main top floating toolbar, or, similarly laid out to how other toolbars in this area are
+- the preview slider should have a play icon button on the right side of it which plays the animation at real speed once and then resets back to 0 (this needs to account for the animation snap at 0 for rest pose)

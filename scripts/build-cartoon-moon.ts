@@ -3,15 +3,15 @@
  * build-cartoon-moon — turn a handful of PNGs into a ready-to-install KSA mod that
  * scatters those images as "cartoon character" ground clutter on a new moon ("Looney").
  *
- * For each input PNG it emits, into ksa-mods/cartoon-moon/:
- *   Textures/Clutter/<name>_Diffuse.ktx2   (sRGB colour)
- *   Textures/Clutter/<name>_Opacity.ktx2   (linear silhouette in R; the clutter shader
- *                                            cuts the card out where opacity.r < 0.5)
- *   Meshes/Clutter/<name>Card.glb           (a vertical quad / cross "card", matching aspect)
- * then regenerates assets/cartoon_moon.xml — the Luna-clone body with one <Ecotype> per
- * character embedded in its <GroundClutter>. That body file is the ONLY thing the game loads
- * (KSA has no standalone ground-clutter asset; clutter lives inside a celestial body). Finally
- * it ensures mod.toml + systems/cartoon_sol.xml exist.
+ * All input PNGs are packed into ONE shared atlas, emitted into ksa-mods/cartoon-moon/:
+ *   Textures/Clutter/Atlas_Diffuse.ktx2    (sRGB; all faces tiled)
+ *   Textures/Clutter/Atlas_Opacity.ktx2    (linear silhouette in R, cut where < 0.5; cards only)
+ *   Meshes/Clutter/<name>Card.glb          (one card per face, UV-mapped to its atlas tile)
+ * then regenerates assets/cartoon_moon.xml — the Luna-clone body with a SINGLE <Ecotype> whose
+ * <GroundClutter> has one <ClutterObject> per face sharing the atlas material. (One ecotype is
+ * mandatory: KSA's placement RNG is seeded by cell position only, so separate ecotypes place at
+ * identical spots and z-fight. The GPU mixes the faces via a random per-instance objectId.) That
+ * body file is the ONLY thing the game loads. Finally it ensures mod.toml + the scenario exist.
  *
  * The KTX2 files are written by flexo's OWN encoder (src/ktx/encodeKtx2) — the format is
  * exactly what KSA's loader expects (validated in-game for custom part textures). Only the
@@ -31,9 +31,14 @@
  *   --brightness <f>      multiply diffuse RGB (default 1.0). KSA decodes clutter diffuse
  *                         ~x2 then luminosity-normalises — try 0.5 if it looks blown out.
  *   --max-size <px>       cap the longest texture edge (default 1024)
- *   --cross               build a 2-quad cross card (visible from all sides) instead of 1 quad
+ *   --shape <s>           card shape: quad (default) | cross | cylinder
+ *   --cross               alias for --shape cross (2-quad cross billboard, visible all around)
+ *   --cylinder            alias for --shape cylinder — a SOLID 3D peg (flat bottom, rounded
+ *                         top) with the face wrapped on the front; no cutout, real 3D shading
+ *   --fill <hex>          background colour the face is composited over for --cylinder
+ *                         (default cdcdcd light grey); fills the non-face surface
  *   --bg <hex>            for PNGs with no transparency, key out this background colour
- *                         (e.g. --bg ffffff) to make the silhouette
+ *                         (e.g. --bg ffffff) to make the silhouette / isolate the face
  *   --zstd                Zstd-supercompress the KTX2 levels (matches KSA atlases; off by
  *                         default to keep the run dependency-light)
  *   --separation <m>      clutter ObjectSeparation metres (default 40)
@@ -45,8 +50,11 @@
 import { encodeImageToKtx2 } from '../src/ktx/encodeKtx2'
 import { buildMipChain, type ImageLevel } from '../src/ktx/decodeImage'
 import UPNG from 'upng-js'
+import { rm } from 'node:fs/promises'
 
 // ----------------------------------------------------------------------------- args
+
+type Shape = 'quad' | 'cross' | 'cylinder'
 
 interface Args {
   inputs: string[]
@@ -55,8 +63,9 @@ interface Args {
   names?: string[]
   brightness: number
   maxSize: number
-  cross: boolean
+  shape: Shape
   bg?: [number, number, number]
+  fill: [number, number, number]
   zstd: boolean
   separation: number
   range: number
@@ -78,8 +87,11 @@ function parseArgs(argv: string[]): Args {
       case '--names': o.names = next().split(',').map((s) => s.trim()).filter(Boolean); break
       case '--brightness': o.brightness = Number(next()); break
       case '--max-size': o.maxSize = Number(next()); break
-      case '--cross': o.cross = true; break
+      case '--cross': o.shape = 'cross'; break
+      case '--cylinder': o.shape = 'cylinder'; break
+      case '--shape': o.shape = next() as Shape; break
       case '--bg': o.bg = hexToRgb(next()); break
+      case '--fill': o.fill = hexToRgb(next()); break
       case '--zstd': o.zstd = true; break
       case '--separation': o.separation = Number(next()); break
       case '--range': o.range = Number(next()); break
@@ -97,8 +109,9 @@ function parseArgs(argv: string[]): Args {
     names: o.names,
     brightness: o.brightness ?? 1.0,
     maxSize: o.maxSize ?? 1024,
-    cross: o.cross ?? false,
+    shape: o.shape ?? 'quad',
     bg: o.bg,
+    fill: o.fill ?? [205, 205, 205],
     zstd: o.zstd ?? false,
     separation: o.separation ?? 40,
     range: o.range ?? 3000,
@@ -109,7 +122,7 @@ function parseArgs(argv: string[]): Args {
 
 function hexToRgb(hex: string): [number, number, number] {
   const h = hex.replace('#', '')
-  if (h.length !== 6) throw new Error(`--bg expects a 6-digit hex colour, got "${hex}"`)
+  if (h.length !== 6) throw new Error(`expected a 6-digit hex colour, got "${hex}"`)
   return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)]
 }
 
@@ -137,32 +150,66 @@ function decodePng(buf: ArrayBuffer): Decoded {
   return { width: img.width, height: img.height, rgba }
 }
 
-/** Box-average resize so the longest edge is <= maxSize (no-op if already small). */
-function fitToMaxSize(src: Decoded, maxSize: number): Decoded {
-  const scale = Math.min(1, maxSize / Math.max(src.width, src.height))
-  if (scale >= 1) return src
-  const dw = Math.max(1, Math.round(src.width * scale))
-  const dh = Math.max(1, Math.round(src.height * scale))
+/** Area resample to arbitrary dims, alpha-weighting RGB (premultiplied) to avoid dark fringes. */
+function resizeArea(src: Decoded, dw: number, dh: number): Decoded {
+  if (dw === src.width && dh === src.height) return src
   const out = new Uint8Array(dw * dh * 4)
-  const sxStep = src.width / dw
-  const syStep = src.height / dh
+  const sxStep = src.width / dw, syStep = src.height / dh
   for (let y = 0; y < dh; y++) {
-    const sy0 = Math.floor(y * syStep)
-    const sy1 = Math.max(sy0 + 1, Math.floor((y + 1) * syStep))
+    const sy0 = Math.floor(y * syStep), sy1 = Math.max(sy0 + 1, Math.floor((y + 1) * syStep))
     for (let x = 0; x < dw; x++) {
-      const sx0 = Math.floor(x * sxStep)
-      const sx1 = Math.max(sx0 + 1, Math.floor((x + 1) * sxStep))
-      let r = 0, g = 0, b = 0, a = 0, n = 0
+      const sx0 = Math.floor(x * sxStep), sx1 = Math.max(sx0 + 1, Math.floor((x + 1) * sxStep))
+      let r = 0, g = 0, b = 0, aw = 0, a = 0, n = 0
       for (let sy = sy0; sy < sy1; sy++)
         for (let sx = sx0; sx < sx1; sx++) {
-          const i = (sy * src.width + sx) * 4
-          r += src.rgba[i]; g += src.rgba[i + 1]; b += src.rgba[i + 2]; a += src.rgba[i + 3]; n++
+          const i = (sy * src.width + sx) * 4, sa = src.rgba[i + 3]
+          r += src.rgba[i] * sa; g += src.rgba[i + 1] * sa; b += src.rgba[i + 2] * sa; aw += sa; a += sa; n++
         }
       const o = (y * dw + x) * 4
-      out[o] = (r / n) | 0; out[o + 1] = (g / n) | 0; out[o + 2] = (b / n) | 0; out[o + 3] = (a / n) | 0
+      out[o] = aw ? Math.round(r / aw) : 0; out[o + 1] = aw ? Math.round(g / aw) : 0; out[o + 2] = aw ? Math.round(b / aw) : 0
+      out[o + 3] = Math.round(a / n)
     }
   }
   return { width: dw, height: dh, rgba: out }
+}
+
+/** Downscale so the longest edge is <= maxSize (no-op if already small). */
+function fitToMaxSize(src: Decoded, maxSize: number): Decoded {
+  const scale = Math.min(1, maxSize / Math.max(src.width, src.height))
+  if (scale >= 1) return src
+  return resizeArea(src, Math.max(1, Math.round(src.width * scale)), Math.max(1, Math.round(src.height * scale)))
+}
+
+interface UvRect { u0: number; v0: number; u1: number; v1: number }
+const remapUv = (u: number, v: number, r: UvRect): [number, number] => [r.u0 + u * (r.u1 - r.u0), r.v0 + v * (r.v1 - r.v0)]
+
+/**
+ * Pack N images into a square-tiled RGBA atlas (cols=ceil(√N)). Each face is aspect-fit and
+ * centred in its tile at `contentScale`, leaving a transparent margin that doubles as a mip
+ * gutter (so faces don't bleed into each other). Returns the atlas + each tile's full-tile UV
+ * rect. One shared atlas lets a SINGLE ecotype carry many faces — the only way KSA scatters
+ * them mixed without z-fighting (separate ecotypes place identically; see groundClutterXml).
+ */
+function buildAtlas(imgs: Decoded[], tile: number, contentScale = 0.9): { atlas: Decoded; rects: UvRect[] } {
+  const n = imgs.length
+  const cols = Math.ceil(Math.sqrt(n)), rows = Math.ceil(n / cols)
+  const W = cols * tile, H = rows * tile
+  const rgba = new Uint8Array(W * H * 4) // zero = transparent
+  const content = Math.max(1, Math.floor(tile * contentScale))
+  const rects: UvRect[] = []
+  for (let i = 0; i < n; i++) {
+    const col = i % cols, row = Math.floor(i / cols)
+    const s = Math.min(content / imgs[i].width, content / imgs[i].height)
+    const fit = resizeArea(imgs[i], Math.max(1, Math.round(imgs[i].width * s)), Math.max(1, Math.round(imgs[i].height * s)))
+    const ox = col * tile + ((tile - fit.width) >> 1), oy = row * tile + ((tile - fit.height) >> 1)
+    for (let y = 0; y < fit.height; y++)
+      for (let x = 0; x < fit.width; x++) {
+        const si = (y * fit.width + x) * 4, di = ((oy + y) * W + (ox + x)) * 4
+        rgba[di] = fit.rgba[si]; rgba[di + 1] = fit.rgba[si + 1]; rgba[di + 2] = fit.rgba[si + 2]; rgba[di + 3] = fit.rgba[si + 3]
+      }
+    rects.push({ u0: col * tile / W, v0: row * tile / H, u1: (col + 1) * tile / W, v1: (row + 1) * tile / H })
+  }
+  return { atlas: { width: W, height: H, rgba }, rects }
 }
 
 /** If the image is fully opaque and a --bg colour is given, key it out into the alpha. */
@@ -214,6 +261,23 @@ function bleedRgb(img: Decoded, passes = 4): Decoded {
   return { width: w, height: h, rgba }
 }
 
+/**
+ * Composite the image over an opaque background colour (alpha-blend, then force alpha=255).
+ * Used for the solid cylinder, which has no opacity cutout — so transparent areas of the source
+ * must become real pixels (the fill) instead of holes/garbage.
+ */
+function flattenOverBg(img: Decoded, fill: [number, number, number]): Decoded {
+  const out = new Uint8Array(img.rgba.length)
+  for (let i = 0; i < out.length; i += 4) {
+    const a = img.rgba[i + 3] / 255
+    out[i] = clamp8(img.rgba[i] * a + fill[0] * (1 - a))
+    out[i + 1] = clamp8(img.rgba[i + 1] * a + fill[1] * (1 - a))
+    out[i + 2] = clamp8(img.rgba[i + 2] * a + fill[2] * (1 - a))
+    out[i + 3] = 255
+  }
+  return { width: img.width, height: img.height, rgba: out }
+}
+
 /** Diffuse base level: RGB (optionally brightened), opaque alpha. */
 function diffuseLevel(img: Decoded, brightness: number): ImageLevel {
   const out = new Uint8Array(img.width * img.height * 4)
@@ -249,13 +313,12 @@ const TARGET_ARRAY = 34962
 const TARGET_ELEMENT = 34963
 
 /**
- * A clutter "card": a unit-tall quad (base at y=0 so it stands on the ground), width = aspect.
- * UVs map the whole image 0..1, upright. `cross` adds a second perpendicular quad so the
- * card reads from any viewing angle (like KSA's grass). Clutter loads mesh index 0 and applies
- * the XML material + opacity cutout, so this is geometry-only (POSITION/NORMAL/TEXCOORD_0).
+ * A clutter "card": a unit square quad (base at y=0 so it stands on the ground). The face is
+ * aspect-fit inside its atlas tile, so the card is square and the opacity cutout trims it to the
+ * face shape. UVs map the card to `rect` (its tile in the shared atlas). `cross` adds a second
+ * perpendicular quad so it reads from any angle. Geometry-only (POSITION/NORMAL/TEXCOORD_0).
  */
-function buildCardGlb(aspect: number, cross: boolean): Uint8Array {
-  const w = aspect
+function buildCardGlb(rect: UvRect, cross: boolean): Uint8Array {
   const pos: number[] = []
   const nrm: number[] = []
   const uv: number[] = []
@@ -263,19 +326,82 @@ function buildCardGlb(aspect: number, cross: boolean): Uint8Array {
 
   const quad = (verts: [number, number, number][], normal: [number, number, number]) => {
     const base = pos.length / 3
-    const uvs: [number, number][] = [[0, 1], [1, 1], [1, 0], [0, 0]]
+    const localUv: [number, number][] = [[0, 1], [1, 1], [1, 0], [0, 0]]
     for (let k = 0; k < 4; k++) {
-      pos.push(...verts[k]); nrm.push(...normal); uv.push(...uvs[k])
+      pos.push(...verts[k]); nrm.push(...normal); uv.push(...remapUv(localUv[k][0], localUv[k][1], rect))
     }
     idx.push(base, base + 1, base + 2, base, base + 2, base + 3)
   }
 
-  // Quad in the XY plane, facing +Z.
-  quad([[-w / 2, 0, 0], [w / 2, 0, 0], [w / 2, 1, 0], [-w / 2, 1, 0]], [0, 0, 1])
+  // Unit square in the XY plane, facing +Z.
+  quad([[-0.5, 0, 0], [0.5, 0, 0], [0.5, 1, 0], [-0.5, 1, 0]], [0, 0, 1])
   if (cross) {
-    // Perpendicular quad in the ZY plane, facing +X.
-    quad([[0, 0, -w / 2], [0, 0, w / 2], [0, 1, w / 2], [0, 1, -w / 2]], [1, 0, 0])
+    // Perpendicular square in the ZY plane, facing +X.
+    quad([[0, 0, -0.5], [0, 0, 0.5], [0, 1, 0.5], [0, 1, -0.5]], [1, 0, 0])
   }
+
+  return packGlb(new Float32Array(pos), new Float32Array(nrm), new Float32Array(uv), new Uint16Array(idx))
+}
+
+const normalize3 = (x: number, y: number, z: number): [number, number, number] => {
+  const l = Math.hypot(x, y, z) || 1
+  return [x / l, y / l, z / l]
+}
+
+/**
+ * A 3D clutter "peg": flat bottom disc → cylindrical wall → hemispherical dome → apex, standing
+ * on y=0 (total height 1, radius 0.32). The face wraps the front 180° and is mirrored on the back
+ * via a triangle-wave U; V runs bottom(0)→apex(1). Real outward normals give genuine 3D shading,
+ * so the material is solid (no opacity cutout). Geometry-only POSITION/NORMAL/TEXCOORD_0.
+ */
+function buildCylinderGlb(rect: UvRect): Uint8Array {
+  const R = 0.32, BODY = 0.68, TOTAL = 1.0 // BODY + R (dome is a hemisphere of radius R)
+  const RADIAL = 24, DOME = 6
+  const pos: number[] = [], nrm: number[] = [], uv: number[] = [], idx: number[] = []
+  const add = (x: number, y: number, z: number, n: [number, number, number], u: number, v: number) => {
+    const i = pos.length / 3; pos.push(x, y, z); nrm.push(n[0], n[1], n[2]); const [ru, rv] = remapUv(u, v, rect); uv.push(ru, rv); return i
+  }
+  // Front faces -Z. Whole face across the front 180°, mirrored across the back 180° (continuous).
+  const uOf = (theta: number) => {
+    let t = theta
+    while (t < -Math.PI) t += 2 * Math.PI
+    while (t >= Math.PI) t -= 2 * Math.PI
+    if (t >= -Math.PI / 2 && t <= Math.PI / 2) return 0.5 + t / Math.PI
+    return t > 0 ? 0.5 + (Math.PI - t) / Math.PI : 0.5 - (Math.PI + t) / Math.PI
+  }
+  const px = (theta: number, r: number): [number, number] => [r * Math.sin(theta), -r * Math.cos(theta)]
+  const ring = (y: number, r: number, nfn: (x: number, z: number, y: number) => [number, number, number]) => {
+    const ids: number[] = []
+    for (let s = 0; s < RADIAL; s++) { const th = s / RADIAL * 2 * Math.PI; const [x, z] = px(th, r); ids.push(add(x, y, z, nfn(x, z, y), uOf(th), y / TOTAL)) }
+    return ids
+  }
+  // outward CCW stitch between a lower and upper ring
+  const stitch = (lower: number[], upper: number[]) => {
+    for (let s = 0; s < RADIAL; s++) {
+      const a = lower[s], b = lower[(s + 1) % RADIAL], c = upper[(s + 1) % RADIAL], d = upper[s]
+      idx.push(a, c, b, a, d, c)
+    }
+  }
+
+  // flat bottom disc (normal -Y)
+  const bc = add(0, 0, 0, [0, -1, 0], 0.5, 0)
+  const bottom = ring(0, R, () => [0, -1, 0])
+  for (let s = 0; s < RADIAL; s++) idx.push(bc, bottom[s], bottom[(s + 1) % RADIAL])
+
+  // cylindrical wall (radial normals)
+  const wallBottom = ring(0, R, (x, z) => normalize3(x, 0, z))
+  const wallTop = ring(BODY, R, (x, z) => normalize3(x, 0, z))
+  stitch(wallBottom, wallTop)
+
+  // hemispherical dome (normals point away from the dome centre at y=BODY); wallTop is its base
+  let prev = wallTop
+  for (let r = 1; r < DOME; r++) {
+    const phi = r / DOME * (Math.PI / 2)
+    const upper = ring(BODY + R * Math.sin(phi), R * Math.cos(phi), (x, z, y) => normalize3(x, y - BODY, z))
+    stitch(prev, upper); prev = upper
+  }
+  const apex = add(0, TOTAL, 0, [0, 1, 0], 0.5, 1)
+  for (let s = 0; s < RADIAL; s++) idx.push(prev[s], apex, prev[(s + 1) % RADIAL])
 
   return packGlb(new Float32Array(pos), new Float32Array(nrm), new Float32Array(uv), new Uint16Array(idx))
 }
@@ -362,16 +488,55 @@ interface Character { name: string }
 const LOD_SCREEN_SIZES = [128, 64, 32, 16, 8]
 export const FLAT_NORMAL_KTX2 = 'Textures/Clutter/ClutterFlatNormal.ktx2'
 export const NEUTRAL_ORM_KTX2 = 'Textures/Clutter/ClutterNeutralAoRoughMetal.ktx2'
+export const ATLAS_DIFFUSE_KTX2 = 'Textures/Clutter/Atlas_Diffuse.ktx2'
+export const ATLAS_OPACITY_KTX2 = 'Textures/Clutter/Atlas_Opacity.ktx2'
 
-function lodsXml(name: string): string {
+/** 5 LODs (KSA reads Lods[0..4]); `id` namespaces the LOD meshes, `mesh` is the card GLB stem. */
+function lodsXml(id: string, mesh: string): string {
   return LOD_SCREEN_SIZES.map((px, k) =>
 `                        <LOD MinScreenSize="${px}">
-                            <Mesh Id="${name}Card_LOD${k}" Path="Meshes/Clutter/${name}Card.glb" />
+                            <Mesh Id="${id}_LOD${k}" Path="Meshes/Clutter/${mesh}Card.glb" />
                         </LOD>`).join('\n')
 }
 
-function ecotypeXml(c: Character, a: Args): string {
-  return `            <Ecotype Name="${c.name}">
+function clutterObjectXml(id: string, mesh: string): string {
+  return `                <ClutterObject Name="${id}">
+                    <LODs>
+${lodsXml(id, mesh)}
+                    </LODs>
+                </ClutterObject>`
+}
+
+/**
+ * ONE ecotype, one ClutterObject per character + a spare, all sharing a single atlas material.
+ *
+ * This is the only way to scatter several DIFFERENT images mixed across the surface: KSA's
+ * placement RNG is seeded by cell position only (Generate.comp), so separate ecotypes would all
+ * place at identical positions and z-fight. Within one ecotype the GPU assigns each instance a
+ * random objectId → a different card → its tile in the shared atlas (exactly how stock Luna's one
+ * rock ecotype mixes 7 rock meshes). The spare object works around an engine off-by-one
+ * (objectId = floor(rand*(N-1)) never selects the last object) so every real character shows.
+ */
+export function groundClutterXml(chars: Character[], a: Args): string {
+  const cylinder = a.shape === 'cylinder'
+  const objects = chars.map((c) => clutterObjectXml(c.name, c.name))
+  objects.push(clutterObjectXml(`${chars[0].name}_spare`, chars[0].name)) // never-shown; reuses char 0's mesh
+  const material = cylinder
+    ? `                    <UseTerrainMask Value="false" />
+                    <DoubleSided Value="false" />
+                    <CastShadows Value="true" />
+                    <ReceiveShadows Value="true" />
+                    <BiasNormalsUp Value="false" />`
+    : `                    <Opacity Id="ClutterAtlasOpacity" Path="${ATLAS_OPACITY_KTX2}" Category="Terrain"/>
+                    <UseTerrainMask Value="false" />
+                    <DoubleSided Value="true" />
+                    <CastShadows Value="true" />
+                    <ReceiveShadows Value="true" />
+                    <BiasNormalsUp Value="true" />`
+  return `        <GroundClutter>
+            <!-- GENERATED by scripts/build-cartoon-moon.ts. One ecotype; each character is a
+                 ClutterObject sharing the atlas material, mixed across the surface by the GPU. -->
+            <Ecotype Name="CartoonCrowd">
                 <Placement Biomes="Surface,Craters,Maria">
                     <ObjectSeparation M="${a.separation}" />
                     <GenerationRange M="${a.range}" />
@@ -384,31 +549,14 @@ function ecotypeXml(c: Character, a: Args): string {
                     <DistributionTextureTiling Value="250" />
                     <UseObjectTypeTexture Value="false" />
                 </Placement>
-                <ClutterObject Name="${c.name}Card">
-                    <LODs>
-${lodsXml(c.name)}
-                    </LODs>
-                </ClutterObject>
+${objects.join('\n')}
                 <Material>
-                    <Diffuse Id="${c.name}Diffuse" Path="Textures/Clutter/${c.name}_Diffuse.ktx2" Category="Terrain"/>
+                    <Diffuse Id="ClutterAtlasDiffuse" Path="${ATLAS_DIFFUSE_KTX2}" Category="Terrain"/>
                     <Normal Id="ClutterFlatNormal" Path="${FLAT_NORMAL_KTX2}" Category="Terrain"/>
                     <AoRoughMetal Id="ClutterNeutralAoRoughMetal" Path="${NEUTRAL_ORM_KTX2}" Category="Terrain"/>
-                    <Opacity Id="${c.name}Opacity" Path="Textures/Clutter/${c.name}_Opacity.ktx2" Category="Terrain"/>
-                    <UseTerrainMask Value="false" />
-                    <DoubleSided Value="true" />
-                    <CastShadows Value="true" />
-                    <ReceiveShadows Value="true" />
-                    <BiasNormalsUp Value="true" />
+${material}
                 </Material>
-            </Ecotype>`
-}
-
-export function groundClutterXml(chars: Character[], a: Args): string {
-  return `        <GroundClutter>
-            <!-- GENERATED by scripts/build-cartoon-moon.ts. One <Ecotype> per character; they
-                 share placement so the engine mixes them across the surface. Surface textures
-                 are reused from core Luna by Id (see the body); only the clutter is new. -->
-${chars.map((c) => ecotypeXml(c, a)).join('\n\n')}
+            </Ecotype>
         </GroundClutter>`
 }
 
@@ -487,6 +635,43 @@ export const SCENARIO_XML = `<?xml version="1.0" encoding="utf-8"?>
 </System>
 `
 
+const README_MD = `# Cartoon Moon — KSA ground-clutter mod (GENERATED)
+
+This folder is **generated** by \`scripts/build-cartoon-moon.ts\` and is git-ignored — don't hand-edit
+it; re-run the script. It adds **"Looney"**, a Luna clone that reuses Luna's surface textures and
+replaces only its ground clutter with your images, surfaced via a selectable **"Sol — Cartoon Moon"**
+star system. Pure data + assets, no game code.
+
+## Regenerate
+
+\`\`\`bash
+cd scripts && bun install            # once
+bun build-cartoon-moon.ts ../ksa-mods/faces            # flat cutout cards (default)
+bun build-cartoon-moon.ts ../ksa-mods/faces --cross    # 2-quad cross billboards
+bun build-cartoon-moon.ts ../ksa-mods/faces --cylinder # SOLID 3D pegs (face wrapped on a rounded-top cylinder)
+\`\`\`
+
+Inputs are PNGs (transparent background = the cutout silhouette / isolated face). Handy flags:
+\`--brightness 0.5\` (KSA ~×2-decodes diffuse), \`--fill <hex>\` (cylinder background), \`--bg <hex>\`
+(key out a solid background), \`--min-scale/--max-scale\`, \`--separation\`, \`--range\`, \`--zstd\`.
+Run with \`--astronomicals <your game's Content/core/Astronomicals.xml>\` to match your install.
+
+## Install + test
+
+1. Copy this folder into the game's mods dir (\`<KSA user dir>/mods/cartoon-moon/\`); launch once so
+   KSA adds it to \`manifest.toml\`; ensure it's enabled.
+2. Reconcile \`systems/cartoon_sol.xml\`'s \`<LoadFromLibrary>\` list with your game's stock scenario.
+3. Launch, pick **"Sol — Cartoon Moon"**, fly to **Looney** (just past Luna), descend.
+
+## KSA requirements the generator bakes in (each crashed during bring-up)
+
+- **Exactly 5 \`<LOD>\`s per \`<ClutterObject>\`** (the renderer reads \`Lods[0..4]\` unconditionally).
+- **\`<Normal>\` + \`<AoRoughMetal>\` are mandatory** (dereferenced without a null check) — shared
+  synthetic \`ClutterFlatNormal.ktx2\` + \`ClutterNeutralAoRoughMetal.ktx2\` are written for this.
+- **Scenario syntax:** \`<DisplayName Value="…"/>\` and a \`Parent="…"\` on every \`<LoadFromLibrary>\`
+  except the root star.
+`
+
 // --------------------------------------------------------------------------------- main
 
 /** Filename -> a safe XML/identifier name, e.g. "cat face.png" -> "CatFace". */
@@ -509,6 +694,11 @@ async function main() {
     throw new Error(`could not read Astronomicals.xml at ${args.astronomicals}`)
   })
 
+  // Clear previously-generated clutter assets so stale per-character files don't linger when the
+  // set of faces changes (this folder is generated — see README).
+  await rm(`${args.out}/Textures/Clutter`, { recursive: true, force: true })
+  await rm(`${args.out}/Meshes/Clutter`, { recursive: true, force: true })
+
   // Shared 1×1 PBR maps every clutter material needs (the renderer dereferences Normal + PBR
   // unconditionally). Flat tangent-space normal (128,128,255) and matte non-metal AoRoughMetal
   // (AO=255, rough≈230, metal=0); both linear. All ecotypes reference these by the same Id.
@@ -517,34 +707,45 @@ async function main() {
   await Bun.write(`${args.out}/${FLAT_NORMAL_KTX2}`, await solid(128, 128, 255))
   await Bun.write(`${args.out}/${NEUTRAL_ORM_KTX2}`, await solid(255, 230, 0))
 
+  // Decode every face, then pack into ONE shared atlas. A single ecotype with one ClutterObject
+  // per atlas tile is the only way KSA mixes different images across the surface (separate
+  // ecotypes place identically and z-fight — that was the "same image flickering" bug).
   const usedNames = new Set<string>()
   const chars: Character[] = []
-
+  const faces: Decoded[] = []
   for (let i = 0; i < files.length; i++) {
-    const file = files[i]
-    let name = args.names?.[i] ?? nameFromPath(file)
+    let name = args.names?.[i] ?? nameFromPath(files[i])
     while (usedNames.has(name)) name += '_'
     usedNames.add(name)
-
-    const buf = await Bun.file(file).arrayBuffer()
-    let img = decodePng(buf)
-    img = fitToMaxSize(img, args.maxSize)
-    img = applyBackgroundKey(img, args.bg)
-    img = bleedRgb(img)
-
-    const aspect = img.width / img.height
-
-    const diffuse = await encodeImageToKtx2(buildMipChainOf(diffuseLevel(img, args.brightness)), { srgb: true, zstd: args.zstd })
-    const opacity = await encodeImageToKtx2(buildMipChainOf(opacityLevel(img)), { srgb: false, zstd: args.zstd })
-    const glb = buildCardGlb(aspect, args.cross)
-
-    await Bun.write(`${args.out}/Textures/Clutter/${name}_Diffuse.ktx2`, diffuse)
-    await Bun.write(`${args.out}/Textures/Clutter/${name}_Opacity.ktx2`, opacity)
-    await Bun.write(`${args.out}/Meshes/Clutter/${name}Card.glb`, glb)
-
+    let img = decodePng(await Bun.file(files[i]).arrayBuffer())
+    img = applyBackgroundKey(fitToMaxSize(img, args.maxSize), args.bg)
+    faces.push(img)
     chars.push({ name })
-    console.log(`  ${name}: ${img.width}x${img.height}  diffuse ${kb(diffuse)}  opacity ${kb(opacity)}  card ${kb(glb)}${args.cross ? ' (cross)' : ''}`)
   }
+
+  const cylinder = args.shape === 'cylinder'
+  const tile = Math.min(512, Math.floor(2048 / Math.ceil(Math.sqrt(faces.length))))
+  const { atlas, rects } = buildAtlas(faces, tile)
+
+  // One atlas diffuse (+ opacity for cutout cards). Cylinder is solid → composite over the fill
+  // colour (no holes) and no opacity map; flat cards keep the alpha as the cutout silhouette.
+  const diffuseSrc = cylinder ? flattenOverBg(atlas, args.fill) : bleedRgb(atlas)
+  const diffuse = await encodeImageToKtx2(buildMipChainOf(diffuseLevel(diffuseSrc, args.brightness)), { srgb: true, zstd: args.zstd })
+  await Bun.write(`${args.out}/${ATLAS_DIFFUSE_KTX2}`, diffuse)
+  let opacityKb = '—'
+  if (!cylinder) {
+    const opacity = await encodeImageToKtx2(buildMipChainOf(opacityLevel(atlas)), { srgb: false, zstd: args.zstd })
+    await Bun.write(`${args.out}/${ATLAS_OPACITY_KTX2}`, opacity)
+    opacityKb = kb(opacity)
+  }
+
+  // One card mesh per character, UV-mapped to its atlas tile.
+  for (let i = 0; i < chars.length; i++) {
+    const glb = cylinder ? buildCylinderGlb(rects[i]) : buildCardGlb(rects[i], args.shape === 'cross')
+    await Bun.write(`${args.out}/Meshes/Clutter/${chars[i].name}Card.glb`, glb)
+  }
+
+  console.log(`  ${chars.length} face(s) -> ${atlas.width}x${atlas.height} atlas  diffuse ${kb(diffuse)}  opacity ${opacityKb}  (${args.shape})`)
 
   // The clutter is embedded directly into the body — KSA has no standalone clutter asset, so
   // assets/cartoon_moon.xml is the single file the game loads.
@@ -554,6 +755,8 @@ async function main() {
   // Write mod.toml + scenario only if absent, so user edits are preserved.
   if (!(await Bun.file(`${args.out}/mod.toml`).exists())) await Bun.write(`${args.out}/mod.toml`, MOD_TOML)
   if (!(await Bun.file(`${args.out}/systems/cartoon_sol.xml`).exists())) await Bun.write(`${args.out}/systems/cartoon_sol.xml`, SCENARIO_XML)
+  // README is generated docs (the folder is git-ignored + regenerated), so always refresh it.
+  await Bun.write(`${args.out}/README.md`, README_MD)
 
   console.log(`\nWrote mod for ${chars.length} character(s) -> ${args.out}`)
   console.log('Next: copy that folder into your KSA mods dir, launch, pick "Sol — Cartoon Moon", fly to Looney.')

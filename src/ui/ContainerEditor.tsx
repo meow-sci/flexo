@@ -1,16 +1,10 @@
 import { useStore } from '@nanostores/react'
 import { Euler, Quaternion, MathUtils } from 'three'
-import { Lock, Unlock, X } from 'lucide-react'
-import {
-  Button,
-  ToggleButton,
-  ToggleButtonGroup,
-  SectionTitle,
-  Switch,
-  Slider,
-  useIsPhone,
-} from './kit'
+import { Button, ToggleButton, ToggleButtonGroup, SectionTitle, Switch } from './kit'
+import { FloatingEditorPanel } from './FloatingEditorPanel'
 import { PreciseNumberInput } from './PreciseNumberInput'
+import { SliderRow } from './SliderRow'
+import { Vec3Field } from './Vec3Field'
 import { ColorAlphaField } from './ColorAlphaField'
 import {
   $activeContainerId,
@@ -65,14 +59,9 @@ export function ContainerEditor() {
   const activeId = useStore($activeContainerId)
   const containers = useStore($containers)
   const mode = useStore($containerGizmoMode)
-  const isPhone = useIsPhone()
 
   const c = activeId ? containers.find((x) => x.id === activeId) : undefined
   if (!c) return null
-
-  const containerClass = isPhone
-    ? 'absolute inset-x-2 bottom-20 z-10 rounded-xl border border-border bg-panel/95 p-3 text-fg shadow-popover backdrop-blur-md'
-    : 'absolute left-3 top-1/2 z-10 w-64 -translate-y-1/2 rounded-xl border border-border bg-panel/95 p-3 text-fg shadow-popover backdrop-blur-md'
 
   const setSize = (next: Vec3) => updateContainer(c.id, { size: normalizeSize(c.shape, next) })
   const euler = quatToEulerDeg(c.rotation)
@@ -85,25 +74,13 @@ export function ContainerEditor() {
   const pushStyle = () => pushUndo('container style')
 
   return (
-    <div className={containerClass}>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-[11px] uppercase tracking-wide text-fg-subtle">
-          {SHAPE_LABEL[c.shape]}
-        </span>
-        <div className="flex items-center gap-1">
-          <Button
-            size="sm"
-            aria-label={c.locked ? 'Unlock' : 'Lock'}
-            onPress={() => setContainerLocked(c.id, !c.locked)}
-          >
-            {c.locked ? <Lock size={14} /> : <Unlock size={14} />}
-          </Button>
-          <Button size="sm" aria-label="Close" onPress={() => setActiveContainer(null)}>
-            <X size={14} />
-          </Button>
-        </div>
-      </div>
-
+    <FloatingEditorPanel
+      title={SHAPE_LABEL[c.shape]}
+      width="w-64"
+      locked={c.locked}
+      onToggleLock={() => setContainerLocked(c.id, !c.locked)}
+      onClose={() => setActiveContainer(null)}
+    >
       {c.locked ? (
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 font-mono text-xs">
           <dt className="text-fg-muted">Center</dt>
@@ -133,9 +110,9 @@ export function ContainerEditor() {
             </ToggleButtonGroup>
           </div>
 
-          <VecRow
+          <Vec3Field
             label="Center"
-            v={c.center}
+            value={c.center}
             onInteractionStart={pushCenter}
             onCommit={(axis, val) =>
               updateContainer(c.id, { center: { ...c.center, [axis]: val } })
@@ -145,28 +122,21 @@ export function ContainerEditor() {
           <Dimensions container={c} onSize={setSize} onInteractionStart={pushSize} />
 
           {c.shape !== 'rect' && (
-            <div className="flex items-center gap-2" onPointerDown={pushStyle}>
-              <span className="w-12 shrink-0 text-xs text-fg-muted">Lines</span>
-              <Slider
-                aria-label="Surface lines"
-                className="flex-1"
-                minValue={2}
-                maxValue={48}
-                step={1}
-                value={c.segments ?? 16}
-                onChange={(v) => updateContainer(c.id, { segments: v as number })}
-              />
-              <span className="w-8 shrink-0 text-right font-mono text-[11px] text-fg-subtle">
-                {c.segments ?? 16}
-              </span>
-            </div>
+            <SliderRow
+              label="Lines"
+              ariaLabel="Surface lines"
+              value={c.segments ?? 16}
+              min={2}
+              max={48}
+              onChange={(v) => updateContainer(c.id, { segments: v })}
+              onInteractionStart={pushStyle}
+            />
           )}
 
           <div className="flex flex-col gap-1">
             <SectionTitle>Rotation°</SectionTitle>
-            <VecRow
-              label=""
-              v={euler}
+            <Vec3Field
+              value={euler}
               onInteractionStart={pushRotation}
               onCommit={(axis, val) => setEuler(axis, val)}
             />
@@ -183,21 +153,16 @@ export function ContainerEditor() {
                 updateContainer(c.id, { color, lineOpacity: opacity })
               }
             />
-            <div className="flex items-center gap-2" onPointerDown={pushStyle}>
-              <span className="w-12 shrink-0 text-xs text-fg-muted">Width</span>
-              <Slider
-                aria-label="Line width"
-                className="flex-1"
-                minValue={1}
-                maxValue={10}
-                step={1}
-                value={c.lineWidth}
-                onChange={(v) => updateContainer(c.id, { lineWidth: v as number })}
-              />
-              <span className="w-8 shrink-0 text-right font-mono text-[11px] text-fg-subtle">
-                {c.lineWidth}px
-              </span>
-            </div>
+            <SliderRow
+              label="Width"
+              ariaLabel="Line width"
+              value={c.lineWidth}
+              min={1}
+              max={10}
+              onChange={(v) => updateContainer(c.id, { lineWidth: v })}
+              onInteractionStart={pushStyle}
+              format={(v) => `${v}px`}
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -229,7 +194,7 @@ export function ContainerEditor() {
           </Button>
         </div>
       )}
-    </div>
+    </FloatingEditorPanel>
   )
 }
 
@@ -247,9 +212,8 @@ function Dimensions({
     return (
       <div className="flex flex-col gap-1">
         <SectionTitle>Size (m)</SectionTitle>
-        <VecRow
-          label=""
-          v={c.size}
+        <Vec3Field
+          value={c.size}
           onInteractionStart={onInteractionStart}
           onCommit={(axis, val) => onSize({ ...c.size, [axis]: Math.max(0, val) })}
         />
@@ -286,35 +250,6 @@ function Dimensions({
           />
         </div>
       )}
-    </div>
-  )
-}
-
-function VecRow({
-  label,
-  v,
-  onCommit,
-  onInteractionStart,
-}: {
-  label: string
-  v: Vec3
-  onCommit: (axis: keyof Vec3, value: number) => void
-  onInteractionStart?: () => void
-}) {
-  const axes: (keyof Vec3)[] = ['x', 'y', 'z']
-  return (
-    <div className="flex items-center gap-1.5">
-      {label && <span className="w-12 shrink-0 text-xs text-fg-muted">{label}</span>}
-      {axes.map((axis) => (
-        <PreciseNumberInput
-          key={axis}
-          aria-label={`${label} ${axis.toUpperCase()}`}
-          className="min-w-0 flex-1"
-          value={v[axis]}
-          onInteractionStart={onInteractionStart}
-          onCommit={(val) => onCommit(axis, val)}
-        />
-      ))}
     </div>
   )
 }

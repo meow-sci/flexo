@@ -1,4 +1,4 @@
-import { Button, Switch, Select, ListBoxItem, TextField } from './kit'
+import { Button, Switch, Select, ListBoxItem, TextField, SectionTitle } from './kit'
 import { PreciseNumberInput } from './PreciseNumberInput'
 import { pushUndo } from '../state/editorStore'
 import {
@@ -210,7 +210,7 @@ function PowerList({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <span className="text-xs uppercase tracking-wide text-fg-subtle">{label}</span>
+      <SectionTitle>{label}</SectionTitle>
       {values.map((v, i) => (
         <div key={i} className="flex items-end gap-2">
           <Field label={`#${i + 1} (${unit})`}>

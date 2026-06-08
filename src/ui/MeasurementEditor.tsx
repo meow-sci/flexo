@@ -1,7 +1,9 @@
 import { useStore } from '@nanostores/react'
-import { Lock, Unlock, X } from 'lucide-react'
-import { Button, ToggleButton, ToggleButtonGroup, SectionTitle, Slider, useIsPhone } from './kit'
+import { Button, ToggleButton, ToggleButtonGroup, SectionTitle } from './kit'
+import { FloatingEditorPanel } from './FloatingEditorPanel'
 import { PreciseNumberInput } from './PreciseNumberInput'
+import { SliderRow } from './SliderRow'
+import { Vec3Field } from './Vec3Field'
 import { ColorAlphaField } from './ColorAlphaField'
 import {
   $activeEndpoint,
@@ -61,16 +63,9 @@ export function MeasurementEditor() {
   const measurements = useStore($measurements)
   const endpoint = useStore($activeEndpoint)
   const { unit: displayUnit } = useStore($measurementSettings)
-  const isPhone = useIsPhone()
 
   const m = activeId ? measurements.find((x) => x.id === activeId) : undefined
   if (!m) return null
-
-  // Desktop: floating card on the left. Phone: full-width sheet pinned to the
-  // bottom (above the mobile inspector FAB).
-  const containerClass = isPhone
-    ? 'absolute inset-x-2 bottom-20 z-10 rounded-xl border border-border bg-panel/95 p-3 text-fg shadow-popover backdrop-blur-md'
-    : 'absolute left-3 top-1/2 z-10 w-60 -translate-y-1/2 rounded-xl border border-border bg-panel/95 p-3 text-fg shadow-popover backdrop-blur-md'
 
   const length = distance(m.a, m.b)
   const setEndpoint = (key: 'a' | 'b', axis: keyof Vec3, value: number) => {
@@ -91,25 +86,13 @@ export function MeasurementEditor() {
   const pushStyle = () => pushUndo('line style')
 
   return (
-    <div className={containerClass}>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="text-[11px] uppercase tracking-wide text-fg-subtle">
-          {m.source === 'point' ? 'Point measurement' : 'Reference line'}
-        </span>
-        <div className="flex items-center gap-1">
-          <Button
-            size="sm"
-            aria-label={m.locked ? 'Unlock' : 'Lock'}
-            onPress={() => setMeasurementLocked(m.id, !m.locked)}
-          >
-            {m.locked ? <Lock size={14} /> : <Unlock size={14} />}
-          </Button>
-          <Button size="sm" aria-label="Close" onPress={() => setActiveMeasurement(null)}>
-            <X size={14} />
-          </Button>
-        </div>
-      </div>
-
+    <FloatingEditorPanel
+      title={m.source === 'point' ? 'Point measurement' : 'Reference line'}
+      width="w-60"
+      locked={m.locked}
+      onToggleLock={() => setMeasurementLocked(m.id, !m.locked)}
+      onClose={() => setActiveMeasurement(null)}
+    >
       {m.locked ? (
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 font-mono text-xs">
           <dt className="text-fg-muted">Length</dt>
@@ -140,15 +123,17 @@ export function MeasurementEditor() {
             </ToggleButtonGroup>
           </div>
 
-          <VecRow
+          <Vec3Field
             label="A"
-            v={m.a}
+            labelWidth="w-3"
+            value={m.a}
             onInteractionStart={pushEndpoint}
             onCommit={(axis, val) => setEndpoint('a', axis, val)}
           />
-          <VecRow
+          <Vec3Field
             label="B"
-            v={m.b}
+            labelWidth="w-3"
+            value={m.b}
             disabled={
               m.axisLock === 'none'
                 ? undefined
@@ -205,21 +190,16 @@ export function MeasurementEditor() {
                 updateMeasurement(m.id, { color, lineOpacity: opacity })
               }
             />
-            <div className="flex items-center gap-2" onPointerDown={pushStyle}>
-              <span className="w-12 shrink-0 text-xs text-fg-muted">Width</span>
-              <Slider
-                aria-label="Line width"
-                className="flex-1"
-                minValue={1}
-                maxValue={10}
-                step={1}
-                value={m.lineWidth ?? 2}
-                onChange={(v) => updateMeasurement(m.id, { lineWidth: v as number })}
-              />
-              <span className="w-8 shrink-0 text-right font-mono text-[11px] text-fg-subtle">
-                {m.lineWidth ?? 2}px
-              </span>
-            </div>
+            <SliderRow
+              label="Width"
+              ariaLabel="Line width"
+              value={m.lineWidth ?? 2}
+              min={1}
+              max={10}
+              onChange={(v) => updateMeasurement(m.id, { lineWidth: v })}
+              onInteractionStart={pushStyle}
+              format={(v) => `${v}px`}
+            />
           </div>
 
           <Button
@@ -232,38 +212,6 @@ export function MeasurementEditor() {
           </Button>
         </div>
       )}
-    </div>
-  )
-}
-
-function VecRow({
-  label,
-  v,
-  disabled,
-  onCommit,
-  onInteractionStart,
-}: {
-  label: string
-  v: Vec3
-  disabled?: { x: boolean; y: boolean; z: boolean }
-  onCommit: (axis: keyof Vec3, value: number) => void
-  onInteractionStart?: () => void
-}) {
-  const axes: (keyof Vec3)[] = ['x', 'y', 'z']
-  return (
-    <div className="flex items-center gap-1.5">
-      <span className="w-3 shrink-0 text-xs font-medium text-fg-muted">{label}</span>
-      {axes.map((axis) => (
-        <PreciseNumberInput
-          key={axis}
-          aria-label={`${label} ${axis.toUpperCase()}`}
-          className="min-w-0 flex-1"
-          value={v[axis]}
-          isDisabled={disabled?.[axis]}
-          onInteractionStart={onInteractionStart}
-          onCommit={(val) => onCommit(axis, val)}
-        />
-      ))}
-    </div>
+    </FloatingEditorPanel>
   )
 }

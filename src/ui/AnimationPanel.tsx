@@ -10,6 +10,7 @@ import {
   GridListItem,
   Switch,
   Tooltip,
+  SectionTitle,
   cn,
 } from './kit'
 import { $part, $toolMode, pushUndo } from '../state/editorStore'
@@ -46,6 +47,7 @@ import {
 import { isAnimationExportable } from '../ksa/animationNaming'
 import { EasingEditor } from './EasingEditor'
 import { PreviewScrubber } from './PreviewScrubber'
+import { NumberField } from './NumberField'
 import {
   identityTransform,
   type AnimationJoint,
@@ -70,41 +72,6 @@ function closeAnimation(): void {
   $activeJointId.set(null)
   $editKeyframeId.set(null)
   stopAnimationPreview() // cancel any in-flight playback + snap back to rest
-}
-
-/** A draft-aware numeric field (free-types while focused, reflects the store otherwise). */
-function NumberField(props: {
-  label: string
-  value: number
-  onCommit: (n: number) => void
-  onFocus?: () => void
-  isDisabled?: boolean
-}) {
-  const [draft, setDraft] = useState<string | null>(null)
-  return (
-    <label className="flex items-center gap-1">
-      <span className="w-3 text-xs text-fg-subtle">{props.label}</span>
-      <TextField
-        size="sm"
-        type="number"
-        inputMode="decimal"
-        aria-label={props.label}
-        value={draft ?? fmt(props.value)}
-        inputClassName="font-mono"
-        isDisabled={props.isDisabled}
-        onChange={(v) => {
-          setDraft(v)
-          const n = Number.parseFloat(v)
-          if (Number.isFinite(n)) props.onCommit(n)
-        }}
-        onFocus={() => {
-          setDraft(fmt(props.value))
-          props.onFocus?.()
-        }}
-        onBlur={() => setDraft(null)}
-      />
-    </label>
-  )
 }
 
 /**
@@ -237,7 +204,7 @@ function AnimationEditor({ anim }: { anim: PartAnimation }) {
           <NumberField
             label="s"
             value={anim.durationSec}
-            onFocus={() => pushUndo('animation duration', anim.name)}
+            onInteractionStart={() => pushUndo('animation duration', anim.name)}
             onCommit={(n) => setAnimationDuration(anim.id, n)}
           />
         </div>
@@ -271,14 +238,14 @@ function PreviewProgressLabel() {
   const previewU = useStore($animPreviewU)
   const scrubbing = useStore($animScrubbing)
   return (
-    <span className="text-xs uppercase tracking-wide text-fg-subtle">
+    <SectionTitle>
       Preview{' '}
       {editKfId
         ? '(pinned to edited pose)'
         : scrubbing
           ? `${Math.round(previewU * 100)}%`
           : '(drag, or ▶ to play)'}
-    </span>
+    </SectionTitle>
   )
 }
 
@@ -361,7 +328,7 @@ function JointsSection({ anim }: { anim: PartAnimation }) {
 
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-wide text-fg-subtle">Joints (pivots)</span>
+      <SectionTitle>Joints (pivots)</SectionTitle>
       <p className="text-xs text-fg-subtle">
         A joint is a hinge — attached parts rotate around its <b>Rest</b> position. Select the hinge
         part and <b>Set pivot</b> to place that anchor on it.
@@ -548,7 +515,7 @@ function KeyframesSection({ anim }: { anim: PartAnimation }) {
 
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-wide text-fg-subtle">Poses (keyframes)</span>
+      <SectionTitle>Poses (keyframes)</SectionTitle>
       {sorted.map((kf) => (
         <KeyframeRow key={kf.id} anim={anim} kf={kf} editing={kf.id === editKfId} />
       ))}
@@ -597,7 +564,7 @@ function KeyframeRow({
           <NumberField
             label="t"
             value={kf.timeSec}
-            onFocus={() => pushUndo('keyframe time', anim.name)}
+            onInteractionStart={() => pushUndo('keyframe time', anim.name)}
             onCommit={(n) => setKeyframeTime(anim.id, kf.id, n)}
           />
         </div>
@@ -666,30 +633,28 @@ function PoseEditor({ anim }: { anim: PartAnimation }) {
         </span>
       </div>
       <div className="flex flex-col gap-1">
-        <span className="text-xs uppercase tracking-wide text-fg-subtle">
-          {isRest ? 'Pivot position (m)' : 'Position (m)'}
-        </span>
+        <SectionTitle>{isRest ? 'Pivot position (m)' : 'Position (m)'}</SectionTitle>
         <div className="grid grid-cols-3 gap-1">
           {axes.map((a) => (
             <NumberField
               key={a}
               label={a.toUpperCase()}
               value={pose.position[a]}
-              onFocus={start}
+              onInteractionStart={start}
               onCommit={(n) => commit((t) => (t.position[a] = n))}
             />
           ))}
         </div>
       </div>
       <div className="flex flex-col gap-1">
-        <span className="text-xs uppercase tracking-wide text-fg-subtle">Rotation (°)</span>
+        <SectionTitle>Rotation (°)</SectionTitle>
         <div className="grid grid-cols-3 gap-1">
           {axes.map((a) => (
             <NumberField
               key={a}
               label={a.toUpperCase()}
               value={pose.rotation[a] * RAD2DEG}
-              onFocus={start}
+              onInteractionStart={start}
               onCommit={(deg) => commit((t) => (t.rotation[a] = deg * DEG2RAD))}
             />
           ))}
@@ -698,9 +663,7 @@ function PoseEditor({ anim }: { anim: PartAnimation }) {
       {hasNext && (
         <div className="flex flex-col gap-1">
           <div className="flex items-center justify-between">
-            <span className="text-xs uppercase tracking-wide text-fg-subtle">
-              Easing → next pose
-            </span>
+            <SectionTitle>Easing → next pose</SectionTitle>
             <Button
               size="sm"
               variant="ghost"

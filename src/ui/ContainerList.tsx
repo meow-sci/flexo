@@ -1,7 +1,7 @@
 import { useStore } from '@nanostores/react'
-import { GridList, GridListItem, type Selection } from 'react-aria-components'
+import type { Selection } from 'react-aria-components'
 import { Lock, Unlock, Trash2, Square, Cylinder, Circle } from 'lucide-react'
-import { Button } from './kit'
+import { Button, GridList, GridListItem } from './kit'
 import {
   $activeContainerId,
   $containers,
@@ -49,16 +49,11 @@ export function ContainerList({ onSelect }: { onSelect?: () => void } = {}) {
       selectedKeys={activeId ? [activeId] : []}
       onSelectionChange={onSelectionChange}
       items={containers}
-      className="flex flex-col gap-0.5"
     >
       {(c) => {
         const Icon = SHAPE_ICON[c.shape]
         return (
-          <GridListItem
-            id={c.id}
-            textValue={SHAPE_LABEL[c.shape]}
-            className="group flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none selected:bg-cladd-primary/15 hover:bg-white/[0.06]"
-          >
+          <GridListItem id={c.id} textValue={SHAPE_LABEL[c.shape]}>
             <span
               className="size-3 shrink-0 rounded-full border border-black/30"
               style={{ background: c.color }}

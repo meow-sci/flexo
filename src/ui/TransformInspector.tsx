@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
-import { Button, TextField, Switch } from './kit'
+import { Button, TextField, Switch, SectionTitle } from './kit'
+import { NumberField } from './NumberField'
 import {
   $bulkScaleMode,
   pushUndo,
@@ -32,48 +33,6 @@ function fmt(n: number): string {
 }
 
 const panelClass = 'flex flex-col gap-2 rounded-xl border border-border bg-panel p-2'
-
-/**
- * A single numeric field. Free-types while focused (local string state), and
- * reflects external store changes (e.g. gizmo drags) when not focused. Commits a
- * parsed number on every valid keystroke; calls `onInteractionStart` once on
- * focus so a typing session collapses into a single undo step.
- */
-function ScalarField(props: {
-  value: number
-  onCommit: (n: number) => void
-  onInteractionStart: () => void
-  label: string
-  isDisabled?: boolean
-}) {
-  const { value, onCommit, onInteractionStart, label, isDisabled } = props
-  const [draft, setDraft] = useState<string | null>(null)
-
-  return (
-    <label className="flex items-center gap-1">
-      <span className="w-3 text-xs text-fg-subtle">{label}</span>
-      <TextField
-        size="sm"
-        type="number"
-        inputMode="decimal"
-        aria-label={label}
-        value={draft ?? fmt(value)}
-        inputClassName="font-mono"
-        isDisabled={isDisabled}
-        onChange={(v) => {
-          setDraft(v)
-          const n = Number.parseFloat(v)
-          if (Number.isFinite(n)) onCommit(n)
-        }}
-        onFocus={() => {
-          setDraft(fmt(value))
-          onInteractionStart()
-        }}
-        onBlur={() => setDraft(null)}
-      />
-    </label>
-  )
-}
 
 type Axis = 'x' | 'y' | 'z'
 
@@ -107,7 +66,7 @@ export function TransformInspector() {
   const entityName = entity.kind === 'subpart' ? entity.placement.instanceId : entity.connector.id
 
   const posField = (axis: Axis) => (
-    <ScalarField
+    <NumberField
       label={axis.toUpperCase()}
       value={transform.position[axis]}
       isDisabled={locked}
@@ -116,7 +75,7 @@ export function TransformInspector() {
     />
   )
   const rotField = (axis: Axis) => (
-    <ScalarField
+    <NumberField
       label={axis.toUpperCase()}
       value={transform.rotation[axis] * RAD2DEG}
       isDisabled={locked}
@@ -125,7 +84,7 @@ export function TransformInspector() {
     />
   )
   const scaleField = (axis: Axis) => (
-    <ScalarField
+    <NumberField
       label={axis.toUpperCase()}
       value={transform.scale[axis]}
       isDisabled={locked}
@@ -173,7 +132,7 @@ export function TransformInspector() {
 function Section(props: { title: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-wide text-fg-subtle">{props.title}</span>
+      <SectionTitle>{props.title}</SectionTitle>
       <div className="grid grid-cols-3 gap-1">{props.children}</div>
     </div>
   )
@@ -343,7 +302,7 @@ function VectorApply(props: {
 
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs uppercase tracking-wide text-fg-subtle">{title}</span>
+      <SectionTitle>{title}</SectionTitle>
       <div className="flex items-center gap-1">
         {(['X', 'Y', 'Z'] as const).map((label, i) => (
           <label key={label} className="flex flex-1 items-center gap-1">
@@ -394,7 +353,7 @@ function ConnectorHeader({
       <span className="truncate font-mono text-sm" title={id}>
         {id}
       </span>
-      <span className="text-xs uppercase tracking-wide text-fg-subtle">Flags</span>
+      <SectionTitle>Flags</SectionTitle>
       <div className="flex flex-wrap gap-x-3 gap-y-1">
         {CONNECTOR_FLAGS.map((f) => (
           <Switch

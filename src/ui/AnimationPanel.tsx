@@ -58,13 +58,7 @@ import {
   type SubPartPlacement,
 } from '../ksa/types'
 
-const RAD2DEG = 180 / Math.PI
-const DEG2RAD = Math.PI / 180
-
-function fmt(n: number): string {
-  if (!Number.isFinite(n)) return '0'
-  return String(Math.round(n * 1e5) / 1e5)
-}
+import { DEG2RAD, RAD2DEG, fmt } from './format'
 
 /** Clears the active animation and its joint/keyframe sub-selection (back to the list). */
 function closeAnimation(): void {

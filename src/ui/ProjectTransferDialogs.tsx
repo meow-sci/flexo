@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useStore } from '@nanostores/react'
-import { Modal, Dialog, DialogHeader, Button, toast } from './kit'
+import { Modal, Dialog, DialogHeader, Button, monoTextarea, toast, warningBox } from './kit'
 import { $part, importProjectData } from '../state/editorStore'
 import { $projectName } from '../state/projectStore'
 import { buildProjectExport, hasCustomAssets, parseProjectImport } from '../state/projectTransfer'
@@ -11,10 +11,6 @@ import { buildProjectExport, hasCustomAssets, parseProjectImport } from '../stat
  * Import is ADDITIVE — pasted content is merged into the current workspace via
  * {@link importProjectData} (one undo step), never replacing it.
  */
-
-const textareaClass =
-  'h-96 w-full resize-none rounded-lg border border-border bg-panel-sunken p-2 font-mono text-xs text-fg outline-none'
-const warningBox = 'rounded-lg border border-warning/40 bg-warning/10 p-2 text-xs text-warning'
 
 function plural(n: number, singular: string, pluralForm = `${singular}s`): string {
   return `${n} ${n === 1 ? singular : pluralForm}`
@@ -33,10 +29,7 @@ export function ExportProjectDialog({
   const [copied, setCopied] = useState(false)
 
   // Only serialize while the dialog is open and export is allowed.
-  const json = useMemo(
-    () => (isOpen && !blocked ? JSON.stringify(buildProjectExport(part, name), null, 2) : ''),
-    [isOpen, blocked, part, name],
-  )
+  const json = isOpen && !blocked ? JSON.stringify(buildProjectExport(part, name), null, 2) : ''
 
   const copy = async () => {
     try {
@@ -84,7 +77,7 @@ export function ExportProjectDialog({
                 carries meshes, layers, connectors, kittens, kitten meshes, animations, and GameData
                 — but no uploaded textures or primitive meshes.
               </p>
-              <textarea readOnly value={json} className={textareaClass} spellCheck={false} />
+              <textarea readOnly value={json} className={monoTextarea} spellCheck={false} />
               <div className="flex justify-end gap-2">
                 <Button size="sm" variant="ghost" onPress={download}>
                   Download .json
@@ -153,7 +146,7 @@ export function ImportProjectDialog({
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Paste exported project JSON here…"
-            className={textareaClass}
+            className={monoTextarea}
             spellCheck={false}
           />
           <div className="flex justify-end">

@@ -1,10 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import type { Key, Selection } from 'react-aria-components'
 import {
-  Modal,
-  Dialog,
-  DialogHeader,
   Button,
   SearchField,
   Select,
@@ -12,7 +9,6 @@ import {
   GridList,
   GridListItem,
   SectionTitle,
-  ToolbarButton,
   toast,
   useIsPhone,
 } from './kit'
@@ -26,7 +22,7 @@ import { revealLayer } from '../state/layerStore'
 import { closeBrowserPopup, openBrowserPopup } from '../state/loadProgressStore'
 import { PartPreview } from './PartPreview'
 import { PreviewLoadProgress } from './LoadProgress'
-import { VerticalSplit, HorizontalSplit } from './VerticalSplit'
+import { BrowserLayout, BrowserPopup } from './BrowserShell'
 
 const MAX_RESULTS = 200
 const NEW_LAYER = '__new_layer__'
@@ -43,21 +39,11 @@ function nextNewLayerName(layers: readonly Layer[]): string {
 }
 
 /**
- * "+ Part" action: opens a full-viewport browser. Top row is search +
- * destination-layer Select + Add. On desktop the body is `list | (preview /
- * details)` with two draggable dividers; on phone it collapses to a
- * vertically-split list-over-preview. Both splits reset to 50/50 each open.
+ * Full-viewport browser for importing a built-in Part (opened from the Add menu).
+ * Top row is search + destination-layer Select + Add. On desktop the body is
+ * `list | (preview / details)` with two draggable dividers; on phone it collapses
+ * to a vertically-split list-over-preview. Both splits reset to 50/50 each open.
  */
-export function AddPartButton() {
-  const [open, setOpen] = useState(false)
-  return (
-    <>
-      <ToolbarButton onPress={() => setOpen(true)}>+ Part</ToolbarButton>
-      <PartPopup open={open} onOpenChange={setOpen} />
-    </>
-  )
-}
-
 export function PartPopup({
   open,
   onOpenChange,
@@ -66,18 +52,9 @@ export function PartPopup({
   onOpenChange: (open: boolean) => void
 }) {
   return (
-    <Modal
-      isOpen={open}
-      onOpenChange={onOpenChange}
-      isDismissable
-      variant="cover"
-      className="sm:w-[95vw] sm:max-w-[75rem]"
-    >
-      <Dialog className="h-full">
-        <DialogHeader title="Add Part" onClose={() => onOpenChange(false)} />
-        {open && <BrowserBody onClose={() => onOpenChange(false)} />}
-      </Dialog>
-    </Modal>
+    <BrowserPopup title="Add Part" open={open} onOpenChange={onOpenChange}>
+      <BrowserBody onClose={() => onOpenChange(false)} />
+    </BrowserPopup>
   )
 }
 
@@ -96,21 +73,16 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
     return closeBrowserPopup
   }, [])
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    const matches = q
-      ? catalog.filter(
-          (p) =>
-            p.id.toLowerCase().includes(q) || p.editorTags.some((t) => t.toLowerCase().includes(q)),
-        )
-      : catalog
-    return matches.slice(0, MAX_RESULTS)
-  }, [catalog, query])
+  const q = query.trim().toLowerCase()
+  const matches = q
+    ? catalog.filter(
+        (p) =>
+          p.id.toLowerCase().includes(q) || p.editorTags.some((t) => t.toLowerCase().includes(q)),
+      )
+    : catalog
+  const filtered = matches.slice(0, MAX_RESULTS)
 
-  const selected = useMemo(
-    () => (selectedId ? (catalog.find((p) => p.id === selectedId) ?? null) : null),
-    [catalog, selectedId],
-  )
+  const selected = selectedId ? (catalog.find((p) => p.id === selectedId) ?? null) : null
 
   const onSelection = (keys: Selection) => {
     if (keys === 'all') return
@@ -239,26 +211,18 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1">
-        {isPhone ? (
-          <VerticalSplit
-            // Favor the preview — browsing-to-preview is the point on phone.
-            initialSplit={45}
-            top={listPane}
-            bottom={
-              <div className="flex h-full flex-col gap-1.5 overflow-hidden">
-                {selected && <CompactPartSummary part={selected} subPartIndex={subPartIndex} />}
-                <div className="min-h-0 flex-1">{previewPane}</div>
-              </div>
-            }
-          />
-        ) : (
-          <HorizontalSplit
-            left={listPane}
-            right={<VerticalSplit top={previewPane} bottom={detailsPane} />}
-          />
-        )}
-      </div>
+      <BrowserLayout
+        list={listPane}
+        preview={previewPane}
+        details={detailsPane}
+        // Phone: compact summary strip above the preview (no room for full details).
+        phoneBottom={
+          <div className="flex h-full flex-col gap-1.5 overflow-hidden">
+            {selected && <CompactPartSummary part={selected} subPartIndex={subPartIndex} />}
+            <div className="min-h-0 flex-1">{previewPane}</div>
+          </div>
+        }
+      />
     </div>
   )
 }
@@ -274,16 +238,8 @@ function CompactPartSummary({
   part: CatalogPart
   subPartIndex: Map<string, unknown>
 }) {
-  const uniqueTypes = useMemo(() => {
-    const set = new Set<string>()
-    for (const p of part.placements) set.add(p.subPartTemplateId)
-    return set
-  }, [part])
-
-  const missing = useMemo(
-    () => [...uniqueTypes].filter((t) => !subPartIndex.has(t)).length,
-    [uniqueTypes, subPartIndex],
-  )
+  const uniqueTypes = new Set(part.placements.map((p) => p.subPartTemplateId))
+  const missing = [...uniqueTypes].filter((t) => !subPartIndex.has(t)).length
 
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-panel-sunken px-2 py-1 text-xs">
@@ -323,15 +279,13 @@ function PartDetails({
   part: CatalogPart
   subPartIndex: Map<string, unknown>
 }) {
-  const breakdown = useMemo(() => {
-    const counts = new Map<string, number>()
-    for (const p of part.placements) {
-      counts.set(p.subPartTemplateId, (counts.get(p.subPartTemplateId) ?? 0) + 1)
-    }
-    return Array.from(counts, ([templateId, count]) => ({ templateId, count })).sort(
-      (a, b) => b.count - a.count || a.templateId.localeCompare(b.templateId),
-    )
-  }, [part])
+  const counts = new Map<string, number>()
+  for (const p of part.placements) {
+    counts.set(p.subPartTemplateId, (counts.get(p.subPartTemplateId) ?? 0) + 1)
+  }
+  const breakdown = Array.from(counts, ([templateId, count]) => ({ templateId, count })).sort(
+    (a, b) => b.count - a.count || a.templateId.localeCompare(b.templateId),
+  )
 
   const missing = breakdown.filter((b) => !subPartIndex.has(b.templateId)).length
 

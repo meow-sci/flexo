@@ -14,7 +14,7 @@ export interface ConfirmDialogProps {
   onConfirm: () => void
 }
 
-/** Controlled confirm/alert dialog. Replaces cladd's Dialog + useDialog.confirm. */
+/** Controlled confirm/alert dialog: title + message + cancel/confirm actions. */
 export function ConfirmDialog({
   isOpen,
   onOpenChange,

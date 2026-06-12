@@ -13,8 +13,8 @@ import {
 import { $part, addConnector, addKitten, addSubPart } from '../state/editorStore'
 import { makeKittenMeshPart } from '../state/customAssetStore'
 import type { KittenKind } from '../ksa/types'
-import { SubPartPopup } from './AddSubPartButton'
-import { PartPopup } from './AddPartButton'
+import { SubPartPopup } from './SubPartBrowser'
+import { PartPopup } from './PartBrowser'
 import { CustomTextureDialog } from './CustomTextureDialog'
 import { CreateMeshDialog } from './CreateMeshDialog'
 

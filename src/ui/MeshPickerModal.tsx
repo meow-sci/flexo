@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { GridList, GridListItem, type Selection } from 'react-aria-components'
-import { Button, Dialog, DialogHeader, Modal, SearchField } from './kit'
+import { Button, Dialog, DialogHeader, Modal, SearchField, cn, gridRowClass } from './kit'
 import { $part } from '../state/editorStore'
 import { $activeAnimation, $activeJointId, attachToJoint } from '../state/animationStore'
 
@@ -11,19 +11,6 @@ interface PickRow {
   name: string
   sub: string
 }
-
-const rowClass = ({
-  isSelected,
-  isFocusVisible,
-}: {
-  isSelected: boolean
-  isFocusVisible: boolean
-}) =>
-  [
-    'flex cursor-default select-none items-center gap-1 rounded-md px-2 py-1.5 text-fg outline-none',
-    isSelected ? 'bg-white/[0.08] ring-2 ring-inset ring-accent' : 'hover:bg-white/[0.06]',
-    isFocusVisible && !isSelected ? 'ring-1 ring-inset ring-accent' : '',
-  ].join(' ')
 
 /**
  * A searchable, multi-select grid of placed SubParts for attaching to the active
@@ -46,17 +33,13 @@ export function MeshPickerModal({
 
   const joint = anim?.joints.find((j) => j.id === activeJointId) ?? null
 
-  const rows = useMemo<PickRow[]>(() => {
-    const q = search.trim().toLowerCase()
-    const match = (...vals: string[]) => q === '' || vals.some((v) => v.toLowerCase().includes(q))
-    return part.placements.flatMap((p) =>
-      match(p.instanceId, p.subPartTemplateId)
-        ? [{ id: p.instanceId, name: p.instanceId, sub: p.subPartTemplateId }]
-        : [],
-    )
-  }, [part.placements, search])
-
-  const selectedKeys = useMemo<Selection>(() => new Set(picked), [picked])
+  const q = search.trim().toLowerCase()
+  const match = (...vals: string[]) => q === '' || vals.some((v) => v.toLowerCase().includes(q))
+  const rows: PickRow[] = part.placements.flatMap((p) =>
+    match(p.instanceId, p.subPartTemplateId)
+      ? [{ id: p.instanceId, name: p.instanceId, sub: p.subPartTemplateId }]
+      : [],
+  )
 
   const onSelectionChange = (keys: Selection) => {
     if (keys === 'all') {
@@ -104,7 +87,7 @@ export function MeshPickerModal({
               aria-label="Parts"
               selectionMode="multiple"
               items={rows}
-              selectedKeys={selectedKeys}
+              selectedKeys={picked}
               onSelectionChange={onSelectionChange}
               dependencies={[search]}
               renderEmptyState={() => (
@@ -115,7 +98,11 @@ export function MeshPickerModal({
               className="flex flex-col gap-1 outline-none"
             >
               {(row: PickRow) => (
-                <GridListItem id={row.id} textValue={row.name} className={rowClass}>
+                <GridListItem
+                  id={row.id}
+                  textValue={row.name}
+                  className={(rp) => cn(gridRowClass(rp), 'py-1.5')}
+                >
                   <div className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-sm">{row.name}</span>
                     <span className="truncate text-xs text-fg-subtle">{row.sub}</span>

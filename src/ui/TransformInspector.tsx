@@ -22,15 +22,7 @@ import {
   translatedTransform,
 } from '../three/bulkTransform'
 import { CONNECTOR_FLAGS, type ConnectorFlag } from '../ksa/types'
-
-const RAD2DEG = 180 / Math.PI
-const DEG2RAD = Math.PI / 180
-
-/** Format a number for display: trim to ~5 decimals, no trailing zeros. */
-function fmt(n: number): string {
-  if (!Number.isFinite(n)) return '0'
-  return String(Math.round(n * 1e5) / 1e5)
-}
+import { DEG2RAD, RAD2DEG, fmt } from './format'
 
 const panelClass = 'flex flex-col gap-2 rounded-xl border border-border bg-panel p-2'
 

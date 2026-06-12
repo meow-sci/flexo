@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import {
   Collection,
@@ -18,6 +18,8 @@ import {
   Popover,
   SearchField,
   SubmenuTrigger,
+  cn,
+  gridRowClass,
 } from './kit'
 import {
   $part,
@@ -74,22 +76,6 @@ function parseKey(key: string): { kind: Kind; raw: string } {
   }
 }
 
-const rowClass = ({
-  isSelected,
-  isFocusVisible,
-  isDisabled,
-}: {
-  isSelected: boolean
-  isFocusVisible: boolean
-  isDisabled: boolean
-}) =>
-  [
-    'flex cursor-default select-none items-center gap-1 rounded-md px-2 py-1 text-fg outline-none',
-    isDisabled ? 'opacity-40' : '',
-    isSelected ? 'bg-white/[0.08] ring-2 ring-inset ring-accent' : 'hover:bg-white/[0.06]',
-    isFocusVisible && !isSelected ? 'ring-1 ring-inset ring-accent' : '',
-  ].join(' ')
-
 /**
  * The unified inspector "Assets" list: one section per layer (filtered by each
  * layer's "in asset list" toggle), with normal layers listing SubParts, the
@@ -113,105 +99,91 @@ export function AssetsList() {
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Fast key → store-index lookups for onSelectionChange.
-  const subIdx = useMemo(
-    () => new Map(part.placements.map((p, i) => [p.instanceId, i])),
-    [part.placements],
-  )
-  const conIdx = useMemo(() => new Map(part.connectors.map((c, i) => [c.id, i])), [part.connectors])
-  const kitIdx = useMemo(() => new Map(part.kittens.map((k, i) => [k.id, i])), [part.kittens])
+  const subIdx = new Map(part.placements.map((p, i) => [p.instanceId, i]))
+  const conIdx = new Map(part.connectors.map((c, i) => [c.id, i]))
+  const kitIdx = new Map(part.kittens.map((k, i) => [k.id, i]))
 
-  const sections = useMemo<Section[]>(() => {
-    const q = search.trim().toLowerCase()
-    const match = (...vals: string[]) => q === '' || vals.some((v) => v.toLowerCase().includes(q))
-    return part.layers
-      .filter((l) => layerViewState(layerView, l.id).listed)
-      .map((l) => {
-        const view = layerViewState(layerView, l.id)
-        const hidden = !view.visible
-        let rows: Row[]
-        if (l.id === CONNECTOR_LAYER_ID) {
-          rows = part.connectors.flatMap((c, i) =>
-            c.layerId === l.id && match(c.id, ...c.flags)
-              ? [
-                  {
-                    id: keyOf('connector', c.id),
-                    kind: 'connector' as const,
-                    index: i,
-                    name: c.id,
-                    sub: c.flags.length ? c.flags.join(', ') : 'no flags',
-                    hidden,
-                  },
-                ]
-              : [],
-          )
-        } else if (l.id === KITTEN_LAYER_ID) {
-          rows = part.kittens.flatMap((k, i) =>
-            k.layerId === l.id && match(k.id, k.kind)
-              ? [
-                  {
-                    id: keyOf('kitten', k.id),
-                    kind: 'kitten' as const,
-                    index: i,
-                    name: k.id,
-                    sub: k.kind,
-                    hidden,
-                  },
-                ]
-              : [],
-          )
-        } else {
-          rows = part.placements.flatMap((p, i) =>
-            p.layerId === l.id && match(p.instanceId, p.subPartTemplateId)
-              ? [
-                  {
-                    id: keyOf('subpart', p.instanceId),
-                    kind: 'subpart' as const,
-                    index: i,
-                    name: p.instanceId,
-                    sub: p.subPartTemplateId,
-                    hidden,
-                  },
-                ]
-              : [],
-          )
-        }
-        return { id: l.id, layer: l, rows, count: rows.length, hidden, locked: view.locked }
-      })
-      .filter((s) => s.rows.length > 0)
-  }, [part, layerView, search])
+  const q = search.trim().toLowerCase()
+  const match = (...vals: string[]) => q === '' || vals.some((v) => v.toLowerCase().includes(q))
+  const sections: Section[] = part.layers
+    .filter((l) => layerViewState(layerView, l.id).listed)
+    .map((l) => {
+      const view = layerViewState(layerView, l.id)
+      const hidden = !view.visible
+      let rows: Row[]
+      if (l.id === CONNECTOR_LAYER_ID) {
+        rows = part.connectors.flatMap((c, i) =>
+          c.layerId === l.id && match(c.id, ...c.flags)
+            ? [
+                {
+                  id: keyOf('connector', c.id),
+                  kind: 'connector' as const,
+                  index: i,
+                  name: c.id,
+                  sub: c.flags.length ? c.flags.join(', ') : 'no flags',
+                  hidden,
+                },
+              ]
+            : [],
+        )
+      } else if (l.id === KITTEN_LAYER_ID) {
+        rows = part.kittens.flatMap((k, i) =>
+          k.layerId === l.id && match(k.id, k.kind)
+            ? [
+                {
+                  id: keyOf('kitten', k.id),
+                  kind: 'kitten' as const,
+                  index: i,
+                  name: k.id,
+                  sub: k.kind,
+                  hidden,
+                },
+              ]
+            : [],
+        )
+      } else {
+        rows = part.placements.flatMap((p, i) =>
+          p.layerId === l.id && match(p.instanceId, p.subPartTemplateId)
+            ? [
+                {
+                  id: keyOf('subpart', p.instanceId),
+                  kind: 'subpart' as const,
+                  index: i,
+                  name: p.instanceId,
+                  sub: p.subPartTemplateId,
+                  hidden,
+                },
+              ]
+            : [],
+        )
+      }
+      return { id: l.id, layer: l, rows, count: rows.length, hidden, locked: view.locked }
+    })
+    .filter((s) => s.rows.length > 0)
 
   // Locked-layer rows are fully disabled (non-selectable, non-focusable).
-  const disabledKeys = useMemo(() => {
-    const ids = new Set<string>()
-    for (const s of sections) if (s.locked) for (const r of s.rows) ids.add(r.id)
-    return ids
-  }, [sections])
+  const disabledKeys = new Set<string>()
+  for (const s of sections) if (s.locked) for (const r of s.rows) disabledKeys.add(r.id)
 
   // Hidden-layer rows are blocked from selection but not disabled (keep their menu).
-  const hiddenKeys = useMemo(() => {
-    const ids = new Set<string>()
-    for (const s of sections) if (s.hidden) for (const r of s.rows) ids.add(r.id)
-    return ids
-  }, [sections])
+  const hiddenKeys = new Set<string>()
+  for (const s of sections) if (s.hidden) for (const r of s.rows) hiddenKeys.add(r.id)
 
   // Controlled selection — the UNION of all three stores, so a selection can span
   // SubParts, connectors, and kittens at once (native react-aria multi-select).
-  const selectedKeys = useMemo<Selection>(() => {
-    const keys = new Set<string>()
-    for (const i of selSub) {
-      const p = part.placements[i]
-      if (p) keys.add(keyOf('subpart', p.instanceId))
-    }
-    for (const i of selCon) {
-      const c = part.connectors[i]
-      if (c) keys.add(keyOf('connector', c.id))
-    }
-    for (const i of selKit) {
-      const k = part.kittens[i]
-      if (k) keys.add(keyOf('kitten', k.id))
-    }
-    return keys
-  }, [selSub, selCon, selKit, part])
+  const selectedKeys = new Set<string>()
+  for (const i of selSub) {
+    const p = part.placements[i]
+    if (p) selectedKeys.add(keyOf('subpart', p.instanceId))
+  }
+  for (const i of selCon) {
+    const c = part.connectors[i]
+    if (c) selectedKeys.add(keyOf('connector', c.id))
+  }
+  for (const i of selKit) {
+    const k = part.kittens[i]
+    if (k) selectedKeys.add(keyOf('kitten', k.id))
+  }
 
   const onSelectionChange = (keys: Selection) => {
     const sub: number[] = []
@@ -231,10 +203,9 @@ export function AssetsList() {
       return
     }
     const next = new Set([...keys].map(String))
-    const prev = selectedKeys === 'all' ? new Set<string>() : selectedKeys
     // Clicking a hidden-layer row may not select it (matches the 3D visible rule);
     // ignore the event so the current selection is preserved.
-    const added = [...next].find((id) => !prev.has(id))
+    const added = [...next].find((id) => !selectedKeys.has(id))
     if (added != null && hiddenKeys.has(added)) return
     // Partition the (possibly cross-kind) key set into the three stores; drop any
     // hidden-layer rows that a range selection may have swept in.
@@ -320,7 +291,7 @@ export function AssetsList() {
                         .querySelector<HTMLButtonElement>('button[aria-label="Asset options"]')
                         ?.click()
                     }}
-                    className={(rp) => `${rowClass(rp)}${row.hidden ? ' opacity-40' : ''}`}
+                    className={(rp) => cn(gridRowClass(rp), row.hidden && 'opacity-40')}
                   >
                     <div className="flex min-w-0 flex-1 flex-col">
                       <span

@@ -1,106 +1,44 @@
+# scripts/ — Bun mini-workspace
 
-Default to using Bun instead of Node.js.
+Standalone build/asset utilities. This directory is its own Bun package
+(`scripts/package.json`): install and run everything here with **Bun**, never
+Node, ts-node, or pnpm. The flexo app at the repo root is the opposite —
+pnpm + Vite + vitest — so never apply this file's Bun guidance outside
+`scripts/`.
 
-- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
-- Use `bun test` instead of `jest` or `vitest`
-- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
-- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
-- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
-- Use `bunx <package> <command>` instead of `npx <package> <command>`
-- Bun automatically loads .env, so don't use dotenv.
-
-## APIs
-
-- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
-- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
-- `Bun.redis` for Redis. Don't use `ioredis`.
-- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
-- `WebSocket` is built-in. Don't use `ws`.
-- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
-- Bun.$`ls` instead of execa.
-
-## Testing
-
-Use `bun test` to run tests.
-
-```ts#index.test.ts
-import { test, expect } from "bun:test";
-
-test("hello world", () => {
-  expect(1).toBe(1);
-});
-```
-
-## Frontend
-
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
-
-Server:
-
-```ts#index.ts
-import index from "./index.html"
-
-Bun.serve({
-  routes: {
-    "/": index,
-    "/api/users/:id": {
-      GET: (req) => {
-        return new Response(JSON.stringify({ id: req.params.id }));
-      },
-    },
-  },
-  // optional websocket support
-  websocket: {
-    open: (ws) => {
-      ws.send("Hello, world!");
-    },
-    message: (ws, message) => {
-      ws.send(message);
-    },
-    close: (ws) => {
-      // handle close
-    }
-  },
-  development: {
-    hmr: true,
-    console: true,
-  }
-})
-```
-
-HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
-
-```html#index.html
-<html>
-  <body>
-    <h1>Hello, world!</h1>
-    <script type="module" src="./frontend.tsx"></script>
-  </body>
-</html>
-```
-
-With the following `frontend.tsx`:
-
-```tsx#frontend.tsx
-import React from "react";
-import { createRoot } from "react-dom/client";
-
-// import .css files directly and it works
-import './index.css';
-
-const root = createRoot(document.body);
-
-export default function Frontend() {
-  return <h1>Hello, world!</h1>;
-}
-
-root.render(<Frontend />);
-```
-
-Then, run index.ts
+## Setup & running
 
 ```sh
-bun --hot ./index.ts
+cd scripts
+bun install                                          # once (upng-js + @types/bun)
+bun build-cartoon-moon.ts ../faces                   # a dir of PNGs (or individual files)
+bun copy-ksa-assets-to-private-repo.ts --target <dir>
 ```
 
-For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
+## The scripts
+
+- `build-cartoon-moon.ts` — packs PNG "character faces" into one shared KTX2
+  atlas + per-face GLB cards and regenerates `ksa-mods/cartoon-moon/`, a
+  data-only KSA moon mod that scatters the faces as ground clutter. All flags
+  (`--out`, `--shape`, `--brightness`, `--zstd`, …) are documented in the
+  script's header comment; mod-level docs live in
+  [`ksa-mods/cartoon-moon/README.md`](../ksa-mods/cartoon-moon/README.md).
+- `copy-ksa-assets-to-private-repo.ts` — discovers the KSA Core Part/SubPart
+  catalog plus every binary it references (and the kitten character dirs,
+  copied verbatim) and writes them into the private assets repo used at CI
+  build time. Context: [`docs/asset-pipeline.md`](../docs/asset-pipeline.md).
+
+## Conventions
+
+- **Reuse app code instead of reimplementing it.** `build-cartoon-moon.ts`
+  imports `../src/ktx/encodeKtx2` so the on-disk KTX2 format has exactly one
+  implementation. Keep shareable logic in `src/` and import it from here; only
+  Bun-environment shims (e.g. upng-js for PNG decode where the browser would
+  use canvas) belong in `scripts/`.
+- `bun <file.ts>` runs TypeScript directly — no transpile step.
+- Prefer Bun built-ins over Node equivalents here: `Bun.file()`/`Bun.write()`
+  over `node:fs` read/write, `Glob` from `bun` for file discovery,
+  Bun.$\`cmd\` over child_process/execa, `bun:test` if tests are added. Bun
+  auto-loads `.env` — don't add dotenv.
+- TypeScript config is local (`scripts/tsconfig.json`, bun-init defaults with
+  `types: ["bun"]`) and intentionally independent of the app's tsconfig.

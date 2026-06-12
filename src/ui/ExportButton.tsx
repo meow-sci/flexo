@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { CheckCircle2, Download, FolderInput, FolderSync } from 'lucide-react'
 import {
@@ -9,7 +9,9 @@ import {
   ToggleButtonGroup,
   ToggleButton,
   ToolbarButton,
+  monoTextarea,
   toast,
+  warningBox,
 } from './kit'
 import { $part } from '../state/editorStore'
 import { $projectName } from '../state/projectStore'
@@ -46,8 +48,6 @@ function singleSelect(keys: Iterable<string | number>): string | undefined {
   return [...keys][0] as string | undefined
 }
 
-const warningBox = 'rounded-lg border border-warning/40 bg-warning/10 p-2 text-xs text-warning'
-
 /**
  * Top-surface "Export" action. Two modes:
  *   - XML: shows the raw Part / GameData KSA XML with copy-to-clipboard.
@@ -70,13 +70,9 @@ export function ExportButton({
   const open = isControlled ? externalOpen! : internalOpen
   const setOpen = isControlled ? (v: boolean) => externalOnChange?.(v) : setInternalOpen
 
-  const warnings = useMemo(
-    () =>
-      validate(
-        part.partId,
-        part.placements.map((p) => p.instanceId),
-      ),
-    [part],
+  const warnings = validate(
+    part.partId,
+    part.placements.map((p) => p.instanceId),
   )
 
   return (
@@ -129,10 +125,7 @@ function XmlPanel() {
   const [tab, setTab] = useState<Tab>('part')
   const [copied, setCopied] = useState(false)
 
-  const xml = useMemo(
-    () => (tab === 'part' ? serializePart(part) : serializeGameData(part)),
-    [tab, part],
-  )
+  const xml = tab === 'part' ? serializePart(part) : serializeGameData(part)
 
   const copy = async () => {
     try {
@@ -162,12 +155,7 @@ function XmlPanel() {
           GameData XML
         </ToggleButton>
       </ToggleButtonGroup>
-      <textarea
-        readOnly
-        value={xml}
-        className="h-96 w-full resize-none rounded-lg border border-border bg-panel-sunken p-2 font-mono text-xs text-fg outline-none"
-        spellCheck={false}
-      />
+      <textarea readOnly value={xml} className={monoTextarea} spellCheck={false} />
       <div className="flex justify-end">
         <Button size="sm" variant="primary" onPress={copy}>
           {copied ? 'Copied!' : 'Copy to clipboard'}

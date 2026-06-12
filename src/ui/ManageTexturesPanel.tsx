@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { X } from 'lucide-react'
 import { Button as AriaButton } from 'react-aria-components'
@@ -81,14 +81,11 @@ export function ManageTexturesPanel() {
   const [selectedFace, setSelectedFace] = useState(faceKeys[0] ?? '')
   const activeFace = faceKeys.includes(selectedFace) ? selectedFace : (faceKeys[0] ?? '')
 
-  const update = useCallback(
-    (faceKey: string, patch: Partial<FaceTextureConfig>) => {
-      const currentMesh = $part.get().customMeshes.find((m) => m.id === meshId)
-      const existing = currentMesh?.faceTextures[faceKey] ?? DEFAULT_CONFIG
-      void updateMeshFaceConfig(meshId!, faceKey, { ...existing, ...patch })
-    },
-    [meshId],
-  )
+  const update = (faceKey: string, patch: Partial<FaceTextureConfig>) => {
+    const currentMesh = $part.get().customMeshes.find((m) => m.id === meshId)
+    const existing = currentMesh?.faceTextures[faceKey] ?? DEFAULT_CONFIG
+    void updateMeshFaceConfig(meshId!, faceKey, { ...existing, ...patch })
+  }
 
   if (!mesh) return null
 
@@ -392,7 +389,7 @@ function UvNumberField({
     }
   }, [value])
 
-  const commit = useCallback(() => {
+  const commit = () => {
     const n = parseFloat(draft)
     if (!isNaN(n)) {
       committed.current = n
@@ -401,7 +398,7 @@ function UvNumberField({
     } else {
       setDraft(formatNum(committed.current))
     }
-  }, [draft, onChange])
+  }
 
   return (
     <TextField

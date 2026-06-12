@@ -1,11 +1,6 @@
 import { useState } from 'react'
 import { TextField } from './kit'
-
-/** Display format: round to ~5 decimals, drop trailing zeros. */
-function fmt(n: number): string {
-  if (!Number.isFinite(n)) return '0'
-  return String(Math.round(n * 1e5) / 1e5)
-}
+import { fmt } from './format'
 
 /**
  * A draft-aware numeric field with a short inline label. Free-types while focused (local

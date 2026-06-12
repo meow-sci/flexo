@@ -18,7 +18,7 @@ export interface ToastMessage {
 /** App-wide toast queue. Render {@link GlobalToastRegion} once near the root. */
 export const toastQueue = new ToastQueue<ToastMessage>({ maxVisibleToasts: 4 })
 
-/** Imperative entry point — replaces cladd's useToast(). */
+/** Imperative entry point — enqueue a toast from anywhere, no hook required. */
 export function toast(message: ToastMessage, options?: { timeout?: number }) {
   return toastQueue.add(message, { timeout: options?.timeout ?? 4000 })
 }

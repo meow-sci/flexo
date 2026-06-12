@@ -13,7 +13,7 @@ it's a web based interface that exposes a 3d work area for importing SubParts, a
 
 # repository layout
 
-- `src/` - the flexo web app source (TypeScript). Layered: `src/ksa/` (pure domain logic + XML + catalog), `src/state/` (nanostores editor state), `src/three/` (three.js viewport/scene/materials), `src/ui/` (React + cladd panels). See [docs/architecture.md](docs/architecture.md).
+- `src/` - the flexo web app source (TypeScript). Layered: `src/ksa/` (pure domain logic + XML + catalog), `src/state/` (nanostores editor state), `src/three/` (three.js viewport/scene/materials), `src/ui/` (React panels on react-aria-components + the local `src/ui/kit/` primitives). See [docs/architecture.md](docs/architecture.md).
 - `docs/` - feature documentation for how the app works (linked from the "documentation" section below). Keep these updated as features change.
 - `public/` - static assets copied verbatim into the build (`public/basis/` holds the KTX2 transcoder worker).
 - `vite/` - custom Vite plugins (e.g. `ksaAssets.ts` serves KSA assets at `/ksa/` in dev — see [docs/asset-pipeline.md](docs/asset-pipeline.md)).
@@ -135,8 +135,8 @@ Skipping any step is not acceptable.
 
 # UI design
 
-- **`<Popover>` MUST use `rounded-lg`**: every `<Popover>` component MUST include `rounded-lg` in its `className`. The default rounding from cladd is too large for this UI; `rounded-lg` is the correct standard. Example: `<Popover className="w-64 rounded-lg" ...>`.
-- **Prefer `GridList` over `ListBox`**: when rendering selectable lists, use react-aria's `GridList`/`GridListItem` rather than `ListBox` (or cladd's `List`/`ListButton`). `GridList` supports richer functionality — rows can embed interactive controls (buttons, menus, links) while still participating in single/multi selection and keyboard navigation.
+- **Use the `src/ui/kit/` primitives, not raw react-aria-components**: import Button/Modal/Popover/Select/etc. from `./kit` so styling stays centralized (the kit `<Popover>` already applies the standard `rounded-lg` rounding — don't override it). Reach for raw `react-aria-components` only for pieces the kit deliberately doesn't wrap (e.g. sectioned `GridList` collections).
+- **Prefer `GridList` over `ListBox`**: when rendering selectable lists, use react-aria's `GridList`/`GridListItem` rather than `ListBox`. `GridList` supports richer functionality — rows can embed interactive controls (buttons, menus, links) while still participating in single/multi selection and keyboard navigation.
 
 # repository maintenance
 
@@ -155,16 +155,27 @@ Skipping any step is not acceptable.
 - react 19 for UI framework where needed
 - vite / rolldown for build and packaging tools
 - typescript for language
-- cladd for react ui component framework (use the cladd skill)
+- react-aria-components for accessible UI primitives, wrapped by the local `src/ui/kit/` component kit styled with tailwind-variants (use the react-aria skill)
+- React Compiler (babel-plugin-react-compiler via vite) for automatic memoization — never hand-write `useMemo`/`useCallback`/`React.memo` (use the react-compiler skill)
 - three.js for the 3d workspace (use the threejs-\* skills)
-- nanostores for editor state (framework-agnostic core; `src/state/` and `src/ksa/` import no react/three)
+- nanostores for editor state (framework-agnostic core; `src/state/` and `src/ksa/` import no react — three.js imports are allowed only for math/geometry in the animation + custom-asset modules, see [docs/architecture.md](docs/architecture.md))
 - XML via built-in DOM APIs: `@xmldom/xmldom` (node/tests) + browser `DOMParser`/`XMLSerializer` (no third-party XML lib)
 - vitest (happy-dom env) for unit tests
 
 # skills
 
+Project skills live in `.claude/skills/`.
+
 | Skill                  | Description                                                             |
 | ---------------------- | ----------------------------------------------------------------------- |
+| react                  | Rules of React — required reading for React Compiler compatibility      |
+| react-compiler         | React Compiler behavior, directives, debugging, build integration       |
+| react-aria             | react-aria-components usage and accessible component patterns           |
+| nanostores             | nanostores state manager patterns                                       |
+| hotkeys                | react-hotkeys-hook usage                                                |
+| oxlint                 | oxlint linting and code analysis                                        |
+| oxcfmt                 | oxfmt code formatting                                                   |
+| bun                    | Bun runtime for the `scripts/` mini-workspace                           |
 | threejs-fundamentals   | Scene setup, cameras, renderer, Object3D hierarchy, coordinate systems  |
 | threejs-geometry       | Built-in shapes, BufferGeometry, custom geometry, instancing            |
 | threejs-materials      | PBR materials, basic/phong/standard materials, shader materials         |
@@ -175,7 +186,6 @@ Skipping any step is not acceptable.
 | threejs-shaders        | GLSL basics, ShaderMaterial, uniforms, custom effects                   |
 | threejs-postprocessing | EffectComposer, bloom, DOF, screen effects, custom passes               |
 | threejs-interaction    | Raycasting, camera controls, mouse/touch input, object selection        |
-| cladd                  | cladd react ui component framework                                      |
 
 # KSA
 

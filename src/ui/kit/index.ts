@@ -1,7 +1,7 @@
 // Centralized react-aria + Tailwind component kit. Import UI primitives from
 // here (not from react-aria-components directly) so styling stays in one place.
 
-export { cn, composeTw, focusRing } from './styles'
+export { cn, composeTw, focusRing, gridRowClass, monoTextarea, warningBox } from './styles'
 
 export { Button, button, type ButtonKitProps } from './Button'
 export { ToggleButton, ToggleButtonGroup, type ToggleButtonKitProps } from './ToggleButton'

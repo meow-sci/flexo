@@ -31,3 +31,29 @@ export function composeTw<T extends object>(
 ) {
   return composeRenderProps(className, (resolved) => cn(tw, resolved))
 }
+
+/**
+ * Row styling for the app's standalone `GridList`s (Assets list, Mesh Picker):
+ * accent ring when selected, subtle hover otherwise, dimmed when disabled.
+ * Compose call-site extras via `cn(gridRowClass(rp), …)`.
+ */
+export function gridRowClass(rp: {
+  isSelected: boolean
+  isFocusVisible: boolean
+  isDisabled?: boolean
+}): string {
+  return cn(
+    'flex cursor-default select-none items-center gap-1 rounded-md px-2 py-1 text-fg outline-none',
+    rp.isDisabled && 'opacity-40',
+    rp.isSelected ? 'bg-white/[0.08] ring-2 ring-inset ring-accent' : 'hover:bg-white/[0.06]',
+    rp.isFocusVisible && !rp.isSelected && 'ring-1 ring-inset ring-accent',
+  )
+}
+
+/** Amber callout box for inline warnings inside dialogs and panels. */
+export const warningBox =
+  'rounded-lg border border-warning/40 bg-warning/10 p-2 text-xs text-warning'
+
+/** Tall read-mostly monospace textarea for XML/JSON payloads in dialogs. */
+export const monoTextarea =
+  'h-96 w-full resize-none rounded-lg border border-border bg-panel-sunken p-2 font-mono text-xs text-fg outline-none'

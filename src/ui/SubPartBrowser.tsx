@@ -1,46 +1,23 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import type { Key, Selection } from 'react-aria-components'
-import {
-  Modal,
-  Dialog,
-  DialogHeader,
-  Button,
-  SearchField,
-  GridList,
-  GridListItem,
-  SectionTitle,
-  ToolbarButton,
-  toast,
-  useIsPhone,
-} from './kit'
+import { Button, SearchField, GridList, GridListItem, SectionTitle, toast, useIsPhone } from './kit'
 import { $catalog, $catalogLoading } from '../state/catalogStore'
 import type { CatalogSubPart } from '../ksa/catalog'
 import { addSubPart } from '../state/editorStore'
 import { closeBrowserPopup, openBrowserPopup } from '../state/loadProgressStore'
 import { SubPartPreview } from './SubPartPreview'
 import { PreviewLoadProgress } from './LoadProgress'
-import { VerticalSplit, HorizontalSplit } from './VerticalSplit'
+import { BrowserLayout, BrowserPopup } from './BrowserShell'
 
 const MAX_RESULTS = 200
 
 /**
- * "+ SubPart" action: opens a full-viewport browser. Top row is search + Add.
- * On desktop the body is `list | (preview / details)` with two draggable
- * dividers; on phone it collapses to a vertically-split list-over-preview.
- * Both splits reset to 50/50 each time the modal opens.
+ * Full-viewport browser for adding a catalog SubPart (opened from the Add menu).
+ * Top row is search + Add. On desktop the body is `list | (preview / details)`
+ * with two draggable dividers; on phone it collapses to a vertically-split
+ * list-over-preview. Both splits reset to 50/50 each time the modal opens.
  */
-export function AddSubPartButton() {
-  const [open, setOpen] = useState(false)
-
-  return (
-    <>
-      <ToolbarButton onPress={() => setOpen(true)}>+ SubPart</ToolbarButton>
-      <SubPartPopup open={open} onOpenChange={setOpen} />
-    </>
-  )
-}
-
 export function SubPartPopup({
   open,
   onOpenChange,
@@ -49,18 +26,9 @@ export function SubPartPopup({
   onOpenChange: (open: boolean) => void
 }) {
   return (
-    <Modal
-      isOpen={open}
-      onOpenChange={onOpenChange}
-      isDismissable
-      variant="cover"
-      className="sm:w-[95vw] sm:max-w-[75rem]"
-    >
-      <Dialog className="h-full">
-        <DialogHeader title="Add SubPart" onClose={() => onOpenChange(false)} />
-        {open && <BrowserBody onClose={() => onOpenChange(false)} />}
-      </Dialog>
-    </Modal>
+    <BrowserPopup title="Add SubPart" open={open} onOpenChange={onOpenChange}>
+      <BrowserBody onClose={() => onOpenChange(false)} />
+    </BrowserPopup>
   )
 }
 
@@ -76,16 +44,11 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
     return closeBrowserPopup
   }, [])
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    const matches = q ? catalog.filter((s) => s.id.toLowerCase().includes(q)) : catalog
-    return matches.slice(0, MAX_RESULTS)
-  }, [catalog, query])
+  const q = query.trim().toLowerCase()
+  const matches = q ? catalog.filter((s) => s.id.toLowerCase().includes(q)) : catalog
+  const filtered = matches.slice(0, MAX_RESULTS)
 
-  const selected = useMemo(
-    () => (selectedId ? (catalog.find((s) => s.id === selectedId) ?? null) : null),
-    [catalog, selectedId],
-  )
+  const selected = selectedId ? (catalog.find((s) => s.id === selectedId) ?? null) : null
 
   const onSelection = (keys: Selection) => {
     if (keys === 'all') return
@@ -178,16 +141,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
         </Button>
       </div>
 
-      <div className="min-h-0 flex-1">
-        {isPhone ? (
-          <VerticalSplit initialSplit={45} top={listPane} bottom={previewPane} />
-        ) : (
-          <HorizontalSplit
-            left={listPane}
-            right={<VerticalSplit top={previewPane} bottom={detailsPane} />}
-          />
-        )}
-      </div>
+      <BrowserLayout list={listPane} preview={previewPane} details={detailsPane} />
     </div>
   )
 }

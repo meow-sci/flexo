@@ -216,6 +216,29 @@ export class ContainerLayer {
   private attachedId: string | null = null
   private dragging = false
 
+  // Gizmo handlers as instance fields so dispose() can unregister them.
+  private readonly onGizmoDraggingChanged = (e: { value: unknown }) => {
+    const isDragging = e.value as boolean
+    if (isDragging) {
+      const mode = $containerGizmoMode.get()
+      const label =
+        mode === 'translate'
+          ? 'move container'
+          : mode === 'rotate'
+            ? 'rotate container'
+            : 'resize container'
+      pushUndo(label)
+    }
+    this.dragging = isDragging
+    this.viewport.controls.enabled = !isDragging
+    if (!isDragging) this.refresh() // re-seed node from normalized store on release
+  }
+  private readonly onGizmoObjectChange = () => this.handleGizmoChange()
+
+  // Scratch vector reused across refreshes — refresh() runs on every store/
+  // document change, including per-frame while a gizmo drag streams transforms.
+  private readonly scratchResolution = new THREE.Vector2()
+
   constructor(viewport: Viewport, getPartObjects: () => THREE.Object3D[]) {
     this.viewport = viewport
     this.getPartObjects = getPartObjects
@@ -403,23 +426,8 @@ export class ContainerLayer {
     const controls = new TransformControls(this.viewport.camera, this.viewport.renderer.domElement)
     controls.setSpace('local')
     this.viewport.scene.add(controls.getHelper())
-    controls.addEventListener('dragging-changed', (e) => {
-      const isDragging = e.value as boolean
-      if (isDragging) {
-        const mode = $containerGizmoMode.get()
-        const label =
-          mode === 'translate'
-            ? 'move container'
-            : mode === 'rotate'
-              ? 'rotate container'
-              : 'resize container'
-        pushUndo(label)
-      }
-      this.dragging = isDragging
-      this.viewport.controls.enabled = !isDragging
-      if (!isDragging) this.refresh() // re-seed node from normalized store on release
-    })
-    controls.addEventListener('objectChange', () => this.handleGizmoChange())
+    controls.addEventListener('dragging-changed', this.onGizmoDraggingChanged)
+    controls.addEventListener('objectChange', this.onGizmoObjectChange)
     this.controls = controls
     return controls
   }
@@ -446,7 +454,7 @@ export class ContainerLayer {
   }
 
   private updateResolution(): void {
-    const res = this.viewport.renderer.getSize(new THREE.Vector2())
+    const res = this.viewport.renderer.getSize(this.scratchResolution)
     for (const m of this.materials) m.resolution.set(res.x, res.y)
   }
 
@@ -456,6 +464,8 @@ export class ContainerLayer {
     for (const g of this.gfx.values()) this.disposeGfx(g)
     this.gfx.clear()
     if (this.controls) {
+      this.controls.removeEventListener('dragging-changed', this.onGizmoDraggingChanged)
+      this.controls.removeEventListener('objectChange', this.onGizmoObjectChange)
       this.controls.detach()
       this.controls.getHelper().removeFromParent()
       this.controls.dispose()

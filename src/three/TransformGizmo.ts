@@ -3,6 +3,12 @@ import { TransformControls } from 'three/addons/controls/TransformControls.js'
 import type { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import type { ToolMode, SnapSettings } from '../state/editorStore'
 
+interface TransformGizmoCallbacks {
+  onDragStart: () => void
+  onChange: (object: THREE.Object3D) => void
+  onDraggingChanged: (dragging: boolean) => void
+}
+
 /**
  * Wraps three's TransformControls for translate/rotate/scale of the attached
  * object. Disables orbit during a drag, pushes a single undo snapshot at drag
@@ -10,32 +16,37 @@ import type { ToolMode, SnapSettings } from '../state/editorStore'
  */
 export class TransformGizmo {
   private readonly controls: TransformControls
+  private readonly orbit: OrbitControls
+  private readonly callbacks: TransformGizmoCallbacks
+
+  // Handlers are instance fields so dispose() can unregister them from the
+  // controls' event dispatcher.
+  private readonly onDraggingChanged = (event: { value: unknown }) => {
+    const dragging = event.value as boolean
+    this.orbit.enabled = !dragging
+    this.callbacks.onDraggingChanged(dragging)
+    if (dragging) this.callbacks.onDragStart()
+  }
+
+  private readonly onObjectChange = () => {
+    const obj = this.controls.object
+    if (obj) this.callbacks.onChange(obj)
+  }
 
   constructor(
     camera: THREE.Camera,
     domElement: HTMLElement,
     scene: THREE.Scene,
     orbit: OrbitControls,
-    callbacks: {
-      onDragStart: () => void
-      onChange: (object: THREE.Object3D) => void
-      onDraggingChanged: (dragging: boolean) => void
-    },
+    callbacks: TransformGizmoCallbacks,
   ) {
+    this.orbit = orbit
+    this.callbacks = callbacks
     this.controls = new TransformControls(camera, domElement)
     scene.add(this.controls.getHelper())
 
-    this.controls.addEventListener('dragging-changed', (event) => {
-      const dragging = event.value as boolean
-      orbit.enabled = !dragging
-      callbacks.onDraggingChanged(dragging)
-      if (dragging) callbacks.onDragStart()
-    })
-
-    this.controls.addEventListener('objectChange', () => {
-      const obj = this.controls.object
-      if (obj) callbacks.onChange(obj)
-    })
+    this.controls.addEventListener('dragging-changed', this.onDraggingChanged)
+    this.controls.addEventListener('objectChange', this.onObjectChange)
   }
 
   attach(object: THREE.Object3D | null): void {
@@ -60,6 +71,8 @@ export class TransformGizmo {
   }
 
   dispose(): void {
+    this.controls.removeEventListener('dragging-changed', this.onDraggingChanged)
+    this.controls.removeEventListener('objectChange', this.onObjectChange)
     this.controls.detach()
     const helper = this.controls.getHelper()
     helper.removeFromParent()

@@ -128,6 +128,21 @@ export class MeasurementLayer {
   private readonly endpointProxy = new THREE.Object3D()
   private gizmoAttached = false
 
+  // Gizmo handlers as instance fields so dispose() can unregister them.
+  private readonly onEndpointDraggingChanged = (e: { value: unknown }) => {
+    const isDragging = e.value as boolean
+    if (isDragging) pushUndo('move endpoint')
+    this.viewport.controls.enabled = !isDragging
+  }
+  private readonly onEndpointObjectChange = () => this.handleEndpointChange()
+
+  // Scratch objects reused across refreshes — refresh() runs on every store
+  // change, including per-frame while a gizmo drag streams transforms.
+  private readonly scratchQuat = new THREE.Quaternion()
+  private readonly scratchHalf = new THREE.Vector3()
+  private readonly scratchLabelPos = new THREE.Vector3()
+  private readonly scratchResolution = new THREE.Vector2()
+
   constructor(viewport: Viewport, getSelected: () => THREE.Object3D[]) {
     this.viewport = viewport
     this.getSelected = getSelected
@@ -188,23 +203,25 @@ export class MeasurementLayer {
     placeBox(this.selectionBox.lines, bounds)
     this.selectionBox.lines.visible = true
 
-    const size = new THREE.Vector3(bounds.size.x, bounds.size.y, bounds.size.z)
-    const center = new THREE.Vector3(bounds.center.x, bounds.center.y, bounds.center.z)
-    const quat = new THREE.Quaternion(...bounds.quaternion)
-    const half = size.clone().multiplyScalar(0.5)
-    const offsets = [
-      new THREE.Vector3(0, -half.y, -half.z), // X edge
-      new THREE.Vector3(-half.x, 0, -half.z), // Y edge
-      new THREE.Vector3(-half.x, -half.y, 0), // Z edge
-    ]
+    const quat = this.scratchQuat.set(...bounds.quaternion)
+    const half = this.scratchHalf
+      .set(bounds.size.x, bounds.size.y, bounds.size.z)
+      .multiplyScalar(0.5)
     const dims = [bounds.size.x, bounds.size.y, bounds.size.z]
-    offsets.forEach((offset, i) => {
-      const world = offset.clone().applyQuaternion(quat).add(center)
+    for (let i = 0; i < 3; i++) {
+      // Label i sits at the midpoint of its measured edge: zero along axis i,
+      // -half on the other two (the X/Y/Z edges meeting at the min corner).
+      const world = this.scratchLabelPos
+        .set(i === 0 ? 0 : -half.x, i === 1 ? 0 : -half.y, i === 2 ? 0 : -half.z)
+        .applyQuaternion(quat)
+      world.x += bounds.center.x
+      world.y += bounds.center.y
+      world.z += bounds.center.z
       const { obj, el } = this.boxLabels[i]
       obj.position.copy(world)
       obj.visible = true
       el.textContent = formatLength(dims[i], this.settings.unit)
-    })
+    }
   }
 
   private hideSelectionBox(): void {
@@ -347,12 +364,8 @@ export class MeasurementLayer {
     controls.setMode('translate')
     controls.setSpace('world')
     this.viewport.scene.add(controls.getHelper())
-    controls.addEventListener('dragging-changed', (e) => {
-      const isDragging = e.value as boolean
-      if (isDragging) pushUndo('move endpoint')
-      this.viewport.controls.enabled = !isDragging
-    })
-    controls.addEventListener('objectChange', () => this.handleEndpointChange())
+    controls.addEventListener('dragging-changed', this.onEndpointDraggingChanged)
+    controls.addEventListener('objectChange', this.onEndpointObjectChange)
     this.endpointControls = controls
     return controls
   }
@@ -448,7 +461,7 @@ export class MeasurementLayer {
   }
 
   private updateResolution(): void {
-    const res = this.viewport.renderer.getSize(new THREE.Vector2())
+    const res = this.viewport.renderer.getSize(this.scratchResolution)
     for (const m of this.materials) m.resolution.set(res.x, res.y)
   }
 
@@ -464,6 +477,8 @@ export class MeasurementLayer {
     for (const gfx of this.measurementGfx.values()) this.disposeMeasurementGfx(gfx)
     this.measurementGfx.clear()
     if (this.endpointControls) {
+      this.endpointControls.removeEventListener('dragging-changed', this.onEndpointDraggingChanged)
+      this.endpointControls.removeEventListener('objectChange', this.onEndpointObjectChange)
       this.endpointControls.detach()
       this.endpointControls.getHelper().removeFromParent()
       this.endpointControls.dispose()

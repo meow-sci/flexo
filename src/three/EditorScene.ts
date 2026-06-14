@@ -131,6 +131,10 @@ export class EditorScene {
   private pendingMeasurementId: string | null = null
   private pickPointerDown: { x: number; y: number } | null = null
 
+  // Scratch object reused by updatePivotHelper (runs per-frame while the anim
+  // preview is scrubbing/playing) — decompose needs a scale target we discard.
+  private readonly scratchScale = new THREE.Vector3()
+
   constructor(host: HTMLElement) {
     this.viewport = new Viewport(host)
     // Must precede the store subscriptions below (they build SubParts, which
@@ -696,12 +700,12 @@ export class EditorScene {
       this.pivotHelper.visible = false
       return
     }
-    const pos = new THREE.Vector3()
-    const quat = new THREE.Quaternion()
-    jointWorld(anim, joint.id, 0).decompose(pos, quat, new THREE.Vector3())
-    this.pivotHelper.position.copy(pos)
-    this.pivotHelper.quaternion.copy(quat)
-    this.pivotHelper.scale.setScalar(1) // strip any pivot scale; always a clean unit frame
+    jointWorld(anim, joint.id, 0).decompose(
+      this.pivotHelper.position,
+      this.pivotHelper.quaternion,
+      this.scratchScale, // discarded — strip any pivot scale; always a clean unit frame
+    )
+    this.pivotHelper.scale.setScalar(1)
     this.pivotHelper.visible = true
   }
 

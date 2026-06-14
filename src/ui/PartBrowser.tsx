@@ -309,6 +309,9 @@ function PartDetails({
         <span className="text-fg-muted">
           <span className="text-fg-subtle">Connectors:</span> {part.connectors.length}
         </span>
+        <span className="text-fg-muted">
+          <span className="text-fg-subtle">Animations:</span> {part.animationModules.length}
+        </span>
         {missing > 0 && (
           <span
             className="text-warning"

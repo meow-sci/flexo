@@ -19,7 +19,8 @@ import {
   setDisplayName,
   setDockingPortConnector,
   setDockingPortEnabled,
-  setDockingPortForce,
+  setDockingPortLatchingImpulse,
+  setDockingPortPushoffForce,
   setEvaDoorConnector,
   setEvaDoorEnabled,
   setGeneratorOutput,
@@ -349,13 +350,22 @@ export function CouplingSection({ part }: { part: EditingPart }) {
               value={dockingPort.connectorId}
               onChange={setDockingPortConnector}
             />
-            <Field label="Force (N)">
+            <Field label="Latching Impulse (N·s)">
               <PreciseNumberInput
-                aria-label="Docking port force in newtons"
-                value={dockingPort.force}
+                aria-label="Docking port latching impulse in newton-seconds"
+                value={dockingPort.latchingImpulse}
                 min={0}
                 onInteractionStart={() => pushUndo('edit docking port', '')}
-                onCommit={setDockingPortForce}
+                onCommit={setDockingPortLatchingImpulse}
+              />
+            </Field>
+            <Field label="Pushoff Force (N)">
+              <PreciseNumberInput
+                aria-label="Docking port push-off force in newtons"
+                value={dockingPort.pushoffForce}
+                min={0}
+                onInteractionStart={() => pushUndo('edit docking port', '')}
+                onCommit={setDockingPortPushoffForce}
               />
             </Field>
           </>

@@ -218,11 +218,13 @@ export interface Decoupler {
   force: number
 }
 
-/** Docking port bound to a connector. Serialized as <DockingPort ConnectorId Force/>. */
+/** Docking port bound to a connector. Serialized as <DockingPort ConnectorId LatchingImpulse PushoffForce/>. */
 export interface DockingPort {
   connectorId: string
-  /** Docking force in newtons. */
-  force: number
+  /** Magnetic latching impulse in newton-seconds (LatchingImpulse attribute). */
+  latchingImpulse: number
+  /** Undock push-off force in newtons (PushoffForce attribute). */
+  pushoffForce: number
 }
 
 /** EVA hatch bound to a connector. Serialized as <EVADoor ConnectorId/>. */

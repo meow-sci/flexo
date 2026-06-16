@@ -51,6 +51,27 @@ describe('parseGameDataFile + mergeGameData', () => {
     expect(parts[0].editorTags).toEqual(['Electrical'])
   })
 
+  it('parses the docking port from GameData and merges it onto the Part (original connector id space)', () => {
+    const parts: CatalogPart[] = []
+    parsePartsFile(parse(ASSETS_XML), 'CoreCouplingAAssets.xml', parts)
+    expect(parts[0].dockingPort).toBeNull() // not present on the geometry <Part>
+
+    const gameData = new Map<string, PartGameData>()
+    parseGameDataFile(
+      parse(`<Assets><PartGameData Id="CoreElectricalA_Prefab_SolarPanelB">
+        <DockingPort ConnectorId="_connector6" LatchingImpulse="6000" PushoffForce="7000" />
+      </PartGameData></Assets>`),
+      gameData,
+    )
+    mergeGameData(parts, gameData)
+
+    expect(parts[0].dockingPort).toEqual({
+      connectorId: '_connector6',
+      latchingImpulse: 6000,
+      pushoffForce: 7000,
+    })
+  })
+
   it('ignores unknown / None flags and connectors with no geometry counterpart', () => {
     const parts: CatalogPart[] = []
     parsePartsFile(parse(ASSETS_XML), 'f.xml', parts)

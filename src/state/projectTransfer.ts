@@ -1,6 +1,7 @@
 import type {
   Connector,
   CustomMesh,
+  DockingPort,
   EditingPart,
   KittenInstance,
   KittenMeshSource,
@@ -168,6 +169,14 @@ function normalizeEnvelope(
     d.gameData && typeof d.gameData === 'object'
       ? { ...createEmptyGameData(), ...(d.gameData as Partial<PartGameData>) }
       : createEmptyGameData()
+  // Migrate legacy docking ports that stored a single `force` instead of the
+  // split LatchingImpulse/PushoffForce fields (older project exports).
+  if (gameData.dockingPort) {
+    const dp = gameData.dockingPort as DockingPort & { force?: number }
+    if (dp.latchingImpulse == null) dp.latchingImpulse = dp.force ?? 0
+    if (dp.pushoffForce == null) dp.pushoffForce = dp.force ?? 0
+    delete dp.force
+  }
   return {
     format: PROJECT_EXPORT_FORMAT,
     version: typeof obj.version === 'number' ? obj.version : PROJECT_EXPORT_VERSION,
@@ -356,7 +365,12 @@ function mergeGameData(
   }
   if (target.dockingPort == null && src.dockingPort) {
     const id = connectorIdMap.get(src.dockingPort.connectorId)
-    if (id) target.dockingPort = { connectorId: id, force: src.dockingPort.force }
+    if (id)
+      target.dockingPort = {
+        connectorId: id,
+        latchingImpulse: src.dockingPort.latchingImpulse,
+        pushoffForce: src.dockingPort.pushoffForce,
+      }
   }
   if (target.evaDoor == null && src.evaDoor) {
     const id = connectorIdMap.get(src.evaDoor.connectorId)

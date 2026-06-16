@@ -210,11 +210,16 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
       force: readNum(dec, 'Force') ?? 0,
     }
   const dp = directChildren(gd, 'DockingPort')[0]
-  if (dp)
+  if (dp) {
+    // Legacy GameData used a single Force attribute; new GameData splits it into
+    // LatchingImpulse + PushoffForce. Fall back to Force for both when reading old files.
+    const legacyForce = readNum(dp, 'Force')
     game.dockingPort = {
       connectorId: dp.getAttribute('ConnectorId') ?? '',
-      force: readNum(dp, 'Force') ?? 0,
+      latchingImpulse: readNum(dp, 'LatchingImpulse') ?? legacyForce ?? 0,
+      pushoffForce: readNum(dp, 'PushoffForce') ?? legacyForce ?? 0,
     }
+  }
   const eva = directChildren(gd, 'EVADoor')[0]
   if (eva) game.evaDoor = { connectorId: eva.getAttribute('ConnectorId') ?? '' }
 

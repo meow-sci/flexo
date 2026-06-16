@@ -214,7 +214,7 @@ describe('serializeGameData', () => {
       generators: [{ outputWatts: 12 }],
       powerConsumers: [{ consumedWatts: 3 }],
       decoupler: { connectorId: '_connector2', force: 750 },
-      dockingPort: { connectorId: '_connector3', force: 600 },
+      dockingPort: { connectorId: '_connector3', latchingImpulse: 6000, pushoffForce: 7000 },
       evaDoor: { connectorId: '_connector3' },
     },
     subPartGameData: [
@@ -295,7 +295,8 @@ describe('serializeGameData', () => {
     expect(dec.getAttribute('Force')).toBe('750')
     const dp = tags(doc, 'DockingPort')[0]
     expect(dp.getAttribute('ConnectorId')).toBe('_connector3')
-    expect(dp.getAttribute('Force')).toBe('600')
+    expect(dp.getAttribute('LatchingImpulse')).toBe('6000')
+    expect(dp.getAttribute('PushoffForce')).toBe('7000')
     expect(tags(doc, 'EVADoor')[0].getAttribute('ConnectorId')).toBe('_connector3')
   })
 

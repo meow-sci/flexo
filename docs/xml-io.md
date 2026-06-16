@@ -66,7 +66,7 @@ Mirrors space-tape's `GameDataXmlSerializer.cs`. The popup-only metadata
         <PowerConsumer><Consumed W="3"/></PowerConsumer>
         <Connector Id="_connector1"><Flags>ToSurface</Flags></Connector>  <!-- every connector; <Flags> only when set -->
         <Decoupler ConnectorId="_connector2" Force="750"/>
-        <DockingPort ConnectorId="_connector3" Force="600"/>
+        <DockingPort ConnectorId="_connector3" LatchingImpulse="6000" PushoffForce="7000"/>
         <EVADoor ConnectorId="_connector3"/>
     </PartGameData>
 </Assets>

@@ -35,7 +35,8 @@ undo survives a reload) — see [projects.md](./projects.md).
 `setCustomMassEnabled` / `setCustomMass`, tanks `addTank` / `removeTank` /
 `setTankShape` / `updateTank`, power `add*`/`remove*`/`set*` for batteries / generators
 / power-consumers, and coupling `set{Decoupler,DockingPort,EvaDoor}Enabled` /
-`set*Connector` / `set{Decoupler,DockingPort}Force`. List add/remove, checkboxes and
+`set*Connector` / `setDecouplerForce` / `setDockingPort{LatchingImpulse,PushoffForce}`.
+List add/remove, checkboxes and
 Select picks are **discrete**; free-text/number field edits are **streaming**.
 
 Conventions:

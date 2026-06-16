@@ -160,7 +160,7 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
       generators: [{ outputWatts: 12 }],
       powerConsumers: [{ consumedWatts: 3 }],
       decoupler: { connectorId: '_c2', force: 750 },
-      dockingPort: { connectorId: '_c3', force: 600 },
+      dockingPort: { connectorId: '_c3', latchingImpulse: 6000, pushoffForce: 7000 },
       evaDoor: { connectorId: '_c3' },
     },
     subPartGameData: [
@@ -210,7 +210,11 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
     expect(parsed.gameData.generators[0].outputWatts).toBe(12)
     expect(parsed.gameData.powerConsumers[0].consumedWatts).toBe(3)
     expect(parsed.gameData.decoupler).toEqual({ connectorId: '_c2', force: 750 })
-    expect(parsed.gameData.dockingPort).toEqual({ connectorId: '_c3', force: 600 })
+    expect(parsed.gameData.dockingPort).toEqual({
+      connectorId: '_c3',
+      latchingImpulse: 6000,
+      pushoffForce: 7000,
+    })
     expect(parsed.gameData.evaDoor).toEqual({ connectorId: '_c3' })
   })
 
@@ -220,6 +224,31 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
 
   it('returns null for an unknown part id', () => {
     expect(gameDataFromAssets(serializeGameData(source), 'Nope', new DOMParser())).toBeNull()
+  })
+})
+
+describe('gameDataFromAssets docking port (direct GameData XML)', () => {
+  const parseDp = (attrs: string) =>
+    gameDataFromAssets(
+      `<Assets><PartGameData Id="P"><DockingPort ConnectorId="_connector2" ${attrs}/></PartGameData></Assets>`,
+      'P',
+      new DOMParser(),
+    )!.gameData.dockingPort
+
+  it('reads LatchingImpulse and PushoffForce from current GameData', () => {
+    expect(parseDp('LatchingImpulse="6000" PushoffForce="7000"')).toEqual({
+      connectorId: '_connector2',
+      latchingImpulse: 6000,
+      pushoffForce: 7000,
+    })
+  })
+
+  it('falls back to legacy Force for both fields when the new attributes are absent', () => {
+    expect(parseDp('Force="500"')).toEqual({
+      connectorId: '_connector2',
+      latchingImpulse: 500,
+      pushoffForce: 500,
+    })
   })
 })
 

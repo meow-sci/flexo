@@ -148,7 +148,8 @@ export function serializeGameData(
   if (game.dockingPort) {
     const el = doc.createElement('DockingPort')
     el.setAttribute('ConnectorId', game.dockingPort.connectorId)
-    el.setAttribute('Force', formatG6(game.dockingPort.force))
+    el.setAttribute('LatchingImpulse', formatG6(game.dockingPort.latchingImpulse))
+    el.setAttribute('PushoffForce', formatG6(game.dockingPort.pushoffForce))
     gd.appendChild(el)
   }
   if (game.evaDoor) {

@@ -42,6 +42,9 @@ import {
   setCustomMassEnabled,
   setDecouplerEnabled,
   setDecouplerForce,
+  setDockingPortEnabled,
+  setDockingPortLatchingImpulse,
+  setDockingPortPushoffForce,
   undo,
   updatePlacementTransform,
 } from './editorStore'
@@ -161,6 +164,36 @@ describe('editorStore', () => {
     expect($part.get().editorTags).toEqual(['Existing', 'Electrical'])
   })
 
+  it('addPart imports a docking port and rewires its connectorId to the regenerated connector', () => {
+    addPart(
+      [],
+      [
+        {
+          id: '_connector5', // original KSA id; regenerated to _connector1 on import
+          position: { x: 0, y: 0, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+          flags: [],
+          layerId: DEFAULT_LAYER_ID,
+        },
+      ],
+      [],
+      undefined,
+      undefined,
+      {
+        decoupler: null,
+        dockingPort: { connectorId: '_connector5', latchingImpulse: 6000, pushoffForce: 7000 },
+        evaDoor: null,
+      },
+    )
+    const dp = $part.get().gameData.dockingPort
+    // Values carried in, and the binding points at the regenerated connector id (not '_connector5').
+    expect(dp?.latchingImpulse).toBe(6000)
+    expect(dp?.pushoffForce).toBe(7000)
+    expect(dp?.connectorId).toBe($part.get().connectors[0].id)
+    expect(dp?.connectorId).not.toBe('_connector5')
+  })
+
   it('adds/removes tanks per SubPart template as discrete undo steps and patches fields (streaming)', () => {
     const tmpl = 'CoreFuelTankA_Subpart_Skin1W1HA'
     addTank(tmpl)
@@ -195,6 +228,23 @@ describe('editorStore', () => {
     expect($part.get().gameData.decoupler?.force).toBe(900)
     undo()
     expect($part.get().gameData.decoupler?.force).toBe(500)
+  })
+
+  it('toggles a docking port (KSA defaults) and edits its impulse/push-off with undo', () => {
+    setDockingPortEnabled(true)
+    expect($part.get().gameData.dockingPort).toEqual({
+      connectorId: '',
+      latchingImpulse: 6000,
+      pushoffForce: 7000,
+    })
+    pushUndo('edit docking port')
+    setDockingPortLatchingImpulse(8000)
+    setDockingPortPushoffForce(9000)
+    expect($part.get().gameData.dockingPort?.latchingImpulse).toBe(8000)
+    expect($part.get().gameData.dockingPort?.pushoffForce).toBe(9000)
+    undo()
+    expect($part.get().gameData.dockingPort?.latchingImpulse).toBe(6000)
+    expect($part.get().gameData.dockingPort?.pushoffForce).toBe(7000)
   })
 
   it('setEditorTags is undoable (self-records)', () => {

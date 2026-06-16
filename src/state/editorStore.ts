@@ -3,8 +3,11 @@ import { persistentJSON } from '@nanostores/persistent'
 import type {
   Connector,
   ConnectorFlag,
+  Decoupler,
+  DockingPort,
   EditingPart,
   EulerXYZ,
+  EvaDoor,
   KittenKind,
   PartAnimation,
   PartGameData,
@@ -456,13 +459,48 @@ export function addSubPart(templateId: string): void {
   selectPlacement(part.placements.length - 1)
 }
 
+/** Connector-bound coupling game-data carried into {@link addPart} from a built-in Part. */
+export interface ImportedCoupling {
+  decoupler: Decoupler | null
+  dockingPort: DockingPort | null
+  evaDoor: EvaDoor | null
+}
+
+/**
+ * Fills the project's singular coupling bindings from an imported Part, only when
+ * not already set, remapping each binding's connector id from the source's original
+ * id space through `connectorIdMap`. A binding whose connector isn't among the
+ * imported connectors is skipped (no dangling reference). Mirrors mergeGameData in
+ * projectTransfer.ts so built-in and project imports behave identically.
+ */
+function applyImportedCoupling(
+  target: PartGameData,
+  src: ImportedCoupling,
+  connectorIdMap: ReadonlyMap<string, string>,
+): void {
+  if (target.decoupler == null && src.decoupler) {
+    const id = connectorIdMap.get(src.decoupler.connectorId)
+    if (id) target.decoupler = { ...src.decoupler, connectorId: id }
+  }
+  if (target.dockingPort == null && src.dockingPort) {
+    const id = connectorIdMap.get(src.dockingPort.connectorId)
+    if (id) target.dockingPort = { ...src.dockingPort, connectorId: id }
+  }
+  if (target.evaDoor == null && src.evaDoor) {
+    const id = connectorIdMap.get(src.evaDoor.connectorId)
+    if (id) target.evaDoor = { connectorId: id }
+  }
+}
+
 /**
  * Imports a whole Part by appending all of its SubPart instances to the current
  * project, preserving each one's position/rotation/scale, along with the Part's
- * connectors (transforms + flags) and editor tags. InstanceIds and connector ids
+ * connectors (transforms + flags), editor tags, and connector-bound coupling
+ * game-data (decoupler / docking port / EVA door). InstanceIds and connector ids
  * are regenerated so they never collide with entities already in the project; the
- * imported editor tags are unioned into the project's tags. Imported SubParts land
- * in `targetLayerId` when given (and it exists), else the active layer; connectors
+ * imported editor tags are unioned into the project's tags and coupling bindings
+ * are rewired to the regenerated connector ids. Imported SubParts land in
+ * `targetLayerId` when given (and it exists), else the active layer; connectors
  * always go to the built-in Connectors layer
  * (layers are editor-only and absent from KSA XML). The last added SubPart is
  * selected (or the last connector if the Part has no SubParts).
@@ -480,6 +518,13 @@ export function addPart(
    * importBuiltInPart wrapper).
    */
   buildAnimations?: (idMap: ReadonlyMap<string, string>) => PartAnimation[],
+  /**
+   * Connector-bound coupling game-data from the Part's GameData (decoupler /
+   * docking port / EVA door). Their `connectorId`s are in the source's original
+   * id space and get remapped onto the freshly-generated connector ids below.
+   * Singular bindings are only filled when the project doesn't already have one.
+   */
+  coupling?: ImportedCoupling,
 ): string {
   if (placements.length === 0 && connectors.length === 0) return DEFAULT_LAYER_ID
   const importDetail =
@@ -521,9 +566,14 @@ export function addPart(
     importedSubIndices.push(part.placements.length - 1)
   }
   if (buildAnimations) part.animations.push(...buildAnimations(idMap))
+  // Original KSA connector id → regenerated id, so imported coupling bindings
+  // (which target connectors by their original id) can be rewired.
+  const connectorIdMap = new Map<string, string>()
   for (const src of connectors) {
+    const id = nextConnectorId(part) // regenerated against the growing list
+    connectorIdMap.set(src.id, id)
     part.connectors.push({
-      id: nextConnectorId(part), // regenerated against the growing list
+      id,
       position: { ...src.position },
       rotation: { ...src.rotation },
       scale: { ...src.scale },
@@ -531,6 +581,7 @@ export function addPart(
       layerId: CONNECTOR_LAYER_ID, // connectors always live in the Connectors layer
     })
   }
+  if (coupling) applyImportedCoupling(part.gameData, coupling, connectorIdMap)
   $part.set(part)
   // Select exactly the imported SubParts (not any pre-existing ones on the layer);
   // for a connectors-only import, fall back to selecting the last connector.
@@ -1178,8 +1229,12 @@ export function setEditorTags(editorTags: readonly string[]): void {
 // self-record undo via {@link commitGameData}.
 // ---------------------------------------------------------------------------
 
-/** Default separation/docking force (N) when a coupling is first enabled (matches space-tape). */
+/** Default decoupler separation force (N) when a decoupler is first enabled (matches space-tape). */
 const DEFAULT_COUPLING_FORCE = 500
+/** Default magnetic latching impulse (N·s) when a docking port is first enabled (matches CoreCouplingA). */
+const DEFAULT_LATCHING_IMPULSE = 6000
+/** Default undock push-off force (N) when a docking port is first enabled (matches CoreCouplingA). */
+const DEFAULT_PUSHOFF_FORCE = 7000
 /** Default mass (kg) when the custom-mass override is first enabled. */
 const DEFAULT_CUSTOM_MASS_KG = 100
 
@@ -1357,7 +1412,11 @@ export function setDecouplerForce(force: number): void {
 export function setDockingPortEnabled(enabled: boolean): void {
   commitGameData('docking port', enabled ? 'on' : 'off', (g) => {
     g.dockingPort = enabled
-      ? (g.dockingPort ?? { connectorId: '', force: DEFAULT_COUPLING_FORCE })
+      ? (g.dockingPort ?? {
+          connectorId: '',
+          latchingImpulse: DEFAULT_LATCHING_IMPULSE,
+          pushoffForce: DEFAULT_PUSHOFF_FORCE,
+        })
       : null
   })
 }
@@ -1367,10 +1426,16 @@ export function setDockingPortConnector(connectorId: string): void {
     if (g.dockingPort) g.dockingPort.connectorId = connectorId
   })
 }
-/** Streaming: set docking port force (N). Caller pushes undo on field focus. */
-export function setDockingPortForce(force: number): void {
+/** Streaming: set docking port latching impulse (N·s). Caller pushes undo on field focus. */
+export function setDockingPortLatchingImpulse(latchingImpulse: number): void {
   mutateGameData((g) => {
-    if (g.dockingPort) g.dockingPort.force = force
+    if (g.dockingPort) g.dockingPort.latchingImpulse = latchingImpulse
+  })
+}
+/** Streaming: set docking port push-off force (N). Caller pushes undo on field focus. */
+export function setDockingPortPushoffForce(pushoffForce: number): void {
+  mutateGameData((g) => {
+    if (g.dockingPort) g.dockingPort.pushoffForce = pushoffForce
   })
 }
 

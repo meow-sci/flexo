@@ -55,6 +55,7 @@ export async function importBuiltInPart(
         const last = fitted.keyframes.reduce((a, b) => (b.timeSec > a.timeSec ? b : a))
         return { ...fitted, restKeyframeId: last.id }
       }),
+    { decoupler: part.decoupler, dockingPort: part.dockingPort, evaDoor: part.evaDoor },
   )
 }
 

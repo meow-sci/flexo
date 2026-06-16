@@ -15,7 +15,15 @@ import {
   parseGameDataElement,
   placementsFromPartElement,
 } from './partXmlParser'
-import type { CatalogAnimationModule, Connector, ConnectorFlag, SubPartPlacement } from './types'
+import type {
+  CatalogAnimationModule,
+  Connector,
+  ConnectorFlag,
+  Decoupler,
+  DockingPort,
+  EvaDoor,
+  SubPartPlacement,
+} from './types'
 
 export interface CatalogPart {
   /** Part id as declared in the Assets XML, e.g. "CoreFuelTankA_Prefab_LF1W1HA". */
@@ -28,6 +36,10 @@ export interface CatalogPart {
   connectors: Connector[]
   /** KeyframeAnimationModules (from GameData), decoded + imported alongside the Part. */
   animationModules: CatalogAnimationModule[]
+  /** Connector-bound coupling game-data (from GameData); connectorIds are in the Part's original id space. */
+  decoupler: Decoupler | null
+  dockingPort: DockingPort | null
+  evaDoor: EvaDoor | null
   /** Originating XML file (for debugging / grouping). */
   sourceFile: string
 }
@@ -42,7 +54,17 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
     const placements = placementsFromPartElement(part)
     if (placements.length === 0) continue // nothing renderable/importable
     const connectors = connectorsFromPartElement(part)
-    out.push({ id, editorTags, placements, connectors, animationModules: [], sourceFile })
+    out.push({
+      id,
+      editorTags,
+      placements,
+      connectors,
+      animationModules: [],
+      decoupler: null,
+      dockingPort: null,
+      evaDoor: null,
+      sourceFile,
+    })
   }
 }
 
@@ -58,12 +80,16 @@ export interface PartGameData {
   connectorFlags: Map<string, ConnectorFlag[]>
   /** KeyframeAnimationModules declared on this <PartGameData>. */
   animationModules: CatalogAnimationModule[]
+  /** Connector-bound coupling game-data, so built-in part imports carry them in. */
+  decoupler: Decoupler | null
+  dockingPort: DockingPort | null
+  evaDoor: EvaDoor | null
 }
 
 /** GameData sibling of each catalog asset file (e.g. CoreElectricalAAssets.xml -> CoreElectricalAGameData.xml). Not every asset file has one. */
 const GAMEDATA_FILES = ASSET_FILES.map((f) => f.replace(/Assets\.xml$/, 'GameData.xml'))
 
-/** Parses <PartGameData> entries (editor tags + connector flags) keyed by Part id. */
+/** Parses <PartGameData> entries (editor tags, connector flags, coupling bindings) keyed by Part id. */
 export function parseGameDataFile(doc: Document, out: Map<string, PartGameData>): void {
   for (const gd of Array.from(doc.getElementsByTagName('PartGameData'))) {
     const id = gd.getAttribute('Id')
@@ -73,12 +99,18 @@ export function parseGameDataFile(doc: Document, out: Map<string, PartGameData>)
       editorTags: [],
       connectorFlags: new Map(),
       animationModules: [],
+      decoupler: null,
+      dockingPort: null,
+      evaDoor: null,
     }
     for (const tag of parsed.editorTags) {
       if (!entry.editorTags.includes(tag)) entry.editorTags.push(tag)
     }
     for (const [connId, flags] of parsed.connectorFlags) entry.connectorFlags.set(connId, flags)
     entry.animationModules.push(...parsed.animationModules)
+    entry.decoupler ??= parsed.gameData.decoupler
+    entry.dockingPort ??= parsed.gameData.dockingPort
+    entry.evaDoor ??= parsed.gameData.evaDoor
     out.set(id, entry)
   }
 }
@@ -96,7 +128,7 @@ async function loadGameData(): Promise<Map<string, PartGameData>> {
   return out
 }
 
-/** Merges parsed game-data into catalog parts: unions editor tags and applies connector flags by id. */
+/** Merges parsed game-data into catalog parts: unions editor tags, applies connector flags by id, and carries coupling bindings. */
 export function mergeGameData(parts: CatalogPart[], gameData: Map<string, PartGameData>): void {
   for (const part of parts) {
     const gd = gameData.get(part.id)
@@ -109,6 +141,9 @@ export function mergeGameData(parts: CatalogPart[], gameData: Map<string, PartGa
       if (flags) conn.flags = flags
     }
     if (gd.animationModules.length) part.animationModules = gd.animationModules
+    part.decoupler = gd.decoupler
+    part.dockingPort = gd.dockingPort
+    part.evaDoor = gd.evaDoor
   }
 }
 

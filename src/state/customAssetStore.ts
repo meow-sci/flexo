@@ -401,7 +401,12 @@ function scheduleRebuild(): Promise<void> {
 export async function addCustomTexture(file: Blob, name: string): Promise<CustomTexture> {
   const id = `tex_${shortId()}`
   const decoded = await decodeImage(file)
-  const ktx2 = await encodeImageToKtx2(decoded, { srgb: true, zstd: true })
+  // Diffuse is stored LINEAR/UNORM (not sRGB): KSA's opaque part shader (ModelPbr.frag) samples the
+  // diffuse raw and applies pow(2.2) itself, and the game's own part diffuse maps are UNORM (e.g.
+  // BC1_RGB_UNORM). An sRGB-tagged texture would be linearized by the GPU sampler AND again by the
+  // shader → near-black ("uploaded PNG renders dark"). The editor preview is unaffected: it forces
+  // colorSpace=SRGB at load time (TextureCache), independent of the KTX2's format tag.
+  const ktx2 = await encodeImageToKtx2(decoded, { srgb: false, zstd: true })
 
   await putAsset(assetKeys.textureSource(id), file, file.type || 'image/png')
   await putAsset(assetKeys.textureKtx2(id), ktx2, 'image/ktx2')

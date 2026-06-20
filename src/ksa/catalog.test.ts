@@ -1,14 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { fileURLToPath } from 'node:url'
-import { dirname, join } from 'node:path'
 import { DOMParser } from '@xmldom/xmldom'
 import { parseAssetsFile, type CatalogSubPart } from './catalog'
-
-const CORE_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../thirdparty/ksa/Content/Core')
+import { hasKsaAssets, ksaAsset } from './ksaTestAssets'
 
 function parseFile(name: string): CatalogSubPart[] {
-  const text = readFileSync(join(CORE_DIR, name), 'utf-8')
+  const text = readFileSync(ksaAsset(name), 'utf-8')
   const doc = new DOMParser().parseFromString(text, 'application/xml')
   const out: CatalogSubPart[] = []
   parseAssetsFile(doc as unknown as Document, name, out)
@@ -26,9 +23,10 @@ function glbNodeNames(glbPath: string): Set<string> {
 }
 
 describe('catalog parsing (real Core XML)', () => {
-  const structural = parseFile('CoreStructuralAAssets.xml')
+  // Real licensed XML/GLB from the private assets repo; skips without it (open-source CI).
+  const structural = hasKsaAssets ? parseFile('CoreStructuralAAssets.xml') : []
 
-  it('extracts SubPart templates with atlas + mesh node + material', () => {
+  it.runIf(hasKsaAssets)('extracts SubPart templates with atlas + mesh node + material', () => {
     expect(structural.length).toBeGreaterThan(20)
     const truss = structural.find((s) => s.id === 'CoreStructuralA_Subpart_TrussBarA')!
     expect(truss).toBeDefined()
@@ -39,22 +37,22 @@ describe('catalog parsing (real Core XML)', () => {
     expect(truss.diffuseUrl).toContain(`${base}ksa/Textures/`)
   })
 
-  it('does not include Part SubPart instances (only templates)', () => {
+  it.runIf(hasKsaAssets)('does not include Part SubPart instances (only templates)', () => {
     // Every entry must have a mesh node (templates), none should be an instance.
     for (const s of structural) {
       expect(s.meshNodeName ?? '').not.toBe('')
     }
   })
 
-  it('every resolved mesh node name exists in its GLB atlas', () => {
-    const names = glbNodeNames(join(CORE_DIR, 'Meshes/CoreStructuralA_MeshAtlas.glb'))
+  it.runIf(hasKsaAssets)('every resolved mesh node name exists in its GLB atlas', () => {
+    const names = glbNodeNames(ksaAsset('Meshes/CoreStructuralA_MeshAtlas.glb'))
     const missing = structural
       .filter((s) => s.meshNodeName && !names.has(s.meshNodeName))
       .map((s) => s.meshNodeName)
     expect(missing).toEqual([])
   })
 
-  it('flags IVA (Internal) SubParts and leaves normal ones unmarked', () => {
+  it.runIf(hasKsaAssets)('flags IVA (Internal) SubParts and leaves normal ones unmarked', () => {
     const iva = parseFile('CoreIVAPropAAssets.xml')
     const note = iva.find((s) => s.id === 'CoreIVAPropA_Subpart_WrittenNoteE')!
     expect(note).toBeDefined()

@@ -157,6 +157,17 @@ export interface ImportedAnimation {
    * to the last keyframe so the preview/export anchor on the deployed (modeled) pose.
    */
   restAtLastKeyframe: boolean
+  /**
+   * Each animated member's Part-local transform at the rest keyframe, computed straight
+   * from the GLB (== KSA's `EvaluateWorldMatrix(leaf, restTime)`), keyed by ORIGINAL
+   * instance id. KSA positions animated SubParts SOLELY from the GLB and ignores their
+   * geometry `<Position>` (it's overwritten on spawn — see {@link import('./animationRig')}),
+   * so the importer overrides each animated SubPart's placement with this GLB-faithful
+   * pose. For correctly-authored clips this equals the geometry placement (a no-op); when
+   * the two disagree (a stale/rotated geometry placement) it's what keeps flexo matching
+   * the game instead of anchoring the joint motion to the wrong spot.
+   */
+  memberRestPlacements: Map<string, Transform>
   solarTracking: {
     degreesPerSecond: number
     subPartOriginalId: string
@@ -322,6 +333,19 @@ export function decodeAnimationGlb(
   }
   const restAtLastKeyframe = resLast < resFirst
 
+  // Each animated member's GLB-faithful Part-local pose at the rest keyframe — the same
+  // matrix KSA assigns the SubPart on spawn (its leaf-static-offset carried up the joint
+  // chain). The importer uses this to OVERRIDE the geometry placement so flexo positions
+  // animated SubParts from the GLB, exactly like the game (which never trusts the
+  // geometry `<Position>` for them). `restTime` mirrors restAnchorTime: t=0 for an
+  // actuate/authored clip, the last keyframe for an imported deploy.
+  const restTime = restAtLastKeyframe ? tLast : tFirst
+  const memberRestPlacements = new Map<string, Transform>()
+  for (let i = 0; i < nodes.length; i++) {
+    if (!isLeaf(i) || nearestJointAncestor(i) === null) continue
+    memberRestPlacements.set(nodes[i].name!, transformFromMatrix(nodeWorld(i, restTime)))
+  }
+
   return {
     name: opts.module.moduleId || anim.name || 'Animation',
     durationSec: keyframeTimes[keyframeTimes.length - 1] ?? 0,
@@ -329,6 +353,7 @@ export function decodeAnimationGlb(
     keyframeTimes,
     joints,
     restAtLastKeyframe,
+    memberRestPlacements,
     solarTracking: opts.module.solarTracking
       ? {
           degreesPerSecond: opts.module.solarTracking.degreesPerSecond,

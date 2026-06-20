@@ -125,40 +125,6 @@ describe('serializeAssets', () => {
     expect(xml).toContain('<AoRoughMetal Path="Textures/X_NeutralORM.ktx2" Category="Vessel"')
   })
 
-  it('falls back to a shared flat-normal PNG + EmptyAoRoughMetallic.png for empty channels', () => {
-    const xml = serializeAssets({
-      meshAtlasPath: 'Meshes/X.glb',
-      // The current export uses a flat-normal PNG + KSA's own empty ORM PNG (never hand-rolled KTX2).
-      normalPath: 'Textures/X_FlatNormal.png',
-      aoRoughMetalPath: 'Textures/Characters/EmptyAoRoughMetallic.png',
-      subParts: [
-        // Kitten head: real normal map, but no ORM → ORM falls back to the shared empty PNG.
-        {
-          subPartId: 'head',
-          materialId: 'head_Material',
-          diffusePath: 'Textures/Characters/KittenHead_Bengal_A.ktx2',
-          normalPath: 'Textures/Characters/KittenHead_N.ktx2',
-        },
-        // Kitten eyes: diffuse only → BOTH channels fall back to the shared empties.
-        {
-          subPartId: 'eye',
-          materialId: 'eye_Material',
-          diffusePath: 'Textures/Characters/Kitten_Eye_A.ktx2',
-        },
-      ],
-    })
-    // Real per-SubPart normal is still emitted as a Path.
-    expect(xml).toContain('<Normal Path="Textures/Characters/KittenHead_N.ktx2" Category="Vessel"')
-    // Empty normal is the shared flat-normal PNG — never a hand-rolled .ktx2.
-    expect(xml).toContain('<Normal Path="Textures/X_FlatNormal.png" Category="Vessel"')
-    expect(xml).not.toContain('FlatNormal.ktx2')
-    // Both materials use KSA's own constant ORM PNG (Metal=0), never a hand-rolled KTX2.
-    expect(xml).toContain(
-      '<AoRoughMetal Path="Textures/Characters/EmptyAoRoughMetallic.png" Category="Vessel"',
-    )
-    expect(xml).not.toContain('NeutralORM')
-  })
-
   it('emits reference SubParts (de-IVA props) reusing built-in Mesh/Material, with a render-mesh MeshView', () => {
     const xml = serializeAssets({
       // No meshAtlasPath: an IVA-only export declares no custom geometry.

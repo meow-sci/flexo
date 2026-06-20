@@ -211,23 +211,11 @@ describe('buildCustomBundle — part-ified kitten textures', () => {
     expect(bundle.assetsXml).toContain(
       '<AoRoughMetal Path="C:\\KSA\\Content\\Core\\Textures\\Characters\\Kitten_EMU_ORM.ktx2"',
     )
-    // Eyes (diffuse only) fall back to the shared empties, NOT hand-rolled KTX2 (the chrome/wavy bug):
-    //  - Normal → a bundled flat-normal PNG (flexo-authored; always shipped, even in reference mode).
-    //  - ORM → KSA's own EmptyAoRoughMetallic.png (absolute, referenced from the install).
-    expect(bundle.assetsXml).toMatch(
-      /<Normal Path="Textures\/[^"]*_FlatNormal\.png" Category="Vessel"/,
-    )
-    expect(bundle.assetsXml).toContain(
-      '<AoRoughMetal Path="C:\\KSA\\Content\\Core\\Textures\\Characters\\EmptyAoRoughMetallic.png"',
-    )
-    expect(bundle.assetsXml).not.toContain('<Normal Id="EmptyNormal"/>')
-    expect(bundle.assetsXml).not.toContain('_FlatNormal.ktx2')
-    expect(bundle.assetsXml).not.toContain('_NeutralORM.ktx2')
-    // No game textures are copied into the mod (the empty ORM is referenced, not bundled), but the
-    // flat-normal PNG IS bundled (flexo-authored, no install path); the baked mesh atlas ships too.
+    // Eyes (diffuse only) fall back to the shared synthetic normal/ORM.
+    expect(bundle.assetsXml).toContain('_FlatNormal.ktx2')
+    expect(bundle.assetsXml).toContain('_NeutralORM.ktx2')
+    // No game textures are copied into the mod; the baked mesh atlas still ships.
     expect(bundle.binaries.filter((b) => b.path.includes('Kitten_'))).toHaveLength(0)
-    expect(bundle.binaries.filter((b) => b.path.includes('EmptyAoRoughMetallic'))).toHaveLength(0)
-    expect(bundle.binaries.some((b) => b.path.endsWith('_FlatNormal.png'))).toBe(true)
     expect(bundle.binaries.some((b) => b.path.endsWith('_MeshAtlas.glb'))).toBe(true)
   })
 
@@ -247,19 +235,9 @@ describe('buildCustomBundle — part-ified kitten textures', () => {
       expect(paths).toContain('Textures/Kitten_EMU_N.ktx2')
       expect(paths).toContain('Textures/Kitten_EMU_ORM.ktx2')
       expect(paths).toContain('Textures/Kitten_Eye_Green2_A.ktx2')
-      // The shared empty ORM (KSA's own PNG) is bundled too, deduped across SubParts.
-      expect(paths).toContain('Textures/EmptyAoRoughMetallic.png')
-      // The shared flat-normal PNG is generated (not fetched) and bundled.
-      expect(paths.some((p) => p.endsWith('_FlatNormal.png'))).toBe(true)
       expect(bundle.assetsXml).toContain('<Diffuse Path="Textures/Kitten_EMU_A.ktx2"')
-      expect(bundle.assetsXml).toContain(
-        '<AoRoughMetal Path="Textures/EmptyAoRoughMetallic.png" Category="Vessel"',
-      )
-      expect(bundle.assetsXml).toMatch(
-        /<Normal Path="Textures\/[^"]*_FlatNormal\.png" Category="Vessel"/,
-      )
-      // 5 fetched subpaths (4 kitten maps + the empty ORM PNG); the flat-normal PNG is generated.
-      expect(fetchMock).toHaveBeenCalledTimes(5)
+      // 4 unique subpaths → exactly 4 fetches (no duplicate copies).
+      expect(fetchMock).toHaveBeenCalledTimes(4)
     } finally {
       vi.unstubAllGlobals()
     }

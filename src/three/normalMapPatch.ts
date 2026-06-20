@@ -7,8 +7,12 @@ import * as THREE from 'three'
  *  - **BC5 normal map** stores only R,G. The stock three.js tangent-space path
  *    reads `.xyz` (blue = 0 → broken). We reconstruct Z = sqrt(1 - x² - y²) and
  *    flip X (KSA: `normalMap.x = -normalMap.x`), +Y up. `tbn` comes from the
- *    derivative tangent frame computed in `normal_fragment_begin` (verified against
- *    the installed three r0.184 chunk).
+ *    explicit per-vertex tangent attribute that MeshAtlasCache bakes in with
+ *    MikkTSpace (KSA GLBs ship no TANGENT) — that gives a handedness sign matching
+ *    the baker and keeps detail consistent across mirrored UV islands. Without it,
+ *    `normal_fragment_begin` would fall back to the screen-space derivative frame,
+ *    which inverts normal-map detail on those islands (verified against the
+ *    installed three r0.184 chunk).
  *  - **BC4 emissive** stores one channel in R; KSA uses it as a mask. We broadcast
  *    `.rrr` (boosted by {@link EMISSIVE_BOOST}) and ADD it to `totalEmissiveRadiance`
  *    rather than multiplying. three initializes `totalEmissiveRadiance` from the

@@ -2,18 +2,24 @@ import { useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { GripVertical } from 'lucide-react'
 import { PreviewScrubber } from './PreviewScrubber'
+import { useIsPhone } from './kit'
 import { $activeAnimation } from '../state/animationStore'
 import { $inspectorMode, $animPreviewFloatPos, setAnimPreviewFloatPos } from '../state/uiStore'
 
 /**
- * A floating, draggable toolbar holding the animation preview scrubber + play button,
- * hovering over the workspace whenever the Animation editor has a clip open. Lets you
- * scrub/play while watching the 3D view instead of reaching into the inspector.
+ * A floating toolbar holding the animation preview scrubber + play button, hovering over
+ * the workspace whenever the Animation editor has a clip open. Lets you scrub/play while
+ * watching the 3D view instead of reaching into the inspector.
  *
- * Defaults to top-center, just below the main editor toolbar (matching how the other
- * toolbars sit in that area); dragging the grip moves it freely and the position is
- * persisted ({@link $animPreviewFloatPos}, cleared by the global data reset). Desktop
- * only — the phone build keeps the scrubber inline in its bottom sheet.
+ * Desktop: free-floating + draggable, defaulting to top-center just below the main editor
+ * toolbar (matching how the other toolbars sit in that area); dragging the grip moves it
+ * freely and the position is persisted ({@link $animPreviewFloatPos}, cleared by the
+ * global data reset).
+ *
+ * Phone: a static bar pinned in the top toolbar stack (placed by {@link App}), under the
+ * mobile top bar — same idea, but no drag grip (touch-dragging a hover bar is fiddly and
+ * the desktop-tuned saved position wouldn't map onto a phone viewport). Without it the
+ * only scrub/replay control is the bottom sheet, which covers the 3D view.
  */
 
 /** Keep at least this much of the toolbar on-screen when dragging / after a resize. */
@@ -21,6 +27,7 @@ const KEEP_VISIBLE_X = 140
 const KEEP_VISIBLE_Y = 28
 
 export function FloatingPreviewToolbar() {
+  const isPhone = useIsPhone()
   const mode = useStore($inspectorMode)
   const anim = useStore($activeAnimation)
   const stored = useStore($animPreviewFloatPos)
@@ -28,6 +35,15 @@ export function FloatingPreviewToolbar() {
 
   // Only while the Animation editor has a clip open (its atoms persist across mode switches).
   if (mode !== 'anim' || !anim) return null
+
+  // Phone: in-flow bar in the centered top stack — no absolute positioning or drag.
+  if (isPhone) {
+    return (
+      <div className="pointer-events-auto flex w-80 max-w-[calc(100vw-1rem)] items-center gap-1.5 rounded-lg border border-border bg-panel/95 px-2 py-1.5 shadow-popover backdrop-blur-md">
+        <PreviewScrubber anim={anim} />
+      </div>
+    )
+  }
 
   const onGripPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
     if (e.button !== 0) return

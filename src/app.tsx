@@ -56,12 +56,15 @@ function App() {
       )}
 
       {/* Below the top toolbar: per-selection tools, only when something is
-          selected. The multi-select toolbar stacks beneath. */}
+          selected. The multi-select toolbar stacks beneath. On phone the animation
+          scrubber pins to the top of this stack (under the top bar) so the clip can be
+          scrubbed/replayed without opening the inspector sheet over the 3D view. */}
       <div
         className={`absolute left-1/2 flex -translate-x-1/2 flex-col items-center gap-2 ${
           isPhone ? 'top-14' : 'top-16'
         }`}
       >
+        {isPhone && <FloatingPreviewToolbar />}
         <SelectionToolbar />
         <MultiSelectToolbar />
       </div>
@@ -74,7 +77,8 @@ function App() {
       {!isPhone && <FloatingInspector />}
 
       {/* Floating, draggable animation preview scrubber over the workspace while the
-          Animation editor has a clip open (desktop only — phone keeps it inline). */}
+          Animation editor has a clip open (desktop only — the phone variant pins into the
+          top toolbar stack above). */}
       {!isPhone && <FloatingPreviewToolbar />}
 
       {/* Editor for the active line measurement (left card on desktop, bottom

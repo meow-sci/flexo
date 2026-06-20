@@ -2,14 +2,19 @@ import * as THREE from 'three'
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
 
 /**
- * Owns the renderer-aware KTX2Loader used to load KSA's BCn (BC7/BC5/BC4) +
- * Zstd-supercompressed texture atlases, and probes whether the GPU can actually
- * upload those compressed formats. If not (e.g. Safari on Apple Silicon),
- * texturing degrades gracefully to the flat material — see MaterialFactory.
+ * Owns the renderer-aware KTX2Loader used to load KSA's texture atlases, and
+ * probes whether the GPU can upload *raw* BCn (BC7/BC5/BC4) blocks directly.
+ *
+ * SubPart atlases are shipped as UASTC (Basis Universal) — KTX2Loader transcodes
+ * those at runtime to BC7 / ASTC / ETC2 per device, with an uncompressed RGBA8
+ * fallback, so they render on every GPU/browser regardless of this probe. The
+ * probe (`isBcnSupported`) now only gates the kitten `Characters/` atlases, which
+ * are still raw BCn (they can be bundled verbatim into exported KSA mods, where
+ * the game requires real BC7). On a GPU without BPTC/RGTC those degrade to the
+ * flat material — see kittenBake.
  *
  * The transcoder worker assets live at /basis/ (public/basis/, committed); the
- * worker also runs the Zstd decoder, so it is required even though these files
- * are not Basis Universal.
+ * worker also runs the Zstd decoder + the Basis (UASTC) transcoder.
  */
 let loader: KTX2Loader | null = null
 let bcSupported = false
@@ -30,10 +35,12 @@ export function initTextureSupport(renderer: THREE.WebGLRenderer): void {
     !!gl.getExtension('EXT_texture_compression_rgtc')
 
   if (!bcSupported) {
-    console.warn(
-      'flexo: BC7/BC5 texture compression unavailable in this browser/GPU — ' +
-        'SubParts will render untextured. Use Chrome, or add an offline conversion ' +
-        'step (see plans/FLEXO_TEXTURING.md Appendix).',
+    // SubParts are UASTC and transcode fine here; only the raw-BCn kitten
+    // (Characters/) atlases are affected, so keep this informational.
+    console.info(
+      'flexo: raw BC7/BC5 texture compression unavailable in this browser/GPU — ' +
+        'SubParts still render (UASTC transcodes); only kitten character textures ' +
+        'fall back to flat. (Desktop Chrome exposes BPTC/RGTC.)',
     )
   }
 }
@@ -43,7 +50,11 @@ export function getKtx2Loader(): KTX2Loader {
   return loader
 }
 
-export function isTextureSupported(): boolean {
+/**
+ * True when the GPU can upload *raw* BCn (BC7/BC5/BC4) blocks directly. Only the
+ * kitten `Characters/` atlases still need this; UASTC SubPart atlases do not.
+ */
+export function isBcnSupported(): boolean {
   return bcSupported
 }
 

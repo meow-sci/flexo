@@ -2,7 +2,6 @@ import * as THREE from 'three'
 import type { CatalogSubPart } from '../ksa/catalog'
 import type { TextureWrap } from '../ksa/types'
 import type { ImageLevel } from '../ktx/decodeImage'
-import { isTextureSupported } from './textureSupport'
 import { loadTexture, loadWrappedTexture } from './TextureCache'
 import { applyKsaShaderPatches } from './normalMapPatch'
 
@@ -17,7 +16,9 @@ import { applyKsaShaderPatches } from './normalMapPatch'
  *
  * Returns the shared per-material-id material; callers (SubPartObject) clone it
  * per instance so selection-highlight emissive edits don't bleed across parts.
- * Falls back to a flat material when textures are unsupported or missing.
+ * Falls back to a flat material only when the SubPart has no diffuse atlas — the
+ * atlases are UASTC, which KTX2Loader transcodes on every GPU/browser (no BCn
+ * capability gate needed; see textureSupport).
  */
 
 const materialCache = new Map<string, Promise<THREE.MeshStandardMaterial>>()
@@ -89,7 +90,7 @@ export function buildGlowingFaceMaterial(
 
 /** Resolves the shared material for a catalog entry (cached by material id). */
 export function getSharedMaterial(entry: CatalogSubPart): Promise<THREE.MeshStandardMaterial> {
-  if (!isTextureSupported() || !entry.diffuseUrl) {
+  if (!entry.diffuseUrl) {
     return Promise.resolve(makeFlatMaterial())
   }
   const key = entry.materialId ?? entry.diffuseUrl

@@ -13,7 +13,7 @@ import {
   type KittenPartSubMesh,
 } from '../ksa/kittenAssets'
 import { toUrl } from '../ksa/catalog'
-import { isTextureSupported } from './textureSupport'
+import { isBcnSupported } from './textureSupport'
 import { loadTexture } from './TextureCache'
 import { makeFlatMaterial } from './MaterialFactory'
 import { applyKsaShaderPatches } from './normalMapPatch'
@@ -137,7 +137,9 @@ export async function buildKittenMaterial(
       roughness: 0.85,
     })
   }
-  if (!isTextureSupported()) return makeFlatMaterial()
+  // Kitten Characters/ atlases are still raw BCn (kept BC7 for verbatim mod
+  // bundle-export); without BPTC/RGTC they can't upload, so fall back to flat.
+  if (!isBcnSupported()) return makeFlatMaterial()
   const [map, orm, normal] = await Promise.all([
     loadTexture(spec.diffuseUrl, 'srgb'),
     spec.aoRoughMetalUrl ? loadTexture(spec.aoRoughMetalUrl, 'linear') : null,

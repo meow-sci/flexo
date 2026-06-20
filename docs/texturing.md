@@ -6,23 +6,36 @@ rationale (verified against the KSA decompiled shaders) is in
 
 ## The texture files
 
-Per category, KSA ships 2048² KTX2 atlases, 12 mips, **Zstd-supercompressed**, in
-concrete BCn formats (NOT Basis Universal):
+Per category, KSA ships 2048² KTX2 atlases, 12 mips, **Zstd-supercompressed**. As
+shipped they are *raw block-compressed* BCn (the map below), which is a desktop-GPU
+format with **no fallback** — it only uploads where the browser exposes
+`EXT_texture_compression_bptc`/`rgtc` (desktop Chrome), so it rendered untextured on
+most Android GPUs and on Firefox/Safari.
 
-| Map | File suffix | Format | Use |
+| Map | File suffix | Shipped format | Use |
 |---|---|---|---|
 | Diffuse | `_Diffuse.ktx2` | BC7 | base color (sRGB) |
 | AoRoughMetal | `_PBR.ktx2` | BC7 | packed: **AO=R, Rough=G, Metal=B** |
 | Normal | `_Normal.ktx2` | BC5 | tangent normal, 2-channel RG |
 | Emissive | `_Emissive.ktx2` | BC4 | single-channel (R) mask |
 
+**The atlases flexo serves are re-encoded offline to UASTC (Basis Universal)** by
+`flexo-private-assets/tools/reencode-textures-uastc.py` (preserving each map's exact
+bytes + transfer function). `KTX2Loader` then transcodes UASTC at runtime to BC7
+(desktop), ASTC / ETC2 (mobile), or uncompressed RGBA8 when a device supports no
+compressed format — so SubParts render on **every** GPU/browser. The re-encode runs
+in place over `assets/Textures/` and **skips `Characters/`** (kitten atlases stay raw
+BC7 — flexo can bundle those verbatim into exported KSA mods, where the game needs
+real BC7). Re-run it after each game-asset sync (it's idempotent). The decode/encode
+needs the KTX-Software `ktx` v4 CLI + `pip install texture2ddecoder zstandard Pillow`.
+
 ## Pipeline (`src/three/`)
 
 | File | Role |
 |---|---|
-| `textureSupport.ts` | Renderer-aware `KTX2Loader` singleton (`setTranscoderPath('/basis/')` + `detectSupport`); probes `EXT_texture_compression_bptc`/`rgtc`. If absent → `isTextureSupported()` is false and we fall back to the flat material (one console warning). |
+| `textureSupport.ts` | Renderer-aware `KTX2Loader` singleton (`setTranscoderPath('/basis/')` + `detectSupport`). `isBcnSupported()` probes `EXT_texture_compression_bptc`/`rgtc` — it now **only** gates the raw-BC7 kitten (`Characters/`) atlases; UASTC SubPart atlases ignore it (they always transcode). |
 | `TextureCache.ts` | `loadTexture(url, 'srgb'|'linear')` — loads once, caches, tags color space. Diffuse = `SRGBColorSpace`; normal/PBR/emissive = `NoColorSpace` (linear). |
-| `MaterialFactory.ts` | `getSharedMaterial(entry)` builds a `MeshStandardMaterial` per material-id (cached); flat fallback otherwise. |
+| `MaterialFactory.ts` | `getSharedMaterial(entry)` builds a `MeshStandardMaterial` per material-id (cached); flat fallback only when the SubPart has no diffuse atlas. |
 | `normalMapPatch.ts` | `onBeforeCompile` patch: BC5 normal decode + BC4 emissive broadcast. |
 
 `textureSupport.initTextureSupport(renderer)` is called from `EditorScene`'s
@@ -65,11 +78,16 @@ Tune `renderer.toneMappingExposure`.
 
 ## Browser support
 
-Targets **Chrome** (its ANGLE backend exposes BC7/BC5/BC4 even on Apple Silicon).
-Safari on Apple Silicon generally can't upload these; there `isTextureSupported()`
-is false and parts render flat-grey. The transcoder worker assets live in
-`public/basis/` and are copied to `dist/` automatically by Vite. For a universal
-(Safari) path, see the offline-conversion appendix in `plans/FLEXO_TEXTURING.md`.
+**Universal.** Because the SubPart atlases are UASTC, `KTX2Loader` transcodes them to
+whatever the device supports — BC7 on desktop, ASTC/ETC2 on Android, and uncompressed
+RGBA8 as a last resort — so SubParts render on Chrome, Firefox, Safari, and Android
+Chrome/Firefox alike. The transcoder worker assets live in `public/basis/` and are
+copied to `dist/` automatically by Vite.
+
+The one exception is the **kitten `Characters/` atlases**, still raw BC7 so they can be
+bundled verbatim into exported KSA mods. On a GPU without BPTC/RGTC (`isBcnSupported()`
+false) kittens render flat-grey. Converting them too (keeping the BC7 original for
+bundle-export) is a follow-up.
 
 ## Caveats / not done
 - This doc covers **built-in** KSA part textures. **User-authored** emissive (glow) and the kitten

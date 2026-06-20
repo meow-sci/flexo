@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import { buildAnimationRig, previewOverrideMatrix } from './animationRig'
 import { buildAnimationGlb } from './exportAnimationGlb'
 import { decodeAnimationGlb, remapImportedAnimation, parseGlb } from './animationImport'
-import { hasKsaAssets, ksaAsset } from './ksaTestAssets'
 import type { CatalogAnimationModule, PartAnimation, SubPartPlacement, Transform } from './types'
 
 function tf(
@@ -173,66 +172,10 @@ describe('decodeAnimationGlb — modeled-rest detection (KSA model = deployed = 
   })
 })
 
-describe('decodeAnimationGlb — animated members carry the GLB rest pose, not the geometry placement', () => {
-  // One-joint clip: hip turns +90° about Y over [0,1]; the leaf's GLB static offset puts
-  // it at world [2,0,0] at the rest keyframe, tracing to [0,0,-2] at t=1. This mirrors the
-  // KSA case where a SubPart's geometry <Position> disagrees with the GLB: KSA positions
-  // animated SubParts SOLELY from the GLB, so the importer must too (via memberRestPlacements).
-  const orig: PartAnimation = {
-    id: 'anim_arm',
-    name: 'Arm',
-    durationSec: 1,
-    mode: 'actuate',
-    joints: [{ id: 'hip', name: 'Hip', parentJointId: null, memberInstanceIds: ['foot_1'] }],
-    keyframes: [
-      { id: 'k0', timeSec: 0, poses: { hip: tf() } },
-      { id: 'k1', timeSec: 1, poses: { hip: tf({ rot: [0, Math.PI / 2, 0] }) } },
-    ],
-    solarTracking: null,
-  }
-  const ab = glbBuffer(buildAnimationRig(orig, [pl('foot_1', tf({ pos: [2, 0, 0] }))], 'Arm'))
-  const expectPos = (t: Transform, x: number, y: number, z: number) => {
-    expect(t.position.x).toBeCloseTo(x, 3)
-    expect(t.position.y).toBeCloseTo(y, 3)
-    expect(t.position.z).toBeCloseTo(z, 3)
-  }
-
-  it('captures the GLB world at the FIRST keyframe for an actuate clip (rest = t=0)', () => {
-    const d = decodeAnimationGlb(ab, { instanceIds: new Set(['foot_1']), module: MODULE })!
-    expectPos(d.memberRestPlacements.get('foot_1')!, 2, 0, 0)
-  })
-
-  it('captures the GLB world at the LAST keyframe for a deploy clip (rest = deployed)', () => {
-    // Modeled deployed: geometry places the foot at its last-keyframe world [0,0,-2].
-    const placements = new Map<string, Transform>([
-      ['foot_1', pl('foot_1', tf({ pos: [0, 0, -2] }))],
-    ])
-    const d = decodeAnimationGlb(ab, {
-      instanceIds: new Set(['foot_1']),
-      module: MODULE,
-      placements,
-    })!
-    expect(d.restAtLastKeyframe).toBe(true)
-    expectPos(d.memberRestPlacements.get('foot_1')!, 0, 0, -2)
-  })
-
-  it('anchored to the GLB rest pose, the preview traces the GLB path even when geometry disagrees', () => {
-    const d = decodeAnimationGlb(ab, { instanceIds: new Set(['foot_1']), module: MODULE })!
-    const remapped = remapImportedAnimation(d, new Map([['foot_1', 'foot_1']]), counterId())
-    // The catalog geometry placement is stale/rotated — but the importer overrides it with
-    // the GLB rest pose, so the foot traces the GLB-faithful path [2,0,0] → [0,0,-2].
-    const glbRest = pl('foot_1', d.memberRestPlacements.get('foot_1')!)
-    const at = (t: number) => previewOverrideMatrix(remapped, 'foot_1', t, glbRest)!.elements
-    expect(at(0)[12]).toBeCloseTo(2, 3)
-    expect(at(0)[14]).toBeCloseTo(0, 3)
-    expect(at(1)[12]).toBeCloseTo(0, 3)
-    expect(at(1)[14]).toBeCloseTo(-2, 3)
-  })
-})
-
 describe('decodeAnimationGlb — real KSA solar panel asset', () => {
-  const PATH = ksaAsset('Animations/CoreElectricalA_Prefab_SolarPanelB_Anim.glb')
-  it.runIf(hasKsaAssets)('decodes the dense baked deploy into joints + many keyframes', () => {
+  const PATH = 'thirdparty/ksa/Content/Core/Animations/CoreElectricalA_Prefab_SolarPanelB_Anim.glb'
+  const present = existsSync(PATH)
+  it.runIf(present)('decodes the dense baked deploy into joints + many keyframes', () => {
     const buf = readFileSync(PATH)
     const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
     // The GLB leaf node names ARE the SubPart instance ids; gather them from the GLB itself.
@@ -262,49 +205,4 @@ describe('decodeAnimationGlb — real KSA solar panel asset', () => {
     // a real chain: at least one joint has a joint parent
     expect(decoded.joints.some((j) => j.parentIndex !== null)).toBe(true)
   })
-})
-
-describe('decodeAnimationGlb — real KSA SetAHeightA (GLB disagrees with geometry placement)', () => {
-  // The nested-joint deploy whose door SubParts' geometry <Position> is stale/rotated vs
-  // the GLB. KSA positions animated SubParts SOLELY from the GLB, so memberRestPlacements
-  // must yield the GLB rest pose (its world at the rest keyframe), NOT the geometry value —
-  // which is what the importer overrides each door placement with. See partImport.ts.
-  const PATH = ksaAsset('Animations/CoreServiceModuleA_Prefab_SetAHeightA_Anim.glb')
-  // Door geometry placements (from CoreServiceModuleAAssets.xml) — they disagree with the GLB.
-  const geomDoors: Record<string, [number, number, number]> = {
-    CoreServiceModuleA_Subpart_SetADoorA1: [0, -0.7541, 0.7355],
-    CoreServiceModuleA_Subpart_SetADoorA2: [0, 0.7541, -0.7355],
-    CoreServiceModuleA_Subpart_SetADoorB1: [0, -0.7542, -0.7355],
-    CoreServiceModuleA_Subpart_SetADoorB2: [0, 0.7542, 0.7355],
-  }
-  it.runIf(hasKsaAssets)(
-    'captures each door’s GLB rest pose, not its stale geometry placement',
-    () => {
-      const buf = readFileSync(PATH)
-      const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
-      const { json } = parseGlb(ab)
-      const instanceIds = new Set(
-        (json.nodes ?? []).map((n) => n.name!).filter((nm) => /_Subpart_/.test(nm)),
-      )
-      const placements = new Map<string, Transform>(
-        Object.entries(geomDoors).map(([id, p]) => [id, pl(id, tf({ pos: p }))]),
-      )
-      const decoded = decodeAnimationGlb(ab, { instanceIds, module: MODULE, placements })!
-      // Nested chain: RootJoint + 4 Translate + 4 Rotate = 9 joints; doors modeled stowed (t=0).
-      expect(decoded.joints.length).toBe(9)
-      expect(decoded.restAtLastKeyframe).toBe(false)
-      // All four doors are animated members with a captured GLB rest pose.
-      const doors = [...decoded.memberRestPlacements.keys()].filter((k) => /SetADoor/.test(k))
-      expect(doors).toHaveLength(4)
-      for (const [id, g] of Object.entries(geomDoors)) {
-        const rest = decoded.memberRestPlacements.get(id)!
-        const dist = Math.hypot(
-          rest.position.x - g[0],
-          rest.position.y - g[1],
-          rest.position.z - g[2],
-        )
-        expect(dist).toBeGreaterThan(1) // GLB pose ≠ the stale geometry placement
-      }
-    },
-  )
 })

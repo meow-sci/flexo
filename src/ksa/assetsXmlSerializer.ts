@@ -25,10 +25,10 @@ export interface AssetsSubPartPlan {
   /** Diffuse .ktx2 path (relative to the mod, or absolute for a referenced asset), or null when untextured. */
   diffusePath: string | null
   /**
-   * Per-SubPart Normal .ktx2 path. `undefined` → fall back to the shared flat-normal
-   * ({@link AssetsPlan.normalPath}); a string → use exactly this path (a real kitten normal map).
-   * Lets kitten SubParts carry their own PBR while primitive custom meshes / kitten eyes+labels
-   * reuse the shared empty channel.
+   * Per-SubPart Normal .ktx2 path. `undefined` → fall back to the shared
+   * {@link AssetsPlan.normalPath} (synthetic flat normal); a string → use exactly this
+   * path (a real kitten normal map). Lets kitten SubParts carry their own PBR while
+   * primitive custom meshes keep using the shared synthetic.
    */
   normalPath?: string
   /** Per-SubPart AO/Rough/Metal .ktx2 path. `undefined` → fall back to {@link AssetsPlan.aoRoughMetalPath}. */
@@ -75,18 +75,16 @@ export interface AssetsPlan {
   /** Reference-only SubParts that reuse built-in Mesh/Material (e.g. de-IVA'd props). */
   referenceSubParts?: ReferenceSubPartPlan[]
   /**
-   * Shared Normal `<… Path>` for SubParts lacking a real per-SubPart map — a tiny flat-normal PNG
-   * (R=128, G=128, B=255). KSA's thumbnail renderer (ThumbnailRenderResources.AddDraw) dereferences
-   * `Material.NormalReference` and `Material.PBRMap` WITHOUT a null check, so a <PbrMaterial> with
-   * only <Diffuse> throws a NullReferenceException at startup — every material needs a Normal +
-   * AoRoughMetal. Shipped as a PNG (not hand-rolled KTX2, which KSA's KTX decoder mis-reads).
+   * Relative path to a shared flat-normal .ktx2 (RGB 128,128,255 = +Z).
+   *
+   * REQUIRED whenever any subpart is textured. KSA's thumbnail renderer
+   * (ThumbnailRenderResources.AddDraw) dereferences `Material.NormalReference`
+   * and `Material.PBRMap` WITHOUT a null check, so a <PbrMaterial> with only
+   * <Diffuse> throws a NullReferenceException at startup. We emit synthetic
+   * Normal + AoRoughMetal channels so every material is complete.
    */
   normalPath?: string
-  /**
-   * Shared AO/Rough/Metal `<… Path>` for SubParts lacking a real per-SubPart map — normally KSA's
-   * own `Textures/Characters/EmptyAoRoughMetallic.png` (AO=255, Rough=255, Metal=0), referenced
-   * or bundled per the export mode.
-   */
+  /** Relative path to a shared AO/Rough/Metal .ktx2 (AO=255, Rough=128, Metal=0). */
   aoRoughMetalPath?: string
 }
 
@@ -105,12 +103,11 @@ export function serializeAssets(plan: AssetsPlan): string {
   // Materials first (Core lists PbrMaterials above the SubParts that use them).
   // Every material gets all three channels KSA dereferences unconditionally in
   // its thumbnail renderer: <Diffuse>, <Normal>, <AoRoughMetal>. The latter two
-  // fall back to shared empties ({@link AssetsPlan.normalPath} flat-normal PNG /
-  // {@link AssetsPlan.aoRoughMetalPath} EmptyAoRoughMetallic.png) — omitting them
-  // crashes KSA at startup (see AssetsPlan.normalPath).
+  // point at shared synthetic textures (flat normal / neutral ORM) — omitting
+  // them crashes KSA at startup (see AssetsPlan.normalPath).
   for (const sp of plan.subParts) {
     if (!sp.materialId || !sp.diffusePath) continue
-    // Per-SubPart map (real kitten map) falls back to the shared empty channel.
+    // Per-SubPart override (real kitten map) falls back to the shared synthetic.
     const effNormal = sp.normalPath !== undefined ? sp.normalPath : plan.normalPath
     const effOrm = sp.aoRoughMetalPath !== undefined ? sp.aoRoughMetalPath : plan.aoRoughMetalPath
     const mat = doc.createElement('PbrMaterial')

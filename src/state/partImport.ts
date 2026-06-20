@@ -41,24 +41,8 @@ export async function importBuiltInPart(
       console.error(`flexo: failed to import animation ${mod.glbPath}`, err)
     }
   }
-
-  // KSA positions animated SubParts SOLELY from the GLB and ignores their geometry
-  // `<Position>` (it's overwritten on spawn), so override each animated SubPart's
-  // placement with the GLB-faithful rest pose the decoder captured. For correctly
-  // authored clips this equals the geometry placement (a no-op); when they disagree
-  // (a stale/rotated geometry placement) it's what keeps the imported animation
-  // matching the game instead of anchoring the joint motion to the wrong spot.
-  const restPlacements = new Map<string, Transform>()
-  for (const d of decoded) for (const [id, t] of d.memberRestPlacements) restPlacements.set(id, t)
-  const importedPlacements = part.placements.map((p) => {
-    const t = restPlacements.get(p.instanceId)
-    return t
-      ? { ...p, position: { ...t.position }, rotation: { ...t.rotation }, scale: { ...t.scale } }
-      : p
-  })
-
   return addPart(
-    importedPlacements,
+    part.placements,
     part.connectors,
     part.editorTags,
     targetLayerId,

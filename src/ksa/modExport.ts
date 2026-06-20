@@ -22,6 +22,7 @@ import { assetKeys, getAsset } from '../state/assetDb'
 import type { KittenTextureExportSettings } from '../state/settingsStore'
 import { createZip, type ZipEntry } from '../util/zip'
 import { encodeImageToKtx2, makeSolidKtx2 } from '../ktx/encodeKtx2'
+import { makeSolidPng } from '../ktx/encodePng'
 import { decodeImage, buildMipChain, type ImageLevel } from '../ktx/decodeImage'
 import { compositeGlow, neutralBase, type GlowBitmap } from '../ktx/glowComposite'
 
@@ -193,7 +194,9 @@ async function emitGlowTextures(
   const { diffuse, mask } = compositeGlow(base, glow)
   const diffusePath = `Textures/${token}_Diffuse.ktx2`
   const emissivePath = `Textures/${token}_Emissive.ktx2`
-  binaries.push({ path: diffusePath, data: await encodeLevel(diffuse, true) })
+  // Diffuse LINEAR/UNORM to match KSA's opaque ModelPbr.frag (it pow(2.2)s the diffuse itself); an
+  // sRGB tag would be double-linearized → too dark. The mask stays linear (grayscale add, not color).
+  binaries.push({ path: diffusePath, data: await encodeLevel(diffuse, false) })
   binaries.push({ path: emissivePath, data: await encodeLevel(mask, false) })
   return { diffusePath, emissivePath }
 }
@@ -218,12 +221,44 @@ function joinContentCore(prefix: string, subpath: string): string {
   return `${root}\\${subpath.replace(/\//g, '\\')}`
 }
 
-/** Fetches a KSA .ktx2 (served under /ksa/) verbatim, for the 'bundle' export mode. */
-async function fetchKtx2(subpath: string): Promise<Uint8Array> {
+/** Fetches a KSA asset (.ktx2/.png, served under /ksa/) verbatim, for the 'bundle' export mode. */
+async function fetchAsset(subpath: string): Promise<Uint8Array> {
   const res = await fetch(toUrl(subpath))
   if (!res.ok) throw new Error(`kitten texture fetch failed (${res.status}): ${subpath}`)
   return new Uint8Array(await res.arrayBuffer())
 }
+
+/**
+ * Resolves one Content/Core-relative KSA texture subpath to the value emitted as a mod-XML
+ * `<… Path>`, per the export mode:
+ *  - 'reference' → an absolute `{contentCorePath}\…` path (no file copied).
+ *  - 'bundle' → copy the asset verbatim into Textures/ (deduped by subpath via `bundled`).
+ * Works for any served KSA asset (a real .ktx2 OR KSA's own .png empties).
+ */
+async function resolveKittenTexture(
+  subpath: string,
+  cfg: KittenTextureExportConfig,
+  bundled: Map<string, string>,
+  binaries: { path: string; data: Uint8Array }[],
+): Promise<string> {
+  if (cfg.mode === 'reference') return joinContentCore(cfg.contentCorePath, subpath)
+  let rel = bundled.get(subpath)
+  if (!rel) {
+    rel = `Textures/${basename(subpath)}`
+    bundled.set(subpath, rel)
+    binaries.push({ path: rel, data: await fetchAsset(subpath) })
+  }
+  return rel
+}
+
+/**
+ * KSA Core's constant "empty" ORM — a tiny PNG the game ships and uses for its OWN normal-/ORM-less
+ * character materials (CharacterAssets.xml: head/eyes/MMU-labels). Pixels are AO=255, Rough=255,
+ * Metal=0 (non-metallic). We reference/bundle this real PNG instead of hand-rolling a KTX2: KSA's
+ * KTX decoder mis-reads flexo's uncompressed-RGBA8+Zstd textures (no load error logged), binding
+ * them to the white fallback texture → Metal=1 → the "highly reflective metallic" chrome look.
+ */
+const EMPTY_ORM_SUBPATH = 'Textures/Characters/EmptyAoRoughMetallic.png'
 
 /**
  * Builds the Assets plan for one part-ified kitten SubPart. Resolves each KSA texture
@@ -261,16 +296,8 @@ async function planKittenSubPart(
     }
   }
 
-  const resolve = async (subpath: string): Promise<string> => {
-    if (cfg.mode === 'reference') return joinContentCore(cfg.contentCorePath, subpath)
-    let rel = bundled.get(subpath)
-    if (!rel) {
-      rel = `Textures/${basename(subpath)}`
-      bundled.set(subpath, rel)
-      binaries.push({ path: rel, data: await fetchKtx2(subpath) })
-    }
-    return rel
-  }
+  const resolve = (subpath: string): Promise<string> =>
+    resolveKittenTexture(subpath, cfg, bundled, binaries)
 
   // Glass shell (visor 'glass'/'glassGlow'): a chosen tint becomes a solid sRGB diffuse (KSA's
   // glass shader derives only ~10% of its color from the diffuse, so a saturated solid reads as a
@@ -498,15 +525,24 @@ export async function buildCustomBundle(
       subParts.push({ subPartId: m.subPartId, materialId, diffusePath })
     }
 
-    // KSA's ThumbnailRenderResources.AddDraw dereferences NormalReference and PBRMap
-    // without null checks, so every PbrMaterial must include all three channels.
-    // Emit shared synthetic 1×1 textures when any sub-part is textured.
+    // KSA's ThumbnailRenderResources.AddDraw dereferences NormalReference and PBRMap without null
+    // checks, so every PbrMaterial needs both a Normal and an AoRoughMetal. The constant channels
+    // (SubParts with no real per-SubPart map) must NOT be hand-rolled KTX2 — KSA's KTX decoder
+    // mis-reads flexo's uncompressed-RGBA8+Zstd textures (rendered chrome / wavy mis-lighting):
+    //  - Normal → a tiny flat-normal PNG (R=128,G=128,B=255). KSA's opaque shader reconstructs
+    //    the normal's Z from R,G only (normalMap.z = sqrt(1-x²-y²)), so R=G=128 reads as +Z = the
+    //    geometry normal. Bundled (flexo-authored; no game-install path). NOT KSA's own
+    //    <Normal Id="EmptyNormal"/> — that texture isn't flat under this reconstruction.
+    //  - ORM → KSA's own EmptyAoRoughMetallic.png (a PNG), referenced/bundled per the export mode.
     if (subParts.some((sp) => sp.materialId !== null)) {
-      normalPath = `Textures/${bundleToken}_FlatNormal.ktx2`
-      aoRoughMetalPath = `Textures/${bundleToken}_NeutralORM.ktx2`
-      // flat normal = (128,128,255) ≈ +Z in tangent space; neutral ORM = AO=255, Rough=128, Metal=0
-      binaries.push({ path: normalPath, data: await makeSolidKtx2(128, 128, 255) })
-      binaries.push({ path: aoRoughMetalPath, data: await makeSolidKtx2(255, 128, 0) })
+      normalPath = `Textures/${bundleToken}_FlatNormal.png`
+      binaries.push({ path: normalPath, data: makeSolidPng(128, 128, 255) })
+      aoRoughMetalPath = await resolveKittenTexture(
+        EMPTY_ORM_SUBPATH,
+        kittenTex,
+        kittenTexPath,
+        binaries,
+      )
     }
   }
 

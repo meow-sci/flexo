@@ -108,10 +108,11 @@ export async function encodeImageToKtx2(
 
 /**
  * Encodes a 1×1 solid-color RGBA8 KTX2 (Zstd). `srgb` picks the transfer/format:
- *  - `false` (default) → linear/UNORM — e.g. the synthetic Normal (128,128,255) / AoRoughMetal
- *    (255,128,0) channels, or a single-channel emissive mask.
- *  - `true` → sRGB — a solid DIFFUSE (a glass tint or a whole-mesh glow color). KSA samples the
- *    diffuse through `gammaToLinear`, so the stored solid must be sRGB to yield the chosen color.
+ *  - `false` (default) → linear/UNORM — linear data, or an OPAQUE diffuse. KSA's opaque part
+ *    shader (ModelPbr.frag) samples the diffuse raw and applies pow(2.2) itself, so an opaque
+ *    diffuse must be UNORM (an sRGB tag would double-linearize → near-black).
+ *  - `true` → sRGB — a solid GLASS-tint diffuse only. KSA's glass shader (ModelGlass.frag) uses
+ *    the sampled diffuse WITHOUT a pow(2.2), so the GPU sampler's single sRGB→linear is wanted.
  */
 export function makeSolidKtx2(
   r: number,

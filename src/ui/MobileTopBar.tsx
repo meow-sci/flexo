@@ -22,6 +22,7 @@ import { ViewButton } from './ViewButton'
 import { MeasureButton } from './MeasureButton'
 import { HistoryButton } from './HistoryButton'
 import { SettingsModal } from './SettingsButton'
+import { ScaleEverythingDialog } from './ScaleEverythingDialog'
 import { nukeAndReload } from './nukeAndReload'
 import { openHelp } from '../state/helpStore'
 import { openAbout } from '../state/aboutStore'
@@ -42,6 +43,7 @@ export function MobileTopBar() {
   const [measureOpen, setMeasureOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [scaleOpen, setScaleOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
 
   return (
@@ -87,6 +89,7 @@ export function MobileTopBar() {
                 else if (key === 'export') setExportOpen(true)
                 else if (key === 'view') setViewOpen(true)
                 else if (key === 'measure') setMeasureOpen(true)
+                else if (key === 'scale') setScaleOpen(true)
                 else if (key === 'history') setHistoryOpen(true)
                 else if (key === 'settings') setSettingsOpen(true)
                 else if (key === 'shortcuts') openHelp()
@@ -98,6 +101,7 @@ export function MobileTopBar() {
               <MenuItem id="export">Export</MenuItem>
               <MenuItem id="view">View</MenuItem>
               <MenuItem id="measure">Measure</MenuItem>
+              <MenuItem id="scale">Scale Everything</MenuItem>
               <MenuItem id="history">History</MenuItem>
               <MenuSeparator />
               <MenuItem id="settings">Settings</MenuItem>
@@ -118,6 +122,7 @@ export function MobileTopBar() {
       <MeasureButton isOpen={measureOpen} onOpenChange={setMeasureOpen} />
       <HistoryButton isOpen={historyOpen} onOpenChange={setHistoryOpen} />
       <SettingsModal isOpen={settingsOpen} onOpenChange={setSettingsOpen} />
+      <ScaleEverythingDialog isOpen={scaleOpen} onOpenChange={setScaleOpen} />
       <ConfirmDialog
         isOpen={confirmReset}
         onOpenChange={setConfirmReset}

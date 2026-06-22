@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
+import * as THREE from 'three'
+import { previewOverrideMatrix } from '../ksa/animationRig'
 import {
   $part,
   $activeLayerId,
@@ -47,8 +49,15 @@ import {
   setDockingPortPushoffForce,
   undo,
   updatePlacementTransform,
+  scaleEverything,
 } from './editorStore'
-import { CONNECTOR_LAYER_ID, DEFAULT_LAYER_ID, KITTEN_LAYER_ID } from '../ksa/types'
+import {
+  CONNECTOR_LAYER_ID,
+  DEFAULT_LAYER_ID,
+  KITTEN_LAYER_ID,
+  createEmptyPart,
+} from '../ksa/types'
+import type { Transform } from '../ksa/types'
 
 beforeEach(() => {
   newPart()
@@ -647,5 +656,175 @@ describe('editorStore layers', () => {
     // Selection is exactly the two imported parts (indices 1 & 2), not the pre-existing one.
     expect([...$selectedIndices.get()].sort((a, b) => a - b)).toEqual([1, 2])
     expect($part.get().placements[1].layerId).toBe(engines)
+  })
+})
+
+describe('scaleEverything', () => {
+  const tf = (
+    pos: [number, number, number],
+    rot: [number, number, number],
+    scale: [number, number, number],
+  ): Transform => ({
+    position: { x: pos[0], y: pos[1], z: pos[2] },
+    rotation: { x: rot[0], y: rot[1], z: rot[2] },
+    scale: { x: scale[0], y: scale[1], z: scale[2] },
+  })
+
+  it('scales placements, connectors, kittens, and animation poses per-axis around the origin, leaving rotation and timing untouched', () => {
+    $part.set({
+      ...createEmptyPart(),
+      placements: [
+        {
+          instanceId: 'p1',
+          subPartTemplateId: 'T',
+          layerId: DEFAULT_LAYER_ID,
+          ...tf([2, 4, 8], [0.1, 0.2, 0.3], [1, 2, 4]),
+        },
+      ],
+      connectors: [
+        {
+          id: 'c1',
+          flags: [],
+          layerId: CONNECTOR_LAYER_ID,
+          ...tf([1, 1, 1], [0, 0, 0], [1, 1, 1]),
+        },
+      ],
+      kittens: [
+        {
+          id: 'k1',
+          kind: 'hunter',
+          layerId: KITTEN_LAYER_ID,
+          ...tf([3, 0, 0], [0, 0, 0], [2, 2, 2]),
+        },
+      ],
+      animations: [
+        {
+          id: 'a1',
+          name: 'A',
+          durationSec: 2,
+          mode: 'actuate',
+          joints: [{ id: 'j1', name: 'J', parentJointId: null, memberInstanceIds: ['p1'] }],
+          keyframes: [
+            { id: 'kf0', timeSec: 0, poses: { j1: tf([0, 0, 0], [0, 0, 0], [1, 1, 1]) } },
+            { id: 'kf1', timeSec: 1, poses: { j1: tf([5, 6, 7], [0.5, 0, 0], [3, 1, 1]) } },
+          ],
+          restKeyframeId: 'kf0',
+          solarTracking: null,
+        },
+      ],
+    })
+
+    scaleEverything({ x: 2, y: 3, z: 0.5 })
+
+    const p = $part.get()
+    expect(p.placements[0].position).toEqual({ x: 4, y: 12, z: 4 })
+    expect(p.placements[0].scale).toEqual({ x: 2, y: 6, z: 2 })
+    expect(p.placements[0].rotation).toEqual({ x: 0.1, y: 0.2, z: 0.3 }) // unchanged
+    expect(p.connectors[0].position).toEqual({ x: 2, y: 3, z: 0.5 })
+    expect(p.kittens[0].position).toEqual({ x: 6, y: 0, z: 0 })
+    expect(p.kittens[0].scale).toEqual({ x: 4, y: 6, z: 1 })
+
+    const a = p.animations[0]
+    expect(a.durationSec).toBe(2) // timing untouched
+    expect(a.keyframes[1].timeSec).toBe(1) // untouched
+    // Joint poses are interior rig nodes: only the TRANSLATION scales; rotation
+    // AND pose-scale stay put (scaling pose-scale double-scales the joint chain).
+    expect(a.keyframes[1].poses.j1.position).toEqual({ x: 10, y: 18, z: 3.5 })
+    expect(a.keyframes[1].poses.j1.scale).toEqual({ x: 3, y: 1, z: 1 }) // unchanged
+    expect(a.keyframes[1].poses.j1.rotation).toEqual({ x: 0.5, y: 0, z: 0 }) // unchanged
+  })
+
+  it('keeps a multi-joint rig uniformly scaled: every animated leaf world pose scales by the factor at all times', () => {
+    // hip(root) → knee(child, local offset) → foot leaf. BOTH joints articulate
+    // (hip about Z, knee about Y) and the knee carries a non-origin local offset,
+    // so the parent's bogus scale-factor can't cancel in W_J(t)·W_J(rest)⁻¹ — this
+    // is the chain shape that shears apart when a pose's `scale` is wrongly scaled.
+    const part = {
+      ...createEmptyPart(),
+      placements: [
+        {
+          instanceId: 'foot_1',
+          subPartTemplateId: 'T',
+          layerId: DEFAULT_LAYER_ID,
+          ...tf([3, 0.5, 0], [0, 0, 0], [1, 1, 1]),
+        },
+      ],
+      animations: [
+        {
+          id: 'a1',
+          name: 'Leg',
+          durationSec: 1,
+          mode: 'actuate' as const,
+          joints: [
+            { id: 'hip', name: 'Hip', parentJointId: null, memberInstanceIds: [] },
+            { id: 'knee', name: 'Knee', parentJointId: 'hip', memberInstanceIds: ['foot_1'] },
+          ],
+          keyframes: [
+            {
+              id: 'kf0',
+              timeSec: 0,
+              poses: {
+                hip: tf([1, 0, 0], [0, 0, 0], [1, 1, 1]),
+                knee: tf([2, 0.5, 0], [0, 0, 0], [1, 1, 1]),
+              },
+            },
+            {
+              id: 'kf1',
+              timeSec: 1,
+              poses: {
+                hip: tf([1, 0, 0], [0, 0, Math.PI / 2], [1, 1, 1]),
+                knee: tf([2, 0.5, 0], [0, Math.PI / 3, 0], [1, 1, 1]),
+              },
+            },
+          ],
+          restKeyframeId: 'kf0',
+          solarTracking: null,
+        },
+      ],
+    }
+    $part.set(part)
+
+    const leafWorldAt = (t: number): THREE.Vector3 => {
+      const cur = $part.get()
+      const m = previewOverrideMatrix(cur.animations[0], 'foot_1', t, cur.placements[0])!
+      return new THREE.Vector3().setFromMatrixPosition(m)
+    }
+    const before = [leafWorldAt(0), leafWorldAt(0.5), leafWorldAt(1)]
+
+    const s = 2.5
+    scaleEverything({ x: s, y: s, z: s })
+
+    // Under a uniform scale about the origin, the leaf's world position at EVERY
+    // time must scale by exactly s — the invariant the chain double-scaling broke.
+    before.forEach((b, i) => {
+      const after = leafWorldAt([0, 0.5, 1][i])
+      expect(after.x).toBeCloseTo(b.x * s, 6)
+      expect(after.y).toBeCloseTo(b.y * s, 6)
+      expect(after.z).toBeCloseTo(b.z * s, 6)
+    })
+  })
+
+  it('no-ops at factor 1 (no undo entry) and is a single undoable step otherwise', () => {
+    $part.set({
+      ...createEmptyPart(),
+      placements: [
+        {
+          instanceId: 'p1',
+          subPartTemplateId: 'T',
+          layerId: DEFAULT_LAYER_ID,
+          ...tf([2, 0, 0], [0, 0, 0], [1, 1, 1]),
+        },
+      ],
+    })
+
+    scaleEverything({ x: 1, y: 1, z: 1 })
+    expect($canUndo.get()).toBe(false)
+
+    scaleEverything({ x: 2, y: 2, z: 2 })
+    expect($part.get().placements[0].position.x).toBe(4)
+    expect($canUndo.get()).toBe(true)
+
+    undo()
+    expect($part.get().placements[0].position.x).toBe(2)
   })
 })

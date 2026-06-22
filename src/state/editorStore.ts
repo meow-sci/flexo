@@ -1192,6 +1192,56 @@ export function updateSelectedTransforms(
 }
 
 /**
+ * Scales the ENTIRE workspace by per-axis factors around the world origin
+ * (0,0,0): every placed SubPart, connector, and kitten, AND every animation
+ * keyframe pose. Rotations and keyframe times are left untouched. One undoable
+ * step. Anchored at the origin so the Part's mount reference stays fixed.
+ *
+ * This is the animation-safe counterpart to a multi-select gizmo resize, which
+ * only touches the selected placements and silently breaks animation offsets.
+ *
+ * GEOMETRY INSTANCES (placements/connectors/kittens) are rig LEAVES — a point
+ * map `Σ·placement` — so both `position` and `scale` multiply (the mesh grows).
+ *
+ * ANIMATION JOINT POSES are INTERIOR nodes of the preview/export rig:
+ *   world(leaf,t) = L_root·…·L_J · placement,  L_J = T(pos)·R(rot)·S(scale)
+ * A uniform scale about the origin is the CONJUGATION Σ·L·Σ⁻¹ = T(Σ·pos)·R·S, so
+ * only the pose TRANSLATION scales — rotation and pose-scale stay put. Scaling a
+ * pose's `scale` bakes a bogus factor into every descendant joint (double-scaling
+ * the chain); a lone hinge survives only because its single scale cancels in
+ * W_J(t)·W_J(rest)⁻¹, but multi-joint bay/solar rigs shear apart.
+ *
+ * (Non-uniform factors are exact for static placements and root joints, but only
+ * approximate for rotated child joints — rotation doesn't commute with a
+ * non-uniform scale — the same limitation as the multi-select gizmo's scale.)
+ *
+ * Reference containers and ruler measurements are intentionally left untouched
+ * (they are fixed size references / annotations, not part geometry).
+ */
+export function scaleEverything(factor: Vec3): void {
+  const { x, y, z } = factor
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) return
+  if (x === 1 && y === 1 && z === 1) return
+  pushUndo('scale everything', `${x}×${y}×${z}`)
+  const part = clone($part.get())
+  const scalePos = (p: Vec3): Vec3 => ({ x: p.x * x, y: p.y * y, z: p.z * z })
+  const scaleInstance = (e: { position: Vec3; scale: Vec3 }): void => {
+    e.position = scalePos(e.position)
+    e.scale = scalePos(e.scale)
+  }
+  for (const p of part.placements) scaleInstance(p)
+  for (const c of part.connectors) scaleInstance(c)
+  for (const k of part.kittens) scaleInstance(k)
+  for (const a of part.animations) {
+    for (const kf of a.keyframes) {
+      // Translation only — see the conjugation note above.
+      for (const pose of Object.values(kf.poses)) pose.position = scalePos(pose.position)
+    }
+  }
+  $part.set(part)
+}
+
+/**
  * Updates the transform of whichever entity is selected (SubPart, connector, or
  * kitten). No undo — the caller pushes once at interaction start.
  */

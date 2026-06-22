@@ -33,6 +33,7 @@ import type { KittenTextureExportSettings } from '../state/settingsStore'
 import { openHelp } from '../state/helpStore'
 import { openAbout } from '../state/aboutStore'
 import { PreciseNumberInput } from './PreciseNumberInput'
+import { ScaleEverythingDialog } from './ScaleEverythingDialog'
 
 import { nukeAndReload } from './nukeAndReload'
 
@@ -175,6 +176,7 @@ function HighlightRow({
 
 export function SettingsButton() {
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [scaleOpen, setScaleOpen] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
   const [resetFsGrants, setResetFsGrants] = useState(false)
 
@@ -188,7 +190,8 @@ export function SettingsButton() {
         <Popover placement="bottom end" className="w-44">
           <Menu
             onAction={(key) => {
-              if (key === 'settings') setSettingsOpen(true)
+              if (key === 'scale') setScaleOpen(true)
+              else if (key === 'settings') setSettingsOpen(true)
               else if (key === 'shortcuts') openHelp()
               else if (key === 'reset') {
                 setResetFsGrants(false)
@@ -196,6 +199,8 @@ export function SettingsButton() {
               } else if (key === 'about') openAbout()
             }}
           >
+            <MenuItem id="scale">Scale Everything</MenuItem>
+            <MenuSeparator />
             <MenuItem id="settings">Settings</MenuItem>
             <MenuItem id="shortcuts">Shortcuts</MenuItem>
             <MenuItem id="about">About</MenuItem>
@@ -208,6 +213,8 @@ export function SettingsButton() {
       </MenuTrigger>
 
       <SettingsModal isOpen={settingsOpen} onOpenChange={setSettingsOpen} />
+
+      <ScaleEverythingDialog isOpen={scaleOpen} onOpenChange={setScaleOpen} />
 
       <ConfirmDialog
         isOpen={confirmReset}

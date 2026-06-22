@@ -5,10 +5,12 @@ import type {
   ConnectorFlag,
   EulerXYZ,
   PartGameData,
+  SolarPanel,
   SubPartGameData,
   SubPartPlacement,
   Tank,
   TankShape,
+  Transform,
   Vec3,
 } from './types'
 
@@ -156,6 +158,39 @@ function readNum(el: Element | null | undefined, attr: string): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+/**
+ * Reads a KSA `JoulesReference` child (e.g. `<MaximumCapacity>` / `<Produced>` /
+ * `<Consumed>`), summing its `Joules` + `Watts` + `KWh` attributes exactly the way
+ * the game's JoulesReference does (`KWh` is scaled by 3,600,000). Returns 0 when the
+ * element or all three attributes are absent. The unit of the result is contextual:
+ * Joules for an energy capacity (battery), Watts for a power rate (generator/panel/
+ * consumer). NOTE: the game does NOT recognize a bare `W` attribute — only `Watts`.
+ */
+function readJoulesValue(parent: Element, childTag: string): number {
+  const el = directChildren(parent, childTag)[0]
+  if (!el) return 0
+  return (
+    (readNum(el, 'Joules') ?? 0) +
+    (readNum(el, 'Watts') ?? 0) +
+    (readNum(el, 'KWh') ?? 0) * 3_600_000
+  )
+}
+
+/** Reads a child `<Transform>` into a full {@link Transform} (identity when absent). */
+function readTransform(parent: Element): Transform {
+  const t = directChildren(parent, 'Transform')[0] ?? null
+  return {
+    position: readVec(t, 'Position', 0),
+    rotation: readVec(t, 'Rotation', 0) as EulerXYZ,
+    scale: readVec(t, 'Scale', 1),
+  }
+}
+
+/** Parses one `<SolarPanel>` element: its `<Produced Watts>` and orientation `<Transform>`. */
+function parseSolarPanel(el: Element): SolarPanel {
+  return { outputWatts: readJoulesValue(el, 'Produced'), transform: readTransform(el) }
+}
+
 function tankFromElement(el: Element, shape: TankShape): Tank {
   return {
     shape,
@@ -184,16 +219,14 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   const mass = readNum(directChildren(directChildren(gd, 'CustomMass')[0] ?? gd, 'Mass')[0], 'Kg')
   game.customMass = mass != null && mass > 0 ? mass : null
 
+  // Battery capacity is a JoulesReference (Joules in Core data); the model holds Wh.
   for (const el of directChildren(gd, 'Battery'))
-    game.batteries.push({
-      capacityKWh: readNum(directChildren(el, 'MaximumCapacity')[0], 'KWh') ?? 0,
-    })
+    game.batteries.push({ capacityWh: readJoulesValue(el, 'MaximumCapacity') / 3600 })
   for (const el of directChildren(gd, 'Generator'))
-    game.generators.push({ outputWatts: readNum(directChildren(el, 'Produced')[0], 'W') ?? 0 })
+    game.generators.push({ outputWatts: readJoulesValue(el, 'Produced') })
+  for (const el of directChildren(gd, 'SolarPanel')) game.solarPanels.push(parseSolarPanel(el))
   for (const el of directChildren(gd, 'PowerConsumer'))
-    game.powerConsumers.push({
-      consumedWatts: readNum(directChildren(el, 'Consumed')[0], 'W') ?? 0,
-    })
+    game.powerConsumers.push({ consumedWatts: readJoulesValue(el, 'Consumed') })
 
   const connectorFlags = new Map<string, ConnectorFlag[]>()
   for (const conn of directChildren(gd, 'Connector')) {
@@ -232,6 +265,11 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   }
 }
 
+/** Parses all top-level <SubPartGameData> elements from a parsed GameData document. */
+export function subPartGameDataFromDoc(doc: Document): SubPartGameData[] {
+  return subPartGameDataFromRoot(doc.documentElement as Element)
+}
+
 /** Parses all top-level <SubPartGameData> elements from an Assets document root. */
 function subPartGameDataFromRoot(root: Element): SubPartGameData[] {
   const out: SubPartGameData[] = []
@@ -245,7 +283,9 @@ function subPartGameDataFromRoot(root: Element): SubPartGameData[] {
       if (cylEl) tanks.push(tankFromElement(cylEl, 'Cylindrical'))
       else if (sphEl) tanks.push(tankFromElement(sphEl, 'Spherical'))
     }
-    if (tanks.length > 0) out.push({ subPartTemplateId, tanks })
+    const solarPanels = directChildren(spEl, 'SolarPanel').map(parseSolarPanel)
+    if (tanks.length > 0 || solarPanels.length > 0)
+      out.push({ subPartTemplateId, tanks, solarPanels })
   }
   return out
 }

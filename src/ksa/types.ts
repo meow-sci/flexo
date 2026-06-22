@@ -196,17 +196,38 @@ export interface Tank {
   wallThicknessMm: number
 }
 
-/** Battery storage (multiple allowed). Serialized as <Battery><MaximumCapacity KWh/>. */
+/**
+ * Battery storage (multiple allowed). Serialized as <Battery><MaximumCapacity Joules/>.
+ * Capacity is held in watt-hours (Wh) — KSA's JoulesReference stores Joules, and
+ * 1 Wh = 3600 J, so the serializer multiplies by 3600 on the way out and the
+ * parser divides by 3600 on the way in. Wh keeps the editable numbers human-sized
+ * (a 500 J cell is 0.139 Wh, which the game itself renders as "0.14 Wh").
+ */
 export interface Battery {
-  capacityKWh: number
+  capacityWh: number
 }
 
-/** Power generator (multiple allowed). Serialized as <Generator><Produced W/>. */
+/**
+ * Power generator with constant output (multiple allowed). Serialized as
+ * <Generator><Produced Watts/>. Distinct from {@link SolarPanel} in KSA: a
+ * generator produces continuously, regardless of orientation or sun exposure.
+ */
 export interface Generator {
   outputWatts: number
 }
 
-/** Power consumer (multiple allowed). Serialized as <PowerConsumer><Consumed W/>. */
+/**
+ * Solar panel (multiple allowed). Serialized as <SolarPanel><Produced Watts/><Transform/>.
+ * Unlike a {@link Generator}, its output is sun-dependent and it carries an
+ * orientation {@link Transform} (the panel's sun-facing normal), which we round-trip
+ * so imported built-in panels keep facing the right way.
+ */
+export interface SolarPanel {
+  outputWatts: number
+  transform: Transform
+}
+
+/** Power consumer (multiple allowed). Serialized as <PowerConsumer><Consumed Watts/>. */
 export interface PowerConsumer {
   consumedWatts: number
 }
@@ -245,6 +266,7 @@ export interface PartGameData {
   customMass: number | null
   batteries: Battery[]
   generators: Generator[]
+  solarPanels: SolarPanel[]
   powerConsumers: PowerConsumer[]
   decoupler: Decoupler | null
   dockingPort: DockingPort | null
@@ -252,15 +274,24 @@ export interface PartGameData {
 }
 
 /**
- * Per-SubPart-template GameData: tanks that belong to a specific SubPart template.
- * Serialized as <SubPartGameData Id="subPartTemplateId"><Tank>...</Tank></SubPartGameData>
+ * Per-SubPart-template GameData: tanks and solar panels that belong to a specific
+ * SubPart template. Serialized as
+ * <SubPartGameData Id="subPartTemplateId"><Tank/>...<SolarPanel/>...</SubPartGameData>
  * inside the <PartGameData> document. Multiple instances of the same template share
- * this data, matching KSA's SubPartGameData model.
+ * this data, matching KSA's SubPartGameData model (a SubPartGameDataReference is a
+ * PartGameDataReference, so a SubPart can carry the same power modules a Part can;
+ * in Core data only tanks and solar panels actually appear on SubParts).
  */
 export interface SubPartGameData {
   /** The SubPart template id this data belongs to, e.g. "CoreFuelTankA_Subpart_Skin2W1HB". */
   subPartTemplateId: string
   tanks: Tank[]
+  solarPanels: SolarPanel[]
+}
+
+/** True when a SubPart's data is empty and the entry can be pruned. */
+export function isSubPartGameDataEmpty(spd: SubPartGameData): boolean {
+  return spd.tanks.length === 0 && spd.solarPanels.length === 0
 }
 
 /** Default tank: 2 m cylinder, 0.5 m radius, 2 mm aluminium wall (matches TankState). */
@@ -274,6 +305,11 @@ export function createTank(): Tank {
   }
 }
 
+/** Default solar panel: 50 W, facing its local axis (identity orientation). */
+export function createSolarPanel(): SolarPanel {
+  return { outputWatts: 50, transform: identityTransform() }
+}
+
 /** An empty GameData block (no display name, default mass, no sub-items). */
 export function createEmptyGameData(): PartGameData {
   return {
@@ -281,6 +317,7 @@ export function createEmptyGameData(): PartGameData {
     customMass: null,
     batteries: [],
     generators: [],
+    solarPanels: [],
     powerConsumers: [],
     decoupler: null,
     dockingPort: null,

@@ -20,7 +20,7 @@ import {
   DEFAULT_LAYER_ID,
   KITTEN_LAYER_ID,
 } from '../ksa/types'
-import type { Connector, ConnectorFlag, EditingPart, PartGameData } from '../ksa/types'
+import type { Battery, Connector, ConnectorFlag, EditingPart, PartGameData } from '../ksa/types'
 
 /**
  * PROJECTS — the editing experience is "project"-based. A project bundles all of
@@ -157,6 +157,20 @@ function migratePart(part: EditingPart | undefined | null): void {
   if (!part) return
   const withGameData = part as EditingPart & { gameData?: PartGameData }
   if (!withGameData.gameData) withGameData.gameData = createEmptyGameData()
+  // Solar panels + battery Wh units were added later. Default the solarPanels array
+  // and migrate batteries that still store the legacy `capacityKWh` (1 kWh = 1000 Wh).
+  const game = withGameData.gameData
+  if (!Array.isArray(game.solarPanels)) game.solarPanels = []
+  for (const b of game.batteries ?? []) {
+    const legacy = b as Battery & { capacityKWh?: number }
+    if (legacy.capacityWh == null && legacy.capacityKWh != null) {
+      legacy.capacityWh = legacy.capacityKWh * 1000
+      delete legacy.capacityKWh
+    }
+  }
+  for (const spd of part.subPartGameData ?? []) {
+    if (!Array.isArray(spd.solarPanels)) spd.solarPanels = []
+  }
   for (const c of part.connectors ?? []) {
     const legacy = c as Connector & { flags: unknown }
     if (Array.isArray(legacy.flags)) continue

@@ -6,6 +6,7 @@ import type { Connector, EditingPart, SubPartPlacement } from './types'
 import {
   createDefaultLayer,
   createEmptyGameData,
+  identityTransform,
   createTank,
   DEFAULT_LAYER_ID,
   EULER_ZERO,
@@ -210,8 +211,14 @@ describe('serializeGameData', () => {
       ...createEmptyGameData(),
       displayName: 'My Tank',
       customMass: 250,
-      batteries: [{ capacityKWh: 0.5 }],
+      batteries: [{ capacityWh: 0.5 }],
       generators: [{ outputWatts: 12 }],
+      solarPanels: [
+        {
+          outputWatts: 200,
+          transform: { ...identityTransform(), rotation: { x: 0, y: 1.5708, z: 0 } },
+        },
+      ],
       powerConsumers: [{ consumedWatts: 3 }],
       decoupler: { connectorId: '_connector2', force: 750 },
       dockingPort: { connectorId: '_connector3', latchingImpulse: 6000, pushoffForce: 7000 },
@@ -230,6 +237,7 @@ describe('serializeGameData', () => {
           },
           { ...createTank(), shape: 'Spherical', wallMaterialId: 'Steel(s)', outerRadiusM: 1.2 },
         ],
+        solarPanels: [{ outputWatts: 50, transform: identityTransform() }],
       },
     ],
     connectors: [
@@ -271,10 +279,25 @@ describe('serializeGameData', () => {
     expect(sph.getElementsByTagName('Material')[0].getAttribute('Id')).toBe('Steel(s)')
   })
 
-  it('emits batteries/generators/consumers with their units', () => {
-    expect(child(tags(doc, 'Battery')[0], 'MaximumCapacity')!.getAttribute('KWh')).toBe('0.5')
-    expect(child(tags(doc, 'Generator')[0], 'Produced')!.getAttribute('W')).toBe('12')
-    expect(child(tags(doc, 'PowerConsumer')[0], 'Consumed')!.getAttribute('W')).toBe('3')
+  it('emits power modules with KSA JoulesReference attributes (Joules / Watts)', () => {
+    // Battery capacity is Wh in the model, Joules in the XML (1 Wh = 3600 J).
+    expect(child(tags(doc, 'Battery')[0], 'MaximumCapacity')!.getAttribute('Joules')).toBe('1800')
+    expect(child(tags(doc, 'Generator')[0], 'Produced')!.getAttribute('Watts')).toBe('12')
+    expect(child(tags(doc, 'PowerConsumer')[0], 'Consumed')!.getAttribute('Watts')).toBe('3')
+  })
+
+  it('emits part-level <SolarPanel> with Produced Watts + orientation Transform', () => {
+    const sp = tags(doc, 'SolarPanel').find((el) => el.parentNode === gd)!
+    expect(child(sp, 'Produced')!.getAttribute('Watts')).toBe('200')
+    const rot = child(child(sp, 'Transform')!, 'Rotation')!
+    expect(rot.getAttribute('Y')).toBe('1.5708')
+  })
+
+  it('emits SubPart-level <SolarPanel> alongside tanks', () => {
+    const spd = tags(doc, 'SubPartGameData')[0]
+    expect(
+      child(spd, 'SolarPanel')!.getElementsByTagName('Produced')[0].getAttribute('Watts'),
+    ).toBe('50')
   })
 
   it('emits every connector, with <Flags> only when set', () => {

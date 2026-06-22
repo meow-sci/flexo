@@ -14,14 +14,20 @@ import {
   directChildren,
   parseGameDataElement,
   placementsFromPartElement,
+  subPartGameDataFromDoc,
 } from './partXmlParser'
 import type {
+  Battery,
   CatalogAnimationModule,
   Connector,
   ConnectorFlag,
   Decoupler,
   DockingPort,
   EvaDoor,
+  Generator,
+  PowerConsumer,
+  SolarPanel,
+  SubPartGameData,
   SubPartPlacement,
 } from './types'
 
@@ -40,6 +46,13 @@ export interface CatalogPart {
   decoupler: Decoupler | null
   dockingPort: DockingPort | null
   evaDoor: EvaDoor | null
+  /** Part-level power modules (from GameData), carried into the editor on import. */
+  batteries: Battery[]
+  generators: Generator[]
+  solarPanels: SolarPanel[]
+  powerConsumers: PowerConsumer[]
+  /** Per-SubPart-template data (tanks / solar panels) for the SubParts this Part places. */
+  subPartGameData: SubPartGameData[]
   /** Originating XML file (for debugging / grouping). */
   sourceFile: string
 }
@@ -63,6 +76,11 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
       decoupler: null,
       dockingPort: null,
       evaDoor: null,
+      batteries: [],
+      generators: [],
+      solarPanels: [],
+      powerConsumers: [],
+      subPartGameData: [],
       sourceFile,
     })
   }
@@ -84,24 +102,44 @@ export interface PartGameData {
   decoupler: Decoupler | null
   dockingPort: DockingPort | null
   evaDoor: EvaDoor | null
+  /** Part-level power modules declared on this <PartGameData>. */
+  batteries: Battery[]
+  generators: Generator[]
+  solarPanels: SolarPanel[]
+  powerConsumers: PowerConsumer[]
+}
+
+/** Parsed GameData for a whole file: per-Part data + per-SubPart-template data (keyed by template id). */
+interface ParsedGameDataFile {
+  parts: Map<string, PartGameData>
+  subParts: Map<string, SubPartGameData>
 }
 
 /** GameData sibling of each catalog asset file (e.g. CoreElectricalAAssets.xml -> CoreElectricalAGameData.xml). Not every asset file has one. */
 const GAMEDATA_FILES = ASSET_FILES.map((f) => f.replace(/Assets\.xml$/, 'GameData.xml'))
 
-/** Parses <PartGameData> entries (editor tags, connector flags, coupling bindings) keyed by Part id. */
-export function parseGameDataFile(doc: Document, out: Map<string, PartGameData>): void {
+/**
+ * Parses a GameData document: `<PartGameData>` entries (editor tags, connector
+ * flags, coupling bindings, power modules) keyed by Part id into `out.parts`, and
+ * all top-level `<SubPartGameData>` entries (tanks / solar panels) keyed by SubPart
+ * template id into `out.subParts`.
+ */
+export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void {
   for (const gd of Array.from(doc.getElementsByTagName('PartGameData'))) {
     const id = gd.getAttribute('Id')
     if (!id) continue
     const parsed = parseGameDataElement(gd)
-    const entry: PartGameData = out.get(id) ?? {
+    const entry: PartGameData = out.parts.get(id) ?? {
       editorTags: [],
       connectorFlags: new Map(),
       animationModules: [],
       decoupler: null,
       dockingPort: null,
       evaDoor: null,
+      batteries: [],
+      generators: [],
+      solarPanels: [],
+      powerConsumers: [],
     }
     for (const tag of parsed.editorTags) {
       if (!entry.editorTags.includes(tag)) entry.editorTags.push(tag)
@@ -111,12 +149,17 @@ export function parseGameDataFile(doc: Document, out: Map<string, PartGameData>)
     entry.decoupler ??= parsed.gameData.decoupler
     entry.dockingPort ??= parsed.gameData.dockingPort
     entry.evaDoor ??= parsed.gameData.evaDoor
-    out.set(id, entry)
+    entry.batteries.push(...parsed.gameData.batteries)
+    entry.generators.push(...parsed.gameData.generators)
+    entry.solarPanels.push(...parsed.gameData.solarPanels)
+    entry.powerConsumers.push(...parsed.gameData.powerConsumers)
+    out.parts.set(id, entry)
   }
+  for (const spd of subPartGameDataFromDoc(doc)) out.subParts.set(spd.subPartTemplateId, spd)
 }
 
-async function loadGameData(): Promise<Map<string, PartGameData>> {
-  const out = new Map<string, PartGameData>()
+async function loadGameData(): Promise<ParsedGameDataFile> {
+  const out: ParsedGameDataFile = { parts: new Map(), subParts: new Map() }
   await Promise.all(
     GAMEDATA_FILES.map(async (file) => {
       const r = await fetchXmlFile(file)
@@ -128,22 +171,37 @@ async function loadGameData(): Promise<Map<string, PartGameData>> {
   return out
 }
 
-/** Merges parsed game-data into catalog parts: unions editor tags, applies connector flags by id, and carries coupling bindings. */
-export function mergeGameData(parts: CatalogPart[], gameData: Map<string, PartGameData>): void {
+/**
+ * Merges parsed game-data into catalog parts: unions editor tags, applies connector
+ * flags by id, and carries coupling bindings, power modules, and the per-SubPart-template
+ * data (tanks / solar panels) for whichever SubParts this Part actually places.
+ */
+export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile): void {
   for (const part of parts) {
-    const gd = gameData.get(part.id)
-    if (!gd) continue
-    for (const tag of gd.editorTags) {
-      if (!part.editorTags.includes(tag)) part.editorTags.push(tag)
+    const gd = gameData.parts.get(part.id)
+    if (gd) {
+      for (const tag of gd.editorTags) {
+        if (!part.editorTags.includes(tag)) part.editorTags.push(tag)
+      }
+      for (const conn of part.connectors) {
+        const flags = gd.connectorFlags.get(conn.id)
+        if (flags) conn.flags = flags
+      }
+      if (gd.animationModules.length) part.animationModules = gd.animationModules
+      part.decoupler = gd.decoupler
+      part.dockingPort = gd.dockingPort
+      part.evaDoor = gd.evaDoor
+      part.batteries = gd.batteries
+      part.generators = gd.generators
+      part.solarPanels = gd.solarPanels
+      part.powerConsumers = gd.powerConsumers
     }
-    for (const conn of part.connectors) {
-      const flags = gd.connectorFlags.get(conn.id)
-      if (flags) conn.flags = flags
-    }
-    if (gd.animationModules.length) part.animationModules = gd.animationModules
-    part.decoupler = gd.decoupler
-    part.dockingPort = gd.dockingPort
-    part.evaDoor = gd.evaDoor
+    // SubPart-template data is keyed globally by template id; carry only the entries
+    // for templates this Part places (deduped — many instances share one template).
+    const templateIds = new Set(part.placements.map((p) => p.subPartTemplateId))
+    part.subPartGameData = [...templateIds]
+      .map((tid) => gameData.subParts.get(tid))
+      .filter((spd): spd is SubPartGameData => spd != null)
   }
 }
 

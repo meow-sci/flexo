@@ -32,7 +32,10 @@ export function PartDataButton({
   const { gameData } = part
 
   const powerCount =
-    gameData.batteries.length + gameData.generators.length + gameData.powerConsumers.length
+    gameData.batteries.length +
+    gameData.generators.length +
+    gameData.solarPanels.length +
+    gameData.powerConsumers.length
   const couplingCount =
     (gameData.decoupler ? 1 : 0) + (gameData.dockingPort ? 1 : 0) + (gameData.evaDoor ? 1 : 0)
 

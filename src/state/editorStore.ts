@@ -1,6 +1,7 @@
 import { atom, computed } from 'nanostores'
 import { persistentJSON } from '@nanostores/persistent'
 import type {
+  Battery,
   Connector,
   ConnectorFlag,
   Decoupler,
@@ -8,9 +9,12 @@ import type {
   EditingPart,
   EulerXYZ,
   EvaDoor,
+  Generator,
   KittenKind,
   PartAnimation,
   PartGameData,
+  PowerConsumer,
+  SolarPanel,
   SubPartGameData,
   SubPartPlacement,
   Tank,
@@ -21,8 +25,10 @@ import {
   BUILT_IN_LAYER_IDS,
   CONNECTOR_LAYER_ID,
   createEmptyPart,
+  createSolarPanel,
   createTank,
   DEFAULT_LAYER_ID,
+  isSubPartGameDataEmpty,
   KITTEN_LAYER_ID,
 } from '../ksa/types'
 import type { ReferenceContainer } from './containerStore'
@@ -459,36 +465,57 @@ export function addSubPart(templateId: string): void {
   selectPlacement(part.placements.length - 1)
 }
 
-/** Connector-bound coupling game-data carried into {@link addPart} from a built-in Part. */
-export interface ImportedCoupling {
+/** GameData carried into {@link addPart} from a built-in Part so its imports keep it. */
+export interface ImportedGameData {
+  /** Connector-bound coupling bindings (connectorIds in the source's original id space). */
   decoupler: Decoupler | null
   dockingPort: DockingPort | null
   evaDoor: EvaDoor | null
+  /** Part-level power modules — appended to the project's part (a Part may carry several). */
+  batteries: Battery[]
+  generators: Generator[]
+  solarPanels: SolarPanel[]
+  powerConsumers: PowerConsumer[]
+  /** Per-SubPart-template data (tanks / solar panels) for the imported SubParts. */
+  subPartGameData: SubPartGameData[]
 }
 
 /**
- * Fills the project's singular coupling bindings from an imported Part, only when
- * not already set, remapping each binding's connector id from the source's original
- * id space through `connectorIdMap`. A binding whose connector isn't among the
- * imported connectors is skipped (no dangling reference). Mirrors mergeGameData in
+ * Applies an imported Part's GameData onto the project's part. Coupling bindings are
+ * singular: filled only when not already set, remapping each binding's connector id
+ * from the source's original id space through `connectorIdMap` (a binding whose
+ * connector isn't among the imported connectors is skipped). Power modules are lists
+ * and are appended (a Part can carry several batteries / panels). Per-SubPart-template
+ * data is added for any template the project doesn't already have an entry for (the
+ * existing entry wins so prior user edits aren't clobbered). Mirrors mergeGameData in
  * projectTransfer.ts so built-in and project imports behave identically.
  */
-function applyImportedCoupling(
-  target: PartGameData,
-  src: ImportedCoupling,
+function applyImportedGameData(
+  target: EditingPart,
+  src: ImportedGameData,
   connectorIdMap: ReadonlyMap<string, string>,
 ): void {
-  if (target.decoupler == null && src.decoupler) {
+  const game = target.gameData
+  if (game.decoupler == null && src.decoupler) {
     const id = connectorIdMap.get(src.decoupler.connectorId)
-    if (id) target.decoupler = { ...src.decoupler, connectorId: id }
+    if (id) game.decoupler = { ...src.decoupler, connectorId: id }
   }
-  if (target.dockingPort == null && src.dockingPort) {
+  if (game.dockingPort == null && src.dockingPort) {
     const id = connectorIdMap.get(src.dockingPort.connectorId)
-    if (id) target.dockingPort = { ...src.dockingPort, connectorId: id }
+    if (id) game.dockingPort = { ...src.dockingPort, connectorId: id }
   }
-  if (target.evaDoor == null && src.evaDoor) {
+  if (game.evaDoor == null && src.evaDoor) {
     const id = connectorIdMap.get(src.evaDoor.connectorId)
-    if (id) target.evaDoor = { connectorId: id }
+    if (id) game.evaDoor = { connectorId: id }
+  }
+  game.batteries.push(...src.batteries)
+  game.generators.push(...src.generators)
+  game.solarPanels.push(...src.solarPanels)
+  game.powerConsumers.push(...src.powerConsumers)
+  for (const spd of src.subPartGameData) {
+    if (!target.subPartGameData.some((s) => s.subPartTemplateId === spd.subPartTemplateId)) {
+      target.subPartGameData.push(spd)
+    }
   }
 }
 
@@ -519,12 +546,12 @@ export function addPart(
    */
   buildAnimations?: (idMap: ReadonlyMap<string, string>) => PartAnimation[],
   /**
-   * Connector-bound coupling game-data from the Part's GameData (decoupler /
-   * docking port / EVA door). Their `connectorId`s are in the source's original
-   * id space and get remapped onto the freshly-generated connector ids below.
-   * Singular bindings are only filled when the project doesn't already have one.
+   * GameData from the Part being imported (coupling bindings, power modules, and
+   * per-SubPart-template tanks / solar panels). Coupling `connectorId`s are in the
+   * source's original id space and get remapped onto the freshly-generated connector
+   * ids below. See {@link applyImportedGameData} for the per-field merge rules.
    */
-  coupling?: ImportedCoupling,
+  imported?: ImportedGameData,
 ): string {
   if (placements.length === 0 && connectors.length === 0) return DEFAULT_LAYER_ID
   const importDetail =
@@ -581,7 +608,7 @@ export function addPart(
       layerId: CONNECTOR_LAYER_ID, // connectors always live in the Connectors layer
     })
   }
-  if (coupling) applyImportedCoupling(part.gameData, coupling, connectorIdMap)
+  if (imported) applyImportedGameData(part, imported, connectorIdMap)
   $part.set(part)
   // Select exactly the imported SubParts (not any pre-existing ones on the layer);
   // for a connectors-only import, fall back to selecting the last connector.
@@ -1277,7 +1304,7 @@ export function setCustomMass(massKg: number): void {
 function getOrCreateSubPartData(part: EditingPart, subPartTemplateId: string): SubPartGameData {
   let spd = part.subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
   if (!spd) {
-    spd = { subPartTemplateId, tanks: [] }
+    spd = { subPartTemplateId, tanks: [], solarPanels: [] }
     part.subPartGameData.push(spd)
   }
   return spd
@@ -1286,7 +1313,7 @@ function getOrCreateSubPartData(part: EditingPart, subPartTemplateId: string): S
 function mutateSubPartData(subPartTemplateId: string, mutate: (s: SubPartGameData) => void): void {
   const part = clone($part.get())
   mutate(getOrCreateSubPartData(part, subPartTemplateId))
-  part.subPartGameData = part.subPartGameData.filter((s) => s.tanks.length > 0)
+  part.subPartGameData = part.subPartGameData.filter((s) => !isSubPartGameDataEmpty(s))
   $part.set(part)
 }
 
@@ -1332,22 +1359,66 @@ export function updateTank(subPartTemplateId: string, index: number, patch: Part
   })
 }
 
+// --- Solar panels (per SubPart template) ---
+
+/** Discrete: append a default solar panel for the given SubPart template. */
+export function addSubPartSolarPanel(subPartTemplateId: string): void {
+  commitSubPartData('add solar panel', '', subPartTemplateId, (s) =>
+    s.solarPanels.push(createSolarPanel()),
+  )
+}
+
+/** Discrete: remove the solar panel at `index` for the given SubPart template. */
+export function removeSubPartSolarPanel(subPartTemplateId: string, index: number): void {
+  const spd = $part.get().subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
+  if (!spd || index < 0 || index >= spd.solarPanels.length) return
+  commitSubPartData('remove solar panel', '', subPartTemplateId, (s) =>
+    s.solarPanels.splice(index, 1),
+  )
+}
+
+/** Streaming: set a SubPart solar panel's output (W). Caller pushes undo on field focus. */
+export function setSubPartSolarPanelOutput(
+  subPartTemplateId: string,
+  index: number,
+  outputWatts: number,
+): void {
+  const spd = $part.get().subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
+  if (!spd || index < 0 || index >= spd.solarPanels.length) return
+  mutateSubPartData(subPartTemplateId, (s) => {
+    s.solarPanels[index].outputWatts = outputWatts
+  })
+}
+
+/** Streaming: set a SubPart solar panel's orientation rotation (Euler XYZ radians). */
+export function setSubPartSolarPanelRotation(
+  subPartTemplateId: string,
+  index: number,
+  rotation: EulerXYZ,
+): void {
+  const spd = $part.get().subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
+  if (!spd || index < 0 || index >= spd.solarPanels.length) return
+  mutateSubPartData(subPartTemplateId, (s) => {
+    s.solarPanels[index].transform.rotation = rotation
+  })
+}
+
 // --- Power (batteries / generators / consumers) ---
 
-/** Discrete: append a battery (default capacity). */
+/** Discrete: append a battery (default capacity, in Wh). */
 export function addBattery(): void {
-  commitGameData('add battery', '', (g) => g.batteries.push({ capacityKWh: 0.01 }))
+  commitGameData('add battery', '', (g) => g.batteries.push({ capacityWh: 10 }))
 }
 /** Discrete: remove battery at `index`. */
 export function removeBattery(index: number): void {
   if (index < 0 || index >= $part.get().gameData.batteries.length) return
   commitGameData('remove battery', '', (g) => g.batteries.splice(index, 1))
 }
-/** Streaming: set a battery's capacity (kWh). Caller pushes undo on field focus. */
-export function setBatteryCapacity(index: number, capacityKWh: number): void {
+/** Streaming: set a battery's capacity (Wh). Caller pushes undo on field focus. */
+export function setBatteryCapacity(index: number, capacityWh: number): void {
   if (index < 0 || index >= $part.get().gameData.batteries.length) return
   mutateGameData((g) => {
-    g.batteries[index].capacityKWh = capacityKWh
+    g.batteries[index].capacityWh = capacityWh
   })
 }
 
@@ -1365,6 +1436,32 @@ export function setGeneratorOutput(index: number, outputWatts: number): void {
   if (index < 0 || index >= $part.get().gameData.generators.length) return
   mutateGameData((g) => {
     g.generators[index].outputWatts = outputWatts
+  })
+}
+
+// --- Solar panels (part-level) ---
+
+/** Discrete: append a solar panel (default output, identity orientation). */
+export function addSolarPanel(): void {
+  commitGameData('add solar panel', '', (g) => g.solarPanels.push(createSolarPanel()))
+}
+/** Discrete: remove solar panel at `index`. */
+export function removeSolarPanel(index: number): void {
+  if (index < 0 || index >= $part.get().gameData.solarPanels.length) return
+  commitGameData('remove solar panel', '', (g) => g.solarPanels.splice(index, 1))
+}
+/** Streaming: set a solar panel's output (W). Caller pushes undo on field focus. */
+export function setSolarPanelOutput(index: number, outputWatts: number): void {
+  if (index < 0 || index >= $part.get().gameData.solarPanels.length) return
+  mutateGameData((g) => {
+    g.solarPanels[index].outputWatts = outputWatts
+  })
+}
+/** Streaming: set a solar panel's orientation rotation (Euler XYZ radians). */
+export function setSolarPanelRotation(index: number, rotation: EulerXYZ): void {
+  if (index < 0 || index >= $part.get().gameData.solarPanels.length) return
+  mutateGameData((g) => {
+    g.solarPanels[index].transform.rotation = rotation
   })
 }
 

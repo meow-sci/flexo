@@ -1,14 +1,17 @@
 import { Button, Switch, Select, ListBoxItem, TextField, SectionTitle } from './kit'
 import { PreciseNumberInput } from './PreciseNumberInput'
+import { Vec3Field } from './Vec3Field'
 import { pushUndo } from '../state/editorStore'
 import {
   addBattery,
   addGenerator,
   addPowerConsumer,
+  addSolarPanel,
   addTank,
   removeBattery,
   removeGenerator,
   removePowerConsumer,
+  removeSolarPanel,
   removeTank,
   setBatteryCapacity,
   setCustomMass,
@@ -25,10 +28,12 @@ import {
   setEvaDoorEnabled,
   setGeneratorOutput,
   setPowerConsumerWatts,
+  setSolarPanelOutput,
+  setSolarPanelRotation,
   setTankShape,
   updateTank,
 } from '../state/editorStore'
-import type { EditingPart, PartGameData, Tank, TankShape } from '../ksa/types'
+import type { EditingPart, EulerXYZ, PartGameData, SolarPanel, Tank, TankShape } from '../ksa/types'
 
 /**
  * The "popup-only" GameData editors used inside the Part Data dialog — every
@@ -240,14 +245,65 @@ function PowerList({
   )
 }
 
+/**
+ * Solar-panel list editor: each panel has a Produced (W) output and an orientation
+ * (Euler XYZ radians, the sun-facing normal). Callback-driven so the same component
+ * serves both the part-level Power section and the per-SubPart modal.
+ */
+export function SolarPanelsSection({
+  solarPanels,
+  onAdd,
+  onRemove,
+  onChangeOutput,
+  onChangeRotation,
+}: {
+  solarPanels: SolarPanel[]
+  onAdd: () => void
+  onRemove: (i: number) => void
+  onChangeOutput: (i: number, watts: number) => void
+  onChangeRotation: (i: number, rotation: EulerXYZ) => void
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <SectionTitle>Solar Panels</SectionTitle>
+      {solarPanels.map((sp, i) => (
+        <ItemCard key={i} title={`Solar Panel ${i + 1}`} onRemove={() => onRemove(i)}>
+          <Field label="Produced (W)">
+            <PreciseNumberInput
+              aria-label={`Solar panel ${i + 1} produced watts`}
+              value={sp.outputWatts}
+              min={0}
+              onInteractionStart={() => pushUndo('edit solar panel', '')}
+              onCommit={(n) => onChangeOutput(i, n)}
+            />
+          </Field>
+          <div className="flex flex-col gap-1">
+            <span className={RAD_LABEL}>Orientation (radians)</span>
+            <Vec3Field
+              value={sp.transform.rotation}
+              onInteractionStart={() => pushUndo('edit solar panel', '')}
+              onCommit={(axis, val) =>
+                onChangeRotation(i, { ...sp.transform.rotation, [axis]: val })
+              }
+            />
+          </div>
+        </ItemCard>
+      ))}
+      <Button size="sm" onPress={onAdd} className="self-start">
+        + Solar Panel
+      </Button>
+    </div>
+  )
+}
+
 export function PowerSection({ gameData }: { gameData: PartGameData }) {
   return (
     <div className="flex flex-col gap-4">
       <PowerList
         label="Batteries"
-        unit="kWh"
+        unit="Wh"
         addLabel="Battery"
-        values={gameData.batteries.map((b) => b.capacityKWh)}
+        values={gameData.batteries.map((b) => b.capacityWh)}
         onAdd={addBattery}
         onRemove={removeBattery}
         onChange={setBatteryCapacity}
@@ -260,6 +316,13 @@ export function PowerSection({ gameData }: { gameData: PartGameData }) {
         onAdd={addGenerator}
         onRemove={removeGenerator}
         onChange={setGeneratorOutput}
+      />
+      <SolarPanelsSection
+        solarPanels={gameData.solarPanels}
+        onAdd={addSolarPanel}
+        onRemove={removeSolarPanel}
+        onChangeOutput={setSolarPanelOutput}
+        onChangeRotation={setSolarPanelRotation}
       />
       <PowerList
         label="Power Consumers"

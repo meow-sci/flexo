@@ -71,7 +71,18 @@ export async function importBuiltInPart(
         const last = fitted.keyframes.reduce((a, b) => (b.timeSec > a.timeSec ? b : a))
         return { ...fitted, restKeyframeId: last.id }
       }),
-    { decoupler: part.decoupler, dockingPort: part.dockingPort, evaDoor: part.evaDoor },
+    // Deep-clone so later edits to the imported part's GameData never mutate the
+    // cached catalog entry (which can be imported again).
+    structuredClone({
+      decoupler: part.decoupler,
+      dockingPort: part.dockingPort,
+      evaDoor: part.evaDoor,
+      batteries: part.batteries,
+      generators: part.generators,
+      solarPanels: part.solarPanels,
+      powerConsumers: part.powerConsumers,
+      subPartGameData: part.subPartGameData,
+    }),
   )
 }
 

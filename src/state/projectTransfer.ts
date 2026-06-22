@@ -1,4 +1,5 @@
 import type {
+  Battery,
   Connector,
   CustomMesh,
   DockingPort,
@@ -177,6 +178,14 @@ function normalizeEnvelope(
     if (dp.pushoffForce == null) dp.pushoffForce = dp.force ?? 0
     delete dp.force
   }
+  // Migrate legacy batteries that stored capacity in kWh (1 kWh = 1000 Wh).
+  for (const b of gameData.batteries) {
+    const legacy = b as Battery & { capacityKWh?: number }
+    if (legacy.capacityWh == null && legacy.capacityKWh != null) {
+      legacy.capacityWh = legacy.capacityKWh * 1000
+      delete legacy.capacityKWh
+    }
+  }
   return {
     format: PROJECT_EXPORT_FORMAT,
     version: typeof obj.version === 'number' ? obj.version : PROJECT_EXPORT_VERSION,
@@ -303,14 +312,17 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
 
   mergeGameData(part.gameData, data.gameData, connectorIdMap)
 
-  // Per-SubPart tanks: append to an existing template entry, else add the entry.
-  // Repoint the template id if it names an imported custom mesh.
+  // Per-SubPart tanks + solar panels: append to an existing template entry, else add
+  // the entry. Repoint the template id if it names an imported custom mesh.
   for (const sg of data.subPartGameData) {
     const templateId = mapTemplateId(sg.subPartTemplateId)
     const tanks = (sg.tanks ?? []).map((t) => ({ ...t }))
+    const solarPanels = (sg.solarPanels ?? []).map((sp) => structuredClone(sp))
     const existing = part.subPartGameData.find((x) => x.subPartTemplateId === templateId)
-    if (existing) existing.tanks.push(...tanks)
-    else part.subPartGameData.push({ subPartTemplateId: templateId, tanks })
+    if (existing) {
+      existing.tanks.push(...tanks)
+      existing.solarPanels.push(...solarPanels)
+    } else part.subPartGameData.push({ subPartTemplateId: templateId, tanks, solarPanels })
   }
 
   // Animations: fresh id (so re-pasting the same export can't collide), members +
@@ -358,6 +370,7 @@ function mergeGameData(
   if (target.customMass == null && src.customMass != null) target.customMass = src.customMass
   target.batteries.push(...(src.batteries ?? []).map((b) => ({ ...b })))
   target.generators.push(...(src.generators ?? []).map((g) => ({ ...g })))
+  target.solarPanels.push(...(src.solarPanels ?? []).map((sp) => structuredClone(sp)))
   target.powerConsumers.push(...(src.powerConsumers ?? []).map((p) => ({ ...p })))
   if (target.decoupler == null && src.decoupler) {
     const id = connectorIdMap.get(src.decoupler.connectorId)

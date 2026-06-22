@@ -184,6 +184,11 @@ describe('editorStore', () => {
         decoupler: null,
         dockingPort: { connectorId: '_connector5', latchingImpulse: 6000, pushoffForce: 7000 },
         evaDoor: null,
+        batteries: [],
+        generators: [],
+        solarPanels: [],
+        powerConsumers: [],
+        subPartGameData: [],
       },
     )
     const dp = $part.get().gameData.dockingPort

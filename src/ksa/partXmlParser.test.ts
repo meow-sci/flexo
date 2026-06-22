@@ -9,7 +9,13 @@ import {
 } from './partXmlParser'
 import { serializeGameData, serializePart } from './partXmlSerializer'
 import type { Connector, EditingPart } from './types'
-import { createDefaultLayer, createEmptyGameData, createTank, DEFAULT_LAYER_ID } from './types'
+import {
+  createDefaultLayer,
+  createEmptyGameData,
+  identityTransform,
+  createTank,
+  DEFAULT_LAYER_ID,
+} from './types'
 
 function editingPart(over: Partial<EditingPart>): EditingPart {
   return {
@@ -156,8 +162,14 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
       ...createEmptyGameData(),
       displayName: 'Round Trip',
       customMass: 42,
-      batteries: [{ capacityKWh: 0.5 }],
+      batteries: [{ capacityWh: 0.5 }],
       generators: [{ outputWatts: 12 }],
+      solarPanels: [
+        {
+          outputWatts: 200,
+          transform: { ...identityTransform(), rotation: { x: 0, y: 1.5708, z: 0 } },
+        },
+      ],
       powerConsumers: [{ consumedWatts: 3 }],
       decoupler: { connectorId: '_c2', force: 750 },
       dockingPort: { connectorId: '_c3', latchingImpulse: 6000, pushoffForce: 7000 },
@@ -176,6 +188,7 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
           },
           { ...createTank(), shape: 'Spherical', wallMaterialId: 'Steel(s)', outerRadiusM: 1.2 },
         ],
+        solarPanels: [{ outputWatts: 50, transform: identityTransform() }],
       },
     ],
     connectors: [
@@ -198,16 +211,19 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
     expect(parsed.gameData.customMass).toBe(42)
   })
 
-  it('recovers tanks per SubPart template (shape, material, dims)', () => {
+  it('recovers tanks and solar panels per SubPart template (shape, material, dims)', () => {
     const spd = parsed.subPartGameData.find((s) => s.subPartTemplateId === TANK_TMPL)
     expect(spd?.tanks.map((t) => t.shape)).toEqual(['Cylindrical', 'Spherical'])
     expect(spd?.tanks[0].lengthM).toBe(3)
     expect(spd?.tanks[1].wallMaterialId).toBe('Steel(s)')
+    expect(spd?.solarPanels[0].outputWatts).toBe(50)
   })
 
   it('recovers power and coupling', () => {
-    expect(parsed.gameData.batteries[0].capacityKWh).toBe(0.5)
+    expect(parsed.gameData.batteries[0].capacityWh).toBeCloseTo(0.5, 6)
     expect(parsed.gameData.generators[0].outputWatts).toBe(12)
+    expect(parsed.gameData.solarPanels[0].outputWatts).toBe(200)
+    expect(parsed.gameData.solarPanels[0].transform.rotation.y).toBeCloseTo(1.5708, 4)
     expect(parsed.gameData.powerConsumers[0].consumedWatts).toBe(3)
     expect(parsed.gameData.decoupler).toEqual({ connectorId: '_c2', force: 750 })
     expect(parsed.gameData.dockingPort).toEqual({

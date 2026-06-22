@@ -354,7 +354,7 @@ function SubPartRowMenu({ index }: { index: number }) {
             {customMesh && (
               <MenuItem onAction={() => setManagingMeshId(customMesh.id)}>Manage Textures</MenuItem>
             )}
-            <MenuItem onAction={() => setManagingTanks(true)}>Manage Tanks</MenuItem>
+            <MenuItem onAction={() => setManagingTanks(true)}>SubPart Data</MenuItem>
             <SubmenuTrigger>
               <MenuItem>Change Layer</MenuItem>
               <Popover className="w-44">

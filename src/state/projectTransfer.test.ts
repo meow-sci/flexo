@@ -55,9 +55,14 @@ function sourcePart(): EditingPart {
   p.editorTags.push('Structural')
   p.gameData.displayName = 'Source Display'
   p.gameData.customMass = 1234
-  p.gameData.batteries.push({ capacityKWh: 5 })
+  p.gameData.batteries.push({ capacityWh: 5 })
+  p.gameData.solarPanels.push({ outputWatts: 80, transform: identityTransform() })
   p.gameData.decoupler = { connectorId: '_connector1', force: 1000 }
-  p.subPartGameData.push({ subPartTemplateId: 'Core.TrussBarA', tanks: [createTank()] })
+  p.subPartGameData.push({
+    subPartTemplateId: 'Core.TrussBarA',
+    tanks: [createTank()],
+    solarPanels: [],
+  })
   p.animations.push({
     id: 'anim_src1',
     name: 'Deploy',

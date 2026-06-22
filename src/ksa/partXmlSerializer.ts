@@ -7,6 +7,7 @@ import type {
   EulerXYZ,
   PartAnimation,
   PartGameData,
+  SolarPanel,
   SubPartPlacement,
   Tank,
   Transform,
@@ -113,17 +114,19 @@ export function serializeGameData(
 
   for (const b of game.batteries) {
     const el = doc.createElement('Battery')
-    el.appendChild(elWithAttr(doc, 'MaximumCapacity', 'KWh', formatG6(b.capacityKWh)))
+    // Model holds Wh; KSA's MaximumCapacity is a JoulesReference (1 Wh = 3600 J).
+    el.appendChild(elWithAttr(doc, 'MaximumCapacity', 'Joules', formatG6(b.capacityWh * 3600)))
     gd.appendChild(el)
   }
   for (const g of game.generators) {
     const el = doc.createElement('Generator')
-    el.appendChild(elWithAttr(doc, 'Produced', 'W', formatG6(g.outputWatts)))
+    el.appendChild(elWithAttr(doc, 'Produced', 'Watts', formatG6(g.outputWatts)))
     gd.appendChild(el)
   }
+  for (const sp of game.solarPanels) gd.appendChild(buildSolarPanelElement(doc, sp))
   for (const pc of game.powerConsumers) {
     const el = doc.createElement('PowerConsumer')
-    el.appendChild(elWithAttr(doc, 'Consumed', 'W', formatG6(pc.consumedWatts)))
+    el.appendChild(elWithAttr(doc, 'Consumed', 'Watts', formatG6(pc.consumedWatts)))
     gd.appendChild(el)
   }
 
@@ -161,7 +164,7 @@ export function serializeGameData(
   assets.appendChild(gd)
 
   for (const spd of part.subPartGameData) {
-    if (spd.tanks.length === 0) continue
+    if (spd.tanks.length === 0 && spd.solarPanels.length === 0) continue
     const spdEl = doc.createElement('SubPartGameData')
     // Remap to the exported variant id so data keyed on an IVA template still applies.
     spdEl.setAttribute('Id', ivaRemap.get(spd.subPartTemplateId) ?? spd.subPartTemplateId)
@@ -170,6 +173,7 @@ export function serializeGameData(
       tankWrapper.appendChild(buildTankElement(doc, tank))
       spdEl.appendChild(tankWrapper)
     }
+    for (const sp of spd.solarPanels) spdEl.appendChild(buildSolarPanelElement(doc, sp))
     assets.appendChild(spdEl)
   }
 
@@ -181,6 +185,15 @@ export function serializeGameData(
 function elWithAttr(doc: XmlDocument, name: string, attr: string, value: string): XmlElement {
   const el = doc.createElement(name)
   el.setAttribute(attr, value)
+  return el
+}
+
+/** <SolarPanel><Produced Watts/><Transform/></SolarPanel> (Transform omitted when identity). */
+function buildSolarPanelElement(doc: XmlDocument, sp: SolarPanel): XmlElement {
+  const el = doc.createElement('SolarPanel')
+  el.appendChild(elWithAttr(doc, 'Produced', 'Watts', formatG6(sp.outputWatts)))
+  const transform = buildTransformElement(doc, sp.transform)
+  if (transform) el.appendChild(transform)
   return el
 }
 

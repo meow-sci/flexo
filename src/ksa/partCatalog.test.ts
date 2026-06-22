@@ -1,15 +1,14 @@
 import { describe, it, expect } from 'vitest'
 import { DOMParser } from '@xmldom/xmldom'
-import {
-  mergeGameData,
-  parseGameDataFile,
-  parsePartsFile,
-  type CatalogPart,
-  type PartGameData,
-} from './partCatalog'
+import { mergeGameData, parseGameDataFile, parsePartsFile, type CatalogPart } from './partCatalog'
 
 function parse(xml: string): Document {
   return new DOMParser().parseFromString(xml, 'application/xml') as unknown as Document
+}
+
+/** An empty parsed-GameData accumulator (part-keyed + subpart-template-keyed maps). */
+function emptyGameData() {
+  return { parts: new Map(), subParts: new Map() }
 }
 
 // Mirrors the real KSA Core split: <Part> geometry in the Assets file (no flags),
@@ -43,7 +42,7 @@ describe('parseGameDataFile + mergeGameData', () => {
     expect(parts[0].connectors[0].flags).toEqual([])
     expect(parts[0].editorTags).toEqual([])
 
-    const gameData = new Map<string, PartGameData>()
+    const gameData = emptyGameData()
     parseGameDataFile(parse(GAMEDATA_XML), gameData)
     mergeGameData(parts, gameData)
 
@@ -56,7 +55,7 @@ describe('parseGameDataFile + mergeGameData', () => {
     parsePartsFile(parse(ASSETS_XML), 'CoreCouplingAAssets.xml', parts)
     expect(parts[0].dockingPort).toBeNull() // not present on the geometry <Part>
 
-    const gameData = new Map<string, PartGameData>()
+    const gameData = emptyGameData()
     parseGameDataFile(
       parse(`<Assets><PartGameData Id="CoreElectricalA_Prefab_SolarPanelB">
         <DockingPort ConnectorId="_connector6" LatchingImpulse="6000" PushoffForce="7000" />
@@ -72,10 +71,42 @@ describe('parseGameDataFile + mergeGameData', () => {
     })
   })
 
+  it('carries part-level battery (Joules→Wh) and the SubPart solar panel onto the Part', () => {
+    const parts: CatalogPart[] = []
+    parsePartsFile(parse(ASSETS_XML), 'CoreElectricalAAssets.xml', parts)
+    expect(parts[0].batteries).toEqual([]) // not on the geometry <Part>
+
+    const gameData = emptyGameData()
+    parseGameDataFile(
+      parse(`<Assets>
+        <PartGameData Id="CoreElectricalA_Prefab_SolarPanelB">
+          <Battery HasStatusLight="true"><MaximumCapacity Joules="500" /></Battery>
+        </PartGameData>
+        <SubPartGameData Id="CoreElectricalA_Subpart_SolarPanelB_CellA">
+          <SolarPanel><Produced Watts="50" /><Transform><Rotation Y="1.5708" /></Transform></SolarPanel>
+        </SubPartGameData>
+        <SubPartGameData Id="SomeOtherTemplate">
+          <SolarPanel><Produced Watts="999" /></SolarPanel>
+        </SubPartGameData>
+      </Assets>`),
+      gameData,
+    )
+    mergeGameData(parts, gameData)
+
+    // Battery imported with Joules→Wh conversion (500 J = 0.1389 Wh).
+    expect(parts[0].batteries[0].capacityWh).toBeCloseTo(500 / 3600, 6)
+    // Only the SubPart this Part actually places is carried (not SomeOtherTemplate).
+    expect(parts[0].subPartGameData.map((s) => s.subPartTemplateId)).toEqual([
+      'CoreElectricalA_Subpart_SolarPanelB_CellA',
+    ])
+    expect(parts[0].subPartGameData[0].solarPanels[0].outputWatts).toBe(50)
+    expect(parts[0].subPartGameData[0].solarPanels[0].transform.rotation.y).toBeCloseTo(1.5708, 4)
+  })
+
   it('ignores unknown / None flags and connectors with no geometry counterpart', () => {
     const parts: CatalogPart[] = []
     parsePartsFile(parse(ASSETS_XML), 'f.xml', parts)
-    const gameData = new Map<string, PartGameData>()
+    const gameData = emptyGameData()
     parseGameDataFile(
       parse(`<Assets><PartGameData Id="CoreElectricalA_Prefab_SolarPanelB">
         <Connector Id="_connector6"><Flags>Bogus</Flags></Connector>

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import {
   $activeLayerId,
   $canUndo,
@@ -20,6 +20,7 @@ import {
   renameCurrentProject,
   saveCurrentProject,
   uniqueProjectName,
+  hydrateProjectOnBoot,
   DEFAULT_PROJECT_NAME,
 } from './projectStore'
 import { CONNECTOR_LAYER_ID, DEFAULT_LAYER_ID } from '../ksa/types'
@@ -140,6 +141,57 @@ describe('projectStore persistence', () => {
     deleteProject('Solo')
     expect($projectName.get()).toBe(DEFAULT_PROJECT_NAME)
     expect(projectExists(DEFAULT_PROJECT_NAME)).toBe(true)
+  })
+
+  it('purges projects from an old data model at boot and warns', () => {
+    // A valid project saved by the current build.
+    $projectName.set('Good')
+    addSubPart('Core.A')
+    saveCurrentProject()
+
+    // An "old model" project: strip an engine field that the current model requires
+    // (mirrors a project saved before engines existed). Loading this would crash.
+    $projectName.set('Old')
+    saveCurrentProject()
+    const stale = JSON.parse(localStorage.getItem('flexo:project:Old')!)
+    delete stale.part.gameData.rocketControllers
+    localStorage.setItem('flexo:project:Old', JSON.stringify(stale))
+    // Pointer references the now-incompatible project.
+    localStorage.setItem('flexo:currentProject', JSON.stringify({ name: 'Old' }))
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    hydrateProjectOnBoot()
+
+    // The bad one is gone (with a warning), the good one survives.
+    expect(projectExists('Old')).toBe(false)
+    expect(projectExists('Good')).toBe(true)
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('incompatible'),
+      expect.arrayContaining(['flexo:project:Old']),
+    )
+    // The dangling pointer was cleared, so boot fell back to the surviving project.
+    expect($projectName.get()).toBe('Good')
+    warn.mockRestore()
+  })
+
+  it('purges unparseable project entries at boot', () => {
+    localStorage.setItem('flexo:project:Corrupt', '{ not valid json')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    hydrateProjectOnBoot()
+    expect(localStorage.getItem('flexo:project:Corrupt')).toBeNull()
+    warn.mockRestore()
+  })
+
+  it('leaves a fully valid project untouched at boot', () => {
+    $projectName.set('Fine')
+    addSubPart('Core.A')
+    saveCurrentProject()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    hydrateProjectOnBoot()
+    expect(warn).not.toHaveBeenCalled()
+    expect(projectExists('Fine')).toBe(true)
+    expect($projectName.get()).toBe('Fine')
+    warn.mockRestore()
   })
 
   it('uniqueProjectName avoids collisions', () => {

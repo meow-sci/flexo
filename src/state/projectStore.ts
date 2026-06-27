@@ -17,6 +17,7 @@ import { $containers, type ReferenceContainer } from './containerStore'
 import {
   createEmptyGameData,
   createKittenLayer,
+  createSubPartGameData,
   DEFAULT_LAYER_ID,
   KITTEN_LAYER_ID,
 } from '../ksa/types'
@@ -191,15 +192,95 @@ function migratePart(part: EditingPart | undefined | null): void {
   if (!Array.isArray(part.animations)) part.animations = []
 }
 
+/**
+ * Every EditingPart reachable from a snapshot: the live document plus the part
+ * inside each undo/redo history entry (normal entries are { part, description,
+ * detail }; legacy saves stored a bare EditingPart — handle whichever shape).
+ */
+function snapshotParts(snap: ProjectSnapshot): EditingPart[] {
+  const out: EditingPart[] = []
+  if (snap.part) out.push(snap.part)
+  for (const e of [...(snap.history?.undo ?? []), ...(snap.history?.redo ?? [])]) {
+    const part = (e as { part?: EditingPart }).part ?? (e as unknown as EditingPart)
+    if (part) out.push(part)
+  }
+  return out
+}
+
 /** Migrates the document + every history-snapshot part within a loaded snapshot. */
 function migrateSnapshot(snap: ProjectSnapshot): void {
-  migratePart(snap.part)
-  const entries = [...(snap.history?.undo ?? []), ...(snap.history?.redo ?? [])]
-  for (const e of entries) {
-    // Normal entries are { part, description, detail }; legacy saves stored a
-    // bare EditingPart — migrate whichever shape this is.
-    const entry = e as { part?: EditingPart }
-    migratePart(entry.part ?? (e as unknown as EditingPart))
+  for (const part of snapshotParts(snap)) migratePart(part)
+}
+
+/**
+ * True only when every part in the snapshot carries all the GameData / SubPartGameData
+ * fields the CURRENT model defines. {@link migratePart} fills in fields it knows about,
+ * but it deliberately does NOT chase every new field (engines, etc.) — by design we do
+ * not migrate old project data. Anything still missing a current field after migration
+ * is from an incompatible older model and would crash the editor (e.g. the engine
+ * computeds read `subPartGameData[].combustors.length`), so it's treated as unloadable
+ * and purged at boot. Because the templates come from the live constructors, any field
+ * added there in future automatically becomes required here — no per-field upkeep.
+ */
+function hasAllKeys(obj: unknown, template: object): boolean {
+  if (!obj || typeof obj !== 'object') return false
+  for (const k of Object.keys(template)) if (!(k in obj)) return false
+  return true
+}
+
+function snapshotMatchesModel(snap: ProjectSnapshot): boolean {
+  const gameDataTemplate = createEmptyGameData()
+  const subPartTemplate = createSubPartGameData('')
+  for (const part of snapshotParts(snap)) {
+    if (!hasAllKeys(part.gameData, gameDataTemplate)) return false
+    for (const spd of part.subPartGameData ?? []) {
+      if (!hasAllKeys(spd, subPartTemplate)) return false
+    }
+  }
+  return true
+}
+
+/**
+ * Whether a stored snapshot can be loaded into the current editor: it must parse,
+ * survive migration without throwing, and match the current data model. Used to
+ * decide what to purge at boot — never throws.
+ */
+function isSnapshotLoadable(snap: ProjectSnapshot | null): boolean {
+  if (!snap) return false
+  try {
+    migrateSnapshot(snap)
+    return snapshotMatchesModel(snap)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Boot-time cleanup: drop any `flexo:project:*` entry that can't be loaded into the
+ * current editor (corrupt JSON, or an older data model we don't migrate). Loading such
+ * data crashes the whole app, so we delete it rather than try to honor it. A dangling
+ * current-project pointer (now pointing at a removed entry) is cleared too. Removed
+ * keys are reported in a single console.warn.
+ */
+function sanitizeProjectStorage(): void {
+  const removed: string[] = []
+  // Iterate high→low: removeItem reindexes localStorage, so descending is stable.
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i)
+    if (!key || !key.startsWith(PROJECT_KEY_PREFIX)) continue
+    if (isSnapshotLoadable(readSnapshotByKey(key))) continue
+    localStorage.removeItem(key)
+    removed.push(key)
+  }
+  const pointer = readCurrentPointer()
+  if (pointer != null && localStorage.getItem(projectKey(pointer)) == null) {
+    localStorage.removeItem(CURRENT_PROJECT_KEY)
+  }
+  if (removed.length > 0) {
+    console.warn(
+      `flexo: removed ${removed.length} incompatible project(s) from localStorage (old/unsupported data model):`,
+      removed,
+    )
   }
 }
 
@@ -277,7 +358,16 @@ export function uniqueProjectName(base: string = DEFAULT_PROJECT_NAME): string {
 export function loadProject(name: string): boolean {
   const snap = readSnapshot(name)
   if (!snap) return false
-  applyProjectSnapshot(snap)
+  try {
+    applyProjectSnapshot(snap)
+  } catch (err) {
+    // Defensive: sanitizeProjectStorage() should have already purged anything that
+    // can't apply, but never let one bad project crash boot. Discard it and fail.
+    suspended = false
+    console.warn(`flexo: failed to load project "${name}" — removing it`, err)
+    localStorage.removeItem(projectKey(name))
+    return false
+  }
   $projectName.set(snap.name)
   writeCurrentPointer(snap.name)
   return true
@@ -399,6 +489,9 @@ function startAutosave(): void {
  * synchronous, so no async wait is needed.
  */
 export function hydrateProjectOnBoot(): void {
+  // Purge corrupt / old-data-model projects first so we never try to load one (which
+  // would crash the app). Anything removed is reported via console.warn.
+  sanitizeProjectStorage()
   const pointerName = readCurrentPointer()
   const loaded = pointerName != null && loadProject(pointerName)
   if (!loaded) {

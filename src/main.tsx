@@ -7,6 +7,7 @@ import { BuildIdMismatchDialog } from './ui/BuildIdMismatchDialog'
 import { checkBuildId } from './buildCheck'
 import { hydrateProjectOnBoot, loadSharedProject } from './state/projectStore'
 import { clearShareParam, decodeSharePayload, readShareParam } from './state/projectShareLink'
+import { suppressAboutFirstUse } from './state/aboutStore'
 import { initCustomAssets } from './state/customAssetStore'
 import { initAnimationStore } from './state/animationStore'
 import { initModFolder } from './state/modFolderStore'
@@ -43,7 +44,19 @@ initCustomAssets()
 // Keep the active animation/joint/keyframe selection clamped across undo/redo.
 initAnimationStore()
 
-checkBuildId()
+// Detect a share-link launch up front: it changes how the next two startup steps behave.
+const sharePayload = readShareParam()
+
+if (sharePayload) {
+  // Opening someone's shared project is an explicit "load this" action — don't ambush it
+  // with the build-mismatch reset prompt, and don't auto-show the intro. We skip the build
+  // check entirely (rather than just hiding its dialog) so the stored flexo_build_id is left
+  // untouched and the safety prompt still fires on the user's next ordinary visit. Likewise
+  // the intro stays unseen (flexo:aboutSeen unchanged) so it greets them next time.
+  suppressAboutFirstUse()
+} else {
+  checkBuildId()
+}
 
 // Reflect any previously-granted mods folder (async; updates the export UI when ready).
 void initModFolder()
@@ -51,7 +64,6 @@ void initModFolder()
 // Stateless share links (`?load=<payload>`): decode the project and open it as a NEW
 // project (the freshly-hydrated project stays untouched until this resolves). Async —
 // decompression needs the Zstd WASM module — so it lands a beat after first paint.
-const sharePayload = readShareParam()
 if (sharePayload) {
   void (async () => {
     const result = await decodeSharePayload(sharePayload)

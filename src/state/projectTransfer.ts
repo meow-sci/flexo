@@ -398,6 +398,16 @@ function mergeGameData(
 ): void {
   if (!target.displayName.trim() && src.displayName?.trim()) target.displayName = src.displayName
   if (target.customMass == null && src.customMass != null) target.customMass = src.customMass
+  if (target.diameterM == null && src.diameterM != null) target.diameterM = src.diameterM
+  if (!target.controllable && src.controllable) target.controllable = true
+  // Unmodeled passthrough XML: fill only when the target has none (first part's leftover wins).
+  if (
+    Object.keys(target.unknownAttrs).length === 0 &&
+    Object.keys(src.unknownAttrs ?? {}).length > 0
+  )
+    target.unknownAttrs = { ...src.unknownAttrs }
+  if (target.unknownChildren.length === 0 && (src.unknownChildren ?? []).length > 0)
+    target.unknownChildren = structuredClone(src.unknownChildren)
   target.batteries.push(...(src.batteries ?? []).map((b) => ({ ...b })))
   target.generators.push(...(src.generators ?? []).map((g) => ({ ...g })))
   target.solarPanels.push(...(src.solarPanels ?? []).map((sp) => structuredClone(sp)))
@@ -411,8 +421,8 @@ function mergeGameData(
     if (id)
       target.dockingPort = {
         connectorId: id,
-        latchingImpulse: src.dockingPort.latchingImpulse,
-        pushoffForce: src.dockingPort.pushoffForce,
+        latchingKineticEnergyJ: src.dockingPort.latchingKineticEnergyJ,
+        pushoffImpulseNs: src.dockingPort.pushoffImpulseNs,
       }
   }
   if (target.evaDoor == null && src.evaDoor) {

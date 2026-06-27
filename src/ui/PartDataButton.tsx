@@ -12,7 +12,13 @@ import {
 } from './kit'
 import { $part, pushUndo, setEditorTags, setPartId } from '../state/editorStore'
 import { EditorTagsField } from './EditorTagsField'
-import { CouplingSection, IdentityFields, MassSection, PowerSection } from './GameDataSections'
+import {
+  CouplingSection,
+  IdentityFields,
+  MassSection,
+  PowerSection,
+  SizeControlFields,
+} from './GameDataSections'
 import { GimbalsSection, PartGasGeneratorSection, RocketControllersSection } from './EngineSections'
 
 interface Props {
@@ -76,6 +82,7 @@ export function PartDataButton({
                 <SectionTitle>Editor Tags</SectionTitle>
                 <EditorTagsField tags={part.editorTags} onChange={setEditorTags} />
               </div>
+              <SizeControlFields gameData={gameData} />
             </DisclosureSection>
 
             <DisclosureSection title="Mass" defaultExpanded>

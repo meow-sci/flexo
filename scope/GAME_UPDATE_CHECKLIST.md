@@ -10,12 +10,14 @@ point **before** a user hits it.
 ---
 
 ## 0. Set up the two snapshots
+
 1. Keep the previously-vetted assemblies repo as `OLD` (rename its dir with the build suffix, as
    with `ksa-game-assemblies_2026.6.8.4680`).
 2. Sync/checkout the `NEW` build into `ksa-game-assemblies/current` (decomp + `Content/`).
 3. Confirm builds: `head version.json` in each (the `build` field).
 
 ## 1. Read the changelog first
+
 `jq -r '.commits[] | "--- rev \(.rev) [\(.author)]\n" + (.lines|join("\n"))' NEW/version.json`
 Skim for keywords that map to scope areas: `Part`, `SubPart`, `GameData`, `XML`, `Editor`,
 `Tag`, `Category`, `Connector`/`snap`/`ToSurface`, `Docking`, `Engine`/`Rocket`/`Thrust`/
@@ -24,22 +26,26 @@ Skim for keywords that map to scope areas: `Part`, `SubPart`, `GameData`, `XML`,
 `Impulse`). The changelog is the human summary — it points you at files; it is **not** proof.
 
 ## 2. File-level diffs (concrete change surface)
+
 ```
 # Asset data + shaders flexo reads/targets:
 diff -rq OLD/Content NEW/Content | sort
 # Decompiled C# (exclude library namespaces flexo never touches):
 diff -rq OLD/decomp NEW/decomp | grep -vE "Brutal|System\.|MIConvexHull|Planet" | sort
 ```
+
 Note **Only in NEW** (added) and **Only in OLD** (removed) lines specially — added schema is the
 silent-data-loss risk (see the master invariant), removed/renamed classes are the breaking risk.
 
 ## 3. Map changed files → scope docs
+
 For each changed/added/removed file, find the scope doc that lists it as an anchor (see the
 [integration map](FULL_SCOPE.md#integration-map-at-a-glance)). Anything that maps to **no** scope
 doc is either irrelevant (rendering/particles/networking/physics-internals) or a **new
 integration surface** that needs a new `scope/*.md`.
 
 ## 4. Per-area verification (only the areas the diff touched)
+
 For each touched area, open its scope doc's **"The contract"** section and check each assumption
 against the NEW code/XML. Highest-value checks, by area:
 
@@ -68,12 +74,14 @@ against the NEW code/XML. Highest-value checks, by area:
 - **Ground clutter** — the 7 `*Reference.cs` schema classes unchanged.
 
 ## 5. Distinguish real changes from decompiler noise
+
 Before flagging a `.cs` as changed, read the actual hunk. Known-noise patterns this codebase has
 seen: `"x".AsSpan()` → `"x"`; `Log.Warning($"…")` → `LogString<Warning>` + `AppendLiteral`/
 `AppendFormatted`; `Brutal.ShaderCompilerApi` → `Brutal.ShaderCApi`; `AddMacroDefinition` gaining
 `ByteSize` args; log line-number shifts. None of these are behavior changes.
 
 ## 6. Record the outcome
+
 - Update each touched scope doc's **Baseline** line to the NEW build and its **status** + "What
   changed in <build>" section.
 - For real gaps, write/refresh `plans/FIX_CURRENT_GAPS_PLAN.md` (severity, exact flexo
@@ -84,6 +92,7 @@ seen: `"x".AsSpan()` → `"x"`; `Log.Warning($"…")` → `LogString<Warning>` +
   bump the baseline pointer in [FULL_SCOPE.md](FULL_SCOPE.md#baseline-game-version).
 
 ## 7. Regression tests
+
 flexo's `src/ksa/*.test.ts` (parser/serializer/engine-physics/animation) encode much of the
 contract. After any schema fix, extend the matching test with a NEW-build XML fixture so the next
 update catches a re-break automatically.

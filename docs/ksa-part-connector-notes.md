@@ -33,4 +33,34 @@ Other parts can mount their surfaces against this connector point. Default conne
 
 ---
 
+## Face-snapping & editor tags (data-driven as of build 2026.6.9.4750)
+
+Editor tags are no longer hardcoded statics in the game. They're a **data-driven registry**:
+`Content/Core/CoreEditorTagsGameData.xml` defines one `<EditorTagDef>` per tag
+(schema `EditorTagDefinition.cs`), and tags like `NoFaceSnapping` / `Coupling` / `Structural` /
+`Fuel Tanks` are registered from that data — the old `EditorTag` static fields (and the obsolete
+`Tanks` tag, now `Fuel Tanks`) were removed game-side.
+
+Each `<EditorTagDef>` carries boolean flags that drive editor behavior (read by `VehicleEditor.cs`):
+
+- `NotaCategory` — the tag is a **functional** marker, not a part-picker category button. flexo
+  mirrors this in `EDITOR_TAG_DEFS` (`src/ksa/types.ts`) to group its tag-autocomplete into
+  "Categories" vs "Functional"; the registered-but-functional tags are `Interstage`, `Radial`,
+  `NoFaceSnapping`, `All`, `Hidden`.
+- `FaceSnapBlacklist` / `FaceSnapTargetWhitelist` / `FaceSnapTargetBlacklist` — govern
+  **face-snapping**: a part snaps off its **+Z** bounding face onto a target. (`NoFaceSnapping`
+  opts a part out.) Note this is the **part's +Z bounding face**, distinct from a connector's
+  **+X** facing arrow — the connector arrow is cosmetic and unrelated to face-snap orientation.
+- `DiameterFilterlist` — the tag participates in the VAB **diameter** size-class filter (see the
+  separate `<Diameter M>` `<PartGameData>` element, modeled as `PartGameData.diameterM`).
+- `RootPartWhitelist` — the part may be a vehicle root.
+
+**flexo impact:** the `<Connector>`/`<Flags>` schema itself is **unchanged**, so connector export
+remains correct. flexo treats editor tags as a freeform string list (any string round-trips); the
+registry only drives autocomplete suggestions + their grouping (`KNOWN_EDITOR_TAGS` /
+`EDITOR_TAG_DEFS`, a static snapshot of the 16 Core tags). flexo does not implement face-snapping
+(it has no in-game assembly), so the snap booleans are informational here.
+
+---
+
 **Enable/disable connectors:** Toggle with "Enable Connecting" in the Debug Editor to show/hide attachment UI. 

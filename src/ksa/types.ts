@@ -152,26 +152,54 @@ export const BUILT_IN_LAYER_IDS: readonly string[] = [
 ]
 
 /**
- * The editor tags KSA's Core data uses to bucket parts in the in-game part
- * picker. Offered as suggestions in the Part Data dialog, but free-form custom
- * values are also allowed (KSA registers any tag string it sees).
+ * One row of KSA's editor-tag registry (`<EditorTagDef>` in
+ * `Content/Core/CoreEditorTagsGameData.xml`, schema `EditorTagDefinition.cs`).
+ * {@link notaCategory} mirrors the `NotaCategory` attribute: `false` ⇒ a part-picker
+ * **category** button; `true` ⇒ a purely **functional** tag (face-snap / diameter-filter
+ * / visibility behavior, not a category). flexo treats all tags as a freeform string list
+ * — this registry only drives the autocomplete suggestions and their grouping (see
+ * {@link import('../ui/EditorTagsField').EditorTagsField}); it does not constrain entry.
  */
-export const KNOWN_EDITOR_TAGS: readonly string[] = [
-  'Capsules',
-  'Cargo',
-  'Coupling',
-  'Electrical',
-  'Engines',
-  'Fuel Tanks',
-  'Hidden',
-  'Interstage',
-  'Lights',
-  'Passage',
-  'Radial',
-  'RCS',
-  'Structural',
-  'Tanks',
+export interface EditorTagDef {
+  /** The tag string emitted as `<EditorTag Value>`, e.g. "Fuel Tanks". */
+  id: string
+  /** `<EditorTagDef NotaCategory>` — `true` ⇒ a functional tag, not a part-picker category. */
+  notaCategory: boolean
+}
+
+/**
+ * KSA's editor-tag registry in the game's authored order (= the order of category
+ * buttons in the part picker). Mirrors `CoreEditorTagsGameData.xml` as of build
+ * **2026.6.9.4750**. This is a static snapshot, not a live parse: flexo only uses it for
+ * freeform-entry autocomplete, so a modder-defined tag simply isn't suggested (it can
+ * still be typed). Keep in sync with the game file on a registry change.
+ */
+export const EDITOR_TAG_DEFS: readonly EditorTagDef[] = [
+  { id: 'Capsules', notaCategory: false },
+  { id: 'Engines', notaCategory: false },
+  { id: 'RCS', notaCategory: false },
+  { id: 'Fuel Tanks', notaCategory: false },
+  { id: 'Electrical', notaCategory: false },
+  { id: 'Coupling', notaCategory: false },
+  { id: 'Structural', notaCategory: false },
+  { id: 'Landing', notaCategory: false },
+  { id: 'Interstage', notaCategory: true },
+  { id: 'Passage', notaCategory: false },
+  { id: 'Cargo', notaCategory: false },
+  { id: 'Lights', notaCategory: false },
+  { id: 'Radial', notaCategory: true },
+  { id: 'NoFaceSnapping', notaCategory: true },
+  { id: 'All', notaCategory: true },
+  { id: 'Hidden', notaCategory: true },
 ]
+
+/**
+ * The editor tags KSA's Core data uses to bucket parts in the in-game part picker.
+ * Offered as suggestions in the Part Data dialog (free-form custom values are also
+ * allowed — KSA registers any tag string it sees). Derived from {@link EDITOR_TAG_DEFS}
+ * in registry order.
+ */
+export const KNOWN_EDITOR_TAGS: readonly string[] = EDITOR_TAG_DEFS.map((d) => d.id)
 
 /**
  * Tank cross-section shape. Cylindrical tanks have a length; spherical ones are
@@ -197,8 +225,8 @@ export interface Tank {
 }
 
 /**
- * Battery storage (multiple allowed). Serialized as <Battery><MaximumCapacity Joules/>.
- * Capacity is held in watt-hours (Wh) — KSA's JoulesReference stores Joules, and
+ * Battery storage (multiple allowed). Serialized as <Battery><MaximumCapacity J/>.
+ * Capacity is held in watt-hours (Wh) — KSA's EnergyReference stores Joules, and
  * 1 Wh = 3600 J, so the serializer multiplies by 3600 on the way out and the
  * parser divides by 3600 on the way in. Wh keeps the editable numbers human-sized
  * (a 500 J cell is 0.139 Wh, which the game itself renders as "0.14 Wh").
@@ -209,7 +237,7 @@ export interface Battery {
 
 /**
  * Power generator with constant output (multiple allowed). Serialized as
- * <Generator><Produced Watts/>. Distinct from {@link SolarPanel} in KSA: a
+ * <Generator><Produced W/>. Distinct from {@link SolarPanel} in KSA: a
  * generator produces continuously, regardless of orientation or sun exposure.
  */
 export interface Generator {
@@ -217,7 +245,7 @@ export interface Generator {
 }
 
 /**
- * Solar panel (multiple allowed). Serialized as <SolarPanel><Produced Watts/><Transform/>.
+ * Solar panel (multiple allowed). Serialized as <SolarPanel><Produced W/><Transform/>.
  * Unlike a {@link Generator}, its output is sun-dependent and it carries an
  * orientation {@link Transform} (the panel's sun-facing normal), which we round-trip
  * so imported built-in panels keep facing the right way.
@@ -227,7 +255,7 @@ export interface SolarPanel {
   transform: Transform
 }
 
-/** Power consumer (multiple allowed). Serialized as <PowerConsumer><Consumed Watts/>. */
+/** Power consumer (multiple allowed). Serialized as <PowerConsumer><Consumed W/>. */
 export interface PowerConsumer {
   consumedWatts: number
 }
@@ -277,13 +305,16 @@ export interface Decoupler {
   force: number
 }
 
-/** Docking port bound to a connector. Serialized as <DockingPort ConnectorId LatchingImpulse PushoffForce/>. */
+/**
+ * Docking port bound to a connector. Serialized as child elements:
+ * <DockingPort><ConnectorId Value/><LatchingKineticEnergy J/><PushoffImpulse Ns/></DockingPort>.
+ */
 export interface DockingPort {
   connectorId: string
-  /** Magnetic latching impulse in newton-seconds (LatchingImpulse attribute). */
-  latchingImpulse: number
-  /** Undock push-off force in newtons (PushoffForce attribute). */
-  pushoffForce: number
+  /** Magnetic latching kinetic-energy budget in joules (<LatchingKineticEnergy J/>; KSA default 50). */
+  latchingKineticEnergyJ: number
+  /** Undock push-off impulse in newton-seconds (<PushoffImpulse Ns/>; KSA default 5000). */
+  pushoffImpulseNs: number
 }
 
 /** EVA hatch bound to a connector. Serialized as <EVADoor ConnectorId/>. */
@@ -459,6 +490,26 @@ export interface Gimbal {
 }
 
 /**
+ * A captured XML subtree flexo does NOT model, preserved verbatim so importing a
+ * built-in Part and re-exporting never silently drops game data flexo has no field for
+ * (e.g. `<Collider>`, the `SolidSphereMass`/`SolidCylinderMass`… mass family, `<IVASeat>`,
+ * `<SubstanceStorageVolume>`). Stored as plain JSON (no live DOM handle) so it round-trips
+ * through the project codec and localStorage. Built by the parser's `captureUnknownChildren`
+ * and re-emitted by the serializer's `buildRawNode`. This is the cure for flexo's
+ * "model-faithful re-emitter drops everything it doesn't model" round-trip invariant.
+ */
+export interface RawXmlNode {
+  /** Element tag name, e.g. "Collider". */
+  tag: string
+  /** Attributes as a name→value map, in source order. */
+  attrs: Record<string, string>
+  /** Child elements (recursive). Empty for a leaf element. */
+  children: RawXmlNode[]
+  /** Trimmed text content — present only for a childless leaf that carries text. */
+  text?: string
+}
+
+/**
  * Per-part GameData carried in the sibling <PartGameData> document — the
  * "popup-only" metadata that has no 3D representation (connectors live on
  * {@link EditingPart.connectors} instead, since they ARE 3D). Mirrors
@@ -469,6 +520,18 @@ export interface PartGameData {
   displayName: string
   /** Mass override in kg, or null for the part's default mass. */
   customMass: number | null
+  /**
+   * Part diameter in meters, serialized as <Diameter M/>. KSA's VAB part-picker
+   * size-class filter (the `DiameterFilterlist` editor tags) — no physics effect.
+   * null ⇒ no <Diameter> element (the part isn't size-filtered).
+   */
+  diameterM: number | null
+  /**
+   * Command-capability marker, serialized as a bare <Control/>. When true the part
+   * can pilot a vehicle (KSA `Vehicle.IsControllable`). KSA's ControlTemplate is an
+   * empty marker with no fields, so this is a plain on/off flag.
+   */
+  controllable: boolean
   batteries: Battery[]
   generators: Generator[]
   solarPanels: SolarPanel[]
@@ -486,6 +549,10 @@ export interface PartGameData {
   nozzles: DeLavalNozzle[]
   /** Per-instance gimbal overlays (thrust-vectoring), keyed by placement instanceId. */
   gimbals: Gimbal[]
+  /** Unmodeled `<PartGameData>` attributes (anything but `Id`/`DisplayName`), preserved verbatim. */
+  unknownAttrs: Record<string, string>
+  /** Unmodeled `<PartGameData>` child elements, preserved verbatim (see {@link RawXmlNode}). */
+  unknownChildren: RawXmlNode[]
 }
 
 /**
@@ -509,6 +576,10 @@ export interface SubPartGameData {
   nozzles: DeLavalNozzle[]
   /** Reusable `<Rocket>` bindings (core + nozzles) that travel with this mesh. */
   rockets: Rocket[]
+  /** Unmodeled `<SubPartGameData>` attributes (anything but `Id` — e.g. Core's `DisplayName`), preserved verbatim. */
+  unknownAttrs: Record<string, string>
+  /** Unmodeled `<SubPartGameData>` child elements, preserved verbatim (see {@link RawXmlNode}). */
+  unknownChildren: RawXmlNode[]
 }
 
 /** True when a SubPart's data is empty and the entry can be pruned. */
@@ -519,7 +590,9 @@ export function isSubPartGameDataEmpty(spd: SubPartGameData): boolean {
     spd.lights.length === 0 &&
     spd.combustors.length === 0 &&
     spd.nozzles.length === 0 &&
-    spd.rockets.length === 0
+    spd.rockets.length === 0 &&
+    spd.unknownChildren.length === 0 &&
+    Object.keys(spd.unknownAttrs).length === 0
   )
 }
 
@@ -562,6 +635,8 @@ export function createEmptyGameData(): PartGameData {
   return {
     displayName: '',
     customMass: null,
+    diameterM: null,
+    controllable: false,
     batteries: [],
     generators: [],
     solarPanels: [],
@@ -574,6 +649,8 @@ export function createEmptyGameData(): PartGameData {
     combustors: [],
     nozzles: [],
     gimbals: [],
+    unknownAttrs: {},
+    unknownChildren: [],
   }
 }
 
@@ -587,6 +664,8 @@ export function createSubPartGameData(subPartTemplateId: string): SubPartGameDat
     combustors: [],
     nozzles: [],
     rockets: [],
+    unknownAttrs: {},
+    unknownChildren: [],
   }
 }
 

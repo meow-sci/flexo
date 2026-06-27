@@ -12,6 +12,7 @@ import type {
   Light,
   PartAnimation,
   PartGameData,
+  RawXmlNode,
   Rocket,
   RocketController,
   SolarPanel,
@@ -102,12 +103,19 @@ export function serializeGameData(
   const game: PartGameData = part.gameData
 
   if (game.displayName.trim()) gd.setAttribute('DisplayName', game.displayName)
+  applyUnknownAttrs(gd, game.unknownAttrs)
 
   for (const tag of part.editorTags) {
     if (!tag.trim()) continue
     const el = doc.createElement('EditorTag')
     el.setAttribute('Value', tag)
     gd.appendChild(el)
+  }
+
+  // <Diameter M/> — the VAB size-class filter (DistanceReference). Core authors plain
+  // M (e.g. M="1"), so emit M unconditionally rather than flexo's Cm-under-1m style.
+  if (game.diameterM != null) {
+    gd.appendChild(elWithAttr(doc, 'Diameter', 'M', formatG6(game.diameterM)))
   }
 
   for (const anim of part.animations) {
@@ -121,21 +129,24 @@ export function serializeGameData(
     gd.appendChild(custom)
   }
 
+  // <Control/> — bare command-capability marker (ControlTemplate has no fields).
+  if (game.controllable) gd.appendChild(doc.createElement('Control'))
+
   for (const b of game.batteries) {
     const el = doc.createElement('Battery')
-    // Model holds Wh; KSA's MaximumCapacity is a JoulesReference (1 Wh = 3600 J).
-    el.appendChild(elWithAttr(doc, 'MaximumCapacity', 'Joules', formatG6(b.capacityWh * 3600)))
+    // Model holds Wh; KSA's MaximumCapacity is an EnergyReference in joules (1 Wh = 3600 J).
+    el.appendChild(elWithAttr(doc, 'MaximumCapacity', 'J', formatG6(b.capacityWh * 3600)))
     gd.appendChild(el)
   }
   for (const g of game.generators) {
     const el = doc.createElement('Generator')
-    el.appendChild(elWithAttr(doc, 'Produced', 'Watts', formatG6(g.outputWatts)))
+    el.appendChild(elWithAttr(doc, 'Produced', 'W', formatG6(g.outputWatts)))
     gd.appendChild(el)
   }
   for (const sp of game.solarPanels) gd.appendChild(buildSolarPanelElement(doc, sp))
   for (const pc of game.powerConsumers) {
     const el = doc.createElement('PowerConsumer')
-    el.appendChild(elWithAttr(doc, 'Consumed', 'Watts', formatG6(pc.consumedWatts)))
+    el.appendChild(elWithAttr(doc, 'Consumed', 'W', formatG6(pc.consumedWatts)))
     gd.appendChild(el)
   }
 
@@ -158,10 +169,21 @@ export function serializeGameData(
     gd.appendChild(el)
   }
   if (game.dockingPort) {
+    // KSA 4750+ child-element form: <ConnectorId Value/> (StringReference),
+    // <LatchingKineticEnergy J/> (EnergyReference), <PushoffImpulse Ns/> (ImpulseReference).
     const el = doc.createElement('DockingPort')
-    el.setAttribute('ConnectorId', game.dockingPort.connectorId)
-    el.setAttribute('LatchingImpulse', formatG6(game.dockingPort.latchingImpulse))
-    el.setAttribute('PushoffForce', formatG6(game.dockingPort.pushoffForce))
+    el.appendChild(elWithAttr(doc, 'ConnectorId', 'Value', game.dockingPort.connectorId))
+    el.appendChild(
+      elWithAttr(
+        doc,
+        'LatchingKineticEnergy',
+        'J',
+        formatG6(game.dockingPort.latchingKineticEnergyJ),
+      ),
+    )
+    el.appendChild(
+      elWithAttr(doc, 'PushoffImpulse', 'Ns', formatG6(game.dockingPort.pushoffImpulseNs)),
+    )
     gd.appendChild(el)
   }
   if (game.evaDoor) {
@@ -182,6 +204,9 @@ export function serializeGameData(
     if (el) gd.appendChild(el)
   }
 
+  // Unmodeled children flexo captured on import (e.g. <Collider>) — re-emitted verbatim, last.
+  for (const node of game.unknownChildren) gd.appendChild(buildRawNode(doc, node))
+
   assets.appendChild(gd)
 
   // User-authored propellants — top-level <CombustionProcess> siblings of <PartGameData>
@@ -195,6 +220,7 @@ export function serializeGameData(
     const spdEl = doc.createElement('SubPartGameData')
     // Remap to the exported variant id so data keyed on an IVA template still applies.
     spdEl.setAttribute('Id', ivaRemap.get(spd.subPartTemplateId) ?? spd.subPartTemplateId)
+    applyUnknownAttrs(spdEl, spd.unknownAttrs)
     for (const tank of spd.tanks) {
       const tankWrapper = doc.createElement('Tank')
       tankWrapper.appendChild(buildTankElement(doc, tank))
@@ -206,6 +232,8 @@ export function serializeGameData(
     for (const rocket of spd.rockets) spdEl.appendChild(buildRocketElement(doc, rocket))
     for (const combustor of spd.combustors) spdEl.appendChild(buildCombustorElement(doc, combustor))
     for (const nozzle of spd.nozzles) spdEl.appendChild(buildNozzleElement(doc, nozzle))
+    // Unmodeled children flexo captured on import — re-emitted verbatim, last.
+    for (const node of spd.unknownChildren) spdEl.appendChild(buildRawNode(doc, node))
     assets.appendChild(spdEl)
   }
 
@@ -220,10 +248,24 @@ function elWithAttr(doc: XmlDocument, name: string, attr: string, value: string)
   return el
 }
 
-/** <SolarPanel><Produced Watts/><Transform/></SolarPanel> (Transform omitted when identity). */
+/** Rebuilds a captured {@link RawXmlNode} (unmodeled passthrough XML) into a real element. */
+function buildRawNode(doc: XmlDocument, node: RawXmlNode): XmlElement {
+  const el = doc.createElement(node.tag)
+  for (const [name, value] of Object.entries(node.attrs ?? {})) el.setAttribute(name, value)
+  for (const child of node.children ?? []) el.appendChild(buildRawNode(doc, child))
+  if ((node.children?.length ?? 0) === 0 && node.text) el.appendChild(doc.createTextNode(node.text))
+  return el
+}
+
+/** Re-applies captured unmodeled root attributes onto a `<PartGameData>`/`<SubPartGameData>` element. */
+function applyUnknownAttrs(el: XmlElement, attrs: Record<string, string>): void {
+  for (const [name, value] of Object.entries(attrs ?? {})) el.setAttribute(name, value)
+}
+
+/** <SolarPanel><Produced W/><Transform/></SolarPanel> (Transform omitted when identity). */
 function buildSolarPanelElement(doc: XmlDocument, sp: SolarPanel): XmlElement {
   const el = doc.createElement('SolarPanel')
-  el.appendChild(elWithAttr(doc, 'Produced', 'Watts', formatG6(sp.outputWatts)))
+  el.appendChild(elWithAttr(doc, 'Produced', 'W', formatG6(sp.outputWatts)))
   const transform = buildTransformElement(doc, sp.transform)
   if (transform) el.appendChild(transform)
   return el

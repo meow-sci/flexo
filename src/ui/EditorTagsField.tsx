@@ -10,13 +10,20 @@ import {
   TagList,
   Tag,
 } from './kit'
-import { KNOWN_EDITOR_TAGS } from '../ksa/types'
+import { EDITOR_TAG_DEFS, KNOWN_EDITOR_TAGS } from '../ksa/types'
+
+/** Tag id → `NotaCategory` flag (true ⇒ a functional tag, not a part-picker category). */
+const TAG_IS_FUNCTIONAL = new Map(EDITOR_TAG_DEFS.map((d) => [d.id, d.notaCategory]))
 
 /**
  * Editor-tag combobox for the Part Data dialog: removable tag chips plus a
  * popover with a search field over the KSA {@link KNOWN_EDITOR_TAGS}. The filter
  * doubles as free-form entry — text matching no known tag can still be added
  * verbatim. Selecting keeps the popover open so several tags can be added in a row.
+ *
+ * Suggestions are split into "Categories" (the part-picker buttons) and "Functional"
+ * tags (face-snap / diameter-filter / visibility behavior), mirroring the game's
+ * `<EditorTagDef NotaCategory>` registry flag (see {@link EDITOR_TAG_DEFS}).
  */
 export function EditorTagsField({
   tags,
@@ -38,6 +45,8 @@ export function EditorTagsField({
   const suggestions = KNOWN_EDITOR_TAGS.filter(
     (t) => !tags.includes(t) && (q === '' || t.toLowerCase().includes(q)),
   )
+  const categoryTags = suggestions.filter((t) => !TAG_IS_FUNCTIONAL.get(t))
+  const functionalTags = suggestions.filter((t) => TAG_IS_FUNCTIONAL.get(t))
   const showCustom =
     q !== '' &&
     !tags.some((t) => t.toLowerCase() === q) &&
@@ -78,21 +87,37 @@ export function EditorTagsField({
                   Add “{query.trim()}”
                 </Button>
               )}
-              {suggestions.length === 0 && !showCustom ? (
+              {suggestions.length === 0 && !showCustom && (
                 <span className="px-2 py-1.5 text-sm text-fg-subtle">No matches</span>
-              ) : (
-                suggestions.map((t) => (
-                  <Button
-                    key={t}
-                    size="sm"
-                    variant="ghost"
-                    className="justify-start"
-                    onPress={() => addTag(t)}
-                  >
-                    {t}
-                  </Button>
-                ))
               )}
+              {categoryTags.length > 0 && (
+                <SectionTitle className="px-1 pt-1 text-fg-subtle">Categories</SectionTitle>
+              )}
+              {categoryTags.map((t) => (
+                <Button
+                  key={t}
+                  size="sm"
+                  variant="ghost"
+                  className="justify-start"
+                  onPress={() => addTag(t)}
+                >
+                  {t}
+                </Button>
+              ))}
+              {functionalTags.length > 0 && (
+                <SectionTitle className="px-1 pt-1 text-fg-subtle">Functional</SectionTitle>
+              )}
+              {functionalTags.map((t) => (
+                <Button
+                  key={t}
+                  size="sm"
+                  variant="ghost"
+                  className="justify-start"
+                  onPress={() => addTag(t)}
+                >
+                  {t}
+                </Button>
+              ))}
             </div>
           </PopoverDialog>
         </Popover>

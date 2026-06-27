@@ -15,9 +15,11 @@ import {
   createEmptyGameData,
   createLight,
   createSubPartGameData,
+  EDITOR_TAG_DEFS,
   identityTransform,
   createTank,
   DEFAULT_LAYER_ID,
+  KNOWN_EDITOR_TAGS,
 } from './types'
 
 function editingPart(over: Partial<EditingPart>): EditingPart {
@@ -166,6 +168,8 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
       ...createEmptyGameData(),
       displayName: 'Round Trip',
       customMass: 42,
+      diameterM: 2,
+      controllable: true,
       batteries: [{ capacityWh: 0.5 }],
       generators: [{ outputWatts: 12 }],
       solarPanels: [
@@ -176,7 +180,7 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
       ],
       powerConsumers: [{ consumedWatts: 3 }],
       decoupler: { connectorId: '_c2', force: 750 },
-      dockingPort: { connectorId: '_c3', latchingImpulse: 6000, pushoffForce: 7000 },
+      dockingPort: { connectorId: '_c3', latchingKineticEnergyJ: 6000, pushoffImpulseNs: 7000 },
       evaDoor: { connectorId: '_c3' },
     },
     subPartGameData: [
@@ -214,6 +218,8 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
         combustors: [],
         nozzles: [],
         rockets: [],
+        unknownAttrs: {},
+        unknownChildren: [],
       },
     ],
     connectors: [
@@ -234,6 +240,11 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
     expect(parsed.gameData.displayName).toBe('Round Trip')
     expect(parsed.editorTags).toEqual(['Tanks', 'Structural'])
     expect(parsed.gameData.customMass).toBe(42)
+  })
+
+  it('recovers part diameter (size class) and the command marker', () => {
+    expect(parsed.gameData.diameterM).toBe(2)
+    expect(parsed.gameData.controllable).toBe(true)
   })
 
   it('recovers lights per SubPart template (type, transform, color, angles, ray tracing)', () => {
@@ -272,8 +283,8 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
     expect(parsed.gameData.decoupler).toEqual({ connectorId: '_c2', force: 750 })
     expect(parsed.gameData.dockingPort).toEqual({
       connectorId: '_c3',
-      latchingImpulse: 6000,
-      pushoffForce: 7000,
+      latchingKineticEnergyJ: 6000,
+      pushoffImpulseNs: 7000,
     })
     expect(parsed.gameData.evaDoor).toEqual({ connectorId: '_c3' })
   })
@@ -421,27 +432,138 @@ describe('engine modules (round-trip with serializeGameData)', () => {
 })
 
 describe('gameDataFromAssets docking port (direct GameData XML)', () => {
-  const parseDp = (attrs: string) =>
+  const parseDp = (inner: string) =>
     gameDataFromAssets(
-      `<Assets><PartGameData Id="P"><DockingPort ConnectorId="_connector2" ${attrs}/></PartGameData></Assets>`,
+      `<Assets><PartGameData Id="P"><DockingPort>${inner}</DockingPort></PartGameData></Assets>`,
       'P',
       new DOMParser(),
     )!.gameData.dockingPort
 
-  it('reads LatchingImpulse and PushoffForce from current GameData', () => {
-    expect(parseDp('LatchingImpulse="6000" PushoffForce="7000"')).toEqual({
+  it('parses the child-element form (ConnectorId / LatchingKineticEnergy J / PushoffImpulse Ns)', () => {
+    expect(
+      parseDp(
+        '<ConnectorId Value="_connector2" /><LatchingKineticEnergy J="50" /><PushoffImpulse Ns="7000" />',
+      ),
+    ).toEqual({
       connectorId: '_connector2',
-      latchingImpulse: 6000,
-      pushoffForce: 7000,
+      latchingKineticEnergyJ: 50,
+      pushoffImpulseNs: 7000,
     })
   })
+})
 
-  it('falls back to legacy Force for both fields when the new attributes are absent', () => {
-    expect(parseDp('Force="500"')).toEqual({
-      connectorId: '_connector2',
-      latchingImpulse: 500,
-      pushoffForce: 500,
+describe('gameDataFromAssets diameter + control (direct GameData XML)', () => {
+  const parse = (inner: string) =>
+    gameDataFromAssets(
+      `<Assets><PartGameData Id="P">${inner}</PartGameData></Assets>`,
+      'P',
+      new DOMParser(),
+    )!.gameData
+
+  it('parses <Diameter M> (size class) and a bare <Control/> command marker', () => {
+    const g = parse('<Diameter M="1"/><Control />')
+    expect(g.diameterM).toBe(1)
+    expect(g.controllable).toBe(true)
+  })
+
+  it('reads sub-meter <Diameter Cm> via the distance reference', () => {
+    expect(parse('<Diameter Cm="50"/>').diameterM).toBeCloseTo(0.5, 6)
+  })
+
+  it('defaults to null diameter / not-controllable when both are absent', () => {
+    const g = parse('<EditorTag Value="Capsules" />')
+    expect(g.diameterM).toBeNull()
+    expect(g.controllable).toBe(false)
+  })
+})
+
+describe('editor-tag registry (gap 5)', () => {
+  it('matches CoreEditorTagsGameData.xml order (build 4750)', () => {
+    expect(KNOWN_EDITOR_TAGS).toEqual([
+      'Capsules',
+      'Engines',
+      'RCS',
+      'Fuel Tanks',
+      'Electrical',
+      'Coupling',
+      'Structural',
+      'Landing',
+      'Interstage',
+      'Passage',
+      'Cargo',
+      'Lights',
+      'Radial',
+      'NoFaceSnapping',
+      'All',
+      'Hidden',
+    ])
+  })
+
+  it('drops obsolete `Tanks` and adds the new registry tags', () => {
+    expect(KNOWN_EDITOR_TAGS).not.toContain('Tanks')
+    expect(KNOWN_EDITOR_TAGS).toContain('Fuel Tanks')
+    expect(KNOWN_EDITOR_TAGS).toEqual(expect.arrayContaining(['Landing', 'NoFaceSnapping', 'All']))
+  })
+
+  it('flags exactly the NotaCategory (functional) tags', () => {
+    const functional = EDITOR_TAG_DEFS.filter((d) => d.notaCategory).map((d) => d.id)
+    expect(functional).toEqual(['Interstage', 'Radial', 'NoFaceSnapping', 'All', 'Hidden'])
+  })
+})
+
+describe('unmodeled-XML passthrough (gap 6)', () => {
+  const xml = `<Assets>
+    <PartGameData Id="P">
+      <EditorTag Value="Fuel Tanks" />
+      <Collider Id="Collider1">
+        <Cylinder Id="Cyl1">
+          <Radius M="0.5007" />
+          <LengthY M="1.0197" />
+        </Cylinder>
+      </Collider>
+      <SolidSphereMass><Mass Kg="50" /></SolidSphereMass>
+    </PartGameData>
+    <SubPartGameData Id="Tmpl" DisplayName="Wing Skin">
+      <SubstanceStorageVolume Id="Vol1" />
+    </SubPartGameData>
+  </Assets>`
+  const parsed = gameDataFromAssets(xml, 'P', new DOMParser())!
+
+  it('captures unmodeled <PartGameData> children verbatim (tag/attrs/nested tree)', () => {
+    expect(parsed.gameData.unknownChildren.map((n) => n.tag)).toEqual([
+      'Collider',
+      'SolidSphereMass',
+    ])
+    const collider = parsed.gameData.unknownChildren[0]
+    expect(collider.attrs).toEqual({ Id: 'Collider1' })
+    expect(collider.children[0].tag).toBe('Cylinder')
+    expect(collider.children[0].children.map((c) => [c.tag, c.attrs])).toEqual([
+      ['Radius', { M: '0.5007' }],
+      ['LengthY', { M: '1.0197' }],
+    ])
+  })
+
+  it('captures an unmodeled <SubPartGameData> DisplayName attr + child', () => {
+    const spd = parsed.subPartGameData.find((s) => s.subPartTemplateId === 'Tmpl')!
+    expect(spd.unknownAttrs).toEqual({ DisplayName: 'Wing Skin' })
+    expect(spd.unknownChildren.map((n) => n.tag)).toEqual(['SubstanceStorageVolume'])
+    expect(spd.unknownChildren[0].attrs).toEqual({ Id: 'Vol1' })
+  })
+
+  it('round-trips the unmodeled XML through serialize → re-parse', () => {
+    const part = editingPart({
+      partId: 'P',
+      editorTags: parsed.editorTags,
+      gameData: parsed.gameData,
+      subPartGameData: parsed.subPartGameData,
     })
+    const reparsed = gameDataFromAssets(serializeGameData(part), 'P', new DOMParser())!
+    expect(reparsed.gameData.unknownChildren).toEqual(parsed.gameData.unknownChildren)
+    const spd = reparsed.subPartGameData.find((s) => s.subPartTemplateId === 'Tmpl')!
+    expect(spd.unknownAttrs).toEqual({ DisplayName: 'Wing Skin' })
+    expect(spd.unknownChildren).toEqual([
+      { tag: 'SubstanceStorageVolume', attrs: { Id: 'Vol1' }, children: [] },
+    ])
   })
 })
 

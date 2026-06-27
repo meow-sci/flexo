@@ -18,6 +18,7 @@ import type {
   PartAnimation,
   PartGameData,
   PowerConsumer,
+  RawXmlNode,
   Rocket,
   RocketController,
   RocketSoundAction,
@@ -232,24 +233,30 @@ function decSolarPanel(c: CSolarPanel): SolarPanel {
 interface CGameData {
   dn?: string // displayName
   cm?: number // customMass
+  dm?: number // diameterM (omitted when null)
+  co?: 1 // controllable (<Control/>); present ⇒ true
   bt?: number[] // batteries → capacityWh[]
   gn?: number[] // generators → outputWatts[]
   sp?: CSolarPanel[] // solarPanels
   pc?: number[] // powerConsumers → consumedWatts[]
   dc?: { c: string; f: number } // decoupler
-  dp?: { c: string; li: number; po: number } // dockingPort
+  dp?: { c: string; ke: number; pi: number } // dockingPort
   ed?: { c: string } // evaDoor
   ct?: CController[] // rocketControllers
   ro?: CRocket[] // part-level rockets (gas generators)
   cb?: CCombustor[] // part-level combustors
   nz?: CNozzle[] // part-level nozzles
   gm?: CGimbal[] // gimbals
+  ua?: Record<string, string> // unmodeled <PartGameData> attrs (passthrough)
+  uc?: RawXmlNode[] // unmodeled <PartGameData> child elements (passthrough)
 }
 
 function encGameData(g: PartGameData): CGameData {
   const o: CGameData = {}
   if (g.displayName.trim()) o.dn = g.displayName
   if (g.customMass != null) o.cm = round(g.customMass)
+  if (g.diameterM != null) o.dm = round(g.diameterM)
+  if (g.controllable) o.co = 1
   if (g.batteries.length) o.bt = g.batteries.map((b) => round(b.capacityWh))
   if (g.generators.length) o.gn = g.generators.map((x) => round(x.outputWatts))
   if (g.solarPanels.length) o.sp = g.solarPanels.map(encSolarPanel)
@@ -258,8 +265,8 @@ function encGameData(g: PartGameData): CGameData {
   if (g.dockingPort) {
     o.dp = {
       c: g.dockingPort.connectorId,
-      li: round(g.dockingPort.latchingImpulse),
-      po: round(g.dockingPort.pushoffForce),
+      ke: round(g.dockingPort.latchingKineticEnergyJ),
+      pi: round(g.dockingPort.pushoffImpulseNs),
     }
   }
   if (g.evaDoor) o.ed = { c: g.evaDoor.connectorId }
@@ -268,6 +275,8 @@ function encGameData(g: PartGameData): CGameData {
   if (g.combustors.length) o.cb = g.combustors.map(encCombustor)
   if (g.nozzles.length) o.nz = g.nozzles.map(encNozzle)
   if (g.gimbals.length) o.gm = g.gimbals.map(encGimbal)
+  if (Object.keys(g.unknownAttrs).length) o.ua = g.unknownAttrs
+  if (g.unknownChildren.length) o.uc = g.unknownChildren
   return o
 }
 
@@ -276,13 +285,19 @@ function decGameData(c: CGameData | undefined): PartGameData {
   if (!c) return g
   g.displayName = str(c.dn)
   g.customMass = typeof c.cm === 'number' ? c.cm : null
+  g.diameterM = typeof c.dm === 'number' ? c.dm : null
+  g.controllable = !!c.co
   g.batteries = arr<number>(c.bt).map((wh): Battery => ({ capacityWh: num(wh) }))
   g.generators = arr<number>(c.gn).map((w): Generator => ({ outputWatts: num(w) }))
   g.solarPanels = arr<CSolarPanel>(c.sp).map(decSolarPanel)
   g.powerConsumers = arr<number>(c.pc).map((w): PowerConsumer => ({ consumedWatts: num(w) }))
   g.decoupler = c.dc ? { connectorId: str(c.dc.c), force: num(c.dc.f) } : null
   g.dockingPort = c.dp
-    ? { connectorId: str(c.dp.c), latchingImpulse: num(c.dp.li), pushoffForce: num(c.dp.po) }
+    ? {
+        connectorId: str(c.dp.c),
+        latchingKineticEnergyJ: num(c.dp.ke),
+        pushoffImpulseNs: num(c.dp.pi),
+      }
     : null
   g.evaDoor = c.ed ? { connectorId: str(c.ed.c) } : null
   g.rocketControllers = arr<CController>(c.ct).map(decController)
@@ -290,7 +305,35 @@ function decGameData(c: CGameData | undefined): PartGameData {
   g.combustors = arr<CCombustor>(c.cb).map(decCombustor)
   g.nozzles = arr<CNozzle>(c.nz).map(decNozzle)
   g.gimbals = arr<CGimbal>(c.gm).map(decGimbal)
+  g.unknownAttrs = decRawAttrs(c.ua)
+  g.unknownChildren = decRawNodes(c.uc)
   return g
+}
+
+/** Tolerant decode of a passthrough attr map (drops non-string values). */
+function decRawAttrs(v: unknown): Record<string, string> {
+  const out: Record<string, string> = {}
+  if (v && typeof v === 'object') {
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      if (typeof val === 'string') out[k] = val
+    }
+  }
+  return out
+}
+
+/** Tolerant decode of a passthrough child-node list (recursively coerces each {@link RawXmlNode}). */
+function decRawNodes(v: unknown): RawXmlNode[] {
+  return arr<unknown>(v)
+    .filter((n): n is Record<string, unknown> => !!n && typeof n === 'object')
+    .map((n) => {
+      const node: RawXmlNode = {
+        tag: str(n.tag),
+        attrs: decRawAttrs(n.attrs),
+        children: decRawNodes(n.children),
+      }
+      if (typeof n.text === 'string' && n.text) node.text = n.text
+      return node
+    })
 }
 
 // ── per-SubPart game data (tanks / solar panels / lights) ────────────────────
@@ -530,6 +573,8 @@ interface CSubPartGameData {
   cb?: CCombustor[] // combustors
   nz?: CNozzle[] // nozzles
   ro?: CRocket[] // rockets
+  ua?: Record<string, string> // unmodeled <SubPartGameData> attrs (passthrough)
+  uc?: RawXmlNode[] // unmodeled <SubPartGameData> child elements (passthrough)
 }
 
 function encSubPartGameData(s: SubPartGameData): CSubPartGameData {
@@ -540,6 +585,8 @@ function encSubPartGameData(s: SubPartGameData): CSubPartGameData {
   if (s.combustors.length) o.cb = s.combustors.map(encCombustor)
   if (s.nozzles.length) o.nz = s.nozzles.map(encNozzle)
   if (s.rockets.length) o.ro = s.rockets.map(encRocket)
+  if (Object.keys(s.unknownAttrs).length) o.ua = s.unknownAttrs
+  if (s.unknownChildren.length) o.uc = s.unknownChildren
   return o
 }
 
@@ -551,6 +598,8 @@ function decSubPartGameData(c: CSubPartGameData): SubPartGameData {
   s.combustors = arr<CCombustor>(c.cb).map(decCombustor)
   s.nozzles = arr<CNozzle>(c.nz).map(decNozzle)
   s.rockets = arr<CRocket>(c.ro).map(decRocket)
+  s.unknownAttrs = decRawAttrs(c.ua)
+  s.unknownChildren = decRawNodes(c.uc)
   return s
 }
 

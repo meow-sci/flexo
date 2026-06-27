@@ -41,12 +41,15 @@ import {
   removeTank,
   setTankShape,
   updateTank,
+  setControllable,
   setCustomMassEnabled,
   setDecouplerEnabled,
   setDecouplerForce,
+  setDiameter,
+  setDiameterEnabled,
   setDockingPortEnabled,
-  setDockingPortLatchingImpulse,
-  setDockingPortPushoffForce,
+  setDockingPortLatchingKineticEnergy,
+  setDockingPortPushoffImpulse,
   undo,
   updatePlacementTransform,
   scaleEverything,
@@ -191,8 +194,16 @@ describe('editorStore', () => {
       undefined,
       {
         decoupler: null,
-        dockingPort: { connectorId: '_connector5', latchingImpulse: 6000, pushoffForce: 7000 },
+        dockingPort: {
+          connectorId: '_connector5',
+          latchingKineticEnergyJ: 6000,
+          pushoffImpulseNs: 7000,
+        },
         evaDoor: null,
+        diameterM: null,
+        controllable: false,
+        unknownAttrs: {},
+        unknownChildren: [],
         batteries: [],
         generators: [],
         solarPanels: [],
@@ -207,8 +218,8 @@ describe('editorStore', () => {
     )
     const dp = $part.get().gameData.dockingPort
     // Values carried in, and the binding points at the regenerated connector id (not '_connector5').
-    expect(dp?.latchingImpulse).toBe(6000)
-    expect(dp?.pushoffForce).toBe(7000)
+    expect(dp?.latchingKineticEnergyJ).toBe(6000)
+    expect(dp?.pushoffImpulseNs).toBe(7000)
     expect(dp?.connectorId).toBe($part.get().connectors[0].id)
     expect(dp?.connectorId).not.toBe('_connector5')
   })
@@ -249,21 +260,41 @@ describe('editorStore', () => {
     expect($part.get().gameData.decoupler?.force).toBe(500)
   })
 
-  it('toggles a docking port (KSA defaults) and edits its impulse/push-off with undo', () => {
+  it('toggles a docking port (KSA defaults) and edits its energy/impulse with undo', () => {
     setDockingPortEnabled(true)
     expect($part.get().gameData.dockingPort).toEqual({
       connectorId: '',
-      latchingImpulse: 6000,
-      pushoffForce: 7000,
+      latchingKineticEnergyJ: 50,
+      pushoffImpulseNs: 5000,
     })
     pushUndo('edit docking port')
-    setDockingPortLatchingImpulse(8000)
-    setDockingPortPushoffForce(9000)
-    expect($part.get().gameData.dockingPort?.latchingImpulse).toBe(8000)
-    expect($part.get().gameData.dockingPort?.pushoffForce).toBe(9000)
+    setDockingPortLatchingKineticEnergy(8000)
+    setDockingPortPushoffImpulse(9000)
+    expect($part.get().gameData.dockingPort?.latchingKineticEnergyJ).toBe(8000)
+    expect($part.get().gameData.dockingPort?.pushoffImpulseNs).toBe(9000)
     undo()
-    expect($part.get().gameData.dockingPort?.latchingImpulse).toBe(6000)
-    expect($part.get().gameData.dockingPort?.pushoffForce).toBe(7000)
+    expect($part.get().gameData.dockingPort?.latchingKineticEnergyJ).toBe(50)
+    expect($part.get().gameData.dockingPort?.pushoffImpulseNs).toBe(5000)
+  })
+
+  it('toggles part diameter (size class) and edits it with undo', () => {
+    setDiameterEnabled(true)
+    expect($part.get().gameData.diameterM).toBe(1) // DEFAULT_DIAMETER_M
+    pushUndo('edit diameter')
+    setDiameter(2.5)
+    expect($part.get().gameData.diameterM).toBe(2.5)
+    undo()
+    expect($part.get().gameData.diameterM).toBe(1)
+    undo()
+    expect($part.get().gameData.diameterM).toBeNull()
+  })
+
+  it('toggles the command-capable marker with undo', () => {
+    expect($part.get().gameData.controllable).toBe(false)
+    setControllable(true)
+    expect($part.get().gameData.controllable).toBe(true)
+    undo()
+    expect($part.get().gameData.controllable).toBe(false)
   })
 
   it('setEditorTags is undoable (self-records)', () => {

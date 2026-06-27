@@ -70,6 +70,25 @@ function richPart(): EditingPart {
 
   p.gameData.displayName = 'Rich Display'
   p.gameData.customMass = 1234.5
+  p.gameData.diameterM = 2.5
+  p.gameData.controllable = true
+  // Unmodeled passthrough on the part itself: a nested <Collider> (attrs + child tree).
+  p.gameData.unknownChildren = [
+    {
+      tag: 'Collider',
+      attrs: { Id: 'Collider1' },
+      children: [
+        {
+          tag: 'Cylinder',
+          attrs: { Id: 'Cyl1' },
+          children: [
+            { tag: 'Radius', attrs: { M: '0.5007' }, children: [] },
+            { tag: 'LengthY', attrs: { M: '1.0197' }, children: [] },
+          ],
+        },
+      ],
+    },
+  ]
   p.gameData.batteries.push({ capacityWh: 5 }, { capacityWh: 10.25 })
   p.gameData.generators.push({ outputWatts: 100 })
   p.gameData.solarPanels.push(
@@ -78,7 +97,11 @@ function richPart(): EditingPart {
   )
   p.gameData.powerConsumers.push({ consumedWatts: 12.5 })
   p.gameData.decoupler = { connectorId: '_connector1', force: 1000 }
-  p.gameData.dockingPort = { connectorId: '_connector1', latchingImpulse: 50, pushoffForce: 25 }
+  p.gameData.dockingPort = {
+    connectorId: '_connector1',
+    latchingKineticEnergyJ: 50,
+    pushoffImpulseNs: 25,
+  }
   p.gameData.evaDoor = { connectorId: '_connector1' }
 
   // Part-level engine modules: a controller, a gas-generator rocket+combustor, gimbals.
@@ -185,6 +208,9 @@ function richPart(): EditingPart {
         nozzles: [{ id: 'Nozzle', subPartInstanceId: null }],
       },
     ],
+    // Unmodeled passthrough: a SubPartGameData DisplayName attr + a SubstanceStorageVolume child.
+    unknownAttrs: { DisplayName: 'Wing Tank' },
+    unknownChildren: [{ tag: 'SubstanceStorageVolume', attrs: { Id: 'Vol1' }, children: [] }],
   })
 
   p.customMeshes.push({

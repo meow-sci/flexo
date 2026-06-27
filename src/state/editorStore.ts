@@ -21,6 +21,7 @@ import type {
   PartAnimation,
   PartGameData,
   PowerConsumer,
+  RawXmlNode,
   Rocket,
   RocketController,
   RocketControllerKind,
@@ -506,6 +507,12 @@ export interface ImportedGameData {
   decoupler: Decoupler | null
   dockingPort: DockingPort | null
   evaDoor: EvaDoor | null
+  /** Part diameter (<Diameter M/>) and command marker (<Control/>) carried in on import. */
+  diameterM: number | null
+  controllable: boolean
+  /** Unmodeled `<PartGameData>` attrs + child elements, preserved verbatim on import. */
+  unknownAttrs: Record<string, string>
+  unknownChildren: RawXmlNode[]
   /** Part-level power modules — appended to the project's part (a Part may carry several). */
   batteries: Battery[]
   generators: Generator[]
@@ -568,6 +575,14 @@ function applyImportedGameData(
     const id = connectorIdMap.get(src.evaDoor.connectorId)
     if (id) game.evaDoor = { connectorId: id }
   }
+  // Part diameter + command marker: singular, filled only when not already set.
+  if (game.diameterM == null && src.diameterM != null) game.diameterM = src.diameterM
+  if (!game.controllable && src.controllable) game.controllable = true
+  // Unmodeled passthrough: fill only when the target has none (first import's leftover XML wins).
+  if (Object.keys(game.unknownAttrs).length === 0 && Object.keys(src.unknownAttrs).length > 0)
+    game.unknownAttrs = src.unknownAttrs
+  if (game.unknownChildren.length === 0 && src.unknownChildren.length > 0)
+    game.unknownChildren = src.unknownChildren
   game.batteries.push(...src.batteries)
   game.generators.push(...src.generators)
   game.solarPanels.push(...src.solarPanels)
@@ -1489,12 +1504,14 @@ export function setEditorTags(editorTags: readonly string[]): void {
 
 /** Default decoupler separation force (N) when a decoupler is first enabled (matches space-tape). */
 const DEFAULT_COUPLING_FORCE = 500
-/** Default magnetic latching impulse (N·s) when a docking port is first enabled (matches CoreCouplingA). */
-const DEFAULT_LATCHING_IMPULSE = 6000
-/** Default undock push-off force (N) when a docking port is first enabled (matches CoreCouplingA). */
-const DEFAULT_PUSHOFF_FORCE = 7000
+/** Default latching kinetic-energy budget (J) when a docking port is first enabled (matches DockingPortTemplate). */
+const DEFAULT_LATCHING_KINETIC_ENERGY_J = 50
+/** Default undock push-off impulse (N·s) when a docking port is first enabled (matches DockingPortTemplate). */
+const DEFAULT_PUSHOFF_IMPULSE_NS = 5000
 /** Default mass (kg) when the custom-mass override is first enabled. */
 const DEFAULT_CUSTOM_MASS_KG = 100
+/** Default diameter (m) when the part-diameter size class is first enabled (Core's most common value). */
+const DEFAULT_DIAMETER_M = 1
 
 /** Streaming gameData mutation: no undo push (caller focus-pushes). */
 function mutateGameData(mutate: (g: PartGameData) => void): void {
@@ -1527,6 +1544,27 @@ export function setCustomMassEnabled(enabled: boolean): void {
 export function setCustomMass(massKg: number): void {
   mutateGameData((g) => {
     g.customMass = massKg
+  })
+}
+
+/** Discrete: enable/disable the part-diameter size class (off → null, on → default 1 m). */
+export function setDiameterEnabled(enabled: boolean): void {
+  commitGameData('part diameter', enabled ? 'on' : 'off', (g) => {
+    g.diameterM = enabled ? (g.diameterM ?? DEFAULT_DIAMETER_M) : null
+  })
+}
+
+/** Streaming: set the part diameter in meters. Caller pushes undo on field focus. */
+export function setDiameter(diameterM: number): void {
+  mutateGameData((g) => {
+    g.diameterM = diameterM
+  })
+}
+
+/** Discrete: toggle the part's command-capability marker (<Control/>). */
+export function setControllable(enabled: boolean): void {
+  commitGameData('command capable', enabled ? 'on' : 'off', (g) => {
+    g.controllable = enabled
   })
 }
 
@@ -1940,8 +1978,8 @@ export function setDockingPortEnabled(enabled: boolean): void {
     g.dockingPort = enabled
       ? (g.dockingPort ?? {
           connectorId: '',
-          latchingImpulse: DEFAULT_LATCHING_IMPULSE,
-          pushoffForce: DEFAULT_PUSHOFF_FORCE,
+          latchingKineticEnergyJ: DEFAULT_LATCHING_KINETIC_ENERGY_J,
+          pushoffImpulseNs: DEFAULT_PUSHOFF_IMPULSE_NS,
         })
       : null
   })
@@ -1952,16 +1990,16 @@ export function setDockingPortConnector(connectorId: string): void {
     if (g.dockingPort) g.dockingPort.connectorId = connectorId
   })
 }
-/** Streaming: set docking port latching impulse (N·s). Caller pushes undo on field focus. */
-export function setDockingPortLatchingImpulse(latchingImpulse: number): void {
+/** Streaming: set docking port latching kinetic energy (J). Caller pushes undo on field focus. */
+export function setDockingPortLatchingKineticEnergy(latchingKineticEnergyJ: number): void {
   mutateGameData((g) => {
-    if (g.dockingPort) g.dockingPort.latchingImpulse = latchingImpulse
+    if (g.dockingPort) g.dockingPort.latchingKineticEnergyJ = latchingKineticEnergyJ
   })
 }
-/** Streaming: set docking port push-off force (N). Caller pushes undo on field focus. */
-export function setDockingPortPushoffForce(pushoffForce: number): void {
+/** Streaming: set docking port push-off impulse (N·s). Caller pushes undo on field focus. */
+export function setDockingPortPushoffImpulse(pushoffImpulseNs: number): void {
   mutateGameData((g) => {
-    if (g.dockingPort) g.dockingPort.pushoffForce = pushoffForce
+    if (g.dockingPort) g.dockingPort.pushoffImpulseNs = pushoffImpulseNs
   })
 }
 

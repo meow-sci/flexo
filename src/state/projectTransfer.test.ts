@@ -87,6 +87,8 @@ function sourcePart(): EditingPart {
     combustors: [],
     nozzles: [],
     rockets: [],
+    unknownAttrs: {},
+    unknownChildren: [],
   })
   p.animations.push({
     id: 'anim_src1',

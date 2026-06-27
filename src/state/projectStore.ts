@@ -16,12 +16,11 @@ import { $measurements, type LineMeasurement } from './measurementStore'
 import { $containers, type ReferenceContainer } from './containerStore'
 import {
   createEmptyGameData,
-  createKittenLayer,
+  createEmptyPart,
   createSubPartGameData,
   DEFAULT_LAYER_ID,
-  KITTEN_LAYER_ID,
 } from '../ksa/types'
-import type { Battery, Connector, ConnectorFlag, EditingPart, PartGameData } from '../ksa/types'
+import type { EditingPart } from '../ksa/types'
 import { envelopeToPart, type ProjectExportEnvelope } from './projectTransfer'
 
 /**
@@ -55,8 +54,8 @@ import { envelopeToPart, type ProjectExportEnvelope } from './projectTransfer'
 
 const PROJECT_KEY_PREFIX = 'flexo:project:'
 const CURRENT_PROJECT_KEY = 'flexo:currentProject'
-// v2: added EditingPart.gameData and changed Connector.flags from a single value
-// to a ConnectorFlag[]. {@link migratePart} upgrades v1 snapshots on load.
+// Stamped into each snapshot. Snapshots whose shape doesn't match the current data
+// model are discarded at boot (see sanitizeProjectStorage) — never migrated.
 const PROJECT_VERSION = 2
 export const DEFAULT_PROJECT_NAME = 'Untitled'
 
@@ -144,55 +143,6 @@ function serializeCurrentProject(): ProjectSnapshot {
 }
 
 /**
- * Loads a snapshot into the live stores. Autosave is suspended for the duration so
- * the cascade of store writes doesn't trigger a redundant save mid-load. The active
- * layer is clamped to a layer that exists in the loaded document; selection is
- * cleared (a fresh slate, like a normal page load).
- */
-/**
- * Upgrades a possibly-legacy EditingPart in place to the current (v2) shape:
- *  - adds the {@link PartGameData} block if absent (introduced in project v2);
- *  - coerces each connector's `flags` from the old single value
- *    (`'None' | ConnectorFlag`) to the current `ConnectorFlag[]` ([] = none).
- */
-function migratePart(part: EditingPart | undefined | null): void {
-  if (!part) return
-  const withGameData = part as EditingPart & { gameData?: PartGameData }
-  if (!withGameData.gameData) withGameData.gameData = createEmptyGameData()
-  // Solar panels + battery Wh units were added later. Default the solarPanels array
-  // and migrate batteries that still store the legacy `capacityKWh` (1 kWh = 1000 Wh).
-  const game = withGameData.gameData
-  if (!Array.isArray(game.solarPanels)) game.solarPanels = []
-  for (const b of game.batteries ?? []) {
-    const legacy = b as Battery & { capacityKWh?: number }
-    if (legacy.capacityWh == null && legacy.capacityKWh != null) {
-      legacy.capacityWh = legacy.capacityKWh * 1000
-      delete legacy.capacityKWh
-    }
-  }
-  for (const spd of part.subPartGameData ?? []) {
-    if (!Array.isArray(spd.solarPanels)) spd.solarPanels = []
-    if (!Array.isArray(spd.lights)) spd.lights = []
-  }
-  for (const c of part.connectors ?? []) {
-    const legacy = c as Connector & { flags: unknown }
-    if (Array.isArray(legacy.flags)) continue
-    legacy.flags = legacy.flags && legacy.flags !== 'None' ? [legacy.flags as ConnectorFlag] : []
-  }
-  // Kittens (editor-only visual aides) were added later: default the array and
-  // ensure the built-in Kittens layer exists so older projects load cleanly.
-  if (!Array.isArray(part.kittens)) part.kittens = []
-  if (!part.layers?.some((l) => l.id === KITTEN_LAYER_ID)) {
-    ;(part.layers ??= []).push(createKittenLayer())
-  }
-  // Custom assets (textures/meshes) were added later; default for older projects.
-  if (!Array.isArray(part.customTextures)) part.customTextures = []
-  if (!Array.isArray(part.customMeshes)) part.customMeshes = []
-  // Animations were added later; default for older projects.
-  if (!Array.isArray(part.animations)) part.animations = []
-}
-
-/**
  * Every EditingPart reachable from a snapshot: the live document plus the part
  * inside each undo/redo history entry (normal entries are { part, description,
  * detail }; legacy saves stored a bare EditingPart — handle whichever shape).
@@ -207,20 +157,14 @@ function snapshotParts(snap: ProjectSnapshot): EditingPart[] {
   return out
 }
 
-/** Migrates the document + every history-snapshot part within a loaded snapshot. */
-function migrateSnapshot(snap: ProjectSnapshot): void {
-  for (const part of snapshotParts(snap)) migratePart(part)
-}
-
 /**
- * True only when every part in the snapshot carries all the GameData / SubPartGameData
- * fields the CURRENT model defines. {@link migratePart} fills in fields it knows about,
- * but it deliberately does NOT chase every new field (engines, etc.) — by design we do
- * not migrate old project data. Anything still missing a current field after migration
- * is from an incompatible older model and would crash the editor (e.g. the engine
- * computeds read `subPartGameData[].combustors.length`), so it's treated as unloadable
- * and purged at boot. Because the templates come from the live constructors, any field
- * added there in future automatically becomes required here — no per-field upkeep.
+ * True only when every part in the snapshot carries all the fields the CURRENT model
+ * defines — top-level EditingPart keys plus the nested GameData / SubPartGameData keys.
+ * We do NOT migrate old project data; anything structurally behind the current model is
+ * from an incompatible build and would crash the editor (e.g. the engine computeds read
+ * `subPartGameData[].combustors.length`), so it's unloadable and purged at boot. The
+ * templates come from the live constructors, so a field added there in future
+ * automatically becomes required here — no per-field upkeep, no migration.
  */
 function hasAllKeys(obj: unknown, template: object): boolean {
   if (!obj || typeof obj !== 'object') return false
@@ -229,9 +173,11 @@ function hasAllKeys(obj: unknown, template: object): boolean {
 }
 
 function snapshotMatchesModel(snap: ProjectSnapshot): boolean {
+  const partTemplate = createEmptyPart()
   const gameDataTemplate = createEmptyGameData()
   const subPartTemplate = createSubPartGameData('')
   for (const part of snapshotParts(snap)) {
+    if (!hasAllKeys(part, partTemplate)) return false
     if (!hasAllKeys(part.gameData, gameDataTemplate)) return false
     for (const spd of part.subPartGameData ?? []) {
       if (!hasAllKeys(spd, subPartTemplate)) return false
@@ -241,14 +187,13 @@ function snapshotMatchesModel(snap: ProjectSnapshot): boolean {
 }
 
 /**
- * Whether a stored snapshot can be loaded into the current editor: it must parse,
- * survive migration without throwing, and match the current data model. Used to
- * decide what to purge at boot — never throws.
+ * Whether a stored snapshot can be loaded into the current editor: it must parse and
+ * match the current data model exactly (no migration). Used to decide what to purge at
+ * boot — never throws.
  */
 function isSnapshotLoadable(snap: ProjectSnapshot | null): boolean {
   if (!snap) return false
   try {
-    migrateSnapshot(snap)
     return snapshotMatchesModel(snap)
   } catch {
     return false
@@ -284,10 +229,15 @@ function sanitizeProjectStorage(): void {
   }
 }
 
+/**
+ * Loads a snapshot into the live stores. Autosave is suspended for the duration so
+ * the cascade of store writes doesn't trigger a redundant save mid-load. The active
+ * layer is clamped to a layer that exists in the loaded document; selection is
+ * cleared (a fresh slate, like a normal page load).
+ */
 function applyProjectSnapshot(snap: ProjectSnapshot): void {
   suspended = true
   try {
-    migrateSnapshot(snap)
     importHistory(snap.history ?? { undo: [], redo: [] })
     $part.set(snap.part)
     const activeValid = snap.part.layers.some((l) => l.id === snap.activeLayerId)
@@ -399,7 +349,6 @@ export function createProject(name: string): void {
  */
 export function loadSharedProject(env: ProjectExportEnvelope): string {
   const part = envelopeToPart(env)
-  migratePart(part)
   const name = uniqueProjectName(env.projectName.trim() || 'Shared Project')
   suspended = true
   try {

@@ -17,6 +17,7 @@ import type {
   Light,
   LightType,
   PartGameData,
+  RawXmlNode,
   Rocket,
   RocketController,
   RocketControllerKind,
@@ -178,21 +179,65 @@ function readNum(el: Element | null | undefined, attr: string): number | null {
 }
 
 /**
- * Reads a KSA `JoulesReference` child (e.g. `<MaximumCapacity>` / `<Produced>` /
- * `<Consumed>`), summing its `Joules` + `Watts` + `KWh` attributes exactly the way
- * the game's JoulesReference does (`KWh` is scaled by 3,600,000). Returns 0 when the
- * element or all three attributes are absent. The unit of the result is contextual:
- * Joules for an energy capacity (battery), Watts for a power rate (generator/panel/
- * consumer). NOTE: the game does NOT recognize a bare `W` attribute — only `Watts`.
+ * KSA unit-reference token tables (attribute name → SI scale). A reference element
+ * (e.g. `<MaximumCapacity J="…"/>`) may carry any of these attributes and the game
+ * sums every one present (absent = ignored). Mirrors the current game's
+ * `EnergyReference`/`PowerReference`/`ImpulseReference.SetValue()`.
  */
-function readJoulesValue(parent: Element, childTag: string): number {
+const ENERGY_TOKENS: readonly (readonly [string, number])[] = [
+  ['J', 1],
+  ['KJ', 1_000],
+  ['MJ', 1_000_000],
+  ['GJ', 1_000_000_000],
+  ['TJ', 1_000_000_000_000],
+  ['Ws', 1],
+  ['Wh', 3_600],
+  ['KWh', 3_600_000],
+]
+const POWER_TOKENS: readonly (readonly [string, number])[] = [
+  ['W', 1],
+  ['KW', 1_000],
+  ['MW', 1_000_000],
+  ['GW', 1_000_000_000],
+  ['TW', 1_000_000_000_000],
+]
+const IMPULSE_TOKENS: readonly (readonly [string, number])[] = [
+  ['Ns', 1],
+  ['KNs', 1_000],
+  ['MNs', 1_000_000],
+]
+
+/**
+ * Reads a KSA reference child element (e.g. `<MaximumCapacity>` / `<Produced>` /
+ * `<PushoffImpulse>`), summing each present unit token by its SI scale the way the
+ * game's `*Reference.SetValue()` does. Returns 0 when the element or all tokens are absent.
+ */
+function sumUnitChild(
+  parent: Element,
+  childTag: string,
+  tokens: readonly (readonly [string, number])[],
+): number {
   const el = directChildren(parent, childTag)[0]
   if (!el) return 0
-  return (
-    (readNum(el, 'Joules') ?? 0) +
-    (readNum(el, 'Watts') ?? 0) +
-    (readNum(el, 'KWh') ?? 0) * 3_600_000
-  )
+  let total = 0
+  for (const [attr, scale] of tokens) {
+    const n = readNum(el, attr)
+    if (n != null) total += n * scale
+  }
+  return total
+}
+
+/** Sum of a child's energy tokens, in joules (KSA `EnergyReference`). */
+function readEnergyJoules(parent: Element, childTag: string): number {
+  return sumUnitChild(parent, childTag, ENERGY_TOKENS)
+}
+/** Sum of a child's power tokens, in watts (KSA `PowerReference`). */
+function readPowerWatts(parent: Element, childTag: string): number {
+  return sumUnitChild(parent, childTag, POWER_TOKENS)
+}
+/** Sum of a child's impulse tokens, in newton-seconds (KSA `ImpulseReference`). */
+function readImpulseNs(parent: Element, childTag: string): number {
+  return sumUnitChild(parent, childTag, IMPULSE_TOKENS)
 }
 
 /** Reads a child `<Transform>` into a full {@link Transform} (identity when absent). */
@@ -205,9 +250,9 @@ function readTransform(parent: Element): Transform {
   }
 }
 
-/** Parses one `<SolarPanel>` element: its `<Produced Watts>` and orientation `<Transform>`. */
+/** Parses one `<SolarPanel>` element: its `<Produced W>` and orientation `<Transform>`. */
 function parseSolarPanel(el: Element): SolarPanel {
-  return { outputWatts: readJoulesValue(el, 'Produced'), transform: readTransform(el) }
+  return { outputWatts: readPowerWatts(el, 'Produced'), transform: readTransform(el) }
 }
 
 function tankFromElement(el: Element, shape: TankShape): Tank {
@@ -263,14 +308,20 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   const mass = readNum(directChildren(directChildren(gd, 'CustomMass')[0] ?? gd, 'Mass')[0], 'Kg')
   game.customMass = mass != null && mass > 0 ? mass : null
 
-  // Battery capacity is a JoulesReference (Joules in Core data); the model holds Wh.
+  // <Diameter M/> — a DistanceReference; null when the element is absent.
+  game.diameterM = readDistanceM(directChildren(gd, 'Diameter')[0])
+  // <Control/> — a bare command-capability marker (ControlTemplate has no fields).
+  game.controllable = directChildren(gd, 'Control').length > 0
+
+  // Battery capacity is an EnergyReference (`J`); the model holds Wh.
+  // Generator/Solar/Consumer rates are a PowerReference (`W`).
   for (const el of directChildren(gd, 'Battery'))
-    game.batteries.push({ capacityWh: readJoulesValue(el, 'MaximumCapacity') / 3600 })
+    game.batteries.push({ capacityWh: readEnergyJoules(el, 'MaximumCapacity') / 3600 })
   for (const el of directChildren(gd, 'Generator'))
-    game.generators.push({ outputWatts: readJoulesValue(el, 'Produced') })
+    game.generators.push({ outputWatts: readPowerWatts(el, 'Produced') })
   for (const el of directChildren(gd, 'SolarPanel')) game.solarPanels.push(parseSolarPanel(el))
   for (const el of directChildren(gd, 'PowerConsumer'))
-    game.powerConsumers.push({ consumedWatts: readJoulesValue(el, 'Consumed') })
+    game.powerConsumers.push({ consumedWatts: readPowerWatts(el, 'Consumed') })
 
   const connectorFlags = new Map<string, ConnectorFlag[]>()
   for (const conn of directChildren(gd, 'Connector')) {
@@ -288,13 +339,11 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
     }
   const dp = directChildren(gd, 'DockingPort')[0]
   if (dp) {
-    // Legacy GameData used a single Force attribute; new GameData splits it into
-    // LatchingImpulse + PushoffForce. Fall back to Force for both when reading old files.
-    const legacyForce = readNum(dp, 'Force')
+    // <DockingPort><ConnectorId Value/><LatchingKineticEnergy J/><PushoffImpulse Ns/></DockingPort>.
     game.dockingPort = {
-      connectorId: dp.getAttribute('ConnectorId') ?? '',
-      latchingImpulse: readNum(dp, 'LatchingImpulse') ?? legacyForce ?? 0,
-      pushoffForce: readNum(dp, 'PushoffForce') ?? legacyForce ?? 0,
+      connectorId: directChildren(dp, 'ConnectorId')[0]?.getAttribute('Value') ?? '',
+      latchingKineticEnergyJ: readEnergyJoules(dp, 'LatchingKineticEnergy'),
+      pushoffImpulseNs: readImpulseNs(dp, 'PushoffImpulse'),
     }
   }
   const eva = directChildren(gd, 'EVADoor')[0]
@@ -308,6 +357,10 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   for (const c of directChildren(gd, 'RocketThrusterController'))
     game.rocketControllers.push(controllerFromElement(c, 'thruster'))
   game.gimbals = gimbalsFromGameData(gd)
+
+  // Preserve anything flexo doesn't model so import → export doesn't silently drop it.
+  game.unknownAttrs = captureUnknownAttrs(gd, KNOWN_PART_GAMEDATA_ATTRS)
+  game.unknownChildren = captureUnknownChildren(gd, KNOWN_PART_GAMEDATA_CHILDREN)
 
   return {
     editorTags,
@@ -365,6 +418,9 @@ function subPartGameDataFromRoot(root: Element): SubPartGameData[] {
     spd.lights = directChildren(spEl, 'Light').map(lightFromElement)
     // Reusable thrust-chamber modules (rocket/combustor/nozzle) that travel with the mesh.
     parseEngineModules(spEl, spd)
+    // Preserve unmodeled attrs (e.g. Core's `DisplayName`) + child elements verbatim.
+    spd.unknownAttrs = captureUnknownAttrs(spEl, KNOWN_SUBPART_GAMEDATA_ATTRS)
+    spd.unknownChildren = captureUnknownChildren(spEl, KNOWN_SUBPART_GAMEDATA_CHILDREN)
     if (!isSubPartGameDataEmpty(spd)) out.push(spd)
   }
   return out
@@ -398,6 +454,90 @@ export function directChildren(parent: Element, tag: string): Element[] {
   const out: Element[] = []
   for (const node of Array.from(parent.childNodes)) {
     if (node.nodeType === 1 && (node as Element).tagName === tag) out.push(node as Element)
+  }
+  return out
+}
+
+/** All direct child *elements* of `parent` (any tag), in document order. */
+function childElements(parent: Element): Element[] {
+  const out: Element[] = []
+  for (const node of Array.from(parent.childNodes)) {
+    if (node.nodeType === 1) out.push(node as Element)
+  }
+  return out
+}
+
+// --- Unmodeled-XML passthrough (round-trip fidelity for elements flexo doesn't model) ---
+//
+// flexo reads a fixed allow-list and rebuilds a fresh DOM, so any element it doesn't model
+// is normally dropped on import → export. These sets enumerate exactly what flexo models as
+// direct children / root attributes of <PartGameData> / <SubPartGameData>; everything else is
+// captured verbatim into `unknownChildren`/`unknownAttrs` and re-emitted by the serializer.
+
+/** `<PartGameData>` child tags flexo models (read and/or emit). Everything else is passthrough. */
+const KNOWN_PART_GAMEDATA_CHILDREN: ReadonlySet<string> = new Set([
+  'EditorTag',
+  'Diameter',
+  'KeyframeAnimationModule',
+  'CustomMass',
+  'Control',
+  'Battery',
+  'Generator',
+  'SolarPanel',
+  'PowerConsumer',
+  'Connector',
+  'Decoupler',
+  'DockingPort',
+  'EVADoor',
+  'RocketEngineController',
+  'RocketThrusterController',
+  'Rocket',
+  'Combustor',
+  'DeLavalNozzle',
+  'SubPart',
+])
+/** `<SubPartGameData>` child tags flexo models. Everything else is passthrough. */
+const KNOWN_SUBPART_GAMEDATA_CHILDREN: ReadonlySet<string> = new Set([
+  'Tank',
+  'SolarPanel',
+  'Light',
+  'Rocket',
+  'Combustor',
+  'DeLavalNozzle',
+])
+/** `<PartGameData>` attributes flexo models (`DisplayName` is read; `Id` keys the entry). */
+const KNOWN_PART_GAMEDATA_ATTRS: ReadonlySet<string> = new Set(['Id', 'DisplayName'])
+/** `<SubPartGameData>` attributes flexo models (only `Id`; Core also authors an unmodeled `DisplayName`). */
+const KNOWN_SUBPART_GAMEDATA_ATTRS: ReadonlySet<string> = new Set(['Id'])
+
+/** Recursively snapshots an element into a JSON {@link RawXmlNode} (attrs + child elements + leaf text). */
+function elementToRawNode(el: Element): RawXmlNode {
+  const attrs: Record<string, string> = {}
+  for (const attr of Array.from(el.attributes)) attrs[attr.name] = attr.value
+  const kids = childElements(el)
+  const node: RawXmlNode = { tag: el.tagName, attrs, children: kids.map(elementToRawNode) }
+  if (kids.length === 0) {
+    const text = el.textContent?.trim()
+    if (text) node.text = text
+  }
+  return node
+}
+
+/** Captures every direct child element whose tag is NOT in `known` as a verbatim {@link RawXmlNode}. */
+export function captureUnknownChildren(parent: Element, known: ReadonlySet<string>): RawXmlNode[] {
+  return childElements(parent)
+    .filter((el) => !known.has(el.tagName))
+    .map(elementToRawNode)
+}
+
+/** Captures every attribute whose name is NOT in `known` as a verbatim name→value entry. */
+export function captureUnknownAttrs(
+  el: Element,
+  known: ReadonlySet<string>,
+): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const attr of Array.from(el.attributes)) {
+    if (!known.has(attr.name)) out[attr.name] = attr.value
   }
   return out
 }

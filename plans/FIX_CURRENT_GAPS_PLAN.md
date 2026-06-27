@@ -6,7 +6,7 @@
 rebuilds a fresh XML document, so a changed unit token silently round-trips to `0` and an added
 element silently vanishes. None of these throw; all are silent correctness/round-trip failures.
 
-> Before starting, re-read [scope/part-and-subpart-xml.md](../scope/part-and-subpart-xml.md#-master-invariant--flexo-does-not-preserve-unknown-xml)
+> Before starting, re-read [scope/part-and-subpart-xml.md](../scope/part-and-subpart-xml.md#-master-invariant--flexo-rebuilds-a-fresh-dom-now-with-gamedata-passthrough)
 > (the no-passthrough invariant) and [scope/gamedata-modules.md](../scope/gamedata-modules.md).
 > Follow the mandatory workflow in [AGENTS.md](../AGENTS.md) (fmt → lint → fmt:check → tests) and
 > update the matching `scope/*.md` baseline status as each gap closes.
@@ -15,19 +15,30 @@ element silently vanishes. None of these throw; all are silent correctness/round
 
 | # | Gap | Severity | Flexo touch-points | Scope doc |
 |---|---|---|---|---|
-| 1 | Electrical unit refactor (`Joules`/`Watts` → `J`/`W`) | 🔴 BREAKING | `partXmlParser.ts`, `partXmlSerializer.ts`, `types.ts` | [gamedata-modules](../scope/gamedata-modules.md) |
-| 2 | DockingPort schema (attrs → child elements, impulse→energy) | 🔴 BREAKING | `partXmlParser.ts`, `partXmlSerializer.ts`, `types.ts`, UI | [gamedata-modules](../scope/gamedata-modules.md) |
-| 3 | `<Diameter>` part-size element dropped | 🟡 MISSING | `types.ts`, `partXmlParser.ts`, `partXmlSerializer.ts`, `partCatalog.ts` | [part-and-subpart-xml](../scope/part-and-subpart-xml.md) |
-| 4 | `<Control>` command marker dropped | 🟡 MISSING | `types.ts`, `partXmlParser.ts`, `partXmlSerializer.ts`, `partCatalog.ts` | [part-and-subpart-xml](../scope/part-and-subpart-xml.md) |
-| 5 | Editor-tag list stale + face-snap docs | 📝 DRIFT/docs | `types.ts`, `docs/ksa-part-connector-notes.md` | [part-and-subpart-xml](../scope/part-and-subpart-xml.md) |
-| 6 | Unknown-element passthrough (architectural) | 🧱 OPTIONAL | `partXmlParser.ts`, `partXmlSerializer.ts`, `types.ts` | [part-and-subpart-xml](../scope/part-and-subpart-xml.md) |
+| 1 | Electrical unit refactor (`Joules`/`Watts` → `J`/`W`) | ✅ **DONE** (uncommitted) | `partXmlParser.ts`, `partXmlSerializer.ts`, `types.ts` | [gamedata-modules](../scope/gamedata-modules.md) |
+| 2 | DockingPort schema (attrs → child elements, impulse→energy) | ✅ **DONE** (uncommitted) | `partXmlParser.ts`, `partXmlSerializer.ts`, `types.ts`, UI | [gamedata-modules](../scope/gamedata-modules.md) |
+| 3 | `<Diameter>` part-size element dropped | ✅ **DONE** (uncommitted) | `types.ts`, `partXmlParser.ts`, `partXmlSerializer.ts`, `partCatalog.ts` | [part-and-subpart-xml](../scope/part-and-subpart-xml.md) |
+| 4 | `<Control>` command marker dropped | ✅ **DONE** (uncommitted) | `types.ts`, `partXmlParser.ts`, `partXmlSerializer.ts`, `partCatalog.ts` | [part-and-subpart-xml](../scope/part-and-subpart-xml.md) |
+| 5 | Editor-tag list stale + face-snap docs | ✅ **DONE** (uncommitted) | `types.ts`, `EditorTagsField.tsx`, `docs/ksa-part-connector-notes.md` | [part-and-subpart-xml](../scope/part-and-subpart-xml.md) |
+| 6 | Unknown-element passthrough (architectural) | ✅ **DONE** (uncommitted) | `partXmlParser.ts`, `partXmlSerializer.ts`, `types.ts`, `partCatalog.ts`, codec/transfer | [part-and-subpart-xml](../scope/part-and-subpart-xml.md) |
 
-Do **1 and 2 first** (data is wrong in-game today). 3–5 are round-trip fidelity. 6 is a
-strategic hardening that would prevent the *next* update's "added element" from being a regression.
+**All gaps (1–6) are now implemented** (✅, uncommitted — full details under each section below;
+346 tests pass). Gap 6 (unmodeled-XML passthrough) closes the round-trip data-loss for good: the
+"model-faithful re-emitter drops what it doesn't model" invariant no longer applies to
+`<PartGameData>`/`<SubPartGameData>` child elements + root attributes (they're captured + re-emitted
+verbatim). The only remaining items are intentionally out of scope (see each section's notes).
 
 ---
 
 ## Gap 1 — Electrical unit refactor (BREAKING)
+
+> **Status: ✅ IMPLEMENTED 2026-06-27 (uncommitted).** `partXmlParser.ts` now reads via
+> `readEnergyJoules`/`readPowerWatts` (token tables `ENERGY_TOKENS`/`POWER_TOKENS`) over a shared
+> `sumUnitChild`; `partXmlSerializer.ts` emits `<MaximumCapacity J>` and `<Produced/Consumed W>`;
+> `types.ts` doc-comments updated. Parser + serializer + catalog tests refreshed to the new tokens.
+> (Model field names were unchanged.) **Current form only — the plan's legacy `Joules`/`Watts`
+> fallback below was intentionally dropped:** flexo models only the current game; stale data is
+> purged at boot, never migrated.
 
 **Game change.** `JoulesReference` → `EnergyReference` (energy) + `PowerReference` (power);
 `BatteryJouleData` removed. Authored Core data now uses `<MaximumCapacity J="…"/>` and
@@ -58,6 +69,20 @@ fixtures (`<MaximumCapacity J=…>`, `<Produced W=…>`) **and** a legacy fixtur
 ---
 
 ## Gap 2 — DockingPort schema (BREAKING)
+
+> **Status: ✅ IMPLEMENTED 2026-06-27 (uncommitted).** Model fields renamed
+> `latchingImpulse`/`pushoffForce` → `latchingKineticEnergyJ`/`pushoffImpulseNs` (defaults 50 J /
+> 5000 Ns) across `types.ts`, `partXmlParser.ts` (child-element form + `readImpulseNs`),
+> `partXmlSerializer.ts` (emits `<ConnectorId Value>` + `<LatchingKineticEnergy J>` +
+> `<PushoffImpulse Ns>`), `editorStore.ts` (renamed `DEFAULT_*` consts +
+> `setDockingPortLatchingKineticEnergy`/`setDockingPortPushoffImpulse` actions),
+> `GameDataSections.tsx` (relabelled fields), `projectCodec.ts` (`ke`/`pi` wire keys), and
+> `projectTransfer.ts`. **Current form only — the plan's pre-4750 attribute fallback and the
+> `li`/`po` codec migration were intentionally dropped** (flexo models only the current game; stale
+> projects are purged at boot, not migrated). In the same pass the entire `projectStore.ts`
+> migration system (`migratePart`/`migrateSnapshot`, `capacityKWh`→Wh, string-flags→array) was
+> removed; boot-time validation (`snapshotMatchesModel`, now also checking top-level part keys)
+> purges any non-current snapshot.
 
 **Game change.** `<DockingPort>` moved from attributes to child elements, with renamed fields and
 **new physical quantities** (`DockingPortTemplate.cs`):
@@ -92,6 +117,17 @@ legacy attribute-form fixture; round-trip `CoreCouplingA_Prefab_DockingPort1WA`'
 
 ## Gap 3 — `<Diameter>` part-size element (MISSING-CAPABILITY)
 
+> **Status: ✅ IMPLEMENTED 2026-06-27 (uncommitted).** `PartGameData.diameterM: number | null`
+> added (`types.ts` + `createEmptyGameData`); `parseGameDataElement` reads `<Diameter>` via the
+> existing `readDistanceM` helper (so `M`/`Cm`/etc. all parse, null when absent);
+> `serializeGameData` emits `<Diameter M=…/>` in plain meters (matching Core, not flexo's
+> Cm-under-1m style) right after `<EditorTag>`. Carried through `partCatalog.ts`
+> (`CatalogPart` + local `PartGameData` + `parseGameDataFile` + `mergeGameData`), into the editor
+> via `ImportedGameData`/`applyImportedGameData` + `importBuiltInPart`, and persisted by
+> `projectCodec` (`dm` key) + `projectTransfer` merge. UI: a "Diameter size class" toggle + numeric
+> field in Part Data → Identity (`SizeControlFields`, `setDiameterEnabled`/`setDiameter`, default
+> 1 m). Round-trip + catalog + codec + store tests added.
+
 **Game change.** `PartTemplate.cs` added `[XmlElement("Diameter")] DistanceReference? Diameter`.
 Core now emits `<Diameter M="…"/>` as a child of `<PartGameData>` on nearly every part (command,
 fuel tanks, structural, coupling, fairing, propulsion + the monolithic `PartGameData.xml`). It's
@@ -115,6 +151,14 @@ appear under a diameter-filtered catalog view.
 
 ## Gap 4 — `<Control>` command marker (MISSING-CAPABILITY)
 
+> **Status: ✅ IMPLEMENTED 2026-06-27 (uncommitted).** `PartGameData.controllable: boolean`
+> added (default `false`); `parseGameDataElement` sets it from `directChildren(gd, 'Control').length
+> > 0`; `serializeGameData` emits a bare `<Control/>` (no attrs/children) after `<CustomMass>` when
+> true. Carried through `partCatalog.ts` (OR-merged across PartGameData entries), into the editor via
+> `ImportedGameData`/`applyImportedGameData` + `importBuiltInPart`, and persisted by `projectCodec`
+> (`co` key) + `projectTransfer` merge. UI: a "Command capable (controllable)" switch in Part Data →
+> Identity (`SizeControlFields`, `setControllable`). Round-trip + catalog + codec + store tests added.
+
 **Game change.** New `Control`/`ControlTemplate` module (empty marker). Core adds a bare
 `<Control/>` to the capsule's `<PartGameData>` (`CoreCommandAGameData.xml`); it marks a part as
 command-capable (`Vehicle.IsControllable`). `ControlTemplate.cs` has no fields.
@@ -133,6 +177,19 @@ command-capable (`Vehicle.IsControllable`). `ControlTemplate.cs` has no fields.
 ---
 
 ## Gap 5 — Editor-tag list + face-snapping docs (SCHEMA-DRIFT / docs)
+
+> **Status: ✅ IMPLEMENTED 2026-06-27 (uncommitted).** `KNOWN_EDITOR_TAGS` (`types.ts`) regenerated
+> to the exact registry set/order via a new typed `EDITOR_TAG_DEFS` (16 rows, each carrying the
+> `NotaCategory` flag) — obsolete `Tanks` dropped, `Fuel Tanks`/`Landing`/`NoFaceSnapping`/`All`
+> added. `EditorTagsField.tsx` now groups suggestions into **Categories** vs **Functional** using
+> `notaCategory`. Docs: `docs/ksa-part-connector-notes.md` gained a "Face-snapping & editor tags"
+> section (data-driven registry, +Z face-snap vs cosmetic +X connector arrow, `DiameterFilterlist`).
+> **Decision — static registry, not live parse:** the plan's option-2 live parse of
+> `CoreEditorTagsGameData.xml` was intentionally NOT taken — that file isn't synced into the served
+> `/ksa/` assets, and the registry only drives freeform autocomplete (no correctness need). A static
+> typed snapshot delivers the same suggestion + NotaCategory-grouping behavior with no network/asset
+> dependency; modder tags simply aren't auto-suggested (still typeable). Tests in
+> `partXmlParser.test.ts` assert the registry order + functional-tag set.
 
 **Game change.** Editor tags are now a data-driven registry: `CoreEditorTagsGameData.xml` defines
 16 `<EditorTagDef>` rows (`EditorTagDefinition.cs`), with `NotaCategory` + face-snap booleans;
@@ -160,6 +217,32 @@ obsolete `Tanks` (now `Fuel Tanks`) and missing `Landing`/`NoFaceSnapping`/`All`
 ---
 
 ## Gap 6 — Unknown-element passthrough (OPTIONAL, architectural)
+
+> **Status: ✅ IMPLEMENTED 2026-06-27 (uncommitted).** Unmodeled `<PartGameData>` /
+> `<SubPartGameData>` **child elements** AND **root attributes** are now captured verbatim on import
+> and re-emitted on export. Model: `RawXmlNode` (a JSON tree `{ tag, attrs, children, text? }`) +
+> `unknownAttrs: Record<string,string>` / `unknownChildren: RawXmlNode[]` on `PartGameData` and
+> `SubPartGameData` (`types.ts`). Parser (`partXmlParser.ts`): `captureUnknownChildren` /
+> `captureUnknownAttrs` diff each container's direct children/attrs against the modeled allow-list
+> (`KNOWN_PART_GAMEDATA_CHILDREN`/`…_ATTRS`, `KNOWN_SUBPART_GAMEDATA_*`). Serializer
+> (`partXmlSerializer.ts`): `buildRawNode` rebuilds them, appended LAST (order-independent to the
+> game). Carried through `partCatalog.ts` (catalog + `mergeGameData`), import
+> (`ImportedGameData`/`applyImportedGameData`/`importBuiltInPart`), persistence (`projectCodec` `ua`/`uc`
+> keys with tolerant `decRawNodes`/`decRawAttrs`, `projectTransfer` merge). This recovers
+> real Core data flexo silently dropped: `<Collider>` (every fuel tank), the `SolidSphereMass`/
+> `SolidCylinderMass`… mass family, `<IVASeat>`, `<SubstanceStorageVolume>`, and a SubPart's
+> `DisplayName` attribute. Round-trip + catalog + codec tests added.
+>
+> **Design notes / deliberate scope:** captured as a structured JSON tree (NOT a raw XML string) so
+> it (a) persists losslessly through the JSON codec and (b) is implementation-agnostic across the
+> browser `DOMParser` and the `@xmldom` parser the tests inject (a string serializer would mismatch
+> across the two DOM impls). Merge semantics are **fill-if-empty** (a part's leftover XML is treated
+> as a unit — first non-empty source wins — never appended/deduped, which would risk duplicate
+> `<Collider>`s). Known limitation: a `<SubPart>` child of `<PartGameData>` is "modeled" (gimbal
+> overlay), so a `<SubPart>` carrying ONLY non-gimbal unmodeled data is not passed through; mixed
+> text+element content isn't preserved (game-data XML has none). This does NOT conflict with the
+> no-migration policy ([[no-data-migration]] is about not converting OLD formats; passthrough
+> preserves CURRENT unknown game XML on round-trip).
 
 **Problem.** flexo's "read allow-list → rebuild fresh DOM" design means **every** future game
 element is a silent round-trip loss until explicitly modeled (today: `<Collider>`, and pre-fix

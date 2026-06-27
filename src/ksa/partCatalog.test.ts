@@ -60,7 +60,11 @@ describe('parseGameDataFile + mergeGameData', () => {
     const gameData = emptyGameData()
     parseGameDataFile(
       parse(`<Assets><PartGameData Id="CoreElectricalA_Prefab_SolarPanelB">
-        <DockingPort ConnectorId="_connector6" LatchingImpulse="6000" PushoffForce="7000" />
+        <DockingPort>
+          <ConnectorId Value="_connector6" />
+          <LatchingKineticEnergy J="50" />
+          <PushoffImpulse Ns="7000" />
+        </DockingPort>
       </PartGameData></Assets>`),
       gameData,
     )
@@ -68,12 +72,55 @@ describe('parseGameDataFile + mergeGameData', () => {
 
     expect(parts[0].dockingPort).toEqual({
       connectorId: '_connector6',
-      latchingImpulse: 6000,
-      pushoffForce: 7000,
+      latchingKineticEnergyJ: 50,
+      pushoffImpulseNs: 7000,
     })
   })
 
-  it('carries part-level battery (Joules→Wh) and the SubPart solar panel onto the Part', () => {
+  it('merges <Diameter> (size class) and <Control/> from GameData onto the Part', () => {
+    const parts: CatalogPart[] = []
+    parsePartsFile(parse(ASSETS_XML), 'CoreCommandAAssets.xml', parts)
+    // Neither lives on the geometry <Part>; both default until the GameData merge.
+    expect(parts[0].diameterM).toBeNull()
+    expect(parts[0].controllable).toBe(false)
+
+    const gameData = emptyGameData()
+    parseGameDataFile(
+      parse(`<Assets><PartGameData Id="CoreElectricalA_Prefab_SolarPanelB">
+        <Diameter M="1" />
+        <Control />
+      </PartGameData></Assets>`),
+      gameData,
+    )
+    mergeGameData(parts, gameData)
+
+    expect(parts[0].diameterM).toBe(1)
+    expect(parts[0].controllable).toBe(true)
+  })
+
+  it('merges unmodeled <PartGameData> children (e.g. <Collider>) onto the Part verbatim', () => {
+    const parts: CatalogPart[] = []
+    parsePartsFile(parse(ASSETS_XML), 'CoreFuelTankAAssets.xml', parts)
+    expect(parts[0].unknownChildren).toEqual([]) // nothing on the geometry <Part>
+
+    const gameData = emptyGameData()
+    parseGameDataFile(
+      parse(`<Assets><PartGameData Id="CoreElectricalA_Prefab_SolarPanelB">
+        <Collider Id="Collider1"><Cylinder Id="Cyl1"><Radius M="0.5" /></Cylinder></Collider>
+      </PartGameData></Assets>`),
+      gameData,
+    )
+    mergeGameData(parts, gameData)
+
+    expect(parts[0].unknownChildren.map((n) => n.tag)).toEqual(['Collider'])
+    expect(parts[0].unknownChildren[0].children[0].children[0]).toEqual({
+      tag: 'Radius',
+      attrs: { M: '0.5' },
+      children: [],
+    })
+  })
+
+  it('carries part-level battery (J→Wh) and the SubPart solar panel onto the Part', () => {
     const parts: CatalogPart[] = []
     parsePartsFile(parse(ASSETS_XML), 'CoreElectricalAAssets.xml', parts)
     expect(parts[0].batteries).toEqual([]) // not on the geometry <Part>
@@ -82,20 +129,20 @@ describe('parseGameDataFile + mergeGameData', () => {
     parseGameDataFile(
       parse(`<Assets>
         <PartGameData Id="CoreElectricalA_Prefab_SolarPanelB">
-          <Battery HasStatusLight="true"><MaximumCapacity Joules="500" /></Battery>
+          <Battery HasStatusLight="true"><MaximumCapacity J="500" /></Battery>
         </PartGameData>
         <SubPartGameData Id="CoreElectricalA_Subpart_SolarPanelB_CellA">
-          <SolarPanel><Produced Watts="50" /><Transform><Rotation Y="1.5708" /></Transform></SolarPanel>
+          <SolarPanel><Produced W="50" /><Transform><Rotation Y="1.5708" /></Transform></SolarPanel>
         </SubPartGameData>
         <SubPartGameData Id="SomeOtherTemplate">
-          <SolarPanel><Produced Watts="999" /></SolarPanel>
+          <SolarPanel><Produced W="999" /></SolarPanel>
         </SubPartGameData>
       </Assets>`),
       gameData,
     )
     mergeGameData(parts, gameData)
 
-    // Battery imported with Joules→Wh conversion (500 J = 0.1389 Wh).
+    // Battery imported with J→Wh conversion (500 J = 0.1389 Wh).
     expect(parts[0].batteries[0].capacityWh).toBeCloseTo(500 / 3600, 6)
     // Only the SubPart this Part actually places is carried (not SomeOtherTemplate).
     expect(parts[0].subPartGameData.map((s) => s.subPartTemplateId)).toEqual([

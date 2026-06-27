@@ -29,6 +29,7 @@ import type {
   Generator,
   Gimbal,
   PowerConsumer,
+  RawXmlNode,
   Rocket,
   RocketController,
   SolarPanel,
@@ -51,6 +52,13 @@ export interface CatalogPart {
   decoupler: Decoupler | null
   dockingPort: DockingPort | null
   evaDoor: EvaDoor | null
+  /** Part diameter in meters (<Diameter M/>, VAB size-class filter), or null. */
+  diameterM: number | null
+  /** Command-capability marker (<Control/>): the part can pilot a vehicle. */
+  controllable: boolean
+  /** Unmodeled `<PartGameData>` attrs + child elements, preserved verbatim for round-trip. */
+  unknownAttrs: Record<string, string>
+  unknownChildren: RawXmlNode[]
   /** Part-level power modules (from GameData), carried into the editor on import. */
   batteries: Battery[]
   generators: Generator[]
@@ -87,6 +95,10 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
       decoupler: null,
       dockingPort: null,
       evaDoor: null,
+      diameterM: null,
+      controllable: false,
+      unknownAttrs: {},
+      unknownChildren: [],
       batteries: [],
       generators: [],
       solarPanels: [],
@@ -118,6 +130,12 @@ export interface PartGameData {
   decoupler: Decoupler | null
   dockingPort: DockingPort | null
   evaDoor: EvaDoor | null
+  /** Part diameter (<Diameter M/>) and command marker (<Control/>) declared on this <PartGameData>. */
+  diameterM: number | null
+  controllable: boolean
+  /** Unmodeled `<PartGameData>` attrs + child elements preserved from this entry. */
+  unknownAttrs: Record<string, string>
+  unknownChildren: RawXmlNode[]
   /** Part-level power modules declared on this <PartGameData>. */
   batteries: Battery[]
   generators: Generator[]
@@ -158,6 +176,10 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
       decoupler: null,
       dockingPort: null,
       evaDoor: null,
+      diameterM: null,
+      controllable: false,
+      unknownAttrs: {},
+      unknownChildren: [],
       batteries: [],
       generators: [],
       solarPanels: [],
@@ -176,6 +198,12 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
     entry.decoupler ??= parsed.gameData.decoupler
     entry.dockingPort ??= parsed.gameData.dockingPort
     entry.evaDoor ??= parsed.gameData.evaDoor
+    entry.diameterM ??= parsed.gameData.diameterM
+    entry.controllable ||= parsed.gameData.controllable
+    // First entry with passthrough wins (these represent one part's leftover XML).
+    if (Object.keys(entry.unknownAttrs).length === 0)
+      entry.unknownAttrs = parsed.gameData.unknownAttrs
+    if (entry.unknownChildren.length === 0) entry.unknownChildren = parsed.gameData.unknownChildren
     entry.batteries.push(...parsed.gameData.batteries)
     entry.generators.push(...parsed.gameData.generators)
     entry.solarPanels.push(...parsed.gameData.solarPanels)
@@ -223,6 +251,10 @@ export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile
       part.decoupler = gd.decoupler
       part.dockingPort = gd.dockingPort
       part.evaDoor = gd.evaDoor
+      part.diameterM = gd.diameterM
+      part.controllable = gd.controllable
+      part.unknownAttrs = gd.unknownAttrs
+      part.unknownChildren = gd.unknownChildren
       part.batteries = gd.batteries
       part.generators = gd.generators
       part.solarPanels = gd.solarPanels

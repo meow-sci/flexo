@@ -216,6 +216,8 @@ describe('serializeGameData', () => {
       ...createEmptyGameData(),
       displayName: 'My Tank',
       customMass: 250,
+      diameterM: 2,
+      controllable: true,
       batteries: [{ capacityWh: 0.5 }],
       generators: [{ outputWatts: 12 }],
       solarPanels: [
@@ -226,7 +228,11 @@ describe('serializeGameData', () => {
       ],
       powerConsumers: [{ consumedWatts: 3 }],
       decoupler: { connectorId: '_connector2', force: 750 },
-      dockingPort: { connectorId: '_connector3', latchingImpulse: 6000, pushoffForce: 7000 },
+      dockingPort: {
+        connectorId: '_connector3',
+        latchingKineticEnergyJ: 6000,
+        pushoffImpulseNs: 7000,
+      },
       evaDoor: { connectorId: '_connector3' },
     },
     subPartGameData: [
@@ -264,6 +270,8 @@ describe('serializeGameData', () => {
         combustors: [],
         nozzles: [],
         rockets: [],
+        unknownAttrs: {},
+        unknownChildren: [],
       },
     ],
     connectors: [
@@ -289,6 +297,16 @@ describe('serializeGameData', () => {
 
   it('emits custom mass in kg', () => {
     expect(child(gd, 'CustomMass')!.getElementsByTagName('Mass')[0].getAttribute('Kg')).toBe('250')
+  })
+
+  it('emits <Diameter M> (plain meters) and a bare <Control/> marker', () => {
+    const diameter = child(gd, 'Diameter')!
+    expect(diameter.getAttribute('M')).toBe('2')
+    expect(diameter.hasAttribute('Cm')).toBe(false)
+    const control = child(gd, 'Control')!
+    expect(control).not.toBeNull()
+    expect(control.attributes.length).toBe(0)
+    expect(control.childNodes.length).toBe(0)
   })
 
   it('emits tanks nested under <SubPartGameData><Tank><CylindricalTank/SphericalTank>', () => {
@@ -337,25 +355,25 @@ describe('serializeGameData', () => {
     expect(child(point, 'RayTracing')).toBeNull()
   })
 
-  it('emits power modules with KSA JoulesReference attributes (Joules / Watts)', () => {
-    // Battery capacity is Wh in the model, Joules in the XML (1 Wh = 3600 J).
-    expect(child(tags(doc, 'Battery')[0], 'MaximumCapacity')!.getAttribute('Joules')).toBe('1800')
-    expect(child(tags(doc, 'Generator')[0], 'Produced')!.getAttribute('Watts')).toBe('12')
-    expect(child(tags(doc, 'PowerConsumer')[0], 'Consumed')!.getAttribute('Watts')).toBe('3')
+  it('emits power modules with KSA EnergyReference/PowerReference attributes (J / W)', () => {
+    // Battery capacity is Wh in the model, joules in the XML (1 Wh = 3600 J).
+    expect(child(tags(doc, 'Battery')[0], 'MaximumCapacity')!.getAttribute('J')).toBe('1800')
+    expect(child(tags(doc, 'Generator')[0], 'Produced')!.getAttribute('W')).toBe('12')
+    expect(child(tags(doc, 'PowerConsumer')[0], 'Consumed')!.getAttribute('W')).toBe('3')
   })
 
-  it('emits part-level <SolarPanel> with Produced Watts + orientation Transform', () => {
+  it('emits part-level <SolarPanel> with Produced W + orientation Transform', () => {
     const sp = tags(doc, 'SolarPanel').find((el) => el.parentNode === gd)!
-    expect(child(sp, 'Produced')!.getAttribute('Watts')).toBe('200')
+    expect(child(sp, 'Produced')!.getAttribute('W')).toBe('200')
     const rot = child(child(sp, 'Transform')!, 'Rotation')!
     expect(rot.getAttribute('Y')).toBe('1.5708')
   })
 
   it('emits SubPart-level <SolarPanel> alongside tanks', () => {
     const spd = tags(doc, 'SubPartGameData')[0]
-    expect(
-      child(spd, 'SolarPanel')!.getElementsByTagName('Produced')[0].getAttribute('Watts'),
-    ).toBe('50')
+    expect(child(spd, 'SolarPanel')!.getElementsByTagName('Produced')[0].getAttribute('W')).toBe(
+      '50',
+    )
   })
 
   it('emits every connector, with <Flags> only when set', () => {
@@ -375,9 +393,9 @@ describe('serializeGameData', () => {
     expect(dec.getAttribute('ConnectorId')).toBe('_connector2')
     expect(dec.getAttribute('Force')).toBe('750')
     const dp = tags(doc, 'DockingPort')[0]
-    expect(dp.getAttribute('ConnectorId')).toBe('_connector3')
-    expect(dp.getAttribute('LatchingImpulse')).toBe('6000')
-    expect(dp.getAttribute('PushoffForce')).toBe('7000')
+    expect(child(dp, 'ConnectorId')!.getAttribute('Value')).toBe('_connector3')
+    expect(child(dp, 'LatchingKineticEnergy')!.getAttribute('J')).toBe('6000')
+    expect(child(dp, 'PushoffImpulse')!.getAttribute('Ns')).toBe('7000')
     expect(tags(doc, 'EVADoor')[0].getAttribute('ConnectorId')).toBe('_connector3')
   })
 
@@ -388,6 +406,8 @@ describe('serializeGameData', () => {
     expect(tags(bare, 'CustomMass').length).toBe(0)
     expect(tags(bare, 'SubPartGameData').length).toBe(0)
     expect(tags(bare, 'Decoupler').length).toBe(0)
+    expect(tags(bare, 'Diameter').length).toBe(0)
+    expect(tags(bare, 'Control').length).toBe(0)
   })
 
   // --- Engine modules ---

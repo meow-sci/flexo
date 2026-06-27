@@ -17,16 +17,19 @@ import {
   removeSolarPanel,
   removeTank,
   setBatteryCapacity,
+  setControllable,
   setCustomMass,
   setCustomMassEnabled,
   setDecouplerConnector,
   setDecouplerEnabled,
   setDecouplerForce,
+  setDiameter,
+  setDiameterEnabled,
   setDisplayName,
   setDockingPortConnector,
   setDockingPortEnabled,
-  setDockingPortLatchingImpulse,
-  setDockingPortPushoffForce,
+  setDockingPortLatchingKineticEnergy,
+  setDockingPortPushoffImpulse,
   setEvaDoorConnector,
   setEvaDoorEnabled,
   setGeneratorOutput,
@@ -127,6 +130,39 @@ export function IdentityFields({ gameData }: { gameData: PartGameData }) {
         placeholder="(uses Part Id)"
       />
     </Field>
+  )
+}
+
+// --- Size class (diameter) + command capability ---
+
+/**
+ * Part-level catalog/capability markers that have no 3D representation: the
+ * `<Diameter M/>` VAB size-class filter (a numeric size class — no physics effect)
+ * and the bare `<Control/>` command marker that makes the part vehicle-controllable.
+ * Both are optional; diameter toggles between absent (null) and a value.
+ */
+export function SizeControlFields({ gameData }: { gameData: PartGameData }) {
+  const diameterEnabled = gameData.diameterM != null
+  return (
+    <div className="flex flex-col gap-2">
+      <Switch isSelected={diameterEnabled} onChange={setDiameterEnabled}>
+        Diameter size class
+      </Switch>
+      {diameterEnabled && (
+        <Field label="Diameter (m, VAB size-class filter)">
+          <PreciseNumberInput
+            aria-label="Part diameter in meters"
+            value={gameData.diameterM ?? 0}
+            min={0}
+            onInteractionStart={() => pushUndo('edit diameter', '')}
+            onCommit={setDiameter}
+          />
+        </Field>
+      )}
+      <Switch isSelected={gameData.controllable} onChange={setControllable}>
+        Command capable (controllable)
+      </Switch>
+    </div>
   )
 }
 
@@ -591,22 +627,22 @@ export function CouplingSection({ part }: { part: EditingPart }) {
               value={dockingPort.connectorId}
               onChange={setDockingPortConnector}
             />
-            <Field label="Latching Impulse (N·s)">
+            <Field label="Latching Kinetic Energy (J)">
               <PreciseNumberInput
-                aria-label="Docking port latching impulse in newton-seconds"
-                value={dockingPort.latchingImpulse}
+                aria-label="Docking port latching kinetic energy in joules"
+                value={dockingPort.latchingKineticEnergyJ}
                 min={0}
                 onInteractionStart={() => pushUndo('edit docking port', '')}
-                onCommit={setDockingPortLatchingImpulse}
+                onCommit={setDockingPortLatchingKineticEnergy}
               />
             </Field>
-            <Field label="Pushoff Force (N)">
+            <Field label="Pushoff Impulse (N·s)">
               <PreciseNumberInput
-                aria-label="Docking port push-off force in newtons"
-                value={dockingPort.pushoffForce}
+                aria-label="Docking port push-off impulse in newton-seconds"
+                value={dockingPort.pushoffImpulseNs}
                 min={0}
                 onInteractionStart={() => pushUndo('edit docking port', '')}
-                onCommit={setDockingPortPushoffForce}
+                onCommit={setDockingPortPushoffImpulse}
               />
             </Field>
           </>

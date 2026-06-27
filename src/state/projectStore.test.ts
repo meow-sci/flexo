@@ -174,6 +174,22 @@ describe('projectStore persistence', () => {
     warn.mockRestore()
   })
 
+  it('purges a structurally-old project (missing a top-level field) instead of migrating it', () => {
+    // A project saved before a top-level field existed (e.g. kittens/animations). The tool
+    // does NOT back-fill it — it only supports the current model and discards anything else.
+    $projectName.set('Ancient')
+    addSubPart('Core.A')
+    saveCurrentProject()
+    const stale = JSON.parse(localStorage.getItem('flexo:project:Ancient')!)
+    delete stale.part.kittens
+    localStorage.setItem('flexo:project:Ancient', JSON.stringify(stale))
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    hydrateProjectOnBoot()
+    expect(projectExists('Ancient')).toBe(false) // thrown away, not migrated
+    warn.mockRestore()
+  })
+
   it('purges unparseable project entries at boot', () => {
     localStorage.setItem('flexo:project:Corrupt', '{ not valid json')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})

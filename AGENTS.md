@@ -47,6 +47,7 @@ Feature docs live in `docs/`. Read the relevant one before working on an area, a
 
 - MUST ensure the project code remains clean, well structure and well architected
 - MUST ensure architecture aligns with the general concept of a 3d editor / graphics editor workflow that is tailor made for KSA game Part creation
+- **Current game state only — NO data migration.** The tool models exactly the current KSA build; it does NOT account for the evolution/churn of either the game schema or flexo's own persisted formats. NEVER add migration/upgrade/back-compat code (no "read the old key too", no attribute/token fallbacks, no `migrateX`, no version-gated upcasting) for either game-XML parsing or project (localStorage / export-codec) loading. Stale or incompatible data is **discarded, not converted**: the boot-time project purge (`sanitizeProjectStorage` → `snapshotMatchesModel` in `projectStore.ts`, which validates against the live model constructors) throws away anything that doesn't match the current model. Keep that validation defensive enough to drop bad data without crashing; when you change the data model, do NOT write a migration — let non-current snapshots be purged.
 
 # code quality
 

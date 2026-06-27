@@ -11,6 +11,8 @@ import type {
   EvaDoor,
   Generator,
   KittenKind,
+  Light,
+  LightType,
   PartAnimation,
   PartGameData,
   PowerConsumer,
@@ -25,6 +27,7 @@ import {
   BUILT_IN_LAYER_IDS,
   CONNECTOR_LAYER_ID,
   createEmptyPart,
+  createLight,
   createSolarPanel,
   createTank,
   DEFAULT_LAYER_ID,
@@ -1354,7 +1357,7 @@ export function setCustomMass(massKg: number): void {
 function getOrCreateSubPartData(part: EditingPart, subPartTemplateId: string): SubPartGameData {
   let spd = part.subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
   if (!spd) {
-    spd = { subPartTemplateId, tanks: [], solarPanels: [] }
+    spd = { subPartTemplateId, tanks: [], solarPanels: [], lights: [] }
     part.subPartGameData.push(spd)
   }
   return spd
@@ -1450,6 +1453,69 @@ export function setSubPartSolarPanelRotation(
   if (!spd || index < 0 || index >= spd.solarPanels.length) return
   mutateSubPartData(subPartTemplateId, (s) => {
     s.solarPanels[index].transform.rotation = rotation
+  })
+}
+
+// --- Lights (per SubPart template) ---
+
+/** True when `index` is a valid light slot on the given SubPart template. */
+function hasLight(subPartTemplateId: string, index: number): boolean {
+  const spd = $part.get().subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
+  return !!spd && index >= 0 && index < spd.lights.length
+}
+
+/** Discrete: append a default (white Spot) light for the given SubPart template. */
+export function addLight(subPartTemplateId: string): void {
+  commitSubPartData('add light', '', subPartTemplateId, (s) => s.lights.push(createLight()))
+}
+
+/** Discrete: remove the light at `index` for the given SubPart template. */
+export function removeLight(subPartTemplateId: string, index: number): void {
+  if (!hasLight(subPartTemplateId, index)) return
+  commitSubPartData('remove light', '', subPartTemplateId, (s) => s.lights.splice(index, 1))
+}
+
+/** Discrete: change a light's type (Spot/Point). */
+export function setLightType(subPartTemplateId: string, index: number, type: LightType): void {
+  if (!hasLight(subPartTemplateId, index)) return
+  commitSubPartData('light type', type, subPartTemplateId, (s) => {
+    s.lights[index].type = type
+  })
+}
+
+/** Discrete: toggle a light's IVA ray-tracing flag. */
+export function setLightRayTracing(subPartTemplateId: string, index: number, on: boolean): void {
+  if (!hasLight(subPartTemplateId, index)) return
+  commitSubPartData('light ray tracing', on ? 'on' : 'off', subPartTemplateId, (s) => {
+    s.lights[index].rayTracing = on
+  })
+}
+
+/** Streaming: patch a light's scalar/color fields. Caller pushes undo on field focus. */
+export function updateLight(subPartTemplateId: string, index: number, patch: Partial<Light>): void {
+  if (!hasLight(subPartTemplateId, index)) return
+  mutateSubPartData(subPartTemplateId, (s) => {
+    s.lights[index] = { ...s.lights[index], ...patch }
+  })
+}
+
+/** Streaming: set a light's local position (m). Caller pushes undo on field focus. */
+export function setLightPosition(subPartTemplateId: string, index: number, position: Vec3): void {
+  if (!hasLight(subPartTemplateId, index)) return
+  mutateSubPartData(subPartTemplateId, (s) => {
+    s.lights[index].transform.position = position
+  })
+}
+
+/** Streaming: set a Spot light's aim rotation (Euler XYZ radians). */
+export function setLightRotation(
+  subPartTemplateId: string,
+  index: number,
+  rotation: EulerXYZ,
+): void {
+  if (!hasLight(subPartTemplateId, index)) return
+  mutateSubPartData(subPartTemplateId, (s) => {
+    s.lights[index].transform.rotation = rotation
   })
 }
 

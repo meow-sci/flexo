@@ -6,6 +6,7 @@ import type { Connector, EditingPart, SubPartPlacement } from './types'
 import {
   createDefaultLayer,
   createEmptyGameData,
+  createLight,
   identityTransform,
   createTank,
   DEFAULT_LAYER_ID,
@@ -238,6 +239,24 @@ describe('serializeGameData', () => {
           { ...createTank(), shape: 'Spherical', wallMaterialId: 'Steel(s)', outerRadiusM: 1.2 },
         ],
         solarPanels: [{ outputWatts: 50, transform: identityTransform() }],
+        lights: [
+          {
+            ...createLight(),
+            type: 'Spot',
+            transform: {
+              ...identityTransform(),
+              position: { x: 0.38, y: 0.21, z: 0 },
+              rotation: { x: 0, y: 0, z: 1.5708 },
+            },
+            rangeM: 5,
+            intensity: 10,
+            color: { r: 1, g: 0.5, b: 0.25 },
+            innerAngleRad: 0.392599,
+            outerAngleRad: 0.785398,
+            rayTracing: true,
+          },
+          { ...createLight(), type: 'Point', rangeM: 2, intensity: 2 },
+        ],
       },
     ],
     connectors: [
@@ -277,6 +296,38 @@ describe('serializeGameData', () => {
     const sph = tankEls[1].getElementsByTagName('SphericalTank')[0]
     expect(sph.getElementsByTagName('Length').length).toBe(0)
     expect(sph.getElementsByTagName('Material')[0].getAttribute('Id')).toBe('Steel(s)')
+  })
+
+  it('emits <Light> with Type/Transform/Range/Intensity/Color under <SubPartGameData>', () => {
+    const spd = tags(doc, 'SubPartGameData')[0]
+    const lightEls = tags(spd, 'Light')
+    expect(lightEls.length).toBe(2)
+    const spot = lightEls[0]
+    expect(child(spot, 'Type')!.textContent).toBe('Spot')
+    expect(child(spot, 'Range')!.getAttribute('Value')).toBe('5')
+    expect(child(spot, 'Intensity')!.getAttribute('Value')).toBe('10')
+    const color = child(spot, 'Color')!
+    expect(color.getAttribute('R')).toBe('1')
+    expect(color.getAttribute('G')).toBe('0.5')
+    expect(color.getAttribute('B')).toBe('0.25')
+    const rot = child(child(spot, 'Transform')!, 'Rotation')!
+    expect(rot.getAttribute('Z')).toBe('1.5708')
+    // Scale is never emitted for lights (KSA ignores it).
+    expect(child(child(spot, 'Transform')!, 'Scale')).toBeNull()
+  })
+
+  it('emits InnerAngle/OuterAngle + <RayTracing> only for the right lights', () => {
+    const spd = tags(doc, 'SubPartGameData')[0]
+    const [spot, point] = tags(spd, 'Light')
+    // Spot keeps cone angles (radians) and the explicit ray-tracing flag.
+    expect(child(spot, 'InnerAngle')!.getAttribute('Value')).toBe('0.392599')
+    expect(child(spot, 'OuterAngle')!.getAttribute('Value')).toBe('0.785398')
+    expect(child(spot, 'RayTracing')!.textContent).toBe('true')
+    // Point light omits cone angles, and an unset ray-tracing flag is dropped.
+    expect(child(point, 'Type')!.textContent).toBe('Point')
+    expect(child(point, 'InnerAngle')).toBeNull()
+    expect(child(point, 'OuterAngle')).toBeNull()
+    expect(child(point, 'RayTracing')).toBeNull()
   })
 
   it('emits power modules with KSA JoulesReference attributes (Joules / Watts)', () => {

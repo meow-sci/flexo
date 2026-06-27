@@ -318,11 +318,13 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
     const templateId = mapTemplateId(sg.subPartTemplateId)
     const tanks = (sg.tanks ?? []).map((t) => ({ ...t }))
     const solarPanels = (sg.solarPanels ?? []).map((sp) => structuredClone(sp))
+    const lights = (sg.lights ?? []).map((l) => structuredClone(l))
     const existing = part.subPartGameData.find((x) => x.subPartTemplateId === templateId)
     if (existing) {
       existing.tanks.push(...tanks)
       existing.solarPanels.push(...solarPanels)
-    } else part.subPartGameData.push({ subPartTemplateId: templateId, tanks, solarPanels })
+      existing.lights.push(...lights)
+    } else part.subPartGameData.push({ subPartTemplateId: templateId, tanks, solarPanels, lights })
   }
 
   // Animations: fresh id (so re-pasting the same export can't collide), members +

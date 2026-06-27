@@ -4,6 +4,8 @@ import type {
   Connector,
   ConnectorFlag,
   EulerXYZ,
+  Light,
+  LightType,
   PartGameData,
   SolarPanel,
   SubPartGameData,
@@ -202,6 +204,31 @@ function tankFromElement(el: Element, shape: TankShape): Tank {
 }
 
 /**
+ * Parses one `<Light>` element into a {@link Light}. Missing children/attributes fall
+ * back to KSA's `LightModule.TemplateData` defaults (Range/Intensity 1, white color,
+ * InnerAngle π/8, OuterAngle π/4, RayTracing false). The inverse of `buildLightElement`.
+ */
+function lightFromElement(el: Element): Light {
+  const type: LightType =
+    directChildren(el, 'Type')[0]?.textContent?.trim() === 'Point' ? 'Point' : 'Spot'
+  const colorEl = directChildren(el, 'Color')[0]
+  return {
+    type,
+    transform: readTransform(el),
+    rangeM: readNum(directChildren(el, 'Range')[0], 'Value') ?? 1,
+    intensity: readNum(directChildren(el, 'Intensity')[0], 'Value') ?? 1,
+    color: {
+      r: readNum(colorEl, 'R') ?? 1,
+      g: readNum(colorEl, 'G') ?? 1,
+      b: readNum(colorEl, 'B') ?? 1,
+    },
+    innerAngleRad: readNum(directChildren(el, 'InnerAngle')[0], 'Value') ?? Math.PI / 8,
+    outerAngleRad: readNum(directChildren(el, 'OuterAngle')[0], 'Value') ?? Math.PI / 4,
+    rayTracing: directChildren(el, 'RayTracing')[0]?.textContent?.trim().toLowerCase() === 'true',
+  }
+}
+
+/**
  * Parses a single <PartGameData> element into its editor tags, connector flags
  * (by id) and {@link PartGameData} block. The inverse of
  * {@link serializeGameData}; missing children/attributes fall back to defaults.
@@ -284,8 +311,9 @@ function subPartGameDataFromRoot(root: Element): SubPartGameData[] {
       else if (sphEl) tanks.push(tankFromElement(sphEl, 'Spherical'))
     }
     const solarPanels = directChildren(spEl, 'SolarPanel').map(parseSolarPanel)
-    if (tanks.length > 0 || solarPanels.length > 0)
-      out.push({ subPartTemplateId, tanks, solarPanels })
+    const lights = directChildren(spEl, 'Light').map(lightFromElement)
+    if (tanks.length > 0 || solarPanels.length > 0 || lights.length > 0)
+      out.push({ subPartTemplateId, tanks, solarPanels, lights })
   }
   return out
 }

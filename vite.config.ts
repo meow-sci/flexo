@@ -9,6 +9,9 @@ import { ksaAssets } from './vite/ksaAssets'
 export default defineConfig(({ mode }) => ({
   // Served under https://meow.science.fail/flexo/ in production; also used in dev.
   base: '/flexo/',
+  experimental: {
+    bundledDev: true,
+  },
   plugins: [
     tailwindcss(),
     react(),

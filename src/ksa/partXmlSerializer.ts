@@ -5,6 +5,7 @@ import type {
   ConnectorFlag,
   EditingPart,
   EulerXYZ,
+  Light,
   PartAnimation,
   PartGameData,
   SolarPanel,
@@ -164,7 +165,7 @@ export function serializeGameData(
   assets.appendChild(gd)
 
   for (const spd of part.subPartGameData) {
-    if (spd.tanks.length === 0 && spd.solarPanels.length === 0) continue
+    if (spd.tanks.length === 0 && spd.solarPanels.length === 0 && spd.lights.length === 0) continue
     const spdEl = doc.createElement('SubPartGameData')
     // Remap to the exported variant id so data keyed on an IVA template still applies.
     spdEl.setAttribute('Id', ivaRemap.get(spd.subPartTemplateId) ?? spd.subPartTemplateId)
@@ -174,6 +175,7 @@ export function serializeGameData(
       spdEl.appendChild(tankWrapper)
     }
     for (const sp of spd.solarPanels) spdEl.appendChild(buildSolarPanelElement(doc, sp))
+    for (const light of spd.lights) spdEl.appendChild(buildLightElement(doc, light))
     assets.appendChild(spdEl)
   }
 
@@ -208,6 +210,44 @@ function buildTankElement(doc: XmlDocument, tank: Tank): XmlElement {
   }
   el.appendChild(elWithAttr(doc, 'OuterRadius', 'M', formatG6(tank.outerRadiusM)))
   el.appendChild(elWithAttr(doc, 'WallThickness', 'Mm', formatG6(tank.wallThicknessMm)))
+  return el
+}
+
+/**
+ * <Light> with Type/Transform/Range/Intensity/Color, plus InnerAngle+OuterAngle for
+ * Spots and <RayTracing> only when enabled. Matches KSA's LightModule schema:
+ * Position aims/places the light, Rotation aims a Spot's cone; Scale is never emitted
+ * (the engine ignores it). The <Transform> itself is omitted when identity.
+ */
+function buildLightElement(doc: XmlDocument, light: Light): XmlElement {
+  const el = doc.createElement('Light')
+  const type = doc.createElement('Type')
+  type.appendChild(doc.createTextNode(light.type))
+  el.appendChild(type)
+
+  // Only Position + Rotation are meaningful to KSA lights; never emit Scale.
+  const transform = buildTransformElement(doc, { ...light.transform, scale: { x: 1, y: 1, z: 1 } })
+  if (transform) el.appendChild(transform)
+
+  el.appendChild(elWithAttr(doc, 'Range', 'Value', formatG6(light.rangeM)))
+  el.appendChild(elWithAttr(doc, 'Intensity', 'Value', formatG6(light.intensity)))
+
+  const color = doc.createElement('Color')
+  color.setAttribute('R', formatG6(light.color.r))
+  color.setAttribute('G', formatG6(light.color.g))
+  color.setAttribute('B', formatG6(light.color.b))
+  el.appendChild(color)
+
+  if (light.type === 'Spot') {
+    el.appendChild(elWithAttr(doc, 'InnerAngle', 'Value', formatG6(light.innerAngleRad)))
+    el.appendChild(elWithAttr(doc, 'OuterAngle', 'Value', formatG6(light.outerAngleRad)))
+  }
+
+  if (light.rayTracing) {
+    const rt = doc.createElement('RayTracing')
+    rt.appendChild(doc.createTextNode('true'))
+    el.appendChild(rt)
+  }
   return el
 }
 

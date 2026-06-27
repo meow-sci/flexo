@@ -12,6 +12,7 @@ import type { Connector, EditingPart } from './types'
 import {
   createDefaultLayer,
   createEmptyGameData,
+  createLight,
   identityTransform,
   createTank,
   DEFAULT_LAYER_ID,
@@ -189,6 +190,24 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
           { ...createTank(), shape: 'Spherical', wallMaterialId: 'Steel(s)', outerRadiusM: 1.2 },
         ],
         solarPanels: [{ outputWatts: 50, transform: identityTransform() }],
+        lights: [
+          {
+            ...createLight(),
+            type: 'Spot',
+            transform: {
+              ...identityTransform(),
+              position: { x: 0.38, y: 0.21, z: 0 },
+              rotation: { x: 0, y: 0, z: 1.5708 },
+            },
+            rangeM: 5,
+            intensity: 10,
+            color: { r: 1, g: 0.5, b: 0.25 },
+            innerAngleRad: 0.392599,
+            outerAngleRad: 0.785398,
+            rayTracing: true,
+          },
+          { ...createLight(), type: 'Point', rangeM: 2, intensity: 2 },
+        ],
       },
     ],
     connectors: [
@@ -209,6 +228,25 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
     expect(parsed.gameData.displayName).toBe('Round Trip')
     expect(parsed.editorTags).toEqual(['Tanks', 'Structural'])
     expect(parsed.gameData.customMass).toBe(42)
+  })
+
+  it('recovers lights per SubPart template (type, transform, color, angles, ray tracing)', () => {
+    const spd = parsed.subPartGameData.find((s) => s.subPartTemplateId === TANK_TMPL)
+    expect(spd?.lights.map((l) => l.type)).toEqual(['Spot', 'Point'])
+    const spot = spd!.lights[0]
+    expect(spot.transform.position).toEqual({ x: 0.38, y: 0.21, z: 0 })
+    expect(spot.transform.rotation.z).toBeCloseTo(1.5708, 4)
+    expect(spot.rangeM).toBe(5)
+    expect(spot.intensity).toBe(10)
+    expect(spot.color.r).toBeCloseTo(1, 5)
+    expect(spot.color.g).toBeCloseTo(0.5, 5)
+    expect(spot.color.b).toBeCloseTo(0.25, 5)
+    expect(spot.innerAngleRad).toBeCloseTo(0.392599, 5)
+    expect(spot.outerAngleRad).toBeCloseTo(0.785398, 5)
+    expect(spot.rayTracing).toBe(true)
+    // Point light: no ray tracing, cone angles fall back to KSA defaults.
+    expect(spd!.lights[1].rayTracing).toBe(false)
+    expect(spd!.lights[1].rangeM).toBe(2)
   })
 
   it('recovers tanks and solar panels per SubPart template (shape, material, dims)', () => {

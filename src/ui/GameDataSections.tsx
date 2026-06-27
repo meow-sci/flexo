@@ -1,15 +1,18 @@
 import { Button, Switch, Select, ListBoxItem, TextField, SectionTitle } from './kit'
 import { PreciseNumberInput } from './PreciseNumberInput'
 import { Vec3Field } from './Vec3Field'
+import { DEG2RAD, RAD2DEG } from './format'
 import { pushUndo } from '../state/editorStore'
 import {
   addBattery,
   addGenerator,
+  addLight,
   addPowerConsumer,
   addSolarPanel,
   addTank,
   removeBattery,
   removeGenerator,
+  removeLight,
   removePowerConsumer,
   removeSolarPanel,
   removeTank,
@@ -27,13 +30,42 @@ import {
   setEvaDoorConnector,
   setEvaDoorEnabled,
   setGeneratorOutput,
+  setLightPosition,
+  setLightRayTracing,
+  setLightRotation,
+  setLightType,
   setPowerConsumerWatts,
   setSolarPanelOutput,
   setSolarPanelRotation,
   setTankShape,
+  updateLight,
   updateTank,
 } from '../state/editorStore'
-import type { EditingPart, EulerXYZ, PartGameData, SolarPanel, Tank, TankShape } from '../ksa/types'
+import type {
+  EditingPart,
+  EulerXYZ,
+  Light,
+  LightType,
+  PartGameData,
+  SolarPanel,
+  Tank,
+  TankShape,
+} from '../ksa/types'
+
+/** A light's RGB (each 0–1) as a "#rrggbb" hex string for the native color picker. */
+function rgb01ToHex({ r, g, b }: { r: number; g: number; b: number }): string {
+  const h = (v: number) =>
+    Math.round(Math.min(1, Math.max(0, v)) * 255)
+      .toString(16)
+      .padStart(2, '0')
+  return `#${h(r)}${h(g)}${h(b)}`
+}
+
+/** Inverse of {@link rgb01ToHex}: "#rrggbb" → RGB floats in 0–1. */
+function hexToRgb01(hex: string): { r: number; g: number; b: number } {
+  const n = Number.parseInt(hex.slice(1), 16)
+  return { r: ((n >> 16) & 255) / 255, g: ((n >> 8) & 255) / 255, b: (n & 255) / 255 }
+}
 
 /**
  * The "popup-only" GameData editors used inside the Part Data dialog — every
@@ -189,6 +221,152 @@ export function TanksSection({
       ))}
       <Button size="sm" onPress={() => addTank(subPartTemplateId)} className="self-start">
         + Tank
+      </Button>
+    </div>
+  )
+}
+
+// --- Lights (per SubPart template) ---
+
+/**
+ * Per-SubPart light editor — full coverage of KSA's <Light> SubPartGameData schema
+ * (LightModule.TemplateData). Each card edits one light. Cone angles and the aim
+ * rotation are shown in DEGREES (matching the workspace TransformInspector) and
+ * converted to the radians KSA stores; Point lights hide the aim rotation + cone
+ * angles since KSA ignores them. Mirrors {@link TanksSection}: discrete
+ * add/remove/type/raytracing self-record undo, while numeric/color fields focus-push
+ * a single undo step (streaming).
+ */
+export function LightsSection({
+  lights,
+  subPartTemplateId,
+}: {
+  lights: Light[]
+  subPartTemplateId: string
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      {lights.map((light, i) => {
+        const isSpot = light.type === 'Spot'
+        return (
+          <ItemCard
+            key={i}
+            title={`Light ${i + 1}`}
+            onRemove={() => removeLight(subPartTemplateId, i)}
+          >
+            <Field label="Type">
+              <Select
+                size="sm"
+                aria-label="Light type"
+                value={light.type}
+                onChange={(k) => setLightType(subPartTemplateId, i, k as LightType)}
+              >
+                <ListBoxItem id="Spot">Spot</ListBoxItem>
+                <ListBoxItem id="Point">Point</ListBoxItem>
+              </Select>
+            </Field>
+            <div className="flex flex-col gap-1">
+              <span className={RAD_LABEL}>Position (m)</span>
+              <Vec3Field
+                value={light.transform.position}
+                onInteractionStart={() => pushUndo('edit light', '')}
+                onCommit={(axis, val) =>
+                  setLightPosition(subPartTemplateId, i, {
+                    ...light.transform.position,
+                    [axis]: val,
+                  })
+                }
+              />
+            </div>
+            {isSpot && (
+              <div className="flex flex-col gap-1">
+                <span className={RAD_LABEL}>Aim Rotation (°)</span>
+                <Vec3Field
+                  value={{
+                    x: light.transform.rotation.x * RAD2DEG,
+                    y: light.transform.rotation.y * RAD2DEG,
+                    z: light.transform.rotation.z * RAD2DEG,
+                  }}
+                  onInteractionStart={() => pushUndo('edit light', '')}
+                  onCommit={(axis, deg) =>
+                    setLightRotation(subPartTemplateId, i, {
+                      ...light.transform.rotation,
+                      [axis]: deg * DEG2RAD,
+                    })
+                  }
+                />
+              </div>
+            )}
+            <Field label="Range (m)">
+              <PreciseNumberInput
+                aria-label="Light range in meters"
+                value={light.rangeM}
+                min={0}
+                onInteractionStart={() => pushUndo('edit light', '')}
+                onCommit={(n) => updateLight(subPartTemplateId, i, { rangeM: n })}
+              />
+            </Field>
+            <Field label="Intensity">
+              <PreciseNumberInput
+                aria-label="Light intensity"
+                value={light.intensity}
+                min={0}
+                onInteractionStart={() => pushUndo('edit light', '')}
+                onCommit={(n) => updateLight(subPartTemplateId, i, { intensity: n })}
+              />
+            </Field>
+            <div className="flex items-center gap-2">
+              <span className={RAD_LABEL}>Color</span>
+              <input
+                type="color"
+                aria-label="Light color"
+                className="h-6 w-6 shrink-0 cursor-pointer rounded border border-border bg-transparent"
+                value={rgb01ToHex(light.color)}
+                onPointerDown={() => pushUndo('edit light', '')}
+                onChange={(e) =>
+                  updateLight(subPartTemplateId, i, { color: hexToRgb01(e.target.value) })
+                }
+              />
+            </div>
+            {isSpot && (
+              <>
+                <Field label="Inner Angle (°, half-cone)">
+                  <PreciseNumberInput
+                    aria-label="Spot inner cone half-angle in degrees"
+                    value={light.innerAngleRad * RAD2DEG}
+                    min={0}
+                    max={90}
+                    onInteractionStart={() => pushUndo('edit light', '')}
+                    onCommit={(deg) =>
+                      updateLight(subPartTemplateId, i, { innerAngleRad: deg * DEG2RAD })
+                    }
+                  />
+                </Field>
+                <Field label="Outer Angle (°, half-cone)">
+                  <PreciseNumberInput
+                    aria-label="Spot outer cone half-angle in degrees"
+                    value={light.outerAngleRad * RAD2DEG}
+                    min={0}
+                    max={90}
+                    onInteractionStart={() => pushUndo('edit light', '')}
+                    onCommit={(deg) =>
+                      updateLight(subPartTemplateId, i, { outerAngleRad: deg * DEG2RAD })
+                    }
+                  />
+                </Field>
+              </>
+            )}
+            <Switch
+              isSelected={light.rayTracing}
+              onChange={(on) => setLightRayTracing(subPartTemplateId, i, on)}
+            >
+              Ray tracing (IVA only)
+            </Switch>
+          </ItemCard>
+        )
+      })}
+      <Button size="sm" onPress={() => addLight(subPartTemplateId)} className="self-start">
+        + Light
       </Button>
     </div>
   )

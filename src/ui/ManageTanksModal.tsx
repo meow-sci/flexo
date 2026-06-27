@@ -7,7 +7,7 @@ import {
   setSubPartSolarPanelOutput,
   setSubPartSolarPanelRotation,
 } from '../state/editorStore'
-import { SolarPanelsSection, TanksSection } from './GameDataSections'
+import { LightsSection, SolarPanelsSection, TanksSection } from './GameDataSections'
 
 interface Props {
   subPartTemplateId: string
@@ -20,6 +20,7 @@ export function ManageTanksModal({ subPartTemplateId, onClose }: Props) {
   const spd = part.subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
   const tanks = spd?.tanks ?? []
   const solarPanels = spd?.solarPanels ?? []
+  const lights = spd?.lights ?? []
 
   return (
     <Modal
@@ -34,6 +35,10 @@ export function ManageTanksModal({ subPartTemplateId, onClose }: Props) {
           <div className="flex flex-col gap-2">
             <SectionTitle>Tanks</SectionTitle>
             <TanksSection tanks={tanks} subPartTemplateId={subPartTemplateId} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <SectionTitle>Lights</SectionTitle>
+            <LightsSection lights={lights} subPartTemplateId={subPartTemplateId} />
           </div>
           <SolarPanelsSection
             solarPanels={solarPanels}

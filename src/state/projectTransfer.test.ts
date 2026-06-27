@@ -62,6 +62,7 @@ function sourcePart(): EditingPart {
     subPartTemplateId: 'Core.TrussBarA',
     tanks: [createTank()],
     solarPanels: [],
+    lights: [],
   })
   p.animations.push({
     id: 'anim_src1',

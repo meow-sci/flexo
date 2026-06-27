@@ -232,6 +232,44 @@ export interface PowerConsumer {
   consumedWatts: number
 }
 
+/**
+ * Light type. Mirrors KSA's `LightModule.TemplateData.LightType` (the only two
+ * values the engine's `ELightType` recognizes): an omnidirectional `Point` or a
+ * cone `Spot`. A Spot is aimed by its {@link Light.transform} rotation and adds
+ * the inner/outer cone angles.
+ */
+export type LightType = 'Spot' | 'Point'
+
+/**
+ * A light attached to a SubPart (multiple allowed). Mirrors KSA's
+ * `LightModule.TemplateData` (`<Light>` under `<SubPartGameData>`) field-for-field:
+ *  - `Type` → {@link type}
+ *  - `Transform` → {@link transform} (Position places the light; Rotation aims a
+ *    Spot's cone along its local +X. KSA ignores Scale for lights, so we never
+ *    emit it.)
+ *  - `Range`/`Intensity` → {@link rangeM}/{@link intensity}
+ *  - `Color` (R/G/B floats 0–1, no alpha) → {@link color}
+ *  - `InnerAngle`/`OuterAngle` (radians; Spot only) → {@link innerAngleRad}/{@link outerAngleRad}
+ *  - `RayTracing` (bool; only affects IVA ray tracing) → {@link rayTracing}
+ */
+export interface Light {
+  type: LightType
+  /** Local position (m) + aim rotation (Euler XYZ radians). Scale is unused by KSA lights. */
+  transform: Transform
+  /** Falloff distance in meters (<Range Value/>). */
+  rangeM: number
+  /** Brightness multiplier (<Intensity Value/>). */
+  intensity: number
+  /** RGB color, each channel 0–1 (<Color R G B/>; KSA lights carry no alpha). */
+  color: { r: number; g: number; b: number }
+  /** Spot inner-cone half-angle in radians (<InnerAngle Value/>). Spot only. */
+  innerAngleRad: number
+  /** Spot outer-cone half-angle in radians (<OuterAngle Value/>). Spot only; KSA clamps to ~90°. */
+  outerAngleRad: number
+  /** Ray-traced light (<RayTracing>true</RayTracing>); only meaningful for IVA ray tracing. */
+  rayTracing: boolean
+}
+
 /** Decoupler bound to a connector. Serialized as <Decoupler ConnectorId Force/>. */
 export interface Decoupler {
   connectorId: string
@@ -287,11 +325,12 @@ export interface SubPartGameData {
   subPartTemplateId: string
   tanks: Tank[]
   solarPanels: SolarPanel[]
+  lights: Light[]
 }
 
 /** True when a SubPart's data is empty and the entry can be pruned. */
 export function isSubPartGameDataEmpty(spd: SubPartGameData): boolean {
-  return spd.tanks.length === 0 && spd.solarPanels.length === 0
+  return spd.tanks.length === 0 && spd.solarPanels.length === 0 && spd.lights.length === 0
 }
 
 /** Default tank: 2 m cylinder, 0.5 m radius, 2 mm aluminium wall (matches TankState). */
@@ -308,6 +347,24 @@ export function createTank(): Tank {
 /** Default solar panel: 50 W, facing its local axis (identity orientation). */
 export function createSolarPanel(): SolarPanel {
   return { outputWatts: 50, transform: identityTransform() }
+}
+
+/**
+ * Default light: a white Spot matching KSA's canonical CoreElectricalA spotlight
+ * (range 5 m, intensity 10, 22.5°/45° inner/outer half-cone). Aimed along local +X
+ * (identity rotation); the user repositions/re-aims it from the SubPart Data dialog.
+ */
+export function createLight(): Light {
+  return {
+    type: 'Spot',
+    transform: identityTransform(),
+    rangeM: 5,
+    intensity: 10,
+    color: { r: 1, g: 1, b: 1 },
+    innerAngleRad: Math.PI / 8,
+    outerAngleRad: Math.PI / 4,
+    rayTracing: false,
+  }
 }
 
 /** An empty GameData block (no display name, default mass, no sub-items). */

@@ -170,6 +170,7 @@ function migratePart(part: EditingPart | undefined | null): void {
   }
   for (const spd of part.subPartGameData ?? []) {
     if (!Array.isArray(spd.solarPanels)) spd.solarPanels = []
+    if (!Array.isArray(spd.lights)) spd.lights = []
   }
   for (const c of part.connectors ?? []) {
     const legacy = c as Connector & { flags: unknown }

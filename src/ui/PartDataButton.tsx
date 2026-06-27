@@ -13,6 +13,7 @@ import {
 import { $part, pushUndo, setEditorTags, setPartId } from '../state/editorStore'
 import { EditorTagsField } from './EditorTagsField'
 import { CouplingSection, IdentityFields, MassSection, PowerSection } from './GameDataSections'
+import { GimbalsSection, PartGasGeneratorSection, RocketControllersSection } from './EngineSections'
 
 interface Props {
   isOpen?: boolean
@@ -38,6 +39,12 @@ export function PartDataButton({
     gameData.powerConsumers.length
   const couplingCount =
     (gameData.decoupler ? 1 : 0) + (gameData.dockingPort ? 1 : 0) + (gameData.evaDoor ? 1 : 0)
+  const engineCount =
+    gameData.rocketControllers.length +
+    gameData.gimbals.length +
+    gameData.rockets.length +
+    gameData.combustors.length +
+    gameData.nozzles.length
 
   return (
     <>
@@ -81,6 +88,22 @@ export function PartDataButton({
 
             <DisclosureSection title="Coupling" badge={couplingCount || ''} defaultExpanded>
               <CouplingSection part={part} />
+            </DisclosureSection>
+
+            <DisclosureSection title="Engine" badge={engineCount || ''}>
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
+                  <SectionTitle>Controllers</SectionTitle>
+                  <RocketControllersSection part={part} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <SectionTitle>Gimbals</SectionTitle>
+                  <GimbalsSection part={part} />
+                </div>
+                <DisclosureSection title="Gas generator (advanced, part-level rockets)">
+                  <PartGasGeneratorSection part={part} />
+                </DisclosureSection>
+              </div>
             </DisclosureSection>
           </div>
         </Dialog>

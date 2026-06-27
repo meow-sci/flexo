@@ -1,19 +1,27 @@
 import { DOMImplementation, XMLSerializer } from '@xmldom/xmldom'
 import type { Document as XmlDocument, Element as XmlElement } from '@xmldom/xmldom'
 import type {
+  Combustor,
   Connector,
   ConnectorFlag,
+  CustomCombustionProcess,
+  DeLavalNozzle,
   EditingPart,
   EulerXYZ,
+  Gimbal,
   Light,
   PartAnimation,
   PartGameData,
+  Rocket,
+  RocketController,
   SolarPanel,
+  SubPartIdRef,
   SubPartPlacement,
   Tank,
   Transform,
   Vec3,
 } from './types'
+import { isSubPartGameDataEmpty } from './types'
 import { formatG6 } from './formatG6'
 import { animGlbPath, animModuleId, isAnimationExportable } from './animationNaming'
 
@@ -162,10 +170,28 @@ export function serializeGameData(
     gd.appendChild(el)
   }
 
+  // Engine modules at the part level: controllers (what makes it fire), gas-generator
+  // rockets/combustors/nozzles, then per-instance gimbal overlays.
+  for (const controller of game.rocketControllers)
+    gd.appendChild(buildControllerElement(doc, controller))
+  for (const rocket of game.rockets) gd.appendChild(buildRocketElement(doc, rocket))
+  for (const combustor of game.combustors) gd.appendChild(buildCombustorElement(doc, combustor))
+  for (const nozzle of game.nozzles) gd.appendChild(buildNozzleElement(doc, nozzle))
+  for (const gimbal of game.gimbals) {
+    const el = buildGimbalSubPartElement(doc, gimbal)
+    if (el) gd.appendChild(el)
+  }
+
   assets.appendChild(gd)
 
+  // User-authored propellants — top-level <CombustionProcess> siblings of <PartGameData>
+  // (KSA registers them by Id; a combustor's <Combustion Id> resolves to one).
+  for (const process of part.customCombustionProcesses) {
+    assets.appendChild(buildCombustionProcessElement(doc, process))
+  }
+
   for (const spd of part.subPartGameData) {
-    if (spd.tanks.length === 0 && spd.solarPanels.length === 0 && spd.lights.length === 0) continue
+    if (isSubPartGameDataEmpty(spd)) continue
     const spdEl = doc.createElement('SubPartGameData')
     // Remap to the exported variant id so data keyed on an IVA template still applies.
     spdEl.setAttribute('Id', ivaRemap.get(spd.subPartTemplateId) ?? spd.subPartTemplateId)
@@ -176,6 +202,10 @@ export function serializeGameData(
     }
     for (const sp of spd.solarPanels) spdEl.appendChild(buildSolarPanelElement(doc, sp))
     for (const light of spd.lights) spdEl.appendChild(buildLightElement(doc, light))
+    // Reusable thrust-chamber modules that travel with this mesh.
+    for (const rocket of spd.rockets) spdEl.appendChild(buildRocketElement(doc, rocket))
+    for (const combustor of spd.combustors) spdEl.appendChild(buildCombustorElement(doc, combustor))
+    for (const nozzle of spd.nozzles) spdEl.appendChild(buildNozzleElement(doc, nozzle))
     assets.appendChild(spdEl)
   }
 
@@ -247,6 +277,182 @@ function buildLightElement(doc: XmlDocument, light: Light): XmlElement {
     const rt = doc.createElement('RayTracing')
     rt.appendChild(doc.createTextNode('true'))
     el.appendChild(rt)
+  }
+  return el
+}
+
+// --- Engine module builders ---
+
+/** Sets a SubPartIdReference's Id (+ SubPartId only when scoped to a specific instance). */
+function setRefAttrs(el: XmlElement, ref: SubPartIdRef): void {
+  el.setAttribute('Id', ref.id)
+  if (ref.subPartInstanceId) el.setAttribute('SubPartId', ref.subPartInstanceId)
+}
+
+/** A distance element emitted as `Cm` under 1 m (matching Core's small-nozzle style), else `M`. */
+function buildDistanceElement(doc: XmlDocument, name: string, meters: number): XmlElement {
+  return meters < 1
+    ? elWithAttr(doc, name, 'Cm', formatG6(meters * 100))
+    : elWithAttr(doc, name, 'M', formatG6(meters))
+}
+
+/** A point/direction vector emitted with all three axes, or null when equal to `def` within EPSILON. */
+function buildEngineVec3(doc: XmlDocument, name: string, v: Vec3, def: Vec3): XmlElement | null {
+  if (
+    Math.abs(v.x - def.x) <= EPSILON &&
+    Math.abs(v.y - def.y) <= EPSILON &&
+    Math.abs(v.z - def.z) <= EPSILON
+  ) {
+    return null
+  }
+  const el = doc.createElement(name)
+  el.setAttribute('X', formatG6(v.x))
+  el.setAttribute('Y', formatG6(v.y))
+  el.setAttribute('Z', formatG6(v.z))
+  return el
+}
+
+/** <Combustor Id><Combustion Id/><MaxPressure Bar/>… — omits efficiency/throttle at their defaults. */
+function buildCombustorElement(doc: XmlDocument, c: Combustor): XmlElement {
+  const el = doc.createElement('Combustor')
+  el.setAttribute('Id', c.id)
+  el.appendChild(elWithAttr(doc, 'Combustion', 'Id', c.combustionId))
+  // Stored SI Pa, emitted as Bar (Pa / 1e5) to match Core's authoring style.
+  el.appendChild(elWithAttr(doc, 'MaxPressure', 'Bar', formatG6(c.maxPressurePa / 1e5)))
+  if (Math.abs(c.thermalEfficiency - 1) > EPSILON) {
+    el.appendChild(elWithAttr(doc, 'ThermalEfficiency', 'Value', formatG6(c.thermalEfficiency)))
+  }
+  if (Math.abs(c.minimumThrottle - 1) > EPSILON) {
+    el.appendChild(elWithAttr(doc, 'MinimumThrottle', 'Value', formatG6(c.minimumThrottle)))
+  }
+  if (c.minimumPulseTimeS != null) {
+    el.appendChild(elWithAttr(doc, 'MinimumPulseTime', 'Seconds', formatG6(c.minimumPulseTimeS)))
+  }
+  return el
+}
+
+/** <DeLavalNozzle Id> with geometry, efficiencies, exhaust placement + plume/light/sound FX. */
+function buildNozzleElement(doc: XmlDocument, n: DeLavalNozzle): XmlElement {
+  const el = doc.createElement('DeLavalNozzle')
+  el.setAttribute('Id', n.id)
+  el.appendChild(buildDistanceElement(doc, 'ExitDiameter', n.exitDiameterM))
+  if (n.fxExitDiameterM != null) {
+    el.appendChild(buildDistanceElement(doc, 'FxExitDiameter', n.fxExitDiameterM))
+  }
+  el.appendChild(elWithAttr(doc, 'AreaRatio', 'Value', formatG6(n.areaRatio)))
+  if (Math.abs(n.flowEfficiency - 1) > EPSILON) {
+    el.appendChild(elWithAttr(doc, 'FlowEfficiency', 'Value', formatG6(n.flowEfficiency)))
+  }
+  if (Math.abs(n.expansionEfficiency - 1) > EPSILON) {
+    el.appendChild(elWithAttr(doc, 'ExpansionEfficiency', 'Value', formatG6(n.expansionEfficiency)))
+  }
+  const loc = buildEngineVec3(doc, 'ExhaustLocation', n.exhaustLocation, { x: 0, y: 0, z: 0 })
+  if (loc) el.appendChild(loc)
+  const dir = buildEngineVec3(doc, 'ExhaustDirection', n.exhaustDirection, { x: -1, y: 0, z: 0 })
+  if (dir) el.appendChild(dir)
+  if (n.fxExhaustLocation) {
+    const fl = buildEngineVec3(doc, 'FxExhaustLocation', n.fxExhaustLocation, {
+      x: NaN,
+      y: NaN,
+      z: NaN,
+    })
+    if (fl) el.appendChild(fl)
+  }
+  if (n.fxExhaustDirection) {
+    const fd = buildEngineVec3(doc, 'FxExhaustDirection', n.fxExhaustDirection, {
+      x: NaN,
+      y: NaN,
+      z: NaN,
+    })
+    if (fd) el.appendChild(fd)
+  }
+  if (n.volumetricExhaustId) {
+    el.appendChild(elWithAttr(doc, 'VolumetricExhaust', 'Id', n.volumetricExhaustId))
+  }
+  if (n.sound) {
+    const sound = doc.createElement('SoundEvent')
+    sound.setAttribute('Action', n.sound.action)
+    sound.setAttribute('SoundId', n.sound.soundId)
+    el.appendChild(sound)
+  }
+  // ExhaustLight defaults true — only emit the override when disabled.
+  if (!n.exhaustLight) el.appendChild(elWithAttr(doc, 'ExhaustLight', 'Value', 'false'))
+  return el
+}
+
+/** <Rocket Id><Core Id [SubPartId]/><Nozzle Id [SubPartId]/>…</Rocket>. */
+function buildRocketElement(doc: XmlDocument, r: Rocket): XmlElement {
+  const el = doc.createElement('Rocket')
+  el.setAttribute('Id', r.id)
+  const core = doc.createElement('Core')
+  setRefAttrs(core, r.core)
+  el.appendChild(core)
+  for (const nozzle of r.nozzles) {
+    const nz = doc.createElement('Nozzle')
+    setRefAttrs(nz, nozzle)
+    el.appendChild(nz)
+  }
+  return el
+}
+
+/** <RocketEngineController>/<RocketThrusterController> with its rocket references (+ ControlMap for RCS). */
+function buildControllerElement(doc: XmlDocument, c: RocketController): XmlElement {
+  const el = doc.createElement(
+    c.kind === 'thruster' ? 'RocketThrusterController' : 'RocketEngineController',
+  )
+  el.setAttribute('Id', c.id)
+  for (const ref of c.rocketRefs) {
+    const r = doc.createElement('RocketReference')
+    setRefAttrs(r, ref)
+    el.appendChild(r)
+  }
+  if (c.kind === 'thruster' && c.controlMapFlags && c.controlMapFlags.length > 0) {
+    el.appendChild(elWithAttr(doc, 'ControlMap', 'CSV', c.controlMapFlags.join(',')))
+  }
+  return el
+}
+
+/** <SubPart Id="instanceId"><Gimbal>…</Gimbal></SubPart>, or null for a fixed (0/0) gimbal. */
+function buildGimbalSubPartElement(doc: XmlDocument, g: Gimbal): XmlElement | null {
+  const hasY = Math.abs(g.maxAngleYDeg) > EPSILON
+  const hasZ = Math.abs(g.maxAngleZDeg) > EPSILON
+  // A 0/0 gimbal is a no-op in KSA; only emit when it actually actuates or constrains.
+  if (!hasY && !hasZ && g.constrainToCircle) return null
+  const sub = doc.createElement('SubPart')
+  sub.setAttribute('Id', g.subPartInstanceId)
+  const gimbal = doc.createElement('Gimbal')
+  if (hasY) gimbal.appendChild(elWithAttr(doc, 'MaxAngleY', 'Degrees', formatG6(g.maxAngleYDeg)))
+  if (hasZ) gimbal.appendChild(elWithAttr(doc, 'MaxAngleZ', 'Degrees', formatG6(g.maxAngleZDeg)))
+  // ConstrainToCircle defaults true — only emit the override when disabled.
+  if (!g.constrainToCircle)
+    gimbal.appendChild(elWithAttr(doc, 'ConstrainToCircle', 'Value', 'false'))
+  sub.appendChild(gimbal)
+  return sub
+}
+
+/** <CombustionProcess Id><Name/><Reactant…/><CombustionCondition>…</CombustionProcess> (custom propellant). */
+function buildCombustionProcessElement(
+  doc: XmlDocument,
+  process: CustomCombustionProcess,
+): XmlElement {
+  const el = doc.createElement('CombustionProcess')
+  el.setAttribute('Id', process.id)
+  if (process.name.trim() && process.name !== process.id) {
+    el.appendChild(elWithAttr(doc, 'Name', 'Value', process.name))
+  }
+  for (const r of process.reactants) {
+    const re = doc.createElement('Reactant')
+    re.setAttribute('Id', r.phaseId)
+    re.setAttribute('MassShare', formatG6(r.massShare))
+    el.appendChild(re)
+  }
+  for (const row of process.lut) {
+    const cond = doc.createElement('CombustionCondition')
+    cond.appendChild(elWithAttr(doc, 'LnPressure', 'Value', formatG6(row.lnPressure)))
+    cond.appendChild(elWithAttr(doc, 'Temperature', 'K', formatG6(row.temperatureK)))
+    cond.appendChild(elWithAttr(doc, 'Gamma', 'Value', formatG6(row.gamma)))
+    cond.appendChild(elWithAttr(doc, 'MolarMass', 'GPerMol', formatG6(row.molarMassGPerMol)))
+    el.appendChild(cond)
   }
   return el
 }

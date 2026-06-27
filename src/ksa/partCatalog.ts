@@ -19,13 +19,18 @@ import {
 import type {
   Battery,
   CatalogAnimationModule,
+  Combustor,
   Connector,
   ConnectorFlag,
   Decoupler,
+  DeLavalNozzle,
   DockingPort,
   EvaDoor,
   Generator,
+  Gimbal,
   PowerConsumer,
+  Rocket,
+  RocketController,
   SolarPanel,
   SubPartGameData,
   SubPartPlacement,
@@ -51,8 +56,14 @@ export interface CatalogPart {
   generators: Generator[]
   solarPanels: SolarPanel[]
   powerConsumers: PowerConsumer[]
-  /** Per-SubPart-template data (tanks / solar panels) for the SubParts this Part places. */
+  /** Per-SubPart-template data (tanks / solar panels / engine modules) for the SubParts this Part places. */
   subPartGameData: SubPartGameData[]
+  /** Part-level engine modules (controllers/rockets/combustors/nozzles/gimbals); instance refs in original id space. */
+  rocketControllers: RocketController[]
+  rockets: Rocket[]
+  combustors: Combustor[]
+  nozzles: DeLavalNozzle[]
+  gimbals: Gimbal[]
   /** Originating XML file (for debugging / grouping). */
   sourceFile: string
 }
@@ -81,6 +92,11 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
       solarPanels: [],
       powerConsumers: [],
       subPartGameData: [],
+      rocketControllers: [],
+      rockets: [],
+      combustors: [],
+      nozzles: [],
+      gimbals: [],
       sourceFile,
     })
   }
@@ -107,6 +123,12 @@ export interface PartGameData {
   generators: Generator[]
   solarPanels: SolarPanel[]
   powerConsumers: PowerConsumer[]
+  /** Part-level engine modules declared on this <PartGameData>. */
+  rocketControllers: RocketController[]
+  rockets: Rocket[]
+  combustors: Combustor[]
+  nozzles: DeLavalNozzle[]
+  gimbals: Gimbal[]
 }
 
 /** Parsed GameData for a whole file: per-Part data + per-SubPart-template data (keyed by template id). */
@@ -140,6 +162,11 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
       generators: [],
       solarPanels: [],
       powerConsumers: [],
+      rocketControllers: [],
+      rockets: [],
+      combustors: [],
+      nozzles: [],
+      gimbals: [],
     }
     for (const tag of parsed.editorTags) {
       if (!entry.editorTags.includes(tag)) entry.editorTags.push(tag)
@@ -153,6 +180,11 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
     entry.generators.push(...parsed.gameData.generators)
     entry.solarPanels.push(...parsed.gameData.solarPanels)
     entry.powerConsumers.push(...parsed.gameData.powerConsumers)
+    entry.rocketControllers.push(...parsed.gameData.rocketControllers)
+    entry.rockets.push(...parsed.gameData.rockets)
+    entry.combustors.push(...parsed.gameData.combustors)
+    entry.nozzles.push(...parsed.gameData.nozzles)
+    entry.gimbals.push(...parsed.gameData.gimbals)
     out.parts.set(id, entry)
   }
   for (const spd of subPartGameDataFromDoc(doc)) out.subParts.set(spd.subPartTemplateId, spd)
@@ -195,6 +227,11 @@ export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile
       part.generators = gd.generators
       part.solarPanels = gd.solarPanels
       part.powerConsumers = gd.powerConsumers
+      part.rocketControllers = gd.rocketControllers
+      part.rockets = gd.rockets
+      part.combustors = gd.combustors
+      part.nozzles = gd.nozzles
+      part.gimbals = gd.gimbals
     }
     // SubPart-template data is keyed globally by template id; carry only the entries
     // for templates this Part places (deduped — many instances share one template).

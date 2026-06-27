@@ -4,9 +4,12 @@ import type { Document as XmlDocument, Element as XmlElement } from '@xmldom/xml
 import { serializeGameData, serializePart } from './partXmlSerializer'
 import type { Connector, EditingPart, SubPartPlacement } from './types'
 import {
+  createCombustor,
   createDefaultLayer,
   createEmptyGameData,
   createLight,
+  createNozzle,
+  createSubPartGameData,
   identityTransform,
   createTank,
   DEFAULT_LAYER_ID,
@@ -42,6 +45,7 @@ function editingPart(over: Partial<EditingPart>): EditingPart {
     customTextures: [],
     customMeshes: [],
     animations: [],
+    customCombustionProcesses: [],
     ...over,
   }
 }
@@ -257,6 +261,9 @@ describe('serializeGameData', () => {
           },
           { ...createLight(), type: 'Point', rangeM: 2, intensity: 2 },
         ],
+        combustors: [],
+        nozzles: [],
+        rockets: [],
       },
     ],
     connectors: [
@@ -381,6 +388,176 @@ describe('serializeGameData', () => {
     expect(tags(bare, 'CustomMass').length).toBe(0)
     expect(tags(bare, 'SubPartGameData').length).toBe(0)
     expect(tags(bare, 'Decoupler').length).toBe(0)
+  })
+
+  // --- Engine modules ---
+
+  it('emits a reusable thrust chamber (Rocket/Combustor/DeLavalNozzle) under SubPartGameData', () => {
+    const TMPL = 'CorePropulsionA_Subpart_EngineALargeVacAssembly'
+    const enginePart = editingPart({
+      subPartGameData: [
+        {
+          ...createSubPartGameData(TMPL),
+          combustors: [
+            {
+              id: 'ThrustChamber',
+              combustionId: 'Hydrolox_5.5',
+              maxPressurePa: 4_900_000, // 49 bar
+              thermalEfficiency: 1, // default → omitted
+              minimumThrottle: 0.1, // non-default → emitted
+              minimumPulseTimeS: null,
+            },
+          ],
+          nozzles: [
+            {
+              id: 'Nozzle',
+              exitDiameterM: 2.5,
+              fxExitDiameterM: 1.439,
+              areaRatio: 49,
+              flowEfficiency: 1,
+              expansionEfficiency: 1,
+              exhaustLocation: { x: -1.23, y: 0, z: 0 },
+              exhaustDirection: { x: -1, y: 0, z: 0 }, // default → omitted
+              fxExhaustLocation: null,
+              fxExhaustDirection: null,
+              volumetricExhaustId: 'EngineALarge',
+              exhaustLight: true,
+              sound: { action: 'On', soundId: 'DefaultEngineSoundBehavior' },
+            },
+          ],
+          rockets: [
+            {
+              id: 'Engine',
+              core: { id: 'ThrustChamber', subPartInstanceId: null },
+              nozzles: [{ id: 'Nozzle', subPartInstanceId: null }],
+            },
+          ],
+        },
+      ],
+    })
+    const sdoc = parse(serializeGameData(enginePart))
+    const spd = tags(sdoc, 'SubPartGameData').find((e) => e.getAttribute('Id') === TMPL)!
+
+    const rocket = child(spd, 'Rocket')!
+    expect(rocket.getAttribute('Id')).toBe('Engine')
+    expect(child(rocket, 'Core')!.getAttribute('Id')).toBe('ThrustChamber')
+    expect(child(rocket, 'Core')!.hasAttribute('SubPartId')).toBe(false)
+    expect(child(rocket, 'Nozzle')!.getAttribute('Id')).toBe('Nozzle')
+
+    const comb = child(spd, 'Combustor')!
+    expect(child(comb, 'Combustion')!.getAttribute('Id')).toBe('Hydrolox_5.5')
+    expect(child(comb, 'MaxPressure')!.getAttribute('Bar')).toBe('49')
+    expect(child(comb, 'ThermalEfficiency')).toBeNull() // default 1 omitted
+    expect(child(comb, 'MinimumThrottle')!.getAttribute('Value')).toBe('0.1')
+
+    const noz = child(spd, 'DeLavalNozzle')!
+    expect(child(noz, 'ExitDiameter')!.getAttribute('M')).toBe('2.5')
+    expect(child(noz, 'FxExitDiameter')!.getAttribute('M')).toBe('1.439')
+    expect(child(noz, 'AreaRatio')!.getAttribute('Value')).toBe('49')
+    expect(child(noz, 'FlowEfficiency')).toBeNull() // default 1 omitted
+    expect(child(noz, 'ExhaustLocation')!.getAttribute('X')).toBe('-1.23')
+    expect(child(noz, 'ExhaustDirection')).toBeNull() // default (-1,0,0) omitted
+    expect(child(noz, 'VolumetricExhaust')!.getAttribute('Id')).toBe('EngineALarge')
+    expect(child(noz, 'SoundEvent')!.getAttribute('SoundId')).toBe('DefaultEngineSoundBehavior')
+    expect(child(noz, 'ExhaustLight')).toBeNull() // default true omitted
+  })
+
+  it('emits a small nozzle diameter as Cm (under 1 m)', () => {
+    const part2 = editingPart({
+      subPartGameData: [
+        {
+          ...createSubPartGameData('T'),
+          nozzles: [{ ...createNozzle('N'), exitDiameterM: 0.268, exhaustLight: false }],
+        },
+      ],
+    })
+    const sdoc = parse(serializeGameData(part2))
+    const noz = tags(sdoc, 'DeLavalNozzle')[0]
+    expect(child(noz, 'ExitDiameter')!.getAttribute('Cm')).toBe('26.8')
+    expect(child(noz, 'ExitDiameter')!.hasAttribute('M')).toBe(false)
+    // ExhaustLight only emitted when disabled.
+    expect(child(noz, 'ExhaustLight')!.getAttribute('Value')).toBe('false')
+  })
+
+  it('emits the part-level controller, gas-generator, and gimbal overlays', () => {
+    const enginePart = editingPart({
+      gameData: {
+        ...createEmptyGameData(),
+        rocketControllers: [
+          {
+            id: 'LR91-AJ-3',
+            kind: 'engine',
+            rocketRefs: [
+              {
+                id: 'Engine',
+                subPartInstanceId: 'CorePropulsionA_Subpart_EngineALargeVacAssembly2',
+              },
+              { id: 'GasGenerator', subPartInstanceId: null },
+            ],
+            controlMapFlags: null,
+          },
+        ],
+        rockets: [
+          {
+            id: 'GasGenerator',
+            core: { id: 'GasGeneratorChamber', subPartInstanceId: null },
+            nozzles: [{ id: 'TurbineExhaustNozzle', subPartInstanceId: 'turbo_2' }],
+          },
+        ],
+        combustors: [createCombustor('GasGeneratorChamber')],
+        gimbals: [
+          {
+            subPartInstanceId: 'asm_2',
+            maxAngleYDeg: 5,
+            maxAngleZDeg: 5,
+            constrainToCircle: false,
+          },
+          {
+            subPartInstanceId: 'turbo_2',
+            maxAngleYDeg: 70,
+            maxAngleZDeg: 0,
+            constrainToCircle: true,
+          },
+        ],
+      },
+    })
+    const sdoc = parse(serializeGameData(enginePart))
+
+    const ctrl = tags(sdoc, 'RocketEngineController')[0]
+    expect(ctrl.getAttribute('Id')).toBe('LR91-AJ-3')
+    const refs = tags(ctrl, 'RocketReference')
+    expect(refs[0].getAttribute('SubPartId')).toBe(
+      'CorePropulsionA_Subpart_EngineALargeVacAssembly2',
+    )
+    expect(refs[1].hasAttribute('SubPartId')).toBe(false) // root-part rocket ref
+
+    // Gas-generator nozzle ref carries its SubPart instance.
+    const ggNozzle = child(tags(sdoc, 'Rocket')[0], 'Nozzle')!
+    expect(ggNozzle.getAttribute('SubPartId')).toBe('turbo_2')
+
+    // Two gimbal overlays under <SubPart Id=instance>; the actuating-Y-only one omits Z.
+    const subPartOverlays = tags(sdoc, 'SubPart').filter((s) => child(s, 'Gimbal'))
+    expect(subPartOverlays.map((s) => s.getAttribute('Id'))).toEqual(['asm_2', 'turbo_2'])
+    const asmGimbal = child(subPartOverlays[0], 'Gimbal')!
+    expect(child(asmGimbal, 'MaxAngleY')!.getAttribute('Degrees')).toBe('5')
+    expect(child(asmGimbal, 'ConstrainToCircle')!.getAttribute('Value')).toBe('false')
+    const turboGimbal = child(subPartOverlays[1], 'Gimbal')!
+    expect(child(turboGimbal, 'MaxAngleY')!.getAttribute('Degrees')).toBe('70')
+    expect(child(turboGimbal, 'MaxAngleZ')).toBeNull() // 0 → omitted
+    expect(child(turboGimbal, 'ConstrainToCircle')).toBeNull() // default true → omitted
+  })
+
+  it('does not emit a fixed (0/0) gimbal overlay', () => {
+    const part2 = editingPart({
+      gameData: {
+        ...createEmptyGameData(),
+        gimbals: [
+          { subPartInstanceId: 'x', maxAngleYDeg: 0, maxAngleZDeg: 0, constrainToCircle: true },
+        ],
+      },
+    })
+    const sdoc = parse(serializeGameData(part2))
+    expect(tags(sdoc, 'Gimbal').length).toBe(0)
   })
 
   // Kittens are editor-only visual aides — they must never leak into export.

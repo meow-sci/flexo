@@ -60,11 +60,33 @@ function sourcePart(): EditingPart {
   p.gameData.batteries.push({ capacityWh: 5 })
   p.gameData.solarPanels.push({ outputWatts: 80, transform: identityTransform() })
   p.gameData.decoupler = { connectorId: '_connector1', force: 1000 }
+  // Engine modules whose SubPart-instance refs (→ trussbara_2) must be remapped on import.
+  p.gameData.rocketControllers.push({
+    id: 'Engine1',
+    kind: 'engine',
+    rocketRefs: [{ id: 'Engine', subPartInstanceId: 'trussbara_2' }],
+    controlMapFlags: null,
+  })
+  p.gameData.gimbals.push({
+    subPartInstanceId: 'trussbara_2',
+    maxAngleYDeg: 3,
+    maxAngleZDeg: 3,
+    constrainToCircle: false,
+  })
+  p.customCombustionProcesses.push({
+    id: 'MyKerolox_2.6',
+    name: 'Custom Kerolox',
+    reactants: [{ phaseId: 'Kerosene(l)', massShare: 1 }],
+    lut: [{ lnPressure: 9.5, temperatureK: 3200, gamma: 1.22, molarMassGPerMol: 22.4 }],
+  })
   p.subPartGameData.push({
     subPartTemplateId: 'Core.TrussBarA',
     tanks: [createTank()],
     solarPanels: [],
     lights: [],
+    combustors: [],
+    nozzles: [],
+    rockets: [],
   })
   p.animations.push({
     id: 'anim_src1',
@@ -232,6 +254,10 @@ describe('mergeProjectImport into an empty project', () => {
     expect(part.gameData.batteries).toHaveLength(1)
     expect(part.gameData.decoupler?.connectorId).toBe(part.connectors[0].id)
     expect(part.subPartGameData).toHaveLength(1)
+    // The custom propellant + engine controller/gimbal are carried in.
+    expect(part.customCombustionProcesses.map((c) => c.id)).toEqual(['MyKerolox_2.6'])
+    expect(part.gameData.rocketControllers).toHaveLength(1)
+    expect(part.gameData.gimbals).toHaveLength(1)
   })
 })
 
@@ -267,6 +293,10 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
     expect(part.gameData.customMass).toBe(99)
     expect(part.gameData.batteries).toHaveLength(1)
     expect(part.connectors.map((c) => c.id)).toContain(part.gameData.decoupler?.connectorId)
+
+    // Engine controller + gimbal refs that targeted 'trussbara_2' follow it to 'trussbara_3'.
+    expect(part.gameData.rocketControllers[0].rocketRefs[0].subPartInstanceId).toBe('trussbara_3')
+    expect(part.gameData.gimbals[0].subPartInstanceId).toBe('trussbara_3')
   })
 
   it('skips a coupling whose connector was not imported', () => {

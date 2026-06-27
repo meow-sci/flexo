@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import { DOMParser } from '@xmldom/xmldom'
 import { mergeGameData, parseGameDataFile, parsePartsFile, type CatalogPart } from './partCatalog'
+import { hasKsaAssets, ksaAsset } from './ksaTestAssets'
 
 function parse(xml: string): Document {
   return new DOMParser().parseFromString(xml, 'application/xml') as unknown as Document
@@ -102,6 +104,83 @@ describe('parseGameDataFile + mergeGameData', () => {
     expect(parts[0].subPartGameData[0].solarPanels[0].outputWatts).toBe(50)
     expect(parts[0].subPartGameData[0].solarPanels[0].transform.rotation.y).toBeCloseTo(1.5708, 4)
   })
+
+  it('merges a part-level controller + gimbal and the SubPart thrust chamber onto an engine part', () => {
+    const parts: CatalogPart[] = []
+    parsePartsFile(
+      parse(`<Assets><Part Id="Eng">
+        <SubPart Id="chamber_1" InstanceOf="ThrustChamberMesh" />
+      </Part></Assets>`),
+      'CorePropulsionAAssets.xml',
+      parts,
+    )
+    const gameData = emptyGameData()
+    parseGameDataFile(
+      parse(`<Assets>
+        <PartGameData Id="Eng">
+          <EditorTag Value="Engines" />
+          <RocketEngineController Id="MyEngine">
+            <RocketReference Id="Engine" SubPartId="chamber_1" />
+          </RocketEngineController>
+          <SubPart Id="chamber_1"><Gimbal><MaxAngleY Degrees="5" /></Gimbal></SubPart>
+        </PartGameData>
+        <SubPartGameData Id="ThrustChamberMesh">
+          <Rocket Id="Engine"><Core Id="ThrustChamber" /><Nozzle Id="Nozzle" /></Rocket>
+          <Combustor Id="ThrustChamber"><Combustion Id="Hydrolox_5.5" /><MaxPressure Bar="49" /></Combustor>
+          <DeLavalNozzle Id="Nozzle"><AreaRatio Value="49" /><ExitDiameter M="2.5" /></DeLavalNozzle>
+        </SubPartGameData>
+      </Assets>`),
+      gameData,
+    )
+    mergeGameData(parts, gameData)
+
+    expect(parts[0].rocketControllers[0].id).toBe('MyEngine')
+    expect(parts[0].rocketControllers[0].rocketRefs[0].subPartInstanceId).toBe('chamber_1')
+    expect(parts[0].gimbals[0].maxAngleYDeg).toBe(5)
+    const spd = parts[0].subPartGameData.find((s) => s.subPartTemplateId === 'ThrustChamberMesh')!
+    expect(spd.combustors[0].combustionId).toBe('Hydrolox_5.5')
+    expect(spd.nozzles[0].areaRatio).toBe(49)
+    expect(spd.rockets[0].core.id).toBe('ThrustChamber')
+  })
+
+  it.runIf(hasKsaAssets)(
+    'imports the real LR91 Vac engine (controller + gimbals + thrust chamber)',
+    () => {
+      const parts: CatalogPart[] = []
+      parsePartsFile(
+        parse(readFileSync(ksaAsset('CorePropulsionAAssets.xml'), 'utf-8')),
+        'CorePropulsionAAssets.xml',
+        parts,
+      )
+      const gameData = emptyGameData()
+      parseGameDataFile(
+        parse(readFileSync(ksaAsset('CorePropulsionAGameData.xml'), 'utf-8')),
+        gameData,
+      )
+      mergeGameData(parts, gameData)
+
+      const lr91 = parts.find((p) => p.id === 'CorePropulsionA_Prefab_EngineA3')!
+      expect(lr91).toBeTruthy()
+      expect(lr91.editorTags).toContain('Engines')
+      // The engine controller drives the main Engine rocket + the gas-generator.
+      expect(lr91.rocketControllers[0].id).toBe('LR91-AJ-3')
+      expect(lr91.rocketControllers[0].rocketRefs.map((r) => r.id)).toEqual([
+        'Engine',
+        'GasGenerator',
+      ])
+      // The gas-generator is a part-level rocket + combustor.
+      expect(lr91.rockets.find((r) => r.id === 'GasGenerator')).toBeTruthy()
+      expect(lr91.combustors.find((c) => c.id === 'GasGeneratorChamber')).toBeTruthy()
+      // Two gimbals (main chamber ±2°, turbine exhaust 70° Y).
+      expect(lr91.gimbals.length).toBeGreaterThanOrEqual(2)
+      // The reusable thrust chamber's modules ride along via the placed SubPart's data.
+      const chamber = lr91.subPartGameData.find(
+        (s) => s.subPartTemplateId === 'CorePropulsionA_Subpart_EngineALargeVacAssembly',
+      )!
+      expect(chamber.combustors[0].combustionId).toBe('Hydrolox_5.5')
+      expect(chamber.nozzles[0].volumetricExhaustId).toBe('EngineALarge')
+    },
+  )
 
   it('ignores unknown / None flags and connectors with no geometry counterpart', () => {
     const parts: CatalogPart[] = []

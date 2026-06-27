@@ -198,6 +198,11 @@ describe('editorStore', () => {
         solarPanels: [],
         powerConsumers: [],
         subPartGameData: [],
+        rocketControllers: [],
+        rockets: [],
+        combustors: [],
+        nozzles: [],
+        gimbals: [],
       },
     )
     const dp = $part.get().gameData.dockingPort

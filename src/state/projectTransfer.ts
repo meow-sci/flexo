@@ -1,5 +1,6 @@
 import type {
   Connector,
+  CustomCombustionProcess,
   CustomMesh,
   EditingPart,
   KittenInstance,
@@ -7,7 +8,9 @@ import type {
   Layer,
   PartAnimation,
   PartGameData,
+  Rocket,
   SubPartGameData,
+  SubPartIdRef,
   SubPartPlacement,
   Vec3,
 } from '../ksa/types'
@@ -18,6 +21,7 @@ import {
   createConnectorLayer,
   createDefaultLayer,
   createKittenLayer,
+  createSubPartGameData,
 } from '../ksa/types'
 import { randomId } from './ids'
 import {
@@ -61,6 +65,8 @@ export interface ProjectExportData {
   animations: PartAnimation[]
   /** Part-ified kitten meshes only (descriptors referencing game assets — no binaries). */
   customMeshes: CustomMesh[]
+  /** User-authored combustion processes (custom propellants — pure data). */
+  customCombustionProcesses: CustomCombustionProcess[]
 }
 
 /** A versioned export envelope. `sourcePartId` is informational — never applied on import. */
@@ -126,6 +132,7 @@ export function buildProjectExport(part: EditingPart, projectName: string): Proj
       kittens: part.kittens,
       animations: part.animations,
       customMeshes: part.customMeshes.filter(isKittenMesh),
+      customCombustionProcesses: part.customCombustionProcesses,
     }),
   }
 }
@@ -191,6 +198,7 @@ export function envelopeToPart(env: ProjectExportEnvelope): EditingPart {
     customTextures: [],
     customMeshes: d.customMeshes,
     animations: d.animations,
+    customCombustionProcesses: d.customCombustionProcesses ?? [],
   }
   ensureBuiltInLayers(part)
   return part
@@ -305,21 +313,37 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
     if (!part.editorTags.includes(tag)) part.editorTags.push(tag)
   }
 
-  mergeGameData(part.gameData, data.gameData, connectorIdMap)
+  mergeGameData(part.gameData, data.gameData, connectorIdMap, instanceIdMap)
 
-  // Per-SubPart tanks + solar panels: append to an existing template entry, else add
-  // the entry. Repoint the template id if it names an imported custom mesh.
+  // Per-SubPart tanks / solar panels / engine modules: append to an existing template
+  // entry, else add the entry. Repoint the template id if it names an imported custom
+  // mesh; remap any rocket SubPart-instance refs onto the freshly-generated ids.
   for (const sg of data.subPartGameData) {
     const templateId = mapTemplateId(sg.subPartTemplateId)
     const tanks = (sg.tanks ?? []).map((t) => ({ ...t }))
     const solarPanels = (sg.solarPanels ?? []).map((sp) => structuredClone(sp))
     const lights = (sg.lights ?? []).map((l) => structuredClone(l))
+    const combustors = (sg.combustors ?? []).map((c) => ({ ...c }))
+    const nozzles = (sg.nozzles ?? []).map((n) => structuredClone(n))
+    const rockets = (sg.rockets ?? []).map((r) => remapRocket(r, instanceIdMap))
     const existing = part.subPartGameData.find((x) => x.subPartTemplateId === templateId)
     if (existing) {
       existing.tanks.push(...tanks)
       existing.solarPanels.push(...solarPanels)
       existing.lights.push(...lights)
-    } else part.subPartGameData.push({ subPartTemplateId: templateId, tanks, solarPanels, lights })
+      existing.combustors.push(...combustors)
+      existing.nozzles.push(...nozzles)
+      existing.rockets.push(...rockets)
+    } else {
+      const entry = createSubPartGameData(templateId)
+      entry.tanks = tanks
+      entry.solarPanels = solarPanels
+      entry.lights = lights
+      entry.combustors = combustors
+      entry.nozzles = nozzles
+      entry.rockets = rockets
+      part.subPartGameData.push(entry)
+    }
   }
 
   // Animations: fresh id (so re-pasting the same export can't collide), members +
@@ -345,6 +369,14 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
     part.animations.push(anim)
   }
 
+  // Custom propellants are pure data with no instance refs: add those the project
+  // doesn't already have (by id), so a combustor referencing one keeps resolving.
+  for (const cp of data.customCombustionProcesses ?? []) {
+    if (!part.customCombustionProcesses.some((p) => p.id === cp.id)) {
+      part.customCombustionProcesses.push(structuredClone(cp))
+    }
+  }
+
   return {
     part,
     summary: {
@@ -362,6 +394,7 @@ function mergeGameData(
   target: PartGameData,
   src: PartGameData,
   connectorIdMap: Map<string, string>,
+  instanceIdMap: Map<string, string>,
 ): void {
   if (!target.displayName.trim() && src.displayName?.trim()) target.displayName = src.displayName
   if (target.customMass == null && src.customMass != null) target.customMass = src.customMass
@@ -385,6 +418,38 @@ function mergeGameData(
   if (target.evaDoor == null && src.evaDoor) {
     const id = connectorIdMap.get(src.evaDoor.connectorId)
     if (id) target.evaDoor = { connectorId: id }
+  }
+  // Engine modules: append with every SubPart-instance reference remapped to the
+  // freshly-generated instance ids (mirrors applyImportedGameData in editorStore).
+  target.rocketControllers.push(
+    ...(src.rocketControllers ?? []).map((c) => ({
+      ...c,
+      rocketRefs: c.rocketRefs.map((r) => remapRef(r, instanceIdMap)),
+    })),
+  )
+  target.rockets.push(...(src.rockets ?? []).map((r) => remapRocket(r, instanceIdMap)))
+  target.combustors.push(...(src.combustors ?? []).map((c) => ({ ...c })))
+  target.nozzles.push(...(src.nozzles ?? []).map((n) => structuredClone(n)))
+  target.gimbals.push(
+    ...(src.gimbals ?? []).map((g) => ({
+      ...g,
+      subPartInstanceId: instanceIdMap.get(g.subPartInstanceId) ?? g.subPartInstanceId,
+    })),
+  )
+}
+
+/** Remaps a module→SubPart-instance ref through the import id map (null ⇒ root, unchanged). */
+function remapRef(ref: SubPartIdRef, map: Map<string, string>): SubPartIdRef {
+  if (!ref.subPartInstanceId) return { id: ref.id, subPartInstanceId: ref.subPartInstanceId }
+  return { id: ref.id, subPartInstanceId: map.get(ref.subPartInstanceId) ?? ref.subPartInstanceId }
+}
+
+/** Remaps a rocket's core + nozzle SubPart-instance refs through the import id map. */
+function remapRocket(rocket: Rocket, map: Map<string, string>): Rocket {
+  return {
+    id: rocket.id,
+    core: remapRef(rocket.core, map),
+    nozzles: rocket.nozzles.map((n) => remapRef(n, map)),
   }
 }
 

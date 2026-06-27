@@ -81,6 +81,34 @@ function richPart(): EditingPart {
   p.gameData.dockingPort = { connectorId: '_connector1', latchingImpulse: 50, pushoffForce: 25 }
   p.gameData.evaDoor = { connectorId: '_connector1' }
 
+  // Part-level engine modules: a controller, a gas-generator rocket+combustor, gimbals.
+  p.gameData.rocketControllers.push({
+    id: 'LR91-AJ-3',
+    kind: 'engine',
+    rocketRefs: [
+      { id: 'Engine', subPartInstanceId: 'wing_1' },
+      { id: 'GasGenerator', subPartInstanceId: null },
+    ],
+    controlMapFlags: null,
+  })
+  p.gameData.rockets.push({
+    id: 'GasGenerator',
+    core: { id: 'GasGeneratorChamber', subPartInstanceId: null },
+    nozzles: [{ id: 'TurbineExhaustNozzle', subPartInstanceId: 'wing_1' }],
+  })
+  p.gameData.combustors.push({
+    id: 'GasGeneratorChamber',
+    combustionId: 'Hydrolox_5.5',
+    maxPressurePa: 4900000,
+    thermalEfficiency: 0.95,
+    minimumThrottle: 1,
+    minimumPulseTimeS: null,
+  })
+  p.gameData.gimbals.push(
+    { subPartInstanceId: 'wing_1', maxAngleYDeg: 5, maxAngleZDeg: 5, constrainToCircle: false },
+    { subPartInstanceId: 'truss_1', maxAngleYDeg: 70, maxAngleZDeg: 0, constrainToCircle: true },
+  )
+
   p.subPartGameData.push({
     subPartTemplateId: 'Core.Wing',
     tanks: [
@@ -120,6 +148,41 @@ function richPart(): EditingPart {
         innerAngleRad: 0,
         outerAngleRad: 0,
         rayTracing: true,
+      },
+    ],
+    // Reusable thrust chamber: combustor + nozzle (all FX fields) + rocket binding.
+    combustors: [
+      {
+        id: 'ThrustChamber',
+        combustionId: 'Hydrolox_5.5',
+        maxPressurePa: 4900000,
+        thermalEfficiency: 1,
+        minimumThrottle: 0.1,
+        minimumPulseTimeS: 0.008,
+      },
+    ],
+    nozzles: [
+      {
+        id: 'Nozzle',
+        exitDiameterM: 2.5,
+        fxExitDiameterM: 1.439,
+        areaRatio: 49,
+        flowEfficiency: 0.98,
+        expansionEfficiency: 0.97,
+        exhaustLocation: { x: -1.23, y: 0, z: 0 },
+        exhaustDirection: { x: -1, y: 0, z: 0 },
+        fxExhaustLocation: { x: -1.3, y: 0, z: 0 },
+        fxExhaustDirection: { x: -0.5, y: 0.5, z: 0 },
+        volumetricExhaustId: 'EngineALarge',
+        exhaustLight: false,
+        sound: { action: 'On', soundId: 'DefaultEngineSoundBehavior' },
+      },
+    ],
+    rockets: [
+      {
+        id: 'Engine',
+        core: { id: 'ThrustChamber', subPartInstanceId: null },
+        nozzles: [{ id: 'Nozzle', subPartInstanceId: null }],
       },
     ],
   })
@@ -174,6 +237,20 @@ function richPart(): EditingPart {
       subPartInstanceId: 'wing_1',
       excludeInstanceIds: ['truss_1'],
     },
+  })
+
+  // A custom propellant (numbers pre-rounded to ≤6 decimals so encode is lossless).
+  p.customCombustionProcesses.push({
+    id: 'MyKerolox_2.6',
+    name: 'Custom Kerolox',
+    reactants: [
+      { phaseId: 'Kerosene(l)', massShare: 1 },
+      { phaseId: 'O2(l)', massShare: 2.6 },
+    ],
+    lut: [
+      { lnPressure: 9.5, temperatureK: 3200, gamma: 1.22, molarMassGPerMol: 22.4 },
+      { lnPressure: 15.4, temperatureK: 3650, gamma: 1.15, molarMassGPerMol: 23.1 },
+    ],
   })
 
   return p

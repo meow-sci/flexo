@@ -80,8 +80,8 @@ function hexToRgb01(hex: string): { r: number; g: number; b: number } {
 
 const RAD_LABEL = 'text-xs text-fg-subtle'
 
-/** A label above a control (stacks cleanly on narrow/mobile widths). */
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+/** A label above a control (stacks cleanly on narrow/mobile widths). Shared with EngineSections. */
+export function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1">
       <span className={RAD_LABEL}>{label}</span>
@@ -90,8 +90,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-/** A removable card wrapping one list item's fields (tank, battery, …). */
-function ItemCard({
+/** A removable card wrapping one list item's fields (tank, battery, …). Shared with EngineSections. */
+export function ItemCard({
   title,
   onRemove,
   children,

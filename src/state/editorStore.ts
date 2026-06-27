@@ -2,22 +2,30 @@ import { atom, computed } from 'nanostores'
 import { persistentJSON } from '@nanostores/persistent'
 import type {
   Battery,
+  Combustor,
   Connector,
   ConnectorFlag,
+  CustomCombustionProcess,
   Decoupler,
+  DeLavalNozzle,
   DockingPort,
   EditingPart,
   EulerXYZ,
   EvaDoor,
   Generator,
+  Gimbal,
   KittenKind,
   Light,
   LightType,
   PartAnimation,
   PartGameData,
   PowerConsumer,
+  Rocket,
+  RocketController,
+  RocketControllerKind,
   SolarPanel,
   SubPartGameData,
+  SubPartIdRef,
   SubPartPlacement,
   Tank,
   TankShape,
@@ -26,9 +34,15 @@ import type {
 import {
   BUILT_IN_LAYER_IDS,
   CONNECTOR_LAYER_ID,
+  createCombustor,
   createEmptyPart,
+  createGimbal,
   createLight,
+  createNozzle,
+  createRocket,
+  createRocketController,
   createSolarPanel,
+  createSubPartGameData,
   createTank,
   DEFAULT_LAYER_ID,
   isSubPartGameDataEmpty,
@@ -479,8 +493,32 @@ export interface ImportedGameData {
   generators: Generator[]
   solarPanels: SolarPanel[]
   powerConsumers: PowerConsumer[]
-  /** Per-SubPart-template data (tanks / solar panels) for the imported SubParts. */
+  /** Per-SubPart-template data (tanks / solar panels / engine modules) for the imported SubParts. */
   subPartGameData: SubPartGameData[]
+  /** Part-level engine modules (controllers/rockets/combustors/nozzles/gimbals); instance refs in the source id space. */
+  rocketControllers: RocketController[]
+  rockets: Rocket[]
+  combustors: Combustor[]
+  nozzles: DeLavalNozzle[]
+  gimbals: Gimbal[]
+}
+
+/** Remaps a module→SubPart-instance reference through the import id map (null ⇒ root part, unchanged). */
+function remapSubPartRef(ref: SubPartIdRef, idMap: ReadonlyMap<string, string>): SubPartIdRef {
+  if (!ref.subPartInstanceId) return { id: ref.id, subPartInstanceId: ref.subPartInstanceId }
+  return {
+    id: ref.id,
+    subPartInstanceId: idMap.get(ref.subPartInstanceId) ?? ref.subPartInstanceId,
+  }
+}
+
+/** Remaps a rocket's core + nozzle SubPart-instance references through the import id map. */
+function remapRocket(rocket: Rocket, idMap: ReadonlyMap<string, string>): Rocket {
+  return {
+    id: rocket.id,
+    core: remapSubPartRef(rocket.core, idMap),
+    nozzles: rocket.nozzles.map((n) => remapSubPartRef(n, idMap)),
+  }
 }
 
 /**
@@ -497,6 +535,7 @@ function applyImportedGameData(
   target: EditingPart,
   src: ImportedGameData,
   connectorIdMap: ReadonlyMap<string, string>,
+  idMap: ReadonlyMap<string, string>,
 ): void {
   const game = target.gameData
   if (game.decoupler == null && src.decoupler) {
@@ -517,9 +556,30 @@ function applyImportedGameData(
   game.powerConsumers.push(...src.powerConsumers)
   for (const spd of src.subPartGameData) {
     if (!target.subPartGameData.some((s) => s.subPartTemplateId === spd.subPartTemplateId)) {
-      target.subPartGameData.push(spd)
+      // Per-subpart rockets can reference sibling instances — remap those refs too.
+      target.subPartGameData.push({
+        ...spd,
+        rockets: spd.rockets.map((r) => remapRocket(r, idMap)),
+      })
     }
   }
+  // Engine modules are lists: append, remapping every SubPart-instance reference from
+  // the source id space onto the freshly-generated instance ids (the bug-prone bit).
+  game.rocketControllers.push(
+    ...src.rocketControllers.map((c) => ({
+      ...c,
+      rocketRefs: c.rocketRefs.map((r) => remapSubPartRef(r, idMap)),
+    })),
+  )
+  game.rockets.push(...src.rockets.map((r) => remapRocket(r, idMap)))
+  game.combustors.push(...src.combustors)
+  game.nozzles.push(...src.nozzles)
+  game.gimbals.push(
+    ...src.gimbals.map((gimbal) => ({
+      ...gimbal,
+      subPartInstanceId: idMap.get(gimbal.subPartInstanceId) ?? gimbal.subPartInstanceId,
+    })),
+  )
 }
 
 /**
@@ -611,7 +671,7 @@ export function addPart(
       layerId: CONNECTOR_LAYER_ID, // connectors always live in the Connectors layer
     })
   }
-  if (imported) applyImportedGameData(part, imported, connectorIdMap)
+  if (imported) applyImportedGameData(part, imported, connectorIdMap, idMap)
   $part.set(part)
   // Select exactly the imported SubParts (not any pre-existing ones on the layer);
   // for a connectors-only import, fall back to selecting the last connector.
@@ -1357,7 +1417,7 @@ export function setCustomMass(massKg: number): void {
 function getOrCreateSubPartData(part: EditingPart, subPartTemplateId: string): SubPartGameData {
   let spd = part.subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
   if (!spd) {
-    spd = { subPartTemplateId, tanks: [], solarPanels: [], lights: [] }
+    spd = createSubPartGameData(subPartTemplateId)
     part.subPartGameData.push(spd)
   }
   return spd
@@ -1519,6 +1579,141 @@ export function setLightRotation(
   })
 }
 
+// --- Engine modules (per SubPart template): combustor / nozzle / rocket ---
+//
+// These travel with the mesh (a reusable thrust chamber). The controller + gimbals
+// that make them fire live on the part-level GameData below. Module ids are KSA-facing
+// and cross-referenced, so new ones get a readable, scope-unique id.
+
+/** Returns `base`, else `base2`, `base3`, … — the first not already in `taken`. */
+function uniqueModuleId(base: string, taken: Iterable<string>): string {
+  const set = new Set(taken)
+  if (!set.has(base)) return base
+  let n = 2
+  while (set.has(`${base}${n}`)) n++
+  return `${base}${n}`
+}
+
+/** All engine-module ids currently in use across the part (so new ids never collide). */
+function allEngineModuleIds(part: EditingPart): {
+  combustors: string[]
+  nozzles: string[]
+  rockets: string[]
+  controllers: string[]
+} {
+  const combustors: string[] = []
+  const nozzles: string[] = []
+  const rockets: string[] = []
+  for (const spd of part.subPartGameData) {
+    for (const c of spd.combustors) combustors.push(c.id)
+    for (const noz of spd.nozzles) nozzles.push(noz.id)
+    for (const r of spd.rockets) rockets.push(r.id)
+  }
+  for (const c of part.gameData.combustors) combustors.push(c.id)
+  for (const noz of part.gameData.nozzles) nozzles.push(noz.id)
+  for (const r of part.gameData.rockets) rockets.push(r.id)
+  return {
+    combustors,
+    nozzles,
+    rockets,
+    controllers: part.gameData.rocketControllers.map((c) => c.id),
+  }
+}
+
+function hasSubPartItem(
+  subPartTemplateId: string,
+  key: 'combustors' | 'nozzles' | 'rockets',
+  index: number,
+): boolean {
+  const spd = $part.get().subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
+  return !!spd && index >= 0 && index < spd[key].length
+}
+
+/** Discrete: append a default combustor for the given SubPart template. */
+export function addCombustor(subPartTemplateId: string): void {
+  const id = uniqueModuleId('ThrustChamber', allEngineModuleIds($part.get()).combustors)
+  commitSubPartData('add combustor', '', subPartTemplateId, (s) =>
+    s.combustors.push(createCombustor(id)),
+  )
+}
+/** Discrete: remove the combustor at `index`. */
+export function removeCombustor(subPartTemplateId: string, index: number): void {
+  if (!hasSubPartItem(subPartTemplateId, 'combustors', index)) return
+  commitSubPartData('remove combustor', '', subPartTemplateId, (s) => s.combustors.splice(index, 1))
+}
+/** Streaming: patch a combustor's numeric fields. Caller pushes undo on field focus. */
+export function updateCombustor(
+  subPartTemplateId: string,
+  index: number,
+  patch: Partial<Combustor>,
+): void {
+  if (!hasSubPartItem(subPartTemplateId, 'combustors', index)) return
+  mutateSubPartData(subPartTemplateId, (s) => {
+    s.combustors[index] = { ...s.combustors[index], ...patch }
+  })
+}
+/** Discrete: set a combustor's combustion process id (the propellant). */
+export function setCombustorCombustion(
+  subPartTemplateId: string,
+  index: number,
+  combustionId: string,
+): void {
+  if (!hasSubPartItem(subPartTemplateId, 'combustors', index)) return
+  commitSubPartData('combustion process', combustionId, subPartTemplateId, (s) => {
+    s.combustors[index].combustionId = combustionId
+  })
+}
+
+/** Discrete: append a default nozzle for the given SubPart template. */
+export function addNozzle(subPartTemplateId: string): void {
+  const id = uniqueModuleId('Nozzle', allEngineModuleIds($part.get()).nozzles)
+  commitSubPartData('add nozzle', '', subPartTemplateId, (s) => s.nozzles.push(createNozzle(id)))
+}
+/** Discrete: remove the nozzle at `index`. */
+export function removeNozzle(subPartTemplateId: string, index: number): void {
+  if (!hasSubPartItem(subPartTemplateId, 'nozzles', index)) return
+  commitSubPartData('remove nozzle', '', subPartTemplateId, (s) => s.nozzles.splice(index, 1))
+}
+/** Streaming: patch a nozzle's fields (numbers, vectors, plume/sound). Caller pushes undo on focus/drag-start. */
+export function updateNozzle(
+  subPartTemplateId: string,
+  index: number,
+  patch: Partial<DeLavalNozzle>,
+): void {
+  if (!hasSubPartItem(subPartTemplateId, 'nozzles', index)) return
+  mutateSubPartData(subPartTemplateId, (s) => {
+    s.nozzles[index] = { ...s.nozzles[index], ...patch }
+  })
+}
+
+/** Discrete: append a `<Rocket>` (defaults to binding the first combustor + nozzle on this SubPart). */
+export function addRocket(subPartTemplateId: string): void {
+  const part = $part.get()
+  const spd = part.subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
+  const id = uniqueModuleId('Engine', allEngineModuleIds(part).rockets)
+  const coreId = spd?.combustors[0]?.id ?? ''
+  const nozzleIds = spd?.nozzles[0] ? [spd.nozzles[0].id] : []
+  commitSubPartData('add rocket', '', subPartTemplateId, (s) =>
+    s.rockets.push(createRocket(id, coreId, nozzleIds)),
+  )
+}
+/** Discrete: remove the `<Rocket>` at `index`. */
+export function removeRocket(subPartTemplateId: string, index: number): void {
+  if (!hasSubPartItem(subPartTemplateId, 'rockets', index)) return
+  commitSubPartData('remove rocket', '', subPartTemplateId, (s) => s.rockets.splice(index, 1))
+}
+/** Discrete: patch a `<Rocket>`'s wiring (core / nozzles). Structural, so it records one step. */
+export function updateRocket(
+  subPartTemplateId: string,
+  index: number,
+  patch: Partial<Rocket>,
+): void {
+  if (!hasSubPartItem(subPartTemplateId, 'rockets', index)) return
+  commitSubPartData('rocket wiring', '', subPartTemplateId, (s) => {
+    s.rockets[index] = { ...s.rockets[index], ...patch }
+  })
+}
+
 // --- Power (batteries / generators / consumers) ---
 
 /** Discrete: append a battery (default capacity, in Wh). */
@@ -1663,6 +1858,224 @@ export function setEvaDoorConnector(connectorId: string): void {
   commitGameData('EVA connector', connectorId, (g) => {
     if (g.evaDoor) g.evaDoor.connectorId = connectorId
   })
+}
+
+// --- Engine controllers + gimbals + gas-generator modules (part-level) ---
+//
+// The controller is what makes a part an engine; it references rockets (by id) on
+// specific SubPart instances. Gimbals overlay a placed instance and thrust-vector its
+// nozzles. Part-level rockets/combustors/nozzles model gas-generator cycles.
+
+function hasController(index: number): boolean {
+  const c = $part.get().gameData.rocketControllers
+  return index >= 0 && index < c.length
+}
+
+/** Discrete: append an engine (or thruster) controller. */
+export function addRocketController(kind: RocketControllerKind = 'engine'): void {
+  const id = uniqueModuleId(kind === 'thruster' ? 'Thruster' : 'Engine', [
+    ...allEngineModuleIds($part.get()).controllers,
+  ])
+  commitGameData('add controller', kind, (g) =>
+    g.rocketControllers.push(createRocketController(id, kind)),
+  )
+}
+/** Discrete: remove the controller at `index`. */
+export function removeRocketController(index: number): void {
+  if (!hasController(index)) return
+  commitGameData('remove controller', '', (g) => g.rocketControllers.splice(index, 1))
+}
+/** Discrete: patch a controller (id, kind, rocketRefs, control map). */
+export function updateRocketController(index: number, patch: Partial<RocketController>): void {
+  if (!hasController(index)) return
+  commitGameData('controller', '', (g) => {
+    g.rocketControllers[index] = { ...g.rocketControllers[index], ...patch }
+  })
+}
+
+/** Discrete: append a part-level gas-generator rocket. */
+export function addPartRocket(): void {
+  const id = uniqueModuleId('GasGenerator', allEngineModuleIds($part.get()).rockets)
+  commitGameData('add rocket', '', (g) => g.rockets.push(createRocket(id)))
+}
+/** Discrete: remove the part-level rocket at `index`. */
+export function removePartRocket(index: number): void {
+  if (index < 0 || index >= $part.get().gameData.rockets.length) return
+  commitGameData('remove rocket', '', (g) => g.rockets.splice(index, 1))
+}
+/** Discrete: patch a part-level rocket's wiring. */
+export function updatePartRocket(index: number, patch: Partial<Rocket>): void {
+  if (index < 0 || index >= $part.get().gameData.rockets.length) return
+  commitGameData('rocket wiring', '', (g) => {
+    g.rockets[index] = { ...g.rockets[index], ...patch }
+  })
+}
+
+/** Discrete: append a part-level combustor (e.g. a gas-generator chamber). */
+export function addPartCombustor(): void {
+  const id = uniqueModuleId('GasGeneratorChamber', allEngineModuleIds($part.get()).combustors)
+  commitGameData('add combustor', '', (g) => g.combustors.push(createCombustor(id)))
+}
+/** Discrete: remove the part-level combustor at `index`. */
+export function removePartCombustor(index: number): void {
+  if (index < 0 || index >= $part.get().gameData.combustors.length) return
+  commitGameData('remove combustor', '', (g) => g.combustors.splice(index, 1))
+}
+/** Streaming: patch a part-level combustor's numeric fields. Caller pushes undo on focus. */
+export function updatePartCombustor(index: number, patch: Partial<Combustor>): void {
+  if (index < 0 || index >= $part.get().gameData.combustors.length) return
+  mutateGameData((g) => {
+    g.combustors[index] = { ...g.combustors[index], ...patch }
+  })
+}
+/** Discrete: set a part-level combustor's combustion process id. */
+export function setPartCombustorCombustion(index: number, combustionId: string): void {
+  if (index < 0 || index >= $part.get().gameData.combustors.length) return
+  commitGameData('combustion process', combustionId, (g) => {
+    g.combustors[index].combustionId = combustionId
+  })
+}
+
+/** Discrete: append a part-level nozzle. */
+export function addPartNozzle(): void {
+  const id = uniqueModuleId('Nozzle', allEngineModuleIds($part.get()).nozzles)
+  commitGameData('add nozzle', '', (g) => g.nozzles.push(createNozzle(id)))
+}
+/** Discrete: remove the part-level nozzle at `index`. */
+export function removePartNozzle(index: number): void {
+  if (index < 0 || index >= $part.get().gameData.nozzles.length) return
+  commitGameData('remove nozzle', '', (g) => g.nozzles.splice(index, 1))
+}
+/** Streaming: patch a part-level nozzle's fields. Caller pushes undo on focus/drag-start. */
+export function updatePartNozzle(index: number, patch: Partial<DeLavalNozzle>): void {
+  if (index < 0 || index >= $part.get().gameData.nozzles.length) return
+  mutateGameData((g) => {
+    g.nozzles[index] = { ...g.nozzles[index], ...patch }
+  })
+}
+
+/** Streaming: set the gimbal limits on a placed SubPart instance, creating the gimbal if absent. */
+export function setGimbal(
+  subPartInstanceId: string,
+  patch: Partial<Omit<Gimbal, 'subPartInstanceId'>>,
+): void {
+  if (!subPartInstanceId) return
+  mutateGameData((g) => {
+    const existing = g.gimbals.find((gm) => gm.subPartInstanceId === subPartInstanceId)
+    if (existing) Object.assign(existing, patch)
+    else g.gimbals.push({ ...createGimbal(subPartInstanceId), ...patch })
+  })
+}
+/** Discrete: remove the gimbal on a placed SubPart instance. */
+export function removeGimbal(subPartInstanceId: string): void {
+  if (!$part.get().gameData.gimbals.some((g) => g.subPartInstanceId === subPartInstanceId)) return
+  commitGameData('remove gimbal', '', (g) => {
+    g.gimbals = g.gimbals.filter((gm) => gm.subPartInstanceId !== subPartInstanceId)
+  })
+}
+
+/**
+ * Discrete (one undo step): defines a complete, fires-in-game engine on a SubPart
+ * template — a wired Combustor + DeLavalNozzle + Rocket on its SubPartGameData, plus
+ * a part-level RocketEngineController referencing that rocket on the given placement
+ * instance, and the "Engines" editor tag. The minimum to go from a reused mesh to a
+ * working engine; the designer then tunes the physics/geometry. Returns the new
+ * thrust-chamber's combustor id (for selection), or null if the template is invalid.
+ */
+export function addEngine(
+  subPartTemplateId: string,
+  instanceId: string | null,
+  kind: RocketControllerKind = 'engine',
+): string | null {
+  if (!subPartTemplateId) return null
+  pushUndo('define engine', lastSegmentLower(subPartTemplateId))
+  const part = clone($part.get())
+  const ids = allEngineModuleIds(part)
+  const combId = uniqueModuleId('ThrustChamber', ids.combustors)
+  const nozId = uniqueModuleId('Nozzle', ids.nozzles)
+  const rocketId = uniqueModuleId('Engine', ids.rockets)
+  const ctrlId = uniqueModuleId(kind === 'thruster' ? 'Thruster' : 'Engine', ids.controllers)
+
+  const spd = getOrCreateSubPartData(part, subPartTemplateId)
+  spd.combustors.push(createCombustor(combId))
+  spd.nozzles.push(createNozzle(nozId))
+  spd.rockets.push(createRocket(rocketId, combId, [nozId]))
+
+  const controller = createRocketController(ctrlId, kind, [rocketId])
+  if (instanceId) controller.rocketRefs[0].subPartInstanceId = instanceId
+  part.gameData.rocketControllers.push(controller)
+
+  const tag = kind === 'thruster' ? 'RCS' : 'Engines'
+  if (!part.editorTags.includes(tag)) part.editorTags.push(tag)
+
+  $part.set(part)
+  return combId
+}
+
+/**
+ * Discrete (one undo step): defines an "SRB (approximate)" — a data-only solid-rocket
+ * fake. It's a normal liquid engine pinned to {@link Combustor.minimumThrottle}=1 (so it
+ * can't be throttled, like a solid) with a sealed internal propellant Tank on the same
+ * SubPart, so it's self-contained. KSA has no solid-motor code, so this CANNOT reproduce
+ * a real SRB: thrust is flat (no grain-regression thrust-vs-time curve), it stays
+ * shutdown-able / re-ignitable, and the propellant drains like a liquid (CoM shifts).
+ * See analysis/KSA_ENGINE_DETAILS.md §10. Returns the combustor id, or null.
+ */
+export function addSrbEngine(subPartTemplateId: string, instanceId: string | null): string | null {
+  if (!subPartTemplateId) return null
+  pushUndo('define SRB', lastSegmentLower(subPartTemplateId))
+  const part = clone($part.get())
+  const ids = allEngineModuleIds(part)
+  const combId = uniqueModuleId('SolidMotor', ids.combustors)
+  const nozId = uniqueModuleId('Nozzle', ids.nozzles)
+  const rocketId = uniqueModuleId('SRB', ids.rockets)
+  const ctrlId = uniqueModuleId('SRB', ids.controllers)
+
+  const spd = getOrCreateSubPartData(part, subPartTemplateId)
+  const combustor = createCombustor(combId)
+  combustor.minimumThrottle = 1 // fixed (non-throttleable), the one thing the fake gets right
+  spd.combustors.push(combustor)
+  spd.nozzles.push(createNozzle(nozId))
+  spd.rockets.push(createRocket(rocketId, combId, [nozId]))
+  // A sealed internal propellant reservoir (modeled as a liquid tank — the limitation).
+  spd.tanks.push(createTank())
+
+  const controller = createRocketController(ctrlId, 'engine', [rocketId])
+  if (instanceId) controller.rocketRefs[0].subPartInstanceId = instanceId
+  part.gameData.rocketControllers.push(controller)
+  if (!part.editorTags.includes('Engines')) part.editorTags.push('Engines')
+
+  $part.set(part)
+  return combId
+}
+
+// --- Custom combustion processes (user-authored propellants) ---
+
+/** Discrete: add a user-authored combustion process (a custom propellant). */
+export function addCustomCombustionProcess(process: CustomCombustionProcess): void {
+  pushUndo('add propellant', process.name || process.id)
+  const part = clone($part.get())
+  part.customCombustionProcesses.push(process)
+  $part.set(part)
+}
+/** Discrete: remove the custom combustion process with the given id. */
+export function removeCustomCombustionProcess(id: string): void {
+  if (!$part.get().customCombustionProcesses.some((p) => p.id === id)) return
+  pushUndo('remove propellant', id)
+  const part = clone($part.get())
+  part.customCombustionProcesses = part.customCombustionProcesses.filter((p) => p.id !== id)
+  $part.set(part)
+}
+/** Streaming: patch a custom combustion process (name / reactants / LUT). Caller pushes undo on focus. */
+export function updateCustomCombustionProcess(
+  id: string,
+  patch: Partial<CustomCombustionProcess>,
+): void {
+  const part = clone($part.get())
+  const idx = part.customCombustionProcesses.findIndex((p) => p.id === id)
+  if (idx < 0) return
+  part.customCombustionProcesses[idx] = { ...part.customCombustionProcesses[idx], ...patch }
+  $part.set(part)
 }
 
 // ---------------------------------------------------------------------------

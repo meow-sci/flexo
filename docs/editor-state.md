@@ -96,6 +96,11 @@ Rotation is shown in **degrees**, stored/exported in **radians**.
 - `PartDataButton.tsx` — the **Part Data** dialog (Part id, editor tags, and the
   `gameData` sections; see [xml-io.md](./xml-io.md)). `ExportButton.tsx` exports.
 - `LayersButton.tsx` / `LayersPanel.tsx` — sidebar Layers popover (see [layers.md](./layers.md)).
+- `EnginePanel.tsx` / `EngineToolbar.tsx` — the full-sidebar **Engine Designer**
+  (`$inspectorMode === 'engine'`, ephemeral atoms in `engineStore.ts`) with a live
+  thrust/Isp readout; `EngineSections.tsx` holds the reusable combustor/nozzle/controller/
+  gimbal/propellant editors (also rendered in the Part/SubPart Data modals). See
+  [engines.md](./engines.md).
 
 ## Persistence
 

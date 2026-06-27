@@ -82,6 +82,11 @@ export async function importBuiltInPart(
       solarPanels: part.solarPanels,
       powerConsumers: part.powerConsumers,
       subPartGameData: part.subPartGameData,
+      rocketControllers: part.rocketControllers,
+      rockets: part.rockets,
+      combustors: part.combustors,
+      nozzles: part.nozzles,
+      gimbals: part.gimbals,
     }),
   )
 }

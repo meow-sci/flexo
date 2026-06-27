@@ -292,6 +292,173 @@ export interface EvaDoor {
 }
 
 /**
+ * ENGINES — a rocket engine is a small graph of cooperating GameData modules layered
+ * onto a Part and its SubParts (see analysis/KSA_ENGINE_DETAILS.md):
+ *  - {@link Combustor}    `<Combustor>`        the chamber: burns a combustion process → hot gas
+ *  - {@link DeLavalNozzle} `<DeLavalNozzle>`    expands the gas → thrust; owns the plume/light/sound FX
+ *  - {@link Rocket}       `<Rocket>`           binds one Core (combustor) to ≥1 Nozzle(s)
+ *  - {@link RocketController} `<RocketEngineController>`/`<RocketThrusterController>` groups rockets,
+ *                              receives throttle/staging, drives the cores
+ *  - {@link Gimbal}       `<SubPart Id><Gimbal>` thrust-vectors a placed SubPart's nozzles
+ * Reusable thrust chambers (combustor+nozzle+rocket) live on a {@link SubPartGameData}
+ * so every prefab reusing that mesh inherits them; the controller, gimbals, and any
+ * gas-generator hardware live on the {@link PartGameData} and reference SubPart
+ * *instance ids*. Thrust/Isp are real De Laval physics — see src/ksa/enginePhysics.ts.
+ */
+
+/** The KSA default combustion process — the most common Core propellant (LH2/LOX). */
+export const DEFAULT_COMBUSTION_ID = 'Hydrolox_5.5'
+
+/** The combustion processes shipped in Core (used as fallback suggestions when the live catalog is absent). */
+export const KNOWN_COMBUSTION_IDS: readonly string[] = [
+  'Hydrolox_5.5',
+  'Kerolox_2.4',
+  'MMH_NTO_1.6',
+]
+
+/** The 8 `<VolumetricExhaust>` plume templates shipped in Core (referenced by id; auto-scale to the nozzle). */
+export const VOLUMETRIC_EXHAUST_IDS: readonly string[] = [
+  'EngineALarge',
+  'EngineALargeUpperStage',
+  'EngineAMed',
+  'EngineACompact',
+  'EngineAVernier',
+  'EngineATurbine',
+  'RCS',
+  'MmuRcsVac',
+]
+
+/** KSA's default engine sound behavior id (the `<SoundEvent SoundId>` Core engines use). */
+export const DEFAULT_ENGINE_SOUND_ID = 'DefaultEngineSoundBehavior'
+
+/** What a `<SoundEvent>` does when the nozzle activates. Mirrors KSA's RocketSoundAction. */
+export type RocketSoundAction = 'On' | 'Off' | 'None'
+
+/** A nozzle's engine-audio event. Serialized as <SoundEvent Action SoundId/>. */
+export interface RocketSoundEvent {
+  action: RocketSoundAction
+  /** Sound behavior id, e.g. "DefaultEngineSoundBehavior". */
+  soundId: string
+}
+
+/**
+ * A reference to an engine module (Combustor/Nozzle/Rocket) by its template id,
+ * optionally scoped to a specific placed SubPart instance. Mirrors KSA's
+ * SubPartIdReference: empty {@link subPartInstanceId} ⇒ the root part. The instance
+ * id is a literal-string reference into {@link EditingPart.placements} and MUST be
+ * remapped on import/paste (like coupling→connectorId, but pointing at a placement).
+ */
+export interface SubPartIdRef {
+  /** The target module's template id (the `<Core Id>` / `<Nozzle Id>` / `<RocketReference Id>`). */
+  id: string
+  /** Placement instanceId the module lives on; null/'' ⇒ the root part. */
+  subPartInstanceId: string | null
+}
+
+/**
+ * A combustion chamber. Serialized as <Combustor>. References a {@link CombustionProcess}
+ * by {@link combustionId}; the propellant chemistry + gas LUT come from that process.
+ * Defaults mirror CombustorTemplate.cs.
+ */
+export interface Combustor {
+  /** `<Combustor Id>`, targeted by a Rocket's `<Core Id>`, e.g. "ThrustChamber". */
+  id: string
+  /** `<Combustion Id>` — a CombustionProcess id, e.g. "Hydrolox_5.5". */
+  combustionId: string
+  /** `<MaxPressure>` chamber pressure at full throttle. Stored SI (Pa); emitted as Bar. Default 5e6. */
+  maxPressurePa: number
+  /** `<ThermalEfficiency Value>` (0–1). Default 1. */
+  thermalEfficiency: number
+  /** `<MinimumThrottle Value>` (clamped [0.01,1]). Default 1 ⇒ non-throttleable (on/off). */
+  minimumThrottle: number
+  /** `<MinimumPulseTime Seconds>` minimum firing duration; null ⇒ omit (KSA default 0.001 s). */
+  minimumPulseTimeS: number | null
+}
+
+/**
+ * A De Laval nozzle. Serialized as <DeLavalNozzle>. Produces thrust and owns the
+ * exhaust geometry + plume/light/sound FX. Defaults mirror DeLavalNozzleTemplate.cs /
+ * RocketNozzleTemplate.cs. NOTE: {@link areaRatio} is effectively required — KSA's
+ * default is NaN (a broken engine) — so flexo defaults it to a usable value and validates.
+ */
+export interface DeLavalNozzle {
+  /** `<DeLavalNozzle Id>`, targeted by a Rocket's `<Nozzle Id>`, e.g. "Nozzle". */
+  id: string
+  /** `<ExitDiameter>` exit-plane diameter (m). Emitted as M, or Cm under 1 m. Default 1. */
+  exitDiameterM: number
+  /** `<FxExitDiameter>` visual plume width (m); null ⇒ uses {@link exitDiameterM}. VISUAL ONLY. */
+  fxExitDiameterM: number | null
+  /** `<AreaRatio Value>` exit/throat area ratio. Required (finite, > 0). */
+  areaRatio: number
+  /** `<FlowEfficiency Value>` (0–1) inlet pressure drop; primarily cuts thrust. Default 1. */
+  flowEfficiency: number
+  /** `<ExpansionEfficiency Value>` (0–1) stagnation drop; primarily cuts Isp. Default 1. */
+  expansionEfficiency: number
+  /** `<ExhaustLocation X Y Z>` thrust application point (assembly frame). Default (0,0,0). */
+  exhaustLocation: Vec3
+  /** `<ExhaustDirection X Y Z>` direction exhaust leaves (thrust acts along −this). Default (−1,0,0). */
+  exhaustDirection: Vec3
+  /** `<FxExhaustLocation>` plume origin; null ⇒ uses {@link exhaustLocation}. */
+  fxExhaustLocation: Vec3 | null
+  /** `<FxExhaustDirection>` plume axis; null ⇒ uses {@link exhaustDirection}. */
+  fxExhaustDirection: Vec3 | null
+  /** `<VolumetricExhaust Id>` plume template id (one of {@link VOLUMETRIC_EXHAUST_IDS}); null ⇒ none. */
+  volumetricExhaustId: string | null
+  /** `<ExhaustLight Value>` dynamic exhaust point light. Default true. */
+  exhaustLight: boolean
+  /** `<SoundEvent>` engine audio, or null. */
+  sound: RocketSoundEvent | null
+}
+
+/**
+ * A `<Rocket>`: binds one combustor ({@link core}) and one-or-more nozzles into a
+ * single firing unit. A controller drives one-or-more rockets. Mirrors RocketTemplate.cs.
+ */
+export interface Rocket {
+  /** `<Rocket Id>`, targeted by a controller's `<RocketReference Id>`, e.g. "Engine". */
+  id: string
+  /** `<Core Id [SubPartId]>` — the combustor. */
+  core: SubPartIdRef
+  /** `<Nozzle Id [SubPartId]>` (≥1 needed for thrust), repeatable. */
+  nozzles: SubPartIdRef[]
+}
+
+/** Main engine (throttle + staging) vs RCS thruster (pulsed, control-mapped). */
+export type RocketControllerKind = 'engine' | 'thruster'
+
+/**
+ * Groups one-or-more {@link Rocket}s under a single command source. Serialized as
+ * `<RocketEngineController>` (main) or `<RocketThrusterController>` (RCS). Lives on the
+ * PartGameData and is what makes a Part a functioning engine. Mirrors RocketControllerTemplate.cs.
+ */
+export interface RocketController {
+  /** `<… Id>` controller / engine display id, e.g. "LR91-AJ-3". */
+  id: string
+  kind: RocketControllerKind
+  /** `<RocketReference Id [SubPartId]>` — the rockets this controller drives. */
+  rocketRefs: SubPartIdRef[]
+  /** Thruster only: `<ControlMap CSV>` 6-DOF axis flags; null ⇒ auto-computed from geometry. */
+  controlMapFlags: string[] | null
+}
+
+/**
+ * A thrust-vectoring gimbal overlaid on a placed SubPart instance. Serialized as
+ * `<SubPart Id="instanceId"><Gimbal>…</Gimbal></SubPart>` on the PartGameData. It
+ * vectors all nozzles on that SubPart. A 0/0 gimbal is a silent no-op (fixed). Mirrors
+ * GimbalReference.cs.
+ */
+export interface Gimbal {
+  /** Placement instanceId this gimbal sits on (the `<SubPart Id>` wrapper). */
+  subPartInstanceId: string
+  /** `<MaxAngleY Degrees>` max deflection about local Y. 0 ⇒ no Y actuation. */
+  maxAngleYDeg: number
+  /** `<MaxAngleZ Degrees>` max deflection about local Z. 0 ⇒ no Z actuation. */
+  maxAngleZDeg: number
+  /** `<ConstrainToCircle Value>` clamp combined Y/Z to a circle vs a square. Default true. */
+  constrainToCircle: boolean
+}
+
+/**
  * Per-part GameData carried in the sibling <PartGameData> document — the
  * "popup-only" metadata that has no 3D representation (connectors live on
  * {@link EditingPart.connectors} instead, since they ARE 3D). Mirrors
@@ -309,6 +476,16 @@ export interface PartGameData {
   decoupler: Decoupler | null
   dockingPort: DockingPort | null
   evaDoor: EvaDoor | null
+  /** Engine controllers (what makes a Part fire). Reference rockets by id + SubPart instance. */
+  rocketControllers: RocketController[]
+  /** Part-level rockets (e.g. a gas-generator stitching a root combustor to a SubPart nozzle). */
+  rockets: Rocket[]
+  /** Part-level combustors (e.g. a gas-generator chamber on the root part). */
+  combustors: Combustor[]
+  /** Part-level nozzles (uncommon — nozzles usually live on a SubPart). */
+  nozzles: DeLavalNozzle[]
+  /** Per-instance gimbal overlays (thrust-vectoring), keyed by placement instanceId. */
+  gimbals: Gimbal[]
 }
 
 /**
@@ -326,11 +503,24 @@ export interface SubPartGameData {
   tanks: Tank[]
   solarPanels: SolarPanel[]
   lights: Light[]
+  /** Reusable thrust-chamber combustors that travel with this mesh. */
+  combustors: Combustor[]
+  /** Reusable nozzles that travel with this mesh. */
+  nozzles: DeLavalNozzle[]
+  /** Reusable `<Rocket>` bindings (core + nozzles) that travel with this mesh. */
+  rockets: Rocket[]
 }
 
 /** True when a SubPart's data is empty and the entry can be pruned. */
 export function isSubPartGameDataEmpty(spd: SubPartGameData): boolean {
-  return spd.tanks.length === 0 && spd.solarPanels.length === 0 && spd.lights.length === 0
+  return (
+    spd.tanks.length === 0 &&
+    spd.solarPanels.length === 0 &&
+    spd.lights.length === 0 &&
+    spd.combustors.length === 0 &&
+    spd.nozzles.length === 0 &&
+    spd.rockets.length === 0
+  )
 }
 
 /** Default tank: 2 m cylinder, 0.5 m radius, 2 mm aluminium wall (matches TankState). */
@@ -379,6 +569,142 @@ export function createEmptyGameData(): PartGameData {
     decoupler: null,
     dockingPort: null,
     evaDoor: null,
+    rocketControllers: [],
+    rockets: [],
+    combustors: [],
+    nozzles: [],
+    gimbals: [],
+  }
+}
+
+/** A fresh, empty per-SubPart-template GameData entry. */
+export function createSubPartGameData(subPartTemplateId: string): SubPartGameData {
+  return {
+    subPartTemplateId,
+    tanks: [],
+    solarPanels: [],
+    lights: [],
+    combustors: [],
+    nozzles: [],
+    rockets: [],
+  }
+}
+
+/** Default combustor: Hydrolox, 50 bar chamber, fully throttleable, no min-pulse. Mirrors CombustorTemplate. */
+export function createCombustor(id: string): Combustor {
+  return {
+    id,
+    combustionId: DEFAULT_COMBUSTION_ID,
+    maxPressurePa: 5_000_000,
+    thermalEfficiency: 1,
+    minimumThrottle: 1,
+    minimumPulseTimeS: null,
+  }
+}
+
+/**
+ * Default nozzle: 1 m exit, area ratio 25 (a usable vacuum-ish bell — KSA's own NaN
+ * default is broken), efficiencies 1, exhaust at the origin firing along −X. Mirrors
+ * DeLavalNozzleTemplate / RocketNozzleTemplate, with a real AreaRatio so it works out of the box.
+ */
+export function createNozzle(id: string): DeLavalNozzle {
+  return {
+    id,
+    exitDiameterM: 1,
+    fxExitDiameterM: null,
+    areaRatio: 25,
+    flowEfficiency: 1,
+    expansionEfficiency: 1,
+    exhaustLocation: { x: 0, y: 0, z: 0 },
+    exhaustDirection: { x: -1, y: 0, z: 0 },
+    fxExhaustLocation: null,
+    fxExhaustDirection: null,
+    volumetricExhaustId: null,
+    exhaustLight: true,
+    sound: null,
+  }
+}
+
+/** A `<Rocket>` binding one core to N nozzles (defaults to the given core/nozzle ids on the same SubPart). */
+export function createRocket(id: string, coreId = '', nozzleIds: string[] = []): Rocket {
+  return {
+    id,
+    core: { id: coreId, subPartInstanceId: null },
+    nozzles: nozzleIds.map((nid) => ({ id: nid, subPartInstanceId: null })),
+  }
+}
+
+/** A controller (default: main engine) driving the given rocket ids. */
+export function createRocketController(
+  id: string,
+  kind: RocketControllerKind = 'engine',
+  rocketIds: string[] = [],
+): RocketController {
+  return {
+    id,
+    kind,
+    rocketRefs: rocketIds.map((rid) => ({ id: rid, subPartInstanceId: null })),
+    controlMapFlags: null,
+  }
+}
+
+/** A fixed (0/0) gimbal on a placement; raise the max angles to make it actuate. */
+export function createGimbal(subPartInstanceId: string): Gimbal {
+  return { subPartInstanceId, maxAngleYDeg: 0, maxAngleZDeg: 0, constrainToCircle: true }
+}
+
+/** One reactant in a custom combustion process: a substance-phase id + its mixture mass share. */
+export interface CombustionReactantSpec {
+  /** Substance phase id, e.g. "H2(l)" / "O2(l)". */
+  phaseId: string
+  /** `<Reactant MassShare>` — the mixture-ratio numerator (normalized to fractions at load). */
+  massShare: number
+}
+
+/**
+ * One row of a custom combustion process's pressure-indexed gas table, in authored units
+ * (the raw `<CombustionCondition>` form). The physics derives R from {@link molarMassGPerMol}
+ * and indexes rows by {@link lnPressure}; see src/ksa/enginePhysics.ts.
+ */
+export interface CombustionLutRowSpec {
+  /** ln(chamber pressure / Pa). */
+  lnPressure: number
+  /** Flame temperature (K). */
+  temperatureK: number
+  /** Ratio of specific heats γ. */
+  gamma: number
+  /** Mean molar mass of the combustion products (g/mol). */
+  molarMassGPerMol: number
+}
+
+/**
+ * A USER-AUTHORED combustion process (propellant chemistry). Lets a designer control
+ * fuel/oxidizer mixture beyond the shipped Core processes. Exported as a top-level
+ * `<CombustionProcess>` in the GameData document and referenced by a combustor's
+ * {@link Combustor.combustionId}. The gas {@link lut} is CEA-style pre-solved
+ * thermodynamics — flexo's authoring is clone-and-remix (copy a shipped process, then
+ * adjust the mixture / rows), NOT a from-scratch solver. Pure data: no binaries.
+ */
+export interface CustomCombustionProcess {
+  /** Unique process id referenced by `<Combustion Id>`, e.g. "MyKerolox_2.6". */
+  id: string
+  /** Display name (`<Name Value>`), falling back to {@link id}. */
+  name: string
+  /** Reactant mixture (≥1). */
+  reactants: CombustionReactantSpec[]
+  /** Pressure-indexed gas LUT (≥1 row). */
+  lut: CombustionLutRowSpec[]
+}
+
+/** A minimal valid custom combustion process (one reactant, one LUT row) — a blank to edit. */
+export function createCustomCombustionProcess(id: string, name: string): CustomCombustionProcess {
+  return {
+    id,
+    name: name.trim() || id,
+    reactants: [{ phaseId: 'H2(l)', massShare: 1 }],
+    lut: [
+      { lnPressure: Math.log(5_000_000), temperatureK: 3000, gamma: 1.2, molarMassGPerMol: 14 },
+    ],
   }
 }
 
@@ -782,6 +1108,8 @@ export interface EditingPart {
   customMeshes: CustomMesh[]
   /** User-authored keyframe animations (KeyframeAnimationModule + Animations/*.glb). */
   animations: PartAnimation[]
+  /** User-authored combustion processes (custom propellants), exported as <CombustionProcess>. */
+  customCombustionProcesses: CustomCombustionProcess[]
 }
 
 export function createEmptyPart(): EditingPart {
@@ -797,5 +1125,6 @@ export function createEmptyPart(): EditingPart {
     customTextures: [],
     customMeshes: [],
     animations: [],
+    customCombustionProcesses: [],
   }
 }

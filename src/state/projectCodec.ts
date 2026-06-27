@@ -2,11 +2,15 @@ import type {
   AnimationJoint,
   AnimationKeyframe,
   Battery,
+  Combustor,
   Connector,
+  CustomCombustionProcess,
   CustomMesh,
+  DeLavalNozzle,
   EasingConfig,
   EulerXYZ,
   Generator,
+  Gimbal,
   KittenInstance,
   KittenMeshSource,
   Layer,
@@ -14,14 +18,23 @@ import type {
   PartAnimation,
   PartGameData,
   PowerConsumer,
+  Rocket,
+  RocketController,
+  RocketSoundAction,
   SolarPanel,
   SubPartGameData,
+  SubPartIdRef,
   SubPartPlacement,
   Tank,
   Transform,
   Vec3,
 } from '../ksa/types'
-import { CONNECTOR_LAYER_ID, KITTEN_LAYER_ID, createEmptyGameData } from '../ksa/types'
+import {
+  CONNECTOR_LAYER_ID,
+  KITTEN_LAYER_ID,
+  createEmptyGameData,
+  createSubPartGameData,
+} from '../ksa/types'
 import type { ProjectExportEnvelope } from './projectTransfer'
 
 /**
@@ -226,6 +239,11 @@ interface CGameData {
   dc?: { c: string; f: number } // decoupler
   dp?: { c: string; li: number; po: number } // dockingPort
   ed?: { c: string } // evaDoor
+  ct?: CController[] // rocketControllers
+  ro?: CRocket[] // part-level rockets (gas generators)
+  cb?: CCombustor[] // part-level combustors
+  nz?: CNozzle[] // part-level nozzles
+  gm?: CGimbal[] // gimbals
 }
 
 function encGameData(g: PartGameData): CGameData {
@@ -245,6 +263,11 @@ function encGameData(g: PartGameData): CGameData {
     }
   }
   if (g.evaDoor) o.ed = { c: g.evaDoor.connectorId }
+  if (g.rocketControllers.length) o.ct = g.rocketControllers.map(encController)
+  if (g.rockets.length) o.ro = g.rockets.map(encRocket)
+  if (g.combustors.length) o.cb = g.combustors.map(encCombustor)
+  if (g.nozzles.length) o.nz = g.nozzles.map(encNozzle)
+  if (g.gimbals.length) o.gm = g.gimbals.map(encGimbal)
   return o
 }
 
@@ -262,6 +285,11 @@ function decGameData(c: CGameData | undefined): PartGameData {
     ? { connectorId: str(c.dp.c), latchingImpulse: num(c.dp.li), pushoffForce: num(c.dp.po) }
     : null
   g.evaDoor = c.ed ? { connectorId: str(c.ed.c) } : null
+  g.rocketControllers = arr<CController>(c.ct).map(decController)
+  g.rockets = arr<CRocket>(c.ro).map(decRocket)
+  g.combustors = arr<CCombustor>(c.cb).map(decCombustor)
+  g.nozzles = arr<CNozzle>(c.nz).map(decNozzle)
+  g.gimbals = arr<CGimbal>(c.gm).map(decGimbal)
   return g
 }
 
@@ -331,11 +359,177 @@ function decLight(c: CLight): Light {
   }
 }
 
+// ── engine modules (combustor / nozzle / rocket / controller / gimbal) ───────
+
+/** Compact SubPartIdReference: id, plus instance id only when scoped to a placement. */
+interface CRef {
+  i: string // id
+  s?: string // subPartInstanceId
+}
+
+function encRef(r: SubPartIdRef): CRef {
+  const o: CRef = { i: r.id }
+  if (r.subPartInstanceId) o.s = r.subPartInstanceId
+  return o
+}
+
+function decRef(c: CRef | undefined): SubPartIdRef {
+  return { id: str(c?.i), subPartInstanceId: c?.s ? str(c.s) : null }
+}
+
+interface CCombustor {
+  id: string
+  c: string // combustionId
+  p: number // maxPressurePa
+  te?: number // thermalEfficiency (omit when 1)
+  mt?: number // minimumThrottle (omit when 1)
+  pt?: number // minimumPulseTimeS (omit when null)
+}
+
+function encCombustor(c: Combustor): CCombustor {
+  const o: CCombustor = { id: c.id, c: c.combustionId, p: round(c.maxPressurePa) }
+  if (c.thermalEfficiency !== 1) o.te = round(c.thermalEfficiency)
+  if (c.minimumThrottle !== 1) o.mt = round(c.minimumThrottle)
+  if (c.minimumPulseTimeS != null) o.pt = round(c.minimumPulseTimeS)
+  return o
+}
+
+function decCombustor(c: CCombustor): Combustor {
+  return {
+    id: str(c.id),
+    combustionId: str(c.c),
+    maxPressurePa: num(c.p, 5_000_000),
+    thermalEfficiency: typeof c.te === 'number' ? c.te : 1,
+    minimumThrottle: typeof c.mt === 'number' ? c.mt : 1,
+    minimumPulseTimeS: typeof c.pt === 'number' ? c.pt : null,
+  }
+}
+
+interface CNozzle {
+  id: string
+  d: number // exitDiameterM
+  ar: number // areaRatio
+  fx?: number // fxExitDiameterM
+  fe?: number // flowEfficiency (omit 1)
+  ee?: number // expansionEfficiency (omit 1)
+  el?: Triple // exhaustLocation (omit 0,0,0)
+  ed?: Triple // exhaustDirection (omit -1,0,0)
+  fl?: Triple // fxExhaustLocation
+  fd?: Triple // fxExhaustDirection
+  ve?: string // volumetricExhaustId
+  lo?: 1 // exhaustLight OFF (default on)
+  sd?: { a: string; s: string } // sound {action, soundId}
+}
+
+function isDefaultExhaustDir(v: Vec3): boolean {
+  return round(v.x) === -1 && round(v.y) === 0 && round(v.z) === 0
+}
+
+function encNozzle(n: DeLavalNozzle): CNozzle {
+  const o: CNozzle = { id: n.id, d: round(n.exitDiameterM), ar: round(n.areaRatio) }
+  if (n.fxExitDiameterM != null) o.fx = round(n.fxExitDiameterM)
+  if (n.flowEfficiency !== 1) o.fe = round(n.flowEfficiency)
+  if (n.expansionEfficiency !== 1) o.ee = round(n.expansionEfficiency)
+  if (!isZeroVec(n.exhaustLocation)) o.el = encVec(n.exhaustLocation)
+  if (!isDefaultExhaustDir(n.exhaustDirection)) o.ed = encVec(n.exhaustDirection)
+  if (n.fxExhaustLocation) o.fl = encVec(n.fxExhaustLocation)
+  if (n.fxExhaustDirection) o.fd = encVec(n.fxExhaustDirection)
+  if (n.volumetricExhaustId) o.ve = n.volumetricExhaustId
+  if (!n.exhaustLight) o.lo = 1
+  if (n.sound) o.sd = { a: n.sound.action, s: n.sound.soundId }
+  return o
+}
+
+function decNozzle(c: CNozzle): DeLavalNozzle {
+  return {
+    id: str(c.id),
+    exitDiameterM: num(c.d, 1),
+    fxExitDiameterM: typeof c.fx === 'number' ? c.fx : null,
+    areaRatio: num(c.ar),
+    flowEfficiency: typeof c.fe === 'number' ? c.fe : 1,
+    expansionEfficiency: typeof c.ee === 'number' ? c.ee : 1,
+    exhaustLocation: decVec(c.el, 0),
+    exhaustDirection: c.ed ? decVec(c.ed, 0) : { x: -1, y: 0, z: 0 },
+    fxExhaustLocation: c.fl ? decVec(c.fl, 0) : null,
+    fxExhaustDirection: c.fd ? decVec(c.fd, 0) : null,
+    volumetricExhaustId: c.ve ? str(c.ve) : null,
+    exhaustLight: !c.lo,
+    sound: c.sd ? { action: str(c.sd.a, 'On') as RocketSoundAction, soundId: str(c.sd.s) } : null,
+  }
+}
+
+interface CRocket {
+  id: string
+  c: CRef // core
+  n?: CRef[] // nozzles
+}
+
+function encRocket(r: Rocket): CRocket {
+  const o: CRocket = { id: r.id, c: encRef(r.core) }
+  if (r.nozzles.length) o.n = r.nozzles.map(encRef)
+  return o
+}
+
+function decRocket(c: CRocket): Rocket {
+  return { id: str(c.id), core: decRef(c.c), nozzles: arr<CRef>(c.n).map(decRef) }
+}
+
+interface CController {
+  id: string
+  tk?: 1 // kind: present ⇒ thruster (engine is the default)
+  r?: CRef[] // rocketRefs
+  cm?: string[] // controlMapFlags
+}
+
+function encController(c: RocketController): CController {
+  const o: CController = { id: c.id }
+  if (c.kind === 'thruster') o.tk = 1
+  if (c.rocketRefs.length) o.r = c.rocketRefs.map(encRef)
+  if (c.controlMapFlags && c.controlMapFlags.length) o.cm = c.controlMapFlags
+  return o
+}
+
+function decController(c: CController): RocketController {
+  return {
+    id: str(c.id),
+    kind: c.tk ? 'thruster' : 'engine',
+    rocketRefs: arr<CRef>(c.r).map(decRef),
+    controlMapFlags: Array.isArray(c.cm) ? arr<string>(c.cm) : null,
+  }
+}
+
+interface CGimbal {
+  i: string // subPartInstanceId
+  y?: number // maxAngleYDeg (omit 0)
+  z?: number // maxAngleZDeg (omit 0)
+  nc?: 1 // NOT constrain-to-circle (default is constrained)
+}
+
+function encGimbal(g: Gimbal): CGimbal {
+  const o: CGimbal = { i: g.subPartInstanceId }
+  if (g.maxAngleYDeg) o.y = round(g.maxAngleYDeg)
+  if (g.maxAngleZDeg) o.z = round(g.maxAngleZDeg)
+  if (!g.constrainToCircle) o.nc = 1
+  return o
+}
+
+function decGimbal(c: CGimbal): Gimbal {
+  return {
+    subPartInstanceId: str(c.i),
+    maxAngleYDeg: num(c.y),
+    maxAngleZDeg: num(c.z),
+    constrainToCircle: !c.nc,
+  }
+}
+
 interface CSubPartGameData {
   t: string // subPartTemplateId
   tk?: CTank[] // tanks
   sp?: CSolarPanel[] // solarPanels
   li?: CLight[] // lights
+  cb?: CCombustor[] // combustors
+  nz?: CNozzle[] // nozzles
+  ro?: CRocket[] // rockets
 }
 
 function encSubPartGameData(s: SubPartGameData): CSubPartGameData {
@@ -343,16 +537,21 @@ function encSubPartGameData(s: SubPartGameData): CSubPartGameData {
   if (s.tanks.length) o.tk = s.tanks.map(encTank)
   if (s.solarPanels.length) o.sp = s.solarPanels.map(encSolarPanel)
   if (s.lights.length) o.li = s.lights.map(encLight)
+  if (s.combustors.length) o.cb = s.combustors.map(encCombustor)
+  if (s.nozzles.length) o.nz = s.nozzles.map(encNozzle)
+  if (s.rockets.length) o.ro = s.rockets.map(encRocket)
   return o
 }
 
 function decSubPartGameData(c: CSubPartGameData): SubPartGameData {
-  return {
-    subPartTemplateId: str(c.t),
-    tanks: arr<CTank>(c.tk).map(decTank),
-    solarPanels: arr<CSolarPanel>(c.sp).map(decSolarPanel),
-    lights: arr<CLight>(c.li).map(decLight),
-  }
+  const s = createSubPartGameData(str(c.t))
+  s.tanks = arr<CTank>(c.tk).map(decTank)
+  s.solarPanels = arr<CSolarPanel>(c.sp).map(decSolarPanel)
+  s.lights = arr<CLight>(c.li).map(decLight)
+  s.combustors = arr<CCombustor>(c.cb).map(decCombustor)
+  s.nozzles = arr<CNozzle>(c.nz).map(decNozzle)
+  s.rockets = arr<CRocket>(c.ro).map(decRocket)
+  return s
 }
 
 // ── custom (kitten) meshes ───────────────────────────────────────────────────
@@ -543,6 +742,44 @@ function decAnimation(c: CAnimation): PartAnimation {
   }
 }
 
+// ── custom combustion processes (user-authored propellants) ──────────────────
+
+interface CCombustionProcess {
+  id: string
+  n?: string // name (omitted when === id)
+  r: [string, number][] // reactants [phaseId, massShare]
+  lut: [number, number, number, number][] // rows [lnPressure, temperatureK, gamma, molarMassGPerMol]
+}
+
+function encCustomCombustion(c: CustomCombustionProcess): CCombustionProcess {
+  const o: CCombustionProcess = {
+    id: c.id,
+    r: c.reactants.map((x) => [x.phaseId, round(x.massShare)]),
+    lut: c.lut.map((row) => [
+      round(row.lnPressure),
+      round(row.temperatureK),
+      round(row.gamma),
+      round(row.molarMassGPerMol),
+    ]),
+  }
+  if (c.name && c.name !== c.id) o.n = c.name
+  return o
+}
+
+function decCustomCombustion(c: CCombustionProcess): CustomCombustionProcess {
+  return {
+    id: str(c.id),
+    name: str(c.n) || str(c.id),
+    reactants: arr<[string, number]>(c.r).map(([p, m]) => ({ phaseId: str(p), massShare: num(m) })),
+    lut: arr<[number, number, number, number]>(c.lut).map(([l, t, g, m]) => ({
+      lnPressure: num(l),
+      temperatureK: num(t),
+      gamma: num(g),
+      molarMassGPerMol: num(m),
+    })),
+  }
+}
+
 // ── top-level envelope ───────────────────────────────────────────────────────
 
 /** The compact wire object that `JSON.stringify` / compression operate on. */
@@ -560,6 +797,7 @@ export interface CompactProject {
   k?: CKitten[] // kittens
   a?: CAnimation[] // animations
   m?: CCustomMesh[] // customMeshes (kitten only)
+  cp?: CCombustionProcess[] // customCombustionProcesses
 }
 
 /** Verbose export envelope → compact wire object (drops defaults, rounds, shortens keys). */
@@ -579,6 +817,8 @@ export function encodeProject(env: ProjectExportEnvelope): CompactProject {
   if (d.animations.length) o.a = d.animations.map(encAnimation)
   const meshes = d.customMeshes.map(encCustomMesh).filter((m): m is CCustomMesh => m != null)
   if (meshes.length) o.m = meshes
+  if (d.customCombustionProcesses.length)
+    o.cp = d.customCombustionProcesses.map(encCustomCombustion)
   return o
 }
 
@@ -600,6 +840,7 @@ export function decodeProject(raw: CompactProject): ProjectExportEnvelope {
       kittens: arr<CKitten>(raw.k).map(decKitten),
       animations: arr<CAnimation>(raw.a).map(decAnimation),
       customMeshes: arr<CCustomMesh>(raw.m).map(decCustomMesh),
+      customCombustionProcesses: arr<CCombustionProcess>(raw.cp).map(decCustomCombustion),
     },
   }
 }

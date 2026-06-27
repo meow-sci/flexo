@@ -1,14 +1,29 @@
-import { CONNECTOR_LAYER_ID, createEmptyGameData, DEFAULT_LAYER_ID } from './types'
+import {
+  CONNECTOR_LAYER_ID,
+  createEmptyGameData,
+  createSubPartGameData,
+  DEFAULT_LAYER_ID,
+  isSubPartGameDataEmpty,
+} from './types'
 import type {
   CatalogAnimationModule,
+  Combustor,
   Connector,
   ConnectorFlag,
+  CustomCombustionProcess,
+  DeLavalNozzle,
   EulerXYZ,
+  Gimbal,
   Light,
   LightType,
   PartGameData,
+  Rocket,
+  RocketController,
+  RocketControllerKind,
+  RocketSoundAction,
   SolarPanel,
   SubPartGameData,
+  SubPartIdRef,
   SubPartPlacement,
   Tank,
   TankShape,
@@ -124,6 +139,8 @@ export interface ParsedGameData {
   subPartGameData: SubPartGameData[]
   /** Parsed <KeyframeAnimationModule>s (refs in ORIGINAL instance-id space). */
   animationModules: CatalogAnimationModule[]
+  /** Top-level <CombustionProcess> custom propellants (siblings of <PartGameData>). */
+  customCombustionProcesses: CustomCombustionProcess[]
 }
 
 /** Parses the <KeyframeAnimationModule> children of a <PartGameData> element. */
@@ -283,13 +300,47 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   const eva = directChildren(gd, 'EVADoor')[0]
   if (eva) game.evaDoor = { connectorId: eva.getAttribute('ConnectorId') ?? '' }
 
+  // Engine modules: part-level rockets/combustors/nozzles (gas generators), controllers,
+  // and per-instance gimbal overlays.
+  parseEngineModules(gd, game)
+  for (const c of directChildren(gd, 'RocketEngineController'))
+    game.rocketControllers.push(controllerFromElement(c, 'engine'))
+  for (const c of directChildren(gd, 'RocketThrusterController'))
+    game.rocketControllers.push(controllerFromElement(c, 'thruster'))
+  game.gimbals = gimbalsFromGameData(gd)
+
   return {
     editorTags,
     connectorFlags,
     gameData: game,
     subPartGameData: [],
     animationModules: animationModulesFromGameData(gd),
+    customCombustionProcesses: [],
   }
+}
+
+/** Parses top-level `<CombustionProcess>` (custom propellants) from an Assets document root. */
+export function combustionProcessesFromRoot(root: Element): CustomCombustionProcess[] {
+  const out: CustomCombustionProcess[] = []
+  for (const proc of directChildren(root, 'CombustionProcess')) {
+    const id = proc.getAttribute('Id')
+    if (!id) continue
+    const name = directChildren(proc, 'Name')[0]?.getAttribute('Value')?.trim() || id
+    const reactants = directChildren(proc, 'Reactant')
+      .map((r) => ({
+        phaseId: r.getAttribute('Id') ?? '',
+        massShare: readNum(r, 'MassShare') ?? 0,
+      }))
+      .filter((r) => r.phaseId)
+    const lut = directChildren(proc, 'CombustionCondition').map((c) => ({
+      lnPressure: readNum(directChildren(c, 'LnPressure')[0], 'Value') ?? 0,
+      temperatureK: readNum(directChildren(c, 'Temperature')[0], 'K') ?? 0,
+      gamma: readNum(directChildren(c, 'Gamma')[0], 'Value') ?? 0,
+      molarMassGPerMol: readNum(directChildren(c, 'MolarMass')[0], 'GPerMol') ?? 0,
+    }))
+    out.push({ id, name, reactants, lut })
+  }
+  return out
 }
 
 /** Parses all top-level <SubPartGameData> elements from a parsed GameData document. */
@@ -303,17 +354,18 @@ function subPartGameDataFromRoot(root: Element): SubPartGameData[] {
   for (const spEl of directChildren(root, 'SubPartGameData')) {
     const subPartTemplateId = spEl.getAttribute('Id')
     if (!subPartTemplateId) continue
-    const tanks: Tank[] = []
+    const spd = createSubPartGameData(subPartTemplateId)
     for (const tankEl of directChildren(spEl, 'Tank')) {
       const cylEl = directChildren(tankEl, 'CylindricalTank')[0]
       const sphEl = directChildren(tankEl, 'SphericalTank')[0]
-      if (cylEl) tanks.push(tankFromElement(cylEl, 'Cylindrical'))
-      else if (sphEl) tanks.push(tankFromElement(sphEl, 'Spherical'))
+      if (cylEl) spd.tanks.push(tankFromElement(cylEl, 'Cylindrical'))
+      else if (sphEl) spd.tanks.push(tankFromElement(sphEl, 'Spherical'))
     }
-    const solarPanels = directChildren(spEl, 'SolarPanel').map(parseSolarPanel)
-    const lights = directChildren(spEl, 'Light').map(lightFromElement)
-    if (tanks.length > 0 || solarPanels.length > 0 || lights.length > 0)
-      out.push({ subPartTemplateId, tanks, solarPanels, lights })
+    spd.solarPanels = directChildren(spEl, 'SolarPanel').map(parseSolarPanel)
+    spd.lights = directChildren(spEl, 'Light').map(lightFromElement)
+    // Reusable thrust-chamber modules (rocket/combustor/nozzle) that travel with the mesh.
+    parseEngineModules(spEl, spd)
+    if (!isSubPartGameDataEmpty(spd)) out.push(spd)
   }
   return out
 }
@@ -338,6 +390,7 @@ export function gameDataFromAssets(
   if (!gd) return null
   const parsed = parseGameDataElement(gd)
   parsed.subPartGameData = subPartGameDataFromRoot(doc.documentElement as Element)
+  parsed.customCombustionProcesses = combustionProcessesFromRoot(doc.documentElement as Element)
   return parsed
 }
 
@@ -359,4 +412,193 @@ function readVec(transform: Element | null, tag: string, def: number): Vec3 {
     return raw === null ? def : Number.parseFloat(raw)
   }
   return { x: read('X'), y: read('Y'), z: read('Z') }
+}
+
+// --- Engine module parsing (inverse of partXmlSerializer's engine builders) ---
+
+/** Reads X/Y/Z attributes directly off an element (engine vectors, unlike <Transform> children). */
+function readVec3Attrs(el: Element | null | undefined, def: Vec3): Vec3 {
+  if (!el) return { ...def }
+  return {
+    x: readNum(el, 'X') ?? def.x,
+    y: readNum(el, 'Y') ?? def.y,
+    z: readNum(el, 'Z') ?? def.z,
+  }
+}
+
+/** Sums a `PressureReference`'s unit attributes into Pa; null when none are set. */
+function readPressurePa(el: Element | null | undefined): number | null {
+  if (!el) return null
+  const parts: [string, number][] = [
+    ['Pa', 1],
+    ['KPa', 1e3],
+    ['MPa', 1e6],
+    ['MBar', 100],
+    ['Bar', 1e5],
+    ['Atm', 101325],
+  ]
+  let value: number | null = null
+  for (const [attr, scale] of parts) {
+    const n = readNum(el, attr)
+    if (n != null) value = (value ?? 0) + n * scale
+  }
+  return value
+}
+
+/** Sums a `DistanceReference`'s unit attributes into meters; null when none are set. */
+function readDistanceM(el: Element | null | undefined): number | null {
+  if (!el) return null
+  const parts: [string, number][] = [
+    ['Mm', 0.001],
+    ['Cm', 0.01],
+    ['M', 1],
+    ['Km', 1000],
+  ]
+  let value: number | null = null
+  for (const [attr, scale] of parts) {
+    const n = readNum(el, attr)
+    if (n != null) value = (value ?? 0) + n * scale
+  }
+  return value
+}
+
+/** Reads a `TimeSpanReference` (Seconds/Minutes/Hours) into seconds; null when absent. */
+function readSeconds(el: Element | null | undefined): number | null {
+  if (!el) return null
+  const parts: [string, number][] = [
+    ['Seconds', 1],
+    ['Minutes', 60],
+    ['Hours', 3600],
+  ]
+  let value: number | null = null
+  for (const [attr, scale] of parts) {
+    const n = readNum(el, attr)
+    if (n != null) value = (value ?? 0) + n * scale
+  }
+  return value
+}
+
+/** Reads a `RadianReference` as degrees (Radians takes priority over Degrees, like KSA); 0 when absent. */
+function readDegrees(el: Element | null | undefined): number {
+  const radians = readNum(el, 'Radians')
+  if (radians != null) return (radians * 180) / Math.PI
+  return readNum(el, 'Degrees') ?? 0
+}
+
+/** Reads a `BoolReference` Value attribute; null when absent. */
+function readBoolValue(el: Element | null | undefined): boolean | null {
+  const raw = el?.getAttribute('Value')
+  if (raw == null) return null
+  return raw.trim().toLowerCase() === 'true'
+}
+
+/** Parses a `<Core>`/`<Nozzle>`/`<RocketReference>` into a {@link SubPartIdRef}. */
+function refFromElement(el: Element | null | undefined): SubPartIdRef {
+  return {
+    id: el?.getAttribute('Id') ?? '',
+    subPartInstanceId: el?.getAttribute('SubPartId') || null,
+  }
+}
+
+/** Parses one `<Combustor>` element. Missing fields fall back to CombustorTemplate defaults. */
+function combustorFromElement(el: Element): Combustor {
+  return {
+    id: el.getAttribute('Id') ?? '',
+    combustionId: directChildren(el, 'Combustion')[0]?.getAttribute('Id') ?? '',
+    maxPressurePa: readPressurePa(directChildren(el, 'MaxPressure')[0]) ?? 5_000_000,
+    thermalEfficiency: readNum(directChildren(el, 'ThermalEfficiency')[0], 'Value') ?? 1,
+    minimumThrottle: readNum(directChildren(el, 'MinimumThrottle')[0], 'Value') ?? 1,
+    minimumPulseTimeS: readSeconds(directChildren(el, 'MinimumPulseTime')[0]),
+  }
+}
+
+/** Parses one `<DeLavalNozzle>` element. Missing fields fall back to nozzle template defaults. */
+function nozzleFromElement(el: Element): DeLavalNozzle {
+  const fxDia = readDistanceM(directChildren(el, 'FxExitDiameter')[0])
+  const fxLoc = directChildren(el, 'FxExhaustLocation')[0]
+  const fxDir = directChildren(el, 'FxExhaustDirection')[0]
+  const soundEl = directChildren(el, 'SoundEvent')[0]
+  return {
+    id: el.getAttribute('Id') ?? '',
+    exitDiameterM: readDistanceM(directChildren(el, 'ExitDiameter')[0]) ?? 1,
+    fxExitDiameterM: fxDia,
+    // KSA's AreaRatio default is NaN (a broken engine); preserve that so validation can flag it.
+    areaRatio: readNum(directChildren(el, 'AreaRatio')[0], 'Value') ?? Number.NaN,
+    flowEfficiency: readNum(directChildren(el, 'FlowEfficiency')[0], 'Value') ?? 1,
+    expansionEfficiency: readNum(directChildren(el, 'ExpansionEfficiency')[0], 'Value') ?? 1,
+    exhaustLocation: readVec3Attrs(directChildren(el, 'ExhaustLocation')[0], { x: 0, y: 0, z: 0 }),
+    exhaustDirection: readVec3Attrs(directChildren(el, 'ExhaustDirection')[0], {
+      x: -1,
+      y: 0,
+      z: 0,
+    }),
+    fxExhaustLocation: fxLoc ? readVec3Attrs(fxLoc, { x: 0, y: 0, z: 0 }) : null,
+    fxExhaustDirection: fxDir ? readVec3Attrs(fxDir, { x: -1, y: 0, z: 0 }) : null,
+    volumetricExhaustId: directChildren(el, 'VolumetricExhaust')[0]?.getAttribute('Id') ?? null,
+    exhaustLight: readBoolValue(directChildren(el, 'ExhaustLight')[0]) ?? true,
+    sound: soundEl
+      ? {
+          action: (soundEl.getAttribute('Action') as RocketSoundAction) || 'On',
+          soundId: soundEl.getAttribute('SoundId') ?? '',
+        }
+      : null,
+  }
+}
+
+/** Parses one `<Rocket>` element (core + nozzle references). */
+function rocketFromElement(el: Element): Rocket {
+  return {
+    id: el.getAttribute('Id') ?? '',
+    core: refFromElement(directChildren(el, 'Core')[0]),
+    nozzles: directChildren(el, 'Nozzle').map(refFromElement),
+  }
+}
+
+/** Parses a `<RocketEngineController>`/`<RocketThrusterController>` element. */
+function controllerFromElement(el: Element, kind: RocketControllerKind): RocketController {
+  const controlMapEl = directChildren(el, 'ControlMap')[0]
+  const csv = controlMapEl?.getAttribute('CSV')
+  return {
+    id: el.getAttribute('Id') ?? '',
+    kind,
+    rocketRefs: directChildren(el, 'RocketReference').map(refFromElement),
+    controlMapFlags: csv
+      ? csv
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : null,
+  }
+}
+
+/** Parses the `<Gimbal>` overlays from a GameData element's `<SubPart Id>` children. */
+function gimbalsFromGameData(gd: Element): Gimbal[] {
+  const out: Gimbal[] = []
+  for (const sub of directChildren(gd, 'SubPart')) {
+    const instanceId = sub.getAttribute('Id')
+    if (!instanceId) continue
+    const gel = directChildren(sub, 'Gimbal')[0]
+    if (!gel) continue
+    out.push({
+      subPartInstanceId: instanceId,
+      maxAngleYDeg: readDegrees(directChildren(gel, 'MaxAngleY')[0]),
+      maxAngleZDeg: readDegrees(directChildren(gel, 'MaxAngleZ')[0]),
+      constrainToCircle: readBoolValue(directChildren(gel, 'ConstrainToCircle')[0]) ?? true,
+    })
+  }
+  return out
+}
+
+/** Parses all engine modules of a `<PartGameData>`/`<SubPartGameData>` element into `target`. */
+function parseEngineModules(
+  el: Element,
+  target: {
+    combustors: Combustor[]
+    nozzles: DeLavalNozzle[]
+    rockets: Rocket[]
+  },
+): void {
+  for (const r of directChildren(el, 'Rocket')) target.rockets.push(rocketFromElement(r))
+  for (const c of directChildren(el, 'Combustor')) target.combustors.push(combustorFromElement(c))
+  for (const n of directChildren(el, 'DeLavalNozzle')) target.nozzles.push(nozzleFromElement(n))
 }

@@ -11,6 +11,7 @@ import {
   ToolbarButton,
 } from './kit'
 import { $part, addConnector, addKitten, addSubPart } from '../state/editorStore'
+import { enterEngineMode } from '../state/engineStore'
 import { makeKittenMeshPart } from '../state/customAssetStore'
 import type { KittenKind } from '../ksa/types'
 import { SubPartPopup } from './SubPartBrowser'
@@ -43,12 +44,14 @@ export function AddButton() {
               else if (key === 'part') setPartOpen(true)
               else if (key === 'texture') setTextureOpen(true)
               else if (key === 'mesh') setMeshOpen(true)
+              else if (key === 'engine') enterEngineMode()
             }}
           >
             <MenuHeader>Add</MenuHeader>
             <MenuItem id="subpart">SubPart</MenuItem>
             <MenuItem id="connector">Connector</MenuItem>
             <MenuItem id="part">Import built-in Part</MenuItem>
+            <MenuItem id="engine">Define Engine…</MenuItem>
             <MenuItem id="texture">Upload texture…</MenuItem>
             <MenuItem id="mesh">Create mesh…</MenuItem>
             {customMeshes.length > 0 && (

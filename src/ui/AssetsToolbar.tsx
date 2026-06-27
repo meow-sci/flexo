@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
-import { Boxes, Clapperboard } from 'lucide-react'
+import { Boxes, Clapperboard, Rocket } from 'lucide-react'
 import { Toolbar, Button } from './kit'
 import { $part } from '../state/editorStore'
 import { setInspectorMode } from '../state/uiStore'
+import { $engineTemplateIds } from '../state/engineStore'
 import { LayersButton } from './LayersButton'
 import { CustomAssetsModal } from './CustomAssetsModal'
 
@@ -15,9 +16,11 @@ import { CustomAssetsModal } from './CustomAssetsModal'
  */
 export function AssetsToolbar() {
   const part = useStore($part)
+  const engineTemplateIds = useStore($engineTemplateIds)
   const [customOpen, setCustomOpen] = useState(false)
   const customCount = part.customTextures.length + part.customMeshes.length
   const animCount = part.animations.length
+  const engineCount = engineTemplateIds.length
 
   return (
     <>
@@ -33,6 +36,15 @@ export function AssetsToolbar() {
         >
           <Boxes size={16} className="shrink-0" />
           Custom ({customCount})
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          className="shrink-0"
+          onPress={() => setInspectorMode('engine')}
+        >
+          <Rocket size={16} className="shrink-0" />
+          Engine{engineCount ? ` (${engineCount})` : ''}
         </Button>
         <Button
           size="sm"

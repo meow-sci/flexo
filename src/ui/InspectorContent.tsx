@@ -4,6 +4,8 @@ import { AssetsList } from './AssetsList'
 import { TransformInspector } from './TransformInspector'
 import { AnimToolbar } from './AnimToolbar'
 import { AnimationPanel } from './AnimationPanel'
+import { EngineToolbar } from './EngineToolbar'
+import { EnginePanel } from './EnginePanel'
 import { $inspectorMode } from '../state/uiStore'
 
 /**
@@ -27,6 +29,17 @@ export function InspectorContent({ showTransform = false }: { showTransform?: bo
         <AnimToolbar />
         <div className="min-h-0 flex-1">
           <AnimationPanel />
+        </div>
+      </div>
+    )
+  }
+
+  if (mode === 'engine') {
+    return (
+      <div className="flex h-full min-h-0 flex-col gap-2">
+        <EngineToolbar />
+        <div className="min-h-0 flex-1">
+          <EnginePanel />
         </div>
       </div>
     )

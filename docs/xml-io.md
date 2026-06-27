@@ -75,6 +75,12 @@ Mirrors space-tape's `GameDataXmlSerializer.cs`. The popup-only metadata
 Every piece is omitted when empty/default. Each project exports both files
 (`<Name>Part.xml` + `<Name>GameData.xml`) via `src/ksa/modExport.ts`.
 
+**Engines** add more to this document: `<Rocket>`/`<Combustor>`/`<DeLavalNozzle>` per
+`<SubPartGameData>`, part-level `<RocketEngineController>`/`<RocketThrusterController>` +
+gas-generator `<Rocket>`/`<Combustor>` + `<SubPart Id><Gimbal>` overlays, and top-level
+`<CombustionProcess>` for custom propellants — all round-tripped by the parser. See
+[engines.md](engines.md) for the schema, units, and default-omission rules.
+
 ## Number formatting — `src/ksa/formatG6.ts`
 
 `formatG6(n)` replicates .NET `double.ToString("G6")`: 6 significant digits, trailing

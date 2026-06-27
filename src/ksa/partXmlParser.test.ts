@@ -10,9 +10,11 @@ import {
 import { serializeGameData, serializePart } from './partXmlSerializer'
 import type { Connector, EditingPart } from './types'
 import {
+  createCombustor,
   createDefaultLayer,
   createEmptyGameData,
   createLight,
+  createSubPartGameData,
   identityTransform,
   createTank,
   DEFAULT_LAYER_ID,
@@ -31,6 +33,7 @@ function editingPart(over: Partial<EditingPart>): EditingPart {
     customTextures: [],
     customMeshes: [],
     animations: [],
+    customCombustionProcesses: [],
     ...over,
   }
 }
@@ -208,6 +211,9 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
           },
           { ...createLight(), type: 'Point', rangeM: 2, intensity: 2 },
         ],
+        combustors: [],
+        nozzles: [],
+        rockets: [],
       },
     ],
     connectors: [
@@ -278,6 +284,139 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
 
   it('returns null for an unknown part id', () => {
     expect(gameDataFromAssets(serializeGameData(source), 'Nope', new DOMParser())).toBeNull()
+  })
+})
+
+describe('engine modules (round-trip with serializeGameData)', () => {
+  const TMPL = 'CorePropulsionA_Subpart_EngineALargeVacAssembly'
+  const source = editingPart({
+    partId: 'ENG',
+    editorTags: ['Engines'],
+    gameData: {
+      ...createEmptyGameData(),
+      rocketControllers: [
+        {
+          id: 'LR91-AJ-3',
+          kind: 'engine',
+          rocketRefs: [
+            { id: 'Engine', subPartInstanceId: `${TMPL}2` },
+            { id: 'GasGenerator', subPartInstanceId: null },
+          ],
+          controlMapFlags: null,
+        },
+      ],
+      rockets: [
+        {
+          id: 'GasGenerator',
+          core: { id: 'GasGeneratorChamber', subPartInstanceId: null },
+          nozzles: [{ id: 'TurbineExhaustNozzle', subPartInstanceId: 'turbo_2' }],
+        },
+      ],
+      combustors: [createCombustor('GasGeneratorChamber')],
+      gimbals: [
+        {
+          subPartInstanceId: `${TMPL}2`,
+          maxAngleYDeg: 2,
+          maxAngleZDeg: 2,
+          constrainToCircle: false,
+        },
+        {
+          subPartInstanceId: 'turbo_2',
+          maxAngleYDeg: 70,
+          maxAngleZDeg: 0,
+          constrainToCircle: true,
+        },
+      ],
+    },
+    // A custom propellant (clean ≤6-sig-fig numbers so G6 formatting round-trips exactly).
+    customCombustionProcesses: [
+      {
+        id: 'MyKerolox_2.6',
+        name: 'Custom Kerolox',
+        reactants: [
+          { phaseId: 'Kerosene(l)', massShare: 1 },
+          { phaseId: 'O2(l)', massShare: 2.6 },
+        ],
+        lut: [
+          { lnPressure: 9.5, temperatureK: 3200, gamma: 1.22, molarMassGPerMol: 22.4 },
+          { lnPressure: 15.4, temperatureK: 3650, gamma: 1.15, molarMassGPerMol: 23.1 },
+        ],
+      },
+    ],
+    subPartGameData: [
+      {
+        ...createSubPartGameData(TMPL),
+        combustors: [
+          {
+            id: 'ThrustChamber',
+            combustionId: 'Hydrolox_5.5',
+            maxPressurePa: 4_900_000,
+            thermalEfficiency: 1,
+            minimumThrottle: 0.1,
+            minimumPulseTimeS: null,
+          },
+        ],
+        nozzles: [
+          {
+            id: 'Nozzle',
+            exitDiameterM: 2.5,
+            fxExitDiameterM: 1.439,
+            areaRatio: 49,
+            flowEfficiency: 1,
+            expansionEfficiency: 1,
+            exhaustLocation: { x: -1.23, y: 0, z: 0 },
+            exhaustDirection: { x: -1, y: 0, z: 0 },
+            fxExhaustLocation: null,
+            fxExhaustDirection: null,
+            volumetricExhaustId: 'EngineALarge',
+            exhaustLight: true,
+            sound: { action: 'On', soundId: 'DefaultEngineSoundBehavior' },
+          },
+        ],
+        rockets: [
+          {
+            id: 'Engine',
+            core: { id: 'ThrustChamber', subPartInstanceId: null },
+            nozzles: [{ id: 'Nozzle', subPartInstanceId: null }],
+          },
+        ],
+      },
+    ],
+  })
+
+  const parsed = gameDataFromAssets(serializeGameData(source), 'ENG', new DOMParser())!
+
+  it('round-trips the reusable thrust chamber under SubPartGameData (combustor/nozzle/rocket)', () => {
+    const spd = parsed.subPartGameData.find((s) => s.subPartTemplateId === TMPL)!
+    expect(spd.combustors).toEqual(source.subPartGameData[0].combustors)
+    expect(spd.nozzles).toEqual(source.subPartGameData[0].nozzles)
+    expect(spd.rockets).toEqual(source.subPartGameData[0].rockets)
+  })
+
+  it('round-trips the part-level controller, gas-generator, and gimbals', () => {
+    expect(parsed.gameData.rocketControllers).toEqual(source.gameData.rocketControllers)
+    expect(parsed.gameData.rockets).toEqual(source.gameData.rockets)
+    expect(parsed.gameData.combustors).toEqual(source.gameData.combustors)
+    expect(parsed.gameData.gimbals).toEqual(source.gameData.gimbals)
+  })
+
+  it('round-trips a custom combustion process (propellant)', () => {
+    expect(parsed.customCombustionProcesses).toEqual(source.customCombustionProcesses)
+  })
+
+  it('parses RocketThrusterController + ControlMap as an RCS controller', () => {
+    const rcs = gameDataFromAssets(
+      `<Assets><PartGameData Id="P">
+        <RocketThrusterController Id="RCS">
+          <RocketReference Id="Thruster" SubPartId="t1" />
+          <ControlMap CSV="PitchUp, YawRight" />
+        </RocketThrusterController>
+      </PartGameData></Assets>`,
+      'P',
+      new DOMParser(),
+    )!
+    expect(rcs.gameData.rocketControllers[0].kind).toBe('thruster')
+    expect(rcs.gameData.rocketControllers[0].controlMapFlags).toEqual(['PitchUp', 'YawRight'])
   })
 })
 

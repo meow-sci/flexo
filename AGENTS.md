@@ -211,6 +211,18 @@ DO NOT attempt to load them all blindy, many are quite large. Make strategic rea
 
 The "Core" mod ships with the game and acts as the default data which includes Part and SubPart definitions
 
+## engines (Engine Designer)
+
+flexo authors complete KSA rocket engines on reused SubPart meshes — combustor + De Laval
+nozzle + rocket + controller + gimbals, with a **live in-browser thrust/Isp readout** ported
+verbatim from KSA's decompiled engine math (`src/ksa/enginePhysics.ts`). Engines add no
+geometry (they decorate placements with GameData). The full-sidebar designer is
+`$inspectorMode === 'engine'` (`EnginePanel`/`EngineToolbar` + `EngineSections.tsx`, ephemeral
+state in `engineStore.ts`); the same editors also appear in the Part/SubPart Data modals.
+Custom propellants (`<CombustionProcess>`) are clone-and-remix. Electric engines and true
+SRBs are impossible data-only (no game code path) — SRBs get an explicitly-limited preset.
+See [docs/engines.md](docs/engines.md), [analysis/KSA_ENGINE_DETAILS.md](analysis/KSA_ENGINE_DETAILS.md).
+
 ## kittens (EVA character visual aides)
 
 The three default kittens (Hunter/Polaris/Banjo) can be added via **Add → Kitten → \<name\>** as **editor-only visual aides** — a scale/placement reference, NOT part geometry. They live on a hard-coded built-in **Kittens** layer (`KITTEN_LAYER_ID`), are stored as `EditingPart.kittens: KittenInstance[]`, and are **never serialized to export** (the serializer only walks `placements`/`connectors`/`gameData`, so they're excluded for free). Code: `src/three/KittenObject.ts` (renderer), `src/ksa/kittenAssets.ts` (asset descriptors), `addKitten()` in `src/state/editorStore.ts`.

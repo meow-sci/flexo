@@ -8,13 +8,13 @@ import { persistentJSON } from '@nanostores/persistent'
  */
 
 /**
- * Which body the inspector shows: the Assets list, or the full-sidebar Animation
- * editor. Ephemeral (not persisted) — like selection, it resets to 'assets' on
- * reload. The Assets toolbar's "Anim" button switches to 'anim'; the anim toolbar's
- * "Close" switches back. In 'anim' mode the Assets list is hidden and reachable only
- * via the Mesh Picker dialog.
+ * Which body the inspector shows: the Assets list, the full-sidebar Animation
+ * editor, or the full-sidebar Engine designer. Ephemeral (not persisted) — like
+ * selection, it resets to 'assets' on reload. The Assets toolbar's "Anim"/"Engine"
+ * buttons switch in; each editor's toolbar "Close" switches back. In a full-sidebar
+ * mode the Assets list is hidden and reachable only via the Mesh Picker dialog.
  */
-export type InspectorMode = 'assets' | 'anim'
+export type InspectorMode = 'assets' | 'anim' | 'engine'
 export const $inspectorMode = atom<InspectorMode>('assets')
 
 export function setInspectorMode(mode: InspectorMode): void {

@@ -2,10 +2,11 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './app.tsx'
-import { GlobalToastRegion } from './ui/kit'
+import { GlobalToastRegion, toast } from './ui/kit'
 import { BuildIdMismatchDialog } from './ui/BuildIdMismatchDialog'
 import { checkBuildId } from './buildCheck'
-import { hydrateProjectOnBoot } from './state/projectStore'
+import { hydrateProjectOnBoot, loadSharedProject } from './state/projectStore'
+import { clearShareParam, decodeSharePayload, readShareParam } from './state/projectShareLink'
 import { initCustomAssets } from './state/customAssetStore'
 import { initAnimationStore } from './state/animationStore'
 import { initModFolder } from './state/modFolderStore'
@@ -46,6 +47,23 @@ checkBuildId()
 
 // Reflect any previously-granted mods folder (async; updates the export UI when ready).
 void initModFolder()
+
+// Stateless share links (`?load=<payload>`): decode the project and open it as a NEW
+// project (the freshly-hydrated project stays untouched until this resolves). Async —
+// decompression needs the Zstd WASM module — so it lands a beat after first paint.
+const sharePayload = readShareParam()
+if (sharePayload) {
+  void (async () => {
+    const result = await decodeSharePayload(sharePayload)
+    clearShareParam()
+    if (!result.ok) {
+      toast({ title: 'Could not open shared link', description: result.error, variant: 'danger' })
+      return
+    }
+    const name = loadSharedProject(result.env)
+    toast({ title: 'Opened shared project', description: name, variant: 'success' })
+  })()
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

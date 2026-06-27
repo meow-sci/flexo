@@ -16,6 +16,7 @@ import {
 } from './kit'
 import { TrashIcon } from './layerIcons'
 import { ExportProjectDialog, ImportProjectDialog } from './ProjectTransferDialogs'
+import { ShareProjectDialog } from './ShareProjectDialog'
 import {
   $projectName,
   createProject,
@@ -37,6 +38,7 @@ export function ProjectButton() {
   const name = useStore($projectName)
   const [popoverOpen, setPopoverOpen] = useState(false)
   const [loadOpen, setLoadOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
 
@@ -83,6 +85,16 @@ export function ProjectButton() {
                   variant="ghost"
                   onPress={() => {
                     setPopoverOpen(false)
+                    setShareOpen(true)
+                  }}
+                >
+                  Share Project...
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onPress={() => {
+                    setPopoverOpen(false)
                     setExportOpen(true)
                   }}
                 >
@@ -105,6 +117,7 @@ export function ProjectButton() {
       </DialogTrigger>
 
       <LoadProjectDialog isOpen={loadOpen} onOpenChange={setLoadOpen} />
+      <ShareProjectDialog isOpen={shareOpen} onOpenChange={setShareOpen} />
       <ExportProjectDialog isOpen={exportOpen} onOpenChange={setExportOpen} />
       <ImportProjectDialog isOpen={importOpen} onOpenChange={setImportOpen} />
     </>

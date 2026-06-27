@@ -12,9 +12,11 @@ import {
   PROJECT_EXPORT_FORMAT,
   PROJECT_EXPORT_VERSION,
   buildProjectExport,
+  envelopeToPart,
   hasCustomAssets,
   mergeProjectImport,
   parseProjectImport,
+  serializeProjectJson,
 } from './projectTransfer'
 
 /** A transform with all three components set to `n` (scale defaults to 1). */
@@ -285,36 +287,55 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
 })
 
 describe('parseProjectImport', () => {
-  it('accepts a well-formed envelope', () => {
-    const env = buildProjectExport(sourcePart(), 'X')
-    const result = parseProjectImport(JSON.stringify(env))
+  it('accepts a well-formed compact project', () => {
+    const json = serializeProjectJson(buildProjectExport(sourcePart(), 'X'))
+    const result = parseProjectImport(json)
     expect(result.ok).toBe(true)
   })
 
-  it('rejects empty, non-JSON, wrong-format, future-version, and missing-data input', () => {
-    const env = buildProjectExport(sourcePart(), 'X')
+  it('rejects empty, non-JSON, wrong-format, and future-version input', () => {
     expect(parseProjectImport('').ok).toBe(false)
     expect(parseProjectImport('not json').ok).toBe(false)
-    expect(parseProjectImport('{}').ok).toBe(false)
-    expect(parseProjectImport(JSON.stringify({ ...env, version: 999 })).ok).toBe(false)
-    expect(
-      parseProjectImport(JSON.stringify({ format: PROJECT_EXPORT_FORMAT, version: 1 })).ok,
-    ).toBe(false)
+    expect(parseProjectImport('{}').ok).toBe(false) // no format marker
+    expect(parseProjectImport(JSON.stringify({ f: 'something-else', v: 1 })).ok).toBe(false)
+    expect(parseProjectImport(JSON.stringify({ f: PROJECT_EXPORT_FORMAT, v: 999 })).ok).toBe(false)
   })
 
-  it('backfills missing optional fields (editorTags, gameData, subPartGameData)', () => {
-    const minimal = {
-      format: PROJECT_EXPORT_FORMAT,
-      version: 1,
-      data: { layers: [], placements: [], connectors: [], kittens: [], animations: [] },
-    }
-    const result = parseProjectImport(JSON.stringify(minimal))
+  it('backfills every optional field from a bare-marker payload', () => {
+    const result = parseProjectImport(
+      JSON.stringify({ f: PROJECT_EXPORT_FORMAT, v: PROJECT_EXPORT_VERSION }),
+    )
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.env.data.editorTags).toEqual([])
+      expect(result.env.data.layers).toEqual([])
+      expect(result.env.data.placements).toEqual([])
       expect(result.env.data.subPartGameData).toEqual([])
       expect(result.env.data.customMeshes).toEqual([])
       expect(result.env.data.gameData.customMass).toBeNull()
     }
+  })
+})
+
+describe('envelopeToPart', () => {
+  it('faithfully reconstructs a standalone part (no id remapping) with built-in layers', () => {
+    const env = buildProjectExport(sourcePart(), 'MyShip')
+    const part = envelopeToPart(env)
+    expect(part.partId).toBe('source_part')
+    // Ids preserved verbatim — unlike the additive merge, nothing is regenerated.
+    expect(part.placements.map((p) => p.instanceId)).toEqual([
+      'trussbara_1',
+      'trussbara_2',
+      'wing_1',
+    ])
+    expect(part.connectors[0].id).toBe('_connector1')
+    expect(part.animations[0].id).toBe('anim_src1')
+    expect(part.gameData.decoupler?.connectorId).toBe('_connector1')
+    // The three undeletable built-in layers are present.
+    for (const id of [DEFAULT_LAYER_ID, CONNECTOR_LAYER_ID, KITTEN_LAYER_ID]) {
+      expect(part.layers.some((l) => l.id === id)).toBe(true)
+    }
+    // Binary-backed assets always start empty.
+    expect(part.customTextures).toEqual([])
   })
 })

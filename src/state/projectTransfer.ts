@@ -1,8 +1,6 @@
 import type {
-  Battery,
   Connector,
   CustomMesh,
-  DockingPort,
   EditingPart,
   KittenInstance,
   KittenMeshSource,
@@ -13,8 +11,24 @@ import type {
   SubPartPlacement,
   Vec3,
 } from '../ksa/types'
-import { CONNECTOR_LAYER_ID, KITTEN_LAYER_ID, createEmptyGameData } from '../ksa/types'
+import {
+  CONNECTOR_LAYER_ID,
+  DEFAULT_LAYER_ID,
+  KITTEN_LAYER_ID,
+  createConnectorLayer,
+  createDefaultLayer,
+  createKittenLayer,
+} from '../ksa/types'
 import { randomId } from './ids'
+import {
+  PROJECT_EXPORT_FORMAT,
+  PROJECT_EXPORT_VERSION,
+  decodeProject,
+  encodeProject,
+  isCompactProject,
+} from './projectCodec'
+
+export { PROJECT_EXPORT_FORMAT, PROJECT_EXPORT_VERSION }
 
 /**
  * Project Export / Import — a portable, data-only JSON snapshot of a project's
@@ -34,9 +48,6 @@ import { randomId } from './ids'
  * built-in game assets (geometry re-bakes from the kitten gltf on load, textures resolve
  * by Content/Core path), so they round-trip as data with no binary bundling.
  */
-
-export const PROJECT_EXPORT_FORMAT = 'flexo-project'
-export const PROJECT_EXPORT_VERSION = 1
 
 /** The in-scope workspace data carried by an export (everything but binary-backed assets). */
 export interface ProjectExportData {
@@ -119,10 +130,15 @@ export function buildProjectExport(part: EditingPart, projectName: string): Proj
   }
 }
 
+/** Serializes an export envelope to the minified compact-JSON wire string. */
+export function serializeProjectJson(env: ProjectExportEnvelope): string {
+  return JSON.stringify(encodeProject(env))
+}
+
 /**
- * Parses + validates pasted import text. Returns a discriminated result with a
- * human-readable error on failure, or a normalized envelope (missing optional
- * fields backfilled) on success.
+ * Parses + validates a compact project JSON string (from the Import dialog or a
+ * decompressed share-link payload). Returns a discriminated result with a
+ * human-readable error on failure, or the decoded envelope on success.
  */
 export function parseProjectImport(text: string): ParseResult {
   const trimmed = text.trim()
@@ -134,79 +150,58 @@ export function parseProjectImport(text: string): ParseResult {
   } catch (err) {
     return { ok: false, error: `Not valid JSON: ${(err as Error).message}` }
   }
+  return parseProjectObject(raw)
+}
+
+/** Validates an already-parsed compact object and decodes it to an envelope. */
+export function parseProjectObject(raw: unknown): ParseResult {
   if (typeof raw !== 'object' || raw === null) {
     return { ok: false, error: 'Expected a JSON object.' }
   }
-
-  const obj = raw as Record<string, unknown>
-  if (obj.format !== PROJECT_EXPORT_FORMAT) {
+  if (!isCompactProject(raw)) {
     return {
       ok: false,
-      error: `Not a flexo project export (format: ${JSON.stringify(obj.format)}).`,
+      error: `Not a flexo project (format: ${JSON.stringify((raw as { f?: unknown }).f)}).`,
     }
   }
-  if (typeof obj.version !== 'number' || obj.version > PROJECT_EXPORT_VERSION) {
-    return { ok: false, error: `Unsupported export version: ${JSON.stringify(obj.version)}.` }
+  if (typeof raw.v !== 'number' || raw.v > PROJECT_EXPORT_VERSION) {
+    return { ok: false, error: `Unsupported project version: ${JSON.stringify(raw.v)}.` }
   }
-  if (typeof obj.data !== 'object' || obj.data === null) {
-    return { ok: false, error: 'Export is missing its "data" section.' }
-  }
-
-  const d = obj.data as Record<string, unknown>
-  for (const key of ['placements', 'connectors', 'kittens', 'animations', 'layers'] as const) {
-    if (!Array.isArray(d[key])) {
-      return { ok: false, error: `Export "data.${key}" is missing or not an array.` }
-    }
-  }
-
-  return { ok: true, env: normalizeEnvelope(obj, d) }
+  return { ok: true, env: decodeProject(raw) }
 }
 
-function normalizeEnvelope(
-  obj: Record<string, unknown>,
-  d: Record<string, unknown>,
-): ProjectExportEnvelope {
-  const gameData =
-    d.gameData && typeof d.gameData === 'object'
-      ? { ...createEmptyGameData(), ...(d.gameData as Partial<PartGameData>) }
-      : createEmptyGameData()
-  // Migrate legacy docking ports that stored a single `force` instead of the
-  // split LatchingImpulse/PushoffForce fields (older project exports).
-  if (gameData.dockingPort) {
-    const dp = gameData.dockingPort as DockingPort & { force?: number }
-    if (dp.latchingImpulse == null) dp.latchingImpulse = dp.force ?? 0
-    if (dp.pushoffForce == null) dp.pushoffForce = dp.force ?? 0
-    delete dp.force
+/**
+ * Faithfully reconstructs a standalone {@link EditingPart} from an export envelope —
+ * NO id remapping (the payload's ids are already internally consistent). Used by the
+ * share-link "load as a new project" path (see projectStore.loadSharedProject); the
+ * paste-Import path uses {@link mergeProjectImport} instead, which merges additively.
+ * Custom textures / primitive meshes are never carried, so they start empty.
+ */
+export function envelopeToPart(env: ProjectExportEnvelope): EditingPart {
+  const d = env.data
+  const part: EditingPart = {
+    partId: env.sourcePartId || 'fixme_part_id',
+    editorTags: [...d.editorTags],
+    gameData: d.gameData,
+    subPartGameData: d.subPartGameData,
+    layers: [...d.layers],
+    placements: d.placements,
+    connectors: d.connectors,
+    kittens: d.kittens,
+    customTextures: [],
+    customMeshes: d.customMeshes,
+    animations: d.animations,
   }
-  // Migrate legacy batteries that stored capacity in kWh (1 kWh = 1000 Wh).
-  for (const b of gameData.batteries) {
-    const legacy = b as Battery & { capacityKWh?: number }
-    if (legacy.capacityWh == null && legacy.capacityKWh != null) {
-      legacy.capacityWh = legacy.capacityKWh * 1000
-      delete legacy.capacityKWh
-    }
-  }
-  return {
-    format: PROJECT_EXPORT_FORMAT,
-    version: typeof obj.version === 'number' ? obj.version : PROJECT_EXPORT_VERSION,
-    exportedAt: typeof obj.exportedAt === 'number' ? obj.exportedAt : 0,
-    projectName: typeof obj.projectName === 'string' ? obj.projectName : '',
-    sourcePartId: typeof obj.sourcePartId === 'string' ? obj.sourcePartId : '',
-    data: {
-      editorTags: Array.isArray(d.editorTags) ? (d.editorTags as string[]) : [],
-      gameData,
-      subPartGameData: Array.isArray(d.subPartGameData)
-        ? (d.subPartGameData as SubPartGameData[])
-        : [],
-      layers: d.layers as Layer[],
-      placements: d.placements as SubPartPlacement[],
-      connectors: d.connectors as Connector[],
-      kittens: d.kittens as KittenInstance[],
-      animations: d.animations as PartAnimation[],
-      // Optional — absent in pre-kitten-mesh exports; only kitten meshes are ever carried.
-      customMeshes: Array.isArray(d.customMeshes) ? (d.customMeshes as CustomMesh[]) : [],
-    },
-  }
+  ensureBuiltInLayers(part)
+  return part
+}
+
+/** Guarantees the three undeletable built-in layers exist (in case a payload omitted any). */
+function ensureBuiltInLayers(part: EditingPart): void {
+  const has = (id: string) => part.layers.some((l) => l.id === id)
+  if (!has(DEFAULT_LAYER_ID)) part.layers.unshift(createDefaultLayer())
+  if (!has(CONNECTOR_LAYER_ID)) part.layers.push(createConnectorLayer())
+  if (!has(KITTEN_LAYER_ID)) part.layers.push(createKittenLayer())
 }
 
 /**

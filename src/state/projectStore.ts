@@ -21,6 +21,7 @@ import {
   KITTEN_LAYER_ID,
 } from '../ksa/types'
 import type { Battery, Connector, ConnectorFlag, EditingPart, PartGameData } from '../ksa/types'
+import { envelopeToPart, type ProjectExportEnvelope } from './projectTransfer'
 
 /**
  * PROJECTS — the editing experience is "project"-based. A project bundles all of
@@ -298,6 +299,34 @@ export function createProject(name: string): void {
   }
   $projectName.set(trimmed)
   saveCurrentProject()
+}
+
+/**
+ * Opens a project decoded from a stateless share link (see projectShareLink.ts) as a
+ * NEW saved project, switched-to and made current — the user's existing projects are
+ * untouched. The shared project's name is made unique to avoid clobbering a same-named
+ * local project. Reconstructed faithfully (no id remapping); camera/selection reset.
+ */
+export function loadSharedProject(env: ProjectExportEnvelope): string {
+  const part = envelopeToPart(env)
+  migratePart(part)
+  const name = uniqueProjectName(env.projectName.trim() || 'Shared Project')
+  suspended = true
+  try {
+    importHistory({ undo: [], redo: [] })
+    $part.set(part)
+    $activeLayerId.set(DEFAULT_LAYER_ID)
+    $layerView.set({})
+    $measurements.set([])
+    $containers.set([])
+    clearSelection()
+    resetCamera()
+  } finally {
+    suspended = false
+  }
+  $projectName.set(name)
+  saveCurrentProject()
+  return name
 }
 
 /**

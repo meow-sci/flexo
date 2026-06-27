@@ -3,7 +3,12 @@ import { useStore } from '@nanostores/react'
 import { Modal, Dialog, DialogHeader, Button, monoTextarea, toast, warningBox } from './kit'
 import { $part, importProjectData } from '../state/editorStore'
 import { $projectName } from '../state/projectStore'
-import { buildProjectExport, hasCustomAssets, parseProjectImport } from '../state/projectTransfer'
+import {
+  buildProjectExport,
+  hasCustomAssets,
+  parseProjectImport,
+  serializeProjectJson,
+} from '../state/projectTransfer'
 
 /**
  * "Project Data" Export / Import dialogs (data-only JSON, opened from the Project
@@ -29,7 +34,7 @@ export function ExportProjectDialog({
   const [copied, setCopied] = useState(false)
 
   // Only serialize while the dialog is open and export is allowed.
-  const json = isOpen && !blocked ? JSON.stringify(buildProjectExport(part, name), null, 2) : ''
+  const json = isOpen && !blocked ? serializeProjectJson(buildProjectExport(part, name)) : ''
 
   const copy = async () => {
     try {

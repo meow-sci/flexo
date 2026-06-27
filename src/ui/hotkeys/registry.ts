@@ -1,5 +1,5 @@
 import type { Keys, Options } from 'react-hotkeys-hook'
-import { redo, removeSelected, undo } from '../../state/editorStore'
+import { copySelected, pasteClipboard, redo, removeSelected, undo } from '../../state/editorStore'
 import { toggleHelp } from '../../state/helpStore'
 import { rotateSelectionAroundPair } from '../../three/rotateSelection'
 import { FAST_NUDGE_MULTIPLIER, nudgeSelectionBy } from '../../three/nudgeSelection'
@@ -47,6 +47,15 @@ function runUndo(): void {
 function runRedo(): void {
   const d = redo()
   if (d) toast({ title: `Redo: ${d}` }, { timeout: 1500 })
+}
+/** Copy/paste wrappers that toast a count so the action is self-describing. */
+function runCopy(): void {
+  const n = copySelected()
+  if (n) toast({ title: `Copied ${n} ${n === 1 ? 'item' : 'items'}` }, { timeout: 1500 })
+}
+function runPaste(): void {
+  const n = pasteClipboard()
+  if (n) toast({ title: `Pasted ${n} ${n === 1 ? 'item' : 'items'}` }, { timeout: 1500 })
 }
 
 export const HOTKEY_GROUPS: HotkeyGroup[] = [
@@ -134,6 +143,20 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
         run: () => removeSelected(),
       },
       {
+        id: 'copy',
+        label: 'Copy selection',
+        keys: 'mod+c',
+        chords: [['mod', 'C']],
+        run: runCopy,
+      },
+      {
+        id: 'paste',
+        label: 'Paste in place',
+        keys: 'mod+v',
+        chords: [['mod', 'V']],
+        run: runPaste,
+      },
+      {
         id: 'undo',
         label: 'Undo',
         keys: 'mod+z',
@@ -159,9 +182,10 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
         id: 'help',
         label: 'Show keyboard shortcuts',
         keys: '?',
-        // Match the produced character so Shift+/ on US layouts (and any layout
-        // where "?" needs Shift) fires it, regardless of physical key.
-        options: { useKey: true },
+        // Match the produced character ("?") regardless of physical key/layout, and
+        // ignore modifiers: on US layouts "?" is Shift+/, and react-hotkeys-hook
+        // otherwise rejects the match because the held Shift isn't part of the combo.
+        options: { useKey: true, ignoreModifiers: true },
         chords: [['?']],
         run: () => toggleHelp(),
       },

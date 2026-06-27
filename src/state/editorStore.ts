@@ -10,6 +10,7 @@ import type {
   EulerXYZ,
   EvaDoor,
   Generator,
+  KittenInstance,
   KittenKind,
   Light,
   LightType,
@@ -107,6 +108,23 @@ export const $selectedKittenIndices = atom<number[]>([])
 export const $selectedKittenIndex = computed($selectedKittenIndices, (indices) =>
   indices.length > 0 ? indices[indices.length - 1] : -1,
 )
+
+/**
+ * Snapshots of copied entities (SubParts, connectors, kittens), stored WITHOUT
+ * their ids — paste regenerates fresh ids so copies never collide. Ephemeral
+ * editor state like selection: NOT persisted and NOT part of undo history. An
+ * in-app clipboard (not the OS clipboard) so paste reliably reconstructs entity
+ * data without serialization/permission round-trips; copy/paste are still driven
+ * by the platform shortcuts (⌘/Ctrl + C/V). Null when nothing has been copied.
+ */
+export interface PartClipboard {
+  placements: SubPartPlacement[]
+  connectors: Connector[]
+  kittens: KittenInstance[]
+}
+export const $clipboard = atom<PartClipboard | null>(null)
+/** True once something has been copied — drives enable/disable of paste affordances. */
+export const $hasClipboard = computed($clipboard, (c) => c != null)
 /**
  * The layer new SubParts/connectors are added to. Ephemeral UI state (like
  * selection) — NOT persisted and NOT in undo history. Always clamped to an
@@ -873,6 +891,106 @@ export function duplicateSelected(): void {
   }
   $part.set(part)
   setSelection(newSub, newCon, newKit)
+}
+
+/** Human label for a count of mixed entities, e.g. "3 parts" or "5 items". */
+function entityCountLabel(sub: number, con: number, kit: number): string {
+  const total = sub + con + kit
+  const kinds = (sub ? 1 : 0) + (con ? 1 : 0) + (kit ? 1 : 0)
+  if (kinds > 1) return `${total} items`
+  if (sub) return `${sub} ${sub === 1 ? 'part' : 'parts'}`
+  if (con) return `${con} ${con === 1 ? 'connector' : 'connectors'}`
+  return `${kit} ${kit === 1 ? 'kitten' : 'kittens'}`
+}
+
+/**
+ * Copies the current selection (SubParts, connectors, kittens) into the in-app
+ * {@link $clipboard}, stripping ids so a later paste regenerates fresh ones.
+ * Leaves the workspace and selection untouched. Returns how many entities were
+ * copied (0 when nothing is selected — the clipboard is left as-is).
+ */
+export function copySelected(): number {
+  const part = $part.get()
+  const sub = $selectedIndices.get().filter((i) => i >= 0 && i < part.placements.length)
+  const con = $selectedConnectorIndices.get().filter((i) => i >= 0 && i < part.connectors.length)
+  const kit = $selectedKittenIndices.get().filter((i) => i >= 0 && i < part.kittens.length)
+  const total = sub.length + con.length + kit.length
+  if (total === 0) return 0
+  const order = (a: number, b: number) => a - b
+  $clipboard.set({
+    placements: [...sub].sort(order).map((i) => structuredClone(part.placements[i])),
+    connectors: [...con].sort(order).map((i) => structuredClone(part.connectors[i])),
+    kittens: [...kit].sort(order).map((i) => structuredClone(part.kittens[i])),
+  })
+  return total
+}
+
+/**
+ * Pastes the {@link $clipboard} contents back into the workspace in place (same
+ * position/rotation/scale they were copied at), regenerating ids so the pastes
+ * never collide with existing entities, and selects the newly pasted entities.
+ * Discrete mutation → records one undo step. A pasted SubPart keeps its original
+ * layer when that layer still exists, else falls back to the active layer (the
+ * clipboard can outlive the layer it was copied from). Returns how many entities
+ * were pasted (0 when the clipboard is empty).
+ */
+export function pasteClipboard(): number {
+  const clip = $clipboard.get()
+  if (!clip) return 0
+  const total = clip.placements.length + clip.connectors.length + clip.kittens.length
+  if (total === 0) return 0
+
+  pushUndo(
+    'paste',
+    entityCountLabel(clip.placements.length, clip.connectors.length, clip.kittens.length),
+  )
+  const part = clone($part.get())
+  const newSub: number[] = []
+  const newCon: number[] = []
+  const newKit: number[] = []
+  for (const src of clip.placements) {
+    const base = lastSegmentLower(src.subPartTemplateId)
+    const count = part.placements.filter(
+      (p) => p.subPartTemplateId === src.subPartTemplateId,
+    ).length
+    const layerId = part.layers.some((l) => l.id === src.layerId)
+      ? src.layerId
+      : currentLayerId(part)
+    part.placements.push({
+      instanceId: `${base}_${count + 1}`,
+      subPartTemplateId: src.subPartTemplateId,
+      position: { ...src.position },
+      rotation: { ...src.rotation },
+      scale: { ...src.scale },
+      layerId,
+    })
+    newSub.push(part.placements.length - 1)
+  }
+  for (const src of clip.connectors) {
+    part.connectors.push({
+      id: nextConnectorId(part),
+      position: { ...src.position },
+      rotation: { ...src.rotation },
+      scale: { ...src.scale },
+      flags: [...src.flags],
+      layerId: CONNECTOR_LAYER_ID,
+    })
+    newCon.push(part.connectors.length - 1)
+  }
+  for (const src of clip.kittens) {
+    part.kittens.push({
+      id: nextKittenId(part),
+      kind: src.kind,
+      position: { ...src.position },
+      rotation: { ...src.rotation },
+      scale: { ...src.scale },
+      layerId: KITTEN_LAYER_ID,
+    })
+    newKit.push(part.kittens.length - 1)
+  }
+  $part.set(part)
+  setSelection(newSub, newCon, newKit)
+  return total
 }
 
 /**

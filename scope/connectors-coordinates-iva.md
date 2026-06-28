@@ -55,6 +55,36 @@ drift). See [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md).
 - KSA gate (`PartModel.cs`): an Internal PartModel renders only in IVA camera mode (`Template.RayTracing != ShadowProxy && (!Template.Internal || viewport.Mode == IVA)`).
 - flexo re-homes each placed Internal SubPart onto a fresh, project-unique SubPart `flexo_<base>_<id>_NotIVA` that **reuses the built-in `<Mesh>` + `<Material>` ids**, **omits `<Internal>` + `<RayTracing>`**, with a **fresh `<PartModel>` Id** (KSA dedupes PartModels by id).
 
+**Vehicle reference orientation (root part = the flight-computer "up")**
+
+flexo edits parts, not vehicles, so it never computes this — but it is the contract behind "which way
+is up" for any **control / root-eligible** part flexo emits. Verified 4750; full trace in
+[analysis/HOW_UP_WORKS.md](../analysis/HOW_UP_WORKS.md).
+
+- The flight computer aims the vehicle **Body-frame +X** (nose/forward) at every auto-point mode
+  (`Up`=local zenith, `Forward`=surface velocity, `Prograde`, `RadialOut`, … —
+  `FlightComputer.UpdateAttitudeTrackError` uses `double3.UnitX.Transform(...)`); **+Z** is the roll
+  reference (`RollMode`). This is the **same +X-forward convention** flexo already draws for connector
+  facing (above).
+- **Body frame == Assembly (editor) frame** (`Vehicle.cs` `Asmb2Cce => Body2Cce`), and at launch the
+  **root part is pinned to identity** in that frame — its editor orientation is folded into the
+  vehicle's world attitude (`VehicleEditor.cs` ~`:845`). ⇒ **the root part's local axes ARE the
+  vehicle reference axes; root-local +X = the ship's forward/up.**
+- `<Control/>` does **NOT** set this. `Control`/`ControlTemplate` are empty markers (`Control.cs`);
+  `Vehicle.IsControllable` = *any* `Control` module present, anywhere in the tree. There is **no
+  control-point / "control-from-here" / reference-transform** in 4750 — the orientation reference is
+  always the root part, regardless of where the `Control` marker lives.
+- **Root-eligibility contract** (`VehicleEditor.IsAllowedAsRootPart`): a part may be root iff it has
+  (a) an editor tag flagged `RootPartWhitelist` (Core: `Capsules`, `Engines`, `Fuel Tanks`,
+  `Coupling`, `Structural`, `Interstage`, `Cargo`), (b) **≥1 connector**, and (c) **no**
+  `ToSurface`/`FromSurface` connector (stack nodes only).
+
+**flexo implication:** none today (flexo does no vehicle assembly). If flexo ever generates a
+control/reference part, author its **local +X toward the intended forward/up**, and give it a stack
+connector + a root-whitelisted `<EditorTag>` so it can serve as the anchor. A *passive*
+"attach-it-to-reorient-up" part is **impossible data-only** (no control point) — "up" only ever
+follows the root part.
+
 ## Known gotchas
 
 - `EULER_ORDER` is the single calibration knob — change it only in `coords.ts`; everything routes through it. Single-axis rotations look right under either order, masking a wrong order until a multi-axis part scrambles.

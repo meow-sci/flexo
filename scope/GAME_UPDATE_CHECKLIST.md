@@ -71,6 +71,7 @@ against the NEW code/XML. Highest-value checks, by area:
 - **Connectors / coords / IVA** — `QuaternionEx.CreateFromXyzRadians` + `Double3Ex` axes unchanged
   (else recalibrate `EULER_ORDER`); `Part.Connector.Flag` enum + `<Flags>` schema; `PartModel.cs`
   IVA render gate + `<Internal>`/`<RayTracing>` schema.
+- **Vehicle reference orientation** (background contract, [connectors-coordinates-iva.md](connectors-coordinates-iva.md)/[analysis/HOW_UP_WORKS.md](../analysis/HOW_UP_WORKS.md)) — confirm `Control.cs`/`ControlTemplate.cs` are still empty markers (no transform/control-point field); `FlightComputer.UpdateAttitudeTrackError` still aims **Body +X** / rolls **+Z**; `Vehicle.Asmb2Cce => Body2Cce`; `VehicleEditor` still pins the **root** to identity at launch; `IsAllowedAsRootPart` rules + `EditorTagDef RootPartWhitelist`. A new `ControlPoint`/"control-from-here"/reference-transform would flip "up follows root" → "up follows selected part" (grep `controlpoint|control from here|referencetransform`).
 - **Ground clutter** — the 7 `*Reference.cs` schema classes unchanged.
 
 ## 5. Distinguish real changes from decompiler noise

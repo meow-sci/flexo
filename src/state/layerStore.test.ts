@@ -32,14 +32,15 @@ describe('layerStore — listed flag', () => {
     expect(isLayerListed('engines')).toBe(true)
   })
 
-  it('back-fills listed=true for legacy entries missing the field', () => {
-    // A persisted entry from before the `listed` flag existed.
+  it('back-fills listed/opacity defaults for legacy entries missing the fields', () => {
+    // A persisted entry from before the `listed`/`opacity` fields existed.
     $layerView.set({ x: { visible: false, locked: true } as never })
     expect(isLayerListed('x')).toBe(true)
     expect(layerViewState($layerView.get(), 'x')).toEqual({
       visible: false,
       locked: true,
       listed: true,
+      opacity: 1,
     })
   })
 

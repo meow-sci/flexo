@@ -10,6 +10,7 @@ import {
 } from '../ksa/kittenAssets'
 import { applyPlacement } from './coords'
 import { kittenHighlight } from './highlightSettings'
+import { applyMaterialOpacity, captureOpacityBase, type MaterialOpacityBase } from './layerOpacity'
 import {
   ATTACHMENT_CORRECTION,
   bakeGeometry,
@@ -47,6 +48,7 @@ export class KittenObject {
     color: THREE.Color
     intensity: number
   }[]
+  private readonly opacityBases: MaterialOpacityBase[]
 
   private constructor(id: string, materials: THREE.MeshStandardMaterial[]) {
     this.id = id
@@ -56,6 +58,7 @@ export class KittenObject {
       color: mat.emissive.clone(),
       intensity: mat.emissiveIntensity,
     }))
+    this.opacityBases = materials.map(captureOpacityBase)
     this.group.name = `kitten:${id}`
     this.group.userData.selectable = { kind: 'kitten', id }
   }
@@ -121,6 +124,13 @@ export class KittenObject {
         mat.emissive.copy(color)
         mat.emissiveIntensity = intensity
       }
+    }
+  }
+
+  /** Dims this kitten to `factor` (0–1) of its base opacity for the layer fade. */
+  setLayerOpacity(factor: number): void {
+    for (let i = 0; i < this.materials.length; i++) {
+      applyMaterialOpacity(this.materials[i], this.opacityBases[i], factor)
     }
   }
 

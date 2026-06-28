@@ -7,6 +7,7 @@ import { applyKsaShaderPatches } from './normalMapPatch'
 import { applyPlacement } from './coords'
 import { customMeshRenderCache } from '../state/customAssetStore'
 import { meshHighlight } from './highlightSettings'
+import { applyMaterialOpacity, captureOpacityBase, type MaterialOpacityBase } from './layerOpacity'
 
 /**
  * A placed SubPart in the scene: a Group carrying its instance id (for raycast
@@ -28,6 +29,7 @@ export class SubPartObject {
 
   private readonly materials: THREE.MeshStandardMaterial[]
   private readonly baseEmissives: Array<{ color: THREE.Color; intensity: number }>
+  private readonly opacityBases: MaterialOpacityBase[]
 
   private constructor(
     instanceId: string,
@@ -40,6 +42,7 @@ export class SubPartObject {
       color: m.emissive.clone(),
       intensity: m.emissiveIntensity,
     }))
+    this.opacityBases = materials.map(captureOpacityBase)
     this.group.name = `subpart:${instanceId}`
     this.group.userData.selectable = { kind: 'subpart', id: instanceId }
     this.group.add(mesh)
@@ -107,6 +110,13 @@ export class SubPartObject {
         mat.emissive.copy(this.baseEmissives[i].color)
         mat.emissiveIntensity = this.baseEmissives[i].intensity
       }
+    }
+  }
+
+  /** Dims this instance to `factor` (0–1) of its base opacity for the layer fade. */
+  setLayerOpacity(factor: number): void {
+    for (let i = 0; i < this.materials.length; i++) {
+      applyMaterialOpacity(this.materials[i], this.opacityBases[i], factor)
     }
   }
 

@@ -20,12 +20,19 @@ export interface LayerViewState {
   locked: boolean
   /** Whether the layer's entities appear in the inspector "Assets" list. */
   listed: boolean
+  /**
+   * Viewport opacity multiplier, 0–1 (default 1 = fully opaque). Fades the layer's
+   * rendered meshes so parts behind show through while repositioning. Editor-only —
+   * never affects the exported document.
+   */
+  opacity: number
 }
 
 export const DEFAULT_LAYER_STATE: Readonly<LayerViewState> = {
   visible: true,
   locked: false,
   listed: true,
+  opacity: 1,
 }
 
 /** Map of layerId → view state. Entries are sparse (defaults filled on read). */
@@ -49,6 +56,11 @@ export function isLayerLocked(id: string): boolean {
 /** True when the layer's entities are shown in the Assets list (default true). */
 export function isLayerListed(id: string): boolean {
   return layerViewState($layerView.get(), id).listed
+}
+
+/** A layer's viewport opacity multiplier, 0–1 (default 1). */
+export function layerOpacity(id: string): number {
+  return layerViewState($layerView.get(), id).opacity
 }
 
 function setLayerView(id: string, patch: Partial<LayerViewState>): void {
@@ -92,4 +104,9 @@ export function setLayerLocked(id: string, locked: boolean): void {
 /** Toggles a layer's lock (see {@link setLayerLocked}). */
 export function toggleLayerLocked(id: string): void {
   setLayerLocked(id, !isLayerLocked(id))
+}
+
+/** Sets a layer's viewport opacity multiplier, clamped to 0–1. */
+export function setLayerOpacity(id: string, opacity: number): void {
+  setLayerView(id, { opacity: Math.min(1, Math.max(0, opacity)) })
 }

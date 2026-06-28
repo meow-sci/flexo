@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import type { Connector } from '../ksa/types'
 import { applyPlacement } from './coords'
+import { applyMaterialOpacity, captureOpacityBase, type MaterialOpacityBase } from './layerOpacity'
 
 const COLOR_DEFAULT = 0xf2f0e9
 const COLOR_SELECTED = 0x22dd44
@@ -21,6 +22,7 @@ export class ConnectorObject {
   private readonly cubeMaterial: THREE.MeshStandardMaterial
   private readonly coneGeometry: THREE.ConeGeometry
   private readonly coneMaterial: THREE.MeshStandardMaterial
+  private readonly opacityBases: MaterialOpacityBase[]
 
   constructor(connector: Connector, size: number) {
     this.id = connector.id
@@ -52,6 +54,11 @@ export class ConnectorObject {
     cone.position.x = size / 2 + coneLength / 2
     this.group.add(cone)
 
+    this.opacityBases = [
+      captureOpacityBase(this.cubeMaterial),
+      captureOpacityBase(this.coneMaterial),
+    ]
+
     this.setConnector(connector)
   }
 
@@ -65,6 +72,12 @@ export class ConnectorObject {
     const hex = selected ? COLOR_SELECTED : COLOR_DEFAULT
     this.cubeMaterial.color.setHex(hex)
     this.coneMaterial.color.setHex(hex)
+  }
+
+  /** Dims this connector to `factor` (0–1) of its base opacity for the layer fade. */
+  setLayerOpacity(factor: number): void {
+    applyMaterialOpacity(this.cubeMaterial, this.opacityBases[0], factor)
+    applyMaterialOpacity(this.coneMaterial, this.opacityBases[1], factor)
   }
 
   dispose(): void {

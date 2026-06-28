@@ -11,6 +11,10 @@ import {
   Button,
   Chip,
   ConfirmDialog,
+  DialogTrigger,
+  Popover,
+  PopoverDialog,
+  Slider,
   TextField,
   ToggleButtonGroup,
   ToggleButton,
@@ -33,6 +37,7 @@ import {
 import {
   $layerView,
   layerViewState,
+  setLayerOpacity,
   toggleLayerListed,
   toggleLayerLocked,
   toggleLayerVisible,
@@ -46,6 +51,7 @@ import {
   type Layer,
 } from '../ksa/types'
 import {
+  BlendIcon,
   EyeIcon,
   EyeOffIcon,
   GripVerticalIcon,
@@ -283,6 +289,7 @@ function LayerRow({
             {view.visible ? <EyeIcon /> : <EyeOffIcon />}
           </Button>
         </Tooltip>
+        <LayerOpacityButton layerId={layer.id} opacity={view.opacity} />
         <Tooltip content={locked ? 'Unlock layer' : 'Lock layer'}>
           <Button
             iconOnly
@@ -331,6 +338,79 @@ function LayerRow({
         </Tooltip>
       </div>
     </>
+  )
+}
+
+/**
+ * Opacity control for a layer: a Blend-icon button opening a small popover with a
+ * 0–100 number input and a slider, both driving {@link setLayerOpacity}. Fading a
+ * layer makes its meshes see-through in the viewport so you can reposition parts
+ * behind them — a view preference, never exported. The icon tints accent when the
+ * layer is dimmed below 100%.
+ */
+function LayerOpacityButton({ layerId, opacity }: { layerId: string; opacity: number }) {
+  const pct = Math.round(opacity * 100)
+  const dimmed = pct < 100
+  return (
+    <DialogTrigger>
+      <Tooltip content={dimmed ? `Opacity ${pct}%` : 'Layer opacity'}>
+        <Button
+          iconOnly
+          size="sm"
+          variant="ghost"
+          aria-label="Layer opacity"
+          className={dimmed ? 'text-accent' : undefined}
+        >
+          <BlendIcon />
+        </Button>
+      </Tooltip>
+      <Popover placement="bottom">
+        <PopoverDialog className="p-2">
+          <OpacityFields layerId={layerId} pct={pct} />
+        </PopoverDialog>
+      </Popover>
+    </DialogTrigger>
+  )
+}
+
+/** Number input (0–100) + slider, both committing to {@link setLayerOpacity}. */
+function OpacityFields({ layerId, pct }: { layerId: string; pct: number }) {
+  // Local draft lets the field hold a transient/empty value while typing; null means
+  // "follow the store value" (so slider edits flow back into the number display).
+  const [draft, setDraft] = useState<string | null>(null)
+  const commit = (raw: string) => {
+    const n = Number.parseInt(raw, 10)
+    if (Number.isFinite(n)) setLayerOpacity(layerId, Math.min(100, Math.max(0, n)) / 100)
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <TextField
+        size="sm"
+        type="number"
+        aria-label="Layer opacity percent"
+        className="w-14"
+        value={draft ?? String(pct)}
+        onChange={(v) => {
+          setDraft(v)
+          commit(v)
+        }}
+        onBlur={() => setDraft(null)}
+        onKeyDown={(e) => {
+          // Keep grid typeahead/selection keys from stealing keystrokes.
+          e.stopPropagation()
+          if (e.key === 'Enter') setDraft(null)
+        }}
+      />
+      <Slider
+        aria-label="Layer opacity"
+        className="w-36"
+        minValue={0}
+        maxValue={100}
+        step={1}
+        value={pct}
+        onChange={(v) => setLayerOpacity(layerId, v / 100)}
+      />
+    </div>
   )
 }
 

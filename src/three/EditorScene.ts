@@ -380,7 +380,7 @@ export class EditorScene {
     // setting changes (fires immediately on subscribe — a harmless no-op when nothing
     // is selected).
     this.unsubscribers.push($selectionHighlight.subscribe(() => this.updateSelection()))
-    this.unsubscribers.push($layerView.subscribe(() => this.applyLayerVisibility()))
+    this.unsubscribers.push($layerView.subscribe(() => this.applyLayerView()))
     this.unsubscribers.push($toolMode.subscribe((mode) => this.gizmo.setMode(mode)))
     this.unsubscribers.push($snap.subscribe((snap) => this.gizmo.setSnap(snap)))
     this.unsubscribers.push($grids.subscribe((grids) => this.viewport.grids.setConfig(grids)))
@@ -437,7 +437,7 @@ export class EditorScene {
           obj.setPlacement(latest)
           this.root.add(obj.group)
           this.objects.set(placement.instanceId, obj)
-          this.applyLayerVisibility() // respect the layer's visibility for the new object
+          this.applyLayerView() // respect the layer's visibility + opacity for the new object
           this.updateSelection() // highlight/attach if this is the selected one
           this.applyAnimationPreview() // re-apply if this object is animation-driven
         })
@@ -449,7 +449,7 @@ export class EditorScene {
 
     this.reconcileConnectors(part)
     this.reconcileKittens(part)
-    this.applyLayerVisibility()
+    this.applyLayerView()
     this.updateSelection()
     this.applyAnimationPreview()
     this.applyEngineHandle()
@@ -551,7 +551,7 @@ export class EditorScene {
           obj.setInstance(latest)
           this.root.add(obj.group)
           this.kittenObjects.set(kitten.id, obj)
-          this.applyLayerVisibility()
+          this.applyLayerView()
           this.updateSelection()
         })
         .catch((err) => {
@@ -562,24 +562,37 @@ export class EditorScene {
   }
 
   /**
-   * Hides/shows each built entity by its layer's visibility (from `$layerView`).
-   * Note: three.js does NOT skip invisible objects during raycasting, so the
-   * `onSelect` callback guards against hidden/non-active-layer hits explicitly.
+   * Applies each layer's view state (from `$layerView`) to its built entities:
+   * visibility (eye toggle) and opacity (fade slider). Note: three.js does NOT skip
+   * invisible objects during raycasting, so the `onSelect` callback guards against
+   * hidden/non-active-layer hits explicitly.
    */
-  private applyLayerVisibility(): void {
+  private applyLayerView(): void {
     const part = $part.get()
     const view = $layerView.get()
     for (const p of part.placements) {
       const obj = this.objects.get(p.instanceId)
-      if (obj) obj.group.visible = layerViewState(view, p.layerId).visible
+      if (obj) {
+        const lv = layerViewState(view, p.layerId)
+        obj.group.visible = lv.visible
+        obj.setLayerOpacity(lv.opacity)
+      }
     }
     for (const c of part.connectors) {
       const obj = this.connectorObjects.get(c.id)
-      if (obj) obj.group.visible = layerViewState(view, c.layerId).visible
+      if (obj) {
+        const lv = layerViewState(view, c.layerId)
+        obj.group.visible = lv.visible
+        obj.setLayerOpacity(lv.opacity)
+      }
     }
     for (const k of part.kittens) {
       const obj = this.kittenObjects.get(k.id)
-      if (obj) obj.group.visible = layerViewState(view, k.layerId).visible
+      if (obj) {
+        const lv = layerViewState(view, k.layerId)
+        obj.group.visible = lv.visible
+        obj.setLayerOpacity(lv.opacity)
+      }
     }
   }
 
@@ -613,7 +626,7 @@ export class EditorScene {
     }
     this.connectorObjects.clear()
     this.reconcileConnectors($part.get())
-    this.applyLayerVisibility()
+    this.applyLayerView()
     this.updateSelection()
   }
 

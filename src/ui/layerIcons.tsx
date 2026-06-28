@@ -1,4 +1,5 @@
 import {
+  Blend,
   Eye,
   EyeOff,
   GripVertical,
@@ -37,6 +38,11 @@ export function UnlistedIcon() {
 /** Crosshair-style "select all in layer" affordance. */
 export function SelectAllIcon() {
   return <Scan className="size-4" />
+}
+
+/** Layer opacity / fade affordance. */
+export function BlendIcon() {
+  return <Blend className="size-4" />
 }
 
 export function TrashIcon() {

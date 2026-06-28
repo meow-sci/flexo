@@ -147,6 +147,10 @@ export function serializeGameData(
   for (const pc of game.powerConsumers) {
     const el = doc.createElement('PowerConsumer')
     el.appendChild(elWithAttr(doc, 'Consumed', 'W', formatG6(pc.consumedWatts)))
+    // KSA defaults both flags to false, so emit each only when set (LightIsActive
+    // is meaningless without LightSwitch, but round-tripped independently).
+    if (pc.lightSwitch) el.setAttribute('LightSwitch', 'true')
+    if (pc.lightIsActive) el.setAttribute('LightIsActive', 'true')
     gd.appendChild(el)
   }
 

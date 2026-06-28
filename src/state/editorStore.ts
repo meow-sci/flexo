@@ -1934,7 +1934,9 @@ export function setSolarPanelRotation(index: number, rotation: EulerXYZ): void {
 
 /** Discrete: append a power consumer (default draw). */
 export function addPowerConsumer(): void {
-  commitGameData('add consumer', '', (g) => g.powerConsumers.push({ consumedWatts: 2 }))
+  commitGameData('add consumer', '', (g) =>
+    g.powerConsumers.push({ consumedWatts: 2, lightSwitch: false, lightIsActive: false }),
+  )
 }
 /** Discrete: remove power consumer at `index`. */
 export function removePowerConsumer(index: number): void {
@@ -1946,6 +1948,20 @@ export function setPowerConsumerWatts(index: number, consumedWatts: number): voi
   if (index < 0 || index >= $part.get().gameData.powerConsumers.length) return
   mutateGameData((g) => {
     g.powerConsumers[index].consumedWatts = consumedWatts
+  })
+}
+/** Discrete: toggle a consumer's `LightSwitch` (flight-toggleable light switch). */
+export function setPowerConsumerLightSwitch(index: number, on: boolean): void {
+  if (index < 0 || index >= $part.get().gameData.powerConsumers.length) return
+  commitGameData('toggle light switch', '', (g) => {
+    g.powerConsumers[index].lightSwitch = on
+  })
+}
+/** Discrete: toggle a consumer's `LightIsActive` (initial on/off state). */
+export function setPowerConsumerLightIsActive(index: number, on: boolean): void {
+  if (index < 0 || index >= $part.get().gameData.powerConsumers.length) return
+  commitGameData('toggle light active', '', (g) => {
+    g.powerConsumers[index].lightIsActive = on
   })
 }
 

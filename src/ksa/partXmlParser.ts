@@ -321,7 +321,11 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
     game.generators.push({ outputWatts: readPowerWatts(el, 'Produced') })
   for (const el of directChildren(gd, 'SolarPanel')) game.solarPanels.push(parseSolarPanel(el))
   for (const el of directChildren(gd, 'PowerConsumer'))
-    game.powerConsumers.push({ consumedWatts: readPowerWatts(el, 'Consumed') })
+    game.powerConsumers.push({
+      consumedWatts: readPowerWatts(el, 'Consumed'),
+      lightSwitch: el.getAttribute('LightSwitch')?.trim().toLowerCase() === 'true',
+      lightIsActive: el.getAttribute('LightIsActive')?.trim().toLowerCase() === 'true',
+    })
 
   const connectorFlags = new Map<string, ConnectorFlag[]>()
   for (const conn of directChildren(gd, 'Connector')) {

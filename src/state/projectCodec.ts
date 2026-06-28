@@ -230,6 +230,23 @@ function decSolarPanel(c: CSolarPanel): SolarPanel {
   return { outputWatts: num(c.w), transform: decTransform(c.tf) }
 }
 
+interface CPowerConsumer {
+  w: number // consumedWatts
+  ls?: 1 // lightSwitch; present ⇒ true
+  la?: 1 // lightIsActive; present ⇒ true
+}
+
+function encPowerConsumer(pc: PowerConsumer): CPowerConsumer {
+  const o: CPowerConsumer = { w: round(pc.consumedWatts) }
+  if (pc.lightSwitch) o.ls = 1
+  if (pc.lightIsActive) o.la = 1
+  return o
+}
+
+function decPowerConsumer(c: CPowerConsumer): PowerConsumer {
+  return { consumedWatts: num(c.w), lightSwitch: !!c.ls, lightIsActive: !!c.la }
+}
+
 interface CGameData {
   dn?: string // displayName
   cm?: number // customMass
@@ -238,7 +255,7 @@ interface CGameData {
   bt?: number[] // batteries → capacityWh[]
   gn?: number[] // generators → outputWatts[]
   sp?: CSolarPanel[] // solarPanels
-  pc?: number[] // powerConsumers → consumedWatts[]
+  pc?: CPowerConsumer[] // powerConsumers
   dc?: { c: string; f: number } // decoupler
   dp?: { c: string; ke: number; pi: number } // dockingPort
   ed?: { c: string } // evaDoor
@@ -260,7 +277,7 @@ function encGameData(g: PartGameData): CGameData {
   if (g.batteries.length) o.bt = g.batteries.map((b) => round(b.capacityWh))
   if (g.generators.length) o.gn = g.generators.map((x) => round(x.outputWatts))
   if (g.solarPanels.length) o.sp = g.solarPanels.map(encSolarPanel)
-  if (g.powerConsumers.length) o.pc = g.powerConsumers.map((p) => round(p.consumedWatts))
+  if (g.powerConsumers.length) o.pc = g.powerConsumers.map(encPowerConsumer)
   if (g.decoupler) o.dc = { c: g.decoupler.connectorId, f: round(g.decoupler.force) }
   if (g.dockingPort) {
     o.dp = {
@@ -290,7 +307,7 @@ function decGameData(c: CGameData | undefined): PartGameData {
   g.batteries = arr<number>(c.bt).map((wh): Battery => ({ capacityWh: num(wh) }))
   g.generators = arr<number>(c.gn).map((w): Generator => ({ outputWatts: num(w) }))
   g.solarPanels = arr<CSolarPanel>(c.sp).map(decSolarPanel)
-  g.powerConsumers = arr<number>(c.pc).map((w): PowerConsumer => ({ consumedWatts: num(w) }))
+  g.powerConsumers = arr<CPowerConsumer>(c.pc).map(decPowerConsumer)
   g.decoupler = c.dc ? { connectorId: str(c.dc.c), force: num(c.dc.f) } : null
   g.dockingPort = c.dp
     ? {

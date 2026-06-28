@@ -71,7 +71,7 @@ is up" for any **control / root-eligible** part flexo emits. Verified 4750; full
   vehicle's world attitude (`VehicleEditor.cs` ~`:845`). ⇒ **the root part's local axes ARE the
   vehicle reference axes; root-local +X = the ship's forward/up.**
 - `<Control/>` does **NOT** set this. `Control`/`ControlTemplate` are empty markers (`Control.cs`);
-  `Vehicle.IsControllable` = *any* `Control` module present, anywhere in the tree. There is **no
+  `Vehicle.IsControllable` = _any_ `Control` module present, anywhere in the tree. There is **no
   control-point / "control-from-here" / reference-transform** in 4750 — the orientation reference is
   always the root part, regardless of where the `Control` marker lives.
 - **Root-eligibility contract** (`VehicleEditor.IsAllowedAsRootPart`): a part may be root iff it has
@@ -81,7 +81,7 @@ is up" for any **control / root-eligible** part flexo emits. Verified 4750; full
 
 **flexo implication:** none today (flexo does no vehicle assembly). If flexo ever generates a
 control/reference part, author its **local +X toward the intended forward/up**, and give it a stack
-connector + a root-whitelisted `<EditorTag>` so it can serve as the anchor. A *passive*
+connector + a root-whitelisted `<EditorTag>` so it can serve as the anchor. A _passive_
 "attach-it-to-reorient-up" part is **impossible data-only** (no control point) — "up" only ever
 follows the root part.
 

@@ -95,7 +95,10 @@ function richPart(): EditingPart {
     { outputWatts: 80, transform: identityTransform() },
     { outputWatts: 50, transform: xf([0, 1, 0], [0, 0.5, 0], [1, 1, 1]) },
   )
-  p.gameData.powerConsumers.push({ consumedWatts: 12.5 })
+  p.gameData.powerConsumers.push(
+    { consumedWatts: 12.5, lightSwitch: true, lightIsActive: true },
+    { consumedWatts: 4, lightSwitch: false, lightIsActive: false },
+  )
   p.gameData.decoupler = { connectorId: '_connector1', force: 1000 }
   p.gameData.dockingPort = {
     connectorId: '_connector1',

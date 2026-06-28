@@ -37,6 +37,8 @@ import {
   setLightRayTracing,
   setLightRotation,
   setLightType,
+  setPowerConsumerLightIsActive,
+  setPowerConsumerLightSwitch,
   setPowerConsumerWatts,
   setSolarPanelOutput,
   setSolarPanelRotation,
@@ -50,6 +52,7 @@ import type {
   Light,
   LightType,
   PartGameData,
+  PowerConsumer,
   SolarPanel,
   Tank,
   TankShape,
@@ -460,6 +463,46 @@ function PowerList({
 }
 
 /**
+ * Power-consumer list editor: each consumer has a draw (Consumed, W) plus the two
+ * `LightSwitch`/`LightIsActive` flags that turn it into a flight-toggleable light
+ * switch. `LightIsActive` is the switch's initial on/off state and KSA only reads
+ * it when `LightSwitch` is set, so we disable it until the switch is enabled.
+ */
+function PowerConsumersSection({ powerConsumers }: { powerConsumers: PowerConsumer[] }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <SectionTitle>Power Consumers</SectionTitle>
+      {powerConsumers.map((pc, i) => (
+        <ItemCard key={i} title={`Consumer ${i + 1}`} onRemove={() => removePowerConsumer(i)}>
+          <Field label="Consumed (W)">
+            <PreciseNumberInput
+              aria-label={`Consumer ${i + 1} consumed watts`}
+              value={pc.consumedWatts}
+              min={0}
+              onInteractionStart={() => pushUndo('edit consumer', '')}
+              onCommit={(n) => setPowerConsumerWatts(i, n)}
+            />
+          </Field>
+          <Switch isSelected={pc.lightSwitch} onChange={(on) => setPowerConsumerLightSwitch(i, on)}>
+            Light switch (toggleable in-game)
+          </Switch>
+          <Switch
+            isSelected={pc.lightIsActive}
+            isDisabled={!pc.lightSwitch}
+            onChange={(on) => setPowerConsumerLightIsActive(i, on)}
+          >
+            Starts on (initial state)
+          </Switch>
+        </ItemCard>
+      ))}
+      <Button size="sm" onPress={addPowerConsumer} className="self-start">
+        + Consumer
+      </Button>
+    </div>
+  )
+}
+
+/**
  * Solar-panel list editor: each panel has a Produced (W) output and an orientation
  * (Euler XYZ radians, the sun-facing normal). Callback-driven so the same component
  * serves both the part-level Power section and the per-SubPart modal.
@@ -538,15 +581,7 @@ export function PowerSection({ gameData }: { gameData: PartGameData }) {
         onChangeOutput={setSolarPanelOutput}
         onChangeRotation={setSolarPanelRotation}
       />
-      <PowerList
-        label="Power Consumers"
-        unit="W"
-        addLabel="Consumer"
-        values={gameData.powerConsumers.map((c) => c.consumedWatts)}
-        onAdd={addPowerConsumer}
-        onRemove={removePowerConsumer}
-        onChange={setPowerConsumerWatts}
-      />
+      <PowerConsumersSection powerConsumers={gameData.powerConsumers} />
     </div>
   )
 }

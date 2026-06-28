@@ -178,7 +178,7 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
           transform: { ...identityTransform(), rotation: { x: 0, y: 1.5708, z: 0 } },
         },
       ],
-      powerConsumers: [{ consumedWatts: 3 }],
+      powerConsumers: [{ consumedWatts: 3, lightSwitch: true, lightIsActive: true }],
       decoupler: { connectorId: '_c2', force: 750 },
       dockingPort: { connectorId: '_c3', latchingKineticEnergyJ: 6000, pushoffImpulseNs: 7000 },
       evaDoor: { connectorId: '_c3' },
@@ -279,7 +279,11 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
     expect(parsed.gameData.generators[0].outputWatts).toBe(12)
     expect(parsed.gameData.solarPanels[0].outputWatts).toBe(200)
     expect(parsed.gameData.solarPanels[0].transform.rotation.y).toBeCloseTo(1.5708, 4)
-    expect(parsed.gameData.powerConsumers[0].consumedWatts).toBe(3)
+    expect(parsed.gameData.powerConsumers[0]).toEqual({
+      consumedWatts: 3,
+      lightSwitch: true,
+      lightIsActive: true,
+    })
     expect(parsed.gameData.decoupler).toEqual({ connectorId: '_c2', force: 750 })
     expect(parsed.gameData.dockingPort).toEqual({
       connectorId: '_c3',

@@ -226,7 +226,10 @@ describe('serializeGameData', () => {
           transform: { ...identityTransform(), rotation: { x: 0, y: 1.5708, z: 0 } },
         },
       ],
-      powerConsumers: [{ consumedWatts: 3 }],
+      powerConsumers: [
+        { consumedWatts: 3, lightSwitch: false, lightIsActive: false },
+        { consumedWatts: 5, lightSwitch: true, lightIsActive: true },
+      ],
       decoupler: { connectorId: '_connector2', force: 750 },
       dockingPort: {
         connectorId: '_connector3',
@@ -360,6 +363,15 @@ describe('serializeGameData', () => {
     expect(child(tags(doc, 'Battery')[0], 'MaximumCapacity')!.getAttribute('J')).toBe('1800')
     expect(child(tags(doc, 'Generator')[0], 'Produced')!.getAttribute('W')).toBe('12')
     expect(child(tags(doc, 'PowerConsumer')[0], 'Consumed')!.getAttribute('W')).toBe('3')
+  })
+
+  it('emits PowerConsumer LightSwitch/LightIsActive flags only when set', () => {
+    const [plain, lit] = tags(doc, 'PowerConsumer')
+    // Default-false flags are omitted; KSA reads absent attrs as false.
+    expect(plain.hasAttribute('LightSwitch')).toBe(false)
+    expect(plain.hasAttribute('LightIsActive')).toBe(false)
+    expect(lit.getAttribute('LightSwitch')).toBe('true')
+    expect(lit.getAttribute('LightIsActive')).toBe('true')
   })
 
   it('emits part-level <SolarPanel> with Produced W + orientation Transform', () => {

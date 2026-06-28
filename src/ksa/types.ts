@@ -255,9 +255,24 @@ export interface SolarPanel {
   transform: Transform
 }
 
-/** Power consumer (multiple allowed). Serialized as <PowerConsumer><Consumed W/>. */
+/**
+ * Power consumer (multiple allowed). Mirrors KSA's `PowerConsumerTemplate`
+ * (`<PowerConsumer>` under `<PartGameData>`):
+ *  - `Consumed` (PowerReference, `W`) → {@link consumedWatts}
+ *  - `LightSwitch` (bool attr) → {@link lightSwitch}: when set, the consumer acts
+ *    as an in-game on/off light switch (the part can be toggled in flight).
+ *  - `LightIsActive` (bool attr) → {@link lightIsActive}: the switch's initial
+ *    on/off state. Only meaningful when {@link lightSwitch} is set (KSA only reads
+ *    it under `if (LightSwitch)`).
+ *
+ * Both flags default to `false` in KSA, so we only emit each attribute when true.
+ */
 export interface PowerConsumer {
   consumedWatts: number
+  /** `LightSwitch` — makes this consumer a flight-toggleable light switch. */
+  lightSwitch: boolean
+  /** `LightIsActive` — initial on state when {@link lightSwitch} is set. */
+  lightIsActive: boolean
 }
 
 /**

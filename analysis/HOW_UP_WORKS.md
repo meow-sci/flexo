@@ -1,7 +1,7 @@
 # How KSA Treats "Up" on a Vehicle (Flight-Computer Reference Orientation)
 
 **Question:** When the flight computer points the ship "Up" / "Down" / "Prograde" / "Radial-out" /
-etc., *which* axis of the vehicle is it pointing, and *what* decides that axis? Is the "up"
+etc., _which_ axis of the vehicle is it pointing, and _what_ decides that axis? Is the "up"
 reference defined in part XML (so a custom data-only Part could set it), or is it baked into game
 code (e.g. the root part)?
 
@@ -10,14 +10,14 @@ code (e.g. the root part)?
 - The flight computer always points the vehicle's **Body-frame +X axis** (the "nose"/forward axis) at
   the chosen world direction. Roll is referenced off Body **+Z**.
 - The **Body frame is identical to the Assembly (editor build) frame**, and the **root part is pinned
-  to identity** in that frame at launch. So **the root part's own local coordinate frame *is* the
+  to identity** in that frame at launch. So **the root part's own local coordinate frame _is_ the
   vehicle's reference frame.** Whatever direction the root part's local +X points becomes the ship's
   "forward/up".
 - The `<Control/>` module (the thing that makes a craft controllable) is a **bare marker** — it
   carries **no transform and no orientation**. There is **no "control point" / "control from here" /
   reference-transform concept** anywhere in the current build.
-- Therefore you **cannot** make a passive part that, when *attached* to an existing craft, re-orients
-  "up". A part only influences "up" by **being the root** (or by being **re-rooted** to). That *is*
+- Therefore you **cannot** make a passive part that, when _attached_ to an existing craft, re-orients
+  "up". A part only influences "up" by **being the root** (or by being **re-rooted** to). That _is_
   data-reachable, though: any part with the right editor tag + a stack connector is root-eligible, and
   its authored local frame defines the reference.
 
@@ -53,7 +53,7 @@ Prograde, Retrograde, Normal, AntiNormal, Outward, Inward, PositiveDv, NegativeD
 Toward, Away, Antivel, Align
 ```
 
-(`FlightComputerAttitudeMode.cs` is a *different*, smaller enum — just `Manual`/`Auto`. The
+(`FlightComputerAttitudeMode.cs` is a _different_, smaller enum — just `Manual`/`Auto`. The
 direction list is the one above.)
 
 ### Each mode → a world reference frame
@@ -62,21 +62,21 @@ direction list is the one above.)
 `VehicleReferenceFrameEx`, producing a target quaternion `Target2Cci` (target-frame → Central-body
 Inertial). Highlights:
 
-| Mode | Builder (`VehicleReferenceFrameEx`) | Physical meaning of the target |
-|------|--------------------------------------|--------------------------------|
-| `Up` | `GetTail2Cci` | nose → **radial-out / local zenith** (away from surface) |
-| `Down` | `GetTail2Cci` + 180° pitch | nose → toward surface |
-| `Forward` | `GetFlp2Cci` | nose → **surface-relative horizontal velocity** (where you're going over the ground) |
-| `Backward` | `GetFlp2Cci` + 180° | opposite |
-| `Ahead`/`Behind`/`RadialOut`/`RadialIn` | `GetLvlh2Cci` (+ rot) | orbital LVLH frame (radial/along-track) |
-| `Prograde`/`Retrograde`/`Normal`/`AntiNormal`/`Outward`/`Inward` | `GetVlfBody2Cci` (+ rot) | orbital velocity frame (prograde + normal/radial) |
-| `PositiveDv`/`NegativeDv` | the planned burn's `BurnBody2Cci` | maneuver-node direction |
-| `Toward`/`Away`/`Antivel` | `GetTgt2Cci` / `GetTvel2Cci` | relative to the selected target vessel |
-| `Align` | `GetDock2Cci(target)` | the **target vehicle's Body frame**, yaw-flipped (nose-to-nose docking) |
+| Mode                                                             | Builder (`VehicleReferenceFrameEx`) | Physical meaning of the target                                                       |
+| ---------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------ |
+| `Up`                                                             | `GetTail2Cci`                       | nose → **radial-out / local zenith** (away from surface)                             |
+| `Down`                                                           | `GetTail2Cci` + 180° pitch          | nose → toward surface                                                                |
+| `Forward`                                                        | `GetFlp2Cci`                        | nose → **surface-relative horizontal velocity** (where you're going over the ground) |
+| `Backward`                                                       | `GetFlp2Cci` + 180°                 | opposite                                                                             |
+| `Ahead`/`Behind`/`RadialOut`/`RadialIn`                          | `GetLvlh2Cci` (+ rot)               | orbital LVLH frame (radial/along-track)                                              |
+| `Prograde`/`Retrograde`/`Normal`/`AntiNormal`/`Outward`/`Inward` | `GetVlfBody2Cci` (+ rot)            | orbital velocity frame (prograde + normal/radial)                                    |
+| `PositiveDv`/`NegativeDv`                                        | the planned burn's `BurnBody2Cci`   | maneuver-node direction                                                              |
+| `Toward`/`Away`/`Antivel`                                        | `GetTgt2Cci` / `GetTvel2Cci`        | relative to the selected target vessel                                               |
+| `Align`                                                          | `GetDock2Cci(target)`               | the **target vehicle's Body frame**, yaw-flipped (nose-to-nose docking)              |
 
 For example `GetTail2Cci` (`VehicleReferenceFrameEx.cs:253`) builds a matrix whose first row is
 `positionCci/|positionCci|` (radial out). `CreateFromRotationMatrix` treats that first row as the
-**+X basis** of the frame, so "Up" literally means *"make Body +X equal to the radial-out vector."*
+**+X basis** of the frame, so "Up" literally means _"make Body +X equal to the radial-out vector."_
 "Forward" (`GetFlp2Cci:200`) puts surface-relative velocity in that first row, etc.
 
 **Key point: in every mode the thing being aimed is the frame's +X axis.** None of these builders
@@ -115,7 +115,7 @@ So:
 The only vehicle input is `body2Cci` (the vehicle's Body→Inertial orientation, from physics). So the
 entire question reduces to: **what defines the vehicle's Body frame?**
 
-### The Body frame *is* the Assembly (editor) frame
+### The Body frame _is_ the Assembly (editor) frame
 
 `Vehicle.cs`:
 
@@ -124,7 +124,7 @@ entire question reduces to: **what defines the vehicle's Body frame?**
   the Body frame are the same frame**. ("Asmb" = the coordinate system parts are placed in in the
   editor.)
 - `:256` `BODY2UPFRAME = diag(1, -1, -1)` — a fixed 180°-about-X axis convention rotation (it flips Y
-  and Z signs between "body" and the navigation "up-frame"). It is a *constant*, not data.
+  and Z signs between "body" and the navigation "up-frame"). It is a _constant_, not data.
 
 ### The Control module is a pure marker — it does **not** define orientation
 
@@ -143,7 +143,7 @@ entire question reduces to: **what defines the vehicle's Body frame?**
 - In `CoreCommandAGameData.xml` the command pod simply has a bare `<Control />` element among its other
   modules. That's the entire "command pod" contract.
 
-> Consequence: the popular intuition "the command pod decides which way is up" is *incidental*. What
+> Consequence: the popular intuition "the command pod decides which way is up" is _incidental_. What
 > actually decides up is the **root part**. The command pod is usually the first part you place, hence
 > usually the root — but if you root your craft on a structural part and hang the pod off it as a
 > child, "up" follows the **structural part**, not the pod.
@@ -242,17 +242,17 @@ connectors** (`ToSurface`/`FromSurface`).
 
 ## 5. Summary of the data-vs-code split
 
-| Thing | Where it lives | Data-reachable? |
-|-------|----------------|-----------------|
-| Set of point-at modes (Up/Down/Prograde/…) | code enum `FlightComputerAttitudeTrackTarget` | No |
-| World direction of each mode | code (`VehicleReferenceFrameEx`, orbital math) | No |
-| Pointing axis = Body +X, roll = Body +Z | code (`FlightComputer.UpdateAttitudeTrackError`) | No |
-| Body frame == Assembly frame | code (`Vehicle.Asmb2Cce => Body2Cce`) | No |
-| **Body frame = root part's local frame** | code (launch pins root to identity) | **Indirect — via which part is root + that part's authored frame** |
-| "Control point" / per-part reference transform | **does not exist** | — |
-| `<Control/>` capability | part XML — but it's a **marker only**, no orientation | Yes (capability), No (orientation) |
-| Which parts may be root | editor-tag whitelist + connector rules | **Yes** (editor tags + connectors are XML) |
-| Root part's local axes / connector layout | part XML/mesh (`<Connector><Transform>`) | **Yes** |
+| Thing                                          | Where it lives                                        | Data-reachable?                                                    |
+| ---------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------ |
+| Set of point-at modes (Up/Down/Prograde/…)     | code enum `FlightComputerAttitudeTrackTarget`         | No                                                                 |
+| World direction of each mode                   | code (`VehicleReferenceFrameEx`, orbital math)        | No                                                                 |
+| Pointing axis = Body +X, roll = Body +Z        | code (`FlightComputer.UpdateAttitudeTrackError`)      | No                                                                 |
+| Body frame == Assembly frame                   | code (`Vehicle.Asmb2Cce => Body2Cce`)                 | No                                                                 |
+| **Body frame = root part's local frame**       | code (launch pins root to identity)                   | **Indirect — via which part is root + that part's authored frame** |
+| "Control point" / per-part reference transform | **does not exist**                                    | —                                                                  |
+| `<Control/>` capability                        | part XML — but it's a **marker only**, no orientation | Yes (capability), No (orientation)                                 |
+| Which parts may be root                        | editor-tag whitelist + connector rules                | **Yes** (editor tags + connectors are XML)                         |
+| Root part's local axes / connector layout      | part XML/mesh (`<Connector><Transform>`)              | **Yes**                                                            |
 
 ---
 
@@ -260,7 +260,7 @@ connectors** (`ToSurface`/`FromSurface`).
 
 ### ❌ Not possible (data-only, current build)
 
-- A **passive "attitude reference" part** you simply *attach* to an existing craft to re-define "up".
+- A **passive "attitude reference" part** you simply _attach_ to an existing craft to re-define "up".
   There is no control-point mechanism for it to hook into; the autopilot reads only the vehicle Body
   frame (= root frame). A non-root child contributes nothing.
 - **Selecting "control from here"** at runtime, KSP-style. The feature does not exist in this build.
@@ -273,6 +273,7 @@ Both are reachable from a data-only `PartGameData` (+ its mesh/connector assets)
 
 **Option A — a custom root "reference/command block."**
 Author a small Part that is root-eligible:
+
 - give it a root-whitelisted `EditorTag` (reuse `Structural`/`Capsules`/`Coupling`, or define your own
   `<EditorTagDef Id="MyControlBlock" RootPartWhitelist="true"/>`),
 - give it **one stack `<Connector>`** (flag `Internal` or plain; **no** `ToSurface`/`FromSurface`),
@@ -291,7 +292,7 @@ connector, each variant makes the autopilot treat a **different physical directi
 craft** as "forward/up." Pick the variant = pick the reference orientation. This is the closest
 data-only analog to a "control-from-here, but rotated" part.
 
-> Note: with a single rigid frame, +X is simultaneously the connector-layout axis *and* the control
+> Note: with a single rigid frame, +X is simultaneously the connector-layout axis _and_ the control
 > axis. The variants work by moving the connector to a different face so the same +X points a different
 > way relative to the stack. You can't decouple "where the craft attaches" from "which way is forward"
 > within one part — that decoupling would need a real control-point feature (code).

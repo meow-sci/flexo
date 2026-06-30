@@ -250,6 +250,10 @@ describe('mergeProjectImport into an empty project', () => {
     expect(anim.solarTracking?.excludeInstanceIds).toEqual(['trussbara_1'])
   })
 
+  it('adopts the source Part Id (destination still had the placeholder)', () => {
+    expect(part.partId).toBe('source_part')
+  })
+
   it('fills empty GameData fields and remaps the decoupler to the new connector', () => {
     expect(part.gameData.displayName).toBe('Source Display')
     expect(part.gameData.customMass).toBe(1234)
@@ -272,11 +276,15 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
       layerId: DEFAULT_LAYER_ID,
       ...t(0),
     })
+    dest.partId = 'existing_part'
     dest.gameData.displayName = 'Existing'
     dest.gameData.customMass = 99
 
     const env = buildProjectExport(sourcePart(), 'MyShip')
     const { part } = mergeProjectImport(dest, env)
+
+    // A destination with a real Part Id keeps it (additive paste never renames).
+    expect(part.partId).toBe('existing_part')
 
     // Existing trussbara_1 + two imported TrussBarA → _2, _3 (no collision).
     const trussIds = part.placements

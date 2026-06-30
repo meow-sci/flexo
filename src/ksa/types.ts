@@ -113,6 +113,13 @@ export interface Layer {
   name: string
 }
 
+/**
+ * Placeholder Part id every new/empty project starts with — a deliberately ugly
+ * sentinel so an unset id is obvious in the inspector and the exported XML. Project
+ * import treats a partId still equal to this as "unset" and adopts the imported one.
+ */
+export const DEFAULT_PART_ID = 'fixme_part_id'
+
 /** Id of the built-in "Default" layer. It always exists and cannot be deleted. */
 export const DEFAULT_LAYER_ID = 'default'
 
@@ -1228,7 +1235,7 @@ export interface EditingPart {
 
 export function createEmptyPart(): EditingPart {
   return {
-    partId: 'fixme_part_id',
+    partId: DEFAULT_PART_ID,
     editorTags: [],
     gameData: createEmptyGameData(),
     subPartGameData: [],

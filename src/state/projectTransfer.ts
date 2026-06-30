@@ -17,6 +17,7 @@ import type {
 import {
   CONNECTOR_LAYER_ID,
   DEFAULT_LAYER_ID,
+  DEFAULT_PART_ID,
   KITTEN_LAYER_ID,
   createConnectorLayer,
   createDefaultLayer,
@@ -69,7 +70,11 @@ export interface ProjectExportData {
   customCombustionProcesses: CustomCombustionProcess[]
 }
 
-/** A versioned export envelope. `sourcePartId` is informational — never applied on import. */
+/**
+ * A versioned export envelope. `sourcePartId` carries the source's Part Id: it's
+ * restored verbatim by {@link envelopeToPart} (share-link load) and adopted by
+ * {@link mergeProjectImport} only when the destination has no Part Id of its own.
+ */
 export interface ProjectExportEnvelope {
   format: typeof PROJECT_EXPORT_FORMAT
   version: number
@@ -187,7 +192,7 @@ export function parseProjectObject(raw: unknown): ParseResult {
 export function envelopeToPart(env: ProjectExportEnvelope): EditingPart {
   const d = env.data
   const part: EditingPart = {
-    partId: env.sourcePartId || 'fixme_part_id',
+    partId: env.sourcePartId || DEFAULT_PART_ID,
     editorTags: [...d.editorTags],
     gameData: d.gameData,
     subPartGameData: d.subPartGameData,
@@ -224,6 +229,13 @@ function ensureBuiltInLayers(part: EditingPart): void {
 export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvelope): MergeResult {
   const part = structuredClone(current)
   const { data } = env
+
+  // Part Id: adopt the source's only when the destination still carries the placeholder
+  // (i.e. importing into a fresh project) — so an Export→Import round-trip preserves it.
+  // A destination that already has a real Part Id keeps it; additive paste never renames.
+  if ((!part.partId.trim() || part.partId === DEFAULT_PART_ID) && env.sourcePartId.trim()) {
+    part.partId = env.sourcePartId
+  }
 
   const instanceIdMap = new Map<string, string>()
   const connectorIdMap = new Map<string, string>()

@@ -207,7 +207,7 @@ describe('editorStore', () => {
         batteries: [],
         generators: [],
         solarPanels: [],
-        powerConsumers: [],
+        powerConsumer: null,
         subPartGameData: [],
         rocketControllers: [],
         rockets: [],

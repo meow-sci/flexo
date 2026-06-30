@@ -1,8 +1,9 @@
+import { useStore } from '@nanostores/react'
 import { Button, Switch, Select, ListBoxItem, TextField, SectionTitle } from './kit'
 import { PreciseNumberInput } from './PreciseNumberInput'
 import { Vec3Field } from './Vec3Field'
 import { DEG2RAD, RAD2DEG } from './format'
-import { pushUndo } from '../state/editorStore'
+import { $part, pushUndo } from '../state/editorStore'
 import {
   addBattery,
   addGenerator,
@@ -285,6 +286,12 @@ export function LightsSection({
 }) {
   return (
     <div className="flex flex-col gap-2">
+      {lights.length > 0 && (
+        <span className="text-xs text-fg-subtle">
+          Applies to every placed instance of this SubPart; each instance aims the light by its own
+          rotation. Toggled in-game by the part's light switch.
+        </span>
+      )}
       {lights.map((light, i) => {
         const isSpot = light.type === 'Spot'
         return (
@@ -463,41 +470,66 @@ function PowerList({
 }
 
 /**
- * Power-consumer list editor: each consumer has a draw (Consumed, W) plus the two
- * `LightSwitch`/`LightIsActive` flags that turn it into a flight-toggleable light
- * switch. `LightIsActive` is the switch's initial on/off state and KSA only reads
- * it when `LightSwitch` is set, so we disable it until the switch is enabled.
+ * Power / light-switch editor — **one consumer per part** (KSA has a single
+ * `Part.LightSwitch` slot; see `analysis/HOW_LIGHT_PARTS_WORK.md`). The consumer has
+ * a draw (Consumed, W) plus `LightSwitch` (makes it a flight-toggleable switch that
+ * gates ALL of the part's lights + emissive glow) and `LightIsActive` (the switch's
+ * initial on/off state, only read by KSA when `LightSwitch` is set). Surfaces hints
+ * when a switch controls nothing, or when lights exist with no switch (always on).
  */
-function PowerConsumersSection({ powerConsumers }: { powerConsumers: PowerConsumer[] }) {
+function PowerConsumerSection({ powerConsumer }: { powerConsumer: PowerConsumer | null }) {
+  const part = useStore($part)
+  const placed = new Set(part.placements.map((p) => p.subPartTemplateId))
+  const hasLights = part.subPartGameData.some(
+    (s) => placed.has(s.subPartTemplateId) && s.lights.length > 0,
+  )
+  const hasGlow = part.customMeshes.some((m) => placed.has(m.subPartId) && m.emissive)
+  const switchControlsNothing = !!powerConsumer?.lightSwitch && !hasLights && !hasGlow
+  const lightsAlwaysOn = hasLights && !powerConsumer?.lightSwitch
+
   return (
     <div className="flex flex-col gap-2">
-      <SectionTitle>Power Consumers</SectionTitle>
-      {powerConsumers.map((pc, i) => (
-        <ItemCard key={i} title={`Consumer ${i + 1}`} onRemove={() => removePowerConsumer(i)}>
+      <SectionTitle>Power & Light Switch</SectionTitle>
+      {powerConsumer ? (
+        <ItemCard title="Power consumer" onRemove={removePowerConsumer}>
           <Field label="Consumed (W)">
             <PreciseNumberInput
-              aria-label={`Consumer ${i + 1} consumed watts`}
-              value={pc.consumedWatts}
+              aria-label="Consumed watts"
+              value={powerConsumer.consumedWatts}
               min={0}
               onInteractionStart={() => pushUndo('edit consumer', '')}
-              onCommit={(n) => setPowerConsumerWatts(i, n)}
+              onCommit={(n) => setPowerConsumerWatts(n)}
             />
           </Field>
-          <Switch isSelected={pc.lightSwitch} onChange={(on) => setPowerConsumerLightSwitch(i, on)}>
-            Light switch (toggleable in-game)
+          <Switch
+            isSelected={powerConsumer.lightSwitch}
+            onChange={(on) => setPowerConsumerLightSwitch(on)}
+          >
+            Light switch (toggles all of this part's lights in-game)
           </Switch>
           <Switch
-            isSelected={pc.lightIsActive}
-            isDisabled={!pc.lightSwitch}
-            onChange={(on) => setPowerConsumerLightIsActive(i, on)}
+            isSelected={powerConsumer.lightIsActive}
+            isDisabled={!powerConsumer.lightSwitch}
+            onChange={(on) => setPowerConsumerLightIsActive(on)}
           >
             Starts on (initial state)
           </Switch>
+          {switchControlsNothing && (
+            <span className="text-xs text-warning">
+              This light switch controls nothing — the part has no lights or glowing meshes.
+            </span>
+          )}
         </ItemCard>
-      ))}
-      <Button size="sm" onPress={addPowerConsumer} className="self-start">
-        + Consumer
-      </Button>
+      ) : (
+        <Button size="sm" onPress={addPowerConsumer} className="self-start">
+          + Power consumer / light switch
+        </Button>
+      )}
+      {lightsAlwaysOn && (
+        <span className="text-xs text-fg-subtle">
+          This part's lights are always on in flight — add a light switch to toggle them.
+        </span>
+      )}
     </div>
   )
 }
@@ -581,7 +613,7 @@ export function PowerSection({ gameData }: { gameData: PartGameData }) {
         onChangeOutput={setSolarPanelOutput}
         onChangeRotation={setSolarPanelRotation}
       />
-      <PowerConsumersSection powerConsumers={gameData.powerConsumers} />
+      <PowerConsumerSection powerConsumer={gameData.powerConsumer} />
     </div>
   )
 }

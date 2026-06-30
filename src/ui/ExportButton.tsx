@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { CheckCircle2, Download, FolderInput, FolderSync } from 'lucide-react'
 import {
@@ -9,7 +9,7 @@ import {
   ToggleButtonGroup,
   ToggleButton,
   ToolbarButton,
-  monoTextarea,
+  monoTextareaFill,
   toast,
   warningBox,
 } from './kit'
@@ -23,11 +23,16 @@ import {
   pickModFolder,
   requestModFolderPermission,
 } from '../state/modFolderStore'
-import { serializeGameData, serializePart } from '../ksa/partXmlSerializer'
-import { buildModZip, writeModToFolder } from '../ksa/modExport'
+import {
+  buildCustomBundle,
+  buildModContent,
+  buildModZip,
+  expandGlassGlow,
+  writeModToFolder,
+} from '../ksa/modExport'
 
 type Mode = 'xml' | 'mod'
-type Tab = 'part' | 'gamedata'
+type Tab = 'part' | 'gamedata' | 'assets'
 
 /** Returns human-readable warnings about the current part prior to export. */
 function validate(partId: string, instanceIds: string[]): string[] {
@@ -85,9 +90,9 @@ export function ExportButton({
         variant="fullscreen"
         className="max-w-2xl"
       >
-        <Dialog>
+        <Dialog className="min-h-0 flex-1">
           <DialogHeader title="Export" onClose={() => setOpen(false)} />
-          <div className="flex flex-col gap-2 overflow-auto p-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto p-3">
             {warnings.length > 0 && (
               <div className={warningBox}>
                 {warnings.map((w) => (
@@ -122,10 +127,60 @@ export function ExportButton({
 /** Raw-XML view: Part / GameData tab switcher + copy-to-clipboard. */
 function XmlPanel() {
   const part = useStore($part)
+  const projectName = useStore($projectName)
+  const catalog = useStore($catalogIndex)
+  const kittenTex = useStore($kittenTextureExport)
   const [tab, setTab] = useState<Tab>('part')
   const [copied, setCopied] = useState(false)
+  // The Assets XML is built by buildCustomBundle (async: GLBs/textures), so it can't be
+  // computed inline like Part/GameData. We build it in an effect and stamp the result with
+  // the inputs it was built from; "building" is DERIVED by comparing those to the current
+  // inputs (no synchronous setState in the effect — see react-hooks set-state-in-effect).
+  const [assets, setAssets] = useState<{
+    xml: string | null
+    part: unknown
+    name: string
+    cat: unknown
+    tex: unknown
+  } | null>(null)
 
-  const xml = tab === 'part' ? serializePart(part) : serializeGameData(part)
+  // Build via the same path as the mod export so the preview matches the shipped XML —
+  // crucially, built-in SubParts carrying GameData are remapped to fresh export variants
+  // (never redefining the shared built-in template). See buildExportVariantMap.
+  const { part: expandedPart } = expandGlassGlow(part)
+  const content = buildModContent(expandedPart, projectName, catalog)
+
+  useEffect(() => {
+    let cancelled = false
+    const { part: ep, insetIds } = expandGlassGlow(part)
+    const c = buildModContent(ep, projectName, catalog)
+    buildCustomBundle(ep, c.base, kittenTex, c.variants, insetIds)
+      .then((b) => {
+        if (!cancelled)
+          setAssets({ xml: b.assetsXml, part, name: projectName, cat: catalog, tex: kittenTex })
+      })
+      .catch((err) => {
+        console.warn('assets XML preview build failed', err)
+        if (!cancelled)
+          setAssets({ xml: null, part, name: projectName, cat: catalog, tex: kittenTex })
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [part, projectName, catalog, kittenTex])
+
+  const assetsBuilt =
+    assets != null &&
+    assets.part === part &&
+    assets.name === projectName &&
+    assets.cat === catalog &&
+    assets.tex === kittenTex
+  const assetsBody = !assetsBuilt
+    ? 'Building Assets XML…'
+    : (assets.xml ??
+      '(No Assets XML — this part references only built-in SubParts directly, so the mod ships just Part + GameData XML.)')
+  const xml =
+    tab === 'part' ? content.partXml : tab === 'gamedata' ? content.gameDataXml : assetsBody
 
   const copy = async () => {
     try {
@@ -138,7 +193,7 @@ function XmlPanel() {
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <ToggleButtonGroup
         selectionMode="single"
         disallowEmptySelection
@@ -154,8 +209,11 @@ function XmlPanel() {
         <ToggleButton id="gamedata" size="sm">
           GameData XML
         </ToggleButton>
+        <ToggleButton id="assets" size="sm">
+          Assets XML
+        </ToggleButton>
       </ToggleButtonGroup>
-      <textarea readOnly value={xml} className={monoTextarea} spellCheck={false} />
+      <textarea readOnly value={xml} className={monoTextareaFill} spellCheck={false} />
       <div className="flex justify-end">
         <Button size="sm" variant="primary" onPress={copy}>
           {copied ? 'Copied!' : 'Copy to clipboard'}

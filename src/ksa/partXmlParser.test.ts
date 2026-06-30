@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { DOMParser } from '@xmldom/xmldom'
 import {
   animationModulesFromGameData,
@@ -178,7 +178,7 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
           transform: { ...identityTransform(), rotation: { x: 0, y: 1.5708, z: 0 } },
         },
       ],
-      powerConsumers: [{ consumedWatts: 3, lightSwitch: true, lightIsActive: true }],
+      powerConsumer: { consumedWatts: 3, lightSwitch: true, lightIsActive: true },
       decoupler: { connectorId: '_c2', force: 750 },
       dockingPort: { connectorId: '_c3', latchingKineticEnergyJ: 6000, pushoffImpulseNs: 7000 },
       evaDoor: { connectorId: '_c3' },
@@ -279,7 +279,7 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
     expect(parsed.gameData.generators[0].outputWatts).toBe(12)
     expect(parsed.gameData.solarPanels[0].outputWatts).toBe(200)
     expect(parsed.gameData.solarPanels[0].transform.rotation.y).toBeCloseTo(1.5708, 4)
-    expect(parsed.gameData.powerConsumers[0]).toEqual({
+    expect(parsed.gameData.powerConsumer).toEqual({
       consumedWatts: 3,
       lightSwitch: true,
       lightIsActive: true,
@@ -607,5 +607,46 @@ describe('animationModulesFromGameData', () => {
     const [m] = animationModulesFromGameData(x)
     expect(m.showDeployRetract).toBe(false)
     expect(m.solarTracking).toBeNull()
+  })
+})
+
+describe('PowerConsumer is collapsed to one per part (KSA Part.LightSwitch slot)', () => {
+  it('keeps the LightSwitch consumer when several are present, and warns', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const xml = `<Assets><PartGameData Id="P">
+        <PowerConsumer><Consumed W="4" /></PowerConsumer>
+        <PowerConsumer LightSwitch="true" LightIsActive="true"><Consumed W="60" /></PowerConsumer>
+      </PartGameData></Assets>`
+    const parsed = gameDataFromAssets(xml, 'P', new DOMParser())!
+    expect(parsed.gameData.powerConsumer).toEqual({
+      consumedWatts: 60,
+      lightSwitch: true,
+      lightIsActive: true,
+    })
+    expect(warn).toHaveBeenCalledOnce()
+    warn.mockRestore()
+  })
+
+  it('keeps the sole consumer (no warning) and null when there is none', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const one = gameDataFromAssets(
+      `<Assets><PartGameData Id="P"><PowerConsumer><Consumed W="2" /></PowerConsumer></PartGameData></Assets>`,
+      'P',
+      new DOMParser(),
+    )!
+    expect(one.gameData.powerConsumer).toEqual({
+      consumedWatts: 2,
+      lightSwitch: false,
+      lightIsActive: false,
+    })
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+
+    const none = gameDataFromAssets(
+      `<Assets><PartGameData Id="P"><EditorTag Value="Structural" /></PartGameData></Assets>`,
+      'P',
+      new DOMParser(),
+    )!
+    expect(none.gameData.powerConsumer).toBeNull()
   })
 })

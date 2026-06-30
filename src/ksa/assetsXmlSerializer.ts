@@ -50,11 +50,12 @@ export interface AssetsSubPartPlan {
 
 /**
  * A "reference" SubPart: a project-unique SubPart that REUSES an existing (built-in)
- * Mesh + Material by id rather than declaring its own geometry/texture. Used to re-home
- * KSA's IVA (interior) props onto a non-Internal PartModel so they render outside IVA
- * mode (see buildIvaVariantMap in modExport.ts). Unlike {@link AssetsSubPartPlan} it emits
- * NO <PbrMaterial> (the material is built-in), NO <MeshView> (the built-in mesh has no
- * "_VM" view node), and needs no MeshAtlas.
+ * Mesh + Material by id rather than declaring its own geometry/texture. Used for export
+ * variants (see buildExportVariantMap in modExport.ts): re-homing KSA's IVA (interior) props
+ * onto a non-Internal PartModel so they render outside IVA, AND giving a built-in SubPart that
+ * carries flexo GameData a fresh id so it doesn't redefine the shared built-in template. Unlike
+ * {@link AssetsSubPartPlan} it emits NO <PbrMaterial> (the material is built-in) and needs no
+ * MeshAtlas; it DOES emit a <MeshView> pointing at the reused render mesh for editor picking.
  */
 export interface ReferenceSubPartPlan {
   /** New project-unique SubPart id (also the basis for its unique PartModel id). */
@@ -192,7 +193,7 @@ export function serializeAssets(plan: AssetsPlan): string {
     // View mesh — without a MeshViewModule (built from <MeshView>) KSA's editor won't
     // raycast the SubPart, so a de-IVA'd prop renders but can't be hovered/selected/
     // right-clicked. We point <MeshView> at the SAME built-in render mesh the PartModel
-    // reuses: it's guaranteed to exist (buildIvaVariantMap skips entries without a mesh
+    // reuses: it's guaranteed to exist (buildExportVariantMap skips entries without a mesh
     // node) and resolves cross-mod exactly like the render <Mesh> above. We deliberately
     // do NOT reference "<meshId>_VM": built-in IVA atlases are inconsistent (CoreIVAPropA
     // ships a _VM per subpart, CoreIVASpaceA has only a handful for 333 subparts), so a

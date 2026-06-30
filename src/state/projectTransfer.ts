@@ -411,7 +411,8 @@ function mergeGameData(
   target.batteries.push(...(src.batteries ?? []).map((b) => ({ ...b })))
   target.generators.push(...(src.generators ?? []).map((g) => ({ ...g })))
   target.solarPanels.push(...(src.solarPanels ?? []).map((sp) => structuredClone(sp)))
-  target.powerConsumers.push(...(src.powerConsumers ?? []).map((p) => ({ ...p })))
+  // Single consumer per part: keep the target's, adopt the source's only when empty.
+  if (!target.powerConsumer && src.powerConsumer) target.powerConsumer = { ...src.powerConsumer }
   if (target.decoupler == null && src.decoupler) {
     const id = connectorIdMap.get(src.decoupler.connectorId)
     if (id) target.decoupler = { connectorId: id, force: src.decoupler.force }

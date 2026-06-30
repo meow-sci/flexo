@@ -55,22 +55,24 @@ function flagsString(flags: readonly ConnectorFlag[]): string | null {
 }
 
 /**
- * Optional `originalTemplateId → exported template id` remap. Used to point IVA-prop
- * placements at their non-Internal export variant (see buildIvaVariantMap in modExport.ts);
- * a template not in the map keeps its own id (the common case).
+ * Optional `originalTemplateId → exported variant id` remap. Points placements (and the
+ * matching SubPartGameData) at a fresh built-in-SubPart export variant instead of the
+ * built-in id (see buildExportVariantMap in modExport.ts) — for de-IVA'd props AND for
+ * built-in SubParts that carry GameData (so we never redefine the shared built-in template).
+ * A template not in the map keeps its own id (the common case).
  */
 export type TemplateRemap = ReadonlyMap<string, string>
 
 const NO_REMAP: TemplateRemap = new Map()
 
-export function serializePart(part: EditingPart, ivaRemap: TemplateRemap = NO_REMAP): string {
+export function serializePart(part: EditingPart, templateRemap: TemplateRemap = NO_REMAP): string {
   const doc = new DOMImplementation().createDocument(null, 'Assets', null)
   const assets = doc.documentElement! // 'Assets' root, created above
   const partEl = doc.createElement('Part')
   partEl.setAttribute('Id', part.partId)
 
   for (const placement of part.placements) {
-    partEl.appendChild(buildSubPartElement(doc, placement, ivaRemap))
+    partEl.appendChild(buildSubPartElement(doc, placement, templateRemap))
   }
 
   for (const connector of part.connectors) {
@@ -94,7 +96,7 @@ export function serializePart(part: EditingPart, ivaRemap: TemplateRemap = NO_RE
 export function serializeGameData(
   part: EditingPart,
   base = '',
-  ivaRemap: TemplateRemap = NO_REMAP,
+  templateRemap: TemplateRemap = NO_REMAP,
 ): string {
   const doc = new DOMImplementation().createDocument(null, 'Assets', null)
   const assets = doc.documentElement!
@@ -144,7 +146,9 @@ export function serializeGameData(
     gd.appendChild(el)
   }
   for (const sp of game.solarPanels) gd.appendChild(buildSolarPanelElement(doc, sp))
-  for (const pc of game.powerConsumers) {
+  // One consumer per part (KSA's single Part.LightSwitch slot — see PowerConsumer docs).
+  if (game.powerConsumer) {
+    const pc = game.powerConsumer
     const el = doc.createElement('PowerConsumer')
     el.appendChild(elWithAttr(doc, 'Consumed', 'W', formatG6(pc.consumedWatts)))
     // KSA defaults both flags to false, so emit each only when set (LightIsActive
@@ -222,8 +226,9 @@ export function serializeGameData(
   for (const spd of part.subPartGameData) {
     if (isSubPartGameDataEmpty(spd)) continue
     const spdEl = doc.createElement('SubPartGameData')
-    // Remap to the exported variant id so data keyed on an IVA template still applies.
-    spdEl.setAttribute('Id', ivaRemap.get(spd.subPartTemplateId) ?? spd.subPartTemplateId)
+    // Remap to the export variant id so GameData keyed on a built-in template lands on the
+    // fresh variant SubPart instead of REDEFINING the shared built-in (KSA merges by id).
+    spdEl.setAttribute('Id', templateRemap.get(spd.subPartTemplateId) ?? spd.subPartTemplateId)
     applyUnknownAttrs(spdEl, spd.unknownAttrs)
     for (const tank of spd.tanks) {
       const tankWrapper = doc.createElement('Tank')
@@ -543,13 +548,13 @@ function buildAnimationModuleElement(
 function buildSubPartElement(
   doc: XmlDocument,
   placement: SubPartPlacement,
-  ivaRemap: TemplateRemap,
+  templateRemap: TemplateRemap,
 ): XmlElement {
   const el = doc.createElement('SubPart')
   el.setAttribute('Id', placement.instanceId)
   el.setAttribute(
     'InstanceOf',
-    ivaRemap.get(placement.subPartTemplateId) ?? placement.subPartTemplateId,
+    templateRemap.get(placement.subPartTemplateId) ?? placement.subPartTemplateId,
   )
   const transform = buildTransformElement(doc, placement)
   if (transform) el.appendChild(transform)

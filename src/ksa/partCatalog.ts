@@ -63,7 +63,8 @@ export interface CatalogPart {
   batteries: Battery[]
   generators: Generator[]
   solarPanels: SolarPanel[]
-  powerConsumers: PowerConsumer[]
+  /** The part's single power consumer / light switch, or null (KSA has one switch slot). */
+  powerConsumer: PowerConsumer | null
   /** Per-SubPart-template data (tanks / solar panels / engine modules) for the SubParts this Part places. */
   subPartGameData: SubPartGameData[]
   /** Part-level engine modules (controllers/rockets/combustors/nozzles/gimbals); instance refs in original id space. */
@@ -102,7 +103,7 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
       batteries: [],
       generators: [],
       solarPanels: [],
-      powerConsumers: [],
+      powerConsumer: null,
       subPartGameData: [],
       rocketControllers: [],
       rockets: [],
@@ -140,7 +141,8 @@ export interface PartGameData {
   batteries: Battery[]
   generators: Generator[]
   solarPanels: SolarPanel[]
-  powerConsumers: PowerConsumer[]
+  /** The part's single power consumer / light switch, or null (KSA has one switch slot). */
+  powerConsumer: PowerConsumer | null
   /** Part-level engine modules declared on this <PartGameData>. */
   rocketControllers: RocketController[]
   rockets: Rocket[]
@@ -183,7 +185,7 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
       batteries: [],
       generators: [],
       solarPanels: [],
-      powerConsumers: [],
+      powerConsumer: null,
       rocketControllers: [],
       rockets: [],
       combustors: [],
@@ -207,7 +209,7 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
     entry.batteries.push(...parsed.gameData.batteries)
     entry.generators.push(...parsed.gameData.generators)
     entry.solarPanels.push(...parsed.gameData.solarPanels)
-    entry.powerConsumers.push(...parsed.gameData.powerConsumers)
+    entry.powerConsumer ??= parsed.gameData.powerConsumer
     entry.rocketControllers.push(...parsed.gameData.rocketControllers)
     entry.rockets.push(...parsed.gameData.rockets)
     entry.combustors.push(...parsed.gameData.combustors)
@@ -258,7 +260,7 @@ export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile
       part.batteries = gd.batteries
       part.generators = gd.generators
       part.solarPanels = gd.solarPanels
-      part.powerConsumers = gd.powerConsumers
+      part.powerConsumer = gd.powerConsumer
       part.rocketControllers = gd.rocketControllers
       part.rockets = gd.rockets
       part.combustors = gd.combustors

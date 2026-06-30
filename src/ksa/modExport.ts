@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import type { CustomMesh, CustomTexture, EditingPart } from './types'
+import { isSubPartGameDataEmpty } from './types'
 import { serializeGameData, serializePart } from './partXmlSerializer'
 import {
   serializeAssets,
@@ -83,6 +84,12 @@ export function uniqueFileName(taken: Set<string>, base: string, ext: string): s
 
 export interface ModContent {
   base: string
+  /**
+   * Built-in SubPart export variants this part needs (see {@link buildExportVariantMap}),
+   * keyed by original template id. Threaded into {@link buildCustomBundle} so the Assets XML
+   * declares the same reference SubParts the Part/GameData XML now points at.
+   */
+  variants: Map<string, ExportVariant>
   partFile: string
   partXml: string
   gameDataFile: string
@@ -91,21 +98,26 @@ export interface ModContent {
 
 /**
  * Builds the desired filenames + XML bodies for a project (no conflict resolution).
- * `ivaRemap` (originalTemplateId → variant id, from {@link buildIvaVariantMap}) points
- * IVA-prop placements at their non-Internal export variant; empty for IVA-free parts.
+ * Builds the export-variant map internally (from {@link catalog}) so the Part tree and the
+ * GameData both reference the fresh variant ids — never the built-in SubPart ids — and
+ * returns the variants so the Assets bundle can declare the matching reference SubParts.
+ * This is the single source of truth shared by the export buttons AND the XML preview.
  */
 export function buildModContent(
   part: EditingPart,
   projectName: string,
-  ivaRemap: ReadonlyMap<string, string> = new Map(),
+  catalog: ReadonlyMap<string, CatalogSubPart> = new Map(),
 ): ModContent {
   const base = sanitizeBaseName(projectName)
+  const variants = buildExportVariantMap(part, catalog, base)
+  const remap = variantRemap(variants)
   return {
     base,
+    variants,
     partFile: `${base}Part.xml`,
-    partXml: serializePart(part, ivaRemap),
+    partXml: serializePart(part, remap),
     gameDataFile: `${base}GameData.xml`,
-    gameDataXml: serializeGameData(part, base, ivaRemap),
+    gameDataXml: serializeGameData(part, base, remap),
   }
 }
 
@@ -115,15 +127,15 @@ function sanitizeAssetToken(name: string): string {
 }
 
 /**
- * One placed IVA (Internal) SubPart and the non-Internal export variant it maps to.
- * KSA only renders <Internal>true</Internal> props in IVA camera mode; we re-home each
- * onto a fresh, non-Internal SubPart that reuses the SAME built-in Mesh + Material so it
- * renders everywhere. See {@link buildIvaVariantMap}.
+ * A built-in SubPart and the fresh export variant flexo redeclares for it. The variant reuses
+ * the SAME built-in Mesh + Material (no geometry/texture is duplicated) under a project-unique
+ * id, so the part can carry its own SubPart GameData WITHOUT redefining (merging onto) the
+ * shared built-in SubPart template. See {@link buildExportVariantMap}.
  */
-export interface IvaVariant {
-  /** Built-in IVA SubPart template id placed in the part, e.g. "CoreIVAPropA_Subpart_ChairA". */
+export interface ExportVariant {
+  /** Built-in SubPart template id placed in the part, e.g. "CoreElectricalA_Subpart_SpotlightA". */
   originalId: string
-  /** Project-unique export variant id referenced by the placement and declared in the Assets XML. */
+  /** Project-unique export variant id referenced by placements + SubPartGameData, declared in Assets. */
   variantId: string
   /** Built-in <Mesh Id> the variant reuses (NOT redeclared). */
   meshId: string
@@ -131,33 +143,50 @@ export interface IvaVariant {
   materialId: string | null
 }
 
+/** True when the part carries flexo-modeled GameData (light/tank/solar/engine) for this template. */
+function hasSubPartGameData(part: EditingPart, templateId: string): boolean {
+  return part.subPartGameData.some(
+    (s) => s.subPartTemplateId === templateId && !isSubPartGameDataEmpty(s),
+  )
+}
+
 /**
- * Builds the IVA→variant map for a part: one entry per DISTINCT placed IVA template
- * (deduped across placements), keyed by the original template id. Non-IVA templates and
- * templates absent from the catalog are skipped. Variant ids are namespaced by the project
- * {@link base} so two flexo mods reusing the same built-in IVA part don't collide; the id is
- * deterministic, so re-exports are stable. Empty when the part places no IVA props.
+ * Builds the built-in-SubPart → export-variant map: one entry per DISTINCT placed built-in
+ * template (deduped across placements) that needs redeclaring, because it is EITHER
+ *   - an IVA (Internal) prop we re-home onto a non-Internal SubPart so it renders outside IVA, OR
+ *   - carrying flexo SubPart GameData (a <Light>, tank, etc.) — emitting that under the built-in
+ *     id would MERGE onto the shared built-in template (KSA dedups GameData by id), corrupting
+ *     every other use of that SubPart. The variant moves the GameData onto a fresh id instead.
+ *
+ * Custom-mesh SubParts (absent from the catalog) are skipped — flexo already declares those with
+ * their own ids, so their GameData never collides. Variant ids are namespaced by the project
+ * {@link base} (deterministic, so re-exports are stable). IVA variants keep the `_NotIVA` suffix.
  */
-export function buildIvaVariantMap(
+export function buildExportVariantMap(
   part: EditingPart,
   catalog: ReadonlyMap<string, CatalogSubPart>,
   base: string,
-): Map<string, IvaVariant> {
-  const out = new Map<string, IvaVariant>()
+): Map<string, ExportVariant> {
+  const out = new Map<string, ExportVariant>()
   for (const p of part.placements) {
     const templateId = p.subPartTemplateId
     if (out.has(templateId)) continue
     const entry = catalog.get(templateId)
-    if (!entry?.internal) continue
-    // meshNodeName is the built-in <Mesh Id> (null only for the rare whole-atlas mesh,
-    // which no IVA prop uses). Without it we can't reference the geometry — leave as-is.
+    if (!entry) continue // custom mesh (not a built-in) — flexo declares it directly, no collision
+    if (!entry.internal && !hasSubPartGameData(part, templateId)) continue
+    // meshNodeName is the built-in <Mesh Id> (null only for the rare whole-atlas mesh). Without
+    // it we can't reference the geometry — leave the built-in reference as-is.
     if (!entry.meshNodeName) {
-      console.warn(`flexo export: IVA SubPart '${templateId}' has no mesh node — left as IVA`)
+      console.warn(
+        `flexo export: built-in SubPart '${templateId}' has no mesh node — left as a direct reference`,
+      )
       continue
     }
     out.set(templateId, {
       originalId: templateId,
-      variantId: `flexo_${base}_${templateId}_NotIVA`,
+      variantId: entry.internal
+        ? `flexo_${base}_${templateId}_NotIVA`
+        : `flexo_${base}_${templateId}`,
       meshId: entry.meshNodeName,
       materialId: entry.materialId ?? null,
     })
@@ -166,7 +195,7 @@ export function buildIvaVariantMap(
 }
 
 /** Derives the `originalTemplateId → variantId` remap consumed by the Part/GameData serializers. */
-function ivaRemapFromVariants(variants: Map<string, IvaVariant>): Map<string, string> {
+function variantRemap(variants: Map<string, ExportVariant>): Map<string, string> {
   return new Map([...variants.values()].map((v) => [v.originalId, v.variantId]))
 }
 
@@ -374,9 +403,10 @@ export interface CustomBundle {
  * Builds the custom-asset bundle for a project: a geometry mesh-atlas GLB (one named
  * node per custom SubPart actually placed), the diffuse .ktx2 for each referenced
  * custom texture, and the Assets XML that declares the MeshAtlas/PbrMaterial/SubPart.
- * The Assets XML also declares any IVA-prop export variants (`ivaVariants`), which reuse
- * built-in Mesh/Material and ship no binaries. Returns an empty bundle (animations only)
- * when neither custom SubParts nor IVA variants are present.
+ * The Assets XML also declares the export variants (`variants` — de-IVA'd props AND
+ * built-in SubParts that carry GameData), which reuse built-in Mesh/Material and ship no
+ * binaries. Returns an empty bundle (animations only) when neither custom SubParts nor
+ * variants are present.
  *
  * The .ktx2 bytes come from IndexedDB (encoded at upload time); the GLB is generated
  * fresh from the stored primitive params.
@@ -385,7 +415,7 @@ export async function buildCustomBundle(
   part: EditingPart,
   base: string,
   kittenTex: KittenTextureExportConfig = DEFAULT_KITTEN_TEXTURE_EXPORT,
-  ivaVariants: Map<string, IvaVariant> = new Map(),
+  variants: Map<string, ExportVariant> = new Map(),
   insetIds: ReadonlySet<string> = new Set(),
 ): Promise<CustomBundle> {
   const binaries: { path: string; data: Uint8Array }[] = []
@@ -402,8 +432,9 @@ export async function buildCustomBundle(
   const placed = new Set(part.placements.map((p) => p.subPartTemplateId))
   const meshes = part.customMeshes.filter((m) => placed.has(m.subPartId))
 
-  // De-IVA'd props: reference-only SubParts reusing built-in Mesh/Material (no binaries).
-  const referenceSubParts: ReferenceSubPartPlan[] = [...ivaVariants.values()].map((v) => ({
+  // Export variants (de-IVA'd props + built-in SubParts carrying GameData): reference-only
+  // SubParts reusing built-in Mesh/Material (no binaries).
+  const referenceSubParts: ReferenceSubPartPlan[] = [...variants.values()].map((v) => ({
     subPartId: v.variantId,
     meshId: v.meshId,
     materialId: v.materialId,
@@ -538,13 +569,12 @@ export async function buildModZip(
   // Layered 'glassGlow' visors expand into glass + inset-glow SubPart pairs; feed the augmented
   // part to BOTH the Part/GameData serializers and the bundle so placements + geometry agree.
   const { part: expandedPart, insetIds } = expandGlassGlow(part)
-  const ivaVariants = buildIvaVariantMap(expandedPart, catalog, sanitizeBaseName(projectName))
-  const content = buildModContent(expandedPart, projectName, ivaRemapFromVariants(ivaVariants))
+  const content = buildModContent(expandedPart, projectName, catalog)
   const bundle = await buildCustomBundle(
     expandedPart,
     content.base,
     kittenTex,
-    ivaVariants,
+    content.variants,
     insetIds,
   )
   const encoder = new TextEncoder()
@@ -637,14 +667,13 @@ export async function writeModToFolder(
 ): Promise<WriteResult> {
   const modDir = await modsDir.getDirectoryHandle(MOD_FOLDER_NAME, { create: true })
   const { part: expandedPart, insetIds } = expandGlassGlow(part)
-  const ivaVariants = buildIvaVariantMap(expandedPart, catalog, sanitizeBaseName(projectName))
-  const content = buildModContent(expandedPart, projectName, ivaRemapFromVariants(ivaVariants))
+  const content = buildModContent(expandedPart, projectName, catalog)
 
   const bundle = await buildCustomBundle(
     expandedPart,
     content.base,
     kittenTex,
-    ivaVariants,
+    content.variants,
     insetIds,
   )
 

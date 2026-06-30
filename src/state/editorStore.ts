@@ -41,6 +41,7 @@ import {
   createGimbal,
   createLight,
   createNozzle,
+  createPowerConsumer,
   createRocket,
   createRocketController,
   createSolarPanel,
@@ -517,7 +518,8 @@ export interface ImportedGameData {
   batteries: Battery[]
   generators: Generator[]
   solarPanels: SolarPanel[]
-  powerConsumers: PowerConsumer[]
+  /** The part's single power consumer / light switch, or null (KSA has one switch slot). */
+  powerConsumer: PowerConsumer | null
   /** Per-SubPart-template data (tanks / solar panels / engine modules) for the imported SubParts. */
   subPartGameData: SubPartGameData[]
   /** Part-level engine modules (controllers/rockets/combustors/nozzles/gimbals); instance refs in the source id space. */
@@ -586,7 +588,8 @@ function applyImportedGameData(
   game.batteries.push(...src.batteries)
   game.generators.push(...src.generators)
   game.solarPanels.push(...src.solarPanels)
-  game.powerConsumers.push(...src.powerConsumers)
+  // Single consumer per part: keep the target's, adopt the source's only when empty.
+  if (!game.powerConsumer && src.powerConsumer) game.powerConsumer = src.powerConsumer
   for (const spd of src.subPartGameData) {
     if (!target.subPartGameData.some((s) => s.subPartTemplateId === spd.subPartTemplateId)) {
       // Per-subpart rockets can reference sibling instances — remap those refs too.
@@ -1932,36 +1935,39 @@ export function setSolarPanelRotation(index: number, rotation: EulerXYZ): void {
   })
 }
 
-/** Discrete: append a power consumer (default draw). */
+/** Discrete: add the part's single power consumer (defaults to a 60 W light switch). */
 export function addPowerConsumer(): void {
-  commitGameData('add consumer', '', (g) =>
-    g.powerConsumers.push({ consumedWatts: 2, lightSwitch: false, lightIsActive: false }),
-  )
+  if ($part.get().gameData.powerConsumer) return
+  commitGameData('add consumer', '', (g) => {
+    g.powerConsumer = createPowerConsumer()
+  })
 }
-/** Discrete: remove power consumer at `index`. */
-export function removePowerConsumer(index: number): void {
-  if (index < 0 || index >= $part.get().gameData.powerConsumers.length) return
-  commitGameData('remove consumer', '', (g) => g.powerConsumers.splice(index, 1))
+/** Discrete: remove the part's power consumer. */
+export function removePowerConsumer(): void {
+  if (!$part.get().gameData.powerConsumer) return
+  commitGameData('remove consumer', '', (g) => {
+    g.powerConsumer = null
+  })
 }
-/** Streaming: set a consumer's draw (W). Caller pushes undo on field focus. */
-export function setPowerConsumerWatts(index: number, consumedWatts: number): void {
-  if (index < 0 || index >= $part.get().gameData.powerConsumers.length) return
+/** Streaming: set the consumer's draw (W). Caller pushes undo on field focus. */
+export function setPowerConsumerWatts(consumedWatts: number): void {
+  if (!$part.get().gameData.powerConsumer) return
   mutateGameData((g) => {
-    g.powerConsumers[index].consumedWatts = consumedWatts
+    g.powerConsumer!.consumedWatts = consumedWatts
   })
 }
-/** Discrete: toggle a consumer's `LightSwitch` (flight-toggleable light switch). */
-export function setPowerConsumerLightSwitch(index: number, on: boolean): void {
-  if (index < 0 || index >= $part.get().gameData.powerConsumers.length) return
+/** Discrete: toggle the consumer's `LightSwitch` (flight-toggleable light switch). */
+export function setPowerConsumerLightSwitch(on: boolean): void {
+  if (!$part.get().gameData.powerConsumer) return
   commitGameData('toggle light switch', '', (g) => {
-    g.powerConsumers[index].lightSwitch = on
+    g.powerConsumer!.lightSwitch = on
   })
 }
-/** Discrete: toggle a consumer's `LightIsActive` (initial on/off state). */
-export function setPowerConsumerLightIsActive(index: number, on: boolean): void {
-  if (index < 0 || index >= $part.get().gameData.powerConsumers.length) return
+/** Discrete: toggle the consumer's `LightIsActive` (initial on/off state). */
+export function setPowerConsumerLightIsActive(on: boolean): void {
+  if (!$part.get().gameData.powerConsumer) return
   commitGameData('toggle light active', '', (g) => {
-    g.powerConsumers[index].lightIsActive = on
+    g.powerConsumer!.lightIsActive = on
   })
 }
 

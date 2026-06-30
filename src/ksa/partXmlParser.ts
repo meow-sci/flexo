@@ -320,12 +320,21 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   for (const el of directChildren(gd, 'Generator'))
     game.generators.push({ outputWatts: readPowerWatts(el, 'Produced') })
   for (const el of directChildren(gd, 'SolarPanel')) game.solarPanels.push(parseSolarPanel(el))
-  for (const el of directChildren(gd, 'PowerConsumer'))
-    game.powerConsumers.push({
-      consumedWatts: readPowerWatts(el, 'Consumed'),
-      lightSwitch: el.getAttribute('LightSwitch')?.trim().toLowerCase() === 'true',
-      lightIsActive: el.getAttribute('LightIsActive')?.trim().toLowerCase() === 'true',
-    })
+  // KSA has a single Part.LightSwitch slot, so flexo keeps ONE consumer per part:
+  // prefer the first LightSwitch=true (the one KSA would actually wire up), else the
+  // first. No shipped part has >1, so the >1 branch is purely defensive.
+  const consumers = directChildren(gd, 'PowerConsumer').map((el) => ({
+    consumedWatts: readPowerWatts(el, 'Consumed'),
+    lightSwitch: el.getAttribute('LightSwitch')?.trim().toLowerCase() === 'true',
+    lightIsActive: el.getAttribute('LightIsActive')?.trim().toLowerCase() === 'true',
+  }))
+  if (consumers.length > 1) {
+    console.warn(
+      `flexo import: <PartGameData Id="${gd.getAttribute('Id') ?? ''}"> has ${consumers.length} <PowerConsumer>; ` +
+        `keeping one (KSA wires only a single Part.LightSwitch).`,
+    )
+  }
+  game.powerConsumer = consumers.find((c) => c.lightSwitch) ?? consumers[0] ?? null
 
   const connectorFlags = new Map<string, ConnectorFlag[]>()
   for (const conn of directChildren(gd, 'Connector')) {

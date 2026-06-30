@@ -42,7 +42,7 @@ export function PartDataButton({
     gameData.batteries.length +
     gameData.generators.length +
     gameData.solarPanels.length +
-    gameData.powerConsumers.length
+    (gameData.powerConsumer ? 1 : 0)
   const couplingCount =
     (gameData.decoupler ? 1 : 0) + (gameData.dockingPort ? 1 : 0) + (gameData.evaDoor ? 1 : 0)
   const engineCount =

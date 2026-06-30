@@ -84,7 +84,7 @@ export async function importBuiltInPart(
       batteries: part.batteries,
       generators: part.generators,
       solarPanels: part.solarPanels,
-      powerConsumers: part.powerConsumers,
+      powerConsumer: part.powerConsumer,
       subPartGameData: part.subPartGameData,
       rocketControllers: part.rocketControllers,
       rockets: part.rockets,

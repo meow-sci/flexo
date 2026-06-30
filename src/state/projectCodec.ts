@@ -255,7 +255,7 @@ interface CGameData {
   bt?: number[] // batteries → capacityWh[]
   gn?: number[] // generators → outputWatts[]
   sp?: CSolarPanel[] // solarPanels
-  pc?: CPowerConsumer[] // powerConsumers
+  pc?: CPowerConsumer // powerConsumer (one per part)
   dc?: { c: string; f: number } // decoupler
   dp?: { c: string; ke: number; pi: number } // dockingPort
   ed?: { c: string } // evaDoor
@@ -277,7 +277,7 @@ function encGameData(g: PartGameData): CGameData {
   if (g.batteries.length) o.bt = g.batteries.map((b) => round(b.capacityWh))
   if (g.generators.length) o.gn = g.generators.map((x) => round(x.outputWatts))
   if (g.solarPanels.length) o.sp = g.solarPanels.map(encSolarPanel)
-  if (g.powerConsumers.length) o.pc = g.powerConsumers.map(encPowerConsumer)
+  if (g.powerConsumer) o.pc = encPowerConsumer(g.powerConsumer)
   if (g.decoupler) o.dc = { c: g.decoupler.connectorId, f: round(g.decoupler.force) }
   if (g.dockingPort) {
     o.dp = {
@@ -307,7 +307,7 @@ function decGameData(c: CGameData | undefined): PartGameData {
   g.batteries = arr<number>(c.bt).map((wh): Battery => ({ capacityWh: num(wh) }))
   g.generators = arr<number>(c.gn).map((w): Generator => ({ outputWatts: num(w) }))
   g.solarPanels = arr<CSolarPanel>(c.sp).map(decSolarPanel)
-  g.powerConsumers = arr<CPowerConsumer>(c.pc).map(decPowerConsumer)
+  g.powerConsumer = c.pc ? decPowerConsumer(c.pc) : null
   g.decoupler = c.dc ? { connectorId: str(c.dc.c), force: num(c.dc.f) } : null
   g.dockingPort = c.dp
     ? {

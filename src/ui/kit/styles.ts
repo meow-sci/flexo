@@ -54,6 +54,11 @@ export function gridRowClass(rp: {
 export const warningBox =
   'rounded-lg border border-warning/40 bg-warning/10 p-2 text-xs text-warning'
 
-/** Tall read-mostly monospace textarea for XML/JSON payloads in dialogs. */
-export const monoTextarea =
-  'h-96 w-full resize-none rounded-lg border border-border bg-panel-sunken p-2 font-mono text-xs text-fg outline-none'
+const monoTextareaBase =
+  'w-full resize-none rounded-lg border border-border bg-panel-sunken p-2 font-mono text-xs text-fg outline-none'
+
+/** Tall read-mostly monospace textarea for XML/JSON payloads in dialogs (fixed height). */
+export const monoTextarea = `${monoTextareaBase} h-96`
+
+/** Monospace textarea that grows to fill its flex-column parent (full-height dialog panels). */
+export const monoTextareaFill = `${monoTextareaBase} min-h-0 flex-1`

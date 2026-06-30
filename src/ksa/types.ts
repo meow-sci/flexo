@@ -256,8 +256,8 @@ export interface SolarPanel {
 }
 
 /**
- * Power consumer (multiple allowed). Mirrors KSA's `PowerConsumerTemplate`
- * (`<PowerConsumer>` under `<PartGameData>`):
+ * Power consumer — **one per Part** (see {@link PartGameData.powerConsumer}).
+ * Mirrors KSA's `PowerConsumerTemplate` (`<PowerConsumer>` under `<PartGameData>`):
  *  - `Consumed` (PowerReference, `W`) → {@link consumedWatts}
  *  - `LightSwitch` (bool attr) → {@link lightSwitch}: when set, the consumer acts
  *    as an in-game on/off light switch (the part can be toggled in flight).
@@ -266,6 +266,12 @@ export interface SolarPanel {
  *    it under `if (LightSwitch)`).
  *
  * Both flags default to `false` in KSA, so we only emit each attribute when true.
+ *
+ * **Why one per Part:** KSA stores a single `Part.LightSwitch` slot and picks the
+ * FIRST `LightSwitch=true` consumer (`ResetModuleProperties` then `break`s); every
+ * light + emissive in the part is gated by that one switch. Multiple consumers just
+ * draw duplicate dead checkboxes in-game that still drain power. Full reasoning in
+ * `analysis/HOW_LIGHT_PARTS_WORK.md`.
  */
 export interface PowerConsumer {
   consumedWatts: number
@@ -550,7 +556,12 @@ export interface PartGameData {
   batteries: Battery[]
   generators: Generator[]
   solarPanels: SolarPanel[]
-  powerConsumers: PowerConsumer[]
+  /**
+   * The part's single power consumer / light switch, or null. KSA has exactly one
+   * `Part.LightSwitch` slot, so flexo models at most one consumer per part — see
+   * {@link PowerConsumer} and `analysis/HOW_LIGHT_PARTS_WORK.md`.
+   */
+  powerConsumer: PowerConsumer | null
   decoupler: Decoupler | null
   dockingPort: DockingPort | null
   evaDoor: EvaDoor | null
@@ -628,6 +639,15 @@ export function createSolarPanel(): SolarPanel {
 }
 
 /**
+ * Default power consumer: a 60 W light switch (matches KSA's `LightSmallA` draw),
+ * off at start. Light parts are the dominant use, so we default {@link PowerConsumer.lightSwitch}
+ * on; clear it for a plain always-on draw.
+ */
+export function createPowerConsumer(): PowerConsumer {
+  return { consumedWatts: 60, lightSwitch: true, lightIsActive: false }
+}
+
+/**
  * Default light: a white Spot matching KSA's canonical CoreElectricalA spotlight
  * (range 5 m, intensity 10, 22.5°/45° inner/outer half-cone). Aimed along local +X
  * (identity rotation); the user repositions/re-aims it from the SubPart Data dialog.
@@ -655,7 +675,7 @@ export function createEmptyGameData(): PartGameData {
     batteries: [],
     generators: [],
     solarPanels: [],
-    powerConsumers: [],
+    powerConsumer: null,
     decoupler: null,
     dockingPort: null,
     evaDoor: null,

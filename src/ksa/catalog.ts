@@ -28,7 +28,7 @@ export interface CatalogSubPart {
    * True when the SubPart's <PartModel> carries <Internal>true</Internal> — an "IVA"
    * (interior) prop that KSA only renders in IVA camera mode. flexo renders it normally
    * in the editor, and on mod export rewrites it to a non-Internal variant so it renders
-   * everywhere (see buildIvaVariantMap in modExport.ts).
+   * everywhere (see buildExportVariantMap in modExport.ts).
    */
   internal?: boolean
   /** Originating XML file (for debugging). */

@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createEmptyPart, createPartAnimation, identityTransform } from './types'
+import {
+  createEmptyPart,
+  createLight,
+  createPartAnimation,
+  createSubPartGameData,
+  identityTransform,
+} from './types'
 import type { CustomMesh, EditingPart, PartAnimation } from './types'
 
 // Avoid loading the real kitten gltfs (GLTFLoader/fetch) — return tiny baked geometry.
@@ -23,7 +29,7 @@ vi.mock('../three/kittenBake', () => ({
 }))
 import {
   buildCustomBundle,
-  buildIvaVariantMap,
+  buildExportVariantMap,
   buildModContent,
   buildModZip,
   expandGlassGlow,
@@ -244,6 +250,132 @@ describe('buildCustomBundle — part-ified kitten textures', () => {
   })
 })
 
+describe('SubPart light GameData export', () => {
+  const REF_TEX = { mode: 'reference', contentCorePath: 'C:\\KSA\\Content\\Core' } as const
+
+  // A custom light SubPart's <Light> must reach the GameData XML keyed by the SAME id that
+  // the Part tree references (InstanceOf) and the Assets XML declares (<SubPart Id>), or KSA's
+  // merge-by-id won't attach the light. See analysis/HOW_LIGHT_PARTS_WORK.md §1.1.
+  it('emits <SubPartGameData><Light> with an id aligned across Part / GameData / Assets XML', async () => {
+    const part = partWithKittenMeshes()
+    const lampId = 'flexo_hunter_suit_a' // a placed custom SubPart
+    part.subPartGameData.push({ ...createSubPartGameData(lampId), lights: [createLight()] })
+
+    const gameDataXml = serializeGameData(part, 'KittenMod')
+    const partXml = serializePart(part)
+    const bundle = await buildCustomBundle(part, 'KittenMod', REF_TEX)
+
+    // GameData carries the light, keyed by the SubPart template id.
+    expect(gameDataXml).toContain(`<SubPartGameData Id="${lampId}"`)
+    expect(gameDataXml).toContain('<Light>')
+    expect(gameDataXml).toContain('<Type>Spot</Type>')
+    // The Part tree instantiates that template, and the Assets XML declares it — same id everywhere.
+    expect(partXml).toContain(`InstanceOf="${lampId}"`)
+    expect(bundle.assetsXml).toContain(`<SubPart Id="${lampId}"`)
+  })
+
+  it('emits one <PowerConsumer LightSwitch="true"> for the part switch', () => {
+    const part = createEmptyPart()
+    part.gameData.powerConsumer = { consumedWatts: 60, lightSwitch: true, lightIsActive: false }
+    const xml = serializeGameData(part, 'P')
+    expect(xml.match(/<PowerConsumer/g)?.length).toBe(1)
+    expect(xml).toContain('LightSwitch="true"')
+    expect(xml).not.toContain('LightIsActive')
+  })
+})
+
+const SPOTLIGHT = 'CoreElectricalA_Subpart_SpotlightA'
+
+/** A catalog with one non-IVA built-in light SubPart (mesh + material), like CoreElectricalA. */
+function lightCatalog(): Map<string, CatalogSubPart> {
+  return new Map<string, CatalogSubPart>([
+    [
+      SPOTLIGHT,
+      {
+        id: SPOTLIGHT,
+        atlasUrl: '/ksa/Meshes/CoreElectricalA_MeshAtlas.glb',
+        meshNodeName: SPOTLIGHT,
+        materialId: 'CoreElectricalA_Material',
+        sourceFile: 'CoreElectricalAAssets.xml',
+      },
+    ],
+  ])
+}
+
+/** A part that places the built-in spotlight SubPart and gives it a <Light> (the reported case). */
+function partWithBuiltinLight(): EditingPart {
+  const part = createEmptyPart()
+  part.partId = 'fixme_part_id'
+  part.placements.push({
+    instanceId: 'spot_1',
+    subPartTemplateId: SPOTLIGHT,
+    ...identityTransform(),
+    layerId: 'default',
+  })
+  part.subPartGameData.push({ ...createSubPartGameData(SPOTLIGHT), lights: [createLight()] })
+  return part
+}
+
+describe('built-in SubPart GameData export variants (never redefine the built-in)', () => {
+  const VID = `flexo_MyLight_${SPOTLIGHT}`
+
+  it('creates a variant for a placed built-in SubPart carrying GameData, reusing built-in mesh/material', () => {
+    const v = buildExportVariantMap(partWithBuiltinLight(), lightCatalog(), 'MyLight').get(
+      SPOTLIGHT,
+    )!
+    expect(v.variantId).toBe(VID) // no _NotIVA suffix — it's not an IVA prop
+    expect(v.meshId).toBe(SPOTLIGHT)
+    expect(v.materialId).toBe('CoreElectricalA_Material')
+  })
+
+  it('makes NO variant for a placed built-in SubPart with no GameData (plain mesh reuse)', () => {
+    const part = createEmptyPart()
+    part.placements.push({
+      instanceId: 's',
+      subPartTemplateId: SPOTLIGHT,
+      ...identityTransform(),
+      layerId: 'default',
+    })
+    expect(buildExportVariantMap(part, lightCatalog(), 'X').size).toBe(0)
+  })
+
+  it('Part + GameData XML reference the variant id, never the built-in id', () => {
+    const content = buildModContent(partWithBuiltinLight(), 'MyLight', lightCatalog())
+    // The <Light> moves onto a fresh variant SubPartGameData…
+    expect(content.gameDataXml).toContain(`<SubPartGameData Id="${VID}"`)
+    expect(content.gameDataXml).toContain('<Light>')
+    // …and the built-in SubPart is NEVER redefined (the reported bug).
+    expect(content.gameDataXml).not.toContain(`<SubPartGameData Id="${SPOTLIGHT}"`)
+    // The placement instantiates the variant, not the built-in.
+    expect(content.partXml).toContain(`InstanceOf="${VID}"`)
+    expect(content.partXml).not.toContain(`InstanceOf="${SPOTLIGHT}"`)
+  })
+
+  it('Assets XML declares the variant reusing the built-in Mesh + Material (ships no binaries)', async () => {
+    const content = buildModContent(partWithBuiltinLight(), 'MyLight', lightCatalog())
+    const bundle = await buildCustomBundle(
+      partWithBuiltinLight(),
+      content.base,
+      undefined,
+      content.variants,
+    )
+    expect(bundle.assetsFile).toBe('MyLightAssets.xml')
+    expect(bundle.assetsXml).toContain(`<SubPart Id="${VID}"`)
+    expect(bundle.assetsXml).toContain(`<PartModel Id="${VID}_Model"`)
+    expect(bundle.assetsXml).toContain(`<Mesh Id="${SPOTLIGHT}"`) // reuse built-in geometry
+    expect(bundle.assetsXml).toContain('<Material Id="CoreElectricalA_Material"')
+    expect(bundle.assetsXml).not.toContain('MeshAtlas') // no custom geometry generated
+    expect(bundle.binaries).toHaveLength(0) // reuses built-in art — nothing to ship
+  })
+
+  it('end-to-end zip never emits a <SubPartGameData> for the built-in id', async () => {
+    const blob = await buildModZip(partWithBuiltinLight(), 'MyLight', undefined, lightCatalog())
+    const text = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()))
+    expect(text).toContain(`<SubPartGameData Id="${VID}"`)
+    expect(text).not.toContain(`<SubPartGameData Id="${SPOTLIGHT}"`)
+  })
+})
+
 function ivaCatalog(): Map<string, CatalogSubPart> {
   return new Map<string, CatalogSubPart>([
     [
@@ -292,7 +424,7 @@ function partWithIvaAndCore(): EditingPart {
 
 describe('IVA (Internal) SubPart export variants', () => {
   it('maps placed IVA templates to project-namespaced variants, skipping normal parts', () => {
-    const variants = buildIvaVariantMap(partWithIvaAndCore(), ivaCatalog(), 'MyShip')
+    const variants = buildExportVariantMap(partWithIvaAndCore(), ivaCatalog(), 'MyShip')
     expect(variants.size).toBe(1)
     const v = variants.get('CoreIVAPropA_Subpart_ChairA')!
     expect(v.variantId).toBe('flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA')
@@ -308,7 +440,7 @@ describe('IVA (Internal) SubPart export variants', () => {
       ...identityTransform(),
       layerId: 'default',
     })
-    expect(buildIvaVariantMap(part, ivaCatalog(), 'MyShip').size).toBe(1)
+    expect(buildExportVariantMap(part, ivaCatalog(), 'MyShip').size).toBe(1)
   })
 
   it('produces no variants for a part with no IVA props', () => {
@@ -319,12 +451,12 @@ describe('IVA (Internal) SubPart export variants', () => {
       ...identityTransform(),
       layerId: 'default',
     })
-    expect(buildIvaVariantMap(part, ivaCatalog(), 'P').size).toBe(0)
+    expect(buildExportVariantMap(part, ivaCatalog(), 'P').size).toBe(0)
   })
 
   it('Part XML points IVA placements at the variant, normal placements unchanged', () => {
     const part = partWithIvaAndCore()
-    const variants = buildIvaVariantMap(part, ivaCatalog(), 'MyShip')
+    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip')
     const remap = new Map([...variants.values()].map((v) => [v.originalId, v.variantId]))
     const xml = serializePart(part, remap)
     expect(xml).toContain('InstanceOf="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA"')
@@ -334,7 +466,7 @@ describe('IVA (Internal) SubPart export variants', () => {
 
   it('Assets XML declares the de-IVA variant (no Internal/RayTracing) even with no custom meshes', async () => {
     const part = partWithIvaAndCore()
-    const variants = buildIvaVariantMap(part, ivaCatalog(), 'MyShip')
+    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip')
     const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants)
     expect(bundle.assetsFile).toBe('MyShipAssets.xml')
     expect(bundle.assetsXml).toContain(

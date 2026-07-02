@@ -1,0 +1,464 @@
+<?xml version='1.0' encoding='utf-8'?>
+<Assets>
+    <PartGameData Id="CoreFuelTankA_Prefab_LF1W1HA">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="1"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-0.051" Y="-1.5417" Z="-1.5199" />
+            <LengthY M="1.0197" />
+            <Radius M="0.5007" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF1W1HB">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="1"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-0.051" Y="-1.5417" Z="-1.5199" />
+            <LengthY M="1.0197" />
+            <Radius M="0.5007" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF1W1HC">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="1"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-0.051" Y="-1.5417" Z="-1.5199" />
+            <LengthY M="1.0197" />
+            <Radius M="0.5007" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF1WHalfHA">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="1"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="0.1164" Y="-1.545" Z="-1.6872" />
+            <LengthY M="0.5473" />
+            <Radius M="0.5007" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF1WHalfHB">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="1"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="0.1164" Y="-1.545" Z="-1.6872" />
+            <LengthY M="0.5473" />
+            <Radius M="0.5007" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF1WHalfHC">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="1"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="0.1164" Y="-1.545" Z="-1.6872" />
+            <LengthY M="0.5473" />
+            <Radius M="0.5007" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W1HA">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="2"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="0.0678" Y="-1.5423" Z="-1.6386" />
+            <LengthY M="1.0339" />
+            <Radius M="1.001" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W1HB">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="2"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="0.0678" Y="-1.5423" Z="-1.6386" />
+            <LengthY M="1.0339" />
+            <Radius M="1.001" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W2HA">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="2"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-0.0549" Y="-1.5424" Z="-1.5159" />
+            <LengthY M="2.0321" />
+            <Radius M="1.0016" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W2HB">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="2"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-0.0549" Y="-1.5424" Z="-1.5159" />
+            <LengthY M="2.0321" />
+            <Radius M="1.0016" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W2HC">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="2"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-0.0549" Y="-1.5424" Z="-1.5159" />
+            <LengthY M="2.0321" />
+            <Radius M="1.0016" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W4HA">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="2"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-0.0171" Y="-1.5424" Z="-1.5537" />
+            <LengthY M="4.031" />
+            <Radius M="1.001" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W4HB">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="2"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-0.0171" Y="-1.5424" Z="-1.5537" />
+            <LengthY M="4.031" />
+            <Radius M="1.001" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W4HC">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="2"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-0.0171" Y="-1.5424" Z="-1.5537" />
+            <LengthY M="4.031" />
+            <Radius M="1.001" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W4HD">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="2"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-0.0171" Y="-1.5424" Z="-1.5537" />
+            <LengthY M="4.031" />
+            <Radius M="1.001" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF3W3HA">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="3"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-0.0727" Y="-1.5443" Z="-1.4982" />
+            <LengthY M="3.0681" />
+            <Radius M="1.5029" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF3W3HB">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="3"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-0.0727" Y="-1.5443" Z="-1.4982" />
+            <LengthY M="3.0681" />
+            <Radius M="1.5029" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF3W6HA">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="3"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-3.1411" Y="0.0022" Z="1.5708" />
+            <LengthY M="6.0681" />
+            <Radius M="1.5942" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF3W6HB">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="3"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-3.1411" Y="0.0022" Z="1.5708" />
+            <LengthY M="6.0681" />
+            <Radius M="1.5942" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF3W6HC">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="3"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-3.1411" Y="0.0022" Z="1.5708" />
+            <LengthY M="6.0681" />
+            <Radius M="1.5942" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF3W6HD">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="3"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-3.1411" Y="0.0022" Z="1.5708" />
+            <LengthY M="6.0681" />
+            <Radius M="1.5942" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_MP1W1HA">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="1"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-0.0027" Y="-1.2321" Z="-1.5692" />
+            <LengthY M="1.0256" />
+            <Radius M="0.5006" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_MP1W1HB">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="1"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-0.0027" Y="-1.2321" Z="-1.5692" />
+            <LengthY M="1.0256" />
+            <Radius M="0.5006" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_MP1W1HC">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="1"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-0.0027" Y="-1.2321" Z="-1.5692" />
+            <LengthY M="1.0256" />
+            <Radius M="0.5006" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_MP1W1HD">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="1"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="-0.0027" Y="-1.2321" Z="-1.5692" />
+            <LengthY M="1.0256" />
+            <Radius M="0.5006" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_MP1WHalfHA">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="1"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="0.0163" Y="-1.5262" Z="-1.5871" />
+            <LengthY M="0.5455" />
+            <Radius M="0.5002" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_MP1WHalfHB">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="1"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="0.0163" Y="-1.5262" Z="-1.5871" />
+            <LengthY M="0.5455" />
+            <Radius M="0.5002" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_MP1WHalfHC">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="1"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="0.0163" Y="-1.5262" Z="-1.5871" />
+            <LengthY M="0.5455" />
+            <Radius M="0.5002" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_MP1WHalfHD">
+        <EditorTag Value="Fuel Tanks" />
+        <Diameter M="1"/>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="0.0163" Y="-1.5262" Z="-1.5871" />
+            <LengthY M="0.5455" />
+            <Radius M="0.5002" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_RadialMPHalfWA">
+        <EditorTag Value="Fuel Tanks" />
+
+        <Collider Id="Collider1">
+          <Sphere Id="SphereCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <Radius M="0.25" />
+          </Sphere>
+          <Box Id="BoxCollider1">
+            <LocationAsmb X="0" Y="0" Z="0.4" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <LengthX M="0.1" />
+            <LengthY M="0.8" />
+            <LengthZ M="0.2" />
+          </Box>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_RadialMPHalfWB">
+        <EditorTag Value="Fuel Tanks" />
+
+        <Collider Id="Collider1">
+          <Sphere Id="SphereCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <Radius M="0.25" />
+          </Sphere>
+          <Box Id="BoxCollider1">
+            <LocationAsmb X="0" Y="0" Z="0.4" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <LengthX M="0.1" />
+            <LengthY M="0.8" />
+            <LengthZ M="0.2" />
+          </Box>
+        </Collider>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_RadialMPQuarterWA">
+        <EditorTag Value="Fuel Tanks" />
+
+        <Collider Id="Collider1">
+          <Sphere Id="SphereCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <Radius M="0.15" />
+          </Sphere>
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0" Y="0" Z="0.15" />
+            <Collider2Asmb X="1.57" Y="0" Z="0" />
+            <LengthY M="0.05" />
+            <Radius M="0.2" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+</Assets>

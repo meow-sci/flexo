@@ -27,6 +27,11 @@ bun copy-ksa-assets-to-private-repo.ts --target <dir>
   catalog plus every binary it references (and the kitten character dirs,
   copied verbatim) and writes them into the private assets repo used at CI
   build time. Context: [`docs/asset-pipeline.md`](../docs/asset-pipeline.md).
+- `sync-test-fixtures.ts` — re-copies the vendored KSA asset fixtures in
+  `src/ksa/__fixtures__/` (byte-identical Core XML committed so parser/catalog
+  tests run without the private tree) from `$KSA_ASSETS_DIR`. Run after a KSA
+  asset update that materially changes a vendored file. Context:
+  [`src/ksa/__fixtures__/README.md`](../src/ksa/__fixtures__/README.md).
 
 ## Conventions
 

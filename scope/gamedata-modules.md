@@ -66,6 +66,7 @@ fallback). See [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.m
 
 ## Known gotchas
 
+- **Duplicate-`Id` `<SubPartGameData>` MERGE, not last-wins.** KSA registers each GameData block by `Id` and, on a repeat `Id`, applies the later block onto the first (`PartGameDataReference.OnDataLoad` → `PartTemplate.ApplyGameData`): list-valued modules (tanks/solar panels/lights/engine modules — `Components.AddRange`) **accumulate**, scalar fields overwrite only when the incoming value is non-null. Core's fuel-tank skins rely on this — e.g. `CoreFuelTankA_Subpart_Skin1WHalfHA` appears **twice** in `PartGameData.xml`: once carrying the `<Tank>`, and again (the "Quad Fuel Tank" variant) with only an unmodeled `<SubstanceStorageVolume>`. flexo's `subPartGameDataFromRoot` (`partXmlParser.ts`) merges duplicates by `Id` to match; a naive `Map.set` last-wins silently dropped the tank. Regression-covered by the vendored `PartGameData.xml` fixture (`partCatalog.test.ts`).
 - **Battery Wh↔J** is an off-by-3600 trap if the unit token is misread.
 - The **DockingPort parser + serializer** model only the current child-element form (`<ConnectorId Value>`, `<LatchingKineticEnergy J>`, `<PushoffImpulse Ns>`) — no legacy attribute fallback. Stale data is discarded by the boot-time project purge, never migrated.
 - Connector `<Flags>` is emitted in **both** the Assets and GameData docs.

@@ -414,9 +414,18 @@ export function subPartGameDataFromDoc(doc: Document): SubPartGameData[] {
   return subPartGameDataFromRoot(doc.documentElement as Element)
 }
 
-/** Parses all top-level <SubPartGameData> elements from an Assets document root. */
+/**
+ * Parses all top-level <SubPartGameData> elements from an Assets document root,
+ * merging duplicate-Id entries the way KSA does. KSA registers each SubPartGameData
+ * by Id and, on a repeat Id, applies the later entry onto the first
+ * (PartGameDataReference.OnDataLoad → PartTemplate.ApplyGameData): list-valued modules
+ * (tanks/solar panels/lights/engine modules) accumulate. Core relies on this — e.g.
+ * `CoreFuelTankA_Subpart_Skin1WHalfHA` is declared twice in PartGameData.xml: once with
+ * the `<Tank>`, and again (its "quad" variant) with only an unmodeled child — so a naive
+ * last-wins would silently drop the tank.
+ */
 function subPartGameDataFromRoot(root: Element): SubPartGameData[] {
-  const out: SubPartGameData[] = []
+  const byId = new Map<string, SubPartGameData>()
   for (const spEl of directChildren(root, 'SubPartGameData')) {
     const subPartTemplateId = spEl.getAttribute('Id')
     if (!subPartTemplateId) continue
@@ -434,9 +443,28 @@ function subPartGameDataFromRoot(root: Element): SubPartGameData[] {
     // Preserve unmodeled attrs (e.g. Core's `DisplayName`) + child elements verbatim.
     spd.unknownAttrs = captureUnknownAttrs(spEl, KNOWN_SUBPART_GAMEDATA_ATTRS)
     spd.unknownChildren = captureUnknownChildren(spEl, KNOWN_SUBPART_GAMEDATA_CHILDREN)
-    if (!isSubPartGameDataEmpty(spd)) out.push(spd)
+    const existing = byId.get(subPartTemplateId)
+    if (existing) mergeSubPartGameDataInto(existing, spd)
+    else byId.set(subPartTemplateId, spd)
   }
-  return out
+  return Array.from(byId.values()).filter((spd) => !isSubPartGameDataEmpty(spd))
+}
+
+/**
+ * Applies a repeat-Id `<SubPartGameData>` onto the first entry seen for that Id,
+ * mirroring KSA's `PartTemplate.ApplyGameData`: list-valued modules accumulate and
+ * unmodeled children are preserved; the base entry's unmodeled attrs win (its
+ * `DisplayName` identifies the template).
+ */
+function mergeSubPartGameDataInto(base: SubPartGameData, add: SubPartGameData): void {
+  base.tanks.push(...add.tanks)
+  base.solarPanels.push(...add.solarPanels)
+  base.lights.push(...add.lights)
+  base.combustors.push(...add.combustors)
+  base.nozzles.push(...add.nozzles)
+  base.rockets.push(...add.rockets)
+  base.unknownChildren.push(...add.unknownChildren)
+  for (const [k, v] of Object.entries(add.unknownAttrs)) base.unknownAttrs[k] ??= v
 }
 
 /**

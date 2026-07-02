@@ -4,7 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "cartoon-moon": "bun build-cartoon-moon.ts"
+    "cartoon-moon": "bun build-cartoon-moon.ts",
+    "sync-fixtures": "bun sync-test-fixtures.ts"
   },
   "dependencies": {
     "upng-js": "2.1.0"

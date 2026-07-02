@@ -1,8 +1,14 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import { DOMParser } from '@xmldom/xmldom'
 import { mergeGameData, parseGameDataFile, parsePartsFile, type CatalogPart } from './partCatalog'
-import { hasKsaAssets, ksaAsset } from './ksaTestAssets'
+import {
+  hasKsaAssets,
+  ksaAsset,
+  readVendoredAsset,
+  VENDORED_ASSETS_DIR,
+  vendoredAsset,
+} from './ksaTestAssets'
 
 function parse(xml: string): Document {
   return new DOMParser().parseFromString(xml, 'application/xml') as unknown as Document
@@ -229,6 +235,141 @@ describe('parseGameDataFile + mergeGameData', () => {
     },
   )
 
+  it('merges a duplicate-Id SubPartGameData so the fuel-tank <Tank> survives a later tank-less entry', () => {
+    const parts: CatalogPart[] = []
+    parsePartsFile(
+      parse(`<Assets><Part Id="CoreFuelTankA_Prefab_LF1WHalfHA">
+        <SubPart Id="skin" InstanceOf="CoreFuelTankA_Subpart_Skin1WHalfHA" />
+      </Part></Assets>`),
+      'CoreFuelTankAAssets.xml',
+      parts,
+    )
+
+    // KSA authors this skin's game-data as TWO same-Id <SubPartGameData> entries: the
+    // first carries the <Tank>; a later "quad" variant carries only an unmodeled child.
+    // KSA registers-then-merges by Id, so a naive last-wins would drop the tank.
+    const gameData = emptyGameData()
+    parseGameDataFile(
+      parse(`<Assets>
+        <SubPartGameData Id="CoreFuelTankA_Subpart_Skin1WHalfHA" DisplayName="Fuel Tank 1m x .5m A">
+          <Tank><CylindricalTank>
+            <Material Id="Aluminum.2014(s)" /><Length M=".5" /><OuterRadius M="1" /><WallThickness Mm="2" />
+          </CylindricalTank></Tank>
+        </SubPartGameData>
+        <SubPartGameData Id="CoreFuelTankA_Subpart_Skin1WHalfHA" DisplayName="Quad Fuel Tank 1m x .5m A">
+          <SubstanceStorageVolume M3="0.30" />
+        </SubPartGameData>
+      </Assets>`),
+      gameData,
+    )
+    mergeGameData(parts, gameData)
+
+    const skin = parts[0].subPartGameData.find(
+      (s) => s.subPartTemplateId === 'CoreFuelTankA_Subpart_Skin1WHalfHA',
+    )!
+    expect(skin).toBeTruthy()
+    expect(skin.tanks).toHaveLength(1)
+    expect(skin.tanks[0]).toEqual({
+      shape: 'Cylindrical',
+      wallMaterialId: 'Aluminum.2014(s)',
+      lengthM: 0.5,
+      outerRadiusM: 1,
+      wallThicknessMm: 2,
+    })
+    // The later entry's unmodeled child is still carried (round-trip), alongside the tank.
+    expect(skin.unknownChildren.map((n) => n.tag)).toEqual(['SubstanceStorageVolume'])
+  })
+
+  // Runs against the committed fixtures (src/ksa/__fixtures__/), so it exercises the REAL
+  // Core data without the private asset tree. CoreFuelTankAAssets.xml holds the geometry;
+  // the tank <SubPartGameData> lives in the shared PartGameData.xml.
+  it('imports the real CoreFuelTankA_Prefab_LF1WHalfHA SubPart <Tank> (vendored fixtures)', () => {
+    const parts: CatalogPart[] = []
+    parsePartsFile(
+      parse(readVendoredAsset('CoreFuelTankAAssets.xml')),
+      'CoreFuelTankAAssets.xml',
+      parts,
+    )
+    const gameData = emptyGameData()
+    parseGameDataFile(parse(readVendoredAsset('PartGameData.xml')), gameData)
+    mergeGameData(parts, gameData)
+
+    const part = parts.find((p) => p.id === 'CoreFuelTankA_Prefab_LF1WHalfHA')!
+    expect(part).toBeTruthy()
+    const skin = part.subPartGameData.find(
+      (s) => s.subPartTemplateId === 'CoreFuelTankA_Subpart_Skin1WHalfHA',
+    )!
+    expect(skin).toBeTruthy()
+    // Skin1WHalfHA is declared twice in PartGameData.xml (a normal + a "quad" variant);
+    // the tank must survive the merge.
+    expect(skin.tanks).toHaveLength(1)
+    expect(skin.tanks[0].shape).toBe('Cylindrical')
+    expect(skin.tanks[0].wallMaterialId).toBe('Aluminum.2014(s)')
+    expect(skin.tanks[0].lengthM).toBe(0.5)
+    expect(skin.tanks[0].outerRadiusM).toBe(1)
+    expect(skin.tanks[0].wallThicknessMm).toBe(2)
+  })
+
+  // The electrical solar panel exercises the OTHER real-data path: the SubPart's
+  // <SolarPanel> data lives in the same GameData file as its <PartGameData> (unlike the
+  // fuel tank, whose tank data is off in the shared PartGameData.xml).
+  it('imports the real CoreElectricalA_Prefab_SolarPanelB tags/flags + SubPart solar panel (vendored fixtures)', () => {
+    const parts: CatalogPart[] = []
+    parsePartsFile(
+      parse(readVendoredAsset('CoreElectricalAAssets.xml')),
+      'CoreElectricalAAssets.xml',
+      parts,
+    )
+    const gameData = emptyGameData()
+    parseGameDataFile(parse(readVendoredAsset('CoreElectricalAGameData.xml')), gameData)
+    mergeGameData(parts, gameData)
+
+    const panel = parts.find((p) => p.id === 'CoreElectricalA_Prefab_SolarPanelB')!
+    expect(panel).toBeTruthy()
+    // Editor tag + the ToSurface connector flag come from <PartGameData>, not the geometry.
+    expect(panel.editorTags).toContain('Electrical')
+    expect(panel.connectors.find((c) => c.id === '_connector6')?.flags).toEqual(['ToSurface'])
+    // The solar cell's per-template data (50 W, rotated Y=\u03C0/2) is attached to the placed SubPart.
+    const cell = panel.subPartGameData.find(
+      (s) => s.subPartTemplateId === 'CoreElectricalA_Subpart_SolarPanelB_CellA',
+    )!
+    expect(cell).toBeTruthy()
+    expect(cell.solarPanels).toHaveLength(1)
+    expect(cell.solarPanels[0].outputWatts).toBe(50)
+    expect(cell.solarPanels[0].transform.rotation.y).toBeCloseTo(1.5708, 4)
+  })
+
+  // Light coverage from real data: the small spotlight Part places SpotlightA, whose
+  // <SubPartGameData> carries a spot <Light> (type/transform/range/intensity/color/cone).
+  it('imports the real CoreElectricalA_Prefab_LightSmallA SubPart <Light> (vendored fixtures)', () => {
+    const parts: CatalogPart[] = []
+    parsePartsFile(
+      parse(readVendoredAsset('CoreElectricalAAssets.xml')),
+      'CoreElectricalAAssets.xml',
+      parts,
+    )
+    const gameData = emptyGameData()
+    parseGameDataFile(parse(readVendoredAsset('CoreElectricalAGameData.xml')), gameData)
+    mergeGameData(parts, gameData)
+
+    const light = parts.find((p) => p.id === 'CoreElectricalA_Prefab_LightSmallA')!
+    expect(light).toBeTruthy()
+    const spotlight = light.subPartGameData.find(
+      (s) => s.subPartTemplateId === 'CoreElectricalA_Subpart_SpotlightA',
+    )!
+    expect(spotlight).toBeTruthy()
+    expect(spotlight.lights).toHaveLength(1)
+    const l = spotlight.lights[0]
+    expect(l.type).toBe('Spot')
+    expect(l.rangeM).toBe(5)
+    expect(l.intensity).toBe(10)
+    expect(l.color).toEqual({ r: 1, g: 1, b: 1 })
+    expect(l.innerAngleRad).toBeCloseTo(0.392599, 6)
+    expect(l.outerAngleRad).toBeCloseTo(0.785398, 6)
+    expect(l.transform.position).toEqual({ x: 0.38, y: 0.21, z: 0 })
+    expect(l.rayTracing).toBe(false) // no <RayTracing> child → KSA default
+  })
+
   it('ignores unknown / None flags and connectors with no geometry counterpart', () => {
     const parts: CatalogPart[] = []
     parsePartsFile(parse(ASSETS_XML), 'f.xml', parts)
@@ -244,5 +385,22 @@ describe('parseGameDataFile + mergeGameData', () => {
     // Bogus flag ignored -> stays empty; _connectorX has no geometry connector -> skipped.
     expect(parts[0].connectors.map((c) => c.id)).toEqual(['_connector6'])
     expect(parts[0].connectors[0].flags).toEqual([])
+  })
+})
+
+// Guards the tests above: the vendored fixtures are hand-copied and CAN silently drift
+// from the live KSA assets. When the private tree is present (locally / private CI) this
+// fails the moment any fixture diverges — re-sync with `bun scripts/sync-test-fixtures.ts`
+// and update the parser/catalog code + tests to match. Skipped when the private tree is
+// absent (open-source CI), where the vendored copies are all we have to test against.
+describe.runIf(hasKsaAssets)('vendored fixtures stay byte-identical to the live KSA assets', () => {
+  const fixtures = readdirSync(VENDORED_ASSETS_DIR).filter((f) => f.endsWith('.xml'))
+
+  it('has at least one vendored fixture to check', () => {
+    expect(fixtures.length).toBeGreaterThan(0)
+  })
+
+  it.each(fixtures)('%s matches $KSA_ASSETS_DIR', (name) => {
+    expect(readFileSync(vendoredAsset(name), 'utf-8')).toBe(readFileSync(ksaAsset(name), 'utf-8'))
   })
 })

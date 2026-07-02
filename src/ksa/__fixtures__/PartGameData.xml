@@ -1,0 +1,1243 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Assets>
+
+    <SubPartGameData Id="KittenBackPackSubPart">
+        <CustomMass>
+            <LocationBody Z="-0.11692" />
+            <Mass Kg="50" />
+            <!-- A solid rectangular prism, 0.211 x 0.274 x 0.483 -->
+            <MassSpecificInertia Ixx="0.0256970833" Iyy="0.0231508333" Izz="0.0099664166" />
+        </CustomMass>
+
+        <Tank>
+            <SphericalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <OuterRadius M="0.276" />
+                <WallThickness Mm="4" />
+            </SphericalTank>
+        </Tank>
+
+        <RocketThrusterController Id="TranslateRight">
+            <ControlMap CSV="TranslateRight" />
+            <RocketReference Id="TranslateRight" />
+        </RocketThrusterController>
+        <Rocket Id="TranslateRight">
+            <Core Id="TranslateRightCombustor" />
+            <Nozzle Id="TranslateRight1" />
+            <Nozzle Id="TranslateRight2" />
+        </Rocket>
+        <Combustor Id="TranslateRightCombustor">
+            <Combustion Id="MMH_NTO_1.6" />
+            <MaxPressure Bar="7" />
+            <ThermalEfficiency Value="0.75" />
+            <MinimumPulseTime Seconds="0.008" />
+        </Combustor>
+        <DeLavalNozzle Id="TranslateRight1">
+            <ExitDiameter M="0.02" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.00" Y="-0.23" Z="0.0" />
+            <ExhaustDirection X="0.000" Y="-1.000" Z="0.000" />
+            <FxExhaustLocation X="-0.15" Y="-0.23" Z="0.0" />
+            <FxExhaustDirection X="0.000" Y="-1.000" Z="0.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+        <DeLavalNozzle Id="TranslateRight2">
+            <ExitDiameter M="0.02" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.00" Y="-0.23" Z="0.0" />
+            <ExhaustDirection X="0.000" Y="-1.000" Z="0.000" />
+            <FxExhaustLocation X="-0.16" Y="-0.23" Z="0.3120" />
+            <FxExhaustDirection X="0.000" Y="-1.000" Z="0.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+
+        <RocketThrusterController Id="TranslateLeft">
+            <ControlMap CSV="TranslateLeft" />
+            <RocketReference Id="TranslateLeft" />
+        </RocketThrusterController>
+        <Rocket Id="TranslateLeft">
+            <Core Id="TranslateLeftCombustor" />
+            <Nozzle Id="TranslateLeft1" />
+            <Nozzle Id="TranslateLeft2" />
+        </Rocket>
+        <Combustor Id="TranslateLeftCombustor">
+            <Combustion Id="MMH_NTO_1.6" />
+            <MaxPressure Bar="7" />
+            <ThermalEfficiency Value="0.75" />
+            <MinimumPulseTime Seconds="0.008" />
+        </Combustor>
+        <DeLavalNozzle Id="TranslateLeft1">
+            <ExitDiameter M="0.02" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.00" Y="0.23" Z="0.0" />
+            <ExhaustDirection X="0.000" Y="1.000" Z="0.000" />
+            <FxExhaustLocation X="-0.15" Y="0.23" Z="0.0" />
+            <FxExhaustDirection X="0.000" Y="1.000" Z="0.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+        <DeLavalNozzle Id="TranslateLeft2">
+            <ExitDiameter M="0.02" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.00" Y="0.23" Z="0.0" />
+            <ExhaustDirection X="0.000" Y="1.000" Z="0.000" />
+            <FxExhaustLocation X="-0.16" Y="0.23" Z="0.3120" />
+            <FxExhaustDirection X="0.000" Y="1.000" Z="0.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+
+        <RocketThrusterController Id="TranslateDown">
+            <ControlMap CSV="TranslateDown" />
+            <RocketReference Id="TranslateDown" />
+        </RocketThrusterController>
+        <Rocket Id="TranslateDown">
+            <Core Id="TranslateDownCombustor" />
+            <Nozzle Id="TranslateDown1" />
+            <Nozzle Id="TranslateDown2" />
+            <Nozzle Id="TranslateDown3" />
+            <Nozzle Id="TranslateDown4" />
+        </Rocket>
+        <Combustor Id="TranslateDownCombustor">
+            <Combustion Id="MMH_NTO_1.6" />
+            <MaxPressure Bar="7" />
+            <ThermalEfficiency Value="0.75" />
+            <MinimumPulseTime Seconds="0.008" />
+        </Combustor>
+        <DeLavalNozzle Id="TranslateDown1">
+            <ExitDiameter M="0.01" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.0" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="0.0" Y="0.0" Z="-1.000" />
+            <FxExhaustLocation X="-0.16" Y="0.23" Z="0.3120" />
+            <FxExhaustDirection X="0.0" Y="0.550" Z="-1.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+        <DeLavalNozzle Id="TranslateDown2">
+            <ExitDiameter M="0.01" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.0" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="0.0" Y="0.0" Z="-1.000" />
+            <FxExhaustLocation X="-0.16" Y="-0.23" Z="0.3120" />
+            <FxExhaustDirection X="0.0" Y="-0.550" Z="-1.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+        <DeLavalNozzle Id="TranslateDown3">
+            <ExitDiameter M="0.01" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.0" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="0.0" Y="0.0" Z="-1.000" />
+            <FxExhaustLocation X="-0.09" Y="0.23" Z="0.310" />
+            <FxExhaustDirection X="0.0" Y="0.550" Z="-1.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+        <DeLavalNozzle Id="TranslateDown4">
+            <ExitDiameter M="0.01" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.0" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="0.0" Y="0.0" Z="-1.000" />
+            <FxExhaustLocation X="-0.09" Y="-0.23" Z="0.310" />
+            <FxExhaustDirection X="0.0" Y="-0.550" Z="-1.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+
+        <RocketThrusterController Id="TranslateUp">
+            <ControlMap CSV="TranslateUp" />
+            <RocketReference Id="TranslateUp" />
+        </RocketThrusterController>
+        <Rocket Id="TranslateUp">
+            <Core Id="TranslateUpCombustor" />
+            <Nozzle Id="TranslateUp1" />
+            <Nozzle Id="TranslateUp2" />
+            <Nozzle Id="TranslateUp3" />
+            <Nozzle Id="TranslateUp4" />
+        </Rocket>
+        <Combustor Id="TranslateUpCombustor">
+            <Combustion Id="MMH_NTO_1.6" />
+            <MaxPressure Bar="7" />
+            <ThermalEfficiency Value="0.75" />
+            <MinimumPulseTime Seconds="0.008" />
+        </Combustor>
+        <DeLavalNozzle Id="TranslateUp1">
+            <ExitDiameter M="0.01" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.0" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="0.000" Y="0.000" Z="1.000" />
+            <FxExhaustLocation X="-0.15" Y="0.210" Z="0.3150" />
+            <FxExhaustDirection X="0.000" Y="0.000" Z="1.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+        <DeLavalNozzle Id="TranslateUp2">
+            <ExitDiameter M="0.01" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.0" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="0.000" Y="0.000" Z="1.000" />
+            <FxExhaustLocation X="-0.15" Y="-0.210" Z="0.3150" />
+            <FxExhaustDirection X="0.000" Y="0.000" Z="1.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+        <DeLavalNozzle Id="TranslateUp3">
+            <ExitDiameter M="0.01" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.0" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="0.000" Y="0.000" Z="1.000" />
+            <FxExhaustLocation X="-0.09" Y="0.210" Z="0.3150" />
+            <FxExhaustDirection X="0.000" Y="0.000" Z="1.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+        <DeLavalNozzle Id="TranslateUp4">
+            <ExitDiameter M="0.01" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.0" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="0.000" Y="0.000" Z="1.000" />
+            <FxExhaustLocation X="-0.09" Y="-0.210" Z="0.3150" />
+            <FxExhaustDirection X="0.000" Y="0.000" Z="1.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+
+        <RocketThrusterController Id="TranslateBackward">
+            <ControlMap CSV="TranslateBackward" />
+            <RocketReference Id="TranslateBackward" />
+        </RocketThrusterController>
+        <Rocket Id="TranslateBackward">
+            <Core Id="TranslateBackwardCombustor" />
+            <Nozzle Id="TranslateBackward1" />
+            <Nozzle Id="TranslateBackward2" />
+            <Nozzle Id="TranslateBackward3" />
+            <Nozzle Id="TranslateBackward4" />
+        </Rocket>
+        <Combustor Id="TranslateBackwardCombustor">
+            <Combustion Id="MMH_NTO_1.6" />
+            <MaxPressure Bar="7" />
+            <ThermalEfficiency Value="0.75" />
+            <MinimumPulseTime Seconds="0.008" />
+        </Combustor>
+        <DeLavalNozzle Id="TranslateBackward1">
+            <ExitDiameter M="0.01" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.0" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+            <FxExhaustLocation X="-0.05" Y="0.220" Z="0.0" />
+            <FxExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+        <DeLavalNozzle Id="TranslateBackward2">
+            <ExitDiameter M="0.01" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.0" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+            <FxExhaustLocation X="-0.05" Y="-0.220" Z="0.0" />
+            <FxExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+        <DeLavalNozzle Id="TranslateBackward3">
+            <ExitDiameter M="0.01" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.0" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+            <FxExhaustLocation X="-0.05" Y="0.220" Z="0.3150" />
+            <FxExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+        <DeLavalNozzle Id="TranslateBackward4">
+            <ExitDiameter M="0.01" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.0" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+            <FxExhaustLocation X="-0.05" Y="-0.220" Z="0.3150" />
+            <FxExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+
+        <RocketThrusterController Id="TranslateForward">
+            <ControlMap CSV="TranslateForward" />
+            <RocketReference Id="TranslateForward" />
+        </RocketThrusterController>
+        <Rocket Id="TranslateForward">
+            <Core Id="TranslateForwardCombustor" />
+            <Nozzle Id="TranslateForward1" />
+            <Nozzle Id="TranslateForward2" />
+            <Nozzle Id="TranslateForward3" />
+            <Nozzle Id="TranslateForward4" />
+        </Rocket>
+        <Combustor Id="TranslateForwardCombustor">
+            <Combustion Id="MMH_NTO_1.6" />
+            <MaxPressure Bar="7" />
+            <ThermalEfficiency Value="0.75" />
+            <MinimumPulseTime Seconds="0.008" />
+        </Combustor>
+        <DeLavalNozzle Id="TranslateForward1">
+            <ExitDiameter M="0.01" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.0" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+            <FxExhaustLocation X="-0.15" Y="0.220" Z="0.0" />
+            <FxExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+        <DeLavalNozzle Id="TranslateForward2">
+            <ExitDiameter M="0.01" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.0" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+            <FxExhaustLocation X="-0.15" Y="-0.220" Z="0.0" />
+            <FxExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+        <DeLavalNozzle Id="TranslateForward3">
+            <ExitDiameter M="0.01" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.0" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+            <FxExhaustLocation X="-0.15" Y="0.220" Z="0.3150" />
+            <FxExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+        <DeLavalNozzle Id="TranslateForward4">
+            <ExitDiameter M="0.01" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0.0" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+            <FxExhaustLocation X="-0.15" Y="-0.220" Z="0.3150" />
+            <FxExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+
+        <RocketThrusterController Id="PitchDownRollLeftYawRight">
+            <ControlMap CSV="PitchDown,RollLeft,YawRight" />
+            <RocketReference Id="PitchDownRollLeftYawRight" />
+        </RocketThrusterController>
+        <Rocket Id="PitchDownRollLeftYawRight">
+            <Core Id="PitchDownRollLeftYawRightCombustor" />
+            <Nozzle Id="PitchDownRollLeftYawRight1" />
+            <Nozzle Id="PitchDownRollLeftYawRight2" />
+        </Rocket>
+        <Combustor Id="PitchDownRollLeftYawRightCombustor">
+            <Combustion Id="MMH_NTO_1.6" />
+            <MaxPressure Bar="7" />
+            <ThermalEfficiency Value="0.75" />
+            <MinimumPulseTime Seconds="0.008" />
+        </Combustor>
+        <DeLavalNozzle Id="PitchDownRollLeftYawRight1">
+            <ExitDiameter M="0.02" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0" Y="0.2" Z="0.5" />
+            <ExhaustDirection X="0.707106" Y="0.000" Z="0.707106" />
+            <FxExhaustLocation X="-0.05" Y="0.220" Z="0.3150" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+        <DeLavalNozzle Id="PitchDownRollLeftYawRight2">
+            <ExitDiameter M="0.02" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0" Y="-0.2" Z="-0.5" />
+            <ExhaustDirection X="-0.707106" Y="0.000" Z="-0.707106" />
+            <FxExhaustLocation X="-0.15" Y="-0.220" Z="0.0" />
+            <FxExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+
+        <RocketThrusterController Id="PitchUpRollLeftYawLeft">
+            <ControlMap CSV="PitchUp,RollLeft,YawLeft" />
+            <RocketReference Id="PitchUpRollLeftYawLeft" />
+        </RocketThrusterController>
+        <Rocket Id="PitchUpRollLeftYawLeft">
+            <Core Id="PitchUpRollLeftYawLeftCombustor" />
+            <Nozzle Id="PitchUpRollLeftYawLeft1" />
+            <Nozzle Id="PitchUpRollLeftYawLeft2" />
+        </Rocket>
+        <Combustor Id="PitchUpRollLeftYawLeftCombustor">
+            <Combustion Id="MMH_NTO_1.6" />
+            <MaxPressure Bar="7" />
+            <ThermalEfficiency Value="0.75" />
+            <MinimumPulseTime Seconds="0.008" />
+        </Combustor>
+        <DeLavalNozzle Id="PitchUpRollLeftYawLeft1">
+            <ExitDiameter M="0.02" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0" Y="0.2" Z="0.5" />
+            <ExhaustDirection X="-0.707106" Y="0.000" Z="0.707106" />
+            <FxExhaustLocation X="-0.15" Y="0.220" Z="0.3150" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+        <DeLavalNozzle Id="PitchUpRollLeftYawLeft2">
+            <ExitDiameter M="0.02" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0" Y="-0.2" Z="-0.5" />
+            <ExhaustDirection X="0.707106" Y="0.000" Z="-0.707106" />
+            <FxExhaustLocation X="-0.05" Y="-0.220" Z="0.0" />
+            <FxExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+
+        <RocketThrusterController Id="PitchDownRollRightYawLeft">
+            <ControlMap CSV="PitchDown,RollRight,YawLeft" />
+            <RocketReference Id="PitchDownRollRightYawLeft" />
+        </RocketThrusterController>
+        <Rocket Id="PitchDownRollRightYawLeft">
+            <Core Id="PitchDownRollRightYawLeftCombustor" />
+            <Nozzle Id="PitchDownRollRightYawLeft1" />
+            <Nozzle Id="PitchDownRollRightYawLeft2" />
+        </Rocket>
+        <Combustor Id="PitchDownRollRightYawLeftCombustor">
+            <Combustion Id="MMH_NTO_1.6" />
+            <MaxPressure Bar="7" />
+            <ThermalEfficiency Value="0.75" />
+            <MinimumPulseTime Seconds="0.008" />
+        </Combustor>
+        <DeLavalNozzle Id="PitchDownRollRightYawLeft1">
+            <ExitDiameter M="0.02" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0" Y="-0.2" Z="0.5" />
+            <ExhaustDirection X="0.707106" Y="0.000" Z="0.707106" />
+            <FxExhaustLocation X="-0.05" Y="-0.220" Z="0.3150" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+        <DeLavalNozzle Id="PitchDownRollRightYawLeft2">
+            <ExitDiameter M="0.02" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0" Y="0.2" Z="-0.5" />
+            <ExhaustDirection X="-0.707106" Y="0.000" Z="-0.707106" />
+            <FxExhaustLocation X="-0.15" Y="0.220" Z="0.0" />
+            <FxExhaustDirection X="-1.000" Y="0.000" Z="0.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+
+        <RocketThrusterController Id="PitchUpRollRightYawRight">
+            <ControlMap CSV="PitchUp,RollRight,YawRight" />
+            <RocketReference Id="PitchUpRollRightYawRight" />
+        </RocketThrusterController>
+        <Rocket Id="PitchUpRollRightYawRight">
+            <Core Id="PitchUpRollRightYawRightCombustor" />
+            <Nozzle Id="PitchUpRollRightYawRight1" />
+            <Nozzle Id="PitchUpRollRightYawRight2" />
+        </Rocket>
+        <Combustor Id="PitchUpRollRightYawRightCombustor">
+            <Combustion Id="MMH_NTO_1.6" />
+            <MaxPressure Bar="7" />
+            <ThermalEfficiency Value="0.75" />
+            <MinimumPulseTime Seconds="0.008" />
+        </Combustor>
+        <DeLavalNozzle Id="PitchUpRollRightYawRight1">
+            <ExitDiameter M="0.02" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0" Y="-0.2" Z="0.5" />
+            <ExhaustDirection X="-0.707106" Y="0.000" Z="0.707106" />
+            <FxExhaustLocation X="-0.15" Y="-0.220" Z="0.3150" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+        <DeLavalNozzle Id="PitchUpRollRightYawRight2">
+            <ExitDiameter M="0.02" />
+            <AreaRatio Value="50" />
+            <FlowEfficiency Value="0.72" />
+            <ExpansionEfficiency Value="0.13" />
+            <ExhaustLocation X="0" Y="0.2" Z="-0.5" />
+            <ExhaustDirection X="0.707106" Y="0.000" Z="-0.707106" />
+            <FxExhaustLocation X="-0.05" Y="0.220" Z="0.0" />
+            <FxExhaustDirection X="1.000" Y="0.000" Z="0.000" />
+            <VolumetricExhaust Id="MmuRcsVac" />
+            <ExhaustLight Value="false"/>
+            <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
+        </DeLavalNozzle>
+    </SubPartGameData>
+
+    <!-- Standard Tanks -->
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin1W1HA" DisplayName="Fuel Tank 1m x 1m A">
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="1" />
+                <WallThickness Mm="2" />
+            </CylindricalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin1W1HB" DisplayName="Fuel Tank 1m x 1m B">
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="1" />
+                <WallThickness Mm="2" />
+            </CylindricalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin1W1HC" DisplayName="Fuel Tank 1m x 1m C">
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="1" />
+                <WallThickness Mm="2" />
+            </CylindricalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin1WHalfHA" DisplayName="Fuel Tank 1m x .5m A">
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M=".5" />
+                <OuterRadius M="1" />
+                <WallThickness Mm="2" />
+            </CylindricalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin1WHalfHB" DisplayName="Fuel Tank 1m x .5m B">
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M=".5" />
+                <OuterRadius M="1" />
+                <WallThickness Mm="2" />
+            </CylindricalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin1WHalfHC" DisplayName="Fuel Tank 1m x .5m C">
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M=".5" />
+                <OuterRadius M="1" />
+                <WallThickness Mm="2" />
+            </CylindricalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W1HA">
+        <EditorTag Value="Fuel Tanks"/>
+        <Connector Id="_connector41">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector42">
+            <Flags>Internal</Flags>
+        </Connector>
+    </PartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin2W1HA" DisplayName="Fuel Tank 2m x 1m A">
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="2" />
+                <WallThickness Mm="3" />
+            </CylindricalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W1HB">
+        <EditorTag Value="Fuel Tanks"/>
+        <Connector Id="_connector43">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector44">
+            <Flags>Internal</Flags>
+        </Connector>
+    </PartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin2W1HB" DisplayName="Fuel Tank 2m x 1m B">
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="2" />
+                <WallThickness Mm="3" />
+            </CylindricalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W2HA">
+        <EditorTag Value="Fuel Tanks"/>
+        <Connector Id="_connector45">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector46">
+            <Flags>Internal</Flags>
+        </Connector>
+    </PartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin2W2HA" DisplayName="Fuel Tank 2m x 2m A">
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="2" />
+                <OuterRadius M="2" />
+                <WallThickness Mm="3" />
+            </CylindricalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W2HB">
+        <EditorTag Value="Fuel Tanks"/>
+        <Connector Id="_connector47">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector48">
+            <Flags>Internal</Flags>
+        </Connector>
+    </PartGameData>
+    
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin2W2HB" DisplayName="Fuel Tank 2m x 2m B">
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="2" />
+                <OuterRadius M="2" />
+                <WallThickness Mm="3" />
+            </CylindricalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W2HC">
+        <EditorTag Value="Fuel Tanks"/>
+        <Connector Id="_connector49">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector50">
+            <Flags>Internal</Flags>
+        </Connector>
+    </PartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin2W2HC" DisplayName="Fuel Tank 2m x 2m C">
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="2" />
+                <OuterRadius M="2" />
+                <WallThickness Mm="3" />
+            </CylindricalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W4HA">
+        <EditorTag Value="Fuel Tanks"/>
+        <Connector Id="_connector51">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector52">
+            <Flags>Internal</Flags>
+        </Connector>
+    </PartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin2W4HA" DisplayName="Fuel Tank 2m x 4m A">
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="4" />
+                <OuterRadius M="2" />
+                <WallThickness Mm="3" />
+            </CylindricalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W4HB">
+        <EditorTag Value="Fuel Tanks"/>
+        <Connector Id="_connector53">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector54">
+            <Flags>Internal</Flags>
+        </Connector>
+    </PartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin2W4HB" DisplayName="Fuel Tank 2m x 4m B">
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="4" />
+                <OuterRadius M="2" />
+                <WallThickness Mm="3" />
+            </CylindricalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W4HC">
+        <EditorTag Value="Fuel Tanks"/>
+        <Connector Id="_connector55">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector56">
+            <Flags>Internal</Flags>
+        </Connector>
+    </PartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin2W4HC" DisplayName="Fuel Tank 2m x 4m C">
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="4" />
+                <OuterRadius M="2" />
+                <WallThickness Mm="3" />
+            </CylindricalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W4HC">
+        <EditorTag Value="Fuel Tanks"/>
+        <Connector Id="_connector57">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector58">
+            <Flags>Internal</Flags>
+        </Connector>
+    </PartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin2W4HD" DisplayName="Fuel Tank 2m x 4m D">
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="4" />
+                <OuterRadius M="2" />
+                <WallThickness Mm="3" />
+            </CylindricalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <SubPartGameData Id="CoreServiceModuleA_Subpart_MedSMStructure">
+        <!-- Mass set purely to get the existing vehicle center of mass in roughly the right spot -->
+        <SolidSphereMass>
+            <Mass Kg="400" />
+            <Radius M="0.25" />
+        </SolidSphereMass>        
+    </SubPartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF3W3HA" DisplayName="Fuel Tank 3m x 3m A">
+        <EditorTag Value="Fuel Tanks"/>
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="3" />
+                <OuterRadius M="4" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+        <Connector Id="_connector39">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector40">
+            <Flags>Internal</Flags>
+        </Connector>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF3W3HB">
+        <EditorTag Value="Fuel Tanks"/>
+        <Connector Id="_connector37">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector38">
+            <Flags>Internal</Flags>
+        </Connector>
+    </PartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin3W3HB" DisplayName="Fuel Tank 3m x 3m B">        
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="3" />
+                <OuterRadius M="4" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF3W6HA">
+        <EditorTag Value="Fuel Tanks"/>
+        <Connector Id="_connector29">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector30">
+            <Flags>Internal</Flags>
+        </Connector>
+    </PartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin3W6HA" DisplayName="Fuel Tank 3m x 6m A">
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="6" />
+                <OuterRadius M="4" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+        
+    </SubPartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF3W6HB">
+        <EditorTag Value="Fuel Tanks"/>
+        <Connector Id="_connector31">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector32">
+            <Flags>Internal</Flags>
+        </Connector>
+    </PartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin3W6HB" DisplayName="Fuel Tank 3m x 6m B">
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="6" />
+                <OuterRadius M="4" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>        
+    </SubPartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF3W6HC">
+        <EditorTag Value="Fuel Tanks"/>
+        <Connector Id="_connector33">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector34">
+            <Flags>Internal</Flags>
+        </Connector>
+    </PartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin3W6HC" DisplayName="Fuel Tank 3m x 6m C">
+        <Tank>       
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="6" />
+                <OuterRadius M="4" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_LF3W6HD">
+        <EditorTag Value="Fuel Tanks"/>
+        <Connector Id="_connector35">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector36">
+            <Flags>Internal</Flags>
+        </Connector>
+    </PartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin3W6HD" DisplayName="Fuel Tank 3m x 6m D">
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="6" />
+                <OuterRadius M="4" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <!-- Special Tanks -->
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin1W1HA" DisplayName="Quad Fuel Tank 1m x 1m A">
+        <SubstanceStorageVolume M3="0.70" />
+    </SubPartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin1W1HB" DisplayName="Quad Fuel Tank 1m x 1m B">
+        <SubstanceStorageVolume M3="0.70" />
+    </SubPartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin1W1HC" DisplayName="Quad Fuel Tank 1m x 1m C">
+        <SubstanceStorageVolume M3="0.70" />
+    </SubPartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin1W1HD" DisplayName="Quad Fuel Tank 1m x 1m D">
+        <SubstanceStorageVolume M3="0.70" />
+    </SubPartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin1WHalfHA" DisplayName="Quad Fuel Tank 1m x .5m A">
+        <SubstanceStorageVolume M3="0.30" />
+    </SubPartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin1WHalfHB" DisplayName="Quad Fuel Tank 1m x .5m B">
+        <SubstanceStorageVolume M3="0.30" />
+    </SubPartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin1WHalfHC" DisplayName="Quad Fuel Tank 1m x .5m C">
+        <SubstanceStorageVolume M3="0.30" />
+    </SubPartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_Skin1WHalfHD" DisplayName="Quad Fuel Tank 1m x .5m D">
+        <SubstanceStorageVolume M3="0.30" />        
+    </SubPartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_RadialMPHalfWA">
+        <Tank Id="Tank1">
+            <SphericalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <OuterRadius M="0.5" />
+                <WallThickness Mm="4" />
+            </SphericalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_RadialMPHalfWB">
+        <Tank Id="Tank1">
+            <SphericalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <OuterRadius M="0.5" />
+                <WallThickness Mm="4" />
+            </SphericalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <SubPartGameData Id="CoreFuelTankA_Subpart_RadialMPQuarterWA">
+        <Tank Id="Tank1">
+            <SphericalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <OuterRadius M="0.25" />
+                <WallThickness Mm="4" />
+            </SphericalTank>
+        </Tank>
+    </SubPartGameData>
+
+    <SubPartGameData Id="CorePropulsionA_Subpart_EngineALargeVacAssembly_Dev">
+        <Rocket Id="Engine">
+            <Core Id="ThrustChamber" />
+            <Nozzle Id="Nozzle" />
+        </Rocket>
+        <Combustor Id="ThrustChamber">
+            <Combustion Id="NepetalactoneActinidine_2" />
+            <MaxPressure Bar="75" />
+            <ThermalEfficiency Value="1" />
+            <MinimumThrottle Value="0.01" />
+        </Combustor>
+        <DeLavalNozzle Id="Nozzle">
+            <ExitDiameter M="6" />
+            <FxExitDiameter M="1.439" />
+            <AreaRatio Value="100" />
+            <FlowEfficiency Value="1" />
+            <ExpansionEfficiency Value="1" />
+            <ExhaustLocation X="-1.23" Y="0.0" Z="0.0" />
+            <ExhaustDirection X="-1" Y="0" Z="0" />
+            <VolumetricExhaust Id="EngineALargeUpperStage" />
+            <SoundEvent Action="On" SoundId="DefaultEngineSoundBehavior"/>
+        </DeLavalNozzle>
+    </SubPartGameData>
+
+    <PartGameData Id="CorePropulsionA_Prefab_EngineA1_Dev" DisplayName="LR91 Dev">
+        <EditorTag Value="Engines"/>
+        <Diameter M="1"/>
+        <RocketEngineController Id="LR91-AJ-3">
+            <RocketReference Id="Engine" SubPartId="CorePropulsionA_Subpart_EngineALargeVacAssembly_Dev" />
+            <RocketReference Id="GasGenerator" />
+        </RocketEngineController>
+        <Rocket Id="GasGenerator">
+            <Core Id="GasGeneratorChamber" />
+            <Nozzle Id="VernierNozzle" SubPartId="CorePropulsionA_Subpart_EngineAVernierNozzle" />
+            <Nozzle Id="VernierNozzle" SubPartId="CorePropulsionA_Subpart_EngineAVernierNozzle1" />
+            <Nozzle Id="VernierNozzle" SubPartId="CorePropulsionA_Subpart_EngineAVernierNozzle2" />
+            <Nozzle Id="VernierNozzle" SubPartId="CorePropulsionA_Subpart_EngineAVernierNozzle3" />
+        </Rocket>
+        <Combustor Id="GasGeneratorChamber">
+            <Combustion Id="NepetalactoneActinidine_2" />
+            <MaxPressure Bar="49" />
+            <ThermalEfficiency Value="0.95" />
+            <MinimumThrottle Value="0.1" />
+        </Combustor>
+        <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle">
+            <Gimbal>
+                <MaxAngleY Degrees="70" />
+            </Gimbal>
+        </SubPart>
+        <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle1">
+            <Gimbal>
+                <MaxAngleY Degrees="70" />
+            </Gimbal>
+        </SubPart>
+        <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle2">
+            <Gimbal>
+                <MaxAngleY Degrees="70" />
+            </Gimbal>
+        </SubPart>
+        <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle3">
+            <Gimbal>
+                <MaxAngleY Degrees="70" />
+            </Gimbal>
+        </SubPart>
+        <SubPart Id="CorePropulsionA_Subpart_EngineALargeVacAssembly_Dev">
+            <Gimbal>
+                <MaxAngleY Degrees="5" />
+                <MaxAngleZ Degrees="5" />
+                <ConstrainToCircle Value="false" />
+            </Gimbal>
+        </SubPart>
+        <SolidSphereMass>
+            <Mass Kg="100" />
+            <Radius M="0.25" />
+        </SolidSphereMass>
+
+        <Collider Id="Collider1">
+          <Cylinder Id="CylinderCollider1">
+            <LocationAsmb X="0.6" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="1.57" />
+            <LengthY M="1.1728" />
+            <Radius M="0.5" />
+          </Cylinder>
+          <Sphere Id="SphereCollider1">
+            <LocationAsmb X="-0.6" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <Radius M="0.6" />
+          </Sphere>
+          <Cylinder Id="CylinderCollider2">
+            <LocationAsmb X="-1.5" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="1.57" />
+            <LengthY M="0.1" />
+            <Radius M="0.75" />
+          </Cylinder>
+        </Collider>
+    </PartGameData>
+
+    <!-- Capsules and Interstages -->
+
+    <SubPartGameData Id="CoreCommandA_Subpart_MediumCapsuleCrewDoorA">
+        <EVADoor />
+    </SubPartGameData>
+
+    <SubPartGameData Id="CoreCommandA_Subpart_MediumCapsuleCrewDoorB">
+        <EVADoor />
+    </SubPartGameData>
+
+    <!-- Mesh Definitions copied from CorePropulsionAAssets for dev engine -->
+    <Part Id="CorePropulsionA_Prefab_EngineA1_Dev">
+        <SubPart Id="CorePropulsionA_Subpart_EngineA2WBase1" InstanceOf="CorePropulsionA_Subpart_EngineA2WBase">
+            <Transform>
+                <Position X="0.94540"/>
+            </Transform>
+        </SubPart>
+        <SubPart Id="FlexiPipe_EndNode1" InstanceOf="FlexiPipe_EndNode">
+            <Transform>
+                <Position X="0.56782" Y="-0.31279" Z="-0.32211"/>
+            </Transform>
+        </SubPart>
+        <SubPart Id="FlexiPipe_StartNode1" InstanceOf="FlexiPipe_StartNode">
+            <Transform>
+                <Position X="0.46644" Y="-0.25902" Z="-0.27229"/>
+            </Transform>
+        </SubPart>
+        <SubPart Id="CorePropulsionA_Subpart_EngineAActuatorHousing1" InstanceOf="CorePropulsionA_Subpart_EngineAActuatorHousing">
+            <Transform>
+                <Position X="0.96436" Z="-0.47887"/>
+                <Rotation Y="0.52360"/>
+            </Transform>
+        </SubPart>
+        <SubPart Id="CorePropulsionA_Subpart_EngineAActuatorHousing2" InstanceOf="CorePropulsionA_Subpart_EngineAActuatorHousing">
+            <Transform>
+                <Position X="0.96436" Y="0.47887"/>
+                <Rotation X="1.57080" Z="0.52360"/>
+            </Transform>
+        </SubPart>
+        <SubPart Id="FlexiPipe_EndNode2" InstanceOf="FlexiPipe_EndNode">
+            <Transform>
+                <Position X="0.44568" Y="0.25717" Z="0.39743"/>
+                <Rotation X="-3.01069"/>
+            </Transform>
+        </SubPart>
+        <SubPart Id="FlexiPipe_StartNode2" InstanceOf="FlexiPipe_StartNode">
+            <Transform>
+                <Position X="0.43965" Y="0.23834" Z="0.30049"/>
+                <Rotation X="-3.01069"/>
+            </Transform>
+        </SubPart>
+        <SubPart Id="CorePropulsionA_Subpart_EngineAActuatorShaft1" InstanceOf="CorePropulsionA_Subpart_EngineAActuatorShaft">
+            <Transform>
+                <Position X="0.75207" Z="-0.35489"/>
+                <Rotation Y="0.52360"/>
+            </Transform>
+        </SubPart>
+        <SubPart Id="CorePropulsionA_Subpart_EngineAActuatorShaft2" InstanceOf="CorePropulsionA_Subpart_EngineAActuatorShaft">
+            <Transform>
+                <Position X="0.75207" Y="0.35489"/>
+                <Rotation X="1.57080" Z="0.52360"/>
+            </Transform>
+        </SubPart>
+        <Connector Id="_connector1">
+            <Transform>
+                <Position X="1.49620"/>
+                <Scale X="2.00000" Y="2.00000" Z="2.00000"/>
+            </Transform>
+        </Connector>
+        <SubPart Id="CorePropulsionA_Subpart_EngineALargeVacAssembly_Dev" InstanceOf="CorePropulsionA_Subpart_EngineALargeVacAssembly_Dev">
+            <Transform>
+                <Position X="-0.34420"/>
+            </Transform>
+            <Gimbal>
+                <Transform>
+                    <Position X="1.15747"/>
+                </Transform>
+            </Gimbal>
+        </SubPart>
+        <SubPart Id="CorePropulsionA_Subpart_EngineAVernierFrame1" InstanceOf="CorePropulsionA_Subpart_EngineAVernierFrame">
+            <Transform>
+                <Position X="0.60464"/>
+            </Transform>
+        </SubPart>
+        <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle" InstanceOf="CorePropulsionA_Subpart_EngineAVernierNozzle">
+            <Transform>
+                <Position X="0.10147" Y="-0.94371" Z="0.97302"/>
+                <Rotation X="0.85138" Y="0.34798" Z="0.37121"/>
+            </Transform>
+            <Gimbal>
+                <Transform>
+                    <Position X="0.12460" Y="0.00261" Z="-0.06448"/>
+                    <Rotation X="1.57080" Y="-0.50322"/>
+                </Transform>
+            </Gimbal>
+        </SubPart>
+        <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle1" InstanceOf="CorePropulsionA_Subpart_EngineAVernierNozzle">
+            <Transform>
+                <Position X="0.10147" Y="-0.97302" Z="-0.94371"/>
+                <Rotation X="2.29021" Y="-0.34798" Z="0.37121"/>
+            </Transform>
+            <Gimbal>
+                <Transform>
+                    <Position X="0.12460" Y="0.00261" Z="-0.06448"/>
+                    <Rotation X="1.57080" Y="-0.50322"/>
+                </Transform>
+            </Gimbal>
+        </SubPart>
+        <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle2" InstanceOf="CorePropulsionA_Subpart_EngineAVernierNozzle">
+            <Transform>
+                <Position X="0.10147" Y="0.94371" Z="-0.97302"/>
+                <Rotation X="-2.29021" Y="-0.34798" Z="-0.37121"/>
+            </Transform>
+            <Gimbal>
+                <Transform>
+                    <Position X="0.12460" Y="0.00261" Z="-0.06448"/>
+                    <Rotation X="1.57080" Y="-0.50322"/>
+                </Transform>
+            </Gimbal>
+        </SubPart>
+        <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle3" InstanceOf="CorePropulsionA_Subpart_EngineAVernierNozzle">
+            <Transform>
+                <Position X="0.10147" Y="0.97302" Z="0.94371"/>
+                <Rotation X="-0.85138" Y="0.34798" Z="-0.37121"/>
+            </Transform>
+            <Gimbal>
+                <Transform>
+                    <Position X="0.12460" Y="0.00261" Z="-0.06448"/>
+                    <Rotation X="1.57080" Y="-0.50322"/>
+                </Transform>
+            </Gimbal>
+        </SubPart>
+    </Part>
+
+    <SubPart Id="CorePropulsionA_Subpart_EngineALargeVacAssembly_Dev">
+        <PartModelDynamic Id="CorePropulsionA_Subpart_EngineALargeVacAssembly_Model">
+            <Mesh Id="CorePropulsionA_Subpart_EngineALargeVacAssembly"/>
+            <Material Id="CorePropulsionA_Material"/>
+        </PartModelDynamic>
+        <MeshView>
+            <Mesh Id="CorePropulsionA_Subpart_EngineALargeVacAssembly_VM"/>
+        </MeshView>
+    </SubPart>
+    
+</Assets>

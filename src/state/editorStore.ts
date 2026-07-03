@@ -510,6 +510,8 @@ export interface ImportedGameData {
   evaDoor: EvaDoor | null
   /** Part diameter (<Diameter M/>) and command marker (<Control/>) carried in on import. */
   diameterM: number | null
+  /** Extra `<Diameter M/>` size classes (adapter prefabs) carried in on import. */
+  extraDiametersM: number[]
   controllable: boolean
   /** Unmodeled `<PartGameData>` attrs + child elements, preserved verbatim on import. */
   unknownAttrs: Record<string, string>
@@ -577,8 +579,12 @@ function applyImportedGameData(
     const id = connectorIdMap.get(src.evaDoor.connectorId)
     if (id) game.evaDoor = { connectorId: id }
   }
-  // Part diameter + command marker: singular, filled only when not already set.
-  if (game.diameterM == null && src.diameterM != null) game.diameterM = src.diameterM
+  // Part diameter + command marker: filled only when not already set. The extra
+  // adapter size classes ride along with the primary (they're meaningless without it).
+  if (game.diameterM == null && src.diameterM != null) {
+    game.diameterM = src.diameterM
+    game.extraDiametersM = src.extraDiametersM
+  }
   if (!game.controllable && src.controllable) game.controllable = true
   // Unmodeled passthrough: fill only when the target has none (first import's leftover XML wins).
   if (Object.keys(game.unknownAttrs).length === 0 && Object.keys(src.unknownAttrs).length > 0)
@@ -694,6 +700,7 @@ export function addPart(
   if (buildAnimations) part.animations.push(...buildAnimations(idMap))
   // Original KSA connector id → regenerated id, so imported coupling bindings
   // (which target connectors by their original id) can be rewired.
+  const connectorStart = part.connectors.length
   const connectorIdMap = new Map<string, string>()
   for (const src of connectors) {
     const id = nextConnectorId(part) // regenerated against the growing list
@@ -704,8 +711,16 @@ export function addPart(
       rotation: { ...src.rotation },
       scale: { ...src.scale },
       flags: [...src.flags],
+      siblingIds: [...src.siblingIds],
       layerId: CONNECTOR_LAYER_ID, // connectors always live in the Connectors layer
     })
+  }
+  // Sibling refs point at other connectors by their original id — rewire to the
+  // regenerated ids, dropping any that point outside the imported set.
+  for (let i = connectorStart; i < part.connectors.length; i++) {
+    part.connectors[i].siblingIds = part.connectors[i].siblingIds
+      .map((s) => connectorIdMap.get(s))
+      .filter((s): s is string => s != null)
   }
   if (imported) applyImportedGameData(part, imported, connectorIdMap, idMap)
   $part.set(part)
@@ -757,6 +772,7 @@ export function addConnector(): void {
     rotation: { x: 0, y: 0, z: 0 },
     scale: { x: 1, y: 1, z: 1 },
     flags: [],
+    siblingIds: [],
     layerId: CONNECTOR_LAYER_ID,
   })
   $part.set(part)
@@ -950,6 +966,7 @@ export function duplicateSelected(): void {
       rotation: { ...src.rotation },
       scale: { ...src.scale },
       flags: [...src.flags],
+      siblingIds: [...src.siblingIds],
       layerId: src.layerId,
     })
     newCon.push(part.connectors.length - 1)
@@ -1051,6 +1068,7 @@ export function pasteClipboard(): number {
       rotation: { ...src.rotation },
       scale: { ...src.scale },
       flags: [...src.flags],
+      siblingIds: [...src.siblingIds],
       layerId: CONNECTOR_LAYER_ID,
     })
     newCon.push(part.connectors.length - 1)
@@ -1554,6 +1572,8 @@ export function setCustomMass(massKg: number): void {
 export function setDiameterEnabled(enabled: boolean): void {
   commitGameData('part diameter', enabled ? 'on' : 'off', (g) => {
     g.diameterM = enabled ? (g.diameterM ?? DEFAULT_DIAMETER_M) : null
+    // Extra adapter size classes are meaningless without a primary — drop them when disabling.
+    if (!enabled) g.extraDiametersM = []
   })
 }
 

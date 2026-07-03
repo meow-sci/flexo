@@ -296,6 +296,7 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
   }
 
   // Connectors — always on the built-in Connectors layer, fresh _connectorN ids.
+  const connectorStart = part.connectors.length
   for (const src of data.connectors) {
     const id = nextConnectorId(part)
     part.connectors.push({
@@ -304,9 +305,16 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
       rotation: vec(src.rotation, 0),
       scale: vec(src.scale, 1),
       flags: [...(src.flags ?? [])],
+      siblingIds: [...(src.siblingIds ?? [])],
       layerId: CONNECTOR_LAYER_ID,
     })
     connectorIdMap.set(src.id, id)
+  }
+  // Rewire sibling refs to the regenerated ids (drop any pointing outside the pasted set).
+  for (let i = connectorStart; i < part.connectors.length; i++) {
+    part.connectors[i].siblingIds = part.connectors[i].siblingIds
+      .map((s) => connectorIdMap.get(s))
+      .filter((s): s is string => s != null)
   }
 
   // Kittens — always on the built-in Kittens layer, fresh kitten_N ids.

@@ -1,4 +1,75 @@
-# Plan — Fix flexo gaps from KSA update 4680 → 4750
+# Plan — Fix flexo gaps from KSA updates (running)
+
+> **Latest review: `2026.6.9.4750` → `2026.7.3.4826` (see below). All three 4826 gaps are ✅ DONE.**
+> The earlier `4680 → 4750` review (also all done) follows as history.
+
+---
+
+# 4826 review — `2026.6.9.4750` → `2026.7.3.4826`
+
+**Derived from:** the [scope/](../scope/FULL_SCOPE.md) catalog review — full **decomp diff**
+(`ksa-game-assemblies` @ 4826 vs `ksa-game-assemblies_prev` @ 4750) **+** shipped-Core-XML diff.
+(An early pass mistook a stale checkout for "no 4826 decomp"; every finding below is verified against
+the actual 4826 C#.) **One feature cluster** landed between 4751–4826 (undocumented in `version.json`,
+recovered from the diffs): the game's new **part-symmetry** system (multi-mount adapter prefabs) +
+hypergolic **service-module tanks** — three round-trip-fidelity gaps in flexo's Part-editor surface
+(all silent data-loss; flexo rebuilds a fresh DOM from its typed model; none throw), plus one
+**ground-clutter scaffold** watch-item. Each Part-editor fix is **faithful preservation** per the
+no-migration rule — model the new form, no legacy fallback. The engine physics, animation, kitten,
+custom-asset, and coordinate contracts were re-checked against the 4826 decomp and are **intact**
+(see [FULL_SCOPE "Not gaps"](../scope/FULL_SCOPE.md#open-gaps-from-4826--plansfix_current_gaps_planmd)).
+
+## Priority summary (4826)
+
+| # | Gap | Severity | Flexo touch-points | Scope doc |
+|---|---|---|---|---|
+| A | `<Diameter>` now repeatable — extras dropped | ✅ **DONE** | `types.ts`, `partXmlParser.ts`, `partXmlSerializer.ts`, `partCatalog.ts`, `editorStore.ts`, `partImport.ts`, `projectCodec.ts` | [part-and-subpart-xml](../scope/part-and-subpart-xml.md#what-changed-in-4826) |
+| B | Tank `<CombustionProcess>` propellant dropped | ✅ **DONE** | `types.ts`, `partXmlParser.ts`, `partXmlSerializer.ts`, `projectCodec.ts` | [gamedata-modules](../scope/gamedata-modules.md#what-changed-in-4826) |
+| C | Connector `<Sibling>` grouping dropped (`<Aligned>` already safe) | ✅ **DONE** | `types.ts`, `partXmlParser.ts`, `partXmlSerializer.ts`, `projectCodec.ts`, `editorStore.ts`, `projectTransfer.ts` | [connectors-coordinates-iva](../scope/connectors-coordinates-iva.md#what-changed-in-4826) |
+| D | Ground-clutter LOD mesh → atlas (scaffold, not core) | 🟡 **WATCH** | none (hand-authored `ksa-mods/cartoon-moon/` XML + `scripts/build-cartoon-moon.ts`) | [ground-clutter](../scope/ground-clutter.md#what-changed-in-4826) |
+
+### Gap A — `<Diameter>` repeatable (SCHEMA-DRIFT / round-trip-lossy)
+
+- **Contract:** 4750 `PartTemplate.cs` = single `[XmlElement("Diameter")] DistanceReference? Diameter`. 4826 XML ships **multiple** `<Diameter M/>` per adapter part (e.g. `CoreFairingA_Prefab_InterstageBridge3W2WA` → `3` + `2`; `CoreStructuralA` engine plates). flexo read `directChildren(gd,'Diameter')[0]` and emitted one → the rest silently dropped.
+- **Fix (DONE):** first `<Diameter>` → editable `PartGameData.diameterM`; the rest → `PartGameData.extraDiametersM: number[]`, parsed (`partXmlParser.ts:312`) and re-emitted after the primary (`partXmlSerializer.ts:119`). Threaded through `CatalogPart` + the local catalog `PartGameData`, `ImportedGameData` (import merge takes extras with the primary), `setDiameterEnabled(false)` clears them, and codec `xdm`. No multi-value UI (extras ride the primary). Test: `partXmlParser.test.ts` "multi-size adapter".
+
+### Gap B — Tank `<CombustionProcess>` (MISSING-CAPABILITY / round-trip-lossy)
+
+- **Contract (decomp-confirmed):** `AsmbTankTemplate.cs` (base of both tank shapes) gained `[XmlElement("CombustionProcess")] SerializedReference DefaultCombustionProcess` — so any tank may declare it. In shipped 4826 XML it's on 3 service-module `<SphericalTank>`s in `PartGameData.xml` as `<CombustionProcess Id="MMH_NTO_1.6" />`. `<Tank>` is a **modeled** `<SubPartGameData>` child (rebuilt from a typed model, below the passthrough surface), so the nested child was dropped on export.
+- **Fix (DONE):** `Tank.combustionProcessId: string | null`, parsed in `tankFromElement` (covers **both** shapes, matching the base-class field), emitted in `buildTankElement` after `<WallThickness>`, persisted as codec `cp`. Not editable yet — preserved verbatim. Test: `partXmlParser.test.ts` "tank `<CombustionProcess>`".
+
+### Gap C — Connector `<Sibling>` + GameData `<Aligned>` (SCHEMA-DRIFT / round-trip-lossy)
+
+- **Contract (decomp-confirmed):** the game's new **part-symmetry** system. `Connector.TemplateBase.SymmetrySiblings` = `[XmlElement("Sibling")] List<ConnectorReference>` → `<Sibling Id/>` (child of the geometry `<Part>`'s `<Connector>`). `PartTemplate.Aligned` = `[XmlElement("Aligned")] List<AlignedConnectorsRef>`; `AlignedConnectorsRef` = `[XmlElement("ConnectorRef")] List<ConnectorReference>` → `<Aligned><ConnectorRef Id/></Aligned>` (child of `<PartGameData>`). The runtime `PartSymmetryInstance`/`SymmetryLayerInstance` are vehicle-assembly/save state, out of flexo scope.
+- **`<Aligned>` — INTACT (no code):** not in `KNOWN_PART_GAMEDATA_CHILDREN`, so the gap-6 `RawXmlNode` passthrough already round-trips it. Locked by a regression test.
+- **`<Sibling>` — Fix (DONE):** flexo re-emits geometry connectors (`serializePart`→`buildConnectorElement`) with no passthrough on connector children, so it was dropped. Now `Connector.siblingIds: string[]` (parse `connectorsFromPartElement`, emit `buildConnectorElement`, codec `sb`). On import (`addPart`) and project-paste (`projectTransfer`) the ids are **remapped through the regenerated-connector id map**, dropping refs outside the imported set so they never dangle; intra-part duplicate/stamp carry them as-is (same id space). Test: `partXmlParser.test.ts` "`<Sibling>` attach-node grouping".
+
+### Gap D — Ground-clutter LOD mesh → atlas (WATCH — scaffold only)
+
+- **Contract (decomp-confirmed):** `GroundClutterLodReference.MeshFileReference` changed type `MeshFileReference` → `MeshAtlasFileReference`; its single `Mesh` field became `Meshes` (a list — `MeshAtlasFileReference.DoLoad` loads every GLB mesh node, skipping `_`-prefixed, keyed by node name). The `[XmlElement("Mesh")]` name + `Id`/`Path` attrs (from the shared `FileReference` base) are unchanged.
+- **Impact:** `ksa-mods/cartoon-moon/`'s `<LOD><Mesh Id Path/></LOD>` still **parses**, but per-LOD semantics shifted from one mesh to a whole atlas. **No flexo core-editor code involved** (clutter is hand-authored mod XML + `scripts/build-cartoon-moon.ts`). **Action:** re-verify the cartoon-moon mod loads + renders in 4826; tweak GLB mesh-node names / mod XML only if it regresses in-game (can't be checked from the decomp).
+
+### Verified NOT gaps (4826, decomp-checked)
+
+- **Engines:** `RocketControllerData.cs` changed only `GetAllRocketTemplates` (`List` → `Span`/`ArrayPool`, perf); thrust/Isp math + `DeLavalNozzleConfig`/`CombustorConfig`/`CombustionTable`/`Combustion.xml` byte-identical.
+- **Animation:** `KeyframeAnimationModule.cs` only added `ApplyToMirroredParts` (symmetry mirroring, runtime); schema + GLB loader contract unchanged.
+- **Power units:** `PowerReference.cs` only added a `ToNearest` display formatter; tokens/scales unchanged.
+- **Custom-assets:** `PbrMaterialReference.cs` unchanged (null-deref gotcha holds); `MeshReference`/`MeshAtlasFileReference` gained multi-primitive **runtime** fields (no `[XmlElement]`) — watch the GLB node→SubPart mapping, but single-primitive exports are unaffected.
+- **Kittens:** `CharacterRenderResources.cs` internal-only; `CharacterAssets.xml`/`Characters/` untouched (editor-only aide regardless).
+- `CoreFuelTankAAssets.xml` `<PartModel>`→`<PartModelDynamic>` (33×) + `TFI_Heat` KTX2 + `<ThinFilm>` — thermal FX; `catalog.ts:156` reads either tag; meshes referenced by id.
+- `CoreElectricalAGameData.xml` solar cell `<Produced W>` 50→100 — pure data (fixture + assertion refreshed).
+- `CoreIVASpaceAGameData.xml` — line-ending normalization only.
+
+### Follow-through (4826)
+
+- Vendored fixtures re-synced (`scripts/sync-fixtures`): `CoreElectricalAGameData.xml`, `CoreFuelTankAAssets.xml`, `PartGameData.xml`. Drift test green.
+- Scope docs re-baselined to `2026.7.3.4826` (decomp @ 4826); `FULL_SCOPE.md` map + open-gaps updated; every "intact" area re-checked against the real 4826 C#.
+- 373 tests pass; typecheck/lint/fmt green.
+- **Open follow-up:** (1) re-verify the `ksa-mods/cartoon-moon/` scaffold in-game (Gap D). (2) No editor UI for the three new Part fields (`extraDiametersM`/`combustionProcessId`/`siblingIds`) — deliberate (niche prefab data); revisit if users need to author multi-diameter adapters, assign tank propellants, or edit symmetry groups.
+
+---
+
+# 4750 review — Fix flexo gaps from KSA update 4680 → 4750 (history)
 
 **Derived from:** the [scope/](../scope/FULL_SCOPE.md) catalog review of KSA build
 `2026.6.8.4680` → `2026.6.9.4750`. Each gap links to the scope doc that defines the contract.

@@ -62,6 +62,14 @@ export interface Connector extends Transform {
   id: string
   /** Connection behavior flags (independent, may combine). Empty = default mode. */
   flags: ConnectorFlag[]
+  /**
+   * Ids of sibling connectors, serialized as nested `<Sibling Id/>` children of the
+   * geometry `<Connector>`. KSA 2026.7 added this to group the attach nodes of
+   * multi-mount prefabs (engine plates, interstage bridges) — the geometry twin of
+   * `<PartGameData>`'s `<Aligned>`. flexo doesn't edit these, but preserves them
+   * verbatim so importing then re-exporting a prefab keeps its node grouping.
+   */
+  siblingIds: string[]
   /** Id of the {@link Layer} this connector belongs to (editor-only grouping). */
   layerId: string
 }
@@ -229,6 +237,14 @@ export interface Tank {
   outerRadiusM: number
   /** Wall thickness in millimeters. */
   wallThicknessMm: number
+  /**
+   * Propellant the tank is pre-filled with, serialized as a nested
+   * `<CombustionProcess Id/>` (a `SubstanceLibrary` combustion-process reference,
+   * e.g. "MMH_NTO_1.6"). KSA 2026.7 added this to `AsmbTankTemplate` so hypergolic
+   * service-module tanks declare their contents. null ⇒ no <CombustionProcess>
+   * element. flexo does not (yet) edit it, but preserves it verbatim on round-trip.
+   */
+  combustionProcessId: string | null
 }
 
 /**
@@ -555,6 +571,15 @@ export interface PartGameData {
    */
   diameterM: number | null
   /**
+   * Additional `<Diameter M/>` size classes beyond {@link diameterM}. KSA 2026.7
+   * made `<Diameter>` repeatable so adapter prefabs (interstage bridges, engine
+   * plates) list every size they bridge (e.g. a 3 m↔2 m adapter emits both). flexo
+   * edits only the first ({@link diameterM}); the rest are preserved verbatim so a
+   * round-tripped adapter keeps appearing under all its size-class filters. Empty
+   * for the common single-diameter case.
+   */
+  extraDiametersM: number[]
+  /**
    * Command-capability marker, serialized as a bare <Control/>. When true the part
    * can pilot a vehicle (KSA `Vehicle.IsControllable`). KSA's ControlTemplate is an
    * empty marker with no fields, so this is a plain on/off flag.
@@ -637,6 +662,7 @@ export function createTank(): Tank {
     lengthM: 2.0,
     outerRadiusM: 0.5,
     wallThicknessMm: 2.0,
+    combustionProcessId: null,
   }
 }
 
@@ -678,6 +704,7 @@ export function createEmptyGameData(): PartGameData {
     displayName: '',
     customMass: null,
     diameterM: null,
+    extraDiametersM: [],
     controllable: false,
     batteries: [],
     generators: [],

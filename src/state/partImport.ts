@@ -78,6 +78,7 @@ export async function importBuiltInPart(
       dockingPort: part.dockingPort,
       evaDoor: part.evaDoor,
       diameterM: part.diameterM,
+      extraDiametersM: part.extraDiametersM,
       controllable: part.controllable,
       unknownAttrs: part.unknownAttrs,
       unknownChildren: part.unknownChildren,

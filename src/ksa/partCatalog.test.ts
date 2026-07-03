@@ -275,6 +275,7 @@ describe('parseGameDataFile + mergeGameData', () => {
       lengthM: 0.5,
       outerRadiusM: 1,
       wallThicknessMm: 2,
+      combustionProcessId: null,
     })
     // The later entry's unmodeled child is still carried (round-trip), alongside the tank.
     expect(skin.unknownChildren.map((n) => n.tag)).toEqual(['SubstanceStorageVolume'])
@@ -335,7 +336,8 @@ describe('parseGameDataFile + mergeGameData', () => {
     )!
     expect(cell).toBeTruthy()
     expect(cell.solarPanels).toHaveLength(1)
-    expect(cell.solarPanels[0].outputWatts).toBe(50)
+    // KSA 2026.7 (build 4826) bumped this cell's <Produced W> from 50 → 100.
+    expect(cell.solarPanels[0].outputWatts).toBe(100)
     expect(cell.solarPanels[0].transform.rotation.y).toBeCloseTo(1.5708, 4)
   })
 

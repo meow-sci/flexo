@@ -6,7 +6,7 @@
 > alongside [docs/custom-assets.md](../docs/custom-assets.md), [docs/texturing.md](../docs/texturing.md),
 > [docs/asset-pipeline.md](../docs/asset-pipeline.md).
 
-**Baseline:** verified against KSA build **2026.6.9.4750**.
+**Baseline:** re-vetted against KSA build **2026.7.3.4826** (decomp @ 4826 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — every schema/reference class and renderer quirk flexo's
 export depends on is byte-identical or behavior-preserving. No code change required. Two
 durable watch-items noted below.
@@ -53,6 +53,13 @@ durable watch-items noted below.
 8. **`PartModel Id` must be unique** (KSA dedupes PartModels by `Template.Id`); flexo uses `<subPartId>_Model`.
 9. **Glass: emissive ignored + ~10% diffuse tint.** `MeshGlassIndirect.frag` hard-codes opacity 0.75, `glassColor=mix(albedo,0.1,0.9)`. `$simulateGlass` mirrors this; glass can't glow, so the `glassGlow` layered two-SubPart export is required.
 10. **Glow = WHITE × mask × 1.25, added after lighting.** `glowComposite` bakes glow color into the diffuse and emits a white mask; `MeshIndirect.frag` does `gammaToLinear(vec3(sampledEmissive) * EMISSIVE_MULTIPLIER)`, `EMISSIVE_MULTIPLIER=1.25`.
+
+## What changed in 4826
+
+**Export contract intact — one watch-item.** Decomp diff (4750 → 4826):
+
+- `PbrMaterialReference.cs` — **unchanged**. The `ThumbnailRenderResources.AddDraw` null-deref still has no guard, so the synthetic Normal + AoRoughMetal on every `<PbrMaterial>` is still required. `ENABLE_EMISSIVE`, `Mod.cs`/`ModLibrary.cs`/`AssetBundle.cs`, `mod.toml` contract unchanged.
+- **Watch-item — `MeshReference`/`MeshAtlasFileReference` gained multi-primitive support** (`HostPrimitives[]`, `PrimitiveCount`, `DevicePrimitives[]`; `MeshAtlasFileReference.DoLoad` now registers every GLB mesh node by name, skipping `_`-prefixed). These are **runtime fields, not `[XmlElement]`** — the `<Mesh Id/>`/`<MeshAtlas>` reference schema is unchanged, and flexo exports **single-primitive** meshes named by SubPart id (the `meshes[i].name` → SubPart mapping still holds). No change needed, but the GLB node→SubPart mapping is now atlas-aware game-side — re-confirm a `flexo-parts/` mod still imports cleanly if the export mesh layout ever changes.
 
 ## What changed in 4750
 

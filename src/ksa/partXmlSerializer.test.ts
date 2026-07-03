@@ -163,6 +163,7 @@ function connector(c: Partial<Connector>): Connector {
     rotation: { ...EULER_ZERO },
     scale: { ...VEC3_ONE },
     flags: [],
+    siblingIds: [],
     layerId: DEFAULT_LAYER_ID,
     ...c,
   }

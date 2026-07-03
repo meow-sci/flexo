@@ -50,6 +50,7 @@ function sourcePart(): EditingPart {
   p.connectors.push({
     id: '_connector1',
     flags: ['Internal'],
+    siblingIds: [],
     layerId: CONNECTOR_LAYER_ID,
     ...t(0),
   })

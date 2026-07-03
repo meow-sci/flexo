@@ -4,7 +4,7 @@
 > lets the user edit them, and re-exports animation GLBs that KSA's `KeyframeAnimationModule`
 > loads. The load-bearing integration is the **animation-GLB node-structure convention**.
 
-**Baseline:** verified against KSA build **2026.6.9.4750**.
+**Baseline:** re-vetted against KSA build **2026.7.3.4826** (decomp @ 4826 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — the keyframe runtime, GLB-loader contract, GameData schema,
 and bone/transform math are all unchanged. The only delta is 3 new content clips (ServiceModule
 B/C/D) that flexo's existing importer already handles.
@@ -74,6 +74,15 @@ B/C/D) that flexo's existing importer already handles.
 3. **Importer interpolation coverage is partial**: flexo handles only FLOAT accessors + LINEAR/STEP. KSA _does_ support **CubicSpline** → a CubicSpline-authored clip would be mis-decoded (silent corruption, not an error). Pre-existing; unverifiable from snapshots (GLBs not shipped).
 4. Only `animations[0]` is read on both sides.
 5. Wrong rest anchor re-applies the deploy (the reason `restKeyframeId` exists).
+
+## What changed in 4826
+
+**Schema intact.** Decomp diff (4750 → 4826): `KeyframeAnimationModule.cs` changed only by adding a
+runtime `ApplyToMirroredParts(...)` method — it propagates a deploy-anim to a part's **symmetry
+mirror copies** (`Part.SymmetryLink.Symmetries`), part of the new part-symmetry feature. No
+`[XmlElement]`/`[XmlAttribute]`/schema change; `KeyframeAnimationData.cs` (the GLB-loader contract)
+unchanged; no new/changed `Animations/*.glb`. flexo's import/export contract is unaffected (and
+symmetry mirroring is a runtime vehicle behavior, outside flexo's part-template scope).
 
 ## What changed in 4750
 

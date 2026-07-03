@@ -121,6 +121,7 @@ describe('connectorsFromPartElement (round-trip with serializer)', () => {
         rotation: { x: 0, y: 0, z: 0 },
         scale: { x: 2, y: 2, z: 2 },
         flags: [],
+        siblingIds: [],
         layerId: DEFAULT_LAYER_ID,
       },
       {
@@ -129,6 +130,7 @@ describe('connectorsFromPartElement (round-trip with serializer)', () => {
         rotation: { x: 3.14159, y: 0, z: 3.14159 },
         scale: { x: 1, y: 1, z: 1 },
         flags: ['Internal', 'FromSurface'],
+        siblingIds: [],
         layerId: DEFAULT_LAYER_ID,
       },
     ],
@@ -156,6 +158,24 @@ describe('connectorsFromPartElement (round-trip with serializer)', () => {
   it('round-trips inline <Flags> (now emitted on the Part connector)', () => {
     expect(parsed[0].flags).toEqual([])
     expect(parsed[1].flags).toEqual(['Internal', 'FromSurface'])
+  })
+
+  it('round-trips <Sibling> attach-node grouping (KSA 2026.7 multi-mount prefabs)', () => {
+    const withSiblings = editingPart({
+      connectors: [
+        {
+          id: '_connector1',
+          position: { x: 0, y: 0, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+          flags: [],
+          siblingIds: ['_connector2', '_connector3'],
+          layerId: DEFAULT_LAYER_ID,
+        },
+      ],
+    })
+    const reparsed = connectorsFromPartElement(partElement(serializePart(withSiblings)))
+    expect(reparsed[0].siblingIds).toEqual(['_connector2', '_connector3'])
   })
 })
 
@@ -229,6 +249,7 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
         rotation: { x: 0, y: 0, z: 0 },
         scale: { x: 1, y: 1, z: 1 },
         flags: ['ToSurface'],
+        siblingIds: [],
         layerId: DEFAULT_LAYER_ID,
       },
     ],
@@ -479,6 +500,18 @@ describe('gameDataFromAssets diameter + control (direct GameData XML)', () => {
     expect(g.diameterM).toBeNull()
     expect(g.controllable).toBe(false)
   })
+
+  it('keeps every <Diameter> of a KSA 2026.7 multi-size adapter (first editable, rest preserved)', () => {
+    const g = parse('<Diameter M="3"/><Diameter M="2"/>')
+    expect(g.diameterM).toBe(3)
+    expect(g.extraDiametersM).toEqual([2])
+
+    // ...and re-emits both on export so the adapter keeps every size-class filter.
+    const part = editingPart({ partId: 'P', gameData: g })
+    const reparsed = gameDataFromAssets(serializeGameData(part), 'P', new DOMParser())!.gameData
+    expect(reparsed.diameterM).toBe(3)
+    expect(reparsed.extraDiametersM).toEqual([2])
+  })
 })
 
 describe('editor-tag registry (gap 5)', () => {
@@ -568,6 +601,51 @@ describe('unmodeled-XML passthrough (gap 6)', () => {
     expect(spd.unknownChildren).toEqual([
       { tag: 'SubstanceStorageVolume', attrs: { Id: 'Vol1' }, children: [] },
     ])
+  })
+
+  it('captures KSA 2026.7 <Aligned> connector groups verbatim (unmodeled → passthrough)', () => {
+    const aligned = `<Assets><PartGameData Id="P">
+      <Aligned><ConnectorRef Id="_connector19"/><ConnectorRef Id="_connector41"/></Aligned>
+    </PartGameData></Assets>`
+    const p = gameDataFromAssets(aligned, 'P', new DOMParser())!
+    expect(p.gameData.unknownChildren).toEqual([
+      {
+        tag: 'Aligned',
+        attrs: {},
+        children: [
+          { tag: 'ConnectorRef', attrs: { Id: '_connector19' }, children: [] },
+          { tag: 'ConnectorRef', attrs: { Id: '_connector41' }, children: [] },
+        ],
+      },
+    ])
+    const part = editingPart({ partId: 'P', gameData: p.gameData })
+    const reparsed = gameDataFromAssets(serializeGameData(part), 'P', new DOMParser())!
+    expect(reparsed.gameData.unknownChildren).toEqual(p.gameData.unknownChildren)
+  })
+})
+
+describe('SubPartGameData tank <CombustionProcess> (KSA 2026.7)', () => {
+  const xml = `<Assets>
+    <PartGameData Id="P"/>
+    <SubPartGameData Id="Tmpl">
+      <Tank Id="Tank1"><SphericalTank>
+        <Material Id="Aluminum.2014(s)" />
+        <OuterRadius M="0.5" />
+        <WallThickness Mm="4" />
+        <CombustionProcess Id="MMH_NTO_1.6" />
+      </SphericalTank></Tank>
+    </SubPartGameData>
+  </Assets>`
+
+  it('parses + round-trips the propellant a <SphericalTank> holds', () => {
+    const parsed = gameDataFromAssets(xml, 'P', new DOMParser())!
+    const spd = parsed.subPartGameData.find((s) => s.subPartTemplateId === 'Tmpl')!
+    expect(spd.tanks[0].combustionProcessId).toBe('MMH_NTO_1.6')
+
+    const part = editingPart({ partId: 'P', subPartGameData: parsed.subPartGameData })
+    const reparsed = gameDataFromAssets(serializeGameData(part), 'P', new DOMParser())!
+    const rspd = reparsed.subPartGameData.find((s) => s.subPartTemplateId === 'Tmpl')!
+    expect(rspd.tanks[0].combustionProcessId).toBe('MMH_NTO_1.6')
   })
 })
 

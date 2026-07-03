@@ -5,11 +5,13 @@
 > other feature hangs off. Read alongside [docs/xml-io.md](../docs/xml-io.md) and
 > [docs/subpart-catalog.md](../docs/subpart-catalog.md) (the flexo-internal view).
 
-**Baseline:** verified against KSA build **2026.6.9.4750**.
-**Baseline status:** ✅ **CURRENT** — `<Diameter>` part-size + `<Control>` command marker modeled;
-`KNOWN_EDITOR_TAGS` refreshed from the registry (with `NotaCategory` grouping); and unmodeled
-`<PartGameData>`/`<SubPartGameData>` child elements + root attrs now round-trip via gap-6
-passthrough (`<Collider>` et al. no longer dropped). See
+**Baseline:** re-vetted against KSA build **2026.7.3.4826** (decomp @ 4826 + shipped Core XML).
+**Baseline status:** ✅ **CURRENT** — `<Diameter>` part-size + `<Control>` command marker modeled
+(and as of 4826 `<Diameter>` is **repeatable** — the extras round-trip via `extraDiametersM`, see
+[What changed in 4826](#what-changed-in-4826)); `KNOWN_EDITOR_TAGS` refreshed from the registry
+(with `NotaCategory` grouping); and unmodeled `<PartGameData>`/`<SubPartGameData>` child elements +
+root attrs now round-trip via gap-6 passthrough (`<Collider>`, `<Aligned>` et al. no longer
+dropped). See
 [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md).
 
 ---
@@ -80,6 +82,12 @@ Consequences / what's STILL drop-on-round-trip (passthrough is scoped to GameDat
 - Connector `<Flags>` live on `<PartGameData>`, **not** on the geometry `<Part>` — without the GameData merge, `ToSurface`/etc. are lost.
 - A `<Part>` with no matching `<PartGameData>` has no tags/modules → invisible in the part picker.
 - `DockingPort` parses only the current child-element form (`<ConnectorId Value>`, `<LatchingKineticEnergy J>`, `<PushoffImpulse Ns>`) — no legacy fallback; see [gamedata-modules.md](gamedata-modules.md).
+
+## What changed in 4826
+
+- **`<Diameter>` became repeatable.** Decomp-confirmed: `PartTemplate.cs` `[XmlElement("Diameter")] DistanceReference? Diameter` (4750, single) → `[XmlElement("Diameter")] List<DistanceReference> Diameters` (4826). Element name unchanged (`<Diameter>`); `ApplyGameData` now `AddRange`s them. Adapter prefabs list every size class they bridge (e.g. `CoreFairingA_Prefab_InterstageBridge3W2WA` → `<Diameter M="3"/><Diameter M="2"/>`; `CoreStructuralA` low-profile engine plates likewise). flexo modeled one value (`PartGameData.diameterM`) and dropped the rest on round-trip. **Fixed:** the first `<Diameter>` stays the editable `diameterM`; the remainder are preserved verbatim in `PartGameData.extraDiametersM` (parse `partXmlParser.ts`, emit `partXmlSerializer.ts`, carried through catalog/import/persist). No multi-value UI — the extras ride along with the primary. Regression: `partXmlParser.test.ts` "multi-size adapter".
+- **`<Aligned>` is now a modeled game field too** (decomp: `PartTemplate.Aligned` = `List<Part.AlignedConnectors.AlignedConnectorsRef>`), but a `<PartGameData>` child flexo doesn't model → still round-trips verbatim via the gap-6 passthrough. Its geometry twin `<Sibling>` (connector child) is covered via `Connector.siblingIds`; both are the new part-symmetry system — see [connectors-coordinates-iva.md](connectors-coordinates-iva.md#what-changed-in-4826).
+- **Not a schema change:** `CoreFuelTankAAssets.xml` switched its 33 fuel-tank meshes from `<PartModel>` to `<PartModelDynamic>` (thermal-FX / `TFI_Heat` heat-glow). `catalog.ts` already reads either tag (`firstChildByTag(sub, 'PartModel') ?? firstChildByTag(sub, 'PartModelDynamic')`), and built-in meshes/materials are referenced by id, so nothing to change.
 
 ## What changed in 4750 (summary; detail in the fix plan)
 

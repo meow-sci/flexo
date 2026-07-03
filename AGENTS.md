@@ -172,26 +172,27 @@ Skipping any step is not acceptable.
 
 Project skills live in `.claude/skills/`.
 
-| Skill                  | Description                                                             |
-| ---------------------- | ----------------------------------------------------------------------- |
-| react                  | Rules of React — required reading for React Compiler compatibility      |
-| react-compiler         | React Compiler behavior, directives, debugging, build integration       |
-| react-aria             | react-aria-components usage and accessible component patterns           |
-| nanostores             | nanostores state manager patterns                                       |
-| hotkeys                | react-hotkeys-hook usage                                                |
-| oxlint                 | oxlint linting and code analysis                                        |
-| oxcfmt                 | oxfmt code formatting                                                   |
-| bun                    | Bun runtime for the `scripts/` mini-workspace                           |
-| threejs-fundamentals   | Scene setup, cameras, renderer, Object3D hierarchy, coordinate systems  |
-| threejs-geometry       | Built-in shapes, BufferGeometry, custom geometry, instancing            |
-| threejs-materials      | PBR materials, basic/phong/standard materials, shader materials         |
-| threejs-lighting       | Light types, shadows, environment lighting, light helpers               |
-| threejs-textures       | Texture types, UV mapping, environment maps, render targets             |
-| threejs-animation      | Keyframe animation, skeletal animation, morph targets, animation mixing |
-| threejs-loaders        | GLTF/GLB loading, texture loading, async patterns, caching              |
-| threejs-shaders        | GLSL basics, ShaderMaterial, uniforms, custom effects                   |
-| threejs-postprocessing | EffectComposer, bloom, DOF, screen effects, custom passes               |
-| threejs-interaction    | Raycasting, camera controls, mouse/touch input, object selection        |
+| Skill                  | Description                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| upgrade-ksa            | Vet a new/changed upstream KSA build against flexo (the game-update runbook over `scope/`) |
+| react                  | Rules of React — required reading for React Compiler compatibility                         |
+| react-compiler         | React Compiler behavior, directives, debugging, build integration                          |
+| react-aria             | react-aria-components usage and accessible component patterns                              |
+| nanostores             | nanostores state manager patterns                                                          |
+| hotkeys                | react-hotkeys-hook usage                                                                   |
+| oxlint                 | oxlint linting and code analysis                                                           |
+| oxcfmt                 | oxfmt code formatting                                                                      |
+| bun                    | Bun runtime for the `scripts/` mini-workspace                                              |
+| threejs-fundamentals   | Scene setup, cameras, renderer, Object3D hierarchy, coordinate systems                     |
+| threejs-geometry       | Built-in shapes, BufferGeometry, custom geometry, instancing                               |
+| threejs-materials      | PBR materials, basic/phong/standard materials, shader materials                            |
+| threejs-lighting       | Light types, shadows, environment lighting, light helpers                                  |
+| threejs-textures       | Texture types, UV mapping, environment maps, render targets                                |
+| threejs-animation      | Keyframe animation, skeletal animation, morph targets, animation mixing                    |
+| threejs-loaders        | GLTF/GLB loading, texture loading, async patterns, caching                                 |
+| threejs-shaders        | GLSL basics, ShaderMaterial, uniforms, custom effects                                      |
+| threejs-postprocessing | EffectComposer, bloom, DOF, screen effects, custom passes                                  |
+| threejs-interaction    | Raycasting, camera controls, mouse/touch input, object selection                           |
 
 # KSA
 

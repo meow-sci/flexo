@@ -4,11 +4,13 @@
 > Read alongside [docs/coordinates.md](../docs/coordinates.md) and
 > [docs/ksa-part-connector-notes.md](../docs/ksa-part-connector-notes.md).
 
-**Baseline:** verified against KSA build **2026.6.9.4750**.
-**Baseline status:** ⚠️ **MIXED** — the coordinate calibration, connector flag _schema_, and
-IVA/NotIVA are all **intact**, but the **`<DockingPort>` GameData schema is BREAKING** (see
-[gamedata-modules.md](gamedata-modules.md)) and the face-snapping model is now data-driven (docs
-drift). See [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md).
+**Baseline:** re-vetted against KSA build **2026.7.3.4826** (decomp @ 4826 + shipped Core XML).
+**Baseline status:** ✅ **CURRENT** — the coordinate calibration, connector flag _schema_, and
+IVA/NotIVA are all **intact**; the `<DockingPort>` GameData schema (BREAKING in 4750) is fixed. As
+of 4826, connectors carry new attach-node grouping (`<Sibling>` geometry / `<Aligned>` GameData);
+`<Sibling>` is now preserved via `Connector.siblingIds`, `<Aligned>` rides the gap-6 passthrough
+(see [What changed in 4826](#what-changed-in-4826)). See
+[plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md).
 
 ---
 
@@ -91,6 +93,14 @@ follows the root part.
 - IVA variant must use a **fresh PartModel Id** (reusing one silently collides via the dedup).
 - IVA props render black/invisible outside IVA unless de-IVA'd (the whole NotIVA feature exists for this).
 - Connector `<Flags>` must be emitted in BOTH the Part and GameData documents.
+
+## What changed in 4826
+
+- **New connector attach-node grouping = the game's new part-symmetry system.** KSA 2026.7 added `<Sibling>` (geometry connector) + `<Aligned>` (GameData) to the multi-mount adapter prefabs (engine plates, interstage bridges, radial fuel-tank clusters). Decomp-confirmed (4750 → 4826):
+  - **`<Sibling Id="_connectorN"/>`** — decomp: `Part.Connector.TemplateBase.SymmetrySiblings` = `[XmlElement("Sibling")] List<ConnectorReference>` (`ConnectorReference` = `[XmlAttribute("Id")]`). A child of the geometry `<Part>`'s `<Connector>`, listing its symmetry group-mates. flexo parses connectors (`connectorsFromPartElement`) and re-emits them (`buildConnectorElement`) with **no passthrough on connector children**, so it dropped `<Sibling>` on round-trip. **Fixed:** `Connector.siblingIds[]` (parse/emit); on import + project-paste the ids are **remapped through the regenerated-connector id map** (dropping refs outside the imported set) so they never dangle; intra-part duplicate/stamp carry them as-is (same id space). Persisted as codec `sb`. Regression: `partXmlParser.test.ts` "`<Sibling>` attach-node grouping".
+  - **`<Aligned><ConnectorRef Id/></Aligned>`** — decomp: `PartTemplate.Aligned` = `[XmlElement("Aligned")] List<Part.AlignedConnectors.AlignedConnectorsRef>` (`AlignedConnectorsRef` = `[XmlElement("ConnectorRef")] List<ConnectorReference>`). A modeled child of `<PartGameData>`, but **not** in flexo's `KNOWN_PART_GAMEDATA_CHILDREN`, so the gap-6 `RawXmlNode` passthrough already captures + re-emits it verbatim. **Intact — no code change**; locked by `partXmlParser.test.ts` "`<Aligned>` connector groups verbatim".
+  - The runtime `PartSymmetryInstance`/`SymmetryLayerInstance`/`SymmetryData`/`Part.SymmetryLink` classes (Part.cs `SaveSymmetryLinks`/`RestoreSymmetryLinks`, `PartInstance.Symmetry`) are **vehicle-assembly / save-file state — outside flexo's part-template scope**; only the connector-level template hints above reach flexo.
+- **Reference-orientation contract unchanged (decomp-verified 4826):** still no `ControlPoint` / "control-from-here" / reference-transform; `Control`/`ControlTemplate` are still empty markers; the vehicle's "up" still follows the root part. `Double3Ex.cs`/`QuaternionEx.cs`/`PartModel.cs`/`PartModelModule.cs` unchanged → `EULER_ORDER='ZYX'` + IVA gate still valid.
 
 ## What changed in 4750
 

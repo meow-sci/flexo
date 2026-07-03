@@ -5,7 +5,7 @@
 > **BREAKING** for the live thrust/Isp readout. Read alongside [docs/engines.md](../docs/engines.md)
 > and [analysis/KSA_ENGINE_DETAILS.md](../analysis/KSA_ENGINE_DETAILS.md).
 
-**Baseline:** verified against KSA build **2026.6.9.4750**.
+**Baseline:** re-vetted against KSA build **2026.7.3.4826** (decomp @ 4826 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — every physics/schema class flexo ports is byte-identical
 OLD→NEW. The only delta is the new optional `<Diameter>` (catalog size filter, no physics
 impact) covered in [part-and-subpart-xml.md](part-and-subpart-xml.md).
@@ -79,6 +79,16 @@ Assets: `Content/Core/Combustion.xml` (propellant LUTs), `Content/Core/CorePropu
 - A `<Part>` with no matching `<PartGameData>` → invisible in picker (the SRB trap).
 - KSA computes in `float`, flexo in `double` → sub-0.1% match.
 - **Electric/ion/cold-gas engines and true SRBs are impossible data-only** (no game code path).
+
+## What changed in 4826
+
+**Nothing flexo ports.** Decomp diff (4750 → 4826): `RocketControllerData.cs` changed only its
+`GetAllRocketTemplates` traversal (`List<RocketTemplate>` → `Span`/`ArrayPool<RocketTemplate>` for
+zero-alloc) — the thrust/Isp/mass-flow **math is byte-identical**. `DeLavalNozzleConfig.cs`,
+`CombustorConfig.cs`, `GasProperties.cs`, `CombustionTable.cs`, `NozzlePerformance.cs`,
+`RocketDesign.cs`, `EngineDesigner.cs`, and `Combustion.xml` are all unchanged. Zero math drift —
+`enginePhysics.ts` stays correct. (Note: tanks can now declare a `<CombustionProcess>` propellant —
+that's tank data, see [gamedata-modules.md](gamedata-modules.md#what-changed-in-4826), not engine physics.)
 
 ## What changed in 4750
 

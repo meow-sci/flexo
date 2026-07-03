@@ -57,6 +57,7 @@ function richPart(): EditingPart {
   p.connectors.push({
     id: '_connector1',
     flags: ['Internal', 'ToSurface'],
+    siblingIds: [],
     layerId: CONNECTOR_LAYER_ID,
     ...xf([0.5, 0, 0], [0, 0, 0], [1, 1, 1]),
   })
@@ -141,6 +142,7 @@ function richPart(): EditingPart {
         lengthM: 2,
         outerRadiusM: 0.5,
         wallThicknessMm: 2,
+        combustionProcessId: null,
       },
       {
         shape: 'Spherical',
@@ -148,6 +150,7 @@ function richPart(): EditingPart {
         lengthM: 0,
         outerRadiusM: 1.25,
         wallThicknessMm: 3,
+        combustionProcessId: 'MMH_NTO_1.6',
       },
     ],
     solarPanels: [{ outputWatts: 30, transform: identityTransform() }],

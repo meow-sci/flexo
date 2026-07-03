@@ -4,11 +4,13 @@
 > `<PartGameData>` / `<SubPartGameData>` documents. Each block maps to a KSA `*Template`
 > class. Engine modules have their own file ([engines.md](engines.md)).
 
-**Baseline:** verified against KSA build **2026.6.9.4750**.
-**Baseline status:** ✅ **CURRENT** — the electrical unit tokens (now `J`/`W`), the
-`<DockingPort>` child-element schema, and the new `<Control>` command marker all changed/landed this
-build; flexo's parse **and** emit are now fixed for all three (current form only — no legacy
-fallback). See [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md).
+**Baseline:** re-vetted against KSA build **2026.7.3.4826** (decomp @ 4826 + shipped Core XML).
+**Baseline status:** ✅ **CURRENT** — the electrical unit tokens (`J`/`W`), the `<DockingPort>`
+child-element schema, and the `<Control>` command marker are all modeled (parse **and** emit,
+current form only — no legacy fallback). As of 4826, tanks may declare a `<CombustionProcess>`
+propellant; flexo now models it as `Tank.combustionProcessId` (see
+[What changed in 4826](#what-changed-in-4826)). See
+[plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md).
 
 ---
 
@@ -72,6 +74,11 @@ fallback). See [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.m
 - Connector `<Flags>` is emitted in **both** the Assets and GameData docs.
 - Light `Scale` is never emitted (KSA ignores it).
 - `Battery.cs`'s save-state `[XmlElement("Charge")]` (was `"Joules"`) is **save-game state, not authored template** — irrelevant to flexo.
+
+## What changed in 4826
+
+- **Tanks gained a `<CombustionProcess>` propellant declaration.** Decomp-confirmed: `AsmbTankTemplate.cs` (the **base** of both `CylindricalTankTemplate` and `SphericalTankTemplate`) gained `[XmlElement("CombustionProcess")] public SerializedReference DefaultCombustionProcess = new SerializedReference();` — so any tank shape may carry it (a `SubstanceLibrary` combustion-process reference; `SerializedReference` → `<CombustionProcess Id/>`). In the shipped 4826 XML it appears on three hypergolic service-module `<SphericalTank>`s in `PartGameData.xml` (`CoreServiceModule…` RCS tanks) as `<CombustionProcess Id="MMH_NTO_1.6" />`. `<Tank>` is a **modeled** `<SubPartGameData>` child (rebuilt from a typed model, not passthrough), so flexo silently dropped the new child on export. **Fixed:** `Tank.combustionProcessId` — read in `tankFromElement` (covers **both** shapes, matching the base-class field), emitted in `buildTankElement` after `<WallThickness>`, persisted as codec `cp`. flexo doesn't edit it yet — preserved verbatim. Regression: `partXmlParser.test.ts` "tank `<CombustionProcess>`".
+- **Solar-cell data tweak (not a schema change):** `CoreElectricalAGameData.xml` `CoreElectricalA_Subpart_SolarPanelB_CellA` `<Produced W>` went 50 → 100. flexo reads the value generically; only the vendored fixture + its assertion were refreshed.
 
 ## What changed in 4750 (detail in the fix plan)
 

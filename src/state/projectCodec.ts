@@ -170,12 +170,14 @@ function decPlacement(c: CPlacement): SubPartPlacement {
 interface CConnector extends CTransform {
   i: string // id
   f?: Connector['flags'] // flags (omitted when empty)
+  sb?: string[] // siblingIds (omitted when empty)
 }
 
 function encConnector(c: Connector): CConnector {
   // layerId is always CONNECTOR_LAYER_ID — restored on decode, never serialized.
   const o: CConnector = { i: c.id, ...encTransform(c) }
   if (c.flags.length > 0) o.f = c.flags
+  if (c.siblingIds.length > 0) o.sb = c.siblingIds
   return o
 }
 
@@ -183,6 +185,7 @@ function decConnector(c: CConnector): Connector {
   return {
     id: str(c.i),
     flags: arr<Connector['flags'][number]>(c.f),
+    siblingIds: arr<string>(c.sb).map((s) => str(s)),
     layerId: CONNECTOR_LAYER_ID,
     ...decTransform(c),
   }
@@ -251,6 +254,7 @@ interface CGameData {
   dn?: string // displayName
   cm?: number // customMass
   dm?: number // diameterM (omitted when null)
+  xdm?: number[] // extraDiametersM (adapter size classes; omitted when empty)
   co?: 1 // controllable (<Control/>); present ⇒ true
   bt?: number[] // batteries → capacityWh[]
   gn?: number[] // generators → outputWatts[]
@@ -273,6 +277,7 @@ function encGameData(g: PartGameData): CGameData {
   if (g.displayName.trim()) o.dn = g.displayName
   if (g.customMass != null) o.cm = round(g.customMass)
   if (g.diameterM != null) o.dm = round(g.diameterM)
+  if (g.extraDiametersM.length) o.xdm = g.extraDiametersM.map(round)
   if (g.controllable) o.co = 1
   if (g.batteries.length) o.bt = g.batteries.map((b) => round(b.capacityWh))
   if (g.generators.length) o.gn = g.generators.map((x) => round(x.outputWatts))
@@ -303,6 +308,7 @@ function decGameData(c: CGameData | undefined): PartGameData {
   g.displayName = str(c.dn)
   g.customMass = typeof c.cm === 'number' ? c.cm : null
   g.diameterM = typeof c.dm === 'number' ? c.dm : null
+  g.extraDiametersM = arr<number>(c.xdm).map(num)
   g.controllable = !!c.co
   g.batteries = arr<number>(c.bt).map((wh): Battery => ({ capacityWh: num(wh) }))
   g.generators = arr<number>(c.gn).map((w): Generator => ({ outputWatts: num(w) }))
@@ -361,12 +367,14 @@ interface CTank {
   w: number // wallThicknessMm
   m?: string // wallMaterialId (omitted when the default aluminium)
   sph?: 1 // shape: present ⇒ Spherical (Cylindrical is the default)
+  cp?: string // combustionProcessId (omitted when unset)
 }
 
 function encTank(t: Tank): CTank {
   const o: CTank = { l: round(t.lengthM), r: round(t.outerRadiusM), w: round(t.wallThicknessMm) }
   if (t.wallMaterialId && t.wallMaterialId !== DEFAULT_TANK_MATERIAL) o.m = t.wallMaterialId
   if (t.shape === 'Spherical') o.sph = 1
+  if (t.combustionProcessId) o.cp = t.combustionProcessId
   return o
 }
 
@@ -377,6 +385,7 @@ function decTank(c: CTank): Tank {
     lengthM: num(c.l),
     outerRadiusM: num(c.r),
     wallThicknessMm: num(c.w),
+    combustionProcessId: c.cp != null ? str(c.cp) : null,
   }
 }
 

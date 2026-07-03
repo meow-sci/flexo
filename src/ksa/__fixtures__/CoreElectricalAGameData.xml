@@ -211,7 +211,7 @@
 
     <SubPartGameData Id="CoreElectricalA_Subpart_SolarPanelB_CellA">
         <SolarPanel>
-            <Produced W="50" />
+            <Produced W="100" />
             <Transform>
                 <Rotation Y="1.5708" />
             </Transform>

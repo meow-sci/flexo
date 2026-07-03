@@ -622,6 +622,14 @@
         <Connector Id="_connector42">
             <Flags>Internal</Flags>
         </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector19"/>
+            <ConnectorRef Id="_connector41"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector20"/>
+            <ConnectorRef Id="_connector42"/>
+        </Aligned>
     </PartGameData>
 
     <SubPartGameData Id="CoreFuelTankA_Subpart_Skin2W1HA" DisplayName="Fuel Tank 2m x 1m A">
@@ -643,6 +651,14 @@
         <Connector Id="_connector44">
             <Flags>Internal</Flags>
         </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector19"/>
+            <ConnectorRef Id="_connector43"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector20"/>
+            <ConnectorRef Id="_connector44"/>
+        </Aligned>
     </PartGameData>
 
     <SubPartGameData Id="CoreFuelTankA_Subpart_Skin2W1HB" DisplayName="Fuel Tank 2m x 1m B">
@@ -664,6 +680,14 @@
         <Connector Id="_connector46">
             <Flags>Internal</Flags>
         </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector21"/>
+            <ConnectorRef Id="_connector45"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector22"/>
+            <ConnectorRef Id="_connector46"/>
+        </Aligned>
     </PartGameData>
 
     <SubPartGameData Id="CoreFuelTankA_Subpart_Skin2W2HA" DisplayName="Fuel Tank 2m x 2m A">
@@ -685,6 +709,14 @@
         <Connector Id="_connector48">
             <Flags>Internal</Flags>
         </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector21"/>
+            <ConnectorRef Id="_connector47"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector22"/>
+            <ConnectorRef Id="_connector48"/>
+        </Aligned>
     </PartGameData>
     
     <SubPartGameData Id="CoreFuelTankA_Subpart_Skin2W2HB" DisplayName="Fuel Tank 2m x 2m B">
@@ -706,6 +738,14 @@
         <Connector Id="_connector50">
             <Flags>Internal</Flags>
         </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector21"/>
+            <ConnectorRef Id="_connector49"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector22"/>
+            <ConnectorRef Id="_connector50"/>
+        </Aligned>
     </PartGameData>
 
     <SubPartGameData Id="CoreFuelTankA_Subpart_Skin2W2HC" DisplayName="Fuel Tank 2m x 2m C">
@@ -727,6 +767,14 @@
         <Connector Id="_connector52">
             <Flags>Internal</Flags>
         </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector23"/>
+            <ConnectorRef Id="_connector51"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector24"/>
+            <ConnectorRef Id="_connector52"/>
+        </Aligned>
     </PartGameData>
 
     <SubPartGameData Id="CoreFuelTankA_Subpart_Skin2W4HA" DisplayName="Fuel Tank 2m x 4m A">
@@ -748,6 +796,14 @@
         <Connector Id="_connector54">
             <Flags>Internal</Flags>
         </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector23"/>
+            <ConnectorRef Id="_connector54"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector24"/>
+            <ConnectorRef Id="_connector53"/>
+        </Aligned>
     </PartGameData>
 
     <SubPartGameData Id="CoreFuelTankA_Subpart_Skin2W4HB" DisplayName="Fuel Tank 2m x 4m B">
@@ -769,6 +825,14 @@
         <Connector Id="_connector56">
             <Flags>Internal</Flags>
         </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector23"/>
+            <ConnectorRef Id="_connector56"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector24"/>
+            <ConnectorRef Id="_connector55"/>
+        </Aligned>
     </PartGameData>
 
     <SubPartGameData Id="CoreFuelTankA_Subpart_Skin2W4HC" DisplayName="Fuel Tank 2m x 4m C">
@@ -782,7 +846,7 @@
         </Tank>
     </SubPartGameData>
 
-    <PartGameData Id="CoreFuelTankA_Prefab_LF2W4HC">
+    <PartGameData Id="CoreFuelTankA_Prefab_LF2W4HD">
         <EditorTag Value="Fuel Tanks"/>
         <Connector Id="_connector57">
             <Flags>Internal</Flags>
@@ -790,6 +854,14 @@
         <Connector Id="_connector58">
             <Flags>Internal</Flags>
         </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector23"/>
+            <ConnectorRef Id="_connector58"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector24"/>
+            <ConnectorRef Id="_connector57"/>
+        </Aligned>
     </PartGameData>
 
     <SubPartGameData Id="CoreFuelTankA_Subpart_Skin2W4HD" DisplayName="Fuel Tank 2m x 4m D">
@@ -827,6 +899,14 @@
         <Connector Id="_connector40">
             <Flags>Internal</Flags>
         </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector25"/>
+            <ConnectorRef Id="_connector40"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector26"/>
+            <ConnectorRef Id="_connector39"/>
+        </Aligned>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF3W3HB">
@@ -837,6 +917,14 @@
         <Connector Id="_connector38">
             <Flags>Internal</Flags>
         </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector25"/>
+            <ConnectorRef Id="_connector38"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector26"/>
+            <ConnectorRef Id="_connector37"/>
+        </Aligned>
     </PartGameData>
 
     <SubPartGameData Id="CoreFuelTankA_Subpart_Skin3W3HB" DisplayName="Fuel Tank 3m x 3m B">        
@@ -858,6 +946,14 @@
         <Connector Id="_connector30">
             <Flags>Internal</Flags>
         </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector27"/>
+            <ConnectorRef Id="_connector30"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector28"/>
+            <ConnectorRef Id="_connector29"/>
+        </Aligned>
     </PartGameData>
 
     <SubPartGameData Id="CoreFuelTankA_Subpart_Skin3W6HA" DisplayName="Fuel Tank 3m x 6m A">
@@ -880,6 +976,14 @@
         <Connector Id="_connector32">
             <Flags>Internal</Flags>
         </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector27"/>
+            <ConnectorRef Id="_connector31"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector28"/>
+            <ConnectorRef Id="_connector32"/>
+        </Aligned>
     </PartGameData>
 
     <SubPartGameData Id="CoreFuelTankA_Subpart_Skin3W6HB" DisplayName="Fuel Tank 3m x 6m B">
@@ -901,6 +1005,14 @@
         <Connector Id="_connector34">
             <Flags>Internal</Flags>
         </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector27"/>
+            <ConnectorRef Id="_connector33"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector28"/>
+            <ConnectorRef Id="_connector34"/>
+        </Aligned>
     </PartGameData>
 
     <SubPartGameData Id="CoreFuelTankA_Subpart_Skin3W6HC" DisplayName="Fuel Tank 3m x 6m C">
@@ -922,6 +1034,14 @@
         <Connector Id="_connector36">
             <Flags>Internal</Flags>
         </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector27"/>
+            <ConnectorRef Id="_connector36"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector28"/>
+            <ConnectorRef Id="_connector35"/>
+        </Aligned>
     </PartGameData>
 
     <SubPartGameData Id="CoreFuelTankA_Subpart_Skin3W6HD" DisplayName="Fuel Tank 3m x 6m D">
@@ -975,6 +1095,7 @@
                 <Material Id="Aluminum.2014(s)" />
                 <OuterRadius M="0.5" />
                 <WallThickness Mm="4" />
+                <CombustionProcess Id="MMH_NTO_1.6" />
             </SphericalTank>
         </Tank>
     </SubPartGameData>
@@ -985,6 +1106,7 @@
                 <Material Id="Aluminum.2014(s)" />
                 <OuterRadius M="0.5" />
                 <WallThickness Mm="4" />
+                <CombustionProcess Id="MMH_NTO_1.6" />
             </SphericalTank>
         </Tank>
     </SubPartGameData>
@@ -995,6 +1117,7 @@
                 <Material Id="Aluminum.2014(s)" />
                 <OuterRadius M="0.25" />
                 <WallThickness Mm="4" />
+                <CombustionProcess Id="MMH_NTO_1.6" />
             </SphericalTank>
         </Tank>
     </SubPartGameData>

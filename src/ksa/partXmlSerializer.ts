@@ -116,8 +116,12 @@ export function serializeGameData(
 
   // <Diameter M/> — the VAB size-class filter (DistanceReference). Core authors plain
   // M (e.g. M="1"), so emit M unconditionally rather than flexo's Cm-under-1m style.
+  // Repeatable since KSA 2026.7: emit the primary then any preserved adapter sizes.
   if (game.diameterM != null) {
     gd.appendChild(elWithAttr(doc, 'Diameter', 'M', formatG6(game.diameterM)))
+    for (const extra of game.extraDiametersM) {
+      gd.appendChild(elWithAttr(doc, 'Diameter', 'M', formatG6(extra)))
+    }
   }
 
   for (const anim of part.animations) {
@@ -291,6 +295,10 @@ function buildTankElement(doc: XmlDocument, tank: Tank): XmlElement {
   }
   el.appendChild(elWithAttr(doc, 'OuterRadius', 'M', formatG6(tank.outerRadiusM)))
   el.appendChild(elWithAttr(doc, 'WallThickness', 'Mm', formatG6(tank.wallThicknessMm)))
+  // <CombustionProcess Id/> — the propellant the tank holds (KSA 2026.7); omitted when unset.
+  if (tank.combustionProcessId) {
+    el.appendChild(elWithAttr(doc, 'CombustionProcess', 'Id', tank.combustionProcessId))
+  }
   return el
 }
 
@@ -571,6 +579,10 @@ function buildConnectorElement(doc: XmlDocument, connector: Connector): XmlEleme
     const flagsEl = doc.createElement('Flags')
     flagsEl.appendChild(doc.createTextNode(flags))
     el.appendChild(flagsEl)
+  }
+  // <Sibling Id/> — attach-node grouping preserved from import (KSA 2026.7 multi-mount prefabs).
+  for (const siblingId of connector.siblingIds) {
+    el.appendChild(elWithAttr(doc, 'Sibling', 'Id', siblingId))
   }
   return el
 }

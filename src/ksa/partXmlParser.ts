@@ -123,6 +123,11 @@ export function connectorsFromPartElement(part: Element): Connector[] {
       rotation: readVec(transform, 'Rotation', 0) as EulerXYZ,
       scale: readVec(transform, 'Scale', 1),
       flags: parseConnectorFlags(directChildren(conn, 'Flags')[0]?.textContent),
+      // <Sibling Id/> children group this connector with the part's other attach nodes
+      // (KSA 2026.7 multi-mount prefabs); preserved verbatim, dropping any without an Id.
+      siblingIds: directChildren(conn, 'Sibling')
+        .map((s) => s.getAttribute('Id') ?? '')
+        .filter((s) => s),
       // Connectors live in the built-in Connectors layer (managed separately from
       // SubPart meshes); importing into the editor keeps them there.
       layerId: CONNECTOR_LAYER_ID,
@@ -262,6 +267,8 @@ function tankFromElement(el: Element, shape: TankShape): Tank {
     lengthM: readNum(directChildren(el, 'Length')[0], 'M') ?? 0,
     outerRadiusM: readNum(directChildren(el, 'OuterRadius')[0], 'M') ?? 0,
     wallThicknessMm: readNum(directChildren(el, 'WallThickness')[0], 'Mm') ?? 0,
+    // <CombustionProcess Id/> — the propellant the tank holds (KSA 2026.7); absent ⇒ null.
+    combustionProcessId: directChildren(el, 'CombustionProcess')[0]?.getAttribute('Id') ?? null,
   }
 }
 
@@ -308,8 +315,13 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   const mass = readNum(directChildren(directChildren(gd, 'CustomMass')[0] ?? gd, 'Mass')[0], 'Kg')
   game.customMass = mass != null && mass > 0 ? mass : null
 
-  // <Diameter M/> — a DistanceReference; null when the element is absent.
-  game.diameterM = readDistanceM(directChildren(gd, 'Diameter')[0])
+  // <Diameter M/> — a repeatable DistanceReference (KSA 2026.7). The first is the
+  // editable size class; the rest (adapter prefabs list several) are preserved verbatim.
+  const diameters = directChildren(gd, 'Diameter')
+    .map((el) => readDistanceM(el))
+    .filter((m): m is number => m != null)
+  game.diameterM = diameters[0] ?? null
+  game.extraDiametersM = diameters.slice(1)
   // <Control/> — a bare command-capability marker (ControlTemplate has no fields).
   game.controllable = directChildren(gd, 'Control').length > 0
 

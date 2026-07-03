@@ -54,6 +54,8 @@ export interface CatalogPart {
   evaDoor: EvaDoor | null
   /** Part diameter in meters (<Diameter M/>, VAB size-class filter), or null. */
   diameterM: number | null
+  /** Extra `<Diameter M/>` size classes beyond {@link diameterM} (adapter prefabs), preserved for round-trip. */
+  extraDiametersM: number[]
   /** Command-capability marker (<Control/>): the part can pilot a vehicle. */
   controllable: boolean
   /** Unmodeled `<PartGameData>` attrs + child elements, preserved verbatim for round-trip. */
@@ -97,6 +99,7 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
       dockingPort: null,
       evaDoor: null,
       diameterM: null,
+      extraDiametersM: [],
       controllable: false,
       unknownAttrs: {},
       unknownChildren: [],
@@ -133,6 +136,8 @@ export interface PartGameData {
   evaDoor: EvaDoor | null
   /** Part diameter (<Diameter M/>) and command marker (<Control/>) declared on this <PartGameData>. */
   diameterM: number | null
+  /** Extra `<Diameter M/>` size classes beyond {@link diameterM} (adapter prefabs), preserved for round-trip. */
+  extraDiametersM: number[]
   controllable: boolean
   /** Unmodeled `<PartGameData>` attrs + child elements preserved from this entry. */
   unknownAttrs: Record<string, string>
@@ -179,6 +184,7 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
       dockingPort: null,
       evaDoor: null,
       diameterM: null,
+      extraDiametersM: [],
       controllable: false,
       unknownAttrs: {},
       unknownChildren: [],
@@ -200,7 +206,11 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
     entry.decoupler ??= parsed.gameData.decoupler
     entry.dockingPort ??= parsed.gameData.dockingPort
     entry.evaDoor ??= parsed.gameData.evaDoor
-    entry.diameterM ??= parsed.gameData.diameterM
+    // Adopt the first entry's diameter + its extra adapter size classes together.
+    if (entry.diameterM == null && parsed.gameData.diameterM != null) {
+      entry.diameterM = parsed.gameData.diameterM
+      entry.extraDiametersM = parsed.gameData.extraDiametersM
+    }
     entry.controllable ||= parsed.gameData.controllable
     // First entry with passthrough wins (these represent one part's leftover XML).
     if (Object.keys(entry.unknownAttrs).length === 0)
@@ -254,6 +264,7 @@ export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile
       part.dockingPort = gd.dockingPort
       part.evaDoor = gd.evaDoor
       part.diameterM = gd.diameterM
+      part.extraDiametersM = gd.extraDiametersM
       part.controllable = gd.controllable
       part.unknownAttrs = gd.unknownAttrs
       part.unknownChildren = gd.unknownChildren

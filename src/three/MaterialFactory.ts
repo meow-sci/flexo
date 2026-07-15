@@ -49,19 +49,69 @@ export async function buildCustomFaceMaterial(
 }
 
 /**
+ * A material's resolved scalar/map channels (see customAssetStore's
+ * resolveMaterialChannels). Uniform values render as material scalars and export
+ * as solid texels — same numbers, same look. Mapped channels bind the stored
+ * .ktx2 with the scalar forced to 1 (three multiplies map × scalar; KSA reads
+ * the map alone — same result). Channel semantics match KSA's AoRoughMetal
+ * (R=AO, G=rough, B=metal) which is also three's native map convention.
+ */
+export interface MaterialChannelMaps {
+  metalness: number
+  roughness: number
+  metalnessMapUrl?: string
+  roughnessMapUrl?: string
+  occlusionMapUrl?: string
+  /** A pre-packed AO/Rough/Metal image; overrides the three separate maps. */
+  ormPackedUrl?: string
+  normalMapUrl?: string
+  /** Normal strength — editor-side normalScale; baked into RG on export. */
+  normalScale?: number
+}
+
+/** Loads and attaches a material's scalar/map channels onto a three material. */
+export async function applyMaterialChannels(
+  mat: THREE.MeshStandardMaterial,
+  ch: MaterialChannelMaps,
+): Promise<void> {
+  mat.metalness = ch.metalness
+  mat.roughness = ch.roughness
+  if (ch.ormPackedUrl) {
+    const orm = await loadTexture(ch.ormPackedUrl, 'linear')
+    mat.aoMap = orm
+    mat.roughnessMap = orm
+    mat.metalnessMap = orm
+    mat.aoMap.channel = 0 // KSA uses TEXCOORD_0 for all maps
+    mat.aoMapIntensity = 1
+  } else {
+    if (ch.occlusionMapUrl) {
+      mat.aoMap = await loadTexture(ch.occlusionMapUrl, 'linear')
+      mat.aoMap.channel = 0
+      mat.aoMapIntensity = 1
+    }
+    if (ch.roughnessMapUrl) mat.roughnessMap = await loadTexture(ch.roughnessMapUrl, 'linear')
+    if (ch.metalnessMapUrl) mat.metalnessMap = await loadTexture(ch.metalnessMapUrl, 'linear')
+  }
+  if (ch.normalMapUrl) {
+    mat.normalMap = await loadTexture(ch.normalMapUrl, 'linear')
+    mat.normalMapType = THREE.TangentSpaceNormalMap
+    const s = ch.normalScale ?? 1
+    // The stored map already carries the strength-1 KSA transform (X-flip); the
+    // editor applies strength as normalScale, the export bakes it into RG — same math.
+    mat.normalScale.set(s, s)
+  }
+}
+
+/**
  * The resolved per-face inputs of a {@link CustomMaterial} (see customAssetStore's
  * refreshCatalog): the base color as an image blob URL (a face texture or the
- * material's baseColor map) OR a uniform sRGB color, plus the uniform scalar
- * channels. Uniform values render as material scalars here and export as solid
- * texels — same numbers, same look.
+ * material's baseColor map) OR a uniform sRGB color, plus the channel maps.
  */
-export interface CustomFaceSpec {
+export interface CustomFaceSpec extends MaterialChannelMaps {
   /** Diffuse .ktx2 blob URL; wins over {@link color} when set. */
   mapUrl?: string
   /** Uniform base color (sRGB 0..255) when there is no image. */
   color?: RgbColor
-  metalness: number
-  roughness: number
   wrap: TextureWrap
 }
 
@@ -69,10 +119,7 @@ export interface CustomFaceSpec {
 export async function buildCustomMaterial(
   spec: CustomFaceSpec,
 ): Promise<THREE.MeshStandardMaterial> {
-  const mat = new THREE.MeshStandardMaterial({
-    metalness: spec.metalness,
-    roughness: spec.roughness,
-  })
+  const mat = new THREE.MeshStandardMaterial()
   if (spec.mapUrl) {
     mat.map = await loadWrappedTexture(spec.mapUrl, 'srgb', spec.wrap)
   } else if (spec.color) {
@@ -83,6 +130,10 @@ export async function buildCustomMaterial(
       THREE.SRGBColorSpace,
     )
   }
+  await applyMaterialChannels(mat, spec)
+  // The KSA normal decode (RG, X-flip, Z-reconstruct) — SubPartObject re-applies per
+  // clone from the final map set; applied here too so direct renders are correct.
+  applyKsaShaderPatches(mat, { normal: !!mat.normalMap, emissive: false })
   return mat
 }
 

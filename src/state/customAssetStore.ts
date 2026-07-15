@@ -14,6 +14,7 @@ import type {
   KittenMeshSource,
   PrimitiveSpec,
   ScalarChannel,
+  TextureChannel,
   VisorSurface,
 } from '../ksa/types'
 import { KITTEN_LABELS, createDefaultMaterial } from '../ksa/types'
@@ -37,6 +38,7 @@ import {
 import { buildMeshAtlasGlb } from '../ksa/exportGlb'
 import { decodeImage, type ImageLevel } from '../ktx/decodeImage'
 import { encodeImageToKtx2, isLegacySrgbKtx2 } from '../ktx/encodeKtx2'
+import { prepareChannelImage } from '../ktx/channelTransforms'
 import {
   compositeGlow,
   solidGlowBitmap,
@@ -45,10 +47,12 @@ import {
   type GlowBitmap,
 } from '../ktx/glowComposite'
 import {
+  applyMaterialChannels,
   buildCustomFaceMaterial,
   buildCustomMaterial,
   makeFlatMaterial,
   buildGlowingFaceMaterial,
+  type MaterialChannelMaps,
 } from '../three/MaterialFactory'
 import { kittenPartSubMeshes, kittenSpecFromSource } from '../ksa/kittenAssets'
 import { bakeKittenSubMeshes, buildKittenMaterial } from '../three/kittenBake'
@@ -211,9 +215,43 @@ function materialFor(part: EditingPart, m: CustomMesh): CustomMaterial | undefin
   return m.materialId ? part.customMaterials.find((x) => x.id === m.materialId) : undefined
 }
 
-/** The uniform value of a scalar channel; 'map' channels resolve in Phase 2 (grayscale packs). */
+/** The uniform value of a scalar channel; a mapped channel multiplies at 1 (three convention). */
 function scalarValue(c: ScalarChannel, fallback: number): number {
   return c.kind === 'value' ? c.value : fallback
+}
+
+/** ktx2 blob URL for a map-kind scalar channel, if any. */
+function scalarMapUrl(c: ScalarChannel): string | undefined {
+  return c.kind === 'map' ? textureKtx2Urls.get(c.textureId) : undefined
+}
+
+/**
+ * Resolves a material's scalar/normal channels into the editor inputs
+ * ({@link MaterialChannelMaps}): uniform values pass through as scalars; mapped
+ * channels resolve to their stored-.ktx2 blob URLs with the scalar forced to 1
+ * (three multiplies map × scalar; KSA reads the map alone — same result). A packed
+ * ORM overrides the three separate channels, mirroring the export.
+ */
+function resolveMaterialChannels(material: CustomMaterial): MaterialChannelMaps {
+  const ormPackedUrl = material.ormPacked
+    ? textureKtx2Urls.get(material.ormPacked.textureId)
+    : undefined
+  const metalnessMapUrl = ormPackedUrl ? undefined : scalarMapUrl(material.metalness)
+  const roughnessMapUrl = ormPackedUrl ? undefined : scalarMapUrl(material.roughness)
+  const occlusionMapUrl =
+    ormPackedUrl || !material.occlusion
+      ? undefined
+      : textureKtx2Urls.get(material.occlusion.textureId)
+  return {
+    metalness: ormPackedUrl || metalnessMapUrl ? 1 : scalarValue(material.metalness, 0),
+    roughness: ormPackedUrl || roughnessMapUrl ? 1 : scalarValue(material.roughness, 0.5),
+    metalnessMapUrl,
+    roughnessMapUrl,
+    occlusionMapUrl,
+    ormPackedUrl,
+    normalMapUrl: material.normal ? textureKtx2Urls.get(material.normal.textureId) : undefined,
+    normalScale: material.normal?.strength,
+  }
 }
 
 /** The glow bitmap (rgb=color, a=intensity) for a mesh's emissive config, or null when no glow. */
@@ -336,26 +374,28 @@ async function refreshCatalog(): Promise<void> {
       applyFaceUvTransforms(geometry, faceKeys, ft)
 
       // One material per face group. Resolution per face: the face's own texture overrides
-      // the mesh material's base color; scalar channels always come from the mesh material
-      // (neutral when unassigned). A glowing mesh composites its glow bitmap over the same
-      // resolved base so editor == export; meshes with neither material nor face texture
-      // keep the legacy flat look.
+      // the mesh material's base color; the scalar/map/normal channels always come from the
+      // mesh material (neutral when unassigned). A glowing mesh composites its glow bitmap
+      // over the same resolved base so editor == export; meshes with neither material nor
+      // face texture keep the legacy flat look.
       const glow = await glowBitmapFor(m)
       const material = materialFor(part, m)
-      const metalness = material ? scalarValue(material.metalness, 1) : undefined
-      const roughness = material ? scalarValue(material.roughness, 1) : undefined
+      const channels = material ? resolveMaterialChannels(material) : undefined
       const materials: THREE.MeshStandardMaterial[] = []
       for (const key of faceKeys) {
         const texId = ft[key]?.textureId
         const wrap = ft[key]?.wrap ?? 'repeat'
         if (glow) {
           const { diffuse, mask } = compositeGlow(await faceBaseImage(texId, material), glow)
-          const pbr =
-            metalness !== undefined && roughness !== undefined
-              ? { metalness, roughness }
-              : undefined
-          materials.push(buildGlowingFaceMaterial(diffuse, mask, wrap, pbr))
-        } else if (material) {
+          const pbr = channels
+            ? { metalness: channels.metalness, roughness: channels.roughness }
+            : undefined
+          const gmat = buildGlowingFaceMaterial(diffuse, mask, wrap, pbr)
+          // Attach the material's map channels too; SubPartObject re-applies the shader
+          // patches per instance from the final map set, so the flags end up correct.
+          if (channels) await applyMaterialChannels(gmat, channels)
+          materials.push(gmat)
+        } else if (material && channels) {
           const faceUrl = texId ? textureKtx2Urls.get(texId) : undefined
           const baseMapUrl =
             faceUrl ??
@@ -366,9 +406,8 @@ async function refreshCatalog(): Promise<void> {
             await buildCustomMaterial({
               mapUrl: baseMapUrl,
               color: material.baseColor.kind === 'color' ? material.baseColor.color : undefined,
-              metalness: metalness!,
-              roughness: roughness!,
               wrap,
+              ...channels,
             }),
           )
         } else {
@@ -456,9 +495,13 @@ function scheduleRebuild(): Promise<void> {
 }
 
 // ── textures ─────────────────────────────────────────────────────────────────
-export async function addCustomTexture(file: Blob, name: string): Promise<CustomTexture> {
+export async function addCustomTexture(
+  file: Blob,
+  name: string,
+  channel: TextureChannel = 'baseColor',
+): Promise<CustomTexture> {
   const id = `tex_${shortId()}`
-  const decoded = await decodeImage(file)
+  const decoded = prepareChannelImage(await decodeImage(file), channel)
   const ktx2 = await encodeImageToKtx2(decoded, { zstd: true })
 
   await putAsset(assetKeys.textureSource(id), file, file.type || 'image/png')
@@ -473,12 +516,36 @@ export async function addCustomTexture(file: Blob, name: string): Promise<Custom
     name: name.trim() || 'texture',
     width: decoded.width,
     height: decoded.height,
-    channel: 'baseColor',
+    channel,
   }
   mutate('add texture', tex.name, (p) => {
     p.customTextures.push(tex)
   })
   return tex
+}
+
+/**
+ * Re-declares which PBR channel an uploaded image is for: re-encodes the stored
+ * .ktx2 from the original source with the new channel's transforms (the encode is
+ * a derived cache of the source), updates the descriptor, and rebuilds the catalog.
+ */
+export async function setTextureChannel(id: string, channel: TextureChannel): Promise<void> {
+  const src = await getAsset(assetKeys.textureSource(id))
+  if (!src) return
+  const decoded = prepareChannelImage(await decodeImage(src), channel)
+  const ktx2 = await encodeImageToKtx2(decoded, { zstd: true })
+  await putAsset(assetKeys.textureKtx2(id), ktx2, 'image/ktx2')
+  const old = textureKtx2Urls.get(id)
+  if (old) URL.revokeObjectURL(old)
+  textureKtx2Urls.set(id, URL.createObjectURL(new Blob([ktx2.slice()], { type: 'image/ktx2' })))
+  publishTextureUrls()
+
+  const name = $part.get().customTextures.find((t) => t.id === id)?.name ?? ''
+  mutate('texture channel', name, (p) => {
+    const t = p.customTextures.find((x) => x.id === id)
+    if (t) t.channel = channel
+  })
+  await refreshCatalog()
 }
 
 /**

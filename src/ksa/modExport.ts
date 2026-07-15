@@ -4,8 +4,10 @@ import type {
   CustomMesh,
   CustomTexture,
   EditingPart,
+  NormalChannel,
   RgbColor,
   ScalarChannel,
+  TextureChannel,
 } from './types'
 import { isSubPartGameDataEmpty } from './types'
 import { serializeGameData, serializePart } from './partXmlSerializer'
@@ -32,6 +34,7 @@ import type { KittenTextureExportSettings } from '../state/settingsStore'
 import { createZip, type ZipEntry } from '../util/zip'
 import { encodeImageToKtx2, makeSolidKtx2 } from '../ktx/encodeKtx2'
 import { decodeImage, buildMipChain, type ImageLevel } from '../ktx/decodeImage'
+import { packOrmLevel, prepareChannelImage, type OrmSource } from '../ktx/channelTransforms'
 import { compositeGlow, neutralBase, solidBase, type GlowBitmap } from '../ktx/glowComposite'
 
 /** How part-ified kitten SubParts supply their textures on export (see settingsStore). */
@@ -344,24 +347,30 @@ class BundleTextures {
   }
 }
 
-/** The uniform value of a scalar channel ('map' channels resolve at ORM-pack time — Phase 2). */
+/** The uniform value of a scalar channel. */
 function scalarValue(c: ScalarChannel, fallback: number): number {
   return c.kind === 'value' ? c.value : fallback
 }
 
-/** The packed-ORM solid for a material's uniform channels (AO fixed at 1.0 without a map). */
-function ormFor(material: CustomMaterial | undefined, tex: BundleTextures): Promise<string> {
-  if (!material) return tex.ormSolid(255, 128, 0) // legacy neutral (no material assigned)
-  return tex.ormSolid(
-    255,
-    toTexel(scalarValue(material.roughness, 0.5)),
-    toTexel(scalarValue(material.metalness, 0)),
-  )
+/** The map texture id of a scalar channel, if any. */
+function scalarMapId(c: ScalarChannel): string | undefined {
+  return c.kind === 'map' ? c.textureId : undefined
 }
 
 /** The exported <PbrMaterial Id> for a mesh rendering its material verbatim (shareable). */
 function materialExportId(material: CustomMaterial): string {
   return `flexo_${sanitizeAssetToken(material.name)}_${material.id.replace(/^mat_/, '')}_Material`
+}
+
+/** Exported filename suffix per texture channel (mirrors Core's naming). */
+const CHANNEL_SUFFIX: Record<TextureChannel, string> = {
+  baseColor: 'Diffuse',
+  normal: 'Normal',
+  orm: 'AoRoughMetal',
+  roughness: 'Rough',
+  metalness: 'Metal',
+  occlusion: 'AO',
+  emissiveMask: 'Emissive',
 }
 
 /** Last path segment of a "Textures/Characters/Foo.ktx2" subpath, e.g. "Foo.ktx2". */
@@ -638,11 +647,98 @@ export async function buildCustomBundle(
       if (!rel) {
         const blob = await getAsset(assetKeys.textureKtx2(t.id))
         if (!blob) return null
-        rel = `Textures/${sanitizeAssetToken(t.name)}_${sanitizeAssetToken(t.id)}_Diffuse.ktx2`
+        const suffix = CHANNEL_SUFFIX[t.channel ?? 'baseColor']
+        rel = `Textures/${sanitizeAssetToken(t.name)}_${sanitizeAssetToken(t.id)}_${suffix}.ktx2`
         texPath.set(t.id, rel)
         binaries.push({ path: rel, data: new Uint8Array(await blob.arrayBuffer()) })
       }
       return rel
+    }
+
+    /** The decoded base level of a stored texture's SOURCE image, or null. */
+    const sourceLevel = async (texId: string): Promise<ImageLevel | null> => {
+      const src = await getAsset(assetKeys.textureSource(texId))
+      return src ? (await decodeImage(src)).levels[0] : null
+    }
+
+    /**
+     * The <Normal> path for a material: strength 1 copies the stored .ktx2 verbatim
+     * (the KSA X-flip transform is baked at upload), any other strength regenerates
+     * from the source with the strength scaled into RG — the editor's normalScale
+     * applies the same multiplier, so both render identically. Deduped per
+     * (texture, strength); null → caller falls back to the flat solid.
+     */
+    const normalPaths = new Map<string, Promise<string | null>>()
+    const normalPathFor = (normal: NormalChannel): Promise<string | null> => {
+      const key = `${normal.textureId}@${normal.strength}`
+      let pending = normalPaths.get(key)
+      if (!pending) {
+        pending = (async () => {
+          if (normal.strength === 1) return storedTexturePath(normal.textureId)
+          const t = texById.get(normal.textureId)
+          const src = t ? await getAsset(assetKeys.textureSource(t.id)) : null
+          if (!t || !src) return null
+          const prepared = prepareChannelImage(await decodeImage(src), 'normal', normal.strength)
+          const pct = Math.round(normal.strength * 100)
+          const rel = `Textures/${sanitizeAssetToken(t.name)}_${sanitizeAssetToken(t.id)}_s${pct}_Normal.ktx2`
+          binaries.push({ path: rel, data: await encodeImageToKtx2(prepared, { zstd: true }) })
+          return rel
+        })()
+        normalPaths.set(key, pending)
+      }
+      return pending
+    }
+
+    /** The material's <Normal> path (its map when set and resolvable, else the flat solid). */
+    const resolveNormal = async (material: CustomMaterial | undefined): Promise<string> => {
+      if (material?.normal) {
+        const p = await normalPathFor(material.normal)
+        if (p) return p
+      }
+      return tex.flatNormal()
+    }
+
+    /**
+     * The material's <AoRoughMetal> path: a pre-packed upload copies verbatim; any
+     * grayscale AO/rough/metal map packs with the uniform channels into one image
+     * (R=AO G=rough B=metal); all-uniform channels become a solid texel. Deduped by
+     * the source combination.
+     */
+    const ormPacks = new Map<string, Promise<string | null>>()
+    const resolveOrm = async (material: CustomMaterial | undefined): Promise<string> => {
+      if (!material) return tex.ormSolid(255, 128, 0) // legacy neutral (no material assigned)
+      if (material.ormPacked) {
+        const p = await storedTexturePath(material.ormPacked.textureId)
+        if (p) return p
+      }
+      const aoId = material.occlusion?.textureId
+      const roughId = scalarMapId(material.roughness)
+      const metalId = scalarMapId(material.metalness)
+      const roughByte = toTexel(scalarValue(material.roughness, 0.5))
+      const metalByte = toTexel(scalarValue(material.metalness, 0))
+      if (!aoId && !roughId && !metalId) return tex.ormSolid(255, roughByte, metalByte)
+
+      const key = `${aoId ?? '-'}|${roughId ?? roughByte}|${metalId ?? metalByte}`
+      let pending = ormPacks.get(key)
+      if (!pending) {
+        pending = (async () => {
+          const src = async (id: string | undefined, value: number): Promise<OrmSource> => {
+            const level = id ? await sourceLevel(id) : null
+            return level ? { level } : { value }
+          }
+          const packed = packOrmLevel(
+            await src(aoId, 255),
+            await src(roughId, roughByte),
+            await src(metalId, metalByte),
+          )
+          const rel = `Textures/${bundleToken}_${sanitizeAssetToken(material.name)}_${material.id.replace(/^mat_/, '')}_AoRoughMetal.ktx2`
+          binaries.push({ path: rel, data: await encodeLevel(packed) })
+          return rel
+        })()
+        ormPacks.set(key, pending)
+      }
+      const packedPath = await pending
+      return packedPath ?? tex.ormSolid(255, roughByte, metalByte)
     }
 
     for (const m of meshes) {
@@ -671,8 +767,8 @@ export async function buildCustomBundle(
         const materialId = tex.intern(
           {
             diffusePath: paths.diffusePath,
-            normalPath: await tex.flatNormal(),
-            aoRoughMetalPath: await ormFor(material, tex),
+            normalPath: await resolveNormal(material),
+            aoRoughMetalPath: await resolveOrm(material),
             emissivePath: paths.emissivePath,
           },
           `${m.subPartId}_Material`,
@@ -702,8 +798,8 @@ export async function buildCustomBundle(
       const materialId = tex.intern(
         {
           diffusePath,
-          normalPath: await tex.flatNormal(),
-          aoRoughMetalPath: await ormFor(material, tex),
+          normalPath: await resolveNormal(material),
+          aoRoughMetalPath: await resolveOrm(material),
         },
         preferredId,
       )

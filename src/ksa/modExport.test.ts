@@ -8,6 +8,28 @@ import {
 } from './types'
 import type { CustomMesh, EditingPart, PartAnimation } from './types'
 
+// In-memory stand-in for the IndexedDB blob store (happy-dom has no indexedDB), so
+// image-channel export paths (stored-.ktx2 copies) are testable. Keys mirror assetKeys.
+vi.mock('../state/assetDb', () => {
+  const store = new Map<string, Blob>()
+  return {
+    assetKeys: {
+      textureSource: (id: string) => `tex-src:${id}`,
+      textureKtx2: (id: string) => `tex-ktx2:${id}`,
+      meshGlb: (id: string) => `mesh-glb:${id}`,
+      emissivePaint: (id: string) => `emissive-paint:${id}`,
+    },
+    getAsset: async (key: string) => store.get(key) ?? null,
+    putAsset: async (key: string, data: Blob | Uint8Array, type = '') => {
+      store.set(key, data instanceof Blob ? data : new Blob([data.slice()], { type }))
+    },
+    deleteAsset: async (key: string) => {
+      store.delete(key)
+    },
+    __assetStore: store,
+  }
+})
+
 // Avoid loading the real kitten gltfs (GLTFLoader/fetch) — return tiny baked geometry.
 vi.mock('../three/kittenBake', () => ({
   bakeKittenSubMeshes: vi.fn(async () => {
@@ -597,6 +619,37 @@ describe('buildCustomBundle — uniform-channel CustomMaterial (red metallic but
     expect(glowMat.slice(0, glowMat.indexOf('</PbrMaterial>'))).toContain('_ORM_ff26ff.ktx2')
     // The non-glowing sibling still shares the plain material entry.
     expect(xml).toContain('<PbrMaterial Id="flexo_RedMetal_red1_Material"')
+  })
+})
+
+describe('buildCustomBundle — image-backed material channels', () => {
+  it('copies a strength-1 normal map and a packed ORM verbatim with channel-suffixed names', async () => {
+    const { __assetStore } = (await import('../state/assetDb')) as unknown as {
+      __assetStore: Map<string, Blob>
+    }
+    __assetStore.set('tex-ktx2:tex_n1', new Blob([new Uint8Array([1, 1, 1, 1])]))
+    __assetStore.set('tex-ktx2:tex_orm1', new Blob([new Uint8Array([2, 2, 2, 2])]))
+
+    const part = partWithMaterialMeshes()
+    part.customTextures.push(
+      { id: 'tex_n1', name: 'Bumps', width: 4, height: 4, channel: 'normal' },
+      { id: 'tex_orm1', name: 'Packed', width: 4, height: 4, channel: 'orm' },
+    )
+    part.customMaterials[0].normal = { textureId: 'tex_n1', strength: 1 }
+    part.customMaterials[0].ormPacked = { textureId: 'tex_orm1' }
+
+    const bundle = await buildCustomBundle(part, 'ButtonMod')
+    const xml = bundle.assetsXml!
+    expect(xml).toContain('<Normal Path="Textures/Bumps_texn1_Normal.ktx2"')
+    expect(xml).toContain('<AoRoughMetal Path="Textures/Packed_texorm1_AoRoughMetal.ktx2"')
+    const paths = bundle.binaries.map((b) => b.path)
+    expect(paths).toContain('Textures/Bumps_texn1_Normal.ktx2')
+    expect(paths).toContain('Textures/Packed_texorm1_AoRoughMetal.ktx2')
+    // Copied bytes, not regenerated.
+    const normalBin = bundle.binaries.find((b) => b.path.endsWith('Bumps_texn1_Normal.ktx2'))!
+    expect([...normalBin.data]).toEqual([1, 1, 1, 1])
+    // The shared material still interns once for both meshes.
+    expect(xml.match(/<PbrMaterial /g)?.length).toBe(1)
   })
 })
 

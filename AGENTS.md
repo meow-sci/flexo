@@ -277,33 +277,36 @@ Key modules:
 - `src/state/assetDb.ts` — IndexedDB blob store (binaries are too big for the
   localStorage `ProjectSnapshot`; only lightweight descriptors persist there).
 
-### v1 scope (deliberate limitations)
+### Current scope
 
-- **Diffuse + emissive glow (user-authored).** Normal / AoRoughMetal are still synthetic
-  (shared 1×1 flat-normal + neutral-ORM, only to satisfy KSA's null-check-free renderer — no
-  detail). **Glow IS shipped:** per-mesh `EmissiveConfig` (whole / painted-canvas) baked as a
-  composited diffuse + white `<Emissive>` mask (KSA glow is WHITE × mask × 1.25; the color lives in
-  the diffuse — there's no per-material emissive color). The kitten **visor** also gets a `surface`
-  mode (`glass` translucent+tint / `glow` opaque / `glassGlow` layered two-SubPart): KSA's glass
-  shader ignores emissive (glass can't glow) and derives only ~10% of its color from the diffuse, so
-  the tint is a solid diffuse and reads subtle in-game. See `plans/FEATURE_EMISSIVES_PLAN.md` +
-  `docs/custom-assets.md`. (`src/ktx/glowComposite.ts`, `modExport.expandGlassGlow`, `$simulateGlass`.)
-- **One texture per whole mesh** (the primitive's default UVs); no per-face/multi-
-  material texturing.
-- **Uncompressed `R8G8B8A8` + Zstd** KTX2, NOT block-compressed. KSA's own atlases
-  are raw `BC7_UNORM`/`BC5`/`BC4` + Zstd; we don't byte-match them because there's
-  no turnkey in-browser BC7 encoder. Uncompressed RGBA8 is the most compatible
-  format and loads through three's `KTX2Loader` for live preview. Larger VRAM use.
+- **Full PBR materials (user-authored).** A reusable `CustomMaterial` (base color as a
+  picked color or an image; metalness/roughness as sliders or grayscale maps; optional
+  AO map, pre-packed ORM, normal map + strength) is assigned per mesh and exported as a
+  complete `<PbrMaterial>` — uniform values become deduped 1×1 solid texels (KSA's
+  material schema is textures-only; ORM channels are **R=AO G=rough B=metal**), and
+  identical channel sets share ONE `<PbrMaterial>` across SubParts (Core's own pack
+  pattern). Normal maps are uploaded in the standard glTF convention and X-flipped at
+  encode (KSA negates X and derives TBN from screen-space derivatives — exported GLBs
+  need no TANGENT attribute). KTX2 containers are ALWAYS `R8G8B8A8_UNORM` + linear
+  DFD with sRGB **bytes** for color content — an `_SRGB` vkFormat double-gamma-decodes
+  in-game (hardware view + the shader's own `gammaToLinear`). See
+  `plans/CUSTOM_TEXTURES_PLAN.md` + `docs/custom-assets.md`.
+- **Glow (emissive)** stays per-mesh: `EmissiveConfig` (whole / painted-canvas) baked as
+  a composited diffuse + white `<Emissive>` mask (KSA glow is WHITE × mask × 1.25; the
+  color lives in the diffuse — there's no per-material emissive color). The kitten
+  **visor** `surface` mode (`glass` / `glow` / `glassGlow` layered two-SubPart) is
+  unchanged: KSA glass ignores emissive and derives only ~10% of its color from the
+  diffuse. (`src/ktx/glowComposite.ts`, `modExport.expandGlassGlow`, `$simulateGlass`.)
 
-### To reach full feature parity later
+### Deliberate limitations / later
 
-- **Remaining PBR channels:** add upload slots + encoder formats for Normal (BC5; needs
-  the `normalMapPatch` decode + GLB tangents via `computeTangents`) and AoRoughMetal
-  (packed AO/Rough/Metal); emit the matching `<Normal>/<AoRoughMetal>` lines in
-  `assetsXmlSerializer`. (Emissive is shipped — see custom-assets.md.)
-- **BC7/BC5/BC4 block compression** to byte-match KSA + cut VRAM: swap ONLY
-  `src/ktx/encodeKtx2.ts` to a BC7 WASM encoder (e.g. a `bc7enc`/libktx WASM
-  build). Container assembly (`ktx-parse`), mips, and Zstd stay.
-- **Per-face / multi-material** texturing via geometry groups + multiple materials.
-- **Confirm what KSA accepts in-game** — the chosen KTX2 flavor's real acceptance
-  test is dropping an exported `flexo-parts/` into KSA's mods folder.
+- **Per-face textures export lossily** (KSA gets one material per SubPart — the first
+  textured face wins; the UI warns). Faithful export = one SubPart per face group.
+- **ThinFilm heat effects** (5th PbrMaterial slot: R=re-entry iridescence, G=heat glow,
+  B=frost) need `<PartModelDynamic>` + runtime temperature — invisible on a bench part;
+  see the plan's Phase 3.
+- **Uncompressed RGBA8 + Zstd**, not block-compressed (larger VRAM). Preferred future
+  route: UASTC + a `.toml` sidecar (`scblockformatfamily` → BC7) — KSA transcodes UASTC
+  natively but defaults the target to uncompressed Rgba32 without the sidecar.
+- **In-game re-verification pending** for the UNORM re-tag (gray-swatch A/B), the shared
+  material path (red metallic button on two meshes), and normal-map orientation.

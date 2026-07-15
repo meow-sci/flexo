@@ -1,5 +1,13 @@
 # Custom Textures → Custom Materials — Analysis & Implementation Plan
 
+> **STATUS (2026-07-15, branch `feature/textures`): Phases 0–2 IMPLEMENTED.**
+> Phase 0 (UNORM/linear re-tag + editor fidelity), Phase 1 (CustomMaterial model,
+> store, codec, editor rendering, solid-channel export, shared PbrMaterials, UI)
+> and Phase 2 (channel-aware uploads, normal maps w/ X-flip+strength, grayscale +
+> packed ORM, advanced-maps UI) are committed. Phase 3 items remain open, and the
+> in-game checks in §6 (gray-swatch A/B, red button, normal orientation) are still
+> pending — see docs/custom-assets.md "Pending in-game verification".
+
 **Goal:** a flexo user can author *every* surface property KSA's part renderer supports — base
 color, metalness, roughness, ambient occlusion, normal detail, glow — either by uploading images
 per channel or by picking simple uniform values (a color picker, two sliders), and export it all

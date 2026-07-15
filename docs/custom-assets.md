@@ -1,10 +1,13 @@
-# Custom assets — user textures + primitive meshes
+# Custom assets — user textures, materials + primitive meshes
 
-Lets a flexo user, entirely in-browser: upload an image → encode it to a KTX2
-texture, create a parametric primitive mesh (box / cylinder / sphere / plane),
+Lets a flexo user, entirely in-browser: upload images → encode them to KTX2
+textures (per PBR channel), author reusable **materials** (base color as a picked
+color or an image, metalness/roughness as sliders or grayscale maps, normal maps,
+packed ORM), create a parametric primitive mesh (box / cylinder / sphere / plane),
 texture it, place/transform it like any built-in SubPart, and export the whole
-thing as a KSA part mod that **loads and renders in the game** (validated in-game
-2026-05-30).
+thing as a KSA part mod that **loads and renders in the game** (diffuse pipeline
+validated in-game 2026-05-30; the full-material pipeline + UNORM re-tag await an
+in-game pass — see "Pending in-game verification" below).
 
 The design rationale and format research live in
 [plans/FLEXO_CUSTOM_ASSETS.md](../plans/FLEXO_CUSTOM_ASSETS.md). This doc is the
@@ -130,9 +133,17 @@ of *placements* are all unchanged. A custom mesh is just a synthetic
 
 ### UI (`src/ui/`)
 
-- `CustomTextureDialog.tsx` — image upload (picker / drag-drop / paste) + encode.
-- `CreateMeshDialog.tsx` — primitive picker, params, texture assignment, preview.
-- `CustomAssetsPanel.tsx` — list/rename/delete textures + meshes.
+- `CustomTextureDialog.tsx` — image upload (picker / drag-drop / paste) + a channel
+  picker ("This image is…" — base color / normal / grayscale / packed ORM) + encode.
+- `MaterialDialog.tsx` — create/edit a `CustomMaterial`: presets, base color
+  (picker ⟷ image), metal/rough sliders, advanced maps (normal + strength, AO,
+  packed ORM, grayscale rough/metal), and a live PBR preview sphere under the same
+  RoomEnvironment/tonemapping as the viewport.
+- `CreateMeshDialog.tsx` — primitive picker, params, material + texture assignment.
+- `ManageTexturesPanel.tsx` — per-mesh: material assignment (+ edit / new), glow /
+  visor surface, per-face texture + UV controls (warns when faces mix textures).
+- `CustomAssetsModal.tsx` — textures (channel select, delete), materials (swatch,
+  usage counts, edit, delete), meshes (add instance / manage / delete).
 - entry points wired from the **Add** menu (`AddButton.tsx`).
 
 ## On-disk format decisions
@@ -172,21 +183,42 @@ flexo's own `MeshAtlasCache.getObjectByName` resolves on re-import. Guarded by
 > mesh name from it) — that did not work, hence the JSON post-process. The plan doc's
 > original write-up of this is superseded by the code + this section.
 
-### Synthetic Normal + AoRoughMetal channels — REQUIRED, even for diffuse-only
+### Custom materials (`CustomMaterial`) + solid texels — every PbrMaterial carries D+N+ORM
 
-KSA's thumbnail renderer (`ThumbnailRenderResources.AddDraw`) dereferences
-`Material.NormalReference` **and** `Material.PBRMap` with **no null check**. A
-`<PbrMaterial>` with only `<Diffuse>` throws a `NullReferenceException` at startup.
+KSA's `<PbrMaterial>` has **exactly five texture slots and zero scalar params**
+(`PbrMaterialReference.cs`: Diffuse / Normal / AoRoughMetal / Emissive / ThinFilm), and
+BOTH the thumbnail renderer (`ThumbnailRenderResources.AddDraw`) **and** every placed
+part (`PartModel.WriteInstancesToGpu`) dereference Diffuse/Normal/PBRMap with **no null
+check** — a partial material crashes the game. Two consequences baked into the export:
 
-So even though v1 is diffuse-only, every emitted `PbrMaterial` carries all three
-channels. `buildCustomBundle` synthesizes two shared **1×1 solid-color** linear KTX2
-textures (`makeSolid1x1Ktx2`) whenever any subpart is textured:
+- **Uniform values become 1×1 solid KTX2s** (deduped per bundle by `BundleTextures` in
+  `modExport.ts`): `<base>_FlatNormal.ktx2` (128,128,255 ≈ +Z), `<base>_NeutralORM.ktx2`
+  (AO 255 / rough 128 / metal 0 — the no-material legacy), `<base>_ORM_<hex>.ktx2` (a
+  material's uniform rough/metal; **R=AO G=rough B=metal**, the glTF convention KSA's
+  `MeshIndirect.frag` documents), and `<base>_BaseColor_<hex>.ktx2` (picked colors).
+- **Materials are shared, Core-style**: identical resolved channel sets intern into ONE
+  `<PbrMaterial>` referenced by many SubParts (`flexo_<MatName>_<hex>_Material` when a
+  mesh renders its `CustomMaterial` verbatim, `<subPartId>_Material` otherwise). KSA
+  dedupes material ids the same way it dedupes PartModels, so ids stay project-unique.
 
-- `<base>_FlatNormal.ktx2` — RGB (128,128,255) ≈ +Z in tangent space (flat normal).
-- `<base>_NeutralORM.ktx2` — (AO=255, Rough=128, Metal=0), a neutral dielectric.
+The user-facing model (`CustomMaterial` in `ksa/types.ts`): `baseColor`
+(color|image), `metalness`/`roughness` (value|grayscale map), optional `occlusion`
+map, optional pre-packed `ormPacked` (overrides the three), optional `normal`
+(+`strength`, baked into RG on export — KSA's `<Normal Power>` is dead for parts).
+Grayscale maps pack into one ORM image at export (`packOrmLevel`); a face's own
+texture still overrides the material's base color on that face. Emissive/glow stays
+per-mesh (below). Editor rendering resolves the same way (`resolveMaterialChannels`
+in customAssetStore → `applyMaterialChannels` in MaterialFactory), so the viewport
+IS the export preview.
 
-`serializeAssets` emits `<Normal>` / `<AoRoughMetal>` lines pointing at these when
-`normalPath` / `aoRoughMetalPath` are present in the `AssetsPlan`.
+### Normal maps — KSA convention, no tangents needed
+
+KSA decodes part normals as RG-only, **X-flipped**, Z-reconstructed, with the TBN
+derived from screen-space derivatives (`SharedFrag.glsl getNormalFromMap_ShaderX` +
+`cotangent_frame`) — so exported GLBs need **no TANGENT attribute**. Uploads use the
+standard OpenGL/glTF convention; `channelTransforms.ts` flips X at encode (strength ≠ 1
+regenerates from source with RG scaled about the midpoint), and the editor previews
+through the same KSA-replica shader patch, so editor == game by construction.
 
 ## Export layout (mirrors KSA Core)
 
@@ -285,30 +317,39 @@ Kitten `.ktx2` can't be CPU-decoded (they load only via the GPU `KTX2Loader`), s
 kitten submesh uses a **solid generated diffuse** — it drops the kitten texture under the glow/tint
 (fine: KSA glass mutes detail anyway, and "whole glow" means the mesh glows a color).
 
-## v1 scope — deliberate limitations
+## Current scope — remaining limitations
 
-- **Diffuse + emissive glow.** Normal / AoRoughMetal are still not user-authored (we emit
-  synthetic flat-normal + neutral-ORM only to satisfy KSA's renderer, above). **Emissive (glow) IS
-  shipped** — see "Emissive (glow) + visor surface" above. KSA `PbrMaterial` supports all four
-  channels and built-in parts use all four.
-- **One texture per whole mesh** via the primitive's default UVs — no per-face /
-  multi-material texturing.
-- **Uncompressed RGBA8 + Zstd**, not BC7/BC5/BC4 — larger VRAM, no byte-match to KSA.
-- **Four primitives only** (box / cylinder / sphere / plane) — no imported/custom
-  meshes, no CSG.
+Full PBR materials ARE shipped (base color / metal / rough / AO / packed ORM / normal
++ per-mesh glow) — see `plans/CUSTOM_TEXTURES_PLAN.md` for the analysis behind the
+design. Still deliberately out of scope:
+
+- **Per-face textures export lossily.** The editor renders a different texture per
+  face, but KSA gets ONE material per SubPart — export uses the first textured face
+  (the ManageTexturesPanel warns when faces mix textures). Faithful export would need
+  one SubPart per face group.
+- **ThinFilm (heat effects)** — the fifth PbrMaterial slot. It's a packed mask
+  (R = re-entry iridescence, G = heat glow, B = frost) driven by runtime temperature
+  and plumbed only through `<PartModelDynamic>`; invisible on a bench part. See the
+  plan's Phase 3.
+- **Uncompressed RGBA8 + Zstd**, not block-compressed — larger VRAM than BC7. The
+  preferred future route is UASTC + a `.toml` sidecar (`scblockformatfamily` → BC7);
+  KSA transcodes UASTC natively (its own `_TFI_Heat.ktx2` files prove the path), but
+  the no-sidecar default target is uncompressed Rgba32, so the sidecar is required
+  for the VRAM win.
+- **Four primitives only** (box / cylinder / sphere / plane) — no imported meshes, no CSG.
 - **Mesh GLBs not persisted** — regenerated from params each session (fine; cheap).
 - **No per-project namespacing in IndexedDB** — all assets share one store (OK for
   the current single-active-project model).
+- **Emissive masks export full-res** — KSA's own are 128–512 px BC4; shrinking painted
+  masks on export is an easy byte win.
 
-### Reaching full parity later
+## Pending in-game verification
 
-- **Remaining PBR channels:** add upload slots + encoder formats for Normal (BC5; needs the
-  `normalMapPatch` decode + GLB tangents via `computeTangents`) and AoRoughMetal (packed); emit the
-  matching lines in `assetsXmlSerializer`. (Emissive is shipped — see above; the synthetic Normal/ORM
-  scaffolding already proves the multi-channel `<PbrMaterial>` path.)
-- **BC7/BC5/BC4 block compression** to byte-match KSA + cut VRAM: swap **only**
-  `src/ktx/encodeKtx2.ts` to a BC7 WASM encoder (e.g. a `bc7enc`/libktx WASM build).
-  Container assembly (`ktx-parse`), mips, and Zstd stay.
-- **Per-face / multi-material** texturing via geometry groups + multiple materials.
-- **Basis-flavored KTX2** is an option only after confirming KSA's loader accepts it
-  (it uses raw-BCn+Zstd for its own assets; basis acceptance is unverified).
+- **UNORM/linear re-tag (double-gamma fix):** export a gray-swatch strip
+  (0/25/50/75/100% + a mid-tone color) next to a Core part and compare mid-tone
+  brightness. Revert point: the vkFormat mapping in `encodeKtx2.ts`.
+- **Red metallic button:** primitive + material (base color red, metal 1, rough
+  ~0.15) → shiny red metal in-game; two meshes sharing the material must both render
+  (shared `<PbrMaterial>`).
+- **Normal-map orientation:** an asymmetric bump texture (arrow/dome) — confirm the
+  X-flip convention reads correctly in-game.

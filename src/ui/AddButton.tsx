@@ -18,6 +18,7 @@ import { SubPartPopup } from './SubPartBrowser'
 import { PartPopup } from './PartBrowser'
 import { CustomTextureDialog } from './CustomTextureDialog'
 import { CreateMeshDialog } from './CreateMeshDialog'
+import { MaterialDialog } from './MaterialDialog'
 
 export function AddButton() {
   const part = useStore($part)
@@ -27,6 +28,7 @@ export function AddButton() {
   const [subPartOpen, setSubPartOpen] = useState(false)
   const [partOpen, setPartOpen] = useState(false)
   const [textureOpen, setTextureOpen] = useState(false)
+  const [materialOpen, setMaterialOpen] = useState(false)
   const [meshOpen, setMeshOpen] = useState(false)
 
   return (
@@ -43,6 +45,7 @@ export function AddButton() {
               else if (key === 'connector') addConnector()
               else if (key === 'part') setPartOpen(true)
               else if (key === 'texture') setTextureOpen(true)
+              else if (key === 'material') setMaterialOpen(true)
               else if (key === 'mesh') setMeshOpen(true)
               else if (key === 'engine') enterEngineMode()
             }}
@@ -53,6 +56,7 @@ export function AddButton() {
             <MenuItem id="part">Import built-in Part</MenuItem>
             <MenuItem id="engine">Define Engine…</MenuItem>
             <MenuItem id="texture">Upload texture…</MenuItem>
+            <MenuItem id="material">Create material…</MenuItem>
             <MenuItem id="mesh">Create mesh…</MenuItem>
             {customMeshes.length > 0 && (
               <SubmenuTrigger>
@@ -100,6 +104,7 @@ export function AddButton() {
       <SubPartPopup open={subPartOpen} onOpenChange={setSubPartOpen} />
       <PartPopup open={partOpen} onOpenChange={setPartOpen} />
       {textureOpen && <CustomTextureDialog onClose={() => setTextureOpen(false)} />}
+      {materialOpen && <MaterialDialog onClose={() => setMaterialOpen(false)} />}
       {meshOpen && <CreateMeshDialog onClose={() => setMeshOpen(false)} />}
     </>
   )

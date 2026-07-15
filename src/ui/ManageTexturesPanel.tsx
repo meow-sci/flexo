@@ -14,10 +14,12 @@ import {
   useIsPhone,
 } from './kit'
 import { ColorAlphaField } from './ColorAlphaField'
+import { MaterialDialog } from './MaterialDialog'
 import { $part } from '../state/editorStore'
 import {
   $managingMeshId,
   setManagingMeshId,
+  setMeshMaterial,
   updateMeshFaceConfig,
   setMeshGlow,
   setMeshGlass,
@@ -157,6 +159,9 @@ function PanelContent({
 
   return (
     <div className="flex flex-col gap-3">
+      {/* Material — primitive meshes only (kitten submeshes carry their own KSA PBR set). */}
+      {mesh.primitive && <MaterialSection mesh={mesh} />}
+
       <GlowSection mesh={mesh} />
 
       {/* Per-face texture controls — primitive meshes only. */}
@@ -248,6 +253,74 @@ function PanelContent({
         Close
       </Button>
     </div>
+  )
+}
+
+/**
+ * Whole-mesh material assignment: pick one of the project's CustomMaterials (color /
+ * metal / rough), edit it in place, or create a new one auto-assigned to this mesh.
+ * A face's own texture still overrides the material's base color on that face —
+ * flagged below when the mesh mixes several face textures (export uses the first).
+ */
+function MaterialSection({ mesh }: { mesh: CustomMesh }) {
+  const part = useStore($part)
+  const [dialog, setDialog] = useState<'closed' | 'edit' | 'create'>('closed')
+  const material = mesh.materialId
+    ? part.customMaterials.find((m) => m.id === mesh.materialId)
+    : undefined
+
+  const distinctFaceTextures = new Set(
+    Object.values(mesh.faceTextures)
+      .map((f) => f?.textureId)
+      .filter(Boolean),
+  )
+
+  return (
+    <SectionShell title="Material">
+      <Select
+        aria-label="Material"
+        value={mesh.materialId ?? ''}
+        onChange={(k) => void setMeshMaterial(mesh.id, k ? String(k) : undefined)}
+      >
+        <ListBoxItem id="">(none)</ListBoxItem>
+        {part.customMaterials.map((m) => (
+          <ListBoxItem key={m.id} id={m.id}>
+            {m.name}
+          </ListBoxItem>
+        ))}
+      </Select>
+      <div className="flex items-center gap-2">
+        {material && (
+          <Button size="sm" variant="secondary" onPress={() => setDialog('edit')}>
+            Edit…
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" onPress={() => setDialog('create')}>
+          New material…
+        </Button>
+        {material && material.metalness.kind === 'value' && material.roughness.kind === 'value' && (
+          <span className="ml-auto font-mono text-[11px] text-fg-subtle">
+            M {Math.round(material.metalness.value * 100)}% · R{' '}
+            {Math.round(material.roughness.value * 100)}%
+          </span>
+        )}
+      </div>
+      {distinctFaceTextures.size > 1 && (
+        <p className="text-[11px] leading-snug text-warning">
+          Faces use {distinctFaceTextures.size} different textures — the KSA export applies the
+          first face’s texture to the whole mesh.
+        </p>
+      )}
+      {dialog === 'edit' && material && (
+        <MaterialDialog materialId={material.id} onClose={() => setDialog('closed')} />
+      )}
+      {dialog === 'create' && (
+        <MaterialDialog
+          onClose={() => setDialog('closed')}
+          onCreated={(mat) => void setMeshMaterial(mesh.id, mat.id)}
+        />
+      )}
+    </SectionShell>
   )
 }
 

@@ -32,10 +32,12 @@ interface CreateMeshDialogProps {
 export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
   const part = useStore($part)
   const textures = part.customTextures
+  const materials = part.customMaterials
   const [kind, setKind] = useState<PrimitiveKind>('box')
   const [params, setParams] = useState<Record<string, number>>({ ...DEFAULT_PRIMITIVE_PARAMS.box })
   const [name, setName] = useState('Panel')
   const [textureId, setTextureId] = useState<string>(() => textures[0]?.id ?? '')
+  const [materialId, setMaterialId] = useState<string>('')
   const [busy, setBusy] = useState(false)
 
   const changeKind = (k: PrimitiveKind) => {
@@ -66,7 +68,12 @@ export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
   const submit = async () => {
     setBusy(true)
     try {
-      await addCustomMesh({ name, primitive: buildSpec(), textureId })
+      await addCustomMesh({
+        name,
+        primitive: buildSpec(),
+        textureId,
+        materialId: materialId || undefined,
+      })
       toast({ title: 'Mesh created', description: name, variant: 'success' })
       onClose()
     } catch (err) {
@@ -127,8 +134,23 @@ export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
 
           <TextField label="Name" value={name} onChange={setName} size="sm" />
 
+          {materials.length > 0 && (
+            <Select label="Material" value={materialId} onChange={(k) => setMaterialId(String(k))}>
+              <ListBoxItem id="">(none)</ListBoxItem>
+              {materials.map((m) => (
+                <ListBoxItem key={m.id} id={m.id}>
+                  {m.name}
+                </ListBoxItem>
+              ))}
+            </Select>
+          )}
+
           {textures.length > 0 ? (
-            <Select label="Texture" value={textureId} onChange={(k) => setTextureId(String(k))}>
+            <Select
+              label="Texture (image)"
+              value={textureId}
+              onChange={(k) => setTextureId(String(k))}
+            >
               <ListBoxItem id="">(none)</ListBoxItem>
               {textures.map((t) => (
                 <ListBoxItem key={t.id} id={t.id}>
@@ -137,8 +159,17 @@ export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
               ))}
             </Select>
           ) : (
-            <p className="text-xs text-fg-muted">
-              No textures yet — upload one to texture this mesh.
+            materials.length === 0 && (
+              <p className="text-xs text-fg-muted">
+                No materials or textures yet — create a material (color + metal/rough) or upload an
+                image, or just create the bare mesh.
+              </p>
+            )
+          )}
+          {materials.length > 0 && textures.length > 0 && (
+            <p className="text-[11px] leading-snug text-fg-subtle">
+              An image covers the faces; the material supplies color (where there’s no image),
+              metalness and roughness.
             </p>
           )}
 

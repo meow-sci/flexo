@@ -226,8 +226,10 @@ verbatim from KSA's decompiled engine math (`src/ksa/enginePhysics.ts`). Engines
 geometry (they decorate placements with GameData). The full-sidebar designer is
 `$inspectorMode === 'engine'` (`EnginePanel`/`EngineToolbar` + `EngineSections.tsx`, ephemeral
 state in `engineStore.ts`); the same editors also appear in the Part/SubPart Data modals.
-Custom propellants (`<CombustionProcess>`) are clone-and-remix. Electric engines and true
-SRBs are impossible data-only (no game code path) — SRBs get an explicitly-limited preset.
+Custom propellants (top-level `<FixedReaction>`; a combustor references `<Reaction Id>` with a
+`<MixtureRatio>` for Core's mixture reactions) are clone-and-remix. Electric engines remain
+impossible data-only; true SRBs still lack solid-motor hardware — the SRB preset burns Core's
+APCP solid reaction but stays explicitly limited (flat thrust, shutdown-able).
 See [docs/engines.md](docs/engines.md), [analysis/KSA_ENGINE_DETAILS.md](analysis/KSA_ENGINE_DETAILS.md).
 
 ## kittens (EVA character visual aides)

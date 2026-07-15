@@ -4,7 +4,7 @@
 > scale/placement aides (never exported) — a faithful three.js re-implementation of KSA's
 > Character rendering. The contract is a long list of asset/material/bone names + render quirks.
 
-**Baseline:** re-vetted against KSA build **2026.7.3.4826** (decomp @ 4826 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.5.4892** (decomp @ 4826 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — `CharacterAssets.xml` is byte-identical (md5 match),
 `KittenRenderable.cs` is identical, and the eye/glass shader merge (rev 4745) is a verbatim
 refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code change needed.
@@ -67,6 +67,19 @@ refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code
 5. Don't `computeVertexNormals()` (faceted helmet dome from seam-split verts).
 6. Attachment correction is required & order-sensitive.
 7. `Characters/` atlases stay raw **BC7** (for verbatim mod bundle-export); without BPTC/RGTC they fall back to flat.
+
+## What changed in 4892
+
+**INTACT — no flexo change.** `CharacterAssets.xml`, the Characters gltf/textures,
+`KittenRenderable.cs`, `CharacterRenderResources.cs`, and `ModelTranslucent.frag` are all
+byte-identical 4826→4892; material names, socket bones, `ATTACHMENT_CORRECTION`, and the
+`DefaultORM` redirect stand. The `AnimatedRenderable`/`Cat*Anim` diffs are a runtime
+pose-composition refactor (blink/expression/ear mixing moved to a pre-`UpdateLocalTransforms`
+TRS pass via the new `IAnimProcessor.UpdateLocalPose`; skinning stays `invBind × world`) —
+invisible to flexo's static bind-pose bake. Rev 4869 gave EVA kittens a spawn-clearance push
+and `KittenBackPackPart` a 0.35 m sphere `<Collider>` (new root-level `<PartGameData>` in
+`PartGameData.xml` — survives flexo round-trip via the unmodeled-child passthrough; the backpack
+tank also picked up `<RoleAffinity>Thruster`, owned by gamedata-modules).
 
 ## What changed in 4826
 

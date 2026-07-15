@@ -4,7 +4,7 @@
 > lets the user edit them, and re-exports animation GLBs that KSA's `KeyframeAnimationModule`
 > loads. The load-bearing integration is the **animation-GLB node-structure convention**.
 
-**Baseline:** re-vetted against KSA build **2026.7.3.4826** (decomp @ 4826 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.5.4892** (decomp @ 4826 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — the keyframe runtime, GLB-loader contract, GameData schema,
 and bone/transform math are all unchanged. The only delta is 3 new content clips (ServiceModule
 B/C/D) that flexo's existing importer already handles.
@@ -74,6 +74,18 @@ B/C/D) that flexo's existing importer already handles.
 3. **Importer interpolation coverage is partial**: flexo handles only FLOAT accessors + LINEAR/STEP. KSA _does_ support **CubicSpline** → a CubicSpline-authored clip would be mis-decoded (silent corruption, not an error). Pre-existing; unverifiable from snapshots (GLBs not shipped).
 4. Only `animations[0]` is read on both sides.
 5. Wrong rest anchor re-applies the deploy (the reason `restKeyframeId` exists).
+
+## What changed in 4892
+
+**Nothing on the keyframe path — INTACT.** `KeyframeAnimationData.cs` and
+`KeyframeAnimationModule.cs` are byte-identical 4826→4892. The rev-4875 sampling refactor
+("sampled in local space then transformed into TRS", the rotation-only `SampleRotations`
+sampler, the blink-sampling gate) lives entirely in the **character/skeletal** pipeline
+(`AnimatedRenderable`/`SkeletalAnimClip`/`IAnimProcessor.UpdateLocalPose`) that part keyframe
+clips never touch; `AnimExtensions.SearchKeyAtTime` went linear→binary search
+(behavior-identical) and `TransformTRS.CreateMatrix` was rewritten algebraically-identically
+(same S·R·T row-vector composition). No flexo change; rest-anchor, GLB node contract, and
+LINEAR-only export all re-verified.
 
 ## What changed in 4826
 

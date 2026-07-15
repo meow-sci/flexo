@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Assets>
 
     <SubPartGameData Id="KittenBackPackSubPart">
@@ -14,6 +14,7 @@
                 <Material Id="Aluminum.2014(s)" />
                 <OuterRadius M="0.276" />
                 <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
             </SphericalTank>
         </Tank>
 
@@ -27,7 +28,9 @@
             <Nozzle Id="TranslateRight2" />
         </Rocket>
         <Combustor Id="TranslateRightCombustor">
-            <Combustion Id="MMH_NTO_1.6" />
+            <Reaction Id="MMH_NTO">
+                <MixtureRatio>1.6</MixtureRatio>
+            </Reaction>
             <MaxPressure Bar="7" />
             <ThermalEfficiency Value="0.75" />
             <MinimumPulseTime Seconds="0.008" />
@@ -69,7 +72,9 @@
             <Nozzle Id="TranslateLeft2" />
         </Rocket>
         <Combustor Id="TranslateLeftCombustor">
-            <Combustion Id="MMH_NTO_1.6" />
+            <Reaction Id="MMH_NTO">
+                <MixtureRatio>1.6</MixtureRatio>
+            </Reaction>
             <MaxPressure Bar="7" />
             <ThermalEfficiency Value="0.75" />
             <MinimumPulseTime Seconds="0.008" />
@@ -113,7 +118,9 @@
             <Nozzle Id="TranslateDown4" />
         </Rocket>
         <Combustor Id="TranslateDownCombustor">
-            <Combustion Id="MMH_NTO_1.6" />
+            <Reaction Id="MMH_NTO">
+                <MixtureRatio>1.6</MixtureRatio>
+            </Reaction>
             <MaxPressure Bar="7" />
             <ThermalEfficiency Value="0.75" />
             <MinimumPulseTime Seconds="0.008" />
@@ -183,7 +190,9 @@
             <Nozzle Id="TranslateUp4" />
         </Rocket>
         <Combustor Id="TranslateUpCombustor">
-            <Combustion Id="MMH_NTO_1.6" />
+            <Reaction Id="MMH_NTO">
+                <MixtureRatio>1.6</MixtureRatio>
+            </Reaction>
             <MaxPressure Bar="7" />
             <ThermalEfficiency Value="0.75" />
             <MinimumPulseTime Seconds="0.008" />
@@ -253,7 +262,9 @@
             <Nozzle Id="TranslateBackward4" />
         </Rocket>
         <Combustor Id="TranslateBackwardCombustor">
-            <Combustion Id="MMH_NTO_1.6" />
+            <Reaction Id="MMH_NTO">
+                <MixtureRatio>1.6</MixtureRatio>
+            </Reaction>
             <MaxPressure Bar="7" />
             <ThermalEfficiency Value="0.75" />
             <MinimumPulseTime Seconds="0.008" />
@@ -323,7 +334,9 @@
             <Nozzle Id="TranslateForward4" />
         </Rocket>
         <Combustor Id="TranslateForwardCombustor">
-            <Combustion Id="MMH_NTO_1.6" />
+            <Reaction Id="MMH_NTO">
+                <MixtureRatio>1.6</MixtureRatio>
+            </Reaction>
             <MaxPressure Bar="7" />
             <ThermalEfficiency Value="0.75" />
             <MinimumPulseTime Seconds="0.008" />
@@ -391,7 +404,9 @@
             <Nozzle Id="PitchDownRollLeftYawRight2" />
         </Rocket>
         <Combustor Id="PitchDownRollLeftYawRightCombustor">
-            <Combustion Id="MMH_NTO_1.6" />
+            <Reaction Id="MMH_NTO">
+                <MixtureRatio>1.6</MixtureRatio>
+            </Reaction>
             <MaxPressure Bar="7" />
             <ThermalEfficiency Value="0.75" />
             <MinimumPulseTime Seconds="0.008" />
@@ -432,7 +447,9 @@
             <Nozzle Id="PitchUpRollLeftYawLeft2" />
         </Rocket>
         <Combustor Id="PitchUpRollLeftYawLeftCombustor">
-            <Combustion Id="MMH_NTO_1.6" />
+            <Reaction Id="MMH_NTO">
+                <MixtureRatio>1.6</MixtureRatio>
+            </Reaction>
             <MaxPressure Bar="7" />
             <ThermalEfficiency Value="0.75" />
             <MinimumPulseTime Seconds="0.008" />
@@ -473,7 +490,9 @@
             <Nozzle Id="PitchDownRollRightYawLeft2" />
         </Rocket>
         <Combustor Id="PitchDownRollRightYawLeftCombustor">
-            <Combustion Id="MMH_NTO_1.6" />
+            <Reaction Id="MMH_NTO">
+                <MixtureRatio>1.6</MixtureRatio>
+            </Reaction>
             <MaxPressure Bar="7" />
             <ThermalEfficiency Value="0.75" />
             <MinimumPulseTime Seconds="0.008" />
@@ -514,7 +533,9 @@
             <Nozzle Id="PitchUpRollRightYawRight2" />
         </Rocket>
         <Combustor Id="PitchUpRollRightYawRightCombustor">
-            <Combustion Id="MMH_NTO_1.6" />
+            <Reaction Id="MMH_NTO">
+                <MixtureRatio>1.6</MixtureRatio>
+            </Reaction>
             <MaxPressure Bar="7" />
             <ThermalEfficiency Value="0.75" />
             <MinimumPulseTime Seconds="0.008" />
@@ -545,6 +566,20 @@
             <SoundEvent Action="On" SoundId="DefaultRcsThruster"/>
         </DeLavalNozzle>
     </SubPartGameData>
+
+    <PartGameData Id="KittenBackPackPart">
+        <!-- Without an explicit collider the kitten falls back to the default 2x2x2m bounding-box
+             collision shape, which dwarfs the actual kitten and starts intersecting the vehicle it
+             EVAs from. Sphere sized to cover the MMU pack (0.211 x 0.274 x 0.483 prism) and the
+             RCS nozzles (within ~0.31m of the origin). -->
+        <Collider Id="KittenBackPackCollider">
+            <Sphere Id="KittenBackPackSphereCollider">
+                <LocationAsmb X="0" Y="0" Z="0" />
+                <Collider2Asmb X="0" Y="0" Z="0" />
+                <Radius M="0.35" />
+            </Sphere>
+        </Collider>
+    </PartGameData>
 
     <!-- Standard Tanks -->
 
@@ -1095,7 +1130,7 @@
                 <Material Id="Aluminum.2014(s)" />
                 <OuterRadius M="0.5" />
                 <WallThickness Mm="4" />
-                <CombustionProcess Id="MMH_NTO_1.6" />
+                <RoleAffinity>Thruster</RoleAffinity>
             </SphericalTank>
         </Tank>
     </SubPartGameData>
@@ -1106,7 +1141,7 @@
                 <Material Id="Aluminum.2014(s)" />
                 <OuterRadius M="0.5" />
                 <WallThickness Mm="4" />
-                <CombustionProcess Id="MMH_NTO_1.6" />
+                <RoleAffinity>Thruster</RoleAffinity>
             </SphericalTank>
         </Tank>
     </SubPartGameData>
@@ -1117,107 +1152,10 @@
                 <Material Id="Aluminum.2014(s)" />
                 <OuterRadius M="0.25" />
                 <WallThickness Mm="4" />
-                <CombustionProcess Id="MMH_NTO_1.6" />
+                <RoleAffinity>Thruster</RoleAffinity>
             </SphericalTank>
         </Tank>
     </SubPartGameData>
-
-    <SubPartGameData Id="CorePropulsionA_Subpart_EngineALargeVacAssembly_Dev">
-        <Rocket Id="Engine">
-            <Core Id="ThrustChamber" />
-            <Nozzle Id="Nozzle" />
-        </Rocket>
-        <Combustor Id="ThrustChamber">
-            <Combustion Id="NepetalactoneActinidine_2" />
-            <MaxPressure Bar="75" />
-            <ThermalEfficiency Value="1" />
-            <MinimumThrottle Value="0.01" />
-        </Combustor>
-        <DeLavalNozzle Id="Nozzle">
-            <ExitDiameter M="6" />
-            <FxExitDiameter M="1.439" />
-            <AreaRatio Value="100" />
-            <FlowEfficiency Value="1" />
-            <ExpansionEfficiency Value="1" />
-            <ExhaustLocation X="-1.23" Y="0.0" Z="0.0" />
-            <ExhaustDirection X="-1" Y="0" Z="0" />
-            <VolumetricExhaust Id="EngineALargeUpperStage" />
-            <SoundEvent Action="On" SoundId="DefaultEngineSoundBehavior"/>
-        </DeLavalNozzle>
-    </SubPartGameData>
-
-    <PartGameData Id="CorePropulsionA_Prefab_EngineA1_Dev" DisplayName="LR91 Dev">
-        <EditorTag Value="Engines"/>
-        <Diameter M="1"/>
-        <RocketEngineController Id="LR91-AJ-3">
-            <RocketReference Id="Engine" SubPartId="CorePropulsionA_Subpart_EngineALargeVacAssembly_Dev" />
-            <RocketReference Id="GasGenerator" />
-        </RocketEngineController>
-        <Rocket Id="GasGenerator">
-            <Core Id="GasGeneratorChamber" />
-            <Nozzle Id="VernierNozzle" SubPartId="CorePropulsionA_Subpart_EngineAVernierNozzle" />
-            <Nozzle Id="VernierNozzle" SubPartId="CorePropulsionA_Subpart_EngineAVernierNozzle1" />
-            <Nozzle Id="VernierNozzle" SubPartId="CorePropulsionA_Subpart_EngineAVernierNozzle2" />
-            <Nozzle Id="VernierNozzle" SubPartId="CorePropulsionA_Subpart_EngineAVernierNozzle3" />
-        </Rocket>
-        <Combustor Id="GasGeneratorChamber">
-            <Combustion Id="NepetalactoneActinidine_2" />
-            <MaxPressure Bar="49" />
-            <ThermalEfficiency Value="0.95" />
-            <MinimumThrottle Value="0.1" />
-        </Combustor>
-        <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle">
-            <Gimbal>
-                <MaxAngleY Degrees="70" />
-            </Gimbal>
-        </SubPart>
-        <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle1">
-            <Gimbal>
-                <MaxAngleY Degrees="70" />
-            </Gimbal>
-        </SubPart>
-        <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle2">
-            <Gimbal>
-                <MaxAngleY Degrees="70" />
-            </Gimbal>
-        </SubPart>
-        <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle3">
-            <Gimbal>
-                <MaxAngleY Degrees="70" />
-            </Gimbal>
-        </SubPart>
-        <SubPart Id="CorePropulsionA_Subpart_EngineALargeVacAssembly_Dev">
-            <Gimbal>
-                <MaxAngleY Degrees="5" />
-                <MaxAngleZ Degrees="5" />
-                <ConstrainToCircle Value="false" />
-            </Gimbal>
-        </SubPart>
-        <SolidSphereMass>
-            <Mass Kg="100" />
-            <Radius M="0.25" />
-        </SolidSphereMass>
-
-        <Collider Id="Collider1">
-          <Cylinder Id="CylinderCollider1">
-            <LocationAsmb X="0.6" Y="0" Z="0" />
-            <Collider2Asmb X="0" Y="0" Z="1.57" />
-            <LengthY M="1.1728" />
-            <Radius M="0.5" />
-          </Cylinder>
-          <Sphere Id="SphereCollider1">
-            <LocationAsmb X="-0.6" Y="0" Z="0" />
-            <Collider2Asmb X="0" Y="0" Z="0" />
-            <Radius M="0.6" />
-          </Sphere>
-          <Cylinder Id="CylinderCollider2">
-            <LocationAsmb X="-1.5" Y="0" Z="0" />
-            <Collider2Asmb X="0" Y="0" Z="1.57" />
-            <LengthY M="0.1" />
-            <Radius M="0.75" />
-          </Cylinder>
-        </Collider>
-    </PartGameData>
 
     <!-- Capsules and Interstages -->
 
@@ -1229,138 +1167,4 @@
         <EVADoor />
     </SubPartGameData>
 
-    <!-- Mesh Definitions copied from CorePropulsionAAssets for dev engine -->
-    <Part Id="CorePropulsionA_Prefab_EngineA1_Dev">
-        <SubPart Id="CorePropulsionA_Subpart_EngineA2WBase1" InstanceOf="CorePropulsionA_Subpart_EngineA2WBase">
-            <Transform>
-                <Position X="0.94540"/>
-            </Transform>
-        </SubPart>
-        <SubPart Id="FlexiPipe_EndNode1" InstanceOf="FlexiPipe_EndNode">
-            <Transform>
-                <Position X="0.56782" Y="-0.31279" Z="-0.32211"/>
-            </Transform>
-        </SubPart>
-        <SubPart Id="FlexiPipe_StartNode1" InstanceOf="FlexiPipe_StartNode">
-            <Transform>
-                <Position X="0.46644" Y="-0.25902" Z="-0.27229"/>
-            </Transform>
-        </SubPart>
-        <SubPart Id="CorePropulsionA_Subpart_EngineAActuatorHousing1" InstanceOf="CorePropulsionA_Subpart_EngineAActuatorHousing">
-            <Transform>
-                <Position X="0.96436" Z="-0.47887"/>
-                <Rotation Y="0.52360"/>
-            </Transform>
-        </SubPart>
-        <SubPart Id="CorePropulsionA_Subpart_EngineAActuatorHousing2" InstanceOf="CorePropulsionA_Subpart_EngineAActuatorHousing">
-            <Transform>
-                <Position X="0.96436" Y="0.47887"/>
-                <Rotation X="1.57080" Z="0.52360"/>
-            </Transform>
-        </SubPart>
-        <SubPart Id="FlexiPipe_EndNode2" InstanceOf="FlexiPipe_EndNode">
-            <Transform>
-                <Position X="0.44568" Y="0.25717" Z="0.39743"/>
-                <Rotation X="-3.01069"/>
-            </Transform>
-        </SubPart>
-        <SubPart Id="FlexiPipe_StartNode2" InstanceOf="FlexiPipe_StartNode">
-            <Transform>
-                <Position X="0.43965" Y="0.23834" Z="0.30049"/>
-                <Rotation X="-3.01069"/>
-            </Transform>
-        </SubPart>
-        <SubPart Id="CorePropulsionA_Subpart_EngineAActuatorShaft1" InstanceOf="CorePropulsionA_Subpart_EngineAActuatorShaft">
-            <Transform>
-                <Position X="0.75207" Z="-0.35489"/>
-                <Rotation Y="0.52360"/>
-            </Transform>
-        </SubPart>
-        <SubPart Id="CorePropulsionA_Subpart_EngineAActuatorShaft2" InstanceOf="CorePropulsionA_Subpart_EngineAActuatorShaft">
-            <Transform>
-                <Position X="0.75207" Y="0.35489"/>
-                <Rotation X="1.57080" Z="0.52360"/>
-            </Transform>
-        </SubPart>
-        <Connector Id="_connector1">
-            <Transform>
-                <Position X="1.49620"/>
-                <Scale X="2.00000" Y="2.00000" Z="2.00000"/>
-            </Transform>
-        </Connector>
-        <SubPart Id="CorePropulsionA_Subpart_EngineALargeVacAssembly_Dev" InstanceOf="CorePropulsionA_Subpart_EngineALargeVacAssembly_Dev">
-            <Transform>
-                <Position X="-0.34420"/>
-            </Transform>
-            <Gimbal>
-                <Transform>
-                    <Position X="1.15747"/>
-                </Transform>
-            </Gimbal>
-        </SubPart>
-        <SubPart Id="CorePropulsionA_Subpart_EngineAVernierFrame1" InstanceOf="CorePropulsionA_Subpart_EngineAVernierFrame">
-            <Transform>
-                <Position X="0.60464"/>
-            </Transform>
-        </SubPart>
-        <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle" InstanceOf="CorePropulsionA_Subpart_EngineAVernierNozzle">
-            <Transform>
-                <Position X="0.10147" Y="-0.94371" Z="0.97302"/>
-                <Rotation X="0.85138" Y="0.34798" Z="0.37121"/>
-            </Transform>
-            <Gimbal>
-                <Transform>
-                    <Position X="0.12460" Y="0.00261" Z="-0.06448"/>
-                    <Rotation X="1.57080" Y="-0.50322"/>
-                </Transform>
-            </Gimbal>
-        </SubPart>
-        <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle1" InstanceOf="CorePropulsionA_Subpart_EngineAVernierNozzle">
-            <Transform>
-                <Position X="0.10147" Y="-0.97302" Z="-0.94371"/>
-                <Rotation X="2.29021" Y="-0.34798" Z="0.37121"/>
-            </Transform>
-            <Gimbal>
-                <Transform>
-                    <Position X="0.12460" Y="0.00261" Z="-0.06448"/>
-                    <Rotation X="1.57080" Y="-0.50322"/>
-                </Transform>
-            </Gimbal>
-        </SubPart>
-        <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle2" InstanceOf="CorePropulsionA_Subpart_EngineAVernierNozzle">
-            <Transform>
-                <Position X="0.10147" Y="0.94371" Z="-0.97302"/>
-                <Rotation X="-2.29021" Y="-0.34798" Z="-0.37121"/>
-            </Transform>
-            <Gimbal>
-                <Transform>
-                    <Position X="0.12460" Y="0.00261" Z="-0.06448"/>
-                    <Rotation X="1.57080" Y="-0.50322"/>
-                </Transform>
-            </Gimbal>
-        </SubPart>
-        <SubPart Id="CorePropulsionA_Subpart_EngineAVernierNozzle3" InstanceOf="CorePropulsionA_Subpart_EngineAVernierNozzle">
-            <Transform>
-                <Position X="0.10147" Y="0.97302" Z="0.94371"/>
-                <Rotation X="-0.85138" Y="0.34798" Z="-0.37121"/>
-            </Transform>
-            <Gimbal>
-                <Transform>
-                    <Position X="0.12460" Y="0.00261" Z="-0.06448"/>
-                    <Rotation X="1.57080" Y="-0.50322"/>
-                </Transform>
-            </Gimbal>
-        </SubPart>
-    </Part>
-
-    <SubPart Id="CorePropulsionA_Subpart_EngineALargeVacAssembly_Dev">
-        <PartModelDynamic Id="CorePropulsionA_Subpart_EngineALargeVacAssembly_Model">
-            <Mesh Id="CorePropulsionA_Subpart_EngineALargeVacAssembly"/>
-            <Material Id="CorePropulsionA_Material"/>
-        </PartModelDynamic>
-        <MeshView>
-            <Mesh Id="CorePropulsionA_Subpart_EngineALargeVacAssembly_VM"/>
-        </MeshView>
-    </SubPart>
-    
 </Assets>

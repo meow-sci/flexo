@@ -74,9 +74,10 @@ function sourcePart(): EditingPart {
     maxAngleZDeg: 3,
     constrainToCircle: false,
   })
-  p.customCombustionProcesses.push({
+  p.customReactions.push({
     id: 'MyKerolox_2.6',
     name: 'Custom Kerolox',
+    category: 'Bipropellant',
     reactants: [{ phaseId: 'Kerosene(l)', massShare: 1 }],
     lut: [{ lnPressure: 9.5, temperatureK: 3200, gamma: 1.22, molarMassGPerMol: 22.4 }],
   })
@@ -262,7 +263,7 @@ describe('mergeProjectImport into an empty project', () => {
     expect(part.gameData.decoupler?.connectorId).toBe(part.connectors[0].id)
     expect(part.subPartGameData).toHaveLength(1)
     // The custom propellant + engine controller/gimbal are carried in.
-    expect(part.customCombustionProcesses.map((c) => c.id)).toEqual(['MyKerolox_2.6'])
+    expect(part.customReactions.map((c) => c.id)).toEqual(['MyKerolox_2.6'])
     expect(part.gameData.rocketControllers).toHaveLength(1)
     expect(part.gameData.gimbals).toHaveLength(1)
   })
@@ -334,12 +335,14 @@ describe('parseProjectImport', () => {
     expect(result.ok).toBe(true)
   })
 
-  it('rejects empty, non-JSON, wrong-format, and future-version input', () => {
+  it('rejects empty, non-JSON, wrong-format, and wrong-version input', () => {
     expect(parseProjectImport('').ok).toBe(false)
     expect(parseProjectImport('not json').ok).toBe(false)
     expect(parseProjectImport('{}').ok).toBe(false) // no format marker
     expect(parseProjectImport(JSON.stringify({ f: 'something-else', v: 1 })).ok).toBe(false)
     expect(parseProjectImport(JSON.stringify({ f: PROJECT_EXPORT_FORMAT, v: 999 })).ok).toBe(false)
+    // v1 predates the 4892 reaction/tank key renames — rejected, never migrated.
+    expect(parseProjectImport(JSON.stringify({ f: PROJECT_EXPORT_FORMAT, v: 1 })).ok).toBe(false)
   })
 
   it('backfills every optional field from a bare-marker payload', () => {

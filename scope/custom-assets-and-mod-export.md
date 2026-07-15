@@ -6,7 +6,7 @@
 > alongside [docs/custom-assets.md](../docs/custom-assets.md), [docs/texturing.md](../docs/texturing.md),
 > [docs/asset-pipeline.md](../docs/asset-pipeline.md).
 
-**Baseline:** re-vetted against KSA build **2026.7.3.4826** (decomp @ 4826 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.5.4892** (decomp @ 4826 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — every schema/reference class and renderer quirk flexo's
 export depends on is byte-identical or behavior-preserving. No code change required. Two
 durable watch-items noted below.
@@ -53,6 +53,25 @@ durable watch-items noted below.
 8. **`PartModel Id` must be unique** (KSA dedupes PartModels by `Template.Id`); flexo uses `<subPartId>_Model`.
 9. **Glass: emissive ignored + ~10% diffuse tint.** `MeshGlassIndirect.frag` hard-codes opacity 0.75, `glassColor=mix(albedo,0.1,0.9)`. `$simulateGlass` mirrors this; glass can't glow, so the `glassGlow` layered two-SubPart export is required.
 10. **Glow = WHITE × mask × 1.25, added after lighting.** `glowComposite` bakes glow color into the diffuse and emits a white mask; `MeshIndirect.frag` does `gammaToLinear(vec3(sampledEmissive) * EMISSIVE_MULTIPLIER)`, `EMISSIVE_MULTIPLIER=1.25`.
+
+## What changed in 4892
+
+**INTACT — no flexo change on the mesh/texture/mod path.** `ThumbnailRenderResources.AddDraw`
+still has NO null guard (synthetic Normal + AoRoughMetal still required); `ENABLE_EMISSIVE` is
+still defined in both `PartModelRenderer.BuildPipelineModel` variants; `TextureReference.cs` /
+`PbrMaterialReference.cs` / `SubPartTemplate.cs` byte-identical; `mod.toml` schema (`name` +
+`assets`) unchanged (Core's own manifest content swapped `Combustion.xml`/`Substances.xml` for
+`Reactions.xml`/`Volatiles.xml`/`SolidPropellants.xml`/`Materials.xml`). The 4826 watch-item on
+`MeshReference` **closes benignly**: the new `[XmlIgnore] PrimitiveMaterialIds` /
+`MeshAtlasFileReference.MaterialCount` (multi-primitive GLBs are now first-class) are consumed
+ONLY by ground clutter (`ClutterEcotypeRenderData`, `GroundClutterLodReference` — which now
+throws when clutter material refs ≠ GLB material count, see
+[ground-clutter.md](ground-clutter.md)); the part path still reads `HostPrimitives[0]` and the
+mesh-name → SubPart-id contract (`_`-prefix skip included) is unchanged. One schema note for the
+engines area: `AssetBundle.cs` dropped `<CombustionProcess>` from the `<Assets>` polymorphic
+union in favor of `<MixtureReaction>`/`<FixedReaction>`/`<ThermalReaction>` — flexo's custom
+propellants now export as `<FixedReaction>`. (Doc nit fixed: `AddDraw`'s null-safe read list is
+`EmissiveMap?` only — the old `ThinFilmMap?` mention was stale.)
 
 ## What changed in 4826
 

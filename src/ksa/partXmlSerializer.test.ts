@@ -45,7 +45,7 @@ function editingPart(over: Partial<EditingPart>): EditingPart {
     customTextures: [],
     customMeshes: [],
     animations: [],
-    customCombustionProcesses: [],
+    customReactions: [],
     ...over,
   }
 }
@@ -462,7 +462,8 @@ describe('serializeGameData', () => {
           combustors: [
             {
               id: 'ThrustChamber',
-              combustionId: 'Hydrolox_5.5',
+              reactionId: 'Hydrolox',
+              mixtureRatio: 5.5,
               maxPressurePa: 4_900_000, // 49 bar
               thermalEfficiency: 1, // default → omitted
               minimumThrottle: 0.1, // non-default → emitted
@@ -506,7 +507,9 @@ describe('serializeGameData', () => {
     expect(child(rocket, 'Nozzle')!.getAttribute('Id')).toBe('Nozzle')
 
     const comb = child(spd, 'Combustor')!
-    expect(child(comb, 'Combustion')!.getAttribute('Id')).toBe('Hydrolox_5.5')
+    const reaction = child(comb, 'Reaction')!
+    expect(reaction.getAttribute('Id')).toBe('Hydrolox')
+    expect(child(reaction, 'MixtureRatio')!.textContent).toBe('5.5')
     expect(child(comb, 'MaxPressure')!.getAttribute('Bar')).toBe('49')
     expect(child(comb, 'ThermalEfficiency')).toBeNull() // default 1 omitted
     expect(child(comb, 'MinimumThrottle')!.getAttribute('Value')).toBe('0.1')

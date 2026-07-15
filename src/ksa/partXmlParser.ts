@@ -10,7 +10,7 @@ import type {
   Combustor,
   Connector,
   ConnectorFlag,
-  CustomCombustionProcess,
+  CustomReaction,
   DeLavalNozzle,
   EulerXYZ,
   Gimbal,
@@ -18,6 +18,7 @@ import type {
   LightType,
   PartGameData,
   RawXmlNode,
+  ReactionCategory,
   Rocket,
   RocketController,
   RocketControllerKind,
@@ -27,6 +28,7 @@ import type {
   SubPartIdRef,
   SubPartPlacement,
   Tank,
+  TankRoleAffinity,
   TankShape,
   Transform,
   Vec3,
@@ -145,8 +147,8 @@ export interface ParsedGameData {
   subPartGameData: SubPartGameData[]
   /** Parsed <KeyframeAnimationModule>s (refs in ORIGINAL instance-id space). */
   animationModules: CatalogAnimationModule[]
-  /** Top-level <CombustionProcess> custom propellants (siblings of <PartGameData>). */
-  customCombustionProcesses: CustomCombustionProcess[]
+  /** Top-level <FixedReaction> custom propellants (siblings of <PartGameData>). */
+  customReactions: CustomReaction[]
 }
 
 /** Parses the <KeyframeAnimationModule> children of a <PartGameData> element. */
@@ -267,9 +269,26 @@ function tankFromElement(el: Element, shape: TankShape): Tank {
     lengthM: readNum(directChildren(el, 'Length')[0], 'M') ?? 0,
     outerRadiusM: readNum(directChildren(el, 'OuterRadius')[0], 'M') ?? 0,
     wallThicknessMm: readNum(directChildren(el, 'WallThickness')[0], 'Mm') ?? 0,
-    // <CombustionProcess Id/> — the propellant the tank holds (KSA 2026.7); absent ⇒ null.
-    combustionProcessId: directChildren(el, 'CombustionProcess')[0]?.getAttribute('Id') ?? null,
+    // <RoleAffinity> — which consumer kind the tank feeds (KSA 2026.7.5); absent ⇒ Engine.
+    roleAffinity: readRoleAffinity(directChildren(el, 'RoleAffinity')[0]),
   }
+}
+
+/**
+ * Parses `<RoleAffinity>` text into the normalized {@link TankRoleAffinity} form.
+ * KSA's XmlSerializer writes the `ConsumerRole` [Flags] enum as space-separated
+ * tokens; absent (or unrecognized) ⇒ the schema default `Engine`.
+ */
+function readRoleAffinity(el: Element | undefined): TankRoleAffinity {
+  const raw = el?.textContent?.trim()
+  if (!raw) return 'Engine'
+  const tokens = new Set(raw.split(/[\s,]+/))
+  const engine = tokens.has('Engine')
+  const thruster = tokens.has('Thruster')
+  if (engine && thruster) return 'Engine Thruster'
+  if (thruster) return 'Thruster'
+  if (tokens.has('None')) return 'None'
+  return 'Engine'
 }
 
 /**
@@ -393,30 +412,49 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
     gameData: game,
     subPartGameData: [],
     animationModules: animationModulesFromGameData(gd),
-    customCombustionProcesses: [],
+    customReactions: [],
   }
 }
 
-/** Parses top-level `<CombustionProcess>` (custom propellants) from an Assets document root. */
-export function combustionProcessesFromRoot(root: Element): CustomCombustionProcess[] {
-  const out: CustomCombustionProcess[] = []
-  for (const proc of directChildren(root, 'CombustionProcess')) {
+const REACTION_CATEGORY_TOKENS: ReadonlySet<string> = new Set([
+  'Bipropellant',
+  'Hypergolic',
+  'Monopropellant',
+  'Solid',
+  'Thermal',
+])
+
+/**
+ * Parses top-level `<FixedReaction>` (custom propellants) from an Assets document
+ * root. flexo authors custom reactions exclusively in the fixed (1-D LUT) form —
+ * a `<MixtureReaction>`'s 2-D table is a generated artifact, not an editing surface
+ * — so top-level MixtureReaction/ThermalReaction elements are not imported.
+ */
+export function customReactionsFromRoot(root: Element): CustomReaction[] {
+  const out: CustomReaction[] = []
+  for (const proc of directChildren(root, 'FixedReaction')) {
     const id = proc.getAttribute('Id')
     if (!id) continue
     const name = directChildren(proc, 'Name')[0]?.getAttribute('Value')?.trim() || id
+    const rawCategory = proc.getAttribute('Category')
+    // KSA's FixedReaction category fallback is Monopropellant (ResolveCategory).
+    const category =
+      rawCategory && REACTION_CATEGORY_TOKENS.has(rawCategory)
+        ? (rawCategory as ReactionCategory)
+        : 'Monopropellant'
     const reactants = directChildren(proc, 'Reactant')
       .map((r) => ({
         phaseId: r.getAttribute('Id') ?? '',
         massShare: readNum(r, 'MassShare') ?? 0,
       }))
       .filter((r) => r.phaseId)
-    const lut = directChildren(proc, 'CombustionCondition').map((c) => ({
+    const lut = directChildren(proc, 'PressureCondition').map((c) => ({
       lnPressure: readNum(directChildren(c, 'LnPressure')[0], 'Value') ?? 0,
       temperatureK: readNum(directChildren(c, 'Temperature')[0], 'K') ?? 0,
       gamma: readNum(directChildren(c, 'Gamma')[0], 'Value') ?? 0,
       molarMassGPerMol: readNum(directChildren(c, 'MolarMass')[0], 'GPerMol') ?? 0,
     }))
-    out.push({ id, name, reactants, lut })
+    out.push({ id, name, category, reactants, lut })
   }
   return out
 }
@@ -499,7 +537,7 @@ export function gameDataFromAssets(
   if (!gd) return null
   const parsed = parseGameDataElement(gd)
   parsed.subPartGameData = subPartGameDataFromRoot(doc.documentElement as Element)
-  parsed.customCombustionProcesses = combustionProcessesFromRoot(doc.documentElement as Element)
+  parsed.customReactions = customReactionsFromRoot(doc.documentElement as Element)
   return parsed
 }
 
@@ -695,9 +733,15 @@ function refFromElement(el: Element | null | undefined): SubPartIdRef {
 
 /** Parses one `<Combustor>` element. Missing fields fall back to CombustorTemplate defaults. */
 function combustorFromElement(el: Element): Combustor {
+  const reactionEl = directChildren(el, 'Reaction')[0]
+  const ratioRaw = reactionEl
+    ? directChildren(reactionEl, 'MixtureRatio')[0]?.textContent?.trim()
+    : undefined
+  const ratio = ratioRaw ? Number.parseFloat(ratioRaw) : Number.NaN
   return {
     id: el.getAttribute('Id') ?? '',
-    combustionId: directChildren(el, 'Combustion')[0]?.getAttribute('Id') ?? '',
+    reactionId: reactionEl?.getAttribute('Id') ?? '',
+    mixtureRatio: Number.isFinite(ratio) ? ratio : null,
     maxPressurePa: readPressurePa(directChildren(el, 'MaxPressure')[0]) ?? 5_000_000,
     thermalEfficiency: readNum(directChildren(el, 'ThermalEfficiency')[0], 'Value') ?? 1,
     minimumThrottle: readNum(directChildren(el, 'MinimumThrottle')[0], 'Value') ?? 1,

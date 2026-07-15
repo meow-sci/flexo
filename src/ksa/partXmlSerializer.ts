@@ -4,7 +4,7 @@ import type {
   Combustor,
   Connector,
   ConnectorFlag,
-  CustomCombustionProcess,
+  CustomReaction,
   DeLavalNozzle,
   EditingPart,
   EulerXYZ,
@@ -221,10 +221,10 @@ export function serializeGameData(
 
   assets.appendChild(gd)
 
-  // User-authored propellants — top-level <CombustionProcess> siblings of <PartGameData>
-  // (KSA registers them by Id; a combustor's <Combustion Id> resolves to one).
-  for (const process of part.customCombustionProcesses) {
-    assets.appendChild(buildCombustionProcessElement(doc, process))
+  // User-authored propellants — top-level <FixedReaction> siblings of <PartGameData>
+  // (KSA registers them by Id; a combustor's <Reaction Id> resolves to one).
+  for (const reaction of part.customReactions) {
+    assets.appendChild(buildFixedReactionElement(doc, reaction))
   }
 
   for (const spd of part.subPartGameData) {
@@ -295,9 +295,11 @@ function buildTankElement(doc: XmlDocument, tank: Tank): XmlElement {
   }
   el.appendChild(elWithAttr(doc, 'OuterRadius', 'M', formatG6(tank.outerRadiusM)))
   el.appendChild(elWithAttr(doc, 'WallThickness', 'Mm', formatG6(tank.wallThicknessMm)))
-  // <CombustionProcess Id/> — the propellant the tank holds (KSA 2026.7); omitted when unset.
-  if (tank.combustionProcessId) {
-    el.appendChild(elWithAttr(doc, 'CombustionProcess', 'Id', tank.combustionProcessId))
+  // <RoleAffinity> — ConsumerRole flags text (KSA 2026.7.5); omitted at the Engine default.
+  if (tank.roleAffinity !== 'Engine') {
+    const affinity = doc.createElement('RoleAffinity')
+    affinity.appendChild(doc.createTextNode(tank.roleAffinity))
+    el.appendChild(affinity)
   }
   return el
 }
@@ -371,11 +373,20 @@ function buildEngineVec3(doc: XmlDocument, name: string, v: Vec3, def: Vec3): Xm
   return el
 }
 
-/** <Combustor Id><Combustion Id/><MaxPressure Bar/>… — omits efficiency/throttle at their defaults. */
+/** <Combustor Id><Reaction Id><MixtureRatio/></Reaction><MaxPressure Bar/>… — omits efficiency/throttle at their defaults. */
 function buildCombustorElement(doc: XmlDocument, c: Combustor): XmlElement {
   const el = doc.createElement('Combustor')
   el.setAttribute('Id', c.id)
-  el.appendChild(elWithAttr(doc, 'Combustion', 'Id', c.combustionId))
+  // <Reaction Id> with the O/F ratio as a text child — REQUIRED by KSA for
+  // MixtureReactions (CombustorTemplate.ResolveReaction throws without it),
+  // omitted for FixedReactions (custom propellants, monoprops, solids).
+  const reaction = elWithAttr(doc, 'Reaction', 'Id', c.reactionId)
+  if (c.mixtureRatio != null) {
+    const ratio = doc.createElement('MixtureRatio')
+    ratio.appendChild(doc.createTextNode(formatG6(c.mixtureRatio)))
+    reaction.appendChild(ratio)
+  }
+  el.appendChild(reaction)
   // Stored SI Pa, emitted as Bar (Pa / 1e5) to match Core's authoring style.
   el.appendChild(elWithAttr(doc, 'MaxPressure', 'Bar', formatG6(c.maxPressurePa / 1e5)))
   if (Math.abs(c.thermalEfficiency - 1) > EPSILON) {
@@ -489,24 +500,23 @@ function buildGimbalSubPartElement(doc: XmlDocument, g: Gimbal): XmlElement | nu
   return sub
 }
 
-/** <CombustionProcess Id><Name/><Reactant…/><CombustionCondition>…</CombustionProcess> (custom propellant). */
-function buildCombustionProcessElement(
-  doc: XmlDocument,
-  process: CustomCombustionProcess,
-): XmlElement {
-  const el = doc.createElement('CombustionProcess')
-  el.setAttribute('Id', process.id)
-  if (process.name.trim() && process.name !== process.id) {
-    el.appendChild(elWithAttr(doc, 'Name', 'Value', process.name))
+/** <FixedReaction Id Category><Name/><Reactant…/><PressureCondition>…</FixedReaction> (custom propellant). */
+function buildFixedReactionElement(doc: XmlDocument, reaction: CustomReaction): XmlElement {
+  const el = doc.createElement('FixedReaction')
+  el.setAttribute('Id', reaction.id)
+  // KSA's FixedReaction category fallback is Monopropellant — omit it at that default.
+  if (reaction.category !== 'Monopropellant') el.setAttribute('Category', reaction.category)
+  if (reaction.name.trim() && reaction.name !== reaction.id) {
+    el.appendChild(elWithAttr(doc, 'Name', 'Value', reaction.name))
   }
-  for (const r of process.reactants) {
+  for (const r of reaction.reactants) {
     const re = doc.createElement('Reactant')
     re.setAttribute('Id', r.phaseId)
     re.setAttribute('MassShare', formatG6(r.massShare))
     el.appendChild(re)
   }
-  for (const row of process.lut) {
-    const cond = doc.createElement('CombustionCondition')
+  for (const row of reaction.lut) {
+    const cond = doc.createElement('PressureCondition')
     cond.appendChild(elWithAttr(doc, 'LnPressure', 'Value', formatG6(row.lnPressure)))
     cond.appendChild(elWithAttr(doc, 'Temperature', 'K', formatG6(row.temperatureK)))
     cond.appendChild(elWithAttr(doc, 'Gamma', 'Value', formatG6(row.gamma)))

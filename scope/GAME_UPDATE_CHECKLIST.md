@@ -55,7 +55,7 @@ against the NEW code/XML. Highest-value checks, by area:
   emits every element the contract lists. Re-diff `CoreEditorTagsGameData.xml` vs
   `KNOWN_EDITOR_TAGS`.
 - **Engines** — these classes must stay **byte-identical** to keep the verbatim port valid:
-  `DeLavalNozzleConfig`, `CombustorConfig`, `GasProperties`, `CombustionTable`, `NozzlePerformance`,
+  `DeLavalNozzleConfig`, `CombustorConfig`, `GasProperties`, `FixedReactionTable`/`MixtureReactionTable`, `NozzlePerformance`,
   `RocketDesign`, `EngineDesigner`. Any real (non-decompiler) hunk in them is BREAKING — map it
   to the matching `enginePhysics.ts` function. Confirm the constants `9.80665`, `8.31446261815324`,
   `101325`.

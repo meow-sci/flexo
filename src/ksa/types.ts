@@ -238,14 +238,21 @@ export interface Tank {
   /** Wall thickness in millimeters. */
   wallThicknessMm: number
   /**
-   * Propellant the tank is pre-filled with, serialized as a nested
-   * `<CombustionProcess Id/>` (a `SubstanceLibrary` combustion-process reference,
-   * e.g. "MMH_NTO_1.6"). KSA 2026.7 added this to `AsmbTankTemplate` so hypergolic
-   * service-module tanks declare their contents. null ⇒ no <CombustionProcess>
-   * element. flexo does not (yet) edit it, but preserves it verbatim on round-trip.
+   * `<RoleAffinity>` — which consumer kind this tank prefers to feed (KSA
+   * 2026.7.5's replacement for the old pre-filled `<CombustionProcess Id/>`).
+   * Mirrors `AsmbTankTemplate.RoleAffinity` (`ConsumerRole` [Flags] enum): unless
+   * overridden by the player, tanks fill themselves with the most sensible
+   * propellant mixture for their affinity. Defaults to `Engine` (the element is
+   * omitted at the default); Core's RCS spheres declare `Thruster`.
    */
-  combustionProcessId: string | null
+  roleAffinity: TankRoleAffinity
 }
+
+/**
+ * KSA `ConsumerRole` [Flags] enum as its XmlSerializer text form (flags are
+ * space-separated). `Engine` is the schema default.
+ */
+export type TankRoleAffinity = 'None' | 'Engine' | 'Thruster' | 'Engine Thruster'
 
 /**
  * Battery storage (multiple allowed). Serialized as <Battery><MaximumCapacity J/>.
@@ -369,7 +376,7 @@ export interface EvaDoor {
 /**
  * ENGINES — a rocket engine is a small graph of cooperating GameData modules layered
  * onto a Part and its SubParts (see analysis/KSA_ENGINE_DETAILS.md):
- *  - {@link Combustor}    `<Combustor>`        the chamber: burns a combustion process → hot gas
+ *  - {@link Combustor}    `<Combustor>`        the chamber: burns a reaction → hot gas
  *  - {@link DeLavalNozzle} `<DeLavalNozzle>`    expands the gas → thrust; owns the plume/light/sound FX
  *  - {@link Rocket}       `<Rocket>`           binds one Core (combustor) to ≥1 Nozzle(s)
  *  - {@link RocketController} `<RocketEngineController>`/`<RocketThrusterController>` groups rockets,
@@ -381,20 +388,60 @@ export interface EvaDoor {
  * *instance ids*. Thrust/Isp are real De Laval physics — see src/ksa/enginePhysics.ts.
  */
 
-/** The KSA default combustion process — the most common Core propellant (LH2/LOX). */
-export const DEFAULT_COMBUSTION_ID = 'Hydrolox_5.5'
+/** The KSA default reaction — the most common Core propellant (LH2/LOX). */
+export const DEFAULT_REACTION_ID = 'Hydrolox'
+/** The O/F mixture ratio Core's Hydrolox engines run (also Hydrolox's `<DefaultMixtureRatio>`). */
+export const DEFAULT_MIXTURE_RATIO = 5.5
 
-/** The combustion processes shipped in Core (used as fallback suggestions when the live catalog is absent). */
-export const KNOWN_COMBUSTION_IDS: readonly string[] = [
-  'Hydrolox_5.5',
-  'Kerolox_2.4',
-  'MMH_NTO_1.6',
+/** KSA `ReactionCategory` (the `Category` attribute on every reaction element). */
+export type ReactionCategory =
+  | 'Bipropellant'
+  | 'Hypergolic'
+  | 'Monopropellant'
+  | 'Solid'
+  | 'Thermal'
+
+/** One entry of the static Core-reaction snapshot ({@link KNOWN_REACTIONS}). */
+export interface KnownReaction {
+  id: string
+  name: string
+  kind: 'Fixed' | 'Mixture'
+  category: ReactionCategory
+  /** `<DefaultMixtureRatio>` (mixtures only). */
+  defaultMixtureRatio?: number
+  /** The mixture LUT's O/F row range — KSA clamps a combustor's ratio into it. */
+  ratioMin?: number
+  ratioMax?: number
+}
+
+/**
+ * Static snapshot of the combustor-drivable reactions shipped in Core's
+ * `Reactions.xml` (build 2026.7.5.4892) — the fallback suggestions when the live
+ * catalog is absent. `ThermalReaction`s are excluded: they need a thermal core,
+ * which no part template provides yet (KSA's own designer refuses them).
+ */
+export const KNOWN_REACTIONS: readonly KnownReaction[] = [
+  // prettier-ignore
+  { id: 'Kerolox', name: 'Kerosene + Oxygen', kind: 'Mixture', category: 'Bipropellant', defaultMixtureRatio: 2.3, ratioMin: 0.3403148743618607, ratioMax: 68.06297487237215 },
+  // prettier-ignore
+  { id: 'Hydrolox', name: 'Hydrogen + Oxygen', kind: 'Mixture', category: 'Bipropellant', defaultMixtureRatio: 5.5, ratioMin: 0.7936682739051928, ratioMax: 158.73365478103852 },
+  // prettier-ignore
+  { id: 'Methalox', name: 'Methane + Oxygen', kind: 'Mixture', category: 'Bipropellant', defaultMixtureRatio: 3.6, ratioMin: 0.3989263492008084, ratioMax: 79.78526984016167 },
+  // prettier-ignore
+  { id: 'Ethalox', name: 'Ethanol + Oxygen', kind: 'Mixture', category: 'Bipropellant', defaultMixtureRatio: 1.6, ratioMin: 0.2083777961658784, ratioMax: 41.67555923317568 },
+  // prettier-ignore
+  { id: 'Ethanol_HTP', name: 'Ethanol + HTP', kind: 'Mixture', category: 'Bipropellant', defaultMixtureRatio: 4.5, ratioMin: 0.4922340181984312, ratioMax: 98.44680363968624 },
+  // prettier-ignore
+  { id: 'MMH_NTO', name: 'MMH + NTO', kind: 'Mixture', category: 'Hypergolic', defaultMixtureRatio: 1.65, ratioMin: 0.249640560569234, ratioMax: 49.92811211384679 },
+  { id: 'HTPDecomposition', name: 'HTP', kind: 'Fixed', category: 'Monopropellant' },
+  { id: 'HydrazineDecomposition', name: 'Hydrazine', kind: 'Fixed', category: 'Monopropellant' },
+  { id: 'APCP', name: 'APCP', kind: 'Fixed', category: 'Solid' },
+  { id: 'DoubleBase', name: 'Double-Base', kind: 'Fixed', category: 'Solid' },
 ]
 
-/** The 8 `<VolumetricExhaust>` plume templates shipped in Core (referenced by id; auto-scale to the nozzle). */
+/** The 7 `<VolumetricExhaust>` plume templates shipped in Core (referenced by id; auto-scale to the nozzle). */
 export const VOLUMETRIC_EXHAUST_IDS: readonly string[] = [
   'EngineALarge',
-  'EngineALargeUpperStage',
   'EngineAMed',
   'EngineACompact',
   'EngineAVernier',
@@ -431,15 +478,22 @@ export interface SubPartIdRef {
 }
 
 /**
- * A combustion chamber. Serialized as <Combustor>. References a {@link CombustionProcess}
- * by {@link combustionId}; the propellant chemistry + gas LUT come from that process.
+ * A combustion chamber. Serialized as <Combustor>. References a Reaction by
+ * {@link reactionId}; the propellant chemistry + gas LUT come from that reaction.
  * Defaults mirror CombustorTemplate.cs.
  */
 export interface Combustor {
   /** `<Combustor Id>`, targeted by a Rocket's `<Core Id>`, e.g. "ThrustChamber". */
   id: string
-  /** `<Combustion Id>` — a CombustionProcess id, e.g. "Hydrolox_5.5". */
-  combustionId: string
+  /** `<Reaction Id>` — a Reaction id, e.g. "Hydrolox" / "MMH_NTO" / a custom FixedReaction. */
+  reactionId: string
+  /**
+   * `<MixtureRatio>` child of `<Reaction>` — the O/F mass ratio fed to the chamber.
+   * REQUIRED by KSA when the reaction is a MixtureReaction (load throws without it);
+   * meaningless for FixedReactions. null ⇒ omitted. KSA clamps it into the reaction
+   * LUT's row range at resolve time (MixtureReaction.AtMixtureRatio).
+   */
+  mixtureRatio: number | null
   /** `<MaxPressure>` chamber pressure at full throttle. Stored SI (Pa); emitted as Bar. Default 5e6. */
   maxPressurePa: number
   /** `<ThermalEfficiency Value>` (0–1). Default 1. */
@@ -662,7 +716,7 @@ export function createTank(): Tank {
     lengthM: 2.0,
     outerRadiusM: 0.5,
     wallThicknessMm: 2.0,
-    combustionProcessId: null,
+    roleAffinity: 'Engine',
   }
 }
 
@@ -738,11 +792,12 @@ export function createSubPartGameData(subPartTemplateId: string): SubPartGameDat
   }
 }
 
-/** Default combustor: Hydrolox, 50 bar chamber, fully throttleable, no min-pulse. Mirrors CombustorTemplate. */
+/** Default combustor: Hydrolox at its default O/F, 50 bar chamber, fully throttleable, no min-pulse. Mirrors CombustorTemplate. */
 export function createCombustor(id: string): Combustor {
   return {
     id,
-    combustionId: DEFAULT_COMBUSTION_ID,
+    reactionId: DEFAULT_REACTION_ID,
+    mixtureRatio: DEFAULT_MIXTURE_RATIO,
     maxPressurePa: 5_000_000,
     thermalEfficiency: 1,
     minimumThrottle: 1,
@@ -801,8 +856,8 @@ export function createGimbal(subPartInstanceId: string): Gimbal {
   return { subPartInstanceId, maxAngleYDeg: 0, maxAngleZDeg: 0, constrainToCircle: true }
 }
 
-/** One reactant in a custom combustion process: a substance-phase id + its mixture mass share. */
-export interface CombustionReactantSpec {
+/** One reactant in a custom reaction: a substance-phase id + its mixture mass share. */
+export interface ReactionReactantSpec {
   /** Substance phase id, e.g. "H2(l)" / "O2(l)". */
   phaseId: string
   /** `<Reactant MassShare>` — the mixture-ratio numerator (normalized to fractions at load). */
@@ -810,11 +865,11 @@ export interface CombustionReactantSpec {
 }
 
 /**
- * One row of a custom combustion process's pressure-indexed gas table, in authored units
- * (the raw `<CombustionCondition>` form). The physics derives R from {@link molarMassGPerMol}
+ * One row of a custom reaction's pressure-indexed gas table, in authored units
+ * (the raw `<PressureCondition>` form). The physics derives R from {@link molarMassGPerMol}
  * and indexes rows by {@link lnPressure}; see src/ksa/enginePhysics.ts.
  */
-export interface CombustionLutRowSpec {
+export interface ReactionLutRowSpec {
   /** ln(chamber pressure / Pa). */
   lnPressure: number
   /** Flame temperature (K). */
@@ -826,29 +881,34 @@ export interface CombustionLutRowSpec {
 }
 
 /**
- * A USER-AUTHORED combustion process (propellant chemistry). Lets a designer control
- * fuel/oxidizer mixture beyond the shipped Core processes. Exported as a top-level
- * `<CombustionProcess>` in the GameData document and referenced by a combustor's
- * {@link Combustor.combustionId}. The gas {@link lut} is CEA-style pre-solved
- * thermodynamics — flexo's authoring is clone-and-remix (copy a shipped process, then
- * adjust the mixture / rows), NOT a from-scratch solver. Pure data: no binaries.
+ * A USER-AUTHORED reaction (propellant chemistry). Lets a designer control the
+ * mixture beyond the shipped Core reactions. Exported as a top-level
+ * `<FixedReaction>` in the GameData document and referenced by a combustor's
+ * {@link Combustor.reactionId} (fixed ⇒ no `<MixtureRatio>` needed). The gas
+ * {@link lut} is CEA-style pre-solved thermodynamics — flexo's authoring is
+ * clone-and-remix (copy a shipped reaction, then adjust the mixture / rows), NOT a
+ * from-scratch solver; cloning a MixtureReaction bakes it at one O/F ratio the way
+ * KSA itself does (MixtureReaction.AtMixtureRatio). Pure data: no binaries.
  */
-export interface CustomCombustionProcess {
-  /** Unique process id referenced by `<Combustion Id>`, e.g. "MyKerolox_2.6". */
+export interface CustomReaction {
+  /** Unique reaction id referenced by `<Reaction Id>`, e.g. "MyKerolox_2.6". */
   id: string
   /** Display name (`<Name Value>`), falling back to {@link id}. */
   name: string
+  /** `Category` attribute (grouping; KSA's FixedReaction fallback is Monopropellant). */
+  category: ReactionCategory
   /** Reactant mixture (≥1). */
-  reactants: CombustionReactantSpec[]
-  /** Pressure-indexed gas LUT (≥1 row). */
-  lut: CombustionLutRowSpec[]
+  reactants: ReactionReactantSpec[]
+  /** Pressure-indexed gas LUT (≥1 `<PressureCondition>` row). */
+  lut: ReactionLutRowSpec[]
 }
 
-/** A minimal valid custom combustion process (one reactant, one LUT row) — a blank to edit. */
-export function createCustomCombustionProcess(id: string, name: string): CustomCombustionProcess {
+/** A minimal valid custom reaction (one reactant, one LUT row) — a blank to edit. */
+export function createCustomReaction(id: string, name: string): CustomReaction {
   return {
     id,
     name: name.trim() || id,
+    category: 'Monopropellant',
     reactants: [{ phaseId: 'H2(l)', massShare: 1 }],
     lut: [
       { lnPressure: Math.log(5_000_000), temperatureK: 3000, gamma: 1.2, molarMassGPerMol: 14 },
@@ -1256,8 +1316,8 @@ export interface EditingPart {
   customMeshes: CustomMesh[]
   /** User-authored keyframe animations (KeyframeAnimationModule + Animations/*.glb). */
   animations: PartAnimation[]
-  /** User-authored combustion processes (custom propellants), exported as <CombustionProcess>. */
-  customCombustionProcesses: CustomCombustionProcess[]
+  /** User-authored reactions (custom propellants), exported as <FixedReaction>. */
+  customReactions: CustomReaction[]
 }
 
 export function createEmptyPart(): EditingPart {
@@ -1273,6 +1333,6 @@ export function createEmptyPart(): EditingPart {
     customTextures: [],
     customMeshes: [],
     animations: [],
-    customCombustionProcesses: [],
+    customReactions: [],
   }
 }

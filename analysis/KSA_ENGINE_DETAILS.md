@@ -1,5 +1,12 @@
 # KSA Engine System — Deep Technical Analysis
 
+> **⚠ Superseded in part by KSA 2026.7.5.4892 (rev 4884 "Reactions" refactor).** This document
+> describes the pre-4892 combustion model: `Combustion.xml` / `<CombustionProcess>` /
+> `<Combustor><Combustion Id>` are now `Reactions.xml` / `<FixedReaction>`+`<MixtureReaction>` /
+> `<Combustor><Reaction Id>` (+ required `<MixtureRatio>` for mixtures), and solid-propellant
+> FixedReactions (APCP) exist. The nozzle/combustor math and all other findings still hold.
+> Current contract: [scope/engines.md](../scope/engines.md).
+
 **Purpose:** A complete, source-verified reference for how rocket engines work in KSA (Kitten Space Agency), what XML it takes to define a brand-new engine that reuses existing meshes, and where the gaps are for electric engines and SRBs. This is the factual substrate for the flexo "Engine Designer" feature (see `plans/KSA_ENGINE_DESIGNER_PLAN.md`).
 
 **Sources (authoritative):**

@@ -5,7 +5,8 @@
  * react, no three, no DOM — so it runs identically in the browser and in vitest.
  *
  * Source of every formula (decomp `KSA/`):
- *  - CombustionTable.cs        — pressure→{γ,R,T} lookup (binary search + lerp in ln P)
+ *  - FixedReactionTable.cs     — pressure→{γ,R,T} lookup (binary search + lerp in ln P)
+ *  - MixtureReactionTable.cs   — O/F-ratio × pressure 2-D LUT; SliceAt bakes a 1-D slice
  *  - GasProperties.cs          — c*, critical pressure ratio, isochoric/isothermal/isentropic
  *  - CombustorConfig.cs        — chamber pressure = throttle·MaxPressure, isochoric exit
  *  - DeLavalNozzleConfig.cs    — mass flow, exit Mach, flow separation, exhaust velocity
@@ -52,9 +53,20 @@ export interface CombustionLutRow {
   specificGasConstant: number
 }
 
-/** A combustion process's gas LUT (≥1 row, ascending lnPressure). See CombustionTable.cs. */
+/** A reaction's 1-D gas LUT (≥1 row, ascending lnPressure). See FixedReactionTable.cs. */
 export interface CombustionLut {
   rows: CombustionLutRow[]
+}
+
+/**
+ * A MixtureReaction's 2-D gas LUT (MixtureReactionTable.cs): one 1-D slice per
+ * O/F mass-ratio row, all sharing the same lnPressure column axis (KSA rejects
+ * non-rectangular tables at load). `ratios` is ascending and index-parallel with
+ * `slices`.
+ */
+export interface MixtureLut {
+  ratios: number[]
+  slices: CombustionLut[]
 }
 
 /** Resolved combustor state at a given throttle: gas props + chamber + post-thermal-efficiency exit. */
@@ -90,13 +102,13 @@ export interface RocketPerformanceResult {
 }
 
 // ---------------------------------------------------------------------------
-// CombustionTable.cs — pressure → gas LUT lookup (binary search + lerp in ln P)
+// FixedReactionTable.cs — pressure → gas LUT lookup (binary search + lerp in ln P)
 // ---------------------------------------------------------------------------
 
 /**
  * .NET `Array.BinarySearch` semantics: returns the index of an exact match, else
  * the bitwise complement (`~`) of the index of the first element greater than the
- * value (i.e. the insertion point). Mirrors the search CombustionTable.Lookup uses.
+ * value (i.e. the insertion point). Mirrors the search FixedReactionTable uses.
  */
 function binarySearchAscending(values: readonly number[], target: number): number {
   let lo = 0
@@ -119,7 +131,8 @@ function lerp(a: number, b: number, t: number): number {
 /**
  * Looks up gas properties + conditions at a chamber pressure, interpolating in
  * ln(pressure). Below the lowest / above the highest tabulated pressure it clamps to
- * the end row's gas properties but keeps the queried pressure (CombustionTable.cs:15-66).
+ * the end row's gas properties but keeps the queried pressure (FixedReactionTable.Lookup —
+ * behavior-identical to the pre-4892 CombustionTable.Lookup this was ported from).
  */
 export function lutLookup(
   lut: CombustionLut,
@@ -170,6 +183,51 @@ export function lutLookup(
     },
     conditions: { pressure, temperature: lerp(a.temperature, b.temperature, t) },
   }
+}
+
+/**
+ * `FixedReactionTable.FindSegment`: locates the interpolation segment of `value`
+ * on an ascending axis — (i, i, 0) on an exact hit, end-clamped otherwise, with
+ * the interpolant clamped to [0, 1].
+ */
+function findSegment(
+  axis: readonly number[],
+  value: number,
+): { lower: number; upper: number; interp: number } {
+  const idx = binarySearchAscending(axis, value)
+  if (idx >= 0) return { lower: idx, upper: idx, interp: 0 }
+  const upper = Math.min(Math.max(~idx, 0), axis.length - 1)
+  const lower = Math.max(upper - 1, 0)
+  if (lower === upper) return { lower, upper, interp: 0 }
+  const interp = Math.min(1, Math.max(0, (value - axis[lower]) / (axis[upper] - axis[lower])))
+  return { lower, upper, interp }
+}
+
+/**
+ * Bakes a MixtureReaction's 2-D LUT down to the 1-D gas LUT at one O/F mass
+ * ratio, reproducing `MixtureReaction.AtMixtureRatio` → `MixtureReactionTable.SliceAt`:
+ * the ratio is clamped into the row range, then temperature / γ / R are lerped
+ * between the two neighbouring ratio rows per pressure column. The result feeds
+ * {@link lutLookup} / {@link predictPerformance} exactly like a FixedReaction's LUT
+ * (which is precisely what KSA's combustor does at load).
+ */
+export function sliceLutAtMixtureRatio(mix: MixtureLut, mixtureRatio: number): CombustionLut {
+  const ratios = mix.ratios
+  const ratio = Math.min(Math.max(mixtureRatio, ratios[0]), ratios[ratios.length - 1])
+  const { lower, upper, interp } = findSegment(ratios, ratio)
+  const a = mix.slices[lower].rows
+  const b = mix.slices[upper].rows
+  const rows: CombustionLutRow[] = a.map((rowA, i) => {
+    const rowB = b[i]
+    return {
+      lnPressure: rowA.lnPressure,
+      pressure: rowA.pressure,
+      temperature: lerp(rowA.temperature, rowB.temperature, interp),
+      gamma: lerp(rowA.gamma, rowB.gamma, interp),
+      specificGasConstant: lerp(rowA.specificGasConstant, rowB.specificGasConstant, interp),
+    }
+  })
+  return { rows }
 }
 
 // ---------------------------------------------------------------------------

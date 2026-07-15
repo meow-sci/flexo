@@ -122,7 +122,8 @@ function richPart(): EditingPart {
   })
   p.gameData.combustors.push({
     id: 'GasGeneratorChamber',
-    combustionId: 'Hydrolox_5.5',
+    reactionId: 'Hydrolox',
+    mixtureRatio: 5.5,
     maxPressurePa: 4900000,
     thermalEfficiency: 0.95,
     minimumThrottle: 1,
@@ -142,7 +143,7 @@ function richPart(): EditingPart {
         lengthM: 2,
         outerRadiusM: 0.5,
         wallThicknessMm: 2,
-        combustionProcessId: null,
+        roleAffinity: 'Engine',
       },
       {
         shape: 'Spherical',
@@ -150,7 +151,7 @@ function richPart(): EditingPart {
         lengthM: 0,
         outerRadiusM: 1.25,
         wallThicknessMm: 3,
-        combustionProcessId: 'MMH_NTO_1.6',
+        roleAffinity: 'Thruster',
       },
     ],
     solarPanels: [{ outputWatts: 30, transform: identityTransform() }],
@@ -180,7 +181,8 @@ function richPart(): EditingPart {
     combustors: [
       {
         id: 'ThrustChamber',
-        combustionId: 'Hydrolox_5.5',
+        reactionId: 'Hydrolox',
+        mixtureRatio: 5.5,
         maxPressurePa: 4900000,
         thermalEfficiency: 1,
         minimumThrottle: 0.1,
@@ -269,9 +271,10 @@ function richPart(): EditingPart {
   })
 
   // A custom propellant (numbers pre-rounded to ≤6 decimals so encode is lossless).
-  p.customCombustionProcesses.push({
+  p.customReactions.push({
     id: 'MyKerolox_2.6',
     name: 'Custom Kerolox',
+    category: 'Bipropellant',
     reactants: [
       { phaseId: 'Kerosene(l)', massShare: 1 },
       { phaseId: 'O2(l)', massShare: 2.6 },

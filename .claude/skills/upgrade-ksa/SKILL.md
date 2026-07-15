@@ -23,6 +23,9 @@ The authoritative catalog of the flexo↔KSA break-surface already lives in the 
 catalog: it abstracts the two game snapshots as inputs and gives you the consolidated surface-area
 matrix and step order so a review can be done end-to-end.
 
+You can also reference the decompiled game sources under the included ksa-game-assembles repository
+that is included in this session
+
 ---
 
 ## 0. Inputs — REQUIRED, never hard-coded

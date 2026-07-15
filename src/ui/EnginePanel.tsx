@@ -19,8 +19,9 @@ import {
   setActiveEngineTemplate,
   setEngineExhaustGizmo,
 } from '../state/engineStore'
-import { $allCombustionIndex, ensureCombustionLoaded } from '../state/combustionStore'
+import { $allReactionIndex, ensureReactionsLoaded } from '../state/reactionStore'
 import { predictPerformance, type EnginePerformance } from '../ksa/enginePhysics'
+import { resolveReactionLut } from '../ksa/reactionCatalog'
 import type { Combustor, DeLavalNozzle, SubPartGameData } from '../ksa/types'
 
 /** Short, human label for a SubPart template id (its last underscore segment). */
@@ -44,7 +45,7 @@ export function EnginePanel() {
   const activeSpd = useStore($activeEngineData)
 
   useEffect(() => {
-    void ensureCombustionLoaded()
+    void ensureReactionsLoaded()
   }, [])
 
   // Placements whose template isn't an engine yet — candidates for "New engine".
@@ -113,9 +114,10 @@ export function EnginePanel() {
               </Select>
             </Field>
             <p className="text-[11px] leading-snug text-fg-subtle">
-              SRB = a non-throttleable engine + a sealed propellant tank. KSA has no solid-motor
-              code, so it can't reproduce a real SRB: thrust is flat (no burn-time curve), it stays
-              shutdown-able, and propellant drains like a liquid.
+              SRB = a non-throttleable engine burning Core's APCP solid reaction + a sealed
+              propellant tank. KSA still has no solid-motor hardware, so it can't reproduce a real
+              SRB: thrust is flat (no burn-time curve), it stays shutdown-able, and propellant
+              drains like a liquid.
             </p>
           </>
         ) : part.placements.length === 0 ? (
@@ -138,10 +140,7 @@ export function EnginePanel() {
         </p>
       )}
 
-      <DisclosureSection
-        title="Custom propellants"
-        badge={part.customCombustionProcesses.length || ''}
-      >
+      <DisclosureSection title="Custom propellants" badge={part.customReactions.length || ''}>
         <CustomPropellantsSection part={part} />
       </DisclosureSection>
     </div>
@@ -207,8 +206,10 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: s
 
 /**
  * Live thrust/Isp readout for the active engine's primary combustor + nozzle, computed
- * in-browser by the ported KSA physics. Requires the combustion catalog (Combustion.xml)
+ * in-browser by the ported KSA physics. Requires the reaction catalog (Reactions.xml)
  * — absent it shows a hint, since the engine still authors/exports fine without a preview.
+ * A MixtureReaction additionally needs the combustor's O/F mixture ratio set (KSA itself
+ * refuses to load a combustor without one).
  */
 function PerformanceReadout({
   combustor,
@@ -217,20 +218,30 @@ function PerformanceReadout({
   combustor: Combustor
   nozzle: DeLavalNozzle
 }) {
-  const index = useStore($allCombustionIndex)
-  const process = index.get(combustor.combustionId)
+  const index = useStore($allReactionIndex)
+  const reaction = index.get(combustor.reactionId)
 
-  if (!process) {
+  if (!reaction) {
     return (
       <div className="rounded-md border border-border bg-panel-sunken p-2 text-xs text-fg-subtle">
-        Live performance needs the combustion catalog (Combustion.xml). Pick a known propellant, or
+        Live performance needs the reaction catalog (Reactions.xml). Pick a known propellant, or
         it's unavailable in this build — the engine still exports correctly.
       </div>
     )
   }
 
+  const lut = resolveReactionLut(reaction, combustor.mixtureRatio)
+  if (!lut) {
+    return (
+      <div className="rounded-md border border-border bg-panel-sunken p-2 text-xs text-fg-subtle">
+        {reaction.name} is a mixture reaction — set the combustor's O/F mixture ratio to preview
+        performance (KSA requires it to load the engine).
+      </div>
+    )
+  }
+
   const perf: EnginePerformance = predictPerformance({
-    lut: process.lut,
+    lut,
     maxPressurePa: combustor.maxPressurePa,
     exitDiameterM: nozzle.exitDiameterM,
     areaRatio: nozzle.areaRatio,
@@ -243,7 +254,7 @@ function PerformanceReadout({
 
   return (
     <div className="flex flex-col gap-1 rounded-md border border-border bg-panel-sunken p-2">
-      <SectionTitle>Performance — {process.name}</SectionTitle>
+      <SectionTitle>Performance — {reaction.name}</SectionTitle>
       <Metric label="Thrust (vacuum)" value={kN(perf.thrustVacN)} />
       <Metric label="Thrust (sea level)" value={kN(perf.thrustSLN)} />
       <Metric label="Isp (vacuum)" value={s(perf.ispVac)} />

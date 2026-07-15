@@ -1,5 +1,12 @@
 # Flexo Engine Designer — Implementation Plan
 
+> **⚠ Superseded in part by KSA 2026.7.5.4892 (rev 4884 "Reactions" refactor).** This document
+> describes the pre-4892 combustion model: `Combustion.xml` / `<CombustionProcess>` /
+> `<Combustor><Combustion Id>` are now `Reactions.xml` / `<FixedReaction>`+`<MixtureReaction>` /
+> `<Combustor><Reaction Id>` (+ required `<MixtureRatio>` for mixtures), and solid-propellant
+> FixedReactions (APCP) exist. The nozzle/combustor math and all other findings still hold.
+> Current contract: [scope/engines.md](../scope/engines.md).
+
 **Companion analysis:** `analysis/KSA_ENGINE_DETAILS.md` (read it first — every schema/formula/default referenced here is verified there).
 
 **Goal:** Let a flexo user design a complete, in-game-functional KSA rocket engine — choosing propellant/mixture, thrust/Isp via real nozzle physics, gimbal, and exhaust plume — and export it as valid KSA part GameData, reusing existing SubPart meshes.

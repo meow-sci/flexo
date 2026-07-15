@@ -5,7 +5,7 @@
 > other feature hangs off. Read alongside [docs/xml-io.md](../docs/xml-io.md) and
 > [docs/subpart-catalog.md](../docs/subpart-catalog.md) (the flexo-internal view).
 
-**Baseline:** re-vetted against KSA build **2026.7.3.4826** (decomp @ 4826 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.5.4892** (decomp @ 4892 + shipped Core XML).
 **Baseline status:** ✅ **CURRENT** — `<Diameter>` part-size + `<Control>` command marker modeled
 (and as of 4826 `<Diameter>` is **repeatable** — the extras round-trip via `extraDiametersM`, see
 [What changed in 4826](#what-changed-in-4826)); `KNOWN_EDITOR_TAGS` refreshed from the registry
@@ -73,7 +73,7 @@ The parser reads a **fixed allow-list** into typed objects; the serializer **reb
 
 Consequences / what's STILL drop-on-round-trip (passthrough is scoped to GameData containers):
 
-- The geometry `<Part>` (placements/connectors), `<SubPart>` **templates** (mesh/material/atlas), and **top-level** `<Assets>` children other than `<PartGameData>`/`<SubPartGameData>`/`<CombustionProcess>` are NOT passthrough — a new unmodeled element there still vanishes.
+- The geometry `<Part>` (placements/connectors), `<SubPart>` **templates** (mesh/material/atlas), and **top-level** `<Assets>` children other than `<PartGameData>`/`<SubPartGameData>`/`<FixedReaction>` are NOT passthrough — a new unmodeled element there still vanishes.
 - Within `<PartGameData>`, a `<SubPart>` child is "modeled" (gimbal overlay), so a `<SubPart>` carrying only non-gimbal unmodeled data isn't preserved. Mixed text+element content isn't preserved (game-data XML has none).
 - So each game update must still re-check this scope for added schema **outside** the GameData child/attr surface; inside it, additions now round-trip harmlessly until explicitly modeled.
 
@@ -82,6 +82,26 @@ Consequences / what's STILL drop-on-round-trip (passthrough is scoped to GameDat
 - Connector `<Flags>` live on `<PartGameData>`, **not** on the geometry `<Part>` — without the GameData merge, `ToSurface`/etc. are lost.
 - A `<Part>` with no matching `<PartGameData>` has no tags/modules → invisible in the part picker.
 - `DockingPort` parses only the current child-element form (`<ConnectorId Value>`, `<LatchingKineticEnergy J>`, `<PushoffImpulse Ns>`) — no legacy fallback; see [gamedata-modules.md](gamedata-modules.md).
+
+## What changed in 4892
+
+- ✅ **`PartTemplate.cs` / `SubPartTemplate.cs` geometry schema: NO drift.** The only
+  `PartTemplate` change is the removal of the dead part-level `Tank` field (never modeled by
+  flexo — see [gamedata-modules.md](gamedata-modules.md#what-changed-in-4892)) plus tooltip
+  refactors (`DrawCombustionProcessTooltip` → `DrawReactionTooltip` + a new consumer-role
+  tooltip). `EditorTagDefinition.cs` and `CoreEditorTagsGameData.xml` unchanged — the
+  `EDITOR_TAG_DEFS` snapshot stays valid.
+- 🟡 **Modeled-child schema drift inside GameData — combustor + tank** (the engines and
+  gamedata-modules areas own the fixes): `<Combustor><Combustion Id>` → `<Reaction Id>` +
+  `<MixtureRatio>`, tank `<CombustionProcess>` → `<RoleAffinity>`, and top-level custom
+  propellants `<CombustionProcess>` → `<FixedReaction>`.
+- ✅ **Content churn absorbed by the fixture re-sync:** `PartGameData.xml` lost its UTF-8 BOM,
+  gained the `KittenBackPackPart` `<PartGameData>` (a lone `<Collider>` — survives via the gap-6
+  passthrough), and LOST the LR91 Dev engine (`CorePropulsionA_Prefab_EngineA1_Dev` `<PartGameData>`
+  - `<Part>` + its subpart). Vendored fixtures re-synced @ 4892 (`bun scripts/sync-test-fixtures.ts`);
+    the drift test in `partCatalog.test.ts` is green again.
+- ✅ **Duplicate-Id SubPartGameData merge, `<Diameter>` repeatable, `<Control>` marker: intact**
+  (re-verified against the 4892 fixture round-trip tests).
 
 ## What changed in 4826
 

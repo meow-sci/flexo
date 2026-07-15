@@ -179,7 +179,7 @@ describe('parseGameDataFile + mergeGameData', () => {
         </PartGameData>
         <SubPartGameData Id="ThrustChamberMesh">
           <Rocket Id="Engine"><Core Id="ThrustChamber" /><Nozzle Id="Nozzle" /></Rocket>
-          <Combustor Id="ThrustChamber"><Combustion Id="Hydrolox_5.5" /><MaxPressure Bar="49" /></Combustor>
+          <Combustor Id="ThrustChamber"><Reaction Id="Hydrolox"><MixtureRatio>5.5</MixtureRatio></Reaction><MaxPressure Bar="49" /></Combustor>
           <DeLavalNozzle Id="Nozzle"><AreaRatio Value="49" /><ExitDiameter M="2.5" /></DeLavalNozzle>
         </SubPartGameData>
       </Assets>`),
@@ -191,7 +191,7 @@ describe('parseGameDataFile + mergeGameData', () => {
     expect(parts[0].rocketControllers[0].rocketRefs[0].subPartInstanceId).toBe('chamber_1')
     expect(parts[0].gimbals[0].maxAngleYDeg).toBe(5)
     const spd = parts[0].subPartGameData.find((s) => s.subPartTemplateId === 'ThrustChamberMesh')!
-    expect(spd.combustors[0].combustionId).toBe('Hydrolox_5.5')
+    expect(spd.combustors[0].reactionId).toBe('Hydrolox')
     expect(spd.nozzles[0].areaRatio).toBe(49)
     expect(spd.rockets[0].core.id).toBe('ThrustChamber')
   })
@@ -230,7 +230,8 @@ describe('parseGameDataFile + mergeGameData', () => {
       const chamber = lr91.subPartGameData.find(
         (s) => s.subPartTemplateId === 'CorePropulsionA_Subpart_EngineALargeVacAssembly',
       )!
-      expect(chamber.combustors[0].combustionId).toBe('Hydrolox_5.5')
+      expect(chamber.combustors[0].reactionId).toBe('Hydrolox')
+      expect(chamber.combustors[0].mixtureRatio).toBe(5.5)
       expect(chamber.nozzles[0].volumetricExhaustId).toBe('EngineALarge')
     },
   )
@@ -275,7 +276,7 @@ describe('parseGameDataFile + mergeGameData', () => {
       lengthM: 0.5,
       outerRadiusM: 1,
       wallThicknessMm: 2,
-      combustionProcessId: null,
+      roleAffinity: 'Engine',
     })
     // The later entry's unmodeled child is still carried (round-trip), alongside the tank.
     expect(skin.unknownChildren.map((n) => n.tag)).toEqual(['SubstanceStorageVolume'])

@@ -4,12 +4,12 @@
 > `<PartGameData>` / `<SubPartGameData>` documents. Each block maps to a KSA `*Template`
 > class. Engine modules have their own file ([engines.md](engines.md)).
 
-**Baseline:** re-vetted against KSA build **2026.7.3.4826** (decomp @ 4826 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.5.4892** (decomp @ 4892 + shipped Core XML).
 **Baseline status:** ✅ **CURRENT** — the electrical unit tokens (`J`/`W`), the `<DockingPort>`
 child-element schema, and the `<Control>` command marker are all modeled (parse **and** emit,
-current form only — no legacy fallback). As of 4826, tanks may declare a `<CombustionProcess>`
-propellant; flexo now models it as `Tank.combustionProcessId` (see
-[What changed in 4826](#what-changed-in-4826)). See
+current form only — no legacy fallback). As of 4892 (rev 4884), a tank's 4826-era
+`<CombustionProcess>` propellant is GONE, replaced by the `<RoleAffinity>` consumer-role flags —
+flexo models it as `Tank.roleAffinity` (see [What changed in 4892](#what-changed-in-4892)). See
 [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md).
 
 ---
@@ -34,7 +34,7 @@ propellant; flexo now models it as `Tank.combustionProcessId` (see
 | `Decoupler`                | `DecouplerTemplate.cs`                                                              | `<Decoupler>`                           | attrs `ConnectorId` (string), `Force` (float N)                                                                                                                                                                                                                                                                                                                                                                                            | **unchanged**                           |
 | `DockingPort`              | `DockingPortTemplate.cs`                                                            | `<DockingPort>`                         | **CHANGED → child elements** `<ConnectorId Value>` (StringReference), `<LatchingKineticEnergy>` (EnergyReference), `<PushoffImpulse>` (ImpulseReference)                                                                                                                                                                                                                                                                                   | 50 J / 5000 Ns                          |
 | `EvaDoor`                  | `EVADoorTemplate.cs`                                                                | `<EVADoor>`                             | attr `ConnectorId`                                                                                                                                                                                                                                                                                                                                                                                                                         | unchanged                               |
-| `Tank`                     | `CylindricalTankTemplate.cs` / `SphericalTankTemplate.cs` (base `AsmbTankTemplate`) | `<CylindricalTank>` / `<SphericalTank>` | `<Material Id>`, `<Length M>`, `<OuterRadius M>`, `<WallThickness Mm>`                                                                                                                                                                                                                                                                                                                                                                     | unchanged                               |
+| `Tank`                     | `CylindricalTankTemplate.cs` / `SphericalTankTemplate.cs` (base `AsmbTankTemplate`) | `<CylindricalTank>` / `<SphericalTank>` | `<Material Id>`, `<Length M>`, `<OuterRadius M>`, `<WallThickness Mm>`, `<RoleAffinity>` (ConsumerRole flags text, default `Engine`)                                                                                                                                                                                                                                                                                                       | RoleAffinity replaced CombustionProcess |
 | `customMass`               | `CustomMassTemplate.cs`                                                             | `<CustomMass>`                          | child `<Mass Kg>` (`MassReference`), `<MassSpecificInertia>` (`InertiaTemplate`)                                                                                                                                                                                                                                                                                                                                                           | Mass>0 required; Ixx/Iyy/Izz 1.0        |
 | `Light`                    | `LightModule.TemplateData`                                                          | `<Light>` (under `<SubPartGameData>`)   | `<Type>`, `<Transform>`, `<Range Value>`, `<Intensity Value>`, `<Color R G B>`, `<InnerAngle Value>`, `<OuterAngle Value>`, `<RayTracing>`                                                                                                                                                                                                                                                                                                 | Range/Intensity 1, Inner π/8, Outer π/4 |
 | `controllable` (`Control`) | `ControlTemplate.cs` (empty marker)                                                 | `<Control/>`                            | none (bare element) → `PartGameData.controllable: boolean`                                                                                                                                                                                                                                                                                                                                                                                 | false                                   |
@@ -74,6 +74,30 @@ propellant; flexo now models it as `Tank.combustionProcessId` (see
 - Connector `<Flags>` is emitted in **both** the Assets and GameData docs.
 - Light `Scale` is never emitted (KSA ignores it).
 - `Battery.cs`'s save-state `[XmlElement("Charge")]` (was `"Joules"`) is **save-game state, not authored template** — irrelevant to flexo.
+
+## What changed in 4892
+
+- 🔴→✅ **Tank `<CombustionProcess>` → `<RoleAffinity>` (SCHEMA-DRIFT, fixed).** Decomp-confirmed:
+  `AsmbTankTemplate.cs` swapped `[XmlElement("CombustionProcess")] SerializedReference
+DefaultCombustionProcess` for `[XmlElement("RoleAffinity")] ConsumerRole RoleAffinity =
+ConsumerRole.Engine` (`ConsumerRole` is a `[Flags]` byte enum `None|Engine|Thruster`; the
+  XmlSerializer text form is space-separated, e.g. `Thruster` / `Engine Thruster`). Rev 4884:
+  "Replaced pre-configured prop tank combustion processes with an _affinity_… tanks will try and
+  fill themselves with the most sensible propellant mixture." Shipped XML: the three RCS
+  `<SphericalTank>`s (plus the kitten backpack tank) now say `<RoleAffinity>Thruster</RoleAffinity>`;
+  main fuel tanks omit it (default `Engine`). **flexo:** `Tank.combustionProcessId` →
+  `Tank.roleAffinity: TankRoleAffinity` (`'None'|'Engine'|'Thruster'|'Engine Thruster'`), parsed
+  by `readRoleAffinity` (token-normalizing), emitted only at non-default, codec key `ra`.
+  Regression: `partXmlParser.test.ts` "tank `<RoleAffinity>`".
+- ✅ **`PartTemplate.Tank` removed (NONE for flexo).** Rev 4884 "Removed dead PartTemplate.Tank
+  field": `<CylindricalTank>`/`<SphericalTank>` can no longer sit directly under `<Part>` /
+  `<PartGameData>` (the `PartGameDataReference.Tank` application was deleted too). flexo never
+  modeled part-level tanks — its `Tank` lives only under the `<SubPartGameData>` `<Tank>` module
+  wrapper, which is exactly the surviving `Tank.TemplateData` component path.
+- ✅ **Battery/Generator/SolarPanel/PowerConsumer/Decoupler/DockingPort/Control/Light: NO drift.**
+  None of their template classes appear in the 4826→4892 diff. `PowerManager.cs` changed
+  runtime-only (resource-group integration). The new vehicle-level fuel-link system
+  (`FuelLinkData` in vehicle saves) never touches Part/SubPart templates — not a flexo surface.
 
 ## What changed in 4826
 

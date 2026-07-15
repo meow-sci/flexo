@@ -1,6 +1,6 @@
 import type {
   Connector,
-  CustomCombustionProcess,
+  CustomReaction,
   CustomMesh,
   EditingPart,
   KittenInstance,
@@ -66,8 +66,8 @@ export interface ProjectExportData {
   animations: PartAnimation[]
   /** Part-ified kitten meshes only (descriptors referencing game assets — no binaries). */
   customMeshes: CustomMesh[]
-  /** User-authored combustion processes (custom propellants — pure data). */
-  customCombustionProcesses: CustomCombustionProcess[]
+  /** User-authored reactions (custom propellants — pure data). */
+  customReactions: CustomReaction[]
 }
 
 /**
@@ -137,7 +137,7 @@ export function buildProjectExport(part: EditingPart, projectName: string): Proj
       kittens: part.kittens,
       animations: part.animations,
       customMeshes: part.customMeshes.filter(isKittenMesh),
-      customCombustionProcesses: part.customCombustionProcesses,
+      customReactions: part.customReactions,
     }),
   }
 }
@@ -176,7 +176,9 @@ export function parseProjectObject(raw: unknown): ParseResult {
       error: `Not a flexo project (format: ${JSON.stringify((raw as { f?: unknown }).f)}).`,
     }
   }
-  if (typeof raw.v !== 'number' || raw.v > PROJECT_EXPORT_VERSION) {
+  // Exact-version match only: older payloads carry pre-rename keys that would decode
+  // silently wrong (no migration, per the constitution), newer ones are unknown.
+  if (typeof raw.v !== 'number' || raw.v !== PROJECT_EXPORT_VERSION) {
     return { ok: false, error: `Unsupported project version: ${JSON.stringify(raw.v)}.` }
   }
   return { ok: true, env: decodeProject(raw) }
@@ -203,7 +205,7 @@ export function envelopeToPart(env: ProjectExportEnvelope): EditingPart {
     customTextures: [],
     customMeshes: d.customMeshes,
     animations: d.animations,
-    customCombustionProcesses: d.customCombustionProcesses ?? [],
+    customReactions: d.customReactions ?? [],
   }
   ensureBuiltInLayers(part)
   return part
@@ -391,9 +393,9 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
 
   // Custom propellants are pure data with no instance refs: add those the project
   // doesn't already have (by id), so a combustor referencing one keeps resolving.
-  for (const cp of data.customCombustionProcesses ?? []) {
-    if (!part.customCombustionProcesses.some((p) => p.id === cp.id)) {
-      part.customCombustionProcesses.push(structuredClone(cp))
+  for (const cp of data.customReactions ?? []) {
+    if (!part.customReactions.some((p) => p.id === cp.id)) {
+      part.customReactions.push(structuredClone(cp))
     }
   }
 

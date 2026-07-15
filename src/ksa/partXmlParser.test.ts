@@ -35,7 +35,7 @@ function editingPart(over: Partial<EditingPart>): EditingPart {
     customTextures: [],
     customMeshes: [],
     animations: [],
-    customCombustionProcesses: [],
+    customReactions: [],
     ...over,
   }
 }
@@ -365,10 +365,11 @@ describe('engine modules (round-trip with serializeGameData)', () => {
       ],
     },
     // A custom propellant (clean ≤6-sig-fig numbers so G6 formatting round-trips exactly).
-    customCombustionProcesses: [
+    customReactions: [
       {
         id: 'MyKerolox_2.6',
         name: 'Custom Kerolox',
+        category: 'Bipropellant' as const,
         reactants: [
           { phaseId: 'Kerosene(l)', massShare: 1 },
           { phaseId: 'O2(l)', massShare: 2.6 },
@@ -385,7 +386,8 @@ describe('engine modules (round-trip with serializeGameData)', () => {
         combustors: [
           {
             id: 'ThrustChamber',
-            combustionId: 'Hydrolox_5.5',
+            reactionId: 'Hydrolox',
+            mixtureRatio: 5.5,
             maxPressurePa: 4_900_000,
             thermalEfficiency: 1,
             minimumThrottle: 0.1,
@@ -436,8 +438,8 @@ describe('engine modules (round-trip with serializeGameData)', () => {
     expect(parsed.gameData.gimbals).toEqual(source.gameData.gimbals)
   })
 
-  it('round-trips a custom combustion process (propellant)', () => {
-    expect(parsed.customCombustionProcesses).toEqual(source.customCombustionProcesses)
+  it('round-trips a custom reaction (propellant)', () => {
+    expect(parsed.customReactions).toEqual(source.customReactions)
   })
 
   it('parses RocketThrusterController + ControlMap as an RCS controller', () => {
@@ -624,7 +626,7 @@ describe('unmodeled-XML passthrough (gap 6)', () => {
   })
 })
 
-describe('SubPartGameData tank <CombustionProcess> (KSA 2026.7)', () => {
+describe('SubPartGameData tank <RoleAffinity> (KSA 2026.7.5)', () => {
   const xml = `<Assets>
     <PartGameData Id="P"/>
     <SubPartGameData Id="Tmpl">
@@ -632,20 +634,43 @@ describe('SubPartGameData tank <CombustionProcess> (KSA 2026.7)', () => {
         <Material Id="Aluminum.2014(s)" />
         <OuterRadius M="0.5" />
         <WallThickness Mm="4" />
-        <CombustionProcess Id="MMH_NTO_1.6" />
+        <RoleAffinity>Thruster</RoleAffinity>
       </SphericalTank></Tank>
     </SubPartGameData>
   </Assets>`
 
-  it('parses + round-trips the propellant a <SphericalTank> holds', () => {
+  it('parses + round-trips the consumer role a <SphericalTank> feeds', () => {
     const parsed = gameDataFromAssets(xml, 'P', new DOMParser())!
     const spd = parsed.subPartGameData.find((s) => s.subPartTemplateId === 'Tmpl')!
-    expect(spd.tanks[0].combustionProcessId).toBe('MMH_NTO_1.6')
+    expect(spd.tanks[0].roleAffinity).toBe('Thruster')
 
     const part = editingPart({ partId: 'P', subPartGameData: parsed.subPartGameData })
     const reparsed = gameDataFromAssets(serializeGameData(part), 'P', new DOMParser())!
     const rspd = reparsed.subPartGameData.find((s) => s.subPartTemplateId === 'Tmpl')!
-    expect(rspd.tanks[0].combustionProcessId).toBe('MMH_NTO_1.6')
+    expect(rspd.tanks[0].roleAffinity).toBe('Thruster')
+  })
+
+  it('defaults an affinity-less tank to Engine and omits the element on emit', () => {
+    const bare = `<Assets><PartGameData Id="P"/><SubPartGameData Id="Tmpl">
+      <Tank Id="Tank1"><SphericalTank><OuterRadius M="0.5" /><WallThickness Mm="4" /></SphericalTank></Tank>
+    </SubPartGameData></Assets>`
+    const parsed = gameDataFromAssets(bare, 'P', new DOMParser())!
+    const spd = parsed.subPartGameData.find((s) => s.subPartTemplateId === 'Tmpl')!
+    expect(spd.tanks[0].roleAffinity).toBe('Engine')
+
+    const part = editingPart({ partId: 'P', subPartGameData: parsed.subPartGameData })
+    expect(serializeGameData(part)).not.toContain('RoleAffinity')
+  })
+
+  it('normalizes a combined flags body', () => {
+    const combined = `<Assets><PartGameData Id="P"/><SubPartGameData Id="Tmpl">
+      <Tank Id="Tank1"><SphericalTank><OuterRadius M="0.5" /><WallThickness Mm="4" />
+        <RoleAffinity>Thruster Engine</RoleAffinity>
+      </SphericalTank></Tank>
+    </SubPartGameData></Assets>`
+    const parsed = gameDataFromAssets(combined, 'P', new DOMParser())!
+    const spd = parsed.subPartGameData.find((s) => s.subPartTemplateId === 'Tmpl')!
+    expect(spd.tanks[0].roleAffinity).toBe('Engine Thruster')
   })
 })
 

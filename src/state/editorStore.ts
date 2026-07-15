@@ -5,7 +5,7 @@ import type {
   Combustor,
   Connector,
   ConnectorFlag,
-  CustomCombustionProcess,
+  CustomReaction,
   Decoupler,
   DeLavalNozzle,
   DockingPort,
@@ -1831,15 +1831,21 @@ export function updateCombustor(
     s.combustors[index] = { ...s.combustors[index], ...patch }
   })
 }
-/** Discrete: set a combustor's combustion process id (the propellant). */
-export function setCombustorCombustion(
+/**
+ * Discrete: set a combustor's reaction id (the propellant) and its O/F mixture
+ * ratio in one commit — picking a reaction resets the ratio to that reaction's
+ * default, the way KSA's own designer does (null for FixedReactions).
+ */
+export function setCombustorReaction(
   subPartTemplateId: string,
   index: number,
-  combustionId: string,
+  reactionId: string,
+  mixtureRatio: number | null,
 ): void {
   if (!hasSubPartItem(subPartTemplateId, 'combustors', index)) return
-  commitSubPartData('combustion process', combustionId, subPartTemplateId, (s) => {
-    s.combustors[index].combustionId = combustionId
+  commitSubPartData('reaction', reactionId, subPartTemplateId, (s) => {
+    s.combustors[index].reactionId = reactionId
+    s.combustors[index].mixtureRatio = mixtureRatio
   })
 }
 
@@ -2126,11 +2132,16 @@ export function updatePartCombustor(index: number, patch: Partial<Combustor>): v
     g.combustors[index] = { ...g.combustors[index], ...patch }
   })
 }
-/** Discrete: set a part-level combustor's combustion process id. */
-export function setPartCombustorCombustion(index: number, combustionId: string): void {
+/** Discrete: set a part-level combustor's reaction id + O/F mixture ratio (see setCombustorReaction). */
+export function setPartCombustorReaction(
+  index: number,
+  reactionId: string,
+  mixtureRatio: number | null,
+): void {
   if (index < 0 || index >= $part.get().gameData.combustors.length) return
-  commitGameData('combustion process', combustionId, (g) => {
-    g.combustors[index].combustionId = combustionId
+  commitGameData('reaction', reactionId, (g) => {
+    g.combustors[index].reactionId = reactionId
+    g.combustors[index].mixtureRatio = mixtureRatio
   })
 }
 
@@ -2212,9 +2223,10 @@ export function addEngine(
 
 /**
  * Discrete (one undo step): defines an "SRB (approximate)" — a data-only solid-rocket
- * fake. It's a normal liquid engine pinned to {@link Combustor.minimumThrottle}=1 (so it
- * can't be throttled, like a solid) with a sealed internal propellant Tank on the same
- * SubPart, so it's self-contained. KSA has no solid-motor code, so this CANNOT reproduce
+ * fake. It's a normal engine pinned to {@link Combustor.minimumThrottle}=1 (so it
+ * can't be throttled, like a solid) burning KSA 2026.7.5's APCP solid-propellant
+ * reaction, with a sealed internal propellant Tank on the same SubPart, so it's
+ * self-contained. KSA still has no solid-motor hardware, so this CANNOT reproduce
  * a real SRB: thrust is flat (no grain-regression thrust-vs-time curve), it stays
  * shutdown-able / re-ignitable, and the propellant drains like a liquid (CoM shifts).
  * See analysis/KSA_ENGINE_DETAILS.md §10. Returns the combustor id, or null.
@@ -2232,6 +2244,8 @@ export function addSrbEngine(subPartTemplateId: string, instanceId: string | nul
   const spd = getOrCreateSubPartData(part, subPartTemplateId)
   const combustor = createCombustor(combId)
   combustor.minimumThrottle = 1 // fixed (non-throttleable), the one thing the fake gets right
+  combustor.reactionId = 'APCP' // Core's solid-propellant FixedReaction (2026.7.5)
+  combustor.mixtureRatio = null // fixed reactions take no O/F ratio
   spd.combustors.push(combustor)
   spd.nozzles.push(createNozzle(nozId))
   spd.rockets.push(createRocket(rocketId, combId, [nozId]))
@@ -2247,32 +2261,29 @@ export function addSrbEngine(subPartTemplateId: string, instanceId: string | nul
   return combId
 }
 
-// --- Custom combustion processes (user-authored propellants) ---
+// --- Custom reactions (user-authored propellants) ---
 
-/** Discrete: add a user-authored combustion process (a custom propellant). */
-export function addCustomCombustionProcess(process: CustomCombustionProcess): void {
-  pushUndo('add propellant', process.name || process.id)
+/** Discrete: add a user-authored reaction (a custom propellant). */
+export function addCustomReaction(reaction: CustomReaction): void {
+  pushUndo('add propellant', reaction.name || reaction.id)
   const part = clone($part.get())
-  part.customCombustionProcesses.push(process)
+  part.customReactions.push(reaction)
   $part.set(part)
 }
-/** Discrete: remove the custom combustion process with the given id. */
-export function removeCustomCombustionProcess(id: string): void {
-  if (!$part.get().customCombustionProcesses.some((p) => p.id === id)) return
+/** Discrete: remove the custom reaction with the given id. */
+export function removeCustomReaction(id: string): void {
+  if (!$part.get().customReactions.some((p) => p.id === id)) return
   pushUndo('remove propellant', id)
   const part = clone($part.get())
-  part.customCombustionProcesses = part.customCombustionProcesses.filter((p) => p.id !== id)
+  part.customReactions = part.customReactions.filter((p) => p.id !== id)
   $part.set(part)
 }
-/** Streaming: patch a custom combustion process (name / reactants / LUT). Caller pushes undo on focus. */
-export function updateCustomCombustionProcess(
-  id: string,
-  patch: Partial<CustomCombustionProcess>,
-): void {
+/** Streaming: patch a custom reaction (name / category / reactants / LUT). Caller pushes undo on focus. */
+export function updateCustomReaction(id: string, patch: Partial<CustomReaction>): void {
   const part = clone($part.get())
-  const idx = part.customCombustionProcesses.findIndex((p) => p.id === id)
+  const idx = part.customReactions.findIndex((p) => p.id === id)
   if (idx < 0) return
-  part.customCombustionProcesses[idx] = { ...part.customCombustionProcesses[idx], ...patch }
+  part.customReactions[idx] = { ...part.customReactions[idx], ...patch }
   $part.set(part)
 }
 

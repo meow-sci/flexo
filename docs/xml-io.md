@@ -78,7 +78,7 @@ Every piece is omitted when empty/default. Each project exports both files
 **Engines** add more to this document: `<Rocket>`/`<Combustor>`/`<DeLavalNozzle>` per
 `<SubPartGameData>`, part-level `<RocketEngineController>`/`<RocketThrusterController>` +
 gas-generator `<Rocket>`/`<Combustor>` + `<SubPart Id><Gimbal>` overlays, and top-level
-`<CombustionProcess>` for custom propellants — all round-tripped by the parser. See
+`<FixedReaction>` for custom propellants — all round-tripped by the parser. See
 [engines.md](engines.md) for the schema, units, and default-omission rules.
 
 ## Number formatting — `src/ksa/formatG6.ts`

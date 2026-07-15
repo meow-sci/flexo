@@ -12,11 +12,13 @@ import {
   inverseNozzlePressureRatioFromMach,
   lutLookup,
   predictPerformance,
+  sliceLutAtMixtureRatio,
   solveMachFromAreaRatio,
   UNIVERSAL_GAS_CONSTANT,
   type CombustionLut,
+  type MixtureLut,
 } from './enginePhysics'
-import { parseCombustionFile, type CombustionProcessData } from './combustionCatalog'
+import { parseReactionsFile, resolveReactionLut, type ReactionData } from './reactionCatalog'
 import { hasKsaAssets, ksaAsset } from './ksaTestAssets'
 
 /** A flat single-row LUT (constant γ/R/T at any pressure) for closed-form checks. */
@@ -191,32 +193,61 @@ describe('enginePhysics: predictPerformance (synthetic gas)', () => {
   })
 })
 
-// Real KSA combustion data: skipped in the open-source build (private assets absent).
+describe('enginePhysics: sliceLutAtMixtureRatio (MixtureReactionTable.SliceAt port)', () => {
+  const mix: MixtureLut = {
+    ratios: [2, 4],
+    slices: [
+      flatLut(1.2, 400, 2000), // γ 1.2, R 400, T 2000 at ratio 2
+      flatLut(1.3, 500, 3000), // γ 1.3, R 500, T 3000 at ratio 4
+    ],
+  }
+
+  it('lerps temperature, gamma, and R between the neighbouring ratio rows', () => {
+    const mid = sliceLutAtMixtureRatio(mix, 3)
+    expect(mid.rows[0].temperature).toBeCloseTo(2500, 9)
+    expect(mid.rows[0].gamma).toBeCloseTo(1.25, 9)
+    expect(mid.rows[0].specificGasConstant).toBeCloseTo(450, 9)
+    // The shared lnPressure axis is preserved untouched.
+    expect(mid.rows[0].lnPressure).toBe(mix.slices[0].rows[0].lnPressure)
+  })
+
+  it('returns exact rows on an exact ratio hit and clamps out-of-range ratios', () => {
+    expect(sliceLutAtMixtureRatio(mix, 2).rows[0].temperature).toBe(2000)
+    expect(sliceLutAtMixtureRatio(mix, 0.5).rows[0].temperature).toBe(2000) // below → first row
+    expect(sliceLutAtMixtureRatio(mix, 99).rows[0].temperature).toBe(3000) // above → last row
+  })
+})
+
+// Real KSA reaction data: skipped in the open-source build (private assets absent).
 describe('enginePhysics: real Hydrolox parity', () => {
-  function loadProcesses(): CombustionProcessData[] {
-    const text = readFileSync(ksaAsset('Combustion.xml'), 'utf-8')
+  function loadReactions(): ReactionData[] {
+    const text = readFileSync(ksaAsset('Reactions.xml'), 'utf-8')
     const doc = new DOMParser().parseFromString(text, 'application/xml') as unknown as Document
-    const out: CombustionProcessData[] = []
-    parseCombustionFile(doc, out)
+    const out: ReactionData[] = []
+    parseReactionsFile(doc, out)
     return out
   }
 
-  it.runIf(hasKsaAssets)('parses Hydrolox_5.5 with normalized 5.5:1 O/F mass fractions', () => {
-    const hydrolox = loadProcesses().find((p) => p.id === 'Hydrolox_5.5')!
+  /** Hydrolox baked at Core's 5.5:1 O/F — the LUT the game's own combustor resolves. */
+  function hydroloxLutAt55(): CombustionLut {
+    const hydrolox = loadReactions().find((p) => p.id === 'Hydrolox')!
+    expect(hydrolox.kind).toBe('Mixture')
+    return resolveReactionLut(hydrolox, 5.5)!
+  }
+
+  it.runIf(hasKsaAssets)('parses Hydrolox as a fuel+oxidizer mixture reaction', () => {
+    const hydrolox = loadReactions().find((p) => p.id === 'Hydrolox')!
     expect(hydrolox).toBeTruthy()
     expect(hydrolox.reactants).toHaveLength(2)
-    const ox = hydrolox.reactants.find((r) => r.phaseId === 'O2(l)')!
-    const fuel = hydrolox.reactants.find((r) => r.phaseId === 'H2(l)')!
-    expect(ox.massShare / fuel.massShare).toBeCloseTo(5.5, 6)
-    expect(ox.massFraction + fuel.massFraction).toBeCloseTo(1, 6)
-    expect(hydrolox.lut.rows.length).toBeGreaterThan(10)
+    expect(hydrolox.reactants.map((r) => r.phaseId)).toEqual(['H2(l)', 'O2(l)'])
+    const lut = hydroloxLutAt55()
+    expect(lut.rows.length).toBeGreaterThan(10)
   })
 
   it.runIf(hasKsaAssets)('predicts physically sane LR91-Vac Hydrolox performance', () => {
-    const hydrolox = loadProcesses().find((p) => p.id === 'Hydrolox_5.5')!
     // The real LR91 Vac thrust chamber: 49 bar, 2.5 m exit, area ratio 49, efficiency 1.
     const perf = predictPerformance({
-      lut: hydrolox.lut,
+      lut: hydroloxLutAt55(),
       maxPressurePa: 49 * 1e5,
       exitDiameterM: 2.5,
       areaRatio: 49,
@@ -228,11 +259,12 @@ describe('enginePhysics: real Hydrolox parity', () => {
     expect(perf.thrustVacN).toBeGreaterThan(0)
     expect(perf.ispVac).toBeGreaterThan(perf.ispSL)
     // Regression snapshot of the faithful port (tolerant of float32-vs-double drift):
-    // vacuum Isp ≈ 443.5 s and ≈ 931 kN thrust — textbook LH2/LOX figures, and a
+    // vacuum Isp ≈ 445.4 s and ≈ 933 kN thrust — textbook LH2/LOX figures under the
+    // 2026.7.5 ThermoToolkit-regenerated Hydrolox LUT (sliced at Core's 5.5 O/F), and a
     // heavily over-expanded sea-level nozzle (the AR49 vacuum bell separates at SL).
-    expect(perf.ispVac).toBeCloseTo(443.5, 0)
-    expect(perf.thrustVacN / 1000).toBeCloseTo(930.9, 0)
-    expect(perf.ispSL).toBeCloseTo(340, 0)
+    expect(perf.ispVac).toBeCloseTo(445.4, 0)
+    expect(perf.thrustVacN / 1000).toBeCloseTo(932.6, 0)
+    expect(perf.ispSL).toBeCloseTo(341, 0)
     expect(perf.flowSeparationSeveritySL).toBeGreaterThan(0.5)
     expect(perf.gamma).toBeGreaterThan(1.1)
     expect(perf.gamma).toBeLessThan(1.3)
@@ -244,8 +276,14 @@ describe('enginePhysics: real Hydrolox parity', () => {
   })
 
   it.runIf(hasKsaAssets)('derives a sea-level area ratio below the vacuum one', () => {
-    const hydrolox = loadProcesses().find((p) => p.id === 'Hydrolox_5.5')!
-    const arSeaLevel = deriveAreaRatioForExhaustPressure(hydrolox.lut, 49 * 1e5, 101325, 1, 1, 1)!
+    const arSeaLevel = deriveAreaRatioForExhaustPressure(
+      hydroloxLutAt55(),
+      49 * 1e5,
+      101325,
+      1,
+      1,
+      1,
+    )!
     expect(arSeaLevel).toBeGreaterThan(1)
     expect(arSeaLevel).toBeLessThan(49) // optimizing for SL needs less expansion than vacuum
   })

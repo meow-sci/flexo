@@ -318,7 +318,7 @@ const TARGET_ELEMENT = 34963
  * face shape. UVs map the card to `rect` (its tile in the shared atlas). `cross` adds a second
  * perpendicular quad so it reads from any angle. Geometry-only (POSITION/NORMAL/TEXCOORD_0).
  */
-function buildCardGlb(rect: UvRect, cross: boolean): Uint8Array {
+function buildCardGlb(rect: UvRect, cross: boolean, meshName: string): Uint8Array {
   const pos: number[] = []
   const nrm: number[] = []
   const uv: number[] = []
@@ -340,7 +340,7 @@ function buildCardGlb(rect: UvRect, cross: boolean): Uint8Array {
     quad([[0, 0, -0.5], [0, 0, 0.5], [0, 1, 0.5], [0, 1, -0.5]], [1, 0, 0])
   }
 
-  return packGlb(new Float32Array(pos), new Float32Array(nrm), new Float32Array(uv), new Uint16Array(idx))
+  return packGlb(new Float32Array(pos), new Float32Array(nrm), new Float32Array(uv), new Uint16Array(idx), meshName)
 }
 
 const normalize3 = (x: number, y: number, z: number): [number, number, number] => {
@@ -354,7 +354,7 @@ const normalize3 = (x: number, y: number, z: number): [number, number, number] =
  * via a triangle-wave U; V runs bottom(0)→apex(1). Real outward normals give genuine 3D shading,
  * so the material is solid (no opacity cutout). Geometry-only POSITION/NORMAL/TEXCOORD_0.
  */
-function buildCylinderGlb(rect: UvRect): Uint8Array {
+function buildCylinderGlb(rect: UvRect, meshName: string): Uint8Array {
   const R = 0.32, BODY = 0.68, TOTAL = 1.0 // BODY + R (dome is a hemisphere of radius R)
   const RADIAL = 24, DOME = 6
   const pos: number[] = [], nrm: number[] = [], uv: number[] = [], idx: number[] = []
@@ -403,10 +403,16 @@ function buildCylinderGlb(rect: UvRect): Uint8Array {
   const apex = add(0, TOTAL, 0, [0, 1, 0], 0.5, 1)
   for (let s = 0; s < RADIAL; s++) idx.push(prev[s], apex, prev[(s + 1) % RADIAL])
 
-  return packGlb(new Float32Array(pos), new Float32Array(nrm), new Float32Array(uv), new Uint16Array(idx))
+  return packGlb(new Float32Array(pos), new Float32Array(nrm), new Float32Array(uv), new Uint16Array(idx), meshName)
 }
 
-function packGlb(pos: Float32Array, nrm: Float32Array, uvs: Float32Array, idx: Uint16Array): Uint8Array {
+/**
+ * `meshName` MUST be unique per character: KSA's clutter loader (MeshAtlasFileReference.DoLoad)
+ * registers every GLB mesh globally under its glTF MESH name with first-wins dedupe, so a shared
+ * name (the old constant "card") made every character resolve to the first-loaded card's geometry
+ * (and thus its atlas tile). Names starting with "_" are skipped by the loader entirely.
+ */
+function packGlb(pos: Float32Array, nrm: Float32Array, uvs: Float32Array, idx: Uint16Array, meshName: string): Uint8Array {
   const align4 = (n: number) => (n + 3) & ~3
   const posBytes = pos.byteLength
   const nrmBytes = nrm.byteLength
@@ -435,8 +441,8 @@ function packGlb(pos: Float32Array, nrm: Float32Array, uvs: Float32Array, idx: U
     asset: { version: '2.0', generator: 'flexo build-cartoon-moon' },
     scene: 0,
     scenes: [{ nodes: [0] }],
-    nodes: [{ mesh: 0, name: 'card' }],
-    meshes: [{ name: 'card', primitives: [{ attributes: { POSITION: 0, NORMAL: 1, TEXCOORD_0: 2 }, indices: 3, mode: 4 }] }],
+    nodes: [{ mesh: 0, name: meshName }],
+    meshes: [{ name: meshName, primitives: [{ attributes: { POSITION: 0, NORMAL: 1, TEXCOORD_0: 2 }, indices: 3, mode: 4 }] }],
     accessors: [
       { bufferView: 0, componentType: COMP_FLOAT, count: pos.length / 3, type: 'VEC3', min, max },
       { bufferView: 1, componentType: COMP_FLOAT, count: nrm.length / 3, type: 'VEC3' },
@@ -490,19 +496,30 @@ export const FLAT_NORMAL_KTX2 = 'Textures/Clutter/ClutterFlatNormal.ktx2'
 export const NEUTRAL_ORM_KTX2 = 'Textures/Clutter/ClutterNeutralAoRoughMetal.ktx2'
 export const ATLAS_DIFFUSE_KTX2 = 'Textures/Clutter/Atlas_Diffuse.ktx2'
 export const ATLAS_OPACITY_KTX2 = 'Textures/Clutter/Atlas_Opacity.ktx2'
+// Ecotype material Id. Material ids live in KSA's GLOBAL first-wins ModLibrary namespace —
+// Core already claims EarthGrassClutterMaterial, Trunk, Leaves, Tree0Cards, Tree1Cards — so this
+// must stay project-unique or the mod would silently pick up someone else's material.
+export const CLUTTER_MATERIAL_ID = 'CartoonMoonCrowdMaterial'
 
-/** 5 LODs (KSA reads Lods[0..4]); `id` namespaces the LOD meshes, `mesh` is the card GLB stem. */
-function lodsXml(id: string, mesh: string): string {
-  return LOD_SCREEN_SIZES.map((px, k) =>
+/**
+ * 5 LODs (KSA reads Lods[0..4]); `mesh` is the card GLB stem. Each LOD needs, after its <Mesh>,
+ * one <Material Id/> ID-reference PER glTF material of the GLB (concrete material definitions on
+ * a LOD throw at load) — our card GLBs have no glTF materials array, which KSA counts as 1, so
+ * exactly one reference to the ecotype material. The loader registers the GLB's mesh globally
+ * under its glTF mesh name (`<mesh>Card`), so <Mesh Id> uses that same name.
+ */
+function lodsXml(mesh: string): string {
+  return LOD_SCREEN_SIZES.map((px) =>
 `                        <LOD MinScreenSize="${px}">
-                            <Mesh Id="${id}_LOD${k}" Path="Meshes/Clutter/${mesh}Card.glb" />
+                            <Mesh Id="${mesh}Card" Path="Meshes/Clutter/${mesh}Card.glb" />
+                            <Material Id="${CLUTTER_MATERIAL_ID}" />
                         </LOD>`).join('\n')
 }
 
 function clutterObjectXml(id: string, mesh: string): string {
   return `                <ClutterObject Name="${id}">
                     <LODs>
-${lodsXml(id, mesh)}
+${lodsXml(mesh)}
                     </LODs>
                 </ClutterObject>`
 }
@@ -550,7 +567,7 @@ export function groundClutterXml(chars: Character[], a: Args): string {
                     <UseObjectTypeTexture Value="false" />
                 </Placement>
 ${objects.join('\n')}
-                <Material>
+                <Material Id="${CLUTTER_MATERIAL_ID}">
                     <Diffuse Id="ClutterAtlasDiffuse" Path="${ATLAS_DIFFUSE_KTX2}" Category="Terrain"/>
                     <Normal Id="ClutterFlatNormal" Path="${FLAT_NORMAL_KTX2}" Category="Terrain"/>
                     <AoRoughMetal Id="ClutterNeutralAoRoughMetal" Path="${NEUTRAL_ORM_KTX2}" Category="Terrain"/>
@@ -666,6 +683,15 @@ Run with \`--astronomicals <your game's Content/core/Astronomicals.xml>\` to mat
 ## KSA requirements the generator bakes in (each crashed during bring-up)
 
 - **Exactly 5 \`<LOD>\`s per \`<ClutterObject>\`** (the renderer reads \`Lods[0..4]\` unconditionally).
+- **Every \`<LOD>\` needs \`<Material Id/>\` references after its \`<Mesh>\`** (build 2026.7.5.4892+):
+  one per glTF material of the GLB (a GLB with no materials array counts as 1); concrete material
+  definitions on a LOD, or a count mismatch, **throw at data load**.
+- **Ecotype \`<Material>\` entries need a unique \`Id\`** — material ids are a global first-wins
+  namespace (Core claims \`EarthGrassClutterMaterial\`, \`Trunk\`, \`Leaves\`, \`Tree0Cards\`,
+  \`Tree1Cards\`), hence the project-unique \`CartoonMoonCrowdMaterial\`.
+- **Unique glTF mesh name per GLB** — KSA registers clutter meshes globally by GLB mesh name,
+  first-wins, so shared names collapse every character onto the first-loaded mesh. The generator
+  names each mesh \`<name>Card\` and the \`<Mesh Id>\` matches it.
 - **\`<Normal>\` + \`<AoRoughMetal>\` are mandatory** (dereferenced without a null check) — shared
   synthetic \`ClutterFlatNormal.ktx2\` + \`ClutterNeutralAoRoughMetal.ktx2\` are written for this.
 - **Scenario syntax:** \`<DisplayName Value="…"/>\` and a \`Parent="…"\` on every \`<LoadFromLibrary>\`
@@ -739,10 +765,13 @@ async function main() {
     opacityKb = kb(opacity)
   }
 
-  // One card mesh per character, UV-mapped to its atlas tile.
+  // One card mesh per character, UV-mapped to its atlas tile. The glTF mesh name must be unique
+  // per character (KSA registers clutter meshes globally by GLB mesh name, first-wins) and match
+  // the <Mesh Id> in the XML — both use the `<name>Card` convention.
   for (let i = 0; i < chars.length; i++) {
-    const glb = cylinder ? buildCylinderGlb(rects[i]) : buildCardGlb(rects[i], args.shape === 'cross')
-    await Bun.write(`${args.out}/Meshes/Clutter/${chars[i].name}Card.glb`, glb)
+    const meshName = `${chars[i].name}Card`
+    const glb = cylinder ? buildCylinderGlb(rects[i], meshName) : buildCardGlb(rects[i], args.shape === 'cross', meshName)
+    await Bun.write(`${args.out}/Meshes/Clutter/${meshName}.glb`, glb)
   }
 
   console.log(`  ${chars.length} face(s) -> ${atlas.width}x${atlas.height} atlas  diffuse ${kb(diffuse)}  opacity ${opacityKb}  (${args.shape})`)

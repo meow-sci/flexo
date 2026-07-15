@@ -35,6 +35,12 @@ trustworthy each one is. Decide which to keep / cut / add, then we implement the
 All confirmed against the decompiled C# at `ksa-game-assemblies/current/decomp` and game content at
 `Content/Core/Substances.xml` / `assets/Combustion.xml`.
 
+> **⚠ Data-source note (KSA 2026.7.5.4892):** `Substances.xml` and `Combustion.xml` no longer exist —
+> substance phases now live in `Volatiles.xml`/`SolidPropellants.xml`/`Materials.xml` and propellant
+> LUTs in `Reactions.xml` (`<FixedReaction>`/`<MixtureReaction>`, `<PressureCondition>` rows, mixture
+> ratios no longer baked into ids — e.g. `Hydrolox_5.5` → `Hydrolox` + `<MixtureRatio>5.5`). Re-anchor
+> any implementation of this plan on `src/ksa/reactionCatalog.ts` and [scope/engines.md](../scope/engines.md).
+
 ### 2.1 Mass primitives (`MassGeometry.cs`) — `mass = density × volume`
 
 | Shape | Volume formula | Used by |

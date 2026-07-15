@@ -4,7 +4,7 @@ import type {
   Battery,
   Combustor,
   Connector,
-  CustomCombustionProcess,
+  CustomReaction,
   CustomMesh,
   DeLavalNozzle,
   EasingConfig,
@@ -19,6 +19,7 @@ import type {
   PartGameData,
   PowerConsumer,
   RawXmlNode,
+  ReactionCategory,
   Rocket,
   RocketController,
   RocketSoundAction,
@@ -27,6 +28,7 @@ import type {
   SubPartIdRef,
   SubPartPlacement,
   Tank,
+  TankRoleAffinity,
   Transform,
   Vec3,
 } from '../ksa/types'
@@ -44,7 +46,10 @@ import type { ProjectExportEnvelope } from './projectTransfer'
  * codec, and only its *types* flow back the other way (erased at build, no cycle).
  */
 export const PROJECT_EXPORT_FORMAT = 'flexo-project'
-export const PROJECT_EXPORT_VERSION = 1
+// v2: KSA 2026.7.5.4892 Reactions refactor — combustor `c`(combustionId)→`r`+`mr`, tank
+// `cp`(combustionProcessId)→`ra`(roleAffinity), envelope `cp`(custom processes)→`cr`(custom
+// reactions). Per the no-migration rule, v1 payloads are REJECTED on import, never converted.
+export const PROJECT_EXPORT_VERSION = 2
 
 /**
  * COMPACT PROJECT CODEC — the single wire format for everything that serializes a
@@ -367,16 +372,23 @@ interface CTank {
   w: number // wallThicknessMm
   m?: string // wallMaterialId (omitted when the default aluminium)
   sph?: 1 // shape: present ⇒ Spherical (Cylindrical is the default)
-  cp?: string // combustionProcessId (omitted when unset)
+  ra?: string // roleAffinity (omitted at the Engine default)
 }
 
 function encTank(t: Tank): CTank {
   const o: CTank = { l: round(t.lengthM), r: round(t.outerRadiusM), w: round(t.wallThicknessMm) }
   if (t.wallMaterialId && t.wallMaterialId !== DEFAULT_TANK_MATERIAL) o.m = t.wallMaterialId
   if (t.shape === 'Spherical') o.sph = 1
-  if (t.combustionProcessId) o.cp = t.combustionProcessId
+  if (t.roleAffinity !== 'Engine') o.ra = t.roleAffinity
   return o
 }
+
+const TANK_ROLE_AFFINITIES: ReadonlySet<string> = new Set([
+  'None',
+  'Engine',
+  'Thruster',
+  'Engine Thruster',
+])
 
 function decTank(c: CTank): Tank {
   return {
@@ -385,7 +397,10 @@ function decTank(c: CTank): Tank {
     lengthM: num(c.l),
     outerRadiusM: num(c.r),
     wallThicknessMm: num(c.w),
-    combustionProcessId: c.cp != null ? str(c.cp) : null,
+    roleAffinity:
+      c.ra != null && TANK_ROLE_AFFINITIES.has(str(c.ra))
+        ? (str(c.ra) as TankRoleAffinity)
+        : 'Engine',
   }
 }
 
@@ -448,7 +463,8 @@ function decRef(c: CRef | undefined): SubPartIdRef {
 
 interface CCombustor {
   id: string
-  c: string // combustionId
+  r: string // reactionId
+  mr?: number // mixtureRatio (omit when null — fixed reactions)
   p: number // maxPressurePa
   te?: number // thermalEfficiency (omit when 1)
   mt?: number // minimumThrottle (omit when 1)
@@ -456,7 +472,8 @@ interface CCombustor {
 }
 
 function encCombustor(c: Combustor): CCombustor {
-  const o: CCombustor = { id: c.id, c: c.combustionId, p: round(c.maxPressurePa) }
+  const o: CCombustor = { id: c.id, r: c.reactionId, p: round(c.maxPressurePa) }
+  if (c.mixtureRatio != null) o.mr = round(c.mixtureRatio)
   if (c.thermalEfficiency !== 1) o.te = round(c.thermalEfficiency)
   if (c.minimumThrottle !== 1) o.mt = round(c.minimumThrottle)
   if (c.minimumPulseTimeS != null) o.pt = round(c.minimumPulseTimeS)
@@ -466,7 +483,8 @@ function encCombustor(c: Combustor): CCombustor {
 function decCombustor(c: CCombustor): Combustor {
   return {
     id: str(c.id),
-    combustionId: str(c.c),
+    reactionId: str(c.r),
+    mixtureRatio: typeof c.mr === 'number' ? c.mr : null,
     maxPressurePa: num(c.p, 5_000_000),
     thermalEfficiency: typeof c.te === 'number' ? c.te : 1,
     minimumThrottle: typeof c.mt === 'number' ? c.mt : 1,
@@ -817,17 +835,26 @@ function decAnimation(c: CAnimation): PartAnimation {
   }
 }
 
-// ── custom combustion processes (user-authored propellants) ──────────────────
+// ── custom reactions (user-authored propellants) ─────────────────────────────
 
-interface CCombustionProcess {
+const REACTION_CATEGORIES: ReadonlySet<string> = new Set([
+  'Bipropellant',
+  'Hypergolic',
+  'Monopropellant',
+  'Solid',
+  'Thermal',
+])
+
+interface CReaction {
   id: string
   n?: string // name (omitted when === id)
+  c?: string // category (omitted at the Monopropellant default)
   r: [string, number][] // reactants [phaseId, massShare]
   lut: [number, number, number, number][] // rows [lnPressure, temperatureK, gamma, molarMassGPerMol]
 }
 
-function encCustomCombustion(c: CustomCombustionProcess): CCombustionProcess {
-  const o: CCombustionProcess = {
+function encCustomReaction(c: CustomReaction): CReaction {
+  const o: CReaction = {
     id: c.id,
     r: c.reactants.map((x) => [x.phaseId, round(x.massShare)]),
     lut: c.lut.map((row) => [
@@ -838,13 +865,18 @@ function encCustomCombustion(c: CustomCombustionProcess): CCombustionProcess {
     ]),
   }
   if (c.name && c.name !== c.id) o.n = c.name
+  if (c.category !== 'Monopropellant') o.c = c.category
   return o
 }
 
-function decCustomCombustion(c: CCombustionProcess): CustomCombustionProcess {
+function decCustomReaction(c: CReaction): CustomReaction {
   return {
     id: str(c.id),
     name: str(c.n) || str(c.id),
+    category:
+      c.c != null && REACTION_CATEGORIES.has(str(c.c))
+        ? (str(c.c) as ReactionCategory)
+        : 'Monopropellant',
     reactants: arr<[string, number]>(c.r).map(([p, m]) => ({ phaseId: str(p), massShare: num(m) })),
     lut: arr<[number, number, number, number]>(c.lut).map(([l, t, g, m]) => ({
       lnPressure: num(l),
@@ -872,7 +904,7 @@ export interface CompactProject {
   k?: CKitten[] // kittens
   a?: CAnimation[] // animations
   m?: CCustomMesh[] // customMeshes (kitten only)
-  cp?: CCombustionProcess[] // customCombustionProcesses
+  cr?: CReaction[] // customReactions
 }
 
 /** Verbose export envelope → compact wire object (drops defaults, rounds, shortens keys). */
@@ -892,8 +924,7 @@ export function encodeProject(env: ProjectExportEnvelope): CompactProject {
   if (d.animations.length) o.a = d.animations.map(encAnimation)
   const meshes = d.customMeshes.map(encCustomMesh).filter((m): m is CCustomMesh => m != null)
   if (meshes.length) o.m = meshes
-  if (d.customCombustionProcesses.length)
-    o.cp = d.customCombustionProcesses.map(encCustomCombustion)
+  if (d.customReactions.length) o.cr = d.customReactions.map(encCustomReaction)
   return o
 }
 
@@ -915,7 +946,7 @@ export function decodeProject(raw: CompactProject): ProjectExportEnvelope {
       kittens: arr<CKitten>(raw.k).map(decKitten),
       animations: arr<CAnimation>(raw.a).map(decAnimation),
       customMeshes: arr<CCustomMesh>(raw.m).map(decCustomMesh),
-      customCombustionProcesses: arr<CCombustionProcess>(raw.cp).map(decCustomCombustion),
+      customReactions: arr<CReaction>(raw.cr).map(decCustomReaction),
     },
   }
 }

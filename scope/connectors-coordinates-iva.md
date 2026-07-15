@@ -4,7 +4,7 @@
 > Read alongside [docs/coordinates.md](../docs/coordinates.md) and
 > [docs/ksa-part-connector-notes.md](../docs/ksa-part-connector-notes.md).
 
-**Baseline:** re-vetted against KSA build **2026.7.3.4826** (decomp @ 4826 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.5.4892** (decomp @ 4826 + shipped Core XML).
 **Baseline status:** ✅ **CURRENT** — the coordinate calibration, connector flag _schema_, and
 IVA/NotIVA are all **intact**; the `<DockingPort>` GameData schema (BREAKING in 4750) is fixed. As
 of 4826, connectors carry new attach-node grouping (`<Sibling>` geometry / `<Aligned>` GameData);
@@ -93,6 +93,23 @@ follows the root part.
 - IVA variant must use a **fresh PartModel Id** (reusing one silently collides via the dedup).
 - IVA props render black/invisible outside IVA unless de-IVA'd (the whole NotIVA feature exists for this).
 - Connector `<Flags>` must be emitted in BOTH the Part and GameData documents.
+
+## What changed in 4892
+
+**INTACT — no flexo change.** `QuaternionEx.cs`, `Double3Ex.cs`, `Control.cs`,
+`ControlTemplate.cs`, `DockingPortTemplate.cs`, `DecouplerTemplate.cs`, `PartModel.cs` all
+byte-identical; `Part.Connector` `Flag` enum + `<Flags>`/`<Sibling>` schema unchanged (the
+runtime-only `Connector.Blocked` obstruction concept from 4826 was removed again);
+`PartModelModule` template (`<Mesh>/<Material>/<RayTracing>/<ShadowCaster>/<Internal>`)
+unchanged — only two new runtime selection-flag bits. Reference-orientation contract
+re-verified: `VehicleEditor` still folds the root's editor rotation into the world attitude and
+pins `Parts.Root.Asmb2ParentAsmb = Identity` at launch; `FlightComputer.UpdateAttitudeTrackError`
+still aims **Body +X** / rolls **+Z**; no ControlPoint/reference-transform concept appeared
+(grep-clean). Rev 4876's "axes gizmo ASMB frame" is a **display-only** camera nav-ball (its +X
+handle = top view — the game itself confirming +X-up) plus a new ASMB/Local manipulation-gizmo
+toggle. The new fuel-line system (`FuelLink*`, rev 4882) persists as `<FuelLink PartA PartB Flow
+Enabled>` in **vehicle saves** (`VehicleSaveData`) with uint instance ids — nothing lands in
+Part/SubPart templates or GameData, so it is NOT a flexo surface.
 
 ## What changed in 4826
 

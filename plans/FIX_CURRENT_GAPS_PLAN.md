@@ -1,7 +1,80 @@
 # Plan — Fix flexo gaps from KSA updates (running)
 
-> **Latest review: `2026.6.9.4750` → `2026.7.3.4826` (see below). All three 4826 gaps are ✅ DONE.**
-> The earlier `4680 → 4750` review (also all done) follows as history.
+> **Latest review: `2026.7.3.4826` → `2026.7.5.4892` (see below). All 4892 gaps are ✅ DONE.**
+> The earlier `4750 → 4826` and `4680 → 4750` reviews (also all done) follow as history.
+
+---
+
+# 4892 review — `2026.7.3.4826` → `2026.7.5.4892`
+
+**Derived from:** the [scope/](../scope/FULL_SCOPE.md) catalog review — full `git diff 1265373
+7cf5c0a` inside `ksa-game-assemblies` (the on-disk `_prev` tree was stale at 4750; the 4826
+baseline came from git history) + shipped-Core-XML diff + per-area contract re-verification.
+Headline change: rev 4884 ("!THIS BREAKS SAVED GAMES AND SAVED VEHICLES!") — **combustion
+processes refactored into Reactions** (no hardcoded O/F ratio; ThermoToolkit-generated data;
+prop-tank affinity). All fixes below follow the no-migration rule (model the new form only;
+stale persisted projects are purged at boot by `snapshotMatchesModel`).
+
+## Priority summary (4892)
+
+| # | Gap | Severity | Flexo touch-points | Scope doc |
+|---|---|---|---|---|
+| A | Combustion → Reactions refactor (Combustion.xml deleted; `<Combustor><Combustion Id>` → `<Reaction Id>` + required `<MixtureRatio>`; custom propellants `<CombustionProcess>` no longer mapped by `AssetBundle`) | ✅ **DONE** (was BREAKING) | `reactionCatalog.ts` (new, replaces `combustionCatalog.ts`), `enginePhysics.ts`, `types.ts`, `partXmlParser.ts`, `partXmlSerializer.ts`, `reactionStore.ts` (replaces `combustionStore.ts`), `editorStore.ts`, `EnginePanel.tsx`, `EngineSections.tsx`, `projectCodec.ts`, `projectTransfer.ts` | [engines](../scope/engines.md#what-changed-in-4892--the-reactions-refactor-rev-48844885) |
+| B | Tank `<CombustionProcess>` → `<RoleAffinity>` (ConsumerRole flags) | ✅ **DONE** (was SCHEMA-DRIFT) | `types.ts`, `partXmlParser.ts`, `partXmlSerializer.ts`, `projectCodec.ts` | [gamedata-modules](../scope/gamedata-modules.md#what-changed-in-4892) |
+| C | Ground clutter: LOD `<Material Id>` refs REQUIRED (load-time throw), ecotype materials need unique Ids | ✅ **DONE** (was BREAKING for the scaffold) | `scripts/build-cartoon-moon.ts`, `ksa-mods/cartoon-moon/` (regenerated; also fixed the latent shared-`card` GLB mesh-name first-wins collision) | [ground-clutter](../scope/ground-clutter.md#what-changed-in-4892) |
+| D | `EngineALargeUpperStage` volumetric exhaust removed (LR91 Dev deleted) | ✅ **DONE** (was COSMETIC — stale dropdown option) | `types.ts` `VOLUMETRIC_EXHAUST_IDS` | [engines](../scope/engines.md#what-changed-in-4892--the-reactions-refactor-rev-48844885) |
+
+### Gap A — Reactions refactor (BREAKING)
+
+- **Contract:** `CombustorTemplate.Combustion: SerializedReference` → `Reaction: ReactionReference`
+  (`<Reaction Id>` + optional-but-required-for-mixtures `<MixtureRatio>` text child;
+  `ResolveReaction` throws on a ratio-less MixtureReaction and on ThermalReactions).
+  `CombustionProcess`/`CombustionTable` class family deleted; `Reactions.xml` ships 6
+  `<MixtureReaction>` (2-D O/F×lnP LUTs + `<DefaultMixtureRatio>`), 4 combustor-drivable
+  `<FixedReaction>` (incl. `Category="Solid"` APCP/DoubleBase), 6 `<ThermalReaction>` (unusable —
+  no thermal core template exists). `AssetBundle` maps the three new element names and no longer
+  maps `<CombustionProcess>` — an old-style flexo export would be silently dropped.
+- **Fix (DONE):** see [engines.md "What changed in 4892"](../scope/engines.md#what-changed-in-4892--the-reactions-refactor-rev-48844885)
+  for the full flexo-side change list (catalog rewrite, `sliceLutAtMixtureRatio` port,
+  `Combustor.reactionId`+`mixtureRatio`, custom propellants as `<FixedReaction>`, O/F UI,
+  `KNOWN_REACTIONS` snapshot, SRB→APCP, fixtures + mirror re-sync). Regression: `reactionCatalog.test.ts`,
+  `enginePhysics.test.ts` (slice port + re-pinned Hydrolox parity ≈ 445.4 s / 932.6 kN),
+  `partXmlParser/Serializer.test.ts`, `partCatalog.test.ts` (4892 fixtures).
+
+### Gap B — Tank `<RoleAffinity>` (SCHEMA-DRIFT)
+
+- **Contract:** `AsmbTankTemplate.DefaultCombustionProcess` → `RoleAffinity: ConsumerRole`
+  ([Flags] `None|Engine|Thruster`, default `Engine`, XmlSerializer space-separated text).
+- **Fix (DONE):** `Tank.roleAffinity: TankRoleAffinity`, token-normalizing parse, emit only at
+  non-default, codec key `ra`. Regression: `partXmlParser.test.ts` "tank `<RoleAffinity>`".
+
+### Gap C — Ground-clutter multi-material schema (BREAKING for the scaffold)
+
+- **Contract:** `GroundClutterLodReference.OnDataLoad` now **throws** on a LOD without
+  `<Material Id>` references, on concrete LOD materials, and on ref-count ≠ GLB material count;
+  `ClutterEcotypeReference.MaterialReferences` is a list and each ecotype `<Material>` needs a
+  unique global Id (first-wins namespace now contains Core's `EarthGrassClutterMaterial`,
+  `Trunk`, `Leaves`, `Tree0Cards`, `Tree1Cards`).
+- **Fix (DONE):** `build-cartoon-moon.ts` emits one `<Material Id="CartoonMoonCrowdMaterial"/>`
+  per LOD + the Id'd ecotype material; unique per-character GLB mesh names (`<name>Card`) fix the
+  latent first-wins mesh collapse; scaffold regenerated. In-game re-verification pending (next
+  KSA session).
+
+### Gap D — Removed volumetric exhaust id (COSMETIC)
+
+- `<VolumetricExhaustTemplate Id="EngineALargeUpperStage">` deleted with the LR91 Dev engine;
+  dropped from `VOLUMETRIC_EXHAUST_IDS` so the nozzle FX dropdown no longer offers a dangling id.
+
+### Not gaps (4892, re-verified intact)
+
+- **Animation** (keyframe loader/schema byte-identical; rev-4875 refactor is kitten-skeletal only),
+  **kittens** (render resources unchanged), **custom assets / mod export** (thumbnail null-deref,
+  `ENABLE_EMISSIVE`, mesh-name contract, mod.toml all stand; `MeshReference.PrimitiveMaterialIds`
+  is clutter-only), **connectors/coords/IVA/reference-orientation** (all anchors byte-identical;
+  the rev-4876 "ASMB axes gizmo" is a display-only camera nav-ball; fuel links are vehicle-save
+  state, not a part surface).
+- **Persisted projects:** model shape changed (reaction/tank fields) → old snapshots are
+  intentionally discarded by the boot purge, per the constitution.
 
 ---
 

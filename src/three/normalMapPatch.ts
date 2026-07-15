@@ -42,11 +42,14 @@ export function applyKsaShaderPatches(
       )
     }
     if (opts.emissive) {
+      // KSA: lightColor += gammaToLinear(vec3(mask) * EMISSIVE_MULTIPLIER), with
+      // gammaToLinear(x) = pow(x, 2.2) (Shared.glsl). Match the exact curve so
+      // mid-strength glows preview at the in-game brightness.
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <emissivemap_fragment>',
         /* glsl */ `
           vec4 emissiveColor = texture2D( emissiveMap, vEmissiveMapUv );
-          totalEmissiveRadiance += emissiveColor.rrr * ${EMISSIVE_BOOST.toFixed(2)};
+          totalEmissiveRadiance += pow( emissiveColor.rrr * ${EMISSIVE_BOOST.toFixed(2)}, vec3( 2.2 ) );
         `,
       )
     }

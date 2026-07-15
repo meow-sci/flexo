@@ -27,13 +27,25 @@ export function makeFlatMaterial(): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ color: 0xbfc4cc, metalness: 0.6, roughness: 0.5 })
 }
 
-/** Builds a diffuse-only material for a single custom-mesh face (v1 custom assets). */
+/**
+ * The scalar PBR values a custom face exports when it has no user material: the shared
+ * synthetic NeutralORM solid is (AO=255, Rough=128, Metal=0). The editor materials use the
+ * SAME values so what you see is what ships.
+ */
+export const NEUTRAL_METALNESS = 0
+export const NEUTRAL_ROUGHNESS = 128 / 255
+
+/** Builds a diffuse-only material for a single custom-mesh face (no user material assigned). */
 export async function buildCustomFaceMaterial(
   ktx2Url: string,
   wrap: TextureWrap = 'repeat',
 ): Promise<THREE.MeshStandardMaterial> {
   const texture = await loadWrappedTexture(ktx2Url, 'srgb', wrap)
-  return new THREE.MeshStandardMaterial({ map: texture, metalness: 0.1, roughness: 0.7 })
+  return new THREE.MeshStandardMaterial({
+    map: texture,
+    metalness: NEUTRAL_METALNESS,
+    roughness: NEUTRAL_ROUGHNESS,
+  })
 }
 
 function wrapMode(wrap: TextureWrap): THREE.Wrapping {
@@ -80,7 +92,11 @@ export function buildGlowingFaceMaterial(
 ): THREE.MeshStandardMaterial {
   const map = makeDataTexture(diffuse, THREE.SRGBColorSpace, wrap)
   const emissiveMap = makeDataTexture(mask, THREE.NoColorSpace, wrap)
-  const mat = new THREE.MeshStandardMaterial({ map, metalness: 0.1, roughness: 0.7 })
+  const mat = new THREE.MeshStandardMaterial({
+    map,
+    metalness: NEUTRAL_METALNESS,
+    roughness: NEUTRAL_ROUGHNESS,
+  })
   mat.emissiveMap = emissiveMap
   // emissive uniform deliberately left black (free for the selection highlight); the glow is
   // ADDED from the mask in the shader patch — see normalMapPatch + SubPartObject.setSelected.

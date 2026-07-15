@@ -34,7 +34,7 @@ import {
 } from '../three/primitives'
 import { buildMeshAtlasGlb } from '../ksa/exportGlb'
 import { decodeImage, type ImageLevel } from '../ktx/decodeImage'
-import { encodeImageToKtx2 } from '../ktx/encodeKtx2'
+import { encodeImageToKtx2, isLegacySrgbKtx2 } from '../ktx/encodeKtx2'
 import { compositeGlow, solidGlowBitmap, neutralBase, type GlowBitmap } from '../ktx/glowComposite'
 import {
   buildCustomFaceMaterial,
@@ -401,7 +401,7 @@ function scheduleRebuild(): Promise<void> {
 export async function addCustomTexture(file: Blob, name: string): Promise<CustomTexture> {
   const id = `tex_${shortId()}`
   const decoded = await decodeImage(file)
-  const ktx2 = await encodeImageToKtx2(decoded, { srgb: true, zstd: true })
+  const ktx2 = await encodeImageToKtx2(decoded, { zstd: true })
 
   await putAsset(assetKeys.textureSource(id), file, file.type || 'image/png')
   await putAsset(assetKeys.textureKtx2(id), ktx2, 'image/ktx2')
@@ -634,6 +634,23 @@ export async function removeCustomMesh(id: string): Promise<void> {
   await scheduleRebuild()
 }
 
+/**
+ * The stored `.ktx2` is a derived cache of the stored source image. Encodes written by
+ * pre-UNORM-convention builds are tagged `VK_FORMAT_R8G8B8A8_SRGB`, which KSA gamma-decodes
+ * TWICE in-game (hardware sRGB view + the shader's own gammaToLinear) — mid-tones render
+ * too dark. Regenerate such a stale cache from the source (cache invalidation, not data
+ * migration; see encodeKtx2.ts).
+ */
+async function ensureCurrentKtx2(id: string, stored: Blob): Promise<Blob> {
+  const header = new Uint8Array(await stored.slice(0, 16).arrayBuffer())
+  if (!isLegacySrgbKtx2(header)) return stored
+  const src = await getAsset(assetKeys.textureSource(id))
+  if (!src) return stored
+  const ktx2 = await encodeImageToKtx2(await decodeImage(src), { zstd: true })
+  await putAsset(assetKeys.textureKtx2(id), ktx2, 'image/ktx2')
+  return new Blob([ktx2.slice()], { type: 'image/ktx2' })
+}
+
 // ── hydration on project load ─────────────────────────────────────────────────
 export async function hydrateCustomAssets(): Promise<void> {
   for (const id of [...textureKtx2Urls.keys(), ...textureSrcUrls.keys()]) revokeTexture(id)
@@ -644,7 +661,7 @@ export async function hydrateCustomAssets(): Promise<void> {
   const part = $part.get()
   for (const t of part.customTextures) {
     const k = await getAsset(assetKeys.textureKtx2(t.id))
-    if (k) textureKtx2Urls.set(t.id, URL.createObjectURL(k))
+    if (k) textureKtx2Urls.set(t.id, URL.createObjectURL(await ensureCurrentKtx2(t.id, k)))
     const s = await getAsset(assetKeys.textureSource(t.id))
     if (s) textureSrcUrls.set(t.id, URL.createObjectURL(s))
   }

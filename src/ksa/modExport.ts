@@ -199,11 +199,11 @@ function variantRemap(variants: Map<string, ExportVariant>): Map<string, string>
   return new Map([...variants.values()].map((v) => [v.originalId, v.variantId]))
 }
 
-/** Encodes a decoded image to a Zstd KTX2 (sRGB diffuse vs linear mask), generating its mip chain. */
-function encodeLevel(level: ImageLevel, srgb: boolean): Promise<Uint8Array> {
+/** Encodes a decoded image to a Zstd KTX2, generating its mip chain. */
+function encodeLevel(level: ImageLevel): Promise<Uint8Array> {
   return encodeImageToKtx2(
     { width: level.width, height: level.height, levels: buildMipChain(level) },
-    { srgb, zstd: true },
+    { zstd: true },
   )
 }
 
@@ -222,8 +222,8 @@ async function emitGlowTextures(
   const { diffuse, mask } = compositeGlow(base, glow)
   const diffusePath = `Textures/${token}_Diffuse.ktx2`
   const emissivePath = `Textures/${token}_Emissive.ktx2`
-  binaries.push({ path: diffusePath, data: await encodeLevel(diffuse, true) })
-  binaries.push({ path: emissivePath, data: await encodeLevel(mask, false) })
+  binaries.push({ path: diffusePath, data: await encodeLevel(diffuse) })
+  binaries.push({ path: emissivePath, data: await encodeLevel(mask) })
   return { diffusePath, emissivePath }
 }
 
@@ -301,16 +301,17 @@ async function planKittenSubPart(
     return rel
   }
 
-  // Glass shell (visor 'glass'/'glassGlow'): a chosen tint becomes a solid sRGB diffuse (KSA's
-  // glass shader derives only ~10% of its color from the diffuse, so a saturated solid reads as a
-  // subtle tinted glass); no tint keeps the real visor diffuse. Non-glass submeshes also land here.
+  // Glass shell (visor 'glass'/'glassGlow'): a chosen tint becomes a solid diffuse of the picked
+  // sRGB color (KSA's glass shader derives only ~10% of its color from the diffuse, so a saturated
+  // solid reads as a subtle tinted glass); no tint keeps the real visor diffuse. Non-glass
+  // submeshes also land here.
   const tint = surface === 'glass' || surface === 'glassGlow' ? m.glass?.tint : undefined
   let diffusePath: string
   if (tint) {
     diffusePath = `Textures/${bundleToken}_${subPartId}_Diffuse.ktx2`
     binaries.push({
       path: diffusePath,
-      data: await makeSolidKtx2(tint.r, tint.g, tint.b, { srgb: true }),
+      data: await makeSolidKtx2(tint.r, tint.g, tint.b),
     })
   } else {
     diffusePath = await resolve(src.diffuse)

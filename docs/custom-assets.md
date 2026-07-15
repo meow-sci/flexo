@@ -55,13 +55,19 @@ of *placements* are all unchanged. A custom mesh is just a synthetic
   `createImageBitmap` + a canvas, reads back RGBA8, downscales so the longest edge
   ≤ `maxSize` (respects the ~6 MP browser decode ceiling), and builds a full mip
   chain down to 1×1 by 2×2 box-filtering in sRGB space.
-- **`encodeKtx2.ts`** — `encodeImageToKtx2(image, {srgb, zstd}) → Uint8Array`.
+- **`encodeKtx2.ts`** — `encodeImageToKtx2(image, {zstd}) → Uint8Array`.
   Assembles a standards-compliant KTX2 via [`ktx-parse`](https://github.com/donmccurdy/KTX-Parse)'s
   `write()`. **This is the single chokepoint for the texture format** — a future
   BC7 swap touches only this file. Hand-builds the Data Format Descriptor (DFD) for
-  a 4×8-bit RGBA texel (R/G/B at the chosen transfer function, A always linear).
-  - `srgb: true`  → `VK_FORMAT_R8G8B8A8_SRGB` (43) + sRGB transfer (diffuse).
-  - `srgb: false` → `VK_FORMAT_R8G8B8A8_UNORM` (23) + linear transfer (normal / ORM).
+  a 4×8-bit RGBA texel.
+  - Container tags are **always `VK_FORMAT_R8G8B8A8_UNORM` (23) + linear transfer**,
+    even for sRGB content: KSA honors the file's vkFormat verbatim AND its shader
+    gamma-decodes the diffuse sample itself (`gammaToLinear` = pow 2.2), so an
+    `_SRGB`-tagged file double-decodes in-game (mid-tones too dark). Diffuse content
+    keeps sRGB **bytes**; Core's own BC7 atlases follow the same convention. The
+    editor is unaffected (TextureCache forces `colorSpace` per call site).
+    `isLegacySrgbKtx2()` detects pre-convention caches; `ensureCurrentKtx2` in
+    `customAssetStore` regenerates them from the stored source on hydrate.
   - `container.levelCount` is set explicitly to the mip-chain length — `write()`
     emits exactly that many levels (it does **not** infer from the array).
 - **`zstd.ts`** — lazy `@bokuweb/zstd-wasm` `compress` wrapper (`compressZstd`,

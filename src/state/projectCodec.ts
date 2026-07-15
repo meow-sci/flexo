@@ -51,7 +51,8 @@ import type { ProjectExportEnvelope } from './projectTransfer'
 export const PROJECT_EXPORT_FORMAT = 'flexo-project'
 // v2: KSA 2026.7.5.4892 Reactions refactor — combustor `c`(combustionId)→`r`+`mr`, tank
 // `cp`(combustionProcessId)→`ra`(roleAffinity), envelope `cp`(custom processes)→`cr`(custom
-// reactions). Per the no-migration rule, v1 payloads are REJECTED on import, never converted.
+// reactions). v3: custom materials (`mat`). Per the no-migration rule, older payloads are
+// REJECTED on import, never converted.
 export const PROJECT_EXPORT_VERSION = 3
 
 /**

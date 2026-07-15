@@ -517,6 +517,89 @@ describe('buildModZip', () => {
   })
 })
 
+/** A part with primitive meshes wearing a CustomMaterial (the "red metallic button" case). */
+function partWithMaterialMeshes(): EditingPart {
+  const part = createEmptyPart()
+  part.partId = 'ButtonMod'
+  part.customMaterials.push({
+    id: 'mat_red1',
+    name: 'Red Metal',
+    baseColor: { kind: 'color', color: { r: 255, g: 0, b: 0 } },
+    metalness: { kind: 'value', value: 1 },
+    roughness: { kind: 'value', value: 0.15 },
+  })
+  const add = (subPartId: string, materialId?: string) => {
+    part.customMeshes.push({
+      id: `mesh_${subPartId}`,
+      name: subPartId,
+      subPartId,
+      primitive: { kind: 'box', params: { width: 1, height: 1, depth: 1 } },
+      faceTextures: {},
+      materialId,
+    })
+    part.placements.push({
+      instanceId: subPartId,
+      subPartTemplateId: subPartId,
+      ...identityTransform(),
+      layerId: 'default',
+    })
+  }
+  add('flexo_button_a', 'mat_red1')
+  add('flexo_plinth_b', 'mat_red1')
+  add('flexo_bare_c') // no material → untextured legacy SubPart
+  return part
+}
+
+describe('buildCustomBundle — uniform-channel CustomMaterial (red metallic button)', () => {
+  it('emits solid BaseColor + ORM texels and ONE shared PbrMaterial for both meshes', async () => {
+    const bundle = await buildCustomBundle(partWithMaterialMeshes(), 'ButtonMod')
+    const paths = bundle.binaries.map((b) => b.path)
+
+    // Uniform channels become 1×1 solids: pure-red diffuse + ORM (AO 255, rough 0.15→38=0x26, metal 255).
+    expect(paths.some((p) => p.endsWith('_BaseColor_ff0000.ktx2'))).toBe(true)
+    expect(paths.some((p) => p.endsWith('_ORM_ff26ff.ktx2'))).toBe(true)
+    expect(paths.some((p) => p.endsWith('_FlatNormal.ktx2'))).toBe(true)
+    // Each solid ships exactly once even though two meshes share the material.
+    expect(paths.filter((p) => p.includes('_BaseColor_ff0000'))).toHaveLength(1)
+    expect(paths.filter((p) => p.includes('_ORM_ff26ff'))).toHaveLength(1)
+
+    // ONE shared <PbrMaterial>, named from the material, referenced by both SubParts.
+    const xml = bundle.assetsXml!
+    expect(xml.match(/<PbrMaterial /g)?.length).toBe(1)
+    expect(xml).toContain('<PbrMaterial Id="flexo_RedMetal_red1_Material"')
+    expect(xml.match(/<Material Id="flexo_RedMetal_red1_Material"/g)?.length).toBe(2)
+    expect(xml).toContain('<Diffuse Path="Textures/ButtonMod_flexo_button_a_BaseColor_ff0000.ktx2"')
+    expect(xml).toContain('<AoRoughMetal Path="Textures/ButtonMod_flexo_button_a_ORM_ff26ff.ktx2"')
+
+    // The material-less mesh stays untextured (no <Material>) but keeps its MeshView.
+    expect(xml).toContain('<SubPart Id="flexo_bare_c"')
+    const bare = xml.slice(xml.indexOf('<SubPart Id="flexo_bare_c"'))
+    expect(bare.slice(0, bare.indexOf('</SubPart>'))).not.toContain('<Material ')
+    expect(bare).toContain('<Mesh Id="flexo_bare_c_VM"')
+  })
+
+  it('a glowing mesh keeps its material scalars in the ORM and bakes the base color under the glow', async () => {
+    const part = partWithMaterialMeshes()
+    part.customMeshes[0].emissive = {
+      shape: 'whole',
+      color: { r: 255, g: 255, b: 255 },
+      strength: 0.5,
+    }
+    const bundle = await buildCustomBundle(part, 'ButtonMod')
+    const xml = bundle.assetsXml!
+    // The glowing mesh gets its own per-mesh material (composited diffuse) with <Emissive>…
+    expect(xml).toContain('<PbrMaterial Id="flexo_button_a_Material"')
+    expect(xml).toContain(
+      '<Emissive Path="Textures/ButtonMod_flexo_button_a_flexo_button_a_Emissive.ktx2"',
+    )
+    // …still carrying the material's metallic ORM solid.
+    const glowMat = xml.slice(xml.indexOf('<PbrMaterial Id="flexo_button_a_Material"'))
+    expect(glowMat.slice(0, glowMat.indexOf('</PbrMaterial>'))).toContain('_ORM_ff26ff.ktx2')
+    // The non-glowing sibling still shares the plain material entry.
+    expect(xml).toContain('<PbrMaterial Id="flexo_RedMetal_red1_Material"')
+  })
+})
+
 // A part with a single visor (transparent kitten submesh). specKey 'suit' matches the mocked bake
 // above so the geometry node resolves; transparent:true is what makes it a visor.
 function partWithVisor(overrides: Partial<CustomMesh>): EditingPart {

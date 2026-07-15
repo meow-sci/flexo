@@ -5,17 +5,22 @@ describe('serializeAssets', () => {
   it('emits MeshAtlas, PbrMaterial and SubPart for a textured custom mesh', () => {
     const xml = serializeAssets({
       meshAtlasPath: 'Meshes/MyMod_MeshAtlas.glb',
-      subParts: [
+      materials: [
         {
-          subPartId: 'flexo_panel_ab12cd',
-          materialId: 'flexo_panel_ab12cd_Material',
+          id: 'flexo_panel_ab12cd_Material',
           diffusePath: 'Textures/dean_ab12cd_Diffuse.ktx2',
+          normalPath: 'Textures/MyMod_FlatNormal.ktx2',
+          aoRoughMetalPath: 'Textures/MyMod_NeutralORM.ktx2',
         },
       ],
+      subParts: [{ subPartId: 'flexo_panel_ab12cd', materialId: 'flexo_panel_ab12cd_Material' }],
     })
     expect(xml).toContain('<MeshAtlas Path="Meshes/MyMod_MeshAtlas.glb"')
     expect(xml).toContain('<PbrMaterial Id="flexo_panel_ab12cd_Material"')
     expect(xml).toContain('<Diffuse Path="Textures/dean_ab12cd_Diffuse.ktx2" Category="Vessel"')
+    // Every material carries the three channels KSA dereferences with no null check.
+    expect(xml).toContain('<Normal Path="Textures/MyMod_FlatNormal.ktx2" Category="Vessel"')
+    expect(xml).toContain('<AoRoughMetal Path="Textures/MyMod_NeutralORM.ktx2" Category="Vessel"')
     expect(xml).toContain('<SubPart Id="flexo_panel_ab12cd"')
     // PartModel needs a UNIQUE Id — KSA dedupes PartModels by Template.Id, so an
     // empty Id collapses multi-SubPart parts onto the first piece.
@@ -31,7 +36,7 @@ describe('serializeAssets', () => {
   it('omits material/PbrMaterial for an untextured custom mesh', () => {
     const xml = serializeAssets({
       meshAtlasPath: 'Meshes/X.glb',
-      subParts: [{ subPartId: 's1', materialId: null, diffusePath: null }],
+      subParts: [{ subPartId: 's1', materialId: null }],
     })
     expect(xml).not.toContain('PbrMaterial')
     expect(xml).not.toContain('<Material ')
@@ -42,51 +47,82 @@ describe('serializeAssets', () => {
     expect(xml).toContain('<Mesh Id="s1_VM"')
   })
 
+  it('one shared PbrMaterial can serve several SubParts (Core pack-material pattern)', () => {
+    const xml = serializeAssets({
+      meshAtlasPath: 'Meshes/X.glb',
+      materials: [
+        {
+          id: 'flexo_RedMetal_ab12cd34_Material',
+          diffusePath: 'Textures/X_BaseColor_ff0000.ktx2',
+          normalPath: 'Textures/X_FlatNormal.ktx2',
+          aoRoughMetalPath: 'Textures/X_ORM_ff26ff.ktx2',
+        },
+      ],
+      subParts: [
+        { subPartId: 'button', materialId: 'flexo_RedMetal_ab12cd34_Material' },
+        { subPartId: 'plinth', materialId: 'flexo_RedMetal_ab12cd34_Material' },
+      ],
+    })
+    // ONE material declaration…
+    expect(xml.match(/<PbrMaterial /g)?.length).toBe(1)
+    // …referenced by both SubParts, each with its own unique PartModel id.
+    expect(xml.match(/<Material Id="flexo_RedMetal_ab12cd34_Material"/g)?.length).toBe(2)
+    expect(xml).toContain('<PartModel Id="button_Model"')
+    expect(xml).toContain('<PartModel Id="plinth_Model"')
+  })
+
   it('emits <Emissive> after <AoRoughMetal> when emissivePath is set, and omits it otherwise', () => {
     const xml = serializeAssets({
       meshAtlasPath: 'Meshes/X.glb',
-      normalPath: 'Textures/X_FlatNormal.ktx2',
-      aoRoughMetalPath: 'Textures/X_NeutralORM.ktx2',
-      subParts: [
+      materials: [
         {
-          subPartId: 'glow',
-          materialId: 'glow_Material',
+          id: 'glow_Material',
           diffusePath: 'Textures/X_glow_Diffuse.ktx2',
+          normalPath: 'Textures/X_FlatNormal.ktx2',
+          aoRoughMetalPath: 'Textures/X_NeutralORM.ktx2',
           emissivePath: 'Textures/X_glow_Emissive.ktx2',
         },
         {
-          subPartId: 'plain',
-          materialId: 'plain_Material',
+          id: 'plain_Material',
           diffusePath: 'Textures/X_plain_Diffuse.ktx2',
+          normalPath: 'Textures/X_FlatNormal.ktx2',
+          aoRoughMetalPath: 'Textures/X_NeutralORM.ktx2',
         },
+      ],
+      subParts: [
+        { subPartId: 'glow', materialId: 'glow_Material' },
+        { subPartId: 'plain', materialId: 'plain_Material' },
       ],
     })
     expect(xml).toContain('<Emissive Path="Textures/X_glow_Emissive.ktx2" Category="Vessel"')
     // Emissive comes after AoRoughMetal in the glowing material.
     expect(xml.indexOf('X_NeutralORM.ktx2')).toBeLessThan(xml.indexOf('X_glow_Emissive.ktx2'))
     // The non-glow material has no <Emissive>.
-    const plainMat = xml.slice(xml.indexOf('plain_Material'))
-    expect(plainMat).not.toContain('Emissive')
+    const plainMat = xml.slice(xml.indexOf('<PbrMaterial Id="plain_Material"'))
+    expect(plainMat.slice(0, plainMat.indexOf('</PbrMaterial>'))).not.toContain('Emissive')
   })
 
   it('a glass shell + its opaque glow sibling emit <PartModelGlass> and <PartModel>+<Emissive>', () => {
     const xml = serializeAssets({
       meshAtlasPath: 'Meshes/X.glb',
-      normalPath: 'Textures/X_FlatNormal.ktx2',
-      aoRoughMetalPath: 'Textures/X_NeutralORM.ktx2',
-      subParts: [
+      materials: [
         {
-          subPartId: 'visor',
-          materialId: 'visor_Material',
+          id: 'visor_Material',
           diffusePath: 'Textures/X_visor_Diffuse.ktx2',
-          glass: true,
+          normalPath: 'Textures/X_FlatNormal.ktx2',
+          aoRoughMetalPath: 'Textures/X_NeutralORM.ktx2',
         },
         {
-          subPartId: 'visor_Glow',
-          materialId: 'visor_Glow_Material',
+          id: 'visor_Glow_Material',
           diffusePath: 'Textures/X_glow_Diffuse.ktx2',
+          normalPath: 'Textures/X_FlatNormal.ktx2',
+          aoRoughMetalPath: 'Textures/X_NeutralORM.ktx2',
           emissivePath: 'Textures/X_glow_Emissive.ktx2',
         },
+      ],
+      subParts: [
+        { subPartId: 'visor', materialId: 'visor_Material', glass: true },
+        { subPartId: 'visor_Glow', materialId: 'visor_Glow_Material' },
       ],
     })
     expect(xml).toContain('<PartModelGlass Id="visor_Model"')
@@ -94,33 +130,32 @@ describe('serializeAssets', () => {
     expect(xml).toContain('<Emissive Path="Textures/X_glow_Emissive.ktx2"')
   })
 
-  it('per-SubPart normal/ORM override the shared synthetic; undefined falls back', () => {
+  it('kitten materials carry their own real normal/ORM paths; map-less ones use the solids', () => {
     const xml = serializeAssets({
       meshAtlasPath: 'Meshes/X.glb',
-      normalPath: 'Textures/X_FlatNormal.ktx2',
-      aoRoughMetalPath: 'Textures/X_NeutralORM.ktx2',
-      subParts: [
-        // Kitten suit: carries its own real normal + ORM (overrides the shared synthetic).
+      materials: [
         {
-          subPartId: 'suit',
-          materialId: 'suit_Material',
+          id: 'suit_Material',
           diffusePath: 'Textures/Characters/Kitten_EMU_A.ktx2',
           normalPath: 'Textures/Characters/Kitten_EMU_N.ktx2',
           aoRoughMetalPath: 'Textures/Characters/Kitten_EMU_ORM.ktx2',
         },
-        // Kitten eyes: diffuse only → undefined channels fall back to the shared synthetic.
         {
-          subPartId: 'eye',
-          materialId: 'eye_Material',
+          id: 'eye_Material',
           diffusePath: 'Textures/Characters/Kitten_Eye_A.ktx2',
+          normalPath: 'Textures/X_FlatNormal.ktx2',
+          aoRoughMetalPath: 'Textures/X_NeutralORM.ktx2',
         },
+      ],
+      subParts: [
+        { subPartId: 'suit', materialId: 'suit_Material' },
+        { subPartId: 'eye', materialId: 'eye_Material' },
       ],
     })
     expect(xml).toContain('<Normal Path="Textures/Characters/Kitten_EMU_N.ktx2" Category="Vessel"')
     expect(xml).toContain(
       '<AoRoughMetal Path="Textures/Characters/Kitten_EMU_ORM.ktx2" Category="Vessel"',
     )
-    // The eye material falls back to the shared synthetic paths.
     expect(xml).toContain('<Normal Path="Textures/X_FlatNormal.ktx2" Category="Vessel"')
     expect(xml).toContain('<AoRoughMetal Path="Textures/X_NeutralORM.ktx2" Category="Vessel"')
   })
@@ -169,14 +204,23 @@ describe('serializeAssets', () => {
   it('emits <PartModelGlass> for a glass SubPart (translucent path)', () => {
     const xml = serializeAssets({
       meshAtlasPath: 'Meshes/X.glb',
-      subParts: [
+      materials: [
         {
-          subPartId: 'visor',
-          materialId: 'visor_Material',
+          id: 'visor_Material',
           diffusePath: 'Textures/Visor.ktx2',
-          glass: true,
+          normalPath: 'Textures/X_FlatNormal.ktx2',
+          aoRoughMetalPath: 'Textures/X_NeutralORM.ktx2',
         },
-        { subPartId: 'suit', materialId: 'suit_Material', diffusePath: 'Textures/Suit.ktx2' },
+        {
+          id: 'suit_Material',
+          diffusePath: 'Textures/Suit.ktx2',
+          normalPath: 'Textures/X_FlatNormal.ktx2',
+          aoRoughMetalPath: 'Textures/X_NeutralORM.ktx2',
+        },
+      ],
+      subParts: [
+        { subPartId: 'visor', materialId: 'visor_Material', glass: true },
+        { subPartId: 'suit', materialId: 'suit_Material' },
       ],
     })
     expect(xml).toContain('<PartModelGlass Id="visor_Model"')

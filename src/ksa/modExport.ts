@@ -1,9 +1,17 @@
 import * as THREE from 'three'
-import type { CustomMesh, CustomTexture, EditingPart } from './types'
+import type {
+  CustomMaterial,
+  CustomMesh,
+  CustomTexture,
+  EditingPart,
+  RgbColor,
+  ScalarChannel,
+} from './types'
 import { isSubPartGameDataEmpty } from './types'
 import { serializeGameData, serializePart } from './partXmlSerializer'
 import {
   serializeAssets,
+  type AssetsMaterialPlan,
   type AssetsSubPartPlan,
   type ReferenceSubPartPlan,
 } from './assetsXmlSerializer'
@@ -24,7 +32,7 @@ import type { KittenTextureExportSettings } from '../state/settingsStore'
 import { createZip, type ZipEntry } from '../util/zip'
 import { encodeImageToKtx2, makeSolidKtx2 } from '../ktx/encodeKtx2'
 import { decodeImage, buildMipChain, type ImageLevel } from '../ktx/decodeImage'
-import { compositeGlow, neutralBase, type GlowBitmap } from '../ktx/glowComposite'
+import { compositeGlow, neutralBase, solidBase, type GlowBitmap } from '../ktx/glowComposite'
 
 /** How part-ified kitten SubParts supply their textures on export (see settingsStore). */
 export type KittenTextureExportConfig = KittenTextureExportSettings
@@ -227,13 +235,133 @@ async function emitGlowTextures(
   return { diffusePath, emissivePath }
 }
 
-/** The decoded base diffuse for a glowing primitive (its primary source image), or neutral gray. */
-async function exportBaseImage(tex: CustomTexture | undefined): Promise<ImageLevel> {
-  if (tex) {
-    const src = await getAsset(assetKeys.textureSource(tex.id))
+/**
+ * The decoded base diffuse a glowing primitive composites over: its primary face
+ * texture → its material's baseColor image → the material's picked color (solid) →
+ * neutral gray. Mirrors customAssetStore's faceBaseImage so editor == export.
+ */
+async function exportBaseImage(
+  tex: CustomTexture | undefined,
+  material: CustomMaterial | undefined,
+  texById: ReadonlyMap<string, CustomTexture>,
+): Promise<ImageLevel> {
+  const mapTex =
+    tex ??
+    (material?.baseColor.kind === 'map' ? texById.get(material.baseColor.textureId) : undefined)
+  if (mapTex) {
+    const src = await getAsset(assetKeys.textureSource(mapTex.id))
     if (src) return (await decodeImage(src)).levels[0]
   }
+  if (material?.baseColor.kind === 'color') return solidBase(material.baseColor.color)
   return neutralBase()
+}
+
+/** Two-digit lowercase hex of a 0..255 value (solid-texture filename tokens). */
+function hex2(v: number): string {
+  return Math.max(0, Math.min(255, Math.round(v)))
+    .toString(16)
+    .padStart(2, '0')
+}
+
+/** A 0..1 channel value quantized to a texel byte. */
+function toTexel(v: number): number {
+  return Math.max(0, Math.min(255, Math.round(v * 255)))
+}
+
+/** Resolved texture channels for one <PbrMaterial> (all binaries already emitted). */
+interface ResolvedChannels {
+  diffusePath: string
+  normalPath: string
+  aoRoughMetalPath: string
+  emissivePath?: string
+}
+
+/**
+ * Per-bundle texture/material emission state: dedupes solid-color textures by value
+ * and <PbrMaterial>s by resolved channel set (Core's own pattern — one material
+ * shared by many SubParts), pushing each binary exactly once.
+ */
+class BundleTextures {
+  private readonly solids = new Map<string, Promise<string>>()
+  private readonly materialByChannels = new Map<string, string>()
+  /** The deduped <PbrMaterial> list, in first-use order. */
+  readonly materials: AssetsMaterialPlan[] = []
+  private readonly token: string
+  private readonly binaries: { path: string; data: Uint8Array }[]
+
+  constructor(token: string, binaries: { path: string; data: Uint8Array }[]) {
+    this.token = token
+    this.binaries = binaries
+  }
+
+  private solid(key: string, path: string, r: number, g: number, b: number): Promise<string> {
+    let pending = this.solids.get(key)
+    if (!pending) {
+      pending = makeSolidKtx2(r, g, b).then((data) => {
+        this.binaries.push({ path, data })
+        return path
+      })
+      this.solids.set(key, pending)
+    }
+    return pending
+  }
+
+  /** The shared flat tangent-space normal (128,128,255 ≈ +Z) for map-less materials. */
+  flatNormal(): Promise<string> {
+    return this.solid('normal', `Textures/${this.token}_FlatNormal.ktx2`, 128, 128, 255)
+  }
+
+  /**
+   * A solid AO/Rough/Metal texel (bytes 0..255). The legacy neutral (255,128,0 =
+   * AO 1 / rough 0.5 / metal 0) keeps its historical `_NeutralORM` filename.
+   */
+  ormSolid(ao: number, rough: number, metal: number): Promise<string> {
+    const path =
+      ao === 255 && rough === 128 && metal === 0
+        ? `Textures/${this.token}_NeutralORM.ktx2`
+        : `Textures/${this.token}_ORM_${hex2(ao)}${hex2(rough)}${hex2(metal)}.ktx2`
+    return this.solid(`orm:${ao},${rough},${metal}`, path, ao, rough, metal)
+  }
+
+  /** A solid diffuse of the picked sRGB color (KSA's shader gamma-decodes it once). */
+  baseColorSolid(c: RgbColor): Promise<string> {
+    const path = `Textures/${this.token}_BaseColor_${hex2(c.r)}${hex2(c.g)}${hex2(c.b)}.ktx2`
+    return this.solid(`base:${c.r},${c.g},${c.b}`, path, c.r, c.g, c.b)
+  }
+
+  /**
+   * Interns a resolved channel set: identical channels share one <PbrMaterial>
+   * (the first claimant's `preferredId` names it), mirroring how one Core pack
+   * material serves every SubPart in the pack.
+   */
+  intern(channels: ResolvedChannels, preferredId: string): string {
+    const key = `${channels.diffusePath}|${channels.normalPath}|${channels.aoRoughMetalPath}|${channels.emissivePath ?? ''}`
+    const existing = this.materialByChannels.get(key)
+    if (existing) return existing
+    this.materialByChannels.set(key, preferredId)
+    this.materials.push({ id: preferredId, ...channels })
+    return preferredId
+  }
+}
+
+/** The uniform value of a scalar channel ('map' channels resolve at ORM-pack time — Phase 2). */
+function scalarValue(c: ScalarChannel, fallback: number): number {
+  return c.kind === 'value' ? c.value : fallback
+}
+
+/** The packed-ORM solid for a material's uniform channels (AO fixed at 1.0 without a map). */
+function ormFor(material: CustomMaterial | undefined, tex: BundleTextures): Promise<string> {
+  if (!material) return tex.ormSolid(255, 128, 0) // legacy neutral (no material assigned)
+  return tex.ormSolid(
+    255,
+    toTexel(scalarValue(material.roughness, 0.5)),
+    toTexel(scalarValue(material.metalness, 0)),
+  )
+}
+
+/** The exported <PbrMaterial Id> for a mesh rendering its material verbatim (shareable). */
+function materialExportId(material: CustomMaterial): string {
+  return `flexo_${sanitizeAssetToken(material.name)}_${material.id.replace(/^mat_/, '')}_Material`
 }
 
 /** Last path segment of a "Textures/Characters/Foo.ktx2" subpath, e.g. "Foo.ktx2". */
@@ -259,7 +387,8 @@ async function fetchKtx2(subpath: string): Promise<Uint8Array> {
  * channel by the export mode: 'reference' → an absolute `{contentCorePath}\…` path (no
  * file copied); 'bundle' → copy the .ktx2 verbatim into Textures/ (deduped by subpath
  * across submeshes/kittens via `bundled`). Channels the submesh lacks (eyes/labels
- * normal+ORM) stay `undefined` so serializeAssets falls back to the shared synthetic.
+ * normal+ORM) resolve to the shared synthetic solids; the material is interned into
+ * `tex` so identical channel sets (two part-ified kittens of one kind) share one entry.
  */
 async function planKittenSubPart(
   m: CustomMesh,
@@ -267,6 +396,7 @@ async function planKittenSubPart(
   bundled: Map<string, string>,
   binaries: { path: string; data: Uint8Array }[],
   bundleToken: string,
+  tex: BundleTextures,
 ): Promise<AssetsSubPartPlan> {
   const src = m.kitten!
   const subPartId = m.subPartId
@@ -286,7 +416,16 @@ async function planKittenSubPart(
         glow,
         binaries,
       )
-      return { subPartId, materialId: `${subPartId}_Material`, glass: false, ...paths }
+      const materialId = tex.intern(
+        {
+          diffusePath: paths.diffusePath,
+          normalPath: await tex.flatNormal(),
+          aoRoughMetalPath: await tex.ormSolid(255, 128, 0),
+          emissivePath: paths.emissivePath,
+        },
+        `${subPartId}_Material`,
+      )
+      return { subPartId, materialId, glass: false }
     }
   }
 
@@ -304,7 +443,7 @@ async function planKittenSubPart(
   // Glass shell (visor 'glass'/'glassGlow'): a chosen tint becomes a solid diffuse of the picked
   // sRGB color (KSA's glass shader derives only ~10% of its color from the diffuse, so a saturated
   // solid reads as a subtle tinted glass); no tint keeps the real visor diffuse. Non-glass
-  // submeshes also land here.
+  // submeshes also land here. Glass materials never carry <Emissive> (KSA glass ignores it).
   const tint = surface === 'glass' || surface === 'glassGlow' ? m.glass?.tint : undefined
   let diffusePath: string
   if (tint) {
@@ -316,14 +455,18 @@ async function planKittenSubPart(
   } else {
     diffusePath = await resolve(src.diffuse)
   }
-  return {
-    subPartId,
-    materialId: `${subPartId}_Material`,
-    diffusePath,
-    normalPath: src.normal ? await resolve(src.normal) : undefined,
-    aoRoughMetalPath: src.aoRoughMetal ? await resolve(src.aoRoughMetal) : undefined,
-    glass: transparent, // the visor renders through KSA's translucent glass path
-  }
+  const materialId = tex.intern(
+    {
+      diffusePath,
+      normalPath: src.normal ? await resolve(src.normal) : await tex.flatNormal(),
+      aoRoughMetalPath: src.aoRoughMetal
+        ? await resolve(src.aoRoughMetal)
+        : await tex.ormSolid(255, 128, 0),
+    },
+    `${subPartId}_Material`,
+  )
+  // The visor renders through KSA's translucent glass path.
+  return { subPartId, materialId, glass: transparent }
 }
 
 /**
@@ -447,11 +590,10 @@ export async function buildCustomBundle(
   }
 
   // Custom geometry (primitive/kitten meshes) → build the mesh-atlas GLB, its textures, and
-  // the per-mesh PbrMaterial SubParts. Skipped entirely for an IVA-only part (no atlas needed).
+  // the deduped PbrMaterial list. Skipped entirely for an IVA-only part (no atlas needed).
   let meshAtlasPath: string | undefined
   const subParts: AssetsSubPartPlan[] = []
-  let normalPath: string | undefined
-  let aoRoughMetalPath: string | undefined
+  let materials: AssetsMaterialPlan[] = []
   if (meshes.length > 0) {
     // Derive a bundle token from base (project name) + the first mesh's random id suffix.
     // Mesh ids contain a random UUID fragment generated at creation time, so this is
@@ -482,74 +624,102 @@ export async function buildCustomBundle(
       for (const n of nodes) n.geometry.dispose()
     }
 
+    const tex = new BundleTextures(bundleToken, binaries)
     const texById = new Map(part.customTextures.map((t) => [t.id, t]))
+    const materialById = new Map(part.customMaterials.map((mt) => [mt.id, mt]))
     const texPath = new Map<string, string>() // texId -> relative path (dedupe shared textures)
     const kittenTexPath = new Map<string, string>() // kitten subpath -> mod path (bundle mode)
+
+    /** Copies a stored uploaded .ktx2 into the bundle once, returning its path (null = blob gone). */
+    const storedTexturePath = async (texId: string): Promise<string | null> => {
+      const t = texById.get(texId)
+      if (!t) return null
+      let rel = texPath.get(t.id)
+      if (!rel) {
+        const blob = await getAsset(assetKeys.textureKtx2(t.id))
+        if (!blob) return null
+        rel = `Textures/${sanitizeAssetToken(t.name)}_${sanitizeAssetToken(t.id)}_Diffuse.ktx2`
+        texPath.set(t.id, rel)
+        binaries.push({ path: rel, data: new Uint8Array(await blob.arrayBuffer()) })
+      }
+      return rel
+    }
+
     for (const m of meshes) {
       // Part-ified kitten submesh: full PBR from the KSA .ktx2 (referenced/bundled), or a generated
       // solid tint diffuse (glass) / glow textures (emissive) per the visor surface mode.
       if (m.kitten) {
-        subParts.push(await planKittenSubPart(m, kittenTex, kittenTexPath, binaries, bundleToken))
+        subParts.push(
+          await planKittenSubPart(m, kittenTex, kittenTexPath, binaries, bundleToken, tex),
+        )
         continue
       }
+      const material = m.materialId ? materialById.get(m.materialId) : undefined
       // Glowing primitive: composite the glow into the diffuse (color baked in) + emit the
-      // grayscale emissive mask. Glow-only (untextured) meshes composite over a neutral base.
+      // grayscale emissive mask. The base under the glow resolves exactly like the editor:
+      // face texture > material baseColor image > material color > neutral gray. The material's
+      // scalar channels still ship via the ORM solid.
       const glow = await glowBitmapFor(m)
       if (glow) {
         const primaryTexId = getPrimaryTextureId(m)
-        const base = await exportBaseImage(primaryTexId ? texById.get(primaryTexId) : undefined)
+        const base = await exportBaseImage(
+          primaryTexId ? texById.get(primaryTexId) : undefined,
+          material,
+          texById,
+        )
         const paths = await emitGlowTextures(`${bundleToken}_${m.subPartId}`, base, glow, binaries)
-        subParts.push({
-          subPartId: m.subPartId,
-          materialId: `${m.subPartId}_Material`,
-          diffusePath: paths.diffusePath,
-          emissivePath: paths.emissivePath,
-        })
+        const materialId = tex.intern(
+          {
+            diffusePath: paths.diffusePath,
+            normalPath: await tex.flatNormal(),
+            aoRoughMetalPath: await ormFor(material, tex),
+            emissivePath: paths.emissivePath,
+          },
+          `${m.subPartId}_Material`,
+        )
+        subParts.push({ subPartId: m.subPartId, materialId })
         continue
       }
-      let diffusePath: string | null = null
-      let materialId: string | null = null
-      // For KSA export, one material per SubPart — use the primary (first valid) face texture.
+      // Diffuse resolution: the primary (first textured) face wins, then the material's
+      // base color (image or picked-color solid). Neither → untextured (no PbrMaterial,
+      // KSA renders its default look; the <MeshView> below still makes it pickable).
       const primaryTexId = getPrimaryTextureId(m)
-      const tex = primaryTexId ? texById.get(primaryTexId) : undefined
-      if (tex) {
-        let rel = texPath.get(tex.id)
-        if (!rel) {
-          const blob = await getAsset(assetKeys.textureKtx2(tex.id))
-          if (blob) {
-            rel = `Textures/${sanitizeAssetToken(tex.name)}_${sanitizeAssetToken(tex.id)}_Diffuse.ktx2`
-            texPath.set(tex.id, rel)
-            binaries.push({ path: rel, data: new Uint8Array(await blob.arrayBuffer()) })
-          }
-        }
-        if (rel) {
-          diffusePath = rel
-          materialId = `${m.subPartId}_Material`
-        }
+      let diffusePath = primaryTexId ? await storedTexturePath(primaryTexId) : null
+      if (!diffusePath && material) {
+        diffusePath =
+          material.baseColor.kind === 'map'
+            ? await storedTexturePath(material.baseColor.textureId)
+            : await tex.baseColorSolid(material.baseColor.color)
       }
-      subParts.push({ subPartId: m.subPartId, materialId, diffusePath })
+      if (!diffusePath) {
+        subParts.push({ subPartId: m.subPartId, materialId: null })
+        continue
+      }
+      // A mesh rendering its material verbatim (no per-face diffuse override) interns under
+      // the material's own exported id, so meshes sharing a material share one <PbrMaterial>.
+      const preferredId =
+        material && !primaryTexId ? materialExportId(material) : `${m.subPartId}_Material`
+      const materialId = tex.intern(
+        {
+          diffusePath,
+          normalPath: await tex.flatNormal(),
+          aoRoughMetalPath: await ormFor(material, tex),
+        },
+        preferredId,
+      )
+      subParts.push({ subPartId: m.subPartId, materialId })
     }
 
-    // KSA's ThumbnailRenderResources.AddDraw dereferences NormalReference and PBRMap
-    // without null checks, so every PbrMaterial must include all three channels.
-    // Emit shared synthetic 1×1 textures when any sub-part is textured.
-    if (subParts.some((sp) => sp.materialId !== null)) {
-      normalPath = `Textures/${bundleToken}_FlatNormal.ktx2`
-      aoRoughMetalPath = `Textures/${bundleToken}_NeutralORM.ktx2`
-      // flat normal = (128,128,255) ≈ +Z in tangent space; neutral ORM = AO=255, Rough=128, Metal=0
-      binaries.push({ path: normalPath, data: await makeSolidKtx2(128, 128, 255) })
-      binaries.push({ path: aoRoughMetalPath, data: await makeSolidKtx2(255, 128, 0) })
-    }
+    materials = tex.materials
   }
 
   return {
     assetsFile: `${base}Assets.xml`,
     assetsXml: serializeAssets({
       meshAtlasPath,
+      materials,
       subParts,
       referenceSubParts,
-      normalPath,
-      aoRoughMetalPath,
     }),
     binaries,
   }

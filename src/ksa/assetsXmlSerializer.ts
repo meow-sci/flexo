@@ -5,9 +5,14 @@ import { VIEW_MESH_SUFFIX } from './exportGlb'
 /**
  * Serializes the custom-asset "Assets" XML — the file that DEFINES user-created
  * SubParts, mirroring KSA Core's CoreXxxAAssets.xml: a default <MeshAtlas> (the
- * generated geometry GLB), one <PbrMaterial> per textured SubPart (referencing the
- * exported .ktx2 by relative Path), and one <SubPart> per custom mesh wiring a
+ * generated geometry GLB), the <PbrMaterial> list (each referencing its .ktx2
+ * channels by relative Path), and one <SubPart> per custom mesh wiring a
  * <PartModel> to its <Mesh> node and <Material>.
+ *
+ * Materials are first-class and SHARED: multiple SubParts may reference one
+ * <PbrMaterial Id> — exactly Core's pattern (one pack material serves every
+ * SubPart in the pack). buildCustomBundle (modExport) dedupes identical resolved
+ * channel sets into one entry.
  *
  * Only custom SubParts actually placed in the Part are emitted — built-in/Core
  * SubParts are owned by KSA Core and must NOT be re-declared here. The Part.xml
@@ -17,35 +22,43 @@ import { VIEW_MESH_SUFFIX } from './exportGlb'
  * matching how Core references its own binaries.
  */
 
+/**
+ * One <PbrMaterial> to declare. Diffuse + Normal + AoRoughMetal are REQUIRED:
+ * KSA dereferences all three with no null check — both the thumbnail renderer
+ * (ThumbnailRenderResources.AddDraw) and every placed part
+ * (PartModel.WriteInstancesToGpu) — so a partial material crashes the game.
+ * buildCustomBundle resolves uniform channels into 1×1 solid textures.
+ */
+export interface AssetsMaterialPlan {
+  /** <PbrMaterial Id>. MUST be project-unique and never a Core id — KSA dedupes
+   * materials by id (a duplicate silently becomes a reference to the first). */
+  id: string
+  /** Diffuse .ktx2 path (mod-relative, or absolute for a referenced kitten asset). */
+  diffusePath: string
+  /** Tangent-space normal .ktx2 path (the shared FlatNormal solid when unauthored). */
+  normalPath: string
+  /** Packed AO/Rough/Metal .ktx2 path (a solid texel for uniform channels). */
+  aoRoughMetalPath: string
+  /**
+   * Emissive (glow) mask .ktx2 path. `undefined` → no <Emissive>. KSA samples it as a
+   * grayscale mask (R) and ADDS it as white light × 1.25 after lighting; the glow COLOR
+   * lives in the (composited) diffuse. Glass materials never carry one (KSA's glass
+   * shader ignores emissive).
+   */
+  emissivePath?: string
+}
+
 export interface AssetsSubPartPlan {
   /** SubPart template id (== GLB node Mesh Id == placement.subPartTemplateId). */
   subPartId: string
-  /** Material id, or null for an untextured SubPart (no <Material>/<PbrMaterial>). */
+  /** Id of an {@link AssetsPlan.materials} entry, or null for an untextured SubPart. */
   materialId: string | null
-  /** Diffuse .ktx2 path (relative to the mod, or absolute for a referenced asset), or null when untextured. */
-  diffusePath: string | null
-  /**
-   * Per-SubPart Normal .ktx2 path. `undefined` → fall back to the shared
-   * {@link AssetsPlan.normalPath} (synthetic flat normal); a string → use exactly this
-   * path (a real kitten normal map). Lets kitten SubParts carry their own PBR while
-   * primitive custom meshes keep using the shared synthetic.
-   */
-  normalPath?: string
-  /** Per-SubPart AO/Rough/Metal .ktx2 path. `undefined` → fall back to {@link AssetsPlan.aoRoughMetalPath}. */
-  aoRoughMetalPath?: string
   /**
    * Render through KSA's translucent glass path: emits `<PartModelGlass>` instead of
    * `<PartModel>` (an alpha-blended shader), for glass surfaces like the kitten visor.
-   * The opaque `<PartModel>` path renders glass black/opaque. NOTE: KSA's glass shader
-   * ignores the emissive texture, so a glass SubPart never carries {@link emissivePath}.
+   * The opaque `<PartModel>` path renders glass black/opaque.
    */
   glass?: boolean
-  /**
-   * Emissive (glow) .ktx2 path (relative to the mod, or absolute for a referenced asset).
-   * `undefined` → no `<Emissive>`. KSA samples it as a grayscale mask (R) and ADDS it as white
-   * light × 1.25 after lighting; the glow COLOR lives in the (composited) diffuse.
-   */
-  emissivePath?: string
 }
 
 /**
@@ -72,21 +85,11 @@ export interface AssetsPlan {
    * Omit when this Assets file declares only {@link referenceSubParts} (no custom geometry).
    */
   meshAtlasPath?: string
+  /** The <PbrMaterial> list (deduped; shared across SubParts like Core's pack materials). */
+  materials?: AssetsMaterialPlan[]
   subParts: AssetsSubPartPlan[]
   /** Reference-only SubParts that reuse built-in Mesh/Material (e.g. de-IVA'd props). */
   referenceSubParts?: ReferenceSubPartPlan[]
-  /**
-   * Relative path to a shared flat-normal .ktx2 (RGB 128,128,255 = +Z).
-   *
-   * REQUIRED whenever any subpart is textured. KSA's thumbnail renderer
-   * (ThumbnailRenderResources.AddDraw) dereferences `Material.NormalReference`
-   * and `Material.PBRMap` WITHOUT a null check, so a <PbrMaterial> with only
-   * <Diffuse> throws a NullReferenceException at startup. We emit synthetic
-   * Normal + AoRoughMetal channels so every material is complete.
-   */
-  normalPath?: string
-  /** Relative path to a shared AO/Rough/Metal .ktx2 (AO=255, Rough=128, Metal=0). */
-  aoRoughMetalPath?: string
 }
 
 export function serializeAssets(plan: AssetsPlan): string {
@@ -102,39 +105,22 @@ export function serializeAssets(plan: AssetsPlan): string {
   }
 
   // Materials first (Core lists PbrMaterials above the SubParts that use them).
-  // Every material gets all three channels KSA dereferences unconditionally in
-  // its thumbnail renderer: <Diffuse>, <Normal>, <AoRoughMetal>. The latter two
-  // point at shared synthetic textures (flat normal / neutral ORM) — omitting
-  // them crashes KSA at startup (see AssetsPlan.normalPath).
-  for (const sp of plan.subParts) {
-    if (!sp.materialId || !sp.diffusePath) continue
-    // Per-SubPart override (real kitten map) falls back to the shared synthetic.
-    const effNormal = sp.normalPath !== undefined ? sp.normalPath : plan.normalPath
-    const effOrm = sp.aoRoughMetalPath !== undefined ? sp.aoRoughMetalPath : plan.aoRoughMetalPath
+  // Channel order mirrors Core: Diffuse, Normal, AoRoughMetal, then Emissive.
+  for (const m of plan.materials ?? []) {
     const mat = doc.createElement('PbrMaterial')
-    mat.setAttribute('Id', sp.materialId)
-    const diffuse = doc.createElement('Diffuse')
-    diffuse.setAttribute('Path', sp.diffusePath)
-    diffuse.setAttribute('Category', 'Vessel')
-    mat.appendChild(diffuse)
-    if (effNormal) {
-      const normal = doc.createElement('Normal')
-      normal.setAttribute('Path', effNormal)
-      normal.setAttribute('Category', 'Vessel')
-      mat.appendChild(normal)
-    }
-    if (effOrm) {
-      const orm = doc.createElement('AoRoughMetal')
-      orm.setAttribute('Path', effOrm)
-      orm.setAttribute('Category', 'Vessel')
-      mat.appendChild(orm)
-    }
-    // Emissive (glow) — emitted after AoRoughMetal, mirroring Core's PbrMaterial channel order.
-    if (sp.emissivePath) {
-      const emissive = doc.createElement('Emissive')
-      emissive.setAttribute('Path', sp.emissivePath)
-      emissive.setAttribute('Category', 'Vessel')
-      mat.appendChild(emissive)
+    mat.setAttribute('Id', m.id)
+    const channels: Array<[string, string | undefined]> = [
+      ['Diffuse', m.diffusePath],
+      ['Normal', m.normalPath],
+      ['AoRoughMetal', m.aoRoughMetalPath],
+      ['Emissive', m.emissivePath],
+    ]
+    for (const [name, path] of channels) {
+      if (!path) continue
+      const el = doc.createElement(name)
+      el.setAttribute('Path', path)
+      el.setAttribute('Category', 'Vessel')
+      mat.appendChild(el)
     }
     assets.appendChild(mat)
   }
@@ -153,7 +139,7 @@ export function serializeAssets(plan: AssetsPlan): string {
     const mesh = doc.createElement('Mesh')
     mesh.setAttribute('Id', sp.subPartId)
     model.appendChild(mesh)
-    if (sp.materialId && sp.diffusePath) {
+    if (sp.materialId) {
       const material = doc.createElement('Material')
       material.setAttribute('Id', sp.materialId)
       model.appendChild(material)

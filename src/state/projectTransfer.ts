@@ -1,5 +1,6 @@
 import type {
   Connector,
+  CustomMaterial,
   CustomReaction,
   CustomMesh,
   EditingPart,
@@ -66,6 +67,12 @@ export interface ProjectExportData {
   animations: PartAnimation[]
   /** Part-ified kitten meshes only (descriptors referencing game assets — no binaries). */
   customMeshes: CustomMesh[]
+  /**
+   * User-authored materials. Always carried: with the {@link hasCustomAssets} gate in
+   * place, any exportable project's materials are uniform-value-only (a 'map' channel
+   * requires an uploaded texture, which gates the export).
+   */
+  customMaterials: CustomMaterial[]
   /** User-authored reactions (custom propellants — pure data). */
   customReactions: CustomReaction[]
 }
@@ -137,6 +144,7 @@ export function buildProjectExport(part: EditingPart, projectName: string): Proj
       kittens: part.kittens,
       animations: part.animations,
       customMeshes: part.customMeshes.filter(isKittenMesh),
+      customMaterials: part.customMaterials,
       customReactions: part.customReactions,
     }),
   }
@@ -203,6 +211,7 @@ export function envelopeToPart(env: ProjectExportEnvelope): EditingPart {
     connectors: d.connectors,
     kittens: d.kittens,
     customTextures: [],
+    customMaterials: d.customMaterials,
     customMeshes: d.customMeshes,
     animations: d.animations,
     customReactions: d.customReactions ?? [],
@@ -389,6 +398,15 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
       }
     }
     part.animations.push(anim)
+  }
+
+  // Custom materials are pure descriptors (uniform-only in any exportable project — see
+  // ProjectExportData.customMaterials): add those not already present by id, so pasting
+  // the same export twice never duplicates the library.
+  for (const cm of data.customMaterials ?? []) {
+    if (!part.customMaterials.some((m) => m.id === cm.id)) {
+      part.customMaterials.push(structuredClone(cm))
+    }
   }
 
   // Custom propellants are pure data with no instance refs: add those the project

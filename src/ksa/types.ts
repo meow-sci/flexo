@@ -956,8 +956,24 @@ export type PrimitiveSpec =
   | { kind: 'plane'; params: PlaneParams }
 
 /**
- * A user-uploaded texture. v1 carries a single diffuse image; the raw image bytes
- * and the encoded KTX2 live in IndexedDB under {@link id}.
+ * Which PBR channel an uploaded image was authored for. Drives the encode params
+ * (mip filtering space, normal-map transforms) and which material slots the texture
+ * can be assigned to. KSA's `<PbrMaterial>` slots: Diffuse (sRGB content),
+ * Normal (RG tangent-space, X-flipped by the shader), AoRoughMetal (packed
+ * R=AO G=rough B=metal, linear), Emissive (grayscale mask, linear).
+ */
+export type TextureChannel =
+  | 'baseColor' // sRGB content → <Diffuse>
+  | 'normal' // tangent-space normal (X-flip + strength baked at encode) → <Normal>
+  | 'orm' // pre-packed R=AO G=rough B=metal → <AoRoughMetal>
+  | 'roughness' // grayscale → packed into ORM green
+  | 'metalness' // grayscale → packed into ORM blue
+  | 'occlusion' // grayscale → packed into ORM red
+  | 'emissiveMask' // grayscale glow mask → <Emissive>
+
+/**
+ * A user-uploaded texture. Carries a single image authored for one {@link channel};
+ * the raw image bytes and the encoded KTX2 live in IndexedDB under {@link id}.
  */
 export interface CustomTexture {
   /** Stable unique id (also the IndexedDB key), e.g. "tex_ab12cd". */
@@ -967,6 +983,76 @@ export interface CustomTexture {
   /** Base level dimensions of the encoded texture (post-decode/resize). */
   width: number
   height: number
+  /** The PBR channel this image is authored for (decides encode params + valid slots). */
+  channel: TextureChannel
+}
+
+/** An sRGB color, 0..255 per channel. */
+export interface RgbColor {
+  r: number
+  g: number
+  b: number
+}
+
+/**
+ * How a scalar PBR channel (metalness / roughness) of a {@link CustomMaterial} is
+ * sourced: a uniform value (exported as a solid texel — KSA's PbrMaterial has NO
+ * scalar parameters, everything is a texture) or a grayscale {@link CustomTexture}.
+ */
+export type ScalarChannel = { kind: 'value'; value: number } | { kind: 'map'; textureId: string }
+
+/** How a {@link CustomMaterial}'s base color is sourced: a picked color or an image. */
+export type BaseColorChannel =
+  | { kind: 'color'; color: RgbColor }
+  | { kind: 'map'; textureId: string }
+
+/**
+ * A tangent-space normal map channel. KSA has no usable per-material normal-strength
+ * scalar (`<Normal Power>` is parsed but only consumed by the planet renderer), so
+ * {@link strength} is baked into the map's RG values at encode time.
+ */
+export interface NormalChannel {
+  textureId: string
+  /** Bump strength multiplier, baked into RG at encode. 1 = as authored. */
+  strength: number
+}
+
+/**
+ * A reusable user-authored PBR material. Meshes reference it via
+ * {@link CustomMesh.materialId}; export resolves every channel into the
+ * `<PbrMaterial>` texture set (uniform values become 1×1 solid KTX2s — KSA's
+ * material schema is textures-only, see plans/CUSTOM_TEXTURES_PLAN.md §1).
+ * Emissive (glow) deliberately stays per-mesh ({@link CustomMesh.emissive}).
+ */
+export interface CustomMaterial {
+  /** Stable unique id, e.g. "mat_ab12cd". */
+  id: string
+  /** User-facing label, also the basis for the exported material id. */
+  name: string
+  baseColor: BaseColorChannel
+  /** 0 = dielectric, 1 = metal. KSA reads it from the ORM blue channel. */
+  metalness: ScalarChannel
+  /** 0 = mirror-smooth, 1 = fully rough. KSA reads it from the ORM green channel. */
+  roughness: ScalarChannel
+  /** Ambient occlusion map (ORM red). Absent = fully unoccluded (255). */
+  occlusion?: { textureId: string }
+  /** Pre-packed AO/Rough/Metal image; when set it overrides the three channels above. */
+  ormPacked?: { textureId: string }
+  /** Tangent-space normal map. Absent = flat (the shared synthetic FlatNormal). */
+  normal?: NormalChannel
+}
+
+/** The neutral material: matches what an un-materialed custom mesh has always exported
+ * (NeutralORM = AO 255 / rough 128 / metal 0 — 0.5 quantizes to the same 128 texel)
+ * and the editor's flat-gray base color. */
+export function createDefaultMaterial(id: string, name: string): CustomMaterial {
+  return {
+    id,
+    name,
+    baseColor: { kind: 'color', color: { r: 191, g: 196, b: 204 } },
+    metalness: { kind: 'value', value: 0 },
+    roughness: { kind: 'value', value: 0.5 },
+  }
 }
 
 /**
@@ -1099,6 +1185,14 @@ export interface CustomMesh {
    * Always empty ({}) for kitten submeshes (they carry their material in {@link kitten}).
    */
   faceTextures: Partial<Record<string, FaceTextureConfig>>
+  /**
+   * The {@link CustomMaterial} for the whole mesh (base color / metal / rough / normal).
+   * Absent ⇒ the legacy neutral look (flat gray, NeutralORM on export). A face's
+   * {@link FaceTextureConfig.textureId} overrides the material's base color on that face;
+   * the scalar/normal channels always come from the material. Never set on kitten
+   * submeshes (they carry their own full PBR set in {@link kitten}).
+   */
+  materialId?: string
   /**
    * Optional per-mesh emissive glow. For a glass-capable visor it is the glow layer used when
    * {@link surface} ∈ {'glow','glassGlow'}. A 'painted' shape stores its RGBA bitmap in IndexedDB
@@ -1312,6 +1406,8 @@ export interface EditingPart {
   kittens: KittenInstance[]
   /** User-uploaded textures (descriptors only; binaries in IndexedDB). */
   customTextures: CustomTexture[]
+  /** User-authored reusable PBR materials (pure descriptors; see {@link CustomMaterial}). */
+  customMaterials: CustomMaterial[]
   /** User-created primitive meshes / custom SubPart templates. */
   customMeshes: CustomMesh[]
   /** User-authored keyframe animations (KeyframeAnimationModule + Animations/*.glb). */
@@ -1331,6 +1427,7 @@ export function createEmptyPart(): EditingPart {
     connectors: [],
     kittens: [],
     customTextures: [],
+    customMaterials: [],
     customMeshes: [],
     animations: [],
     customReactions: [],

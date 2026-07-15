@@ -3,6 +3,7 @@ import { atom } from 'nanostores'
 import type { CatalogSubPart } from '../ksa/catalog'
 import { toUrl } from '../ksa/catalog'
 import type {
+  CustomMaterial,
   CustomMesh,
   CustomTexture,
   EditingPart,
@@ -12,9 +13,10 @@ import type {
   KittenKind,
   KittenMeshSource,
   PrimitiveSpec,
+  ScalarChannel,
   VisorSurface,
 } from '../ksa/types'
-import { KITTEN_LABELS } from '../ksa/types'
+import { KITTEN_LABELS, createDefaultMaterial } from '../ksa/types'
 import {
   $part,
   pushUndo,
@@ -35,9 +37,16 @@ import {
 import { buildMeshAtlasGlb } from '../ksa/exportGlb'
 import { decodeImage, type ImageLevel } from '../ktx/decodeImage'
 import { encodeImageToKtx2, isLegacySrgbKtx2 } from '../ktx/encodeKtx2'
-import { compositeGlow, solidGlowBitmap, neutralBase, type GlowBitmap } from '../ktx/glowComposite'
+import {
+  compositeGlow,
+  solidGlowBitmap,
+  neutralBase,
+  solidBase,
+  type GlowBitmap,
+} from '../ktx/glowComposite'
 import {
   buildCustomFaceMaterial,
+  buildCustomMaterial,
   makeFlatMaterial,
   buildGlowingFaceMaterial,
 } from '../three/MaterialFactory'
@@ -180,17 +189,31 @@ export function getPrimaryTextureId(m: CustomMesh): string {
 let appliedMeshSig = ''
 
 function meshSignature(part: EditingPart): string {
-  return JSON.stringify(
-    part.customMeshes.map((m) => ({
+  return JSON.stringify({
+    meshes: part.customMeshes.map((m) => ({
       s: m.subPartId,
       p: m.primitive,
       k: m.kitten,
       f: m.faceTextures,
+      mt: m.materialId,
       e: m.emissive,
       g: m.glass,
       su: m.surface,
     })),
-  )
+    // Material CONTENTS feed the render cache (color/metal/rough per face), so an
+    // undo/redo of a material edit must re-trigger a rebuild too.
+    materials: part.customMaterials,
+  })
+}
+
+/** The mesh's material, or undefined when unassigned / dangling. */
+function materialFor(part: EditingPart, m: CustomMesh): CustomMaterial | undefined {
+  return m.materialId ? part.customMaterials.find((x) => x.id === m.materialId) : undefined
+}
+
+/** The uniform value of a scalar channel; 'map' channels resolve in Phase 2 (grayscale packs). */
+function scalarValue(c: ScalarChannel, fallback: number): number {
+  return c.kind === 'value' ? c.value : fallback
 }
 
 /** The glow bitmap (rgb=color, a=intensity) for a mesh's emissive config, or null when no glow. */
@@ -208,12 +231,22 @@ export async function glowBitmapFor(m: CustomMesh): Promise<GlowBitmap | null> {
   return solidGlowBitmap(e.color, e.strength)
 }
 
-/** The decoded base diffuse for a primitive face (source image), or a neutral gray when untextured. */
-async function faceBaseImage(texId: string | undefined): Promise<ImageLevel> {
-  if (texId) {
-    const src = await getAsset(assetKeys.textureSource(texId))
+/**
+ * The decoded base diffuse a glow composites over, for one primitive face: the face's
+ * texture → the material's baseColor image → the material's picked color (as a solid)
+ * → neutral gray. Mirrors the export-side resolution in modExport so editor == export.
+ */
+async function faceBaseImage(
+  texId: string | undefined,
+  material: CustomMaterial | undefined,
+): Promise<ImageLevel> {
+  const mapTexId =
+    texId || (material?.baseColor.kind === 'map' ? material.baseColor.textureId : undefined)
+  if (mapTexId) {
+    const src = await getAsset(assetKeys.textureSource(mapTexId))
     if (src) return (await decodeImage(src)).levels[0]
   }
+  if (material?.baseColor.kind === 'color') return solidBase(material.baseColor.color)
   return neutralBase()
 }
 
@@ -302,17 +335,42 @@ async function refreshCatalog(): Promise<void> {
       const geometry = buildPrimitiveGeometry(m.primitive!)
       applyFaceUvTransforms(geometry, faceKeys, ft)
 
-      // One material per face group. A glowing mesh composites its glow bitmap over each face's
-      // base diffuse (source image, or neutral gray when untextured) so editor == export; an
-      // un-glowing mesh keeps the diffuse-only path (flat fallback for untextured faces).
+      // One material per face group. Resolution per face: the face's own texture overrides
+      // the mesh material's base color; scalar channels always come from the mesh material
+      // (neutral when unassigned). A glowing mesh composites its glow bitmap over the same
+      // resolved base so editor == export; meshes with neither material nor face texture
+      // keep the legacy flat look.
       const glow = await glowBitmapFor(m)
+      const material = materialFor(part, m)
+      const metalness = material ? scalarValue(material.metalness, 1) : undefined
+      const roughness = material ? scalarValue(material.roughness, 1) : undefined
       const materials: THREE.MeshStandardMaterial[] = []
       for (const key of faceKeys) {
         const texId = ft[key]?.textureId
         const wrap = ft[key]?.wrap ?? 'repeat'
         if (glow) {
-          const { diffuse, mask } = compositeGlow(await faceBaseImage(texId), glow)
-          materials.push(buildGlowingFaceMaterial(diffuse, mask, wrap))
+          const { diffuse, mask } = compositeGlow(await faceBaseImage(texId, material), glow)
+          const pbr =
+            metalness !== undefined && roughness !== undefined
+              ? { metalness, roughness }
+              : undefined
+          materials.push(buildGlowingFaceMaterial(diffuse, mask, wrap, pbr))
+        } else if (material) {
+          const faceUrl = texId ? textureKtx2Urls.get(texId) : undefined
+          const baseMapUrl =
+            faceUrl ??
+            (material.baseColor.kind === 'map'
+              ? textureKtx2Urls.get(material.baseColor.textureId)
+              : undefined)
+          materials.push(
+            await buildCustomMaterial({
+              mapUrl: baseMapUrl,
+              color: material.baseColor.kind === 'color' ? material.baseColor.color : undefined,
+              metalness: metalness!,
+              roughness: roughness!,
+              wrap,
+            }),
+          )
         } else {
           const ktx2Url = texId ? textureKtx2Urls.get(texId) : undefined
           materials.push(
@@ -415,11 +473,33 @@ export async function addCustomTexture(file: Blob, name: string): Promise<Custom
     name: name.trim() || 'texture',
     width: decoded.width,
     height: decoded.height,
+    channel: 'baseColor',
   }
   mutate('add texture', tex.name, (p) => {
     p.customTextures.push(tex)
   })
   return tex
+}
+
+/**
+ * Downgrades every material channel that references the removed texture to its
+ * uniform/absent form, so material 'map' channels only ever point at live textures
+ * (the project-JSON export gate relies on this invariant — see projectTransfer).
+ */
+function clearMaterialTextureRefs(mat: CustomMaterial, textureId: string): void {
+  const fresh = createDefaultMaterial(mat.id, mat.name)
+  if (mat.baseColor.kind === 'map' && mat.baseColor.textureId === textureId) {
+    mat.baseColor = fresh.baseColor
+  }
+  if (mat.metalness.kind === 'map' && mat.metalness.textureId === textureId) {
+    mat.metalness = fresh.metalness
+  }
+  if (mat.roughness.kind === 'map' && mat.roughness.textureId === textureId) {
+    mat.roughness = fresh.roughness
+  }
+  if (mat.occlusion?.textureId === textureId) delete mat.occlusion
+  if (mat.ormPacked?.textureId === textureId) delete mat.ormPacked
+  if (mat.normal?.textureId === textureId) delete mat.normal
 }
 
 export function removeCustomTexture(id: string): void {
@@ -433,12 +513,73 @@ export function removeCustomTexture(id: string): void {
         }
       }
     }
+    for (const mat of p.customMaterials) clearMaterialTextureRefs(mat, id)
   })
   revokeTexture(id)
   void deleteAsset(assetKeys.textureSource(id))
   void deleteAsset(assetKeys.textureKtx2(id))
   publishTextureUrls()
   void refreshCatalog()
+}
+
+// ── materials ────────────────────────────────────────────────────────────────
+
+/**
+ * Creates a reusable material. `init` overlays the neutral defaults (a preset's
+ * metal/rough values, a picked base color). Returns the created material.
+ */
+export async function addCustomMaterial(
+  name: string,
+  init?: Partial<Omit<CustomMaterial, 'id' | 'name'>>,
+): Promise<CustomMaterial> {
+  const mat: CustomMaterial = {
+    ...createDefaultMaterial(`mat_${shortId()}`, name.trim() || 'material'),
+    ...init,
+  }
+  mutate('add material', mat.name, (p) => {
+    p.customMaterials.push(mat)
+  })
+  await refreshCatalog()
+  return mat
+}
+
+export async function updateCustomMaterial(
+  id: string,
+  patch: Partial<Omit<CustomMaterial, 'id'>>,
+): Promise<void> {
+  const name = $part.get().customMaterials.find((m) => m.id === id)?.name ?? ''
+  mutate('edit material', patch.name ?? name, (p) => {
+    const m = p.customMaterials.find((x) => x.id === id)
+    if (m) Object.assign(m, patch)
+  })
+  await refreshCatalog()
+}
+
+/** Removes a material and unassigns it from every mesh that referenced it. */
+export async function removeCustomMaterial(id: string): Promise<void> {
+  const name = $part.get().customMaterials.find((m) => m.id === id)?.name ?? ''
+  mutate('remove material', name, (p) => {
+    p.customMaterials = p.customMaterials.filter((m) => m.id !== id)
+    for (const m of p.customMeshes) {
+      if (m.materialId === id) delete m.materialId
+    }
+  })
+  await refreshCatalog()
+}
+
+/** Assigns (or clears, with `undefined`) a mesh's material. */
+export async function setMeshMaterial(
+  meshId: string,
+  materialId: string | undefined,
+): Promise<void> {
+  const name = $part.get().customMeshes.find((m) => m.id === meshId)?.name ?? ''
+  mutate('assign material', name, (p) => {
+    const m = p.customMeshes.find((x) => x.id === meshId)
+    if (!m) return
+    if (materialId) m.materialId = materialId
+    else delete m.materialId
+  })
+  await refreshCatalog()
 }
 
 function revokeTexture(id: string): void {
@@ -454,7 +595,10 @@ function revokeTexture(id: string): void {
 export async function addCustomMesh(args: {
   name: string
   primitive: PrimitiveSpec
+  /** Seeds every face with this texture (the quick "image on a shape" path). */
   textureId: string
+  /** The {@link CustomMaterial} for the whole mesh (color/metal/rough/normal). */
+  materialId?: string
 }): Promise<CustomMesh> {
   const id = `mesh_${shortId()}`
   const faceTextures: Partial<Record<string, FaceTextureConfig>> = {}
@@ -474,6 +618,7 @@ export async function addCustomMesh(args: {
     primitive: args.primitive,
     faceTextures,
   }
+  if (args.materialId) mesh.materialId = args.materialId
   mutate('add mesh', mesh.name, (p) => {
     p.customMeshes.push(mesh)
   })

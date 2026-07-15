@@ -271,6 +271,26 @@ function richPart(): EditingPart {
   })
 
   // A custom propellant (numbers pre-rounded to ≤6 decimals so encode is lossless).
+  p.customMaterials.push(
+    {
+      id: 'mat_red',
+      name: 'Red Metal',
+      baseColor: { kind: 'color', color: { r: 255, g: 0, b: 0 } },
+      metalness: { kind: 'value', value: 1 },
+      roughness: { kind: 'value', value: 0.15 },
+    },
+    {
+      id: 'mat_mapped',
+      name: 'Mapped',
+      baseColor: { kind: 'map', textureId: 'tex_base' },
+      metalness: { kind: 'map', textureId: 'tex_metal' },
+      roughness: { kind: 'value', value: 0.5 },
+      occlusion: { textureId: 'tex_ao' },
+      ormPacked: { textureId: 'tex_orm' },
+      normal: { textureId: 'tex_n', strength: 1.5 },
+    },
+  )
+
   p.customReactions.push({
     id: 'MyKerolox_2.6',
     name: 'Custom Kerolox',

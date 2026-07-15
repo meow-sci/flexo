@@ -140,7 +140,7 @@ function primitiveMesh() {
 describe('buildProjectExport', () => {
   it('carries kitten meshes, drops primitive meshes + uploaded textures, stamps provenance', () => {
     const src = sourcePart()
-    src.customTextures.push({ id: 'tex_1', name: 'T', width: 4, height: 4 })
+    src.customTextures.push({ id: 'tex_1', name: 'T', width: 4, height: 4, channel: 'baseColor' })
     src.customMeshes.push(primitiveMesh(), kittenMesh())
     const env = buildProjectExport(src, 'MyShip')
     expect(env.format).toBe(PROJECT_EXPORT_FORMAT)
@@ -153,6 +153,38 @@ describe('buildProjectExport', () => {
     const data = env.data as unknown as Record<string, unknown>
     expect(data.customTextures).toBeUndefined()
   })
+
+  it('carries custom materials (pure descriptors)', () => {
+    const src = sourcePart()
+    src.customMaterials.push({
+      id: 'mat_1',
+      name: 'Red Metal',
+      baseColor: { kind: 'color', color: { r: 255, g: 0, b: 0 } },
+      metalness: { kind: 'value', value: 1 },
+      roughness: { kind: 'value', value: 0.15 },
+    })
+    const env = buildProjectExport(src, 'MyShip')
+    expect(env.data.customMaterials).toHaveLength(1)
+    expect(env.data.customMaterials[0].name).toBe('Red Metal')
+  })
+})
+
+describe('mergeProjectImport with custom materials', () => {
+  it('adds materials not already present by id (re-pasting never duplicates)', () => {
+    const src = sourcePart()
+    src.customMaterials.push({
+      id: 'mat_1',
+      name: 'Red Metal',
+      baseColor: { kind: 'color', color: { r: 255, g: 0, b: 0 } },
+      metalness: { kind: 'value', value: 1 },
+      roughness: { kind: 'value', value: 0.15 },
+    })
+    const env = buildProjectExport(src, 'Src')
+    const once = mergeProjectImport(createEmptyPart(), env)
+    expect(once.part.customMaterials).toHaveLength(1)
+    const twice = mergeProjectImport(once.part, env)
+    expect(twice.part.customMaterials).toHaveLength(1)
+  })
 })
 
 describe('hasCustomAssets', () => {
@@ -160,7 +192,13 @@ describe('hasCustomAssets', () => {
     expect(hasCustomAssets(createEmptyPart())).toBe(false)
 
     const withTex = createEmptyPart()
-    withTex.customTextures.push({ id: 'tex_1', name: 'T', width: 1, height: 1 })
+    withTex.customTextures.push({
+      id: 'tex_1',
+      name: 'T',
+      width: 1,
+      height: 1,
+      channel: 'baseColor',
+    })
     expect(hasCustomAssets(withTex)).toBe(true)
 
     const withPrimitive = createEmptyPart()

@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { CatalogSubPart } from '../ksa/catalog'
-import type { TextureWrap } from '../ksa/types'
+import type { RgbColor, TextureWrap } from '../ksa/types'
 import type { ImageLevel } from '../ktx/decodeImage'
 import { loadTexture, loadWrappedTexture } from './TextureCache'
 import { applyKsaShaderPatches } from './normalMapPatch'
@@ -48,6 +48,44 @@ export async function buildCustomFaceMaterial(
   })
 }
 
+/**
+ * The resolved per-face inputs of a {@link CustomMaterial} (see customAssetStore's
+ * refreshCatalog): the base color as an image blob URL (a face texture or the
+ * material's baseColor map) OR a uniform sRGB color, plus the uniform scalar
+ * channels. Uniform values render as material scalars here and export as solid
+ * texels — same numbers, same look.
+ */
+export interface CustomFaceSpec {
+  /** Diffuse .ktx2 blob URL; wins over {@link color} when set. */
+  mapUrl?: string
+  /** Uniform base color (sRGB 0..255) when there is no image. */
+  color?: RgbColor
+  metalness: number
+  roughness: number
+  wrap: TextureWrap
+}
+
+/** Builds the editor material for a custom-mesh face driven by a {@link CustomMaterial}. */
+export async function buildCustomMaterial(
+  spec: CustomFaceSpec,
+): Promise<THREE.MeshStandardMaterial> {
+  const mat = new THREE.MeshStandardMaterial({
+    metalness: spec.metalness,
+    roughness: spec.roughness,
+  })
+  if (spec.mapUrl) {
+    mat.map = await loadWrappedTexture(spec.mapUrl, 'srgb', spec.wrap)
+  } else if (spec.color) {
+    mat.color.setRGB(
+      spec.color.r / 255,
+      spec.color.g / 255,
+      spec.color.b / 255,
+      THREE.SRGBColorSpace,
+    )
+  }
+  return mat
+}
+
 function wrapMode(wrap: TextureWrap): THREE.Wrapping {
   if (wrap === 'mirror') return THREE.MirroredRepeatWrapping
   if (wrap === 'clamp') return THREE.ClampToEdgeWrapping
@@ -89,13 +127,14 @@ export function buildGlowingFaceMaterial(
   diffuse: ImageLevel,
   mask: ImageLevel,
   wrap: TextureWrap = 'repeat',
+  pbr?: { metalness: number; roughness: number },
 ): THREE.MeshStandardMaterial {
   const map = makeDataTexture(diffuse, THREE.SRGBColorSpace, wrap)
   const emissiveMap = makeDataTexture(mask, THREE.NoColorSpace, wrap)
   const mat = new THREE.MeshStandardMaterial({
     map,
-    metalness: NEUTRAL_METALNESS,
-    roughness: NEUTRAL_ROUGHNESS,
+    metalness: pbr?.metalness ?? NEUTRAL_METALNESS,
+    roughness: pbr?.roughness ?? NEUTRAL_ROUGHNESS,
   })
   mat.emissiveMap = emissiveMap
   // emissive uniform deliberately left black (free for the selection highlight); the glow is

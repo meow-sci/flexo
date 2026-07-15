@@ -58,6 +58,18 @@ export function neutralBase(width = 4, height = 4, value = 128): ImageLevel {
   return { width, height, rgba }
 }
 
+/** A tiny solid opaque base of the given sRGB color (a material's picked base color). */
+export function solidBase(color: { r: number; g: number; b: number }, size = 4): ImageLevel {
+  const rgba = new Uint8Array(size * size * 4)
+  for (let i = 0; i < size * size; i++) {
+    rgba[i * 4] = color.r
+    rgba[i * 4 + 1] = color.g
+    rgba[i * 4 + 2] = color.b
+    rgba[i * 4 + 3] = 255
+  }
+  return { width: size, height: size, rgba }
+}
+
 /**
  * Composites a glow bitmap onto a base diffuse, producing the diffuse + emissive-mask pair KSA
  * needs. The glow is nearest-resampled to the base's dimensions (so a painted spot lands at the

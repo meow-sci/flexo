@@ -26,10 +26,80 @@ vi.mock('../three/kittenBake', () => ({
 }))
 
 import { $part, newPart, undo } from './editorStore'
-import { makeKittenMeshPart } from './customAssetStore'
+import {
+  addCustomMaterial,
+  makeKittenMeshPart,
+  removeCustomMaterial,
+  setMeshMaterial,
+  updateCustomMaterial,
+} from './customAssetStore'
 
 beforeEach(() => {
   newPart()
+})
+
+describe('custom materials', () => {
+  it('add / update / remove are each one undo step', async () => {
+    const mat = await addCustomMaterial('Red Metal', {
+      baseColor: { kind: 'color', color: { r: 255, g: 0, b: 0 } },
+      metalness: { kind: 'value', value: 1 },
+      roughness: { kind: 'value', value: 0.15 },
+    })
+    expect($part.get().customMaterials).toHaveLength(1)
+    expect(mat.id).toMatch(/^mat_/)
+    expect(mat.metalness).toEqual({ kind: 'value', value: 1 })
+
+    await updateCustomMaterial(mat.id, { roughness: { kind: 'value', value: 0.4 } })
+    expect($part.get().customMaterials[0].roughness).toEqual({ kind: 'value', value: 0.4 })
+
+    undo() // revert the update
+    expect($part.get().customMaterials[0].roughness).toEqual({ kind: 'value', value: 0.15 })
+    undo() // revert the add
+    expect($part.get().customMaterials).toHaveLength(0)
+  })
+
+  it('removeCustomMaterial unassigns it from meshes', async () => {
+    const mat = await addCustomMaterial('M')
+    // A minimal primitive mesh referencing the material (bypasses addCustomMesh's
+    // atlas rebuild — the assignment model is what's under test).
+    $part.set({
+      ...$part.get(),
+      customMeshes: [
+        {
+          id: 'mesh_1',
+          name: 'Box',
+          subPartId: 'flexo_Box_1',
+          primitive: { kind: 'box', params: { width: 1, height: 1, depth: 1 } },
+          faceTextures: {},
+          materialId: mat.id,
+        },
+      ],
+    })
+    await removeCustomMaterial(mat.id)
+    const p = $part.get()
+    expect(p.customMaterials).toHaveLength(0)
+    expect(p.customMeshes[0].materialId).toBeUndefined()
+  })
+
+  it('setMeshMaterial assigns and clears', async () => {
+    const mat = await addCustomMaterial('M')
+    $part.set({
+      ...$part.get(),
+      customMeshes: [
+        {
+          id: 'mesh_1',
+          name: 'Box',
+          subPartId: 'flexo_Box_1',
+          primitive: { kind: 'box', params: { width: 1, height: 1, depth: 1 } },
+          faceTextures: {},
+        },
+      ],
+    })
+    await setMeshMaterial('mesh_1', mat.id)
+    expect($part.get().customMeshes[0].materialId).toBe(mat.id)
+    await setMeshMaterial('mesh_1', undefined)
+    expect($part.get().customMeshes[0].materialId).toBeUndefined()
+  })
 })
 
 describe('makeKittenMeshPart', () => {

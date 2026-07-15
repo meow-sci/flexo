@@ -33,6 +33,7 @@ function editingPart(over: Partial<EditingPart>): EditingPart {
     connectors: [],
     kittens: [],
     customTextures: [],
+    customMaterials: [],
     customMeshes: [],
     animations: [],
     customReactions: [],

@@ -4,9 +4,11 @@ import type {
   Battery,
   Combustor,
   Connector,
+  CustomMaterial,
   CustomReaction,
   CustomMesh,
   DeLavalNozzle,
+  ScalarChannel,
   EasingConfig,
   EulerXYZ,
   Generator,
@@ -35,6 +37,7 @@ import type {
 import {
   CONNECTOR_LAYER_ID,
   KITTEN_LAYER_ID,
+  createDefaultMaterial,
   createEmptyGameData,
   createSubPartGameData,
 } from '../ksa/types'
@@ -49,7 +52,7 @@ export const PROJECT_EXPORT_FORMAT = 'flexo-project'
 // v2: KSA 2026.7.5.4892 Reactions refactor — combustor `c`(combustionId)→`r`+`mr`, tank
 // `cp`(combustionProcessId)→`ra`(roleAffinity), envelope `cp`(custom processes)→`cr`(custom
 // reactions). Per the no-migration rule, v1 payloads are REJECTED on import, never converted.
-export const PROJECT_EXPORT_VERSION = 2
+export const PROJECT_EXPORT_VERSION = 3
 
 /**
  * COMPACT PROJECT CODEC — the single wire format for everything that serializes a
@@ -647,6 +650,71 @@ function decSubPartGameData(c: CSubPartGameData): SubPartGameData {
   return s
 }
 
+// ── custom materials ─────────────────────────────────────────────────────────
+
+/** Compact scalar channel: `{v}` uniform value | `{t}` grayscale-map texture id. */
+type CScalar = { v: number } | { t: string }
+/** Compact base color: `{c:[r,g,b]}` picked color | `{t}` image texture id. */
+type CBaseColor = { c: [number, number, number] } | { t: string }
+
+interface CCustomMaterial {
+  id: string
+  n: string // name
+  bc: CBaseColor
+  mt: CScalar // metalness
+  ro: CScalar // roughness
+  oc?: string // occlusion textureId
+  orm?: string // packed-ORM textureId
+  no?: { t: string; s: number } // normal map textureId + strength
+}
+
+function encScalar(c: ScalarChannel): CScalar {
+  return c.kind === 'value' ? { v: round(c.value) } : { t: c.textureId }
+}
+
+function decScalar(c: CScalar | undefined, def: number): ScalarChannel {
+  if (c && 't' in c && typeof c.t === 'string') return { kind: 'map', textureId: c.t }
+  return { kind: 'value', value: c && 'v' in c ? num(c.v, def) : def }
+}
+
+function encCustomMaterial(m: CustomMaterial): CCustomMaterial {
+  const bc: CBaseColor =
+    m.baseColor.kind === 'color'
+      ? { c: [m.baseColor.color.r, m.baseColor.color.g, m.baseColor.color.b] }
+      : { t: m.baseColor.textureId }
+  const o: CCustomMaterial = {
+    id: m.id,
+    n: m.name,
+    bc,
+    mt: encScalar(m.metalness),
+    ro: encScalar(m.roughness),
+  }
+  if (m.occlusion) o.oc = m.occlusion.textureId
+  if (m.ormPacked) o.orm = m.ormPacked.textureId
+  if (m.normal) o.no = { t: m.normal.textureId, s: round(m.normal.strength) }
+  return o
+}
+
+function decCustomMaterial(c: CCustomMaterial): CustomMaterial {
+  const m = createDefaultMaterial(str(c.id), str(c.n))
+  if (c.bc && 't' in c.bc && typeof c.bc.t === 'string') {
+    m.baseColor = { kind: 'map', textureId: c.bc.t }
+  } else if (c.bc && 'c' in c.bc && Array.isArray(c.bc.c)) {
+    m.baseColor = {
+      kind: 'color',
+      color: { r: num(c.bc.c[0]), g: num(c.bc.c[1]), b: num(c.bc.c[2]) },
+    }
+  }
+  m.metalness = decScalar(c.mt, 0)
+  m.roughness = decScalar(c.ro, 0.5)
+  if (typeof c.oc === 'string' && c.oc) m.occlusion = { textureId: c.oc }
+  if (typeof c.orm === 'string' && c.orm) m.ormPacked = { textureId: c.orm }
+  if (c.no && typeof c.no.t === 'string' && c.no.t) {
+    m.normal = { textureId: c.no.t, strength: num(c.no.s, 1) }
+  }
+  return m
+}
+
 // ── custom (kitten) meshes ───────────────────────────────────────────────────
 
 interface CKittenSource {
@@ -904,6 +972,7 @@ export interface CompactProject {
   k?: CKitten[] // kittens
   a?: CAnimation[] // animations
   m?: CCustomMesh[] // customMeshes (kitten only)
+  mat?: CCustomMaterial[] // customMaterials
   cr?: CReaction[] // customReactions
 }
 
@@ -924,6 +993,7 @@ export function encodeProject(env: ProjectExportEnvelope): CompactProject {
   if (d.animations.length) o.a = d.animations.map(encAnimation)
   const meshes = d.customMeshes.map(encCustomMesh).filter((m): m is CCustomMesh => m != null)
   if (meshes.length) o.m = meshes
+  if (d.customMaterials.length) o.mat = d.customMaterials.map(encCustomMaterial)
   if (d.customReactions.length) o.cr = d.customReactions.map(encCustomReaction)
   return o
 }
@@ -946,6 +1016,7 @@ export function decodeProject(raw: CompactProject): ProjectExportEnvelope {
       kittens: arr<CKitten>(raw.k).map(decKitten),
       animations: arr<CAnimation>(raw.a).map(decAnimation),
       customMeshes: arr<CCustomMesh>(raw.m).map(decCustomMesh),
+      customMaterials: arr<CCustomMaterial>(raw.mat).map(decCustomMaterial),
       customReactions: arr<CReaction>(raw.cr).map(decCustomReaction),
     },
   }

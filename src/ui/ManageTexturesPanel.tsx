@@ -178,18 +178,20 @@ function PanelContent({
             </Select>
           )}
 
-          {/* Texture for this face */}
+          {/* Texture for this face — base-color images only (data maps live on the material). */}
           <Select
             label="Texture"
             value={currentConfig.textureId}
             onChange={(k) => update(selectedFace, { textureId: String(k) })}
           >
             <ListBoxItem id="">(none)</ListBoxItem>
-            {part.customTextures.map((t) => (
-              <ListBoxItem key={t.id} id={t.id}>
-                {t.name}
-              </ListBoxItem>
-            ))}
+            {part.customTextures
+              .filter((t) => t.channel === 'baseColor')
+              .map((t) => (
+                <ListBoxItem key={t.id} id={t.id}>
+                  {t.name}
+                </ListBoxItem>
+              ))}
           </Select>
 
           {/* Wrap mode — how the texture behaves where UVs exceed 0–1. Disabled when no texture. */}

@@ -1,7 +1,16 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { Palette, Pencil, Plus, Trash2 } from 'lucide-react'
-import { Button, ConfirmDialog, Dialog, DialogHeader, Modal, SectionTitle } from './kit'
+import {
+  Button,
+  ConfirmDialog,
+  Dialog,
+  DialogHeader,
+  ListBoxItem,
+  Modal,
+  SectionTitle,
+  Select,
+} from './kit'
 import { $part, addSubPart } from '../state/editorStore'
 import {
   $customTextureUrls,
@@ -9,9 +18,11 @@ import {
   removeCustomMesh,
   removeCustomTexture,
   setManagingMeshId,
+  setTextureChannel,
 } from '../state/customAssetStore'
 import { MaterialDialog } from './MaterialDialog'
-import type { CustomMaterial, CustomMesh, CustomTexture } from '../ksa/types'
+import { CHANNEL_LABELS } from './channelLabels'
+import type { CustomMaterial, CustomMesh, CustomTexture, TextureChannel } from '../ksa/types'
 
 /**
  * Management hub for the project's custom assets (uploaded textures + created
@@ -100,6 +111,19 @@ export function CustomAssetsModal({
                           {t.width}×{t.height}
                         </span>
                       </span>
+                      {/* Which PBR channel the image is for — changing re-encodes from source. */}
+                      <Select
+                        aria-label={`Channel for ${t.name}`}
+                        value={t.channel ?? 'baseColor'}
+                        onChange={(k) => void setTextureChannel(t.id, k as TextureChannel)}
+                        className="w-44"
+                      >
+                        {(Object.keys(CHANNEL_LABELS) as TextureChannel[]).map((c) => (
+                          <ListBoxItem key={c} id={c}>
+                            {CHANNEL_LABELS[c]}
+                          </ListBoxItem>
+                        ))}
+                      </Select>
                       <Button
                         size="sm"
                         variant="danger-ghost"

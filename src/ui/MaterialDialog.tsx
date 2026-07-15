@@ -6,6 +6,7 @@ import {
   Modal,
   Dialog,
   DialogHeader,
+  DisclosureSection,
   Button,
   TextField,
   ToggleButtonGroup,
@@ -21,8 +22,13 @@ import {
   addCustomMaterial,
   updateCustomMaterial,
 } from '../state/customAssetStore'
-import { loadWrappedTexture } from '../three/TextureCache'
-import type { BaseColorChannel, CustomMaterial, RgbColor } from '../ksa/types'
+import type {
+  BaseColorChannel,
+  CustomMaterial,
+  RgbColor,
+  ScalarChannel,
+  TextureChannel,
+} from '../ksa/types'
 import { createDefaultMaterial } from '../ksa/types'
 
 /**
@@ -49,10 +55,13 @@ export function MaterialDialog({
   const part = useStore($part)
   const textureUrls = useStore($customTextureUrls)
   const existing = materialId ? part.customMaterials.find((m) => m.id === materialId) : undefined
-  // Textures usable as a base color image (v1 uploads are all base-color).
-  const baseColorTextures = part.customTextures.filter(
-    (t) => (t.channel ?? 'baseColor') === 'baseColor',
-  )
+  const byChannel = (c: TextureChannel) => part.customTextures.filter((t) => t.channel === c)
+  const baseColorTextures = byChannel('baseColor')
+  const normalTextures = byChannel('normal')
+  const occlusionTextures = byChannel('occlusion')
+  const ormTextures = byChannel('orm')
+  const roughnessTextures = byChannel('roughness')
+  const metalnessTextures = byChannel('metalness')
 
   const seed = existing ?? createDefaultMaterial('', 'Material')
   const [name, setName] = useState(existing ? existing.name : 'Material')
@@ -65,7 +74,21 @@ export function MaterialDialog({
   const [baseMode, setBaseMode] = useState<'color' | 'map'>(seed.baseColor.kind)
   const [metalness, setMetalness] = useState(scalar(seed.metalness))
   const [roughness, setRoughness] = useState(scalar(seed.roughness))
+  const [metalMapId, setMetalMapId] = useState(mapId(seed.metalness))
+  const [roughMapId, setRoughMapId] = useState(mapId(seed.roughness))
+  const [occlusionMapId, setOcclusionMapId] = useState(seed.occlusion?.textureId ?? '')
+  const [ormPackedId, setOrmPackedId] = useState(seed.ormPacked?.textureId ?? '')
+  const [normalMapId, setNormalMapId] = useState(seed.normal?.textureId ?? '')
+  const [normalStrength, setNormalStrength] = useState(seed.normal?.strength ?? 1)
   const [busy, setBusy] = useState(false)
+
+  const hasAdvanced = !!(metalMapId || roughMapId || occlusionMapId || ormPackedId || normalMapId)
+  const anyAdvancedTextures =
+    normalTextures.length > 0 ||
+    occlusionTextures.length > 0 ||
+    ormTextures.length > 0 ||
+    roughnessTextures.length > 0 ||
+    metalnessTextures.length > 0
 
   const activePreset =
     MATERIAL_PRESETS.find((p) => p.metalness === metalness && p.roughness === roughness)?.id ??
@@ -78,15 +101,22 @@ export function MaterialDialog({
     setRoughness(p.roughness)
   }
 
-  const buildChannels = (): Pick<CustomMaterial, 'baseColor' | 'metalness' | 'roughness'> => {
+  const buildChannels = (): Omit<CustomMaterial, 'id' | 'name'> => {
     const baseColor: BaseColorChannel =
       baseMode === 'map' && baseTextureId
         ? { kind: 'map', textureId: baseTextureId }
         : { kind: 'color', color: hexToRgb(colorHex) }
+    // A packed ORM supersedes the separate AO/rough/metal channels.
+    const usePacked = !!ormPackedId
+    const scalarOrMap = (map: string, value: number): ScalarChannel =>
+      map && !usePacked ? { kind: 'map', textureId: map } : { kind: 'value', value }
     return {
       baseColor,
-      metalness: { kind: 'value', value: metalness },
-      roughness: { kind: 'value', value: roughness },
+      metalness: scalarOrMap(metalMapId, metalness),
+      roughness: scalarOrMap(roughMapId, roughness),
+      occlusion: !usePacked && occlusionMapId ? { textureId: occlusionMapId } : undefined,
+      ormPacked: usePacked ? { textureId: ormPackedId } : undefined,
+      normal: normalMapId ? { textureId: normalMapId, strength: normalStrength } : undefined,
     }
   }
 
@@ -114,7 +144,22 @@ export function MaterialDialog({
     }
   }
 
+  // Preview textures load from the SOURCE image blob URLs (plain PNG/JPG →
+  // THREE.TextureLoader). Normal maps preview through three's standard glTF-convention
+  // decode of the original — mathematically what KSA renders from the flipped export.
   const previewMapUrl = baseMode === 'map' && baseTextureId ? textureUrls[baseTextureId] : undefined
+  const preview = {
+    colorHex: baseMode === 'color' ? colorHex : undefined,
+    mapUrl: previewMapUrl,
+    metalness: metalMapId || ormPackedId ? 1 : metalness,
+    roughness: roughMapId || ormPackedId ? 1 : roughness,
+    normalMapUrl: normalMapId ? textureUrls[normalMapId] : undefined,
+    normalStrength,
+    ormUrl: ormPackedId ? textureUrls[ormPackedId] : undefined,
+    roughMapUrl: !ormPackedId && roughMapId ? textureUrls[roughMapId] : undefined,
+    metalMapUrl: !ormPackedId && metalMapId ? textureUrls[metalMapId] : undefined,
+    occlusionMapUrl: !ormPackedId && occlusionMapId ? textureUrls[occlusionMapId] : undefined,
+  }
 
   return (
     <Modal
@@ -126,13 +171,8 @@ export function MaterialDialog({
     >
       <Dialog>
         <DialogHeader title={existing ? 'Edit material' : 'Create material'} onClose={onClose} />
-        <div className="flex flex-col gap-3 p-3">
-          <MaterialPreview
-            colorHex={baseMode === 'color' ? colorHex : undefined}
-            mapUrl={previewMapUrl}
-            metalness={metalness}
-            roughness={roughness}
-          />
+        <div className="flex flex-col gap-3 overflow-y-auto p-3">
+          <MaterialPreview {...preview} />
 
           <Select label="Preset" value={activePreset} onChange={(k) => applyPreset(String(k))}>
             {activePreset === 'custom' && <ListBoxItem id="custom">Custom</ListBoxItem>}
@@ -187,8 +227,95 @@ export function MaterialDialog({
             )}
           </div>
 
-          <ScalarSlider label="Metalness" value={metalness} onChange={setMetalness} />
-          <ScalarSlider label="Roughness" value={roughness} onChange={setRoughness} />
+          <ScalarSlider
+            label="Metalness"
+            value={metalness}
+            onChange={setMetalness}
+            mapped={!!(metalMapId || ormPackedId)}
+          />
+          <ScalarSlider
+            label="Roughness"
+            value={roughness}
+            onChange={setRoughness}
+            mapped={!!(roughMapId || ormPackedId)}
+          />
+
+          {anyAdvancedTextures && (
+            <DisclosureSection
+              title="Advanced maps"
+              defaultExpanded={hasAdvanced}
+              badge={hasAdvanced ? '●' : undefined}
+            >
+              {normalTextures.length > 0 && (
+                <>
+                  <MapSelect
+                    label="Normal map"
+                    value={normalMapId}
+                    onChange={setNormalMapId}
+                    textures={normalTextures}
+                  />
+                  {normalMapId && (
+                    <div className="flex items-center gap-2">
+                      <span className="w-20 shrink-0 text-xs text-fg-muted">Strength</span>
+                      <Slider
+                        aria-label="Normal strength"
+                        className="flex-1"
+                        minValue={0}
+                        maxValue={2}
+                        step={0.05}
+                        value={normalStrength}
+                        onChange={(v) => setNormalStrength(v as number)}
+                      />
+                      <span className="w-8 shrink-0 text-right font-mono text-[11px] text-fg-subtle">
+                        {normalStrength.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
+              {ormTextures.length > 0 && (
+                <MapSelect
+                  label="Packed ORM"
+                  value={ormPackedId}
+                  onChange={setOrmPackedId}
+                  textures={ormTextures}
+                />
+              )}
+              {ormPackedId ? (
+                <p className="text-[11px] leading-snug text-fg-subtle">
+                  The packed ORM supplies AO, roughness and metalness — the sliders and separate
+                  maps are ignored while it’s set.
+                </p>
+              ) : (
+                <>
+                  {occlusionTextures.length > 0 && (
+                    <MapSelect
+                      label="AO map"
+                      value={occlusionMapId}
+                      onChange={setOcclusionMapId}
+                      textures={occlusionTextures}
+                    />
+                  )}
+                  {roughnessTextures.length > 0 && (
+                    <MapSelect
+                      label="Roughness map"
+                      value={roughMapId}
+                      onChange={setRoughMapId}
+                      textures={roughnessTextures}
+                    />
+                  )}
+                  {metalnessTextures.length > 0 && (
+                    <MapSelect
+                      label="Metalness map"
+                      value={metalMapId}
+                      onChange={setMetalMapId}
+                      textures={metalnessTextures}
+                    />
+                  )}
+                </>
+              )}
+            </DisclosureSection>
+          )}
 
           <TextField label="Name" value={name} onChange={setName} size="sm" />
 
@@ -210,10 +337,13 @@ function ScalarSlider({
   label,
   value,
   onChange,
+  mapped = false,
 }: {
   label: string
   value: number
   onChange: (v: number) => void
+  /** True when a map drives this channel — the slider is inert and shows "map". */
+  mapped?: boolean
 }) {
   return (
     <div className="flex items-center gap-2">
@@ -226,11 +356,36 @@ function ScalarSlider({
         step={0.01}
         value={value}
         onChange={(v) => onChange(v as number)}
+        isDisabled={mapped}
       />
       <span className="w-8 shrink-0 text-right font-mono text-[11px] text-fg-subtle">
-        {Math.round(value * 100)}%
+        {mapped ? 'map' : `${Math.round(value * 100)}%`}
       </span>
     </div>
+  )
+}
+
+/** Texture picker for one advanced map slot ("(none)" clears it). */
+function MapSelect({
+  label,
+  value,
+  onChange,
+  textures,
+}: {
+  label: string
+  value: string
+  onChange: (id: string) => void
+  textures: { id: string; name: string }[]
+}) {
+  return (
+    <Select label={label} value={value} onChange={(k) => onChange(String(k))}>
+      <ListBoxItem id="">(none)</ListBoxItem>
+      {textures.map((t) => (
+        <ListBoxItem key={t.id} id={t.id}>
+          {t.name}
+        </ListBoxItem>
+      ))}
+    </Select>
   )
 }
 
@@ -256,24 +411,40 @@ interface PreviewState {
   envTarget: THREE.WebGLRenderTarget
 }
 
+interface MaterialPreviewProps {
+  /** Uniform base color hex; ignored when {@link mapUrl} is set. */
+  colorHex?: string
+  /** Base-color SOURCE image blob URL — overrides the uniform color. */
+  mapUrl?: string
+  metalness: number
+  roughness: number
+  normalMapUrl?: string
+  normalStrength?: number
+  /** Packed ORM source image; overrides the separate grayscale maps below. */
+  ormUrl?: string
+  roughMapUrl?: string
+  metalMapUrl?: string
+  occlusionMapUrl?: string
+}
+
 /**
  * Live PBR preview: a sphere under the same RoomEnvironment ("Studio") the editor
- * scene uses, so metalness/roughness read exactly like the viewport. Renders on
- * demand (one frame per prop change) — no animation loop.
+ * scene uses, so metalness/roughness read exactly like the viewport. Textures load
+ * from the SOURCE images via TextureLoader (approximate but representative — the
+ * viewport renders the exact encoded .ktx2). Renders on demand — no animation loop.
  */
 function MaterialPreview({
   colorHex,
   mapUrl,
   metalness,
   roughness,
-}: {
-  /** Uniform base color hex; ignored when {@link mapUrl} is set. */
-  colorHex?: string
-  /** Base-color image (.ktx2 blob URL) — overrides the uniform color. */
-  mapUrl?: string
-  metalness: number
-  roughness: number
-}) {
+  normalMapUrl,
+  normalStrength = 1,
+  ormUrl,
+  roughMapUrl,
+  metalMapUrl,
+  occlusionMapUrl,
+}: MaterialPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const stateRef = useRef<PreviewState | null>(null)
 
@@ -318,29 +489,56 @@ function MaterialPreview({
     const s = stateRef.current
     if (!s) return
     let cancelled = false
+    const loadImage = async (url: string, srgb: boolean): Promise<THREE.Texture> => {
+      const tex = await new THREE.TextureLoader().loadAsync(url)
+      tex.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+      return tex
+    }
     const apply = async () => {
-      s.material.metalness = metalness
-      s.material.roughness = roughness
+      const m = s.material
+      m.metalness = metalness
+      m.roughness = roughness
       if (mapUrl) {
-        const tex = await loadWrappedTexture(mapUrl, 'srgb', 'repeat')
+        const tex = await loadImage(mapUrl, true)
         if (cancelled) return
-        s.material.map = tex
-        s.material.color.set(0xffffff)
+        m.map = tex
+        m.color.set(0xffffff)
       } else {
-        s.material.map = null
+        m.map = null
         if (colorHex) {
           const { r, g, b } = hexToRgb(colorHex)
-          s.material.color.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace)
+          m.color.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace)
         }
       }
-      s.material.needsUpdate = true
+      // Normal preview uses three's standard glTF-convention decode of the ORIGINAL
+      // upload — mathematically what KSA renders from the X-flipped export.
+      m.normalMap = normalMapUrl ? await loadImage(normalMapUrl, false) : null
+      m.normalScale.set(normalStrength, normalStrength)
+      const orm = ormUrl ? await loadImage(ormUrl, false) : null
+      m.aoMap = orm ?? (occlusionMapUrl ? await loadImage(occlusionMapUrl, false) : null)
+      m.roughnessMap = orm ?? (roughMapUrl ? await loadImage(roughMapUrl, false) : null)
+      m.metalnessMap = orm ?? (metalMapUrl ? await loadImage(metalMapUrl, false) : null)
+      if (cancelled) return
+      m.needsUpdate = true
       s.renderer.render(s.scene, s.camera)
     }
     void apply().catch((err) => console.warn('flexo: material preview failed', err))
     return () => {
       cancelled = true
     }
-  }, [colorHex, mapUrl, metalness, roughness])
+  }, [
+    colorHex,
+    mapUrl,
+    metalness,
+    roughness,
+    normalMapUrl,
+    normalStrength,
+    ormUrl,
+    roughMapUrl,
+    metalMapUrl,
+    occlusionMapUrl,
+  ])
 
   return (
     <canvas
@@ -361,6 +559,10 @@ function hexToRgb(hex: string): RgbColor {
   return { r: (v >> 16) & 255, g: (v >> 8) & 255, b: v & 255 }
 }
 
-function scalar(c: CustomMaterial['metalness']): number {
-  return c.kind === 'value' ? c.value : 1
+function scalar(c: ScalarChannel): number {
+  return c.kind === 'value' ? c.value : 0.5
+}
+
+function mapId(c: ScalarChannel): string {
+  return c.kind === 'map' ? c.textureId : ''
 }

@@ -31,7 +31,8 @@ interface CreateMeshDialogProps {
  */
 export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
   const part = useStore($part)
-  const textures = part.customTextures
+  // Base-color images only — data maps (normal/ORM/…) are picked inside a material.
+  const textures = part.customTextures.filter((t) => t.channel === 'baseColor')
   const materials = part.customMaterials
   const [kind, setKind] = useState<PrimitiveKind>('box')
   const [params, setParams] = useState<Record<string, number>>({ ...DEFAULT_PRIMITIVE_PARAMS.box })

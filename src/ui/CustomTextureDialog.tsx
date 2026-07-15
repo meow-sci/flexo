@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { Upload } from 'lucide-react'
-import { Modal, Dialog, DialogHeader, Button, TextField, toast } from './kit'
+import { Modal, Dialog, DialogHeader, Button, TextField, Select, ListBoxItem, toast } from './kit'
 import { addCustomTexture } from '../state/customAssetStore'
+import { CHANNEL_LABELS, CHANNEL_ORDER } from './channelLabels'
+import type { TextureChannel } from '../ksa/types'
 
 interface CustomTextureDialogProps {
   onClose: () => void
 }
 
 /**
- * Upload (or paste) an image, name it, and encode it into a KTX2 texture that's
- * added to the project's custom-asset library. The encoded texture immediately
- * becomes selectable in the Create Mesh dialog. v1 = single diffuse map.
+ * Upload (or paste) an image, declare which PBR channel it's authored for, name
+ * it, and encode it into a KTX2 texture in the project's custom-asset library.
+ * The channel drives the encode transforms (normal maps get the KSA X-flip) and
+ * which material slots the texture can fill.
  *
  * Mounted only while open (see AddButton) so per-open state initializes via
  * useState with no reset effect.
@@ -19,6 +22,7 @@ export function CustomTextureDialog({ onClose }: CustomTextureDialogProps) {
   const [file, setFile] = useState<File | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [name, setName] = useState('')
+  const [channel, setChannel] = useState<TextureChannel>('baseColor')
   const [busy, setBusy] = useState(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -72,7 +76,7 @@ export function CustomTextureDialog({ onClose }: CustomTextureDialogProps) {
     if (!file) return
     setBusy(true)
     try {
-      await addCustomTexture(file, name)
+      await addCustomTexture(file, name, channel)
       toast({ title: 'Texture added', description: name || file.name, variant: 'success' })
       onClose()
     } catch (err) {
@@ -122,6 +126,23 @@ export function CustomTextureDialog({ onClose }: CustomTextureDialogProps) {
             onChange={(e) => pickFile(e.target.files?.[0])}
           />
           <TextField label="Name" value={name} onChange={setName} size="sm" placeholder="texture" />
+          <Select
+            label="This image is…"
+            value={channel}
+            onChange={(k) => setChannel(k as TextureChannel)}
+          >
+            {CHANNEL_ORDER.map((c) => (
+              <ListBoxItem key={c} id={c}>
+                {CHANNEL_LABELS[c]}
+              </ListBoxItem>
+            ))}
+          </Select>
+          {channel === 'normal' && (
+            <p className="text-[11px] leading-snug text-fg-subtle">
+              Use a standard (OpenGL/glTF-convention) normal map — flexo applies KSA’s decoding
+              convention automatically.
+            </p>
+          )}
           <div className="flex justify-end gap-2">
             <Button size="sm" variant="ghost" onPress={onClose}>
               Cancel

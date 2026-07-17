@@ -58,6 +58,10 @@ export interface CatalogPart {
   extraDiametersM: number[]
   /** Command-capability marker (<Control/>): the part can pilot a vehicle. */
   controllable: boolean
+  /** Part-level `<CustomMass><Mass Kg>` override, or null (the part masses from its tanks/inert masses). */
+  customMass: number | null
+  /** Unmodeled children of that `<CustomMass>` (inertia, offsets), preserved verbatim. */
+  customMassExtras: RawXmlNode[]
   /** Unmodeled `<PartGameData>` attrs + child elements, preserved verbatim for round-trip. */
   unknownAttrs: Record<string, string>
   unknownChildren: RawXmlNode[]
@@ -101,6 +105,8 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
       diameterM: null,
       extraDiametersM: [],
       controllable: false,
+      customMass: null,
+      customMassExtras: [],
       unknownAttrs: {},
       unknownChildren: [],
       batteries: [],
@@ -139,6 +145,9 @@ export interface PartGameData {
   /** Extra `<Diameter M/>` size classes beyond {@link diameterM} (adapter prefabs), preserved for round-trip. */
   extraDiametersM: number[]
   controllable: boolean
+  /** Part-level `<CustomMass>` mass override (Kg) + its preserved unmodeled children. */
+  customMass: number | null
+  customMassExtras: RawXmlNode[]
   /** Unmodeled `<PartGameData>` attrs + child elements preserved from this entry. */
   unknownAttrs: Record<string, string>
   unknownChildren: RawXmlNode[]
@@ -186,6 +195,8 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
       diameterM: null,
       extraDiametersM: [],
       controllable: false,
+      customMass: null,
+      customMassExtras: [],
       unknownAttrs: {},
       unknownChildren: [],
       batteries: [],
@@ -212,6 +223,11 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
       entry.extraDiametersM = parsed.gameData.extraDiametersM
     }
     entry.controllable ||= parsed.gameData.controllable
+    // Adopt the first entry's custom mass; its preserved extras (inertia) ride along.
+    if (entry.customMass == null && parsed.gameData.customMass != null) {
+      entry.customMass = parsed.gameData.customMass
+      entry.customMassExtras = parsed.gameData.customMassExtras
+    }
     // First entry with passthrough wins (these represent one part's leftover XML).
     if (Object.keys(entry.unknownAttrs).length === 0)
       entry.unknownAttrs = parsed.gameData.unknownAttrs
@@ -266,6 +282,8 @@ export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile
       part.diameterM = gd.diameterM
       part.extraDiametersM = gd.extraDiametersM
       part.controllable = gd.controllable
+      part.customMass = gd.customMass
+      part.customMassExtras = gd.customMassExtras
       part.unknownAttrs = gd.unknownAttrs
       part.unknownChildren = gd.unknownChildren
       part.batteries = gd.batteries

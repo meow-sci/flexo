@@ -4,7 +4,7 @@
 > scale/placement aides (never exported) — a faithful three.js re-implementation of KSA's
 > Character rendering. The contract is a long list of asset/material/bone names + render quirks.
 
-**Baseline:** re-vetted against KSA build **2026.7.5.4892** (decomp @ 4826 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.6.4939** (decomp @ 4939 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — `CharacterAssets.xml` is byte-identical (md5 match),
 `KittenRenderable.cs` is identical, and the eye/glass shader merge (rev 4745) is a verbatim
 refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code change needed.
@@ -67,6 +67,12 @@ refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code
 5. Don't `computeVertexNormals()` (faceted helmet dome from seam-split verts).
 6. Attachment correction is required & order-sensitive.
 7. `Characters/` atlases stay raw **BC7** (for verbatim mod bundle-export); without BPTC/RGTC they fall back to flat.
+
+## What changed in 4939
+
+**INTACT — no flexo change.** Zero hits in the 4892→4939 diff: `CharacterAssets.xml`,
+`KittenRenderable.cs`, `AnimatedRenderable.cs`, `CharacterRenderResources.cs`, and
+`ModelTranslucent.frag` are all unchanged.
 
 ## What changed in 4892
 

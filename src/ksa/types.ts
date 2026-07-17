@@ -185,11 +185,12 @@ export interface EditorTagDef {
 /**
  * KSA's editor-tag registry in the game's authored order (= the order of category
  * buttons in the part picker). Mirrors `CoreEditorTagsGameData.xml` as of build
- * **2026.6.9.4750**. This is a static snapshot, not a live parse: flexo only uses it for
+ * **2026.7.6.4939**. This is a static snapshot, not a live parse: flexo only uses it for
  * freeform-entry autocomplete, so a modder-defined tag simply isn't suggested (it can
  * still be typed). Keep in sync with the game file on a registry change.
  */
 export const EDITOR_TAG_DEFS: readonly EditorTagDef[] = [
+  { id: 'Booster', notaCategory: false },
   { id: 'Capsules', notaCategory: false },
   { id: 'Engines', notaCategory: false },
   { id: 'RCS', notaCategory: false },
@@ -225,7 +226,9 @@ export type TankShape = 'Cylindrical' | 'Spherical'
 /**
  * A fuel/oxidizer tank definition (a part may have several). Parametric — no 3D
  * workspace geometry; edited as numbers in the Part Data dialog. Serialized as
- * <CylindricalTank>/<SphericalTank> on <PartGameData>. Mirrors `TankState`.
+ * <Tank><CylindricalTank>/<SphericalTank> on <SubPartGameData>. (Since KSA 2026.7.6
+ * Core authors its prefab tanks at the <PartGameData> level instead — flexo doesn't
+ * model those; they survive round-trip via the GameData passthrough.) Mirrors `TankState`.
  */
 export interface Tank {
   shape: TankShape
@@ -450,6 +453,13 @@ export const VOLUMETRIC_EXHAUST_IDS: readonly string[] = [
   'MmuRcsVac',
 ]
 
+/**
+ * The `<PlumeTrailTemplate>` ids shipped in Core (KSA 2026.7.6 volumetric plume trails,
+ * referenced by a nozzle's `<PlumeTrail Id>`). Core assigns DefaultEngine to every main
+ * engine; RCS/vernier nozzles carry none.
+ */
+export const PLUME_TRAIL_IDS: readonly string[] = ['DefaultEngine']
+
 /** KSA's default engine sound behavior id (the `<SoundEvent SoundId>` Core engines use). */
 export const DEFAULT_ENGINE_SOUND_ID = 'DefaultEngineSoundBehavior'
 
@@ -533,6 +543,8 @@ export interface DeLavalNozzle {
   fxExhaustDirection: Vec3 | null
   /** `<VolumetricExhaust Id>` plume template id (one of {@link VOLUMETRIC_EXHAUST_IDS}); null ⇒ none. */
   volumetricExhaustId: string | null
+  /** `<PlumeTrail Id>` volumetric trail template (one of {@link PLUME_TRAIL_IDS}); null ⇒ none. */
+  plumeTrailId: string | null
   /** `<ExhaustLight Value>` dynamic exhaust point light. Default true. */
   exhaustLight: boolean
   /** `<SoundEvent>` engine audio, or null. */
@@ -618,6 +630,14 @@ export interface PartGameData {
   displayName: string
   /** Mass override in kg, or null for the part's default mass. */
   customMass: number | null
+  /**
+   * Unmodeled children of the modeled `<CustomMass>` element (KSA's `CustomMassTemplate`
+   * carries more than `<Mass Kg>`: `<MassSpecificInertia Ixx/Iyy/Izz>` plus the
+   * `AsmbTransformTemplate` offset/rotation), preserved verbatim and re-emitted inside
+   * `<CustomMass>` so importing a built-in part keeps its inertia. Meaningless (and
+   * dropped) when {@link customMass} is null — KSA requires `Mass > 0` on a CustomMass.
+   */
+  customMassExtras: RawXmlNode[]
   /**
    * Part diameter in meters, serialized as <Diameter M/>. KSA's VAB part-picker
    * size-class filter (the `DiameterFilterlist` editor tags) — no physics effect.
@@ -757,6 +777,7 @@ export function createEmptyGameData(): PartGameData {
   return {
     displayName: '',
     customMass: null,
+    customMassExtras: [],
     diameterM: null,
     extraDiametersM: [],
     controllable: false,
@@ -823,6 +844,7 @@ export function createNozzle(id: string): DeLavalNozzle {
     fxExhaustLocation: null,
     fxExhaustDirection: null,
     volumetricExhaustId: null,
+    plumeTrailId: null,
     exhaustLight: true,
     sound: null,
   }

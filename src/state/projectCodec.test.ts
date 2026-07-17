@@ -71,6 +71,14 @@ function richPart(): EditingPart {
 
   p.gameData.displayName = 'Rich Display'
   p.gameData.customMass = 1234.5
+  // Preserved unmodeled <CustomMass> children (inertia) ride along with the Kg scalar.
+  p.gameData.customMassExtras = [
+    {
+      tag: 'MassSpecificInertia',
+      attrs: { Ixx: '0.325', Iyy: '0.668', Izz: '0.668' },
+      children: [],
+    },
+  ]
   p.gameData.diameterM = 2.5
   p.gameData.controllable = true
   // Unmodeled passthrough on the part itself: a nested <Collider> (attrs + child tree).
@@ -202,6 +210,7 @@ function richPart(): EditingPart {
         fxExhaustLocation: { x: -1.3, y: 0, z: 0 },
         fxExhaustDirection: { x: -0.5, y: 0.5, z: 0 },
         volumetricExhaustId: 'EngineALarge',
+        plumeTrailId: 'DefaultEngine',
         exhaustLight: false,
         sound: { action: 'On', soundId: 'DefaultEngineSoundBehavior' },
       },

@@ -5,8 +5,11 @@
 > **BREAKING** for the live thrust/Isp readout. Read alongside [docs/engines.md](../docs/engines.md)
 > and [analysis/KSA_ENGINE_DETAILS.md](../analysis/KSA_ENGINE_DETAILS.md).
 
-**Baseline:** re-vetted against KSA build **2026.7.5.4892** (decomp @ 4892 + shipped Core XML).
-**Baseline status:** ✅ **CURRENT — flexo re-modeled** after the rev-4884 Reactions refactor
+**Baseline:** re-vetted against KSA build **2026.7.6.4939** (decomp @ 4939 + shipped Core XML).
+**Baseline status:** ✅ **CURRENT** — 4939 left every ported physics class byte-identical; the one
+schema addition (`<PlumeTrail Id>` on the nozzle) is modeled (see
+[What changed in 4939](#what-changed-in-4939)). Previously re-modeled at 4892 after the rev-4884
+Reactions refactor
 (the largest engine-contract break since flexo began): `Combustion.xml`/`<CombustionProcess>`
 are GONE, replaced by `Reactions.xml` + a `Reaction` class family, and `<Combustor>` now
 references `<Reaction Id>` (+ required `<MixtureRatio>` for mixtures). See
@@ -102,6 +105,31 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
   `<Combustor>` (flexo's SRB recipe now burns APCP) — but there is still no solid-motor
   hardware (no grain-regression thrust curve; the propellant reservoir is still a liquid-style
   tank), so a true SRB is still not reproducible.
+
+## What changed in 4939
+
+- ✅ **`<PlumeTrail Id>` on the nozzle (SCHEMA-DRIFT, modeled).** `RocketNozzleTemplate` gained
+  `[XmlElement] PlumeTrailReference? PlumeTrail` (rev 4900's experimental volumetric plume
+  trails; `PlumeTrailReference` = `[XmlAttribute("Id")]` into the new top-level
+  `<PlumeTrailTemplate>` asset, id-resolved via `ModLibrary` so mods reference Core's
+  `DefaultEngine` without redefining it). Core now authors `<PlumeTrail Id="DefaultEngine"/>`
+  on every main engine's `<DeLavalNozzle>` (CorePropulsionA ×3; RCS/vernier none) — inside
+  flexo's MODELED nozzle surface, so before this fix an imported engine silently dropped it on
+  re-export. Modeled end-to-end: `DeLavalNozzle.plumeTrailId` + `PLUME_TRAIL_IDS`
+  (`src/ksa/types.ts`), parse (`partXmlParser.ts` `nozzleFromElement`), emit after
+  `<VolumetricExhaust>` (`partXmlSerializer.ts` `buildNozzleElement`), project codec (`pt`),
+  nozzle UI select (`src/ui/EngineSections.tsx`). New nozzles default to none (game schema
+  default; Core's RCS carries none).
+- ✅ **Ported math intact.** `DeLavalNozzleConfig.cs`, `CombustorConfig.cs`, `GasProperties.cs`,
+  `CombustionTable.cs`, `NozzlePerformance.cs`, `RocketDesign.cs`, `EngineDesigner.cs`, and
+  `Reactions.xml` all absent from the 4892→4939 diff; `DeLavalNozzleTemplate.cs`'s only hunk is
+  threading `PlumeTrail` into instance data; `Constants.cs` only ADDED liter conversions
+  (9.80665 / 8.31446… / 101325 untouched).
+- ℹ️ **Larger SRB parts shipped, still data-faked.** Rev 4909's CorePropulsionC pack ("Booster"
+  tag) has **no engine GameData yet** ("not yet configured"); no new data path for true SRBs —
+  the APCP `FixedReaction` fake remains the only route. Dev leftovers `FakeSubstances.xml` /
+  `FakeCombustion.xml` refs were dropped from Core's `mod.toml` (files already absent at 4892;
+  flexo never referenced them).
 
 ## What changed in 4892 — the Reactions refactor (rev 4884/4885)
 

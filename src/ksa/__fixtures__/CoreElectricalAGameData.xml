@@ -1,226 +1,218 @@
 <?xml version='1.0' encoding='utf-8' ?>
 <Assets>
-    <PartGameData Id="CoreElectricalA_Prefab_InlineBatteryBankA">
-        <EditorTag Value="Electrical" />
-        <EditorTag Value="NoFaceSnapping" />
-        <Battery HasStatusLight="true">
-            <MaximumCapacity J="1000" />
-        </Battery>
-        <Collider Id="Collider1">
-          <Cylinder Id="CylinderCollider1">
-            <LocationAsmb X="0" Y="0" Z="0" />
-            <Collider2Asmb X="0" Y="0" Z="1.57" />
-            <LengthY M="0.25" />
-            <Radius M="0.5" />
-          </Cylinder>
-        </Collider>
-    </PartGameData>
+  <PartGameData Id="CoreElectricalA_Prefab_InlineBatteryBankA">
+    <EditorTag Value="Electrical" />
+    <EditorTag Value="NoFaceSnapping" />
+    <Battery HasStatusLight="true">
+      <MaximumCapacity J="1000" />
+    </Battery>
+    <Collider Id="Collider1">
+      <Cylinder Id="CylinderCollider1">
+        <LocationAsmb X="0" Y="0" Z="0" />
+        <Collider2Asmb X="0" Y="0" Z="1.57" />
+        <LengthY M="0.25" />
+        <Radius M="0.5" />
+      </Cylinder>
+    </Collider>
+  </PartGameData>
 
-    <PartGameData Id="CoreElectricalA_Prefab_InlineBatteryBankB">
-        <EditorTag Value="Electrical" />
-        <EditorTag Value="NoFaceSnapping" />
-        <Battery HasStatusLight="true">
-            <MaximumCapacity J="3000" />
-        </Battery>
-        <Collider Id="Collider1">
-          <Cylinder Id="CylinderCollider1">
-            <LocationAsmb X="-0.005" Y="0" Z="0" />
-            <Collider2Asmb X="0" Y="0" Z="1.57" />
-            <LengthY M="0.325" />
-            <Radius M="1.0" />
-          </Cylinder>
-        </Collider>
-    </PartGameData>
+  <PartGameData Id="CoreElectricalA_Prefab_InlineBatteryBankB">
+    <EditorTag Value="Electrical" />
+    <EditorTag Value="NoFaceSnapping" />
+    <Battery HasStatusLight="true">
+      <MaximumCapacity J="3000" />
+    </Battery>
+  </PartGameData>
 
-    <PartGameData Id="CoreElectricalA_Prefab_LightSmallA">
-        <EditorTag Value="Lights"/>
-        <PowerConsumer LightSwitch="true">
-            <Consumed W="60" />
-        </PowerConsumer>
-        <Connector Id="_connector8">
-            <Flags>ToSurface</Flags>
-        </Connector>
-        <KeyframeAnimationModule Id="CoreElectricalA_Prefab_LightSmallA_Anim">
-            <KeyframeAnimation Path="Animations/CoreElectricalA_Prefab_LightSmallA_Anim.glb" Id="CoreElectricalA_Prefab_LightSmallA_Anim" />
-        </KeyframeAnimationModule>
+  <PartGameData Id="CoreElectricalA_Prefab_LightSmallA">
+    <EditorTag Value="Lights" />
+    <PowerConsumer LightSwitch="true">
+      <Consumed W="60" />
+    </PowerConsumer>
+    <Connector Id="_connector8">
+      <Flags>ToSurface</Flags>
+    </Connector>
+    <KeyframeAnimationModule Id="CoreElectricalA_Prefab_LightSmallA_Anim">
+      <KeyframeAnimation Path="Animations/CoreElectricalA_Prefab_LightSmallA_Anim.glb" Id="CoreElectricalA_Prefab_LightSmallA_Anim" />
+    </KeyframeAnimationModule>
 
-        <Collider Id="Collider1">
-          <Box Id="BoxCollider1">
-            <LocationAsmb X="0" Y="0" Z="0.1" />
-            <Collider2Asmb X="0" Y="0" Z="0" />
-            <LengthX M="0.5" />
-            <LengthY M="0.5" />
-            <LengthZ M="0.5" />
-          </Box>
-        </Collider>
-    </PartGameData>
+    <Collider Id="Collider1">
+      <Box Id="BoxCollider1">
+        <LocationAsmb X="0" Y="0" Z="0.1" />
+        <Collider2Asmb X="0" Y="0" Z="0" />
+        <LengthX M="0.5" />
+        <LengthY M="0.5" />
+        <LengthZ M="0.5" />
+      </Box>
+    </Collider>
+  </PartGameData>
 
-    <PartGameData Id="CoreElectricalA_Prefab_LightSmallB">
-        <EditorTag Value="Lights"/>
-        <PowerConsumer LightSwitch="true">
-            <Consumed W="120" />
-        </PowerConsumer>
-        <Connector Id="_connector7">
-            <Flags>ToSurface</Flags>
-        </Connector>
-        <KeyframeAnimationModule Id="CoreElectricalA_Prefab_LightSmallB_Anim">
-            <KeyframeAnimation Path="Animations/CoreElectricalA_Prefab_LightSmallB_Anim.glb" Id="CoreElectricalA_Prefab_LightSmallB_Anim" />
-        </KeyframeAnimationModule>
+  <PartGameData Id="CoreElectricalA_Prefab_LightSmallB">
+    <EditorTag Value="Lights" />
+    <PowerConsumer LightSwitch="true">
+      <Consumed W="120" />
+    </PowerConsumer>
+    <Connector Id="_connector7">
+      <Flags>ToSurface</Flags>
+    </Connector>
+    <KeyframeAnimationModule Id="CoreElectricalA_Prefab_LightSmallB_Anim">
+      <KeyframeAnimation Path="Animations/CoreElectricalA_Prefab_LightSmallB_Anim.glb" Id="CoreElectricalA_Prefab_LightSmallB_Anim" />
+    </KeyframeAnimationModule>
 
-        <Collider Id="Collider1">
-          <Box Id="BoxCollider1">
-            <LocationAsmb X="0.020" Y="0" Z="0.070" />
-            <Collider2Asmb X="0" Y="0" Z="0" />
-            <LengthX M="0.350000" />
-            <LengthY M="0.800000" />
-            <LengthZ M="0.500000" />
-          </Box>
-        </Collider>
-    </PartGameData>
+    <Collider Id="Collider1">
+      <Box Id="BoxCollider1">
+        <LocationAsmb X="0.020" Y="0" Z="0.070" />
+        <Collider2Asmb X="0" Y="0" Z="0" />
+        <LengthX M="0.350000" />
+        <LengthY M="0.800000" />
+        <LengthZ M="0.500000" />
+      </Box>
+    </Collider>
+  </PartGameData>
 
-    <PartGameData Id="CoreElectricalA_Prefab_LightSmallC">
-        <EditorTag Value="Lights"/>
-        <PowerConsumer LightSwitch="true">
-            <Consumed W="100" />
-        </PowerConsumer>
-        <Connector Id="_connector9">
-            <Flags>ToSurface</Flags>
-        </Connector>
-        <KeyframeAnimationModule Id="CoreElectricalA_Prefab_LightSmallC_Anim">
-            <KeyframeAnimation Path="Animations/CoreElectricalA_Prefab_LightSmallC_Anim.glb" Id="CoreElectricalA_Prefab_LightSmallC_Anim" />
-        </KeyframeAnimationModule>
+  <PartGameData Id="CoreElectricalA_Prefab_LightSmallC">
+    <EditorTag Value="Lights" />
+    <PowerConsumer LightSwitch="true">
+      <Consumed W="100" />
+    </PowerConsumer>
+    <Connector Id="_connector9">
+      <Flags>ToSurface</Flags>
+    </Connector>
+    <KeyframeAnimationModule Id="CoreElectricalA_Prefab_LightSmallC_Anim">
+      <KeyframeAnimation Path="Animations/CoreElectricalA_Prefab_LightSmallC_Anim.glb" Id="CoreElectricalA_Prefab_LightSmallC_Anim" />
+    </KeyframeAnimationModule>
 
-        <Collider Id="Collider1">
-          <Box Id="BoxCollider1">
-            <LocationAsmb X="-0.0278" Y="0" Z="0.0475" />
-            <Collider2Asmb X="1.5564" Y="0" Z="1.5708" />
-            <LengthX M="0.8902" />
-            <LengthY M="0.5288" />
-            <LengthZ M="0.3419" />
-          </Box>
-        </Collider>
-    </PartGameData>
+    <Collider Id="Collider1">
+      <Box Id="BoxCollider1">
+        <LocationAsmb X="-0.0278" Y="0" Z="0.0475" />
+        <Collider2Asmb X="1.5564" Y="0" Z="1.5708" />
+        <LengthX M="0.8902" />
+        <LengthY M="0.5288" />
+        <LengthZ M="0.3419" />
+      </Box>
+    </Collider>
+  </PartGameData>
 
-    <SubPartGameData Id="CoreElectricalA_Subpart_SpotlightA">
-        <Light>
-            <Type>Spot</Type>
-            <Transform>
-                <Position X="0.38" Y="0.21" Z="0"/>
-            </Transform>
-            <Range Value="5"/>
-            <Intensity Value="10"/>
-            <Color R="1" G="1" B="1"/>
-            <InnerAngle Value="0.392599"/>
-            <OuterAngle Value="0.785398"/>
-        </Light>
-    </SubPartGameData>
+  <SubPartGameData Id="CoreElectricalA_Subpart_SpotlightA">
+    <Light>
+      <Type>Spot</Type>
+      <Transform>
+        <Position X="0.38" Y="0.21" Z="0" />
+      </Transform>
+      <Range Value="5" />
+      <Intensity Value="10" />
+      <Color R="1" G="1" B="1" />
+      <InnerAngle Value="0.392599" />
+      <OuterAngle Value="0.785398" />
+    </Light>
+  </SubPartGameData>
 
-    <SubPartGameData Id="CoreElectricalA_Subpart_FloodlightA">
-        <Light>
-            <Type>Spot</Type>
-            <Transform>
-                <Position X="0.338" Y="0" Z="0"/>
-            </Transform>
-            <Range Value="3"/>
-            <Intensity Value="10"/>
-            <Color R="1" G="1" B="1"/>
-            <InnerAngle Value="0.23"/>
-            <OuterAngle Value="1.57"/>
-        </Light>
-    </SubPartGameData>
+  <SubPartGameData Id="CoreElectricalA_Subpart_FloodlightA">
+    <Light>
+      <Type>Spot</Type>
+      <Transform>
+        <Position X="0.338" Y="0" Z="0" />
+      </Transform>
+      <Range Value="3" />
+      <Intensity Value="10" />
+      <Color R="1" G="1" B="1" />
+      <InnerAngle Value="0.23" />
+      <OuterAngle Value="1.57" />
+    </Light>
+  </SubPartGameData>
 
-    <PartGameData Id="CoreElectricalA_Prefab_RadialBatteryA">
-        <EditorTag Value="Electrical" />
-        <Battery HasStatusLight="true">
-            <MaximumCapacity J="100" />
-        </Battery>
+  <PartGameData Id="CoreElectricalA_Prefab_RadialBatteryA">
+    <EditorTag Value="Electrical" />
+    <Battery HasStatusLight="true">
+      <MaximumCapacity J="100" />
+    </Battery>
 
-        <Collider Id="Collider1">
-          <Box Id="BoxCollider1">
-            <LocationAsmb X="0.01" Y="0.005" Z="0.03" />
-            <Collider2Asmb X="0" Y="0" Z="0" />
-            <LengthX M="0.4292" />
-            <LengthY M="0.3057" />
-            <LengthZ M="0.2185" />
-          </Box>
-        </Collider>
-    </PartGameData>
+    <Collider Id="Collider1">
+      <Box Id="BoxCollider1">
+        <LocationAsmb X="0.01" Y="0.005" Z="0.03" />
+        <Collider2Asmb X="0" Y="0" Z="0" />
+        <LengthX M="0.4292" />
+        <LengthY M="0.3057" />
+        <LengthZ M="0.2185" />
+      </Box>
+    </Collider>
+  </PartGameData>
 
-    <PartGameData Id="CoreElectricalA_Prefab_RadialBatteryB">
-        <EditorTag Value="Electrical" />
-        <Battery HasStatusLight="true">
-            <MaximumCapacity J="500" />
-        </Battery>
+  <PartGameData Id="CoreElectricalA_Prefab_RadialBatteryB">
+    <EditorTag Value="Electrical" />
+    <Battery HasStatusLight="true">
+      <MaximumCapacity J="500" />
+    </Battery>
 
-        <Collider Id="Collider1">
-          <Box Id="BoxCollider1">
-            <LocationAsmb X="-0.0059" Y="-0.005" Z="0.05" />
-            <Collider2Asmb X="0" Y="0" Z="0" />
-            <LengthX M="0.6704" />
-            <LengthY M="0.5138" />
-            <LengthZ M="0.35" />
-          </Box>
-        </Collider>
-    </PartGameData>
+    <Collider Id="Collider1">
+      <Box Id="BoxCollider1">
+        <LocationAsmb X="-0.0059" Y="-0.005" Z="0.05" />
+        <Collider2Asmb X="0" Y="0" Z="0" />
+        <LengthX M="0.6704" />
+        <LengthY M="0.5138" />
+        <LengthZ M="0.35" />
+      </Box>
+    </Collider>
+  </PartGameData>
 
-    <PartGameData Id="CoreElectricalA_Prefab_SolarPanelA">
-        <EditorTag Value="Electrical" />
-        <SolarPanel>
-            <Produced W="200" />
-            <Transform>
-                <Rotation Y="1.5708" />
-            </Transform>
-        </SolarPanel>
-        <Connector Id="_connector5">
-            <Flags>ToSurface</Flags>
-        </Connector>
+  <PartGameData Id="CoreElectricalA_Prefab_SolarPanelA">
+    <EditorTag Value="Electrical" />
+    <SolarPanel>
+      <Produced W="200" />
+      <Transform>
+        <Rotation Y="1.5708" />
+      </Transform>
+    </SolarPanel>
+    <Connector Id="_connector5">
+      <Flags>ToSurface</Flags>
+    </Connector>
 
-        <Collider Id="Collider1">
-          <Box Id="BoxCollider1">
-            <LocationAsmb X="0" Y="0" Z="0.0719" />
-            <Collider2Asmb X="0" Y="0.0002" Z="0" />
-            <LengthX M="0.8" />
-            <LengthY M="0.7058" />
-            <LengthZ M="0.1689" />
-          </Box>
-        </Collider>
-    </PartGameData>
+    <Collider Id="Collider1">
+      <Box Id="BoxCollider1">
+        <LocationAsmb X="0" Y="0" Z="0.0719" />
+        <Collider2Asmb X="0" Y="0.0002" Z="0" />
+        <LengthX M="0.8" />
+        <LengthY M="0.7058" />
+        <LengthZ M="0.1689" />
+      </Box>
+    </Collider>
+  </PartGameData>
 
-    <PartGameData Id="CoreElectricalA_Prefab_SolarPanelB">
-        <EditorTag Value="Electrical" />
-        <KeyframeAnimationModule Id="SolarPanelAnimation" ShowDeployRetract="true">
-            <KeyframeAnimation Path="Animations/CoreElectricalA_Prefab_SolarPanelB_Anim.glb" Id="CoreElectricalA_Prefab_SolarPanelB_Anim" />
-            <SolarTracking DegreesPerSecond="5" SubPart="CoreStructuralA_Subpart_DriveRotorB1">
-                <ExcludeSubPart>CoreStructuralA_Subpart_DriveHousingB1</ExcludeSubPart>
-            </SolarTracking>
-        </KeyframeAnimationModule>
-        <Connector Id="_connector6">
-            <Flags>ToSurface</Flags>
-        </Connector>
+  <PartGameData Id="CoreElectricalA_Prefab_SolarPanelB">
+    <EditorTag Value="Electrical" />
+    <KeyframeAnimationModule Id="SolarPanelAnimation" ShowDeployRetract="true">
+      <KeyframeAnimation Path="Animations/CoreElectricalA_Prefab_SolarPanelB_Anim.glb" Id="CoreElectricalA_Prefab_SolarPanelB_Anim" />
+      <SolarTracking DegreesPerSecond="5" SubPart="CoreStructuralA_Subpart_DriveRotorB1">
+        <ExcludeSubPart>CoreStructuralA_Subpart_DriveHousingB1</ExcludeSubPart>
+      </SolarTracking>
+    </KeyframeAnimationModule>
+    <Connector Id="_connector6">
+      <Flags>ToSurface</Flags>
+    </Connector>
 
-        <Collider Id="Collider1">
-          <Box Id="BoxCollider1">
-            <LocationAsmb X="0.15" Y="0.0002" Z="-0.3" />
-            <Collider2Asmb X="0" Y="0.0046" Z="-0.0004" />
-            <LengthX M="0.5" />
-            <LengthY M="1.3" />
-            <LengthZ M="1" />
-          </Box>
-        </Collider>
-    </PartGameData>
+    <Collider Id="Collider1">
+      <Box Id="BoxCollider1">
+        <LocationAsmb X="0.15" Y="0.0002" Z="-0.3" />
+        <Collider2Asmb X="0" Y="0.0046" Z="-0.0004" />
+        <LengthX M="0.5" />
+        <LengthY M="1.3" />
+        <LengthZ M="1" />
+      </Box>
+    </Collider>
+  </PartGameData>
 
-    <SubPartGameData Id="CoreElectricalA_Subpart_SolarPanelB_CellA">
-        <SolarPanel>
-            <Produced W="100" />
-            <Transform>
-                <Rotation Y="1.5708" />
-            </Transform>
-        </SolarPanel>
-    </SubPartGameData>
+  <SubPartGameData Id="CoreElectricalA_Subpart_SolarPanelB_CellA">
+    <SolarPanel>
+      <Produced W="100" />
+      <Transform>
+        <Rotation Y="1.5708" />
+      </Transform>
+    </SolarPanel>
+  </SubPartGameData>
 
-    <PartGameData Id="LightPart">
-        <PowerConsumer LightSwitch="true">
-            <Consumed W="40" />
-        </PowerConsumer>
-    </PartGameData>
+  <PartGameData Id="LightPart">
+    <PowerConsumer LightSwitch="true">
+      <Consumed W="40" />
+    </PowerConsumer>
+  </PartGameData>
 </Assets>

@@ -437,7 +437,10 @@ function mergeGameData(
   instanceIdMap: Map<string, string>,
 ): void {
   if (!target.displayName.trim() && src.displayName?.trim()) target.displayName = src.displayName
-  if (target.customMass == null && src.customMass != null) target.customMass = src.customMass
+  if (target.customMass == null && src.customMass != null) {
+    target.customMass = src.customMass
+    target.customMassExtras = structuredClone(src.customMassExtras ?? [])
+  }
   if (target.diameterM == null && src.diameterM != null) target.diameterM = src.diameterM
   if (!target.controllable && src.controllable) target.controllable = true
   // Unmodeled passthrough XML: fill only when the target has none (first part's leftover wins).

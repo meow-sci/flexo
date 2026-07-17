@@ -6,7 +6,7 @@
 > alongside [docs/custom-assets.md](../docs/custom-assets.md), [docs/texturing.md](../docs/texturing.md),
 > [docs/asset-pipeline.md](../docs/asset-pipeline.md).
 
-**Baseline:** re-vetted against KSA build **2026.7.5.4892** (decomp @ 4826 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.6.4939** (decomp @ 4939 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — every schema/reference class and renderer quirk flexo's
 export depends on is byte-identical or behavior-preserving. No code change required. Two
 durable watch-items noted below.
@@ -55,6 +55,22 @@ durable watch-items noted below.
 8. **`PartModel Id` must be unique** (KSA dedupes PartModels by `Template.Id`); flexo uses `<subPartId>_Model`. **`PbrMaterial Id`s dedupe the same way** (`PbrMaterialReference.OnDataLoad` → `ModLibrary.Register`; a duplicate silently becomes a reference to the first) — flexo exploits this deliberately: identical resolved channel sets intern into ONE shared `<PbrMaterial>` referenced by many SubParts (`flexo_<MatName>_<hex>_Material` for a verbatim CustomMaterial, `<subPartId>_Material` otherwise), exactly Core's one-pack-material pattern.
 9. **Glass: emissive ignored + ~10% diffuse tint.** `MeshGlassIndirect.frag` hard-codes opacity 0.75, `glassColor=mix(albedo,0.1,0.9)`. `$simulateGlass` mirrors this; glass can't glow, so the `glassGlow` layered two-SubPart export is required.
 10. **Glow = WHITE × mask × 1.25, added after lighting.** `glowComposite` bakes glow color into the diffuse and emits a white mask; `MeshIndirect.frag` does `gammaToLinear(vec3(sampledEmissive) * EMISSIVE_MULTIPLIER)`, `EMISSIVE_MULTIPLIER=1.25`.
+
+## What changed in 4939
+
+**INTACT — no flexo change.** Re-verified against the diff: `ThumbnailRenderResources.AddDraw`
+still has NO null guard (synthetic Normal + AoRoughMetal stay required);
+`PartModelRenderer` still defines `ENABLE_EMISSIVE` (and `MeshIndirect.frag` still gates on it);
+`MeshAtlasFileReference.cs` / `PbrMaterialReference.cs` unchanged; `AssetBundle.cs` /
+`ModLibrary.cs` / `FileReference.cs` / `ShaderReference.cs` hunks are decompiler/log noise.
+Notes: `Mod.cs` gained the `[XmlElement("PlumeTrailTemplate")]` registration (new top-level
+`<Assets>` child — flexo only ever REFERENCES Core's `DefaultEngine` by id from a nozzle, never
+emits the template, see [engines.md](engines.md#what-changed-in-4939));
+`SimpleVkMeshAtlas` now computes mesh bounding-sphere radius from the ORIGIN
+(`max(|min|,|max|).Length()`) instead of the bbox center — for flexo-exported GLBs that's equal
+or more conservative (no premature culling), no emit-side change. `<MeshFile>`'s `<Interleaved>`
+element already existed at 4892 (Core just started authoring it); flexo emits `<MeshAtlas>`, not
+`<MeshFile>`.
 
 ## What changed in 4892
 

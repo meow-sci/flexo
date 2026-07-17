@@ -205,6 +205,8 @@ describe('editorStore', () => {
         diameterM: null,
         extraDiametersM: [],
         controllable: false,
+        customMass: null,
+        customMassExtras: [],
         unknownAttrs: {},
         unknownChildren: [],
         batteries: [],

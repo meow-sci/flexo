@@ -484,6 +484,7 @@ describe('serializeGameData', () => {
               fxExhaustLocation: null,
               fxExhaustDirection: null,
               volumetricExhaustId: 'EngineALarge',
+              plumeTrailId: 'DefaultEngine',
               exhaustLight: true,
               sound: { action: 'On', soundId: 'DefaultEngineSoundBehavior' },
             },
@@ -523,6 +524,7 @@ describe('serializeGameData', () => {
     expect(child(noz, 'ExhaustLocation')!.getAttribute('X')).toBe('-1.23')
     expect(child(noz, 'ExhaustDirection')).toBeNull() // default (-1,0,0) omitted
     expect(child(noz, 'VolumetricExhaust')!.getAttribute('Id')).toBe('EngineALarge')
+    expect(child(noz, 'PlumeTrail')!.getAttribute('Id')).toBe('DefaultEngine')
     expect(child(noz, 'SoundEvent')!.getAttribute('SoundId')).toBe('DefaultEngineSoundBehavior')
     expect(child(noz, 'ExhaustLight')).toBeNull() // default true omitted
   })

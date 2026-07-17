@@ -5,13 +5,15 @@
 > other feature hangs off. Read alongside [docs/xml-io.md](../docs/xml-io.md) and
 > [docs/subpart-catalog.md](../docs/subpart-catalog.md) (the flexo-internal view).
 
-**Baseline:** re-vetted against KSA build **2026.7.5.4892** (decomp @ 4892 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.6.4939** (decomp @ 4939 + shipped Core XML).
 **Baseline status:** ✅ **CURRENT** — `<Diameter>` part-size + `<Control>` command marker modeled
 (and as of 4826 `<Diameter>` is **repeatable** — the extras round-trip via `extraDiametersM`, see
 [What changed in 4826](#what-changed-in-4826)); `KNOWN_EDITOR_TAGS` refreshed from the registry
-(with `NotaCategory` grouping); and unmodeled `<PartGameData>`/`<SubPartGameData>` child elements +
-root attrs now round-trip via gap-6 passthrough (`<Collider>`, `<Aligned>` et al. no longer
-dropped). See
+(4939 added `Booster`); and unmodeled `<PartGameData>`/`<SubPartGameData>` child elements +
+root attrs round-trip via gap-6 passthrough (`<Collider>`, `<Aligned>`, `<SymmetryGroup>`,
+part-level `<Tank>` et al.). **Known gap:** 4939 put the first `<Collider>` children on
+GEOMETRY `<Part>`/`<SubPart>` templates (CoreElectricalA), which are NOT passthrough-covered —
+see [What changed in 4939](#what-changed-in-4939) and
 [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md).
 
 ---
@@ -50,7 +52,7 @@ dropped). See
 - Placement: `<SubPart Id InstanceOf>` + `<Transform>` with `<Position>/<Rotation>/<Scale>` each carrying `X`/`Y`/`Z`. Defaults position 0, rotation 0, scale 1; element/axis omitted at default within `EPSILON = 1e-9`.
 - Rotation is **Euler XYZ radians** (KSA "XYZ" ⇒ three.js `'ZYX'` — see [connectors-coordinates-iva.md](connectors-coordinates-iva.md)).
 - `<Connector Id>` carries `<Transform>` + a comma-space `<Flags>` body; connector faces local **+X**. Flag enum is exactly `Internal | ToSurface | FromSurface`; unknown flags dropped.
-- `<PartGameData>` children flexo reads: `DisplayName` attr; `<EditorTag Value>`; `<Diameter M>`; `<CustomMass><Mass Kg>`; `<Control/>`; `<Connector Id><Flags>`; `<Decoupler>`; `<DockingPort>`; `<EVADoor>`; power modules; engine modules; `<KeyframeAnimationModule>`. (See [gamedata-modules.md](gamedata-modules.md) for module detail.)
+- `<PartGameData>` children flexo reads: `DisplayName` attr; `<EditorTag Value>`; `<Diameter M>`; `<CustomMass><Mass Kg>` (other CustomMass children — inertia/offsets — preserved verbatim as `customMassExtras`); `<Control/>`; `<Connector Id><Flags>`; `<Decoupler>`; `<DockingPort>`; `<EVADoor>`; power modules; engine modules; `<KeyframeAnimationModule>`. (See [gamedata-modules.md](gamedata-modules.md) for module detail.)
 
 **Catalog / file-path conventions**
 
@@ -82,6 +84,45 @@ Consequences / what's STILL drop-on-round-trip (passthrough is scoped to GameDat
 - Connector `<Flags>` live on `<PartGameData>`, **not** on the geometry `<Part>` — without the GameData merge, `ToSurface`/etc. are lost.
 - A `<Part>` with no matching `<PartGameData>` has no tags/modules → invisible in the part picker.
 - `DockingPort` parses only the current child-element form (`<ConnectorId Value>`, `<LatchingKineticEnergy J>`, `<PushoffImpulse Ns>`) — no legacy fallback; see [gamedata-modules.md](gamedata-modules.md).
+
+## What changed in 4939
+
+- ⚠️ **First geometry-template `<Collider>` children (recorded gap).** Rev 4918's
+  CoreElectricalA update authored `<Collider>` directly on 2 geometry `<Part>` prefabs
+  (`CoreElectricalA_Prefab_BayFuelcellSmall`, `CoreElectricalA_Prefab_InlineBatteryBankB` —
+  `<Cylinder>`) and 2 `<SubPart>` templates (`CoreElectricalA_Subpart_SolarPanel[A|B]_CellA` —
+  `<Box>`). The gap-6 passthrough covers only `<PartGameData>`/`<SubPartGameData>`; geometry
+  templates are rebuilt from the typed model, so importing one of those 2 prefabs and
+  re-exporting DROPS the collider. Fix (deferred, needs an `EditingPart` model change + boot
+  purge): capture unknown `<Part>` children as `RawXmlNode` at `parsePartsFile`
+  (`src/ksa/partCatalog.ts`) and re-emit in `serializePart` (`src/ksa/partXmlSerializer.ts:68`).
+  See plans/FIX_CURRENT_GAPS_PLAN.md.
+- ✅ **New `<SymmetryGroup>` element (schema + GameData content).** `PartTemplate` gained
+  `[XmlElement("SymmetryGroup")] List<Part.SymmetryGroupRef>` (`SymmetryGroupRef` =
+  `[XmlElement("ConnectorRef")]` with `Id` attrs); `PartTemplate.ExpandSymmetryGroups()`
+  expands it into pairwise connector `SymmetrySiblings` — i.e. it's GameData-side sugar for
+  the 4826 `<Sibling>` system. Rev 4929 moved Core's sibling defs out of the auto-generated
+  `CoreStructuralAAssets.xml` into `CoreStructuralAGameData.xml` as `<SymmetryGroup>` — shipped
+  Assets XML now has **zero** `<Sibling>` elements, but `[XmlElement("Sibling")]` on
+  `Part.Connector.TemplateBase` is unchanged, so flexo's `siblingIds` parse/emit
+  (`partXmlParser.ts` / `partXmlSerializer.ts`) stays valid. `<SymmetryGroup>` inside
+  `<PartGameData>` rides the gap-6 passthrough verbatim.
+- ✅ **New editor tag `Booster`** (`<EditorTagDef Id="Booster" RootPartWhitelist="true"
+FaceSnapTargetWhitelist="true"/>`, first in registry order). `EDITOR_TAG_DEFS` snapshot in
+  `src/ksa/types.ts` refreshed; registry-order test updated.
+- ✅ **Two new Core asset packs** — `CoreFuelTankB[Assets|GameData].xml` (bay parts, not yet
+  configured as tanks) and `CorePropulsionC[Assets|GameData].xml` (larger SRBs under the new
+  `Booster` tag; engine GameData not yet configured). Added to `ASSET_FILES` in
+  `src/ksa/catalog.ts` (GameData siblings are derived). Rev 4915 also REMOVED the old
+  service-module prefabs (`CoreServiceModuleA_Prefab_MediumServiceModule[A|B]`) — no flexo
+  references existed.
+- ✅ **Tank GameData relocated to Part level.** Rev 4934 moved all Core tank definitions out of
+  `PartGameData.xml`'s `<SubPartGameData>` entries into Part-LEVEL `<Tank>` children of
+  `<PartGameData>` entries in `CoreFuelTankAGameData.xml` (now with optional `Id` attr,
+  `<LocationAsmb>`, and the first `<SphericalTank>` usage). flexo models tanks only on
+  `<SubPartGameData>` (still-valid schema); part-level `<Tank>` rides the passthrough —
+  preserved verbatim but NOT editable (recorded MISSING-CAPABILITY in the gaps plan). Vendored
+  fixtures re-synced; the vendored-fixture tank test now asserts the passthrough shape.
 
 ## What changed in 4892
 

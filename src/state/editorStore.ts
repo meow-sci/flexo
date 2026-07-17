@@ -513,6 +513,9 @@ export interface ImportedGameData {
   /** Extra `<Diameter M/>` size classes (adapter prefabs) carried in on import. */
   extraDiametersM: number[]
   controllable: boolean
+  /** Part-level `<CustomMass>` mass override (Kg) + its preserved unmodeled children (inertia). */
+  customMass: number | null
+  customMassExtras: RawXmlNode[]
   /** Unmodeled `<PartGameData>` attrs + child elements, preserved verbatim on import. */
   unknownAttrs: Record<string, string>
   unknownChildren: RawXmlNode[]
@@ -586,6 +589,11 @@ function applyImportedGameData(
     game.extraDiametersM = src.extraDiametersM
   }
   if (!game.controllable && src.controllable) game.controllable = true
+  // Custom mass: filled only when not already set; the preserved extras (inertia) ride along.
+  if (game.customMass == null && src.customMass != null) {
+    game.customMass = src.customMass
+    game.customMassExtras = src.customMassExtras
+  }
   // Unmodeled passthrough: fill only when the target has none (first import's leftover XML wins).
   if (Object.keys(game.unknownAttrs).length === 0 && Object.keys(src.unknownAttrs).length > 0)
     game.unknownAttrs = src.unknownAttrs
@@ -1558,6 +1566,8 @@ export function setDisplayName(name: string): void {
 export function setCustomMassEnabled(enabled: boolean): void {
   commitGameData('custom mass', enabled ? 'on' : 'off', (g) => {
     g.customMass = enabled ? (g.customMass ?? DEFAULT_CUSTOM_MASS_KG) : null
+    // Preserved inertia/offset children belong to the imported mass; drop them with it.
+    if (!enabled) g.customMassExtras = []
   })
 }
 

@@ -331,8 +331,20 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
     if (v && !editorTags.includes(v)) editorTags.push(v)
   }
 
-  const mass = readNum(directChildren(directChildren(gd, 'CustomMass')[0] ?? gd, 'Mass')[0], 'Kg')
+  // <CustomMass> — KSA's CustomMassTemplate needs <Mass Kg> (> 0) and may also carry
+  // <MassSpecificInertia> + transform offsets. flexo edits the Kg scalar; everything
+  // else inside the modeled element is preserved verbatim (customMassExtras). A
+  // CustomMass flexo can't model (no valid Mass) and any repeats beyond the first are
+  // extra PartTemplate.InertMasses entries — kept whole via the unknown passthrough.
+  const customMassEls = directChildren(gd, 'CustomMass')
+  const mass = readNum(directChildren(customMassEls[0] ?? gd, 'Mass')[0], 'Kg')
   game.customMass = mass != null && mass > 0 ? mass : null
+  if (game.customMass != null && customMassEls[0]) {
+    game.customMassExtras = childElements(customMassEls[0])
+      .filter((el) => el.tagName !== 'Mass')
+      .map(elementToRawNode)
+  }
+  const passthroughCustomMassEls = game.customMass != null ? customMassEls.slice(1) : customMassEls
 
   // <Diameter M/> — a repeatable DistanceReference (KSA 2026.7). The first is the
   // editable size class; the rest (adapter prefabs list several) are preserved verbatim.
@@ -405,6 +417,7 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   // Preserve anything flexo doesn't model so import → export doesn't silently drop it.
   game.unknownAttrs = captureUnknownAttrs(gd, KNOWN_PART_GAMEDATA_ATTRS)
   game.unknownChildren = captureUnknownChildren(gd, KNOWN_PART_GAMEDATA_CHILDREN)
+  game.unknownChildren.push(...passthroughCustomMassEls.map(elementToRawNode))
 
   return {
     editorTags,
@@ -469,10 +482,10 @@ export function subPartGameDataFromDoc(doc: Document): SubPartGameData[] {
  * merging duplicate-Id entries the way KSA does. KSA registers each SubPartGameData
  * by Id and, on a repeat Id, applies the later entry onto the first
  * (PartGameDataReference.OnDataLoad → PartTemplate.ApplyGameData): list-valued modules
- * (tanks/solar panels/lights/engine modules) accumulate. Core relies on this — e.g.
- * `CoreFuelTankA_Subpart_Skin1WHalfHA` is declared twice in PartGameData.xml: once with
- * the `<Tank>`, and again (its "quad" variant) with only an unmodeled child — so a naive
- * last-wins would silently drop the tank.
+ * (tanks/solar panels/lights/engine modules) accumulate, so a naive last-wins would
+ * silently drop the earlier entry's modules. (Core exercised this until 2026.7.5 by
+ * declaring fuel-tank SubParts twice in PartGameData.xml; 2026.7.6 moved its tank data
+ * to Part-level GameData, but the game's merge semantics are unchanged.)
  */
 function subPartGameDataFromRoot(root: Element): SubPartGameData[] {
   const byId = new Map<string, SubPartGameData>()
@@ -772,6 +785,7 @@ function nozzleFromElement(el: Element): DeLavalNozzle {
     fxExhaustLocation: fxLoc ? readVec3Attrs(fxLoc, { x: 0, y: 0, z: 0 }) : null,
     fxExhaustDirection: fxDir ? readVec3Attrs(fxDir, { x: -1, y: 0, z: 0 }) : null,
     volumetricExhaustId: directChildren(el, 'VolumetricExhaust')[0]?.getAttribute('Id') ?? null,
+    plumeTrailId: directChildren(el, 'PlumeTrail')[0]?.getAttribute('Id') ?? null,
     exhaustLight: readBoolValue(directChildren(el, 'ExhaustLight')[0]) ?? true,
     sound: soundEl
       ? {

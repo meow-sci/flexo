@@ -262,6 +262,7 @@ function decPowerConsumer(c: CPowerConsumer): PowerConsumer {
 interface CGameData {
   dn?: string // displayName
   cm?: number // customMass
+  cmx?: RawXmlNode[] // customMassExtras (unmodeled <CustomMass> children, passthrough)
   dm?: number // diameterM (omitted when null)
   xdm?: number[] // extraDiametersM (adapter size classes; omitted when empty)
   co?: 1 // controllable (<Control/>); present ⇒ true
@@ -285,6 +286,7 @@ function encGameData(g: PartGameData): CGameData {
   const o: CGameData = {}
   if (g.displayName.trim()) o.dn = g.displayName
   if (g.customMass != null) o.cm = round(g.customMass)
+  if (g.customMass != null && g.customMassExtras.length) o.cmx = g.customMassExtras
   if (g.diameterM != null) o.dm = round(g.diameterM)
   if (g.extraDiametersM.length) o.xdm = g.extraDiametersM.map(round)
   if (g.controllable) o.co = 1
@@ -316,6 +318,7 @@ function decGameData(c: CGameData | undefined): PartGameData {
   if (!c) return g
   g.displayName = str(c.dn)
   g.customMass = typeof c.cm === 'number' ? c.cm : null
+  g.customMassExtras = g.customMass != null ? decRawNodes(c.cmx) : []
   g.diameterM = typeof c.dm === 'number' ? c.dm : null
   g.extraDiametersM = arr<number>(c.xdm).map(num)
   g.controllable = !!c.co
@@ -508,6 +511,7 @@ interface CNozzle {
   fl?: Triple // fxExhaustLocation
   fd?: Triple // fxExhaustDirection
   ve?: string // volumetricExhaustId
+  pt?: string // plumeTrailId
   lo?: 1 // exhaustLight OFF (default on)
   sd?: { a: string; s: string } // sound {action, soundId}
 }
@@ -526,6 +530,7 @@ function encNozzle(n: DeLavalNozzle): CNozzle {
   if (n.fxExhaustLocation) o.fl = encVec(n.fxExhaustLocation)
   if (n.fxExhaustDirection) o.fd = encVec(n.fxExhaustDirection)
   if (n.volumetricExhaustId) o.ve = n.volumetricExhaustId
+  if (n.plumeTrailId) o.pt = n.plumeTrailId
   if (!n.exhaustLight) o.lo = 1
   if (n.sound) o.sd = { a: n.sound.action, s: n.sound.soundId }
   return o
@@ -544,6 +549,7 @@ function decNozzle(c: CNozzle): DeLavalNozzle {
     fxExhaustLocation: c.fl ? decVec(c.fl, 0) : null,
     fxExhaustDirection: c.fd ? decVec(c.fd, 0) : null,
     volumetricExhaustId: c.ve ? str(c.ve) : null,
+    plumeTrailId: c.pt ? str(c.pt) : null,
     exhaustLight: !c.lo,
     sound: c.sd ? { action: str(c.sd.a, 'On') as RocketSoundAction, soundId: str(c.sd.s) } : null,
   }

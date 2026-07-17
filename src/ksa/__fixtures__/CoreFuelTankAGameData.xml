@@ -12,6 +12,15 @@
             <Radius M="0.5007" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="1" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF1W1HB">
@@ -26,6 +35,15 @@
             <Radius M="0.5007" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="1" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF1W1HC">
@@ -40,6 +58,15 @@
             <Radius M="0.5007" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="1" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF1WHalfHA">
@@ -54,6 +81,15 @@
             <Radius M="0.5007" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="1" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF1WHalfHB">
@@ -68,6 +104,15 @@
             <Radius M="0.5007" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="1" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF1WHalfHC">
@@ -82,6 +127,15 @@
             <Radius M="0.5007" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="1" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF2W1HA">
@@ -96,6 +150,30 @@
             <Radius M="1.001" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="2" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+
+        <Connector Id="_connector41">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector42">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector19"/>
+            <ConnectorRef Id="_connector41"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector20"/>
+            <ConnectorRef Id="_connector42"/>
+        </Aligned>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF2W1HB">
@@ -110,6 +188,30 @@
             <Radius M="1.001" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="2" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+
+        <Connector Id="_connector43">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector44">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector19"/>
+            <ConnectorRef Id="_connector43"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector20"/>
+            <ConnectorRef Id="_connector44"/>
+        </Aligned>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF2W2HA">
@@ -124,6 +226,30 @@
             <Radius M="1.0016" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="2" />
+                <OuterRadius M="2" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+
+        <Connector Id="_connector45">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector46">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector21"/>
+            <ConnectorRef Id="_connector45"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector22"/>
+            <ConnectorRef Id="_connector46"/>
+        </Aligned>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF2W2HB">
@@ -138,6 +264,30 @@
             <Radius M="1.0016" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="2" />
+                <OuterRadius M="2" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+
+        <Connector Id="_connector47">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector48">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector21"/>
+            <ConnectorRef Id="_connector47"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector22"/>
+            <ConnectorRef Id="_connector48"/>
+        </Aligned>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF2W2HC">
@@ -152,6 +302,30 @@
             <Radius M="1.0016" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="2" />
+                <OuterRadius M="2" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+
+        <Connector Id="_connector49">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector50">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector21"/>
+            <ConnectorRef Id="_connector49"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector22"/>
+            <ConnectorRef Id="_connector50"/>
+        </Aligned>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF2W4HA">
@@ -166,6 +340,30 @@
             <Radius M="1.001" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="4" />
+                <OuterRadius M="2" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+
+        <Connector Id="_connector51">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector52">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector23"/>
+            <ConnectorRef Id="_connector51"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector24"/>
+            <ConnectorRef Id="_connector52"/>
+        </Aligned>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF2W4HB">
@@ -180,6 +378,30 @@
             <Radius M="1.001" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="4" />
+                <OuterRadius M="2" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+
+        <Connector Id="_connector53">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector54">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector23"/>
+            <ConnectorRef Id="_connector54"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector24"/>
+            <ConnectorRef Id="_connector53"/>
+        </Aligned>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF2W4HC">
@@ -194,6 +416,30 @@
             <Radius M="1.001" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="4" />
+                <OuterRadius M="2" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+
+        <Connector Id="_connector55">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector56">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector23"/>
+            <ConnectorRef Id="_connector56"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector24"/>
+            <ConnectorRef Id="_connector55"/>
+        </Aligned>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF2W4HD">
@@ -208,6 +454,30 @@
             <Radius M="1.001" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="4" />
+                <OuterRadius M="2" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+
+        <Connector Id="_connector57">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector58">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector23"/>
+            <ConnectorRef Id="_connector58"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector24"/>
+            <ConnectorRef Id="_connector57"/>
+        </Aligned>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF3W3HA">
@@ -222,6 +492,30 @@
             <Radius M="1.5029" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="3" />
+                <OuterRadius M="4" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+
+        <Connector Id="_connector39">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector40">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector25"/>
+            <ConnectorRef Id="_connector40"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector26"/>
+            <ConnectorRef Id="_connector39"/>
+        </Aligned>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF3W3HB">
@@ -236,6 +530,30 @@
             <Radius M="1.5029" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="3" />
+                <OuterRadius M="4" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+
+        <Connector Id="_connector37">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector38">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector25"/>
+            <ConnectorRef Id="_connector38"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector26"/>
+            <ConnectorRef Id="_connector37"/>
+        </Aligned>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF3W6HA">
@@ -250,6 +568,30 @@
             <Radius M="1.5942" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="6" />
+                <OuterRadius M="4" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+
+        <Connector Id="_connector29">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector30">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector27"/>
+            <ConnectorRef Id="_connector30"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector28"/>
+            <ConnectorRef Id="_connector29"/>
+        </Aligned>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF3W6HB">
@@ -264,6 +606,30 @@
             <Radius M="1.5942" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="6" />
+                <OuterRadius M="4" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+
+        <Connector Id="_connector31">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector32">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector27"/>
+            <ConnectorRef Id="_connector31"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector28"/>
+            <ConnectorRef Id="_connector32"/>
+        </Aligned>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF3W6HC">
@@ -278,6 +644,30 @@
             <Radius M="1.5942" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="6" />
+                <OuterRadius M="4" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+
+        <Connector Id="_connector33">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector34">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector27"/>
+            <ConnectorRef Id="_connector33"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector28"/>
+            <ConnectorRef Id="_connector34"/>
+        </Aligned>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF3W6HD">
@@ -292,6 +682,30 @@
             <Radius M="1.5942" />
           </Cylinder>
         </Collider>
+
+        <Tank>
+            <CylindricalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="6" />
+                <OuterRadius M="4" />
+                <WallThickness Mm="4" />
+            </CylindricalTank>
+        </Tank>
+
+        <Connector Id="_connector35">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Connector Id="_connector36">
+            <Flags>Internal</Flags>
+        </Connector>
+        <Aligned>
+            <ConnectorRef Id="_connector27"/>
+            <ConnectorRef Id="_connector36"/>
+        </Aligned>
+        <Aligned>
+            <ConnectorRef Id="_connector28"/>
+            <ConnectorRef Id="_connector35"/>
+        </Aligned>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_MP1W1HA">
@@ -306,6 +720,47 @@
             <Radius M="0.5006" />
           </Cylinder>
         </Collider>
+
+        <Tank Id="Tank1">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0" Z="0.25" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank2">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0.25" Z="0" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank3">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0" Z="-0.25" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank4">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="-0.25" Z="0" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_MP1W1HB">
@@ -320,6 +775,47 @@
             <Radius M="0.5006" />
           </Cylinder>
         </Collider>
+
+        <Tank Id="Tank1">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0" Z="0.25" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank2">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0.25" Z="0" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank3">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0" Z="-0.25" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank4">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="-0.25" Z="0" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_MP1W1HC">
@@ -334,6 +830,47 @@
             <Radius M="0.5006" />
           </Cylinder>
         </Collider>
+
+        <Tank Id="Tank1">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0" Z="0.25" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank2">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0.25" Z="0" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank3">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0" Z="-0.25" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank4">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="-0.25" Z="0" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_MP1W1HD">
@@ -348,6 +885,47 @@
             <Radius M="0.5006" />
           </Cylinder>
         </Collider>
+
+        <Tank Id="Tank1">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0" Z="0.25" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank2">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0.25" Z="0" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank3">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0" Z="-0.25" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank4">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="-0.25" Z="0" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_MP1WHalfHA">
@@ -362,6 +940,47 @@
             <Radius M="0.5002" />
           </Cylinder>
         </Collider>
+
+        <Tank Id="Tank1">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0" Z="0.25" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank2">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0.25" Z="0" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank3">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0" Z="-0.25" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank4">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="-0.25" Z="0" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_MP1WHalfHB">
@@ -376,6 +995,47 @@
             <Radius M="0.5002" />
           </Cylinder>
         </Collider>
+
+        <Tank Id="Tank1">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0" Z="0.25" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank2">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0.25" Z="0" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank3">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0" Z="-0.25" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank4">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="-0.25" Z="0" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_MP1WHalfHC">
@@ -390,6 +1050,47 @@
             <Radius M="0.5002" />
           </Cylinder>
         </Collider>
+
+        <Tank Id="Tank1">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0" Z="0.25" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank2">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0.25" Z="0" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank3">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0" Z="-0.25" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank4">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="-0.25" Z="0" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_MP1WHalfHD">
@@ -404,6 +1105,47 @@
             <Radius M="0.5002" />
           </Cylinder>
         </Collider>
+
+        <Tank Id="Tank1">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0" Z="0.25" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank2">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0.25" Z="0" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank3">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="0" Z="-0.25" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
+        <Tank Id="Tank4">
+            <CylindricalTank>
+                <LocationAsmb X="0" Y="-0.25" Z="0" />
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="0.5" />
+                <OuterRadius M="0.338" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </CylindricalTank>
+        </Tank>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_RadialMPHalfWA">
@@ -423,6 +1165,15 @@
             <LengthZ M="0.2" />
           </Box>
         </Collider>
+
+        <Tank Id="Tank1">
+            <SphericalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <OuterRadius M="0.25" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </SphericalTank>
+        </Tank>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_RadialMPHalfWB">
@@ -442,6 +1193,16 @@
             <LengthZ M="0.2" />
           </Box>
         </Collider>
+
+        <Tank Id="Tank1">
+            <SphericalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <Length M="1.5" />
+                <OuterRadius M="0.25" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </SphericalTank>
+        </Tank>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_RadialMPQuarterWA">
@@ -460,5 +1221,34 @@
             <Radius M="0.2" />
           </Cylinder>
         </Collider>
+
+        <Tank Id="Tank1">
+            <SphericalTank>
+                <Material Id="Aluminum.2014(s)" />
+                <OuterRadius M="0.15" />
+                <WallThickness Mm="4" />
+                <RoleAffinity>Thruster</RoleAffinity>
+            </SphericalTank>
+        </Tank>
+    </PartGameData>
+
+    <PartGameData Id="CoreFuelTankA_Prefab_FuelPortA" DisplayName="Fuel Port">
+        <EditorTag Value="Fuel Tanks" />
+
+        <CustomMass>
+            <Mass Kg="10" />
+            <!-- Solid sphere, r = 0.15 -->
+            <MassSpecificInertia Ixx="0.009" Iyy="0.009" Izz="0.009" />
+        </CustomMass>
+
+        <Collider Id="Collider1">
+          <Sphere Id="SphereCollider1">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <Radius M="0.15" />
+          </Sphere>
+        </Collider>
+
+        <FuelPort MaxLength="100" />
     </PartGameData>
 </Assets>

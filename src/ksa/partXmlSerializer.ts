@@ -132,6 +132,8 @@ export function serializeGameData(
   if (game.customMass != null && game.customMass > 0) {
     const custom = doc.createElement('CustomMass')
     custom.appendChild(elWithAttr(doc, 'Mass', 'Kg', formatG6(game.customMass)))
+    // Preserved unmodeled CustomMass children (<MassSpecificInertia>, offsets) — verbatim.
+    for (const node of game.customMassExtras) custom.appendChild(buildRawNode(doc, node))
     gd.appendChild(custom)
   }
 
@@ -438,6 +440,9 @@ function buildNozzleElement(doc: XmlDocument, n: DeLavalNozzle): XmlElement {
   }
   if (n.volumetricExhaustId) {
     el.appendChild(elWithAttr(doc, 'VolumetricExhaust', 'Id', n.volumetricExhaustId))
+  }
+  if (n.plumeTrailId) {
+    el.appendChild(elWithAttr(doc, 'PlumeTrail', 'Id', n.plumeTrailId))
   }
   if (n.sound) {
     const sound = doc.createElement('SoundEvent')

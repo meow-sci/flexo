@@ -4,7 +4,7 @@
 > lets the user edit them, and re-exports animation GLBs that KSA's `KeyframeAnimationModule`
 > loads. The load-bearing integration is the **animation-GLB node-structure convention**.
 
-**Baseline:** re-vetted against KSA build **2026.7.5.4892** (decomp @ 4826 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.6.4939** (decomp @ 4939 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — the keyframe runtime, GLB-loader contract, GameData schema,
 and bone/transform math are all unchanged. The only delta is 3 new content clips (ServiceModule
 B/C/D) that flexo's existing importer already handles.
@@ -74,6 +74,15 @@ B/C/D) that flexo's existing importer already handles.
 3. **Importer interpolation coverage is partial**: flexo handles only FLOAT accessors + LINEAR/STEP. KSA _does_ support **CubicSpline** → a CubicSpline-authored clip would be mis-decoded (silent corruption, not an error). Pre-existing; unverifiable from snapshots (GLBs not shipped).
 4. Only `animations[0]` is read on both sides.
 5. Wrong rest anchor re-applies the deploy (the reason `restKeyframeId` exists).
+
+## What changed in 4939
+
+**INTACT — no flexo change.** `KeyframeAnimationData.cs` (the GLB-loader contract) is absent from
+the 4892→4939 diff; `KeyframeAnimationModule.cs`'s hunks are runtime-only (a static
+`AnyAnimating()` helper and rev 4930's collider refresh — animating parts now set
+`ColliderModule.NeedsColliderUpdate`, plus `IKeyframeAnimationExtension.IsAnimating` for
+solar-tracking). No schema or loader-contract drift; `Animations/*.glb` in the private mirror
+(@ 4939) unchanged.
 
 ## What changed in 4892
 

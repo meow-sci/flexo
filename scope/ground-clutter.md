@@ -4,7 +4,7 @@
 > data-only KSA mod that adds a celestial body with `<GroundClutter>` (cards/meshes scattered
 > on the terrain), using **no custom game code**. Reference scaffold for clutter modding.
 
-**Baseline:** re-verified against KSA build **2026.7.5.4892** (decomp @ 4892 + shipped Core XML).
+**Baseline:** re-verified against KSA build **2026.7.6.4939** (decomp @ 4939 + shipped Core XML).
 **Baseline status:** 🟢 **CURRENT (scaffold updated, in-game re-check pending)** — 4892 turned the
 4826 mesh-atlas change load-bearing: every `<LOD>` now **requires `<Material Id/>` ID-references
 after its `<Mesh>`** and the ecotype `<Material>` became an Id-carrying **list**, so the old
@@ -46,6 +46,20 @@ hand-authored mod XML + a build script).
 - **Opacity** cut where R < 0.5 (cutout cards).
 - First-wins + core-first load order, so a clutter mod can **add** a body & reuse textures by `Id`.
 - Loading is gated by the scenario's `<LoadFromLibrary>`.
+
+## What changed in 4939
+
+**Schema INTACT; LOD-selection behavior changed (scaffold retune advisory).** All 7 `*Reference.cs`
+schema classes (`GroundClutterReference` et al.) are absent from the 4892→4939 diff — the
+`<GroundClutter>`/Ecotype/LOD/`<Material Id>` contract from 4892 holds. Rev 4901 reworked the
+RENDERER: culling split into prepare/cull compute passes (`ClutterViewResources`, per-view
+culling, `Evaluate.comp`/`BuildDispatchCommands.comp` deleted), shadow culling added, and —
+load-bearing for mods — **bounding-sphere radius + LOD selection were FIXED**, so Core retuned
+every clutter `<LOD MinScreenSize>` in `Astronomicals.xml` (~4×: 128→512, 64→316, 32→256 …) and
+added real Lod2/Lod3 meshes. The cartoon-moon scaffold still LOADS fine, but its `MinScreenSize`
+values were tuned against the old buggy selection — expect different pop-in distances until
+retuned to Core's new scale (`scripts/build-cartoon-moon.ts`). In-game re-check (already pending
+from 4892) should cover this.
 
 ## What changed in 4892
 

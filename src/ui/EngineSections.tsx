@@ -39,6 +39,7 @@ import {
   createCustomReaction,
   DEFAULT_ENGINE_SOUND_ID,
   KNOWN_REACTIONS,
+  PLUME_TRAIL_IDS,
   VOLUMETRIC_EXHAUST_IDS,
   type Combustor,
   type CustomReaction,
@@ -353,6 +354,21 @@ function NozzleFields({
         >
           <ListBoxItem id={NONE}>(none)</ListBoxItem>
           {VOLUMETRIC_EXHAUST_IDS.map((id) => (
+            <ListBoxItem key={id} id={id} textValue={id}>
+              {id}
+            </ListBoxItem>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Plume trail (volumetric exhaust trail)">
+        <Select
+          size="sm"
+          aria-label="Plume trail template"
+          value={nozzle.plumeTrailId ?? NONE}
+          onChange={(k) => onUpdate({ plumeTrailId: k === NONE ? null : String(k) })}
+        >
+          <ListBoxItem id={NONE}>(none)</ListBoxItem>
+          {PLUME_TRAIL_IDS.map((id) => (
             <ListBoxItem key={id} id={id} textValue={id}>
               {id}
             </ListBoxItem>

@@ -1,7 +1,43 @@
 # Plan — Fix flexo gaps from KSA updates (running)
 
-> **Latest review: `2026.7.3.4826` → `2026.7.5.4892` (see below). All 4892 gaps are ✅ DONE.**
-> The earlier `4750 → 4826` and `4680 → 4750` reviews (also all done) follow as history.
+> **Latest review: `2026.7.5.4892` → `2026.7.6.4939` (see below). Direct breaks are ✅ DONE;
+> three capability gaps are 📋 OPEN (part-level `<Tank>` editing, geometry-template
+> passthrough, FuelPort) plus one cosmetic advisory.** The earlier `4826 → 4892`,
+> `4750 → 4826` and `4680 → 4750` reviews (all done) follow as history.
+
+---
+
+# 4939 review — `2026.7.5.4892` → `2026.7.6.4939`
+
+**Derived from:** the [scope/](../scope/FULL_SCOPE.md) catalog review — full `git diff 7cf5c0a
+2423a02` inside `ksa-game-assemblies` + shipped-Core-XML element-path diff + per-area contract
+re-verification (see each scope doc's "What changed in 4939"). The update is mostly rendering
+(screenspace particles, volumetric plume trails, clutter culling) and vehicle runtime (fuel
+lines/ports, tank transfer, sequences); the part-template contract deltas are below. All fixes
+follow the no-migration rule.
+
+## Priority summary (4939)
+
+| # | Gap | Severity | Flexo touch-points | Scope doc |
+|---|---|---|---|---|
+| A | `<PlumeTrail Id>` on `RocketNozzleTemplate` (Core sets `DefaultEngine` on every main engine; inside flexo's modeled nozzle surface ⇒ silently dropped on import→export) | ✅ **DONE** (was SCHEMA-DRIFT / silent data-loss) | `types.ts` (`plumeTrailId`, `PLUME_TRAIL_IDS`), `partXmlParser.ts`, `partXmlSerializer.ts`, `projectCodec.ts` (`pt`), `EngineSections.tsx` + parser/serializer/codec/catalog tests | [engines](../scope/engines.md#what-changed-in-4939) |
+| B | New `Booster` editor tag (registry snapshot stale) | ✅ **DONE** (was SCHEMA-DRIFT) | `types.ts` `EDITOR_TAG_DEFS` + registry-order test | [part-and-subpart-xml](../scope/part-and-subpart-xml.md#what-changed-in-4939) |
+| C | New asset packs CoreFuelTankB (bays) + CorePropulsionC (large SRBs) not in the catalog file list | ✅ **DONE** (was MISSING-CAPABILITY — parts invisible) | `catalog.ts` `ASSET_FILES` | [part-and-subpart-xml](../scope/part-and-subpart-xml.md#what-changed-in-4939) |
+| D | Vendored fixtures stale after the rev-4934 tank relocation (drift test fails vs the 4939 mirror) | ✅ **DONE** | `src/ksa/__fixtures__/` re-synced (`bun run sync-fixtures`); `partCatalog.test.ts` tank test re-targeted to the Part-level passthrough shape | [part-and-subpart-xml](../scope/part-and-subpart-xml.md#what-changed-in-4939) |
+| E | Geometry-template `<Collider>` (2 CoreElectricalA `<Part>` prefabs + 2 `<SubPart>` cells) — geometry templates are NOT passthrough; import→export drops the collider (part loses collision in-game) | 📋 **OPEN — SCHEMA-DRIFT** (narrow: bites only when importing those parts) | capture unknown `<Part>` children in `parsePartsFile` (`partCatalog.ts:83`) → thread through `partImport.ts` / `addPart` (`editorStore.ts:640`) → new `EditingPart` field (`types.ts:1390`, triggers the sanctioned boot purge) → re-emit in `serializePart` (`partXmlSerializer.ts:68`) + `projectCodec.ts`/`projectTransfer.ts`; same capture on re-emitted `<SubPart>` templates (NotIVA path) | [part-and-subpart-xml](../scope/part-and-subpart-xml.md#what-changed-in-4939) |
+| F | Part-LEVEL `<Tank>` (rev 4934: all Core tank data now on `<PartGameData>`, with optional `Id`, `<LocationAsmb>`, first `<SphericalTank>`) — preserved via passthrough but NOT editable; imported Core fuel tanks show no tank UI | 📋 **OPEN — MISSING-CAPABILITY** | add `Tank` to `KNOWN_PART_GAMEDATA_CHILDREN` + parse into a part-level `tanks` list (`partXmlParser.ts:324` `parseGameDataElement`), emit in `serializeGameData` (`partXmlSerializer.ts:96`), `PartGameData.tanks` (`types.ts:616`, boot purge), Part Data dialog UI; model `locationAsmb`/`id` on `Tank` at the same time. Do TOGETHER with gap E so users eat ONE purge | [gamedata-modules](../scope/gamedata-modules.md#what-changed-in-4939) |
+| G | New `FuelPort` GameData module (`MaxLength` attr + `<AnchorAsmb>`) — passthrough-preserved, opaque to the editor | 📋 **OPEN — MISSING-CAPABILITY (optional)** | model + UI if fuel-port authoring is wanted: `types.ts`, `partXmlParser.ts`, `partXmlSerializer.ts`, Part Data dialog | [gamedata-modules](../scope/gamedata-modules.md#what-changed-in-4939) |
+| H | Cartoon-moon clutter `<LOD MinScreenSize>` values tuned for the pre-4901 (buggy) LOD selection; Core retuned ~4× | 📋 **OPEN — COSMETIC (advisory)** | retune `scripts/build-cartoon-moon.ts` LOD sizes against the fixed selection during the pending in-game check | [ground-clutter](../scope/ground-clutter.md#what-changed-in-4939) |
+
+**Verified-intact (no action):** ported engine physics + `Reactions.xml` (byte-identical);
+animation loader/schema; kittens; custom-assets/mod-export gotchas (`ThumbnailRenderResources`
+null-deref unguarded, `ENABLE_EMISSIVE` defined, KTX2/`mod.toml`/`AssetBundle` contract);
+connectors/coords/IVA + reference orientation (root still identity-pinned; `<Flags>`/`<Sibling>`
+schema unchanged — `<SymmetryGroup>` is GameData sugar, passthrough-safe); ground-clutter schema
+(all 7 `*Reference.cs` untouched); `VolumeReference` XML attrs (liters rework is display-only);
+`Tank.SaveData.PropellantUseDisabled` + transfer modes (save-state, out of scope); removed
+`CoreServiceModuleA_Prefab_MediumServiceModule[A|B]` (no flexo references); `FakeSubstances.xml`/
+`FakeCombustion.xml` dropped from Core `mod.toml` (never referenced).
 
 ---
 

@@ -408,6 +408,7 @@ describe('engine modules (round-trip with serializeGameData)', () => {
             fxExhaustLocation: null,
             fxExhaustDirection: null,
             volumetricExhaustId: 'EngineALarge',
+            plumeTrailId: 'DefaultEngine',
             exhaustLight: true,
             sound: { action: 'On', soundId: 'DefaultEngineSoundBehavior' },
           },
@@ -518,8 +519,9 @@ describe('gameDataFromAssets diameter + control (direct GameData XML)', () => {
 })
 
 describe('editor-tag registry (gap 5)', () => {
-  it('matches CoreEditorTagsGameData.xml order (build 4750)', () => {
+  it('matches CoreEditorTagsGameData.xml order (build 4939)', () => {
     expect(KNOWN_EDITOR_TAGS).toEqual([
+      'Booster',
       'Capsules',
       'Engines',
       'RCS',
@@ -624,6 +626,79 @@ describe('unmodeled-XML passthrough (gap 6)', () => {
     const part = editingPart({ partId: 'P', gameData: p.gameData })
     const reparsed = gameDataFromAssets(serializeGameData(part), 'P', new DOMParser())!
     expect(reparsed.gameData.unknownChildren).toEqual(p.gameData.unknownChildren)
+  })
+})
+
+describe('<CustomMass> fidelity (Kg modeled, inertia/offset children preserved)', () => {
+  // Mirrors Core's CoreCommandA capsule: CustomMass with an offset + specific inertia.
+  const xml = `<Assets>
+    <PartGameData Id="P">
+      <CustomMass>
+        <LocationBody X="-0.3601690873" />
+        <Mass Kg="1800" />
+        <MassSpecificInertia Ixx="0.3252281349" Iyy="0.668371379" Izz="0.668371379" />
+      </CustomMass>
+    </PartGameData>
+  </Assets>`
+  const parsed = gameDataFromAssets(xml, 'P', new DOMParser())!
+
+  it('parses the Kg scalar and captures the other CustomMass children verbatim', () => {
+    expect(parsed.gameData.customMass).toBe(1800)
+    expect(parsed.gameData.customMassExtras).toEqual([
+      { tag: 'LocationBody', attrs: { X: '-0.3601690873' }, children: [] },
+      {
+        tag: 'MassSpecificInertia',
+        attrs: { Ixx: '0.3252281349', Iyy: '0.668371379', Izz: '0.668371379' },
+        children: [],
+      },
+    ])
+    expect(parsed.gameData.unknownChildren).toEqual([])
+  })
+
+  it('round-trips the extras inside <CustomMass> through serialize → re-parse', () => {
+    const part = editingPart({ partId: 'P', gameData: parsed.gameData })
+    const doc = new DOMParser().parseFromString(serializeGameData(part), 'application/xml')
+    const custom = doc.getElementsByTagName('CustomMass')
+    expect(custom.length).toBe(1)
+    expect(custom[0].getElementsByTagName('MassSpecificInertia')[0].getAttribute('Ixx')).toBe(
+      '0.3252281349',
+    )
+    const reparsed = gameDataFromAssets(serializeGameData(part), 'P', new DOMParser())!
+    expect(reparsed.gameData.customMass).toBe(1800)
+    expect(reparsed.gameData.customMassExtras).toEqual(parsed.gameData.customMassExtras)
+  })
+
+  it('keeps a CustomMass flexo cannot model (no valid <Mass Kg>) whole via passthrough', () => {
+    const dens = `<Assets><PartGameData Id="P">
+      <CustomMass><Density KgPerM3="2700" /><MassSpecificInertia Ixx="1" Iyy="1" Izz="1" /></CustomMass>
+    </PartGameData></Assets>`
+    const p = gameDataFromAssets(dens, 'P', new DOMParser())!
+    expect(p.gameData.customMass).toBeNull()
+    expect(p.gameData.customMassExtras).toEqual([])
+    expect(p.gameData.unknownChildren.map((n) => n.tag)).toEqual(['CustomMass'])
+    expect(p.gameData.unknownChildren[0].children.map((c) => c.tag)).toEqual([
+      'Density',
+      'MassSpecificInertia',
+    ])
+  })
+
+  it('keeps repeat <CustomMass> entries beyond the first (InertMasses is a list) via passthrough', () => {
+    const two = `<Assets><PartGameData Id="P">
+      <CustomMass><Mass Kg="10" /></CustomMass>
+      <CustomMass><Mass Kg="5" /><MassSpecificInertia Ixx="2" Iyy="2" Izz="2" /></CustomMass>
+    </PartGameData></Assets>`
+    const p = gameDataFromAssets(two, 'P', new DOMParser())!
+    expect(p.gameData.customMass).toBe(10)
+    expect(p.gameData.unknownChildren).toEqual([
+      {
+        tag: 'CustomMass',
+        attrs: {},
+        children: [
+          { tag: 'Mass', attrs: { Kg: '5' }, children: [] },
+          { tag: 'MassSpecificInertia', attrs: { Ixx: '2', Iyy: '2', Izz: '2' }, children: [] },
+        ],
+      },
+    ])
   })
 })
 

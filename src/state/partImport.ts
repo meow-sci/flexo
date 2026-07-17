@@ -80,6 +80,8 @@ export async function importBuiltInPart(
       diameterM: part.diameterM,
       extraDiametersM: part.extraDiametersM,
       controllable: part.controllable,
+      customMass: part.customMass,
+      customMassExtras: part.customMassExtras,
       unknownAttrs: part.unknownAttrs,
       unknownChildren: part.unknownChildren,
       batteries: part.batteries,

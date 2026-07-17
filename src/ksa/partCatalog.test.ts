@@ -104,6 +104,33 @@ describe('parseGameDataFile + mergeGameData', () => {
     expect(parts[0].controllable).toBe(true)
   })
 
+  it('merges <CustomMass> (Kg + preserved inertia children) from GameData onto the Part', () => {
+    const parts: CatalogPart[] = []
+    parsePartsFile(parse(ASSETS_XML), 'CoreCommandAAssets.xml', parts)
+    expect(parts[0].customMass).toBeNull() // not present on the geometry <Part>
+
+    const gameData = emptyGameData()
+    parseGameDataFile(
+      parse(`<Assets><PartGameData Id="CoreElectricalA_Prefab_SolarPanelB">
+        <CustomMass>
+          <Mass Kg="1800" />
+          <MassSpecificInertia Ixx="0.325" Iyy="0.668" Izz="0.668" />
+        </CustomMass>
+      </PartGameData></Assets>`),
+      gameData,
+    )
+    mergeGameData(parts, gameData)
+
+    expect(parts[0].customMass).toBe(1800)
+    expect(parts[0].customMassExtras).toEqual([
+      {
+        tag: 'MassSpecificInertia',
+        attrs: { Ixx: '0.325', Iyy: '0.668', Izz: '0.668' },
+        children: [],
+      },
+    ])
+  })
+
   it('merges unmodeled <PartGameData> children (e.g. <Collider>) onto the Part verbatim', () => {
     const parts: CatalogPart[] = []
     parsePartsFile(parse(ASSETS_XML), 'CoreFuelTankAAssets.xml', parts)
@@ -233,6 +260,8 @@ describe('parseGameDataFile + mergeGameData', () => {
       expect(chamber.combustors[0].reactionId).toBe('Hydrolox')
       expect(chamber.combustors[0].mixtureRatio).toBe(5.5)
       expect(chamber.nozzles[0].volumetricExhaustId).toBe('EngineALarge')
+      // <PlumeTrail> — volumetric trail reference Core added to main engines in 2026.7.6.
+      expect(chamber.nozzles[0].plumeTrailId).toBe('DefaultEngine')
     },
   )
 
@@ -283,9 +312,10 @@ describe('parseGameDataFile + mergeGameData', () => {
   })
 
   // Runs against the committed fixtures (src/ksa/__fixtures__/), so it exercises the REAL
-  // Core data without the private asset tree. CoreFuelTankAAssets.xml holds the geometry;
-  // the tank <SubPartGameData> lives in the shared PartGameData.xml.
-  it('imports the real CoreFuelTankA_Prefab_LF1WHalfHA SubPart <Tank> (vendored fixtures)', () => {
+  // Core data without the private asset tree. Since KSA 2026.7.6 Core authors its fuel-tank
+  // data as Part-LEVEL <Tank> entries in CoreFuelTankAGameData.xml (no SubPartGameData);
+  // flexo doesn't model part-level tanks, so they must survive via the GameData passthrough.
+  it('preserves the real CoreFuelTankA_Prefab_LF1WHalfHA part-level <Tank>/<Collider> verbatim (vendored fixtures)', () => {
     const parts: CatalogPart[] = []
     parsePartsFile(
       parse(readVendoredAsset('CoreFuelTankAAssets.xml')),
@@ -293,28 +323,29 @@ describe('parseGameDataFile + mergeGameData', () => {
       parts,
     )
     const gameData = emptyGameData()
-    parseGameDataFile(parse(readVendoredAsset('PartGameData.xml')), gameData)
+    parseGameDataFile(parse(readVendoredAsset('CoreFuelTankAGameData.xml')), gameData)
     mergeGameData(parts, gameData)
 
     const part = parts.find((p) => p.id === 'CoreFuelTankA_Prefab_LF1WHalfHA')!
     expect(part).toBeTruthy()
-    const skin = part.subPartGameData.find(
-      (s) => s.subPartTemplateId === 'CoreFuelTankA_Subpart_Skin1WHalfHA',
-    )!
-    expect(skin).toBeTruthy()
-    // Skin1WHalfHA is declared twice in PartGameData.xml (a normal + a "quad" variant);
-    // the tank must survive the merge.
-    expect(skin.tanks).toHaveLength(1)
-    expect(skin.tanks[0].shape).toBe('Cylindrical')
-    expect(skin.tanks[0].wallMaterialId).toBe('Aluminum.2014(s)')
-    expect(skin.tanks[0].lengthM).toBe(0.5)
-    expect(skin.tanks[0].outerRadiusM).toBe(1)
-    expect(skin.tanks[0].wallThicknessMm).toBe(2)
+    expect(part.editorTags).toContain('Fuel Tanks')
+    expect(part.diameterM).toBe(1)
+    // The part-level <Collider> and <Tank> ride along as unmodeled passthrough children.
+    expect(part.unknownChildren.map((n) => n.tag)).toEqual(['Collider', 'Tank'])
+    const tank = part.unknownChildren.find((n) => n.tag === 'Tank')!
+    expect(tank.children[0].tag).toBe('CylindricalTank')
+    expect(tank.children[0].children.map((n) => n.tag)).toEqual([
+      'Material',
+      'Length',
+      'OuterRadius',
+      'WallThickness',
+    ])
+    // The relocated SubPart entries are gone: no typed SubPart tank data anymore.
+    expect(part.subPartGameData.every((s) => s.tanks.length === 0)).toBe(true)
   })
 
-  // The electrical solar panel exercises the OTHER real-data path: the SubPart's
-  // <SolarPanel> data lives in the same GameData file as its <PartGameData> (unlike the
-  // fuel tank, whose tank data is off in the shared PartGameData.xml).
+  // The electrical solar panel exercises the typed SubPart-module path: the SubPart's
+  // <SolarPanel> data lives in the same GameData file as its <PartGameData>.
   it('imports the real CoreElectricalA_Prefab_SolarPanelB tags/flags + SubPart solar panel (vendored fixtures)', () => {
     const parts: CatalogPart[] = []
     parsePartsFile(

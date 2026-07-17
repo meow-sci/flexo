@@ -22,13 +22,33 @@ update, this is the checklist you diff against to find what breaks flexo.**
 
 |                      | Build           | Path                                                                                                                                                            |
 | -------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Verified against** | `2026.7.5.4892` | `/Users/asherwin/repos/meow-sci/ksa-game-assemblies/current` (decomp @ 4892) + `flexo-private-assets/assets` (Core XML @ 4892)                                  |
-| Previous baseline    | `2026.7.3.4826` | `ksa-game-assemblies` git commit `1265373` (the on-disk `ksa-game-assemblies_prev/current` is older still — 4750 — so diff via git history, not the \_prev dir) |
+| **Verified against** | `2026.7.6.4939` | `/Users/asherwin/repos/meow-sci/ksa-game-assemblies/current` (decomp @ 4939) + `flexo-private-assets/assets` (Core XML @ 4939)                                  |
+| Previous baseline    | `2026.7.5.4892` | `ksa-game-assemblies` git commit `7cf5c0a` (the on-disk `ksa-game-assemblies_prev/current` is older still — 4750 — so diff via git history, not the \_prev dir) |
 
 Each snapshot holds `decomp/` (decompiled C#; schema lives in `[XmlType]`/`[XmlElement]`/
 `[XmlAttribute]` + public fields), `Content/Core/` (the shipped game-data XML + GLSL shaders),
 and `version.json` (a commit-by-commit changelog — the fastest first read on any update).
 
+> **4939 review method.** Full `4892 → 4939` diff via **git history inside `ksa-game-assemblies`**
+> (`git diff 7cf5c0a 2423a02`); `version.json` @ 4939 documents the whole rev range 4893–4939.
+> The bulk of the update is rendering (screenspace particles, volumetric plume trails, clutter
+> culling) and vehicle-runtime work (fuel lines/ports, tank transfer, sequence UI) — outside
+> flexo's part-template scope. Real contract deltas, all handled: **`<PlumeTrail Id>`** on
+> `RocketNozzleTemplate` (new `[XmlElement]`; Core now sets `DefaultEngine` on every main
+> engine — modeled in flexo, see [engines.md](engines.md#what-changed-in-4939)); new
+> **`Booster` editor tag** (registry snapshot refreshed); new asset packs
+> **CoreFuelTankB** (bays) / **CorePropulsionC** (large SRBs, GameData unconfigured) added to
+> `ASSET_FILES`; **tank GameData relocated** from SubPart-level entries in `PartGameData.xml`
+> to Part-LEVEL `<Tank>` entries in `CoreFuelTankAGameData.xml` (flexo doesn't model part-level
+> tanks — passthrough preserves them; fixtures re-synced); `<SymmetryGroup>` GameData sugar for
+> connector `<Sibling>` (passthrough-safe; `[XmlElement("Sibling")]` schema unchanged); first
+> **geometry-template `<Collider>`** children on 2 CoreElectricalA prefabs + 2 solar-cell
+> SubParts (NOT passthrough-covered — recorded gap, see
+> [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md)); new `FuelPort`
+> GameData module (passthrough-safe, opaque to the editor). `VolumeReference` XML schema
+> unchanged (display-only liters rework). Animation, kittens, custom-assets/mod-export,
+> connectors/coords/IVA, clutter schema all re-verified **INTACT**.
+>
 > **4892 review method.** Full `4826 → 4892` diff via **git history inside `ksa-game-assemblies`**
 > (`git diff 1265373 7cf5c0a`) — the `_prev` directory was stale (4750), so the last-vetted 4826
 > tree came from the repo's own history. `version.json` @ 4892 documents revs 4861–4892 only

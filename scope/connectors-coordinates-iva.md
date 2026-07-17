@@ -4,7 +4,7 @@
 > Read alongside [docs/coordinates.md](../docs/coordinates.md) and
 > [docs/ksa-part-connector-notes.md](../docs/ksa-part-connector-notes.md).
 
-**Baseline:** re-vetted against KSA build **2026.7.5.4892** (decomp @ 4826 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.6.4939** (decomp @ 4939 + shipped Core XML).
 **Baseline status:** ✅ **CURRENT** — the coordinate calibration, connector flag _schema_, and
 IVA/NotIVA are all **intact**; the `<DockingPort>` GameData schema (BREAKING in 4750) is fixed. As
 of 4826, connectors carry new attach-node grouping (`<Sibling>` geometry / `<Aligned>` GameData);
@@ -93,6 +93,21 @@ follows the root part.
 - IVA variant must use a **fresh PartModel Id** (reusing one silently collides via the dedup).
 - IVA props render black/invisible outside IVA unless de-IVA'd (the whole NotIVA feature exists for this).
 - Connector `<Flags>` must be emitted in BOTH the Part and GameData documents.
+
+## What changed in 4939
+
+**INTACT — no flexo change.** `QuaternionEx.cs`, `Double3Ex.cs`, `Control.cs`,
+`ControlTemplate.cs`, `FlightComputer.cs`, and `DockingPortTemplate.cs` are absent from the
+4892→4939 diff; `VehicleEditor.cs` still pins the root to identity
+(`Root.Asmb2ParentAsmb = doubleQuat.Identity` — rev 4904 was a refactor plus fuel-line UI);
+grep for `controlpoint|control from here|referencetransform` still empty, so the
+reference-orientation contract (aim **Body +X**, roll **+Z**, up-follows-root) holds. Connector
+schema: `[XmlElement("Flags")]` and `[XmlElement("Sibling")]` unchanged on
+`Part.Connector.TemplateBase` — but rev 4929 moved Core's sibling CONTENT to GameData-level
+`<SymmetryGroup>` (expanded into `SymmetrySiblings` at load, unknown connector ids skipped), so
+shipped Assets XML now authors zero `<Sibling>` elements; flexo's `siblingIds` emit remains
+valid schema. See
+[part-and-subpart-xml.md](part-and-subpart-xml.md#what-changed-in-4939).
 
 ## What changed in 4892
 

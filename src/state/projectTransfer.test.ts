@@ -349,6 +349,43 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
     expect(part.gameData.gimbals[0].subPartInstanceId).toBe('trussbara_3')
   })
 
+  it('rewrites <ConnectorRef>s inside preserved raw XML onto the regenerated connector ids', () => {
+    const src = sourcePart()
+    src.gameData.unknownChildren = [
+      {
+        tag: 'Aligned',
+        attrs: {},
+        children: [
+          { tag: 'ConnectorRef', attrs: { Id: '_connector1' }, children: [] },
+          // Dangling ref (no such connector in the export) — left verbatim.
+          { tag: 'ConnectorRef', attrs: { Id: '_connector99' }, children: [] },
+        ],
+      },
+    ]
+    const dest = createEmptyPart()
+    dest.connectors.push({
+      id: '_connector1',
+      flags: [],
+      siblingIds: [],
+      layerId: CONNECTOR_LAYER_ID,
+      ...t(0),
+    })
+    const { part } = mergeProjectImport(dest, buildProjectExport(src, 'X'))
+    // The imported _connector1 renumbered to _connector2; the Aligned ref follows it.
+    expect(part.connectors.map((c) => c.id)).toEqual(['_connector1', '_connector2'])
+    expect(part.gameData.unknownChildren).toEqual([
+      {
+        tag: 'Aligned',
+        attrs: {},
+        children: [
+          { tag: 'ConnectorRef', attrs: { Id: '_connector2' }, children: [] },
+          { tag: 'ConnectorRef', attrs: { Id: '_connector99' }, children: [] },
+        ],
+      },
+    ])
+    expect(part.gameData.decoupler?.connectorId).toBe('_connector2')
+  })
+
   it('skips a coupling whose connector was not imported', () => {
     const src = sourcePart()
     src.connectors = [] // decoupler still references the (now absent) _connector1

@@ -106,7 +106,9 @@ Consequences / what's STILL drop-on-round-trip (passthrough is scoped to GameDat
   Assets XML now has **zero** `<Sibling>` elements, but `[XmlElement("Sibling")]` on
   `Part.Connector.TemplateBase` is unchanged, so flexo's `siblingIds` parse/emit
   (`partXmlParser.ts` / `partXmlSerializer.ts`) stays valid. `<SymmetryGroup>` inside
-  `<PartGameData>` rides the gap-6 passthrough verbatim.
+  `<PartGameData>` rides the gap-6 passthrough, with its `<ConnectorRef>` ids remapped onto the
+  regenerated connector ids on import/paste (`remapRawConnectorRefs` — verbatim re-emit left
+  them stale after connector renumbering).
 - ✅ **New editor tag `Booster`** (`<EditorTagDef Id="Booster" RootPartWhitelist="true"
 FaceSnapTargetWhitelist="true"/>`, first in registry order). `EDITOR_TAG_DEFS` snapshot in
   `src/ksa/types.ts` refreshed; registry-order test updated.

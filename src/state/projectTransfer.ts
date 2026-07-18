@@ -25,6 +25,7 @@ import {
   createKittenLayer,
   createSubPartGameData,
 } from '../ksa/types'
+import { remapRawConnectorRefs } from '../ksa/partXmlParser'
 import { randomId } from './ids'
 import {
   PROJECT_EXPORT_FORMAT,
@@ -444,13 +445,15 @@ function mergeGameData(
   if (target.diameterM == null && src.diameterM != null) target.diameterM = src.diameterM
   if (!target.controllable && src.controllable) target.controllable = true
   // Unmodeled passthrough XML: fill only when the target has none (first part's leftover wins).
+  // Connector refs inside the raw XML (<Aligned>/<SymmetryGroup> <ConnectorRef>s) are in the
+  // source's original id space — rewrite them onto the regenerated connector ids.
   if (
     Object.keys(target.unknownAttrs).length === 0 &&
     Object.keys(src.unknownAttrs ?? {}).length > 0
   )
     target.unknownAttrs = { ...src.unknownAttrs }
   if (target.unknownChildren.length === 0 && (src.unknownChildren ?? []).length > 0)
-    target.unknownChildren = structuredClone(src.unknownChildren)
+    target.unknownChildren = remapRawConnectorRefs(src.unknownChildren, connectorIdMap)
   target.batteries.push(...(src.batteries ?? []).map((b) => ({ ...b })))
   target.generators.push(...(src.generators ?? []).map((g) => ({ ...g })))
   target.solarPanels.push(...(src.solarPanels ?? []).map((sp) => structuredClone(sp)))

@@ -634,6 +634,42 @@ export function captureUnknownChildren(parent: Element, known: ReadonlySet<strin
     .map(elementToRawNode)
 }
 
+/**
+ * Tags whose `Id` attribute is a KSA `Part.ConnectorReference` — the only way raw
+ * passthrough XML points at a connector: `<ConnectorRef>` (inside `<Aligned>` /
+ * `<SymmetryGroup>`) and `<Sibling>` (inside `<Connector>`). Modeled connector
+ * bindings (Decoupler/DockingPort/EVADoor) never land in `unknownChildren`.
+ */
+const CONNECTOR_REF_TAGS: ReadonlySet<string> = new Set(['ConnectorRef', 'Sibling'])
+
+/**
+ * Returns a copy of preserved-passthrough XML with every connector reference
+ * (`<ConnectorRef Id>` / `<Sibling Id>`, at any depth) rewritten through
+ * `connectorIdMap` — imports regenerate `_connectorN` ids, so refs kept verbatim
+ * would point at the wrong (or a colliding pre-existing) connector. Ids without a
+ * mapping are left untouched: the raw structure can't be safely pruned, and a
+ * whole-Part import maps every connector the refs can legitimately name.
+ */
+export function remapRawConnectorRefs(
+  nodes: readonly RawXmlNode[],
+  connectorIdMap: ReadonlyMap<string, string>,
+): RawXmlNode[] {
+  return nodes.map((node) => {
+    const attrs = { ...node.attrs }
+    if (CONNECTOR_REF_TAGS.has(node.tag) && attrs.Id) {
+      const mapped = connectorIdMap.get(attrs.Id)
+      if (mapped) attrs.Id = mapped
+    }
+    const out: RawXmlNode = {
+      tag: node.tag,
+      attrs,
+      children: remapRawConnectorRefs(node.children ?? [], connectorIdMap),
+    }
+    if (node.text != null) out.text = node.text
+    return out
+  })
+}
+
 /** Captures every attribute whose name is NOT in `known` as a verbatim name→value entry. */
 export function captureUnknownAttrs(
   el: Element,

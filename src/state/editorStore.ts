@@ -51,6 +51,7 @@ import {
   isSubPartGameDataEmpty,
   KITTEN_LAYER_ID,
 } from '../ksa/types'
+import { remapRawConnectorRefs } from '../ksa/partXmlParser'
 import type { ReferenceContainer } from './containerStore'
 import type { LineMeasurement } from './measurementStore'
 import { mergeProjectImport } from './projectTransfer'
@@ -595,10 +596,12 @@ function applyImportedGameData(
     game.customMassExtras = src.customMassExtras
   }
   // Unmodeled passthrough: fill only when the target has none (first import's leftover XML wins).
+  // Connector refs inside the raw XML (<Aligned>/<SymmetryGroup> <ConnectorRef>s) are in the
+  // source's original id space — rewrite them onto the regenerated connector ids.
   if (Object.keys(game.unknownAttrs).length === 0 && Object.keys(src.unknownAttrs).length > 0)
     game.unknownAttrs = src.unknownAttrs
   if (game.unknownChildren.length === 0 && src.unknownChildren.length > 0)
-    game.unknownChildren = src.unknownChildren
+    game.unknownChildren = remapRawConnectorRefs(src.unknownChildren, connectorIdMap)
   game.batteries.push(...src.batteries)
   game.generators.push(...src.generators)
   game.solarPanels.push(...src.solarPanels)

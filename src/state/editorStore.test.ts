@@ -229,6 +229,69 @@ describe('editorStore', () => {
     expect(dp?.connectorId).not.toBe('_connector5')
   })
 
+  it('addPart rewrites <ConnectorRef>s inside preserved raw XML onto the regenerated connector ids', () => {
+    addConnector() // occupies _connector1, forcing the imported connectors to renumber
+    const conn = (id: string) => ({
+      id,
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+      flags: [],
+      siblingIds: [],
+      layerId: DEFAULT_LAYER_ID,
+    })
+    addPart([], [conn('_connector19'), conn('_connector41')], [], undefined, undefined, {
+      decoupler: null,
+      dockingPort: null,
+      evaDoor: null,
+      diameterM: null,
+      extraDiametersM: [],
+      controllable: false,
+      customMass: null,
+      customMassExtras: [],
+      unknownAttrs: {},
+      // KSA 2026.7 <Aligned> groups pair connectors by ref — ids in the SOURCE id space.
+      unknownChildren: [
+        {
+          tag: 'Aligned',
+          attrs: {},
+          children: [
+            { tag: 'ConnectorRef', attrs: { Id: '_connector19' }, children: [] },
+            { tag: 'ConnectorRef', attrs: { Id: '_connector41' }, children: [] },
+          ],
+        },
+      ],
+      batteries: [],
+      generators: [],
+      solarPanels: [],
+      powerConsumer: null,
+      subPartGameData: [],
+      rocketControllers: [],
+      rockets: [],
+      combustors: [],
+      nozzles: [],
+      gimbals: [],
+    })
+    const part = $part.get()
+    // _connector19/_connector41 were regenerated to _connector2/_connector3…
+    expect(part.connectors.map((c) => c.id)).toEqual([
+      '_connector1',
+      '_connector2',
+      '_connector3',
+    ])
+    // …and the Aligned group's refs follow them (no stale source-space ids).
+    expect(part.gameData.unknownChildren).toEqual([
+      {
+        tag: 'Aligned',
+        attrs: {},
+        children: [
+          { tag: 'ConnectorRef', attrs: { Id: '_connector2' }, children: [] },
+          { tag: 'ConnectorRef', attrs: { Id: '_connector3' }, children: [] },
+        ],
+      },
+    ])
+  })
+
   it('adds/removes tanks per SubPart template as discrete undo steps and patches fields (streaming)', () => {
     const tmpl = 'CoreFuelTankA_Subpart_Skin1W1HA'
     addTank(tmpl)

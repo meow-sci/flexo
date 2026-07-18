@@ -6,9 +6,10 @@ import {
   gameDataFromAssets,
   parseConnectorFlags,
   parsePartPlacements,
+  remapRawConnectorRefs,
 } from './partXmlParser'
 import { serializeGameData, serializePart } from './partXmlSerializer'
-import type { Connector, EditingPart } from './types'
+import type { Connector, EditingPart, RawXmlNode } from './types'
 import {
   createCombustor,
   createDefaultLayer,
@@ -626,6 +627,56 @@ describe('unmodeled-XML passthrough (gap 6)', () => {
     const part = editingPart({ partId: 'P', gameData: p.gameData })
     const reparsed = gameDataFromAssets(serializeGameData(part), 'P', new DOMParser())!
     expect(reparsed.gameData.unknownChildren).toEqual(p.gameData.unknownChildren)
+  })
+
+  it('remapRawConnectorRefs rewrites ConnectorRef/Sibling Ids at any depth, leaving unmapped ids alone', () => {
+    const nodes: RawXmlNode[] = [
+      {
+        tag: 'Aligned',
+        attrs: {},
+        children: [
+          { tag: 'ConnectorRef', attrs: { Id: '_connector19' }, children: [] },
+          { tag: 'ConnectorRef', attrs: { Id: '_connector41' }, children: [] },
+        ],
+      },
+      {
+        tag: 'SymmetryGroup',
+        attrs: {},
+        children: [
+          { tag: 'ConnectorRef', attrs: { Id: '_connector19' }, children: [] },
+          // No mapping — a ref to a connector outside the imported set stays verbatim.
+          { tag: 'ConnectorRef', attrs: { Id: '_connector99' }, children: [] },
+        ],
+      },
+      // Non-ref tags keep their Id even when it collides with a mapped connector id.
+      { tag: 'Whatever', attrs: { Id: '_connector19' }, children: [], text: 'keep' },
+    ]
+    const map = new Map([
+      ['_connector19', '_connector1'],
+      ['_connector41', '_connector2'],
+    ])
+    const out = remapRawConnectorRefs(nodes, map)
+    expect(out).toEqual([
+      {
+        tag: 'Aligned',
+        attrs: {},
+        children: [
+          { tag: 'ConnectorRef', attrs: { Id: '_connector1' }, children: [] },
+          { tag: 'ConnectorRef', attrs: { Id: '_connector2' }, children: [] },
+        ],
+      },
+      {
+        tag: 'SymmetryGroup',
+        attrs: {},
+        children: [
+          { tag: 'ConnectorRef', attrs: { Id: '_connector1' }, children: [] },
+          { tag: 'ConnectorRef', attrs: { Id: '_connector99' }, children: [] },
+        ],
+      },
+      { tag: 'Whatever', attrs: { Id: '_connector19' }, children: [], text: 'keep' },
+    ])
+    // Pure: the input trees are untouched.
+    expect(nodes[0].children[0].attrs.Id).toBe('_connector19')
   })
 })
 

@@ -6,7 +6,7 @@
 > alongside [docs/custom-assets.md](../docs/custom-assets.md), [docs/texturing.md](../docs/texturing.md),
 > [docs/asset-pipeline.md](../docs/asset-pipeline.md).
 
-**Baseline:** re-vetted against KSA build **2026.7.6.4939** (decomp @ 4939 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.8.4980** (decomp @ 4980 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — every schema/reference class and renderer quirk flexo's
 export depends on is byte-identical or behavior-preserving. No code change required. Two
 durable watch-items noted below.
@@ -55,6 +55,21 @@ durable watch-items noted below.
 8. **`PartModel Id` must be unique** (KSA dedupes PartModels by `Template.Id`); flexo uses `<subPartId>_Model`. **`PbrMaterial Id`s dedupe the same way** (`PbrMaterialReference.OnDataLoad` → `ModLibrary.Register`; a duplicate silently becomes a reference to the first) — flexo exploits this deliberately: identical resolved channel sets intern into ONE shared `<PbrMaterial>` referenced by many SubParts (`flexo_<MatName>_<hex>_Material` for a verbatim CustomMaterial, `<subPartId>_Material` otherwise), exactly Core's one-pack-material pattern.
 9. **Glass: emissive ignored + ~10% diffuse tint.** `MeshGlassIndirect.frag` hard-codes opacity 0.75, `glassColor=mix(albedo,0.1,0.9)`. `$simulateGlass` mirrors this; glass can't glow, so the `glassGlow` layered two-SubPart export is required.
 10. **Glow = WHITE × mask × 1.25, added after lighting.** `glowComposite` bakes glow color into the diffuse and emits a white mask; `MeshIndirect.frag` does `gammaToLinear(vec3(sampledEmissive) * EMISSIVE_MULTIPLIER)`, `EMISSIVE_MULTIPLIER=1.25`.
+
+## What changed in 4980
+
+**INTACT — no flexo change.** `ThumbnailRenderResources.cs` is absent from the 4939→4980 diff
+(the `AddDraw` null-deref stays unguarded ⇒ synthetic Normal + AoRoughMetal stay required).
+`PartModelRenderer.cs` / `PartModelGlass.cs` hunks only thread the new cascaded-shadow-filter
+**specialization constant** (ID 10) and a per-cascade push constant into the pipelines —
+`ENABLE_EMISSIVE` is still defined on the color pipelines (visible unchanged in the same
+hunks). `ModLibrary.cs` is pure log-line-number noise; `Mod.cs`, `AssetBundle.cs`,
+`PbrMaterialReference.cs`, `MeshAtlasFileReference.cs`, `mod.toml` handling all absent from the
+diff. One additive schema note: `TextureCategory` gained `TerrainHeight` (rev 4947, exempts
+height-affecting terrain textures from the max-size downmip) — part textures stay
+`Category="Vessel"`, so mod export is unaffected (the celestial scaffold is —
+see [ground-clutter.md](ground-clutter.md#what-changed-in-4980)). The new texture-streaming
+stack (`CelestialTextureStreamer` et al.) only touches celestial diffuse/height sources.
 
 ## What changed in 4939
 

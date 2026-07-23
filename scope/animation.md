@@ -4,10 +4,10 @@
 > lets the user edit them, and re-exports animation GLBs that KSA's `KeyframeAnimationModule`
 > loads. The load-bearing integration is the **animation-GLB node-structure convention**.
 
-**Baseline:** re-vetted against KSA build **2026.7.6.4939** (decomp @ 4939 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.8.4980** (decomp @ 4980 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — the keyframe runtime, GLB-loader contract, GameData schema,
-and bone/transform math are all unchanged. The only delta is 3 new content clips (ServiceModule
-B/C/D) that flexo's existing importer already handles.
+and bone/transform math are all unchanged since the 4939 vetting (4980 didn't touch the
+animation path at all).
 
 ---
 
@@ -74,6 +74,14 @@ B/C/D) that flexo's existing importer already handles.
 3. **Importer interpolation coverage is partial**: flexo handles only FLOAT accessors + LINEAR/STEP. KSA _does_ support **CubicSpline** → a CubicSpline-authored clip would be mis-decoded (silent corruption, not an error). Pre-existing; unverifiable from snapshots (GLBs not shipped).
 4. Only `animations[0]` is read on both sides.
 5. Wrong rest anchor re-applies the deploy (the reason `restKeyframeId` exists).
+
+## What changed in 4980
+
+**INTACT — no flexo change, no diff.** Neither `KeyframeAnimationData.cs` nor
+`KeyframeAnimationModule.cs` appears in the 4939→4980 diff, and the private mirror's
+`Animations/*.glb` are byte-identical between the 4939 and 4980 syncs. The 4980 update is
+HUD-layout/burn-UI/texture-streaming/vehicle-runtime work that never crosses the animation
+contract. NONE.
 
 ## What changed in 4939
 

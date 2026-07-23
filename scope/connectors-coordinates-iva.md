@@ -4,7 +4,7 @@
 > Read alongside [docs/coordinates.md](../docs/coordinates.md) and
 > [docs/ksa-part-connector-notes.md](../docs/ksa-part-connector-notes.md).
 
-**Baseline:** re-vetted against KSA build **2026.7.6.4939** (decomp @ 4939 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.8.4980** (decomp @ 4980 + shipped Core XML).
 **Baseline status:** ✅ **CURRENT** — the coordinate calibration, connector flag _schema_, and
 IVA/NotIVA are all **intact**; the `<DockingPort>` GameData schema (BREAKING in 4750) is fixed. As
 of 4826, connectors carry new attach-node grouping (`<Sibling>` geometry / `<Aligned>` GameData);
@@ -94,6 +94,36 @@ follows the root part.
 - IVA variant must use a **fresh PartModel Id** (reusing one silently collides via the dedup).
 - IVA props render black/invisible outside IVA unless de-IVA'd (the whole NotIVA feature exists for this).
 - Connector `<Flags>` must be emitted in BOTH the Part and GameData documents.
+
+## What changed in 4980
+
+**INTACT — no flexo change.** The contract anchors held through a noisy vehicle-runtime update:
+
+- **`Part.Connector.ConnectAndMerge` rewritten** (rev 4950 "insidious frame errors" fix +
+  rev 4944/4945 `recomputeDerivedData` plumbing). The mate contract is unchanged — connectors
+  still join anti-parallel via the same 180° flip
+  (`doubleQuat.CreateFromAxisAngle(double3.UnitZ, Math.PI)`); the rewrite re-derives the child
+  tree's transform purely from the two connectors' `Asmb2VehicleAsmb` frames, fixing the case
+  where the receiving part isn't at vehicle identity. flexo does its own three.js snap math and
+  never ported this body — no drift on our side.
+- **Root-identity pin consolidated, not removed.** The ~4 inline
+  `Root.Asmb2ParentAsmb = doubleQuat.Identity` copies in `VehicleEditor.cs` moved to
+  `PartTree.SetRootPose(...)` / `PartTree.NormalizeRootRotation()` (which pins to
+  `doubleQuat.Identity`); `VehicleEditor` calls it at 3 sites. **Up-follows-root holds**, even
+  with the new multi-vehicle editor ("Switch Vehicle" / "Make Vehicle Root", rev 4972).
+- **`Control` is still an empty template marker.** `ControlTemplate.cs` is absent from the diff;
+  the runtime `Control` module gained `VehicleName` + a nested `SaveData`
+  (`[XmlType("ControlData")]`, `[XmlAttribute("VehicleName")]`, rev 4950 undock naming) —
+  **vehicle-save state only**, never part XML. Grep for
+  `controlpoint|control from here|referencetransform` still empty.
+- **`FlightComputer.UpdateAttitudeTrackError` untouched** — still aims **Body +X**, rolls
+  **+Z**. Runtime-only deltas: `RollMode` default `Up`→`Decoupled` (starts in "ANY", rev 4978)
+  and a new `RCSMode` toggle (`FlightComputerData` gains `<RCSMode>` — save schema, not ours).
+- **`DockingPort` save schema reshaped** (`OldVehicleName` attr → `PreDockRootLocalId` +
+  `<PreDockRootTransform>`, `SerializePreDockRecords`) — vehicle-save only;
+  `DockingPortTemplate.cs` untouched.
+- `QuaternionEx.cs` / `Double3Ex.cs` / `PartModel.cs` / `PartModelModule.cs` absent from the
+  diff; `<Internal>`/`<RayTracing>` IVA gate unchanged (shipped IVA XML byte-identical).
 
 ## What changed in 4939
 

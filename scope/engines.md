@@ -5,8 +5,10 @@
 > **BREAKING** for the live thrust/Isp readout. Read alongside [docs/engines.md](../docs/engines.md)
 > and [analysis/KSA_ENGINE_DETAILS.md](../analysis/KSA_ENGINE_DETAILS.md).
 
-**Baseline:** re-vetted against KSA build **2026.7.6.4939** (decomp @ 4939 + shipped Core XML).
-**Baseline status:** ✅ **CURRENT** — 4939 left every ported physics class byte-identical; the one
+**Baseline:** re-vetted against KSA build **2026.7.8.4980** (decomp @ 4980 + shipped Core XML).
+**Baseline status:** ✅ **CURRENT** — 4980 (like 4939) left every ported physics class and
+`Reactions.xml` byte-identical; the 4939 schema addition (`<PlumeTrail Id>` on the nozzle) is
+modeled (see [What changed in 4939](#what-changed-in-4939)). At 4939 the one
 schema addition (`<PlumeTrail Id>` on the nozzle) is modeled (see
 [What changed in 4939](#what-changed-in-4939)). Previously re-modeled at 4892 after the rev-4884
 Reactions refactor
@@ -105,6 +107,24 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
   `<Combustor>` (flexo's SRB recipe now burns APCP) — but there is still no solid-motor
   hardware (no grain-regression thrust curve; the propellant reservoir is still a liquid-style
   tank), so a true SRB is still not reproducible.
+
+## What changed in 4980
+
+**INTACT — no flexo change.** `DeLavalNozzleConfig.cs`, `CombustorConfig.cs`,
+`GasProperties.cs`, `CombustionTable.cs`, `NozzlePerformance.cs`, `RocketDesign.cs`,
+`RocketControllerData.cs`, `EngineDesigner.cs`, and `Reactions.xml` are all absent from the
+4939→4980 diff. The engine-adjacent churn is flight-runtime/save only:
+
+- **Fuel-flow-rule persistence + default flip** (revs 4957/4958/4965): the default engine flow
+  rule changed `NearestToFurtherestSameStage` → `FurtherestToNearestSameStage`
+  (`PartTree.RecreateResourceManagers`), `EngineController.SaveData` gained
+  `[XmlElement] FlowRule?` and `RocketCore` a `PersistedFlowRule` — all **vehicle-save**
+  schema/runtime; flexo has zero `FlowRule` references (flow rules are a flight concept, not
+  part-template data).
+- `SequencePerformanceList` (per-sequence Δv/TWR/Isp) was rewritten as an event-driven
+  fuel-flow simulation — flexo never ported it; our designer readout uses
+  `NozzlePerformance`-derived math only. `FuelLinkList.cs` was deleted (fuel links folded into
+  the `PartTreeData` vehicle-save shape) — also outside flexo's surface.
 
 ## What changed in 4939
 

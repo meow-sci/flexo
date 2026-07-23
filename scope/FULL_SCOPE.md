@@ -20,15 +20,35 @@ update, this is the checklist you diff against to find what breaks flexo.**
 
 ## Baseline game version
 
-|                      | Build           | Path                                                                                                                                                            |
-| -------------------- | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Verified against** | `2026.7.6.4939` | `/Users/asherwin/repos/meow-sci/ksa-game-assemblies/current` (decomp @ 4939) + `flexo-private-assets/assets` (Core XML @ 4939)                                  |
-| Previous baseline    | `2026.7.5.4892` | `ksa-game-assemblies` git commit `7cf5c0a` (the on-disk `ksa-game-assemblies_prev/current` is older still — 4750 — so diff via git history, not the \_prev dir) |
+|                      | Build           | Path                                                                                                                                                             |
+| -------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Verified against** | `2026.7.8.4980` | `/Users/asherwin/repos/meow-sci/ksa-game-assemblies/current` (decomp @ 4980, commit `cdb7391`) + `flexo-private-assets/assets` (Core XML @ 4980, re-encoded)     |
+| Previous baseline    | `2026.7.6.4939` | `ksa-game-assemblies` git commit `2423a02` + the `flexo-private-assets_prev` dir copy (diff decomp via git history; the mirror \_prev copies go stale over time) |
 
 Each snapshot holds `decomp/` (decompiled C#; schema lives in `[XmlType]`/`[XmlElement]`/
 `[XmlAttribute]` + public fields), `Content/Core/` (the shipped game-data XML + GLSL shaders),
 and `version.json` (a commit-by-commit changelog — the fastest first read on any update).
 
+> **4980 review method.** Full `4939 → 4980` diff via **git history inside `ksa-game-assemblies`**
+> (`git diff 2423a02 cdb7391`) + `diff -rq` of the two private-mirror `assets/` trees;
+> `version.json` @ 4980 documents revs 4940–4978. The update is HUD layouts, the burn-UI gauge
+> rework, navball markers, screenshots, terrain **texture streaming**, cascaded-shadow
+> specialization constants, and vehicle-runtime work (docking frame fixes, undock naming, fuel
+> flow-rule persistence, sequence Δv rework) — almost entirely outside flexo's surface.
+> **Zero part-template/GameData/engine/animation schema drift**: no `*Template.cs`, unit
+> reference, ported-physics, or `KeyframeAnimation*` class changed; the shipped part XML is
+> content-identical (8 mirror files differ only in CRLF line endings — sync artifact; fixtures
+> unaffected). Contract mechanics that MOVED but held: root-identity pin consolidated into
+> `PartTree.NormalizeRootRotation()`; `Part.Connector.ConnectAndMerge` rewritten (same 180°-Z
+> mate contract). Save-side-only schema: `ControlData.VehicleName`, `FlightComputerData.RCSMode`
+> (+ RollMode default `Up`→`Decoupled`), `EngineController.SaveData.FlowRule` (default flow rule
+> flipped to `FurtherestToNearestSameStage`), docking `PreDockRootTransform`. One data-side
+> delta handled: new **`TextureCategory.TerrainHeight`** — Core retagged height-affecting
+> celestial textures, and the cartoon-moon scaffold's Luna block was retagged to match (see
+> [ground-clutter.md](ground-clutter.md#what-changed-in-4980)). No new integration surfaces;
+> the 4939 OPEN gaps (geometry `<Collider>`, part-level `<Tank>`, FuelPort, clutter LOD retune)
+> carry forward. All areas re-verified **INTACT/CURRENT**.
+>
 > **4939 review method.** Full `4892 → 4939` diff via **git history inside `ksa-game-assemblies`**
 > (`git diff 7cf5c0a 2423a02`); `version.json` @ 4939 documents the whole rev range 4893–4939.
 > The bulk of the update is rendering (screenspace particles, volumetric plume trails, clutter

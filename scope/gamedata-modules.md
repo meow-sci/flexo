@@ -4,7 +4,7 @@
 > `<PartGameData>` / `<SubPartGameData>` documents. Each block maps to a KSA `*Template`
 > class. Engine modules have their own file ([engines.md](engines.md)).
 
-**Baseline:** re-vetted against KSA build **2026.7.6.4939** (decomp @ 4939 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.8.4980** (decomp @ 4980 + shipped Core XML).
 **Baseline status:** ✅ **CURRENT** — the electrical unit tokens (`J`/`W`), the `<DockingPort>`
 child-element schema, and the `<Control>` command marker are all modeled (parse **and** emit,
 current form only — no legacy fallback). As of 4892 (rev 4884), a tank's 4826-era
@@ -77,6 +77,18 @@ ships a new `FuelPort` module (passthrough-preserved) — see
 - Connector `<Flags>` is emitted in **both** the Assets and GameData docs.
 - Light `Scale` is never emitted (KSA ignores it).
 - `Battery.cs`'s save-state `[XmlElement("Charge")]` (was `"Joules"`) is **save-game state, not authored template** — irrelevant to flexo.
+
+## What changed in 4980
+
+**INTACT — no flexo change.** No `*Template.cs` module class and none of the unit reference
+classes (`EnergyReference` / `PowerReference` / `ImpulseReference` / `MassReference`) appear in
+the 4939→4980 diff, and the shipped GameData XML is content-identical in the 4980 mirror. The
+only module-adjacent deltas are **vehicle-save** state, not authored template schema: `Control`
+gained `VehicleName` + a `SaveData` (`[XmlType("ControlData")]`) for undock naming
+(`ControlTemplate` untouched — still the empty `<Control/>` marker flexo models);
+`EngineController.SaveData` gained `<FlowRule>`; `DockingPort`'s save records were reshaped
+(`PreDockRootLocalId`/`<PreDockRootTransform>`). The 4939 OPEN items (part-level `<Tank>`
+editing, `FuelPort` modeling) carry forward unchanged.
 
 ## What changed in 4939
 

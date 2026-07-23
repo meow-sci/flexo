@@ -4,7 +4,7 @@
 > data-only KSA mod that adds a celestial body with `<GroundClutter>` (cards/meshes scattered
 > on the terrain), using **no custom game code**. Reference scaffold for clutter modding.
 
-**Baseline:** re-verified against KSA build **2026.7.6.4939** (decomp @ 4939 + shipped Core XML).
+**Baseline:** re-verified against KSA build **2026.7.8.4980** (decomp @ 4980 + shipped Core XML).
 **Baseline status:** 🟢 **CURRENT (scaffold updated, in-game re-check pending)** — 4892 turned the
 4826 mesh-atlas change load-bearing: every `<LOD>` now **requires `<Material Id/>` ID-references
 after its `<Mesh>`** and the ecotype `<Material>` became an Id-carrying **list**, so the old
@@ -46,6 +46,28 @@ hand-authored mod XML + a build script).
 - **Opacity** cut where R < 0.5 (cutout cards).
 - First-wins + core-first load order, so a clutter mod can **add** a body & reuse textures by `Id`.
 - Loading is gated by the scenario's `<LoadFromLibrary>`.
+
+## What changed in 4980
+
+**Schema INTACT; scaffold retagged for the new `TerrainHeight` texture category.** All 7
+`*Reference.cs` clutter schema classes are again absent from the 4939→4980 diff. The clutter
+churn is renderer-only: per-cascade shadow culling (rev 4966/4967 — `CullInstances.comp` split
+into shadow/non-shadow mains, draw-command ownership moved `ClutterEcotypeRenderData` →
+`ClutterViewResources`), and the non-uniform-indexing extension enabled for clutter/terrain
+shaders (rev 4960, fixes device-specific flicker) — none of it touches the mod XML contract.
+
+The data-side delta is celestial: rev 4947 added **`TextureCategory.TerrainHeight`** for
+textures that affect height calculations (exempt from the terrain-texture max-size downmip, so
+rendered and collided terrain stay aligned), and Core's `Astronomicals.xml` retagged every
+height-affecting celestial texture (`<Height>`, `<Normal>`, `<BiomeIDMap>`,
+`<BiomeControlMap>`, decal `<HeightMap>`, height-modifier `<Texture>`) `Terrain` →
+`TerrainHeight` (clutter card/ground-material textures stay `Terrain`). The scaffold's
+Luna-clone block carried the old tags, so `ksa-mods/cartoon-moon/assets/cartoon_moon.xml` was
+retagged to match (5 lines — Luna_Normal / Luna_Height / Luna_Biome_ID / Luna_Biome_Control /
+LunaTestDecalHeight). `build-cartoon-moon.ts` needs **no change**: it clones the
+`<PlanetaryBody Id="Luna">` block verbatim from the caller's Astronomicals.xml, so the next
+regeneration against 4980 Core produces the same tags; its hardcoded clutter textures correctly
+stay `Terrain`. The 4939 LOD `MinScreenSize` retune advisory + in-game re-check remain pending.
 
 ## What changed in 4939
 

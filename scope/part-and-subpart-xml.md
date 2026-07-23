@@ -5,7 +5,7 @@
 > other feature hangs off. Read alongside [docs/xml-io.md](../docs/xml-io.md) and
 > [docs/subpart-catalog.md](../docs/subpart-catalog.md) (the flexo-internal view).
 
-**Baseline:** re-vetted against KSA build **2026.7.6.4939** (decomp @ 4939 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.8.4980** (decomp @ 4980 + shipped Core XML).
 **Baseline status:** ✅ **CURRENT** — `<Diameter>` part-size + `<Control>` command marker modeled
 (and as of 4826 `<Diameter>` is **repeatable** — the extras round-trip via `extraDiametersM`, see
 [What changed in 4826](#what-changed-in-4826)); `KNOWN_EDITOR_TAGS` refreshed from the registry
@@ -84,6 +84,21 @@ Consequences / what's STILL drop-on-round-trip (passthrough is scoped to GameDat
 - Connector `<Flags>` live on `<PartGameData>`, **not** on the geometry `<Part>` — without the GameData merge, `ToSurface`/etc. are lost.
 - A `<Part>` with no matching `<PartGameData>` has no tags/modules → invisible in the part picker.
 - `DockingPort` parses only the current child-element form (`<ConnectorId Value>`, `<LatchingKineticEnergy J>`, `<PushoffImpulse Ns>`) — no legacy fallback; see [gamedata-modules.md](gamedata-modules.md).
+
+## What changed in 4980
+
+**INTACT — no flexo change, no schema or content drift.** `PartTemplate.cs`,
+`SubPartTemplate.cs`, `Part.cs`'s template surface, and `EditorTagDefinition.cs` are all absent
+from the 4939→4980 decomp diff (the `Part.cs` hunks are runtime `ConnectAndMerge`/flow-rule
+work — see [connectors-coordinates-iva.md](connectors-coordinates-iva.md#what-changed-in-4980)
+and [engines.md](engines.md#what-changed-in-4980)). No editor-tag registry change. The shipped
+part catalog is **content-identical**: the 8 `Core*Assets.xml`/`CoreIVASpaceAGameData.xml`
+files that differ in the 4980 private-mirror sync differ **only in CRLF line endings** (mirror
+sync artifact — `diff --strip-trailing-cr` is empty), no new asset packs, and none of the 5
+vendored `__fixtures__` files are affected (drift test unaffected). `PartTree.Serialize()` was
+reshaped into `PartTreeData` (root + sequence environments + fuel links) — **vehicle-save**
+format, outside flexo's part-template scope. The 4939 geometry-`<Collider>` gap carries
+forward unchanged (still only the 4 CoreElectricalA sites).
 
 ## What changed in 4939
 

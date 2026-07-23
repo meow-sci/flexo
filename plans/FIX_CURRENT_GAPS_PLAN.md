@@ -1,9 +1,49 @@
 # Plan — Fix flexo gaps from KSA updates (running)
 
-> **Latest review: `2026.7.5.4892` → `2026.7.6.4939` (see below). Direct breaks are ✅ DONE;
-> three capability gaps are 📋 OPEN (part-level `<Tank>` editing, geometry-template
-> passthrough, FuelPort) plus one cosmetic advisory.** The earlier `4826 → 4892`,
-> `4750 → 4826` and `4680 → 4750` reviews (all done) follow as history.
+> **Latest review: `2026.7.6.4939` → `2026.7.8.4980` (see below). ZERO flexo `src/` changes
+> required — no part-template/GameData/engine/animation schema drift; the one data-side delta
+> (celestial `TerrainHeight` texture category) is ✅ DONE in the cartoon-moon scaffold. The
+> 4939 capability gaps stay 📋 OPEN (part-level `<Tank>` editing, geometry-template
+> passthrough, FuelPort, clutter LOD retune).** The earlier `4892 → 4939`, `4826 → 4892`,
+> `4750 → 4826` and `4680 → 4750` reviews follow as history.
+
+---
+
+# 4980 review — `2026.7.6.4939` → `2026.7.8.4980`
+
+**Derived from:** the [scope/](../scope/FULL_SCOPE.md) catalog review — full `git diff 2423a02
+cdb7391` inside `ksa-game-assemblies` + `diff -rq` of the 4939/4980 private-mirror `assets/`
+trees + per-area contract re-verification (see each scope doc's "What changed in 4980").
+`version.json` @ 4980 covers revs 4940–4978: HUD layouts, burn-UI gauge rework, navball
+markers, screenshot capture, terrain texture streaming, cascaded-shadow spec constants, and
+vehicle-runtime work (docking frame fixes, undock naming, fuel-flow-rule persistence,
+event-driven sequence Δv) — none of it crosses flexo's part-template surface.
+
+## Priority summary (4980)
+
+| # | Gap | Severity | Flexo touch-points | Scope doc |
+|---|---|---|---|---|
+| A | Core retagged height-affecting celestial textures `Category="Terrain"` → `"TerrainHeight"` (new `TextureCategory` member, rev 4947 — exempts them from the terrain max-size downmip so rendered and collided terrain align); the cartoon-moon Luna-clone block carried the old tags | ✅ **DONE** (was COSMETIC — mod still loads; height textures could be downmipped → render/collision misalignment) | `ksa-mods/cartoon-moon/assets/cartoon_moon.xml` retagged (5 lines: Luna_Normal, Luna_Height, Luna_Biome_ID, Luna_Biome_Control, LunaTestDecalHeight); `build-cartoon-moon.ts` needs no change (clones the Luna block verbatim from Core) | [ground-clutter](../scope/ground-clutter.md#what-changed-in-4980) |
+
+**Verified-intact (no action):** part/subpart templates + editor tags (no `*Template.cs` /
+`EditorTagDefinition.cs` in the diff; shipped part XML content-identical — the 8 mirror-file
+diffs are CRLF-only sync artifacts; fixtures untouched, drift test green); ported engine
+physics + `Reactions.xml` (byte-identical; `SequencePerformanceList` Δv rework and the
+`FlowRule` default flip `NearestToFurtherestSameStage`→`FurtherestToNearestSameStage` are
+flight-runtime/save-side — flexo has no `FlowRule` surface); animation (no `KeyframeAnimation*`
+diff; mirror GLBs byte-identical); kittens (`CharacterRenderResources` hunk = CSM spec constant
+only); custom-assets/mod-export (`ThumbnailRenderResources` absent from diff ⇒ synthetic maps
+still required; `ENABLE_EMISSIVE` still defined; `ModLibrary` log-noise only;
+`TextureCategory.TerrainHeight` additive — parts stay `Vessel`); connectors/coords/IVA +
+reference orientation (`QuaternionEx`/`Double3Ex` untouched; `ConnectAndMerge` rewrite keeps
+the 180°-Z mate contract; root-identity pin consolidated into `PartTree.NormalizeRootRotation()`
+— up-follows-root holds under the new multi-vehicle editor; `ControlTemplate` still an empty
+marker — `ControlData.VehicleName`, `FlightComputerData.RCSMode`, RollMode default
+`Up`→`Decoupled`, and docking `PreDockRootTransform` are vehicle-save state); ground-clutter
+schema (all 7 `*Reference.cs` untouched; shadow-culling/draw-command-ownership changes are
+GPU-side). New systems (HUD `LayoutSaves`, `ScreenshotCapture`, `BurnCanvasHost`,
+`NavballMarkers`, `CelestialTextureStreamer`, `PartTreeData` vehicle-save shape,
+`CollisionAvoidancePair`) are runtime/UI/save surfaces — **no new scope rows needed**.
 
 ---
 

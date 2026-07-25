@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  COLLIDER_LAYER_ID,
   CONNECTOR_LAYER_ID,
   DEFAULT_LAYER_ID,
   KITTEN_LAYER_ID,
@@ -299,7 +300,14 @@ describe('mergeProjectImport into an empty project', () => {
     expect(part.connectors).toHaveLength(1)
     expect(part.kittens).toHaveLength(1)
     expect(part.animations).toHaveLength(1)
-    expect(summary).toEqual({ meshes: 3, connectors: 1, kittens: 1, newLayers: 3, animations: 1 })
+    expect(summary).toEqual({
+      meshes: 3,
+      connectors: 1,
+      colliders: 0,
+      kittens: 1,
+      newLayers: 3,
+      animations: 1,
+    })
   })
 
   it('mirrors every source layer (including Default) as a NEW layer, leaving the existing Default empty', () => {
@@ -567,5 +575,52 @@ describe('envelopeToPart', () => {
     }
     // Binary-backed assets always start empty.
     expect(part.customTextures).toEqual([])
+  })
+})
+
+describe('collider merge', () => {
+  it('appends colliders with fresh _colliderN ids on the built-in Colliders layer', () => {
+    const src = createEmptyPart()
+    src.colliders.push({
+      id: '_collider1',
+      shape: 'Cylinder',
+      ownerTemplateId: null,
+      ...t(0.5),
+      layerId: COLLIDER_LAYER_ID,
+    })
+    const dest = createEmptyPart()
+    dest.colliders.push({
+      id: '_collider1',
+      shape: 'Box',
+      ownerTemplateId: null,
+      ...identityTransform(),
+      layerId: COLLIDER_LAYER_ID,
+    })
+
+    const { part, summary } = mergeProjectImport(dest, buildProjectExport(src, 'S'))
+    expect(part.colliders.map((c) => c.id)).toEqual(['_collider1', '_collider2'])
+    expect(part.colliders[1].shape).toBe('Cylinder')
+    expect(part.colliders[1].position).toEqual({ x: 0.5, y: 0.5, z: 0.5 })
+    expect(part.colliders.every((c) => c.layerId === COLLIDER_LAYER_ID)).toBe(true)
+    expect(summary.colliders).toBe(1)
+  })
+
+  it('leaves a SubPart owner pointing at a built-in template untouched', () => {
+    const src = createEmptyPart()
+    src.colliders.push({
+      id: '_collider1',
+      shape: 'Box',
+      ownerTemplateId: 'CoreLandingA_Subpart_MediumFootA',
+      ...identityTransform(),
+      layerId: COLLIDER_LAYER_ID,
+    })
+    const { part } = mergeProjectImport(createEmptyPart(), buildProjectExport(src, 'S'))
+    expect(part.colliders[0].ownerTemplateId).toBe('CoreLandingA_Subpart_MediumFootA')
+  })
+
+  it('restores the Colliders layer when a payload omits it', () => {
+    const env = buildProjectExport(createEmptyPart(), 'S')
+    env.data.layers = env.data.layers.filter((l) => l.id !== COLLIDER_LAYER_ID)
+    expect(envelopeToPart(env).layers.map((l) => l.id)).toContain(COLLIDER_LAYER_ID)
   })
 })

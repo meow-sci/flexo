@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { DOMParser } from '@xmldom/xmldom'
 import { parseAssetsFile, type CatalogSubPart } from './catalog'
-import { hasKsaAssets, ksaAsset } from './ksaTestAssets'
+import { hasKsaAssets, ksaAsset, readVendoredAsset } from './ksaTestAssets'
+import { COLLIDER_LAYER_ID } from './types'
 
 function parseFile(name: string): CatalogSubPart[] {
   const text = readFileSync(ksaAsset(name), 'utf-8')
@@ -63,5 +64,39 @@ describe('catalog parsing (real Core XML)', () => {
     // A normal structural SubPart carries no Internal flag.
     const truss = structural.find((s) => s.id === 'CoreStructuralA_Subpart_TrussBarA')!
     expect(truss.internal).toBeUndefined()
+  })
+})
+
+// Runs against the committed fixtures (src/ksa/__fixtures__/), so it exercises the REAL
+// Core data without the private asset tree.
+describe('geometry <SubPart><Collider> (gap E — vendored fixtures)', () => {
+  const out: CatalogSubPart[] = []
+  const doc = new DOMParser().parseFromString(
+    readVendoredAsset('CoreElectricalAAssets.xml'),
+    'application/xml',
+  )
+  parseAssetsFile(doc as unknown as Document, 'CoreElectricalAAssets.xml', out)
+
+  it('reads the solar-cell templates’ own <Box> collider off the geometry <SubPart>', () => {
+    const cell = out.find((s) => s.id === 'CoreElectricalA_Subpart_SolarPanelA_CellA')!
+    expect(cell.colliders).toEqual([
+      {
+        id: 'BoxCollider1',
+        shape: 'Box',
+        ownerTemplateId: 'CoreElectricalA_Subpart_SolarPanelA_CellA',
+        position: { x: 0, y: 0, z: -0.00894 },
+        rotation: { x: 0, y: 0, z: 0 },
+        // Box dimensions are FULL extents: the cell's real mesh AABB is
+        // 0.800 × 0.600 × 0.025 m. A half-extent reading would make this a 5 cm-thick,
+        // 1.6 m panel instead of the 2.5 cm-thick 0.79 × 0.60 m one it is.
+        scale: { x: 0.79467, y: 0.59602, z: 0.02531 },
+        layerId: COLLIDER_LAYER_ID,
+      },
+    ])
+  })
+
+  it('leaves `colliders` undefined for a template that authors none', () => {
+    const battery = out.find((s) => s.id === 'CoreElectricalA_Subpart_RadialBatteryA')!
+    expect(battery.colliders).toBeUndefined()
   })
 })

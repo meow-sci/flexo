@@ -67,7 +67,7 @@ ships a new `FuelPort` module (passthrough-preserved) — see
 
 **Enums / strings**: `TankShape` `'Cylindrical'|'Spherical'`; `ConnectorFlag` `'Internal'|'ToSurface'|'FromSurface'`; `LightType` `'Spot'|'Point'`.
 
-**Round-trip safety:** see the ⭐ master invariant in [part-and-subpart-xml.md](part-and-subpart-xml.md#-master-invariant--flexo-rebuilds-a-fresh-dom-now-with-gamedata-passthrough). As of gap 6, unmodeled `<PartGameData>`/`<SubPartGameData>` **child elements + root attrs are preserved** verbatim (`RawXmlNode` passthrough) — e.g. `<Collider>`, the `SolidSphereMass`… mass family, `<IVASeat>`, `<SubstanceStorageVolume>`, a SubPart's `DisplayName`. (Unmodeled elements OUTSIDE these two containers are still dropped.)
+**Round-trip safety:** see the ⭐ master invariant in [part-and-subpart-xml.md](part-and-subpart-xml.md#-master-invariant--flexo-rebuilds-a-fresh-dom-now-with-gamedata-passthrough). As of gap 6, unmodeled `<PartGameData>`/`<SubPartGameData>` **child elements + root attrs are preserved** verbatim (`RawXmlNode` passthrough) — e.g. the `SolidSphereMass`… mass family, `<IVASeat>`, `<SubstanceStorageVolume>`, a SubPart's `DisplayName`. (`<Collider>` is MODELED — see [colliders.md](colliders.md).) (Unmodeled elements OUTSIDE these two containers are still dropped.)
 
 ## Known gotchas
 
@@ -91,7 +91,19 @@ inner `<CylindricalTank>`/`<SphericalTank>` shape), plus the shape's `<LocationA
 
 The full `Components` element-name list @ 5018: `AttachedInternal`, `Collider`, `FuelPort`,
 `IVASeat`, `KeyframeAnimationModule`, `Light`, `MeshView`, `PartModelGlass`, `PartModel`,
-`PartModelDynamic`, **`SolidGrainSegment`**, `Tank`.
+`PartModelDynamic`, **`SolidGrainSegment`**, `Tank`. Of these flexo MODELS `Collider`,
+`KeyframeAnimationModule`, `Light`, `SolidGrainSegment` and `Tank`; the rest ride the
+gap-6 passthrough.
+
+### `<Collider>` is now MODELED — closes the 4939 gap E
+
+`<Collider>` moved out of the passthrough into both `KNOWN_*_GAMEDATA_CHILDREN` sets and
+into a first-class `EditingPart.colliders` list. Because a `<Collider>` component is legal
+(and identical in effect) on the geometry `<Part>`/`<SubPart>` as well, flexo reads all four
+authoring sites and normalises every collider into the GameData document — which is what
+closed the geometry-template drop. Its component `Id` shares the addressable-container
+namespace described above, so it must never equal a `<Tank Id>` on the same owner. Full
+contract in [colliders.md](colliders.md).
 
 ### Part-level `<Tank>` is now MODELED — closes the 4939 gap
 

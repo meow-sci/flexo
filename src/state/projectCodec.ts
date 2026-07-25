@@ -3,6 +3,7 @@ import type {
   AnimationKeyframe,
   Battery,
   BurnRateLaw,
+  ColliderShape,
   Combustor,
   Connector,
   ConnectorCapability,
@@ -24,6 +25,7 @@ import type {
   Layer,
   Light,
   PartAnimation,
+  PartCollider,
   PartGameData,
   PowerConsumer,
   RawXmlNode,
@@ -44,6 +46,8 @@ import type {
   Vec3,
 } from '../ksa/types'
 import {
+  COLLIDER_LAYER_ID,
+  COLLIDER_SHAPES,
   CONNECTOR_LAYER_ID,
   KITTEN_LAYER_ID,
   createDefaultMaterial,
@@ -67,8 +71,9 @@ export const PROJECT_EXPORT_FORMAT = 'flexo-project'
 // `sm`/`sn`/`sg` on both game-data levels, plus the solid burn-rate reaction fields.
 // v5: imported glTF meshes (`imp`) — a third CustomMesh source kind, plus the mesh-level
 // `mid` (materialId) an imported mesh needs to keep its surface across a round-trip.
+// v6: colliders (`cl`) — the Part's collision volume as a flat list of analytic primitives.
 // Per the no-migration rule, older payloads are REJECTED on import, never converted.
-export const PROJECT_EXPORT_VERSION = 5
+export const PROJECT_EXPORT_VERSION = 6
 
 /**
  * COMPACT PROJECT CODEC — the single wire format for everything that serializes a
@@ -214,6 +219,32 @@ function decConnector(c: CConnector): Connector {
     capabilities: arr<ConnectorCapability>(c.cp),
     siblingIds: arr<string>(c.sb).map((s) => str(s)),
     layerId: CONNECTOR_LAYER_ID,
+    ...decTransform(c),
+  }
+}
+
+/** `s` is taken by {@link CTransform}'s scale, so the shape token is `sh`. */
+interface CCollider extends CTransform {
+  i: string // id
+  sh: ColliderShape // shape
+  o?: string // ownerTemplateId (omitted ⇒ null ⇒ part-level)
+}
+
+function encCollider(c: PartCollider): CCollider {
+  // layerId is always COLLIDER_LAYER_ID — restored on decode, never serialized.
+  // `scale` carries the collider's SIZE in meters; the shared CTransform encoder omits
+  // it at (1,1,1), which decodes back to a 1 m cube — the same shape.
+  const o: CCollider = { i: c.id, sh: c.shape, ...encTransform(c) }
+  if (c.ownerTemplateId) o.o = c.ownerTemplateId
+  return o
+}
+
+function decCollider(c: CCollider): PartCollider {
+  return {
+    id: str(c.i),
+    shape: COLLIDER_SHAPES.includes(c.sh) ? c.sh : 'Cylinder',
+    ownerTemplateId: c.o ? str(c.o) : null,
+    layerId: COLLIDER_LAYER_ID,
     ...decTransform(c),
   }
 }
@@ -1246,6 +1277,7 @@ export interface CompactProject {
   l?: CLayer[] // layers
   p?: CPlacement[] // placements
   c?: CConnector[] // connectors
+  cl?: CCollider[] // colliders
   k?: CKitten[] // kittens
   a?: CAnimation[] // animations
   m?: CCustomMesh[] // customMeshes (kitten + imported; primitives are never encoded)
@@ -1266,6 +1298,7 @@ export function encodeProject(env: ProjectExportEnvelope): CompactProject {
   if (d.layers.length) o.l = d.layers.map((x): CLayer => ({ i: x.id, n: x.name }))
   if (d.placements.length) o.p = d.placements.map(encPlacement)
   if (d.connectors.length) o.c = d.connectors.map(encConnector)
+  if (d.colliders.length) o.cl = d.colliders.map(encCollider)
   if (d.kittens.length) o.k = d.kittens.map(encKitten)
   if (d.animations.length) o.a = d.animations.map(encAnimation)
   const meshes = d.customMeshes.map(encCustomMesh).filter((m): m is CCustomMesh => m != null)
@@ -1290,6 +1323,7 @@ export function decodeProject(raw: CompactProject): ProjectExportEnvelope {
       layers: arr<CLayer>(raw.l).map((x): Layer => ({ id: str(x.i), name: str(x.n) })),
       placements: arr<CPlacement>(raw.p).map(decPlacement),
       connectors: arr<CConnector>(raw.c).map(decConnector),
+      colliders: arr<CCollider>(raw.cl).map(decCollider),
       kittens: arr<CKitten>(raw.k).map(decKitten),
       animations: arr<CAnimation>(raw.a).map(decAnimation),
       customMeshes: arr<CCustomMesh>(raw.m).map(decCustomMesh),

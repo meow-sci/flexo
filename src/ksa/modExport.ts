@@ -10,6 +10,7 @@ import type {
   TextureChannel,
 } from './types'
 import { isSubPartGameDataEmpty, meshKind } from './types'
+import type { PartCollider } from './types'
 import { serializeGameData, serializePart } from './partXmlSerializer'
 import {
   serializeAssets,
@@ -159,12 +160,26 @@ export interface ExportVariant {
   meshId: string
   /** Built-in <Material Id> the variant reuses, or null when untextured. */
   materialId: string | null
+  /**
+   * The built-in template's OWN geometry `<Collider>`s, copied forward onto the variant.
+   * A variant is a FRESH `<SubPart Id>` that reuses only the built-in Mesh/Material — it
+   * does NOT inherit anything else the built-in `<SubPart>` declared, so without this the
+   * variant would silently lose the built-in collision volume (e.g. the solar-panel cells'
+   * `<Box>`). Empty for a template that authors none.
+   */
+  colliders: PartCollider[]
 }
 
-/** True when the part carries flexo-modeled GameData (light/tank/solar/engine) for this template. */
+/**
+ * True when the part carries flexo-modeled data that must be emitted UNDER this template's
+ * id — SubPart GameData (light/tank/solar/engine) or a SubPart-owned collider. Emitting
+ * either under the shared built-in id would MERGE onto the built-in template globally.
+ */
 function hasSubPartGameData(part: EditingPart, templateId: string): boolean {
-  return part.subPartGameData.some(
-    (s) => s.subPartTemplateId === templateId && !isSubPartGameDataEmpty(s),
+  return (
+    part.subPartGameData.some(
+      (s) => s.subPartTemplateId === templateId && !isSubPartGameDataEmpty(s),
+    ) || part.colliders.some((c) => c.ownerTemplateId === templateId)
   )
 }
 
@@ -207,6 +222,7 @@ export function buildExportVariantMap(
         : `flexo_${base}_${templateId}`,
       meshId: entry.meshNodeName,
       materialId: entry.materialId ?? null,
+      colliders: entry.colliders ?? [],
     })
   }
   return out
@@ -646,6 +662,7 @@ export async function buildCustomBundle(
     subPartId: v.variantId,
     meshId: v.meshId,
     materialId: v.materialId,
+    colliders: v.colliders,
   }))
 
   // Nothing to declare → no Assets XML, but still ship any animation glbs above.

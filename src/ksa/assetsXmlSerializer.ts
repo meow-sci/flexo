@@ -1,6 +1,11 @@
 import { DOMImplementation, XMLSerializer } from '@xmldom/xmldom'
-import { prettyXml } from './partXmlSerializer'
+import {
+  buildColliderElement,
+  INHERITED_COLLIDER_COMPONENT_ID,
+  prettyXml,
+} from './partXmlSerializer'
 import { VIEW_MESH_SUFFIX } from './exportGlb'
+import type { PartCollider } from './types'
 
 /**
  * Serializes the custom-asset "Assets" XML — the file that DEFINES user-created
@@ -77,6 +82,12 @@ export interface ReferenceSubPartPlan {
   meshId: string
   /** Built-in <Material Id> to reference, or null for an untextured SubPart. */
   materialId: string | null
+  /**
+   * Collision primitives the shadowed built-in `<SubPart>` declared. A variant inherits
+   * NOTHING but the Mesh/Material it explicitly references, so these must be re-declared
+   * here or the variant loses the built-in collision volume.
+   */
+  colliders?: PartCollider[]
 }
 
 export interface AssetsPlan {
@@ -190,6 +201,10 @@ export function serializeAssets(plan: AssetsPlan): string {
     viewMesh.setAttribute('Id', sp.meshId)
     meshView.appendChild(viewMesh)
     sub.appendChild(meshView)
+    // Carry the shadowed built-in's own collision volume forward (see the field docs).
+    if (sp.colliders?.length) {
+      sub.appendChild(buildColliderElement(doc, sp.colliders, INHERITED_COLLIDER_COMPONENT_ID))
+    }
     assets.appendChild(sub)
   }
 

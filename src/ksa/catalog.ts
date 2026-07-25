@@ -9,6 +9,9 @@
  * <PartModel><Mesh Id="..."/> and exist as named nodes inside the atlas GLB.
  */
 
+import { collidersFromElement } from './partXmlParser'
+import type { PartCollider } from './types'
+
 export interface CatalogSubPart {
   /** SubPart template id, e.g. "CoreStructuralA_Subpart_TrussBarA". */
   id: string
@@ -31,6 +34,16 @@ export interface CatalogSubPart {
    * everywhere (see buildExportVariantMap in modExport.ts).
    */
   internal?: boolean
+  /**
+   * Collision primitives authored on the geometry `<SubPart>` template itself (Core does
+   * this for e.g. the solar-panel cells). flexo does NOT copy these into the document
+   * when you merely PLACE the template — the placement references the built-in id and the
+   * built-in collider applies in-game for free. They exist so that when mod export is
+   * forced to redeclare the template as an export VARIANT (see buildExportVariantMap),
+   * the variant can carry the built-in collision volume forward instead of silently
+   * losing it.
+   */
+  colliders?: PartCollider[]
   /** Originating XML file (for debugging). */
   sourceFile: string
 }
@@ -187,6 +200,8 @@ export function parseAssetsFile(doc: Document, sourceFile: string, out: CatalogS
     const internal =
       firstChildByTag(partModel, 'Internal')?.textContent?.trim().toLowerCase() === 'true'
 
+    const colliders = collidersFromElement(sub, id)
+
     out.push({
       id,
       atlasUrl: toUrl(atlasPath),
@@ -197,6 +212,7 @@ export function parseAssetsFile(doc: Document, sourceFile: string, out: CatalogS
       aoRoughMetalUrl: mat?.aoRoughMetal ? toUrl(mat.aoRoughMetal) : undefined,
       emissiveUrl: mat?.emissive ? toUrl(mat.emissive) : undefined,
       internal: internal || undefined,
+      colliders: colliders.length > 0 ? colliders : undefined,
       sourceFile,
     })
   }

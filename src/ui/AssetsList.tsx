@@ -37,7 +37,13 @@ import {
   setSelection,
 } from '../state/editorStore'
 import { $layerView, layerViewState } from '../state/layerStore'
-import { CONNECTOR_LAYER_ID, KITTEN_LAYER_ID, meshKind, type Layer } from '../ksa/types'
+import {
+  COLLIDER_LAYER_ID,
+  CONNECTOR_LAYER_ID,
+  KITTEN_LAYER_ID,
+  meshKind,
+  type Layer,
+} from '../ksa/types'
 import { setManagingMeshId } from '../state/customAssetStore'
 import { ManageTanksModal } from './ManageTanksModal'
 
@@ -333,7 +339,9 @@ function SubPartRowMenu({ index }: { index: number }) {
   const [managingTanks, setManagingTanks] = useState(false)
   const placement = part.placements[index]
   if (!placement) return null
-  const layers = part.layers.filter((l) => l.id !== CONNECTOR_LAYER_ID && l.id !== KITTEN_LAYER_ID)
+  const layers = part.layers.filter(
+    (l) => l.id !== CONNECTOR_LAYER_ID && l.id !== COLLIDER_LAYER_ID && l.id !== KITTEN_LAYER_ID,
+  )
   const customMesh = part.customMeshes.find((m) => m.subPartId === placement.subPartTemplateId)
 
   return (

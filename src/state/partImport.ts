@@ -99,6 +99,7 @@ export async function importBuiltInPart(
       solidNozzles: part.solidNozzles,
       solidGrainSegments: part.solidGrainSegments,
       consumerFeedWiring: part.consumerFeedWiring,
+      colliders: part.colliders,
     }),
   )
 }

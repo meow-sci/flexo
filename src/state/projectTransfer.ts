@@ -8,6 +8,7 @@ import type {
   KittenMeshSource,
   Layer,
   PartAnimation,
+  PartCollider,
   PartGameData,
   Rocket,
   SubPartGameData,
@@ -16,10 +17,12 @@ import type {
   Vec3,
 } from '../ksa/types'
 import {
+  COLLIDER_LAYER_ID,
   CONNECTOR_LAYER_ID,
   DEFAULT_LAYER_ID,
   DEFAULT_PART_ID,
   KITTEN_LAYER_ID,
+  createColliderLayer,
   createConnectorLayer,
   createDefaultLayer,
   createKittenLayer,
@@ -67,6 +70,8 @@ export interface ProjectExportData {
   layers: Layer[]
   placements: SubPartPlacement[]
   connectors: Connector[]
+  /** The Part's collision volume (analytic primitives; owner-grouped only on XML export). */
+  colliders: PartCollider[]
   kittens: KittenInstance[]
   animations: PartAnimation[]
   /** Part-ified kitten meshes only (descriptors referencing game assets — no binaries). */
@@ -99,6 +104,7 @@ export interface ProjectExportEnvelope {
 export interface ImportSummary {
   meshes: number
   connectors: number
+  colliders: number
   kittens: number
   newLayers: number
   animations: number
@@ -157,6 +163,7 @@ export function buildProjectExport(part: EditingPart, projectName: string): Proj
       layers: part.layers,
       placements: part.placements,
       connectors: part.connectors,
+      colliders: part.colliders,
       kittens: part.kittens,
       animations: part.animations,
       customMeshes: part.customMeshes.filter(isDataOnlyMesh),
@@ -225,6 +232,7 @@ export function envelopeToPart(env: ProjectExportEnvelope): EditingPart {
     layers: [...d.layers],
     placements: d.placements,
     connectors: d.connectors,
+    colliders: d.colliders,
     kittens: d.kittens,
     customTextures: [],
     customMaterials: d.customMaterials,
@@ -236,11 +244,12 @@ export function envelopeToPart(env: ProjectExportEnvelope): EditingPart {
   return part
 }
 
-/** Guarantees the three undeletable built-in layers exist (in case a payload omitted any). */
+/** Guarantees the four undeletable built-in layers exist (in case a payload omitted any). */
 function ensureBuiltInLayers(part: EditingPart): void {
   const has = (id: string) => part.layers.some((l) => l.id === id)
   if (!has(DEFAULT_LAYER_ID)) part.layers.unshift(createDefaultLayer())
   if (!has(CONNECTOR_LAYER_ID)) part.layers.push(createConnectorLayer())
+  if (!has(COLLIDER_LAYER_ID)) part.layers.push(createColliderLayer())
   if (!has(KITTEN_LAYER_ID)) part.layers.push(createKittenLayer())
 }
 
@@ -345,6 +354,24 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
     part.connectors[i].siblingIds = part.connectors[i].siblingIds
       .map((s) => connectorIdMap.get(s))
       .filter((s): s is string => s != null)
+  }
+
+  // Colliders — always on the built-in Colliders layer, fresh _colliderN ids. Nothing
+  // references a collider by id (it is not in the feed-container namespace — only the
+  // `<Collider>` COMPONENT id is, and flexo generates that at serialize time), so unlike
+  // connectors there is no ref map to thread through. `ownerTemplateId` IS a reference
+  // though: it names a SubPart TEMPLATE, and an imported kitten mesh gets a fresh
+  // template id, so route it through the same map the placements use.
+  for (const src of data.colliders ?? []) {
+    part.colliders.push({
+      id: nextColliderId(part),
+      shape: src.shape,
+      ownerTemplateId: src.ownerTemplateId ? mapTemplateId(src.ownerTemplateId) : null,
+      position: vec(src.position, 0),
+      rotation: vec(src.rotation, 0),
+      scale: vec(src.scale, 1),
+      layerId: COLLIDER_LAYER_ID,
+    })
   }
 
   // Kittens — always on the built-in Kittens layer, fresh kitten_N ids.
@@ -455,6 +482,7 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
     summary: {
       meshes: data.placements.length,
       connectors: data.connectors.length,
+      colliders: data.colliders?.length ?? 0,
       kittens: data.kittens.length,
       newLayers: newLayerIds.length,
       animations: data.animations.length,
@@ -593,6 +621,15 @@ function nextConnectorId(part: EditingPart): string {
     if (m) max = Math.max(max, Number.parseInt(m[1], 10))
   }
   return `_connector${max + 1}`
+}
+
+function nextColliderId(part: EditingPart): string {
+  let max = 0
+  for (const c of part.colliders) {
+    const m = /^_collider(\d+)$/.exec(c.id)
+    if (m) max = Math.max(max, Number.parseInt(m[1], 10))
+  }
+  return `_collider${max + 1}`
 }
 
 function nextKittenId(part: EditingPart): string {

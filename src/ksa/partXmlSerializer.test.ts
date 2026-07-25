@@ -41,6 +41,7 @@ function editingPart(over: Partial<EditingPart>): EditingPart {
     layers: [createDefaultLayer()],
     placements: [],
     connectors: [],
+    colliders: [],
     kittens: [],
     customTextures: [],
     customMaterials: [],

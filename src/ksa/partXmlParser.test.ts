@@ -12,6 +12,7 @@ import {
 import { serializeGameData, serializePart } from './partXmlSerializer'
 import type { Connector, EditingPart, RawXmlNode } from './types'
 import {
+  COLLIDER_LAYER_ID,
   createCombustor,
   createCustomReaction,
   createDefaultLayer,
@@ -38,6 +39,7 @@ function editingPart(over: Partial<EditingPart>): EditingPart {
     layers: [createDefaultLayer()],
     placements: [],
     connectors: [],
+    colliders: [],
     kittens: [],
     customTextures: [],
     customMaterials: [],
@@ -612,16 +614,24 @@ describe('unmodeled-XML passthrough (gap 6)', () => {
   const parsed = gameDataFromAssets(xml, 'P', new DOMParser())!
 
   it('captures unmodeled <PartGameData> children verbatim (tag/attrs/nested tree)', () => {
-    expect(parsed.gameData.unknownChildren.map((n) => n.tag)).toEqual([
-      'Collider',
-      'SolidSphereMass',
-    ])
-    const collider = parsed.gameData.unknownChildren[0]
-    expect(collider.attrs).toEqual({ Id: 'Collider1' })
-    expect(collider.children[0].tag).toBe('Cylinder')
-    expect(collider.children[0].children.map((c) => [c.tag, c.attrs])).toEqual([
-      ['Radius', { M: '0.5007' }],
-      ['LengthY', { M: '1.0197' }],
+    // <Collider> is MODELED now (it lands in `colliders`, not the passthrough).
+    expect(parsed.gameData.unknownChildren.map((n) => n.tag)).toEqual(['SolidSphereMass'])
+    const mass = parsed.gameData.unknownChildren[0]
+    expect(mass.children.map((c) => [c.tag, c.attrs])).toEqual([['Mass', { Kg: '50' }]])
+  })
+
+  it('reads the <PartGameData><Collider> into the typed model instead of passthrough', () => {
+    expect(parsed.colliders).toEqual([
+      {
+        id: 'Cyl1',
+        shape: 'Cylinder',
+        ownerTemplateId: null,
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        // Cylinder size = (2R, LengthY, 2R).
+        scale: { x: 1.0014, y: 1.0197, z: 1.0014 },
+        layerId: COLLIDER_LAYER_ID,
+      },
     ])
   })
 
@@ -1329,5 +1339,205 @@ describe('solid custom reactions (KSA hard requirements)', () => {
       customReactions: [createCustomReaction('MyMono', 'My Mono')],
     })
     expect(serializeGameData(mono)).toContain('<FixedReaction Id="MyMono"')
+  })
+})
+
+// ── colliders ────────────────────────────────────────────────────────────────
+//
+// The KSA contract these lock down (verified against decomp/KSA/*ColliderTemplate.cs
+// and the shipped Core data — see scope/colliders.md):
+//   Box(LengthX, LengthY, LengthZ) full extents · Cylinder(Radius, LengthY) Y-aligned
+//   full length · Capsule(Radius, LengthY) where LengthY is the SEGMENT only ·
+//   Sphere(Radius) · <Collider2Asmb> is Euler XYZ radians.
+
+describe('colliders', () => {
+  /** The real `CoreCommandA_Prefab_MediumCapsuleVariantA` collision volume. */
+  const MEDIUM_CAPSULE = `<Assets>
+    <PartGameData Id="CoreCommandA_Prefab_MediumCapsuleVariantA">
+      <Collider Id="Collider1">
+        <Cylinder Id="CylinderCollider1">
+          <LocationAsmb X="0" Y="0" Z="0" />
+          <Collider2Asmb X="0" Y="0" Z="1.57" />
+          <LengthY M="2" />
+          <Radius M="0.5" />
+        </Cylinder>
+        <Sphere Id="SphereCollider1">
+          <LocationAsmb X="-0.11" Y="0" Z="0" />
+          <Collider2Asmb X="0" Y="0" Z="0" />
+          <Radius M="0.89" />
+        </Sphere>
+      </Collider>
+    </PartGameData>
+  </Assets>`
+
+  it('parses a real Core cylinder + sphere block into typed part-level colliders', () => {
+    const parsed = gameDataFromAssets(
+      MEDIUM_CAPSULE,
+      'CoreCommandA_Prefab_MediumCapsuleVariantA',
+      new DOMParser(),
+    )!
+    expect(parsed.colliders).toEqual([
+      {
+        id: 'CylinderCollider1',
+        shape: 'Cylinder',
+        ownerTemplateId: null,
+        position: { x: 0, y: 0, z: 0 },
+        // Euler XYZ radians — the Z=1.57 that lays the cylinder along X.
+        rotation: { x: 0, y: 0, z: 1.57 },
+        scale: { x: 1, y: 2, z: 1 }, // (2R, LengthY, 2R)
+        layerId: COLLIDER_LAYER_ID,
+      },
+      {
+        id: 'SphereCollider1',
+        shape: 'Sphere',
+        ownerTemplateId: null,
+        position: { x: -0.11, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1.78, y: 1.78, z: 1.78 },
+        layerId: COLLIDER_LAYER_ID,
+      },
+    ])
+  })
+
+  it('re-serializes that block to semantically identical XML', () => {
+    const parsed = gameDataFromAssets(
+      MEDIUM_CAPSULE,
+      'CoreCommandA_Prefab_MediumCapsuleVariantA',
+      new DOMParser(),
+    )!
+    const part = editingPart({
+      partId: 'CoreCommandA_Prefab_MediumCapsuleVariantA',
+      colliders: parsed.colliders,
+    })
+    expect(roundTrip(part).colliders).toEqual(parsed.colliders)
+    const xml = serializeGameData(part)
+    expect(xml).toContain('<Cylinder Id="CylinderCollider1">')
+    expect(xml).toContain('<Collider2Asmb X="0" Y="0" Z="1.57"/>')
+    expect(xml).toContain('<Sphere Id="SphereCollider1">')
+    expect(xml).toContain('<LocationAsmb X="-0.11" Y="0" Z="0"/>')
+  })
+
+  // The exemplar: CoreLandingA_Prefab_MediumLandingLegA — a part-level strut cylinder
+  // plus a SubPart-owned foot puck that rides the animated joint.
+  it('routes part-level and SubPart-owned colliders to the right owners, both ways', () => {
+    const xml = `<Assets>
+      <PartGameData Id="Leg">
+        <Collider Id="Collider1">
+          <Cylinder Id="Strut">
+            <LocationAsmb X="-0.5501" Y="0.0013" Z="0.0464" />
+            <Collider2Asmb X="3.0777" Y="0.008" Z="1.5705" />
+            <LengthY M="2.1922" />
+            <Radius M="0.4361" />
+          </Cylinder>
+        </Collider>
+      </PartGameData>
+      <SubPartGameData Id="CoreLandingA_Subpart_MediumFootA">
+        <Collider Id="Collider1">
+          <Cylinder Id="Puck">
+            <LocationAsmb X="0" Y="0" Z="0" />
+            <Collider2Asmb X="0" Y="0" Z="0" />
+            <LengthY M="0.34" />
+            <Radius M="0.5" />
+          </Cylinder>
+        </Collider>
+      </SubPartGameData>
+    </Assets>`
+    const parsed = gameDataFromAssets(xml, 'Leg', new DOMParser())!
+    expect(parsed.colliders.map((c) => [c.id, c.ownerTemplateId])).toEqual([
+      ['Strut', null],
+      ['Puck', 'CoreLandingA_Subpart_MediumFootA'],
+    ])
+
+    const back = roundTrip(editingPart({ partId: 'Leg', colliders: parsed.colliders }))
+    expect(back.colliders).toEqual(parsed.colliders)
+    // The foot has NO other GameData, so its <SubPartGameData> block exists purely to
+    // carry the collider — it must still be emitted.
+    const out = serializeGameData(editingPart({ partId: 'Leg', colliders: parsed.colliders }))
+    expect(out).toContain('<SubPartGameData Id="CoreLandingA_Subpart_MediumFootA">')
+  })
+
+  it('emits SubPart-owned colliders INTO an existing <SubPartGameData> block, not a second one', () => {
+    const part = editingPart({
+      partId: 'P',
+      subPartGameData: [{ ...createSubPartGameData('Tmpl'), lights: [createLight()] }],
+      colliders: [
+        {
+          id: '_collider1',
+          shape: 'Box',
+          ownerTemplateId: 'Tmpl',
+          ...identityTransform(),
+          layerId: COLLIDER_LAYER_ID,
+        },
+      ],
+    })
+    const xml = serializeGameData(part)
+    expect(xml.match(/<SubPartGameData Id="Tmpl">/g)).toHaveLength(1)
+    expect(roundTrip(part).colliders[0].ownerTemplateId).toBe('Tmpl')
+  })
+
+  it('ALWAYS emits every dimension (an omitted one reads back as NaN in KSA)', () => {
+    const part = editingPart({
+      partId: 'P',
+      colliders: [
+        {
+          id: 'b',
+          shape: 'Box',
+          ownerTemplateId: null,
+          position: { x: 0, y: 0, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 }, // every extent at its "default" — still emitted
+          layerId: COLLIDER_LAYER_ID,
+        },
+      ],
+    })
+    const xml = serializeGameData(part)
+    expect(xml).toContain('<LengthX M="1"/>')
+    expect(xml).toContain('<LengthY M="1"/>')
+    expect(xml).toContain('<LengthZ M="1"/>')
+    // …and both frame vectors, all three axes, even at zero.
+    expect(xml).toContain('<LocationAsmb X="0" Y="0" Z="0"/>')
+    expect(xml).toContain('<Collider2Asmb X="0" Y="0" Z="0"/>')
+  })
+
+  it('defaults a missing dimension to a visible size and warns', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const parsed = gameDataFromAssets(
+      `<Assets><PartGameData Id="P"><Collider Id="C">
+        <Sphere Id="s" />
+      </Collider></PartGameData></Assets>`,
+      'P',
+      new DOMParser(),
+    )!
+    expect(parsed.colliders[0].scale).toEqual({ x: 1, y: 1, z: 1 })
+    expect(warn).toHaveBeenCalledOnce()
+    expect(String(warn.mock.calls[0][0])).toContain('<Radius>')
+    warn.mockRestore()
+  })
+
+  it('ignores a child element that is not one of the four Bepu primitives', () => {
+    const parsed = gameDataFromAssets(
+      `<Assets><PartGameData Id="P"><Collider Id="C">
+        <ConvexHull Id="nope" />
+        <Box Id="yes"><LengthX M="1"/><LengthY M="1"/><LengthZ M="1"/></Box>
+      </Collider></PartGameData></Assets>`,
+      'P',
+      new DOMParser(),
+    )!
+    expect(parsed.colliders.map((c) => c.id)).toEqual(['yes'])
+  })
+
+  it('keeps <Collider> out of the unmodeled passthrough on both GameData levels', () => {
+    const parsed = gameDataFromAssets(
+      `<Assets>
+        <PartGameData Id="P"><Collider Id="C"><Sphere Id="s"><Radius M="1"/></Sphere></Collider></PartGameData>
+        <SubPartGameData Id="T"><Collider Id="C"><Sphere Id="t"><Radius M="1"/></Sphere></Collider></SubPartGameData>
+      </Assets>`,
+      'P',
+      new DOMParser(),
+    )!
+    expect(parsed.gameData.unknownChildren).toEqual([])
+    // The SubPartGameData holds ONLY a collider, so it isn't materialized as an entry.
+    expect(parsed.subPartGameData).toEqual([])
+    expect(parsed.colliders.map((c) => c.ownerTemplateId)).toEqual([null, 'T'])
   })
 })

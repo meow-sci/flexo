@@ -47,6 +47,7 @@ import {
   BUILT_IN_LAYER_IDS,
   CONNECTOR_LAYER_ID,
   DEFAULT_LAYER_ID,
+  COLLIDER_LAYER_ID,
   KITTEN_LAYER_ID,
   type Layer,
 } from '../ksa/types'
@@ -227,7 +228,10 @@ function LayerRow({
   // The Connectors/Kittens layers can't be deleted, but their delete button instead
   // clears the layer's contents (after a confirm). The Default layer stays fully
   // protected. Custom layers use the normal delete-layer flow.
-  const isClearable = layer.id === CONNECTOR_LAYER_ID || layer.id === KITTEN_LAYER_ID
+  const isClearable =
+    layer.id === CONNECTOR_LAYER_ID ||
+    layer.id === COLLIDER_LAYER_ID ||
+    layer.id === KITTEN_LAYER_ID
   const deleteTooltip = isClearable
     ? 'Delete all items in layer'
     : isBuiltIn

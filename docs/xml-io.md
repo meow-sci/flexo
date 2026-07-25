@@ -156,3 +156,47 @@ GameData files under `/ksa/`; `vite/ksaAssets.ts` copies the existing ones into
 - `formatG6.test.ts` — fixed/exponential cases.
 - `partXmlParser.test.ts` — serialize→parse round-trips (placements, connector
   flag arrays, full `gameDataFromAssets`).
+
+## Colliders
+
+`<Collider>` is legal in **four** places in KSA's schema (geometry `<Part>`, geometry
+`<SubPart>`, `<PartGameData>`, `<SubPartGameData>`), and the geometry/GameData pairs are
+functionally identical — `PartTemplate.ApplyGameData` merges `Components` **additively**.
+flexo therefore **reads all four and writes one**: every collider is normalised into the
+GameData document, grouped by owner.
+
+```xml
+<PartGameData Id="...">
+    …
+    <Collider Id="flexoColliders">                  <!-- part-level group (ownerTemplateId null) -->
+        <Cylinder Id="_collider1">
+            <LocationAsmb X="0" Y="0" Z="0"/>       <!-- always all three axes -->
+            <Collider2Asmb X="0" Y="0" Z="1.57"/>   <!-- Euler XYZ radians -->
+            <LengthY M="2"/>                        <!-- ALWAYS emitted (see below) -->
+            <Radius Cm="50"/>
+        </Cylinder>
+    </Collider>
+</PartGameData>
+<SubPartGameData Id="...">                          <!-- one group per owning template -->
+    <Collider Id="flexoColliders"> … </Collider>
+</SubPartGameData>
+```
+
+Rules that differ from the rest of this document:
+
+- **No omit-at-default for dimensions.** `DistanceReference` reads back as **NaN**, not 0,
+  when no unit attribute is present, so an omitted `<Radius>`/`<Length*>` would build a NaN
+  Bepu shape in-game. `buildColliderElement` always emits every dimension the shape has
+  (`colliderDimensionNames`), and both frame vectors with all three axes.
+- **A `<SubPartGameData>` block is created for a template whose only data is a collider** —
+  e.g. a landing-leg foot puck — and the existing block is reused when there is one, so a
+  template never gets two.
+- **The component `Id` is generated, not round-tripped.** Nothing references it, Core reuses
+  `"Collider1"` everywhere, and it shares the id namespace `<FeedsFrom Container>` resolves
+  against — so flexo emits one deterministic id per owner and validates it against that
+  owner's `<Tank Id>`s.
+- **Export variants copy the built-in template's colliders forward** into the Assets file
+  under `Id="flexoInheritedColliders"` — a variant inherits nothing but the Mesh/Material it
+  names.
+
+See [colliders.md](colliders.md) and [scope/colliders.md](../scope/colliders.md).

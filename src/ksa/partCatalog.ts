@@ -10,10 +10,12 @@
 
 import { ASSET_FILES, fetchXmlFile } from './catalog'
 import {
+  collidersFromElement,
   connectorsFromPartElement,
   directChildren,
   parseGameDataElement,
   placementsFromPartElement,
+  subPartCollidersFromRoot,
   subPartGameDataFromDoc,
 } from './partXmlParser'
 import type {
@@ -30,6 +32,7 @@ import type {
   EvaDoor,
   Generator,
   Gimbal,
+  PartCollider,
   PowerConsumer,
   RawXmlNode,
   Rocket,
@@ -52,6 +55,13 @@ export interface CatalogPart {
   placements: SubPartPlacement[]
   /** The connector attachment points of this Part, with their relative transforms. */
   connectors: Connector[]
+  /**
+   * The Part's collision volume, gathered from ALL of its authoring sites: the geometry
+   * `<Part><Collider>` (which flexo used to drop — gap E), the `<PartGameData><Collider>`,
+   * and every `<SubPartGameData><Collider>` for a template this Part places. Part-level
+   * shapes carry `ownerTemplateId: null`; SubPart-owned ones name their template.
+   */
+  colliders: PartCollider[]
   /** KeyframeAnimationModules (from GameData), decoded + imported alongside the Part. */
   animationModules: CatalogAnimationModule[]
   /** Connector-bound coupling game-data (from GameData); connectorIds are in the Part's original id space. */
@@ -112,6 +122,10 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
       editorTags,
       placements,
       connectors,
+      // Geometry `<Part><Collider>` — equivalent to authoring it on <PartGameData>
+      // (PartTemplate.ApplyGameData merges Components additively), so it is normalised
+      // into the same flat list and re-emitted into the GameData document on export.
+      colliders: collidersFromElement(part, null),
       animationModules: [],
       decoupler: null,
       dockingPort: null,
@@ -157,6 +171,8 @@ export interface PartGameData {
   connectorCapabilities: Map<string, ConnectorCapability[]>
   /** KeyframeAnimationModules declared on this <PartGameData>. */
   animationModules: CatalogAnimationModule[]
+  /** `<PartGameData><Collider>` shapes (part-level, `ownerTemplateId: null`). */
+  colliders: PartCollider[]
   /** Connector-bound coupling game-data, so built-in part imports carry them in. */
   decoupler: Decoupler | null
   dockingPort: DockingPort | null
@@ -196,6 +212,8 @@ export interface PartGameData {
 interface ParsedGameDataFile {
   parts: Map<string, PartGameData>
   subParts: Map<string, SubPartGameData>
+  /** `<SubPartGameData><Collider>` shapes, keyed by the owning SubPart template id. */
+  subPartColliders: Map<string, PartCollider[]>
 }
 
 /** GameData sibling of each catalog asset file (e.g. CoreElectricalAAssets.xml -> CoreElectricalAGameData.xml). Not every asset file has one. */
@@ -217,6 +235,7 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
       connectorFlags: new Map(),
       connectorCapabilities: new Map(),
       animationModules: [],
+      colliders: [],
       decoupler: null,
       dockingPort: null,
       evaDoor: null,
@@ -249,6 +268,7 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
     for (const [connId, caps] of parsed.connectorCapabilities)
       entry.connectorCapabilities.set(connId, caps)
     entry.animationModules.push(...parsed.animationModules)
+    entry.colliders.push(...parsed.colliders)
     entry.decoupler ??= parsed.gameData.decoupler
     entry.dockingPort ??= parsed.gameData.dockingPort
     entry.evaDoor ??= parsed.gameData.evaDoor
@@ -284,10 +304,19 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
     out.parts.set(id, entry)
   }
   for (const spd of subPartGameDataFromDoc(doc)) out.subParts.set(spd.subPartTemplateId, spd)
+  for (const c of subPartCollidersFromRoot(doc.documentElement as Element)) {
+    const list = out.subPartColliders.get(c.ownerTemplateId!)
+    if (list) list.push(c)
+    else out.subPartColliders.set(c.ownerTemplateId!, [c])
+  }
 }
 
 async function loadGameData(): Promise<ParsedGameDataFile> {
-  const out: ParsedGameDataFile = { parts: new Map(), subParts: new Map() }
+  const out: ParsedGameDataFile = {
+    parts: new Map(),
+    subParts: new Map(),
+    subPartColliders: new Map(),
+  }
   await Promise.all(
     GAMEDATA_FILES.map(async (file) => {
       const r = await fetchXmlFile(file)
@@ -345,6 +374,9 @@ export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile
       part.solidNozzles = gd.solidNozzles
       part.solidGrainSegments = gd.solidGrainSegments
       part.consumerFeedWiring = gd.consumerFeedWiring
+      // APPEND — the geometry `<Part><Collider>` read in parsePartsFile is already here,
+      // and KSA applies both (Components merge additively, no dedupe).
+      part.colliders.push(...gd.colliders)
     }
     // SubPart-template data is keyed globally by template id; carry only the entries
     // for templates this Part places (deduped — many instances share one template).
@@ -352,6 +384,13 @@ export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile
     part.subPartGameData = [...templateIds]
       .map((tid) => gameData.subParts.get(tid))
       .filter((spd): spd is SubPartGameData => spd != null)
+    // Same scoping for SubPart-owned colliders. NOTE: the geometry `<SubPart><Collider>`
+    // of a placed built-in template is deliberately NOT pulled in — the placement keeps
+    // referencing the built-in id, so that collider already applies in-game (see
+    // CatalogSubPart.colliders).
+    for (const tid of templateIds) {
+      part.colliders.push(...(gameData.subPartColliders.get(tid) ?? []))
+    }
   }
 }
 

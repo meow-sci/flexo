@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import { DOMParser } from '@xmldom/xmldom'
 import { mergeGameData, parseGameDataFile, parsePartsFile, type CatalogPart } from './partCatalog'
-import { createTank } from './types'
+import { COLLIDER_LAYER_ID, createTank } from './types'
 import {
   hasKsaAssets,
   ksaAsset,
@@ -17,7 +17,7 @@ function parse(xml: string): Document {
 
 /** An empty parsed-GameData accumulator (part-keyed + subpart-template-keyed maps). */
 function emptyGameData() {
-  return { parts: new Map(), subParts: new Map() }
+  return { parts: new Map(), subParts: new Map(), subPartColliders: new Map() }
 }
 
 // Mirrors the real KSA Core split: <Part> geometry in the Assets file (no flags),
@@ -132,7 +132,7 @@ describe('parseGameDataFile + mergeGameData', () => {
     ])
   })
 
-  it('merges unmodeled <PartGameData> children (e.g. <Collider>) onto the Part verbatim', () => {
+  it('merges unmodeled <PartGameData> children onto the Part verbatim', () => {
     const parts: CatalogPart[] = []
     parsePartsFile(parse(ASSETS_XML), 'CoreFuelTankAAssets.xml', parts)
     expect(parts[0].unknownChildren).toEqual([]) // nothing on the geometry <Part>
@@ -140,18 +140,41 @@ describe('parseGameDataFile + mergeGameData', () => {
     const gameData = emptyGameData()
     parseGameDataFile(
       parse(`<Assets><PartGameData Id="CoreElectricalA_Prefab_SolarPanelB">
-        <Collider Id="Collider1"><Cylinder Id="Cyl1"><Radius M="0.5" /></Cylinder></Collider>
+        <SubstanceStorageVolume Id="Vol1" />
       </PartGameData></Assets>`),
       gameData,
     )
     mergeGameData(parts, gameData)
 
-    expect(parts[0].unknownChildren.map((n) => n.tag)).toEqual(['Collider'])
-    expect(parts[0].unknownChildren[0].children[0].children[0]).toEqual({
-      tag: 'Radius',
-      attrs: { M: '0.5' },
-      children: [],
-    })
+    expect(parts[0].unknownChildren.map((n) => n.tag)).toEqual(['SubstanceStorageVolume'])
+    expect(parts[0].unknownChildren[0].attrs).toEqual({ Id: 'Vol1' })
+  })
+
+  it('merges a <PartGameData><Collider> onto the Part as a typed part-level collider', () => {
+    const parts: CatalogPart[] = []
+    parsePartsFile(parse(ASSETS_XML), 'CoreFuelTankAAssets.xml', parts)
+    expect(parts[0].colliders).toEqual([]) // nothing on the geometry <Part>
+
+    const gameData = emptyGameData()
+    parseGameDataFile(
+      parse(`<Assets><PartGameData Id="CoreElectricalA_Prefab_SolarPanelB">
+        <Collider Id="Collider1"><Cylinder Id="Cyl1"><Radius M="0.5" /><LengthY M="2" /></Cylinder></Collider>
+      </PartGameData></Assets>`),
+      gameData,
+    )
+    mergeGameData(parts, gameData)
+
+    expect(parts[0].colliders).toEqual([
+      {
+        id: 'Cyl1',
+        shape: 'Cylinder',
+        ownerTemplateId: null,
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 2, z: 1 },
+        layerId: COLLIDER_LAYER_ID,
+      },
+    ])
   })
 
   it('carries part-level battery (J→Wh) and the SubPart solar panel onto the Part', () => {
@@ -318,9 +341,9 @@ describe('parseGameDataFile + mergeGameData', () => {
   // Runs against the committed fixtures (src/ksa/__fixtures__/), so it exercises the REAL
   // Core data without the private asset tree. Since KSA 2026.7.6 Core authors its fuel-tank
   // data as Part-LEVEL <Tank> entries in CoreFuelTankAGameData.xml (no SubPartGameData);
-  // 2026.7.9 made those tanks addressable feed containers, so flexo now MODELS them (the
-  // <Collider> still rides along as unmodeled passthrough).
-  it('imports the real CoreFuelTankA_Prefab_LF1WHalfHA part-level <Tank> and preserves its <Collider> (vendored fixtures)', () => {
+  // 2026.7.9 made those tanks addressable feed containers, so flexo now MODELS them — and
+  // since the collider work its <Collider> is modeled too, leaving NO passthrough at all.
+  it('imports the real CoreFuelTankA_Prefab_LF1WHalfHA part-level <Tank> + <Collider> (vendored fixtures)', () => {
     const parts: CatalogPart[] = []
     parsePartsFile(
       parse(readVendoredAsset('CoreFuelTankAAssets.xml')),
@@ -335,8 +358,10 @@ describe('parseGameDataFile + mergeGameData', () => {
     expect(part).toBeTruthy()
     expect(part.editorTags).toContain('Fuel Tanks')
     expect(part.diameterM).toBe(1)
-    // Only the <Collider> is still passthrough — the <Tank> is modeled now.
-    expect(part.unknownChildren.map((n) => n.tag)).toEqual(['Collider'])
+    // Nothing is passthrough any more — both the <Tank> and the <Collider> are modeled.
+    expect(part.unknownChildren.map((n) => n.tag)).toEqual([])
+    expect(part.colliders.map((c) => c.shape)).toEqual(['Cylinder'])
+    expect(part.colliders.every((c) => c.ownerTemplateId === null)).toBe(true)
     expect(part.tanks).toEqual([
       {
         ...createTank(),
@@ -447,5 +472,47 @@ describe.runIf(hasKsaAssets)('vendored fixtures stay byte-identical to the live 
 
   it.each(fixtures)('%s matches $KSA_ASSETS_DIR', (name) => {
     expect(readFileSync(vendoredAsset(name), 'utf-8')).toBe(readFileSync(ksaAsset(name), 'utf-8'))
+  })
+})
+
+// Gap E (was: flexo dropped every collider authored on a geometry template). Runs against
+// the committed fixtures so it exercises the REAL Core data without the private tree.
+describe('geometry <Part><Collider> (gap E — vendored fixtures)', () => {
+  it('imports CoreElectricalA_Prefab_BayFuelcellSmall’s geometry collider', () => {
+    const parts: CatalogPart[] = []
+    parsePartsFile(
+      parse(readVendoredAsset('CoreElectricalAAssets.xml')),
+      'CoreElectricalAAssets.xml',
+      parts,
+    )
+    const part = parts.find((p) => p.id === 'CoreElectricalA_Prefab_BayFuelcellSmall')!
+    expect(part).toBeTruthy()
+    expect(part.colliders).toEqual([
+      {
+        id: 'CylinderCollider1',
+        shape: 'Cylinder',
+        ownerTemplateId: null,
+        position: { x: 0.00642, y: 0, z: -0.16949 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 0.3869, y: 0.6, z: 0.3869 }, // (2R, LengthY, 2R)
+        layerId: COLLIDER_LAYER_ID,
+      },
+    ])
+  })
+
+  it('APPENDS the <PartGameData> collider to the geometry one (KSA merges Components additively)', () => {
+    const parts: CatalogPart[] = []
+    parsePartsFile(
+      parse(readVendoredAsset('CoreElectricalAAssets.xml')),
+      'CoreElectricalAAssets.xml',
+      parts,
+    )
+    const gameData = emptyGameData()
+    parseGameDataFile(parse(readVendoredAsset('CoreElectricalAGameData.xml')), gameData)
+    mergeGameData(parts, gameData)
+
+    const light = parts.find((p) => p.id === 'CoreElectricalA_Prefab_LightSmallB')!
+    expect(light.colliders.map((c) => c.shape)).toEqual(['Box'])
+    expect(light.unknownChildren.map((n) => n.tag)).toEqual([])
   })
 })

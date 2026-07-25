@@ -1,12 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  COLLIDER_LAYER_ID,
   createEmptyPart,
   createLight,
   createPartAnimation,
   createSubPartGameData,
   identityTransform,
 } from './types'
-import type { CustomMesh, EditingPart, PartAnimation } from './types'
+import type { CustomMesh, EditingPart, PartAnimation, PartCollider } from './types'
 
 // In-memory stand-in for the IndexedDB blob store (happy-dom has no indexedDB), so
 // image-channel export paths (stored-.ktx2 copies) are testable. Keys mirror assetKeys.
@@ -82,6 +83,7 @@ import {
   uniqueFileName,
 } from './modExport'
 import { serializeGameData, serializePart } from './partXmlSerializer'
+import { serializeAssets } from './assetsXmlSerializer'
 import type { CatalogSubPart } from './catalog'
 import { animGlbPath } from './animationNaming'
 
@@ -925,5 +927,69 @@ describe('buildCustomBundle — imported glTF SubParts', () => {
       'flexo_RcsPod_Part0_ab12cd',
       'flexo_RcsPod_Part0_ab12cd_VM',
     ])
+  })
+})
+
+describe('export variants carry the built-in template’s own colliders forward', () => {
+  const BUILT_IN_BOX: PartCollider = {
+    id: 'BoxCollider1',
+    shape: 'Box',
+    ownerTemplateId: SPOTLIGHT,
+    position: { x: 0, y: 0, z: -0.00894 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 0.79467, y: 0.59602, z: 0.02531 },
+    layerId: COLLIDER_LAYER_ID,
+  }
+
+  /** The light catalog, but the built-in template also declares its own geometry collider. */
+  function catalogWithCollider(): Map<string, CatalogSubPart> {
+    const c = lightCatalog()
+    c.set(SPOTLIGHT, { ...c.get(SPOTLIGHT)!, colliders: [BUILT_IN_BOX] })
+    return c
+  }
+
+  it('forces a variant for a template that carries ONLY a flexo collider', () => {
+    const part = createEmptyPart()
+    part.placements.push({
+      instanceId: 's',
+      subPartTemplateId: SPOTLIGHT,
+      ...identityTransform(),
+      layerId: 'default',
+    })
+    // Without this, the collider would be emitted under the SHARED built-in id and merge
+    // onto every other use of that SubPart in the game.
+    expect(buildExportVariantMap(part, lightCatalog(), 'X').size).toBe(0)
+    part.colliders.push({
+      id: '_collider1',
+      shape: 'Cylinder',
+      ownerTemplateId: SPOTLIGHT,
+      ...identityTransform(),
+      layerId: COLLIDER_LAYER_ID,
+    })
+    expect(buildExportVariantMap(part, lightCatalog(), 'X').size).toBe(1)
+  })
+
+  it('copies the built-in geometry collider onto the variant (a variant inherits nothing else)', () => {
+    const v = buildExportVariantMap(partWithBuiltinLight(), catalogWithCollider(), 'MyLight').get(
+      SPOTLIGHT,
+    )!
+    expect(v.colliders).toEqual([BUILT_IN_BOX])
+  })
+
+  it('declares them on the variant <SubPart> in the Assets XML, under a distinct component id', () => {
+    const xml = serializeAssets({
+      subParts: [],
+      referenceSubParts: [
+        {
+          subPartId: 'flexo_X_Variant',
+          meshId: SPOTLIGHT,
+          materialId: null,
+          colliders: [BUILT_IN_BOX],
+        },
+      ],
+    })
+    expect(xml).toContain('<Collider Id="flexoInheritedColliders">')
+    expect(xml).toContain('<Box Id="BoxCollider1">')
+    expect(xml).toContain('<LengthX Cm="79.467"/>') // sub-metre distances emit as Cm
   })
 })

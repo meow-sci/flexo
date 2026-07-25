@@ -22,6 +22,7 @@ import type {
   Light,
   LightType,
   PartAnimation,
+  PartCollider,
   PartGameData,
   PlumbingClass,
   PowerConsumer,
@@ -42,6 +43,7 @@ import type {
 } from '../ksa/types'
 import {
   BUILT_IN_LAYER_IDS,
+  COLLIDER_LAYER_ID,
   CONNECTOR_LAYER_ID,
   createCombustor,
   createEmptyPart,
@@ -554,6 +556,13 @@ export interface ImportedGameData {
   solidGrainSegments: SolidGrainSegment[]
   /** `<ConsumerFeedWiring>`; SubPart + connector refs in the source id space. */
   consumerFeedWiring: ConsumerFeedWiring[]
+  /**
+   * The source Part's collision volume, from every authoring site it uses (geometry
+   * `<Part>`, `<PartGameData>`, and the `<SubPartGameData>` of the templates it places).
+   * `ownerTemplateId` names a SubPart TEMPLATE, which import never renames, so unlike the
+   * module refs above these need no remapping — only fresh document ids.
+   */
+  colliders: PartCollider[]
 }
 
 /** Remaps a module→SubPart-instance reference through the import id map (null ⇒ root part, unchanged). */
@@ -679,6 +688,15 @@ function applyImportedGameData(
   game.consumerFeedWiring.push(
     ...src.consumerFeedWiring.map((w) => remapConsumerFeedWiring(w, connectorIdMap, idMap)),
   )
+  // Colliders are a top-level list, not GameData: append with fresh ids on the built-in
+  // Colliders layer. Nothing references a collider by id, so no map is threaded out.
+  for (const c of src.colliders) {
+    target.colliders.push({
+      ...structuredClone(c),
+      id: nextColliderId(target),
+      layerId: COLLIDER_LAYER_ID,
+    })
+  }
 }
 
 /**
@@ -864,6 +882,16 @@ function nextKittenId(part: EditingPart): string {
     if (m) max = Math.max(max, Number.parseInt(m[1], 10))
   }
   return `kitten_${max + 1}`
+}
+
+/** Returns the next free "_colliderN" id (max existing N + 1). */
+function nextColliderId(part: EditingPart): string {
+  let max = 0
+  for (const c of part.colliders) {
+    const m = /^_collider(\d+)$/.exec(c.id)
+    if (m) max = Math.max(max, Number.parseInt(m[1], 10))
+  }
+  return `_collider${max + 1}`
 }
 
 /** Returns the next free "_connectorN" id (max existing N + 1). */
@@ -2808,8 +2836,14 @@ export function reorderLayers(orderedIds: readonly string[]): void {
  * SubPart is already on that layer.
  */
 export function movePlacementToLayer(index: number, layerId: string): void {
-  // SubParts can't live on the special Connectors/Kittens layers.
-  if (layerId === CONNECTOR_LAYER_ID || layerId === KITTEN_LAYER_ID) return
+  // SubParts can't live on the special Connectors/Colliders/Kittens layers.
+  if (
+    layerId === CONNECTOR_LAYER_ID ||
+    layerId === COLLIDER_LAYER_ID ||
+    layerId === KITTEN_LAYER_ID
+  ) {
+    return
+  }
   const current = $part.get()
   const placement = current.placements[index]
   if (!placement || placement.layerId === layerId) return
@@ -2831,8 +2865,14 @@ export function movePlacementToLayer(index: number, layerId: string): void {
  * the special Connectors/Kittens layers, an unknown layer, or an empty selection.
  */
 export function moveSelectedPlacementsToLayer(layerId: string): void {
-  // SubParts can't live on the special Connectors/Kittens layers.
-  if (layerId === CONNECTOR_LAYER_ID || layerId === KITTEN_LAYER_ID) return
+  // SubParts can't live on the special Connectors/Colliders/Kittens layers.
+  if (
+    layerId === CONNECTOR_LAYER_ID ||
+    layerId === COLLIDER_LAYER_ID ||
+    layerId === KITTEN_LAYER_ID
+  ) {
+    return
+  }
   const indices = $selectedIndices.get()
   if (indices.length === 0) return
   const current = $part.get()

@@ -121,6 +121,7 @@ import {
   scaleEverything,
 } from './editorStore'
 import {
+  COLLIDER_LAYER_ID,
   CONNECTOR_LAYER_ID,
   DEFAULT_LAYER_ID,
   KITTEN_LAYER_ID,
@@ -129,7 +130,7 @@ import {
   createSolidMotor,
   createSubPartGameData,
 } from '../ksa/types'
-import type { ConnectorCapability, Transform } from '../ksa/types'
+import type { ConnectorCapability, PartCollider, Transform } from '../ksa/types'
 import type { ImportedGameData } from './editorStore'
 import {
   importModelAsMeshes,
@@ -169,6 +170,7 @@ function emptyImportedGameData(): ImportedGameData {
     solidNozzles: [],
     solidGrainSegments: [],
     consumerFeedWiring: [],
+    colliders: [],
   }
 }
 
@@ -336,6 +338,7 @@ describe('editorStore', () => {
         solidNozzles: [],
         solidGrainSegments: [],
         consumerFeedWiring: [],
+        colliders: [],
       },
     )
     const dp = $part.get().gameData.dockingPort
@@ -394,6 +397,7 @@ describe('editorStore', () => {
       solidNozzles: [],
       solidGrainSegments: [],
       consumerFeedWiring: [],
+      colliders: [],
     })
     const part = $part.get()
     // _connector19/_connector41 were regenerated to _connector2/_connector3…
@@ -725,10 +729,11 @@ describe('editorStore kittens', () => {
 })
 
 describe('editorStore layers', () => {
-  it('starts with built-in Default + Connectors + Kittens layers; Default is active', () => {
+  it('starts with built-in Default + Connectors + Colliders + Kittens layers; Default is active', () => {
     expect($part.get().layers).toEqual([
       { id: DEFAULT_LAYER_ID, name: 'Default' },
       { id: CONNECTOR_LAYER_ID, name: 'Connectors' },
+      { id: COLLIDER_LAYER_ID, name: 'Colliders' },
       { id: KITTEN_LAYER_ID, name: 'Kittens' },
     ])
     expect($activeLayerId.get()).toBe(DEFAULT_LAYER_ID)
@@ -739,13 +744,19 @@ describe('editorStore layers', () => {
     expect($part.get().layers.map((l) => l.name)).toEqual([
       'Default',
       'Connectors',
+      'Colliders',
       'Kittens',
       'Engines',
     ])
     expect($activeLayerId.get()).toBe(id)
     undo()
     // Layer removed AND the active layer falls back to Default (it no longer exists).
-    expect($part.get().layers.map((l) => l.name)).toEqual(['Default', 'Connectors', 'Kittens'])
+    expect($part.get().layers.map((l) => l.name)).toEqual([
+      'Default',
+      'Connectors',
+      'Colliders',
+      'Kittens',
+    ])
     expect($activeLayerId.get()).toBe(DEFAULT_LAYER_ID)
   })
 
@@ -788,6 +799,7 @@ describe('editorStore layers', () => {
     expect($part.get().layers.map((l) => l.id)).toEqual([
       DEFAULT_LAYER_ID,
       CONNECTOR_LAYER_ID,
+      COLLIDER_LAYER_ID,
       KITTEN_LAYER_ID,
     ])
     expect($part.get().placements.map((p) => p.subPartTemplateId)).toEqual(['Core.B'])
@@ -803,6 +815,7 @@ describe('editorStore layers', () => {
     expect($part.get().layers.map((l) => l.id)).toEqual([
       DEFAULT_LAYER_ID,
       CONNECTOR_LAYER_ID,
+      COLLIDER_LAYER_ID,
       KITTEN_LAYER_ID,
       b,
     ])
@@ -817,21 +830,24 @@ describe('editorStore layers', () => {
     expect($part.get().layers.map((l) => l.id)).toEqual([
       DEFAULT_LAYER_ID,
       CONNECTOR_LAYER_ID,
+      COLLIDER_LAYER_ID,
       KITTEN_LAYER_ID,
       id,
     ])
     expect($part.get().placements[0].layerId).toBe(id)
   })
 
-  it('refuses to delete the built-in Default, Connectors and Kittens layers', () => {
+  it('refuses to delete the built-in Default, Connectors, Colliders and Kittens layers', () => {
     addSubPart('Core.A')
     addConnector()
     deleteLayer(DEFAULT_LAYER_ID, { mode: 'delete-items' })
     deleteLayer(CONNECTOR_LAYER_ID, { mode: 'delete-items' })
+    deleteLayer(COLLIDER_LAYER_ID, { mode: 'delete-items' })
     deleteLayer(KITTEN_LAYER_ID, { mode: 'delete-items' })
     expect($part.get().layers.map((l) => l.id)).toEqual([
       DEFAULT_LAYER_ID,
       CONNECTOR_LAYER_ID,
+      COLLIDER_LAYER_ID,
       KITTEN_LAYER_ID,
     ])
     expect($part.get().placements.length).toBe(1)
@@ -852,6 +868,7 @@ describe('editorStore layers', () => {
     expect($part.get().layers.map((l) => l.id)).toEqual([
       DEFAULT_LAYER_ID,
       CONNECTOR_LAYER_ID,
+      COLLIDER_LAYER_ID,
       KITTEN_LAYER_ID,
     ])
     undo()
@@ -869,11 +886,12 @@ describe('editorStore layers', () => {
   it('reorderLayers reorders by id and is undoable', () => {
     const a = createLayer('A')
     const b = createLayer('B')
-    reorderLayers([a, DEFAULT_LAYER_ID, CONNECTOR_LAYER_ID, KITTEN_LAYER_ID, b])
+    reorderLayers([a, DEFAULT_LAYER_ID, CONNECTOR_LAYER_ID, COLLIDER_LAYER_ID, KITTEN_LAYER_ID, b])
     expect($part.get().layers.map((l) => l.id)).toEqual([
       a,
       DEFAULT_LAYER_ID,
       CONNECTOR_LAYER_ID,
+      COLLIDER_LAYER_ID,
       KITTEN_LAYER_ID,
       b,
     ])
@@ -881,6 +899,7 @@ describe('editorStore layers', () => {
     expect($part.get().layers.map((l) => l.id)).toEqual([
       DEFAULT_LAYER_ID,
       CONNECTOR_LAYER_ID,
+      COLLIDER_LAYER_ID,
       KITTEN_LAYER_ID,
       a,
       b,
@@ -1434,5 +1453,84 @@ describe('imported models', () => {
     expect($part.get().customMeshes[0].imported!.transparent).toBeUndefined()
     redo()
     expect($part.get().customMeshes[0].imported!.transparent).toBe(true)
+  })
+})
+
+describe('importing a Part with colliders', () => {
+  /** Imports a Part carrying `colliders` (plus one placement — every real catalog Part has geometry). */
+  function importWithColliders(colliders: PartCollider[]): void {
+    addPart(
+      [
+        {
+          instanceId: 'foot_1',
+          subPartTemplateId: 'CoreLandingA_Subpart_MediumFootA',
+          position: { x: 0, y: 0, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+          layerId: DEFAULT_LAYER_ID,
+        },
+      ],
+      [],
+      [],
+      undefined,
+      undefined,
+      { ...emptyImportedGameData(), colliders },
+    )
+  }
+
+  const IMPORTED = [
+    {
+      id: 'CylinderCollider1',
+      shape: 'Cylinder' as const,
+      ownerTemplateId: null,
+      position: { x: 0, y: 0, z: -0.17 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 0.39, y: 0.6, z: 0.39 },
+      layerId: COLLIDER_LAYER_ID,
+    },
+    {
+      id: 'Puck',
+      shape: 'Cylinder' as const,
+      ownerTemplateId: 'CoreLandingA_Subpart_MediumFootA',
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 0.34, z: 1 },
+      layerId: COLLIDER_LAYER_ID,
+    },
+  ]
+
+  it('regenerates ids onto the Colliders layer, keeping owner + geometry', () => {
+    importWithColliders(IMPORTED)
+    const colliders = $part.get().colliders
+    // Core reuses ids like "CylinderCollider1" across dozens of parts, so import
+    // regenerates them exactly like connector ids.
+    expect(colliders.map((c) => c.id)).toEqual(['_collider1', '_collider2'])
+    expect(colliders.map((c) => c.ownerTemplateId)).toEqual([
+      null,
+      'CoreLandingA_Subpart_MediumFootA',
+    ])
+    expect(colliders[1].scale).toEqual({ x: 1, y: 0.34, z: 1 })
+    expect(colliders.every((c) => c.layerId === COLLIDER_LAYER_ID)).toBe(true)
+  })
+
+  it('keeps ids collision-free across a second import and is undoable', () => {
+    importWithColliders(IMPORTED)
+    importWithColliders(IMPORTED)
+    expect($part.get().colliders.map((c) => c.id)).toEqual([
+      '_collider1',
+      '_collider2',
+      '_collider3',
+      '_collider4',
+    ])
+    undo()
+    expect($part.get().colliders.map((c) => c.id)).toEqual(['_collider1', '_collider2'])
+    undo()
+    expect($part.get().colliders).toEqual([])
+  })
+
+  it('does not mutate the source catalog entry’s colliders', () => {
+    const src = structuredClone(IMPORTED)
+    importWithColliders(src)
+    expect(src).toEqual(IMPORTED)
   })
 })

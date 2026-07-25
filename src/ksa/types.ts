@@ -114,6 +114,64 @@ export interface Connector extends Transform {
 }
 
 /**
+ * One KSA collision primitive shape. `ColliderModule.Template`
+ * (`decomp/KSA/ColliderModule.cs`) accepts EXACTLY these four child elements, each
+ * mapping 1:1 onto a Bepu analytic shape — KSA has NO convex-hull / triangle-mesh
+ * part collider, so a collision volume is always a handful of these primitives.
+ * See scope/colliders.md.
+ */
+export type ColliderShape = 'Box' | 'Sphere' | 'Cylinder' | 'Capsule'
+
+/**
+ * All collider shapes, in UI order. Cylinder leads because Core uses it 66× vs
+ * Box 29 / Sphere 21 / Capsule 0 across the shipped `Content/` tree.
+ */
+export const COLLIDER_SHAPES: readonly ColliderShape[] = ['Cylinder', 'Box', 'Sphere', 'Capsule']
+
+/** Human-facing shape labels (menus, inspector). */
+export const COLLIDER_SHAPE_LABELS: Record<ColliderShape, string> = {
+  Cylinder: 'Cylinder',
+  Box: 'Box',
+  Sphere: 'Sphere',
+  Capsule: 'Capsule',
+}
+
+/**
+ * One collision primitive of the Part being edited. {@link Transform} is reused with a
+ * deliberate reinterpretation of each field:
+ *
+ *  - `position` → `<LocationAsmb X Y Z>` — the shape centre in the OWNER's assembly
+ *    frame, meters (direct, no conversion).
+ *  - `rotation` → `<Collider2Asmb X Y Z>` — Euler XYZ radians. KSA builds it with
+ *    `QuaternionEx.CreateFromXyzRadians` (`ColliderTemplate.Create`), the identical
+ *    function `TransformReference.RotationValue` uses for a placement `<Rotation>`, so
+ *    src/three/coords.ts's `EULER_ORDER` mapping applies verbatim.
+ *  - `scale` → the collider's OUTER SIZE IN METERS, not a multiplier. KSA colliders have
+ *    no scale field; storing size here is what makes every existing transform path
+ *    correct for free (the scene object holds unit-box wire geometry, so `group.scale`
+ *    IS the size and the scale gizmo natively edits dimensions — exactly how
+ *    ContainerLayer drives ReferenceContainer.size). See src/ksa/colliderSize.ts for
+ *    the size ↔ `<LengthX|Y|Z>` / `<Radius>` mapping.
+ */
+export interface PartCollider extends Transform {
+  /** Document id, also emitted as the shape element's `Id`, e.g. "_collider1". */
+  id: string
+  shape: ColliderShape
+  /**
+   * `null` ⇒ part-level: emitted under `<PartGameData>`, transform in the Part's
+   * assembly frame. Otherwise a `subPartTemplateId` ⇒ emitted under that template's
+   * `<SubPartGameData>`, transform in the SubPart TEMPLATE's local frame. A
+   * SubPart-owned collider therefore applies to EVERY placement of that template (KSA
+   * has no per-instance collider — `PartInstance.Components` is save-game state, not
+   * template data) and follows joint animation
+   * (`KeyframeAnimationModule.ApplyAnimationTransforms` flags `NeedsColliderUpdate`).
+   */
+  ownerTemplateId: string | null
+  /** Always {@link COLLIDER_LAYER_ID}; present for parity with the other layered entities. */
+  layerId: string
+}
+
+/**
  * Which of the three default KSA kittens to render. They share the same body mesh
  * and EVA suit; only the head pattern and eye color differ. See src/ksa/kittenAssets.ts.
  */
@@ -183,6 +241,13 @@ export const CONNECTOR_LAYER_ID = 'connectors'
  */
 export const KITTEN_LAYER_ID = 'kittens'
 
+/**
+ * Id of the built-in "Colliders" layer. {@link PartCollider}s always live here so the
+ * collision volume can be hidden/locked separately from the meshes it wraps. Cannot be
+ * deleted.
+ */
+export const COLLIDER_LAYER_ID = 'colliders'
+
 /** The built-in Default layer (for SubParts) that every new Part starts with. */
 export function createDefaultLayer(): Layer {
   return { id: DEFAULT_LAYER_ID, name: 'Default' }
@@ -198,10 +263,16 @@ export function createKittenLayer(): Layer {
   return { id: KITTEN_LAYER_ID, name: 'Kittens' }
 }
 
+/** The built-in Colliders layer that every new Part starts with. */
+export function createColliderLayer(): Layer {
+  return { id: COLLIDER_LAYER_ID, name: 'Colliders' }
+}
+
 /** The built-in layers present in every Part (and never deletable). */
 export const BUILT_IN_LAYER_IDS: readonly string[] = [
   DEFAULT_LAYER_ID,
   CONNECTOR_LAYER_ID,
+  COLLIDER_LAYER_ID,
   KITTEN_LAYER_ID,
 ]
 
@@ -1892,6 +1963,8 @@ export interface EditingPart {
   placements: SubPartPlacement[]
   /** All connector attachment points. */
   connectors: Connector[]
+  /** The Part's collision volume — analytic primitives grouped by owner on export. */
+  colliders: PartCollider[]
   /** Editor-only kitten visual aides (never serialized to export). */
   kittens: KittenInstance[]
   /** User-uploaded textures (descriptors only; binaries in IndexedDB). */
@@ -1912,9 +1985,15 @@ export function createEmptyPart(): EditingPart {
     editorTags: [],
     gameData: createEmptyGameData(),
     subPartGameData: [],
-    layers: [createDefaultLayer(), createConnectorLayer(), createKittenLayer()],
+    layers: [
+      createDefaultLayer(),
+      createConnectorLayer(),
+      createColliderLayer(),
+      createKittenLayer(),
+    ],
     placements: [],
     connectors: [],
+    colliders: [],
     kittens: [],
     customTextures: [],
     customMaterials: [],

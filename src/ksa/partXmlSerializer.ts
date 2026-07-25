@@ -13,6 +13,7 @@ import type {
   Gimbal,
   Light,
   PartAnimation,
+  PartCollider,
   PartGameData,
   RawXmlNode,
   Rocket,
@@ -28,6 +29,7 @@ import type {
   Vec3,
 } from './types'
 import { isCustomReactionExportable, isFeedSourceValid, isSubPartGameDataEmpty } from './types'
+import { colliderDimensions } from './colliderSize'
 import { formatG6 } from './formatG6'
 import { animGlbPath, animModuleId, isAnimationExportable } from './animationNaming'
 
@@ -138,6 +140,11 @@ export function serializeGameData(
   const gd = doc.createElement('PartGameData')
   gd.setAttribute('Id', part.partId)
   const game: PartGameData = part.gameData
+  // Colliders are normalised into THIS document regardless of where they were authored:
+  // a `<PartGameData>`/`<SubPartGameData>` component is merged onto the already-registered
+  // template additively (`PartTemplate.ApplyGameData` → `Components.AddRange`), so it is
+  // exactly equivalent to authoring it on the geometry `<Part>`/`<SubPart>`.
+  const colliderGroups = collidersByOwner(part.colliders)
 
   if (game.displayName.trim()) gd.setAttribute('DisplayName', game.displayName)
   applyUnknownAttrs(gd, game.unknownAttrs)
@@ -261,7 +268,11 @@ export function serializeGameData(
     if (el) gd.appendChild(el)
   }
 
-  // Unmodeled children flexo captured on import (e.g. <Collider>) — re-emitted verbatim, last.
+  // Part-level collision volume, in the Part's assembly frame.
+  const partColliders = colliderGroups.get(null)
+  if (partColliders?.length) gd.appendChild(buildColliderElement(doc, partColliders))
+
+  // Unmodeled children flexo captured on import — re-emitted verbatim, last.
   for (const node of game.unknownChildren) gd.appendChild(buildRawNode(doc, node))
 
   assets.appendChild(gd)
@@ -283,8 +294,17 @@ export function serializeGameData(
     assets.appendChild(buildFixedReactionElement(doc, reaction))
   }
 
+  // SubPart-owned colliders travel with the template, so they are emitted INTO that
+  // template's <SubPartGameData> block (which templateRemap already routes onto the
+  // export variant id). An owner with colliders but no other GameData still needs a
+  // block — those are emitted after this loop.
+  const emittedColliderOwners = new Set<string>()
   for (const spd of part.subPartGameData) {
-    if (isSubPartGameDataEmpty(spd)) continue
+    const owned = emittedColliderOwners.has(spd.subPartTemplateId)
+      ? []
+      : (colliderGroups.get(spd.subPartTemplateId) ?? [])
+    if (isSubPartGameDataEmpty(spd) && owned.length === 0) continue
+    if (owned.length > 0) emittedColliderOwners.add(spd.subPartTemplateId)
     const spdEl = doc.createElement('SubPartGameData')
     // Remap to the export variant id so GameData keyed on a built-in template lands on the
     // fresh variant SubPart instead of REDEFINING the shared built-in (KSA merges by id).
@@ -301,13 +321,97 @@ export function serializeGameData(
     for (const nozzle of spd.solidNozzles) spdEl.appendChild(buildSolidNozzleElement(doc, nozzle))
     for (const seg of spd.solidGrainSegments)
       spdEl.appendChild(buildSolidGrainSegmentElement(doc, seg))
+    if (owned.length > 0) spdEl.appendChild(buildColliderElement(doc, owned))
     // Unmodeled children flexo captured on import — re-emitted verbatim, last.
     for (const node of spd.unknownChildren) spdEl.appendChild(buildRawNode(doc, node))
     assets.appendChild(spdEl)
   }
 
+  // Templates whose ONLY GameData is a collider (e.g. the landing-leg foot puck) have no
+  // `subPartGameData` entry to ride along with — give them their own block.
+  for (const [templateId, owned] of colliderGroups) {
+    if (templateId === null || emittedColliderOwners.has(templateId)) continue
+    const spdEl = doc.createElement('SubPartGameData')
+    spdEl.setAttribute('Id', templateRemap.get(templateId) ?? templateId)
+    spdEl.appendChild(buildColliderElement(doc, owned))
+    assets.appendChild(spdEl)
+  }
+
   const body = new XMLSerializer().serializeToString(doc)
   return '<?xml version="1.0" encoding="utf-8"?>\n' + prettyXml(body) + '\n'
+}
+
+/**
+ * The `<Collider Id>` COMPONENT id flexo emits — one per owner, holding all of that
+ * owner's shapes. It shares the id namespace `<FeedsFrom Container="…">` resolves
+ * against (`PartTemplate` scans every `Components[].Id`), so it must never equal a
+ * `<Tank Id>` on the same owner; colliderValidation.ts blocks export if it does.
+ */
+export const COLLIDER_COMPONENT_ID = 'flexoColliders'
+
+/**
+ * Component id for the built-in colliders an export VARIANT inherits from the template it
+ * shadows (emitted on the variant's geometry `<SubPart>` in the Assets file). Distinct
+ * from {@link COLLIDER_COMPONENT_ID} so the two components a variant can carry — inherited
+ * and flexo-authored — never share an id in the feed-container namespace.
+ */
+export const INHERITED_COLLIDER_COMPONENT_ID = 'flexoInheritedColliders'
+
+/**
+ * Builds one `<Collider Id="flexoColliders">` component holding every shape in `colliders`.
+ *
+ * EVERY dimension element is emitted unconditionally — `DistanceReference` defaults to
+ * **NaN**, not 0, so an omitted `<Radius>`/`<Length*>` would build a NaN Bepu shape
+ * in-game. `<LocationAsmb>`/`<Collider2Asmb>` are `Vector3Reference`s initialised to zero
+ * and would be safe to omit, but Core writes them always and so do we (a collider whose
+ * frame is invisible in the XML is a debugging trap).
+ */
+export function buildColliderElement(
+  doc: XmlDocument,
+  colliders: readonly PartCollider[],
+  componentId: string = COLLIDER_COMPONENT_ID,
+): XmlElement {
+  const component = doc.createElement('Collider')
+  component.setAttribute('Id', componentId)
+  for (const c of colliders) {
+    const el = doc.createElement(c.shape)
+    el.setAttribute('Id', c.id)
+    el.appendChild(buildColliderVec3(doc, 'LocationAsmb', c.position))
+    el.appendChild(buildColliderVec3(doc, 'Collider2Asmb', c.rotation))
+    const dims = colliderDimensions(c.shape, c.scale)
+    if (dims.lengthXM != null) el.appendChild(buildDistanceElement(doc, 'LengthX', dims.lengthXM))
+    if (dims.lengthYM != null) el.appendChild(buildDistanceElement(doc, 'LengthY', dims.lengthYM))
+    if (dims.lengthZM != null) el.appendChild(buildDistanceElement(doc, 'LengthZ', dims.lengthZM))
+    if (dims.radiusM != null) el.appendChild(buildDistanceElement(doc, 'Radius', dims.radiusM))
+    component.appendChild(el)
+  }
+  return component
+}
+
+/** `<LocationAsmb X Y Z/>` / `<Collider2Asmb X Y Z/>` — all three axes, always. */
+function buildColliderVec3(doc: XmlDocument, name: string, v: Vec3): XmlElement {
+  const el = doc.createElement(name)
+  el.setAttribute('X', formatG6(v.x))
+  el.setAttribute('Y', formatG6(v.y))
+  el.setAttribute('Z', formatG6(v.z))
+  return el
+}
+
+/**
+ * Groups a part's colliders by owner. The `null` key is the part-level group
+ * (`<PartGameData>`); every other key is a SubPart template id whose shapes belong in
+ * that template's `<SubPartGameData>`.
+ */
+export function collidersByOwner(
+  colliders: readonly PartCollider[],
+): Map<string | null, PartCollider[]> {
+  const out = new Map<string | null, PartCollider[]>()
+  for (const c of colliders) {
+    const list = out.get(c.ownerTemplateId)
+    if (list) list.push(c)
+    else out.set(c.ownerTemplateId, [c])
+  }
+  return out
 }
 
 /** Creates an element with a single attribute, e.g. <Mass Kg="100"/>. */

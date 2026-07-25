@@ -43,6 +43,7 @@ Feature docs live in `docs/`. Read the relevant one before working on an area, a
 - [docs/texturing.md](docs/texturing.md) - KTX2 (BC7/BC5/BC4) loading, PBR material mapping, normal-map shader patch, IBL/tonemapping
 - [docs/asset-pipeline.md](docs/asset-pipeline.md) - `/ksa/` dev serving AND what must be done to bundle models/textures into `pnpm build`
 - [docs/custom-assets.md](docs/custom-assets.md) - user-authored textures (image→KTX2) + primitive meshes (→geometry GLB), exported as a KSA part mod; the on-disk format decisions and v1 shortcomings
+- [docs/colliders.md](docs/colliders.md) - authoring a Part's collision volume: KSA's four analytic primitives (there are no collider meshes), why size lives in `Transform.scale`, part-level vs SubPart-owned ownership, the four XML authoring sites and why flexo normalizes them into one
 - [docs/importing-models.md](docs/importing-models.md) - importing a Blender/DCC `.glb`/`.gltf` as real KSA SubParts: the Blender recipe, the glTF→SubPart/placement/material mapping, the warning catalog, storage + export, and the deliberate limits
 
 # project constitution
@@ -241,6 +242,30 @@ are now authorable** (`<SolidMotor>`/`<SolidMotorNozzle>`/`<SolidGrainSegment>` 
 profiles); electric and thermal engines remain impossible data-only.
 See [docs/engines.md](docs/engines.md), [scope/plumbing-and-feeds.md](scope/plumbing-and-feeds.md),
 [analysis/KSA_ENGINE_DETAILS.md](analysis/KSA_ENGINE_DETAILS.md).
+
+## colliders (Part collision volumes)
+
+A Part's collision volume is the coarse shapes KSA's physics uses instead of the visual
+mesh. **KSA has no collider meshes** — a collision volume is a handful of analytic Bepu
+primitives (**Cylinder / Box / Sphere / Capsule**) and nothing else; if a shape needs a
+hull, the answer is more primitives. A part with no collider passes through terrain and
+other vehicles, and a docking port with no collider never docks.
+
+Colliders are first-class 3D entities (`EditingPart.colliders: PartCollider[]` on the
+built-in **Colliders** layer), not numbers buried in GameData. `Transform` is reused with
+one deliberate reinterpretation: **`scale` is the outer size in METERS, not a multiplier**
+(KSA colliders have no scale field), which makes the scale gizmo natively edit dimensions.
+`src/ksa/colliderSize.ts` is the single place that knows the size ↔ `<LengthX|Y|Z>` /
+`<Radius>` mapping — a capsule's `<LengthY>` is only the cylindrical SEGMENT, and
+`DistanceReference` reads back as **NaN** when omitted, so every dimension is ALWAYS emitted.
+
+A collider is either part-level (`ownerTemplateId: null` ⇒ `<PartGameData>`) or SubPart-owned
+(⇒ that template's `<SubPartGameData>`, applying to every placement of it and **following
+joint animation** — how a landing leg gets a deployed foot collider). `<Collider>` is legal
+in four places in KSA's schema; flexo reads all four and normalises every collider into the
+GameData document, which is what closed the long-open geometry-template gap **E**.
+See [docs/colliders.md](docs/colliders.md), [scope/colliders.md](scope/colliders.md),
+`plans/COLLIDERS_PLAN.md`.
 
 ## kittens (EVA character visual aides)
 

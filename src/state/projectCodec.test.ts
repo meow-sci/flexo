@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  COLLIDER_LAYER_ID,
   CONNECTOR_LAYER_ID,
   DEFAULT_LAYER_ID,
   KITTEN_LAYER_ID,
@@ -423,10 +424,10 @@ describe('projectCodec round-trip', () => {
   })
 
   // Per the no-migration rule a v4 envelope is REJECTED, never converted — so the
-  // marker must actually be 5, not just "whatever the constant says".
-  it('stamps wire version 5 (imported glTF meshes)', () => {
-    expect(PROJECT_EXPORT_VERSION).toBe(5)
-    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P')).v).toBe(5)
+  // marker must actually be 6, not just "whatever the constant says".
+  it('stamps wire version 6 (colliders)', () => {
+    expect(PROJECT_EXPORT_VERSION).toBe(6)
+    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P')).v).toBe(6)
   })
 
   it('rounds high-precision floats to 6 decimals', () => {
@@ -488,5 +489,45 @@ describe('projectCodec round-trip', () => {
     expect(isCompactProject({ f: PROJECT_EXPORT_FORMAT, v: 1 })).toBe(true)
     expect(isCompactProject({ format: PROJECT_EXPORT_FORMAT })).toBe(false)
     expect(isCompactProject(null)).toBe(false)
+  })
+})
+
+describe('collider codec', () => {
+  it('round-trips every shape, owner and size, restoring the constant layerId', () => {
+    const p = createEmptyPart()
+    p.colliders.push(
+      {
+        id: '_collider1',
+        shape: 'Cylinder',
+        ownerTemplateId: null,
+        position: { x: 0.1, y: 0, z: -2 },
+        rotation: { x: 0, y: 0, z: 1.5708 },
+        scale: { x: 1.2, y: 3, z: 1.2 },
+        layerId: COLLIDER_LAYER_ID,
+      },
+      {
+        id: '_collider2',
+        shape: 'Capsule',
+        ownerTemplateId: 'CoreLandingA_Subpart_MediumFootA',
+        ...identityTransform(),
+        layerId: COLLIDER_LAYER_ID,
+      },
+    )
+    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.colliders
+    expect(back).toEqual(p.colliders)
+  })
+
+  it('omits the constant layerId and a null owner from the wire form', () => {
+    const p = createEmptyPart()
+    p.colliders.push({
+      id: '_collider1',
+      shape: 'Box',
+      ownerTemplateId: null,
+      ...identityTransform(),
+      layerId: COLLIDER_LAYER_ID,
+    })
+    const c = encodeProject(buildProjectExport(p, 'P'))
+    // Identity transform + null owner ⇒ just the id and the shape token.
+    expect(c.cl?.[0]).toEqual({ i: '_collider1', sh: 'Box' })
   })
 })

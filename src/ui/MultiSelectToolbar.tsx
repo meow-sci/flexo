@@ -9,7 +9,7 @@ import {
   removeSelected,
 } from '../state/editorStore'
 import { $hasMultiSelection, $selectionCount } from '../state/selectors'
-import { CONNECTOR_LAYER_ID, KITTEN_LAYER_ID } from '../ksa/types'
+import { COLLIDER_LAYER_ID, CONNECTOR_LAYER_ID, KITTEN_LAYER_ID } from '../ksa/types'
 
 /**
  * Floating toolbar stacked beneath {@link SelectionToolbar}, shown only when more
@@ -36,7 +36,9 @@ export function MultiSelectToolbar() {
 function ChangeLayerButton() {
   const part = useStore($part)
   // SubParts never belong to the built-in Connectors/Kittens layers.
-  const layers = part.layers.filter((l) => l.id !== CONNECTOR_LAYER_ID && l.id !== KITTEN_LAYER_ID)
+  const layers = part.layers.filter(
+    (l) => l.id !== CONNECTOR_LAYER_ID && l.id !== COLLIDER_LAYER_ID && l.id !== KITTEN_LAYER_ID,
+  )
 
   return (
     <MenuTrigger>

@@ -10,11 +10,10 @@
 (and as of 4826 `<Diameter>` is **repeatable** — the extras round-trip via `extraDiametersM`, see
 [What changed in 4826](#what-changed-in-4826)); `KNOWN_EDITOR_TAGS` refreshed from the registry
 (4939 added `Booster`); and unmodeled `<PartGameData>`/`<SubPartGameData>` child elements +
-root attrs round-trip via gap-6 passthrough (`<Collider>`, `<Aligned>`, `<SymmetryGroup>`,
-part-level `<Tank>` et al.). **Known gap:** 4939 put the first `<Collider>` children on
-GEOMETRY `<Part>`/`<SubPart>` templates (CoreElectricalA), which are NOT passthrough-covered —
-see [What changed in 4939](#what-changed-in-4939) and
-[plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md).
+root attrs round-trip via gap-6 passthrough (`<Aligned>`, `<SymmetryGroup>`,
+`<IVASeat>` et al.). The 4939 geometry-template `<Collider>` gap is **CLOSED**:
+`<Collider>` is now MODELED at all four authoring sites and no longer rides the passthrough —
+see [colliders.md](colliders.md).
 
 ---
 
@@ -71,7 +70,7 @@ see [What changed in 4939](#what-changed-in-4939) and
 
 The parser reads a **fixed allow-list** into typed objects; the serializer **rebuilds a brand-new `<Assets>` document** and appends only what it knows how to emit. flexo is a _model-faithful re-emitter_, not a _byte-faithful editor_.
 
-**As of 2026-06-27 (gap 6), `<PartGameData>` and `<SubPartGameData>` ARE passthrough-safe:** their unmodeled direct **child elements** and unmodeled **root attributes** are captured verbatim on import (`captureUnknownChildren`/`captureUnknownAttrs` → `RawXmlNode` JSON trees on `unknownChildren`/`unknownAttrs`) and re-emitted on export (`buildRawNode`, appended last). This recovers `<Collider>`, the `SolidSphereMass`… mass family, `<IVASeat>`, `<SubstanceStorageVolume>`, and a SubPart's `DisplayName` — all previously dropped.
+**As of 2026-06-27 (gap 6), `<PartGameData>` and `<SubPartGameData>` ARE passthrough-safe:** their unmodeled direct **child elements** and unmodeled **root attributes** are captured verbatim on import (`captureUnknownChildren`/`captureUnknownAttrs` → `RawXmlNode` JSON trees on `unknownChildren`/`unknownAttrs`) and re-emitted on export (`buildRawNode`, appended last). This recovers the `SolidSphereMass`… mass family, `<IVASeat>`, `<SubstanceStorageVolume>`, and a SubPart's `DisplayName` — all previously dropped. (`<Collider>` was recovered this way too until it became MODELED — see [colliders.md](colliders.md).)
 
 Consequences / what's STILL drop-on-round-trip (passthrough is scoped to GameData containers):
 
@@ -123,21 +122,24 @@ files that differ in the 4980 private-mirror sync differ **only in CRLF line end
 sync artifact — `diff --strip-trailing-cr` is empty), no new asset packs, and none of the 5
 vendored `__fixtures__` files are affected (drift test unaffected). `PartTree.Serialize()` was
 reshaped into `PartTreeData` (root + sequence environments + fuel links) — **vehicle-save**
-format, outside flexo's part-template scope. The 4939 geometry-`<Collider>` gap carries
-forward unchanged (still only the 4 CoreElectricalA sites).
+format, outside flexo's part-template scope. The 4939 geometry-`<Collider>` gap carried
+forward unchanged at 5018 (still only the 4 CoreElectricalA sites) and has since been CLOSED
+by modeling `<Collider>` — see [colliders.md](colliders.md).
 
 ## What changed in 4939
 
-- ⚠️ **First geometry-template `<Collider>` children (recorded gap).** Rev 4918's
+- ✅ **First geometry-template `<Collider>` children (gap E — now CLOSED).** Rev 4918's
   CoreElectricalA update authored `<Collider>` directly on 2 geometry `<Part>` prefabs
   (`CoreElectricalA_Prefab_BayFuelcellSmall`, `CoreElectricalA_Prefab_InlineBatteryBankB` —
   `<Cylinder>`) and 2 `<SubPart>` templates (`CoreElectricalA_Subpart_SolarPanel[A|B]_CellA` —
   `<Box>`). The gap-6 passthrough covers only `<PartGameData>`/`<SubPartGameData>`; geometry
   templates are rebuilt from the typed model, so importing one of those 2 prefabs and
-  re-exporting DROPS the collider. Fix (deferred, needs an `EditingPart` model change + boot
-  purge): capture unknown `<Part>` children as `RawXmlNode` at `parsePartsFile`
-  (`src/ksa/partCatalog.ts`) and re-emit in `serializePart` (`src/ksa/partXmlSerializer.ts:68`).
-  See plans/FIX_CURRENT_GAPS_PLAN.md.
+  re-exporting DROPPED the collider. **Resolved by modeling `<Collider>` outright** rather
+  than by raw `<Part>`-child passthrough: `collidersFromElement` reads all four authoring
+  sites into `EditingPart.colliders`, and `serializeGameData` normalises them back into the
+  GameData document (legal because `PartTemplate.ApplyGameData` merges `Components`
+  additively). `<Collider>` moved OUT of the passthrough into both
+  `KNOWN_*_GAMEDATA_CHILDREN` sets. See [colliders.md](colliders.md).
 - ✅ **New `<SymmetryGroup>` element (schema + GameData content).** `PartTemplate` gained
   `[XmlElement("SymmetryGroup")] List<Part.SymmetryGroupRef>` (`SymmetryGroupRef` =
   `[XmlElement("ConnectorRef")]` with `Id` attrs); `PartTemplate.ExpandSymmetryGroups()`
@@ -180,7 +182,7 @@ FaceSnapTargetWhitelist="true"/>`, first in registry order). `EDITOR_TAG_DEFS` s
   `<MixtureRatio>`, tank `<CombustionProcess>` → `<RoleAffinity>`, and top-level custom
   propellants `<CombustionProcess>` → `<FixedReaction>`.
 - ✅ **Content churn absorbed by the fixture re-sync:** `PartGameData.xml` lost its UTF-8 BOM,
-  gained the `KittenBackPackPart` `<PartGameData>` (a lone `<Collider>` — survives via the gap-6
+  gained the `KittenBackPackPart` `<PartGameData>` (a lone `<Collider>` — since MODELED; then via the gap-6
   passthrough), and LOST the LR91 Dev engine (`CorePropulsionA_Prefab_EngineA1_Dev` `<PartGameData>`
   - `<Part>` + its subpart). Vendored fixtures re-synced @ 4892 (`bun scripts/sync-test-fixtures.ts`);
     the drift test in `partCatalog.test.ts` is green again.
@@ -198,5 +200,6 @@ FaceSnapTargetWhitelist="true"/>`, first in registry order). `EDITOR_TAG_DEFS` s
 - **NEW `<Diameter M>`** on most `<PartGameData>` (command, fuel tanks, structural, coupling, fairing, propulsion, + monolithic `PartGameData.xml`) — ✅ **now modeled** as `PartGameData.diameterM` (read via `readDistanceM`, emitted as plain `<Diameter M>`). _FIXED 2026-06-27._
 - **NEW `<Control/>`** marker on command pods — ✅ **now modeled** as `PartGameData.controllable` (bare `<Control/>` round-trips). _FIXED 2026-06-27._
 - **Editor-tag registry** (`CoreEditorTagsGameData.xml`) supersedes `KNOWN_EDITOR_TAGS` — ✅ **refreshed**: `KNOWN_EDITOR_TAGS` now derives from a typed `EDITOR_TAG_DEFS` snapshot (16 rows, registry order, `NotaCategory` flags); obsolete `Tanks` dropped, `Fuel Tanks`/`Landing`/`NoFaceSnapping`/`All` added; `EditorTagsField` groups Categories vs Functional. _FIXED 2026-06-27._
-- **Unmodeled GameData elements dropped on round-trip** (e.g. `<Collider>`) — ✅ **fixed** by gap-6 passthrough (see the master-invariant section). _FIXED 2026-06-27._
+- **Unmodeled GameData elements dropped on round-trip** — ✅ **fixed** by gap-6 passthrough (see the master-invariant section). _FIXED 2026-06-27._
+- **Geometry-template `<Collider>` dropped on round-trip** (gap E) — ✅ **fixed** by modeling `<Collider>` at all four authoring sites and normalising it into the GameData document ([colliders.md](colliders.md)).
 - `Part.cs`/`PartTree.cs`/`EnumCollections.cs` otherwise = bugfix + logging-codegen noise; no Part/SubPart structural change.

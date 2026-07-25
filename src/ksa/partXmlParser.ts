@@ -1,4 +1,6 @@
 import {
+  COLLIDER_LAYER_ID,
+  COLLIDER_SHAPES,
   CONNECTOR_CAPABILITIES,
   CONNECTOR_LAYER_ID,
   createEmptyGameData,
@@ -6,8 +8,15 @@ import {
   DEFAULT_LAYER_ID,
   isSubPartGameDataEmpty,
 } from './types'
+import {
+  colliderDimensionNames,
+  colliderSizeFromDimensions,
+  DEFAULT_COLLIDER_SIZE_M,
+  type ColliderDimensions,
+} from './colliderSize'
 import type {
   CatalogAnimationModule,
+  ColliderShape,
   Combustor,
   Connector,
   ConnectorCapability,
@@ -19,6 +28,7 @@ import type {
   Gimbal,
   Light,
   LightType,
+  PartCollider,
   PartGameData,
   PlumbingClass,
   RawXmlNode,
@@ -173,6 +183,92 @@ export function connectorsFromPartElement(part: Element): Connector[] {
   return connectors
 }
 
+/**
+ * Reads every `<Collider>` component of an owner element into flat {@link PartCollider}s.
+ *
+ * The four legal owners (`<Part>`, geometry `<SubPart>`, `<PartGameData>`,
+ * `<SubPartGameData>`) all use the identical schema — `Components` is mapped onto every
+ * `PartTemplate` subclass by `XmlHelper.AttributeOverrides` — so ONE reader serves all
+ * of them. The `<Collider Id>` COMPONENT id is deliberately dropped: nothing references
+ * it (Core reuses "Collider1" everywhere) and flexo re-emits a single deterministic
+ * component per owner, so keeping it would only risk colliding with a `<Tank Id>` in the
+ * shared feed-container namespace (`PartTemplate` scans every `Components[].Id`).
+ *
+ * `ownerTemplateId` is the frame the shapes are expressed in: `null` for a Part-level
+ * owner, else the SubPart template id.
+ */
+export function collidersFromElement(
+  owner: Element,
+  ownerTemplateId: string | null,
+): PartCollider[] {
+  const out: PartCollider[] = []
+  for (const component of directChildren(owner, 'Collider')) {
+    for (const shapeEl of childElements(component)) {
+      const shape = COLLIDER_SHAPE_SET.has(shapeEl.tagName as ColliderShape)
+        ? (shapeEl.tagName as ColliderShape)
+        : null
+      if (!shape) continue // not one of the four Bepu primitives KSA accepts
+      const dims = {
+        lengthXM: readDistanceM(directChildren(shapeEl, 'LengthX')[0]),
+        lengthYM: readDistanceM(directChildren(shapeEl, 'LengthY')[0]),
+        lengthZM: readDistanceM(directChildren(shapeEl, 'LengthZ')[0]),
+        radiusM: readDistanceM(directChildren(shapeEl, 'Radius')[0]),
+      }
+      // A DistanceReference with no unit attribute reads back as NaN in KSA, poisoning
+      // the Bepu shape. Substitute a visible default and say so — flexo always emits.
+      const missing = colliderDimensionNames(shape).filter(
+        (name) => dims[DIMENSION_FIELD[name]] == null,
+      )
+      if (missing.length > 0) {
+        console.warn(
+          `flexo import: <${shapeEl.tagName} Id="${shapeEl.getAttribute('Id') ?? ''}"> is missing ` +
+            `<${missing.join('>, <')}> — KSA would build a NaN shape from it; ` +
+            `defaulting each to ${DEFAULT_COLLIDER_SIZE_M} m.`,
+        )
+      }
+      out.push({
+        id: shapeEl.getAttribute('Id') ?? `${shape.toLowerCase()}_collider`,
+        shape,
+        ownerTemplateId,
+        position: readVec3Attrs(directChildren(shapeEl, 'LocationAsmb')[0], ZERO_VEC3),
+        // <Collider2Asmb> is Euler XYZ radians — the same convention as a <Rotation>.
+        rotation: readVec3Attrs(directChildren(shapeEl, 'Collider2Asmb')[0], ZERO_VEC3) as EulerXYZ,
+        scale: colliderSizeFromDimensions(shape, dims),
+        layerId: COLLIDER_LAYER_ID,
+      })
+    }
+  }
+  return out
+}
+
+const COLLIDER_SHAPE_SET: ReadonlySet<ColliderShape> = new Set(COLLIDER_SHAPES)
+
+/** Dimension element name → the {@link ColliderDimensions} field it fills. */
+const DIMENSION_FIELD: Record<string, keyof ColliderDimensions> = {
+  LengthX: 'lengthXM',
+  LengthY: 'lengthYM',
+  LengthZ: 'lengthZM',
+  Radius: 'radiusM',
+}
+
+const ZERO_VEC3: Vec3 = { x: 0, y: 0, z: 0 }
+
+/**
+ * Reads the `<Collider>`s of every top-level `<SubPartGameData Id>` in a GameData
+ * document root, each tagged with its owning SubPart template id. Kept separate from
+ * {@link parseGameDataElement} (which sees only one `<PartGameData>`) because
+ * `<SubPartGameData>` is its SIBLING, not its child.
+ */
+export function subPartCollidersFromRoot(root: Element): PartCollider[] {
+  const out: PartCollider[] = []
+  for (const spEl of directChildren(root, 'SubPartGameData')) {
+    const templateId = spEl.getAttribute('Id')
+    if (!templateId) continue
+    out.push(...collidersFromElement(spEl, templateId))
+  }
+  return out
+}
+
 /** The full GameData payload read back from a <PartGameData> element. */
 export interface ParsedGameData {
   editorTags: string[]
@@ -182,6 +278,12 @@ export interface ParsedGameData {
   connectorCapabilities: Map<string, ConnectorCapability[]>
   gameData: PartGameData
   subPartGameData: SubPartGameData[]
+  /**
+   * Collision primitives read from this document. `<PartGameData><Collider>` shapes
+   * carry `ownerTemplateId: null`; `<SubPartGameData Id><Collider>` shapes carry that
+   * template id (filled in by {@link gameDataFromAssets}, which sees the whole root).
+   */
+  colliders: PartCollider[]
   /** Parsed <KeyframeAnimationModule>s (refs in ORIGINAL instance-id space). */
   animationModules: CatalogAnimationModule[]
   /** Top-level <FixedReaction> custom propellants (siblings of <PartGameData>). */
@@ -499,6 +601,8 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
     connectorCapabilities,
     gameData: game,
     subPartGameData: [],
+    // Part-level collision primitives, in the Part's own assembly frame.
+    colliders: collidersFromElement(gd, null),
     animationModules: animationModulesFromGameData(gd),
     customReactions: [],
   }
@@ -642,9 +746,12 @@ export function gameDataFromAssets(
     (g) => g.getAttribute('Id') === partId,
   )
   if (!gd) return null
+  const root = doc.documentElement as Element
   const parsed = parseGameDataElement(gd)
-  parsed.subPartGameData = subPartGameDataFromRoot(doc.documentElement as Element)
-  parsed.customReactions = customReactionsFromRoot(doc.documentElement as Element)
+  parsed.subPartGameData = subPartGameDataFromRoot(root)
+  // SubPart-owned colliders are siblings of <PartGameData>, so they join the flat list here.
+  parsed.colliders = [...parsed.colliders, ...subPartCollidersFromRoot(root)]
+  parsed.customReactions = customReactionsFromRoot(root)
   return parsed
 }
 
@@ -698,12 +805,14 @@ const KNOWN_PART_GAMEDATA_CHILDREN: ReadonlySet<string> = new Set([
   'ConsumerFeedWiring',
   'Tank',
   'SubPart',
+  'Collider',
 ])
 /** `<SubPartGameData>` child tags flexo models. Everything else is passthrough. */
 const KNOWN_SUBPART_GAMEDATA_CHILDREN: ReadonlySet<string> = new Set([
   'Tank',
   'SolarPanel',
   'Light',
+  'Collider',
   'Rocket',
   'Combustor',
   'DeLavalNozzle',

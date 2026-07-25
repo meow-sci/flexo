@@ -9,7 +9,7 @@
             <MassSpecificInertia Ixx="0.0256970833" Iyy="0.0231508333" Izz="0.0099664166" />
         </CustomMass>
 
-        <Tank>
+        <Tank Id="PropellantTank">
             <SphericalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <OuterRadius M="0.276" />
@@ -28,6 +28,8 @@
             <Nozzle Id="TranslateRight2" />
         </Rocket>
         <Combustor Id="TranslateRightCombustor">
+            <FeedsFrom Container="PropellantTank" />
+            <Plumbing>Service</Plumbing>
             <Reaction Id="MMH_NTO">
                 <MixtureRatio>1.6</MixtureRatio>
             </Reaction>
@@ -72,6 +74,8 @@
             <Nozzle Id="TranslateLeft2" />
         </Rocket>
         <Combustor Id="TranslateLeftCombustor">
+            <FeedsFrom Container="PropellantTank" />
+            <Plumbing>Service</Plumbing>
             <Reaction Id="MMH_NTO">
                 <MixtureRatio>1.6</MixtureRatio>
             </Reaction>
@@ -118,6 +122,8 @@
             <Nozzle Id="TranslateDown4" />
         </Rocket>
         <Combustor Id="TranslateDownCombustor">
+            <FeedsFrom Container="PropellantTank" />
+            <Plumbing>Service</Plumbing>
             <Reaction Id="MMH_NTO">
                 <MixtureRatio>1.6</MixtureRatio>
             </Reaction>
@@ -190,6 +196,8 @@
             <Nozzle Id="TranslateUp4" />
         </Rocket>
         <Combustor Id="TranslateUpCombustor">
+            <FeedsFrom Container="PropellantTank" />
+            <Plumbing>Service</Plumbing>
             <Reaction Id="MMH_NTO">
                 <MixtureRatio>1.6</MixtureRatio>
             </Reaction>
@@ -262,6 +270,8 @@
             <Nozzle Id="TranslateBackward4" />
         </Rocket>
         <Combustor Id="TranslateBackwardCombustor">
+            <FeedsFrom Container="PropellantTank" />
+            <Plumbing>Service</Plumbing>
             <Reaction Id="MMH_NTO">
                 <MixtureRatio>1.6</MixtureRatio>
             </Reaction>
@@ -334,6 +344,8 @@
             <Nozzle Id="TranslateForward4" />
         </Rocket>
         <Combustor Id="TranslateForwardCombustor">
+            <FeedsFrom Container="PropellantTank" />
+            <Plumbing>Service</Plumbing>
             <Reaction Id="MMH_NTO">
                 <MixtureRatio>1.6</MixtureRatio>
             </Reaction>
@@ -404,6 +416,8 @@
             <Nozzle Id="PitchDownRollLeftYawRight2" />
         </Rocket>
         <Combustor Id="PitchDownRollLeftYawRightCombustor">
+            <FeedsFrom Container="PropellantTank" />
+            <Plumbing>Service</Plumbing>
             <Reaction Id="MMH_NTO">
                 <MixtureRatio>1.6</MixtureRatio>
             </Reaction>
@@ -447,6 +461,8 @@
             <Nozzle Id="PitchUpRollLeftYawLeft2" />
         </Rocket>
         <Combustor Id="PitchUpRollLeftYawLeftCombustor">
+            <FeedsFrom Container="PropellantTank" />
+            <Plumbing>Service</Plumbing>
             <Reaction Id="MMH_NTO">
                 <MixtureRatio>1.6</MixtureRatio>
             </Reaction>
@@ -490,6 +506,8 @@
             <Nozzle Id="PitchDownRollRightYawLeft2" />
         </Rocket>
         <Combustor Id="PitchDownRollRightYawLeftCombustor">
+            <FeedsFrom Container="PropellantTank" />
+            <Plumbing>Service</Plumbing>
             <Reaction Id="MMH_NTO">
                 <MixtureRatio>1.6</MixtureRatio>
             </Reaction>
@@ -533,6 +551,8 @@
             <Nozzle Id="PitchUpRollRightYawRight2" />
         </Rocket>
         <Combustor Id="PitchUpRollRightYawRightCombustor">
+            <FeedsFrom Container="PropellantTank" />
+            <Plumbing>Service</Plumbing>
             <Reaction Id="MMH_NTO">
                 <MixtureRatio>1.6</MixtureRatio>
             </Reaction>

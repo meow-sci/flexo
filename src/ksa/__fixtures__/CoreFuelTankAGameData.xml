@@ -21,6 +21,13 @@
                 <WallThickness Mm="4" />
             </CylindricalTank>
         </Tank>
+
+        <Connector Id="_connector17">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector18">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF1W1HB">
@@ -44,6 +51,13 @@
                 <WallThickness Mm="4" />
             </CylindricalTank>
         </Tank>
+
+        <Connector Id="_connector15">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector16">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF1W1HC">
@@ -67,6 +81,13 @@
                 <WallThickness Mm="4" />
             </CylindricalTank>
         </Tank>
+
+        <Connector Id="_connector13">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector14">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF1WHalfHA">
@@ -90,6 +111,13 @@
                 <WallThickness Mm="4" />
             </CylindricalTank>
         </Tank>
+
+        <Connector Id="_connector1">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector2">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF1WHalfHB">
@@ -113,6 +141,13 @@
                 <WallThickness Mm="4" />
             </CylindricalTank>
         </Tank>
+
+        <Connector Id="_connector3">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector4">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF1WHalfHC">
@@ -136,6 +171,13 @@
                 <WallThickness Mm="4" />
             </CylindricalTank>
         </Tank>
+
+        <Connector Id="_connector5">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector6">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF2W1HA">
@@ -161,9 +203,11 @@
         </Tank>
 
         <Connector Id="_connector41">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Connector Id="_connector42">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Aligned>
@@ -174,6 +218,13 @@
             <ConnectorRef Id="_connector20"/>
             <ConnectorRef Id="_connector42"/>
         </Aligned>
+
+        <Connector Id="_connector19">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector20">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF2W1HB">
@@ -199,9 +250,11 @@
         </Tank>
 
         <Connector Id="_connector43">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Connector Id="_connector44">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Aligned>
@@ -212,6 +265,13 @@
             <ConnectorRef Id="_connector20"/>
             <ConnectorRef Id="_connector44"/>
         </Aligned>
+
+        <Connector Id="_connector19">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector20">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF2W2HA">
@@ -237,9 +297,11 @@
         </Tank>
 
         <Connector Id="_connector45">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Connector Id="_connector46">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Aligned>
@@ -250,6 +312,13 @@
             <ConnectorRef Id="_connector22"/>
             <ConnectorRef Id="_connector46"/>
         </Aligned>
+
+        <Connector Id="_connector21">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector22">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF2W2HB">
@@ -275,9 +344,11 @@
         </Tank>
 
         <Connector Id="_connector47">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Connector Id="_connector48">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Aligned>
@@ -288,6 +359,13 @@
             <ConnectorRef Id="_connector22"/>
             <ConnectorRef Id="_connector48"/>
         </Aligned>
+
+        <Connector Id="_connector21">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector22">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF2W2HC">
@@ -313,9 +391,11 @@
         </Tank>
 
         <Connector Id="_connector49">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Connector Id="_connector50">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Aligned>
@@ -326,6 +406,13 @@
             <ConnectorRef Id="_connector22"/>
             <ConnectorRef Id="_connector50"/>
         </Aligned>
+
+        <Connector Id="_connector21">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector22">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF2W4HA">
@@ -351,9 +438,11 @@
         </Tank>
 
         <Connector Id="_connector51">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Connector Id="_connector52">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Aligned>
@@ -364,6 +453,13 @@
             <ConnectorRef Id="_connector24"/>
             <ConnectorRef Id="_connector52"/>
         </Aligned>
+
+        <Connector Id="_connector23">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector24">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF2W4HB">
@@ -389,9 +485,11 @@
         </Tank>
 
         <Connector Id="_connector53">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Connector Id="_connector54">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Aligned>
@@ -402,6 +500,13 @@
             <ConnectorRef Id="_connector24"/>
             <ConnectorRef Id="_connector53"/>
         </Aligned>
+
+        <Connector Id="_connector23">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector24">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF2W4HC">
@@ -427,9 +532,11 @@
         </Tank>
 
         <Connector Id="_connector55">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Connector Id="_connector56">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Aligned>
@@ -440,6 +547,13 @@
             <ConnectorRef Id="_connector24"/>
             <ConnectorRef Id="_connector55"/>
         </Aligned>
+
+        <Connector Id="_connector23">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector24">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF2W4HD">
@@ -465,9 +579,11 @@
         </Tank>
 
         <Connector Id="_connector57">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Connector Id="_connector58">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Aligned>
@@ -478,6 +594,13 @@
             <ConnectorRef Id="_connector24"/>
             <ConnectorRef Id="_connector57"/>
         </Aligned>
+
+        <Connector Id="_connector23">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector24">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF3W3HA">
@@ -503,9 +626,11 @@
         </Tank>
 
         <Connector Id="_connector39">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Connector Id="_connector40">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Aligned>
@@ -516,6 +641,13 @@
             <ConnectorRef Id="_connector26"/>
             <ConnectorRef Id="_connector39"/>
         </Aligned>
+
+        <Connector Id="_connector25">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector26">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF3W3HB">
@@ -541,9 +673,11 @@
         </Tank>
 
         <Connector Id="_connector37">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Connector Id="_connector38">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Aligned>
@@ -554,6 +688,13 @@
             <ConnectorRef Id="_connector26"/>
             <ConnectorRef Id="_connector37"/>
         </Aligned>
+
+        <Connector Id="_connector25">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector26">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF3W6HA">
@@ -579,9 +720,11 @@
         </Tank>
 
         <Connector Id="_connector29">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Connector Id="_connector30">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Aligned>
@@ -592,6 +735,13 @@
             <ConnectorRef Id="_connector28"/>
             <ConnectorRef Id="_connector29"/>
         </Aligned>
+
+        <Connector Id="_connector27">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector28">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF3W6HB">
@@ -617,9 +767,11 @@
         </Tank>
 
         <Connector Id="_connector31">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Connector Id="_connector32">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Aligned>
@@ -630,6 +782,13 @@
             <ConnectorRef Id="_connector28"/>
             <ConnectorRef Id="_connector32"/>
         </Aligned>
+
+        <Connector Id="_connector27">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector28">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF3W6HC">
@@ -655,9 +814,11 @@
         </Tank>
 
         <Connector Id="_connector33">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Connector Id="_connector34">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Aligned>
@@ -668,6 +829,13 @@
             <ConnectorRef Id="_connector28"/>
             <ConnectorRef Id="_connector34"/>
         </Aligned>
+
+        <Connector Id="_connector27">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector28">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_LF3W6HD">
@@ -693,9 +861,11 @@
         </Tank>
 
         <Connector Id="_connector35">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Connector Id="_connector36">
+            <Capabilities>BulkFluid</Capabilities>
             <Flags>Internal</Flags>
         </Connector>
         <Aligned>
@@ -706,6 +876,13 @@
             <ConnectorRef Id="_connector28"/>
             <ConnectorRef Id="_connector35"/>
         </Aligned>
+
+        <Connector Id="_connector27">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector28">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_MP1W1HA">
@@ -761,6 +938,13 @@
                 <RoleAffinity>Thruster</RoleAffinity>
             </CylindricalTank>
         </Tank>
+
+        <Connector Id="_connector17">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector18">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_MP1W1HB">
@@ -816,6 +1000,13 @@
                 <RoleAffinity>Thruster</RoleAffinity>
             </CylindricalTank>
         </Tank>
+
+        <Connector Id="_connector15">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector16">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_MP1W1HC">
@@ -871,6 +1062,13 @@
                 <RoleAffinity>Thruster</RoleAffinity>
             </CylindricalTank>
         </Tank>
+
+        <Connector Id="_connector13">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector14">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_MP1W1HD">
@@ -926,6 +1124,13 @@
                 <RoleAffinity>Thruster</RoleAffinity>
             </CylindricalTank>
         </Tank>
+
+        <Connector Id="_connector17">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector18">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_MP1WHalfHA">
@@ -981,6 +1186,13 @@
                 <RoleAffinity>Thruster</RoleAffinity>
             </CylindricalTank>
         </Tank>
+
+        <Connector Id="_connector7">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector8">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_MP1WHalfHB">
@@ -1036,6 +1248,13 @@
                 <RoleAffinity>Thruster</RoleAffinity>
             </CylindricalTank>
         </Tank>
+
+        <Connector Id="_connector9">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector10">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_MP1WHalfHC">
@@ -1091,6 +1310,13 @@
                 <RoleAffinity>Thruster</RoleAffinity>
             </CylindricalTank>
         </Tank>
+
+        <Connector Id="_connector11">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector12">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_MP1WHalfHD">
@@ -1146,6 +1372,13 @@
                 <RoleAffinity>Thruster</RoleAffinity>
             </CylindricalTank>
         </Tank>
+
+        <Connector Id="_connector7">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
+        <Connector Id="_connector8">
+            <Capabilities>BulkFluid</Capabilities>
+        </Connector>
     </PartGameData>
 
     <PartGameData Id="CoreFuelTankA_Prefab_RadialMPHalfWA">

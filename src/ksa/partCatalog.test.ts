@@ -260,8 +260,10 @@ describe('parseGameDataFile + mergeGameData', () => {
       expect(chamber.combustors[0].reactionId).toBe('Hydrolox')
       expect(chamber.combustors[0].mixtureRatio).toBe(5.5)
       expect(chamber.nozzles[0].volumetricExhaustId).toBe('EngineALarge')
-      // <PlumeTrail> — volumetric trail reference Core added to main engines in 2026.7.6.
-      expect(chamber.nozzles[0].plumeTrailId).toBe('DefaultEngine')
+      // <PlumeTrail> — 2026.7.9.5018 moved the template to PlumeTrailAssets.xml
+      // (`DefaultEngine` → `DefaultPlumeTrail`) and stripped it from every LIQUID nozzle;
+      // only <SolidMotorNozzle>s carry one now (CorePropulsionCGameData.xml).
+      expect(chamber.nozzles[0].plumeTrailId).toBeNull()
     },
   )
 

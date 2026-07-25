@@ -125,6 +125,19 @@ export interface ModelSource {
   /** `materials[i]` index for a three material (via `parser.associations`), or null. */
   materialIndex(material: THREE.Material): number | null
   /**
+   * The name of the glTF NODE an object came from — the Blender OBJECT name — or null when
+   * the object isn't from a glTF node.
+   *
+   * Not the same thing as `object.name`: GLTFLoader splits a glTF mesh with several
+   * primitives into one three `Mesh` PER PRIMITIVE, each named after the glTF **mesh**
+   * (uniquified: "Hull", "Hull_1", …), nested under a `Group` that carries the node's name.
+   * So exactly the case the importer cares about most — one Blender object with two material
+   * slots — is the case where `mesh.name` is NOT the object name, and can be a stale
+   * mesh-data name ("Cube.003") that means nothing to the user. `associations` tags every
+   * node object with its `nodes` index, so the nearest such ancestor IS the node.
+   */
+  nodeName(object: THREE.Object3D): string | null
+  /**
    * The ORIGINAL encoded bytes of `images[i]`.
    *
    * Original bytes matter: flexo stores the source blob under `tex-src:<id>` and RE-ENCODES
@@ -267,6 +280,16 @@ function makeSource(parser: GLTFParser, siblings: Map<string, File>): ModelSourc
   return {
     json,
     materialIndex: (material) => parser.associations.get(material)?.materials ?? null,
+    nodeName: (object) => {
+      // `GLTFParser.loadNode` stamps `.nodes` onto the association of every object it returns
+      // for a glTF node (and onto the per-instance clones), so the nearest self-or-ancestor
+      // carrying one is the node. A single-primitive mesh IS that object; a multi-primitive
+      // one is a Group above the per-primitive Meshes.
+      for (let o: THREE.Object3D | null = object; o; o = o.parent) {
+        if (parser.associations.get(o)?.nodes !== undefined) return o.name || null
+      }
+      return null
+    },
     imageBytes: (index) => {
       let pending = images.get(index)
       if (!pending) {

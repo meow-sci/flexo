@@ -318,19 +318,19 @@ export function analyzeImport(model: LoadedModel, opts: ImportOptions): ImportPl
 
   const groups = new Map<string, ImportGroup>()
   const materials = new Set<string>()
-  /** How many groups each source-node NAME produced — drives the "Node · Material" naming. */
-  const groupsPerNode = new Map<string, number>()
+  /** Distinct materials per source-node NAME — drives the "Node · Material" naming and the
+   *  `multiMaterial` warning. Counted after the fact rather than off `mesh.material` being an
+   *  array, because a glTF multi-material object arrives as one three `Mesh` PER PRIMITIVE
+   *  (GLTFLoader splits them), so no single `Mesh` ever carries the whole set. */
+  const materialsPerNode = new Map<string, Set<string>>()
 
   for (const mesh of collectMeshes(scene)) {
-    const nodeName = mesh.name || 'Object'
+    // The glTF NODE name (= the Blender object name), not the three object's own name: for a
+    // multi-primitive glTF mesh those differ, and the node name is the one the user authored,
+    // the one shown as provenance, and the one replace-matching keys on. See
+    // ModelSource.nodeName.
+    const nodeName = model.source?.nodeName(mesh) || mesh.name || 'Object'
     const meshMaterials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
-    if (meshMaterials.length > 1) {
-      warnings.add({
-        code: 'multiMaterial',
-        subject: nodeName,
-        message: `"${nodeName}" uses ${meshMaterials.length} materials → ${meshMaterials.length} SubParts (KSA renders one material per SubPart).`,
-      })
-    }
 
     // Node world matrix relative to the scene root, then the import correction.
     const world = rootIsIdentity
@@ -366,6 +366,9 @@ export function analyzeImport(model: LoadedModel, opts: ImportOptions): ImportPl
       const material = meshMaterials[mi]
       if (!material) continue
       materials.add(material.uuid)
+      let perNode = materialsPerNode.get(nodeName)
+      if (!perNode) materialsPerNode.set(nodeName, (perNode = new Set()))
+      perNode.add(material.uuid)
       // HANDEDNESS IS PART OF THE GROUP IDENTITY. A SubPart ships ONE baked geometry, and a
       // mirrored instance needs the OPPOSITE triangle winding — one bake cannot serve both, so
       // sharing a group across handednesses leaves a NEGATIVE <Scale> on the odd instances'
@@ -412,14 +415,26 @@ export function analyzeImport(model: LoadedModel, opts: ImportOptions): ImportPl
       inspectMaterial(material, warnings)
       inspectGltfMaterial(model.source, group.materialIndex, group.sourceMaterial, warnings)
       groups.set(key, group)
-      groupsPerNode.set(nodeName, (groupsPerNode.get(nodeName) ?? 0) + 1)
     }
+  }
+
+  // A node with several materials MUST split (one <PartModel> binds one <Material>), which is
+  // the importer's most surprising behaviour — so say so, and name the pieces after the
+  // material that made them distinct. Keyed on distinct materials, not group count, so the
+  // mirrored-handedness split above never masquerades as a multi-material one.
+  for (const [nodeName, used] of materialsPerNode) {
+    if (used.size < 2) continue
+    warnings.add({
+      code: 'multiMaterial',
+      subject: nodeName,
+      message: `"${nodeName}" uses ${used.size} materials → ${used.size} SubParts (KSA renders one material per SubPart).`,
+    })
   }
 
   const list = [...groups.values()]
   // Disambiguate only where a node actually split; a one-material object keeps its plain name.
   for (const group of list) {
-    if ((groupsPerNode.get(group.sourceNode) ?? 0) > 1) {
+    if ((materialsPerNode.get(group.sourceNode)?.size ?? 0) > 1) {
       group.suggestedName = `${group.sourceNode} · ${group.sourceMaterial}`
     }
     if (group.triangles > HEAVY_MESH_TRIANGLES) {

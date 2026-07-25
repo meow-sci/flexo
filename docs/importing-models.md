@@ -120,6 +120,13 @@ Naming: `subPartId = flexo_<Sanitized(name)>_<hash8>` (`importNormalize.ts`), di
 `"<Object> · <Material>"` when the object split across materials, else plain `<Object>`, both
 prefixed with the dialog's optional **Name prefix**.
 
+`<Object>` is the glTF **node** name — the Blender object name — read through
+`ModelSource.nodeName`, **not** the three object's own `name`. They differ in exactly the case
+that matters most: a multi-primitive glTF mesh becomes one three `Mesh` per primitive, each
+named after the glTF *mesh* (a data-block name, often something like `Cube.003`, uniquified to
+`Cube.003_1`…) under a `Group` that carries the node name. Since `(sourceNode, sourceMaterial)`
+is also the identity a **replace** matches on, that distinction is load-bearing, not cosmetic.
+
 ## Transforms, orientation, scale
 
 - **No axis conversion by default.** glTF, three.js and KSA all use right-handed, Y-up,
@@ -198,7 +205,7 @@ hand-authored ones. Nothing about them is a parallel universe.
 
 | Module                             | Owns                                                                                                                                                                                    |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/three/loadModelFile.ts`       | File(s) → a three scene. `GLTFLoader` + DRACO/meshopt decoders, `.gltf` sidecar resolution, and the `ModelSource` façade over `GLTFParser` (glTF JSON, material indices, original image bytes). |
+| `src/three/loadModelFile.ts`       | File(s) → a three scene. `GLTFLoader` + DRACO/meshopt decoders, `.gltf` sidecar resolution, and the `ModelSource` façade over `GLTFParser` (glTF JSON, material indices, **node names**, original image bytes). |
 | `src/ksa/importPlan.ts`            | `analyzeImport()` — the (mesh × material) grouping, instances, scale/up-axis correction, bounds, totals, and the whole warning catalogue. Pure over three objects.                        |
 | `src/ksa/importMaterials.ts`       | `planImportMaterials()` — glTF metallic-roughness → texture/material specs, every factor baked into pixels. Pure; codecs injectable.                                                     |
 | `src/ksa/importNormalize.ts`       | `normalizeImport()` — KSA-legal geometry (indexed, POSITION/NORMAL/UV0), transform/mirror/bind-pose bake, optional double-siding and merge, and the batch's atlas GLB.                   |
@@ -398,6 +405,8 @@ is collected; an asset created and never assigned is never a candidate.
 
 ## Tests
 
+- `src/three/loadModelFile.test.ts` — `ModelSource.nodeName` over a real `GLTFLoader` parse: the
+  glTF node name survives three's per-primitive mesh split and its per-instance clones.
 - `src/ksa/importPlan.test.ts` — grouping, instancing, transform round-trips, mirrored bakes, the
   warning conditions.
 - `src/ksa/importNormalize.test.ts` — output is indexed, float32, POSITION/NORMAL/UV0 only, no

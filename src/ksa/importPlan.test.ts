@@ -35,6 +35,29 @@ function codes(plan: { warnings: { code: string }[] }): string[] {
   return plan.warnings.map((w) => w.code)
 }
 
+/**
+ * A model whose `ModelSource.nodeName` behaves like the real one: the nearest ancestor that
+ * IS a glTF node. Here that is stubbed as "the nearest named ancestor that isn't a Mesh",
+ * which is the shape GLTFLoader produces for a multi-primitive mesh. What the real
+ * implementation reads out of `parser.associations` is covered by loadModelFile.test.ts.
+ */
+function withNodeNames(scene: THREE.Object3D, fileName = 'model.glb'): LoadedModel {
+  return {
+    ...model(scene, fileName),
+    source: {
+      json: {},
+      materialIndex: () => null,
+      nodeName: (object) => {
+        for (let o: THREE.Object3D | null = object; o; o = o.parent) {
+          if (!(o as THREE.Mesh).isMesh && o.name) return o.name
+        }
+        return object.name || null
+      },
+      imageBytes: async () => null,
+    },
+  }
+}
+
 describe('analyzeImport — (mesh × material) grouping', () => {
   it('splits one object with two materials into two groups', () => {
     // KSA renders one <Mesh> + one <Material> per <PartModel> and draws only primitive 0, so a
@@ -60,6 +83,33 @@ describe('analyzeImport — (mesh × material) grouping', () => {
     expect(plan.groups.map((g) => g.triangles)).toEqual([6, 6])
     expect(plan.totals).toMatchObject({ subParts: 2, placements: 2, materials: 2 })
     expect(codes(plan)).toContain('multiMaterial')
+  })
+
+  it('splits by material when the loader already split the object into one Mesh per primitive', () => {
+    // The shape a REAL glTF arrives in: GLTFLoader turns a two-material Blender object into a
+    // Group carrying the NODE name plus one `Mesh` per primitive, each named after the mesh
+    // data-block. No single `Mesh` has an array material, so the split has to be recognised
+    // from the node name the two share (ModelSource.nodeName) — otherwise the SubParts are
+    // named after mesh data ("Cube.003", "Cube.003_1") and the user is never told why their
+    // one object became two SubParts.
+    const painted = new THREE.MeshStandardMaterial()
+    painted.name = 'PaintedMetal'
+    const glow = new THREE.MeshStandardMaterial()
+    glow.name = 'GlowStrip'
+    const node = new THREE.Group()
+    node.name = 'Hull'
+    node.add(box('HullMesh', painted), box('HullMesh_1', glow))
+
+    const plan = analyzeImport(withNodeNames(node), opts())
+
+    expect(plan.groups.map((g) => g.sourceNode)).toEqual(['Hull', 'Hull'])
+    expect(plan.groups.map((g) => g.suggestedName)).toEqual([
+      'Hull · PaintedMetal',
+      'Hull · GlowStrip',
+    ])
+    const warning = plan.warnings.find((w) => w.code === 'multiMaterial')
+    expect(warning?.subject).toBe('Hull')
+    expect(warning?.message).toContain('2 materials')
   })
 
   it('collapses two nodes sharing one geometry+material into ONE group with TWO instances', () => {
@@ -272,6 +322,7 @@ describe('analyzeImport — glTF-source material warnings', () => {
       source: {
         json,
         materialIndex: () => 0,
+        nodeName: (object) => object.name || null,
         imageBytes: async () => null,
       },
     }

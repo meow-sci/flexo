@@ -81,6 +81,7 @@ function makeSource(json: GltfJson, images: ImageLevel[]): ModelSource {
   return {
     json,
     materialIndex: () => null,
+    nodeName: () => null,
     imageBytes: async (index) => {
       const level = images[index]
       return level ? { bytes: fakeEncode(level), mime: 'image/png' } : null

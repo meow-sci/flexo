@@ -1,13 +1,14 @@
-import { useState } from 'react'
 import { TextField } from './kit'
 import { fmt } from './format'
+import { useNumberDraft } from './numberDraft'
 
 /**
  * A draft-aware numeric field with a short inline label. Free-types while focused (local
- * string draft) and reflects external store changes (e.g. gizmo drags) when not focused.
- * Commits a parsed number on every valid keystroke; calls `onInteractionStart` once on focus
- * so a typing session collapses into one undo step. Display is rounded to ~5 decimals (vs
- * {@link PreciseNumberInput}, which preserves the exact value).
+ * string draft — see {@link useNumberDraft} for the editing rules) and reflects external
+ * store changes (e.g. gizmo drags) when not focused. Commits a parsed number on every valid
+ * keystroke; calls `onInteractionStart` once on focus so a typing session collapses into one
+ * undo step. Display is rounded to ~5 decimals (vs `PreciseNumberInput`, which preserves the
+ * exact value).
  */
 export function NumberField(props: {
   /** Visible label — ONE character wide (the slot is `w-3`); use `ariaLabel` for the rest. */
@@ -17,32 +18,27 @@ export function NumberField(props: {
   value: number
   onCommit: (n: number) => void
   onInteractionStart?: () => void
+  /** Bounds: out-of-range keystrokes are not committed, and the final value is clamped. */
+  min?: number
+  max?: number
+  /** Arrow-key increment (default 1); Shift ⇒ ×10, Alt ⇒ ×0.1. */
+  step?: number
   isDisabled?: boolean
 }) {
-  const { label, ariaLabel, value, onCommit, onInteractionStart, isDisabled } = props
-  const [draft, setDraft] = useState<string | null>(null)
+  const { label, ariaLabel, value, onCommit, onInteractionStart, min, max, step, isDisabled } =
+    props
+  const field = useNumberDraft({ value, onCommit, onInteractionStart, min, max, step, format: fmt })
 
   return (
     <label className="flex items-center gap-1">
       <span className="w-3 text-xs text-fg-subtle">{label}</span>
       <TextField
         size="sm"
-        type="number"
         inputMode="decimal"
         aria-label={ariaLabel ?? label}
-        value={draft ?? fmt(value)}
         inputClassName="font-mono"
         isDisabled={isDisabled}
-        onChange={(v) => {
-          setDraft(v)
-          const n = Number.parseFloat(v)
-          if (Number.isFinite(n)) onCommit(n)
-        }}
-        onFocus={() => {
-          setDraft(fmt(value))
-          onInteractionStart?.()
-        }}
-        onBlur={() => setDraft(null)}
+        {...field}
       />
     </label>
   )

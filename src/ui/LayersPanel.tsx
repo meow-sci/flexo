@@ -65,6 +65,7 @@ import {
   UnlistedIcon,
   UnlockIcon,
 } from './layerIcons'
+import { useNumberDraft } from './numberDraft'
 
 /** Moves the dragged keys to before/after the target id within `ids`. */
 function computeReorder(
@@ -379,30 +380,26 @@ function LayerOpacityButton({ layerId, opacity }: { layerId: string; opacity: nu
 
 /** Number input (0–100) + slider, both committing to {@link setLayerOpacity}. */
 function OpacityFields({ layerId, pct }: { layerId: string; pct: number }) {
-  // Local draft lets the field hold a transient/empty value while typing; null means
-  // "follow the store value" (so slider edits flow back into the number display).
-  const [draft, setDraft] = useState<string | null>(null)
-  const commit = (raw: string) => {
-    const n = Number.parseInt(raw, 10)
-    if (Number.isFinite(n)) setLayerOpacity(layerId, Math.min(100, Math.max(0, n)) / 100)
-  }
+  // Draft-aware text field (never type="number", which would erase a partial entry);
+  // when not being edited it follows the store, so slider edits flow back into it.
+  const field = useNumberDraft({
+    value: pct,
+    min: 0,
+    max: 100,
+    onCommit: (n) => setLayerOpacity(layerId, Math.round(n) / 100),
+  })
   return (
     <div className="flex items-center gap-2">
       <TextField
         size="sm"
-        type="number"
+        inputMode="numeric"
         aria-label="Layer opacity percent"
         className="w-14"
-        value={draft ?? String(pct)}
-        onChange={(v) => {
-          setDraft(v)
-          commit(v)
-        }}
-        onBlur={() => setDraft(null)}
+        {...field}
         onKeyDown={(e) => {
           // Keep grid typeahead/selection keys from stealing keystrokes.
           e.stopPropagation()
-          if (e.key === 'Enter') setDraft(null)
+          field.onKeyDown(e)
         }}
       />
       <Slider

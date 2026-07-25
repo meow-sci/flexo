@@ -97,6 +97,28 @@ The inspector uses a focus-scoped `draft` string per field so free typing works 
 focused, and the field reflects live store values (e.g. gizmo drags) when not focused.
 Rotation is shown in **degrees**, stored/exported in **radians**.
 
+### Numeric fields — `src/ui/numberDraft.ts`
+
+Every numeric input in the app (`NumberField`, `PreciseNumberInput`, `Vec3Field`, the
+layer-opacity percent box) shares `useNumberDraft`, and all of them are **text** inputs —
+never `type="number"`. A number input sanitizes its own DOM value, so a half-typed `-`,
+`.`, `0.` or `1e-` reads back as `''` and the controlled re-render erases what was just
+typed; that is what made fractional/negative entry feel like a fight. The shared rules:
+
+- keystrokes are kept verbatim in a draft string while focused; junk that can't become a
+  number (`isPartialNumber`) is dropped without rewriting the draft
+- each keystroke that parses to an **in-range** number commits live, so the viewport
+  follows along; out-of-range keystrokes are skipped rather than clamped (clamping `0` on
+  the way to `0.5` would fight the typist)
+- blur/Enter finalize: clamp to `[min, max]` and commit — or restore the pre-edit value if
+  what's left isn't a number at all (empty, `-`, `.`)
+- Escape cancels the whole edit and is swallowed only while the edit is dirty, so a second
+  Escape still closes the popover the field lives in
+- ArrowUp/ArrowDown step by `step` (default 1; Shift ⇒ ×10, Alt ⇒ ×0.1)
+
+Focus is still the streaming-undo boundary (`onInteractionStart`), so a typing session —
+live commits, arrow steps and all — collapses into one undo step.
+
 ## UI panels (`src/ui/`)
 - `SubPartBrowser.tsx` — filterable catalog list; click adds via `addSubPart`.
 - `PlacementList.tsx` — placed instances; select/duplicate/delete.

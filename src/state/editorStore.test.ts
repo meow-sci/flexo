@@ -274,11 +274,7 @@ describe('editorStore', () => {
     })
     const part = $part.get()
     // _connector19/_connector41 were regenerated to _connector2/_connector3…
-    expect(part.connectors.map((c) => c.id)).toEqual([
-      '_connector1',
-      '_connector2',
-      '_connector3',
-    ])
+    expect(part.connectors.map((c) => c.id)).toEqual(['_connector1', '_connector2', '_connector3'])
     // …and the Aligned group's refs follow them (no stale source-space ids).
     expect(part.gameData.unknownChildren).toEqual([
       {

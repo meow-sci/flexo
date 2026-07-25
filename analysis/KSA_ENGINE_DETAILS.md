@@ -143,25 +143,27 @@ Constants: `MINIMUM_PULSE_TIME = 0.001`, `MINIMUM_THROTTLE = 0.01`.
 ### 3.4 `<DeLavalNozzle>` → `DeLavalNozzleTemplate` (`DeLavalNozzleTemplate.cs`) + base `RocketNozzleTemplate` (`RocketNozzleTemplate.cs`)
 
 Own fields:
-| XML | C# member | Type | Default | Physics role |
-|---|---|---|---|---|
-| `Id` (attr) | `Id` | string | `""` | targeted by `<Nozzle Id>` |
-| `<ExitDiameter>` | `ExitDiameter` | `DistanceReference` (`M`/`Cm`/`Mm`…) | **1.0 m** (line 11) | `ExitArea = π·(D/2)²` |
-| `<FxExitDiameter>` | `FxExitDiameter` | `DistanceReference?` | null → `ExitDiameter` | **VISUAL ONLY** — sets plume radius `FxExitRadius = 0.5·FxExitDiameter`. **Zero effect on thrust.** |
-| `<AreaRatio>` | `AreaRatio` | `DoubleReference` (`Value`) | **NaN** (line 17) | **EFFECTIVELY REQUIRED** — `ThroatArea = ExitArea / AreaRatio`. NaN ⇒ broken engine |
-| `<FlowEfficiency>` | `FlowEfficiency` | `DoubleReference` (`Value`) | **1.0** (line 20) | isothermal inlet pressure drop; primarily cuts **thrust** |
-| `<ExpansionEfficiency>` | `ExpansionEfficiency` | `DoubleReference` (`Value`) | **1.0** (line 23) | isentropic stagnation drop; primarily cuts **Isp** |
+
+| XML                     | C# member             | Type                                 | Default               | Physics role                                                                                        |
+| ----------------------- | --------------------- | ------------------------------------ | --------------------- | --------------------------------------------------------------------------------------------------- |
+| `Id` (attr)             | `Id`                  | string                               | `""`                  | targeted by `<Nozzle Id>`                                                                           |
+| `<ExitDiameter>`        | `ExitDiameter`        | `DistanceReference` (`M`/`Cm`/`Mm`…) | **1.0 m** (line 11)   | `ExitArea = π·(D/2)²`                                                                               |
+| `<FxExitDiameter>`      | `FxExitDiameter`      | `DistanceReference?`                 | null → `ExitDiameter` | **VISUAL ONLY** — sets plume radius `FxExitRadius = 0.5·FxExitDiameter`. **Zero effect on thrust.** |
+| `<AreaRatio>`           | `AreaRatio`           | `DoubleReference` (`Value`)          | **NaN** (line 17)     | **EFFECTIVELY REQUIRED** — `ThroatArea = ExitArea / AreaRatio`. NaN ⇒ broken engine                 |
+| `<FlowEfficiency>`      | `FlowEfficiency`      | `DoubleReference` (`Value`)          | **1.0** (line 20)     | isothermal inlet pressure drop; primarily cuts **thrust**                                           |
+| `<ExpansionEfficiency>` | `ExpansionEfficiency` | `DoubleReference` (`Value`)          | **1.0** (line 23)     | isentropic stagnation drop; primarily cuts **Isp**                                                  |
 
 Inherited from `RocketNozzleTemplate` (geometry/placement + FX):
-| XML | C# member | Type | Default | Notes |
-|---|---|---|---|---|
-| `<ExhaustLocation>` | `ExhaustLocation` | `Vector3Reference` (`X`/`Y`/`Z`) | `(0,0,0)` | **thrust application point** (assembly frame) |
-| `<ExhaustDirection>` | `ExhaustDirection` | `Vector3Reference` | **`(-1,0,0)`** (−X) | direction exhaust leaves; thrust force is along `−ExhaustDirection` |
-| `<FxExhaustLocation>` | `FxExhaustLocation` | `Vector3Reference?` | null → `ExhaustLocation` | FX plume origin only |
-| `<FxExhaustDirection>` | `FxExhaustDirection` | `Vector3Reference?` | null → `ExhaustDirection` | FX plume axis only |
-| `<VolumetricExhaust>` | `VolumetricExhaust` | `VolumetricExhaustReference?` (`Id` attr + optional `<Offset>`) | null | plume FX template reference (§7) |
-| `<ExhaustLight>` | `ExhaustLight` | `BoolReference` (`Value`) | **true** | dynamic exhaust point light on/off |
-| `<SoundEvent>` | `SoundEvent` | `RocketSoundEvent?` | null | engine audio (§6.6) |
+
+| XML                    | C# member            | Type                                                            | Default                   | Notes                                                               |
+| ---------------------- | -------------------- | --------------------------------------------------------------- | ------------------------- | ------------------------------------------------------------------- |
+| `<ExhaustLocation>`    | `ExhaustLocation`    | `Vector3Reference` (`X`/`Y`/`Z`)                                | `(0,0,0)`                 | **thrust application point** (assembly frame)                       |
+| `<ExhaustDirection>`   | `ExhaustDirection`   | `Vector3Reference`                                              | **`(-1,0,0)`** (−X)       | direction exhaust leaves; thrust force is along `−ExhaustDirection` |
+| `<FxExhaustLocation>`  | `FxExhaustLocation`  | `Vector3Reference?`                                             | null → `ExhaustLocation`  | FX plume origin only                                                |
+| `<FxExhaustDirection>` | `FxExhaustDirection` | `Vector3Reference?`                                             | null → `ExhaustDirection` | FX plume axis only                                                  |
+| `<VolumetricExhaust>`  | `VolumetricExhaust`  | `VolumetricExhaustReference?` (`Id` attr + optional `<Offset>`) | null                      | plume FX template reference (§7)                                    |
+| `<ExhaustLight>`       | `ExhaustLight`       | `BoolReference` (`Value`)                                       | **true**                  | dynamic exhaust point light on/off                                  |
+| `<SoundEvent>`         | `SoundEvent`         | `RocketSoundEvent?`                                             | null                      | engine audio (§6.6)                                                 |
 
 ### 3.5 `<RocketEngineController>` / `<RocketThrusterController>` → `RocketControllerTemplate` (`RocketControllerTemplate.cs`)
 
@@ -318,17 +320,17 @@ Interpolation (`CombustionTable.Lookup`): binary-search ln(P), linear-lerp γ/R/
 
 `<Substance Id>` → `SubstanceTemplate` with `<MolarMass>` and per-phase `<Solid>`/`<Liquid>`/`<Gas>` (each: `<StorageTemperature K>`, `<StorageDensity>`). Phases register as suffixed ids: `Id(s)`/`Id(l)`/`Id(g)`. Reactants reference the **phase** id.
 
-| Id                             | Name          | MolarMass g/mol  | Phases      | Liquid T (K) | Liquid density (kg/m³) |
+| Id | Name | MolarMass g/mol | Phases | Liquid T (K) | Liquid density (kg/m³) |
 | ------------------------------ | ------------- | ---------------- | ----------- | ------------ | ---------------------- | ----------------------------- |
-| `H2`                           | Hydrogen      | 2.01588          | Liquid, Gas | 20.27        | 70.85                  |
-| `O2`                           | Oxygen        | 31.9988          | Liquid, Gas | 90.19        | 1141                   |
-| `Kerosene`                     | Kerosene      | 167.31102        | Liquid      | 293.15       | 805.41                 |
-| `N2H4`                         | Hydrazine     | 32.04516         | Liquid      | 293.15       | 1021                   |
-| `CH6N2`                        | MMH           | 46.07174         | Liquid      | 293.15       | 875.7                  |
-| `C2H8N2`                       | UDMH          | 60.09832         | Liquid      | 293.15       | 791                    |
-| `N2O4`                         | NTO           | 92.011           | Liquid      | 293.15       | 1442.46                |
-| `Aluminum.2014`                | Al alloy 2014 | 28.75            | **Solid**   | —            | 2800                   | _(tank wall, not propellant)_ |
-| `Nepetalactone` / `Actinidine` | —             | 166.22 / 147.221 | Liquid      | 293.15       | 1066.3 / 944           | _(easter-egg "catnip")_       |
+| `H2` | Hydrogen | 2.01588 | Liquid, Gas | 20.27 | 70.85 |
+| `O2` | Oxygen | 31.9988 | Liquid, Gas | 90.19 | 1141 |
+| `Kerosene` | Kerosene | 167.31102 | Liquid | 293.15 | 805.41 |
+| `N2H4` | Hydrazine | 32.04516 | Liquid | 293.15 | 1021 |
+| `CH6N2` | MMH | 46.07174 | Liquid | 293.15 | 875.7 |
+| `C2H8N2` | UDMH | 60.09832 | Liquid | 293.15 | 791 |
+| `N2O4` | NTO | 92.011 | Liquid | 293.15 | 1442.46 |
+| `Aluminum.2014` | Al alloy 2014 | 28.75 | **Solid** | — | 2800 | _(tank wall, not propellant)_ |
+| `Nepetalactone` / `Actinidine` | — | 166.22 / 147.221 | Liquid | 293.15 | 1066.3 / 944 | _(easter-egg "catnip")_ |
 
 `N2H4` and `C2H8N2` are defined but **unused** by any combustion process (no monopropellant decomposition modeled).
 

@@ -20,6 +20,11 @@ import { bakeGeometry } from '../three/kittenBake'
  * (decomp/KSA/MeshReference.cs:58,76-118; decomp/KSA/PartModel.cs:400-418). A multi-material
  * object therefore MUST split, and the split is a game limit, not a preference.
  *
+ * One further split nobody asks for but the renderer forces: **mirrored (negative-scale)
+ * instances get their own SubPart**, because one baked geometry cannot carry both triangle
+ * windings and a negative placement scale back-face-culls the piece invisible in-game
+ * (`CullMode = BackBit`, decomp/KSA/PartModelRenderer.cs:165).
+ *
  * Node transforms cannot ride along either: KSA's atlas loader iterates `GltfJson.Meshes[]`
  * and never looks at the node graph (decomp/KSA/MeshAtlasFileReference.cs:22-49), so a node's
  * world matrix has to become a flexo *placement* (or be baked into the geometry) — which is
@@ -83,9 +88,11 @@ export interface ImportInstance {
   matrix: THREE.Matrix4
 }
 
-/** One (mesh × material) pair — one future SubPart, with every node that references it. */
+/** One (mesh × material × handedness) triple — one future SubPart, with every node that
+ *  references it. */
 export interface ImportGroup {
-  /** Stable within one import (geometry+material identity); NOT stable across re-imports. */
+  /** Stable within one import (geometry + material + handedness identity); NOT stable across
+   *  re-imports. */
   key: string
   /** "Hull", or "Hull · PaintedMetal" when that node split across several materials. */
   suggestedName: string
@@ -346,11 +353,12 @@ export function analyzeImport(model: LoadedModel, opts: ImportOptions): ImportPl
         message: `"${nodeName}" has shape keys (morph targets); only the base shape is imported.`,
       })
     }
-    if (world.determinant() < 0) {
+    const mirrored = world.determinant() < 0
+    if (mirrored) {
       warnings.add({
         code: 'mirrored',
         subject: nodeName,
-        message: `"${nodeName}" has a mirrored (negative-scale) transform; it was baked into the geometry with the triangle winding fixed.`,
+        message: `"${nodeName}" has a mirrored (negative-scale) transform; it was baked into the geometry with the triangle winding fixed, so it becomes its own SubPart rather than sharing one with an unmirrored copy.`,
       })
     }
 
@@ -358,7 +366,14 @@ export function analyzeImport(model: LoadedModel, opts: ImportOptions): ImportPl
       const material = meshMaterials[mi]
       if (!material) continue
       materials.add(material.uuid)
-      const key = `${mesh.geometry.uuid}|${material.uuid}`
+      // HANDEDNESS IS PART OF THE GROUP IDENTITY. A SubPart ships ONE baked geometry, and a
+      // mirrored instance needs the OPPOSITE triangle winding — one bake cannot serve both, so
+      // sharing a group across handednesses leaves a NEGATIVE <Scale> on the odd instances'
+      // placements, which reverses their winding in-game and back-face-culls the whole piece
+      // invisible (CullMode = BackBit is unconditional, decomp/KSA/PartModelRenderer.cs:165).
+      // Splitting keeps every placement positive-scaled; same-handed copies still share one
+      // SubPart, so the 1-SubPart-N-placements rule is untouched.
+      const key = `${mesh.geometry.uuid}|${material.uuid}|${mirrored ? 'm' : 'p'}`
       const existing = groups.get(key)
       if (existing) {
         existing.instances.push({ nodeName, matrix: world.clone() })

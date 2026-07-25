@@ -95,7 +95,8 @@ Modelling rules that map to hard game limits — each one is surfaced as an impo
 | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | a unique (mesh × material) pair                | **one SubPart** — a `CustomMesh` + `<SubPart>` + `<Mesh>` + `<PbrMaterial>` + `<MeshView>`              |
 | a node referencing that mesh                   | **one placement** (`SubPartPlacement`) carrying the node's world transform                             |
-| the same mesh referenced by N nodes            | **1 SubPart, N placements** — free instancing, exactly KSA's own pattern                                |
+| the same mesh referenced by N **same-handed** nodes | **1 SubPart, N placements** — free instancing, exactly KSA's own pattern                           |
+| a mirrored (negative-scale) reference of it    | **its own SubPart** — one baked geometry can't carry both triangle windings (see Transforms below)     |
 | a glTF material                                | **one `CustomMaterial`**, deduped by glTF material index; identical channel sets intern to one `<PbrMaterial>` on export |
 | the glTF scene                                 | **one flexo layer**, named after the file, holding every new placement                                 |
 
@@ -143,6 +144,10 @@ prefixed with the dialog's optional **Name prefix**.
   winding reversed, and the placement keeps the positive-scale remainder. A negative placement
   scale would reverse winding in-game and back-face-cull the whole piece invisible
   (`CullMode = BackBit` is unconditional, `decomp/KSA/PartModelRenderer.cs:165`).
+  **Handedness is therefore part of the group identity** (`importPlan.ts`): a bake is a single
+  matrix, so a group holding both handednesses could only fix one of them and would leave the
+  others negative-scaled. Mirroring one of four copies of a strut yields 2 SubParts (3
+  placements + 1), not 1 SubPart with an invisible instance.
 - **Skinned meshes** have no usable node-local space, so the plan CPU-bakes their bind pose to
   scene-root space with the kitten pipeline's `bakeGeometry()` (authored normals transformed by
   the normal matrix, never recomputed) and their single instance is the import correction alone.
@@ -238,7 +243,7 @@ handled it and is only telling you what it did.
 | `multiMaterial`     | info     | an object with N>1 materials → N SubParts                                        | — (a game limit, not a choice)                                      |
 | `noNormals`         | info     | no normals — flat shading is computed at import                                  | —                                                                    |
 | `skinned`           | info     | a skinned mesh — its bind pose was baked into static geometry                     | —                                                                    |
-| `mirrored`          | info     | a negative-scale transform — baked into the geometry with the winding fixed       | —                                                                    |
+| `mirrored`          | info     | a negative-scale transform — baked into the geometry with the winding fixed, in its own SubPart | —                                                     |
 
 ## Storage + persistence
 

@@ -85,6 +85,40 @@ describe('analyzeImport — (mesh × material) grouping', () => {
     expect(plan.totals).toMatchObject({ subParts: 1, placements: 2, triangles: 12, materials: 1 })
   })
 
+  it('splits a mirrored instance off into its own group', () => {
+    // A SubPart ships ONE baked geometry; a mirrored copy needs the opposite winding, and a
+    // negative placement <Scale> would back-face-cull it invisible in-game (CullMode = BackBit,
+    // PartModelRenderer.cs:165). Same-handed copies still share one SubPart.
+    const geometry = new THREE.BoxGeometry(1, 1, 1)
+    const material = new THREE.MeshStandardMaterial()
+    material.name = 'Steel'
+    const nodes = [
+      ['Left', -1],
+      ['Right', 1],
+      ['LeftMirror', -1],
+    ] as const
+    const root = new THREE.Group()
+    for (const [name, sx] of nodes) {
+      const mesh = new THREE.Mesh(geometry, material)
+      mesh.name = name
+      mesh.scale.set(sx, 1, 1)
+      root.add(mesh)
+    }
+
+    const plan = analyzeImport(model(root), opts())
+
+    expect(plan.groups).toHaveLength(2)
+    expect(plan.groups.map((g) => g.instances.map((i) => i.nodeName))).toEqual([
+      ['Left', 'LeftMirror'],
+      ['Right'],
+    ])
+    expect(plan.totals).toMatchObject({ subParts: 2, placements: 3, materials: 1 })
+    // ...and the split is NOT reported as a multi-material split, which it is not.
+    expect(codes(plan)).toContain('mirrored')
+    expect(codes(plan)).not.toContain('multiMaterial')
+    expect(plan.groups.map((g) => g.suggestedName)).toEqual(['Left', 'Right'])
+  })
+
   it('carries each node world matrix (relative to the scene root) on its instance', () => {
     const mesh = box('Pod')
     mesh.position.set(0.5, 1, -2)

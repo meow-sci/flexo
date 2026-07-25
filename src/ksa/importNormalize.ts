@@ -115,6 +115,10 @@ function negateNormals(geometry: THREE.BufferGeometry): void {
  *    the mirror from the placement. A negative placement scale would reverse the winding
  *    in-game and back-face-cull the whole piece (CullMode = BackBit is unconditional,
  *    decomp/KSA/PartModelRenderer.cs:165) — an invisible part with no error.
+ *
+ * Every instance in a group shares its handedness (`analyzeImport` keys the group on it), which
+ * is what makes the mirror removal total: `det(placement_i) = det(M_i)/det(bake)` is then
+ * positive for EVERY instance, not just the first one the bake was taken from.
  */
 function bakeMatrixFor(group: ImportGroup, opts: ImportOptions): THREE.Matrix4 {
   const first = group.instances[0]?.matrix ?? IDENTITY

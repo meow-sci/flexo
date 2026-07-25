@@ -212,6 +212,43 @@ describe('normalizeImport — mirrored transforms', () => {
       expect(p.scale.z).toBeGreaterThan(0)
     }
   })
+
+  it('keeps EVERY placement positive when one instance of a mesh is mirrored and another is not', async () => {
+    // The Blender "duplicate and mirror a strut" case. One baked geometry cannot carry both
+    // triangle windings, so the mirrored copy has to become its own SubPart — otherwise the
+    // odd instance keeps a negative <Scale>, whose reversed winding back-face-culls it
+    // invisible in-game (CullMode = BackBit, PartModelRenderer.cs:165), silently.
+    const geometry = triangle()
+    const material = new THREE.MeshStandardMaterial()
+    material.name = 'Steel'
+    const upright = new THREE.Mesh(geometry, material)
+    upright.name = 'Strut'
+    upright.position.set(1, 0, 0)
+    const mirrored = new THREE.Mesh(geometry, material)
+    mirrored.name = 'Strut_mirror'
+    mirrored.position.set(-1, 0, 0)
+    mirrored.scale.set(-1, 1, 1)
+    const root = new THREE.Group()
+    root.add(upright, mirrored)
+
+    const result = await normalize(root)
+
+    expect(result.meshes).toHaveLength(2)
+    for (const mesh of result.meshes) {
+      for (const p of mesh.placements) {
+        expect(p.scale.x).toBeGreaterThan(0)
+        expect(p.scale.y).toBeGreaterThan(0)
+        expect(p.scale.z).toBeGreaterThan(0)
+      }
+    }
+    // ...and the mirror is in the geometry instead: reversed winding, mirrored positions.
+    const mirroredMesh = result.meshes.find((m) => m.sourceNode === 'Strut_mirror')!
+    expect(indicesOf(mirroredMesh.geometry)).toEqual([2, 1, 0])
+    expect(mirroredMesh.geometry.getAttribute('position').getX(1)).toBeCloseTo(-1, 6)
+    // The unmirrored copy is untouched.
+    const uprightMesh = result.meshes.find((m) => m.sourceNode === 'Strut')!
+    expect(indicesOf(uprightMesh.geometry)).toEqual([0, 1, 2])
+  })
 })
 
 describe('normalizeImport — double-siding', () => {

@@ -14,6 +14,28 @@ The KTX2 transcoder worker assets are addressed from `/basis/` and live in
 `public/basis/` — Vite copies `public/` into `dist/` automatically, so those work in
 the production build already. Only the `/ksa/` assets need the plugin below.
 
+## `public/draco/` — the Draco decoder for model import
+
+`public/draco/` holds the committed Draco glTF decoder (`draco_decoder.js`,
+`draco_decoder.wasm`, `draco_wasm_wrapper.js`), copied verbatim from
+`node_modules/three/examples/jsm/libs/draco/gltf/`. The model importer
+(`src/three/loadModelFile.ts`) points `DRACOLoader.setDecoderPath()` at
+`${import.meta.env.BASE_URL}draco/`, so a Blender export saved with Draco compression
+decodes in the browser. Committed rather than resolved from `node_modules` for exactly
+the same reason as `public/basis/`: these are runtime-fetched worker/WASM assets, not
+bundled modules, so they must exist as real files under the deployed base path.
+
+**Re-copy them whenever `three` is upgraded** — the decoder and the `DRACOLoader` that
+drives it ship as a matched pair, and a stale decoder fails at parse time with an opaque
+error:
+
+```
+cp node_modules/three/examples/jsm/libs/draco/gltf/* public/draco/
+```
+
+(The meshopt decoder needs no such copy — `three/addons/libs/meshopt_decoder.module.js`
+is a plain ES module and gets bundled.)
+
 ## Source of truth: `KSA_ASSETS_DIR`
 
 The `/ksa/*` files are sourced from a directory named by the **`KSA_ASSETS_DIR`** env

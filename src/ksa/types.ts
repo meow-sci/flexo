@@ -1526,6 +1526,44 @@ export interface KittenMeshSource {
 }
 
 /**
+ * An IMPORTED (glTF/GLB) SubPart's geometry source. Present ONLY on a {@link CustomMesh}
+ * created by the model importer (see `src/ksa/importPlan.ts` + `importNormalize.ts`) — it
+ * is mutually exclusive with {@link CustomMesh.primitive} and {@link CustomMesh.kitten}.
+ *
+ * Unlike a primitive (regenerable from its {@link PrimitiveSpec}) or a kitten submesh
+ * (re-baked from the shipped kitten gltf), imported geometry has NO regenerable source:
+ * the normalized atlas GLB in IndexedDB under `assetKeys.importGlb(importId)` is the ONLY
+ * copy, and this descriptor is just the name pair that resolves a mesh inside it.
+ *
+ * ONE import batch (one dropped file) produces ONE GLB holding one named mesh per SubPart,
+ * so every mesh from the same file shares an {@link importId} and is distinguished by
+ * {@link meshName} (== {@link CustomMesh.subPartId} == the glTF node+mesh name, per KSA's
+ * MeshAtlasFileReference which registers meshes by `meshes[i].name`).
+ */
+export interface ImportedMeshSource {
+  /** Import batch id — IndexedDB key of the normalized geometry GLB (assetKeys.importGlb). */
+  importId: string
+  /** Node/mesh name inside that GLB (== {@link CustomMesh.subPartId}). */
+  meshName: string
+  /** Provenance: the original file name, e.g. "rcs_pod.glb". Shown in the UI. */
+  sourceFile: string
+  /** Provenance: the glTF node/object name this SubPart was cut from. Also the re-import match key. */
+  sourceNode: string
+  /** Provenance: the glTF material name this SubPart was cut from. Also the re-import match key. */
+  sourceMaterial: string
+  /** Triangle count of the normalized geometry (budget warnings + the provenance block). */
+  triangles: number
+  /** Vertex count of the normalized geometry. */
+  vertices: number
+  /**
+   * Export through KSA's translucent `<PartModelGlass>` path instead of `<PartModel>`
+   * (offered when the glTF material used `alphaMode: BLEND`; opt-in, because KSA glass is a
+   * fixed ~0.75-opacity, ~10%-tinted, non-glowing shader — see MeshGlassIndirect.frag).
+   */
+  transparent?: boolean
+}
+
+/**
  * Emissive (glow) authoring shape for a custom mesh.
  *  - 'whole'   — a uniform glow over the whole mesh (color + strength).
  *  - 'painted' — an RGBA glow bitmap authored in the in-browser paint tool (stored in IndexedDB
@@ -1571,10 +1609,12 @@ export interface GlassConfig {
 export type VisorSurface = 'glass' | 'glow' | 'glassGlow'
 
 /**
- * A user-created custom SubPart — either a primitive mesh + per-face textures, or a
- * part-ified kitten submesh ({@link kitten} set, {@link primitive} absent). Becomes a
- * custom SubPart template: placements reference {@link subPartId} via subPartTemplateId,
- * exactly like a Core template id. The generated GLB node is named {@link subPartId}.
+ * A user-created custom SubPart — a primitive mesh + per-face textures, a part-ified
+ * kitten submesh ({@link kitten} set), or an imported glTF mesh ({@link imported} set).
+ * The three sources are MUTUALLY EXCLUSIVE; discriminate with {@link meshKind}, never by
+ * asserting `primitive!`. Becomes a custom SubPart template: placements reference
+ * {@link subPartId} via subPartTemplateId, exactly like a Core template id. The generated
+ * GLB node is named {@link subPartId}.
  */
 export interface CustomMesh {
   /** Stable unique id (IndexedDB key for the generated GLB), e.g. "mesh_ab12cd". */
@@ -1586,10 +1626,12 @@ export interface CustomMesh {
    * from {@link name}/project name so renames never break existing placements.
    */
   subPartId: string
-  /** The primitive shape + parameters. Absent for kitten submeshes ({@link kitten} set). */
+  /** The primitive shape + parameters. Absent for kitten ({@link kitten}) and imported ({@link imported}) meshes. */
   primitive?: PrimitiveSpec
-  /** Part-ified kitten submesh source. When set, this mesh is a kitten submesh and {@link primitive} is absent. */
+  /** Part-ified kitten submesh source. When set, {@link primitive} and {@link imported} are absent. */
   kitten?: KittenMeshSource
+  /** Imported glTF/GLB mesh source. When set, {@link primitive} and {@link kitten} are absent. */
+  imported?: ImportedMeshSource
   /**
    * Per-face texture + UV configuration. Keys are primitive-kind-specific face names
    * from PRIMITIVE_FACE_KEYS ('right'/'left'/… for box, 'side'/'top'/'bottom' for
@@ -1619,6 +1661,25 @@ export interface CustomMesh {
    * Undefined ⇒ 'glass'.
    */
   surface?: VisorSurface
+}
+
+/** Which geometry source backs a {@link CustomMesh}. See {@link meshKind}. */
+export type CustomMeshKind = 'primitive' | 'kitten' | 'imported'
+
+/**
+ * The discriminator for {@link CustomMesh}'s three mutually exclusive geometry sources.
+ *
+ * EVERY consumer must switch on this — resolving geometry, building materials, rebuilding
+ * the atlas, encoding the project, exporting the mod. Do NOT test `m.kitten ? … : m.primitive!`:
+ * that idiom silently mis-handles a third kind (an imported mesh would be treated as a
+ * primitive and crash on the missing spec), which is exactly the trap a third source kind
+ * introduces. A mesh with no source at all is reported as 'primitive' — the historical
+ * default and the only kind whose absence is recoverable (an empty PrimitiveSpec).
+ */
+export function meshKind(m: CustomMesh): CustomMeshKind {
+  if (m.kitten) return 'kitten'
+  if (m.imported) return 'imported'
+  return 'primitive'
 }
 
 /**

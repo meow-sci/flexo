@@ -84,6 +84,14 @@ export const assetKeys = {
   textureSource: (id: string) => `tex-src:${id}`,
   textureKtx2: (id: string) => `tex-ktx2:${id}`,
   meshGlb: (id: string) => `mesh-glb:${id}`,
+  /**
+   * The normalized geometry GLB for one import batch (one dropped glTF file), holding one
+   * named mesh per imported SubPart. This is the ONLY copy of imported geometry — unlike a
+   * primitive (regenerable from its PrimitiveSpec) or a kitten submesh (re-baked from the
+   * shipped gltf) it cannot be reconstructed — and it is far too big for the localStorage
+   * ProjectSnapshot, which is precisely the split this store exists for.
+   */
+  importGlb: (id: string) => `import-glb:${id}`,
   /** The painted RGBA glow bitmap (PNG) for a mesh's 'painted' emissive shape. */
   emissivePaint: (id: string) => `emissive-paint:${id}`,
 }

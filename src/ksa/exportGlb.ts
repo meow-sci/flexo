@@ -84,7 +84,23 @@ function toKsaGeometry(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
   return out
 }
 
-export async function buildMeshAtlasGlb(nodes: MeshAtlasNode[]): Promise<Uint8Array> {
+export interface MeshAtlasOptions {
+  /**
+   * Emit the paired `<id>_VM` picking mesh for every node (default true — the shipped mod
+   * needs them, see VIEW MESHES in the file header).
+   *
+   * The model importer sets this FALSE: its atlas is an intermediate, editor-side store of
+   * normalized geometry in IndexedDB, not something KSA ever loads. The `_VM` pairs are
+   * generated from the same geometry at export time (and may be decimated there), so
+   * carrying them in the import atlas would double its size for nothing.
+   */
+  viewMeshes?: boolean
+}
+
+export async function buildMeshAtlasGlb(
+  nodes: MeshAtlasNode[],
+  { viewMeshes = true }: MeshAtlasOptions = {},
+): Promise<Uint8Array> {
   if (nodes.length === 0) throw new Error('buildMeshAtlasGlb: no nodes to export')
 
   const scene = new THREE.Scene()
@@ -104,11 +120,13 @@ export async function buildMeshAtlasGlb(nodes: MeshAtlasNode[]): Promise<Uint8Ar
     // GLTFExporter dedupes meshes that share geometry+material into ONE glTF mesh, which
     // would collapse the render and view meshes and leave KSA only one registered name.
     // Referenced from <MeshView> in the Assets XML. See file header.
-    const viewGeometry = toKsaGeometry(node.geometry)
-    temporaries.push(viewGeometry)
-    const viewMesh = new THREE.Mesh(viewGeometry, placeholder)
-    viewMesh.name = node.name + VIEW_MESH_SUFFIX
-    scene.add(viewMesh)
+    if (viewMeshes) {
+      const viewGeometry = toKsaGeometry(node.geometry)
+      temporaries.push(viewGeometry)
+      const viewMesh = new THREE.Mesh(viewGeometry, placeholder)
+      viewMesh.name = node.name + VIEW_MESH_SUFFIX
+      scene.add(viewMesh)
+    }
   }
 
   const exporter = new GLTFExporter()

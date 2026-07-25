@@ -1,8 +1,13 @@
 # Colliders — authoring KSA part collision volumes in flexo
 
-> **Status:** 📋 PLAN (not implemented). Research complete and verified against KSA build
+> **Status:** ✅ **IMPLEMENTED** (all four phases). Research verified against KSA build
 > **2026.7.9.5018** (`ksa-game-assemblies/current/decomp` + `Content/Core`) and the real GLB
 > meshes in `flexo-private-assets/assets/Meshes`.
+>
+> Living docs: [scope/colliders.md](../scope/colliders.md) (game contract) and
+> [docs/colliders.md](../docs/colliders.md) (flexo-internal view) — this plan is the
+> historical design record. **Still unverified:** in-game behaviour of the exported XML,
+> capsule semantics (Core ships zero capsules), and the posed-animation collider preview.
 >
 > **Goal:** let a flexo user author the collision volume of a Part — the coarse shapes physics
 > uses instead of the visual mesh — see it in the 3D workspace, fit it to the model with one

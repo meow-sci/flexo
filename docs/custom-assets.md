@@ -89,7 +89,7 @@ would re-run `GLTFExporter` over a multi-megabyte model on every rebuild.
   `write()`. **This is the single chokepoint for the texture format** — a future
   BC7 swap touches only this file. Hand-builds the Data Format Descriptor (DFD) for
   a 4×8-bit RGBA texel.
-  - Container tags are **always `VK_FORMAT_R8G8B8A8_UNORM` (23) + linear transfer**,
+  - Container tags are **always `VK_FORMAT_R8G8B8A8_UNORM` (vkFormat 37) + linear transfer**,
     even for sRGB content: KSA honors the file's vkFormat verbatim AND its shader
     gamma-decodes the diffuse sample itself (`gammaToLinear` = pow 2.2), so an
     `_SRGB`-tagged file double-decodes in-game (mid-tones too dark). Diffuse content

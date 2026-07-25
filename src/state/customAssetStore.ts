@@ -20,6 +20,7 @@ import type {
 } from '../ksa/types'
 import { KITTEN_LABELS, createDefaultMaterial, meshKind } from '../ksa/types'
 import type { NormalizedImport } from '../ksa/importNormalize'
+import type { ImportMaterialPlan } from '../ksa/importMaterials'
 import {
   $part,
   pushUndo,
@@ -42,6 +43,7 @@ import { decodeImage, type ImageLevel } from '../ktx/decodeImage'
 import { encodeImageToKtx2, isLegacySrgbKtx2 } from '../ktx/encodeKtx2'
 import { prepareChannelImage } from '../ktx/channelTransforms'
 import {
+  baseSizeFor,
   compositeGlow,
   solidGlowBitmap,
   neutralBase,
@@ -305,10 +307,14 @@ export async function glowBitmapFor(m: CustomMesh): Promise<GlowBitmap | null> {
  * The decoded base diffuse a glow composites over, for one primitive face: the face's
  * texture → the material's baseColor image → the material's picked color (as a solid)
  * → neutral gray. Mirrors the export-side resolution in modExport so editor == export.
+ *
+ * `glow` sizes the SYNTHESISED bases only: compositeGlow outputs at the base's resolution,
+ * so a 4×4 solid would throw away a high-resolution glow (see glowComposite.baseSizeFor).
  */
 async function faceBaseImage(
   texId: string | undefined,
   material: CustomMaterial | undefined,
+  glow?: GlowBitmap | null,
 ): Promise<ImageLevel> {
   const mapTexId =
     texId || (material?.baseColor.kind === 'map' ? material.baseColor.textureId : undefined)
@@ -316,8 +322,10 @@ async function faceBaseImage(
     const src = await getAsset(assetKeys.textureSource(mapTexId))
     if (src) return (await decodeImage(src)).levels[0]
   }
-  if (material?.baseColor.kind === 'color') return solidBase(material.baseColor.color)
-  return neutralBase()
+  const { width, height } = baseSizeFor(glow)
+  if (material?.baseColor.kind === 'color')
+    return solidBase(material.baseColor.color, width, height)
+  return neutralBase(width, height)
 }
 
 /**
@@ -364,7 +372,8 @@ async function buildKittenSubMeshMaterial(
   if (opaqueGlow && m.emissive) {
     const glow = await glowBitmapFor(m)
     if (glow) {
-      const { diffuse, mask } = compositeGlow(neutralBase(), glow)
+      const size = baseSizeFor(glow)
+      const { diffuse, mask } = compositeGlow(neutralBase(size.width, size.height), glow)
       return buildGlowingFaceMaterial(diffuse, mask)
     }
   }
@@ -391,10 +400,14 @@ async function buildKittenSubMeshMaterial(
  * misses. Geometry comes from the shared MeshAtlasCache (tangents, node transform baked), so
  * imported SubParts render through the identical path as Core ones.
  *
- * Materials/textures are Phase 2 (plans/IMPORT_MODELS.md §3.4): until then an imported mesh
- * wears the same neutral flat material an untextured primitive does.
+ * The surface goes through the SAME resolvers as a primitive's — `resolveMaterialChannels` +
+ * `buildCustomMaterial`, and `glowBitmapFor` + `compositeGlow` + `buildGlowingFaceMaterial`
+ * for a glow — so the editor preview and the exported `<PbrMaterial>` are produced by one
+ * body of code. The only difference is that an imported mesh has no per-face grid: one
+ * material for the whole mesh, exactly like a KSA `<PartModel>`.
  */
 async function buildImportedCatalogEntry(
+  part: EditingPart,
   m: CustomMesh,
   imported: ImportedMeshSource,
 ): Promise<CatalogSubPart | null> {
@@ -404,13 +417,43 @@ async function buildImportedCatalogEntry(
     console.warn(`flexo: imported mesh '${m.name}' has no resolvable geometry — skipped`)
     return null
   }
-  customMeshRenderCache.set(m.subPartId, { geometry, materials: [makeFlatMaterial()] })
+
+  const material = materialFor(part, m)
+  const channels = material ? resolveMaterialChannels(material) : undefined
+  const baseMapUrl =
+    material?.baseColor.kind === 'map'
+      ? textureKtx2Urls.get(material.baseColor.textureId)
+      : undefined
+  const glow = await glowBitmapFor(m)
+
+  let mat: THREE.MeshStandardMaterial
+  if (glow) {
+    const { diffuse, mask } = compositeGlow(await faceBaseImage(undefined, material, glow), glow)
+    const pbr = channels
+      ? { metalness: channels.metalness, roughness: channels.roughness }
+      : undefined
+    mat = buildGlowingFaceMaterial(diffuse, mask, 'repeat', pbr)
+    // SubPartObject re-applies the shader patches per instance from the final map set, so
+    // attaching the material's map channels here leaves the flags correct.
+    if (channels) await applyMaterialChannels(mat, channels)
+  } else if (channels) {
+    mat = await buildCustomMaterial({
+      mapUrl: baseMapUrl,
+      color: material?.baseColor.kind === 'color' ? material.baseColor.color : undefined,
+      wrap: 'repeat',
+      ...channels,
+    })
+  } else {
+    mat = makeFlatMaterial()
+  }
+  customMeshRenderCache.set(m.subPartId, { geometry, materials: [mat] })
   return {
     id: m.subPartId,
     atlasUrl: url,
     meshNodeName: m.subPartId,
     materialId: undefined,
-    diffuseUrl: undefined,
+    // Cache-busting key for the shared-material cache, exactly like the primitive path.
+    diffuseUrl: baseMapUrl,
     sourceFile: '(imported)',
   }
 }
@@ -447,7 +490,7 @@ async function buildPrimitiveCatalogEntry(
     const texId = ft[key]?.textureId
     const wrap = ft[key]?.wrap ?? 'repeat'
     if (glow) {
-      const { diffuse, mask } = compositeGlow(await faceBaseImage(texId, material), glow)
+      const { diffuse, mask } = compositeGlow(await faceBaseImage(texId, material, glow), glow)
       const pbr = channels
         ? { metalness: channels.metalness, roughness: channels.roughness }
         : undefined
@@ -505,7 +548,7 @@ async function refreshCatalog(): Promise<void> {
     part.customMeshes.map(async (m): Promise<CatalogSubPart | null> => {
       switch (meshKind(m)) {
         case 'imported':
-          return m.imported ? buildImportedCatalogEntry(m, m.imported) : null
+          return m.imported ? buildImportedCatalogEntry(part, m, m.imported) : null
         case 'kitten':
           return m.kitten && atlasUrl ? buildKittenCatalogEntry(m, m.kitten) : null
         case 'primitive':
@@ -598,10 +641,19 @@ function scheduleRebuild(): Promise<void> {
 }
 
 // ── textures ─────────────────────────────────────────────────────────────────
-export async function addCustomTexture(
+
+/**
+ * Creates a texture's BINARIES and runtime URLs and returns its descriptor — everything
+ * {@link addCustomTexture} does EXCEPT touching the document.
+ *
+ * Split out because an import creates several textures, several materials and several meshes
+ * that must land in ONE undo step: each `mutate()` is one undo entry, so the non-mutating
+ * halves have to be callable on their own (see {@link importModelAsMeshes}).
+ */
+async function createTextureAsset(
   file: Blob,
   name: string,
-  channel: TextureChannel = 'baseColor',
+  channel: TextureChannel,
 ): Promise<CustomTexture> {
   const id = `tex_${shortId()}`
   const decoded = prepareChannelImage(await decodeImage(file), channel)
@@ -614,13 +666,21 @@ export async function addCustomTexture(
   textureSrcUrls.set(id, URL.createObjectURL(file))
   publishTextureUrls()
 
-  const tex: CustomTexture = {
+  return {
     id,
     name: name.trim() || 'texture',
     width: decoded.width,
     height: decoded.height,
     channel,
   }
+}
+
+export async function addCustomTexture(
+  file: Blob,
+  name: string,
+  channel: TextureChannel = 'baseColor',
+): Promise<CustomTexture> {
+  const tex = await createTextureAsset(file, name, channel)
   mutate('add texture', tex.name, (p) => {
     p.customTextures.push(tex)
   })
@@ -695,6 +755,21 @@ export function removeCustomTexture(id: string): void {
 // ── materials ────────────────────────────────────────────────────────────────
 
 /**
+ * The descriptor half of {@link addCustomMaterial} — pure, no document write. Same split
+ * rationale as {@link createTextureAsset}: an import builds several of these and commits them
+ * all in one `mutate()`.
+ */
+function buildCustomMaterialDescriptor(
+  name: string,
+  init?: Partial<Omit<CustomMaterial, 'id' | 'name'>>,
+): CustomMaterial {
+  return {
+    ...createDefaultMaterial(`mat_${shortId()}`, name.trim() || 'material'),
+    ...init,
+  }
+}
+
+/**
  * Creates a reusable material. `init` overlays the neutral defaults (a preset's
  * metal/rough values, a picked base color). Returns the created material.
  */
@@ -702,10 +777,7 @@ export async function addCustomMaterial(
   name: string,
   init?: Partial<Omit<CustomMaterial, 'id' | 'name'>>,
 ): Promise<CustomMaterial> {
-  const mat: CustomMaterial = {
-    ...createDefaultMaterial(`mat_${shortId()}`, name.trim() || 'material'),
-    ...init,
-  }
+  const mat = buildCustomMaterialDescriptor(name, init)
   mutate('add material', mat.name, (p) => {
     p.customMaterials.push(mat)
   })
@@ -848,46 +920,135 @@ function instanceBase(name: string): string {
 }
 
 /**
+ * Turns the {@link ImportMaterialPlan}'s specs into real flexo assets: one
+ * {@link CustomTexture} per {@link ImportTextureSpec} (binaries + KTX2 + blob URLs) and one
+ * {@link CustomMaterial} per {@link ImportMaterialSpec}, wired to those texture ids.
+ *
+ * NOTHING here writes to the document — the descriptors are handed back for the single
+ * `mutate()` in {@link importModelAsMeshes}. Imported textures and materials are ORDINARY
+ * flexo assets from this point on: editable in the material dialog, reusable on other meshes,
+ * deletable, and exported through the same `<PbrMaterial>` path as hand-authored ones.
+ */
+async function createImportMaterialAssets(
+  plan: ImportMaterialPlan,
+): Promise<{ textures: CustomTexture[]; materials: Map<string, CustomMaterial> }> {
+  const textureByKey = new Map<string, CustomTexture>()
+  for (const spec of plan.textures) {
+    const blob = new Blob([spec.bytes.slice()], { type: spec.mime })
+    textureByKey.set(spec.key, await createTextureAsset(blob, spec.name, spec.channel))
+  }
+
+  const materials = new Map<string, CustomMaterial>()
+  for (const spec of plan.materials) {
+    const baseTex = spec.baseColorTextureKey
+      ? textureByKey.get(spec.baseColorTextureKey)
+      : undefined
+    const ormTex = spec.ormTextureKey ? textureByKey.get(spec.ormTextureKey) : undefined
+    const normalTex = spec.normalTextureKey ? textureByKey.get(spec.normalTextureKey) : undefined
+    const init: Partial<Omit<CustomMaterial, 'id' | 'name'>> = {
+      baseColor: baseTex
+        ? { kind: 'map', textureId: baseTex.id }
+        : { kind: 'color', color: spec.baseColor ?? { r: 255, g: 255, b: 255 } },
+      // The scalars are what KSA gets when there is no packed image (as a solid ORM texel);
+      // an ormPacked texture overrides them in both the editor and the export.
+      metalness: { kind: 'value', value: spec.metalness },
+      roughness: { kind: 'value', value: spec.roughness },
+    }
+    if (ormTex) init.ormPacked = { textureId: ormTex.id }
+    if (normalTex) init.normal = { textureId: normalTex.id, strength: spec.normalStrength }
+    materials.set(spec.key, buildCustomMaterialDescriptor(spec.name, init))
+  }
+  return { textures: [...textureByKey.values()], materials }
+}
+
+/**
  * Commits a normalized model import into the document — the editor-facing half of the importer
- * (parse/analyze/normalize live in `loadModelFile.ts` + `importPlan.ts` + `importNormalize.ts`).
+ * (parse/analyze/normalize/translate live in `loadModelFile.ts` + `importPlan.ts` +
+ * `importNormalize.ts` + `importMaterials.ts`).
  *
- * In ONE undo step it creates a layer named after the file, one {@link CustomMesh} per
- * normalized mesh, and one placement per instance the plan found (one SubPart, N placements —
- * KSA's own instancing pattern). The rebuild then publishes the catalog/render-cache so the
- * imported SubParts render through the normal SubPart pipeline, exactly like a primitive.
+ * In ONE undo step it creates a layer named after the file, every imported texture and
+ * material, one {@link CustomMesh} per normalized mesh, and one placement per instance the
+ * plan found (one SubPart, N placements — KSA's own instancing pattern). The rebuild then
+ * publishes the catalog/render-cache so the imported SubParts render through the normal
+ * SubPart pipeline, exactly like a primitive.
  *
- * Order matters: the geometry GLB is persisted AND registered as a blob URL BEFORE the
- * mutation, because the rebuild it triggers resolves every imported mesh out of that GLB.
+ * ONE UNDO STEP is the constraint that shapes this function: `mutate()` pushes an undo entry,
+ * so every binary (the geometry GLB, each texture's source + .ktx2, each glow bitmap) is
+ * written and registered FIRST, and a single `mutate()` at the end appends all the
+ * descriptors at once. It is also required for correctness — the rebuild that mutation
+ * triggers resolves geometry, texture URLs and glow bitmaps out of exactly those binaries.
  */
 export async function importModelAsMeshes(
   normalized: NormalizedImport,
   fileName: string,
+  materialPlan?: ImportMaterialPlan,
 ): Promise<void> {
   await putAsset(assetKeys.importGlb(normalized.importId), normalized.glb, 'model/gltf-binary')
   registerImportAtlas(normalized.importId, normalized.glb)
+
+  const assets = materialPlan
+    ? await createImportMaterialAssets(materialPlan)
+    : { textures: [], materials: new Map<string, CustomMaterial>() }
+
+  /**
+   * Mesh descriptors are built BEFORE the mutation because a glowing material's bitmap is
+   * keyed by the mesh id (assetKeys.emissivePaint), so the id has to exist before the blob
+   * can be written — and the blob has to exist before the rebuild reads it.
+   */
+  const meshes: CustomMesh[] = []
+  for (const mesh of normalized.meshes) {
+    const spec = materialPlan?.materialKeyByGroup.get(mesh.materialGroupKey)
+    const material = spec ? assets.materials.get(spec) : undefined
+    const materialSpec = spec ? materialPlan?.materials.find((m) => m.key === spec) : undefined
+    const id = `mesh_${shortId()}`
+    const descriptor: CustomMesh = {
+      id,
+      name: mesh.name,
+      subPartId: mesh.subPartId,
+      imported: {
+        importId: normalized.importId,
+        // The GLB names every mesh by its subPartId (see importNormalize's atlas build).
+        meshName: mesh.subPartId,
+        sourceFile: normalized.fileName,
+        sourceNode: mesh.sourceNode,
+        sourceMaterial: mesh.sourceMaterial,
+        triangles: mesh.triangles,
+        vertices: mesh.vertices,
+      },
+      faceTextures: {},
+    }
+    if (material) descriptor.materialId = material.id
+    if (materialSpec?.transparent) descriptor.imported!.transparent = true
+    if (materialSpec?.glowPng) {
+      // REUSE OF THE 'painted' SHAPE (plans/IMPORT_MODELS.md §3.4 called for a new 'map'
+      // shape): an imported emissive is exactly what 'painted' already models — an RGBA
+      // bitmap where rgb is the glow colour and a is the intensity, stored under
+      // assetKeys.emissivePaint(meshId). Reusing it means glowBitmapFor(), compositeGlow(),
+      // the editor material and the exporter all work unchanged, and the user can retouch
+      // an imported glow in the existing paint dialog.
+      const png = new Blob([materialSpec.glowPng.slice()], { type: 'image/png' })
+      await putAsset(assetKeys.emissivePaint(id), png, 'image/png')
+      emissivePaintUrls.set(id, URL.createObjectURL(png))
+      descriptor.emissive = {
+        shape: 'painted',
+        color: materialSpec.glowColor ?? DEFAULT_GLOW.color,
+        strength: materialSpec.glowStrength ?? DEFAULT_GLOW.strength,
+      }
+    }
+    meshes.push(descriptor)
+  }
+  publishEmissivePaintUrls()
 
   const layerId = nextLayerId($part.get())
   const layerName = fileName.replace(/\.[^.]+$/, '') || 'Imported model'
   const newPlacementIndices: number[] = []
   mutate('import model', fileName, (p) => {
     p.layers.push({ id: layerId, name: layerName })
-    for (const mesh of normalized.meshes) {
-      p.customMeshes.push({
-        id: `mesh_${shortId()}`,
-        name: mesh.name,
-        subPartId: mesh.subPartId,
-        imported: {
-          importId: normalized.importId,
-          // The GLB names every mesh by its subPartId (see importNormalize's atlas build).
-          meshName: mesh.subPartId,
-          sourceFile: normalized.fileName,
-          sourceNode: mesh.sourceNode,
-          sourceMaterial: mesh.sourceMaterial,
-          triangles: mesh.triangles,
-          vertices: mesh.vertices,
-        },
-        faceTextures: {},
-      })
+    p.customTextures.push(...assets.textures)
+    p.customMaterials.push(...assets.materials.values())
+    for (let i = 0; i < normalized.meshes.length; i++) {
+      const mesh = normalized.meshes[i]!
+      p.customMeshes.push(meshes[i]!)
       // Keep instanceIds unique across the whole part (e.g. the same file imported twice).
       const base = instanceBase(mesh.name)
       let taken = p.placements.filter(

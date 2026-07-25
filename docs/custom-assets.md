@@ -120,9 +120,22 @@ would re-run `GLTFExporter` over a multi-megabyte model on every rebuild.
 ### Imported models (glTF)
 
 - **`src/three/loadModelFile.ts`** — File(s) → a three scene (`GLTFLoader` + DRACO/meshopt
-  decoders; `.gltf` sidecars resolve through a `blob:` URL map).
+  decoders; `.gltf` sidecars resolve through a `blob:` URL map). Also exposes `ModelSource`,
+  a narrow façade over `GLTFParser`: the glTF **JSON** (factors/extensions/samplers three
+  folds away), `materialIndex(threeMaterial)` via `parser.associations`, and
+  `imageBytes(i)` — each image's **original encoded PNG/JPEG bytes** (GLB `bufferView`,
+  `data:` URI, or the retained sidecar `File`). Original bytes matter because flexo stores
+  the source under `tex-src:<id>` and **re-encodes from it** on every later channel /
+  normal-strength change; a canvas readback would silently become the new "source".
 - **`src/ksa/importPlan.ts`** — `analyzeImport()`: (glTF mesh × material) → one SubPart,
-  every referencing node → one placement, plus the "KSA can't do this" warning catalog.
+  every referencing node → one placement, the glTF material index on each group, plus the
+  "KSA can't do this" warning catalog (including the JSON-only ones: unsupported material
+  extensions, `KHR_texture_basisu` sources, non-Repeat sampler wraps, `KHR_texture_transform`,
+  per-channel `TEXCOORD_1`).
+- **`src/ksa/importMaterials.ts`** — `planImportMaterials()`: the glTF metallic-roughness
+  material model → flexo `CustomTexture`/`CustomMaterial` specs. See **Imported materials**
+  below. Pure and descriptor-shaped (image codecs are injectable), so it unit-tests without
+  a canvas.
 - **`src/ksa/importNormalize.ts`** — `normalizeImport()`: bakes transforms/mirror/bind-pose,
   strips unread attributes, forces indices, and emits ONE atlas GLB per import batch
   (`viewMeshes: false` — `_VM` meshes are generated at export instead).
@@ -131,8 +144,40 @@ would re-run `GLTFExporter` over a multi-megabyte model on every rebuild.
   `getImportedRawGeometry()` (export: **no** tangents, because MikkTSpace de-indexes and KSA
   requires indices). Cached geometries are shared — clone, never dispose.
 - **`customAssetStore.importModelAsMeshes()`** — commits a normalized import as ONE undo
-  step: a layer named after the file, one `CustomMesh{imported}` per group, one placement
-  per instance; the GLB is persisted + registered first so the rebuild can resolve it.
+  step: a layer named after the file, every imported texture + material, one
+  `CustomMesh{imported}` per group, one placement per instance. **Every binary is written
+  first** (the atlas GLB, each texture's source + `.ktx2`, each glow bitmap), then a single
+  `mutate()` appends all the descriptors — both because `mutate()` is one undo entry each,
+  and because the rebuild it triggers resolves geometry/textures/glow out of those binaries.
+  The non-mutating halves it needs are `createTextureAsset()` and
+  `buildCustomMaterialDescriptor()`; `addCustomTexture`/`addCustomMaterial` are thin
+  wrappers over them.
+
+#### Imported materials — the glTF → KSA slot mapping
+
+KSA's `<PbrMaterial>` has **five texture slots and zero scalars**, so **every glTF factor is
+baked into pixels** at import (there is nowhere downstream to put a number):
+
+| KSA slot | glTF source | Import handling |
+| --- | --- | --- |
+| `<Diffuse>` | `baseColorTexture` × `baseColorFactor` | White factor ⇒ the image ships **verbatim**. Otherwise the factor is multiplied in **linear space** (sRGB byte → linear → × → sRGB byte; multiplying the bytes would darken wrongly) and the result is PNG-encoded as the texture's source. No texture ⇒ `baseColor` as a picked colour (exports as a deduped 1×1 solid). Factor **alpha is ignored** — KSA parts are opaque or glass, never per-texel alpha. |
+| `<AoRoughMetal>` | `occlusionTexture`(R) + `metallicRoughnessTexture`(G,B) + their factors/`occlusionStrength` | Same channel layout as KSA ("Following GLTF spec"). Occlusion and MR **sharing one image with all factors at 1** (Blender's "glTF Settings" ORM packing) is reused **verbatim** — smaller mod, no requantize loss. Otherwise `packOrmLevel()` repacks (`ao = 255 + strength*(texR-255)`; rough/metal are linear data, so the factors multiply in byte space). No maps ⇒ scalars only (a solid ORM texel). |
+| `<Normal>` | `normalTexture` + `scale` | Verbatim bytes + `strength = scale`. **Not** pre-transformed: `prepareChannelImage(…, 'normal', strength)` owns KSA's X-flip and the strength bake at encode, and `modExport.normalPathFor` re-derives a strength ≠ 1 from the same source. |
+| `<Emissive>` | `emissiveTexture` × `emissiveFactor` × `KHR_materials_emissive_strength` | KSA's glow is WHITE × mask × 1.25 added after lighting — there is no emissive colour — so the colour is composited into the **diffuse** and only the intensity is a mask. The import composes a glow bitmap (`rgb` = the emissive product as sRGB, `a` = its linear luminance) and stores it under the **existing `'painted'` emissive shape** (see below). |
+| `<ThinFilm>` | — | No glTF equivalent; `<PartModelDynamic>`-only and heat-gated. Out of scope. |
+
+`alphaMode: BLEND` sets `ImportedMeshSource.transparent` (the opt-in `<PartModelGlass>`
+path); `MASK` is a warning only — KSA's part shader has no cutout.
+
+**Dedup.** Textures are keyed by a pure FNV-1a-64 hash of the **source bytes** + the channel +
+any baked-factor parameters, so one image shared by five materials becomes one `CustomTexture`
+— but the same image used as *two* channels correctly becomes two (each channel encodes
+differently). Materials are keyed by the glTF material index, so two SubParts cut from one
+Blender material share one flexo `CustomMaterial` (and therefore one exported `<PbrMaterial>`).
+
+**Imported textures and materials are ordinary flexo assets** from the moment they land:
+editable in the material dialog, reusable on other meshes, deletable, and exported through the
+same path as hand-authored ones. Nothing about them is a parallel universe.
 
 ### Assets XML
 
@@ -350,9 +395,20 @@ translucent **glass tint** — authored in the per-mesh panel (`ManageTexturesPa
 
 **The model:**
 - **Glow** (`CustomMesh.emissive: EmissiveConfig`): `whole` (uniform color + strength) or `painted`
-  (paint canvas; RGBA bitmap in IndexedDB under `assetKeys.emissivePaint`). On every primitive AND
-  kitten submesh. Exports a composited `*_Diffuse.ktx2` (color baked in) + `*_Emissive.ktx2` (white
-  mask) + `<Emissive>` in the Assets XML.
+  (RGBA bitmap in IndexedDB under `assetKeys.emissivePaint`). On every primitive, kitten submesh
+  AND imported mesh. Exports a composited `*_Diffuse.ktx2` (color baked in) + `*_Emissive.ktx2`
+  (white mask) + `<Emissive>` in the Assets XML.
+- **An IMPORTED emissive reuses `'painted'`** rather than adding a shape of its own: a glTF
+  `emissiveTexture × emissiveFactor` composes to exactly what `'painted'` already models — an RGBA
+  bitmap whose `rgb` is the glow colour and whose `a` is the intensity. So `glowBitmapFor()`,
+  `compositeGlow()`, the editor material and the exporter all work unchanged, and an imported glow
+  can be retouched in the existing paint dialog. (`plans/IMPORT_MODELS.md` §3.4 originally proposed
+  a new `'map'` shape; the reuse is strictly less code for the same result.)
+- **A synthesised base is sized to the glow.** `compositeGlow` outputs at the BASE's resolution, so
+  a colour-only (or kitten) material's 4×4 solid would have collapsed a 2048² painted/imported glow
+  to 4×4. `glowComposite.baseSizeFor(glow)` gives both resolvers (`customAssetStore.faceBaseImage`,
+  `modExport.exportBaseImage`) the glow's dimensions — a uniform colour has no intrinsic resolution,
+  so generating it larger costs nothing and loses nothing.
 - **Visor surface** (`CustomMesh.surface`, only on a `transparent` kitten submesh — the visor):
   `glass` (translucent, tintable via `GlassConfig` → a solid sRGB diffuse on the `<PartModelGlass>`
   path), `glow` (opaque emissive `<PartModel>`), or `glassGlow` (layered — export `expandGlassGlow`
@@ -384,9 +440,9 @@ design. Still deliberately out of scope:
   the no-sidecar default target is uncompressed Rgba32, so the sidecar is required
   for the VRAM win.
 - **Four primitives** (box / cylinder / sphere / plane) **+ imported glTF models** — no CSG,
-  no mesh editing in flexo. Imported models currently render with the neutral flat material:
-  their glTF materials/textures and their mod export are the next two phases
-  ([plans/IMPORT_MODELS.md](../plans/IMPORT_MODELS.md) Phases 2–3), as are the import dialog
+  no mesh editing in flexo. Imported models now carry their real glTF surfaces (see **Imported
+  materials** above); their **mod export** is the next phase
+  ([plans/IMPORT_MODELS.md](../plans/IMPORT_MODELS.md) Phase 3), as are the import dialog
   (preview / options / warnings) and re-import.
 - **Generated mesh GLBs not persisted** — regenerated from params each session (fine; cheap).
   Imported model GLBs are the exception (see `assetDb.ts` above).

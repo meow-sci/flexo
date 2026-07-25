@@ -51,6 +51,29 @@ vi.mock('../three/importedMeshCache', () => {
   }
 })
 
+// happy-dom has no working 2D canvas, so the real decodeImage (createImageBitmap → canvas
+// readback) can't run. Stub the DECODE only; the mip builder and the KTX2 encoder underneath
+// it stay real, so the texture-creation path is exercised end to end.
+vi.mock('../ktx/decodeImage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../ktx/decodeImage')>()
+  const base = { width: 2, height: 2, rgba: new Uint8Array(16).fill(200) }
+  return {
+    ...actual,
+    decodeImage: async () => ({ width: 2, height: 2, levels: actual.buildMipChain(base) }),
+  }
+})
+
+// Loading a .ktx2 needs a WebGLRenderer to pick a transcode target (textureSupport), which
+// there is no headless equivalent of. The material WIRING (which url lands in which slot) is
+// what these tests assert, so hand back plain textures.
+vi.mock('../three/TextureCache', async () => {
+  const THREE = await import('three')
+  return {
+    loadTexture: async () => new THREE.Texture(),
+    loadWrappedTexture: async () => new THREE.Texture(),
+  }
+})
+
 // Avoid loading the real kitten gltfs (GLTFLoader/fetch/KTX2) — return tiny baked
 // geometry for every submesh specKey and a stub material.
 vi.mock('../three/kittenBake', () => ({
@@ -80,6 +103,7 @@ import { $part, newPart, undo } from './editorStore'
 import { $customCatalog } from './catalogStore'
 import {
   addCustomMaterial,
+  customMeshRenderCache,
   importModelAsMeshes,
   makeKittenMeshPart,
   removeCustomMaterial,
@@ -88,6 +112,8 @@ import {
 } from './customAssetStore'
 import { analyzeImport, DEFAULT_IMPORT_OPTIONS } from '../ksa/importPlan'
 import { normalizeImport, type NormalizedImport } from '../ksa/importNormalize'
+import type { ImportMaterialPlan, ImportMaterialSpec } from '../ksa/importMaterials'
+import { assetKeys, getAsset } from './assetDb'
 
 beforeEach(() => {
   newPart()
@@ -115,6 +141,57 @@ async function synthesizeImport(): Promise<NormalizedImport> {
 
   const plan = analyzeImport({ scene, fileName: 'pod.glb' }, DEFAULT_IMPORT_OPTIONS)
   return normalizeImport(plan, DEFAULT_IMPORT_OPTIONS)
+}
+
+/**
+ * The material half of an import, as {@link planImportMaterials} would produce it: three
+ * textures (one per KSA slot that can carry an image) and one material both SubParts share.
+ * Built here as plain data — the translation itself is covered by importMaterials.test.ts.
+ */
+function materialPlanFor(normalized: NormalizedImport, glow = false): ImportMaterialPlan {
+  const material: ImportMaterialSpec = {
+    key: 'mat:0',
+    name: 'Metal',
+    baseColorTextureKey: 'tex:base',
+    ormTextureKey: 'tex:orm',
+    normalTextureKey: 'tex:normal',
+    normalStrength: 0.5,
+    metalness: 1,
+    roughness: 0.3,
+  }
+  if (glow) {
+    material.glowPng = new Uint8Array([1, 2, 3])
+    material.glowColor = { r: 255, g: 64, b: 0 }
+    material.glowStrength = 0.4
+  }
+  return {
+    textures: [
+      {
+        key: 'tex:base',
+        name: 'hull_basecolor',
+        channel: 'baseColor',
+        bytes: new Uint8Array([1]),
+        mime: 'image/png',
+      },
+      {
+        key: 'tex:orm',
+        name: 'hull_orm',
+        channel: 'orm',
+        bytes: new Uint8Array([2]),
+        mime: 'image/png',
+      },
+      {
+        key: 'tex:normal',
+        name: 'hull_normal',
+        channel: 'normal',
+        bytes: new Uint8Array([3]),
+        mime: 'image/png',
+      },
+    ],
+    materials: [material],
+    materialKeyByGroup: new Map(normalized.meshes.map((m) => [m.materialGroupKey, 'mat:0'])),
+    warnings: [],
+  }
 }
 
 describe('custom materials', () => {
@@ -259,6 +336,80 @@ describe('importModelAsMeshes', () => {
       expect(e.atlasUrl).toBe(`blob:import/${normalized.importId}`)
       expect(e.meshNodeName).toBe(e.id)
     }
+  })
+
+  it('renders an imported mesh through the REAL material path, not the flat placeholder', async () => {
+    const normalized = await synthesizeImport()
+    await importModelAsMeshes(normalized, 'pod.glb', materialPlanFor(normalized))
+
+    const subPartId = $part.get().customMeshes[0]!.subPartId
+    const cached = customMeshRenderCache.get(subPartId)!
+    expect(cached.materials).toHaveLength(1) // one material per mesh — a KSA <PartModel>
+    const mat = cached.materials[0]!
+    expect(mat.map).toBeTruthy()
+    expect(mat.normalMap).toBeTruthy()
+    expect(mat.normalScale.x).toBe(0.5)
+    // A packed ORM drives all three of three's separate maps, exactly like the export.
+    expect(mat.aoMap).toBe(mat.roughnessMap)
+    expect(mat.aoMap).toBe(mat.metalnessMap)
+    // diffuseUrl makes the shared-material cache bust like the primitive path does.
+    expect($customCatalog.get()[0]!.diffuseUrl).toBeTruthy()
+  })
+
+  it('composites an imported glow into the diffuse + mask, like a painted primitive', async () => {
+    const normalized = await synthesizeImport()
+    await importModelAsMeshes(normalized, 'pod.glb', materialPlanFor(normalized, true))
+    const subPartId = $part.get().customMeshes[0]!.subPartId
+    const mat = customMeshRenderCache.get(subPartId)!.materials[0]!
+    // KSA adds WHITE × mask × 1.25 after lighting, so the colour must be in the diffuse and
+    // the emissive UNIFORM must stay black (free for the selection highlight).
+    expect(mat.emissiveMap).toBeTruthy()
+    expect(mat.emissive.getHex()).toBe(0x000000)
+  })
+
+  it('creates the imported textures + material as ORDINARY flexo assets and assigns them', async () => {
+    const normalized = await synthesizeImport()
+    await importModelAsMeshes(normalized, 'pod.glb', materialPlanFor(normalized))
+
+    const p = $part.get()
+    // One CustomTexture per slot, each with the channel the translation authored it for.
+    expect(p.customTextures.map((t) => t.channel)).toEqual(['baseColor', 'orm', 'normal'])
+    expect(p.customTextures.every((t) => t.id.startsWith('tex_'))).toBe(true)
+
+    // ONE material shared by both SubParts (they came from one glTF material).
+    expect(p.customMaterials).toHaveLength(1)
+    const mat = p.customMaterials[0]!
+    expect(mat.baseColor).toEqual({ kind: 'map', textureId: p.customTextures[0]!.id })
+    expect(mat.ormPacked).toEqual({ textureId: p.customTextures[1]!.id })
+    expect(mat.normal).toEqual({ textureId: p.customTextures[2]!.id, strength: 0.5 })
+    // The scalars are what KSA gets when no packed ORM image exists.
+    expect(mat.metalness).toEqual({ kind: 'value', value: 1 })
+    expect(mat.roughness).toEqual({ kind: 'value', value: 0.3 })
+    expect(p.customMeshes.every((m) => m.materialId === mat.id)).toBe(true)
+  })
+
+  it('stores an emissive material through the existing painted-glow shape', async () => {
+    const normalized = await synthesizeImport()
+    await importModelAsMeshes(normalized, 'pod.glb', materialPlanFor(normalized, true))
+
+    for (const m of $part.get().customMeshes) {
+      // Reusing 'painted' means glowBitmapFor / compositeGlow / the exporter all work unchanged.
+      expect(m.emissive).toEqual({
+        shape: 'painted',
+        color: { r: 255, g: 64, b: 0 },
+        strength: 0.4,
+      })
+      expect(await getAsset(assetKeys.emissivePaint(m.id))).toBeInstanceOf(Blob)
+    }
+  })
+
+  it('imports with no material plan at all (geometry only)', async () => {
+    const normalized = await synthesizeImport()
+    await importModelAsMeshes(normalized, 'pod.glb')
+    const p = $part.get()
+    expect(p.customTextures).toHaveLength(0)
+    expect(p.customMaterials).toHaveLength(0)
+    expect(p.customMeshes.every((m) => m.materialId === undefined)).toBe(true)
   })
 
   it('keeps instance ids unique when the same model is imported twice', async () => {

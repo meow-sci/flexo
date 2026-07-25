@@ -46,6 +46,20 @@ export function solidGlowBitmap(
   return { width: size, height: size, rgba }
 }
 
+/**
+ * The dimensions a synthesised base must have to preserve a glow's detail.
+ *
+ * {@link compositeGlow} outputs at the BASE's resolution, so compositing a 2048² painted or
+ * imported glow over a 4×4 solid would collapse the whole diffuse to 4×4. A uniform base has
+ * no intrinsic resolution, so it is simply generated at the glow's — same colour, no loss.
+ */
+export function baseSizeFor(glow: { width: number; height: number } | null | undefined): {
+  width: number
+  height: number
+} {
+  return { width: Math.max(4, glow?.width ?? 4), height: Math.max(4, glow?.height ?? 4) }
+}
+
 /** A neutral mid-gray opaque base (for a glow on a mesh with no decodable diffuse). */
 export function neutralBase(width = 4, height = 4, value = 128): ImageLevel {
   const rgba = new Uint8Array(width * height * 4)
@@ -58,16 +72,23 @@ export function neutralBase(width = 4, height = 4, value = 128): ImageLevel {
   return { width, height, rgba }
 }
 
-/** A tiny solid opaque base of the given sRGB color (a material's picked base color). */
-export function solidBase(color: { r: number; g: number; b: number }, size = 4): ImageLevel {
-  const rgba = new Uint8Array(size * size * 4)
-  for (let i = 0; i < size * size; i++) {
+/**
+ * A solid opaque base of the given sRGB color (a material's picked base color). Defaults to
+ * 4×4; pass {@link baseSizeFor}'s dimensions when a glow will be composited over it.
+ */
+export function solidBase(
+  color: { r: number; g: number; b: number },
+  width = 4,
+  height = width,
+): ImageLevel {
+  const rgba = new Uint8Array(width * height * 4)
+  for (let i = 0; i < width * height; i++) {
     rgba[i * 4] = color.r
     rgba[i * 4 + 1] = color.g
     rgba[i * 4 + 2] = color.b
     rgba[i * 4 + 3] = 255
   }
-  return { width: size, height: size, rgba }
+  return { width, height, rgba }
 }
 
 /**

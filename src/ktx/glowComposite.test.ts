@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { compositeGlow, solidGlowBitmap, neutralBase, type GlowBitmap } from './glowComposite'
+import {
+  baseSizeFor,
+  compositeGlow,
+  solidGlowBitmap,
+  neutralBase,
+  solidBase,
+  type GlowBitmap,
+} from './glowComposite'
 import type { ImageLevel } from './decodeImage'
 
 function solid(width: number, height: number, color: number[]): ImageLevel {
@@ -64,5 +71,35 @@ describe('neutralBase', () => {
   it('is opaque mid-gray', () => {
     const b = neutralBase(2, 2)
     expect([b.rgba[0], b.rgba[1], b.rgba[2], b.rgba[3]]).toEqual([128, 128, 128, 255])
+  })
+})
+
+describe('baseSizeFor — a synthesised base must not throw the glow away', () => {
+  it('sizes a uniform base to the glow, so the composite keeps the glow resolution', () => {
+    // compositeGlow outputs at the BASE's resolution. A colour-only material used to
+    // synthesise a 4×4 solid, which collapsed a 64×64 painted/imported glow to 4×4.
+    const glow = solidGlowBitmap({ r: 255, g: 0, b: 0 }, 1, 64)
+    const size = baseSizeFor(glow)
+    expect(size).toEqual({ width: 64, height: 64 })
+
+    const { diffuse, mask } = compositeGlow(
+      solidBase({ r: 8, g: 8, b: 8 }, size.width, size.height),
+      glow,
+    )
+    expect([diffuse.width, diffuse.height]).toEqual([64, 64])
+    expect([mask.width, mask.height]).toEqual([64, 64])
+    expect(compositeGlow(solidBase({ r: 8, g: 8, b: 8 }), glow).diffuse.width).toBe(4)
+  })
+
+  it('keeps a 4×4 floor (and handles a missing glow) so nothing shrinks below the old default', () => {
+    expect(baseSizeFor(null)).toEqual({ width: 4, height: 4 })
+    expect(baseSizeFor({ width: 1, height: 1 })).toEqual({ width: 4, height: 4 })
+    expect(baseSizeFor({ width: 2048, height: 1024 })).toEqual({ width: 2048, height: 1024 })
+  })
+
+  it('solidBase fills non-square dimensions with the colour', () => {
+    const b = solidBase({ r: 1, g: 2, b: 3 }, 4, 2)
+    expect([b.width, b.height, b.rgba.length]).toEqual([4, 2, 32])
+    expect(Array.from(b.rgba.slice(28))).toEqual([1, 2, 3, 255])
   })
 })

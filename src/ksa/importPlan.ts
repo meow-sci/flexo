@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { LoadedModel } from '../three/loadModelFile'
+import type { GltfTextureRef, LoadedModel, ModelSource } from '../three/loadModelFile'
 import { bakeGeometry } from '../three/kittenBake'
 
 /**
@@ -85,6 +85,14 @@ export interface ImportGroup {
   sourceMaterial: string
   /** The three material. Phase 2 reads its maps/factors; keep the reference alive. */
   material: THREE.Material
+  /**
+   * `materials[i]` index in the glTF JSON (from `parser.associations`), or null for the
+   * glTF default material / a scene not loaded from a file. This — not the three material —
+   * is the material identity the translation pass keys on: it is what dedupes two groups
+   * onto one flexo `CustomMaterial`, and what resolves the FACTORS three folded away
+   * (see src/ksa/importMaterials.ts).
+   */
+  materialIndex: number | null
   /** SOURCE geometry, untouched, in node-local space. Owned by the loaded scene — do not dispose. */
   geometry: THREE.BufferGeometry
   /**
@@ -100,8 +108,8 @@ export interface ImportGroup {
 }
 
 /**
- * Warning kinds. OPEN FOR EXTENSION — the material/texture pass (Phase 2) adds codes for
- * unsupported glTF extensions, KHR_texture_basisu source images, and texture-budget limits.
+ * Warning kinds. OPEN FOR EXTENSION — the material/texture pass adds `imageDecode`
+ * (see importMaterials.ts) and Phase 4 will add texture-budget codes.
  */
 export type ImportWarningCode =
   | 'multiMaterial'
@@ -118,6 +126,18 @@ export type ImportWarningCode =
   | 'mirrored'
   | 'heavyMesh'
   | 'noMeshes'
+  /** A glTF material extension with no KSA equivalent (clearcoat, transmission, …). */
+  | 'materialExtension'
+  /** A KHR_texture_basisu source image — already block-compressed, so not re-encodable. */
+  | 'basisuImage'
+  /** A sampler wrap mode other than Repeat (KSA's sampler is hard-wired Repeat). */
+  | 'samplerWrap'
+  /** A KHR_texture_transform on a texture reference (KSA has no UV transform). */
+  | 'textureTransform'
+  /** A material channel sampling TEXCOORD_1 (KSA reads UV0 for all five slots). */
+  | 'textureUv1'
+  /** A source image flexo could not decode to pixels (so its factors can't be baked in). */
+  | 'imageDecode'
 
 /** One thing about the file that KSA can't represent, in the user's language. */
 export interface ImportWarning {
@@ -212,7 +232,7 @@ function collectMeshes(root: THREE.Object3D): THREE.Mesh[] {
 }
 
 /** Accumulates warnings, deduped by (code, subject) so N instances don't shout N times. */
-class WarningSink {
+export class WarningSink {
   private readonly seen = new Set<string>()
   readonly list: ImportWarning[] = []
   add(w: ImportWarning): void {
@@ -329,6 +349,7 @@ export function analyzeImport(model: LoadedModel, opts: ImportOptions): ImportPl
         sourceNode: nodeName,
         sourceMaterial: material.name || 'Material',
         material,
+        materialIndex: model.source?.materialIndex(material) ?? null,
         geometry,
         triangles: triangleCount(skinnedRootBake ?? geometry),
         vertices: vertexCount(skinnedRootBake ?? geometry),
@@ -336,6 +357,7 @@ export function analyzeImport(model: LoadedModel, opts: ImportOptions): ImportPl
       }
       if (skinnedRootBake) group.skinnedRootBake = skinnedRootBake
       inspectMaterial(material, warnings)
+      inspectGltfMaterial(model.source, group.materialIndex, group.sourceMaterial, warnings)
       groups.set(key, group)
       groupsPerNode.set(nodeName, (groupsPerNode.get(nodeName) ?? 0) + 1)
     }
@@ -464,6 +486,112 @@ function inspectMaterial(material: THREE.Material, warnings: WarningSink): void 
       message: `"${name}" is translucent (alphaMode BLEND). It exports opaque unless you turn on glass, and KSA's glass is a fixed ~75% opacity that can't glow.`,
       remedy: 'Enable the per-mesh glass toggle after importing.',
     })
+  }
+}
+
+/**
+ * glTF material extensions with no KSA equivalent. KSA's part shader is a plain
+ * metallic-roughness PBR pass (Content/Core/Shaders/MeshIndirect.frag) with five texture
+ * slots and no scalars (decomp/KSA/PbrMaterialReference.cs) — there is nowhere to put a
+ * clearcoat lobe, a transmission factor or an IOR, and `unlit` has no unlit pipeline.
+ * KHR_materials_emissive_strength is deliberately ABSENT: the importer bakes it (§3.4).
+ */
+const UNSUPPORTED_MATERIAL_EXTENSIONS: Readonly<Record<string, string>> = {
+  KHR_materials_clearcoat: 'clearcoat',
+  KHR_materials_transmission: 'transmission',
+  KHR_materials_sheen: 'sheen',
+  KHR_materials_specular: 'specular',
+  KHR_materials_volume: 'volume',
+  KHR_materials_ior: 'index of refraction',
+  KHR_materials_unlit: 'unlit shading',
+}
+
+/** glTF sampler wrap mode REPEAT — the only one KSA can honour. */
+const GLTF_WRAP_REPEAT = 10497
+
+/**
+ * Warnings that are only visible in the glTF JSON: three's `MeshStandardMaterial` folds
+ * factors in, drops the extensions it can't express, and turns wrap modes into three enums,
+ * so the source document is the only place these survive. Silently ignoring them would mean
+ * a model that looks right in Blender and wrong in KSA with no explanation.
+ */
+function inspectGltfMaterial(
+  source: ModelSource | undefined,
+  materialIndex: number | null,
+  name: string,
+  warnings: WarningSink,
+): void {
+  if (!source || materialIndex === null) return
+  const def = source.json.materials?.[materialIndex]
+  if (!def) return
+
+  for (const [ext, label] of Object.entries(UNSUPPORTED_MATERIAL_EXTENSIONS)) {
+    if (def.extensions?.[ext] === undefined) continue
+    warnings.add({
+      code: 'materialExtension',
+      subject: `${name}:${ext}`,
+      message: `"${name}" uses ${ext} (${label}), which KSA's part shader has no equivalent for — it is ignored.`,
+      remedy: `Bake the ${label} look into the base colour / roughness maps in Blender.`,
+    })
+  }
+
+  const refs: [string, GltfTextureRef | undefined][] = [
+    ['base colour', def.pbrMetallicRoughness?.baseColorTexture],
+    ['metallic-roughness', def.pbrMetallicRoughness?.metallicRoughnessTexture],
+    ['normal', def.normalTexture],
+    ['occlusion', def.occlusionTexture],
+    ['emissive', def.emissiveTexture],
+  ]
+  for (const [channel, ref] of refs) {
+    if (!ref) continue
+    // KSA samples ALL five PbrMaterial slots from TEXCOORD_0 (MeshReference.cs:83 imports
+    // Normals|UVs only), so a channel on UV1 samples the wrong coordinates in-game.
+    if ((ref.texCoord ?? 0) !== 0) {
+      warnings.add({
+        code: 'textureUv1',
+        subject: `${name}:${channel}`,
+        message: `"${name}" samples its ${channel} map from a second UV set; KSA reads UV0 for every texture slot.`,
+        remedy: 'Use the first UV set for all maps in Blender.',
+      })
+    }
+    // KHR_texture_transform is a per-reference UV offset/scale/rotate. KSA has no such
+    // uniform, and baking it would need a per-channel UV rewrite the mesh can't carry.
+    if (ref.extensions?.KHR_texture_transform !== undefined) {
+      warnings.add({
+        code: 'textureTransform',
+        subject: `${name}:${channel}`,
+        message: `"${name}" applies a UV transform (KHR_texture_transform) to its ${channel} map, which KSA cannot express.`,
+        remedy: 'Apply the transform to the UV map itself in Blender and re-export.',
+      })
+    }
+
+    const texture = source.json.textures?.[ref.index]
+    if (!texture) continue
+    // A KHR_texture_basisu image is already block-compressed; flexo must decode to pixels to
+    // re-encode its own KTX2 (and to bake factors), and a supercompressed texture can't be
+    // CPU-decoded here — KTX2Loader needs a WebGLRenderer to pick a transcode target.
+    if (texture.extensions?.KHR_texture_basisu !== undefined) {
+      warnings.add({
+        code: 'basisuImage',
+        subject: `${name}:${channel}`,
+        message: `"${name}"'s ${channel} map is a compressed KTX2 image (KHR_texture_basisu), which flexo cannot re-encode.`,
+        remedy: 'Re-export from Blender with Images = Automatic (PNG/JPEG).',
+      })
+    }
+    // decomp/KSA/PartModelRenderer.cs:40-42 builds ONE global sampler with
+    // AddressModeU/V/W = Repeat; per-texture clamp/mirror simply does not exist in-game.
+    const sampler =
+      texture.sampler === undefined ? undefined : source.json.samplers?.[texture.sampler]
+    const wrapS = sampler?.wrapS ?? GLTF_WRAP_REPEAT
+    const wrapT = sampler?.wrapT ?? GLTF_WRAP_REPEAT
+    if (wrapS !== GLTF_WRAP_REPEAT || wrapT !== GLTF_WRAP_REPEAT) {
+      warnings.add({
+        code: 'samplerWrap',
+        subject: `${name}:${channel}`,
+        message: `"${name}"'s ${channel} map uses a clamp/mirror wrap mode; KSA's sampler is hard-wired to Repeat.`,
+        remedy: 'Keep the UVs inside 0–1, or bake the clamped result into the image.',
+      })
+    }
   }
 }
 

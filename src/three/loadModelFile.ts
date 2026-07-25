@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { GLTFLoader, type GLTFParser } from 'three/addons/loaders/GLTFLoader.js'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
 
@@ -26,12 +26,127 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
  * material phase warns and asks for a PNG/JPEG re-export instead.
  */
 
+// ── the glTF JSON slice the material pass reads ──────────────────────────────
+//
+// `GLTFParser.json` is typed `any` by three. These interfaces are the narrow, typed view of
+// the parts flexo's material translation actually consumes (plan §3.4): the factors three
+// folds into its own material (and therefore loses), the extensions KSA has no equivalent
+// for, the sampler wrap modes it hard-wires, and the image → bytes indirection.
+
+/** A `textureInfo`: which texture, which UV set, plus any per-reference extensions. */
+export interface GltfTextureRef {
+  index: number
+  /** TEXCOORD_n. KSA reads UV0 only (decomp/KSA/MeshReference.cs:83), so ≠0 warns. */
+  texCoord?: number
+  extensions?: Record<string, unknown>
+}
+
+/** `material.normalTexture` — a texture ref plus the bump `scale`. */
+export interface GltfNormalTextureRef extends GltfTextureRef {
+  scale?: number
+}
+
+/** `material.occlusionTexture` — a texture ref plus the AO `strength`. */
+export interface GltfOcclusionTextureRef extends GltfTextureRef {
+  strength?: number
+}
+
+/** One `materials[i]` entry, metallic-roughness only (the model KSA's PbrMaterial mirrors). */
+export interface GltfMaterialDef {
+  name?: string
+  pbrMetallicRoughness?: {
+    /** Linear RGBA multiplier, default [1,1,1,1]. */
+    baseColorFactor?: number[]
+    baseColorTexture?: GltfTextureRef
+    /** Default 1. */
+    metallicFactor?: number
+    /** Default 1. */
+    roughnessFactor?: number
+    metallicRoughnessTexture?: GltfTextureRef
+  }
+  normalTexture?: GltfNormalTextureRef
+  occlusionTexture?: GltfOcclusionTextureRef
+  /** Linear RGB, default [0,0,0]. */
+  emissiveFactor?: number[]
+  emissiveTexture?: GltfTextureRef
+  alphaMode?: string
+  doubleSided?: boolean
+  extensions?: Record<string, unknown>
+}
+
+/** One `textures[i]` entry — the sampler + image indirection. */
+export interface GltfTextureDef {
+  source?: number
+  sampler?: number
+  extensions?: Record<string, unknown>
+}
+
+/** One `samplers[i]` entry. KSA's global sampler is Repeat on U/V/W, so these are advisory. */
+export interface GltfSamplerDef {
+  wrapS?: number
+  wrapT?: number
+}
+
+/** One `images[i]` entry — either a GLB `bufferView` or a (possibly sidecar) `uri`. */
+export interface GltfImageDef {
+  name?: string
+  uri?: string
+  mimeType?: string
+  bufferView?: number
+}
+
+/** The typed slice of the glTF JSON document flexo reads. */
+export interface GltfJson {
+  materials?: GltfMaterialDef[]
+  textures?: GltfTextureDef[]
+  samplers?: GltfSamplerDef[]
+  images?: GltfImageDef[]
+}
+
+/** An image's ORIGINAL encoded bytes (PNG/JPEG as authored) — never a canvas re-encode. */
+export interface GltfImageBytes {
+  bytes: Uint8Array
+  mime: string
+}
+
+/**
+ * A narrow façade over `GLTFParser` — the source-level data three's scene graph does NOT
+ * carry, which is exactly what the material pass needs (see `src/ksa/importMaterials.ts`).
+ *
+ * three folds every glTF factor into its own `MeshStandardMaterial` (and drops what it can't
+ * express), so reading factors/extensions back off the three material would be lossy and
+ * indirect. Reading the JSON is exact, and `parser.associations` — the Map three maintains
+ * from its own objects back to glTF indices — is the sanctioned way to get from a group's
+ * three material to its `materials[i]` entry.
+ */
+export interface ModelSource {
+  /** The parsed glTF JSON document. */
+  json: GltfJson
+  /** `materials[i]` index for a three material (via `parser.associations`), or null. */
+  materialIndex(material: THREE.Material): number | null
+  /**
+   * The ORIGINAL encoded bytes of `images[i]`.
+   *
+   * Original bytes matter: flexo stores the source blob under `tex-src:<id>` and RE-ENCODES
+   * from it whenever a channel or normal strength changes (customAssetStore.setTextureChannel /
+   * ensureCurrentKtx2). A canvas readback would silently become the new "source", so a later
+   * channel change would re-encode a lossy copy. Returns null when the image is unreachable.
+   */
+  imageBytes(imageIndex: number): Promise<GltfImageBytes | null>
+}
+
 /** A parsed model, ready for `analyzeImport`. */
 export interface LoadedModel {
   /** The glTF scene root. Node transforms are still on the graph — nothing is baked yet. */
   scene: THREE.Group
   /** The entry file's name, e.g. "rcs_pod.glb" — provenance + the default layer/name prefix. */
   fileName: string
+  /**
+   * The glTF-source façade. Always present for a file loaded by {@link loadModelFile};
+   * optional so a programmatically built scene (unit tests, a future non-glTF source) is
+   * still a valid model — the material pass then simply contributes nothing.
+   */
+  source?: ModelSource
 }
 
 /** Entry-file extensions we accept, in preference order. */
@@ -83,16 +198,87 @@ function decodeSafe(s: string): string {
  * `File.name` from a drop is not — matching only one of the two loses textures whose name
  * contains a space.
  */
-function buildSiblingUrls(files: File[]): { urls: Map<string, string>; created: string[] } {
+function buildSiblings(files: File[]): {
+  byName: Map<string, File>
+  urls: Map<string, string>
+  created: string[]
+} {
+  const byName = new Map<string, File>()
   const urls = new Map<string, string>()
   const created: string[] = []
   for (const file of files) {
     const url = URL.createObjectURL(file)
     created.push(url)
-    urls.set(file.name, url)
-    urls.set(decodeSafe(file.name), url)
+    for (const key of [file.name, decodeSafe(file.name)]) {
+      byName.set(key, file)
+      urls.set(key, url)
+    }
   }
-  return { urls, created }
+  return { byName, urls, created }
+}
+
+/** MIME type from a file extension, for sidecar images whose glTF entry omits `mimeType`. */
+function mimeFromName(name: string): string {
+  const ext = extensionOf(name)
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg'
+  if (ext === '.webp') return 'image/webp'
+  return 'image/png'
+}
+
+/**
+ * Reads one `images[i]`'s original encoded bytes. Three sources, in glTF's own order of
+ * precedence: a GLB `bufferView`, a `data:` URI, or a sidecar file from the drop.
+ *
+ * A sidecar is read straight off the retained `File` rather than re-fetched through the
+ * loader's blob URL: those URLs are revoked as soon as `parseAsync` resolves (see
+ * {@link loadModelFile}), and `File.arrayBuffer()` yields the identical bytes with no
+ * lifetime to manage.
+ */
+async function readImageBytes(
+  parser: GLTFParser,
+  json: GltfJson,
+  siblings: Map<string, File>,
+  index: number,
+): Promise<GltfImageBytes | null> {
+  const image = json.images?.[index]
+  if (!image) return null
+  if (image.bufferView !== undefined) {
+    // `loadBufferView` already slices the view out of the GLB binary chunk.
+    const view = (await parser.getDependency('bufferView', image.bufferView)) as ArrayBuffer
+    return { bytes: new Uint8Array(view), mime: image.mimeType || 'image/png' }
+  }
+  if (!image.uri) return null
+  if (image.uri.startsWith('data:')) {
+    const res = await fetch(image.uri)
+    const bytes = new Uint8Array(await res.arrayBuffer())
+    return { bytes, mime: image.mimeType || res.headers.get('content-type') || 'image/png' }
+  }
+  const segment = lastSegment(image.uri)
+  const file = siblings.get(segment) ?? siblings.get(decodeSafe(segment))
+  if (!file) return null
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  return { bytes, mime: image.mimeType || file.type || mimeFromName(file.name) }
+}
+
+/** Builds the {@link ModelSource} façade, memoizing each image read (one image, N channels). */
+function makeSource(parser: GLTFParser, siblings: Map<string, File>): ModelSource {
+  const json = parser.json as GltfJson
+  const images = new Map<number, Promise<GltfImageBytes | null>>()
+  return {
+    json,
+    materialIndex: (material) => parser.associations.get(material)?.materials ?? null,
+    imageBytes: (index) => {
+      let pending = images.get(index)
+      if (!pending) {
+        pending = readImageBytes(parser, json, siblings, index).catch((err) => {
+          console.warn(`flexo: glTF image ${index} could not be read`, err)
+          return null
+        })
+        images.set(index, pending)
+      }
+      return pending
+    },
+  }
 }
 
 /**
@@ -135,11 +321,14 @@ export async function loadModelFile(files: File[]): Promise<LoadedModel> {
     // Self-contained: no sibling resolution, no manager needed.
     const loader = makeGltfLoader()
     const gltf = await loader.parseAsync(bytes, '')
-    return { scene: withAnimations(gltf), fileName: entry.name }
+    return {
+      scene: withAnimations(gltf),
+      fileName: entry.name,
+      source: makeSource(gltf.parser, new Map()),
+    }
   }
 
-  const siblings = files.filter((f) => f !== entry)
-  const { urls, created } = buildSiblingUrls(siblings)
+  const { byName, urls, created } = buildSiblings(files.filter((f) => f !== entry))
   const manager = new THREE.LoadingManager()
   manager.setURLModifier((url) => {
     const segment = lastSegment(url)
@@ -149,7 +338,13 @@ export async function loadModelFile(files: File[]): Promise<LoadedModel> {
     const loader = makeGltfLoader(manager)
     // Empty resource path: relative URIs stay relative and are rewritten by the modifier above.
     const gltf = await loader.parseAsync(new TextDecoder().decode(bytes), '')
-    return { scene: withAnimations(gltf), fileName: entry.name }
+    // The blob URLs die with this function, but the File objects live on in `byName`, which is
+    // what the source façade reads image bytes from — see readImageBytes.
+    return {
+      scene: withAnimations(gltf),
+      fileName: entry.name,
+      source: makeSource(gltf.parser, byName),
+    }
   } finally {
     for (const url of created) URL.revokeObjectURL(url)
   }

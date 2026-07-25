@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import type { LoadedModel } from '../three/loadModelFile'
+import type { GltfJson, LoadedModel } from '../three/loadModelFile'
 import { analyzeImport, DEFAULT_IMPORT_OPTIONS, type ImportOptions } from './importPlan'
 
 /**
@@ -213,6 +213,97 @@ describe('analyzeImport — warnings', () => {
     // `model()` re-parents into a fresh root, so analyze against this one directly.
     const plan = analyzeImport({ scene: root, fileName: 'arm.glb' }, opts())
     expect(codes(plan)).toContain('animations')
+  })
+})
+
+describe('analyzeImport — glTF-source material warnings', () => {
+  /**
+   * These live only in the glTF JSON: three's MeshStandardMaterial folds factors in, drops the
+   * extensions it can't express and turns wrap modes into its own enums, so a model that looks
+   * right in Blender would go wrong in KSA with no explanation. A stub {@link ModelSource} is
+   * the whole input — analyzeImport reads nothing else from it but the material index.
+   */
+  function withSource(mesh: THREE.Mesh, json: GltfJson): LoadedModel {
+    const root = new THREE.Group()
+    root.add(mesh)
+    return {
+      scene: root,
+      fileName: 'model.glb',
+      source: {
+        json,
+        materialIndex: () => 0,
+        imageBytes: async () => null,
+      },
+    }
+  }
+
+  function analyze(json: GltfJson, name = 'Hull'): ReturnType<typeof analyzeImport> {
+    const material = new THREE.MeshStandardMaterial()
+    material.name = name
+    return analyzeImport(withSource(box(name, material), json), opts())
+  }
+
+  it('records the glTF material index on the group', () => {
+    const plan = analyze({ materials: [{}] })
+    expect(plan.groups[0]!.materialIndex).toBe(0)
+    // No source ⇒ no glTF identity (a programmatically built scene).
+    expect(analyzeImport(model(box('Hull')), opts()).groups[0]!.materialIndex).toBeNull()
+  })
+
+  it('names each unsupported material extension', () => {
+    const plan = analyze({
+      materials: [{ extensions: { KHR_materials_clearcoat: {}, KHR_materials_ior: {} } }],
+    })
+    const warnings = plan.warnings.filter((w) => w.code === 'materialExtension')
+    expect(warnings).toHaveLength(2)
+    expect(warnings.map((w) => w.message).join(' ')).toMatch(/clearcoat/)
+    expect(warnings.map((w) => w.message).join(' ')).toMatch(/KHR_materials_ior/)
+  })
+
+  it('warns about a KHR_texture_basisu source image (not re-encodable)', () => {
+    const plan = analyze({
+      materials: [{ pbrMetallicRoughness: { baseColorTexture: { index: 0 } } }],
+      textures: [{ extensions: { KHR_texture_basisu: { source: 0 } } }],
+    })
+    const warning = plan.warnings.find((w) => w.code === 'basisuImage')
+    expect(warning?.subject).toBe('Hull:base colour')
+    expect(warning?.remedy).toMatch(/PNG/i)
+  })
+
+  it('warns about a non-repeat sampler wrap mode (KSA hard-wires Repeat)', () => {
+    const plan = analyze({
+      materials: [{ normalTexture: { index: 0 } }],
+      textures: [{ source: 0, sampler: 0 }],
+      samplers: [{ wrapS: 33071, wrapT: 10497 }], // CLAMP_TO_EDGE / REPEAT
+    })
+    expect(plan.warnings.find((w) => w.code === 'samplerWrap')?.subject).toBe('Hull:normal')
+    // The default (no sampler declared) is REPEAT and must stay silent.
+    const plain = analyze({
+      materials: [{ normalTexture: { index: 0 } }],
+      textures: [{ source: 0 }],
+    })
+    expect(codes(plain)).not.toContain('samplerWrap')
+  })
+
+  it('warns about KHR_texture_transform and per-channel TEXCOORD_1', () => {
+    const plan = analyze({
+      materials: [
+        {
+          pbrMetallicRoughness: {
+            baseColorTexture: {
+              index: 0,
+              extensions: { KHR_texture_transform: { scale: [2, 2] } },
+            },
+          },
+          occlusionTexture: { index: 0, texCoord: 1 },
+        },
+      ],
+      textures: [{ source: 0 }],
+    })
+    expect(plan.warnings.find((w) => w.code === 'textureTransform')?.subject).toBe(
+      'Hull:base colour',
+    )
+    expect(plan.warnings.find((w) => w.code === 'textureUv1')?.subject).toBe('Hull:occlusion')
   })
 })
 

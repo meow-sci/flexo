@@ -38,6 +38,24 @@ vi.mock('../three/importedMeshCache', () => {
     clearImportAtlases: () => urls.clear(),
   }
 })
+// The import creates real textures (decode → KTX2), but happy-dom has no working 2D canvas.
+// Stub the DECODE only; the KTX2 encode underneath stays real.
+vi.mock('../ktx/decodeImage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../ktx/decodeImage')>()
+  const base = { width: 2, height: 2, rgba: new Uint8Array(16).fill(200) }
+  return {
+    ...actual,
+    decodeImage: async () => ({ width: 2, height: 2, levels: actual.buildMipChain(base) }),
+  }
+})
+// Loading a .ktx2 needs a WebGLRenderer to pick a transcode target — hand back plain textures.
+vi.mock('../three/TextureCache', async () => {
+  const THREE = await import('three')
+  return {
+    loadTexture: async () => new THREE.Texture(),
+    loadWrappedTexture: async () => new THREE.Texture(),
+  }
+})
 import { previewOverrideMatrix } from '../ksa/animationRig'
 import {
   $part,
@@ -114,7 +132,8 @@ import type { ConnectorCapability, Transform } from '../ksa/types'
 import type { ImportedGameData } from './editorStore'
 import { importModelAsMeshes } from './customAssetStore'
 import { analyzeImport, DEFAULT_IMPORT_OPTIONS } from '../ksa/importPlan'
-import { normalizeImport } from '../ksa/importNormalize'
+import { normalizeImport, type NormalizedImport } from '../ksa/importNormalize'
+import type { ImportMaterialPlan } from '../ksa/importMaterials'
 
 /** An {@link ImportedGameData} with every list empty — spread and override what a test needs. */
 function emptyImportedGameData(): ImportedGameData {
@@ -1195,8 +1214,50 @@ describe('scaleEverything', () => {
 })
 
 describe('imported models', () => {
+  /**
+   * The material half of an import (see importMaterials): two textures + one shared material,
+   * one of the meshes also glowing. Enough to prove the whole import is ONE undo step even
+   * though `addCustomTexture`/`addCustomMaterial` would each push their own.
+   */
+  function materialPlan(normalized: NormalizedImport): ImportMaterialPlan {
+    return {
+      textures: [
+        {
+          key: 'k:base',
+          name: 'basecolor',
+          channel: 'baseColor',
+          bytes: new Uint8Array([1]),
+          mime: 'image/png',
+        },
+        {
+          key: 'k:normal',
+          name: 'normal',
+          channel: 'normal',
+          bytes: new Uint8Array([2]),
+          mime: 'image/png',
+        },
+      ],
+      materials: [
+        {
+          key: 'mat:0',
+          name: 'Metal',
+          baseColorTextureKey: 'k:base',
+          normalTextureKey: 'k:normal',
+          normalStrength: 1,
+          metalness: 1,
+          roughness: 0.4,
+          glowPng: new Uint8Array([3]),
+          glowColor: { r: 255, g: 0, b: 0 },
+          glowStrength: 0.5,
+        },
+      ],
+      materialKeyByGroup: new Map(normalized.meshes.map((m) => [m.materialGroupKey, 'mat:0'])),
+      warnings: [],
+    }
+  }
+
   /** Two objects, one of them placed twice → 2 SubParts, 3 placements (see importPlan). */
-  async function importSyntheticModel(): Promise<void> {
+  async function importSyntheticModel(withMaterials = false): Promise<void> {
     const material = new THREE.MeshStandardMaterial()
     material.name = 'Metal'
     const shared = new THREE.BoxGeometry(1, 1, 1)
@@ -1213,7 +1274,11 @@ describe('imported models', () => {
 
     const plan = analyzeImport({ scene, fileName: 'pod.glb' }, DEFAULT_IMPORT_OPTIONS)
     const normalized = await normalizeImport(plan, DEFAULT_IMPORT_OPTIONS)
-    await importModelAsMeshes(normalized, 'pod.glb')
+    await importModelAsMeshes(
+      normalized,
+      'pod.glb',
+      withMaterials ? materialPlan(normalized) : undefined,
+    )
   }
 
   it('is ONE undo step: undo removes the meshes, placements and layer; redo restores them', async () => {
@@ -1243,5 +1308,35 @@ describe('imported models', () => {
     )
     expect(restored.placements).toHaveLength(3)
     expect(restored.layers.some((l) => l.id === layer.id)).toBe(true)
+  })
+
+  it('stays ONE undo step with textures and materials, which normally push their own', async () => {
+    // addCustomTexture/addCustomMaterial each call mutate() (one undo entry each), so an
+    // import creating 2 textures + 1 material + 2 meshes + 3 placements would be SIX steps
+    // without the non-mutating createTextureAsset/buildCustomMaterialDescriptor split.
+    await importSyntheticModel(true)
+
+    const imported = $part.get()
+    expect(imported.customTextures).toHaveLength(2)
+    expect(imported.customMaterials).toHaveLength(1)
+    expect(imported.customMeshes).toHaveLength(2)
+    expect(
+      imported.customMeshes.every((m) => m.materialId === imported.customMaterials[0].id),
+    ).toBe(true)
+    expect(imported.customMeshes.every((m) => m.emissive?.shape === 'painted')).toBe(true)
+
+    undo()
+    const reverted = $part.get()
+    expect(reverted.customTextures).toHaveLength(0)
+    expect(reverted.customMaterials).toHaveLength(0)
+    expect(reverted.customMeshes).toHaveLength(0)
+    expect(reverted.placements).toHaveLength(0)
+
+    redo()
+    const restored = $part.get()
+    expect(restored.customTextures).toHaveLength(2)
+    expect(restored.customMaterials).toHaveLength(1)
+    expect(restored.customMeshes).toHaveLength(2)
+    expect(restored.placements).toHaveLength(3)
   })
 })

@@ -102,6 +102,34 @@ function downsampleHalf(src: ImageLevel): ImageLevel {
   return { width: dw, height: dh, rgba: out }
 }
 
+/**
+ * Encodes raw RGBA8 pixels back to PNG bytes — the round trip of {@link decodeImage}'s first
+ * step. Used by the model importer, which must hand the custom-asset store a SOURCE IMAGE for
+ * every texture it generates (factor-baked base colours, repacked ORM, composed glow bitmaps):
+ * flexo re-encodes the stored `.ktx2` from that source whenever a channel changes, so a
+ * generated texture needs a real, lossless image behind it. PNG because it is lossless and
+ * `createImageBitmap` reads it back byte-exactly.
+ */
+export async function encodeLevelToPng(level: ImageLevel): Promise<Uint8Array> {
+  const canvas = makeCanvas(level.width, level.height)
+  const ctx = canvas.getContext('2d') as
+    | CanvasRenderingContext2D
+    | OffscreenCanvasRenderingContext2D
+    | null
+  if (!ctx) throw new Error('encodeLevelToPng: 2D canvas context unavailable')
+  ctx.putImageData(
+    new ImageData(new Uint8ClampedArray(level.rgba), level.width, level.height),
+    0,
+    0,
+  )
+  const blob =
+    'convertToBlob' in canvas
+      ? await canvas.convertToBlob({ type: 'image/png' })
+      : await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+  if (!blob) throw new Error('encodeLevelToPng: canvas produced no PNG')
+  return new Uint8Array(await blob.arrayBuffer())
+}
+
 /** OffscreenCanvas when available (also works off the main thread), else a DOM canvas. */
 function makeCanvas(width: number, height: number): OffscreenCanvas | HTMLCanvasElement {
   if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(width, height)

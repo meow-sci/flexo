@@ -17,6 +17,7 @@ import { importModelAsMeshes, makeKittenMeshPart } from '../state/customAssetSto
 import { loadModelFile } from '../three/loadModelFile'
 import { analyzeImport, DEFAULT_IMPORT_OPTIONS } from '../ksa/importPlan'
 import { normalizeImport } from '../ksa/importNormalize'
+import { planImportMaterials } from '../ksa/importMaterials'
 import type { KittenKind } from '../ksa/types'
 import { SubPartPopup } from './SubPartBrowser'
 import { PartPopup } from './PartBrowser'
@@ -45,9 +46,13 @@ export function AddButton() {
     try {
       const model = await loadModelFile(files)
       const plan = analyzeImport(model, DEFAULT_IMPORT_OPTIONS)
+      // Materials are translated from the glTF JSON (factors baked into pixels, ORM packed,
+      // emissive composed) BEFORE the document is touched, so the whole import — geometry,
+      // textures, materials, meshes, placements — commits as one undo step.
+      const materials = await planImportMaterials(model, plan)
       const normalized = await normalizeImport(plan, DEFAULT_IMPORT_OPTIONS)
       try {
-        await importModelAsMeshes(normalized, model.fileName)
+        await importModelAsMeshes(normalized, model.fileName, materials)
       } finally {
         // The normalized geometries are consumed by the atlas GLB; the editor renders from
         // that GLB via importedMeshCache, so these copies are ours to free.

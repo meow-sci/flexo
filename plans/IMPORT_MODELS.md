@@ -216,7 +216,7 @@ existing `CustomMaterial` model already expresses all of this; the importer's jo
 | `<Diffuse>` | `pbrMetallicRoughness.baseColorTexture` (+ `baseColorFactor`) | Texture → `CustomTexture{channel:'baseColor'}`. A non-white `baseColorFactor` is **multiplied into the pixels** at import (KSA has no tint). No texture ⇒ `baseColor:{kind:'color'}` (exports as a deduped 1×1 solid — existing path). |
 | `<AoRoughMetal>` | `metallicRoughnessTexture` (G=rough, B=metal) + `occlusionTexture` (R) + `metallicFactor`/`roughnessFactor`/`occlusionStrength` | Same channel layout as KSA ("Following GLTF spec"). If MR and AO are the **same image** (Blender's "glTF Settings" ORM packing) → store once as `channel:'orm'` → `CustomMaterial.ormPacked`. If they differ → `packOrmLevel()` (`src/ktx/channelTransforms.ts:84`) merges them into one image at import. All-scalar materials → `metalness/roughness:{kind:'value'}` (1×1 solids on export). Factors < 1 are baked into the packed channels. |
 | `<Normal>` | `normalTexture` + `scale` | `CustomTexture{channel:'normal'}` → the existing encode applies KSA's **X-flip** and bakes strength into RG (`transformNormalLevel`). No TANGENT is exported — KSA derives TBN from screen-space derivatives. |
-| `<Emissive>` | `emissiveTexture`, `emissiveFactor`, `KHR_materials_emissive_strength` | KSA glow is **white × mask × 1.25 added after lighting** — there is no emissive colour. So: the emissive colour is **composited into the diffuse** and a **grayscale mask** is emitted, using the existing `compositeGlow()` machinery. Model change: a new `EmissiveShape: 'map'` whose `GlowBitmap` is built from the emissive texture (RGB = colour, luminance → alpha = intensity), joining the existing `'whole'` / `'painted'` shapes. Emissive factor-only (no texture) maps to the existing `'whole'` shape for free. |
+| `<Emissive>` | `emissiveTexture`, `emissiveFactor`, `KHR_materials_emissive_strength` | KSA glow is **white × mask × 1.25 added after lighting** — there is no emissive colour. So: the emissive colour is **composited into the diffuse** and a **grayscale mask** is emitted, using the existing `compositeGlow()` machinery. **IMPLEMENTED (Phase 2) as a reuse of the existing `'painted'` shape, NOT the new `'map'` shape proposed here**: an imported emissive composes to exactly what `'painted'` already models — an RGBA bitmap under `assetKeys.emissivePaint(meshId)` whose RGB is the glow colour and whose alpha is the intensity — so `glowBitmapFor()` / `compositeGlow()` / the editor material / the exporter all work unchanged, and the user can retouch an imported glow in the existing paint dialog. |
 | `<ThinFilm>` | — | No glTF equivalent, and it's `<PartModelDynamic>`-only + heat-gated (invisible on a bench part). Out of scope, as today. |
 
 Extensions and cases that **cannot** survive, surfaced as warnings (§4.4):
@@ -426,13 +426,20 @@ the Rules of React (no manual memo, hooks at top level) per AGENTS.md.
 - **Done when**: a textureless Blender GLB renders in the viewport with correct scale and
   placement, survives reload, and undo/redo removes/restores it cleanly.
 
-### Phase 2 — Textures + materials (2–3 days)
-- `src/ksa/importMaterials.ts`: image extraction (raw bytes + mime), content-hash dedup, factor
-  baking, ORM packing, normal strength, emissive → composited diffuse + mask.
-- `types.ts`: `EmissiveShape` gains `'map'` (+ `EmissiveConfig.textureId`);
-  `glowBitmapFor()` gains the `'map'` branch.
-- Wire through `addCustomTexture` / `addCustomMaterial` so imported textures and materials are
-  ordinary flexo assets (editable, reusable, deletable) — not a parallel universe.
+### Phase 2 — Textures + materials (2–3 days) — **DONE**
+- `src/ksa/importMaterials.ts`: image extraction (raw bytes + mime), content-hash dedup
+  (FNV-1a-64 over the source bytes + channel + baked factors), factor baking, ORM packing,
+  normal strength, emissive → composited diffuse + mask.
+- ~~`types.ts`: `EmissiveShape` gains `'map'`~~ — **superseded**: the existing `'painted'`
+  shape already models exactly this (see §3.4), so no model change was needed.
+- Wired through the extracted `createTextureAsset` / `buildCustomMaterialDescriptor` (the
+  non-mutating halves of `addCustomTexture` / `addCustomMaterial`) so imported textures and
+  materials are ordinary flexo assets — editable, reusable, deletable — while the whole
+  import still commits as ONE undo step.
+- `refreshCatalog()`'s imported branch builds the REAL material through the same
+  `resolveMaterialChannels` + `buildCustomMaterial` / `compositeGlow` +
+  `buildGlowingFaceMaterial` path the primitive branch uses, so the editor preview and the
+  exported material come from one body of code.
 - **Done when**: the fixture model renders in flexo with base colour, normal, roughness/metal, AO
   and glow visibly correct, and the textures appear in the Custom Assets modal.
 

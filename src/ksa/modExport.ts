@@ -35,7 +35,13 @@ import { createZip, type ZipEntry } from '../util/zip'
 import { encodeImageToKtx2, makeSolidKtx2 } from '../ktx/encodeKtx2'
 import { decodeImage, buildMipChain, type ImageLevel } from '../ktx/decodeImage'
 import { packOrmLevel, prepareChannelImage, type OrmSource } from '../ktx/channelTransforms'
-import { compositeGlow, neutralBase, solidBase, type GlowBitmap } from '../ktx/glowComposite'
+import {
+  baseSizeFor,
+  compositeGlow,
+  neutralBase,
+  solidBase,
+  type GlowBitmap,
+} from '../ktx/glowComposite'
 
 /** How part-ified kitten SubParts supply their textures on export (see settingsStore). */
 export type KittenTextureExportConfig = KittenTextureExportSettings
@@ -242,11 +248,15 @@ async function emitGlowTextures(
  * The decoded base diffuse a glowing primitive composites over: its primary face
  * texture → its material's baseColor image → the material's picked color (solid) →
  * neutral gray. Mirrors customAssetStore's faceBaseImage so editor == export.
+ *
+ * `glow` sizes the SYNTHESISED bases only: compositeGlow outputs at the base's resolution,
+ * so a 4×4 solid would throw a high-resolution glow away (see glowComposite.baseSizeFor).
  */
 async function exportBaseImage(
   tex: CustomTexture | undefined,
   material: CustomMaterial | undefined,
   texById: ReadonlyMap<string, CustomTexture>,
+  glow?: GlowBitmap | null,
 ): Promise<ImageLevel> {
   const mapTex =
     tex ??
@@ -255,8 +265,10 @@ async function exportBaseImage(
     const src = await getAsset(assetKeys.textureSource(mapTex.id))
     if (src) return (await decodeImage(src)).levels[0]
   }
-  if (material?.baseColor.kind === 'color') return solidBase(material.baseColor.color)
-  return neutralBase()
+  const { width, height } = baseSizeFor(glow)
+  if (material?.baseColor.kind === 'color')
+    return solidBase(material.baseColor.color, width, height)
+  return neutralBase(width, height)
 }
 
 /** Two-digit lowercase hex of a 0..255 value (solid-texture filename tokens). */
@@ -419,9 +431,10 @@ async function planKittenSubPart(
   if (opaqueGlow && m.emissive) {
     const glow = await glowBitmapFor(m)
     if (glow) {
+      const size = baseSizeFor(glow)
       const paths = await emitGlowTextures(
         `${bundleToken}_${subPartId}`,
-        neutralBase(),
+        neutralBase(size.width, size.height),
         glow,
         binaries,
       )
@@ -762,6 +775,7 @@ export async function buildCustomBundle(
           primaryTexId ? texById.get(primaryTexId) : undefined,
           material,
           texById,
+          glow,
         )
         const paths = await emitGlowTextures(`${bundleToken}_${m.subPartId}`, base, glow, binaries)
         const materialId = tex.intern(

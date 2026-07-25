@@ -1,5 +1,43 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import * as THREE from 'three'
+
+// The model-import undo test drives customAssetStore, which persists the import GLB in
+// IndexedDB and resolves its geometry through a blob: URL — neither exists in happy-dom.
+// Both are stubbed with the same contract; the document mutation is what's under test.
+vi.mock('./assetDb', () => {
+  const store = new Map<string, Blob>()
+  return {
+    assetKeys: {
+      textureSource: (id: string) => `tex-src:${id}`,
+      textureKtx2: (id: string) => `tex-ktx2:${id}`,
+      meshGlb: (id: string) => `mesh-glb:${id}`,
+      importGlb: (id: string) => `import-glb:${id}`,
+      emissivePaint: (id: string) => `emissive-paint:${id}`,
+    },
+    getAsset: async (key: string) => store.get(key),
+    putAsset: async (key: string, data: Blob | Uint8Array, type = '') => {
+      store.set(key, data instanceof Blob ? data : new Blob([data.slice()], { type }))
+    },
+    deleteAsset: async (key: string) => {
+      store.delete(key)
+    },
+  }
+})
+vi.mock('../three/importedMeshCache', () => {
+  const urls = new Map<string, string>()
+  return {
+    registerImportAtlas: (importId: string) => {
+      const url = `blob:import/${importId}`
+      urls.set(importId, url)
+      return url
+    },
+    importAtlasUrl: (importId: string) => urls.get(importId) ?? null,
+    ensureImportAtlas: async (importId: string) => urls.get(importId) ?? null,
+    getImportedGeometry: async () => new THREE.BufferGeometry(),
+    getImportedRawGeometry: async () => null,
+    clearImportAtlases: () => urls.clear(),
+  }
+})
 import { previewOverrideMatrix } from '../ksa/animationRig'
 import {
   $part,
@@ -74,6 +112,9 @@ import {
 } from '../ksa/types'
 import type { ConnectorCapability, Transform } from '../ksa/types'
 import type { ImportedGameData } from './editorStore'
+import { importModelAsMeshes } from './customAssetStore'
+import { analyzeImport, DEFAULT_IMPORT_OPTIONS } from '../ksa/importPlan'
+import { normalizeImport } from '../ksa/importNormalize'
 
 /** An {@link ImportedGameData} with every list empty — spread and override what a test needs. */
 function emptyImportedGameData(): ImportedGameData {
@@ -1150,5 +1191,57 @@ describe('scaleEverything', () => {
 
     undo()
     expect($part.get().placements[0].position.x).toBe(2)
+  })
+})
+
+describe('imported models', () => {
+  /** Two objects, one of them placed twice → 2 SubParts, 3 placements (see importPlan). */
+  async function importSyntheticModel(): Promise<void> {
+    const material = new THREE.MeshStandardMaterial()
+    material.name = 'Metal'
+    const shared = new THREE.BoxGeometry(1, 1, 1)
+    const scene = new THREE.Group()
+    for (const x of [0, 2]) {
+      const mesh = new THREE.Mesh(shared, material)
+      mesh.name = 'Hull'
+      mesh.position.set(x, 0, 0)
+      scene.add(mesh)
+    }
+    const nozzle = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), material)
+    nozzle.name = 'Nozzle'
+    scene.add(nozzle)
+
+    const plan = analyzeImport({ scene, fileName: 'pod.glb' }, DEFAULT_IMPORT_OPTIONS)
+    const normalized = await normalizeImport(plan, DEFAULT_IMPORT_OPTIONS)
+    await importModelAsMeshes(normalized, 'pod.glb')
+  }
+
+  it('is ONE undo step: undo removes the meshes, placements and layer; redo restores them', async () => {
+    const layersBefore = $part.get().layers.length
+    await importSyntheticModel()
+
+    const imported = $part.get()
+    expect(imported.customMeshes).toHaveLength(2)
+    expect(imported.placements).toHaveLength(3)
+    expect(imported.layers).toHaveLength(layersBefore + 1)
+    const layer = imported.layers.at(-1)!
+    expect(layer.name).toBe('pod')
+    expect($activeLayerId.get()).toBe(layer.id)
+
+    undo()
+    const reverted = $part.get()
+    expect(reverted.customMeshes).toHaveLength(0)
+    expect(reverted.placements).toHaveLength(0)
+    expect(reverted.layers).toHaveLength(layersBefore)
+    expect(reverted.layers.some((l) => l.id === layer.id)).toBe(false)
+
+    redo()
+    const restored = $part.get()
+    expect(restored.customMeshes).toHaveLength(2)
+    expect(restored.customMeshes.map((m) => m.imported?.meshName)).toEqual(
+      imported.customMeshes.map((m) => m.subPartId),
+    )
+    expect(restored.placements).toHaveLength(3)
+    expect(restored.layers.some((l) => l.id === layer.id)).toBe(true)
   })
 })

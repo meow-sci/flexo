@@ -9,6 +9,13 @@ thing as a KSA part mod that **loads and renders in the game** (diffuse pipeline
 validated in-game 2026-05-30; the full-material pipeline + UNORM re-tag await an
 in-game pass — see "Pending in-game verification" below).
 
+A **model imported from Blender** (`.glb` / `.gltf`) rides the same machinery: it becomes
+ordinary `CustomMesh` descriptors — one SubPart per (glTF mesh × material), one placement
+per node that references it — so the catalog, scene, selection, gizmos, layers and undo are
+unchanged. Geometry import is shipped; its materials/textures and mod export are the next
+phases (see [plans/IMPORT_MODELS.md](../plans/IMPORT_MODELS.md); the user-facing
+`docs/importing-models.md` lands with them).
+
 The design rationale and format research live in
 [plans/done/FLEXO_CUSTOM_ASSETS.md](../plans/done/FLEXO_CUSTOM_ASSETS.md). This doc is the
 maintenance reference for the shipped code: what each module does, the decisions
@@ -48,6 +55,22 @@ flexo-specific code is the upload/encode/build orchestration in
 `customAssetStore.ts`; the scene, selection, transform, placement, and XML-export
 of *placements* are all unchanged. A custom mesh is just a synthetic
 `CatalogSubPart` whose URLs happen to be `blob:` instead of `/ksa/`.
+
+`refreshCatalog()` publishes one `$customCatalog` entry per custom mesh **and** fills
+`customMeshRenderCache` (`subPartId → {geometry, materials[]}`) — `SubPartObject` prefers
+the cache (pre-built geometry + per-face materials, cloned per instance) and falls back to
+the entry's `atlasUrl` + `meshNodeName` like a Core SubPart. The `atlasUrl` differs per
+mesh kind:
+
+| Mesh kind | `atlasUrl` | Geometry |
+| --- | --- | --- |
+| primitive | the shared rebuilt atlas blob | `buildPrimitiveGeometry` + baked face UVs |
+| kitten submesh | the shared rebuilt atlas blob | CPU bind-pose bake (`kittenBake`) |
+| **imported** | **that import batch's own GLB blob** | `importedMeshCache` → `MeshAtlasCache` (node transform baked, MikkTSpace tangents) |
+
+An imported batch's normalized GLB *is* a mesh atlas (one named mesh per SubPart), so it is
+its own `atlasUrl` — and it is deliberately **not** re-encoded into the shared atlas, which
+would re-run `GLTFExporter` over a multi-megabyte model on every rebuild.
 
 ## Modules
 
@@ -94,6 +117,23 @@ of *placements* are all unchanged. A custom mesh is just a synthetic
   file post-processes the GLB JSON chunk. See **View meshes (pickability)** below for
   why the `_VM` mesh exists.
 
+### Imported models (glTF)
+
+- **`src/three/loadModelFile.ts`** — File(s) → a three scene (`GLTFLoader` + DRACO/meshopt
+  decoders; `.gltf` sidecars resolve through a `blob:` URL map).
+- **`src/ksa/importPlan.ts`** — `analyzeImport()`: (glTF mesh × material) → one SubPart,
+  every referencing node → one placement, plus the "KSA can't do this" warning catalog.
+- **`src/ksa/importNormalize.ts`** — `normalizeImport()`: bakes transforms/mirror/bind-pose,
+  strips unread attributes, forces indices, and emits ONE atlas GLB per import batch
+  (`viewMeshes: false` — `_VM` meshes are generated at export instead).
+- **`src/three/importedMeshCache.ts`** — the runtime registry: `importId → blob:` URL over
+  the stored GLBs, `getImportedGeometry()` (editor: shared `MeshAtlasCache`, tangents) and
+  `getImportedRawGeometry()` (export: **no** tangents, because MikkTSpace de-indexes and KSA
+  requires indices). Cached geometries are shared — clone, never dispose.
+- **`customAssetStore.importModelAsMeshes()`** — commits a normalized import as ONE undo
+  step: a layer named after the file, one `CustomMesh{imported}` per group, one placement
+  per instance; the GLB is persisted + registered first so the rebuild can resolve it.
+
 ### Assets XML
 
 - **`src/ksa/assetsXmlSerializer.ts`** — `serializeAssets(plan) → string`. Emits the
@@ -109,17 +149,22 @@ of *placements* are all unchanged. A custom mesh is just a synthetic
   (`EditingPart.customTextures` / `customMeshes`) to (a) IndexedDB binaries, (b)
   runtime `blob:` URLs, and (c) the synthetic `$customCatalog` entries the renderer
   consumes. Actions: `addCustomTexture`, `removeCustomTexture`, `addCustomMesh`,
-  `updateCustomMesh`, `removeCustomMesh`, `hydrateCustomAssets`. All document
+  `updateCustomMesh`, `removeCustomMesh`, `makeKittenMeshPart`, `importModelAsMeshes`,
+  `hydrateCustomAssets`. All document
   mutations go through `mutate()`, which calls `pushUndo()` — so custom assets
   **enroll in undo/redo** (see [editor-state.md](editor-state.md)). Re-hydrates on
   every `$projectName` change. Diffuse `blob:` URL is the catalog cache key
   (`materialId` left undefined) so replacing a texture busts `MaterialFactory`'s cache.
 - **`src/state/assetDb.ts`** — tiny promise-wrapped IndexedDB key→Blob store
   (`flexo-assets`/`blobs`). `putAsset`/`getAsset`/`deleteAsset` + `assetKeys`
-  (`tex-src:<id>`, `tex-ktx2:<id>`, `mesh-glb:<id>`). Binaries are too big for the
-  localStorage `ProjectSnapshot`, so only lightweight descriptors persist there; the
-  bytes live here. **Mesh GLBs are not persisted** — they're cheap to regenerate from
-  the primitive params.
+  (`tex-src:<id>`, `tex-ktx2:<id>`, `mesh-glb:<id>`, `import-glb:<id>`,
+  `emissive-paint:<id>`). Binaries are too big for the localStorage `ProjectSnapshot`, so
+  only lightweight descriptors persist there; the bytes live here. **Generated mesh GLBs
+  are not persisted** — they're cheap to regenerate from the primitive params. **Imported
+  model GLBs are** (`import-glb:<importId>`, one per import batch): nothing can regenerate
+  imported geometry, so that file is the only copy. Deleting an imported mesh therefore
+  does *not* delete the batch GLB (undo must restore it, and its sibling SubParts still
+  read from it) — reclaiming it is an explicit user action.
 
 ### Export plumbing (`src/ksa/modExport.ts`)
 
@@ -144,7 +189,9 @@ of *placements* are all unchanged. A custom mesh is just a synthetic
   visor surface, per-face texture + UV controls (warns when faces mix textures).
 - `CustomAssetsModal.tsx` — textures (channel select, delete), materials (swatch,
   usage counts, edit, delete), meshes (add instance / manage / delete).
-- entry points wired from the **Add** menu (`AddButton.tsx`).
+- entry points wired from the **Add** menu (`AddButton.tsx`) — including **Import model…**,
+  which is deliberately a bare file picker that imports with the default options (the
+  preview/options/warnings dialog is a later phase).
 
 ## On-disk format decisions
 
@@ -336,8 +383,13 @@ design. Still deliberately out of scope:
   KSA transcodes UASTC natively (its own `_TFI_Heat.ktx2` files prove the path), but
   the no-sidecar default target is uncompressed Rgba32, so the sidecar is required
   for the VRAM win.
-- **Four primitives only** (box / cylinder / sphere / plane) — no imported meshes, no CSG.
-- **Mesh GLBs not persisted** — regenerated from params each session (fine; cheap).
+- **Four primitives** (box / cylinder / sphere / plane) **+ imported glTF models** — no CSG,
+  no mesh editing in flexo. Imported models currently render with the neutral flat material:
+  their glTF materials/textures and their mod export are the next two phases
+  ([plans/IMPORT_MODELS.md](../plans/IMPORT_MODELS.md) Phases 2–3), as are the import dialog
+  (preview / options / warnings) and re-import.
+- **Generated mesh GLBs not persisted** — regenerated from params each session (fine; cheap).
+  Imported model GLBs are the exception (see `assetDb.ts` above).
 - **No per-project namespacing in IndexedDB** — all assets share one store (OK for
   the current single-active-project model).
 - **Emissive masks export full-res** — KSA's own are 128–512 px BC4; shrinking painted

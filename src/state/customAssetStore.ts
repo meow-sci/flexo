@@ -10,6 +10,7 @@ import type {
   EmissiveConfig,
   FaceTextureConfig,
   GlassConfig,
+  ImportedMeshSource,
   KittenKind,
   KittenMeshSource,
   PrimitiveSpec,
@@ -17,7 +18,8 @@ import type {
   TextureChannel,
   VisorSurface,
 } from '../ksa/types'
-import { KITTEN_LABELS, createDefaultMaterial } from '../ksa/types'
+import { KITTEN_LABELS, createDefaultMaterial, meshKind } from '../ksa/types'
+import type { NormalizedImport } from '../ksa/importNormalize'
 import {
   $part,
   pushUndo,
@@ -56,6 +58,13 @@ import {
 } from '../three/MaterialFactory'
 import { kittenPartSubMeshes, kittenSpecFromSource } from '../ksa/kittenAssets'
 import { bakeKittenSubMeshes, buildKittenMaterial } from '../three/kittenBake'
+import {
+  clearImportAtlases,
+  ensureImportAtlas,
+  getImportedGeometry,
+  importAtlasUrl,
+  registerImportAtlas,
+} from '../three/importedMeshCache'
 
 /**
  * Orchestrates user-created custom assets (textures + primitive meshes). Ties the
@@ -66,9 +75,13 @@ import { bakeKittenSubMeshes, buildKittenMaterial } from '../three/kittenBake'
  * material arrays used by SubPartObject to render per-face textures and baked UV
  * transforms directly, bypassing the atlas-GLB round-trip.
  *
- * Design notes (see plans/FLEXO_CUSTOM_ASSETS.md):
+ * Design notes (see plans/FLEXO_CUSTOM_ASSETS.md, plans/IMPORT_MODELS.md):
  *  - Texture binaries (source image + encoded .ktx2) persist in IndexedDB.
- *    Mesh GLBs are NOT persisted — regenerated from primitive params.
+ *    Primitive/kitten mesh GLBs are NOT persisted — regenerated from the primitive
+ *    params / re-baked from the kitten gltf. An IMPORTED model's normalized GLB is
+ *    the exception: it is the only copy of that geometry, so it persists under
+ *    `assetKeys.importGlb` and doubles as that batch's own mesh atlas (see
+ *    src/three/importedMeshCache.ts).
  *  - Atlas GLB (for KSA export) is rebuilt when the mesh set or shape changes;
  *    face-config changes only rebuild the render cache.
  *  - KSA export uses one PbrMaterial per SubPart (the first face with a texture).
@@ -171,14 +184,26 @@ async function bakedKittenGeometry(src: KittenMeshSource): Promise<THREE.BufferG
   return subs.find((s) => s.specKey === src.specKey)?.geometry ?? null
 }
 
-/** Returns the first valid textureId across all faces (for KSA single-material export). */
+/**
+ * Returns the first valid textureId across all faces (for KSA single-material export).
+ * Only primitives have faces: a kitten submesh carries its texture in `m.kitten`, and an
+ * imported mesh gets its surface from its {@link CustomMaterial} (Phase 2) — neither has a
+ * per-face texture grid.
+ */
 export function getPrimaryTextureId(m: CustomMesh): string {
-  if (!m.primitive) return '' // kitten submeshes carry their texture in m.kitten, not customTextures
-  for (const key of PRIMITIVE_FACE_KEYS[m.primitive.kind]) {
-    const tid = m.faceTextures[key]?.textureId
-    if (tid) return tid
+  switch (meshKind(m)) {
+    case 'kitten':
+    case 'imported':
+      return ''
+    case 'primitive': {
+      if (!m.primitive) return ''
+      for (const key of PRIMITIVE_FACE_KEYS[m.primitive.kind]) {
+        const tid = m.faceTextures[key]?.textureId
+        if (tid) return tid
+      }
+      return ''
+    }
   }
-  return ''
 }
 
 // ── catalog + render cache ────────────────────────────────────────────────────
@@ -187,8 +212,9 @@ export function getPrimaryTextureId(m: CustomMesh): string {
  * Signature of the mesh state the runtime (atlas + render cache + `$customCatalog`)
  * currently reflects. Compared against the live `$part` in the {@link initCustomAssets}
  * subscriber so undo/redo (which restores `$part.customMeshes` without re-running the
- * mutation helpers) re-triggers a rebuild. Covers geometry (primitive) and per-face
- * texture assignments — the two inputs to the cache/atlas.
+ * mutation helpers) re-triggers a rebuild. Covers geometry (primitive params, kitten
+ * submesh, imported mesh reference) and per-face texture assignments — the inputs to
+ * the cache/atlas.
  */
 let appliedMeshSig = ''
 
@@ -198,6 +224,12 @@ function meshSignature(part: EditingPart): string {
       s: m.subPartId,
       p: m.primitive,
       k: m.kitten,
+      // Only the geometry-resolving fields of an imported source: which GLB, which mesh in
+      // it, and whether it renders as glass. Provenance/counts can't change what we build.
+      // Without this an undo of an import would leave the imported SubParts in the scene.
+      i: m.imported
+        ? { i: m.imported.importId, n: m.imported.meshName, t: m.imported.transparent }
+        : undefined,
       f: m.faceTextures,
       mt: m.materialId,
       e: m.emissive,
@@ -350,112 +382,182 @@ async function buildKittenSubMeshMaterial(
   )
 }
 
+/**
+ * Builds the render-cache entry + catalog entry for an IMPORTED glTF mesh.
+ *
+ * The batch's own normalized GLB IS the mesh atlas here (it holds one named mesh per imported
+ * SubPart, exactly like a KSA `<MeshAtlas>`), so the entry points at that blob URL rather than
+ * the shared primitive/kitten atlas — truthful, and it still resolves if the render cache ever
+ * misses. Geometry comes from the shared MeshAtlasCache (tangents, node transform baked), so
+ * imported SubParts render through the identical path as Core ones.
+ *
+ * Materials/textures are Phase 2 (plans/IMPORT_MODELS.md §3.4): until then an imported mesh
+ * wears the same neutral flat material an untextured primitive does.
+ */
+async function buildImportedCatalogEntry(
+  m: CustomMesh,
+  imported: ImportedMeshSource,
+): Promise<CatalogSubPart | null> {
+  const url = importAtlasUrl(imported.importId)
+  const geometry = await getImportedGeometry(imported.importId, imported.meshName)
+  if (!url || !geometry) {
+    console.warn(`flexo: imported mesh '${m.name}' has no resolvable geometry — skipped`)
+    return null
+  }
+  customMeshRenderCache.set(m.subPartId, { geometry, materials: [makeFlatMaterial()] })
+  return {
+    id: m.subPartId,
+    atlasUrl: url,
+    meshNodeName: m.subPartId,
+    materialId: undefined,
+    diffuseUrl: undefined,
+    sourceFile: '(imported)',
+  }
+}
+
+/**
+ * Builds the render-cache entry + catalog entry for a parametric primitive mesh: geometry with
+ * the per-face UV transforms baked in, and one material per face group.
+ */
+async function buildPrimitiveCatalogEntry(
+  part: EditingPart,
+  m: CustomMesh,
+): Promise<CatalogSubPart | null> {
+  if (!m.primitive) {
+    console.warn(`flexo: custom mesh '${m.name}' has no geometry source — skipped`)
+    return null
+  }
+  const ft = m.faceTextures
+  const faceKeys = PRIMITIVE_FACE_KEYS[m.primitive.kind]
+
+  // Build geometry with UV transforms baked in.
+  const geometry = buildPrimitiveGeometry(m.primitive)
+  applyFaceUvTransforms(geometry, faceKeys, ft)
+
+  // One material per face group. Resolution per face: the face's own texture overrides
+  // the mesh material's base color; the scalar/map/normal channels always come from the
+  // mesh material (neutral when unassigned). A glowing mesh composites its glow bitmap
+  // over the same resolved base so editor == export; meshes with neither material nor
+  // face texture keep the legacy flat look.
+  const glow = await glowBitmapFor(m)
+  const material = materialFor(part, m)
+  const channels = material ? resolveMaterialChannels(material) : undefined
+  const materials: THREE.MeshStandardMaterial[] = []
+  for (const key of faceKeys) {
+    const texId = ft[key]?.textureId
+    const wrap = ft[key]?.wrap ?? 'repeat'
+    if (glow) {
+      const { diffuse, mask } = compositeGlow(await faceBaseImage(texId, material), glow)
+      const pbr = channels
+        ? { metalness: channels.metalness, roughness: channels.roughness }
+        : undefined
+      const gmat = buildGlowingFaceMaterial(diffuse, mask, wrap, pbr)
+      // Attach the material's map channels too; SubPartObject re-applies the shader
+      // patches per instance from the final map set, so the flags end up correct.
+      if (channels) await applyMaterialChannels(gmat, channels)
+      materials.push(gmat)
+    } else if (material && channels) {
+      const faceUrl = texId ? textureKtx2Urls.get(texId) : undefined
+      const baseMapUrl =
+        faceUrl ??
+        (material.baseColor.kind === 'map'
+          ? textureKtx2Urls.get(material.baseColor.textureId)
+          : undefined)
+      materials.push(
+        await buildCustomMaterial({
+          mapUrl: baseMapUrl,
+          color: material.baseColor.kind === 'color' ? material.baseColor.color : undefined,
+          wrap,
+          ...channels,
+        }),
+      )
+    } else {
+      const ktx2Url = texId ? textureKtx2Urls.get(texId) : undefined
+      materials.push(ktx2Url ? await buildCustomFaceMaterial(ktx2Url, wrap) : makeFlatMaterial())
+    }
+  }
+
+  customMeshRenderCache.set(m.subPartId, { geometry, materials })
+
+  const primaryTexId = getPrimaryTextureId(m)
+  return {
+    id: m.subPartId,
+    atlasUrl: atlasUrl!,
+    meshNodeName: m.subPartId,
+    materialId: undefined,
+    diffuseUrl: primaryTexId ? textureKtx2Urls.get(primaryTexId) : undefined,
+    sourceFile: '(custom)',
+  }
+}
+
 async function refreshCatalog(): Promise<void> {
   // Whatever we build below reflects the current $part; record it so the $part
   // subscriber doesn't treat our own rebuild as an external (undo/redo) change.
   appliedMeshSig = meshSignature($part.get())
-  if (!atlasUrl) {
-    customMeshRenderCache.clear()
-    $customCatalog.set([])
-    return
-  }
   const part = $part.get()
 
   customMeshRenderCache.clear()
 
-  const entries: CatalogSubPart[] = await Promise.all(
-    part.customMeshes.map(async (m) => {
-      if (m.kitten) return buildKittenCatalogEntry(m, m.kitten)
-      const ft = m.faceTextures
-      const faceKeys = PRIMITIVE_FACE_KEYS[m.primitive!.kind]
-
-      // Build geometry with UV transforms baked in.
-      const geometry = buildPrimitiveGeometry(m.primitive!)
-      applyFaceUvTransforms(geometry, faceKeys, ft)
-
-      // One material per face group. Resolution per face: the face's own texture overrides
-      // the mesh material's base color; the scalar/map/normal channels always come from the
-      // mesh material (neutral when unassigned). A glowing mesh composites its glow bitmap
-      // over the same resolved base so editor == export; meshes with neither material nor
-      // face texture keep the legacy flat look.
-      const glow = await glowBitmapFor(m)
-      const material = materialFor(part, m)
-      const channels = material ? resolveMaterialChannels(material) : undefined
-      const materials: THREE.MeshStandardMaterial[] = []
-      for (const key of faceKeys) {
-        const texId = ft[key]?.textureId
-        const wrap = ft[key]?.wrap ?? 'repeat'
-        if (glow) {
-          const { diffuse, mask } = compositeGlow(await faceBaseImage(texId, material), glow)
-          const pbr = channels
-            ? { metalness: channels.metalness, roughness: channels.roughness }
-            : undefined
-          const gmat = buildGlowingFaceMaterial(diffuse, mask, wrap, pbr)
-          // Attach the material's map channels too; SubPartObject re-applies the shader
-          // patches per instance from the final map set, so the flags end up correct.
-          if (channels) await applyMaterialChannels(gmat, channels)
-          materials.push(gmat)
-        } else if (material && channels) {
-          const faceUrl = texId ? textureKtx2Urls.get(texId) : undefined
-          const baseMapUrl =
-            faceUrl ??
-            (material.baseColor.kind === 'map'
-              ? textureKtx2Urls.get(material.baseColor.textureId)
-              : undefined)
-          materials.push(
-            await buildCustomMaterial({
-              mapUrl: baseMapUrl,
-              color: material.baseColor.kind === 'color' ? material.baseColor.color : undefined,
-              wrap,
-              ...channels,
-            }),
-          )
-        } else {
-          const ktx2Url = texId ? textureKtx2Urls.get(texId) : undefined
-          materials.push(
-            ktx2Url ? await buildCustomFaceMaterial(ktx2Url, wrap) : makeFlatMaterial(),
-          )
-        }
-      }
-
-      customMeshRenderCache.set(m.subPartId, { geometry, materials })
-
-      const primaryTexId = getPrimaryTextureId(m)
-      return {
-        id: m.subPartId,
-        atlasUrl: atlasUrl!,
-        meshNodeName: m.subPartId,
-        materialId: undefined,
-        diffuseUrl: primaryTexId ? textureKtx2Urls.get(primaryTexId) : undefined,
-        sourceFile: '(custom)',
+  // The shared atlas backs primitive + kitten meshes ONLY, so its absence must not silence
+  // imported ones: a project whose only custom meshes are imported has no shared atlas at all
+  // (each import batch brings its own GLB) and still has to render.
+  const entries = await Promise.all(
+    part.customMeshes.map(async (m): Promise<CatalogSubPart | null> => {
+      switch (meshKind(m)) {
+        case 'imported':
+          return m.imported ? buildImportedCatalogEntry(m, m.imported) : null
+        case 'kitten':
+          return m.kitten && atlasUrl ? buildKittenCatalogEntry(m, m.kitten) : null
+        case 'primitive':
+          return atlasUrl ? buildPrimitiveCatalogEntry(part, m) : null
       }
     }),
   )
-  $customCatalog.set(entries)
+  $customCatalog.set(entries.filter((e) => e !== null))
 }
 
-/** Rebuilds the combined mesh-atlas GLB blob (for KSA export), then refreshes the catalog. */
+/**
+ * Rebuilds the combined mesh-atlas GLB blob for the GENERATED meshes (primitives + kitten
+ * bakes), then refreshes the catalog.
+ *
+ * IMPORTED meshes contribute nothing here on purpose: each import batch already persists its
+ * own normalized GLB, which doubles as that batch's mesh atlas (importedMeshCache). Re-encoding
+ * a multi-megabyte imported model through GLTFExporter on every face-texture tweak or undo
+ * would be a serious perf regression for zero gain.
+ */
 async function rebuildAtlasNow(): Promise<void> {
   const part = $part.get()
   if (atlasUrl) {
     URL.revokeObjectURL(atlasUrl)
     atlasUrl = null
   }
-  if (part.customMeshes.length > 0) {
-    const nodes = await Promise.all(
-      part.customMeshes.map(async (m) => {
-        if (m.kitten) {
-          // Clone the shared cached bake so the post-build dispose() below frees the
-          // clone and leaves the cache (used by the render path) intact.
-          const baked = await bakedKittenGeometry(m.kitten)
-          return { name: m.subPartId, geometry: baked ? baked.clone() : new THREE.BufferGeometry() }
-        }
-        const faceKeys = PRIMITIVE_FACE_KEYS[m.primitive!.kind]
-        const geometry = buildPrimitiveGeometry(m.primitive!)
+  const nodes: { name: string; geometry: THREE.BufferGeometry }[] = []
+  for (const m of part.customMeshes) {
+    switch (meshKind(m)) {
+      case 'imported':
+        break // has its own GLB — see the header above
+      case 'kitten': {
+        if (!m.kitten) break
+        // Clone the shared cached bake so the post-build dispose() below frees the
+        // clone and leaves the cache (used by the render path) intact.
+        const baked = await bakedKittenGeometry(m.kitten)
+        nodes.push({
+          name: m.subPartId,
+          geometry: baked ? baked.clone() : new THREE.BufferGeometry(),
+        })
+        break
+      }
+      case 'primitive': {
+        if (!m.primitive) break
+        const faceKeys = PRIMITIVE_FACE_KEYS[m.primitive.kind]
+        const geometry = buildPrimitiveGeometry(m.primitive)
         applyFaceUvTransforms(geometry, faceKeys, m.faceTextures)
-        return { name: m.subPartId, geometry }
-      }),
-    )
+        nodes.push({ name: m.subPartId, geometry })
+        break
+      }
+    }
+  }
+  if (nodes.length > 0) {
     try {
       const glb = await buildMeshAtlasGlb(nodes)
       atlasUrl = URL.createObjectURL(new Blob([glb.slice()], { type: 'model/gltf-binary' }))
@@ -463,6 +565,7 @@ async function rebuildAtlasNow(): Promise<void> {
       for (const n of nodes) n.geometry.dispose()
     }
   }
+  // Always refresh: an import-only project builds no shared atlas but still has a catalog.
   await refreshCatalog()
 }
 
@@ -739,6 +842,77 @@ export async function makeKittenMeshPart(kind: KittenKind): Promise<void> {
   setSelection(newPlacementIndices, [], [])
 }
 
+/** Layer/instance-id base for an imported SubPart: lowercase, id-safe, never empty. */
+function instanceBase(name: string): string {
+  return sanitizeIdent(name).toLowerCase()
+}
+
+/**
+ * Commits a normalized model import into the document — the editor-facing half of the importer
+ * (parse/analyze/normalize live in `loadModelFile.ts` + `importPlan.ts` + `importNormalize.ts`).
+ *
+ * In ONE undo step it creates a layer named after the file, one {@link CustomMesh} per
+ * normalized mesh, and one placement per instance the plan found (one SubPart, N placements —
+ * KSA's own instancing pattern). The rebuild then publishes the catalog/render-cache so the
+ * imported SubParts render through the normal SubPart pipeline, exactly like a primitive.
+ *
+ * Order matters: the geometry GLB is persisted AND registered as a blob URL BEFORE the
+ * mutation, because the rebuild it triggers resolves every imported mesh out of that GLB.
+ */
+export async function importModelAsMeshes(
+  normalized: NormalizedImport,
+  fileName: string,
+): Promise<void> {
+  await putAsset(assetKeys.importGlb(normalized.importId), normalized.glb, 'model/gltf-binary')
+  registerImportAtlas(normalized.importId, normalized.glb)
+
+  const layerId = nextLayerId($part.get())
+  const layerName = fileName.replace(/\.[^.]+$/, '') || 'Imported model'
+  const newPlacementIndices: number[] = []
+  mutate('import model', fileName, (p) => {
+    p.layers.push({ id: layerId, name: layerName })
+    for (const mesh of normalized.meshes) {
+      p.customMeshes.push({
+        id: `mesh_${shortId()}`,
+        name: mesh.name,
+        subPartId: mesh.subPartId,
+        imported: {
+          importId: normalized.importId,
+          // The GLB names every mesh by its subPartId (see importNormalize's atlas build).
+          meshName: mesh.subPartId,
+          sourceFile: normalized.fileName,
+          sourceNode: mesh.sourceNode,
+          sourceMaterial: mesh.sourceMaterial,
+          triangles: mesh.triangles,
+          vertices: mesh.vertices,
+        },
+        faceTextures: {},
+      })
+      // Keep instanceIds unique across the whole part (e.g. the same file imported twice).
+      const base = instanceBase(mesh.name)
+      let taken = p.placements.filter(
+        (pl) => pl.instanceId === base || pl.instanceId.startsWith(`${base}_`),
+      ).length
+      for (const t of mesh.placements) {
+        taken++
+        p.placements.push({
+          instanceId: `${base}_${taken}`,
+          subPartTemplateId: mesh.subPartId,
+          position: { ...t.position },
+          rotation: { ...t.rotation },
+          scale: { ...t.scale },
+          layerId,
+        })
+        newPlacementIndices.push(p.placements.length - 1)
+      }
+    }
+  })
+  await scheduleRebuild()
+  // Active layer + selection are ephemeral (not undo-tracked).
+  setActiveLayer(layerId)
+  setSelection(newPlacementIndices, [], [])
+}
+
 export async function updateCustomMesh(
   id: string,
   patch: Partial<Pick<CustomMesh, 'name' | 'primitive' | 'faceTextures'>>,
@@ -832,6 +1006,14 @@ export async function setMeshGlowPainted(
   await refreshCatalog()
 }
 
+/**
+ * Removes a custom mesh and every placement of it.
+ *
+ * The import GLB of an imported mesh is deliberately NOT deleted from IndexedDB: undo must be
+ * able to restore the mesh, and the other SubParts of the same import batch still resolve their
+ * geometry out of that one file. Reclaiming a batch's bytes is an explicit user action
+ * ("Remove import" in the Custom Assets modal — plans/IMPORT_MODELS.md §4.3, Phase 5).
+ */
 export async function removeCustomMesh(id: string): Promise<void> {
   const mesh = $part.get().customMeshes.find((x) => x.id === id)
   mutate('remove mesh', mesh?.name ?? '', (p) => {
@@ -869,6 +1051,7 @@ export async function hydrateCustomAssets(): Promise<void> {
   publishTextureUrls()
   for (const url of emissivePaintUrls.values()) URL.revokeObjectURL(url)
   emissivePaintUrls.clear()
+  clearImportAtlases()
 
   const part = $part.get()
   for (const t of part.customTextures) {
@@ -886,6 +1069,11 @@ export async function hydrateCustomAssets(): Promise<void> {
     }
   }
   publishEmissivePaintUrls()
+  // Re-register every import batch's geometry GLB (the only copy — nothing regenerates it)
+  // BEFORE the rebuild, which resolves imported meshes out of those blob URLs by name.
+  const importIds = new Set<string>()
+  for (const m of part.customMeshes) if (m.imported) importIds.add(m.imported.importId)
+  for (const importId of importIds) await ensureImportAtlas(importId)
   await scheduleRebuild()
 }
 

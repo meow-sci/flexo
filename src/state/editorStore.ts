@@ -52,6 +52,9 @@ import {
   createRocket,
   createRocketController,
   createSolarPanel,
+  createSolidGrainSegment,
+  createSolidMotor,
+  createSolidMotorNozzle,
   createSubPartGameData,
   createTank,
   DEFAULT_LAYER_ID,
@@ -1880,35 +1883,54 @@ function uniqueModuleId(base: string, taken: Iterable<string>): string {
   return `${base}${n}`
 }
 
-/** All engine-module ids currently in use across the part (so new ids never collide). */
+/**
+ * All engine-module ids currently in use across the part (so new ids never collide).
+ *
+ * The solid families share namespaces with the liquid ones: a `<Rocket><Core Id>` may
+ * name a `<Combustor>` OR a `<SolidMotor>`, and a `<Nozzle Id>` a `<DeLavalNozzle>` OR a
+ * `<SolidMotorNozzle>` — so they are pooled here. `containers` pools `<Tank Id>` with
+ * `<SolidGrainSegment Id>` for the same reason (both are `Components` entries a
+ * `<FeedsFrom Container>` resolves against).
+ */
 function allEngineModuleIds(part: EditingPart): {
   combustors: string[]
   nozzles: string[]
   rockets: string[]
   controllers: string[]
+  containers: string[]
 } {
   const combustors: string[] = []
   const nozzles: string[] = []
   const rockets: string[] = []
+  const containers: string[] = []
   for (const spd of part.subPartGameData) {
     for (const c of spd.combustors) combustors.push(c.id)
+    for (const m of spd.solidMotors) combustors.push(m.id)
     for (const noz of spd.nozzles) nozzles.push(noz.id)
+    for (const noz of spd.solidNozzles) nozzles.push(noz.id)
     for (const r of spd.rockets) rockets.push(r.id)
+    for (const t of spd.tanks) containers.push(t.id)
+    for (const g of spd.solidGrainSegments) containers.push(g.id)
   }
   for (const c of part.gameData.combustors) combustors.push(c.id)
+  for (const m of part.gameData.solidMotors) combustors.push(m.id)
   for (const noz of part.gameData.nozzles) nozzles.push(noz.id)
+  for (const noz of part.gameData.solidNozzles) nozzles.push(noz.id)
   for (const r of part.gameData.rockets) rockets.push(r.id)
+  for (const t of part.gameData.tanks) containers.push(t.id)
+  for (const g of part.gameData.solidGrainSegments) containers.push(g.id)
   return {
     combustors,
     nozzles,
     rockets,
     controllers: part.gameData.rocketControllers.map((c) => c.id),
+    containers: containers.filter((id) => id.trim()),
   }
 }
 
 function hasSubPartItem(
   subPartTemplateId: string,
-  key: 'combustors' | 'nozzles' | 'rockets',
+  key: 'combustors' | 'nozzles' | 'rockets' | 'solidMotors' | 'solidNozzles' | 'solidGrainSegments',
   index: number,
 ): boolean {
   const spd = $part.get().subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
@@ -2293,6 +2315,167 @@ export function setPartCombustorPlumbing(index: number, plumbing: PlumbingClass)
   if (index < 0 || index >= $part.get().gameData.combustors.length) return
   commitGameData('plumbing', plumbing, (g) => {
     g.combustors[index].plumbing = plumbing
+  })
+}
+
+// --- Solid rocket motors (KSA 2026.7.9): motor case + nozzle + stackable grain ---
+//
+// The solid analogue of combustor/DeLaval-nozzle/tank. A `<Rocket>` may bind ONLY solid
+// parts or ONLY liquid ones (RocketTemplate.Create throws on a mix), so these get their
+// own add/remove/update actions rather than options on the liquid ones.
+
+/** Discrete: append a part-level `<SolidMotor>` (an SRB case). */
+export function addPartSolidMotor(): void {
+  const id = uniqueModuleId('MotorCore', allEngineModuleIds($part.get()).combustors)
+  commitGameData('add solid motor', '', (g) => g.solidMotors.push(createSolidMotor(id)))
+}
+/** Discrete: remove the part-level solid motor at `index`. */
+export function removePartSolidMotor(index: number): void {
+  if (index < 0 || index >= $part.get().gameData.solidMotors.length) return
+  commitGameData('remove solid motor', '', (g) => g.solidMotors.splice(index, 1))
+}
+/** Streaming: patch a part-level solid motor's fields. Caller pushes undo on field focus. */
+export function updatePartSolidMotor(index: number, patch: Partial<SolidMotor>): void {
+  if (index < 0 || index >= $part.get().gameData.solidMotors.length) return
+  mutateGameData((g) => {
+    g.solidMotors[index] = { ...g.solidMotors[index], ...patch }
+  })
+}
+/** Discrete: replace a part-level solid motor's `<FeedsFrom>` list. */
+export function setPartSolidMotorFeeds(index: number, feeds: readonly FeedSource[]): void {
+  if (index < 0 || index >= $part.get().gameData.solidMotors.length) return
+  commitGameData('feed points', '', (g) => {
+    g.solidMotors[index].feeds = [...feeds]
+  })
+}
+
+/** Discrete: append a part-level `<SolidMotorNozzle>`. */
+export function addPartSolidNozzle(): void {
+  const id = uniqueModuleId('Nozzle', allEngineModuleIds($part.get()).nozzles)
+  commitGameData('add solid nozzle', '', (g) => g.solidNozzles.push(createSolidMotorNozzle(id)))
+}
+/** Discrete: remove the part-level solid nozzle at `index`. */
+export function removePartSolidNozzle(index: number): void {
+  if (index < 0 || index >= $part.get().gameData.solidNozzles.length) return
+  commitGameData('remove solid nozzle', '', (g) => g.solidNozzles.splice(index, 1))
+}
+/** Streaming: patch a part-level solid nozzle's fields. Caller pushes undo on focus/drag-start. */
+export function updatePartSolidNozzle(index: number, patch: Partial<SolidMotorNozzle>): void {
+  if (index < 0 || index >= $part.get().gameData.solidNozzles.length) return
+  mutateGameData((g) => {
+    g.solidNozzles[index] = { ...g.solidNozzles[index], ...patch }
+  })
+}
+
+/** Discrete: append a part-level `<SolidGrainSegment>` (a feedable propellant container). */
+export function addPartSolidGrainSegment(): void {
+  const id = uniqueModuleId('Grain', allEngineModuleIds($part.get()).containers)
+  commitGameData('add grain segment', '', (g) =>
+    g.solidGrainSegments.push(createSolidGrainSegment(id)),
+  )
+}
+/** Discrete: remove the part-level grain segment at `index`. */
+export function removePartSolidGrainSegment(index: number): void {
+  if (index < 0 || index >= $part.get().gameData.solidGrainSegments.length) return
+  commitGameData('remove grain segment', '', (g) => g.solidGrainSegments.splice(index, 1))
+}
+/** Streaming: patch a part-level grain segment's fields. Caller pushes undo on field focus. */
+export function updatePartSolidGrainSegment(
+  index: number,
+  patch: Partial<SolidGrainSegment>,
+): void {
+  if (index < 0 || index >= $part.get().gameData.solidGrainSegments.length) return
+  mutateGameData((g) => {
+    g.solidGrainSegments[index] = { ...g.solidGrainSegments[index], ...patch }
+  })
+}
+
+/** Discrete: append a `<SolidMotor>` that travels with the given SubPart template. */
+export function addSubPartSolidMotor(subPartTemplateId: string): void {
+  const id = uniqueModuleId('MotorCore', allEngineModuleIds($part.get()).combustors)
+  commitSubPartData('add solid motor', '', subPartTemplateId, (s) =>
+    s.solidMotors.push(createSolidMotor(id)),
+  )
+}
+/** Discrete: remove the SubPart-level solid motor at `index`. */
+export function removeSubPartSolidMotor(subPartTemplateId: string, index: number): void {
+  if (!hasSubPartItem(subPartTemplateId, 'solidMotors', index)) return
+  commitSubPartData('remove solid motor', '', subPartTemplateId, (s) =>
+    s.solidMotors.splice(index, 1),
+  )
+}
+/** Streaming: patch a SubPart-level solid motor's fields. Caller pushes undo on field focus. */
+export function updateSubPartSolidMotor(
+  subPartTemplateId: string,
+  index: number,
+  patch: Partial<SolidMotor>,
+): void {
+  if (!hasSubPartItem(subPartTemplateId, 'solidMotors', index)) return
+  mutateSubPartData(subPartTemplateId, (s) => {
+    s.solidMotors[index] = { ...s.solidMotors[index], ...patch }
+  })
+}
+/** Discrete: replace a SubPart-level solid motor's `<FeedsFrom>` list. */
+export function setSubPartSolidMotorFeeds(
+  subPartTemplateId: string,
+  index: number,
+  feeds: readonly FeedSource[],
+): void {
+  if (!hasSubPartItem(subPartTemplateId, 'solidMotors', index)) return
+  commitSubPartData('feed points', '', subPartTemplateId, (s) => {
+    s.solidMotors[index].feeds = [...feeds]
+  })
+}
+
+/** Discrete: append a `<SolidMotorNozzle>` that travels with the given SubPart template. */
+export function addSubPartSolidNozzle(subPartTemplateId: string): void {
+  const id = uniqueModuleId('Nozzle', allEngineModuleIds($part.get()).nozzles)
+  commitSubPartData('add solid nozzle', '', subPartTemplateId, (s) =>
+    s.solidNozzles.push(createSolidMotorNozzle(id)),
+  )
+}
+/** Discrete: remove the SubPart-level solid nozzle at `index`. */
+export function removeSubPartSolidNozzle(subPartTemplateId: string, index: number): void {
+  if (!hasSubPartItem(subPartTemplateId, 'solidNozzles', index)) return
+  commitSubPartData('remove solid nozzle', '', subPartTemplateId, (s) =>
+    s.solidNozzles.splice(index, 1),
+  )
+}
+/** Streaming: patch a SubPart-level solid nozzle's fields. Caller pushes undo on focus/drag-start. */
+export function updateSubPartSolidNozzle(
+  subPartTemplateId: string,
+  index: number,
+  patch: Partial<SolidMotorNozzle>,
+): void {
+  if (!hasSubPartItem(subPartTemplateId, 'solidNozzles', index)) return
+  mutateSubPartData(subPartTemplateId, (s) => {
+    s.solidNozzles[index] = { ...s.solidNozzles[index], ...patch }
+  })
+}
+
+/** Discrete: append a `<SolidGrainSegment>` that travels with the given SubPart template. */
+export function addSubPartSolidGrainSegment(subPartTemplateId: string): void {
+  const id = uniqueModuleId('Grain', allEngineModuleIds($part.get()).containers)
+  commitSubPartData('add grain segment', '', subPartTemplateId, (s) =>
+    s.solidGrainSegments.push(createSolidGrainSegment(id)),
+  )
+}
+/** Discrete: remove the SubPart-level grain segment at `index`. */
+export function removeSubPartSolidGrainSegment(subPartTemplateId: string, index: number): void {
+  if (!hasSubPartItem(subPartTemplateId, 'solidGrainSegments', index)) return
+  commitSubPartData('remove grain segment', '', subPartTemplateId, (s) =>
+    s.solidGrainSegments.splice(index, 1),
+  )
+}
+/** Streaming: patch a SubPart-level grain segment's fields. Caller pushes undo on field focus. */
+export function updateSubPartSolidGrainSegment(
+  subPartTemplateId: string,
+  index: number,
+  patch: Partial<SolidGrainSegment>,
+): void {
+  if (!hasSubPartItem(subPartTemplateId, 'solidGrainSegments', index)) return
+  mutateSubPartData(subPartTemplateId, (s) => {
+    s.solidGrainSegments[index] = { ...s.solidGrainSegments[index], ...patch }
   })
 }
 

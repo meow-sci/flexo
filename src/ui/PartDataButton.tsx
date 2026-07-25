@@ -24,8 +24,10 @@ import {
   ConsumerFeedWiringSection,
   GimbalsSection,
   PartGasGeneratorSection,
+  PartSolidMotorSection,
   RocketControllersSection,
 } from './EngineSections'
+import { EngineIssuesPanel } from './EngineIssuesPanel'
 
 interface Props {
   isOpen?: boolean
@@ -57,7 +59,10 @@ export function PartDataButton({
     gameData.rockets.length +
     gameData.combustors.length +
     gameData.nozzles.length +
-    gameData.consumerFeedWiring.length
+    gameData.consumerFeedWiring.length +
+    gameData.solidMotors.length +
+    gameData.solidNozzles.length +
+    gameData.solidGrainSegments.length
 
   return (
     <>
@@ -124,6 +129,10 @@ export function PartDataButton({
                   <SectionTitle>Gimbals</SectionTitle>
                   <GimbalsSection part={part} />
                 </div>
+                <EngineIssuesPanel part={part} />
+                <DisclosureSection title="Solid motor (SRB)">
+                  <PartSolidMotorSection part={part} />
+                </DisclosureSection>
                 <DisclosureSection title="Gas generator (advanced, part-level rockets)">
                   <PartGasGeneratorSection part={part} />
                 </DisclosureSection>

@@ -9,6 +9,7 @@ import {
   ToggleButtonGroup,
   ToggleButton,
   ToolbarButton,
+  dangerBox,
   monoTextareaFill,
   toast,
   warningBox,
@@ -16,6 +17,8 @@ import {
 import { $part } from '../state/editorStore'
 import { $projectName } from '../state/projectStore'
 import { $catalogIndex } from '../state/catalogStore'
+import { $allReactionIndex } from '../state/reactionStore'
+import { validateEngines } from '../ksa/engineValidation'
 import { $kittenTextureExport } from '../state/settingsStore'
 import {
   $modFolder,
@@ -69,6 +72,7 @@ export function ExportButton({
   onOpenChange: externalOnChange,
 }: ExportButtonProps = {}) {
   const part = useStore($part)
+  const reactionIndex = useStore($allReactionIndex)
   const [internalOpen, setInternalOpen] = useState(false)
   const [mode, setMode] = useState<Mode>('xml')
   const isControlled = externalOpen !== undefined
@@ -79,6 +83,11 @@ export function ExportButton({
     part.partId,
     part.placements.map((p) => p.instanceId),
   )
+  // Engine + plumbing pre-flight (KSA 2026.7.9). `block` = KSA throws at load, so the
+  // whole mod fails; `warn` = it loads but the part misbehaves (usually no thrust).
+  const engineIssues = validateEngines(part, reactionIndex)
+  const blocking = engineIssues.filter((i) => i.severity === 'block')
+  const engineWarnings = engineIssues.filter((i) => i.severity === 'warn')
 
   return (
     <>
@@ -97,6 +106,27 @@ export function ExportButton({
               <div className={warningBox}>
                 {warnings.map((w) => (
                   <div key={w}>⚠ {w}</div>
+                ))}
+              </div>
+            )}
+            {blocking.length > 0 && (
+              <div className={dangerBox}>
+                <div className="font-medium">
+                  KSA would refuse to load this mod ({blocking.length}
+                  {blocking.length === 1 ? ' issue' : ' issues'})
+                </div>
+                {blocking.map((issue, i) => (
+                  <div key={i}>✕ {issue.message}</div>
+                ))}
+              </div>
+            )}
+            {engineWarnings.length > 0 && (
+              <div className={warningBox}>
+                <div className="font-medium">
+                  Loads, but the part misbehaves ({engineWarnings.length})
+                </div>
+                {engineWarnings.map((issue, i) => (
+                  <div key={i}>⚠ {issue.message}</div>
                 ))}
               </div>
             )}

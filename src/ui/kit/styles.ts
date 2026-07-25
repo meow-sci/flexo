@@ -54,6 +54,10 @@ export function gridRowClass(rp: {
 export const warningBox =
   'rounded-lg border border-warning/40 bg-warning/10 p-2 text-xs text-warning'
 
+/** Red callout box for blocking errors (the action would produce something broken). */
+export const dangerBox =
+  'flex flex-col gap-1 rounded-lg border border-danger/40 bg-danger/10 p-2 text-xs text-danger'
+
 const monoTextareaBase =
   'w-full resize-none rounded-lg border border-border bg-panel-sunken p-2 font-mono text-xs text-fg outline-none'
 

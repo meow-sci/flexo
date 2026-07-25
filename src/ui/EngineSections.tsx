@@ -24,7 +24,27 @@ import {
   removeRocket,
   removeRocketController,
   addConsumerFeedWiring,
+  addPartSolidGrainSegment,
+  addPartSolidMotor,
+  addPartSolidNozzle,
+  addSubPartSolidGrainSegment,
+  addSubPartSolidMotor,
+  addSubPartSolidNozzle,
   autoWireUnwiredConsumers,
+  removePartSolidGrainSegment,
+  removePartSolidMotor,
+  removePartSolidNozzle,
+  removeSubPartSolidGrainSegment,
+  removeSubPartSolidMotor,
+  removeSubPartSolidNozzle,
+  setPartSolidMotorFeeds,
+  setSubPartSolidMotorFeeds,
+  updatePartSolidGrainSegment,
+  updatePartSolidMotor,
+  updatePartSolidNozzle,
+  updateSubPartSolidGrainSegment,
+  updateSubPartSolidMotor,
+  updateSubPartSolidNozzle,
   removeConsumerFeedWiring,
   setCombustorFeeds,
   setCombustorPlumbing,
@@ -49,6 +69,7 @@ import { mixtureRatioBounds, reactionDataToCustom, type ReactionData } from '../
 import {
   createCustomReaction,
   DEFAULT_ENGINE_SOUND_ID,
+  GRAIN_GEOMETRY_IDS,
   isCustomReactionExportable,
   KNOWN_REACTIONS,
   PLUME_TRAIL_IDS,
@@ -58,6 +79,9 @@ import {
   type DeLavalNozzle,
   type FeedSource,
   type PlumbingClass,
+  type SolidGrainSegment,
+  type SolidMotor,
+  type SolidMotorNozzle,
   type ReactionCategory,
   type ReactionLutRowSpec,
   type ReactionReactantSpec,
@@ -318,6 +342,63 @@ function NozzleFields({
   nozzle: DeLavalNozzle
   onUpdate: (patch: Partial<DeLavalNozzle>) => void
 }) {
+  return (
+    <RocketNozzleFields
+      nozzle={nozzle}
+      onUpdate={onUpdate}
+      throat={
+        <Field label="Area ratio (exit / throat)">
+          <PreciseNumberInput
+            aria-label="Nozzle area ratio"
+            value={Number.isFinite(nozzle.areaRatio) ? nozzle.areaRatio : 0}
+            min={1}
+            onInteractionStart={() => pushUndo('edit nozzle', '')}
+            onCommit={(ar) => onUpdate({ areaRatio: ar })}
+          />
+        </Field>
+      }
+    />
+  )
+}
+
+/**
+ * The editable fields of one solid-motor nozzle — identical to a De Laval nozzle MINUS
+ * the area ratio: `SolidMotorNozzleTemplate.Create` sizes the throat itself as
+ * `exitArea / 12`, and the schema has no AreaRatio slot to author.
+ */
+function SolidNozzleFields({
+  nozzle,
+  onUpdate,
+}: {
+  nozzle: SolidMotorNozzle
+  onUpdate: (patch: Partial<SolidMotorNozzle>) => void
+}) {
+  return (
+    <RocketNozzleFields
+      nozzle={nozzle}
+      onUpdate={onUpdate}
+      throat={
+        <p className="text-[11px] leading-snug text-fg-subtle">
+          KSA sizes the throat automatically (exit area ÷ 12) — solid nozzles have no area ratio.
+        </p>
+      }
+    />
+  )
+}
+
+/**
+ * The nozzle fields both flavors share (`RocketNozzleTemplate` + exit geometry and
+ * efficiencies). `throat` is the one slot they differ in.
+ */
+function RocketNozzleFields({
+  nozzle,
+  onUpdate,
+  throat,
+}: {
+  nozzle: SolidMotorNozzle
+  onUpdate: (patch: Partial<SolidMotorNozzle>) => void
+  throat: React.ReactNode
+}) {
   const begin = () => pushUndo('edit nozzle', '')
   return (
     <>
@@ -330,15 +411,7 @@ function NozzleFields({
           onCommit={(m) => onUpdate({ exitDiameterM: m })}
         />
       </Field>
-      <Field label="Area ratio (exit / throat)">
-        <PreciseNumberInput
-          aria-label="Nozzle area ratio"
-          value={Number.isFinite(nozzle.areaRatio) ? nozzle.areaRatio : 0}
-          min={1}
-          onInteractionStart={begin}
-          onCommit={(ar) => onUpdate({ areaRatio: ar })}
-        />
-      </Field>
+      {throat}
       <Field label="Flow efficiency (%)">
         <PreciseNumberInput
           aria-label="Flow efficiency percent"
@@ -440,6 +513,179 @@ function NozzleFields({
   )
 }
 
+/**
+ * The editable fields of one `<SolidMotor>` — an SRB case. The reaction must be a
+ * `Category="Solid"` FixedReaction (`SolidMotorTemplate.Create` throws otherwise), and
+ * the default chamber pressure must sit inside that reaction's stable range.
+ */
+function SolidMotorFields({
+  motor,
+  onUpdate,
+  onSetFeeds,
+}: {
+  motor: SolidMotor
+  onUpdate: (patch: Partial<SolidMotor>) => void
+  onSetFeeds: (feeds: FeedSource[]) => void
+}) {
+  const part = useStore($part)
+  const catalog = useStore($allReactions)
+  const targets = feedTargetsOf(part)
+  const begin = () => pushUndo('edit solid motor', '')
+  // Only solid reactions are offered — a liquid one is a hard load error, not a choice.
+  const solidIds = (
+    catalog.length
+      ? catalog.filter((c) => c.category === 'Solid').map((c) => c.id)
+      : KNOWN_REACTIONS.filter((k) => k.category === 'Solid').map((k) => k.id)
+  ).concat(part.customReactions.filter((r) => r.category === 'Solid').map((r) => r.id))
+  const options =
+    motor.reactionId && !solidIds.includes(motor.reactionId)
+      ? [motor.reactionId, ...solidIds]
+      : solidIds
+  return (
+    <>
+      <Field label="Solid propellant (reaction)">
+        <Select
+          size="sm"
+          aria-label="Solid motor reaction"
+          placeholder="Select a solid propellant"
+          value={motor.reactionId || null}
+          onChange={(k) => {
+            pushUndo('solid motor reaction', String(k))
+            onUpdate({ reactionId: String(k) })
+          }}
+        >
+          {options.map((id) => (
+            <ListBoxItem key={id} id={id} textValue={id}>
+              {id}
+            </ListBoxItem>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Grain profile (the thrust curve over the burn)">
+        <Select
+          size="sm"
+          aria-label="Grain geometry"
+          value={motor.grainGeometryId || NONE}
+          onChange={(k) => {
+            pushUndo('grain profile', String(k))
+            onUpdate({ grainGeometryId: k === NONE ? '' : String(k) })
+          }}
+        >
+          <ListBoxItem id={NONE}>(library default)</ListBoxItem>
+          {GRAIN_GEOMETRY_IDS.map((id) => (
+            <ListBoxItem key={id} id={id} textValue={id}>
+              {id}
+            </ListBoxItem>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Default chamber pressure (bar)">
+        <PreciseNumberInput
+          aria-label="Default chamber pressure in bar"
+          value={motor.defaultPressurePa / PA_PER_BAR}
+          min={0}
+          onInteractionStart={begin}
+          onCommit={(bar) => onUpdate({ defaultPressurePa: bar * PA_PER_BAR })}
+        />
+      </Field>
+      <Field label="Thermal efficiency (%)">
+        <PreciseNumberInput
+          aria-label="Thermal efficiency percent"
+          value={motor.thermalEfficiency * 100}
+          min={0}
+          max={100}
+          onInteractionStart={begin}
+          onCommit={(pct) => onUpdate({ thermalEfficiency: clamp01(pct / 100) })}
+        />
+      </Field>
+      <FeedsField
+        label="Feeds from (grain segments + SolidMotorCase connectors)"
+        feeds={motor.feeds}
+        connectorIds={targets.connectorIds}
+        containers={targets.containers}
+        allowParent
+        onChange={onSetFeeds}
+      />
+    </>
+  )
+}
+
+/**
+ * The editable fields of one `<SolidGrainSegment>` — a stackable propellant grain, and
+ * the container an SRB's `<FeedsFrom Container>` addresses. Segments stack in the vehicle
+ * editor across connectors that declare the `SolidMotorCase` capability.
+ */
+function SolidGrainSegmentFields({
+  segment,
+  onUpdate,
+  onSetId,
+}: {
+  segment: SolidGrainSegment
+  onUpdate: (patch: Partial<SolidGrainSegment>) => void
+  onSetId: (id: string) => void
+}) {
+  const begin = () => pushUndo('edit grain segment', '')
+  return (
+    <>
+      <Field label="Feed id (reference it from a motor's Feeds from → Container)">
+        <TextField
+          size="sm"
+          aria-label="Grain segment feed id"
+          inputClassName="font-mono"
+          value={segment.id}
+          onFocus={begin}
+          onChange={onSetId}
+        />
+      </Field>
+      <Field label="Casing material id">
+        <TextField
+          size="sm"
+          aria-label="Grain casing material id"
+          inputClassName="font-mono"
+          value={segment.wallMaterialId}
+          onFocus={begin}
+          onChange={(v) => onUpdate({ wallMaterialId: v })}
+        />
+      </Field>
+      <Field label="Outer radius (m)">
+        <PreciseNumberInput
+          aria-label="Grain outer radius in meters"
+          value={segment.outerRadiusM}
+          min={0}
+          onInteractionStart={begin}
+          onCommit={(n) => onUpdate({ outerRadiusM: n })}
+        />
+      </Field>
+      <Field label="Wall thickness (mm)">
+        <PreciseNumberInput
+          aria-label="Grain wall thickness in millimeters"
+          value={segment.wallThicknessMm}
+          min={0}
+          onInteractionStart={begin}
+          onCommit={(n) => onUpdate({ wallThicknessMm: n })}
+        />
+      </Field>
+      <Field label="Length (m)">
+        <PreciseNumberInput
+          aria-label="Grain length in meters"
+          value={segment.lengthM}
+          min={0}
+          onInteractionStart={begin}
+          onCommit={(n) => onUpdate({ lengthM: n })}
+        />
+      </Field>
+      <div className="flex flex-col gap-1">
+        <span className={LABEL}>Location offset (m, assembly frame)</span>
+        <Vec3Field
+          value={segment.locationAsmb}
+          onInteractionStart={begin}
+          onCommit={(axis, v) => onUpdate({ locationAsmb: { ...segment.locationAsmb, [axis]: v } })}
+        />
+      </div>
+    </>
+  )
+}
+
 const NONE = '\0none'
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n))
 const clampThrottle = (n: number) => Math.min(1, Math.max(0.01, n))
@@ -453,8 +699,10 @@ const clampThrottle = (n: number) => Math.min(1, Math.max(0.01, n))
  */
 export function SubPartEngineSection({ spd }: { spd: SubPartGameData }) {
   const tid = spd.subPartTemplateId
-  const combustorIds = spd.combustors.map((c) => c.id)
-  const nozzleIds = spd.nozzles.map((n) => n.id)
+  // A <Rocket>'s <Core Id>/<Nozzle Id> may name either family, so both are offered
+  // (mixing them is a load error, which engineValidation flags).
+  const combustorIds = [...spd.combustors.map((c) => c.id), ...spd.solidMotors.map((m) => m.id)]
+  const nozzleIds = [...spd.nozzles.map((n) => n.id), ...spd.solidNozzles.map((n) => n.id)]
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
@@ -483,6 +731,58 @@ export function SubPartEngineSection({ spd }: { spd: SubPartGameData }) {
         <Button size="sm" onPress={() => addNozzle(tid)} className="self-start">
           + Nozzle
         </Button>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        {spd.solidMotors.map((m, i) => (
+          <ItemCard
+            key={i}
+            title={`Solid motor — ${m.id}`}
+            onRemove={() => removeSubPartSolidMotor(tid, i)}
+          >
+            <SolidMotorFields
+              motor={m}
+              onUpdate={(patch) => updateSubPartSolidMotor(tid, i, patch)}
+              onSetFeeds={(feeds) => setSubPartSolidMotorFeeds(tid, i, feeds)}
+            />
+          </ItemCard>
+        ))}
+        {spd.solidNozzles.map((n, i) => (
+          <ItemCard
+            key={i}
+            title={`Solid nozzle — ${n.id}`}
+            onRemove={() => removeSubPartSolidNozzle(tid, i)}
+          >
+            <SolidNozzleFields
+              nozzle={n}
+              onUpdate={(patch) => updateSubPartSolidNozzle(tid, i, patch)}
+            />
+          </ItemCard>
+        ))}
+        {spd.solidGrainSegments.map((g, i) => (
+          <ItemCard
+            key={i}
+            title={`Grain segment — ${g.id}`}
+            onRemove={() => removeSubPartSolidGrainSegment(tid, i)}
+          >
+            <SolidGrainSegmentFields
+              segment={g}
+              onUpdate={(patch) => updateSubPartSolidGrainSegment(tid, i, patch)}
+              onSetId={(id) => updateSubPartSolidGrainSegment(tid, i, { id })}
+            />
+          </ItemCard>
+        ))}
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onPress={() => addSubPartSolidMotor(tid)}>
+            + Solid motor
+          </Button>
+          <Button size="sm" onPress={() => addSubPartSolidNozzle(tid)}>
+            + Solid nozzle
+          </Button>
+          <Button size="sm" onPress={() => addSubPartSolidGrainSegment(tid)}>
+            + Grain segment
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -806,6 +1106,72 @@ export function ConsumerFeedWiringSection({ part }: { part: EditingPart }) {
             Auto-wire unwired consumers
           </Button>
         )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Part-level solid rocket motor hardware — the SRB analogue of the gas-generator
+ * section. A booster prefab authors its `<SolidMotor>` + `<SolidGrainSegment>` here and
+ * (usually) reuses a shared thrust-assembly SubPart for the `<SolidMotorNozzle>`.
+ */
+export function PartSolidMotorSection({ part }: { part: EditingPart }) {
+  const g = part.gameData
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-xs text-fg-subtle">
+        A <code>&lt;Rocket&gt;</code> may bind ONLY solid parts or ONLY liquid ones, and a solid
+        rocket needs at least one nozzle — KSA throws at load otherwise. Grain segments stack across
+        connectors that declare <b>SolidMotorCase</b>.
+      </p>
+      <div className="flex flex-col gap-2">
+        {g.solidMotors.map((m, i) => (
+          <ItemCard
+            key={i}
+            title={`Solid motor — ${m.id}`}
+            onRemove={() => removePartSolidMotor(i)}
+          >
+            <SolidMotorFields
+              motor={m}
+              onUpdate={(patch) => updatePartSolidMotor(i, patch)}
+              onSetFeeds={(feeds) => setPartSolidMotorFeeds(i, feeds)}
+            />
+          </ItemCard>
+        ))}
+        {g.solidGrainSegments.map((seg, i) => (
+          <ItemCard
+            key={i}
+            title={`Grain segment — ${seg.id}`}
+            onRemove={() => removePartSolidGrainSegment(i)}
+          >
+            <SolidGrainSegmentFields
+              segment={seg}
+              onUpdate={(patch) => updatePartSolidGrainSegment(i, patch)}
+              onSetId={(id) => updatePartSolidGrainSegment(i, { id })}
+            />
+          </ItemCard>
+        ))}
+        {g.solidNozzles.map((n, i) => (
+          <ItemCard
+            key={i}
+            title={`Solid nozzle — ${n.id}`}
+            onRemove={() => removePartSolidNozzle(i)}
+          >
+            <SolidNozzleFields nozzle={n} onUpdate={(patch) => updatePartSolidNozzle(i, patch)} />
+          </ItemCard>
+        ))}
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" onPress={addPartSolidMotor}>
+            + Solid motor
+          </Button>
+          <Button size="sm" onPress={addPartSolidGrainSegment}>
+            + Grain segment
+          </Button>
+          <Button size="sm" onPress={addPartSolidNozzle}>
+            + Solid nozzle
+          </Button>
+        </div>
       </div>
     </div>
   )

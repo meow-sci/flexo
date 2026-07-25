@@ -4,6 +4,7 @@
 export {
   cn,
   composeTw,
+  dangerBox,
   focusRing,
   gridRowClass,
   monoTextarea,

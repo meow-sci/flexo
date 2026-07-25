@@ -4,7 +4,7 @@
 > data-only KSA mod that adds a celestial body with `<GroundClutter>` (cards/meshes scattered
 > on the terrain), using **no custom game code**. Reference scaffold for clutter modding.
 
-**Baseline:** re-verified against KSA build **2026.7.8.4980** (decomp @ 4980 + shipped Core XML).
+**Baseline:** re-verified against KSA build **2026.7.9.5018** (decomp @ 5018 + shipped Core XML).
 **Baseline status:** 🟢 **CURRENT (scaffold updated, in-game re-check pending)** — 4892 turned the
 4826 mesh-atlas change load-bearing: every `<LOD>` now **requires `<Material Id/>` ID-references
 after its `<Mesh>`** and the ecotype `<Material>` became an Id-carrying **list**, so the old
@@ -46,6 +46,30 @@ hand-authored mod XML + a build script).
 - **Opacity** cut where R < 0.5 (cutout cards).
 - First-wins + core-first load order, so a clutter mod can **add** a body & reuse textures by `Id`.
 - Loading is gated by the scenario's `<LoadFromLibrary>`.
+
+## What changed in 5018
+
+One additive, optional schema field; **no flexo code change and the cartoon-moon scaffold is
+unchanged**.
+
+### `<LOD CastShadows>` (revs 5009–5011)
+
+`GroundClutterLodReference` gained `[XmlAttribute] public bool CastShadows = true`, so a LOD
+can opt OUT of the ground-clutter shadow pass:
+
+```xml
+<LOD CastShadows="false" Distance="...">…</LOD>
+```
+
+Default `true` ⇒ omitting it preserves today's behavior, which is why the scaffold still
+loads unchanged. It is a cheap perf lever for the far LODs (Core uses it to drop distant
+tree instances from shadow casting) and is worth applying during the still-open clutter LOD
+retune — filed as gap **F14** / **H** rather than done blind, since tuning it without an
+in-game look would be guesswork.
+
+Nothing else in the clutter schema changed: `GroundClutterReference.cs` and its six sibling
+schema classes are otherwise unchanged from 4980. Earth gained three small tree variants and
+a forest distribution texture — content, not contract.
 
 ## What changed in 4980
 

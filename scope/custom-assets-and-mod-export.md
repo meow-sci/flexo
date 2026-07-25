@@ -6,7 +6,7 @@
 > alongside [docs/custom-assets.md](../docs/custom-assets.md), [docs/texturing.md](../docs/texturing.md),
 > [docs/asset-pipeline.md](../docs/asset-pipeline.md).
 
-**Baseline:** re-vetted against KSA build **2026.7.8.4980** (decomp @ 4980 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.9.5018** (decomp @ 5018 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — every schema/reference class and renderer quirk flexo's
 export depends on is byte-identical or behavior-preserving. No code change required. Two
 durable watch-items noted below.
@@ -55,6 +55,17 @@ durable watch-items noted below.
 8. **`PartModel Id` must be unique** (KSA dedupes PartModels by `Template.Id`); flexo uses `<subPartId>_Model`. **`PbrMaterial Id`s dedupe the same way** (`PbrMaterialReference.OnDataLoad` → `ModLibrary.Register`; a duplicate silently becomes a reference to the first) — flexo exploits this deliberately: identical resolved channel sets intern into ONE shared `<PbrMaterial>` referenced by many SubParts (`flexo_<MatName>_<hex>_Material` for a verbatim CustomMaterial, `<subPartId>_Material` otherwise), exactly Core's one-pack-material pattern.
 9. **Glass: emissive ignored + ~10% diffuse tint.** `MeshGlassIndirect.frag` hard-codes opacity 0.75, `glassColor=mix(albedo,0.1,0.9)`. `$simulateGlass` mirrors this; glass can't glow, so the `glassGlow` layered two-SubPart export is required.
 10. **Glow = WHITE × mask × 1.25, added after lighting.** `glowComposite` bakes glow color into the diffuse and emits a white mask; `MeshIndirect.frag` does `gammaToLinear(vec3(sampledEmissive) * EMISSIVE_MULTIPLIER)`, `EMISSIVE_MULTIPLIER=1.25`.
+
+## What changed in 5018
+
+**Nothing that reaches flexo's export.** `Mod.cs` / `ModLibrary.cs` / `FileReference.cs` /
+`ShaderReference.cs` differ only in log line numbers. `AssetBundle.cs` gained exactly ONE
+line — registering the new top-level `<GrainGeometry>` element (`Content/Core/GrainGeometries.xml`,
+listed in `mod.toml` after `Reactions.xml`) — which flexo neither reads nor writes; it
+references the shipped ids by name only (`GRAIN_GEOMETRY_IDS`). `ThumbnailRenderResources.cs`
+is absent from the diff, so the **synthetic Normal + AoRoughMetal requirement still holds**.
+`Content/Core/PlumeTrailAssets.xml` is likewise a new bundle entry flexo only references by
+id. Re-verified **INTACT** — no code change required.
 
 ## What changed in 4980
 

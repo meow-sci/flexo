@@ -5,7 +5,7 @@
 > **BREAKING** for the live thrust/Isp readout. Read alongside [docs/engines.md](../docs/engines.md)
 > and [analysis/KSA_ENGINE_DETAILS.md](../analysis/KSA_ENGINE_DETAILS.md).
 
-**Baseline:** re-vetted against KSA build **2026.7.8.4980** (decomp @ 4980 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.9.5018** (decomp @ 5018 + shipped Core XML).
 **Baseline status:** ✅ **CURRENT** — 4980 (like 4939) left every ported physics class and
 `Reactions.xml` byte-identical; the 4939 schema addition (`<PlumeTrail Id>` on the nozzle) is
 modeled (see [What changed in 4939](#what-changed-in-4939)). At 4939 the one
@@ -107,6 +107,85 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
   `<Combustor>` (flexo's SRB recipe now burns APCP) — but there is still no solid-motor
   hardware (no grain-regression thrust curve; the propellant reservoir is still a liquid-style
   tank), so a true SRB is still not reproducible.
+
+## What changed in 5018 — explicit plumbing + solid rocket motors
+
+The largest engine-contract change since the 4884 Reactions refactor, and unlike that one it
+is **additive rather than a rename**: the ported math is untouched, but an engine that
+doesn't declare its new plumbing produces no thrust. The topology itself is documented in
+[plumbing-and-feeds.md](plumbing-and-feeds.md); this section covers the engine-side schema.
+
+### Ported physics: byte-identical
+
+`DeLavalNozzleConfig.cs`, `CombustorConfig.cs`, `GasProperties.cs`, `NozzlePerformance.cs`,
+`RocketDesign.cs`, `RocketControllerData.cs`, `EngineDesigner.cs`, `DeLavalNozzleTemplate.cs`,
+`RocketNozzleTemplate.cs`, `MixtureReaction.cs`, `Reaction.cs`, `ReactionTemplate.cs` and
+`FixedReactionTable.cs` are all unchanged 4980 → 5018 ⇒ **`enginePhysics.ts` needed zero
+changes**. The constants `9.80665`, `8.31446261815324`, `101325` are unchanged. The
+runtime-only renames (`RocketNozzleState.Throttle`→`ThrustFraction`,
+`PlumeData.ActualExhaustVelocity`→`ApparentExhaustVelocity`,
+`ActiveNozzle.ResourceManager`→`Core`, `RocketCore.ResourceManager` moving down to
+`Combustor`) have no flexo surface.
+
+### `<FeedsFrom>` + `<Plumbing>` on `<Combustor>` — BREAKING, now modeled
+
+`RocketCoreTemplate` gained `[XmlElement("FeedsFrom")] List<FeedsFromReference>`, and
+`OnDataLoad` logs _"Rocket core X declares no FeedsFrom feed points; it will reach no
+propellant"_ on an empty list — i.e. **every flexo-exported engine was dead in-game**.
+`CombustorTemplate` gained `<Plumbing>` (`PlumbingClass { Bulk, Service }`); `Bulk` is the
+default, so an RCS thruster that doesn't declare `Service` demands `BulkFluid` across
+service-only connectors and gets nothing. Both are modeled on `Combustor` and authored in
+the Engine panel. `createCombustor` now defaults to `feeds: [{ kind: 'parent' }]`.
+
+### Solid rocket motors (revs 4992 / 5002) — new capability
+
+| Element               | KSA class                                               | flexo type                                |
+| --------------------- | ------------------------------------------------------- | ----------------------------------------- |
+| `<SolidMotor>`        | `SolidMotorTemplate` (a `RocketCoreTemplate`)           | `SolidMotor`                              |
+| `<SolidMotorNozzle>`  | `SolidMotorNozzleTemplate` (a `RocketNozzleTemplate`)   | `SolidMotorNozzle`                        |
+| `<SolidGrainSegment>` | `SolidGrainSegment.TemplateData` (a `Components` entry) | `SolidGrainSegment`                       |
+| `<GrainGeometry>`     | `GrainGeometryTemplate` + `GrainGeometryLibrary`        | `GRAIN_GEOMETRY_IDS` (static id snapshot) |
+
+Load-time rules flexo validates (`src/ksa/engineValidation.ts`), each a **throw**:
+
+- `RocketTemplate.Create` — a `<Rocket>` may bind ONLY solid or ONLY liquid parts, and a
+  solid rocket needs ≥1 nozzle.
+- `RocketThrusterControllerTemplate.Create` — a thruster (RCS) controller may not drive a
+  solid motor.
+- `SolidMotorTemplate.Create` — the reaction must be a `Category="Solid"` FixedReaction
+  with a burn-rate law, and `<DefaultPressure>` must be **> `MinimumBurnPressure` and
+  ≤ `MaxStablePressure`**.
+
+**A `<SolidMotorNozzle>` has NO `<AreaRatio>`** — `SolidMotorNozzleTemplate.Create` sizes
+the throat itself as `exitArea / 12`. flexo's `SolidMotorNozzle` deliberately omits the
+field and the two nozzle builders/parsers share one body so they cannot drift.
+`<SolidGrainSegment>`'s inner `<Grain>` is a `SolidGrainSegmentTemplate` (an
+`AsmbVolumetricMassTemplate`): `<Material Id>` + `<OuterRadius M>` + `<WallThickness Mm>` +
+`<Length M>` + the inherited `<LocationAsmb>`.
+
+### Solid reactions REQUIRE burn-rate data — BREAKING (crash-class)
+
+`FixedReactionTemplate` gained `<BurnRate CoefficientMPerS Exponent/>`,
+`<MinimumBurnPressure>`, `<MaxStablePressure>` and `<ExhaustCondensedFraction>`. For
+`Category="Solid"` **all four are mandatory and `Create()` THROWS without them**, failing
+the entire mod load — and flexo's category picker has always offered `Solid`. All four
+round-trip now; `reactionCatalog` parses them off the live `Reactions.xml` so cloning a
+shipped solid seeds them; and `serializeGameData` **skips** (with a warning) any solid
+reaction failing `isCustomReactionExportable`. Core's reference values @ 5018:
+
+| Reaction     | a (m/s) | n    | min burn | max stable | condensed           |
+| ------------ | ------- | ---- | -------- | ---------- | ------------------- |
+| `APCP`       | 0.0045  | 0.35 | 15 bar   | 150 bar    | 0.33696528908145584 |
+| `DoubleBase` | 0.0024  | 0.65 | 30 bar   | 100 bar    | 0                   |
+
+### `DefaultEngine` → `DefaultPlumeTrail` — SCHEMA-DRIFT
+
+The inline `<PlumeTrailTemplate Id="DefaultEngine"/>` in `CorePropulsionAGameData.xml` was
+DELETED. `Content/Core/PlumeTrailAssets.xml` now declares
+`<PlumeTrailTemplate Id="DefaultPlumeTrail"><EndRadius M="80"/></PlumeTrailTemplate>`, and
+per rev 4996 ("Only use plume trails on SRBs") Core removed `<PlumeTrail>` from **every
+liquid nozzle** — only `<SolidMotorNozzle>`s carry one. `PLUME_TRAIL_IDS` was a dangling
+id; it is now `['DefaultPlumeTrail']`.
 
 ## What changed in 4980
 

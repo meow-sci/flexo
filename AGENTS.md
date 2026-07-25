@@ -227,10 +227,19 @@ geometry (they decorate placements with GameData). The full-sidebar designer is
 `$inspectorMode === 'engine'` (`EnginePanel`/`EngineToolbar` + `EngineSections.tsx`, ephemeral
 state in `engineStore.ts`); the same editors also appear in the Part/SubPart Data modals.
 Custom propellants (top-level `<FixedReaction>`; a combustor references `<Reaction Id>` with a
-`<MixtureRatio>` for Core's mixture reactions) are clone-and-remix. Electric engines remain
-impossible data-only; true SRBs still lack solid-motor hardware — the SRB preset burns Core's
-APCP solid reaction but stays explicitly limited (flat thrust, shutdown-able).
-See [docs/engines.md](docs/engines.md), [analysis/KSA_ENGINE_DETAILS.md](analysis/KSA_ENGINE_DETAILS.md).
+`<MixtureRatio>` for Core's mixture reactions) are clone-and-remix.
+
+Since **KSA 2026.7.9** propellant flow is **explicitly authored plumbing topology**, not an
+implicit vehicle-wide tank search — connector `<Capabilities>` (what may flow), consumer
+`<FeedsFrom>` + `<Plumbing>` (where it draws), and part `<ConsumerFeedWiring>` (how a Part
+answers a reusable chamber's `Parent="true"`), against addressable `<Tank Id>` containers. An
+engine that doesn't declare it makes **zero thrust with no load error**, so
+`src/ksa/engineValidation.ts` grades every problem as _blocking_ (KSA throws) vs _warning_
+(loads, misbehaves) and both the Engine panel and the Export dialog surface it. **Real SRBs
+are now authorable** (`<SolidMotor>`/`<SolidMotorNozzle>`/`<SolidGrainSegment>` + grain
+profiles); electric and thermal engines remain impossible data-only.
+See [docs/engines.md](docs/engines.md), [scope/plumbing-and-feeds.md](scope/plumbing-and-feeds.md),
+[analysis/KSA_ENGINE_DETAILS.md](analysis/KSA_ENGINE_DETAILS.md).
 
 ## kittens (EVA character visual aides)
 
@@ -248,7 +257,7 @@ Users can upload an image → KTX2 texture, create a primitive mesh (box/cylinde
 sphere/plane), texture it, and export it as a KSA part mod that **loads and renders
 in-game** (validated 2026-05-30). **Primary doc: [docs/custom-assets.md](docs/custom-assets.md)**
 (maintenance reference: modules, format decisions, shortcomings). Design rationale +
-format research: `plans/FLEXO_CUSTOM_ASSETS.md`.
+format research: `plans/done/FLEXO_CUSTOM_ASSETS.md`.
 
 Two non-obvious KSA constraints the export MUST satisfy (each caused an in-game crash
 on the first attempt — full detail in docs/custom-assets.md):

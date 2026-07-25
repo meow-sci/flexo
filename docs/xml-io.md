@@ -81,6 +81,23 @@ gas-generator `<Rocket>`/`<Combustor>` + `<SubPart Id><Gimbal>` overlays, and to
 `<FixedReaction>` for custom propellants — all round-tripped by the parser. See
 [engines.md](engines.md) for the schema, units, and default-omission rules.
 
+### `[Flags]` enum bodies MUST be whitespace-separated (hard requirement)
+
+Any enum flexo emits as element text — `<Flags>`, `<Capabilities>`, `<RoleAffinity>` — is a
+.NET `[Flags]` enum, and KSA deserializes with `System.Xml.Serialization.XmlSerializer`.
+`XmlSerializationReader.ToEnum` splits the body with **`value.Split(null)`** (whitespace) and
+throws `CreateUnknownConstantException` on any token it doesn't recognize.
+
+```xml
+<Flags>Internal ToSurface</Flags>   <!-- correct -->
+<Flags>Internal, ToSurface</Flags>  <!-- token "Internal," ⇒ KSA's mod load THROWS -->
+```
+
+`flagsString()` and the `<Capabilities>` emitter therefore join with a space; the parser
+accepts either separator on the way in. Single-token bodies (which is all Core authors) are
+identical either way, which is exactly why this stayed latent until 2026.7.9 added
+`<Capabilities>`.
+
 ## Number formatting — `src/ksa/formatG6.ts`
 
 `formatG6(n)` replicates .NET `double.ToString("G6")`: 6 significant digits, trailing

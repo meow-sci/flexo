@@ -4,7 +4,7 @@
 > `<PartGameData>` / `<SubPartGameData>` documents. Each block maps to a KSA `*Template`
 > class. Engine modules have their own file ([engines.md](engines.md)).
 
-**Baseline:** re-vetted against KSA build **2026.7.8.4980** (decomp @ 4980 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.9.5018** (decomp @ 5018 + shipped Core XML).
 **Baseline status:** ✅ **CURRENT** — the electrical unit tokens (`J`/`W`), the `<DockingPort>`
 child-element schema, and the `<Control>` command marker are all modeled (parse **and** emit,
 current form only — no legacy fallback). As of 4892 (rev 4884), a tank's 4826-era
@@ -77,6 +77,50 @@ ships a new `FuelPort` module (passthrough-preserved) — see
 - Connector `<Flags>` is emitted in **both** the Assets and GameData docs.
 - Light `Scale` is never emitted (KSA ignores it).
 - `Battery.cs`'s save-state `[XmlElement("Charge")]` (was `"Joules"`) is **save-game state, not authored template** — irrelevant to flexo.
+
+## What changed in 5018
+
+### Container `Id`s became load-bearing — MISSING-CAPABILITY, now modeled
+
+Every `Components` entry carries an `Id` via `ModuleBase.TemplateDataBase.Id` (an
+`[XmlAttribute]`), and its element name comes from `[XmlType(TypeName)]`. That `Id` was
+inert to flexo until 5018 made it the address an engine's `<FeedsFrom Container="X">`
+resolves against (`PartTemplate.AddResolvedFeed`, which logs _"feeds from unknown container
+'…'"_ on a miss). `<Tank>` now carries `Tank.id` **on the wrapping element** (not on the
+inner `<CylindricalTank>`/`<SphericalTank>` shape), plus the shape's `<LocationAsmb>`.
+
+The full `Components` element-name list @ 5018: `AttachedInternal`, `Collider`, `FuelPort`,
+`IVASeat`, `KeyframeAnimationModule`, `Light`, `MeshView`, `PartModelGlass`, `PartModel`,
+`PartModelDynamic`, **`SolidGrainSegment`**, `Tank`.
+
+### Part-level `<Tank>` is now MODELED — closes the 4939 gap
+
+Core has authored its prefab tank data as Part-LEVEL `<Tank>` entries since 2026.7.6;
+flexo relied on the GameData passthrough to preserve them. That stopped being enough once
+the `Id` became addressable (and once a user needed to author one), so `PartGameData.tanks`
+is a real modeled list with its own Tanks section in the Part Data dialog. `'Tank'` moved
+into `KNOWN_PART_GAMEDATA_CHILDREN`, so it no longer appears in `unknownChildren`.
+
+### `<SolidGrainSegment>` — a new container kind
+
+The solid analogue of a `<Tank>`: a stackable propellant grain that is also a feedable
+`Components` entry. Modeled at both levels; see [engines.md](engines.md#what-changed-in-5018)
+for the inner `<Grain>` schema and [plumbing-and-feeds.md](plumbing-and-feeds.md) for how
+it is addressed.
+
+### `<ConsumerFeedWiring>` left the passthrough
+
+It parsed "fine" as unmodeled XML, but the passthrough remapper only rewrites
+`<ConnectorRef>`/`<Sibling>` — so an imported entry's `SubPartId` and its children's
+`Connector=`/`SubPart=` silently kept the SOURCE part's ids. Modeled and remapped now.
+
+### `HollowOpenSemiEllipsoidMass` — new inert-mass shape (rev 5002), passthrough-safe
+
+`HollowOpenSemiEllipsoidMassTemplate` joins the `SolidSphereMass`/`SolidCylinderMass`/
+`HollowOpenCylinderMass`/… family with `<Material Id>` + `<Length>` + `<Radius>` +
+`<WallThickness>`. flexo has never modeled the inert-mass family — it rides the
+`<PartGameData>`/`<SubPartGameData>` passthrough verbatim — so **no code change is needed**;
+recorded here so the next reviewer doesn't re-derive it.
 
 ## What changed in 4980
 

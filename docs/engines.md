@@ -97,11 +97,103 @@ the project's `customReactions` (custom wins on id).
   (the pose-pivot precedent in `EditorScene`). A drag streams `updateNozzle` and pushes one
   undo step on drag-start.
 
+## Plumbing — where the propellant actually comes from (KSA 2026.7.9)
+
+Before 5018 an engine just needed a combustor: KSA searched the whole vehicle for tanks
+holding its reactants. Now the path is **explicitly authored**, and an engine that doesn't
+declare it makes **zero thrust** with no error visible in-game. Three layers, all editable
+in flexo. Game-contract detail: [scope/plumbing-and-feeds.md](../scope/plumbing-and-feeds.md).
+
+### 1. Connector capabilities — what may cross a connector
+
+Select a connector → the inspector's **Capabilities** row (independent of **Flags**, which
+is about orientation). A connection carries a resource only when **both** ends declare it.
+
+**An empty list is not "nothing"** — it means KSA's implicit `Electricity | ServiceFluid`.
+Add `BulkFluid` for a main-engine propellant path, `SolidMotorCase` so SRB segments stack,
+`DecouplerJoint` on a decoupler's connector (required since rev 5007); `NoElectricity` /
+`NoServiceFluid` SUBTRACT from the default.
+
+### 2. Feed points — where a consumer draws from
+
+Every combustor and solid motor has a **Feeds from** list (`<FeedsFrom>`). Each entry is
+exactly one of:
+
+| Kind          | Means                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------ |
+| **Parent**    | "whatever the Part that places me wires up" — resolved by layer 3. The default for a reusable thrust chamber. |
+| **Connector** | Draw across that connector (needs the matching capability at both ends).                    |
+| **Container** | Draw from a specific `<Tank Id>` / `<SolidGrainSegment Id>`, optionally scoped to a placement. |
+
+A combustor also picks a **Plumbing** class: `Bulk` (main engine, needs `BulkFluid`) or
+`Service` (RCS, rides the default). `Bulk` is the schema default, so **an RCS thruster must
+be switched to Service** or it demands `BulkFluid` from service-only connectors.
+
+### 3. Feed wiring — the Part's answer to "Parent"
+
+**Part Data → Engine → Feed wiring**. One entry per SubPart-level consumer that defers to
+its parent, naming the real connector or container. A wiring entry may not itself defer to
+Parent. **"Auto-wire unwired consumers"** creates a blank entry for every consumer that
+needs one — the one-click fix for the most common mistake; you still pick the feed points.
+
+### Worked example — Core's medium boost engine
+
+```xml
+<!-- The reusable thrust chamber: "feed me from whoever places me". -->
+<SubPartGameData Id="CorePropulsionA_Subpart_EngineAMedBoostAssembly">
+  <Combustor Id="ThrustChamber"><FeedsFrom Parent="true"/>…</Combustor>
+</SubPartGameData>
+
+<!-- The prefab that places it answers with a real connector, and opens that connector
+     to bulk fluid (without BulkFluid the path is dead). -->
+<PartGameData Id="CorePropulsionA_Prefab_EngineAMedBoost">
+  <SubPart Id="CorePropulsionA_Subpart_EngineAMedBoostAssembly1"/>
+  <ConsumerFeedWiring Id="ThrustChamber" SubPartId="CorePropulsionA_Subpart_EngineAMedBoostAssembly1">
+    <FeedsFrom Connector="_connector2"/>
+  </ConsumerFeedWiring>
+  <Connector Id="_connector2"><Capabilities>BulkFluid</Capabilities></Connector>
+</PartGameData>
+```
+
+### Pre-flight validation
+
+`src/ksa/engineValidation.ts` grades every problem by what KSA does with it — **blocking**
+(KSA throws, the whole mod fails to load) vs **warning** (it loads, the part misbehaves).
+Findings appear inline in the Engine panel and again in the Export dialog. Most plumbing
+mistakes are warnings, because KSA only logs them.
+
+## Solid rocket motors (SRBs) — real, since KSA 2026.7.9
+
+A solid booster is the solid-family mirror of the liquid trio, authored under **Part Data →
+Engine → Solid motor (SRB)** (and per-SubPart in SubPart Data):
+
+- **`<SolidMotor>`** — the case. Picks a `Category="Solid"` reaction (APCP / DoubleBase /
+  a custom one), a **grain profile** (`Neutral`, `Progressive`, `Regressive`,
+  `BoostSustain`, `BoostSustainBoost` — the thrust curve over the burn), a default chamber
+  pressure, and its feed points.
+- **`<SolidGrainSegment>`** — the propellant, and the container a motor feeds from. Stacks
+  in the VAB across connectors that declare `SolidMotorCase`.
+- **`<SolidMotorNozzle>`** — like a De Laval nozzle but with **no area ratio**: KSA sizes
+  the throat as `exitArea / 12`.
+
+Rules KSA enforces by THROWING at load (all validated up front): a `<Rocket>` may bind only
+solid or only liquid parts, a solid rocket needs ≥1 nozzle, an RCS thruster controller may
+not drive a solid motor, the reaction must be solid, and the default pressure must sit
+inside that reaction's stable range.
+
+**Custom solid propellants need burn-rate data.** When a custom reaction's category is
+`Solid`, four extra fields appear (burn-rate coefficient + exponent, minimum burn pressure,
+max stable pressure, exhaust condensed fraction). They are **mandatory** — KSA refuses to
+load a solid reaction without them, so flexo omits an incomplete one from the export and
+says so. Cloning a shipped solid fills them in.
+
 ## XML I/O
 
-`serializeGameData` emits `<Rocket>`/`<Combustor>`/`<DeLavalNozzle>` per SubPartGameData,
-the part-level controllers + gas-generator + `<SubPart Id><Gimbal>` overlays, and top-level
-`<FixedReaction>` for each custom propellant. Defaults are omitted (efficiencies 1,
+`serializeGameData` emits `<Rocket>`/`<Combustor>`/`<DeLavalNozzle>` and the solid trio
+`<SolidMotor>`/`<SolidMotorNozzle>`/`<SolidGrainSegment>` per SubPartGameData, the
+part-level controllers + gas-generator + `<SubPart Id><Gimbal>` overlays +
+`<ConsumerFeedWiring>`, and top-level `<FixedReaction>` for each custom propellant (a
+solid one that KSA would refuse to load is skipped with a console warning). Defaults are omitted (efficiencies 1,
 `ExhaustDirection` −X, `ExhaustLight` true, `ConstrainToCircle` true, a 0/0 gimbal). Units:
 `MaxPressure` as Bar, `ExitDiameter` as M (Cm under 1 m), gimbal angles as Degrees,
 `MinimumPulseTime` as Seconds, everything else dimensionless `Value`. The parser
@@ -113,12 +205,12 @@ data when importing a Core engine (e.g. LR91 Vac). Round-trip tests live in
 
 - **Electric/ion/cold-gas engines** — KSA's only thrust source is a combustor burning a
   reaction (no power coupling). Not modelled; needs new game code.
-- **True SRBs** — KSA still has no solid-motor hardware (since 2026.7.5 there ARE
-  `Category="Solid"` FixedReactions — APCP, Double-Base — and the SRB preset burns APCP,
-  but the reservoir is still a liquid-style tank). The designer's "SRB (approximate)"
-  preset makes a non-throttleable engine + a sealed propellant tank; thrust is flat (no
-  burn-time curve), it stays shutdown-able, and propellant drains like a liquid. Surfaced
-  with that warning in the UI.
+- ~~**True SRBs**~~ — **now possible.** KSA 2026.7.9 added real solid-motor hardware
+  (`<SolidMotor>` / `<SolidMotorNozzle>` / `<SolidGrainSegment>`), which flexo authors — see
+  the SRB chapter above. The old "SRB (approximate)" liquid-tank preset is superseded by it.
+  What flexo still does NOT do is **preview the thrust curve**: sampling it needs a port of
+  `SolidMotor.TrySampleThrustCurve` + `GrainGeometryTable` + `ComputeBurningAreaAtDepth`
+  (~200 lines), so the grain profile is authored by name and evaluated only in-game.
 - **Thermal rockets** — `<ThermalReaction>`s ship in Reactions.xml but need a thermal core,
   which no part template provides; KSA's own designer refuses them. Not modelled.
 - **Custom propellant chemistry** is clone-and-remix: the gas LUT is CEA-style pre-solved

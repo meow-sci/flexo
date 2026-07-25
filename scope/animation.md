@@ -4,7 +4,7 @@
 > lets the user edit them, and re-exports animation GLBs that KSA's `KeyframeAnimationModule`
 > loads. The load-bearing integration is the **animation-GLB node-structure convention**.
 
-**Baseline:** re-vetted against KSA build **2026.7.8.4980** (decomp @ 4980 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.9.5018** (decomp @ 5018 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — the keyframe runtime, GLB-loader contract, GameData schema,
 and bone/transform math are all unchanged since the 4939 vetting (4980 didn't touch the
 animation path at all).
@@ -74,6 +74,13 @@ animation path at all).
 3. **Importer interpolation coverage is partial**: flexo handles only FLOAT accessors + LINEAR/STEP. KSA _does_ support **CubicSpline** → a CubicSpline-authored clip would be mis-decoded (silent corruption, not an error). Pre-existing; unverifiable from snapshots (GLBs not shipped).
 4. Only `animations[0]` is read on both sides.
 5. Wrong rest anchor re-applies the deploy (the reason `restKeyframeId` exists).
+
+## What changed in 5018
+
+**Nothing in this area.** The `4980 → 5018` diff touches no `KeyframeAnimation*` class, no
+`SolarTracking`, no GLB-loader path and no bone/transform math (`QuaternionEx`/`Double3Ex`
+unchanged). The update is the plumbing-topology + solid-rocket-motor work — see
+[plumbing-and-feeds.md](plumbing-and-feeds.md). Re-verified **INTACT**.
 
 ## What changed in 4980
 

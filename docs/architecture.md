@@ -69,6 +69,28 @@ are guarded against placements removed mid-load).
 - Rotation is radians internally/in export; the inspector UI shows degrees.
 - Shared resources (mesh geometry, textures, per-material-id materials) are cached
   and never disposed per-instance; only per-instance material clones are disposed.
+- **Every literal id reference in the document is remapped on import/paste.** Ids that
+  cross-reference within `$part` — a coupling's `connectorId`, a rocket's
+  `SubPartId`, a `<ConnectorRef>` inside preserved raw XML, and (since KSA 2026.7.9) every
+  `<FeedsFrom>` / `<ConsumerFeedWiring>` target — are plain strings, while import and paste
+  REGENERATE both `_connectorN` and placement `instanceId`s. Any new id-bearing field must
+  be rewritten in the same pass or it silently points at nothing (or, worse, at whatever
+  now holds that id). The feed remappers live in `src/ksa/idRemap.ts`, shared by
+  `editorStore.applyImportedGameData` and `projectTransfer.mergeGameData`; unmapped ids are
+  left as-is, matching `remapRawConnectorRefs`.
+
+### Plumbing topology is document state
+
+KSA 2026.7.9 made propellant flow explicit authored data (connector `<Capabilities>`,
+consumer `<FeedsFrom>`, part `<ConsumerFeedWiring>`, addressable `<Tank Id>` containers).
+It is ordinary `$part` document state throughout: modeled in `src/ksa/types.ts`,
+undo-tracked like every other mutation, remapped on import/paste as above, encoded by the
+project codec (wire version 4), and validated by the pure `src/ksa/engineValidation.ts`
+whose findings the Engine panel and the Export dialog both render. The pickable-options
+derivations (`src/state/feedTargets.ts`) are pure functions over `EditingPart` kept OUT of
+the component modules so React Fast Refresh survives. See
+[engines.md](./engines.md#plumbing--where-the-propellant-actually-comes-from-ksa-202679)
+and [scope/plumbing-and-feeds.md](../scope/plumbing-and-feeds.md).
 
 ## Build & tooling
 

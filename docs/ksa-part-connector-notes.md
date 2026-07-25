@@ -33,6 +33,43 @@ Other parts can mount their surfaces against this connector point. Default conne
 
 ---
 
+## Capabilities — what may FLOW across a connector (KSA 2026.7.9)
+
+Flags (above) are hints about **how the editor orients** a part when connecting. Capabilities
+are a completely independent axis: **what a connection is allowed to carry**. They are
+authored as a whitespace-separated `<Capabilities>` element on the `<Connector>`, in the
+geometry `<Part>` and/or the `<PartGameData>` (KSA ORs the two), and edited in flexo from the
+connector inspector's **Capabilities** row.
+
+A connection carries a resource only when **both** endpoints declare it.
+
+| Token            | Effect                                                                       |
+| ---------------- | ---------------------------------------------------------------------------- |
+| `BulkFluid`      | Main-engine propellant may cross. **Required** for any `Bulk`-plumbed engine. |
+| `SolidMotorCase` | SRB grain segments may stack across this connector.                          |
+| `DecouplerJoint` | This connector forms a decoupler joint (**required** since rev 5007 — a `<Decoupler ConnectorId>` alone no longer does it). |
+| `NoElectricity`  | Removes electricity from the default.                                        |
+| `NoServiceFluid` | Removes service fluid (RCS) from the default.                                |
+
+**Empty is not "nothing".** An unauthored connector is `Electricity | ServiceFluid` — the
+two `No…` tokens SUBTRACT from that default rather than adding to an empty set (KSA inverts
+them in `ConnectorCapabilityExtensions.ToCapability()`). So an RCS thruster works across a
+plain connector, while a main engine gets nothing until you add `BulkFluid`.
+
+> **Whitespace, never commas.** A multi-token `<Flags>` or `<Capabilities>` body must be
+> space-separated: .NET's XML deserializer splits `[Flags]` enum text on whitespace and
+> throws on an unknown token, so `"Internal, ToSurface"` fails the mod load on `"Internal,"`.
+
+Full game-side detail: [scope/plumbing-and-feeds.md](../scope/plumbing-and-feeds.md).
+
+## Which connector a surface mount picks (KSA 2026.7.9)
+
+`Part.UnambiguousSurfaceMount()` + `Connection.ConnectSurfaceMount`: a surface mount now
+**prefers the part's single unconnected `ToSurface` connector**. On a part with exactly one
+free `ToSurface` node the placement is deterministic; on a multi-mount prefab it depends on
+how many are still free — worth keeping in mind when authoring several `ToSurface`
+connectors on one part.
+
 ## Face-snapping & editor tags (data-driven as of build 2026.6.9.4750)
 
 Editor tags are no longer hardcoded statics in the game. They're a **data-driven registry**:

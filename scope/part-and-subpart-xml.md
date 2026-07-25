@@ -5,7 +5,7 @@
 > other feature hangs off. Read alongside [docs/xml-io.md](../docs/xml-io.md) and
 > [docs/subpart-catalog.md](../docs/subpart-catalog.md) (the flexo-internal view).
 
-**Baseline:** re-vetted against KSA build **2026.7.8.4980** (decomp @ 4980 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.9.5018** (decomp @ 5018 + shipped Core XML).
 **Baseline status:** ✅ **CURRENT** — `<Diameter>` part-size + `<Control>` command marker modeled
 (and as of 4826 `<Diameter>` is **repeatable** — the extras round-trip via `extraDiametersM`, see
 [What changed in 4826](#what-changed-in-4826)); `KNOWN_EDITOR_TAGS` refreshed from the registry
@@ -84,6 +84,32 @@ Consequences / what's STILL drop-on-round-trip (passthrough is scoped to GameDat
 - Connector `<Flags>` live on `<PartGameData>`, **not** on the geometry `<Part>` — without the GameData merge, `ToSurface`/etc. are lost.
 - A `<Part>` with no matching `<PartGameData>` has no tags/modules → invisible in the part picker.
 - `DockingPort` parses only the current child-element form (`<ConnectorId Value>`, `<LatchingKineticEnergy J>`, `<PushoffImpulse Ns>`) — no legacy fallback; see [gamedata-modules.md](gamedata-modules.md).
+
+## What changed in 5018
+
+**The document structure is unchanged** — no new top-level `<Assets>` child that flexo
+places, no `<Part>`/`<SubPart>` attribute change, and the editor-tag registry
+(`CoreEditorTagsGameData.xml`) is byte-identical, so `EDITOR_TAG_DEFS` stands. What changed
+is the CONTENT of modeled GameData elements; see
+[plumbing-and-feeds.md](plumbing-and-feeds.md), [engines.md](engines.md#what-changed-in-5018)
+and [gamedata-modules.md](gamedata-modules.md#what-changed-in-5018).
+
+Two structural notes for future reviews:
+
+- **The allow-list grew**: `KNOWN_PART_GAMEDATA_CHILDREN` gained `Tank`,
+  `ConsumerFeedWiring`, `SolidMotor`, `SolidMotorNozzle`, `SolidGrainSegment`;
+  `KNOWN_SUBPART_GAMEDATA_CHILDREN` gained the three solid ones. Anything that moves INTO
+  the allow-list stops appearing in `unknownChildren` — which is the point, but it also
+  means it stops being protected by the passthrough, so its schema must now be tracked.
+- **`Components` entries all carry an `Id`** (`ModuleBase.TemplateDataBase.Id`), and as of
+  5018 that id is load-bearing for feed resolution. Full element list in
+  [gamedata-modules.md](gamedata-modules.md#what-changed-in-5018).
+
+Two new top-level asset elements appeared in Core but need no flexo entry in `ASSET_FILES`:
+`Content/Core/GrainGeometries.xml` (`<GrainGeometry>`) and
+`Content/Core/PlumeTrailAssets.xml` (`<PlumeTrailTemplate>`) — neither declares a
+`<SubPart>` or a `<Part>`, so the catalog has nothing to read from them; flexo references
+their ids by name only.
 
 ## What changed in 4980
 

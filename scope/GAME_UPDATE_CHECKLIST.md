@@ -49,6 +49,35 @@ integration surface** that needs a new `scope/*.md`.
 For each touched area, open its scope doc's **"The contract"** section and check each assumption
 against the NEW code/XML. Highest-value checks, by area:
 
+- **⚠ MODELED elements first — the passthrough does NOT cover them.** Before anything else,
+  diff the template classes behind the elements flexo reads field-by-field:
+  **`Part.Connector.TemplateBase`** (`<Connector>`), **`CombustorTemplate`** (`<Combustor>`),
+  **`DeLavalNozzleTemplate`**/`RocketNozzleTemplate`, **`RocketTemplate`** (`<Rocket>`),
+  **`AsmbTankTemplate`** (`<Tank>`), `RocketControllerTemplate`, `GimbalReference`,
+  `LightModule.TemplateData`, `BatteryTemplate`/`GeneratorTemplate`/`SolarPanelTemplate`/
+  `PowerConsumerTemplate`, `DecouplerTemplate`/`DockingPortTemplate`/`EVADoorTemplate`,
+  `CustomMassTemplate`, and the `<PartGameData>`/`<SubPartGameData>` roots themselves.
+  A new `[XmlElement]`/`[XmlAttribute]` on ANY of these is **silent data-loss** on the next
+  import → export — the `RawXmlNode` passthrough only protects children flexo does NOT model.
+  5018 is the cautionary tale: `<Capabilities>` on `<Connector>`, `<FeedsFrom>`/`<Plumbing>`
+  on `<Combustor>` and `Id` on `<Tank>` were all dropped, and the result was dead-in-game
+  hardware with no error anywhere. Cross-check the two allow-lists in `partXmlParser.ts`
+  (`KNOWN_PART_GAMEDATA_CHILDREN` / `KNOWN_SUBPART_GAMEDATA_CHILDREN`): everything in them is
+  modeled and therefore unprotected.
+- **Plumbing topology** ([plumbing-and-feeds.md](plumbing-and-feeds.md)) —
+  `ConnectorCapabilityFlags` / `ConnectorCapability` / `ConnectorCapabilityExtensions`
+  (especially the `ToCapability()` inversion and the `Intersect()` default),
+  `FeedsFromReference.IsValid`, `RocketCoreTemplate.OnDataLoad`, `ConsumerFeedWiring`, and
+  `PartTemplate.ResolveConsumerFeedPoints`/`ResolveConsumerFeeds`/`AddResolvedFeed`. Most
+  failures here are Error LOGS, not throws — the mod loads and the part just makes no thrust,
+  so they cannot be caught by "did it load?".
+- **`[Flags]` enum bodies** — any enum flexo emits as element text (`<Flags>`,
+  `<Capabilities>`, `<RoleAffinity>`) MUST be **whitespace**-separated: .NET's
+  `XmlSerializationReader.ToEnum` does `value.Split(null)` and throws
+  `CreateUnknownConstantException` on an unknown token, so a comma-joined body fails the load.
+  Core authors single-token bodies almost everywhere, so this will not show up in a diff —
+  check flexo's emitters directly.
+
 - **Part/SubPart + GameData** — diff `PartTemplate.cs` and the `*GameData.xml` files. Watch for:
   new `[XmlElement]`/`[XmlAttribute]` on `PartTemplate` (→ a dropped element); attribute↔element
   form changes; renamed unit tokens. Confirm `partXmlParser.ts` reads and `partXmlSerializer.ts`

@@ -10,7 +10,7 @@ validated in-game 2026-05-30; the full-material pipeline + UNORM re-tag await an
 in-game pass — see "Pending in-game verification" below).
 
 The design rationale and format research live in
-[plans/FLEXO_CUSTOM_ASSETS.md](../plans/FLEXO_CUSTOM_ASSETS.md). This doc is the
+[plans/done/FLEXO_CUSTOM_ASSETS.md](../plans/done/FLEXO_CUSTOM_ASSETS.md). This doc is the
 maintenance reference for the shipped code: what each module does, the decisions
 baked into the on-disk formats, and the deliberate v1 shortcomings.
 

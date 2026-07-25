@@ -1,11 +1,73 @@
 # Plan — Fix flexo gaps from KSA updates (running)
 
-> **Latest review: `2026.7.6.4939` → `2026.7.8.4980` (see below). ZERO flexo `src/` changes
-> required — no part-template/GameData/engine/animation schema drift; the one data-side delta
-> (celestial `TerrainHeight` texture category) is ✅ DONE in the cartoon-moon scaffold. The
-> 4939 capability gaps stay 📋 OPEN (part-level `<Tank>` editing, geometry-template
-> passthrough, FuelPort, clutter LOD retune).** The earlier `4892 → 4939`, `4826 → 4892`,
+> **Latest review: `2026.7.8.4980` → `2026.7.9.5018` (see below). BREAKING — and unlike the
+> last three updates it was NOT a patch list: KSA changed the SHAPE of how a Part declares
+> propellant flow, and flexo's model had no equivalent concept. Every BREAKING / DATA-LOSS /
+> MISSING-CAPABILITY / SCHEMA-DRIFT gap is ✅ DONE (implemented across
+> [UPGRADE_PLAN_2026-07-24.md](UPGRADE_PLAN_2026-07-24.md) phases 0–7), including the
+> long-open part-level `<Tank>` gap. Still 📋 OPEN: geometry-template `<Collider>`
+> passthrough, `FuelPort` authoring, the clutter LOD retune (+ its new optional
+> `<LOD CastShadows>`), and a solid-motor thrust-curve preview. In-game verification of the
+> 5018 output is PENDING.** The earlier `4939 → 4980`, `4892 → 4939`, `4826 → 4892`,
 > `4750 → 4826` and `4680 → 4750` reviews follow as history.
+
+---
+
+# 5018 review — `2026.7.8.4980` → `2026.7.9.5018`
+
+**Derived from:** the [scope/](../scope/FULL_SCOPE.md) catalog review — full decomp + shipped
+Core XML + private-mirror diff over revs 4981–5016, recorded in
+[UPGRADE_PLAN_2026-07-24.md](UPGRADE_PLAN_2026-07-24.md) (which holds the full change register
+G1–G13 with game-side anchors, the target model, and the phase-by-phase implementation).
+
+Three load-bearing revs: **4992** (solid rocket motors + connector Capabilities + explicit
+engine feed sources), **5002** (solid modules on every booster part,
+`HollowOpenSemiEllipsoidMass`, feeding from sub-parts), **5007** (decoupler joints became a
+per-connector Capability).
+
+**Why this one was dangerous:** `<Connector>`, `<Combustor>` and `<Tank>` are MODELED
+elements, so they never rode the `<PartGameData>` passthrough — every addition was silent
+data-loss, and every symptom was a log line rather than a load error. A flexo-exported engine
+declared no feed points (dead in-game); a round-tripped Core fuel tank, decoupler or SRB
+segment lost its `BulkFluid` / `DecouplerJoint` / `SolidMotorCase`.
+
+## Priority summary (5018)
+
+| # | Gap | Severity | Status | Scope doc |
+|---|---|---|---|---|
+| F1 | `<Capabilities>` silently dropped from every `<Connector>` (both documents) | BREAKING + DATA-LOSS | ✅ **DONE** — modeled as `Connector.capabilities`, emitted in both docs via one shared helper, merged by id on catalog import, authored in the inspector | [plumbing-and-feeds](../scope/plumbing-and-feeds.md), [connectors](../scope/connectors-coordinates-iva.md#what-changed-in-5018) |
+| F2 | `<FeedsFrom>` dropped on `<Combustor>` ⇒ every exported engine reaches no propellant | BREAKING | ✅ **DONE** — `Combustor.feeds`, `createCombustor` defaults to `Parent` | [engines](../scope/engines.md#what-changed-in-5018) |
+| F3 | `<Plumbing>` dropped ⇒ RCS thrusters demand `BulkFluid` and get nothing | BREAKING | ✅ **DONE** — `Combustor.plumbing`, `Service` authored from the Engine panel | [engines](../scope/engines.md#what-changed-in-5018) |
+| F4 | `<ConsumerFeedWiring>` survived passthrough but its `SubPartId` + child refs went stale on import | BREAKING on import | ✅ **DONE** — modeled + remapped (`src/ksa/idRemap.ts`) | [plumbing-and-feeds](../scope/plumbing-and-feeds.md) |
+| F5 | Same stale-reference problem for `<SolidMotor>`/`<SolidGrainSegment>` | BREAKING on import | ✅ **DONE** — modeled + remapped | [plumbing-and-feeds](../scope/plumbing-and-feeds.md) |
+| F6 | No solid-motor authoring (`<SolidMotor>`/`<SolidMotorNozzle>`/`<SolidGrainSegment>`) | MISSING-CAPABILITY | ✅ **DONE** — full round-trip + a "Solid motor (SRB)" authoring section | [engines](../scope/engines.md#what-changed-in-5018) |
+| F7 | Tanks had no `Id`, so no `<FeedsFrom Container>` could address a flexo tank | MISSING-CAPABILITY | ✅ **DONE** — `Tank.id` on the wrapping element + `<LocationAsmb>` | [gamedata-modules](../scope/gamedata-modules.md#what-changed-in-5018) |
+| F8 | Part-level `<Tank>` not modeled (carried over as gap **F** from the 4939 review) | MISSING-CAPABILITY | ✅ **DONE** — `PartGameData.tanks` + a Part Data Tanks section | [gamedata-modules](../scope/gamedata-modules.md#what-changed-in-5018) |
+| F9 | `PLUME_TRAIL_IDS = ['DefaultEngine']` — a dangling id after the template moved/renamed | SCHEMA-DRIFT | ✅ **DONE** — `['DefaultPlumeTrail']` | [engines](../scope/engines.md#what-changed-in-5018) |
+| F10 | A `Category="Solid"` custom reaction without burn-rate data CRASHES the mod load | BREAKING (crash-class) | ✅ **DONE** — four fields modeled + round-tripped, seeded on clone, and an unexportable one is SKIPPED with a warning | [engines](../scope/engines.md#what-changed-in-5018) |
+| F11 | Multi-token `[Flags]` separator wrong in BOTH directions (pre-existing latent bug) | BREAKING | ✅ **DONE** — emit whitespace, accept either | [connectors](../scope/connectors-coordinates-iva.md#what-changed-in-5018), [docs/xml-io](../docs/xml-io.md) |
+| F12 | Vendored fixtures stale (`CoreFuelTankAGameData.xml`, `PartGameData.xml`) | BREAKING (CI) | ✅ **DONE** — re-synced; drift test green | — |
+| F13 | `HollowOpenSemiEllipsoidMass` undocumented (passthrough-safe, no code change) | COSMETIC | ✅ **DONE** — recorded | [gamedata-modules](../scope/gamedata-modules.md#what-changed-in-5018) |
+| F14 | Clutter `<LOD CastShadows>` unused by the cartoon-moon scaffold | COSMETIC (optional) | 📋 **OPEN** — folded into the clutter LOD retune (gap **H**); default `true` preserves today's behavior | [ground-clutter](../scope/ground-clutter.md#what-changed-in-5018) |
+
+**Verified-intact (no action):** ported engine physics — the 13 classes behind
+`enginePhysics.ts` are byte-identical, and the constants `9.80665` / `8.31446261815324` /
+`101325` are unchanged; the editor-tag registry (`CoreEditorTagsGameData.xml` byte-identical);
+animation, kittens and coordinates (no `KeyframeAnimation*`, `Character*`, `QuaternionEx` or
+`Double3Ex` change); mod/asset loading (`AssetBundle.cs` gained exactly one line registering
+`<GrainGeometry>`; `ThumbnailRenderResources.cs` absent from the diff ⇒ the synthetic
+Normal + AoRoughMetal requirement still holds). Runtime-only renames
+(`RocketNozzleState.Throttle`→`ThrustFraction`, `ActiveNozzle.ResourceManager`→`Core`,
+`RocketCore.ResourceManager` moving down to `Combustor`, …) have no flexo surface.
+
+**Still OPEN across reviews:** geometry-template `<Collider>` passthrough (**E**), `FuelPort`
+authoring (**G**), cartoon-moon clutter LOD retune (**H**, now including F14), and — new —
+a **solid-motor thrust-curve preview**, which needs a real port of
+`SolidMotor.TrySampleThrustCurve` + `GrainGeometryTable` + `SolidGrainSegment.ComputeBurningAreaAtDepth`
+(~200 lines) and was deliberately deferred.
+
+**⚠ In-game verification PENDING.** Automated tests cannot prove KSA accepts the output; the
+manual checklist is [UPGRADE_PLAN_2026-07-24.md](UPGRADE_PLAN_2026-07-24.md) Phase 8.
 
 ---
 

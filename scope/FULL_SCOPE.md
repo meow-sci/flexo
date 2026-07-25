@@ -22,13 +22,38 @@ update, this is the checklist you diff against to find what breaks flexo.**
 
 |                      | Build           | Path                                                                                                                                                             |
 | -------------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Verified against** | `2026.7.8.4980` | `/Users/asherwin/repos/meow-sci/ksa-game-assemblies/current` (decomp @ 4980, commit `cdb7391`) + `flexo-private-assets/assets` (Core XML @ 4980, re-encoded)     |
-| Previous baseline    | `2026.7.6.4939` | `ksa-game-assemblies` git commit `2423a02` + the `flexo-private-assets_prev` dir copy (diff decomp via git history; the mirror \_prev copies go stale over time) |
+| **Verified against** | `2026.7.9.5018` | `/Users/asherwin/repos/meow-sci/ksa-game-assemblies/current` (decomp @ 5018) + `flexo-private-assets/assets` (Core XML @ 5018, re-encoded)                       |
+| Previous baseline    | `2026.7.8.4980` | `ksa-game-assemblies` git commit `cdb7391` + the `flexo-private-assets_prev` dir copy (diff decomp via git history; the mirror \_prev copies go stale over time) |
 
 Each snapshot holds `decomp/` (decompiled C#; schema lives in `[XmlType]`/`[XmlElement]`/
 `[XmlAttribute]` + public fields), `Content/Core/` (the shipped game-data XML + GLSL shaders),
 and `version.json` (a commit-by-commit changelog — the fastest first read on any update).
 
+> **5018 review method.** Full `4980 → 5018` diff via **git history inside
+> `ksa-game-assemblies`** + `diff -rq` of the two private-mirror `assets/` trees;
+> `version.json` @ 5018 documents revs 4981–5016. Unlike the last three updates this one is
+> **not a patch list — KSA changed the SHAPE of how a Part declares propellant flow**, and
+> flexo's model had no equivalent concept. Three load-bearing revs: **4992** (solid rocket
+> motors + connector Capabilities + explicit engine feed sources), **5002** (solid modules on
+> every booster part, `HollowOpenSemiEllipsoidMass`, feeding from sub-parts) and **5007**
+> (decoupler joints became a per-connector Capability). What used to be implicit — a combustor
+> searching the whole vehicle for tanks — is now explicitly authored topology in three layers:
+> connector `<Capabilities>`, consumer `<FeedsFrom>`, and Part `<ConsumerFeedWiring>`. Because
+> `<Connector>`, `<Combustor>` and `<Tank>` are **modeled** elements they never rode the
+> GameData passthrough, so every addition was silent data-loss: a flexo-exported engine
+> declared no feed points (dead in-game) and a round-tripped fuel tank / decoupler / SRB
+> segment lost its `BulkFluid` / `DecouplerJoint` / `SolidMotorCase`. New surface doc:
+> [plumbing-and-feeds.md](plumbing-and-feeds.md). Also handled: solid-motor authoring
+> (`<SolidMotor>`/`<SolidMotorNozzle>`/`<SolidGrainSegment>` + `GrainGeometries.xml`), the
+> mandatory solid-reaction burn-rate data (`FixedReactionTemplate.Create` THROWS without it —
+> a crash-class export bug), the `DefaultEngine` → `DefaultPlumeTrail` rename (Core now uses
+> trails on SRBs only), and a **pre-existing latent bug** promoted to breaking: flexo emitted
+> comma-joined `[Flags]` bodies, but .NET's `XmlSerializationReader.ToEnum` splits on
+> WHITESPACE and throws on the resulting `"Internal,"` token. Ported physics
+> (`enginePhysics.ts`) is byte-identical and needed zero changes; animation, kittens,
+> coordinates, mod/asset loading all re-verified **INTACT**. Full detail:
+> [plans/UPGRADE_PLAN_2026-07-24.md](../plans/UPGRADE_PLAN_2026-07-24.md).
+>
 > **4980 review method.** Full `4939 → 4980` diff via **git history inside `ksa-game-assemblies`**
 > (`git diff 2423a02 cdb7391`) + `diff -rq` of the two private-mirror `assets/` trees;
 > `version.json` @ 4980 documents revs 4940–4978. The update is HUD layouts, the burn-UI gauge
@@ -106,22 +131,46 @@ import → export (it rarely _crashes_ flexo; it just disappears). Every update 
 check for _added_ schema outside the GameData child/attr surface, not just _changed_ schema. Full
 detail: [part-and-subpart-xml.md](part-and-subpart-xml.md#-master-invariant--flexo-rebuilds-a-fresh-dom-now-with-gamedata-passthrough).
 
+> **The passthrough does not cover MODELED elements — and that is the sharp edge.**
+> `<Connector>`, `<Combustor>`, `<DeLavalNozzle>`, `<Rocket>`, `<Tank>` and the rest of the
+> allow-list are read field-by-field, so schema ADDED to one of them is dropped on the next
+> import → export even though the surrounding document round-trips perfectly. **5018 is the
+> canonical example**: `<Capabilities>` on a connector, `<FeedsFrom>`/`<Plumbing>` on a
+> combustor, and `Id` on a `<Tank>` were all silently lost, turning an imported Core fuel
+> tank or a flexo-authored engine into dead hardware in-game with no error anywhere. When
+> vetting an update, diff the modeled elements' template classes specifically — the
+> passthrough will not save you there (see
+> [GAME_UPDATE_CHECKLIST.md](GAME_UPDATE_CHECKLIST.md)).
+
 ---
 
 ## Integration map (at a glance)
 
-Status reflects the `4826 → 4892` review. 🔴 breaking · 🟡 missing/drift · 📝 docs · ✅ intact.
+Status reflects the `4980 → 5018` review. 🔴 breaking · 🟡 missing/drift · 📝 docs · ✅ intact.
 
-| Area                                                                                      | Detail doc                                                         | Primary game anchors                                                                                                                                                       | 4892 status                                                                      |
-| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Part / SubPart XML structure, catalog, editor tags, part size                             | [part-and-subpart-xml.md](part-and-subpart-xml.md)                 | `PartTemplate.cs`, `Part.cs`, `EditorTagDefinition.cs`, `*Assets.xml`/`*GameData.xml`, `CoreEditorTagsGameData.xml`                                                        | ✅ intact (dead part-level `Tank` removed; fixtures re-synced)                   |
-| GameData module blocks (mass, electrical, tanks, decoupler, docking port, control, light) | [gamedata-modules.md](gamedata-modules.md)                         | `BatteryTemplate.cs`, `DockingPortTemplate.cs`, `EnergyReference.cs`/`PowerReference.cs`/`ImpulseReference.cs`, `ControlTemplate.cs`                                       | ✅ tank `<RoleAffinity>` modeled — FIXED (replaced `<CombustionProcess>`)        |
-| Engines (thrust/Isp physics, reactions)                                                   | [engines.md](engines.md)                                           | `DeLavalNozzleConfig.cs`, `FixedReactionTable.cs`/`MixtureReactionTable.cs`, `ReactionTemplate.cs` family, `RocketControllerData.cs`, `EngineDesigner.cs`, `Reactions.xml` | 🔴→✅ Reactions refactor re-modeled — FIXED                                      |
-| Animation (keyframe import/export)                                                        | [animation.md](animation.md)                                       | `KeyframeAnimationData.cs`, `KeyframeAnimationModule.cs`, `Animations/*.glb`                                                                                               | ✅ intact (rev-4875 refactor is skeletal-only)                                   |
-| Kittens (Character rendering, editor-only)                                                | [kittens.md](kittens.md)                                           | `CharacterAssets.xml`, `KittenRenderable.cs`, `CharacterRenderResources.cs`, `ModelTranslucent.frag`                                                                       | ✅ intact (Characters/ untouched)                                                |
-| Custom assets, textures, GLB, mod export                                                  | [custom-assets-and-mod-export.md](custom-assets-and-mod-export.md) | `ThumbnailRenderResources.cs`, `Mod.cs`/`ModLibrary.cs`/`AssetBundle.cs`, `PbrMaterialReference.cs`, `MeshAtlasFileReference.cs`, `mod.toml`                               | ✅ intact (4826 MeshReference watch-item closed: clutter-only)                   |
-| Connectors, coordinates, IVA/NotIVA                                                       | [connectors-coordinates-iva.md](connectors-coordinates-iva.md)     | `Part.Connector`, `QuaternionEx.cs`/`Double3Ex.cs`, `VehicleEditor.cs`, `PartModelModule.cs`, `DockingPortTemplate.cs`                                                     | ✅ intact (+X-up re-confirmed; fuel links = save state)                          |
-| Ground clutter (data-only celestial mod)                                                  | [ground-clutter.md](ground-clutter.md)                             | `GroundClutterReference.cs` + 6 sibling schema classes                                                                                                                     | 🔴→✅ LOD `<Material Id>` refs — scaffold regenerated (in-game re-check pending) |
+| Area                                                                                      | Detail doc                                                         | Primary game anchors                                                                                                                                                       | 5018 status                                                                                    |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Part / SubPart XML structure, catalog, editor tags, part size                             | [part-and-subpart-xml.md](part-and-subpart-xml.md)                 | `PartTemplate.cs`, `Part.cs`, `EditorTagDefinition.cs`, `*Assets.xml`/`*GameData.xml`, `CoreEditorTagsGameData.xml`                                                        | ✅ intact (structure unchanged; part-level `<Tank>` now MODELED, fixtures re-synced)           |
+| GameData module blocks (mass, electrical, tanks, decoupler, docking port, control, light) | [gamedata-modules.md](gamedata-modules.md)                         | `BatteryTemplate.cs`, `DockingPortTemplate.cs`, `EnergyReference.cs`/`PowerReference.cs`/`ImpulseReference.cs`, `ControlTemplate.cs`                                       | 🔴→✅ container `Id`s became load-bearing; `<SolidGrainSegment>` + part-level `<Tank>` modeled |
+| Engines (thrust/Isp physics, reactions)                                                   | [engines.md](engines.md)                                           | `DeLavalNozzleConfig.cs`, `FixedReactionTable.cs`/`MixtureReactionTable.cs`, `ReactionTemplate.cs` family, `RocketControllerData.cs`, `EngineDesigner.cs`, `Reactions.xml` | 🔴→✅ `<FeedsFrom>`/`<Plumbing>`/solid motors modeled; ported physics byte-identical           |
+| Animation (keyframe import/export)                                                        | [animation.md](animation.md)                                       | `KeyframeAnimationData.cs`, `KeyframeAnimationModule.cs`, `Animations/*.glb`                                                                                               | ✅ intact (no `KeyframeAnimation*` change at 5018)                                             |
+| Kittens (Character rendering, editor-only)                                                | [kittens.md](kittens.md)                                           | `CharacterAssets.xml`, `KittenRenderable.cs`, `CharacterRenderResources.cs`, `ModelTranslucent.frag`                                                                       | ✅ intact (no `Character*`/`Characters/` change at 5018)                                       |
+| Custom assets, textures, GLB, mod export                                                  | [custom-assets-and-mod-export.md](custom-assets-and-mod-export.md) | `ThumbnailRenderResources.cs`, `Mod.cs`/`ModLibrary.cs`/`AssetBundle.cs`, `PbrMaterialReference.cs`, `MeshAtlasFileReference.cs`, `mod.toml`                               | ✅ intact (`AssetBundle.cs` gained one line, `<GrainGeometry>`; thumbnail rule holds)          |
+| Connectors, coordinates, IVA/NotIVA                                                       | [connectors-coordinates-iva.md](connectors-coordinates-iva.md)     | `Part.Connector`, `QuaternionEx.cs`/`Double3Ex.cs`, `VehicleEditor.cs`, `PartModelModule.cs`, `DockingPortTemplate.cs`                                                     | 🔴→✅ `<Capabilities>` modeled (incl. `DecouplerJoint`); `[Flags]` separator fixed             |
+| Ground clutter (data-only celestial mod)                                                  | [ground-clutter.md](ground-clutter.md)                             | `GroundClutterReference.cs` + 6 sibling schema classes                                                                                                                     | 📝 `<LOD CastShadows>` recorded (optional; scaffold unchanged)                                 |
+| **Plumbing topology** (connector capabilities, consumer feed points, containers)          | [plumbing-and-feeds.md](plumbing-and-feeds.md)                     | `ConnectorCapability*.cs`, `FeedsFromReference.cs`, `ConsumerFeedWiring.cs`, `RocketCoreTemplate.cs`, `PartTemplate.ResolveConsumerFeedPoints`                             | 🔴→✅ modeled (NEW surface at 5018)                                                            |
+
+### Open gaps from 5018 → [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md)
+
+The 5018 review's gap register (F1–F14) is in
+[plans/UPGRADE_PLAN_2026-07-24.md](../plans/UPGRADE_PLAN_2026-07-24.md) §2. All BREAKING,
+DATA-LOSS, MISSING-CAPABILITY and SCHEMA-DRIFT rows are **✅ FIXED**; part-level `<Tank>`
+(carried-forward gap **F** from 4939) is closed too. Still **📋 OPEN** and explicitly out of
+scope for that upgrade: geometry-template `<Collider>` passthrough (**E**), `FuelPort`
+authoring (**G**), the cartoon-moon clutter LOD retune (**H**), the optional clutter
+`<LOD CastShadows>` (**F14**), and the solid-motor thrust-curve preview (a real port of
+`SolidMotor.TrySampleThrustCurve` + `GrainGeometryTable`, filed as a follow-up).
+**In-game verification of the 5018 output is PENDING** (see the upgrade plan's Phase 8).
 
 ### Open gaps from 4892 → [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md)
 

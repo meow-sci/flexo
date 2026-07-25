@@ -4,7 +4,7 @@
 > Read alongside [docs/coordinates.md](../docs/coordinates.md) and
 > [docs/ksa-part-connector-notes.md](../docs/ksa-part-connector-notes.md).
 
-**Baseline:** re-vetted against KSA build **2026.7.8.4980** (decomp @ 4980 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.9.5018** (decomp @ 5018 + shipped Core XML).
 **Baseline status:** ✅ **CURRENT** — the coordinate calibration, connector flag _schema_, and
 IVA/NotIVA are all **intact**; the `<DockingPort>` GameData schema (BREAKING in 4750) is fixed. As
 of 4826, connectors carry new attach-node grouping (`<Sibling>` geometry / `<Aligned>` GameData);
@@ -94,6 +94,59 @@ follows the root part.
 - IVA variant must use a **fresh PartModel Id** (reusing one silently collides via the dedup).
 - IVA props render black/invisible outside IVA unless de-IVA'd (the whole NotIVA feature exists for this).
 - Connector `<Flags>` must be emitted in BOTH the Part and GameData documents.
+
+## What changed in 5018
+
+Three deltas, two of them BREAKING and both now fixed. Full treatment of the capability
+system lives in [plumbing-and-feeds.md](plumbing-and-feeds.md); this is the connector-side
+summary.
+
+### `<Capabilities>` — a new element on every `<Connector>` (rev 4992) — was DATA-LOSS
+
+```xml
+<Connector Id="_connector17"><Capabilities>BulkFluid</Capabilities></Connector>
+```
+
+`Part.Connector.TemplateBase.Capabilities` (`[XmlElement("Capabilities")]`,
+`ConnectorCapabilityFlags : byte { None=0, BulkFluid=1, SolidMotorCase=2, NoElectricity=4,
+NoServiceFluid=8, DecouplerJoint=0x10 }`) decides what may FLOW across the connector — a
+completely independent axis from `<Flags>` (which is about how the editor ORIENTS the part
+when connecting). A connection carries a resource only when both endpoints declare it
+(`Part.Connection.HasCapabilities` → `ConnectorCapabilityExtensions.Intersect`).
+
+`<Connector>` is a MODELED element in both documents, so it never rode the GameData
+passthrough: before the fix, importing a Core fuel tank / decoupler / SRB segment and
+re-exporting **silently stripped** its capabilities. Now modeled as
+`Connector.capabilities`, parsed from and emitted into BOTH documents through one shared
+helper (KSA merges them with `|=` in `PartTemplate.ApplyGameData`, so emitting both is
+idempotent). **An empty list is not "nothing"** — it is KSA's implicit
+`Electricity | ServiceFluid`, and the two `No…` tokens are INVERTED at load by
+`ConnectorCapabilityExtensions.ToCapability()`.
+
+### Decoupler joints moved onto the connector (rev 5007) — BREAKING
+
+`_decouplerConnections` is gone; a decoupler's connector must now declare the
+`DecouplerJoint` capability, and Core authors it on every decoupler connector alongside the
+existing `<Decoupler ConnectorId=… Force=…/>`. A flexo-exported decoupler that carries only
+the `<Decoupler>` element no longer forms a joint. Both halves round-trip now.
+
+### The `[Flags]` separator was wrong in BOTH directions — BREAKING (pre-existing)
+
+flexo emitted `<Flags>Internal, ToSurface</Flags>`. KSA deserializes with .NET's
+`XmlSerializer`, whose `XmlSerializationReader.ToEnum` splits a `[Flags]` enum body with
+`value.Split(null)` — **whitespace** — and throws `CreateUnknownConstantException` on any
+unrecognized token, so the comma form yields `"Internal,"` and **fails the mod load
+outright**. Symmetrically, flexo's parser split on `,` only and could not read a
+KSA-authored `"Internal ToSurface"`. Core only ever authors single-token bodies, which is
+why this stayed latent until `<Capabilities>` doubled the exposure. flexo now **emits**
+whitespace-separated bodies in both documents and **accepts** either on the way in.
+
+### Surface-attach preference (rev 5018) — behavioral, no schema
+
+`Part.UnambiguousSurfaceMount()` + `Connection.ConnectSurfaceMount`: a surface mount now
+prefers the part's single unconnected `ToSurface` connector. No XML change — but it does
+mean which connector a surface mount picks is now decided by how many `ToSurface`
+connectors are free, worth knowing when authoring multi-mount prefabs.
 
 ## What changed in 4980
 

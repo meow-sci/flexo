@@ -1,10 +1,14 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
-import { Button, TextField, Switch, SectionTitle } from './kit'
+import { ListBoxItem } from 'react-aria-components'
+import { Button, TextField, Switch, SectionTitle, Select } from './kit'
 import { NumberField } from './NumberField'
 import {
   $bulkScaleMode,
   pushUndo,
+  $part,
+  setColliderOwner,
+  setColliderShape,
   setConnectorCapabilities,
   setConnectorFlags,
   setSubPartInstanceId,
@@ -23,11 +27,17 @@ import {
   translatedTransform,
 } from '../three/bulkTransform'
 import {
+  COLLIDER_SHAPES,
   CONNECTOR_CAPABILITIES,
   CONNECTOR_FLAGS,
+  type ColliderShape,
   type ConnectorCapability,
   type ConnectorFlag,
+  type PartCollider,
 } from '../ksa/types'
+import { colliderSizeLabels, type ColliderSizeLabel } from '../ksa/colliderSize'
+import { colliderLocalFromWorld, colliderWorld } from '../three/coords'
+import { requestColliderFit } from '../state/colliderStore'
 import { DEG2RAD, RAD2DEG, fmt } from './format'
 
 const panelClass = 'flex flex-col gap-2 rounded-xl border border-border bg-panel p-2'
@@ -35,10 +45,15 @@ const panelClass = 'flex flex-col gap-2 rounded-xl border border-border bg-panel
 type Axis = 'x' | 'y' | 'z'
 
 /**
- * Numeric transform inspector for the selected entity (SubPart or connector).
+ * Numeric transform inspector for the selected entity (SubPart, connector, or collider).
  * Two-way bound with the 3D gizmo: both edit the SAME store, so typing moves the
  * model live and gizmo drags update these fields live. Rotation is shown in
  * degrees but stored/exported in radians. Connectors expose their connection Flags.
+ *
+ * A **collider** reads differently in one place: its `scale` IS its outer size in METERS
+ * (KSA colliders have no scale field — see {@link PartCollider}), so the third group is
+ * labelled "Size (m)" with per-shape labels, and only the axes that shape can independently
+ * control are shown.
  */
 export function TransformInspector() {
   const count = useStore($selectionCount)
@@ -47,9 +62,14 @@ export function TransformInspector() {
   if (count > 1) return <BulkTransformPanel />
   if (!entity) return null
 
-  const layerId = entity.kind === 'subpart' ? entity.placement.layerId : entity.connector.layerId
-  const locked = isLayerLocked(layerId)
-  const transform = entity.kind === 'subpart' ? entity.placement : entity.connector
+  const target =
+    entity.kind === 'subpart'
+      ? entity.placement
+      : entity.kind === 'connector'
+        ? entity.connector
+        : entity.collider
+  const locked = isLayerLocked(target.layerId)
+  const transform = target
 
   const commit = (mutate: (t: PlacementTransform) => void) => {
     const next: PlacementTransform = {
@@ -61,7 +81,12 @@ export function TransformInspector() {
     updateSelectedTransform(next)
   }
 
-  const entityName = entity.kind === 'subpart' ? entity.placement.instanceId : entity.connector.id
+  const entityName =
+    entity.kind === 'subpart'
+      ? entity.placement.instanceId
+      : entity.kind === 'connector'
+        ? entity.connector.id
+        : entity.collider.id
 
   const posField = (axis: Axis) => (
     <NumberField
@@ -81,15 +106,19 @@ export function TransformInspector() {
       onCommit={(deg) => commit((t) => (t.rotation[axis] = deg * DEG2RAD))}
     />
   )
-  const scaleField = (axis: Axis) => (
+  const scaleField = (axis: Axis, label?: ColliderSizeLabel) => (
     <NumberField
-      label={axis.toUpperCase()}
+      label={label?.short ?? axis.toUpperCase()}
+      ariaLabel={label?.full}
       value={transform.scale[axis]}
       isDisabled={locked}
       onInteractionStart={() => pushUndo('scale', entityName)}
       onCommit={(n) => commit((t) => (t.scale[axis] = n))}
     />
   )
+  // A collider's size is normalized per shape on write (a cylinder's X and Z are one
+  // diameter), so only the independently-editable axes get a field.
+  const sizeLabels = entity.kind === 'collider' ? colliderSizeLabels(entity.collider.shape) : null
 
   return (
     <div className={panelClass}>
@@ -100,7 +129,7 @@ export function TransformInspector() {
           templateId={entity.placement.subPartTemplateId}
           locked={locked}
         />
-      ) : (
+      ) : entity.kind === 'connector' ? (
         <ConnectorHeader
           index={entity.index}
           id={entity.connector.id}
@@ -108,6 +137,8 @@ export function TransformInspector() {
           capabilities={entity.connector.capabilities}
           locked={locked}
         />
+      ) : (
+        <ColliderHeader index={entity.index} collider={entity.collider} locked={locked} />
       )}
       <Section title="Position (m)">
         {posField('x')}
@@ -119,11 +150,19 @@ export function TransformInspector() {
         {rotField('y')}
         {rotField('z')}
       </Section>
-      <Section title="Scale">
-        {scaleField('x')}
-        {scaleField('y')}
-        {scaleField('z')}
-      </Section>
+      {sizeLabels ? (
+        <Section title="Size (m)">
+          {sizeLabels[0] && scaleField('x', sizeLabels[0])}
+          {sizeLabels[1] && scaleField('y', sizeLabels[1])}
+          {sizeLabels[2] && scaleField('z', sizeLabels[2])}
+        </Section>
+      ) : (
+        <Section title="Scale">
+          {scaleField('x')}
+          {scaleField('y')}
+          {scaleField('z')}
+        </Section>
+      )}
     </div>
   )
 }
@@ -397,3 +436,113 @@ function ConnectorHeader({
     </div>
   )
 }
+
+/**
+ * Header for a selected collider: its id, the primitive shape, the owner it travels with,
+ * and a one-click refit.
+ *
+ * **Owner** is the load-bearing control. `Part (assembly)` emits the shape under
+ * `<PartGameData>` in the Part's own frame; picking a SubPart template emits it under that
+ * template's `<SubPartGameData>`, where it applies to EVERY placement of that template and
+ * follows joint animation. KSA has no per-instance collider, so the wording says so
+ * explicitly rather than letting the user assume it attaches to the one they clicked.
+ */
+function ColliderHeader({
+  index,
+  collider,
+  locked,
+}: {
+  index: number
+  collider: PartCollider
+  locked: boolean
+}) {
+  const part = useStore($part)
+  // Every DISTINCT template actually placed in the part is a candidate owner.
+  const templates = [...new Set(part.placements.map((p) => p.subPartTemplateId))].sort()
+  const owner = collider.ownerTemplateId
+  const instances = owner ? part.placements.filter((p) => p.subPartTemplateId === owner).length : 0
+  // KSA composes only position + rotation, so a non-unit placement scale silently halves
+  // (or doubles) the collider relative to what you see — warn rather than compensate.
+  /**
+   * Re-homes the collider, CONVERTING its transform through the old and new owners'
+   * placements so it stays where the user last saw it. Without this, switching owner
+   * would reinterpret the same numbers in a different frame and the shape would jump.
+   * Falls back to a plain re-home when a frame is unavailable (an unplaced template).
+   */
+  const changeOwner = (next: string | null) => {
+    const from = owner ? part.placements.find((p) => p.subPartTemplateId === owner) : null
+    const to = next ? part.placements.find((p) => p.subPartTemplateId === next) : null
+    const world = from ? colliderWorld(collider, from) : collider
+    setColliderOwner(index, next, to ? colliderLocalFromWorld(world, to) : world)
+  }
+
+  const scaledOwner =
+    owner != null &&
+    part.placements.some(
+      (p) =>
+        p.subPartTemplateId === owner && (p.scale.x !== 1 || p.scale.y !== 1 || p.scale.z !== 1),
+    )
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate font-mono text-sm">{collider.id}</span>
+        <Button
+          size="sm"
+          variant="ghost"
+          isDisabled={locked}
+          onPress={() => requestColliderFit(collider.shape, { kind: 'existing', index })}
+        >
+          Fit to selection
+        </Button>
+      </div>
+      <div className="grid grid-cols-2 gap-1">
+        <Select
+          size="sm"
+          aria-label="Collider shape"
+          value={collider.shape}
+          isDisabled={locked}
+          onChange={(key) => setColliderShape(index, key as ColliderShape)}
+        >
+          {COLLIDER_SHAPES.map((shape) => (
+            <ListBoxItem key={shape} id={shape}>
+              {shape}
+            </ListBoxItem>
+          ))}
+        </Select>
+        <Select
+          size="sm"
+          aria-label="Collider owner"
+          value={owner ?? PART_OWNER_KEY}
+          isDisabled={locked}
+          onChange={(key) => changeOwner(key === PART_OWNER_KEY ? null : String(key))}
+        >
+          <ListBoxItem id={PART_OWNER_KEY}>Part (assembly)</ListBoxItem>
+          <>
+            {templates.map((t) => (
+              <ListBoxItem key={t} id={t}>
+                {t.split('_').pop() || t}
+              </ListBoxItem>
+            ))}
+          </>
+        </Select>
+      </div>
+      {owner != null && (
+        <span className="text-xs text-fg-subtle">
+          {instances === 0
+            ? 'Owner template is not placed — this collider is dead data.'
+            : `Applies to all ${instances} placement${instances === 1 ? '' : 's'} of this template; follows joint animation.`}
+        </span>
+      )}
+      {scaledOwner && (
+        <span className="text-xs text-warn">
+          KSA ignores placement scale for colliders — this owner has a non-unit scale, so the
+          in-game size will not match the mesh.
+        </span>
+      )}
+    </div>
+  )
+}
+
+/** Select key standing in for `ownerTemplateId: null` (a Select can't carry null). */
+const PART_OWNER_KEY = '\u0000part'

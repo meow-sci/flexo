@@ -67,7 +67,18 @@ import {
   $selectedConnectorIndices,
   $selectedKittenIndex,
   $selectedKittenIndices,
+  $selectedColliderIndex,
+  $selectedColliderIndices,
   $canUndo,
+  addCollider,
+  removeCollider,
+  selectCollider,
+  selectPlacement,
+  setColliderOwner,
+  setColliderShape,
+  setColliderSize,
+  copySelected,
+  pasteClipboard,
   addCombustor,
   addConnector,
   addConsumerFeedWiring,
@@ -1532,5 +1543,121 @@ describe('importing a Part with colliders', () => {
     const src = structuredClone(IMPORTED)
     importWithColliders(src)
     expect(src).toEqual(IMPORTED)
+  })
+})
+
+describe('collider mutations', () => {
+  it('addCollider drops a unit shape on the Colliders layer, selects it, and is undoable', () => {
+    addCollider('Cylinder')
+    addCollider('Box')
+    const colliders = $part.get().colliders
+    expect(colliders.map((c) => [c.id, c.shape])).toEqual([
+      ['_collider1', 'Cylinder'],
+      ['_collider2', 'Box'],
+    ])
+    expect(colliders.every((c) => c.layerId === COLLIDER_LAYER_ID)).toBe(true)
+    expect(colliders[0].scale).toEqual({ x: 1, y: 1, z: 1 })
+    expect(colliders[0].ownerTemplateId).toBeNull()
+    expect($selectedColliderIndex.get()).toBe(1)
+    undo()
+    expect($part.get().colliders.map((c) => c.id)).toEqual(['_collider1'])
+  })
+
+  it('selecting a collider clears the other kinds (and vice versa)', () => {
+    addSubPart('Core.A')
+    addCollider('Box')
+    expect($selectedIndices.get()).toEqual([])
+    expect($selectedColliderIndices.get()).toEqual([0])
+    selectPlacement(0)
+    expect($selectedColliderIndices.get()).toEqual([])
+  })
+
+  it('setColliderShape re-snaps the size onto the new shape and is undoable', () => {
+    addCollider('Box', {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 2, y: 3, z: 1 },
+    })
+    setColliderShape(0, 'Cylinder')
+    // A cylinder's X and Z are one diameter: max(2, 1) = 2.
+    expect($part.get().colliders[0].scale).toEqual({ x: 2, y: 3, z: 2 })
+    undo()
+    expect($part.get().colliders[0].shape).toBe('Box')
+    expect($part.get().colliders[0].scale).toEqual({ x: 2, y: 3, z: 1 })
+  })
+
+  it('setColliderSize normalizes so a cylinder can never be elliptical', () => {
+    addCollider('Cylinder')
+    setColliderSize(0, { x: 3, y: 4, z: 1 })
+    expect($part.get().colliders[0].scale).toEqual({ x: 3, y: 4, z: 3 })
+  })
+
+  it('setColliderOwner re-homes with the converted transform and is undoable', () => {
+    addSubPart('Core.Foot')
+    addCollider('Cylinder')
+    setColliderOwner(0, 'Core.Foot', {
+      position: { x: 1, y: 2, z: 3 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+    })
+    expect($part.get().colliders[0].ownerTemplateId).toBe('Core.Foot')
+    expect($part.get().colliders[0].position).toEqual({ x: 1, y: 2, z: 3 })
+    undo()
+    expect($part.get().colliders[0].ownerTemplateId).toBeNull()
+  })
+
+  it('gizmo write-back normalizes the size (scale IS the size)', () => {
+    addCollider('Sphere')
+    updateSelectedTransforms([
+      {
+        kind: 'collider',
+        index: 0,
+        transform: {
+          position: { x: 0, y: 0, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 5, z: 2 },
+        },
+      },
+    ])
+    // A sphere is uniform: the largest axis wins.
+    expect($part.get().colliders[0].scale).toEqual({ x: 5, y: 5, z: 5 })
+  })
+
+  it('duplicate / delete / copy-paste all cover colliders in one undo step', () => {
+    addCollider('Box')
+    duplicateSelected()
+    expect($part.get().colliders.map((c) => c.id)).toEqual(['_collider1', '_collider2'])
+    copySelected()
+    pasteClipboard()
+    expect($part.get().colliders).toHaveLength(3)
+    undo() // paste
+    expect($part.get().colliders).toHaveLength(2)
+    // Undo restores the document, not the selection — re-select before deleting.
+    selectCollider(1)
+    removeSelected()
+    expect($part.get().colliders).toHaveLength(1)
+    undo()
+    expect($part.get().colliders).toHaveLength(2)
+  })
+
+  it('scaleEverything scales a collider’s position AND its size, re-normalized', () => {
+    addCollider('Cylinder', {
+      position: { x: 1, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 2, y: 4, z: 2 },
+    })
+    scaleEverything({ x: 2, y: 2, z: 2 })
+    const c = $part.get().colliders[0]
+    expect(c.position).toEqual({ x: 2, y: 0, z: 0 })
+    expect(c.scale).toEqual({ x: 4, y: 8, z: 4 })
+  })
+
+  it('removeCollider drops one by index and is undoable', () => {
+    addCollider('Box')
+    addCollider('Sphere')
+    removeCollider(0)
+    expect($part.get().colliders.map((c) => c.shape)).toEqual(['Sphere'])
+    undo()
+    expect($part.get().colliders.map((c) => c.shape)).toEqual(['Box', 'Sphere'])
   })
 })

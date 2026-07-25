@@ -1,8 +1,8 @@
 import * as THREE from 'three'
 
-/** What a hit object resolves to: a SubPart instance, a connector, or a kitten. */
+/** What a hit object resolves to: a SubPart instance, connector, collider, or kitten. */
 export interface Selectable {
-  kind: 'subpart' | 'connector' | 'kitten'
+  kind: 'subpart' | 'connector' | 'collider' | 'kitten'
   id: string
 }
 

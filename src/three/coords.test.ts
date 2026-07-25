@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
-import { applyPlacement, readPlacementTransform } from './coords'
+import {
+  applyPlacement,
+  colliderLocalFromWorld,
+  colliderWorld,
+  readPlacementTransform,
+} from './coords'
 import type { Transform } from '../ksa/types'
 
 /**
@@ -68,4 +73,57 @@ describe('coords applyPlacement rotation order', () => {
       expect(back.scale).toEqual(t.scale)
     },
   )
+})
+
+describe('collider owner frames', () => {
+  const placement: Transform = {
+    position: { x: 1, y: 2, z: -3 },
+    rotation: { x: 0.3, y: -1.1, z: 0.7 },
+    // A non-unit placement scale is DELIBERATELY ignored (ColliderModule composes only
+    // position + rotation) — the collider keeps its own metre size in-game.
+    scale: { x: 2, y: 2, z: 2 },
+  }
+  const collider: Transform = {
+    position: { x: 0.5, y: 0, z: 0.25 },
+    rotation: { x: 0, y: 0, z: Math.PI / 2 },
+    scale: { x: 1, y: 3, z: 1 },
+  }
+
+  it('composes exactly as ColliderModule does, ignoring placement scale', () => {
+    const world = colliderWorld(collider, placement)
+    expect(world.scale).toEqual(collider.scale)
+
+    // worldPos = placement.position + R(placement.rotation) · collider.position
+    const expected = new THREE.Vector3(0.5, 0, 0.25)
+      .applyQuaternion(new THREE.Quaternion().setFromEuler(new THREE.Euler(0.3, -1.1, 0.7, 'ZYX')))
+      .add(new THREE.Vector3(1, 2, -3))
+    expect(world.position.x).toBeCloseTo(expected.x, 10)
+    expect(world.position.y).toBeCloseTo(expected.y, 10)
+    expect(world.position.z).toBeCloseTo(expected.z, 10)
+  })
+
+  it('round-trips world ⇄ local exactly', () => {
+    const back = colliderLocalFromWorld(colliderWorld(collider, placement), placement)
+    for (const axis of ['x', 'y', 'z'] as const) {
+      expect(back.position[axis]).toBeCloseTo(collider.position[axis], 10)
+      expect(back.scale[axis]).toBeCloseTo(collider.scale[axis], 10)
+    }
+    // Compare rotations as quaternions — Euler triples are not unique.
+    const q = (t: Transform) =>
+      new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(t.rotation.x, t.rotation.y, t.rotation.z, 'ZYX'),
+      )
+    expect(q(back).angleTo(q(collider))).toBeCloseTo(0, 10)
+  })
+
+  it('is the identity for an identity placement', () => {
+    const identity: Transform = {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+    }
+    const world = colliderWorld(collider, identity)
+    expect(world.position).toEqual(collider.position)
+    expect(world.scale).toEqual(collider.scale)
+  })
 })

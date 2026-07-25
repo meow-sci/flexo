@@ -27,6 +27,11 @@ and the real GLB meshes in `flexo-private-assets/assets/Meshes`.
 | `src/ksa/assetsXmlSerializer.ts`             | Re-declares an inherited built-in collider on a `ReferenceSubPartPlan` (`INHERITED_COLLIDER_COMPONENT_ID`).                                 |
 | `src/state/editorStore.ts`                   | `ImportedGameData.colliders`; fresh `_colliderN` ids on import.                                                                             |
 | `src/state/projectCodec.ts` / `-Transfer.ts` | `CCollider` (`cl`) wire form; additive paste with fresh ids.                                                                                |
+| `src/three/ColliderObject.ts`                | Unit-normalised wireframe + fill; `group.scale` IS the size in meters.                                                                      |
+| `src/three/wireShapes.ts`                    | Shared unit outlines (incl. the ratio-dependent capsule), also used by `ContainerLayer`.                                                    |
+| `src/three/coords.ts`                        | `colliderWorld` / `colliderLocalFromWorld` — the owner-frame composition, mirroring `ColliderModule.cs:38-42`.                              |
+| `src/ksa/colliderFit.ts`                     | Pure primitive fitting around sampled points (`src/three/samplePoints.ts`).                                                                 |
+| `src/ksa/colliderValidation.ts`              | The block/warn rules, each citing the game-side member it mirrors.                                                                          |
 
 ---
 

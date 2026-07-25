@@ -2,6 +2,8 @@ import { computed } from 'nanostores'
 import {
   $activeLayerId,
   $part,
+  $selectedColliderIndex,
+  $selectedColliderIndices,
   $selectedConnectorIndex,
   $selectedConnectorIndices,
   $selectedIndices,
@@ -9,7 +11,7 @@ import {
   selectedTransformRefs,
   type SelectedTransformRef,
 } from './editorStore'
-import type { Connector, Layer, SubPartPlacement } from '../ksa/types'
+import type { Connector, Layer, PartCollider, SubPartPlacement } from '../ksa/types'
 
 /** The currently selected placement when exactly one SubPart is selected, else null. */
 export const $selectedPlacement = computed(
@@ -52,8 +54,8 @@ export const $hasMultiSelection = computed(
 
 /** Total number of selected entities across all kinds. */
 export const $selectionCount = computed(
-  [$selectedIndices, $selectedConnectorIndices, $selectedKittenIndices],
-  (sub, con, kit): number => sub.length + con.length + kit.length,
+  [$selectedIndices, $selectedConnectorIndices, $selectedKittenIndices, $selectedColliderIndices],
+  (sub, con, kit, col): number => sub.length + con.length + kit.length + col.length,
 )
 
 /**
@@ -61,7 +63,13 @@ export const $selectionCount = computed(
  * then kittens). Drives the bulk transform panel for a unified multi-selection.
  */
 export const $selectedRefs = computed(
-  [$part, $selectedIndices, $selectedConnectorIndices, $selectedKittenIndices],
+  [
+    $part,
+    $selectedIndices,
+    $selectedConnectorIndices,
+    $selectedKittenIndices,
+    $selectedColliderIndices,
+  ],
   (): SelectedTransformRef[] => selectedTransformRefs(),
 )
 
@@ -74,16 +82,19 @@ export const $selectedRefs = computed(
 export type SelectedEntity =
   | { kind: 'subpart'; index: number; placement: SubPartPlacement }
   | { kind: 'connector'; index: number; connector: Connector }
+  | { kind: 'collider'; index: number; collider: PartCollider }
 
 export const $selectedEntity = computed(
-  [$part, $selectedIndices, $selectedConnectorIndex],
-  (part, subIndices, conIndex): SelectedEntity | null => {
+  [$part, $selectedIndices, $selectedConnectorIndex, $selectedColliderIndex],
+  (part, subIndices, conIndex, colIndex): SelectedEntity | null => {
     if (subIndices.length === 1) {
       const placement = part.placements[subIndices[0]]
       if (placement) return { kind: 'subpart', index: subIndices[0], placement }
     }
     const connector = part.connectors[conIndex]
     if (conIndex >= 0 && connector) return { kind: 'connector', index: conIndex, connector }
+    const collider = part.colliders[colIndex]
+    if (colIndex >= 0 && collider) return { kind: 'collider', index: colIndex, collider }
     return null
   },
 )

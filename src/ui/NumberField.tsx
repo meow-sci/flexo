@@ -10,13 +10,16 @@ import { fmt } from './format'
  * {@link PreciseNumberInput}, which preserves the exact value).
  */
 export function NumberField(props: {
+  /** Visible label — ONE character wide (the slot is `w-3`); use `ariaLabel` for the rest. */
   label: string
+  /** Accessible name when {@link label} is a symbol (e.g. "Ø" ⇒ "Diameter"). */
+  ariaLabel?: string
   value: number
   onCommit: (n: number) => void
   onInteractionStart?: () => void
   isDisabled?: boolean
 }) {
-  const { label, value, onCommit, onInteractionStart, isDisabled } = props
+  const { label, ariaLabel, value, onCommit, onInteractionStart, isDisabled } = props
   const [draft, setDraft] = useState<string | null>(null)
 
   return (
@@ -26,7 +29,7 @@ export function NumberField(props: {
         size="sm"
         type="number"
         inputMode="decimal"
-        aria-label={label}
+        aria-label={ariaLabel ?? label}
         value={draft ?? fmt(value)}
         inputClassName="font-mono"
         isDisabled={isDisabled}

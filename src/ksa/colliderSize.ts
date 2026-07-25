@@ -151,20 +151,35 @@ export function colliderDimensionNames(shape: ColliderShape): readonly string[] 
   }
 }
 
+/** A size field's one-character visible label plus its accessible name. */
+export interface ColliderSizeLabel {
+  /** ONE character — the inspector's label slot is a single glyph wide. */
+  short: string
+  /** Spoken/tooltip name, e.g. "Diameter". */
+  full: string
+}
+
 /**
- * Per-axis labels for the size fields of a shape (`null` ⇒ that axis isn't independently
- * editable and the field should be hidden). Drives the inspector's "Size (m)" group.
+ * Per-axis labels for the size fields of a shape (`null` ⇒ that axis is not independently
+ * editable — {@link normalizeColliderSize} derives it — so the field is hidden). Drives the
+ * inspector's "Size (m)" group.
  */
 export function colliderSizeLabels(
   shape: ColliderShape,
-): [string | null, string | null, string | null] {
+): [ColliderSizeLabel | null, ColliderSizeLabel | null, ColliderSizeLabel | null] {
+  const dia: ColliderSizeLabel = { short: '\u00D8', full: 'Diameter' }
+  const height: ColliderSizeLabel = { short: 'H', full: 'Height' }
   switch (shape) {
     case 'Box':
-      return ['Length X', 'Length Y', 'Length Z']
+      return [
+        { short: 'X', full: 'Length X' },
+        { short: 'Y', full: 'Length Y' },
+        { short: 'Z', full: 'Length Z' },
+      ]
     case 'Sphere':
-      return ['Diameter', null, null]
+      return [dia, null, null]
     case 'Cylinder':
     case 'Capsule':
-      return ['Diameter', 'Height', null]
+      return [dia, height, null]
   }
 }

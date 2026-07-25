@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { LineSegments2 } from 'three/addons/lines/LineSegments2.js'
-import { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js'
+import type { LineSegmentsGeometry } from 'three/addons/lines/LineSegmentsGeometry.js'
 import { LineMaterial } from 'three/addons/lines/LineMaterial.js'
 import { TransformControls } from 'three/addons/controls/TransformControls.js'
 import type { Viewport } from './Viewport'
@@ -18,103 +18,16 @@ import {
 import { $part, pushUndo } from '../state/editorStore'
 import { evaluateViolations } from '../measure/containment'
 import type { Vec3 } from '../ksa/types'
+import { clampSegments, cylinderEdges, edgesGeometry, RECT_EDGES, sphereEdges } from './wireShapes'
+import { collectWorldPoints as sampleWorldPoints } from './samplePoints'
 
 // --- Static unit geometries (centered at origin, scaled per container) --------
-
-/** Unit-cube (±0.5) edge segments as flat xyz pairs. */
-const RECT_EDGES = ((): number[] => {
-  const h = 0.5
-  const c: Record<string, [number, number, number]> = {
-    a: [-h, -h, -h],
-    b: [h, -h, -h],
-    cc: [h, -h, h],
-    d: [-h, -h, h],
-    e: [-h, h, -h],
-    f: [h, h, -h],
-    g: [h, h, h],
-    k: [-h, h, h],
-  }
-  const edges: [string, string][] = [
-    ['a', 'b'],
-    ['b', 'cc'],
-    ['cc', 'd'],
-    ['d', 'a'],
-    ['e', 'f'],
-    ['f', 'g'],
-    ['g', 'k'],
-    ['k', 'e'],
-    ['a', 'e'],
-    ['b', 'f'],
-    ['cc', 'g'],
-    ['d', 'k'],
-  ]
-  return edges.flatMap(([p, q]) => [...c[p], ...c[q]])
-})()
-
-/** Builds segment pairs for a ring of `n` chords; `at(cos, sin)` maps to a point. */
-function ring(n: number, at: (cos: number, sin: number) => [number, number, number]): number[] {
-  const out: number[] = []
-  for (let i = 0; i < n; i++) {
-    const a0 = (2 * Math.PI * i) / n
-    const a1 = (2 * Math.PI * (i + 1)) / n
-    out.push(...at(Math.cos(a0), Math.sin(a0)), ...at(Math.cos(a1), Math.sin(a1)))
-  }
-  return out
-}
+//
+// The outline builders live in ./wireShapes.ts — shared with ColliderObject, which needs
+// the same unit-normalised wireframes (and adds the capsule).
 
 const R = 0.5
 const RING_SEGMENTS = 48
-/** Chords per drawn circle — fixed so curves stay smooth regardless of line count. */
-const CIRCLE_SMOOTH = 64
-/** Clamp for the user-controlled wireframe line count on curved surfaces. */
-const MIN_SEGMENTS = 2
-const MAX_SEGMENTS = 64
-
-const clampSegments = (n: number): number =>
-  Number.isFinite(n) ? Math.max(MIN_SEGMENTS, Math.min(MAX_SEGMENTS, Math.round(n))) : 16
-
-/**
- * Unit cylinder (r=0.5, h=1, axis Y): smooth top + bottom rings plus `struts`
- * evenly-spaced vertical lines on the side (the user-controlled count).
- */
-function cylinderEdges(struts: number): number[] {
-  const bottom = ring(CIRCLE_SMOOTH, (c, s) => [c * R, -0.5, s * R])
-  const top = ring(CIRCLE_SMOOTH, (c, s) => [c * R, 0.5, s * R])
-  const verticals: number[] = []
-  for (let i = 0; i < struts; i++) {
-    const a = (2 * Math.PI * i) / struts
-    const c = Math.cos(a) * R
-    const s = Math.sin(a) * R
-    verticals.push(c, -0.5, s, c, 0.5, s)
-  }
-  return [...bottom, ...top, ...verticals]
-}
-
-/**
- * Unit sphere (r=0.5): `rings` meridian great-circles (around Y) plus `rings - 1`
- * latitude rings — a globe whose line density the user controls.
- */
-function sphereEdges(rings: number): number[] {
-  const out: number[] = []
-  for (let i = 0; i < rings; i++) {
-    const ang = (Math.PI * i) / rings // meridian plane angle
-    const ca = Math.cos(ang)
-    const sa = Math.sin(ang)
-    out.push(...ring(CIRCLE_SMOOTH, (c, s) => [c * ca * R, s * R, c * sa * R]))
-  }
-  for (let j = 1; j < rings; j++) {
-    const y = -R + (2 * R * j) / rings
-    const rad = Math.sqrt(Math.max(0, R * R - y * y))
-    out.push(...ring(CIRCLE_SMOOTH, (c, s) => [c * rad, y, s * rad]))
-  }
-  return out
-}
-
-function edgesGeometry(positions: number[]): LineSegmentsGeometry {
-  const geom = new LineSegmentsGeometry()
-  geom.setPositions(positions)
-  return geom
-}
 
 /** Builds the outline edge geometry for a shape at the given line count. */
 function outlineGeometry(shape: ReferenceShape, segments: number): LineSegmentsGeometry {
@@ -347,35 +260,7 @@ export class ContainerLayer {
 
   /** World-space sample points for every part object (bbox corners or all vertices). */
   private collectWorldPoints(mode: WarnPrecision): Vec3[] {
-    const objects = this.getPartObjects()
-    const out: Vec3[] = []
-    if (mode === 'bbox') {
-      const box = new THREE.Box3()
-      for (const obj of objects) {
-        box.setFromObject(obj)
-        if (box.isEmpty()) continue
-        const { min, max } = box
-        for (const x of [min.x, max.x])
-          for (const y of [min.y, max.y]) for (const z of [min.z, max.z]) out.push({ x, y, z })
-      }
-      return out
-    }
-    const v = new THREE.Vector3()
-    for (const obj of objects) {
-      obj.updateWorldMatrix(true, true)
-      obj.traverse((child) => {
-        const mesh = child as THREE.Mesh
-        const pos = (mesh.geometry as THREE.BufferGeometry | undefined)?.attributes?.position as
-          | THREE.BufferAttribute
-          | undefined
-        if (!mesh.isMesh || !pos) return
-        for (let i = 0; i < pos.count; i++) {
-          v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld)
-          out.push({ x: v.x, y: v.y, z: v.z })
-        }
-      })
-    }
-    return out
+    return sampleWorldPoints(this.getPartObjects(), mode)
   }
 
   // --- Gizmo -----------------------------------------------------------------

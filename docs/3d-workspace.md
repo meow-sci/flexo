@@ -11,6 +11,9 @@ All code is under `src/three/`.
 | `EditorScene.ts` | Owns the `Viewport`; subscribes to the store and reconciles `SubPartObject`s; wires selection + gizmo. The bridge between state and scene. |
 | `SubPartObject.ts` | One placed SubPart: a `THREE.Group` (carrying `userData.instanceId`) holding the atlas mesh + its material. |
 | `MeshAtlasCache.ts` | Loads GLB atlases (`GLTFLoader`), extracts geometry by node name, bakes the node's local transform, caches per `atlasUrl#node`. |
+| `ColliderObject.ts` | One collision primitive: a fat-line wireframe + a low-alpha fill (the raycast target). Geometry is **unit-normalised**, so the group's `scale` IS the collider's size in meters and the scale gizmo edits dimensions directly. See [colliders.md](./colliders.md). |
+| `wireShapes.ts` | Shared unit-box wireframe builders (box / cylinder / sphere / capsule outlines) used by `ColliderObject` AND `ContainerLayer`. |
+| `samplePoints.ts` | Shared world-space geometry sampler (bbox corners or every vertex) for collider fitting and container containment warnings. |
 | `Grid.ts` | Origin grid (XZ plane) + colored axes (1 cell = 1 m). |
 | `SelectionManager.ts` | Raycast click-to-select (fires on pointerup only when the pointer barely moved, so orbit/gizmo drags aren't clicks). |
 | `TransformGizmo.ts` | Wraps `TransformControls` (translate/rotate/scale); disables orbit while dragging; emits transform changes. |
@@ -42,6 +45,19 @@ Async builds (`SubPartObject.create`) load geometry + material in parallel.
 
 Because the gizmo writes through the store and the scene reconciles from the store,
 the transform [inspector](./editor-state.md) and the gizmo are two-way synced.
+
+### The scale gizmo as a dimension editor
+
+A `ColliderObject`'s wire/fill geometry is normalised into `[-0.5, 0.5]³`, so its group
+`scale` is literally the shape's size in meters. That makes scale-mode gizmo drags edit
+KSA dimensions with no special-casing — the write-back just runs the result through
+`normalizeColliderSize` so a non-uniform drag on a cylinder or sphere snaps back to a
+shape KSA can represent. It is the same trick `ContainerLayer` uses for reference
+containers.
+
+A **SubPart-owned** collider is drawn once per placement of its template (KSA has no
+per-instance collider), positioned via `coords.colliderWorld`. Since no single object
+could unambiguously receive a drag, the gizmo is suppressed for those until Phase 3.
 
 ## Layer visibility & lock
 

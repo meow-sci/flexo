@@ -10,10 +10,11 @@ import {
   SubmenuTrigger,
   ToolbarButton,
 } from './kit'
-import { $part, addConnector, addKitten, addSubPart } from '../state/editorStore'
+import { $part, addCollider, addConnector, addKitten, addSubPart } from '../state/editorStore'
+import { requestColliderFit } from '../state/colliderStore'
 import { enterEngineMode } from '../state/engineStore'
 import { makeKittenMeshPart, openImportModel } from '../state/customAssetStore'
-import { meshKind, type KittenKind } from '../ksa/types'
+import { COLLIDER_SHAPES, meshKind, type ColliderShape, type KittenKind } from '../ksa/types'
 import { SubPartPopup } from './SubPartBrowser'
 import { PartPopup } from './PartBrowser'
 import { CustomTextureDialog } from './CustomTextureDialog'
@@ -76,6 +77,29 @@ export function AddButton() {
                 </Popover>
               </SubmenuTrigger>
             )}
+            <SubmenuTrigger>
+              <MenuItem id="collider">Collider</MenuItem>
+              <Popover className="w-56">
+                <Menu onAction={(key) => addCollider(key as ColliderShape)}>
+                  <MenuHeader>Add at origin</MenuHeader>
+                  {COLLIDER_SHAPES.map((shape) => (
+                    <MenuItem key={shape} id={shape}>
+                      {shape}
+                    </MenuItem>
+                  ))}
+                </Menu>
+                {/* Fitting needs world geometry, so it publishes an intent the 3D scene
+                    consumes (see colliderStore) rather than calling a store mutator here. */}
+                <Menu onAction={(key) => requestColliderFit(key as ColliderShape)}>
+                  <MenuHeader>Fit to selection</MenuHeader>
+                  {COLLIDER_SHAPES.map((shape) => (
+                    <MenuItem key={`fit-${shape}`} id={shape}>
+                      {shape}
+                    </MenuItem>
+                  ))}
+                </Menu>
+              </Popover>
+            </SubmenuTrigger>
             <SubmenuTrigger>
               <MenuItem id="kitten">Kitten</MenuItem>
               <Popover className="w-40">

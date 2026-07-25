@@ -19,6 +19,7 @@ import { $projectName } from '../state/projectStore'
 import { $catalogIndex } from '../state/catalogStore'
 import { $allReactionIndex } from '../state/reactionStore'
 import { validateEngines } from '../ksa/engineValidation'
+import { validateColliders } from '../ksa/colliderValidation'
 import { $kittenTextureExport } from '../state/settingsStore'
 import {
   $modFolder,
@@ -85,9 +86,11 @@ export function ExportButton({
   )
   // Engine + plumbing pre-flight (KSA 2026.7.9). `block` = KSA throws at load, so the
   // whole mod fails; `warn` = it loads but the part misbehaves (usually no thrust).
-  const engineIssues = validateEngines(part, reactionIndex)
-  const blocking = engineIssues.filter((i) => i.severity === 'block')
-  const engineWarnings = engineIssues.filter((i) => i.severity === 'warn')
+  // Collider pre-flight shares the same two severities and the same treatment: a part
+  // with no collision volume loads fine but falls through the world.
+  const issues = [...validateEngines(part, reactionIndex), ...validateColliders(part)]
+  const blocking = issues.filter((i) => i.severity === 'block')
+  const engineWarnings = issues.filter((i) => i.severity === 'warn')
 
   return (
     <>

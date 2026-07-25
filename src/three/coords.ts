@@ -75,3 +75,78 @@ export function transformFromMatrix(m: THREE.Matrix4): Transform {
     scale: { x: scale.x, y: scale.y, z: scale.z },
   }
 }
+
+/**
+ * Places a SubPart-owned {@link import('../ksa/types').PartCollider} into Part space, exactly
+ * as KSA composes it (`ColliderModule.PositionVehicleAsmb` / `Collider2VehicleAsmb`,
+ * `decomp/KSA/ColliderModule.cs:38-42`):
+ *
+ * ```
+ * worldPos  = placement.position + R(placement.rotation) · collider.position
+ * worldRot  = R(placement.rotation) · R(collider.rotation)
+ * worldSize = collider.scale                            // placement scale IGNORED
+ * ```
+ *
+ * The scale omission is not a simplification — `ColliderModule` composes only position and
+ * rotation, so a collider on a placement scaled 2× really is half the visual size in-game.
+ * flexo renders that faithfully and warns instead of compensating (see scope/colliders.md).
+ */
+export function colliderWorld(collider: Transform, placement: Transform): Transform {
+  const parentQuat = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(placement.rotation.x, placement.rotation.y, placement.rotation.z, EULER_ORDER),
+  )
+  const localPos = new THREE.Vector3(
+    collider.position.x,
+    collider.position.y,
+    collider.position.z,
+  ).applyQuaternion(parentQuat)
+  const worldQuat = parentQuat
+    .clone()
+    .multiply(
+      new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(collider.rotation.x, collider.rotation.y, collider.rotation.z, EULER_ORDER),
+      ),
+    )
+  const euler = new THREE.Euler().setFromQuaternion(worldQuat, EULER_ORDER)
+  return {
+    position: {
+      x: placement.position.x + localPos.x,
+      y: placement.position.y + localPos.y,
+      z: placement.position.z + localPos.z,
+    },
+    rotation: { x: euler.x, y: euler.y, z: euler.z },
+    scale: { ...collider.scale },
+  }
+}
+
+/** Inverse of {@link colliderWorld}: a Part-space transform back into the owner's local frame. */
+export function colliderLocalFromWorld(world: Transform, placement: Transform): Transform {
+  const parentInv = new THREE.Quaternion()
+    .setFromEuler(
+      new THREE.Euler(
+        placement.rotation.x,
+        placement.rotation.y,
+        placement.rotation.z,
+        EULER_ORDER,
+      ),
+    )
+    .invert()
+  const localPos = new THREE.Vector3(
+    world.position.x - placement.position.x,
+    world.position.y - placement.position.y,
+    world.position.z - placement.position.z,
+  ).applyQuaternion(parentInv)
+  const localQuat = parentInv
+    .clone()
+    .multiply(
+      new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(world.rotation.x, world.rotation.y, world.rotation.z, EULER_ORDER),
+      ),
+    )
+  const euler = new THREE.Euler().setFromQuaternion(localQuat, EULER_ORDER)
+  return {
+    position: { x: localPos.x, y: localPos.y, z: localPos.z },
+    rotation: { x: euler.x, y: euler.y, z: euler.z },
+    scale: { ...world.scale },
+  }
+}

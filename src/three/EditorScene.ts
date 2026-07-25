@@ -2,13 +2,27 @@ import * as THREE from 'three'
 import { Viewport } from './Viewport'
 import { SubPartObject } from './SubPartObject'
 import { ConnectorObject } from './ConnectorObject'
+import { ColliderObject } from './ColliderObject'
+import { collectWorldPoints } from './samplePoints'
+import { fitCollider, IDENTITY_QUAT, type Quat } from '../ksa/colliderFit'
+import {
+  $colliderFitRequest,
+  $colliderSettings,
+  type ColliderFitRequest,
+} from '../state/colliderStore'
 import { KittenObject } from './KittenObject'
 import { SelectionManager } from './SelectionManager'
 import { TransformGizmo } from './TransformGizmo'
 import { MeasurementLayer } from './MeasurementLayer'
 import { ContainerLayer } from './ContainerLayer'
 import { NozzleHandleObject } from './NozzleHandleObject'
-import { matrixFromTransform, readPlacementTransform, transformFromMatrix } from './coords'
+import {
+  colliderLocalFromWorld,
+  colliderWorld,
+  matrixFromTransform,
+  readPlacementTransform,
+  transformFromMatrix,
+} from './coords'
 import {
   centroidOf,
   rotatedAroundOriginTransform,
@@ -18,10 +32,11 @@ import {
 } from './bulkTransform'
 import { initTextureSupport } from './textureSupport'
 import type { CatalogSubPart } from '../ksa/catalog'
-import type { EditingPart, Vec3 } from '../ksa/types'
+import type { EditingPart, Transform, Vec3 } from '../ksa/types'
 import {
   $bulkScaleMode,
   $part,
+  $selectedColliderIndices,
   $selectedConnectorIndices,
   $selectedIndices,
   $selectedKittenIndices,
@@ -30,7 +45,10 @@ import {
   clearSelection,
   pushUndo,
   revealEntity,
+  addCollider,
+  selectCollider,
   selectConnector,
+  updateColliderTransform,
   selectKitten,
   selectPlacement,
   selectedTransformRefs,
@@ -99,6 +117,13 @@ export class EditorScene {
   private readonly objects = new Map<string, SubPartObject>()
   private readonly connectorObjects = new Map<string, ConnectorObject>()
   private readonly kittenObjects = new Map<string, KittenObject>()
+  /**
+   * Collider visuals, keyed by collider id. An ARRAY per collider because a SubPart-owned
+   * one is drawn once per PLACEMENT of its template — KSA has no per-instance collider, so
+   * every instance really does carry the same shape (see scope/colliders.md §4). A
+   * part-level collider always has exactly one entry.
+   */
+  private readonly colliderObjects = new Map<string, ColliderObject[]>()
   private readonly building = new Set<string>()
   private readonly kittenBuilding = new Set<string>()
   private index: Map<string, CatalogSubPart> = new Map()
@@ -209,6 +234,21 @@ export class EditorScene {
             selectConnector(index)
             revealEntity('connector', selected.id)
           }
+        } else if (selected.kind === 'collider') {
+          const colliders = $part.get().colliders
+          const index = colliders.findIndex((c) => c.id === selected.id)
+          if (index < 0) return
+          const layerId = colliders[index].layerId
+          if (isLayerLocked(layerId)) return
+          if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
+          if (additive) {
+            const added = !$selectedColliderIndices.get().includes(index)
+            toggleEntity('collider', index)
+            if (added) revealEntity('collider', selected.id)
+          } else {
+            selectCollider(index)
+            revealEntity('collider', selected.id)
+          }
         } else {
           const kittens = $part.get().kittens
           const index = kittens.findIndex((k) => k.id === selected.id)
@@ -314,6 +354,7 @@ export class EditorScene {
     this.unsubscribers.push($selectedIndices.subscribe(clearContainerOnSelect))
     this.unsubscribers.push($selectedConnectorIndices.subscribe(clearContainerOnSelect))
     this.unsubscribers.push($selectedKittenIndices.subscribe(clearContainerOnSelect))
+    this.unsubscribers.push($selectedColliderIndices.subscribe(clearContainerOnSelect))
 
     // nanostores `subscribe` fires immediately with the current value.
     this.unsubscribers.push(
@@ -370,6 +411,14 @@ export class EditorScene {
     this.unsubscribers.push($selectedIndices.subscribe(() => this.updateSelection()))
     this.unsubscribers.push($selectedConnectorIndices.subscribe(() => this.updateSelection()))
     this.unsubscribers.push($selectedKittenIndices.subscribe(() => this.updateSelection()))
+    this.unsubscribers.push($selectedColliderIndices.subscribe(() => this.updateSelection()))
+    // Collider fitting needs world geometry, which only exists here — the UI publishes an
+    // intent and this consumes it (see colliderStore).
+    this.unsubscribers.push(
+      $colliderFitRequest.subscribe((req) => {
+        if (req) this.handleColliderFit(req)
+      }),
+    )
     this.unsubscribers.push(
       $connectorSettings.subscribe((settings) => {
         this.connectorSettings = settings
@@ -448,6 +497,7 @@ export class EditorScene {
     }
 
     this.reconcileConnectors(part)
+    this.reconcileColliders(part)
     this.reconcileKittens(part)
     this.applyLayerView()
     this.updateSelection()
@@ -586,6 +636,13 @@ export class EditorScene {
         obj.setLayerOpacity(lv.opacity)
       }
     }
+    for (const c of part.colliders) {
+      const lv = layerViewState(view, c.layerId)
+      for (const obj of this.colliderObjects.get(c.id) ?? []) {
+        obj.group.visible = lv.visible
+        obj.setLayerOpacity(lv.opacity)
+      }
+    }
     for (const k of part.kittens) {
       const obj = this.kittenObjects.get(k.id)
       if (obj) {
@@ -618,6 +675,110 @@ export class EditorScene {
     }
   }
 
+  /**
+   * Colliders build synchronously (unit wireframe + fill). A SubPart-owned collider gets
+   * ONE visual per placement of its owning template, positioned exactly as KSA composes it
+   * ({@link colliderWorld}); a part-level one gets a single visual in the Part frame.
+   */
+  private reconcileColliders(part: EditingPart): void {
+    const wanted = new Set(part.colliders.map((c) => c.id))
+    for (const [id, objs] of this.colliderObjects) {
+      if (wanted.has(id)) continue
+      for (const obj of objs) {
+        this.root.remove(obj.group)
+        obj.dispose()
+      }
+      this.colliderObjects.delete(id)
+    }
+
+    for (const collider of part.colliders) {
+      // A collider whose owner is no longer placed still renders (in the Part frame) so it
+      // can be found and re-homed rather than silently vanishing; validation flags it.
+      const owners = collider.ownerTemplateId
+        ? part.placements.filter((p) => p.subPartTemplateId === collider.ownerTemplateId)
+        : []
+      const frames: (Transform | undefined)[] =
+        owners.length > 0 ? owners.map((p) => colliderWorld(collider, p)) : [undefined]
+
+      let objs = this.colliderObjects.get(collider.id)
+      if (!objs) {
+        objs = []
+        this.colliderObjects.set(collider.id, objs)
+      }
+      while (objs.length > frames.length) {
+        const obj = objs.pop()!
+        this.root.remove(obj.group)
+        obj.dispose()
+      }
+      while (objs.length < frames.length) {
+        const obj = new ColliderObject(collider)
+        this.root.add(obj.group)
+        objs.push(obj)
+      }
+      for (let i = 0; i < frames.length; i++) objs[i].setCollider(collider, frames[i])
+    }
+  }
+
+  /**
+   * Runs a pending collider fit: samples the requested geometry, fits the primitive in the
+   * chosen frame (the pure {@link fitCollider}), and writes it back through the store.
+   * Clears the request either way so a repeated identical fit still fires.
+   */
+  private handleColliderFit(req: ColliderFitRequest): void {
+    $colliderFitRequest.set(null)
+    const settings = $colliderSettings.get()
+    const part = $part.get()
+
+    // "Fit to selection" means the selected MESHES; with nothing selected (or when the
+    // caller asked for it) fall back to the whole part — an empty part fits nothing.
+    const selected = req.useSelection
+      ? $selectedIndices.get().flatMap((i) => {
+          const obj = part.placements[i] && this.objects.get(part.placements[i].instanceId)
+          return obj ? [obj.group] : []
+        })
+      : []
+    const targets = selected.length > 0 ? selected : [...this.objects.values()].map((o) => o.group)
+    const points = collectWorldPoints(targets, settings.precision)
+    if (points.length === 0) {
+      console.warn('flexo: nothing to fit a collider to (no geometry loaded yet?)')
+      return
+    }
+
+    // Orient to the LAST selected placement so a tilted tank gets a tilted cylinder.
+    const frameSource = selected.length > 0 ? selected[selected.length - 1] : null
+    let frame: Quat = IDENTITY_QUAT
+    if (settings.orientToSelection && frameSource) {
+      const q = frameSource.getWorldQuaternion(new THREE.Quaternion())
+      frame = [q.x, q.y, q.z, q.w]
+    }
+
+    const fit = fitCollider(req.shape, points, frame, settings.margin)
+    if (!fit) return
+    // Quaternion → KSA Euler goes through coords.ts, the one sanctioned place.
+    const transform = transformFromMatrix(
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(fit.position.x, fit.position.y, fit.position.z),
+        new THREE.Quaternion(...fit.quaternion),
+        new THREE.Vector3(fit.size.x, fit.size.y, fit.size.z),
+      ),
+    )
+
+    if (req.target.kind === 'new') {
+      addCollider(req.shape, transform)
+      return
+    }
+    const existing = part.colliders[req.target.index]
+    if (!existing) return
+    // Refit keeps the collider's id and owner; a SubPart-owned one must come back into
+    // its template's local frame or it would jump by the placement transform.
+    const owner = existing.ownerTemplateId
+      ? part.placements.find((p) => p.subPartTemplateId === existing.ownerTemplateId)
+      : undefined
+    const local = owner ? colliderLocalFromWorld(transform, owner) : transform
+    pushUndo('fit collider', existing.id)
+    updateColliderTransform(req.target.index, local)
+  }
+
   /** Rebuilds every connector from scratch (cube/arrow sizes are global settings). */
   private rebuildConnectors(): void {
     for (const obj of this.connectorObjects.values()) {
@@ -643,6 +804,12 @@ export class EditorScene {
       const connector = part.connectors[i]
       const obj = connector && this.connectorObjects.get(connector.id)
       if (obj) out.push(obj)
+    }
+    for (const i of $selectedColliderIndices.get()) {
+      const collider = part.colliders[i]
+      // Every instance of a SubPart-owned collider highlights together — they are one
+      // document entity, so highlighting only the gizmo target would read as a bug.
+      for (const obj of (collider && this.colliderObjects.get(collider.id)) ?? []) out.push(obj)
     }
     for (const i of $selectedKittenIndices.get()) {
       const kitten = part.kittens[i]
@@ -724,7 +891,8 @@ export class EditorScene {
     const indices = $selectedIndices.get()
     const conIndices = $selectedConnectorIndices.get()
     const kitIndices = $selectedKittenIndices.get()
-    const multi = indices.length + conIndices.length + kitIndices.length > 1
+    const colIndices = $selectedColliderIndices.get()
+    const multi = indices.length + conIndices.length + kitIndices.length + colIndices.length > 1
     let target: THREE.Object3D | null
 
     // Suppress the gizmo when any selected entity is in a locked layer (items
@@ -732,7 +900,12 @@ export class EditorScene {
     const anyLocked =
       indices.some((i) => isLayerLocked(part.placements[i]?.layerId ?? '')) ||
       conIndices.some((ci) => isLayerLocked(part.connectors[ci]?.layerId ?? '')) ||
-      kitIndices.some((ki) => isLayerLocked(part.kittens[ki]?.layerId ?? ''))
+      kitIndices.some((ki) => isLayerLocked(part.kittens[ki]?.layerId ?? '')) ||
+      colIndices.some((i) => isLayerLocked(part.colliders[i]?.layerId ?? '')) ||
+      // A SubPart-OWNED collider is drawn once per placement, so there is no single
+      // object a gizmo drag could unambiguously write back to. Phase 3 attaches to the
+      // instance under the cursor; until then it is inspector-editable only.
+      colIndices.some((i) => part.colliders[i]?.ownerTemplateId != null)
     // While the preview shows a POSED frame (t>0 / editing), an animated SubPart's
     // group sits at its animated transform — suppress the gizmo so a drag can't write
     // the posed transform back as the static placement. At rest (t=0) it's safe.
@@ -1030,6 +1203,13 @@ export class EditorScene {
   }
 
   dispose(): void {
+    for (const objs of this.colliderObjects.values()) {
+      for (const obj of objs) {
+        this.root.remove(obj.group)
+        obj.dispose()
+      }
+    }
+    this.colliderObjects.clear()
     const dom = this.viewport.renderer.domElement
     dom.removeEventListener('pointerdown', this.onPickPointerDown)
     dom.removeEventListener('pointerup', this.onPickPointerUp)

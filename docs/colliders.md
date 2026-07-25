@@ -97,6 +97,71 @@ export is forced to redeclare a built-in template under a fresh id (because it c
 GameData or a flexo collider), the variant inherits **nothing** but the Mesh/Material it
 names — so the built-in collision volume is explicitly copied forward onto it.
 
+## 3D authoring
+
+`src/three/ColliderObject.ts` renders each collider as a fat-line wireframe plus a very
+low-alpha solid fill (which doubles as the raycast target — a bare line is fiddly to
+click). Amber by default, green when selected, matching connectors.
+
+All geometry is **normalised into the unit box** (`src/three/wireShapes.ts`, shared with
+`ContainerLayer`), so `group.scale` IS the size in meters and the **scale gizmo edits
+dimensions natively**. Line width is screen-space, so a squashed collider stays readable.
+The **capsule** is the one ratio-dependent shape: its hemispherical caps are drawn as
+normalised *ellipses* precisely so the non-uniform node scale renders them as true
+hemispheres — its geometry is rebuilt when the diameter/height ratio changes.
+
+A SubPart-owned collider draws **once per placement** of its template (KSA has no
+per-instance collider, so every instance really does carry the shape), positioned exactly
+as `ColliderModule` composes it — `colliderWorld` / `colliderLocalFromWorld` in
+`src/three/coords.ts`, which keeps the Euler convention in its one sanctioned place.
+Because there's no single object a drag could unambiguously write back to, a SubPart-owned
+collider is inspector-editable but not yet a gizmo target (Phase 3).
+
+### Selection and the inspector
+
+Colliders are the **fourth** `SelectableKind`, with the same machinery as the other three:
+click-select, multi-select across kinds, nudge/rotate/duplicate/delete hotkeys, copy/paste,
+the Assets list, and layer visibility/lock/opacity. The inspector's third numeric group
+becomes **"Size (m)"** with per-shape fields (Box: X/Y/Z · Sphere: Ø · Cylinder/Capsule:
+Ø + H) — only the axes a shape independently controls are shown, since
+`normalizeColliderSize` derives the rest. Changing the **owner** converts the transform
+through the old and new placements so the shape doesn't visually jump.
+
+## Fitting
+
+**Add → Collider ▸ Fit to selection ▸ \<shape\>** wraps the selected placements (or the
+whole Part when nothing is selected); the inspector's **Fit to selection** button refits an
+existing collider in place, keeping its id and owner.
+
+`src/ksa/colliderFit.ts` is pure: it takes world-space sample points plus a frame
+quaternion and returns position + orientation + outer size. A cylinder/capsule lays its
+barrel along the longest axis of the oriented AABB, with the radius spanning the
+perpendicular plane; a sphere stays axis-aligned (an arbitrary rotation on a sphere is just
+noise in the XML). A tunable ±% margin covers Core's habit of shaving ~0.7% off a mesh
+AABB.
+
+Fitting needs world geometry, which only exists in the three.js scene — and `src/state` /
+`src/ui` are deliberately three-free. So the menu publishes an intent
+(`$colliderFitRequest` in `src/state/colliderStore.ts`) that `EditorScene` consumes,
+samples (`src/three/samplePoints.ts`, shared with the container containment warnings), and
+writes back through the store. Same pattern as `$revealEntity`.
+
+## Validation
+
+`src/ksa/colliderValidation.ts` grades every problem the way `engineValidation` does, and
+the Export dialog renders both together:
+
+| Severity  | Rule                                                        | Why                                                     |
+| --------- | ----------------------------------------------------------- | ------------------------------------------------------- |
+| **block** | any size axis ≤ 0 or non-finite                             | degenerate/NaN Bepu shape                               |
+| **block** | a `<Tank Id>` equal to the emitted collider component id     | `<FeedsFrom Container>` could resolve to the collider   |
+| warn      | the Part has no collider at all                              | passes through terrain once anything else has one       |
+| warn      | a docking port with no collider                              | docking is resolved from the contacted collider         |
+| warn      | owner placed with a non-unit scale                           | KSA ignores placement scale for colliders               |
+| warn      | owner template no longer placed                              | dead data                                               |
+| warn      | capsule shorter than its diameter                            | it is just a sphere                                     |
+| warn      | more than ~32 colliders                                      | the compound rebuilds on every animation tick           |
+
 ## Layer
 
 Colliders live on the built-in, undeletable **Colliders** layer
@@ -118,6 +183,9 @@ serialized to KSA XML. See [docs/layers.md](layers.md).
 
 ## Status
 
-Phase 1 (contract + round-trip, closes gap **E**) is implemented. 3D authoring — the
-`ColliderObject` visual, selection/gizmo, the Add menu, fitting tools, validation and the
-coverage readout — is [plans/COLLIDERS_PLAN.md](../plans/COLLIDERS_PLAN.md) Phases 2–4.
+Phases 1–2 are implemented: the game contract + round-trip (closing gap **E**), and
+part-level 3D authoring (visual, selection, gizmo, Add menu, fitting, validation).
+Still open in [plans/COLLIDERS_PLAN.md](../plans/COLLIDERS_PLAN.md): making SubPart-owned
+colliders gizmo-editable per instance and following the animation preview (Phase 3), and
+the coverage readout (Phase 4). **In-game verification is pending**, and capsule semantics
+remain unverified in shipped data.

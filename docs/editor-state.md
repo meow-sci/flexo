@@ -11,6 +11,7 @@ the 3D scene subscribes with vanilla `subscribe()`, React reads via
 | `$part` | `EditingPart` | The whole part: `partId`, `editorTags`, `gameData` (display name, mass, tanks, power, coupling — the popup-only metadata with no 3D form), `layers[]`, `placements[]`, `connectors[]` (each placement/connector carries a `layerId`; connector `flags` is a `ConnectorFlag[]`). Treated as **immutable** — every mutation replaces it with a fresh object (so subscribers fire). |
 | `$selectedIndices` / `$selectedIndex` | `number[]` / `number` | SubPart selection (multi); `$selectedIndex` is the primary (last) one or `-1`. |
 | `$selectedConnectorIndex` | `number` | Selected connector, or `-1`. Mutually exclusive with SubPart selection. |
+| `$selectedColliderIndices` / `$selectedColliderIndex` | `number[]` / `number` | Collider selection — the **fourth** `SelectableKind`, alongside subpart/connector/kitten. Mutually exclusive under the single-kind setters, but `setSelection` / `toggleEntity` can span all four (the Assets list's cross-kind multi-select). |
 | `$activeLayerId` | `string` | Layer new items land in. Ephemeral (not persisted, not undone); clamped to a live layer. See [layers.md](./layers.md). |
 | `$toolMode` | `'translate'\|'rotate'\|'scale'` | Drives the 3D gizmo. |
 | `$snap` | `{ translate?, rotateDeg? }` | Grid / rotation snap (0/undefined = off). |
@@ -30,6 +31,15 @@ undo survives a reload) — see [projects.md](./projects.md).
 `selectPlacement(index)`, `updatePlacementTransform(index, {position,rotation,scale})`,
 `updateSelectedTransform(t)`, `setPartId(id)`, `setEditorTags(tags)`,
 `setToolMode(mode)`, `setSnap(snap)`, `newPart()`, `pushUndo()`, `undo()`, `redo()`.
+
+**Collider actions** (`part.colliders`; see [colliders.md](./colliders.md)) — all enrolled
+in undo: `addCollider(shape, transform?, owner?)`, `setColliderShape(index, shape)`,
+`setColliderOwner(index, owner, converted?)`, `removeCollider(index)` are **discrete**
+(they `pushUndo()` themselves); `setColliderSize(index, size)` and
+`updateColliderTransform(s)` are **streaming** (the caller pushes once at field focus /
+gizmo drag start, exactly like the placement/connector transform writers). Every one of
+them routes the size through `normalizeColliderSize`, because a collider's `scale` is its
+size in meters, not a multiplier.
 
 **GameData actions** (`part.gameData`, used by the Part Data dialog): `setDisplayName`,
 `setCustomMassEnabled` / `setCustomMass`, tanks `addTank` / `removeTank` /

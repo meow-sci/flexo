@@ -26,12 +26,14 @@ import {
   $revealEntity,
   $selectedConnectorIndices,
   $selectedIndices,
+  $selectedColliderIndices,
   $selectedKittenIndices,
   duplicatePlacement,
   duplicateSelected,
   movePlacementToLayer,
   removePlacement,
   removeSelected,
+  selectCollider,
   selectConnector,
   selectKitten,
   setSelection,
@@ -47,8 +49,13 @@ import {
 import { setManagingMeshId } from '../state/customAssetStore'
 import { ManageTanksModal } from './ManageTanksModal'
 
+/** Trailing `_Subpart_Foo` segment of a template id — the part users actually read. */
+function lastSegment(id: string): string {
+  return id.split('_').pop() || id
+}
+
 /** An entity kind that can appear as a row in the Assets list. */
-type Kind = 'subpart' | 'connector' | 'kitten'
+type Kind = 'subpart' | 'connector' | 'collider' | 'kitten'
 
 /** One asset row. `index` points into the matching `$part` array for its kind. */
 interface Row {
@@ -71,13 +78,18 @@ interface Section {
   locked: boolean
 }
 
-const PREFIX: Record<Kind, string> = { subpart: 'sp', connector: 'con', kitten: 'kit' }
+const PREFIX: Record<Kind, string> = {
+  subpart: 'sp',
+  connector: 'con',
+  collider: 'col',
+  kitten: 'kit',
+}
 const keyOf = (kind: Kind, raw: string) => `${PREFIX[kind]}:${raw}`
 function parseKey(key: string): { kind: Kind; raw: string } {
   const i = key.indexOf(':')
   const p = key.slice(0, i)
   return {
-    kind: p === 'sp' ? 'subpart' : p === 'con' ? 'connector' : 'kitten',
+    kind: p === 'sp' ? 'subpart' : p === 'con' ? 'connector' : p === 'col' ? 'collider' : 'kitten',
     raw: key.slice(i + 1),
   }
 }
@@ -100,6 +112,7 @@ export function AssetsList() {
   const selSub = useStore($selectedIndices)
   const selCon = useStore($selectedConnectorIndices)
   const selKit = useStore($selectedKittenIndices)
+  const selCol = useStore($selectedColliderIndices)
   const reveal = useStore($revealEntity)
   const [search, setSearch] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -108,6 +121,7 @@ export function AssetsList() {
   const subIdx = new Map(part.placements.map((p, i) => [p.instanceId, i]))
   const conIdx = new Map(part.connectors.map((c, i) => [c.id, i]))
   const kitIdx = new Map(part.kittens.map((k, i) => [k.id, i]))
+  const colIdx = new Map(part.colliders.map((c, i) => [c.id, i]))
 
   const q = search.trim().toLowerCase()
   const match = (...vals: string[]) => q === '' || vals.some((v) => v.toLowerCase().includes(q))
@@ -129,6 +143,23 @@ export function AssetsList() {
                   // Flags (how it orients) and capabilities (what may flow across it)
                   // are independent axes — show both, e.g. "ToSurface · BulkFluid".
                   sub: [...c.flags, ...c.capabilities].join(' · ') || 'no flags',
+                  hidden,
+                },
+              ]
+            : [],
+        )
+      } else if (l.id === COLLIDER_LAYER_ID) {
+        rows = part.colliders.flatMap((c, i) =>
+          c.layerId === l.id && match(c.id, c.shape, c.ownerTemplateId ?? '')
+            ? [
+                {
+                  id: keyOf('collider', c.id),
+                  kind: 'collider' as const,
+                  index: i,
+                  name: c.id,
+                  // Shape plus its owner — a SubPart-owned collider behaves very
+                  // differently (one per placement, follows animation), so say so.
+                  sub: `${c.shape} · ${c.ownerTemplateId ? lastSegment(c.ownerTemplateId) : 'Part'}`,
                   hidden,
                 },
               ]
@@ -192,11 +223,16 @@ export function AssetsList() {
     const k = part.kittens[i]
     if (k) selectedKeys.add(keyOf('kitten', k.id))
   }
+  for (const i of selCol) {
+    const c = part.colliders[i]
+    if (c) selectedKeys.add(keyOf('collider', c.id))
+  }
 
   const onSelectionChange = (keys: Selection) => {
     const sub: number[] = []
     const con: number[] = []
     const kit: number[] = []
+    const col: number[] = []
     if (keys === 'all') {
       // Select-all (Cmd/Ctrl+A): every enabled (visible + unlocked) row, all kinds.
       for (const s of sections) {
@@ -204,10 +240,11 @@ export function AssetsList() {
         for (const r of s.rows) {
           if (r.kind === 'subpart') sub.push(r.index)
           else if (r.kind === 'connector') con.push(r.index)
+          else if (r.kind === 'collider') col.push(r.index)
           else kit.push(r.index)
         }
       }
-      setSelection(sub, con, kit)
+      setSelection(sub, con, kit, col)
       return
     }
     const next = new Set([...keys].map(String))
@@ -226,12 +263,15 @@ export function AssetsList() {
       } else if (kind === 'connector') {
         const i = conIdx.get(raw)
         if (i != null) con.push(i)
+      } else if (kind === 'collider') {
+        const i = colIdx.get(raw)
+        if (i != null) col.push(i)
       } else {
         const i = kitIdx.get(raw)
         if (i != null) kit.push(i)
       }
     }
-    setSelection(sub, con, kit)
+    setSelection(sub, con, kit, col)
   }
 
   // A 3D-viewport click can't tell the list to scroll; it signals via $revealEntity
@@ -418,9 +458,14 @@ function SubPartRowMenu({ index }: { index: number }) {
  */
 function SimpleRowMenu({ row }: { row: Row }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const label = row.kind === 'connector' ? 'connector' : 'kitten'
+  const label =
+    row.kind === 'connector' ? 'connector' : row.kind === 'collider' ? 'collider' : 'kitten'
   const select = () =>
-    row.kind === 'connector' ? selectConnector(row.index) : selectKitten(row.index)
+    row.kind === 'connector'
+      ? selectConnector(row.index)
+      : row.kind === 'collider'
+        ? selectCollider(row.index)
+        : selectKitten(row.index)
 
   return (
     <>

@@ -21,6 +21,7 @@ import type {
   KittenKind,
   Light,
   LightType,
+  ColliderShape,
   PartAnimation,
   PartCollider,
   PartGameData,
@@ -44,6 +45,7 @@ import type {
 import {
   BUILT_IN_LAYER_IDS,
   COLLIDER_LAYER_ID,
+  COLLIDER_SHAPES,
   CONNECTOR_LAYER_ID,
   createCombustor,
   createEmptyPart,
@@ -63,6 +65,7 @@ import {
   isSubPartGameDataEmpty,
   KITTEN_LAYER_ID,
 } from '../ksa/types'
+import { normalizeColliderSize } from '../ksa/colliderSize'
 import { remapRawConnectorRefs } from '../ksa/partXmlParser'
 import { remapConsumerFeedWiring, remapConsumerFeeds } from '../ksa/idRemap'
 import { unwiredConsumersOf } from './feedTargets'
@@ -141,6 +144,17 @@ export const $selectedKittenIndex = computed($selectedKittenIndices, (indices) =
 )
 
 /**
+ * Selected collider indices (multi-select), ordered by selection. Mutually exclusive
+ * with the other kind stores under the single-kind setters, but participates equally in
+ * the unified {@link setSelection} / {@link toggleEntity} paths.
+ */
+export const $selectedColliderIndices = atom<number[]>([])
+/** Primary selected collider index (last added to the selection), or -1. */
+export const $selectedColliderIndex = computed($selectedColliderIndices, (indices) =>
+  indices.length > 0 ? indices[indices.length - 1] : -1,
+)
+
+/**
  * Snapshots of copied entities (SubParts, connectors, kittens), stored WITHOUT
  * their ids — paste regenerates fresh ids so copies never collide. Ephemeral
  * editor state like selection: NOT persisted and NOT part of undo history. An
@@ -152,6 +166,7 @@ export interface PartClipboard {
   placements: SubPartPlacement[]
   connectors: Connector[]
   kittens: KittenInstance[]
+  colliders: PartCollider[]
 }
 export const $clipboard = atom<PartClipboard | null>(null)
 /** True once something has been copied — drives enable/disable of paste affordances. */
@@ -856,6 +871,125 @@ export function addConnector(): void {
   selectConnector(part.connectors.length - 1)
 }
 
+/**
+ * Adds a collision primitive at the origin (on the built-in Colliders layer) and selects it.
+ *
+ * `transform` seeds position/rotation/size — the fitting tools pass a fitted one; without it
+ * the collider starts as a 1 m unit shape at the Part origin. `ownerTemplateId` names the
+ * SubPart template that owns it (`null` ⇒ part-level; see {@link PartCollider}).
+ */
+export function addCollider(
+  shape: ColliderShape,
+  transform?: PlacementTransform,
+  ownerTemplateId: string | null = null,
+): void {
+  const current = $part.get()
+  const newId = nextColliderId(current)
+  pushUndo('add collider', `${shape.toLowerCase()} ${newId}`)
+  const part = clone(current)
+  part.colliders.push({
+    id: newId,
+    shape,
+    ownerTemplateId,
+    position: transform ? { ...transform.position } : { x: 0, y: 0, z: 0 },
+    rotation: transform ? { ...transform.rotation } : { x: 0, y: 0, z: 0 },
+    scale: normalizeColliderSize(shape, transform?.scale ?? { x: 1, y: 1, z: 1 }),
+    layerId: COLLIDER_LAYER_ID,
+  })
+  $part.set(part)
+  selectCollider(part.colliders.length - 1)
+}
+
+/**
+ * Changes a collider's primitive shape, re-snapping its size onto the new shape's degrees
+ * of freedom (e.g. Box 2×3×1 → Cylinder becomes diameter 2, height 3). Discrete → undo.
+ */
+export function setColliderShape(index: number, shape: ColliderShape): void {
+  const current = $part.get()
+  const c = current.colliders[index]
+  if (!c || c.shape === shape || !COLLIDER_SHAPES.includes(shape)) return
+  pushUndo('collider shape', `${c.id} → ${shape}`)
+  const part = clone(current)
+  part.colliders[index].shape = shape
+  part.colliders[index].scale = normalizeColliderSize(shape, c.scale)
+  $part.set(part)
+}
+
+/**
+ * Re-homes a collider onto another owner, CONVERTING its transform through `frame` so it
+ * doesn't visually jump. `frame` is the placement whose local space the collider is moving
+ * into or out of (the caller resolves it — see EditorScene); pass null for a pure
+ * part-level ↔ part-level no-op frame. Discrete → undo.
+ */
+export function setColliderOwner(
+  index: number,
+  ownerTemplateId: string | null,
+  converted?: PlacementTransform,
+): void {
+  const current = $part.get()
+  const c = current.colliders[index]
+  if (!c || c.ownerTemplateId === ownerTemplateId) return
+  pushUndo('collider owner', `${c.id} → ${ownerTemplateId ?? 'Part'}`)
+  const part = clone(current)
+  const next = part.colliders[index]
+  next.ownerTemplateId = ownerTemplateId
+  if (converted) {
+    next.position = { ...converted.position }
+    next.rotation = { ...converted.rotation }
+    next.scale = normalizeColliderSize(next.shape, converted.scale)
+  }
+  $part.set(part)
+}
+
+/**
+ * Sets a collider's outer size in meters (the numeric inspector fields). Streaming
+ * mutation — the caller pushes undo once at field focus. Always normalized, so typing
+ * a cylinder's X never leaves Z stale.
+ */
+export function setColliderSize(index: number, size: Vec3): void {
+  const current = $part.get()
+  const c = current.colliders[index]
+  if (!c) return
+  const part = clone(current)
+  part.colliders[index].scale = normalizeColliderSize(c.shape, size)
+  $part.set(part)
+}
+
+/** Like {@link updatePlacementTransform} but for a collider (size-normalized). No undo. */
+export function updateColliderTransform(index: number, t: PlacementTransform): void {
+  const current = $part.get()
+  if (index < 0 || index >= current.colliders.length) return
+  const part = clone(current)
+  assignCollider(part.colliders[index], t)
+  $part.set(part)
+}
+
+/**
+ * Applies several collider transforms in one store update (bulk gizmo drag). No undo —
+ * the caller pushes once at interaction start.
+ */
+export function updateColliderTransforms(
+  updates: readonly { index: number; transform: PlacementTransform }[],
+): void {
+  if (updates.length === 0) return
+  const part = clone($part.get())
+  for (const { index, transform } of updates) assignCollider(part.colliders[index], transform)
+  $part.set(part)
+}
+
+/** Removes a single collider by index (per-row context menu). Discrete → undo. */
+export function removeCollider(index: number): void {
+  const current = $part.get()
+  if (index < 0 || index >= current.colliders.length) return
+  pushUndo('delete collider', current.colliders[index].id)
+  const part = clone(current)
+  part.colliders.splice(index, 1)
+  $part.set(part)
+  const sel = $selectedColliderIndices.get()
+  const next = sel.filter((i) => i !== index).map((i) => (i > index ? i - 1 : i))
+  $selectedColliderIndices.set(next)
+}
+
 /** Adds a kitten visual aide at the origin (on the built-in Kittens layer) and selects it. */
 export function addKitten(kind: KittenKind): void {
   const current = $part.get()
@@ -945,10 +1079,12 @@ export function removeSelected(): void {
   const sub = $selectedIndices.get().filter((i) => i >= 0 && i < part0.placements.length)
   const con = $selectedConnectorIndices.get().filter((i) => i >= 0 && i < part0.connectors.length)
   const kit = $selectedKittenIndices.get().filter((i) => i >= 0 && i < part0.kittens.length)
-  const total = sub.length + con.length + kit.length
+  const col = $selectedColliderIndices.get().filter((i) => i >= 0 && i < part0.colliders.length)
+  const total = sub.length + con.length + kit.length + col.length
   if (total === 0) return
 
-  const kinds = (sub.length ? 1 : 0) + (con.length ? 1 : 0) + (kit.length ? 1 : 0)
+  const kinds =
+    (sub.length ? 1 : 0) + (con.length ? 1 : 0) + (kit.length ? 1 : 0) + (col.length ? 1 : 0)
   const description =
     kinds > 1
       ? 'delete'
@@ -960,20 +1096,27 @@ export function removeSelected(): void {
           ? con.length === 1
             ? 'delete connector'
             : 'delete connectors'
-          : kit.length === 1
-            ? 'delete kitten'
-            : 'delete kittens'
+          : kit.length
+            ? kit.length === 1
+              ? 'delete kitten'
+              : 'delete kittens'
+            : col.length === 1
+              ? 'delete collider'
+              : 'delete colliders'
   const detail =
     total === 1
       ? ((sub.length
           ? part0.placements[sub[0]]?.instanceId
           : con.length
             ? part0.connectors[con[0]]?.id
-            : part0.kittens[kit[0]]?.id) ?? '')
+            : kit.length
+              ? part0.kittens[kit[0]]?.id
+              : part0.colliders[col[0]]?.id) ?? '')
       : [
           sub.length ? `${sub.length} part${sub.length === 1 ? '' : 's'}` : '',
           con.length ? `${con.length} connector${con.length === 1 ? '' : 's'}` : '',
           kit.length ? `${kit.length} kitten${kit.length === 1 ? '' : 's'}` : '',
+          col.length ? `${col.length} collider${col.length === 1 ? '' : 's'}` : '',
         ]
           .filter(Boolean)
           .join(', ')
@@ -984,6 +1127,7 @@ export function removeSelected(): void {
   for (const i of [...sub].sort((a, b) => b - a)) part.placements.splice(i, 1)
   for (const i of [...con].sort((a, b) => b - a)) part.connectors.splice(i, 1)
   for (const i of [...kit].sort((a, b) => b - a)) part.kittens.splice(i, 1)
+  for (const i of [...col].sort((a, b) => b - a)) part.colliders.splice(i, 1)
   $part.set(part)
 
   if (total === 1 && sub.length === 1 && part.placements.length > 0) {
@@ -992,6 +1136,8 @@ export function removeSelected(): void {
     setSelection([], [Math.min(con[0], part.connectors.length - 1)], [])
   } else if (total === 1 && kit.length === 1 && part.kittens.length > 0) {
     setSelection([], [], [Math.min(kit[0], part.kittens.length - 1)])
+  } else if (total === 1 && col.length === 1 && part.colliders.length > 0) {
+    setSelection([], [], [], [Math.min(col[0], part.colliders.length - 1)])
   } else {
     clearSelection()
   }
@@ -1022,30 +1168,27 @@ export function duplicateSelected(): void {
   const sub = $selectedIndices.get().filter((i) => i >= 0 && i < part0.placements.length)
   const con = $selectedConnectorIndices.get().filter((i) => i >= 0 && i < part0.connectors.length)
   const kit = $selectedKittenIndices.get().filter((i) => i >= 0 && i < part0.kittens.length)
-  const total = sub.length + con.length + kit.length
+  const col = $selectedColliderIndices.get().filter((i) => i >= 0 && i < part0.colliders.length)
+  const total = sub.length + con.length + kit.length + col.length
   if (total === 0) return
 
-  const kinds = (sub.length ? 1 : 0) + (con.length ? 1 : 0) + (kit.length ? 1 : 0)
   const detail =
     total === 1
       ? ((sub.length
           ? part0.placements[sub[0]]?.instanceId
           : con.length
             ? part0.connectors[con[0]]?.id
-            : part0.kittens[kit[0]]?.id) ?? '')
-      : kinds > 1
-        ? `${total} items`
-        : sub.length
-          ? `${sub.length} parts`
-          : con.length
-            ? `${con.length} connectors`
-            : `${kit.length} kittens`
+            : kit.length
+              ? part0.kittens[kit[0]]?.id
+              : part0.colliders[col[0]]?.id) ?? '')
+      : entityCountLabel(sub.length, con.length, kit.length, col.length)
   pushUndo('duplicate', detail)
 
   const part = clone(part0)
   const newSub: number[] = []
   const newCon: number[] = []
   const newKit: number[] = []
+  const newCol: number[] = []
   for (const i of [...sub].sort((a, b) => a - b)) {
     const src = part.placements[i]
     if (!src) continue
@@ -1091,18 +1234,29 @@ export function duplicateSelected(): void {
     })
     newKit.push(part.kittens.length - 1)
   }
+  for (const i of [...col].sort((a, b) => a - b)) {
+    const src = part.colliders[i]
+    if (!src) continue
+    part.colliders.push({
+      ...structuredClone(src),
+      id: nextColliderId(part),
+      layerId: COLLIDER_LAYER_ID,
+    })
+    newCol.push(part.colliders.length - 1)
+  }
   $part.set(part)
-  setSelection(newSub, newCon, newKit)
+  setSelection(newSub, newCon, newKit, newCol)
 }
 
 /** Human label for a count of mixed entities, e.g. "3 parts" or "5 items". */
-function entityCountLabel(sub: number, con: number, kit: number): string {
-  const total = sub + con + kit
-  const kinds = (sub ? 1 : 0) + (con ? 1 : 0) + (kit ? 1 : 0)
+function entityCountLabel(sub: number, con: number, kit: number, col: number): string {
+  const total = sub + con + kit + col
+  const kinds = (sub ? 1 : 0) + (con ? 1 : 0) + (kit ? 1 : 0) + (col ? 1 : 0)
   if (kinds > 1) return `${total} items`
   if (sub) return `${sub} ${sub === 1 ? 'part' : 'parts'}`
   if (con) return `${con} ${con === 1 ? 'connector' : 'connectors'}`
-  return `${kit} ${kit === 1 ? 'kitten' : 'kittens'}`
+  if (kit) return `${kit} ${kit === 1 ? 'kitten' : 'kittens'}`
+  return `${col} ${col === 1 ? 'collider' : 'colliders'}`
 }
 
 /**
@@ -1116,13 +1270,15 @@ export function copySelected(): number {
   const sub = $selectedIndices.get().filter((i) => i >= 0 && i < part.placements.length)
   const con = $selectedConnectorIndices.get().filter((i) => i >= 0 && i < part.connectors.length)
   const kit = $selectedKittenIndices.get().filter((i) => i >= 0 && i < part.kittens.length)
-  const total = sub.length + con.length + kit.length
+  const col = $selectedColliderIndices.get().filter((i) => i >= 0 && i < part.colliders.length)
+  const total = sub.length + con.length + kit.length + col.length
   if (total === 0) return 0
   const order = (a: number, b: number) => a - b
   $clipboard.set({
     placements: [...sub].sort(order).map((i) => structuredClone(part.placements[i])),
     connectors: [...con].sort(order).map((i) => structuredClone(part.connectors[i])),
     kittens: [...kit].sort(order).map((i) => structuredClone(part.kittens[i])),
+    colliders: [...col].sort(order).map((i) => structuredClone(part.colliders[i])),
   })
   return total
 }
@@ -1139,17 +1295,24 @@ export function copySelected(): number {
 export function pasteClipboard(): number {
   const clip = $clipboard.get()
   if (!clip) return 0
-  const total = clip.placements.length + clip.connectors.length + clip.kittens.length
+  const total =
+    clip.placements.length + clip.connectors.length + clip.kittens.length + clip.colliders.length
   if (total === 0) return 0
 
   pushUndo(
     'paste',
-    entityCountLabel(clip.placements.length, clip.connectors.length, clip.kittens.length),
+    entityCountLabel(
+      clip.placements.length,
+      clip.connectors.length,
+      clip.kittens.length,
+      clip.colliders.length,
+    ),
   )
   const part = clone($part.get())
   const newSub: number[] = []
   const newCon: number[] = []
   const newKit: number[] = []
+  const newCol: number[] = []
   for (const src of clip.placements) {
     const base = lastSegmentLower(src.subPartTemplateId)
     const count = part.placements.filter(
@@ -1192,8 +1355,16 @@ export function pasteClipboard(): number {
     })
     newKit.push(part.kittens.length - 1)
   }
+  for (const src of clip.colliders) {
+    part.colliders.push({
+      ...structuredClone(src),
+      id: nextColliderId(part),
+      layerId: COLLIDER_LAYER_ID,
+    })
+    newCol.push(part.colliders.length - 1)
+  }
   $part.set(part)
-  setSelection(newSub, newCon, newKit)
+  setSelection(newSub, newCon, newKit, newCol)
   return total
 }
 
@@ -1225,6 +1396,7 @@ export function duplicatePlacement(index: number): void {
 /** Replaces the SubPart selection with a single index (clears any connector/kitten selection). */
 export function selectPlacement(index: number): void {
   $selectedConnectorIndices.set([])
+  $selectedColliderIndices.set([])
   $selectedKittenIndices.set([])
   $selectedIndices.set(index >= 0 ? [index] : [])
 }
@@ -1232,6 +1404,7 @@ export function selectPlacement(index: number): void {
 /** Replaces the SubPart selection with the given indices (deduped, order-preserving). */
 export function setSelectedPlacements(indices: readonly number[]): void {
   $selectedConnectorIndices.set([])
+  $selectedColliderIndices.set([])
   $selectedKittenIndices.set([])
   const seen = new Set<number>()
   const next: number[] = []
@@ -1258,6 +1431,7 @@ export function togglePlacement(index: number): void {
 /** Selects a connector by index (clears any SubPart/kitten selection). */
 export function selectConnector(index: number): void {
   $selectedIndices.set([])
+  $selectedColliderIndices.set([])
   $selectedKittenIndices.set([])
   $selectedConnectorIndices.set(index >= 0 ? [index] : [])
 }
@@ -1265,6 +1439,7 @@ export function selectConnector(index: number): void {
 /** Replaces connector selection with the given indices (deduped, order-preserving). Clears SubPart/kitten selection. */
 export function setSelectedConnectors(indices: readonly number[]): void {
   $selectedIndices.set([])
+  $selectedColliderIndices.set([])
   $selectedKittenIndices.set([])
   const seen = new Set<number>()
   const next: number[] = []
@@ -1281,13 +1456,31 @@ export function setSelectedConnectors(indices: readonly number[]): void {
 export function selectKitten(index: number): void {
   $selectedIndices.set([])
   $selectedConnectorIndices.set([])
+  $selectedColliderIndices.set([])
   $selectedKittenIndices.set(index >= 0 ? [index] : [])
+}
+
+/** Selects a collider by index (clears any SubPart/connector/kitten selection). */
+export function selectCollider(index: number): void {
+  $selectedIndices.set([])
+  $selectedConnectorIndices.set([])
+  $selectedKittenIndices.set([])
+  $selectedColliderIndices.set(index >= 0 ? [index] : [])
+}
+
+/** Replaces collider selection with the given indices (deduped). Clears the other kinds. */
+export function setSelectedColliders(indices: readonly number[]): void {
+  $selectedIndices.set([])
+  $selectedConnectorIndices.set([])
+  $selectedKittenIndices.set([])
+  $selectedColliderIndices.set(dedupeIndices(indices))
 }
 
 /** Replaces kitten selection with the given indices (deduped, order-preserving). Clears SubPart/connector selection. */
 export function setSelectedKittens(indices: readonly number[]): void {
   $selectedIndices.set([])
   $selectedConnectorIndices.set([])
+  $selectedColliderIndices.set([])
   const seen = new Set<number>()
   const next: number[] = []
   for (const i of indices) {
@@ -1303,11 +1496,12 @@ export function setSelectedKittens(indices: readonly number[]): void {
 export function clearSelection(): void {
   $selectedIndices.set([])
   $selectedConnectorIndices.set([])
+  $selectedColliderIndices.set([])
   $selectedKittenIndices.set([])
 }
 
-/** An entity kind that can be selected (SubPart placement, connector, or kitten). */
-export type SelectableKind = 'subpart' | 'connector' | 'kitten'
+/** An entity kind that can be selected (SubPart placement, connector, collider, or kitten). */
+export type SelectableKind = 'subpart' | 'connector' | 'collider' | 'kitten'
 
 const dedupeIndices = (xs: readonly number[]): number[] => {
   const seen = new Set<number>()
@@ -1330,10 +1524,12 @@ export function setSelection(
   subIndices: readonly number[],
   conIndices: readonly number[],
   kitIndices: readonly number[],
+  colIndices: readonly number[] = [],
 ): void {
   $selectedIndices.set(dedupeIndices(subIndices))
   $selectedConnectorIndices.set(dedupeIndices(conIndices))
   $selectedKittenIndices.set(dedupeIndices(kitIndices))
+  $selectedColliderIndices.set(dedupeIndices(colIndices))
 }
 
 /**
@@ -1348,7 +1544,9 @@ export function toggleEntity(kind: SelectableKind, index: number): void {
       ? $selectedIndices
       : kind === 'connector'
         ? $selectedConnectorIndices
-        : $selectedKittenIndices
+        : kind === 'collider'
+          ? $selectedColliderIndices
+          : $selectedKittenIndices
   const cur = store.get()
   store.set(cur.includes(index) ? cur.filter((i) => i !== index) : [...cur, index])
 }
@@ -1401,6 +1599,11 @@ export function selectedTransformRefs(): SelectedTransformRef[] {
     const c = part.connectors[i]
     if (c)
       out.push({ kind: 'connector', index: i, transform: tx(c), layerId: c.layerId, name: c.id })
+  }
+  for (const i of $selectedColliderIndices.get()) {
+    const c = part.colliders[i]
+    if (c)
+      out.push({ kind: 'collider', index: i, transform: tx(c), layerId: c.layerId, name: c.id })
   }
   for (const i of $selectedKittenIndices.get()) {
     const k = part.kittens[i]
@@ -1511,9 +1714,22 @@ export function updateSelectedTransforms(
   for (const { kind, index, transform } of updates) {
     if (kind === 'subpart') assign(part.placements[index], transform)
     else if (kind === 'connector') assign(part.connectors[index], transform)
+    else if (kind === 'collider') assignCollider(part.colliders[index], transform)
     else assign(part.kittens[index], transform)
   }
   $part.set(part)
+}
+
+/**
+ * Writes a transform onto a collider, snapping its `scale` (which IS its size in meters)
+ * back onto the degrees of freedom its shape actually has. Without this, a non-uniform
+ * scale-gizmo drag on a cylinder would describe a shape KSA cannot represent.
+ */
+function assignCollider(c: PartCollider | undefined, t: PlacementTransform): void {
+  if (!c) return
+  c.position = { ...t.position }
+  c.rotation = { ...t.rotation }
+  c.scale = normalizeColliderSize(c.shape, t.scale)
 }
 
 /**
@@ -1557,6 +1773,12 @@ export function scaleEverything(factor: Vec3): void {
   for (const p of part.placements) scaleInstance(p)
   for (const c of part.connectors) scaleInstance(c)
   for (const k of part.kittens) scaleInstance(k)
+  // A collider's `scale` is its SIZE in meters, so the same multiply is right for it too
+  // (the shape constraint is re-applied so a non-uniform factor can't skew a cylinder).
+  for (const c of part.colliders) {
+    c.position = scalePos(c.position)
+    c.scale = normalizeColliderSize(c.shape, scalePos(c.scale))
+  }
   for (const a of part.animations) {
     for (const kf of a.keyframes) {
       // Translation only — see the conjugation note above.
@@ -1571,6 +1793,11 @@ export function scaleEverything(factor: Vec3): void {
  * kitten). No undo — the caller pushes once at interaction start.
  */
 export function updateSelectedTransform(t: PlacementTransform): void {
+  const coli = $selectedColliderIndex.get()
+  if (coli >= 0) {
+    updateColliderTransform(coli, t)
+    return
+  }
   const ki = $selectedKittenIndex.get()
   if (ki >= 0) {
     updateKittenTransform(ki, t)

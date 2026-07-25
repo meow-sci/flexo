@@ -14,6 +14,7 @@ import type {
   EditingPart,
   EulerXYZ,
   EvaDoor,
+  FeedSource,
   Generator,
   KittenInstance,
   Gimbal,
@@ -22,6 +23,7 @@ import type {
   LightType,
   PartAnimation,
   PartGameData,
+  PlumbingClass,
   PowerConsumer,
   RawXmlNode,
   Rocket,
@@ -58,6 +60,7 @@ import {
 } from '../ksa/types'
 import { remapRawConnectorRefs } from '../ksa/partXmlParser'
 import { remapConsumerFeedWiring, remapConsumerFeeds } from '../ksa/idRemap'
+import { unwiredConsumersOf } from './feedTargets'
 import type { ReferenceContainer } from './containerStore'
 import type { LineMeasurement } from './measurementStore'
 import { mergeProjectImport } from './projectTransfer'
@@ -1695,35 +1698,63 @@ function commitSubPartData(
   mutateSubPartData(subPartTemplateId, mutate)
 }
 
-// --- Tanks (per SubPart template) ---
+// --- Tanks (part level or per SubPart template) ---
+//
+// A `<Tank>` may be authored on the `<PartGameData>` (where Core puts its prefab tank
+// data, and the only level a `<FeedsFrom Container>` can address without a `SubPart=`
+// scope) or on a `<SubPartGameData>` so it travels with a reused mesh. `null` selects
+// the part level; a template id selects that SubPart's entry.
 
-/** Discrete: append a default tank for the given SubPart template. */
-export function addTank(subPartTemplateId: string): void {
-  commitSubPartData('add tank', '', subPartTemplateId, (s) => s.tanks.push(createTank()))
+/** The tank list a `subPartTemplateId` of `null` (part level) or an id (SubPart) names. */
+export type TankOwner = string | null
+
+/** Reads the current tank list for an owner, or null when the owner has no entry yet. */
+function tanksOf(owner: TankOwner): Tank[] | null {
+  if (owner === null) return $part.get().gameData.tanks
+  return $part.get().subPartGameData.find((s) => s.subPartTemplateId === owner)?.tanks ?? null
 }
 
-/** Discrete: remove the tank at `index` for the given SubPart template. */
-export function removeTank(subPartTemplateId: string, index: number): void {
-  const spd = $part.get().subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
-  if (!spd || index < 0 || index >= spd.tanks.length) return
-  commitSubPartData('remove tank', '', subPartTemplateId, (s) => s.tanks.splice(index, 1))
+/** Applies `mutate` to the owner's tank list, creating the SubPart entry if needed. */
+function mutateTanks(owner: TankOwner, mutate: (tanks: Tank[]) => void): void {
+  if (owner === null) {
+    const part = clone($part.get())
+    mutate(part.gameData.tanks)
+    $part.set(part)
+    return
+  }
+  mutateSubPartData(owner, (s) => mutate(s.tanks))
+}
+
+/** Discrete: append a default tank to the part or the given SubPart template. */
+export function addTank(owner: TankOwner): void {
+  pushUndo('add tank', '')
+  mutateTanks(owner, (tanks) => tanks.push(createTank()))
+}
+
+/** Discrete: remove the tank at `index`. */
+export function removeTank(owner: TankOwner, index: number): void {
+  const tanks = tanksOf(owner)
+  if (!tanks || index < 0 || index >= tanks.length) return
+  pushUndo('remove tank', '')
+  mutateTanks(owner, (t) => t.splice(index, 1))
 }
 
 /** Discrete: change a tank's shape (cylindrical/spherical). */
-export function setTankShape(subPartTemplateId: string, index: number, shape: TankShape): void {
-  const spd = $part.get().subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
-  if (!spd || index < 0 || index >= spd.tanks.length) return
-  commitSubPartData('tank shape', shape, subPartTemplateId, (s) => {
-    s.tanks[index].shape = shape
+export function setTankShape(owner: TankOwner, index: number, shape: TankShape): void {
+  const tanks = tanksOf(owner)
+  if (!tanks || index < 0 || index >= tanks.length) return
+  pushUndo('tank shape', shape)
+  mutateTanks(owner, (t) => {
+    t[index].shape = shape
   })
 }
 
-/** Streaming: patch a tank's numeric/material fields. Caller pushes undo on field focus. */
-export function updateTank(subPartTemplateId: string, index: number, patch: Partial<Tank>): void {
-  const spd = $part.get().subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
-  if (!spd || index < 0 || index >= spd.tanks.length) return
-  mutateSubPartData(subPartTemplateId, (s) => {
-    s.tanks[index] = { ...s.tanks[index], ...patch }
+/** Streaming: patch a tank's id / numeric / material fields. Caller pushes undo on field focus. */
+export function updateTank(owner: TankOwner, index: number, patch: Partial<Tank>): void {
+  const tanks = tanksOf(owner)
+  if (!tanks || index < 0 || index >= tanks.length) return
+  mutateTanks(owner, (t) => {
+    t[index] = { ...t[index], ...patch }
   })
 }
 
@@ -1922,6 +1953,34 @@ export function setCombustorReaction(
   commitSubPartData('reaction', reactionId, subPartTemplateId, (s) => {
     s.combustors[index].reactionId = reactionId
     s.combustors[index].mixtureRatio = mixtureRatio
+  })
+}
+
+/**
+ * Discrete: replace a SubPart-level combustor's `<FeedsFrom>` list. Feed points are a
+ * discrete edit (add/remove/retarget a whole feed), so this records its own undo step
+ * rather than streaming like {@link updateCombustor}.
+ */
+export function setCombustorFeeds(
+  subPartTemplateId: string,
+  index: number,
+  feeds: readonly FeedSource[],
+): void {
+  if (!hasSubPartItem(subPartTemplateId, 'combustors', index)) return
+  commitSubPartData('feed points', '', subPartTemplateId, (s) => {
+    s.combustors[index].feeds = [...feeds]
+  })
+}
+
+/** Discrete: set a SubPart-level combustor's `<Plumbing>` class (Bulk / Service). */
+export function setCombustorPlumbing(
+  subPartTemplateId: string,
+  index: number,
+  plumbing: PlumbingClass,
+): void {
+  if (!hasSubPartItem(subPartTemplateId, 'combustors', index)) return
+  commitSubPartData('plumbing', plumbing, subPartTemplateId, (s) => {
+    s.combustors[index].plumbing = plumbing
   })
 }
 
@@ -2218,6 +2277,85 @@ export function setPartCombustorReaction(
   commitGameData('reaction', reactionId, (g) => {
     g.combustors[index].reactionId = reactionId
     g.combustors[index].mixtureRatio = mixtureRatio
+  })
+}
+
+/** Discrete: replace a part-level combustor's `<FeedsFrom>` list (see setCombustorFeeds). */
+export function setPartCombustorFeeds(index: number, feeds: readonly FeedSource[]): void {
+  if (index < 0 || index >= $part.get().gameData.combustors.length) return
+  commitGameData('feed points', '', (g) => {
+    g.combustors[index].feeds = [...feeds]
+  })
+}
+
+/** Discrete: set a part-level combustor's `<Plumbing>` class (Bulk / Service). */
+export function setPartCombustorPlumbing(index: number, plumbing: PlumbingClass): void {
+  if (index < 0 || index >= $part.get().gameData.combustors.length) return
+  commitGameData('plumbing', plumbing, (g) => {
+    g.combustors[index].plumbing = plumbing
+  })
+}
+
+// --- Consumer feed wiring (how a Part satisfies a placed SubPart's <FeedsFrom Parent>) ---
+
+/** Discrete: append an empty wiring entry for the given consumer + placement scope. */
+export function addConsumerFeedWiring(
+  consumerId = '',
+  subPartInstanceId: string | null = null,
+): void {
+  commitGameData('add feed wiring', consumerId, (g) =>
+    g.consumerFeedWiring.push({ consumerId, subPartInstanceId, feeds: [] }),
+  )
+}
+
+/** Discrete: remove the wiring entry at `index`. */
+export function removeConsumerFeedWiring(index: number): void {
+  if (index < 0 || index >= $part.get().gameData.consumerFeedWiring.length) return
+  commitGameData('remove feed wiring', '', (g) => g.consumerFeedWiring.splice(index, 1))
+}
+
+/** Discrete: retarget a wiring entry at the given consumer template id + placement scope. */
+export function setConsumerFeedWiringTarget(
+  index: number,
+  consumerId: string,
+  subPartInstanceId: string | null,
+): void {
+  if (index < 0 || index >= $part.get().gameData.consumerFeedWiring.length) return
+  commitGameData('feed wiring target', consumerId, (g) => {
+    g.consumerFeedWiring[index].consumerId = consumerId
+    g.consumerFeedWiring[index].subPartInstanceId = subPartInstanceId
+  })
+}
+
+/** Discrete: replace a wiring entry's `<FeedsFrom>` list. */
+export function setConsumerFeedWiringFeeds(index: number, feeds: readonly FeedSource[]): void {
+  if (index < 0 || index >= $part.get().gameData.consumerFeedWiring.length) return
+  commitGameData('feed wiring points', '', (g) => {
+    g.consumerFeedWiring[index].feeds = [...feeds]
+  })
+}
+
+/**
+ * Discrete: append an empty wiring entry for every placed SubPart consumer that defers
+ * to its parent (`<FeedsFrom Parent="true"/>`) and has no matching entry — the one-click
+ * fix for the most common authoring mistake. Without a wiring entry KSA logs *"Consumer X
+ * feeds from its parent part, but Y has no ConsumerFeedWiring wiring for it"* and the
+ * engine reaches no propellant. The user still has to pick each entry's feed points.
+ *
+ * Mirrors `PartTemplate.ResolveConsumerFeeds`'s lookup: an instance-scoped entry wins,
+ * an unscoped one for the same consumer id is the fallback.
+ */
+export function autoWireUnwiredConsumers(): void {
+  const wanted = unwiredConsumersOf($part.get())
+  if (wanted.length === 0) return
+  commitGameData('auto-wire consumers', String(wanted.length), (g) => {
+    for (const w of wanted) {
+      g.consumerFeedWiring.push({
+        consumerId: w.consumerId,
+        subPartInstanceId: w.subPartInstanceId,
+        feeds: [],
+      })
+    }
   })
 }
 

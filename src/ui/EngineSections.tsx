@@ -4,7 +4,9 @@ import { Button, ListBoxItem, Select, Switch, TextField } from './kit'
 import { PreciseNumberInput } from './PreciseNumberInput'
 import { Vec3Field } from './Vec3Field'
 import { Field, ItemCard } from './GameDataSections'
-import { pushUndo } from '../state/editorStore'
+import { FeedsField } from './FeedsField'
+import { consumerOptionsOf, feedTargetsOf, unwiredConsumersOf } from '../state/feedTargets'
+import { $part, pushUndo } from '../state/editorStore'
 import {
   addCombustor,
   addNozzle,
@@ -21,8 +23,17 @@ import {
   removePartRocket,
   removeRocket,
   removeRocketController,
+  addConsumerFeedWiring,
+  autoWireUnwiredConsumers,
+  removeConsumerFeedWiring,
+  setCombustorFeeds,
+  setCombustorPlumbing,
   setCombustorReaction,
+  setConsumerFeedWiringFeeds,
+  setConsumerFeedWiringTarget,
   setGimbal,
+  setPartCombustorFeeds,
+  setPartCombustorPlumbing,
   setPartCombustorReaction,
   updateCombustor,
   updateNozzle,
@@ -38,12 +49,15 @@ import { mixtureRatioBounds, reactionDataToCustom, type ReactionData } from '../
 import {
   createCustomReaction,
   DEFAULT_ENGINE_SOUND_ID,
+  isCustomReactionExportable,
   KNOWN_REACTIONS,
   PLUME_TRAIL_IDS,
   VOLUMETRIC_EXHAUST_IDS,
   type Combustor,
   type CustomReaction,
   type DeLavalNozzle,
+  type FeedSource,
+  type PlumbingClass,
   type ReactionCategory,
   type ReactionLutRowSpec,
   type ReactionReactantSpec,
@@ -182,17 +196,23 @@ function InstanceSelect({
 
 // ── combustor + nozzle field groups (reused by per-SubPart + part-level) ───────
 
-/** The editable fields of one combustor (propellant + O/F ratio, chamber pressure, efficiencies, throttle). */
+/** The editable fields of one combustor (feeds + plumbing, propellant + O/F ratio, chamber pressure, efficiencies, throttle). */
 function CombustorFields({
   combustor,
   onSetReaction,
   onUpdate,
+  onSetFeeds,
+  onSetPlumbing,
 }: {
   combustor: Combustor
   onSetReaction: (id: string, mixtureRatio: number | null) => void
   onUpdate: (patch: Partial<Combustor>) => void
+  onSetFeeds: (feeds: FeedSource[]) => void
+  onSetPlumbing: (plumbing: PlumbingClass) => void
 }) {
   const index = useStore($allReactionIndex)
+  const part = useStore($part)
+  const targets = feedTargetsOf(part)
   const reaction = index.get(combustor.reactionId)
   const known = KNOWN_REACTIONS.find((k) => k.id === combustor.reactionId)
   // Whether this reaction takes an O/F ratio: prefer the live catalog, then the
@@ -207,6 +227,29 @@ function CombustorFields({
   const ratioMax = bounds?.max ?? known?.ratioMax
   return (
     <>
+      <Field label="Plumbing (which fluid network it draws through)">
+        <Select
+          size="sm"
+          aria-label="Plumbing class"
+          value={combustor.plumbing}
+          onChange={(k) => onSetPlumbing(k as PlumbingClass)}
+        >
+          <ListBoxItem id="Bulk">Bulk (main engine)</ListBoxItem>
+          <ListBoxItem id="Service">Service (RCS)</ListBoxItem>
+        </Select>
+      </Field>
+      <p className="text-[11px] leading-snug text-fg-subtle">
+        <b>Service</b> draws through connectors that carry ServiceFluid — the default. <b>Bulk</b>{' '}
+        needs <code>BulkFluid</code> on every connector in the path.
+      </p>
+      <FeedsField
+        label="Feeds from"
+        feeds={combustor.feeds}
+        connectorIds={targets.connectorIds}
+        containers={targets.containers}
+        allowParent
+        onChange={onSetFeeds}
+      />
       <ReactionSelect value={combustor.reactionId} onChange={onSetReaction} />
       {isMixture && (
         <Field label="Mixture ratio (O/F by mass — required for mixtures)">
@@ -421,6 +464,8 @@ export function SubPartEngineSection({ spd }: { spd: SubPartGameData }) {
               combustor={c}
               onSetReaction={(id, ratio) => setCombustorReaction(tid, i, id, ratio)}
               onUpdate={(patch) => updateCombustor(tid, i, patch)}
+              onSetFeeds={(feeds) => setCombustorFeeds(tid, i, feeds)}
+              onSetPlumbing={(p) => setCombustorPlumbing(tid, i, p)}
             />
           </ItemCard>
         ))}
@@ -668,6 +713,104 @@ export function RocketControllersSection({ part }: { part: EditingPart }) {
 }
 
 /** Per-instance gimbal overlays (thrust-vectoring). */
+/** Encodes a consumer choice as one Select key (a consumer id repeats across placements). */
+function consumerKey(consumerId: string, subPartInstanceId: string | null): string {
+  return `${subPartInstanceId ?? ''} ${consumerId}`
+}
+
+/**
+ * `<ConsumerFeedWiring>` editor — how this Part satisfies a placed SubPart's
+ * `<FeedsFrom Parent="true"/>`. A reusable thrust chamber says "feed me from whatever
+ * places me"; this section is where the Part answers with a real connector or container.
+ * Without a matching entry KSA logs *"Consumer X feeds from its parent part, but Y has no
+ * ConsumerFeedWiring wiring for it"* and the engine reaches no propellant.
+ */
+export function ConsumerFeedWiringSection({ part }: { part: EditingPart }) {
+  const wiring = part.gameData.consumerFeedWiring
+  const consumers = consumerOptionsOf(part)
+  const targets = feedTargetsOf(part)
+  const unwired = unwiredConsumersOf(part)
+  return (
+    <div className="flex flex-col gap-2">
+      {wiring.map((w, i) => (
+        <ItemCard
+          key={i}
+          title={`Wiring — ${w.consumerId || '(no consumer)'}`}
+          onRemove={() => removeConsumerFeedWiring(i)}
+        >
+          <Field label="Consumer (combustor / solid motor)">
+            <Select
+              size="sm"
+              aria-label="Wired consumer"
+              placeholder="Select a consumer"
+              value={consumerKey(w.consumerId, w.subPartInstanceId) || null}
+              onChange={(k) => {
+                const opt = consumers.find(
+                  (c) => consumerKey(c.consumerId, c.subPartInstanceId) === String(k),
+                )
+                if (opt) setConsumerFeedWiringTarget(i, opt.consumerId, opt.subPartInstanceId)
+              }}
+            >
+              {/* Keep a consumer the part no longer carries selectable, so re-picking is
+                  an explicit act rather than a silent retarget. */}
+              {(consumers.some(
+                (c) =>
+                  consumerKey(c.consumerId, c.subPartInstanceId) ===
+                  consumerKey(w.consumerId, w.subPartInstanceId),
+              )
+                ? consumers
+                : [
+                    {
+                      consumerId: w.consumerId,
+                      subPartInstanceId: w.subPartInstanceId,
+                      defersToParent: false,
+                      label: `${w.consumerId || '(none)'} — not found`,
+                    },
+                    ...consumers,
+                  ]
+              ).map((c) => (
+                <ListBoxItem
+                  key={consumerKey(c.consumerId, c.subPartInstanceId)}
+                  id={consumerKey(c.consumerId, c.subPartInstanceId)}
+                  textValue={c.label}
+                >
+                  {c.label}
+                </ListBoxItem>
+              ))}
+            </Select>
+          </Field>
+          {/* A wiring entry may NOT itself defer to Parent (ConsumerFeedWiring.OnDataLoad). */}
+          <FeedsField
+            label="Feeds from"
+            feeds={w.feeds}
+            connectorIds={targets.connectorIds}
+            containers={targets.containers}
+            allowParent={false}
+            onChange={(feeds) => setConsumerFeedWiringFeeds(i, feeds)}
+          />
+        </ItemCard>
+      ))}
+      {unwired.length > 0 && (
+        <p className="text-[11px] leading-snug text-warning">
+          {unwired.length} consumer{unwired.length === 1 ? '' : 's'} feed from the parent part with
+          no wiring — KSA will log <i>&ldquo;has no ConsumerFeedWiring wiring for it&rdquo;</i> and
+          they will reach no propellant.
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" onPress={() => addConsumerFeedWiring()}>
+          + Feed wiring
+        </Button>
+        {unwired.length > 0 && (
+          <Button size="sm" onPress={autoWireUnwiredConsumers}>
+            Auto-wire unwired consumers
+          </Button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function GimbalsSection({ part }: { part: EditingPart }) {
   const gimbals = part.gameData.gimbals
   // Instances that don't yet have a gimbal — candidates to add one to.
@@ -759,6 +902,8 @@ export function PartGasGeneratorSection({ part }: { part: EditingPart }) {
               combustor={c}
               onSetReaction={(id, ratio) => setPartCombustorReaction(i, id, ratio)}
               onUpdate={(patch) => updatePartCombustor(i, patch)}
+              onSetFeeds={(feeds) => setPartCombustorFeeds(i, feeds)}
+              onSetPlumbing={(p) => setPartCombustorPlumbing(i, p)}
             />
           </ItemCard>
         ))}
@@ -972,8 +1117,87 @@ function CustomPropellantCard({ process }: { process: CustomReaction }) {
           + Reactant
         </Button>
       </div>
+      {process.category === 'Solid' && <SolidPropellantFields process={process} />}
       <CustomPropellantLut process={process} setLut={setLut} />
     </ItemCard>
+  )
+}
+
+/**
+ * The four fields KSA REQUIRES on a `Category="Solid"` FixedReaction. Without all four
+ * `FixedReactionTemplate.Create()` throws and the whole mod fails to load, so export
+ * omits an incomplete one (see {@link isCustomReactionExportable}) — hence the hard
+ * error banner rather than a soft warning. Cloning APCP/DoubleBase fills these in.
+ */
+function SolidPropellantFields({ process }: { process: CustomReaction }) {
+  const id = process.id
+  const begin = () => pushUndo('edit propellant', '')
+  const br = process.burnRate
+  const setBurnRate = (patch: Partial<NonNullable<CustomReaction['burnRate']>>) =>
+    updateCustomReaction(id, {
+      burnRate: { coefficientMPerS: 0, exponent: 0, ...br, ...patch },
+    })
+  return (
+    <div className="flex flex-col gap-2">
+      <span className={LABEL}>Solid propellant (required — burn-rate law r = a·pⁿ)</span>
+      <Field label="Burn-rate coefficient a (m/s at 1 Pa — must be > 0)">
+        <PreciseNumberInput
+          aria-label="Burn rate coefficient in meters per second"
+          value={br?.coefficientMPerS ?? 0}
+          min={0}
+          onInteractionStart={begin}
+          onCommit={(n) => setBurnRate({ coefficientMPerS: n })}
+        />
+      </Field>
+      <Field label="Burn-rate exponent n (0 ≤ n < 0.95)">
+        <PreciseNumberInput
+          aria-label="Burn rate exponent"
+          value={br?.exponent ?? 0}
+          min={0}
+          max={0.95}
+          onInteractionStart={begin}
+          onCommit={(n) => setBurnRate({ exponent: n })}
+        />
+      </Field>
+      <Field label="Minimum burn pressure (bar — the deflagration limit)">
+        <PreciseNumberInput
+          aria-label="Minimum burn pressure in bar"
+          value={(process.minimumBurnPressurePa ?? 0) / PA_PER_BAR}
+          min={0}
+          onInteractionStart={begin}
+          onCommit={(bar) =>
+            updateCustomReaction(id, { minimumBurnPressurePa: bar > 0 ? bar * PA_PER_BAR : null })
+          }
+        />
+      </Field>
+      <Field label="Max stable pressure (bar — the slope-break limit)">
+        <PreciseNumberInput
+          aria-label="Max stable pressure in bar"
+          value={(process.maxStablePressurePa ?? 0) / PA_PER_BAR}
+          min={0}
+          onInteractionStart={begin}
+          onCommit={(bar) =>
+            updateCustomReaction(id, { maxStablePressurePa: bar > 0 ? bar * PA_PER_BAR : null })
+          }
+        />
+      </Field>
+      <Field label="Exhaust condensed fraction (0 to < 1)">
+        <PreciseNumberInput
+          aria-label="Exhaust condensed fraction"
+          value={process.exhaustCondensedFraction ?? 0}
+          min={0}
+          max={0.999999}
+          onInteractionStart={begin}
+          onCommit={(n) => updateCustomReaction(id, { exhaustCondensedFraction: n })}
+        />
+      </Field>
+      {!isCustomReactionExportable(process) && (
+        <p className="text-[11px] leading-snug text-danger">
+          KSA refuses to load a solid reaction without a burn-rate law and pressure limits — this
+          propellant will be omitted from the export.
+        </p>
+      )}
+    </div>
   )
 }
 

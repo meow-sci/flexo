@@ -201,12 +201,28 @@ export function TanksSection({
   subPartTemplateId,
 }: {
   tanks: Tank[]
-  subPartTemplateId: string
+  /**
+   * The tank owner: a SubPart template id, or `null` for the `<PartGameData>` itself.
+   * Part-level is where Core authors its prefab tank data, and the only level a
+   * `<FeedsFrom Container>` can address without a `SubPart=` scope.
+   */
+  subPartTemplateId: string | null
 }) {
   return (
     <div className="flex flex-col gap-2">
       {tanks.map((tank, i) => (
         <ItemCard key={i} title={`Tank ${i + 1}`} onRemove={() => removeTank(subPartTemplateId, i)}>
+          <Field label="Feed id (reference it from an engine's Feeds from → Container)">
+            <TextField
+              size="sm"
+              aria-label="Tank feed id"
+              inputClassName="font-mono"
+              placeholder="e.g. Fuel"
+              value={tank.id}
+              onFocus={() => pushUndo('edit tank', '')}
+              onChange={(v) => updateTank(subPartTemplateId, i, { id: v })}
+            />
+          </Field>
           <Field label="Shape">
             <Select
               size="sm"

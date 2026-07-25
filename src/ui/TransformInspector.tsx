@@ -5,6 +5,7 @@ import { NumberField } from './NumberField'
 import {
   $bulkScaleMode,
   pushUndo,
+  setConnectorCapabilities,
   setConnectorFlags,
   setSubPartInstanceId,
   updateSelectedTransform,
@@ -21,7 +22,12 @@ import {
   scaledInPlaceTransform,
   translatedTransform,
 } from '../three/bulkTransform'
-import { CONNECTOR_FLAGS, type ConnectorFlag } from '../ksa/types'
+import {
+  CONNECTOR_CAPABILITIES,
+  CONNECTOR_FLAGS,
+  type ConnectorCapability,
+  type ConnectorFlag,
+} from '../ksa/types'
 import { DEG2RAD, RAD2DEG, fmt } from './format'
 
 const panelClass = 'flex flex-col gap-2 rounded-xl border border-border bg-panel p-2'
@@ -99,6 +105,7 @@ export function TransformInspector() {
           index={entity.index}
           id={entity.connector.id}
           flags={entity.connector.flags}
+          capabilities={entity.connector.capabilities}
           locked={locked}
         />
       )}
@@ -322,22 +329,33 @@ function ConnectorHeader({
   index,
   id,
   flags,
+  capabilities,
   locked,
 }: {
   index: number
   id: string
   flags: ConnectorFlag[]
+  capabilities: ConnectorCapability[]
   locked: boolean
 }) {
   // Toggle one flag, re-emitting the full set in canonical order so the XML and
   // the inspector stay stable regardless of click order.
-  const toggle = (flag: ConnectorFlag, on: boolean) => {
+  const toggleFlag = (flag: ConnectorFlag, on: boolean) => {
     const next = new Set(flags)
     if (on) next.add(flag)
     else next.delete(flag)
     setConnectorFlags(
       index,
       CONNECTOR_FLAGS.filter((f) => next.has(f)),
+    )
+  }
+  const toggleCapability = (cap: ConnectorCapability, on: boolean) => {
+    const next = new Set(capabilities)
+    if (on) next.add(cap)
+    else next.delete(cap)
+    setConnectorCapabilities(
+      index,
+      CONNECTOR_CAPABILITIES.filter((c) => next.has(c)),
     )
   }
   return (
@@ -352,12 +370,30 @@ function ConnectorHeader({
             key={f}
             isSelected={flags.includes(f)}
             isDisabled={locked}
-            onChange={(on) => toggle(f, on)}
+            onChange={(on) => toggleFlag(f, on)}
           >
             {f}
           </Switch>
         ))}
       </div>
+      <SectionTitle>Capabilities</SectionTitle>
+      <div className="flex flex-wrap gap-x-3 gap-y-1">
+        {CONNECTOR_CAPABILITIES.map((c) => (
+          <Switch
+            key={c}
+            isSelected={capabilities.includes(c)}
+            isDisabled={locked}
+            onChange={(on) => toggleCapability(c, on)}
+          >
+            {c}
+          </Switch>
+        ))}
+      </div>
+      <p className="text-xs leading-snug text-fg-subtle">
+        None = electricity + service fluid only. Add <b>BulkFluid</b> for main-engine propellant,{' '}
+        <b>SolidMotorCase</b> to stack SRB segments, <b>DecouplerJoint</b> on a decoupler&rsquo;s
+        connector.
+      </p>
     </div>
   )
 }

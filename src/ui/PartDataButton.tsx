@@ -18,8 +18,14 @@ import {
   MassSection,
   PowerSection,
   SizeControlFields,
+  TanksSection,
 } from './GameDataSections'
-import { GimbalsSection, PartGasGeneratorSection, RocketControllersSection } from './EngineSections'
+import {
+  ConsumerFeedWiringSection,
+  GimbalsSection,
+  PartGasGeneratorSection,
+  RocketControllersSection,
+} from './EngineSections'
 
 interface Props {
   isOpen?: boolean
@@ -50,7 +56,8 @@ export function PartDataButton({
     gameData.gimbals.length +
     gameData.rockets.length +
     gameData.combustors.length +
-    gameData.nozzles.length
+    gameData.nozzles.length +
+    gameData.consumerFeedWiring.length
 
   return (
     <>
@@ -89,6 +96,12 @@ export function PartDataButton({
               <MassSection gameData={gameData} />
             </DisclosureSection>
 
+            <DisclosureSection title="Tanks" badge={gameData.tanks.length || ''} defaultExpanded>
+              {/* Part-level <Tank>s — where Core authors its prefab tank data, and the
+                  only level an engine can address without a SubPart= scope. */}
+              <TanksSection tanks={gameData.tanks} subPartTemplateId={null} />
+            </DisclosureSection>
+
             <DisclosureSection title="Power" badge={powerCount || ''} defaultExpanded>
               <PowerSection gameData={gameData} />
             </DisclosureSection>
@@ -102,6 +115,10 @@ export function PartDataButton({
                 <div className="flex flex-col gap-2">
                   <SectionTitle>Controllers</SectionTitle>
                   <RocketControllersSection part={part} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <SectionTitle>Feed wiring</SectionTitle>
+                  <ConsumerFeedWiringSection part={part} />
                 </div>
                 <div className="flex flex-col gap-2">
                   <SectionTitle>Gimbals</SectionTitle>

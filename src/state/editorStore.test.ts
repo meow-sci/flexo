@@ -11,10 +11,19 @@ import {
   $selectedKittenIndex,
   $selectedKittenIndices,
   $canUndo,
+  addCombustor,
   addConnector,
+  addConsumerFeedWiring,
   addKitten,
   addPart,
+  addPartCombustor,
   addSubPart,
+  autoWireUnwiredConsumers,
+  setCombustorFeeds,
+  setConnectorCapabilities,
+  setConsumerFeedWiringFeeds,
+  setPartCombustorFeeds,
+  setPartCombustorPlumbing,
   clearLayer,
   createLayer,
   deleteLayer,
@@ -440,6 +449,65 @@ describe('editorStore', () => {
     const spd = part.subPartGameData.find((s) => s.subPartTemplateId === CHAMBER_TMPL)!
     expect(spd.combustors[0].feeds).toEqual([{ kind: 'parent' }]) // nothing to remap
     expect(spd.solidMotors[0].feeds).toEqual([{ kind: 'connector', connectorId: '_connector3' }])
+  })
+
+  it('records undo for the plumbing mutations (capabilities, feeds, plumbing, wiring)', () => {
+    addConnector()
+    setConnectorCapabilities(0, ['BulkFluid'])
+    expect($part.get().connectors[0].capabilities).toEqual(['BulkFluid'])
+    undo()
+    expect($part.get().connectors[0].capabilities).toEqual([])
+
+    addPartCombustor()
+    const combustor = () => $part.get().gameData.combustors[0]
+    setPartCombustorPlumbing(0, 'Service')
+    expect(combustor().plumbing).toBe('Service')
+    setPartCombustorFeeds(0, [{ kind: 'connector', connectorId: '_connector1' }])
+    expect(combustor().feeds).toEqual([{ kind: 'connector', connectorId: '_connector1' }])
+    undo() // feeds
+    expect(combustor().feeds).toEqual([{ kind: 'parent' }])
+    undo() // plumbing
+    expect(combustor().plumbing).toBe('Bulk')
+
+    addConsumerFeedWiring('ThrustChamber', 'chamber_1')
+    expect($part.get().gameData.consumerFeedWiring).toHaveLength(1)
+    setConsumerFeedWiringFeeds(0, [{ kind: 'connector', connectorId: '_connector1' }])
+    expect($part.get().gameData.consumerFeedWiring[0].feeds).toHaveLength(1)
+    undo() // feeds
+    expect($part.get().gameData.consumerFeedWiring[0].feeds).toEqual([])
+    undo() // add
+    expect($part.get().gameData.consumerFeedWiring).toEqual([])
+  })
+
+  it('auto-wires only SubPart consumers that defer to the parent and lack an entry', () => {
+    const TMPL = 'Core.ThrustChamberMesh'
+    addSubPart(TMPL)
+    addSubPart(TMPL) // same template placed twice ⇒ two distinct wiring targets
+    addCombustor(TMPL)
+    const instanceIds = $part.get().placements.map((p) => p.instanceId)
+    const chamberId = $part.get().subPartGameData[0].combustors[0].id
+
+    autoWireUnwiredConsumers()
+    expect($part.get().gameData.consumerFeedWiring).toEqual([
+      { consumerId: chamberId, subPartInstanceId: instanceIds[0], feeds: [] },
+      { consumerId: chamberId, subPartInstanceId: instanceIds[1], feeds: [] },
+    ])
+
+    // Idempotent: everything is wired now, so a second run is a no-op (and no undo step).
+    const before = $canUndo.get()
+    autoWireUnwiredConsumers()
+    expect($part.get().gameData.consumerFeedWiring).toHaveLength(2)
+    expect($canUndo.get()).toBe(before)
+
+    undo()
+    expect($part.get().gameData.consumerFeedWiring).toEqual([])
+
+    // A consumer with a concrete feed (not Parent) never needs wiring.
+    setCombustorFeeds(TMPL, 0, [
+      { kind: 'container', containerId: 'Fuel', subPartInstanceId: null },
+    ])
+    autoWireUnwiredConsumers()
+    expect($part.get().gameData.consumerFeedWiring).toEqual([])
   })
 
   it('adds/removes tanks per SubPart template as discrete undo steps and patches fields (streaming)', () => {

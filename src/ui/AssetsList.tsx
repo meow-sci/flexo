@@ -113,14 +113,16 @@ export function AssetsList() {
       let rows: Row[]
       if (l.id === CONNECTOR_LAYER_ID) {
         rows = part.connectors.flatMap((c, i) =>
-          c.layerId === l.id && match(c.id, ...c.flags)
+          c.layerId === l.id && match(c.id, ...c.flags, ...c.capabilities)
             ? [
                 {
                   id: keyOf('connector', c.id),
                   kind: 'connector' as const,
                   index: i,
                   name: c.id,
-                  sub: c.flags.length ? c.flags.join(', ') : 'no flags',
+                  // Flags (how it orients) and capabilities (what may flow across it)
+                  // are independent axes — show both, e.g. "ToSurface · BulkFluid".
+                  sub: [...c.flags, ...c.capabilities].join(' · ') || 'no flags',
                   hidden,
                 },
               ]

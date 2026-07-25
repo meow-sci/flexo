@@ -131,7 +131,12 @@ import {
 } from '../ksa/types'
 import type { ConnectorCapability, Transform } from '../ksa/types'
 import type { ImportedGameData } from './editorStore'
-import { importModelAsMeshes, removeImport, setMeshTransparent } from './customAssetStore'
+import {
+  importModelAsMeshes,
+  removeImport,
+  replaceImport,
+  setMeshTransparent,
+} from './customAssetStore'
 import { analyzeImport, DEFAULT_IMPORT_OPTIONS } from '../ksa/importPlan'
 import { normalizeImport, type NormalizedImport } from '../ksa/importNormalize'
 import type { ImportMaterialPlan } from '../ksa/importMaterials'
@@ -1257,24 +1262,32 @@ describe('imported models', () => {
     }
   }
 
-  /** Two objects, one of them placed twice → 2 SubParts, 3 placements (see importPlan). */
-  async function importSyntheticModel(withMaterials = false): Promise<void> {
+  /** A synthetic model: one object per entry, each placed `instances` times. */
+  async function synthesizeModel(
+    objects: { name: string; instances: number }[],
+  ): Promise<NormalizedImport> {
     const material = new THREE.MeshStandardMaterial()
     material.name = 'Metal'
-    const shared = new THREE.BoxGeometry(1, 1, 1)
     const scene = new THREE.Group()
-    for (const x of [0, 2]) {
-      const mesh = new THREE.Mesh(shared, material)
-      mesh.name = 'Hull'
-      mesh.position.set(x, 0, 0)
-      scene.add(mesh)
+    for (const object of objects) {
+      const geometry = new THREE.BoxGeometry(1, 1, 1)
+      for (let i = 0; i < object.instances; i++) {
+        const mesh = new THREE.Mesh(geometry, material)
+        mesh.name = object.name
+        mesh.position.set(i * 2, 0, 0)
+        scene.add(mesh)
+      }
     }
-    const nozzle = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), material)
-    nozzle.name = 'Nozzle'
-    scene.add(nozzle)
-
     const plan = analyzeImport({ scene, fileName: 'pod.glb' }, DEFAULT_IMPORT_OPTIONS)
-    const normalized = await normalizeImport(plan, DEFAULT_IMPORT_OPTIONS)
+    return normalizeImport(plan, DEFAULT_IMPORT_OPTIONS)
+  }
+
+  /** Two objects, one of them placed twice → 2 SubParts, 3 placements (see importPlan). */
+  async function importSyntheticModel(withMaterials = false): Promise<void> {
+    const normalized = await synthesizeModel([
+      { name: 'Hull', instances: 2 },
+      { name: 'Nozzle', instances: 1 },
+    ])
     await importModelAsMeshes(
       normalized,
       'pod.glb',
@@ -1369,6 +1382,45 @@ describe('imported models', () => {
 
     redo()
     expect($part.get().customMeshes).toHaveLength(0)
+  })
+
+  it('replaceImport is ONE undo step: undo restores the geometry, materials and placements', async () => {
+    await importSyntheticModel(true)
+    const before = $part.get()
+    const importId = before.customMeshes[0]!.imported!.importId
+    const hull = before.customMeshes[0]!
+    const nozzle = before.customMeshes[1]!
+    const materialId = before.customMaterials[0]!.id
+
+    // The re-export: Hull survives, Nozzle is gone, Skirt is new — with its own material set.
+    const second = await synthesizeModel([
+      { name: 'Hull', instances: 2 },
+      { name: 'Skirt', instances: 1 },
+    ])
+    await replaceImport(importId, second, { updateMaterials: true }, materialPlan(second))
+
+    const swapped = $part.get()
+    expect(swapped.customMeshes).toHaveLength(2)
+    expect(swapped.customMeshes[0]!.subPartId).toBe(hull.subPartId) // identity preserved
+    expect(swapped.customMeshes[0]!.imported!.importId).toBe(second.importId)
+    expect(swapped.customMeshes.some((m) => m.id === nozzle.id)).toBe(false)
+    expect(swapped.customMaterials.map((m) => m.id)).not.toContain(materialId)
+
+    // ONE undo: the geometry reference, the swapped material/textures, the removed SubPart
+    // and every placement come back together. (The BYTES do not — see replaceImport.)
+    undo()
+    const back = $part.get()
+    expect(back.customMeshes.map((m) => m.id)).toEqual(before.customMeshes.map((m) => m.id))
+    expect(back.customMeshes.map((m) => m.imported!.importId)).toEqual([importId, importId])
+    expect(back.customMeshes.map((m) => m.imported!.meshName)).toEqual(
+      before.customMeshes.map((m) => m.imported!.meshName),
+    )
+    expect(back.customMaterials.map((m) => m.id)).toEqual([materialId])
+    expect(back.customTextures).toHaveLength(2)
+    expect(back.placements).toEqual(before.placements)
+
+    redo()
+    expect($part.get().customMeshes[0]!.imported!.importId).toBe(second.importId)
   })
 
   it('setMeshTransparent enrolls in undo', async () => {

@@ -16,6 +16,7 @@ import type {
   PrimitiveSpec,
   ScalarChannel,
   TextureChannel,
+  Transform,
   VisorSurface,
 } from '../ksa/types'
 import {
@@ -26,8 +27,9 @@ import {
   materialTextureIds,
   meshKind,
 } from '../ksa/types'
-import type { NormalizedImport } from '../ksa/importNormalize'
+import type { NormalizedImport, NormalizedMesh } from '../ksa/importNormalize'
 import type { ImportMaterialPlan } from '../ksa/importMaterials'
+import type { ImportWarning } from '../ksa/importPlan'
 import {
   $activeLayerId,
   $part,
@@ -153,24 +155,65 @@ export function setGlowPaintMeshId(id: string | null): void {
 
 /**
  * An open request for the model-import dialog (null = closed). Ephemeral UI state, like the
- * two ids above: the dialog is mounted once in `app.tsx` and opened from BOTH entry points —
- * the Add menu (with no files, so it shows its drop zone) and a drag-drop onto the 3D
- * viewport (with the dropped files, so it goes straight to the review step). `id` changes on
- * every open so the dialog body remounts with fresh per-import state.
+ * two ids above: the dialog is mounted once in `app.tsx` and opened from THREE entry points —
+ * the Add menu (with no files, so it shows its drop zone), a drag-drop onto the 3D viewport
+ * (with the dropped files, so it goes straight to the review step), and "Replace…" on an
+ * existing batch in the Custom Assets modal (which sets {@link replaceImportId}). `id` changes
+ * on every open so the dialog body remounts with fresh per-import state.
  */
 export interface ImportModelRequest {
   id: string
   files: File[]
+  /**
+   * Set by "Replace…": the dialog runs in REPLACE mode and the chosen file swaps THAT batch's
+   * geometry in place ({@link replaceImport}) instead of creating a new batch. One request
+   * store, one dialog — a second modal would duplicate the whole parse/review/options surface.
+   */
+  replaceImportId?: string
 }
 
 export const $importModelRequest = atom<ImportModelRequest | null>(null)
 
-export function openImportModel(files: File[] = []): void {
-  $importModelRequest.set({ id: shortId(), files })
+export function openImportModel(files: File[] = [], replaceImportId?: string): void {
+  $importModelRequest.set({ id: shortId(), files, replaceImportId })
 }
 
 export function closeImportModel(): void {
   $importModelRequest.set(null)
+}
+
+/**
+ * What one completed import or replace actually did, for the post-import summary
+ * ({@link import('../ui/ImportReportCard').ImportReportCard}).
+ *
+ * A toast can hold one line; an import creates a layer, N SubParts, N placements, N textures
+ * and N materials, and a REPLACE additionally destroys SubParts — the user has to be able to
+ * read which ones. So the outcome is published as document-independent state and rendered as a
+ * dismissible card that never takes focus, rather than being crammed into a toast description.
+ */
+export interface ImportReport {
+  /** Fresh per report, so the card remounts (and re-announces) for each one. */
+  id: string
+  mode: 'import' | 'replace'
+  fileName: string
+  /** SubParts CREATED (for a replace: the added ones only — matched SubParts already existed). */
+  subParts: number
+  /** Placements created. */
+  placements: number
+  textures: number
+  materials: number
+  /** Replace only: how many existing SubParts kept their identity. */
+  matched?: number
+  /** Replace only: display names of the SubParts the new file no longer contains. */
+  removed?: string[]
+  /** Non-blocking warnings from the geometry + material passes, carried through verbatim. */
+  warnings: ImportWarning[]
+}
+
+export const $importReport = atom<ImportReport | null>(null)
+
+export function dismissImportReport(): void {
+  $importReport.set(null)
 }
 
 function shortId(): string {
@@ -481,7 +524,12 @@ async function buildImportedCatalogEntry(
   return {
     id: m.subPartId,
     atlasUrl: url,
-    meshNodeName: m.subPartId,
+    // The name INSIDE the GLB, which is not the SubPart id after a replace: a replaced mesh
+    // keeps its original `subPartId` (placements/GameData/animations reference it) while its
+    // geometry now lives under the new file's generated name. The render cache short-circuits
+    // this for the editor, but SubPartObject's fallback and SubPartPreviewViewport resolve
+    // through it, so it has to be the truth.
+    meshNodeName: imported.meshName,
     materialId: undefined,
     // Cache-busting key for the shared-material cache, exactly like the primitive path.
     diffuseUrl: baseMapUrl,
@@ -952,6 +1000,107 @@ function instanceBase(name: string): string {
 }
 
 /**
+ * Appends one placement of an imported SubPart, with an instanceId unique across the WHOLE
+ * part (the same file can be imported twice, and a replace adds copies alongside placements
+ * the user already arranged). The count is a starting guess, then probed — `<base>_2` can
+ * exist without `<base>_1` after a manual delete.
+ */
+function pushImportedPlacement(
+  p: EditingPart,
+  subPartId: string,
+  name: string,
+  transform: Transform,
+  layerId: string,
+): void {
+  const base = instanceBase(name)
+  let n =
+    p.placements.filter((pl) => pl.instanceId === base || pl.instanceId.startsWith(`${base}_`))
+      .length + 1
+  while (p.placements.some((pl) => pl.instanceId === `${base}_${n}`)) n++
+  p.placements.push({
+    instanceId: `${base}_${n}`,
+    subPartTemplateId: subPartId,
+    position: { ...transform.position },
+    rotation: { ...transform.rotation },
+    scale: { ...transform.scale },
+    layerId,
+  })
+}
+
+/** The {@link ImportedMeshSource} for one normalized mesh of a batch. */
+function importedSourceFor(
+  normalized: NormalizedImport,
+  mesh: NormalizedMesh,
+  keep?: ImportedMeshSource,
+): ImportedMeshSource {
+  const source: ImportedMeshSource = {
+    importId: normalized.importId,
+    // The GLB names every mesh by the subPartId NORMALIZATION generated for it (see
+    // importNormalize's atlas build) — which is only the descriptor's own `subPartId` on a
+    // fresh import: a replaced mesh keeps its original SubPart id and points here instead.
+    meshName: mesh.subPartId,
+    sourceFile: normalized.fileName,
+    sourceNode: mesh.sourceNode,
+    sourceMaterial: mesh.sourceMaterial,
+    triangles: mesh.triangles,
+    vertices: mesh.vertices,
+  }
+  // "Render as glass" is the user's export decision about this SubPart, not the file's.
+  if (keep?.transparent) source.transparent = true
+  return source
+}
+
+/**
+ * Attaches the import's material + glow to a mesh descriptor, and REMOVES what the new file
+ * no longer says. Shared by {@link importModelAsMeshes} (where there is nothing to remove) and
+ * {@link replaceImport} with "Update materials from file" on — a replaced SubPart whose new
+ * material doesn't emit must lose the glow the previous file gave it, or it keeps glowing
+ * from a bitmap that no longer describes anything.
+ *
+ * Mutates `descriptor` in place (it is a local, pre-mutation object) and writes the glow
+ * bitmap binary, because the rebuild the caller's `mutate()` triggers reads it back.
+ */
+async function attachImportedMaterial(
+  descriptor: CustomMesh,
+  mesh: NormalizedMesh,
+  plan: ImportMaterialPlan | undefined,
+  materials: Map<string, CustomMaterial>,
+): Promise<void> {
+  const key = plan?.materialKeyByGroup.get(mesh.materialGroupKey)
+  const material = key ? materials.get(key) : undefined
+  const spec = key ? plan?.materials.find((m) => m.key === key) : undefined
+  if (material) descriptor.materialId = material.id
+  else delete descriptor.materialId
+  if (spec?.transparent && descriptor.imported) descriptor.imported.transparent = true
+
+  const hadGlow = !!descriptor.emissive
+  if (spec?.glowPng) {
+    // REUSE OF THE 'painted' SHAPE (plans/IMPORT_MODELS.md §3.4 called for a new 'map'
+    // shape): an imported emissive is exactly what 'painted' already models — an RGBA
+    // bitmap where rgb is the glow colour and a is the intensity, stored under
+    // assetKeys.emissivePaint(meshId). Reusing it means glowBitmapFor(), compositeGlow(),
+    // the editor material and the exporter all work unchanged, and the user can retouch
+    // an imported glow in the existing paint dialog.
+    const png = new Blob([spec.glowPng.slice()], { type: 'image/png' })
+    await putAsset(assetKeys.emissivePaint(descriptor.id), png, 'image/png')
+    const old = emissivePaintUrls.get(descriptor.id)
+    if (old) URL.revokeObjectURL(old)
+    emissivePaintUrls.set(descriptor.id, URL.createObjectURL(png))
+    descriptor.emissive = {
+      shape: 'painted',
+      color: spec.glowColor ?? DEFAULT_GLOW.color,
+      strength: spec.glowStrength ?? DEFAULT_GLOW.strength,
+    }
+  } else if (hadGlow) {
+    delete descriptor.emissive
+    const old = emissivePaintUrls.get(descriptor.id)
+    if (old) URL.revokeObjectURL(old)
+    emissivePaintUrls.delete(descriptor.id)
+    void deleteAsset(assetKeys.emissivePaint(descriptor.id))
+  }
+}
+
+/**
  * Turns the {@link ImportMaterialPlan}'s specs into real flexo assets: one
  * {@link CustomTexture} per {@link ImportTextureSpec} (binaries + KTX2 + blob URLs) and one
  * {@link CustomMaterial} per {@link ImportMaterialSpec}, wired to those texture ids.
@@ -1033,44 +1182,14 @@ export async function importModelAsMeshes(
    */
   const meshes: CustomMesh[] = []
   for (const mesh of normalized.meshes) {
-    const spec = materialPlan?.materialKeyByGroup.get(mesh.materialGroupKey)
-    const material = spec ? assets.materials.get(spec) : undefined
-    const materialSpec = spec ? materialPlan?.materials.find((m) => m.key === spec) : undefined
-    const id = `mesh_${shortId()}`
     const descriptor: CustomMesh = {
-      id,
+      id: `mesh_${shortId()}`,
       name: mesh.name,
       subPartId: mesh.subPartId,
-      imported: {
-        importId: normalized.importId,
-        // The GLB names every mesh by its subPartId (see importNormalize's atlas build).
-        meshName: mesh.subPartId,
-        sourceFile: normalized.fileName,
-        sourceNode: mesh.sourceNode,
-        sourceMaterial: mesh.sourceMaterial,
-        triangles: mesh.triangles,
-        vertices: mesh.vertices,
-      },
+      imported: importedSourceFor(normalized, mesh),
       faceTextures: {},
     }
-    if (material) descriptor.materialId = material.id
-    if (materialSpec?.transparent) descriptor.imported!.transparent = true
-    if (materialSpec?.glowPng) {
-      // REUSE OF THE 'painted' SHAPE (plans/IMPORT_MODELS.md §3.4 called for a new 'map'
-      // shape): an imported emissive is exactly what 'painted' already models — an RGBA
-      // bitmap where rgb is the glow colour and a is the intensity, stored under
-      // assetKeys.emissivePaint(meshId). Reusing it means glowBitmapFor(), compositeGlow(),
-      // the editor material and the exporter all work unchanged, and the user can retouch
-      // an imported glow in the existing paint dialog.
-      const png = new Blob([materialSpec.glowPng.slice()], { type: 'image/png' })
-      await putAsset(assetKeys.emissivePaint(id), png, 'image/png')
-      emissivePaintUrls.set(id, URL.createObjectURL(png))
-      descriptor.emissive = {
-        shape: 'painted',
-        color: materialSpec.glowColor ?? DEFAULT_GLOW.color,
-        strength: materialSpec.glowStrength ?? DEFAULT_GLOW.strength,
-      }
-    }
+    await attachImportedMaterial(descriptor, mesh, materialPlan, assets.materials)
     meshes.push(descriptor)
   }
   publishEmissivePaintUrls()
@@ -1085,21 +1204,8 @@ export async function importModelAsMeshes(
     for (let i = 0; i < normalized.meshes.length; i++) {
       const mesh = normalized.meshes[i]!
       p.customMeshes.push(meshes[i]!)
-      // Keep instanceIds unique across the whole part (e.g. the same file imported twice).
-      const base = instanceBase(mesh.name)
-      let taken = p.placements.filter(
-        (pl) => pl.instanceId === base || pl.instanceId.startsWith(`${base}_`),
-      ).length
       for (const t of mesh.placements) {
-        taken++
-        p.placements.push({
-          instanceId: `${base}_${taken}`,
-          subPartTemplateId: mesh.subPartId,
-          position: { ...t.position },
-          rotation: { ...t.rotation },
-          scale: { ...t.scale },
-          layerId,
-        })
+        pushImportedPlacement(p, mesh.subPartId, mesh.name, t, layerId)
         newPlacementIndices.push(p.placements.length - 1)
       }
     }
@@ -1108,6 +1214,16 @@ export async function importModelAsMeshes(
   // Active layer + selection are ephemeral (not undo-tracked).
   setActiveLayer(layerId)
   setSelection(newPlacementIndices, [], [])
+  $importReport.set({
+    id: shortId(),
+    mode: 'import',
+    fileName,
+    subParts: meshes.length,
+    placements: newPlacementIndices.length,
+    textures: assets.textures.length,
+    materials: assets.materials.size,
+    warnings: [...normalized.warnings, ...(materialPlan?.warnings ?? [])],
+  })
 }
 
 /**
@@ -1138,52 +1254,70 @@ function meshFaceTextureIds(m: CustomMesh): string[] {
 }
 
 /**
- * Plans the removal of one import batch (one dropped file): its meshes, their placements, and
- * the assets the batch LEAVES BEHIND.
+ * REFERENCE-COUNTED GARBAGE COLLECTION of the materials/textures a set of meshes stops using —
+ * the shared engine behind {@link planImportRemoval} (a batch is deleted) and
+ * {@link replaceImport} (a batch's meshes swap onto the new file's materials).
  *
  * GARBAGE COLLECTION IS REFERENCE COUNTED, NOT PROVENANCE TAGGED. Imported textures and
  * materials are ordinary flexo assets the moment they land — reusable, re-assignable,
  * editable — so "which material came from this file" is the wrong question by the time the
- * user removes it. Instead: take the assets the batch's meshes were USING, and purge exactly
- * those that nothing in the post-removal document still references. That cleans up correctly
- * when the user has re-assigned materials since importing (a material the batch brought in but
- * that now dresses a hand-made box SURVIVES; a hand-made material the user moved onto an
- * imported SubPart, and nothing else, is collected).
+ * user removes or replaces it. Instead: take the assets the `released` meshes were USING, and
+ * purge exactly those that nothing in the post-change document still references. That cleans
+ * up correctly when the user has re-assigned materials since importing (a material the batch
+ * brought in but that now dresses a hand-made box SURVIVES; a hand-made material the user moved
+ * onto an imported SubPart, and nothing else, is collected).
  *
  * A material or texture that is simply unassigned — created in the Add menu and never used —
- * is NEVER touched: only assets the removed meshes referenced are candidates.
+ * is NEVER touched: only assets the released meshes referenced are candidates.
+ *
+ * @param part      the document BEFORE the change — the pool a purge may draw from.
+ * @param released  mesh descriptors as they were BEFORE, whose assets become candidates.
+ * @param surviving every mesh that exists AFTER, with its post-change asset references.
+ * @param added     materials created by the same change (they can keep a texture alive too).
+ */
+function planOrphanedAssets(
+  part: EditingPart,
+  released: readonly CustomMesh[],
+  surviving: readonly CustomMesh[],
+  added: readonly CustomMaterial[] = [],
+): { materialIds: string[]; textureIds: string[] } {
+  // Materials: candidates are the ones the released meshes wore; survivors are those any
+  // remaining mesh still wears.
+  const releasedMaterialIds = new Set(released.map((m) => m.materialId).filter(Boolean))
+  const survivingMaterialIds = new Set(surviving.map((m) => m.materialId).filter(Boolean))
+  const purgedMaterials = part.customMaterials.filter(
+    (mat) => releasedMaterialIds.has(mat.id) && !survivingMaterialIds.has(mat.id),
+  )
+  const purgedMaterialIds = new Set(purgedMaterials.map((m) => m.id))
+
+  // Textures: candidates are those the purged materials + the released meshes' faces pointed
+  // at; survivors are those any SURVIVING material channel or remaining mesh face still does.
+  const candidates = new Set<string>()
+  for (const mat of purgedMaterials) for (const id of materialTextureIds(mat)) candidates.add(id)
+  for (const m of released) for (const id of meshFaceTextureIds(m)) candidates.add(id)
+  const stillUsed = new Set<string>()
+  for (const mat of [...part.customMaterials, ...added]) {
+    if (purgedMaterialIds.has(mat.id)) continue
+    for (const id of materialTextureIds(mat)) stillUsed.add(id)
+  }
+  for (const m of surviving) for (const id of meshFaceTextureIds(m)) stillUsed.add(id)
+  const textureIds = part.customTextures
+    .filter((t) => candidates.has(t.id) && !stillUsed.has(t.id))
+    .map((t) => t.id)
+
+  return { materialIds: [...purgedMaterialIds], textureIds }
+}
+
+/**
+ * Plans the removal of one import batch (one dropped file): its meshes, their placements, and
+ * the assets the batch LEAVES BEHIND ({@link planOrphanedAssets}).
  */
 export function planImportRemoval(part: EditingPart, importId: string): ImportRemovalPlan {
   const removed = part.customMeshes.filter((m) => m.imported?.importId === importId)
   const meshIds = new Set(removed.map((m) => m.id))
   const subPartIds = new Set(removed.map((m) => m.subPartId))
   const kept = part.customMeshes.filter((m) => !meshIds.has(m.id))
-
-  // Materials: candidates are the ones the removed meshes wore; survivors are those any
-  // remaining mesh still wears.
-  const keptMaterialIds = new Set(kept.map((m) => m.materialId).filter(Boolean))
-  const purgedMaterials = part.customMaterials.filter(
-    (mat) =>
-      removed.some((m) => m.materialId === mat.id) &&
-      !keptMaterialIds.has(mat.id) &&
-      !kept.some((m) => m.materialId === mat.id),
-  )
-  const purgedMaterialIds = new Set(purgedMaterials.map((m) => m.id))
-
-  // Textures: candidates are those the purged materials + the removed meshes' faces pointed
-  // at; survivors are those any SURVIVING material channel or remaining mesh face still does.
-  const candidates = new Set<string>()
-  for (const mat of purgedMaterials) for (const id of materialTextureIds(mat)) candidates.add(id)
-  for (const m of removed) for (const id of meshFaceTextureIds(m)) candidates.add(id)
-  const stillUsed = new Set<string>()
-  for (const mat of part.customMaterials) {
-    if (purgedMaterialIds.has(mat.id)) continue
-    for (const id of materialTextureIds(mat)) stillUsed.add(id)
-  }
-  for (const m of kept) for (const id of meshFaceTextureIds(m)) stillUsed.add(id)
-  const textureIds = part.customTextures
-    .filter((t) => candidates.has(t.id) && !stillUsed.has(t.id))
-    .map((t) => t.id)
+  const { materialIds, textureIds } = planOrphanedAssets(part, removed, kept)
 
   // Layers: only ones this batch was placed on, and only when nothing at all is left on them
   // (the import's own layer, unless the user has since moved other entities onto it).
@@ -1203,7 +1337,7 @@ export function planImportRemoval(part: EditingPart, importId: string): ImportRe
     meshIds: [...meshIds],
     subPartIds: [...subPartIds],
     placements: part.placements.filter((pl) => subPartIds.has(pl.subPartTemplateId)).length,
-    materialIds: [...purgedMaterialIds],
+    materialIds,
     textureIds,
     layerIds,
   }
@@ -1263,6 +1397,244 @@ export async function removeImport(importId: string): Promise<void> {
   releaseImportAtlas(importId)
 
   await scheduleRebuild()
+}
+
+// ── re-import / replace ──────────────────────────────────────────────────────
+
+/**
+ * How a new file's meshes line up against an existing import batch's SubParts.
+ * Generic over the incoming shape so the SAME matching runs on an {@link ImportPlan}'s groups
+ * (the dialog's live preview, before anything is normalized) and on the
+ * {@link NormalizedMesh}es {@link replaceImport} actually commits.
+ */
+export interface ImportMatchPlan<T> {
+  /** Existing SubParts the new file still contains — these keep their identity. */
+  matched: { mesh: CustomMesh; incoming: T }[]
+  /** Meshes in the new file with no counterpart — these become new SubParts. */
+  added: T[]
+  /** Existing SubParts the new file no longer contains — these must go (see below). */
+  removed: CustomMesh[]
+}
+
+/**
+ * MATCHING RULE: `(imported.sourceNode, imported.sourceMaterial)`, i.e. the Blender object name
+ * and the material on it. That pair is what a user actually keeps stable while iterating on a
+ * model, and it is the only identity glTF carries across exports — mesh/material *indices*
+ * reshuffle whenever anything is added or reordered, and flexo's own `subPartId` embeds a
+ * random suffix minted at import time, so neither can be matched on.
+ *
+ * A matched SubPart keeps its `id` AND its `subPartId`, which is the whole point: placements,
+ * SubPart GameData, animation membership, connector references and layer assignment all
+ * reference the `subPartId`, so preserving it preserves every bit of work built around the
+ * model. An existing SubPart with no counterpart has no geometry any more and MUST be dropped
+ * (a `<SubPart>` pointing at a mesh name the atlas no longer defines is a dangling reference).
+ *
+ * Duplicate keys (two objects in the file with the same name and material) are matched
+ * first-come-first-served, in document order.
+ */
+export function matchImportedMeshes<T extends { sourceNode: string; sourceMaterial: string }>(
+  existing: readonly CustomMesh[],
+  incoming: readonly T[],
+): ImportMatchPlan<T> {
+  const key = (v: { sourceNode: string; sourceMaterial: string }) =>
+    `${v.sourceNode}\u0000${v.sourceMaterial}`
+  const pool = new Map<string, CustomMesh[]>()
+  for (const mesh of existing) {
+    if (!mesh.imported) continue
+    const k = key(mesh.imported)
+    const bucket = pool.get(k)
+    if (bucket) bucket.push(mesh)
+    else pool.set(k, [mesh])
+  }
+
+  const matched: { mesh: CustomMesh; incoming: T }[] = []
+  const added: T[] = []
+  const consumed = new Set<string>()
+  for (const item of incoming) {
+    const mesh = pool.get(key(item))?.shift()
+    if (mesh) {
+      matched.push({ mesh, incoming: item })
+      consumed.add(mesh.id)
+    } else {
+      added.push(item)
+    }
+  }
+  return { matched, added, removed: existing.filter((m) => !consumed.has(m.id)) }
+}
+
+/** The batch's own layer: whatever its placements sit on today (fallback: the active layer). */
+function importBatchLayer(part: EditingPart, batch: readonly CustomMesh[]): string {
+  const subPartIds = new Set(batch.map((m) => m.subPartId))
+  return (
+    part.placements.find((pl) => subPartIds.has(pl.subPartTemplateId))?.layerId ??
+    $activeLayerId.get()
+  )
+}
+
+/**
+ * RE-IMPORT: swaps one import batch's geometry for a newly loaded file, IN PLACE, as ONE undo
+ * step. This is the difference between a toy and something you can iterate on in Blender —
+ * tweak the model, re-export, drop it back in, and the arrangement you built around it survives.
+ *
+ * What survives a replace, and why:
+ *  - **Matched SubParts keep `id` + `subPartId`** ({@link matchImportedMeshes}) — so every
+ *    placement, SubPart GameData block, animation membership, connector reference and layer
+ *    assignment keeps resolving. Only the geometry pointer (`imported`) is rewritten.
+ *  - **Their placements are left exactly as the user arranged them.** The new file's node
+ *    transforms are NOT re-applied: the user moved those instances in flexo on purpose, and a
+ *    replace that re-scattered them would throw that away. A file with MORE copies of a mesh
+ *    than the project has placements contributes only the surplus; FEWER leaves the extras be.
+ *  - **The display name** — the user may have renamed the SubPart.
+ *  - **"Render as glass"** — an export decision about the SubPart, not something the file says.
+ *
+ * `updateMaterials` (the dialog's "Update materials from file", default ON) chooses whether the
+ * new file's textures/materials/glow are created and assigned, or whether matched SubParts keep
+ * the material and glow they wear today so material edits made in flexo survive the swap.
+ * Either way the assets the swap ORPHANS are reference-counted away by the same
+ * {@link planOrphanedAssets} that backs "Remove import".
+ *
+ * BINARIES, LIKE {@link removeImport}: the new GLB (and any new textures/glow bitmaps) are
+ * written BEFORE the mutation — the rebuild it triggers reads them back — and the OLD batch's
+ * GLB plus every purged texture is deleted after. Undo restores the descriptors, not the bytes:
+ * imported geometry has no regenerable source, so undoing a replace brings back a mesh whose
+ * GLB is gone. The dialog says so.
+ */
+export async function replaceImport(
+  importId: string,
+  normalized: NormalizedImport,
+  opts: { updateMaterials: boolean },
+  materialPlan?: ImportMaterialPlan,
+): Promise<void> {
+  const before = $part.get()
+  const existing = before.customMeshes.filter((m) => m.imported?.importId === importId)
+  if (existing.length === 0) return
+
+  const match = matchImportedMeshes(existing, normalized.meshes)
+  const layerId = importBatchLayer(before, existing)
+
+  await putAsset(assetKeys.importGlb(normalized.importId), normalized.glb, 'model/gltf-binary')
+  registerImportAtlas(normalized.importId, normalized.glb)
+
+  // "Update materials from file" OFF drops the translated plan entirely: no textures are
+  // encoded, no materials are created, and matched SubParts keep the material + glow they
+  // wear today (the point of the option).
+  const applied = opts.updateMaterials ? materialPlan : undefined
+  const useMaterials = !!applied
+  const assets = applied
+    ? await createImportMaterialAssets(applied)
+    : { textures: [], materials: new Map<string, CustomMaterial>() }
+
+  // Descriptors are built (and their glow bitmaps written) BEFORE the mutation, exactly as in
+  // importModelAsMeshes: the rebuild the mutation triggers resolves geometry, texture URLs and
+  // glow bitmaps out of these binaries.
+  const updated = new Map<string, CustomMesh>()
+  for (const { mesh, incoming } of match.matched) {
+    const descriptor: CustomMesh = {
+      ...structuredClone(mesh),
+      imported: importedSourceFor(normalized, incoming, mesh.imported),
+    }
+    if (useMaterials) {
+      await attachImportedMaterial(descriptor, incoming, applied, assets.materials)
+    }
+    updated.set(mesh.id, descriptor)
+  }
+  const added: { descriptor: CustomMesh; incoming: NormalizedMesh }[] = []
+  for (const incoming of match.added) {
+    const descriptor: CustomMesh = {
+      id: `mesh_${shortId()}`,
+      name: incoming.name,
+      subPartId: incoming.subPartId,
+      imported: importedSourceFor(normalized, incoming),
+      faceTextures: {},
+    }
+    if (useMaterials) {
+      await attachImportedMaterial(descriptor, incoming, applied, assets.materials)
+    }
+    added.push({ descriptor, incoming })
+  }
+  publishEmissivePaintUrls()
+
+  const removedIds = new Set(match.removed.map((m) => m.id))
+  const removedSubPartIds = new Set(match.removed.map((m) => m.subPartId))
+  const surviving = [
+    ...before.customMeshes.filter((m) => !removedIds.has(m.id)).map((m) => updated.get(m.id) ?? m),
+    ...added.map((a) => a.descriptor),
+  ]
+  // With materials updated, every mesh of the batch releases what it wore; without, only the
+  // SubParts that are actually going away can orphan anything.
+  const released = useMaterials ? existing : match.removed
+  const gc = planOrphanedAssets(before, released, surviving, [...assets.materials.values()])
+  const purgedMaterialIds = new Set(gc.materialIds)
+  const purgedTextureIds = new Set(gc.textureIds)
+
+  const removedPlacements = before.placements.filter((pl) =>
+    removedSubPartIds.has(pl.subPartTemplateId),
+  ).length
+  const newPlacementIndices: number[] = []
+  mutate('replace model', normalized.fileName, (p) => {
+    p.customMeshes = p.customMeshes
+      .filter((m) => !removedIds.has(m.id))
+      .map((m) => updated.get(m.id) ?? m)
+    p.customMeshes.push(...added.map((a) => a.descriptor))
+    p.placements = p.placements.filter((pl) => !removedSubPartIds.has(pl.subPartTemplateId))
+    p.customTextures = [...p.customTextures, ...assets.textures].filter(
+      (t) => !purgedTextureIds.has(t.id),
+    )
+    p.customMaterials = [...p.customMaterials, ...assets.materials.values()].filter(
+      (m) => !purgedMaterialIds.has(m.id),
+    )
+
+    // Matched SubParts keep the placements the user arranged; only a file that now has MORE
+    // copies of a mesh than the project has placements of it contributes the surplus.
+    for (const { mesh, incoming } of match.matched) {
+      const have = p.placements.filter((pl) => pl.subPartTemplateId === mesh.subPartId).length
+      for (const t of incoming.placements.slice(have)) {
+        pushImportedPlacement(p, mesh.subPartId, mesh.name, t, layerId)
+        newPlacementIndices.push(p.placements.length - 1)
+      }
+    }
+    for (const { descriptor, incoming } of added) {
+      for (const t of incoming.placements) {
+        pushImportedPlacement(p, descriptor.subPartId, descriptor.name, t, layerId)
+        newPlacementIndices.push(p.placements.length - 1)
+      }
+    }
+  })
+
+  // Selection is ephemeral: prefer the new placements, but never leave stale INDICES behind
+  // (they shift when removed placements are spliced out).
+  if (newPlacementIndices.length > 0) setSelection(newPlacementIndices, [], [])
+  else if (removedPlacements > 0) setSelection([], [], [])
+
+  for (const id of purgedTextureIds) {
+    revokeTexture(id)
+    void deleteAsset(assetKeys.textureSource(id))
+    void deleteAsset(assetKeys.textureKtx2(id))
+  }
+  publishTextureUrls()
+  for (const mesh of match.removed) {
+    const url = emissivePaintUrls.get(mesh.id)
+    if (url) URL.revokeObjectURL(url)
+    emissivePaintUrls.delete(mesh.id)
+    void deleteAsset(assetKeys.emissivePaint(mesh.id))
+  }
+  publishEmissivePaintUrls()
+  void deleteAsset(assetKeys.importGlb(importId))
+  releaseImportAtlas(importId)
+
+  await scheduleRebuild()
+  $importReport.set({
+    id: shortId(),
+    mode: 'replace',
+    fileName: normalized.fileName,
+    subParts: added.length,
+    placements: newPlacementIndices.length,
+    textures: assets.textures.length,
+    materials: assets.materials.size,
+    matched: match.matched.length,
+    removed: match.removed.map((m) => m.name),
+    warnings: [...normalized.warnings, ...(applied?.warnings ?? [])],
+  })
 }
 
 export async function updateCustomMesh(

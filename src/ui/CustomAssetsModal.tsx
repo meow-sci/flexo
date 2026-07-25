@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
-import { Palette, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Palette, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import {
   Button,
   ConfirmDialog,
@@ -16,6 +16,7 @@ import {
 import { $part, addSubPart } from '../state/editorStore'
 import {
   $customTextureUrls,
+  openImportModel,
   planImportRemoval,
   removeCustomMaterial,
   removeCustomMesh,
@@ -152,6 +153,15 @@ export function CustomAssetsModal({
   }
   const manageTextures = (m: CustomMesh) => {
     setManagingMeshId(m.id)
+    onOpenChange(false)
+  }
+  /**
+   * Re-import: hand the batch to the ONE import dialog in replace mode (it opens on its drop
+   * step, since the point is to pick the file you just re-exported from Blender). This modal
+   * closes — two stacked fullscreen modals would trap focus in the wrong one.
+   */
+  const replaceImport = (batch: ImportBatch) => {
+    openImportModel([], batch.importId)
     onOpenChange(false)
   }
 
@@ -329,6 +339,7 @@ export function CustomAssetsModal({
                     onAddInstance={addToScene}
                     onManage={manageTextures}
                     onDeleteMesh={setPendingMesh}
+                    onReplaceImport={() => replaceImport(batch)}
                     onRemoveImport={() => setPendingImport(batch)}
                   />
                 ))
@@ -432,6 +443,7 @@ function ImportBatchCard({
   onAddInstance,
   onManage,
   onDeleteMesh,
+  onReplaceImport,
   onRemoveImport,
 }: {
   batch: ImportBatch
@@ -439,6 +451,7 @@ function ImportBatchCard({
   onAddInstance: (m: CustomMesh) => void
   onManage: (m: CustomMesh) => void
   onDeleteMesh: (m: CustomMesh) => void
+  onReplaceImport: () => void
   onRemoveImport: () => void
 }) {
   return (
@@ -451,6 +464,12 @@ function ImportBatchCard({
             placement{batch.placements === 1 ? '' : 's'} · {batch.triangles.toLocaleString()} tris
           </span>
         </span>
+        {/* Iteration: re-export from Blender, drop the new file here, and the SubParts that
+            kept their object+material name keep their identity (customAssetStore.replaceImport). */}
+        <Button size="sm" variant="secondary" onPress={onReplaceImport}>
+          <RefreshCw size={14} />
+          Replace…
+        </Button>
         <Button size="sm" variant="danger-ghost" onPress={onRemoveImport}>
           Remove import
         </Button>

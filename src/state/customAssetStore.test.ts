@@ -107,9 +107,11 @@ import {
   customMeshRenderCache,
   importModelAsMeshes,
   makeKittenMeshPart,
+  matchImportedMeshes,
   planImportRemoval,
   removeCustomMaterial,
   removeImport,
+  replaceImport,
   setMeshMaterial,
   setMeshTransparent,
   updateCustomMaterial,
@@ -117,6 +119,7 @@ import {
 import { analyzeImport, DEFAULT_IMPORT_OPTIONS } from '../ksa/importPlan'
 import { normalizeImport, type NormalizedImport } from '../ksa/importNormalize'
 import type { ImportMaterialPlan, ImportMaterialSpec } from '../ksa/importMaterials'
+import type { CustomMesh } from '../ksa/types'
 import { assetKeys, getAsset } from './assetDb'
 
 beforeEach(() => {
@@ -124,27 +127,36 @@ beforeEach(() => {
 })
 
 /**
- * A synthetic two-object model: "Hull" placed twice (both nodes share one geometry+material,
- * so it must become ONE SubPart with TWO placements) plus a single "Nozzle". Run through the
+ * A synthetic model, one object per entry, each placed `instances` times (all instances share
+ * one geometry + material, so an object becomes ONE SubPart with N placements). Run through the
  * real analyze + normalize passes so the descriptors under test are the real shapes.
  */
-async function synthesizeImport(): Promise<NormalizedImport> {
+async function synthesizeModel(
+  objects: { name: string; instances: number }[],
+  fileName = 'pod.glb',
+): Promise<NormalizedImport> {
   const material = new THREE.MeshStandardMaterial()
   material.name = 'Metal'
-  const hull = new THREE.BoxGeometry(1, 1, 1)
   const scene = new THREE.Group()
-  for (const x of [0, 2]) {
-    const mesh = new THREE.Mesh(hull, material)
-    mesh.name = 'Hull'
-    mesh.position.set(x, 0, 0)
-    scene.add(mesh)
+  for (const object of objects) {
+    const geometry = new THREE.BoxGeometry(1, 1, 1)
+    for (let i = 0; i < object.instances; i++) {
+      const mesh = new THREE.Mesh(geometry, material)
+      mesh.name = object.name
+      mesh.position.set(i * 2, 0, 0)
+      scene.add(mesh)
+    }
   }
-  const nozzle = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), material)
-  nozzle.name = 'Nozzle'
-  scene.add(nozzle)
-
-  const plan = analyzeImport({ scene, fileName: 'pod.glb' }, DEFAULT_IMPORT_OPTIONS)
+  const plan = analyzeImport({ scene, fileName }, DEFAULT_IMPORT_OPTIONS)
   return normalizeImport(plan, DEFAULT_IMPORT_OPTIONS)
+}
+
+/** The canonical fixture: "Hull" placed twice + a single "Nozzle" → 2 SubParts, 3 placements. */
+async function synthesizeImport(): Promise<NormalizedImport> {
+  return synthesizeModel([
+    { name: 'Hull', instances: 2 },
+    { name: 'Nozzle', instances: 1 },
+  ])
 }
 
 /**
@@ -556,5 +568,252 @@ describe('removeImport', () => {
     await importModelAsMeshes(normalized, 'pod.glb')
     await removeImport('nope')
     expect($part.get().customMeshes).toHaveLength(2)
+  })
+})
+
+describe('replaceImport', () => {
+  /** Drags the Hull placements somewhere, as a user arranging the model in the editor would. */
+  function arrangeHullPlacements(subPartId: string): void {
+    const p = $part.get()
+    $part.set({
+      ...p,
+      placements: p.placements.map((pl) =>
+        pl.subPartTemplateId === subPartId ? { ...pl, position: { x: 9, y: 9, z: 9 } } : pl,
+      ),
+    })
+  }
+
+  it('matched SubParts keep their id, subPartId and the placements the user arranged', async () => {
+    const first = await synthesizeImport()
+    await importModelAsMeshes(first, 'pod.glb', materialPlanFor(first))
+    const hullBefore = $part.get().customMeshes[0]!
+    arrangeHullPlacements(hullBefore.subPartId)
+
+    // The re-export: Hull survives (renamed in flexo, and re-materialled in Blender), Nozzle
+    // is gone, Skirt is new.
+    const second = await synthesizeModel([
+      { name: 'Hull', instances: 2 },
+      { name: 'Skirt', instances: 1 },
+    ])
+    await replaceImport(first.importId, second, { updateMaterials: true }, materialPlanFor(second))
+
+    const p = $part.get()
+    expect(p.customMeshes).toHaveLength(2)
+    const hull = p.customMeshes.find((m) => m.imported?.sourceNode === 'Hull')!
+    // IDENTITY PRESERVED: everything that references a SubPart keeps resolving.
+    expect(hull.id).toBe(hullBefore.id)
+    expect(hull.subPartId).toBe(hullBefore.subPartId)
+    // …pointing at the NEW file's geometry, under the name that file gave it.
+    expect(hull.imported!.importId).toBe(second.importId)
+    expect(hull.imported!.meshName).toBe(second.meshes[0]!.subPartId)
+    expect(hull.imported!.meshName).not.toBe(hull.subPartId)
+    expect(hull.imported!.sourceFile).toBe('pod.glb')
+
+    // The arrangement survives — the file's node transforms are NOT re-applied.
+    const hullPlacements = p.placements.filter((pl) => pl.subPartTemplateId === hull.subPartId)
+    expect(hullPlacements).toHaveLength(2)
+    expect(hullPlacements.every((pl) => pl.position.x === 9)).toBe(true)
+
+    // Removed: the SubPart the new file no longer contains, and its placement.
+    expect(p.customMeshes.some((m) => m.imported?.sourceNode === 'Nozzle')).toBe(false)
+    expect(p.placements.some((pl) => pl.subPartTemplateId === hullBefore.subPartId)).toBe(true)
+    // Added: a brand-new SubPart with its own placement, on the batch's existing layer.
+    const skirt = p.customMeshes.find((m) => m.imported?.sourceNode === 'Skirt')!
+    expect(skirt.subPartId).toBe(second.meshes[1]!.subPartId)
+    const skirtPlacements = p.placements.filter((pl) => pl.subPartTemplateId === skirt.subPartId)
+    expect(skirtPlacements).toHaveLength(1)
+    expect(skirtPlacements[0]!.layerId).toBe(hullPlacements[0]!.layerId)
+    expect(p.placements).toHaveLength(3)
+  })
+
+  it('adds only the SURPLUS placements when the new file has more copies of a mesh', async () => {
+    const first = await synthesizeImport()
+    await importModelAsMeshes(first, 'pod.glb')
+    const hullId = $part.get().customMeshes[0]!.subPartId
+    arrangeHullPlacements(hullId)
+
+    // Hull is now placed FOUR times in Blender; flexo has two placements it must not disturb.
+    const second = await synthesizeModel([
+      { name: 'Hull', instances: 4 },
+      { name: 'Nozzle', instances: 1 },
+    ])
+    await replaceImport(first.importId, second, { updateMaterials: false })
+
+    const hullPlacements = $part.get().placements.filter((pl) => pl.subPartTemplateId === hullId)
+    expect(hullPlacements).toHaveLength(4)
+    expect(hullPlacements.filter((pl) => pl.position.x === 9)).toHaveLength(2)
+    expect(new Set(hullPlacements.map((pl) => pl.instanceId)).size).toBe(4)
+  })
+
+  it('leaves surplus placements alone when the new file has fewer copies', async () => {
+    const first = await synthesizeImport()
+    await importModelAsMeshes(first, 'pod.glb')
+    const hullId = $part.get().customMeshes[0]!.subPartId
+
+    const second = await synthesizeModel([
+      { name: 'Hull', instances: 1 },
+      { name: 'Nozzle', instances: 1 },
+    ])
+    await replaceImport(first.importId, second, { updateMaterials: false })
+
+    expect($part.get().placements.filter((pl) => pl.subPartTemplateId === hullId)).toHaveLength(2)
+  })
+
+  it('"Update materials from file" ON swaps the material and collects the orphans', async () => {
+    const first = await synthesizeImport()
+    await importModelAsMeshes(first, 'pod.glb', materialPlanFor(first))
+    const before = $part.get()
+    const oldMaterialId = before.customMaterials[0]!.id
+    const oldTextureIds = before.customTextures.map((t) => t.id)
+
+    const second = await synthesizeImport()
+    await replaceImport(first.importId, second, { updateMaterials: true }, materialPlanFor(second))
+
+    const p = $part.get()
+    // ONE material again — the old one is unreferenced after the swap, so it is collected
+    // along with its three textures (the same reference counting "Remove import" uses).
+    expect(p.customMaterials).toHaveLength(1)
+    expect(p.customMaterials[0]!.id).not.toBe(oldMaterialId)
+    expect(p.customTextures).toHaveLength(3)
+    expect(p.customTextures.some((t) => oldTextureIds.includes(t.id))).toBe(false)
+    expect(p.customMeshes.every((m) => m.materialId === p.customMaterials[0]!.id)).toBe(true)
+    // The orphaned textures' binaries go too.
+    for (const id of oldTextureIds) {
+      expect(await getAsset(assetKeys.textureSource(id))).toBeUndefined()
+    }
+  })
+
+  it('"Update materials from file" OFF keeps the material edits made in flexo', async () => {
+    const first = await synthesizeImport()
+    await importModelAsMeshes(first, 'pod.glb', materialPlanFor(first))
+    const before = $part.get()
+    const materialId = before.customMaterials[0]!.id
+    const textureIds = before.customTextures.map((t) => t.id)
+
+    const second = await synthesizeImport()
+    await replaceImport(first.importId, second, { updateMaterials: false }, materialPlanFor(second))
+
+    const p = $part.get()
+    // Nothing was created and nothing was collected — only the geometry pointer moved.
+    expect(p.customMaterials.map((m) => m.id)).toEqual([materialId])
+    expect(p.customTextures.map((t) => t.id)).toEqual(textureIds)
+    expect(p.customMeshes.every((m) => m.materialId === materialId)).toBe(true)
+    expect(p.customMeshes.every((m) => m.imported!.importId === second.importId)).toBe(true)
+    for (const id of textureIds) {
+      expect(await getAsset(assetKeys.textureSource(id))).toBeInstanceOf(Blob)
+    }
+  })
+
+  it('drops a glow the new file no longer emits (materials ON) but keeps it (materials OFF)', async () => {
+    const first = await synthesizeImport()
+    await importModelAsMeshes(first, 'pod.glb', materialPlanFor(first, true))
+    expect($part.get().customMeshes.every((m) => m.emissive?.shape === 'painted')).toBe(true)
+
+    const off = await synthesizeImport()
+    await replaceImport(first.importId, off, { updateMaterials: false }, materialPlanFor(off))
+    expect($part.get().customMeshes.every((m) => m.emissive?.shape === 'painted')).toBe(true)
+
+    const on = await synthesizeImport()
+    await replaceImport(off.importId, on, { updateMaterials: true }, materialPlanFor(on))
+    expect($part.get().customMeshes.every((m) => m.emissive === undefined)).toBe(true)
+  })
+
+  it('publishes a catalog entry per surviving SubPart, atlased to the NEW batch GLB', async () => {
+    const first = await synthesizeImport()
+    await importModelAsMeshes(first, 'pod.glb')
+    const second = await synthesizeModel([
+      { name: 'Hull', instances: 2 },
+      { name: 'Skirt', instances: 1 },
+    ])
+    await replaceImport(first.importId, second, { updateMaterials: false })
+
+    const entries = $customCatalog.get()
+    expect(entries).toHaveLength(2)
+    for (const e of entries) {
+      expect(e.atlasUrl).toBe(`blob:import/${second.importId}`)
+    }
+    // meshNodeName is the name INSIDE the new GLB, which is no longer the SubPart id for a
+    // replaced mesh — the fallback geometry lookup depends on it being the truth.
+    const hull = $part.get().customMeshes[0]!
+    const hullEntry = entries.find((e) => e.id === hull.subPartId)!
+    expect(hullEntry.meshNodeName).toBe(hull.imported!.meshName)
+    expect(hullEntry.meshNodeName).not.toBe(hullEntry.id)
+  })
+
+  it('deletes the previous batch GLB and registers the new one', async () => {
+    const first = await synthesizeImport()
+    await importModelAsMeshes(first, 'pod.glb')
+    const second = await synthesizeImport()
+    await replaceImport(first.importId, second, { updateMaterials: false })
+
+    expect(await getAsset(assetKeys.importGlb(first.importId))).toBeUndefined()
+    expect(await getAsset(assetKeys.importGlb(second.importId))).toBeInstanceOf(Blob)
+  })
+
+  it('leaves another import batch untouched', async () => {
+    const first = await synthesizeImport()
+    await importModelAsMeshes(first, 'pod.glb', materialPlanFor(first))
+    const other = await synthesizeImport()
+    await importModelAsMeshes(other, 'nozzle.glb', materialPlanFor(other))
+
+    const second = await synthesizeImport()
+    await replaceImport(first.importId, second, { updateMaterials: true }, materialPlanFor(second))
+
+    const p = $part.get()
+    expect(p.customMeshes.filter((m) => m.imported!.importId === other.importId)).toHaveLength(2)
+    expect(p.customMeshes.filter((m) => m.imported!.importId === second.importId)).toHaveLength(2)
+    expect(p.customMaterials).toHaveLength(2)
+    expect(p.customTextures).toHaveLength(6)
+    expect(await getAsset(assetKeys.importGlb(other.importId))).toBeInstanceOf(Blob)
+  })
+
+  it('is a no-op for an unknown import id', async () => {
+    const first = await synthesizeImport()
+    await importModelAsMeshes(first, 'pod.glb')
+    const second = await synthesizeImport()
+    await replaceImport('nope', second, { updateMaterials: true })
+    expect($part.get().customMeshes.every((m) => m.imported!.importId === first.importId)).toBe(
+      true,
+    )
+  })
+})
+
+describe('matchImportedMeshes', () => {
+  const mesh = (id: string, sourceNode: string, sourceMaterial: string): CustomMesh => ({
+    id,
+    name: id,
+    subPartId: `flexo_${id}`,
+    faceTextures: {},
+    imported: {
+      importId: 'imp_1',
+      meshName: `flexo_${id}`,
+      sourceFile: 'pod.glb',
+      sourceNode,
+      sourceMaterial,
+      triangles: 1,
+      vertices: 3,
+    },
+  })
+
+  it('matches on (sourceNode, sourceMaterial) and reports the rest', () => {
+    const existing = [mesh('a', 'Hull', 'Metal'), mesh('b', 'Nozzle', 'Metal')]
+    const plan = matchImportedMeshes(existing, [
+      { sourceNode: 'Nozzle', sourceMaterial: 'Metal' },
+      { sourceNode: 'Hull', sourceMaterial: 'Paint' }, // same object, NEW material → not a match
+    ])
+    expect(plan.matched.map((m) => m.mesh.id)).toEqual(['b'])
+    expect(plan.added).toHaveLength(1)
+    expect(plan.removed.map((m) => m.id)).toEqual(['a'])
+  })
+
+  it('matches duplicate (node, material) pairs first-come-first-served', () => {
+    const existing = [mesh('a', 'Bolt', 'Metal'), mesh('b', 'Bolt', 'Metal')]
+    const plan = matchImportedMeshes(existing, [
+      { sourceNode: 'Bolt', sourceMaterial: 'Metal' },
+      { sourceNode: 'Bolt', sourceMaterial: 'Metal' },
+    ])
+    expect(plan.matched.map((m) => m.mesh.id)).toEqual(['a', 'b'])
+    expect(plan.added).toHaveLength(0)
+    expect(plan.removed).toHaveLength(0)
   })
 })

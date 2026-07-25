@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { ViewportCanvas } from './three/ViewportCanvas'
 import { ViewportDropZone } from './ui/ViewportDropZone'
 import { ImportModelDialog } from './ui/ImportModelDialog'
+import { ImportReportCard } from './ui/ImportReportCard'
 import { EditorToolbar } from './ui/Toolbar'
 import { MobileTopBar } from './ui/MobileTopBar'
 import { SelectionToolbar } from './ui/SelectionToolbar'
@@ -102,6 +103,10 @@ function App() {
       {/* Model import (preview + options + warnings). Mounted once for both entry points:
           the Add menu and a drag-drop onto the viewport above. */}
       <ImportModelDialog />
+
+      {/* Bottom-right: what the last import/replace created, matched and removed. Dismissible,
+          non-modal, never focus-stealing. */}
+      <ImportReportCard />
 
       {/* Bottom-left: live selection bounding-box dimensions. */}
       <MeasurementInfo />

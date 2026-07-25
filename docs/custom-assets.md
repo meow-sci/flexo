@@ -12,10 +12,10 @@ in-game pass — see "Pending in-game verification" below).
 A **model imported from Blender** (`.glb` / `.gltf`) rides the same machinery: it becomes
 ordinary `CustomMesh` descriptors — one SubPart per (glTF mesh × material), one placement
 per node that references it — so the catalog, scene, selection, gizmos, layers and undo are
-unchanged. Geometry, materials/textures **and mod export** are shipped; the import dialog
-(preview / options / warnings) and re-import are the remaining phases (see
+unchanged. Geometry, materials/textures, mod export, the import dialog (preview / options /
+warnings) and **re-import in place** are all shipped (see
 [plans/IMPORT_MODELS.md](../plans/IMPORT_MODELS.md); the user-facing
-`docs/importing-models.md` lands with them).
+`docs/importing-models.md` is still to come).
 
 The design rationale and format research live in
 [plans/done/FLEXO_CUSTOM_ASSETS.md](../plans/done/FLEXO_CUSTOM_ASSETS.md). This doc is the
@@ -159,14 +159,48 @@ would re-run `GLTFExporter` over a multi-megabyte model on every rebuild.
   SubPart of that batch, their placements, the assets it leaves behind, and its layer when
   the batch was the only thing on it. `planImportRemoval(part, importId)` computes the
   inventory (and feeds the confirm dialog's counts) — see **Removing an import** below.
+- **`customAssetStore.replaceImport(importId, normalized, opts, materialPlan?)`** — the
+  iteration loop: swap one batch's geometry for a re-export, in place, as ONE undo step. See
+  **Replacing an import** below.
 
-#### Removing an import — reference-counted, not provenance-tagged
+#### Replacing an import (re-import) — identity is preserved, arrangement is not touched
+
+"Replace…" on a batch in the Custom Assets modal reopens the **same** import dialog in replace
+mode (`$importModelRequest.replaceImportId`); its review step shows the match summary before
+anything is committed.
+
+**Matching rule: `(imported.sourceNode, imported.sourceMaterial)`** — the Blender object name ×
+the material on it (`matchImportedMeshes()`, shared by the dialog's preview and the commit).
+That pair is the only identity glTF carries across exports: mesh/material *indices* reshuffle
+on every edit, and flexo's own `subPartId` embeds a random suffix minted at import time.
+
+| Outcome | What happens |
+| --- | --- |
+| **matched** | The existing `CustomMesh` keeps its `id` **and `subPartId`**, so every placement, SubPart GameData block, animation membership, connector reference and layer assignment survives. Only `imported` is rewritten (new `importId`/`meshName`/`sourceFile`/`triangles`/`vertices`); the display name and the "render as glass" flag are the user's, and stay. **Its placements are left exactly as arranged** — the file's node transforms are NOT re-applied. More copies in the new file than the project has placements ⇒ only the surplus is added; fewer ⇒ the extras are left alone. |
+| **added** | A new `CustomMesh` + its placements, on the batch's existing layer. |
+| **removed** | The new file has no geometry for it, so the SubPart and its placements go (a `<SubPart>` pointing at a mesh name the atlas no longer defines is a dangling reference). Named explicitly in both the review step and the report. |
+
+**"Update materials from file" (default on)** decides whether the new file's textures /
+materials / glow are created and assigned, or whether matched SubParts keep the material and
+glow they wear today (off = material edits made in flexo survive; nothing is encoded and
+nothing is collected). With it on, a matched SubPart whose new material doesn't emit also
+loses the glow the previous file gave it.
+
+Because a replaced mesh keeps its original `subPartId` while its geometry lives under the new
+file's generated name, **`imported.meshName` is the only truthful mesh lookup key** — it is
+what `CatalogSubPart.meshNodeName`, `getImportedGeometry()` and `buildCustomBundle()` all use.
+
+Binaries follow `removeImport`'s contract: the new GLB is written before the mutation, the old
+batch's GLB + every collected texture is deleted after, and `releaseImportAtlas()` frees the
+old blob URL — so **undo restores the descriptors, not the bytes**.
+
+#### Removing or replacing an import — reference-counted, not provenance-tagged
 
 Imported textures and materials are ordinary flexo assets, so "which material came from this
-file" stops being true the moment the user re-assigns one. `planImportRemoval()` therefore
-garbage-collects by **reference counting over the post-removal document**: the candidates are
-the assets the removed meshes were *using*, and a candidate is collected only when nothing
-that remains references it.
+file" stops being true the moment the user re-assigns one. `planOrphanedAssets()` — shared by
+`planImportRemoval()` and `replaceImport()` — therefore garbage-collects by **reference
+counting over the post-change document**: the candidates are the assets the released meshes
+were *using*, and a candidate is collected only when nothing that remains references it.
 
 - a **material** is collected when the batch's meshes wore it and no surviving mesh does;
 - a **texture** is collected when a collected material's channel (or a removed mesh's face)
@@ -286,8 +320,9 @@ same path as hand-authored ones. Nothing about them is a parallel universe.
   now), and **Imported models**: one card per import batch with its file name, SubPart /
   placement / triangle totals and the textures it is dressed in; a `GridList` of its SubParts
   (name, source object · source material, tri count, add instance / manage / delete); and
-  **Remove import**, confirmed with the exact inventory `planImportRemoval()` computed plus
-  the "deleted from browser storage, undo won't bring the bytes back" warning.
+  **Replace…** (reopens the import dialog in replace mode for that batch) + **Remove import**,
+  the latter confirmed with the exact inventory `planImportRemoval()` computed plus the
+  "deleted from browser storage, undo won't bring the bytes back" warning.
 - `ImportModelDialog.tsx` — the model importer's UI: **three states in one modal** —
   _drop_ (drop zone + file picker + the "How to export from Blender" recipe), _review_
   (3D preview, stats, options, warnings) and _importing_ (progress). **Nothing touches the
@@ -306,6 +341,16 @@ same path as hand-authored ones. Nothing about them is a parallel universe.
     reads, the cap, the VRAM/mod formulas, warning grouping + severities, scale presets).
   - **Warnings** are `ImportPlan.warnings` + the material plan's, grouped by subject and
     styled by severity, each with its plain-English remedy.
+  - **Replace mode** (`$importModelRequest.replaceImportId`) adds the match summary to the
+    review step (kept / new / removed, with the removed SubParts named) and the **Update
+    materials from file** switch; merging is not offered, since collapsing everything into
+    one SubPart could not preserve a single existing identity.
+- `ImportReportCard.tsx` — the post-import summary: a small dismissible card (bottom-right,
+  non-modal, never focus-stealing) driven by `$importReport`, which both
+  `importModelAsMeshes()` and `replaceImport()` publish. It reports what was created
+  (SubParts / placements / textures / materials), and for a replace the kept / removed counts
+  with the **removed SubParts named**, plus the non-blocking warnings. A one-line toast could
+  not carry that, so the success toast was dropped in its favour.
 - `ViewportDropZone.tsx` — wraps the 3D workspace so dropping a `.glb`/`.gltf` (or a
   multi-file `.gltf` set) opens the same dialog pre-loaded. Plain React drag handlers, not
   three.js: `dragover` must `preventDefault()` or no `drop` fires, drags with no file are

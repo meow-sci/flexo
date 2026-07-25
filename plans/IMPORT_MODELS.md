@@ -479,10 +479,27 @@ the Rules of React (no manual memo, hooks at top level) per AGENTS.md.
   batch's blob URL; undo restores the descriptors, never the bytes (the `removeCustomTexture`
   precedent), and the confirm dialog says so.
 
-### Phase 5 — Iteration UX (1–2 days)
-- Re-import / replace with `sourceNode + sourceMaterial` matching (keeps `subPartId`s alive).
+### Phase 5 — Iteration UX (1–2 days) — **DONE**
+- `customAssetStore.replaceImport()` — one undo step swapping ONE batch's geometry for a
+  re-export. Matching is `(sourceNode, sourceMaterial)` (`matchImportedMeshes()`, shared by the
+  dialog's live preview and the commit): a matched mesh keeps `id` **and `subPartId`** (so
+  placements, SubPart GameData, animations, connectors and layer assignment survive) plus its
+  display name, glass flag and — crucially — **the placements the user arranged**; the file's
+  node transforms are never re-applied, only a surplus copy count adds placements. Unmatched
+  incoming meshes are added on the batch's layer; unmatched existing meshes are removed with
+  their placements and reported by name.
+- Because a replaced mesh's `subPartId` and its GLB mesh name now DIVERGE, `meshNodeName` in
+  `buildImportedCatalogEntry` was corrected to `imported.meshName` (it was `subPartId`, which
+  only worked because the render cache short-circuits the fallback lookup).
+- **"Update materials from file"** (default on) — off keeps the material + glow edits made in
+  flexo and swaps geometry only. Orphaned materials/textures are collected by
+  `planOrphanedAssets()`, factored out of `planImportRemoval()` and shared by both.
 - ~~"Remove import" cleanup~~ — **done in Phase 4** (above).
-- Import report toast/panel summarising what was created.
+- Import report: `$importReport` + `ImportReportCard` (dismissible, non-modal, bottom-right) —
+  created SubParts/placements/textures/materials, the replace's kept/removed counts with the
+  removed SubParts NAMED, and the non-blocking warnings. Replaces the success toast.
+- **Merging is not offered in replace mode**: it collapses everything into one SubPart, a
+  different granularity that could not preserve a single existing SubPart identity.
 
 ### Phase 6 — Deferred / opportunistic
 - **UASTC (or BC7) KTX2 encoding + `.toml` sidecar** — the real fix for imported-texture VRAM.

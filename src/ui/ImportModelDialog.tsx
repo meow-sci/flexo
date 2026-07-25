@@ -20,7 +20,12 @@ import {
   $importModelRequest,
   closeImportModel,
   importModelAsMeshes,
+  matchImportedMeshes,
+  replaceImport,
+  type ImportMatchPlan,
 } from '../state/customAssetStore'
+import { $part } from '../state/editorStore'
+import type { CustomMesh } from '../ksa/types'
 import { $modelImportSettings, setModelImportSettings } from '../state/settingsStore'
 import { loadModelFile, type LoadedModel } from '../three/loadModelFile'
 import { ModelPreviewViewport } from '../three/ModelPreviewViewport'
@@ -65,19 +70,38 @@ import { fmt } from './format'
  * and is wrong — so the dialog measures the bounding box, previews the correction, and lets
  * the user fix it BEFORE anything is committed.
  *
- * Mounted once in `app.tsx` and driven by `$importModelRequest`, because there are two entry
- * points (the Add menu and a drag-drop onto the 3D viewport) and only one dialog.
+ * REPLACE MODE (`request.replaceImportId`, from "Replace…" on a batch in the Custom Assets
+ * modal) runs the exact same three states against an EXISTING import batch: the review step
+ * additionally shows how the new file matches up — which SubParts keep their identity, which
+ * are new, and which are about to disappear — and the commit swaps that batch's geometry in
+ * place instead of creating another one (see `customAssetStore.replaceImport`).
+ *
+ * Mounted once in `app.tsx` and driven by `$importModelRequest`, because there are three entry
+ * points (the Add menu, a drag-drop onto the 3D viewport, and "Replace…") and one dialog.
  */
 export function ImportModelDialog() {
   const request = useStore($importModelRequest)
   if (!request) return null
   // Keyed by the request id so every open starts with fresh per-import state.
-  return <ImportModelBody key={request.id} initialFiles={request.files} />
+  return (
+    <ImportModelBody
+      key={request.id}
+      initialFiles={request.files}
+      replaceImportId={request.replaceImportId}
+    />
+  )
 }
 
 /** Re-analysis is cheap; re-parsing is not. Everything here derives from a parsed model. */
-function ImportModelBody({ initialFiles }: { initialFiles: File[] }) {
+function ImportModelBody({
+  initialFiles,
+  replaceImportId,
+}: {
+  initialFiles: File[]
+  replaceImportId?: string
+}) {
   const settings = useStore($modelImportSettings)
+  const part = useStore($part)
   const [files, setFiles] = useState<File[]>(initialFiles)
   const [model, setModel] = useState<LoadedModel | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -92,6 +116,8 @@ function ImportModelBody({ initialFiles }: { initialFiles: File[] }) {
   const [bakeTransforms, setBakeTransforms] = useState(false)
   const [doubleSided, setDoubleSided] = useState(false)
   const [merge, setMerge] = useState(false)
+  /** Replace only. On (default): take the new file's textures/materials/glow too. */
+  const [updateMaterials, setUpdateMaterials] = useState(true)
 
   const fileInput = useRef<HTMLInputElement>(null)
 
@@ -168,7 +194,20 @@ function ImportModelBody({ initialFiles }: { initialFiles: File[] }) {
     }
   }, [model, settings.maxTextureSize])
 
-  const mergeable = plan ? canMerge(plan) : false
+  // ── replace mode ───────────────────────────────────────────────────────────
+  //
+  // The batch being replaced, and how the parsed file lines up against it — the SAME
+  // `matchImportedMeshes` the store commits with, run here on the plan's groups so the review
+  // step promises exactly what happens. Merging is deliberately not offered: it collapses
+  // every object into ONE SubPart, which is a different granularity and could not preserve a
+  // single existing SubPart identity.
+  const existingBatch: CustomMesh[] = replaceImportId
+    ? part.customMeshes.filter((m) => m.imported?.importId === replaceImportId)
+    : []
+  const match: ImportMatchPlan<{ sourceNode: string; sourceMaterial: string }> | null =
+    replaceImportId && plan ? matchImportedMeshes(existingBatch, plan.groups) : null
+
+  const mergeable = !replaceImportId && plan ? canMerge(plan) : false
   const totals = plan ? plannedTotals(plan, merge && mergeable) : null
   const cost = estimateImportCost({
     textureSizes: (materialPlan?.textures ?? []).map((t) => imageSizeOf(t.bytes)),
@@ -216,21 +255,24 @@ function ImportModelBody({ initialFiles }: { initialFiles: File[] }) {
         (await planImportMaterials(model, plan, { maxTextureSize: settings.maxTextureSize }))
       setImporting('Normalizing geometry…')
       const normalized = await normalizeImport(plan, options)
-      setImporting('Encoding textures and creating SubParts…')
+      setImporting(
+        replaceImportId
+          ? 'Swapping geometry and materials…'
+          : 'Encoding textures and creating SubParts…',
+      )
       try {
-        await importModelAsMeshes(normalized, model.fileName, materials)
+        if (replaceImportId) {
+          await replaceImport(replaceImportId, normalized, { updateMaterials }, materials)
+        } else {
+          await importModelAsMeshes(normalized, model.fileName, materials)
+        }
       } finally {
         // The atlas GLB is now the geometry's home (the editor renders from it via
         // importedMeshCache), so these working copies are ours to free.
         for (const mesh of normalized.meshes) mesh.geometry.dispose()
       }
-      toast({
-        title: 'Model imported',
-        description: `${normalized.meshes.length} SubPart${
-          normalized.meshes.length === 1 ? '' : 's'
-        } from ${model.fileName}`,
-        variant: 'success',
-      })
+      // The outcome is reported by the ImportReportCard (counts, removed SubParts, warnings) —
+      // a success toast would say strictly less, twice.
       closeImportModel()
     } catch (err: unknown) {
       console.error('flexo: model import failed', err)
@@ -253,7 +295,7 @@ function ImportModelBody({ initialFiles }: { initialFiles: File[] }) {
         {/* Closing mid-import would orphan half-written binaries, so the header/Escape/backdrop
             routes are all inert while state 3 runs. */}
         <DialogHeader
-          title="Import model"
+          title={replaceImportId ? 'Replace model' : 'Import model'}
           onClose={() => {
             if (!importing) closeImportModel()
           }}
@@ -277,6 +319,7 @@ function ImportModelBody({ initialFiles }: { initialFiles: File[] }) {
                 the accurate surface preview (it renders the real KSA material channels).
               </p>
               <Stats plan={plan} totals={totals} cost={cost} pending={!materialPlan} />
+              {match && <ReplaceSummary match={match} batchSize={existingBatch.length} />}
               <Warnings groups={warnings} />
             </div>
 
@@ -358,6 +401,16 @@ function ImportModelBody({ initialFiles }: { initialFiles: File[] }) {
                   Merge into one SubPart
                 </Switch>
               )}
+              {replaceImportId && (
+                <>
+                  <Switch isSelected={updateMaterials} onChange={setUpdateMaterials}>
+                    Update materials from file
+                  </Switch>
+                  <p className="text-[11px] leading-snug text-fg-subtle">
+                    Off keeps material edits you made in flexo — only the geometry is swapped.
+                  </p>
+                </>
+              )}
               <p className="text-[11px] leading-snug text-fg-subtle">
                 Objects always split by material — KSA binds one material per SubPart, so that part
                 isn’t a choice. Up-axis, texture size, scale baking and view-mesh decimation are
@@ -370,6 +423,7 @@ function ImportModelBody({ initialFiles }: { initialFiles: File[] }) {
             parsing={parsing}
             error={error}
             dropActive={dropActive}
+            replacing={!!replaceImportId}
             onPick={() => fileInput.current?.click()}
             onDropActive={setDropActive}
             onFiles={pickFiles}
@@ -399,10 +453,16 @@ function ImportModelBody({ initialFiles }: { initialFiles: File[] }) {
             onPress={() => void runImport()}
           >
             {importing
-              ? 'Importing…'
-              : totals
-                ? `Import ${totals.subParts} SubPart${totals.subParts === 1 ? '' : 's'}`
-                : 'Import'}
+              ? replaceImportId
+                ? 'Replacing…'
+                : 'Importing…'
+              : replaceImportId
+                ? match
+                  ? `Replace (${match.matched.length} kept, ${match.added.length} new, ${match.removed.length} removed)`
+                  : 'Replace'
+                : totals
+                  ? `Import ${totals.subParts} SubPart${totals.subParts === 1 ? '' : 's'}`
+                  : 'Import'}
           </Button>
         </div>
 
@@ -432,6 +492,7 @@ function DropStep({
   parsing,
   error,
   dropActive,
+  replacing,
   onPick,
   onDropActive,
   onFiles,
@@ -439,12 +500,20 @@ function DropStep({
   parsing: boolean
   error: string | null
   dropActive: boolean
+  replacing: boolean
   onPick: () => void
   onDropActive: (active: boolean) => void
   onFiles: (files: File[]) => void
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+      {replacing && (
+        <p className="rounded-lg border border-border bg-panel p-2 text-xs leading-snug text-fg-muted">
+          Choose the re-exported file for this model. Objects that kept their name and material keep
+          their SubPart — with every placement, GameData block, animation and connector that
+          references it.
+        </p>
+      )}
       <button
         type="button"
         onClick={onPick}
@@ -586,6 +655,45 @@ function Stats({
         tooltip="flexo's KTX2 textures are uncompressed RGBA8 + Zstd, so each one costs width × height × 4 bytes of VRAM in-game, plus a third again for its mip chain — a 4096² map is ~85 MB. Lower “Max texture size” to cut it."
       />
     </dl>
+  )
+}
+
+/**
+ * Replace mode's match summary: what the new file does to the batch that exists today.
+ *
+ * Matching is by (object name × material name) — see `matchImportedMeshes`. The REMOVED list is
+ * spelled out by name rather than counted, because those SubParts and their placements are
+ * about to disappear: their geometry is simply not in the new file any more.
+ */
+function ReplaceSummary({
+  match,
+  batchSize,
+}: {
+  match: ImportMatchPlan<{ sourceNode: string; sourceMaterial: string }>
+  batchSize: number
+}) {
+  return (
+    <div className="flex flex-col gap-1 rounded-lg border border-accent/40 bg-accent/5 p-2 text-xs">
+      <span className="font-medium">
+        Replacing {batchSize} SubPart{batchSize === 1 ? '' : 's'} — matched by object and material
+        name
+      </span>
+      <dl className="grid grid-cols-3 gap-x-3">
+        <Stat label="Kept" value={String(match.matched.length)} />
+        <Stat label="New" value={String(match.added.length)} />
+        <Stat label="Removed" value={String(match.removed.length)} />
+      </dl>
+      <p className="leading-snug text-fg-subtle">
+        Kept SubParts hold on to their placements, GameData, animations and connectors — the
+        arrangement you built survives.
+      </p>
+      {match.removed.length > 0 && (
+        <p className="leading-snug text-warning">
+          Not in the new file, so they and their placements are removed:{' '}
+          {match.removed.map((m) => m.name).join(', ')}
+        </p>
+      )}
+    </div>
   )
 }
 

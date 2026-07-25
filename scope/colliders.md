@@ -32,6 +32,7 @@ and the real GLB meshes in `flexo-private-assets/assets/Meshes`.
 | `src/three/coords.ts`                        | `colliderWorld` / `colliderLocalFromWorld` — the owner-frame composition, mirroring `ColliderModule.cs:38-42`.                              |
 | `src/ksa/colliderFit.ts`                     | Pure primitive fitting around sampled points (`src/three/samplePoints.ts`).                                                                 |
 | `src/ksa/colliderValidation.ts`              | The block/warn rules, each citing the game-side member it mirrors.                                                                          |
+| `src/measure/colliderCoverage.ts`            | `pointInCollider` (Bepu shape semantics again, as a containment test) + the gap/bloat readout.                                              |
 
 ---
 

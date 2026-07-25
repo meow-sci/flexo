@@ -3,6 +3,7 @@ import { useStore } from '@nanostores/react'
 import { ListBoxItem } from 'react-aria-components'
 import { Button, TextField, Switch, SectionTitle, Select } from './kit'
 import { NumberField } from './NumberField'
+import { isPartialNumber, parseNumericDraft } from './numberDraft'
 import {
   $bulkScaleMode,
   pushUndo,
@@ -37,7 +38,14 @@ import {
 } from '../ksa/types'
 import { colliderSizeLabels, type ColliderSizeLabel } from '../ksa/colliderSize'
 import { colliderLocalFromWorld, colliderWorld } from '../three/coords'
-import { requestColliderFit } from '../state/colliderStore'
+import {
+  $colliderSettings,
+  $coverageReport,
+  clearCoverageReport,
+  requestColliderFit,
+  requestCoverageCheck,
+  setColliderSettings,
+} from '../state/colliderStore'
 import { DEG2RAD, RAD2DEG, fmt } from './format'
 
 const panelClass = 'flex flex-col gap-2 rounded-xl border border-border bg-panel p-2'
@@ -322,6 +330,8 @@ function VectorApply(props: {
   const [drafts, setDrafts] = useState<[string, string, string]>(initial)
 
   const setAxis = (axis: number, value: string) => {
+    // Drop keystrokes that can't become a number, but keep partial entries ('-', '0.').
+    if (!isPartialNumber(value)) return
     setDrafts((prev) => {
       const next = [...prev] as [string, string, string]
       next[axis] = value
@@ -330,10 +340,11 @@ function VectorApply(props: {
   }
 
   const apply = () => {
-    const parsed = drafts.map((s, i) => {
-      const n = Number.parseFloat(s)
-      return Number.isFinite(n) ? n : defaultValue[i]
-    }) as [number, number, number]
+    const parsed = drafts.map((s, i) => parseNumericDraft(s) ?? defaultValue[i]) as [
+      number,
+      number,
+      number,
+    ]
     onApply(parsed)
     setDrafts(initial)
   }
@@ -347,7 +358,6 @@ function VectorApply(props: {
             <span className="w-3 text-xs text-fg-subtle">{label}</span>
             <TextField
               size="sm"
-              type="number"
               inputMode="decimal"
               aria-label={`${title} ${label}`}
               value={drafts[i]}
@@ -540,6 +550,66 @@ function ColliderHeader({
           in-game size will not match the mesh.
         </span>
       )}
+      <CoveragePanel />
+    </div>
+  )
+}
+
+/**
+ * On-demand "how good is my approximation?" readout for the WHOLE collision volume (not
+ * just the selected shape). Manual rather than live: a vertex-precision sample of a real
+ * part is tens of thousands of points tested against every collider.
+ *
+ * Gaps and bloat pull in opposite directions — geometry outside every collider clips
+ * through the world, while collider volume far beyond the mesh is an invisible wall AND
+ * inflates the vehicle bounding box KSA derives from the collider compound.
+ */
+function CoveragePanel() {
+  const report = useStore($coverageReport)
+  const settings = useStore($colliderSettings)
+  const pct = report ? Math.round(report.fraction * 1000) / 10 : 0
+  const missing = report ? report.sampled - report.covered : 0
+
+  return (
+    <div className="flex flex-col gap-0.5 border-t border-border pt-1">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-fg-subtle">Coverage</span>
+        <div className="flex items-center gap-1">
+          {report && (
+            <Button size="sm" variant="ghost" onPress={() => clearCoverageReport()}>
+              Clear
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" onPress={() => requestCoverageCheck()}>
+            Check
+          </Button>
+        </div>
+      </div>
+      {report && (
+        <>
+          <span className={missing === 0 ? 'text-xs text-fg-subtle' : 'text-xs text-warn'}>
+            {pct}% of {report.sampled} sample points covered
+            {missing > 0 && ` — ${missing} outside every collider`}
+          </span>
+          {report.bloat != null && (
+            <span className="text-xs text-fg-subtle">
+              Collider volume {report.bloat.toFixed(2)}× the mesh bounds
+            </span>
+          )}
+          {report.uncovered.length > 0 && (
+            <span className="text-xs text-fg-subtle">Gaps marked in red in the viewport.</span>
+          )}
+        </>
+      )}
+      {/* Bounding-box corners are 8 points per mesh — fast, but far too coarse to trust a
+          coverage number from. Per-vertex walks the whole buffer and is the honest answer.
+          Also drives fitting, where it matters for rotated/irregular geometry. */}
+      <Switch
+        isSelected={settings.precision === 'vertex'}
+        onChange={(on) => setColliderSettings({ precision: on ? 'vertex' : 'bbox' })}
+      >
+        <span className="text-xs text-fg-subtle">Sample every vertex (slower, accurate)</span>
+      </Switch>
     </div>
   )
 }

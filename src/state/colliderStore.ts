@@ -2,6 +2,7 @@ import { atom } from 'nanostores'
 import { persistentJSON } from '@nanostores/persistent'
 import type { ColliderShape } from '../ksa/types'
 import type { SamplePrecision } from '../three/samplePoints'
+import type { CoverageReport } from '../measure/colliderCoverage'
 
 /**
  * Ephemeral + persisted state for collider AUTHORING. The colliders themselves are
@@ -74,4 +75,33 @@ export const $colliderSettings = persistentJSON<ColliderSettings>(
 
 export function setColliderSettings(patch: Partial<ColliderSettings>): void {
   $colliderSettings.set({ ...$colliderSettings.get(), ...patch })
+}
+
+// ── coverage check ───────────────────────────────────────────────────────────
+//
+// Same intent → scene → store round trip as fitting: the check needs world geometry, which
+// only exists in three.
+
+/** Pending coverage-check request, consumed by `EditorScene`. */
+export const $coverageRequest = atom<boolean>(false)
+
+/** Asks the 3D scene to score the current collision volume against the part's geometry. */
+export function requestCoverageCheck(): void {
+  $coverageRequest.set(true)
+}
+
+/**
+ * The most recent coverage result, or null when it has never run / was dismissed.
+ * `EditorScene` also renders {@link CoverageReport.uncovered} as dots so the hole is
+ * visible, not just counted.
+ */
+export const $coverageReport = atom<CoverageReport | null>(null)
+
+export function setCoverageReport(report: CoverageReport | null): void {
+  $coverageReport.set(report)
+}
+
+/** Clears the readout and its viewport dots. */
+export function clearCoverageReport(): void {
+  $coverageReport.set(null)
 }

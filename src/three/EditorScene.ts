@@ -8,8 +8,12 @@ import { fitCollider, IDENTITY_QUAT, type Quat } from '../ksa/colliderFit'
 import {
   $colliderFitRequest,
   $colliderSettings,
+  $coverageReport,
+  $coverageRequest,
+  setCoverageReport,
   type ColliderFitRequest,
 } from '../state/colliderStore'
+import { evaluateCoverage, type PlacedCollider } from '../measure/colliderCoverage'
 import { KittenObject } from './KittenObject'
 import { SelectionManager } from './SelectionManager'
 import { TransformGizmo } from './TransformGizmo'
@@ -131,6 +135,8 @@ export class EditorScene {
    * through. Ephemeral view state.
    */
   private readonly colliderInstance = new Map<string, number>()
+  /** Red dots marking sample points outside every collider (the last coverage check). */
+  private coverageDots: THREE.Points | null = null
   private readonly building = new Set<string>()
   private readonly kittenBuilding = new Set<string>()
   private index: Map<string, CatalogSubPart> = new Map()
@@ -428,6 +434,13 @@ export class EditorScene {
         if (req) this.handleColliderFit(req)
       }),
     )
+    this.unsubscribers.push(
+      $coverageRequest.subscribe((wanted) => {
+        if (wanted) this.handleCoverageCheck()
+      }),
+    )
+    // The uncovered-point dots are a snapshot of one check; editing invalidates them.
+    this.unsubscribers.push($coverageReport.subscribe(() => this.applyCoverageDots()))
     this.unsubscribers.push(
       $connectorSettings.subscribe((settings) => {
         this.connectorSettings = settings
@@ -771,6 +784,72 @@ export class EditorScene {
         objs[i].setCollider(collider, colliderWorld(collider, frame))
       }
     }
+  }
+
+  /**
+   * Scores the current collision volume against the part's sampled geometry and publishes
+   * the report (which also drives the uncovered-point dots). Runs here rather than in the
+   * store because both halves — the geometry sample and the owner-frame resolution — need
+   * the scene.
+   */
+  private handleCoverageCheck(): void {
+    $coverageRequest.set(false)
+    const part = $part.get()
+    const points = collectWorldPoints(
+      [...this.objects.values()].map((o) => o.group),
+      $colliderSettings.get().precision,
+    )
+    // Every collider, lifted into Part space — a SubPart-owned one is scored once per
+    // placement of its template, exactly as it exists in-game.
+    const placed: PlacedCollider[] = []
+    for (const collider of part.colliders) {
+      const owners = this.colliderOwners(part, collider)
+      const frames: Transform[] =
+        owners.length > 0 ? owners.map((o) => colliderWorld(collider, o)) : [collider]
+      for (const f of frames) {
+        // Through coords.matrixFromTransform so the Euler convention stays in one place.
+        const q = new THREE.Quaternion()
+        matrixFromTransform(f).decompose(new THREE.Vector3(), q, new THREE.Vector3())
+        placed.push({ collider, position: { ...f.position }, quaternion: [q.x, q.y, q.z, q.w] })
+      }
+    }
+    setCoverageReport(evaluateCoverage(points, placed))
+  }
+
+  /** Draws (or clears) the uncovered sample points from the latest coverage report. */
+  private applyCoverageDots(): void {
+    const report = $coverageReport.get()
+    const points = report?.uncovered ?? []
+    if (points.length === 0) {
+      if (this.coverageDots) {
+        this.root.remove(this.coverageDots)
+        this.coverageDots.geometry.dispose()
+        ;(this.coverageDots.material as THREE.Material).dispose()
+        this.coverageDots = null
+      }
+      return
+    }
+    const positions = new Float32Array(points.length * 3)
+    points.forEach((p, i) => {
+      positions[i * 3] = p.x
+      positions[i * 3 + 1] = p.y
+      positions[i * 3 + 2] = p.z
+    })
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    if (this.coverageDots) {
+      this.coverageDots.geometry.dispose()
+      this.coverageDots.geometry = geometry
+      return
+    }
+    const dots = new THREE.Points(
+      geometry,
+      new THREE.PointsMaterial({ color: 0xff3355, size: 6, sizeAttenuation: false }),
+    )
+    dots.name = 'collider-coverage-gaps'
+    dots.raycast = () => {} // a readout, never selectable
+    this.coverageDots = dots
+    this.root.add(dots)
   }
 
   /**
@@ -1309,6 +1388,12 @@ export class EditorScene {
   }
 
   dispose(): void {
+    if (this.coverageDots) {
+      this.root.remove(this.coverageDots)
+      this.coverageDots.geometry.dispose()
+      ;(this.coverageDots.material as THREE.Material).dispose()
+      this.coverageDots = null
+    }
     for (const objs of this.colliderObjects.values()) {
       for (const obj of objs) {
         this.root.remove(obj.group)

@@ -173,6 +173,28 @@ the Export dialog renders both together:
 | warn      | capsule shorter than its diameter                            | it is just a sphere                                     |
 | warn      | more than ~32 colliders                                      | the compound rebuilds on every animation tick           |
 
+## Coverage check
+
+**Check** in the collider panel scores the whole collision volume against the part's
+sampled geometry (`src/measure/colliderCoverage.ts`, pure) and reports two numbers that
+pull in opposite directions:
+
+- **% of sample points covered** — geometry outside every collider clips through terrain
+  and other vehicles. Uncovered points render as red dots in the viewport, so you can see
+  *where* the hole is rather than just that there is one.
+- **collider volume ÷ mesh-bounds volume** — bloat means invisible walls, and it inflates
+  the vehicle `BoundingBoxAsmb` / `BoundingSphereRadiusBody` KSA derives from the collider
+  compound. Overlap within a part is free in-game (a Bepu compound never self-collides), so
+  an overlapping composite legitimately scores high — read it as a smell, not a rule.
+
+A SubPart-owned collider is scored once per placement of its template, exactly as it exists
+in-game. **Sample every vertex** trades speed for honesty: bounding-box corners are 8 points
+per mesh (fast, far too coarse to trust a percentage from), per-vertex walks the whole
+buffer. The setting also drives fitting, where it matters for rotated/irregular geometry.
+
+Deliberately manual, never live: a vertex-precision sample of a real part is tens of
+thousands of points against every collider.
+
 ## Layer
 
 Colliders live on the built-in, undeletable **Colliders** layer
@@ -194,9 +216,9 @@ serialized to KSA XML. See [docs/layers.md](layers.md).
 
 ## Status
 
-Phases 1–3 are implemented: the game contract + round-trip (closing gap **E**), 3D
-authoring, and fully editable SubPart-owned colliders. Still open in
-[plans/COLLIDERS_PLAN.md](../plans/COLLIDERS_PLAN.md): the coverage readout (Phase 4).
+All four phases of [plans/COLLIDERS_PLAN.md](../plans/COLLIDERS_PLAN.md) are implemented:
+the game contract + round-trip (closing gap **E**), 3D authoring, fully editable
+SubPart-owned colliders, and the coverage readout.
 
 **Not yet verified:** in-game behaviour of anything exported here; capsule semantics (Core
 ships zero capsules, so the Bepu convention is unconfirmed against real data); and the

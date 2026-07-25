@@ -2,12 +2,17 @@ import type {
   AnimationJoint,
   AnimationKeyframe,
   Battery,
+  BurnRateLaw,
   Combustor,
   Connector,
+  ConnectorCapability,
+  ConsumerFeedWiring,
   CustomMaterial,
   CustomReaction,
   CustomMesh,
   DeLavalNozzle,
+  FeedSource,
+  PlumbingClass,
   ScalarChannel,
   EasingConfig,
   EulerXYZ,
@@ -26,6 +31,9 @@ import type {
   RocketController,
   RocketSoundAction,
   SolarPanel,
+  SolidGrainSegment,
+  SolidMotor,
+  SolidMotorNozzle,
   SubPartGameData,
   SubPartIdRef,
   SubPartPlacement,
@@ -51,9 +59,12 @@ import type { ProjectExportEnvelope } from './projectTransfer'
 export const PROJECT_EXPORT_FORMAT = 'flexo-project'
 // v2: KSA 2026.7.5.4892 Reactions refactor — combustor `c`(combustionId)→`r`+`mr`, tank
 // `cp`(combustionProcessId)→`ra`(roleAffinity), envelope `cp`(custom processes)→`cr`(custom
-// reactions). v3: custom materials (`mat`). Per the no-migration rule, older payloads are
-// REJECTED on import, never converted.
-export const PROJECT_EXPORT_VERSION = 3
+// reactions). v3: custom materials (`mat`). v4: KSA 2026.7.9.5018 plumbing topology —
+// connector `cp`(capabilities), tank `id`+`lo`, combustor `fd`(feeds)+`pl`(plumbing),
+// part-level `tk`(tanks)/`cfw`(consumer feed wiring), and the solid-motor trio
+// `sm`/`sn`/`sg` on both game-data levels, plus the solid burn-rate reaction fields.
+// Per the no-migration rule, older payloads are REJECTED on import, never converted.
+export const PROJECT_EXPORT_VERSION = 4
 
 /**
  * COMPACT PROJECT CODEC — the single wire format for everything that serializes a
@@ -179,6 +190,7 @@ function decPlacement(c: CPlacement): SubPartPlacement {
 interface CConnector extends CTransform {
   i: string // id
   f?: Connector['flags'] // flags (omitted when empty)
+  cp?: ConnectorCapability[] // capabilities (omitted when empty ⇒ KSA's implicit default)
   sb?: string[] // siblingIds (omitted when empty)
 }
 
@@ -186,6 +198,7 @@ function encConnector(c: Connector): CConnector {
   // layerId is always CONNECTOR_LAYER_ID — restored on decode, never serialized.
   const o: CConnector = { i: c.id, ...encTransform(c) }
   if (c.flags.length > 0) o.f = c.flags
+  if (c.capabilities.length > 0) o.cp = c.capabilities
   if (c.siblingIds.length > 0) o.sb = c.siblingIds
   return o
 }
@@ -194,8 +207,7 @@ function decConnector(c: CConnector): Connector {
   return {
     id: str(c.i),
     flags: arr<Connector['flags'][number]>(c.f),
-    // TODO(phase 3): decode capabilities.
-    capabilities: [],
+    capabilities: arr<ConnectorCapability>(c.cp),
     siblingIds: arr<string>(c.sb).map((s) => str(s)),
     layerId: CONNECTOR_LAYER_ID,
     ...decTransform(c),
@@ -280,6 +292,11 @@ interface CGameData {
   cb?: CCombustor[] // part-level combustors
   nz?: CNozzle[] // part-level nozzles
   gm?: CGimbal[] // gimbals
+  tk?: CTank[] // part-level tanks (feed containers)
+  sm?: CSolidMotor[] // part-level solid motors
+  sn?: CSolidNozzle[] // part-level solid-motor nozzles
+  sg?: CSolidGrain[] // part-level solid grain segments
+  cfw?: CFeedWiring[] // consumerFeedWiring
   ua?: Record<string, string> // unmodeled <PartGameData> attrs (passthrough)
   uc?: RawXmlNode[] // unmodeled <PartGameData> child elements (passthrough)
 }
@@ -310,6 +327,11 @@ function encGameData(g: PartGameData): CGameData {
   if (g.combustors.length) o.cb = g.combustors.map(encCombustor)
   if (g.nozzles.length) o.nz = g.nozzles.map(encNozzle)
   if (g.gimbals.length) o.gm = g.gimbals.map(encGimbal)
+  if (g.tanks.length) o.tk = g.tanks.map(encTank)
+  if (g.solidMotors.length) o.sm = g.solidMotors.map(encSolidMotor)
+  if (g.solidNozzles.length) o.sn = g.solidNozzles.map(encSolidNozzle)
+  if (g.solidGrainSegments.length) o.sg = g.solidGrainSegments.map(encSolidGrain)
+  if (g.consumerFeedWiring.length) o.cfw = g.consumerFeedWiring.map(encFeedWiring)
   if (Object.keys(g.unknownAttrs).length) o.ua = g.unknownAttrs
   if (g.unknownChildren.length) o.uc = g.unknownChildren
   return o
@@ -342,6 +364,11 @@ function decGameData(c: CGameData | undefined): PartGameData {
   g.combustors = arr<CCombustor>(c.cb).map(decCombustor)
   g.nozzles = arr<CNozzle>(c.nz).map(decNozzle)
   g.gimbals = arr<CGimbal>(c.gm).map(decGimbal)
+  g.tanks = arr<CTank>(c.tk).map(decTank)
+  g.solidMotors = arr<CSolidMotor>(c.sm).map(decSolidMotor)
+  g.solidNozzles = arr<CSolidNozzle>(c.sn).map(decSolidNozzle)
+  g.solidGrainSegments = arr<CSolidGrain>(c.sg).map(decSolidGrain)
+  g.consumerFeedWiring = arr<CFeedWiring>(c.cfw).map(decFeedWiring)
   g.unknownAttrs = decRawAttrs(c.ua)
   g.unknownChildren = decRawNodes(c.uc)
   return g
@@ -382,6 +409,8 @@ interface CTank {
   m?: string // wallMaterialId (omitted when the default aluminium)
   sph?: 1 // shape: present ⇒ Spherical (Cylindrical is the default)
   ra?: string // roleAffinity (omitted at the Engine default)
+  id?: string // <Tank Id> feed-container id (omitted when unnamed)
+  lo?: Triple // locationAsmb (omitted at 0,0,0)
 }
 
 function encTank(t: Tank): CTank {
@@ -389,6 +418,8 @@ function encTank(t: Tank): CTank {
   if (t.wallMaterialId && t.wallMaterialId !== DEFAULT_TANK_MATERIAL) o.m = t.wallMaterialId
   if (t.shape === 'Spherical') o.sph = 1
   if (t.roleAffinity !== 'Engine') o.ra = t.roleAffinity
+  if (t.id.trim()) o.id = t.id
+  if (!isZeroVec(t.locationAsmb)) o.lo = encVec(t.locationAsmb)
   return o
 }
 
@@ -401,9 +432,8 @@ const TANK_ROLE_AFFINITIES: ReadonlySet<string> = new Set([
 
 function decTank(c: CTank): Tank {
   return {
-    // TODO(phase 3): decode id + locationAsmb.
-    id: '',
-    locationAsmb: { x: 0, y: 0, z: 0 },
+    id: str(c.id),
+    locationAsmb: decVec(c.lo, 0),
     shape: c.sph ? 'Spherical' : 'Cylindrical',
     wallMaterialId: c.m != null ? str(c.m) : DEFAULT_TANK_MATERIAL,
     lengthM: num(c.l),
@@ -473,6 +503,43 @@ function decRef(c: CRef | undefined): SubPartIdRef {
   return { id: str(c?.i), subPartInstanceId: c?.s ? str(c.s) : null }
 }
 
+/**
+ * A feed point, at its most compact: `'p'` parent · `['c', connectorId]` ·
+ * `['t', containerId]` / `['t', containerId, subPartInstanceId]`. The overwhelmingly
+ * common case (a reusable chamber deferring to its placing part) is one character.
+ */
+type CFeed = 'p' | ['c', string] | ['t', string] | ['t', string, string]
+
+function encFeed(f: FeedSource): CFeed {
+  if (f.kind === 'connector') return ['c', f.connectorId]
+  if (f.kind === 'container') {
+    return f.subPartInstanceId ? ['t', f.containerId, f.subPartInstanceId] : ['t', f.containerId]
+  }
+  return 'p'
+}
+
+/** Decodes one compact feed point; null for anything unrecognized (caller filters). */
+function decFeed(c: CFeed): FeedSource | null {
+  if (c === 'p') return { kind: 'parent' }
+  if (!Array.isArray(c)) return null
+  if (c[0] === 'c') return { kind: 'connector', connectorId: str(c[1]) }
+  if (c[0] === 't') {
+    return { kind: 'container', containerId: str(c[1]), subPartInstanceId: c[2] ? str(c[2]) : null }
+  }
+  return null
+}
+
+function decFeeds(c: CFeed[] | undefined): FeedSource[] {
+  return arr<CFeed>(c)
+    .map(decFeed)
+    .filter((f): f is FeedSource => f != null)
+}
+
+/** `1` ⇒ Service; anything else is KSA's `Bulk` schema default. */
+function decPlumbing(c: 1 | undefined): PlumbingClass {
+  return c === 1 ? 'Service' : 'Bulk'
+}
+
 interface CCombustor {
   id: string
   r: string // reactionId
@@ -481,6 +548,8 @@ interface CCombustor {
   te?: number // thermalEfficiency (omit when 1)
   mt?: number // minimumThrottle (omit when 1)
   pt?: number // minimumPulseTimeS (omit when null)
+  fd?: CFeed[] // feeds (omit when empty)
+  pl?: 1 // plumbing: present ⇒ Service (Bulk is the schema default)
 }
 
 function encCombustor(c: Combustor): CCombustor {
@@ -489,6 +558,8 @@ function encCombustor(c: Combustor): CCombustor {
   if (c.thermalEfficiency !== 1) o.te = round(c.thermalEfficiency)
   if (c.minimumThrottle !== 1) o.mt = round(c.minimumThrottle)
   if (c.minimumPulseTimeS != null) o.pt = round(c.minimumPulseTimeS)
+  if (c.feeds.length) o.fd = c.feeds.map(encFeed)
+  if (c.plumbing === 'Service') o.pl = 1
   return o
 }
 
@@ -501,9 +572,8 @@ function decCombustor(c: CCombustor): Combustor {
     thermalEfficiency: typeof c.te === 'number' ? c.te : 1,
     minimumThrottle: typeof c.mt === 'number' ? c.mt : 1,
     minimumPulseTimeS: typeof c.pt === 'number' ? c.pt : null,
-    // TODO(phase 3): decode feeds + plumbing.
-    feeds: [],
-    plumbing: 'Bulk',
+    feeds: decFeeds(c.fd),
+    plumbing: decPlumbing(c.pl),
   }
 }
 
@@ -560,6 +630,107 @@ function decNozzle(c: CNozzle): DeLavalNozzle {
     plumeTrailId: c.pt ? str(c.pt) : null,
     exhaustLight: !c.lo,
     sound: c.sd ? { action: str(c.sd.a, 'On') as RocketSoundAction, soundId: str(c.sd.s) } : null,
+  }
+}
+
+/**
+ * A solid nozzle is exactly a DeLaval nozzle WITHOUT `ar` — KSA derives the throat as
+ * `exitArea / 12` and the schema has no AreaRatio slot. Delegating to the DeLaval codec
+ * (rather than copying 14 fields) means the two can never drift apart.
+ */
+type CSolidNozzle = Omit<CNozzle, 'ar'>
+
+function encSolidNozzle(n: SolidMotorNozzle): CSolidNozzle {
+  const { ar, ...rest } = encNozzle({ ...n, areaRatio: 0 })
+  void ar
+  return rest
+}
+
+function decSolidNozzle(c: CSolidNozzle): SolidMotorNozzle {
+  const { areaRatio, ...rest } = decNozzle({ ...c, ar: 0 })
+  void areaRatio
+  return rest
+}
+
+interface CSolidMotor {
+  id: string
+  r: string // reactionId
+  dp: number // defaultPressurePa
+  te?: number // thermalEfficiency (omit when 1)
+  g?: string // grainGeometryId (omit when '' ⇒ the library default)
+  fd?: CFeed[] // feeds (omit when empty)
+}
+
+function encSolidMotor(m: SolidMotor): CSolidMotor {
+  const o: CSolidMotor = { id: m.id, r: m.reactionId, dp: round(m.defaultPressurePa) }
+  if (m.thermalEfficiency !== 1) o.te = round(m.thermalEfficiency)
+  if (m.grainGeometryId.trim()) o.g = m.grainGeometryId
+  if (m.feeds.length) o.fd = m.feeds.map(encFeed)
+  return o
+}
+
+function decSolidMotor(c: CSolidMotor): SolidMotor {
+  return {
+    id: str(c.id),
+    reactionId: str(c.r),
+    defaultPressurePa: num(c.dp, 7_000_000),
+    thermalEfficiency: typeof c.te === 'number' ? c.te : 1,
+    grainGeometryId: str(c.g),
+    feeds: decFeeds(c.fd),
+  }
+}
+
+interface CSolidGrain {
+  id: string
+  r: number // outerRadiusM
+  w: number // wallThicknessMm
+  l: number // lengthM
+  m?: string // wallMaterialId (omit when blank)
+  lo?: Triple // locationAsmb (omit at 0,0,0)
+}
+
+function encSolidGrain(s: SolidGrainSegment): CSolidGrain {
+  const o: CSolidGrain = {
+    id: s.id,
+    r: round(s.outerRadiusM),
+    w: round(s.wallThicknessMm),
+    l: round(s.lengthM),
+  }
+  if (s.wallMaterialId.trim()) o.m = s.wallMaterialId
+  if (!isZeroVec(s.locationAsmb)) o.lo = encVec(s.locationAsmb)
+  return o
+}
+
+function decSolidGrain(c: CSolidGrain): SolidGrainSegment {
+  return {
+    id: str(c.id),
+    wallMaterialId: str(c.m),
+    outerRadiusM: num(c.r),
+    wallThicknessMm: num(c.w),
+    lengthM: num(c.l),
+    locationAsmb: decVec(c.lo, 0),
+  }
+}
+
+/** `<ConsumerFeedWiring Id [SubPartId]>` + its feed points. */
+interface CFeedWiring {
+  id: string // consumerId (the consumer's TEMPLATE id)
+  s?: string // subPartInstanceId (omit ⇒ the root part)
+  fd?: CFeed[] // feeds
+}
+
+function encFeedWiring(w: ConsumerFeedWiring): CFeedWiring {
+  const o: CFeedWiring = { id: w.consumerId }
+  if (w.subPartInstanceId) o.s = w.subPartInstanceId
+  if (w.feeds.length) o.fd = w.feeds.map(encFeed)
+  return o
+}
+
+function decFeedWiring(c: CFeedWiring): ConsumerFeedWiring {
+  return {
+    consumerId: str(c.id),
+    subPartInstanceId: c.s ? str(c.s) : null,
+    feeds: decFeeds(c.fd),
   }
 }
 
@@ -635,6 +806,9 @@ interface CSubPartGameData {
   cb?: CCombustor[] // combustors
   nz?: CNozzle[] // nozzles
   ro?: CRocket[] // rockets
+  sm?: CSolidMotor[] // solid motors
+  sn?: CSolidNozzle[] // solid-motor nozzles
+  sg?: CSolidGrain[] // solid grain segments
   ua?: Record<string, string> // unmodeled <SubPartGameData> attrs (passthrough)
   uc?: RawXmlNode[] // unmodeled <SubPartGameData> child elements (passthrough)
 }
@@ -647,6 +821,9 @@ function encSubPartGameData(s: SubPartGameData): CSubPartGameData {
   if (s.combustors.length) o.cb = s.combustors.map(encCombustor)
   if (s.nozzles.length) o.nz = s.nozzles.map(encNozzle)
   if (s.rockets.length) o.ro = s.rockets.map(encRocket)
+  if (s.solidMotors.length) o.sm = s.solidMotors.map(encSolidMotor)
+  if (s.solidNozzles.length) o.sn = s.solidNozzles.map(encSolidNozzle)
+  if (s.solidGrainSegments.length) o.sg = s.solidGrainSegments.map(encSolidGrain)
   if (Object.keys(s.unknownAttrs).length) o.ua = s.unknownAttrs
   if (s.unknownChildren.length) o.uc = s.unknownChildren
   return o
@@ -660,6 +837,9 @@ function decSubPartGameData(c: CSubPartGameData): SubPartGameData {
   s.combustors = arr<CCombustor>(c.cb).map(decCombustor)
   s.nozzles = arr<CNozzle>(c.nz).map(decNozzle)
   s.rockets = arr<CRocket>(c.ro).map(decRocket)
+  s.solidMotors = arr<CSolidMotor>(c.sm).map(decSolidMotor)
+  s.solidNozzles = arr<CSolidNozzle>(c.sn).map(decSolidNozzle)
+  s.solidGrainSegments = arr<CSolidGrain>(c.sg).map(decSolidGrain)
   s.unknownAttrs = decRawAttrs(c.ua)
   s.unknownChildren = decRawNodes(c.uc)
   return s
@@ -934,6 +1114,12 @@ interface CReaction {
   c?: string // category (omitted at the Monopropellant default)
   r: [string, number][] // reactants [phaseId, massShare]
   lut: [number, number, number, number][] // rows [lnPressure, temperatureK, gamma, molarMassGPerMol]
+  // Solid-propellant fields — REQUIRED by KSA on a Category="Solid" reaction, absent
+  // on every other category (see isCustomReactionExportable).
+  br?: [number, number] // burnRate [coefficientMPerS, exponent]
+  bp?: number // minimumBurnPressurePa
+  mp?: number // maxStablePressurePa
+  cf?: number // exhaustCondensedFraction
 }
 
 function encCustomReaction(c: CustomReaction): CReaction {
@@ -949,6 +1135,10 @@ function encCustomReaction(c: CustomReaction): CReaction {
   }
   if (c.name && c.name !== c.id) o.n = c.name
   if (c.category !== 'Monopropellant') o.c = c.category
+  if (c.burnRate) o.br = [round(c.burnRate.coefficientMPerS), round(c.burnRate.exponent)]
+  if (c.minimumBurnPressurePa != null) o.bp = round(c.minimumBurnPressurePa)
+  if (c.maxStablePressurePa != null) o.mp = round(c.maxStablePressurePa)
+  if (c.exhaustCondensedFraction != null) o.cf = round(c.exhaustCondensedFraction)
   return o
 }
 
@@ -967,12 +1157,17 @@ function decCustomReaction(c: CReaction): CustomReaction {
       gamma: num(g),
       molarMassGPerMol: num(m),
     })),
-    // TODO(phase 3): decode the solid burn-rate fields.
-    burnRate: null,
-    minimumBurnPressurePa: null,
-    maxStablePressurePa: null,
-    exhaustCondensedFraction: null,
+    burnRate: decBurnRate(c.br),
+    minimumBurnPressurePa: typeof c.bp === 'number' ? c.bp : null,
+    maxStablePressurePa: typeof c.mp === 'number' ? c.mp : null,
+    exhaustCondensedFraction: typeof c.cf === 'number' ? c.cf : null,
   }
+}
+
+/** `[a, n]` ⇒ Vieille's law `r = a·p^n`; anything else ⇒ no burn-rate law. */
+function decBurnRate(c: [number, number] | undefined): BurnRateLaw | null {
+  if (!Array.isArray(c) || c.length !== 2) return null
+  return { coefficientMPerS: num(c[0]), exponent: num(c[1]) }
 }
 
 // ── top-level envelope ───────────────────────────────────────────────────────

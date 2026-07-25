@@ -4,6 +4,8 @@ import {
   DEFAULT_LAYER_ID,
   KITTEN_LAYER_ID,
   createEmptyPart,
+  createCombustor,
+  createSolidMotor,
   createSubPartGameData,
   createTank,
   identityTransform,
@@ -384,6 +386,81 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
       },
     ])
     expect(part.gameData.decoupler?.connectorId).toBe('_connector2')
+  })
+
+  it('remaps every feed + capability reference on the paste path', () => {
+    const src = sourcePart()
+    src.connectors[0].capabilities = ['BulkFluid', 'DecouplerJoint']
+    src.gameData.combustors.push({
+      ...createCombustor('GasGeneratorChamber'),
+      feeds: [
+        { kind: 'connector', connectorId: '_connector1' },
+        { kind: 'container', containerId: 'Grain', subPartInstanceId: 'wing_1' },
+      ],
+    })
+    src.gameData.solidMotors.push({
+      ...createSolidMotor('MotorCore'),
+      feeds: [{ kind: 'connector', connectorId: '_connector1' }],
+    })
+    src.gameData.consumerFeedWiring.push({
+      consumerId: 'ThrustChamber',
+      subPartInstanceId: 'wing_1',
+      feeds: [{ kind: 'connector', connectorId: '_connector1' }],
+    })
+    src.subPartGameData.push({
+      ...createSubPartGameData('Core.Wing'),
+      combustors: [{ ...createCombustor('ThrustChamber'), feeds: [{ kind: 'parent' }] }],
+      solidMotors: [
+        {
+          ...createSolidMotor('SubMotor'),
+          feeds: [{ kind: 'connector', connectorId: '_connector1' }],
+        },
+      ],
+    })
+
+    // A destination that already owns _connector1 + wing_1 forces BOTH id spaces to shift.
+    const dest = createEmptyPart()
+    dest.connectors.push({
+      id: '_connector1',
+      flags: [],
+      capabilities: [],
+      siblingIds: [],
+      layerId: CONNECTOR_LAYER_ID,
+      ...t(0),
+    })
+    dest.placements.push({
+      instanceId: 'wing_1',
+      subPartTemplateId: 'Core.Wing',
+      layerId: DEFAULT_LAYER_ID,
+      ...t(0),
+    })
+
+    const { part } = mergeProjectImport(dest, buildProjectExport(src, 'X'))
+    const newConnectorId = part.connectors[1].id
+    const newWingId = part.placements.find(
+      (p) => p.subPartTemplateId === 'Core.Wing' && p.instanceId !== 'wing_1',
+    )!.instanceId
+    expect(newConnectorId).not.toBe('_connector1')
+    expect(newWingId).not.toBe('wing_1')
+
+    expect(part.connectors[1].capabilities).toEqual(['BulkFluid', 'DecouplerJoint'])
+    expect(part.gameData.combustors[0].feeds).toEqual([
+      { kind: 'connector', connectorId: newConnectorId },
+      { kind: 'container', containerId: 'Grain', subPartInstanceId: newWingId },
+    ])
+    expect(part.gameData.solidMotors[0].feeds).toEqual([
+      { kind: 'connector', connectorId: newConnectorId },
+    ])
+    expect(part.gameData.consumerFeedWiring).toEqual([
+      {
+        consumerId: 'ThrustChamber',
+        subPartInstanceId: newWingId,
+        feeds: [{ kind: 'connector', connectorId: newConnectorId }],
+      },
+    ])
+    const spd = part.subPartGameData.find((x) => x.subPartTemplateId === 'Core.Wing')!
+    expect(spd.combustors[0].feeds).toEqual([{ kind: 'parent' }]) // nothing to remap
+    expect(spd.solidMotors[0].feeds).toEqual([{ kind: 'connector', connectorId: newConnectorId }])
   })
 
   it('skips a coupling whose connector was not imported', () => {

@@ -4,6 +4,9 @@ import {
   DEFAULT_LAYER_ID,
   KITTEN_LAYER_ID,
   createEmptyPart,
+  createSolidGrainSegment,
+  createSolidMotor,
+  createSolidMotorNozzle,
   createSubPartGameData,
   createTank,
   identityTransform,
@@ -59,7 +62,7 @@ function richPart(): EditingPart {
   p.connectors.push({
     id: '_connector1',
     flags: ['Internal', 'ToSurface'],
-    capabilities: [],
+    capabilities: ['BulkFluid', 'DecouplerJoint'],
     siblingIds: [],
     layerId: CONNECTOR_LAYER_ID,
     ...xf([0.5, 0, 0], [0, 0, 0], [1, 1, 1]),
@@ -139,13 +142,55 @@ function richPart(): EditingPart {
     thermalEfficiency: 0.95,
     minimumThrottle: 1,
     minimumPulseTimeS: null,
-    feeds: [],
+    // Every feed-point kind, so the compact CFeed codec is fully exercised.
+    feeds: [
+      { kind: 'parent' as const },
+      { kind: 'connector' as const, connectorId: '_connector1' },
+      { kind: 'container' as const, containerId: 'Fuel', subPartInstanceId: null },
+      { kind: 'container' as const, containerId: 'Grain', subPartInstanceId: 'wing_1' },
+    ],
     plumbing: 'Bulk' as const,
   })
   p.gameData.gimbals.push(
     { subPartInstanceId: 'wing_1', maxAngleYDeg: 5, maxAngleZDeg: 5, constrainToCircle: false },
     { subPartInstanceId: 'truss_1', maxAngleYDeg: 70, maxAngleZDeg: 0, constrainToCircle: true },
   )
+
+  // KSA 2026.7.9 plumbing topology: a part-level feed container, the solid-motor trio,
+  // and a wiring entry pointing a placed SubPart's consumer at a real connector.
+  p.gameData.tanks.push({
+    ...createTank(),
+    id: 'Fuel',
+    lengthM: 3,
+    outerRadiusM: 0.8,
+    locationAsmb: { x: 0.25, y: 0, z: -0.5 },
+  })
+  p.gameData.solidMotors.push({
+    ...createSolidMotor('MotorCore'),
+    feeds: [
+      { kind: 'container', containerId: 'Grain', subPartInstanceId: null },
+      { kind: 'connector', connectorId: '_connector1' },
+    ],
+  })
+  p.gameData.solidNozzles.push({
+    ...createSolidMotorNozzle('SrbNozzle'),
+    exitDiameterM: 1.2,
+    fxExitDiameterM: 0.587008,
+    exhaustLocation: { x: -0.470039, y: 0, z: 0 },
+    sound: { action: 'On', soundId: 'DefaultEngineSoundBehavior' },
+  })
+  p.gameData.solidGrainSegments.push({
+    ...createSolidGrainSegment('Grain'),
+    outerRadiusM: 1,
+    wallThicknessMm: 8,
+    lengthM: 0.65227,
+    locationAsmb: { x: -0.1, y: 0, z: 0 },
+  })
+  p.gameData.consumerFeedWiring.push({
+    consumerId: 'ThrustChamber',
+    subPartInstanceId: 'wing_1',
+    feeds: [{ kind: 'connector', connectorId: '_connector1' }],
+  })
 
   p.subPartGameData.push({
     ...createSubPartGameData('Core.Wing'),
@@ -202,8 +247,8 @@ function richPart(): EditingPart {
         thermalEfficiency: 1,
         minimumThrottle: 0.1,
         minimumPulseTimeS: 0.008,
-        feeds: [],
-        plumbing: 'Bulk' as const,
+        feeds: [{ kind: 'parent' as const }],
+        plumbing: 'Service' as const,
       },
     ],
     nozzles: [
@@ -231,6 +276,11 @@ function richPart(): EditingPart {
         nozzles: [{ id: 'Nozzle', subPartInstanceId: null }],
       },
     ],
+    solidMotors: [
+      { ...createSolidMotor('SubMotor'), feeds: [{ kind: 'parent' }], grainGeometryId: '' },
+    ],
+    solidNozzles: [createSolidMotorNozzle('SubSrbNozzle')],
+    solidGrainSegments: [createSolidGrainSegment('SubGrain')],
     // Unmodeled passthrough: a SubPartGameData DisplayName attr + a SubstanceStorageVolume child.
     unknownAttrs: { DisplayName: 'Wing Tank' },
     unknownChildren: [{ tag: 'SubstanceStorageVolume', attrs: { Id: 'Vol1' }, children: [] }],
@@ -321,10 +371,10 @@ function richPart(): EditingPart {
       { lnPressure: 9.5, temperatureK: 3200, gamma: 1.22, molarMassGPerMol: 22.4 },
       { lnPressure: 15.4, temperatureK: 3650, gamma: 1.15, molarMassGPerMol: 23.1 },
     ],
-    burnRate: null,
-    minimumBurnPressurePa: null,
-    maxStablePressurePa: null,
-    exhaustCondensedFraction: null,
+    burnRate: { coefficientMPerS: 0.0045, exponent: 0.35 },
+    minimumBurnPressurePa: 1500000,
+    maxStablePressurePa: 15000000,
+    exhaustCondensedFraction: 0.336965,
   })
 
   return p
@@ -354,6 +404,28 @@ describe('projectCodec round-trip', () => {
     // Cylindrical tank with the default material is the bare {l,r,w}; spherical sets sph.
     expect(c.sg?.[0].tk?.[0]).toEqual({ l: 2, r: 0.5, w: 2 })
     expect(c.sg?.[0].tk?.[1]).toMatchObject({ sph: 1, m: 'Steel.A36(s)' })
+    // A feed point deferring to the placing part is a single character.
+    expect(c.g?.cb?.[0].fd).toEqual([
+      'p',
+      ['c', '_connector1'],
+      ['t', 'Fuel'],
+      ['t', 'Grain', 'wing_1'],
+    ])
+    // Bulk is the schema default, so `pl` appears only on the Service combustor.
+    expect(c.g?.cb?.[0]).not.toHaveProperty('pl')
+    expect(c.sg?.[0].cb?.[0].pl).toBe(1)
+    // A solid nozzle never carries an area ratio (KSA derives throat = exitArea/12).
+    expect(c.g?.sn?.[0]).not.toHaveProperty('ar')
+    // Empty capabilities are omitted (they mean KSA's implicit Electricity|ServiceFluid).
+    expect(c.g?.sm?.[0].g).toBe('Neutral')
+    expect(c.sg?.[0].sm?.[0]).not.toHaveProperty('g')
+  })
+
+  // Per the no-migration rule a v3 envelope is REJECTED, never converted — so the
+  // marker must actually be 4, not just "whatever the constant says".
+  it('stamps wire version 4 (KSA 5018 plumbing topology)', () => {
+    expect(PROJECT_EXPORT_VERSION).toBe(4)
+    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P')).v).toBe(4)
   })
 
   it('rounds high-precision floats to 6 decimals', () => {

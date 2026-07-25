@@ -4,7 +4,9 @@ import type {
   Battery,
   Combustor,
   Connector,
+  ConnectorCapability,
   ConnectorFlag,
+  ConsumerFeedWiring,
   CustomReaction,
   Decoupler,
   DeLavalNozzle,
@@ -26,6 +28,9 @@ import type {
   RocketController,
   RocketControllerKind,
   SolarPanel,
+  SolidGrainSegment,
+  SolidMotor,
+  SolidMotorNozzle,
   SubPartGameData,
   SubPartIdRef,
   SubPartPlacement,
@@ -52,6 +57,7 @@ import {
   KITTEN_LAYER_ID,
 } from '../ksa/types'
 import { remapRawConnectorRefs } from '../ksa/partXmlParser'
+import { remapConsumerFeedWiring, remapConsumerFeeds } from '../ksa/idRemap'
 import type { ReferenceContainer } from './containerStore'
 import type { LineMeasurement } from './measurementStore'
 import { mergeProjectImport } from './projectTransfer'
@@ -534,6 +540,14 @@ export interface ImportedGameData {
   combustors: Combustor[]
   nozzles: DeLavalNozzle[]
   gimbals: Gimbal[]
+  /** Part-level `<Tank>` containers carried in on import. */
+  tanks: Tank[]
+  /** Part-level solid-motor hardware; `<FeedsFrom>` refs in the source id space. */
+  solidMotors: SolidMotor[]
+  solidNozzles: SolidMotorNozzle[]
+  solidGrainSegments: SolidGrainSegment[]
+  /** `<ConsumerFeedWiring>`; SubPart + connector refs in the source id space. */
+  consumerFeedWiring: ConsumerFeedWiring[]
 }
 
 /** Remaps a module→SubPart-instance reference through the import id map (null ⇒ root part, unchanged). */
@@ -542,6 +556,25 @@ function remapSubPartRef(ref: SubPartIdRef, idMap: ReadonlyMap<string, string>):
   return {
     id: ref.id,
     subPartInstanceId: idMap.get(ref.subPartInstanceId) ?? ref.subPartInstanceId,
+  }
+}
+
+/**
+ * Remaps every id-bearing reference on an imported `SubPartGameData`: its rockets'
+ * SubPart refs and its consumers' feed points. A SubPart-level consumer normally
+ * declares `{ kind: 'parent' }` (which needs no remap), but a container/connector feed
+ * points into the placing Part's id space and does.
+ */
+function remapSubPartGameData(
+  spd: SubPartGameData,
+  connectorIdMap: ReadonlyMap<string, string>,
+  idMap: ReadonlyMap<string, string>,
+): SubPartGameData {
+  return {
+    ...spd,
+    rockets: spd.rockets.map((r) => remapRocket(r, idMap)),
+    combustors: spd.combustors.map((c) => remapConsumerFeeds(c, connectorIdMap, idMap)),
+    solidMotors: spd.solidMotors.map((m) => remapConsumerFeeds(m, connectorIdMap, idMap)),
   }
 }
 
@@ -609,11 +642,9 @@ function applyImportedGameData(
   if (!game.powerConsumer && src.powerConsumer) game.powerConsumer = src.powerConsumer
   for (const spd of src.subPartGameData) {
     if (!target.subPartGameData.some((s) => s.subPartTemplateId === spd.subPartTemplateId)) {
-      // Per-subpart rockets can reference sibling instances — remap those refs too.
-      target.subPartGameData.push({
-        ...spd,
-        rockets: spd.rockets.map((r) => remapRocket(r, idMap)),
-      })
+      // Per-subpart rockets + consumer feeds can reference sibling instances / the
+      // placing part's connectors — remap those refs too.
+      target.subPartGameData.push(remapSubPartGameData(spd, connectorIdMap, idMap))
     }
   }
   // Engine modules are lists: append, remapping every SubPart-instance reference from
@@ -625,13 +656,22 @@ function applyImportedGameData(
     })),
   )
   game.rockets.push(...src.rockets.map((r) => remapRocket(r, idMap)))
-  game.combustors.push(...src.combustors)
+  game.combustors.push(...src.combustors.map((c) => remapConsumerFeeds(c, connectorIdMap, idMap)))
   game.nozzles.push(...src.nozzles)
   game.gimbals.push(
     ...src.gimbals.map((gimbal) => ({
       ...gimbal,
       subPartInstanceId: idMap.get(gimbal.subPartInstanceId) ?? gimbal.subPartInstanceId,
     })),
+  )
+  // Plumbing topology: tanks are plain containers, but solid motors carry feed points
+  // and the wiring entries carry both a placement scope and feed points.
+  game.tanks.push(...src.tanks)
+  game.solidMotors.push(...src.solidMotors.map((m) => remapConsumerFeeds(m, connectorIdMap, idMap)))
+  game.solidNozzles.push(...src.solidNozzles)
+  game.solidGrainSegments.push(...src.solidGrainSegments)
+  game.consumerFeedWiring.push(
+    ...src.consumerFeedWiring.map((w) => remapConsumerFeedWiring(w, connectorIdMap, idMap)),
   )
 }
 
@@ -839,6 +879,25 @@ export function setConnectorFlags(index: number, flags: readonly ConnectorFlag[]
   )
   const part = clone(current)
   part.connectors[index].flags = [...flags]
+  $part.set(part)
+}
+
+/**
+ * Sets a connector's `<Capabilities>` — what may FLOW across it (KSA 2026.7.9). An
+ * empty list is not "nothing": it is KSA's implicit `Electricity | ServiceFluid`.
+ */
+export function setConnectorCapabilities(
+  index: number,
+  capabilities: readonly ConnectorCapability[],
+): void {
+  const current = $part.get()
+  if (index < 0 || index >= current.connectors.length) return
+  pushUndo(
+    'connector capabilities',
+    `${current.connectors[index].id} → ${capabilities.length ? capabilities.join(', ') : 'default'}`,
+  )
+  const part = clone(current)
+  part.connectors[index].capabilities = [...capabilities]
   $part.set(part)
 }
 

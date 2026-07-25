@@ -58,9 +58,44 @@ import {
   CONNECTOR_LAYER_ID,
   DEFAULT_LAYER_ID,
   KITTEN_LAYER_ID,
+  createCombustor,
   createEmptyPart,
+  createSolidMotor,
+  createSubPartGameData,
 } from '../ksa/types'
-import type { Transform } from '../ksa/types'
+import type { ConnectorCapability, Transform } from '../ksa/types'
+import type { ImportedGameData } from './editorStore'
+
+/** An {@link ImportedGameData} with every list empty — spread and override what a test needs. */
+function emptyImportedGameData(): ImportedGameData {
+  return {
+    decoupler: null,
+    dockingPort: null,
+    evaDoor: null,
+    diameterM: null,
+    extraDiametersM: [],
+    controllable: false,
+    customMass: null,
+    customMassExtras: [],
+    unknownAttrs: {},
+    unknownChildren: [],
+    batteries: [],
+    generators: [],
+    solarPanels: [],
+    powerConsumer: null,
+    subPartGameData: [],
+    rocketControllers: [],
+    rockets: [],
+    combustors: [],
+    nozzles: [],
+    gimbals: [],
+    tanks: [],
+    solidMotors: [],
+    solidNozzles: [],
+    solidGrainSegments: [],
+    consumerFeedWiring: [],
+  }
+}
 
 beforeEach(() => {
   newPart()
@@ -221,6 +256,11 @@ describe('editorStore', () => {
         combustors: [],
         nozzles: [],
         gimbals: [],
+        tanks: [],
+        solidMotors: [],
+        solidNozzles: [],
+        solidGrainSegments: [],
+        consumerFeedWiring: [],
       },
     )
     const dp = $part.get().gameData.dockingPort
@@ -274,6 +314,11 @@ describe('editorStore', () => {
       combustors: [],
       nozzles: [],
       gimbals: [],
+      tanks: [],
+      solidMotors: [],
+      solidNozzles: [],
+      solidGrainSegments: [],
+      consumerFeedWiring: [],
     })
     const part = $part.get()
     // _connector19/_connector41 were regenerated to _connector2/_connector3…
@@ -289,6 +334,112 @@ describe('editorStore', () => {
         ],
       },
     ])
+  })
+
+  it('addPart remaps every feed + capability reference onto the regenerated ids', () => {
+    addConnector() // occupies _connector1, forcing the imported connectors to renumber
+    const conn = (id: string, capabilities: ConnectorCapability[] = []) => ({
+      id,
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+      flags: [],
+      capabilities,
+      siblingIds: [],
+      layerId: DEFAULT_LAYER_ID,
+    })
+    const CHAMBER_TMPL = 'Core.ThrustChamberMesh'
+    addPart(
+      [
+        {
+          instanceId: 'CorePropulsionA_Subpart_EngineAMedBoostAssembly1',
+          subPartTemplateId: CHAMBER_TMPL,
+          position: { x: 0, y: 0, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+          layerId: DEFAULT_LAYER_ID,
+        },
+      ],
+      [conn('_connector19', ['BulkFluid']), conn('_connector41', ['SolidMotorCase'])],
+      [],
+      undefined,
+      undefined,
+      {
+        ...emptyImportedGameData(),
+        // A part-level gas generator feeding from a connector + a scoped container.
+        combustors: [
+          {
+            ...createCombustor('GasGeneratorChamber'),
+            feeds: [
+              { kind: 'connector', connectorId: '_connector19' },
+              {
+                kind: 'container',
+                containerId: 'Grain',
+                subPartInstanceId: 'CorePropulsionA_Subpart_EngineAMedBoostAssembly1',
+              },
+            ],
+          },
+        ],
+        solidMotors: [
+          {
+            ...createSolidMotor('MotorCore'),
+            feeds: [{ kind: 'connector', connectorId: '_connector41' }],
+          },
+        ],
+        // The wiring entry references BOTH a placement (SubPartId) and a connector.
+        consumerFeedWiring: [
+          {
+            consumerId: 'ThrustChamber',
+            subPartInstanceId: 'CorePropulsionA_Subpart_EngineAMedBoostAssembly1',
+            feeds: [{ kind: 'connector', connectorId: '_connector19' }],
+          },
+        ],
+        // A SubPart-level chamber deferring to its placing part needs no remap...
+        subPartGameData: [
+          {
+            ...createSubPartGameData(CHAMBER_TMPL),
+            combustors: [{ ...createCombustor('ThrustChamber'), feeds: [{ kind: 'parent' }] }],
+            // ...but a connector feed on a SubPart-level motor does.
+            solidMotors: [
+              {
+                ...createSolidMotor('SubMotor'),
+                feeds: [{ kind: 'connector', connectorId: '_connector41' }],
+              },
+            ],
+          },
+        ],
+      },
+    )
+    const part = $part.get()
+    const newInstanceId = part.placements[0].instanceId
+    expect(part.connectors.map((c) => c.id)).toEqual(['_connector1', '_connector2', '_connector3'])
+    expect(newInstanceId).not.toBe('CorePropulsionA_Subpart_EngineAMedBoostAssembly1')
+
+    // <Capabilities> rides through addPart (without BulkFluid the tank path is dead).
+    expect(part.connectors.map((c) => c.capabilities)).toEqual([
+      [],
+      ['BulkFluid'],
+      ['SolidMotorCase'],
+    ])
+    // Every connector feed points at the REGENERATED id, never the source-space one.
+    expect(part.gameData.combustors[0].feeds).toEqual([
+      { kind: 'connector', connectorId: '_connector2' },
+      { kind: 'container', containerId: 'Grain', subPartInstanceId: newInstanceId },
+    ])
+    expect(part.gameData.solidMotors[0].feeds).toEqual([
+      { kind: 'connector', connectorId: '_connector3' },
+    ])
+    // The wiring entry's placement scope AND its feed point are both remapped.
+    expect(part.gameData.consumerFeedWiring).toEqual([
+      {
+        consumerId: 'ThrustChamber',
+        subPartInstanceId: newInstanceId,
+        feeds: [{ kind: 'connector', connectorId: '_connector2' }],
+      },
+    ])
+    const spd = part.subPartGameData.find((s) => s.subPartTemplateId === CHAMBER_TMPL)!
+    expect(spd.combustors[0].feeds).toEqual([{ kind: 'parent' }]) // nothing to remap
+    expect(spd.solidMotors[0].feeds).toEqual([{ kind: 'connector', connectorId: '_connector3' }])
   })
 
   it('adds/removes tanks per SubPart template as discrete undo steps and patches fields (streaming)', () => {

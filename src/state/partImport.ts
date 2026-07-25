@@ -94,6 +94,11 @@ export async function importBuiltInPart(
       combustors: part.combustors,
       nozzles: part.nozzles,
       gimbals: part.gimbals,
+      tanks: part.tanks,
+      solidMotors: part.solidMotors,
+      solidNozzles: part.solidNozzles,
+      solidGrainSegments: part.solidGrainSegments,
+      consumerFeedWiring: part.consumerFeedWiring,
     }),
   )
 }

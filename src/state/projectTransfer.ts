@@ -26,6 +26,7 @@ import {
   createSubPartGameData,
 } from '../ksa/types'
 import { remapRawConnectorRefs } from '../ksa/partXmlParser'
+import { remapConsumerFeedWiring, remapConsumerFeeds } from '../ksa/idRemap'
 import { randomId } from './ids'
 import {
   PROJECT_EXPORT_FORMAT,
@@ -356,9 +357,17 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
     const tanks = (sg.tanks ?? []).map((t) => ({ ...t }))
     const solarPanels = (sg.solarPanels ?? []).map((sp) => structuredClone(sp))
     const lights = (sg.lights ?? []).map((l) => structuredClone(l))
-    const combustors = (sg.combustors ?? []).map((c) => ({ ...c }))
+    // A consumer's feed points name connectors/placements in the SOURCE id space.
+    const combustors = (sg.combustors ?? []).map((c) =>
+      remapConsumerFeeds(structuredClone(c), connectorIdMap, instanceIdMap),
+    )
     const nozzles = (sg.nozzles ?? []).map((n) => structuredClone(n))
     const rockets = (sg.rockets ?? []).map((r) => remapRocket(r, instanceIdMap))
+    const solidMotors = (sg.solidMotors ?? []).map((m) =>
+      remapConsumerFeeds(structuredClone(m), connectorIdMap, instanceIdMap),
+    )
+    const solidNozzles = (sg.solidNozzles ?? []).map((n) => structuredClone(n))
+    const solidGrainSegments = (sg.solidGrainSegments ?? []).map((s) => structuredClone(s))
     const existing = part.subPartGameData.find((x) => x.subPartTemplateId === templateId)
     if (existing) {
       existing.tanks.push(...tanks)
@@ -367,6 +376,9 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
       existing.combustors.push(...combustors)
       existing.nozzles.push(...nozzles)
       existing.rockets.push(...rockets)
+      existing.solidMotors.push(...solidMotors)
+      existing.solidNozzles.push(...solidNozzles)
+      existing.solidGrainSegments.push(...solidGrainSegments)
     } else {
       const entry = createSubPartGameData(templateId)
       entry.tanks = tanks
@@ -375,6 +387,9 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
       entry.combustors = combustors
       entry.nozzles = nozzles
       entry.rockets = rockets
+      entry.solidMotors = solidMotors
+      entry.solidNozzles = solidNozzles
+      entry.solidGrainSegments = solidGrainSegments
       part.subPartGameData.push(entry)
     }
   }
@@ -486,13 +501,32 @@ function mergeGameData(
     })),
   )
   target.rockets.push(...(src.rockets ?? []).map((r) => remapRocket(r, instanceIdMap)))
-  target.combustors.push(...(src.combustors ?? []).map((c) => ({ ...c })))
+  target.combustors.push(
+    ...(src.combustors ?? []).map((c) =>
+      remapConsumerFeeds(structuredClone(c), connectorIdMap, instanceIdMap),
+    ),
+  )
   target.nozzles.push(...(src.nozzles ?? []).map((n) => structuredClone(n)))
   target.gimbals.push(
     ...(src.gimbals ?? []).map((g) => ({
       ...g,
       subPartInstanceId: instanceIdMap.get(g.subPartInstanceId) ?? g.subPartInstanceId,
     })),
+  )
+  // Plumbing topology (KSA 2026.7.9): tanks are plain containers; solid motors and the
+  // wiring entries carry feed points / placement scopes in the SOURCE id space.
+  target.tanks.push(...(src.tanks ?? []).map((t) => structuredClone(t)))
+  target.solidMotors.push(
+    ...(src.solidMotors ?? []).map((m) =>
+      remapConsumerFeeds(structuredClone(m), connectorIdMap, instanceIdMap),
+    ),
+  )
+  target.solidNozzles.push(...(src.solidNozzles ?? []).map((n) => structuredClone(n)))
+  target.solidGrainSegments.push(...(src.solidGrainSegments ?? []).map((s) => structuredClone(s)))
+  target.consumerFeedWiring.push(
+    ...(src.consumerFeedWiring ?? []).map((w) =>
+      remapConsumerFeedWiring(structuredClone(w), connectorIdMap, instanceIdMap),
+    ),
   )
 }
 

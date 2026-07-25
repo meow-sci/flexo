@@ -318,8 +318,9 @@ describe('parseGameDataFile + mergeGameData', () => {
   // Runs against the committed fixtures (src/ksa/__fixtures__/), so it exercises the REAL
   // Core data without the private asset tree. Since KSA 2026.7.6 Core authors its fuel-tank
   // data as Part-LEVEL <Tank> entries in CoreFuelTankAGameData.xml (no SubPartGameData);
-  // flexo doesn't model part-level tanks, so they must survive via the GameData passthrough.
-  it('preserves the real CoreFuelTankA_Prefab_LF1WHalfHA part-level <Tank>/<Collider> verbatim (vendored fixtures)', () => {
+  // 2026.7.9 made those tanks addressable feed containers, so flexo now MODELS them (the
+  // <Collider> still rides along as unmodeled passthrough).
+  it('imports the real CoreFuelTankA_Prefab_LF1WHalfHA part-level <Tank> and preserves its <Collider> (vendored fixtures)', () => {
     const parts: CatalogPart[] = []
     parsePartsFile(
       parse(readVendoredAsset('CoreFuelTankAAssets.xml')),
@@ -334,18 +335,24 @@ describe('parseGameDataFile + mergeGameData', () => {
     expect(part).toBeTruthy()
     expect(part.editorTags).toContain('Fuel Tanks')
     expect(part.diameterM).toBe(1)
-    // The part-level <Collider> and <Tank> ride along as unmodeled passthrough children.
-    expect(part.unknownChildren.map((n) => n.tag)).toEqual(['Collider', 'Tank'])
-    const tank = part.unknownChildren.find((n) => n.tag === 'Tank')!
-    expect(tank.children[0].tag).toBe('CylindricalTank')
-    expect(tank.children[0].children.map((n) => n.tag)).toEqual([
-      'Material',
-      'Length',
-      'OuterRadius',
-      'WallThickness',
+    // Only the <Collider> is still passthrough — the <Tank> is modeled now.
+    expect(part.unknownChildren.map((n) => n.tag)).toEqual(['Collider'])
+    expect(part.tanks).toEqual([
+      {
+        ...createTank(),
+        id: '', // this prefab's tank is unnamed, so no engine can address it
+        shape: 'Cylindrical',
+        wallMaterialId: 'Aluminum.2014(s)',
+        lengthM: 0.5,
+        outerRadiusM: 1,
+        wallThicknessMm: 4,
+      },
     ])
     // The relocated SubPart entries are gone: no typed SubPart tank data anymore.
     expect(part.subPartGameData.every((s) => s.tanks.length === 0)).toBe(true)
+    // Core 5018 declares BulkFluid on both of this prefab's connectors — without it no
+    // main-engine propellant can cross, so it must survive the merge.
+    expect(part.connectors.map((c) => c.capabilities)).toEqual([['BulkFluid'], ['BulkFluid']])
   })
 
   // The electrical solar panel exercises the typed SubPart-module path: the SubPart's

@@ -4,10 +4,12 @@ import type {
   Combustor,
   Connector,
   ConnectorFlag,
+  ConsumerFeedWiring,
   CustomReaction,
   DeLavalNozzle,
   EditingPart,
   EulerXYZ,
+  FeedSource,
   Gimbal,
   Light,
   PartAnimation,
@@ -16,13 +18,16 @@ import type {
   Rocket,
   RocketController,
   SolarPanel,
+  SolidGrainSegment,
+  SolidMotor,
+  SolidMotorNozzle,
   SubPartIdRef,
   SubPartPlacement,
   Tank,
   Transform,
   Vec3,
 } from './types'
-import { isSubPartGameDataEmpty } from './types'
+import { isCustomReactionExportable, isFeedSourceValid, isSubPartGameDataEmpty } from './types'
 import { formatG6 } from './formatG6'
 import { animGlbPath, animModuleId, isAnimationExportable } from './animationNaming'
 
@@ -49,9 +54,39 @@ import { animGlbPath, animModuleId, isAnimationExportable } from './animationNam
 
 const EPSILON = 1e-9
 
-/** ", "-joined flag list (e.g. "Internal, ToSurface"), or null when empty. */
+/**
+ * Space-joined flag list (e.g. "Internal ToSurface"), or null when empty.
+ *
+ * MUST be spaces, not commas: KSA deserializes with .NET's `XmlSerializer`, whose
+ * `XmlSerializationReader.ToEnum` splits a `[Flags]` enum body with `value.Split(null)`
+ * — i.e. on WHITESPACE — and throws `CreateUnknownConstantException` on any token it
+ * doesn't recognize. A comma-joined body ("Internal, ToSurface") therefore yields the
+ * token "Internal," and fails KSA's mod load outright. Single-flag bodies (all Core
+ * authors) are unaffected either way, which is why this went unnoticed until
+ * `<Capabilities>` doubled the exposure.
+ */
 function flagsString(flags: readonly ConnectorFlag[]): string | null {
-  return flags.length > 0 ? flags.join(', ') : null
+  return flags.length > 0 ? flags.join(' ') : null
+}
+
+/**
+ * Appends `<Flags>` / `<Capabilities>` to a `<Connector>` element. Shared by the
+ * geometry `<Part>` and the `<PartGameData>` emitters so the two documents can never
+ * drift — KSA merges the connector's capabilities across both with `|=`
+ * (`PartTemplate.ApplyGameData`), so emitting the same list in both is idempotent.
+ */
+function appendConnectorTokens(doc: XmlDocument, el: XmlElement, connector: Connector): void {
+  const flags = flagsString(connector.flags)
+  if (flags) {
+    const flagsEl = doc.createElement('Flags')
+    flagsEl.appendChild(doc.createTextNode(flags))
+    el.appendChild(flagsEl)
+  }
+  if (connector.capabilities.length > 0) {
+    const capsEl = doc.createElement('Capabilities')
+    capsEl.appendChild(doc.createTextNode(connector.capabilities.join(' ')))
+    el.appendChild(capsEl)
+  }
 }
 
 /**
@@ -140,6 +175,10 @@ export function serializeGameData(
   // <Control/> — bare command-capability marker (ControlTemplate has no fields).
   if (game.controllable) gd.appendChild(doc.createElement('Control'))
 
+  // Part-level <Tank>s — Core authors its prefab tank data here, and a part-level tank
+  // id is what an engine's <FeedsFrom Container> addresses without a SubPart= scope.
+  for (const tank of game.tanks) gd.appendChild(buildTankWrapperElement(doc, tank))
+
   for (const b of game.batteries) {
     const el = doc.createElement('Battery')
     // Model holds Wh; KSA's MaximumCapacity is an EnergyReference in joules (1 Wh = 3600 J).
@@ -167,12 +206,7 @@ export function serializeGameData(
   for (const connector of part.connectors) {
     const el = doc.createElement('Connector')
     el.setAttribute('Id', connector.id)
-    const flags = flagsString(connector.flags)
-    if (flags) {
-      const flagsEl = doc.createElement('Flags')
-      flagsEl.appendChild(doc.createTextNode(flags))
-      el.appendChild(flagsEl)
-    }
+    appendConnectorTokens(doc, el, connector)
     gd.appendChild(el)
   }
 
@@ -212,9 +246,18 @@ export function serializeGameData(
     gd.appendChild(buildControllerElement(doc, controller))
   for (const rocket of game.rockets) gd.appendChild(buildRocketElement(doc, rocket))
   for (const combustor of game.combustors) gd.appendChild(buildCombustorElement(doc, combustor))
+  for (const motor of game.solidMotors) gd.appendChild(buildSolidMotorElement(doc, motor))
   for (const nozzle of game.nozzles) gd.appendChild(buildNozzleElement(doc, nozzle))
+  for (const nozzle of game.solidNozzles) gd.appendChild(buildSolidNozzleElement(doc, nozzle))
+  for (const seg of game.solidGrainSegments) gd.appendChild(buildSolidGrainSegmentElement(doc, seg))
   for (const gimbal of game.gimbals) {
     const el = buildGimbalSubPartElement(doc, gimbal)
+    if (el) gd.appendChild(el)
+  }
+  // <ConsumerFeedWiring> — wires a placed SubPart's <FeedsFrom Parent> onto this Part's
+  // own containers/connectors. Emitted after the modules it references, before passthrough.
+  for (const w of game.consumerFeedWiring) {
+    const el = buildConsumerFeedWiringElement(doc, w)
     if (el) gd.appendChild(el)
   }
 
@@ -226,6 +269,17 @@ export function serializeGameData(
   // User-authored propellants — top-level <FixedReaction> siblings of <PartGameData>
   // (KSA registers them by Id; a combustor's <Reaction Id> resolves to one).
   for (const reaction of part.customReactions) {
+    // A Category="Solid" reaction missing its burn-rate law / pressure limits makes
+    // FixedReactionTemplate.Create() THROW, failing the whole mod load — never emit one.
+    if (!isCustomReactionExportable(reaction)) {
+      console.warn(
+        `flexo export: skipping solid reaction "${reaction.id}" — KSA refuses to load a ` +
+          `Category="Solid" FixedReaction without a valid <BurnRate> (a > 0, 0 <= n < 0.95), ` +
+          `<MinimumBurnPressure> (> 0), <MaxStablePressure> (> the minimum) and ` +
+          `<ExhaustCondensedFraction> (in [0, 1)).`,
+      )
+      continue
+    }
     assets.appendChild(buildFixedReactionElement(doc, reaction))
   }
 
@@ -236,17 +290,17 @@ export function serializeGameData(
     // fresh variant SubPart instead of REDEFINING the shared built-in (KSA merges by id).
     spdEl.setAttribute('Id', templateRemap.get(spd.subPartTemplateId) ?? spd.subPartTemplateId)
     applyUnknownAttrs(spdEl, spd.unknownAttrs)
-    for (const tank of spd.tanks) {
-      const tankWrapper = doc.createElement('Tank')
-      tankWrapper.appendChild(buildTankElement(doc, tank))
-      spdEl.appendChild(tankWrapper)
-    }
+    for (const tank of spd.tanks) spdEl.appendChild(buildTankWrapperElement(doc, tank))
     for (const sp of spd.solarPanels) spdEl.appendChild(buildSolarPanelElement(doc, sp))
     for (const light of spd.lights) spdEl.appendChild(buildLightElement(doc, light))
-    // Reusable thrust-chamber modules that travel with this mesh.
+    // Reusable thrust-chamber / solid-motor modules that travel with this mesh.
     for (const rocket of spd.rockets) spdEl.appendChild(buildRocketElement(doc, rocket))
     for (const combustor of spd.combustors) spdEl.appendChild(buildCombustorElement(doc, combustor))
+    for (const motor of spd.solidMotors) spdEl.appendChild(buildSolidMotorElement(doc, motor))
     for (const nozzle of spd.nozzles) spdEl.appendChild(buildNozzleElement(doc, nozzle))
+    for (const nozzle of spd.solidNozzles) spdEl.appendChild(buildSolidNozzleElement(doc, nozzle))
+    for (const seg of spd.solidGrainSegments)
+      spdEl.appendChild(buildSolidGrainSegmentElement(doc, seg))
     // Unmodeled children flexo captured on import — re-emitted verbatim, last.
     for (const node of spd.unknownChildren) spdEl.appendChild(buildRawNode(doc, node))
     assets.appendChild(spdEl)
@@ -286,8 +340,20 @@ function buildSolarPanelElement(doc: XmlDocument, sp: SolarPanel): XmlElement {
   return el
 }
 
+/**
+ * `<Tank [Id]><CylindricalTank|SphericalTank>…</Tank>`. The `Id` sits on the WRAPPER
+ * (it is the `Components` entry id an engine addresses with `<FeedsFrom Container>`);
+ * the geometry and the assembly-frame offset sit on the shape element.
+ */
+function buildTankWrapperElement(doc: XmlDocument, tank: Tank): XmlElement {
+  const wrapper = doc.createElement('Tank')
+  if (tank.id.trim()) wrapper.setAttribute('Id', tank.id)
+  wrapper.appendChild(buildTankShapeElement(doc, tank))
+  return wrapper
+}
+
 /** <CylindricalTank>/<SphericalTank> with Material/Length/OuterRadius/WallThickness. */
-function buildTankElement(doc: XmlDocument, tank: Tank): XmlElement {
+function buildTankShapeElement(doc: XmlDocument, tank: Tank): XmlElement {
   const el = doc.createElement(tank.shape === 'Cylindrical' ? 'CylindricalTank' : 'SphericalTank')
   if (tank.wallMaterialId.trim()) {
     el.appendChild(elWithAttr(doc, 'Material', 'Id', tank.wallMaterialId))
@@ -303,6 +369,9 @@ function buildTankElement(doc: XmlDocument, tank: Tank): XmlElement {
     affinity.appendChild(doc.createTextNode(tank.roleAffinity))
     el.appendChild(affinity)
   }
+  // <LocationAsmb> — AsmbTransformTemplate offset; omitted at the (0,0,0) default.
+  const loc = buildEngineVec3(doc, 'LocationAsmb', tank.locationAsmb, { x: 0, y: 0, z: 0 })
+  if (loc) el.appendChild(loc)
   return el
 }
 
@@ -375,10 +444,43 @@ function buildEngineVec3(doc: XmlDocument, name: string, v: Vec3, def: Vec3): Xm
   return el
 }
 
-/** <Combustor Id><Reaction Id><MixtureRatio/></Reaction><MaxPressure Bar/>… — omits efficiency/throttle at their defaults. */
+/**
+ * `<FeedsFrom Container|SubPart|Connector|Parent/>` — one element per feed point,
+ * skipping any that names nothing KSA could resolve (it would only log an error).
+ */
+function buildFeedElements(doc: XmlDocument, feeds: readonly FeedSource[]): XmlElement[] {
+  const out: XmlElement[] = []
+  for (const f of feeds) {
+    if (!isFeedSourceValid(f)) continue
+    const el = doc.createElement('FeedsFrom')
+    if (f.kind === 'container') {
+      // Core authors SubPart before Container; attribute order is irrelevant to XmlSerializer.
+      if (f.subPartInstanceId) el.setAttribute('SubPart', f.subPartInstanceId)
+      el.setAttribute('Container', f.containerId)
+    } else if (f.kind === 'connector') {
+      el.setAttribute('Connector', f.connectorId)
+    } else {
+      el.setAttribute('Parent', 'true')
+    }
+    out.push(el)
+  }
+  return out
+}
+
+/** <Combustor Id><FeedsFrom/><Plumbing/><Reaction Id><MixtureRatio/></Reaction><MaxPressure Bar/>… — omits efficiency/throttle at their defaults. */
 function buildCombustorElement(doc: XmlDocument, c: Combustor): XmlElement {
   const el = doc.createElement('Combustor')
   el.setAttribute('Id', c.id)
+  // <FeedsFrom> then <Plumbing> then <Reaction>, matching Core's authoring order.
+  // Without any feed point KSA logs "declares no FeedsFrom feed points; it will reach
+  // no propellant" and the chamber never fires.
+  for (const f of buildFeedElements(doc, c.feeds)) el.appendChild(f)
+  // Bulk is the schema default (PlumbingClass.Bulk = 0) — emit only the Service override.
+  if (c.plumbing === 'Service') {
+    const plumbing = doc.createElement('Plumbing')
+    plumbing.appendChild(doc.createTextNode('Service'))
+    el.appendChild(plumbing)
+  }
   // <Reaction Id> with the O/F ratio as a text child — REQUIRED by KSA for
   // MixtureReactions (CombustorTemplate.ResolveReaction throws without it),
   // omitted for FixedReactions (custom propellants, monoprops, solids).
@@ -403,15 +505,44 @@ function buildCombustorElement(doc: XmlDocument, c: Combustor): XmlElement {
   return el
 }
 
-/** <DeLavalNozzle Id> with geometry, efficiencies, exhaust placement + plume/light/sound FX. */
+/**
+ * `<DeLavalNozzle Id>` with geometry, efficiencies, exhaust placement + plume/light/
+ * sound FX. `<AreaRatio>` is emitted between the exit diameters and the efficiencies —
+ * a `<SolidMotorNozzle>` is exactly this element without it (see
+ * {@link buildSolidNozzleElement}).
+ */
 function buildNozzleElement(doc: XmlDocument, n: DeLavalNozzle): XmlElement {
-  const el = doc.createElement('DeLavalNozzle')
+  return buildRocketNozzleElement(doc, 'DeLavalNozzle', n, (el) => {
+    el.appendChild(elWithAttr(doc, 'AreaRatio', 'Value', formatG6(n.areaRatio)))
+  })
+}
+
+/**
+ * `<SolidMotorNozzle Id>` — the DeLaval schema WITHOUT `<AreaRatio>`:
+ * `SolidMotorNozzleTemplate.Create` derives the throat as `exitArea / 12`, so an
+ * authored area ratio would be ignored (and there is no XML slot for it).
+ */
+function buildSolidNozzleElement(doc: XmlDocument, n: SolidMotorNozzle): XmlElement {
+  return buildRocketNozzleElement(doc, 'SolidMotorNozzle', n)
+}
+
+/**
+ * The shared nozzle body (`RocketNozzleTemplate` + exit geometry/efficiencies). The
+ * `afterExitDiameter` hook is where `<DeLavalNozzle>` slots its `<AreaRatio>`.
+ */
+function buildRocketNozzleElement(
+  doc: XmlDocument,
+  tag: 'DeLavalNozzle' | 'SolidMotorNozzle',
+  n: SolidMotorNozzle,
+  afterExitDiameter?: (el: XmlElement) => void,
+): XmlElement {
+  const el = doc.createElement(tag)
   el.setAttribute('Id', n.id)
   el.appendChild(buildDistanceElement(doc, 'ExitDiameter', n.exitDiameterM))
   if (n.fxExitDiameterM != null) {
     el.appendChild(buildDistanceElement(doc, 'FxExitDiameter', n.fxExitDiameterM))
   }
-  el.appendChild(elWithAttr(doc, 'AreaRatio', 'Value', formatG6(n.areaRatio)))
+  afterExitDiameter?.(el)
   if (Math.abs(n.flowEfficiency - 1) > EPSILON) {
     el.appendChild(elWithAttr(doc, 'FlowEfficiency', 'Value', formatG6(n.flowEfficiency)))
   }
@@ -452,6 +583,70 @@ function buildNozzleElement(doc: XmlDocument, n: DeLavalNozzle): XmlElement {
   }
   // ExhaustLight defaults true — only emit the override when disabled.
   if (!n.exhaustLight) el.appendChild(elWithAttr(doc, 'ExhaustLight', 'Value', 'false'))
+  return el
+}
+
+/**
+ * `<SolidMotor Id><Reaction Id/><ThermalEfficiency/><DefaultPressure Bar/><Grain Id/>
+ * <FeedsFrom/>…</SolidMotor>` — a solid motor case. Element order matches Core's
+ * authoring in `CorePropulsionCGameData.xml`.
+ */
+function buildSolidMotorElement(doc: XmlDocument, m: SolidMotor): XmlElement {
+  const el = doc.createElement('SolidMotor')
+  el.setAttribute('Id', m.id)
+  el.appendChild(elWithAttr(doc, 'Reaction', 'Id', m.reactionId))
+  if (Math.abs(m.thermalEfficiency - 1) > EPSILON) {
+    el.appendChild(elWithAttr(doc, 'ThermalEfficiency', 'Value', formatG6(m.thermalEfficiency)))
+  }
+  // Stored SI Pa, emitted as Bar to match Core's authoring style.
+  el.appendChild(elWithAttr(doc, 'DefaultPressure', 'Bar', formatG6(m.defaultPressurePa / 1e5)))
+  // Blank ⇒ omit, so KSA takes GrainGeometryLibrary.Default.
+  if (m.grainGeometryId.trim()) el.appendChild(elWithAttr(doc, 'Grain', 'Id', m.grainGeometryId))
+  for (const f of buildFeedElements(doc, m.feeds)) el.appendChild(f)
+  return el
+}
+
+/**
+ * `<SolidGrainSegment Id><Grain><Material Id/><OuterRadius M/><WallThickness Mm/>
+ * <Length M/>[<LocationAsmb/>]</Grain></SolidGrainSegment>` — a stackable propellant
+ * grain, addressable as a feed container by its `Id`.
+ */
+function buildSolidGrainSegmentElement(doc: XmlDocument, s: SolidGrainSegment): XmlElement {
+  const el = doc.createElement('SolidGrainSegment')
+  el.setAttribute('Id', s.id)
+  const grain = doc.createElement('Grain')
+  if (s.wallMaterialId.trim()) {
+    grain.appendChild(elWithAttr(doc, 'Material', 'Id', s.wallMaterialId))
+  }
+  grain.appendChild(elWithAttr(doc, 'OuterRadius', 'M', formatG6(s.outerRadiusM)))
+  grain.appendChild(elWithAttr(doc, 'WallThickness', 'Mm', formatG6(s.wallThicknessMm)))
+  grain.appendChild(elWithAttr(doc, 'Length', 'M', formatG6(s.lengthM)))
+  const loc = buildEngineVec3(doc, 'LocationAsmb', s.locationAsmb, { x: 0, y: 0, z: 0 })
+  if (loc) grain.appendChild(loc)
+  el.appendChild(grain)
+  return el
+}
+
+/**
+ * `<ConsumerFeedWiring Id [SubPartId]><FeedsFrom/>…</ConsumerFeedWiring>`, or null when
+ * it names no consumer / wires no resolvable feed point — KSA logs an Error for either
+ * ("wires no feed points" / "wires no consumer this part carries"), so we omit instead.
+ */
+function buildConsumerFeedWiringElement(
+  doc: XmlDocument,
+  w: ConsumerFeedWiring,
+): XmlElement | null {
+  if (!w.consumerId.trim()) return null
+  // A wiring entry may not itself defer to Parent (ConsumerFeedWiring.OnDataLoad).
+  const feeds = buildFeedElements(
+    doc,
+    w.feeds.filter((f) => f.kind !== 'parent'),
+  )
+  if (feeds.length === 0) return null
+  const el = doc.createElement('ConsumerFeedWiring')
+  el.setAttribute('Id', w.consumerId)
+  if (w.subPartInstanceId) el.setAttribute('SubPartId', w.subPartInstanceId)
+  for (const f of feeds) el.appendChild(f)
   return el
 }
 
@@ -519,6 +714,35 @@ function buildFixedReactionElement(doc: XmlDocument, reaction: CustomReaction): 
     re.setAttribute('Id', r.phaseId)
     re.setAttribute('MassShare', formatG6(r.massShare))
     el.appendChild(re)
+  }
+  // Solid-propellant data, after <Reactant> and before <PressureCondition> (Core's order).
+  // Each is emitted only when set; a Category="Solid" reaction missing any of them is
+  // rejected up front by isCustomReactionExportable (KSA would throw on load).
+  if (reaction.burnRate) {
+    const br = doc.createElement('BurnRate')
+    br.setAttribute('CoefficientMPerS', formatG6(reaction.burnRate.coefficientMPerS))
+    br.setAttribute('Exponent', formatG6(reaction.burnRate.exponent))
+    el.appendChild(br)
+  }
+  if (reaction.minimumBurnPressurePa != null) {
+    el.appendChild(
+      elWithAttr(doc, 'MinimumBurnPressure', 'Bar', formatG6(reaction.minimumBurnPressurePa / 1e5)),
+    )
+  }
+  if (reaction.maxStablePressurePa != null) {
+    el.appendChild(
+      elWithAttr(doc, 'MaxStablePressure', 'Bar', formatG6(reaction.maxStablePressurePa / 1e5)),
+    )
+  }
+  if (reaction.exhaustCondensedFraction != null) {
+    el.appendChild(
+      elWithAttr(
+        doc,
+        'ExhaustCondensedFraction',
+        'Value',
+        formatG6(reaction.exhaustCondensedFraction),
+      ),
+    )
   }
   for (const row of reaction.lut) {
     const cond = doc.createElement('PressureCondition')
@@ -589,12 +813,7 @@ function buildConnectorElement(doc: XmlDocument, connector: Connector): XmlEleme
   el.setAttribute('Id', connector.id)
   const transform = buildTransformElement(doc, connector)
   if (transform) el.appendChild(transform)
-  const flags = flagsString(connector.flags)
-  if (flags) {
-    const flagsEl = doc.createElement('Flags')
-    flagsEl.appendChild(doc.createTextNode(flags))
-    el.appendChild(flagsEl)
-  }
+  appendConnectorTokens(doc, el, connector)
   // <Sibling Id/> — attach-node grouping preserved from import (KSA 2026.7 multi-mount prefabs).
   for (const siblingId of connector.siblingIds) {
     el.appendChild(elWithAttr(doc, 'Sibling', 'Id', siblingId))

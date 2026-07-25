@@ -203,11 +203,26 @@ describe('serializePart connectors', () => {
     expect(child(c, 'Scale')!.getAttribute('X')).toBe('2')
   })
 
-  it('emits ", "-joined <Flags> on the Part connector (matches space-tape)', () => {
+  // .NET's XmlSerializationReader.ToEnum splits a [Flags] body with value.Split(null)
+  // — on WHITESPACE — and throws CreateUnknownConstantException on an unknown token, so
+  // a comma-joined body ("Internal, ToSurface") yields "Internal," and fails KSA's load.
+  it('emits a space-separated <Flags> body, never a comma', () => {
     const c2 = tags(doc, 'Connector').find((e) => e.getAttribute('Id') === '_connector2')!
-    expect(child(c2, 'Flags')!.textContent).toBe('Internal, ToSurface')
+    expect(child(c2, 'Flags')!.textContent).toBe('Internal ToSurface')
     const c1 = tags(doc, 'Connector').find((e) => e.getAttribute('Id') === '_connector1')!
     expect(child(c1, 'Flags')).toBeNull()
+  })
+
+  it('emits a space-separated <Flags> body in BOTH documents', () => {
+    const multi = editingPart({
+      connectors: [connector({ id: '_connector1', flags: ['Internal', 'ToSurface'] })],
+    })
+    for (const xml of [serializePart(multi), serializeGameData(multi)]) {
+      const flags = tags(parse(xml), 'Flags')
+      expect(flags).toHaveLength(1)
+      expect(flags[0].textContent).toBe('Internal ToSurface')
+      expect(flags[0].textContent).not.toContain(',')
+    }
   })
 })
 

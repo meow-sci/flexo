@@ -4,6 +4,7 @@ import {
   animationModulesFromGameData,
   connectorsFromPartElement,
   gameDataFromAssets,
+  parseConnectorCapabilities,
   parseConnectorFlags,
   parsePartPlacements,
   remapRawConnectorRefs,
@@ -12,9 +13,14 @@ import { serializeGameData, serializePart } from './partXmlSerializer'
 import type { Connector, EditingPart, RawXmlNode } from './types'
 import {
   createCombustor,
+  createCustomReaction,
   createDefaultLayer,
   createEmptyGameData,
   createLight,
+  createRocketController,
+  createSolidGrainSegment,
+  createSolidMotor,
+  createSolidMotorNozzle,
   createSubPartGameData,
   EDITOR_TAG_DEFS,
   identityTransform,
@@ -105,12 +111,33 @@ describe('parsePartPlacements (round-trip with serializer)', () => {
 })
 
 describe('parseConnectorFlags', () => {
-  it('splits a comma-separated list, trimming and dropping unknowns', () => {
+  // .NET's XmlSerializationReader.ToEnum does value.Split(null) — whitespace. That is
+  // the form KSA authors and the form flexo emits; commas are tolerated on the way in.
+  it('splits a whitespace-separated list, trimming and dropping unknowns', () => {
+    expect(parseConnectorFlags('Internal ToSurface')).toEqual(['Internal', 'ToSurface'])
     expect(parseConnectorFlags('Internal, ToSurface')).toEqual(['Internal', 'ToSurface'])
     expect(parseConnectorFlags(' FromSurface ')).toEqual(['FromSurface'])
-    expect(parseConnectorFlags('Bogus, Internal')).toEqual(['Internal'])
+    expect(parseConnectorFlags('Bogus Internal')).toEqual(['Internal'])
     expect(parseConnectorFlags('')).toEqual([])
     expect(parseConnectorFlags(null)).toEqual([])
+  })
+})
+
+describe('parseConnectorCapabilities', () => {
+  it('splits a whitespace-separated list, trimming and dropping unknowns', () => {
+    expect(parseConnectorCapabilities('BulkFluid SolidMotorCase')).toEqual([
+      'BulkFluid',
+      'SolidMotorCase',
+    ])
+    expect(parseConnectorCapabilities(' DecouplerJoint ')).toEqual(['DecouplerJoint'])
+    expect(parseConnectorCapabilities('NoElectricity NoServiceFluid')).toEqual([
+      'NoElectricity',
+      'NoServiceFluid',
+    ])
+    expect(parseConnectorCapabilities('Bogus BulkFluid')).toEqual(['BulkFluid'])
+    // Empty is NOT "no capabilities" — it means KSA's Electricity|ServiceFluid default.
+    expect(parseConnectorCapabilities('')).toEqual([])
+    expect(parseConnectorCapabilities(null)).toEqual([])
   })
 })
 
@@ -890,5 +917,417 @@ describe('PowerConsumer is collapsed to one per part (KSA Part.LightSwitch slot)
       new DOMParser(),
     )!
     expect(none.gameData.powerConsumer).toBeNull()
+  })
+})
+
+// ── KSA 2026.7.9 plumbing topology ────────────────────────────────────────────
+// Connector capabilities, consumer feed points, consumer feed wiring, addressable
+// tank containers and the solid-motor trio. Each asserts a full parse → serialize →
+// re-parse round trip, so a drop on either side fails.
+
+/** Round-trips a GameData document through the serializer and back. */
+function roundTrip(source: EditingPart) {
+  return gameDataFromAssets(serializeGameData(source), source.partId, new DOMParser())!
+}
+
+describe('<Capabilities> round-trip', () => {
+  const source = editingPart({
+    partId: 'CAP',
+    connectors: [
+      {
+        id: '_connector1',
+        ...identityTransform(),
+        flags: ['Internal', 'ToSurface'],
+        capabilities: ['BulkFluid', 'SolidMotorCase'],
+        siblingIds: [],
+        layerId: DEFAULT_LAYER_ID,
+      },
+      {
+        id: '_connector2',
+        ...identityTransform(),
+        flags: [],
+        capabilities: ['DecouplerJoint'],
+        siblingIds: [],
+        layerId: DEFAULT_LAYER_ID,
+      },
+      {
+        id: '_connector3',
+        ...identityTransform(),
+        flags: [],
+        capabilities: [],
+        siblingIds: [],
+        layerId: DEFAULT_LAYER_ID,
+      },
+    ],
+  })
+
+  it('round-trips through the GameData document, keyed by connector id', () => {
+    const parsed = roundTrip(source)
+    expect(parsed.connectorCapabilities.get('_connector1')).toEqual(['BulkFluid', 'SolidMotorCase'])
+    expect(parsed.connectorCapabilities.get('_connector2')).toEqual(['DecouplerJoint'])
+    // A capability-less connector records nothing (KSA's implicit default applies).
+    expect(parsed.connectorCapabilities.has('_connector3')).toBe(false)
+  })
+
+  it('round-trips through the geometry <Part> document', () => {
+    const doc = new DOMParser().parseFromString(
+      serializePart(source),
+      'application/xml',
+    ) as unknown as Document
+    const partEl = Array.from(doc.getElementsByTagName('Part'))[0]
+    expect(connectorsFromPartElement(partEl).map((c) => c.capabilities)).toEqual([
+      ['BulkFluid', 'SolidMotorCase'],
+      ['DecouplerJoint'],
+      [],
+    ])
+  })
+
+  it('drops unknown capability tokens on the way in', () => {
+    const parsed = gameDataFromAssets(
+      `<Assets><PartGameData Id="P"><Connector Id="_c1">
+         <Capabilities>Bogus BulkFluid</Capabilities>
+       </Connector></PartGameData></Assets>`,
+      'P',
+      new DOMParser(),
+    )!
+    expect(parsed.connectorCapabilities.get('_c1')).toEqual(['BulkFluid'])
+  })
+})
+
+describe('<FeedsFrom> / <Plumbing> round-trip', () => {
+  const source = editingPart({
+    partId: 'FEED',
+    gameData: {
+      ...createEmptyGameData(),
+      combustors: [
+        {
+          ...createCombustor('BulkChamber'),
+          feeds: [
+            { kind: 'parent' },
+            { kind: 'connector', connectorId: '_connector2' },
+            { kind: 'container', containerId: 'Fuel', subPartInstanceId: null },
+            { kind: 'container', containerId: 'Grain', subPartInstanceId: 'seg_1' },
+          ],
+        },
+        { ...createCombustor('RcsChamber'), feeds: [{ kind: 'parent' }], plumbing: 'Service' },
+      ],
+    },
+  })
+
+  it('round-trips every feed-point kind, in order', () => {
+    const parsed = roundTrip(source)
+    expect(parsed.gameData.combustors[0].feeds).toEqual(source.gameData.combustors[0].feeds)
+  })
+
+  it('round-trips <Plumbing>Service and omits the Bulk default', () => {
+    const xml = serializeGameData(source)
+    expect(xml.match(/<Plumbing>/g)).toHaveLength(1)
+    expect(xml).toContain('<Plumbing>Service</Plumbing>')
+    const parsed = roundTrip(source)
+    expect(parsed.gameData.combustors.map((c) => c.plumbing)).toEqual(['Bulk', 'Service'])
+  })
+
+  it('drops a <FeedsFrom> that names more than one target (KSA logs an error for it)', () => {
+    const parsed = gameDataFromAssets(
+      `<Assets><PartGameData Id="P"><Combustor Id="C">
+         <FeedsFrom Container="Fuel" Connector="_c1" />
+         <FeedsFrom Parent="true" Container="Fuel" />
+         <FeedsFrom />
+         <FeedsFrom Connector="_c1" />
+       </Combustor></PartGameData></Assets>`,
+      'P',
+      new DOMParser(),
+    )!
+    expect(parsed.gameData.combustors[0].feeds).toEqual([{ kind: 'connector', connectorId: '_c1' }])
+  })
+
+  it('never emits a feed point whose target id is blank', () => {
+    const blank = editingPart({
+      partId: 'B',
+      gameData: {
+        ...createEmptyGameData(),
+        combustors: [
+          {
+            ...createCombustor('C'),
+            feeds: [
+              { kind: 'connector', connectorId: '  ' },
+              { kind: 'container', containerId: '', subPartInstanceId: null },
+            ],
+          },
+        ],
+      },
+    })
+    expect(serializeGameData(blank)).not.toContain('<FeedsFrom')
+  })
+})
+
+describe('<ConsumerFeedWiring> round-trip', () => {
+  it('round-trips the consumer id, SubPartId scope and feed points', () => {
+    const source = editingPart({
+      partId: 'WIRE',
+      gameData: {
+        ...createEmptyGameData(),
+        consumerFeedWiring: [
+          {
+            consumerId: 'ThrustChamber',
+            subPartInstanceId: 'chamber_1',
+            feeds: [{ kind: 'connector', connectorId: '_connector2' }],
+          },
+          {
+            consumerId: 'ThrustChamber',
+            subPartInstanceId: null,
+            feeds: [{ kind: 'container', containerId: 'Fuel', subPartInstanceId: null }],
+          },
+        ],
+      },
+    })
+    expect(roundTrip(source).gameData.consumerFeedWiring).toEqual(
+      source.gameData.consumerFeedWiring,
+    )
+  })
+
+  it('drops a Parent="true" child (KSA: "cannot itself defer to Parent")', () => {
+    const parsed = gameDataFromAssets(
+      `<Assets><PartGameData Id="P">
+         <ConsumerFeedWiring Id="C"><FeedsFrom Parent="true" /><FeedsFrom Connector="_c1" /></ConsumerFeedWiring>
+       </PartGameData></Assets>`,
+      'P',
+      new DOMParser(),
+    )!
+    expect(parsed.gameData.consumerFeedWiring[0].feeds).toEqual([
+      { kind: 'connector', connectorId: '_c1' },
+    ])
+  })
+
+  it('omits an entry that wires no feed points, or names no consumer', () => {
+    const empty = editingPart({
+      partId: 'E',
+      gameData: {
+        ...createEmptyGameData(),
+        consumerFeedWiring: [
+          { consumerId: 'C', subPartInstanceId: null, feeds: [] },
+          { consumerId: 'C', subPartInstanceId: null, feeds: [{ kind: 'parent' }] },
+          { consumerId: '  ', subPartInstanceId: null, feeds: [{ kind: 'parent' }] },
+        ],
+      },
+    })
+    expect(serializeGameData(empty)).not.toContain('<ConsumerFeedWiring')
+  })
+})
+
+describe('<Tank Id> round-trip at both levels', () => {
+  const TMPL = 'Core.TankSkin'
+  const source = editingPart({
+    partId: 'TANKS',
+    gameData: {
+      ...createEmptyGameData(),
+      tanks: [{ ...createTank(), id: 'Fuel', lengthM: 3, outerRadiusM: 0.8 }],
+    },
+    subPartGameData: [
+      {
+        ...createSubPartGameData(TMPL),
+        tanks: [
+          {
+            ...createTank(),
+            id: 'PropellantTank',
+            shape: 'Spherical',
+            lengthM: 0, // a spherical tank emits no <Length> (radius-defined)
+            outerRadiusM: 0.276,
+            wallThicknessMm: 4,
+            roleAffinity: 'Thruster',
+            locationAsmb: { x: 0.5, y: 0, z: -0.25 },
+          },
+        ],
+      },
+    ],
+  })
+
+  it('round-trips a part-level <Tank Id> (the feed container an engine addresses)', () => {
+    expect(roundTrip(source).gameData.tanks).toEqual(source.gameData.tanks)
+  })
+
+  it('round-trips a SubPart-level <Tank Id> with its <LocationAsmb>', () => {
+    const parsed = roundTrip(source)
+    expect(parsed.subPartGameData.find((s) => s.subPartTemplateId === TMPL)!.tanks).toEqual(
+      source.subPartGameData[0].tanks,
+    )
+  })
+
+  it('puts the Id on the wrapping <Tank>, not the shape element, and omits a blank one', () => {
+    const xml = serializeGameData(source)
+    expect(xml).toContain('<Tank Id="Fuel">')
+    expect(xml).toContain('<Tank Id="PropellantTank">')
+    const anon = editingPart({
+      partId: 'A',
+      gameData: { ...createEmptyGameData(), tanks: [createTank()] },
+    })
+    expect(serializeGameData(anon)).toContain('<Tank>')
+  })
+})
+
+describe('solid rocket motors round-trip', () => {
+  // Modeled on Core's CorePropulsionC_Prefab_SRBDThrustAssemblyA (@ 2026.7.9.5018).
+  const SEG_TMPL = 'CorePropulsionC_Subpart_SRBSizeDThrustAssemblyA'
+  const source = editingPart({
+    partId: 'CorePropulsionC_Prefab_SRBDThrustAssemblyA',
+    editorTags: ['Booster'],
+    connectors: [
+      {
+        id: '_connector25',
+        ...identityTransform(),
+        flags: [],
+        capabilities: ['SolidMotorCase'],
+        siblingIds: [],
+        layerId: DEFAULT_LAYER_ID,
+      },
+    ],
+    gameData: {
+      ...createEmptyGameData(),
+      diameterM: 1,
+      rocketControllers: [createRocketController('SRBDMotor', 'engine', ['Motor'])],
+      rockets: [
+        {
+          id: 'Motor',
+          core: { id: 'MotorCore', subPartInstanceId: null },
+          nozzles: [{ id: 'Nozzle', subPartInstanceId: 'srb_thrust_1' }],
+        },
+      ],
+      solidMotors: [
+        {
+          ...createSolidMotor('MotorCore'),
+          feeds: [
+            { kind: 'container', containerId: 'Grain', subPartInstanceId: null },
+            { kind: 'connector', connectorId: '_connector25' },
+          ],
+        },
+      ],
+      solidGrainSegments: [
+        {
+          ...createSolidGrainSegment('Grain'),
+          wallMaterialId: 'Steel.300(s)',
+          outerRadiusM: 1,
+          wallThicknessMm: 8,
+          lengthM: 0.65227,
+        },
+      ],
+    },
+    subPartGameData: [
+      {
+        ...createSubPartGameData(SEG_TMPL),
+        solidNozzles: [
+          {
+            ...createSolidMotorNozzle('Nozzle'),
+            exitDiameterM: 1.2,
+            fxExitDiameterM: 0.587008,
+            exhaustLocation: { x: -0.470039, y: 0, z: 0 },
+            sound: { action: 'On', soundId: 'DefaultEngineSoundBehavior' },
+          },
+        ],
+      },
+    ],
+  })
+
+  const parsed = roundTrip(source)
+
+  it('round-trips the part-level <SolidMotor> with both feed points', () => {
+    expect(parsed.gameData.solidMotors).toEqual(source.gameData.solidMotors)
+  })
+
+  it('round-trips the <SolidGrainSegment> container', () => {
+    expect(parsed.gameData.solidGrainSegments).toEqual(source.gameData.solidGrainSegments)
+  })
+
+  it('round-trips the SubPart-level <SolidMotorNozzle>', () => {
+    expect(
+      parsed.subPartGameData.find((s) => s.subPartTemplateId === SEG_TMPL)!.solidNozzles,
+    ).toEqual(source.subPartGameData[0].solidNozzles)
+  })
+
+  it('emits Core’s exact SRB element shapes', () => {
+    const xml = serializeGameData(source)
+    expect(xml).toContain('<SolidMotor Id="MotorCore">')
+    expect(xml).toContain('<Reaction Id="APCP"/>')
+    expect(xml).toContain('<DefaultPressure Bar="70"/>')
+    expect(xml).toContain('<Grain Id="Neutral"/>')
+    expect(xml).toContain('<FeedsFrom Container="Grain"/>')
+    expect(xml).toContain('<FeedsFrom Connector="_connector25"/>')
+    expect(xml).toContain('<SolidGrainSegment Id="Grain">')
+    expect(xml).toContain('<WallThickness Mm="8"/>')
+    expect(xml).toContain('<SolidMotorNozzle Id="Nozzle">')
+    expect(xml).toContain('<Capabilities>SolidMotorCase</Capabilities>')
+  })
+
+  // SolidMotorNozzleTemplate.Create derives the throat as exitArea/12 — the schema has
+  // no AreaRatio slot at all, so emitting one would be an unknown element to KSA.
+  it('never emits <AreaRatio> on a solid nozzle', () => {
+    expect(serializeGameData(source)).not.toContain('AreaRatio')
+  })
+
+  it('omits <Grain Id> when the motor takes the library default', () => {
+    const anon = editingPart({
+      partId: 'A',
+      gameData: {
+        ...createEmptyGameData(),
+        solidMotors: [{ ...createSolidMotor('M'), grainGeometryId: '' }],
+      },
+    })
+    expect(serializeGameData(anon)).not.toContain('<Grain Id=')
+    expect(roundTrip(anon).gameData.solidMotors[0].grainGeometryId).toBe('')
+  })
+})
+
+describe('solid custom reactions (KSA hard requirements)', () => {
+  /** APCP's real burn-rate data from Core's Reactions.xml @ 5018. */
+  function apcpLike(over: Partial<ReturnType<typeof createCustomReaction>> = {}) {
+    return {
+      ...createCustomReaction('MyAPCP', 'My APCP'),
+      category: 'Solid' as const,
+      reactants: [{ phaseId: 'APCP(s)', massShare: 1 }],
+      // ≤6-sig-fig numbers so a single G6 encode round-trips exactly.
+      lut: [{ lnPressure: 9.90349, temperatureK: 3003.97, gamma: 1.23876, molarMassGPerMol: 23 }],
+      burnRate: { coefficientMPerS: 0.0045, exponent: 0.35 },
+      minimumBurnPressurePa: 1_500_000,
+      maxStablePressurePa: 15_000_000,
+      exhaustCondensedFraction: 0.336965,
+      ...over,
+    }
+  }
+
+  it('round-trips the burn-rate law and pressure limits', () => {
+    const source = editingPart({ partId: 'R', customReactions: [apcpLike()] })
+    expect(roundTrip(source).customReactions).toEqual(source.customReactions)
+    const xml = serializeGameData(source)
+    expect(xml).toContain('<BurnRate CoefficientMPerS="0.0045" Exponent="0.35"/>')
+    expect(xml).toContain('<MinimumBurnPressure Bar="15"/>')
+    expect(xml).toContain('<MaxStablePressure Bar="150"/>')
+    expect(xml).toContain('<ExhaustCondensedFraction Value="0.336965"/>')
+  })
+
+  // FixedReactionTemplate.Create() THROWS on a Solid reaction missing any of these,
+  // which fails the ENTIRE mod load — flexo must omit it rather than ship a crash.
+  it('skips a Solid reaction that KSA would refuse to load, and warns', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const broken = editingPart({
+      partId: 'R',
+      customReactions: [
+        apcpLike({ burnRate: null }), // no <BurnRate>: "must specify a BurnRate"
+        apcpLike({ id: 'NoMin', minimumBurnPressurePa: null }),
+        apcpLike({ id: 'BadExp', burnRate: { coefficientMPerS: 0.0045, exponent: 1.2 } }),
+        apcpLike({ id: 'MaxBelowMin', maxStablePressurePa: 1_000_000 }),
+        apcpLike({ id: 'BadCondensed', exhaustCondensedFraction: 1 }),
+      ],
+    })
+    const xml = serializeGameData(broken)
+    expect(xml).not.toContain('<FixedReaction')
+    expect(warn).toHaveBeenCalledTimes(5)
+    warn.mockRestore()
+  })
+
+  it('still emits a non-Solid reaction with no burn-rate data', () => {
+    const mono = editingPart({
+      partId: 'R',
+      customReactions: [createCustomReaction('MyMono', 'My Mono')],
+    })
+    expect(serializeGameData(mono)).toContain('<FixedReaction Id="MyMono"')
   })
 })

@@ -21,7 +21,9 @@ import type {
   CatalogAnimationModule,
   Combustor,
   Connector,
+  ConnectorCapability,
   ConnectorFlag,
+  ConsumerFeedWiring,
   Decoupler,
   DeLavalNozzle,
   DockingPort,
@@ -33,8 +35,12 @@ import type {
   Rocket,
   RocketController,
   SolarPanel,
+  SolidGrainSegment,
+  SolidMotor,
+  SolidMotorNozzle,
   SubPartGameData,
   SubPartPlacement,
+  Tank,
 } from './types'
 
 export interface CatalogPart {
@@ -79,6 +85,14 @@ export interface CatalogPart {
   combustors: Combustor[]
   nozzles: DeLavalNozzle[]
   gimbals: Gimbal[]
+  /** Part-level `<Tank>`s (where Core authors its prefab tank data since KSA 2026.7.6). */
+  tanks: Tank[]
+  /** Part-level solid-motor hardware (SRB cases / nozzles / grain segments). */
+  solidMotors: SolidMotor[]
+  solidNozzles: SolidMotorNozzle[]
+  solidGrainSegments: SolidGrainSegment[]
+  /** `<ConsumerFeedWiring>`; SubPart + connector refs in the Part's ORIGINAL id space. */
+  consumerFeedWiring: ConsumerFeedWiring[]
   /** Originating XML file (for debugging / grouping). */
   sourceFile: string
 }
@@ -119,6 +133,11 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
       combustors: [],
       nozzles: [],
       gimbals: [],
+      tanks: [],
+      solidMotors: [],
+      solidNozzles: [],
+      solidGrainSegments: [],
+      consumerFeedWiring: [],
       sourceFile,
     })
   }
@@ -134,6 +153,8 @@ export interface PartGameData {
   editorTags: string[]
   /** connector id -> its flags (only connectors carrying <Flags> are recorded). */
   connectorFlags: Map<string, ConnectorFlag[]>
+  /** connector id -> its capabilities (only connectors carrying <Capabilities> are recorded). */
+  connectorCapabilities: Map<string, ConnectorCapability[]>
   /** KeyframeAnimationModules declared on this <PartGameData>. */
   animationModules: CatalogAnimationModule[]
   /** Connector-bound coupling game-data, so built-in part imports carry them in. */
@@ -163,6 +184,12 @@ export interface PartGameData {
   combustors: Combustor[]
   nozzles: DeLavalNozzle[]
   gimbals: Gimbal[]
+  /** Part-level tanks, solid-motor hardware and consumer feed wiring declared here. */
+  tanks: Tank[]
+  solidMotors: SolidMotor[]
+  solidNozzles: SolidMotorNozzle[]
+  solidGrainSegments: SolidGrainSegment[]
+  consumerFeedWiring: ConsumerFeedWiring[]
 }
 
 /** Parsed GameData for a whole file: per-Part data + per-SubPart-template data (keyed by template id). */
@@ -188,6 +215,7 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
     const entry: PartGameData = out.parts.get(id) ?? {
       editorTags: [],
       connectorFlags: new Map(),
+      connectorCapabilities: new Map(),
       animationModules: [],
       decoupler: null,
       dockingPort: null,
@@ -208,11 +236,18 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
       combustors: [],
       nozzles: [],
       gimbals: [],
+      tanks: [],
+      solidMotors: [],
+      solidNozzles: [],
+      solidGrainSegments: [],
+      consumerFeedWiring: [],
     }
     for (const tag of parsed.editorTags) {
       if (!entry.editorTags.includes(tag)) entry.editorTags.push(tag)
     }
     for (const [connId, flags] of parsed.connectorFlags) entry.connectorFlags.set(connId, flags)
+    for (const [connId, caps] of parsed.connectorCapabilities)
+      entry.connectorCapabilities.set(connId, caps)
     entry.animationModules.push(...parsed.animationModules)
     entry.decoupler ??= parsed.gameData.decoupler
     entry.dockingPort ??= parsed.gameData.dockingPort
@@ -241,6 +276,11 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
     entry.combustors.push(...parsed.gameData.combustors)
     entry.nozzles.push(...parsed.gameData.nozzles)
     entry.gimbals.push(...parsed.gameData.gimbals)
+    entry.tanks.push(...parsed.gameData.tanks)
+    entry.solidMotors.push(...parsed.gameData.solidMotors)
+    entry.solidNozzles.push(...parsed.gameData.solidNozzles)
+    entry.solidGrainSegments.push(...parsed.gameData.solidGrainSegments)
+    entry.consumerFeedWiring.push(...parsed.gameData.consumerFeedWiring)
     out.parts.set(id, entry)
   }
   for (const spd of subPartGameDataFromDoc(doc)) out.subParts.set(spd.subPartTemplateId, spd)
@@ -274,6 +314,11 @@ export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile
       for (const conn of part.connectors) {
         const flags = gd.connectorFlags.get(conn.id)
         if (flags) conn.flags = flags
+        // <Capabilities> decides what may FLOW across the connector (BulkFluid /
+        // SolidMotorCase / DecouplerJoint) — dropping it makes an imported fuel tank,
+        // SRB segment or decoupler dead on re-export.
+        const caps = gd.connectorCapabilities.get(conn.id)
+        if (caps) conn.capabilities = caps
       }
       if (gd.animationModules.length) part.animationModules = gd.animationModules
       part.decoupler = gd.decoupler
@@ -295,6 +340,11 @@ export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile
       part.combustors = gd.combustors
       part.nozzles = gd.nozzles
       part.gimbals = gd.gimbals
+      part.tanks = gd.tanks
+      part.solidMotors = gd.solidMotors
+      part.solidNozzles = gd.solidNozzles
+      part.solidGrainSegments = gd.solidGrainSegments
+      part.consumerFeedWiring = gd.consumerFeedWiring
     }
     // SubPart-template data is keyed globally by template id; carry only the entries
     // for templates this Part places (deduped — many instances share one template).

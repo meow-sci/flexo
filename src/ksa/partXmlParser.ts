@@ -1,4 +1,5 @@
 import {
+  CONNECTOR_CAPABILITIES,
   CONNECTOR_LAYER_ID,
   createEmptyGameData,
   createSubPartGameData,
@@ -9,14 +10,17 @@ import type {
   CatalogAnimationModule,
   Combustor,
   Connector,
+  ConnectorCapability,
   ConnectorFlag,
   CustomReaction,
   DeLavalNozzle,
   EulerXYZ,
+  FeedSource,
   Gimbal,
   Light,
   LightType,
   PartGameData,
+  PlumbingClass,
   RawXmlNode,
   ReactionCategory,
   Rocket,
@@ -24,6 +28,9 @@ import type {
   RocketControllerKind,
   RocketSoundAction,
   SolarPanel,
+  SolidGrainSegment,
+  SolidMotor,
+  SolidMotorNozzle,
   SubPartGameData,
   SubPartIdRef,
   SubPartPlacement,
@@ -96,15 +103,39 @@ export function placementsFromPartElement(part: Element): SubPartPlacement[] {
 const CONNECTOR_FLAG_SET = new Set<ConnectorFlag>(['Internal', 'ToSurface', 'FromSurface'])
 
 /**
- * Parses a comma-separated <Flags> body (e.g. "Internal, ToSurface") into the
+ * The separator .NET's `XmlSerializationReader.ToEnum` uses for a `[Flags]` enum body:
+ * it does `value.Split(null)`, i.e. splits on WHITESPACE. Commas are tolerated here only
+ * so a hand-authored (or legacy flexo-authored) `"Internal, ToSurface"` still reads —
+ * flexo itself always EMITS the whitespace form, since a comma-joined body makes KSA
+ * throw `CreateUnknownConstantException` on the token `"Internal,"`.
+ */
+const FLAG_SEPARATOR = /[\s,]+/
+
+/**
+ * Parses a whitespace-separated `<Flags>` body (e.g. "Internal ToSurface") into the
  * recognized {@link ConnectorFlag}s, preserving order and dropping unknowns.
  */
 export function parseConnectorFlags(raw: string | null | undefined): ConnectorFlag[] {
   if (!raw) return []
   return raw
-    .split(',')
+    .split(FLAG_SEPARATOR)
     .map((s) => s.trim() as ConnectorFlag)
     .filter((f) => CONNECTOR_FLAG_SET.has(f))
+}
+
+const CONNECTOR_CAPABILITY_SET = new Set<ConnectorCapability>(CONNECTOR_CAPABILITIES)
+
+/**
+ * Parses a whitespace-separated `<Capabilities>` body (KSA's `ConnectorCapabilityFlags`)
+ * into the recognized tokens, preserving order and dropping unknowns. An empty result is
+ * NOT "no capabilities" — it is KSA's implicit `Electricity | ServiceFluid` default.
+ */
+export function parseConnectorCapabilities(raw: string | null | undefined): ConnectorCapability[] {
+  if (!raw) return []
+  return raw
+    .split(FLAG_SEPARATOR)
+    .map((s) => s.trim() as ConnectorCapability)
+    .filter((c) => CONNECTOR_CAPABILITY_SET.has(c))
 }
 
 /**
@@ -125,8 +156,10 @@ export function connectorsFromPartElement(part: Element): Connector[] {
       rotation: readVec(transform, 'Rotation', 0) as EulerXYZ,
       scale: readVec(transform, 'Scale', 1),
       flags: parseConnectorFlags(directChildren(conn, 'Flags')[0]?.textContent),
-      // TODO(phase 2): parse <Capabilities>.
-      capabilities: [],
+      // <Capabilities> — KSA ORs the geometry and GameData values, so reading both is safe.
+      capabilities: parseConnectorCapabilities(
+        directChildren(conn, 'Capabilities')[0]?.textContent,
+      ),
       // <Sibling Id/> children group this connector with the part's other attach nodes
       // (KSA 2026.7 multi-mount prefabs); preserved verbatim, dropping any without an Id.
       siblingIds: directChildren(conn, 'Sibling')
@@ -145,6 +178,8 @@ export interface ParsedGameData {
   editorTags: string[]
   /** connector id → its flags (only connectors that carry <Flags>). */
   connectorFlags: Map<string, ConnectorFlag[]>
+  /** connector id → its capabilities (only connectors that carry <Capabilities>). */
+  connectorCapabilities: Map<string, ConnectorCapability[]>
   gameData: PartGameData
   subPartGameData: SubPartGameData[]
   /** Parsed <KeyframeAnimationModule>s (refs in ORIGINAL instance-id space). */
@@ -264,19 +299,35 @@ function parseSolarPanel(el: Element): SolarPanel {
   return { outputWatts: readPowerWatts(el, 'Produced'), transform: readTransform(el) }
 }
 
-function tankFromElement(el: Element, shape: TankShape): Tank {
+/**
+ * Parses one `<Tank Id><CylindricalTank|SphericalTank>…</Tank>`. The container `Id`
+ * lives on the WRAPPING `<Tank>` (it is a `Components` entry id, addressable by
+ * `<FeedsFrom Container>`); the geometry + `<LocationAsmb>` live on the shape element.
+ */
+function tankFromElement(wrapper: Element, shapeEl: Element, shape: TankShape): Tank {
   return {
-    // TODO(phase 2): read the Id off the wrapping <Tank> and <LocationAsmb> off the shape.
-    id: '',
-    locationAsmb: { x: 0, y: 0, z: 0 },
+    id: wrapper.getAttribute('Id') ?? '',
+    locationAsmb: readVec3Attrs(directChildren(shapeEl, 'LocationAsmb')[0], { x: 0, y: 0, z: 0 }),
     shape,
-    wallMaterialId: directChildren(el, 'Material')[0]?.getAttribute('Id') ?? '',
-    lengthM: readNum(directChildren(el, 'Length')[0], 'M') ?? 0,
-    outerRadiusM: readNum(directChildren(el, 'OuterRadius')[0], 'M') ?? 0,
-    wallThicknessMm: readNum(directChildren(el, 'WallThickness')[0], 'Mm') ?? 0,
+    wallMaterialId: directChildren(shapeEl, 'Material')[0]?.getAttribute('Id') ?? '',
+    lengthM: readNum(directChildren(shapeEl, 'Length')[0], 'M') ?? 0,
+    outerRadiusM: readNum(directChildren(shapeEl, 'OuterRadius')[0], 'M') ?? 0,
+    wallThicknessMm: readNum(directChildren(shapeEl, 'WallThickness')[0], 'Mm') ?? 0,
     // <RoleAffinity> — which consumer kind the tank feeds (KSA 2026.7.5); absent ⇒ Engine.
-    roleAffinity: readRoleAffinity(directChildren(el, 'RoleAffinity')[0]),
+    roleAffinity: readRoleAffinity(directChildren(shapeEl, 'RoleAffinity')[0]),
   }
+}
+
+/** Parses every `<Tank>` child of a `<PartGameData>`/`<SubPartGameData>` element. */
+function tanksFromElement(parent: Element): Tank[] {
+  const out: Tank[] = []
+  for (const tankEl of directChildren(parent, 'Tank')) {
+    const cylEl = directChildren(tankEl, 'CylindricalTank')[0]
+    const sphEl = directChildren(tankEl, 'SphericalTank')[0]
+    if (cylEl) out.push(tankFromElement(tankEl, cylEl, 'Cylindrical'))
+    else if (sphEl) out.push(tankFromElement(tankEl, sphEl, 'Spherical'))
+  }
+  return out
 }
 
 /**
@@ -385,11 +436,14 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   game.powerConsumer = consumers.find((c) => c.lightSwitch) ?? consumers[0] ?? null
 
   const connectorFlags = new Map<string, ConnectorFlag[]>()
+  const connectorCapabilities = new Map<string, ConnectorCapability[]>()
   for (const conn of directChildren(gd, 'Connector')) {
     const connId = conn.getAttribute('Id')
     if (!connId) continue
     const flags = parseConnectorFlags(directChildren(conn, 'Flags')[0]?.textContent)
     if (flags.length > 0) connectorFlags.set(connId, flags)
+    const caps = parseConnectorCapabilities(directChildren(conn, 'Capabilities')[0]?.textContent)
+    if (caps.length > 0) connectorCapabilities.set(connId, caps)
   }
 
   const dec = directChildren(gd, 'Decoupler')[0]
@@ -410,14 +464,29 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   const eva = directChildren(gd, 'EVADoor')[0]
   if (eva) game.evaDoor = { connectorId: eva.getAttribute('ConnectorId') ?? '' }
 
-  // Engine modules: part-level rockets/combustors/nozzles (gas generators), controllers,
-  // and per-instance gimbal overlays.
+  // Part-level `<Tank>`s — Core authors its prefab tank data here, and a part-level
+  // tank id is what `<FeedsFrom Container>` addresses without a `SubPart=` scope.
+  game.tanks = tanksFromElement(gd)
+
+  // Engine modules: part-level rockets/combustors/nozzles (gas generators), solid-motor
+  // hardware, controllers, and per-instance gimbal overlays.
   parseEngineModules(gd, game)
   for (const c of directChildren(gd, 'RocketEngineController'))
     game.rocketControllers.push(controllerFromElement(c, 'engine'))
   for (const c of directChildren(gd, 'RocketThrusterController'))
     game.rocketControllers.push(controllerFromElement(c, 'thruster'))
   game.gimbals = gimbalsFromGameData(gd)
+
+  // <ConsumerFeedWiring> — how this Part satisfies a placed SubPart's <FeedsFrom Parent>.
+  for (const w of directChildren(gd, 'ConsumerFeedWiring')) {
+    game.consumerFeedWiring.push({
+      consumerId: w.getAttribute('Id') ?? '',
+      subPartInstanceId: w.getAttribute('SubPartId') || null,
+      // KSA errors on a Parent="true" inside a wiring entry ("cannot itself defer to
+      // Parent") — drop it here rather than round-trip a load error.
+      feeds: feedsFromElement(w).filter((f) => f.kind !== 'parent'),
+    })
+  }
 
   // Preserve anything flexo doesn't model so import → export doesn't silently drop it.
   game.unknownAttrs = captureUnknownAttrs(gd, KNOWN_PART_GAMEDATA_ATTRS)
@@ -427,6 +496,7 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   return {
     editorTags,
     connectorFlags,
+    connectorCapabilities,
     gameData: game,
     subPartGameData: [],
     animationModules: animationModulesFromGameData(gd),
@@ -472,18 +542,27 @@ export function customReactionsFromRoot(root: Element): CustomReaction[] {
       gamma: readNum(directChildren(c, 'Gamma')[0], 'Value') ?? 0,
       molarMassGPerMol: readNum(directChildren(c, 'MolarMass')[0], 'GPerMol') ?? 0,
     }))
-    // TODO(phase 2): read <BurnRate>/<MinimumBurnPressure>/<MaxStablePressure>/
-    // <ExhaustCondensedFraction> (mandatory on a Category="Solid" reaction).
+    // Solid-propellant data — MANDATORY on a Category="Solid" reaction
+    // (FixedReactionTemplate.Create throws without it), absent on every other category.
+    const br = directChildren(proc, 'BurnRate')[0]
     out.push({
       id,
       name,
       category,
       reactants,
       lut,
-      burnRate: null,
-      minimumBurnPressurePa: null,
-      maxStablePressurePa: null,
-      exhaustCondensedFraction: null,
+      burnRate: br
+        ? {
+            coefficientMPerS: readNum(br, 'CoefficientMPerS') ?? 0,
+            exponent: readNum(br, 'Exponent') ?? 0,
+          }
+        : null,
+      minimumBurnPressurePa: readPressurePa(directChildren(proc, 'MinimumBurnPressure')[0]),
+      maxStablePressurePa: readPressurePa(directChildren(proc, 'MaxStablePressure')[0]),
+      exhaustCondensedFraction: readNum(
+        directChildren(proc, 'ExhaustCondensedFraction')[0],
+        'Value',
+      ),
     })
   }
   return out
@@ -510,12 +589,7 @@ function subPartGameDataFromRoot(root: Element): SubPartGameData[] {
     const subPartTemplateId = spEl.getAttribute('Id')
     if (!subPartTemplateId) continue
     const spd = createSubPartGameData(subPartTemplateId)
-    for (const tankEl of directChildren(spEl, 'Tank')) {
-      const cylEl = directChildren(tankEl, 'CylindricalTank')[0]
-      const sphEl = directChildren(tankEl, 'SphericalTank')[0]
-      if (cylEl) spd.tanks.push(tankFromElement(cylEl, 'Cylindrical'))
-      else if (sphEl) spd.tanks.push(tankFromElement(sphEl, 'Spherical'))
-    }
+    spd.tanks = tanksFromElement(spEl)
     spd.solarPanels = directChildren(spEl, 'SolarPanel').map(parseSolarPanel)
     spd.lights = directChildren(spEl, 'Light').map(lightFromElement)
     // Reusable thrust-chamber modules (rocket/combustor/nozzle) that travel with the mesh.
@@ -543,6 +617,9 @@ function mergeSubPartGameDataInto(base: SubPartGameData, add: SubPartGameData): 
   base.combustors.push(...add.combustors)
   base.nozzles.push(...add.nozzles)
   base.rockets.push(...add.rockets)
+  base.solidMotors.push(...add.solidMotors)
+  base.solidNozzles.push(...add.solidNozzles)
+  base.solidGrainSegments.push(...add.solidGrainSegments)
   base.unknownChildren.push(...add.unknownChildren)
   for (const [k, v] of Object.entries(add.unknownAttrs)) base.unknownAttrs[k] ??= v
 }
@@ -615,6 +692,11 @@ const KNOWN_PART_GAMEDATA_CHILDREN: ReadonlySet<string> = new Set([
   'Rocket',
   'Combustor',
   'DeLavalNozzle',
+  'SolidMotor',
+  'SolidMotorNozzle',
+  'SolidGrainSegment',
+  'ConsumerFeedWiring',
+  'Tank',
   'SubPart',
 ])
 /** `<SubPartGameData>` child tags flexo models. Everything else is passthrough. */
@@ -625,6 +707,9 @@ const KNOWN_SUBPART_GAMEDATA_CHILDREN: ReadonlySet<string> = new Set([
   'Rocket',
   'Combustor',
   'DeLavalNozzle',
+  'SolidMotor',
+  'SolidMotorNozzle',
+  'SolidGrainSegment',
 ])
 /** `<PartGameData>` attributes flexo models (`DisplayName` is read; `Id` keys the entry). */
 const KNOWN_PART_GAMEDATA_ATTRS: ReadonlySet<string> = new Set(['Id', 'DisplayName'])
@@ -789,6 +874,34 @@ function readBoolValue(el: Element | null | undefined): boolean | null {
   return raw.trim().toLowerCase() === 'true'
 }
 
+/**
+ * Parses one `<FeedsFrom>` element (KSA `FeedsFromReference`). Exactly one of
+ * Container / Connector / Parent must be set; `SubPart` is only meaningful with
+ * `Container`. Returns null for a malformed element — KSA logs an Error for the same
+ * shape ("must name exactly one of Container, Connector, or Parent"), so re-emitting it
+ * would just round-trip a load error.
+ */
+function feedFromElement(el: Element): FeedSource | null {
+  const container = el.getAttribute('Container')?.trim() ?? ''
+  const connector = el.getAttribute('Connector')?.trim() ?? ''
+  const parent = (el.getAttribute('Parent') ?? '').trim().toLowerCase() === 'true'
+  const set = (container ? 1 : 0) + (connector ? 1 : 0) + (parent ? 1 : 0)
+  if (set !== 1) return null
+  if (container) {
+    const subPart = el.getAttribute('SubPart')?.trim() ?? ''
+    return { kind: 'container', containerId: container, subPartInstanceId: subPart || null }
+  }
+  if (connector) return { kind: 'connector', connectorId: connector }
+  return { kind: 'parent' }
+}
+
+/** All `<FeedsFrom>` children of an element, malformed entries dropped. */
+function feedsFromElement(el: Element): FeedSource[] {
+  return directChildren(el, 'FeedsFrom')
+    .map(feedFromElement)
+    .filter((f): f is FeedSource => f != null)
+}
+
 /** Parses a `<Core>`/`<Nozzle>`/`<RocketReference>` into a {@link SubPartIdRef}. */
 function refFromElement(el: Element | null | undefined): SubPartIdRef {
   return {
@@ -812,24 +925,29 @@ function combustorFromElement(el: Element): Combustor {
     thermalEfficiency: readNum(directChildren(el, 'ThermalEfficiency')[0], 'Value') ?? 1,
     minimumThrottle: readNum(directChildren(el, 'MinimumThrottle')[0], 'Value') ?? 1,
     minimumPulseTimeS: readSeconds(directChildren(el, 'MinimumPulseTime')[0]),
-    // TODO(phase 2): parse <FeedsFrom> and <Plumbing>.
-    feeds: [],
-    plumbing: 'Bulk',
+    feeds: feedsFromElement(el),
+    plumbing: readPlumbing(directChildren(el, 'Plumbing')[0]),
   }
 }
 
-/** Parses one `<DeLavalNozzle>` element. Missing fields fall back to nozzle template defaults. */
-function nozzleFromElement(el: Element): DeLavalNozzle {
-  const fxDia = readDistanceM(directChildren(el, 'FxExitDiameter')[0])
+/** `<Plumbing>` body — `Service` for RCS, else KSA's `Bulk` schema default. */
+function readPlumbing(el: Element | null | undefined): PlumbingClass {
+  return el?.textContent?.trim() === 'Service' ? 'Service' : 'Bulk'
+}
+
+/**
+ * The fields a `<DeLavalNozzle>` and a `<SolidMotorNozzle>` share — everything on
+ * `RocketNozzleTemplate` plus the exit geometry/efficiencies both flavors declare.
+ * The two differ ONLY in `<AreaRatio>` (solid nozzles have none: KSA sizes the throat
+ * as `exitArea / 12` in `SolidMotorNozzleTemplate.Create`).
+ */
+function commonNozzleFields(el: Element): Omit<SolidMotorNozzle, 'id'> {
   const fxLoc = directChildren(el, 'FxExhaustLocation')[0]
   const fxDir = directChildren(el, 'FxExhaustDirection')[0]
   const soundEl = directChildren(el, 'SoundEvent')[0]
   return {
-    id: el.getAttribute('Id') ?? '',
     exitDiameterM: readDistanceM(directChildren(el, 'ExitDiameter')[0]) ?? 1,
-    fxExitDiameterM: fxDia,
-    // KSA's AreaRatio default is NaN (a broken engine); preserve that so validation can flag it.
-    areaRatio: readNum(directChildren(el, 'AreaRatio')[0], 'Value') ?? Number.NaN,
+    fxExitDiameterM: readDistanceM(directChildren(el, 'FxExitDiameter')[0]),
     flowEfficiency: readNum(directChildren(el, 'FlowEfficiency')[0], 'Value') ?? 1,
     expansionEfficiency: readNum(directChildren(el, 'ExpansionEfficiency')[0], 'Value') ?? 1,
     exhaustLocation: readVec3Attrs(directChildren(el, 'ExhaustLocation')[0], { x: 0, y: 0, z: 0 }),
@@ -849,6 +967,54 @@ function nozzleFromElement(el: Element): DeLavalNozzle {
           soundId: soundEl.getAttribute('SoundId') ?? '',
         }
       : null,
+  }
+}
+
+/** Parses one `<DeLavalNozzle>` element. Missing fields fall back to nozzle template defaults. */
+function nozzleFromElement(el: Element): DeLavalNozzle {
+  return {
+    id: el.getAttribute('Id') ?? '',
+    ...commonNozzleFields(el),
+    // KSA's AreaRatio default is NaN (a broken engine); preserve that so validation can flag it.
+    areaRatio: readNum(directChildren(el, 'AreaRatio')[0], 'Value') ?? Number.NaN,
+  }
+}
+
+/** Parses one `<SolidMotorNozzle>` element (the DeLaval schema minus `<AreaRatio>`). */
+function solidNozzleFromElement(el: Element): SolidMotorNozzle {
+  return { id: el.getAttribute('Id') ?? '', ...commonNozzleFields(el) }
+}
+
+/** Parses one `<SolidMotor>` element. Defaults mirror `SolidMotorTemplate.cs`. */
+function solidMotorFromElement(el: Element): SolidMotor {
+  return {
+    id: el.getAttribute('Id') ?? '',
+    reactionId: directChildren(el, 'Reaction')[0]?.getAttribute('Id') ?? '',
+    thermalEfficiency: readNum(directChildren(el, 'ThermalEfficiency')[0], 'Value') ?? 1,
+    defaultPressurePa: readPressurePa(directChildren(el, 'DefaultPressure')[0]) ?? 7_000_000,
+    // '' ⇒ KSA takes GrainGeometryLibrary.Default.
+    grainGeometryId: directChildren(el, 'Grain')[0]?.getAttribute('Id') ?? '',
+    feeds: feedsFromElement(el),
+  }
+}
+
+/**
+ * Parses one `<SolidGrainSegment Id><Grain>…</Grain></SolidGrainSegment>`. The inner
+ * `<Grain>` is a `SolidGrainSegmentTemplate` (an `AsmbVolumetricMassTemplate`): material
+ * + hollow-cylinder dimensions + the assembly-frame mass offset.
+ */
+function solidGrainSegmentFromElement(el: Element): SolidGrainSegment {
+  const g = directChildren(el, 'Grain')[0]
+  return {
+    id: el.getAttribute('Id') ?? '',
+    wallMaterialId: g ? (directChildren(g, 'Material')[0]?.getAttribute('Id') ?? '') : '',
+    outerRadiusM: (g && readDistanceM(directChildren(g, 'OuterRadius')[0])) || 0,
+    // WallThickness is a DistanceReference (authored as Mm); the model holds millimeters.
+    wallThicknessMm: g ? (readDistanceM(directChildren(g, 'WallThickness')[0]) ?? 0) * 1000 : 0,
+    lengthM: (g && readDistanceM(directChildren(g, 'Length')[0])) || 0,
+    locationAsmb: g
+      ? readVec3Attrs(directChildren(g, 'LocationAsmb')[0], { x: 0, y: 0, z: 0 })
+      : { x: 0, y: 0, z: 0 },
   }
 }
 
@@ -896,16 +1062,29 @@ function gimbalsFromGameData(gd: Element): Gimbal[] {
   return out
 }
 
-/** Parses all engine modules of a `<PartGameData>`/`<SubPartGameData>` element into `target`. */
+/**
+ * Parses all engine modules of a `<PartGameData>`/`<SubPartGameData>` element into
+ * `target` — the liquid trio (rocket/combustor/DeLaval nozzle) and the solid trio
+ * (solid motor / solid nozzle / grain segment). Both documents carry both families.
+ */
 function parseEngineModules(
   el: Element,
   target: {
     combustors: Combustor[]
     nozzles: DeLavalNozzle[]
     rockets: Rocket[]
+    solidMotors: SolidMotor[]
+    solidNozzles: SolidMotorNozzle[]
+    solidGrainSegments: SolidGrainSegment[]
   },
 ): void {
   for (const r of directChildren(el, 'Rocket')) target.rockets.push(rocketFromElement(r))
   for (const c of directChildren(el, 'Combustor')) target.combustors.push(combustorFromElement(c))
   for (const n of directChildren(el, 'DeLavalNozzle')) target.nozzles.push(nozzleFromElement(n))
+  for (const m of directChildren(el, 'SolidMotor'))
+    target.solidMotors.push(solidMotorFromElement(m))
+  for (const n of directChildren(el, 'SolidMotorNozzle'))
+    target.solidNozzles.push(solidNozzleFromElement(n))
+  for (const s of directChildren(el, 'SolidGrainSegment'))
+    target.solidGrainSegments.push(solidGrainSegmentFromElement(s))
 }

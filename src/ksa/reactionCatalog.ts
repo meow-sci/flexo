@@ -28,6 +28,7 @@ import type { CombustionLut, CombustionLutRow, MixtureLut } from './enginePhysic
 import { sliceLutAtMixtureRatio, UNIVERSAL_GAS_CONSTANT } from './enginePhysics'
 import { directChildren } from './partXmlParser'
 import type {
+  BurnRateLaw,
   CustomReaction,
   ReactionCategory,
   ReactionLutRowSpec,
@@ -57,10 +58,24 @@ interface ReactionDataBase {
   reactants: ReactionReactant[]
 }
 
-/** A `<FixedReaction>` — a single 1-D pressure LUT (also what custom reactions become). */
+/**
+ * A `<FixedReaction>` — a single 1-D pressure LUT (also what custom reactions become).
+ * The four solid-propellant fields are MANDATORY on a `Category="Solid"` reaction
+ * (`FixedReactionTemplate.Create()` throws without them) and absent on every other
+ * category; carrying them here is what lets "clone a shipped propellant" produce a
+ * custom solid reaction KSA will actually load.
+ */
 export interface FixedReactionData extends ReactionDataBase {
   kind: 'Fixed'
   lut: CombustionLut
+  /** `<BurnRate CoefficientMPerS Exponent>` — Vieille's law `r = a·p^n`. */
+  burnRate: BurnRateLaw | null
+  /** `<MinimumBurnPressure>` deflagration limit, Pa. */
+  minimumBurnPressurePa: number | null
+  /** `<MaxStablePressure>` slope-break limit, Pa — a solid motor's `<DefaultPressure>` ceiling. */
+  maxStablePressurePa: number | null
+  /** `<ExhaustCondensedFraction Value>` condensed-phase exhaust mass fraction, [0, 1). */
+  exhaustCondensedFraction: number | null
 }
 
 /** A `<MixtureReaction>` — a 2-D O/F × pressure LUT plus its default ratio. */
@@ -98,6 +113,12 @@ function readTextNum(el: Element | null | undefined): number {
   if (!raw) return Number.NaN
   const n = Number.parseFloat(raw)
   return Number.isFinite(n) ? n : Number.NaN
+}
+
+/** Sums a `PressureReference`'s unit attributes into Pa; null when none are set. */
+function readPressurePa(el: Element | null | undefined): number | null {
+  const pa = sumUnits(el, { Pa: 1, KPa: 1e3, MPa: 1e6, MBar: 100, Bar: 1e5, Atm: 101325 })
+  return Number.isFinite(pa) ? pa : null
 }
 
 const REACTION_CATEGORIES: ReadonlySet<string> = new Set([
@@ -178,6 +199,11 @@ export function parseReactionsFile(doc: Document, out: ReactionData[]): void {
     if (!id) continue
     const rows = readPressureConditions(el)
     if (rows.length === 0) continue
+    // Solid-propellant data (mandatory for Category="Solid", absent otherwise).
+    const brEl = directChildren(el, 'BurnRate')[0]
+    const a = readAttrNum(brEl, 'CoefficientMPerS')
+    const n = readAttrNum(brEl, 'Exponent')
+    const condensed = readAttrNum(directChildren(el, 'ExhaustCondensedFraction')[0], 'Value')
     out.push({
       kind: 'Fixed',
       id,
@@ -185,6 +211,11 @@ export function parseReactionsFile(doc: Document, out: ReactionData[]): void {
       category: readCategory(el, 'Monopropellant'),
       reactants: readReactants(el),
       lut: { rows },
+      burnRate:
+        Number.isFinite(a) && Number.isFinite(n) ? { coefficientMPerS: a, exponent: n } : null,
+      minimumBurnPressurePa: readPressurePa(directChildren(el, 'MinimumBurnPressure')[0]),
+      maxStablePressurePa: readPressurePa(directChildren(el, 'MaxStablePressure')[0]),
+      exhaustCondensedFraction: Number.isFinite(condensed) ? condensed : null,
     })
   }
 
@@ -295,6 +326,10 @@ export function customToReactionData(custom: CustomReaction): FixedReactionData 
     category: custom.category,
     reactants,
     lut: { rows },
+    burnRate: custom.burnRate,
+    minimumBurnPressurePa: custom.minimumBurnPressurePa,
+    maxStablePressurePa: custom.maxStablePressurePa,
+    exhaustCondensedFraction: custom.exhaustCondensedFraction,
   }
 }
 
@@ -324,7 +359,20 @@ export function reactionDataToCustom(
     gamma: row.gamma,
     molarMassGPerMol: (UNIVERSAL_GAS_CONSTANT / row.specificGasConstant) * 1000,
   }))
-  return { id: newId, name: newName || newId, category: data.category, reactants, lut }
+  return {
+    id: newId,
+    name: newName || newId,
+    category: data.category,
+    reactants,
+    lut,
+    // Carry the solid-propellant data through so cloning APCP/DoubleBase (or any
+    // modded solid) yields a reaction KSA will load — without these four,
+    // FixedReactionTemplate.Create() throws on a Category="Solid" reaction.
+    burnRate: data.kind === 'Fixed' ? data.burnRate : null,
+    minimumBurnPressurePa: data.kind === 'Fixed' ? data.minimumBurnPressurePa : null,
+    maxStablePressurePa: data.kind === 'Fixed' ? data.maxStablePressurePa : null,
+    exhaustCondensedFraction: data.kind === 'Fixed' ? data.exhaustCondensedFraction : null,
+  }
 }
 
 /** The O/F row range a mixture reaction's ratio is clamped into; null for fixed reactions. */

@@ -4,6 +4,8 @@ import {
   DEFAULT_LAYER_ID,
   KITTEN_LAYER_ID,
   createEmptyPart,
+  createSubPartGameData,
+  createTank,
   identityTransform,
   type EditingPart,
 } from '../ksa/types'
@@ -57,6 +59,7 @@ function richPart(): EditingPart {
   p.connectors.push({
     id: '_connector1',
     flags: ['Internal', 'ToSurface'],
+    capabilities: [],
     siblingIds: [],
     layerId: CONNECTOR_LAYER_ID,
     ...xf([0.5, 0, 0], [0, 0, 0], [1, 1, 1]),
@@ -136,6 +139,8 @@ function richPart(): EditingPart {
     thermalEfficiency: 0.95,
     minimumThrottle: 1,
     minimumPulseTimeS: null,
+    feeds: [],
+    plumbing: 'Bulk' as const,
   })
   p.gameData.gimbals.push(
     { subPartInstanceId: 'wing_1', maxAngleYDeg: 5, maxAngleZDeg: 5, constrainToCircle: false },
@@ -143,9 +148,10 @@ function richPart(): EditingPart {
   )
 
   p.subPartGameData.push({
-    subPartTemplateId: 'Core.Wing',
+    ...createSubPartGameData('Core.Wing'),
     tanks: [
       {
+        ...createTank(),
         shape: 'Cylindrical',
         wallMaterialId: 'Aluminum.2014(s)',
         lengthM: 2,
@@ -154,6 +160,7 @@ function richPart(): EditingPart {
         roleAffinity: 'Engine',
       },
       {
+        ...createTank(),
         shape: 'Spherical',
         wallMaterialId: 'Steel.A36(s)',
         lengthM: 0,
@@ -195,6 +202,8 @@ function richPart(): EditingPart {
         thermalEfficiency: 1,
         minimumThrottle: 0.1,
         minimumPulseTimeS: 0.008,
+        feeds: [],
+        plumbing: 'Bulk' as const,
       },
     ],
     nozzles: [
@@ -312,6 +321,10 @@ function richPart(): EditingPart {
       { lnPressure: 9.5, temperatureK: 3200, gamma: 1.22, molarMassGPerMol: 22.4 },
       { lnPressure: 15.4, temperatureK: 3650, gamma: 1.15, molarMassGPerMol: 23.1 },
     ],
+    burnRate: null,
+    minimumBurnPressurePa: null,
+    maxStablePressurePa: null,
+    exhaustCondensedFraction: null,
   })
 
   return p

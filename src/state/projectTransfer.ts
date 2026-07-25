@@ -317,6 +317,7 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
       rotation: vec(src.rotation, 0),
       scale: vec(src.scale, 1),
       flags: [...(src.flags ?? [])],
+      capabilities: [...(src.capabilities ?? [])],
       siblingIds: [...(src.siblingIds ?? [])],
       layerId: CONNECTOR_LAYER_ID,
     })

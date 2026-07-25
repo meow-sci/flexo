@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import { DOMParser } from '@xmldom/xmldom'
 import { mergeGameData, parseGameDataFile, parsePartsFile, type CatalogPart } from './partCatalog'
+import { createTank } from './types'
 import {
   hasKsaAssets,
   ksaAsset,
@@ -302,6 +303,7 @@ describe('parseGameDataFile + mergeGameData', () => {
     expect(skin).toBeTruthy()
     expect(skin.tanks).toHaveLength(1)
     expect(skin.tanks[0]).toEqual({
+      ...createTank(),
       shape: 'Cylindrical',
       wallMaterialId: 'Aluminum.2014(s)',
       lengthM: 0.5,

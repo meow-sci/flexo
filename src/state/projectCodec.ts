@@ -194,6 +194,8 @@ function decConnector(c: CConnector): Connector {
   return {
     id: str(c.i),
     flags: arr<Connector['flags'][number]>(c.f),
+    // TODO(phase 3): decode capabilities.
+    capabilities: [],
     siblingIds: arr<string>(c.sb).map((s) => str(s)),
     layerId: CONNECTOR_LAYER_ID,
     ...decTransform(c),
@@ -399,6 +401,9 @@ const TANK_ROLE_AFFINITIES: ReadonlySet<string> = new Set([
 
 function decTank(c: CTank): Tank {
   return {
+    // TODO(phase 3): decode id + locationAsmb.
+    id: '',
+    locationAsmb: { x: 0, y: 0, z: 0 },
     shape: c.sph ? 'Spherical' : 'Cylindrical',
     wallMaterialId: c.m != null ? str(c.m) : DEFAULT_TANK_MATERIAL,
     lengthM: num(c.l),
@@ -496,6 +501,9 @@ function decCombustor(c: CCombustor): Combustor {
     thermalEfficiency: typeof c.te === 'number' ? c.te : 1,
     minimumThrottle: typeof c.mt === 'number' ? c.mt : 1,
     minimumPulseTimeS: typeof c.pt === 'number' ? c.pt : null,
+    // TODO(phase 3): decode feeds + plumbing.
+    feeds: [],
+    plumbing: 'Bulk',
   }
 }
 
@@ -959,6 +967,11 @@ function decCustomReaction(c: CReaction): CustomReaction {
       gamma: num(g),
       molarMassGPerMol: num(m),
     })),
+    // TODO(phase 3): decode the solid burn-rate fields.
+    burnRate: null,
+    minimumBurnPressurePa: null,
+    maxStablePressurePa: null,
+    exhaustCondensedFraction: null,
   }
 }
 

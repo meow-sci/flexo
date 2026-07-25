@@ -164,6 +164,7 @@ function connector(c: Partial<Connector>): Connector {
     rotation: { ...EULER_ZERO },
     scale: { ...VEC3_ONE },
     flags: [],
+    capabilities: [],
     siblingIds: [],
     layerId: DEFAULT_LAYER_ID,
     ...c,
@@ -239,7 +240,7 @@ describe('serializeGameData', () => {
     },
     subPartGameData: [
       {
-        subPartTemplateId: TANK_TMPL,
+        ...createSubPartGameData(TANK_TMPL),
         tanks: [
           {
             ...createTank(),
@@ -469,6 +470,8 @@ describe('serializeGameData', () => {
               thermalEfficiency: 1, // default → omitted
               minimumThrottle: 0.1, // non-default → emitted
               minimumPulseTimeS: null,
+              feeds: [],
+              plumbing: 'Bulk' as const,
             },
           ],
           nozzles: [

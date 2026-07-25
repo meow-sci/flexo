@@ -56,12 +56,51 @@ export type ConnectorFlag = 'Internal' | 'ToSurface' | 'FromSurface'
 
 export const CONNECTOR_FLAGS: readonly ConnectorFlag[] = ['Internal', 'ToSurface', 'FromSurface']
 
+/**
+ * What is allowed to FLOW across a connector, serialized as the whitespace-separated
+ * `<Capabilities>` on the `<Connector>` (KSA `ConnectorCapabilityFlags`, a `[Flags]`
+ * byte enum — see `decomp/KSA/ConnectorCapabilityFlags.cs`). Added in KSA 2026.7.9
+ * (rev 4992) to make propellant plumbing explicit topology rather than a whole-vehicle
+ * search: a connection carries a resource only when BOTH endpoints declare it
+ * (`Part.Connection.HasCapabilities` → `ConnectorCapabilityExtensions.Intersect`).
+ *
+ * **An EMPTY list is not "nothing"** — it is KSA's implicit default
+ * `Electricity | ServiceFluid`. `NoElectricity` / `NoServiceFluid` are INVERTED at
+ * load by `ConnectorCapabilityExtensions.ToCapability()` (they subtract from that
+ * default); `BulkFluid` / `SolidMotorCase` / `DecouplerJoint` are opt-in additions.
+ * A main-engine propellant path is dead unless every connector along it declares
+ * `BulkFluid`; SRB segments stack only across `SolidMotorCase`; and since rev 5007 a
+ * decoupler's connector must declare `DecouplerJoint` (it replaced the old
+ * `_decouplerConnections` list).
+ */
+export type ConnectorCapability =
+  | 'BulkFluid'
+  | 'SolidMotorCase'
+  | 'NoElectricity'
+  | 'NoServiceFluid'
+  | 'DecouplerJoint'
+
+export const CONNECTOR_CAPABILITIES: readonly ConnectorCapability[] = [
+  'BulkFluid',
+  'SolidMotorCase',
+  'NoElectricity',
+  'NoServiceFluid',
+  'DecouplerJoint',
+]
+
 /** A connector attachment point within the Part. Faces local +X (its arrow). */
 export interface Connector extends Transform {
   /** Connector id used in the exported XML, e.g. "_connector1". */
   id: string
   /** Connection behavior flags (independent, may combine). Empty = default mode. */
   flags: ConnectorFlag[]
+  /**
+   * `<Capabilities>` — what may flow across this connector. KSA merges the geometry
+   * `<Part>` and `<PartGameData>` values with `|=` (`PartTemplate.ApplyGameData`), so
+   * flexo emits the same list in both documents (idempotent). Empty ⇒ KSA's default
+   * `Electricity | ServiceFluid`. See {@link ConnectorCapability}.
+   */
+  capabilities: ConnectorCapability[]
   /**
    * Ids of sibling connectors, serialized as nested `<Sibling Id/>` children of the
    * geometry `<Connector>`. KSA 2026.7 added this to group the attach nodes of
@@ -231,6 +270,14 @@ export type TankShape = 'Cylindrical' | 'Spherical'
  * model those; they survive round-trip via the GameData passthrough.) Mirrors `TankState`.
  */
 export interface Tank {
+  /**
+   * `<Tank Id>` — the container id an engine addresses with
+   * `<FeedsFrom Container="…">`. Load-bearing since KSA 2026.7.9: KSA resolves it
+   * against `PartTemplate.Components[].Id` (`ModuleBase.TemplateDataBase.Id`, an
+   * `[XmlAttribute]`) in `PartTemplate.AddResolvedFeed`, and logs *"feeds from unknown
+   * container '…'"* when it misses. `''` ⇒ emit no `Id` (an unaddressable tank).
+   */
+  id: string
   shape: TankShape
   /** Wall material id, e.g. "Aluminum.2014(s)". Blank omits <Material>. */
   wallMaterialId: string
@@ -249,6 +296,11 @@ export interface Tank {
    * omitted at the default); Core's RCS spheres declare `Thruster`.
    */
   roleAffinity: TankRoleAffinity
+  /**
+   * `<LocationAsmb X Y Z>` inside the shape element — the tank's mass offset in the
+   * assembly frame (`AsmbTransformTemplate.LocationAsmb`). Omitted at (0,0,0).
+   */
+  locationAsmb: Vec3
 }
 
 /**
@@ -377,6 +429,86 @@ export interface EvaDoor {
 }
 
 /**
+ * PLUMBING TOPOLOGY (KSA 2026.7.9, revs 4992/5002/5007) — where a propellant
+ * CONSUMER (a `RocketCore`: a {@link Combustor} or a {@link SolidMotor}) draws from.
+ * Before 5018 this was implicit (a combustor searched the whole vehicle for tanks
+ * holding its reactants); it is now explicitly authored in three layers:
+ *   1. {@link ConnectorCapability} — what each connector is allowed to carry.
+ *   2. {@link FeedSource} — the consumer's own `<FeedsFrom>` feed points.
+ *   3. {@link ConsumerFeedWiring} — how the Part wires a reusable SubPart's
+ *      `<FeedsFrom Parent="true"/>` onto its own containers/connectors.
+ */
+
+/**
+ * One `<FeedsFrom>` feed point (KSA `FeedsFromReference`, see
+ * `decomp/KSA/FeedsFromReference.cs`). The XML carries four attributes —
+ * `Container`, `SubPart`, `Connector`, `Parent` — under a strict validity rule
+ * (`FeedsFromReference.IsValid`, logged as an Error on load):
+ *  - **exactly one** of `Container` / `Connector` / `Parent` may be set, and
+ *  - `SubPart` is only legal alongside `Container` (it scopes the container lookup
+ *    to a placed SubPart's own `Components` instead of the owning template's).
+ * flexo models that rule as a discriminated union so an invalid combination is
+ * unrepresentable.
+ *
+ * `parent` means "whatever the Part that places me wires up" and is resolved through
+ * the Part's {@link ConsumerFeedWiring} (`PartTemplate.ResolveConsumerFeeds`); a
+ * SubPart-level consumer with no matching wiring entry logs
+ * *"feeds from its parent part, but … has no ConsumerFeedWiring wiring for it"*.
+ */
+export type FeedSource =
+  | {
+      kind: 'container'
+      /** `<FeedsFrom Container>` — a `Components` entry `Id` (a `<Tank>`/`<SolidGrainSegment>`). */
+      containerId: string
+      /** `<FeedsFrom SubPart>` — placement instanceId owning the container; null ⇒ the owning template. */
+      subPartInstanceId: string | null
+    }
+  | { kind: 'connector'; connectorId: string }
+  | { kind: 'parent' }
+
+/** True when a feed source names a target KSA can resolve (drop invalid ones on export). */
+export function isFeedSourceValid(f: FeedSource): boolean {
+  if (f.kind === 'container') return f.containerId.trim().length > 0
+  if (f.kind === 'connector') return f.connectorId.trim().length > 0
+  return true
+}
+
+/**
+ * `<Plumbing>` on a `<Combustor>` — which fluid network the chamber draws through
+ * (KSA `PlumbingClass`, see `decomp/KSA/PlumbingClass.cs`). Mapped to a connector
+ * capability by `ConnectorCapabilityExtensions.ToCapability(PlumbingClass)`:
+ * `Bulk ⇒ BulkFluid` (main engines), `Service ⇒ ServiceFluid` (RCS). `Bulk` is the
+ * schema default, so a flexo-authored RCS thruster MUST declare `Service` — otherwise
+ * it demands `BulkFluid` across connectors that only carry `ServiceFluid` and gets
+ * no propellant. Every Core RCS combustor declares `Service`.
+ */
+export type PlumbingClass = 'Bulk' | 'Service'
+
+/**
+ * `<ConsumerFeedWiring>` on a `<PartGameData>` — how the Part that PLACES a reusable
+ * thrust chamber satisfies that chamber's `<FeedsFrom Parent="true"/>` (KSA
+ * `ConsumerFeedWiring : SubPartIdReference`, see `decomp/KSA/ConsumerFeedWiring.cs`
+ * and `PartTemplate.ResolveConsumerFeedPoints`). This is what lets one SubPart mesh
+ * be reused by prefabs that plumb it differently.
+ */
+export interface ConsumerFeedWiring {
+  /** `<ConsumerFeedWiring Id>` — the consumer's TEMPLATE id (e.g. "ThrustChamber"). */
+  consumerId: string
+  /**
+   * `<ConsumerFeedWiring SubPartId>` — the placement instanceId carrying the consumer;
+   * null ⇒ the root part. KSA prefers an instance-scoped entry and falls back to an
+   * unscoped one (`ResolveConsumerFeeds`).
+   */
+  subPartInstanceId: string | null
+  /**
+   * `<FeedsFrom>` children. MUST NOT contain `{ kind: 'parent' }` — KSA logs
+   * *"ConsumerFeedWiring for X cannot itself defer to Parent"*. An entry that wires
+   * zero feed points is likewise an error, so the serializer omits it.
+   */
+  feeds: FeedSource[]
+}
+
+/**
  * ENGINES — a rocket engine is a small graph of cooperating GameData modules layered
  * onto a Part and its SubParts (see analysis/KSA_ENGINE_DETAILS.md):
  *  - {@link Combustor}    `<Combustor>`        the chamber: burns a reaction → hot gas
@@ -454,11 +586,14 @@ export const VOLUMETRIC_EXHAUST_IDS: readonly string[] = [
 ]
 
 /**
- * The `<PlumeTrailTemplate>` ids shipped in Core (KSA 2026.7.6 volumetric plume trails,
- * referenced by a nozzle's `<PlumeTrail Id>`). Core assigns DefaultEngine to every main
- * engine; RCS/vernier nozzles carry none.
+ * The `<PlumeTrailTemplate>` ids shipped in Core (volumetric plume trails, referenced by
+ * a nozzle's `<PlumeTrail Id>`). KSA 2026.7.9 moved the template out of
+ * `CorePropulsionAGameData.xml` into its own `Content/Core/PlumeTrailAssets.xml`,
+ * renamed it `DefaultEngine` → `DefaultPlumeTrail` (it gained an `<EndRadius M>`), and
+ * now assigns it ONLY to solid-motor nozzles ("Only use plume trails on SRBs", rev 4996)
+ * — every liquid nozzle in Core carries none.
  */
-export const PLUME_TRAIL_IDS: readonly string[] = ['DefaultEngine']
+export const PLUME_TRAIL_IDS: readonly string[] = ['DefaultPlumeTrail']
 
 /** KSA's default engine sound behavior id (the `<SoundEvent SoundId>` Core engines use). */
 export const DEFAULT_ENGINE_SOUND_ID = 'DefaultEngineSoundBehavior'
@@ -495,6 +630,17 @@ export interface SubPartIdRef {
 export interface Combustor {
   /** `<Combustor Id>`, targeted by a Rocket's `<Core Id>`, e.g. "ThrustChamber". */
   id: string
+  /**
+   * `<FeedsFrom>` — where this chamber draws propellant. **Required since KSA
+   * 2026.7.9**: `RocketCoreTemplate.OnDataLoad` logs *"Rocket core X declares no
+   * FeedsFrom feed points; it will reach no propellant"* on an empty list and the
+   * engine produces zero thrust. A reusable SubPart chamber normally declares a
+   * single `{ kind: 'parent' }` and lets the placing Part's
+   * {@link ConsumerFeedWiring} name the real container/connector.
+   */
+  feeds: FeedSource[]
+  /** `<Plumbing>` — which fluid network to draw through. `Bulk` is the schema default. */
+  plumbing: PlumbingClass
   /** `<Reaction Id>` — a Reaction id, e.g. "Hydrolox" / "MMH_NTO" / a custom FixedReaction. */
   reactionId: string
   /**
@@ -600,6 +746,161 @@ export interface Gimbal {
 }
 
 /**
+ * SOLID ROCKET MOTORS (KSA 2026.7.9, rev 4992/5002) — the solid analogue of the
+ * combustor/nozzle/rocket trio. A `<Rocket>` may bind ONLY solid parts or ONLY liquid
+ * ones (`RocketTemplate.Create` throws *"Rocket X mixes solid and liquid components"*),
+ * a solid rocket needs ≥1 nozzle, and a `<RocketThrusterController>` may not drive one.
+ *  - {@link SolidMotor}        `<SolidMotor>`        the case: burns a solid grain
+ *  - {@link SolidMotorNozzle}  `<SolidMotorNozzle>`  expands the gas → thrust
+ *  - {@link SolidGrainSegment} `<SolidGrainSegment>` the "tank": a stackable propellant
+ *    grain, addressable as a feed container by its `Id`, stacked across connectors that
+ *    declare the `SolidMotorCase` capability.
+ */
+
+/**
+ * A solid motor case (a `RocketCoreTemplate`, so it carries {@link feeds} like a
+ * {@link Combustor}). Defaults mirror `decomp/KSA/SolidMotorTemplate.cs`.
+ */
+export interface SolidMotor {
+  /** `<SolidMotor Id>`, targeted by a Rocket's `<Core Id>`, e.g. "MotorCore". */
+  id: string
+  /**
+   * `<Reaction Id>` — MUST resolve to a `Category="Solid"` FixedReaction with a burn-rate
+   * law, else `SolidMotorTemplate.Create` throws *"Solid motor X requires a solid reaction"*.
+   * Core ships `APCP` and `DoubleBase`.
+   */
+  reactionId: string
+  /** `<ThermalEfficiency Value>` (0–1). Default 1. */
+  thermalEfficiency: number
+  /**
+   * `<DefaultPressure>` chamber pressure. Stored SI (Pa); emitted as Bar. Default 7e6.
+   * KSA throws when it is `<= reaction.MinimumBurnPressure` or `> reaction.MaxStablePressure`.
+   */
+  defaultPressurePa: number
+  /**
+   * `<Grain Id>` — a `<GrainGeometry>` id (the burn-area-vs-depth profile, i.e. the
+   * thrust curve shape). `''` ⇒ omit the element and take `GrainGeometryLibrary.Default`.
+   * Moved from the segment XML to the motor XML in rev 5002.
+   */
+  grainGeometryId: string
+  /** `<FeedsFrom>` feed points — see {@link Combustor.feeds}; a motor feeds from grain segments. */
+  feeds: FeedSource[]
+}
+
+/**
+ * A solid-motor nozzle (a `RocketNozzleTemplate`). Identical to {@link DeLavalNozzle}
+ * MINUS `<AreaRatio>`: `SolidMotorNozzleTemplate.Create` sizes the throat itself as
+ * `exitArea / 12`, so there is deliberately no `areaRatio` field here.
+ */
+export interface SolidMotorNozzle {
+  /** `<SolidMotorNozzle Id>`, targeted by a Rocket's `<Nozzle Id>`, e.g. "Nozzle". */
+  id: string
+  /** `<ExitDiameter>` exit-plane diameter (m). Default 1. */
+  exitDiameterM: number
+  /** `<FxExitDiameter>` visual plume width (m); null ⇒ uses {@link exitDiameterM}. VISUAL ONLY. */
+  fxExitDiameterM: number | null
+  /** `<FlowEfficiency Value>` (0–1). Default 1. */
+  flowEfficiency: number
+  /** `<ExpansionEfficiency Value>` (0–1). Default 1. */
+  expansionEfficiency: number
+  /** `<ExhaustLocation X Y Z>` thrust application point (assembly frame). Default (0,0,0). */
+  exhaustLocation: Vec3
+  /** `<ExhaustDirection X Y Z>` direction exhaust leaves (thrust acts along −this). Default (−1,0,0). */
+  exhaustDirection: Vec3
+  /** `<FxExhaustLocation>` plume origin; null ⇒ uses {@link exhaustLocation}. */
+  fxExhaustLocation: Vec3 | null
+  /** `<FxExhaustDirection>` plume axis; null ⇒ uses {@link exhaustDirection}. */
+  fxExhaustDirection: Vec3 | null
+  /** `<VolumetricExhaust Id>` plume template id; null ⇒ none. */
+  volumetricExhaustId: string | null
+  /** `<PlumeTrail Id>` volumetric trail template; null ⇒ none. Core 5018 uses these on SRBs only. */
+  plumeTrailId: string | null
+  /** `<ExhaustLight Value>` dynamic exhaust point light. Default true. */
+  exhaustLight: boolean
+  /** `<SoundEvent>` engine audio, or null. */
+  sound: RocketSoundEvent | null
+}
+
+/**
+ * A stackable solid-propellant grain segment — the solid analogue of a {@link Tank},
+ * and like a Tank a `Components` entry addressable as a feed container by its `Id`.
+ * Serialized as `<SolidGrainSegment Id><Grain>…</Grain></SolidGrainSegment>`; the
+ * inner `<Grain>` is a `SolidGrainSegmentTemplate` (an `AsmbVolumetricMassTemplate`),
+ * so it carries the material + the hollow-cylinder dimensions + a mass offset.
+ */
+export interface SolidGrainSegment {
+  /** `<SolidGrainSegment Id>` — the feed container id, e.g. "Grain". */
+  id: string
+  /** `<Grain><Material Id>` propellant/casing material, e.g. "Steel.300(s)". Blank omits it. */
+  wallMaterialId: string
+  /** `<Grain><OuterRadius M>` casing outer radius in meters. */
+  outerRadiusM: number
+  /** `<Grain><WallThickness Mm>` casing wall thickness in millimeters. */
+  wallThicknessMm: number
+  /** `<Grain><Length M>` segment length in meters. */
+  lengthM: number
+  /** `<Grain><LocationAsmb X Y Z>` mass offset in the assembly frame. Omitted at (0,0,0). */
+  locationAsmb: Vec3
+}
+
+/**
+ * Core's shipped `<GrainGeometry>` ids — a static snapshot of
+ * `Content/Core/GrainGeometries.xml` @ 2026.7.9.5018 (the new top-level asset element
+ * added in rev 4992). Each defines a burn-area-vs-depth curve, i.e. the booster's
+ * thrust profile over its burn. `Neutral` is the library default.
+ */
+export const GRAIN_GEOMETRY_IDS: readonly string[] = [
+  'BoostSustain',
+  'BoostSustainBoost',
+  'Neutral',
+  'Progressive',
+  'Regressive',
+]
+
+/** Default solid motor: APCP at 70 bar with a neutral star grain (matches Core's SRBs). */
+export function createSolidMotor(id: string): SolidMotor {
+  return {
+    id,
+    reactionId: 'APCP',
+    thermalEfficiency: 0.95,
+    defaultPressurePa: 7_000_000,
+    grainGeometryId: 'Neutral',
+    feeds: [],
+  }
+}
+
+/** Default solid nozzle: 1 m exit, Core's 0.95/0.98 efficiencies, firing along −X. */
+export function createSolidMotorNozzle(id: string): SolidMotorNozzle {
+  return {
+    id,
+    exitDiameterM: 1,
+    fxExitDiameterM: null,
+    flowEfficiency: 0.95,
+    expansionEfficiency: 0.98,
+    exhaustLocation: { x: 0, y: 0, z: 0 },
+    exhaustDirection: { x: -1, y: 0, z: 0 },
+    fxExhaustLocation: null,
+    fxExhaustDirection: null,
+    volumetricExhaustId: null,
+    plumeTrailId: 'DefaultPlumeTrail',
+    exhaustLight: true,
+    sound: null,
+  }
+}
+
+/** Default grain segment: a 1 m long, 0.5 m radius steel case with a 6 mm wall. */
+export function createSolidGrainSegment(id: string): SolidGrainSegment {
+  return {
+    id,
+    wallMaterialId: 'Steel.300(s)',
+    outerRadiusM: 0.5,
+    wallThicknessMm: 6,
+    lengthM: 1,
+    locationAsmb: { x: 0, y: 0, z: 0 },
+  }
+}
+
+/**
  * A captured XML subtree flexo does NOT model, preserved verbatim so importing a
  * built-in Part and re-exporting never silently drops game data flexo has no field for
  * (e.g. `<Collider>`, the `SolidSphereMass`/`SolidCylinderMass`… mass family, `<IVASeat>`,
@@ -679,6 +980,20 @@ export interface PartGameData {
   combustors: Combustor[]
   /** Part-level nozzles (uncommon — nozzles usually live on a SubPart). */
   nozzles: DeLavalNozzle[]
+  /**
+   * Part-level `<Tank>`s. Core authors its prefab tank data here rather than on the
+   * SubPart, and since KSA 2026.7.9 a part-level tank is what an engine addresses with
+   * `<FeedsFrom Container="…">` without a `SubPart=` scope.
+   */
+  tanks: Tank[]
+  /** Solid motor cases (the SRB analogue of {@link combustors}). */
+  solidMotors: SolidMotor[]
+  /** Solid-motor nozzles (the SRB analogue of {@link nozzles}). */
+  solidNozzles: SolidMotorNozzle[]
+  /** Stackable solid propellant grain segments (the SRB analogue of {@link tanks}). */
+  solidGrainSegments: SolidGrainSegment[]
+  /** How this Part satisfies its placed SubParts' `<FeedsFrom Parent="true"/>` consumers. */
+  consumerFeedWiring: ConsumerFeedWiring[]
   /** Per-instance gimbal overlays (thrust-vectoring), keyed by placement instanceId. */
   gimbals: Gimbal[]
   /** Unmodeled `<PartGameData>` attributes (anything but `Id`/`DisplayName`), preserved verbatim. */
@@ -708,6 +1023,12 @@ export interface SubPartGameData {
   nozzles: DeLavalNozzle[]
   /** Reusable `<Rocket>` bindings (core + nozzles) that travel with this mesh. */
   rockets: Rocket[]
+  /** Reusable solid motor cases that travel with this mesh. */
+  solidMotors: SolidMotor[]
+  /** Reusable solid-motor nozzles that travel with this mesh. */
+  solidNozzles: SolidMotorNozzle[]
+  /** Reusable solid propellant grain segments that travel with this mesh (a stackable SRB segment). */
+  solidGrainSegments: SolidGrainSegment[]
   /** Unmodeled `<SubPartGameData>` attributes (anything but `Id` — e.g. Core's `DisplayName`), preserved verbatim. */
   unknownAttrs: Record<string, string>
   /** Unmodeled `<SubPartGameData>` child elements, preserved verbatim (see {@link RawXmlNode}). */
@@ -723,6 +1044,9 @@ export function isSubPartGameDataEmpty(spd: SubPartGameData): boolean {
     spd.combustors.length === 0 &&
     spd.nozzles.length === 0 &&
     spd.rockets.length === 0 &&
+    spd.solidMotors.length === 0 &&
+    spd.solidNozzles.length === 0 &&
+    spd.solidGrainSegments.length === 0 &&
     spd.unknownChildren.length === 0 &&
     Object.keys(spd.unknownAttrs).length === 0
   )
@@ -731,12 +1055,14 @@ export function isSubPartGameDataEmpty(spd: SubPartGameData): boolean {
 /** Default tank: 2 m cylinder, 0.5 m radius, 2 mm aluminium wall (matches TankState). */
 export function createTank(): Tank {
   return {
+    id: '',
     shape: 'Cylindrical',
     wallMaterialId: 'Aluminum.2014(s)',
     lengthM: 2.0,
     outerRadiusM: 0.5,
     wallThicknessMm: 2.0,
     roleAffinity: 'Engine',
+    locationAsmb: { x: 0, y: 0, z: 0 },
   }
 }
 
@@ -792,6 +1118,11 @@ export function createEmptyGameData(): PartGameData {
     rockets: [],
     combustors: [],
     nozzles: [],
+    tanks: [],
+    solidMotors: [],
+    solidNozzles: [],
+    solidGrainSegments: [],
+    consumerFeedWiring: [],
     gimbals: [],
     unknownAttrs: {},
     unknownChildren: [],
@@ -808,6 +1139,9 @@ export function createSubPartGameData(subPartTemplateId: string): SubPartGameDat
     combustors: [],
     nozzles: [],
     rockets: [],
+    solidMotors: [],
+    solidNozzles: [],
+    solidGrainSegments: [],
     unknownAttrs: {},
     unknownChildren: [],
   }
@@ -823,6 +1157,10 @@ export function createCombustor(id: string): Combustor {
     thermalEfficiency: 1,
     minimumThrottle: 1,
     minimumPulseTimeS: null,
+    // A fresh chamber defers to its placing Part (the reusable-SubPart shape Core uses);
+    // an empty list would make KSA log "declares no FeedsFrom feed points".
+    feeds: [{ kind: 'parent' }],
+    plumbing: 'Bulk',
   }
 }
 
@@ -903,6 +1241,19 @@ export interface ReactionLutRowSpec {
 }
 
 /**
+ * `<BurnRate CoefficientMPerS Exponent/>` — Vieille's law `r = a · p^n`, the solid
+ * grain's regression rate vs chamber pressure (KSA `BurnRateTemplate`/`BurnRateLaw`).
+ * `FixedReactionTemplate.Create` throws *"Reaction X has an implausible burn rate law"*
+ * unless `a > 0` and `0 <= n < 0.95`.
+ */
+export interface BurnRateLaw {
+  /** `<BurnRate CoefficientMPerS>` — must be > 0. */
+  coefficientMPerS: number
+  /** `<BurnRate Exponent>` — must be >= 0 and < 0.95. */
+  exponent: number
+}
+
+/**
  * A USER-AUTHORED reaction (propellant chemistry). Lets a designer control the
  * mixture beyond the shipped Core reactions. Exported as a top-level
  * `<FixedReaction>` in the GameData document and referenced by a combustor's
@@ -923,6 +1274,14 @@ export interface CustomReaction {
   reactants: ReactionReactantSpec[]
   /** Pressure-indexed gas LUT (≥1 `<PressureCondition>` row). */
   lut: ReactionLutRowSpec[]
+  /** `<BurnRate>` — REQUIRED when {@link category} is `Solid`; null otherwise. */
+  burnRate: BurnRateLaw | null
+  /** `<MinimumBurnPressure>` deflagration limit (Pa). Required for Solid, must be > 0. */
+  minimumBurnPressurePa: number | null
+  /** `<MaxStablePressure>` slope-break limit (Pa). Required for Solid, must be > {@link minimumBurnPressurePa}. */
+  maxStablePressurePa: number | null
+  /** `<ExhaustCondensedFraction Value>` condensed-phase exhaust mass fraction. Required for Solid, [0, 1). */
+  exhaustCondensedFraction: number | null
 }
 
 /** A minimal valid custom reaction (one reactant, one LUT row) — a blank to edit. */
@@ -935,7 +1294,38 @@ export function createCustomReaction(id: string, name: string): CustomReaction {
     lut: [
       { lnPressure: Math.log(5_000_000), temperatureK: 3000, gamma: 1.2, molarMassGPerMol: 14 },
     ],
+    burnRate: null,
+    minimumBurnPressurePa: null,
+    maxStablePressurePa: null,
+    exhaustCondensedFraction: null,
   }
+}
+
+/**
+ * KSA REQUIRES burn-rate data on a `Category="Solid"` FixedReaction —
+ * `FixedReactionTemplate.Create()` THROWS (the whole mod fails to load) when
+ * `<BurnRate>`, `<MinimumBurnPressure>`, `<MaxStablePressure>` or
+ * `<ExhaustCondensedFraction>` is missing or implausible. Export therefore SKIPS any
+ * solid reaction that fails this check rather than emitting a crash-on-load mod.
+ * Reference values from Core's `Reactions.xml` @ 5018:
+ *   APCP       — a=0.0045 m/s, n=0.35, min 15 bar, max 150 bar, condensed 0.33696528908145584
+ *   DoubleBase — a=0.0024 m/s, n=0.65, min 30 bar, max 100 bar, condensed 0
+ */
+export function isCustomReactionExportable(r: CustomReaction): boolean {
+  if (r.category !== 'Solid') return true
+  return (
+    r.burnRate != null &&
+    r.burnRate.coefficientMPerS > 0 &&
+    r.burnRate.exponent >= 0 &&
+    r.burnRate.exponent < 0.95 &&
+    r.minimumBurnPressurePa != null &&
+    r.minimumBurnPressurePa > 0 &&
+    r.maxStablePressurePa != null &&
+    r.maxStablePressurePa > r.minimumBurnPressurePa &&
+    r.exhaustCondensedFraction != null &&
+    r.exhaustCondensedFraction >= 0 &&
+    r.exhaustCondensedFraction < 1
+  )
 }
 
 /**

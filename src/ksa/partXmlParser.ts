@@ -125,6 +125,8 @@ export function connectorsFromPartElement(part: Element): Connector[] {
       rotation: readVec(transform, 'Rotation', 0) as EulerXYZ,
       scale: readVec(transform, 'Scale', 1),
       flags: parseConnectorFlags(directChildren(conn, 'Flags')[0]?.textContent),
+      // TODO(phase 2): parse <Capabilities>.
+      capabilities: [],
       // <Sibling Id/> children group this connector with the part's other attach nodes
       // (KSA 2026.7 multi-mount prefabs); preserved verbatim, dropping any without an Id.
       siblingIds: directChildren(conn, 'Sibling')
@@ -264,6 +266,9 @@ function parseSolarPanel(el: Element): SolarPanel {
 
 function tankFromElement(el: Element, shape: TankShape): Tank {
   return {
+    // TODO(phase 2): read the Id off the wrapping <Tank> and <LocationAsmb> off the shape.
+    id: '',
+    locationAsmb: { x: 0, y: 0, z: 0 },
     shape,
     wallMaterialId: directChildren(el, 'Material')[0]?.getAttribute('Id') ?? '',
     lengthM: readNum(directChildren(el, 'Length')[0], 'M') ?? 0,
@@ -467,7 +472,19 @@ export function customReactionsFromRoot(root: Element): CustomReaction[] {
       gamma: readNum(directChildren(c, 'Gamma')[0], 'Value') ?? 0,
       molarMassGPerMol: readNum(directChildren(c, 'MolarMass')[0], 'GPerMol') ?? 0,
     }))
-    out.push({ id, name, category, reactants, lut })
+    // TODO(phase 2): read <BurnRate>/<MinimumBurnPressure>/<MaxStablePressure>/
+    // <ExhaustCondensedFraction> (mandatory on a Category="Solid" reaction).
+    out.push({
+      id,
+      name,
+      category,
+      reactants,
+      lut,
+      burnRate: null,
+      minimumBurnPressurePa: null,
+      maxStablePressurePa: null,
+      exhaustCondensedFraction: null,
+    })
   }
   return out
 }
@@ -795,6 +812,9 @@ function combustorFromElement(el: Element): Combustor {
     thermalEfficiency: readNum(directChildren(el, 'ThermalEfficiency')[0], 'Value') ?? 1,
     minimumThrottle: readNum(directChildren(el, 'MinimumThrottle')[0], 'Value') ?? 1,
     minimumPulseTimeS: readSeconds(directChildren(el, 'MinimumPulseTime')[0]),
+    // TODO(phase 2): parse <FeedsFrom> and <Plumbing>.
+    feeds: [],
+    plumbing: 'Bulk',
   }
 }
 

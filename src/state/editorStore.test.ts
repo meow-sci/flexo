@@ -166,6 +166,7 @@ describe('editorStore', () => {
           rotation: { x: 0, y: 0, z: 0 },
           scale: { x: 1, y: 1, z: 1 },
           flags: ['ToSurface'],
+          capabilities: [],
           siblingIds: [],
           layerId: DEFAULT_LAYER_ID,
         },
@@ -187,6 +188,7 @@ describe('editorStore', () => {
           rotation: { x: 0, y: 0, z: 0 },
           scale: { x: 1, y: 1, z: 1 },
           flags: [],
+          capabilities: [],
           siblingIds: [],
           layerId: DEFAULT_LAYER_ID,
         },
@@ -237,6 +239,7 @@ describe('editorStore', () => {
       rotation: { x: 0, y: 0, z: 0 },
       scale: { x: 1, y: 1, z: 1 },
       flags: [],
+      capabilities: [],
       siblingIds: [],
       layerId: DEFAULT_LAYER_ID,
     })
@@ -785,6 +788,7 @@ describe('scaleEverything', () => {
         {
           id: 'c1',
           flags: [],
+          capabilities: [],
           siblingIds: [],
           layerId: CONNECTOR_LAYER_ID,
           ...tf([1, 1, 1], [0, 0, 0], [1, 1, 1]),

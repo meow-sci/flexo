@@ -722,6 +722,7 @@ export function addPart(
       rotation: { ...src.rotation },
       scale: { ...src.scale },
       flags: [...src.flags],
+      capabilities: [...src.capabilities],
       siblingIds: [...src.siblingIds],
       layerId: CONNECTOR_LAYER_ID, // connectors always live in the Connectors layer
     })
@@ -783,6 +784,7 @@ export function addConnector(): void {
     rotation: { x: 0, y: 0, z: 0 },
     scale: { x: 1, y: 1, z: 1 },
     flags: [],
+    capabilities: [],
     siblingIds: [],
     layerId: CONNECTOR_LAYER_ID,
   })
@@ -977,6 +979,7 @@ export function duplicateSelected(): void {
       rotation: { ...src.rotation },
       scale: { ...src.scale },
       flags: [...src.flags],
+      capabilities: [...src.capabilities],
       siblingIds: [...src.siblingIds],
       layerId: src.layerId,
     })
@@ -1079,6 +1082,7 @@ export function pasteClipboard(): number {
       rotation: { ...src.rotation },
       scale: { ...src.scale },
       flags: [...src.flags],
+      capabilities: [...src.capabilities],
       siblingIds: [...src.siblingIds],
       layerId: CONNECTOR_LAYER_ID,
     })

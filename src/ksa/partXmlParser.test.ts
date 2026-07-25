@@ -123,6 +123,7 @@ describe('connectorsFromPartElement (round-trip with serializer)', () => {
         rotation: { x: 0, y: 0, z: 0 },
         scale: { x: 2, y: 2, z: 2 },
         flags: [],
+        capabilities: [],
         siblingIds: [],
         layerId: DEFAULT_LAYER_ID,
       },
@@ -132,6 +133,7 @@ describe('connectorsFromPartElement (round-trip with serializer)', () => {
         rotation: { x: 3.14159, y: 0, z: 3.14159 },
         scale: { x: 1, y: 1, z: 1 },
         flags: ['Internal', 'FromSurface'],
+        capabilities: [],
         siblingIds: [],
         layerId: DEFAULT_LAYER_ID,
       },
@@ -171,6 +173,7 @@ describe('connectorsFromPartElement (round-trip with serializer)', () => {
           rotation: { x: 0, y: 0, z: 0 },
           scale: { x: 1, y: 1, z: 1 },
           flags: [],
+          capabilities: [],
           siblingIds: ['_connector2', '_connector3'],
           layerId: DEFAULT_LAYER_ID,
         },
@@ -207,7 +210,7 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
     },
     subPartGameData: [
       {
-        subPartTemplateId: TANK_TMPL,
+        ...createSubPartGameData(TANK_TMPL),
         tanks: [
           {
             ...createTank(),
@@ -251,6 +254,7 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
         rotation: { x: 0, y: 0, z: 0 },
         scale: { x: 1, y: 1, z: 1 },
         flags: ['ToSurface'],
+        capabilities: [],
         siblingIds: [],
         layerId: DEFAULT_LAYER_ID,
       },
@@ -350,7 +354,9 @@ describe('engine modules (round-trip with serializeGameData)', () => {
           nozzles: [{ id: 'TurbineExhaustNozzle', subPartInstanceId: 'turbo_2' }],
         },
       ],
-      combustors: [createCombustor('GasGeneratorChamber')],
+      // feeds/plumbing are not yet parsed or emitted (see partXmlParser TODOs); a
+      // part-level gas generator would really declare a container/connector feed.
+      combustors: [{ ...createCombustor('GasGeneratorChamber'), feeds: [] }],
       gimbals: [
         {
           subPartInstanceId: `${TMPL}2`,
@@ -380,6 +386,10 @@ describe('engine modules (round-trip with serializeGameData)', () => {
           { lnPressure: 9.5, temperatureK: 3200, gamma: 1.22, molarMassGPerMol: 22.4 },
           { lnPressure: 15.4, temperatureK: 3650, gamma: 1.15, molarMassGPerMol: 23.1 },
         ],
+        burnRate: null,
+        minimumBurnPressurePa: null,
+        maxStablePressurePa: null,
+        exhaustCondensedFraction: null,
       },
     ],
     subPartGameData: [
@@ -394,6 +404,8 @@ describe('engine modules (round-trip with serializeGameData)', () => {
             thermalEfficiency: 1,
             minimumThrottle: 0.1,
             minimumPulseTimeS: null,
+            feeds: [],
+            plumbing: 'Bulk' as const,
           },
         ],
         nozzles: [

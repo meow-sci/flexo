@@ -4,6 +4,7 @@ import {
   DEFAULT_LAYER_ID,
   KITTEN_LAYER_ID,
   createEmptyPart,
+  createSubPartGameData,
   createTank,
   identityTransform,
   type EditingPart,
@@ -50,6 +51,7 @@ function sourcePart(): EditingPart {
   p.connectors.push({
     id: '_connector1',
     flags: ['Internal'],
+    capabilities: [],
     siblingIds: [],
     layerId: CONNECTOR_LAYER_ID,
     ...t(0),
@@ -80,17 +82,14 @@ function sourcePart(): EditingPart {
     category: 'Bipropellant',
     reactants: [{ phaseId: 'Kerosene(l)', massShare: 1 }],
     lut: [{ lnPressure: 9.5, temperatureK: 3200, gamma: 1.22, molarMassGPerMol: 22.4 }],
+    burnRate: null,
+    minimumBurnPressurePa: null,
+    maxStablePressurePa: null,
+    exhaustCondensedFraction: null,
   })
   p.subPartGameData.push({
-    subPartTemplateId: 'Core.TrussBarA',
+    ...createSubPartGameData('Core.TrussBarA'),
     tanks: [createTank()],
-    solarPanels: [],
-    lights: [],
-    combustors: [],
-    nozzles: [],
-    rockets: [],
-    unknownAttrs: {},
-    unknownChildren: [],
   })
   p.animations.push({
     id: 'anim_src1',
@@ -366,6 +365,7 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
     dest.connectors.push({
       id: '_connector1',
       flags: [],
+      capabilities: [],
       siblingIds: [],
       layerId: CONNECTOR_LAYER_ID,
       ...t(0),

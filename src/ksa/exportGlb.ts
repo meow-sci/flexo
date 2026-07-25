@@ -46,6 +46,16 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
  * placed part renders but can't be hovered, selected, or right-clicked. Every built-in
  * Core SubPart ships a distinct _VM mesh, so we mirror that exactly. The XML side of
  * this contract lives in assetsXmlSerializer (it appends `_VM` to the SubPart id).
+ *
+ * VIEW-MESH COST — the view mesh is not free geometry, it is a CPU workload. On mod load
+ * `MeshReference.Load` DE-INDEXES it into `PositionsCompare` (one `double3` — 24 bytes —
+ * per INDEX, `decomp/KSA/MeshReference.cs:87-95`), and every hover in the vehicle editor
+ * runs `Part.RayCastEgoSubPart` → `Ray.RaycastWatertight`, a plain `for (i += 3)` triangle
+ * loop over that whole array (`decomp/KSA/Part.cs:1854-1887`, `decomp/KSA/Ray.cs:194-213`),
+ * then reads `MeshAttribute.Normal` at the winning vertex. flexo's own primitives are tens
+ * of triangles, but an IMPORTED model can be six figures — so {@link MeshAtlasOptions.viewMeshBudget}
+ * decimates the _VM copy (index buffer only; the vertex arrays, and therefore the NORMAL
+ * the raycast reads, are untouched).
  */
 
 /** Suffix KSA's Core content uses for view (picking) meshes; see file header. */
@@ -84,6 +94,67 @@ function toKsaGeometry(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
   return out
 }
 
+/**
+ * Simplification error budget for a decimated view mesh, as a fraction of the mesh's extent
+ * (meshopt's `target_error` is scale-relative). 5% keeps the picking hull on the silhouette
+ * while letting the simplifier actually REACH the triangle budget — a stricter error makes it
+ * stop early and ship a mesh that still costs the full per-hover raycast. Picking tolerance is
+ * the only thing at stake: the _VM mesh is never rendered.
+ */
+const VIEW_MESH_TARGET_ERROR = 0.05
+
+/**
+ * Decimates a view mesh IN PLACE to at most `budget` triangles, by replacing its index buffer
+ * with a meshopt-simplified one over the SAME vertex arrays — so POSITION / NORMAL / TEXCOORD_0
+ * survive verbatim and the mesh stays indexed (both KSA requirements: `MeshReference.Load`
+ * reads `MeshAttribute.Normal` at the hit vertex, and a primitive with no `indices` draws and
+ * picks nothing — `decomp/RenderCore.Gltf/GltfUtils.cs:484-488`).
+ *
+ * Best-effort by contract: an unexpected attribute layout, a missing wasm module or a
+ * simplifier that can't beat the budget all fall back to the full-resolution copy with a
+ * warning. A slow hover in-game is a nuisance; a failed export is not acceptable.
+ */
+async function decimateViewGeometry(geometry: THREE.BufferGeometry, budget: number): Promise<void> {
+  const index = geometry.getIndex()
+  const position = geometry.getAttribute('position')
+  if (!index || !position) return
+  const target = budget * 3
+  if (index.count <= target) return // already within budget
+  if (position.itemSize !== 3 || 'isInterleavedBufferAttribute' in position) {
+    console.warn('flexo export: view mesh kept full-resolution (unexpected position layout)')
+    return
+  }
+  try {
+    const { MeshoptSimplifier } = await import('three/addons/libs/meshopt_simplifier.module.js')
+    await MeshoptSimplifier.ready
+    const positions =
+      position.array instanceof Float32Array
+        ? position.array
+        : new Float32Array(position.array as ArrayLike<number>)
+    // meshopt accepts 16/32-bit index arrays; normalize so a ubyte/ushort source can't trip it.
+    const indices = new Uint32Array(index.array as ArrayLike<number>)
+    const [simplified] = MeshoptSimplifier.simplify(
+      indices,
+      positions,
+      3,
+      target,
+      VIEW_MESH_TARGET_ERROR,
+    )
+    if (simplified.length === 0 || simplified.length >= indices.length) return // no win
+    // Unused vertices stay in the buffers (meshopt returns indices into the ORIGINAL arrays).
+    // That costs a few bytes in the shipped GLB; what it saves is the per-hover CPU loop and
+    // the double3-per-index PositionsCompare allocation, which is the whole point.
+    geometry.setIndex(
+      new THREE.BufferAttribute(
+        position.count > 65535 ? simplified : new Uint16Array(simplified),
+        1,
+      ),
+    )
+  } catch (err) {
+    console.warn('flexo export: view mesh decimation unavailable — shipping full resolution', err)
+  }
+}
+
 export interface MeshAtlasOptions {
   /**
    * Emit the paired `<id>_VM` picking mesh for every node (default true — the shipped mod
@@ -95,11 +166,17 @@ export interface MeshAtlasOptions {
    * carrying them in the import atlas would double its size for nothing.
    */
   viewMeshes?: boolean
+  /**
+   * Max triangles in an emitted `<id>_VM` view mesh; anything above it is simplified down
+   * (render meshes are never touched). Undefined ⇒ never decimate. See VIEW-MESH COST in the
+   * file header for why this matters in-game; `buildCustomBundle` sets the shipped default.
+   */
+  viewMeshBudget?: number
 }
 
 export async function buildMeshAtlasGlb(
   nodes: MeshAtlasNode[],
-  { viewMeshes = true }: MeshAtlasOptions = {},
+  { viewMeshes = true, viewMeshBudget }: MeshAtlasOptions = {},
 ): Promise<Uint8Array> {
   if (nodes.length === 0) throw new Error('buildMeshAtlasGlb: no nodes to export')
 
@@ -123,6 +200,8 @@ export async function buildMeshAtlasGlb(
     if (viewMeshes) {
       const viewGeometry = toKsaGeometry(node.geometry)
       temporaries.push(viewGeometry)
+      // Heavy (imported) geometry gets a decimated picking hull — see VIEW-MESH COST above.
+      if (viewMeshBudget != null) await decimateViewGeometry(viewGeometry, viewMeshBudget)
       const viewMesh = new THREE.Mesh(viewGeometry, placeholder)
       viewMesh.name = node.name + VIEW_MESH_SUFFIX
       scene.add(viewMesh)

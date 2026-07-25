@@ -9,7 +9,7 @@ import type {
   ScalarChannel,
   TextureChannel,
 } from './types'
-import { isSubPartGameDataEmpty } from './types'
+import { isSubPartGameDataEmpty, meshKind } from './types'
 import { serializeGameData, serializePart } from './partXmlSerializer'
 import {
   serializeAssets,
@@ -28,6 +28,7 @@ import {
   applyFaceUvTransforms,
 } from '../three/primitives'
 import { bakeKittenSubMeshes } from '../three/kittenBake'
+import { getImportedRawGeometry } from '../three/importedMeshCache'
 import { getPrimaryTextureId, glowBitmapFor } from '../state/customAssetStore'
 import { assetKeys, getAsset } from '../state/assetDb'
 import type { KittenTextureExportSettings } from '../state/settingsStore'
@@ -524,11 +525,22 @@ const GLASS_GLOW_INSET = 0.99
  * placement at the original's transform. Returns the augmented part (fed to BOTH serializePart and
  * buildCustomBundle so atlas/subparts/part-tree agree) + the set of subPartIds to inset. No-op
  * (original part + empty set) when there are no glassGlow visors.
+ *
+ * DELIBERATELY KITTEN-ONLY. An IMPORTED mesh may also export as glass (`imported.transparent`),
+ * but it takes the plain single-SubPart glass route: the layered trick needs a second copy of the
+ * geometry inset inside the shell, which for a hand-modelled visor shell is exact and for an
+ * arbitrary imported mesh (open surfaces, non-convex hulls) is a scale-toward-bbox-center guess
+ * that would poke through. An imported glass mesh therefore just doesn't glow — the honest KSA
+ * behaviour (MeshGlassIndirect.frag never samples emissive).
  */
 export function expandGlassGlow(part: EditingPart): { part: EditingPart; insetIds: Set<string> } {
   const placed = new Set(part.placements.map((p) => p.subPartTemplateId))
   const layered = part.customMeshes.filter(
-    (m) => m.kitten?.transparent && m.surface === 'glassGlow' && placed.has(m.subPartId),
+    (m) =>
+      meshKind(m) === 'kitten' &&
+      m.kitten?.transparent &&
+      m.surface === 'glassGlow' &&
+      placed.has(m.subPartId),
   )
   if (layered.length === 0) return { part, insetIds: new Set() }
 
@@ -556,6 +568,22 @@ export function expandGlassGlow(part: EditingPart): { part: EditingPart; insetId
   return { part: { ...part, customMeshes, placements }, insetIds }
 }
 
+/**
+ * Triangle budget for the `<id>_VM` picking meshes in a SHIPPED mod: above this, the view mesh
+ * is decimated (index buffer only — see exportGlb's decimateViewGeometry).
+ *
+ * WHY 2000: KSA's editor hover is a CPU cost, not a GPU one. `Part.RayCastEgoSubPart`
+ * (`decomp/KSA/Part.cs:1854-1887`) runs `Ray.RaycastWatertight` — a plain triangle loop over
+ * `MeshReference.PositionCompare`, which is the view mesh DE-INDEXED into one `double3` (24 B)
+ * per index at load (`decomp/KSA/MeshReference.cs:87-95`) — for every SubPart of every part
+ * under the cursor, every frame the mouse moves. 2 000 triangles is ~144 KB of compare data and
+ * a loop that finishes in microseconds; it is also comfortably above every flexo primitive and
+ * kitten submesh (so nothing hand-authored is ever touched) while capping a 150 k-triangle
+ * imported model at 1.3% of its raw picking cost. Picking accuracy is the only trade, and the
+ * _VM mesh is never rendered.
+ */
+const VIEW_MESH_TRIANGLE_BUDGET = 2000
+
 /** A custom-asset bundle for export: the Assets XML + the binary files it references. */
 export interface CustomBundle {
   /** Desired Assets XML filename, or null when there are no custom assets to emit. */
@@ -574,8 +602,11 @@ export interface CustomBundle {
  * binaries. Returns an empty bundle (animations only) when neither custom SubParts nor
  * variants are present.
  *
- * The .ktx2 bytes come from IndexedDB (encoded at upload time); the GLB is generated
- * fresh from the stored primitive params.
+ * The .ktx2 bytes come from IndexedDB (encoded at upload time); the atlas GLB is generated
+ * fresh, per mesh source — primitives from their stored params, kitten submeshes from the
+ * shared bake, IMPORTED meshes from the raw (untangented, indexed) geometry of their import
+ * batch's stored GLB. Every SubPart, whatever its source, ends up as one node in ONE atlas
+ * with one `<PbrMaterial>` and one decimated `<id>_VM` picking mesh.
  */
 export async function buildCustomBundle(
   part: EditingPart,
@@ -611,8 +642,8 @@ export async function buildCustomBundle(
     return { assetsFile: null, assetsXml: null, binaries }
   }
 
-  // Custom geometry (primitive/kitten meshes) → build the mesh-atlas GLB, its textures, and
-  // the deduped PbrMaterial list. Skipped entirely for an IVA-only part (no atlas needed).
+  // Custom geometry (primitive/kitten/imported meshes) → build the mesh-atlas GLB, its textures,
+  // and the deduped PbrMaterial list. Skipped entirely for an IVA-only part (no atlas needed).
   let meshAtlasPath: string | undefined
   const subParts: AssetsSubPartPlan[] = []
   let materials: AssetsMaterialPlan[] = []
@@ -623,27 +654,64 @@ export async function buildCustomBundle(
     // Using base keeps the filename human-readable; the hash suffix makes it unique.
     const bundleToken = `${base}_${meshes[0].id.replace(/^mesh_/, '')}`
     meshAtlasPath = `Meshes/${bundleToken}_MeshAtlas.glb`
-    const nodes = await Promise.all(
-      meshes.map(async (m) => {
-        if (m.kitten) {
-          // Always bundle the baked geometry (KSA can't skin the source gltf); clone the
-          // shared cache so the post-build dispose() frees the clone, not the cache. A layered
-          // 'glassGlow' glow layer is inset so it sits just inside its glass shell.
-          const subs = await bakeKittenSubMeshes(m.kitten.kind)
-          const geo = subs.find((s) => s.specKey === m.kitten!.specKey)?.geometry
-          let cloned = geo ? geo.clone() : new THREE.BufferGeometry()
-          if (insetIds.has(m.subPartId)) cloned = insetGeometry(cloned, GLASS_GLOW_INSET)
-          return { name: m.subPartId, geometry: cloned }
-        }
-        const geometry = buildPrimitiveGeometry(m.primitive!)
-        applyFaceUvTransforms(geometry, PRIMITIVE_FACE_KEYS[m.primitive!.kind], m.faceTextures)
-        return { name: m.subPartId, geometry }
-      }),
-    )
-    try {
-      binaries.push({ path: meshAtlasPath, data: await buildMeshAtlasGlb(nodes) })
-    } finally {
-      for (const n of nodes) n.geometry.dispose()
+    // One atlas node per placed custom mesh, resolved per geometry source. A source that can't
+    // produce geometry yields null: the SubPart is dropped from BOTH the atlas and the Assets XML
+    // below (a <SubPart> whose <Mesh Id> names nothing would be a dangling reference in-game),
+    // but the rest of the export still ships — never throw half-way through a user's export.
+    const nodes = (
+      await Promise.all(
+        meshes.map(async (m) => {
+          switch (meshKind(m)) {
+            case 'kitten': {
+              // Always bundle the baked geometry (KSA can't skin the source gltf); clone the
+              // shared cache so the post-build dispose() frees the clone, not the cache. A layered
+              // 'glassGlow' glow layer is inset so it sits just inside its glass shell.
+              const subs = await bakeKittenSubMeshes(m.kitten!.kind)
+              const geo = subs.find((s) => s.specKey === m.kitten!.specKey)?.geometry
+              let cloned = geo ? geo.clone() : new THREE.BufferGeometry()
+              if (insetIds.has(m.subPartId)) cloned = insetGeometry(cloned, GLASS_GLOW_INSET)
+              return { name: m.subPartId, geometry: cloned }
+            }
+            case 'imported': {
+              // The RAW (untangented, indexed) geometry — never the editor's MikkTSpace cache,
+              // which is de-indexed and would export as a silent no-draw (see the GEOMETRY block
+              // in exportGlb.ts and getImportedRawGeometry's own comment). Cloned for the same
+              // reason as the kitten bake: the cache is shared and must survive dispose().
+              const src = m.imported!
+              const geo = await getImportedRawGeometry(src.importId, src.meshName)
+              if (!geo) {
+                console.warn(
+                  `flexo export: imported mesh '${src.meshName}' (${src.sourceFile}) has no geometry — SubPart '${m.subPartId}' skipped`,
+                )
+                return null
+              }
+              return { name: m.subPartId, geometry: geo.clone() }
+            }
+            case 'primitive': {
+              const geometry = buildPrimitiveGeometry(m.primitive!)
+              applyFaceUvTransforms(
+                geometry,
+                PRIMITIVE_FACE_KEYS[m.primitive!.kind],
+                m.faceTextures,
+              )
+              return { name: m.subPartId, geometry }
+            }
+          }
+        }),
+      )
+    ).filter((n) => n !== null)
+    const emitted = new Set(nodes.map((n) => n.name))
+    if (nodes.length === 0) {
+      meshAtlasPath = undefined // every mesh failed to resolve — declare no atlas at all
+    } else {
+      try {
+        binaries.push({
+          path: meshAtlasPath,
+          data: await buildMeshAtlasGlb(nodes, { viewMeshBudget: VIEW_MESH_TRIANGLE_BUDGET }),
+        })
+      } finally {
+        for (const n of nodes) n.geometry.dispose()
+      }
     }
 
     const tex = new BundleTextures(bundleToken, binaries)
@@ -755,20 +823,29 @@ export async function buildCustomBundle(
     }
 
     for (const m of meshes) {
+      if (!emitted.has(m.subPartId)) continue // geometry failed to resolve (warned above)
       // Part-ified kitten submesh: full PBR from the KSA .ktx2 (referenced/bundled), or a generated
       // solid tint diffuse (glass) / glow textures (emissive) per the visor surface mode.
-      if (m.kitten) {
+      if (meshKind(m) === 'kitten') {
         subParts.push(
           await planKittenSubPart(m, kittenTex, kittenTexPath, binaries, bundleToken, tex),
         )
         continue
       }
+      // An imported mesh flagged `transparent` (glTF alphaMode BLEND, opt-in at import) renders
+      // through KSA's translucent <PartModelGlass> instead of <PartModel>. Primitives are never
+      // glass — the flag only exists on kitten/imported sources.
+      const glass = m.imported?.transparent === true
       const material = m.materialId ? materialById.get(m.materialId) : undefined
-      // Glowing primitive: composite the glow into the diffuse (color baked in) + emit the
-      // grayscale emissive mask. The base under the glow resolves exactly like the editor:
-      // face texture > material baseColor image > material color > neutral gray. The material's
-      // scalar channels still ship via the ORM solid.
-      const glow = await glowBitmapFor(m)
+      // Glowing primitive/imported mesh: composite the glow into the diffuse (color baked in) +
+      // emit the grayscale emissive mask. The base under the glow resolves exactly like the
+      // editor: face texture > material baseColor image > material color > neutral gray. The
+      // material's scalar channels still ship via the ORM solid.
+      //
+      // Glass never takes this path: MeshGlassIndirect.frag doesn't sample the emissive map at
+      // all, so an <Emissive> on a glass material is dead weight that only muddies material
+      // interning — the same rule planKittenSubPart applies to a 'glass' visor.
+      const glow = glass ? null : await glowBitmapFor(m)
       if (glow) {
         const primaryTexId = getPrimaryTextureId(m)
         const base = await exportBaseImage(
@@ -787,7 +864,7 @@ export async function buildCustomBundle(
           },
           `${m.subPartId}_Material`,
         )
-        subParts.push({ subPartId: m.subPartId, materialId })
+        subParts.push({ subPartId: m.subPartId, materialId, glass })
         continue
       }
       // Diffuse resolution: the primary (first textured) face wins, then the material's
@@ -802,7 +879,7 @@ export async function buildCustomBundle(
             : await tex.baseColorSolid(material.baseColor.color)
       }
       if (!diffusePath) {
-        subParts.push({ subPartId: m.subPartId, materialId: null })
+        subParts.push({ subPartId: m.subPartId, materialId: null, glass })
         continue
       }
       // A mesh rendering its material verbatim (no per-face diffuse override) interns under
@@ -817,7 +894,7 @@ export async function buildCustomBundle(
         },
         preferredId,
       )
-      subParts.push({ subPartId: m.subPartId, materialId })
+      subParts.push({ subPartId: m.subPartId, materialId, glass })
     }
 
     materials = tex.materials

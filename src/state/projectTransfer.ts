@@ -24,6 +24,7 @@ import {
   createDefaultLayer,
   createKittenLayer,
   createSubPartGameData,
+  meshKind,
 } from '../ksa/types'
 import { remapRawConnectorRefs } from '../ksa/partXmlParser'
 import { remapConsumerFeedWiring, remapConsumerFeeds } from '../ksa/idRemap'
@@ -50,8 +51,9 @@ export { PROJECT_EXPORT_FORMAT, PROJECT_EXPORT_VERSION }
  * `instanceId` and GameData couplings reference connectors by id — so the merge
  * carries old→new maps and rewrites every reference through them.
  *
- * Custom assets that carry uploaded binaries (textures, primitive meshes) are NOT
- * exported — the UI blocks export when a project has any (see {@link hasCustomAssets}).
+ * Custom assets that carry binaries (uploaded textures, primitive meshes, imported glTF
+ * models) are NOT exported — the UI blocks export when a project has any (see
+ * {@link hasCustomAssets}).
  * Part-ified KITTEN meshes ARE carried, though: they're pure descriptors referencing
  * built-in game assets (geometry re-bakes from the kitten gltf on load, textures resolve
  * by Content/Core path), so they round-trip as data with no binary bundling.
@@ -110,24 +112,36 @@ export interface MergeResult {
 
 export type ParseResult = { ok: true; env: ProjectExportEnvelope } | { ok: false; error: string }
 
-/** A part-ified kitten submesh — pure data referencing game assets (no uploaded binary). */
-function isKittenMesh(m: CustomMesh): boolean {
-  return m.kitten != null
+/**
+ * True for the ONE mesh kind a data-only payload can carry: a part-ified kitten submesh,
+ * which is pure data referencing game assets (geometry re-bakes from the shipped kitten gltf,
+ * textures resolve by Content/Core path). A primitive mesh needs its generated GLB and an
+ * IMPORTED mesh needs its import batch's GLB — both live in IndexedDB, neither is on the wire.
+ */
+function isDataOnlyMesh(m: CustomMesh): boolean {
+  return meshKind(m) === 'kitten'
 }
 
 /**
- * True when the project has custom assets that JSON export can't carry — uploaded
- * textures or primitive meshes (their binaries live in IndexedDB). Kitten part-meshes
- * DON'T count: they're data-only references to game assets and export fine.
+ * True when the project has custom assets that JSON export can't carry — uploaded textures,
+ * primitive meshes, or IMPORTED glTF models (all binary-backed: their bytes live in IndexedDB,
+ * never in the payload). Kitten part-meshes DON'T count: they're data-only references to game
+ * assets and export fine.
+ *
+ * This is the gate the Export-Project and Share-Link dialogs disable themselves on, and it is
+ * what keeps {@link buildProjectExport}'s kitten-only filter from ever being the only line of
+ * defence: an imported mesh descriptor on the wire would decode into a SubPart pointing at an
+ * `importId` the receiving browser has no geometry for — an invisible, unfixable placement.
  */
 export function hasCustomAssets(part: EditingPart): boolean {
-  return part.customTextures.length > 0 || part.customMeshes.some((m) => !isKittenMesh(m))
+  return part.customTextures.length > 0 || part.customMeshes.some((m) => !isDataOnlyMesh(m))
 }
 
 /**
  * Builds a data-only export envelope. Deep-copies the in-scope fields and stamps
- * provenance. Only kitten part-meshes are carried in `customMeshes` (primitive meshes and
- * `customTextures` are binary-backed and omitted — export is gated off when they exist).
+ * provenance. Only kitten part-meshes are carried in `customMeshes` (primitive meshes,
+ * IMPORTED meshes and `customTextures` are binary-backed and omitted — export is gated off
+ * when they exist, see {@link hasCustomAssets}).
  */
 export function buildProjectExport(part: EditingPart, projectName: string): ProjectExportEnvelope {
   return {
@@ -145,7 +159,7 @@ export function buildProjectExport(part: EditingPart, projectName: string): Proj
       connectors: part.connectors,
       kittens: part.kittens,
       animations: part.animations,
-      customMeshes: part.customMeshes.filter(isKittenMesh),
+      customMeshes: part.customMeshes.filter(isDataOnlyMesh),
       customMaterials: part.customMaterials,
       customReactions: part.customReactions,
     }),
@@ -259,9 +273,11 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
   // Custom (kitten) meshes — descriptors referencing game assets, no binaries. Give each a
   // fresh id + subPartId so repeated additive imports never collide, and remember the
   // old->new subPartId so placements/SubPartGameData below repoint at the new template.
-  // (Primitive/textured meshes never reach here — export is gated off when they exist.)
+  // Primitive/imported/textured meshes never reach here (export is gated off when they exist,
+  // see hasCustomAssets); a hand-edited payload that smuggles one in is dropped rather than
+  // materialized as a SubPart whose geometry this browser doesn't have.
   for (const src of data.customMeshes ?? []) {
-    if (!src.kitten) continue
+    if (!isDataOnlyMesh(src) || !src.kitten) continue
     const subPartId = newKittenSubPartId(src.kitten)
     subPartIdMap.set(src.subPartId, subPartId)
     part.customMeshes.push({

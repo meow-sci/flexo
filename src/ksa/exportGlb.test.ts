@@ -208,3 +208,56 @@ describe('KSA glTF loader requirements', () => {
     expect(geometry.getIndex()).toBeNull()
   })
 })
+
+/**
+ * View-mesh decimation. KSA's editor hover is a CPU triangle loop over the _VM mesh
+ * (`Part.RayCastEgoSubPart` → `Ray.RaycastWatertight`, decomp/KSA/Part.cs:1854-1887), fed by a
+ * de-indexed `double3` copy built at load (decomp/KSA/MeshReference.cs:87-95), and it reads
+ * `MeshAttribute.Normal` at the hit vertex — so the simplified copy must stay INDEXED and keep
+ * its attributes. An imported model is the only geometry big enough for this to matter.
+ */
+describe('view-mesh decimation (viewMeshBudget)', () => {
+  /** The render + _VM primitives of a single-node atlas, by name. */
+  function pairOf(json: ReturnType<typeof parseGlbJson>, name: string) {
+    const byName = new Map((json.meshes ?? []).map((m) => [m.name, m.primitives?.[0]]))
+    return { render: byName.get(name)!, view: byName.get(`${name}_VM`)! }
+  }
+
+  it('ships a smaller, still-indexed _VM for a high-poly node', async () => {
+    // ~8k triangles: comfortably over the budget, small enough to keep the test quick.
+    const geometry = new THREE.SphereGeometry(1, 96, 48)
+    const glb = await buildMeshAtlasGlb([{ name: 'flexo_Heavy', geometry }], {
+      viewMeshBudget: 200,
+    })
+    const json = parseGlbJson(glb)
+    const { render, view } = pairOf(json, 'flexo_Heavy')
+    expect(view).toBeDefined() // the <MeshView> target still exists, still named <id>_VM
+    const renderIndices = json.accessors![render.indices!]!
+    const viewIndices = json.accessors![view.indices!]!
+    expect(typeof view.indices).toBe('number') // still indexed — KSA draws/picks nothing without it
+    expect(viewIndices.count).toBeLessThan(renderIndices.count)
+    expect(viewIndices.count % 3).toBe(0)
+    // The raycast reads NORMAL at the hit vertex, so the attribute set must survive intact.
+    expect(Object.keys(view.attributes).sort()).toEqual(['NORMAL', 'POSITION', 'TEXCOORD_0'])
+    // The RENDER mesh is never touched — decimation is a picking-only trade.
+    expect(renderIndices.count).toBe(geometry.getIndex()!.count)
+  })
+
+  it('leaves a node under the budget (and every render mesh) alone', async () => {
+    const geometry = new THREE.BoxGeometry(1, 1, 1) // 12 triangles
+    const glb = await buildMeshAtlasGlb([{ name: 'flexo_Light', geometry }], {
+      viewMeshBudget: 2000,
+    })
+    const json = parseGlbJson(glb)
+    const { render, view } = pairOf(json, 'flexo_Light')
+    expect(json.accessors![view.indices!]!.count).toBe(json.accessors![render.indices!]!.count)
+  })
+
+  it('is off by default (no budget ⇒ full-resolution view meshes)', async () => {
+    const geometry = new THREE.SphereGeometry(1, 96, 48)
+    const glb = await buildMeshAtlasGlb([{ name: 'flexo_Heavy', geometry }])
+    const json = parseGlbJson(glb)
+    const { render, view } = pairOf(json, 'flexo_Heavy')
+    expect(json.accessors![view.indices!]!.count).toBe(json.accessors![render.indices!]!.count)
+  })
+})

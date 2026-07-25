@@ -12,8 +12,9 @@ in-game pass — see "Pending in-game verification" below).
 A **model imported from Blender** (`.glb` / `.gltf`) rides the same machinery: it becomes
 ordinary `CustomMesh` descriptors — one SubPart per (glTF mesh × material), one placement
 per node that references it — so the catalog, scene, selection, gizmos, layers and undo are
-unchanged. Geometry import is shipped; its materials/textures and mod export are the next
-phases (see [plans/IMPORT_MODELS.md](../plans/IMPORT_MODELS.md); the user-facing
+unchanged. Geometry, materials/textures **and mod export** are shipped; the import dialog
+(preview / options / warnings) and re-import are the remaining phases (see
+[plans/IMPORT_MODELS.md](../plans/IMPORT_MODELS.md); the user-facing
 `docs/importing-models.md` lands with them).
 
 The design rationale and format research live in
@@ -217,6 +218,22 @@ same path as hand-authored ones. Nothing about them is a parallel universe.
   per *placed* custom mesh), pulls each referenced diffuse `.ktx2` from IndexedDB
   (deduped by texture id), synthesizes the shared Normal/ORM textures (see below),
   and returns `{ assetsFile, assetsXml, binaries }`.
+- Geometry is resolved per `meshKind(m)` — primitives rebuild from their params, kitten
+  submeshes clone the shared bake, and **imported meshes clone
+  `getImportedRawGeometry()`**: the untangented, still-indexed copy of the import batch's
+  GLB. Never the editor's `MeshAtlasCache` geometry — MikkTSpace de-indexes it and KSA
+  draws/picks nothing without `indices`. A mesh whose geometry can't be resolved is
+  skipped from BOTH the atlas and the Assets XML (with a warning) rather than shipped as
+  a `<SubPart>` pointing at a `<Mesh Id>` that doesn't exist.
+- **What an imported SubPart ships:** one node in the shared `Meshes/<Name>_MeshAtlas.glb`
+  named `<subPartId>`, a decimated `<subPartId>_VM` picking mesh beside it (see *View
+  meshes* below), one `<PbrMaterial>` built from its `CustomMaterial` — base-colour map or
+  1×1 solid, `<Normal>`, `<AoRoughMetal>`, plus `<Emissive>` + a composited diffuse when it
+  glows — and a `<SubPart>` wiring `<PartModel>`(or `<PartModelGlass>` when
+  `imported.transparent`) → `<Mesh>` + `<Material>` + `<MeshView>`. Imported meshes have no
+  per-face texture grid, so they take the "material verbatim" interning path: **N meshes
+  sharing one `CustomMaterial` ship ONE `<PbrMaterial>`**, which is how a multi-object
+  Blender import stays cheap.
 - `buildModZip` / `writeModToFolder` — both call `buildCustomBundle` and lay the
   binaries out under `Meshes/` + `Textures/`. The FS-Access path is non-destructive
   for XML (suffixes on collision) but **overwrites binaries** deterministically.
@@ -321,6 +338,8 @@ flexo-parts/
   <Name>GameData.xml
   <Name>Assets.xml                  # <MeshAtlas> + <PbrMaterial>(s) + <SubPart>(s, each with a <MeshView>)
   Meshes/<Name>_MeshAtlas.glb       # one geometry GLB; per subpart: render mesh + <id>_VM view mesh
+                                    #   (primitive params, kitten bakes AND imported glTF geometry
+                                    #    all land here; heavy <id>_VM meshes are decimated)
   Textures/<tex>_<id>_Diffuse.ktx2  # one per referenced custom texture (deduped)
   Textures/<Name>_FlatNormal.ktx2   # shared synthetic normal (when any subpart is textured)
   Textures/<Name>_NeutralORM.ktx2   # shared synthetic ORM   (when any subpart is textured)
@@ -364,19 +383,37 @@ a `<MeshView>` element. The raycast then runs a watertight triangle test against
 view mesh's vertices (`MeshReference.PositionCompare`).
 
 So every custom SubPart emits a `<MeshView>` pointing at a `<id>_VM` mesh, and
-`buildMeshAtlasGlb` writes that `_VM` mesh into the atlas (same geometry as the render
-mesh — flexo primitives are low-poly, so a separate simplified hull buys nothing). Every
-built-in Core SubPart ships a distinct `_VM` mesh; this mirrors that exactly. The `_VM`
-node must be a **distinct** geometry instance in the GLB, or `GLTFExporter` dedupes it
-with the render mesh into a single glTF mesh and KSA registers only one name.
+`buildMeshAtlasGlb` writes that `_VM` mesh into the atlas. Every built-in Core SubPart ships
+a distinct `_VM` mesh; this mirrors that exactly. The `_VM` node must be a **distinct**
+geometry instance in the GLB, or `GLTFExporter` dedupes it with the render mesh into a
+single glTF mesh and KSA registers only one name.
+
+**The view mesh is a CPU budget.** `MeshReference.Load` de-indexes it at mod load into
+`PositionCompare` — one `double3` (24 bytes) **per index** — and `RaycastWatertight` is a
+plain triangle loop over that array, run on every hover frame for every SubPart under the
+cursor, finishing with a read of `MeshAttribute.Normal` at the hit vertex. flexo primitives
+and kitten submeshes are tens to hundreds of triangles, but an **imported** model can be six
+figures. So `buildCustomBundle` passes `viewMeshBudget: 2000` and `exportGlb` simplifies any
+over-budget `_VM` with meshopt: the simplifier returns a **reduced index buffer over the same
+vertex arrays**, so POSITION/NORMAL/TEXCOORD_0 ride along untouched, the mesh stays indexed,
+and the render mesh is never modified. Picking precision is the only trade; if the simplifier
+is unavailable the full-resolution copy ships with a `console.warn` (a slow hover beats a
+failed export).
 
 ## Tests
 
 - `src/ktx/encodeKtx2.test.ts` — KTX2 container/header.
 - `src/ksa/exportGlb.test.ts` — guards the mesh-naming regression (asserts both
-  `meshes[i].name` and `nodes[i].name` are set; checks 4-byte GLB alignment).
+  `meshes[i].name` and `nodes[i].name` are set; checks 4-byte GLB alignment), the KSA glTF
+  loader requirements (indices / float32 tight accessors / POSITION min-max / attribute
+  stripping), and `_VM` decimation (a heavy node's view mesh shrinks, stays indexed, keeps
+  its attributes; the render mesh doesn't move).
 - `src/ksa/assetsXmlSerializer.test.ts` — Assets XML shape.
-- `src/ksa/modExport.test.ts` — bundle/zip/folder output.
+- `src/ksa/modExport.test.ts` — bundle/zip/folder output, including imported SubParts
+  (atlas node + complete `<PbrMaterial>` + `<SubPart>`/`<MeshView>`, glow, the
+  `<PartModelGlass>` route, shared-material interning, and a missing-geometry skip).
+- `src/state/projectCodec.test.ts` / `projectTransfer.test.ts` — imported-descriptor
+  round-trip, the v4-payload rejection, and the binary-asset export gate.
 
 ## Emissive (glow) + visor surface
 
@@ -440,10 +477,15 @@ design. Still deliberately out of scope:
   the no-sidecar default target is uncompressed Rgba32, so the sidecar is required
   for the VRAM win.
 - **Four primitives** (box / cylinder / sphere / plane) **+ imported glTF models** — no CSG,
-  no mesh editing in flexo. Imported models now carry their real glTF surfaces (see **Imported
-  materials** above); their **mod export** is the next phase
-  ([plans/IMPORT_MODELS.md](../plans/IMPORT_MODELS.md) Phase 3), as are the import dialog
-  (preview / options / warnings) and re-import.
+  no mesh editing in flexo. Imported models carry their real glTF surfaces (see **Imported
+  materials** above) and **export into the part mod** like any other custom SubPart (see
+  *Export plumbing*). Still to come ([plans/IMPORT_MODELS.md](../plans/IMPORT_MODELS.md)
+  Phases 4–5): the import dialog (preview / options / warnings) and re-import/replace.
+- **Imported models can't be shared as project JSON.** The data-only project export and the
+  share link carry descriptors, not binaries, and an import batch's GLB in IndexedDB is the
+  only copy of its geometry — so `hasCustomAssets()` gates those dialogs off exactly as it
+  does for uploaded textures and primitive meshes. The compact codec (v5) *encodes* the
+  imported descriptor losslessly, ready for a future bundle format.
 - **Generated mesh GLBs not persisted** — regenerated from params each session (fine; cheap).
   Imported model GLBs are the exception (see `assetDb.ts` above).
 - **No per-project namespacing in IndexedDB** — all assets share one store (OK for
@@ -461,3 +503,7 @@ design. Still deliberately out of scope:
   (shared `<PbrMaterial>`).
 - **Normal-map orientation:** an asymmetric bump texture (arrow/dome) — confirm the
   X-flip convention reads correctly in-game.
+- **Imported model mod:** export a two-material Blender `.glb` → the mod loads with no
+  exception, both SubParts render with their textures/normals/glow, **hover + click + the
+  context menu work on each piece** (the decimated `_VM` contract), the part thumbnail
+  renders, and a multi-instance import shows every placement.

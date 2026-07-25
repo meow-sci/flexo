@@ -71,16 +71,16 @@ export function ExportProjectDialog({
         <div className="flex flex-col gap-2 overflow-auto p-3">
           {blocked ? (
             <div className={warningBox}>
-              Export is disabled because this project has uploaded textures or custom (primitive)
-              meshes. Data-only project export doesn’t bundle uploaded asset binaries yet — remove
-              them to export, or use the KSA part-mod export. (Kitten meshes export fine.)
+              Export is disabled because this project has uploaded textures, custom (primitive)
+              meshes, or imported models. Data-only project export doesn’t bundle asset binaries yet
+              — remove them to export, or use the KSA part-mod export. (Kitten meshes export fine.)
             </div>
           ) : (
             <>
               <p className="text-xs text-fg-subtle">
                 Copy or download this JSON, then paste it into another project via Import. It
                 carries meshes, layers, connectors, kittens, kitten meshes, animations, and GameData
-                — but no uploaded textures or primitive meshes.
+                — but no uploaded textures, primitive meshes or imported models.
               </p>
               <textarea readOnly value={json} className={monoTextarea} spellCheck={false} />
               <div className="flex justify-end gap-2">

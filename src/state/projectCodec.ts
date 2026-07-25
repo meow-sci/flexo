@@ -18,6 +18,7 @@ import type {
   EulerXYZ,
   Generator,
   Gimbal,
+  ImportedMeshSource,
   KittenInstance,
   KittenMeshSource,
   Layer,
@@ -48,6 +49,7 @@ import {
   createDefaultMaterial,
   createEmptyGameData,
   createSubPartGameData,
+  meshKind,
 } from '../ksa/types'
 import type { ProjectExportEnvelope } from './projectTransfer'
 
@@ -63,8 +65,10 @@ export const PROJECT_EXPORT_FORMAT = 'flexo-project'
 // connector `cp`(capabilities), tank `id`+`lo`, combustor `fd`(feeds)+`pl`(plumbing),
 // part-level `tk`(tanks)/`cfw`(consumer feed wiring), and the solid-motor trio
 // `sm`/`sn`/`sg` on both game-data levels, plus the solid burn-rate reaction fields.
+// v5: imported glTF meshes (`imp`) — a third CustomMesh source kind, plus the mesh-level
+// `mid` (materialId) an imported mesh needs to keep its surface across a round-trip.
 // Per the no-migration rule, older payloads are REJECTED on import, never converted.
-export const PROJECT_EXPORT_VERSION = 4
+export const PROJECT_EXPORT_VERSION = 5
 
 /**
  * COMPACT PROJECT CODEC — the single wire format for everything that serializes a
@@ -910,7 +914,15 @@ function decCustomMaterial(c: CCustomMaterial): CustomMaterial {
   return m
 }
 
-// ── custom (kitten) meshes ───────────────────────────────────────────────────
+// ── custom (kitten / imported) meshes ────────────────────────────────────────
+//
+// PRIMITIVE meshes are never encoded (they'd need their generated GLB); IMPORTED meshes ARE
+// encoded, but the data-only transfer paths (project JSON + share link) still refuse to CARRY
+// one: `projectTransfer.hasCustomAssets` gates those paths off for any project holding a
+// binary-backed asset, and imported geometry is the most binary of all — the import batch's
+// GLB in IndexedDB is its only copy, and nothing in this JSON could rebuild it. The encoding
+// exists so the descriptor is lossless the day a bundle format ships (and so `meshKind`'s
+// three cases are all handled here rather than silently collapsing to "kitten or nothing").
 
 interface CKittenSource {
   k: KittenMeshSource['kind']
@@ -921,24 +933,59 @@ interface CKittenSource {
   tr?: 1 // transparent
 }
 
+interface CImportedSource {
+  i: string // importId
+  m: string // meshName
+  f: string // sourceFile
+  n: string // sourceNode
+  mt: string // sourceMaterial
+  t: number // triangles
+  v: number // vertices
+  tr?: 1 // transparent (exports via <PartModelGlass>)
+}
+
 interface CCustomMesh {
   id: string
   n: string // name
   sub: string // subPartId
-  kit: CKittenSource
+  kit?: CKittenSource // kitten submesh source (mutually exclusive with `imp`)
+  imp?: CImportedSource // imported glTF mesh source
+  mid?: string // materialId (imported meshes; kitten submeshes carry their own PBR set)
   em?: CustomMesh['emissive'] // emissive (small object — kept verbatim)
   gl?: CustomMesh['glass'] // glass tint
   su?: CustomMesh['surface'] // visor surface mode
 }
 
 function encCustomMesh(m: CustomMesh): CCustomMesh | null {
-  const k = m.kitten
-  if (!k) return null // only kitten meshes are data-only / shareable
-  const kit: CKittenSource = { k: k.kind, s: k.specKey, d: k.diffuse }
-  if (k.normal) kit.n = k.normal
-  if (k.aoRoughMetal) kit.o = k.aoRoughMetal
-  if (k.transparent) kit.tr = 1
-  const o: CCustomMesh = { id: m.id, n: m.name, sub: m.subPartId, kit }
+  const o: CCustomMesh = { id: m.id, n: m.name, sub: m.subPartId }
+  switch (meshKind(m)) {
+    case 'kitten': {
+      const k = m.kitten!
+      const kit: CKittenSource = { k: k.kind, s: k.specKey, d: k.diffuse }
+      if (k.normal) kit.n = k.normal
+      if (k.aoRoughMetal) kit.o = k.aoRoughMetal
+      if (k.transparent) kit.tr = 1
+      o.kit = kit
+      break
+    }
+    case 'imported': {
+      const i = m.imported!
+      o.imp = {
+        i: i.importId,
+        m: i.meshName,
+        f: i.sourceFile,
+        n: i.sourceNode,
+        mt: i.sourceMaterial,
+        t: i.triangles,
+        v: i.vertices,
+      }
+      if (i.transparent) o.imp.tr = 1
+      if (m.materialId) o.mid = m.materialId
+      break
+    }
+    case 'primitive':
+      return null // regenerable only from a GLB flexo doesn't put on the wire
+  }
   if (m.emissive) o.em = m.emissive
   if (m.glass) o.gl = m.glass
   if (m.surface) o.su = m.surface
@@ -946,20 +993,35 @@ function encCustomMesh(m: CustomMesh): CCustomMesh | null {
 }
 
 function decCustomMesh(c: CCustomMesh): CustomMesh {
-  const kit: KittenMeshSource = {
-    kind: (c.kit?.k ?? 'hunter') as KittenMeshSource['kind'],
-    specKey: str(c.kit?.s),
-    diffuse: str(c.kit?.d),
-  }
-  if (c.kit?.n) kit.normal = c.kit.n
-  if (c.kit?.o) kit.aoRoughMetal = c.kit.o
-  if (c.kit?.tr) kit.transparent = true
   const m: CustomMesh = {
     id: str(c.id),
     name: str(c.n),
     subPartId: str(c.sub),
-    kitten: kit,
     faceTextures: {},
+  }
+  if (c.imp) {
+    const imported: ImportedMeshSource = {
+      importId: str(c.imp.i),
+      meshName: str(c.imp.m),
+      sourceFile: str(c.imp.f),
+      sourceNode: str(c.imp.n),
+      sourceMaterial: str(c.imp.mt),
+      triangles: num(c.imp.t),
+      vertices: num(c.imp.v),
+    }
+    if (c.imp.tr) imported.transparent = true
+    m.imported = imported
+    if (c.mid) m.materialId = c.mid
+  } else {
+    const kit: KittenMeshSource = {
+      kind: (c.kit?.k ?? 'hunter') as KittenMeshSource['kind'],
+      specKey: str(c.kit?.s),
+      diffuse: str(c.kit?.d),
+    }
+    if (c.kit?.n) kit.normal = c.kit.n
+    if (c.kit?.o) kit.aoRoughMetal = c.kit.o
+    if (c.kit?.tr) kit.transparent = true
+    m.kitten = kit
   }
   if (c.em) m.emissive = c.em
   if (c.gl) m.glass = c.gl
@@ -1186,7 +1248,7 @@ export interface CompactProject {
   c?: CConnector[] // connectors
   k?: CKitten[] // kittens
   a?: CAnimation[] // animations
-  m?: CCustomMesh[] // customMeshes (kitten only)
+  m?: CCustomMesh[] // customMeshes (kitten + imported; primitives are never encoded)
   mat?: CCustomMaterial[] // customMaterials
   cr?: CReaction[] // customReactions
 }

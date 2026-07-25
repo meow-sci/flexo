@@ -443,13 +443,24 @@ the Rules of React (no manual memo, hooks at top level) per AGENTS.md.
 - **Done when**: the fixture model renders in flexo with base colour, normal, roughness/metal, AO
   and glow visibly correct, and the textures appear in the Custom Assets modal.
 
-### Phase 3 — Export (1–2 days)
-- `modExport.buildCustomBundle`: imported branch (raw geometry, no tangents).
-- `_VM` decimation via `meshopt_simplifier` for heavy meshes.
-- `expandGlassGlow` / glass toggle generalised beyond kitten visors.
-- `projectCodec` v5 + `projectTransfer` gating.
+### Phase 3 — Export (1–2 days) — **DONE**
+- `modExport.buildCustomBundle`: imported branch (raw geometry, no tangents), an exhaustive
+  `meshKind()` switch over the node build, and a missing-geometry SubPart skipped from BOTH the
+  atlas and the Assets XML instead of shipped as a dangling `<Mesh Id>`.
+- `_VM` decimation via `meshopt_simplifier` for heavy meshes —
+  `MeshAtlasOptions.viewMeshBudget` (2 000 tris, set by `buildCustomBundle`); the simplifier
+  returns a reduced INDEX buffer over the same vertex arrays, so NORMAL/UV survive and the mesh
+  stays indexed. Best-effort: any failure ships the full-resolution copy with a warning.
+- Glass toggle honoured for imported meshes (`<PartModelGlass>`, never `<Emissive>`);
+  ~~`expandGlassGlow` generalised beyond kitten visors~~ — **deliberately NOT generalised**: the
+  layered trick insets a copy of the geometry toward its bbox center, which is exact for a visor
+  shell and a guess that pokes through for arbitrary imported geometry. An imported glass mesh
+  simply doesn't glow, which is what KSA's glass shader does anyway.
+- `projectCodec` v5 (`imp` + `mid`, no migration) + `projectTransfer` gating
+  (`hasCustomAssets` ⇒ true for imported meshes; the export filter and the merge both refuse
+  to materialize one) + the export/share dialog copy.
 - **Done when**: `pnpm test` covers the emitted Assets XML/atlas for an imported SubPart, and a
-  real mod folder loads in KSA (see §6).
+  real mod folder loads in KSA (see §6). ← automated side done; **in-game pass still pending**.
 
 ### Phase 4 — The dialog + warnings (2 days)
 - `ImportModelDialog.tsx` with preview, stats, options, warning list; drag-drop onto the viewport;

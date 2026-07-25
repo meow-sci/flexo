@@ -127,6 +127,25 @@ function kittenMesh(subPartId = 'flexo_hunter_suit_abc') {
   }
 }
 
+/** An imported glTF (binary-backed) custom mesh descriptor. */
+function importedMesh() {
+  return {
+    id: 'mesh_imp',
+    name: 'RCS Pod',
+    subPartId: 'flexo_RcsPod_Metal_ab12cd34',
+    imported: {
+      importId: 'imp_1',
+      meshName: 'flexo_RcsPod_Metal_ab12cd34',
+      sourceFile: 'rcs_pod.glb',
+      sourceNode: 'RcsPod',
+      sourceMaterial: 'Metal',
+      triangles: 128,
+      vertices: 66,
+    },
+    faceTextures: {},
+  }
+}
+
 /** A primitive (binary-backed) custom mesh descriptor. */
 function primitiveMesh() {
   return {
@@ -209,6 +228,21 @@ describe('hasCustomAssets', () => {
     const withKitten = createEmptyPart()
     withKitten.customMeshes.push(kittenMesh())
     expect(hasCustomAssets(withKitten)).toBe(false)
+  })
+
+  // An imported model's geometry is a GLB in IndexedDB — nothing in the JSON could rebuild it,
+  // so the data-only paths must stay gated off and must not emit the descriptor either.
+  it('flags imported glTF meshes and keeps them out of the payload', () => {
+    const part = createEmptyPart()
+    part.customMeshes.push(importedMesh())
+    expect(hasCustomAssets(part)).toBe(true)
+    expect(buildProjectExport(part, 'P').data.customMeshes).toEqual([])
+
+    // Even a hand-edited payload that smuggles one in is dropped by the merge.
+    const env = buildProjectExport(createEmptyPart(), 'P')
+    env.data.customMeshes = [importedMesh()]
+    const merged = mergeProjectImport(createEmptyPart(), env)
+    expect(merged.part.customMeshes).toEqual([])
   })
 })
 

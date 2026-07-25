@@ -10,9 +10,10 @@ import {
   createSubPartGameData,
   createTank,
   identityTransform,
+  type CustomMesh,
   type EditingPart,
 } from '../ksa/types'
-import { buildProjectExport } from './projectTransfer'
+import { buildProjectExport, parseProjectObject } from './projectTransfer'
 import {
   PROJECT_EXPORT_FORMAT,
   PROJECT_EXPORT_VERSION,
@@ -421,11 +422,11 @@ describe('projectCodec round-trip', () => {
     expect(c.sg?.[0].sm?.[0]).not.toHaveProperty('g')
   })
 
-  // Per the no-migration rule a v3 envelope is REJECTED, never converted — so the
-  // marker must actually be 4, not just "whatever the constant says".
-  it('stamps wire version 4 (KSA 5018 plumbing topology)', () => {
-    expect(PROJECT_EXPORT_VERSION).toBe(4)
-    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P')).v).toBe(4)
+  // Per the no-migration rule a v4 envelope is REJECTED, never converted — so the
+  // marker must actually be 5, not just "whatever the constant says".
+  it('stamps wire version 5 (imported glTF meshes)', () => {
+    expect(PROJECT_EXPORT_VERSION).toBe(5)
+    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P')).v).toBe(5)
   })
 
   it('rounds high-precision floats to 6 decimals', () => {
@@ -438,6 +439,49 @@ describe('projectCodec round-trip', () => {
     })
     const decoded = decodeProject(encodeProject(buildProjectExport(p, 'P')))
     expect(decoded.data.placements[0].position.x).toBe(3.141593)
+  })
+
+  it('round-trips an imported glTF mesh descriptor (source + material + glass flag)', () => {
+    const p = createEmptyPart()
+    const imported: CustomMesh = {
+      id: 'mesh_imp1',
+      name: 'RCS Pod · Painted Metal',
+      subPartId: 'flexo_RcsPod_PaintedMetal_ab12cd34',
+      imported: {
+        importId: 'imp_9f8e',
+        meshName: 'flexo_RcsPod_PaintedMetal_ab12cd34',
+        sourceFile: 'rcs_pod.glb',
+        sourceNode: 'RcsPod',
+        sourceMaterial: 'PaintedMetal',
+        triangles: 4212,
+        vertices: 2130,
+        transparent: true,
+      },
+      materialId: 'mat_paint',
+      faceTextures: {},
+      emissive: { shape: 'painted', color: { r: 255, g: 120, b: 0 }, strength: 0.8 },
+    }
+    p.customMeshes.push(imported)
+    // buildProjectExport deliberately filters imported meshes out (binary-backed, gated by
+    // hasCustomAssets) — the CODEC still has to be lossless, so feed the envelope directly.
+    const env = buildProjectExport(p, 'P')
+    env.data.customMeshes = [imported]
+    const decoded = decodeProject(encodeProject(env))
+    expect(decoded.data.customMeshes).toEqual([imported])
+    // …and it is encoded under the compact `imp` key, not as a degenerate kitten mesh.
+    const c = encodeProject(env)
+    expect(c.m?.[0]).toMatchObject({ imp: { i: 'imp_9f8e', f: 'rcs_pod.glb', tr: 1 } })
+    expect(c.m?.[0]).not.toHaveProperty('kit')
+  })
+
+  // No migration, ever: a payload stamped with the previous version is rejected outright
+  // rather than half-decoded (v4 has no `imp`/`mid` keys and predates them by design).
+  it('rejects a v4 payload instead of converting it', () => {
+    const v5 = encodeProject(buildProjectExport(createEmptyPart(), 'P'))
+    expect(parseProjectObject(v5).ok).toBe(true)
+    const v4 = parseProjectObject({ ...v5, v: 4 })
+    expect(v4.ok).toBe(false)
+    expect(v4.ok === false && v4.error).toContain('Unsupported project version')
   })
 
   it('recognizes its own format marker', () => {

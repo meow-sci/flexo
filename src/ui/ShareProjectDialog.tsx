@@ -10,7 +10,7 @@ import { createShareLink } from '../state/projectShareLink'
  * "Share Project" dialog — generates a single, stateless deep link that encodes the
  * ENTIRE project (compact JSON → Zstd → URL-safe Base64; see projectShareLink.ts).
  * Anyone who opens the link gets the project as a new local project — no server,
- * no account. Disabled when the project has uploaded textures / primitive meshes
+ * no account. Disabled when the project has uploaded textures / primitive meshes / imported models
  * (their binaries can't ride in a URL), mirroring the JSON export gate.
  */
 export function ShareProjectDialog({
@@ -76,9 +76,9 @@ export function ShareProjectDialog({
         <div className="flex flex-col gap-3 overflow-auto p-3">
           {blocked ? (
             <div className={warningBox}>
-              Sharing is disabled because this project has uploaded textures or custom (primitive)
-              meshes — their binaries can’t be carried in a link. Remove them to share, or use the
-              KSA part-mod export. (Kitten meshes share fine.)
+              Sharing is disabled because this project has uploaded textures, custom (primitive)
+              meshes, or imported models — their binaries can’t be carried in a link. Remove them to
+              share, or use the KSA part-mod export. (Kitten meshes share fine.)
             </div>
           ) : (
             <>
@@ -86,7 +86,8 @@ export function ShareProjectDialog({
                 Generate a self-contained link to this project. Anyone who opens it gets a copy as a
                 new project — no server, nothing saved online. The whole project (meshes, layers,
                 connectors, kittens, kitten meshes, animations, and GameData) is compressed into the
-                link itself; uploaded textures and primitive meshes are not included.
+                link itself; uploaded textures, primitive meshes and imported models are not
+                included.
               </p>
 
               {link == null ? (

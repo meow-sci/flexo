@@ -49,6 +49,28 @@ vi.mock('../three/kittenBake', () => ({
   }),
   buildKittenMaterial: vi.fn(async () => ({})),
 }))
+
+// Imported geometry normally comes out of an IndexedDB GLB through GLTFLoader (no fetch, no
+// indexedDB in happy-dom). Stand in with a one-triangle indexed mesh carrying the exact
+// attribute set KSA imports; a mesh name containing 'missing' models a lost import blob.
+vi.mock('../three/importedMeshCache', () => ({
+  getImportedRawGeometry: vi.fn(async (_importId: string, meshName: string) => {
+    if (meshName.includes('missing')) return null
+    const THREE = await import('three')
+    const g = new THREE.BufferGeometry()
+    g.setAttribute(
+      'position',
+      new THREE.BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3),
+    )
+    g.setAttribute(
+      'normal',
+      new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]), 3),
+    )
+    g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 0, 1]), 2))
+    g.setIndex(new THREE.BufferAttribute(new Uint16Array([0, 1, 2]), 1))
+    return g
+  }),
+}))
 import {
   buildCustomBundle,
   buildExportVariantMap,
@@ -755,5 +777,153 @@ describe('visor glass tint + glow export', () => {
     const { part: same, insetIds } = expandGlassGlow(part)
     expect(same).toBe(part)
     expect(insetIds.size).toBe(0)
+  })
+})
+
+// ── imported (glTF) SubParts ──────────────────────────────────────────────────
+
+/** Mesh names declared inside a generated mesh-atlas GLB (the JSON chunk's `meshes[].name`). */
+function atlasMeshNames(glb: Uint8Array): string[] {
+  const dv = new DataView(glb.buffer, glb.byteOffset, glb.byteLength)
+  const jsonLen = dv.getUint32(12, true)
+  const json = JSON.parse(new TextDecoder().decode(glb.subarray(20, 20 + jsonLen))) as {
+    meshes?: { name?: string }[]
+  }
+  return (json.meshes ?? []).map((m) => m.name ?? '').sort()
+}
+
+/**
+ * A part holding imported SubParts. Every imported mesh gets its surface from a
+ * {@link CustomMaterial} (they have no per-face texture grid), which is exactly the "material
+ * verbatim" export path primitives already use — the interning it enables is asserted below.
+ */
+function partWithImportedMeshes(overrides: Partial<CustomMesh>[] = [{}]): EditingPart {
+  const part = createEmptyPart()
+  part.partId = 'PodMod'
+  part.customMaterials.push({
+    id: 'mat_paint',
+    name: 'Painted Metal',
+    baseColor: { kind: 'color', color: { r: 40, g: 80, b: 200 } },
+    metalness: { kind: 'value', value: 0.9 },
+    roughness: { kind: 'value', value: 0.35 },
+  })
+  overrides.forEach((o, i) => {
+    const subPartId = `flexo_RcsPod_Part${i}_ab12cd`
+    part.customMeshes.push({
+      id: `mesh_imp${i}`,
+      name: `RCS Pod ${i}`,
+      subPartId,
+      imported: {
+        importId: 'imp_9f8e',
+        meshName: subPartId,
+        sourceFile: 'rcs_pod.glb',
+        sourceNode: `RcsPod${i}`,
+        sourceMaterial: 'PaintedMetal',
+        triangles: 1,
+        vertices: 3,
+      },
+      materialId: 'mat_paint',
+      faceTextures: {},
+      ...o,
+    })
+    part.placements.push({
+      instanceId: `pod_${i}`,
+      subPartTemplateId: subPartId,
+      ...identityTransform(),
+      layerId: 'default',
+    })
+  })
+  return part
+}
+
+describe('buildCustomBundle — imported glTF SubParts', () => {
+  it('ships the geometry in the atlas and a complete <PbrMaterial> + <SubPart> + <MeshView>', async () => {
+    const bundle = await buildCustomBundle(partWithImportedMeshes(), 'PodMod')
+
+    // Geometry: the imported mesh is a node in the shared atlas, paired with its _VM view mesh.
+    const atlas = bundle.binaries.find((b) => b.path.endsWith('_MeshAtlas.glb'))!
+    expect(atlas).toBeDefined()
+    expect(atlasMeshNames(atlas.data)).toEqual([
+      'flexo_RcsPod_Part0_ab12cd',
+      'flexo_RcsPod_Part0_ab12cd_VM',
+    ])
+
+    const xml = bundle.assetsXml!
+    // The material carries all three channels KSA dereferences with no null check.
+    expect(xml).toContain('<PbrMaterial Id="flexo_PaintedMetal_paint_Material"')
+    expect(xml).toContain('<Diffuse Path="Textures/PodMod_imp0_BaseColor_2850c8.ktx2"')
+    expect(xml).toContain('<Normal Path="Textures/PodMod_imp0_FlatNormal.ktx2"')
+    expect(xml).toContain('<AoRoughMetal Path="Textures/PodMod_imp0_ORM_ff59e6.ktx2"')
+    expect(xml).not.toContain('<Emissive')
+    // Opaque render path + the picking wiring.
+    const sub = xml.slice(xml.indexOf('<SubPart Id="flexo_RcsPod_Part0_ab12cd"'))
+    expect(sub).toContain('<PartModel Id="flexo_RcsPod_Part0_ab12cd_Model"')
+    expect(sub).toContain('<Mesh Id="flexo_RcsPod_Part0_ab12cd"')
+    expect(sub).toContain('<Material Id="flexo_PaintedMetal_paint_Material"')
+    expect(sub).toContain('<MeshView>')
+    expect(sub).toContain('<Mesh Id="flexo_RcsPod_Part0_ab12cd_VM"')
+  })
+
+  it('interns ONE <PbrMaterial> for two imported meshes sharing a CustomMaterial', async () => {
+    const bundle = await buildCustomBundle(partWithImportedMeshes([{}, {}]), 'PodMod')
+    const xml = bundle.assetsXml!
+    expect(xml.match(/<PbrMaterial /g)).toHaveLength(1)
+    expect(xml.match(/<Material Id="flexo_PaintedMetal_paint_Material"/g)).toHaveLength(2)
+    // Both meshes are in the atlas, each with its own view mesh.
+    const atlas = bundle.binaries.find((b) => b.path.endsWith('_MeshAtlas.glb'))!
+    expect(atlasMeshNames(atlas.data)).toHaveLength(4)
+  })
+
+  it('a glowing imported mesh emits <Emissive> + a composited diffuse', async () => {
+    const part = partWithImportedMeshes([
+      { emissive: { shape: 'whole', color: { r: 255, g: 120, b: 0 }, strength: 0.75 } },
+    ])
+    const bundle = await buildCustomBundle(part, 'PodMod')
+    const xml = bundle.assetsXml!
+    // A glowing mesh gets its own per-mesh material (the diffuse has the glow baked in).
+    expect(xml).toContain('<PbrMaterial Id="flexo_RcsPod_Part0_ab12cd_Material"')
+    expect(xml).toContain('_flexo_RcsPod_Part0_ab12cd_Emissive.ktx2"')
+    expect(xml).toContain('_flexo_RcsPod_Part0_ab12cd_Diffuse.ktx2"')
+    const paths = bundle.binaries.map((b) => b.path)
+    expect(paths.some((p) => p.endsWith('_flexo_RcsPod_Part0_ab12cd_Diffuse.ktx2'))).toBe(true)
+    expect(paths.some((p) => p.endsWith('_flexo_RcsPod_Part0_ab12cd_Emissive.ktx2'))).toBe(true)
+    // The material's uniform scalars still ship in the ORM solid.
+    expect(xml).toContain('_ORM_ff59e6.ktx2')
+  })
+
+  it('a transparent imported mesh exports through <PartModelGlass> and never <Emissive>', async () => {
+    // KSA's glass shader (MeshGlassIndirect.frag) doesn't sample the emissive map at all, so a
+    // glow on a glass SubPart must not reach the material — glass simply can't glow.
+    const part = partWithImportedMeshes([
+      { emissive: { shape: 'whole', color: { r: 0, g: 255, b: 255 }, strength: 0.6 } },
+    ])
+    part.customMeshes[0].imported!.transparent = true
+    const bundle = await buildCustomBundle(part, 'PodMod')
+    const xml = bundle.assetsXml!
+    expect(xml).toContain('<PartModelGlass Id="flexo_RcsPod_Part0_ab12cd_Model"')
+    expect(xml).not.toContain('<PartModel ')
+    expect(xml).not.toContain('<Emissive')
+    expect(bundle.binaries.some((b) => b.path.endsWith('_Emissive.ktx2'))).toBe(false)
+    // Still fully declared + pickable.
+    expect(xml).toContain('<Material Id="flexo_PaintedMetal_paint_Material"')
+    expect(xml).toContain('<Mesh Id="flexo_RcsPod_Part0_ab12cd_VM"')
+  })
+
+  it('skips an imported SubPart whose geometry is gone, without failing the export', async () => {
+    const part = partWithImportedMeshes([{}, {}])
+    part.customMeshes[1].imported!.meshName = 'flexo_missing_mesh'
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const bundle = await buildCustomBundle(part, 'PodMod')
+    warn.mockRestore()
+    const xml = bundle.assetsXml!
+    // The survivor is fully exported; the dead one appears nowhere (a <SubPart> pointing at a
+    // <Mesh Id> that isn't in the atlas is a dangling reference in-game).
+    expect(xml).toContain('<SubPart Id="flexo_RcsPod_Part0_ab12cd"')
+    expect(xml).not.toContain('flexo_RcsPod_Part1_ab12cd')
+    const atlas = bundle.binaries.find((b) => b.path.endsWith('_MeshAtlas.glb'))!
+    expect(atlasMeshNames(atlas.data)).toEqual([
+      'flexo_RcsPod_Part0_ab12cd',
+      'flexo_RcsPod_Part0_ab12cd_VM',
+    ])
   })
 })

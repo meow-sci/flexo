@@ -63,6 +63,25 @@ Resolution rules per file:
 - Caches the resulting geometry per `atlasUrl#node`. **Shared across instances —
   never disposed per-instance.**
 
+## Where SubPart geometry can come from
+
+The Core catalog above is only one source. `$customCatalog` (see
+[custom-assets.md](./custom-assets.md)) publishes **synthetic `CatalogSubPart` entries** for
+user-authored SubParts, which flow through this exact same `atlasUrl` + `meshNodeName`
+resolution — the only difference is that their URLs are `blob:` instead of `/ksa/`:
+
+| Source           | `atlasUrl`                                | Geometry                                                |
+| ---------------- | ----------------------------------------- | ------------------------------------------------------- |
+| Core SubPart     | `/ksa/Meshes/*.glb`                       | `getSubPartGeometry(atlasUrl, meshNodeName)`            |
+| primitive mesh   | the shared rebuilt atlas blob             | `buildPrimitiveGeometry` + baked face UVs               |
+| kitten submesh   | the shared rebuilt atlas blob             | CPU bind-pose bake (`kittenBake`)                       |
+| **imported model** | **that import batch's own GLB blob**    | `importedMeshCache` → `getSubPartGeometry` (same cache) |
+
+An **import batch's normalized GLB is itself a mesh atlas** — one named mesh per imported
+SubPart, exactly the layout above — so it is its own `atlasUrl` and its meshes resolve by
+name (`imported.meshName`) through the same `MeshAtlasCache`. See
+[importing-models.md](./importing-models.md).
+
 ## Where the asset files come from
 
 `/ksa/...` is served by the `ksaAssets()` Vite plugin in **dev only**, mapping

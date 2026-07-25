@@ -1,9 +1,20 @@
 # Import Models (Blender → flexo → KSA) — Analysis & Implementation Plan
 
-> **STATUS: PROPOSED (2026-07-24).** Nothing implemented yet. This doc is the research +
-> design + phased work breakdown for letting a user drop a model authored in Blender (or any
-> DCC) into flexo, have it become real KSA SubParts with real KSA textures, and export it as a
-> part mod that loads and renders in-game.
+> **STATUS: IMPLEMENTED (2026-07-25).** Phases 0–5 landed across commits `6a5de93`,
+> `a4f2765`, `251ddcd`, `61eba47`, `f23a08d`, `ac6f7ae`, `6f448ed`, `f0342d8`. **Phase 6 is
+> deferred** (UASTC/BC7 KTX2 + `.toml` sidecar, shipping the imported GLB verbatim as a second
+> `<MeshAtlas>`, glTF animation import, vertex-colour bake, OBJ/STL, LODs).
+> **In-game verification is still PENDING** — nothing here has been loaded into KSA; the §6
+> manual checklist is the bar.
+>
+> This doc remains the research + design + evidence record (the game facts in §2 carry
+> `decomp/…:line` citations for the next `upgrade-ksa` pass). The **user/maintenance
+> reference for the shipped feature is [docs/importing-models.md](../docs/importing-models.md)**;
+> the game contract it depends on is
+> [scope/custom-assets-and-mod-export.md](../scope/custom-assets-and-mod-export.md) #10–#11,
+> #13–#17. Where the implementation deviated from this plan, the phase notes in §5 say so
+> (the emissive `'map'` shape was superseded by `'painted'`; `expandGlassGlow` was
+> deliberately NOT generalised; "Remove import" landed in Phase 4).
 
 **Goal (user's words, translated):** import a model exported from Blender *with its textures*,
 have it land in flexo aligned to KSA's Part/SubPart paradigm, and use the **full** set of
@@ -394,7 +405,7 @@ Three states in one modal, no wizard chrome:
 Each phase ends green: `pnpm typecheck && pnpm test && pnpm lint && pnpm fmt:check`, and follows
 the Rules of React (no manual memo, hooks at top level) per AGENTS.md.
 
-### Phase 0 — Spike + guard rails (½ day)
+### Phase 0 — Spike + guard rails (½ day) — **DONE**
 - `src/ksa/exportGlb.test.ts`: add assertions that every emitted primitive **has `indices`** and
   that POSITION/NORMAL/TEXCOORD_0 accessors are `componentType 5126` with no `byteStride`
   mismatch — the fact-4/fact-5 trap, guarded *before* any importer exists.
@@ -403,7 +414,7 @@ the Rules of React (no manual memo, hooks at top level) per AGENTS.md.
 - Fixture: commit a tiny (<100 KB) two-material, textured `.glb` under `src/ksa/__fixtures__/`
   (authored by us, so no licensing question) for all later tests.
 
-### Phase 1 — Geometry-only import (2–3 days)
+### Phase 1 — Geometry-only import (2–3 days) — **DONE**
 - `src/three/loadModelFile.ts` — File(s) → `GLTF`, with DRACO/meshopt decoders (copy
   `three/examples/jsm/libs/draco/gltf/*` into `public/draco/` and wire the path like
   `public/basis/`; document it in `docs/asset-pipeline.md`), multi-file URL resolution, and
@@ -571,9 +582,11 @@ automatic UV unwrapping, mesh editing inside flexo, and FBX/USD/OBJ import.
 
 ---
 
-## 9. Documentation + scope obligations (mandatory, per AGENTS.md)
+## 9. Documentation + scope obligations (mandatory, per AGENTS.md) — **DONE**
 
-Landing this feature **must** include, in the same change:
+Landing this feature **must** include, in the same change (every item below has landed; the
+scope contract items are #13–#17, alongside the pre-existing #10–#11 that the importer now
+also depends on):
 
 - **`scope/custom-assets-and-mod-export.md`** — extend "The contract" with the new game facts
   proven in §2 that flexo now depends on: node transforms ignored (fact 1), primitive-0-only

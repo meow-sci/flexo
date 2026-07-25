@@ -13,16 +13,18 @@ A **model imported from Blender** (`.glb` / `.gltf`) rides the same machinery: i
 ordinary `CustomMesh` descriptors — one SubPart per (glTF mesh × material), one placement
 per node that references it — so the catalog, scene, selection, gizmos, layers and undo are
 unchanged. Geometry, materials/textures, mod export, the import dialog (preview / options /
-warnings) and **re-import in place** are all shipped (see
-[plans/IMPORT_MODELS.md](../plans/IMPORT_MODELS.md); the user-facing
-`docs/importing-models.md` is still to come).
+warnings) and **re-import in place** are all shipped. **The user-facing reference for that
+feature is [importing-models.md](importing-models.md)** (Blender recipe, the glTF→KSA
+mapping, the warning catalog, the limits); this doc covers only the shared machinery it
+rides on. Design + evidence: [plans/IMPORT_MODELS.md](../plans/IMPORT_MODELS.md).
 
 The design rationale and format research live in
 [plans/done/FLEXO_CUSTOM_ASSETS.md](../plans/done/FLEXO_CUSTOM_ASSETS.md). This doc is the
 maintenance reference for the shipped code: what each module does, the decisions
 baked into the on-disk formats, and the deliberate v1 shortcomings.
 
-Related: [texturing.md](texturing.md) (how KTX2 loads/renders),
+Related: [importing-models.md](importing-models.md) (importing a Blender model as SubParts),
+[texturing.md](texturing.md) (how KTX2 loads/renders),
 [subpart-catalog.md](subpart-catalog.md) (how SubParts resolve geometry/textures),
 [xml-io.md](xml-io.md) (XML serialize patterns), [projects.md](projects.md) +
 [state-persistence.md](state-persistence.md) (persistence),
@@ -612,11 +614,11 @@ design. Still deliberately out of scope:
   for the VRAM win.
 - **Four primitives** (box / cylinder / sphere / plane) **+ imported glTF models** — no CSG,
   no mesh editing in flexo. Imported models carry their real glTF surfaces (see **Imported
-  materials** above) and **export into the part mod** like any other custom SubPart (see
-  *Export plumbing*). Still to come ([plans/IMPORT_MODELS.md](../plans/IMPORT_MODELS.md)
-  Phase 5): **re-import / replace** — picking a new file for an existing batch and matching
-  SubParts by `sourceNode + sourceMaterial` so their `subPartId`s (and therefore placements,
-  GameData, animations and connectors) survive a Blender iteration.
+  materials** above), **export into the part mod** like any other custom SubPart (see *Export
+  plumbing*), and can be **re-imported in place** after a Blender iteration (see *Replacing an
+  import*). Their own limits — no alpha cutout, single-sided only, no morph targets, no glTF
+  animation import, no vertex colours, no KTX2 source images, no LODs — are catalogued in
+  [importing-models.md](importing-models.md#deliberate-limitations).
 - **Imported models can't be shared as project JSON.** The data-only project export and the
   share link carry descriptors, not binaries, and an import batch's GLB in IndexedDB is the
   only copy of its geometry — so `hasCustomAssets()` gates those dialogs off exactly as it

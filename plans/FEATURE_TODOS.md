@@ -122,6 +122,17 @@
 - ✅ part preview on mobile sucks now.  autofocus on search hides half the screen and a single tap is adding the part and dismissing the window
 - ✅ about screen doesnt overflow and scroll on mobile anymore
 - ✅ global reset should NOT delete the mod folder grant from IndexedDB
+- ✅ import a model exported from Blender (with its textures) as real KSA SubParts
+    - drop a `.glb` (or `.gltf` + sidecars) on the viewport / Add ▸ Import model…
+    - one SubPart per (glTF mesh × material), one placement per node that references it
+    - the FULL KSA texture slot set, not just a diffuse: base color, packed AO/rough/metal,
+      normal, emissive (glTF factors baked into pixels — KSA's PbrMaterial has no scalars)
+    - review dialog with preview, measured bounding box, in-game VRAM estimate and warnings
+    - replace/re-import in place after a Blender iteration (SubPart ids, placements,
+      GameData, animations and connectors survive)
+    - plan: `plans/IMPORT_MODELS.md` · docs: `docs/importing-models.md`
+      (Phase 6 — UASTC textures, verbatim atlas, glTF animation import — deferred;
+      in-game verification still pending)
 
 - can we import the built-in animations for e.g. solar panel?  does it map cleanly to flexos representation of an animation system? the built-in solar panel Part in question has Id "CoreElectricalA_Prefab_SolarPanelB"
 - hotkeys for move/rotate/scale (make sure works in animation mode too)

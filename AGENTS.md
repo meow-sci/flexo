@@ -43,6 +43,7 @@ Feature docs live in `docs/`. Read the relevant one before working on an area, a
 - [docs/texturing.md](docs/texturing.md) - KTX2 (BC7/BC5/BC4) loading, PBR material mapping, normal-map shader patch, IBL/tonemapping
 - [docs/asset-pipeline.md](docs/asset-pipeline.md) - `/ksa/` dev serving AND what must be done to bundle models/textures into `pnpm build`
 - [docs/custom-assets.md](docs/custom-assets.md) - user-authored textures (image→KTX2) + primitive meshes (→geometry GLB), exported as a KSA part mod; the on-disk format decisions and v1 shortcomings
+- [docs/importing-models.md](docs/importing-models.md) - importing a Blender/DCC `.glb`/`.gltf` as real KSA SubParts: the Blender recipe, the glTF→SubPart/placement/material mapping, the warning catalog, storage + export, and the deliberate limits
 
 # project constitution
 
@@ -285,6 +286,39 @@ Key modules:
   when `$customCatalog` changes).
 - `src/state/assetDb.ts` — IndexedDB blob store (binaries are too big for the
   localStorage `ProjectSnapshot`; only lightweight descriptors persist there).
+
+### Imported models (glTF)
+
+A user can drop a `.glb` (or `.gltf` + sidecars) onto the 3D viewport (or **Add → Import
+model…**) and get real KSA SubParts with their real glTF surfaces, exported into the part
+mod like any other custom SubPart. **Primary doc:
+[docs/importing-models.md](docs/importing-models.md)**; game contract in
+[scope/custom-assets-and-mod-export.md](scope/custom-assets-and-mod-export.md) (#13–#17);
+design + evidence in `plans/IMPORT_MODELS.md`. **Not yet verified in-game.**
+
+Three non-obvious KSA constraints shape the whole design:
+
+- **glTF node transforms are IGNORED** — the atlas loader iterates `GltfJson.Meshes[]` and
+  never walks the node graph, so a node's world matrix must become baked geometry or a
+  flexo **placement**; a mirrored transform is always baked (a negative placement scale
+  would reverse winding and back-face-cull the piece invisible).
+- **One `<PartModel>` = one `<Mesh>` + one `<Material>`, and only glTF primitive 0 is
+  drawn** — so one SubPart = one mesh = one material, and a multi-material object MUST
+  split at import. Every referencing node becomes one more placement (free instancing).
+- **Indices are required and accessors must be float32 + tightly packed** (POSITION /
+  NORMAL / TEXCOORD_0 only). Hence the two geometry accessors: the editor's tangented
+  cache (MikkTSpace **de-indexes**) is never what gets exported.
+
+Plus: `<PbrMaterial>` has five texture slots and **zero scalars**, so every glTF factor
+(baseColor/metallic/roughness/occlusion/emissive) is baked into pixels at import.
+
+Key modules: `src/three/loadModelFile.ts` (File(s) → glTF scene + the `ModelSource` façade
+over `GLTFParser`), `src/ksa/importPlan.ts` (grouping + the warning catalog),
+`src/ksa/importMaterials.ts` (glTF → the five slots), `src/ksa/importNormalize.ts`
+(KSA-legal geometry + the batch atlas GLB), `src/ksa/importEstimates.ts` (VRAM/mod-size +
+warning severities), `src/three/importedMeshCache.ts` (`importId → blob:`; editor vs raw
+export geometry), `src/ui/ImportModelDialog.tsx`, and
+`customAssetStore.importModelAsMeshes` / `replaceImport` / `removeImport`.
 
 ### Current scope
 

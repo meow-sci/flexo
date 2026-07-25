@@ -51,6 +51,13 @@ export interface ImportOptions {
   doubleSided: boolean
   /** Prefixed onto every created SubPart's display name. */
   namePrefix: string
+  /**
+   * Collapse every group + instance into ONE SubPart with one placement (one draw, one
+   * `<PartModel>`). Honoured by {@link normalizeImport} only when the whole model uses a
+   * SINGLE material — a merge across materials would violate the one-material-per-SubPart
+   * game limit, so the dialog offers the switch only then (see {@link canMerge}).
+   */
+  merge: boolean
 }
 
 export const DEFAULT_IMPORT_OPTIONS: ImportOptions = {
@@ -60,6 +67,7 @@ export const DEFAULT_IMPORT_OPTIONS: ImportOptions = {
   bakeScale: true,
   doubleSided: false,
   namePrefix: '',
+  merge: false,
 }
 
 // ── plan shape ───────────────────────────────────────────────────────────────
@@ -138,6 +146,8 @@ export type ImportWarningCode =
   | 'textureUv1'
   /** A source image flexo could not decode to pixels (so its factors can't be baked in). */
   | 'imageDecode'
+  /** "Merge into one SubPart" was asked for but the pieces couldn't be combined. */
+  | 'mergeFailed'
 
 /** One thing about the file that KSA can't represent, in the user's language. */
 export interface ImportWarning {
@@ -164,6 +174,34 @@ export interface ImportPlan {
   }
   /** Metres, post scale/up-axis correction, over every instance. Zeroed when there are no meshes. */
   bounds: { min: THREE.Vector3; max: THREE.Vector3; size: THREE.Vector3 }
+}
+
+/**
+ * Whether "merge into one SubPart" may be offered: a KSA `<PartModel>` binds exactly ONE
+ * material (decomp/KSA/PartModel.cs:400-418), so merging across materials is illegal, not
+ * merely undesirable. A model that is already one SubPart with one placement has nothing to
+ * merge, so the switch stays hidden there too.
+ */
+export function canMerge(plan: ImportPlan): boolean {
+  return plan.totals.materials === 1 && (plan.totals.subParts > 1 || plan.totals.placements > 1)
+}
+
+/**
+ * The totals the user will actually get, i.e. {@link ImportPlan.totals} after an effective
+ * merge collapses every group + instance into one SubPart with one placement. Split out of
+ * the dialog so the "what am I about to create" numbers are testable on their own.
+ */
+export function plannedTotals(plan: ImportPlan, merge: boolean): ImportPlan['totals'] {
+  if (!merge || !canMerge(plan)) return plan.totals
+  // Merging BAKES every instance, so instanced geometry is duplicated in the merged mesh —
+  // the triangle/vertex counts grow to the drawn totals rather than the unique ones.
+  return {
+    subParts: 1,
+    placements: 1,
+    triangles: plan.groups.reduce((n, g) => n + g.triangles * g.instances.length, 0),
+    vertices: plan.groups.reduce((n, g) => n + g.vertices * g.instances.length, 0),
+    materials: plan.totals.materials,
+  }
 }
 
 // ── analysis ─────────────────────────────────────────────────────────────────

@@ -3,7 +3,13 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import { transformFromMatrix } from '../three/coords'
 import { randomId } from '../state/ids'
 import { buildMeshAtlasGlb } from './exportGlb'
-import type { ImportGroup, ImportOptions, ImportPlan, ImportWarning } from './importPlan'
+import {
+  canMerge,
+  type ImportGroup,
+  type ImportOptions,
+  type ImportPlan,
+  type ImportWarning,
+} from './importPlan'
 import type { Transform } from './types'
 
 /**
@@ -178,6 +184,69 @@ function normalizeGeometry(group: ImportGroup, opts: ImportOptions, bake: THREE.
   return geometry
 }
 
+/** A file name without its extension — the merged SubPart's default display name. */
+function baseName(fileName: string): string {
+  return fileName.replace(/\.[^.]+$/, '') || 'Model'
+}
+
+/**
+ * "Merge into one SubPart": every group × instance baked into ONE geometry with a single
+ * identity placement — one draw, one `<PartModel>`, one `<MeshView>`. Legal only for a
+ * single-material model ({@link canMerge}), because a `<PartModel>` binds exactly one
+ * material.
+ *
+ * Each piece goes through the SAME {@link normalizeGeometry} every unmerged mesh does, with
+ * the instance's FULL world matrix as the bake — so indices, attribute stripping, mirror
+ * winding repair and optional double-siding are identical; only the combination is new.
+ * Returns null (with a warning) when the pieces can't be combined — `mergeGeometries` refuses
+ * a set whose attribute layouts differ (e.g. one object UV-unwrapped and another not), and an
+ * unmerged import is strictly better than a failed one.
+ */
+function mergeAll(
+  plan: ImportPlan,
+  opts: ImportOptions,
+  warnings: ImportWarning[],
+): NormalizedMesh | null {
+  const pieces: THREE.BufferGeometry[] = []
+  for (const group of plan.groups) {
+    for (const instance of group.instances) {
+      pieces.push(normalizeGeometry(group, opts, instance.matrix))
+    }
+  }
+  const merged = mergeGeometries(pieces, false)
+  for (const piece of pieces) piece.dispose()
+  if (!merged) {
+    warnings.push({
+      code: 'mergeFailed',
+      subject: plan.fileName,
+      message:
+        'These objects could not be merged into one SubPart (their vertex attributes differ — usually one is UV-unwrapped and another is not), so they were imported separately.',
+      remedy: 'UV-unwrap every object in Blender, or import without merging.',
+    })
+    return null
+  }
+  merged.computeBoundingBox()
+  merged.computeBoundingSphere()
+
+  const first = plan.groups[0]!
+  const name = `${opts.namePrefix}${baseName(plan.fileName)}`
+  const index = merged.getIndex()
+  return {
+    subPartId: `flexo_${sanitizeIdent(name)}_${shortId()}`,
+    name,
+    sourceNode:
+      plan.groups.length === 1 ? first.sourceNode : `${plan.groups.length} objects (merged)`,
+    sourceMaterial: first.sourceMaterial,
+    // The FIRST group's key: every group shares the one material here (canMerge), and this is
+    // what maps the merged mesh onto the material plan's spec (materialKeyByGroup).
+    materialGroupKey: first.key,
+    triangles: index ? Math.floor(index.count / 3) : 0,
+    vertices: merged.getAttribute('position')?.count ?? 0,
+    geometry: merged,
+    placements: [transformFromMatrix(new THREE.Matrix4())],
+  }
+}
+
 /**
  * Normalizes an analyzed plan into SubPart-ready geometry, placements and one atlas GLB.
  * Throws when the plan has nothing to import (the dialog gates on the 'noMeshes' warning).
@@ -188,6 +257,23 @@ export async function normalizeImport(
 ): Promise<NormalizedImport> {
   if (plan.groups.length === 0) {
     throw new Error(`normalizeImport: "${plan.fileName}" contains no meshes to import.`)
+  }
+
+  const warnings = [...plan.warnings]
+  if (opts.merge && canMerge(plan)) {
+    const merged = mergeAll(plan, opts, warnings)
+    if (merged) {
+      const glb = await buildMeshAtlasGlb([{ name: merged.subPartId, geometry: merged.geometry }], {
+        viewMeshes: false,
+      })
+      return {
+        importId: `imp_${shortId()}`,
+        fileName: plan.fileName,
+        glb,
+        meshes: [merged],
+        warnings,
+      }
+    }
   }
 
   const meshes: NormalizedMesh[] = []
@@ -229,11 +315,5 @@ export async function normalizeImport(
     { viewMeshes: false },
   )
 
-  return {
-    importId: `imp_${shortId()}`,
-    fileName: plan.fileName,
-    glb,
-    meshes,
-    warnings: plan.warnings,
-  }
+  return { importId: `imp_${shortId()}`, fileName: plan.fileName, glb, meshes, warnings }
 }

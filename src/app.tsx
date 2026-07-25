@@ -1,5 +1,7 @@
 import { useEffect } from 'react'
 import { ViewportCanvas } from './three/ViewportCanvas'
+import { ViewportDropZone } from './ui/ViewportDropZone'
+import { ImportModelDialog } from './ui/ImportModelDialog'
 import { EditorToolbar } from './ui/Toolbar'
 import { MobileTopBar } from './ui/MobileTopBar'
 import { SelectionToolbar } from './ui/SelectionToolbar'
@@ -37,7 +39,10 @@ function App() {
       <HelpDialog />
       <AboutDialog />
 
-      <ViewportCanvas />
+      {/* The 3D workspace, wrapped so a dropped .glb opens the import dialog. */}
+      <ViewportDropZone>
+        <ViewportCanvas />
+      </ViewportDropZone>
 
       {/* Top: floating, centered editor toolbar on desktop/tablet; full-width
           compact bar with an overflow menu on phone. */}
@@ -93,6 +98,10 @@ function App() {
 
       {/* Modal paint canvas for a mesh's 'painted' glow bitmap. */}
       <GlowPaintDialog />
+
+      {/* Model import (preview + options + warnings). Mounted once for both entry points:
+          the Add menu and a drag-drop onto the viewport above. */}
+      <ImportModelDialog />
 
       {/* Bottom-left: live selection bounding-box dimensions. */}
       <MeasurementInfo />

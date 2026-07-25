@@ -281,3 +281,82 @@ describe('normalizeImport — the atlas GLB', () => {
     await expect(normalizeImport(plan, opts())).rejects.toThrow(/no meshes/)
   })
 })
+
+describe('normalizeImport — merge into one SubPart', () => {
+  /** Two separate objects sharing ONE material — the only case a merge is legal for. */
+  function twoPieces(): THREE.Object3D {
+    const material = new THREE.MeshStandardMaterial()
+    material.name = 'Steel'
+    const root = new THREE.Group()
+    const a = new THREE.Mesh(triangle(), material)
+    a.name = 'PieceA'
+    a.position.set(2, 0, 0)
+    const b = new THREE.Mesh(triangle(), material)
+    b.name = 'PieceB'
+    b.position.set(-2, 0, 0)
+    root.add(a, b)
+    return root
+  }
+
+  it('collapses every group and instance into one mesh at the origin', async () => {
+    const result = await normalize(twoPieces(), opts({ merge: true }))
+
+    expect(result.meshes).toHaveLength(1)
+    const merged = result.meshes[0]!
+    expect(merged.triangles).toBe(2)
+    expect(merged.placements).toHaveLength(1)
+    expect(merged.placements[0]).toMatchObject({ position: { x: 0, y: 0, z: 0 } })
+    // Each piece keeps its world position — the instance transforms are BAKED, not dropped.
+    const positions = merged.geometry.getAttribute('position')
+    const xs = Array.from({ length: positions.count }, (_, i) => positions.getX(i))
+    expect(Math.min(...xs)).toBeCloseTo(-2)
+    expect(Math.max(...xs)).toBeCloseTo(3)
+    // One SubPart ⇒ one named mesh in the atlas.
+    expect((parseGlbJson(result.glb).meshes ?? []).map((m) => m.name)).toEqual([merged.subPartId])
+  })
+
+  it('names the merged SubPart after the file and keeps the first group material key', async () => {
+    const plan = analyzeImport(model(twoPieces(), 'rcs_pod.glb'), opts({ merge: true }))
+    const result = await normalizeImport(plan, opts({ merge: true, namePrefix: 'RCS ' }))
+
+    expect(result.meshes[0]!.name).toBe('RCS rcs_pod')
+    expect(result.meshes[0]!.materialGroupKey).toBe(plan.groups[0]!.key)
+    expect(result.meshes[0]!.sourceNode).toBe('2 objects (merged)')
+  })
+
+  it('IGNORES the merge when the model uses more than one material (a game limit)', async () => {
+    const geometry = triangle()
+    geometry.clearGroups()
+    geometry.addGroup(0, 3, 0)
+    geometry.addGroup(0, 3, 1)
+    const a = new THREE.MeshStandardMaterial()
+    a.name = 'PaintedMetal'
+    const b = new THREE.MeshStandardMaterial()
+    b.name = 'Indicator'
+    const mesh = new THREE.Mesh(geometry, [a, b])
+    mesh.name = 'Hull'
+
+    const result = await normalize(mesh, opts({ merge: true }))
+
+    expect(result.meshes).toHaveLength(2)
+  })
+
+  it('falls back to an unmerged import (with a warning) when the pieces cannot combine', async () => {
+    // One object UV-unwrapped, the other not: mergeGeometries refuses mismatched attributes.
+    const material = new THREE.MeshStandardMaterial()
+    material.name = 'Steel'
+    const bare = triangle()
+    bare.deleteAttribute('uv')
+    const root = new THREE.Group()
+    const a = new THREE.Mesh(triangle(), material)
+    a.name = 'Mapped'
+    const b = new THREE.Mesh(bare, material)
+    b.name = 'Bare'
+    root.add(a, b)
+
+    const result = await normalize(root, opts({ merge: true }))
+
+    expect(result.meshes).toHaveLength(2)
+    expect(result.warnings.map((w) => w.code)).toContain('mergeFailed')
+  })
+})

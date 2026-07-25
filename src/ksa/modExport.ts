@@ -31,7 +31,7 @@ import { bakeKittenSubMeshes } from '../three/kittenBake'
 import { getImportedRawGeometry } from '../three/importedMeshCache'
 import { getPrimaryTextureId, glowBitmapFor } from '../state/customAssetStore'
 import { assetKeys, getAsset } from '../state/assetDb'
-import type { KittenTextureExportSettings } from '../state/settingsStore'
+import { $modelImportSettings, type KittenTextureExportSettings } from '../state/settingsStore'
 import { createZip, type ZipEntry } from '../util/zip'
 import { encodeImageToKtx2, makeSolidKtx2 } from '../ktx/encodeKtx2'
 import { decodeImage, buildMipChain, type ImageLevel } from '../ktx/decodeImage'
@@ -582,7 +582,18 @@ export function expandGlassGlow(part: EditingPart): { part: EditingPart; insetId
  * imported model at 1.3% of its raw picking cost. Picking accuracy is the only trade, and the
  * _VM mesh is never rendered.
  */
-const VIEW_MESH_TRIANGLE_BUDGET = 2000
+export const VIEW_MESH_TRIANGLE_BUDGET = 2000
+
+/**
+ * The `_VM` budget this export runs with: the constant above, or `undefined` (ship the view
+ * meshes at full resolution) when the user turned decimation off in the import settings.
+ * Read from the persisted store rather than threaded through every caller — it is a global
+ * user preference, and the store yields its default (decimation ON) wherever nothing was
+ * ever persisted, which is also what tests get.
+ */
+function viewMeshBudget(): number | undefined {
+  return $modelImportSettings.get().decimateViewMeshes ? VIEW_MESH_TRIANGLE_BUDGET : undefined
+}
 
 /** A custom-asset bundle for export: the Assets XML + the binary files it references. */
 export interface CustomBundle {
@@ -707,7 +718,7 @@ export async function buildCustomBundle(
       try {
         binaries.push({
           path: meshAtlasPath,
-          data: await buildMeshAtlasGlb(nodes, { viewMeshBudget: VIEW_MESH_TRIANGLE_BUDGET }),
+          data: await buildMeshAtlasGlb(nodes, { viewMeshBudget: viewMeshBudget() }),
         })
       } finally {
         for (const n of nodes) n.geometry.dispose()

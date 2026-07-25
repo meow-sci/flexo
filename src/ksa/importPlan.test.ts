@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
 import type { GltfJson, LoadedModel } from '../three/loadModelFile'
-import { analyzeImport, DEFAULT_IMPORT_OPTIONS, type ImportOptions } from './importPlan'
+import {
+  analyzeImport,
+  canMerge,
+  DEFAULT_IMPORT_OPTIONS,
+  plannedTotals,
+  type ImportOptions,
+} from './importPlan'
 
 /**
  * Inputs are built PROGRAMMATICALLY with three (never a committed binary fixture): three's own
@@ -333,5 +339,54 @@ describe('analyzeImport — skinned meshes', () => {
     // The node's +2 Y offset now lives in the baked vertices, not the placement.
     expect(plan.bounds.min.y).toBeCloseTo(1.5, 6)
     expect(codes(plan)).toContain('skinned')
+  })
+})
+
+describe('canMerge / plannedTotals — what the dialog offers and promises', () => {
+  function twoBolts(): THREE.Object3D {
+    const geometry = new THREE.BoxGeometry(1, 1, 1)
+    const material = new THREE.MeshStandardMaterial()
+    material.name = 'Steel'
+    const root = new THREE.Group()
+    const a = new THREE.Mesh(geometry, material)
+    a.name = 'BoltA'
+    a.position.x = 1
+    const b = new THREE.Mesh(geometry, material)
+    b.name = 'BoltB'
+    b.position.x = -1
+    root.add(a, b)
+    return root
+  }
+
+  it('offers a merge only for a single-material model with something to merge', () => {
+    expect(canMerge(analyzeImport(model(twoBolts()), opts()))).toBe(true)
+    // One SubPart, one placement: nothing to collapse.
+    expect(canMerge(analyzeImport(model(box('Solo')), opts()))).toBe(false)
+  })
+
+  it('refuses a merge across materials (a <PartModel> binds exactly one)', () => {
+    const geometry = new THREE.BoxGeometry(1, 1, 1)
+    geometry.clearGroups()
+    geometry.addGroup(0, 18, 0)
+    geometry.addGroup(18, 18, 1)
+    const mesh = new THREE.Mesh(geometry, [
+      new THREE.MeshStandardMaterial(),
+      new THREE.MeshStandardMaterial(),
+    ])
+    mesh.name = 'Hull'
+    expect(canMerge(analyzeImport(model(mesh), opts()))).toBe(false)
+  })
+
+  it('reports the merged totals — one SubPart, one placement, instanced geometry duplicated', () => {
+    const plan = analyzeImport(model(twoBolts()), opts())
+    // Two nodes share ONE geometry+material, so the plan holds 1 group × 2 instances.
+    expect(plan.totals).toMatchObject({ subParts: 1, placements: 2, triangles: 12 })
+    expect(plannedTotals(plan, false)).toBe(plan.totals)
+    expect(plannedTotals(plan, true)).toMatchObject({
+      subParts: 1,
+      placements: 1,
+      triangles: 24,
+      vertices: plan.totals.vertices * 2,
+    })
   })
 })

@@ -251,9 +251,54 @@ same path as hand-authored ones. Nothing about them is a parallel universe.
   visor surface, per-face texture + UV controls (warns when faces mix textures).
 - `CustomAssetsModal.tsx` — textures (channel select, delete), materials (swatch,
   usage counts, edit, delete), meshes (add instance / manage / delete).
+- `ImportModelDialog.tsx` — the model importer's UI: **three states in one modal** —
+  _drop_ (drop zone + file picker + the "How to export from Blender" recipe), _review_
+  (3D preview, stats, options, warnings) and _importing_ (progress). **Nothing touches the
+  document until the user confirms**: the file is parsed and analyzed in memory, and
+  cancelling leaves no trace. Mounted once in `app.tsx` and driven by
+  `$importModelRequest`, because two entry points share it (below).
+  - The review step re-runs `analyzeImport()` on every scale / up-axis change — cheap, since
+    it walks the already-parsed scene graph and never re-reads the file — while the
+    expensive `planImportMaterials()` (image decodes) runs ONCE per (model, texture cap) and
+    is handed straight to the import, so nothing is decoded twice.
+  - **Stats**: SubParts / placements / materials / triangles / vertices / textures, the
+    **measured bounding box in metres** (the wrong-units check), estimated mod size and
+    **estimated in-game VRAM** — the last one because flexo's KTX2 is uncompressed RGBA8 +
+    Zstd, so each texture costs `w·h·4·4⁄3` bytes resident (a 4096² map ≈ 85 MB). Both
+    numbers come from `src/ksa/importEstimates.ts` (pure, unit-tested: image-header size
+    reads, the cap, the VRAM/mod formulas, warning grouping + severities, scale presets).
+  - **Warnings** are `ImportPlan.warnings` + the material plan's, grouped by subject and
+    styled by severity, each with its plain-English remedy.
+- `ViewportDropZone.tsx` — wraps the 3D workspace so dropping a `.glb`/`.gltf` (or a
+  multi-file `.gltf` set) opens the same dialog pre-loaded. Plain React drag handlers, not
+  three.js: `dragover` must `preventDefault()` or no `drop` fires, drags with no file are
+  ignored, and the affordance is a `pointer-events-none` overlay.
+- `src/three/ModelPreviewViewport.ts` — the dialog's preview: the editor's
+  environment/tonemapping + orbit, an adaptive power-of-ten-metre grid for scale, camera
+  auto-framed on the bounding sphere. It shows the loaded glTF with **its own** materials
+  ("is this oriented, scaled and split the way I meant?"); the accurate surface preview is
+  the editor viewport after import, which renders the real KSA channels. It clones the
+  scene (SkeletonUtils) and never disposes geometry/materials it doesn't own.
 - entry points wired from the **Add** menu (`AddButton.tsx`) — including **Import model…**,
-  which is deliberately a bare file picker that imports with the default options (the
-  preview/options/warnings dialog is a later phase).
+  which opens `ImportModelDialog` on its drop state.
+
+#### Import settings — sticky vs per-import
+
+`$modelImportSettings` (`state/settingsStore.ts`, persisted) holds the four preferences that
+describe a working style: **max texture size** (1024/2048/4096, default 2048 — it feeds
+`decodeImage`'s `maxSize` for BOTH the dialog's estimate and the encoded `.ktx2`, so the
+number shown is the number shipped), **up axis**, **bake scale into geometry** and
+**decimate view meshes** (read by `modExport.buildCustomBundle` for the `_VM` budget).
+
+Everything that describes ONE model stays dialog state and is deliberately NOT persisted:
+scale factor, name prefix, make double-sided, bake transforms to origin, and merge. A 0.01
+scale left over from a centimetre export would silently mis-size the next import.
+
+"Merge into one SubPart" is offered only when the whole model uses a single material
+(`canMerge()`) — a `<PartModel>` binds exactly one material, so merging across materials is
+illegal, not merely undesirable. `normalizeImport()` bakes every group × instance into one
+geometry with one identity placement, and falls back to an unmerged import with a
+`mergeFailed` warning when the pieces' attribute layouts don't match.
 
 ## On-disk format decisions
 

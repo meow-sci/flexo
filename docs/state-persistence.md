@@ -97,6 +97,23 @@ function Inspector() {
 }
 ```
 
+## Sticky settings vs per-action state
+
+A persisted setting should describe **how the user works**, not **what they are doing right
+now**. The model importer is the worked example (`$modelImportSettings` in
+`state/settingsStore.ts`, key `flexo:modelImport`):
+
+| Persisted (sticky) | Dialog state (per-import) |
+| --- | --- |
+| `maxTextureSize` (1024/2048/4096, default 2048) — the VRAM budget | scale factor |
+| `upAxis` (`'y'` \| `'z'`) — the DCC's export convention | name prefix |
+| `bakeScale` — the default geometry bake | make double-sided |
+| `decimateViewMeshes` — the exported `<MeshView>` budget | bake transforms to origin, merge |
+
+The right-hand column is intentionally forgotten between imports: re-applying the last
+model's fix-up to the next one produces a plausible-looking, wrong result (a leftover `×0.01`
+scale is the worst of these). Persist a preference; never persist a correction.
+
 ## Projects (workspace persistence)
 
 Beyond individual preference atoms, the **entire editing workspace** is persisted as a

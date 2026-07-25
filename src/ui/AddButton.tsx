@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { CirclePlus } from 'lucide-react'
 import {
@@ -9,15 +9,10 @@ import {
   Popover,
   SubmenuTrigger,
   ToolbarButton,
-  toast,
 } from './kit'
 import { $part, addConnector, addKitten, addSubPart } from '../state/editorStore'
 import { enterEngineMode } from '../state/engineStore'
-import { importModelAsMeshes, makeKittenMeshPart } from '../state/customAssetStore'
-import { loadModelFile } from '../three/loadModelFile'
-import { analyzeImport, DEFAULT_IMPORT_OPTIONS } from '../ksa/importPlan'
-import { normalizeImport } from '../ksa/importNormalize'
-import { planImportMaterials } from '../ksa/importMaterials'
+import { makeKittenMeshPart, openImportModel } from '../state/customAssetStore'
 import type { KittenKind } from '../ksa/types'
 import { SubPartPopup } from './SubPartBrowser'
 import { PartPopup } from './PartBrowser'
@@ -35,45 +30,6 @@ export function AddButton() {
   const [textureOpen, setTextureOpen] = useState(false)
   const [materialOpen, setMaterialOpen] = useState(false)
   const [meshOpen, setMeshOpen] = useState(false)
-  const modelInput = useRef<HTMLInputElement>(null)
-
-  /**
-   * Import with the defaults, no questions asked.
-   * TODO(phase 4): replace with `ImportModelDialog` — preview, stats, options (scale / up-axis /
-   * bake / double-sided) and the warning list. See plans/IMPORT_MODELS.md §4.2.
-   */
-  const runImport = async (files: File[]) => {
-    try {
-      const model = await loadModelFile(files)
-      const plan = analyzeImport(model, DEFAULT_IMPORT_OPTIONS)
-      // Materials are translated from the glTF JSON (factors baked into pixels, ORM packed,
-      // emissive composed) BEFORE the document is touched, so the whole import — geometry,
-      // textures, materials, meshes, placements — commits as one undo step.
-      const materials = await planImportMaterials(model, plan)
-      const normalized = await normalizeImport(plan, DEFAULT_IMPORT_OPTIONS)
-      try {
-        await importModelAsMeshes(normalized, model.fileName, materials)
-      } finally {
-        // The normalized geometries are consumed by the atlas GLB; the editor renders from
-        // that GLB via importedMeshCache, so these copies are ours to free.
-        for (const mesh of normalized.meshes) mesh.geometry.dispose()
-      }
-      toast({
-        title: 'Model imported',
-        description: `${normalized.meshes.length} SubPart${
-          normalized.meshes.length === 1 ? '' : 's'
-        } from ${model.fileName}`,
-        variant: 'success',
-      })
-    } catch (err) {
-      console.error('flexo: model import failed', err)
-      toast({
-        title: 'Import failed',
-        description: err instanceof Error ? err.message : String(err),
-        variant: 'danger',
-      })
-    }
-  }
 
   return (
     <>
@@ -91,7 +47,8 @@ export function AddButton() {
               else if (key === 'texture') setTextureOpen(true)
               else if (key === 'material') setMaterialOpen(true)
               else if (key === 'mesh') setMeshOpen(true)
-              else if (key === 'import-model') modelInput.current?.click()
+              // Opens with no files, i.e. on its drop/pick step (see ImportModelDialog).
+              else if (key === 'import-model') openImportModel()
               else if (key === 'engine') enterEngineMode()
             }}
           >
@@ -152,21 +109,6 @@ export function AddButton() {
       {textureOpen && <CustomTextureDialog onClose={() => setTextureOpen(false)} />}
       {materialOpen && <MaterialDialog onClose={() => setMaterialOpen(false)} />}
       {meshOpen && <CreateMeshDialog onClose={() => setMeshOpen(false)} />}
-      {/* A `.gltf` needs its siblings (.bin + images) picked alongside it, hence `multiple`;
-          `loadModelFile` picks the entry file out of the set and resolves the rest. */}
-      <input
-        ref={modelInput}
-        type="file"
-        accept=".glb,.gltf,.bin,image/*"
-        multiple
-        className="hidden"
-        onChange={(e) => {
-          const input = e.currentTarget
-          const files = Array.from(input.files ?? [])
-          input.value = '' // re-picking the same file must fire change again
-          if (files.length > 0) void runImport(files)
-        }}
-      />
     </>
   )
 }

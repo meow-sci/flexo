@@ -87,6 +87,54 @@ export function setKittenTextureExport(patch: Partial<KittenTextureExportSetting
 }
 
 /**
+ * STICKY preferences for the model importer (Add ▸ Import model… / drag-drop onto the
+ * viewport). These four are the ones a user sets once for how they work — a texture budget,
+ * the axis convention their DCC exports with, and the two "do the sensible thing" bakes — so
+ * they persist and pre-seed every future import.
+ *
+ * PER-IMPORT choices deliberately do NOT live here and are dialog state instead: the scale
+ * factor, the name prefix, "make double-sided", "bake transforms to origin" and "merge into
+ * one SubPart" all describe ONE model, not a working style. Persisting them would silently
+ * apply the last model's fix-up to the next one — a 0.01 scale left over from a centimetre
+ * export is the worst of these, because the result looks plausible and is 100× wrong.
+ *
+ * Consumers: `ImportModelDialog` (all four), `planImportMaterials` +
+ * `createImportMaterialAssets` ({@link ModelImportSettings.maxTextureSize} → `decodeImage`'s
+ * `maxSize`, so the analysis estimate and the encoded .ktx2 agree), and
+ * `modExport.buildCustomBundle` ({@link ModelImportSettings.decimateViewMeshes} → the `_VM`
+ * triangle budget).
+ */
+export interface ModelImportSettings {
+  /**
+   * Longest-edge cap for imported images. flexo's KTX2 is uncompressed RGBA8 + Zstd, so
+   * in-game VRAM is ~w·h·4·4/3 PER TEXTURE — 4096² costs ~85 MB. Hence a 2048 default.
+   */
+  maxTextureSize: 1024 | 2048 | 4096
+  /** Which axis the source file calls "up" ('z' applies the RotX(-90°) correction). */
+  upAxis: 'y' | 'z'
+  /** Bake the instance scale into the geometry (predictable texel density + gizmo behaviour). */
+  bakeScale: boolean
+  /** Decimate the exported `<MeshView>` picking meshes (KSA hover-picks on the CPU). */
+  decimateViewMeshes: boolean
+}
+
+const DEFAULT_MODEL_IMPORT: ModelImportSettings = {
+  maxTextureSize: 2048,
+  upAxis: 'y',
+  bakeScale: true,
+  decimateViewMeshes: true,
+}
+
+export const $modelImportSettings = persistentJSON<ModelImportSettings>(
+  'flexo:modelImport',
+  DEFAULT_MODEL_IMPORT,
+)
+
+export function setModelImportSettings(patch: Partial<ModelImportSettings>): void {
+  $modelImportSettings.set({ ...$modelImportSettings.get(), ...patch })
+}
+
+/**
  * Editor preview toggle: simulate KSA's muted in-game glass look for tinted visors. KSA's glass
  * shader (MeshGlassIndirect.frag) renders the tint darker/subtler — only ~10% of the diffuse —
  * and at a fixed ~0.75 opacity. ON ⇒ the editor mimics that (WYSIWYG); OFF ⇒ it shows the chosen

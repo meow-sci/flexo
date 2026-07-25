@@ -31,7 +31,7 @@ import {
 } from './editorStore'
 import { $projectName } from './projectStore'
 import { $customCatalog } from './catalogStore'
-import { $simulateGlass } from './settingsStore'
+import { $modelImportSettings, $simulateGlass } from './settingsStore'
 import { assetKeys, deleteAsset, getAsset, putAsset } from './assetDb'
 import {
   buildPrimitiveGeometry,
@@ -140,6 +140,28 @@ export const $glowPaintMeshId = atom<string | null>(null)
 
 export function setGlowPaintMeshId(id: string | null): void {
   $glowPaintMeshId.set(id)
+}
+
+/**
+ * An open request for the model-import dialog (null = closed). Ephemeral UI state, like the
+ * two ids above: the dialog is mounted once in `app.tsx` and opened from BOTH entry points —
+ * the Add menu (with no files, so it shows its drop zone) and a drag-drop onto the 3D
+ * viewport (with the dropped files, so it goes straight to the review step). `id` changes on
+ * every open so the dialog body remounts with fresh per-import state.
+ */
+export interface ImportModelRequest {
+  id: string
+  files: File[]
+}
+
+export const $importModelRequest = atom<ImportModelRequest | null>(null)
+
+export function openImportModel(files: File[] = []): void {
+  $importModelRequest.set({ id: shortId(), files })
+}
+
+export function closeImportModel(): void {
+  $importModelRequest.set(null)
 }
 
 function shortId(): string {
@@ -654,9 +676,10 @@ async function createTextureAsset(
   file: Blob,
   name: string,
   channel: TextureChannel,
+  maxSize?: number,
 ): Promise<CustomTexture> {
   const id = `tex_${shortId()}`
-  const decoded = prepareChannelImage(await decodeImage(file), channel)
+  const decoded = prepareChannelImage(await decodeImage(file, maxSize), channel)
   const ktx2 = await encodeImageToKtx2(decoded, { zstd: true })
 
   await putAsset(assetKeys.textureSource(id), file, file.type || 'image/png')
@@ -933,9 +956,13 @@ async function createImportMaterialAssets(
   plan: ImportMaterialPlan,
 ): Promise<{ textures: CustomTexture[]; materials: Map<string, CustomMaterial> }> {
   const textureByKey = new Map<string, CustomTexture>()
+  // The SAME cap `planImportMaterials` decoded with (settingsStore), so the .ktx2 that ships
+  // is the size the import dialog costed — flexo's KTX2 is uncompressed RGBA8, so this cap is
+  // the user's only VRAM lever until block compression lands.
+  const maxSize = $modelImportSettings.get().maxTextureSize
   for (const spec of plan.textures) {
     const blob = new Blob([spec.bytes.slice()], { type: spec.mime })
-    textureByKey.set(spec.key, await createTextureAsset(blob, spec.name, spec.channel))
+    textureByKey.set(spec.key, await createTextureAsset(blob, spec.name, spec.channel, maxSize))
   }
 
   const materials = new Map<string, CustomMaterial>()

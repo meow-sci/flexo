@@ -4,6 +4,13 @@ import * as THREE from 'three'
 export interface Selectable {
   kind: 'subpart' | 'connector' | 'collider' | 'kitten'
   id: string
+  /**
+   * Which VISUAL of a multi-instance entity was hit. Only a SubPart-owned collider has
+   * more than one (it is drawn once per placement of its owning template — KSA has no
+   * per-instance collider), and the caller needs it to know which placement's frame a
+   * gizmo drag should write back through.
+   */
+  instanceIndex?: number
 }
 
 /**

@@ -32,7 +32,7 @@ import {
 } from './bulkTransform'
 import { initTextureSupport } from './textureSupport'
 import type { CatalogSubPart } from '../ksa/catalog'
-import type { EditingPart, Transform, Vec3 } from '../ksa/types'
+import type { EditingPart, PartCollider, SubPartPlacement, Transform, Vec3 } from '../ksa/types'
 import {
   $bulkScaleMode,
   $part,
@@ -124,6 +124,13 @@ export class EditorScene {
    * part-level collider always has exactly one entry.
    */
   private readonly colliderObjects = new Map<string, ColliderObject[]>()
+  /**
+   * Collider id → which of its per-placement visuals the gizmo edits (set by the last
+   * click on it; defaults to 0). Only meaningful for a SubPart-owned collider — the one
+   * document entity is drawn N times, so a drag has to name the frame it writes back
+   * through. Ephemeral view state.
+   */
+  private readonly colliderInstance = new Map<string, number>()
   private readonly building = new Set<string>()
   private readonly kittenBuilding = new Set<string>()
   private index: Map<string, CatalogSubPart> = new Map()
@@ -241,6 +248,8 @@ export class EditorScene {
           const layerId = colliders[index].layerId
           if (isLayerLocked(layerId)) return
           if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
+          // Remember WHICH visual was clicked so the gizmo edits that instance's frame.
+          this.colliderInstance.set(selected.id, selected.instanceIndex ?? 0)
           if (additive) {
             const added = !$selectedColliderIndices.get().includes(index)
             toggleEntity('collider', index)
@@ -531,7 +540,15 @@ export class EditorScene {
     if (!anim) return false
     const members = new Set<string>()
     for (const j of anim.joints) for (const id of j.memberInstanceIds) members.add(id)
-    return $selectedIndices.get().some((i) => members.has(part.placements[i]?.instanceId ?? ''))
+    if ($selectedIndices.get().some((i) => members.has(part.placements[i]?.instanceId ?? '')))
+      return true
+    // A SubPart-owned collider rides its instance, so while a POSED frame is shown its
+    // gizmo would write back through the posed (not modeled) frame — lock it too.
+    return $selectedColliderIndices.get().some((i) => {
+      const owner = part.colliders[i]?.ownerTemplateId
+      if (!owner) return false
+      return part.placements.some((p) => p.subPartTemplateId === owner && members.has(p.instanceId))
+    })
   }
 
   private applyAnimationPreview(): void {
@@ -549,12 +566,19 @@ export class EditorScene {
     // inspector mode switches); in assets mode parts show their static placements.
     const animId = $inspectorMode.get() === 'anim' ? $activeAnimationId.get() : null
     const anim = animId ? part.animations.find((a) => a.id === animId) : null
-    if (!anim) return
+    if (!anim) {
+      this.positionColliders(part) // back to static frames
+      return
+    }
     const editKf = $editKeyframeId.get()
     // Override only while actively posing a keyframe or dragging the scrubber; otherwise
     // SubParts rest at their static modeled placement (an imported deploy clip's rest is
     // its DEPLOYED last keyframe, so this keeps it shown deployed until you scrub).
-    if (!editKf && !$animScrubbing.get()) return
+    if (!editKf && !$animScrubbing.get()) {
+      this.positionColliders(part)
+      return
+    }
+    const posed = new Map<string, Transform>()
     const pinned = editKf ? anim.keyframes.find((k) => k.id === editKf) : null
     const u = Math.min(1, Math.max(0, $animPreviewU.get()))
     const t = pinned ? pinned.timeSec : u * anim.durationSec
@@ -568,8 +592,11 @@ export class EditorScene {
         if (!m) continue
         m.decompose(obj.group.position, obj.group.quaternion, obj.group.scale)
         this.animOverridden.add(instId)
+        posed.set(instId, transformFromMatrix(m))
       }
     }
+    // A SubPart-owned collider rides its instance, so it must follow the pose too.
+    this.positionColliders(part, posed)
   }
 
   /** Builds/updates/removes kitten visual aides (async, like SubParts). */
@@ -692,30 +719,57 @@ export class EditorScene {
     }
 
     for (const collider of part.colliders) {
-      // A collider whose owner is no longer placed still renders (in the Part frame) so it
-      // can be found and re-homed rather than silently vanishing; validation flags it.
-      const owners = collider.ownerTemplateId
-        ? part.placements.filter((p) => p.subPartTemplateId === collider.ownerTemplateId)
-        : []
-      const frames: (Transform | undefined)[] =
-        owners.length > 0 ? owners.map((p) => colliderWorld(collider, p)) : [undefined]
-
+      const wanted = this.colliderOwners(part, collider).length || 1
       let objs = this.colliderObjects.get(collider.id)
       if (!objs) {
         objs = []
         this.colliderObjects.set(collider.id, objs)
       }
-      while (objs.length > frames.length) {
+      while (objs.length > wanted) {
         const obj = objs.pop()!
         this.root.remove(obj.group)
         obj.dispose()
       }
-      while (objs.length < frames.length) {
-        const obj = new ColliderObject(collider)
+      while (objs.length < wanted) {
+        const obj = new ColliderObject(collider, objs.length)
         this.root.add(obj.group)
         objs.push(obj)
       }
-      for (let i = 0; i < frames.length; i++) objs[i].setCollider(collider, frames[i])
+    }
+    this.positionColliders(part)
+  }
+
+  /**
+   * Placements a collider's visuals ride on. Empty for a part-level collider — and also
+   * for one whose owner template is no longer placed, which then renders once in the Part
+   * frame so it can be found and re-homed rather than silently vanishing (validation
+   * flags it as dead data).
+   */
+  private colliderOwners(part: EditingPart, collider: PartCollider): SubPartPlacement[] {
+    if (!collider.ownerTemplateId) return []
+    return part.placements.filter((p) => p.subPartTemplateId === collider.ownerTemplateId)
+  }
+
+  /**
+   * Positions every collider visual. `posed` supplies the ANIMATED transform of an
+   * instance when the animation preview is showing a non-rest frame — SubPart-owned
+   * colliders follow joint animation in-game (`KeyframeAnimationModule` flags
+   * `NeedsColliderUpdate` and `ConstraintSim` rebuilds the compound), so the editor shows
+   * the same thing. An empty/absent map means "everything at its static placement".
+   */
+  private positionColliders(part: EditingPart, posed?: ReadonlyMap<string, Transform>): void {
+    for (const collider of part.colliders) {
+      const objs = this.colliderObjects.get(collider.id)
+      if (!objs) continue
+      const owners = this.colliderOwners(part, collider)
+      if (owners.length === 0) {
+        objs[0]?.setCollider(collider)
+        continue
+      }
+      for (let i = 0; i < owners.length && i < objs.length; i++) {
+        const frame = posed?.get(owners[i].instanceId) ?? owners[i]
+        objs[i].setCollider(collider, colliderWorld(collider, frame))
+      }
     }
   }
 
@@ -819,9 +873,24 @@ export class EditorScene {
     return out
   }
 
-  /** Centroid of all selected entities (SubParts + connectors + kittens), from store positions. */
+  /**
+   * Every selected entity's transform in PART space. Identical to
+   * {@link selectedTransformRefs} except for a SubPart-owned collider, whose stored
+   * transform is in its owner's local frame — bulk gizmo math (and the centroid the pivot
+   * sits on) has to work in one shared space, so those are lifted through
+   * {@link colliderWorld} here and pushed back down on write.
+   */
+  private worldTransformRefs(): SelectedTransformRef[] {
+    return selectedTransformRefs().map((ref) => {
+      if (ref.kind !== 'collider') return ref
+      const frame = this.colliderGizmoFrame(ref.index)
+      return frame ? { ...ref, transform: colliderWorld(ref.transform, frame) } : ref
+    })
+  }
+
+  /** Centroid of all selected entities, from Part-space positions. */
   private selectionCentroid(): Vec3 {
-    return centroidOf(selectedTransformRefs().map((r) => r.transform.position))
+    return centroidOf(this.worldTransformRefs().map((r) => r.transform.position))
   }
 
   /** Resets the pivot to the selection centroid with identity rotation/scale. */
@@ -901,11 +970,7 @@ export class EditorScene {
       indices.some((i) => isLayerLocked(part.placements[i]?.layerId ?? '')) ||
       conIndices.some((ci) => isLayerLocked(part.connectors[ci]?.layerId ?? '')) ||
       kitIndices.some((ki) => isLayerLocked(part.kittens[ki]?.layerId ?? '')) ||
-      colIndices.some((i) => isLayerLocked(part.colliders[i]?.layerId ?? '')) ||
-      // A SubPart-OWNED collider is drawn once per placement, so there is no single
-      // object a gizmo drag could unambiguously write back to. Phase 3 attaches to the
-      // instance under the cursor; until then it is inspector-editable only.
-      colIndices.some((i) => part.colliders[i]?.ownerTemplateId != null)
+      colIndices.some((i) => isLayerLocked(part.colliders[i]?.layerId ?? ''))
     // While the preview shows a POSED frame (t>0 / editing), an animated SubPart's
     // group sits at its animated transform — suppress the gizmo so a drag can't write
     // the posed transform back as the static placement. At rest (t=0) it's safe.
@@ -915,6 +980,13 @@ export class EditorScene {
     } else if (multi) {
       this.repositionPivot()
       target = this.pivot
+    } else if (colIndices.length === 1) {
+      // A SubPart-owned collider has one visual PER PLACEMENT; attach to whichever the
+      // user last clicked (see colliderInstance) so the drag has an unambiguous frame.
+      const collider = part.colliders[colIndices[0]]
+      const objs = collider ? (this.colliderObjects.get(collider.id) ?? []) : []
+      const i = Math.min(this.colliderInstance.get(collider?.id ?? '') ?? 0, objs.length - 1)
+      target = objs[Math.max(0, i)]?.group ?? null
     } else {
       target = selected[0]?.group ?? null
     }
@@ -954,7 +1026,34 @@ export class EditorScene {
       this.applyBulkFromPivot()
       return
     }
-    updateSelectedTransform(readPlacementTransform(object))
+    const world = readPlacementTransform(object)
+    // A collider visual sits in PART space; its document transform is in its owner's
+    // frame, so a SubPart-owned one has to be converted back before it is stored.
+    const sel = object.userData.selectable as { kind?: string; id?: string } | undefined
+    if (sel?.kind === 'collider') {
+      const index = $part.get().colliders.findIndex((c) => c.id === sel.id)
+      if (index >= 0) {
+        const frame = this.colliderGizmoFrame(index)
+        updateColliderTransform(index, frame ? colliderLocalFromWorld(world, frame) : world)
+        return
+      }
+    }
+    updateSelectedTransform(world)
+  }
+
+  /**
+   * The placement a collider's gizmo currently edits through — the instance the user last
+   * clicked (see {@link colliderInstance}). Null for a part-level collider, or one whose
+   * owner template isn't placed: those live directly in Part space.
+   */
+  private colliderGizmoFrame(index: number): Transform | null {
+    const part = $part.get()
+    const collider = part.colliders[index]
+    if (!collider) return null
+    const owners = this.colliderOwners(part, collider)
+    if (owners.length === 0) return null
+    const i = Math.min(this.colliderInstance.get(collider.id) ?? 0, owners.length - 1)
+    return owners[Math.max(0, i)] ?? null
   }
 
   /** The active pose-edit target (active animation + joint + keyframe), or null. */
@@ -1093,7 +1192,7 @@ export class EditorScene {
 
   /** Snapshots all selected entities' transforms at the start of a bulk gizmo drag. */
   private beginBulkDrag(): void {
-    const refs = selectedTransformRefs()
+    const refs = this.worldTransformRefs()
     if (refs.length <= 1) {
       this.bulkSnapshot = null
       return
@@ -1132,7 +1231,14 @@ export class EditorScene {
             : scaledInPlaceTransform(base, factor),
       }
     })
-    updateSelectedTransforms(updates)
+    // Owner-local again on the way back down (see worldTransformRefs).
+    updateSelectedTransforms(
+      updates.map((u) => {
+        if (u.kind !== 'collider') return u
+        const frame = this.colliderGizmoFrame(u.index)
+        return frame ? { ...u, transform: colliderLocalFromWorld(u.transform, frame) } : u
+      }),
+    )
   }
 
   /** Ends a bulk drag: drops the snapshot and re-centers the pivot on the new layout. */

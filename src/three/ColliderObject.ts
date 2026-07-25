@@ -50,11 +50,20 @@ export class ColliderObject {
   private readonly fill: THREE.Mesh
   private readonly opacityBases: MaterialOpacityBase[]
 
-  constructor(collider: PartCollider) {
+  /**
+   * Which visual of this collider we are — a SubPart-owned collider is drawn once per
+   * placement of its template, and a click must report WHICH one so the gizmo can write
+   * back through that placement's frame. Always 0 for a part-level collider.
+   */
+  readonly instanceIndex: number
+
+  constructor(collider: PartCollider, instanceIndex = 0) {
     this.id = collider.id
+    this.instanceIndex = instanceIndex
     this.shape = collider.shape
-    this.group.name = `collider:${collider.id}`
-    const selectable = { kind: 'collider', id: collider.id }
+    this.group.name =
+      instanceIndex > 0 ? `collider:${collider.id}#${instanceIndex}` : `collider:${collider.id}`
+    const selectable = { kind: 'collider', id: collider.id, instanceIndex }
     this.group.userData.selectable = selectable
 
     this.aspect = aspectFor(collider)

@@ -114,8 +114,19 @@ A SubPart-owned collider draws **once per placement** of its template (KSA has n
 per-instance collider, so every instance really does carry the shape), positioned exactly
 as `ColliderModule` composes it — `colliderWorld` / `colliderLocalFromWorld` in
 `src/three/coords.ts`, which keeps the Euler convention in its one sanctioned place.
-Because there's no single object a drag could unambiguously write back to, a SubPart-owned
-collider is inspector-editable but not yet a gizmo target (Phase 3).
+
+Those visuals are all gizmo targets: clicking one records which instance you grabbed, and
+a drag converts the Part-space result back through **that placement's** frame before
+storing it. Every other visual of the same collider then moves with it — they are one
+document entity. The bulk (multi-select) path lifts owned colliders into Part space for
+the delta math and pushes them back down on write, so a mixed selection stays correct even
+when the owner is rotated.
+
+While the animation preview shows a **posed** frame, owned colliders ride their instance's
+posed transform — they do in-game too (`KeyframeAnimationModule.ApplyAnimationTransforms`
+flags `NeedsColliderUpdate` and `ConstraintSim` rebuilds the compound). The existing
+preview lock extends to them, so a drag can never write a posed frame back as the modeled
+one.
 
 ### Selection and the inspector
 
@@ -183,9 +194,10 @@ serialized to KSA XML. See [docs/layers.md](layers.md).
 
 ## Status
 
-Phases 1–2 are implemented: the game contract + round-trip (closing gap **E**), and
-part-level 3D authoring (visual, selection, gizmo, Add menu, fitting, validation).
-Still open in [plans/COLLIDERS_PLAN.md](../plans/COLLIDERS_PLAN.md): making SubPart-owned
-colliders gizmo-editable per instance and following the animation preview (Phase 3), and
-the coverage readout (Phase 4). **In-game verification is pending**, and capsule semantics
-remain unverified in shipped data.
+Phases 1–3 are implemented: the game contract + round-trip (closing gap **E**), 3D
+authoring, and fully editable SubPart-owned colliders. Still open in
+[plans/COLLIDERS_PLAN.md](../plans/COLLIDERS_PLAN.md): the coverage readout (Phase 4).
+
+**Not yet verified:** in-game behaviour of anything exported here; capsule semantics (Core
+ships zero capsules, so the Bepu convention is unconfirmed against real data); and the
+posed-animation collider preview, which is wired but has only been exercised at rest.

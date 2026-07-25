@@ -1,9 +1,11 @@
 # Import Models (Blender → flexo → KSA) — Analysis & Implementation Plan
 
 > **STATUS: IMPLEMENTED (2026-07-25).** Phases 0–5 landed across commits `6a5de93`,
-> `a4f2765`, `251ddcd`, `61eba47`, `f23a08d`, `ac6f7ae`, `6f448ed`, `f0342d8`. **Phase 6 is
-> deferred** (UASTC/BC7 KTX2 + `.toml` sidecar, shipping the imported GLB verbatim as a second
-> `<MeshAtlas>`, glTF animation import, vertex-colour bake, OBJ/STL, LODs).
+> `a4f2765`, `251ddcd`, `61eba47`, `f23a08d`, `ac6f7ae`, `6f448ed`, `f0342d8`, plus the
+> post-verification fixes `37793e9`, `4756641`. **Phase 6 is deferred** — see §5 Phase 6 for the
+> now-verified block-compression contract (UASTC + `.toml` sidecar, or raw BCn), why the
+> verbatim-atlas idea is recommended dropped, and that **glTF animation import is explicitly
+> out of scope by user decision**.
 > **In-game verification is still PENDING** — nothing here has been loaded into KSA; the §6
 > manual checklist is the bar.
 >
@@ -513,18 +515,56 @@ the Rules of React (no manual memo, hooks at top level) per AGENTS.md.
   different granularity that could not preserve a single existing SubPart identity.
 
 ### Phase 6 — Deferred / opportunistic
-- **UASTC (or BC7) KTX2 encoding + `.toml` sidecar** — the real fix for imported-texture VRAM.
-  Already the documented preferred future route in `docs/custom-assets.md`; imported models make
-  it *much* more urgent (a 4-texture model at 2048² costs ~90 MB VRAM uncompressed — 22.4 MB per
-  texture with mips — vs ~22 MB block-compressed at 1 byte/texel). Needs an in-browser encoder
-  evaluation (Basis Universal `basis_encoder.wasm`
-  / libktx WASM) — treat the encoder availability as **unverified** until spiked.
-- Ship the imported GLB **verbatim** as a second `<MeshAtlas>` (legal per fact 11) to skip the
-  export re-encode — gated on an in-game check that multiple Id-less atlases load.
-- glTF **animation** import mapped onto flexo's joint/keyframe model.
-- Vertex-colour bake into base colour; planar/box UV generation for unwrapped meshes.
-- Geometry-only OBJ/STL import.
-- LOD authoring (`<LOD>`) once the ground-clutter LOD work lands.
+
+**A. Block-compressed export textures (the one with real value).** Today every exported texture
+is uncompressed RGBA8 + Zstd: small on disk, **4 bytes/texel in VRAM** (a 2048² map = 22.4 MB with
+mips; a four-map model ≈ 90 MB). Block compression cuts that 4× (BC7/BC5 = 1 byte/texel) to 8×
+(BC4 = 0.5). The game-side contract is now **fully verified** (2026-07-25):
+
+- `KSA/TextureReference.cs:95-100` — a texture reads an optional sidecar at
+  `Path.ChangeExtension(modPath, ".toml")`, parsed into `KSA/TextureManifest.cs`:
+  `max` (int), `mipMaps` (bool), `format` (VkFormat), `scblockformatfamily` (`KtxTranscodeFmt`).
+- **Without a sidecar the transcode target is `Rgba32`** — `TextureReference` passes
+  `Manifest?.SuperCompressionBlockFormatFamily ?? KtxTranscodeFmt.Rgba32`, overriding the loader
+  class's own `Bc7Rgba` default (`Brutal.TextureApi.Ktx/Loader.cs:12`). So **UASTC alone buys
+  nothing** — the sidecar is what makes it land as BC7.
+- `Brutal.TextureApi.Ktx/Loader.cs:31-35` — transcoding only happens when
+  `NeedsTranscoding()`, i.e. for supercompressed (UASTC/ETC1S) files. **A raw BCn KTX2 is
+  uploaded verbatim and needs no sidecar** (that is how Core's own BC7/BC5/BC4 atlases work).
+- `KtxTranscodeFmt` values to emit (`Brutal.KtxApi/KtxTranscodeFmt.cs`): `6` = Bc7Rgba
+  (diffuse/ORM), `5` = Bc5Rg (normal), `4` = Bc4R (emissive mask).
+- Shipped precedent: `Content/Core/Textures/Earth_Normal.toml` is literally
+  `max = 4096` / `mipMaps = true` / `scblockformatfamily = 5`.
+
+Two routes, both **export-time only** — the editor keeps its existing uncompressed KTX2 in
+IndexedDB for preview (which is also why SubPart atlases moved to UASTC: it transcodes on every
+GPU, whereas raw BC7 needs BPTC), so neither route touches the import/render path:
+
+1. **UASTC + sidecar** (smaller change): encode UASTC, write `<name>.ktx2` + `<name>.toml` with
+   the per-channel `scblockformatfamily`. Proven by Core's own file above.
+2. **Raw BCn, no sidecar** (matches Core's atlases exactly): encode UASTC, then transcode
+   UASTC→BC7/BC5/BC4 with the Basis transcoder flexo **already ships** at `public/basis/`, and
+   re-wrap the blocks with `ktx-parse`. More code, but no sidecar file and nothing to misparse.
+
+The missing piece for both is an **in-browser UASTC encoder**. Candidates: vendor
+`basis_encoder.js/.wasm` from Basis Universal into `public/` (mirrors the existing
+`public/basis/` precedent, no supply-chain dependency, manual updates), or the npm package
+`ktx2-encoder` (0.6.0, MIT, ~3.4 MB, depends on `ktx-parse` — a small single-maintainer wrapper,
+so vet it). Encoding is slow (seconds per 2048² map), so it must run at export with progress,
+possibly behind an "optimize textures for VRAM" toggle.
+
+**B. Ship the imported GLB verbatim as a second `<MeshAtlas>`** — legal per fact 11, and it would
+skip the export re-encode. Low value in practice: it needs the `_VM` view meshes moved into the
+import GLB, it would ship orphaned meshes for deleted SubParts, and it rests on an unverified
+multi-atlas assumption. The current re-pack is correct and cheap. **Recommendation: drop it**
+unless export time or peak memory on a very large model becomes a real complaint.
+
+**C. Explicitly OUT: glTF animation import.** This would have meant reading Blender's animation
+clips and mapping them onto flexo's joint/keyframe model. The user has ruled it out — imported
+models are static geometry, and animation stays authored in flexo's own animation editor.
+
+**D. Remaining opportunistic ideas** (unranked): vertex-colour bake into base colour, planar/box
+UV generation for un-unwrapped meshes, geometry-only OBJ/STL import, LOD authoring (`<LOD>`).
 
 ---
 

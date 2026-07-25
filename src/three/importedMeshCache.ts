@@ -148,6 +148,29 @@ export async function getImportedRawGeometry(
 }
 
 /**
+ * Releases ONE import batch: revokes its blob URL and drops the raw-geometry entries derived
+ * from it. Called by `customAssetStore.removeImport()` after the batch's GLB is deleted from
+ * IndexedDB — {@link clearImportAtlases} is all-or-nothing and would take every OTHER batch's
+ * live URL down with it.
+ *
+ * After this the batch is unresolvable: {@link ensureImportAtlas} would find nothing in
+ * IndexedDB either. That is deliberate and matches the confirm dialog's promise — undoing the
+ * removal restores the descriptors, never the bytes (the same contract as removeCustomTexture).
+ */
+export function releaseImportAtlas(importId: string): void {
+  const url = atlasUrls.get(importId)
+  if (!url) return
+  URL.revokeObjectURL(url)
+  atlasUrls.delete(importId)
+  rawGltfs.delete(url)
+  // Deleting the CURRENT key during a Map iteration is well-defined (the iterator only
+  // skips entries removed ahead of it), so no snapshot copy is needed.
+  for (const key of rawGeometries.keys()) {
+    if (key.startsWith(`${url}#`)) rawGeometries.delete(key)
+  }
+}
+
+/**
  * Revokes every registered blob URL and drops the caches — called on project switch, before
  * re-registering the new project's batches ({@link ensureImportAtlas}). MeshAtlasCache keeps
  * its own entries keyed by the (now dead) URLs; blob URLs are unique per creation, so those

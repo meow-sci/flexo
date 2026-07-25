@@ -37,7 +37,7 @@ import {
   setSelection,
 } from '../state/editorStore'
 import { $layerView, layerViewState } from '../state/layerStore'
-import { CONNECTOR_LAYER_ID, KITTEN_LAYER_ID, type Layer } from '../ksa/types'
+import { CONNECTOR_LAYER_ID, KITTEN_LAYER_ID, meshKind, type Layer } from '../ksa/types'
 import { setManagingMeshId } from '../state/customAssetStore'
 import { ManageTanksModal } from './ManageTanksModal'
 
@@ -354,7 +354,11 @@ function SubPartRowMenu({ index }: { index: number }) {
           <Menu>
             <MenuItem onAction={() => duplicatePlacement(index)}>Duplicate</MenuItem>
             {customMesh && (
-              <MenuItem onAction={() => setManagingMeshId(customMesh.id)}>Manage Textures</MenuItem>
+              <MenuItem onAction={() => setManagingMeshId(customMesh.id)}>
+                {/* An imported SubPart has no per-face texture grid — one glTF primitive means
+                    one KSA material — so the panel it opens is a material/glow panel. */}
+                {meshKind(customMesh) === 'imported' ? 'Manage Material' : 'Manage Textures'}
+              </MenuItem>
             )}
             <MenuItem onAction={() => setManagingTanks(true)}>SubPart Data</MenuItem>
             <SubmenuTrigger>

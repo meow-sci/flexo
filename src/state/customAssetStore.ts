@@ -18,10 +18,18 @@ import type {
   TextureChannel,
   VisorSurface,
 } from '../ksa/types'
-import { KITTEN_LABELS, createDefaultMaterial, meshKind } from '../ksa/types'
+import {
+  BUILT_IN_LAYER_IDS,
+  DEFAULT_LAYER_ID,
+  KITTEN_LABELS,
+  createDefaultMaterial,
+  materialTextureIds,
+  meshKind,
+} from '../ksa/types'
 import type { NormalizedImport } from '../ksa/importNormalize'
 import type { ImportMaterialPlan } from '../ksa/importMaterials'
 import {
+  $activeLayerId,
   $part,
   pushUndo,
   addSubPart,
@@ -66,6 +74,7 @@ import {
   getImportedGeometry,
   importAtlasUrl,
   registerImportAtlas,
+  releaseImportAtlas,
 } from '../three/importedMeshCache'
 
 /**
@@ -1101,6 +1110,161 @@ export async function importModelAsMeshes(
   setSelection(newPlacementIndices, [], [])
 }
 
+/**
+ * Everything removing ONE import batch takes with it, as counts + ids. Computed by
+ * {@link planImportRemoval} and consumed by BOTH {@link removeImport} and the Custom Assets
+ * modal's confirm dialog, so the numbers the user agrees to are the numbers that happen.
+ */
+export interface ImportRemovalPlan {
+  /** {@link CustomMesh.id} of every SubPart of the batch. */
+  meshIds: string[]
+  /** Their {@link CustomMesh.subPartId}s (what placements reference). */
+  subPartIds: string[]
+  /** How many placements reference those SubParts. */
+  placements: number
+  /** Materials the batch leaves unreferenced (see the reference-counting note below). */
+  materialIds: string[]
+  /** Textures those materials (and the removed meshes' faces) leave unreferenced. */
+  textureIds: string[]
+  /** Layers left with no entity at all once the batch is gone (dropped with it). */
+  layerIds: string[]
+}
+
+/** Every texture a mesh's per-face grid points at (primitives only; imported meshes have none). */
+function meshFaceTextureIds(m: CustomMesh): string[] {
+  return Object.values(m.faceTextures)
+    .map((f) => f?.textureId)
+    .filter((id): id is string => !!id)
+}
+
+/**
+ * Plans the removal of one import batch (one dropped file): its meshes, their placements, and
+ * the assets the batch LEAVES BEHIND.
+ *
+ * GARBAGE COLLECTION IS REFERENCE COUNTED, NOT PROVENANCE TAGGED. Imported textures and
+ * materials are ordinary flexo assets the moment they land — reusable, re-assignable,
+ * editable — so "which material came from this file" is the wrong question by the time the
+ * user removes it. Instead: take the assets the batch's meshes were USING, and purge exactly
+ * those that nothing in the post-removal document still references. That cleans up correctly
+ * when the user has re-assigned materials since importing (a material the batch brought in but
+ * that now dresses a hand-made box SURVIVES; a hand-made material the user moved onto an
+ * imported SubPart, and nothing else, is collected).
+ *
+ * A material or texture that is simply unassigned — created in the Add menu and never used —
+ * is NEVER touched: only assets the removed meshes referenced are candidates.
+ */
+export function planImportRemoval(part: EditingPart, importId: string): ImportRemovalPlan {
+  const removed = part.customMeshes.filter((m) => m.imported?.importId === importId)
+  const meshIds = new Set(removed.map((m) => m.id))
+  const subPartIds = new Set(removed.map((m) => m.subPartId))
+  const kept = part.customMeshes.filter((m) => !meshIds.has(m.id))
+
+  // Materials: candidates are the ones the removed meshes wore; survivors are those any
+  // remaining mesh still wears.
+  const keptMaterialIds = new Set(kept.map((m) => m.materialId).filter(Boolean))
+  const purgedMaterials = part.customMaterials.filter(
+    (mat) =>
+      removed.some((m) => m.materialId === mat.id) &&
+      !keptMaterialIds.has(mat.id) &&
+      !kept.some((m) => m.materialId === mat.id),
+  )
+  const purgedMaterialIds = new Set(purgedMaterials.map((m) => m.id))
+
+  // Textures: candidates are those the purged materials + the removed meshes' faces pointed
+  // at; survivors are those any SURVIVING material channel or remaining mesh face still does.
+  const candidates = new Set<string>()
+  for (const mat of purgedMaterials) for (const id of materialTextureIds(mat)) candidates.add(id)
+  for (const m of removed) for (const id of meshFaceTextureIds(m)) candidates.add(id)
+  const stillUsed = new Set<string>()
+  for (const mat of part.customMaterials) {
+    if (purgedMaterialIds.has(mat.id)) continue
+    for (const id of materialTextureIds(mat)) stillUsed.add(id)
+  }
+  for (const m of kept) for (const id of meshFaceTextureIds(m)) stillUsed.add(id)
+  const textureIds = part.customTextures
+    .filter((t) => candidates.has(t.id) && !stillUsed.has(t.id))
+    .map((t) => t.id)
+
+  // Layers: only ones this batch was placed on, and only when nothing at all is left on them
+  // (the import's own layer, unless the user has since moved other entities onto it).
+  const batchLayers = new Set(
+    part.placements.filter((pl) => subPartIds.has(pl.subPartTemplateId)).map((pl) => pl.layerId),
+  )
+  const layerIds = [...batchLayers].filter(
+    (id) =>
+      !BUILT_IN_LAYER_IDS.includes(id) &&
+      part.layers.some((l) => l.id === id) &&
+      !part.placements.some((pl) => pl.layerId === id && !subPartIds.has(pl.subPartTemplateId)) &&
+      !part.connectors.some((c) => c.layerId === id) &&
+      !part.kittens.some((k) => k.layerId === id),
+  )
+
+  return {
+    meshIds: [...meshIds],
+    subPartIds: [...subPartIds],
+    placements: part.placements.filter((pl) => subPartIds.has(pl.subPartTemplateId)).length,
+    materialIds: [...purgedMaterialIds],
+    textureIds,
+    layerIds,
+  }
+}
+
+/**
+ * Removes a whole import batch: every SubPart that came from that one file, their placements,
+ * the materials/textures the batch leaves unreferenced ({@link planImportRemoval}), and the
+ * layer if the batch was the only thing on it — as ONE undo step.
+ *
+ * UNDO RESTORES THE DOCUMENT, NOT THE BYTES. Mirroring {@link removeCustomTexture}, the binaries
+ * are deleted from IndexedDB outright: the batch's geometry GLB, each purged texture's source +
+ * `.ktx2`, and each removed mesh's painted-glow bitmap. Undo brings the descriptors back but
+ * their geometry/textures are gone — imported geometry has no regenerable source, so a restored
+ * mesh would render nothing. The confirm dialog in CustomAssetsModal says exactly this.
+ */
+export async function removeImport(importId: string): Promise<void> {
+  const before = $part.get()
+  const plan = planImportRemoval(before, importId)
+  if (plan.meshIds.length === 0) return
+
+  const meshIds = new Set(plan.meshIds)
+  const subPartIds = new Set(plan.subPartIds)
+  const materialIds = new Set(plan.materialIds)
+  const textureIds = new Set(plan.textureIds)
+  const layerIds = new Set(plan.layerIds)
+  const label = before.customMeshes.find((m) => m.imported?.importId === importId)?.imported
+    ?.sourceFile
+
+  mutate('remove import', label ?? importId, (p) => {
+    p.customMeshes = p.customMeshes.filter((m) => !meshIds.has(m.id))
+    p.placements = p.placements.filter((pl) => !subPartIds.has(pl.subPartTemplateId))
+    p.customMaterials = p.customMaterials.filter((m) => !materialIds.has(m.id))
+    p.customTextures = p.customTextures.filter((t) => !textureIds.has(t.id))
+    p.layers = p.layers.filter((l) => !layerIds.has(l.id))
+  })
+
+  // Selection/active layer are ephemeral; both may now point at something that no longer
+  // exists (placement INDICES shift when placements are spliced out).
+  setSelection([], [], [])
+  if (layerIds.has($activeLayerId.get())) setActiveLayer(DEFAULT_LAYER_ID)
+
+  for (const id of textureIds) {
+    revokeTexture(id)
+    void deleteAsset(assetKeys.textureSource(id))
+    void deleteAsset(assetKeys.textureKtx2(id))
+  }
+  publishTextureUrls()
+  for (const id of meshIds) {
+    const url = emissivePaintUrls.get(id)
+    if (url) URL.revokeObjectURL(url)
+    emissivePaintUrls.delete(id)
+    void deleteAsset(assetKeys.emissivePaint(id))
+  }
+  publishEmissivePaintUrls()
+  void deleteAsset(assetKeys.importGlb(importId))
+  releaseImportAtlas(importId)
+
+  await scheduleRebuild()
+}
+
 export async function updateCustomMesh(
   id: string,
   patch: Partial<Pick<CustomMesh, 'name' | 'primitive' | 'faceTextures'>>,
@@ -1144,6 +1308,29 @@ export async function setMeshGlass(meshId: string, cfg: GlassConfig | undefined)
   mutate('edit visor tint', meshId, (p) => {
     const m = p.customMeshes.find((x) => x.id === meshId)
     if (m) m.glass = cfg
+  })
+  await refreshCatalog()
+}
+
+/**
+ * Toggles an IMPORTED mesh's "render as glass": exports through KSA's translucent
+ * `<PartModelGlass>` instead of `<PartModel>` (modExport reads `imported.transparent`).
+ *
+ * Export-only by design — the editor keeps showing the opaque PBR surface. KSA's glass is one
+ * fixed shader (≈75% opacity, ~10% diffuse tint, never emissive — MeshGlassIndirect.frag), so
+ * there is no material of the user's to preview: whatever the editor drew would be a second,
+ * differently-wrong guess. The panel says so in one line instead.
+ *
+ * No-op on a non-imported mesh (a primitive is never glass; a visor uses
+ * {@link setMeshSurface}).
+ */
+export async function setMeshTransparent(meshId: string, transparent: boolean): Promise<void> {
+  const name = $part.get().customMeshes.find((m) => m.id === meshId)?.name ?? ''
+  mutate('render as glass', name, (p) => {
+    const m = p.customMeshes.find((x) => x.id === meshId)
+    if (!m?.imported) return
+    if (transparent) m.imported.transparent = true
+    else delete m.imported.transparent
   })
   await refreshCatalog()
 }

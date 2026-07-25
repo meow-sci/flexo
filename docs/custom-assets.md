@@ -144,6 +144,8 @@ would re-run `GLTFExporter` over a multi-megabyte model on every rebuild.
   the stored GLBs, `getImportedGeometry()` (editor: shared `MeshAtlasCache`, tangents) and
   `getImportedRawGeometry()` (export: **no** tangents, because MikkTSpace de-indexes and KSA
   requires indices). Cached geometries are shared — clone, never dispose.
+  `releaseImportAtlas(importId)` drops ONE batch (used by `removeImport`);
+  `clearImportAtlases()` drops them all on project switch.
 - **`customAssetStore.importModelAsMeshes()`** — commits a normalized import as ONE undo
   step: a layer named after the file, every imported texture + material, one
   `CustomMesh{imported}` per group, one placement per instance. **Every binary is written
@@ -153,6 +155,31 @@ would re-run `GLTFExporter` over a multi-megabyte model on every rebuild.
   The non-mutating halves it needs are `createTextureAsset()` and
   `buildCustomMaterialDescriptor()`; `addCustomTexture`/`addCustomMaterial` are thin
   wrappers over them.
+- **`customAssetStore.removeImport(importId)`** — the inverse: ONE undo step removing every
+  SubPart of that batch, their placements, the assets it leaves behind, and its layer when
+  the batch was the only thing on it. `planImportRemoval(part, importId)` computes the
+  inventory (and feeds the confirm dialog's counts) — see **Removing an import** below.
+
+#### Removing an import — reference-counted, not provenance-tagged
+
+Imported textures and materials are ordinary flexo assets, so "which material came from this
+file" stops being true the moment the user re-assigns one. `planImportRemoval()` therefore
+garbage-collects by **reference counting over the post-removal document**: the candidates are
+the assets the removed meshes were *using*, and a candidate is collected only when nothing
+that remains references it.
+
+- a **material** is collected when the batch's meshes wore it and no surviving mesh does;
+- a **texture** is collected when a collected material's channel (or a removed mesh's face)
+  pointed at it and no surviving material channel / mesh face does;
+- an asset the user created and never assigned is **never** a candidate;
+- the **layer** goes only when it holds no placement, connector or kitten afterwards.
+
+**Undo restores the document, never the bytes.** The batch's `import-glb:<importId>`, each
+collected texture's `tex-src:`/`tex-ktx2:`, and each removed mesh's `emissive-paint:` are
+deleted from IndexedDB outright, and `releaseImportAtlas()` revokes just that batch's blob URL
+(`clearImportAtlases()` is the project-switch, all-or-nothing one). This mirrors
+`removeCustomTexture`'s long-standing contract, and unlike a primitive there is no regenerable
+source — so the confirm dialog says it in as many words before the user commits.
 
 #### Imported materials — the glTF → KSA slot mapping
 
@@ -196,7 +223,7 @@ same path as hand-authored ones. Nothing about them is a parallel universe.
   runtime `blob:` URLs, and (c) the synthetic `$customCatalog` entries the renderer
   consumes. Actions: `addCustomTexture`, `removeCustomTexture`, `addCustomMesh`,
   `updateCustomMesh`, `removeCustomMesh`, `makeKittenMeshPart`, `importModelAsMeshes`,
-  `hydrateCustomAssets`. All document
+  `removeImport`, `setMeshTransparent`, `hydrateCustomAssets`. All document
   mutations go through `mutate()`, which calls `pushUndo()` — so custom assets
   **enroll in undo/redo** (see [editor-state.md](editor-state.md)). Re-hydrates on
   every `$projectName` change. Diffuse `blob:` URL is the catalog cache key
@@ -247,10 +274,20 @@ same path as hand-authored ones. Nothing about them is a parallel universe.
   packed ORM, grayscale rough/metal), and a live PBR preview sphere under the same
   RoomEnvironment/tonemapping as the viewport.
 - `CreateMeshDialog.tsx` — primitive picker, params, material + texture assignment.
-- `ManageTexturesPanel.tsx` — per-mesh: material assignment (+ edit / new), glow /
-  visor surface, per-face texture + UV controls (warns when faces mix textures).
+- `ManageTexturesPanel.tsx` — per-mesh, gated on `meshKind()`: material assignment (+ edit /
+  new) and glow for primitive **and imported** meshes, visor surface for a kitten visor,
+  per-face texture + UV controls for primitives only (warns when faces mix textures). An
+  imported mesh instead gets a read-only **provenance block** (file / object / material /
+  triangles / vertices) and the **Render as glass** switch (`setMeshTransparent` →
+  `imported.transparent` → `<PartModelGlass>`) — export-only, since KSA's glass is one fixed
+  ~75%-opacity non-glowing shader there is no material of the user's to preview.
 - `CustomAssetsModal.tsx` — textures (channel select, delete), materials (swatch,
-  usage counts, edit, delete), meshes (add instance / manage / delete).
+  usage counts, edit, delete), meshes (add instance / manage / delete — **primitives only**
+  now), and **Imported models**: one card per import batch with its file name, SubPart /
+  placement / triangle totals and the textures it is dressed in; a `GridList` of its SubParts
+  (name, source object · source material, tri count, add instance / manage / delete); and
+  **Remove import**, confirmed with the exact inventory `planImportRemoval()` computed plus
+  the "deleted from browser storage, undo won't bring the bytes back" warning.
 - `ImportModelDialog.tsx` — the model importer's UI: **three states in one modal** —
   _drop_ (drop zone + file picker + the "How to export from Blender" recipe), _review_
   (3D preview, stats, options, warnings) and _importing_ (progress). **Nothing touches the
@@ -459,6 +496,13 @@ failed export).
   `<PartModelGlass>` route, shared-material interning, and a missing-geometry skip).
 - `src/state/projectCodec.test.ts` / `projectTransfer.test.ts` — imported-descriptor
   round-trip, the v4-payload rejection, and the binary-asset export gate.
+- `src/state/customAssetStore.test.ts` — the import commit (layer / meshes / placements /
+  textures / materials / glow) and `removeImport`: the orphan GC keeps assets another mesh
+  still uses and never touches an unassigned one, a second batch is untouched, and the batch
+  GLB + purged texture/glow binaries leave IndexedDB.
+- `src/state/editorStore.test.ts` — an import is ONE undo step, `removeImport` is ONE undo
+  step (undo restores meshes, placements, materials, textures and the layer), and
+  `setMeshTransparent` enrolls in undo.
 
 ## Emissive (glow) + visor surface
 
@@ -525,7 +569,9 @@ design. Still deliberately out of scope:
   no mesh editing in flexo. Imported models carry their real glTF surfaces (see **Imported
   materials** above) and **export into the part mod** like any other custom SubPart (see
   *Export plumbing*). Still to come ([plans/IMPORT_MODELS.md](../plans/IMPORT_MODELS.md)
-  Phases 4–5): the import dialog (preview / options / warnings) and re-import/replace.
+  Phase 5): **re-import / replace** — picking a new file for an existing batch and matching
+  SubParts by `sourceNode + sourceMaterial` so their `subPartId`s (and therefore placements,
+  GameData, animations and connectors) survive a Blender iteration.
 - **Imported models can't be shared as project JSON.** The data-only project export and the
   share link carry descriptors, not binaries, and an import batch's GLB in IndexedDB is the
   only copy of its geometry — so `hasCustomAssets()` gates those dialogs off exactly as it

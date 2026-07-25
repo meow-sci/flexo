@@ -24,16 +24,19 @@ import {
   setMeshGlow,
   setMeshGlass,
   setMeshSurface,
+  setMeshTransparent,
   setGlowPaintMeshId,
 } from '../state/customAssetStore'
 import { $simulateGlass, setSimulateGlass } from '../state/settingsStore'
 import { PRIMITIVE_FACE_KEYS, FACE_LABELS } from '../three/primitives'
-import type {
-  CustomMesh,
-  EmissiveConfig,
-  FaceTextureConfig,
-  TextureWrap,
-  VisorSurface,
+import {
+  meshKind,
+  type CustomMesh,
+  type EmissiveConfig,
+  type FaceTextureConfig,
+  type ImportedMeshSource,
+  type TextureWrap,
+  type VisorSurface,
 } from '../ksa/types'
 
 const DEFAULT_CONFIG: FaceTextureConfig = {
@@ -65,11 +68,24 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } {
   return { r: (v >> 16) & 255, g: (v >> 8) & 255, b: v & 255 }
 }
 
+/** The kind label in the panel header — a primitive names its shape, the other two their kind. */
+function meshKindLabel(mesh: CustomMesh): string {
+  switch (meshKind(mesh)) {
+    case 'kitten':
+      return 'kitten'
+    case 'imported':
+      return 'imported'
+    case 'primitive':
+      return mesh.primitive?.kind ?? 'mesh'
+  }
+}
+
 /**
  * Floating panel for per-mesh material editing on a custom mesh: a Glow (emissive) / visor-surface
- * section for every mesh, plus per-face texture + UV controls for primitive meshes. Rendered at the
- * app root so it floats over the 3D viewport (desktop card / mobile fullscreen modal). Driven by
- * $managingMeshId — set to a mesh id to open, null to close.
+ * section for every mesh, plus per-face texture + UV controls for primitive meshes and a
+ * provenance + glass block for imported ones. Rendered at the app root so it floats over the 3D
+ * viewport (desktop card / mobile fullscreen modal). Driven by $managingMeshId — set to a mesh
+ * id to open, null to close.
  */
 export function ManageTexturesPanel() {
   const meshId = useStore($managingMeshId)
@@ -78,8 +94,12 @@ export function ManageTexturesPanel() {
 
   const mesh = meshId ? part.customMeshes.find((m) => m.id === meshId) : undefined
 
-  // Per-face textures only exist for primitive meshes (kitten submeshes carry their own material).
-  const faceKeys = mesh?.primitive ? PRIMITIVE_FACE_KEYS[mesh.primitive.kind] : []
+  // Per-face textures only exist for primitive meshes: a kitten submesh carries its own KSA PBR
+  // set, and an imported mesh is one glTF primitive with exactly one material (a KSA <PartModel>).
+  const faceKeys =
+    mesh && meshKind(mesh) === 'primitive' && mesh.primitive
+      ? PRIMITIVE_FACE_KEYS[mesh.primitive.kind]
+      : []
   const [selectedFace, setSelectedFace] = useState(faceKeys[0] ?? '')
   const activeFace = faceKeys.includes(selectedFace) ? selectedFace : (faceKeys[0] ?? '')
 
@@ -118,10 +138,12 @@ export function ManageTexturesPanel() {
   }
 
   return (
-    <div className="absolute left-3 top-1/2 z-10 w-64 -translate-y-1/2 rounded-xl border border-border bg-panel/95 p-3 text-fg shadow-popover backdrop-blur-md">
+    // max-h + scroll: an imported mesh adds a provenance/glass section on top of the material
+    // and glow ones, which on a short viewport would otherwise run off the bottom of the card.
+    <div className="absolute left-3 top-1/2 z-10 max-h-[calc(100vh-6rem)] w-64 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-panel/95 p-3 text-fg shadow-popover backdrop-blur-md">
       <div className="mb-3 flex items-center justify-between gap-2">
         <span className="text-[11px] uppercase tracking-wide text-fg-subtle">
-          {mesh.primitive?.kind ?? 'kitten'} · {mesh.name}
+          {meshKindLabel(mesh)} · {mesh.name}
         </span>
         <AriaButton
           onPress={close}
@@ -156,16 +178,22 @@ function PanelContent({
   onClose,
 }: PanelContentProps) {
   const part = useStore($part)
+  const kind = meshKind(mesh)
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Material — primitive meshes only (kitten submeshes carry their own KSA PBR set). */}
-      {mesh.primitive && <MaterialSection mesh={mesh} />}
+      {/* Material — primitive + imported meshes (kitten submeshes carry their own KSA PBR set). */}
+      {kind !== 'kitten' && <MaterialSection mesh={mesh} />}
 
       <GlowSection mesh={mesh} />
 
+      {/* Provenance + the <PartModelGlass> opt-in — imported meshes only. */}
+      {kind === 'imported' && mesh.imported && (
+        <ImportedSection mesh={mesh} imported={mesh.imported} />
+      )}
+
       {/* Per-face texture controls — primitive meshes only. */}
-      {mesh.primitive && (
+      {kind === 'primitive' && (
         <>
           {/* Face selector — hidden when there is only one face (sphere/plane). */}
           {faceKeys.length > 1 && (
@@ -323,6 +351,50 @@ function MaterialSection({ mesh }: { mesh: CustomMesh }) {
         />
       )}
     </SectionShell>
+  )
+}
+
+/**
+ * Read-only provenance for an imported SubPart + its one authoring choice, "Render as glass".
+ *
+ * The provenance is what makes a re-import (Phase 5) legible — `sourceNode`/`sourceMaterial`
+ * are the match keys — and what tells the user which Blender object a SubPart came from when
+ * one file split into a dozen. The glass toggle writes `imported.transparent`, which the
+ * exporter routes to `<PartModelGlass>`; it deliberately changes nothing in the editor
+ * preview (see setMeshTransparent).
+ */
+function ImportedSection({ mesh, imported }: { mesh: CustomMesh; imported: ImportedMeshSource }) {
+  return (
+    <SectionShell title="Imported model">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-[11px]">
+        <ProvenanceRow label="File" value={imported.sourceFile} />
+        <ProvenanceRow label="Object" value={imported.sourceNode} />
+        <ProvenanceRow label="Material" value={imported.sourceMaterial} />
+        <ProvenanceRow label="Triangles" value={imported.triangles.toLocaleString()} />
+        <ProvenanceRow label="Vertices" value={imported.vertices.toLocaleString()} />
+      </dl>
+      <Switch
+        isSelected={!!imported.transparent}
+        onChange={(v) => void setMeshTransparent(mesh.id, v)}
+      >
+        Render as glass
+      </Switch>
+      <p className="text-[11px] leading-snug text-fg-subtle">
+        KSA glass is one fixed shader — about 75% opaque, barely tinted by the diffuse, and it
+        can&apos;t glow. Editor preview stays opaque.
+      </p>
+    </SectionShell>
+  )
+}
+
+function ProvenanceRow({ label, value }: { label: string; value: string }) {
+  return (
+    <>
+      <dt className="text-fg-subtle">{label}</dt>
+      <dd className="truncate text-fg-muted" title={value}>
+        {value}
+      </dd>
+    </>
   )
 }
 

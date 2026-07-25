@@ -35,6 +35,7 @@ vi.mock('../three/importedMeshCache', () => {
     ensureImportAtlas: async (importId: string) => urls.get(importId) ?? null,
     getImportedGeometry: async () => new THREE.BufferGeometry(),
     getImportedRawGeometry: async () => null,
+    releaseImportAtlas: (importId: string) => urls.delete(importId),
     clearImportAtlases: () => urls.clear(),
   }
 })
@@ -130,7 +131,7 @@ import {
 } from '../ksa/types'
 import type { ConnectorCapability, Transform } from '../ksa/types'
 import type { ImportedGameData } from './editorStore'
-import { importModelAsMeshes } from './customAssetStore'
+import { importModelAsMeshes, removeImport, setMeshTransparent } from './customAssetStore'
 import { analyzeImport, DEFAULT_IMPORT_OPTIONS } from '../ksa/importPlan'
 import { normalizeImport, type NormalizedImport } from '../ksa/importNormalize'
 import type { ImportMaterialPlan } from '../ksa/importMaterials'
@@ -1338,5 +1339,48 @@ describe('imported models', () => {
     expect(restored.customMaterials).toHaveLength(1)
     expect(restored.customMeshes).toHaveLength(2)
     expect(restored.placements).toHaveLength(3)
+  })
+
+  it('removeImport is ONE undo step: undo restores meshes, placements, materials and textures', async () => {
+    const layersBefore = $part.get().layers.length
+    await importSyntheticModel(true)
+    const imported = $part.get()
+    const importId = imported.customMeshes[0].imported!.importId
+
+    await removeImport(importId)
+    const removed = $part.get()
+    expect(removed.customMeshes).toHaveLength(0)
+    expect(removed.placements).toHaveLength(0)
+    expect(removed.customMaterials).toHaveLength(0)
+    expect(removed.customTextures).toHaveLength(0)
+    expect(removed.layers).toHaveLength(layersBefore)
+
+    // ONE undo: the meshes, their placements, the collected material/textures and the layer
+    // all come back together. (Their BINARIES do not — see removeImport's contract; the
+    // confirm dialog says so.)
+    undo()
+    const back = $part.get()
+    expect(back.customMeshes).toHaveLength(2)
+    expect(back.placements).toHaveLength(3)
+    expect(back.customMaterials).toHaveLength(1)
+    expect(back.customTextures).toHaveLength(2)
+    expect(back.layers).toHaveLength(layersBefore + 1)
+    expect(back.customMeshes.every((m) => m.imported?.importId === importId)).toBe(true)
+
+    redo()
+    expect($part.get().customMeshes).toHaveLength(0)
+  })
+
+  it('setMeshTransparent enrolls in undo', async () => {
+    await importSyntheticModel()
+    const meshId = $part.get().customMeshes[0].id
+
+    await setMeshTransparent(meshId, true)
+    expect($part.get().customMeshes[0].imported!.transparent).toBe(true)
+
+    undo()
+    expect($part.get().customMeshes[0].imported!.transparent).toBeUndefined()
+    redo()
+    expect($part.get().customMeshes[0].imported!.transparent).toBe(true)
   })
 })

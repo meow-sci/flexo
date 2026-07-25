@@ -462,14 +462,26 @@ the Rules of React (no manual memo, hooks at top level) per AGENTS.md.
 - **Done when**: `pnpm test` covers the emitted Assets XML/atlas for an imported SubPart, and a
   real mod folder loads in KSA (see §6). ← automated side done; **in-game pass still pending**.
 
-### Phase 4 — The dialog + warnings (2 days)
+### Phase 4 — The dialog + warnings (2 days) — **DONE**
 - `ImportModelDialog.tsx` with preview, stats, options, warning list; drag-drop onto the viewport;
   `$modelImportSettings` persisted store; progress reporting for big files.
-- `CustomAssetsModal` "Imported models" section; `ManageTexturesPanel` imported-mesh mode.
+- `CustomAssetsModal` "Imported models" section (one card per batch: file, SubPart/placement/tri
+  totals, its textures, a `GridList` of its SubParts with add-instance / manage / delete, and
+  **Remove import**); `ManageTexturesPanel` imported-mesh mode (material + glow as for a
+  primitive, **no** face grid, a read-only provenance block, and the "Render as glass"
+  `setMeshTransparent` toggle). Every `meshKind()` audit site in §3.6 is now converted.
+- **"Remove import" landed here, not in Phase 5** — it is what makes the batch section usable.
+  `customAssetStore.removeImport()` is one undo step over `planImportRemoval()`, which GCs the
+  batch's leftovers by **reference counting over the post-removal document** rather than tagging
+  assets with import provenance (imported textures/materials are ordinary flexo assets, so
+  provenance goes stale the moment the user re-assigns one). Binaries — the batch GLB, purged
+  textures, glow bitmaps — are deleted outright and `releaseImportAtlas()` frees just that
+  batch's blob URL; undo restores the descriptors, never the bytes (the `removeCustomTexture`
+  precedent), and the confirm dialog says so.
 
 ### Phase 5 — Iteration UX (1–2 days)
 - Re-import / replace with `sourceNode + sourceMaterial` matching (keeps `subPartId`s alive).
-- "Remove import" cleanup (meshes, placements, orphan textures, IndexedDB blob).
+- ~~"Remove import" cleanup~~ — **done in Phase 4** (above).
 - Import report toast/panel summarising what was created.
 
 ### Phase 6 — Deferred / opportunistic

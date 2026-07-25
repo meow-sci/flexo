@@ -47,6 +47,7 @@ vi.mock('../three/importedMeshCache', () => {
       return g
     },
     getImportedRawGeometry: async () => null,
+    releaseImportAtlas: (importId: string) => urls.delete(importId),
     clearImportAtlases: () => urls.clear(),
   }
 })
@@ -106,8 +107,11 @@ import {
   customMeshRenderCache,
   importModelAsMeshes,
   makeKittenMeshPart,
+  planImportRemoval,
   removeCustomMaterial,
+  removeImport,
   setMeshMaterial,
+  setMeshTransparent,
   updateCustomMaterial,
 } from './customAssetStore'
 import { analyzeImport, DEFAULT_IMPORT_OPTIONS } from '../ksa/importPlan'
@@ -420,5 +424,137 @@ describe('importModelAsMeshes', () => {
     expect(new Set(ids).size).toBe(6)
     expect(ids).toContain('hull_1')
     expect(ids).toContain('hull_3')
+  })
+
+  it('setMeshTransparent flips the <PartModelGlass> export flag on an imported mesh', async () => {
+    const normalized = await synthesizeImport()
+    await importModelAsMeshes(normalized, 'pod.glb')
+    const meshId = $part.get().customMeshes[0]!.id
+
+    await setMeshTransparent(meshId, true)
+    expect($part.get().customMeshes[0]!.imported?.transparent).toBe(true)
+    await setMeshTransparent(meshId, false)
+    // Cleared, not set to false — the flag is optional and absence is the default.
+    expect($part.get().customMeshes[0]!.imported).not.toHaveProperty('transparent')
+  })
+})
+
+describe('removeImport', () => {
+  it('removes the batch meshes, placements, layer and orphaned material/textures', async () => {
+    const normalized = await synthesizeImport()
+    await importModelAsMeshes(normalized, 'pod.glb', materialPlanFor(normalized, true))
+
+    const before = $part.get()
+    expect(before.customMeshes).toHaveLength(2)
+    expect(before.placements).toHaveLength(3)
+    expect(before.customTextures).toHaveLength(3)
+    expect(before.customMaterials).toHaveLength(1)
+    const layerId = before.layers.find((l) => l.name === 'pod')!.id
+
+    await removeImport(normalized.importId)
+
+    const after = $part.get()
+    expect(after.customMeshes).toHaveLength(0)
+    expect(after.placements).toHaveLength(0)
+    // The batch's material and all three of its textures are now unreferenced → collected.
+    expect(after.customMaterials).toHaveLength(0)
+    expect(after.customTextures).toHaveLength(0)
+    // The layer the import created is empty now, so it goes too.
+    expect(after.layers.some((l) => l.id === layerId)).toBe(false)
+    expect($customCatalog.get()).toHaveLength(0)
+  })
+
+  it('keeps a material (and its textures) that another mesh still uses', async () => {
+    const normalized = await synthesizeImport()
+    await importModelAsMeshes(normalized, 'pod.glb', materialPlanFor(normalized))
+
+    // A hand-authored primitive adopts the imported material — the exact case provenance
+    // tagging would get wrong and reference counting gets right.
+    const matId = $part.get().customMaterials[0]!.id
+    $part.set({
+      ...$part.get(),
+      customMeshes: [
+        ...$part.get().customMeshes,
+        {
+          id: 'mesh_keep',
+          name: 'Box',
+          subPartId: 'flexo_Box_keep',
+          primitive: { kind: 'box', params: { width: 1, height: 1, depth: 1 } },
+          faceTextures: {},
+          materialId: matId,
+        },
+      ],
+    })
+
+    await removeImport(normalized.importId)
+
+    const after = $part.get()
+    expect(after.customMeshes.map((m) => m.id)).toEqual(['mesh_keep'])
+    expect(after.customMaterials).toHaveLength(1)
+    expect(after.customTextures).toHaveLength(3)
+    // Its binaries survive too.
+    for (const t of after.customTextures) {
+      expect(await getAsset(assetKeys.textureSource(t.id))).toBeInstanceOf(Blob)
+    }
+  })
+
+  it('leaves an untouched second import batch alone', async () => {
+    const first = await synthesizeImport()
+    await importModelAsMeshes(first, 'pod.glb', materialPlanFor(first))
+    const second = await synthesizeImport()
+    await importModelAsMeshes(second, 'nozzle.glb', materialPlanFor(second))
+
+    await removeImport(first.importId)
+
+    const after = $part.get()
+    expect(after.customMeshes.every((m) => m.imported?.importId === second.importId)).toBe(true)
+    expect(after.customMeshes).toHaveLength(2)
+    expect(after.placements).toHaveLength(3)
+    expect(after.customMaterials).toHaveLength(1)
+    expect(after.customTextures).toHaveLength(3)
+    expect(await getAsset(assetKeys.importGlb(second.importId))).toBeInstanceOf(Blob)
+  })
+
+  it('deletes the batch GLB, the purged textures and the glow bitmaps from IndexedDB', async () => {
+    const normalized = await synthesizeImport()
+    await importModelAsMeshes(normalized, 'pod.glb', materialPlanFor(normalized, true))
+    const before = $part.get()
+    const textureIds = before.customTextures.map((t) => t.id)
+    const meshIds = before.customMeshes.map((m) => m.id)
+    expect(await getAsset(assetKeys.importGlb(normalized.importId))).toBeInstanceOf(Blob)
+
+    await removeImport(normalized.importId)
+
+    expect(await getAsset(assetKeys.importGlb(normalized.importId))).toBeUndefined()
+    for (const id of textureIds) {
+      expect(await getAsset(assetKeys.textureSource(id))).toBeUndefined()
+      expect(await getAsset(assetKeys.textureKtx2(id))).toBeUndefined()
+    }
+    for (const id of meshIds) {
+      expect(await getAsset(assetKeys.emissivePaint(id))).toBeUndefined()
+    }
+  })
+
+  it('planImportRemoval never collects an asset nothing referenced in the first place', async () => {
+    const normalized = await synthesizeImport()
+    await importModelAsMeshes(normalized, 'pod.glb', materialPlanFor(normalized))
+    // A material created in the Add menu and never assigned is NOT the import's litter.
+    const spare = await addCustomMaterial('Spare')
+
+    const plan = planImportRemoval($part.get(), normalized.importId)
+    expect(plan.materialIds).not.toContain(spare.id)
+    expect(plan.meshIds).toHaveLength(2)
+    expect(plan.placements).toBe(3)
+    expect(plan.textureIds).toHaveLength(3)
+
+    await removeImport(normalized.importId)
+    expect($part.get().customMaterials.map((m) => m.id)).toEqual([spare.id])
+  })
+
+  it('is a no-op for an unknown import id', async () => {
+    const normalized = await synthesizeImport()
+    await importModelAsMeshes(normalized, 'pod.glb')
+    await removeImport('nope')
+    expect($part.get().customMeshes).toHaveLength(2)
   })
 })

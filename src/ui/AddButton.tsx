@@ -13,7 +13,7 @@ import {
 import { $part, addConnector, addKitten, addSubPart } from '../state/editorStore'
 import { enterEngineMode } from '../state/engineStore'
 import { makeKittenMeshPart, openImportModel } from '../state/customAssetStore'
-import type { KittenKind } from '../ksa/types'
+import { meshKind, type KittenKind } from '../ksa/types'
 import { SubPartPopup } from './SubPartBrowser'
 import { PartPopup } from './PartBrowser'
 import { CustomTextureDialog } from './CustomTextureDialog'
@@ -22,9 +22,10 @@ import { MaterialDialog } from './MaterialDialog'
 
 export function AddButton() {
   const part = useStore($part)
-  // Kitten submeshes aren't user-editable primitives — they have their own "Make
-  // Kitten Mesh" entry and shouldn't clutter the "Custom Meshes" re-add submenu.
-  const customMeshes = part.customMeshes.filter((m) => !m.kitten)
+  // Every re-placeable custom SubPart — hand-authored primitives AND imported glTF meshes.
+  // Kitten submeshes are the exception: they have their own "Make Kitten Mesh" entry and
+  // shouldn't clutter the "Custom Meshes" re-add submenu.
+  const customMeshes = part.customMeshes.filter((m) => meshKind(m) !== 'kitten')
   const [subPartOpen, setSubPartOpen] = useState(false)
   const [partOpen, setPartOpen] = useState(false)
   const [textureOpen, setTextureOpen] = useState(false)

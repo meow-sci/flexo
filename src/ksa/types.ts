@@ -1468,6 +1468,23 @@ export function createDefaultMaterial(id: string, name: string): CustomMaterial 
 }
 
 /**
+ * Every {@link CustomTexture} id a material's channels point at (deduped, in slot order).
+ * The one place that enumerates the mapped channels — used for usage counts in the UI and for
+ * the reference-counted asset GC in `customAssetStore.planImportRemoval()`. A packed ORM
+ * counts exactly like the separate channels it overrides, mirroring the export.
+ */
+export function materialTextureIds(mat: CustomMaterial): string[] {
+  const ids: string[] = []
+  if (mat.baseColor.kind === 'map') ids.push(mat.baseColor.textureId)
+  if (mat.metalness.kind === 'map') ids.push(mat.metalness.textureId)
+  if (mat.roughness.kind === 'map') ids.push(mat.roughness.textureId)
+  if (mat.occlusion) ids.push(mat.occlusion.textureId)
+  if (mat.ormPacked) ids.push(mat.ormPacked.textureId)
+  if (mat.normal) ids.push(mat.normal.textureId)
+  return [...new Set(ids)]
+}
+
+/**
  * Per-face texture + UV configuration for a custom primitive mesh face.
  * Face key names are defined by PRIMITIVE_FACE_KEYS in three/primitives.ts
  * (e.g. 'right'/'left'/'top'/'bottom'/'front'/'back' for box,

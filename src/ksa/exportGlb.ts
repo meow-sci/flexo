@@ -19,6 +19,21 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
  * references. We keep the node name too (flexo's own MeshAtlasCache resolves geometry
  * via getObjectByName), so both fields end up set to the SubPart id.
  *
+ * GEOMETRY — CRITICAL (indices are mandatory, extra attributes are not read):
+ * KSA's glTF reader only builds an index buffer `if (prim.Indices.HasValue)`
+ * (decomp/RenderCore.Gltf/GltfUtils.cs:484-488). A primitive WITHOUT `indices` therefore
+ * loads with an empty index buffer: it draws zero triangles and its CPU picking span is
+ * empty (decomp/KSA/MeshReference.cs:90-96) — an invisible, unpickable part with NO error
+ * message. THREE.GLTFExporter faithfully omits `indices` for a non-indexed BufferGeometry,
+ * and three's MikkTSpace tangent generator DE-INDEXES geometry (see MeshAtlasCache, which
+ * adds tangents for the editor's normal-map preview), so a geometry that took the editor's
+ * path would silently export as a no-draw. toKsaGeometry() below therefore ALWAYS indexes.
+ * It also strips every attribute KSA never imports — meshes load with
+ * `VertexImportFlags.Normals | UVs` only (decomp/KSA/MeshReference.cs:83), so TANGENT /
+ * COLOR_0 / TEXCOORD_1 / JOINTS_0 / WEIGHTS_0 are dead weight in the shipped mod. Neither
+ * step may mutate the caller's geometry (the editor's render cache owns it and its tangents
+ * must survive), so both operate on a clone.
+ *
  * Authoring orientation is three.js-natural (Y-up); how the result sits inside KSA
  * is validated in-game (see plans/FLEXO_CUSTOM_ASSETS.md). If an axis fix is ever
  * needed, apply it HERE only (rotate the geometry before export) so the editor's
@@ -42,6 +57,33 @@ export interface MeshAtlasNode {
   geometry: THREE.BufferGeometry
 }
 
+/**
+ * three.js attribute names that survive into the atlas, i.e. the ones KSA's mesh loader
+ * actually imports (POSITION / NORMAL / TEXCOORD_0). See the GEOMETRY block in the header.
+ */
+const KSA_READ_ATTRIBUTES = new Set(['position', 'normal', 'uv'])
+
+/**
+ * Returns a NEW geometry that satisfies KSA's mesh loader: indexed, and carrying only the
+ * attributes the game imports. Never mutates the input — callers pass geometry owned by the
+ * editor's caches. See the GEOMETRY block in the file header for why each step is required.
+ */
+function toKsaGeometry(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+  const out = geometry.clone()
+  for (const name of Object.keys(out.attributes)) {
+    if (!KSA_READ_ATTRIBUTES.has(name)) out.deleteAttribute(name)
+  }
+  if (!out.getIndex()) {
+    // De-indexed input (MikkTSpace tangents, geometry.toNonIndexed(), some DCC exports):
+    // rebuild the trivial 0..count-1 index so GLTFExporter emits an `indices` accessor.
+    const count = out.getAttribute('position')?.count ?? 0
+    const index = count > 65536 ? new Uint32Array(count) : new Uint16Array(count)
+    for (let i = 0; i < count; i++) index[i] = i
+    out.setIndex(new THREE.BufferAttribute(index, 1))
+  }
+  return out
+}
+
 export async function buildMeshAtlasGlb(nodes: MeshAtlasNode[]): Promise<Uint8Array> {
   if (nodes.length === 0) throw new Error('buildMeshAtlasGlb: no nodes to export')
 
@@ -49,19 +91,21 @@ export async function buildMeshAtlasGlb(nodes: MeshAtlasNode[]): Promise<Uint8Ar
   // A single shared placeholder material — KSA ignores GLB materials and applies
   // the XML PbrMaterial, but GLTFExporter requires meshes to have one.
   const placeholder = new THREE.MeshStandardMaterial()
-  const viewGeometries: THREE.BufferGeometry[] = []
+  const temporaries: THREE.BufferGeometry[] = []
   for (const node of nodes) {
-    const mesh = new THREE.Mesh(node.geometry, placeholder)
+    const geometry = toKsaGeometry(node.geometry)
+    temporaries.push(geometry)
+    const mesh = new THREE.Mesh(geometry, placeholder)
     mesh.name = node.name // → glTF node name (what flexo's MeshAtlasCache resolves)
     scene.add(mesh)
     // Paired view (picking) mesh so the in-game editor can hover/select the part.
     // Same shape — flexo primitives are low-poly, so a simplified picking mesh buys
-    // nothing. The geometry must be a distinct instance (not node.geometry): GLTFExporter
-    // dedupes meshes that share geometry+material into ONE glTF mesh, which would collapse
-    // the render and view meshes and leave KSA only one registered name. Referenced from
-    // <MeshView> in the Assets XML. See file header.
-    const viewGeometry = node.geometry.clone()
-    viewGeometries.push(viewGeometry)
+    // nothing. The geometry must be a distinct instance (not the render geometry):
+    // GLTFExporter dedupes meshes that share geometry+material into ONE glTF mesh, which
+    // would collapse the render and view meshes and leave KSA only one registered name.
+    // Referenced from <MeshView> in the Assets XML. See file header.
+    const viewGeometry = toKsaGeometry(node.geometry)
+    temporaries.push(viewGeometry)
     const viewMesh = new THREE.Mesh(viewGeometry, placeholder)
     viewMesh.name = node.name + VIEW_MESH_SUFFIX
     scene.add(viewMesh)
@@ -70,7 +114,7 @@ export async function buildMeshAtlasGlb(nodes: MeshAtlasNode[]): Promise<Uint8Ar
   const exporter = new GLTFExporter()
   const result = await exporter.parseAsync(scene, { binary: true, onlyVisible: false })
   placeholder.dispose()
-  for (const g of viewGeometries) g.dispose()
+  for (const g of temporaries) g.dispose()
   if (!(result instanceof ArrayBuffer)) {
     throw new Error('buildMeshAtlasGlb: expected binary GLB output')
   }

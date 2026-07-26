@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { ListBoxItem } from 'react-aria-components'
-import { Button, TextField, Switch, SectionTitle, Select } from './kit'
+import { ChevronDown, ChevronUp } from 'lucide-react'
+import { Button, Chip, TextField, Switch, SectionTitle, Select } from './kit'
 import { NumberField } from './NumberField'
 import { isPartialNumber, parseNumericDraft } from './numberDraft'
 import {
   $bulkScaleMode,
+  aimIvaSeat,
+  moveIvaSeat,
   pushUndo,
   $part,
   setColliderOwner,
@@ -34,7 +37,9 @@ import {
   type ColliderShape,
   type ConnectorCapability,
   type ConnectorFlag,
+  type IvaSeat,
   type PartCollider,
+  type Vec3,
 } from '../ksa/types'
 import { colliderSizeLabels, type ColliderSizeLabel } from '../ksa/colliderSize'
 import { colliderLocalFromWorld, colliderWorld } from '../three/coords'
@@ -46,6 +51,11 @@ import {
   requestCoverageCheck,
   setColliderSettings,
 } from '../state/colliderStore'
+import { requestIvaSeatAim } from '../state/ivaSeatStore'
+import { SEAT_LOCAL_UP, seatAxesFromRotation, seatRotationFromAxes } from '../ksa/ivaSeatAxes'
+import { formatG6 } from '../ksa/formatG6'
+import { $catalogIndex } from '../state/catalogStore'
+import { resolveInternal } from '../ksa/modExport'
 import { DEG2RAD, RAD2DEG, fmt } from './format'
 
 const panelClass = 'flex flex-col gap-2 rounded-xl border border-border bg-panel p-2'
@@ -53,15 +63,17 @@ const panelClass = 'flex flex-col gap-2 rounded-xl border border-border bg-panel
 type Axis = 'x' | 'y' | 'z'
 
 /**
- * Numeric transform inspector for the selected entity (SubPart, connector, or collider).
- * Two-way bound with the 3D gizmo: both edit the SAME store, so typing moves the
- * model live and gizmo drags update these fields live. Rotation is shown in
- * degrees but stored/exported in radians. Connectors expose their connection Flags.
+ * Numeric transform inspector for the selected entity (SubPart, connector, collider or
+ * IVA seat). Two-way bound with the 3D gizmo: both edit the SAME store, so typing moves
+ * the model live and gizmo drags update these fields live. Rotation is shown in degrees
+ * but stored/exported in radians. Connectors expose their connection Flags.
  *
- * A **collider** reads differently in one place: its `scale` IS its outer size in METERS
- * (KSA colliders have no scale field — see {@link PartCollider}), so the third group is
- * labelled "Size (m)" with per-shape labels, and only the axes that shape can independently
- * control are shown.
+ * Two kinds read differently in the third numeric group:
+ *  - a **collider**'s `scale` IS its outer size in METERS (KSA colliders have no scale
+ *    field — see {@link PartCollider}), so the group is labelled "Size (m)" with per-shape
+ *    labels, and only the axes that shape can independently control are shown;
+ *  - an **IVA seat** has no size at all (`<IVASeat>` is position + two axes, and the store
+ *    pins `scale` to (1,1,1)), so the group is omitted entirely rather than shown inert.
  */
 export function TransformInspector() {
   const count = useStore($selectionCount)
@@ -75,7 +87,9 @@ export function TransformInspector() {
       ? entity.placement
       : entity.kind === 'connector'
         ? entity.connector
-        : entity.collider
+        : entity.kind === 'collider'
+          ? entity.collider
+          : entity.seat
   const locked = isLayerLocked(target.layerId)
   const transform = target
 
@@ -94,7 +108,9 @@ export function TransformInspector() {
       ? entity.placement.instanceId
       : entity.kind === 'connector'
         ? entity.connector.id
-        : entity.collider.id
+        : entity.kind === 'collider'
+          ? entity.collider.id
+          : entity.seat.id
 
   const posField = (axis: Axis) => (
     <NumberField
@@ -145,8 +161,10 @@ export function TransformInspector() {
           capabilities={entity.connector.capabilities}
           locked={locked}
         />
-      ) : (
+      ) : entity.kind === 'collider' ? (
         <ColliderHeader index={entity.index} collider={entity.collider} locked={locked} />
+      ) : (
+        <IvaSeatHeader index={entity.index} seat={entity.seat} locked={locked} />
       )}
       <Section title="Position (m)">
         {posField('x')}
@@ -158,7 +176,9 @@ export function TransformInspector() {
         {rotField('y')}
         {rotField('z')}
       </Section>
-      {sizeLabels ? (
+      {/* An IVA seat has no third group at all: KSA's `<IVASeat>` carries no size, and the
+          store pins the seat's scale to (1,1,1), so any field here would be a no-op. */}
+      {entity.kind === 'ivaSeat' ? null : sizeLabels ? (
         <Section title="Size (m)">
           {sizeLabels[0] && scaleField('x', sizeLabels[0])}
           {sizeLabels[1] && scaleField('y', sizeLabels[1])}
@@ -611,6 +631,143 @@ function CoveragePanel() {
       >
         <span className="text-xs text-fg-subtle">Sample every vertex (slower, accurate)</span>
       </Switch>
+    </div>
+  )
+}
+
+/**
+ * The six axis-aligned aim presets. `+X` is called out as the nose because that is
+ * KSA's own `<ForwardAxis>` default and the direction Core's capsule seats look.
+ */
+const AIM_PRESETS: readonly { id: string; label: string; forward: Vec3 }[] = [
+  { id: '+x', label: '+X (nose)', forward: { x: 1, y: 0, z: 0 } },
+  { id: '-x', label: '−X (tail)', forward: { x: -1, y: 0, z: 0 } },
+  { id: '+y', label: '+Y', forward: { x: 0, y: 1, z: 0 } },
+  { id: '-y', label: '−Y', forward: { x: 0, y: -1, z: 0 } },
+  { id: '+z', label: '+Z', forward: { x: 0, y: 0, z: 1 } },
+  { id: '-z', label: '−Z', forward: { x: 0, y: 0, z: -1 } },
+]
+
+/** `x, y, z` through the SAME G6 formatter the exporter writes the seat axes with. */
+const fmtVec = (v: Vec3) => `${formatG6(v.x)}, ${formatG6(v.y)}, ${formatG6(v.z)}`
+
+const dot = (a: Vec3, b: Vec3) => a.x * b.x + a.y * b.y + a.z * b.z
+
+/** Cosine beyond which two unit axes count as parallel (KSA would NaN the camera). */
+const PARALLEL_DOT = 0.999
+
+/**
+ * Header for a selected IVA seat — where KSA's `<IVASeat>` contract becomes visible.
+ *
+ * The element carries a position and a `<ForwardAxis>`/`<UpAxis>` PAIR, but flexo edits
+ * seats with the same rotation gizmo as everything else, so the two vectors are shown
+ * read-only: they are what actually ships, derived through `seatAxesFromRotation`.
+ *
+ * Seat ORDER is authored data, not an implementation detail — the game cycles seats in
+ * document order with `C` and opens IVA on the first one (`IVAController.OnSwitchOn`) —
+ * hence the reorder buttons and the badge on index 0.
+ */
+function IvaSeatHeader({ index, seat, locked }: { index: number; seat: IvaSeat; locked: boolean }) {
+  const part = useStore($part)
+  const catalogIndex = useStore($catalogIndex)
+  const total = part.ivaSeats.length
+  const { forward, up } = seatAxesFromRotation(seat.rotation)
+  // KSA culls back faces unconditionally, so from a seat the surrounding hull is simply
+  // not there: without interior-only geometry the seat looks straight out at space.
+  const hasInterior = part.placements.some((p) =>
+    resolveInternal(part, p.subPartTemplateId, catalogIndex.get(p.subPartTemplateId)),
+  )
+
+  /**
+   * Re-aims the seat along `nextForward`, KEEPING the current up axis so a re-aim never
+   * silently rolls the camera — except where that up would be (near) parallel to the new
+   * forward, which `Camera.LookAtRotation` turns into NaN; then fall back to a
+   * perpendicular default. A degenerate pair is never written: a null rotation is a no-op.
+   */
+  const aim = (nextForward: Vec3) => {
+    const nextUp =
+      Math.abs(dot(nextForward, up)) < PARALLEL_DOT
+        ? up
+        : Math.abs(dot(nextForward, SEAT_LOCAL_UP)) < PARALLEL_DOT
+          ? SEAT_LOCAL_UP
+          : { x: 0, y: 1, z: 0 }
+    const rotation = seatRotationFromAxes(nextForward, nextUp)
+    if (rotation) aimIvaSeat(index, rotation)
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate text-sm">
+          Seat {index + 1} of {total}
+        </span>
+        <div className="flex items-center gap-0.5">
+          <Button
+            iconOnly
+            size="sm"
+            variant="ghost"
+            aria-label="Move seat earlier in the cycle"
+            isDisabled={locked || index === 0}
+            onPress={() => moveIvaSeat(index, -1)}
+          >
+            <ChevronUp className="size-4" />
+          </Button>
+          <Button
+            iconOnly
+            size="sm"
+            variant="ghost"
+            aria-label="Move seat later in the cycle"
+            isDisabled={locked || index >= total - 1}
+            onPress={() => moveIvaSeat(index, 1)}
+          >
+            <ChevronDown className="size-4" />
+          </Button>
+        </div>
+      </div>
+      {index === 0 && <Chip className="self-start text-accent">IVA opens on this seat</Chip>}
+      <p className="text-xs leading-snug text-fg-subtle">
+        Seat order is exported data, not a list order: <b>C</b> cycles seats in this order in game,
+        and the first one is where IVA opens.
+      </p>
+      <SectionTitle>Axes (exported)</SectionTitle>
+      <span className="font-mono text-xs text-fg-subtle">
+        Forward ({fmtVec(forward)}) · Up ({fmtVec(up)})
+      </span>
+      <SectionTitle>Aim</SectionTitle>
+      <div className="flex flex-wrap gap-1">
+        {AIM_PRESETS.map((preset) => (
+          <Button
+            key={preset.id}
+            size="sm"
+            variant="ghost"
+            isDisabled={locked}
+            onPress={() => aim(preset.forward)}
+          >
+            {preset.label}
+          </Button>
+        ))}
+        {/* Aiming at the selection needs its world-space centroid, which only the 3D scene
+            has — publish an intent the way a collider fit request does. */}
+        <Button
+          size="sm"
+          variant="ghost"
+          isDisabled={locked}
+          onPress={() => requestIvaSeatAim(index)}
+        >
+          Aim at selection
+        </Button>
+      </div>
+      <p className="text-xs leading-snug text-fg-subtle">
+        A seat can never look more than 90° away from its forward axis — two directions means two
+        seats.
+      </p>
+      {!hasInterior && (
+        <p className="text-xs leading-snug text-warning">
+          No <code className="font-mono">&lt;Internal&gt;</code> geometry in this part — a seat here
+          looks out at space. Mark interior SubParts with <b>Interior (IVA only)</b> in the Assets
+          list.
+        </p>
+      )}
     </div>
   )
 }

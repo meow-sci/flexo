@@ -10,7 +10,14 @@ import {
   SubmenuTrigger,
   ToolbarButton,
 } from './kit'
-import { $part, addCollider, addConnector, addKitten, addSubPart } from '../state/editorStore'
+import {
+  $part,
+  addCollider,
+  addConnector,
+  addIvaSeat,
+  addKitten,
+  addSubPart,
+} from '../state/editorStore'
 import { requestColliderFit } from '../state/colliderStore'
 import { enterEngineMode } from '../state/engineStore'
 import { makeKittenMeshPart, openImportModel } from '../state/customAssetStore'
@@ -52,6 +59,9 @@ export function AddButton() {
               // Opens with no files, i.e. on its drop/pick step (see ImportModelDialog).
               else if (key === 'import-model') openImportModel()
               else if (key === 'engine') enterEngineMode()
+              // One kind of seat, so no submenu: it lands at the origin looking +X
+              // (KSA's own `<IVASeat>` defaults) and the inspector aims it.
+              else if (key === 'iva-seat') addIvaSeat()
             }}
           >
             <MenuHeader>Add</MenuHeader>
@@ -100,6 +110,7 @@ export function AddButton() {
                 </Menu>
               </Popover>
             </SubmenuTrigger>
+            <MenuItem id="iva-seat">IVA Seat</MenuItem>
             <SubmenuTrigger>
               <MenuItem id="kitten">Kitten</MenuItem>
               <Popover className="w-40">

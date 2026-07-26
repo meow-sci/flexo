@@ -349,6 +349,18 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
     instanceIdMap.set(src.instanceId, instanceId)
   }
 
+  // Per-template `<Internal>` (interior-only) overrides. The key is a SubPart TEMPLATE id, so
+  // it goes through the SAME mapTemplateId the placements above use — an imported kitten mesh
+  // gets a fresh subPartId, and a raw key copy would flag a template that no longer exists.
+  // Incoming keys win ONLY for templates this paste actually brings in (plans/IVA_PLAN.md
+  // §3.7): a payload carrying a flag for a template it never places must not silently re-flag
+  // the destination's own copy of it.
+  const importedTemplates = new Set(data.placements.map((p) => mapTemplateId(p.subPartTemplateId)))
+  for (const [key, internal] of Object.entries(data.internalFlags)) {
+    const templateId = mapTemplateId(key)
+    if (importedTemplates.has(templateId)) part.internalFlags[templateId] = internal
+  }
+
   // Connectors — always on the built-in Connectors layer, fresh _connectorN ids.
   const connectorStart = part.connectors.length
   for (const src of data.connectors) {
@@ -395,7 +407,7 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
   // no ref map to thread through. Order matters, though: the incoming seats keep their
   // relative document order and are APPENDED after the existing ones, so the destination's
   // seat 0 — the one IVA opens on — stays the default.
-  for (const src of data.ivaSeats ?? []) {
+  for (const src of data.ivaSeats) {
     part.ivaSeats.push({
       id: nextIvaSeatId(part),
       position: vec(src.position, 0),
@@ -514,7 +526,7 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
       meshes: data.placements.length,
       connectors: data.connectors.length,
       colliders: data.colliders?.length ?? 0,
-      ivaSeats: data.ivaSeats?.length ?? 0,
+      ivaSeats: data.ivaSeats.length,
       kittens: data.kittens.length,
       newLayers: newLayerIds.length,
       animations: data.animations.length,

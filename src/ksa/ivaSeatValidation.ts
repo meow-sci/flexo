@@ -2,15 +2,16 @@
  * Pre-flight validation for a Part's IVA seats and the interior they look at.
  *
  * Same two severities as {@link import('./colliderValidation').validateColliders}, and the
- * same meaning:
- *  - **block** — the exported seat would poison KSA's camera, or is an obvious duplicate the
- *    author never meant to ship. flexo must not ship it.
+ * same meaning — and, like that module's, they are ADVISORY: the UI surfaces them, nothing
+ * gates the export on them.
+ *  - **block** — the exported seat would poison KSA's camera, so the mod is broken in game.
+ *    Surfaced as a load-failure-grade problem the author needs to fix before shipping.
  *  - **warn**  — KSA loads it fine, but the part behaves in a way the author almost certainly
  *    didn't intend (a seat staring into space, an interior nobody can ever see).
  *
  * The rules implemented here (plans/IVA_PLAN.md §3.8, in full):
  *  - `iva-seat-non-finite` (block) — a seat's position or derived axes are NaN/∞.
- *  - `iva-seat-duplicate` (block) — two seats at the identical position AND orientation.
+ *  - `iva-seat-duplicate` (warn) — two seats at the identical position AND orientation.
  *  - `iva-seat-no-interior` (warn) — seats, but no interior geometry to look at.
  *  - `iva-interior-no-seat` (warn) — interior geometry, but no seat it can be seen from.
  *  - `iva-interior-on-glass` (warn) — `<Internal>` on a template that exports as glass.
@@ -37,7 +38,7 @@ import { resolveInternal } from './modExport'
 import type { CatalogSubPart } from './catalog'
 import type { EditingPart, Vec3 } from './types'
 
-/** `block` ⇒ flexo refuses to export; `warn` ⇒ it exports but the part misbehaves. */
+/** `block` ⇒ the exported Part is broken in game; `warn` ⇒ it loads but misbehaves. */
 export type IvaSeatIssueSeverity = 'block' | 'warn'
 
 export interface IvaSeatIssue {
@@ -152,11 +153,11 @@ export function validateIvaSeats(
         sameVec(forward, otherAxes.forward) &&
         sameVec(up, otherAxes.up)
       ) {
-        block(
+        warn(
           'iva-seat-duplicate',
-          `Seats ${j + 1} and ${i + 1} share the identical position and orientation. That is ` +
-            `not fatal in-game, but pressing C to cycle to it appears to do nothing — it is ` +
-            `almost certainly a duplicate you forgot to move.`,
+          `Seats ${j + 1} and ${i + 1} share the identical position and orientation. KSA loads ` +
+            `both, but cycling to seat ${i + 1} with C will appear to do nothing — probably a ` +
+            `duplicate you forgot to move.`,
         )
         break
       }
@@ -203,9 +204,10 @@ export function validateIvaSeats(
     warn(
       'iva-seat-no-interior',
       `This Part has ${part.ivaSeats.length} IVA seat${part.ivaSeats.length === 1 ? '' : 's'} ` +
-        `but no interior geometry. KSA culls back faces unconditionally, so from the seat the ` +
-        `hull is simply not there and you look straight out at space. Place interior meshes ` +
-        `and mark them “Interior (IVA only)”.`,
+        `but no interior geometry of its own. KSA culls back faces unconditionally, so unless a ` +
+        `neighbouring part supplies the interior you look at, from the seat the hull is simply ` +
+        `not there and you look straight out at space. Place interior meshes and mark them ` +
+        `“Interior (IVA only)”.`,
     )
   }
 
@@ -233,7 +235,12 @@ export function validateIvaSeats(
   return issues
 }
 
-/** True when any issue would stop the export. */
+/**
+ * True when any issue is `block`-severity — i.e. the Part would export, but the seat is broken
+ * in game. Advisory only: nothing gates the export on it (`ExportButton` merely DISPLAYS
+ * blocking issues, same as `colliderValidation`'s), so this is a convenience predicate for
+ * callers that want to headline the worst severity present.
+ */
 export function hasBlockingIvaSeatIssue(issues: readonly IvaSeatIssue[]): boolean {
   return issues.some((i) => i.severity === 'block')
 }

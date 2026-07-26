@@ -675,3 +675,62 @@ describe('IVA seat transfer', () => {
     expect(summary.ivaSeats).toBe(2)
   })
 })
+
+describe('<Internal> flag transfer', () => {
+  it('carries a flag on a BUILT-IN template the paste brings in', () => {
+    const src = createEmptyPart()
+    src.placements.push({
+      instanceId: 'wing_1',
+      subPartTemplateId: 'Core.Wing',
+      layerId: DEFAULT_LAYER_ID,
+      ...t(0),
+    })
+    src.internalFlags['Core.Wing'] = true
+
+    const { part } = mergeProjectImport(createEmptyPart(), buildProjectExport(src, 'S'))
+    expect(part.internalFlags).toEqual({ 'Core.Wing': true })
+  })
+
+  it('routes the flag key through the template-id map for an imported kitten mesh', () => {
+    const src = createEmptyPart()
+    src.customMeshes.push(kittenMesh())
+    src.placements.push({
+      instanceId: 'hunter_suit_1',
+      subPartTemplateId: 'flexo_hunter_suit_abc',
+      layerId: DEFAULT_LAYER_ID,
+      ...t(0),
+    })
+    src.internalFlags.flexo_hunter_suit_abc = true
+
+    const { part } = mergeProjectImport(createEmptyPart(), buildProjectExport(src, 'S'))
+    // The mesh got a FRESH subPartId; the flag must follow it, not the dead source id.
+    const freshId = part.customMeshes[0].subPartId
+    expect(freshId).not.toBe('flexo_hunter_suit_abc')
+    expect(part.internalFlags).toEqual({ [freshId]: true })
+  })
+
+  it('does not clobber a destination flag for a template the paste does not bring', () => {
+    const src = createEmptyPart()
+    // A flag with no placement behind it: the payload does not bring this template in.
+    src.internalFlags['Core.Wing'] = false
+
+    const dest = createEmptyPart()
+    dest.placements.push({
+      instanceId: 'wing_1',
+      subPartTemplateId: 'Core.Wing',
+      layerId: DEFAULT_LAYER_ID,
+      ...t(0),
+    })
+    dest.internalFlags['Core.Wing'] = true
+
+    const { part } = mergeProjectImport(dest, buildProjectExport(src, 'S'))
+    expect(part.internalFlags).toEqual({ 'Core.Wing': true })
+  })
+
+  it('leaves the destination alone when the payload carries no flags', () => {
+    const dest = createEmptyPart()
+    dest.internalFlags['Core.Wing'] = true
+    const { part } = mergeProjectImport(dest, buildProjectExport(createEmptyPart(), 'S'))
+    expect(part.internalFlags).toEqual({ 'Core.Wing': true })
+  })
+})

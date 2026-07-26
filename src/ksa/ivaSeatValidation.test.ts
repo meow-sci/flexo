@@ -123,13 +123,16 @@ describe('validateIvaSeats', () => {
     expect(codes(part, catalog)).toEqual(['iva-seat-non-finite'])
   })
 
-  it('blocks two seats sharing the identical position AND orientation', () => {
+  // WARN, not block: duplicate seats are legal, loadable XML (plans/IVA_PLAN.md §3.8's
+  // "downgrade to warn if that proves annoying"), so they must not appear under the UI's
+  // "KSA would refuse to load this mod" heading. `iva-seat-non-finite` above stays `block`.
+  it('warns (does NOT block) on two seats sharing the identical position AND orientation', () => {
     const { part, catalog } = healthyPart()
     part.ivaSeats.push({ ...seat({ x: -0.45, y: 0.42, z: -0.35 }), id: '_seat2' })
     const issues = validateIvaSeats(part, catalog)
     expect(issues.map((i) => i.code)).toEqual(['iva-seat-duplicate'])
-    expect(issues[0].severity).toBe('block')
-    expect(hasBlockingIvaSeatIssue(issues)).toBe(true)
+    expect(issues[0].severity).toBe('warn')
+    expect(hasBlockingIvaSeatIssue(issues)).toBe(false)
   })
 
   it('allows two seats at the same position facing different ways', () => {

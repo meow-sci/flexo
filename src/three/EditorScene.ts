@@ -4,6 +4,7 @@ import { Viewport } from './Viewport'
 import { SubPartObject } from './SubPartObject'
 import { ConnectorObject } from './ConnectorObject'
 import { ColliderObject } from './ColliderObject'
+import { IvaSeatObject } from './IvaSeatObject'
 import { collectWorldPoints } from './samplePoints'
 import { fitCollider, IDENTITY_QUAT, type Quat } from '../ksa/colliderFit'
 import {
@@ -14,6 +15,12 @@ import {
   setCoverageReport,
   type ColliderFitRequest,
 } from '../state/colliderStore'
+import {
+  $ivaSeatAimRequest,
+  clearIvaSeatAimRequest,
+  type IvaSeatAimRequest,
+} from '../state/ivaSeatStore'
+import { SEAT_LOCAL_UP, seatAxesFromRotation, seatRotationFromAxes } from '../ksa/ivaSeatAxes'
 import { evaluateCoverage, type PlacedCollider } from '../measure/colliderCoverage'
 import { KittenObject } from './KittenObject'
 import { SelectionManager } from './SelectionManager'
@@ -44,15 +51,18 @@ import {
   $selectedColliderIndices,
   $selectedConnectorIndices,
   $selectedIndices,
+  $selectedIvaSeatIndices,
   $selectedKittenIndices,
   $snap,
   $toolMode,
+  aimIvaSeat,
   clearSelection,
   pushUndo,
   revealEntity,
   addCollider,
   selectCollider,
   selectConnector,
+  selectIvaSeat,
   updateColliderTransform,
   selectKitten,
   selectPlacement,
@@ -95,8 +105,10 @@ import {
 } from '../state/engineStore'
 import {
   $connectorSettings,
+  $ivaSeatSettings,
   $selectionHighlight,
   type ConnectorSettings,
+  type IvaSeatSettings,
 } from '../state/settingsStore'
 import { $cameraRestore, $cameraSnap, $grids } from '../state/viewStore'
 import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../state/layerStore'
@@ -141,12 +153,18 @@ export class EditorScene {
    * through. Ephemeral view state.
    */
   private readonly colliderInstance = new Map<string, number>()
+  /**
+   * IVA seat markers, keyed by seat id. ONE visual per seat — a seat is Part-level data
+   * (`<IVASeat>` on `<PartGameData>`), so unlike a collider it is never drawn per placement.
+   */
+  private readonly seatObjects = new Map<string, IvaSeatObject>()
   /** Red dots marking sample points outside every collider (the last coverage check). */
   private coverageDots: THREE.Points | null = null
   private readonly building = new Set<string>()
   private readonly kittenBuilding = new Set<string>()
   private index: Map<string, CatalogSubPart> = new Map()
   private connectorSettings: ConnectorSettings = $connectorSettings.get()
+  private ivaSeatSettings: IvaSeatSettings = $ivaSeatSettings.get()
   private readonly unsubscribers: Array<() => void> = []
   private readonly selection: SelectionManager
   private readonly gizmo: TransformGizmo
@@ -270,6 +288,21 @@ export class EditorScene {
             selectCollider(index)
             revealEntity('collider', selected.id)
           }
+        } else if (selected.kind === 'ivaSeat') {
+          const seats = $part.get().ivaSeats
+          const index = seats.findIndex((s) => s.id === selected.id)
+          if (index < 0) return
+          const layerId = seats[index].layerId
+          if (isLayerLocked(layerId)) return
+          if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
+          if (additive) {
+            const added = !$selectedIvaSeatIndices.get().includes(index)
+            toggleEntity('ivaSeat', index)
+            if (added) revealEntity('ivaSeat', selected.id)
+          } else {
+            selectIvaSeat(index)
+            revealEntity('ivaSeat', selected.id)
+          }
         } else {
           const kittens = $part.get().kittens
           const index = kittens.findIndex((k) => k.id === selected.id)
@@ -364,6 +397,7 @@ export class EditorScene {
     this.sub($selectedConnectorIndices, clearContainerOnSelect)
     this.sub($selectedKittenIndices, clearContainerOnSelect)
     this.sub($selectedColliderIndices, clearContainerOnSelect)
+    this.sub($selectedIvaSeatIndices, clearContainerOnSelect)
 
     // nanostores `subscribe` fires immediately with the current value.
     this.sub($catalogIndex, (index) => {
@@ -417,6 +451,7 @@ export class EditorScene {
     this.sub($selectedConnectorIndices, () => this.updateSelection())
     this.sub($selectedKittenIndices, () => this.updateSelection())
     this.sub($selectedColliderIndices, () => this.updateSelection())
+    this.sub($selectedIvaSeatIndices, () => this.updateSelection())
     // Collider fitting needs world geometry, which only exists here — the UI publishes an
     // intent and this consumes it (see colliderStore).
     this.sub($colliderFitRequest, (req) => {
@@ -427,9 +462,20 @@ export class EditorScene {
     })
     // The uncovered-point dots are a snapshot of one check; editing invalidates them.
     this.sub($coverageReport, () => this.applyCoverageDots())
+    // Aiming a seat needs the world-space centroid of the selection, which only exists
+    // here — same intent → scene → store round trip as the collider fit (see ivaSeatStore).
+    this.sub($ivaSeatAimRequest, (req) => {
+      if (req) this.handleIvaSeatAim(req)
+    })
     this.sub($connectorSettings, (settings) => {
       this.connectorSettings = settings
       this.rebuildConnectors()
+    })
+    // Marker size / gaze cone are global view settings, not document data: the markers
+    // have no in-place resize, so a change rebuilds them (as $connectorSettings does).
+    this.sub($ivaSeatSettings, (settings) => {
+      this.ivaSeatSettings = settings
+      this.rebuildIvaSeats()
     })
     // Re-apply the highlight tint to the current selection when the color/strength
     // setting changes (fires immediately on subscribe — a harmless no-op when nothing
@@ -520,6 +566,7 @@ export class EditorScene {
 
     this.reconcileConnectors(part)
     this.reconcileColliders(part)
+    this.reconcileIvaSeats(part)
     this.reconcileKittens(part)
     this.applyLayerView()
     this.updateSelection()
@@ -684,6 +731,14 @@ export class EditorScene {
         obj.setLayerOpacity(lv.opacity)
       }
     }
+    for (const s of part.ivaSeats) {
+      const obj = this.seatObjects.get(s.id)
+      if (obj) {
+        const lv = layerViewState(view, s.layerId)
+        obj.group.visible = lv.visible
+        obj.setLayerOpacity(lv.opacity)
+      }
+    }
     for (const k of part.kittens) {
       const obj = this.kittenObjects.get(k.id)
       if (obj) {
@@ -713,6 +768,35 @@ export class EditorScene {
       const obj = new ConnectorObject(connector, this.connectorSettings.size)
       this.root.add(obj.group)
       this.connectorObjects.set(connector.id, obj)
+    }
+  }
+
+  /**
+   * IVA seat markers build synchronously (sphere + cone + stick), and a seat is Part-level
+   * data with exactly one visual — so this is the connector reconcile, not the collider one.
+   */
+  private reconcileIvaSeats(part: EditingPart): void {
+    const wanted = new Set(part.ivaSeats.map((s) => s.id))
+    for (const [id, obj] of this.seatObjects) {
+      if (!wanted.has(id)) {
+        this.root.remove(obj.group)
+        obj.dispose()
+        this.seatObjects.delete(id)
+      }
+    }
+    for (const seat of part.ivaSeats) {
+      const existing = this.seatObjects.get(seat.id)
+      if (existing) {
+        existing.setSeat(seat)
+        continue
+      }
+      const obj = new IvaSeatObject(
+        seat,
+        this.ivaSeatSettings.markerSize,
+        this.ivaSeatSettings.showGazeCone,
+      )
+      this.root.add(obj.group)
+      this.seatObjects.set(seat.id, obj)
     }
   }
 
@@ -913,6 +997,70 @@ export class EditorScene {
     updateColliderTransform(req.target.index, local)
   }
 
+  /**
+   * Runs a pending "aim at selection": points the seat's forward axis at the world-space
+   * centroid of the selected placements and writes the resulting rotation back through
+   * {@link aimIvaSeat} (which owns the single undo step). Clears the request either way so
+   * a repeated identical aim still fires.
+   *
+   * With nothing selected — which is the norm, since selecting a seat clears the SubPart
+   * selection — the whole part's geometry is the target, the same fallback
+   * {@link handleColliderFit} uses.
+   */
+  private handleIvaSeatAim(req: IvaSeatAimRequest): void {
+    clearIvaSeatAimRequest()
+    const part = $part.get()
+    const seat = part.ivaSeats[req.index]
+    if (!seat) return
+
+    const centroid = this.selectedGeometryCentroid()
+    if (!centroid) {
+      console.warn('flexo: nothing to aim an IVA seat at (no geometry loaded yet?)')
+      return
+    }
+    const forward = {
+      x: centroid.x - seat.position.x,
+      y: centroid.y - seat.position.y,
+      z: centroid.z - seat.position.z,
+    }
+    // Keep the seat's current up where it survives the new forward, so re-aiming doesn't
+    // silently roll the camera; otherwise take a default that is not parallel to forward.
+    const current = req.keepUp ? seatAxesFromRotation(seat.rotation).up : null
+    const up = current && !isParallel(forward, current) ? current : perpendicularUp(forward)
+    // Degenerate (seat sitting exactly on the centroid, or an unusable up): do NOTHING
+    // rather than store a NaN rotation — that is what the null return is for.
+    const rotation = seatRotationFromAxes(forward, up)
+    if (!rotation) return
+    aimIvaSeat(req.index, rotation)
+  }
+
+  /**
+   * World-space centroid of the selected SubPart placements' geometry (their bounding-box
+   * centers, averaged), falling back to every built SubPart when nothing is selected.
+   * Null when the part has no built geometry at all.
+   *
+   * Reads the SCENE, not the store — which is exactly why aiming is an intent atom the
+   * scene consumes rather than a store action (see ivaSeatStore).
+   */
+  private selectedGeometryCentroid(): Vec3 | null {
+    const part = $part.get()
+    const selected = $selectedIndices.get().flatMap((i) => {
+      const obj = part.placements[i] && this.objects.get(part.placements[i].instanceId)
+      return obj ? [obj.group] : []
+    })
+    const groups = selected.length > 0 ? selected : [...this.objects.values()].map((o) => o.group)
+    const centers: Vec3[] = []
+    const box = new THREE.Box3()
+    const center = new THREE.Vector3()
+    for (const group of groups) {
+      box.setFromObject(group)
+      if (box.isEmpty()) continue
+      box.getCenter(center)
+      centers.push({ x: center.x, y: center.y, z: center.z })
+    }
+    return centers.length > 0 ? centroidOf(centers) : null
+  }
+
   /** Rebuilds every connector from scratch (cube/arrow sizes are global settings). */
   private rebuildConnectors(): void {
     for (const obj of this.connectorObjects.values()) {
@@ -925,7 +1073,19 @@ export class EditorScene {
     this.updateSelection()
   }
 
-  /** Resolves all currently selected scene objects (SubParts + connectors + kittens) that are built. */
+  /** Rebuilds every seat marker from scratch (marker size / gaze cone are global settings). */
+  private rebuildIvaSeats(): void {
+    for (const obj of this.seatObjects.values()) {
+      this.root.remove(obj.group)
+      obj.dispose()
+    }
+    this.seatObjects.clear()
+    this.reconcileIvaSeats($part.get())
+    this.applyLayerView()
+    this.updateSelection()
+  }
+
+  /** Resolves all currently selected scene objects (SubParts + connectors + colliders + seats + kittens) that are built. */
   private selectedObjects(): SelectableObject[] {
     const part = $part.get()
     const out: SelectableObject[] = []
@@ -944,6 +1104,11 @@ export class EditorScene {
       // Every instance of a SubPart-owned collider highlights together — they are one
       // document entity, so highlighting only the gizmo target would read as a bug.
       for (const obj of (collider && this.colliderObjects.get(collider.id)) ?? []) out.push(obj)
+    }
+    for (const i of $selectedIvaSeatIndices.get()) {
+      const seat = part.ivaSeats[i]
+      const obj = seat && this.seatObjects.get(seat.id)
+      if (obj) out.push(obj)
     }
     for (const i of $selectedKittenIndices.get()) {
       const kitten = part.kittens[i]
@@ -1034,14 +1199,21 @@ export class EditorScene {
       return
     }
 
-    // 2+ SubParts -> attach to the centroid pivot for bulk transforms; otherwise
-    // attach directly to the single selected object (SubPart or connector).
+    // 2+ entities -> attach to the centroid pivot for bulk transforms; otherwise
+    // attach directly to the single selected object (SubPart, connector, seat, ...).
     const part = $part.get()
     const indices = $selectedIndices.get()
     const conIndices = $selectedConnectorIndices.get()
     const kitIndices = $selectedKittenIndices.get()
     const colIndices = $selectedColliderIndices.get()
-    const multi = indices.length + conIndices.length + kitIndices.length + colIndices.length > 1
+    const seatIndices = $selectedIvaSeatIndices.get()
+    const multi =
+      indices.length +
+        conIndices.length +
+        kitIndices.length +
+        colIndices.length +
+        seatIndices.length >
+      1
     let target: THREE.Object3D | null
 
     // Suppress the gizmo when any selected entity is in a locked layer (items
@@ -1050,7 +1222,8 @@ export class EditorScene {
       indices.some((i) => isLayerLocked(part.placements[i]?.layerId ?? '')) ||
       conIndices.some((ci) => isLayerLocked(part.connectors[ci]?.layerId ?? '')) ||
       kitIndices.some((ki) => isLayerLocked(part.kittens[ki]?.layerId ?? '')) ||
-      colIndices.some((i) => isLayerLocked(part.colliders[i]?.layerId ?? ''))
+      colIndices.some((i) => isLayerLocked(part.colliders[i]?.layerId ?? '')) ||
+      seatIndices.some((i) => isLayerLocked(part.ivaSeats[i]?.layerId ?? ''))
     // While the preview shows a POSED frame (t>0 / editing), an animated SubPart's
     // group sits at its animated transform — suppress the gizmo so a drag can't write
     // the posed transform back as the static placement. At rest (t=0) it's safe.
@@ -1425,10 +1598,36 @@ export class EditorScene {
     this.objects.clear()
     for (const obj of this.connectorObjects.values()) obj.dispose()
     this.connectorObjects.clear()
+    for (const obj of this.seatObjects.values()) {
+      this.root.remove(obj.group)
+      obj.dispose()
+    }
+    this.seatObjects.clear()
     for (const obj of this.kittenObjects.values()) obj.dispose()
     this.kittenObjects.clear()
     this.viewport.dispose()
   }
+}
+
+/** True when `a` and `b` point along (or against) the same line — where `seatRotationFromAxes` NaNs. */
+function isParallel(a: Vec3, b: Vec3): boolean {
+  const la = Math.hypot(a.x, a.y, a.z)
+  const lb = Math.hypot(b.x, b.y, b.z)
+  if (!(la > 0) || !(lb > 0)) return true
+  const cx = a.y * b.z - a.z * b.y
+  const cy = a.z * b.x - a.x * b.z
+  const cz = a.x * b.y - a.y * b.x
+  return Math.hypot(cx, cy, cz) / (la * lb) < 1e-6
+}
+
+/**
+ * A usable up axis for `forward` when the seat's own is unusable: KSA's own default up
+ * (`SEAT_LOCAL_UP`, i.e. −Z) unless `forward` runs along it, in which case +Y. Need not be
+ * perpendicular — `seatRotationFromAxes` orthogonalises exactly as the game does.
+ */
+function perpendicularUp(forward: Vec3): Vec3 {
+  if (!isParallel(forward, SEAT_LOCAL_UP)) return { ...SEAT_LOCAL_UP }
+  return { x: 0, y: 1, z: 0 }
 }
 
 /**

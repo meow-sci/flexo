@@ -15,7 +15,8 @@ All code is under `src/three/`.
 | `ColliderObject.ts` | One collision primitive: a fat-line wireframe + a low-alpha fill (the raycast target). Geometry is **unit-normalised**, so the group's `scale` IS the collider's size in meters and the scale gizmo edits dimensions directly. See [colliders.md](./colliders.md). |
 | `wireShapes.ts` | Shared unit-box wireframe builders (box / cylinder / sphere / capsule outlines) used by `ColliderObject` AND `ContainerLayer`. |
 | `IvaSeatObject.ts` | One IVA camera vantage point: an eye sphere + a **+X** forward cone + a **−Z** up stick + a CSS2D index badge (and an optional indicative gaze cone). Sized off `$ivaSeatSettings`, never off the document. See [iva-seats.md](./iva-seats.md). |
-| `LightObject.ts` | One cast-light marker: a color-tinted bulb sphere + a **+X** aim cone (Spot only). A SubPart-owned light is drawn once **per placement** of its owning template, positioned via `coords.lightWorld` (owner scale applies to the offset — deliberately unlike colliders). Sized off `$lightSettings`, never off the document. See [lights.md](./lights.md). |
+| `LightObject.ts` | One cast-light marker: a color-tinted bulb sphere + a **+X** aim cone (Spot only), plus the optional **coverage** children — a boundary wireframe on the range sphere and a 16-shell `InstancedMesh` shaded with KSA's exact falloff (`lightVolume.ts` + a GLSL mirror of `lightFalloff.ts`). A SubPart-owned light is drawn once **per placement** of its owning template, positioned via `coords.lightWorld` (owner scale applies to the offset — deliberately unlike colliders). Sized off `$lightSettings`, never off the document. See [lights.md](./lights.md). |
+| `lightVolume.ts` | The pure (three-free) half of the coverage viz: shell radii and the auto/absolute display exposure. |
 | `samplePoints.ts` | Shared world-space geometry sampler (bbox corners or every vertex) for collider fitting and container containment warnings. |
 | `Grid.ts` | Origin grid (XZ plane) + colored axes (1 cell = 1 m). |
 | `SelectionManager.ts` | Raycast click-to-select (fires on pointerup only when the pointer barely moved, so orbit/gizmo drags aren't clicks). |
@@ -129,13 +130,30 @@ mesh, because a **SubPart-owned light is drawn once per placement of its owning 
 (the collider multi-instance pattern): all markers are views of ONE document light, they
 follow their placements — including the joint-animation preview pose — and a click records
 which instance was hit so the highlight (and, in a later phase, the gizmo) works through that
-placement's frame. Positioning goes through `coords.lightWorld`, never `colliderWorld` — the
-owner's scale applies to a light's position offset, unlike a collider's — and the objects are
-top-level scene children (never parented under scaled placement groups) because KSA's light
-`Range` is world meters regardless of owner scale. Marker size is the global
-`$lightSettings.markerSize`; a change rebuilds every marker. A light-only selection does not
-attach the transform gizmo yet (that lands with the gizmo phase of
-`plans/LIGHT_MANAGEMENT_PLAN.md`).
+placement's frame — the gizmo attaches to that instance and writes back through it.
+Positioning goes through `coords.lightWorld`, never `colliderWorld` — the owner's scale applies
+to a light's position offset, unlike a collider's — and the objects are top-level scene
+children (never parented under scaled placement groups) because KSA's light `Range` is world
+meters regardless of owner scale, so a scaled parent would distort the coverage volume.
+
+Each marker also carries two **coverage** children (see [lights.md](./lights.md)): a
+`LineSegments` boundary wireframe — three great circles for a Point, KSA's 12-ray + rim-circle
+language for a Spot, but with the rims placed on the **range sphere** instead of the game debug
+draw's `Range · tan(angle)` disc, which explodes to kilometres for Core's 1.57 rad floodlight —
+and an `InstancedMesh` of 16 concentric spheres whose fragment shader evaluates KSA's exact
+attenuation, then a display-only Reinhard curve. The volume is additive, `depthWrite: false`,
+`BackSide` (exactly one face per shell whether the camera is outside or inside), and
+`frustumCulled = false` (instance scaling invalidates the unit sphere's bounds). **Neither child
+is ever a raycast target** (`raycast = () => {}`) — only the bulb and the aim cone are
+clickable. Their visibility is `$lightSettings.showVolumes` composed with the layer's, applied
+to the CHILDREN's `.visible` flags by `EditorScene.applyLightCoverage`, because `applyLayerView`
+is the single writer of `group.visible`.
+
+Marker size is the global `$lightSettings.markerSize`; changing it rebuilds every marker
+(there is no in-place resize). The coverage settings do **not** rebuild — the exposure is
+pushed into the existing shell materials as a uniform, which is what makes dragging the
+Intensity field re-shade live. The unit sphere the shells instance is one module-level
+geometry shared by every light and is never disposed per object.
 
 ### Seat view (the IVA camera preview)
 

@@ -31,6 +31,12 @@ import {
   type EnvironmentPreset,
   type ToneMappingMode,
 } from '../state/lightingStore'
+import {
+  $lightSettings,
+  DEFAULT_LIGHT_SETTINGS,
+  setLightSettings,
+  type LightVizSettings,
+} from '../state/settingsStore'
 import { PreciseNumberInput } from './PreciseNumberInput'
 
 const SNAP_ROWS: [CameraDir, CameraDir][] = [
@@ -49,6 +55,9 @@ function ViewContent() {
   const grids = useStore($grids)
   const hideInterior = useStore($hideInterior)
   const lighting = useStore($lighting)
+  // Resolved read: a settings object persisted before these fields existed must show
+  // its defaults in the menu, not blank selects (see lightSettings()'s JSDoc).
+  const lightViz = { ...DEFAULT_LIGHT_SETTINGS, ...useStore($lightSettings) }
   const envHasSky = ENVIRONMENT_PRESETS.find((p) => p.id === lighting.environment)?.file != null
 
   return (
@@ -101,6 +110,57 @@ function ViewContent() {
         <p className="text-xs leading-snug text-fg-subtle">
           Hides every mesh marked <b>Interior (IVA only)</b>, showing the part the way the game does
           outside IVA.
+        </p>
+
+        <div className="flex items-center gap-2">
+          <span className="w-24 shrink-0 text-sm text-fg-muted">Light coverage</span>
+          <Select
+            size="sm"
+            className="flex-1"
+            aria-label="Light coverage"
+            value={lightViz.showVolumes}
+            onChange={(k) =>
+              setLightSettings({ showVolumes: k as LightVizSettings['showVolumes'] })
+            }
+          >
+            <ListBoxItem id="selected">Selected</ListBoxItem>
+            <ListBoxItem id="all">All</ListBoxItem>
+            <ListBoxItem id="off">Off</ListBoxItem>
+          </Select>
+        </div>
+        <p className="text-xs leading-snug text-fg-subtle">
+          Draws each light's reach — the graded falloff volume plus its hard range boundary — using
+          the game's own attenuation.
+        </p>
+
+        <div className="flex items-center gap-2">
+          <span className="w-24 shrink-0 text-sm text-fg-muted">Exposure</span>
+          <Select
+            size="sm"
+            className="flex-1"
+            aria-label="Light coverage exposure"
+            value={lightViz.exposureMode}
+            onChange={(k) =>
+              setLightSettings({ exposureMode: k as LightVizSettings['exposureMode'] })
+            }
+          >
+            <ListBoxItem id="auto">Auto</ListBoxItem>
+            <ListBoxItem id="absolute">Absolute</ListBoxItem>
+          </Select>
+          {lightViz.exposureMode === 'absolute' && (
+            <PreciseNumberInput
+              aria-label="Absolute coverage exposure"
+              className="w-20 shrink-0"
+              min={0}
+              step={0.1}
+              value={lightViz.vizExposure}
+              onCommit={(vizExposure) => setLightSettings({ vizExposure })}
+            />
+          )}
+        </div>
+        <p className="text-xs leading-snug text-fg-subtle">
+          <b>Auto</b> scales each light to its own brightness (best for editing one).{' '}
+          <b>Absolute</b> shades every light against the same reference, so a dim light looks dim.
         </p>
       </section>
 

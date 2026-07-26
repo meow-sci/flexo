@@ -124,6 +124,7 @@ import {
   $ivaSeatSettings,
   $lightSettings,
   $selectionHighlight,
+  lightSettings,
   type ConnectorSettings,
   type IvaSeatSettings,
   type LightVizSettings,
@@ -199,7 +200,10 @@ export class EditorScene {
   private index: Map<string, CatalogSubPart> = new Map()
   private connectorSettings: ConnectorSettings = $connectorSettings.get()
   private ivaSeatSettings: IvaSeatSettings = $ivaSeatSettings.get()
-  private lightSettings: LightVizSettings = $lightSettings.get()
+  // Read through lightSettings() so a settings object persisted before a field
+  // existed resolves that field to its default instead of `undefined` (which would
+  // silently disable coverage) — see the resolver's JSDoc.
+  private lightSettings: LightVizSettings = lightSettings()
   private readonly unsubscribers: Array<() => void> = []
   private readonly selection: SelectionManager
   private readonly gizmo: TransformGizmo
@@ -559,10 +563,20 @@ export class EditorScene {
       this.ivaSeatSettings = settings
       this.rebuildIvaSeats()
     })
-    // Same deal for the light markers (the $ivaSeatSettings pattern).
-    this.sub($lightSettings, (settings) => {
+    // Light markers: only the SIZE needs the rebuild (no in-place resize path, the
+    // $ivaSeatSettings pattern). The coverage settings are live — pushing the exposure
+    // into the existing shell materials and re-running the visibility pass is both
+    // cheaper and what makes dragging the exposure field feel connected.
+    this.sub($lightSettings, () => {
+      const settings = lightSettings()
+      const resize = settings.markerSize !== this.lightSettings.markerSize
       this.lightSettings = settings
-      this.rebuildLights()
+      if (resize) {
+        this.rebuildLights()
+        return
+      }
+      for (const objs of this.lightObjects.values()) for (const obj of objs) obj.setViz(settings)
+      this.applyLightCoverage()
     })
     // Re-apply the highlight tint to the current selection when the color/strength
     // setting changes (fires immediately on subscribe — a harmless no-op when nothing
@@ -901,6 +915,9 @@ export class EditorScene {
         obj.setLayerOpacity(lv.opacity)
       }
     }
+    // The coverage children are a SECOND, composed gate (view setting × layer), applied
+    // to their own `.visible` flags — this method stays the only writer of `group.visible`.
+    this.applyLightCoverage()
     for (const k of part.kittens) {
       const obj = this.kittenObjects.get(k.id)
       if (obj) {
@@ -1068,7 +1085,12 @@ export class EditorScene {
         obj.dispose()
       }
       while (objs.length < wantedCount) {
-        const obj = new LightObject(light, this.lightSettings.markerSize, objs.length)
+        const obj = new LightObject(
+          light,
+          this.lightSettings.markerSize,
+          objs.length,
+          this.lightSettings,
+        )
         this.root.add(obj.group)
         objs.push(obj)
       }
@@ -1120,6 +1142,50 @@ export class EditorScene {
         const frame = posed?.get(owners[i].instanceId) ?? owners[i]
         objs[i].setLight(light, lightWorld(light, frame), i)
       }
+    }
+  }
+
+  /**
+   * Shows/hides each light's COVERAGE children (the falloff shell stack + the hard
+   * boundary wireframe) per `$lightSettings.showVolumes`, composed with the Lights
+   * layer's own visibility:
+   *
+   *  - `'off'`      — never;
+   *  - `'all'`      — every instance of every light;
+   *  - `'selected'` — only the CONTEXT instance of a selected light (the one the gizmo
+   *                   and the inspector's part-frame fields work through), so a
+   *                   multi-placement light doesn't stack N overlapping glows.
+   *
+   * Deliberately writes only the CHILDREN's `.visible` flags: {@link applyLayerView} is
+   * the single writer of `group.visible`, and two writers would fight. Re-runs from
+   * there (layer/document changes), from {@link updateSelection} (selection + edit
+   * context) and from the `$lightSettings` subscription.
+   */
+  private applyLightCoverage(): void {
+    const part = $part.get()
+    const view = $layerView.get()
+    const mode = this.lightSettings.showVolumes
+    const selectedIds = new Set<string>()
+    if (mode === 'selected') {
+      for (const i of $selectedLightIndices.get()) {
+        const light = part.lights[i]
+        if (light) selectedIds.add(light.id)
+      }
+    }
+    for (const light of part.lights) {
+      const objs = this.lightObjects.get(light.id)
+      if (!objs) continue
+      const layerVisible = layerViewState(view, light.layerId).visible
+      const context = this.lightContextIndex(light.id, objs.length)
+      objs.forEach((obj, i) => {
+        const wanted =
+          mode === 'all'
+            ? true
+            : mode === 'selected'
+              ? selectedIds.has(light.id) && i === context
+              : false
+        obj.setCoverageVisible(wanted && layerVisible)
+      })
     }
   }
 
@@ -1443,6 +1509,9 @@ export class EditorScene {
   /** Syncs the selection highlight and gizmo attachment to the current selection. */
   private updateSelection(): void {
     this.updatePivotHelper() // before any early-return below; tracks the pivot live during drags
+    // "Coverage on the selected light" is selection-driven, so it re-applies here too —
+    // before the mid-drag early-return, so it also tracks a change of edit context.
+    this.applyLightCoverage()
     const selected = this.selectedObjects()
     const next = new Set(selected)
     for (const obj of this.highlighted) if (!next.has(obj)) obj.setSelected(false)

@@ -88,6 +88,13 @@ lives in `src/ksa/lightFalloff.ts` (formulas + clamp constants) and `src/three/c
 `lightFalloff.test.ts` / `coords.test.ts` against precomputed tables
 (plans/LIGHT_MANAGEMENT_PLAN.md §1.5).
 
+**Second consumer — a GLSL mirror.** The coverage volume shades per fragment on the GPU, so
+the SAME two formulas are also written in GLSL in `src/three/LightObject.ts`
+(`VOLUME_FRAGMENT_GLSL`), with the cone angles pushed in as cosines through
+`clampSpotAngles`. A game-side formula change has to be applied in BOTH places — the TS port
+is the tested one, the shader is a hand-kept mirror (its only additions are the display-only
+Reinhard curve and the per-shell alpha, which are presentation, not contract).
+
 | Fact                                                                                                                                                                                                          | Game-side anchor                                              |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | `E(d) = Intensity · saturate(1 − (d/Range)⁴) / d²` — exactly 0 at `d ≥ Range`                                                                                                                                 | `Content/Core/Shaders/Lighting/LightPrePass.comp:281-284,296` |

@@ -56,11 +56,8 @@ export function setIvaSeatSettings(patch: Partial<IvaSeatSettings>): void {
  * {@link import('../ksa/types').PartLight}'s `scale` is pinned) and its `Range` is
  * world meters regardless of owner scale, so the marker never scales with the part.
  * {@link src/three/LightObject.ts} reads this; `EditorScene` rebuilds the markers
- * when it changes.
- *
- * Phase 5 (plans/LIGHT_MANAGEMENT_PLAN.md §3.6/§3.9) widens this with the coverage
- * visualization controls (`showVolumes` / `exposureMode` / `vizExposure` /
- * `livePreview`) — markerSize is deliberately the only field until then.
+ * when `markerSize` changes and re-shades/re-shows them for the rest (only the marker
+ * has no in-place resize path — the coverage settings are live).
  */
 export interface LightVizSettings {
   /**
@@ -68,14 +65,55 @@ export interface LightVizSettings {
    * aim cone derives from it). Default matches the IVA seat marker.
    */
   markerSize: number
+  /**
+   * Which lights draw their coverage — the falloff shell stack + the hard boundary
+   * wireframe. `'selected'` (default) keeps the viewport calm: only the selected
+   * light's context instance glows. `'all'` is the "where does this part actually
+   * light up?" view; `'off'` leaves just the markers.
+   */
+  showVolumes: 'selected' | 'all' | 'off'
+  /**
+   * How the coverage shading maps illuminance to screen brightness (the Reinhard knee
+   * `E₀` in `E / (E + E₀)`):
+   *  - `'auto'` (default) — derived PER LIGHT from its own range/intensity
+   *    ({@link import('../three/lightVolume').autoExposure}), so a dim interior point
+   *    light and a bright spotlight both span the full gradient. Best for editing one
+   *    light; useless for comparing two.
+   *  - `'absolute'` — every light uses {@link vizExposure}, so relative brightness is
+   *    honest across lights (and a genuinely dim light looks dim).
+   */
+  exposureMode: 'auto' | 'absolute'
+  /** Absolute-mode `E₀`, in the same illuminance units as `Intensity / d²`. */
+  vizExposure: number
 }
 
-export const $lightSettings = persistentJSON<LightVizSettings>('flexo:lightSettings', {
+export const DEFAULT_LIGHT_SETTINGS: LightVizSettings = {
   markerSize: 0.12,
-})
+  showVolumes: 'selected',
+  exposureMode: 'auto',
+  vizExposure: 1,
+}
+
+export const $lightSettings = persistentJSON<LightVizSettings>(
+  'flexo:lightSettings',
+  DEFAULT_LIGHT_SETTINGS,
+)
+
+/**
+ * The settings with every field guaranteed present. `persistentJSON` replays a
+ * stored object VERBATIM — it does not merge the initial value — so a settings
+ * object written before a field existed would read that field as `undefined` and
+ * silently disable it (coverage would just never draw). Reading through here is the
+ * same defaulting `layerViewState`/`DEFAULT_LAYER_STATE` does for layer view state.
+ * This is field defaulting, NOT data migration: nothing reads an old key or converts
+ * an old shape, and a stale field simply resolves to its default.
+ */
+export function lightSettings(): LightVizSettings {
+  return { ...DEFAULT_LIGHT_SETTINGS, ...$lightSettings.get() }
+}
 
 export function setLightSettings(patch: Partial<LightVizSettings>): void {
-  $lightSettings.set({ ...$lightSettings.get(), ...patch })
+  $lightSettings.set({ ...lightSettings(), ...patch })
 }
 
 /**

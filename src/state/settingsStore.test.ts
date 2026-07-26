@@ -3,9 +3,11 @@ import {
   $ivaSeatSettings,
   $lightSettings,
   $modelImportSettings,
+  lightSettings,
   setIvaSeatSettings,
   setLightSettings,
   setModelImportSettings,
+  type LightVizSettings,
 } from './settingsStore'
 
 /**
@@ -24,7 +26,12 @@ beforeEach(() => {
     decimateViewMeshes: true,
   })
   $ivaSeatSettings.set({ markerSize: 0.12, showGazeCone: false })
-  $lightSettings.set({ markerSize: 0.12 })
+  $lightSettings.set({
+    markerSize: 0.12,
+    showVolumes: 'selected',
+    exposureMode: 'auto',
+    vizExposure: 1,
+  })
 })
 
 describe('$modelImportSettings', () => {
@@ -87,27 +94,68 @@ describe('$ivaSeatSettings', () => {
 })
 
 /**
- * The light marker is a pure VIEW setting like the seat marker — KSA ignores a light's
+ * Light appearance is a pure VIEW setting like the seat marker — KSA ignores a light's
  * scale, so nothing here ever reaches the exported XML. The 0.12 m default keeps light
- * and seat markers at the same on-screen scale. markerSize is deliberately the ONLY
- * field this phase; the coverage-visualization settings widen the interface later
+ * and seat markers at the same on-screen scale, and the DEFAULTS of the coverage
+ * controls are load-bearing: coverage on `'selected'` only is what keeps a part with a
+ * dozen lights from becoming an unreadable glow, and `'auto'` exposure is what makes
+ * Core's I=0.05 interior point light visible at all while it is being edited
  * (plans/LIGHT_MANAGEMENT_PLAN.md §3.6).
  */
 describe('$lightSettings', () => {
-  it('defaults to a 0.12 m marker (parity with the seat marker)', () => {
+  it('defaults to a 0.12 m marker, coverage on the selection, auto exposure', () => {
     localStorage.clear()
-    expect($lightSettings.get()).toEqual({ markerSize: 0.12 })
+    expect($lightSettings.get()).toEqual({
+      markerSize: 0.12,
+      showVolumes: 'selected',
+      exposureMode: 'auto',
+      vizExposure: 1,
+    })
   })
 
-  it('patches via setLightSettings, merging over the current value', () => {
+  it('resolves fields missing from a previously-stored object to their defaults', () => {
+    // persistentJSON replays a stored object VERBATIM (no merge with the initial
+    // value), so a settings object written before `showVolumes` existed would read it
+    // as undefined and silently never draw coverage. Every consumer reads through
+    // lightSettings() instead. NOT migration: no old key is read, no shape converted.
+    $lightSettings.set({ markerSize: 0.2 } as unknown as LightVizSettings)
+    expect(lightSettings()).toEqual({
+      markerSize: 0.2,
+      showVolumes: 'selected',
+      exposureMode: 'auto',
+      vizExposure: 1,
+    })
+    // A patch on top of a partial object writes back a COMPLETE one.
+    setLightSettings({ showVolumes: 'all' })
+    expect($lightSettings.get()).toEqual({
+      markerSize: 0.2,
+      showVolumes: 'all',
+      exposureMode: 'auto',
+      vizExposure: 1,
+    })
+  })
+
+  it('patches one field at a time, leaving the rest alone', () => {
     setLightSettings({ markerSize: 0.25 })
-    expect($lightSettings.get()).toEqual({ markerSize: 0.25 })
+    expect($lightSettings.get()).toMatchObject({ markerSize: 0.25, showVolumes: 'selected' })
+    setLightSettings({ showVolumes: 'all' })
+    expect($lightSettings.get()).toMatchObject({ markerSize: 0.25, showVolumes: 'all' })
+    setLightSettings({ exposureMode: 'absolute', vizExposure: 2.5 })
+    expect($lightSettings.get()).toEqual({
+      markerSize: 0.25,
+      showVolumes: 'all',
+      exposureMode: 'absolute',
+      vizExposure: 2.5,
+    })
   })
 
   it('persists to localStorage under its flexo: key', () => {
-    setLightSettings({ markerSize: 0.3 })
+    setLightSettings({ markerSize: 0.3, showVolumes: 'off' })
     expect(JSON.parse(localStorage.getItem('flexo:lightSettings') ?? '{}')).toEqual({
       markerSize: 0.3,
+      showVolumes: 'off',
+      exposureMode: 'auto',
+      vizExposure: 1,
     })
   })
 })

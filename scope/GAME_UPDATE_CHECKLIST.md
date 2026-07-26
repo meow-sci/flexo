@@ -114,7 +114,9 @@ against the NEW code/XML. Highest-value checks, by area:
   offset by the owner's **full matrix, scale included** (`coords.ts` `lightWorld` — the
   deliberate ≠-collider rule), and `ClusteredLightSystem.cs` still culls `Range <= 0` /
   `Intensity <= 0` lights CPU-side (`CreateLightInstance`'s `IsNearlyZero` guard + the
-  `Range <= 0f` check — the shader itself never rejects them).
+  `Range <= 0f` check — the shader itself never rejects them). Any change to those two
+  formulas must be applied **twice**: `lightFalloff.ts` AND its GLSL mirror in
+  `src/three/LightObject.ts` (`VOLUME_FRAGMENT_GLSL`, which shades the coverage volume).
 - **Ground clutter** — the 7 `*Reference.cs` schema classes unchanged.
 
 ## 5. Distinguish real changes from decompiler noise

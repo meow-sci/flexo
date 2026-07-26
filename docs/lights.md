@@ -7,10 +7,10 @@ schema/pose/falloff contract); game-side details in
 [scope/gamedata-modules.md](../scope/gamedata-modules.md).
 
 > **Status.** Implemented so far: the normalized model + XML round-trip, the falloff/frame math
-> ports, the markers/layer/selection described here, and gizmo editing + the full light
-> inspector (owner/part-frame fields, aim vector, owner re-homing). The falloff-volume
-> visualization, the live lighting preview, and validation are later phases of the plan (§4) —
-> where a seam exists for them it is called out below.
+> ports, the markers/layer/selection described here, gizmo editing + the full light inspector
+> (owner/part-frame fields, aim vector, owner re-homing), and the coverage visualization. The
+> live lighting preview and validation are later phases of the plan (§4) — where a seam exists
+> for them it is called out below.
 
 ## What a light is
 
@@ -131,6 +131,81 @@ The transform inspector shows a **dedicated light panel** (`LightHeader`,
   Ray tracing) — the same controls as the SubPart Data dialog's Lights section, which stays
   for template-scoped editing.
 
+## Coverage visualization
+
+A light's numbers (`Range 5`, `Intensity 10`, a 45° cone) say nothing about what the light
+actually reaches. **Light coverage** draws it, using the game's own attenuation rather than a
+look-alike — the two formulas KSA's clustered light pre-pass evaluates for every lit fragment
+(`Content/Core/Shaders/Lighting/LightPrePass.comp:281-296`, ported in
+`src/ksa/lightFalloff.ts`):
+
+```
+E(d)    = Intensity · saturate(1 − (d/Range)⁴) / d²                      illuminance at distance d
+spot(θ) = saturate( (cosθ − cos Outer) / (cos Inner − cos Outer) )²      1 inside the inner cone, 0 outside the outer
+```
+
+Both have exact iso-surfaces, and that is what the visualization is built on: `E` is **exactly
+0 at `d = Range`** (a hard boundary sphere — a light does not "fade out somewhere around" its
+range), the spot term is **exactly 1 inside the inner cone** and **exactly 0 on the outer
+cone**. Cone angles run through KSA's own sanitizer first (`clampSpotAngles` — swap if inner >
+outer, then clamp outer to ≤ 1.5697963 rad ≈ 89.94°), so you see what the game will render, not
+what was typed.
+
+Two things get drawn (`src/three/LightObject.ts`), both pure decoration — neither is ever a
+click target:
+
+**The falloff volume.** A stack of 16 concentric spheres at radii `((i + 0.5)/16)·Range`,
+drawn additively with depth testing on, each fragment shaded by the formulas above evaluated at
+its own distance and angle. Because the shading — not the geometry — carries the cone, a spot
+needs **no cone mesh**: fragments outside the outer cone are simply black, so the stack reads
+as a graded spherical-cap beam, and there is no wide-angle degeneracy to special-case. Each
+shell is exact at its own radius. Cost is one instanced draw per light.
+
+**The boundary wireframe.** For a Point light, three great circles of the range sphere. For a
+Spot, KSA's own debug-draw language — 12 rays from the apex plus inner/outer rim circles
+(`SPOT_BASE_SEGMENTS = 12`, `LightUtils.cs`) — with **one deliberate deviation**: KSA puts its
+rims at axial distance `Range` with radius `Range · tan(angle)`, and flexo puts them **on the
+range sphere** (center `x = R·cos θ`, radius `R·sin θ`), closed by two cap arcs. Two reasons.
+`tan` explodes for wide cones — Core's own `FloodlightA` authors `OuterAngle = 1.57`, where the
+game's debug draw would put a **~3.4 km** rim disc on a 3 m light — and the true extinction
+surface *is* the sphere `d = Range`, so a spot's boundary is a spherical **cap**, not a flat
+disc. FloodlightA therefore renders as what it is: a clean hemisphere.
+
+### Exposure — why there are two modes
+
+Illuminance spans orders of magnitude (Core ships an `Intensity = 10` spotlight and an
+`Intensity = 0.05` interior lamp), so the shells map `E` to screen brightness through a
+Reinhard curve `E / (E + E₀)`. `E₀` is the knee, and **View ▸ Exposure** picks how it is chosen:
+
+- **Auto** (default) — per light, `E₀ = E(0.2·Range) / 3`. Every light spans the full gradient
+  regardless of absolute intensity, so the dim interior lamp is as readable as the spotlight.
+  Use it while shaping one light. It makes cross-light brightness comparisons meaningless.
+- **Absolute** — every light uses the same `E₀` (default 1, editable). Relative brightness is
+  honest: a genuinely dim light looks dim, and at `E₀ = 1` Core's `Intensity = 0.05` interior
+  lamp is nearly invisible — which is correct, and is exactly why Auto exists.
+
+**View ▸ Light coverage** chooses who draws it: `Selected` (default — only the selected light's
+context instance, so a multi-placement light doesn't stack N overlapping glows), `All`, or
+`Off`. It composes with the Lights layer: a hidden or faded layer hides/dims the coverage too.
+
+### Honest limits
+
+- **The shells are exact at their sample radii, and nowhere else.** This is a sampled
+  visualization, not a participating-media raymarch: there is no scattering, no light shafts,
+  and no accumulation along the view ray other than the 16 shell crossings. Read it as "how far
+  and how bright", not as a render of the room.
+- Consequently a **narrow beam seen from the side is subtle** — a view ray only crosses the few
+  shells whose far side falls inside the cone. The boundary wireframe is the crisp read on
+  reach; the volume is the gradient.
+- Sixteen discrete shells read as **visible concentric bands**, not a smooth gradient. That is
+  the sampling showing through, and it is deliberately not hidden: each band edge is an
+  iso-illuminance contour, so the banding doubles as a "how fast is this falling off" scale.
+  A point light shows it most (every view ray crosses all 16 shells twice).
+- The volume is depth-tested, so part geometry occludes it (which is what makes it read as 3D).
+  For an interior light, hide the hull layers or orbit inside.
+- The shading is display-only presentation on top of the game's math; the editor's tone mapping
+  and the game's grading are unrelated. Compare *shapes and extents*, not pixels.
+
 ## Adding lights
 
 - **Add → Light → Spot light / Point light** — a part-level light at the origin, selected and
@@ -140,9 +215,9 @@ The transform inspector shows a **dedicated light panel** (`LightHeader`,
 - The glow panel's **"Add matching light"** (KSA emissive is white-only, so a colored `<Light>`
   is the only way a part reads as a colored lamp in-game).
 
-## Deferred (plan phases 5–7)
+## Deferred (plan phases 6–7)
 
-The exact-formula falloff volume + range-boundary wireframe (§3.5–3.6), the optional live
-three.js light preview (§3.10), and validation (§3.11). Also deferred: clipboard copy/paste
-of lights, and "catalog ghost lights" for the lights a placed built-in template already
-carries in Core's own GameData (plan §7).
+The optional live three.js light preview (§3.10 — real `PointLight`/`SpotLight`s that actually
+light the part meshes) and validation (§3.11). Also deferred: clipboard copy/paste of lights,
+and "catalog ghost lights" for the lights a placed built-in template already carries in Core's
+own GameData (plan §7).

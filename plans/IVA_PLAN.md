@@ -1,7 +1,26 @@
 # IVA seats — authoring KSA interior camera vantage points in flexo
 
-> **Status:** 📋 **PLANNED** (not implemented). Research verified against KSA build
+> **Status:** ✅ **IMPLEMENTED** — Phases 0–4 all landed. Research verified against KSA build
 > **2026.7.9.5018** (`ksa-game-assemblies/current/decomp` + `ksa-game-assemblies/current/Content/Core`).
+> The flexo-internal view now lives in [docs/iva-seats.md](../docs/iva-seats.md); the game contract
+> lives in [scope/connectors-coordinates-iva.md](../scope/connectors-coordinates-iva.md). This file is
+> kept as the design record — its "Where flexo stands today" (§2) describes the PRE-implementation
+> state and is deliberately not updated.
+>
+> **Deviations from this plan, as shipped** (the code is authoritative):
+>
+> - `<ShadowCaster>` is carried forward onto an export variant too, alongside `<Internal>` and
+>   `<RayTracing>` — the same latent bug class §3.7 found, on Core's medium-capsule windows. It is
+>   deliberately NOT part of the variant-minting gate (flexo never lets the user edit it).
+> - `iva-seat-duplicate` ships as **`warn`**, not `block` (§3.8 anticipated the downgrade): the part
+>   loads fine in-game, and `ExportButton` files every `block` under "KSA would refuse to load this mod".
+> - Validation is **advisory** — issues are displayed, nothing gates the export (matching colliders).
+> - The aim intent atom lives in its own `ivaSeatStore.ts` (authoring), separate from `ivaStore.ts`
+>   (seat view), and carries a `keepUp` flag.
+> - `PROJECT_EXPORT_VERSION` took **one** bump to `7` covering both `ifl` and `iv`.
+> - The viewport index label (§3.3 "nice-to-have") shipped as part of `IvaSeatObject`.
+> - **Not yet done:** the in-game acceptance test (§4 Phase 3 "Verify in-game") — build a pressurised
+>   can, export, launch, `Shift+C` ×2, `C` to cycle.
 >
 > **The question this plan answers — and the answer:** _"Is IVA support/position defined in XML
 > data so that custom Flexo-authored parts could control it?"_ → **YES, completely. It is one

@@ -360,11 +360,21 @@ export geometry), `src/ui/ImportModelDialog.tsx`, and
   in-game (hardware view + the shader's own `gammaToLinear`). See
   `plans/CUSTOM_TEXTURES_PLAN.md` + `docs/custom-assets.md`.
 - **Glow (emissive)** stays per-mesh: `EmissiveConfig` (whole / painted-canvas) baked as
-  a composited diffuse + white `<Emissive>` mask (KSA glow is WHITE × mask × 1.25; the
-  color lives in the diffuse — there's no per-material emissive color). The kitten
-  **visor** `surface` mode (`glass` / `glow` / `glassGlow` layered two-SubPart) is
+  a composited diffuse + a greyscale `<Emissive>` mask. **KSA's emissive is WHITE × mask ×
+  1.25 ADDED after lighting — there is no coloured emission and no LUT slot anywhere in
+  `PbrMaterialReference`** (`MeshIndirect.frag:276-287`), so a glow reads pure white in
+  shadow; the colour lives in the diffuse. The bitmap's alpha is the greyscale KEY and
+  `coverage` (diffuse blend) / `strength` (mask value) interpret it INDEPENDENTLY — one
+  slider driving both made the only setting that reads coloured in-game unauthorable. An
+  optional `GlowRamp` (flexo's stand-in for KSA's 1-px gradient LUTs; importable from a
+  gradient image) is evaluated on the CPU and **baked into the diffuse**. For actual
+  coloured light, pair a modest mask with a `<Light>` carrying `<Color>` — the glow panel's
+  "Add matching light". `<PartModelDynamic>` compiles `ENABLE_TEMPERATURE` instead of
+  `ENABLE_EMISSIVE`, so emissive and ThinFilm heat can never coexist on one SubPart. The
+  kitten **visor** `surface` mode (`glass` / `glow` / `glassGlow` layered two-SubPart) is
   unchanged: KSA glass ignores emissive and derives only ~10% of its color from the
-  diffuse. (`src/ktx/glowComposite.ts`, `modExport.expandGlassGlow`, `$simulateGlass`.)
+  diffuse. (`src/ktx/glowComposite.ts`, `src/ktx/glowRamp.ts`, `modExport.expandGlassGlow`,
+  `$simulateGlass`; full analysis in [analysis/KSA_EMISSIVE_AND_LUT.md](analysis/KSA_EMISSIVE_AND_LUT.md).)
 
 ### Deliberate limitations / later
 
@@ -372,7 +382,10 @@ export geometry), `src/ui/ImportModelDialog.tsx`, and
   textured face wins; the UI warns). Faithful export = one SubPart per face group.
 - **ThinFilm heat effects** (5th PbrMaterial slot: R=re-entry iridescence, G=heat glow,
   B=frost) need `<PartModelDynamic>` + runtime temperature — invisible on a bench part;
-  see the plan's Phase 3.
+  see the plan's Phase 3. The G channel is the one greyscale-map-keyed-to-a-1px-LUT path
+  the engine actually ships (`temperatureLut`, a global asset a mod can't replace), and it
+  is **mutually exclusive with `<Emissive>`** — the two live on different compiled variants
+  of `MeshIndirect.frag`, so adopting `<PartModelDynamic>` would silently kill every glow.
 - **Uncompressed RGBA8 + Zstd**, not block-compressed (larger VRAM). Preferred future
   route: UASTC + a `.toml` sidecar (`scblockformatfamily` → BC7) — KSA transcodes UASTC
   natively but defaults the target to uncompressed Rgba32 without the sidecar.

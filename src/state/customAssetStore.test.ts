@@ -178,7 +178,6 @@ function materialPlanFor(normalized: NormalizedImport, glow = false): ImportMate
   if (glow) {
     material.glowPng = new Uint8Array([1, 2, 3])
     material.glowColor = { r: 255, g: 64, b: 0 }
-    material.glowStrength = 0.4
   }
   return {
     textures: [
@@ -409,11 +408,14 @@ describe('importModelAsMeshes', () => {
     await importModelAsMeshes(normalized, 'pod.glb', materialPlanFor(normalized, true))
 
     for (const m of $part.get().customMeshes) {
-      // Reusing 'painted' means glowBitmapFor / compositeGlow / the exporter all work unchanged.
+      // Reusing 'painted' means glowFor / compositeGlow / the exporter all work unchanged.
+      // coverage/strength = 1 pass the glTF emissive's own falloff (already in the bitmap's
+      // alpha) through unscaled, so an import reproduces its source material exactly.
       expect(m.emissive).toEqual({
         shape: 'painted',
         color: { r: 255, g: 64, b: 0 },
-        strength: 0.4,
+        strength: 1,
+        coverage: 1,
       })
       expect(await getAsset(assetKeys.emissivePaint(m.id))).toBeInstanceOf(Blob)
     }

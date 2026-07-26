@@ -83,6 +83,7 @@ import {
   addConnector,
   addConsumerFeedWiring,
   addKitten,
+  addLight,
   addPart,
   addPartCombustor,
   addSubPart,
@@ -610,6 +611,28 @@ describe('editorStore', () => {
     expect(spd()).toBeUndefined() // entry pruned when tanks empty
     undo()
     expect(spd()?.tanks.length).toBe(1)
+  })
+
+  it('adds a light per SubPart template, seeded or default, as one discrete undo step', () => {
+    const tmpl = 'CoreElectricalA_Subpart_SpotlightA'
+    const lights = () =>
+      $part.get().subPartGameData.find((s) => s.subPartTemplateId === tmpl)?.lights ?? []
+
+    addLight(tmpl)
+    expect(lights()[0].type).toBe('Spot')
+    expect(lights()[0].color).toEqual({ r: 1, g: 1, b: 1 })
+
+    // The glow panel's "Add matching light": KSA's <Emissive> can only add WHITE, so a coloured
+    // <Light> is the only way a part reads as a coloured lamp in-game.
+    addLight(tmpl, { type: 'Point', color: { r: 0, g: 1, b: 0 } })
+    expect(lights()).toHaveLength(2)
+    expect(lights()[1].type).toBe('Point')
+    expect(lights()[1].color).toEqual({ r: 0, g: 1, b: 0 })
+    // Unspecified fields still come from createLight().
+    expect(lights()[1].rangeM).toBe(5)
+
+    undo()
+    expect(lights()).toHaveLength(1)
   })
 
   it('toggles custom mass and decoupler with undo', () => {
@@ -1284,7 +1307,6 @@ describe('imported models', () => {
           roughness: 0.4,
           glowPng: new Uint8Array([3]),
           glowColor: { r: 255, g: 0, b: 0 },
-          glowStrength: 0.5,
         },
       ],
       materialKeyByGroup: new Map(normalized.meshes.map((m) => [m.materialGroupKey, 'mat:0'])),

@@ -301,7 +301,7 @@ function richPart(): EditingPart {
       transparent: true,
     },
     faceTextures: {},
-    emissive: { shape: 'whole', color: { r: 0, g: 255, b: 128 }, strength: 0.6 },
+    emissive: { shape: 'whole', color: { r: 0, g: 255, b: 128 }, strength: 0.6, coverage: 1 },
     glass: { tint: { r: 10, g: 200, b: 220 }, opacity: 0.45 },
     surface: 'glassGlow',
   })
@@ -460,7 +460,7 @@ describe('projectCodec round-trip', () => {
       },
       materialId: 'mat_paint',
       faceTextures: {},
-      emissive: { shape: 'painted', color: { r: 255, g: 120, b: 0 }, strength: 0.8 },
+      emissive: { shape: 'painted', color: { r: 255, g: 120, b: 0 }, strength: 0.8, coverage: 1 },
     }
     p.customMeshes.push(imported)
     // buildProjectExport deliberately filters imported meshes out (binary-backed, gated by

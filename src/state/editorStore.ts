@@ -2068,9 +2068,18 @@ function hasLight(subPartTemplateId: string, index: number): boolean {
   return !!spd && index >= 0 && index < spd.lights.length
 }
 
-/** Discrete: append a default (white Spot) light for the given SubPart template. */
-export function addLight(subPartTemplateId: string): void {
-  commitSubPartData('add light', '', subPartTemplateId, (s) => s.lights.push(createLight()))
+/**
+ * Discrete: append a light for the given SubPart template — a default white Spot, or
+ * `createLight()` overridden by `seed`.
+ *
+ * `seed` exists for the glow panel's "Add matching light": KSA's `<Emissive>` map can only ever
+ * add WHITE (MeshIndirect.frag:286), so a `<Light>` carrying the glow's colour is the only way a
+ * part reads as a COLOURED lamp in-game — see analysis/KSA_EMISSIVE_AND_LUT.md §5.1.
+ */
+export function addLight(subPartTemplateId: string, seed?: Partial<Light>): void {
+  commitSubPartData('add light', '', subPartTemplateId, (s) =>
+    s.lights.push({ ...createLight(), ...seed }),
+  )
 }
 
 /** Discrete: remove the light at `index` for the given SubPart template. */

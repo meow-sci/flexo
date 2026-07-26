@@ -1653,24 +1653,80 @@ export interface ImportedMeshSource {
 
 /**
  * Emissive (glow) authoring shape for a custom mesh.
- *  - 'whole'   — a uniform glow over the whole mesh (color + strength).
+ *  - 'whole'   — a uniform glow over the whole mesh (one key value everywhere).
  *  - 'painted' — an RGBA glow bitmap authored in the in-browser paint tool (stored in IndexedDB
- *                under assetKeys.emissivePaint(meshId)); rgb = glow color, a = intensity.
+ *                under assetKeys.emissivePaint(meshId)); rgb = glow color, a = the GREYSCALE KEY.
  */
 export type EmissiveShape = 'whole' | 'painted'
 
+/** One stop of a {@link GlowRamp}: an sRGB color pinned at a key position 0..1. */
+export interface GlowRampStop {
+  /** Key position 0..1. Stops are kept sorted ascending; duplicates make a hard edge. */
+  at: number
+  color: RgbColor
+}
+
 /**
- * Per-mesh emissive (glow). Absent on a {@link CustomMesh} ⇒ no glow. KSA's glow is WHITE ×
- * mask × 1.25 ADDED after lighting (MeshIndirect.frag), so the COLOR comes from compositing
- * {@link color} into the diffuse by the mask — never from a uniform. {@link strength} (0..1) is the
- * mask's gray value (high washes toward white, matching real KSA parts).
+ * A color ramp keyed by the glow's greyscale value — flexo's stand-in for the 1-px gradient LUTs
+ * KSA uses for its own keyed effects (`Textures/TemperatureLut.png`, sampled at
+ * `vec2(key, 0.5)` in MeshIndirect.frag:297).
+ *
+ * KSA has NO per-material LUT slot — `PbrMaterialReference` is five texture paths and nothing
+ * else — so flexo evaluates the ramp on the CPU at composite time and the game only ever receives
+ * the greyscale mask it supports. The authoring model matches KSA's (greyscale map + gradient,
+ * smooth color falloff); the color lands in the `<Diffuse>`. See analysis/KSA_EMISSIVE_AND_LUT.md.
+ */
+export interface GlowRamp {
+  /** Ordered ascending by {@link GlowRampStop.at}; at least 2 stops. */
+  stops: GlowRampStop[]
+}
+
+/**
+ * Per-mesh emissive (glow). Absent on a {@link CustomMesh} ⇒ no glow.
+ *
+ * KSA's emissive is WHITE × mask × 1.25 ADDED after lighting (MeshIndirect.frag:276-287) — there
+ * is no colored emission anywhere on that path — so a glow is authored as TWO independent things
+ * over one greyscale key (the 'whole' uniform value, or the painted bitmap's alpha):
+ *
+ *  - {@link coverage} blends the glow COLOR into the diffuse. Visible wherever the surface is lit.
+ *  - {@link strength} scales the key into the `<Emissive>` mask = how much WHITE the game adds.
+ *    Visible in shadow, and the only thing that shows with the lights off.
+ *
+ * They used to be one slider, which made the only setting that reads colored in-game (saturated
+ * color + gentle white core) impossible to author. For real colored light, pair a modest
+ * {@link strength} with a `<Light>` carrying {@link Light.color} — see §5.1 of the analysis.
  */
 export interface EmissiveConfig {
   shape: EmissiveShape
-  /** Glow color 0..255. Used by 'whole'; also the painter's default brush color for 'painted'. */
-  color: { r: number; g: number; b: number }
-  /** Glow intensity 0..1. 'whole': the uniform mask value. 'painted': default brush intensity. */
+  /** Glow color 0..255. The painter's brush color for 'painted'. Ignored when {@link ramp} is set. */
+  color: RgbColor
+  /**
+   * Emissive mask scale 0..1 — the `<Emissive>` gray value KSA adds as white. Keep it moderate
+   * (~0.2–0.4): 1.0 adds ≈1.63 linear white and swamps any color.
+   */
   strength: number
+  /** How much of the base color the glow color replaces at full key, 0..1. */
+  coverage: number
+  /**
+   * Optional color ramp keyed by the greyscale value, replacing the flat {@link color}. Only
+   * meaningful for 'painted' (a 'whole' glow has one key everywhere, so a ramp would resolve to a
+   * single color).
+   */
+  ramp?: GlowRamp
+}
+
+/**
+ * Default glow: a moderate cyan whose emissive stays low enough that the color survives the white
+ * KSA adds. Also the model template `projectStore.snapshotMatchesModel` validates stored glows
+ * against — a snapshot missing a field is purged, never migrated.
+ */
+export function createGlow(): EmissiveConfig {
+  return {
+    shape: 'whole',
+    color: { r: 120, g: 220, b: 255 },
+    strength: 0.3,
+    coverage: 1,
+  }
 }
 
 /**

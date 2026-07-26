@@ -30,7 +30,7 @@ import {
 } from '../three/primitives'
 import { bakeKittenSubMeshes } from '../three/kittenBake'
 import { getImportedRawGeometry } from '../three/importedMeshCache'
-import { getPrimaryTextureId, glowBitmapFor } from '../state/customAssetStore'
+import { getPrimaryTextureId, glowFor, type MeshGlow } from '../state/customAssetStore'
 import { assetKeys, getAsset } from '../state/assetDb'
 import { $modelImportSettings, type KittenTextureExportSettings } from '../state/settingsStore'
 import { createZip, type ZipEntry } from '../util/zip'
@@ -244,16 +244,17 @@ function encodeLevel(level: ImageLevel): Promise<Uint8Array> {
 /**
  * Composites a mesh's glow onto a base diffuse and writes BOTH the (color-baked) diffuse and the
  * grayscale emissive mask as Textures/<token>_Diffuse.ktx2 / _Emissive.ktx2. The composited
- * diffuse REPLACES any stored diffuse for a glowing mesh — the glow color lives in the diffuse,
- * the mask is white (KSA adds white × 1.25 after lighting). Returns their relative paths.
+ * diffuse REPLACES any stored diffuse for a glowing mesh — the glow color (and any color ramp,
+ * baked here since KSA has no LUT slot) lives in the diffuse, the mask is grayscale and KSA adds
+ * it as white × 1.25 after lighting. Returns their relative paths.
  */
 async function emitGlowTextures(
   token: string,
   base: ImageLevel,
-  glow: GlowBitmap,
+  glow: MeshGlow,
   binaries: { path: string; data: Uint8Array }[],
 ): Promise<{ diffusePath: string; emissivePath: string }> {
-  const { diffuse, mask } = compositeGlow(base, glow)
+  const { diffuse, mask } = compositeGlow(base, glow.bitmap, glow.settings)
   const diffusePath = `Textures/${token}_Diffuse.ktx2`
   const emissivePath = `Textures/${token}_Emissive.ktx2`
   binaries.push({ path: diffusePath, data: await encodeLevel(diffuse) })
@@ -446,9 +447,9 @@ async function planKittenSubPart(
   // glow). The kitten's own .ktx2 can't be CPU-decoded, so the glow composites over a neutral base.
   const opaqueGlow = transparent ? surface === 'glow' : !!m.emissive
   if (opaqueGlow && m.emissive) {
-    const glow = await glowBitmapFor(m)
+    const glow = await glowFor(m)
     if (glow) {
-      const size = baseSizeFor(glow)
+      const size = baseSizeFor(glow.bitmap)
       const paths = await emitGlowTextures(
         `${bundleToken}_${subPartId}`,
         neutralBase(size.width, size.height),
@@ -873,14 +874,14 @@ export async function buildCustomBundle(
       // Glass never takes this path: MeshGlassIndirect.frag doesn't sample the emissive map at
       // all, so an <Emissive> on a glass material is dead weight that only muddies material
       // interning — the same rule planKittenSubPart applies to a 'glass' visor.
-      const glow = glass ? null : await glowBitmapFor(m)
+      const glow = glass ? null : await glowFor(m)
       if (glow) {
         const primaryTexId = getPrimaryTextureId(m)
         const base = await exportBaseImage(
           primaryTexId ? texById.get(primaryTexId) : undefined,
           material,
           texById,
-          glow,
+          glow.bitmap,
         )
         const paths = await emitGlowTextures(`${bundleToken}_${m.subPartId}`, base, glow, binaries)
         const materialId = tex.intern(

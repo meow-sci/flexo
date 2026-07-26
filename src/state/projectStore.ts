@@ -17,6 +17,7 @@ import { $containers, type ReferenceContainer } from './containerStore'
 import {
   createEmptyGameData,
   createEmptyPart,
+  createGlow,
   createSubPartGameData,
   DEFAULT_LAYER_ID,
 } from '../ksa/types'
@@ -176,11 +177,17 @@ function snapshotMatchesModel(snap: ProjectSnapshot): boolean {
   const partTemplate = createEmptyPart()
   const gameDataTemplate = createEmptyGameData()
   const subPartTemplate = createSubPartGameData('')
+  const glowTemplate = createGlow()
   for (const part of snapshotParts(snap)) {
     if (!hasAllKeys(part, partTemplate)) return false
     if (!hasAllKeys(part.gameData, gameDataTemplate)) return false
     for (const spd of part.subPartGameData ?? []) {
       if (!hasAllKeys(spd, subPartTemplate)) return false
+    }
+    // A glow authored before coverage/strength were split would silently composite as an
+    // all-or-nothing white blowout, so an incomplete EmissiveConfig is unloadable too.
+    for (const mesh of part.customMeshes ?? []) {
+      if (mesh.emissive && !hasAllKeys(mesh.emissive, glowTemplate)) return false
     }
   }
   return true

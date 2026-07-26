@@ -557,26 +557,57 @@ Shipped (see `plans/FEATURE_EMISSIVES_PLAN.md`). Per-mesh **glow**, and for the 
 translucent **glass tint** — authored in the per-mesh panel (`ManageTexturesPanel` + the
 `GlowPaintDialog` paint canvas), previewed live, exported faithfully.
 
-**How KSA renders it (verified against the decompiled shaders):**
-- Opaque `<PartModel>` (`MeshIndirect.frag`) samples a **grayscale emissive mask** (`.x`) and ADDS
-  it as WHITE light × `EMISSIVE_MULTIPLIER` (1.25) after lighting. There is **no per-material
-  emissive color**, so the glow COLOR must live in the **diffuse** at the glowing texels (we
-  composite color into the diffuse; the mask is where/how-much). See `src/ktx/glowComposite.ts`.
+**How KSA renders it (verified against the decompiled shaders — full write-up in
+[analysis/KSA_EMISSIVE_AND_LUT.md](../analysis/KSA_EMISSIVE_AND_LUT.md)):**
+- Opaque `<PartModel>` (`MeshIndirect.frag:276-287`) samples a **grayscale emissive mask** (`.x`)
+  and ADDS it as WHITE light × `EMISSIVE_MULTIPLIER` (1.25) after lighting. There is **no
+  per-material emissive color and no LUT slot**, so the glow COLOR must live in the **diffuse** at
+  the glowing texels. Because the add happens after lighting, a glow reads **pure white in
+  shadow** whatever the diffuse holds — that is a hard engine limit, not a flexo shortcoming.
+- The only colored branch (`addEmissiveColor`, bit 7) is hard-wired to `Battery.HasStatusLight`
+  and discards the mask value. **For colored light, add a `<Light>` with a `<Color>`** — it lights
+  the part's own surface through the clustered pre-pass, which is how Core's light parts read
+  colored. The glow panel's **"Add matching light"** button seeds one from the glow color.
+- `<PartModelDynamic>` compiles `ENABLE_TEMPERATURE` instead of `ENABLE_EMISSIVE`
+  (`PartModelRenderer.cs:111`/`:200`), so an `<Emissive>` on one is never sampled. flexo only
+  emits `<PartModel>`/`<PartModelGlass>`, but ThinFilm heat can never coexist with a glow.
 - Translucent `<PartModelGlass>` (`MeshGlassIndirect.frag`) hard-codes opacity ~0.75, derives only
   ~10% of its color from the diffuse, and **never samples emissive**. So **glass can't glow**, and
   its tint reads subtle/dark in-game.
 
 **The model:**
-- **Glow** (`CustomMesh.emissive: EmissiveConfig`): `whole` (uniform color + strength) or `painted`
-  (RGBA bitmap in IndexedDB under `assetKeys.emissivePaint`). On every primitive, kitten submesh
-  AND imported mesh. Exports a composited `*_Diffuse.ktx2` (color baked in) + `*_Emissive.ktx2`
-  (white mask) + `<Emissive>` in the Assets XML.
+- **Glow** (`CustomMesh.emissive: EmissiveConfig`): `whole` (one key over the whole mesh) or
+  `painted` (RGBA bitmap in IndexedDB under `assetKeys.emissivePaint`). On every primitive, kitten
+  submesh AND imported mesh. Exports a composited `*_Diffuse.ktx2` (color baked in) +
+  `*_Emissive.ktx2` (grayscale mask) + `<Emissive>` in the Assets XML.
+- **The bitmap's alpha is the greyscale KEY; `coverage` and `strength` interpret it independently**
+  (`src/ktx/glowComposite.ts`):
+
+  ```
+  key        = glow.a / 255
+  color      = ramp ? sampleGlowRamp(ramp, key) : glow.rgb
+  diffuse[i] = lerp(base[i], color, key * coverage)   → <Diffuse>   (sRGB)
+  mask[i]    = key * strength                         → <Emissive>  (linear, KSA reads R)
+  ```
+
+  One slider used to drive both, which made the only setting that reads colored in-game —
+  saturated color with a gentle white core — impossible to author. Rule of thumb: coverage ~100%,
+  emissive ~20–40%, plus a matching `<Light>`; the panel warns past 60%.
+- **Color ramp (`GlowRamp`)** — flexo's equivalent of the 1-px gradient LUTs KSA keys its own
+  effects through (`Textures/TemperatureLut.png`, sampled at `vec2(key, 0.5)`). Available on a
+  `painted` glow: the greyscale falloff of a brush stamp runs THROUGH the gradient (dark rim → hot
+  core) instead of fading one flat color out. Stops are editable, seedable from presets
+  (blackbody / red→green status / cyan), and **importable from a gradient image** —
+  `glowRampFromImage` reads the middle row across the full width, resamples to 256, and reduces to
+  the fewest stops within 4/255 of the original (`src/ktx/glowRamp.ts`). Since KSA has no LUT slot,
+  the ramp is **baked into the diffuse at composite time** and never ships.
 - **An IMPORTED emissive reuses `'painted'`** rather than adding a shape of its own: a glTF
   `emissiveTexture × emissiveFactor` composes to exactly what `'painted'` already models — an RGBA
-  bitmap whose `rgb` is the glow colour and whose `a` is the intensity. So `glowBitmapFor()`,
-  `compositeGlow()`, the editor material and the exporter all work unchanged, and an imported glow
-  can be retouched in the existing paint dialog. (`plans/IMPORT_MODELS.md` §3.4 originally proposed
-  a new `'map'` shape; the reuse is strictly less code for the same result.)
+  bitmap whose `rgb` is the glow colour and whose `a` is the key. So `glowFor()`, `compositeGlow()`,
+  the editor material and the exporter all work unchanged, and an imported glow can be retouched in
+  the existing paint dialog. It lands at `coverage`/`strength` = 1 so the glTF material's own
+  falloff (already in the alpha) passes through unscaled. (`plans/IMPORT_MODELS.md` §3.4 originally
+  proposed a new `'map'` shape; the reuse is strictly less code for the same result.)
 - **A synthesised base is sized to the glow.** `compositeGlow` outputs at the BASE's resolution, so
   a colour-only (or kitten) material's 4×4 solid would have collapsed a 2048² painted/imported glow
   to 4×4. `glowComposite.baseSizeFor(glow)` gives both resolvers (`customAssetStore.faceBaseImage`,

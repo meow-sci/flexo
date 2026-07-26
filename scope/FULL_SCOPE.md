@@ -171,6 +171,19 @@ Status reflects the `4980 → 5018` review. 🔴 breaking · 🟡 missing/drift 
 > [custom-assets-and-mod-export.md](custom-assets-and-mod-export.md), verified @5018 — there
 > is no separate "import" scope doc to check.
 
+> **The emissive contract is a hard engine limit, not a flexo gap.** `<Emissive>` is a
+> single-channel mask added as `white × mask × 1.25` AFTER lighting, with no colour, tint or
+> LUT field anywhere in `PbrMaterialReference` — so a glow is achromatic in shadow and colour
+> can only come from a `<Light>`'s `<Color>` (or the hard-coded battery status light). The
+> greyscale-map-keyed-to-a-1px-gradient technique the engine does implement is the
+> **temperature** channel, on the `<PartModelDynamic>` shader variant that has emissive
+> compiled out. Contracts **#12 and #18** in
+> [custom-assets-and-mod-export.md](custom-assets-and-mod-export.md); full source-cited
+> derivation in [analysis/KSA_EMISSIVE_AND_LUT.md](../analysis/KSA_EMISSIVE_AND_LUT.md).
+> **Re-check on a game update:** an `<EmissiveLut>`/tint slot appearing on
+> `PbrMaterialReference`, or `ENABLE_EMISSIVE` reaching `BuildPipelineDynamic`, would let
+> flexo ship the ramp instead of baking it.
+
 ### Open gaps from 5018 → [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md)
 
 The 5018 review's gap register (F1–F14) is in

@@ -14,6 +14,7 @@ import type {
   KittenKind,
   KittenMeshSource,
   PrimitiveSpec,
+  RgbColor,
   ScalarChannel,
   TextureChannel,
   Transform,
@@ -24,6 +25,7 @@ import {
   DEFAULT_LAYER_ID,
   KITTEN_LABELS,
   createDefaultMaterial,
+  createGlow,
   materialTextureIds,
   meshKind,
 } from '../ksa/types'
@@ -55,10 +57,12 @@ import { prepareChannelImage } from '../ktx/channelTransforms'
 import {
   baseSizeFor,
   compositeGlow,
+  glowCompositeOf,
   solidGlowBitmap,
   neutralBase,
   solidBase,
   type GlowBitmap,
+  type GlowComposite,
 } from '../ktx/glowComposite'
 import {
   applyMaterialChannels,
@@ -362,19 +366,30 @@ function resolveMaterialChannels(material: CustomMaterial): MaterialChannelMaps 
   }
 }
 
-/** The glow bitmap (rgb=color, a=intensity) for a mesh's emissive config, or null when no glow. */
-export async function glowBitmapFor(m: CustomMesh): Promise<GlowBitmap | null> {
+/** A mesh's resolved glow: the keyed bitmap plus how {@link compositeGlow} should read it. */
+export interface MeshGlow {
+  /** rgb = glow color, a = the greyscale key. */
+  bitmap: GlowBitmap
+  settings: GlowComposite
+}
+
+/**
+ * Resolves a mesh's emissive config into the bitmap + composite settings, or null when it has no
+ * glow. The two travel together so every consumer (editor material, exporter) reads one source.
+ */
+export async function glowFor(m: CustomMesh): Promise<MeshGlow | null> {
   const e = m.emissive
   if (!e) return null
+  const settings = glowCompositeOf(e)
   if (e.shape === 'painted') {
     const png = await getAsset(assetKeys.emissivePaint(m.id))
     if (png) {
       const lvl = (await decodeImage(png)).levels[0]
-      return { width: lvl.width, height: lvl.height, rgba: lvl.rgba }
+      return { bitmap: { width: lvl.width, height: lvl.height, rgba: lvl.rgba }, settings }
     }
-    // painted but no bitmap stored yet → fall back to the default color/strength as a solid.
+    // painted but no bitmap stored yet → fall back to the flat color as a fully-keyed solid.
   }
-  return solidGlowBitmap(e.color, e.strength)
+  return { bitmap: solidGlowBitmap(e.color), settings }
 }
 
 /**
@@ -444,10 +459,14 @@ async function buildKittenSubMeshMaterial(
 
   const opaqueGlow = transparent ? surface === 'glow' : !!m.emissive
   if (opaqueGlow && m.emissive) {
-    const glow = await glowBitmapFor(m)
+    const glow = await glowFor(m)
     if (glow) {
-      const size = baseSizeFor(glow)
-      const { diffuse, mask } = compositeGlow(neutralBase(size.width, size.height), glow)
+      const size = baseSizeFor(glow.bitmap)
+      const { diffuse, mask } = compositeGlow(
+        neutralBase(size.width, size.height),
+        glow.bitmap,
+        glow.settings,
+      )
       return buildGlowingFaceMaterial(diffuse, mask)
     }
   }
@@ -475,7 +494,7 @@ async function buildKittenSubMeshMaterial(
  * imported SubParts render through the identical path as Core ones.
  *
  * The surface goes through the SAME resolvers as a primitive's — `resolveMaterialChannels` +
- * `buildCustomMaterial`, and `glowBitmapFor` + `compositeGlow` + `buildGlowingFaceMaterial`
+ * `buildCustomMaterial`, and `glowFor` + `compositeGlow` + `buildGlowingFaceMaterial`
  * for a glow — so the editor preview and the exported `<PbrMaterial>` are produced by one
  * body of code. The only difference is that an imported mesh has no per-face grid: one
  * material for the whole mesh, exactly like a KSA `<PartModel>`.
@@ -498,11 +517,15 @@ async function buildImportedCatalogEntry(
     material?.baseColor.kind === 'map'
       ? textureKtx2Urls.get(material.baseColor.textureId)
       : undefined
-  const glow = await glowBitmapFor(m)
+  const glow = await glowFor(m)
 
   let mat: THREE.MeshStandardMaterial
   if (glow) {
-    const { diffuse, mask } = compositeGlow(await faceBaseImage(undefined, material, glow), glow)
+    const { diffuse, mask } = compositeGlow(
+      await faceBaseImage(undefined, material, glow.bitmap),
+      glow.bitmap,
+      glow.settings,
+    )
     const pbr = channels
       ? { metalness: channels.metalness, roughness: channels.roughness }
       : undefined
@@ -561,7 +584,7 @@ async function buildPrimitiveCatalogEntry(
   // mesh material (neutral when unassigned). A glowing mesh composites its glow bitmap
   // over the same resolved base so editor == export; meshes with neither material nor
   // face texture keep the legacy flat look.
-  const glow = await glowBitmapFor(m)
+  const glow = await glowFor(m)
   const material = materialFor(part, m)
   const channels = material ? resolveMaterialChannels(material) : undefined
   const materials: THREE.MeshStandardMaterial[] = []
@@ -569,7 +592,11 @@ async function buildPrimitiveCatalogEntry(
     const texId = ft[key]?.textureId
     const wrap = ft[key]?.wrap ?? 'repeat'
     if (glow) {
-      const { diffuse, mask } = compositeGlow(await faceBaseImage(texId, material, glow), glow)
+      const { diffuse, mask } = compositeGlow(
+        await faceBaseImage(texId, material, glow.bitmap),
+        glow.bitmap,
+        glow.settings,
+      )
       const pbr = channels
         ? { metalness: channels.metalness, roughness: channels.roughness }
         : undefined
@@ -1078,7 +1105,7 @@ async function attachImportedMaterial(
     // REUSE OF THE 'painted' SHAPE (plans/IMPORT_MODELS.md §3.4 called for a new 'map'
     // shape): an imported emissive is exactly what 'painted' already models — an RGBA
     // bitmap where rgb is the glow colour and a is the intensity, stored under
-    // assetKeys.emissivePaint(meshId). Reusing it means glowBitmapFor(), compositeGlow(),
+    // assetKeys.emissivePaint(meshId). Reusing it means glowFor(), compositeGlow(),
     // the editor material and the exporter all work unchanged, and the user can retouch
     // an imported glow in the existing paint dialog.
     const png = new Blob([spec.glowPng.slice()], { type: 'image/png' })
@@ -1086,10 +1113,15 @@ async function attachImportedMaterial(
     const old = emissivePaintUrls.get(descriptor.id)
     if (old) URL.revokeObjectURL(old)
     emissivePaintUrls.set(descriptor.id, URL.createObjectURL(png))
+    // coverage/strength = 1: the bitmap's alpha already carries the glTF emissive's own falloff,
+    // so passing it through unscaled reproduces the source material exactly. The user dials the
+    // white back afterwards if it blows out in-game.
     descriptor.emissive = {
+      ...createGlow(),
       shape: 'painted',
-      color: spec.glowColor ?? DEFAULT_GLOW.color,
-      strength: spec.glowStrength ?? DEFAULT_GLOW.strength,
+      color: spec.glowColor ?? createGlow().color,
+      strength: 1,
+      coverage: 1,
     }
   } else if (hadGlow) {
     delete descriptor.emissive
@@ -1708,11 +1740,6 @@ export async function setMeshTransparent(meshId: string, transparent: boolean): 
 }
 
 const DEFAULT_GLASS_TINT: GlassConfig = { tint: { r: 120, g: 200, b: 255 }, opacity: 0.45 }
-const DEFAULT_GLOW: EmissiveConfig = {
-  shape: 'whole',
-  color: { r: 120, g: 220, b: 255 },
-  strength: 0.6,
-}
 
 /**
  * Sets a glass-capable (visor) mesh's surface mode, seeding default tint/glow configs so the
@@ -1726,20 +1753,22 @@ export async function setMeshSurface(meshId: string, surface: VisorSurface): Pro
     m.surface = surface
     if ((surface === 'glass' || surface === 'glassGlow') && !m.glass)
       m.glass = { ...DEFAULT_GLASS_TINT }
-    if ((surface === 'glow' || surface === 'glassGlow') && !m.emissive)
-      m.emissive = { ...DEFAULT_GLOW }
+    if ((surface === 'glow' || surface === 'glassGlow') && !m.emissive) m.emissive = createGlow()
   })
   await refreshCatalog()
 }
 
 /**
  * Stores a painted glow bitmap (RGBA PNG) for a mesh and sets its emissive shape to 'painted'.
- * `defaults` seeds the descriptor's color/strength (the painter's brush defaults).
+ *
+ * The bitmap's alpha IS the greyscale key, so painting never touches how that key is interpreted:
+ * an existing glow keeps its coverage / emissive strength / ramp and only records `brushColor` as
+ * the painter's default for next time.
  */
 export async function setMeshGlowPainted(
   meshId: string,
   png: Blob,
-  defaults: { color: { r: number; g: number; b: number }; strength: number },
+  brushColor: RgbColor,
 ): Promise<void> {
   await putAsset(assetKeys.emissivePaint(meshId), png, 'image/png')
   const old = emissivePaintUrls.get(meshId)
@@ -1748,7 +1777,7 @@ export async function setMeshGlowPainted(
   publishEmissivePaintUrls()
   mutate('paint glow', meshId, (p) => {
     const m = p.customMeshes.find((x) => x.id === meshId)
-    if (m) m.emissive = { shape: 'painted', color: defaults.color, strength: defaults.strength }
+    if (m) m.emissive = { ...(m.emissive ?? createGlow()), shape: 'painted', color: brushColor }
   })
   await refreshCatalog()
 }

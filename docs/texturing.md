@@ -89,6 +89,16 @@ bundled verbatim into exported KSA mods. On a GPU without BPTC/RGTC (`isBcnSuppo
 false) kittens render flat-grey. Converting them too (keeping the BC7 original for
 bundle-export) is a follow-up.
 
+### The emissive is white — always
+
+`MeshIndirect.frag:276-287` adds `gammaToLinear(vec3(mask) * 1.25)`: a greyscale mask broadcast to
+RGB, **after** all lighting. There is no emissive colour, tint or LUT anywhere on that path, so in
+shadow a glow is achromatic no matter what the diffuse holds. The only coloured branch is the
+hard-coded battery status light, and the LUT technique KSA does use (a greyscale map keyed through
+a 1-px gradient) is wired to the **temperature** channel on the `<PartModelDynamic>` pipeline
+variant, which has emissive compiled out. Full source-cited account:
+[analysis/KSA_EMISSIVE_AND_LUT.md](../analysis/KSA_EMISSIVE_AND_LUT.md).
+
 ## Caveats / not done
 - This doc covers **built-in** KSA part textures. **User-authored** emissive (glow) and the kitten
   visor glass tint reuse this exact emissive render path — see [custom-assets.md](./custom-assets.md).

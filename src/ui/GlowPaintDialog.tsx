@@ -4,24 +4,22 @@ import { Modal, Dialog, DialogHeader, Button, Slider } from './kit'
 import { $glowPaintMeshId, setGlowPaintMeshId, setMeshGlowPainted } from '../state/customAssetStore'
 import { $part } from '../state/editorStore'
 import { assetKeys, getAsset } from '../state/assetDb'
+import { glowRampCss, hexToRgb, rgbToHex, sampleGlowRamp } from '../ktx/glowRamp'
 import type { CustomMesh } from '../ksa/types'
 
 /**
- * In-browser paint canvas for a mesh's 'painted' glow bitmap (rgb = glow color, a = intensity).
- * Drag to stamp soft glow spots; the alpha channel becomes the emissive mask and the rgb becomes
- * the glow color baked into the diffuse on export (see src/ktx/glowComposite). Driven by
- * $glowPaintMeshId. Apply writes a PNG to IndexedDB via setMeshGlowPainted.
+ * In-browser paint canvas for a mesh's 'painted' glow bitmap: **alpha is the greyscale KEY** and
+ * rgb is the glow color. The key drives both outputs at composite time — the color blended into
+ * the diffuse (scaled by the mesh's Coverage) and the `<Emissive>` mask KSA adds as white (scaled
+ * by its Emissive strength). See src/ktx/glowComposite.
+ *
+ * With a color ramp set, the brush color is ignored by the composite (the key indexes the ramp
+ * instead), so the stamp is drawn THROUGH the ramp: the soft falloff walks down the gradient and
+ * the canvas previews what the diffuse will actually get.
+ *
+ * Driven by $glowPaintMeshId. Apply writes a PNG to IndexedDB via setMeshGlowPainted.
  */
 const SIZE = 512
-
-function hexToRgb(hex: string): { r: number; g: number; b: number } {
-  const v = parseInt(hex.slice(1), 16)
-  return { r: (v >> 16) & 255, g: (v >> 8) & 255, b: v & 255 }
-}
-
-function rgbToHex({ r, g, b }: { r: number; g: number; b: number }): string {
-  return `#${[r, g, b].map((n) => Math.round(n).toString(16).padStart(2, '0')).join('')}`
-}
 
 export function GlowPaintDialog() {
   const meshId = useStore($glowPaintMeshId)
@@ -35,11 +33,12 @@ export function GlowPaintDialog() {
 function PaintBody({ mesh }: { mesh: CustomMesh }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const painting = useRef(false)
+  const ramp = mesh.emissive?.ramp
   const [color, setColor] = useState(() =>
     mesh.emissive ? rgbToHex(mesh.emissive.color) : '#78dcff',
   )
   const [brush, setBrush] = useState(48)
-  const [intensity, setIntensity] = useState(() => mesh.emissive?.strength ?? 0.8)
+  const [intensity, setIntensity] = useState(0.8)
   const [eraser, setEraser] = useState(false)
 
   // Draw any saved bitmap onto the fresh canvas (no setState — keeps the effect a pure DOM sync).
@@ -62,6 +61,10 @@ function PaintBody({ mesh }: { mesh: CustomMesh }) {
 
   const close = () => setGlowPaintMeshId(null)
 
+  // Radial falloff steps. With a ramp, each step's rgb is the ramp color for the key AT that
+  // step, so the stamp reproduces the LUT falloff; without one it is the flat brush color.
+  const STAMP_STEPS = 8
+
   const stampAt = (clientX: number, clientY: number) => {
     const canvas = canvasRef.current
     const ctx = canvas?.getContext('2d')
@@ -69,12 +72,16 @@ function PaintBody({ mesh }: { mesh: CustomMesh }) {
     const rect = canvas.getBoundingClientRect()
     const x = ((clientX - rect.left) / rect.width) * SIZE
     const y = ((clientY - rect.top) / rect.height) * SIZE
-    const { r, g, b } = hexToRgb(color)
-    const a = eraser ? 1 : intensity
+    const flat = hexToRgb(color)
+    const peak = eraser ? 1 : intensity
     ctx.globalCompositeOperation = eraser ? 'destination-out' : 'source-over'
     const grad = ctx.createRadialGradient(x, y, 0, x, y, brush)
-    grad.addColorStop(0, `rgba(${r},${g},${b},${a})`)
-    grad.addColorStop(1, `rgba(${r},${g},${b},0)`)
+    for (let i = 0; i <= STAMP_STEPS; i++) {
+      const t = i / STAMP_STEPS
+      const key = peak * (1 - t)
+      const c = ramp && !eraser ? sampleGlowRamp(ramp, key) : flat
+      grad.addColorStop(t, `rgba(${c.r},${c.g},${c.b},${key})`)
+    }
     ctx.fillStyle = grad
     ctx.beginPath()
     ctx.arc(x, y, brush, 0, Math.PI * 2)
@@ -88,8 +95,7 @@ function PaintBody({ mesh }: { mesh: CustomMesh }) {
     const canvas = canvasRef.current
     if (!canvas) return
     const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
-    if (blob)
-      await setMeshGlowPainted(mesh.id, blob, { color: hexToRgb(color), strength: intensity })
+    if (blob) await setMeshGlowPainted(mesh.id, blob, hexToRgb(color))
     close()
   }
 
@@ -117,13 +123,21 @@ function PaintBody({ mesh }: { mesh: CustomMesh }) {
           />
           <div className="flex items-center gap-3">
             <span className="w-16 shrink-0 text-xs text-fg-muted">Color</span>
-            <input
-              type="color"
-              aria-label="Brush color"
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              className="h-6 w-6 cursor-pointer rounded border border-border bg-transparent"
-            />
+            {ramp ? (
+              <div
+                className="h-6 flex-1 rounded border border-border"
+                style={{ background: glowRampCss(ramp) }}
+                aria-label="Color ramp (brush color comes from the ramp)"
+              />
+            ) : (
+              <input
+                type="color"
+                aria-label="Brush color"
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                className="h-6 w-6 cursor-pointer rounded border border-border bg-transparent"
+              />
+            )}
             <label className="ml-auto flex items-center gap-1.5 text-xs text-fg-muted">
               <input
                 type="checkbox"

@@ -285,6 +285,8 @@ if (emissive && drawData.emissiveTextureIndex >= 0) {                      // li
 
 So the **glow** is a single-channel emissive texture, multiplied by `EMISSIVE_MULTIPLIER`, added to the lit color — but only when bit 6 is clear, i.e. when `FullPart.LightSwitch` says the light is on and powered.
 
+> **The glow is always WHITE.** `vec3(sampledEmissive)` is a greyscale mask broadcast to RGB, and it is added _after_ all lighting — so an emissive bulb reads achromatic in shadow no matter what its diffuse holds. A light part's COLOR comes from the `<Light>`'s `<Color>` (§3), which reaches the bulb's own surface through the clustered light pre-pass. Why there is no coloured-emissive alternative — and what the "greyscale map keyed to a 1-px LUT" technique actually is in this engine — is worked through in [KSA_EMISSIVE_AND_LUT.md](KSA_EMISSIVE_AND_LUT.md).
+
 ### 5.4 The whole chain, one diagram
 
 ```

@@ -23,7 +23,7 @@ import {
   hydrateProjectOnBoot,
   DEFAULT_PROJECT_NAME,
 } from './projectStore'
-import { CONNECTOR_LAYER_ID, DEFAULT_LAYER_ID } from '../ksa/types'
+import { CONNECTOR_LAYER_ID, DEFAULT_LAYER_ID, createGlow } from '../ksa/types'
 
 beforeEach(() => {
   localStorage.clear()
@@ -187,6 +187,53 @@ describe('projectStore persistence', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     hydrateProjectOnBoot()
     expect(projectExists('Ancient')).toBe(false) // thrown away, not migrated
+    warn.mockRestore()
+  })
+
+  it('purges a project whose glow predates the coverage/strength split', () => {
+    // A glow authored when one slider drove BOTH the diffuse blend and the emissive mask has no
+    // `coverage`. Compositing it would silently read coverage as 0 (no colour at all), so the
+    // snapshot is discarded like any other old-model data — never back-filled.
+    $projectName.set('OldGlow')
+    addSubPart('Core.A')
+    saveCurrentProject()
+    const stale = JSON.parse(localStorage.getItem('flexo:project:OldGlow')!)
+    stale.part.customMeshes = [
+      {
+        id: 'mesh_1',
+        name: 'Lamp',
+        subPartId: 'flexo_Lamp',
+        faceTextures: {},
+        emissive: { shape: 'whole', color: { r: 0, g: 255, b: 0 }, strength: 0.6 },
+      },
+    ]
+    localStorage.setItem('flexo:project:OldGlow', JSON.stringify(stale))
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    hydrateProjectOnBoot()
+    expect(projectExists('OldGlow')).toBe(false)
+    warn.mockRestore()
+  })
+
+  it('keeps a project whose glow carries the full current model', () => {
+    $projectName.set('NewGlow')
+    addSubPart('Core.A')
+    saveCurrentProject()
+    const snap = JSON.parse(localStorage.getItem('flexo:project:NewGlow')!)
+    snap.part.customMeshes = [
+      {
+        id: 'mesh_1',
+        name: 'Lamp',
+        subPartId: 'flexo_Lamp',
+        faceTextures: {},
+        emissive: { ...createGlow(), color: { r: 0, g: 255, b: 0 } },
+      },
+    ]
+    localStorage.setItem('flexo:project:NewGlow', JSON.stringify(snap))
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    hydrateProjectOnBoot()
+    expect(projectExists('NewGlow')).toBe(true)
     warn.mockRestore()
   })
 

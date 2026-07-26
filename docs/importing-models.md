@@ -181,10 +181,13 @@ are injectable, so it unit-tests without a canvas.
 
 **Why `'painted'` and not a new emissive shape.** A glTF emissive composes to exactly what
 `'painted'` already models — an RGBA bitmap under `assetKeys.emissivePaint(meshId)` whose RGB is
-the glow colour and whose alpha is the intensity. Reusing it means `glowBitmapFor()`,
+the glow colour and whose alpha is the greyscale key. Reusing it means `glowFor()`,
 `compositeGlow()`, the editor material and the exporter all work unchanged, **and** an imported
 glow can be retouched in the existing paint dialog. (`plans/IMPORT_MODELS.md` §3.4 originally
-proposed a new `'map'` shape; the reuse is strictly less code for the same result.)
+proposed a new `'map'` shape; the reuse is strictly less code for the same result.) The imported
+config lands at `coverage`/`strength` = 1 so the source material's own falloff — already baked
+into the alpha — passes through unscaled; KSA adds that mask as WHITE, so a strong glTF emissive
+may need the Emissive slider pulled back (and a matching `<Light>`) to read as a colour in-game.
 
 `alphaMode: BLEND` sets `ImportedMeshSource.transparent`, the opt-in `<PartModelGlass>` route
 (toggled per mesh afterwards in the per-mesh panel). `alphaMode: MASK` is a warning only — KSA's

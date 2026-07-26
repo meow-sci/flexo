@@ -630,6 +630,7 @@ describe('buildCustomBundle — uniform-channel CustomMaterial (red metallic but
       shape: 'whole',
       color: { r: 255, g: 255, b: 255 },
       strength: 0.5,
+      coverage: 1,
     }
     const bundle = await buildCustomBundle(part, 'ButtonMod')
     const xml = bundle.assetsXml!
@@ -730,7 +731,7 @@ describe('visor glass tint + glow export', () => {
   it('an opaque-glow visor exports <PartModel> + an emissive mask, never <PartModelGlass>', async () => {
     const part = partWithVisor({
       surface: 'glow',
-      emissive: { shape: 'whole', color: { r: 255, g: 180, b: 0 }, strength: 0.7 },
+      emissive: { shape: 'whole', color: { r: 255, g: 180, b: 0 }, strength: 0.7, coverage: 1 },
     })
     const bundle = await buildCustomBundle(part, 'VisorMod', REF)
     expect(bundle.assetsXml).toContain('<Emissive')
@@ -742,7 +743,7 @@ describe('visor glass tint + glow export', () => {
     const part = partWithVisor({
       surface: 'glassGlow',
       glass: { tint: { r: 10, g: 200, b: 10 } },
-      emissive: { shape: 'whole', color: { r: 10, g: 255, b: 10 }, strength: 0.6 },
+      emissive: { shape: 'whole', color: { r: 10, g: 255, b: 10 }, strength: 0.6, coverage: 1 },
     })
     const { part: expanded, insetIds } = expandGlassGlow(part)
     expect(expanded.customMeshes).toHaveLength(2)
@@ -763,7 +764,7 @@ describe('visor glass tint + glow export', () => {
     const part = partWithVisor({
       surface: 'glassGlow',
       glass: { tint: { r: 10, g: 200, b: 10 } },
-      emissive: { shape: 'whole', color: { r: 10, g: 255, b: 10 }, strength: 0.6 },
+      emissive: { shape: 'whole', color: { r: 10, g: 255, b: 10 }, strength: 0.6, coverage: 1 },
     })
     const { part: expanded, insetIds } = expandGlassGlow(part)
     const bundle = await buildCustomBundle(expanded, 'VisorMod', REF, new Map(), insetIds)
@@ -878,7 +879,9 @@ describe('buildCustomBundle — imported glTF SubParts', () => {
 
   it('a glowing imported mesh emits <Emissive> + a composited diffuse', async () => {
     const part = partWithImportedMeshes([
-      { emissive: { shape: 'whole', color: { r: 255, g: 120, b: 0 }, strength: 0.75 } },
+      {
+        emissive: { shape: 'whole', color: { r: 255, g: 120, b: 0 }, strength: 0.75, coverage: 1 },
+      },
     ])
     const bundle = await buildCustomBundle(part, 'PodMod')
     const xml = bundle.assetsXml!
@@ -897,7 +900,7 @@ describe('buildCustomBundle — imported glTF SubParts', () => {
     // KSA's glass shader (MeshGlassIndirect.frag) doesn't sample the emissive map at all, so a
     // glow on a glass SubPart must not reach the material — glass simply can't glow.
     const part = partWithImportedMeshes([
-      { emissive: { shape: 'whole', color: { r: 0, g: 255, b: 255 }, strength: 0.6 } },
+      { emissive: { shape: 'whole', color: { r: 0, g: 255, b: 255 }, strength: 0.6, coverage: 1 } },
     ])
     part.customMeshes[0].imported!.transparent = true
     const bundle = await buildCustomBundle(part, 'PodMod')

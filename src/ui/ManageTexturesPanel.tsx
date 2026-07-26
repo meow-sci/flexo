@@ -9,13 +9,15 @@ import {
   Button,
   Select,
   ListBoxItem,
+  Slider,
   TextField,
   Switch,
   useIsPhone,
 } from './kit'
 import { ColorAlphaField } from './ColorAlphaField'
+import { SliderRow } from './SliderRow'
 import { MaterialDialog } from './MaterialDialog'
-import { $part } from '../state/editorStore'
+import { $part, addLight } from '../state/editorStore'
 import {
   $managingMeshId,
   setManagingMeshId,
@@ -29,12 +31,27 @@ import {
 } from '../state/customAssetStore'
 import { $simulateGlass, setSimulateGlass } from '../state/settingsStore'
 import { PRIMITIVE_FACE_KEYS, FACE_LABELS } from '../three/primitives'
+import { decodeImage } from '../ktx/decodeImage'
 import {
+  GLOW_RAMP_PRESETS,
+  defaultGlowRamp,
+  glowRampCss,
+  glowRampFromImage,
+  hexToRgb,
+  normalizeGlowRamp,
+  rgbToHex,
+  sampleGlowRamp,
+} from '../ktx/glowRamp'
+import {
+  createGlow,
   meshKind,
   type CustomMesh,
   type EmissiveConfig,
   type FaceTextureConfig,
+  type GlowRamp,
+  type GlowRampStop,
   type ImportedMeshSource,
+  type RgbColor,
   type TextureWrap,
   type VisorSurface,
 } from '../ksa/types'
@@ -52,21 +69,8 @@ const WRAP_LABELS: { id: TextureWrap; label: string }[] = [
   { id: 'clamp', label: 'Stretch edge' },
 ]
 
-const DEFAULT_GLOW: EmissiveConfig = {
-  shape: 'whole',
-  color: { r: 120, g: 220, b: 255 },
-  strength: 0.6,
-}
-
-function rgbToHex({ r, g, b }: { r: number; g: number; b: number }): string {
-  const h = (n: number) => Math.round(n).toString(16).padStart(2, '0')
-  return `#${h(r)}${h(g)}${h(b)}`
-}
-
-function hexToRgb(hex: string): { r: number; g: number; b: number } {
-  const v = parseInt(hex.slice(1), 16)
-  return { r: (v >> 16) & 255, g: (v >> 8) & 255, b: v & 255 }
-}
+/** Emissive mask values above this blow a glow's color out to white in-game (see GlowSettings). */
+const GLOW_WASHOUT_STRENGTH = 0.6
 
 /** The kind label in the panel header — a primitive names its shape, the other two their kind. */
 function meshKindLabel(mesh: CustomMesh): string {
@@ -430,18 +434,98 @@ function TintField({ mesh }: { mesh: CustomMesh }) {
   )
 }
 
-/** Glow color + strength (the slider maps to emissive strength 0..1). */
-function GlowColorField({ mesh }: { mesh: CustomMesh }) {
-  const e = mesh.emissive ?? DEFAULT_GLOW
+/**
+ * The glow controls shared by the visor and the plain-mesh sections.
+ *
+ * The two sliders are deliberately independent, because KSA's emissive can only ever ADD WHITE
+ * (MeshIndirect.frag:286 — `gammaToLinear(vec3(mask) * 1.25)`, no colour input on that path):
+ *  - **Color** puts the glow colour in the `<Diffuse>`; it reads wherever the surface is lit.
+ *  - **Emissive** is the `<Emissive>` mask value; it is the white the game adds, and the only
+ *    thing visible in shadow. Past ~0.6 it swamps the colour, which is the "my green glow is
+ *    white" symptom. See analysis/KSA_EMISSIVE_AND_LUT.md.
+ */
+function GlowSettings({ mesh, glow }: { mesh: CustomMesh; glow: EmissiveConfig }) {
+  const patch = (next: Partial<EmissiveConfig>) => void setMeshGlow(mesh.id, { ...glow, ...next })
+  const ramped = !!glow.ramp
   return (
-    <ColorAlphaField
-      label="Glow"
-      color={rgbToHex(e.color)}
-      opacity={e.strength}
-      onChange={({ color, opacity }) =>
-        void setMeshGlow(mesh.id, { ...e, color: hexToRgb(color), strength: opacity })
+    <>
+      {glow.shape === 'painted' && (
+        <Select
+          label="Color source"
+          selectedKey={ramped ? 'ramp' : 'solid'}
+          onSelectionChange={(k) =>
+            k === 'ramp'
+              ? patch({ ramp: defaultGlowRamp() })
+              : void setMeshGlow(mesh.id, { ...glow, ramp: undefined })
+          }
+        >
+          <ListBoxItem id="solid">Solid color</ListBoxItem>
+          <ListBoxItem id="ramp">Color ramp (LUT)</ListBoxItem>
+        </Select>
+      )}
+      {ramped && glow.ramp ? (
+        <GlowRampEditor ramp={glow.ramp} onChange={(ramp) => patch({ ramp })} />
+      ) : (
+        <ColorAlphaField
+          label="Color"
+          color={rgbToHex(glow.color)}
+          opacity={glow.coverage}
+          onChange={({ color, opacity }) => patch({ color: hexToRgb(color), coverage: opacity })}
+        />
+      )}
+      {ramped && (
+        <SliderRow
+          label="Coverage"
+          ariaLabel="Glow color coverage"
+          value={glow.coverage}
+          min={0}
+          max={1}
+          step={0.01}
+          onChange={(v) => patch({ coverage: v })}
+          format={(v) => `${Math.round(v * 100)}%`}
+        />
+      )}
+      <SliderRow
+        label="Emissive"
+        ariaLabel="Emissive mask strength"
+        value={glow.strength}
+        min={0}
+        max={1}
+        step={0.01}
+        onChange={(v) => patch({ strength: v })}
+        format={(v) => `${Math.round(v * 100)}%`}
+      />
+      {glow.strength > GLOW_WASHOUT_STRENGTH && (
+        <p className="text-[11px] leading-snug text-warning">
+          KSA adds this as WHITE, so this much emissive will wash the color out. Lower it and add a
+          matching light for colored light.
+        </p>
+      )}
+      <AddMatchingLightButton mesh={mesh} glow={glow} />
+    </>
+  )
+}
+
+/**
+ * Adds a `<Light>` on this SubPart seeded with the glow's colour — the only mechanism that makes a
+ * KSA part actually cast COLOURED light (`LightModule.TemplateData.ColorRgb`), since the emissive
+ * map is white-only. A Point light at the SubPart origin; range/aim are edited in SubPart Data.
+ */
+function AddMatchingLightButton({ mesh, glow }: { mesh: CustomMesh; glow: EmissiveConfig }) {
+  const color = glow.ramp ? sampleGlowRamp(glow.ramp, 1) : glow.color
+  return (
+    <Button
+      size="sm"
+      variant="secondary"
+      onPress={() =>
+        addLight(mesh.subPartId, {
+          type: 'Point',
+          color: { r: color.r / 255, g: color.g / 255, b: color.b / 255 },
+        })
       }
-    />
+    >
+      Add matching light
+    </Button>
   )
 }
 
@@ -469,7 +553,7 @@ function VisorSurfaceControls({ mesh }: { mesh: CustomMesh }) {
           </Switch>
         </>
       )}
-      {showGlow && <GlowColorField mesh={mesh} />}
+      {showGlow && mesh.emissive && <GlowSettings mesh={mesh} glow={mesh.emissive} />}
       <p className="text-[11px] leading-snug text-fg-subtle">
         In-game KSA renders glass darker/subtler than shown (it can&apos;t glow). “Glow” makes the
         visor opaque; “Glass + Glow” keeps it see-through with a glow layer behind it.
@@ -485,11 +569,9 @@ function GlowModeControls({ mesh }: { mesh: CustomMesh }) {
       void setMeshGlow(mesh.id, undefined)
       return
     }
-    const base = mesh.emissive ?? DEFAULT_GLOW
     void setMeshGlow(mesh.id, {
+      ...(mesh.emissive ?? createGlow()),
       shape: m as 'whole' | 'painted',
-      color: base.color,
-      strength: base.strength,
     })
   }
   return (
@@ -499,18 +581,134 @@ function GlowModeControls({ mesh }: { mesh: CustomMesh }) {
         <ListBoxItem id="whole">Whole mesh</ListBoxItem>
         <ListBoxItem id="painted">Painted spots</ListBoxItem>
       </Select>
-      {mesh.emissive && <GlowColorField mesh={mesh} />}
+      {mesh.emissive && <GlowSettings mesh={mesh} glow={mesh.emissive} />}
       {mesh.emissive?.shape === 'painted' && (
         <Button size="sm" variant="secondary" onPress={() => setGlowPaintMeshId(mesh.id)}>
           Edit glow…
         </Button>
       )}
       <p className="text-[11px] leading-snug text-fg-subtle">
-        Glow adds white light over the base color — pick a strong color + moderate strength; full
-        strength washes toward white (like real KSA parts).
+        KSA has no colored emissive: it adds <em>white</em> × mask × 1.25 after lighting. Color
+        lives in the base color (visible where lit); Emissive is the white (visible in shadow). For
+        real colored light, keep Emissive low and add a matching light.
       </p>
     </SectionShell>
   )
+}
+
+/**
+ * Editor for a {@link GlowRamp} — the greyscale-key → color gradient that mirrors how KSA keys its
+ * own effects through a 1-px LUT (`temperatureLut`). KSA has no per-material LUT slot, so flexo
+ * bakes the ramp into the diffuse at composite time; this is purely an authoring surface.
+ *
+ * Importing reads the image's MIDDLE row across its FULL width — flexo does not guess where a
+ * gradient starts, so a screenshot with background margins imports those margins too (crop first,
+ * or drag the stops afterwards).
+ */
+function GlowRampEditor({ ramp, onChange }: { ramp: GlowRamp; onChange: (r: GlowRamp) => void }) {
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [importError, setImportError] = useState('')
+
+  const importImage = async (file: File | undefined) => {
+    if (!file) return
+    try {
+      const decoded = await decodeImage(file)
+      onChange(normalizeGlowRamp(glowRampFromImage(decoded.levels[0]).stops))
+      setImportError('')
+    } catch {
+      setImportError('Could not read that image.')
+    }
+  }
+
+  const patchStop = (i: number, next: Partial<GlowRampStop>) =>
+    onChange(normalizeGlowRamp(ramp.stops.map((s, j) => (j === i ? { ...s, ...next } : s))))
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div
+        className="h-5 w-full rounded border border-border"
+        style={{ background: glowRampCss(ramp) }}
+        aria-label="Color ramp preview"
+      />
+      <div className="flex items-center gap-2">
+        {/* A command menu, not a value: selectedKey stays null so it re-shows the placeholder
+            after a pick (the stops are editable afterwards, so there is no "current preset"). */}
+        <Select
+          aria-label="Ramp preset"
+          size="sm"
+          placeholder="Preset…"
+          selectedKey={null}
+          onSelectionChange={(k) => {
+            const preset = GLOW_RAMP_PRESETS.find((p) => p.id === String(k))
+            if (preset) onChange(normalizeGlowRamp(preset.ramp.stops))
+          }}
+          className="flex-1"
+        >
+          {GLOW_RAMP_PRESETS.map((p) => (
+            <ListBoxItem key={p.id} id={p.id}>
+              {p.label}
+            </ListBoxItem>
+          ))}
+        </Select>
+        <Button size="sm" variant="secondary" onPress={() => fileInput.current?.click()}>
+          Import…
+        </Button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => void importImage(e.target.files?.[0])}
+        />
+      </div>
+      {importError && <p className="text-[11px] text-warning">{importError}</p>}
+      {ramp.stops.map((stop, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <input
+            type="color"
+            aria-label={`Ramp stop ${i + 1} color`}
+            className="h-6 w-6 shrink-0 cursor-pointer rounded border border-border bg-transparent"
+            value={rgbToHex(stop.color)}
+            onChange={(e) => patchStop(i, { color: hexToRgb(e.target.value) })}
+          />
+          <Slider
+            aria-label={`Ramp stop ${i + 1} position`}
+            className="flex-1"
+            minValue={0}
+            maxValue={1}
+            step={0.01}
+            value={stop.at}
+            onChange={(v) => patchStop(i, { at: v as number })}
+          />
+          <span className="w-8 shrink-0 text-right font-mono text-[11px] text-fg-subtle">
+            {Math.round(stop.at * 100)}%
+          </span>
+          <AriaButton
+            aria-label={`Remove ramp stop ${i + 1}`}
+            className="shrink-0 rounded p-0.5 text-fg-subtle hover:text-fg disabled:opacity-30"
+            isDisabled={ramp.stops.length <= 2}
+            onPress={() => onChange({ stops: ramp.stops.filter((_, j) => j !== i) })}
+          >
+            <X size={12} />
+          </AriaButton>
+        </div>
+      ))}
+      <Button
+        size="sm"
+        variant="ghost"
+        onPress={() =>
+          onChange(normalizeGlowRamp([...ramp.stops, { at: 0.5, color: midStop(ramp) }]))
+        }
+      >
+        Add stop
+      </Button>
+    </div>
+  )
+}
+
+/** The ramp's own color at the midpoint — so a new stop lands on the curve instead of jumping. */
+function midStop(ramp: GlowRamp): RgbColor {
+  return sampleGlowRamp(ramp, 0.5)
 }
 
 /**

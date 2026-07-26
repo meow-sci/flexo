@@ -75,9 +75,12 @@ export interface ImportMaterialSpec {
    * material emits. Stored under `assetKeys.emissivePaint(meshId)` — see the EMISSIVE note.
    */
   glowPng?: Uint8Array
-  /** Descriptor colour/strength that accompany {@link glowPng} (`EmissiveConfig`). */
+  /**
+   * The uniform-colour equivalent of {@link glowPng}, stored as the `EmissiveConfig.color` (the
+   * paint tool's brush default if the user retouches the import). The glow's magnitude lives in
+   * the bitmap's alpha — the imported `EmissiveConfig` passes it through at coverage/strength 1.
+   */
   glowColor?: RgbColor
-  glowStrength?: number
   /** glTF `alphaMode: BLEND` — the SubPart may export through `<PartModelGlass>`. */
   transparent?: boolean
 }
@@ -557,14 +560,14 @@ class MaterialPlanBuilder {
       const emissiveLevel = emissiveImage ? await this.levelFor(emissiveImage, 'emissive') : null
       const glow = buildGlowBitmap(emissiveLevel, emissive)
       spec.glowPng = await this.encodePng(glow)
-      // The descriptor colour/strength are the uniform equivalent of the bitmap (and the
-      // paint tool's brush defaults if the user later retouches the glow).
+      // The descriptor colour is the uniform equivalent of the bitmap (and the paint tool's
+      // brush default if the user later retouches the glow). Its magnitude is already in the
+      // bitmap's alpha, so nothing else needs carrying over.
       spec.glowColor = {
         r: linearToSrgbByte(emissive[0] ?? 0),
         g: linearToSrgbByte(emissive[1] ?? 0),
         b: linearToSrgbByte(emissive[2] ?? 0),
       }
-      spec.glowStrength = clamp01(luminance(emissive[0] ?? 0, emissive[1] ?? 0, emissive[2] ?? 0))
     }
 
     // ── alpha ────────────────────────────────────────────────────────────────

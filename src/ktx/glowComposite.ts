@@ -1,24 +1,44 @@
 /**
  * Pure helpers shared by the emissive (glow) editor preview AND the exporter, so what the user
- * tunes is what ships. KSA's glow is WHITE × mask × 1.25 ADDED after lighting (MeshIndirect.frag),
- * so the glow COLOR cannot come from a uniform — it must be baked into the DIFFUSE at the glowing
- * texels, with a grayscale mask controlling WHERE/how much. This module turns a "glow bitmap"
- * (rgb = color, a = intensity) into exactly those two textures:
+ * tunes is what ships. KSA's glow is WHITE × mask × 1.25 ADDED after lighting
+ * (MeshIndirect.frag:276-287) — there is no colored emission on that path at all — so the glow
+ * COLOR must be baked into the DIFFUSE at the glowing texels while a grayscale mask carries
+ * WHERE/how much. This module turns a "glow bitmap" (rgb = color, a = the GREYSCALE KEY) plus
+ * {@link GlowComposite} settings into exactly those two textures:
  *
- *   diffuse[i] = lerp(base[i], glow.rgb[i], glow.a[i])     → <Diffuse> / map        (sRGB)
- *   mask[i]    = glow.a[i]  (broadcast to RGB; KSA reads R) → <Emissive> / emissiveMap (LINEAR)
+ *   key        = glow.a[i] / 255                              // the greyscale map
+ *   color      = ramp ? sampleGlowRamp(ramp, key) : glow.rgb  // the LUT, evaluated on the CPU
+ *   diffuse[i] = lerp(base[i], color, key * coverage)  → <Diffuse>  / map         (sRGB)
+ *   mask[i]    = key * strength (broadcast to RGB)     → <Emissive> / emissiveMap (LINEAR, KSA reads R)
+ *
+ * `coverage` and `strength` are INDEPENDENT on purpose: the key alone used to drive both, which
+ * made "saturated color + gentle white core" — the only setting that reads colored in-game —
+ * unauthorable. See analysis/KSA_EMISSIVE_AND_LUT.md §6.
  *
  * `base` is the decoded primary diffuse, or {@link neutralBase} when the mesh has no texture
  * (e.g. a glow-only primitive, or any part-ified kitten submesh — KSA `.ktx2` can't be CPU-decoded).
  */
+import type { EmissiveConfig } from '../ksa/types'
 import type { ImageLevel } from './decodeImage'
+import { sampleGlowRamp } from './glowRamp'
 
-/** A glow bitmap: rgb = glow color, a = glow intensity/mask (all 0..255). */
+/** A glow bitmap: rgb = glow color, a = the greyscale key (all 0..255). */
 export interface GlowBitmap {
   width: number
   height: number
   /** Tightly packed RGBA8, length = width*height*4. */
   rgba: Uint8Array
+}
+
+/**
+ * How {@link compositeGlow} interprets a bitmap's greyscale key — the subset of
+ * {@link EmissiveConfig} that affects pixels (`shape` picks the bitmap, not the math).
+ */
+export type GlowComposite = Pick<EmissiveConfig, 'coverage' | 'strength' | 'ramp'>
+
+/** The composite settings of an emissive config. */
+export function glowCompositeOf(e: EmissiveConfig): GlowComposite {
+  return { coverage: e.coverage, strength: e.strength, ramp: e.ramp }
 }
 
 function clamp01(v: number): number {
@@ -29,19 +49,20 @@ function lerp8(a: number, b: number, t: number): number {
   return Math.round(a + (b - a) * t)
 }
 
-/** A tiny solid glow bitmap from a color (0..255) + strength (0..1) — for the 'whole' glow shape. */
-export function solidGlowBitmap(
-  color: { r: number; g: number; b: number },
-  strength: number,
-  size = 4,
-): GlowBitmap {
-  const a = Math.round(clamp01(strength) * 255)
+/**
+ * A tiny solid glow bitmap for the 'whole' glow shape: one color at a FULL key everywhere.
+ *
+ * The key is 255 rather than the config's strength because coverage/strength are applied by
+ * {@link compositeGlow} — "the whole mesh glows" means every texel is fully keyed, and how much
+ * color and how much white that becomes is the caller's two sliders.
+ */
+export function solidGlowBitmap(color: { r: number; g: number; b: number }, size = 4): GlowBitmap {
   const rgba = new Uint8Array(size * size * 4)
   for (let i = 0; i < size * size; i++) {
     rgba[i * 4] = color.r
     rgba[i * 4 + 1] = color.g
     rgba[i * 4 + 2] = color.b
-    rgba[i * 4 + 3] = a
+    rgba[i * 4 + 3] = 255
   }
   return { width: size, height: size, rgba }
 }
@@ -96,14 +117,22 @@ export function solidBase(
  * needs. The glow is nearest-resampled to the base's dimensions (so a painted spot lands at the
  * right UV relative to the diffuse). Output dimensions = base dimensions; both RGBA8.
  *
- *  - `mask=0`  → diffuse == base (no glow there).
- *  - `mask=255`→ diffuse == glow.rgb (full glow color; in-game the white emissive washes it bright).
+ *  - key 0 → diffuse == base and mask == 0 (no glow at all there).
+ *  - key 1 → diffuse == the glow color blended by `coverage`; mask == `strength`.
+ *
+ * With a `ramp`, the key indexes the ramp instead of using the bitmap's own rgb — the greyscale
+ * falloff of a painted spot then runs THROUGH the gradient (dark rim → hot core) instead of
+ * fading one flat color out, which is the "cleaner fading" a LUT buys you.
  */
 export function compositeGlow(
   base: ImageLevel,
   glow: GlowBitmap,
+  settings: GlowComposite,
 ): { diffuse: ImageLevel; mask: ImageLevel } {
   const { width, height } = base
+  const coverage = clamp01(settings.coverage)
+  const strength = clamp01(settings.strength)
+  const ramp = settings.ramp
   const diffuse = new Uint8Array(width * height * 4)
   const mask = new Uint8Array(width * height * 4)
   for (let y = 0; y < height; y++) {
@@ -114,12 +143,16 @@ export function compositeGlow(
         glow.width === width ? x : Math.min(glow.width - 1, Math.floor((x * glow.width) / width))
       const bi = (y * width + x) * 4
       const gi = (gy * glow.width + gx) * 4
-      const t = glow.rgba[gi + 3] / 255
-      diffuse[bi] = lerp8(base.rgba[bi], glow.rgba[gi], t)
-      diffuse[bi + 1] = lerp8(base.rgba[bi + 1], glow.rgba[gi + 1], t)
-      diffuse[bi + 2] = lerp8(base.rgba[bi + 2], glow.rgba[gi + 2], t)
+      const key = glow.rgba[gi + 3] / 255
+      const color = ramp
+        ? sampleGlowRamp(ramp, key)
+        : { r: glow.rgba[gi], g: glow.rgba[gi + 1], b: glow.rgba[gi + 2] }
+      const t = key * coverage
+      diffuse[bi] = lerp8(base.rgba[bi], color.r, t)
+      diffuse[bi + 1] = lerp8(base.rgba[bi + 1], color.g, t)
+      diffuse[bi + 2] = lerp8(base.rgba[bi + 2], color.b, t)
       diffuse[bi + 3] = 255
-      const m = glow.rgba[gi + 3]
+      const m = Math.round(key * strength * 255)
       mask[bi] = m
       mask[bi + 1] = m
       mask[bi + 2] = m

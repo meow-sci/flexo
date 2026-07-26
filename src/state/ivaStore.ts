@@ -1,4 +1,6 @@
 import { atom } from 'nanostores'
+import { clampSeatLook } from '../ksa/ivaLook'
+import type { Vec3 } from '../ksa/types'
 
 /**
  * Ephemeral state for the IVA SEAT VIEW — "sit in this seat and look around".
@@ -14,31 +16,18 @@ import { atom } from 'nanostores'
  * on `$part` (`EditingPart.ivaSeats`).
  *
  * Who reads what:
- *  - `Viewport` (`src/three/Viewport.ts`) drives the camera from `$seatLook` and writes
- *    the accumulated free-look back into it from its pointer handlers.
+ *  - `Viewport` (`src/three/Viewport.ts`) points the camera down `$seatLook` and feeds its
+ *    pointer deltas back into it through {@link nudgeSeatLook}.
  *  - `EditorScene` resolves `$seatView` against `$part` to a pose, and suppresses the
  *    gizmo / click-selection / seat markers while it is set.
  */
 
-/** Free-look offset from the seat's forward axis, in radians. */
-export interface SeatLook {
-  /** Left/right, positive = toward the seat's left (rotation about its up axis). */
-  yaw: number
-  /** Up/down, positive = toward the seat's up axis (rotation about its right axis). */
-  pitch: number
+/** A seat's eye axes in workspace coordinates — KSA's `<ForwardAxis>` / `<UpAxis>`. */
+export interface SeatAxes {
+  forward: Vec3
+  /** RAW, magnitude included: {@link clampSeatLook}'s pole test is against the un-normalized axis. */
+  up: Vec3
 }
-
-/**
- * Hard bound on each accumulated free-look angle, in radians.
- *
- * The game's clamps (`clampSeatLook`) are what the user actually sees stop the view, but
- * they act on the composed DIRECTION — an unbounded accumulator would happily wind up to
- * 40 radians of yaw against a look that stopped moving at 90°, and then need the whole 40
- * unwound before the view budged again. Clamp 1 already kills everything past 90° from
- * forward, so bounding the accumulator there costs no reachable direction and keeps a
- * drag reversible the moment it reverses.
- */
-export const SEAT_LOOK_LIMIT = Math.PI / 2
 
 /**
  * The seat currently being previewed from, or null. Ephemeral: never persisted, never in
@@ -51,12 +40,23 @@ export const SEAT_LOOK_LIMIT = Math.PI / 2
  */
 export const $seatView = atom<string | null>(null)
 
-/** Free-look offset while in seat view (radians). Reset on enter. */
-export const $seatLook = atom<SeatLook>({ yaw: 0, pitch: 0 })
+/**
+ * The current look DIRECTION in workspace coordinates (unit), or null before the seat has
+ * been resolved to a pose — which reads as "face the seat's forward axis".
+ *
+ * The direction IS the state, exactly as it is in the game: `IVAController.OnFrame` keeps
+ * the look on `Camera.LocalRotation`, applies the frame's mouse delta to THAT, and clamps
+ * once. Holding a raw yaw/pitch accumulator here instead and recomposing the direction from
+ * it every update would feed each clamp a fresh far-out direction that a single pass only
+ * partially corrects — the clamps never see their own output, so they never converge and
+ * the preview escapes both of them (measured: ~103° off forward, `|dot(look, up)| = 0.90`
+ * against a 0.9 limit). Feeding the clamped result back is what makes the bound hold.
+ */
+export const $seatLook = atom<Vec3 | null>(null)
 
 /** Sits in `seatId`, facing straight down its forward axis (the free-look resets). */
 export function enterSeatView(seatId: string): void {
-  $seatLook.set({ yaw: 0, pitch: 0 })
+  $seatLook.set(null)
   $seatView.set(seatId)
 }
 
@@ -64,23 +64,102 @@ export function enterSeatView(seatId: string): void {
 export function exitSeatView(): void {
   if ($seatView.get() === null) return
   $seatView.set(null)
-  $seatLook.set({ yaw: 0, pitch: 0 })
+  $seatLook.set(null)
 }
 
 /**
- * Accumulates a free-look delta (radians), bounded by {@link SEAT_LOOK_LIMIT}. A no-op
- * outside seat view, so a stray pointer event can never leave a stale offset behind for
- * the next entry.
+ * The direction the camera should point for a seat with these `axes`: the stored look, or
+ * the seat's forward axis before the first {@link reclampSeatLook}. Always unit.
  */
-export function nudgeSeatLook(deltaYaw: number, deltaPitch: number): void {
-  if ($seatView.get() === null) return
-  const { yaw, pitch } = $seatLook.get()
-  $seatLook.set({
-    yaw: bound(yaw + deltaYaw),
-    pitch: bound(pitch + deltaPitch),
-  })
+export function seatLookDirection(axes: SeatAxes): Vec3 {
+  const stored = $seatLook.get()
+  if (stored) return stored
+  return normalizeOrNull(axes.forward) ?? { x: 1, y: 0, z: 0 }
 }
 
-function bound(angle: number): number {
-  return Math.min(SEAT_LOOK_LIMIT, Math.max(-SEAT_LOOK_LIMIT, angle))
+/**
+ * Applies one incremental pointer delta (radians) to the stored look and re-clamps it.
+ *
+ * The two rotation axes are the CAMERA's, not the seat's — `IVAController.OnFrame:69-78`
+ * builds yaw about `Camera.GetUp()` and pitch about `Camera.GetRight()`, then composes
+ * `qYaw · qPitch · LocalRotation`, i.e. pitch first, both axes read from the camera as it
+ * was BEFORE this delta. `Camera.LookAtRotation` (`Camera.cs:190-196`) makes that basis
+ * `right = look × up`, `camUp = right × look`, which is also what `camera.lookAt` gives us.
+ *
+ * A no-op outside seat view, so a stray pointer event can never leave a stale look behind
+ * for the next entry.
+ */
+export function nudgeSeatLook(deltaYaw: number, deltaPitch: number, axes: SeatAxes): void {
+  if ($seatView.get() === null) return
+  const dir = seatLookDirection(axes)
+  // Degenerate only for a look sitting exactly on the up axis — which the clamps make
+  // unreachable by dragging; any perpendicular keeps a degenerate seat draggable rather
+  // than frozen (the game NaNs its camera there instead).
+  const right = normalizeOrNull(cross(dir, axes.up)) ?? anyPerpendicular(dir)
+  const camUp = normalizeOrNull(cross(right, dir)) ?? right
+  const pitched = rotateAboutAxis(dir, right, deltaPitch)
+  const yawed = rotateAboutAxis(pitched, camUp, deltaYaw)
+  $seatLook.set(clampSeatLook(yawed, axes.forward, axes.up))
+}
+
+/**
+ * Re-runs the clamps against `axes` and stores the result. Called by the viewport whenever
+ * the seat's pose lands on it: entering (which resolves the null "face forward" state to a
+ * real direction) and any document change that moves or re-aims the seat under a seated
+ * camera, either of which can leave a previously legal look outside the new limits.
+ */
+export function reclampSeatLook(axes: SeatAxes): void {
+  if ($seatView.get() === null) return
+  const clamped = clampSeatLook(seatLookDirection(axes), axes.forward, axes.up)
+  const stored = $seatLook.get()
+  // Every reconcile pushes the pose again; skipping the no-op write keeps that from
+  // invalidating a frame per document change.
+  if (stored && near(stored, clamped)) return
+  $seatLook.set(clamped)
+}
+
+// --- Vector helpers. Duplicated from `ivaSeatAxes.ts` / `ivaLook.ts` rather than widening
+// either module's API — the same ~20 lines of standard math those files already inline. ---
+
+function cross(a: Vec3, b: Vec3): Vec3 {
+  return {
+    x: a.y * b.z - a.z * b.y,
+    y: a.z * b.x - a.x * b.z,
+    z: a.x * b.y - a.y * b.x,
+  }
+}
+
+function dot(a: Vec3, b: Vec3): number {
+  return a.x * b.x + a.y * b.y + a.z * b.z
+}
+
+/** Unit-length `v`, or `null` when `v` is (near) zero — where KSA would produce NaN. */
+function normalizeOrNull(v: Vec3): Vec3 | null {
+  const len = Math.hypot(v.x, v.y, v.z)
+  if (!(len > 1e-12)) return null
+  return { x: v.x / len, y: v.y / len, z: v.z / len }
+}
+
+/** Some unit vector perpendicular to the UNIT `v` — cross with whichever axis `v` leans on least. */
+function anyPerpendicular(v: Vec3): Vec3 {
+  const seed = Math.abs(v.x) < 0.9 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 }
+  return normalizeOrNull(cross(v, seed)) ?? { x: 0, y: 1, z: 0 }
+}
+
+/** Rodrigues rotation of `v` about a UNIT `axis`, right-handed — as `QuaternionEx` does it. */
+function rotateAboutAxis(v: Vec3, axis: Vec3, angle: number): Vec3 {
+  if (angle === 0) return v
+  const c = Math.cos(angle)
+  const s = Math.sin(angle)
+  const k = cross(axis, v)
+  const d = dot(axis, v) * (1 - c)
+  return {
+    x: v.x * c + k.x * s + axis.x * d,
+    y: v.y * c + k.y * s + axis.y * d,
+    z: v.z * c + k.z * s + axis.z * d,
+  }
+}
+
+function near(a: Vec3, b: Vec3): boolean {
+  return Math.abs(a.x - b.x) < 1e-12 && Math.abs(a.y - b.y) < 1e-12 && Math.abs(a.z - b.z) < 1e-12
 }

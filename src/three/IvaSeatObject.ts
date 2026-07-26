@@ -68,8 +68,8 @@ const LABEL_CENTER = { x: 0.5, y: 1.4 } as const
  * (same radius, same `rotation.z`, same flush-against-the-body offset) so the two
  * markers read consistently in the viewport.
  *
- * The Group and every child mesh carry the seat id for raycast selection (the ray hits
- * a mesh, never the group).
+ * The Group and every SOLID child mesh carry the seat id for raycast selection (the ray
+ * hits a mesh, never the group); the indicative gaze cone opts out of raycasting entirely.
  *
  * The marker's size is a global editor setting, NOT document data — see {@link setSeat}.
  * `EditorScene` rebuilds every marker (dispose + recreate) when `$ivaSeatSettings`
@@ -157,7 +157,10 @@ export class IvaSeatObject {
         side: THREE.DoubleSide,
       })
       const gaze = new THREE.Mesh(this.gazeGeometry, this.gazeMaterial)
-      gaze.userData.selectable = { kind: 'ivaSeat', id: seat.id }
+      // NOT a click target: it is a metre-long translucent volume, so leaving it
+      // raycastable would let it shadow every piece of interior geometry the seat looks
+      // at. The eye sphere, forward cone and up stick are what you click.
+      gaze.raycast = () => {}
       gaze.rotation.z = Math.PI / 2 // apex (cone's +Y tip) -> -X, so it opens toward +X
       gaze.position.x = GAZE_LENGTH / 2 // apex at the eye point, mouth 1 m ahead
       this.group.add(gaze)

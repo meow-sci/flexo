@@ -8,20 +8,23 @@ import { SceneEnvironment } from './SceneEnvironment'
 import { $cameraState, type CameraDir, type CameraState } from '../state/viewStore'
 import { $lighting } from '../state/lightingStore'
 import { $showFpsCounter } from '../state/settingsStore'
-import { $seatLook, nudgeSeatLook } from '../state/ivaStore'
-import { clampSeatLook } from '../ksa/ivaLook'
+import {
+  $seatLook,
+  nudgeSeatLook,
+  reclampSeatLook,
+  seatLookDirection,
+  type SeatAxes,
+} from '../state/ivaStore'
 import type { Vec3 } from '../ksa/types'
 
 /**
  * An IVA seat's eye frame, in workspace coordinates: where the camera sits and the two
  * axes KSA authors as `<ForwardAxis>` / `<UpAxis>`. Both axes are unit length (they come
- * from `seatAxesFromRotation`), which is also the only case where {@link clampSeatLook}
- * is idempotent — see its doc comment.
+ * from `seatAxesFromRotation`), which is also the only case where `clampSeatLook` is
+ * idempotent — see its doc comment.
  */
-export interface SeatPose {
+export interface SeatPose extends SeatAxes {
   position: Vec3
-  forward: Vec3
-  up: Vec3
 }
 
 /** Free-look sensitivity in radians per pixel of pointer travel. Editor feel, not KSA's. */
@@ -220,7 +223,7 @@ export class Viewport {
    *
    * The orbit camera is snapshotted and `OrbitControls` disabled (both its input AND its
    * per-frame `update()`, which would otherwise re-aim the camera at `controls.target`
-   * every frame); pointer drags on the canvas accumulate free-look into `$seatLook`, and
+   * every frame); pointer drags on the canvas turn the look direction in `$seatLook`, and
    * this subscribes to that atom so the camera follows. No FOV change: the camera is
    * already 50°, which is KSA's `GameSettings.FieldOfView` (`Camera.cs:51`).
    *
@@ -230,6 +233,8 @@ export class Viewport {
   enterSeatView(pose: SeatPose): void {
     if (this.seatView) {
       this.seatView.pose = pose
+      // A moved/re-aimed seat can leave the stored look outside the new limits.
+      reclampSeatLook(pose)
       this.applySeatCamera()
       return
     }
@@ -244,6 +249,8 @@ export class Viewport {
     // Assign BEFORE subscribing: nanostores fires the listener immediately, and
     // applySeatCamera is a no-op until `seatView` is set.
     this.seatView = { pose, saved, unsubLook: () => {} }
+    // Resolves the "face the seat's forward" reset to a real, clamped direction.
+    reclampSeatLook(pose)
     this.seatView.unsubLook = $seatLook.subscribe(() => this.applySeatCamera())
   }
 
@@ -280,32 +287,32 @@ export class Viewport {
   }
 
   /**
-   * Points the camera out of the seat: compose the look from the seat's axes and the
-   * accumulated free-look, then run it through the game's clamps ONCE — exactly as
-   * `IVAController.OnFrame` does per frame. Never iterated to a fixed point: for a
-   * non-unit up axis `clampSeatLook` deliberately under-corrects in a single pass, and
-   * the game lives with that too (see `src/ksa/ivaLook.ts`).
+   * Points the camera down the stored look direction.
+   *
+   * No clamping happens here: `$seatLook` only ever holds a direction that has already
+   * been through `clampSeatLook`, because the pointer handler feeds the clamp its own
+   * output the way `IVAController.OnFrame` does. Re-composing a direction from a raw
+   * yaw/pitch accumulator and clamping THAT once — which this used to do — hands the
+   * clamp an input it never produced, so it under-corrects and the preview escapes both
+   * of the game's limits (see `$seatLook`).
    */
   private applySeatCamera(): void {
     const view = this.seatView
     if (!view) return
-    const { position, forward, up } = view.pose
-    const { yaw, pitch } = $seatLook.get()
+    const { position, up } = view.pose
+    const look = seatLookDirection(view.pose)
 
-    const f = new THREE.Vector3(forward.x, forward.y, forward.z)
-    const u = new THREE.Vector3(up.x, up.y, up.z)
-    const dir = f.clone()
-    // Pitch about the seat's right axis, then yaw about its up axis. A degenerate seat
-    // (forward parallel to up — which NaNs the game's camera) has no right axis, so its
-    // pitch is simply skipped rather than fed a zero rotation axis.
-    const right = new THREE.Vector3().crossVectors(f, u)
-    if (right.lengthSq() > 1e-12) dir.applyAxisAngle(right.normalize(), pitch)
-    if (u.lengthSq() > 1e-12) dir.applyAxisAngle(u.clone().normalize(), yaw)
-
-    const look = clampSeatLook({ x: dir.x, y: dir.y, z: dir.z }, forward, up)
     this.camera.position.set(position.x, position.y, position.z)
-    this.camera.up.set(up.x, up.y, up.z)
-    this.camera.lookAt(position.x + look.x, position.y + look.y, position.z + look.z)
+    const u = new THREE.Vector3(up.x, up.y, up.z)
+    const l = new THREE.Vector3(look.x, look.y, look.z)
+    // On the up pole `lookAt` has no defined roll — three.js only survives it by nudging
+    // `up` by 1e-4 and producing an arbitrary one. The clamps stop the look 25.84° short
+    // of the pole, so this is unreachable by dragging; keep the last good orientation
+    // rather than spinning the view if a degenerate seat gets us here anyway.
+    if (new THREE.Vector3().crossVectors(l, u).lengthSq() > 1e-12) {
+      this.camera.up.copy(u)
+      this.camera.lookAt(position.x + look.x, position.y + look.y, position.z + look.z)
+    }
     this.invalidate()
   }
 
@@ -319,13 +326,15 @@ export class Viewport {
 
   private readonly onSeatPointerMove = (e: PointerEvent): void => {
     const drag = this.seatDrag
-    if (!drag || e.pointerId !== drag.pointerId) return
+    const view = this.seatView
+    if (!drag || !view || e.pointerId !== drag.pointerId) return
     const dx = e.clientX - drag.x
     const dy = e.clientY - drag.y
     drag.x = e.clientX
     drag.y = e.clientY
-    // Drag right -> look right (yaw is positive toward the seat's LEFT); drag up -> look up.
-    nudgeSeatLook(-dx * SEAT_LOOK_RAD_PER_PX, -dy * SEAT_LOOK_RAD_PER_PX)
+    // Both negated exactly as the game negates its cursor deltas (`IVAController.cs:71,76`
+    // divide by -250): drag right -> look right, drag up -> look up.
+    nudgeSeatLook(-dx * SEAT_LOOK_RAD_PER_PX, -dy * SEAT_LOOK_RAD_PER_PX, view.pose)
   }
 
   private readonly onSeatPointerUp = (e: PointerEvent): void => {

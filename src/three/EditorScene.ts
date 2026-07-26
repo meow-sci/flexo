@@ -114,6 +114,9 @@ import {
 import { $cameraRestore, $cameraSnap, $grids, $hideInterior } from '../state/viewStore'
 import { resolveInternal } from '../ksa/modExport'
 import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../state/layerStore'
+// The app's one user-facing notification channel (`GlobalToastRegion` is mounted at the
+// root) — the scene has no other way to say "that did nothing, and here is why".
+import { toast } from '../ui/kit'
 
 /** A highlightable scene entity — both SubPartObject and ConnectorObject match. */
 interface SelectableObject {
@@ -346,11 +349,18 @@ export class EditorScene {
           return
         }
         const mode = $toolMode.get()
-        const desc = mode === 'rotate' ? 'rotate' : mode === 'scale' ? 'scale' : 'move'
         const refs = selectedTransformRefs()
-        const detail =
-          refs.length === 1 ? refs[0].name : refs.length > 1 ? `${refs.length} items` : ''
-        pushUndo(desc, detail)
+        // A seat has no size — KSA has no seat size field, so `assignIvaSeat` pins scale to
+        // (1,1,1) and a scale drag on seats alone changes nothing. Pushing an undo step for
+        // it would only make the next Ctrl+Z look dead. The bulk snapshot still runs.
+        const seatScaleOnly =
+          mode === 'scale' && refs.length > 0 && refs.every((r) => r.kind === 'ivaSeat')
+        if (!seatScaleOnly) {
+          const desc = mode === 'rotate' ? 'rotate' : mode === 'scale' ? 'scale' : 'move'
+          const detail =
+            refs.length === 1 ? refs[0].name : refs.length > 1 ? `${refs.length} items` : ''
+          pushUndo(desc, detail)
+        }
         this.beginBulkDrag()
       },
       onChange: (object) => {
@@ -1086,7 +1096,14 @@ export class EditorScene {
 
     const centroid = this.selectedGeometryCentroid()
     if (!centroid) {
+      // Silence here reads as a dead button: the aim needs BUILT geometry (the selection's,
+      // or the whole part's), which a still-loading or empty part does not have.
       console.warn('flexo: nothing to aim an IVA seat at (no geometry loaded yet?)')
+      toast({
+        title: 'Nothing to aim at',
+        description: 'No SubPart geometry is loaded yet.',
+        variant: 'warning',
+      })
       return
     }
     const forward = {

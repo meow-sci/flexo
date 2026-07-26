@@ -81,7 +81,12 @@ export function useNumberDraft(options: NumberDraftOptions) {
 
   /** Resolve the draft into a committed value and hand display back to the store. */
   const finalize = () => {
-    const parsed = draft === null ? null : parseNumericDraft(draft)
+    // No active draft ⇒ no edit to resolve; bail. This guard is load-bearing: after
+    // Enter has finalized (draft nulled, focus kept), a selection change can re-bind
+    // the still-focused field to a DIFFERENT entity — the eventual blur must not
+    // commit the stale preEdit into it (it silently overwrote the new entity's value).
+    if (draft === null) return
+    const parsed = parseNumericDraft(draft)
     const next = parsed === null ? preEdit.current : clampNumber(parsed, min, max)
     preEdit.current = next
     commit(next)

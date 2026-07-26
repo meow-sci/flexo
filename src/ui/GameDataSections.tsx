@@ -50,7 +50,6 @@ import {
 import type {
   EditingPart,
   EulerXYZ,
-  Light,
   LightType,
   PartGameData,
   PowerConsumer,
@@ -282,46 +281,42 @@ export function TanksSection({
   )
 }
 
-// --- Lights (per SubPart template) ---
+// --- Lights (owned by one SubPart template) ---
 
 /**
- * Per-SubPart light editor — full coverage of KSA's <Light> SubPartGameData schema
- * (LightModule.TemplateData). Each card edits one light. Cone angles and the aim
- * rotation are shown in DEGREES (matching the workspace TransformInspector) and
- * converted to the radians KSA stores; Point lights hide the aim rotation + cone
- * angles since KSA ignores them. Mirrors {@link TanksSection}: discrete
- * add/remove/type/raytracing self-record undo, while numeric/color fields focus-push
- * a single undo step (streaming).
+ * Per-SubPart light editor — full coverage of KSA's <Light> schema
+ * (LightModule.TemplateData). An owner-filtered view over `part.lights`
+ * ({@link PartLight.ownerTemplateId} === `subPartTemplateId`); each card edits one
+ * light, and the store indices passed to every mutator are into `part.lights`, NOT
+ * this filtered view. Cone angles and the aim rotation are shown in DEGREES
+ * (matching the workspace TransformInspector) and converted to the radians KSA
+ * stores; Point lights hide the aim rotation + cone angles since KSA ignores them.
+ * Mirrors {@link TanksSection}: discrete add/remove/type/raytracing self-record
+ * undo, while numeric/color fields focus-push a single undo step (streaming).
  */
-export function LightsSection({
-  lights,
-  subPartTemplateId,
-}: {
-  lights: Light[]
-  subPartTemplateId: string
-}) {
+export function LightsSection({ subPartTemplateId }: { subPartTemplateId: string }) {
+  const part = useStore($part)
+  const owned = part.lights
+    .map((light, index) => ({ light, index }))
+    .filter(({ light }) => light.ownerTemplateId === subPartTemplateId)
   return (
     <div className="flex flex-col gap-2">
-      {lights.length > 0 && (
+      {owned.length > 0 && (
         <span className="text-xs text-fg-subtle">
           Applies to every placed instance of this SubPart; each instance aims the light by its own
           rotation. Toggled in-game by the part's light switch.
         </span>
       )}
-      {lights.map((light, i) => {
+      {owned.map(({ light, index }, i) => {
         const isSpot = light.type === 'Spot'
         return (
-          <ItemCard
-            key={i}
-            title={`Light ${i + 1}`}
-            onRemove={() => removeLight(subPartTemplateId, i)}
-          >
+          <ItemCard key={light.id} title={`Light ${i + 1}`} onRemove={() => removeLight(index)}>
             <Field label="Type">
               <Select
                 size="sm"
                 aria-label="Light type"
                 value={light.type}
-                onChange={(k) => setLightType(subPartTemplateId, i, k as LightType)}
+                onChange={(k) => setLightType(index, k as LightType)}
               >
                 <ListBoxItem id="Spot">Spot</ListBoxItem>
                 <ListBoxItem id="Point">Point</ListBoxItem>
@@ -330,11 +325,11 @@ export function LightsSection({
             <div className="flex flex-col gap-1">
               <span className={RAD_LABEL}>Position (m)</span>
               <Vec3Field
-                value={light.transform.position}
+                value={light.position}
                 onInteractionStart={() => pushUndo('edit light', '')}
                 onCommit={(axis, val) =>
-                  setLightPosition(subPartTemplateId, i, {
-                    ...light.transform.position,
+                  setLightPosition(index, {
+                    ...light.position,
                     [axis]: val,
                   })
                 }
@@ -345,14 +340,14 @@ export function LightsSection({
                 <span className={RAD_LABEL}>Aim Rotation (°)</span>
                 <Vec3Field
                   value={{
-                    x: light.transform.rotation.x * RAD2DEG,
-                    y: light.transform.rotation.y * RAD2DEG,
-                    z: light.transform.rotation.z * RAD2DEG,
+                    x: light.rotation.x * RAD2DEG,
+                    y: light.rotation.y * RAD2DEG,
+                    z: light.rotation.z * RAD2DEG,
                   }}
                   onInteractionStart={() => pushUndo('edit light', '')}
                   onCommit={(axis, deg) =>
-                    setLightRotation(subPartTemplateId, i, {
-                      ...light.transform.rotation,
+                    setLightRotation(index, {
+                      ...light.rotation,
                       [axis]: deg * DEG2RAD,
                     })
                   }
@@ -365,7 +360,7 @@ export function LightsSection({
                 value={light.rangeM}
                 min={0}
                 onInteractionStart={() => pushUndo('edit light', '')}
-                onCommit={(n) => updateLight(subPartTemplateId, i, { rangeM: n })}
+                onCommit={(n) => updateLight(index, { rangeM: n })}
               />
             </Field>
             <Field label="Intensity">
@@ -374,7 +369,7 @@ export function LightsSection({
                 value={light.intensity}
                 min={0}
                 onInteractionStart={() => pushUndo('edit light', '')}
-                onCommit={(n) => updateLight(subPartTemplateId, i, { intensity: n })}
+                onCommit={(n) => updateLight(index, { intensity: n })}
               />
             </Field>
             <div className="flex items-center gap-2">
@@ -385,9 +380,7 @@ export function LightsSection({
                 className="h-6 w-6 shrink-0 cursor-pointer rounded border border-border bg-transparent"
                 value={rgb01ToHex(light.color)}
                 onPointerDown={() => pushUndo('edit light', '')}
-                onChange={(e) =>
-                  updateLight(subPartTemplateId, i, { color: hexToRgb01(e.target.value) })
-                }
+                onChange={(e) => updateLight(index, { color: hexToRgb01(e.target.value) })}
               />
             </div>
             {isSpot && (
@@ -399,9 +392,7 @@ export function LightsSection({
                     min={0}
                     max={90}
                     onInteractionStart={() => pushUndo('edit light', '')}
-                    onCommit={(deg) =>
-                      updateLight(subPartTemplateId, i, { innerAngleRad: deg * DEG2RAD })
-                    }
+                    onCommit={(deg) => updateLight(index, { innerAngleRad: deg * DEG2RAD })}
                   />
                 </Field>
                 <Field label="Outer Angle (°, half-cone)">
@@ -411,17 +402,12 @@ export function LightsSection({
                     min={0}
                     max={90}
                     onInteractionStart={() => pushUndo('edit light', '')}
-                    onCommit={(deg) =>
-                      updateLight(subPartTemplateId, i, { outerAngleRad: deg * DEG2RAD })
-                    }
+                    onCommit={(deg) => updateLight(index, { outerAngleRad: deg * DEG2RAD })}
                   />
                 </Field>
               </>
             )}
-            <Switch
-              isSelected={light.rayTracing}
-              onChange={(on) => setLightRayTracing(subPartTemplateId, i, on)}
-            >
+            <Switch isSelected={light.rayTracing} onChange={(on) => setLightRayTracing(index, on)}>
               Ray tracing (IVA only)
             </Switch>
           </ItemCard>
@@ -496,8 +482,10 @@ function PowerList({
 function PowerConsumerSection({ powerConsumer }: { powerConsumer: PowerConsumer | null }) {
   const part = useStore($part)
   const placed = new Set(part.placements.map((p) => p.subPartTemplateId))
-  const hasLights = part.subPartGameData.some(
-    (s) => placed.has(s.subPartTemplateId) && s.lights.length > 0,
+  // A light counts only when it will actually exist in-game: part-level always, a
+  // SubPart-owned one only while its owner template is placed at least once.
+  const hasLights = part.lights.some(
+    (l) => l.ownerTemplateId === null || placed.has(l.ownerTemplateId),
   )
   const hasGlow = part.customMeshes.some((m) => placed.has(m.subPartId) && m.emissive)
   const switchControlsNothing = !!powerConsumer?.lightSwitch && !hasLights && !hasGlow

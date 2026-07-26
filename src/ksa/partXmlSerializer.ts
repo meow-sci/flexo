@@ -12,10 +12,10 @@ import type {
   FeedSource,
   Gimbal,
   IvaSeat,
-  Light,
   PartAnimation,
   PartCollider,
   PartGameData,
+  PartLight,
   RawXmlNode,
   Rocket,
   RocketController,
@@ -148,6 +148,9 @@ export function serializeGameData(
   // template additively (`PartTemplate.ApplyGameData` → `Components.AddRange`), so it is
   // exactly equivalent to authoring it on the geometry `<Part>`/`<SubPart>`.
   const colliderGroups = collidersByOwner(part.colliders)
+  // Lights are grouped the same way: `null` ⇒ part-level `<Light>` under <PartGameData>,
+  // a template id ⇒ that template's <SubPartGameData> block.
+  const lightGroups = lightsByOwner(part.lights)
 
   if (game.displayName.trim()) gd.setAttribute('DisplayName', game.displayName)
   applyUnknownAttrs(gd, game.unknownAttrs)
@@ -211,6 +214,13 @@ export function serializeGameData(
     if (pc.lightSwitch) el.setAttribute('LightSwitch', 'true')
     if (pc.lightIsActive) el.setAttribute('LightIsActive', 'true')
     gd.appendChild(el)
+  }
+
+  // Part-level <Light>s, in the Part's assembly frame (Core: CoreCommandA headlights,
+  // CoreIVASpaceA's interior light). Element order is irrelevant to KSA's XmlSerializer;
+  // this spot groups the electrical family for human readers, matching Core's layout.
+  for (const light of lightGroups.get(null) ?? []) {
+    gd.appendChild(buildLightElement(doc, light))
   }
 
   for (const connector of part.connectors) {
@@ -301,17 +311,22 @@ export function serializeGameData(
     assets.appendChild(buildFixedReactionElement(doc, reaction))
   }
 
-  // SubPart-owned colliders travel with the template, so they are emitted INTO that
-  // template's <SubPartGameData> block (which templateRemap already routes onto the
-  // export variant id). An owner with colliders but no other GameData still needs a
+  // SubPart-owned colliders and lights travel with the template, so they are emitted INTO
+  // that template's <SubPartGameData> block (which templateRemap already routes onto the
+  // export variant id). An owner with colliders/lights but no other GameData still needs a
   // block — those are emitted after this loop.
   const emittedColliderOwners = new Set<string>()
+  const emittedLightOwners = new Set<string>()
   for (const spd of part.subPartGameData) {
     const owned = emittedColliderOwners.has(spd.subPartTemplateId)
       ? []
       : (colliderGroups.get(spd.subPartTemplateId) ?? [])
-    if (isSubPartGameDataEmpty(spd) && owned.length === 0) continue
+    const ownedLights = emittedLightOwners.has(spd.subPartTemplateId)
+      ? []
+      : (lightGroups.get(spd.subPartTemplateId) ?? [])
+    if (isSubPartGameDataEmpty(spd) && owned.length === 0 && ownedLights.length === 0) continue
     if (owned.length > 0) emittedColliderOwners.add(spd.subPartTemplateId)
+    if (ownedLights.length > 0) emittedLightOwners.add(spd.subPartTemplateId)
     const spdEl = doc.createElement('SubPartGameData')
     // Remap to the export variant id so GameData keyed on a built-in template lands on the
     // fresh variant SubPart instead of REDEFINING the shared built-in (KSA merges by id).
@@ -319,7 +334,7 @@ export function serializeGameData(
     applyUnknownAttrs(spdEl, spd.unknownAttrs)
     for (const tank of spd.tanks) spdEl.appendChild(buildTankWrapperElement(doc, tank))
     for (const sp of spd.solarPanels) spdEl.appendChild(buildSolarPanelElement(doc, sp))
-    for (const light of spd.lights) spdEl.appendChild(buildLightElement(doc, light))
+    for (const light of ownedLights) spdEl.appendChild(buildLightElement(doc, light))
     // Reusable thrust-chamber / solid-motor modules that travel with this mesh.
     for (const rocket of spd.rockets) spdEl.appendChild(buildRocketElement(doc, rocket))
     for (const combustor of spd.combustors) spdEl.appendChild(buildCombustorElement(doc, combustor))
@@ -334,13 +349,24 @@ export function serializeGameData(
     assets.appendChild(spdEl)
   }
 
-  // Templates whose ONLY GameData is a collider (e.g. the landing-leg foot puck) have no
-  // `subPartGameData` entry to ride along with — give them their own block.
-  for (const [templateId, owned] of colliderGroups) {
-    if (templateId === null || emittedColliderOwners.has(templateId)) continue
+  // Templates whose ONLY GameData is a collider or a light (e.g. the landing-leg foot
+  // puck, a lamp mesh) have no `subPartGameData` entry to ride along with — give them
+  // their own block. One block per owner covers BOTH kinds.
+  const orphanOwners = new Set<string>()
+  for (const templateId of colliderGroups.keys()) {
+    if (templateId !== null && !emittedColliderOwners.has(templateId)) orphanOwners.add(templateId)
+  }
+  for (const templateId of lightGroups.keys()) {
+    if (templateId !== null && !emittedLightOwners.has(templateId)) orphanOwners.add(templateId)
+  }
+  for (const templateId of orphanOwners) {
     const spdEl = doc.createElement('SubPartGameData')
     spdEl.setAttribute('Id', templateRemap.get(templateId) ?? templateId)
-    spdEl.appendChild(buildColliderElement(doc, owned))
+    for (const light of lightGroups.get(templateId) ?? []) {
+      spdEl.appendChild(buildLightElement(doc, light))
+    }
+    const owned = colliderGroups.get(templateId) ?? []
+    if (owned.length > 0) spdEl.appendChild(buildColliderElement(doc, owned))
     assets.appendChild(spdEl)
   }
 
@@ -451,6 +477,21 @@ export function collidersByOwner(
   return out
 }
 
+/**
+ * Groups a part's lights by owner. The `null` key is the part-level group
+ * (`<PartGameData>`); every other key is a SubPart template id whose lights belong in
+ * that template's `<SubPartGameData>`.
+ */
+export function lightsByOwner(lights: readonly PartLight[]): Map<string | null, PartLight[]> {
+  const out = new Map<string | null, PartLight[]>()
+  for (const l of lights) {
+    const list = out.get(l.ownerTemplateId)
+    if (list) list.push(l)
+    else out.set(l.ownerTemplateId, [l])
+  }
+  return out
+}
+
 /** Creates an element with a single attribute, e.g. <Mass Kg="100"/>. */
 function elWithAttr(doc: XmlDocument, name: string, attr: string, value: string): XmlElement {
   const el = doc.createElement(name)
@@ -520,16 +561,21 @@ function buildTankShapeElement(doc: XmlDocument, tank: Tank): XmlElement {
  * <Light> with Type/Transform/Range/Intensity/Color, plus InnerAngle+OuterAngle for
  * Spots and <RayTracing> only when enabled. Matches KSA's LightModule schema:
  * Position aims/places the light, Rotation aims a Spot's cone; Scale is never emitted
- * (the engine ignores it). The <Transform> itself is omitted when identity.
+ * (the engine ignores it). The <Transform> itself is omitted when identity. The
+ * editor-only {@link PartLight.id} is NEVER emitted (Core authors no <Light Id>).
  */
-function buildLightElement(doc: XmlDocument, light: Light): XmlElement {
+function buildLightElement(doc: XmlDocument, light: PartLight): XmlElement {
   const el = doc.createElement('Light')
   const type = doc.createElement('Type')
   type.appendChild(doc.createTextNode(light.type))
   el.appendChild(type)
 
   // Only Position + Rotation are meaningful to KSA lights; never emit Scale.
-  const transform = buildTransformElement(doc, { ...light.transform, scale: { x: 1, y: 1, z: 1 } })
+  const transform = buildTransformElement(doc, {
+    position: light.position,
+    rotation: light.rotation,
+    scale: { x: 1, y: 1, z: 1 },
+  })
   if (transform) el.appendChild(transform)
 
   el.appendChild(elWithAttr(doc, 'Range', 'Value', formatG6(light.rangeM)))

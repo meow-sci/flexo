@@ -20,12 +20,12 @@ import type {
   Gimbal,
   IvaSeat,
   KittenKind,
-  Light,
   LightType,
   ColliderShape,
   PartAnimation,
   PartCollider,
   PartGameData,
+  PartLight,
   PlumbingClass,
   PowerConsumer,
   RawXmlNode,
@@ -51,8 +51,8 @@ import {
   createCombustor,
   createEmptyPart,
   createGimbal,
-  createLight,
   createNozzle,
+  createPartLight,
   createPowerConsumer,
   createRocket,
   createRocketController,
@@ -63,9 +63,11 @@ import {
   createSubPartGameData,
   createTank,
   DEFAULT_LAYER_ID,
+  ENTITY_ONLY_LAYER_IDS,
   isSubPartGameDataEmpty,
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
+  LIGHT_LAYER_ID,
 } from '../ksa/types'
 import { normalizeColliderSize } from '../ksa/colliderSize'
 import { seatAxesFromRotation } from '../ksa/ivaSeatAxes'
@@ -609,6 +611,13 @@ export interface ImportedGameData {
    * seat is the one IVA opens on, `C` walks the rest — see plans/IVA_PLAN.md §1.4).
    */
   ivaSeats: IvaSeat[]
+  /**
+   * The source Part's cast lights, from both GameData authoring sites (`<PartGameData>` ⇒
+   * `ownerTemplateId: null`, `<SubPartGameData>` ⇒ that template id). Like colliders,
+   * `ownerTemplateId` names a SubPart TEMPLATE, which import never renames — so no
+   * remapping, only fresh document ids.
+   */
+  lights: PartLight[]
 }
 
 /** Remaps a module→SubPart-instance reference through the import id map (null ⇒ root part, unchanged). */
@@ -751,6 +760,18 @@ function applyImportedGameData(
       ...structuredClone(s),
       id: nextIvaSeatId(target),
       layerId: IVA_SEAT_LAYER_ID,
+    })
+  }
+  // Lights are a top-level list too: append with fresh ids on the built-in Lights layer.
+  // Nothing references a light by id (flexo emits none), so no map is threaded out. Scale is
+  // re-pinned (1,1,1) — KSA ignores light scale and the model invariant is "always pinned",
+  // so a hand-edited payload can't smuggle one in.
+  for (const l of src.lights) {
+    target.lights.push({
+      ...structuredClone(l),
+      id: nextLightId(target),
+      layerId: LIGHT_LAYER_ID,
+      scale: { x: 1, y: 1, z: 1 },
     })
   }
 }
@@ -2379,76 +2400,105 @@ export function setSubPartSolarPanelRotation(
   })
 }
 
-// --- Lights (per SubPart template) ---
+// --- Lights (part level or per SubPart template) ---
+//
+// A `<Light>` may be authored on the `<PartGameData>` (Core: CoreCommandA headlights,
+// CoreIVASpaceA's interior light) or on a `<SubPartGameData>` so it travels with a
+// reused mesh (Core: CoreElectricalA spotlights). Lights are first-class part entities
+// (`EditingPart.lights`, owner-grouped only at serialize time — see PartLight).
 
-/** True when `index` is a valid light slot on the given SubPart template. */
-function hasLight(subPartTemplateId: string, index: number): boolean {
-  const spd = $part.get().subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
-  return !!spd && index >= 0 && index < spd.lights.length
+/** Returns the next free "_lightN" id (max existing N + 1). */
+function nextLightId(part: EditingPart): string {
+  let max = 0
+  for (const l of part.lights) {
+    const m = /^_light(\d+)$/.exec(l.id)
+    if (m) max = Math.max(max, Number.parseInt(m[1], 10))
+  }
+  return `_light${max + 1}`
 }
 
 /**
- * Discrete: append a light for the given SubPart template — a default white Spot, or
- * `createLight()` overridden by `seed`.
+ * Discrete: append a light — a default white Spot (`createPartLight`) overridden by
+ * `seed`. `ownerTemplateId` null ⇒ part-level (`<PartGameData>`, assembly frame);
+ * a SubPart template id ⇒ that template's `<SubPartGameData>` (owner frame, applies
+ * to every placement).
  *
  * `seed` exists for the glow panel's "Add matching light": KSA's `<Emissive>` map can only ever
  * add WHITE (MeshIndirect.frag:286), so a `<Light>` carrying the glow's colour is the only way a
  * part reads as a COLOURED lamp in-game — see analysis/KSA_EMISSIVE_AND_LUT.md §5.1.
  */
-export function addLight(subPartTemplateId: string, seed?: Partial<Light>): void {
-  commitSubPartData('add light', '', subPartTemplateId, (s) =>
-    s.lights.push({ ...createLight(), ...seed }),
-  )
+export function addLight(ownerTemplateId: string | null, seed?: Partial<PartLight>): void {
+  const current = $part.get()
+  const newId = nextLightId(current)
+  pushUndo('add light', newId)
+  const part = clone(current)
+  part.lights.push({
+    ...createPartLight(ownerTemplateId, newId),
+    ...seed,
+    // Identity + layer are never seed-overridable: the id was just allocated, the owner
+    // is the explicit argument, and lights always live on the built-in Lights layer.
+    id: newId,
+    ownerTemplateId,
+    layerId: LIGHT_LAYER_ID,
+  })
+  $part.set(part)
 }
 
-/** Discrete: remove the light at `index` for the given SubPart template. */
-export function removeLight(subPartTemplateId: string, index: number): void {
-  if (!hasLight(subPartTemplateId, index)) return
-  commitSubPartData('remove light', '', subPartTemplateId, (s) => s.lights.splice(index, 1))
+/** Discrete: remove the light at `index` (into `part.lights`). */
+export function removeLight(index: number): void {
+  const current = $part.get()
+  if (index < 0 || index >= current.lights.length) return
+  pushUndo('remove light', current.lights[index].id)
+  const part = clone(current)
+  part.lights.splice(index, 1)
+  $part.set(part)
 }
 
 /** Discrete: change a light's type (Spot/Point). */
-export function setLightType(subPartTemplateId: string, index: number, type: LightType): void {
-  if (!hasLight(subPartTemplateId, index)) return
-  commitSubPartData('light type', type, subPartTemplateId, (s) => {
-    s.lights[index].type = type
-  })
+export function setLightType(index: number, type: LightType): void {
+  const current = $part.get()
+  if (index < 0 || index >= current.lights.length) return
+  pushUndo('light type', type)
+  const part = clone(current)
+  part.lights[index].type = type
+  $part.set(part)
 }
 
 /** Discrete: toggle a light's IVA ray-tracing flag. */
-export function setLightRayTracing(subPartTemplateId: string, index: number, on: boolean): void {
-  if (!hasLight(subPartTemplateId, index)) return
-  commitSubPartData('light ray tracing', on ? 'on' : 'off', subPartTemplateId, (s) => {
-    s.lights[index].rayTracing = on
-  })
+export function setLightRayTracing(index: number, on: boolean): void {
+  const current = $part.get()
+  if (index < 0 || index >= current.lights.length) return
+  pushUndo('light ray tracing', on ? 'on' : 'off')
+  const part = clone(current)
+  part.lights[index].rayTracing = on
+  $part.set(part)
 }
 
 /** Streaming: patch a light's scalar/color fields. Caller pushes undo on field focus. */
-export function updateLight(subPartTemplateId: string, index: number, patch: Partial<Light>): void {
-  if (!hasLight(subPartTemplateId, index)) return
-  mutateSubPartData(subPartTemplateId, (s) => {
-    s.lights[index] = { ...s.lights[index], ...patch }
-  })
+export function updateLight(index: number, patch: Partial<PartLight>): void {
+  const current = $part.get()
+  if (index < 0 || index >= current.lights.length) return
+  const part = clone(current)
+  part.lights[index] = { ...part.lights[index], ...patch }
+  $part.set(part)
 }
 
-/** Streaming: set a light's local position (m). Caller pushes undo on field focus. */
-export function setLightPosition(subPartTemplateId: string, index: number, position: Vec3): void {
-  if (!hasLight(subPartTemplateId, index)) return
-  mutateSubPartData(subPartTemplateId, (s) => {
-    s.lights[index].transform.position = position
-  })
+/** Streaming: set a light's owner-local position (m). Caller pushes undo on field focus. */
+export function setLightPosition(index: number, position: Vec3): void {
+  const current = $part.get()
+  if (index < 0 || index >= current.lights.length) return
+  const part = clone(current)
+  part.lights[index].position = position
+  $part.set(part)
 }
 
-/** Streaming: set a Spot light's aim rotation (Euler XYZ radians). */
-export function setLightRotation(
-  subPartTemplateId: string,
-  index: number,
-  rotation: EulerXYZ,
-): void {
-  if (!hasLight(subPartTemplateId, index)) return
-  mutateSubPartData(subPartTemplateId, (s) => {
-    s.lights[index].transform.rotation = rotation
-  })
+/** Streaming: set a Spot light's aim rotation (Euler XYZ radians). Caller pushes undo. */
+export function setLightRotation(index: number, rotation: EulerXYZ): void {
+  const current = $part.get()
+  if (index < 0 || index >= current.lights.length) return
+  const part = clone(current)
+  part.lights[index].rotation = rotation
+  $part.set(part)
 }
 
 // --- Engine modules (per SubPart template): combustor / nozzle / rocket ---
@@ -3391,14 +3441,8 @@ export function reorderLayers(orderedIds: readonly string[]): void {
  * SubPart is already on that layer.
  */
 export function movePlacementToLayer(index: number, layerId: string): void {
-  // SubParts can't live on the special Connectors/Colliders/Kittens layers.
-  if (
-    layerId === CONNECTOR_LAYER_ID ||
-    layerId === COLLIDER_LAYER_ID ||
-    layerId === KITTEN_LAYER_ID
-  ) {
-    return
-  }
+  // SubParts can't live on the entity-only built-in layers.
+  if (ENTITY_ONLY_LAYER_IDS.includes(layerId)) return
   const current = $part.get()
   const placement = current.placements[index]
   if (!placement || placement.layerId === layerId) return
@@ -3417,17 +3461,11 @@ export function movePlacementToLayer(index: number, layerId: string): void {
  * preserved: editing a placement's layerId doesn't reorder `placements`, so the
  * selected indices keep pointing at the same SubParts (and the Assets list shows
  * all layers, so they stay visible without changing the active layer). No-op for
- * the special Connectors/Kittens layers, an unknown layer, or an empty selection.
+ * the entity-only built-in layers, an unknown layer, or an empty selection.
  */
 export function moveSelectedPlacementsToLayer(layerId: string): void {
-  // SubParts can't live on the special Connectors/Colliders/Kittens layers.
-  if (
-    layerId === CONNECTOR_LAYER_ID ||
-    layerId === COLLIDER_LAYER_ID ||
-    layerId === KITTEN_LAYER_ID
-  ) {
-    return
-  }
+  // SubParts can't live on the entity-only built-in layers.
+  if (ENTITY_ONLY_LAYER_IDS.includes(layerId)) return
   const indices = $selectedIndices.get()
   if (indices.length === 0) return
   const current = $part.get()

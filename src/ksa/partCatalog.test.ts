@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import { DOMParser } from '@xmldom/xmldom'
 import { mergeGameData, parseGameDataFile, parsePartsFile, type CatalogPart } from './partCatalog'
-import { COLLIDER_LAYER_ID, createTank, IVA_SEAT_LAYER_ID } from './types'
+import { COLLIDER_LAYER_ID, createTank, IVA_SEAT_LAYER_ID, LIGHT_LAYER_ID } from './types'
 import {
   hasKsaAssets,
   ksaAsset,
@@ -17,7 +17,12 @@ function parse(xml: string): Document {
 
 /** An empty parsed-GameData accumulator (part-keyed + subpart-template-keyed maps). */
 function emptyGameData() {
-  return { parts: new Map(), subParts: new Map(), subPartColliders: new Map() }
+  return {
+    parts: new Map(),
+    subParts: new Map(),
+    subPartColliders: new Map(),
+    subPartLights: new Map(),
+  }
 }
 
 // Mirrors the real KSA Core split: <Part> geometry in the Assets file (no flags),
@@ -411,6 +416,8 @@ describe('parseGameDataFile + mergeGameData', () => {
 
   // Light coverage from real data: the small spotlight Part places SpotlightA, whose
   // <SubPartGameData> carries a spot <Light> (type/transform/range/intensity/color/cone).
+  // Lights are first-class part entities now, so the light lands on CatalogPart.lights
+  // tagged with its owning template id — NOT inside the subPartGameData entry.
   it('imports the real CoreElectricalA_Prefab_LightSmallA SubPart <Light> (vendored fixtures)', () => {
     const parts: CatalogPart[] = []
     parsePartsFile(
@@ -424,19 +431,19 @@ describe('parseGameDataFile + mergeGameData', () => {
 
     const light = parts.find((p) => p.id === 'CoreElectricalA_Prefab_LightSmallA')!
     expect(light).toBeTruthy()
-    const spotlight = light.subPartGameData.find(
-      (s) => s.subPartTemplateId === 'CoreElectricalA_Subpart_SpotlightA',
-    )!
-    expect(spotlight).toBeTruthy()
-    expect(spotlight.lights).toHaveLength(1)
-    const l = spotlight.lights[0]
+    expect(light.lights).toHaveLength(1)
+    const l = light.lights[0]
+    expect(l.id).toBe('_light1')
+    expect(l.ownerTemplateId).toBe('CoreElectricalA_Subpart_SpotlightA')
+    expect(l.layerId).toBe(LIGHT_LAYER_ID)
     expect(l.type).toBe('Spot')
     expect(l.rangeM).toBe(5)
     expect(l.intensity).toBe(10)
     expect(l.color).toEqual({ r: 1, g: 1, b: 1 })
     expect(l.innerAngleRad).toBeCloseTo(0.392599, 6)
     expect(l.outerAngleRad).toBeCloseTo(0.785398, 6)
-    expect(l.transform.position).toEqual({ x: 0.38, y: 0.21, z: 0 })
+    expect(l.position).toEqual({ x: 0.38, y: 0.21, z: 0 })
+    expect(l.scale).toEqual({ x: 1, y: 1, z: 1 }) // pinned — KSA ignores light scale
     expect(l.rayTracing).toBe(false) // no <RayTracing> child → KSA default
   })
 

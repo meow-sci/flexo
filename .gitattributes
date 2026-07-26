@@ -1,0 +1,6 @@
+# Vendored KSA asset fixtures are BYTE-IDENTICAL copies of the live game files
+# (see src/ksa/__fixtures__/README.md + the drift test in partCatalog.test.ts).
+# Some ship with CRLF line endings; disable git's text normalization so the
+# committed bytes stay faithful (autocrlf would silently rewrite them to LF and
+# permanently fail the byte-equality drift test on any clone with the private tree).
+src/ksa/__fixtures__/*.xml -text

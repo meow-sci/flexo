@@ -49,6 +49,7 @@ import { $layerView, layerViewState } from '../state/layerStore'
 import {
   COLLIDER_LAYER_ID,
   CONNECTOR_LAYER_ID,
+  ENTITY_ONLY_LAYER_IDS,
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
   meshKind,
@@ -450,13 +451,7 @@ function SubPartRowMenu({ index }: { index: number }) {
   const [managingTanks, setManagingTanks] = useState(false)
   const placement = part.placements[index]
   if (!placement) return null
-  const layers = part.layers.filter(
-    (l) =>
-      l.id !== CONNECTOR_LAYER_ID &&
-      l.id !== COLLIDER_LAYER_ID &&
-      l.id !== IVA_SEAT_LAYER_ID &&
-      l.id !== KITTEN_LAYER_ID,
-  )
+  const layers = part.layers.filter((l) => !ENTITY_ONLY_LAYER_IDS.includes(l.id))
   const customMesh = part.customMeshes.find((m) => m.subPartId === placement.subPartTemplateId)
 
   // The one multi-selection-aware item: this row alone unless it is part of the current

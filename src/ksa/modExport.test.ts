@@ -3,9 +3,8 @@ import {
   COLLIDER_LAYER_ID,
   createEmptyPart,
   createGlow,
-  createLight,
   createPartAnimation,
-  createSubPartGameData,
+  createPartLight,
   identityTransform,
 } from './types'
 import type { CustomMesh, EditingPart, PartAnimation, PartCollider } from './types'
@@ -306,7 +305,7 @@ describe('SubPart light GameData export', () => {
   it('emits <SubPartGameData><Light> with an id aligned across Part / GameData / Assets XML', async () => {
     const part = partWithKittenMeshes()
     const lampId = 'flexo_hunter_suit_a' // a placed custom SubPart
-    part.subPartGameData.push({ ...createSubPartGameData(lampId), lights: [createLight()] })
+    part.lights.push(createPartLight(lampId, '_light1'))
 
     const gameDataXml = serializeGameData(part, 'KittenMod')
     const partXml = serializePart(part)
@@ -359,7 +358,7 @@ function partWithBuiltinLight(): EditingPart {
     ...identityTransform(),
     layerId: 'default',
   })
-  part.subPartGameData.push({ ...createSubPartGameData(SPOTLIGHT), lights: [createLight()] })
+  part.lights.push(createPartLight(SPOTLIGHT, '_light1'))
   return part
 }
 
@@ -453,7 +452,7 @@ function partWithCustomMeshGameData(withCollider = false): EditingPart {
       ...identityTransform(),
     })
   } else {
-    part.subPartGameData.push({ ...createSubPartGameData(CUSTOM_ROD), lights: [createLight()] })
+    part.lights.push(createPartLight(CUSTOM_ROD, '_light1'))
   }
   return part
 }
@@ -667,7 +666,7 @@ describe('<Internal> (interior-only) export variants', () => {
     // Nothing about the flag changed — the variant exists only so the <Light> doesn't merge onto
     // the shared built-in template — so the interior-only behaviour must survive the redeclaration.
     const part = partWithIvaAndCore()
-    part.subPartGameData.push({ ...createSubPartGameData(CHAIR), lights: [createLight()] })
+    part.lights.push(createPartLight(CHAIR, '_light1'))
     const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip')
     expect(variants.get(CHAIR)!.internal).toBe(true)
     const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants)

@@ -9,8 +9,8 @@ import {
   createCombustor,
   createDefaultLayer,
   createEmptyGameData,
-  createLight,
   createNozzle,
+  createPartLight,
   createSubPartGameData,
   identityTransform,
   createTank,
@@ -46,6 +46,7 @@ function editingPart(over: Partial<EditingPart>): EditingPart {
     connectors: [],
     colliders: [],
     ivaSeats: [],
+    lights: [],
     internalFlags: {},
     kittens: [],
     customTextures: [],
@@ -273,30 +274,27 @@ describe('serializeGameData', () => {
           { ...createTank(), shape: 'Spherical', wallMaterialId: 'Steel(s)', outerRadiusM: 1.2 },
         ],
         solarPanels: [{ outputWatts: 50, transform: identityTransform() }],
-        lights: [
-          {
-            ...createLight(),
-            type: 'Spot',
-            transform: {
-              ...identityTransform(),
-              position: { x: 0.38, y: 0.21, z: 0 },
-              rotation: { x: 0, y: 0, z: 1.5708 },
-            },
-            rangeM: 5,
-            intensity: 10,
-            color: { r: 1, g: 0.5, b: 0.25 },
-            innerAngleRad: 0.392599,
-            outerAngleRad: 0.785398,
-            rayTracing: true,
-          },
-          { ...createLight(), type: 'Point', rangeM: 2, intensity: 2 },
-        ],
         combustors: [],
         nozzles: [],
         rockets: [],
         unknownAttrs: {},
         unknownChildren: [],
       },
+    ],
+    lights: [
+      {
+        ...createPartLight(TANK_TMPL, '_light1'),
+        type: 'Spot',
+        position: { x: 0.38, y: 0.21, z: 0 },
+        rotation: { x: 0, y: 0, z: 1.5708 },
+        rangeM: 5,
+        intensity: 10,
+        color: { r: 1, g: 0.5, b: 0.25 },
+        innerAngleRad: 0.392599,
+        outerAngleRad: 0.785398,
+        rayTracing: true,
+      },
+      { ...createPartLight(TANK_TMPL, '_light2'), type: 'Point', rangeM: 2, intensity: 2 },
     ],
     connectors: [
       connector({ id: '_connector1', flags: [] }),
@@ -379,18 +377,85 @@ describe('serializeGameData', () => {
     expect(child(point, 'RayTracing')).toBeNull()
   })
 
-  it('emits a SubPart whose only data is a <Light> (not pruned as empty)', () => {
+  it('emits a SubPart whose only data is a <Light> (an orphan light-only owner gets its own block)', () => {
     const SP = 'Custom_Subpart_Lamp'
     const lightOnly = parse(
-      serializeGameData(
-        editingPart({
-          subPartGameData: [{ ...createSubPartGameData(SP), lights: [createLight()] }],
-        }),
-      ),
+      serializeGameData(editingPart({ lights: [createPartLight(SP, '_light1')] })),
     )
     const spd = tags(lightOnly, 'SubPartGameData').find((e) => e.getAttribute('Id') === SP)!
     expect(spd).toBeDefined()
     expect(tags(spd, 'Light').length).toBe(1)
+  })
+
+  it('emits part-level lights (ownerTemplateId null) under <PartGameData>, never a SubPartGameData', () => {
+    // CoreCommandA-style capsule headlight: a part-level <Light> in the assembly frame.
+    const doc2 = parse(
+      serializeGameData(
+        editingPart({
+          lights: [
+            {
+              ...createPartLight(null, '_light1'),
+              position: { x: 0.09, y: 0.4364, z: -0.61633 },
+              rangeM: 2.5,
+              intensity: 2,
+              outerAngleRad: 1.57,
+            },
+          ],
+        }),
+      ),
+    )
+    const gd2 = tags(doc2, 'PartGameData')[0]
+    const lights = tags(gd2, 'Light')
+    expect(lights).toHaveLength(1)
+    expect(child(lights[0], 'Range')!.getAttribute('Value')).toBe('2.5')
+    // The light is a DIRECT child of <PartGameData> — no <SubPartGameData> block exists.
+    expect(lights[0].parentNode).toBe(gd2)
+    expect(tags(doc2, 'SubPartGameData')).toHaveLength(0)
+    // The editor-only id is never emitted.
+    expect(lights[0].hasAttribute('Id')).toBe(false)
+  })
+
+  it('omits the <Transform> entirely for an identity-transform light', () => {
+    const doc2 = parse(serializeGameData(editingPart({ lights: [createPartLight(null, '_l')] })))
+    const light = tags(doc2, 'Light')[0]
+    expect(child(light, 'Transform')).toBeNull()
+  })
+
+  it('routes an owned light onto the export-variant id via templateRemap', () => {
+    const SP = 'CoreElectricalA_Subpart_SpotlightA'
+    const remap = new Map([[SP, `flexo_MyLight_${SP}`]])
+    const xml = serializeGameData(
+      editingPart({ lights: [createPartLight(SP, '_light1')] }),
+      '',
+      remap,
+    )
+    expect(xml).toContain(`<SubPartGameData Id="flexo_MyLight_${SP}">`)
+    expect(xml).not.toContain(`<SubPartGameData Id="${SP}">`)
+    expect(xml).toContain('<Light>')
+  })
+
+  it('one orphan block carries BOTH an owned light and an owned collider', () => {
+    const SP = 'CoreLandingA_Subpart_MediumFootA'
+    const doc2 = parse(
+      serializeGameData(
+        editingPart({
+          lights: [createPartLight(SP, '_light1')],
+          colliders: [
+            {
+              id: '_collider1',
+              shape: 'Sphere',
+              ownerTemplateId: SP,
+              ...identityTransform(),
+              layerId: 'colliders',
+            },
+          ],
+        }),
+      ),
+    )
+    const blocks = tags(doc2, 'SubPartGameData').filter((e) => e.getAttribute('Id') === SP)
+    expect(blocks).toHaveLength(1)
+    expect(tags(blocks[0], 'Light')).toHaveLength(1)
+    expect(tags(blocks[0], 'Collider')).toHaveLength(1)
   })
 
   it('emits power modules with KSA EnergyReference/PowerReference attributes (J / W)', () => {

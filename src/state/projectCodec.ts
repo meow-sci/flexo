@@ -24,10 +24,10 @@ import type {
   KittenInstance,
   KittenMeshSource,
   Layer,
-  Light,
   PartAnimation,
   PartCollider,
   PartGameData,
+  PartLight,
   PowerConsumer,
   RawXmlNode,
   ReactionCategory,
@@ -52,6 +52,7 @@ import {
   CONNECTOR_LAYER_ID,
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
+  LIGHT_LAYER_ID,
   createDefaultMaterial,
   createEmptyGameData,
   createSubPartGameData,
@@ -76,8 +77,11 @@ export const PROJECT_EXPORT_FORMAT = 'flexo-project'
 // v6: colliders (`cl`) — the Part's collision volume as a flat list of analytic primitives.
 // v7: the per-SubPart-template `<Internal>` (interior-only) flag (`ifl`) AND IVA seats
 // (`iv`) — both halves of the IVA plan ship together, so they share the one bump.
+// v8: lights normalized out of SubPartGameData (`sg[].li` with a nested transform) into
+// first-class part entities: top-level `li` (flat inline `p`/`r`, `ot` owner template,
+// editor-only id) — part-level `<Light>` support.
 // Per the no-migration rule, older payloads are REJECTED on import, never converted.
-export const PROJECT_EXPORT_VERSION = 7
+export const PROJECT_EXPORT_VERSION = 8
 
 /**
  * COMPACT PROJECT CODEC — the single wire format for everything that serializes a
@@ -473,7 +477,7 @@ function decRawNodes(v: unknown): RawXmlNode[] {
     })
 }
 
-// ── per-SubPart game data (tanks / solar panels / lights) ────────────────────
+// ── per-SubPart game data (tanks / solar panels / engine modules) ────────────
 
 interface CTank {
   l: number // lengthM
@@ -519,42 +523,56 @@ function decTank(c: CTank): Tank {
   }
 }
 
-interface CLight {
-  tf?: CTransform // transform (lights ignore scale; most are origin/identity)
+/**
+ * A cast light — a first-class part entity (like {@link CCollider}), not SubPart data.
+ * `scale` is unused (pinned 1,1,1), so the shared CTransform encoder always omits it;
+ * `layerId` is the constant LIGHT_LAYER_ID (`ly` is emitted only if it ever differed,
+ * which the model forbids) — both restored on decode.
+ */
+interface CLight extends CTransform {
+  i: string // id
   rg: number // rangeM
   in: number // intensity
   co: Triple // color [r,g,b] 0..1
   ia: number // innerAngleRad
   oa: number // outerAngleRad
+  ot?: string // ownerTemplateId (omitted ⇒ null ⇒ part-level)
+  ly?: string // layerId (omitted at the constant LIGHT_LAYER_ID — always, in practice)
   pt?: 1 // type: present ⇒ Point (Spot is the default)
   rt?: 1 // rayTracing
 }
 
-function encLight(l: Light): CLight {
+function encLight(l: PartLight): CLight {
   const o: CLight = {
+    i: l.id,
     rg: round(l.rangeM),
     in: round(l.intensity),
     co: [round(l.color.r), round(l.color.g), round(l.color.b)],
     ia: round(l.innerAngleRad),
     oa: round(l.outerAngleRad),
+    ...encTransform(l),
   }
-  if (!isIdentityTransform(l.transform)) o.tf = encTransform(l.transform)
+  if (l.ownerTemplateId) o.ot = l.ownerTemplateId
+  if (l.layerId !== LIGHT_LAYER_ID) o.ly = l.layerId
   if (l.type === 'Point') o.pt = 1
   if (l.rayTracing) o.rt = 1
   return o
 }
 
-function decLight(c: CLight): Light {
+function decLight(c: CLight): PartLight {
   const co = decVec(c.co, 0)
   return {
+    id: str(c.i),
     type: c.pt ? 'Point' : 'Spot',
-    transform: decTransform(c.tf),
+    ownerTemplateId: c.ot ? str(c.ot) : null,
     rangeM: num(c.rg),
     intensity: num(c.in),
     color: { r: co.x, g: co.y, b: co.z },
     innerAngleRad: num(c.ia),
     outerAngleRad: num(c.oa),
     rayTracing: !!c.rt,
+    layerId: c.ly ? str(c.ly) : LIGHT_LAYER_ID,
+    ...decTransform(c),
   }
 }
 
@@ -875,7 +893,6 @@ interface CSubPartGameData {
   t: string // subPartTemplateId
   tk?: CTank[] // tanks
   sp?: CSolarPanel[] // solarPanels
-  li?: CLight[] // lights
   cb?: CCombustor[] // combustors
   nz?: CNozzle[] // nozzles
   ro?: CRocket[] // rockets
@@ -890,7 +907,6 @@ function encSubPartGameData(s: SubPartGameData): CSubPartGameData {
   const o: CSubPartGameData = { t: s.subPartTemplateId }
   if (s.tanks.length) o.tk = s.tanks.map(encTank)
   if (s.solarPanels.length) o.sp = s.solarPanels.map(encSolarPanel)
-  if (s.lights.length) o.li = s.lights.map(encLight)
   if (s.combustors.length) o.cb = s.combustors.map(encCombustor)
   if (s.nozzles.length) o.nz = s.nozzles.map(encNozzle)
   if (s.rockets.length) o.ro = s.rockets.map(encRocket)
@@ -906,7 +922,6 @@ function decSubPartGameData(c: CSubPartGameData): SubPartGameData {
   const s = createSubPartGameData(str(c.t))
   s.tanks = arr<CTank>(c.tk).map(decTank)
   s.solarPanels = arr<CSolarPanel>(c.sp).map(decSolarPanel)
-  s.lights = arr<CLight>(c.li).map(decLight)
   s.combustors = arr<CCombustor>(c.cb).map(decCombustor)
   s.nozzles = arr<CNozzle>(c.nz).map(decNozzle)
   s.rockets = arr<CRocket>(c.ro).map(decRocket)
@@ -1317,6 +1332,7 @@ export interface CompactProject {
   c?: CConnector[] // connectors
   cl?: CCollider[] // colliders
   iv?: CIvaSeat[] // ivaSeats (order is load-bearing — index 0 is the default seat)
+  li?: CLight[] // lights (first-class part entities since v8)
   ifl?: Record<string, boolean> // per-SubPart-template <Internal> overrides
   k?: CKitten[] // kittens
   a?: CAnimation[] // animations
@@ -1340,6 +1356,7 @@ export function encodeProject(env: ProjectExportEnvelope): CompactProject {
   if (d.connectors.length) o.c = d.connectors.map(encConnector)
   if (d.colliders.length) o.cl = d.colliders.map(encCollider)
   if (d.ivaSeats.length) o.iv = d.ivaSeats.map(encIvaSeat)
+  if (d.lights.length) o.li = d.lights.map(encLight)
   if (Object.keys(d.internalFlags).length) o.ifl = { ...d.internalFlags }
   if (d.kittens.length) o.k = d.kittens.map(encKitten)
   if (d.animations.length) o.a = d.animations.map(encAnimation)
@@ -1367,6 +1384,7 @@ export function decodeProject(raw: CompactProject): ProjectExportEnvelope {
       connectors: arr<CConnector>(raw.c).map(decConnector),
       colliders: arr<CCollider>(raw.cl).map(decCollider),
       ivaSeats: arr<CIvaSeat>(raw.iv).map(decIvaSeat),
+      lights: arr<CLight>(raw.li).map(decLight),
       internalFlags: decInternalFlags(raw.ifl),
       kittens: arr<CKitten>(raw.k).map(decKitten),
       animations: arr<CAnimation>(raw.a).map(decAnimation),

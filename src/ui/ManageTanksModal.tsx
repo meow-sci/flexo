@@ -22,7 +22,6 @@ export function ManageTanksModal({ subPartTemplateId, onClose }: Props) {
   const spd = part.subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId)
   const tanks = spd?.tanks ?? []
   const solarPanels = spd?.solarPanels ?? []
-  const lights = spd?.lights ?? []
   // Engine modules add themselves on first edit, so feed the section a synthetic empty
   // entry when this template has no data yet (the "+ Combustor" button then creates it).
   const engineSpd = spd ?? createSubPartGameData(subPartTemplateId)
@@ -45,7 +44,7 @@ export function ManageTanksModal({ subPartTemplateId, onClose }: Props) {
           </div>
           <div className="flex flex-col gap-2">
             <SectionTitle>Lights</SectionTitle>
-            <LightsSection lights={lights} subPartTemplateId={subPartTemplateId} />
+            <LightsSection subPartTemplateId={subPartTemplateId} />
           </div>
           <SolarPanelsSection
             solarPanels={solarPanels}

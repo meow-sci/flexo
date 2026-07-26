@@ -20,7 +20,7 @@ import {
   setPlacementsInternal,
 } from '../state/editorStore'
 import { $hasMultiSelection, $selectionCount } from '../state/selectors'
-import { COLLIDER_LAYER_ID, CONNECTOR_LAYER_ID, KITTEN_LAYER_ID } from '../ksa/types'
+import { ENTITY_ONLY_LAYER_IDS } from '../ksa/types'
 
 /**
  * Floating toolbar stacked beneath {@link SelectionToolbar}, shown only when more
@@ -47,10 +47,8 @@ export function MultiSelectToolbar() {
 /** "Change Layer" menu: picks a destination layer for the whole selection. */
 function ChangeLayerButton() {
   const part = useStore($part)
-  // SubParts never belong to the built-in Connectors/Kittens layers.
-  const layers = part.layers.filter(
-    (l) => l.id !== CONNECTOR_LAYER_ID && l.id !== COLLIDER_LAYER_ID && l.id !== KITTEN_LAYER_ID,
-  )
+  // SubParts never belong to the entity-only built-in layers (connectors/colliders/seats/lights/kittens).
+  const layers = part.layers.filter((l) => !ENTITY_ONLY_LAYER_IDS.includes(l.id))
 
   return (
     <MenuTrigger>

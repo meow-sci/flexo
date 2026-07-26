@@ -197,6 +197,52 @@ export interface IvaSeat extends Transform {
 }
 
 /**
+ * One cast light of the Part being edited — a first-class 3D entity (like
+ * {@link PartCollider} / {@link IvaSeat}), normalised out of per-template GameData
+ * so it can be selected, gizmo-edited and visualized. Mirrors KSA's
+ * `LightModule.TemplateData` (`<Light>`, legal under BOTH `<PartGameData>` and
+ * `<SubPartGameData>` — Core authors both). See plans/LIGHT_MANAGEMENT_PLAN.md §1.
+ *
+ * {@link Transform} is reused with a deliberate reinterpretation:
+ *  - `position` → `<Transform><Position>` — the emitter point in the OWNER frame
+ *    (part assembly frame when {@link ownerTemplateId} is null, else the SubPart
+ *    TEMPLATE's local frame), meters.
+ *  - `rotation` → `<Transform><Rotation>` — Euler XYZ radians. Aims a Spot along
+ *    the rotated local +X (`LightModule.UpdateRenderData` transforms
+ *    `double3.UnitX`). Stored + emitted for Point too; KSA ignores it there.
+ *  - `scale` → UNUSED. KSA ignores light scale; pinned (1,1,1), never emitted.
+ */
+export interface PartLight extends Transform {
+  /** Editor-only document id, e.g. "_light1". NEVER emitted (Core authors no <Light Id>). */
+  id: string
+  type: LightType
+  /**
+   * `null` ⇒ part-level: emitted under `<PartGameData>`, transform in the Part's
+   * assembly frame (Core: CoreCommandA headlights, CoreIVASpaceA interior light).
+   * Otherwise a `subPartTemplateId` ⇒ emitted under that template's
+   * `<SubPartGameData>` — the light applies to EVERY placement of the template and
+   * rides each instance's transform (Core: CoreElectricalA spotlights). Emitting
+   * under a BUILT-IN template id routes through the export-variant remap so Core's
+   * shared template is never mutated (modExport.buildExportVariantMap).
+   */
+  ownerTemplateId: string | null
+  /** Falloff distance in meters (<Range Value/>). Illuminance is EXACTLY 0 at d ≥ range (§1.4). */
+  rangeM: number
+  /** Brightness (<Intensity Value/>). Candela-like: E ≈ intensity/d² near the source. */
+  intensity: number
+  /** RGB color, channels 0–1 (<Color R G B/>). KSA schema default is Gray (0.5,0.5,0.5). */
+  color: { r: number; g: number; b: number }
+  /** Spot inner cone half-angle, radians (<InnerAngle Value/>). Full-bright inside. */
+  innerAngleRad: number
+  /** Spot outer cone half-angle, radians (<OuterAngle Value/>). Runtime-clamped to ≤ 1.5697963 (§1.4). */
+  outerAngleRad: number
+  /** <RayTracing>true</RayTracing> — IVA ray-traced list routing only. */
+  rayTracing: boolean
+  /** Always {@link LIGHT_LAYER_ID}; parity with the other layered entities. */
+  layerId: string
+}
+
+/**
  * Which of the three default KSA kittens to render. They share the same body mesh
  * and EVA suit; only the head pattern and eye color differ. See src/ksa/kittenAssets.ts.
  */
@@ -280,6 +326,13 @@ export const COLLIDER_LAYER_ID = 'colliders'
  */
 export const IVA_SEAT_LAYER_ID = 'ivaSeats'
 
+/**
+ * Id of the built-in "Lights" layer. {@link PartLight}s always live here so the part's
+ * cast lights can be hidden/locked separately from the meshes they sit on. Cannot be
+ * deleted.
+ */
+export const LIGHT_LAYER_ID = 'lights'
+
 /** The built-in Default layer (for SubParts) that every new Part starts with. */
 export function createDefaultLayer(): Layer {
   return { id: DEFAULT_LAYER_ID, name: 'Default' }
@@ -305,12 +358,33 @@ export function createIvaSeatLayer(): Layer {
   return { id: IVA_SEAT_LAYER_ID, name: 'IVA Seats' }
 }
 
+/** The built-in Lights layer that every new Part starts with. */
+export function createLightLayer(): Layer {
+  return { id: LIGHT_LAYER_ID, name: 'Lights' }
+}
+
 /** The built-in layers present in every Part (and never deletable). */
 export const BUILT_IN_LAYER_IDS: readonly string[] = [
   DEFAULT_LAYER_ID,
   CONNECTOR_LAYER_ID,
   COLLIDER_LAYER_ID,
   IVA_SEAT_LAYER_ID,
+  LIGHT_LAYER_ID,
+  KITTEN_LAYER_ID,
+]
+
+/**
+ * Built-in layers that host their own entity kind EXCLUSIVELY — a SubPart placement can
+ * never live on (or be moved to) one of these. {@link DEFAULT_LAYER_ID} is deliberately
+ * absent: it is the ordinary placement layer. Every "move to layer" surface (row menu,
+ * multi-select toolbar, store guards) filters through this ONE list so a newly added
+ * entity layer can't be forgotten at one of the sites.
+ */
+export const ENTITY_ONLY_LAYER_IDS: readonly string[] = [
+  CONNECTOR_LAYER_ID,
+  COLLIDER_LAYER_ID,
+  IVA_SEAT_LAYER_ID,
+  LIGHT_LAYER_ID,
   KITTEN_LAYER_ID,
 ]
 
@@ -478,40 +552,10 @@ export interface PowerConsumer {
 /**
  * Light type. Mirrors KSA's `LightModule.TemplateData.LightType` (the only two
  * values the engine's `ELightType` recognizes): an omnidirectional `Point` or a
- * cone `Spot`. A Spot is aimed by its {@link Light.transform} rotation and adds
- * the inner/outer cone angles.
+ * cone `Spot`. A Spot is aimed by its {@link PartLight.rotation} and adds the
+ * inner/outer cone angles.
  */
 export type LightType = 'Spot' | 'Point'
-
-/**
- * A light attached to a SubPart (multiple allowed). Mirrors KSA's
- * `LightModule.TemplateData` (`<Light>` under `<SubPartGameData>`) field-for-field:
- *  - `Type` → {@link type}
- *  - `Transform` → {@link transform} (Position places the light; Rotation aims a
- *    Spot's cone along its local +X. KSA ignores Scale for lights, so we never
- *    emit it.)
- *  - `Range`/`Intensity` → {@link rangeM}/{@link intensity}
- *  - `Color` (R/G/B floats 0–1, no alpha) → {@link color}
- *  - `InnerAngle`/`OuterAngle` (radians; Spot only) → {@link innerAngleRad}/{@link outerAngleRad}
- *  - `RayTracing` (bool; only affects IVA ray tracing) → {@link rayTracing}
- */
-export interface Light {
-  type: LightType
-  /** Local position (m) + aim rotation (Euler XYZ radians). Scale is unused by KSA lights. */
-  transform: Transform
-  /** Falloff distance in meters (<Range Value/>). */
-  rangeM: number
-  /** Brightness multiplier (<Intensity Value/>). */
-  intensity: number
-  /** RGB color, each channel 0–1 (<Color R G B/>; KSA lights carry no alpha). */
-  color: { r: number; g: number; b: number }
-  /** Spot inner-cone half-angle in radians (<InnerAngle Value/>). Spot only. */
-  innerAngleRad: number
-  /** Spot outer-cone half-angle in radians (<OuterAngle Value/>). Spot only; KSA clamps to ~90°. */
-  outerAngleRad: number
-  /** Ray-traced light (<RayTracing>true</RayTracing>); only meaningful for IVA ray tracing. */
-  rayTracing: boolean
-}
 
 /** Decoupler bound to a connector. Serialized as <Decoupler ConnectorId Force/>. */
 export interface Decoupler {
@@ -1125,7 +1169,6 @@ export interface SubPartGameData {
   subPartTemplateId: string
   tanks: Tank[]
   solarPanels: SolarPanel[]
-  lights: Light[]
   /** Reusable thrust-chamber combustors that travel with this mesh. */
   combustors: Combustor[]
   /** Reusable nozzles that travel with this mesh. */
@@ -1149,7 +1192,6 @@ export function isSubPartGameDataEmpty(spd: SubPartGameData): boolean {
   return (
     spd.tanks.length === 0 &&
     spd.solarPanels.length === 0 &&
-    spd.lights.length === 0 &&
     spd.combustors.length === 0 &&
     spd.nozzles.length === 0 &&
     spd.rockets.length === 0 &&
@@ -1192,18 +1234,21 @@ export function createPowerConsumer(): PowerConsumer {
 /**
  * Default light: a white Spot matching KSA's canonical CoreElectricalA spotlight
  * (range 5 m, intensity 10, 22.5°/45° inner/outer half-cone). Aimed along local +X
- * (identity rotation); the user repositions/re-aims it from the SubPart Data dialog.
+ * (identity rotation) in the owner frame ({@link PartLight.ownerTemplateId}).
  */
-export function createLight(): Light {
+export function createPartLight(ownerTemplateId: string | null, id: string): PartLight {
   return {
+    id,
     type: 'Spot',
-    transform: identityTransform(),
+    ownerTemplateId,
+    ...identityTransform(),
     rangeM: 5,
     intensity: 10,
     color: { r: 1, g: 1, b: 1 },
     innerAngleRad: Math.PI / 8,
     outerAngleRad: Math.PI / 4,
     rayTracing: false,
+    layerId: LIGHT_LAYER_ID,
   }
 }
 
@@ -1244,7 +1289,6 @@ export function createSubPartGameData(subPartTemplateId: string): SubPartGameDat
     subPartTemplateId,
     tanks: [],
     solarPanels: [],
-    lights: [],
     combustors: [],
     nozzles: [],
     rockets: [],
@@ -2071,6 +2115,8 @@ export interface EditingPart {
   colliders: PartCollider[]
   /** The Part's IVA camera vantage points, in cycle order (index 0 is the default seat). */
   ivaSeats: IvaSeat[]
+  /** The Part's cast lights — normalised out of GameData, grouped by owner on export. */
+  lights: PartLight[]
   /** Editor-only kitten visual aides (never serialized to export). */
   kittens: KittenInstance[]
   /** User-uploaded textures (descriptors only; binaries in IndexedDB). */
@@ -2097,12 +2143,14 @@ export function createEmptyPart(): EditingPart {
       createConnectorLayer(),
       createColliderLayer(),
       createIvaSeatLayer(),
+      createLightLayer(),
       createKittenLayer(),
     ],
     placements: [],
     connectors: [],
     colliders: [],
     ivaSeats: [],
+    lights: [],
     kittens: [],
     customTextures: [],
     customMaterials: [],

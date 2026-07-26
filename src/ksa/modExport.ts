@@ -216,14 +216,17 @@ export function resolveInternal(
 
 /**
  * True when the part carries flexo-modeled data that must be emitted UNDER this template's
- * id — SubPart GameData (light/tank/solar/engine) or a SubPart-owned collider. Emitting
- * either under the shared built-in id would MERGE onto the built-in template globally.
+ * id — SubPart GameData (tank/solar/engine), a SubPart-owned collider, or a SubPart-owned
+ * light. Emitting any of them under the shared built-in id would MERGE onto the built-in
+ * template globally.
  */
 function hasSubPartGameData(part: EditingPart, templateId: string): boolean {
   return (
     part.subPartGameData.some(
       (s) => s.subPartTemplateId === templateId && !isSubPartGameDataEmpty(s),
-    ) || part.colliders.some((c) => c.ownerTemplateId === templateId)
+    ) ||
+    part.colliders.some((c) => c.ownerTemplateId === templateId) ||
+    part.lights.some((l) => l.ownerTemplateId === templateId)
   )
 }
 

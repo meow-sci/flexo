@@ -98,6 +98,12 @@ import {
   addConsumerFeedWiring,
   addKitten,
   addLight,
+  removeLight,
+  setLightPosition,
+  setLightRayTracing,
+  setLightRotation,
+  setLightType,
+  updateLight,
   addPart,
   addPartCombustor,
   addSubPart,
@@ -151,8 +157,10 @@ import {
   COLLIDER_LAYER_ID,
   CONNECTOR_LAYER_ID,
   DEFAULT_LAYER_ID,
+  ENTITY_ONLY_LAYER_IDS,
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
+  LIGHT_LAYER_ID,
   createCombustor,
   createEmptyPart,
   createSolidMotor,
@@ -201,6 +209,7 @@ function emptyImportedGameData(): ImportedGameData {
     consumerFeedWiring: [],
     colliders: [],
     ivaSeats: [],
+    lights: [],
   }
 }
 
@@ -370,6 +379,7 @@ describe('editorStore', () => {
         consumerFeedWiring: [],
         colliders: [],
         ivaSeats: [],
+        lights: [],
       },
     )
     const dp = $part.get().gameData.dockingPort
@@ -378,6 +388,51 @@ describe('editorStore', () => {
     expect(dp?.pushoffImpulseNs).toBe(7000)
     expect(dp?.connectorId).toBe($part.get().connectors[0].id)
     expect(dp?.connectorId).not.toBe('_connector5')
+  })
+
+  it('addPart appends imported lights with fresh ids, the Lights layer, and a pinned scale', () => {
+    addLight(null) // occupies _light1, forcing the imported light to renumber
+    // addPart no-ops on an empty geometry import, so carry one placement.
+    const placement = {
+      instanceId: 'imp_1',
+      subPartTemplateId: 'Core.A',
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+      layerId: DEFAULT_LAYER_ID,
+    }
+    addPart([placement], [], [], undefined, undefined, {
+      ...emptyImportedGameData(),
+      lights: [
+        {
+          id: '_light9', // stale source-space id — must be regenerated
+          type: 'Point',
+          ownerTemplateId: null,
+          rangeM: 1.5,
+          intensity: 0.05,
+          color: { r: 1, g: 0.9, b: 0.7 },
+          innerAngleRad: Math.PI / 8,
+          outerAngleRad: Math.PI / 4,
+          rayTracing: true,
+          position: { x: -0.275, y: 0, z: -0.8 },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 2, y: 2, z: 2 }, // hand-edited payload — must be re-pinned
+          layerId: 'not-the-lights-layer',
+        },
+      ],
+    })
+    const lights = $part.get().lights
+    expect(lights.map((l) => l.id)).toEqual(['_light1', '_light2'])
+    const imported = lights[1]
+    expect(imported.layerId).toBe(LIGHT_LAYER_ID)
+    expect(imported.scale).toEqual({ x: 1, y: 1, z: 1 })
+    expect(imported.rangeM).toBe(1.5)
+    expect(imported.intensity).toBe(0.05)
+    expect(imported.color).toEqual({ r: 1, g: 0.9, b: 0.7 })
+    expect(imported.rayTracing).toBe(true)
+    expect(imported.position).toEqual({ x: -0.275, y: 0, z: -0.8 })
+    undo()
+    expect($part.get().lights.map((l) => l.id)).toEqual(['_light1'])
   })
 
   it('addPart rewrites <ConnectorRef>s inside preserved raw XML onto the regenerated connector ids', () => {
@@ -430,6 +485,7 @@ describe('editorStore', () => {
       consumerFeedWiring: [],
       colliders: [],
       ivaSeats: [],
+      lights: [],
     })
     const part = $part.get()
     // _connector19/_connector41 were regenerated to _connector2/_connector3…
@@ -633,12 +689,14 @@ describe('editorStore', () => {
     expect(spd()?.tanks.length).toBe(1)
   })
 
-  it('adds a light per SubPart template, seeded or default, as one discrete undo step', () => {
+  it('adds a light (part-level or SubPart-owned), seeded or default, as one discrete undo step', () => {
     const tmpl = 'CoreElectricalA_Subpart_SpotlightA'
-    const lights = () =>
-      $part.get().subPartGameData.find((s) => s.subPartTemplateId === tmpl)?.lights ?? []
+    const lights = () => $part.get().lights
 
     addLight(tmpl)
+    expect(lights()[0].id).toBe('_light1')
+    expect(lights()[0].ownerTemplateId).toBe(tmpl)
+    expect(lights()[0].layerId).toBe(LIGHT_LAYER_ID)
     expect(lights()[0].type).toBe('Spot')
     expect(lights()[0].color).toEqual({ r: 1, g: 1, b: 1 })
 
@@ -646,12 +704,58 @@ describe('editorStore', () => {
     // <Light> is the only way a part reads as a coloured lamp in-game.
     addLight(tmpl, { type: 'Point', color: { r: 0, g: 1, b: 0 } })
     expect(lights()).toHaveLength(2)
+    expect(lights()[1].id).toBe('_light2')
     expect(lights()[1].type).toBe('Point')
     expect(lights()[1].color).toEqual({ r: 0, g: 1, b: 0 })
-    // Unspecified fields still come from createLight().
+    // Unspecified fields still come from createPartLight().
     expect(lights()[1].rangeM).toBe(5)
 
+    // null owner ⇒ a part-level <Light> under <PartGameData>.
+    addLight(null)
+    expect(lights()[2].ownerTemplateId).toBeNull()
+    expect(lights()[2].id).toBe('_light3')
+
     undo()
+    undo()
+    expect(lights()).toHaveLength(1)
+  })
+
+  it('removes / retypes / re-flags a light discretely and patches fields streaming, all undoable', () => {
+    addLight(null)
+    const lights = () => $part.get().lights
+
+    setLightType(0, 'Point')
+    expect(lights()[0].type).toBe('Point')
+    undo()
+    expect(lights()[0].type).toBe('Spot')
+
+    setLightRayTracing(0, true)
+    expect(lights()[0].rayTracing).toBe(true)
+    undo()
+    expect(lights()[0].rayTracing).toBe(false)
+
+    // updateLight / setLightPosition / setLightRotation are streaming (no internal undo) —
+    // emulate the field-focus push.
+    pushUndo('edit light')
+    updateLight(0, { rangeM: 12, intensity: 3 })
+    setLightPosition(0, { x: 1, y: 2, z: 3 })
+    setLightRotation(0, { x: 0, y: 0, z: 1.5 })
+    expect(lights()[0].rangeM).toBe(12)
+    expect(lights()[0].intensity).toBe(3)
+    expect(lights()[0].position).toEqual({ x: 1, y: 2, z: 3 })
+    expect(lights()[0].rotation.z).toBe(1.5)
+    undo() // the whole typing session collapses into one step
+    expect(lights()[0].rangeM).toBe(5)
+    expect(lights()[0].position).toEqual({ x: 0, y: 0, z: 0 })
+
+    removeLight(0)
+    expect(lights()).toHaveLength(0)
+    undo()
+    expect(lights()).toHaveLength(1)
+
+    // Out-of-range indices are ignored (no crash, no undo entry).
+    removeLight(5)
+    setLightType(-1, 'Point')
     expect(lights()).toHaveLength(1)
   })
 
@@ -783,12 +887,13 @@ describe('editorStore kittens', () => {
 })
 
 describe('editorStore layers', () => {
-  it('starts with built-in Default + Connectors + Colliders + IVA Seats + Kittens layers; Default is active', () => {
+  it('starts with built-in Default + Connectors + Colliders + IVA Seats + Lights + Kittens layers; Default is active', () => {
     expect($part.get().layers).toEqual([
       { id: DEFAULT_LAYER_ID, name: 'Default' },
       { id: CONNECTOR_LAYER_ID, name: 'Connectors' },
       { id: COLLIDER_LAYER_ID, name: 'Colliders' },
       { id: IVA_SEAT_LAYER_ID, name: 'IVA Seats' },
+      { id: LIGHT_LAYER_ID, name: 'Lights' },
       { id: KITTEN_LAYER_ID, name: 'Kittens' },
     ])
     expect($activeLayerId.get()).toBe(DEFAULT_LAYER_ID)
@@ -801,6 +906,7 @@ describe('editorStore layers', () => {
       'Connectors',
       'Colliders',
       'IVA Seats',
+      'Lights',
       'Kittens',
       'Engines',
     ])
@@ -812,6 +918,7 @@ describe('editorStore layers', () => {
       'Connectors',
       'Colliders',
       'IVA Seats',
+      'Lights',
       'Kittens',
     ])
     expect($activeLayerId.get()).toBe(DEFAULT_LAYER_ID)
@@ -858,6 +965,7 @@ describe('editorStore layers', () => {
       CONNECTOR_LAYER_ID,
       COLLIDER_LAYER_ID,
       IVA_SEAT_LAYER_ID,
+      LIGHT_LAYER_ID,
       KITTEN_LAYER_ID,
     ])
     expect($part.get().placements.map((p) => p.subPartTemplateId)).toEqual(['Core.B'])
@@ -875,6 +983,7 @@ describe('editorStore layers', () => {
       CONNECTOR_LAYER_ID,
       COLLIDER_LAYER_ID,
       IVA_SEAT_LAYER_ID,
+      LIGHT_LAYER_ID,
       KITTEN_LAYER_ID,
       b,
     ])
@@ -891,25 +1000,28 @@ describe('editorStore layers', () => {
       CONNECTOR_LAYER_ID,
       COLLIDER_LAYER_ID,
       IVA_SEAT_LAYER_ID,
+      LIGHT_LAYER_ID,
       KITTEN_LAYER_ID,
       id,
     ])
     expect($part.get().placements[0].layerId).toBe(id)
   })
 
-  it('refuses to delete the built-in Default, Connectors, Colliders, IVA Seats and Kittens layers', () => {
+  it('refuses to delete the built-in Default, Connectors, Colliders, IVA Seats, Lights and Kittens layers', () => {
     addSubPart('Core.A')
     addConnector()
     deleteLayer(DEFAULT_LAYER_ID, { mode: 'delete-items' })
     deleteLayer(CONNECTOR_LAYER_ID, { mode: 'delete-items' })
     deleteLayer(COLLIDER_LAYER_ID, { mode: 'delete-items' })
     deleteLayer(IVA_SEAT_LAYER_ID, { mode: 'delete-items' })
+    deleteLayer(LIGHT_LAYER_ID, { mode: 'delete-items' })
     deleteLayer(KITTEN_LAYER_ID, { mode: 'delete-items' })
     expect($part.get().layers.map((l) => l.id)).toEqual([
       DEFAULT_LAYER_ID,
       CONNECTOR_LAYER_ID,
       COLLIDER_LAYER_ID,
       IVA_SEAT_LAYER_ID,
+      LIGHT_LAYER_ID,
       KITTEN_LAYER_ID,
     ])
     expect($part.get().placements.length).toBe(1)
@@ -932,6 +1044,7 @@ describe('editorStore layers', () => {
       CONNECTOR_LAYER_ID,
       COLLIDER_LAYER_ID,
       IVA_SEAT_LAYER_ID,
+      LIGHT_LAYER_ID,
       KITTEN_LAYER_ID,
     ])
     undo()
@@ -955,6 +1068,7 @@ describe('editorStore layers', () => {
       CONNECTOR_LAYER_ID,
       COLLIDER_LAYER_ID,
       IVA_SEAT_LAYER_ID,
+      LIGHT_LAYER_ID,
       KITTEN_LAYER_ID,
       b,
     ])
@@ -964,6 +1078,7 @@ describe('editorStore layers', () => {
       CONNECTOR_LAYER_ID,
       COLLIDER_LAYER_ID,
       IVA_SEAT_LAYER_ID,
+      LIGHT_LAYER_ID,
       KITTEN_LAYER_ID,
       b,
     ])
@@ -973,6 +1088,7 @@ describe('editorStore layers', () => {
       CONNECTOR_LAYER_ID,
       COLLIDER_LAYER_ID,
       IVA_SEAT_LAYER_ID,
+      LIGHT_LAYER_ID,
       KITTEN_LAYER_ID,
       a,
       b,
@@ -1014,10 +1130,9 @@ describe('editorStore layers', () => {
     expect($part.get().placements.length).toBe(2)
   })
 
-  it('movePlacementToLayer refuses the Connectors and Kittens layers', () => {
+  it('movePlacementToLayer refuses every entity-only built-in layer', () => {
     addSubPart('Core.A') // index 0, Default
-    movePlacementToLayer(0, CONNECTOR_LAYER_ID)
-    movePlacementToLayer(0, KITTEN_LAYER_ID)
+    for (const layerId of ENTITY_ONLY_LAYER_IDS) movePlacementToLayer(0, layerId)
     expect($part.get().placements[0].layerId).toBe(DEFAULT_LAYER_ID)
     // A normal layer still works.
     const engines = createLayer('Engines')
@@ -1032,7 +1147,7 @@ describe('editorStore layers', () => {
     addSubPart('Core.B') // index 1, Default
     setSelectedPlacements([0, 1])
 
-    moveSelectedPlacementsToLayer(KITTEN_LAYER_ID)
+    for (const layerId of ENTITY_ONLY_LAYER_IDS) moveSelectedPlacementsToLayer(layerId)
     expect($part.get().placements.every((p) => p.layerId === DEFAULT_LAYER_ID)).toBe(true)
 
     moveSelectedPlacementsToLayer(engines)

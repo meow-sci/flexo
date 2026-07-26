@@ -17,7 +17,7 @@ import {
   createCustomReaction,
   createDefaultLayer,
   createEmptyGameData,
-  createLight,
+  createPartLight,
   createRocketController,
   createSolidGrainSegment,
   createSolidMotor,
@@ -29,6 +29,7 @@ import {
   DEFAULT_LAYER_ID,
   IVA_SEAT_LAYER_ID,
   KNOWN_EDITOR_TAGS,
+  LIGHT_LAYER_ID,
 } from './types'
 import { readVendoredAsset } from './ksaTestAssets'
 
@@ -43,6 +44,7 @@ function editingPart(over: Partial<EditingPart>): EditingPart {
     connectors: [],
     colliders: [],
     ivaSeats: [],
+    lights: [],
     internalFlags: {},
     kittens: [],
     customTextures: [],
@@ -255,30 +257,27 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
           { ...createTank(), shape: 'Spherical', wallMaterialId: 'Steel(s)', outerRadiusM: 1.2 },
         ],
         solarPanels: [{ outputWatts: 50, transform: identityTransform() }],
-        lights: [
-          {
-            ...createLight(),
-            type: 'Spot',
-            transform: {
-              ...identityTransform(),
-              position: { x: 0.38, y: 0.21, z: 0 },
-              rotation: { x: 0, y: 0, z: 1.5708 },
-            },
-            rangeM: 5,
-            intensity: 10,
-            color: { r: 1, g: 0.5, b: 0.25 },
-            innerAngleRad: 0.392599,
-            outerAngleRad: 0.785398,
-            rayTracing: true,
-          },
-          { ...createLight(), type: 'Point', rangeM: 2, intensity: 2 },
-        ],
         combustors: [],
         nozzles: [],
         rockets: [],
         unknownAttrs: {},
         unknownChildren: [],
       },
+    ],
+    lights: [
+      {
+        ...createPartLight(TANK_TMPL, '_light1'),
+        type: 'Spot',
+        position: { x: 0.38, y: 0.21, z: 0 },
+        rotation: { x: 0, y: 0, z: 1.5708 },
+        rangeM: 5,
+        intensity: 10,
+        color: { r: 1, g: 0.5, b: 0.25 },
+        innerAngleRad: 0.392599,
+        outerAngleRad: 0.785398,
+        rayTracing: true,
+      },
+      { ...createPartLight(TANK_TMPL, '_light2'), type: 'Point', rangeM: 2, intensity: 2 },
     ],
     connectors: [
       {
@@ -307,12 +306,16 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
     expect(parsed.gameData.controllable).toBe(true)
   })
 
-  it('recovers lights per SubPart template (type, transform, color, angles, ray tracing)', () => {
-    const spd = parsed.subPartGameData.find((s) => s.subPartTemplateId === TANK_TMPL)
-    expect(spd?.lights.map((l) => l.type)).toEqual(['Spot', 'Point'])
-    const spot = spd!.lights[0]
-    expect(spot.transform.position).toEqual({ x: 0.38, y: 0.21, z: 0 })
-    expect(spot.transform.rotation.z).toBeCloseTo(1.5708, 4)
+  it('recovers SubPart-owned lights as flat PartLights (owner, transform, color, angles, ray tracing)', () => {
+    expect(parsed.lights.map((l) => l.type)).toEqual(['Spot', 'Point'])
+    expect(parsed.lights.every((l) => l.ownerTemplateId === TANK_TMPL)).toBe(true)
+    expect(parsed.lights.every((l) => l.layerId === LIGHT_LAYER_ID)).toBe(true)
+    // Ids regenerated in document order — never read from the XML.
+    expect(parsed.lights.map((l) => l.id)).toEqual(['_light1', '_light2'])
+    const spot = parsed.lights[0]
+    expect(spot.position).toEqual({ x: 0.38, y: 0.21, z: 0 })
+    expect(spot.rotation.z).toBeCloseTo(1.5708, 4)
+    expect(spot.scale).toEqual({ x: 1, y: 1, z: 1 }) // pinned — KSA ignores light scale
     expect(spot.rangeM).toBe(5)
     expect(spot.intensity).toBe(10)
     expect(spot.color.r).toBeCloseTo(1, 5)
@@ -322,8 +325,10 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
     expect(spot.outerAngleRad).toBeCloseTo(0.785398, 5)
     expect(spot.rayTracing).toBe(true)
     // Point light: no ray tracing, cone angles fall back to KSA defaults.
-    expect(spd!.lights[1].rayTracing).toBe(false)
-    expect(spd!.lights[1].rangeM).toBe(2)
+    expect(parsed.lights[1].rayTracing).toBe(false)
+    expect(parsed.lights[1].rangeM).toBe(2)
+    // The SubPartGameData entry holds only its tanks/solar panels — no lights.
+    expect(parsed.subPartGameData.find((s) => s.subPartTemplateId === TANK_TMPL)).toBeDefined()
   })
 
   it('recovers tanks and solar panels per SubPart template (shape, material, dims)', () => {
@@ -359,6 +364,110 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
 
   it('returns null for an unknown part id', () => {
     expect(gameDataFromAssets(serializeGameData(source), 'Nope', new DOMParser())).toBeNull()
+  })
+})
+
+// `<Light>` is legal (and Core-authored) at BOTH GameData sites: `<PartGameData>` (CoreCommandA
+// headlights, CoreIVASpaceA's interior light) and `<SubPartGameData>` (CoreElectricalA spot/flood
+// lights). flexo normalises every light into one flat PartLight list keyed by owner.
+describe('part-level and SubPart-level <Light> parsing (direct GameData XML)', () => {
+  it('parses both sites, assigning _lightN ids in document order (part-level first)', () => {
+    const parsed = gameDataFromAssets(
+      `<Assets>
+        <PartGameData Id="P">
+          <Light>
+            <Type>Spot</Type>
+            <Transform><Position X="0.09" Y="0.4364" Z="-0.61633" /></Transform>
+            <Range Value="2.5" />
+            <Intensity Value="2" />
+            <Color R="1" G="1" B="1" />
+            <OuterAngle Value="1.57" />
+          </Light>
+          <Light>
+            <Type>Point</Type>
+            <Range Value="1.5" />
+            <Intensity Value="0.05" />
+            <Color R="1" G="0.9" B="0.7" />
+            <RayTracing>true</RayTracing>
+          </Light>
+        </PartGameData>
+        <SubPartGameData Id="Tmpl">
+          <Light>
+            <Type>Spot</Type>
+            <Range Value="5" />
+            <Intensity Value="10" />
+          </Light>
+        </SubPartGameData>
+      </Assets>`,
+      'P',
+      new DOMParser(),
+    )!
+    expect(parsed.lights.map((l) => [l.id, l.ownerTemplateId])).toEqual([
+      ['_light1', null],
+      ['_light2', null],
+      ['_light3', 'Tmpl'],
+    ])
+    // The CoreCommandA-style headlight: Inner defaults to π/8 when absent.
+    expect(parsed.lights[0].position).toEqual({ x: 0.09, y: 0.4364, z: -0.61633 })
+    expect(parsed.lights[0].innerAngleRad).toBeCloseTo(Math.PI / 8, 6)
+    expect(parsed.lights[0].outerAngleRad).toBeCloseTo(1.57, 6)
+    // The CoreIVASpaceA-style interior light: Point + RayTracing.
+    expect(parsed.lights[1].type).toBe('Point')
+    expect(parsed.lights[1].rayTracing).toBe(true)
+    expect(parsed.lights[1].color.g).toBeCloseTo(0.9, 6)
+    // Nothing leaked into the passthrough or the SPD entries.
+    expect(parsed.gameData.unknownChildren).toEqual([])
+    expect(parsed.subPartGameData).toEqual([])
+  })
+
+  it('accumulates lights across duplicate-Id <SubPartGameData> blocks in document order', () => {
+    const parsed = gameDataFromAssets(
+      `<Assets>
+        <PartGameData Id="P" />
+        <SubPartGameData Id="Tmpl"><Light><Range Value="1" /></Light></SubPartGameData>
+        <SubPartGameData Id="Tmpl"><Light><Range Value="2" /></Light></SubPartGameData>
+      </Assets>`,
+      'P',
+      new DOMParser(),
+    )!
+    expect(parsed.lights.map((l) => [l.id, l.ownerTemplateId, l.rangeM])).toEqual([
+      ['_light1', 'Tmpl', 1],
+      ['_light2', 'Tmpl', 2],
+    ])
+  })
+
+  it('drops an authored <Light Id> attribute (editor ids are flexo-local, never emitted)', () => {
+    const parsed = gameDataFromAssets(
+      `<Assets><PartGameData Id="P">
+        <Light Id="Headlight"><Range Value="3" /></Light>
+      </PartGameData></Assets>`,
+      'P',
+      new DOMParser(),
+    )!
+    expect(parsed.lights[0].id).toBe('_light1')
+    // Re-export never writes an Id back.
+    const xml = serializeGameData(editingPart({ partId: 'P', lights: parsed.lights }))
+    expect(xml).toContain('<Light>')
+    expect(xml).not.toContain('<Light Id=')
+  })
+
+  it('round-trips a part-level light back under <PartGameData>', () => {
+    const source = editingPart({
+      partId: 'P',
+      lights: [
+        {
+          ...createPartLight(null, '_light1'),
+          type: 'Point',
+          position: { x: -0.275, y: 0, z: -0.8 },
+          rangeM: 1.5,
+          intensity: 0.05,
+          color: { r: 1, g: 0.9, b: 0.7 },
+          rayTracing: true,
+        },
+      ],
+    })
+    const back = roundTrip(source)
+    expect(back.lights).toEqual(source.lights)
   })
 })
 
@@ -1463,7 +1572,8 @@ describe('colliders', () => {
   it('emits SubPart-owned colliders INTO an existing <SubPartGameData> block, not a second one', () => {
     const part = editingPart({
       partId: 'P',
-      subPartGameData: [{ ...createSubPartGameData('Tmpl'), lights: [createLight()] }],
+      subPartGameData: [{ ...createSubPartGameData('Tmpl'), tanks: [createTank()] }],
+      lights: [createPartLight('Tmpl', '_light1')],
       colliders: [
         {
           id: '_collider1',
@@ -1476,7 +1586,10 @@ describe('colliders', () => {
     })
     const xml = serializeGameData(part)
     expect(xml.match(/<SubPartGameData Id="Tmpl">/g)).toHaveLength(1)
-    expect(roundTrip(part).colliders[0].ownerTemplateId).toBe('Tmpl')
+    const back = roundTrip(part)
+    expect(back.colliders[0].ownerTemplateId).toBe('Tmpl')
+    // The owned light rides the same single block.
+    expect(back.lights[0].ownerTemplateId).toBe('Tmpl')
   })
 
   it('ALWAYS emits every dimension (an omitted one reads back as NaN in KSA)', () => {
@@ -1687,8 +1800,16 @@ describe('IVA seats', () => {
       ['_seat1', { x: -0.45, y: 0.42, z: -0.35 }, { x: 0, y: 0, z: 0 }],
       ['_seat2', { x: -0.45, y: -0.42, z: -0.35 }, { x: 0, y: 0, z: 0 }],
     ])
-    // The fixture's part-level `<Light>` is unmodeled and stays in the passthrough; the
-    // seats do NOT.
-    expect(parsed.gameData.unknownChildren.map((n) => n.tag)).toEqual(['Light'])
+    // The fixture's part-level `<Light>` is MODELED (the warm ray-traced interior Point
+    // light) — nothing rides the passthrough anymore.
+    expect(parsed.gameData.unknownChildren).toEqual([])
+    expect(parsed.lights.map((l) => [l.id, l.ownerTemplateId, l.type])).toEqual([
+      ['_light1', null, 'Point'],
+    ])
+    expect(parsed.lights[0].position).toEqual({ x: -0.275, y: 0, z: -0.8 })
+    expect(parsed.lights[0].rangeM).toBe(1.5)
+    expect(parsed.lights[0].intensity).toBe(0.05)
+    expect(parsed.lights[0].color).toEqual({ r: 1, g: 0.9, b: 0.7 })
+    expect(parsed.lights[0].rayTracing).toBe(true)
   })
 })

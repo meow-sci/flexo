@@ -5,6 +5,7 @@ import {
   DEFAULT_LAYER_ID,
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
+  LIGHT_LAYER_ID,
   createEmptyPart,
   createSolidGrainSegment,
   createSolidMotor,
@@ -218,28 +219,6 @@ function richPart(): EditingPart {
       },
     ],
     solarPanels: [{ outputWatts: 30, transform: identityTransform() }],
-    lights: [
-      {
-        type: 'Spot',
-        transform: xf([0, 0, 1], [0, 0, 0], [1, 1, 1]),
-        rangeM: 5,
-        intensity: 10,
-        color: { r: 1, g: 0.5, b: 0.25 },
-        innerAngleRad: 0.392699,
-        outerAngleRad: 0.785398,
-        rayTracing: false,
-      },
-      {
-        type: 'Point',
-        transform: identityTransform(),
-        rangeM: 8,
-        intensity: 3,
-        color: { r: 0.1, g: 0.2, b: 0.3 },
-        innerAngleRad: 0,
-        outerAngleRad: 0,
-        rayTracing: true,
-      },
-    ],
     // Reusable thrust chamber: combustor + nozzle (all FX fields) + rocket binding.
     combustors: [
       {
@@ -288,6 +267,37 @@ function richPart(): EditingPart {
     unknownAttrs: { DisplayName: 'Wing Tank' },
     unknownChildren: [{ tag: 'SubstanceStorageVolume', attrs: { Id: 'Vol1' }, children: [] }],
   })
+
+  // Lights are first-class part entities (v8): one SubPart-owned Spot with a non-identity
+  // transform, one part-level Point (identity transform → p/r omitted on the wire).
+  p.lights.push(
+    {
+      id: '_light1',
+      type: 'Spot',
+      ownerTemplateId: 'Core.Wing',
+      ...xf([0, 0, 1], [0, 0, 0.5], [1, 1, 1]),
+      rangeM: 5,
+      intensity: 10,
+      color: { r: 1, g: 0.5, b: 0.25 },
+      innerAngleRad: 0.392699,
+      outerAngleRad: 0.785398,
+      rayTracing: false,
+      layerId: LIGHT_LAYER_ID,
+    },
+    {
+      id: '_light2',
+      type: 'Point',
+      ownerTemplateId: null,
+      ...identityTransform(),
+      rangeM: 8,
+      intensity: 3,
+      color: { r: 0.1, g: 0.2, b: 0.3 },
+      innerAngleRad: 0,
+      outerAngleRad: 0,
+      rayTracing: true,
+      layerId: LIGHT_LAYER_ID,
+    },
+  )
 
   p.customMeshes.push({
     id: 'mesh_k',
@@ -424,11 +434,11 @@ describe('projectCodec round-trip', () => {
     expect(c.sg?.[0].sm?.[0]).not.toHaveProperty('g')
   })
 
-  // Per the no-migration rule a v6 envelope is REJECTED, never converted — so the
-  // marker must actually be 7, not just "whatever the constant says".
-  it('stamps wire version 7 (<Internal> flags + IVA seats)', () => {
-    expect(PROJECT_EXPORT_VERSION).toBe(7)
-    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P')).v).toBe(7)
+  // Per the no-migration rule a v7 envelope is REJECTED, never converted — so the
+  // marker must actually be 8, not just "whatever the constant says".
+  it('stamps wire version 8 (lights as first-class part entities)', () => {
+    expect(PROJECT_EXPORT_VERSION).toBe(8)
+    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P')).v).toBe(8)
   })
 
   it('round-trips internalFlags and omits them when empty', () => {
@@ -485,11 +495,12 @@ describe('projectCodec round-trip', () => {
   })
 
   // No migration, ever: a payload stamped with the previous version is rejected outright
-  // rather than half-decoded (v4 has no `imp`/`mid` keys and predates them by design).
+  // rather than half-decoded (v7 carried lights inside `sg[].li` with a nested transform,
+  // which would decode silently wrong).
   it('rejects an older payload instead of converting it', () => {
     const current = encodeProject(buildProjectExport(createEmptyPart(), 'P'))
     expect(parseProjectObject(current).ok).toBe(true)
-    for (const v of [4, 6]) {
+    for (const v of [4, 6, 7]) {
       const older = parseProjectObject({ ...current, v })
       expect(older.ok).toBe(false)
       expect(older.ok === false && older.error).toContain('Unsupported project version')
@@ -589,5 +600,74 @@ describe('IVA seat codec', () => {
     const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.ivaSeats
     expect(back.map((s) => s.id)).toEqual(['_seat3', '_seat1', '_seat2'])
     expect(back.map((s) => s.position.x)).toEqual([0, 1, 2])
+  })
+})
+
+describe('light codec', () => {
+  it('round-trips both owners and types, restoring the constant layerId and pinned scale', () => {
+    const p = createEmptyPart()
+    p.lights.push(
+      {
+        id: '_light1',
+        type: 'Spot',
+        ownerTemplateId: 'CoreElectricalA_Subpart_SpotlightA',
+        position: { x: 0.38, y: 0.21, z: 0 },
+        rotation: { x: 0, y: 0, z: 1.5708 },
+        scale: { x: 1, y: 1, z: 1 },
+        rangeM: 5,
+        intensity: 10,
+        color: { r: 1, g: 1, b: 1 },
+        innerAngleRad: 0.392599,
+        outerAngleRad: 0.785398,
+        rayTracing: false,
+        layerId: LIGHT_LAYER_ID,
+      },
+      {
+        id: '_light2',
+        type: 'Point',
+        ownerTemplateId: null,
+        ...identityTransform(),
+        rangeM: 1.5,
+        intensity: 0.05,
+        color: { r: 1, g: 0.9, b: 0.7 },
+        innerAngleRad: 0,
+        outerAngleRad: 0,
+        rayTracing: true,
+        layerId: LIGHT_LAYER_ID,
+      },
+    )
+    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.lights
+    expect(back).toEqual(p.lights)
+    expect(back.every((l) => l.layerId === LIGHT_LAYER_ID)).toBe(true)
+    // `scale` is unused, never serialized, and always decodes back to (1,1,1).
+    expect(back.every((l) => l.scale.x === 1 && l.scale.y === 1 && l.scale.z === 1)).toBe(true)
+  })
+
+  it('drops defaults from the wire form (layerId, null owner, identity transform, Spot, no RT)', () => {
+    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P'))).not.toHaveProperty('li')
+    const p = createEmptyPart()
+    p.lights.push({
+      id: '_light1',
+      type: 'Spot',
+      ownerTemplateId: null,
+      ...identityTransform(),
+      rangeM: 5,
+      intensity: 10,
+      color: { r: 1, g: 1, b: 1 },
+      innerAngleRad: 0.392699,
+      outerAngleRad: 0.785398,
+      rayTracing: false,
+      layerId: LIGHT_LAYER_ID,
+    })
+    const c = encodeProject(buildProjectExport(p, 'P'))
+    // Identity transform + null owner + Spot + no ray tracing ⇒ scalar fields only.
+    expect(c.li?.[0]).toEqual({
+      i: '_light1',
+      rg: 5,
+      in: 10,
+      co: [1, 1, 1],
+      ia: 0.392699,
+      oa: 0.785398,
+    })
   })
 })

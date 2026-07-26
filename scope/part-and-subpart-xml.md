@@ -100,9 +100,12 @@ Two structural notes for future reviews:
 
 - **The allow-list grew**: `KNOWN_PART_GAMEDATA_CHILDREN` gained `Tank`,
   `ConsumerFeedWiring`, `SolidMotor`, `SolidMotorNozzle`, `SolidGrainSegment`;
-  `KNOWN_SUBPART_GAMEDATA_CHILDREN` gained the three solid ones. Anything that moves INTO
-  the allow-list stops appearing in `unknownChildren` — which is the point, but it also
-  means it stops being protected by the passthrough, so its schema must now be tracked.
+  `KNOWN_SUBPART_GAMEDATA_CHILDREN` gained the three solid ones. (Post-5018, the light
+  management feature also added `Light` to `KNOWN_PART_GAMEDATA_CHILDREN` — part-level
+  `<Light>`s are now modeled, see [gamedata-modules.md](gamedata-modules.md).) Anything
+  that moves INTO the allow-list stops appearing in `unknownChildren` — which is the
+  point, but it also means it stops being protected by the passthrough, so its schema
+  must now be tracked.
 - **`Components` entries all carry an `Id`** (`ModuleBase.TemplateDataBase.Id`), and as of
   5018 that id is load-bearing for feed resolution. Full element list in
   [gamedata-modules.md](gamedata-modules.md#what-changed-in-5018).

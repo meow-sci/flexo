@@ -18,6 +18,7 @@ import {
   placementsFromPartElement,
   subPartCollidersFromRoot,
   subPartGameDataFromDoc,
+  subPartLightsFromRoot,
 } from './partXmlParser'
 import type {
   Battery,
@@ -35,6 +36,7 @@ import type {
   Gimbal,
   IvaSeat,
   PartCollider,
+  PartLight,
   PowerConsumer,
   RawXmlNode,
   Rocket,
@@ -71,6 +73,13 @@ export interface CatalogPart {
    * SubPart-level seats are deliberately not gathered (plans/IVA_PLAN.md §6).
    */
   ivaSeats: IvaSeat[]
+  /**
+   * The Part's cast lights, gathered from both GameData authoring sites: the
+   * `<PartGameData><Light>`s (`ownerTemplateId: null`) and every
+   * `<SubPartGameData><Light>` for a template this Part places (owner = that template
+   * id), with `_lightN` re-numbered over the merged list.
+   */
+  lights: PartLight[]
   /** KeyframeAnimationModules (from GameData), decoded + imported alongside the Part. */
   animationModules: CatalogAnimationModule[]
   /** Connector-bound coupling game-data (from GameData); connectorIds are in the Part's original id space. */
@@ -139,6 +148,9 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
       // additive Components merge), so it joins the same list and is re-emitted into the
       // GameData document on export.
       ivaSeats: ivaSeatsFromElement(part),
+      // Lights come exclusively from the GameData docs (mergeGameData) — Core authors no
+      // geometry-level <Light>.
+      lights: [],
       animationModules: [],
       decoupler: null,
       dockingPort: null,
@@ -188,6 +200,8 @@ export interface PartGameData {
   colliders: PartCollider[]
   /** `<PartGameData><IVASeat>` camera vantage points, in document (= cycle) order. */
   ivaSeats: IvaSeat[]
+  /** `<PartGameData><Light>`s (part-level, `ownerTemplateId: null`). */
+  lights: PartLight[]
   /** Connector-bound coupling game-data, so built-in part imports carry them in. */
   decoupler: Decoupler | null
   dockingPort: DockingPort | null
@@ -229,6 +243,8 @@ interface ParsedGameDataFile {
   subParts: Map<string, SubPartGameData>
   /** `<SubPartGameData><Collider>` shapes, keyed by the owning SubPart template id. */
   subPartColliders: Map<string, PartCollider[]>
+  /** `<SubPartGameData><Light>`s, keyed by the owning SubPart template id. */
+  subPartLights: Map<string, PartLight[]>
 }
 
 /** GameData sibling of each catalog asset file (e.g. CoreElectricalAAssets.xml -> CoreElectricalAGameData.xml). Not every asset file has one. */
@@ -252,6 +268,7 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
       animationModules: [],
       colliders: [],
       ivaSeats: [],
+      lights: [],
       decoupler: null,
       dockingPort: null,
       evaDoor: null,
@@ -286,6 +303,8 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
     entry.animationModules.push(...parsed.animationModules)
     entry.colliders.push(...parsed.colliders)
     entry.ivaSeats.push(...parsed.ivaSeats)
+    // Duplicate-Id <PartGameData> entries merge additively in KSA — lights accumulate.
+    entry.lights.push(...parsed.lights)
     entry.decoupler ??= parsed.gameData.decoupler
     entry.dockingPort ??= parsed.gameData.dockingPort
     entry.evaDoor ??= parsed.gameData.evaDoor
@@ -326,6 +345,11 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
     if (list) list.push(c)
     else out.subPartColliders.set(c.ownerTemplateId!, [c])
   }
+  for (const l of subPartLightsFromRoot(doc.documentElement as Element)) {
+    const list = out.subPartLights.get(l.ownerTemplateId!)
+    if (list) list.push(l)
+    else out.subPartLights.set(l.ownerTemplateId!, [l])
+  }
 }
 
 async function loadGameData(): Promise<ParsedGameDataFile> {
@@ -333,6 +357,7 @@ async function loadGameData(): Promise<ParsedGameDataFile> {
     parts: new Map(),
     subParts: new Map(),
     subPartColliders: new Map(),
+    subPartLights: new Map(),
   }
   await Promise.all(
     GAMEDATA_FILES.map(async (file) => {
@@ -401,6 +426,8 @@ export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile
       part.ivaSeats.forEach((seat, i) => {
         seat.id = `_seat${i + 1}`
       })
+      // Part-level <Light>s (Core: CoreCommandA headlights, CoreIVASpaceA interior light).
+      part.lights.push(...gd.lights)
     }
     // SubPart-template data is keyed globally by template id; carry only the entries
     // for templates this Part places (deduped — many instances share one template).
@@ -415,6 +442,17 @@ export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile
     for (const tid of templateIds) {
       part.colliders.push(...(gameData.subPartColliders.get(tid) ?? []))
     }
+    // Same scoping for SubPart-owned lights (Core: CoreElectricalA spotlights), then
+    // re-number `_lightN` across the merged list (part-level first) — the ids are
+    // editor-only and never emitted, so renumbering is free. CLONED, unlike colliders:
+    // the per-template lists are shared by every Part placing the template, and the
+    // renumber below writes ids.
+    for (const tid of templateIds) {
+      part.lights.push(...structuredClone(gameData.subPartLights.get(tid) ?? []))
+    }
+    part.lights.forEach((light, i) => {
+      light.id = `_light${i + 1}`
+    })
   }
 }
 

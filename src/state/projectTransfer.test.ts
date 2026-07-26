@@ -5,8 +5,10 @@ import {
   DEFAULT_LAYER_ID,
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
+  LIGHT_LAYER_ID,
   createEmptyPart,
   createCombustor,
+  createPartLight,
   createSolidMotor,
   createSubPartGameData,
   createTank,
@@ -306,6 +308,7 @@ describe('mergeProjectImport into an empty project', () => {
       connectors: 1,
       colliders: 0,
       ivaSeats: 0,
+      lights: 0,
       kittens: 1,
       newLayers: 3,
       animations: 1,
@@ -673,6 +676,51 @@ describe('IVA seat transfer', () => {
     expect(part.ivaSeats[2].position).toEqual({ x: 0.75, y: 0.75, z: 0.75 })
     expect(part.ivaSeats.every((s) => s.layerId === IVA_SEAT_LAYER_ID)).toBe(true)
     expect(summary.ivaSeats).toBe(2)
+  })
+})
+
+describe('light transfer', () => {
+  it('carries lights through buildProjectExport and envelopeToPart verbatim', () => {
+    const src = createEmptyPart()
+    src.lights.push(
+      { ...createPartLight(null, '_light1'), position: { x: 0.5, y: 0, z: 0 } },
+      { ...createPartLight('Core.Wing', '_light2'), type: 'Point', rangeM: 2 },
+    )
+    const env = buildProjectExport(src, 'S')
+    expect(env.data.lights.map((l) => l.id)).toEqual(['_light1', '_light2'])
+    const part = envelopeToPart(env)
+    // No id remapping on this path — the payload's ids are already consistent.
+    expect(part.lights).toEqual(src.lights)
+    expect(part.layers.map((l) => l.id)).toContain(LIGHT_LAYER_ID)
+  })
+
+  it('restores the Lights layer when a payload omits it', () => {
+    const env = buildProjectExport(createEmptyPart(), 'S')
+    env.data.layers = env.data.layers.filter((l) => l.id !== LIGHT_LAYER_ID)
+    expect(envelopeToPart(env).layers.map((l) => l.id)).toContain(LIGHT_LAYER_ID)
+  })
+
+  it('appends pasted lights with fresh _lightN ids on the built-in Lights layer', () => {
+    const src = createEmptyPart()
+    src.lights.push({
+      ...createPartLight('CoreElectricalA_Subpart_SpotlightA', '_light1'),
+      position: { x: 0.38, y: 0.21, z: 0 },
+      color: { r: 1, g: 0.5, b: 0.25 },
+      rayTracing: true,
+    })
+    const dest = createEmptyPart()
+    dest.lights.push(createPartLight(null, '_light1'))
+
+    const { part, summary } = mergeProjectImport(dest, buildProjectExport(src, 'S'))
+    expect(part.lights.map((l) => l.id)).toEqual(['_light1', '_light2'])
+    // A built-in SubPart owner is carried untouched (import never renames templates)…
+    expect(part.lights[1].ownerTemplateId).toBe('CoreElectricalA_Subpart_SpotlightA')
+    // …with every field intact and the forced built-in layer.
+    expect(part.lights[1].position).toEqual({ x: 0.38, y: 0.21, z: 0 })
+    expect(part.lights[1].color).toEqual({ r: 1, g: 0.5, b: 0.25 })
+    expect(part.lights[1].rayTracing).toBe(true)
+    expect(part.lights.every((l) => l.layerId === LIGHT_LAYER_ID)).toBe(true)
+    expect(summary.lights).toBe(1)
   })
 })
 

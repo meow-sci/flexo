@@ -11,6 +11,7 @@ import type {
   PartAnimation,
   PartCollider,
   PartGameData,
+  PartLight,
   Rocket,
   SubPartGameData,
   SubPartIdRef,
@@ -24,11 +25,13 @@ import {
   DEFAULT_PART_ID,
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
+  LIGHT_LAYER_ID,
   createColliderLayer,
   createConnectorLayer,
   createDefaultLayer,
   createIvaSeatLayer,
   createKittenLayer,
+  createLightLayer,
   createSubPartGameData,
   meshKind,
 } from '../ksa/types'
@@ -80,6 +83,8 @@ export interface ProjectExportData {
    * them in this order, so the wire form preserves the document order exactly.
    */
   ivaSeats: IvaSeat[]
+  /** The Part's cast lights (owner-grouped only on XML export). */
+  lights: PartLight[]
   /** Per-SubPart-template `<Internal>` (interior-only) overrides, keyed by template id. */
   internalFlags: Record<string, boolean>
   kittens: KittenInstance[]
@@ -116,6 +121,7 @@ export interface ImportSummary {
   connectors: number
   colliders: number
   ivaSeats: number
+  lights: number
   kittens: number
   newLayers: number
   animations: number
@@ -176,6 +182,7 @@ export function buildProjectExport(part: EditingPart, projectName: string): Proj
       connectors: part.connectors,
       colliders: part.colliders,
       ivaSeats: part.ivaSeats,
+      lights: part.lights,
       internalFlags: part.internalFlags,
       kittens: part.kittens,
       animations: part.animations,
@@ -247,6 +254,7 @@ export function envelopeToPart(env: ProjectExportEnvelope): EditingPart {
     connectors: d.connectors,
     colliders: d.colliders,
     ivaSeats: d.ivaSeats,
+    lights: d.lights,
     internalFlags: { ...d.internalFlags },
     kittens: d.kittens,
     customTextures: [],
@@ -259,13 +267,14 @@ export function envelopeToPart(env: ProjectExportEnvelope): EditingPart {
   return part
 }
 
-/** Guarantees the five undeletable built-in layers exist (in case a payload omitted any). */
+/** Guarantees the six undeletable built-in layers exist (in case a payload omitted any). */
 function ensureBuiltInLayers(part: EditingPart): void {
   const has = (id: string) => part.layers.some((l) => l.id === id)
   if (!has(DEFAULT_LAYER_ID)) part.layers.unshift(createDefaultLayer())
   if (!has(CONNECTOR_LAYER_ID)) part.layers.push(createConnectorLayer())
   if (!has(COLLIDER_LAYER_ID)) part.layers.push(createColliderLayer())
   if (!has(IVA_SEAT_LAYER_ID)) part.layers.push(createIvaSeatLayer())
+  if (!has(LIGHT_LAYER_ID)) part.layers.push(createLightLayer())
   if (!has(KITTEN_LAYER_ID)) part.layers.push(createKittenLayer())
 }
 
@@ -402,6 +411,31 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
     })
   }
 
+  // Lights — always on the built-in Lights layer, fresh _lightN ids. Nothing references
+  // a light by id (it is editor-only and never emitted to XML), so there is no ref map to
+  // thread through. `ownerTemplateId` IS a reference though: it names a SubPart TEMPLATE,
+  // and an imported kitten mesh gets a fresh template id, so route it through the same map
+  // the placements (and colliders) use.
+  for (const src of data.lights ?? []) {
+    part.lights.push({
+      id: nextLightId(part),
+      type: src.type === 'Point' ? 'Point' : 'Spot',
+      ownerTemplateId: src.ownerTemplateId ? mapTemplateId(src.ownerTemplateId) : null,
+      rangeM: src.rangeM,
+      intensity: src.intensity,
+      color: { r: src.color?.r ?? 1, g: src.color?.g ?? 1, b: src.color?.b ?? 1 },
+      innerAngleRad: src.innerAngleRad,
+      outerAngleRad: src.outerAngleRad,
+      rayTracing: !!src.rayTracing,
+      position: vec(src.position, 0),
+      rotation: vec(src.rotation, 0),
+      // Pinned, not copied: KSA ignores light scale and the model invariant is "always
+      // (1,1,1)" — a hand-edited payload must not be able to smuggle one in.
+      scale: { x: 1, y: 1, z: 1 },
+      layerId: LIGHT_LAYER_ID,
+    })
+  }
+
   // IVA seats — always on the built-in IVA Seats layer, fresh _seatN ids. Nothing
   // references a seat by id (the id is editor-only and never emitted to XML), so there is
   // no ref map to thread through. Order matters, though: the incoming seats keep their
@@ -442,7 +476,6 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
     const templateId = mapTemplateId(sg.subPartTemplateId)
     const tanks = (sg.tanks ?? []).map((t) => ({ ...t }))
     const solarPanels = (sg.solarPanels ?? []).map((sp) => structuredClone(sp))
-    const lights = (sg.lights ?? []).map((l) => structuredClone(l))
     // A consumer's feed points name connectors/placements in the SOURCE id space.
     const combustors = (sg.combustors ?? []).map((c) =>
       remapConsumerFeeds(structuredClone(c), connectorIdMap, instanceIdMap),
@@ -458,7 +491,6 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
     if (existing) {
       existing.tanks.push(...tanks)
       existing.solarPanels.push(...solarPanels)
-      existing.lights.push(...lights)
       existing.combustors.push(...combustors)
       existing.nozzles.push(...nozzles)
       existing.rockets.push(...rockets)
@@ -469,7 +501,6 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
       const entry = createSubPartGameData(templateId)
       entry.tanks = tanks
       entry.solarPanels = solarPanels
-      entry.lights = lights
       entry.combustors = combustors
       entry.nozzles = nozzles
       entry.rockets = rockets
@@ -527,6 +558,7 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
       connectors: data.connectors.length,
       colliders: data.colliders?.length ?? 0,
       ivaSeats: data.ivaSeats.length,
+      lights: data.lights?.length ?? 0,
       kittens: data.kittens.length,
       newLayers: newLayerIds.length,
       animations: data.animations.length,
@@ -683,6 +715,15 @@ function nextIvaSeatId(part: EditingPart): string {
     if (m) max = Math.max(max, Number.parseInt(m[1], 10))
   }
   return `_seat${max + 1}`
+}
+
+function nextLightId(part: EditingPart): string {
+  let max = 0
+  for (const l of part.lights) {
+    const m = /^_light(\d+)$/.exec(l.id)
+    if (m) max = Math.max(max, Number.parseInt(m[1], 10))
+  }
+  return `_light${max + 1}`
 }
 
 function nextKittenId(part: EditingPart): string {

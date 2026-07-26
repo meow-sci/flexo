@@ -101,6 +101,7 @@ export async function importBuiltInPart(
       consumerFeedWiring: part.consumerFeedWiring,
       colliders: part.colliders,
       ivaSeats: part.ivaSeats,
+      lights: part.lights,
     }),
   )
 }

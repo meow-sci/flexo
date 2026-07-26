@@ -8,6 +8,7 @@ import {
   DEFAULT_LAYER_ID,
   isSubPartGameDataEmpty,
   IVA_SEAT_LAYER_ID,
+  LIGHT_LAYER_ID,
 } from './types'
 import { SEAT_LOCAL_FORWARD, SEAT_LOCAL_UP, seatRotationFromAxes } from './ivaSeatAxes'
 import {
@@ -29,10 +30,10 @@ import type {
   FeedSource,
   Gimbal,
   IvaSeat,
-  Light,
   LightType,
   PartCollider,
   PartGameData,
+  PartLight,
   PlumbingClass,
   RawXmlNode,
   ReactionCategory,
@@ -336,6 +337,13 @@ export interface ParsedGameData {
    * riding the GameData passthrough (plans/IVA_PLAN.md §6).
    */
   ivaSeats: IvaSeat[]
+  /**
+   * Cast lights read from this document. `<PartGameData><Light>`s carry
+   * `ownerTemplateId: null`; `<SubPartGameData Id><Light>`s carry that template id
+   * (filled in by {@link gameDataFromAssets}, which sees the whole root and renumbers
+   * `_lightN` ids over the merged list in document order — part-level first).
+   */
+  lights: PartLight[]
   /** Parsed <KeyframeAnimationModule>s (refs in ORIGINAL instance-id space). */
   animationModules: CatalogAnimationModule[]
   /** Top-level <FixedReaction> custom propellants (siblings of <PartGameData>). */
@@ -502,17 +510,26 @@ function readRoleAffinity(el: Element | undefined): TankRoleAffinity {
 }
 
 /**
- * Parses one `<Light>` element into a {@link Light}. Missing children/attributes fall
- * back to KSA's `LightModule.TemplateData` defaults (Range/Intensity 1, white color,
- * InnerAngle π/8, OuterAngle π/4, RayTracing false). The inverse of `buildLightElement`.
+ * Parses one `<Light>` element into the flat {@link PartLight} field set. Missing
+ * children/attributes fall back to KSA's `LightModule.TemplateData` defaults
+ * (Range/Intensity 1, white color, InnerAngle π/8, OuterAngle π/4, RayTracing false).
+ * NOTE: the schema default COLOR is actually Gray (0.5,0.5,0.5) — flexo's white
+ * default is kept deliberately; see scope/gamedata-modules.md. `<Transform><Scale>`
+ * is parsed by KSA but ignored for lights, so it is pinned to (1,1,1) here and never
+ * emitted. Identity (`id`/`ownerTemplateId`/`layerId`) is assigned by the caller
+ * ({@link lightsFromElement}). The inverse of `buildLightElement`.
  */
-function lightFromElement(el: Element): Light {
+function lightFromElement(el: Element): Omit<PartLight, 'id' | 'ownerTemplateId' | 'layerId'> {
   const type: LightType =
     directChildren(el, 'Type')[0]?.textContent?.trim() === 'Point' ? 'Point' : 'Spot'
   const colorEl = directChildren(el, 'Color')[0]
+  const transform = readTransform(el)
   return {
     type,
-    transform: readTransform(el),
+    position: transform.position,
+    rotation: transform.rotation,
+    // KSA ignores light scale (LightModule reads only Position/Rotation) — pinned.
+    scale: { x: 1, y: 1, z: 1 },
     rangeM: readNum(directChildren(el, 'Range')[0], 'Value') ?? 1,
     intensity: readNum(directChildren(el, 'Intensity')[0], 'Value') ?? 1,
     color: {
@@ -524,6 +541,46 @@ function lightFromElement(el: Element): Light {
     outerAngleRad: readNum(directChildren(el, 'OuterAngle')[0], 'Value') ?? Math.PI / 4,
     rayTracing: directChildren(el, 'RayTracing')[0]?.textContent?.trim().toLowerCase() === 'true',
   }
+}
+
+/**
+ * Reads the `<Light>`s of an owner element (`<PartGameData>` or `<SubPartGameData>`)
+ * into {@link PartLight}s, preserving DOCUMENT ORDER (KSA accumulates lights
+ * additively; nothing orders them semantically, but stable order keeps round-trips
+ * byte-identical).
+ *
+ * The light ids are REGENERATED here (`_light1`, `_light2`, … — renumbered again by the
+ * outer callers over the merged part-level + SubPart-owned list) and are never emitted:
+ * an authored `<Light Id>` attribute is DROPPED — no shipped light authors one and
+ * nothing in KSA addresses a light by id (see scope/gamedata-modules.md).
+ *
+ * `ownerTemplateId` is the frame the light is expressed in: `null` for a Part-level
+ * owner, else the SubPart template id.
+ */
+export function lightsFromElement(owner: Element, ownerTemplateId: string | null): PartLight[] {
+  return directChildren(owner, 'Light').map((el, i) => ({
+    ...lightFromElement(el),
+    id: `_light${i + 1}`,
+    ownerTemplateId,
+    layerId: LIGHT_LAYER_ID,
+  }))
+}
+
+/**
+ * Reads the `<Light>`s of every top-level `<SubPartGameData Id>` in a GameData document
+ * root, each tagged with its owning SubPart template id. Duplicate-Id blocks APPEND in
+ * document order (KSA's `PartTemplate.ApplyGameData` accumulates list modules). Kept
+ * separate from {@link parseGameDataElement} (which sees only one `<PartGameData>`)
+ * because `<SubPartGameData>` is its SIBLING, not its child.
+ */
+export function subPartLightsFromRoot(root: Element): PartLight[] {
+  const out: PartLight[] = []
+  for (const spEl of directChildren(root, 'SubPartGameData')) {
+    const templateId = spEl.getAttribute('Id')
+    if (!templateId) continue
+    out.push(...lightsFromElement(spEl, templateId))
+  }
+  return out
 }
 
 /**
@@ -657,6 +714,9 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
     colliders: collidersFromElement(gd, null),
     // Part-level IVA seats, in document (= cycle) order.
     ivaSeats: ivaSeatsFromElement(gd),
+    // Part-level cast lights, in the Part's own assembly frame (Core: CoreCommandA
+    // headlights, CoreIVASpaceA interior light).
+    lights: lightsFromElement(gd, null),
     animationModules: animationModulesFromGameData(gd),
     customReactions: [],
   }
@@ -739,7 +799,10 @@ export function subPartGameDataFromDoc(doc: Document): SubPartGameData[] {
  * (tanks/solar panels/lights/engine modules) accumulate, so a naive last-wins would
  * silently drop the earlier entry's modules. (Core exercised this until 2026.7.5 by
  * declaring fuel-tank SubParts twice in PartGameData.xml; 2026.7.6 moved its tank data
- * to Part-level GameData, but the game's merge semantics are unchanged.)
+ * to Part-level GameData, but the game's merge semantics are unchanged.) `<Light>`s and
+ * `<Collider>`s are NOT part of the entry — they are first-class part entities gathered
+ * by {@link subPartLightsFromRoot} / {@link subPartCollidersFromRoot}, where duplicate-Id
+ * blocks append the same way.
  */
 function subPartGameDataFromRoot(root: Element): SubPartGameData[] {
   const byId = new Map<string, SubPartGameData>()
@@ -749,7 +812,8 @@ function subPartGameDataFromRoot(root: Element): SubPartGameData[] {
     const spd = createSubPartGameData(subPartTemplateId)
     spd.tanks = tanksFromElement(spEl)
     spd.solarPanels = directChildren(spEl, 'SolarPanel').map(parseSolarPanel)
-    spd.lights = directChildren(spEl, 'Light').map(lightFromElement)
+    // <Light> is NOT read here — lights are first-class part entities gathered by
+    // subPartLightsFromRoot (each tagged with this template id as its owner).
     // Reusable thrust-chamber modules (rocket/combustor/nozzle) that travel with the mesh.
     parseEngineModules(spEl, spd)
     // Preserve unmodeled attrs (e.g. Core's `DisplayName`) + child elements verbatim.
@@ -771,7 +835,6 @@ function subPartGameDataFromRoot(root: Element): SubPartGameData[] {
 function mergeSubPartGameDataInto(base: SubPartGameData, add: SubPartGameData): void {
   base.tanks.push(...add.tanks)
   base.solarPanels.push(...add.solarPanels)
-  base.lights.push(...add.lights)
   base.combustors.push(...add.combustors)
   base.nozzles.push(...add.nozzles)
   base.rockets.push(...add.rockets)
@@ -805,6 +868,12 @@ export function gameDataFromAssets(
   parsed.subPartGameData = subPartGameDataFromRoot(root)
   // SubPart-owned colliders are siblings of <PartGameData>, so they join the flat list here.
   parsed.colliders = [...parsed.colliders, ...subPartCollidersFromRoot(root)]
+  // Same for SubPart-owned lights; `_lightN` ids are renumbered over the merged list in
+  // document order (part-level first, then SubPartGameData blocks).
+  parsed.lights = [...parsed.lights, ...subPartLightsFromRoot(root)]
+  parsed.lights.forEach((l, i) => {
+    l.id = `_light${i + 1}`
+  })
   parsed.customReactions = customReactionsFromRoot(root)
   return parsed
 }
@@ -861,6 +930,7 @@ const KNOWN_PART_GAMEDATA_CHILDREN: ReadonlySet<string> = new Set([
   'SubPart',
   'Collider',
   'IVASeat',
+  'Light',
 ])
 /**
  * `<SubPartGameData>` child tags flexo models. Everything else is passthrough.

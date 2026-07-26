@@ -110,6 +110,12 @@ export interface ReferenceSubPartPlan {
    * dropping it silently turns a `ShadowProxy` occluder into a VISIBLE mesh.
    */
   rayTracing: string | null
+  /**
+   * The built-in's `<ShadowCaster>` bool, copied forward; null when the built-in authors none
+   * (KSA's default is `true`). Same inheritance rule as {@link rayTracing} — dropping Core's
+   * explicit `false` (the medium-capsule windows) makes the variant start casting shadows.
+   */
+  shadowCaster: boolean | null
 }
 
 export interface AssetsPlan {
@@ -209,10 +215,13 @@ export function serializeAssets(plan: AssetsPlan): string {
   // <PartModel> property below (the built-in's own <Internal>, its <RayTracing>) would come
   // back with it, silently undoing the redeclaration. Unchanged and still load-bearing.
   //
-  // A variant inherits NOTHING but the Mesh/Material it names, so <Internal>/<RayTracing> are
-  // authored here explicitly and travel in BOTH directions: dropping <Internal> makes a built-in
-  // interior prop render outside IVA, keeping it makes a GameData-carrying variant stay interior.
-  // Element order mirrors Core (Internal, Mesh, Material, RayTracing).
+  // A variant inherits NOTHING but the Mesh/Material it names, so <Internal>/<RayTracing>/
+  // <ShadowCaster> are authored here explicitly and travel in BOTH directions: dropping
+  // <Internal> makes a built-in interior prop render outside IVA, keeping it makes a
+  // GameData-carrying variant stay interior.
+  // Element order mirrors Core (Internal, Mesh, Material, RayTracing, ShadowCaster) — Core
+  // authors Internal/Mesh/Material/RayTracing in CoreIVASpaceAAssets.xml and
+  // Mesh/Material/ShadowCaster in CoreCommandAAssets.xml, and this order satisfies both.
   for (const sp of plan.referenceSubParts ?? []) {
     const sub = doc.createElement('SubPart')
     sub.setAttribute('Id', sp.subPartId)
@@ -231,6 +240,11 @@ export function serializeAssets(plan: AssetsPlan): string {
       const rt = doc.createElement('RayTracing')
       rt.appendChild(doc.createTextNode(sp.rayTracing))
       model.appendChild(rt)
+    }
+    if (sp.shadowCaster !== null) {
+      const sc = doc.createElement('ShadowCaster')
+      sc.appendChild(doc.createTextNode(sp.shadowCaster ? 'true' : 'false'))
+      model.appendChild(sc)
     }
     sub.appendChild(model)
     // View mesh — without a MeshViewModule (built from <MeshView>) KSA's editor won't

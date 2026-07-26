@@ -179,6 +179,15 @@ export interface ExportVariant {
    * would turn e.g. a `ShadowProxy` occluder into a visible mesh.
    */
   rayTracing: string | null
+  /**
+   * The built-in template's `<ShadowCaster>` bool, carried forward (null = none authored, which
+   * is KSA's `true` default). Same inheritance rule as {@link rayTracing}: dropping a built-in's
+   * explicit `false` (Core's medium-capsule windows) would make the variant start casting
+   * shadows. NOT part of the variant-minting gate — flexo never lets the user edit it, so it can
+   * never on its own be a REASON to redeclare a template, only a value carried along when a
+   * variant already exists.
+   */
+  shadowCaster: boolean | null
 }
 
 /**
@@ -217,7 +226,7 @@ function hasSubPartGameData(part: EditingPart, templateId: string): boolean {
  *     every other use of that SubPart. The variant moves the GameData onto a fresh id instead.
  *
  * A template flexo changes NOTHING about gets no variant: the placement references the built-in id
- * and keeps the built-in's own `<Internal>`/`<RayTracing>` for free.
+ * and keeps the built-in's own `<Internal>`/`<RayTracing>`/`<ShadowCaster>` for free.
  *
  * Custom-mesh SubParts (absent from the catalog) are skipped — flexo already declares those with
  * their own ids, so their GameData never collides. Variant ids are namespaced by the project
@@ -253,6 +262,7 @@ export function buildExportVariantMap(
       colliders: entry.colliders ?? [],
       internal: wantInternal,
       rayTracing: entry.rayTracing ?? null,
+      shadowCaster: entry.shadowCaster ?? null,
     })
   }
   return out
@@ -696,6 +706,7 @@ export async function buildCustomBundle(
     colliders: v.colliders,
     internal: v.internal,
     rayTracing: v.rayTracing,
+    shadowCaster: v.shadowCaster,
   }))
 
   // Nothing to declare → no Assets XML, but still ship any animation glbs above.

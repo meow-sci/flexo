@@ -71,6 +71,17 @@ describe('catalog parsing (real Core XML)', () => {
     const blocker = space.find((s) => s.id === 'CoreIVASpaceA_Subpart_MediumCapsuleARayBlocker')!
     expect(blocker.rayTracing).toBe('ShadowProxy')
   })
+
+  it.runIf(hasKsaAssets)('captures an explicit <ShadowCaster>false</ShadowCaster>', () => {
+    // Core's only two authored ShadowCasters — the medium-capsule windows, both `false`.
+    const command = parseFile('CoreCommandAAssets.xml')
+    const window = command.find((s) => s.id === 'CoreCommandA_Subpart_MediumCapsuleWindowA')!
+    expect(window).toBeDefined()
+    expect(window.shadowCaster).toBe(false)
+    // Every other template authors none, so it must stay undefined (not `false`).
+    const door = command.find((s) => s.id === 'CoreCommandA_Subpart_MediumCapsuleServiceDoor')!
+    expect(door.shadowCaster).toBeUndefined()
+  })
 })
 
 // Inline XML so the <RayTracing> capture is covered without the private asset tree.
@@ -110,6 +121,56 @@ describe('<PartModel><RayTracing> capture', () => {
     expect(
       parseInline(xml).find((s) => s.id === 'Inline_Subpart_Plain')!.rayTracing,
     ).toBeUndefined()
+  })
+})
+
+// Inline XML so the <ShadowCaster> capture is covered without the private asset tree.
+// Unlike <RayTracing> (an enum token kept verbatim) this is a bool, and "absent" must stay
+// distinguishable from "explicitly true" — KSA defaults it to true, so only `false` is
+// load-bearing and dropping it on an export variant makes the mesh start casting shadows.
+describe('<PartModel><ShadowCaster> capture', () => {
+  function parseInline(sourceXml: string): CatalogSubPart[] {
+    const out: CatalogSubPart[] = []
+    const doc = new DOMParser().parseFromString(sourceXml, 'application/xml')
+    parseAssetsFile(doc as unknown as Document, 'InlineAssets.xml', out)
+    return out
+  }
+
+  const xml = `<Assets>
+    <MeshAtlas Path="Meshes/Inline_MeshAtlas.glb" />
+    <SubPart Id="Inline_Subpart_Window">
+      <PartModel Id="Inline_Subpart_Window_Model">
+        <Mesh Id="Inline_Subpart_Window" />
+        <Material Id="Inline_Material" />
+        <ShadowCaster>false</ShadowCaster>
+      </PartModel>
+    </SubPart>
+    <SubPart Id="Inline_Subpart_Caster">
+      <PartModel Id="Inline_Subpart_Caster_Model">
+        <Mesh Id="Inline_Subpart_Caster" />
+        <ShadowCaster>true</ShadowCaster>
+      </PartModel>
+    </SubPart>
+    <SubPart Id="Inline_Subpart_Plain">
+      <PartModel Id="Inline_Subpart_Plain_Model">
+        <Mesh Id="Inline_Subpart_Plain" />
+      </PartModel>
+    </SubPart>
+  </Assets>`
+
+  const out = parseInline(xml)
+  const find = (id: string) => out.find((s) => s.id === id)!
+
+  it('captures `false` from <ShadowCaster>false</ShadowCaster>', () => {
+    expect(find('Inline_Subpart_Window').shadowCaster).toBe(false)
+  })
+
+  it('captures `true` from <ShadowCaster>true</ShadowCaster>', () => {
+    expect(find('Inline_Subpart_Caster').shadowCaster).toBe(true)
+  })
+
+  it('leaves `shadowCaster` undefined for a template that authors none', () => {
+    expect(find('Inline_Subpart_Plain').shadowCaster).toBeUndefined()
   })
 })
 

@@ -43,6 +43,15 @@ export interface CatalogSubPart {
    */
   rayTracing?: string
   /**
+   * The `<PartModel><ShadowCaster>` bool, when the built-in authors one at all (undefined =
+   * absent). KSA defaults it to `true`, so `false` is the meaningful case and it MUST stay
+   * distinguishable from "absent": Core authors `<ShadowCaster>false</ShadowCaster>` on the
+   * medium-capsule windows, and an export variant that dropped it would default back to
+   * `true` and make the window start casting shadows the built-in never cast. Never
+   * user-editable — flexo only copies it forward.
+   */
+  shadowCaster?: boolean
+  /**
    * Collision primitives authored on the geometry `<SubPart>` template itself (Core does
    * this for e.g. the solar-panel cells). flexo does NOT copy these into the document
    * when you merely PLACE the template — the placement references the built-in id and the
@@ -209,6 +218,11 @@ export function parseAssetsFile(doc: Document, sourceFile: string, out: CatalogS
       firstChildByTag(partModel, 'Internal')?.textContent?.trim().toLowerCase() === 'true'
     // Raw token, copied verbatim onto an export variant — see CatalogSubPart.rayTracing.
     const rayTracing = firstChildByTag(partModel, 'RayTracing')?.textContent?.trim() || undefined
+    // A bool (unlike <RayTracing>'s enum token) — see CatalogSubPart.shadowCaster. Absent stays
+    // undefined so "authors none" and "explicitly true" don't collapse into "false".
+    const shadowCasterText = firstChildByTag(partModel, 'ShadowCaster')?.textContent?.trim()
+    const shadowCaster =
+      shadowCasterText === undefined ? undefined : shadowCasterText.toLowerCase() === 'true'
 
     const colliders = collidersFromElement(sub, id)
 
@@ -223,6 +237,7 @@ export function parseAssetsFile(doc: Document, sourceFile: string, out: CatalogS
       emissiveUrl: mat?.emissive ? toUrl(mat.emissive) : undefined,
       internal: internal || undefined,
       rayTracing,
+      shadowCaster,
       colliders: colliders.length > 0 ? colliders : undefined,
       sourceFile,
     })

@@ -171,6 +171,7 @@ describe('serializeAssets', () => {
           materialId: 'CoreIVAPropA_Material',
           internal: false,
           rayTracing: null,
+          shadowCaster: null,
         },
         {
           subPartId: 'flexo_MyShip_CoreIVAPropA_Subpart_NoteA',
@@ -178,6 +179,7 @@ describe('serializeAssets', () => {
           materialId: null,
           internal: false,
           rayTracing: null,
+          shadowCaster: null,
         },
       ],
     })
@@ -215,6 +217,7 @@ describe('serializeAssets', () => {
           materialId: 'CoreIVASpaceA_Material',
           internal: true,
           rayTracing: 'ShadowProxy',
+          shadowCaster: null,
         },
       ],
     })
@@ -222,6 +225,47 @@ describe('serializeAssets', () => {
     expect(xml).toMatch(
       /<PartModel Id="flexo_MyShip_RayBlocker_Model">\s*<Internal>true<\/Internal>\s*<Mesh Id="CoreIVASpaceA_Subpart_MediumCapsuleARayBlocker"\s*\/>\s*<Material Id="CoreIVASpaceA_Material"\s*\/>\s*<RayTracing>ShadowProxy<\/RayTracing>/,
     )
+    expect(xml).not.toContain('ShadowCaster')
+  })
+
+  it('carries <ShadowCaster> forward onto a reference SubPart, in Core’s child order', () => {
+    const xml = serializeAssets({
+      subParts: [],
+      referenceSubParts: [
+        {
+          subPartId: 'flexo_MyShip_Window',
+          meshId: 'CoreCommandA_Subpart_MediumCapsuleWindowA',
+          materialId: 'CoreCommandA_Material',
+          internal: false,
+          rayTracing: null,
+          shadowCaster: false,
+        },
+      ],
+    })
+    // Core authors Mesh, Material, ShadowCaster (CoreCommandAAssets.xml) — matched here, and
+    // consistent with Internal, Mesh, Material, RayTracing (CoreIVASpaceAAssets.xml) above.
+    expect(xml).toMatch(
+      /<PartModel Id="flexo_MyShip_Window_Model">\s*<Mesh Id="CoreCommandA_Subpart_MediumCapsuleWindowA"\s*\/>\s*<Material Id="CoreCommandA_Material"\s*\/>\s*<ShadowCaster>false<\/ShadowCaster>/,
+    )
+  })
+
+  it('emits <ShadowCaster>true</ShadowCaster> when the built-in authors an explicit true', () => {
+    // "absent" and "explicitly true" are the same to KSA, but flexo copies what it read rather
+    // than second-guessing the built-in's authoring.
+    const xml = serializeAssets({
+      subParts: [],
+      referenceSubParts: [
+        {
+          subPartId: 'flexo_MyShip_Caster',
+          meshId: 'CoreStructuralA_Subpart_X',
+          materialId: null,
+          internal: false,
+          rayTracing: null,
+          shadowCaster: true,
+        },
+      ],
+    })
+    expect(xml).toContain('<ShadowCaster>true</ShadowCaster>')
   })
 
   it('emits <Internal>true</Internal> on a custom mesh’s own <PartModel>, never on the glass path', () => {

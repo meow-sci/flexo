@@ -449,6 +449,18 @@ function ivaCatalog(): Map<string, CatalogSubPart> {
       },
     ],
     [
+      // Core's capsule window: the only built-in kind that authors <ShadowCaster>false</>.
+      WINDOW,
+      {
+        id: WINDOW,
+        atlasUrl: '/ksa/Meshes/CoreCommandA_MeshAtlas.glb',
+        meshNodeName: WINDOW,
+        materialId: 'CoreCommandA_Material',
+        shadowCaster: false,
+        sourceFile: 'CoreCommandAAssets.xml',
+      },
+    ],
+    [
       'CoreStructuralA_Subpart_X',
       {
         id: 'CoreStructuralA_Subpart_X',
@@ -463,6 +475,7 @@ function ivaCatalog(): Map<string, CatalogSubPart> {
 
 const CHAIR = 'CoreIVAPropA_Subpart_ChairA'
 const RAY_BLOCKER = 'CoreIVASpaceA_Subpart_MediumCapsuleARayBlocker'
+const WINDOW = 'CoreCommandA_Subpart_MediumCapsuleWindowA'
 const CHAIR_VARIANT = `flexo_MyShip_${CHAIR}`
 
 function partWithIvaAndCore(): EditingPart {
@@ -596,6 +609,46 @@ describe('<Internal> (interior-only) export variants', () => {
     expect(variants.get(RAY_BLOCKER)!.rayTracing).toBe('ShadowProxy')
     const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants)
     expect(bundle.assetsXml).toContain('<RayTracing>ShadowProxy</RayTracing>')
+  })
+
+  it('carries a <ShadowCaster>false</ShadowCaster> forward onto the variant (a window keeps not casting)', async () => {
+    const part = createEmptyPart()
+    part.partId = 'MyShip'
+    part.placements.push({
+      instanceId: 'window_1',
+      subPartTemplateId: WINDOW,
+      ...identityTransform(),
+      layerId: 'default',
+    })
+    part.internalFlags[WINDOW] = true // any reason to redeclare will do
+    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip')
+    expect(variants.get(WINDOW)!.shadowCaster).toBe(false)
+    const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants)
+    // Dropping it would default the field back to KSA's `true` and start casting shadows.
+    expect(bundle.assetsXml).toContain('<ShadowCaster>false</ShadowCaster>')
+  })
+
+  it('emits no <ShadowCaster> for a variant whose built-in authors none', async () => {
+    const part = partWithIvaAndCore()
+    part.internalFlags[CHAIR] = false
+    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip')
+    expect(variants.get(CHAIR)!.shadowCaster).toBeNull()
+    const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants)
+    expect(bundle.assetsXml).not.toContain('ShadowCaster')
+  })
+
+  it('a <ShadowCaster> difference alone mints NO variant', () => {
+    // <ShadowCaster> is never user-editable, so it can't be a REASON to redeclare a template —
+    // placing the window untouched must leave it referencing the built-in id.
+    const part = createEmptyPart()
+    part.partId = 'MyShip'
+    part.placements.push({
+      instanceId: 'window_1',
+      subPartTemplateId: WINDOW,
+      ...identityTransform(),
+      layerId: 'default',
+    })
+    expect(buildExportVariantMap(part, ivaCatalog(), 'MyShip').size).toBe(0)
   })
 
   it('end-to-end: buildModZip threads the catalog into both Part and Assets XML', async () => {
@@ -1101,6 +1154,7 @@ describe('export variants carry the built-in template’s own colliders forward'
           colliders: [BUILT_IN_BOX],
           internal: false,
           rayTracing: null,
+          shadowCaster: null,
         },
       ],
     })

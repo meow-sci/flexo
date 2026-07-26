@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { DOMParser } from '@xmldom/xmldom'
 import type { Document as XmlDocument, Element as XmlElement } from '@xmldom/xmldom'
 import { serializeGameData, serializePart } from './partXmlSerializer'
-import type { Connector, EditingPart, SubPartPlacement } from './types'
+import { gameDataFromAssets } from './partXmlParser'
+import { seatAxesFromRotation } from './ivaSeatAxes'
+import type { Connector, EditingPart, IvaSeat, SubPartPlacement } from './types'
 import {
   createCombustor,
   createDefaultLayer,
@@ -14,6 +16,7 @@ import {
   createTank,
   DEFAULT_LAYER_ID,
   EULER_ZERO,
+  IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
   VEC3_ONE,
   VEC3_ZERO,
@@ -42,6 +45,7 @@ function editingPart(over: Partial<EditingPart>): EditingPart {
     placements: [],
     connectors: [],
     colliders: [],
+    ivaSeats: [],
     internalFlags: {},
     kittens: [],
     customTextures: [],
@@ -671,5 +675,113 @@ describe('serializeGameData', () => {
     }
     // The real part content is still emitted.
     expect(partXml).toContain('Core.A')
+  })
+})
+
+// `<IVASeat>` — the orientation is emitted as a (<ForwardAxis>, <UpAxis>) pair, never as a
+// rotation, and every axis is always written (an omitted attribute reads back as 0, which
+// NaNs the in-game camera). See plans/IVA_PLAN.md §3.5.
+describe('serializeGameData IVA seats', () => {
+  const seat = (over: Partial<IvaSeat>): IvaSeat => ({
+    id: '_seat1',
+    position: { ...VEC3_ZERO },
+    rotation: { ...EULER_ZERO },
+    scale: { ...VEC3_ONE },
+    layerId: IVA_SEAT_LAYER_ID,
+    ...over,
+  })
+
+  /** The three X/Y/Z attributes of an `<IVASeat>` child, as numbers. */
+  function axis(el: XmlElement, tag: string): { x: number; y: number; z: number } {
+    const child = tags(el, tag)[0]
+    return {
+      x: Number(child.getAttribute('X')),
+      y: Number(child.getAttribute('Y')),
+      z: Number(child.getAttribute('Z')),
+    }
+  }
+
+  it('emits KSA’s own schema defaults for an identity rotation (all three axes, always)', () => {
+    const xml = serializeGameData(
+      editingPart({ ivaSeats: [seat({ position: { x: -0.45, y: 0.42, z: -0.35 } })] }),
+    )
+    expect(xml).toContain('<Position X="-0.45" Y="0.42" Z="-0.35"/>')
+    expect(xml).toContain('<ForwardAxis X="1" Y="0" Z="0"/>')
+    expect(xml).toContain('<UpAxis X="0" Y="0" Z="-1"/>')
+  })
+
+  it('never emits an Id attribute on <IVASeat>', () => {
+    const xml = serializeGameData(
+      editingPart({
+        ivaSeats: [seat({}), seat({ id: '_seat2', rotation: { x: 0.3, y: 0, z: 1 } })],
+      }),
+    )
+    for (const el of tags(parse(xml), 'IVASeat')) expect(el.getAttribute('Id')).toBe(null)
+    expect(xml).not.toContain('_seat')
+  })
+
+  it('emits UNIT axes for a rotated seat', () => {
+    const xml = serializeGameData(
+      editingPart({ ivaSeats: [seat({ rotation: { x: -0.3876, y: 0.36137, z: 0.71372 } })] }),
+    )
+    const el = tags(parse(xml), 'IVASeat')[0]
+    for (const tag of ['ForwardAxis', 'UpAxis']) {
+      const v = axis(el, tag)
+      expect(Math.hypot(v.x, v.y, v.z)).toBeCloseTo(1, 5)
+    }
+  })
+
+  it('emits one <IVASeat> per seat, in array order', () => {
+    const xml = serializeGameData(
+      editingPart({
+        ivaSeats: [
+          seat({ id: '_seat1', position: { x: 1, y: 0, z: 0 } }),
+          seat({ id: '_seat2', position: { x: 2, y: 0, z: 0 } }),
+          seat({ id: '_seat3', position: { x: 3, y: 0, z: 0 } }),
+        ],
+      }),
+    )
+    const seats = tags(parse(xml), 'IVASeat')
+    expect(seats.map((el) => axis(el, 'Position').x)).toEqual([1, 2, 3])
+  })
+
+  it('emits the seats BEFORE the unmodeled passthrough', () => {
+    const xml = serializeGameData(
+      editingPart({
+        gameData: {
+          ...createEmptyGameData(),
+          unknownChildren: [{ tag: 'AttachedInternal', attrs: { InstanceOf: 'X' }, children: [] }],
+        },
+        ivaSeats: [seat({})],
+      }),
+    )
+    expect(xml.indexOf('<IVASeat>')).toBeLessThan(xml.indexOf('<AttachedInternal'))
+  })
+
+  it('round-trips positions and orientations through serialize → parse', () => {
+    const seats = [
+      seat({ id: '_seat1', position: { x: -0.45, y: 0.42, z: -0.35 } }),
+      seat({
+        id: '_seat2',
+        position: { x: 1.5, y: -2, z: 0.25 },
+        rotation: { x: -0.3876, y: 0.36137, z: 0.71372 },
+      }),
+    ]
+    const parsed = gameDataFromAssets(
+      serializeGameData(editingPart({ ivaSeats: seats })),
+      'P',
+      new DOMParser(),
+    )!
+    expect(parsed.ivaSeats.map((s) => s.position)).toEqual(seats.map((s) => s.position))
+    // Rotation survives via the axes, so compare the AXES (the rotation is only equivalent
+    // up to the orthonormalisation KSA itself performs).
+    for (const [i, s] of parsed.ivaSeats.entries()) {
+      const want = seatAxesFromRotation(seats[i].rotation)
+      const got = seatAxesFromRotation(s.rotation)
+      for (const k of ['x', 'y', 'z'] as const) {
+        expect(got.forward[k]).toBeCloseTo(want.forward[k], 5)
+        expect(got.up[k]).toBeCloseTo(want.up[k], 5)
+      }
+    }
   })
 })

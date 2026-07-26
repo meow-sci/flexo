@@ -13,6 +13,7 @@ import {
   collidersFromElement,
   connectorsFromPartElement,
   directChildren,
+  ivaSeatsFromElement,
   parseGameDataElement,
   placementsFromPartElement,
   subPartCollidersFromRoot,
@@ -32,6 +33,7 @@ import type {
   EvaDoor,
   Generator,
   Gimbal,
+  IvaSeat,
   PartCollider,
   PowerConsumer,
   RawXmlNode,
@@ -62,6 +64,13 @@ export interface CatalogPart {
    * shapes carry `ownerTemplateId: null`; SubPart-owned ones name their template.
    */
   colliders: PartCollider[]
+  /**
+   * The Part's IVA camera vantage points, gathered from BOTH Part-level authoring sites —
+   * the geometry `<Part><IVASeat>` first, then the `<PartGameData><IVASeat>`s (KSA merges
+   * `Components` additively, no dedupe) — with `_seatN` re-numbered over the merged list.
+   * SubPart-level seats are deliberately not gathered (plans/IVA_PLAN.md §6).
+   */
+  ivaSeats: IvaSeat[]
   /** KeyframeAnimationModules (from GameData), decoded + imported alongside the Part. */
   animationModules: CatalogAnimationModule[]
   /** Connector-bound coupling game-data (from GameData); connectorIds are in the Part's original id space. */
@@ -126,6 +135,10 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
       // (PartTemplate.ApplyGameData merges Components additively), so it is normalised
       // into the same flat list and re-emitted into the GameData document on export.
       colliders: collidersFromElement(part, null),
+      // Geometry `<Part><IVASeat>` — equivalent to authoring it on <PartGameData> (same
+      // additive Components merge), so it joins the same list and is re-emitted into the
+      // GameData document on export.
+      ivaSeats: ivaSeatsFromElement(part),
       animationModules: [],
       decoupler: null,
       dockingPort: null,
@@ -173,6 +186,8 @@ export interface PartGameData {
   animationModules: CatalogAnimationModule[]
   /** `<PartGameData><Collider>` shapes (part-level, `ownerTemplateId: null`). */
   colliders: PartCollider[]
+  /** `<PartGameData><IVASeat>` camera vantage points, in document (= cycle) order. */
+  ivaSeats: IvaSeat[]
   /** Connector-bound coupling game-data, so built-in part imports carry them in. */
   decoupler: Decoupler | null
   dockingPort: DockingPort | null
@@ -236,6 +251,7 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
       connectorCapabilities: new Map(),
       animationModules: [],
       colliders: [],
+      ivaSeats: [],
       decoupler: null,
       dockingPort: null,
       evaDoor: null,
@@ -269,6 +285,7 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
       entry.connectorCapabilities.set(connId, caps)
     entry.animationModules.push(...parsed.animationModules)
     entry.colliders.push(...parsed.colliders)
+    entry.ivaSeats.push(...parsed.ivaSeats)
     entry.decoupler ??= parsed.gameData.decoupler
     entry.dockingPort ??= parsed.gameData.dockingPort
     entry.evaDoor ??= parsed.gameData.evaDoor
@@ -377,6 +394,13 @@ export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile
       // APPEND — the geometry `<Part><Collider>` read in parsePartsFile is already here,
       // and KSA applies both (Components merge additively, no dedupe).
       part.colliders.push(...gd.colliders)
+      // Same additive merge for IVA seats, then re-number `_seatN` across the merged list so
+      // the ids stay unique and in document order (geometry `<Part>` first, then GameData).
+      // The ids are editor-only and never emitted, so renumbering is free.
+      part.ivaSeats.push(...gd.ivaSeats)
+      part.ivaSeats.forEach((seat, i) => {
+        seat.id = `_seat${i + 1}`
+      })
     }
     // SubPart-template data is keyed globally by template id; carry only the entries
     // for templates this Part places (deduped — many instances share one template).

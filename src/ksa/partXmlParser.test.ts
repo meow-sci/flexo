@@ -10,7 +10,7 @@ import {
   remapRawConnectorRefs,
 } from './partXmlParser'
 import { serializeGameData, serializePart } from './partXmlSerializer'
-import type { Connector, EditingPart, RawXmlNode } from './types'
+import type { Connector, EditingPart, IvaSeat, RawXmlNode } from './types'
 import {
   COLLIDER_LAYER_ID,
   createCombustor,
@@ -27,8 +27,10 @@ import {
   identityTransform,
   createTank,
   DEFAULT_LAYER_ID,
+  IVA_SEAT_LAYER_ID,
   KNOWN_EDITOR_TAGS,
 } from './types'
+import { readVendoredAsset } from './ksaTestAssets'
 
 function editingPart(over: Partial<EditingPart>): EditingPart {
   return {
@@ -40,6 +42,7 @@ function editingPart(over: Partial<EditingPart>): EditingPart {
     placements: [],
     connectors: [],
     colliders: [],
+    ivaSeats: [],
     internalFlags: {},
     kittens: [],
     customTextures: [],
@@ -1540,5 +1543,152 @@ describe('colliders', () => {
     // The SubPartGameData holds ONLY a collider, so it isn't materialized as an entry.
     expect(parsed.subPartGameData).toEqual([])
     expect(parsed.colliders.map((c) => c.ownerTemplateId)).toEqual([null, 'T'])
+  })
+})
+
+// `<IVASeat>` — KSA's interior camera vantage points. The orientation is authored as a
+// (<ForwardAxis>, <UpAxis>) pair and stored as an equivalent rotation (src/ksa/ivaSeatAxes.ts),
+// so identity rotation ⇔ KSA's own schema defaults (forward +X, up −Z). See plans/IVA_PLAN.md.
+describe('IVA seats', () => {
+  /** Core's `CoreIVASpaceA_Prefab_MediumCapsuleA` seat block, verbatim (the only shipped one). */
+  const CORE_CAPSULE = `<Assets>
+    <PartGameData Id="CoreIVASpaceA_Prefab_MediumCapsuleA">
+        <EditorTag Value="Hidden"/>
+
+        <IVASeat>
+            <Position X="-0.45" Y="0.42" Z="-0.35" />
+            <ForwardAxis X="1" />
+            <UpAxis Z="-1" />
+        </IVASeat>
+
+        <IVASeat>
+            <Position X="-0.45" Y="-0.42" Z="-0.35" />
+            <ForwardAxis X="1" />
+            <UpAxis Z="-1" />
+        </IVASeat>
+    </PartGameData>
+  </Assets>`
+
+  const parseSeats = (xml: string, partId = 'P') =>
+    gameDataFromAssets(xml, partId, new DOMParser())!
+
+  /**
+   * Seats with `-0` collapsed to `0`. `Math.asin(-0)` is `-0`, so an identity rotation comes
+   * out as `y: -0` — numerically identical to `0`, but `toEqual` tells the two apart.
+   */
+  const seats = (parsed: { ivaSeats: IvaSeat[] }): IvaSeat[] =>
+    parsed.ivaSeats.map((s) => ({
+      ...s,
+      rotation: { x: s.rotation.x + 0, y: s.rotation.y + 0, z: s.rotation.z + 0 },
+    }))
+
+  it('parses Core’s two-seat capsule into identity-rotation seats (the convention regression)', () => {
+    const parsed = parseSeats(CORE_CAPSULE, 'CoreIVASpaceA_Prefab_MediumCapsuleA')
+    expect(seats(parsed)).toEqual([
+      {
+        id: '_seat1',
+        position: { x: -0.45, y: 0.42, z: -0.35 },
+        // <ForwardAxis X="1"/> + <UpAxis Z="-1"/> ARE flexo's local axes ⇒ no rotation.
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        layerId: IVA_SEAT_LAYER_ID,
+      },
+      {
+        id: '_seat2',
+        position: { x: -0.45, y: -0.42, z: -0.35 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        layerId: IVA_SEAT_LAYER_ID,
+      },
+    ])
+  })
+
+  it('keeps <IVASeat> out of the unmodeled passthrough', () => {
+    const parsed = parseSeats(CORE_CAPSULE, 'CoreIVASpaceA_Prefab_MediumCapsuleA')
+    expect(parsed.gameData.unknownChildren.map((n) => n.tag)).toEqual([])
+  })
+
+  it('preserves document order (KSA’s seat cycle order)', () => {
+    const parsed = parseSeats(`<Assets><PartGameData Id="P">
+      <IVASeat><Position X="1" /></IVASeat>
+      <IVASeat><Position X="2" /></IVASeat>
+      <IVASeat><Position X="3" /></IVASeat>
+    </PartGameData></Assets>`)
+    expect(parsed.ivaSeats.map((s) => [s.id, s.position.x])).toEqual([
+      ['_seat1', 1],
+      ['_seat2', 2],
+      ['_seat3', 3],
+    ])
+  })
+
+  it('takes the C# FIELD defaults when the axis ELEMENTS are absent entirely', () => {
+    const parsed = parseSeats(
+      `<Assets><PartGameData Id="P"><IVASeat><Position X="1" /></IVASeat></PartGameData></Assets>`,
+    )
+    expect(seats(parsed)).toEqual([
+      {
+        id: '_seat1',
+        position: { x: 1, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        layerId: IVA_SEAT_LAYER_ID,
+      },
+    ])
+  })
+
+  it('drops a seat whose axis element is PRESENT but empty (each attr defaults to 0), and warns', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    // A present <ForwardAxis/> reads (0,0,0) — a zero look direction KSA NaNs the camera on.
+    const parsed = parseSeats(
+      `<Assets><PartGameData Id="P"><IVASeat><ForwardAxis /></IVASeat></PartGameData></Assets>`,
+    )
+    expect(parsed.ivaSeats).toEqual([])
+    expect(warn).toHaveBeenCalledOnce()
+    expect(String(warn.mock.calls[0][0])).toContain('<IVASeat>')
+    warn.mockRestore()
+  })
+
+  it('drops a seat whose axes are parallel, and warns', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const parsed = parseSeats(`<Assets><PartGameData Id="P"><IVASeat>
+      <ForwardAxis X="1" /><UpAxis X="1" />
+    </IVASeat></PartGameData></Assets>`)
+    expect(parsed.ivaSeats).toEqual([])
+    expect(warn).toHaveBeenCalledOnce()
+    warn.mockRestore()
+  })
+
+  it('leaves a <SubPartGameData><IVASeat> riding the passthrough (Part-level seats only)', () => {
+    const xml = `<Assets>
+      <PartGameData Id="P"><EditorTag Value="Hidden" /></PartGameData>
+      <SubPartGameData Id="Tmpl">
+        <IVASeat><Position X="0.5" /><ForwardAxis X="1" /><UpAxis Z="-1" /></IVASeat>
+      </SubPartGameData>
+    </Assets>`
+    const parsed = parseSeats(xml)
+    expect(parsed.ivaSeats).toEqual([])
+    const spd = parsed.subPartGameData.find((s) => s.subPartTemplateId === 'Tmpl')!
+    expect(spd.unknownChildren.map((n) => n.tag)).toEqual(['IVASeat'])
+    // …and it survives serialize → re-parse verbatim.
+    const source = editingPart({ partId: 'P', subPartGameData: parsed.subPartGameData })
+    const reparsed = roundTrip(source)
+    expect(
+      reparsed.subPartGameData.find((s) => s.subPartTemplateId === 'Tmpl')!.unknownChildren,
+    ).toEqual(spd.unknownChildren)
+  })
+
+  it('reads the real Core seats from the vendored fixture', () => {
+    const parsed = gameDataFromAssets(
+      readVendoredAsset('CoreIVASpaceAGameData.xml'),
+      'CoreIVASpaceA_Prefab_MediumCapsuleA',
+      new DOMParser(),
+    )!
+    expect(seats(parsed).map((s) => [s.id, s.position, s.rotation])).toEqual([
+      ['_seat1', { x: -0.45, y: 0.42, z: -0.35 }, { x: 0, y: 0, z: 0 }],
+      ['_seat2', { x: -0.45, y: -0.42, z: -0.35 }, { x: 0, y: 0, z: 0 }],
+    ])
+    // The fixture's part-level `<Light>` is unmodeled and stays in the passthrough; the
+    // seats do NOT.
+    expect(parsed.gameData.unknownChildren.map((n) => n.tag)).toEqual(['Light'])
   })
 })

@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import { DOMParser } from '@xmldom/xmldom'
 import { mergeGameData, parseGameDataFile, parsePartsFile, type CatalogPart } from './partCatalog'
-import { COLLIDER_LAYER_ID, createTank } from './types'
+import { COLLIDER_LAYER_ID, createTank, IVA_SEAT_LAYER_ID } from './types'
 import {
   hasKsaAssets,
   ksaAsset,
@@ -514,5 +514,37 @@ describe('geometry <Part><Collider> (gap E — vendored fixtures)', () => {
     const light = parts.find((p) => p.id === 'CoreElectricalA_Prefab_LightSmallB')!
     expect(light.colliders.map((c) => c.shape)).toEqual(['Box'])
     expect(light.unknownChildren.map((n) => n.tag)).toEqual([])
+  })
+})
+
+// `<IVASeat>` is schema-legal on the geometry `<Part>` AND on `<PartGameData>`, and KSA merges
+// `Components` additively with no dedupe — so both land on the catalog part, geometry first.
+// SubPart-level seats are deliberately not gathered (plans/IVA_PLAN.md §6).
+describe('IVA seats merge both Part-level authoring sites', () => {
+  const ASSETS = `<Assets>
+    <Part Id="P">
+      <SubPart Id="s_1" InstanceOf="Tmpl" />
+      <IVASeat><Position X="1" /><ForwardAxis X="1" /><UpAxis Z="-1" /></IVASeat>
+    </Part>
+  </Assets>`
+  const GAMEDATA = `<Assets>
+    <PartGameData Id="P">
+      <IVASeat><Position X="2" /><ForwardAxis X="1" /><UpAxis Z="-1" /></IVASeat>
+    </PartGameData>
+  </Assets>`
+
+  it('appends the GameData seats to the geometry ones and re-numbers _seatN in document order', () => {
+    const parts: CatalogPart[] = []
+    parsePartsFile(parse(ASSETS), 'A.xml', parts)
+    expect(parts[0].ivaSeats.map((s) => [s.id, s.position.x])).toEqual([['_seat1', 1]])
+
+    const gameData = emptyGameData()
+    parseGameDataFile(parse(GAMEDATA), gameData)
+    mergeGameData(parts, gameData)
+
+    expect(parts[0].ivaSeats.map((s) => [s.id, s.position.x, s.layerId])).toEqual([
+      ['_seat1', 1, IVA_SEAT_LAYER_ID],
+      ['_seat2', 2, IVA_SEAT_LAYER_ID],
+    ])
   })
 })

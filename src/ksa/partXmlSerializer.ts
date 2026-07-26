@@ -11,6 +11,7 @@ import type {
   EulerXYZ,
   FeedSource,
   Gimbal,
+  IvaSeat,
   Light,
   PartAnimation,
   PartCollider,
@@ -30,6 +31,7 @@ import type {
 } from './types'
 import { isCustomReactionExportable, isFeedSourceValid, isSubPartGameDataEmpty } from './types'
 import { colliderDimensions } from './colliderSize'
+import { seatAxesFromRotation } from './ivaSeatAxes'
 import { formatG6 } from './formatG6'
 import { animGlbPath, animModuleId, isAnimationExportable } from './animationNaming'
 
@@ -94,8 +96,9 @@ function appendConnectorTokens(doc: XmlDocument, el: XmlElement, connector: Conn
 /**
  * Optional `originalTemplateId → exported variant id` remap. Points placements (and the
  * matching SubPartGameData) at a fresh built-in-SubPart export variant instead of the
- * built-in id (see buildExportVariantMap in modExport.ts) — for de-IVA'd props AND for
- * built-in SubParts that carry GameData (so we never redefine the shared built-in template).
+ * built-in id (see buildExportVariantMap in modExport.ts) — for any built-in SubPart that needs
+ * an export variant, e.g. one carrying GameData (so we never redefine the shared built-in
+ * template).
  * A template not in the map keeps its own id (the common case).
  */
 export type TemplateRemap = ReadonlyMap<string, string>
@@ -272,6 +275,10 @@ export function serializeGameData(
   const partColliders = colliderGroups.get(null)
   if (partColliders?.length) gd.appendChild(buildColliderElement(doc, partColliders))
 
+  // IVA camera vantage points, in DOCUMENT ORDER — that order is KSA's seat cycle order,
+  // and the first seat is the one the interior view opens on.
+  for (const seat of part.ivaSeats) gd.appendChild(buildIvaSeatElement(doc, seat))
+
   // Unmodeled children flexo captured on import — re-emitted verbatim, last.
   for (const node of game.unknownChildren) gd.appendChild(buildRawNode(doc, node))
 
@@ -376,8 +383,8 @@ export function buildColliderElement(
   for (const c of colliders) {
     const el = doc.createElement(c.shape)
     el.setAttribute('Id', c.id)
-    el.appendChild(buildColliderVec3(doc, 'LocationAsmb', c.position))
-    el.appendChild(buildColliderVec3(doc, 'Collider2Asmb', c.rotation))
+    el.appendChild(buildVec3Attrs(doc, 'LocationAsmb', c.position))
+    el.appendChild(buildVec3Attrs(doc, 'Collider2Asmb', c.rotation))
     const dims = colliderDimensions(c.shape, c.scale)
     if (dims.lengthXM != null) el.appendChild(buildDistanceElement(doc, 'LengthX', dims.lengthXM))
     if (dims.lengthYM != null) el.appendChild(buildDistanceElement(doc, 'LengthY', dims.lengthYM))
@@ -388,12 +395,42 @@ export function buildColliderElement(
   return component
 }
 
-/** `<LocationAsmb X Y Z/>` / `<Collider2Asmb X Y Z/>` — all three axes, always. */
-function buildColliderVec3(doc: XmlDocument, name: string, v: Vec3): XmlElement {
+/**
+ * An X/Y/Z-attribute vector element (`<LocationAsmb>`, `<Collider2Asmb>`, an IVA seat's
+ * `<Position>`/`<ForwardAxis>`/`<UpAxis>`) — all three axes, ALWAYS.
+ *
+ * Distinct from {@link buildEngineVec3}, which omits the whole element at its default: that
+ * "omit at default" style is only safe where the C# field default and the all-zero
+ * `Vector3Reference` attribute defaults agree, which is exactly what an IVA seat's axes
+ * violate (see {@link buildIvaSeatElement}).
+ */
+function buildVec3Attrs(doc: XmlDocument, name: string, v: Vec3): XmlElement {
   const el = doc.createElement(name)
   el.setAttribute('X', formatG6(v.x))
   el.setAttribute('Y', formatG6(v.y))
   el.setAttribute('Z', formatG6(v.z))
+  return el
+}
+
+/**
+ * `<IVASeat><Position/><ForwardAxis/><UpAxis/></IVASeat>` — one IVA vantage point.
+ *
+ * NO `Id` attribute: Core authors none, nothing references a seat by id, and
+ * `TemplateDataBase.Id` shares the namespace `<FeedsFrom Container="…">` resolves against
+ * (`PartTemplate.AddResolvedFeed`) — so emitting flexo's editor-only id would put a seat into
+ * the feed-container namespace for zero benefit.
+ *
+ * All three axes of all three elements are ALWAYS emitted. A `Vector3Reference` defaults each
+ * absent ATTRIBUTE to 0 while an absent ELEMENT takes the C# field default, so an "omit at
+ * default" style could turn `<ForwardAxis X="1"/>` into `<ForwardAxis/>` — a zero look
+ * direction, which NaNs the in-game camera.
+ */
+function buildIvaSeatElement(doc: XmlDocument, seat: IvaSeat): XmlElement {
+  const el = doc.createElement('IVASeat')
+  const { forward, up } = seatAxesFromRotation(seat.rotation)
+  el.appendChild(buildVec3Attrs(doc, 'Position', seat.position))
+  el.appendChild(buildVec3Attrs(doc, 'ForwardAxis', forward))
+  el.appendChild(buildVec3Attrs(doc, 'UpAxis', up))
   return el
 }
 

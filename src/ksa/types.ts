@@ -172,6 +172,31 @@ export interface PartCollider extends Transform {
 }
 
 /**
+ * One IVA (interior view) camera vantage point — a "seat". KSA `IVASeat.IVASeatTemplate`
+ * (`decomp/KSA/IVASeat.cs`), emitted as an `<IVASeat>` child of `<PartGameData>`.
+ *
+ * {@link Transform} is reused with a deliberate reinterpretation:
+ *  - `position` → `<Position X Y Z>` — the EYE POINT in the Part's assembly frame, meters
+ *    (direct, no conversion — the same space as a placement/connector/collider).
+ *  - `rotation` → NOT emitted directly. KSA stores the orientation as two vectors
+ *    (`<ForwardAxis>` + `<UpAxis>`); flexo stores the equivalent rotation so the seat rides
+ *    the normal 3D gizmo, and converts at the XML boundary (src/ksa/ivaSeatAxes.ts).
+ *    Identity rotation ⇒ KSA's own schema defaults, forward +X / up −Z.
+ *  - `scale` → UNUSED. KSA has no seat size; the writer pins it to (1,1,1) and it is never
+ *    emitted (same treatment as `Light.transform.scale`). The marker's on-screen size is a
+ *    global view setting, like the connector cube.
+ *
+ * Order is LOAD-BEARING: the first seat is the one the IVA camera opens on and `C` cycles
+ * them in document order (see scope/connectors-coordinates-iva.md).
+ */
+export interface IvaSeat extends Transform {
+  /** Editor-only document id, e.g. "_seat1". NEVER emitted — see plans/IVA_PLAN.md §3.5. */
+  id: string
+  /** Always {@link IVA_SEAT_LAYER_ID}; present for parity with the other layered entities. */
+  layerId: string
+}
+
+/**
  * Which of the three default KSA kittens to render. They share the same body mesh
  * and EVA suit; only the head pattern and eye color differ. See src/ksa/kittenAssets.ts.
  */
@@ -248,6 +273,13 @@ export const KITTEN_LAYER_ID = 'kittens'
  */
 export const COLLIDER_LAYER_ID = 'colliders'
 
+/**
+ * Id of the built-in "IVA Seats" layer. {@link IvaSeat}s always live here so the interior
+ * camera vantage points can be hidden/locked separately from the meshes around them.
+ * Cannot be deleted.
+ */
+export const IVA_SEAT_LAYER_ID = 'ivaSeats'
+
 /** The built-in Default layer (for SubParts) that every new Part starts with. */
 export function createDefaultLayer(): Layer {
   return { id: DEFAULT_LAYER_ID, name: 'Default' }
@@ -268,11 +300,17 @@ export function createColliderLayer(): Layer {
   return { id: COLLIDER_LAYER_ID, name: 'Colliders' }
 }
 
+/** The built-in IVA Seats layer that every new Part starts with. */
+export function createIvaSeatLayer(): Layer {
+  return { id: IVA_SEAT_LAYER_ID, name: 'IVA Seats' }
+}
+
 /** The built-in layers present in every Part (and never deletable). */
 export const BUILT_IN_LAYER_IDS: readonly string[] = [
   DEFAULT_LAYER_ID,
   CONNECTOR_LAYER_ID,
   COLLIDER_LAYER_ID,
+  IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
 ]
 
@@ -974,7 +1012,7 @@ export function createSolidGrainSegment(id: string): SolidGrainSegment {
 /**
  * A captured XML subtree flexo does NOT model, preserved verbatim so importing a
  * built-in Part and re-exporting never silently drops game data flexo has no field for
- * (e.g. `<Collider>`, the `SolidSphereMass`/`SolidCylinderMass`… mass family, `<IVASeat>`,
+ * (e.g. `<AttachedInternal>`, the `SolidSphereMass`/`SolidCylinderMass`… mass family,
  * `<SubstanceStorageVolume>`). Stored as plain JSON (no live DOM handle) so it round-trips
  * through the project codec and localStorage. Built by the parser's `captureUnknownChildren`
  * and re-emitted by the serializer's `buildRawNode`. This is the cure for flexo's
@@ -2031,6 +2069,8 @@ export interface EditingPart {
   connectors: Connector[]
   /** The Part's collision volume — analytic primitives grouped by owner on export. */
   colliders: PartCollider[]
+  /** The Part's IVA camera vantage points, in cycle order (index 0 is the default seat). */
+  ivaSeats: IvaSeat[]
   /** Editor-only kitten visual aides (never serialized to export). */
   kittens: KittenInstance[]
   /** User-uploaded textures (descriptors only; binaries in IndexedDB). */
@@ -2056,11 +2096,13 @@ export function createEmptyPart(): EditingPart {
       createDefaultLayer(),
       createConnectorLayer(),
       createColliderLayer(),
+      createIvaSeatLayer(),
       createKittenLayer(),
     ],
     placements: [],
     connectors: [],
     colliders: [],
+    ivaSeats: [],
     kittens: [],
     customTextures: [],
     customMaterials: [],

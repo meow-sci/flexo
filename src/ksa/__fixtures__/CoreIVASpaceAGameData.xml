@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Assets>
+
+    <PartGameData Id="CoreIVASpaceA_Prefab_MediumCapsuleA">
+        <EditorTag Value="Hidden"/>
+
+        <Light>
+            <Type>Point</Type>
+            <Transform>
+                <Position X="-0.275" Z="-0.80" />
+            </Transform>
+            <Range Value="1.5" />
+            <Intensity Value="0.05" />
+            <Color R="1.0" G="0.9" B="0.7" />
+            <RayTracing>true</RayTracing>
+        </Light>
+
+        <IVASeat>
+            <Position X="-0.45" Y="0.42" Z="-0.35" />
+            <ForwardAxis X="1" />
+            <UpAxis Z="-1" />
+        </IVASeat>
+
+        <IVASeat>
+            <Position X="-0.45" Y="-0.42" Z="-0.35" />
+            <ForwardAxis X="1" />
+            <UpAxis Z="-1" />
+        </IVASeat>
+    </PartGameData>
+
+</Assets>

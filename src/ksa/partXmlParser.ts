@@ -7,7 +7,9 @@ import {
   createSubPartGameData,
   DEFAULT_LAYER_ID,
   isSubPartGameDataEmpty,
+  IVA_SEAT_LAYER_ID,
 } from './types'
+import { SEAT_LOCAL_FORWARD, SEAT_LOCAL_UP, seatRotationFromAxes } from './ivaSeatAxes'
 import {
   colliderDimensionNames,
   colliderSizeFromDimensions,
@@ -26,6 +28,7 @@ import type {
   EulerXYZ,
   FeedSource,
   Gimbal,
+  IvaSeat,
   Light,
   LightType,
   PartCollider,
@@ -269,6 +272,49 @@ export function subPartCollidersFromRoot(root: Element): PartCollider[] {
   return out
 }
 
+/**
+ * Reads every `<IVASeat>` of an owner element (`<Part>` or `<PartGameData>`) into
+ * {@link IvaSeat}s, preserving DOCUMENT ORDER (which is KSA's seat cycle order — the first
+ * seat is the one IVA opens on).
+ *
+ * The seat ids are REGENERATED here (`_seat1`, `_seat2`, …) and are never emitted (the
+ * serializer writes no `Id` attribute, see partXmlSerializer's `buildIvaSeatElement`), so —
+ * unlike a placement/connector id — nothing needs an `idRemap` entry for them. Order is the
+ * only identity a seat has in-game, and order is preserved.
+ *
+ * Degenerate pairs are DROPPED with a console warning rather than imported: KSA builds a NaN
+ * camera rotation from them (`Camera.LookAtRotation` → `Cross(f, up).Normalized()`), so
+ * round-tripping one would only preserve a broken seat.
+ */
+export function ivaSeatsFromElement(owner: Element): IvaSeat[] {
+  const out: IvaSeat[] = []
+  for (const el of directChildren(owner, 'IVASeat')) {
+    // Element ABSENT ⇒ the C# field default. Element PRESENT ⇒ each missing attribute is 0
+    // (`Vector3Reference` initialises X/Y/Z to 0), which is a zero look direction.
+    const fwdEl = directChildren(el, 'ForwardAxis')[0]
+    const upEl = directChildren(el, 'UpAxis')[0]
+    const forward = fwdEl ? readVec3Attrs(fwdEl, ZERO_VEC3) : { ...SEAT_LOCAL_FORWARD }
+    const up = upEl ? readVec3Attrs(upEl, ZERO_VEC3) : { ...SEAT_LOCAL_UP }
+    const rotation = seatRotationFromAxes(forward, up)
+    if (!rotation) {
+      console.warn(
+        `flexo import: dropping an <IVASeat> whose <ForwardAxis>/<UpAxis> are zero or parallel — ` +
+          `KSA would build a NaN camera rotation from it.`,
+      )
+      continue
+    }
+    out.push({
+      id: `_seat${out.length + 1}`,
+      position: readVec3Attrs(directChildren(el, 'Position')[0], ZERO_VEC3),
+      rotation,
+      // KSA has no seat size; scale is unused and never emitted.
+      scale: { x: 1, y: 1, z: 1 },
+      layerId: IVA_SEAT_LAYER_ID,
+    })
+  }
+  return out
+}
+
 /** The full GameData payload read back from a <PartGameData> element. */
 export interface ParsedGameData {
   editorTags: string[]
@@ -284,6 +330,12 @@ export interface ParsedGameData {
    * template id (filled in by {@link gameDataFromAssets}, which sees the whole root).
    */
   colliders: PartCollider[]
+  /**
+   * IVA camera vantage points read from this document's `<PartGameData><IVASeat>`s, in
+   * document (= cycle) order. SubPart-level seats are deliberately NOT gathered — they keep
+   * riding the GameData passthrough (plans/IVA_PLAN.md §6).
+   */
+  ivaSeats: IvaSeat[]
   /** Parsed <KeyframeAnimationModule>s (refs in ORIGINAL instance-id space). */
   animationModules: CatalogAnimationModule[]
   /** Top-level <FixedReaction> custom propellants (siblings of <PartGameData>). */
@@ -603,6 +655,8 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
     subPartGameData: [],
     // Part-level collision primitives, in the Part's own assembly frame.
     colliders: collidersFromElement(gd, null),
+    // Part-level IVA seats, in document (= cycle) order.
+    ivaSeats: ivaSeatsFromElement(gd),
     animationModules: animationModulesFromGameData(gd),
     customReactions: [],
   }
@@ -806,8 +860,15 @@ const KNOWN_PART_GAMEDATA_CHILDREN: ReadonlySet<string> = new Set([
   'Tank',
   'SubPart',
   'Collider',
+  'IVASeat',
 ])
-/** `<SubPartGameData>` child tags flexo models. Everything else is passthrough. */
+/**
+ * `<SubPartGameData>` child tags flexo models. Everything else is passthrough.
+ *
+ * NOTE: `'IVASeat'` is deliberately ABSENT. `<IVASeat>` is schema-legal here, but flexo models
+ * Part-level seats ONLY (plans/IVA_PLAN.md §6), so a SubPart-level seat keeps riding this
+ * passthrough verbatim — round-tripped, just not editable. Do not "fix" this by adding it.
+ */
 const KNOWN_SUBPART_GAMEDATA_CHILDREN: ReadonlySet<string> = new Set([
   'Tank',
   'SolarPanel',

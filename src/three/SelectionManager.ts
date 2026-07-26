@@ -1,8 +1,8 @@
 import * as THREE from 'three'
 
-/** What a hit object resolves to: a SubPart instance, connector, collider, or kitten. */
+/** What a hit object resolves to: a SubPart instance, connector, collider, IVA seat, or kitten. */
 export interface Selectable {
-  kind: 'subpart' | 'connector' | 'collider' | 'kitten'
+  kind: 'subpart' | 'connector' | 'collider' | 'ivaSeat' | 'kitten'
   id: string
   /**
    * Which VISUAL of a multi-instance entity was hit. Only a SubPart-owned collider has

@@ -69,10 +69,23 @@ import {
   $selectedKittenIndices,
   $selectedColliderIndex,
   $selectedColliderIndices,
+  $selectedIvaSeatIndex,
+  $selectedIvaSeatIndices,
   $canUndo,
   addCollider,
   removeCollider,
   selectCollider,
+  addIvaSeat,
+  aimIvaSeat,
+  selectConnector,
+  selectKitten,
+  moveIvaSeat,
+  removeIvaSeat,
+  selectIvaSeat,
+  setSelectedIvaSeats,
+  updateIvaSeatTransform,
+  updateIvaSeatTransforms,
+  updateSelectedTransform,
   selectPlacement,
   setColliderOwner,
   setColliderShape,
@@ -1838,5 +1851,221 @@ describe('collider mutations', () => {
     expect($part.get().colliders.map((c) => c.shape)).toEqual(['Sphere'])
     undo()
     expect($part.get().colliders.map((c) => c.shape)).toEqual(['Box', 'Sphere'])
+  })
+})
+
+describe('IVA seat mutations', () => {
+  /** A transform with a distinctive rotation, so "rotation untouched" assertions can bite. */
+  const AIMED: Transform = {
+    position: { x: -0.45, y: 0.42, z: -0.35 },
+    rotation: { x: 0, y: 0.5, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+  }
+
+  it('addIvaSeat drops a seat on the IVA Seats layer, selects it, and is undoable', () => {
+    addIvaSeat()
+    addIvaSeat(AIMED)
+    const seats = $part.get().ivaSeats
+    expect(seats.map((s) => s.id)).toEqual(['_seat1', '_seat2'])
+    expect(seats.every((s) => s.layerId === IVA_SEAT_LAYER_ID)).toBe(true)
+    // No transform ⇒ un-rotated at the origin, which IS KSA's schema default (+X / −Z).
+    expect(seats[0].position).toEqual({ x: 0, y: 0, z: 0 })
+    expect(seats[0].rotation).toEqual({ x: 0, y: 0, z: 0 })
+    expect(seats[1].position).toEqual(AIMED.position)
+    expect(seats[1].rotation).toEqual(AIMED.rotation)
+    expect($selectedIvaSeatIndex.get()).toBe(1)
+    undo()
+    expect($part.get().ivaSeats.map((s) => s.id)).toEqual(['_seat1'])
+    redo()
+    expect($part.get().ivaSeats.map((s) => s.id)).toEqual(['_seat1', '_seat2'])
+  })
+
+  it('addIvaSeat pins scale to (1,1,1) — a seat has no size', () => {
+    addIvaSeat({ ...AIMED, scale: { x: 3, y: 4, z: 5 } })
+    expect($part.get().ivaSeats[0].scale).toEqual({ x: 1, y: 1, z: 1 })
+  })
+
+  it('selecting a seat clears the other four kinds (and vice versa)', () => {
+    addSubPart('Core.A')
+    addConnector()
+    addKitten('hunter')
+    addCollider('Box')
+    addIvaSeat()
+    expect($selectedIvaSeatIndices.get()).toEqual([0])
+    expect($selectedIndices.get()).toEqual([])
+    expect($selectedConnectorIndices.get()).toEqual([])
+    expect($selectedKittenIndices.get()).toEqual([])
+    expect($selectedColliderIndices.get()).toEqual([])
+
+    selectPlacement(0)
+    expect($selectedIvaSeatIndices.get()).toEqual([])
+    setSelectedIvaSeats([0])
+    expect($selectedIndices.get()).toEqual([])
+    selectCollider(0)
+    expect($selectedIvaSeatIndices.get()).toEqual([])
+    selectIvaSeat(0)
+    expect($selectedColliderIndices.get()).toEqual([])
+    selectKitten(0)
+    expect($selectedIvaSeatIndices.get()).toEqual([])
+    selectIvaSeat(0)
+    expect($selectedKittenIndices.get()).toEqual([])
+    selectConnector(0)
+    expect($selectedIvaSeatIndices.get()).toEqual([])
+  })
+
+  it('aimIvaSeat writes the rotation only and is undoable', () => {
+    addIvaSeat(AIMED)
+    aimIvaSeat(0, { x: 0, y: 0, z: Math.PI / 2 })
+    expect($part.get().ivaSeats[0].rotation).toEqual({ x: 0, y: 0, z: Math.PI / 2 })
+    expect($part.get().ivaSeats[0].position).toEqual(AIMED.position)
+    undo()
+    expect($part.get().ivaSeats[0].rotation).toEqual(AIMED.rotation)
+  })
+
+  it('updateIvaSeatTransform is streaming — the caller’s pushUndo bounds it', () => {
+    addIvaSeat()
+    pushUndo('move')
+    updateIvaSeatTransform(0, { ...AIMED, position: { x: 1, y: 2, z: 3 } })
+    updateIvaSeatTransform(0, { ...AIMED, position: { x: 4, y: 5, z: 6 } })
+    expect($part.get().ivaSeats[0].position).toEqual({ x: 4, y: 5, z: 6 })
+    undo() // one step for the whole drag
+    expect($part.get().ivaSeats[0].position).toEqual({ x: 0, y: 0, z: 0 })
+  })
+
+  it('updateIvaSeatTransforms writes several seats in one update, scale still pinned', () => {
+    addIvaSeat()
+    addIvaSeat()
+    pushUndo('move')
+    updateIvaSeatTransforms([
+      { index: 0, transform: { ...AIMED, scale: { x: 9, y: 9, z: 9 } } },
+      { index: 1, transform: { ...AIMED, position: { x: 1, y: 1, z: 1 } } },
+    ])
+    const seats = $part.get().ivaSeats
+    expect(seats.map((s) => s.position)).toEqual([AIMED.position, { x: 1, y: 1, z: 1 }])
+    expect(seats.every((s) => s.scale.x === 1 && s.scale.y === 1 && s.scale.z === 1)).toBe(true)
+    undo()
+    expect($part.get().ivaSeats.every((s) => s.position.x === 0)).toBe(true)
+  })
+
+  it('a scale-mode gizmo drag on a seat is a no-op (assignIvaSeat pins the scale)', () => {
+    addIvaSeat(AIMED)
+    updateSelectedTransform({ ...AIMED, scale: { x: 5, y: 5, z: 5 } })
+    expect($part.get().ivaSeats[0].scale).toEqual({ x: 1, y: 1, z: 1 })
+    // …but position + rotation from the same write still land.
+    expect($part.get().ivaSeats[0].rotation).toEqual(AIMED.rotation)
+    updateSelectedTransforms([
+      { kind: 'ivaSeat', index: 0, transform: { ...AIMED, scale: { x: 2, y: 7, z: 3 } } },
+    ])
+    expect($part.get().ivaSeats[0].scale).toEqual({ x: 1, y: 1, z: 1 })
+  })
+
+  it('moveIvaSeat reorders the cycle order, follows the selection, and is undoable', () => {
+    addIvaSeat({ ...AIMED, position: { x: 1, y: 0, z: 0 } })
+    addIvaSeat({ ...AIMED, position: { x: 2, y: 0, z: 0 } })
+    addIvaSeat({ ...AIMED, position: { x: 3, y: 0, z: 0 } })
+    selectIvaSeat(2)
+    moveIvaSeat(2, -2) // last seat becomes the DEFAULT seat (the one IVA opens on)
+    expect($part.get().ivaSeats.map((s) => s.id)).toEqual(['_seat3', '_seat1', '_seat2'])
+    expect($selectedIvaSeatIndices.get()).toEqual([0])
+    undo()
+    expect($part.get().ivaSeats.map((s) => s.id)).toEqual(['_seat1', '_seat2', '_seat3'])
+
+    moveIvaSeat(0, 1)
+    expect($part.get().ivaSeats.map((s) => s.id)).toEqual(['_seat2', '_seat1', '_seat3'])
+  })
+
+  it('moveIvaSeat clamps at both ends and is a no-op at the boundary', () => {
+    addIvaSeat()
+    addIvaSeat()
+    addIvaSeat()
+    const before = $part.get()
+
+    moveIvaSeat(0, -1) // already first
+    expect($part.get()).toBe(before)
+    moveIvaSeat(2, +1) // already last
+    expect($part.get()).toBe(before)
+    moveIvaSeat(9, -1) // no such seat
+    expect($part.get()).toBe(before)
+    expect($canUndo.get()).toBe(true) // …only the three adds are on the stack
+
+    moveIvaSeat(2, -99) // clamped to index 0
+    expect($part.get().ivaSeats.map((s) => s.id)).toEqual(['_seat3', '_seat1', '_seat2'])
+    moveIvaSeat(0, +99) // clamped to the last index
+    expect($part.get().ivaSeats.map((s) => s.id)).toEqual(['_seat1', '_seat2', '_seat3'])
+  })
+
+  it('removeIvaSeat drops one by index, shifting the selection, and is undoable', () => {
+    addIvaSeat({ ...AIMED, position: { x: 1, y: 0, z: 0 } })
+    addIvaSeat({ ...AIMED, position: { x: 2, y: 0, z: 0 } })
+    selectIvaSeat(1)
+    removeIvaSeat(0)
+    expect($part.get().ivaSeats.map((s) => s.id)).toEqual(['_seat2'])
+    expect($selectedIvaSeatIndices.get()).toEqual([0])
+    undo()
+    expect($part.get().ivaSeats.map((s) => s.id)).toEqual(['_seat1', '_seat2'])
+  })
+
+  it('duplicate / delete / copy-paste all cover seats in one undo step, with fresh ids', () => {
+    addIvaSeat(AIMED)
+    duplicateSelected()
+    expect($part.get().ivaSeats.map((s) => s.id)).toEqual(['_seat1', '_seat2'])
+    // The copy is a real copy of the geometry, on the seats layer, at the END of the cycle.
+    expect($part.get().ivaSeats[1].position).toEqual(AIMED.position)
+    expect($part.get().ivaSeats[1].layerId).toBe(IVA_SEAT_LAYER_ID)
+    expect($selectedIvaSeatIndices.get()).toEqual([1])
+    undo()
+    expect($part.get().ivaSeats).toHaveLength(1)
+
+    selectIvaSeat(0)
+    expect(copySelected()).toBe(1)
+    expect(pasteClipboard()).toBe(1)
+    expect($part.get().ivaSeats.map((s) => s.id)).toEqual(['_seat1', '_seat2'])
+    expect($part.get().ivaSeats[1].position).toEqual(AIMED.position)
+    undo() // paste
+    expect($part.get().ivaSeats).toHaveLength(1)
+
+    selectIvaSeat(0)
+    removeSelected()
+    expect($part.get().ivaSeats).toHaveLength(0)
+    undo()
+    expect($part.get().ivaSeats).toHaveLength(1)
+  })
+
+  it('removeSelected deletes seats alongside the other kinds in one undo step', () => {
+    addSubPart('Core.A')
+    addIvaSeat()
+    addIvaSeat()
+    setSelection([0], [], [], [], [0, 1])
+    removeSelected()
+    expect($part.get().ivaSeats).toHaveLength(0)
+    expect($part.get().placements).toHaveLength(0)
+    undo()
+    expect($part.get().ivaSeats).toHaveLength(2)
+    expect($part.get().placements).toHaveLength(1)
+  })
+
+  it('toggleEntity adds/removes a seat without clearing the other kinds', () => {
+    addSubPart('Core.A')
+    addIvaSeat()
+    addIvaSeat()
+    selectPlacement(0)
+    toggleEntity('ivaSeat', 1)
+    expect($selectedIndices.get()).toEqual([0])
+    expect($selectedIvaSeatIndices.get()).toEqual([1])
+    toggleEntity('ivaSeat', 1)
+    expect($selectedIvaSeatIndices.get()).toEqual([])
+  })
+
+  it('scaleEverything scales a seat’s position and leaves its rotation and scale alone', () => {
+    addIvaSeat({
+      position: { x: 1, y: -2, z: 3 },
+      rotation: { x: 0, y: 0.5, z: 0 },
+      scale: AIMED.scale,
+    })
+    scaleEverything({ x: 2, y: 2, z: 2 })
+    const seat = $part.get().ivaSeats[0]
+    expect(seat.position).toEqual({ x: 2, y: -4, z: 6 })
+    expect(seat.rotation).toEqual({ x: 0, y: 0.5, z: 0 })
+    expect(seat.scale).toEqual({ x: 1, y: 1, z: 1 })
   })
 })

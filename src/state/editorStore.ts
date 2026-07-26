@@ -157,7 +157,19 @@ export const $selectedColliderIndex = computed($selectedColliderIndices, (indice
 )
 
 /**
- * Snapshots of copied entities (SubParts, connectors, kittens), stored WITHOUT
+ * Selected IVA-seat indices (multi-select), ordered by selection. Mutually exclusive
+ * with the other kind stores under the single-kind setters, but participates equally in
+ * the unified {@link setSelection} / {@link toggleEntity} paths — exactly like colliders.
+ */
+export const $selectedIvaSeatIndices = atom<number[]>([])
+/** Primary selected IVA-seat index (last added to the selection), or -1. */
+export const $selectedIvaSeatIndex = computed($selectedIvaSeatIndices, (indices) =>
+  indices.length > 0 ? indices[indices.length - 1] : -1,
+)
+
+/**
+ * Snapshots of copied entities (SubParts, connectors, kittens, colliders, IVA seats),
+ * stored WITHOUT
  * their ids — paste regenerates fresh ids so copies never collide. Ephemeral
  * editor state like selection: NOT persisted and NOT part of undo history. An
  * in-app clipboard (not the OS clipboard) so paste reliably reconstructs entity
@@ -169,6 +181,7 @@ export interface PartClipboard {
   connectors: Connector[]
   kittens: KittenInstance[]
   colliders: PartCollider[]
+  ivaSeats: IvaSeat[]
 }
 export const $clipboard = atom<PartClipboard | null>(null)
 /** True once something has been copied — drives enable/disable of paste affordances. */
@@ -336,6 +349,11 @@ function clampSelection(): void {
   const clampedKit = $selectedKittenIndices.get().filter((i) => i >= 0 && i < part.kittens.length)
   if (clampedKit.length !== $selectedKittenIndices.get().length)
     $selectedKittenIndices.set(clampedKit)
+  const clampedSeat = $selectedIvaSeatIndices
+    .get()
+    .filter((i) => i >= 0 && i < part.ivaSeats.length)
+  if (clampedSeat.length !== $selectedIvaSeatIndices.get().length)
+    $selectedIvaSeatIndices.set(clampedSeat)
 }
 
 /** Resets the active layer to Default if it no longer exists (e.g. after undo). */
@@ -1012,6 +1030,115 @@ export function removeCollider(index: number): void {
   $selectedColliderIndices.set(next)
 }
 
+// ── IVA seats ────────────────────────────────────────────────────────────────
+//
+// A seat is a placed, oriented entity like a collider, so it gets the same shape of
+// machinery. The one thing it does NOT have is a size: KSA's `<IVASeat>` is three
+// vectors (position + forward/up), so `scale` is a permanently-unused slot pinned to
+// (1,1,1) by {@link assignIvaSeat}. ORDER IS LOAD-BEARING — see {@link moveIvaSeat}.
+
+/**
+ * Adds an IVA camera vantage point (on the built-in IVA Seats layer) and selects it.
+ *
+ * `transform` seeds position + rotation; without it the seat starts un-rotated at the Part
+ * origin, which is KSA's own schema default (forward +X, up −Z). `scale` is ignored: a seat
+ * has no size (see {@link assignIvaSeat}). The new seat lands LAST, i.e. last in the IVA
+ * cycle order. Discrete → undo.
+ */
+export function addIvaSeat(transform?: PlacementTransform): void {
+  const current = $part.get()
+  const newId = nextIvaSeatId(current)
+  pushUndo('add IVA seat', newId)
+  const part = clone(current)
+  part.ivaSeats.push({
+    id: newId,
+    position: transform ? { ...transform.position } : { x: 0, y: 0, z: 0 },
+    rotation: transform ? { ...transform.rotation } : { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+    layerId: IVA_SEAT_LAYER_ID,
+  })
+  $part.set(part)
+  selectIvaSeat(part.ivaSeats.length - 1)
+}
+
+/** Like {@link updatePlacementTransform} but for an IVA seat (scale pinned). No undo. */
+export function updateIvaSeatTransform(index: number, t: PlacementTransform): void {
+  const current = $part.get()
+  if (index < 0 || index >= current.ivaSeats.length) return
+  const part = clone(current)
+  assignIvaSeat(part.ivaSeats[index], t)
+  $part.set(part)
+}
+
+/**
+ * Applies several seat transforms in one store update (bulk gizmo drag). No undo —
+ * the caller pushes once at interaction start.
+ */
+export function updateIvaSeatTransforms(
+  updates: readonly { index: number; transform: PlacementTransform }[],
+): void {
+  if (updates.length === 0) return
+  const part = clone($part.get())
+  for (const { index, transform } of updates) assignIvaSeat(part.ivaSeats[index], transform)
+  $part.set(part)
+}
+
+/**
+ * Points a seat's gaze by writing its rotation outright — what the inspector's aim presets
+ * and "Aim at selection" produce (both go through `seatRotationFromAxes`). Position is left
+ * alone. One gesture, one undo step → discrete.
+ */
+export function aimIvaSeat(index: number, rotation: EulerXYZ): void {
+  const current = $part.get()
+  const seat = current.ivaSeats[index]
+  if (!seat) return
+  pushUndo('aim IVA seat', seat.id)
+  const part = clone(current)
+  part.ivaSeats[index].rotation = { ...rotation }
+  $part.set(part)
+}
+
+/**
+ * Reorders a seat by `delta` places (−1 = earlier, +1 = later), clamped to the ends.
+ *
+ * THIS IS THE KSA SEAT CYCLE ORDER, not cosmetics: the vehicle's IVA camera opens on the
+ * first seat and `C` walks the rest in document order, which is the order flexo emits
+ * `<IVASeat>` in. Discrete → one undo step. The moved seat stays selected.
+ */
+export function moveIvaSeat(index: number, delta: number): void {
+  const current = $part.get()
+  const seat = current.ivaSeats[index]
+  if (!seat) return
+  const target = Math.min(current.ivaSeats.length - 1, Math.max(0, index + delta))
+  if (target === index) return
+  pushUndo('reorder IVA seat', `${seat.id} → ${target + 1}`)
+  const part = clone(current)
+  const [moved] = part.ivaSeats.splice(index, 1)
+  part.ivaSeats.splice(target, 0, moved)
+  $part.set(part)
+  // Follow the seats through the splice so the selection keeps pointing at the same ones.
+  $selectedIvaSeatIndices.set(
+    $selectedIvaSeatIndices.get().map((i) => {
+      if (i === index) return target
+      if (index < target) return i > index && i <= target ? i - 1 : i
+      return i >= target && i < index ? i + 1 : i
+    }),
+  )
+}
+
+/** Removes a single IVA seat by index (per-row context menu). Discrete → undo. */
+export function removeIvaSeat(index: number): void {
+  const current = $part.get()
+  if (index < 0 || index >= current.ivaSeats.length) return
+  pushUndo('delete IVA seat', current.ivaSeats[index].id)
+  const part = clone(current)
+  part.ivaSeats.splice(index, 1)
+  $part.set(part)
+  const sel = $selectedIvaSeatIndices.get()
+  const next = sel.filter((i) => i !== index).map((i) => (i > index ? i - 1 : i))
+  $selectedIvaSeatIndices.set(next)
+}
+
 /** Adds a kitten visual aide at the origin (on the built-in Kittens layer) and selects it. */
 export function addKitten(kind: KittenKind): void {
   const current = $part.get()
@@ -1102,9 +1229,10 @@ export function setConnectorCapabilities(
 }
 
 /**
- * Removes every selected entity — SubParts, connectors, AND kittens — in one undo
- * step. A single-entity delete keeps a neighbor of that kind selected (matching the
- * old per-kind behavior); any multi/mixed delete clears the selection.
+ * Removes every selected entity — SubParts, connectors, colliders, IVA seats AND
+ * kittens — in one undo step. A single-entity delete keeps a neighbor of that kind
+ * selected (matching the old per-kind behavior); any multi/mixed delete clears the
+ * selection.
  */
 export function removeSelected(): void {
   const part0 = $part.get()
@@ -1112,11 +1240,16 @@ export function removeSelected(): void {
   const con = $selectedConnectorIndices.get().filter((i) => i >= 0 && i < part0.connectors.length)
   const kit = $selectedKittenIndices.get().filter((i) => i >= 0 && i < part0.kittens.length)
   const col = $selectedColliderIndices.get().filter((i) => i >= 0 && i < part0.colliders.length)
-  const total = sub.length + con.length + kit.length + col.length
+  const seat = $selectedIvaSeatIndices.get().filter((i) => i >= 0 && i < part0.ivaSeats.length)
+  const total = sub.length + con.length + kit.length + col.length + seat.length
   if (total === 0) return
 
   const kinds =
-    (sub.length ? 1 : 0) + (con.length ? 1 : 0) + (kit.length ? 1 : 0) + (col.length ? 1 : 0)
+    (sub.length ? 1 : 0) +
+    (con.length ? 1 : 0) +
+    (kit.length ? 1 : 0) +
+    (col.length ? 1 : 0) +
+    (seat.length ? 1 : 0)
   const description =
     kinds > 1
       ? 'delete'
@@ -1132,9 +1265,13 @@ export function removeSelected(): void {
             ? kit.length === 1
               ? 'delete kitten'
               : 'delete kittens'
-            : col.length === 1
-              ? 'delete collider'
-              : 'delete colliders'
+            : col.length
+              ? col.length === 1
+                ? 'delete collider'
+                : 'delete colliders'
+              : seat.length === 1
+                ? 'delete IVA seat'
+                : 'delete IVA seats'
   const detail =
     total === 1
       ? ((sub.length
@@ -1143,12 +1280,15 @@ export function removeSelected(): void {
             ? part0.connectors[con[0]]?.id
             : kit.length
               ? part0.kittens[kit[0]]?.id
-              : part0.colliders[col[0]]?.id) ?? '')
+              : col.length
+                ? part0.colliders[col[0]]?.id
+                : part0.ivaSeats[seat[0]]?.id) ?? '')
       : [
           sub.length ? `${sub.length} part${sub.length === 1 ? '' : 's'}` : '',
           con.length ? `${con.length} connector${con.length === 1 ? '' : 's'}` : '',
           kit.length ? `${kit.length} kitten${kit.length === 1 ? '' : 's'}` : '',
           col.length ? `${col.length} collider${col.length === 1 ? '' : 's'}` : '',
+          seat.length ? `${seat.length} IVA seat${seat.length === 1 ? '' : 's'}` : '',
         ]
           .filter(Boolean)
           .join(', ')
@@ -1160,6 +1300,7 @@ export function removeSelected(): void {
   for (const i of [...con].sort((a, b) => b - a)) part.connectors.splice(i, 1)
   for (const i of [...kit].sort((a, b) => b - a)) part.kittens.splice(i, 1)
   for (const i of [...col].sort((a, b) => b - a)) part.colliders.splice(i, 1)
+  for (const i of [...seat].sort((a, b) => b - a)) part.ivaSeats.splice(i, 1)
   $part.set(part)
 
   if (total === 1 && sub.length === 1 && part.placements.length > 0) {
@@ -1170,6 +1311,8 @@ export function removeSelected(): void {
     setSelection([], [], [Math.min(kit[0], part.kittens.length - 1)])
   } else if (total === 1 && col.length === 1 && part.colliders.length > 0) {
     setSelection([], [], [], [Math.min(col[0], part.colliders.length - 1)])
+  } else if (total === 1 && seat.length === 1 && part.ivaSeats.length > 0) {
+    setSelection([], [], [], [], [Math.min(seat[0], part.ivaSeats.length - 1)])
   } else {
     clearSelection()
   }
@@ -1194,14 +1337,15 @@ export function removePlacement(index: number): void {
   else if (next.some((v, k) => v !== sel[k])) $selectedIndices.set(next)
 }
 
-/** Duplicates every selected entity (SubParts, connectors, kittens) and selects the copies. */
+/** Duplicates every selected entity (SubParts, connectors, colliders, seats, kittens) and selects the copies. */
 export function duplicateSelected(): void {
   const part0 = $part.get()
   const sub = $selectedIndices.get().filter((i) => i >= 0 && i < part0.placements.length)
   const con = $selectedConnectorIndices.get().filter((i) => i >= 0 && i < part0.connectors.length)
   const kit = $selectedKittenIndices.get().filter((i) => i >= 0 && i < part0.kittens.length)
   const col = $selectedColliderIndices.get().filter((i) => i >= 0 && i < part0.colliders.length)
-  const total = sub.length + con.length + kit.length + col.length
+  const seat = $selectedIvaSeatIndices.get().filter((i) => i >= 0 && i < part0.ivaSeats.length)
+  const total = sub.length + con.length + kit.length + col.length + seat.length
   if (total === 0) return
 
   const detail =
@@ -1212,8 +1356,10 @@ export function duplicateSelected(): void {
             ? part0.connectors[con[0]]?.id
             : kit.length
               ? part0.kittens[kit[0]]?.id
-              : part0.colliders[col[0]]?.id) ?? '')
-      : entityCountLabel(sub.length, con.length, kit.length, col.length)
+              : col.length
+                ? part0.colliders[col[0]]?.id
+                : part0.ivaSeats[seat[0]]?.id) ?? '')
+      : entityCountLabel(sub.length, con.length, kit.length, col.length, seat.length)
   pushUndo('duplicate', detail)
 
   const part = clone(part0)
@@ -1221,6 +1367,7 @@ export function duplicateSelected(): void {
   const newCon: number[] = []
   const newKit: number[] = []
   const newCol: number[] = []
+  const newSeat: number[] = []
   for (const i of [...sub].sort((a, b) => a - b)) {
     const src = part.placements[i]
     if (!src) continue
@@ -1276,23 +1423,35 @@ export function duplicateSelected(): void {
     })
     newCol.push(part.colliders.length - 1)
   }
+  // Copies land at the END of the seat list, i.e. last in the IVA cycle order.
+  for (const i of [...seat].sort((a, b) => a - b)) {
+    const src = part.ivaSeats[i]
+    if (!src) continue
+    part.ivaSeats.push({
+      ...structuredClone(src),
+      id: nextIvaSeatId(part),
+      layerId: IVA_SEAT_LAYER_ID,
+    })
+    newSeat.push(part.ivaSeats.length - 1)
+  }
   $part.set(part)
-  setSelection(newSub, newCon, newKit, newCol)
+  setSelection(newSub, newCon, newKit, newCol, newSeat)
 }
 
 /** Human label for a count of mixed entities, e.g. "3 parts" or "5 items". */
-function entityCountLabel(sub: number, con: number, kit: number, col: number): string {
-  const total = sub + con + kit + col
-  const kinds = (sub ? 1 : 0) + (con ? 1 : 0) + (kit ? 1 : 0) + (col ? 1 : 0)
+function entityCountLabel(sub: number, con: number, kit: number, col: number, seat = 0): string {
+  const total = sub + con + kit + col + seat
+  const kinds = (sub ? 1 : 0) + (con ? 1 : 0) + (kit ? 1 : 0) + (col ? 1 : 0) + (seat ? 1 : 0)
   if (kinds > 1) return `${total} items`
   if (sub) return `${sub} ${sub === 1 ? 'part' : 'parts'}`
   if (con) return `${con} ${con === 1 ? 'connector' : 'connectors'}`
   if (kit) return `${kit} ${kit === 1 ? 'kitten' : 'kittens'}`
-  return `${col} ${col === 1 ? 'collider' : 'colliders'}`
+  if (col) return `${col} ${col === 1 ? 'collider' : 'colliders'}`
+  return `${seat} IVA seat${seat === 1 ? '' : 's'}`
 }
 
 /**
- * Copies the current selection (SubParts, connectors, kittens) into the in-app
+ * Copies the current selection (every kind) into the in-app
  * {@link $clipboard}, stripping ids so a later paste regenerates fresh ones.
  * Leaves the workspace and selection untouched. Returns how many entities were
  * copied (0 when nothing is selected — the clipboard is left as-is).
@@ -1303,7 +1462,8 @@ export function copySelected(): number {
   const con = $selectedConnectorIndices.get().filter((i) => i >= 0 && i < part.connectors.length)
   const kit = $selectedKittenIndices.get().filter((i) => i >= 0 && i < part.kittens.length)
   const col = $selectedColliderIndices.get().filter((i) => i >= 0 && i < part.colliders.length)
-  const total = sub.length + con.length + kit.length + col.length
+  const seat = $selectedIvaSeatIndices.get().filter((i) => i >= 0 && i < part.ivaSeats.length)
+  const total = sub.length + con.length + kit.length + col.length + seat.length
   if (total === 0) return 0
   const order = (a: number, b: number) => a - b
   $clipboard.set({
@@ -1311,6 +1471,8 @@ export function copySelected(): number {
     connectors: [...con].sort(order).map((i) => structuredClone(part.connectors[i])),
     kittens: [...kit].sort(order).map((i) => structuredClone(part.kittens[i])),
     colliders: [...col].sort(order).map((i) => structuredClone(part.colliders[i])),
+    // Sorted by index so a paste preserves the seats' relative cycle order.
+    ivaSeats: [...seat].sort(order).map((i) => structuredClone(part.ivaSeats[i])),
   })
   return total
 }
@@ -1328,7 +1490,11 @@ export function pasteClipboard(): number {
   const clip = $clipboard.get()
   if (!clip) return 0
   const total =
-    clip.placements.length + clip.connectors.length + clip.kittens.length + clip.colliders.length
+    clip.placements.length +
+    clip.connectors.length +
+    clip.kittens.length +
+    clip.colliders.length +
+    clip.ivaSeats.length
   if (total === 0) return 0
 
   pushUndo(
@@ -1338,6 +1504,7 @@ export function pasteClipboard(): number {
       clip.connectors.length,
       clip.kittens.length,
       clip.colliders.length,
+      clip.ivaSeats.length,
     ),
   )
   const part = clone($part.get())
@@ -1345,6 +1512,7 @@ export function pasteClipboard(): number {
   const newCon: number[] = []
   const newKit: number[] = []
   const newCol: number[] = []
+  const newSeat: number[] = []
   for (const src of clip.placements) {
     const base = lastSegmentLower(src.subPartTemplateId)
     const count = part.placements.filter(
@@ -1395,8 +1563,17 @@ export function pasteClipboard(): number {
     })
     newCol.push(part.colliders.length - 1)
   }
+  // Pasted seats land at the END of the cycle order, in the order they were copied.
+  for (const src of clip.ivaSeats) {
+    part.ivaSeats.push({
+      ...structuredClone(src),
+      id: nextIvaSeatId(part),
+      layerId: IVA_SEAT_LAYER_ID,
+    })
+    newSeat.push(part.ivaSeats.length - 1)
+  }
   $part.set(part)
-  setSelection(newSub, newCon, newKit, newCol)
+  setSelection(newSub, newCon, newKit, newCol, newSeat)
   return total
 }
 
@@ -1429,6 +1606,7 @@ export function duplicatePlacement(index: number): void {
 export function selectPlacement(index: number): void {
   $selectedConnectorIndices.set([])
   $selectedColliderIndices.set([])
+  $selectedIvaSeatIndices.set([])
   $selectedKittenIndices.set([])
   $selectedIndices.set(index >= 0 ? [index] : [])
 }
@@ -1437,6 +1615,7 @@ export function selectPlacement(index: number): void {
 export function setSelectedPlacements(indices: readonly number[]): void {
   $selectedConnectorIndices.set([])
   $selectedColliderIndices.set([])
+  $selectedIvaSeatIndices.set([])
   $selectedKittenIndices.set([])
   const seen = new Set<number>()
   const next: number[] = []
@@ -1464,6 +1643,7 @@ export function togglePlacement(index: number): void {
 export function selectConnector(index: number): void {
   $selectedIndices.set([])
   $selectedColliderIndices.set([])
+  $selectedIvaSeatIndices.set([])
   $selectedKittenIndices.set([])
   $selectedConnectorIndices.set(index >= 0 ? [index] : [])
 }
@@ -1472,6 +1652,7 @@ export function selectConnector(index: number): void {
 export function setSelectedConnectors(indices: readonly number[]): void {
   $selectedIndices.set([])
   $selectedColliderIndices.set([])
+  $selectedIvaSeatIndices.set([])
   $selectedKittenIndices.set([])
   const seen = new Set<number>()
   const next: number[] = []
@@ -1489,6 +1670,7 @@ export function selectKitten(index: number): void {
   $selectedIndices.set([])
   $selectedConnectorIndices.set([])
   $selectedColliderIndices.set([])
+  $selectedIvaSeatIndices.set([])
   $selectedKittenIndices.set(index >= 0 ? [index] : [])
 }
 
@@ -1496,6 +1678,7 @@ export function selectKitten(index: number): void {
 export function selectCollider(index: number): void {
   $selectedIndices.set([])
   $selectedConnectorIndices.set([])
+  $selectedIvaSeatIndices.set([])
   $selectedKittenIndices.set([])
   $selectedColliderIndices.set(index >= 0 ? [index] : [])
 }
@@ -1504,8 +1687,27 @@ export function selectCollider(index: number): void {
 export function setSelectedColliders(indices: readonly number[]): void {
   $selectedIndices.set([])
   $selectedConnectorIndices.set([])
+  $selectedIvaSeatIndices.set([])
   $selectedKittenIndices.set([])
   $selectedColliderIndices.set(dedupeIndices(indices))
+}
+
+/** Selects an IVA seat by index (clears any SubPart/connector/collider/kitten selection). */
+export function selectIvaSeat(index: number): void {
+  $selectedIndices.set([])
+  $selectedConnectorIndices.set([])
+  $selectedColliderIndices.set([])
+  $selectedKittenIndices.set([])
+  $selectedIvaSeatIndices.set(index >= 0 ? [index] : [])
+}
+
+/** Replaces IVA-seat selection with the given indices (deduped). Clears the other kinds. */
+export function setSelectedIvaSeats(indices: readonly number[]): void {
+  $selectedIndices.set([])
+  $selectedConnectorIndices.set([])
+  $selectedColliderIndices.set([])
+  $selectedKittenIndices.set([])
+  $selectedIvaSeatIndices.set(dedupeIndices(indices))
 }
 
 /** Replaces kitten selection with the given indices (deduped, order-preserving). Clears SubPart/connector selection. */
@@ -1513,6 +1715,7 @@ export function setSelectedKittens(indices: readonly number[]): void {
   $selectedIndices.set([])
   $selectedConnectorIndices.set([])
   $selectedColliderIndices.set([])
+  $selectedIvaSeatIndices.set([])
   const seen = new Set<number>()
   const next: number[] = []
   for (const i of indices) {
@@ -1529,11 +1732,12 @@ export function clearSelection(): void {
   $selectedIndices.set([])
   $selectedConnectorIndices.set([])
   $selectedColliderIndices.set([])
+  $selectedIvaSeatIndices.set([])
   $selectedKittenIndices.set([])
 }
 
-/** An entity kind that can be selected (SubPart placement, connector, collider, or kitten). */
-export type SelectableKind = 'subpart' | 'connector' | 'collider' | 'kitten'
+/** An entity kind that can be selected (SubPart placement, connector, collider, IVA seat, or kitten). */
+export type SelectableKind = 'subpart' | 'connector' | 'collider' | 'ivaSeat' | 'kitten'
 
 const dedupeIndices = (xs: readonly number[]): number[] => {
   const seen = new Set<number>()
@@ -1547,21 +1751,25 @@ const dedupeIndices = (xs: readonly number[]): number[] => {
 }
 
 /**
- * Unified selection setter — sets all three kind stores at once (deduped) WITHOUT
+ * Unified selection setter — sets all five kind stores at once (deduped) WITHOUT
  * the mutual-exclusion clearing that the per-kind setters apply. This lets a
- * selection span SubParts, connectors, and kittens together (the Assets list's
- * native multi-select + select-all). Negative/duplicate indices are dropped.
+ * selection span SubParts, connectors, colliders, IVA seats and kittens together
+ * (the Assets list's native multi-select + select-all). Negative/duplicate indices
+ * are dropped. The collider and seat lists are DEFAULTED so callers that can't carry
+ * those kinds stay unchanged — but note every omitted list is still CLEARED.
  */
 export function setSelection(
   subIndices: readonly number[],
   conIndices: readonly number[],
   kitIndices: readonly number[],
   colIndices: readonly number[] = [],
+  seatIndices: readonly number[] = [],
 ): void {
   $selectedIndices.set(dedupeIndices(subIndices))
   $selectedConnectorIndices.set(dedupeIndices(conIndices))
   $selectedKittenIndices.set(dedupeIndices(kitIndices))
   $selectedColliderIndices.set(dedupeIndices(colIndices))
+  $selectedIvaSeatIndices.set(dedupeIndices(seatIndices))
 }
 
 /**
@@ -1578,7 +1786,9 @@ export function toggleEntity(kind: SelectableKind, index: number): void {
         ? $selectedConnectorIndices
         : kind === 'collider'
           ? $selectedColliderIndices
-          : $selectedKittenIndices
+          : kind === 'ivaSeat'
+            ? $selectedIvaSeatIndices
+            : $selectedKittenIndices
   const cur = store.get()
   store.set(cur.includes(index) ? cur.filter((i) => i !== index) : [...cur, index])
 }
@@ -1607,7 +1817,12 @@ export interface SelectedTransformRef {
   name: string
 }
 
-/** All selected entities (SubParts, then connectors, then kittens) with their transforms. */
+/**
+ * All selected entities (SubParts, then connectors, then colliders, then IVA seats,
+ * then kittens) with their transforms. This is what the gizmo, the keyboard
+ * nudge/rotate tools and the bulk inspector all iterate — being listed here is what
+ * makes a seat participate in those for free.
+ */
 export function selectedTransformRefs(): SelectedTransformRef[] {
   const part = $part.get()
   const tx = (e: PlacementTransform): PlacementTransform => ({
@@ -1636,6 +1851,10 @@ export function selectedTransformRefs(): SelectedTransformRef[] {
     const c = part.colliders[i]
     if (c)
       out.push({ kind: 'collider', index: i, transform: tx(c), layerId: c.layerId, name: c.id })
+  }
+  for (const i of $selectedIvaSeatIndices.get()) {
+    const s = part.ivaSeats[i]
+    if (s) out.push({ kind: 'ivaSeat', index: i, transform: tx(s), layerId: s.layerId, name: s.id })
   }
   for (const i of $selectedKittenIndices.get()) {
     const k = part.kittens[i]
@@ -1747,6 +1966,7 @@ export function updateSelectedTransforms(
     if (kind === 'subpart') assign(part.placements[index], transform)
     else if (kind === 'connector') assign(part.connectors[index], transform)
     else if (kind === 'collider') assignCollider(part.colliders[index], transform)
+    else if (kind === 'ivaSeat') assignIvaSeat(part.ivaSeats[index], transform)
     else assign(part.kittens[index], transform)
   }
   $part.set(part)
@@ -1765,10 +1985,25 @@ function assignCollider(c: PartCollider | undefined, t: PlacementTransform): voi
 }
 
 /**
+ * Writes a transform onto an IVA seat: position + rotation only, with `scale` PINNED to
+ * (1,1,1). KSA's `<IVASeat>` is three vectors — an eye point and two axes — and has no
+ * size of any kind, so there is nothing for a scale to mean; pinning it here makes a
+ * scale-mode gizmo drag (or a scale-mode bulk transform) a silent no-op on a seat instead
+ * of writing a number that could never be emitted. The marker's on-screen size is a global
+ * view setting, not document data.
+ */
+function assignIvaSeat(s: IvaSeat | undefined, t: PlacementTransform): void {
+  if (!s) return
+  s.position = { ...t.position }
+  s.rotation = { ...t.rotation }
+  s.scale = { x: 1, y: 1, z: 1 }
+}
+
+/**
  * Scales the ENTIRE workspace by per-axis factors around the world origin
- * (0,0,0): every placed SubPart, connector, and kitten, AND every animation
- * keyframe pose. Rotations and keyframe times are left untouched. One undoable
- * step. Anchored at the origin so the Part's mount reference stays fixed.
+ * (0,0,0): every placed SubPart, connector, collider, IVA seat and kitten, AND
+ * every animation keyframe pose. Rotations and keyframe times are left untouched.
+ * One undoable step. Anchored at the origin so the Part's mount reference stays fixed.
  *
  * This is the animation-safe counterpart to a multi-select gizmo resize, which
  * only touches the selected placements and silently breaks animation offsets.
@@ -1811,6 +2046,9 @@ export function scaleEverything(factor: Vec3): void {
     c.position = scalePos(c.position)
     c.scale = normalizeColliderSize(c.shape, scalePos(c.scale))
   }
+  // A seat is a POINT with a look direction: only its eye position moves. Scaling its
+  // rotation would tilt the gaze, and its `scale` is the unused slot (see assignIvaSeat).
+  for (const s of part.ivaSeats) s.position = scalePos(s.position)
   for (const a of part.animations) {
     for (const kf of a.keyframes) {
       // Translation only — see the conjugation note above.
@@ -1821,13 +2059,18 @@ export function scaleEverything(factor: Vec3): void {
 }
 
 /**
- * Updates the transform of whichever entity is selected (SubPart, connector, or
- * kitten). No undo — the caller pushes once at interaction start.
+ * Updates the transform of whichever entity is selected (SubPart, connector,
+ * collider, IVA seat or kitten). No undo — the caller pushes once at interaction start.
  */
 export function updateSelectedTransform(t: PlacementTransform): void {
   const coli = $selectedColliderIndex.get()
   if (coli >= 0) {
     updateColliderTransform(coli, t)
+    return
+  }
+  const seati = $selectedIvaSeatIndex.get()
+  if (seati >= 0) {
+    updateIvaSeatTransform(seati, t)
     return
   }
   const ki = $selectedKittenIndex.get()

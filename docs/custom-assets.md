@@ -301,6 +301,24 @@ same path as hand-authored ones. Nothing about them is a parallel universe.
   binaries out under `Meshes/` + `Textures/`. The FS-Access path is non-destructive
   for XML (suffixes on collision) but **overwrites binaries** deterministically.
 
+#### Interior-only meshes (`<Internal>`)
+
+A custom mesh can be marked **interior-only**, so it renders in KSA's IVA camera and nowhere
+else — that is how you build a cockpit interior out of your own geometry. It needs **no export
+variant**: `assetsXmlSerializer` already declares the SubPart, so it simply emits
+`<Internal>true</Internal>` inside that mesh's own `<PartModel>` when
+`resolveInternal(part, subPartId, undefined)` says so. The flag is set from the same
+**Interior (IVA only)** menu built-in props use, and it is per SubPart **template** (which, for
+a custom mesh, is one mesh) — see [iva-seats.md](iva-seats.md).
+
+**A glass mesh can never be interior-only.** `<PartModelGlass>` has no `<Internal>` field —
+there is exactly one `[XmlElement("Internal")]` in the whole decomp, on `PartModelModule` — so
+the plan's `internal` is forced `false` on the glass path (a `kitten.transparent` visor in a
+`glass`/`glassGlow` surface, or an `imported.transparent` mesh), the UI disables the toggle
+with a tooltip rather than silently ignoring it, and export validation warns as a backstop. A
+layered `glassGlow` visor counts as glass **whole**: marking only half of a two-SubPart surface
+interior-only is worse than not offering it.
+
 ### UI (`src/ui/`)
 
 - `CustomTextureDialog.tsx` — image upload (picker / drag-drop / paste) + a channel

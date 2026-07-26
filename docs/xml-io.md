@@ -200,3 +200,44 @@ Rules that differ from the rest of this document:
   names.
 
 See [colliders.md](colliders.md) and [scope/colliders.md](../scope/colliders.md).
+
+## IVA seats
+
+`<IVASeat>` is legal in the same **four** places `<Collider>` is, and the geometry/GameData
+pairs are again functionally identical (the additive `Components` merge). flexo reads both
+**Part-level** sites and writes one — every seat is normalised into the GameData document, in
+array order, which is KSA's in-game seat cycle order. The SubPart-level pair stays on the
+passthrough (`'IVASeat'` is in `KNOWN_PART_GAMEDATA_CHILDREN` only).
+
+```xml
+<PartGameData Id="...">
+    …
+    <IVASeat>                                  <!-- no Id attribute, ever -->
+        <Position X="-0.45" Y="0.42" Z="-0.35"/>
+        <ForwardAxis X="1" Y="0" Z="0"/>       <!-- ALWAYS all three axes (see below) -->
+        <UpAxis X="0" Y="0" Z="-1"/>
+    </IVASeat>
+</PartGameData>
+```
+
+Rules that differ from the rest of this document:
+
+- ⚠️ **Element-absent and attribute-absent are DIFFERENT defaults.** An entirely absent
+  element takes the C# field initializer (`ForwardAxis = (1,0,0)`, `UpAxis = (0,0,-1)`), but a
+  *present* element defaults each missing **attribute** to `0` — so `<ForwardAxis/>` is a
+  **zero look direction** that NaNs the in-game camera. There is therefore **no omit-at-default
+  for a seat's vectors**: `buildIvaSeatElement` writes all three axes of all three elements via
+  `buildVec3Attrs` (the shared all-axes writer, also used for the collider frame vectors),
+  never the omit-at-default `buildEngineVec3` style. Symmetrically, `ivaSeatsFromElement`
+  branches on **element presence** rather than reading attributes with a `(1,0,0)` fallback.
+- **The orientation is derived, not stored.** flexo keeps a `Transform.rotation` and converts
+  through `src/ksa/ivaSeatAxes.ts` at the boundary; the emitted axes are always **unit**
+  vectors (a non-unit `<UpAxis>` silently narrows the game's pitch clamp). Identity rotation
+  emits `ForwardAxis X="1"` + `UpAxis Z="-1"` — Core's own authoring.
+- **No `Id` is emitted.** Core authors none, nothing references a seat by id, and
+  `TemplateDataBase.Id` shares the namespace `<FeedsFrom Container>` resolves against.
+- **A degenerate authored pair is dropped on import** (either vector ~zero, or the two
+  parallel) with a console warning — the game would build a NaN camera rotation from it.
+
+See [iva-seats.md](iva-seats.md) and
+[scope/connectors-coordinates-iva.md](../scope/connectors-coordinates-iva.md).

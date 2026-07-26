@@ -20,7 +20,7 @@ of undo history — toggling the eye never creates an undo step. This matches th
 grid/inspector view-pref pattern in [state-persistence.md](./state-persistence.md).
 
 `Layer = { id, name }` (`src/ksa/types.ts`). Array order in `part.layers` is the
-display order. There are four **built-in** layers, all seeded by `createEmptyPart()`
+display order. There are five **built-in** layers, all seeded by `createEmptyPart()`
 and never deletable (`BUILT_IN_LAYER_IDS`):
 
 - **Default** (`DEFAULT_LAYER_ID = 'default'`) — the starting active layer for SubParts.
@@ -29,6 +29,10 @@ and never deletable (`BUILT_IN_LAYER_IDS`):
 - **Colliders** (`COLLIDER_LAYER_ID = 'colliders'`) — every `PartCollider` lives
   here, so the collision volume can be hidden/locked separately from the meshes it wraps
   (see [colliders.md](colliders.md)).
+- **IVA Seats** (`IVA_SEAT_LAYER_ID = 'ivaSeats'`) — every `IvaSeat` lives here, so the
+  interior camera vantage points can be hidden/locked separately from the meshes around
+  them (see [iva-seats.md](iva-seats.md)). Array order within `part.ivaSeats` is the
+  in-game cycle order, so this layer's rows are ordinals, not names.
 - **Kittens** (`KITTEN_LAYER_ID = 'kittens'`) — editor-only kitten visual aides, never
   serialized to export.
 
@@ -37,8 +41,8 @@ and never deletable (`BUILT_IN_LAYER_IDS`):
 - New **SubParts** (`addSubPart`) and imported Part SubParts (`addPart`) land in the
   **active layer** (`$activeLayerId`, clamped to an existing layer; falls back to Default).
 - New **connectors** (`addConnector`) and imported connectors always go to the built-in
-  **Connectors** layer, regardless of the active layer. **Colliders** and **kittens**
-  likewise always land on their own built-in layer.
+  **Connectors** layer, regardless of the active layer. **Colliders**, **IVA seats** and
+  **kittens** likewise always land on their own built-in layer.
 - `duplicateSelected` keeps each copy in its source's layer (so connector copies stay
   in the Connectors layer).
 - The KSA XML parser assigns SubParts `DEFAULT_LAYER_ID` and connectors `CONNECTOR_LAYER_ID`
@@ -53,8 +57,8 @@ All layer **document** mutations are discrete (self-record undo via `pushUndo()`
 - `renameLayer(id, name)` → committed once (on blur/Enter), not per keystroke.
 - `deleteLayer(id, { mode, targetLayerId })` → `'delete-items'` removes the layer's
   entities; `'move-items'` reassigns them (to Default if the target is invalid).
-  Built-in layers (Default, Connectors, Colliders, Kittens) are protected. Active layer falls back to
-  Default if it was deleted.
+  Built-in layers (Default, Connectors, Colliders, IVA Seats, Kittens) are protected. Active
+  layer falls back to Default if it was deleted.
 - `reorderLayers(orderedIds)` → reorders (must be a permutation of existing ids).
 
 Ephemeral / selection helpers (no undo):

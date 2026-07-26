@@ -41,6 +41,23 @@ with `http://localhost:5173/?debug=dockingport`. This loads the real Core part
 - **Scrambled** → adjust the Euler order or axis signs in `coords.ts` and document
   what was verified. The `EULER_ORDER` constant (currently `'ZYX'`) is the knob.
 
+## The second consumer — `src/ksa/ivaSeatAxes.ts`
+
+`coords.ts` is the chokepoint for *placements*, but it imports three.js, and one other
+conversion needs the same calibration in a **pure** module: an IVA seat's stored rotation ⇄
+its exported `<ForwardAxis>` / `<UpAxis>` pair (see [iva-seats.md](./iva-seats.md)).
+`ivaSeatAxes.ts` therefore carries its own hand-rolled copy — `ksaQuatFromEulerXyz` (a
+verbatim port of `QuaternionEx.CreateFromXyzRadians`) plus the `'ZYX'` Euler extraction
+three.js's `Euler.setFromRotationMatrix` performs — with **no three.js import**, following the
+`colliderFit.ts` precedent.
+
+Two copies of a calibration is exactly how a knob stops being singular, so
+`src/ksa/ivaSeatAxes.test.ts` pins them together: for each of the multi-axis rotation cases
+`coords.test.ts` uses, it runs `applyPlacement` and asserts the object's rotated local +X
+equals `seatAxesFromRotation(r).forward` and its rotated local −Z equals `.up`, to machine
+epsilon. **If `EULER_ORDER` ever changes, that test fails** — which is the point. Change the
+order in `coords.ts`; `ivaSeatAxes.ts` follows or the cross-check breaks.
+
 ## Why everything routes through coords.ts
 
 The store can hold rotation however is convenient, but export must be Euler XYZ

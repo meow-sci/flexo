@@ -45,6 +45,7 @@ Feature docs live in `docs/`. Read the relevant one before working on an area, a
 - [docs/custom-assets.md](docs/custom-assets.md) - user-authored textures (image→KTX2) + primitive meshes (→geometry GLB), exported as a KSA part mod; the on-disk format decisions and v1 shortcomings
 - [docs/colliders.md](docs/colliders.md) - authoring a Part's collision volume: KSA's four analytic primitives (there are no collider meshes), why size lives in `Transform.scale`, part-level vs SubPart-owned ownership, the four XML authoring sites and why flexo normalizes them into one
 - [docs/importing-models.md](docs/importing-models.md) - importing a Blender/DCC `.glb`/`.gltf` as real KSA SubParts: the Blender recipe, the glTF→SubPart/placement/material mapping, the warning catalog, storage + export, and the deliberate limits
+- [docs/iva-seats.md](docs/iva-seats.md) - authoring interior camera vantage points: the `<IVASeat>` document model, the rotation ⇄ `<ForwardAxis>`/`<UpAxis>` convention, seat order as game data, the "sit in this seat" preview and its honest limits, and the per-SubPart-template `<Internal>` interior-only flag
 
 # project constitution
 
@@ -266,6 +267,41 @@ in four places in KSA's schema; flexo reads all four and normalises every collid
 GameData document, which is what closed the long-open geometry-template gap **E**.
 See [docs/colliders.md](docs/colliders.md), [scope/colliders.md](scope/colliders.md),
 `plans/COLLIDERS_PLAN.md`.
+
+## IVA seats (interior camera vantage points)
+
+An `<IVASeat>` is where the player's eye goes in KSA's interior (IVA) camera mode. It is one
+`<PartGameData>` child carrying **three vectors** — `<Position>` (the eye point, in the Part's
+assembly frame), `<ForwardAxis>` and `<UpAxis>` — and nothing else. There is no "IVA support"
+flag: **a vehicle offers the IVA mode iff at least one part in it carries at least one seat**,
+document order IS the `C`-cycle order, and the **first seat is the one IVA opens on** — so seat
+order is authored data, not a list-sorting detail.
+
+Seats are first-class 3D entities (`EditingPart.ivaSeats: IvaSeat[]` on the built-in **IVA
+Seats** layer — the fifth `SelectableKind`), not numbers buried in GameData. `Transform` is
+reused with a reinterpretation: `position` is the eye point, `scale` is **unused** (KSA has no
+seat size), and `rotation` is **not emitted** — `src/ksa/ivaSeatAxes.ts` is the ONE place that
+converts it to/from the `<ForwardAxis>`/`<UpAxis>` pair. Its local axes are chosen to equal
+KSA's own field defaults (**+X forward, −Z up**), so identity rotation emits Core's exact XML;
+it is the **second** consumer of the `EULER_ORDER` calibration and is cross-checked against
+`src/three/coords.ts` by its test. ⚠️ **An absent element and a present-but-empty one have
+DIFFERENT defaults** (`(1,0,0)` vs `(0,0,0)` — a zero look direction NaNs the camera), so every
+axis of every element is ALWAYS emitted.
+
+Because the game's editor has **no IVA preview**, flexo ships one: **"Sit in this seat"** puts
+the camera at the eye point under the game's own two view clamps (`src/ksa/ivaLook.ts`, a
+verbatim port of `IVAController.OnFrame` — you can never look more than 90° off `<ForwardAxis>`,
+and the pitch stops ~25.8° short of the up pole). It is honest about what it does not simulate:
+flexo draws every SubPart, so the preview also shows the hull.
+
+What you _see_ from a seat is the other half: `<Internal>` (interior-only) is now plain
+per-SubPart-**template** user data (`EditingPart.internalFlags`, resolved by
+`resolveInternal`), toggled in bulk via **Interior (IVA only)** in the SubPart list — the old
+automatic interior-prop export rewrite is deleted. KSA culls back faces unconditionally, so an
+IVA part needs real interior geometry or the seat looks out at space; and **glass can never be
+interior-only** (`<PartModelGlass>` has no such field).
+See [docs/iva-seats.md](docs/iva-seats.md),
+[scope/connectors-coordinates-iva.md](scope/connectors-coordinates-iva.md), `plans/IVA_PLAN.md`.
 
 ## kittens (EVA character visual aides)
 

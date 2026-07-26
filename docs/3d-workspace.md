@@ -14,6 +14,7 @@ All code is under `src/three/`.
 | `MeshAtlasCache.ts` | Loads GLB atlases (`GLTFLoader`), extracts geometry by node name, bakes the node's local transform, caches per `atlasUrl#node`. |
 | `ColliderObject.ts` | One collision primitive: a fat-line wireframe + a low-alpha fill (the raycast target). Geometry is **unit-normalised**, so the group's `scale` IS the collider's size in meters and the scale gizmo edits dimensions directly. See [colliders.md](./colliders.md). |
 | `wireShapes.ts` | Shared unit-box wireframe builders (box / cylinder / sphere / capsule outlines) used by `ColliderObject` AND `ContainerLayer`. |
+| `IvaSeatObject.ts` | One IVA camera vantage point: an eye sphere + a **+X** forward cone + a **−Z** up stick + a CSS2D index badge (and an optional indicative gaze cone). Sized off `$ivaSeatSettings`, never off the document. See [iva-seats.md](./iva-seats.md). |
 | `samplePoints.ts` | Shared world-space geometry sampler (bbox corners or every vertex) for collider fitting and container containment warnings. |
 | `Grid.ts` | Origin grid (XZ plane) + colored axes (1 cell = 1 m). |
 | `SelectionManager.ts` | Raycast click-to-select (fires on pointerup only when the pointer barely moved, so orbit/gizmo drags aren't clicks). |
@@ -96,6 +97,44 @@ A **SubPart-owned** collider is drawn once per placement of its template (KSA ha
 per-instance collider), positioned via `coords.colliderWorld`. Since no single object
 could unambiguously receive a drag, the gizmo is suppressed for those until Phase 3.
 
+### The IVA seat marker
+
+An `IvaSeatObject` is a `THREE.Group` whose id rides `userData.selectable` on the group **and
+on every child mesh** (the raycast hits a mesh, never the group). Its anatomy is deliberate:
+
+- an **eye sphere** at the local origin — the vantage point, and the click target;
+- a **forward cone along local +X**, built exactly like `ConnectorObject`'s facing arrow so
+  the two markers read consistently — this is `<ForwardAxis>`;
+- a short **up stick along local −Z** in a contrasting colour — this is `<UpAxis>`, and it is
+  not decoration: without it a seat rolled 90° looks identical to an unrolled one;
+- a **CSS2D index badge** showing the 1-based cycle order (the seat IVA opens on is `1`),
+  hosted by the same `labelRenderer` `MeasurementLayer` drives;
+- an optional translucent **gaze cone** (`$ivaSeatSettings.showGazeCone`, default off), a
+  45° half-angle cone that is *indicative only* — the game's real limit is a 90° hemisphere,
+  which is a half-space with no readable shape.
+
+The marker never scales with the document (a seat's `scale` is unused); its size is the global
+`$ivaSeatSettings.markerSize`, and `EditorScene` **rebuilds** every marker when that setting
+changes, exactly as it does for connectors. `reconcileIvaSeats` re-applies the document index
+on every pass, which is what renumbers the badges after a reorder.
+
+### Seat view (the IVA camera preview)
+
+`Viewport` has a second camera mode. `EditorScene` resolves `$seatView` (a seat **id**) against
+the document to a pose and calls `viewport.enterSeatView({ position, forward, up })`, which
+snapshots the orbit camera, disables `OrbitControls` **and skips `controls.update()`** — it
+re-aims at `controls.target` unconditionally, ignoring `enabled`, and would undo every
+`lookAt`. Pointer drags accumulate yaw/pitch into `$seatLook`; each change composes the look
+from the seat's axes, runs it through `clampSeatLook` **once** (the game's own per-frame
+clamps — see [iva-seats.md](./iva-seats.md)) and sets `camera.position`/`up`/`lookAt`. The FOV
+needs no change: flexo's camera is already 50°, which is KSA's own.
+
+While seated, three things are suppressed — the transform gizmo, click-selection, and **the
+seat markers themselves** (you are inside the one you sat in, so it would fill the screen).
+`exitSeatView` restores the orbit camera exactly and removes the handlers; `dispose()` calls it
+too, so a leaked pointer handler can never outlive the canvas. A previewed seat that no longer
+exists exits cleanly rather than parking the camera on a stale eye point.
+
 ## Layer visibility & lock
 
 `EditorScene` subscribes to `$layerView` and `applyLayerVisibility()` sets each
@@ -103,6 +142,11 @@ entity's `group.visible` from its layer's visibility (on reconcile and after asy
 builds). A hidden layer renders nothing; three's raycaster also skips
 `visible === false`, so hidden entities are non-clickable. The click-select
 callback additionally rejects hits in a **locked** layer. See [layers.md](./layers.md).
+
+That pass is the **only** writer of `group.visible`, which is what keeps the other visibility
+rules from fighting it: the persisted **Hide interior** toggle (`$hideInterior`) and the
+seat-view marker suppression *compose* with the layer state (an entity draws iff its layer is
+visible AND nothing else hides it) instead of overwriting it.
 
 ## Coordinate & transform mapping
 

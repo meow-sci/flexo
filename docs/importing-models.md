@@ -319,6 +319,50 @@ what a primitive does:
   with a warning, rather than shipped as a `<SubPart>` pointing at a `<Mesh Id>` that doesn't
   exist.
 
+## Interior props and the `<Internal>` flag
+
+> **Behaviour change.** A placed interior prop now **stays interior on export**. It used to be
+> silently made visible everywhere.
+
+Several Core SubParts — the `CoreIVASpaceA_*` / `CoreIVAPropA_*` cockpit fittings — carry
+`<Internal>true</Internal>`, KSA's *interior-only* flag: the mesh renders in the IVA camera and
+nowhere else (`PartModel.cs`'s `!Template.Internal || viewport.Mode == IVA` gate). Placing one
+in flexo and exporting used to run **the old automatic interior-prop rewrite**: every such
+placement was re-homed onto a redeclared SubPart variant that dropped `<Internal>` (and, as a
+latent bug, `<RayTracing>`), so the prop rendered in the exterior view. That was right for
+"decorate an exterior part with a cockpit chair" and exactly wrong for "build a real interior",
+and there was no way to ask for the other one.
+
+That rewrite is **deleted**. `<Internal>` is now plain user data — `EditingPart.internalFlags`,
+keyed by SubPart **template** id and resolved by `resolveInternal` (explicit user flag → the
+catalogued built-in's own value → `false`) — so by default flexo mirrors the game's own data,
+and the decision is yours.
+
+**To flip it for a whole selection:** select the placements, then use **Interior (IVA only) ▸
+On / Off** in the SubPart list's row menu (right-click works too) or in the multi-select
+toolbar. It is the one item in that menu that acts on the multi-selection: if the row you
+opened it from is part of the current selection it applies to all of it — the submenu is
+labelled `Interior (IVA only) — N selected` in that case so it is never ambiguous — otherwise
+to that row alone. A template resolving to interior gets a `· interior` badge on its Assets-list
+row (and in the SubPart browser, so you know before placing), and `interior` is a search term.
+
+Three consequences worth knowing:
+
+- **The common cases now emit no variant at all.** A variant is minted only when flexo actually
+  changes something: the template carries SubPart GameData, **or** its wanted `<Internal>`
+  differs from the built-in's own. An untouched prop references the built-in id directly and
+  keeps the built-in's `<Internal>` / `<RayTracing>` / `<ShadowCaster>` for free.
+- **A variant now carries `<RayTracing>` and `<ShadowCaster>` forward.** A variant inherits
+  nothing but the `<Mesh>`/`<Material>` it names, so dropping those turned a `ShadowProxy`
+  occluder into a *visible* mesh and made a built-in's explicit `ShadowCaster false` start
+  casting shadows.
+- **Interior geometry with no seat is invisible in every camera mode** — `<Internal>` hides it
+  outside IVA, and with no `<IVASeat>` anywhere in the vehicle the IVA mode is never offered.
+  That is the failure the old rewrite used to mask, and it is now an export warning. An
+  imported glTF mesh can be marked interior the same way; **glass cannot** (see
+  [custom-assets.md](custom-assets.md#interior-only-meshes-internal)). Full
+  treatment in [iva-seats.md](iva-seats.md).
+
 ## Managing imports
 
 The **Custom Assets** modal has an **Imported models** section: one card per import batch with its

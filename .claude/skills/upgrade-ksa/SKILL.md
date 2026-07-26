@@ -261,16 +261,27 @@ the regression tests, and the highest-value checks. Each row's deep contract is 
   `mod.toml` / `AssetBundle` loader contract; the KTX2 flavor KSA accepts (the real acceptance test
   is dropping an exported `flexo-parts/` mod into KSA).
 
-### G. Connectors · coordinates · IVA/NotIVA · vehicle reference orientation — [`scope/connectors-coordinates-iva.md`](../../../scope/connectors-coordinates-iva.md)
+### G. Connectors · coordinate mapping · IVA · vehicle reference orientation — [`scope/connectors-coordinates-iva.md`](../../../scope/connectors-coordinates-iva.md)
 
 - **Game anchors:** `Part.Connector` / `Part.cs`, `QuaternionEx.cs`, `Double3Ex.cs`,
   `VehicleEditor.cs`, `PartModel.cs` / `PartModelModule.cs`, `DockingPortTemplate.cs`,
-  `Control.cs` / `ControlTemplate.cs`, `FlightComputer.cs`, `Vehicle.cs`.
+  `Control.cs` / `ControlTemplate.cs`, `FlightComputer.cs`, `Vehicle.cs`; for seats
+  `IVASeat.cs`, `IVAController.cs`, `Camera.cs` (`LookAtRotation`, the 50° FOV),
+  `AttachedInternal.cs`, `Input.cs` (`C` / `Shift+C` bindings).
 - **flexo:** `src/three/coords.ts`, `ConnectorObject.ts`, `debugCalibration.ts`; connector
-  parse/emit in `src/ksa/partXmlParser.ts` / `partXmlSerializer.ts`; `types.ts`.
+  parse/emit in `src/ksa/partXmlParser.ts` / `partXmlSerializer.ts`; `types.ts`; seats in
+  `src/ksa/ivaSeatAxes.ts` (the `EULER_ORDER` calibration's second consumer), `ivaLook.ts`,
+  `ivaSeatValidation.ts`, `src/three/IvaSeatObject.ts`; the `<Internal>` flag in
+  `modExport.resolveInternal` / `assetsXmlSerializer.ts`.
 - **Check:** `QuaternionEx.CreateFromXyzRadians` + `Double3Ex` axis conventions unchanged (else
-  recalibrate `EULER_ORDER` in `coords.ts` — use `?debug=dockingport`); `Part.Connector.Flag` enum
-  + `<Flags>` schema; the IVA render gate + `<Internal>` / `<RayTracing>` schema in `PartModel`.
+  recalibrate `EULER_ORDER` in `coords.ts` — use `?debug=dockingport`; `ivaSeatAxes.test.ts`
+  fails first if it drifts); `Part.Connector.Flag` enum + `<Flags>` schema; the IVA render gate
+  + `<Internal>` / `<RayTracing>` / `<ShadowCaster>` schema in `PartModel` (and that
+  `<Internal>` is still the ONLY `[XmlElement("Internal")]` in the decomp — `<PartModelGlass>`
+  gaining one would change what flexo may mark interior-only); `IVASeatTemplate`'s three
+  `Vector3Reference` fields + their field defaults, and `IVAController`'s two view clamps
+  (`ivaLook.ts` is a line-for-line port — re-diff `OnFrame` and the seat-cycling/`OnSwitchOn`
+  order semantics).
   **Reference-orientation contract:** confirm `Control`/`ControlTemplate` are still empty markers
   (no transform / control-point field), `FlightComputer.UpdateAttitudeTrackError` still aims **Body
   +X** / rolls **+Z**, `VehicleEditor` still pins the root to identity at launch. A new

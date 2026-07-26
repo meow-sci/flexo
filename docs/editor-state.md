@@ -11,7 +11,8 @@ the 3D scene subscribes with vanilla `subscribe()`, React reads via
 | `$part` | `EditingPart` | The whole part: `partId`, `editorTags`, `gameData` (display name, mass, tanks, power, coupling — the popup-only metadata with no 3D form), `layers[]`, `placements[]`, `connectors[]` (each placement/connector carries a `layerId`; connector `flags` is a `ConnectorFlag[]`). Treated as **immutable** — every mutation replaces it with a fresh object (so subscribers fire). |
 | `$selectedIndices` / `$selectedIndex` | `number[]` / `number` | SubPart selection (multi); `$selectedIndex` is the primary (last) one or `-1`. |
 | `$selectedConnectorIndex` | `number` | Selected connector, or `-1`. Mutually exclusive with SubPart selection. |
-| `$selectedColliderIndices` / `$selectedColliderIndex` | `number[]` / `number` | Collider selection — the **fourth** `SelectableKind`, alongside subpart/connector/kitten. Mutually exclusive under the single-kind setters, but `setSelection` / `toggleEntity` can span all four (the Assets list's cross-kind multi-select). |
+| `$selectedColliderIndices` / `$selectedColliderIndex` | `number[]` / `number` | Collider selection — the **fourth** `SelectableKind`, alongside subpart/connector/kitten. Mutually exclusive under the single-kind setters, but `setSelection` / `toggleEntity` can span all five (the Assets list's cross-kind multi-select). |
+| `$selectedIvaSeatIndices` / `$selectedIvaSeatIndex` | `number[]` / `number` | IVA seat selection — the **fifth** `SelectableKind` (`'ivaSeat'`), same shape as the collider pair: clamped when the document shrinks, cleared by every other kind's single-kind setter, and carried by `setSelection` / `toggleEntity` / `selectedTransformRefs`. See [iva-seats.md](./iva-seats.md). |
 | `$activeLayerId` | `string` | Layer new items land in. Ephemeral (not persisted, not undone); clamped to a live layer. See [layers.md](./layers.md). |
 | `$toolMode` | `'translate'\|'rotate'\|'scale'` | Drives the 3D gizmo. |
 | `$snap` | `{ translate?, rotateDeg? }` | Grid / rotation snap (0/undefined = off). |
@@ -41,6 +42,24 @@ gizmo drag start, exactly like the placement/connector transform writers). Every
 them routes the size through `normalizeColliderSize`, because a collider's `scale` is its
 size in meters, not a multiplier.
 
+**IVA seat actions** (`part.ivaSeats`; see [iva-seats.md](./iva-seats.md)) — all enrolled in
+undo. **Discrete** (they `pushUndo()` themselves): `addIvaSeat(transform?)` (lands last, i.e.
+last in the cycle order, and selects itself), `removeIvaSeat(index)`,
+`moveIvaSeat(index, delta)` (the **reorder** — that order is exported game data, and the
+selection follows the seat through the splice), `aimIvaSeat(index, rotation)` (the inspector's
+aim presets and "Aim at selection", both one gesture), and `addKittenAtSeat(seatIndex, kind?)`
+(which mutates `part.kittens`, not the seat). **Streaming** (the caller pushes once at gizmo
+drag start, exactly like the placement writers): `updateIvaSeatTransform(index, t)` and
+`updateIvaSeatTransforms(updates)`. Both route through the private `assignIvaSeat`, which
+copies position + rotation and **pins `scale` to (1,1,1)** — KSA has no seat size, so a
+scale-mode drag is a deliberate no-op.
+
+**`setPlacementsInternal(indices, internal)`** is discrete (one undo entry) and writes
+`part.internalFlags` for the **distinct** SubPart templates behind the given placements — KSA
+puts `<Internal>` on the template's `<PartModel>`, so it is never per-placement. Glass-exporting
+templates are skipped (`isGlassTemplate`, exported so the menus can *disable* the item rather
+than silently drop the write).
+
 **GameData actions** (`part.gameData`, used by the Part Data dialog): `setDisplayName`,
 `setCustomMassEnabled` / `setCustomMass`, tanks `addTank` / `removeTank` /
 `setTankShape` / `updateTank`, power `add*`/`remove*`/`set*` for batteries / generators
@@ -57,9 +76,12 @@ Conventions:
 ### Undo/redo invariant (must maintain)
 
 History snapshots **`$part` only** (the serialized document: `partId`, `editorTags`,
-`gameData`, `layers`, `placements`, `connectors`, incl. each entity's `layerId`). Selection,
-`$toolMode`, `$snap` and `$activeLayerId` are ephemeral UI and are intentionally
-excluded; selection + active layer are *clamped* (not restored) after undo/redo.
+`gameData`, `layers`, `placements`, `connectors`, `colliders`, `ivaSeats`, `internalFlags`,
+incl. each entity's `layerId`). Selection, `$toolMode`, `$snap` and `$activeLayerId` are
+ephemeral UI and are intentionally excluded; selection + active layer are *clamped* (not
+restored) after undo/redo. So are the seat-view and seat-aim atoms (`$seatView` / `$seatLook`
+in `ivaStore.ts`, `$ivaSeatAimRequest` in `ivaSeatStore.ts`) — an aim request only enters
+history through the `aimIvaSeat` it eventually causes.
 Per-layer visibility/lock is also excluded (it's persisted view state in
 `layerStore.ts`). Every action that mutates `$part` MUST enroll in undo via exactly
 one of two patterns:

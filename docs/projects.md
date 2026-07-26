@@ -12,7 +12,8 @@ camera**, which is ephemeral and resets on load:
 
 - `name` — the project's identity (and its localStorage key suffix).
 - `part` — the full `EditingPart` document: `partId`, `editorTags`, `layers`,
-  `placements`, `connectors` (each entity's `layerId` included).
+  `placements`, `connectors`, `colliders`, `ivaSeats`, `internalFlags` (each entity's
+  `layerId` included).
 - `layerView` — per-layer visibility/lock (the `$layerView` view state from `layerStore`).
 - `activeLayerId` — where new items land (clamped to a live layer on load).
 - `history` — the undo/redo stacks, via `exportHistory()` / `importHistory()` on
@@ -59,6 +60,25 @@ workspace renders once, with the right data. Then it starts autosave.
 - **Rename** re-keys storage (removes the old `flexo:project:<old>` entry).
 - **Delete** of the current project switches to the most-recent remaining project, or
   starts a fresh default when none are left.
+
+## The compact project codec
+
+`src/state/projectCodec.ts` is the single wire format for everything that serializes a
+document — the localStorage snapshot and the project export/import JSON alike. It encodes
+`EditingPart` into short keys (`p` placements, `c` connectors, `cl` colliders, `iv` IVA seats,
+`ifl` the per-SubPart-template `<Internal>` flags, `k` kittens, `a` animations, `m` custom
+meshes, …), omitting anything empty or at its default.
+
+`PROJECT_EXPORT_VERSION` is currently **7**. That bump covered **both** halves of the IVA
+work at once — `iv` and `ifl` — because they shipped together. Per the no-migration rule in
+AGENTS.md, **older payloads are rejected on import, never converted**, and a stale
+localStorage snapshot is discarded by the boot-time purge rather than upgraded.
+
+Two encoding rules worth knowing, both about seats: the **array order of `iv` is
+load-bearing** (it is KSA's in-game seat cycle order — see [iva-seats.md](./iva-seats.md)), and
+a seat's `layerId` is restored from `IVA_SEAT_LAYER_ID` on decode rather than serialized, with
+its unused `scale` omitted by the shared transform encoder. `ifl` is decoded defensively —
+only `string → boolean` entries survive, bad data is dropped.
 
 ## UI — `src/ui/ProjectButton.tsx`
 

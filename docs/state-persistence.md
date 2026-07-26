@@ -114,6 +114,21 @@ The right-hand column is intentionally forgotten between imports: re-applying th
 model's fix-up to the next one produces a plausible-looking, wrong result (a leftover `×0.01`
 scale is the worst of these). Persist a preference; never persist a correction.
 
+### Worked examples — IVA seat view settings
+
+Two persisted atoms landed with [IVA seats](./iva-seats.md), and they are a clean illustration
+of the "persist a preference, never a correction" rule and of the document/view split:
+
+| Atom               | Key                     | Default                              | Why it is view state, not document state                                                                                                                  |
+| ------------------ | ----------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$ivaSeatSettings` | `flexo:ivaSeatSettings` | `{ markerSize: 0.12, showGazeCone: false }` | KSA has no seat size, so an `IvaSeat`'s `scale` is unused; how big the marker draws is a preference about *your screen*, exactly like the connector cube's size. |
+| `$hideInterior`    | `flexo:hideInterior`    | `false`                              | "Show me the part the way the game does outside IVA" is a way of looking, not a property of the part. Flipping it must never create an undo step.          |
+
+Both live outside `$part` and outside undo. The seat *view* itself (`$seatView`, `$seatLook`
+in `ivaStore.ts`) is the counter-example on the other side: it is transient working state —
+which seat you are sitting in right now — so it is **not** persisted at all, and a reload puts
+you back at the orbit camera.
+
 ## Projects (workspace persistence)
 
 Beyond individual preference atoms, the **entire editing workspace** is persisted as a

@@ -13,6 +13,8 @@ the 3D scene subscribes with vanilla `subscribe()`, React reads via
 | `$selectedConnectorIndex` | `number` | Selected connector, or `-1`. Mutually exclusive with SubPart selection. |
 | `$selectedColliderIndices` / `$selectedColliderIndex` | `number[]` / `number` | Collider selection — the **fourth** `SelectableKind`, alongside subpart/connector/kitten. Mutually exclusive under the single-kind setters, but `setSelection` / `toggleEntity` can span all five (the Assets list's cross-kind multi-select). |
 | `$selectedIvaSeatIndices` / `$selectedIvaSeatIndex` | `number[]` / `number` | IVA seat selection — the **fifth** `SelectableKind` (`'ivaSeat'`), same shape as the collider pair: clamped when the document shrinks, cleared by every other kind's single-kind setter, and carried by `setSelection` / `toggleEntity` / `selectedTransformRefs`. See [iva-seats.md](./iva-seats.md). |
+| `$selectedLightIndices` / `$selectedLightIndex` | `number[]` / `number` | Light selection — the **sixth** `SelectableKind` (`'light'`), same shape again. See [lights.md](./lights.md). |
+| `$lightEditContext` | `Record<string, number>` | Per light id, **which placement of its owner template** was last clicked. Ephemeral (not persisted, not undone). One atom, so the gizmo's write-back frame and the inspector's part-frame fields can never disagree about which instance an edit converts through. |
 | `$activeLayerId` | `string` | Layer new items land in. Ephemeral (not persisted, not undone); clamped to a live layer. See [layers.md](./layers.md). |
 | `$toolMode` | `'translate'\|'rotate'\|'scale'` | Drives the 3D gizmo. |
 | `$snap` | `{ translate?, rotateDeg? }` | Grid / rotation snap (0/undefined = off). |
@@ -54,6 +56,21 @@ drag start, exactly like the placement writers): `updateIvaSeatTransform(index, 
 copies position + rotation and **pins `scale` to (1,1,1)** — KSA has no seat size, so a
 scale-mode drag is a deliberate no-op.
 
+**Light actions** (`part.lights`; see [lights.md](./lights.md)) — all enrolled in undo.
+**Discrete** (they `pushUndo()` themselves): `addLight(ownerTemplateId, seed?)` (appends a
+`createPartLight` default under a freshly generated `_lightN` id; the id, owner and layer are
+never seed-overridable), `removeLight(index)`,
+`setLightType(index, type)`, `setLightRayTracing(index, on)`, and
+`setLightOwner(index, ownerTemplateId, converted?)` (the re-home between `<PartGameData>` and a
+template's `<SubPartGameData>`; the caller supplies the frame-converted transform so the store
+stays three.js-free — the `setColliderOwner` precedent). **Streaming** (the caller pushes once
+at field focus / gizmo drag start): `updateLight(index, patch)` (the `<Light>` scalars — range,
+intensity, colour, cone angles), `setLightPosition(index, position)`,
+`setLightRotation(index, rotation)`, and `updateLightTransform(index, t)`. The three transform
+writers route through the private `assignLight`, which copies position + rotation and **pins
+`scale` to (1,1,1)** — KSA ignores light scale, so a scale-mode drag is a deliberate no-op (the
+IVA-seat rule).
+
 **`setPlacementsInternal(indices, internal)`** is discrete (one undo entry) and writes
 `part.internalFlags` for the **distinct** SubPart templates behind the given placements — KSA
 puts `<Internal>` on the template's `<PartModel>`, so it is never per-placement. Glass-exporting
@@ -76,12 +93,13 @@ Conventions:
 ### Undo/redo invariant (must maintain)
 
 History snapshots **`$part` only** (the serialized document: `partId`, `editorTags`,
-`gameData`, `layers`, `placements`, `connectors`, `colliders`, `ivaSeats`, `internalFlags`,
-incl. each entity's `layerId`). Selection, `$toolMode`, `$snap` and `$activeLayerId` are
-ephemeral UI and are intentionally excluded; selection + active layer are *clamped* (not
-restored) after undo/redo. So are the seat-view and seat-aim atoms (`$seatView` / `$seatLook`
-in `ivaStore.ts`, `$ivaSeatAimRequest` in `ivaSeatStore.ts`) — an aim request only enters
-history through the `aimIvaSeat` it eventually causes.
+`gameData`, `layers`, `placements`, `connectors`, `colliders`, `ivaSeats`, `lights`,
+`internalFlags`, incl. each entity's `layerId`). Selection, `$toolMode`, `$snap` and
+`$activeLayerId` are ephemeral UI and are intentionally excluded; selection + active layer are
+*clamped* (not restored) after undo/redo. So are the seat-view and seat-aim atoms (`$seatView`
+/ `$seatLook` in `ivaStore.ts`, `$ivaSeatAimRequest` in `ivaSeatStore.ts`) and the light
+editing context (`$lightEditContext`) — an aim request only enters history through the
+`aimIvaSeat` it eventually causes.
 Per-layer visibility/lock is also excluded (it's persisted view state in
 `layerStore.ts`). Every action that mutates `$part` MUST enroll in undo via exactly
 one of two patterns:

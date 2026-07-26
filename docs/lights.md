@@ -8,9 +8,9 @@ schema/pose/falloff contract); game-side details in
 
 > **Status.** Implemented so far: the normalized model + XML round-trip, the falloff/frame math
 > ports, the markers/layer/selection described here, gizmo editing + the full light inspector
-> (owner/part-frame fields, aim vector, owner re-homing), and the coverage visualization. The
-> live lighting preview and validation are later phases of the plan (§4) — where a seam exists
-> for them it is called out below.
+> (owner/part-frame fields, aim vector, owner re-homing), the coverage visualization, and the
+> live lighting preview, the export pre-flight validation, and the inspector's falloff curve.
+> What is deliberately still out of scope is listed at the bottom.
 
 ## What a light is
 
@@ -129,7 +129,16 @@ The transform inspector shows a **dedicated light panel** (`LightHeader`,
   re-aiming never wildly spins the gizmo; a degenerate (≈zero) vector is rejected;
 - the `<Light>` scalar editors (Range, Intensity, Color, Spot cone half-angles in degrees,
   Ray tracing) — the same controls as the SubPart Data dialog's Lights section, which stays
-  for template-scoped editing.
+  for template-scoped editing;
+- the **falloff curve** (`src/ui/LightFalloffCurve.tsx`) — a sparkline of
+  `E(d) / (E(d) + E₀)` along the aim axis, 48 samples from 2% of range out to the boundary,
+  drawn with the **same** `E₀` the coverage shells use (below), so the panel and the viewport
+  can never disagree about what Range and Intensity mean. The spot term is absent on purpose:
+  on the aim axis `cosθ = 1`, so it is exactly 1 for a Spot and irrelevant to a Point — one
+  curve is correct for both types. The line lands on the baseline exactly at `d = Range`,
+  which is the whole point of drawing it: a light does not fade out somewhere around its
+  range, it stops there. A light with no usable range draws no curve at all (the same refusal
+  the shells make).
 
 ## Coverage visualization
 
@@ -206,6 +215,65 @@ context instance, so a multi-placement light doesn't stack N overlapping glows),
 - The shading is display-only presentation on top of the game's math; the editor's tone mapping
   and the game's grading are unrelated. Compare *shapes and extents*, not pixels.
 
+## Live lighting preview
+
+Coverage answers "how far does this reach"; it does not answer "what does the part look like lit
+by it". **View ▸ Preview lighting** (off by default) hangs a **real three.js light** off every
+light marker, so the SubPart meshes are actually illuminated in the viewport — a spot's pool on a
+hull, the color a lamp throws onto its own housing, whether a fixture lights anything at all.
+
+It is **indicative, not exact.** The coverage shells are the exact read (they evaluate KSA's own
+formulas per fragment); the preview borrows three.js's punctual lights, which are close but not
+the same. The mapping (`LightObject.setPreview`/`syncPreview`, plan §3.10):
+
+| KSA `<Light>` field | three.js Point                       | three.js Spot                                        |
+| ------------------- | ------------------------------------ | ---------------------------------------------------- |
+| `Type`              | `PointLight`                         | `SpotLight`                                          |
+| `Color`             | `color` (read as sRGB — matches the bulb + the inspector swatch) | same                     |
+| `Intensity`         | `intensity` (candela; both laws are `I/d²`) | same                                          |
+| `Range`             | `distance = Range`, `decay = 2`      | same                                                 |
+| `OuterAngle`        | —                                    | `angle` (after KSA's own clamp, ≤ 1.5697963 rad)     |
+| `InnerAngle`        | —                                    | `penumbra = 1 − inner/outer` (`spotPenumbra`)        |
+| aim (local **+X**)  | — (a point light has no aim)         | `target` parented into the marker group at `(Range, 0, 0)` |
+| shadows             | `castShadow = false`                 | same                                                 |
+
+Cone angles run through the same `clampSpotAngles` sanitizer the shells and the boundary
+wireframe use, so the lit footprint and the wireframe cone describe the same cone.
+
+### Documented approximations
+
+- **The distance window is squared.** three's attenuation is `(1 − (d/R)⁴)² / d²`; KSA's is
+  `(1 − (d/R)⁴) / d²`. Same reach — both are exactly 0 at `d = R` — but the preview dims a
+  little faster through the outer half of the range.
+- **The cone edge is a different curve.** three fades the spot edge with a `smoothstep` between
+  the inner and outer cones; KSA uses a *squared* linear-in-cosine ramp. `penumbra = 1 −
+  inner/outer` lines the two cones up exactly; the gradient between them differs.
+- **The diffuse response is three's, not KSA's.** `MeshStandardMaterial`'s BRDF, the editor's
+  environment/ambient rig, and its ACES tone mapping have nothing to do with KSA's shading and
+  grading. Compare *placement, reach and color*, never pixels.
+- **A light KSA culls draws nothing here either.** `Range ≤ 0` or `Intensity ≤ 0` is culled
+  CPU-side in-game (`ClusteredLightSystem.cs:669,760`), so the preview light is left invisible —
+  which also avoids three's `distance = 0` meaning *infinite* range.
+- **No shadows.** Preview lights pass straight through geometry, so a lamp inside a hull lights
+  the far side too. KSA's shadow configuration is out of scope.
+
+### Limits
+
+- **Capped at 16 light INSTANCES** (`MAX_PREVIEW_LIGHTS`), spent in document order — and a
+  SubPart-owned light counts once per placement of its template, because that is how many lights
+  KSA instantiates. Past the cap the View menu says so ("previewing N of M light instances");
+  the remaining lights still draw markers and coverage.
+- Toggling the preview (or adding/removing a light while it is on) changes the scene's light
+  count, which makes three **re-link every shader program** — a visible hitch on a big part. That
+  is the main reason the default is off.
+- The preview composes with the Lights layer exactly as coverage does: a hidden Lights layer
+  means no preview illumination. Layer opacity does not apply (a light has no opacity), and
+  selecting a light does not tint its illumination green.
+- Preview lights are **editor-only by construction**: they are children of the marker groups in
+  `EditorScene`'s scene, and the three preview viewports (`PartPreviewViewport`,
+  `SubPartPreviewViewport`, `ModelPreviewViewport`) plus the GLB exporter (`exportGlb.ts`) each
+  build their own `THREE.Scene`, so nothing exported or thumbnailed can ever see them.
+
 ## Adding lights
 
 - **Add → Light → Spot light / Point light** — a part-level light at the origin, selected and
@@ -215,9 +283,38 @@ context instance, so a multi-placement light doesn't stack N overlapping glows),
 - The glow panel's **"Add matching light"** (KSA emissive is white-only, so a colored `<Light>`
   is the only way a part reads as a colored lamp in-game).
 
-## Deferred (plan phases 6–7)
+## Validation (export pre-flight)
 
-The optional live three.js light preview (§3.10 — real `PointLight`/`SpotLight`s that actually
-light the part meshes) and validation (§3.11). Also deferred: clipboard copy/paste of lights,
-and "catalog ghost lights" for the lights a placed built-in template already carries in Core's
-own GameData (plan §7).
+`src/ksa/lightValidation.ts` grades a Part's lights before export, and the **Export** dialog
+shows the findings next to the engine, collider and IVA-seat pre-flights. Unlike those, **no
+light finding can block a load**: `<Light>` has no required element, no id anything resolves
+against, and every out-of-range value is sanitized at runtime — so there is no `block`
+severity here, only two bands:
+
+- **⚠ Loads, but the part misbehaves** — the light does something other than what was asked:
+  it never renders, it is never instantiated, or the beam goes somewhere the marker doesn't
+  show.
+- **· Worth knowing** — legal, and often deliberate, but KSA quietly does something to the
+  value. Core's own data trips two of these, so they are stated, never scolded.
+
+| Code                           | Severity | Fires when                                               | What it means in game                                                                                                                                                                                                                                                                                        |
+| ------------------------------ | -------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `light-range-nonpositive`      | warn     | `Range ≤ 0`                                              | KSA culls the light **CPU-side**, before it ever reaches the renderer (`ClusteredLightSystem.cs:669,760`). The shader would not have rejected it — the CPU cull is the reason it is dark.                                                                                                                     |
+| `light-intensity-nonpositive`  | warn     | `Intensity ≤ 0`                                          | The same CPU-side cull (`:760`). Not a dim light — no light at all.                                                                                                                                                                                                                                          |
+| `light-angles-swapped`         | warn     | Spot with inner > outer                                  | The game silently swaps them (`Light.cs:56-61`), so it renders as if the two numbers had been typed the other way round. Almost always an authoring slip.                                                                                                                                                     |
+| `light-outer-overclamp`        | info     | Spot outer > 1.5697963 rad                               | Clamped in-game to ≈89.94° (`MAX_OUTER_ANGLE`). Core's own `FloodlightA` authors 1.57 deliberately to get a hemisphere — the cone simply cannot open further.                                                                                                                                                 |
+| `light-owner-unplaced`         | warn     | the owner template has no placement                      | A SubPart light exists once per **placement**; with none, it is never instantiated. Dead data.                                                                                                                                                                                                                |
+| `light-owner-nonuniform-scale` | warn     | any owner placement is scaled non-uniformly              | KSA pushes the aim through the owner's **scaled** upper-3×3 before normalising, so the in-game beam skews off-axis and the position offset stretches with the placement; the marker shows the uniform-scale approximation.                                                                                     |
+| `light-owner-mirrored`         | warn     | any owner placement has a negative scale component       | The game's aim transform is an improper map that survives its normalize — a (−1,−1,−1) owner flips the in-game beam a full 180° — while flexo composes quaternions, which can never produce a reflection (`coords.ts` `lightWorld`). The marker's aim is not the direction KSA will cast.                     |
+| `light-always-on`              | info     | the Part has lights but no `<PowerConsumer LightSwitch>` | Every in-game light gate is `if (Part.LightSwitch != null && …)`, so with no switch the lights are permanently on and **no checkbox appears** (`analysis/HOW_LIGHT_PARTS_WORK.md` §8.1). Correct for indicator lamps; add a switch in **Part Data ▸ Power** for anything the player should be able to turn off. |
+| `light-color-black`            | info     | every colour channel < 0.01                              | The light still costs a light slot in game and adds no visible illumination.                                                                                                                                                                                                                                 |
+
+Every finding carries the offending `PartLight.id` so the UI can point at it;
+`light-always-on` is the one PART-wide rule and carries `null` instead.
+
+## Deferred
+
+Clipboard copy/paste of lights, and **catalog ghost lights** — visualizing the lights a placed
+built-in template already carries in Core's own GameData (dropping in
+`CoreElectricalA_Subpart_SpotlightA` shows no marker today, because that light lives in the
+catalog, not in this Part's document). Both are plan §7 follow-ups.

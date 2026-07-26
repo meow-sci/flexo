@@ -11,6 +11,7 @@ import {
   ToolbarButton,
   dangerBox,
   monoTextareaFill,
+  noteBox,
   toast,
   warningBox,
 } from './kit'
@@ -21,6 +22,7 @@ import { $allReactionIndex } from '../state/reactionStore'
 import { validateEngines } from '../ksa/engineValidation'
 import { validateColliders } from '../ksa/colliderValidation'
 import { validateIvaSeats } from '../ksa/ivaSeatValidation'
+import { validateLights } from '../ksa/lightValidation'
 import { $kittenTextureExport } from '../state/settingsStore'
 import {
   $modFolder,
@@ -90,14 +92,20 @@ export function ExportButton({
   // whole mod fails; `warn` = it loads but the part misbehaves (usually no thrust).
   // Collider pre-flight shares the same two severities and the same treatment: a part
   // with no collision volume loads fine but falls through the world. IVA-seat pre-flight
-  // likewise: a NaN camera blocks, a seat with nothing to look at only warns.
+  // likewise: a NaN camera blocks, a seat with nothing to look at only warns. Light
+  // pre-flight adds the third severity: nothing in a `<Light>` can stop the mod loading,
+  // but a light can be silently culled or aimed somewhere the marker doesn't show
+  // (`warn`), and some legal-but-surprising things KSA does to it are worth stating
+  // without crying wolf (`info` — Core's own floodlight trips one).
   const issues = [
     ...validateEngines(part, reactionIndex),
     ...validateColliders(part),
     ...validateIvaSeats(part, catalog),
+    ...validateLights(part),
   ]
   const blocking = issues.filter((i) => i.severity === 'block')
   const engineWarnings = issues.filter((i) => i.severity === 'warn')
+  const notes = issues.filter((i) => i.severity === 'info')
 
   return (
     <>
@@ -137,6 +145,14 @@ export function ExportButton({
                 </div>
                 {engineWarnings.map((issue, i) => (
                   <div key={i}>⚠ {issue.message}</div>
+                ))}
+              </div>
+            )}
+            {notes.length > 0 && (
+              <div className={noteBox}>
+                <div className="font-medium">Worth knowing ({notes.length})</div>
+                {notes.map((issue, i) => (
+                  <div key={i}>· {issue.message}</div>
                 ))}
               </div>
             )}

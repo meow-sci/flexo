@@ -62,8 +62,10 @@ import {
   lightWorldAim,
 } from '../three/coords'
 import { Field } from './GameDataSections'
+import { LightFalloffCurve } from './LightFalloffCurve'
 import { hexToRgb01, rgb01ToHex } from './colorHex'
 import { PreciseNumberInput } from './PreciseNumberInput'
+import { $lightSettings, DEFAULT_LIGHT_SETTINGS } from '../state/settingsStore'
 import {
   $colliderSettings,
   $coverageReport,
@@ -736,6 +738,12 @@ function LightHeader({
 }) {
   const part = useStore($part)
   const editContext = useStore($lightEditContext)
+  // Defaulted the way `settingsStore.lightSettings()` does — `persistentJSON` replays a
+  // stored object verbatim, so a settings blob written before a field existed would read
+  // it as `undefined` and the curve would silently pick a different exposure than the
+  // viewport's shells.
+  const storedViz = useStore($lightSettings)
+  const viz = { ...DEFAULT_LIGHT_SETTINGS, ...storedViz }
 
   const isSpot = light.type === 'Spot'
   const owners = light.ownerTemplateId
@@ -968,6 +976,17 @@ function LightHeader({
           </Field>
         </>
       )}
+      {/* What Range + Intensity actually mean, on the same exposure the viewport's
+          coverage shells use — so the panel and the 3D volume agree by construction. */}
+      <div className="flex flex-col gap-1">
+        <SectionTitle>Falloff along the aim axis</SectionTitle>
+        <LightFalloffCurve
+          rangeM={light.rangeM}
+          intensity={light.intensity}
+          exposureMode={viz.exposureMode}
+          vizExposure={viz.vizExposure}
+        />
+      </div>
       <Switch
         isSelected={light.rayTracing}
         isDisabled={locked}

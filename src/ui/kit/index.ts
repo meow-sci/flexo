@@ -9,6 +9,7 @@ export {
   gridRowClass,
   monoTextarea,
   monoTextareaFill,
+  noteBox,
   warningBox,
 } from './styles'
 

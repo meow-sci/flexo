@@ -1,6 +1,8 @@
 # Light management — lights as first-class 3D entities, with gizmo editing and falloff visualization
 
-**Status:** PLANNED (not implemented). Written against KSA build **2026.7.9.5018** and flexo `main` @ `a3bcd33`.
+**Status:** IN PROGRESS on `feature/light-management` — Phases 1–5 are **implemented and
+committed**; see the per-phase status lines in §4 for the commit that landed each. Written
+against KSA build **2026.7.9.5018** and flexo `main` @ `a3bcd33`.
 
 **Goal:** Point and Spot part lights are currently data fields buried in a dialog — no 3D presence, no
 sense of where they point or how far they reach. This plan makes every `<Light>` a selectable,
@@ -824,6 +826,8 @@ subjects are given per phase (scope `lights`).
 
 ### Phase 1 — Data model, XML round-trip, scope sync
 
+> **Status: IMPLEMENTED** — `bdde502`.
+
 **Goal:** `EditingPart.lights: PartLight[]` normalized model; part-level `<Light>` modeled; XML
 grammar byte-compatible with today's output for SubPart lights; no visual change.
 
@@ -855,6 +859,8 @@ lights import → `part.lights` with `ownerTemplateId: null` → re-export under
 
 ### Phase 2 — Math ports (pure, no UI)
 
+> **Status: IMPLEMENTED** — `fbc7ac1`.
+
 **Goal:** the falloff + frame math exists, tested against §1.5.
 
 1. `src/ksa/lightFalloff.ts` — pure, no three.js (the `ivaSeatAxes.ts` discipline):
@@ -873,6 +879,10 @@ lights import → `part.lights` with `ownerTemplateId: null` → re-export under
 **Commit:** `feat(lights): port KSA falloff math and light frame transforms`
 
 ### Phase 3 — Markers, layer, selection
+
+> **Status: IMPLEMENTED** — `d773337`. The per-instance editing context landed as the
+> `$lightEditContext` STORE atom rather than an `EditorScene`-private map (§3.9-1), so the
+> gizmo and the inspector's part-frame fields read one source.
 
 **Goal:** every light renders as a selectable marker on a built-in Lights layer.
 
@@ -901,6 +911,8 @@ owner placements when those are moved; delete/duplicate/undo all work.
 
 ### Phase 4 — Gizmo editing + inspector
 
+> **Status: IMPLEMENTED** — `edab0b4`.
+
 **Goal:** move/rotate via gizmo; owner-frame + part-frame numeric editing; aim vector input.
 
 1. EditorScene gizmo plumbing (§3.7): attach branch, `lightGizmoFrame`, `handleGizmoChange`
@@ -918,6 +930,10 @@ field accepts "-", ".5", and empty-while-typing (useNumberDraft).
 **Commit:** `feat(lights): gizmo editing and inspector transform fields for lights`
 
 ### Phase 5 — Coverage visualization + view settings
+
+> **Status: IMPLEMENTED** — `16f1641`. The pure half of the volume (shell radii + the
+> exposure derivation) lives in `src/three/lightVolume.ts` so it is unit-testable without a
+> WebGL context; `LightObject.ts` owns everything that needs three.
 
 **Goal:** the falloff volume + boundary wireframe, with visibility/exposure controls.
 

@@ -245,6 +245,41 @@ profiles); electric and thermal engines remain impossible data-only.
 See [docs/engines.md](docs/engines.md), [scope/plumbing-and-feeds.md](scope/plumbing-and-feeds.md),
 [analysis/KSA_ENGINE_DETAILS.md](analysis/KSA_ENGINE_DETAILS.md).
 
+## lights (cast lights + coverage visualization)
+
+A `<Light>` is KSA's real cast light — a `Spot` or `Point` placed into the scene by
+`LightModule`, gated by the Part's single light switch. It is legal, and Core-authored, at
+**BOTH** levels: on a `<PartGameData>` (the CoreCommandA headlights, CoreIVASpaceA's
+interior lamp) and on a `<SubPartGameData>` so it travels with a reused mesh (the
+CoreElectricalA spotlights). flexo models both.
+
+Lights are first-class 3D entities (`EditingPart.lights: PartLight[]` on the built-in
+**Lights** layer), owner-grouped only at serialize time. `Transform` is reused with a
+reinterpretation: `position`/`rotation` are the emitter point and aim in the OWNER frame
+(`ownerTemplateId: null` ⇒ the Part's assembly frame), and **`scale` is unused** — KSA
+ignores it, so it is pinned (1,1,1) and never emitted. The editor-only `_lightN` id is
+**never** emitted (no shipped light authors one). A SubPart-owned light is drawn once **per
+placement** of its template and edits affect every instance; `$lightEditContext` names which
+instance the gizmo and the inspector's part-frame fields work through, so the two can never
+disagree.
+
+⚠️ **A light's frame math is NOT a collider's.** KSA transforms the light's offset by the
+owner's **full matrix, scale included** (`LightModule.UpdateRenderData`), while a collider
+ignores placement scale — `coords.lightWorld` vs `colliderWorld` is the trap. A Spot aims
+along the rotated local **+X**, and `Range` is world meters regardless of owner scale (which
+is why light visuals are never parented under a scaled placement group).
+
+The coverage visualization ports KSA's **exact** attenuation from the shipped shader
+(`LightPrePass.comp`): `E = Intensity · saturate(1 − (d/Range)⁴) / d²` with a SQUARED spot
+edge, so the range sphere and the inner/outer cones are true iso-surfaces rather than
+decoration. It renders as a 16-shell additive stack (a spot needs no cone geometry — the
+shells clip themselves) plus a boundary wireframe placed **on the range sphere**, which is a
+deliberate deviation from KSA's own `tan`-based debug rim (that would draw a ~3.4 km disc
+for Core's 90° floodlight). An optional live `THREE.PointLight`/`SpotLight` preview is
+indicative only — three's distance window is squared and its cone edge is a smoothstep.
+See [docs/lights.md](docs/lights.md), [scope/gamedata-modules.md](scope/gamedata-modules.md),
+`analysis/HOW_LIGHT_PARTS_WORK.md`, `plans/LIGHT_MANAGEMENT_PLAN.md`.
+
 ## colliders (Part collision volumes)
 
 A Part's collision volume is the coarse shapes KSA's physics uses instead of the visual

@@ -58,6 +58,15 @@ export const warningBox =
 export const dangerBox =
   'flex flex-col gap-1 rounded-lg border border-danger/40 bg-danger/10 p-2 text-xs text-danger'
 
+/**
+ * Neutral callout box for advisory notes — findings that are legal and often
+ * deliberate, but worth knowing (the `info` severity the export pre-flight
+ * validators grade below `warn`). Deliberately toneless: an amber box would read
+ * as "you made a mistake".
+ */
+export const noteBox =
+  'flex flex-col gap-1 rounded-lg border border-border bg-panel-sunken p-2 text-xs text-fg-muted'
+
 const monoTextareaBase =
   'w-full resize-none rounded-lg border border-border bg-panel-sunken p-2 font-mono text-xs text-fg outline-none'
 

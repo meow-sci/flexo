@@ -117,6 +117,11 @@ against the NEW code/XML. Highest-value checks, by area:
   `Range <= 0f` check — the shader itself never rejects them). Any change to those two
   formulas must be applied **twice**: `lightFalloff.ts` AND its GLSL mirror in
   `src/three/LightObject.ts` (`VOLUME_FRAGMENT_GLSL`, which shades the coverage volume).
+  Then re-read `src/ksa/lightValidation.ts`: its warning messages **quote these members and
+  line numbers back to the user** (`ClusteredLightSystem.cs:669,760`, `Light.cs:10` /
+  `:56-61`, `LightModule.cs:88,93` / `:115-117`), so a drifted anchor turns a helpful
+  warning into a confidently wrong one — `lightValidation.test.ts` pins the citations, not
+  just the codes.
 - **Ground clutter** — the 7 `*Reference.cs` schema classes unchanged.
 
 ## 5. Distinguish real changes from decompiler noise

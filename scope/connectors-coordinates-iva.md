@@ -1,43 +1,59 @@
-# Scope — Connectors, coordinate mapping, IVA/NotIVA
+# Scope — Connectors, coordinate mapping, IVA
 
-> How flexo places geometry in KSA's frame, models connectors, and de-IVAs internal props.
+> How flexo places geometry in KSA's frame, models connectors, authors `<IVASeat>` interior-camera
+> vantage points, and carries the `<Internal>` interior-only render flag.
 > Read alongside [docs/coordinates.md](../docs/coordinates.md) and
 > [docs/ksa-part-connector-notes.md](../docs/ksa-part-connector-notes.md).
 
 **Baseline:** re-vetted against KSA build **2026.7.9.5018** (decomp @ 5018 + shipped Core XML).
-**Baseline status:** ✅ **CURRENT** — the coordinate calibration, connector flag _schema_, and
-IVA/NotIVA are all **intact**; the `<DockingPort>` GameData schema (BREAKING in 4750) is fixed. As
-of 4826, connectors carry new attach-node grouping (`<Sibling>` geometry / `<Aligned>` GameData);
+**Baseline status:** ✅ **CURRENT** — the coordinate calibration, connector flag _schema_, and the
+IVA render gate are all **intact**; the `<DockingPort>` GameData schema (BREAKING in 4750) is fixed.
+As of 4826, connectors carry new attach-node grouping (`<Sibling>` geometry / `<Aligned>` GameData);
 `<Sibling>` is now preserved via `Connector.siblingIds`, `<Aligned>` rides the gap-6 passthrough
 with its `<ConnectorRef>` ids remapped through the regenerated connector ids on import/paste
 (see [What changed in 4826](#what-changed-in-4826)). See
 [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md).
 
+**Two flexo-side changes since the 5018 re-vet, both in this doc:**
+
+- **`<IVASeat>` is now MODELED** at both Part-level authoring sites (it used to ride the gap-6
+  `<PartGameData>` passthrough) — parse, serialize, catalog, built-in-part import, project
+  codec/transfer, and export pre-flight validation. Contract below. Document-layer only so far:
+  there is no seat gizmo, inspector or in-editor preview yet.
+- **The automatic interior-prop export rewrite is DELETED.** `<Internal>` is now
+  per-SubPart-template user data that flexo mirrors from the game by default. Contract below.
+
 ---
 
 ## Flexo modules
 
-| Path                                                | Role                                                                                                                                                                     |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/three/coords.ts`                               | **The single chokepoint** for KSA-Part-space ⇄ three.js. `applyPlacement`, `matrixFromTransform`, `transformFromMatrix`. The one calibration knob `EULER_ORDER = 'ZYX'`. |
-| `src/three/coords.test.ts`                          | Locks the mapping by reproducing KSA's `QuaternionEx.CreateFromXyzRadians` and asserting `applyPlacement` matches to <1e-6.                                              |
-| `src/three/debugCalibration.ts`                     | `?debug=dockingport`: loads `CoreCouplingAAssets.xml` part `CoreCouplingA_Prefab_DockingPort1WA` and renders its SubPart placements.                                     |
-| `src/three/ConnectorObject.ts`                      | Renders a connector as a cube + cone along **local +X** (the facing arrow).                                                                                              |
-| `src/ksa/types.ts`                                  | `Connector` (`extends Transform`; `id`, `flags`, `layerId`); `ConnectorFlag = 'Internal'\|'ToSurface'\|'FromSurface'`; `Decoupler`/`DockingPort`/`EvaDoor`.              |
-| `src/ksa/partXmlParser.ts` / `partXmlSerializer.ts` | `parseConnectorFlags`/`connectorsFromPartElement`; `buildConnectorElement`/`flagsString`.                                                                                |
-| `src/ksa/modExport.ts`                              | `buildIvaVariantMap`/`IvaVariant`/`ivaRemapFromVariants` — de-IVA each placed Internal SubPart.                                                                          |
-| `src/ksa/assetsXmlSerializer.ts`                    | `ReferenceSubPartPlan` — reference-only `<SubPart>` wiring a fresh `<PartModel>` id to built-in `<Mesh>`/`<Material>`.                                                   |
+| Path                                                | Role                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/three/coords.ts`                               | **The single chokepoint** for KSA-Part-space ⇄ three.js. `applyPlacement`, `matrixFromTransform`, `transformFromMatrix`. The one calibration knob `EULER_ORDER = 'ZYX'`.                                                                                                                                                                                                                                                                         |
+| `src/three/coords.test.ts`                          | Locks the mapping by reproducing KSA's `QuaternionEx.CreateFromXyzRadians` and asserting `applyPlacement` matches to <1e-6.                                                                                                                                                                                                                                                                                                                      |
+| `src/three/debugCalibration.ts`                     | `?debug=dockingport`: loads `CoreCouplingAAssets.xml` part `CoreCouplingA_Prefab_DockingPort1WA` and renders its SubPart placements.                                                                                                                                                                                                                                                                                                             |
+| `src/three/ConnectorObject.ts`                      | Renders a connector as a cube + cone along **local +X** (the facing arrow).                                                                                                                                                                                                                                                                                                                                                                      |
+| `src/ksa/types.ts`                                  | `Connector` (`extends Transform`; `id`, `flags`, `layerId`); `ConnectorFlag = 'Internal'\|'ToSurface'\|'FromSurface'`; `Decoupler`/`DockingPort`/`EvaDoor`; `IvaSeat` (`extends Transform`) + `IVA_SEAT_LAYER_ID`/`createIvaSeatLayer`; `EditingPart.ivaSeats` / `EditingPart.internalFlags`.                                                                                                                                                    |
+| `src/ksa/partXmlParser.ts` / `partXmlSerializer.ts` | `parseConnectorFlags`/`connectorsFromPartElement`; `buildConnectorElement`/`flagsString`. Seats: `ivaSeatsFromElement` (+`'IVASeat'` in `KNOWN_PART_GAMEDATA_CHILDREN`) / `buildIvaSeatElement` + the shared `buildVec3Attrs`.                                                                                                                                                                                                                   |
+| `src/ksa/ivaSeatAxes.ts`                            | **The one place** seat `rotation` ⇄ `<ForwardAxis>`/`<UpAxis>` converts. `SEAT_LOCAL_FORWARD` `(1,0,0)` / `SEAT_LOCAL_UP` `(0,0,−1)` (= KSA's own field defaults), `ksaQuatFromEulerXyz`, `seatAxesFromRotation`, `seatRotationFromAxes` (→ `null` on a degenerate pair). Pure, no three.js; `ivaSeatAxes.test.ts` locks it against `coords.ts`.                                                                                                 |
+| `src/ksa/partCatalog.ts`                            | `CatalogPart.ivaSeats` — merges the geometry `<Part><IVASeat>`s (`parsePartsFile`) with the `<PartGameData><IVASeat>`s (`mergeGameData`), then re-numbers `_seatN` across the merged list in document order.                                                                                                                                                                                                                                     |
+| `src/ksa/ivaSeatValidation.ts`                      | Export pre-flight, same two severities as `colliderValidation.ts`: **block** on a non-finite seat (NaN camera) or an exact-duplicate position+orientation; **warn** on seats-without-interior, interior-without-seats, or an interior flag on a glass-exporting mesh. Deliberately has **no** non-unit/parallel-axis rule (unreachable — the parser drops those). Wired into `ExportButton.tsx` alongside `validateEngines`/`validateColliders`. |
+| `src/ksa/modExport.ts`                              | `resolveInternal` — the single `<Internal>` resolution rule (user flag > catalogued built-in value > `false`). `buildExportVariantMap` / `ExportVariant` / `variantRemap` — mints a built-in-SubPart export variant only when flexo actually changes something.                                                                                                                                                                                  |
+| `src/ksa/assetsXmlSerializer.ts`                    | `ReferenceSubPartPlan` — reference-only `<SubPart>` wiring a fresh `<PartModel>` id to built-in `<Mesh>`/`<Material>`, carrying `<Internal>`/`<RayTracing>`/`<ShadowCaster>` forward. `internalElement` emits `<Internal>true</Internal>` (never on the `<PartModelGlass>` path).                                                                                                                                                                |
+| `src/state/editorStore.ts`                          | `setPlacementsInternal(indices, internal)` — one undo entry, writes `EditingPart.internalFlags` for the DISTINCT templates behind the selection; `isGlassTemplate` gates it. UI: `AssetsList.tsx` / `MultiSelectToolbar.tsx` "Interior (IVA only)", `SubPartBrowser.tsx` badge. Built-in-part import appends seats in order with fresh ids (`nextIvaSeatId`).                                                                                    |
+| `src/state/projectCodec.ts` / `projectTransfer.ts`  | Persistence: `iv` (seats — ORDER is load-bearing) + `ifl` (`internalFlags`), both at `PROJECT_EXPORT_VERSION = 7`; a seat's `layerId` is restored from `IVA_SEAT_LAYER_ID` on decode, never serialized. Additive paste appends seats with fresh ids.                                                                                                                                                                                             |
 
 ## Game-side anchors (`decomp/KSA/`)
 
-| Concern                   | Class                                                                                                                                                | XML                                                                          |
-| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Connector schema          | `Part.cs` → `Part.Connector.TemplateBase` (`Id` attr, `<Transform>`, `<Flags>`); enum `Part.Connector.Flag {Internal=1, ToSurface=2, FromSurface=4}` | `<Connector Id><Transform/><Flags/></Connector>` on `<Part>`                 |
-| Face-snapping / placement | `VehicleEditor.cs`, `EditorTag.cs`, `EditorTagDefinition.cs`                                                                                         | `<EditorTag Value>`, `<EditorTagDef …>`                                      |
-| Decoupler                 | `DecouplerTemplate.cs`                                                                                                                               | `<Decoupler ConnectorId Force>`                                              |
-| Docking port              | `DockingPortTemplate.cs`, `DockingPort.cs`                                                                                                           | `<DockingPort>` — **CHANGED, see gamedata-modules.md**                       |
-| IVA / NotIVA              | `PartModelModule.cs` (`<Internal>` bool, `<RayTracing>` enum `{Disabled, ShadowProxy}`, `<Mesh>`, `<Material>`), `PartModel.cs` (render gate)        | `<PartModel><Internal>true</Internal><RayTracing>…</RayTracing></PartModel>` |
-| Coordinate basis          | `Double3Ex.cs` (`Up=(0,1,0)`, `Right=(1,0,0)`, `Forward=(0,0,-1)`), `QuaternionEx.cs` (`CreateFromXyzRadians`)                                       | —                                                                            |
+| Concern                   | Class                                                                                                                                                                                                                                                                                                                                                                                                            | XML                                                                                           |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Connector schema          | `Part.cs` → `Part.Connector.TemplateBase` (`Id` attr, `<Transform>`, `<Flags>`); enum `Part.Connector.Flag {Internal=1, ToSurface=2, FromSurface=4}`                                                                                                                                                                                                                                                             | `<Connector Id><Transform/><Flags/></Connector>` on `<Part>`                                  |
+| Face-snapping / placement | `VehicleEditor.cs`, `EditorTag.cs`, `EditorTagDefinition.cs`                                                                                                                                                                                                                                                                                                                                                     | `<EditorTag Value>`, `<EditorTagDef …>`                                                       |
+| Decoupler                 | `DecouplerTemplate.cs`                                                                                                                                                                                                                                                                                                                                                                                           | `<Decoupler ConnectorId Force>`                                                               |
+| Docking port              | `DockingPortTemplate.cs`, `DockingPort.cs`                                                                                                                                                                                                                                                                                                                                                                       | `<DockingPort>` — **CHANGED, see gamedata-modules.md**                                        |
+| IVA render gate           | `PartModelModule.cs:35` (`<Internal>` bool — the ONLY `[XmlElement("Internal")]` in the decomp), `PartModel.cs:387` (the gate), `<RayTracing>` enum `{Disabled, Enabled, ShadowProxy}`, `<ShadowCaster>` bool                                                                                                                                                                                                    | `<PartModel><Internal>true</Internal><RayTracing>…</RayTracing></PartModel>`                  |
+| IVA seats                 | `IVASeat.cs` (`IVASeatTemplate : TemplateDataBase`; three `Vector3Reference` fields + `CreateComponents`), `IVAController.cs` (fixed-position free-look camera, the two view clamps, seat cycling), `Camera.cs:190-196` (`LookAtRotation` — orthonormalises), `Input.cs:337-339` (`C` = `IVASwitchToNextSeat`, `Shift+C` = `CameraMode`), `AttachedInternal.cs` (Core's interior-prefab indirection flexo skips) | `<IVASeat><Position X Y Z/><ForwardAxis X Y Z/><UpAxis X Y Z/></IVASeat>` on `<PartGameData>` |
+| Coordinate basis          | `Double3Ex.cs` (`Up=(0,1,0)`, `Right=(1,0,0)`, `Forward=(0,0,-1)`), `QuaternionEx.cs` (`CreateFromXyzRadians`)                                                                                                                                                                                                                                                                                                   | —                                                                                             |
 
 ## The contract — what flexo bakes in
 
@@ -53,10 +69,132 @@ with its `<ConnectorRef>` ids remapped through the regenerated connector ids on 
 - Rotation: KSA stores Euler "XYZ" radians but composes opposite to three.js `'XYZ'`; numerically **bit-for-bit three.js `'ZYX'`** (`EULER_ORDER='ZYX'`, reproduced from `QuaternionEx.CreateFromXyzRadians`).
 - Calibration renders `CoreCouplingAAssets.xml` part `CoreCouplingA_Prefab_DockingPort1WA` (the **Assets** geometry file — _not_ the GameData file) → correct ⇒ radially-symmetric port.
 
-**IVA → NotIVA export**
+**`<IVASeat>` — interior camera vantage points (MODELED)**
 
-- KSA gate (`PartModel.cs`): an Internal PartModel renders only in IVA camera mode (`Template.RayTracing != ShadowProxy && (!Template.Internal || viewport.Mode == IVA)`).
-- flexo re-homes each placed Internal SubPart onto a fresh, project-unique SubPart `flexo_<base>_<id>_NotIVA` that **reuses the built-in `<Mesh>` + `<Material>` ids**, **omits `<Internal>` + `<RayTracing>`**, with a **fresh `<PartModel>` Id** (KSA dedupes PartModels by id).
+`IVASeatTemplate` (`decomp/KSA/IVASeat.cs`) is a `ModuleBase.TemplateDataBase` subclass like
+`<Collider>`/`<Tank>`/`<Light>`, so it lives in `PartTemplate.Components` and is a legal direct
+child of `<PartGameData>`. Its ENTIRE authored schema is three vectors:
+
+```xml
+<IVASeat>
+    <Position X="-0.45" Y="0.42" Z="-0.35" />
+    <ForwardAxis X="1" />
+    <UpAxis Z="-1" />
+</IVASeat>
+```
+
+- **Schema.** `<Position>` / `<ForwardAxis>` / `<UpAxis>`, each a `Vector3Reference` with `X`/`Y`/`Z`
+  **double** attributes. `<Position>` is the eye point **in the owning Part's assembly frame**,
+  meters — the identical space flexo already places SubParts, connectors and colliders in
+  (`IVAController.cs:40-41` → `Part.PositionVehicleAsmbOffset`). `<IVASeat Id>` exists
+  (`TemplateDataBase.Id`) but **flexo emits none**: Core authors none, nothing references a seat by
+  id, and that id shares the namespace `<FeedsFrom Container="…">` resolves against
+  (`PartTemplate.AddResolvedFeed`) — see [plumbing-and-feeds.md](plumbing-and-feeds.md).
+- ⚠️ **Element-absent and attribute-absent are DIFFERENT defaults.** An entirely **absent element**
+  takes the C# field initializer — `ForwardAxisAsmb = (1,0,0)`, `UpAxisAsmb = (0,0,-1)`
+  (`IVASeat.cs:9-27`). A **present** element defaults each missing **attribute** to `0`, so a bare
+  `<ForwardAxis/>` is a **zero look direction** that NaNs the camera. That trap is why flexo's
+  serializer always writes all three axes of all three elements (`buildVec3Attrs`, never the
+  "omit at default" `buildEngineVec3` style) and why the parser branches on element presence
+  (`ivaSeatsFromElement`).
+- **Orientation is stored as a rotation, converted at the XML boundary.** KSA has no rotation
+  element; flexo keeps a normal `Transform.rotation` so a seat can ride the same gizmo as
+  everything else, and `src/ksa/ivaSeatAxes.ts` converts both ways. Local **+X = forward, −Z = up**,
+  chosen to equal KSA's own field defaults ⇒ **identity rotation emits `ForwardAxis X="1"` +
+  `UpAxis Z="-1"`, byte-identical to Core**. `scale` is unused (KSA has no seat size) and never
+  emitted. A degenerate authored pair (either vector ~zero, or the two parallel) is **DROPPED on
+  import with a console warning** — `Camera.LookAtRotation` would build a NaN rotation from it, so
+  round-tripping it would only preserve a broken seat.
+- **The game orthonormalises, so `<UpAxis>` need not be perpendicular** — only non-parallel.
+  `Camera.LookAtRotation` (`Camera.cs:190-196`) does `f = Normalize(forward)`,
+  `r = Cross(f, up).Normalized()`, `u = Cross(r, f).Normalized()` and builds the view basis from
+  rows `r, u, −f`. flexo re-orthogonalises identically, so a sloppy authored `<UpAxis>` round-trips
+  **textually changed, semantically identical**.
+- 🔒 **Two view clamps, applied EVERY frame** (`IVAController.cs:69-112`) — this is what makes
+  `<ForwardAxis>` an authoring decision, not a cosmetic initial heading:
+  1. **Forward hemisphere.** `num2 = clamp(dot(look, ForwardAxis.Normalized()), -1, 1)`; when
+     `num2 < 0` the look is rotated back to exactly 90° off the forward axis. ⇒ **you can never look
+     more than 90° away from `<ForwardAxis>`**; a seat cannot look behind itself. Two directions ⇒
+     two seats.
+  2. **Up-pole exclusion.** `value = dot(look, UpAxisAsmb…)` — the up axis is **NOT normalized
+     here** — and `|value| > 0.9` pushes the look back to `acos(0.9) ≈ 25.84°` off the pole. ⇒ the
+     pitch stops ~25.8° short of straight up/down, **measured against the RAW `<UpAxis>`**, so a
+     non-unit `<UpAxis>` silently changes the usable pitch (see the gotchas). flexo always emits
+     unit axes (`seatAxesFromRotation` normalises by construction).
+- **Document order IS cycle order, and the FIRST seat is the one IVA opens on.**
+  `IVAController.OnSwitchOn` sets `Seat = span[0]` over `vehicle.Parts.Modules.Get<IVASeat>()`, and
+  `Module<T>.List.Add` appends. Seat order is therefore authored data, which is why flexo preserves
+  document order everywhere (`EditingPart.ivaSeats`, codec key `iv`) and re-numbers `_seatN` over the
+  merged list rather than sorting it.
+- **`<IVASeat>` is the on/off switch for the whole camera mode.** A vehicle offers IVA **iff at least
+  one part in it carries at least one seat**; with zero seats `OnSwitchOn` calls
+  `NextCameraMode()` and the mode is silently skipped (`IVAController.cs:164-169`). The seat list is
+  **vehicle-wide** — seats from several parts concatenate. **Shift+C** cycles camera modes
+  `Orbit → Free → IVA → Orbit` (`Viewport.NextCameraMode`, `Input.cs:339`) and **C** cycles seats
+  (`InputAction.IVASwitchToNextSeat`, `Input.cs:337`). No `<Control/>`, `<EVADoor>`, tank, collider
+  or crew model is required — a bare part with one `<IVASeat>` is a valid IVA part.
+- **Four schema-legal authoring sites, two of them modeled.** `XmlHelper.cs:33-44` registers every
+  `TemplateDataBase` element name against `PartTemplate.Components`, and
+  `PartGameDataReference.OnDataLoad` → `PartTemplate.ApplyGameData` ends with
+  `Components.AddRange(gameData.Components)` (`PartTemplate.cs:312`) — an **additive merge, no
+  dedupe** — so geometry `<Part><IVASeat>` and `<PartGameData><IVASeat>` are exactly equivalent.
+  flexo **reads both and normalises everything into `<PartGameData>`** (the same decision colliders
+  made). The SubPart-level pair (`<SubPart>` / `<SubPartGameData>`) is **deliberately left on the
+  passthrough** — `'IVASeat'` is in `KNOWN_PART_GAMEDATA_CHILDREN` only, so a SubPart-level seat
+  round-trips verbatim, just not editable.
+- **flexo authors `<IVASeat>` on its own `<PartGameData>` and does NOT copy Core's
+  `<AttachedInternal InstanceOf=…>` indirection.** Core's only shipped seats live in
+  `Content/Core/CoreIVASpaceAGameData.xml:18-28` (two seats, the Gemini-style capsule interior,
+  `<EditorTag Value="Hidden"/>`), and `CoreCommandAGameData.xml:11` attaches that interior to the
+  capsule with `<AttachedInternal InstanceOf="CoreIVASpaceA_Prefab_MediumCapsuleA"/>`, which the
+  vehicle editor instantiates as a real child Part (`AttachedInternal.cs`,
+  `VehicleEditor.cs:5186-5210`). flexo edits exactly one Part, so the reuse that buys is not a flexo
+  workflow — and authoring directly means the seat frame **is** the part frame, with no
+  `AttachedInternal` `<Transform>` to compose. An imported part's `<AttachedInternal>` round-trips
+  verbatim on the `<PartGameData>` passthrough; flexo does not follow the reference.
+
+**`<Internal>` — interior-only geometry and export variants**
+
+- KSA render gate — `PartModel.cs:387`:
+  `Template.RayTracing != ShadowProxy && (!Template.Internal || viewport.Mode == IVA)`.
+  Read it carefully — IVA shows **both** the Internal models and everything else; outside IVA the
+  Internal ones drop out. So `<Internal>` means **"interior-only"**, not "the interior layer".
+- ⚠️ **`<Internal>` exists ONLY on `<PartModel>`** — exactly one `[XmlElement("Internal")]` in the
+  whole decomp, `PartModelModule.cs:35`. `<PartModelGlass>` (`PartModelGlassModule`) has only
+  `<Mesh>`/`<Material>`/`<RayTracing>` (a **bool** there, not the enum)/`<ShadowCaster>`, and
+  `<PartModelDynamic>` has none either ⇒ **KSA glass and dynamic models can never be interior-only.**
+- **flexo models it as user data, per SubPart TEMPLATE.** `EditingPart.internalFlags` (keyed by
+  SubPart template id, persisted as codec key `ifl`), resolved by
+  `resolveInternal(part, templateId, entry)` = explicit user flag > the catalogued built-in's own
+  `<Internal>` > `false`. It is per-template and never per-placement, because KSA puts the flag on
+  the template's `<PartModel>`. The bulk toggle is "Interior (IVA only)" in the SubPart list /
+  multi-select toolbar (`setPlacementsInternal`), disabled for glass-exporting meshes.
+- **The automatic interior-prop rewrite is GONE.** flexo used to re-home **every** placed Internal
+  built-in SubPart onto a suffixed variant that stripped `<Internal>` + `<RayTracing>` so the prop
+  rendered everywhere — a decision the user never got to make, and exactly wrong for anyone building
+  a real interior. A variant is now minted **only** when flexo actually changes something
+  (`buildExportVariantMap`): the template carries **SubPart GameData** (a `<Light>`, tank, … or a
+  SubPart-owned `<Collider>` — emitting either under the shared built-in id would MERGE onto the
+  built-in template globally), **or** its wanted `<Internal>` **differs from the built-in's own**.
+  An untouched interior prop now produces **no redeclaration at all** and keeps the built-in's own
+  flags for free. The old interior-prop suffix is deleted — **one** naming rule,
+  `flexo_<base>_<id>`, for every variant.
+- **A variant inherits NOTHING but the `<Mesh>`/`<Material>` it names**, so `ReferenceSubPartPlan`
+  carries `<Internal>`, `<RayTracing>` (raw token, verbatim) and `<ShadowCaster>` forward from the
+  catalogued built-in, plus the built-in `<SubPart>`'s own geometry `<Collider>`s. Dropping
+  `<RayTracing>` turned a `ShadowProxy` occluder into a **visible** mesh; dropping `<ShadowCaster>`
+  made a built-in's explicit `false` (Core's medium-capsule windows) start casting shadows. Element
+  order mirrors Core: `Internal, Mesh, Material, RayTracing, ShadowCaster`. `<ShadowCaster>` is
+  **not** part of the minting gate — flexo never lets the user edit it, so it can only ever be
+  carried along, never a reason to redeclare.
+- 🔒 **The fresh `<PartModel Id>` rule is UNCHANGED and still load-bearing.** A variant's PartModel
+  id is `<variantSubPartId>_Model`; reusing the built-in's `"<orig>_Model"` would collapse the
+  variant back onto the original via KSA's PartModel dedup by `Template.Id`, dragging the built-in's
+  own `<Internal>`/`<RayTracing>` back with it and silently undoing the redeclaration.
+- **A custom (flexo-authored) mesh needs no variant** — `assetsXmlSerializer` declares it directly
+  and emits `<Internal>true</Internal>` inside its own `<PartModel>` when `resolveInternal` says so
+  (`AssetsSubPartPlan.internal`). Never on the glass path: `internal` is forced `false` for a glass
+  SubPart, and a layered `glassGlow` visor counts as glass **whole**.
 
 **Vehicle reference orientation (root part = the flight-computer "up")**
 
@@ -90,10 +228,22 @@ follows the root part.
 
 ## Known gotchas
 
-- `EULER_ORDER` is the single calibration knob — change it only in `coords.ts`; everything routes through it. Single-axis rotations look right under either order, masking a wrong order until a multi-axis part scrambles.
-- IVA variant must use a **fresh PartModel Id** (reusing one silently collides via the dedup).
-- IVA props render black/invisible outside IVA unless de-IVA'd (the whole NotIVA feature exists for this).
+- `EULER_ORDER` is the single calibration knob — change it only in `coords.ts`; everything routes through it. Single-axis rotations look right under either order, masking a wrong order until a multi-axis part scrambles. `ivaSeatAxes.ts` is its **second** consumer (its own `ksaQuatFromEulerXyz` + `'ZYX'` extraction), cross-checked against `coords.ts` by `ivaSeatAxes.test.ts`.
+- An export variant must use a **fresh PartModel Id** (reusing one silently collides via KSA's dedup by `Template.Id`).
 - Connector `<Flags>` must be emitted in BOTH the Part and GameData documents.
+
+**`<IVASeat>` gotchas** (author these into any future UI, docs and validator):
+
+1. **`ForwardAxis` ∥ `UpAxis` ⇒ NaN camera.** `LookAtRotation` does `Cross(f, up).Normalized()`; a zero cross product normalises to NaN and poisons `Camera.LocalRotation`. flexo drops such a pair on import; the editor cannot construct one (`rotation` is the source of truth).
+2. **A zero `ForwardAxis` or `UpAxis` ⇒ NaN camera** (same path, plus `Normalize(forward)`). Remember a **present but empty** `<ForwardAxis/>` is zero — see the element-vs-attribute default trap above.
+3. **A non-unit `UpAxis` silently changes the pitch clamp.** The up-pole test `|dot(look, UpAxisAsmb)| > 0.9` uses the **raw, un-normalized** vector (`IVAController.cs:95-96`). With `|up| = 2` the clamp engages at `acos(0.45) ≈ 63°` (usable pitch shrinks to ±27°); with `|up| = 0.5` it never engages and the look can reach the pole, where `Cross(f, up)` degenerates → NaN. Core authors unit axes; flexo always emits unit axes.
+4. **You can never look more than 90° off `ForwardAxis`.** A seat is a hemisphere, not a free-look sphere. Two directions ⇒ two seats.
+5. **The first seat is the default seat and document order is cycle order** — seat order is authored data, not an implementation detail.
+6. **The interior must be `<Internal>`**, or it renders in the exterior view too — and **glass cannot be** (`<PartModelGlass>` has no such field), so a window pane always renders in every camera mode.
+7. **You are inside your own exterior hull, and KSA culls back faces unconditionally** (contract #15 in [custom-assets-and-mod-export.md](custom-assets-and-mod-export.md)), so from a seat the hull is simply **not there** — an IVA part needs real interior geometry or the seat looks straight out at space.
+8. **Interior geometry with no seat anywhere in the vehicle is invisible in EVERY camera mode** — `<Internal>` hides it outside IVA, and with no seat the IVA mode is never offered. This is the failure mode the deleted automatic rewrite used to mask.
+9. **`<IVASeat Id>` shares the feed-container id namespace** (`PartTemplate.AddResolvedFeed` scans every `Components[].Id`). flexo emits no `Id`, matching Core byte-for-byte and dodging it entirely.
+10. **There is no in-game editor IVA preview.** The KSA vehicle editor has no IVA mode; the only in-game check is launch → **Shift+C** twice → **C** to cycle.
 
 ## What changed in 5018
 
@@ -223,5 +373,5 @@ Part/SubPart templates or GameData, so it is NOT a flexo surface.
 - 🔴 **DockingPort GameData schema (BREAKING)** — attribute-form → child-element form, renamed fields, impulse→energy units. Detail + fix in [gamedata-modules.md](gamedata-modules.md). NB: this is **GameData** (`CoreCouplingAGameData.xml`); the coordinate calibration renders the **Assets** geometry file, which is byte-identical, so calibration is unaffected.
 - 🟡 **Face-snapping rewrite (SCHEMA-DRIFT, docs only).** `VehicleEditor` face-snapping is now **data-driven** via `EditorTagDefinition` booleans (`FaceSnapBlacklist`/`RootPartWhitelist`/`FaceSnapTargetWhitelist`/`FaceSnapTargetBlacklist`/`DiameterFilterlist`/`NotaCategory`); the built-in `EditorTag` statics `NoFaceSnapping`/`Tanks`/`Coupling`/`Structural` were **removed** from `EditorTag.cs` (now data-driven via `RegisterTag`). Snapping now uses the moving part's **+Z** bounding face (rev 4687/4719/4739). **Connector flag schema + `<Connector>/<Flags>` are unchanged → export is safe.** flexo's `editorTags` is freeform passthrough → users can still apply these tags. Action: refresh `docs/ksa-part-connector-notes.md` to note the data-driven model; optionally surface known face-snap tags in the UI.
 - ✅ `Double3Ex.cs` + `QuaternionEx.cs` + `CoreCouplingAAssets.xml` zero-diff → `EULER_ORDER='ZYX'` holds, calibration valid.
-- ✅ `PartModel.cs` + `PartModelModule.cs` zero-diff → IVA/NotIVA valid.
+- ✅ `PartModel.cs` + `PartModelModule.cs` zero-diff → the `<Internal>` IVA render gate valid.
 - ✅ `Part.cs` connector change = an in-game assembly-merge position-offset fix (flexo doesn't simulate merging). `Decoupler` schema unchanged (runtime-only diff).

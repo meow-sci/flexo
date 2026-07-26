@@ -11,9 +11,12 @@
 [What changed in 4826](#what-changed-in-4826)); `KNOWN_EDITOR_TAGS` refreshed from the registry
 (4939 added `Booster`); and unmodeled `<PartGameData>`/`<SubPartGameData>` child elements +
 root attrs round-trip via gap-6 passthrough (`<Aligned>`, `<SymmetryGroup>`,
-`<IVASeat>` et al.). The 4939 geometry-template `<Collider>` gap is **CLOSED**:
+`<AttachedInternal>` et al.). The 4939 geometry-template `<Collider>` gap is **CLOSED**:
 `<Collider>` is now MODELED at all four authoring sites and no longer rides the passthrough —
-see [colliders.md](colliders.md).
+see [colliders.md](colliders.md). `<IVASeat>` has likewise moved out of the passthrough and is
+**MODELED at the two Part-level sites** (geometry `<Part>` + `<PartGameData>`), normalised into
+`<PartGameData>` on export; the SubPart-level pair stays on the passthrough — see
+[connectors-coordinates-iva.md](connectors-coordinates-iva.md).
 
 ---
 
@@ -70,7 +73,7 @@ see [colliders.md](colliders.md).
 
 The parser reads a **fixed allow-list** into typed objects; the serializer **rebuilds a brand-new `<Assets>` document** and appends only what it knows how to emit. flexo is a _model-faithful re-emitter_, not a _byte-faithful editor_.
 
-**As of 2026-06-27 (gap 6), `<PartGameData>` and `<SubPartGameData>` ARE passthrough-safe:** their unmodeled direct **child elements** and unmodeled **root attributes** are captured verbatim on import (`captureUnknownChildren`/`captureUnknownAttrs` → `RawXmlNode` JSON trees on `unknownChildren`/`unknownAttrs`) and re-emitted on export (`buildRawNode`, appended last). This recovers the `SolidSphereMass`… mass family, `<IVASeat>`, `<SubstanceStorageVolume>`, and a SubPart's `DisplayName` — all previously dropped. (`<Collider>` was recovered this way too until it became MODELED — see [colliders.md](colliders.md).)
+**As of 2026-06-27 (gap 6), `<PartGameData>` and `<SubPartGameData>` ARE passthrough-safe:** their unmodeled direct **child elements** and unmodeled **root attributes** are captured verbatim on import (`captureUnknownChildren`/`captureUnknownAttrs` → `RawXmlNode` JSON trees on `unknownChildren`/`unknownAttrs`) and re-emitted on export (`buildRawNode`, appended last). This recovers the `SolidSphereMass`… mass family, `<AttachedInternal>`, `<SubstanceStorageVolume>`, and a SubPart's `DisplayName` — all previously dropped. (`<Collider>` was recovered this way too until it became MODELED — see [colliders.md](colliders.md); so was `<IVASeat>`, now MODELED at PART level and still passthrough at SubPart level — see [connectors-coordinates-iva.md](connectors-coordinates-iva.md).)
 
 Consequences / what's STILL drop-on-round-trip (passthrough is scoped to GameData containers):
 

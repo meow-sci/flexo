@@ -3,6 +3,7 @@ import {
   COLLIDER_LAYER_ID,
   CONNECTOR_LAYER_ID,
   DEFAULT_LAYER_ID,
+  IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
   createEmptyPart,
   createSolidGrainSegment,
@@ -425,7 +426,7 @@ describe('projectCodec round-trip', () => {
 
   // Per the no-migration rule a v6 envelope is REJECTED, never converted — so the
   // marker must actually be 7, not just "whatever the constant says".
-  it('stamps wire version 7 (<Internal> flags)', () => {
+  it('stamps wire version 7 (<Internal> flags + IVA seats)', () => {
     expect(PROJECT_EXPORT_VERSION).toBe(7)
     expect(encodeProject(buildProjectExport(createEmptyPart(), 'P')).v).toBe(7)
   })
@@ -485,12 +486,14 @@ describe('projectCodec round-trip', () => {
 
   // No migration, ever: a payload stamped with the previous version is rejected outright
   // rather than half-decoded (v4 has no `imp`/`mid` keys and predates them by design).
-  it('rejects a v4 payload instead of converting it', () => {
-    const v5 = encodeProject(buildProjectExport(createEmptyPart(), 'P'))
-    expect(parseProjectObject(v5).ok).toBe(true)
-    const v4 = parseProjectObject({ ...v5, v: 4 })
-    expect(v4.ok).toBe(false)
-    expect(v4.ok === false && v4.error).toContain('Unsupported project version')
+  it('rejects an older payload instead of converting it', () => {
+    const current = encodeProject(buildProjectExport(createEmptyPart(), 'P'))
+    expect(parseProjectObject(current).ok).toBe(true)
+    for (const v of [4, 6]) {
+      const older = parseProjectObject({ ...current, v })
+      expect(older.ok).toBe(false)
+      expect(older.ok === false && older.error).toContain('Unsupported project version')
+    }
   })
 
   it('recognizes its own format marker', () => {
@@ -537,5 +540,54 @@ describe('collider codec', () => {
     const c = encodeProject(buildProjectExport(p, 'P'))
     // Identity transform + null owner ⇒ just the id and the shape token.
     expect(c.cl?.[0]).toEqual({ i: '_collider1', sh: 'Box' })
+  })
+})
+
+describe('IVA seat codec', () => {
+  it('round-trips id/position/rotation, restoring the constant layerId and unit scale', () => {
+    const p = createEmptyPart()
+    p.ivaSeats.push({
+      id: '_seat1',
+      position: { x: 0.1, y: 0.62, z: -0.35 },
+      rotation: { x: 0, y: 1.5708, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+      layerId: IVA_SEAT_LAYER_ID,
+    })
+    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.ivaSeats
+    expect(back).toEqual(p.ivaSeats)
+    expect(back[0].layerId).toBe(IVA_SEAT_LAYER_ID)
+    // `scale` is unused, never serialized, and always decodes back to (1,1,1).
+    expect(back[0].scale).toEqual({ x: 1, y: 1, z: 1 })
+  })
+
+  it('omits the constant layerId, the unused scale, and `iv` entirely when there are no seats', () => {
+    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P'))).not.toHaveProperty('iv')
+    const p = createEmptyPart()
+    p.ivaSeats.push({
+      id: '_seat1',
+      ...identityTransform(),
+      layerId: IVA_SEAT_LAYER_ID,
+    })
+    const c = encodeProject(buildProjectExport(p, 'P'))
+    // Identity transform ⇒ just the id.
+    expect(c.iv?.[0]).toEqual({ i: '_seat1' })
+    expect(c.iv?.[0]).not.toHaveProperty('l')
+    expect(c.iv?.[0]).not.toHaveProperty('s')
+  })
+
+  it('preserves seat ORDER exactly (index 0 is the seat IVA opens on)', () => {
+    const p = createEmptyPart()
+    for (const id of ['_seat3', '_seat1', '_seat2']) {
+      p.ivaSeats.push({
+        id,
+        position: { x: p.ivaSeats.length, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        layerId: IVA_SEAT_LAYER_ID,
+      })
+    }
+    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.ivaSeats
+    expect(back.map((s) => s.id)).toEqual(['_seat3', '_seat1', '_seat2'])
+    expect(back.map((s) => s.position.x)).toEqual([0, 1, 2])
   })
 })

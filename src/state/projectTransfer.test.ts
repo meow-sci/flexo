@@ -3,6 +3,7 @@ import {
   COLLIDER_LAYER_ID,
   CONNECTOR_LAYER_ID,
   DEFAULT_LAYER_ID,
+  IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
   createEmptyPart,
   createCombustor,
@@ -304,6 +305,7 @@ describe('mergeProjectImport into an empty project', () => {
       meshes: 3,
       connectors: 1,
       colliders: 0,
+      ivaSeats: 0,
       kittens: 1,
       newLayers: 3,
       animations: 1,
@@ -622,5 +624,54 @@ describe('collider merge', () => {
     const env = buildProjectExport(createEmptyPart(), 'S')
     env.data.layers = env.data.layers.filter((l) => l.id !== COLLIDER_LAYER_ID)
     expect(envelopeToPart(env).layers.map((l) => l.id)).toContain(COLLIDER_LAYER_ID)
+  })
+})
+
+/** A seat at `n` on every axis, on the built-in IVA Seats layer. */
+function seat(id: string, n = 0) {
+  return { id, ...t(n), layerId: IVA_SEAT_LAYER_ID }
+}
+
+describe('IVA seat transfer', () => {
+  it('carries seats through buildProjectExport in document order', () => {
+    const src = createEmptyPart()
+    src.ivaSeats.push(seat('_seat1'), seat('_seat2', 0.5))
+    const env = buildProjectExport(src, 'S')
+    expect(env.data.ivaSeats.map((s) => s.id)).toEqual(['_seat1', '_seat2'])
+    expect(env.data.ivaSeats[1].position).toEqual({ x: 0.5, y: 0.5, z: 0.5 })
+  })
+
+  it('envelopeToPart restores seats verbatim with the IVA Seats layer present', () => {
+    const src = createEmptyPart()
+    src.ivaSeats.push(seat('_seat1'), seat('_seat2', 0.25))
+    const part = envelopeToPart(buildProjectExport(src, 'S'))
+    // No id remapping on this path — the payload's ids are already consistent.
+    expect(part.ivaSeats.map((s) => s.id)).toEqual(['_seat1', '_seat2'])
+    expect(part.ivaSeats.every((s) => s.layerId === IVA_SEAT_LAYER_ID)).toBe(true)
+    expect(part.layers.map((l) => l.id)).toContain(IVA_SEAT_LAYER_ID)
+  })
+
+  it('restores the IVA Seats layer when a payload omits it', () => {
+    const env = buildProjectExport(createEmptyPart(), 'S')
+    env.data.layers = env.data.layers.filter((l) => l.id !== IVA_SEAT_LAYER_ID)
+    expect(envelopeToPart(env).layers.map((l) => l.id)).toContain(IVA_SEAT_LAYER_ID)
+  })
+
+  it('appends pasted seats with fresh _seatN ids AFTER the existing ones', () => {
+    const src = createEmptyPart()
+    src.ivaSeats.push(seat('_seat1', 0.5), seat('_seat2', 0.75))
+    const dest = createEmptyPart()
+    dest.ivaSeats.push(seat('_seat1'))
+
+    const { part, summary } = mergeProjectImport(dest, buildProjectExport(src, 'S'))
+    // Fresh ids, no collision with the destination's existing _seat1…
+    expect(part.ivaSeats.map((s) => s.id)).toEqual(['_seat1', '_seat2', '_seat3'])
+    // …the destination's seat 0 (the default seat) stays first…
+    expect(part.ivaSeats[0].position).toEqual({ x: 0, y: 0, z: 0 })
+    // …and the incoming seats keep their relative document order.
+    expect(part.ivaSeats[1].position).toEqual({ x: 0.5, y: 0.5, z: 0.5 })
+    expect(part.ivaSeats[2].position).toEqual({ x: 0.75, y: 0.75, z: 0.75 })
+    expect(part.ivaSeats.every((s) => s.layerId === IVA_SEAT_LAYER_ID)).toBe(true)
+    expect(summary.ivaSeats).toBe(2)
   })
 })

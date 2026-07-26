@@ -20,6 +20,7 @@ import type {
   Generator,
   Gimbal,
   ImportedMeshSource,
+  IvaSeat,
   KittenInstance,
   KittenMeshSource,
   Layer,
@@ -49,6 +50,7 @@ import {
   COLLIDER_LAYER_ID,
   COLLIDER_SHAPES,
   CONNECTOR_LAYER_ID,
+  IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
   createDefaultMaterial,
   createEmptyGameData,
@@ -72,7 +74,8 @@ export const PROJECT_EXPORT_FORMAT = 'flexo-project'
 // v5: imported glTF meshes (`imp`) — a third CustomMesh source kind, plus the mesh-level
 // `mid` (materialId) an imported mesh needs to keep its surface across a round-trip.
 // v6: colliders (`cl`) — the Part's collision volume as a flat list of analytic primitives.
-// v7: the per-SubPart-template `<Internal>` (interior-only) flag (`ifl`).
+// v7: the per-SubPart-template `<Internal>` (interior-only) flag (`ifl`) AND IVA seats
+// (`iv`) — both halves of the IVA plan ship together, so they share the one bump.
 // Per the no-migration rule, older payloads are REJECTED on import, never converted.
 export const PROJECT_EXPORT_VERSION = 7
 
@@ -246,6 +249,26 @@ function decCollider(c: CCollider): PartCollider {
     shape: COLLIDER_SHAPES.includes(c.sh) ? c.sh : 'Cylinder',
     ownerTemplateId: c.o ? str(c.o) : null,
     layerId: COLLIDER_LAYER_ID,
+    ...decTransform(c),
+  }
+}
+
+/** An IVA seat. `scale` is unused, so the shared CTransform encoder always omits it. */
+interface CIvaSeat extends CTransform {
+  i: string // id
+}
+
+function encIvaSeat(s: IvaSeat): CIvaSeat {
+  // layerId is always IVA_SEAT_LAYER_ID — restored on decode, never serialized.
+  // `scale` is unused (KSA has no seat size); it is pinned to (1,1,1), which the shared
+  // CTransform encoder omits and `decTransform` restores from its `1` default.
+  return { i: s.id, ...encTransform(s) }
+}
+
+function decIvaSeat(c: CIvaSeat): IvaSeat {
+  return {
+    id: str(c.i),
+    layerId: IVA_SEAT_LAYER_ID,
     ...decTransform(c),
   }
 }
@@ -1293,6 +1316,7 @@ export interface CompactProject {
   p?: CPlacement[] // placements
   c?: CConnector[] // connectors
   cl?: CCollider[] // colliders
+  iv?: CIvaSeat[] // ivaSeats (order is load-bearing — index 0 is the default seat)
   ifl?: Record<string, boolean> // per-SubPart-template <Internal> overrides
   k?: CKitten[] // kittens
   a?: CAnimation[] // animations
@@ -1315,6 +1339,7 @@ export function encodeProject(env: ProjectExportEnvelope): CompactProject {
   if (d.placements.length) o.p = d.placements.map(encPlacement)
   if (d.connectors.length) o.c = d.connectors.map(encConnector)
   if (d.colliders.length) o.cl = d.colliders.map(encCollider)
+  if (d.ivaSeats.length) o.iv = d.ivaSeats.map(encIvaSeat)
   if (Object.keys(d.internalFlags).length) o.ifl = { ...d.internalFlags }
   if (d.kittens.length) o.k = d.kittens.map(encKitten)
   if (d.animations.length) o.a = d.animations.map(encAnimation)
@@ -1341,6 +1366,7 @@ export function decodeProject(raw: CompactProject): ProjectExportEnvelope {
       placements: arr<CPlacement>(raw.p).map(decPlacement),
       connectors: arr<CConnector>(raw.c).map(decConnector),
       colliders: arr<CCollider>(raw.cl).map(decCollider),
+      ivaSeats: arr<CIvaSeat>(raw.iv).map(decIvaSeat),
       internalFlags: decInternalFlags(raw.ifl),
       kittens: arr<CKitten>(raw.k).map(decKitten),
       animations: arr<CAnimation>(raw.a).map(decAnimation),

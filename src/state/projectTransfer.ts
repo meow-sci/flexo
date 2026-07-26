@@ -4,6 +4,7 @@ import type {
   CustomReaction,
   CustomMesh,
   EditingPart,
+  IvaSeat,
   KittenInstance,
   KittenMeshSource,
   Layer,
@@ -21,10 +22,12 @@ import {
   CONNECTOR_LAYER_ID,
   DEFAULT_LAYER_ID,
   DEFAULT_PART_ID,
+  IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
   createColliderLayer,
   createConnectorLayer,
   createDefaultLayer,
+  createIvaSeatLayer,
   createKittenLayer,
   createSubPartGameData,
   meshKind,
@@ -72,6 +75,11 @@ export interface ProjectExportData {
   connectors: Connector[]
   /** The Part's collision volume (analytic primitives; owner-grouped only on XML export). */
   colliders: PartCollider[]
+  /**
+   * IVA seats. ORDER IS LOAD-BEARING: index 0 is the seat IVA opens on and `C` cycles
+   * them in this order, so the wire form preserves the document order exactly.
+   */
+  ivaSeats: IvaSeat[]
   /** Per-SubPart-template `<Internal>` (interior-only) overrides, keyed by template id. */
   internalFlags: Record<string, boolean>
   kittens: KittenInstance[]
@@ -107,6 +115,7 @@ export interface ImportSummary {
   meshes: number
   connectors: number
   colliders: number
+  ivaSeats: number
   kittens: number
   newLayers: number
   animations: number
@@ -166,6 +175,7 @@ export function buildProjectExport(part: EditingPart, projectName: string): Proj
       placements: part.placements,
       connectors: part.connectors,
       colliders: part.colliders,
+      ivaSeats: part.ivaSeats,
       internalFlags: part.internalFlags,
       kittens: part.kittens,
       animations: part.animations,
@@ -236,6 +246,7 @@ export function envelopeToPart(env: ProjectExportEnvelope): EditingPart {
     placements: d.placements,
     connectors: d.connectors,
     colliders: d.colliders,
+    ivaSeats: d.ivaSeats,
     internalFlags: { ...d.internalFlags },
     kittens: d.kittens,
     customTextures: [],
@@ -248,12 +259,13 @@ export function envelopeToPart(env: ProjectExportEnvelope): EditingPart {
   return part
 }
 
-/** Guarantees the four undeletable built-in layers exist (in case a payload omitted any). */
+/** Guarantees the five undeletable built-in layers exist (in case a payload omitted any). */
 function ensureBuiltInLayers(part: EditingPart): void {
   const has = (id: string) => part.layers.some((l) => l.id === id)
   if (!has(DEFAULT_LAYER_ID)) part.layers.unshift(createDefaultLayer())
   if (!has(CONNECTOR_LAYER_ID)) part.layers.push(createConnectorLayer())
   if (!has(COLLIDER_LAYER_ID)) part.layers.push(createColliderLayer())
+  if (!has(IVA_SEAT_LAYER_ID)) part.layers.push(createIvaSeatLayer())
   if (!has(KITTEN_LAYER_ID)) part.layers.push(createKittenLayer())
 }
 
@@ -378,6 +390,21 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
     })
   }
 
+  // IVA seats — always on the built-in IVA Seats layer, fresh _seatN ids. Nothing
+  // references a seat by id (the id is editor-only and never emitted to XML), so there is
+  // no ref map to thread through. Order matters, though: the incoming seats keep their
+  // relative document order and are APPENDED after the existing ones, so the destination's
+  // seat 0 — the one IVA opens on — stays the default.
+  for (const src of data.ivaSeats ?? []) {
+    part.ivaSeats.push({
+      id: nextIvaSeatId(part),
+      position: vec(src.position, 0),
+      rotation: vec(src.rotation, 0),
+      scale: vec(src.scale, 1),
+      layerId: IVA_SEAT_LAYER_ID,
+    })
+  }
+
   // Kittens — always on the built-in Kittens layer, fresh kitten_N ids.
   for (const src of data.kittens) {
     part.kittens.push({
@@ -487,6 +514,7 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
       meshes: data.placements.length,
       connectors: data.connectors.length,
       colliders: data.colliders?.length ?? 0,
+      ivaSeats: data.ivaSeats?.length ?? 0,
       kittens: data.kittens.length,
       newLayers: newLayerIds.length,
       animations: data.animations.length,
@@ -634,6 +662,15 @@ function nextColliderId(part: EditingPart): string {
     if (m) max = Math.max(max, Number.parseInt(m[1], 10))
   }
   return `_collider${max + 1}`
+}
+
+function nextIvaSeatId(part: EditingPart): string {
+  let max = 0
+  for (const s of part.ivaSeats) {
+    const m = /^_seat(\d+)$/.exec(s.id)
+    if (m) max = Math.max(max, Number.parseInt(m[1], 10))
+  }
+  return `_seat${max + 1}`
 }
 
 function nextKittenId(part: EditingPart): string {

@@ -17,6 +17,12 @@
 > - Validation is **advisory** — issues are displayed, nothing gates the export (matching colliders).
 > - The aim intent atom lives in its own `ivaSeatStore.ts` (authoring), separate from `ivaStore.ts`
 >   (seat view), and carries a `keepUp` flag.
+> - **§3.6's `$seatLook: { yaw, pitch }` is wrong and was replaced.** KSA's state is the camera's
+>   own look direction — `IVAController.OnFrame` clamps its *previously clamped* direction each
+>   frame, so it converges. Composing from a raw yaw/pitch accumulator feeds `clampSeatLook` a
+>   fresh far-out direction every update, a single pass under-corrects, and the preview measurably
+>   escaped **both** clamps (`dot(look, forward)` reached −0.23 — 13° behind the 90° hemisphere;
+>   `|dot(look, up)|` reached 0.902). `$seatLook` now holds the unit look direction.
 > - `PROJECT_EXPORT_VERSION` took **one** bump to `7` covering both `ifl` and `iv`.
 > - The viewport index label (§3.3 "nice-to-have") shipped as part of `IvaSeatObject`.
 > - **Not yet done:** the in-game acceptance test (§4 Phase 3 "Verify in-game") — build a pressurised

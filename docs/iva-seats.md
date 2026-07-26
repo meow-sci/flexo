@@ -205,16 +205,27 @@ State is ephemeral and lives in `src/state/ivaStore.ts` — never persisted, nev
   reordering seats mid-preview (the ▲/▼ buttons stay live) cannot silently move the camera
   into a different seat. A vanished id makes `EditorScene` exit cleanly rather than read a
   stale pose.
-- `$seatLook: { yaw, pitch }` — the accumulated free-look, reset on entry and bounded to
-  ±90° (`SEAT_LOOK_LIMIT`). The bound costs no reachable direction — clamp 1 already kills
-  everything past 90° from forward — and keeps a drag reversible the moment it reverses,
-  instead of winding up 40 radians of yaw that must be unwound before the view budges.
+- `$seatLook: Vec3 | null` — the **current unit look direction**, not a yaw/pitch accumulator.
+  `null` means "not yet resolved" and reads as the seat's forward axis.
+
+  ⚠️ **The state has to be the direction, and this is not a style choice.** KSA's state is the
+  camera's own look: `IVAController.OnFrame` applies the mouse delta to the *previously clamped*
+  direction and clamps once, so it converges. An implementation that keeps a raw yaw/pitch
+  accumulator and re-composes the direction from the seat axes every update feeds `clampSeatLook`
+  a fresh far-out direction each time — and a single pass **under-corrects**, so the fixed point
+  is never reached. That version measured `dot(look, forward) = −0.23` (≈13° behind the 90°
+  hemisphere the game enforces) and `|dot(look, up)| = 0.902`, i.e. it showed the author views the
+  game forbids. Feeding the clamped result back in is what makes the preview trustworthy.
 
 `Viewport.enterSeatView(pose)` snapshots the orbit camera, disables `OrbitControls` **and
 skips `controls.update()`** (which re-aims at `controls.target` unconditionally, ignoring
-`enabled`), and installs pointer handlers that accumulate into `$seatLook`. Each update
-composes the look from the seat's axes plus yaw/pitch, runs it through `clampSeatLook`
-**once**, and sets `camera.position` / `camera.up` / `lookAt`. `exitSeatView` restores the
+`enabled`), and installs pointer handlers that call `nudgeSeatLook`. That applies the delta to
+the stored direction — pitch about the camera's right, then yaw about its up, both axes read
+*before* the delta, matching `qYaw · qPitch · LocalRotation` in `IVAController.OnFrame:69-78` —
+runs `clampSeatLook` **once**, and stores the result. `applySeatCamera` then just points the
+camera down the stored direction and sets `camera.position` / `camera.up` / `lookAt`, with a
+degenerate-`cross(look, up)` guard that leaves the orientation untouched rather than letting
+three.js's 1e-4 epsilon nudge invent an arbitrary roll. `exitSeatView` restores the
 camera exactly and removes the handlers; `dispose()` calls it too, so a leaked handler can
 never outlive the canvas. While seated, `EditorScene` suppresses the transform gizmo,
 click-selection, and **the seat markers themselves** (you are inside the one you sat in).

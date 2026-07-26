@@ -124,10 +124,13 @@ on every pass, which is what renumbers the badges after a reorder.
 the document to a pose and calls `viewport.enterSeatView({ position, forward, up })`, which
 snapshots the orbit camera, disables `OrbitControls` **and skips `controls.update()`** — it
 re-aims at `controls.target` unconditionally, ignoring `enabled`, and would undo every
-`lookAt`. Pointer drags accumulate yaw/pitch into `$seatLook`; each change composes the look
-from the seat's axes, runs it through `clampSeatLook` **once** (the game's own per-frame
-clamps — see [iva-seats.md](./iva-seats.md)) and sets `camera.position`/`up`/`lookAt`. The FOV
-needs no change: flexo's camera is already 50°, which is KSA's own.
+`lookAt`. `$seatLook` holds the current unit **look direction** (not a yaw/pitch accumulator);
+a pointer drag applies its delta to that stored direction and runs `clampSeatLook` **once**, so
+the clamp always eats its own output and converges exactly as the game's per-frame loop does —
+re-composing from a raw accumulator instead lets a single pass under-correct and escape both
+clamps (see [iva-seats.md](./iva-seats.md)). `applySeatCamera` then sets
+`camera.position`/`up`/`lookAt`, guarding a degenerate `cross(look, up)` so a pole case keeps
+the last good roll. The FOV needs no change: flexo's camera is already 50°, which is KSA's own.
 
 While seated, three things are suppressed — the transform gizmo, click-selection, and **the
 seat markers themselves** (you are inside the one you sat in, so it would fill the screen).

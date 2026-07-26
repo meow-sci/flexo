@@ -2013,6 +2013,16 @@ export interface EditingPart {
   gameData: PartGameData
   /** Per-SubPart-template GameData (tanks). Keyed by subPartTemplateId. */
   subPartGameData: SubPartGameData[]
+  /**
+   * Per-SubPart-template `<Internal>` (interior-only) flag, keyed by `subPartTemplateId`.
+   * ABSENT ⇒ inherit the template's own value: a built-in's catalogued `<Internal>`
+   * (`CatalogSubPart.internal`), or `false` for a flexo-authored custom mesh.
+   *
+   * KSA puts `<Internal>` on a `<SubPart>`'s `<PartModel>`, so it is a TEMPLATE property, not a
+   * per-placement one — setting it affects every placement of that template (same rule as a
+   * SubPart-owned {@link PartCollider}). See docs/iva-seats.md.
+   */
+  internalFlags: Record<string, boolean>
   /** Editor-only layers; array order is the display order. Always includes Default. */
   layers: Layer[]
   /** All placed SubPart instances. */
@@ -2041,6 +2051,7 @@ export function createEmptyPart(): EditingPart {
     editorTags: [],
     gameData: createEmptyGameData(),
     subPartGameData: [],
+    internalFlags: {},
     layers: [
       createDefaultLayer(),
       createConnectorLayer(),

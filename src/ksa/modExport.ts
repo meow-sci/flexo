@@ -168,6 +168,30 @@ export interface ExportVariant {
    * `<Box>`). Empty for a template that authors none.
    */
   colliders: PartCollider[]
+  /**
+   * The `<Internal>` (interior-only) value the variant declares — {@link resolveInternal}'s
+   * result. `false` emits no element at all (KSA's default).
+   */
+  internal: boolean
+  /**
+   * The built-in template's raw `<RayTracing>` token, carried forward verbatim (null = none
+   * authored). A variant inherits nothing but the Mesh/Material it names, so dropping this
+   * would turn e.g. a `ShadowProxy` occluder into a visible mesh.
+   */
+  rayTracing: string | null
+}
+
+/**
+ * The `<Internal>` value a SubPart template exports with: the user's explicit flag if the
+ * document carries one, else the template's own value (a built-in's catalogued `<Internal>`,
+ * `false` for a flexo custom mesh).
+ */
+export function resolveInternal(
+  part: EditingPart,
+  templateId: string,
+  entry: CatalogSubPart | undefined,
+): boolean {
+  return part.internalFlags[templateId] ?? entry?.internal ?? false
 }
 
 /**
@@ -186,14 +210,18 @@ function hasSubPartGameData(part: EditingPart, templateId: string): boolean {
 /**
  * Builds the built-in-SubPart → export-variant map: one entry per DISTINCT placed built-in
  * template (deduped across placements) that needs redeclaring, because it is EITHER
- *   - an IVA (Internal) prop we re-home onto a non-Internal SubPart so it renders outside IVA, OR
+ *   - carrying an `<Internal>` (interior-only) value the built-in doesn't have — the user flipped
+ *     the flag for this template (see {@link resolveInternal}), OR
  *   - carrying flexo SubPart GameData (a <Light>, tank, etc.) — emitting that under the built-in
  *     id would MERGE onto the shared built-in template (KSA dedups GameData by id), corrupting
  *     every other use of that SubPart. The variant moves the GameData onto a fresh id instead.
  *
+ * A template flexo changes NOTHING about gets no variant: the placement references the built-in id
+ * and keeps the built-in's own `<Internal>`/`<RayTracing>` for free.
+ *
  * Custom-mesh SubParts (absent from the catalog) are skipped — flexo already declares those with
  * their own ids, so their GameData never collides. Variant ids are namespaced by the project
- * {@link base} (deterministic, so re-exports are stable). IVA variants keep the `_NotIVA` suffix.
+ * {@link base} (deterministic, so re-exports are stable).
  */
 export function buildExportVariantMap(
   part: EditingPart,
@@ -206,7 +234,9 @@ export function buildExportVariantMap(
     if (out.has(templateId)) continue
     const entry = catalog.get(templateId)
     if (!entry) continue // custom mesh (not a built-in) — flexo declares it directly, no collision
-    if (!entry.internal && !hasSubPartGameData(part, templateId)) continue
+    const wantInternal = resolveInternal(part, templateId, entry)
+    const internalDiffers = wantInternal !== (entry.internal ?? false)
+    if (!internalDiffers && !hasSubPartGameData(part, templateId)) continue
     // meshNodeName is the built-in <Mesh Id> (null only for the rare whole-atlas mesh). Without
     // it we can't reference the geometry — leave the built-in reference as-is.
     if (!entry.meshNodeName) {
@@ -217,12 +247,12 @@ export function buildExportVariantMap(
     }
     out.set(templateId, {
       originalId: templateId,
-      variantId: entry.internal
-        ? `flexo_${base}_${templateId}_NotIVA`
-        : `flexo_${base}_${templateId}`,
+      variantId: `flexo_${base}_${templateId}`,
       meshId: entry.meshNodeName,
       materialId: entry.materialId ?? null,
       colliders: entry.colliders ?? [],
+      internal: wantInternal,
+      rayTracing: entry.rayTracing ?? null,
     })
   }
   return out
@@ -625,9 +655,9 @@ export interface CustomBundle {
  * Builds the custom-asset bundle for a project: a geometry mesh-atlas GLB (one named
  * node per custom SubPart actually placed), the diffuse .ktx2 for each referenced
  * custom texture, and the Assets XML that declares the MeshAtlas/PbrMaterial/SubPart.
- * The Assets XML also declares the export variants (`variants` — de-IVA'd props AND
- * built-in SubParts that carry GameData), which reuse built-in Mesh/Material and ship no
- * binaries. Returns an empty bundle (animations only) when neither custom SubParts nor
+ * The Assets XML also declares the export variants (`variants` — built-in SubParts whose
+ * `<Internal>` flag the user overrode AND ones that carry GameData), which reuse built-in
+ * Mesh/Material and ship no binaries. Returns an empty bundle (animations only) when neither custom SubParts nor
  * variants are present.
  *
  * The .ktx2 bytes come from IndexedDB (encoded at upload time); the atlas GLB is generated
@@ -657,13 +687,15 @@ export async function buildCustomBundle(
   const placed = new Set(part.placements.map((p) => p.subPartTemplateId))
   const meshes = part.customMeshes.filter((m) => placed.has(m.subPartId))
 
-  // Export variants (de-IVA'd props + built-in SubParts carrying GameData): reference-only
+  // Export variants (overridden <Internal> + built-in SubParts carrying GameData): reference-only
   // SubParts reusing built-in Mesh/Material (no binaries).
   const referenceSubParts: ReferenceSubPartPlan[] = [...variants.values()].map((v) => ({
     subPartId: v.variantId,
     meshId: v.meshId,
     materialId: v.materialId,
     colliders: v.colliders,
+    internal: v.internal,
+    rayTracing: v.rayTracing,
   }))
 
   // Nothing to declare → no Assets XML, but still ship any animation glbs above.
@@ -672,7 +704,7 @@ export async function buildCustomBundle(
   }
 
   // Custom geometry (primitive/kitten/imported meshes) → build the mesh-atlas GLB, its textures,
-  // and the deduped PbrMaterial list. Skipped entirely for an IVA-only part (no atlas needed).
+  // and the deduped PbrMaterial list. Skipped entirely for a variant-only part (no atlas needed).
   let meshAtlasPath: string | undefined
   const subParts: AssetsSubPartPlan[] = []
   let materials: AssetsMaterialPlan[] = []
@@ -851,13 +883,30 @@ export async function buildCustomBundle(
       return packedPath ?? tex.ormSolid(255, roughByte, metalByte)
     }
 
+    /**
+     * Stamps a planned custom SubPart with its `<Internal>` (interior-only) value.
+     *
+     * GLASS IS EXCLUDED, HARD: `<PartModelGlass>` has no `<Internal>` field in KSA at all — the
+     * only `[XmlElement("Internal")]` in the whole decomp is `PartModelModule.cs:35` — so a glass
+     * mesh drops the flag rather than emitting it where the game can never read it. A layered
+     * 'glassGlow' visor is glass WHOLE: its shell lands here as glass, and the opaque emissive
+     * layer expandGlassGlow splits off carries a synthetic `<id>_Glow` template id the document
+     * can hold no flag for, so half a layered surface is never marked interior-only.
+     */
+    const withInternal = (plan: AssetsSubPartPlan): AssetsSubPartPlan => ({
+      ...plan,
+      internal: !plan.glass && resolveInternal(part, plan.subPartId, undefined),
+    })
+
     for (const m of meshes) {
       if (!emitted.has(m.subPartId)) continue // geometry failed to resolve (warned above)
       // Part-ified kitten submesh: full PBR from the KSA .ktx2 (referenced/bundled), or a generated
       // solid tint diffuse (glass) / glow textures (emissive) per the visor surface mode.
       if (meshKind(m) === 'kitten') {
         subParts.push(
-          await planKittenSubPart(m, kittenTex, kittenTexPath, binaries, bundleToken, tex),
+          withInternal(
+            await planKittenSubPart(m, kittenTex, kittenTexPath, binaries, bundleToken, tex),
+          ),
         )
         continue
       }
@@ -893,7 +942,7 @@ export async function buildCustomBundle(
           },
           `${m.subPartId}_Material`,
         )
-        subParts.push({ subPartId: m.subPartId, materialId, glass })
+        subParts.push(withInternal({ subPartId: m.subPartId, materialId, glass }))
         continue
       }
       // Diffuse resolution: the primary (first textured) face wins, then the material's
@@ -908,7 +957,7 @@ export async function buildCustomBundle(
             : await tex.baseColorSolid(material.baseColor.color)
       }
       if (!diffusePath) {
-        subParts.push({ subPartId: m.subPartId, materialId: null, glass })
+        subParts.push(withInternal({ subPartId: m.subPartId, materialId: null, glass }))
         continue
       }
       // A mesh rendering its material verbatim (no per-face diffuse override) interns under
@@ -923,7 +972,7 @@ export async function buildCustomBundle(
         },
         preferredId,
       )
-      subParts.push({ subPartId: m.subPartId, materialId, glass })
+      subParts.push(withInternal({ subPartId: m.subPartId, materialId, glass }))
     }
 
     materials = tex.materials

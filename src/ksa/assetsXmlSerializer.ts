@@ -1,4 +1,5 @@
 import { DOMImplementation, XMLSerializer } from '@xmldom/xmldom'
+import type { Document as XmlDocument, Element as XmlElement } from '@xmldom/xmldom'
 import {
   buildColliderElement,
   INHERITED_COLLIDER_COMPONENT_ID,
@@ -64,14 +65,21 @@ export interface AssetsSubPartPlan {
    * The opaque `<PartModel>` path renders glass black/opaque.
    */
   glass?: boolean
+  /**
+   * Emit `<Internal>true</Internal>` — interior-only geometry, which KSA renders in IVA camera
+   * mode and nowhere else (`PartModel.cs:387`). Resolved by modExport's `resolveInternal`.
+   * IGNORED (and never set) for a {@link glass} SubPart: `<PartModelGlass>` has no `<Internal>`
+   * field at all — the only `[XmlElement("Internal")]` in the decomp is `PartModelModule.cs:35`.
+   */
+  internal?: boolean
 }
 
 /**
  * A "reference" SubPart: a project-unique SubPart that REUSES an existing (built-in)
  * Mesh + Material by id rather than declaring its own geometry/texture. Used for export
- * variants (see buildExportVariantMap in modExport.ts): re-homing KSA's IVA (interior) props
- * onto a non-Internal PartModel so they render outside IVA, AND giving a built-in SubPart that
- * carries flexo GameData a fresh id so it doesn't redefine the shared built-in template. Unlike
+ * variants (see buildExportVariantMap in modExport.ts): re-declaring a built-in template under a
+ * fresh id so flexo can change something about it — an overridden `<Internal>` (interior-only)
+ * flag, or SubPart GameData that would otherwise redefine the shared built-in template. Unlike
  * {@link AssetsSubPartPlan} it emits NO <PbrMaterial> (the material is built-in) and needs no
  * MeshAtlas; it DOES emit a <MeshView> pointing at the reused render mesh for editor picking.
  */
@@ -88,6 +96,20 @@ export interface ReferenceSubPartPlan {
    * here or the variant loses the built-in collision volume.
    */
   colliders?: PartCollider[]
+  /**
+   * Emit `<Internal>true</Internal>` — interior-only, rendered in IVA camera mode and nowhere
+   * else (`PartModel.cs:387`). `false` emits nothing (KSA's default). The variant inherits
+   * nothing from the built-in, so this is the ONLY thing that carries the flag either way: a
+   * built-in Internal prop the user wants outside IVA becomes a variant with `false`, and a
+   * variant of an Internal prop that exists for some other reason must keep `true`.
+   */
+  internal: boolean
+  /**
+   * The built-in's raw `<RayTracing>` token (`Disabled`/`Enabled`/`ShadowProxy`), copied forward
+   * verbatim; null when the built-in authors none. Same inheritance rule as {@link internal} —
+   * dropping it silently turns a `ShadowProxy` occluder into a VISIBLE mesh.
+   */
+  rayTracing: string | null
 }
 
 export interface AssetsPlan {
@@ -99,15 +121,22 @@ export interface AssetsPlan {
   /** The <PbrMaterial> list (deduped; shared across SubParts like Core's pack materials). */
   materials?: AssetsMaterialPlan[]
   subParts: AssetsSubPartPlan[]
-  /** Reference-only SubParts that reuse built-in Mesh/Material (e.g. de-IVA'd props). */
+  /** Reference-only SubParts that reuse built-in Mesh/Material (the export variants). */
   referenceSubParts?: ReferenceSubPartPlan[]
+}
+
+/** `<Internal>true</Internal>` — legal ONLY inside a `<PartModel>` (never `<PartModelGlass>`). */
+function internalElement(doc: XmlDocument): XmlElement {
+  const el = doc.createElement('Internal')
+  el.appendChild(doc.createTextNode('true'))
+  return el
 }
 
 export function serializeAssets(plan: AssetsPlan): string {
   const doc = new DOMImplementation().createDocument(null, 'Assets', null)
   const assets = doc.documentElement!
 
-  // Reference-only SubParts (de-IVA'd props) reuse built-in geometry, so a file with
+  // Reference-only SubParts (export variants) reuse built-in geometry, so a file with
   // only those needs no MeshAtlas. Emit it only when custom geometry is declared.
   if (plan.meshAtlasPath) {
     const atlas = doc.createElement('MeshAtlas')
@@ -147,6 +176,10 @@ export function serializeAssets(plan: AssetsPlan): string {
     // SubPart onto the first one's mesh+material, so a multi-SubPart part renders only
     // its first piece (stacked) in-game. Core always uses "<subPartId>_Model".
     model.setAttribute('Id', `${sp.subPartId}_Model`)
+    // Interior-only geometry: rendered in IVA camera mode and nowhere else. Core writes it
+    // first inside the <PartModel>; never emitted on the glass path (the field doesn't exist
+    // there), which is why the plan's `internal` is already false for a glass SubPart.
+    if (sp.internal && !sp.glass) model.appendChild(internalElement(doc))
     const mesh = doc.createElement('Mesh')
     mesh.setAttribute('Id', sp.subPartId)
     model.appendChild(mesh)
@@ -169,15 +202,23 @@ export function serializeAssets(plan: AssetsPlan): string {
   }
 
   // Reference SubParts: a fresh SubPart + a fresh PartModel pointing at a built-in Mesh
-  // (and Material). The PartModel Id MUST be unique — KSA dedupes PartModels by Template.Id,
-  // so reusing the built-in "<orig>_Model" id would collapse back onto the original (e.g. an
-  // IVA prop's Internal PartModel), defeating the de-IVA. No <PbrMaterial> (the material is
-  // built-in).
+  // (and Material). No <PbrMaterial> (the material is built-in).
+  //
+  // The PartModel Id MUST be unique — KSA dedupes PartModels by Template.Id, so reusing the
+  // built-in "<orig>_Model" id would collapse the variant back onto the original and every
+  // <PartModel> property below (the built-in's own <Internal>, its <RayTracing>) would come
+  // back with it, silently undoing the redeclaration. Unchanged and still load-bearing.
+  //
+  // A variant inherits NOTHING but the Mesh/Material it names, so <Internal>/<RayTracing> are
+  // authored here explicitly and travel in BOTH directions: dropping <Internal> makes a built-in
+  // interior prop render outside IVA, keeping it makes a GameData-carrying variant stay interior.
+  // Element order mirrors Core (Internal, Mesh, Material, RayTracing).
   for (const sp of plan.referenceSubParts ?? []) {
     const sub = doc.createElement('SubPart')
     sub.setAttribute('Id', sp.subPartId)
     const model = doc.createElement('PartModel')
     model.setAttribute('Id', `${sp.subPartId}_Model`)
+    if (sp.internal) model.appendChild(internalElement(doc))
     const mesh = doc.createElement('Mesh')
     mesh.setAttribute('Id', sp.meshId)
     model.appendChild(mesh)
@@ -186,9 +227,14 @@ export function serializeAssets(plan: AssetsPlan): string {
       material.setAttribute('Id', sp.materialId)
       model.appendChild(material)
     }
+    if (sp.rayTracing) {
+      const rt = doc.createElement('RayTracing')
+      rt.appendChild(doc.createTextNode(sp.rayTracing))
+      model.appendChild(rt)
+    }
     sub.appendChild(model)
     // View mesh — without a MeshViewModule (built from <MeshView>) KSA's editor won't
-    // raycast the SubPart, so a de-IVA'd prop renders but can't be hovered/selected/
+    // raycast the SubPart, so an export variant renders but can't be hovered/selected/
     // right-clicked. We point <MeshView> at the SAME built-in render mesh the PartModel
     // reuses: it's guaranteed to exist (buildExportVariantMap skips entries without a mesh
     // node) and resolves cross-mod exactly like the render <Mesh> above. We deliberately

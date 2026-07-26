@@ -28,12 +28,20 @@ export interface CatalogSubPart {
   aoRoughMetalUrl?: string
   emissiveUrl?: string
   /**
-   * True when the SubPart's <PartModel> carries <Internal>true</Internal> — an "IVA"
-   * (interior) prop that KSA only renders in IVA camera mode. flexo renders it normally
-   * in the editor, and on mod export rewrites it to a non-Internal variant so it renders
-   * everywhere (see buildExportVariantMap in modExport.ts).
+   * True when the SubPart's <PartModel> carries <Internal>true</Internal> — "interior-only":
+   * KSA renders the mesh in IVA camera mode and NOT outside it (the render gate in
+   * PartModel.cs:387). flexo always renders it in the editor, and on mod export copies the
+   * flag through FAITHFULLY unless the user overrides it for this template via
+   * `EditingPart.internalFlags` (see resolveInternal in modExport.ts).
    */
   internal?: boolean
+  /**
+   * Raw `<PartModel><RayTracing>` token, e.g. "Disabled" / "Enabled" / "ShadowProxy"
+   * (`PartModelModule.RaytracingMode`). flexo never INTERPRETS it, it only copies it onto an
+   * export variant so a redeclared template keeps the built-in's ray-tracing behaviour — a
+   * `ShadowProxy` mesh (an invisible ray occluder) would otherwise become a visible one.
+   */
+  rayTracing?: string
   /**
    * Collision primitives authored on the geometry `<SubPart>` template itself (Core does
    * this for e.g. the solar-panel cells). flexo does NOT copy these into the document
@@ -196,9 +204,11 @@ export function parseAssetsFile(doc: Document, sourceFile: string, out: CatalogS
     const materialId = firstChildByTag(partModel, 'Material')?.getAttribute('Id') ?? undefined
     const mat = materialId ? materials.get(materialId) : undefined
 
-    // <Internal>true</Internal> marks an IVA (interior) prop — see CatalogSubPart.internal.
+    // <Internal>true</Internal> marks an interior-only (IVA) prop — see CatalogSubPart.internal.
     const internal =
       firstChildByTag(partModel, 'Internal')?.textContent?.trim().toLowerCase() === 'true'
+    // Raw token, copied verbatim onto an export variant — see CatalogSubPart.rayTracing.
+    const rayTracing = firstChildByTag(partModel, 'RayTracing')?.textContent?.trim() || undefined
 
     const colliders = collidersFromElement(sub, id)
 
@@ -212,6 +222,7 @@ export function parseAssetsFile(doc: Document, sourceFile: string, out: CatalogS
       aoRoughMetalUrl: mat?.aoRoughMetal ? toUrl(mat.aoRoughMetal) : undefined,
       emissiveUrl: mat?.emissive ? toUrl(mat.emissive) : undefined,
       internal: internal || undefined,
+      rayTracing,
       colliders: colliders.length > 0 ? colliders : undefined,
       sourceFile,
     })

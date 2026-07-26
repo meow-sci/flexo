@@ -58,12 +58,58 @@ describe('catalog parsing (real Core XML)', () => {
     const note = iva.find((s) => s.id === 'CoreIVAPropA_Subpart_WrittenNoteE')!
     expect(note).toBeDefined()
     expect(note.internal).toBe(true)
-    // The built-in Mesh + Material ids the de-IVA export variant reuses.
+    // The built-in Mesh + Material ids an export variant of this template reuses.
     expect(note.meshNodeName).toBe('CoreIVAPropA_Subpart_WrittenNoteE')
     expect(note.materialId).toBe('CoreIVAPropA_Material')
     // A normal structural SubPart carries no Internal flag.
     const truss = structural.find((s) => s.id === 'CoreStructuralA_Subpart_TrussBarA')!
     expect(truss.internal).toBeUndefined()
+  })
+
+  it.runIf(hasKsaAssets)('captures the raw <RayTracing> token, including ShadowProxy', () => {
+    const space = parseFile('CoreIVASpaceAAssets.xml')
+    const blocker = space.find((s) => s.id === 'CoreIVASpaceA_Subpart_MediumCapsuleARayBlocker')!
+    expect(blocker.rayTracing).toBe('ShadowProxy')
+  })
+})
+
+// Inline XML so the <RayTracing> capture is covered without the private asset tree.
+describe('<PartModel><RayTracing> capture', () => {
+  function parseInline(xml: string): CatalogSubPart[] {
+    const out: CatalogSubPart[] = []
+    const doc = new DOMParser().parseFromString(xml, 'application/xml')
+    parseAssetsFile(doc as unknown as Document, 'InlineAssets.xml', out)
+    return out
+  }
+
+  const xml = `<Assets>
+    <MeshAtlas Path="Meshes/Inline_MeshAtlas.glb" />
+    <SubPart Id="Inline_Subpart_Blocker">
+      <PartModel Id="Inline_Subpart_Blocker_Model">
+        <Internal>true</Internal>
+        <Mesh Id="Inline_Subpart_Blocker" />
+        <Material Id="Inline_Material" />
+        <RayTracing>ShadowProxy</RayTracing>
+      </PartModel>
+    </SubPart>
+    <SubPart Id="Inline_Subpart_Plain">
+      <PartModel Id="Inline_Subpart_Plain_Model">
+        <Mesh Id="Inline_Subpart_Plain" />
+      </PartModel>
+    </SubPart>
+  </Assets>`
+
+  it('keeps the token verbatim (flexo copies it, never interprets it)', () => {
+    const out = parseInline(xml)
+    const blocker = out.find((s) => s.id === 'Inline_Subpart_Blocker')!
+    expect(blocker.rayTracing).toBe('ShadowProxy')
+    expect(blocker.internal).toBe(true)
+  })
+
+  it('leaves `rayTracing` undefined for a template that authors none', () => {
+    expect(
+      parseInline(xml).find((s) => s.id === 'Inline_Subpart_Plain')!.rayTracing,
+    ).toBeUndefined()
   })
 })
 

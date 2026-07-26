@@ -160,31 +160,35 @@ describe('serializeAssets', () => {
     expect(xml).toContain('<AoRoughMetal Path="Textures/X_NeutralORM.ktx2" Category="Vessel"')
   })
 
-  it('emits reference SubParts (de-IVA props) reusing built-in Mesh/Material, with a render-mesh MeshView', () => {
+  it('emits exterior-override reference SubParts reusing built-in Mesh/Material, with a render-mesh MeshView', () => {
     const xml = serializeAssets({
-      // No meshAtlasPath: an IVA-only export declares no custom geometry.
+      // No meshAtlasPath: a variant-only export declares no custom geometry.
       subParts: [],
       referenceSubParts: [
         {
-          subPartId: 'flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA',
+          subPartId: 'flexo_MyShip_CoreIVAPropA_Subpart_ChairA',
           meshId: 'CoreIVAPropA_Subpart_ChairA',
           materialId: 'CoreIVAPropA_Material',
+          internal: false,
+          rayTracing: null,
         },
         {
-          subPartId: 'flexo_MyShip_CoreIVAPropA_Subpart_NoteA_NotIVA',
+          subPartId: 'flexo_MyShip_CoreIVAPropA_Subpart_NoteA',
           meshId: 'CoreIVAPropA_Subpart_NoteA',
           materialId: null,
+          internal: false,
+          rayTracing: null,
         },
       ],
     })
-    expect(xml).toContain('<SubPart Id="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA"')
+    expect(xml).toContain('<SubPart Id="flexo_MyShip_CoreIVAPropA_Subpart_ChairA"')
     // Fresh, unique PartModel id — must NOT reuse the built-in "..._Model" (KSA dedupes by id).
-    expect(xml).toContain('<PartModel Id="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA_Model"')
+    expect(xml).toContain('<PartModel Id="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_Model"')
     // Reuses the built-in Mesh + Material by id.
     expect(xml).toContain('<Mesh Id="CoreIVAPropA_Subpart_ChairA"')
     expect(xml).toContain('<Material Id="CoreIVAPropA_Material"')
     // Untextured reference part omits <Material>.
-    expect(xml).toContain('<PartModel Id="flexo_MyShip_CoreIVAPropA_Subpart_NoteA_NotIVA_Model"')
+    expect(xml).toContain('<PartModel Id="flexo_MyShip_CoreIVAPropA_Subpart_NoteA_Model"')
     expect(xml).toContain('<Mesh Id="CoreIVAPropA_Subpart_NoteA"')
     // Each variant carries a <MeshView> so KSA's editor can raycast (hover/select/right-click)
     // it. The view mesh reuses the built-in RENDER mesh id (NOT a "<id>_VM" suffix, which would
@@ -194,11 +198,45 @@ describe('serializeAssets', () => {
     expect(xml).not.toContain('_VM')
     expect(xml.split('<Mesh Id="CoreIVAPropA_Subpart_ChairA"').length - 1).toBe(2)
     expect(xml.split('<Mesh Id="CoreIVAPropA_Subpart_NoteA"').length - 1).toBe(2)
-    // No atlas, no PbrMaterial, and never the IVA-only nodes.
+    // No atlas, no PbrMaterial, and — the override — no interior-only flag.
     expect(xml).not.toContain('MeshAtlas')
     expect(xml).not.toContain('PbrMaterial')
     expect(xml).not.toContain('<Internal>')
     expect(xml).not.toContain('RayTracing')
+  })
+
+  it('carries <Internal> and the raw <RayTracing> token forward onto a reference SubPart', () => {
+    const xml = serializeAssets({
+      subParts: [],
+      referenceSubParts: [
+        {
+          subPartId: 'flexo_MyShip_RayBlocker',
+          meshId: 'CoreIVASpaceA_Subpart_MediumCapsuleARayBlocker',
+          materialId: 'CoreIVASpaceA_Material',
+          internal: true,
+          rayTracing: 'ShadowProxy',
+        },
+      ],
+    })
+    // Element order mirrors Core: Internal, Mesh, Material, RayTracing.
+    expect(xml).toMatch(
+      /<PartModel Id="flexo_MyShip_RayBlocker_Model">\s*<Internal>true<\/Internal>\s*<Mesh Id="CoreIVASpaceA_Subpart_MediumCapsuleARayBlocker"\s*\/>\s*<Material Id="CoreIVASpaceA_Material"\s*\/>\s*<RayTracing>ShadowProxy<\/RayTracing>/,
+    )
+  })
+
+  it('emits <Internal>true</Internal> on a custom mesh’s own <PartModel>, never on the glass path', () => {
+    const xml = serializeAssets({
+      meshAtlasPath: 'Meshes/X.glb',
+      subParts: [
+        { subPartId: 'panel', materialId: null, internal: true },
+        // Belt-and-braces: modExport never sets `internal` on a glass plan (KSA's
+        // <PartModelGlass> has no such field), and the serializer drops it if it ever did.
+        { subPartId: 'visor', materialId: null, glass: true, internal: true },
+      ],
+    })
+    expect(xml).toMatch(/<PartModel Id="panel_Model">\s*<Internal>true<\/Internal>/)
+    expect(xml.match(/<Internal>true<\/Internal>/g)).toHaveLength(1)
+    expect(xml).toContain('<PartModelGlass Id="visor_Model"')
   })
 
   it('emits <PartModelGlass> for a glass SubPart (translucent path)', () => {

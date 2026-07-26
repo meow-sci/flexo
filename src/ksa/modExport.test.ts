@@ -369,7 +369,7 @@ describe('built-in SubPart GameData export variants (never redefine the built-in
     const v = buildExportVariantMap(partWithBuiltinLight(), lightCatalog(), 'MyLight').get(
       SPOTLIGHT,
     )!
-    expect(v.variantId).toBe(VID) // no _NotIVA suffix — it's not an IVA prop
+    expect(v.variantId).toBe(VID) // one naming rule for every variant
     expect(v.meshId).toBe(SPOTLIGHT)
     expect(v.materialId).toBe('CoreElectricalA_Material')
   })
@@ -436,6 +436,19 @@ function ivaCatalog(): Map<string, CatalogSubPart> {
       },
     ],
     [
+      // Core's invisible ray occluder: Internal AND ShadowProxy (CoreIVASpaceAAssets.xml).
+      RAY_BLOCKER,
+      {
+        id: RAY_BLOCKER,
+        atlasUrl: '/ksa/Meshes/CoreIVASpaceA_MeshAtlas.glb',
+        meshNodeName: RAY_BLOCKER,
+        materialId: 'CoreIVASpaceA_Material',
+        internal: true,
+        rayTracing: 'ShadowProxy',
+        sourceFile: 'CoreIVASpaceAAssets.xml',
+      },
+    ],
+    [
       'CoreStructuralA_Subpart_X',
       {
         id: 'CoreStructuralA_Subpart_X',
@@ -448,13 +461,17 @@ function ivaCatalog(): Map<string, CatalogSubPart> {
   ])
 }
 
+const CHAIR = 'CoreIVAPropA_Subpart_ChairA'
+const RAY_BLOCKER = 'CoreIVASpaceA_Subpart_MediumCapsuleARayBlocker'
+const CHAIR_VARIANT = `flexo_MyShip_${CHAIR}`
+
 function partWithIvaAndCore(): EditingPart {
   const part = createEmptyPart()
   part.partId = 'MyShip'
   part.placements.push(
     {
       instanceId: 'chair_1',
-      subPartTemplateId: 'CoreIVAPropA_Subpart_ChairA',
+      subPartTemplateId: CHAIR,
       ...identityTransform(),
       layerId: 'default',
     },
@@ -468,28 +485,66 @@ function partWithIvaAndCore(): EditingPart {
   return part
 }
 
-describe('IVA (Internal) SubPart export variants', () => {
-  it('maps placed IVA templates to project-namespaced variants, skipping normal parts', () => {
-    const variants = buildExportVariantMap(partWithIvaAndCore(), ivaCatalog(), 'MyShip')
-    expect(variants.size).toBe(1)
-    const v = variants.get('CoreIVAPropA_Subpart_ChairA')!
-    expect(v.variantId).toBe('flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA')
-    expect(v.meshId).toBe('CoreIVAPropA_Subpart_ChairA')
-    expect(v.materialId).toBe('CoreIVAPropA_Material')
+describe('<Internal> (interior-only) export variants', () => {
+  it('leaves an untouched interior prop ALONE — no variant, so it keeps the built-in <Internal>', () => {
+    // The whole point of Phase 0: flexo mirrors the game's own data unless the user says otherwise.
+    const part = partWithIvaAndCore()
+    expect(buildExportVariantMap(part, ivaCatalog(), 'MyShip').size).toBe(0)
+    expect(serializePart(part, new Map())).toContain(`InstanceOf="${CHAIR}"`)
   })
 
-  it('dedupes repeated placements of the same IVA template', () => {
+  it('flagging an interior prop exterior mints a variant with no <Internal>', () => {
     const part = partWithIvaAndCore()
+    part.internalFlags[CHAIR] = false
+    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip')
+    expect(variants.size).toBe(1) // the plain structural SubPart is untouched
+    const v = variants.get(CHAIR)!
+    expect(v.variantId).toBe(CHAIR_VARIANT) // one naming rule for every variant
+    expect(v.meshId).toBe(CHAIR)
+    expect(v.materialId).toBe('CoreIVAPropA_Material')
+    expect(v.internal).toBe(false)
+    expect(v.rayTracing).toBeNull()
+  })
+
+  it('a redundant flag matching the built-in collapses to no variant at all', () => {
+    const part = partWithIvaAndCore()
+    part.internalFlags[CHAIR] = true // already Internal in the catalog
+    part.internalFlags['CoreStructuralA_Subpart_X'] = false // already non-Internal
+    expect(buildExportVariantMap(part, ivaCatalog(), 'MyShip').size).toBe(0)
+  })
+
+  it('flagging a plain built-in interior mints a variant that DOES carry <Internal>', () => {
+    const part = partWithIvaAndCore()
+    part.internalFlags['CoreStructuralA_Subpart_X'] = true
+    const v = buildExportVariantMap(part, ivaCatalog(), 'MyShip').get('CoreStructuralA_Subpart_X')!
+    expect(v.variantId).toBe('flexo_MyShip_CoreStructuralA_Subpart_X')
+    expect(v.internal).toBe(true)
+  })
+
+  it('a variant minted for GameData reasons keeps the built-in’s own <Internal>', async () => {
+    // Nothing about the flag changed — the variant exists only so the <Light> doesn't merge onto
+    // the shared built-in template — so the interior-only behaviour must survive the redeclaration.
+    const part = partWithIvaAndCore()
+    part.subPartGameData.push({ ...createSubPartGameData(CHAIR), lights: [createLight()] })
+    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip')
+    expect(variants.get(CHAIR)!.internal).toBe(true)
+    const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants)
+    expect(bundle.assetsXml).toContain('<Internal>true</Internal>')
+  })
+
+  it('dedupes repeated placements of the same flagged template', () => {
+    const part = partWithIvaAndCore()
+    part.internalFlags[CHAIR] = false
     part.placements.push({
       instanceId: 'chair_2',
-      subPartTemplateId: 'CoreIVAPropA_Subpart_ChairA',
+      subPartTemplateId: CHAIR,
       ...identityTransform(),
       layerId: 'default',
     })
     expect(buildExportVariantMap(part, ivaCatalog(), 'MyShip').size).toBe(1)
   })
 
-  it('produces no variants for a part with no IVA props', () => {
+  it('produces no variants for a part that flags nothing', () => {
     const part = createEmptyPart()
     part.placements.push({
       instanceId: 'x_1',
@@ -500,41 +555,57 @@ describe('IVA (Internal) SubPart export variants', () => {
     expect(buildExportVariantMap(part, ivaCatalog(), 'P').size).toBe(0)
   })
 
-  it('Part XML points IVA placements at the variant, normal placements unchanged', () => {
+  it('Part XML points flagged placements at the variant, normal placements unchanged', () => {
     const part = partWithIvaAndCore()
+    part.internalFlags[CHAIR] = false
     const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip')
     const remap = new Map([...variants.values()].map((v) => [v.originalId, v.variantId]))
     const xml = serializePart(part, remap)
-    expect(xml).toContain('InstanceOf="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA"')
+    expect(xml).toContain(`InstanceOf="${CHAIR_VARIANT}"`)
     expect(xml).toContain('InstanceOf="CoreStructuralA_Subpart_X"')
-    expect(xml).not.toContain('InstanceOf="CoreIVAPropA_Subpart_ChairA"') // the closing quote disambiguates from the variant
+    expect(xml).not.toContain(`InstanceOf="${CHAIR}"`) // the closing quote disambiguates from the variant
   })
 
-  it('Assets XML declares the de-IVA variant (no Internal/RayTracing) even with no custom meshes', async () => {
+  it('Assets XML declares the exterior-override variant (no Internal) even with no custom meshes', async () => {
     const part = partWithIvaAndCore()
+    part.internalFlags[CHAIR] = false
     const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip')
     const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants)
     expect(bundle.assetsFile).toBe('MyShipAssets.xml')
-    expect(bundle.assetsXml).toContain(
-      '<SubPart Id="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA"',
-    )
-    expect(bundle.assetsXml).toContain(
-      '<PartModel Id="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA_Model"',
-    )
-    expect(bundle.assetsXml).toContain('<Mesh Id="CoreIVAPropA_Subpart_ChairA"')
+    expect(bundle.assetsXml).toContain(`<SubPart Id="${CHAIR_VARIANT}"`)
+    expect(bundle.assetsXml).toContain(`<PartModel Id="${CHAIR_VARIANT}_Model"`)
+    expect(bundle.assetsXml).toContain(`<Mesh Id="${CHAIR}"`)
     expect(bundle.assetsXml).toContain('<Material Id="CoreIVAPropA_Material"')
     expect(bundle.assetsXml).not.toContain('<Internal>')
-    expect(bundle.assetsXml).not.toContain('RayTracing')
-    expect(bundle.assetsXml).not.toContain('MeshAtlas') // IVA-only → no custom geometry
+    expect(bundle.assetsXml).not.toContain('RayTracing') // the built-in authors none
+    expect(bundle.assetsXml).not.toContain('MeshAtlas') // variants only → no custom geometry
     expect(bundle.binaries).toHaveLength(0) // variants reuse built-in assets — nothing to ship
   })
 
+  it('carries a ShadowProxy <RayTracing> forward onto the variant (an invisible occluder stays invisible)', async () => {
+    const part = createEmptyPart()
+    part.partId = 'MyShip'
+    part.placements.push({
+      instanceId: 'blocker_1',
+      subPartTemplateId: RAY_BLOCKER,
+      ...identityTransform(),
+      layerId: 'default',
+    })
+    part.internalFlags[RAY_BLOCKER] = false // any reason to redeclare will do
+    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip')
+    expect(variants.get(RAY_BLOCKER)!.rayTracing).toBe('ShadowProxy')
+    const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants)
+    expect(bundle.assetsXml).toContain('<RayTracing>ShadowProxy</RayTracing>')
+  })
+
   it('end-to-end: buildModZip threads the catalog into both Part and Assets XML', async () => {
-    const blob = await buildModZip(partWithIvaAndCore(), 'MyShip', undefined, ivaCatalog())
+    const part = partWithIvaAndCore()
+    part.internalFlags[CHAIR] = false
+    const blob = await buildModZip(part, 'MyShip', undefined, ivaCatalog())
     const text = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()))
     expect(text).toContain('flexo-parts/MyShipAssets.xml')
-    expect(text).toContain('InstanceOf="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA"')
-    expect(text).toContain('<SubPart Id="flexo_MyShip_CoreIVAPropA_Subpart_ChairA_NotIVA"')
+    expect(text).toContain(`InstanceOf="${CHAIR_VARIANT}"`)
+    expect(text).toContain(`<SubPart Id="${CHAIR_VARIANT}"`)
   })
 })
 
@@ -783,6 +854,46 @@ describe('visor glass tint + glow export', () => {
   })
 })
 
+describe('custom-mesh <Internal> (interior-only)', () => {
+  /** The XML of one <SubPart Id="…"> element. */
+  function subPartXml(xml: string, subPartId: string): string {
+    const from = xml.slice(xml.indexOf(`<SubPart Id="${subPartId}"`))
+    return from.slice(0, from.indexOf('</SubPart>'))
+  }
+
+  it('emits <Internal>true</Internal> on the flagged mesh’s own <PartModel>, and NO variant', async () => {
+    const part = partWithMaterialMeshes()
+    part.internalFlags['flexo_button_a'] = true
+    // A custom mesh is absent from the catalog — flexo declares it itself, so it never needs one.
+    expect(buildExportVariantMap(part, ivaCatalog(), 'ButtonMod').size).toBe(0)
+    const xml = (await buildCustomBundle(part, 'ButtonMod')).assetsXml!
+    expect(xml.match(/<Internal>true<\/Internal>/g)).toHaveLength(1)
+    expect(subPartXml(xml, 'flexo_button_a')).toContain('<Internal>true</Internal>')
+    expect(subPartXml(xml, 'flexo_plinth_b')).not.toContain('<Internal>')
+  })
+
+  it('IGNORES the flag on a glass mesh — <PartModelGlass> has no <Internal> field in KSA', async () => {
+    const part = partWithVisor({})
+    part.internalFlags['flexo_hunter_visor_a'] = true
+    const bundle = await buildCustomBundle(part, 'VisorMod', REF)
+    expect(bundle.assetsXml).toContain('<PartModelGlass')
+    expect(bundle.assetsXml).not.toContain('<Internal>')
+  })
+
+  it('treats a layered glassGlow visor as glass WHOLE — neither the shell nor the glow layer is Internal', async () => {
+    const part = partWithVisor({
+      surface: 'glassGlow',
+      glass: { tint: { r: 10, g: 200, b: 10 } },
+      emissive: { shape: 'whole', color: { r: 10, g: 255, b: 10 }, strength: 0.6, coverage: 1 },
+    })
+    part.internalFlags['flexo_hunter_visor_a'] = true
+    const { part: expanded, insetIds } = expandGlassGlow(part)
+    const bundle = await buildCustomBundle(expanded, 'VisorMod', REF, new Map(), insetIds)
+    expect(bundle.assetsXml).toContain('flexo_hunter_visor_a_Glow') // the opaque layer is there…
+    expect(bundle.assetsXml).not.toContain('<Internal>') // …and it is NOT marked interior-only
+  })
+})
+
 // ── imported (glTF) SubParts ──────────────────────────────────────────────────
 
 /** Mesh names declared inside a generated mesh-atlas GLB (the JSON chunk's `meshes[].name`). */
@@ -988,6 +1099,8 @@ describe('export variants carry the built-in template’s own colliders forward'
           meshId: SPOTLIGHT,
           materialId: null,
           colliders: [BUILT_IN_BOX],
+          internal: false,
+          rayTracing: null,
         },
       ],
     })

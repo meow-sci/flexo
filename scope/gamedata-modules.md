@@ -79,6 +79,29 @@ ships a new `FuelPort` module (passthrough-preserved) — see
   `PartLight.id` — an incoming `<Light Id>` is dropped on import.
 - `Battery.cs`'s save-state `[XmlElement("Charge")]` (was `"Joules"`) is **save-game state, not authored template** — irrelevant to flexo.
 
+## Ported light falloff & pose math (visualization contract)
+
+flexo's light visualization ports KSA's **exact** runtime attenuation and pose rules — a
+ported-math game-contract surface (like `enginePhysics.ts`), not an approximation. The port
+lives in `src/ksa/lightFalloff.ts` (formulas + clamp constants) and `src/three/coords.ts`
+(`lightWorld` / `lightLocalFromWorld` / `lightWorldAim`); every value is pinned by
+`lightFalloff.test.ts` / `coords.test.ts` against precomputed tables
+(plans/LIGHT_MANAGEMENT_PLAN.md §1.5).
+
+| Fact                                                                                                                                                                                                          | Game-side anchor                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `E(d) = Intensity · saturate(1 − (d/Range)⁴) / d²` — exactly 0 at `d ≥ Range`                                                                                                                                 | `Content/Core/Shaders/Lighting/LightPrePass.comp:281-284,296` |
+| Spot term `saturate((cosθ − cosOuter)/max(cosInner − cosOuter, 1e-4))²`                                                                                                                                       | `LightPrePass.comp:290-294`                                   |
+| Angles reach the GPU as **cosines** (0 sentinel for Point)                                                                                                                                                    | `LightData.glsl:23,26`; packed at `Light.cs:97-101`           |
+| Angle sanitizer: swap if inner > outer, THEN clamp outer to `[1e-5, 1.5697963]` (≈89.943°), THEN inner to `[0, outer]`                                                                                        | `KSA.Rendering.Lighting/Light.cs:10-12,54-79`                 |
+| `Range ≤ 0` / `Intensity ≤ 0` lights are culled **CPU-side** (the shader never rejects them; `TileFrustum.glsl:53` is an apex-containment test)                                                               | `ClusteredLightSystem.cs:669,760`                             |
+| Spot aim = local **+X**, rotated by the `<Light>` rotation then the owner's upper-3×3; position offset transformed by the owner's **full matrix, scale included** (≠ colliders, which ignore placement scale) | `KSA/LightModule.cs:86-129` (aim `:115-117`)                  |
+| `Range` is world meters — NOT scaled by the owner instance                                                                                                                                                    | `LightModule.cs:101,117` (`Template.Range` passed through)    |
+| A mirrored owner (any negative scale component, det < 0) is an improper aim map the quaternion-composed marker cannot reproduce (in-game beam flips); non-uniform scale skews the aim                         | `LightModule.cs:116` vs `coords.ts` `lightWorld` JSDoc        |
+
+On each game update, re-verify per the checklist item in
+[GAME_UPDATE_CHECKLIST.md](GAME_UPDATE_CHECKLIST.md) (grep anchors are listed there).
+
 ## What changed in 5018
 
 ### Container `Id`s became load-bearing — MISSING-CAPABILITY, now modeled

@@ -101,6 +101,20 @@ against the NEW code/XML. Highest-value checks, by area:
   (else recalibrate `EULER_ORDER`); `Part.Connector.Flag` enum + `<Flags>` schema; `PartModel.cs`
   IVA render gate + `<Internal>`/`<RayTracing>` schema.
 - **Vehicle reference orientation** (background contract, [connectors-coordinates-iva.md](connectors-coordinates-iva.md)/[analysis/HOW_UP_WORKS.md](../analysis/HOW_UP_WORKS.md)) — confirm `Control.cs`/`ControlTemplate.cs` are still empty markers (no transform/control-point field); `FlightComputer.UpdateAttitudeTrackError` still aims **Body +X** / rolls **+Z**; `Vehicle.Asmb2Cce => Body2Cce`; `VehicleEditor` still pins the **root** to identity at launch; `IsAllowedAsRootPart` rules + `EditorTagDef RootPartWhitelist`. A new `ControlPoint`/"control-from-here"/reference-transform would flip "up follows root" → "up follows selected part" (grep `controlpoint|control from here|referencetransform`).
+- **Light falloff/aim math** ([gamedata-modules.md](gamedata-modules.md); ports in
+  `src/ksa/lightFalloff.ts` + `src/three/coords.ts` `lightWorld` family, pinned by
+  `lightFalloff.test.ts`) — grep `Content/Core/Shaders/Lighting/LightPrePass.comp` for the
+  per-light attenuation block (`falloff = saturate(1.0 - x2 * x2)` / `spotAtt *= spotAtt`): the
+  `1 − (d/range)⁴` distance window, the SQUARED spot edge, and the epsilons (`RANGE_EPSILON`
+  1e-6, `SPOT_DENOM_EPSILON` 1e-4) must still match `lightFalloff.ts`; confirm
+  `LightData.glsl` still packs `innerAngle`/`outerAngle` as COSINES. Diff
+  `KSA.Rendering.Lighting/Light.cs`: `MAX_OUTER_ANGLE` (1.5697963) / `MIN_OUTER_ANGLE` (1e-5)
+  and `CreateSpotLight`'s swap-THEN-clamp order vs `clampSpotAngles`. Confirm
+  `LightModule.UpdateRenderData` still aims spots along local **+X** and transforms the light
+  offset by the owner's **full matrix, scale included** (`coords.ts` `lightWorld` — the
+  deliberate ≠-collider rule), and `ClusteredLightSystem.cs` still culls `Range <= 0` /
+  `Intensity <= 0` lights CPU-side (`CreateLightInstance`'s `IsNearlyZero` guard + the
+  `Range <= 0f` check — the shader itself never rejects them).
 - **Ground clutter** — the 7 `*Reference.cs` schema classes unchanged.
 
 ## 5. Distinguish real changes from decompiler noise

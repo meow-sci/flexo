@@ -136,9 +136,12 @@ float att = rangeAtt * mix(1.0, spotAtt, isSpot) * light.intensity;
 `MAX_OUTER_ANGLE`, `Light.cs:10`), then `inner = clamp(inner, 0, outer)`. Core's own
 `OuterAngle=1.57` floodlights rely on this clamp.
 
-A light with `Range ≤ 0` is effectively culled (`step(RANGE_EPSILON, …)` disables the window, and
-tile culling rejects it — `Content/Core/Shaders/Lighting/TileFrustum.glsl:53`; KSA's own debug
-draw also skips it, `decomp/KSA.Rendering.Lighting/LightUtils.cs:67,80`).
+A light with `Range ≤ 0` never renders — the cull is **CPU-side**:
+`decomp/KSA.Rendering.Lighting/ClusteredLightSystem.cs:669` (`!inLight.Range.IsNearlyZero()`)
+and `:760` (`!(light.Range <= 0f) && !(light.Intensity <= 0f)`); KSA's own debug draw also skips
+it (`decomp/KSA.Rendering.Lighting/LightUtils.cs:67,80`). The shader itself would NOT reject it:
+`step(RANGE_EPSILON, …)` merely disables the window (windowless `1/d²`), and
+`TileFrustum.glsl:53`'s `inRange <= 0` branch is an apex-containment test, not a reject.
 
 **The formulas flexo ports (the ONLY falloff model in this plan — no other approximation):**
 
@@ -795,8 +798,9 @@ Mirror `colliderValidation.ts`'s exported shape and its `ExportButton.tsx` wirin
 
 | id | severity | condition | message sketch |
 | --- | --- | --- | --- |
-| `light-range-nonpositive` | warning | `rangeM <= 0` | culled in-game — never renders (TileFrustum.glsl:53) |
-| `light-intensity-nonpositive` | warning | `intensity <= 0` | contributes nothing |
+| `light-range-nonpositive` | warning | `rangeM <= 0` | culled in-game CPU-side — never renders (ClusteredLightSystem.cs:669,760) |
+| `light-intensity-nonpositive` | warning | `intensity <= 0` | culled in-game CPU-side (same `:760` check) — contributes nothing |
+| `light-owner-mirrored` | warning | any owner placement has a negative scale component (det < 0) | the game's aim transform is an improper map: a (−1,−1,−1) owner flips the beam 180° while flexo's quaternion-composed marker cannot show a reflection (coords.ts lightWorld JSDoc) |
 | `light-angles-swapped` | warning | Spot && `innerAngleRad > outerAngleRad` | game silently swaps (Light.cs:56-61) — probably an authoring mistake |
 | `light-outer-overclamp` | info | Spot && `outerAngleRad > 1.5697963` | clamped to ≈89.94° in-game (Core's floodlight does this deliberately) |
 | `light-owner-unplaced` | warning | `ownerTemplateId` set && no placements of it | light is never instantiated |
@@ -1058,7 +1062,7 @@ commit.
 | `decomp/KSA.Rendering.Lighting/Light.cs:10-12,54-79,97-101` | angle swap/clamp constants, cos packing |
 | `Content/Core/Shaders/Lighting/LightPrePass.comp:274-297` | THE falloff formulas |
 | `Content/Core/Shaders/Lighting/LightData.glsl:19-30` | GPU light struct (cosine angles, type sentinel) |
-| `Content/Core/Shaders/Lighting/TileFrustum.glsl:53` | range ≤ 0 culled |
+| `decomp/KSA.Rendering.Lighting/ClusteredLightSystem.cs:669,760` | range ≤ 0 / intensity ≤ 0 culled CPU-side (the shader never rejects them) |
 | `decomp/KSA.Rendering.Lighting/LightUtils.cs:65-109` | KSA's own debug draw (12 rays, tan rims — see §1.6 deviation) |
 | `Brutal.Numerics/Color.cs:93` | Gray = (0.5, 0.5, 0.5) |
 | `Content/Core/CoreElectricalAGameData.xml:97-121`, `CoreCommandAGameData.xml:16-39`, `CoreIVASpaceAGameData.xml:7-16` | all shipped lights (§1.2 census) |

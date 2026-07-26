@@ -4,9 +4,12 @@ import {
   applyPlacement,
   colliderLocalFromWorld,
   colliderWorld,
+  lightLocalFromWorld,
+  lightWorld,
+  lightWorldAim,
   readPlacementTransform,
 } from './coords'
-import type { Transform } from '../ksa/types'
+import type { EulerXYZ, Transform, Vec3 } from '../ksa/types'
 
 /**
  * Locks the calibrated coordinate mapping (see coords.ts): KSA stores rotation as
@@ -125,5 +128,149 @@ describe('collider owner frames', () => {
     const world = colliderWorld(collider, identity)
     expect(world.position).toEqual(collider.position)
     expect(world.scale).toEqual(collider.scale)
+  })
+})
+
+describe('light owner frames', () => {
+  // Lights differ from colliders in exactly one rule (LightModule.UpdateRenderData
+  // transforms the offset by the owner's FULL matrix): the owner's scale IS applied
+  // to the light's local position, and the light's own scale is pinned (1,1,1).
+  const makeLight = (position: Vec3, rotation: EulerXYZ): Transform => ({
+    position,
+    rotation,
+    scale: { x: 1, y: 1, z: 1 },
+  })
+  const makeOwner = (position: Vec3, rotation: EulerXYZ, scale: Vec3): Transform => ({
+    position,
+    rotation,
+    scale,
+  })
+  const quatOf = (t: Transform) =>
+    new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(t.rotation.x, t.rotation.y, t.rotation.z, 'ZYX'),
+    )
+  // Same-rotation assertion in quaternion space (Euler triples are not unique) via
+  // sign-aligned components — angleTo's acos is ill-conditioned near 0 and turns a
+  // ~1e-15 component error into a ~1e-7 angle, so it cannot pin 1e-12 round-trips.
+  const expectSameRotation = (a: Transform, b: Transform) => {
+    const qa = quatOf(a)
+    const qb = quatOf(b)
+    const sign = qa.dot(qb) < 0 ? -1 : 1
+    expect(qa.x).toBeCloseTo(sign * qb.x, 12)
+    expect(qa.y).toBeCloseTo(sign * qb.y, 12)
+    expect(qa.z).toBeCloseTo(sign * qb.z, 12)
+    expect(qa.w).toBeCloseTo(sign * qb.w, 12)
+  }
+
+  it('part-level (owner null) passes through verbatim with pinned scale', () => {
+    const light = makeLight({ x: 0.38, y: 0.21, z: -0.5 }, { x: 0.3, y: -0.7, z: 1.1 })
+    const world = lightWorld(light, null)
+    expect(world.position).toEqual(light.position)
+    expect(world.rotation).toEqual(light.rotation)
+    expect(world.scale).toEqual({ x: 1, y: 1, z: 1 })
+    const back = lightLocalFromWorld(world, null)
+    expect(back.position).toEqual(light.position)
+    expect(back.rotation).toEqual(light.rotation)
+    expect(back.scale).toEqual({ x: 1, y: 1, z: 1 })
+  })
+
+  it('round-trips through a rotated + translated + NON-uniformly scaled owner to 1e-12', () => {
+    const light = makeLight({ x: 0.5, y: -0.25, z: 0.75 }, { x: 0.4, y: -0.6, z: 1.2 })
+    const owner = makeOwner(
+      { x: 1, y: 2, z: -3 },
+      { x: 0.3, y: -1.1, z: 0.7 },
+      { x: 2, y: 0.5, z: 3 },
+    )
+    const back = lightLocalFromWorld(lightWorld(light, owner), owner)
+    for (const axis of ['x', 'y', 'z'] as const) {
+      expect(back.position[axis]).toBeCloseTo(light.position[axis], 12)
+      expect(back.scale[axis]).toBe(1)
+    }
+    expectSameRotation(back, light)
+  })
+
+  it('round-trips through a MIRRORED owner (negative scale axis)', () => {
+    const light = makeLight({ x: 0.4, y: 0.1, z: -0.2 }, { x: -0.3, y: 0.5, z: 0.9 })
+    const owner = makeOwner(
+      { x: -0.5, y: 1.25, z: 2 },
+      { x: 0.2, y: 0.4, z: -0.6 },
+      { x: -2, y: 1, z: 3 },
+    )
+    const back = lightLocalFromWorld(lightWorld(light, owner), owner)
+    for (const axis of ['x', 'y', 'z'] as const) {
+      expect(back.position[axis]).toBeCloseTo(light.position[axis], 12)
+    }
+    expectSameRotation(back, light)
+    // Sanity: the negative axis really participates — the world offset is mirrored.
+    const world = lightWorld(makeLight({ x: 1, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }), {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: -2, y: 1, z: 1 },
+    })
+    expect(world.position).toEqual({ x: -2, y: 0, z: 0 })
+  })
+
+  it('matches the hand-computed pose for a 90°-about-Y owner (scale INCLUDED, unlike colliders)', () => {
+    // Owner: position (1,0,0), KSA Euler (0, π/2, 0). A single-axis rotation is
+    // identical under KSA-"XYZ" (three 'ZYX') and every other order: R = Ry(+90°).
+    // Right-handed Ry(θ): x' = x·cosθ + z·sinθ; z' = −x·sinθ + z·cosθ, so +X ↦ −Z.
+    //
+    // Unit owner scale:
+    //   world = (1,0,0) + Ry(90°)·(1·1, 0, 0) = (1,0,0) + (0,0,−1) = (1, 0, −1)
+    const light = makeLight({ x: 1, y: 0, z: 0 }, { x: 0, y: 0, z: 0 })
+    const owner = makeOwner(
+      { x: 1, y: 0, z: 0 },
+      { x: 0, y: Math.PI / 2, z: 0 },
+      { x: 1, y: 1, z: 1 },
+    )
+    const world = lightWorld(light, owner)
+    expect(world.position.x).toBeCloseTo(1, 12)
+    expect(world.position.y).toBeCloseTo(0, 12)
+    expect(world.position.z).toBeCloseTo(-1, 12)
+    // The world aim (rotated +X) is the same −Z; identity light rotation means the
+    // world rotation IS the owner rotation.
+    const aim = lightWorldAim(world.rotation)
+    expect(aim.x).toBeCloseTo(0, 12)
+    expect(aim.y).toBeCloseTo(0, 12)
+    expect(aim.z).toBeCloseTo(-1, 12)
+    expect(quatOf(world).angleTo(quatOf(owner))).toBeCloseTo(0, 6)
+
+    // Owner scaled ×2 uniformly: the local offset scales BEFORE rotating —
+    //   world = (1,0,0) + Ry(90°)·(2·1, 0, 0) = (1,0,0) + (0,0,−2) = (1, 0, −2)
+    // (colliderWorld would ignore the scale and return (1, 0, −1) — the trap.)
+    const scaledOwner = makeOwner(
+      { x: 1, y: 0, z: 0 },
+      { x: 0, y: Math.PI / 2, z: 0 },
+      { x: 2, y: 2, z: 2 },
+    )
+    const world2 = lightWorld(light, scaledOwner)
+    expect(world2.position.x).toBeCloseTo(1, 12)
+    expect(world2.position.y).toBeCloseTo(0, 12)
+    expect(world2.position.z).toBeCloseTo(-2, 12)
+  })
+
+  it('lightWorldAim: identity rotation aims +X; 90° about Z aims +Y', () => {
+    const aimIdentity = lightWorldAim({ x: 0, y: 0, z: 0 })
+    expect(aimIdentity.x).toBeCloseTo(1, 12)
+    expect(aimIdentity.y).toBeCloseTo(0, 12)
+    expect(aimIdentity.z).toBeCloseTo(0, 12)
+    const aimZ90 = lightWorldAim({ x: 0, y: 0, z: Math.PI / 2 })
+    expect(aimZ90.x).toBeCloseTo(0, 12)
+    expect(aimZ90.y).toBeCloseTo(1, 12)
+    expect(aimZ90.z).toBeCloseTo(0, 12)
+  })
+
+  it('treats a degenerate (~0) owner scale axis as 1 in the inverse', () => {
+    const owner = makeOwner({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 }, { x: 0, y: 2, z: 1 })
+    const world: Transform = {
+      position: { x: 3, y: 4, z: 5 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+    }
+    // x divides by 1 (guarded), y by 2, z by 1 — never NaN/Infinity.
+    const back = lightLocalFromWorld(world, owner)
+    expect(back.position.x).toBeCloseTo(3, 12)
+    expect(back.position.y).toBeCloseTo(2, 12)
+    expect(back.position.z).toBeCloseTo(5, 12)
   })
 })

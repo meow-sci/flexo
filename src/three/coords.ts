@@ -150,3 +150,140 @@ export function colliderLocalFromWorld(world: Transform, placement: Transform): 
     scale: { ...world.scale },
   }
 }
+
+/**
+ * Places a {@link import('../ksa/types').PartLight} into Part space, exactly as KSA
+ * poses it (`LightModule.UpdateRenderData`, `decomp/KSA/LightModule.cs:86-129`:
+ * `Template.Transform.PositionValue.Transform(matrix)` with the OWNER's full matrix):
+ *
+ * ```
+ * worldPos   = owner.position + R(owner.rotation) · (owner.scale ∘ light.position)
+ * worldRot   = R(owner.rotation) · R(light.rotation)
+ * worldScale = (1,1,1)                                  // KSA ignores light scale
+ * ```
+ *
+ * ⚠️ The owner's **scale IS applied to the light's position offset** — deliberately
+ * UNLIKE {@link colliderWorld}, whose `ColliderModule` composes only position +
+ * rotation. Copying the collider math here is the trap: a light on a placement
+ * scaled 2× really does sit twice as far from the placement origin in-game.
+ *
+ * A Spot's aim is its rotated local +X (`double3.UnitX.Transform(rotationValue)`,
+ * then the owner's upper-3×3 — `LightModule.cs:115-117`). flexo composes quaternions
+ * instead: exact for uniform POSITIVE owner scale. A NON-uniform scale skews the
+ * in-game aim, and a MIRRORED owner (any negative scale component, det < 0) is an
+ * improper map that survives the game's normalize — a (−1,−1,−1) owner flips the
+ * in-game beam a full 180° while the quaternion compose (which can never produce a
+ * reflection) still shows the unflipped aim. `lightValidation` must warn on BOTH
+ * (non-uniform, and any negative component) rather than reproducing them.
+ *
+ * `light` is the light's owner-frame transform (a `PartLight`; its own scale is
+ * unused); `owner` is the owning SubPart placement — or a posed animation frame of
+ * it — and `null` for a part-level light, whose transform already IS the part-frame
+ * pose (returned verbatim, scale pinned).
+ */
+export function lightWorld(light: Transform, owner: Transform | null): Transform {
+  if (owner === null) {
+    return {
+      position: { ...light.position },
+      rotation: { ...light.rotation },
+      scale: { x: 1, y: 1, z: 1 },
+    }
+  }
+  const ownerQuat = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(owner.rotation.x, owner.rotation.y, owner.rotation.z, EULER_ORDER),
+  )
+  const offset = new THREE.Vector3(
+    light.position.x * owner.scale.x,
+    light.position.y * owner.scale.y,
+    light.position.z * owner.scale.z,
+  ).applyQuaternion(ownerQuat)
+  const worldQuat = ownerQuat
+    .clone()
+    .multiply(
+      new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(light.rotation.x, light.rotation.y, light.rotation.z, EULER_ORDER),
+      ),
+    )
+  const euler = new THREE.Euler().setFromQuaternion(worldQuat, EULER_ORDER)
+  return {
+    position: {
+      x: owner.position.x + offset.x,
+      y: owner.position.y + offset.y,
+      z: owner.position.z + offset.z,
+    },
+    rotation: { x: euler.x, y: euler.y, z: euler.z },
+    scale: { x: 1, y: 1, z: 1 },
+  }
+}
+
+/**
+ * Exact inverse of {@link lightWorld}: a Part-space pose back into the light's
+ * owner-frame transform (what the gizmo writes through).
+ *
+ * ```
+ * light.position = owner.scale⁻¹ ∘ (R(owner.rotation)⁻¹ · (world.position − owner.position))
+ * light.rotation = R(owner.rotation)⁻¹ · R(world.rotation)
+ * ```
+ *
+ * The per-axis scale division uses the SIGNED component — a mirrored (negative
+ * scale) owner is legal and must round-trip — guarding `|s| < 1e-9` by treating
+ * that axis's scale as 1 (a zero-scaled owner is degenerate; `lightValidation`
+ * warns). Scale is pinned to (1,1,1), like everything light-transform-shaped.
+ */
+export function lightLocalFromWorld(world: Transform, owner: Transform | null): Transform {
+  if (owner === null) {
+    return {
+      position: { ...world.position },
+      rotation: { ...world.rotation },
+      scale: { x: 1, y: 1, z: 1 },
+    }
+  }
+  const ownerInv = new THREE.Quaternion()
+    .setFromEuler(
+      new THREE.Euler(owner.rotation.x, owner.rotation.y, owner.rotation.z, EULER_ORDER),
+    )
+    .invert()
+  const rotated = new THREE.Vector3(
+    world.position.x - owner.position.x,
+    world.position.y - owner.position.y,
+    world.position.z - owner.position.z,
+  ).applyQuaternion(ownerInv)
+  const localQuat = ownerInv
+    .clone()
+    .multiply(
+      new THREE.Quaternion().setFromEuler(
+        new THREE.Euler(world.rotation.x, world.rotation.y, world.rotation.z, EULER_ORDER),
+      ),
+    )
+  const euler = new THREE.Euler().setFromQuaternion(localQuat, EULER_ORDER)
+  return {
+    position: {
+      x: rotated.x / signedScaleOrOne(owner.scale.x),
+      y: rotated.y / signedScaleOrOne(owner.scale.y),
+      z: rotated.z / signedScaleOrOne(owner.scale.z),
+    },
+    rotation: { x: euler.x, y: euler.y, z: euler.z },
+    scale: { x: 1, y: 1, z: 1 },
+  }
+}
+
+/** Signed scale divisor for {@link lightLocalFromWorld}: `|s| < 1e-9` degenerates to 1. */
+function signedScaleOrOne(s: number): number {
+  return Math.abs(s) < 1e-9 ? 1 : s
+}
+
+/**
+ * The AIM of a light rotation: the rotated local **+X** unit vector — KSA aims a
+ * Spot along `double3.UnitX.Transform(rotationValue)` (`LightModule.cs:115`), the
+ * same "facing = local +X" convention as every flexo marker. Feed it a light's
+ * stored rotation for the owner-frame aim, or {@link lightWorld}'s rotation for the
+ * part-frame aim (the inspector aim fields and the live SpotLight target).
+ */
+export function lightWorldAim(rotation: EulerXYZ): Vec3 {
+  const aim = new THREE.Vector3(1, 0, 0).applyQuaternion(
+    new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(rotation.x, rotation.y, rotation.z, EULER_ORDER),
+    ),
+  )
+  return { x: aim.x, y: aim.y, z: aim.z }
+}

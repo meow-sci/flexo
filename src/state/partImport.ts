@@ -100,6 +100,7 @@ export async function importBuiltInPart(
       solidGrainSegments: part.solidGrainSegments,
       consumerFeedWiring: part.consumerFeedWiring,
       colliders: part.colliders,
+      ivaSeats: part.ivaSeats,
     }),
   )
 }

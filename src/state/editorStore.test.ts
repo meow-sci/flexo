@@ -137,13 +137,14 @@ import {
   COLLIDER_LAYER_ID,
   CONNECTOR_LAYER_ID,
   DEFAULT_LAYER_ID,
+  IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
   createCombustor,
   createEmptyPart,
   createSolidMotor,
   createSubPartGameData,
 } from '../ksa/types'
-import type { ConnectorCapability, PartCollider, Transform } from '../ksa/types'
+import type { ConnectorCapability, IvaSeat, PartCollider, Transform } from '../ksa/types'
 import type { ImportedGameData } from './editorStore'
 import {
   importModelAsMeshes,
@@ -184,6 +185,7 @@ function emptyImportedGameData(): ImportedGameData {
     solidGrainSegments: [],
     consumerFeedWiring: [],
     colliders: [],
+    ivaSeats: [],
   }
 }
 
@@ -352,6 +354,7 @@ describe('editorStore', () => {
         solidGrainSegments: [],
         consumerFeedWiring: [],
         colliders: [],
+        ivaSeats: [],
       },
     )
     const dp = $part.get().gameData.dockingPort
@@ -411,6 +414,7 @@ describe('editorStore', () => {
       solidGrainSegments: [],
       consumerFeedWiring: [],
       colliders: [],
+      ivaSeats: [],
     })
     const part = $part.get()
     // _connector19/_connector41 were regenerated to _connector2/_connector3…
@@ -764,11 +768,12 @@ describe('editorStore kittens', () => {
 })
 
 describe('editorStore layers', () => {
-  it('starts with built-in Default + Connectors + Colliders + Kittens layers; Default is active', () => {
+  it('starts with built-in Default + Connectors + Colliders + IVA Seats + Kittens layers; Default is active', () => {
     expect($part.get().layers).toEqual([
       { id: DEFAULT_LAYER_ID, name: 'Default' },
       { id: CONNECTOR_LAYER_ID, name: 'Connectors' },
       { id: COLLIDER_LAYER_ID, name: 'Colliders' },
+      { id: IVA_SEAT_LAYER_ID, name: 'IVA Seats' },
       { id: KITTEN_LAYER_ID, name: 'Kittens' },
     ])
     expect($activeLayerId.get()).toBe(DEFAULT_LAYER_ID)
@@ -780,6 +785,7 @@ describe('editorStore layers', () => {
       'Default',
       'Connectors',
       'Colliders',
+      'IVA Seats',
       'Kittens',
       'Engines',
     ])
@@ -790,6 +796,7 @@ describe('editorStore layers', () => {
       'Default',
       'Connectors',
       'Colliders',
+      'IVA Seats',
       'Kittens',
     ])
     expect($activeLayerId.get()).toBe(DEFAULT_LAYER_ID)
@@ -835,6 +842,7 @@ describe('editorStore layers', () => {
       DEFAULT_LAYER_ID,
       CONNECTOR_LAYER_ID,
       COLLIDER_LAYER_ID,
+      IVA_SEAT_LAYER_ID,
       KITTEN_LAYER_ID,
     ])
     expect($part.get().placements.map((p) => p.subPartTemplateId)).toEqual(['Core.B'])
@@ -851,6 +859,7 @@ describe('editorStore layers', () => {
       DEFAULT_LAYER_ID,
       CONNECTOR_LAYER_ID,
       COLLIDER_LAYER_ID,
+      IVA_SEAT_LAYER_ID,
       KITTEN_LAYER_ID,
       b,
     ])
@@ -866,23 +875,26 @@ describe('editorStore layers', () => {
       DEFAULT_LAYER_ID,
       CONNECTOR_LAYER_ID,
       COLLIDER_LAYER_ID,
+      IVA_SEAT_LAYER_ID,
       KITTEN_LAYER_ID,
       id,
     ])
     expect($part.get().placements[0].layerId).toBe(id)
   })
 
-  it('refuses to delete the built-in Default, Connectors, Colliders and Kittens layers', () => {
+  it('refuses to delete the built-in Default, Connectors, Colliders, IVA Seats and Kittens layers', () => {
     addSubPart('Core.A')
     addConnector()
     deleteLayer(DEFAULT_LAYER_ID, { mode: 'delete-items' })
     deleteLayer(CONNECTOR_LAYER_ID, { mode: 'delete-items' })
     deleteLayer(COLLIDER_LAYER_ID, { mode: 'delete-items' })
+    deleteLayer(IVA_SEAT_LAYER_ID, { mode: 'delete-items' })
     deleteLayer(KITTEN_LAYER_ID, { mode: 'delete-items' })
     expect($part.get().layers.map((l) => l.id)).toEqual([
       DEFAULT_LAYER_ID,
       CONNECTOR_LAYER_ID,
       COLLIDER_LAYER_ID,
+      IVA_SEAT_LAYER_ID,
       KITTEN_LAYER_ID,
     ])
     expect($part.get().placements.length).toBe(1)
@@ -904,6 +916,7 @@ describe('editorStore layers', () => {
       DEFAULT_LAYER_ID,
       CONNECTOR_LAYER_ID,
       COLLIDER_LAYER_ID,
+      IVA_SEAT_LAYER_ID,
       KITTEN_LAYER_ID,
     ])
     undo()
@@ -921,12 +934,21 @@ describe('editorStore layers', () => {
   it('reorderLayers reorders by id and is undoable', () => {
     const a = createLayer('A')
     const b = createLayer('B')
-    reorderLayers([a, DEFAULT_LAYER_ID, CONNECTOR_LAYER_ID, COLLIDER_LAYER_ID, KITTEN_LAYER_ID, b])
+    reorderLayers([
+      a,
+      DEFAULT_LAYER_ID,
+      CONNECTOR_LAYER_ID,
+      COLLIDER_LAYER_ID,
+      IVA_SEAT_LAYER_ID,
+      KITTEN_LAYER_ID,
+      b,
+    ])
     expect($part.get().layers.map((l) => l.id)).toEqual([
       a,
       DEFAULT_LAYER_ID,
       CONNECTOR_LAYER_ID,
       COLLIDER_LAYER_ID,
+      IVA_SEAT_LAYER_ID,
       KITTEN_LAYER_ID,
       b,
     ])
@@ -935,6 +957,7 @@ describe('editorStore layers', () => {
       DEFAULT_LAYER_ID,
       CONNECTOR_LAYER_ID,
       COLLIDER_LAYER_ID,
+      IVA_SEAT_LAYER_ID,
       KITTEN_LAYER_ID,
       a,
       b,
@@ -1630,6 +1653,74 @@ describe('importing a Part with colliders', () => {
   it('does not mutate the source catalog entry’s colliders', () => {
     const src = structuredClone(IMPORTED)
     importWithColliders(src)
+    expect(src).toEqual(IMPORTED)
+  })
+})
+
+describe('importing a Part with IVA seats', () => {
+  /** Imports a Part carrying `ivaSeats` (plus one placement — every real catalog Part has geometry). */
+  function importWithSeats(ivaSeats: IvaSeat[]): void {
+    addPart(
+      [
+        {
+          instanceId: 'capsule_1',
+          subPartTemplateId: 'CoreIVASpaceA_Subpart_MediumCapsuleA',
+          position: { x: 0, y: 0, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+          layerId: DEFAULT_LAYER_ID,
+        },
+      ],
+      [],
+      [],
+      undefined,
+      undefined,
+      { ...emptyImportedGameData(), ivaSeats },
+    )
+  }
+
+  /** Core's two-seat capsule interior (CoreIVASpaceAGameData.xml:18-28), in document order. */
+  const IMPORTED: IvaSeat[] = [
+    {
+      id: 'seatFromSource',
+      position: { x: -0.45, y: 0.42, z: -0.35 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+      layerId: IVA_SEAT_LAYER_ID,
+    },
+    {
+      id: 'seatFromSource',
+      position: { x: -0.45, y: -0.42, z: -0.35 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+      layerId: IVA_SEAT_LAYER_ID,
+    },
+  ]
+
+  it('regenerates ids onto the IVA Seats layer, keeping document order + transforms', () => {
+    importWithSeats(IMPORTED)
+    const seats = $part.get().ivaSeats
+    expect(seats.map((s) => s.id)).toEqual(['_seat1', '_seat2'])
+    expect(seats.every((s) => s.layerId === IVA_SEAT_LAYER_ID)).toBe(true)
+    // Order is KSA's seat CYCLE order — the first seat is the one IVA opens on.
+    expect(seats.map((s) => s.position.y)).toEqual([0.42, -0.42])
+  })
+
+  it('appends after existing seats, keeps ids collision-free, and is undoable', () => {
+    importWithSeats(IMPORTED)
+    importWithSeats(IMPORTED)
+    expect($part.get().ivaSeats.map((s) => s.id)).toEqual(['_seat1', '_seat2', '_seat3', '_seat4'])
+    // The second import's seats land AFTER the first import's, in their own order.
+    expect($part.get().ivaSeats.map((s) => s.position.y)).toEqual([0.42, -0.42, 0.42, -0.42])
+    undo()
+    expect($part.get().ivaSeats.map((s) => s.id)).toEqual(['_seat1', '_seat2'])
+    undo()
+    expect($part.get().ivaSeats).toEqual([])
+  })
+
+  it('does not mutate the source catalog entry’s seats', () => {
+    const src = structuredClone(IMPORTED)
+    importWithSeats(src)
     expect(src).toEqual(IMPORTED)
   })
 })

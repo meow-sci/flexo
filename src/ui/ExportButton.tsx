@@ -20,6 +20,7 @@ import { $catalogIndex } from '../state/catalogStore'
 import { $allReactionIndex } from '../state/reactionStore'
 import { validateEngines } from '../ksa/engineValidation'
 import { validateColliders } from '../ksa/colliderValidation'
+import { validateIvaSeats } from '../ksa/ivaSeatValidation'
 import { $kittenTextureExport } from '../state/settingsStore'
 import {
   $modFolder,
@@ -74,6 +75,7 @@ export function ExportButton({
 }: ExportButtonProps = {}) {
   const part = useStore($part)
   const reactionIndex = useStore($allReactionIndex)
+  const catalog = useStore($catalogIndex)
   const [internalOpen, setInternalOpen] = useState(false)
   const [mode, setMode] = useState<Mode>('xml')
   const isControlled = externalOpen !== undefined
@@ -87,8 +89,13 @@ export function ExportButton({
   // Engine + plumbing pre-flight (KSA 2026.7.9). `block` = KSA throws at load, so the
   // whole mod fails; `warn` = it loads but the part misbehaves (usually no thrust).
   // Collider pre-flight shares the same two severities and the same treatment: a part
-  // with no collision volume loads fine but falls through the world.
-  const issues = [...validateEngines(part, reactionIndex), ...validateColliders(part)]
+  // with no collision volume loads fine but falls through the world. IVA-seat pre-flight
+  // likewise: a NaN camera blocks, a seat with nothing to look at only warns.
+  const issues = [
+    ...validateEngines(part, reactionIndex),
+    ...validateColliders(part),
+    ...validateIvaSeats(part, catalog),
+  ]
   const blocking = issues.filter((i) => i.severity === 'block')
   const engineWarnings = issues.filter((i) => i.severity === 'warn')
 

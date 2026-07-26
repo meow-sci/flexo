@@ -18,6 +18,7 @@ import type {
   Generator,
   KittenInstance,
   Gimbal,
+  IvaSeat,
   KittenKind,
   Light,
   LightType,
@@ -63,6 +64,7 @@ import {
   createTank,
   DEFAULT_LAYER_ID,
   isSubPartGameDataEmpty,
+  IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
 } from '../ksa/types'
 import { normalizeColliderSize } from '../ksa/colliderSize'
@@ -578,6 +580,16 @@ export interface ImportedGameData {
    * module refs above these need no remapping — only fresh document ids.
    */
   colliders: PartCollider[]
+  /**
+   * The source Part's `<IVASeat>`s, from both Part-level authoring sites (geometry `<Part>`
+   * and `<PartGameData>`), already merged in document order. Ids are REGENERATED on import
+   * and never emitted (flexo authors no `<IVASeat Id>`), so unlike the module refs above no
+   * `idRemap` entry is needed — nothing can reference a seat.
+   *
+   * ORDER IS LOAD-BEARING and preserved verbatim: it is KSA's seat cycle order (the first
+   * seat is the one IVA opens on, `C` walks the rest — see plans/IVA_PLAN.md §1.4).
+   */
+  ivaSeats: IvaSeat[]
 }
 
 /** Remaps a module→SubPart-instance reference through the import id map (null ⇒ root part, unchanged). */
@@ -710,6 +722,16 @@ function applyImportedGameData(
       ...structuredClone(c),
       id: nextColliderId(target),
       layerId: COLLIDER_LAYER_ID,
+    })
+  }
+  // Seats are a top-level list too: append with fresh ids on the built-in IVA Seats layer,
+  // IN ORDER and AFTER any seats already in the document — order is KSA's seat cycle order.
+  // Nothing references a seat by id (flexo emits none), so no map is threaded out.
+  for (const s of src.ivaSeats) {
+    target.ivaSeats.push({
+      ...structuredClone(s),
+      id: nextIvaSeatId(target),
+      layerId: IVA_SEAT_LAYER_ID,
     })
   }
 }
@@ -1026,6 +1048,16 @@ function nextColliderId(part: EditingPart): string {
     if (m) max = Math.max(max, Number.parseInt(m[1], 10))
   }
   return `_collider${max + 1}`
+}
+
+/** Returns the next free "_seatN" id (max existing N + 1). */
+function nextIvaSeatId(part: EditingPart): string {
+  let max = 0
+  for (const s of part.ivaSeats) {
+    const m = /^_seat(\d+)$/.exec(s.id)
+    if (m) max = Math.max(max, Number.parseInt(m[1], 10))
+  }
+  return `_seat${max + 1}`
 }
 
 /** Returns the next free "_connectorN" id (max existing N + 1). */

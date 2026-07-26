@@ -158,8 +158,12 @@ export interface ExportVariant {
   variantId: string
   /** Built-in <Mesh Id> the variant reuses (NOT redeclared). */
   meshId: string
-  /** Built-in <Material Id> the variant reuses, or null when untextured. */
-  materialId: string | null
+  /**
+   * Built-in `<Material Id>` the variant reuses. NEVER null: a `<PartModel>` with no `<Material>`
+   * is a hard startup crash (see {@link buildExportVariantMap}), so a material-less built-in is
+   * skipped rather than redeclared.
+   */
+  materialId: string
   /**
    * The built-in template's OWN geometry `<Collider>`s, copied forward onto the variant.
    * A variant is a FRESH `<SubPart Id>` that reuses only the built-in Mesh/Material — it
@@ -189,6 +193,13 @@ export interface ExportVariant {
    */
   shadowCaster: boolean | null
 }
+
+/**
+ * The diffuse of the shared fallback material a custom mesh gets when it resolves no texture,
+ * material or glow. Matches the editor's untextured look (`MaterialFactory.makeFlatMaterial`'s
+ * `0xbfc4cc`), so a bare mesh renders the same in-game as it does in the viewport.
+ */
+const NEUTRAL_BASE_COLOR: RgbColor = { r: 0xbf, g: 0xc4, b: 0xcc }
 
 /**
  * The `<Internal>` value a SubPart template exports with: the user's explicit flag if the
@@ -228,9 +239,18 @@ function hasSubPartGameData(part: EditingPart, templateId: string): boolean {
  * A template flexo changes NOTHING about gets no variant: the placement references the built-in id
  * and keeps the built-in's own `<Internal>`/`<RayTracing>`/`<ShadowCaster>` for free.
  *
- * Custom-mesh SubParts (absent from the catalog) are skipped — flexo already declares those with
- * their own ids, so their GameData never collides. Variant ids are namespaced by the project
- * {@link base} (deterministic, so re-exports are stable).
+ * **BUILT-IN TEMPLATES ONLY.** Custom meshes are skipped explicitly, by document lookup — NOT by
+ * catalog absence. The catalog handed in is `$catalogIndex`, which merges `$customCatalog`
+ * (`catalogStore.ts`), so custom meshes ARE present and a membership test silently let them
+ * through. A variant of a custom mesh is pure harm: the whole mechanism exists to avoid merging
+ * GameData onto a SHARED built-in template, and a custom SubPart id is already project-unique and
+ * declared by this same export, so there is nothing to collide with. Worse, custom catalog entries
+ * carry NO `materialId` (their material lives in `customMeshRenderCache`), so the variant emitted a
+ * `<PartModel>` with no `<Material>` — an unconditional NRE in
+ * `ThumbnailRenderResources.AddDraw` that crashes KSA at startup, before the main menu. Adding a
+ * `<Light>` to a custom mesh was enough to trigger it. See plans/FIX_EMISSIVES_BUG.md.
+ *
+ * Variant ids are namespaced by the project {@link base} (deterministic, so re-exports are stable).
  */
 export function buildExportVariantMap(
   part: EditingPart,
@@ -238,11 +258,15 @@ export function buildExportVariantMap(
   base: string,
 ): Map<string, ExportVariant> {
   const out = new Map<string, ExportVariant>()
+  // expandGlassGlow appends synthetic `_Glow` meshes to customMeshes before this runs, so they
+  // are covered here too.
+  const customIds = new Set(part.customMeshes.map((m) => m.subPartId))
   for (const p of part.placements) {
     const templateId = p.subPartTemplateId
     if (out.has(templateId)) continue
+    if (customIds.has(templateId)) continue // declared directly by this export — never a variant
     const entry = catalog.get(templateId)
-    if (!entry) continue // custom mesh (not a built-in) — flexo declares it directly, no collision
+    if (!entry) continue // unknown template — leave the reference as authored
     const wantInternal = resolveInternal(part, templateId, entry)
     const internalDiffers = wantInternal !== (entry.internal ?? false)
     if (!internalDiffers && !hasSubPartGameData(part, templateId)) continue
@@ -254,11 +278,21 @@ export function buildExportVariantMap(
       )
       continue
     }
+    // Same rule for the material: a variant reuses the built-in's <Material Id>, and a
+    // <PartModel> with no <Material> crashes KSA at startup (AddDraw derefs it unguarded). No
+    // shipped Core SubPart omits one, so this is defensive — but redeclaring without it would
+    // trade a cosmetic limitation for a crash.
+    if (!entry.materialId) {
+      console.warn(
+        `flexo export: built-in SubPart '${templateId}' has no material — left as a direct reference (its SubPart GameData / Internal flag cannot be applied)`,
+      )
+      continue
+    }
     out.set(templateId, {
       originalId: templateId,
       variantId: `flexo_${base}_${templateId}`,
       meshId: entry.meshNodeName,
-      materialId: entry.materialId ?? null,
+      materialId: entry.materialId,
       colliders: entry.colliders ?? [],
       internal: wantInternal,
       rayTracing: entry.rayTracing ?? null,
@@ -957,8 +991,13 @@ export async function buildCustomBundle(
         continue
       }
       // Diffuse resolution: the primary (first textured) face wins, then the material's
-      // base color (image or picked-color solid). Neither → untextured (no PbrMaterial,
-      // KSA renders its default look; the <MeshView> below still makes it pickable).
+      // base color (image or picked-color solid). Neither → the shared neutral material.
+      //
+      // There is NO "untextured <PartModel>" in KSA: ThumbnailRenderResources.AddDraw derefs
+      // Material.DiffuseReference/NormalReference/PBRMap with no null guard, so omitting
+      // <Material> crashes the game at startup. Zero Core PartModels omit it. The fallback
+      // interns to ONE <PbrMaterial> across every bare mesh, and its color matches the editor's
+      // untextured look (MaterialFactory.makeFlatMaterial) so in-game == viewport.
       const primaryTexId = getPrimaryTextureId(m)
       let diffusePath = primaryTexId ? await storedTexturePath(primaryTexId) : null
       if (!diffusePath && material) {
@@ -968,7 +1007,15 @@ export async function buildCustomBundle(
             : await tex.baseColorSolid(material.baseColor.color)
       }
       if (!diffusePath) {
-        subParts.push(withInternal({ subPartId: m.subPartId, materialId: null, glass }))
+        const materialId = tex.intern(
+          {
+            diffusePath: await tex.baseColorSolid(NEUTRAL_BASE_COLOR),
+            normalPath: await tex.flatNormal(),
+            aoRoughMetalPath: await tex.ormSolid(255, 128, 0),
+          },
+          `${bundleToken}_NeutralMaterial`,
+        )
+        subParts.push(withInternal({ subPartId: m.subPartId, materialId, glass }))
         continue
       }
       // A mesh rendering its material verbatim (no per-face diffuse override) interns under

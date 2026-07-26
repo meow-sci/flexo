@@ -13,6 +13,7 @@ import {
   toast,
 } from './kit'
 import { $part } from '../state/editorStore'
+import { useNumberDraft } from './numberDraft'
 import { addCustomMesh } from '../state/customAssetStore'
 import { DEFAULT_PRIMITIVE_PARAMS, PRIMITIVE_KINDS, PRIMITIVE_LABELS } from '../three/primitives'
 import type { PrimitiveKind, PrimitiveSpec } from '../ksa/types'
@@ -120,15 +121,12 @@ export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
 
           <div className="grid grid-cols-2 gap-2">
             {fields.map((f) => (
-              <TextField
-                key={f.key}
+              <ParamNumberField
+                // keyed by kind too: switching primitives remounts the field, discarding drafts
+                key={`${kind}-${f.key}`}
                 label={f.label}
-                size="sm"
-                value={String(params[f.key] ?? '')}
-                onChange={(v) => {
-                  const n = Number(v)
-                  if (!Number.isNaN(n)) setParams((p) => ({ ...p, [f.key]: n }))
-                }}
+                value={params[f.key] ?? 0}
+                onCommit={(n) => setParams((p) => ({ ...p, [f.key]: n }))}
               />
             ))}
           </div>
@@ -185,6 +183,25 @@ export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
         </div>
       </Dialog>
     </Modal>
+  )
+}
+
+/**
+ * Dimension field with a full-width label (vs {@link NumberField}'s one-char slot).
+ * Draft-backed so in-progress entries like `.06`, `-`, or an emptied field survive
+ * while focused; blur/Enter restores the pre-edit value if the draft isn't a number.
+ */
+function ParamNumberField(props: { label: string; value: number; onCommit: (n: number) => void }) {
+  const field = useNumberDraft({ value: props.value, onCommit: props.onCommit })
+  return (
+    <TextField
+      label={props.label}
+      size="sm"
+      // must inputMode="url" so negative numbers can be managed on mobile devices, numeric/decimal/integer dont show "-" key
+      inputMode="url"
+      inputClassName="font-mono"
+      {...field}
+    />
   )
 }
 

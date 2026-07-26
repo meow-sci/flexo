@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   COLLIDER_LAYER_ID,
   createEmptyPart,
+  createGlow,
   createLight,
   createPartAnimation,
   createSubPartGameData,
@@ -422,6 +423,134 @@ describe('built-in SubPart GameData export variants (never redefine the built-in
   })
 })
 
+/**
+ * A part with ONE custom primitive mesh that carries SubPart GameData — the shape that crashed
+ * KSA at startup. `withCollider` uses the other `hasSubPartGameData` trigger instead of a light.
+ */
+function partWithCustomMeshGameData(withCollider = false): EditingPart {
+  const part = createEmptyPart()
+  part.partId = 'inanimate_carbon_rod'
+  part.customMeshes.push({
+    id: 'mesh_rod',
+    name: 'Rod',
+    subPartId: CUSTOM_ROD,
+    primitive: { kind: 'cylinder', params: { radius: 0.06, height: 1.5, radialSegments: 16 } },
+    faceTextures: {},
+    emissive: { ...createGlow(), color: { r: 60, g: 255, b: 50 } },
+  })
+  part.placements.push({
+    instanceId: 'rod_1',
+    subPartTemplateId: CUSTOM_ROD,
+    ...identityTransform(),
+    layerId: 'default',
+  })
+  if (withCollider) {
+    part.colliders.push({
+      id: '_collider1',
+      shape: 'Cylinder',
+      ownerTemplateId: CUSTOM_ROD,
+      layerId: COLLIDER_LAYER_ID,
+      ...identityTransform(),
+    })
+  } else {
+    part.subPartGameData.push({ ...createSubPartGameData(CUSTOM_ROD), lights: [createLight()] })
+  }
+  return part
+}
+
+const CUSTOM_ROD = 'flexo_rod_fb406012'
+
+/** The MERGED index the export really receives — $catalogIndex folds $customCatalog into it. */
+function mergedCatalogWithCustomRod(): Map<string, CatalogSubPart> {
+  return new Map<string, CatalogSubPart>([
+    [
+      CUSTOM_ROD,
+      {
+        id: CUSTOM_ROD,
+        atlasUrl: 'blob:custom',
+        meshNodeName: CUSTOM_ROD,
+        // Custom entries carry NO materialId — the material lives in customMeshRenderCache.
+        materialId: undefined,
+        sourceFile: '(custom)',
+      },
+    ],
+  ])
+}
+
+// A custom mesh is declared by this very export under a project-unique id, so its GameData can
+// never collide with a shared template — a variant is pure harm. It also strips the material
+// (custom catalog entries have none), which crashed KSA in ThumbnailRenderResources.AddDraw
+// before the main menu. See plans/FIX_EMISSIVES_BUG.md.
+describe('custom-mesh SubParts never get an export variant', () => {
+  it('mints no variant for a custom mesh carrying a <Light>, even though it IS in the catalog', () => {
+    const part = partWithCustomMeshGameData()
+    // Guard the precondition that made the old catalog-membership test useless.
+    expect(mergedCatalogWithCustomRod().has(CUSTOM_ROD)).toBe(true)
+    expect(buildExportVariantMap(part, mergedCatalogWithCustomRod(), 'Rod').size).toBe(0)
+  })
+
+  it('mints no variant for a custom mesh carrying a SubPart-owned collider', () => {
+    const part = partWithCustomMeshGameData(true)
+    expect(buildExportVariantMap(part, mergedCatalogWithCustomRod(), 'Rod').size).toBe(0)
+  })
+
+  // Pins the RULE, not just its crash symptom: even if a custom catalog entry gained a
+  // materialId (so the material guard wouldn't fire), a custom mesh must still never be
+  // redeclared — the export already declares it under this exact id.
+  it('mints no variant even when the custom catalog entry does carry a materialId', () => {
+    const catalog = mergedCatalogWithCustomRod()
+    catalog.set(CUSTOM_ROD, { ...catalog.get(CUSTOM_ROD)!, materialId: `${CUSTOM_ROD}_Material` })
+    expect(buildExportVariantMap(partWithCustomMeshGameData(), catalog, 'Rod').size).toBe(0)
+  })
+
+  it('the Part places the custom SubPart id and its GameData hangs off the SAME id', () => {
+    const part = partWithCustomMeshGameData()
+    const content = buildModContent(part, 'Rod', mergedCatalogWithCustomRod())
+    expect(content.partXml).toContain(`InstanceOf="${CUSTOM_ROD}"`)
+    expect(content.partXml).not.toContain('InstanceOf="flexo_Rod_')
+    expect(content.gameDataXml).toContain(`<SubPartGameData Id="${CUSTOM_ROD}"`)
+    expect(content.gameDataXml).toContain('<Light>')
+  })
+
+  it('the Assets XML declares the SubPart exactly ONCE, with a <Material> and the _VM view mesh', async () => {
+    const part = partWithCustomMeshGameData()
+    const content = buildModContent(part, 'Rod', mergedCatalogWithCustomRod())
+    const bundle = await buildCustomBundle(part, content.base, undefined, content.variants)
+    const xml = bundle.assetsXml!
+    expect(xml.match(/<SubPart Id=/g)).toHaveLength(1)
+    expect(xml).toContain(`<SubPart Id="${CUSTOM_ROD}"`)
+    expect(xml).toContain(`<Material Id="${CUSTOM_ROD}_Material"`)
+    // The variant used to point <MeshView> at the render mesh, orphaning the decimated _VM.
+    expect(xml).toContain(`<Mesh Id="${CUSTOM_ROD}_VM"`)
+  })
+})
+
+// The property that makes the whole bug class unrepresentable, whatever the producer.
+describe('every exported <PartModel> carries a <Material>', () => {
+  it('holds for a glowing custom mesh with GameData (the crash case)', async () => {
+    const part = partWithCustomMeshGameData()
+    const content = buildModContent(part, 'Rod', mergedCatalogWithCustomRod())
+    const bundle = await buildCustomBundle(part, content.base, undefined, content.variants)
+    expectEveryPartModelHasMaterial(bundle.assetsXml!)
+  })
+
+  it('holds for a bare mesh with no glow, texture or material', async () => {
+    const bundle = await buildCustomBundle(partWithMaterialMeshes(), 'ButtonMod')
+    expectEveryPartModelHasMaterial(bundle.assetsXml!)
+  })
+})
+
+/**
+ * KSA's `ThumbnailRenderResources.AddDraw` reads `Material.DiffuseReference`/`NormalReference`/
+ * `PBRMap` with no null guard, over every registered part at startup — so a single `<PartModel>`
+ * without a `<Material>` child NREs before the main menu. Zero shipped Core PartModels omit one.
+ */
+function expectEveryPartModelHasMaterial(xml: string): void {
+  const models = xml.match(/<PartModel(?:Glass)?\b[\s\S]*?<\/PartModel(?:Glass)?>/g) ?? []
+  expect(models.length).toBeGreaterThan(0)
+  for (const m of models) expect(m).toMatch(/<Material Id="/)
+}
+
 function ivaCatalog(): Map<string, CatalogSubPart> {
   return new Map<string, CatalogSubPart>([
     [
@@ -733,18 +862,21 @@ describe('buildCustomBundle — uniform-channel CustomMaterial (red metallic but
     expect(paths.filter((p) => p.includes('_BaseColor_ff0000'))).toHaveLength(1)
     expect(paths.filter((p) => p.includes('_ORM_ff26ff'))).toHaveLength(1)
 
-    // ONE shared <PbrMaterial>, named from the material, referenced by both SubParts.
+    // ONE shared <PbrMaterial> for the two material-carrying meshes, named from the material…
     const xml = bundle.assetsXml!
-    expect(xml.match(/<PbrMaterial /g)?.length).toBe(1)
     expect(xml).toContain('<PbrMaterial Id="flexo_RedMetal_red1_Material"')
     expect(xml.match(/<Material Id="flexo_RedMetal_red1_Material"/g)?.length).toBe(2)
     expect(xml).toContain('<Diffuse Path="Textures/ButtonMod_flexo_button_a_BaseColor_ff0000.ktx2"')
     expect(xml).toContain('<AoRoughMetal Path="Textures/ButtonMod_flexo_button_a_ORM_ff26ff.ktx2"')
 
-    // The material-less mesh stays untextured (no <Material>) but keeps its MeshView.
+    // …plus ONE neutral material for the bare mesh. KSA has no untextured <PartModel>:
+    // ThumbnailRenderResources.AddDraw derefs Material.DiffuseReference unguarded, so omitting
+    // <Material> crashes the game at startup. Two declarations total, no more.
+    expect(xml.match(/<PbrMaterial /g)?.length).toBe(2)
+    expect(xml).toContain('<PbrMaterial Id="ButtonMod_flexo_button_a_NeutralMaterial"')
     expect(xml).toContain('<SubPart Id="flexo_bare_c"')
     const bare = xml.slice(xml.indexOf('<SubPart Id="flexo_bare_c"'))
-    expect(bare.slice(0, bare.indexOf('</SubPart>'))).not.toContain('<Material ')
+    expect(bare).toContain('<Material Id="ButtonMod_flexo_button_a_NeutralMaterial"/>')
     expect(bare).toContain('<Mesh Id="flexo_bare_c_VM"')
   })
 
@@ -797,8 +929,10 @@ describe('buildCustomBundle — image-backed material channels', () => {
     // Copied bytes, not regenerated.
     const normalBin = bundle.binaries.find((b) => b.path.endsWith('Bumps_texn1_Normal.ktx2'))!
     expect([...normalBin.data]).toEqual([1, 1, 1, 1])
-    // The shared material still interns once for both meshes.
-    expect(xml.match(/<PbrMaterial /g)?.length).toBe(1)
+    // The shared material still interns once for both meshes; the third (bare) mesh adds the
+    // neutral fallback and nothing else.
+    expect(xml.match(/<PbrMaterial /g)?.length).toBe(2)
+    expect(xml.match(/<Material Id="flexo_RedMetal_red1_Material"/g)?.length).toBe(2)
   })
 })
 
@@ -1150,7 +1284,7 @@ describe('export variants carry the built-in template’s own colliders forward'
         {
           subPartId: 'flexo_X_Variant',
           meshId: SPOTLIGHT,
-          materialId: null,
+          materialId: `${SPOTLIGHT}_Material`,
           colliders: [BUILT_IN_BOX],
           internal: false,
           rayTracing: null,

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { X } from 'lucide-react'
 import { Button as AriaButton } from 'react-aria-components'
@@ -15,6 +15,7 @@ import {
   useIsPhone,
 } from './kit'
 import { ColorAlphaField } from './ColorAlphaField'
+import { useNumberDraft } from './numberDraft'
 import { SliderRow } from './SliderRow'
 import { MaterialDialog } from './MaterialDialog'
 import { $part, addLight } from '../state/editorStore'
@@ -712,8 +713,9 @@ function midStop(ramp: GlowRamp): RgbColor {
 }
 
 /**
- * Numeric input for UV values. Maintains a local string draft so cursor position
- * is stable while typing. Commits on blur or Enter; resets on Escape or bad input.
+ * Numeric input for UV values — the shared draft field (see {@link useNumberDraft})
+ * with ~4-decimal display; valid keystrokes commit live so the viewport previews
+ * the tiling as you type.
  */
 function UvNumberField({
   label,
@@ -724,43 +726,14 @@ function UvNumberField({
   value: number
   onChange: (v: number) => void
 }) {
-  const [draft, setDraft] = useState(() => formatNum(value))
-  const committed = useRef(value)
-
-  useEffect(() => {
-    if (value !== committed.current) {
-      committed.current = value
-      setDraft(formatNum(value))
-    }
-  }, [value])
-
-  const commit = () => {
-    const n = parseFloat(draft)
-    if (!isNaN(n)) {
-      committed.current = n
-      onChange(n)
-      setDraft(formatNum(n))
-    } else {
-      setDraft(formatNum(committed.current))
-    }
-  }
-
+  const field = useNumberDraft({ value, onCommit: onChange, format: formatNum })
   return (
     <TextField
       label={label}
       size="sm"
-      inputMode="decimal"
-      value={draft}
-      onChange={setDraft}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault()
-          commit()
-        } else if (e.key === 'Escape') {
-          setDraft(formatNum(committed.current))
-        }
-      }}
+      // must inputMode="url" so negative numbers can be managed on mobile devices, numeric/decimal/integer dont show "-" key
+      inputMode="url"
+      {...field}
     />
   )
 }

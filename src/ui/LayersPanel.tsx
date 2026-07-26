@@ -392,7 +392,8 @@ function OpacityFields({ layerId, pct }: { layerId: string; pct: number }) {
     <div className="flex items-center gap-2">
       <TextField
         size="sm"
-        inputMode="numeric"
+        // must inputMode="url" so negative numbers can be managed on mobile devices, numeric/decimal/integer dont show "-" key
+        inputMode="url"
         aria-label="Layer opacity percent"
         className="w-14"
         {...field}

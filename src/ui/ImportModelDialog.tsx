@@ -44,13 +44,13 @@ import {
   formatBytes,
   groupWarnings,
   imageSizeOf,
-  parseScale,
   SCALE_PRESETS,
   type WarningGroup,
   type WarningSeverity,
 } from '../ksa/importEstimates'
 import { VIEW_MESH_TRIANGLE_BUDGET } from '../ksa/modExport'
 import { fmt } from './format'
+import { useNumberDraft } from './numberDraft'
 
 /**
  * Import a model (glTF/GLB) as KSA SubParts. Three states in ONE modal, no wizard chrome:
@@ -112,7 +112,7 @@ function ImportModelBody({
 
   // Per-import options (the sticky ones live in $modelImportSettings — see settingsStore).
   const [namePrefix, setNamePrefix] = useState('')
-  const [scaleText, setScaleText] = useState('1')
+  const [scale, setScale] = useState(1)
   const [bakeTransforms, setBakeTransforms] = useState(false)
   const [doubleSided, setDoubleSided] = useState(false)
   const [merge, setMerge] = useState(false)
@@ -148,7 +148,14 @@ function ImportModelBody({
   /** State 1 is still working: files chosen, nothing parsed yet and nothing to report. */
   const parsing = files.length > 0 && !model && !error
 
-  const scale = parseScale(scaleText)
+  // Shared draft editing (see useNumberDraft); a zero/negative scale would degenerate the
+  // preview and import, so those commits are ignored rather than clamped.
+  const scaleField = useNumberDraft({
+    value: scale,
+    onCommit: (n) => {
+      if (n > 0) setScale(n)
+    },
+  })
 
   // Analysis is re-run on every scale / up-axis change: it walks the already-parsed scene
   // graph and never touches the file, so it is cheap enough to drive the live preview,
@@ -336,9 +343,9 @@ function ImportModelBody({
                 <TextField
                   label="Scale"
                   size="sm"
-                  inputMode="decimal"
-                  value={scaleText}
-                  onChange={setScaleText}
+                  // must inputMode="url" so negative numbers can be managed on mobile devices, numeric/decimal/integer dont show "-" key
+                  inputMode="url"
+                  {...scaleField}
                 />
                 <div className="flex gap-1">
                   {SCALE_PRESETS.map((preset) => (
@@ -346,7 +353,7 @@ function ImportModelBody({
                       <Button
                         size="sm"
                         variant={scale === preset.value ? 'primary' : 'secondary'}
-                        onPress={() => setScaleText(String(preset.value))}
+                        onPress={() => setScale(preset.value)}
                       >
                         {preset.label}
                       </Button>

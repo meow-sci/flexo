@@ -57,8 +57,14 @@ export interface AssetsMaterialPlan {
 export interface AssetsSubPartPlan {
   /** SubPart template id (== GLB node Mesh Id == placement.subPartTemplateId). */
   subPartId: string
-  /** Id of an {@link AssetsPlan.materials} entry, or null for an untextured SubPart. */
-  materialId: string | null
+  /**
+   * Id of an {@link AssetsPlan.materials} entry. REQUIRED — KSA has no untextured `<PartModel>`:
+   * `ThumbnailRenderResources.AddDraw` derefs `Material.DiffuseReference`/`NormalReference`/
+   * `PBRMap` with no null guard, so a `<PartModel>` without `<Material>` NREs at startup before
+   * the main menu, and zero shipped Core PartModels omit it. A mesh that resolves no texture or
+   * material gets the shared neutral material instead (see modExport).
+   */
+  materialId: string
   /**
    * Render through KSA's translucent glass path: emits `<PartModelGlass>` instead of
    * `<PartModel>` (an alpha-blended shader), for glass surfaces like the kitten visor.
@@ -88,8 +94,8 @@ export interface ReferenceSubPartPlan {
   subPartId: string
   /** Built-in <Mesh Id> to reference (NOT redeclared in this file). */
   meshId: string
-  /** Built-in <Material Id> to reference, or null for an untextured SubPart. */
-  materialId: string | null
+  /** Built-in `<Material Id>` to reference. REQUIRED for the same reason as {@link AssetsSubPartPlan.materialId}. */
+  materialId: string
   /**
    * Collision primitives the shadowed built-in `<SubPart>` declared. A variant inherits
    * NOTHING but the Mesh/Material it explicitly references, so these must be re-declared
@@ -189,11 +195,10 @@ export function serializeAssets(plan: AssetsPlan): string {
     const mesh = doc.createElement('Mesh')
     mesh.setAttribute('Id', sp.subPartId)
     model.appendChild(mesh)
-    if (sp.materialId) {
-      const material = doc.createElement('Material')
-      material.setAttribute('Id', sp.materialId)
-      model.appendChild(material)
-    }
+    // Unconditional: a <PartModel> without <Material> crashes KSA at startup (see the field doc).
+    const material = doc.createElement('Material')
+    material.setAttribute('Id', sp.materialId)
+    model.appendChild(material)
     sub.appendChild(model)
     // View mesh wires the SubPart to its picking geometry. KSA's vehicle editor
     // only raycasts SubParts that carry a MeshViewModule (built from <MeshView>);
@@ -231,11 +236,10 @@ export function serializeAssets(plan: AssetsPlan): string {
     const mesh = doc.createElement('Mesh')
     mesh.setAttribute('Id', sp.meshId)
     model.appendChild(mesh)
-    if (sp.materialId) {
-      const material = doc.createElement('Material')
-      material.setAttribute('Id', sp.materialId)
-      model.appendChild(material)
-    }
+    // Unconditional, same as the custom-SubPart path above.
+    const material = doc.createElement('Material')
+    material.setAttribute('Id', sp.materialId)
+    model.appendChild(material)
     if (sp.rayTracing) {
       const rt = doc.createElement('RayTracing')
       rt.appendChild(doc.createTextNode(sp.rayTracing))

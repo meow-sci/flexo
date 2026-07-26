@@ -276,16 +276,6 @@ export function groupWarnings(warnings: readonly ImportWarning[]): WarningGroup[
   return [...groups.values()].sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity])
 }
 
-/**
- * A typed scale factor, or 1 while the field is mid-edit ("", "0", "1.", "-"). The import
- * multiplies every vertex and placement by this, so it must never be NaN, zero or negative:
- * a zero scale collapses the model to a point and a negative one mirrors it.
- */
-export function parseScale(text: string): number {
-  const value = Number.parseFloat(text)
-  return Number.isFinite(value) && value > 0 ? value : 1
-}
-
 /** Unit-scale presets for models authored in something other than metres. */
 export interface ScalePreset {
   label: string

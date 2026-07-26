@@ -517,8 +517,16 @@ Example `<Name>Assets.xml`:
 
 `mod.toml`'s `assets` lists only **XML** files; meshes/textures are referenced by
 relative `Path` from the Assets XML (Core does the same). `<Mesh Id>` equals the
-named mesh inside the GLB. An untextured SubPart emits no `<PbrMaterial>` / `<Material>`
-but **still** emits a `<MeshView>` (pickability is independent of texturing).
+named mesh inside the GLB. Every SubPart also emits a `<MeshView>` (pickability is
+independent of texturing).
+
+**Every `<PartModel>` carries a `<Material>` — there is no "untextured" SubPart.**
+`ThumbnailRenderResources.AddDraw` reads `Material.DiffuseReference` with no null guard,
+over every registered part at startup, so omitting `<Material>` crashes the game before the
+main menu (zero shipped Core PartModels omit one). A mesh that resolves no face texture, no
+material and no glow gets a shared `<base>_NeutralMaterial` — a neutral-grey diffuse matching
+the editor's untextured look, plus the usual flat-normal and neutral-ORM solids. The plan types
+make `materialId` non-nullable so the omission is not expressible.
 
 ### View meshes (pickability)
 

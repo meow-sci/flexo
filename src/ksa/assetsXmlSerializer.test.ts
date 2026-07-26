@@ -33,13 +33,17 @@ describe('serializeAssets', () => {
     expect(xml.startsWith('<?xml version="1.0" encoding="utf-8"?>')).toBe(true)
   })
 
-  it('omits material/PbrMaterial for an untextured custom mesh', () => {
+  // KSA has NO untextured <PartModel>: ThumbnailRenderResources.AddDraw derefs
+  // Material.DiffuseReference with no null guard, so omitting <Material> NREs at startup before
+  // the main menu. modExport gives a texture-less mesh the shared neutral material instead; the
+  // serializer's job is simply to always emit the reference it was given.
+  it('always emits <Material> — a SubPart that declares no PbrMaterial here still references one', () => {
     const xml = serializeAssets({
       meshAtlasPath: 'Meshes/X.glb',
-      subParts: [{ subPartId: 's1', materialId: null }],
+      subParts: [{ subPartId: 's1', materialId: 'X_NeutralMaterial' }],
     })
     expect(xml).not.toContain('PbrMaterial')
-    expect(xml).not.toContain('<Material ')
+    expect(xml).toContain('<Material Id="X_NeutralMaterial"/>')
     expect(xml).toContain('<SubPart Id="s1"')
     expect(xml).toContain('<Mesh Id="s1"')
     // Untextured parts still need a view mesh to be pickable in-game.
@@ -176,7 +180,7 @@ describe('serializeAssets', () => {
         {
           subPartId: 'flexo_MyShip_CoreIVAPropA_Subpart_NoteA',
           meshId: 'CoreIVAPropA_Subpart_NoteA',
-          materialId: null,
+          materialId: 'CoreIVAPropA_Material',
           internal: false,
           rayTracing: null,
           shadowCaster: null,
@@ -258,7 +262,7 @@ describe('serializeAssets', () => {
         {
           subPartId: 'flexo_MyShip_Caster',
           meshId: 'CoreStructuralA_Subpart_X',
-          materialId: null,
+          materialId: 'CoreStructuralA_Material',
           internal: false,
           rayTracing: null,
           shadowCaster: true,
@@ -272,10 +276,10 @@ describe('serializeAssets', () => {
     const xml = serializeAssets({
       meshAtlasPath: 'Meshes/X.glb',
       subParts: [
-        { subPartId: 'panel', materialId: null, internal: true },
+        { subPartId: 'panel', materialId: 'M', internal: true },
         // Belt-and-braces: modExport never sets `internal` on a glass plan (KSA's
         // <PartModelGlass> has no such field), and the serializer drops it if it ever did.
-        { subPartId: 'visor', materialId: null, glass: true, internal: true },
+        { subPartId: 'visor', materialId: 'M', glass: true, internal: true },
       ],
     })
     expect(xml).toMatch(/<PartModel Id="panel_Model">\s*<Internal>true<\/Internal>/)

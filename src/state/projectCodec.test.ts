@@ -423,11 +423,19 @@ describe('projectCodec round-trip', () => {
     expect(c.sg?.[0].sm?.[0]).not.toHaveProperty('g')
   })
 
-  // Per the no-migration rule a v4 envelope is REJECTED, never converted — so the
-  // marker must actually be 6, not just "whatever the constant says".
-  it('stamps wire version 6 (colliders)', () => {
-    expect(PROJECT_EXPORT_VERSION).toBe(6)
-    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P')).v).toBe(6)
+  // Per the no-migration rule a v6 envelope is REJECTED, never converted — so the
+  // marker must actually be 7, not just "whatever the constant says".
+  it('stamps wire version 7 (<Internal> flags)', () => {
+    expect(PROJECT_EXPORT_VERSION).toBe(7)
+    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P')).v).toBe(7)
+  })
+
+  it('round-trips internalFlags and omits them when empty', () => {
+    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P'))).not.toHaveProperty('ifl')
+    const p = createEmptyPart()
+    p.internalFlags = { CoreIVAPropA_Subpart_SeatA: true, CoreIVAPropA_Subpart_PanelA: false }
+    const back = decodeProject(encodeProject(buildProjectExport(p, 'P')))
+    expect(back.data.internalFlags).toEqual(p.internalFlags)
   })
 
   it('rounds high-precision floats to 6 decimals', () => {

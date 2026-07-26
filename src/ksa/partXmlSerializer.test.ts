@@ -42,6 +42,7 @@ function editingPart(over: Partial<EditingPart>): EditingPart {
     placements: [],
     connectors: [],
     colliders: [],
+    internalFlags: {},
     kittens: [],
     customTextures: [],
     customMaterials: [],

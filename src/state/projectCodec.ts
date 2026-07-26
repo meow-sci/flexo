@@ -72,8 +72,9 @@ export const PROJECT_EXPORT_FORMAT = 'flexo-project'
 // v5: imported glTF meshes (`imp`) — a third CustomMesh source kind, plus the mesh-level
 // `mid` (materialId) an imported mesh needs to keep its surface across a round-trip.
 // v6: colliders (`cl`) — the Part's collision volume as a flat list of analytic primitives.
+// v7: the per-SubPart-template `<Internal>` (interior-only) flag (`ifl`).
 // Per the no-migration rule, older payloads are REJECTED on import, never converted.
-export const PROJECT_EXPORT_VERSION = 6
+export const PROJECT_EXPORT_VERSION = 7
 
 /**
  * COMPACT PROJECT CODEC — the single wire format for everything that serializes a
@@ -247,6 +248,20 @@ function decCollider(c: CCollider): PartCollider {
     layerId: COLLIDER_LAYER_ID,
     ...decTransform(c),
   }
+}
+
+/**
+ * Per-SubPart-template `<Internal>` overrides. Defensive: a hostile/stale payload can carry
+ * anything under `ifl`, so only string→boolean entries survive (bad data is DROPPED, never
+ * converted — see the no-migration rule in AGENTS.md).
+ */
+function decInternalFlags(raw: unknown): Record<string, boolean> {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return {}
+  const out: Record<string, boolean> = {}
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v === 'boolean') out[k] = v
+  }
+  return out
 }
 
 interface CKitten extends CTransform {
@@ -1278,6 +1293,7 @@ export interface CompactProject {
   p?: CPlacement[] // placements
   c?: CConnector[] // connectors
   cl?: CCollider[] // colliders
+  ifl?: Record<string, boolean> // per-SubPart-template <Internal> overrides
   k?: CKitten[] // kittens
   a?: CAnimation[] // animations
   m?: CCustomMesh[] // customMeshes (kitten + imported; primitives are never encoded)
@@ -1299,6 +1315,7 @@ export function encodeProject(env: ProjectExportEnvelope): CompactProject {
   if (d.placements.length) o.p = d.placements.map(encPlacement)
   if (d.connectors.length) o.c = d.connectors.map(encConnector)
   if (d.colliders.length) o.cl = d.colliders.map(encCollider)
+  if (Object.keys(d.internalFlags).length) o.ifl = { ...d.internalFlags }
   if (d.kittens.length) o.k = d.kittens.map(encKitten)
   if (d.animations.length) o.a = d.animations.map(encAnimation)
   const meshes = d.customMeshes.map(encCustomMesh).filter((m): m is CCustomMesh => m != null)
@@ -1324,6 +1341,7 @@ export function decodeProject(raw: CompactProject): ProjectExportEnvelope {
       placements: arr<CPlacement>(raw.p).map(decPlacement),
       connectors: arr<CConnector>(raw.c).map(decConnector),
       colliders: arr<CCollider>(raw.cl).map(decCollider),
+      internalFlags: decInternalFlags(raw.ifl),
       kittens: arr<CKitten>(raw.k).map(decKitten),
       animations: arr<CAnimation>(raw.a).map(decAnimation),
       customMeshes: arr<CCustomMesh>(raw.m).map(decCustomMesh),

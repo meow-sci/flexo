@@ -72,6 +72,8 @@ export interface ProjectExportData {
   connectors: Connector[]
   /** The Part's collision volume (analytic primitives; owner-grouped only on XML export). */
   colliders: PartCollider[]
+  /** Per-SubPart-template `<Internal>` (interior-only) overrides, keyed by template id. */
+  internalFlags: Record<string, boolean>
   kittens: KittenInstance[]
   animations: PartAnimation[]
   /** Part-ified kitten meshes only (descriptors referencing game assets — no binaries). */
@@ -164,6 +166,7 @@ export function buildProjectExport(part: EditingPart, projectName: string): Proj
       placements: part.placements,
       connectors: part.connectors,
       colliders: part.colliders,
+      internalFlags: part.internalFlags,
       kittens: part.kittens,
       animations: part.animations,
       customMeshes: part.customMeshes.filter(isDataOnlyMesh),
@@ -233,6 +236,7 @@ export function envelopeToPart(env: ProjectExportEnvelope): EditingPart {
     placements: d.placements,
     connectors: d.connectors,
     colliders: d.colliders,
+    internalFlags: { ...d.internalFlags },
     kittens: d.kittens,
     customTextures: [],
     customMaterials: d.customMaterials,

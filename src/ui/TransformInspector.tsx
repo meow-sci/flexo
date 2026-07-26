@@ -358,7 +358,8 @@ function VectorApply(props: {
             <span className="w-3 text-xs text-fg-subtle">{label}</span>
             <TextField
               size="sm"
-              inputMode="decimal"
+              // must inputMode="url" so negative numbers can be managed on mobile devices, numeric/decimal/integer dont show "-" key
+              inputMode="url"
               aria-label={`${title} ${label}`}
               value={drafts[i]}
               inputClassName="font-mono"

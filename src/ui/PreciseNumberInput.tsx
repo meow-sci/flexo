@@ -29,7 +29,8 @@ export function PreciseNumberInput(props: {
   return (
     <TextField
       size="sm"
-      inputMode="decimal"
+      // must inputMode="url" so negative numbers can be managed on mobile devices, numeric/decimal/integer dont show "-" key
+      inputMode="url"
       aria-label={props['aria-label']}
       className={className}
       inputClassName="font-mono"

@@ -34,7 +34,8 @@ export function NumberField(props: {
       <span className="w-3 text-xs text-fg-subtle">{label}</span>
       <TextField
         size="sm"
-        inputMode="decimal"
+        // must inputMode="url" so negative numbers can be managed on mobile devices, numeric/decimal/integer dont show "-" key
+        inputMode="url"
         aria-label={ariaLabel ?? label}
         inputClassName="font-mono"
         isDisabled={isDisabled}

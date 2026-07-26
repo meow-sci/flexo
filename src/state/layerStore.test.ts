@@ -10,8 +10,21 @@ import {
   toggleLayerListed,
   toggleLayerVisible,
 } from './layerStore'
-import { $selectedIndices, addSubPart, newPart, setSelectedPlacements } from './editorStore'
-import { DEFAULT_LAYER_ID } from '../ksa/types'
+import {
+  $selectedColliderIndices,
+  $selectedIndices,
+  $selectedIvaSeatIndices,
+  addCollider,
+  addIvaSeat,
+  addSubPart,
+  clearSelection,
+  newPart,
+  selectLayerEntities,
+  setSelectedColliders,
+  setSelectedIvaSeats,
+  setSelectedPlacements,
+} from './editorStore'
+import { COLLIDER_LAYER_ID, DEFAULT_LAYER_ID, IVA_SEAT_LAYER_ID } from '../ksa/types'
 
 beforeEach(() => {
   $layerView.set({})
@@ -54,6 +67,42 @@ describe('layerStore — listed flag', () => {
 
     setLayerLocked(DEFAULT_LAYER_ID, true)
     expect($selectedIndices.get()).toEqual([]) // lock prunes
+  })
+
+  // Regression: `deselectLayer` used to prune only placements/connectors/kittens, so locking
+  // the Colliders or IVA Seats layer left the gizmo attached to an already-selected entity —
+  // `EditorScene` only re-checks the lock when the SELECTION changes, so the next drag moved it.
+  it('locking a built-in layer prunes EVERY selectable kind, including colliders and IVA seats', () => {
+    addCollider('Box')
+    addIvaSeat()
+
+    // The kinds are mutually exclusive, so each is checked on its own.
+    setSelectedColliders([0])
+    expect($selectedColliderIndices.get()).toEqual([0])
+    setLayerLocked(IVA_SEAT_LAYER_ID, true)
+    expect($selectedColliderIndices.get()).toEqual([0]) // a different layer — untouched
+    setLayerLocked(COLLIDER_LAYER_ID, true)
+    expect($selectedColliderIndices.get()).toEqual([])
+
+    setLayerLocked(IVA_SEAT_LAYER_ID, false)
+    setSelectedIvaSeats([0])
+    expect($selectedIvaSeatIndices.get()).toEqual([0])
+    setLayerLocked(IVA_SEAT_LAYER_ID, true)
+    expect($selectedIvaSeatIndices.get()).toEqual([])
+  })
+
+  it('selectLayerEntities selects a built-in layer’s colliders and IVA seats', () => {
+    addCollider('Box')
+    addIvaSeat()
+    clearSelection()
+
+    selectLayerEntities(IVA_SEAT_LAYER_ID)
+    expect($selectedIvaSeatIndices.get()).toEqual([0])
+    expect($selectedColliderIndices.get()).toEqual([])
+
+    selectLayerEntities(COLLIDER_LAYER_ID)
+    expect($selectedColliderIndices.get()).toEqual([0])
+    expect($selectedIvaSeatIndices.get()).toEqual([])
   })
 
   it('revealLayer makes a hidden + unlisted layer visible and listed again', () => {

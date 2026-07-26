@@ -3521,10 +3521,18 @@ export function selectLayerEntities(id: string): void {
     part.placements.flatMap((p, i) => (p.layerId === id ? [i] : [])),
     part.connectors.flatMap((c, i) => (c.layerId === id ? [i] : [])),
     part.kittens.flatMap((k, i) => (k.layerId === id ? [i] : [])),
+    part.colliders.flatMap((c, i) => (c.layerId === id ? [i] : [])),
+    part.ivaSeats.flatMap((s, i) => (s.layerId === id ? [i] : [])),
   )
 }
 
-/** Drops any selected entities belonging to `layerId` (used when a layer is locked). */
+/**
+ * Drops any selected entities belonging to `layerId` (used when a layer is locked).
+ *
+ * MUST cover every selectable kind. `EditorScene` only re-checks the lock when the SELECTION
+ * changes, so a kind left un-pruned here keeps the gizmo attached to an entity on a layer the
+ * user just locked — and the next drag silently moves it.
+ */
 export function deselectLayer(layerId: string): void {
   const part = $part.get()
   const current = $selectedIndices.get()
@@ -3537,6 +3545,16 @@ export function deselectLayer(layerId: string): void {
     $selectedConnectorIndices.set(keptCon)
   const keptKit = $selectedKittenIndices.get().filter((i) => part.kittens[i]?.layerId !== layerId)
   if (keptKit.length !== $selectedKittenIndices.get().length) $selectedKittenIndices.set(keptKit)
+  const keptCol = $selectedColliderIndices
+    .get()
+    .filter((i) => part.colliders[i]?.layerId !== layerId)
+  if (keptCol.length !== $selectedColliderIndices.get().length)
+    $selectedColliderIndices.set(keptCol)
+  const keptSeat = $selectedIvaSeatIndices
+    .get()
+    .filter((i) => part.ivaSeats[i]?.layerId !== layerId)
+  if (keptSeat.length !== $selectedIvaSeatIndices.get().length)
+    $selectedIvaSeatIndices.set(keptSeat)
 }
 
 export function newPart(): void {

@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import type { Key, Selection } from 'react-aria-components'
-import { Button, SearchField, GridList, GridListItem, SectionTitle, toast, useIsPhone } from './kit'
+import {
+  Button,
+  Chip,
+  SearchField,
+  GridList,
+  GridListItem,
+  SectionTitle,
+  toast,
+  useIsPhone,
+} from './kit'
 import { $catalog, $catalogLoading } from '../state/catalogStore'
 import type { CatalogSubPart } from '../ksa/catalog'
 import { addSubPart } from '../state/editorStore'
@@ -91,7 +100,17 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
         >
           {(s) => (
             <GridListItem id={s.id} textValue={s.id}>
-              {s.id}
+              <span className="min-w-0 flex-1 truncate">{s.id}</span>
+              {/* KSA renders an <Internal> SubPart in IVA camera mode and NOWHERE else — say
+                  so BEFORE it is placed, so an interior-only prop is never a mystery. */}
+              {s.internal && (
+                <Chip
+                  className="shrink-0"
+                  title="Interior-only: KSA renders this SubPart in IVA camera mode and not outside it."
+                >
+                  interior
+                </Chip>
+              )}
             </GridListItem>
           )}
         </GridList>

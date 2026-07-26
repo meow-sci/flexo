@@ -102,6 +102,7 @@ import {
   setActiveLayer,
   setEditorTags,
   setPartId,
+  setPlacementsInternal,
   setSelection,
   setSelectedPlacements,
   toggleEntity,
@@ -1000,6 +1001,71 @@ describe('editorStore layers', () => {
     expect($part.get().placements.every((p) => p.layerId === engines)).toBe(true)
     // The active layer is unchanged (selection spans layers; no forced snap).
     expect($activeLayerId.get()).toBe(DEFAULT_LAYER_ID)
+  })
+
+  it('setPlacementsInternal writes one explicit flag per DISTINCT template, with undo', () => {
+    const A = 'CoreIVAPropA_Subpart_SeatA'
+    const B = 'CoreIVAPropA_Subpart_PanelA'
+    addSubPart(A) // 0
+    addSubPart(A) // 1 — same template, must collapse to ONE write
+    addSubPart(B) // 2
+
+    setPlacementsInternal([0, 1, 2], true)
+    expect($part.get().internalFlags).toEqual({ [A]: true, [B]: true })
+
+    // Discrete ⇒ exactly one undo step for the whole multi-selection.
+    undo()
+    expect($part.get().internalFlags).toEqual({})
+
+    // `false` is STORED, not deleted — it must be able to override a catalogued <Internal>true.
+    setPlacementsInternal([0], false)
+    expect($part.get().internalFlags).toEqual({ [A]: false })
+    expect(Object.hasOwn($part.get().internalFlags, A)).toBe(true)
+
+    // Out-of-range indices are ignored (no throw, no extra keys).
+    setPlacementsInternal([99], true)
+    expect($part.get().internalFlags).toEqual({ [A]: false })
+  })
+
+  it('setPlacementsInternal skips glass meshes (KSA <PartModelGlass> has no <Internal>)', () => {
+    const VISOR = 'flexo_hunter_visor_a'
+    const SOLID = 'flexo_hunter_suit_a'
+    $part.set({
+      ...$part.get(),
+      customMeshes: [
+        {
+          id: 'mesh_visor',
+          name: 'Visor',
+          subPartId: VISOR,
+          kitten: {
+            kind: 'hunter',
+            specKey: 'visor',
+            diffuse: 'Textures/x.ktx2',
+            transparent: true,
+          },
+          surface: 'glassGlow',
+          faceTextures: {},
+        },
+        {
+          id: 'mesh_suit',
+          name: 'Suit',
+          subPartId: SOLID,
+          kitten: { kind: 'hunter', specKey: 'suit', diffuse: 'Textures/y.ktx2' },
+          faceTextures: {},
+        },
+      ],
+    })
+    addSubPart(VISOR) // 0
+    addSubPart(SOLID) // 1
+
+    setPlacementsInternal([0, 1], true)
+    expect($part.get().internalFlags).toEqual({ [SOLID]: true })
+
+    // A glass-only target writes nothing at all — and pushes no undo step.
+    const before = $canUndo.get()
+    setPlacementsInternal([0], true)
+    expect($part.get().internalFlags).toEqual({ [SOLID]: true })
+    expect($canUndo.get()).toBe(before)
   })
 
   it('setSelection allows a selection that spans SubParts, connectors, and kittens', () => {

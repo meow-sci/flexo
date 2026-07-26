@@ -13,6 +13,7 @@ import {
   Button,
   ConfirmDialog,
   Menu,
+  MenuHeader,
   MenuItem,
   MenuTrigger,
   Popover,
@@ -30,14 +31,18 @@ import {
   $selectedKittenIndices,
   duplicatePlacement,
   duplicateSelected,
+  isGlassTemplate,
   movePlacementToLayer,
   removePlacement,
   removeSelected,
   selectCollider,
   selectConnector,
   selectKitten,
+  setPlacementsInternal,
   setSelection,
 } from '../state/editorStore'
+import { $catalogIndex } from '../state/catalogStore'
+import { resolveInternal } from '../ksa/modExport'
 import { $layerView, layerViewState } from '../state/layerStore'
 import {
   COLLIDER_LAYER_ID,
@@ -113,6 +118,7 @@ export function AssetsList() {
   const selCon = useStore($selectedConnectorIndices)
   const selKit = useStore($selectedKittenIndices)
   const selCol = useStore($selectedColliderIndices)
+  const catalogIndex = useStore($catalogIndex)
   const reveal = useStore($revealEntity)
   const [search, setSearch] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -181,20 +187,29 @@ export function AssetsList() {
             : [],
         )
       } else {
-        rows = part.placements.flatMap((p, i) =>
-          p.layerId === l.id && match(p.instanceId, p.subPartTemplateId)
+        rows = part.placements.flatMap((p, i) => {
+          // The resolved <Internal> flag (document override → the built-in's catalogued value)
+          // is shown on the row: it now defaults to the game's own value instead of being
+          // normalised away on export, so it has to be visible — and searchable.
+          const interior = resolveInternal(
+            part,
+            p.subPartTemplateId,
+            catalogIndex.get(p.subPartTemplateId),
+          )
+          return p.layerId === l.id &&
+            match(p.instanceId, p.subPartTemplateId, interior ? 'interior' : '')
             ? [
                 {
                   id: keyOf('subpart', p.instanceId),
                   kind: 'subpart' as const,
                   index: i,
                   name: p.instanceId,
-                  sub: p.subPartTemplateId,
+                  sub: interior ? `${p.subPartTemplateId} · interior` : p.subPartTemplateId,
                   hidden,
                 },
               ]
-            : [],
-        )
+            : []
+        })
       }
       return { id: l.id, layer: l, rows, count: rows.length, hidden, locked: view.locked }
     })
@@ -369,12 +384,18 @@ function AssetRowMenu({ row }: { row: Row }) {
 
 /**
  * Per-row menu for a placed SubPart: Duplicate, Manage Textures (custom meshes
- * only), Manage Tanks, Change Layer (a submenu of layers, excluding the special
- * Connectors/Kittens layers SubParts can't live on), and Delete (confirmed).
- * Acts on this row by index, independent of the multi-selection.
+ * only), Manage Tanks, Interior (IVA only), Change Layer (a submenu of layers,
+ * excluding the special Connectors/Kittens layers SubParts can't live on), and
+ * Delete (confirmed).
+ *
+ * Every item acts on THIS row by index, independent of the multi-selection —
+ * with ONE exception: `Interior (IVA only)` applies to the whole SubPart
+ * selection when this row is part of it (and says so in its label), because
+ * KSA's `<Internal>` is per-TEMPLATE, so a bulk toggle is what it is for.
  */
 function SubPartRowMenu({ index }: { index: number }) {
   const part = useStore($part)
+  const selected = useStore($selectedIndices)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [managingTanks, setManagingTanks] = useState(false)
   const placement = part.placements[index]
@@ -383,6 +404,21 @@ function SubPartRowMenu({ index }: { index: number }) {
     (l) => l.id !== CONNECTOR_LAYER_ID && l.id !== COLLIDER_LAYER_ID && l.id !== KITTEN_LAYER_ID,
   )
   const customMesh = part.customMeshes.find((m) => m.subPartId === placement.subPartTemplateId)
+
+  // The one multi-selection-aware item: this row alone unless it is part of the current
+  // SubPart selection, in which case the whole selection (see the docstring).
+  const internalTargets = selected.includes(index) ? selected : [index]
+  const internalTemplateIds = [
+    ...new Set(
+      internalTargets.flatMap((i) => {
+        const p = part.placements[i]
+        return p ? [p.subPartTemplateId] : []
+      }),
+    ),
+  ]
+  // KSA's <PartModelGlass> has no <Internal> field, so the flag would be silently ignored.
+  const glassOnly =
+    internalTemplateIds.length > 0 && internalTemplateIds.every((id) => isGlassTemplate(part, id))
 
   return (
     <>
@@ -409,6 +445,34 @@ function SubPartRowMenu({ index }: { index: number }) {
               </MenuItem>
             )}
             <MenuItem onAction={() => setManagingTanks(true)}>SubPart Data</MenuItem>
+            {glassOnly ? (
+              <MenuItem isDisabled textValue="Interior (IVA only) — n/a for glass">
+                <span title="KSA glass (<PartModelGlass>) has no <Internal> field, so the flag would be silently ignored.">
+                  Interior (IVA only) — n/a for glass
+                </span>
+              </MenuItem>
+            ) : (
+              <SubmenuTrigger>
+                <MenuItem>
+                  {internalTargets.length > 1
+                    ? `Interior (IVA only) — ${internalTargets.length} selected`
+                    : 'Interior (IVA only)'}
+                </MenuItem>
+                <Popover className="w-64">
+                  <Menu onAction={(key) => setPlacementsInternal(internalTargets, key === 'on')}>
+                    {/* <Internal> lives on the template's <PartModel>, so this is never
+                        per-placement — say so where the user clicks it. */}
+                    <MenuHeader>
+                      {internalTemplateIds.length === 1
+                        ? 'Applies to every placement of this SubPart template'
+                        : `Applies to every placement of ${internalTemplateIds.length} SubPart templates`}
+                    </MenuHeader>
+                    <MenuItem id="on">On — interior only (IVA)</MenuItem>
+                    <MenuItem id="off">Off — visible everywhere</MenuItem>
+                  </Menu>
+                </Popover>
+              </SubmenuTrigger>
+            )}
             <SubmenuTrigger>
               <MenuItem>Change Layer</MenuItem>
               <Popover className="w-44">

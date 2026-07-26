@@ -3127,6 +3127,66 @@ export function moveSelectedPlacementsToLayer(layerId: string): void {
   $part.set(part)
 }
 
+/**
+ * True when a placed template is a custom mesh that exports through KSA's translucent
+ * `<PartModelGlass>` — a transparent (visor) kitten submesh in a glass surface mode, or an
+ * imported glTF mesh flagged transparent. Mirrors the DOCUMENT-side half of the `glass` bit
+ * modExport computes when it plans a custom SubPart.
+ *
+ * HONEST LIMIT: this only sees what the document itself knows, i.e. custom meshes. A BUILT-IN
+ * template's glass-ness lives in the catalog, which `editorStore` does not (and must not)
+ * import — the UI filters those out before calling, and this is only the backstop for what it
+ * can prove.
+ *
+ * Exported so the menus that drive {@link setPlacementsInternal} can DISABLE the toggle instead
+ * of silently dropping the write.
+ */
+export function isGlassTemplate(part: EditingPart, templateId: string): boolean {
+  const mesh = part.customMeshes.find((m) => m.subPartId === templateId)
+  if (!mesh) return false
+  if (mesh.imported?.transparent) return true
+  // A transparent kitten submesh defaults to the 'glass' surface; only the opaque 'glow' mode
+  // leaves the glass path. 'glassGlow' is glass WHOLE (its emissive layer is split off under a
+  // synthetic id the document holds no flag for), so it counts as glass here too.
+  if (!mesh.kitten?.transparent) return false
+  const surface = mesh.surface ?? 'glass'
+  return surface === 'glass' || surface === 'glassGlow'
+}
+
+/**
+ * Discrete: sets the `<Internal>` (interior-only) flag on the DISTINCT SubPart templates of the
+ * given placements. KSA's `<Internal>` lives on the template's `<PartModel>`, so this affects
+ * every placement of each template — the UI says so.
+ *
+ * Templates whose geometry exports as `<PartModelGlass>` are skipped (KSA glass has no such
+ * field); the caller filters them out so the menu can disable them, and this is the backstop.
+ *
+ * The explicit boolean is written UNCONDITIONALLY — there is no "delete the key when it matches
+ * the inherited value", because that would need the catalog inside `editorStore`, which imports
+ * no catalog today. A redundant `true` costs nothing: `buildExportVariantMap`'s `internalDiffers`
+ * test collapses it to zero XML change.
+ */
+export function setPlacementsInternal(indices: readonly number[], internal: boolean): void {
+  const current = $part.get()
+  const templateIds: string[] = []
+  for (const i of indices) {
+    const placement = current.placements[i]
+    if (!placement) continue // out-of-range index — ignore, like the neighbouring mutators
+    const templateId = placement.subPartTemplateId
+    if (templateIds.includes(templateId)) continue // one write per DISTINCT template
+    if (isGlassTemplate(current, templateId)) continue
+    templateIds.push(templateId)
+  }
+  if (templateIds.length === 0) return
+  pushUndo(
+    internal ? 'interior on' : 'interior off',
+    templateIds.length === 1 ? templateIds[0] : `${templateIds.length} templates`,
+  )
+  const part = clone(current)
+  for (const templateId of templateIds) part.internalFlags[templateId] = internal
+  $part.set(part)
+}
+
 /** Sets the active layer (where new items land). No-op for unknown ids. Ephemeral. */
 export function setActiveLayer(id: string): void {
   if ($part.get().layers.some((l) => l.id === id)) $activeLayerId.set(id)

@@ -24,6 +24,33 @@ export function setConnectorSettings(patch: Partial<ConnectorSettings>): void {
 }
 
 /**
+ * IVA seat marker appearance in the 3D workspace. Like the connector cube, the marker's
+ * size is a GLOBAL view setting rather than document data — KSA has no seat size, so an
+ * `IvaSeat`'s `scale` is unused and the marker never scales with the part.
+ * {@link src/three/IvaSeatObject.ts} reads these; `EditorScene` rebuilds the markers when
+ * they change.
+ */
+export interface IvaSeatSettings {
+  /** Diameter of the seat's eye sphere, in meters. The forward cone and up stick derive from it. */
+  markerSize: number
+  /**
+   * Draw the translucent gaze cone ahead of each seat. INDICATIVE ONLY — it is a 45°
+   * half-angle cone, while the game's actual clamp is a 90° hemisphere around the forward
+   * axis (a half-space, which has no readable shape).
+   */
+  showGazeCone: boolean
+}
+
+export const $ivaSeatSettings = persistentJSON<IvaSeatSettings>('flexo:ivaSeatSettings', {
+  markerSize: 0.12,
+  showGazeCone: false,
+})
+
+export function setIvaSeatSettings(patch: Partial<IvaSeatSettings>): void {
+  $ivaSeatSettings.set({ ...$ivaSeatSettings.get(), ...patch })
+}
+
+/**
  * Selection-highlight appearance, applied as an emissive tint when an entity is
  * selected. SubPart meshes and kitten visual aides each get their own color +
  * strength (`alpha`, 0–1 = the emissive intensity of the tint). Connectors keep

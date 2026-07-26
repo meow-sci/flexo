@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { $modelImportSettings, setModelImportSettings } from './settingsStore'
+import {
+  $ivaSeatSettings,
+  $modelImportSettings,
+  setIvaSeatSettings,
+  setModelImportSettings,
+} from './settingsStore'
 
 /**
  * The model-import preferences are the sticky half of the import dialog's options (the
@@ -16,6 +21,7 @@ beforeEach(() => {
     bakeScale: true,
     decimateViewMeshes: true,
   })
+  $ivaSeatSettings.set({ markerSize: 0.12, showGazeCone: false })
 })
 
 describe('$modelImportSettings', () => {
@@ -45,6 +51,34 @@ describe('$modelImportSettings', () => {
     setModelImportSettings({ upAxis: 'z' })
     expect(JSON.parse(localStorage.getItem('flexo:modelImport') ?? '{}')).toMatchObject({
       upAxis: 'z',
+    })
+  })
+})
+
+/**
+ * The IVA seat marker is a pure VIEW setting — KSA has no seat size, so nothing here ever
+ * reaches the exported XML. The 0.12 m default mirrors the connector cube's 0.125 m so the
+ * two markers read at the same scale, and the gaze cone is off by default because it is
+ * indicative only (the real in-game limit is a 90° hemisphere, not a 45° cone).
+ */
+describe('$ivaSeatSettings', () => {
+  it('defaults to a 0.12 m marker with the gaze cone off', () => {
+    localStorage.clear()
+    expect($ivaSeatSettings.get()).toEqual({ markerSize: 0.12, showGazeCone: false })
+  })
+
+  it('patches one field at a time, leaving the rest alone', () => {
+    setIvaSeatSettings({ markerSize: 0.25 })
+    expect($ivaSeatSettings.get()).toEqual({ markerSize: 0.25, showGazeCone: false })
+    setIvaSeatSettings({ showGazeCone: true })
+    expect($ivaSeatSettings.get()).toEqual({ markerSize: 0.25, showGazeCone: true })
+  })
+
+  it('persists to localStorage under its flexo: key', () => {
+    setIvaSeatSettings({ markerSize: 0.3, showGazeCone: true })
+    expect(JSON.parse(localStorage.getItem('flexo:ivaSeatSettings') ?? '{}')).toEqual({
+      markerSize: 0.3,
+      showGazeCone: true,
     })
   })
 })

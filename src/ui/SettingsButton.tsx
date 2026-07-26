@@ -21,10 +21,12 @@ import {
 } from './kit'
 import {
   $connectorSettings,
+  $ivaSeatSettings,
   $kittenTextureExport,
   $selectionHighlight,
   $showFpsCounter,
   setConnectorSettings,
+  setIvaSeatSettings,
   setKittenTextureExport,
   setSelectionHighlight,
   setShowFpsCounter,
@@ -46,6 +48,7 @@ export function SettingsModal({
 }) {
   const connectors = useStore($connectorSettings)
   const highlight = useStore($selectionHighlight)
+  const ivaSeats = useStore($ivaSeatSettings)
   const kittenTex = useStore($kittenTextureExport)
   const showFps = useStore($showFpsCounter)
   return (
@@ -77,6 +80,34 @@ export function SettingsModal({
               <span className="text-xs text-fg-subtle">m</span>
             </div>
           </label>
+
+          <SectionTitle>IVA seats</SectionTitle>
+          <label className="flex items-center justify-between gap-3">
+            <span className="text-sm text-fg-muted">Marker size</span>
+            <div className="flex items-center gap-1">
+              <PreciseNumberInput
+                aria-label="IVA seat marker size (m)"
+                className="w-40"
+                min={0.01}
+                value={ivaSeats.markerSize}
+                onCommit={(markerSize) => setIvaSeatSettings({ markerSize })}
+              />
+              <span className="text-xs text-fg-subtle">m</span>
+            </div>
+          </label>
+          <label className="flex items-center justify-between gap-3">
+            <span className="text-sm text-fg-muted">Show gaze cone</span>
+            <Switch
+              aria-label="Show IVA seat gaze cone"
+              isSelected={ivaSeats.showGazeCone}
+              onChange={(showGazeCone) => setIvaSeatSettings({ showGazeCone })}
+            />
+          </label>
+          <span className="text-xs text-fg-subtle">
+            The gaze cone is indicative only — it shows roughly where a seat looks. In game the view
+            is clamped to a 90° hemisphere around the seat's forward axis, so you can look anywhere
+            ahead of the seat but never behind it.
+          </span>
 
           <SectionTitle>Selection highlight</SectionTitle>
           <HighlightRow

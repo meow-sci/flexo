@@ -103,6 +103,7 @@ import {
   removeLight,
   selectLight,
   setSelectedLights,
+  setLightOwner,
   setLightPosition,
   setLightRayTracing,
   setLightRotation,
@@ -182,6 +183,10 @@ import {
   setMeshTransparent,
 } from './customAssetStore'
 import { seatAxesFromRotation } from '../ksa/ivaSeatAxes'
+// The world-pose-stability tests compose the SAME conversion the inspector's owner
+// select performs (the frame math deliberately lives outside the store — see
+// setLightOwner's JSDoc); importing coords here mirrors the UI, not the store.
+import { lightLocalFromWorld, lightWorld, matrixFromTransform } from '../three/coords'
 import { analyzeImport, DEFAULT_IMPORT_OPTIONS } from '../ksa/importPlan'
 import { normalizeImport, type NormalizedImport } from '../ksa/importNormalize'
 import type { ImportMaterialPlan } from '../ksa/importMaterials'
@@ -880,6 +885,82 @@ describe('editorStore', () => {
     expect(l.scale).toEqual({ x: 1, y: 1, z: 1 })
     undo() // the one pushed step reverts the whole session
     expect($part.get().lights[0].position).toEqual({ x: 0, y: 0, z: 0 })
+  })
+
+  it('setLightOwner keeps the WORLD pose stable through instance 0 (part-level ⇄ placed template), undoable', () => {
+    const tmpl = 'CoreStructuralA_Subpart_TrussBarA'
+    // Two placements so "instance 0 of the owner's placements" is meaningfully the
+    // FIRST one (the plan §3.8 conversion frame), with a rotated + scaled frame.
+    addSubPart(tmpl)
+    addSubPart(tmpl)
+    updatePlacementTransform(0, {
+      position: { x: 1, y: 2, z: -3 },
+      rotation: { x: 0.3, y: -1.1, z: 0.7 },
+      scale: { x: 2, y: 1, z: 0.5 },
+    })
+    const seedPos = { x: 0.5, y: -0.25, z: 0.75 }
+    const seedRot = { x: 0.4, y: -0.6, z: 1.2 }
+    addLight(null, { position: seedPos, rotation: seedRot })
+    const light = () => $part.get().lights[0]
+    const owner0 = () => $part.get().placements[0]
+    // Full-pose comparison via the composed matrix (scale pinned): position AND
+    // rotation-including-roll must survive, not just the aim direction.
+    const expectSamePose = (a: Transform, b: Transform) => {
+      const ma = matrixFromTransform({ ...a, scale: { x: 1, y: 1, z: 1 } }).elements
+      const mb = matrixFromTransform({ ...b, scale: { x: 1, y: 1, z: 1 } }).elements
+      for (let i = 0; i < 16; i++) expect(ma[i]).toBeCloseTo(mb[i], 10)
+    }
+
+    // Part-level → placed template: the caller (the inspector) converts through
+    // instance 0 and passes the result; the rendered part-frame pose must not move.
+    const before = lightWorld(light(), null)
+    setLightOwner(0, tmpl, lightLocalFromWorld(before, owner0()))
+    expect(light().ownerTemplateId).toBe(tmpl)
+    expectSamePose(lightWorld(light(), owner0()), before)
+    // The local numbers really changed frames (the same pose expressed differently).
+    expect(light().position).not.toEqual(seedPos)
+    expect(light().scale).toEqual({ x: 1, y: 1, z: 1 })
+
+    // ... and back to part-level: converting out through instance 0 again.
+    const beforeBack = lightWorld(light(), owner0())
+    setLightOwner(0, null, beforeBack)
+    expect(light().ownerTemplateId).toBeNull()
+    expectSamePose(lightWorld(light(), null), beforeBack)
+
+    // Each re-home is ONE discrete undo step, restoring owner AND transform together.
+    undo()
+    expect(light().ownerTemplateId).toBe(tmpl)
+    undo()
+    expect(light().ownerTemplateId).toBeNull()
+    expect(light().position).toEqual(seedPos)
+    expect(light().rotation).toEqual(seedRot)
+  })
+
+  it('setLightOwner to an UNPLACED template keeps the local transform verbatim; same-owner is a no-op', () => {
+    const seedPos = { x: 0.5, y: -0.25, z: 0.75 }
+    const seedRot = { x: 0.4, y: -0.6, z: 1.2 }
+    addLight(null, { position: seedPos, rotation: seedRot })
+    const light = () => $part.get().lights[0]
+
+    // The inspector passes NO converted transform for an unplaced target (plan §3.8):
+    // the numbers stay verbatim and the light keeps rendering in the Part frame.
+    setLightOwner(0, 'Never_Placed_Template')
+    expect(light().ownerTemplateId).toBe('Never_Placed_Template')
+    expect(light().position).toEqual(seedPos)
+    expect(light().rotation).toEqual(seedRot)
+
+    // Same owner again: no mutation, and crucially NO phantom undo entry —
+    setLightOwner(0, 'Never_Placed_Template')
+    // — so the first undo reverts the re-home ...
+    undo()
+    expect(light().ownerTemplateId).toBeNull()
+    // ... and the next reverts the add itself.
+    undo()
+    expect($part.get().lights).toHaveLength(0)
+
+    // Out-of-range index: ignored.
+    setLightOwner(5, null)
+    expect($part.get().lights).toHaveLength(0)
   })
 
   it('toggles custom mass and decoupler with undo', () => {

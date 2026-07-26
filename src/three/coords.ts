@@ -287,3 +287,32 @@ export function lightWorldAim(rotation: EulerXYZ): Vec3 {
   )
   return { x: aim.x, y: aim.y, z: aim.z }
 }
+
+/**
+ * Re-aims a light rotation at `newAim` while preserving ROLL CONTINUITY: the
+ * minimal rotation ΔQ taking the current aim ({@link lightWorldAim} of
+ * `rotation`) onto the normalized `newAim` is composed ON TOP of the current
+ * rotation — `ΔQ · R` (plans/LIGHT_MANAGEMENT_PLAN.md §3.9-7). Roll around the
+ * aim axis is irrelevant to a Spot's cone, but carrying it through keeps the
+ * gizmo (and the aim-rotation fields) from spinning wildly when the inspector's
+ * aim-vector fields are committed. Works in whatever frame `rotation` is
+ * expressed in — feed it a part-frame rotation and a part-frame aim.
+ *
+ * Degenerate inputs are safe by construction:
+ *  - `|newAim| < 1e-6` → **null** (the caller keeps the prior rotation);
+ *  - `newAim` parallel to the current aim → ΔQ = identity (rotation unchanged);
+ *  - antiparallel → three's `Quaternion.setFromUnitVectors` picks a stable
+ *    perpendicular axis for the 180° flip (never NaN).
+ */
+export function lightAimRotation(rotation: EulerXYZ, newAim: Vec3): EulerXYZ | null {
+  const len = Math.hypot(newAim.x, newAim.y, newAim.z)
+  if (len < 1e-6) return null
+  const target = new THREE.Vector3(newAim.x / len, newAim.y / len, newAim.z / len)
+  const current = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(rotation.x, rotation.y, rotation.z, EULER_ORDER),
+  )
+  const currentAim = new THREE.Vector3(1, 0, 0).applyQuaternion(current)
+  const deltaQ = new THREE.Quaternion().setFromUnitVectors(currentAim, target)
+  const euler = new THREE.Euler().setFromQuaternion(deltaQ.multiply(current), EULER_ORDER)
+  return { x: euler.x, y: euler.y, z: euler.z }
+}

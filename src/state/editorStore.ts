@@ -1979,8 +1979,9 @@ export interface SelectedTransformRef {
  * keyboard nudge/rotate tools and the bulk inspector all iterate — being listed here
  * is what makes a seat (or a light) participate in those for free. NOTE a light's
  * transform is its OWNER-frame transform verbatim (part frame only when part-level),
- * like a collider's — Phase 4's `worldTransformRefs` lift is what puts it in part
- * space for bulk math.
+ * like a collider's — EditorScene's `worldTransformRefs` lifts both into part space
+ * for bulk math (via `lightWorld`) and pushes back down through
+ * `lightLocalFromWorld` on write.
  */
 export function selectedTransformRefs(): SelectedTransformRef[] {
   const part = $part.get()
@@ -2529,6 +2530,26 @@ export function setSubPartSolarPanelRotation(
 // reused mesh (Core: CoreElectricalA spotlights). Lights are first-class part entities
 // (`EditingPart.lights`, owner-grouped only at serialize time — see PartLight).
 
+/**
+ * Light id → which of its per-placement visuals is the current EDITING CONTEXT: the
+ * instance last clicked in 3D (default 0 when never clicked; readers clamp to the
+ * owner's placement count). Only meaningful for a SubPart-owned light, whose one
+ * document entity is drawn once per placement of its template — the context names
+ * the placement frame the gizmo writes back through AND the frame the inspector's
+ * part-frame fields read through. It lives HERE (not as EditorScene's private map,
+ * the `colliderInstance` precedent) precisely so those two consumers read one atom
+ * and can never disagree (plans/LIGHT_MANAGEMENT_PLAN.md §3.9-1). Ephemeral view
+ * state: not document data, never serialized, deliberately outside undo.
+ */
+export const $lightEditContext = atom<Readonly<Record<string, number>>>({})
+
+/** Records the light instance last clicked in 3D (see {@link $lightEditContext}). */
+export function setLightEditContext(lightId: string, instanceIndex: number): void {
+  const current = $lightEditContext.get()
+  if (current[lightId] === instanceIndex) return
+  $lightEditContext.set({ ...current, [lightId]: instanceIndex })
+}
+
 /** Returns the next free "_lightN" id (max existing N + 1). */
 function nextLightId(part: EditingPart): string {
   let max = 0
@@ -2593,6 +2614,36 @@ export function setLightRayTracing(index: number, on: boolean): void {
   pushUndo('light ray tracing', on ? 'on' : 'off')
   const part = clone(current)
   part.lights[index].rayTracing = on
+  $part.set(part)
+}
+
+/**
+ * Discrete: re-homes a light onto another owner (`null` ⇒ part-level `<PartGameData>`),
+ * optionally rewriting its transform to `converted` in the same undo step.
+ *
+ * The world-pose-stable conversion (plans/LIGHT_MANAGEMENT_PLAN.md §3.8 — new local =
+ * `lightLocalFromWorld(lightWorld(light, oldOwner₀), newOwner₀)` through instance 0 of
+ * each owner's placements) is computed by the CALLER and passed as `converted`: this
+ * store imports no three.js (docs/architecture.md layering) and the frame math lives in
+ * `src/three/coords.ts`, so the mutator stays dumb — exactly the {@link setColliderOwner}
+ * precedent, whose conversion also lives in the inspector. Omit `converted` to keep the
+ * local numbers verbatim (the spec'd behavior when the NEW owner has no placements —
+ * the light renders in the Part frame either way, and validation will flag it).
+ * `scale` is pinned to (1,1,1) like every light-transform write.
+ */
+export function setLightOwner(
+  index: number,
+  ownerTemplateId: string | null,
+  converted?: PlacementTransform,
+): void {
+  const current = $part.get()
+  const l = current.lights[index]
+  if (!l || l.ownerTemplateId === ownerTemplateId) return
+  pushUndo('light owner', `${l.id} → ${ownerTemplateId ?? 'Part'}`)
+  const part = clone(current)
+  const next = part.lights[index]
+  next.ownerTemplateId = ownerTemplateId
+  if (converted) assignLight(next, converted)
   $part.set(part)
 }
 

@@ -3,6 +3,7 @@ import { Button, Switch, Select, ListBoxItem, TextField, SectionTitle } from './
 import { PreciseNumberInput } from './PreciseNumberInput'
 import { Vec3Field } from './Vec3Field'
 import { DEG2RAD, RAD2DEG } from './format'
+import { hexToRgb01, rgb01ToHex } from './colorHex'
 import { $part, pushUndo } from '../state/editorStore'
 import {
   addBattery,
@@ -59,21 +60,6 @@ import type {
   Tank,
   TankShape,
 } from '../ksa/types'
-
-/** A light's RGB (each 0–1) as a "#rrggbb" hex string for the native color picker. */
-function rgb01ToHex({ r, g, b }: { r: number; g: number; b: number }): string {
-  const h = (v: number) =>
-    Math.round(Math.min(1, Math.max(0, v)) * 255)
-      .toString(16)
-      .padStart(2, '0')
-  return `#${h(r)}${h(g)}${h(b)}`
-}
-
-/** Inverse of {@link rgb01ToHex}: "#rrggbb" → RGB floats in 0–1. */
-function hexToRgb01(hex: string): { r: number; g: number; b: number } {
-  const n = Number.parseInt(hex.slice(1), 16)
-  return { r: ((n >> 16) & 255) / 255, g: ((n >> 8) & 255) / 255, b: (n & 255) / 255 }
-}
 
 /**
  * The "popup-only" GameData editors used inside the Part Data dialog — every

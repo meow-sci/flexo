@@ -7,6 +7,7 @@ import { NumberField } from './NumberField'
 import { isPartialNumber, parseNumericDraft } from './numberDraft'
 import {
   $bulkScaleMode,
+  $lightEditContext,
   addKittenAtSeat,
   aimIvaSeat,
   moveIvaSeat,
@@ -16,7 +17,14 @@ import {
   setColliderShape,
   setConnectorCapabilities,
   setConnectorFlags,
+  setLightOwner,
+  setLightPosition,
+  setLightRayTracing,
+  setLightRotation,
+  setLightType,
   setSubPartInstanceId,
+  updateLight,
+  updateLightTransform,
   updateSelectedTransform,
   updateSelectedTransforms,
 } from '../state/editorStore'
@@ -39,12 +47,23 @@ import {
   type ConnectorCapability,
   type ConnectorFlag,
   type IvaSeat,
+  type LightType,
   type PartCollider,
   type PartLight,
   type Vec3,
 } from '../ksa/types'
 import { colliderSizeLabels, type ColliderSizeLabel } from '../ksa/colliderSize'
-import { colliderLocalFromWorld, colliderWorld } from '../three/coords'
+import {
+  colliderLocalFromWorld,
+  colliderWorld,
+  lightAimRotation,
+  lightLocalFromWorld,
+  lightWorld,
+  lightWorldAim,
+} from '../three/coords'
+import { Field } from './GameDataSections'
+import { hexToRgb01, rgb01ToHex } from './colorHex'
+import { PreciseNumberInput } from './PreciseNumberInput'
 import {
   $colliderSettings,
   $coverageReport,
@@ -72,16 +91,17 @@ type Axis = 'x' | 'y' | 'z'
  * shown in degrees but stored/exported in radians. Connectors expose their connection
  * Flags.
  *
- * Three kinds read differently in the third numeric group:
+ * A **light** gets a wholly dedicated panel ({@link LightHeader}, plan §3.9) instead of
+ * the generic groups: its position/aim live in TWO frames (owner + part, converted
+ * through `coords.lightWorld`/`lightLocalFromWorld`), its aim fields are Spot-only, and
+ * it carries the `<Light>` scalar editors — none of which the shared groups can express.
+ *
+ * Two remaining kinds read differently in the third numeric group:
  *  - a **collider**'s `scale` IS its outer size in METERS (KSA colliders have no scale
  *    field — see {@link PartCollider}), so the group is labelled "Size (m)" with per-shape
  *    labels, and only the axes that shape can independently control are shown;
  *  - an **IVA seat** has no size at all (`<IVASeat>` is position + two axes, and the store
- *    pins `scale` to (1,1,1)), so the group is omitted entirely rather than shown inert;
- *  - a **light** likewise has no size (KSA ignores light scale; pinned (1,1,1)) — omitted.
- *    NOTE a light's fields are its OWNER-frame transform; the part-frame fields + the
- *    full LightHeader (owner/type/aim/range editors) land in Phase 4
- *    (plans/LIGHT_MANAGEMENT_PLAN.md §3.9).
+ *    pins `scale` to (1,1,1)), so the group is omitted entirely rather than shown inert.
  */
 export function TransformInspector() {
   const count = useStore($selectionCount)
@@ -90,6 +110,21 @@ export function TransformInspector() {
   if (count > 1) return <BulkTransformPanel />
   if (!entity) return null
 
+  // Lights: the whole panel is the LightHeader — its owner-frame/part-frame groups
+  // replace the generic Position/Rotation ones (and a light has no size, so nothing
+  // from the shared groups below applies).
+  if (entity.kind === 'light') {
+    return (
+      <div className={panelClass}>
+        <LightHeader
+          index={entity.index}
+          light={entity.light}
+          locked={isLayerLocked(entity.light.layerId)}
+        />
+      </div>
+    )
+  }
+
   const target =
     entity.kind === 'subpart'
       ? entity.placement
@@ -97,9 +132,7 @@ export function TransformInspector() {
         ? entity.connector
         : entity.kind === 'collider'
           ? entity.collider
-          : entity.kind === 'ivaSeat'
-            ? entity.seat
-            : entity.light
+          : entity.seat
   const locked = isLayerLocked(target.layerId)
   const transform = target
 
@@ -120,9 +153,7 @@ export function TransformInspector() {
         ? entity.connector.id
         : entity.kind === 'collider'
           ? entity.collider.id
-          : entity.kind === 'ivaSeat'
-            ? entity.seat.id
-            : entity.light.id
+          : entity.seat.id
 
   const posField = (axis: Axis) => (
     <NumberField
@@ -175,10 +206,8 @@ export function TransformInspector() {
         />
       ) : entity.kind === 'collider' ? (
         <ColliderHeader index={entity.index} collider={entity.collider} locked={locked} />
-      ) : entity.kind === 'ivaSeat' ? (
-        <IvaSeatHeader index={entity.index} seat={entity.seat} locked={locked} />
       ) : (
-        <LightHeader light={entity.light} />
+        <IvaSeatHeader index={entity.index} seat={entity.seat} locked={locked} />
       )}
       <Section title="Position (m)">
         {posField('x')}
@@ -190,10 +219,9 @@ export function TransformInspector() {
         {rotField('y')}
         {rotField('z')}
       </Section>
-      {/* An IVA seat and a light have no third group at all: KSA's `<IVASeat>` carries no
-          size and KSA ignores a light's scale — the store pins both to (1,1,1), so any
-          field here would be a no-op. */}
-      {entity.kind === 'ivaSeat' || entity.kind === 'light' ? null : sizeLabels ? (
+      {/* An IVA seat has no third group at all: KSA's `<IVASeat>` carries no size —
+          the store pins its scale to (1,1,1), so any field here would be a no-op. */}
+      {entity.kind === 'ivaSeat' ? null : sizeLabels ? (
         <Section title="Size (m)">
           {sizeLabels[0] && scaleField('x', sizeLabels[0])}
           {sizeLabels[1] && scaleField('y', sizeLabels[1])}
@@ -672,32 +700,281 @@ const dot = (a: Vec3, b: Vec3) => a.x * b.x + a.y * b.y + a.z * b.z
 const PARALLEL_DOT = 0.999
 
 /**
- * Minimal Phase-3 header for a selected light: identity, type and owner, plus the
- * one-light-per-template caveat. The transform fields below it edit the light's
- * OWNER-frame pose through `updateSelectedTransform` (scale stays pinned). Phase 4
- * replaces this with the full LightHeader — owner/type selects, part-frame position,
- * aim-vector input, range/intensity/color/angle editors
- * (plans/LIGHT_MANAGEMENT_PLAN.md §3.9).
+ * The full inspector panel for a selected light (plan §3.9 — this replaces the generic
+ * Position/Rotation groups entirely, see {@link TransformInspector}).
+ *
+ * A light's stored transform is in its OWNER frame (the Part assembly frame when
+ * part-level), but the user works in the viewport — so position and aim are editable in
+ * BOTH frames, converted through `coords.lightWorld`/`lightLocalFromWorld` using the
+ * **context instance**: the placement whose marker was last clicked
+ * (`$lightEditContext` — the SAME atom the gizmo's write-back frame comes from, which
+ * is what keeps these fields and the gizmo in exact agreement). For a part-level light
+ * the two frames coincide and only one position group is shown.
+ *
+ * The part-frame **aim vector** re-aims the Spot without wild rolling: the commit goes
+ * through {@link lightAimRotation} (ΔQ = minimal rotation current→new aim, composed on
+ * top of the current rotation — roll continuity, plan §3.9-7); a degenerate (≈zero)
+ * vector is rejected by keeping the prior rotation. Aim fields are Spot-only — KSA
+ * ignores a Point light's rotation (it still round-trips).
+ *
+ * **Owner** re-homes the light between `<PartGameData>` and a template's
+ * `<SubPartGameData>`. The transform is converted through the old and new owners'
+ * FIRST placements so the world pose doesn't jump ({@link setLightOwner} keeps the
+ * store three.js-free, so the conversion lives here — the ColliderHeader precedent);
+ * an unplaced NEW owner keeps the local numbers verbatim (the light renders in the
+ * Part frame either way). Scalar fields mirror the SubPart-Data dialog's LightsSection
+ * (which stays for template-scoped editing).
  */
-function LightHeader({ light }: { light: PartLight }) {
+function LightHeader({
+  index,
+  light,
+  locked,
+}: {
+  index: number
+  light: PartLight
+  locked: boolean
+}) {
   const part = useStore($part)
-  const instances = light.ownerTemplateId
-    ? part.placements.filter((p) => p.subPartTemplateId === light.ownerTemplateId).length
-    : null
+  const editContext = useStore($lightEditContext)
+
+  const isSpot = light.type === 'Spot'
+  const owners = light.ownerTemplateId
+    ? part.placements.filter((p) => p.subPartTemplateId === light.ownerTemplateId)
+    : []
+  // The scene's context rule verbatim (last clicked, default 0, clamped) — one atom,
+  // one rule, so the part-frame fields below and the gizmo can never disagree.
+  const contextIndex = Math.max(0, Math.min(editContext[light.id] ?? 0, owners.length - 1))
+  const contextOwner = owners[contextIndex] ?? null
+  const world = lightWorld(light, contextOwner)
+  const worldAim = lightWorldAim(world.rotation)
+  // Every DISTINCT template actually placed in the part is a candidate owner.
+  const templates = [...new Set(part.placements.map((p) => p.subPartTemplateId))].sort()
+
+  /**
+   * Re-homes the light, CONVERTING its transform through the old and new owners' first
+   * placements so the world pose the user sees doesn't jump (plan §3.8: instance 0 of
+   * each). No `converted` for an unplaced NEW owner — the local numbers stay verbatim.
+   */
+  const changeOwner = (next: string | null) => {
+    const from = light.ownerTemplateId
+      ? part.placements.find((p) => p.subPartTemplateId === light.ownerTemplateId)
+      : null
+    const to = next ? part.placements.find((p) => p.subPartTemplateId === next) : null
+    // The pose currently RENDERED: an unplaced/old-owner-less light draws in the Part
+    // frame, which lightWorld(light, null) returns verbatim.
+    const worldPose = lightWorld(light, from ?? null)
+    setLightOwner(
+      index,
+      next,
+      to ? lightLocalFromWorld(worldPose, to) : next === null ? worldPose : undefined,
+    )
+  }
+
+  const localPosField = (axis: Axis) => (
+    <NumberField
+      label={axis.toUpperCase()}
+      value={light.position[axis]}
+      isDisabled={locked}
+      onInteractionStart={() => pushUndo('move', light.id)}
+      onCommit={(n) => setLightPosition(index, { ...light.position, [axis]: n })}
+    />
+  )
+  const aimRotField = (axis: Axis) => (
+    <NumberField
+      label={axis.toUpperCase()}
+      value={light.rotation[axis] * RAD2DEG}
+      isDisabled={locked}
+      onInteractionStart={() => pushUndo('rotate', light.id)}
+      onCommit={(deg) => setLightRotation(index, { ...light.rotation, [axis]: deg * DEG2RAD })}
+    />
+  )
+  const partPosField = (axis: Axis) => (
+    <NumberField
+      label={axis.toUpperCase()}
+      value={world.position[axis]}
+      isDisabled={locked}
+      onInteractionStart={() => pushUndo('move', light.id)}
+      onCommit={(n) =>
+        updateLightTransform(
+          index,
+          lightLocalFromWorld(
+            { ...world, position: { ...world.position, [axis]: n } },
+            contextOwner,
+          ),
+        )
+      }
+    />
+  )
+  const aimField = (axis: Axis) => (
+    <NumberField
+      label={axis.toUpperCase()}
+      value={worldAim[axis]}
+      isDisabled={locked}
+      onInteractionStart={() => pushUndo('rotate', light.id)}
+      onCommit={(n) => {
+        // Normalized on entry; a degenerate (≈zero) aim returns null — keep the prior
+        // rotation rather than writing a NaN pose.
+        const rotation = lightAimRotation(world.rotation, { ...worldAim, [axis]: n })
+        if (!rotation) return
+        updateLightTransform(index, lightLocalFromWorld({ ...world, rotation }, contextOwner))
+      }}
+    />
+  )
+
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="truncate font-mono text-sm">{light.id}</span>
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="truncate text-sm">Light — {light.type}</span>
+        <span className="truncate font-mono text-xs text-fg-subtle" title={light.id}>
+          {light.id}
+        </span>
+      </div>
       <span className="truncate text-xs text-fg-subtle">
-        {light.type} light ·{' '}
         {light.ownerTemplateId
-          ? `via ${light.ownerTemplateId} · ${instances} instance${instances === 1 ? '' : 's'}`
+          ? `via ${light.ownerTemplateId} · ${owners.length} instance${owners.length === 1 ? '' : 's'}`
           : 'part-level'}
       </span>
-      {instances !== null && instances > 1 && (
+      {owners.length > 1 && (
         <span className="text-xs leading-snug text-fg-subtle">
-          One light per template — edits affect every instance.
+          Editing through <span className="font-mono">{contextOwner?.instanceId}</span> — one light
+          per template; edits affect every instance.
         </span>
       )}
+      {light.ownerTemplateId != null && owners.length === 0 && (
+        <span className="text-xs text-fg-subtle">
+          Owner template is not placed — this light is dead data.
+        </span>
+      )}
+      <div className="grid grid-cols-2 gap-1">
+        <Select
+          size="sm"
+          aria-label="Light owner"
+          value={light.ownerTemplateId ?? PART_OWNER_KEY}
+          isDisabled={locked}
+          onChange={(key) => changeOwner(key === PART_OWNER_KEY ? null : String(key))}
+        >
+          <ListBoxItem id={PART_OWNER_KEY}>Part level</ListBoxItem>
+          <>
+            {templates.map((t) => (
+              <ListBoxItem key={t} id={t}>
+                {t.split('_').pop() || t}
+              </ListBoxItem>
+            ))}
+          </>
+        </Select>
+        <Select
+          size="sm"
+          aria-label="Light type"
+          value={light.type}
+          isDisabled={locked}
+          onChange={(key) => setLightType(index, key as LightType)}
+        >
+          <ListBoxItem id="Spot">Spot</ListBoxItem>
+          <ListBoxItem id="Point">Point</ListBoxItem>
+        </Select>
+      </div>
+      {/* Owner-frame position — only when a placed owner gives it a distinct frame;
+          part-level (and unplaced-owner) lights get the single group below instead. */}
+      {contextOwner !== null && (
+        <Section title="Position (m, owner frame)">
+          {localPosField('x')}
+          {localPosField('y')}
+          {localPosField('z')}
+        </Section>
+      )}
+      {isSpot && (
+        <Section title={contextOwner ? 'Aim rotation (°, owner frame)' : 'Aim rotation (°)'}>
+          {aimRotField('x')}
+          {aimRotField('y')}
+          {aimRotField('z')}
+        </Section>
+      )}
+      {/* Part-frame position (== the stored numbers when no placed owner: for a
+          part-level light the owner frame IS the part frame; an unplaced owner's light
+          renders in the Part frame but its numbers stay owner-frame, hence the label). */}
+      <Section
+        title={
+          light.ownerTemplateId && !contextOwner
+            ? 'Position (m, owner frame)'
+            : 'Position (m, part frame)'
+        }
+      >
+        {partPosField('x')}
+        {partPosField('y')}
+        {partPosField('z')}
+      </Section>
+      {isSpot && (
+        <Section title="Aim (part frame, unit vector)">
+          {aimField('x')}
+          {aimField('y')}
+          {aimField('z')}
+        </Section>
+      )}
+      <Field label="Range (m)">
+        <PreciseNumberInput
+          aria-label="Light range in meters"
+          value={light.rangeM}
+          min={0}
+          isDisabled={locked}
+          onInteractionStart={() => pushUndo('edit light', light.id)}
+          onCommit={(n) => updateLight(index, { rangeM: n })}
+        />
+      </Field>
+      <Field label="Intensity">
+        <PreciseNumberInput
+          aria-label="Light intensity"
+          value={light.intensity}
+          min={0}
+          isDisabled={locked}
+          onInteractionStart={() => pushUndo('edit light', light.id)}
+          onCommit={(n) => updateLight(index, { intensity: n })}
+        />
+      </Field>
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-fg-subtle">Color</span>
+        <input
+          type="color"
+          aria-label="Light color"
+          className="h-6 w-6 shrink-0 cursor-pointer rounded border border-border bg-transparent"
+          value={rgb01ToHex(light.color)}
+          disabled={locked}
+          onPointerDown={() => pushUndo('edit light', light.id)}
+          onChange={(e) => updateLight(index, { color: hexToRgb01(e.target.value) })}
+        />
+      </div>
+      {isSpot && (
+        <>
+          <Field label="Inner Angle (°, half-cone)">
+            <PreciseNumberInput
+              aria-label="Spot inner cone half-angle in degrees"
+              value={light.innerAngleRad * RAD2DEG}
+              min={0}
+              max={90}
+              isDisabled={locked}
+              onInteractionStart={() => pushUndo('edit light', light.id)}
+              onCommit={(deg) => updateLight(index, { innerAngleRad: deg * DEG2RAD })}
+            />
+          </Field>
+          <Field label="Outer Angle (°, half-cone)">
+            <PreciseNumberInput
+              aria-label="Spot outer cone half-angle in degrees"
+              value={light.outerAngleRad * RAD2DEG}
+              min={0}
+              max={90}
+              isDisabled={locked}
+              onInteractionStart={() => pushUndo('edit light', light.id)}
+              onCommit={(deg) => updateLight(index, { outerAngleRad: deg * DEG2RAD })}
+            />
+          </Field>
+        </>
+      )}
+      <Switch
+        isSelected={light.rayTracing}
+        isDisabled={locked}
+        onChange={(on) => setLightRayTracing(index, on)}
+      >
+        Ray tracing (IVA only)
+      </Switch>
     </div>
   )
 }

@@ -4,6 +4,7 @@ import {
   applyPlacement,
   colliderLocalFromWorld,
   colliderWorld,
+  lightAimRotation,
   lightLocalFromWorld,
   lightWorld,
   lightWorldAim,
@@ -272,5 +273,74 @@ describe('light owner frames', () => {
     expect(back.position.x).toBeCloseTo(3, 12)
     expect(back.position.y).toBeCloseTo(2, 12)
     expect(back.position.z).toBeCloseTo(5, 12)
+  })
+})
+
+describe('lightAimRotation (aim-vector commit — ΔQ · R, plan §3.9-7)', () => {
+  const quatOf = (r: EulerXYZ) =>
+    new THREE.Quaternion().setFromEuler(new THREE.Euler(r.x, r.y, r.z, 'ZYX'))
+  // Same-rotation assertion in quaternion space, sign-aligned (Euler triples and
+  // quaternion signs are both non-unique).
+  const expectSameQuat = (a: THREE.Quaternion, b: THREE.Quaternion, digits = 10) => {
+    const sign = a.dot(b) < 0 ? -1 : 1
+    expect(a.x).toBeCloseTo(sign * b.x, digits)
+    expect(a.y).toBeCloseTo(sign * b.y, digits)
+    expect(a.z).toBeCloseTo(sign * b.z, digits)
+    expect(a.w).toBeCloseTo(sign * b.w, digits)
+  }
+
+  it('re-aims +X → +Y as a 90° rotation about Z', () => {
+    const result = lightAimRotation({ x: 0, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })
+    expect(result).not.toBeNull()
+    const aim = lightWorldAim(result!)
+    expect(aim.x).toBeCloseTo(0, 10)
+    expect(aim.y).toBeCloseTo(1, 10)
+    expect(aim.z).toBeCloseTo(0, 10)
+    expectSameQuat(
+      quatOf(result!),
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2),
+    )
+  })
+
+  it('preserves roll: a pre-rolled light re-aimed +X → +Y becomes exactly Rz(90°)·Rx(roll)', () => {
+    // Roll about the aim axis leaves the aim at +X, so ΔQ is still the pure Rz(90°) —
+    // and it composes ON TOP of the roll instead of discarding it.
+    const roll = 0.7
+    const result = lightAimRotation({ x: roll, y: 0, z: 0 }, { x: 0, y: 1, z: 0 })
+    expect(result).not.toBeNull()
+    const expected = new THREE.Quaternion()
+      .setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2)
+      .multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), roll))
+    expectSameQuat(quatOf(result!), expected)
+    const aim = lightWorldAim(result!)
+    expect(aim.y).toBeCloseTo(1, 10)
+  })
+
+  it('is the identity for a parallel (already-aimed) input, and normalizes non-unit input', () => {
+    const rotation: EulerXYZ = { x: 0.3, y: -0.7, z: 1.1 }
+    const currentAim = lightWorldAim(rotation)
+    // Same direction at 5× length: normalize on entry, ΔQ = identity.
+    const result = lightAimRotation(rotation, {
+      x: currentAim.x * 5,
+      y: currentAim.y * 5,
+      z: currentAim.z * 5,
+    })
+    expect(result).not.toBeNull()
+    expectSameQuat(quatOf(result!), quatOf(rotation))
+  })
+
+  it('handles the antiparallel flip without NaN (three picks a stable 180° axis)', () => {
+    const result = lightAimRotation({ x: 0, y: 0, z: 0 }, { x: -1, y: 0, z: 0 })
+    expect(result).not.toBeNull()
+    for (const axis of ['x', 'y', 'z'] as const) expect(Number.isFinite(result![axis])).toBe(true)
+    const aim = lightWorldAim(result!)
+    expect(aim.x).toBeCloseTo(-1, 10)
+    expect(aim.y).toBeCloseTo(0, 10)
+    expect(aim.z).toBeCloseTo(0, 10)
+  })
+
+  it('rejects a degenerate (≈zero) aim with null — the caller keeps the prior rotation', () => {
+    expect(lightAimRotation({ x: 0.2, y: 0.4, z: -0.6 }, { x: 0, y: 0, z: 0 })).toBeNull()
+    expect(lightAimRotation({ x: 0, y: 0, z: 0 }, { x: 1e-9, y: -1e-9, z: 0 })).toBeNull()
   })
 })

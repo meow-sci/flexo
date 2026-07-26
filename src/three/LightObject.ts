@@ -51,9 +51,10 @@ export class LightObject {
   /**
    * Which visual of this light we are — a SubPart-owned light is drawn once per
    * placement of its template (KSA has no per-instance light), and a click must
-   * report WHICH one so the gizmo (Phase 4) can write back through that placement's
-   * frame. Always 0 for a part-level light. Kept current by {@link setLight}; the
-   * same value rides the shared `userData.selectable` stamp.
+   * report WHICH one so the gizmo writes back through that placement's frame
+   * (`$lightEditContext` → `EditorScene.lightGizmoFrame`). Always 0 for a part-level
+   * light. Kept current by {@link setLight}; the same value rides the shared
+   * `userData.selectable` stamp.
    */
   instanceIndex: number
 

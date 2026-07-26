@@ -33,6 +33,7 @@ import { NozzleHandleObject } from './NozzleHandleObject'
 import {
   colliderLocalFromWorld,
   colliderWorld,
+  lightLocalFromWorld,
   lightWorld,
   matrixFromTransform,
   readPlacementTransform,
@@ -57,6 +58,7 @@ import type {
 } from '../ksa/types'
 import {
   $bulkScaleMode,
+  $lightEditContext,
   $part,
   $selectedColliderIndices,
   $selectedConnectorIndices,
@@ -75,7 +77,9 @@ import {
   selectConnector,
   selectIvaSeat,
   selectLight,
+  setLightEditContext,
   updateColliderTransform,
+  updateLightTransform,
   selectKitten,
   selectPlacement,
   selectedTransformRefs,
@@ -184,14 +188,10 @@ export class EditorScene {
    * light. A part-level light always has exactly one entry.
    */
   private readonly lightObjects = new Map<string, LightObject[]>()
-  /**
-   * Light id → which of its per-placement visuals is the editing context (set by the
-   * last click on it; defaults to 0). Only meaningful for a SubPart-owned light — the
-   * one document entity is drawn N times. Drives the selection highlight today and,
-   * in Phase 4, which placement's frame the gizmo writes back through. Ephemeral view
-   * state (the colliderInstance pattern).
-   */
-  private readonly lightInstance = new Map<string, number>()
+  // NOTE the light analogue of {@link colliderInstance} is NOT a private map: the
+  // editing context (which per-placement visual the gizmo writes through) also drives
+  // the inspector's part-frame fields, so it lives in the store as $lightEditContext —
+  // one source both read via {@link lightContextIndex}, so they can never disagree.
   /** Red dots marking sample points outside every collider (the last coverage check). */
   private coverageDots: THREE.Points | null = null
   private readonly building = new Set<string>()
@@ -352,9 +352,9 @@ export class EditorScene {
           const layerId = lights[index].layerId
           if (isLayerLocked(layerId)) return
           if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
-          // Remember WHICH visual was clicked so the highlight (and, in Phase 4, the
-          // gizmo) follows that instance's frame.
-          this.lightInstance.set(selected.id, selected.instanceIndex ?? 0)
+          // Remember WHICH visual was clicked so the highlight, the gizmo and the
+          // inspector's part-frame fields all edit through that instance's frame.
+          setLightEditContext(selected.id, selected.instanceIndex ?? 0)
           if (additive) {
             const added = !$selectedLightIndices.get().includes(index)
             toggleEntity('light', index)
@@ -527,6 +527,9 @@ export class EditorScene {
     this.sub($selectedColliderIndices, () => this.updateSelection())
     this.sub($selectedIvaSeatIndices, () => this.updateSelection())
     this.sub($selectedLightIndices, () => this.updateSelection())
+    // A context change re-targets a selected light's highlight + gizmo to the newly
+    // clicked instance even when the selection indices themselves are unchanged.
+    this.sub($lightEditContext, () => this.updateSelection())
     // Collider fitting needs world geometry, which only exists here — the UI publishes an
     // intent and this consumes it (see colliderStore).
     this.sub($colliderFitRequest, (req) => {
@@ -729,12 +732,23 @@ export class EditorScene {
     if ($selectedIndices.get().some((i) => members.has(part.placements[i]?.instanceId ?? '')))
       return true
     // A SubPart-owned collider rides its instance, so while a POSED frame is shown its
-    // gizmo would write back through the posed (not modeled) frame — lock it too.
-    return $selectedColliderIndices.get().some((i) => {
-      const owner = part.colliders[i]?.ownerTemplateId
-      if (!owner) return false
-      return part.placements.some((p) => p.subPartTemplateId === owner && members.has(p.instanceId))
-    })
+    // gizmo would write back through the posed (not modeled) frame — lock it too. A
+    // SubPart-owned LIGHT rides its instances the same way (positionLights poses it),
+    // so it gets the identical lock: without it a drag would bake the preview pose
+    // into the document (lightGizmoFrame always resolves the STATIC placement).
+    const ownedByAnimated = (ownerTemplateId: string | null | undefined): boolean => {
+      if (!ownerTemplateId) return false
+      return part.placements.some(
+        (p) => p.subPartTemplateId === ownerTemplateId && members.has(p.instanceId),
+      )
+    }
+    if (
+      $selectedColliderIndices
+        .get()
+        .some((i) => ownedByAnimated(part.colliders[i]?.ownerTemplateId))
+    )
+      return true
+    return $selectedLightIndices.get().some((i) => ownedByAnimated(part.lights[i]?.ownerTemplateId))
   }
 
   private applyAnimationPreview(): void {
@@ -1074,6 +1088,17 @@ export class EditorScene {
   }
 
   /**
+   * The context instance index for a light — the visual last clicked
+   * ({@link $lightEditContext}; default 0, clamped to `count`). The ONE rule shared by
+   * the highlight, the gizmo attach/write-back ({@link lightGizmoFrame}) and the
+   * inspector's part-frame fields (which read the same atom), so they always agree.
+   */
+  private lightContextIndex(lightId: string, count: number): number {
+    const i = $lightEditContext.get()[lightId] ?? 0
+    return Math.max(0, Math.min(i, count - 1))
+  }
+
+  /**
    * Positions every light visual via {@link lightWorld} — NEVER {@link colliderWorld}:
    * the owner's scale APPLIES to a light's position offset, unlike a collider's
    * (coords.ts documents the contrast). `posed` supplies the ANIMATED transform of an
@@ -1365,13 +1390,13 @@ export class EditorScene {
     }
     for (const i of $selectedLightIndices.get()) {
       const light = part.lights[i]
+      if (!light) continue
       // The CONTEXT instance only (last-clicked, default 0): a SubPart-owned light is
       // one document entity drawn N times, and highlighting just the instance being
       // worked through is what tells the user which frame their edits go through
       // (plans/LIGHT_MANAGEMENT_PLAN.md §3.7-4 — deliberately unlike colliders).
-      const objs = (light && this.lightObjects.get(light.id)) ?? []
-      const idx = Math.min(this.lightInstance.get(light?.id ?? '') ?? 0, objs.length - 1)
-      const obj = objs[Math.max(0, idx)]
+      const objs = this.lightObjects.get(light.id) ?? []
+      const obj = objs[this.lightContextIndex(light.id, objs.length)]
       if (obj) out.push(obj)
     }
     return out
@@ -1379,20 +1404,26 @@ export class EditorScene {
 
   /**
    * Every selected entity's transform in PART space. Identical to
-   * {@link selectedTransformRefs} except for a SubPart-owned collider, whose stored
-   * transform is in its owner's local frame — bulk gizmo math (and the centroid the pivot
-   * sits on) has to work in one shared space, so those are lifted through
-   * {@link colliderWorld} here and pushed back down on write.
-   *
-   * Phase 4 seam: a SubPart-owned LIGHT's ref passes through UN-lifted for now (its
-   * transform is owner-local too) — the {@link lightWorld} lift + push-back land with
-   * the gizmo phase, so until then a bulk drag moves it in its owner's axes.
+   * {@link selectedTransformRefs} except for SubPart-owned colliders and lights, whose
+   * stored transforms are in their owner's local frame — bulk gizmo math (and the
+   * centroid the pivot sits on) has to work in one shared space, so those are lifted
+   * here (colliders through {@link colliderWorld}, lights through {@link lightWorld} —
+   * NOT interchangeable: the light rule applies the owner's scale to the position
+   * offset) and pushed back down through the matching inverse in
+   * {@link applyBulkFromPivot}. Each lift goes through the entity's CONTEXT instance
+   * frame, the same one its single-selection gizmo edits through.
    */
   private worldTransformRefs(): SelectedTransformRef[] {
     return selectedTransformRefs().map((ref) => {
-      if (ref.kind !== 'collider') return ref
-      const frame = this.colliderGizmoFrame(ref.index)
-      return frame ? { ...ref, transform: colliderWorld(ref.transform, frame) } : ref
+      if (ref.kind === 'collider') {
+        const frame = this.colliderGizmoFrame(ref.index)
+        return frame ? { ...ref, transform: colliderWorld(ref.transform, frame) } : ref
+      }
+      if (ref.kind === 'light')
+        // lightWorld takes the null frame itself: a part-level (or unplaced-owner)
+        // light's local transform already IS its part-frame pose.
+        return { ...ref, transform: lightWorld(ref.transform, this.lightGizmoFrame(ref.index)) }
+      return ref
     })
   }
 
@@ -1494,23 +1525,9 @@ export class EditorScene {
     // group sits at its animated transform — suppress the gizmo so a drag can't write
     // the posed transform back as the static placement. At rest (t=0) it's safe.
     const previewLocked = this.isPreviewPosed() && this.selectedIsAnimated()
-    // Phase 4 seam: lights have no gizmo write-back yet (`lightGizmoFrame` +
-    // the `handleGizmoChange` light branch land with the gizmo phase), so a
-    // light-only selection gets the highlight but NO gizmo — attaching one would let
-    // a drag write a transform nothing converts back through the owner frame. Mixed
-    // selections still attach the bulk pivot, whose write-back goes through
-    // `updateSelectedTransforms`' light branch.
-    const lightOnly =
-      ligIndices.length > 0 &&
-      indices.length +
-        conIndices.length +
-        kitIndices.length +
-        colIndices.length +
-        seatIndices.length ===
-        0
     // Sitting in a seat: the gizmo would render at (or inside) the camera and there is
     // nothing to aim it with — the whole viewport is the preview.
-    if (anyLocked || previewLocked || lightOnly || $seatView.get() !== null) {
+    if (anyLocked || previewLocked || $seatView.get() !== null) {
       target = null
     } else if (multi) {
       this.repositionPivot()
@@ -1522,6 +1539,15 @@ export class EditorScene {
       const objs = collider ? (this.colliderObjects.get(collider.id) ?? []) : []
       const i = Math.min(this.colliderInstance.get(collider?.id ?? '') ?? 0, objs.length - 1)
       target = objs[Math.max(0, i)]?.group ?? null
+    } else if (ligIndices.length === 1) {
+      // Same rule for a SubPart-owned light: attach to the CONTEXT instance
+      // ($lightEditContext — last clicked, default 0) so the drag has an unambiguous
+      // frame; handleGizmoChange converts back through the same placement via
+      // lightGizmoFrame. (selectedObjects() already returns only this instance, but
+      // resolving it here keeps the attach rule explicit and collider-parallel.)
+      const light = part.lights[ligIndices[0]]
+      const objs = light ? (this.lightObjects.get(light.id) ?? []) : []
+      target = light ? (objs[this.lightContextIndex(light.id, objs.length)]?.group ?? null) : null
     } else {
       target = selected[0]?.group ?? null
     }
@@ -1573,6 +1599,19 @@ export class EditorScene {
         return
       }
     }
+    // Same for a light visual — converted through the CONTEXT placement's STATIC frame
+    // (lightGizmoFrame), which is exactly the frame positionLights placed this object
+    // with: while the animation preview shows a POSED owner, selectedIsAnimated()
+    // detaches the gizmo entirely (the collider rule), so a drag can never read a
+    // posed pose and write it back as the modeled transform.
+    if (sel?.kind === 'light') {
+      const index = $part.get().lights.findIndex((l) => l.id === sel.id)
+      if (index >= 0) {
+        // lightLocalFromWorld takes the null frame itself (part-level ⇒ verbatim).
+        updateLightTransform(index, lightLocalFromWorld(world, this.lightGizmoFrame(index)))
+        return
+      }
+    }
     updateSelectedTransform(world)
   }
 
@@ -1589,6 +1628,24 @@ export class EditorScene {
     if (owners.length === 0) return null
     const i = Math.min(this.colliderInstance.get(collider.id) ?? 0, owners.length - 1)
     return owners[Math.max(0, i)] ?? null
+  }
+
+  /**
+   * The placement a light's gizmo (and the inspector's part-frame fields) currently
+   * edit through — the instance the user last clicked ({@link $lightEditContext},
+   * default 0). Null for a part-level light, or one whose owner template isn't placed:
+   * those render directly in the Part frame ({@link lightWorld} with a null owner).
+   * Always the STATIC placement, which is what {@link positionLights} placed the visual
+   * with outside a posed preview — and during one, {@link selectedIsAnimated} locks the
+   * gizmo so no drag can go through the wrong frame.
+   */
+  private lightGizmoFrame(index: number): Transform | null {
+    const part = $part.get()
+    const light = part.lights[index]
+    if (!light) return null
+    const owners = this.lightOwners(part, light)
+    if (owners.length === 0) return null
+    return owners[this.lightContextIndex(light.id, owners.length)] ?? null
   }
 
   /** The active pose-edit target (active animation + joint + keyframe), or null. */
@@ -1766,12 +1823,20 @@ export class EditorScene {
             : scaledInPlaceTransform(base, factor),
       }
     })
-    // Owner-local again on the way back down (see worldTransformRefs).
+    // Owner-local again on the way back down (see worldTransformRefs) — each kind
+    // through the inverse of the SAME lift it went up with.
     updateSelectedTransforms(
       updates.map((u) => {
-        if (u.kind !== 'collider') return u
-        const frame = this.colliderGizmoFrame(u.index)
-        return frame ? { ...u, transform: colliderLocalFromWorld(u.transform, frame) } : u
+        if (u.kind === 'collider') {
+          const frame = this.colliderGizmoFrame(u.index)
+          return frame ? { ...u, transform: colliderLocalFromWorld(u.transform, frame) } : u
+        }
+        if (u.kind === 'light')
+          return {
+            ...u,
+            transform: lightLocalFromWorld(u.transform, this.lightGizmoFrame(u.index)),
+          }
+        return u
       }),
     )
   }

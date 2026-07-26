@@ -40,6 +40,7 @@ import {
   type ConnectorFlag,
   type IvaSeat,
   type PartCollider,
+  type PartLight,
   type Vec3,
 } from '../ksa/types'
 import { colliderSizeLabels, type ColliderSizeLabel } from '../ksa/colliderSize'
@@ -65,17 +66,22 @@ const panelClass = 'flex flex-col gap-2 rounded-xl border border-border bg-panel
 type Axis = 'x' | 'y' | 'z'
 
 /**
- * Numeric transform inspector for the selected entity (SubPart, connector, collider or
- * IVA seat). Two-way bound with the 3D gizmo: both edit the SAME store, so typing moves
- * the model live and gizmo drags update these fields live. Rotation is shown in degrees
- * but stored/exported in radians. Connectors expose their connection Flags.
+ * Numeric transform inspector for the selected entity (SubPart, connector, collider,
+ * IVA seat or light). Two-way bound with the 3D gizmo: both edit the SAME store, so
+ * typing moves the model live and gizmo drags update these fields live. Rotation is
+ * shown in degrees but stored/exported in radians. Connectors expose their connection
+ * Flags.
  *
- * Two kinds read differently in the third numeric group:
+ * Three kinds read differently in the third numeric group:
  *  - a **collider**'s `scale` IS its outer size in METERS (KSA colliders have no scale
  *    field — see {@link PartCollider}), so the group is labelled "Size (m)" with per-shape
  *    labels, and only the axes that shape can independently control are shown;
  *  - an **IVA seat** has no size at all (`<IVASeat>` is position + two axes, and the store
- *    pins `scale` to (1,1,1)), so the group is omitted entirely rather than shown inert.
+ *    pins `scale` to (1,1,1)), so the group is omitted entirely rather than shown inert;
+ *  - a **light** likewise has no size (KSA ignores light scale; pinned (1,1,1)) — omitted.
+ *    NOTE a light's fields are its OWNER-frame transform; the part-frame fields + the
+ *    full LightHeader (owner/type/aim/range editors) land in Phase 4
+ *    (plans/LIGHT_MANAGEMENT_PLAN.md §3.9).
  */
 export function TransformInspector() {
   const count = useStore($selectionCount)
@@ -91,7 +97,9 @@ export function TransformInspector() {
         ? entity.connector
         : entity.kind === 'collider'
           ? entity.collider
-          : entity.seat
+          : entity.kind === 'ivaSeat'
+            ? entity.seat
+            : entity.light
   const locked = isLayerLocked(target.layerId)
   const transform = target
 
@@ -112,7 +120,9 @@ export function TransformInspector() {
         ? entity.connector.id
         : entity.kind === 'collider'
           ? entity.collider.id
-          : entity.seat.id
+          : entity.kind === 'ivaSeat'
+            ? entity.seat.id
+            : entity.light.id
 
   const posField = (axis: Axis) => (
     <NumberField
@@ -165,8 +175,10 @@ export function TransformInspector() {
         />
       ) : entity.kind === 'collider' ? (
         <ColliderHeader index={entity.index} collider={entity.collider} locked={locked} />
-      ) : (
+      ) : entity.kind === 'ivaSeat' ? (
         <IvaSeatHeader index={entity.index} seat={entity.seat} locked={locked} />
+      ) : (
+        <LightHeader light={entity.light} />
       )}
       <Section title="Position (m)">
         {posField('x')}
@@ -178,9 +190,10 @@ export function TransformInspector() {
         {rotField('y')}
         {rotField('z')}
       </Section>
-      {/* An IVA seat has no third group at all: KSA's `<IVASeat>` carries no size, and the
-          store pins the seat's scale to (1,1,1), so any field here would be a no-op. */}
-      {entity.kind === 'ivaSeat' ? null : sizeLabels ? (
+      {/* An IVA seat and a light have no third group at all: KSA's `<IVASeat>` carries no
+          size and KSA ignores a light's scale — the store pins both to (1,1,1), so any
+          field here would be a no-op. */}
+      {entity.kind === 'ivaSeat' || entity.kind === 'light' ? null : sizeLabels ? (
         <Section title="Size (m)">
           {sizeLabels[0] && scaleField('x', sizeLabels[0])}
           {sizeLabels[1] && scaleField('y', sizeLabels[1])}
@@ -657,6 +670,37 @@ const dot = (a: Vec3, b: Vec3) => a.x * b.x + a.y * b.y + a.z * b.z
 
 /** Cosine beyond which two unit axes count as parallel (KSA would NaN the camera). */
 const PARALLEL_DOT = 0.999
+
+/**
+ * Minimal Phase-3 header for a selected light: identity, type and owner, plus the
+ * one-light-per-template caveat. The transform fields below it edit the light's
+ * OWNER-frame pose through `updateSelectedTransform` (scale stays pinned). Phase 4
+ * replaces this with the full LightHeader — owner/type selects, part-frame position,
+ * aim-vector input, range/intensity/color/angle editors
+ * (plans/LIGHT_MANAGEMENT_PLAN.md §3.9).
+ */
+function LightHeader({ light }: { light: PartLight }) {
+  const part = useStore($part)
+  const instances = light.ownerTemplateId
+    ? part.placements.filter((p) => p.subPartTemplateId === light.ownerTemplateId).length
+    : null
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="truncate font-mono text-sm">{light.id}</span>
+      <span className="truncate text-xs text-fg-subtle">
+        {light.type} light ·{' '}
+        {light.ownerTemplateId
+          ? `via ${light.ownerTemplateId} · ${instances} instance${instances === 1 ? '' : 's'}`
+          : 'part-level'}
+      </span>
+      {instances !== null && instances > 1 && (
+        <span className="text-xs leading-snug text-fg-subtle">
+          One light per template — edits affect every instance.
+        </span>
+      )}
+    </div>
+  )
+}
 
 /**
  * Header for a selected IVA seat — where KSA's `<IVASeat>` contract becomes visible.

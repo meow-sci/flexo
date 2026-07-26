@@ -4,10 +4,13 @@ import {
   $nudgeAxis,
   $nudgeStep,
   $part,
+  addKitten,
+  addLight,
   cycleNudgeAxis,
   decrementNudgeStep,
   incrementNudgeStep,
   newPart,
+  selectLight,
   setNudgeAxis,
   setSelectedPlacements,
   undo,
@@ -98,6 +101,21 @@ describe('nudgeSelectionBy', () => {
     nudgeSelectionBy(1)
     expect($canUndo.get()).toBe(false)
     expect($part.get().placements[0].position).toEqual({ x: 0, y: 0, z: 0 })
+  })
+
+  // Regression for the SelectableKind misroute hazard: updateSelectedTransforms' final
+  // else is the KITTEN branch, so an unrouted 'light' ref would move the kitten that
+  // happens to share the light's index instead of the light.
+  it('nudges a selected light — never the kitten at the same index', () => {
+    addKitten('hunter') // kitten index 0, at the origin
+    addLight(null) // light index 0, at the origin
+    selectLight(0)
+    setNudgeAxis('y')
+    nudgeSelectionBy(1)
+    expect($part.get().lights[0].position).toEqual({ x: 0, y: 0.1, z: 0 })
+    expect($part.get().kittens[0].position).toEqual({ x: 0, y: 0, z: 0 })
+    undo()
+    expect($part.get().lights[0].position).toEqual({ x: 0, y: 0, z: 0 })
   })
 })
 

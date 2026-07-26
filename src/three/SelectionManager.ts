@@ -1,14 +1,14 @@
 import * as THREE from 'three'
 
-/** What a hit object resolves to: a SubPart instance, connector, collider, IVA seat, or kitten. */
+/** What a hit object resolves to: a SubPart instance, connector, collider, IVA seat, kitten, or light. */
 export interface Selectable {
-  kind: 'subpart' | 'connector' | 'collider' | 'ivaSeat' | 'kitten'
+  kind: 'subpart' | 'connector' | 'collider' | 'ivaSeat' | 'kitten' | 'light'
   id: string
   /**
-   * Which VISUAL of a multi-instance entity was hit. Only a SubPart-owned collider has
-   * more than one (it is drawn once per placement of its owning template — KSA has no
-   * per-instance collider), and the caller needs it to know which placement's frame a
-   * gizmo drag should write back through.
+   * Which VISUAL of a multi-instance entity was hit. Only SubPart-owned colliders and
+   * lights have more than one (each is drawn once per placement of its owning template
+   * — KSA has no per-instance collider or light), and the caller needs it to know which
+   * placement's frame a gizmo drag should write back through.
    */
   instanceIndex?: number
 }

@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   $ivaSeatSettings,
+  $lightSettings,
   $modelImportSettings,
   setIvaSeatSettings,
+  setLightSettings,
   setModelImportSettings,
 } from './settingsStore'
 
@@ -22,6 +24,7 @@ beforeEach(() => {
     decimateViewMeshes: true,
   })
   $ivaSeatSettings.set({ markerSize: 0.12, showGazeCone: false })
+  $lightSettings.set({ markerSize: 0.12 })
 })
 
 describe('$modelImportSettings', () => {
@@ -79,6 +82,32 @@ describe('$ivaSeatSettings', () => {
     expect(JSON.parse(localStorage.getItem('flexo:ivaSeatSettings') ?? '{}')).toEqual({
       markerSize: 0.3,
       showGazeCone: true,
+    })
+  })
+})
+
+/**
+ * The light marker is a pure VIEW setting like the seat marker — KSA ignores a light's
+ * scale, so nothing here ever reaches the exported XML. The 0.12 m default keeps light
+ * and seat markers at the same on-screen scale. markerSize is deliberately the ONLY
+ * field this phase; the coverage-visualization settings widen the interface later
+ * (plans/LIGHT_MANAGEMENT_PLAN.md §3.6).
+ */
+describe('$lightSettings', () => {
+  it('defaults to a 0.12 m marker (parity with the seat marker)', () => {
+    localStorage.clear()
+    expect($lightSettings.get()).toEqual({ markerSize: 0.12 })
+  })
+
+  it('patches via setLightSettings, merging over the current value', () => {
+    setLightSettings({ markerSize: 0.25 })
+    expect($lightSettings.get()).toEqual({ markerSize: 0.25 })
+  })
+
+  it('persists to localStorage under its flexo: key', () => {
+    setLightSettings({ markerSize: 0.3 })
+    expect(JSON.parse(localStorage.getItem('flexo:lightSettings') ?? '{}')).toEqual({
+      markerSize: 0.3,
     })
   })
 })

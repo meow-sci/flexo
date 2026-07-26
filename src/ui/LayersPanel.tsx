@@ -215,12 +215,15 @@ function LayerRow({
   onRequestDelete: () => void
   onRequestClear: () => void
 }) {
-  const { layer, subParts, connectors, kittens } = summary
-  const total = subParts + connectors + kittens
+  const { layer, subParts, connectors, kittens, ivaSeats, colliders, lights } = summary
+  const total = subParts + connectors + kittens + ivaSeats + colliders + lights
   const countTitle = [
     `${subParts} SubParts`,
     `${connectors} connectors`,
     ...(kittens > 0 ? [`${kittens} kittens`] : []),
+    ...(ivaSeats > 0 ? [`${ivaSeats} IVA seats`] : []),
+    ...(colliders > 0 ? [`${colliders} colliders`] : []),
+    ...(lights > 0 ? [`${lights} lights`] : []),
   ].join(', ')
   const layerView = useStore($layerView)
   const view = layerViewState(layerView, layer.id)

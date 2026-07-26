@@ -24,6 +24,7 @@ import { $seatView, exitSeatView } from '../state/ivaStore'
 import { SEAT_LOCAL_UP, seatAxesFromRotation, seatRotationFromAxes } from '../ksa/ivaSeatAxes'
 import { evaluateCoverage, type PlacedCollider } from '../measure/colliderCoverage'
 import { KittenObject } from './KittenObject'
+import { LightObject } from './LightObject'
 import { SelectionManager } from './SelectionManager'
 import { TransformGizmo } from './TransformGizmo'
 import { MeasurementLayer } from './MeasurementLayer'
@@ -32,6 +33,7 @@ import { NozzleHandleObject } from './NozzleHandleObject'
 import {
   colliderLocalFromWorld,
   colliderWorld,
+  lightWorld,
   matrixFromTransform,
   readPlacementTransform,
   transformFromMatrix,
@@ -45,7 +47,14 @@ import {
 } from './bulkTransform'
 import { initTextureSupport } from './textureSupport'
 import type { CatalogSubPart } from '../ksa/catalog'
-import type { EditingPart, PartCollider, SubPartPlacement, Transform, Vec3 } from '../ksa/types'
+import type {
+  EditingPart,
+  PartCollider,
+  PartLight,
+  SubPartPlacement,
+  Transform,
+  Vec3,
+} from '../ksa/types'
 import {
   $bulkScaleMode,
   $part,
@@ -54,6 +63,7 @@ import {
   $selectedIndices,
   $selectedIvaSeatIndices,
   $selectedKittenIndices,
+  $selectedLightIndices,
   $snap,
   $toolMode,
   aimIvaSeat,
@@ -64,6 +74,7 @@ import {
   selectCollider,
   selectConnector,
   selectIvaSeat,
+  selectLight,
   updateColliderTransform,
   selectKitten,
   selectPlacement,
@@ -107,9 +118,11 @@ import {
 import {
   $connectorSettings,
   $ivaSeatSettings,
+  $lightSettings,
   $selectionHighlight,
   type ConnectorSettings,
   type IvaSeatSettings,
+  type LightVizSettings,
 } from '../state/settingsStore'
 import { $cameraRestore, $cameraSnap, $grids, $hideInterior } from '../state/viewStore'
 import { resolveInternal } from '../ksa/modExport'
@@ -163,6 +176,22 @@ export class EditorScene {
    * (`<IVASeat>` on `<PartGameData>`), so unlike a collider it is never drawn per placement.
    */
   private readonly seatObjects = new Map<string, IvaSeatObject>()
+  /**
+   * Light markers, keyed by light id. An ARRAY per light because a SubPart-owned one is
+   * drawn once per PLACEMENT of its owning template — KSA instantiates the template's
+   * `<Light>` per SubPart instance (`LightModule.UpdateRenderData`;
+   * plans/LIGHT_MANAGEMENT_PLAN.md §1.3), so every instance really does cast the same
+   * light. A part-level light always has exactly one entry.
+   */
+  private readonly lightObjects = new Map<string, LightObject[]>()
+  /**
+   * Light id → which of its per-placement visuals is the editing context (set by the
+   * last click on it; defaults to 0). Only meaningful for a SubPart-owned light — the
+   * one document entity is drawn N times. Drives the selection highlight today and,
+   * in Phase 4, which placement's frame the gizmo writes back through. Ephemeral view
+   * state (the colliderInstance pattern).
+   */
+  private readonly lightInstance = new Map<string, number>()
   /** Red dots marking sample points outside every collider (the last coverage check). */
   private coverageDots: THREE.Points | null = null
   private readonly building = new Set<string>()
@@ -170,6 +199,7 @@ export class EditorScene {
   private index: Map<string, CatalogSubPart> = new Map()
   private connectorSettings: ConnectorSettings = $connectorSettings.get()
   private ivaSeatSettings: IvaSeatSettings = $ivaSeatSettings.get()
+  private lightSettings: LightVizSettings = $lightSettings.get()
   private readonly unsubscribers: Array<() => void> = []
   private readonly selection: SelectionManager
   private readonly gizmo: TransformGizmo
@@ -315,6 +345,24 @@ export class EditorScene {
             selectIvaSeat(index)
             revealEntity('ivaSeat', selected.id)
           }
+        } else if (selected.kind === 'light') {
+          const lights = $part.get().lights
+          const index = lights.findIndex((l) => l.id === selected.id)
+          if (index < 0) return
+          const layerId = lights[index].layerId
+          if (isLayerLocked(layerId)) return
+          if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
+          // Remember WHICH visual was clicked so the highlight (and, in Phase 4, the
+          // gizmo) follows that instance's frame.
+          this.lightInstance.set(selected.id, selected.instanceIndex ?? 0)
+          if (additive) {
+            const added = !$selectedLightIndices.get().includes(index)
+            toggleEntity('light', index)
+            if (added) revealEntity('light', selected.id)
+          } else {
+            selectLight(index)
+            revealEntity('light', selected.id)
+          }
         } else {
           const kittens = $part.get().kittens
           const index = kittens.findIndex((k) => k.id === selected.id)
@@ -353,8 +401,12 @@ export class EditorScene {
         // A seat has no size — KSA has no seat size field, so `assignIvaSeat` pins scale to
         // (1,1,1) and a scale drag on seats alone changes nothing. Pushing an undo step for
         // it would only make the next Ctrl+Z look dead. The bulk snapshot still runs.
+        // Lights are scale-inert for the same reason (KSA ignores light scale; `assignLight`
+        // pins it), so a seats-and/or-lights-only scale drag is equally a no-op.
         const seatScaleOnly =
-          mode === 'scale' && refs.length > 0 && refs.every((r) => r.kind === 'ivaSeat')
+          mode === 'scale' &&
+          refs.length > 0 &&
+          refs.every((r) => r.kind === 'ivaSeat' || r.kind === 'light')
         if (!seatScaleOnly) {
           const desc = mode === 'rotate' ? 'rotate' : mode === 'scale' ? 'scale' : 'move'
           const detail =
@@ -419,6 +471,7 @@ export class EditorScene {
     this.sub($selectedKittenIndices, clearContainerOnSelect)
     this.sub($selectedColliderIndices, clearContainerOnSelect)
     this.sub($selectedIvaSeatIndices, clearContainerOnSelect)
+    this.sub($selectedLightIndices, clearContainerOnSelect)
 
     // nanostores `subscribe` fires immediately with the current value.
     this.sub($catalogIndex, (index) => {
@@ -473,6 +526,7 @@ export class EditorScene {
     this.sub($selectedKittenIndices, () => this.updateSelection())
     this.sub($selectedColliderIndices, () => this.updateSelection())
     this.sub($selectedIvaSeatIndices, () => this.updateSelection())
+    this.sub($selectedLightIndices, () => this.updateSelection())
     // Collider fitting needs world geometry, which only exists here — the UI publishes an
     // intent and this consumes it (see colliderStore).
     this.sub($colliderFitRequest, (req) => {
@@ -501,6 +555,11 @@ export class EditorScene {
     this.sub($ivaSeatSettings, (settings) => {
       this.ivaSeatSettings = settings
       this.rebuildIvaSeats()
+    })
+    // Same deal for the light markers (the $ivaSeatSettings pattern).
+    this.sub($lightSettings, (settings) => {
+      this.lightSettings = settings
+      this.rebuildLights()
     })
     // Re-apply the highlight tint to the current selection when the color/strength
     // setting changes (fires immediately on subscribe — a harmless no-op when nothing
@@ -593,6 +652,7 @@ export class EditorScene {
     this.reconcileConnectors(part)
     this.reconcileColliders(part)
     this.reconcileIvaSeats(part)
+    this.reconcileLights(part)
     this.reconcileKittens(part)
     this.applyLayerView()
     this.updateSelection()
@@ -694,6 +754,7 @@ export class EditorScene {
     const anim = animId ? part.animations.find((a) => a.id === animId) : null
     if (!anim) {
       this.positionColliders(part) // back to static frames
+      this.positionLights(part)
       return
     }
     const editKf = $editKeyframeId.get()
@@ -702,6 +763,7 @@ export class EditorScene {
     // its DEPLOYED last keyframe, so this keeps it shown deployed until you scrub).
     if (!editKf && !$animScrubbing.get()) {
       this.positionColliders(part)
+      this.positionLights(part)
       return
     }
     const posed = new Map<string, Transform>()
@@ -721,8 +783,10 @@ export class EditorScene {
         posed.set(instId, transformFromMatrix(m))
       }
     }
-    // A SubPart-owned collider rides its instance, so it must follow the pose too.
+    // A SubPart-owned collider rides its instance, so it must follow the pose too —
+    // and so does a SubPart-owned light (part-level lights never move with animation).
     this.positionColliders(part, posed)
+    this.positionLights(part, posed)
   }
 
   /** Builds/updates/removes kitten visual aides (async, like SubParts). */
@@ -813,6 +877,13 @@ export class EditorScene {
       if (obj) {
         const lv = layerViewState(view, s.layerId)
         obj.group.visible = lv.visible && !inSeatView
+        obj.setLayerOpacity(lv.opacity)
+      }
+    }
+    for (const l of part.lights) {
+      const lv = layerViewState(view, l.layerId)
+      for (const obj of this.lightObjects.get(l.id) ?? []) {
+        obj.group.visible = lv.visible
         obj.setLayerOpacity(lv.opacity)
       }
     }
@@ -948,6 +1019,81 @@ export class EditorScene {
       for (let i = 0; i < owners.length && i < objs.length; i++) {
         const frame = posed?.get(owners[i].instanceId) ?? owners[i]
         objs[i].setCollider(collider, colliderWorld(collider, frame))
+      }
+    }
+  }
+
+  /**
+   * Light markers build synchronously (bulb + aim cone). A SubPart-owned light gets ONE
+   * visual per placement of its owning template — KSA instantiates the template's
+   * `<Light>` once per SubPart instance (`LightModule.UpdateRenderData`) — while a
+   * part-level light gets a single visual in the Part frame. The collider reconcile
+   * pattern; positioning is {@link positionLights}' job.
+   */
+  private reconcileLights(part: EditingPart): void {
+    const wanted = new Set(part.lights.map((l) => l.id))
+    for (const [id, objs] of this.lightObjects) {
+      if (wanted.has(id)) continue
+      for (const obj of objs) {
+        this.root.remove(obj.group)
+        obj.dispose()
+      }
+      this.lightObjects.delete(id)
+    }
+
+    for (const light of part.lights) {
+      const wantedCount = this.lightOwners(part, light).length || 1
+      let objs = this.lightObjects.get(light.id)
+      if (!objs) {
+        objs = []
+        this.lightObjects.set(light.id, objs)
+      }
+      while (objs.length > wantedCount) {
+        const obj = objs.pop()!
+        this.root.remove(obj.group)
+        obj.dispose()
+      }
+      while (objs.length < wantedCount) {
+        const obj = new LightObject(light, this.lightSettings.markerSize, objs.length)
+        this.root.add(obj.group)
+        objs.push(obj)
+      }
+    }
+    this.positionLights(part)
+  }
+
+  /**
+   * Placements a light's visuals ride on. Empty for a part-level light — and also for
+   * one whose owner template is no longer placed, which then renders once in the Part
+   * frame so it can be found and re-homed rather than silently vanishing (the collider
+   * convention; validation flags it as dead data in Phase 7).
+   */
+  private lightOwners(part: EditingPart, light: PartLight): SubPartPlacement[] {
+    if (!light.ownerTemplateId) return []
+    return part.placements.filter((p) => p.subPartTemplateId === light.ownerTemplateId)
+  }
+
+  /**
+   * Positions every light visual via {@link lightWorld} — NEVER {@link colliderWorld}:
+   * the owner's scale APPLIES to a light's position offset, unlike a collider's
+   * (coords.ts documents the contrast). `posed` supplies the ANIMATED transform of an
+   * instance while the animation preview shows a non-rest frame, so a light on an
+   * animated SubPart follows the preview pose exactly as its owning mesh (and its
+   * colliders) do; part-level lights never move with animation. An empty/absent map
+   * means "everything at its static placement".
+   */
+  private positionLights(part: EditingPart, posed?: ReadonlyMap<string, Transform>): void {
+    for (const light of part.lights) {
+      const objs = this.lightObjects.get(light.id)
+      if (!objs) continue
+      const owners = this.lightOwners(part, light)
+      if (owners.length === 0) {
+        objs[0]?.setLight(light, lightWorld(light, null), 0)
+        continue
+      }
+      for (let i = 0; i < owners.length && i < objs.length; i++) {
+        const frame = posed?.get(owners[i].instanceId) ?? owners[i]
+        objs[i].setLight(light, lightWorld(light, frame), i)
       }
     }
   }
@@ -1173,7 +1319,21 @@ export class EditorScene {
     this.updateSelection()
   }
 
-  /** Resolves all currently selected scene objects (SubParts + connectors + colliders + seats + kittens) that are built. */
+  /** Rebuilds every light marker from scratch (marker size is a global setting). */
+  private rebuildLights(): void {
+    for (const objs of this.lightObjects.values()) {
+      for (const obj of objs) {
+        this.root.remove(obj.group)
+        obj.dispose()
+      }
+    }
+    this.lightObjects.clear()
+    this.reconcileLights($part.get())
+    this.applyLayerView()
+    this.updateSelection()
+  }
+
+  /** Resolves all currently selected scene objects (SubParts + connectors + colliders + seats + kittens + lights) that are built. */
   private selectedObjects(): SelectableObject[] {
     const part = $part.get()
     const out: SelectableObject[] = []
@@ -1203,6 +1363,17 @@ export class EditorScene {
       const obj = kitten && this.kittenObjects.get(kitten.id)
       if (obj) out.push(obj)
     }
+    for (const i of $selectedLightIndices.get()) {
+      const light = part.lights[i]
+      // The CONTEXT instance only (last-clicked, default 0): a SubPart-owned light is
+      // one document entity drawn N times, and highlighting just the instance being
+      // worked through is what tells the user which frame their edits go through
+      // (plans/LIGHT_MANAGEMENT_PLAN.md §3.7-4 — deliberately unlike colliders).
+      const objs = (light && this.lightObjects.get(light.id)) ?? []
+      const idx = Math.min(this.lightInstance.get(light?.id ?? '') ?? 0, objs.length - 1)
+      const obj = objs[Math.max(0, idx)]
+      if (obj) out.push(obj)
+    }
     return out
   }
 
@@ -1212,6 +1383,10 @@ export class EditorScene {
    * transform is in its owner's local frame — bulk gizmo math (and the centroid the pivot
    * sits on) has to work in one shared space, so those are lifted through
    * {@link colliderWorld} here and pushed back down on write.
+   *
+   * Phase 4 seam: a SubPart-owned LIGHT's ref passes through UN-lifted for now (its
+   * transform is owner-local too) — the {@link lightWorld} lift + push-back land with
+   * the gizmo phase, so until then a bulk drag moves it in its owner's axes.
    */
   private worldTransformRefs(): SelectedTransformRef[] {
     return selectedTransformRefs().map((ref) => {
@@ -1295,12 +1470,14 @@ export class EditorScene {
     const kitIndices = $selectedKittenIndices.get()
     const colIndices = $selectedColliderIndices.get()
     const seatIndices = $selectedIvaSeatIndices.get()
+    const ligIndices = $selectedLightIndices.get()
     const multi =
       indices.length +
         conIndices.length +
         kitIndices.length +
         colIndices.length +
-        seatIndices.length >
+        seatIndices.length +
+        ligIndices.length >
       1
     let target: THREE.Object3D | null
 
@@ -1311,14 +1488,29 @@ export class EditorScene {
       conIndices.some((ci) => isLayerLocked(part.connectors[ci]?.layerId ?? '')) ||
       kitIndices.some((ki) => isLayerLocked(part.kittens[ki]?.layerId ?? '')) ||
       colIndices.some((i) => isLayerLocked(part.colliders[i]?.layerId ?? '')) ||
-      seatIndices.some((i) => isLayerLocked(part.ivaSeats[i]?.layerId ?? ''))
+      seatIndices.some((i) => isLayerLocked(part.ivaSeats[i]?.layerId ?? '')) ||
+      ligIndices.some((i) => isLayerLocked(part.lights[i]?.layerId ?? ''))
     // While the preview shows a POSED frame (t>0 / editing), an animated SubPart's
     // group sits at its animated transform — suppress the gizmo so a drag can't write
     // the posed transform back as the static placement. At rest (t=0) it's safe.
     const previewLocked = this.isPreviewPosed() && this.selectedIsAnimated()
+    // Phase 4 seam: lights have no gizmo write-back yet (`lightGizmoFrame` +
+    // the `handleGizmoChange` light branch land with the gizmo phase), so a
+    // light-only selection gets the highlight but NO gizmo — attaching one would let
+    // a drag write a transform nothing converts back through the owner frame. Mixed
+    // selections still attach the bulk pivot, whose write-back goes through
+    // `updateSelectedTransforms`' light branch.
+    const lightOnly =
+      ligIndices.length > 0 &&
+      indices.length +
+        conIndices.length +
+        kitIndices.length +
+        colIndices.length +
+        seatIndices.length ===
+        0
     // Sitting in a seat: the gizmo would render at (or inside) the camera and there is
     // nothing to aim it with — the whole viewport is the preview.
-    if (anyLocked || previewLocked || $seatView.get() !== null) {
+    if (anyLocked || previewLocked || lightOnly || $seatView.get() !== null) {
       target = null
     } else if (multi) {
       this.repositionPivot()
@@ -1667,6 +1859,13 @@ export class EditorScene {
       }
     }
     this.colliderObjects.clear()
+    for (const objs of this.lightObjects.values()) {
+      for (const obj of objs) {
+        this.root.remove(obj.group)
+        obj.dispose()
+      }
+    }
+    this.lightObjects.clear()
     const dom = this.viewport.renderer.domElement
     dom.removeEventListener('pointerdown', this.onPickPointerDown)
     dom.removeEventListener('pointerup', this.onPickPointerUp)

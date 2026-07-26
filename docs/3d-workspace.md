@@ -15,6 +15,7 @@ All code is under `src/three/`.
 | `ColliderObject.ts` | One collision primitive: a fat-line wireframe + a low-alpha fill (the raycast target). Geometry is **unit-normalised**, so the group's `scale` IS the collider's size in meters and the scale gizmo edits dimensions directly. See [colliders.md](./colliders.md). |
 | `wireShapes.ts` | Shared unit-box wireframe builders (box / cylinder / sphere / capsule outlines) used by `ColliderObject` AND `ContainerLayer`. |
 | `IvaSeatObject.ts` | One IVA camera vantage point: an eye sphere + a **+X** forward cone + a **−Z** up stick + a CSS2D index badge (and an optional indicative gaze cone). Sized off `$ivaSeatSettings`, never off the document. See [iva-seats.md](./iva-seats.md). |
+| `LightObject.ts` | One cast-light marker: a color-tinted bulb sphere + a **+X** aim cone (Spot only). A SubPart-owned light is drawn once **per placement** of its owning template, positioned via `coords.lightWorld` (owner scale applies to the offset — deliberately unlike colliders). Sized off `$lightSettings`, never off the document. See [lights.md](./lights.md). |
 | `samplePoints.ts` | Shared world-space geometry sampler (bbox corners or every vertex) for collider fitting and container containment warnings. |
 | `Grid.ts` | Origin grid (XZ plane) + colored axes (1 cell = 1 m). |
 | `SelectionManager.ts` | Raycast click-to-select (fires on pointerup only when the pointer barely moved, so orbit/gizmo drags aren't clicks). |
@@ -118,6 +119,24 @@ The marker never scales with the document (a seat's `scale` is unused); its size
 changes, exactly as it does for connectors. `reconcileIvaSeats` re-applies the document index
 on every pass, which is what renumbers the badges after a reorder.
 
+### Light markers
+
+A `LightObject` is the same idea for a Part's cast lights (see [lights.md](./lights.md)): a
+bulb sphere tinted with the light's own color (floored toward mid-gray when near black so it
+stays visible) plus, for a `Spot`, an aim cone along local **+X** — the direction KSA casts
+the beam. Its id + `instanceIndex` ride `userData.selectable` on the group and every child
+mesh, because a **SubPart-owned light is drawn once per placement of its owning template**
+(the collider multi-instance pattern): all markers are views of ONE document light, they
+follow their placements — including the joint-animation preview pose — and a click records
+which instance was hit so the highlight (and, in a later phase, the gizmo) works through that
+placement's frame. Positioning goes through `coords.lightWorld`, never `colliderWorld` — the
+owner's scale applies to a light's position offset, unlike a collider's — and the objects are
+top-level scene children (never parented under scaled placement groups) because KSA's light
+`Range` is world meters regardless of owner scale. Marker size is the global
+`$lightSettings.markerSize`; a change rebuilds every marker. A light-only selection does not
+attach the transform gizmo yet (that lands with the gizmo phase of
+`plans/LIGHT_MANAGEMENT_PLAN.md`).
+
 ### Seat view (the IVA camera preview)
 
 `Viewport` has a second camera mode. `EditorScene` resolves `$seatView` (a seat **id**) against
@@ -142,9 +161,10 @@ exists exits cleanly rather than parking the camera on a stale eye point.
 
 `EditorScene` subscribes to `$layerView` and `applyLayerVisibility()` sets each
 entity's `group.visible` from its layer's visibility (on reconcile and after async
-builds). A hidden layer renders nothing; three's raycaster also skips
-`visible === false`, so hidden entities are non-clickable. The click-select
-callback additionally rejects hits in a **locked** layer. See [layers.md](./layers.md).
+builds). A hidden layer renders nothing — but three's raycaster does NOT skip
+`visible === false` objects, so the click-select callback explicitly rejects hits on
+hidden layers (and on **locked** ones). Those per-kind guards are load-bearing, not
+belt-and-braces. See [layers.md](./layers.md).
 
 That pass is the **only** writer of `group.visible`, which is what keeps the other visibility
 rules from fighting it: the persisted **Hide interior** toggle (`$hideInterior`) and the

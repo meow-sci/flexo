@@ -20,7 +20,7 @@ of undo history — toggling the eye never creates an undo step. This matches th
 grid/inspector view-pref pattern in [state-persistence.md](./state-persistence.md).
 
 `Layer = { id, name }` (`src/ksa/types.ts`). Array order in `part.layers` is the
-display order. There are five **built-in** layers, all seeded by `createEmptyPart()`
+display order. There are six **built-in** layers, all seeded by `createEmptyPart()`
 and never deletable (`BUILT_IN_LAYER_IDS`):
 
 - **Default** (`DEFAULT_LAYER_ID = 'default'`) — the starting active layer for SubParts.
@@ -33,6 +33,9 @@ and never deletable (`BUILT_IN_LAYER_IDS`):
   interior camera vantage points can be hidden/locked separately from the meshes around
   them (see [iva-seats.md](iva-seats.md)). Array order within `part.ivaSeats` is the
   in-game cycle order, so this layer's rows are ordinals, not names.
+- **Lights** (`LIGHT_LAYER_ID = 'lights'`) — every `PartLight` lives here, so light
+  markers can be hidden/locked separately from the meshes they sit on (see
+  [lights.md](lights.md)).
 - **Kittens** (`KITTEN_LAYER_ID = 'kittens'`) — editor-only kitten visual aides, never
   serialized to export.
 
@@ -57,8 +60,8 @@ All layer **document** mutations are discrete (self-record undo via `pushUndo()`
 - `renameLayer(id, name)` → committed once (on blur/Enter), not per keystroke.
 - `deleteLayer(id, { mode, targetLayerId })` → `'delete-items'` removes the layer's
   entities; `'move-items'` reassigns them (to Default if the target is invalid).
-  Built-in layers (Default, Connectors, Colliders, IVA Seats, Kittens) are protected. Active
-  layer falls back to Default if it was deleted.
+  Built-in layers (Default, Connectors, Colliders, IVA Seats, Lights, Kittens) are protected.
+  Active layer falls back to Default if it was deleted.
 - `reorderLayers(orderedIds)` → reorders (must be a permutation of existing ids).
 
 Ephemeral / selection helpers (no undo):

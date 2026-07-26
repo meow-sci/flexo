@@ -51,6 +51,34 @@ export function setIvaSeatSettings(patch: Partial<IvaSeatSettings>): void {
 }
 
 /**
+ * Light marker appearance in the 3D workspace. Like the seat marker, the size is a
+ * GLOBAL view setting rather than document data — KSA ignores a light's scale (a
+ * {@link import('../ksa/types').PartLight}'s `scale` is pinned) and its `Range` is
+ * world meters regardless of owner scale, so the marker never scales with the part.
+ * {@link src/three/LightObject.ts} reads this; `EditorScene` rebuilds the markers
+ * when it changes.
+ *
+ * Phase 5 (plans/LIGHT_MANAGEMENT_PLAN.md §3.6/§3.9) widens this with the coverage
+ * visualization controls (`showVolumes` / `exposureMode` / `vizExposure` /
+ * `livePreview`) — markerSize is deliberately the only field until then.
+ */
+export interface LightVizSettings {
+  /**
+   * Overall marker size in meters (the bulb sphere's radius is 0.4× this; the Spot
+   * aim cone derives from it). Default matches the IVA seat marker.
+   */
+  markerSize: number
+}
+
+export const $lightSettings = persistentJSON<LightVizSettings>('flexo:lightSettings', {
+  markerSize: 0.12,
+})
+
+export function setLightSettings(patch: Partial<LightVizSettings>): void {
+  $lightSettings.set({ ...$lightSettings.get(), ...patch })
+}
+
+/**
  * Selection-highlight appearance, applied as an emissive tint when an entity is
  * selected. SubPart meshes and kitten visual aides each get their own color +
  * strength (`alpha`, 0–1 = the emissive intensity of the tint). Connectors keep

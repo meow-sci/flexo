@@ -46,6 +46,7 @@ Feature docs live in `docs/`. Read the relevant one before working on an area, a
 - [docs/colliders.md](docs/colliders.md) - authoring a Part's collision volume: KSA's four analytic primitives (there are no collider meshes), why size lives in `Transform.scale`, part-level vs SubPart-owned ownership, the four XML authoring sites and why flexo normalizes them into one
 - [docs/importing-models.md](docs/importing-models.md) - importing a Blender/DCC `.glb`/`.gltf` as real KSA SubParts: the Blender recipe, the glTF→SubPart/placement/material mapping, the warning catalog, storage + export, and the deliberate limits
 - [docs/iva-seats.md](docs/iva-seats.md) - authoring interior camera vantage points: the `<IVASeat>` document model, the rotation ⇄ `<ForwardAxis>`/`<UpAxis>` convention, seat order as game data, the "sit in this seat" preview and its honest limits, and the per-SubPart-template `<Internal>` interior-only flag
+- [docs/lights.md](docs/lights.md) - part cast lights (`<Light>`) as first-class 3D entities: the normalized `PartLight` model (part-level AND SubPart-owned sites), the built-in Lights layer, the bulb + **+X** aim-cone markers, selection semantics ("one light per template → N markers, edits affect all")
 
 # project constitution
 

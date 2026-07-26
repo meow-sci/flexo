@@ -30,6 +30,7 @@ import {
   $selectedColliderIndices,
   $selectedIvaSeatIndices,
   $selectedKittenIndices,
+  $selectedLightIndices,
   duplicatePlacement,
   duplicateSelected,
   isGlassTemplate,
@@ -40,6 +41,7 @@ import {
   selectConnector,
   selectIvaSeat,
   selectKitten,
+  selectLight,
   setPlacementsInternal,
   setSelection,
 } from '../state/editorStore'
@@ -52,6 +54,7 @@ import {
   ENTITY_ONLY_LAYER_IDS,
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
+  LIGHT_LAYER_ID,
   meshKind,
   type Layer,
 } from '../ksa/types'
@@ -67,7 +70,7 @@ function lastSegment(id: string): string {
 }
 
 /** An entity kind that can appear as a row in the Assets list. */
-type Kind = 'subpart' | 'connector' | 'collider' | 'ivaSeat' | 'kitten'
+type Kind = 'subpart' | 'connector' | 'collider' | 'ivaSeat' | 'kitten' | 'light'
 
 /** One asset row. `index` points into the matching `$part` array for its kind. */
 interface Row {
@@ -96,6 +99,7 @@ const PREFIX: Record<Kind, string> = {
   collider: 'col',
   ivaSeat: 'iva',
   kitten: 'kit',
+  light: 'lig',
 }
 const keyOf = (kind: Kind, raw: string) => `${PREFIX[kind]}:${raw}`
 function parseKey(key: string): { kind: Kind; raw: string } {
@@ -111,15 +115,18 @@ function parseKey(key: string): { kind: Kind; raw: string } {
             ? 'collider'
             : p === 'iva'
               ? 'ivaSeat'
-              : 'kitten',
+              : p === 'lig'
+                ? 'light'
+                : 'kitten',
     raw: key.slice(i + 1),
   }
 }
 
 /**
  * The unified inspector "Assets" list: one section per layer (filtered by each
- * layer's "in asset list" toggle), with normal layers listing SubParts, the
- * Connectors layer listing connectors, and the Kittens layer listing kittens.
+ * layer's "in asset list" toggle), with normal layers listing SubParts and the
+ * built-in entity layers listing their own kind (connectors, colliders, IVA seats,
+ * lights, kittens).
  *
  * It is a single react-aria GridList so multi-select spans layers. Because the
  * per-kind selection stores are mutually exclusive, row keys are kind-prefixed and
@@ -136,6 +143,7 @@ export function AssetsList() {
   const selKit = useStore($selectedKittenIndices)
   const selCol = useStore($selectedColliderIndices)
   const selSeat = useStore($selectedIvaSeatIndices)
+  const selLig = useStore($selectedLightIndices)
   const catalogIndex = useStore($catalogIndex)
   const reveal = useStore($revealEntity)
   const [search, setSearch] = useState('')
@@ -147,6 +155,7 @@ export function AssetsList() {
   const kitIdx = new Map(part.kittens.map((k, i) => [k.id, i]))
   const colIdx = new Map(part.colliders.map((c, i) => [c.id, i]))
   const seatIdx = new Map(part.ivaSeats.map((s, i) => [s.id, i]))
+  const ligIdx = new Map(part.lights.map((l, i) => [l.id, i]))
 
   const q = search.trim().toLowerCase()
   const match = (...vals: string[]) => q === '' || vals.some((v) => v.toLowerCase().includes(q))
@@ -212,6 +221,26 @@ export function AssetsList() {
             },
           ]
         })
+      } else if (l.id === LIGHT_LAYER_ID) {
+        rows = part.lights.flatMap((li, i) =>
+          li.layerId === l.id && match(li.id, li.type, li.ownerTemplateId ?? '')
+            ? [
+                {
+                  id: keyOf('light', li.id),
+                  kind: 'light' as const,
+                  index: i,
+                  name: li.id,
+                  // Type plus its owner — a SubPart-owned light behaves very
+                  // differently (one marker per placement, edits affect all), so
+                  // say so; a part-level light just shows its type.
+                  sub: li.ownerTemplateId
+                    ? `${li.type} · via ${lastSegment(li.ownerTemplateId)}`
+                    : li.type,
+                  hidden,
+                },
+              ]
+            : [],
+        )
       } else if (l.id === KITTEN_LAYER_ID) {
         rows = part.kittens.flatMap((k, i) =>
           k.layerId === l.id && match(k.id, k.kind)
@@ -288,6 +317,10 @@ export function AssetsList() {
     const s = part.ivaSeats[i]
     if (s) selectedKeys.add(keyOf('ivaSeat', s.id))
   }
+  for (const i of selLig) {
+    const l = part.lights[i]
+    if (l) selectedKeys.add(keyOf('light', l.id))
+  }
 
   const onSelectionChange = (keys: Selection) => {
     const sub: number[] = []
@@ -295,6 +328,7 @@ export function AssetsList() {
     const kit: number[] = []
     const col: number[] = []
     const seat: number[] = []
+    const lig: number[] = []
     if (keys === 'all') {
       // Select-all (Cmd/Ctrl+A): every enabled (visible + unlocked) row, all kinds.
       for (const s of sections) {
@@ -304,10 +338,11 @@ export function AssetsList() {
           else if (r.kind === 'connector') con.push(r.index)
           else if (r.kind === 'collider') col.push(r.index)
           else if (r.kind === 'ivaSeat') seat.push(r.index)
+          else if (r.kind === 'light') lig.push(r.index)
           else kit.push(r.index)
         }
       }
-      setSelection(sub, con, kit, col, seat)
+      setSelection(sub, con, kit, col, seat, lig)
       return
     }
     const next = new Set([...keys].map(String))
@@ -332,12 +367,15 @@ export function AssetsList() {
       } else if (kind === 'ivaSeat') {
         const i = seatIdx.get(raw)
         if (i != null) seat.push(i)
+      } else if (kind === 'light') {
+        const i = ligIdx.get(raw)
+        if (i != null) lig.push(i)
       } else {
         const i = kitIdx.get(raw)
         if (i != null) kit.push(i)
       }
     }
-    setSelection(sub, con, kit, col, seat)
+    setSelection(sub, con, kit, col, seat, lig)
   }
 
   // A 3D-viewport click can't tell the list to scroll; it signals via $revealEntity
@@ -565,9 +603,9 @@ function SubPartRowMenu({ index }: { index: number }) {
 }
 
 /**
- * Per-row menu for a connector, collider, IVA seat or kitten: Duplicate + Delete.
- * These act via the shared selection-based store actions (which branch by kind), so
- * the row is selected first — natural for a single-row action.
+ * Per-row menu for a connector, collider, IVA seat, light or kitten: Duplicate +
+ * Delete. These act via the shared selection-based store actions (which branch by
+ * kind), so the row is selected first — natural for a single-row action.
  */
 function SimpleRowMenu({ row }: { row: Row }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -579,7 +617,9 @@ function SimpleRowMenu({ row }: { row: Row }) {
         ? 'collider'
         : row.kind === 'ivaSeat'
           ? 'IVA seat'
-          : 'kitten'
+          : row.kind === 'light'
+            ? 'light'
+            : 'kitten'
   const select = () =>
     row.kind === 'connector'
       ? selectConnector(row.index)
@@ -587,7 +627,9 @@ function SimpleRowMenu({ row }: { row: Row }) {
         ? selectCollider(row.index)
         : row.kind === 'ivaSeat'
           ? selectIvaSeat(row.index)
-          : selectKitten(row.index)
+          : row.kind === 'light'
+            ? selectLight(row.index)
+            : selectKitten(row.index)
 
   return (
     <>

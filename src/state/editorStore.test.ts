@@ -71,6 +71,8 @@ import {
   $selectedColliderIndices,
   $selectedIvaSeatIndex,
   $selectedIvaSeatIndices,
+  $selectedLightIndex,
+  $selectedLightIndices,
   $canUndo,
   addCollider,
   removeCollider,
@@ -99,11 +101,16 @@ import {
   addKitten,
   addLight,
   removeLight,
+  selectLight,
+  setSelectedLights,
   setLightPosition,
   setLightRayTracing,
   setLightRotation,
   setLightType,
   updateLight,
+  updateLightTransform,
+  clearSelection,
+  deselectLayer,
   addPart,
   addPartCombustor,
   addSubPart,
@@ -757,6 +764,122 @@ describe('editorStore', () => {
     removeLight(5)
     setLightType(-1, 'Point')
     expect(lights()).toHaveLength(1)
+  })
+
+  it('selects lights exclusively, toggles additively, and clears with the rest', () => {
+    addLight(null)
+    addLight(null)
+    addCollider('Box') // selects the collider
+    expect($selectedColliderIndices.get()).toEqual([0])
+
+    selectLight(0)
+    expect($selectedLightIndices.get()).toEqual([0])
+    expect($selectedLightIndex.get()).toBe(0)
+    expect($selectedColliderIndices.get()).toEqual([]) // single-kind setters are exclusive
+
+    toggleEntity('light', 1) // additive within the kind
+    expect($selectedLightIndices.get()).toEqual([0, 1])
+    toggleEntity('light', 0)
+    expect($selectedLightIndices.get()).toEqual([1])
+
+    setSelectedLights([1, 0, 1, -2])
+    expect($selectedLightIndices.get()).toEqual([1, 0]) // deduped, negatives dropped
+
+    clearSelection()
+    expect($selectedLightIndices.get()).toEqual([])
+    expect($selectedLightIndex.get()).toBe(-1)
+  })
+
+  it('deselectLayer prunes selected lights (the locked-layer contract) and selectLayerEntities picks them up', () => {
+    addLight(null)
+    addLight('CoreElectricalA_Subpart_SpotlightA')
+
+    setSelectedLights([0, 1])
+    deselectLayer(LIGHT_LAYER_ID)
+    expect($selectedLightIndices.get()).toEqual([])
+
+    selectLayerEntities(LIGHT_LAYER_ID)
+    expect($selectedLightIndices.get()).toEqual([0, 1])
+    // Sweeping another layer clears the light term (setSelection clears omitted kinds).
+    selectLayerEntities(COLLIDER_LAYER_ID)
+    expect($selectedLightIndices.get()).toEqual([])
+  })
+
+  it('removeSelected deletes a selected light in one undo step and keeps a neighbor selected', () => {
+    addLight(null)
+    addLight(null)
+    selectLight(0)
+    removeSelected()
+    expect($part.get().lights.map((l) => l.id)).toEqual(['_light2'])
+    expect($selectedLightIndices.get()).toEqual([0]) // neighbor of the same kind
+    undo()
+    expect($part.get().lights).toHaveLength(2)
+  })
+
+  it('duplicateSelected clones a light (fresh id, same owner, Lights layer) and selects the copy', () => {
+    const tmpl = 'CoreElectricalA_Subpart_SpotlightA'
+    addLight(tmpl, { rangeM: 7 })
+    selectLight(0)
+    duplicateSelected()
+    const lights = $part.get().lights
+    expect(lights).toHaveLength(2)
+    expect(lights[1].id).toBe('_light2') // fresh id — copies never collide
+    expect(lights[1].ownerTemplateId).toBe(tmpl) // duplicate keeps the owner
+    expect(lights[1].layerId).toBe(LIGHT_LAYER_ID)
+    expect(lights[1].rangeM).toBe(7) // field-for-field copy
+    expect($selectedLightIndices.get()).toEqual([1]) // selection moves to the duplicate
+    undo()
+    expect($part.get().lights).toHaveLength(1)
+  })
+
+  it("updateSelectedTransforms routes 'light' through assignLight — scale pinned, kitten at the same index untouched", () => {
+    addKitten('hunter') // kitten index 0, at the origin
+    addLight(null) // light index 0, at the origin
+    selectLight(0)
+    pushUndo('move light')
+    updateSelectedTransforms([
+      {
+        kind: 'light',
+        index: 0,
+        transform: {
+          position: { x: 1, y: 2, z: 3 },
+          rotation: { x: 0.1, y: 0, z: 0 },
+          scale: { x: 4, y: 5, z: 6 }, // a scale write must be pinned away
+        },
+      },
+    ])
+    const light = $part.get().lights[0]
+    expect(light.position).toEqual({ x: 1, y: 2, z: 3 })
+    expect(light.rotation.x).toBeCloseTo(0.1, 12)
+    expect(light.scale).toEqual({ x: 1, y: 1, z: 1 })
+    // The misroute hazard this branch exists for: an unhandled kind would fall into the
+    // final else and move the KITTEN at the same index instead.
+    expect($part.get().kittens[0].position).toEqual({ x: 0, y: 0, z: 0 })
+    undo()
+    expect($part.get().lights[0].position).toEqual({ x: 0, y: 0, z: 0 })
+  })
+
+  it('updateLightTransform is a streaming owner-frame write with scale pinned', () => {
+    addLight(null)
+    // Streaming: no internal undo — emulate the interaction-start push.
+    pushUndo('move light')
+    updateLightTransform(0, {
+      position: { x: -1, y: 0.5, z: 2 },
+      rotation: { x: 0, y: 1.2, z: 0 },
+      scale: { x: 9, y: 9, z: 9 },
+    })
+    // Out-of-range indices are ignored (no crash).
+    updateLightTransform(5, {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+    })
+    const l = $part.get().lights[0]
+    expect(l.position).toEqual({ x: -1, y: 0.5, z: 2 })
+    expect(l.rotation.y).toBeCloseTo(1.2, 12)
+    expect(l.scale).toEqual({ x: 1, y: 1, z: 1 })
+    undo() // the one pushed step reverts the whole session
+    expect($part.get().lights[0].position).toEqual({ x: 0, y: 0, z: 0 })
   })
 
   it('toggles custom mass and decoupler with undo', () => {

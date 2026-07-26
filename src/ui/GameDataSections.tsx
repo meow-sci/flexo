@@ -17,6 +17,8 @@ import {
   removePowerConsumer,
   removeSolarPanel,
   removeTank,
+  revealEntity,
+  selectLight,
   setBatteryCapacity,
   setControllable,
   setCustomMass,
@@ -311,6 +313,19 @@ export function LightsSection({ subPartTemplateId }: { subPartTemplateId: string
         const isSpot = light.type === 'Spot'
         return (
           <ItemCard key={light.id} title={`Light ${i + 1}`} onRemove={() => removeLight(index)}>
+            {/* Lights are first-class 3D entities: hand off to the workspace marker
+                (the index passed is into part.lights, not this filtered view). */}
+            <Button
+              size="sm"
+              variant="ghost"
+              className="self-start"
+              onPress={() => {
+                selectLight(index)
+                revealEntity('light', light.id)
+              }}
+            >
+              Select in 3D
+            </Button>
             <Field label="Type">
               <Select
                 size="sm"

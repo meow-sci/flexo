@@ -16,12 +16,21 @@ import {
   addConnector,
   addIvaSeat,
   addKitten,
+  addLight,
   addSubPart,
+  revealEntity,
+  selectLight,
 } from '../state/editorStore'
 import { requestColliderFit } from '../state/colliderStore'
 import { enterEngineMode } from '../state/engineStore'
 import { makeKittenMeshPart, openImportModel } from '../state/customAssetStore'
-import { COLLIDER_SHAPES, meshKind, type ColliderShape, type KittenKind } from '../ksa/types'
+import {
+  COLLIDER_SHAPES,
+  meshKind,
+  type ColliderShape,
+  type KittenKind,
+  type LightType,
+} from '../ksa/types'
 import { SubPartPopup } from './SubPartBrowser'
 import { PartPopup } from './PartBrowser'
 import { CustomTextureDialog } from './CustomTextureDialog'
@@ -111,6 +120,26 @@ export function AddButton() {
               </Popover>
             </SubmenuTrigger>
             <MenuItem id="iva-seat">IVA Seat</MenuItem>
+            <SubmenuTrigger>
+              <MenuItem id="light">Light</MenuItem>
+              <Popover className="w-44">
+                {/* Part-level at the origin — instantly visible and selectable. A
+                    SubPart-owned light is authored from the SubPart Data dialog, where
+                    the owner template is unambiguous. addLight appends, so the new
+                    light is the last entry (it returns nothing). */}
+                <Menu
+                  onAction={(key) => {
+                    addLight(null, { type: key as LightType })
+                    const lights = $part.get().lights
+                    selectLight(lights.length - 1)
+                    revealEntity('light', lights[lights.length - 1].id)
+                  }}
+                >
+                  <MenuItem id="Spot">Spot light</MenuItem>
+                  <MenuItem id="Point">Point light</MenuItem>
+                </Menu>
+              </Popover>
+            </SubmenuTrigger>
             <SubmenuTrigger>
               <MenuItem id="kitten">Kitten</MenuItem>
               <Popover className="w-40">

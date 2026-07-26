@@ -171,6 +171,17 @@ export const $selectedIvaSeatIndex = computed($selectedIvaSeatIndices, (indices)
 )
 
 /**
+ * Selected light indices (multi-select), ordered by selection. Mutually exclusive
+ * with the other kind stores under the single-kind setters, but participates equally in
+ * the unified {@link setSelection} / {@link toggleEntity} paths — exactly like colliders.
+ */
+export const $selectedLightIndices = atom<number[]>([])
+/** Primary selected light index (last added to the selection), or -1. */
+export const $selectedLightIndex = computed($selectedLightIndices, (indices) =>
+  indices.length > 0 ? indices[indices.length - 1] : -1,
+)
+
+/**
  * Snapshots of copied entities (SubParts, connectors, kittens, colliders, IVA seats),
  * stored WITHOUT
  * their ids — paste regenerates fresh ids so copies never collide. Ephemeral
@@ -357,6 +368,14 @@ function clampSelection(): void {
     .filter((i) => i >= 0 && i < part.ivaSeats.length)
   if (clampedSeat.length !== $selectedIvaSeatIndices.get().length)
     $selectedIvaSeatIndices.set(clampedSeat)
+  const clampedCol = $selectedColliderIndices
+    .get()
+    .filter((i) => i >= 0 && i < part.colliders.length)
+  if (clampedCol.length !== $selectedColliderIndices.get().length)
+    $selectedColliderIndices.set(clampedCol)
+  const clampedLig = $selectedLightIndices.get().filter((i) => i >= 0 && i < part.lights.length)
+  if (clampedLig.length !== $selectedLightIndices.get().length)
+    $selectedLightIndices.set(clampedLig)
 }
 
 /** Resets the active layer to Default if it no longer exists (e.g. after undo). */
@@ -1294,10 +1313,10 @@ export function setConnectorCapabilities(
 }
 
 /**
- * Removes every selected entity — SubParts, connectors, colliders, IVA seats AND
- * kittens — in one undo step. A single-entity delete keeps a neighbor of that kind
- * selected (matching the old per-kind behavior); any multi/mixed delete clears the
- * selection.
+ * Removes every selected entity — SubParts, connectors, colliders, IVA seats,
+ * lights AND kittens — in one undo step. A single-entity delete keeps a neighbor of
+ * that kind selected (matching the old per-kind behavior); any multi/mixed delete
+ * clears the selection.
  */
 export function removeSelected(): void {
   const part0 = $part.get()
@@ -1306,7 +1325,8 @@ export function removeSelected(): void {
   const kit = $selectedKittenIndices.get().filter((i) => i >= 0 && i < part0.kittens.length)
   const col = $selectedColliderIndices.get().filter((i) => i >= 0 && i < part0.colliders.length)
   const seat = $selectedIvaSeatIndices.get().filter((i) => i >= 0 && i < part0.ivaSeats.length)
-  const total = sub.length + con.length + kit.length + col.length + seat.length
+  const lig = $selectedLightIndices.get().filter((i) => i >= 0 && i < part0.lights.length)
+  const total = sub.length + con.length + kit.length + col.length + seat.length + lig.length
   if (total === 0) return
 
   const kinds =
@@ -1314,7 +1334,8 @@ export function removeSelected(): void {
     (con.length ? 1 : 0) +
     (kit.length ? 1 : 0) +
     (col.length ? 1 : 0) +
-    (seat.length ? 1 : 0)
+    (seat.length ? 1 : 0) +
+    (lig.length ? 1 : 0)
   const description =
     kinds > 1
       ? 'delete'
@@ -1334,9 +1355,13 @@ export function removeSelected(): void {
               ? col.length === 1
                 ? 'delete collider'
                 : 'delete colliders'
-              : seat.length === 1
-                ? 'delete IVA seat'
-                : 'delete IVA seats'
+              : seat.length
+                ? seat.length === 1
+                  ? 'delete IVA seat'
+                  : 'delete IVA seats'
+                : lig.length === 1
+                  ? 'delete light'
+                  : 'delete lights'
   const detail =
     total === 1
       ? ((sub.length
@@ -1347,13 +1372,16 @@ export function removeSelected(): void {
               ? part0.kittens[kit[0]]?.id
               : col.length
                 ? part0.colliders[col[0]]?.id
-                : part0.ivaSeats[seat[0]]?.id) ?? '')
+                : seat.length
+                  ? part0.ivaSeats[seat[0]]?.id
+                  : part0.lights[lig[0]]?.id) ?? '')
       : [
           sub.length ? `${sub.length} part${sub.length === 1 ? '' : 's'}` : '',
           con.length ? `${con.length} connector${con.length === 1 ? '' : 's'}` : '',
           kit.length ? `${kit.length} kitten${kit.length === 1 ? '' : 's'}` : '',
           col.length ? `${col.length} collider${col.length === 1 ? '' : 's'}` : '',
           seat.length ? `${seat.length} IVA seat${seat.length === 1 ? '' : 's'}` : '',
+          lig.length ? `${lig.length} light${lig.length === 1 ? '' : 's'}` : '',
         ]
           .filter(Boolean)
           .join(', ')
@@ -1366,6 +1394,7 @@ export function removeSelected(): void {
   for (const i of [...kit].sort((a, b) => b - a)) part.kittens.splice(i, 1)
   for (const i of [...col].sort((a, b) => b - a)) part.colliders.splice(i, 1)
   for (const i of [...seat].sort((a, b) => b - a)) part.ivaSeats.splice(i, 1)
+  for (const i of [...lig].sort((a, b) => b - a)) part.lights.splice(i, 1)
   $part.set(part)
 
   if (total === 1 && sub.length === 1 && part.placements.length > 0) {
@@ -1378,6 +1407,8 @@ export function removeSelected(): void {
     setSelection([], [], [], [Math.min(col[0], part.colliders.length - 1)])
   } else if (total === 1 && seat.length === 1 && part.ivaSeats.length > 0) {
     setSelection([], [], [], [], [Math.min(seat[0], part.ivaSeats.length - 1)])
+  } else if (total === 1 && lig.length === 1 && part.lights.length > 0) {
+    setSelection([], [], [], [], [], [Math.min(lig[0], part.lights.length - 1)])
   } else {
     clearSelection()
   }
@@ -1402,7 +1433,7 @@ export function removePlacement(index: number): void {
   else if (next.some((v, k) => v !== sel[k])) $selectedIndices.set(next)
 }
 
-/** Duplicates every selected entity (SubParts, connectors, colliders, seats, kittens) and selects the copies. */
+/** Duplicates every selected entity (SubParts, connectors, colliders, seats, lights, kittens) and selects the copies. */
 export function duplicateSelected(): void {
   const part0 = $part.get()
   const sub = $selectedIndices.get().filter((i) => i >= 0 && i < part0.placements.length)
@@ -1410,7 +1441,8 @@ export function duplicateSelected(): void {
   const kit = $selectedKittenIndices.get().filter((i) => i >= 0 && i < part0.kittens.length)
   const col = $selectedColliderIndices.get().filter((i) => i >= 0 && i < part0.colliders.length)
   const seat = $selectedIvaSeatIndices.get().filter((i) => i >= 0 && i < part0.ivaSeats.length)
-  const total = sub.length + con.length + kit.length + col.length + seat.length
+  const lig = $selectedLightIndices.get().filter((i) => i >= 0 && i < part0.lights.length)
+  const total = sub.length + con.length + kit.length + col.length + seat.length + lig.length
   if (total === 0) return
 
   const detail =
@@ -1423,8 +1455,10 @@ export function duplicateSelected(): void {
               ? part0.kittens[kit[0]]?.id
               : col.length
                 ? part0.colliders[col[0]]?.id
-                : part0.ivaSeats[seat[0]]?.id) ?? '')
-      : entityCountLabel(sub.length, con.length, kit.length, col.length, seat.length)
+                : seat.length
+                  ? part0.ivaSeats[seat[0]]?.id
+                  : part0.lights[lig[0]]?.id) ?? '')
+      : entityCountLabel(sub.length, con.length, kit.length, col.length, seat.length, lig.length)
   pushUndo('duplicate', detail)
 
   const part = clone(part0)
@@ -1433,6 +1467,7 @@ export function duplicateSelected(): void {
   const newKit: number[] = []
   const newCol: number[] = []
   const newSeat: number[] = []
+  const newLig: number[] = []
   for (const i of [...sub].sort((a, b) => a - b)) {
     const src = part.placements[i]
     if (!src) continue
@@ -1499,20 +1534,41 @@ export function duplicateSelected(): void {
     })
     newSeat.push(part.ivaSeats.length - 1)
   }
+  // A duplicate keeps the source's owner: a SubPart-owned copy lands on the same
+  // template (and therefore on every placement of it), like colliders.
+  for (const i of [...lig].sort((a, b) => a - b)) {
+    const src = part.lights[i]
+    if (!src) continue
+    part.lights.push({
+      ...structuredClone(src),
+      id: nextLightId(part),
+      layerId: LIGHT_LAYER_ID,
+    })
+    newLig.push(part.lights.length - 1)
+  }
   $part.set(part)
-  setSelection(newSub, newCon, newKit, newCol, newSeat)
+  setSelection(newSub, newCon, newKit, newCol, newSeat, newLig)
 }
 
 /** Human label for a count of mixed entities, e.g. "3 parts" or "5 items". */
-function entityCountLabel(sub: number, con: number, kit: number, col: number, seat = 0): string {
-  const total = sub + con + kit + col + seat
-  const kinds = (sub ? 1 : 0) + (con ? 1 : 0) + (kit ? 1 : 0) + (col ? 1 : 0) + (seat ? 1 : 0)
+function entityCountLabel(
+  sub: number,
+  con: number,
+  kit: number,
+  col: number,
+  seat = 0,
+  lig = 0,
+): string {
+  const total = sub + con + kit + col + seat + lig
+  const kinds =
+    (sub ? 1 : 0) + (con ? 1 : 0) + (kit ? 1 : 0) + (col ? 1 : 0) + (seat ? 1 : 0) + (lig ? 1 : 0)
   if (kinds > 1) return `${total} items`
   if (sub) return `${sub} ${sub === 1 ? 'part' : 'parts'}`
   if (con) return `${con} ${con === 1 ? 'connector' : 'connectors'}`
   if (kit) return `${kit} ${kit === 1 ? 'kitten' : 'kittens'}`
   if (col) return `${col} ${col === 1 ? 'collider' : 'colliders'}`
-  return `${seat} IVA seat${seat === 1 ? '' : 's'}`
+  if (seat) return `${seat} IVA seat${seat === 1 ? '' : 's'}`
+  return `${lig} light${lig === 1 ? '' : 's'}`
 }
 
 /**
@@ -1672,6 +1728,7 @@ export function selectPlacement(index: number): void {
   $selectedConnectorIndices.set([])
   $selectedColliderIndices.set([])
   $selectedIvaSeatIndices.set([])
+  $selectedLightIndices.set([])
   $selectedKittenIndices.set([])
   $selectedIndices.set(index >= 0 ? [index] : [])
 }
@@ -1681,6 +1738,7 @@ export function setSelectedPlacements(indices: readonly number[]): void {
   $selectedConnectorIndices.set([])
   $selectedColliderIndices.set([])
   $selectedIvaSeatIndices.set([])
+  $selectedLightIndices.set([])
   $selectedKittenIndices.set([])
   const seen = new Set<number>()
   const next: number[] = []
@@ -1709,6 +1767,7 @@ export function selectConnector(index: number): void {
   $selectedIndices.set([])
   $selectedColliderIndices.set([])
   $selectedIvaSeatIndices.set([])
+  $selectedLightIndices.set([])
   $selectedKittenIndices.set([])
   $selectedConnectorIndices.set(index >= 0 ? [index] : [])
 }
@@ -1718,6 +1777,7 @@ export function setSelectedConnectors(indices: readonly number[]): void {
   $selectedIndices.set([])
   $selectedColliderIndices.set([])
   $selectedIvaSeatIndices.set([])
+  $selectedLightIndices.set([])
   $selectedKittenIndices.set([])
   const seen = new Set<number>()
   const next: number[] = []
@@ -1736,6 +1796,7 @@ export function selectKitten(index: number): void {
   $selectedConnectorIndices.set([])
   $selectedColliderIndices.set([])
   $selectedIvaSeatIndices.set([])
+  $selectedLightIndices.set([])
   $selectedKittenIndices.set(index >= 0 ? [index] : [])
 }
 
@@ -1744,6 +1805,7 @@ export function selectCollider(index: number): void {
   $selectedIndices.set([])
   $selectedConnectorIndices.set([])
   $selectedIvaSeatIndices.set([])
+  $selectedLightIndices.set([])
   $selectedKittenIndices.set([])
   $selectedColliderIndices.set(index >= 0 ? [index] : [])
 }
@@ -1753,6 +1815,7 @@ export function setSelectedColliders(indices: readonly number[]): void {
   $selectedIndices.set([])
   $selectedConnectorIndices.set([])
   $selectedIvaSeatIndices.set([])
+  $selectedLightIndices.set([])
   $selectedKittenIndices.set([])
   $selectedColliderIndices.set(dedupeIndices(indices))
 }
@@ -1762,6 +1825,7 @@ export function selectIvaSeat(index: number): void {
   $selectedIndices.set([])
   $selectedConnectorIndices.set([])
   $selectedColliderIndices.set([])
+  $selectedLightIndices.set([])
   $selectedKittenIndices.set([])
   $selectedIvaSeatIndices.set(index >= 0 ? [index] : [])
 }
@@ -1771,8 +1835,29 @@ export function setSelectedIvaSeats(indices: readonly number[]): void {
   $selectedIndices.set([])
   $selectedConnectorIndices.set([])
   $selectedColliderIndices.set([])
+  $selectedLightIndices.set([])
   $selectedKittenIndices.set([])
   $selectedIvaSeatIndices.set(dedupeIndices(indices))
+}
+
+/** Selects a light by index (clears any SubPart/connector/collider/seat/kitten selection). */
+export function selectLight(index: number): void {
+  $selectedIndices.set([])
+  $selectedConnectorIndices.set([])
+  $selectedColliderIndices.set([])
+  $selectedIvaSeatIndices.set([])
+  $selectedKittenIndices.set([])
+  $selectedLightIndices.set(index >= 0 ? [index] : [])
+}
+
+/** Replaces light selection with the given indices (deduped). Clears the other kinds. */
+export function setSelectedLights(indices: readonly number[]): void {
+  $selectedIndices.set([])
+  $selectedConnectorIndices.set([])
+  $selectedColliderIndices.set([])
+  $selectedIvaSeatIndices.set([])
+  $selectedKittenIndices.set([])
+  $selectedLightIndices.set(dedupeIndices(indices))
 }
 
 /** Replaces kitten selection with the given indices (deduped, order-preserving). Clears SubPart/connector selection. */
@@ -1781,6 +1866,7 @@ export function setSelectedKittens(indices: readonly number[]): void {
   $selectedConnectorIndices.set([])
   $selectedColliderIndices.set([])
   $selectedIvaSeatIndices.set([])
+  $selectedLightIndices.set([])
   const seen = new Set<number>()
   const next: number[] = []
   for (const i of indices) {
@@ -1798,11 +1884,12 @@ export function clearSelection(): void {
   $selectedConnectorIndices.set([])
   $selectedColliderIndices.set([])
   $selectedIvaSeatIndices.set([])
+  $selectedLightIndices.set([])
   $selectedKittenIndices.set([])
 }
 
-/** An entity kind that can be selected (SubPart placement, connector, collider, IVA seat, or kitten). */
-export type SelectableKind = 'subpart' | 'connector' | 'collider' | 'ivaSeat' | 'kitten'
+/** An entity kind that can be selected (SubPart placement, connector, collider, IVA seat, kitten, or light). */
+export type SelectableKind = 'subpart' | 'connector' | 'collider' | 'ivaSeat' | 'kitten' | 'light'
 
 const dedupeIndices = (xs: readonly number[]): number[] => {
   const seen = new Set<number>()
@@ -1816,12 +1903,12 @@ const dedupeIndices = (xs: readonly number[]): number[] => {
 }
 
 /**
- * Unified selection setter — sets all five kind stores at once (deduped) WITHOUT
+ * Unified selection setter — sets all six kind stores at once (deduped) WITHOUT
  * the mutual-exclusion clearing that the per-kind setters apply. This lets a
- * selection span SubParts, connectors, colliders, IVA seats and kittens together
- * (the Assets list's native multi-select + select-all). Negative/duplicate indices
- * are dropped. The collider and seat lists are DEFAULTED so callers that can't carry
- * those kinds stay unchanged — but note every omitted list is still CLEARED.
+ * selection span SubParts, connectors, colliders, IVA seats, lights and kittens
+ * together (the Assets list's native multi-select + select-all). Negative/duplicate
+ * indices are dropped. The collider/seat/light lists are DEFAULTED so callers that
+ * can't carry those kinds stay unchanged — but note every omitted list is still CLEARED.
  */
 export function setSelection(
   subIndices: readonly number[],
@@ -1829,12 +1916,14 @@ export function setSelection(
   kitIndices: readonly number[],
   colIndices: readonly number[] = [],
   seatIndices: readonly number[] = [],
+  lightIndices: readonly number[] = [],
 ): void {
   $selectedIndices.set(dedupeIndices(subIndices))
   $selectedConnectorIndices.set(dedupeIndices(conIndices))
   $selectedKittenIndices.set(dedupeIndices(kitIndices))
   $selectedColliderIndices.set(dedupeIndices(colIndices))
   $selectedIvaSeatIndices.set(dedupeIndices(seatIndices))
+  $selectedLightIndices.set(dedupeIndices(lightIndices))
 }
 
 /**
@@ -1853,7 +1942,9 @@ export function toggleEntity(kind: SelectableKind, index: number): void {
           ? $selectedColliderIndices
           : kind === 'ivaSeat'
             ? $selectedIvaSeatIndices
-            : $selectedKittenIndices
+            : kind === 'light'
+              ? $selectedLightIndices
+              : $selectedKittenIndices
   const cur = store.get()
   store.set(cur.includes(index) ? cur.filter((i) => i !== index) : [...cur, index])
 }
@@ -1884,9 +1975,12 @@ export interface SelectedTransformRef {
 
 /**
  * All selected entities (SubParts, then connectors, then colliders, then IVA seats,
- * then kittens) with their transforms. This is what the gizmo, the keyboard
- * nudge/rotate tools and the bulk inspector all iterate — being listed here is what
- * makes a seat participate in those for free.
+ * then kittens, then lights) with their transforms. This is what the gizmo, the
+ * keyboard nudge/rotate tools and the bulk inspector all iterate — being listed here
+ * is what makes a seat (or a light) participate in those for free. NOTE a light's
+ * transform is its OWNER-frame transform verbatim (part frame only when part-level),
+ * like a collider's — Phase 4's `worldTransformRefs` lift is what puts it in part
+ * space for bulk math.
  */
 export function selectedTransformRefs(): SelectedTransformRef[] {
   const part = $part.get()
@@ -1924,6 +2018,10 @@ export function selectedTransformRefs(): SelectedTransformRef[] {
   for (const i of $selectedKittenIndices.get()) {
     const k = part.kittens[i]
     if (k) out.push({ kind: 'kitten', index: i, transform: tx(k), layerId: k.layerId, name: k.id })
+  }
+  for (const i of $selectedLightIndices.get()) {
+    const l = part.lights[i]
+    if (l) out.push({ kind: 'light', index: i, transform: tx(l), layerId: l.layerId, name: l.id })
   }
   return out
 }
@@ -2032,6 +2130,9 @@ export function updateSelectedTransforms(
     else if (kind === 'connector') assign(part.connectors[index], transform)
     else if (kind === 'collider') assignCollider(part.colliders[index], transform)
     else if (kind === 'ivaSeat') assignIvaSeat(part.ivaSeats[index], transform)
+    // 'light' MUST be routed before the kitten fallback: an unhandled kind would fall
+    // into the final else and silently corrupt the KITTEN at the same index.
+    else if (kind === 'light') assignLight(part.lights[index], transform)
     else assign(part.kittens[index], transform)
   }
   $part.set(part)
@@ -2062,6 +2163,21 @@ function assignIvaSeat(s: IvaSeat | undefined, t: PlacementTransform): void {
   s.position = { ...t.position }
   s.rotation = { ...t.rotation }
   s.scale = { x: 1, y: 1, z: 1 }
+}
+
+/**
+ * Writes a transform onto a light: position + rotation only, with `scale` PINNED to
+ * (1,1,1) — the {@link assignIvaSeat} pattern. KSA parses a light's `<Scale>` but
+ * ignores it (and flexo never emits it — see {@link PartLight}), so pinning here makes
+ * a scale-mode gizmo drag / bulk transform a silent no-op on a light instead of writing
+ * a number that could never be emitted. The transform is the light's OWNER-frame
+ * transform (part frame only when {@link PartLight.ownerTemplateId} is null).
+ */
+function assignLight(l: PartLight | undefined, t: PlacementTransform): void {
+  if (!l) return
+  l.position = { ...t.position }
+  l.rotation = { ...t.rotation }
+  l.scale = { x: 1, y: 1, z: 1 }
 }
 
 /**
@@ -2125,7 +2241,8 @@ export function scaleEverything(factor: Vec3): void {
 
 /**
  * Updates the transform of whichever entity is selected (SubPart, connector,
- * collider, IVA seat or kitten). No undo — the caller pushes once at interaction start.
+ * collider, IVA seat, light or kitten). No undo — the caller pushes once at
+ * interaction start.
  */
 export function updateSelectedTransform(t: PlacementTransform): void {
   const coli = $selectedColliderIndex.get()
@@ -2136,6 +2253,11 @@ export function updateSelectedTransform(t: PlacementTransform): void {
   const seati = $selectedIvaSeatIndex.get()
   if (seati >= 0) {
     updateIvaSeatTransform(seati, t)
+    return
+  }
+  const li = $selectedLightIndex.get()
+  if (li >= 0) {
+    updateLightTransform(li, t)
     return
   }
   const ki = $selectedKittenIndex.get()
@@ -2498,6 +2620,21 @@ export function setLightRotation(index: number, rotation: EulerXYZ): void {
   if (index < 0 || index >= current.lights.length) return
   const part = clone(current)
   part.lights[index].rotation = rotation
+  $part.set(part)
+}
+
+/**
+ * Like {@link updatePlacementTransform} but for a light: the OWNER-frame transform,
+ * scale pinned to (1,1,1) via {@link assignLight}. No undo — the caller pushes once at
+ * interaction start (gizmo drag / field focus). Pulled forward from the gizmo phase so
+ * a transform write on a selected light has a dedicated route and can never fall into
+ * {@link updateSelectedTransforms}'s kitten fallback.
+ */
+export function updateLightTransform(index: number, t: PlacementTransform): void {
+  const current = $part.get()
+  if (index < 0 || index >= current.lights.length) return
+  const part = clone(current)
+  assignLight(part.lights[index], t)
   $part.set(part)
 }
 
@@ -3550,8 +3687,9 @@ export function setActiveLayer(id: string): void {
 }
 
 /**
- * Selects every entity in a layer — all of its SubParts, connectors, and kittens
- * at once (selection can span kinds). Clears when the layer is empty.
+ * Selects every entity in a layer — all of its SubParts, connectors, kittens,
+ * colliders, IVA seats and lights at once (selection can span kinds). Clears when
+ * the layer is empty.
  */
 export function selectLayerEntities(id: string): void {
   const part = $part.get()
@@ -3561,6 +3699,7 @@ export function selectLayerEntities(id: string): void {
     part.kittens.flatMap((k, i) => (k.layerId === id ? [i] : [])),
     part.colliders.flatMap((c, i) => (c.layerId === id ? [i] : [])),
     part.ivaSeats.flatMap((s, i) => (s.layerId === id ? [i] : [])),
+    part.lights.flatMap((l, i) => (l.layerId === id ? [i] : [])),
   )
 }
 
@@ -3593,6 +3732,8 @@ export function deselectLayer(layerId: string): void {
     .filter((i) => part.ivaSeats[i]?.layerId !== layerId)
   if (keptSeat.length !== $selectedIvaSeatIndices.get().length)
     $selectedIvaSeatIndices.set(keptSeat)
+  const keptLig = $selectedLightIndices.get().filter((i) => part.lights[i]?.layerId !== layerId)
+  if (keptLig.length !== $selectedLightIndices.get().length) $selectedLightIndices.set(keptLig)
 }
 
 export function newPart(): void {

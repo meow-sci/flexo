@@ -10,10 +10,19 @@ import {
   $selectedIvaSeatIndex,
   $selectedIvaSeatIndices,
   $selectedKittenIndices,
+  $selectedLightIndex,
+  $selectedLightIndices,
   selectedTransformRefs,
   type SelectedTransformRef,
 } from './editorStore'
-import type { Connector, IvaSeat, Layer, PartCollider, SubPartPlacement } from '../ksa/types'
+import type {
+  Connector,
+  IvaSeat,
+  Layer,
+  PartCollider,
+  PartLight,
+  SubPartPlacement,
+} from '../ksa/types'
 
 /** The currently selected placement when exactly one SubPart is selected, else null. */
 export const $selectedPlacement = computed(
@@ -38,11 +47,21 @@ export const $selectedPlacements = computed(
     }),
 )
 
-/** True when anything (SubParts, connectors, IVA seats, or kittens) is selected. */
+/** True when anything (SubParts, connectors, IVA seats, lights, or kittens) is selected. */
 export const $hasSelection = computed(
-  [$selectedIndices, $selectedConnectorIndices, $selectedKittenIndices, $selectedIvaSeatIndices],
-  (indices, conIndices, kitIndices, seatIndices): boolean =>
-    indices.length > 0 || conIndices.length > 0 || kitIndices.length > 0 || seatIndices.length > 0,
+  [
+    $selectedIndices,
+    $selectedConnectorIndices,
+    $selectedKittenIndices,
+    $selectedIvaSeatIndices,
+    $selectedLightIndices,
+  ],
+  (indices, conIndices, kitIndices, seatIndices, ligIndices): boolean =>
+    indices.length > 0 ||
+    conIndices.length > 0 ||
+    kitIndices.length > 0 ||
+    seatIndices.length > 0 ||
+    ligIndices.length > 0,
 )
 
 /**
@@ -50,8 +69,15 @@ export const $hasSelection = computed(
  * the multi-select toolbar and the bulk transform panel.
  */
 export const $hasMultiSelection = computed(
-  [$selectedIndices, $selectedConnectorIndices, $selectedKittenIndices, $selectedIvaSeatIndices],
-  (sub, con, kit, seat): boolean => sub.length + con.length + kit.length + seat.length > 1,
+  [
+    $selectedIndices,
+    $selectedConnectorIndices,
+    $selectedKittenIndices,
+    $selectedIvaSeatIndices,
+    $selectedLightIndices,
+  ],
+  (sub, con, kit, seat, lig): boolean =>
+    sub.length + con.length + kit.length + seat.length + lig.length > 1,
 )
 
 /** Total number of selected entities across all kinds. */
@@ -62,15 +88,16 @@ export const $selectionCount = computed(
     $selectedKittenIndices,
     $selectedColliderIndices,
     $selectedIvaSeatIndices,
+    $selectedLightIndices,
   ],
-  (sub, con, kit, col, seat): number =>
-    sub.length + con.length + kit.length + col.length + seat.length,
+  (sub, con, kit, col, seat, lig): number =>
+    sub.length + con.length + kit.length + col.length + seat.length + lig.length,
 )
 
 /**
  * Every selected entity with its current transform (SubParts, then connectors,
- * then colliders, then IVA seats, then kittens). Drives the bulk transform panel
- * for a unified multi-selection.
+ * then colliders, then IVA seats, then kittens, then lights). Drives the bulk
+ * transform panel for a unified multi-selection.
  */
 export const $selectedRefs = computed(
   [
@@ -80,12 +107,13 @@ export const $selectedRefs = computed(
     $selectedKittenIndices,
     $selectedColliderIndices,
     $selectedIvaSeatIndices,
+    $selectedLightIndices,
   ],
   (): SelectedTransformRef[] => selectedTransformRefs(),
 )
 
 /**
- * The single selected entity (SubPart, connector, collider or IVA seat) as a
+ * The single selected entity (SubPart, connector, collider, IVA seat or light) as a
  * discriminated union, or null. The SubPart branch is non-null ONLY when exactly one
  * SubPart is selected; multi-selection is represented by {@link $selectedPlacements}
  * instead and drives the bulk transform UI. The kinds are mutually exclusive.
@@ -95,10 +123,18 @@ export type SelectedEntity =
   | { kind: 'connector'; index: number; connector: Connector }
   | { kind: 'collider'; index: number; collider: PartCollider }
   | { kind: 'ivaSeat'; index: number; seat: IvaSeat }
+  | { kind: 'light'; index: number; light: PartLight }
 
 export const $selectedEntity = computed(
-  [$part, $selectedIndices, $selectedConnectorIndex, $selectedColliderIndex, $selectedIvaSeatIndex],
-  (part, subIndices, conIndex, colIndex, seatIndex): SelectedEntity | null => {
+  [
+    $part,
+    $selectedIndices,
+    $selectedConnectorIndex,
+    $selectedColliderIndex,
+    $selectedIvaSeatIndex,
+    $selectedLightIndex,
+  ],
+  (part, subIndices, conIndex, colIndex, seatIndex, lightIndex): SelectedEntity | null => {
     if (subIndices.length === 1) {
       const placement = part.placements[subIndices[0]]
       if (placement) return { kind: 'subpart', index: subIndices[0], placement }
@@ -109,12 +145,14 @@ export const $selectedEntity = computed(
     if (colIndex >= 0 && collider) return { kind: 'collider', index: colIndex, collider }
     const seat = part.ivaSeats[seatIndex]
     if (seatIndex >= 0 && seat) return { kind: 'ivaSeat', index: seatIndex, seat }
+    const light = part.lights[lightIndex]
+    if (lightIndex >= 0 && light) return { kind: 'light', index: lightIndex, light }
     return null
   },
 )
 
 /**
- * A layer paired with how many SubParts + connectors belong to it. `id` mirrors
+ * A layer paired with how many entities of each kind belong to it. `id` mirrors
  * `layer.id` so the object can be used directly as a react-aria collection item
  * (the collection builder reads `item.id`/`item.key` to determine the row key).
  */
@@ -125,18 +163,24 @@ export interface LayerSummary {
   connectors: number
   kittens: number
   ivaSeats: number
+  colliders: number
+  lights: number
 }
 
-/** Every layer (in display order) with its SubPart/connector/kitten/seat counts. */
+/** Every layer (in display order) with its per-kind entity counts. */
 export const $layerSummaries = computed([$part], (part): LayerSummary[] => {
   const subCounts = new Map<string, number>()
   const conCounts = new Map<string, number>()
   const kitCounts = new Map<string, number>()
   const seatCounts = new Map<string, number>()
+  const colCounts = new Map<string, number>()
+  const ligCounts = new Map<string, number>()
   for (const p of part.placements) subCounts.set(p.layerId, (subCounts.get(p.layerId) ?? 0) + 1)
   for (const c of part.connectors) conCounts.set(c.layerId, (conCounts.get(c.layerId) ?? 0) + 1)
   for (const k of part.kittens) kitCounts.set(k.layerId, (kitCounts.get(k.layerId) ?? 0) + 1)
   for (const s of part.ivaSeats) seatCounts.set(s.layerId, (seatCounts.get(s.layerId) ?? 0) + 1)
+  for (const c of part.colliders) colCounts.set(c.layerId, (colCounts.get(c.layerId) ?? 0) + 1)
+  for (const l of part.lights) ligCounts.set(l.layerId, (ligCounts.get(l.layerId) ?? 0) + 1)
   return part.layers.map((layer) => ({
     id: layer.id,
     layer,
@@ -144,6 +188,8 @@ export const $layerSummaries = computed([$part], (part): LayerSummary[] => {
     connectors: conCounts.get(layer.id) ?? 0,
     kittens: kitCounts.get(layer.id) ?? 0,
     ivaSeats: seatCounts.get(layer.id) ?? 0,
+    colliders: colCounts.get(layer.id) ?? 0,
+    lights: ligCounts.get(layer.id) ?? 0,
   }))
 })
 

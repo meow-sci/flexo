@@ -14,7 +14,15 @@ import {
   Slider,
   SectionTitle,
 } from './kit'
-import { $grids, setGrid, snapCamera, type Axis, type CameraDir } from '../state/viewStore'
+import {
+  $grids,
+  $hideInterior,
+  setGrid,
+  setHideInterior,
+  snapCamera,
+  type Axis,
+  type CameraDir,
+} from '../state/viewStore'
 import {
   $lighting,
   setLighting,
@@ -39,6 +47,7 @@ const GRID_AXES: { axis: Axis; label: string }[] = [
 
 function ViewContent() {
   const grids = useStore($grids)
+  const hideInterior = useStore($hideInterior)
   const lighting = useStore($lighting)
   const envHasSky = ENVIRONMENT_PRESETS.find((p) => p.id === lighting.environment)?.file != null
 
@@ -82,6 +91,17 @@ function ViewContent() {
             </div>
           )
         })}
+      </section>
+
+      <section className="flex flex-col gap-2">
+        <SectionTitle>Visibility</SectionTitle>
+        <Switch isSelected={hideInterior} onChange={setHideInterior}>
+          Hide interior
+        </Switch>
+        <p className="text-xs leading-snug text-fg-subtle">
+          Hides every mesh marked <b>Interior (IVA only)</b>, showing the part the way the game does
+          outside IVA.
+        </p>
       </section>
 
       <section className="flex flex-col gap-2.5">

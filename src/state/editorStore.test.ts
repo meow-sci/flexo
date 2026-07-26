@@ -76,6 +76,7 @@ import {
   removeCollider,
   selectCollider,
   addIvaSeat,
+  addKittenAtSeat,
   aimIvaSeat,
   selectConnector,
   selectKitten,
@@ -165,6 +166,7 @@ import {
   replaceImport,
   setMeshTransparent,
 } from './customAssetStore'
+import { seatAxesFromRotation } from '../ksa/ivaSeatAxes'
 import { analyzeImport, DEFAULT_IMPORT_OPTIONS } from '../ksa/importPlan'
 import { normalizeImport, type NormalizedImport } from '../ksa/importNormalize'
 import type { ImportMaterialPlan } from '../ksa/importMaterials'
@@ -2054,6 +2056,47 @@ describe('IVA seat mutations', () => {
     expect($selectedIvaSeatIndices.get()).toEqual([1])
     toggleEntity('ivaSeat', 1)
     expect($selectedIvaSeatIndices.get()).toEqual([])
+  })
+
+  it('addKittenAtSeat places a kitten at the seat, facing the seat, undoably', () => {
+    // Aimed along +X: forward (1,0,0) ⇒ the kitten (which faces its local −Z) yaws −90°.
+    addIvaSeat({ ...AIMED, rotation: { x: 0, y: 0, z: 0 } })
+    addKittenAtSeat(0)
+    const kittens = $part.get().kittens
+    expect(kittens).toHaveLength(1)
+    expect(kittens[0].layerId).toBe(KITTEN_LAYER_ID)
+    expect(kittens[0].position).toEqual(AIMED.position)
+    expect(kittens[0].rotation.x).toBe(0)
+    expect(kittens[0].rotation.z).toBe(0)
+    expect(kittens[0].rotation.y).toBeCloseTo(-Math.PI / 2, 12)
+    expect(kittens[0].scale).toEqual({ x: 1, y: 1, z: 1 })
+    expect($selectedKittenIndex.get()).toBe(0)
+    undo()
+    expect($part.get().kittens).toHaveLength(0)
+    redo()
+    expect($part.get().kittens).toHaveLength(1)
+  })
+
+  it('addKittenAtSeat takes the seat’s YAW only — a kitten is never tilted', () => {
+    // Pitched down 30° and rolled: only the heading of the forward axis survives.
+    addIvaSeat({
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0.7, y: Math.PI / 6, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+    })
+    addKittenAtSeat(0)
+    const { forward } = seatAxesFromRotation($part.get().ivaSeats[0].rotation)
+    const kitten = $part.get().kittens[0]
+    expect(kitten.rotation.x).toBe(0)
+    expect(kitten.rotation.z).toBe(0)
+    expect(kitten.rotation.y).toBeCloseTo(Math.atan2(-forward.x, -forward.z), 12)
+  })
+
+  it('addKittenAtSeat on a seat that does not exist is a no-op', () => {
+    const before = $part.get()
+    addKittenAtSeat(0)
+    expect($part.get()).toBe(before)
+    expect($canUndo.get()).toBe(false)
   })
 
   it('scaleEverything scales a seat’s position and leaves its rotation and scale alone', () => {

@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js'
 import type { IvaSeat } from '../ksa/types'
 import { applyPlacement } from './coords'
 import { applyMaterialOpacity, captureOpacityBase, type MaterialOpacityBase } from './layerOpacity'
@@ -18,6 +19,44 @@ const DEFAULT_MARKER_SIZE = 0.12
 
 /** Length of the indicative gaze cone, in meters. */
 const GAZE_LENGTH = 1
+
+/**
+ * The seat's 1-based cycle-order badge, as a `CSS2DObject` hosted by the viewport's
+ * existing `labelRenderer` (the one {@link MeasurementLayer} already drives — there is
+ * exactly one CSS2D overlay, and it renders the whole scene, so a label anywhere in the
+ * graph is picked up for free).
+ *
+ * It sits at the marker's LOCAL ORIGIN and is lifted clear of the eye sphere by the
+ * CSS2DObject's own `center` (see {@link LABEL_CENTER}) rather than by a 3D offset, which
+ * would swing around the marker as the seat is rolled/pitched.
+ */
+function makeIndexLabel(): HTMLDivElement {
+  const el = document.createElement('div')
+  el.style.cssText = [
+    'padding:0 5px',
+    'min-width:16px',
+    'text-align:center',
+    'border-radius:8px',
+    'font:700 11px/1.5 ui-monospace,monospace',
+    'color:#0b1120',
+    'background:rgba(56,189,248,0.92)',
+    'white-space:nowrap',
+    'user-select:none',
+    'pointer-events:none',
+  ].join(';')
+  return el
+}
+
+/**
+ * The badge's anchor, in element-relative units — `(0.5, 1.4)` is "horizontally centred,
+ * 1.4 label-heights above the marker's origin", clearing the eye sphere.
+ *
+ * This MUST be expressed through `CSS2DObject.center`, not a CSS `transform` on the
+ * element: `CSS2DRenderer` overwrites `element.style.transform` wholesale on every frame
+ * with `translate(-100·center.x%, -100·center.y%) translate(<screen px>)`, so any
+ * transform authored in the element's own style is silently thrown away.
+ */
+const LABEL_CENTER = { x: 0.5, y: 1.4 } as const
 
 /**
  * One IVA seat in the scene: a small eye sphere at the vantage point, a cone along
@@ -52,8 +91,11 @@ export class IvaSeatObject {
   /** Materials the layer fade applies to, with their captured base render state. */
   private readonly fadeMaterials: THREE.Material[] = []
   private readonly opacityBases: MaterialOpacityBase[] = []
+  /** The cycle-order badge's DOM node and its scene-graph wrapper — see {@link setIndex}. */
+  private readonly labelEl: HTMLDivElement
+  private readonly label: CSS2DObject
 
-  constructor(seat: IvaSeat, markerSize = DEFAULT_MARKER_SIZE, showGazeCone = false) {
+  constructor(seat: IvaSeat, markerSize = DEFAULT_MARKER_SIZE, showGazeCone = false, index = 0) {
     this.id = seat.id
     this.group.name = `ivaSeat:${seat.id}`
     this.group.userData.selectable = { kind: 'ivaSeat', id: seat.id }
@@ -127,7 +169,26 @@ export class IvaSeatObject {
       this.opacityBases.push(captureOpacityBase(mat))
     }
 
+    // The cycle-order badge. A child of the group, so it inherits the marker's position
+    // AND its visibility (CSS2DRenderer hides an invisible object's whole subtree), which
+    // is what keeps the numbers from floating in an empty interior in seat view.
+    this.labelEl = makeIndexLabel()
+    this.label = new CSS2DObject(this.labelEl)
+    this.label.center.set(LABEL_CENTER.x, LABEL_CENTER.y)
+    this.group.add(this.label)
+    this.setIndex(index)
+
     this.setSeat(seat)
+  }
+
+  /**
+   * Shows this seat's 1-based CYCLE ORDER in the viewport — `1` is the seat IVA opens on
+   * and `C` walks the rest in this order, so the number is authored data, not decoration.
+   * `EditorScene.reconcileIvaSeats` calls this with the document index on every reconcile,
+   * which is what renumbers the markers after a reorder / add / remove.
+   */
+  setIndex(index: number): void {
+    this.labelEl.textContent = String(index + 1)
   }
 
   /**
@@ -159,7 +220,19 @@ export class IvaSeatObject {
     }
   }
 
+  /**
+   * Releases the GPU resources AND the label's DOM node.
+   *
+   * The DOM half is not optional: `CSS2DRenderer` appends the element to its own overlay
+   * div and only ever removes it from three.js's `removed` event, which fires on the
+   * object that is unparented — NOT on its descendants. `EditorScene` removes the marker's
+   * GROUP from the scene, so the badge would be orphaned in the overlay and stay painted
+   * on screen forever. Unparenting the label here fires that event; `labelEl.remove()` is
+   * the belt-and-braces for a dispose that happens before the group is ever added.
+   */
   dispose(): void {
+    this.group.remove(this.label)
+    this.labelEl.remove()
     this.eyeGeometry.dispose()
     this.eyeMaterial.dispose()
     this.coneGeometry.dispose()

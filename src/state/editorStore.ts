@@ -68,6 +68,7 @@ import {
   KITTEN_LAYER_ID,
 } from '../ksa/types'
 import { normalizeColliderSize } from '../ksa/colliderSize'
+import { seatAxesFromRotation } from '../ksa/ivaSeatAxes'
 import { remapRawConnectorRefs } from '../ksa/partXmlParser'
 import { remapConsumerFeedWiring, remapConsumerFeeds } from '../ksa/idRemap'
 import { unwiredConsumersOf } from './feedTargets'
@@ -1150,6 +1151,49 @@ export function addKitten(kind: KittenKind): void {
     kind,
     position: { x: 0, y: 0, z: 0 },
     rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+    layerId: KITTEN_LAYER_ID,
+  })
+  $part.set(part)
+  selectKitten(part.kittens.length - 1)
+}
+
+/**
+ * A kitten stands upright, so it is placed with a pure YAW — the heading of `forward`
+ * projected onto the horizontal (XZ) plane. Tilting it to follow a pitched seat would put
+ * a crew member on their back and tell you nothing about head clearance.
+ *
+ * The model faces its local **−Z** (KSA's own `Forward`, and the basis flexo shares with
+ * it — see src/three/coords.ts), so a yaw `θ` about +Y sends it to `(−sinθ, 0, −cosθ)`;
+ * matching that to `forward` gives `θ = atan2(−fx, −fz)`. A seat looking straight up or
+ * down has no heading at all — keep the default facing rather than snapping to an
+ * arbitrary one.
+ */
+function kittenYawFacing(forward: Vec3): number {
+  if (Math.hypot(forward.x, forward.z) < 1e-9) return 0
+  return Math.atan2(-forward.x, -forward.z)
+}
+
+/**
+ * Places a kitten visual aide AT an IVA seat, facing where the seat looks, so eye height
+ * and head clearance can be eyeballed against a real crew member.
+ *
+ * The kitten is a flexo-only aide and is never exported; this only borrows the seat's
+ * pose. Its origin is its FEET, not its eye point, so the placement is a starting point to
+ * nudge from — the inspector says so.
+ */
+export function addKittenAtSeat(seatIndex: number, kind: KittenKind = 'hunter'): void {
+  const current = $part.get()
+  const seat = current.ivaSeats[seatIndex]
+  if (!seat) return
+  const newId = nextKittenId(current)
+  pushUndo('add kitten at seat', `Seat ${seatIndex + 1}`)
+  const part = clone(current)
+  part.kittens.push({
+    id: newId,
+    kind,
+    position: { ...seat.position },
+    rotation: { x: 0, y: kittenYawFacing(seatAxesFromRotation(seat.rotation).forward), z: 0 },
     scale: { x: 1, y: 1, z: 1 },
     layerId: KITTEN_LAYER_ID,
   })

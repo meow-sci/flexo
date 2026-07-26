@@ -111,7 +111,8 @@ import {
   type ConnectorSettings,
   type IvaSeatSettings,
 } from '../state/settingsStore'
-import { $cameraRestore, $cameraSnap, $grids } from '../state/viewStore'
+import { $cameraRestore, $cameraSnap, $grids, $hideInterior } from '../state/viewStore'
+import { resolveInternal } from '../ksa/modExport'
 import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../state/layerStore'
 
 /** A highlightable scene entity — both SubPartObject and ConnectorObject match. */
@@ -496,6 +497,7 @@ export class EditorScene {
     // is selected).
     this.sub($selectionHighlight, () => this.updateSelection())
     this.sub($layerView, () => this.applyLayerView())
+    this.sub($hideInterior, () => this.applyLayerView())
     this.sub($toolMode, (mode) => this.gizmo.setMode(mode))
     this.sub($snap, (snap) => this.gizmo.setSnap(snap))
     this.sub($grids, (grids) => this.viewport.grids.setConfig(grids))
@@ -762,11 +764,19 @@ export class EditorScene {
   private applyLayerView(): void {
     const part = $part.get()
     const view = $layerView.get()
+    // "Hide interior" previews KSA's OUTSIDE-IVA render gate (`!Template.Internal`), so it
+    // composes with the layer's own visibility instead of overwriting it: a mesh draws iff
+    // its layer is visible AND the toggle doesn't hide it. This is the ONLY writer of
+    // `group.visible`, which is what keeps the two systems from fighting.
+    const hideInterior = $hideInterior.get()
     for (const p of part.placements) {
       const obj = this.objects.get(p.instanceId)
       if (obj) {
         const lv = layerViewState(view, p.layerId)
-        obj.group.visible = lv.visible
+        const interior =
+          hideInterior &&
+          resolveInternal(part, p.subPartTemplateId, this.index.get(p.subPartTemplateId))
+        obj.group.visible = lv.visible && !interior
         obj.setLayerOpacity(lv.opacity)
       }
     }
@@ -841,20 +851,24 @@ export class EditorScene {
         this.seatObjects.delete(id)
       }
     }
-    for (const seat of part.ivaSeats) {
+    // The badge is the seat's DOCUMENT INDEX, so it must be re-stamped on every reconcile:
+    // `moveIvaSeat` renumbers seats without changing any of them.
+    part.ivaSeats.forEach((seat, index) => {
       const existing = this.seatObjects.get(seat.id)
       if (existing) {
         existing.setSeat(seat)
-        continue
+        existing.setIndex(index)
+        return
       }
       const obj = new IvaSeatObject(
         seat,
         this.ivaSeatSettings.markerSize,
         this.ivaSeatSettings.showGazeCone,
+        index,
       )
       this.root.add(obj.group)
       this.seatObjects.set(seat.id, obj)
-    }
+    })
   }
 
   /**

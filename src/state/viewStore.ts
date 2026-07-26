@@ -36,6 +36,22 @@ export function setGrid(axis: Axis, config: Partial<GridConfig>): void {
 }
 
 /**
+ * "Hide interior": when on, every mesh whose RESOLVED `<Internal>` is true is hidden, so
+ * the workspace shows the part exactly as KSA renders it OUTSIDE IVA (`PartModel.cs`'s
+ * `!Template.Internal || viewport.Mode == CameraMode.IVA` gate — see plans/IVA_PLAN.md §1.5).
+ *
+ * A pure VIEW preference, never document data: flexo renders interior meshes normally the
+ * rest of the time, which is what you want while authoring one. Off by default; the scene
+ * composes it with layer visibility (a mesh draws iff its layer is visible AND this does
+ * not hide it) rather than fighting `applyLayerView` for `.visible`.
+ */
+export const $hideInterior = persistentJSON<boolean>('flexo:hideInterior', false)
+
+export function setHideInterior(hide: boolean): void {
+  $hideInterior.set(hide)
+}
+
+/**
  * One-shot camera-snap command. The `nonce` makes every request a distinct value
  * so the three.js subscriber fires even when the same direction is chosen twice.
  */

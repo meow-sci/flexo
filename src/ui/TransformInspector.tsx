@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { ListBoxItem } from 'react-aria-components'
-import { ChevronDown, ChevronUp, Eye } from 'lucide-react'
+import { Cat, ChevronDown, ChevronUp, Eye } from 'lucide-react'
 import { Button, Chip, TextField, Switch, SectionTitle, Select } from './kit'
 import { NumberField } from './NumberField'
 import { isPartialNumber, parseNumericDraft } from './numberDraft'
 import {
   $bulkScaleMode,
+  addKittenAtSeat,
   aimIvaSeat,
   moveIvaSeat,
   pushUndo,
@@ -733,6 +734,18 @@ function IvaSeatHeader({ index, seat, locked }: { index: number; seat: IvaSeat; 
         <Eye className="size-4" />
         Sit in this seat
       </Button>
+      {/* Editor-only aide (never exported) — a body at the seat makes eye height and head
+          clearance judgeable. Placed with the seat's yaw only; a kitten stands upright.
+          Allowed on a locked layer: it adds a kitten, it never touches the seat. */}
+      <Button size="sm" variant="secondary" onPress={() => addKittenAtSeat(index)}>
+        <Cat className="size-4" />
+        Add kitten at this seat
+      </Button>
+      <p className="text-xs leading-snug text-fg-subtle">
+        Lands at the seat position facing the same way — but a kitten&apos;s origin is{' '}
+        <b>not its eye point</b>, so expect to nudge it into place. Kittens are an editor aide and
+        are never exported.
+      </p>
       <p className="text-xs leading-snug text-fg-subtle">
         Seat order is exported data, not a list order: <b>C</b> cycles seats in this order in game,
         and the first one is where IVA opens.

@@ -3,6 +3,7 @@ import Stats from 'stats.js'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js'
 import { GridManager } from './Grid'
+import { RenderLoop } from './RenderLoop'
 import { SceneEnvironment } from './SceneEnvironment'
 import { $cameraState, type CameraDir, type CameraState } from '../state/viewStore'
 import { $lighting } from '../state/lightingStore'
@@ -13,6 +14,11 @@ import { $showFpsCounter } from '../state/settingsStore'
  * reference grid, and orbit controls. Mounts its canvas into a host element and
  * runs a render loop. Later phases attach SubPart objects, gizmos, and selection
  * to `scene` / `camera` / `renderer`.
+ *
+ * The loop is ON-DEMAND ({@link RenderLoop}): a frame is drawn only when
+ * {@link invalidate} is called. This class invalidates for what it owns — camera
+ * motion, resize, environment/tonemapping, context restore — and everything that
+ * mutates the scene from outside (EditorScene and its layers) must do the same.
  */
 export class Viewport {
   readonly scene = new THREE.Scene()
@@ -27,6 +33,7 @@ export class Viewport {
   private readonly resizeObserver: ResizeObserver
   private readonly sceneEnv: SceneEnvironment
   private readonly lightingUnsub: () => void
+  private readonly loop = new RenderLoop(() => this.renderFrame())
   /** FPS overlay (stats.js), mounted only while {@link $showFpsCounter} is on. */
   private stats: Stats | null = null
   private readonly fpsUnsub: () => void
@@ -64,11 +71,19 @@ export class Viewport {
     this.controls.target.set(0, 0, 0)
     this.controls.update()
     this.controls.addEventListener('end', this.onControlsEnd)
+    // Fires on every camera change — user input AND each damping step — which is
+    // what keeps an inertial orbit rendering until it settles (see renderFrame).
+    this.controls.addEventListener('change', this.onControlsChange)
 
     // Image-based lighting (so PBR metals reflect), tonemapping, and background,
     // all driven by the global $lighting store. subscribe() fires immediately.
     this.sceneEnv = new SceneEnvironment(this.renderer, this.scene)
-    this.lightingUnsub = $lighting.subscribe((s) => void this.sceneEnv.apply(s))
+    this.lightingUnsub = $lighting.subscribe((s) => {
+      // apply() lands in two halves: exposure/tonemapping synchronously, then the
+      // HDR + PMREM once loaded. Both change pixels, so both get a frame.
+      this.invalidate()
+      void this.sceneEnv.apply(s).then(() => this.invalidate())
+    })
 
     const hemi = new THREE.HemisphereLight(0xffffff, 0x404050, 0.4)
     this.scene.add(hemi)
@@ -81,16 +96,33 @@ export class Viewport {
     this.resizeObserver = new ResizeObserver(() => this.handleResize())
     this.resizeObserver.observe(host)
 
+    // A lost/restored context (GPU switch, wake from sleep) leaves a blank canvas
+    // until something redraws it — an on-demand loop has no next frame to fix it.
+    this.renderer.domElement.addEventListener('webglcontextrestored', this.onContextRestored)
+
     // FPS overlay, driven by the global setting. subscribe() fires immediately,
     // so a persisted-on counter mounts right away.
     this.fpsUnsub = $showFpsCounter.subscribe((on) => this.setFpsCounter(on))
 
-    this.renderer.setAnimationLoop(this.renderFrame)
+    this.invalidate()
   }
 
-  /** Mount or remove the stats.js panel, pinned to the host's top-left corner. */
+  /** Requests a redraw. Cheap and coalescing — call it after anything visible changes. */
+  invalidate(): void {
+    this.loop.invalidate()
+  }
+
+  /**
+   * Mount or remove the stats.js panel, pinned to the host's top-left corner.
+   *
+   * While it is up the loop runs continuously: the counter exists to answer "how
+   * fast can this scene draw", and against an on-demand loop it would otherwise
+   * read ~0 fps whenever the user stopped moving. Turning it on is therefore also
+   * opting into the idle cost it measures.
+   */
   private setFpsCounter(on: boolean): void {
     if (on === (this.stats !== null)) return
+    this.loop.setContinuous(on)
     if (on) {
       const stats = new Stats()
       stats.showPanel(0) // 0: FPS
@@ -164,6 +196,14 @@ export class Viewport {
     $cameraState.set(this.readCameraState())
   }
 
+  private readonly onControlsChange = (): void => {
+    this.invalidate()
+  }
+
+  private readonly onContextRestored = (): void => {
+    this.invalidate()
+  }
+
   private readCameraState(): CameraState {
     const p = this.camera.position
     const t = this.controls.target
@@ -182,10 +222,13 @@ export class Viewport {
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(w, h)
     this.labelRenderer.setSize(w, h)
+    this.invalidate()
   }
 
-  private readonly renderFrame = (): void => {
+  private renderFrame(): void {
     this.stats?.begin()
+    // Damping is applied here, and a moved camera dispatches `change` → invalidate,
+    // so an inertial orbit keeps requesting frames until it comes to rest.
     this.controls.update()
     this.renderer.render(this.scene, this.camera)
     this.labelRenderer.render(this.scene, this.camera)
@@ -193,11 +236,13 @@ export class Viewport {
   }
 
   dispose(): void {
-    this.renderer.setAnimationLoop(null)
+    this.loop.dispose()
     this.fpsUnsub()
     this.setFpsCounter(false)
     this.resizeObserver.disconnect()
+    this.renderer.domElement.removeEventListener('webglcontextrestored', this.onContextRestored)
     this.controls.removeEventListener('end', this.onControlsEnd)
+    this.controls.removeEventListener('change', this.onControlsChange)
     this.controls.dispose()
     this.grids.dispose()
     this.lightingUnsub()

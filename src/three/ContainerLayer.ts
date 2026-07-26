@@ -147,11 +147,16 @@ export class ContainerLayer {
     this.unsubs.push($part.subscribe(() => this.refresh()))
   }
 
-  /** Recomputes all container graphics from the current store/document state. */
+  /**
+   * Recomputes all container graphics from the current store/document state.
+   * Every mutation this class makes funnels through here, so one invalidate at the
+   * end covers the whole layer on the on-demand loop.
+   */
   refresh(): void {
     this.updateContainers()
     this.updateGizmo()
     this.updateResolution()
+    this.viewport.invalidate()
   }
 
   private updateContainers(): void {
@@ -288,6 +293,8 @@ export class ContainerLayer {
     const controls = new TransformControls(this.viewport.camera, this.viewport.renderer.domElement)
     controls.setSpace('local')
     this.viewport.scene.add(controls.getHelper())
+    // Covers the gizmo's own repaints (hover highlight, attach/detach, drag steps).
+    controls.addEventListener('change', () => this.viewport.invalidate())
     controls.addEventListener('dragging-changed', (e) => {
       const isDragging = e.value as boolean
       if (isDragging) {

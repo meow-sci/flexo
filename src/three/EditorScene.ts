@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import type { ReadableAtom } from 'nanostores'
 import { Viewport } from './Viewport'
 import { SubPartObject } from './SubPartObject'
 import { ConnectorObject } from './ConnectorObject'
@@ -114,6 +115,11 @@ interface SelectableObject {
  * builds are guarded against placements that were removed mid-load.
  *
  * Selection highlight and transform gizmos attach here in Phase 6.
+ *
+ * RENDERING IS ON-DEMAND. The viewport draws only when invalidated, so every
+ * store subscription goes through {@link sub} (which invalidates for you) and
+ * every async build invalidates when it lands. Subscribing directly would leave
+ * the change invisible until something else happened to trigger a frame.
  */
 export class EditorScene {
   readonly viewport: Viewport
@@ -283,47 +289,41 @@ export class EditorScene {
       },
     )
 
-    this.gizmo = new TransformGizmo(
-      this.viewport.camera,
-      this.viewport.renderer.domElement,
-      this.viewport.scene,
-      this.viewport.controls,
-      {
-        onDragStart: () => {
-          // Editing a joint pose: one undo step, no bulk snapshot.
-          const pose = this.attachedObject === this.poseProxy ? this.poseEditTarget() : null
-          if (pose) {
-            const when = pose.kf.timeSec === 0 ? 'rest' : `${pose.kf.timeSec}s`
-            pushUndo('pose', `${pose.joint.name} @ ${when}`)
-            return
-          }
-          // Placing a nozzle exhaust: one undo step, no bulk snapshot.
-          if (this.attachedObject === this.engineProxy) {
-            pushUndo('exhaust', '')
-            return
-          }
-          const mode = $toolMode.get()
-          const desc = mode === 'rotate' ? 'rotate' : mode === 'scale' ? 'scale' : 'move'
-          const refs = selectedTransformRefs()
-          const detail =
-            refs.length === 1 ? refs[0].name : refs.length > 1 ? `${refs.length} items` : ''
-          pushUndo(desc, detail)
-          this.beginBulkDrag()
-        },
-        onChange: (object) => {
-          if (object === this.poseProxy) this.handlePoseGizmoChange()
-          else if (object === this.engineProxy) this.handleEngineGizmoChange()
-          else this.handleGizmoChange(object)
-        },
-        onDraggingChanged: (dragging) => {
-          this.selection.setSuppressed(dragging)
-          if (!dragging) {
-            this.endBulkDrag()
-            this.updateSelection() // re-snap the pose proxy to the committed pose
-          }
-        },
+    this.gizmo = new TransformGizmo(this.viewport, {
+      onDragStart: () => {
+        // Editing a joint pose: one undo step, no bulk snapshot.
+        const pose = this.attachedObject === this.poseProxy ? this.poseEditTarget() : null
+        if (pose) {
+          const when = pose.kf.timeSec === 0 ? 'rest' : `${pose.kf.timeSec}s`
+          pushUndo('pose', `${pose.joint.name} @ ${when}`)
+          return
+        }
+        // Placing a nozzle exhaust: one undo step, no bulk snapshot.
+        if (this.attachedObject === this.engineProxy) {
+          pushUndo('exhaust', '')
+          return
+        }
+        const mode = $toolMode.get()
+        const desc = mode === 'rotate' ? 'rotate' : mode === 'scale' ? 'scale' : 'move'
+        const refs = selectedTransformRefs()
+        const detail =
+          refs.length === 1 ? refs[0].name : refs.length > 1 ? `${refs.length} items` : ''
+        pushUndo(desc, detail)
+        this.beginBulkDrag()
       },
-    )
+      onChange: (object) => {
+        if (object === this.poseProxy) this.handlePoseGizmoChange()
+        else if (object === this.engineProxy) this.handleEngineGizmoChange()
+        else this.handleGizmoChange(object)
+      },
+      onDraggingChanged: (dragging) => {
+        this.selection.setSuppressed(dragging)
+        if (!dragging) {
+          this.endBulkDrag()
+          this.updateSelection() // re-snap the pose proxy to the committed pose
+        }
+      },
+    })
 
     this.measurements = new MeasurementLayer(this.viewport, () =>
       this.selectedObjects().map((o) => o.group),
@@ -335,70 +335,60 @@ export class EditorScene {
     const dom = this.viewport.renderer.domElement
     dom.addEventListener('pointerdown', this.onPickPointerDown)
     dom.addEventListener('pointerup', this.onPickPointerUp)
-    this.unsubscribers.push(
-      $measureTool.subscribe((tool) => {
-        const picking = tool !== 'none'
-        this.selection.setSuppressed(picking)
-        dom.style.cursor = picking ? 'crosshair' : ''
-        if (!picking) this.cancelPendingMeasurement()
-      }),
-    )
+    this.sub($measureTool, (tool) => {
+      const picking = tool !== 'none'
+      this.selection.setSuppressed(picking)
+      dom.style.cursor = picking ? 'crosshair' : ''
+      if (!picking) this.cancelPendingMeasurement()
+    })
     // Editing a measurement, editing a container, and selecting a mesh are all
     // mutually exclusive, so only one gizmo is ever active at a time.
-    this.unsubscribers.push(
-      $activeMeasurementId.subscribe((id) => {
-        if (id) {
-          clearSelection()
-          setActiveContainer(null)
-        }
-      }),
-    )
-    this.unsubscribers.push(
-      $activeContainerId.subscribe((id) => {
-        if (id) {
-          clearSelection()
-          setActiveMeasurement(null)
-        }
-      }),
-    )
+    this.sub($activeMeasurementId, (id) => {
+      if (id) {
+        clearSelection()
+        setActiveContainer(null)
+      }
+    })
+    this.sub($activeContainerId, (id) => {
+      if (id) {
+        clearSelection()
+        setActiveMeasurement(null)
+      }
+    })
     // Selecting any mesh closes container editing (its gizmo would otherwise fight
     // the selection gizmo).
     const clearContainerOnSelect = () => {
       if (this.selectedObjects().length > 0) setActiveContainer(null)
     }
-    this.unsubscribers.push($selectedIndices.subscribe(clearContainerOnSelect))
-    this.unsubscribers.push($selectedConnectorIndices.subscribe(clearContainerOnSelect))
-    this.unsubscribers.push($selectedKittenIndices.subscribe(clearContainerOnSelect))
-    this.unsubscribers.push($selectedColliderIndices.subscribe(clearContainerOnSelect))
+    this.sub($selectedIndices, clearContainerOnSelect)
+    this.sub($selectedConnectorIndices, clearContainerOnSelect)
+    this.sub($selectedKittenIndices, clearContainerOnSelect)
+    this.sub($selectedColliderIndices, clearContainerOnSelect)
 
     // nanostores `subscribe` fires immediately with the current value.
-    this.unsubscribers.push(
-      $catalogIndex.subscribe((index) => {
-        this.index = index
-        this.reconcile($part.get())
-      }),
-    )
+    this.sub($catalogIndex, (index) => {
+      this.index = index
+      this.reconcile($part.get())
+    })
     // A custom template's geometry/texture can change in place (the catalog entry's
     // atlas/diffuse blob URL changes) while its placements keep the same template id.
     // reconcile() never rebuilds existing objects, so dispose the affected ones and
     // let reconcile re-create them from the fresh entry.
-    this.unsubscribers.push(
-      $customCatalog.subscribe((custom) => {
-        const customIds = new Set(custom.map((c) => c.id))
-        const part = $part.get()
-        for (const [id, obj] of this.objects) {
-          const placement = part.placements.find((p) => p.instanceId === id)
-          if (placement && customIds.has(placement.subPartTemplateId)) {
-            this.root.remove(obj.group)
-            obj.dispose()
-            this.objects.delete(id)
-          }
+    this.sub($customCatalog, (custom) => {
+      const customIds = new Set(custom.map((c) => c.id))
+      const part = $part.get()
+      for (const [id, obj] of this.objects) {
+        const placement = part.placements.find((p) => p.instanceId === id)
+        if (placement && customIds.has(placement.subPartTemplateId)) {
+          this.root.remove(obj.group)
+          obj.dispose()
+          this.objects.delete(id)
         }
-        this.index = $catalogIndex.get()
-        this.reconcile(part)
-      }),
-    )
-    this.unsubscribers.push($part.subscribe((part) => this.reconcile(part)))
+      }
+      this.index = $catalogIndex.get()
+      this.reconcile(part)
+    })
+    this.sub($part, (part) => this.reconcile(part))
     // Animation preview: re-apply the joint-driven transform override when the active
     // animation, scrub position, or edited keyframe changes ($part changes already
     // re-apply via reconcile). Fires immediately on subscribe (harmless no-op at rest).
@@ -406,63 +396,72 @@ export class EditorScene {
       this.applyAnimationPreview()
       this.updateSelection() // re-evaluate gizmo suppression for posed animated parts
     }
-    this.unsubscribers.push($activeAnimationId.subscribe(onPreviewChange))
-    this.unsubscribers.push($activeJointId.subscribe(onPreviewChange))
-    this.unsubscribers.push($animPreviewU.subscribe(onPreviewChange))
-    this.unsubscribers.push($animScrubbing.subscribe(onPreviewChange))
-    this.unsubscribers.push($editKeyframeId.subscribe(onPreviewChange))
+    this.sub($activeAnimationId, onPreviewChange)
+    this.sub($activeJointId, onPreviewChange)
+    this.sub($animPreviewU, onPreviewChange)
+    this.sub($animScrubbing, onPreviewChange)
+    this.sub($editKeyframeId, onPreviewChange)
     // Leaving/entering the Animation editor toggles the preview + pose gizmo on/off.
-    this.unsubscribers.push($inspectorMode.subscribe(onPreviewChange))
+    this.sub($inspectorMode, onPreviewChange)
     // Engine designer: refresh the exhaust marker + (re)attach the exhaust gizmo when
     // the active engine / target instance / gizmo toggle / mode changes.
     const onEngineChange = () => {
       this.applyEngineHandle()
       this.updateSelection()
     }
-    this.unsubscribers.push($activeEngineTemplateId.subscribe(onEngineChange))
-    this.unsubscribers.push($activeEngineInstanceId.subscribe(onEngineChange))
-    this.unsubscribers.push($engineExhaustGizmo.subscribe(onEngineChange))
-    this.unsubscribers.push($inspectorMode.subscribe(onEngineChange))
-    this.unsubscribers.push($selectedIndices.subscribe(() => this.updateSelection()))
-    this.unsubscribers.push($selectedConnectorIndices.subscribe(() => this.updateSelection()))
-    this.unsubscribers.push($selectedKittenIndices.subscribe(() => this.updateSelection()))
-    this.unsubscribers.push($selectedColliderIndices.subscribe(() => this.updateSelection()))
+    this.sub($activeEngineTemplateId, onEngineChange)
+    this.sub($activeEngineInstanceId, onEngineChange)
+    this.sub($engineExhaustGizmo, onEngineChange)
+    this.sub($inspectorMode, onEngineChange)
+    this.sub($selectedIndices, () => this.updateSelection())
+    this.sub($selectedConnectorIndices, () => this.updateSelection())
+    this.sub($selectedKittenIndices, () => this.updateSelection())
+    this.sub($selectedColliderIndices, () => this.updateSelection())
     // Collider fitting needs world geometry, which only exists here — the UI publishes an
     // intent and this consumes it (see colliderStore).
-    this.unsubscribers.push(
-      $colliderFitRequest.subscribe((req) => {
-        if (req) this.handleColliderFit(req)
-      }),
-    )
-    this.unsubscribers.push(
-      $coverageRequest.subscribe((wanted) => {
-        if (wanted) this.handleCoverageCheck()
-      }),
-    )
+    this.sub($colliderFitRequest, (req) => {
+      if (req) this.handleColliderFit(req)
+    })
+    this.sub($coverageRequest, (wanted) => {
+      if (wanted) this.handleCoverageCheck()
+    })
     // The uncovered-point dots are a snapshot of one check; editing invalidates them.
-    this.unsubscribers.push($coverageReport.subscribe(() => this.applyCoverageDots()))
-    this.unsubscribers.push(
-      $connectorSettings.subscribe((settings) => {
-        this.connectorSettings = settings
-        this.rebuildConnectors()
-      }),
-    )
+    this.sub($coverageReport, () => this.applyCoverageDots())
+    this.sub($connectorSettings, (settings) => {
+      this.connectorSettings = settings
+      this.rebuildConnectors()
+    })
     // Re-apply the highlight tint to the current selection when the color/strength
     // setting changes (fires immediately on subscribe — a harmless no-op when nothing
     // is selected).
-    this.unsubscribers.push($selectionHighlight.subscribe(() => this.updateSelection()))
-    this.unsubscribers.push($layerView.subscribe(() => this.applyLayerView()))
-    this.unsubscribers.push($toolMode.subscribe((mode) => this.gizmo.setMode(mode)))
-    this.unsubscribers.push($snap.subscribe((snap) => this.gizmo.setSnap(snap)))
-    this.unsubscribers.push($grids.subscribe((grids) => this.viewport.grids.setConfig(grids)))
+    this.sub($selectionHighlight, () => this.updateSelection())
+    this.sub($layerView, () => this.applyLayerView())
+    this.sub($toolMode, (mode) => this.gizmo.setMode(mode))
+    this.sub($snap, (snap) => this.gizmo.setSnap(snap))
+    this.sub($grids, (grids) => this.viewport.grids.setConfig(grids))
+    this.sub($cameraSnap, (cmd) => {
+      if (cmd) this.viewport.snapCamera(cmd.dir)
+    })
+    this.sub($cameraRestore, (cmd) => {
+      if (cmd) this.viewport.restoreCamera(cmd.state)
+    })
+  }
+
+  /**
+   * Subscribes to a store, tracks the unsubscribe, and redraws once the callback
+   * has run.
+   *
+   * Every subscription in this class exists to mutate the scene, and the viewport
+   * only draws when asked ({@link RenderLoop}) — so invalidating here, in one
+   * place, is what keeps "the state changed" and "the viewport shows it" from
+   * drifting apart. Use this for ALL store subscriptions; a bare `.subscribe()`
+   * would leave its change on screen only by luck.
+   */
+  private sub<T>(store: ReadableAtom<T>, run: (value: T) => void): void {
     this.unsubscribers.push(
-      $cameraSnap.subscribe((cmd) => {
-        if (cmd) this.viewport.snapCamera(cmd.dir)
-      }),
-    )
-    this.unsubscribers.push(
-      $cameraRestore.subscribe((cmd) => {
-        if (cmd) this.viewport.restoreCamera(cmd.state)
+      store.subscribe((value) => {
+        run(value)
+        this.viewport.invalidate()
       }),
     )
   }
@@ -511,6 +510,7 @@ export class EditorScene {
           this.applyLayerView() // respect the layer's visibility + opacity for the new object
           this.updateSelection() // highlight/attach if this is the selected one
           this.applyAnimationPreview() // re-apply if this object is animation-driven
+          this.viewport.invalidate() // geometry landed after the store change that asked for it
         })
         .catch((err) => {
           this.building.delete(placement.instanceId)
@@ -643,6 +643,7 @@ export class EditorScene {
           this.kittenObjects.set(kitten.id, obj)
           this.applyLayerView()
           this.updateSelection()
+          this.viewport.invalidate() // as above: the build landed after its store change
         })
         .catch((err) => {
           this.kittenBuilding.delete(kitten.id)

@@ -16,7 +16,9 @@ export function ViewportCanvas() {
     const scene = new EditorScene(host)
 
     if (new URLSearchParams(window.location.search).get('debug') === 'dockingport') {
-      void loadDockingPortCalibration(scene.viewport.scene)
+      // Adds to the scene long after boot, and rendering is on-demand — so ask for
+      // the frame that shows it.
+      void loadDockingPortCalibration(scene.viewport.scene).then(() => scene.viewport.invalidate())
     }
 
     return () => scene.dispose()

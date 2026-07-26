@@ -152,7 +152,11 @@ export class MeasurementLayer {
     this.unsubs.push($measureTool.subscribe(() => this.refresh()))
   }
 
-  /** Recomputes all measurement graphics from the current selection/settings. */
+  /**
+   * Recomputes all measurement graphics from the current selection/settings.
+   * Every mutation this class makes funnels through here, so one invalidate at the
+   * end covers the whole layer on the on-demand loop.
+   */
   refresh(): void {
     const objects = this.getSelected()
     this.updateSelectionBox(objects)
@@ -161,6 +165,7 @@ export class MeasurementLayer {
     this.updateMeasurements()
     this.updateEndpointGizmo()
     this.updateResolution()
+    this.viewport.invalidate()
   }
 
   // --- Selection bounding box ------------------------------------------------
@@ -347,6 +352,8 @@ export class MeasurementLayer {
     controls.setMode('translate')
     controls.setSpace('world')
     this.viewport.scene.add(controls.getHelper())
+    // Covers the gizmo's own repaints (hover highlight, attach/detach, drag steps).
+    controls.addEventListener('change', () => this.viewport.invalidate())
     controls.addEventListener('dragging-changed', (e) => {
       const isDragging = e.value as boolean
       if (isDragging) pushUndo('move endpoint')

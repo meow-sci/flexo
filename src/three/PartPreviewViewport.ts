@@ -4,6 +4,7 @@ import type { CatalogSubPart } from '../ksa/catalog'
 import type { CatalogPart } from '../ksa/partCatalog'
 import { SubPartObject } from './SubPartObject'
 import { ConnectorObject } from './ConnectorObject'
+import { RenderLoop } from './RenderLoop'
 import { SceneEnvironment } from './SceneEnvironment'
 import { $connectorSettings } from '../state/settingsStore'
 import { $lighting } from '../state/lightingStore'
@@ -15,6 +16,9 @@ import { initTextureSupport } from './textureSupport'
  * browser. Mirrors {@link SubPartPreviewViewport}'s lighting/tonemapping/IBL and
  * shares the same geometry/material caches via {@link SubPartObject}; it owns
  * only the renderer/controls/env plus the per-instance SubPartObjects it builds.
+ *
+ * Renders on demand ({@link RenderLoop}) — a browser dialog left open must not
+ * cost a GPU frame every vsync just to show a part sitting still.
  */
 export class PartPreviewViewport {
   private readonly scene = new THREE.Scene()
@@ -25,6 +29,7 @@ export class PartPreviewViewport {
   private readonly resizeObserver: ResizeObserver
   private readonly sceneEnv: SceneEnvironment
   private readonly lightingUnsub: () => void
+  private readonly loop = new RenderLoop(() => this.renderFrame())
 
   private objects: SubPartObject[] = []
   private connectorObjects: ConnectorObject[] = []
@@ -53,10 +58,14 @@ export class PartPreviewViewport {
     this.controls.enableDamping = true
     this.controls.target.set(0, 0, 0)
     this.controls.update()
+    this.controls.addEventListener('change', this.onNeedsRender)
 
     // Environment/tonemapping/background driven by the global $lighting store.
     this.sceneEnv = new SceneEnvironment(this.renderer, this.scene)
-    this.lightingUnsub = $lighting.subscribe((s) => void this.sceneEnv.apply(s))
+    this.lightingUnsub = $lighting.subscribe((s) => {
+      this.loop.invalidate()
+      void this.sceneEnv.apply(s).then(() => this.loop.invalidate())
+    })
 
     const hemi = new THREE.HemisphereLight(0xffffff, 0x404050, 0.4)
     this.scene.add(hemi)
@@ -66,8 +75,13 @@ export class PartPreviewViewport {
 
     this.resizeObserver = new ResizeObserver(() => this.handleResize())
     this.resizeObserver.observe(host)
+    this.renderer.domElement.addEventListener('webglcontextrestored', this.onNeedsRender)
 
-    this.renderer.setAnimationLoop(this.renderFrame)
+    this.loop.invalidate()
+  }
+
+  private readonly onNeedsRender = (): void => {
+    this.loop.invalidate()
   }
 
   /**
@@ -106,6 +120,7 @@ export class PartPreviewViewport {
         this.scene.add(obj.group)
       }
       this.frame()
+      this.loop.invalidate()
     } catch (err) {
       console.warn(`PartPreviewViewport: failed to load Part '${part.id}'`, err)
     }
@@ -122,6 +137,7 @@ export class PartPreviewViewport {
       obj.dispose()
     }
     this.connectorObjects = []
+    this.loop.invalidate()
   }
 
   /** Frames the camera to the combined bounding box of the assembled Part. */
@@ -151,16 +167,21 @@ export class PartPreviewViewport {
     this.camera.aspect = w / h
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(w, h)
+    this.loop.invalidate()
   }
 
-  private readonly renderFrame = (): void => {
+  private renderFrame(): void {
+    // Damping here dispatches `change` → invalidate, so an inertial orbit keeps
+    // asking for frames until it settles.
     this.controls.update()
     this.renderer.render(this.scene, this.camera)
   }
 
   dispose(): void {
-    this.renderer.setAnimationLoop(null)
+    this.loop.dispose()
     this.resizeObserver.disconnect()
+    this.renderer.domElement.removeEventListener('webglcontextrestored', this.onNeedsRender)
+    this.controls.removeEventListener('change', this.onNeedsRender)
     this.clearObjects()
     this.controls.dispose()
     this.lightingUnsub()

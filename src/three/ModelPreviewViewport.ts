@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { clone as cloneSkeleton } from 'three/addons/utils/SkeletonUtils.js'
+import { RenderLoop } from './RenderLoop'
 import { SceneEnvironment } from './SceneEnvironment'
 import { $lighting } from '../state/lightingStore'
 import { initTextureSupport } from './textureSupport'
@@ -22,6 +23,9 @@ import { initTextureSupport } from './textureSupport'
  * keeps the model alive across option changes, and the import pass reads the same objects),
  * so this class NEVER disposes them. It disposes only what it creates: the renderer, the
  * controls, the environment and its own grid.
+ *
+ * Renders on demand ({@link RenderLoop}) — the import dialog can sit open for a long
+ * while, and a still model must not cost a GPU frame every vsync.
  */
 export class ModelPreviewViewport {
   private readonly scene = new THREE.Scene()
@@ -32,6 +36,7 @@ export class ModelPreviewViewport {
   private readonly resizeObserver: ResizeObserver
   private readonly sceneEnv: SceneEnvironment
   private readonly lightingUnsub: () => void
+  private readonly loop = new RenderLoop(() => this.renderFrame())
 
   /** Transform holder for the model clone: the import correction (scale + up-axis) lives here. */
   private readonly root = new THREE.Group()
@@ -63,9 +68,13 @@ export class ModelPreviewViewport {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement)
     this.controls.enableDamping = true
     this.controls.update()
+    this.controls.addEventListener('change', this.onNeedsRender)
 
     this.sceneEnv = new SceneEnvironment(this.renderer, this.scene)
-    this.lightingUnsub = $lighting.subscribe((s) => void this.sceneEnv.apply(s))
+    this.lightingUnsub = $lighting.subscribe((s) => {
+      this.loop.invalidate()
+      void this.sceneEnv.apply(s).then(() => this.loop.invalidate())
+    })
 
     const hemi = new THREE.HemisphereLight(0xffffff, 0x404050, 0.4)
     this.scene.add(hemi)
@@ -75,8 +84,13 @@ export class ModelPreviewViewport {
 
     this.resizeObserver = new ResizeObserver(() => this.handleResize())
     this.resizeObserver.observe(host)
+    this.renderer.domElement.addEventListener('webglcontextrestored', this.onNeedsRender)
 
-    this.renderer.setAnimationLoop(this.renderFrame)
+    this.loop.invalidate()
+  }
+
+  private readonly onNeedsRender = (): void => {
+    this.loop.invalidate()
   }
 
   /**
@@ -112,6 +126,7 @@ export class ModelPreviewViewport {
 
     this.rebuildGrid()
     this.frame()
+    this.loop.invalidate()
   }
 
   /** World-space bounds of the corrected model, in metres. Empty when nothing is loaded. */
@@ -176,16 +191,21 @@ export class ModelPreviewViewport {
     this.camera.aspect = w / h
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(w, h)
+    this.loop.invalidate()
   }
 
-  private readonly renderFrame = (): void => {
+  private renderFrame(): void {
+    // Damping here dispatches `change` → invalidate, so an inertial orbit keeps
+    // asking for frames until it settles.
     this.controls.update()
     this.renderer.render(this.scene, this.camera)
   }
 
   dispose(): void {
-    this.renderer.setAnimationLoop(null)
+    this.loop.dispose()
     this.resizeObserver.disconnect()
+    this.renderer.domElement.removeEventListener('webglcontextrestored', this.onNeedsRender)
+    this.controls.removeEventListener('change', this.onNeedsRender)
     this.controls.dispose()
     this.lightingUnsub()
     this.sceneEnv.dispose()

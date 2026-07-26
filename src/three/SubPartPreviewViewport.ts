@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import type { CatalogSubPart } from '../ksa/catalog'
 import { getSubPartGeometry } from './MeshAtlasCache'
 import { getSharedMaterial } from './MaterialFactory'
+import { RenderLoop } from './RenderLoop'
 import { SceneEnvironment } from './SceneEnvironment'
 import { $lighting } from '../state/lightingStore'
 import { initTextureSupport } from './textureSupport'
@@ -15,6 +16,9 @@ import { initTextureSupport } from './textureSupport'
  *
  * Geometry and materials come from the same shared caches the editor uses, so
  * they are never disposed here; only the renderer/controls/env are owned.
+ *
+ * Renders on demand ({@link RenderLoop}) — a browser dialog left open must not
+ * cost a GPU frame every vsync just to show a part sitting still.
  */
 export class SubPartPreviewViewport {
   private readonly scene = new THREE.Scene()
@@ -25,6 +29,7 @@ export class SubPartPreviewViewport {
   private readonly resizeObserver: ResizeObserver
   private readonly sceneEnv: SceneEnvironment
   private readonly lightingUnsub: () => void
+  private readonly loop = new RenderLoop(() => this.renderFrame())
 
   private current: THREE.Mesh | null = null
   /** Bumped on each setSubPart so a superseded async load discards its result. */
@@ -54,10 +59,14 @@ export class SubPartPreviewViewport {
     this.controls.enableDamping = true
     this.controls.target.set(0, 0, 0)
     this.controls.update()
+    this.controls.addEventListener('change', this.onNeedsRender)
 
     // Environment/tonemapping/background driven by the global $lighting store.
     this.sceneEnv = new SceneEnvironment(this.renderer, this.scene)
-    this.lightingUnsub = $lighting.subscribe((s) => void this.sceneEnv.apply(s))
+    this.lightingUnsub = $lighting.subscribe((s) => {
+      this.loop.invalidate()
+      void this.sceneEnv.apply(s).then(() => this.loop.invalidate())
+    })
 
     const hemi = new THREE.HemisphereLight(0xffffff, 0x404050, 0.4)
     this.scene.add(hemi)
@@ -67,8 +76,13 @@ export class SubPartPreviewViewport {
 
     this.resizeObserver = new ResizeObserver(() => this.handleResize())
     this.resizeObserver.observe(host)
+    this.renderer.domElement.addEventListener('webglcontextrestored', this.onNeedsRender)
 
-    this.renderer.setAnimationLoop(this.renderFrame)
+    this.loop.invalidate()
+  }
+
+  private readonly onNeedsRender = (): void => {
+    this.loop.invalidate()
   }
 
   /** Loads and shows the given SubPart (or clears the preview when null). */
@@ -77,6 +91,7 @@ export class SubPartPreviewViewport {
     if (this.current) {
       this.scene.remove(this.current)
       this.current = null
+      this.loop.invalidate()
     }
     if (!entry) return
 
@@ -90,6 +105,7 @@ export class SubPartPreviewViewport {
       this.scene.add(mesh)
       this.current = mesh
       this.frame(geometry)
+      this.loop.invalidate()
     } catch (err) {
       console.warn(`SubPartPreviewViewport: failed to load '${entry.id}'`, err)
     }
@@ -118,16 +134,21 @@ export class SubPartPreviewViewport {
     this.camera.aspect = w / h
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(w, h)
+    this.loop.invalidate()
   }
 
-  private readonly renderFrame = (): void => {
+  private renderFrame(): void {
+    // Damping here dispatches `change` → invalidate, so an inertial orbit keeps
+    // asking for frames until it settles.
     this.controls.update()
     this.renderer.render(this.scene, this.camera)
   }
 
   dispose(): void {
-    this.renderer.setAnimationLoop(null)
+    this.loop.dispose()
     this.resizeObserver.disconnect()
+    this.renderer.domElement.removeEventListener('webglcontextrestored', this.onNeedsRender)
+    this.controls.removeEventListener('change', this.onNeedsRender)
     this.controls.dispose()
     this.lightingUnsub()
     this.sceneEnv.dispose()

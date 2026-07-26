@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { TransformControls } from 'three/addons/controls/TransformControls.js'
-import type { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import type { Viewport } from './Viewport'
 import type { ToolMode, SnapSettings } from '../state/editorStore'
 
 /**
@@ -12,22 +12,24 @@ export class TransformGizmo {
   private readonly controls: TransformControls
 
   constructor(
-    camera: THREE.Camera,
-    domElement: HTMLElement,
-    scene: THREE.Scene,
-    orbit: OrbitControls,
+    viewport: Viewport,
     callbacks: {
       onDragStart: () => void
       onChange: (object: THREE.Object3D) => void
       onDraggingChanged: (dragging: boolean) => void
     },
   ) {
-    this.controls = new TransformControls(camera, domElement)
-    scene.add(this.controls.getHelper())
+    this.controls = new TransformControls(viewport.camera, viewport.renderer.domElement)
+    viewport.scene.add(this.controls.getHelper())
+
+    // TransformControls raises `change` for every visible state it owns — the
+    // hovered axis, the mode, attach/detach, and each drag step — so this one
+    // hookup keeps the gizmo's own repaints on the on-demand loop.
+    this.controls.addEventListener('change', () => viewport.invalidate())
 
     this.controls.addEventListener('dragging-changed', (event) => {
       const dragging = event.value as boolean
-      orbit.enabled = !dragging
+      viewport.controls.enabled = !dragging
       callbacks.onDraggingChanged(dragging)
       if (dragging) callbacks.onDragStart()
     })

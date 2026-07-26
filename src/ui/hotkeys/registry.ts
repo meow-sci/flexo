@@ -1,6 +1,7 @@
 import type { Keys, Options } from 'react-hotkeys-hook'
 import { copySelected, pasteClipboard, redo, removeSelected, undo } from '../../state/editorStore'
 import { toggleHelp } from '../../state/helpStore'
+import { $seatView, exitSeatView } from '../../state/ivaStore'
 import { rotateSelectionAroundPair } from '../../three/rotateSelection'
 import { FAST_NUDGE_MULTIPLIER, nudgeSelectionBy } from '../../three/nudgeSelection'
 import { changeNudgeAxis, lowerNudgeStep, raiseNudgeStep } from '../nudgeControls'
@@ -188,6 +189,21 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
         options: { useKey: true, ignoreModifiers: true },
         chords: [['?']],
         run: () => toggleHelp(),
+      },
+      {
+        id: 'exit-seat-view',
+        label: 'Leave IVA seat view',
+        keys: 'escape',
+        chords: [['Escape']],
+        // Never preventDefault: Escape also dismisses dialogs/popovers/menus (react-aria
+        // and the browser both act on it), and this binding must not shadow those.
+        options: { preventDefault: false },
+        // Escape is everyone's dismiss key (dialogs, popovers, the gizmo drag). Gating on
+        // the atom keeps this binding inert unless the seat preview is actually up, so it
+        // never eats an Escape meant for something layered above the viewport.
+        run: () => {
+          if ($seatView.get() !== null) exitSeatView()
+        },
       },
     ],
   },

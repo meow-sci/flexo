@@ -55,6 +55,7 @@ import {
   type Layer,
 } from '../ksa/types'
 import { seatAxesFromRotation } from '../ksa/ivaSeatAxes'
+import { enterSeatView } from '../state/ivaStore'
 import { formatG6 } from '../ksa/formatG6'
 import { setManagingMeshId } from '../state/customAssetStore'
 import { ManageTanksModal } from './ManageTanksModal'
@@ -575,6 +576,7 @@ function SubPartRowMenu({ index }: { index: number }) {
  */
 function SimpleRowMenu({ row }: { row: Row }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const part = useStore($part)
   const label =
     row.kind === 'connector'
       ? 'connector'
@@ -607,6 +609,20 @@ function SimpleRowMenu({ row }: { row: Row }) {
         </Button>
         <Popover placement="bottom end" className="w-48">
           <Menu>
+            {/* Seats only: put the camera at this eye point (see SeatViewBar). Selecting
+                first keeps the inspector on the seat you are sitting in. */}
+            {row.kind === 'ivaSeat' && (
+              <MenuItem
+                onAction={() => {
+                  const seat = part.ivaSeats[row.index]
+                  if (!seat) return
+                  select()
+                  enterSeatView(seat.id)
+                }}
+              >
+                Sit in this seat
+              </MenuItem>
+            )}
             <MenuItem
               onAction={() => {
                 select()

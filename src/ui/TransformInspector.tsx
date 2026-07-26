@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { ListBoxItem } from 'react-aria-components'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { ChevronDown, ChevronUp, Eye } from 'lucide-react'
 import { Button, Chip, TextField, Switch, SectionTitle, Select } from './kit'
 import { NumberField } from './NumberField'
 import { isPartialNumber, parseNumericDraft } from './numberDraft'
@@ -52,6 +52,7 @@ import {
   setColliderSettings,
 } from '../state/colliderStore'
 import { requestIvaSeatAim } from '../state/ivaSeatStore'
+import { enterSeatView } from '../state/ivaStore'
 import { SEAT_LOCAL_UP, seatAxesFromRotation, seatRotationFromAxes } from '../ksa/ivaSeatAxes'
 import { formatG6 } from '../ksa/formatG6'
 import { $catalogIndex } from '../state/catalogStore'
@@ -725,6 +726,13 @@ function IvaSeatHeader({ index, seat, locked }: { index: number; seat: IvaSeat; 
         </div>
       </div>
       {index === 0 && <Chip className="self-start text-accent">IVA opens on this seat</Chip>}
+      {/* The game's editor has NO IVA preview, so this is the only way to check a seat
+          before launching: sit in it and look around under the real clamps. Allowed even
+          on a locked layer — it moves the camera, never the document. */}
+      <Button size="sm" variant="secondary" onPress={() => enterSeatView(seat.id)}>
+        <Eye className="size-4" />
+        Sit in this seat
+      </Button>
       <p className="text-xs leading-snug text-fg-subtle">
         Seat order is exported data, not a list order: <b>C</b> cycles seats in this order in game,
         and the first one is where IVA opens.

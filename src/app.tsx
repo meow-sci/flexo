@@ -11,6 +11,7 @@ import { RightPanel } from './ui/RightPanel'
 import { MobileInspector } from './ui/MobileInspector'
 import { FloatingInspector } from './ui/FloatingInspector'
 import { FloatingPreviewToolbar } from './ui/FloatingPreviewToolbar'
+import { SeatViewBar } from './ui/SeatViewBar'
 import { WorkspaceLoadProgress } from './ui/LoadProgress'
 import { MeasurementInfo } from './ui/MeasurementInfo'
 import { MeasurementEditor } from './ui/MeasurementEditor'
@@ -86,6 +87,10 @@ function App() {
           Animation editor has a clip open (desktop only — the phone variant pins into the
           top toolbar stack above). */}
       {!isPhone && <FloatingPreviewToolbar />}
+
+      {/* Bottom-center: seat cycle + exit while sitting in an IVA seat. Phone and
+          desktop alike — in seat view the viewport IS the UI. */}
+      <SeatViewBar />
 
       {/* Editor for the active line measurement (left card on desktop, bottom
           sheet on phone — handled within the component). */}

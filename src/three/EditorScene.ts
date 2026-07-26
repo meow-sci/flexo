@@ -20,6 +20,7 @@ import {
   clearIvaSeatAimRequest,
   type IvaSeatAimRequest,
 } from '../state/ivaSeatStore'
+import { $seatView, exitSeatView } from '../state/ivaStore'
 import { SEAT_LOCAL_UP, seatAxesFromRotation, seatRotationFromAxes } from '../ksa/ivaSeatAxes'
 import { evaluateCoverage, type PlacedCollider } from '../measure/colliderCoverage'
 import { KittenObject } from './KittenObject'
@@ -211,6 +212,13 @@ export class EditorScene {
   private pendingMeasurementId: string | null = null
   private pickPointerDown: { x: number; y: number } | null = null
 
+  // Click-selection is suppressed by several independent modes at once, so each keeps
+  // its own flag and {@link applySelectionSuppression} ORs them — a shared boolean would
+  // let whichever mode ended last re-enable picking under one that is still active.
+  private suppressPickDrag = false
+  private suppressPickMeasure = false
+  private suppressPickSeatView = false
+
   constructor(host: HTMLElement) {
     this.viewport = new Viewport(host)
     // Must precede the store subscriptions below (they build SubParts, which
@@ -350,7 +358,8 @@ export class EditorScene {
         else this.handleGizmoChange(object)
       },
       onDraggingChanged: (dragging) => {
-        this.selection.setSuppressed(dragging)
+        this.suppressPickDrag = dragging
+        this.applySelectionSuppression()
         if (!dragging) {
           this.endBulkDrag()
           this.updateSelection() // re-snap the pose proxy to the committed pose
@@ -370,7 +379,8 @@ export class EditorScene {
     dom.addEventListener('pointerup', this.onPickPointerUp)
     this.sub($measureTool, (tool) => {
       const picking = tool !== 'none'
-      this.selection.setSuppressed(picking)
+      this.suppressPickMeasure = picking
+      this.applySelectionSuppression()
       dom.style.cursor = picking ? 'crosshair' : ''
       if (!picking) this.cancelPendingMeasurement()
     })
@@ -467,6 +477,10 @@ export class EditorScene {
     this.sub($ivaSeatAimRequest, (req) => {
       if (req) this.handleIvaSeatAim(req)
     })
+    // Sitting in a seat: resolve the previewed seat id against the document and hand the
+    // pose to the viewport (reconcile does the same on every document change, so a moved
+    // or deleted seat is picked up there).
+    this.sub($seatView, () => this.applySeatView())
     this.sub($connectorSettings, (settings) => {
       this.connectorSettings = settings
       this.rebuildConnectors()
@@ -572,6 +586,46 @@ export class EditorScene {
     this.updateSelection()
     this.applyAnimationPreview()
     this.applyEngineHandle()
+    // Last: the previewed seat may have moved, been re-aimed, or vanished with this change.
+    this.applySeatView()
+  }
+
+  /**
+   * Keeps the IVA seat preview in sync with the document (plans/IVA_PLAN.md §3.6).
+   *
+   * `$seatView` names a seat by ID, so this is where it becomes a pose — and where a
+   * previewed seat that no longer exists (deleted, or the whole project swapped) exits
+   * cleanly instead of leaving the camera parked on a stale eye point.
+   *
+   * While seated, three things are suppressed: the transform gizmo (nothing to drag from
+   * inside a seat, and the gizmo would be drawn at the camera), click-selection, and the
+   * seat markers — you are INSIDE the marker you sat in, so it would fill the screen.
+   */
+  private applySeatView(): void {
+    const seatId = $seatView.get()
+    const seat = seatId ? $part.get().ivaSeats.find((s) => s.id === seatId) : undefined
+    if (seatId && !seat) {
+      // Re-enters through the $seatView subscription with a null id, which tears down.
+      exitSeatView()
+      return
+    }
+    if (seat) {
+      const { forward, up } = seatAxesFromRotation(seat.rotation)
+      this.viewport.enterSeatView({ position: seat.position, forward, up })
+    } else {
+      this.viewport.exitSeatView()
+    }
+    this.suppressPickSeatView = seat != null
+    this.applySelectionSuppression()
+    this.applyLayerView() // shows/hides the seat markers
+    this.updateSelection() // attaches/detaches the gizmo
+  }
+
+  /** Applies the OR of every reason click-selection is currently off. */
+  private applySelectionSuppression(): void {
+    this.selection.setSuppressed(
+      this.suppressPickDrag || this.suppressPickMeasure || this.suppressPickSeatView,
+    )
   }
 
   /**
@@ -731,11 +785,14 @@ export class EditorScene {
         obj.setLayerOpacity(lv.opacity)
       }
     }
+    // Every seat marker is hidden while sitting in one: the camera is inside the marker
+    // it sat in (it would fill the screen), and the others are eye points, not scenery.
+    const inSeatView = $seatView.get() !== null
     for (const s of part.ivaSeats) {
       const obj = this.seatObjects.get(s.id)
       if (obj) {
         const lv = layerViewState(view, s.layerId)
-        obj.group.visible = lv.visible
+        obj.group.visible = lv.visible && !inSeatView
         obj.setLayerOpacity(lv.opacity)
       }
     }
@@ -1228,7 +1285,9 @@ export class EditorScene {
     // group sits at its animated transform — suppress the gizmo so a drag can't write
     // the posed transform back as the static placement. At rest (t=0) it's safe.
     const previewLocked = this.isPreviewPosed() && this.selectedIsAnimated()
-    if (anyLocked || previewLocked) {
+    // Sitting in a seat: the gizmo would render at (or inside) the camera and there is
+    // nothing to aim it with — the whole viewport is the preview.
+    if (anyLocked || previewLocked || $seatView.get() !== null) {
       target = null
     } else if (multi) {
       this.repositionPivot()
@@ -1562,6 +1621,8 @@ export class EditorScene {
   }
 
   dispose(): void {
+    // The scene going away takes the preview with it — the bar must not survive it.
+    exitSeatView()
     if (this.coverageDots) {
       this.root.remove(this.coverageDots)
       this.coverageDots.geometry.dispose()

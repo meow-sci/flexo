@@ -8,6 +8,24 @@ import { SceneEnvironment } from './SceneEnvironment'
 import { $cameraState, type CameraDir, type CameraState } from '../state/viewStore'
 import { $lighting } from '../state/lightingStore'
 import { $showFpsCounter } from '../state/settingsStore'
+import { $seatLook, nudgeSeatLook } from '../state/ivaStore'
+import { clampSeatLook } from '../ksa/ivaLook'
+import type { Vec3 } from '../ksa/types'
+
+/**
+ * An IVA seat's eye frame, in workspace coordinates: where the camera sits and the two
+ * axes KSA authors as `<ForwardAxis>` / `<UpAxis>`. Both axes are unit length (they come
+ * from `seatAxesFromRotation`), which is also the only case where {@link clampSeatLook}
+ * is idempotent — see its doc comment.
+ */
+export interface SeatPose {
+  position: Vec3
+  forward: Vec3
+  up: Vec3
+}
+
+/** Free-look sensitivity in radians per pixel of pointer travel. Editor feel, not KSA's. */
+const SEAT_LOOK_RAD_PER_PX = 0.004
 
 /**
  * Framework-agnostic 3D workspace: renderer, scene, perspective camera, lighting,
@@ -37,6 +55,18 @@ export class Viewport {
   /** FPS overlay (stats.js), mounted only while {@link $showFpsCounter} is on. */
   private stats: Stats | null = null
   private readonly fpsUnsub: () => void
+  /**
+   * Active IVA seat preview, or null. Holds everything {@link exitSeatView} has to undo:
+   * the orbit camera as it was, and the `$seatLook` subscription that drives the camera.
+   */
+  private seatView: {
+    pose: SeatPose
+    /** The orbit camera to put back on exit. */
+    saved: CameraState
+    unsubLook: () => void
+  } | null = null
+  /** Pointer id currently dragging the seat free-look, and where it last was. */
+  private seatDrag: { pointerId: number; x: number; y: number } | null = null
 
   constructor(host: HTMLElement) {
     this.host = host
@@ -185,6 +215,127 @@ export class Viewport {
     $cameraState.set(this.readCameraState())
   }
 
+  /**
+   * Sits the camera at `pose` — the IVA seat preview (plans/IVA_PLAN.md §3.6).
+   *
+   * The orbit camera is snapshotted and `OrbitControls` disabled (both its input AND its
+   * per-frame `update()`, which would otherwise re-aim the camera at `controls.target`
+   * every frame); pointer drags on the canvas accumulate free-look into `$seatLook`, and
+   * this subscribes to that atom so the camera follows. No FOV change: the camera is
+   * already 50°, which is KSA's `GameSettings.FieldOfView` (`Camera.cs:51`).
+   *
+   * Idempotent — calling it again while previewing just re-poses the seat, so the caller
+   * can push a fresh pose whenever the document moves the seat.
+   */
+  enterSeatView(pose: SeatPose): void {
+    if (this.seatView) {
+      this.seatView.pose = pose
+      this.applySeatCamera()
+      return
+    }
+    const saved = this.readCameraState()
+    this.controls.enabled = false
+    const dom = this.renderer.domElement
+    dom.addEventListener('pointerdown', this.onSeatPointerDown)
+    dom.addEventListener('pointermove', this.onSeatPointerMove)
+    dom.addEventListener('pointerup', this.onSeatPointerUp)
+    dom.addEventListener('pointercancel', this.onSeatPointerUp)
+    dom.style.cursor = 'grab'
+    // Assign BEFORE subscribing: nanostores fires the listener immediately, and
+    // applySeatCamera is a no-op until `seatView` is set.
+    this.seatView = { pose, saved, unsubLook: () => {} }
+    this.seatView.unsubLook = $seatLook.subscribe(() => this.applySeatCamera())
+  }
+
+  /**
+   * Leaves the seat preview and puts the orbit camera back exactly where it was.
+   *
+   * Removing the pointer listeners here is what keeps a leaked handler from fighting
+   * `OrbitControls` for the rest of the session; {@link dispose} calls this too, so the
+   * canvas can never outlive them. Safe to call when not previewing.
+   */
+  exitSeatView(): void {
+    const view = this.seatView
+    if (!view) return
+    this.seatView = null
+    view.unsubLook()
+    const dom = this.renderer.domElement
+    dom.removeEventListener('pointerdown', this.onSeatPointerDown)
+    dom.removeEventListener('pointermove', this.onSeatPointerMove)
+    dom.removeEventListener('pointerup', this.onSeatPointerUp)
+    dom.removeEventListener('pointercancel', this.onSeatPointerUp)
+    dom.style.cursor = ''
+    if (this.seatDrag && dom.hasPointerCapture(this.seatDrag.pointerId)) {
+      dom.releasePointerCapture(this.seatDrag.pointerId)
+    }
+    this.seatDrag = null
+    this.controls.enabled = true
+    this.restoreCamera(view.saved)
+    this.invalidate()
+  }
+
+  /** True while the IVA seat preview owns the camera. */
+  get isSeatView(): boolean {
+    return this.seatView !== null
+  }
+
+  /**
+   * Points the camera out of the seat: compose the look from the seat's axes and the
+   * accumulated free-look, then run it through the game's clamps ONCE — exactly as
+   * `IVAController.OnFrame` does per frame. Never iterated to a fixed point: for a
+   * non-unit up axis `clampSeatLook` deliberately under-corrects in a single pass, and
+   * the game lives with that too (see `src/ksa/ivaLook.ts`).
+   */
+  private applySeatCamera(): void {
+    const view = this.seatView
+    if (!view) return
+    const { position, forward, up } = view.pose
+    const { yaw, pitch } = $seatLook.get()
+
+    const f = new THREE.Vector3(forward.x, forward.y, forward.z)
+    const u = new THREE.Vector3(up.x, up.y, up.z)
+    const dir = f.clone()
+    // Pitch about the seat's right axis, then yaw about its up axis. A degenerate seat
+    // (forward parallel to up — which NaNs the game's camera) has no right axis, so its
+    // pitch is simply skipped rather than fed a zero rotation axis.
+    const right = new THREE.Vector3().crossVectors(f, u)
+    if (right.lengthSq() > 1e-12) dir.applyAxisAngle(right.normalize(), pitch)
+    if (u.lengthSq() > 1e-12) dir.applyAxisAngle(u.clone().normalize(), yaw)
+
+    const look = clampSeatLook({ x: dir.x, y: dir.y, z: dir.z }, forward, up)
+    this.camera.position.set(position.x, position.y, position.z)
+    this.camera.up.set(up.x, up.y, up.z)
+    this.camera.lookAt(position.x + look.x, position.y + look.y, position.z + look.z)
+    this.invalidate()
+  }
+
+  private readonly onSeatPointerDown = (e: PointerEvent): void => {
+    if (!this.seatView || this.seatDrag) return
+    this.seatDrag = { pointerId: e.pointerId, x: e.clientX, y: e.clientY }
+    this.renderer.domElement.setPointerCapture(e.pointerId)
+    this.renderer.domElement.style.cursor = 'grabbing'
+    e.preventDefault()
+  }
+
+  private readonly onSeatPointerMove = (e: PointerEvent): void => {
+    const drag = this.seatDrag
+    if (!drag || e.pointerId !== drag.pointerId) return
+    const dx = e.clientX - drag.x
+    const dy = e.clientY - drag.y
+    drag.x = e.clientX
+    drag.y = e.clientY
+    // Drag right -> look right (yaw is positive toward the seat's LEFT); drag up -> look up.
+    nudgeSeatLook(-dx * SEAT_LOOK_RAD_PER_PX, -dy * SEAT_LOOK_RAD_PER_PX)
+  }
+
+  private readonly onSeatPointerUp = (e: PointerEvent): void => {
+    if (!this.seatDrag || e.pointerId !== this.seatDrag.pointerId) return
+    const dom = this.renderer.domElement
+    if (dom.hasPointerCapture(e.pointerId)) dom.releasePointerCapture(e.pointerId)
+    this.seatDrag = null
+    if (this.seatView) dom.style.cursor = 'grab'
+  }
+
   restoreCamera(state: CameraState): void {
     this.camera.position.set(...state.position)
     this.camera.up.set(...state.up)
@@ -228,14 +379,19 @@ export class Viewport {
   private renderFrame(): void {
     this.stats?.begin()
     // Damping is applied here, and a moved camera dispatches `change` → invalidate,
-    // so an inertial orbit keeps requesting frames until it comes to rest.
-    this.controls.update()
+    // so an inertial orbit keeps requesting frames until it comes to rest. In seat view
+    // the camera is ours: `update()` re-aims it at `controls.target` unconditionally
+    // (it does not check `enabled`), which would undo every lookAt.
+    if (!this.seatView) this.controls.update()
     this.renderer.render(this.scene, this.camera)
     this.labelRenderer.render(this.scene, this.camera)
     this.stats?.end()
   }
 
   dispose(): void {
+    // Before anything else: drops the seat-view pointer listeners and the $seatLook
+    // subscription (no-op when not previewing).
+    this.exitSeatView()
     this.loop.dispose()
     this.fpsUnsub()
     this.setFpsCounter(false)

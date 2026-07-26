@@ -8,6 +8,16 @@
  *  - **warn**  — KSA loads it fine, but the part behaves in a way the author almost certainly
  *    didn't intend (a seat staring into space, an interior nobody can ever see).
  *
+ * The rules implemented here (plans/IVA_PLAN.md §3.8, in full):
+ *  - `iva-seat-non-finite` (block) — a seat's position or derived axes are NaN/∞.
+ *  - `iva-seat-duplicate` (block) — two seats at the identical position AND orientation.
+ *  - `iva-seat-no-interior` (warn) — seats, but no interior geometry to look at.
+ *  - `iva-interior-no-seat` (warn) — interior geometry, but no seat it can be seen from.
+ *  - `iva-interior-on-glass` (warn) — `<Internal>` on a template that exports as glass.
+ *  - `iva-seat-outside-colliders` (warn) — the eye point is outside the collision volume.
+ *  - `iva-seat-count` (warn) — more seats than anyone wants to press `C` through.
+ *  - `iva-seat-at-origin` (warn) — a seat still sitting at the default `(0,0,0)`.
+ *
  * ⚠️ **The non-unit-axis and parallel-axis gotchas (plans/IVA_PLAN.md §1.6.1-3) cannot reach
  * this module, so there is deliberately NO rule for them.** `rotation` is the document's
  * source of truth for a seat's orientation: `partXmlParser` DROPS a seat whose authored
@@ -21,7 +31,8 @@
  * against the decomp rather than against this file's prose. Pure: no stores, no React, no three.
  */
 
-import { seatAxesFromRotation } from './ivaSeatAxes'
+import { pointInCollider, type PlacedCollider } from '../measure/colliderCoverage'
+import { ksaQuatFromEulerXyz, seatAxesFromRotation } from './ivaSeatAxes'
 import { resolveInternal } from './modExport'
 import type { CatalogSubPart } from './catalog'
 import type { EditingPart, Vec3 } from './types'
@@ -49,6 +60,39 @@ function sameVec(a: Vec3, b: Vec3): boolean {
 
 function finiteVec(v: Vec3): boolean {
   return Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z)
+}
+
+/**
+ * More seats than this and `C` becomes a chore — every extra seat is one more press to
+ * cycle past (`IVASeats` is walked in document order, §1.4). Named the way
+ * `colliderValidation.MANY_COLLIDERS` is: a smell threshold, not a game limit.
+ */
+const MANY_SEATS = 8
+
+/**
+ * The colliders a seat position can honestly be tested against.
+ *
+ * PART-LEVEL ONLY, on purpose. A seat's `<Position>` is in the Part's assembly frame, and so
+ * is a part-level collider's transform — but a SubPart-owned collider (`ownerTemplateId !==
+ * null`) is expressed in its TEMPLATE's local frame and exists once per PLACEMENT of that
+ * template (see `PartCollider.ownerTemplateId`). Testing the seat against those coordinates
+ * raw would compare two different spaces and fire on perfectly good seats; resolving them
+ * properly means composing every placement's transform, which is the caller's job everywhere
+ * else in the codebase (`colliderCoverage`'s contract, and `EditorScene.handleCoverageCheck`
+ * is where that composition lives — with three.js, which this pure module must not import).
+ * So they are skipped, and a part whose hull is entirely SubPart-owned simply gets no check:
+ * a false negative is silent, a false positive nags about a correct part.
+ */
+function partLevelColliders(part: EditingPart): PlacedCollider[] {
+  return part.colliders
+    .filter((c) => c.ownerTemplateId === null)
+    .map((collider) => ({
+      collider,
+      position: collider.position,
+      // Same Euler convention as `matrixFromTransform` — `ivaSeatAxes.test.ts` locks the two
+      // together, so this stays consistent with what the viewport draws.
+      quaternion: ksaQuatFromEulerXyz(collider.rotation),
+    }))
 }
 
 /**
@@ -84,6 +128,7 @@ export function validateIvaSeats(
   // Seat ids are editor-only and NEVER emitted, so messages name a seat by its 1-based
   // position — which is also the load-bearing thing about it (cycle order, §1.4).
   const derived = part.ivaSeats.map((s) => seatAxesFromRotation(s.rotation))
+  const hull = partLevelColliders(part)
 
   for (const [i, seat] of part.ivaSeats.entries()) {
     const { forward, up } = derived[i]
@@ -116,6 +161,35 @@ export function validateIvaSeats(
         break
       }
     }
+
+    // The default position, still untouched: exact zero only — a seat deliberately placed at
+    // the Part's origin is a millimetre off in practice, and an epsilon here would nag about
+    // it. (`<Position>` is the EYE point, so the origin is almost never where it belongs.)
+    if (seat.position.x === 0 && seat.position.y === 0 && seat.position.z === 0) {
+      warn(
+        'iva-seat-at-origin',
+        `Seat ${i + 1} is at the Part's origin (0, 0, 0) — the default. <Position> is the eye ` +
+          `point, so unless the origin really is head height inside the cabin, move the seat.`,
+      )
+    }
+
+    // Outside the collision volume ⇒ the eye is almost certainly outside the hull. Only
+    // meaningful when there is a hull to be outside of.
+    if (hull.length > 0 && !hull.some((c) => pointInCollider(seat.position, c))) {
+      warn(
+        'iva-seat-outside-colliders',
+        `Seat ${i + 1} sits outside every collider on this Part. The eye point is outside the ` +
+          `collision volume, which usually means the seat is outside the hull.`,
+      )
+    }
+  }
+
+  if (part.ivaSeats.length > MANY_SEATS) {
+    warn(
+      'iva-seat-count',
+      `${part.ivaSeats.length} IVA seats — every extra seat is one more press of C to cycle ` +
+        `past in game, so keep the count to the crew that actually sits here.`,
+    )
   }
 
   // Interior geometry = a placed template whose <PartModel> exports <Internal>true</Internal>

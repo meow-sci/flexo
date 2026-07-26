@@ -1,10 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   $ivaSeatSettings,
+  $lightPreviewCount,
   $lightSettings,
   $modelImportSettings,
   lightSettings,
   setIvaSeatSettings,
+  setLightPreviewCount,
   setLightSettings,
   setModelImportSettings,
   type LightVizSettings,
@@ -31,7 +33,9 @@ beforeEach(() => {
     showVolumes: 'selected',
     exposureMode: 'auto',
     vizExposure: 1,
+    livePreview: false,
   })
+  $lightPreviewCount.set({ enabled: 0, total: 0 })
 })
 
 describe('$modelImportSettings', () => {
@@ -98,18 +102,20 @@ describe('$ivaSeatSettings', () => {
  * scale, so nothing here ever reaches the exported XML. The 0.12 m default keeps light
  * and seat markers at the same on-screen scale, and the DEFAULTS of the coverage
  * controls are load-bearing: coverage on `'selected'` only is what keeps a part with a
- * dozen lights from becoming an unreadable glow, and `'auto'` exposure is what makes
+ * dozen lights from becoming an unreadable glow, `'auto'` exposure is what makes
  * Core's I=0.05 interior point light visible at all while it is being edited
- * (plans/LIGHT_MANAGEMENT_PLAN.md §3.6).
+ * (plans/LIGHT_MANAGEMENT_PLAN.md §3.6), and the live preview is OFF because it is an
+ * approximation of the game (§3.10) whose every toggle re-links the scene's shaders.
  */
 describe('$lightSettings', () => {
-  it('defaults to a 0.12 m marker, coverage on the selection, auto exposure', () => {
+  it('defaults to a 0.12 m marker, coverage on the selection, auto exposure, no preview', () => {
     localStorage.clear()
     expect($lightSettings.get()).toEqual({
       markerSize: 0.12,
       showVolumes: 'selected',
       exposureMode: 'auto',
       vizExposure: 1,
+      livePreview: false,
     })
   })
 
@@ -124,6 +130,7 @@ describe('$lightSettings', () => {
       showVolumes: 'selected',
       exposureMode: 'auto',
       vizExposure: 1,
+      livePreview: false,
     })
     // A patch on top of a partial object writes back a COMPLETE one.
     setLightSettings({ showVolumes: 'all' })
@@ -132,6 +139,7 @@ describe('$lightSettings', () => {
       showVolumes: 'all',
       exposureMode: 'auto',
       vizExposure: 1,
+      livePreview: false,
     })
   })
 
@@ -146,7 +154,10 @@ describe('$lightSettings', () => {
       showVolumes: 'all',
       exposureMode: 'absolute',
       vizExposure: 2.5,
+      livePreview: false,
     })
+    setLightSettings({ livePreview: true })
+    expect($lightSettings.get()).toMatchObject({ vizExposure: 2.5, livePreview: true })
   })
 
   it('persists to localStorage under its flexo: key', () => {
@@ -156,6 +167,32 @@ describe('$lightSettings', () => {
       showVolumes: 'off',
       exposureMode: 'auto',
       vizExposure: 1,
+      livePreview: false,
     })
+  })
+})
+
+/**
+ * The preview cap report is the one EPHEMERAL store in this module: EditorScene publishes
+ * how many light instances the preview actually lights and how many exist, and the View
+ * menu reads it to explain a truncated preview. It describes the current document, so it
+ * must never be persisted — a replayed count would describe a project that isn't open.
+ */
+describe('$lightPreviewCount', () => {
+  it('starts empty and never touches localStorage', () => {
+    localStorage.clear()
+    expect($lightPreviewCount.get()).toEqual({ enabled: 0, total: 0 })
+    setLightPreviewCount({ enabled: 16, total: 20 })
+    expect($lightPreviewCount.get()).toEqual({ enabled: 16, total: 20 })
+    expect(Object.keys(localStorage)).not.toContain('flexo:lightPreviewCount')
+  })
+
+  it('no-ops (same object identity) when nothing changed, so idle passes cause no re-render', () => {
+    setLightPreviewCount({ enabled: 3, total: 5 })
+    const first = $lightPreviewCount.get()
+    setLightPreviewCount({ enabled: 3, total: 5 })
+    expect($lightPreviewCount.get()).toBe(first)
+    setLightPreviewCount({ enabled: 3, total: 6 })
+    expect($lightPreviewCount.get()).not.toBe(first)
   })
 })

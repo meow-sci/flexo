@@ -1,4 +1,4 @@
-import { lightIlluminance } from '../ksa/lightFalloff'
+import { clampSpotAngles, lightIlluminance } from '../ksa/lightFalloff'
 
 /**
  * The **pure** half of the light coverage visualization (plans/LIGHT_MANAGEMENT_PLAN.md
@@ -12,6 +12,10 @@ import { lightIlluminance } from '../ksa/lightFalloff'
  * fragment's own distance/angle. Each shell is therefore EXACT at its own radius; the
  * stack reads as a graded volume (and, for a Spot, as a spherical-cap beam) with no
  * cone geometry and no wide-angle degeneracy.
+ *
+ * The tail of the file is the same story for the OPTIONAL live preview (§3.10): the
+ * KSA-cone → `THREE.SpotLight` parameter mapping and the {@link MAX_PREVIEW_LIGHTS}
+ * instance budget, kept here for the same reason — they are the parts worth pinning.
  */
 
 /** Concentric shells per light. Enough to read as a gradient, cheap enough for 10+ lights. */
@@ -85,4 +89,88 @@ export function volumeExposure(
     return Number.isFinite(vizExposure) ? Math.max(vizExposure, MIN_EXPOSURE) : MIN_EXPOSURE
   }
   return Math.max(autoExposure(rangeM, intensity), MIN_EXPOSURE)
+}
+
+// ── Live lighting preview (plans/LIGHT_MANAGEMENT_PLAN.md §3.10) ─────────────────────
+// The pure half of the OTHER light visualization: real three.js lights hung off the
+// markers. Everything below is the KSA-field → three.js-parameter mapping and the
+// instance budget — no three.js types, so it unit-tests without a WebGL context.
+
+/**
+ * How many light INSTANCES may carry a real three.js preview light at once. Each one
+ * adds a `NUM_POINT_LIGHTS`/`NUM_SPOT_LIGHTS` define to every material, so the whole
+ * scene re-links its shader programs whenever the count changes; 16 is generous for a
+ * part while keeping the toggle responsive (and the WebGL uniform budget comfortable).
+ */
+export const MAX_PREVIEW_LIGHTS = 16
+
+/**
+ * three's `SpotLight.penumbra` for a KSA cone: the fraction of the outer half-angle the
+ * soft edge occupies. three's spot term is
+ * `smoothstep(cos(angle), cos(angle · (1 − penumbra)), cosθ)`, so `penumbra = 1 −
+ * inner/outer` puts the fully-lit core at exactly KSA's inner angle — the shape matches,
+ * the curve does not (smoothstep vs KSA's SQUARED linear-in-cosine ramp; see
+ * {@link import('../ksa/lightFalloff').spotAttenuation}).
+ *
+ * Angles are expected ALREADY SANITIZED ({@link clampSpotAngles}) — pass raw authored
+ * ones through {@link spotPreviewCone} instead. A non-positive (or non-finite) outer
+ * angle yields 0 rather than a division blowing up into `NaN`, which would silently make
+ * three drop the whole spot.
+ */
+export function spotPenumbra(innerRad: number, outerRad: number): number {
+  if (!Number.isFinite(outerRad) || outerRad <= 0) return 0
+  const p = 1 - innerRad / outerRad
+  if (!Number.isFinite(p)) return 0
+  return p < 0 ? 0 : p > 1 ? 1 : p
+}
+
+/**
+ * The full authored-cone → three.js mapping: KSA's own angle sanitizer
+ * ({@link clampSpotAngles} — swap, clamp outer to ≤1.5697963 rad, clamp inner into it)
+ * followed by {@link spotPenumbra}. The SAME clamped angles the coverage shells and the
+ * boundary wireframe use, so the preview's lit footprint and the wireframe cone agree.
+ */
+export function spotPreviewCone(
+  innerRad: number,
+  outerRad: number,
+): { angleRad: number; penumbra: number } {
+  const clamped = clampSpotAngles(innerRad, outerRad)
+  return { angleRad: clamped.outerRad, penumbra: spotPenumbra(clamped.innerRad, clamped.outerRad) }
+}
+
+/** {@link planPreviewBudget}'s answer: how many instances of each light to light up. */
+export interface PreviewBudget {
+  /** Per light, in document order: how many of its instances get a preview light. */
+  perLight: number[]
+  /** Total preview lights the plan enables (≤ the cap). */
+  enabled: number
+  /** Total light instances offered. */
+  total: number
+}
+
+/**
+ * Spends the {@link MAX_PREVIEW_LIGHTS} budget over the document's lights, **in document
+ * order**, counting INSTANCES rather than documents: a SubPart-owned light placed 5 times
+ * is 5 lights in-game and 5 preview lights here, so it spends 5 of the budget (and may be
+ * partially funded — the first k of its instances light up, the rest stay markers).
+ *
+ * `instanceCounts[i]` is how many visuals light `i` has. Negative/non-finite counts are
+ * treated as 0 so a bad input can never hand three a negative index.
+ */
+export function planPreviewBudget(
+  instanceCounts: readonly number[],
+  cap: number = MAX_PREVIEW_LIGHTS,
+): PreviewBudget {
+  const budget = Number.isFinite(cap) ? Math.max(Math.floor(cap), 0) : 0
+  const perLight: number[] = []
+  let enabled = 0
+  let total = 0
+  for (const raw of instanceCounts) {
+    const count = Number.isFinite(raw) ? Math.max(Math.floor(raw), 0) : 0
+    total += count
+    const take = Math.min(count, budget - enabled)
+    perLight.push(take)
+    enabled += take
+  }
+  return { perLight, enabled, total }
 }

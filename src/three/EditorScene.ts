@@ -25,6 +25,7 @@ import { SEAT_LOCAL_UP, seatAxesFromRotation, seatRotationFromAxes } from '../ks
 import { evaluateCoverage, type PlacedCollider } from '../measure/colliderCoverage'
 import { KittenObject } from './KittenObject'
 import { LightObject } from './LightObject'
+import { planPreviewBudget } from './lightVolume'
 import { SelectionManager } from './SelectionManager'
 import { TransformGizmo } from './TransformGizmo'
 import { MeasurementLayer } from './MeasurementLayer'
@@ -125,6 +126,7 @@ import {
   $lightSettings,
   $selectionHighlight,
   lightSettings,
+  setLightPreviewCount,
   type ConnectorSettings,
   type IvaSeatSettings,
   type LightVizSettings,
@@ -566,17 +568,20 @@ export class EditorScene {
     // Light markers: only the SIZE needs the rebuild (no in-place resize path, the
     // $ivaSeatSettings pattern). The coverage settings are live — pushing the exposure
     // into the existing shell materials and re-running the visibility pass is both
-    // cheaper and what makes dragging the exposure field feel connected.
+    // cheaper and what makes dragging the exposure field feel connected. The live
+    // PREVIEW is live too: `setPreview` adds/removes one real light per marker, so
+    // flipping the toggle must NOT rebuild every marker's geometry.
     this.sub($lightSettings, () => {
       const settings = lightSettings()
       const resize = settings.markerSize !== this.lightSettings.markerSize
       this.lightSettings = settings
       if (resize) {
-        this.rebuildLights()
+        this.rebuildLights() // reconcileLights re-applies coverage + preview
         return
       }
       for (const objs of this.lightObjects.values()) for (const obj of objs) obj.setViz(settings)
       this.applyLightCoverage()
+      this.applyLightPreview()
     })
     // Re-apply the highlight tint to the current selection when the color/strength
     // setting changes (fires immediately on subscribe — a harmless no-op when nothing
@@ -917,7 +922,9 @@ export class EditorScene {
     }
     // The coverage children are a SECOND, composed gate (view setting × layer), applied
     // to their own `.visible` flags — this method stays the only writer of `group.visible`.
+    // The live preview lights compose the same way (toggle × layer × budget).
     this.applyLightCoverage()
+    this.applyLightPreview()
     for (const k of part.kittens) {
       const obj = this.kittenObjects.get(k.id)
       if (obj) {
@@ -1096,6 +1103,10 @@ export class EditorScene {
       }
     }
     this.positionLights(part)
+    // A fresh LightObject starts with no preview light, and the instance budget shifts
+    // whenever lights (or their owners' placements) come and go — so the preview pass
+    // belongs here, not only on the settings toggle.
+    this.applyLightPreview()
   }
 
   /**
@@ -1187,6 +1198,42 @@ export class EditorScene {
         obj.setCoverageVisible(wanted && layerVisible)
       })
     }
+  }
+
+  /**
+   * Adds/removes the LIVE PREVIEW lights — real `THREE.PointLight`/`SpotLight`s that
+   * illuminate the part meshes (plans/LIGHT_MANAGEMENT_PLAN.md §3.10). Composed exactly
+   * like {@link applyLightCoverage}:
+   *
+   *  - `$lightSettings.livePreview` — the global toggle (default off);
+   *  - the Lights layer's own visibility — a hidden layer means no illumination either
+   *    (the marker groups are hidden too, and three skips a hidden subtree's lights, but
+   *    this makes the rule explicit rather than a side effect of traversal);
+   *  - the {@link planPreviewBudget} instance budget — at most
+   *    {@link import('./lightVolume').MAX_PREVIEW_LIGHTS} INSTANCES in document order,
+   *    since each preview light re-links every shader program in the scene.
+   *
+   * Writes only each `LightObject`'s own preview state — never `group.visible`, which
+   * {@link applyLayerView} owns. Publishes the enabled/total counts so the View menu can
+   * say when the cap truncated.
+   */
+  private applyLightPreview(): void {
+    const part = $part.get()
+    const view = $layerView.get()
+    const on = this.lightSettings.livePreview
+    const budget = planPreviewBudget(
+      part.lights.map((l) => this.lightObjects.get(l.id)?.length ?? 0),
+    )
+    let enabled = 0
+    part.lights.forEach((light, li) => {
+      const objs = this.lightObjects.get(light.id)
+      if (!objs) return
+      const layerVisible = layerViewState(view, light.layerId).visible
+      const allowed = on && layerVisible ? budget.perLight[li] : 0
+      enabled += allowed
+      objs.forEach((obj, i) => obj.setPreview(i < allowed))
+    })
+    setLightPreviewCount({ enabled, total: budget.total })
   }
 
   /**
@@ -2000,6 +2047,8 @@ export class EditorScene {
       }
     }
     this.lightObjects.clear()
+    // The cap report describes a scene that no longer exists.
+    setLightPreviewCount({ enabled: 0, total: 0 })
     const dom = this.viewport.renderer.domElement
     dom.removeEventListener('pointerdown', this.onPickPointerDown)
     dom.removeEventListener('pointerup', this.onPickPointerUp)

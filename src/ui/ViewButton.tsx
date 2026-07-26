@@ -32,11 +32,13 @@ import {
   type ToneMappingMode,
 } from '../state/lightingStore'
 import {
+  $lightPreviewCount,
   $lightSettings,
   DEFAULT_LIGHT_SETTINGS,
   setLightSettings,
   type LightVizSettings,
 } from '../state/settingsStore'
+import { MAX_PREVIEW_LIGHTS } from '../three/lightVolume'
 import { PreciseNumberInput } from './PreciseNumberInput'
 
 const SNAP_ROWS: [CameraDir, CameraDir][] = [
@@ -58,6 +60,9 @@ function ViewContent() {
   // Resolved read: a settings object persisted before these fields existed must show
   // its defaults in the menu, not blank selects (see lightSettings()'s JSDoc).
   const lightViz = { ...DEFAULT_LIGHT_SETTINGS, ...useStore($lightSettings) }
+  // Published by EditorScene each time the preview pass runs — ephemeral, so it always
+  // describes the document on screen right now.
+  const preview = useStore($lightPreviewCount)
   const envHasSky = ENVIRONMENT_PRESETS.find((p) => p.id === lighting.environment)?.file != null
 
   return (
@@ -162,6 +167,23 @@ function ViewContent() {
           <b>Auto</b> scales each light to its own brightness (best for editing one).{' '}
           <b>Absolute</b> shades every light against the same reference, so a dim light looks dim.
         </p>
+
+        <Switch
+          isSelected={lightViz.livePreview}
+          onChange={(livePreview) => setLightSettings({ livePreview })}
+        >
+          Preview lighting
+        </Switch>
+        <p className="text-xs leading-snug text-fg-subtle">
+          Actually lights the part with each light's color, range and cone —{' '}
+          <b>indicative, not exact</b> (the coverage volume is the precise read).
+        </p>
+        {lightViz.livePreview && preview.total > preview.enabled && (
+          <p className="text-xs leading-snug text-warning">
+            Previewing {preview.enabled} of {preview.total} light instances ({MAX_PREVIEW_LIGHTS}{' '}
+            max) — the rest draw markers only.
+          </p>
+        )}
       </section>
 
       <section className="flex flex-col gap-2.5">

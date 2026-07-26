@@ -1,4 +1,5 @@
 import { persistentJSON } from '@nanostores/persistent'
+import { atom } from 'nanostores'
 
 /**
  * Global editor settings (nanostores, persisted to localStorage). No React /
@@ -8,6 +9,9 @@ import { persistentJSON } from '@nanostores/persistent'
  * Connector size is global (every connector renders at the same gizmo cube
  * width; the facing cone derives from it); per-connector scale multiplies on
  * top via its transform.
+ *
+ * One exception to "persisted": {@link $lightPreviewCount} is a plain atom — a
+ * scene→UI REPORT about the current document rather than a user preference.
  */
 
 export interface ConnectorSettings {
@@ -85,6 +89,15 @@ export interface LightVizSettings {
   exposureMode: 'auto' | 'absolute'
   /** Absolute-mode `E₀`, in the same illuminance units as `Intensity / d²`. */
   vizExposure: number
+  /**
+   * Hang a REAL three.js light off every light marker so the part meshes are actually
+   * lit ({@link import('../three/LightObject').LightObject} `setPreview`). Default
+   * **off**: it is an approximation of the game (three's distance window is squared and
+   * its cone edge is a smoothstep — see docs/lights.md), and toggling it changes the
+   * scene's light count, which makes three re-link every shader program. The coverage
+   * shells stay the exact read.
+   */
+  livePreview: boolean
 }
 
 export const DEFAULT_LIGHT_SETTINGS: LightVizSettings = {
@@ -92,6 +105,7 @@ export const DEFAULT_LIGHT_SETTINGS: LightVizSettings = {
   showVolumes: 'selected',
   exposureMode: 'auto',
   vizExposure: 1,
+  livePreview: false,
 }
 
 export const $lightSettings = persistentJSON<LightVizSettings>(
@@ -114,6 +128,37 @@ export function lightSettings(): LightVizSettings {
 
 export function setLightSettings(patch: Partial<LightVizSettings>): void {
   $lightSettings.set({ ...lightSettings(), ...patch })
+}
+
+/** How many light instances the live preview actually lights, and how many exist. */
+export interface LightPreviewCount {
+  /**
+   * Preview lights currently in the scene. 0 when {@link LightVizSettings.livePreview}
+   * is off or the Lights layer is hidden; otherwise `min(total, MAX_PREVIEW_LIGHTS)`.
+   */
+  enabled: number
+  /**
+   * Light INSTANCES in the document — a SubPart-owned light counts once per placement of
+   * its template, because that is how many lights KSA instantiates (and how many preview
+   * lights the scene would need).
+   */
+  total: number
+}
+
+/**
+ * The live preview's cap report — **ephemeral, deliberately NOT persisted** (unlike every
+ * other store in this module): it describes the CURRENT document, not a preference, so
+ * replaying a stale count from localStorage would be a lie. `EditorScene` publishes it
+ * from {@link import('../three/lightVolume').planPreviewBudget}; `ViewButton` reads it to
+ * say "previewing N of M" when the cap truncates.
+ */
+export const $lightPreviewCount = atom<LightPreviewCount>({ enabled: 0, total: 0 })
+
+/** Publishes the preview cap report, no-oping when nothing changed (avoids idle re-renders). */
+export function setLightPreviewCount(next: LightPreviewCount): void {
+  const current = $lightPreviewCount.get()
+  if (current.enabled === next.enabled && current.total === next.total) return
+  $lightPreviewCount.set(next)
 }
 
 /**

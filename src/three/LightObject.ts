@@ -3,7 +3,13 @@ import { clampSpotAngles } from '../ksa/lightFalloff'
 import type { LightType, PartLight, Transform } from '../ksa/types'
 import { applyPlacement } from './coords'
 import { applyMaterialOpacity, captureOpacityBase, type MaterialOpacityBase } from './layerOpacity'
-import { SHELL_COUNT, SHELL_MAX_ALPHA, shellRadii, volumeExposure } from './lightVolume'
+import {
+  SHELL_COUNT,
+  SHELL_MAX_ALPHA,
+  shellRadii,
+  spotPreviewCone,
+  volumeExposure,
+} from './lightVolume'
 import { ring } from './wireShapes'
 
 /** The shared selection green (matches ConnectorObject/ColliderObject/IvaSeatObject). */
@@ -38,6 +44,14 @@ const SPOT_RAYS = 12
 
 /** Below this inner half-angle the inner rim is skipped (it would collapse onto the axis). */
 const MIN_INNER_ANGLE_RAD = 0.01
+
+/**
+ * Fallback aim distance for a preview Spot's target when the light's range is degenerate.
+ * three derives the beam direction from `position → target` and NORMALIZES it, so the
+ * magnitude is irrelevant — but a zero-length vector normalizes to `NaN` and takes the
+ * whole spot (and every material's spot loop) with it.
+ */
+const MIN_PREVIEW_AIM_M = 1
 
 /** Boundary wireframe opacity — present enough to read as the edge, quiet enough to see through. */
 const WIRE_OPACITY = 0.55
@@ -206,6 +220,12 @@ function wireKeyOf(light: PartLight): string {
  * `InstancedMesh` of {@link SHELL_COUNT} spheres shaded with KSA's exact attenuation
  * ({@link VOLUME_FRAGMENT_GLSL}). Neither is ever a raycast target.
  *
+ * Plus the optional LIVE PREVIEW ({@link setPreview}): a real `THREE.PointLight` /
+ * `SpotLight` that actually illuminates the part meshes. Unlike the coverage children it
+ * is created and destroyed on demand — three re-links shader programs when the scene's
+ * light count changes, so an always-present-but-hidden light would cost the same as no
+ * light at all only while invisible, and the toggle has to add/remove either way.
+ *
  * One `LightObject` per light INSTANCE: a part-level light has exactly one, while a
  * SubPart-owned light is drawn once per placement of its owning template (KSA
  * instantiates the template's `<Light>` per SubPart instance — see
@@ -274,6 +294,14 @@ export class LightObject {
   private readonly wire: THREE.LineSegments
   private readonly volume: THREE.InstancedMesh
   private readonly volumeMaterial: THREE.ShaderMaterial
+
+  // ── Live preview (§3.10) — a per-object resource that exists ONLY while enabled ────
+  /** Whether {@link setPreview} has been asked for a real light. */
+  private previewEnabled = false
+  /** The real light, when enabled. Its TYPE follows the document (retype swaps it). */
+  private previewLight: THREE.PointLight | THREE.SpotLight | null = null
+  /** A Spot's aim target — a child of {@link group} at local (range, 0, 0). */
+  private previewTarget: THREE.Object3D | null = null
 
   constructor(
     light: PartLight,
@@ -410,6 +438,9 @@ export class LightObject {
     }
     if (light.rangeM !== this.shellRange) this.layoutShells(light.rangeM)
     this.applyVolumeUniforms()
+    // Color / intensity / range / angles all feed the preview light too (and a retype
+    // swaps Point ⇄ Spot) — a no-op when the preview is off.
+    this.syncPreview()
 
     applyPlacement(this.group, { ...world, scale: { x: 1, y: 1, z: 1 } })
   }
@@ -429,6 +460,109 @@ export class LightObject {
   setCoverageVisible(visible: boolean): void {
     this.wire.visible = visible
     this.volume.visible = visible
+  }
+
+  /**
+   * Adds/removes the LIVE PREVIEW light — a real `THREE.PointLight`/`SpotLight` that
+   * actually illuminates the part meshes (plans/LIGHT_MANAGEMENT_PLAN.md §3.10).
+   *
+   * A per-object resource, created and released here rather than by an `EditorScene`
+   * rebuild: only `markerSize` has no in-place path, and rebuilding every marker to flip
+   * a global toggle would churn every geometry in the scene. `EditorScene` composes the
+   * `$lightSettings.livePreview` toggle with the Lights layer's visibility and the
+   * {@link import('./lightVolume').MAX_PREVIEW_LIGHTS} budget and calls this.
+   *
+   * Nothing else in the class touches it: {@link setLayerOpacity} and {@link applyTint}
+   * enumerate the marker MATERIALS by name, so a fade or a selection tint can never
+   * dim/recolor the actual illumination (a light has no opacity, and tinting the light
+   * green on selection would be a lie about the part's appearance).
+   */
+  setPreview(enabled: boolean): void {
+    if (enabled === this.previewEnabled) return
+    this.previewEnabled = enabled
+    if (enabled) this.syncPreview()
+    else this.disposePreview()
+  }
+
+  /**
+   * Builds the preview light for the CURRENT type and pushes every parameter into it —
+   * the §3.10 mapping table:
+   *
+   * | KSA | three.js |
+   * | --- | --- |
+   * | `Color` | `color` (read as sRGB, matching the bulb + the inspector swatch) |
+   * | `Intensity` | `intensity` (candela — both laws are `I/d²`) |
+   * | `Range` | `distance` + `decay = 2` (three's own window is SQUARED — docs/lights.md) |
+   * | `OuterAngle` | `angle` (KSA-clamped) |
+   * | `InnerAngle` | `penumbra = 1 − inner/outer` ({@link spotPreviewCone}) |
+   * | aim = local +X | `target` at local `(range, 0, 0)`, parented INTO the group |
+   *
+   * The target must be part of the scene graph — three reads `target.matrixWorld`, which
+   * only the renderer's traversal updates — so it is a child of {@link group}, which also
+   * makes the beam inherit the marker's world pose for free.
+   *
+   * Shadows stay off (perf; KSA's shadow config is out of scope), and a light KSA would
+   * cull CPU-side (`Range ≤ 0` or `Intensity ≤ 0`, `ClusteredLightSystem.cs:669,760`) is
+   * left `visible = false` — three treats `distance = 0` as INFINITE range, which would
+   * otherwise flood the whole scene from a light the game never renders.
+   */
+  private syncPreview(): void {
+    if (!this.previewEnabled) return
+    const light = this.lightState
+    const wantSpot = light.type === 'Spot'
+    if (this.previewLight && this.previewLight instanceof THREE.SpotLight !== wantSpot) {
+      this.disposePreview()
+    }
+    if (!this.previewLight) {
+      if (wantSpot) {
+        const target = new THREE.Object3D()
+        // Lights are never raycast (Object3D's own raycast is a no-op), but the target IS
+        // a plain Object3D sitting under a group that carries `userData.selectable` — an
+        // explicit opt-out keeps it out of picking no matter what three does later.
+        target.raycast = () => {}
+        this.group.add(target)
+        const spot = new THREE.SpotLight(0xffffff, 1, 1, 1, 0, 2)
+        // three's SpotLight constructor copies Object3D.DEFAULT_UP into its position, so a
+        // fresh spot sits at local (0,1,0) — 1 m ABOVE the emitter, which both offsets the
+        // beam and tilts its aim (the target is at local (range,0,0), so the direction came
+        // out (range,−1,0) — a ~9.5° error at range 6). Pin it to the marker origin.
+        spot.position.set(0, 0, 0)
+        spot.target = target
+        this.group.add(spot)
+        this.previewTarget = target
+        this.previewLight = spot
+      } else {
+        const point = new THREE.PointLight(0xffffff, 1, 1, 2)
+        this.group.add(point)
+        this.previewLight = point
+      }
+      this.previewLight.castShadow = false
+    }
+
+    const preview = this.previewLight
+    preview.color.setRGB(light.color.r, light.color.g, light.color.b, THREE.SRGBColorSpace)
+    preview.intensity = Math.max(light.intensity, 0)
+    preview.distance = Math.max(light.rangeM, 0)
+    preview.visible = light.rangeM > 0 && light.intensity > 0
+    if (preview instanceof THREE.SpotLight) {
+      const { angleRad, penumbra } = spotPreviewCone(light.innerAngleRad, light.outerAngleRad)
+      preview.angle = angleRad
+      preview.penumbra = penumbra
+      this.previewTarget?.position.set(Math.max(light.rangeM, MIN_PREVIEW_AIM_M), 0, 0)
+    }
+  }
+
+  /** Removes + releases the preview light (toggle off, retype, and dispose()). */
+  private disposePreview(): void {
+    if (this.previewLight) {
+      this.group.remove(this.previewLight)
+      this.previewLight.dispose()
+      this.previewLight = null
+    }
+    if (this.previewTarget) {
+      this.group.remove(this.previewTarget)
+      this.previewTarget = null
+    }
   }
 
   /**
@@ -519,6 +653,7 @@ export class LightObject {
     this.bulbGeometry.dispose()
     this.bulbMaterial.dispose()
     this.removeCone()
+    this.disposePreview()
     this.wireGeometry.dispose()
     this.wireMaterial.dispose()
     // The shell MATERIAL is per object (its uniforms are), so it is disposed; the shared

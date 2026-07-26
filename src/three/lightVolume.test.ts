@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { lightIlluminance } from '../ksa/lightFalloff'
+import * as THREE from 'three'
+import { lightIlluminance, MAX_OUTER_ANGLE_RAD } from '../ksa/lightFalloff'
 import {
   autoExposure,
+  MAX_PREVIEW_LIGHTS,
+  planPreviewBudget,
   SHELL_COUNT,
   SHELL_MAX_ALPHA,
   shellRadii,
+  spotPenumbra,
+  spotPreviewCone,
   volumeExposure,
 } from './lightVolume'
 
@@ -116,5 +121,133 @@ describe('volumeExposure', () => {
     expect(volumeExposure(5, 10, 'absolute', 0)).toBeGreaterThan(0)
     expect(volumeExposure(5, 10, 'absolute', -1)).toBeGreaterThan(0)
     expect(volumeExposure(5, 10, 'absolute', Number.NaN)).toBeGreaterThan(0)
+  })
+})
+
+/**
+ * The live preview's KSA→three.js cone mapping (plan §3.10). three's spot term is
+ * `smoothstep(cos(angle), cos(angle·(1 − penumbra)), cosθ)`, so `penumbra = 1 −
+ * inner/outer` places the fully-lit core at exactly KSA's inner angle — the SHAPE
+ * matches even though the curve (smoothstep vs KSA's squared linear-in-cosine) does not.
+ */
+describe('spotPenumbra', () => {
+  it("Core's SpotlightA (inner 22.5°, outer 45°) is half soft edge", () => {
+    expect(spotPenumbra(Math.PI / 8, Math.PI / 4)).toBeCloseTo(0.5, 12)
+  })
+
+  it('inner == outer is a hard edge (penumbra 0)', () => {
+    expect(spotPenumbra(0.7, 0.7)).toBe(0)
+    expect(spotPenumbra(MAX_OUTER_ANGLE_RAD, MAX_OUTER_ANGLE_RAD)).toBe(0)
+  })
+
+  it('inner 0 is fully soft (penumbra 1) — no fully-lit core at all', () => {
+    expect(spotPenumbra(0, Math.PI / 4)).toBe(1)
+  })
+
+  it('a non-positive or non-finite outer angle yields 0, never NaN', () => {
+    // NaN would propagate into THREE.SpotLight.penumbra and take the whole spot with it.
+    for (const outer of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const p = spotPenumbra(0.2, outer)
+      expect(Number.isFinite(p)).toBe(true)
+      expect(p).toBe(0)
+    }
+    expect(spotPenumbra(Number.NaN, 1)).toBe(0)
+  })
+
+  it('clamps into [0, 1] for an unsanitized inner > outer', () => {
+    expect(spotPenumbra(1.2, 0.4)).toBe(0)
+  })
+})
+
+describe('spotPreviewCone — the sanitizer + mapping the preview actually uses', () => {
+  it("Core's FloodlightA (0.23 / 1.57) clamps to KSA's max outer and reads ~0.8535", () => {
+    const cone = spotPreviewCone(0.23, 1.57)
+    expect(cone.angleRad).toBeCloseTo(MAX_OUTER_ANGLE_RAD, 12)
+    expect(cone.penumbra).toBeCloseTo(0.8535, 4)
+  })
+
+  it("Core's SpotlightA (0.392699 / 0.785398) passes through at penumbra 0.5", () => {
+    const cone = spotPreviewCone(Math.PI / 8, Math.PI / 4)
+    expect(cone.angleRad).toBeCloseTo(Math.PI / 4, 12)
+    expect(cone.penumbra).toBeCloseTo(0.5, 12)
+  })
+
+  it("swaps inverted angles exactly as KSA's CreateSpotLight does", () => {
+    const cone = spotPreviewCone(0.8, 0.4)
+    expect(cone.angleRad).toBeCloseTo(0.8, 12)
+    expect(cone.penumbra).toBeCloseTo(0.5, 12)
+  })
+
+  it('stays finite for a degenerate cone (outer 0 clamps to the game floor)', () => {
+    const cone = spotPreviewCone(0, 0)
+    expect(cone.angleRad).toBeGreaterThan(0)
+    expect(Number.isFinite(cone.penumbra)).toBe(true)
+  })
+})
+
+/**
+ * Every preview light adds a shader define, so the scene re-links its programs when the
+ * count changes — hence a hard cap, spent over INSTANCES (a SubPart-owned light placed
+ * five times is five in-game lights) in document order.
+ */
+describe('planPreviewBudget', () => {
+  it('enables everything when the document fits under the cap', () => {
+    expect(planPreviewBudget([1, 1, 3])).toEqual({ perLight: [1, 1, 3], enabled: 5, total: 5 })
+  })
+
+  it('truncates in document order, funding a light PARTIALLY at the boundary', () => {
+    // 10 + 10 instances against a cap of 16: the second light gets its first 6 visuals.
+    const plan = planPreviewBudget([10, 10])
+    expect(plan.perLight).toEqual([10, 6])
+    expect(plan.enabled).toBe(MAX_PREVIEW_LIGHTS)
+    expect(plan.total).toBe(20)
+  })
+
+  it('gives nothing to lights past the cap', () => {
+    const plan = planPreviewBudget([16, 4, 1])
+    expect(plan.perLight).toEqual([16, 0, 0])
+    expect(plan.enabled).toBe(16)
+    expect(plan.total).toBe(21)
+  })
+
+  it('honors an explicit cap (including 0)', () => {
+    expect(planPreviewBudget([2, 2], 3)).toEqual({ perLight: [2, 1], enabled: 3, total: 4 })
+    expect(planPreviewBudget([2, 2], 0)).toEqual({ perLight: [0, 0], enabled: 0, total: 4 })
+  })
+
+  it('treats a bad instance count as 0 rather than handing back a negative index', () => {
+    const plan = planPreviewBudget([-3, Number.NaN, 2])
+    expect(plan.perLight).toEqual([0, 0, 2])
+    expect(plan.enabled).toBe(2)
+    expect(plan.total).toBe(2)
+  })
+
+  it('is empty for a document with no lights', () => {
+    expect(planPreviewBudget([])).toEqual({ perLight: [], enabled: 0, total: 0 })
+  })
+})
+
+/**
+ * three's `SpotLight` constructor copies `Object3D.DEFAULT_UP` into `position`, so a fresh
+ * spot sits at local (0,1,0). `LightObject` pins it back to the origin — without that the
+ * preview beam emits 1 m above the marker AND tilts (its target is at local (range,0,0), so
+ * the aim came out (range,−1,0): ~9.5° off at range 6). This pins the three-side default
+ * that made the bug, so a version bump that changes it can't silently un-fix or re-break it.
+ */
+describe('THREE.SpotLight default position (the preview-aim trap)', () => {
+  it('is (0,1,0), which is why LightObject re-pins it to the origin', () => {
+    const spot = new THREE.SpotLight(0xffffff, 1, 1, 1, 0, 2)
+    expect([spot.position.x, spot.position.y, spot.position.z]).toEqual([0, 1, 0])
+    spot.dispose()
+  })
+
+  it('aims exactly along +X once pinned, and (range,-1,0) if it is not', () => {
+    const range = 6
+    const aimFrom = (y: number) => {
+      const dir = new THREE.Vector3(range, 0, 0).sub(new THREE.Vector3(0, y, 0))
+      return { x: dir.x, y: dir.y, z: dir.z }
+    }
+    expect(aimFrom(0)).toEqual({ x: range, y: 0, z: 0 })
+    expect(aimFrom(1)).toEqual({ x: range, y: -1, z: 0 })
   })
 })

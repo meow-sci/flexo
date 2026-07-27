@@ -40,10 +40,12 @@ import { packOrmLevel, prepareChannelImage, type OrmSource } from '../ktx/channe
 import {
   baseSizeFor,
   compositeGlow,
+  glowCompositeOf,
   neutralBase,
   solidBase,
   type GlowBitmap,
 } from '../ktx/glowComposite'
+import { hashBytes } from './importMaterials'
 
 /** How part-ified kitten SubParts supply their textures on export (see settingsStore). */
 export type KittenTextureExportConfig = KittenTextureExportSettings
@@ -318,25 +320,60 @@ function encodeLevel(level: ImageLevel): Promise<Uint8Array> {
   )
 }
 
+/** Relative paths of one emitted glow pair (the composited diffuse + its grayscale mask). */
+interface GlowPaths {
+  diffusePath: string
+  emissivePath: string
+}
+
+/** 8 hex chars of a content key — the part of a glow filename that moves when the pixels do. */
+function shortHash(key: string): string {
+  return hashBytes(new TextEncoder().encode(key)).slice(0, 8)
+}
+
 /**
- * Composites a mesh's glow onto a base diffuse and writes BOTH the (color-baked) diffuse and the
- * grayscale emissive mask as Textures/<token>_Diffuse.ktx2 / _Emissive.ktx2. The composited
- * diffuse REPLACES any stored diffuse for a glowing mesh — the glow color (and any color ramp,
- * baked here since KSA has no LUT slot) lives in the diffuse, the mask is grayscale and KSA adds
- * it as white × 1.25 after lighting. Returns their relative paths.
+ * The BASE-image half of {@link glowCacheKey}: which image a glow composites over, identified by
+ * id/value rather than by pixels. Mirrors {@link exportBaseImage}'s own precedence exactly —
+ * map texture (face override, else the material's baseColor map) → picked color → neutral gray.
+ *
+ * A synthesised base (color/neutral) has no intrinsic size: it is generated at the GLOW's
+ * dimensions (see baseSizeFor), which the glow half of the key already pins.
  */
-async function emitGlowTextures(
-  token: string,
-  base: ImageLevel,
-  glow: MeshGlow,
-  binaries: { path: string; data: Uint8Array }[],
-): Promise<{ diffusePath: string; emissivePath: string }> {
-  const { diffuse, mask } = compositeGlow(base, glow.bitmap, glow.settings)
-  const diffusePath = `Textures/${token}_Diffuse.ktx2`
-  const emissivePath = `Textures/${token}_Emissive.ktx2`
-  binaries.push({ path: diffusePath, data: await encodeLevel(diffuse) })
-  binaries.push({ path: emissivePath, data: await encodeLevel(mask) })
-  return { diffusePath, emissivePath }
+function glowBaseKey(
+  tex: CustomTexture | undefined,
+  material: CustomMaterial | undefined,
+  texById: ReadonlyMap<string, CustomTexture>,
+): string {
+  const mapTex =
+    tex ??
+    (material?.baseColor.kind === 'map' ? texById.get(material.baseColor.textureId) : undefined)
+  if (mapTex) return `tex:${mapTex.id}`
+  if (material?.baseColor.kind === 'color') {
+    const c = material.baseColor.color
+    return `color:${c.r},${c.g},${c.b}`
+  }
+  return 'neutral'
+}
+
+/**
+ * Content-addresses one glow composite: equal keys ⇒ byte-identical output, so
+ * {@link BundleTextures.glowTextures} can emit ONE Diffuse/Emissive pair for N meshes.
+ *
+ * The key is exactly compositeGlow's three inputs: `baseKey` (the image underneath, see
+ * {@link glowBaseKey}), the glow BITMAP, and the composite SETTINGS. The bitmap is identified the
+ * same way {@link glowFor} builds it — a 'painted' glow by the stored PNG's BYTES (hashed, never
+ * decoded: the bytes are both cheaper and the payload actually being duplicated), everything else
+ * by the flat color solidGlowBitmap fills.
+ */
+async function glowCacheKey(m: CustomMesh, baseKey: string): Promise<string> {
+  const e = m.emissive!
+  let glowKey = `color:${e.color.r},${e.color.g},${e.color.b}`
+  if (e.shape === 'painted') {
+    const png = await getAsset(assetKeys.emissivePaint(m.id))
+    // No stored bitmap ⇒ glowFor falls back to the flat color, so the key must too.
+    if (png) glowKey = `png:${hashBytes(new Uint8Array(await png.arrayBuffer()))}`
+  }
+  return `${baseKey}|${glowKey}|${JSON.stringify(glowCompositeOf(e))}`
 }
 
 /**
@@ -393,6 +430,7 @@ interface ResolvedChannels {
  */
 class BundleTextures {
   private readonly solids = new Map<string, Promise<string>>()
+  private readonly glows = new Map<string, Promise<GlowPaths>>()
   private readonly materialByChannels = new Map<string, string>()
   /** The deduped <PbrMaterial> list, in first-use order. */
   readonly materials: AssetsMaterialPlan[] = []
@@ -431,6 +469,41 @@ class BundleTextures {
         ? `Textures/${this.token}_NeutralORM.ktx2`
         : `Textures/${this.token}_ORM_${hex2(ao)}${hex2(rough)}${hex2(metal)}.ktx2`
     return this.solid(`orm:${ao},${rough},${metal}`, path, ao, rough, metal)
+  }
+
+  /**
+   * The composited glow pair for one glowing mesh, emitted ONCE per distinct composite.
+   *
+   * `key` content-addresses compositeGlow's inputs ({@link glowCacheKey}) and the FILENAME carries
+   * its hash, so every mesh whose glow composites to the same pixels resolves to the same two
+   * paths — which is what lets {@link intern} collapse them onto one <PbrMaterial> instead of
+   * forking one per SubPart (the glow lives on the mesh, so a shared material used to fork N ways).
+   * `name` only makes that filename readable. `make` is lazy on purpose: a cache hit decodes,
+   * composites and encodes nothing.
+   *
+   * The composited diffuse REPLACES any stored diffuse for a glowing mesh — the glow color (and
+   * any color ramp, baked here since KSA has no LUT slot) lives in the diffuse, while the mask is
+   * grayscale and KSA adds it as white × 1.25 after lighting.
+   */
+  glowTextures(
+    key: string,
+    name: string,
+    make: () => Promise<{ base: ImageLevel; glow: MeshGlow }>,
+  ): Promise<GlowPaths> {
+    let pending = this.glows.get(key)
+    if (!pending) {
+      const stem = `Textures/${this.token}_${sanitizeAssetToken(name)}_${shortHash(key)}`
+      pending = (async () => {
+        const { base, glow } = await make()
+        const { diffuse, mask } = compositeGlow(base, glow.bitmap, glow.settings)
+        const paths = { diffusePath: `${stem}_Diffuse.ktx2`, emissivePath: `${stem}_Emissive.ktx2` }
+        this.binaries.push({ path: paths.diffusePath, data: await encodeLevel(diffuse) })
+        this.binaries.push({ path: paths.emissivePath, data: await encodeLevel(mask) })
+        return paths
+      })()
+      this.glows.set(key, pending)
+    }
+    return pending
   }
 
   /** A solid diffuse of the picked sRGB color (KSA's shader gamma-decodes it once). */
@@ -524,26 +597,23 @@ async function planKittenSubPart(
   // glow). The kitten's own .ktx2 can't be CPU-decoded, so the glow composites over a neutral base.
   const opaqueGlow = transparent ? surface === 'glow' : !!m.emissive
   if (opaqueGlow && m.emissive) {
-    const glow = await glowFor(m)
-    if (glow) {
+    // Content-addressed: two part-ified kittens glowing the same way share one composited pair
+    // (and therefore one <PbrMaterial>) instead of each getting a private copy of the bytes.
+    const paths = await tex.glowTextures(await glowCacheKey(m, 'neutral'), m.name, async () => {
+      const glow = (await glowFor(m))! // non-null: m.emissive is set (guard above)
       const size = baseSizeFor(glow.bitmap)
-      const paths = await emitGlowTextures(
-        `${bundleToken}_${subPartId}`,
-        neutralBase(size.width, size.height),
-        glow,
-        binaries,
-      )
-      const materialId = tex.intern(
-        {
-          diffusePath: paths.diffusePath,
-          normalPath: await tex.flatNormal(),
-          aoRoughMetalPath: await tex.ormSolid(255, 128, 0),
-          emissivePath: paths.emissivePath,
-        },
-        `${subPartId}_Material`,
-      )
-      return { subPartId, materialId, glass: false }
-    }
+      return { base: neutralBase(size.width, size.height), glow }
+    })
+    const materialId = tex.intern(
+      {
+        diffusePath: paths.diffusePath,
+        normalPath: await tex.flatNormal(),
+        aoRoughMetalPath: await tex.ormSolid(255, 128, 0),
+        emissivePath: paths.emissivePath,
+      },
+      `${subPartId}_Material`,
+    )
+    return { subPartId, materialId, glass: false }
   }
 
   const resolve = async (subpath: string): Promise<string> => {
@@ -971,16 +1041,20 @@ export async function buildCustomBundle(
       // Glass never takes this path: MeshGlassIndirect.frag doesn't sample the emissive map at
       // all, so an <Emissive> on a glass material is dead weight that only muddies material
       // interning — the same rule planKittenSubPart applies to a 'glass' visor.
-      const glow = glass ? null : await glowFor(m)
-      if (glow) {
+      if (!glass && m.emissive) {
         const primaryTexId = getPrimaryTextureId(m)
-        const base = await exportBaseImage(
-          primaryTexId ? texById.get(primaryTexId) : undefined,
-          material,
-          texById,
-          glow.bitmap,
+        const baseTex = primaryTexId ? texById.get(primaryTexId) : undefined
+        // Content-addressed (base image + glow bitmap + composite settings): meshes whose glows
+        // composite to the same pixels share one emitted pair, so a glowing CustomMaterial worn by
+        // N meshes still ships ONE <PbrMaterial> — it forks only where the GLOW actually differs.
+        const paths = await tex.glowTextures(
+          await glowCacheKey(m, glowBaseKey(baseTex, material, texById)),
+          material?.name ?? m.name,
+          async () => {
+            const glow = (await glowFor(m))! // non-null: m.emissive is set (guard above)
+            return { base: await exportBaseImage(baseTex, material, texById, glow.bitmap), glow }
+          },
         )
-        const paths = await emitGlowTextures(`${bundleToken}_${m.subPartId}`, base, glow, binaries)
         const materialId = tex.intern(
           {
             diffusePath: paths.diffusePath,

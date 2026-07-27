@@ -309,7 +309,10 @@ what a primitive does:
   thumbnail renderer and every placed part), plus `<Emissive>` and a composited diffuse when it
   glows. Imported meshes have no per-face texture grid, so they take the "material verbatim"
   interning path: **N meshes sharing one `CustomMaterial` ship ONE `<PbrMaterial>`**, which is how
-  a multi-object Blender import stays cheap.
+  a multi-object Blender import stays cheap. A glow is per-MESH, not per-material, so a glowing
+  material needs a second entry (its `<Diffuse>` has the glow composited in) — but that composite
+  is content-addressed (base image + glow bitmap + coverage/strength/ramp), so the N meshes still
+  share one entry and one pair of texture files, and fork only where the glow itself differs.
 - **A `<SubPart>`** wiring `<PartModel>` — or `<PartModelGlass>` when `imported.transparent` —
   to `<Mesh>` + `<Material>` + `<MeshView>`. An imported glass mesh never carries `<Emissive>`:
   KSA's glass shader never samples it, and the layered `glassGlow` trick stays kitten-only

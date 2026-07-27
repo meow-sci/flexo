@@ -7,7 +7,7 @@ import {
   createPartLight,
   identityTransform,
 } from './types'
-import type { CustomMesh, EditingPart, PartAnimation, PartCollider } from './types'
+import type { CustomMesh, EditingPart, EmissiveConfig, PartAnimation, PartCollider } from './types'
 
 // In-memory stand-in for the IndexedDB blob store (happy-dom has no indexedDB), so
 // image-channel export paths (stored-.ktx2 copies) are testable. Keys mirror assetKeys.
@@ -889,16 +889,105 @@ describe('buildCustomBundle — uniform-channel CustomMaterial (red metallic but
     }
     const bundle = await buildCustomBundle(part, 'ButtonMod')
     const xml = bundle.assetsXml!
-    // The glowing mesh gets its own per-mesh material (composited diffuse) with <Emissive>…
+    // A glow lives on the MESH, so a glowing mesh can't share the plain material entry: its
+    // <Diffuse> has the glow composited in. It gets a second <PbrMaterial> named after the first
+    // SubPart that claims it — but the composited pair is CONTENT-ADDRESSED (base image + glow
+    // bitmap + coverage/strength/ramp), so what forks the material is the glow, never the SubPart
+    // id. See the shared-glowing-material suite below.
     expect(xml).toContain('<PbrMaterial Id="flexo_button_a_Material"')
-    expect(xml).toContain(
-      '<Emissive Path="Textures/ButtonMod_flexo_button_a_flexo_button_a_Emissive.ktx2"',
+    const emissive = xml.match(/<Emissive Path="([^"]+)"/)![1]
+    expect(emissive).toMatch(
+      /^Textures\/ButtonMod_flexo_button_a_RedMetal_[0-9a-f]{8}_Emissive\.ktx2$/,
     )
+    expect(bundle.binaries.filter((b) => b.path === emissive)).toHaveLength(1)
     // …still carrying the material's metallic ORM solid.
     const glowMat = xml.slice(xml.indexOf('<PbrMaterial Id="flexo_button_a_Material"'))
     expect(glowMat.slice(0, glowMat.indexOf('</PbrMaterial>'))).toContain('_ORM_ff26ff.ktx2')
     // The non-glowing sibling still shares the plain material entry.
     expect(xml).toContain('<PbrMaterial Id="flexo_RedMetal_red1_Material"')
+  })
+})
+
+/** partWithMaterialMeshes, but meshes a+b glow IDENTICALLY off the one shared CustomMaterial. */
+function partWithSharedGlowingMaterial(): EditingPart {
+  const part = partWithMaterialMeshes()
+  part.customMeshes[2].materialId = 'mat_red1' // so all three wear the same material
+  const glow = (): EmissiveConfig => ({
+    shape: 'whole',
+    color: { r: 255, g: 180, b: 0 },
+    strength: 0.4,
+    coverage: 1,
+  })
+  part.customMeshes[0].emissive = glow()
+  part.customMeshes[1].emissive = glow()
+  return part
+}
+
+/** The `<Material Id>` one `<SubPart Id="…">` references. */
+function subPartMaterialId(xml: string, subPartId: string): string {
+  return xml.slice(xml.indexOf(`<SubPart Id="${subPartId}"`)).match(/<Material Id="([^"]+)"/)![1]
+}
+
+// The composited glow diffuse+mask are named from a hash of what went INTO the composite (base
+// image identity, glow bitmap identity, coverage/strength/ramp) rather than from the SubPart id.
+// Naming them per-SubPart forked one <PbrMaterial> AND one full-resolution copy of the identical
+// texture bytes per glowing mesh — a 6-material glTF whose emissive material covered 80 primitives
+// exported 85 <PbrMaterial> and 177 texture files (414 MB, 19 distinct payloads). KSA keys textures
+// by path, so those copies were also 80 GPU textures in-game for one image.
+describe('buildCustomBundle — meshes sharing a GLOWING material share one composite', () => {
+  it('emits ONE <PbrMaterial> + ONE composited pair for two meshes glowing identically', async () => {
+    const bundle = await buildCustomBundle(partWithSharedGlowingMaterial(), 'ButtonMod')
+    const xml = bundle.assetsXml!
+    const paths = bundle.binaries.map((b) => b.path)
+
+    // Two entries total: the shared glowing one + the plain one the non-glowing mesh wears.
+    expect(xml.match(/<PbrMaterial /g)).toHaveLength(2)
+    expect(xml).toContain('<PbrMaterial Id="flexo_RedMetal_red1_Material"')
+    // Each composited payload is written exactly once, not once per glowing SubPart.
+    expect(paths.filter((p) => p.endsWith('_Diffuse.ktx2'))).toHaveLength(1)
+    expect(paths.filter((p) => p.endsWith('_Emissive.ktx2'))).toHaveLength(1)
+
+    // Both glowing SubParts point at the SAME material; the non-glowing one at the plain entry.
+    const glowMaterial = subPartMaterialId(xml, 'flexo_button_a')
+    expect(subPartMaterialId(xml, 'flexo_plinth_b')).toBe(glowMaterial)
+    expect(subPartMaterialId(xml, 'flexo_bare_c')).toBe('flexo_RedMetal_red1_Material')
+    expect(glowMaterial).toBe('flexo_button_a_Material') // the first claimant names it
+  })
+
+  it('forks per DIVERGING glow: a different strength is a different composite', async () => {
+    const part = partWithSharedGlowingMaterial()
+    part.customMeshes[1].emissive!.strength = 0.9
+    const bundle = await buildCustomBundle(part, 'ButtonMod')
+    const xml = bundle.assetsXml!
+    const paths = bundle.binaries.map((b) => b.path)
+
+    // Two distinct composites → two glowing <PbrMaterial>s (+ the plain one), and crucially two
+    // DISTINCT ids: intern() has no uniqueness guard, so a shared preferredId would emit two
+    // <PbrMaterial> elements KSA could not tell apart.
+    expect(xml.match(/<PbrMaterial /g)).toHaveLength(3)
+    const a = subPartMaterialId(xml, 'flexo_button_a')
+    const b = subPartMaterialId(xml, 'flexo_plinth_b')
+    expect(a).not.toBe(b)
+    expect(new Set([a, b, 'flexo_RedMetal_red1_Material']).size).toBe(3)
+    // …and two distinct emissive masks, since the mask carries `strength`.
+    const emissive = paths.filter((p) => p.endsWith('_Emissive.ktx2'))
+    expect(emissive).toHaveLength(2)
+    expect(new Set(emissive).size).toBe(2)
+  })
+
+  it('dedupes the part-ified kitten glow path too', async () => {
+    const part = partWithKittenMeshes()
+    // Two kitten submeshes glowing the same way: their bases are both synthetic neutrals, so the
+    // composite is byte-identical and only its glow identity decides whether it is shared.
+    for (const m of part.customMeshes)
+      m.emissive = { shape: 'whole', color: { r: 10, g: 255, b: 10 }, strength: 0.6, coverage: 1 }
+    const bundle = await buildCustomBundle(part, 'KittenMod', REF)
+    const xml = bundle.assetsXml!
+    expect(xml.match(/<PbrMaterial /g)).toHaveLength(1)
+    expect(bundle.binaries.filter((b) => b.path.endsWith('_Emissive.ktx2'))).toHaveLength(1)
+    expect(subPartMaterialId(xml, 'flexo_hunter_eye_b')).toBe(
+      subPartMaterialId(xml, 'flexo_hunter_suit_a'),
+    )
   })
 })
 
@@ -1182,13 +1271,15 @@ describe('buildCustomBundle — imported glTF SubParts', () => {
     ])
     const bundle = await buildCustomBundle(part, 'PodMod')
     const xml = bundle.assetsXml!
-    // A glowing mesh gets its own per-mesh material (the diffuse has the glow baked in).
+    // A glowing mesh gets its own material (the diffuse has the glow baked in), and both halves
+    // of the composite ship under one content-addressed name.
     expect(xml).toContain('<PbrMaterial Id="flexo_RcsPod_Part0_ab12cd_Material"')
-    expect(xml).toContain('_flexo_RcsPod_Part0_ab12cd_Emissive.ktx2"')
-    expect(xml).toContain('_flexo_RcsPod_Part0_ab12cd_Diffuse.ktx2"')
+    const stem = xml.match(/<Emissive Path="Textures\/(.+)_Emissive\.ktx2"/)![1]
+    expect(stem).toMatch(/^PodMod_imp0_PaintedMetal_[0-9a-f]{8}$/)
+    expect(xml).toContain(`<Diffuse Path="Textures/${stem}_Diffuse.ktx2"`)
     const paths = bundle.binaries.map((b) => b.path)
-    expect(paths.some((p) => p.endsWith('_flexo_RcsPod_Part0_ab12cd_Diffuse.ktx2'))).toBe(true)
-    expect(paths.some((p) => p.endsWith('_flexo_RcsPod_Part0_ab12cd_Emissive.ktx2'))).toBe(true)
+    expect(paths).toContain(`Textures/${stem}_Diffuse.ktx2`)
+    expect(paths).toContain(`Textures/${stem}_Emissive.ktx2`)
     // The material's uniform scalars still ship in the ORM solid.
     expect(xml).toContain('_ORM_ff59e6.ktx2')
   })

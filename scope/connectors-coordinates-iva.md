@@ -7,7 +7,7 @@
 > `<Internal>` flag) and
 > [docs/ksa-part-connector-notes.md](../docs/ksa-part-connector-notes.md).
 
-**Baseline:** re-vetted against KSA build **2026.7.9.5018** (decomp @ 5018 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.10.5056** (decomp @ 5056 + shipped Core XML).
 **Baseline status:** ✅ **CURRENT** — the coordinate calibration, connector flag _schema_, and the
 IVA render gate are all **intact**; the `<DockingPort>` GameData schema (BREAKING in 4750) is fixed.
 As of 4826, connectors carry new attach-node grouping (`<Sibling>` geometry / `<Aligned>` GameData);
@@ -279,6 +279,19 @@ follows the root part.
 8. **Interior geometry with no seat anywhere in the vehicle is invisible in EVERY camera mode** — `<Internal>` hides it outside IVA, and with no seat the IVA mode is never offered. This is the failure mode the deleted automatic rewrite used to mask.
 9. **`<IVASeat Id>` shares the feed-container id namespace** (`PartTemplate.AddResolvedFeed` scans every `Components[].Id`). flexo emits no `Id`, matching Core byte-for-byte and dodging it entirely.
 10. **There is no in-game editor IVA preview.** The KSA vehicle editor has no IVA mode; the only in-game check is launch → **Shift+C** twice → **C** to cycle. This is why flexo ships its own seat preview (above) — and why that preview's honest limits matter.
+
+## What changed in 5056
+
+**Nothing in this area — re-verified INTACT.** `QuaternionEx.cs`, `Double3Ex.cs`, `Control.cs`,
+`ControlTemplate.cs`, `FlightComputer.cs`, `IVASeat.cs`, `IVAController.cs` and
+`AttachedInternal.cs` are all byte-identical, so the `EULER_ORDER` calibration, the seat axes and
+the line-for-line `ivaLook.ts` port stand. `Part.Connector` gained only `ShouldSerializeFlags()` /
+`ShouldSerializeCapabilities()` (write-side suppression) — the `Flag` enum and the `<Flags>` /
+`<Capabilities>` wire format are unchanged. `PartModelModule.Internal` gained
+`[DefaultValue(false)]` and remains the ONLY `[XmlElement("Internal")]` in the decomp, so what
+flexo may mark interior-only is unchanged. A grep of the 5056 decomp for
+`controlpoint|control from here|referencetransform` returns only unrelated Vulkan/renderer hits,
+so the reference-orientation contract ("up follows root") holds.
 
 ## What changed in 5018
 

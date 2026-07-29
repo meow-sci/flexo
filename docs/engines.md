@@ -19,8 +19,13 @@ An "engine" is a small graph of cooperating GameData modules (see `src/ksa/types
 - **`DeLavalNozzle`** (`<DeLavalNozzle>`) — expands the gas → thrust; owns the exhaust
   geometry + plume/light/sound FX. Knobs: `exitDiameterM`, `areaRatio` (required, no
   NaN), flow/expansion efficiencies, `exhaustLocation`/`exhaustDirection`, the optional
-  `fxExhaustLocation`/`fxExhaustDirection` override pair, `volumetricExhaustId`, sound,
+  `fxExhaustLocation`/`fxExhaustDirection` override pair, `reactionPlumes`, sound,
   light. A part or SubPart carries a **list** of nozzles, not one.
+  `reactionPlumes` is a list of `<ReactionPlume>` entries, each optionally keyed to a
+  reaction id and each carrying a volumetric-exhaust and/or plume-trail template. KSA picks
+  the entry matching the core's configured reaction, else the one flagged default. The
+  Engine panel's two plume selects edit the **default** entry; reaction-keyed entries
+  imported from Core round-trip untouched but are not editable in the UI yet.
 - **`Rocket`** (`<Rocket>`) — binds one `core` (combustor) + N `nozzles` into one firing
   unit. Refs are `SubPartIdRef` (`{ id, subPartInstanceId }`).
 - **`RocketController`** (`<RocketEngineController>` / `<RocketThrusterController>`) — what

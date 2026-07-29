@@ -4,7 +4,7 @@
 > `<PartGameData>` / `<SubPartGameData>` documents. Each block maps to a KSA `*Template`
 > class. Engine modules have their own file ([engines.md](engines.md)).
 
-**Baseline:** re-vetted against KSA build **2026.7.9.5018** (decomp @ 5018 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.10.5056** (decomp @ 5056 + shipped Core XML).
 **Baseline status:** ✅ **CURRENT** — the electrical unit tokens (`J`/`W`), the `<DockingPort>`
 child-element schema, and the `<Control>` command marker are all modeled (parse **and** emit,
 current form only — no legacy fallback). As of 4892 (rev 4884), a tank's 4826-era
@@ -115,6 +115,18 @@ re-check the validator's strings alongside the two evaluators.
 
 On each game update, re-verify per the checklist item in
 [GAME_UPDATE_CHECKLIST.md](GAME_UPDATE_CHECKLIST.md) (grep anchors are listed there).
+
+## What changed in 5056
+
+**Nothing in this area — re-verified INTACT.** No unit-reference class moved
+(`EnergyReference` / `PowerReference` / `ImpulseReference` / `MassReference` unchanged), so the
+`J` / `W` / `Ns` / `Kg` token→scale tables still match. `BatteryTemplate.cs`,
+`DockingPortTemplate.cs` and `ControlTemplate.cs` are unchanged. `Tank.cs` changed only in
+`[DefaultValue]` attributes on its **SaveData** (`Manual`, `PropellantUseDisabled`) and in a
+`MoleGlobalState` type-parameter swap that is pure runtime plumbing; the `<Tank>` template schema
+is untouched. `Decoupler.cs` changed only in which `Vehicle` instance it splits (rev 5048, a
+staging bug fix). rev 5053 added new decoupler / interstage / service-bay GAME DATA in element
+forms flexo already models.
 
 ## What changed in 5018
 

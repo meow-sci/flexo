@@ -6,10 +6,18 @@
 > [part-and-subpart-xml.md](part-and-subpart-xml.md) (which owns the surrounding `<Part>` /
 > `<PartGameData>` document structure).
 
-**Baseline:** verified against KSA build **2026.7.9.5018** (`decomp/` + shipped `Content/Core`)
+**Baseline:** verified against KSA build **2026.7.10.5056** (`decomp/` + shipped `Content/Core`)
 and the real GLB meshes in `flexo-private-assets/assets/Meshes`.
 **Baseline status:** ✅ **MODELED** — closes the 4939 geometry-template `<Collider>` gap
 (gap **E** in [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md)).
+
+**5056:** schema INTACT — no collider template class changed. Core's collider VALUES did move,
+because rev 5025/5026 regenerated nine part files through the in-repo `GlbToXmlUtility`, which
+writes 4 significant figures where the old external tool wrote 5–6 (e.g. the solar cell's `<Box>`
+went `0.79467 × 0.59602 × 0.02531` → `0.7947 × 0.596 × 0.0253`). Vendored fixtures were re-synced
+and the two collider assertions in `catalog.test.ts` / `partCatalog.test.ts` updated. rev 5026's
+new `Content/Core/CoreFuelPortGameData.xml` authors a `<Collider><Sphere>` in the same form flexo
+already models.
 
 ---
 

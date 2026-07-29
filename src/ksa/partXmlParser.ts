@@ -1198,8 +1198,12 @@ function commonNozzleFields(el: Element): Omit<SolidMotorNozzle, 'id'> {
     }),
     fxExhaustLocation: fxLoc ? readVec3Attrs(fxLoc, { x: 0, y: 0, z: 0 }) : null,
     fxExhaustDirection: fxDir ? readVec3Attrs(fxDir, { x: -1, y: 0, z: 0 }) : null,
-    volumetricExhaustId: directChildren(el, 'VolumetricExhaust')[0]?.getAttribute('Id') ?? null,
-    plumeTrailId: directChildren(el, 'PlumeTrail')[0]?.getAttribute('Id') ?? null,
+    reactionPlumes: directChildren(el, 'ReactionPlume').map((p) => ({
+      reactionId: p.getAttribute('Reaction') || null,
+      isDefault: p.getAttribute('Default') === 'true',
+      volumetricExhaustId: directChildren(p, 'VolumetricExhaust')[0]?.getAttribute('Id') ?? null,
+      plumeTrailId: directChildren(p, 'PlumeTrail')[0]?.getAttribute('Id') ?? null,
+    })),
     exhaustLight: readBoolValue(directChildren(el, 'ExhaustLight')[0]) ?? true,
     sound: soundEl
       ? {

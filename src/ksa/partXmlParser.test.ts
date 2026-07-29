@@ -562,8 +562,20 @@ describe('engine modules (round-trip with serializeGameData)', () => {
             exhaustDirection: { x: -1, y: 0, z: 0 },
             fxExhaustLocation: null,
             fxExhaustDirection: null,
-            volumetricExhaustId: 'EngineALarge',
-            plumeTrailId: 'DefaultEngine',
+            reactionPlumes: [
+              {
+                reactionId: null,
+                isDefault: true,
+                volumetricExhaustId: 'EngineALarge',
+                plumeTrailId: 'DefaultPlumeTrail',
+              },
+              {
+                reactionId: 'DoubleBase',
+                isDefault: false,
+                volumetricExhaustId: 'EngineAMed',
+                plumeTrailId: null,
+              },
+            ],
             exhaustLight: true,
             sound: { action: 'On', soundId: 'DefaultEngineSoundBehavior' },
           },

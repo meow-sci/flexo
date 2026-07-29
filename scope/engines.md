@@ -5,8 +5,11 @@
 > **BREAKING** for the live thrust/Isp readout. Read alongside [docs/engines.md](../docs/engines.md)
 > and [analysis/KSA_ENGINE_DETAILS.md](../analysis/KSA_ENGINE_DETAILS.md).
 
-**Baseline:** re-vetted against KSA build **2026.7.9.5018** (decomp @ 5018 + shipped Core XML).
-**Baseline status:** ✅ **CURRENT** — 4980 (like 4939) left every ported physics class and
+**Baseline:** re-vetted against KSA build **2026.7.10.5056** (decomp @ 5056 + shipped Core XML).
+**Baseline status:** ✅ **CURRENT** — but 5056 landed the first nozzle-schema BREAK since 4939:
+`<VolumetricExhaust>`/`<PlumeTrail>` moved inside `<ReactionPlume>` (see
+[What changed in 5056](#what-changed-in-5056)). Ported physics remains byte-identical.
+4980 (like 4939) left every ported physics class and
 `Reactions.xml` byte-identical; the 4939 schema addition (`<PlumeTrail Id>` on the nozzle) is
 modeled (see [What changed in 4939](#what-changed-in-4939)). At 4939 the one
 schema addition (`<PlumeTrail Id>` on the nozzle) is modeled (see
@@ -74,7 +77,7 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
   MixtureReactions, `CombustorTemplate.ResolveReaction` throws without it; KSA clamps it into the
   LUT row range), `<MaxPressure Bar>`, `<ThermalEfficiency Value>`, `<MinimumThrottle Value>`,
   `<MinimumPulseTime Seconds>`.
-- `<DeLavalNozzle>`: `Id`, `<ExitDiameter M|Cm>`, `<FxExitDiameter>`, `<AreaRatio Value>`, `<FlowEfficiency Value>`, `<ExpansionEfficiency Value>`, `<ExhaustLocation X Y Z>`, `<ExhaustDirection X Y Z>`, `<FxExhaustLocation>`, `<FxExhaustDirection>`, `<VolumetricExhaust Id>`, `<PlumeTrail Id>`, `<ExhaustLight Value>`, `<SoundEvent SoundId Action>`.
+- `<DeLavalNozzle>`: `Id`, `<ExitDiameter M|Cm>`, `<FxExitDiameter>`, `<AreaRatio Value>`, `<FlowEfficiency Value>`, `<ExpansionEfficiency Value>`, `<ExhaustLocation X Y Z>`, `<ExhaustDirection X Y Z>`, `<FxExhaustLocation>`, `<FxExhaustDirection>`, **`<ReactionPlume Reaction Default>` (repeatable; wraps `<VolumetricExhaust Id>` / `<PlumeTrail Id>` since 5056 — they are NO LONGER direct children)**, `<ExhaustLight Value>`, `<SoundEvent SoundId Action>`.
   **Both scopes, and a LIST at each**: `PartTemplate.RocketNozzles` (`decomp/KSA/PartTemplate.cs:45-47`)
   is legal under `<PartGameData>` and `<SubPartGameData>` alike, and `ApplyGameData` merges the
   SubPart's into the part's (`:245`). Stock uses both — main engines put one nozzle on the
@@ -156,6 +159,77 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
   `<Combustor>` (flexo's SRB recipe now burns APCP) — but there is still no solid-motor
   hardware (no grain-regression thrust curve; the propellant reservoir is still a liquid-style
   tank), so a true SRB is still not reproducible.
+
+## What changed in 5056 — `<ReactionPlume>` (BREAKING) and nothing else
+
+**BREAKING — nozzle exhaust FX re-homed.** rev 5022 ("Allow nozzles to change their
+volumetric exhaust style based on the configured reaction") deleted these two fields from
+`decomp/KSA/RocketNozzleTemplate.cs`:
+
+```csharp
+[XmlElement] public VolumetricExhaustReference? VolumetricExhaust;   // GONE
+[XmlElement] public PlumeTrailReference?        PlumeTrail;          // GONE
+```
+
+and replaced them with a repeatable list backed by the new `decomp/KSA/ReactionPlumeReference.cs`:
+
+```csharp
+[XmlElement("ReactionPlume")] public List<ReactionPlumeReference> ReactionPlumes = new();
+// ReactionPlumeReference: [XmlAttribute("Reaction")] string Reaction  (hashed via KeyHash.Make)
+//                         [XmlAttribute("Default")]  bool   Default
+//                         [XmlElement] VolumetricExhaustReference? VolumetricExhaust
+//                         [XmlElement] PlumeTrailReference?        PlumeTrail
+```
+
+Wire format, from `Content/Core/CorePropulsionCGameData.xml` (the SRB nozzle, the only shipped
+multi-entry user):
+
+```xml
+<SolidMotorNozzle Id="Nozzle">
+  <ReactionPlume Default="true"><PlumeTrail Id="DefaultPlumeTrail"/></ReactionPlume>
+  <ReactionPlume Reaction="DoubleBase"><VolumetricExhaust Id="EngineALarge"/></ReactionPlume>
+</SolidMotorNozzle>
+```
+
+**Resolution order** (`RocketNozzle.TryResolvePlume`, consumed by `ResetFxState` via
+`EffectiveVolumetricExhaust` / `EffectivePlumeTrail`): scan `ReactionPlumes` in order; return
+the FIRST entry whose `ReactionHash` equals the rocket core's currently-configured reaction;
+otherwise return the FIRST `Default="true"` entry; otherwise no plume at all. So a nozzle that
+must always show one plume needs exactly one `Default="true"` entry carrying no `Reaction`.
+
+**Why this was BREAKING for flexo, not silently survivable:** `<DeLavalNozzle>` and
+`<SolidMotorNozzle>` are MODELED elements, so their unmodeled children never ride the
+`<PartGameData>`/`<SubPartGameData>` `RawXmlNode` passthrough. flexo read
+`directChildren(el, 'VolumetricExhaust')` — which now matches nothing — and emitted the old
+flat form, which KSA 5056 ignores. Every Core engine lost its plume on import, and every
+exported engine lost it in-game.
+
+**Fix (no migration, per the constitution):** `DeLavalNozzle.volumetricExhaustId` /
+`.plumeTrailId` and `SolidMotorNozzle`'s pair were REPLACED by
+`reactionPlumes: ReactionPlume[]` (`src/ksa/types.ts`). Parser:
+`commonNozzleFields` in `src/ksa/partXmlParser.ts` now maps `directChildren(el, 'ReactionPlume')`.
+Serializer: `src/ksa/partXmlSerializer.ts` emits one `<ReactionPlume>` per entry, omitting
+`Reaction` on the unkeyed fallback and `Default` when false. Persistence:
+`projectCodec.ts` swapped the `ve`/`pt` scalars for an `rp[]` array. The editor's two selects
+(`src/ui/EngineSections.tsx`) drive the DEFAULT entry via the `defaultReactionPlume` /
+`withDefaultReactionPlume` helpers, so reaction-keyed entries round-trip untouched but are not
+yet authorable in the UI (**gap P1**).
+
+**Everything else engine-side re-verified INTACT.** `DeLavalNozzleConfig.cs`,
+`CombustorConfig.cs`, `GasProperties.cs`, `NozzlePerformance.cs`, `RocketDesign.cs`,
+`RocketControllerData.cs`, `EngineDesigner.cs`, `RocketCore.cs`, `Combustor.cs`,
+`FixedReaction.cs` and `MixtureReaction.cs` are all **byte-identical** to 5018 — the verbatim
+port in `enginePhysics.ts` needed zero changes. `SolidMotorTemplate.Create` still THROWS when
+`<DefaultPressure>` is outside `(MinimumBurnPressure, MaxStablePressure]`, so flexo's
+`solid-motor-pressure-out-of-range` validation stays correct; the rename
+`SolidMotor.DefaultChamberPressure` → `AuthoredChamberPressure` (with a new clamped
+`DefaultChamberPressure` property) is runtime-only and below flexo's surface. The new
+`[XmlAttribute("Reaction")]` on `SolidMotor.SaveData` and `[XmlAttribute("Grain")]` on
+`SolidGrainSegment.SaveData` are **vehicle-save** fields (rev 5022/5023 let the editor swap
+solid propellant and per-segment grain), not part-template schema — flexo does not author
+vehicle saves.
+
+---
 
 ## What changed in 5018 — explicit plumbing + solid rocket motors
 

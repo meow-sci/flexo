@@ -748,6 +748,58 @@ export const VOLUMETRIC_EXHAUST_IDS: readonly string[] = [
  */
 export const PLUME_TRAIL_IDS: readonly string[] = ['DefaultPlumeTrail']
 
+/**
+ * One `<ReactionPlume>` entry on a nozzle — the reaction-keyed exhaust FX bucket KSA
+ * 2026.7.10 (rev 5022, "Allow nozzles to change their volumetric exhaust style based on
+ * the configured reaction") introduced. `RocketNozzleTemplate` no longer carries
+ * `<VolumetricExhaust>` / `<PlumeTrail>` directly; both now live inside a repeatable
+ * `<ReactionPlume>` (`decomp/KSA/ReactionPlumeReference.cs`).
+ *
+ * `RocketNozzle.TryResolvePlume` picks, at FX time: the FIRST entry whose
+ * {@link reactionId} hashes to the rocket core's currently-configured reaction, else the
+ * FIRST entry with `Default="true"`, else no plume at all. So a nozzle that should always
+ * show one plume needs exactly one `Default="true"` entry with no `Reaction`.
+ */
+export interface ReactionPlume {
+  /** `<ReactionPlume Reaction>` — the reaction id this plume is keyed to; null ⇒ unkeyed. */
+  reactionId: string | null
+  /** `<ReactionPlume Default>` — the fallback used when no keyed entry matches. */
+  isDefault: boolean
+  /** `<VolumetricExhaust Id>` plume template (one of {@link VOLUMETRIC_EXHAUST_IDS}); null ⇒ none. */
+  volumetricExhaustId: string | null
+  /** `<PlumeTrail Id>` volumetric trail template (one of {@link PLUME_TRAIL_IDS}); null ⇒ none. */
+  plumeTrailId: string | null
+}
+
+/**
+ * The nozzle's unkeyed fallback plume — the `Default="true"` entry `TryResolvePlume`
+ * lands on when no `Reaction`-keyed entry matches. Null when the nozzle has none.
+ */
+export function defaultReactionPlume(plumes: readonly ReactionPlume[]): ReactionPlume | null {
+  return plumes.find((p) => p.isDefault) ?? null
+}
+
+/**
+ * Applies `patch` to the nozzle's default plume, leaving every `Reaction`-keyed entry
+ * untouched. Adds the default entry when the nozzle has none, and drops it again once
+ * both FX slots are empty (an entry with neither child is inert in-game).
+ */
+export function withDefaultReactionPlume(
+  plumes: readonly ReactionPlume[],
+  patch: Partial<Pick<ReactionPlume, 'volumetricExhaustId' | 'plumeTrailId'>>,
+): ReactionPlume[] {
+  const current = defaultReactionPlume(plumes) ?? {
+    reactionId: null,
+    isDefault: true,
+    volumetricExhaustId: null,
+    plumeTrailId: null,
+  }
+  const next: ReactionPlume = { ...current, ...patch }
+  const others = plumes.filter((p) => !p.isDefault)
+  if (!next.volumetricExhaustId && !next.plumeTrailId) return others
+  return [next, ...others]
+}
+
 /** KSA's default engine sound behavior id (the `<SoundEvent SoundId>` Core engines use). */
 export const DEFAULT_ENGINE_SOUND_ID = 'DefaultEngineSoundBehavior'
 
@@ -840,10 +892,8 @@ export interface DeLavalNozzle {
   fxExhaustLocation: Vec3 | null
   /** `<FxExhaustDirection>` plume axis; null ⇒ uses {@link exhaustDirection}. */
   fxExhaustDirection: Vec3 | null
-  /** `<VolumetricExhaust Id>` plume template id (one of {@link VOLUMETRIC_EXHAUST_IDS}); null ⇒ none. */
-  volumetricExhaustId: string | null
-  /** `<PlumeTrail Id>` volumetric trail template (one of {@link PLUME_TRAIL_IDS}); null ⇒ none. */
-  plumeTrailId: string | null
+  /** `<ReactionPlume>` exhaust-FX entries, in document order. Empty ⇒ no plume. */
+  reactionPlumes: ReactionPlume[]
   /** `<ExhaustLight Value>` dynamic exhaust point light. Default true. */
   exhaustLight: boolean
   /** `<SoundEvent>` engine audio, or null. */
@@ -964,10 +1014,12 @@ export interface SolidMotorNozzle {
   fxExhaustLocation: Vec3 | null
   /** `<FxExhaustDirection>` plume axis; null ⇒ uses {@link exhaustDirection}. */
   fxExhaustDirection: Vec3 | null
-  /** `<VolumetricExhaust Id>` plume template id; null ⇒ none. */
-  volumetricExhaustId: string | null
-  /** `<PlumeTrail Id>` volumetric trail template; null ⇒ none. Core 5018 uses these on SRBs only. */
-  plumeTrailId: string | null
+  /**
+   * `<ReactionPlume>` exhaust-FX entries, in document order. Empty ⇒ no plume. Core's
+   * SRB nozzle carries two: an unkeyed `Default="true"` trail plus a `Reaction="DoubleBase"`
+   * volumetric exhaust.
+   */
+  reactionPlumes: ReactionPlume[]
   /** `<ExhaustLight Value>` dynamic exhaust point light. Default true. */
   exhaustLight: boolean
   /** `<SoundEvent>` engine audio, or null. */
@@ -1034,8 +1086,14 @@ export function createSolidMotorNozzle(id: string): SolidMotorNozzle {
     exhaustDirection: { x: -1, y: 0, z: 0 },
     fxExhaustLocation: null,
     fxExhaustDirection: null,
-    volumetricExhaustId: null,
-    plumeTrailId: 'DefaultPlumeTrail',
+    reactionPlumes: [
+      {
+        reactionId: null,
+        isDefault: true,
+        volumetricExhaustId: null,
+        plumeTrailId: 'DefaultPlumeTrail',
+      },
+    ],
     exhaustLight: true,
     sound: null,
   }
@@ -1334,8 +1392,7 @@ export function createNozzle(id: string): DeLavalNozzle {
     exhaustDirection: { x: -1, y: 0, z: 0 },
     fxExhaustLocation: null,
     fxExhaustDirection: null,
-    volumetricExhaustId: null,
-    plumeTrailId: null,
+    reactionPlumes: [],
     exhaustLight: true,
     sound: null,
   }

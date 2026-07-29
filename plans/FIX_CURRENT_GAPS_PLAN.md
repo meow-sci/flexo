@@ -1,6 +1,66 @@
 # Plan — Fix flexo gaps from KSA updates (running)
 
-> **Latest review: `2026.7.8.4980` → `2026.7.9.5018` (see below). BREAKING — and unlike the
+> **Latest review: `2026.7.9.5018` → `2026.7.10.5056` (see below). One BREAKING gap
+> (`<ReactionPlume>`), ✅ FIXED. Three new 📋 OPEN items: reaction-keyed plume authoring (P1),
+> the unmapped `KSA.GlbImport` surface (P2), and the additive clutter slope/altitude fields
+> (P3).** The `4980 → 5018` review follows, then the earlier ones as history.
+
+---
+
+# 5056 review — `2026.7.9.5018` → `2026.7.10.5056`
+
+**Derived from:** the [scope/](../scope/FULL_SCOPE.md) catalog review — `git diff 3106557
+13595c1` over the decomp + shipped Core XML, plus `diff -rq` of the two private-mirror
+`assets/` trees. `version.json` @ 5056 documents revs 5019–5055.
+
+Two load-bearing revs: **5022** (nozzles pick their exhaust FX from the configured reaction)
+and **5034** (KSA's own keyframe-GLB loader fixed). A third, **5025**, moved the
+`GlbToXmlUtility` in-tree and regenerated nine Core part files through it.
+
+**Why 5022 was dangerous:** `<DeLavalNozzle>` and `<SolidMotorNozzle>` are MODELED elements, so
+their unmodeled children never ride the `<PartGameData>`/`<SubPartGameData>` `RawXmlNode`
+passthrough. When `<VolumetricExhaust>`/`<PlumeTrail>` moved one level down into
+`<ReactionPlume>`, flexo read nothing and wrote a form the game ignores — plumes lost on import
+AND on export, with no error either way.
+
+## Priority summary (5056)
+
+| # | Gap | Severity | Status | Scope doc |
+|---|---|---|---|---|
+| P0 | `<VolumetricExhaust>`/`<PlumeTrail>` re-homed into `<ReactionPlume Reaction Default>` ⇒ nozzle exhaust FX lost on import and on export | **BREAKING + DATA-LOSS** | ✅ **DONE** — `reactionPlumes: ReactionPlume[]` replaces the two scalars (no back-compat); parser/serializer/codec/UI updated | [engines](../scope/engines.md#what-changed-in-5056) |
+| P1 | Reaction-keyed `<ReactionPlume Reaction="…">` entries round-trip but cannot be created or edited — the two editor selects only drive the unkeyed `Default="true"` entry | MISSING-CAPABILITY | 📋 **OPEN** | [engines](../scope/engines.md#what-changed-in-5056) |
+| P2 | `KSA.GlbImport` (`AssetBundler.cs`/`ToolXml.cs`/`InputSet.cs`) — the game's own GLB→Assets.xml tool, now in-tree — maps to no scope row | DOCS | 📋 **OPEN** | [custom-assets](../scope/custom-assets-and-mod-export.md#what-changed-in-5056) |
+| P3 | Clutter `SlopeMaskStrength`/`Contrast`/`Bias` + `<AltitudeDensityCurve>` not emitted by the cartoon-moon scaffold | SCHEMA-DRIFT (additive; defaults inert) | 📋 **OPEN** | [ground-clutter](../scope/ground-clutter.md#what-changed-in-5056) |
+| — | Everything else | NONE | ✅ re-verified INTACT | — |
+
+### P0 — what was changed (for the record)
+
+| File | Change |
+|---|---|
+| `src/ksa/types.ts` | New `ReactionPlume` interface + `defaultReactionPlume()` / `withDefaultReactionPlume()` helpers; `DeLavalNozzle` and `SolidMotorNozzle` swap `volumetricExhaustId`/`plumeTrailId` for `reactionPlumes`; `createNozzle` / `createSolidMotorNozzle` updated |
+| `src/ksa/partXmlParser.ts` | `commonNozzleFields` maps `directChildren(el, 'ReactionPlume')` |
+| `src/ksa/partXmlSerializer.ts` | Emits one `<ReactionPlume>` per entry; omits `Reaction` when unkeyed and `Default` when false |
+| `src/state/projectCodec.ts` | `ve`/`pt` scalars → an `rp[]` array (`CReactionPlume`) |
+| `src/ui/EngineSections.tsx` | The two selects read/write the DEFAULT entry via the new helpers |
+| tests | `partXmlParser.test.ts`, `partXmlSerializer.test.ts` (now asserts the two-entry keyed+default shape), `partCatalog.test.ts` (real LR91), `projectCodec.test.ts` |
+
+### Non-gaps worth recording
+
+- **rev 5034 needed no flexo change** — KSA's loader moved onto the semantics flexo already
+  had. But it made the animation GLB's **scene-root TRS load-bearing**; flexo emits identity, so
+  keep it that way. Detail in [animation.md](../scope/animation.md#what-changed-in-5056).
+- **rev 5025's 4-significant-figure output** shifted every regenerated Core geometry value in its
+  last digit. Fixtures re-synced; two collider assertions updated. Not a schema change.
+- **Ported engine physics is byte-identical** — `DeLavalNozzleConfig`, `CombustorConfig`,
+  `GasProperties`, `NozzlePerformance`, `RocketDesign`, `RocketControllerData`, `EngineDesigner`,
+  `RocketCore`, `Combustor`, `FixedReaction`, `MixtureReaction`. Zero changes to
+  `enginePhysics.ts`.
+- **`SolidMotor.SaveData.Reaction` / `SolidGrainSegment.SaveData.Grain`** are vehicle-SAVE
+  fields, not part-template schema. flexo does not author vehicle saves.
+
+---
+
+> **Previous review: `2026.7.8.4980` → `2026.7.9.5018` (see below). BREAKING — and unlike the
 > last three updates it was NOT a patch list: KSA changed the SHAPE of how a Part declares
 > propellant flow, and flexo's model had no equivalent concept. Every BREAKING / DATA-LOSS /
 > MISSING-CAPABILITY / SCHEMA-DRIFT gap is ✅ DONE (implemented across

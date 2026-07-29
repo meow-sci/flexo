@@ -191,12 +191,15 @@ describe('geometry <SubPart><Collider> (gap E — vendored fixtures)', () => {
         id: 'BoxCollider1',
         shape: 'Box',
         ownerTemplateId: 'CoreElectricalA_Subpart_SolarPanelA_CellA',
-        position: { x: 0, y: 0, z: -0.00894 },
+        // 2026.7.10.5056 regenerated Core through the in-repo GlbToXmlUtility
+        // (rev 5025), which writes 4 significant figures where the old external tool
+        // wrote 5–6 — hence 0.7947 rather than 0.79467.
+        position: { x: 0, y: 0, z: -0.0089 },
         rotation: { x: 0, y: 0, z: 0 },
         // Box dimensions are FULL extents: the cell's real mesh AABB is
         // 0.800 × 0.600 × 0.025 m. A half-extent reading would make this a 5 cm-thick,
         // 1.6 m panel instead of the 2.5 cm-thick 0.79 × 0.60 m one it is.
-        scale: { x: 0.79467, y: 0.59602, z: 0.02531 },
+        scale: { x: 0.7947, y: 0.596, z: 0.0253 },
         layerId: COLLIDER_LAYER_ID,
       },
     ])

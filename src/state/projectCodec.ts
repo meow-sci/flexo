@@ -31,6 +31,7 @@ import type {
   PowerConsumer,
   RawXmlNode,
   ReactionCategory,
+  ReactionPlume,
   Rocket,
   RocketController,
   RocketSoundAction,
@@ -679,10 +680,36 @@ interface CNozzle {
   ed?: Triple // exhaustDirection (omit -1,0,0)
   fl?: Triple // fxExhaustLocation
   fd?: Triple // fxExhaustDirection
-  ve?: string // volumetricExhaustId
-  pt?: string // plumeTrailId
+  rp?: CReactionPlume[] // reactionPlumes (omit when empty)
   lo?: 1 // exhaustLight OFF (default on)
   sd?: { a: string; s: string } // sound {action, soundId}
+}
+
+interface CReactionPlume {
+  r?: string // reactionId (omit on the unkeyed fallback)
+  df?: 1 // isDefault
+  ve?: string // volumetricExhaustId
+  pt?: string // plumeTrailId
+}
+
+function encPlumes(plumes: ReactionPlume[]): CReactionPlume[] {
+  return plumes.map((p) => {
+    const o: CReactionPlume = {}
+    if (p.reactionId) o.r = p.reactionId
+    if (p.isDefault) o.df = 1
+    if (p.volumetricExhaustId) o.ve = p.volumetricExhaustId
+    if (p.plumeTrailId) o.pt = p.plumeTrailId
+    return o
+  })
+}
+
+function decPlumes(cs: CReactionPlume[] | undefined): ReactionPlume[] {
+  return (Array.isArray(cs) ? cs : []).map((c) => ({
+    reactionId: c.r ? str(c.r) : null,
+    isDefault: !!c.df,
+    volumetricExhaustId: c.ve ? str(c.ve) : null,
+    plumeTrailId: c.pt ? str(c.pt) : null,
+  }))
 }
 
 function isDefaultExhaustDir(v: Vec3): boolean {
@@ -698,8 +725,7 @@ function encNozzle(n: DeLavalNozzle): CNozzle {
   if (!isDefaultExhaustDir(n.exhaustDirection)) o.ed = encVec(n.exhaustDirection)
   if (n.fxExhaustLocation) o.fl = encVec(n.fxExhaustLocation)
   if (n.fxExhaustDirection) o.fd = encVec(n.fxExhaustDirection)
-  if (n.volumetricExhaustId) o.ve = n.volumetricExhaustId
-  if (n.plumeTrailId) o.pt = n.plumeTrailId
+  if (n.reactionPlumes.length > 0) o.rp = encPlumes(n.reactionPlumes)
   if (!n.exhaustLight) o.lo = 1
   if (n.sound) o.sd = { a: n.sound.action, s: n.sound.soundId }
   return o
@@ -717,8 +743,7 @@ function decNozzle(c: CNozzle): DeLavalNozzle {
     exhaustDirection: c.ed ? decVec(c.ed, 0) : { x: -1, y: 0, z: 0 },
     fxExhaustLocation: c.fl ? decVec(c.fl, 0) : null,
     fxExhaustDirection: c.fd ? decVec(c.fd, 0) : null,
-    volumetricExhaustId: c.ve ? str(c.ve) : null,
-    plumeTrailId: c.pt ? str(c.pt) : null,
+    reactionPlumes: decPlumes(c.rp),
     exhaustLight: !c.lo,
     sound: c.sd ? { action: str(c.sd.a, 'On') as RocketSoundAction, soundId: str(c.sd.s) } : null,
   }

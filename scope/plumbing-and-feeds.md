@@ -11,7 +11,7 @@
 > alongside [engines.md](engines.md), [connectors-coordinates-iva.md](connectors-coordinates-iva.md)
 > and [gamedata-modules.md](gamedata-modules.md).
 
-**Baseline:** vetted against KSA build **2026.7.9.5018** (decomp @ 5018 + shipped Core XML).
+**Baseline:** vetted against KSA build **2026.7.10.5056** (decomp @ 5056 + shipped Core XML).
 **Baseline status:** ✅ **CURRENT** — modeled end-to-end (parse, serialize, import/paste
 remapping, project codec v4, authoring UI, export pre-flight) by the 5018 upgrade.
 
@@ -187,6 +187,15 @@ template-local `Components` id and is never regenerated, so it passes through un
   places the _part_), so flexo's "unwired consumer" check only fires for SubPart-level ones.
 
 ---
+
+## What changed in 5056
+
+**Nothing in this area — re-verified INTACT.** `PartTemplate.ResolveConsumerFeedPoints` /
+`ResolveConsumerFeeds` / `AddResolvedFeed` differ only in log line numbers.
+`ConnectorCapabilityFlags`, `FeedsFromReference` and `ConsumerFeedWiring` are unchanged, and
+`Part.Connector`'s new `ShouldSerializeCapabilities()` is write-side only. rev 5052 restored RCS
+propellant crossing decouplers and rev 5053 gave service bays real tanks attached to connectors —
+both authored with the existing `<Capabilities>` / `<FeedsFrom>` / `<ConsumerFeedWiring>` schema.
 
 ## What changed in 5018
 

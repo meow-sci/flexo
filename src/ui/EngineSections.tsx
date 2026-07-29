@@ -70,11 +70,13 @@ import { mixtureRatioBounds, reactionDataToCustom, type ReactionData } from '../
 import {
   createCustomReaction,
   DEFAULT_ENGINE_SOUND_ID,
+  defaultReactionPlume,
   GRAIN_GEOMETRY_IDS,
   isCustomReactionExportable,
   KNOWN_REACTIONS,
   PLUME_TRAIL_IDS,
   VOLUMETRIC_EXHAUST_IDS,
+  withDefaultReactionPlume,
   type Combustor,
   type CustomReaction,
   type DeLavalNozzle,
@@ -554,8 +556,14 @@ function RocketNozzleFields({
         <Select
           size="sm"
           aria-label="Exhaust plume template"
-          value={nozzle.volumetricExhaustId ?? NONE}
-          onChange={(k) => onUpdate({ volumetricExhaustId: k === NONE ? null : String(k) })}
+          value={defaultReactionPlume(nozzle.reactionPlumes)?.volumetricExhaustId ?? NONE}
+          onChange={(k) =>
+            onUpdate({
+              reactionPlumes: withDefaultReactionPlume(nozzle.reactionPlumes, {
+                volumetricExhaustId: k === NONE ? null : String(k),
+              }),
+            })
+          }
         >
           <ListBoxItem id={NONE}>(none)</ListBoxItem>
           {VOLUMETRIC_EXHAUST_IDS.map((id) => (
@@ -569,8 +577,14 @@ function RocketNozzleFields({
         <Select
           size="sm"
           aria-label="Plume trail template"
-          value={nozzle.plumeTrailId ?? NONE}
-          onChange={(k) => onUpdate({ plumeTrailId: k === NONE ? null : String(k) })}
+          value={defaultReactionPlume(nozzle.reactionPlumes)?.plumeTrailId ?? NONE}
+          onChange={(k) =>
+            onUpdate({
+              reactionPlumes: withDefaultReactionPlume(nozzle.reactionPlumes, {
+                plumeTrailId: k === NONE ? null : String(k),
+              }),
+            })
+          }
         >
           <ListBoxItem id={NONE}>(none)</ListBoxItem>
           {PLUME_TRAIL_IDS.map((id) => (

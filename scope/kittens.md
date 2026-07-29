@@ -4,7 +4,7 @@
 > scale/placement aides (never exported) — a faithful three.js re-implementation of KSA's
 > Character rendering. The contract is a long list of asset/material/bone names + render quirks.
 
-**Baseline:** re-vetted against KSA build **2026.7.9.5018** (decomp @ 5018 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.10.5056** (decomp @ 5056 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — `CharacterAssets.xml` is byte-identical (md5 match),
 `KittenRenderable.cs` is identical, and the eye/glass shader merge (rev 4745) is a verbatim
 refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code change needed.
@@ -67,6 +67,15 @@ refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code
 5. Don't `computeVertexNormals()` (faceted helmet dome from seam-split verts).
 6. Attachment correction is required & order-sensitive.
 7. `Characters/` atlases stay raw **BC7** (for verbatim mod bundle-export); without BPTC/RGTC they fall back to flat.
+
+## What changed in 5056
+
+**Nothing in this area — re-verified INTACT.** `Content/Core/CharacterAssets.xml` is
+byte-identical (md5 `de6607434ddb3c13eeb9a92ad836b9bb` on both snapshots), and
+`KittenRenderable.cs`, `AnimatedRenderable.cs` and `CharacterRenderResources.cs` are unchanged.
+The only kitten-adjacent diff is `KittenEva.cs`, which gained a `Program.IsModalOpen()` guard in
+`UpdateHighlight` (in-game cursor highlighting) plus decompiler `base.` qualifiers — no asset
+path, gltf material name, socket bone or `DefaultORM` redirect moved.
 
 ## What changed in 5018
 

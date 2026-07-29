@@ -4,7 +4,7 @@
 > data-only KSA mod that adds a celestial body with `<GroundClutter>` (cards/meshes scattered
 > on the terrain), using **no custom game code**. Reference scaffold for clutter modding.
 
-**Baseline:** re-verified against KSA build **2026.7.9.5018** (decomp @ 5018 + shipped Core XML).
+**Baseline:** re-verified against KSA build **2026.7.10.5056** (decomp @ 5056 + shipped Core XML).
 **Baseline status:** 🟢 **CURRENT (scaffold updated, in-game re-check pending)** — 4892 turned the
 4826 mesh-atlas change load-bearing: every `<LOD>` now **requires `<Material Id/>` ID-references
 after its `<Mesh>`** and the ecotype `<Material>` became an Id-carrying **list**, so the old
@@ -46,6 +46,31 @@ hand-authored mod XML + a build script).
 - **Opacity** cut where R < 0.5 (cutout cards).
 - First-wins + core-first load order, so a clutter mod can **add** a body & reuse textures by `Id`.
 - Loading is gated by the scenario's `<LoadFromLibrary>`.
+
+## What changed in 5056
+
+**Four additive placement fields; no break, but the scaffold does not emit them yet (gap P3).**
+rev 5041 ("Masked trees by slope and altitude…; Added altitude density curve and LUT to ground
+clutter with res 1024") added to `decomp/KSA/GroundClutterPlacementReference.cs`:
+
+```csharp
+[XmlElement("SlopeMaskStrength")] public FloatReference SlopeMaskStrength = new(0f);
+[XmlElement("SlopeMaskContrast")] public FloatReference SlopeMaskContrast = new(1f);
+[XmlElement("SlopeMaskBias")]     public FloatReference SlopeMaskBias     = new(0f);
+[XmlElement("AltitudeDensityCurve")] // a CubicHermiteSpline, edited via CubicHermiteSplineEditor
+```
+
+Shipped usage is in `Content/Core/Astronomicals.xml` (`<SlopeMask*>` ×4 each,
+`<AltitudeDensityCurve>` ×3 with `<SplinePoint>`/`<Key>`/`<InTangent>`/`<OutTangent>`/`<Value>`
+children), plus a `<Collideable Value="true"/>` ecotype flag and `<GenerationRange>`. rev 5044
+also made "collideable"-tagged ecotypes deterministic (no regeneration) and re-enabled clutter on
+the Moon and Mars.
+
+**Severity: 🟡 additive only.** Every default is inert (`SlopeMaskStrength = 0` disables the mask;
+an absent curve means uniform density), so the existing `ksa-mods/cartoon-moon/` scaffold still
+loads and behaves as before. Emitting them is an enhancement, not a fix — filed as **P3**.
+`ClutterObjectReference.cs`'s ≤5-LOD rule and the `<Material Id/>`-per-LOD requirement are
+unchanged, and `GroundClutterReference.cs` itself did not move.
 
 ## What changed in 5018
 

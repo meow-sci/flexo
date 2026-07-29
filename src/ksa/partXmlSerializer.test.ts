@@ -572,8 +572,20 @@ describe('serializeGameData', () => {
               exhaustDirection: { x: -1, y: 0, z: 0 }, // default → omitted
               fxExhaustLocation: null,
               fxExhaustDirection: null,
-              volumetricExhaustId: 'EngineALarge',
-              plumeTrailId: 'DefaultEngine',
+              reactionPlumes: [
+                {
+                  reactionId: null,
+                  isDefault: true,
+                  volumetricExhaustId: 'EngineALarge',
+                  plumeTrailId: null,
+                },
+                {
+                  reactionId: 'DoubleBase',
+                  isDefault: false,
+                  volumetricExhaustId: null,
+                  plumeTrailId: 'DefaultPlumeTrail',
+                },
+              ],
               exhaustLight: true,
               sound: { action: 'On', soundId: 'DefaultEngineSoundBehavior' },
             },
@@ -612,8 +624,18 @@ describe('serializeGameData', () => {
     expect(child(noz, 'FlowEfficiency')).toBeNull() // default 1 omitted
     expect(child(noz, 'ExhaustLocation')!.getAttribute('X')).toBe('-1.23')
     expect(child(noz, 'ExhaustDirection')).toBeNull() // default (-1,0,0) omitted
-    expect(child(noz, 'VolumetricExhaust')!.getAttribute('Id')).toBe('EngineALarge')
-    expect(child(noz, 'PlumeTrail')!.getAttribute('Id')).toBe('DefaultEngine')
+    // `<ReactionPlume>` wraps the exhaust FX since 2026.7.10.5056 (rev 5022): the unkeyed
+    // fallback carries Default="true" and no Reaction; a keyed entry carries Reaction and
+    // omits Default (ReactionPlumeReference.Default defaults false).
+    const plumes = noz.getElementsByTagName('ReactionPlume')
+    expect(plumes.length).toBe(2)
+    expect(plumes[0].getAttribute('Reaction')).toBeNull()
+    expect(plumes[0].getAttribute('Default')).toBe('true')
+    expect(child(plumes[0], 'VolumetricExhaust')!.getAttribute('Id')).toBe('EngineALarge')
+    expect(child(plumes[0], 'PlumeTrail')).toBeNull()
+    expect(plumes[1].getAttribute('Reaction')).toBe('DoubleBase')
+    expect(plumes[1].getAttribute('Default')).toBeNull()
+    expect(child(plumes[1], 'PlumeTrail')!.getAttribute('Id')).toBe('DefaultPlumeTrail')
     expect(child(noz, 'SoundEvent')!.getAttribute('SoundId')).toBe('DefaultEngineSoundBehavior')
     expect(child(noz, 'ExhaustLight')).toBeNull() // default true omitted
   })

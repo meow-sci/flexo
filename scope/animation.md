@@ -4,10 +4,11 @@
 > lets the user edit them, and re-exports animation GLBs that KSA's `KeyframeAnimationModule`
 > loads. The load-bearing integration is the **animation-GLB node-structure convention**.
 
-**Baseline:** re-vetted against KSA build **2026.7.9.5018** (decomp @ 5018 + shipped Core XML).
-**Baseline status:** ✅ **INTACT** — the keyframe runtime, GLB-loader contract, GameData schema,
-and bone/transform math are all unchanged since the 4939 vetting (4980 didn't touch the
-animation path at all).
+**Baseline:** re-vetted against KSA build **2026.7.10.5056** (decomp @ 5056 + shipped Core XML).
+**Baseline status:** ✅ **INTACT** — but 5056 rewrote KSA's own GLB loader (rev 5034) to the
+semantics flexo already implemented, and in doing so made the scene ROOT node's transform
+load-bearing for the first time. See [What changed in 5056](#what-changed-in-5056). The
+GameData schema (`KeyframeAnimationModule`) and the bone/transform math are unchanged.
 
 ---
 
@@ -48,11 +49,12 @@ animation path at all).
 **Animation-GLB node structure** (from `KeyframeAnimationData.Template.DoLoad` — the load-bearing convention):
 
 - Reads **only `animations[0]`**. Extra glTF animations ignored.
-- Exactly one parentless **root** node = the Part node at identity.
-- **Joints = animated nodes** (those targeted by a channel); parent chain = nearest _animated_ ancestor.
-- **Members = SubPart leaves**: a node registered in `PartLookup[node.Name]` iff (i) it has **no** channels, (ii) `Name` is **non-empty**, (iii) it has an animated ancestor. **The leaf node `Name` MUST equal the SubPart instance Id** (the match key).
+- Exactly one parentless **root** node = the Part node. Since 5056 (rev 5034) its **own TRS is applied**, so it MUST stay identity — flexo emits identity in `buildAnimationRig`.
+- **Every glTF node gets an `Animation`** (since 5056), defaulting to that node's own TRS; a node targeted by a channel samples its channels instead. `Animation.Parent` is the **immediate** parent node. (At 5018 only ANIMATED nodes got one and the parent link skipped to the nearest animated ancestor, silently dropping every non-animated intermediate's transform — the rev-5034 landing-leg bug.)
+- **Members = SubPart leaves**: a node registered in `PartLookup[node.Name]` iff (i) it has **no** channels, (ii) `Name` is **non-empty**, (iii) **some** ancestor is animated. Its `ParentAnimation` is the **immediate** parent's `Animation`. **The leaf node `Name` MUST equal the SubPart instance Id** (the match key).
 - Leaf static offset = the leaf node's own TRS.
-- World matrix = leafLocal composed up the animated-ancestor chain.
+- World matrix = leafLocal composed up the **full** parent chain — non-animated intermediates included, contributing their static TRS.
+- A TRS channel whose accessor is **empty** falls back to the node's default TRS (the 5056 `array.Length > 0` guard).
 - Duration = max last-input-time across channels.
 
 **Easing / curves:**
@@ -74,6 +76,46 @@ animation path at all).
 3. **Importer interpolation coverage is partial**: flexo handles only FLOAT accessors + LINEAR/STEP. KSA _does_ support **CubicSpline** → a CubicSpline-authored clip would be mis-decoded (silent corruption, not an error). Pre-existing; unverifiable from snapshots (GLBs not shipped).
 4. Only `animations[0]` is read on both sides.
 5. Wrong rest anchor re-applies the deploy (the reason `restKeyframeId` exists).
+
+## What changed in 5056
+
+**KSA's GLB loader was fixed to match what flexo already did — no flexo change needed.**
+rev 5034 ("Fixed a rare parsing bug for Part Keyframe Animations that was causing the landing
+leg to animate incorrectly") rewrote the node-graph pass in
+`decomp/KSA/KeyframeAnimationData.cs`:
+
+|                                | 5018 (buggy)                                   | 5056 (fixed)                                              |
+| ------------------------------ | ---------------------------------------------- | --------------------------------------------------------- |
+| `Animation` built for          | only nodes with channels                       | **every** glTF node (defaults from the node's own TRS)    |
+| `Animation.Parent`             | walk ancestors to the nearest **animated** one | the **immediate** parent                                  |
+| `AnimatedPart.ParentAnimation` | nearest animated ancestor                      | immediate parent, gated on _some_ ancestor being animated |
+| `EvaluateLocalMatrix`          | `array != null`                                | `array != null && array.Length > 0`                       |
+
+The old form silently **dropped the local transform of every non-animated intermediate node**,
+because the parent walk skipped straight past it. The landing leg is the shipped case:
+`Animations/CoreLandingA_Prefab_MediumLandingLegA_Anim.glb` has a non-animated
+`CoreLandingLegA_RootJoint` carrying `R = (0, 0.16549, 0, 0.98621)` sitting between the scene
+root and the animated `CoreLandingLegA_RotaryJoint` — that rotation used to vanish.
+
+**flexo was already correct.** `decodeAnimationGlb` (`src/ksa/animationImport.ts`) classifies a
+node as a joint if it is animated **or** `hasLeafDescendant(i)` — which `RootJoint` is — and
+`nodeWorld` composes the entire ancestor chain regardless of animation. So flexo modeled that
+rotation all along; 5056 moved the game onto flexo's semantics rather than away from them.
+
+**NEW load-bearing constraint:** because `dictionary2` now contains every node, the SCENE ROOT's
+own TRS is part of the `Parent` chain that `EvaluateWorldMatrix` multiplies — at 5018 a root
+transform was ignored. flexo's importer deliberately stops the walk at `roots`, and
+`buildAnimationRig` (`src/ksa/animationRig.ts`) pushes the Part root as
+`push(partId, new THREE.Matrix4())` — identity — so both directions still agree. **If flexo ever
+emits a non-identity root node, exported clips will shift in-game.** Every shipped KSA clip also
+uses an identity root (verified across the 5056 mirror).
+
+**Asset-side note:** rev 5025's in-repo `GlbToXmlUtility` re-exported nine `Animations/*.glb`.
+Node ORDER changed (root-first depth-first) and several base quaternions are negated (`q` and
+`−q` are the same rotation). No flexo change; the only visible effect was the real-asset
+easing-fit tolerance in `easingFit.test.ts` — per-joint angular error held at 2.70° → 2.83°,
+while the ~4 m chain's amplification of it moved 6.6 cm → 12.6 cm, so the position bound was
+relaxed 10 cm → 15 cm and annotated.
 
 ## What changed in 5018
 

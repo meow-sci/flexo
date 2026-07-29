@@ -245,8 +245,20 @@ function richPart(): EditingPart {
         exhaustDirection: { x: -1, y: 0, z: 0 },
         fxExhaustLocation: { x: -1.3, y: 0, z: 0 },
         fxExhaustDirection: { x: -0.5, y: 0.5, z: 0 },
-        volumetricExhaustId: 'EngineALarge',
-        plumeTrailId: 'DefaultEngine',
+        reactionPlumes: [
+          {
+            reactionId: null,
+            isDefault: true,
+            volumetricExhaustId: 'EngineALarge',
+            plumeTrailId: null,
+          },
+          {
+            reactionId: 'DoubleBase',
+            isDefault: false,
+            volumetricExhaustId: null,
+            plumeTrailId: 'DefaultPlumeTrail',
+          },
+        ],
         exhaustLight: false,
         sound: { action: 'On', soundId: 'DefaultEngineSoundBehavior' },
       },

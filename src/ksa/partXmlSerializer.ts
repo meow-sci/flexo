@@ -756,11 +756,20 @@ function buildRocketNozzleElement(
     })
     if (fd) el.appendChild(fd)
   }
-  if (n.volumetricExhaustId) {
-    el.appendChild(elWithAttr(doc, 'VolumetricExhaust', 'Id', n.volumetricExhaustId))
-  }
-  if (n.plumeTrailId) {
-    el.appendChild(elWithAttr(doc, 'PlumeTrail', 'Id', n.plumeTrailId))
+  // `<ReactionPlume>` buckets the exhaust FX by the core's configured reaction (KSA
+  // 2026.7.10 rev 5022). `Reaction` is omitted on the unkeyed fallback; `Default` is
+  // omitted when false (ReactionPlumeReference.Default is a plain bool, default false).
+  for (const p of n.reactionPlumes) {
+    const plume = doc.createElement('ReactionPlume')
+    if (p.reactionId) plume.setAttribute('Reaction', p.reactionId)
+    if (p.isDefault) plume.setAttribute('Default', 'true')
+    if (p.volumetricExhaustId) {
+      plume.appendChild(elWithAttr(doc, 'VolumetricExhaust', 'Id', p.volumetricExhaustId))
+    }
+    if (p.plumeTrailId) {
+      plume.appendChild(elWithAttr(doc, 'PlumeTrail', 'Id', p.plumeTrailId))
+    }
+    el.appendChild(plume)
   }
   if (n.sound) {
     const sound = doc.createElement('SoundEvent')

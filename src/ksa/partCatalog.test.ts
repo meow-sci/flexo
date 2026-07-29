@@ -288,11 +288,16 @@ describe('parseGameDataFile + mergeGameData', () => {
       )!
       expect(chamber.combustors[0].reactionId).toBe('Hydrolox')
       expect(chamber.combustors[0].mixtureRatio).toBe(5.5)
-      expect(chamber.nozzles[0].volumetricExhaustId).toBe('EngineALarge')
-      // <PlumeTrail> — 2026.7.9.5018 moved the template to PlumeTrailAssets.xml
-      // (`DefaultEngine` → `DefaultPlumeTrail`) and stripped it from every LIQUID nozzle;
-      // only <SolidMotorNozzle>s carry one now (CorePropulsionCGameData.xml).
-      expect(chamber.nozzles[0].plumeTrailId).toBeNull()
+      // 2026.7.10.5056 (rev 5022) moved the exhaust FX inside a repeatable
+      // `<ReactionPlume>`; a liquid chamber carries exactly one unkeyed Default entry.
+      expect(chamber.nozzles[0].reactionPlumes).toEqual([
+        {
+          reactionId: null,
+          isDefault: true,
+          volumetricExhaustId: 'EngineALarge',
+          plumeTrailId: null,
+        },
+      ])
     },
   )
 
@@ -499,9 +504,11 @@ describe('geometry <Part><Collider> (gap E — vendored fixtures)', () => {
         id: 'CylinderCollider1',
         shape: 'Cylinder',
         ownerTemplateId: null,
-        position: { x: 0.00642, y: 0, z: -0.16949 },
+        // 4-significant-figure values: 2026.7.10.5056 regenerated Core through the
+        // in-repo GlbToXmlUtility (rev 5025), which rounds harder than the old tool.
+        position: { x: 0.0064, y: 0, z: -0.1695 },
         rotation: { x: 0, y: 0, z: 0 },
-        scale: { x: 0.3869, y: 0.6, z: 0.3869 }, // (2R, LengthY, 2R)
+        scale: { x: 0.387, y: 0.6, z: 0.387 }, // (2R, LengthY, 2R)
         layerId: COLLIDER_LAYER_ID,
       },
     ])

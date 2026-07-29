@@ -9,7 +9,7 @@
 > [docs/importing-models.md](../docs/importing-models.md),
 > [docs/texturing.md](../docs/texturing.md), [docs/asset-pipeline.md](../docs/asset-pipeline.md).
 
-**Baseline:** re-vetted against KSA build **2026.7.9.5018** (decomp @ 5018 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.7.10.5056** (decomp @ 5056 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — every schema/reference class and renderer quirk flexo's
 export depends on is byte-identical or behavior-preserving. No code change required. Two
 durable watch-items noted below.
@@ -80,6 +80,44 @@ durable watch-items noted below.
 
 18. **`<PartModel>` and `<PartModelDynamic>` are two shader VARIANTS of one file: emissive XOR temperature.** `PartModelRenderer.ColorData` compiles `MeshIndirect.vert/frag` twice — `Pipeline` with `ENABLE_EMISSIVE`+`ENABLE_THIN_FILM` (`decomp/KSA/PartModelRenderer.cs:111-112`) and `PipelineDynamic` with `ENABLE_TEMPERATURE`+`ENABLE_THIN_FILM` (`:200-201`) — then draws `PartModel` and `PartModelDynamic` under them back to back (`:343-345`). So an `<Emissive>` on a `<PartModelDynamic>` SubPart is **never sampled** (the block at `MeshIndirect.frag:273-291` is preprocessed out and `:324-326` forces `emissive = false`), and the heat gradient — the `<ThinFilm>`/`_TFI` texture's G channel keyed through the global `temperatureLut` (`MeshIndirect.frag:293-300`) — is never sampled on a `<PartModel>` one. Shipped Core data obeys this exactly: every category with an `<Emissive>` has zero `<PartModelDynamic>` (CommandA / ElectricalA / IVAPropA / PassageA / PartAssets) and every `<PartModelDynamic>` category has zero `<Emissive>` (FuelTankA / PropulsionA / PropulsionC). flexo only ever emits `<PartModel>`/`<PartModelGlass>`, so it sits on the emissive side by construction — but **ThinFilm heat (the plan's Phase 3) can never coexist with a glow on the same SubPart**, and adopting `<PartModelDynamic>` would silently kill every glow on it.
 19. **An export VARIANT is minted only when flexo changes something, and it inherits NOTHING it does not name.** A variant re-declares a built-in SubPart template under a project-unique id (`flexo_<base>_<originalId>` — one naming rule, no interior-prop special case any more) that REUSES the built-in `<Mesh>` + `<Material>` by id. `buildExportVariantMap` mints one **only** when the placed built-in template (a) carries flexo SubPart GameData — a `<Light>`/tank/… or a SubPart-owned `<Collider>`, which under the shared built-in id would MERGE onto the built-in template globally — **or** (b) wants an `<Internal>` that differs from the built-in's own catalogued value. Everything else references the built-in id directly and keeps the built-in's flags for free. Because the variant is a fresh `<SubPart>` that inherits only what it names, `ReferenceSubPartPlan` copies the built-in's `<Internal>`, `<RayTracing>` (raw token) and `<ShadowCaster>` forward, plus the built-in's own geometry `<Collider>`s — dropping `<RayTracing>` turned a `ShadowProxy` occluder into a **visible** mesh, dropping `<ShadowCaster>` made Core's explicitly-`false` capsule windows start casting shadows. Element order mirrors Core: `Internal, Mesh, Material, RayTracing, ShadowCaster`. The `<PartModel Id>` must still be **fresh** (contract #8) or the dedup collapses the variant back onto the original, dragging the original's flags back with it. **A custom (flexo-authored) mesh must NEVER get a variant, and `buildExportVariantMap` skips them by DOCUMENT lookup (`part.customMeshes`), not by catalog absence.** The catalog it receives is `$catalogIndex`, which merges `$customCatalog` (`state/catalogStore.ts`), so a membership test silently let custom meshes through: giving a custom mesh SubPart GameData (a `<Light>`, or a SubPart-owned collider) minted a variant of flexo's own SubPart, and because custom catalog entries carry **no `materialId`** (their material lives in `customMeshRenderCache`) the variant emitted a `<PartModel>` with no `<Material>` — the contract-#3 startup crash — while orphaning the correct, fully-materialed declaration and pointing `<MeshView>` at the render mesh instead of the decimated `_VM`. The rule is semantic, not defensive: a custom SubPart id is project-unique and declared by this same export, so there is nothing to merge onto. A custom mesh emits `<Internal>true</Internal>` in its own `<PartModel>` when the user marks it interior-only. **Glass can NEVER be interior-only**: `<PartModelGlass>` has no `<Internal>` field (the one `[XmlElement("Internal")]` in the decomp is `PartModelModule.cs:35`), a `glassGlow` mesh counts as glass whole, and the flag is forced off on that path. Full contract in [connectors-coordinates-iva.md](connectors-coordinates-iva.md).
+
+## What changed in 5056
+
+**Nothing that reaches flexo's export — and the game shipped its own reference implementation.**
+
+Every contract class re-verified byte-identical: `PbrMaterialReference.cs`, `AssetBundle.cs`,
+`ThumbnailRenderResources.cs` (the null-deref site still has **no** guard, so the synthetic
+Normal + AoRoughMetal rule stands) and `PartModelRenderer.cs` (`ENABLE_EMISSIVE` still defined at
+`:111` / `:123`, so glow still works). `Mod.cs` / `ModLibrary.cs` / `FileReference.cs` /
+`ShaderReference.cs` / `TextureReference.cs` / `TexturePowerReference.cs` differ only in log line
+numbers. `MeshAtlasFileReference.Meshes` gained `[XmlIgnore]` and `HostOnly` gained
+`[DefaultValue(false)]` — both WRITE-side; `Meshes` is populated by the GLB loader and was never
+authored. `mod.toml` gained one line (`CoreFuelPortGameData.xml`).
+
+`PartModelModule` / `PartModelGlassModule` gained `[DefaultValue]` on their render flags —
+`RayTracing = Disabled`, `ShadowCaster = true`, `Internal = false` on `PartModel`; both bools
+`false` on `PartModelGlass`. These CONFIRM the defaults contract #19 already encodes, and
+`<Internal>` remains the ONLY `[XmlElement("Internal")]` in the decomp, so the
+"glass can never be interior-only" rule holds.
+
+**NEW unmapped surface — `KSA.GlbImport` (gap P2).** rev 5025 moved the `GlbToXmlUtility` CLI
+into the codebase (`decomp/KSA.GlbImport/AssetBundler.cs`, `ToolXml.cs`, `InputSet.cs`) so it
+reuses the shipped KSA serializers. It is the game's own answer to the question flexo's
+`assetsXmlSerializer.ts` / `exportGlb.ts` answer, and it independently corroborates conventions
+flexo reverse-engineered:
+
+- `_VM` view meshes: `if (names.Contains(name + "_VM"))` → emits a `MeshViewModule.Template`
+  (`AssetBundler.cs:158-166`), and non-`_VM`, non-`_`-prefixed nodes become SubParts (`:45`).
+- Material id is `set.Stem + "_Material"` (`:24`), with `DiffuseReference` / `NormalReference` /
+  `PBRMap` / `ThinFilmMap` / `EmissiveMap` slots (`:67-98`).
+- Node-name prefixes drive structure: `_ColPrim_Box|Sphere|Capsule|Cylinder`, `_connector`,
+  `_pivot`, `_glass`, `_raytrace`, `_raytraceShadowProxy` (`:189-320`).
+- `ToolXml.Build()` overrides two `PartInstance` attributes to defaults and `[XmlIgnore]`s
+  `TextureReference.Manifest`; output goes through a `NaNFilteringXmlWriter`.
+
+No flexo change is required, but it deserves either its own scope row or a cross-reference from
+here — filed as **P2**. It is also the cause of the 4-significant-figure precision drop across
+regenerated Core geometry (see [part-and-subpart-xml.md](part-and-subpart-xml.md)).
 
 ## What changed in 5018
 

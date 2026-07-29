@@ -78,6 +78,9 @@ import type { ReferenceContainer } from './containerStore'
 import type { LineMeasurement } from './measurementStore'
 import { mergeProjectImport } from './projectTransfer'
 import type { ImportSummary, ProjectExportEnvelope } from './projectTransfer'
+// layerStore imports back into this module (deselectLayer); both directions are
+// function-scoped, so the cycle never runs at module-init time.
+import { isLayerLocked, isLayerVisible } from './layerStore'
 
 /**
  * Framework-agnostic editor state (nanostores). No React / three.js imports —
@@ -795,6 +798,10 @@ function applyImportedGameData(
   }
 }
 
+/** `[start, end)` as an index list — the tail an import appended to a list. */
+const rangeFrom = (start: number, end: number): number[] =>
+  Array.from({ length: Math.max(0, end - start) }, (_, i) => start + i)
+
 /**
  * Imports a whole Part by appending all of its SubPart instances to the current
  * project, preserving each one's position/rotation/scale, along with the Part's
@@ -805,8 +812,9 @@ function applyImportedGameData(
  * are rewired to the regenerated connector ids. Imported SubParts land in
  * `targetLayerId` when given (and it exists), else the active layer; connectors
  * always go to the built-in Connectors layer
- * (layers are editor-only and absent from KSA XML). The last added SubPart is
- * selected (or the last connector if the Part has no SubParts).
+ * (layers are editor-only and absent from KSA XML). Everything the import added is
+ * left selected — SubParts, connectors, colliders, IVA seats and lights — so the
+ * fresh Part can be moved as a unit.
  */
 export function addPart(
   placements: readonly SubPartPlacement[],
@@ -894,12 +902,40 @@ export function addPart(
       .map((s) => connectorIdMap.get(s))
       .filter((s): s is string => s != null)
   }
+  const colliderStart = part.colliders.length
+  const seatStart = part.ivaSeats.length
+  const lightStart = part.lights.length
   if (imported) applyImportedGameData(part, imported, connectorIdMap, idMap)
   $part.set(part)
-  // Select exactly the imported SubParts (not any pre-existing ones on the layer);
-  // for a connectors-only import, fall back to selecting the last connector.
-  if (importedSubIndices.length > 0) setSelection(importedSubIndices, [], [])
-  else if (part.connectors.length > 0) selectConnector(part.connectors.length - 1)
+  // Select exactly what this import added — SubParts AND its connectors / colliders /
+  // IVA seats / lights (each kind is appended, so the imported ones are the tail past
+  // the pre-import length). Selecting every kind is what lets a "move the part I just
+  // imported" drag carry its colliders and connectors along instead of stranding them.
+  // Pre-existing entities on the same layers are deliberately left out. Entity kinds
+  // whose built-in layer is hidden or locked are skipped, matching the select-all rule
+  // in AssetsList (and keeping the "locked ⇒ never selected" invariant of setLayerLocked).
+  const selectable = (layerId: string): boolean =>
+    isLayerVisible(layerId) && !isLayerLocked(layerId)
+  const importedConnectorIndices = selectable(CONNECTOR_LAYER_ID)
+    ? rangeFrom(connectorStart, part.connectors.length)
+    : []
+  const importedColliderIndices = selectable(COLLIDER_LAYER_ID)
+    ? rangeFrom(colliderStart, part.colliders.length)
+    : []
+  const importedSeatIndices = selectable(IVA_SEAT_LAYER_ID)
+    ? rangeFrom(seatStart, part.ivaSeats.length)
+    : []
+  const importedLightIndices = selectable(LIGHT_LAYER_ID)
+    ? rangeFrom(lightStart, part.lights.length)
+    : []
+  setSelection(
+    importedSubIndices,
+    importedConnectorIndices,
+    [],
+    importedColliderIndices,
+    importedSeatIndices,
+    importedLightIndices,
+  )
   return layerId
 }
 

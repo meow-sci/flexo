@@ -174,7 +174,16 @@ import {
   createSolidMotor,
   createSubPartGameData,
 } from '../ksa/types'
-import type { ConnectorCapability, IvaSeat, PartCollider, Transform } from '../ksa/types'
+import type {
+  Connector,
+  ConnectorCapability,
+  IvaSeat,
+  PartCollider,
+  PartLight,
+  SubPartPlacement,
+  Transform,
+} from '../ksa/types'
+import { $layerView, setLayerLocked, toggleLayerVisible } from './layerStore'
 import type { ImportedGameData } from './editorStore'
 import {
   importModelAsMeshes,
@@ -224,6 +233,57 @@ function emptyImportedGameData(): ImportedGameData {
     lights: [],
   }
 }
+
+/** Minimal entities for import tests — ids are in the SOURCE space and get regenerated. */
+const placementOf = (instanceId: string): SubPartPlacement => ({
+  instanceId,
+  subPartTemplateId: 'Core.A',
+  position: { x: 0, y: 0, z: 0 },
+  rotation: { x: 0, y: 0, z: 0 },
+  scale: { x: 1, y: 1, z: 1 },
+  layerId: DEFAULT_LAYER_ID,
+})
+const connectorOf = (id: string): Connector => ({
+  id,
+  position: { x: 0, y: 0, z: 0 },
+  rotation: { x: 0, y: 0, z: 0 },
+  scale: { x: 1, y: 1, z: 1 },
+  flags: [],
+  capabilities: [],
+  siblingIds: [],
+  layerId: DEFAULT_LAYER_ID,
+})
+const importedCollider = (id: string): PartCollider => ({
+  id,
+  shape: 'Box',
+  ownerTemplateId: null,
+  position: { x: 0, y: 0, z: 0 },
+  rotation: { x: 0, y: 0, z: 0 },
+  scale: { x: 1, y: 1, z: 1 },
+  layerId: COLLIDER_LAYER_ID,
+})
+const importedSeat = (id: string): IvaSeat => ({
+  id,
+  position: { x: 0, y: 0, z: 0 },
+  rotation: { x: 0, y: 0, z: 0 },
+  scale: { x: 1, y: 1, z: 1 },
+  layerId: IVA_SEAT_LAYER_ID,
+})
+const importedLight = (id: string): PartLight => ({
+  id,
+  type: 'Point',
+  ownerTemplateId: null,
+  rangeM: 1,
+  intensity: 1,
+  color: { r: 1, g: 1, b: 1 },
+  innerAngleRad: Math.PI / 8,
+  outerAngleRad: Math.PI / 4,
+  rayTracing: false,
+  position: { x: 0, y: 0, z: 0 },
+  rotation: { x: 0, y: 0, z: 0 },
+  scale: { x: 1, y: 1, z: 1 },
+  layerId: LIGHT_LAYER_ID,
+})
 
 beforeEach(() => {
   newPart()
@@ -445,6 +505,52 @@ describe('editorStore', () => {
     expect(imported.position).toEqual({ x: -0.275, y: 0, z: -0.8 })
     undo()
     expect($part.get().lights.map((l) => l.id)).toEqual(['_light1'])
+  })
+
+  it('addPart selects everything it imported — SubParts, connectors, colliders, seats and lights', () => {
+    // Pre-existing entities of every kind: they must NOT end up in the post-import selection.
+    addSubPart('Core.Old')
+    addConnector()
+    addCollider('Box')
+    addIvaSeat()
+    addLight(null)
+    addPart(
+      [placementOf('imp_1'), placementOf('imp_2')],
+      [connectorOf('_connector7')],
+      [],
+      undefined,
+      undefined,
+      {
+        ...emptyImportedGameData(),
+        colliders: [importedCollider('_collider9')],
+        ivaSeats: [importedSeat('_ivaseat9')],
+        lights: [importedLight('_light9')],
+      },
+    )
+    // One pre-existing entity of each kind, so the imported ones are all at index 1.
+    expect($selectedIndices.get()).toEqual([1, 2])
+    expect($selectedConnectorIndices.get()).toEqual([1])
+    expect($selectedColliderIndices.get()).toEqual([1])
+    expect($selectedIvaSeatIndices.get()).toEqual([1])
+    expect($selectedLightIndices.get()).toEqual([1])
+  })
+
+  it('addPart leaves imported entities on a hidden or locked layer out of the selection', () => {
+    try {
+      toggleLayerVisible(COLLIDER_LAYER_ID) // built-in layers default to visible
+      setLayerLocked(CONNECTOR_LAYER_ID, true)
+      addPart([placementOf('imp_1')], [connectorOf('_connector7')], [], undefined, undefined, {
+        ...emptyImportedGameData(),
+        colliders: [importedCollider('_collider9')],
+        lights: [importedLight('_light9')],
+      })
+      expect($selectedIndices.get()).toEqual([0])
+      expect($selectedConnectorIndices.get()).toEqual([]) // locked
+      expect($selectedColliderIndices.get()).toEqual([]) // hidden
+      expect($selectedLightIndices.get()).toEqual([0]) // untouched layer, still selected
+    } finally {
+      $layerView.set({})
+    }
   })
 
   it('addPart rewrites <ConnectorRef>s inside preserved raw XML onto the regenerated connector ids', () => {

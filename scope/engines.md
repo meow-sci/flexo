@@ -22,16 +22,18 @@ moved — so `enginePhysics.ts` needed one new port (`sliceLutAtMixtureRatio`), 
 
 ## Flexo modules
 
-| Path                                                          | Role                                                                                                                                          |
-| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/ksa/enginePhysics.ts`                                    | The verbatim port. `predictPerformance()` + LUT lookup + mixture SliceAt, Mach solve, separation clamp, thrust. Pure numeric.                 |
-| `src/ksa/reactionCatalog.ts`                                  | Loads/parses `Reactions.xml` → Fixed (1-D) / Mixture (2-D O/F×lnP) gas LUTs; custom-reaction ⇄ catalog conversion.                            |
-| `src/state/engineStore.ts`                                    | Ephemeral Engine Designer state (active template/instance, exhaust gizmo). Not in undo/`$part`.                                               |
-| `src/state/reactionStore.ts`                                  | Loaded catalog + Core ∪ project custom reactions (`$allReactionIndex`).                                                                       |
-| `src/ui/EnginePanel.tsx`                                      | Full-sidebar designer; `PerformanceReadout` calls `predictPerformance`.                                                                       |
-| `src/ui/EngineSections.tsx`                                   | Modal section editors (combustor / nozzle / controllers / gimbals / custom propellants).                                                      |
-| `src/ui/EngineToolbar.tsx`, `src/three/NozzleHandleObject.ts` | Engine-mode toolbar; 3D exhaust-location handle.                                                                                              |
-| `src/ksa/types.ts`                                            | Engine type defs (`Combustor`, `DeLavalNozzle`, `Rocket`, `RocketController`, `Gimbal`, `SubPartIdRef`, `CustomReaction`, `KNOWN_REACTIONS`). |
+| Path                                                          | Role                                                                                                                                             |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/ksa/enginePhysics.ts`                                    | The verbatim port. `predictPerformance()` + LUT lookup + mixture SliceAt, Mach solve, separation clamp, thrust. Pure numeric.                    |
+| `src/ksa/reactionCatalog.ts`                                  | Loads/parses `Reactions.xml` → Fixed (1-D) / Mixture (2-D O/F×lnP) gas LUTs; custom-reaction ⇄ catalog conversion.                               |
+| `src/state/engineStore.ts`                                    | Ephemeral Engine Designer state (engine SCOPE — SubPart template or part —, instance, targeted `NozzleRef`, exhaust gizmo). Not in undo/`$part`. |
+| `src/state/reactionStore.ts`                                  | Loaded catalog + Core ∪ project custom reactions (`$allReactionIndex`).                                                                          |
+| `src/ui/EnginePanel.tsx`                                      | Full-sidebar designer; `PerformanceReadout` calls `predictPerformance`.                                                                          |
+| `src/ui/EngineSections.tsx`                                   | Modal section editors (combustor / nozzle / controllers / gimbals / custom propellants).                                                         |
+| `src/ui/EngineToolbar.tsx`, `src/three/NozzleHandleObject.ts` | Engine-mode toolbar; the per-nozzle 3D exhaust handles (amber physics / cyan FX).                                                                |
+| `src/three/coords.ts` (`exhaust*`)                            | Exhaust location/direction ⇄ owner assembly frame. **Location takes owner scale, direction does not** — see the frame gotcha below.              |
+| `src/ksa/engineValidation.ts`                                 | Load-time rules KSA enforces, plus the non-unit-`ExhaustDirection` thrust-multiplier warning.                                                    |
+| `src/ksa/types.ts`                                            | Engine type defs (`Combustor`, `DeLavalNozzle`, `Rocket`, `RocketController`, `Gimbal`, `SubPartIdRef`, `CustomReaction`, `KNOWN_REACTIONS`).    |
 
 ## Game-side anchors (`decomp/KSA/`) — the ported math
 
@@ -72,7 +74,28 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
   MixtureReactions, `CombustorTemplate.ResolveReaction` throws without it; KSA clamps it into the
   LUT row range), `<MaxPressure Bar>`, `<ThermalEfficiency Value>`, `<MinimumThrottle Value>`,
   `<MinimumPulseTime Seconds>`.
-- `<DeLavalNozzle>`: `Id`, `<ExitDiameter M|Cm>`, `<FxExitDiameter>`, `<AreaRatio Value>`, `<FlowEfficiency Value>`, `<ExpansionEfficiency Value>`, `<ExhaustLocation X Y Z>`, `<ExhaustDirection X Y Z>`, `<FxExhaustLocation>`, `<FxExhaustDirection>`, `<VolumetricExhaust Id>`, `<ExhaustLight Value>`, `<SoundEvent SoundId Action>`.
+- `<DeLavalNozzle>`: `Id`, `<ExitDiameter M|Cm>`, `<FxExitDiameter>`, `<AreaRatio Value>`, `<FlowEfficiency Value>`, `<ExpansionEfficiency Value>`, `<ExhaustLocation X Y Z>`, `<ExhaustDirection X Y Z>`, `<FxExhaustLocation>`, `<FxExhaustDirection>`, `<VolumetricExhaust Id>`, `<PlumeTrail Id>`, `<ExhaustLight Value>`, `<SoundEvent SoundId Action>`.
+  **Both scopes, and a LIST at each**: `PartTemplate.RocketNozzles` (`decomp/KSA/PartTemplate.cs:45-47`)
+  is legal under `<PartGameData>` and `<SubPartGameData>` alike, and `ApplyGameData` merges the
+  SubPart's into the part's (`:245`). Stock uses both — main engines put one nozzle on the
+  thrust-chamber SubPart; `PartGameData.xml`'s MMU backpack SubPart authors **56**. flexo's
+  designer surfaces both scopes and every index (`$engineEntries` / `$resolvedNozzleTargets`).
+- **A SubPart-owned nozzle is instantiated ONCE PER PLACEMENT of its template** — the same
+  multi-instance rule as a SubPart-owned `<Collider>` or `<Light>`. KSA turns every
+  `<SubPartRef>` into its own child `Part` carrying its own `RocketNozzle` module
+  (`decomp/KSA/Part.cs:1144-1152` + `RocketNozzle.CreateComponents`), so
+  `CorePropulsionB_Prefab_RCSALargeA`'s **four** thrusters are ONE `<DeLavalNozzle Id="Nozzle">`
+  placed four times at four Z rotations. Every built-in RCS prefab is authored this way. ⇒ the
+  editor must draw a handle per placement and write back through the clicked placement's frame
+  (N views of one document entity — edits move all of them), and a "1 nozzle = 1 thruster"
+  assumption is wrong for essentially all stock RCS.
+- **The FX pair is an inherit-vs-override switch, not two more fields.**
+  `RocketNozzleTemplate.OnDataLoad` copies `ExhaustLocation`/`ExhaustDirection` into whichever
+  of `FxExhaustLocation`/`FxExhaustDirection` is ABSENT. So flexo must emit them **iff
+  overridden** (`Vec3 | null` in `types.ts`); writing them at their inherited values would
+  silently convert an inherit into a hard override and change nothing else. Stock actively
+  desyncs them (thrust straight −Z, plume canted) — ~30 `FxExhaustLocation`, 24
+  `FxExhaustDirection` across `Content/`.
 - `<Rocket>`: `Id`, `<Core Id [SubPartId]>`, `<Nozzle Id [SubPartId]>`.
 - `<RocketEngineController>` / `<RocketThrusterController>`: `Id`, `<RocketReference Id [SubPartId]>`, `<ControlMap CSV>`.
 - `<Gimbal>` (under `<SubPart Id>`): `<MaxAngleY Degrees>`, `<MaxAngleZ Degrees>`, `<ConstrainToCircle Value>`.
@@ -97,6 +120,32 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
 - `AreaRatio` default **NaN** ⇒ must be supplied.
 - `FxExitDiameter` is plume-visual only, ≠ `ExitDiameter`.
 - `ExhaustDirection` is the direction exhaust _leaves_; thrust acts along `−ExhaustDirection`.
+- **Exhaust vectors are NOT normalized at load, and thrust is applied unnormalized.**
+  `Vector3Reference` is bare `[XmlAttribute] X/Y/Z` doubles, and `VehicleUpdateState.cs:294`
+  does `TotalThrust * ThrustDirectionVehicleAsmb` — so `|ExhaustDirection|` is a silent thrust
+  multiplier. flexo keeps gizmo writes unit-length, leaves typed input verbatim (imports must
+  round-trip), and warns (`nozzle-direction-not-unit`). The FX vectors are the opposite case:
+  every FX consumer `NormalizeOrZero()`s first and stock ships non-unit ones (`0, 0.550, -1.000`),
+  so flexo must NOT normalize them.
+- **The two exhaust vectors use DIFFERENT owner frames** — the trap that
+  `Vector3.transformDirection` walks straight into. `RocketNozzle.ResetState`
+  (`decomp/KSA/RocketNozzle.cs:103-108`) transforms the LOCATION by
+  `Parent.MatrixAsmb2VehicleAsmb` (= `Scale · Rotation · Translation`, `Part.cs:217`) but the
+  DIRECTION by `Parent.Asmb2VehicleAsmb`, a bare **quaternion** (`Part.cs:644-656`). A
+  non-uniform owner scale therefore skews the mesh but not the thrust axis. Also note
+  `FxExhaustDirection` is transformed **un-negated** while `ThrustDirection` is negated.
+- **There is no rotation/quaternion/Euler field on a nozzle, and no roll.** Orientation is a
+  direction vector, full stop; roll about the exhaust axis is undefined by design
+  (`Vehicle.SpawnThrusterSparks`, `Vehicle.cs:4828-4830`, builds an arbitrary orthonormal
+  basis — the plume is axially symmetric). Nothing is derived from GLB bones/nodes.
+- **A rotated `<SubPart><Transform>` carries the exhaust with the mesh** (same owner frame),
+  which is why rotating a placement can never fix a _relative_ aim error — only
+  `ExhaustDirection` can. Every stock bell is modelled down −X in its own subpart frame;
+  canted engines either rotate the whole SubPart (verniers) or write a non-axial vector (RCS).
+- KSA's in-game debug overlay (`Vehicle.cs:5030+`) draws a red/white arrow along
+  `-ThrustDirection` and a **Cyan/Blue** one along `FxExhaustDirection` only when the FX
+  location differs from the physics location. flexo's handle colours mirror this deliberately
+  (amber physics / cyan FX) so the overlay reads against what was authored.
 - A `<Gimbal>` with both max angles 0 is a silent no-op.
 - A `<Part>` with no matching `<PartGameData>` → invisible in picker (the SRB trap).
 - KSA computes in `float`, flexo in `double` → sub-0.1% match.

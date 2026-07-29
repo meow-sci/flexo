@@ -21,9 +21,17 @@ import type {
   ReactionCategory,
   Rocket,
   SolidMotor,
+  SolidMotorNozzle,
   SubPartIdRef,
 } from './types'
 import type { ReactionData } from './reactionCatalog'
+
+/**
+ * How far `|ExhaustDirection|` may drift from 1 before it is called out. Generous enough to
+ * absorb the rounding in `formatG6`-serialized unit vectors, tight enough to catch a real
+ * mis-scaled axis. Shared with the nozzle editor's inline warning so the two can't disagree.
+ */
+export const UNIT_EPSILON = 1e-3
 
 /** `block` ⇒ KSA throws at load; `warn` ⇒ it loads but the part misbehaves. */
 export type EngineIssueSeverity = 'block' | 'warn'
@@ -117,6 +125,22 @@ function locateConsumers(part: EditingPart): LocatedConsumer[] {
     if (!spd) continue
     for (const c of spd.combustors) add(c.id, placement.instanceId, c, null)
     for (const m of spd.solidMotors) add(m.id, placement.instanceId, null, m)
+  }
+  return out
+}
+
+/**
+ * Every nozzle on the part with a human-readable scope, both flavors, both scopes. Typed as
+ * {@link SolidMotorNozzle} because that IS the shared shape — a `DeLavalNozzle` is
+ * structurally this plus `<AreaRatio>` — so one walk covers `RocketNozzleTemplate`'s fields.
+ */
+function locateNozzleModules(part: EditingPart): { nozzle: SolidMotorNozzle; scope: string }[] {
+  const out: { nozzle: SolidMotorNozzle; scope: string }[] = []
+  for (const n of part.gameData.nozzles) out.push({ nozzle: n, scope: part.partId })
+  for (const n of part.gameData.solidNozzles) out.push({ nozzle: n, scope: part.partId })
+  for (const spd of part.subPartGameData) {
+    for (const n of spd.nozzles) out.push({ nozzle: n, scope: spd.subPartTemplateId })
+    for (const n of spd.solidNozzles) out.push({ nozzle: n, scope: spd.subPartTemplateId })
   }
   return out
 }
@@ -245,6 +269,30 @@ export function validateEngines(
           `${max != null ? (max / 1e5).toFixed(1) : '?'} bar).`,
       )
     }
+  }
+
+  // --- Exhaust direction magnitude (RocketNozzle.ResetState + VehicleUpdateState) ---
+  // KSA loads any Vector3Reference verbatim (no normalizing in RocketNozzleTemplate) and
+  // then applies thrust as `TotalThrust * ThrustDirectionVehicleAsmb` — so the vector's
+  // LENGTH is a silent thrust multiplier. It loads and runs, hence `warn`. Only the physics
+  // vector: the FX pair is NormalizeOrZero()d by every consumer and stock ships non-unit
+  // FX vectors deliberately.
+  for (const { nozzle, scope } of locateNozzleModules(part)) {
+    const len = Math.hypot(
+      nozzle.exhaustDirection.x,
+      nozzle.exhaustDirection.y,
+      nozzle.exhaustDirection.z,
+    )
+    if (Math.abs(len - 1) <= UNIT_EPSILON) continue
+    warn(
+      'nozzle-direction-not-unit',
+      len > 0
+        ? `Nozzle ${nozzle.id} on ${scope} has a non-unit ExhaustDirection (length ` +
+            `${len.toFixed(4)}) — KSA applies thrust unnormalized, so it will produce ` +
+            `${len.toFixed(2)}× its rated thrust.`
+        : `Nozzle ${nozzle.id} on ${scope} has a zero-length ExhaustDirection — it will ` +
+            `apply no thrust.`,
+    )
   }
 
   // --- Solid reactions KSA refuses to load (FixedReactionTemplate.Create) ---

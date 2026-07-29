@@ -34,6 +34,10 @@ import { NozzleHandleObject } from './NozzleHandleObject'
 import {
   colliderLocalFromWorld,
   colliderWorld,
+  exhaustLocalDirection,
+  exhaustLocalLocation,
+  exhaustWorldDirection,
+  exhaustWorldLocation,
   lightLocalFromWorld,
   lightWorld,
   matrixFromTransform,
@@ -85,7 +89,6 @@ import {
   selectPlacement,
   selectedTransformRefs,
   toggleEntity,
-  updateNozzle,
   updateSelectedTransform,
   updateSelectedTransforms,
   type SelectedTransformRef,
@@ -112,13 +115,19 @@ import {
   setJointPose,
 } from '../state/animationStore'
 import { jointWorld, previewOverrideMatrix } from '../ksa/animationRig'
-import type { DeLavalNozzle, PartAnimation } from '../ksa/types'
+import type { PartAnimation } from '../ksa/types'
 import { $inspectorMode } from '../state/uiStore'
 import {
-  $activeEngineTemplateId,
-  $activeEngineInstanceId,
+  $activeEngineEntry,
+  $activeNozzleRef,
+  $activeNozzleTarget,
+  $effectiveToolMode,
   $engineExhaustGizmo,
-  $resolvedEngineInstanceId,
+  $resolvedNozzleTargets,
+  setActiveNozzleRef,
+  updateNozzleAt,
+  type NozzleRef,
+  type NozzleTarget,
 } from '../state/engineStore'
 import {
   $connectorSettings,
@@ -238,13 +247,19 @@ export class EditorScene {
   private readonly pivotHelper = new THREE.AxesHelper(0.4)
 
   /**
-   * Engine designer: a marker at the active nozzle's exhaust point (+ direction cone),
-   * and an empty proxy the gizmo attaches to so a drag relocates the exhaust LOCATION.
-   * Only present while the Engine designer ($inspectorMode==='engine') has an active
-   * engine; the gizmo attaches only when {@link $engineExhaustGizmo} is on. Mirrors the
-   * pose pivot/proxy pair.
+   * Engine designer: ONE marker per nozzle exhaust placement of the open engine (both
+   * flavors, both channels — see {@link $resolvedNozzleTargets}), keyed by target key, plus
+   * an empty proxy the gizmo attaches to so a drag edits the ACTIVE nozzle's placement.
+   *
+   * All of them are drawn, not just the target: KSA authors many nozzles on one owner (the
+   * MMU RCS puts its whole battery on `<PartGameData>`), and a single marker made an N-bell
+   * block unreadable. Only present while the Engine designer ($inspectorMode==='engine')
+   * has an engine open; the gizmo attaches only when {@link $engineExhaustGizmo} is on.
+   * Mirrors the pose pivot/proxy pair.
    */
-  private engineHandle: NozzleHandleObject | null = null
+  private readonly nozzleHandles = new Map<string, NozzleHandleObject>()
+  /** Target key → the nozzle it names, so a click on a handle resolves back to a ref. */
+  private readonly nozzleRefs = new Map<string, NozzleRef>()
   private readonly engineProxy = new THREE.Group()
 
   // Point-to-point measurement picking.
@@ -286,6 +301,14 @@ export class EditorScene {
       (selected, additive) => {
         if (!selected) {
           if (!additive) clearSelection()
+          return
+        }
+        // A nozzle-exhaust handle is not a document entity — clicking one re-targets the
+        // exhaust gizmo and deliberately leaves the mesh/connector selection alone (the
+        // engine's own SubPart usually IS what's selected while you place its exhaust).
+        if (selected.kind === 'nozzle') {
+          const ref = this.nozzleRefs.get(selected.id)
+          if (ref) setActiveNozzleRef(ref)
           return
         }
         setActiveMeasurement(null) // selecting a mesh closes any measurement edit
@@ -399,7 +422,8 @@ export class EditorScene {
         }
         // Placing a nozzle exhaust: one undo step, no bulk snapshot.
         if (this.attachedObject === this.engineProxy) {
-          pushUndo('exhaust', '')
+          const target = this.activeNozzleTarget()
+          pushUndo(target?.ref.channel === 'fx' ? 'plume FX' : 'exhaust', target?.nozzle.id ?? '')
           return
         }
         const mode = $toolMode.get()
@@ -517,14 +541,16 @@ export class EditorScene {
     this.sub($editKeyframeId, onPreviewChange)
     // Leaving/entering the Animation editor toggles the preview + pose gizmo on/off.
     this.sub($inspectorMode, onPreviewChange)
-    // Engine designer: refresh the exhaust marker + (re)attach the exhaust gizmo when
-    // the active engine / target instance / gizmo toggle / mode changes.
+    // Engine designer: refresh the exhaust markers + (re)attach the exhaust gizmo when the
+    // open engine / target instance / targeted nozzle / gizmo toggle / mode changes. NOT
+    // $resolvedNozzleTargets itself — it also derives from $part, which reconcile() already
+    // covers, so subscribing to it would do every handle pass twice per document edit.
     const onEngineChange = () => {
-      this.applyEngineHandle()
+      this.applyEngineHandles()
       this.updateSelection()
     }
-    this.sub($activeEngineTemplateId, onEngineChange)
-    this.sub($activeEngineInstanceId, onEngineChange)
+    this.sub($activeEngineEntry, onEngineChange)
+    this.sub($activeNozzleRef, onEngineChange)
     this.sub($engineExhaustGizmo, onEngineChange)
     this.sub($inspectorMode, onEngineChange)
     this.sub($selectedIndices, () => this.updateSelection())
@@ -589,7 +615,10 @@ export class EditorScene {
     this.sub($selectionHighlight, () => this.updateSelection())
     this.sub($layerView, () => this.applyLayerView())
     this.sub($hideInterior, () => this.applyLayerView())
-    this.sub($toolMode, (mode) => this.gizmo.setMode(mode))
+    // $effectiveToolMode, not $toolMode: exhaust placement clamps Scale away (a nozzle
+    // placement has nothing to scale), and the toolbar reads the same computed so the
+    // displayed tool always matches the tool a drag performs.
+    this.sub($effectiveToolMode, (mode) => this.gizmo.setMode(mode))
     this.sub($snap, (snap) => this.gizmo.setSnap(snap))
     this.sub($grids, (grids) => this.viewport.grids.setConfig(grids))
     this.sub($cameraSnap, (cmd) => {
@@ -679,7 +708,7 @@ export class EditorScene {
     this.applyLayerView()
     this.updateSelection()
     this.applyAnimationPreview()
-    this.applyEngineHandle()
+    this.applyEngineHandles()
     // Last: the previewed seat may have moved, been re-aimed, or vanished with this change.
     this.applySeatView()
   }
@@ -1582,30 +1611,24 @@ export class EditorScene {
       const m = jointWorld(poseTarget.anim, poseTarget.joint.id, poseTarget.kf.timeSec)
       m.decompose(this.poseProxy.position, this.poseProxy.quaternion, this.poseProxy.scale)
       this.poseProxy.updateMatrixWorld(true)
-      if (this.attachedObject !== this.poseProxy) {
-        this.gizmo.attach(this.poseProxy)
-        this.attachedObject = this.poseProxy
-      }
+      this.attachGizmo(this.poseProxy)
       return
     }
 
-    // Engine designer: when the exhaust gizmo is on, attach it to a proxy at the active
-    // nozzle's exhaust world position so a drag relocates the exhaust point.
-    const engine = this.engineEditTarget()
-    if (engine && $engineExhaustGizmo.get()) {
-      const world = new THREE.Vector3(
-        engine.nozzle.exhaustLocation.x,
-        engine.nozzle.exhaustLocation.y,
-        engine.nozzle.exhaustLocation.z,
-      ).applyMatrix4(engine.instanceMatrix)
-      this.engineProxy.position.copy(world)
-      this.engineProxy.quaternion.identity()
+    // Engine designer: when the exhaust gizmo is on, attach it to a proxy posed at the
+    // targeted nozzle's exhaust POINT and AXIS, so Move relocates the point and Rotate
+    // re-aims the direction. Posing the proxy's rotation (rather than resetting it to
+    // identity) is what makes the rotate rings mean something.
+    const nozzle = this.activeNozzleTarget()
+    if (nozzle && $engineExhaustGizmo.get()) {
+      const pos = exhaustWorldLocation(nozzle.location, nozzle.frame)
+      this.engineProxy.position.set(pos.x, pos.y, pos.z)
+      this.engineProxy.quaternion.copy(
+        aimQuaternion(exhaustWorldDirection(nozzle.direction, nozzle.frame)),
+      )
       this.engineProxy.scale.setScalar(1)
       this.engineProxy.updateMatrixWorld(true)
-      if (this.attachedObject !== this.engineProxy) {
-        this.gizmo.attach(this.engineProxy)
-        this.attachedObject = this.engineProxy
-      }
+      this.attachGizmo(this.engineProxy)
       return
     }
 
@@ -1667,10 +1690,20 @@ export class EditorScene {
     } else {
       target = selected[0]?.group ?? null
     }
+    this.attachGizmo(target)
+  }
+
+  /**
+   * The single gizmo attach point. Re-applies the effective tool mode after every attach,
+   * because what the gizmo is attached TO decides which modes are meaningful (exhaust
+   * placement has no scale) — see {@link $effectiveToolMode}.
+   */
+  private attachGizmo(target: THREE.Object3D | null): void {
     if (target !== this.attachedObject) {
       this.gizmo.attach(target)
       this.attachedObject = target
     }
+    this.gizmo.setMode($effectiveToolMode.get())
   }
 
   /**
@@ -1827,75 +1860,97 @@ export class EditorScene {
   }
 
   /**
-   * The active engine-exhaust edit target while the Engine designer is open: the active
-   * thrust-chamber template's first nozzle, plus the world matrix of the placement
-   * instance it's anchored to (root is at identity, so that's the placement transform —
-   * an unplaced engine anchors at the origin). Null when not applicable.
+   * Every nozzle-exhaust handle to draw right now — the open engine's nozzles across both
+   * flavors and both channels, resolved against `$part` by {@link $resolvedNozzleTargets}.
+   * Empty outside the Engine designer (the engine atoms deliberately survive mode switches,
+   * so the mode gate lives here rather than in the store).
    */
-  private engineEditTarget(): {
-    templateId: string
-    nozzleIndex: number
-    nozzle: DeLavalNozzle
-    instanceMatrix: THREE.Matrix4
-  } | null {
-    if ($inspectorMode.get() !== 'engine') return null
-    const templateId = $activeEngineTemplateId.get()
-    if (!templateId) return null
-    const part = $part.get()
-    const spd = part.subPartGameData.find((s) => s.subPartTemplateId === templateId)
-    const nozzle = spd?.nozzles[0]
-    if (!nozzle) return null
-    const instanceId = $resolvedEngineInstanceId.get()
-    const placement = instanceId
-      ? part.placements.find((p) => p.instanceId === instanceId)
-      : undefined
-    const instanceMatrix = placement ? matrixFromTransform(placement) : new THREE.Matrix4()
-    return { templateId, nozzleIndex: 0, nozzle, instanceMatrix }
+  private nozzleTargets(): NozzleTarget[] {
+    return $inspectorMode.get() === 'engine' ? $resolvedNozzleTargets.get() : []
   }
 
-  /** Shows/positions the exhaust marker for the active engine's nozzle (hidden otherwise). */
-  private applyEngineHandle(): void {
-    const target = this.engineEditTarget()
-    if (!target) {
-      this.engineHandle?.setVisible(false)
-      return
-    }
-    if (!this.engineHandle) {
-      this.engineHandle = new NozzleHandleObject()
-      this.root.add(this.engineHandle.group)
-    }
-    const { nozzle, instanceMatrix } = target
-    const worldPos = new THREE.Vector3(
-      nozzle.exhaustLocation.x,
-      nozzle.exhaustLocation.y,
-      nozzle.exhaustLocation.z,
-    ).applyMatrix4(instanceMatrix)
-    // Direction transforms by the instance's rotation only (no translation).
-    const worldDir = new THREE.Vector3(
-      nozzle.exhaustDirection.x,
-      nozzle.exhaustDirection.y,
-      nozzle.exhaustDirection.z,
-    )
-      .transformDirection(instanceMatrix)
-      .normalize()
-    this.engineHandle.setPose(worldPos, worldDir)
-    this.engineHandle.setVisible(true)
+  /** The one nozzle placement the exhaust gizmo edits, or null. */
+  private activeNozzleTarget(): NozzleTarget | null {
+    return $inspectorMode.get() === 'engine' ? $activeNozzleTarget.get() : null
   }
 
   /**
-   * Writes an exhaust-gizmo drag back to the nozzle's exhaust LOCATION. The proxy's
-   * world position is converted into the placement instance's local (assembly) frame —
-   * exactly where {@link DeLavalNozzle.exhaustLocation} lives. STREAMING (drag-start
-   * pushed undo once).
+   * Reconciles the exhaust markers against {@link nozzleTargets} — create, pose, dim,
+   * remove. Handles are keyed by target key (scope + flavor + index + channel), so a
+   * nozzle removal or an FX override being switched off retires exactly its own handle.
+   * They are disposed rather than merely hidden when the designer closes: they are pickable
+   * now, and a hidden-but-pickable marker would keep stealing clicks (three.js raycasts
+   * invisible objects).
+   */
+  private applyEngineHandles(): void {
+    const targets = this.nozzleTargets()
+    const wanted = new Set(targets.map((t) => t.key))
+    for (const [key, handle] of this.nozzleHandles) {
+      if (wanted.has(key)) continue
+      this.root.remove(handle.group)
+      handle.dispose()
+      this.nozzleHandles.delete(key)
+      this.nozzleRefs.delete(key)
+    }
+    for (const target of targets) {
+      let handle = this.nozzleHandles.get(target.key)
+      if (!handle) {
+        handle = new NozzleHandleObject(target.key, target.ref.channel)
+        this.nozzleHandles.set(target.key, handle)
+        this.root.add(handle.group)
+      }
+      this.nozzleRefs.set(target.key, target.ref)
+      const pos = exhaustWorldLocation(target.location, target.frame)
+      const dir = exhaustWorldDirection(target.direction, target.frame)
+      handle.setPose(new THREE.Vector3(pos.x, pos.y, pos.z), new THREE.Vector3(dir.x, dir.y, dir.z))
+      handle.setActive(target.isActive)
+    }
+  }
+
+  /**
+   * Writes an exhaust-gizmo drag back to the targeted nozzle, in the channel it names.
+   *
+   * - **Move** → the exhaust LOCATION: the proxy's Part-space position converted into the
+   *   owner's assembly frame (which is what the vectors are expressed in — a rotated owner
+   *   carries its exhaust with it, exactly as `Part.MatrixAsmb2VehicleAsmb` composes it).
+   * - **Rotate** → the exhaust DIRECTION: the proxy's local +X, back through the owner's
+   *   rotation. Roll about the exhaust axis is undefined in-game (the plume is axially
+   *   symmetric and `Vehicle.SpawnThrusterSparks` invents an arbitrary basis), so a roll
+   *   drag simply has no effect rather than being locked out.
+   *
+   * The PHYSICS direction is normalized on every write — KSA applies thrust as
+   * `TotalThrust * -ExhaustDirection` **unnormalized** (`VehicleUpdateState.cs:294`), so a
+   * non-unit vector silently rescales thrust. The FX direction keeps its authored MAGNITUDE
+   * (stock ships non-unit FX vectors like `0, 0.550, -1.000`, and every FX consumer
+   * `NormalizeOrZero()`s first) — a re-aim must not quietly renormalize someone's data.
+   *
+   * STREAMING (drag-start pushed undo once).
    */
   private handleEngineGizmoChange(): void {
-    const target = this.engineEditTarget()
+    const target = this.activeNozzleTarget()
     if (!target) return
-    const inv = target.instanceMatrix.clone().invert()
-    const local = this.engineProxy.position.clone().applyMatrix4(inv)
-    updateNozzle(target.templateId, target.nozzleIndex, {
-      exhaustLocation: { x: local.x, y: local.y, z: local.z },
-    })
+    const { ref, frame, nozzle } = target
+    const isFx = ref.channel === 'fx'
+
+    if ($toolMode.get() === 'rotate') {
+      const world = new THREE.Vector3(1, 0, 0).applyQuaternion(this.engineProxy.quaternion)
+      const local = exhaustLocalDirection({ x: world.x, y: world.y, z: world.z }, frame)
+      if (!isFx) {
+        updateNozzleAt(ref, { exhaustDirection: normalizedVec(local) })
+        return
+      }
+      const authored = nozzle.fxExhaustDirection ?? nozzle.exhaustDirection
+      const scale = Math.hypot(authored.x, authored.y, authored.z) || 1
+      const unit = normalizedVec(local)
+      updateNozzleAt(ref, {
+        fxExhaustDirection: { x: unit.x * scale, y: unit.y * scale, z: unit.z * scale },
+      })
+      return
+    }
+
+    const p = this.engineProxy.position
+    const local = exhaustLocalLocation({ x: p.x, y: p.y, z: p.z }, frame)
+    updateNozzleAt(ref, isFx ? { fxExhaustLocation: local } : { exhaustLocation: local })
   }
 
   /** Snapshots all selected entities' transforms at the start of a bulk gizmo drag. */
@@ -2061,11 +2116,12 @@ export class EditorScene {
     this.root.remove(this.pivotHelper)
     this.pivotHelper.dispose()
     this.root.remove(this.engineProxy)
-    if (this.engineHandle) {
-      this.root.remove(this.engineHandle.group)
-      this.engineHandle.dispose()
-      this.engineHandle = null
+    for (const handle of this.nozzleHandles.values()) {
+      this.root.remove(handle.group)
+      handle.dispose()
     }
+    this.nozzleHandles.clear()
+    this.nozzleRefs.clear()
     this.measurements.dispose()
     this.containers.dispose()
     for (const obj of this.objects.values()) obj.dispose()
@@ -2081,6 +2137,24 @@ export class EditorScene {
     this.kittenObjects.clear()
     this.viewport.dispose()
   }
+}
+
+/**
+ * The rotation that takes local **+X** onto `dir` — the exhaust proxy's (and every flexo
+ * marker's) "facing = +X" convention, so the gizmo's rotate rings sit on the exhaust axis.
+ * A degenerate direction falls back to identity rather than producing a NaN quaternion.
+ */
+function aimQuaternion(dir: Vec3): THREE.Quaternion {
+  const v = new THREE.Vector3(dir.x, dir.y, dir.z)
+  if (v.lengthSq() < 1e-18) return new THREE.Quaternion()
+  return new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), v.normalize())
+}
+
+/** Unit-length copy of `v`; a zero vector degenerates to KSA's default exhaust axis (−X). */
+function normalizedVec(v: Vec3): Vec3 {
+  const len = Math.hypot(v.x, v.y, v.z)
+  if (!(len > 0)) return { x: -1, y: 0, z: 0 }
+  return { x: v.x / len, y: v.y / len, z: v.z / len }
 }
 
 /** True when `a` and `b` point along (or against) the same line — where `seatRotationFromAxes` NaNs. */

@@ -18,8 +18,9 @@ An "engine" is a small graph of cooperating GameData modules (see `src/ksa/types
   (1.0 ⇒ on/off), `minimumPulseTimeS`.
 - **`DeLavalNozzle`** (`<DeLavalNozzle>`) — expands the gas → thrust; owns the exhaust
   geometry + plume/light/sound FX. Knobs: `exitDiameterM`, `areaRatio` (required, no
-  NaN), flow/expansion efficiencies, `exhaustLocation`/`exhaustDirection`,
-  `volumetricExhaustId`, sound, light.
+  NaN), flow/expansion efficiencies, `exhaustLocation`/`exhaustDirection`, the optional
+  `fxExhaustLocation`/`fxExhaustDirection` override pair, `volumetricExhaustId`, sound,
+  light. A part or SubPart carries a **list** of nozzles, not one.
 - **`Rocket`** (`<Rocket>`) — binds one `core` (combustor) + N `nozzles` into one firing
   unit. Refs are `SubPartIdRef` (`{ id, subPartInstanceId }`).
 - **`RocketController`** (`<RocketEngineController>` / `<RocketThrusterController>`) — what
@@ -84,18 +85,87 @@ the project's `customReactions` (custom wins on id).
 
 - **Sidebar designer** (`$inspectorMode === 'engine'`, `EnginePanel`/`EngineToolbar`):
   entered from the Add menu ("Define Engine…") or the Assets toolbar "Engine (N)" button.
-  Pick/define an engine on a placed SubPart, watch the **live SL/vacuum thrust + Isp**,
-  edit the chamber/nozzle/FX (picking a mixture reaction exposes an **O/F mixture-ratio**
-  field, defaulted and bounded by the reaction's LUT rows — KSA refuses to load a
-  ratio-less mixture combustor, and the UI warns), place the exhaust with a **3D gizmo**
-  ("Place exhaust in 3D"), wire the controller + gimbals, and author custom propellants.
+  Pick/define an engine, watch the **live SL/vacuum thrust + Isp**, edit the
+  chamber/nozzle/FX (picking a mixture reaction exposes an **O/F mixture-ratio** field,
+  defaulted and bounded by the reaction's LUT rows — KSA refuses to load a ratio-less
+  mixture combustor, and the UI warns), place the exhaust with a **3D gizmo** ("Place
+  exhaust in 3D"), wire the controller + gimbals, and author custom propellants.
+- **Two engine SCOPES, both first-class** (`$engineEntries` in `engineStore.ts`). KSA allows
+  engine hardware under `<PartGameData>` and `<SubPartGameData>` alike
+  (`PartTemplate.RocketNozzles`), and stock uses both:
+  - a **SubPart template** carrying a reusable thrust chamber — the main-engine pattern;
+  - the **part itself** — how stock authors an RCS battery (the MMU puts its whole set of
+    nozzles on the part) and gas-generator cycles. Listed as "Part-level (RCS / gas
+    generator)" whenever `part.gameData` carries any combustor, nozzle or solid motor.
+    Its editors are the primary panel content there; the "Gas generator (advanced)"
+    disclosure stays only under a SubPart engine, where it genuinely is advanced.
 - **Modal sections** (round-trip + no-3D editing): `EngineSections.tsx` renders the
   thrust-chamber editors in **SubPart Data** (`ManageTanksModal`) and the controllers +
   gimbals + gas-generator in **Part Data** (`PartDataButton`, "Engine" section).
-- **3D exhaust handle**: `NozzleHandleObject` (cube + direction cone) marks the active
-  nozzle's exhaust; the `TransformGizmo` attaches to a proxy at the exhaust world position
-  (the pose-pivot precedent in `EditorScene`). A drag streams `updateNozzle` and pushes one
-  undo step on drag-start.
+
+### Placing the exhaust in 3D
+
+`NozzleHandleObject` (cube at the location + cone along the direction) marks **every**
+exhaust in the open engine. `$resolvedNozzleTargets` fans out over three independent axes and
+resolves them against `$part` on every read, so a removed nozzle or placement can never leave
+the gizmo editing the wrong one:
+
+| Axis | Why there is more than one |
+|---|---|
+| **Nozzle list** | A part or SubPart carries a `List<RocketNozzleTemplate>`. The MMU backpack authors **56**. |
+| **Flavor** | `<DeLavalNozzle>` and `<SolidMotorNozzle>` are separate lists on the same owner. |
+| **Placement** | A SubPart-owned nozzle is instantiated **once per placement of its template** — every stock RCS block is ONE `<DeLavalNozzle>` placed 4× at 4 rotations, and each is a real thruster in-game (`Part.cs:1144-1152` makes each `<SubPartRef>` its own child `Part` with its own `RocketNozzle`). |
+| **Channel** | A nozzle with an FX override gets a second, cyan handle. |
+
+- **Every handle is visible and clickable.** The gizmo's target is amber at full opacity,
+  the rest are dimmed; click any handle in the viewport, or any chip under the switch, to
+  re-target. That is what makes an N-bell RCS block legible. Handles are drawn
+  **depth-test-free** because an exhaust point normally sits inside the very bell it
+  describes — and they win the raycast over geometry for the same reason.
+- **The placement axis is N views of ONE document nozzle** — the same rule as a SubPart-owned
+  light or collider. Dragging any handle edits that one nozzle, so its siblings move in sync,
+  each in its own frame (drag a 4-thruster block's `+Y` and you'll see the other three go
+  `−Y`/`+X`/`−X`, because their placements are rotated 90°/180°/270°). This is the schema, not
+  a simplification: there is exactly one `<ExhaustLocation>` in the XML for all four thrusters.
+  Both editors say so — the placement block names the instance you're editing through and the
+  chips read `Nozzle #1…#4`; the numeric nozzle card carries the same note above its vectors,
+  since the fields there move all N too.
+- **To place thrusters independently**, the nozzles have to stop being template-scoped: author
+  one nozzle per thruster on `<PartGameData>` (the part-scope engine entry) with each
+  `ExhaustLocation` in the Part frame, and bind them from a `<Rocket>`. That is how stock
+  authors anything whose thrusters aren't a repeated identical assembly.
+- **Move** drags the exhaust LOCATION, **Rotate** re-aims the exhaust DIRECTION. Roll about
+  the exhaust axis simply does nothing — it is undefined in-game (the plume is axially
+  symmetric and `Vehicle.SpawnThrusterSparks` invents an arbitrary basis), so there is no
+  roll lock to discover. **Scale is disabled** while placing: a nozzle placement has nothing
+  to scale (`$effectiveToolMode` clamps it, and the toolbar shows the clamped tool, so the
+  displayed mode can never disagree with what a drag does).
+- **The FX pair** (`<FxExhaustLocation>`/`<FxExhaustDirection>`) is an explicit override,
+  behind "Override FX placement (plume ≠ thrust)". OFF ⇒ both fields are `null` and KSA
+  inherits the physics pair (`RocketNozzleTemplate.OnDataLoad`); ON seeds both from it. An
+  overridden nozzle grows a second, **cyan** handle — the same colour KSA's own in-game
+  debug overlay uses for its `FxExhaustDirection` arrow, so the overlay reads directly
+  against what you authored.
+- **Frames.** The vectors live in the owning Part/SubPart's assembly frame. The LOCATION
+  goes through the owner's full matrix (**scale included**); the DIRECTION through its
+  rotation only — KSA transforms them by `MatrixAsmb2VehicleAsmb` and `Asmb2VehicleAsmb`
+  respectively (`coords.ts` `exhaust*`). A part-level nozzle is already in Part space.
+- **Magnitude.** Gizmo writes keep the PHYSICS direction unit-length, because KSA applies
+  thrust as `TotalThrust * -ExhaustDirection` **unnormalized** — a non-unit vector is a
+  silent thrust multiplier. Typed input is left verbatim (imports must round-trip) with an
+  inline warning + one-click **Normalize**, and `validateEngines` reports
+  `nozzle-direction-not-unit`. The FX direction keeps its authored magnitude on both paths:
+  stock ships non-unit FX vectors and every FX consumer normalizes first.
+
+A drag streams through `updateNozzleAt` (which dispatches to the right scope+flavor action)
+and pushes one undo step on drag-start — the pose-pivot precedent in `EditorScene`.
+
+> **"My bell points the wrong way and rotating the SubPart doesn't help."** Correct, and not
+> a limitation: the exhaust travels *with* the mesh, because both are composed through the
+> same owner frame. Only `ExhaustDirection` expresses the bell's axis relative to its own
+> mesh. Every stock bell is modelled down **−X** in its own SubPart frame and says
+> `<ExhaustDirection X="-1"/>`; a bell authored along any other axis is fine — set the
+> direction to match (the Rotate handle is the ergonomic way).
 
 ## Plumbing — where the propellant actually comes from (KSA 2026.7.9)
 
@@ -164,8 +234,9 @@ mistakes are warnings, because KSA only logs them.
 
 ## Solid rocket motors (SRBs) — real, since KSA 2026.7.9
 
-A solid booster is the solid-family mirror of the liquid trio, authored under **Part Data →
-Engine → Solid motor (SRB)** (and per-SubPart in SubPart Data):
+A solid booster is the solid-family mirror of the liquid trio, authored in the Engine
+designer's **part-level entry** ("Solid motor hardware") — or under **Part Data → Engine →
+Solid motor (SRB)**, and per-SubPart in SubPart Data:
 
 - **`<SolidMotor>`** — the case. Picks a `Category="Solid"` reaction (APCP / DoubleBase /
   a custom one), a **grain profile** (`Neutral`, `Progressive`, `Regressive`,
@@ -194,7 +265,9 @@ says so. Cloning a shipped solid fills them in.
 part-level controllers + gas-generator + `<SubPart Id><Gimbal>` overlays +
 `<ConsumerFeedWiring>`, and top-level `<FixedReaction>` for each custom propellant (a
 solid one that KSA would refuse to load is skipped with a console warning). Defaults are omitted (efficiencies 1,
-`ExhaustDirection` −X, `ExhaustLight` true, `ConstrainToCircle` true, a 0/0 gimbal). Units:
+`ExhaustDirection` −X, `ExhaustLight` true, `ConstrainToCircle` true, a 0/0 gimbal) — and the
+FX pair is emitted **iff overridden**, since writing it at its inherited value would turn
+KSA's inherit into a hard override. Units:
 `MaxPressure` as Bar, `ExitDiameter` as M (Cm under 1 m), gimbal angles as Degrees,
 `MinimumPulseTime` as Seconds, everything else dimensionless `Value`. The parser
 (`partXmlParser.ts`) is the inverse and converts back to SI; `partCatalog.ts` carries engine

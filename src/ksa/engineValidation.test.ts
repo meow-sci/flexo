@@ -317,6 +317,45 @@ describe('validateEngines — KSA logs and the part misbehaves (warnings)', () =
     p.gameData.combustors[0].feeds = []
     expect(has(p, 'consumer-no-feeds')).toBe(true)
   })
+
+  // RocketNozzleTemplate loads Vector3Reference verbatim and VehicleUpdateState applies
+  // `TotalThrust * ThrustDirectionVehicleAsmb` — so the vector's LENGTH scales thrust.
+  it('flags a non-unit ExhaustDirection (a silent thrust multiplier)', () => {
+    const p = goodLiquidPart()
+    p.gameData.nozzles[0].exhaustDirection = { x: -2, y: 0, z: 0 }
+    const issue = validateEngines(p, REACTIONS).find((i) => i.code === 'nozzle-direction-not-unit')!
+    expect(issue.severity).toBe('warn') // KSA loads it; the thrust is just wrong
+    expect(issue.message).toContain('2.00×')
+  })
+
+  it('flags a zero-length ExhaustDirection', () => {
+    const p = goodLiquidPart()
+    p.gameData.nozzles[0].exhaustDirection = { x: 0, y: 0, z: 0 }
+    const issue = validateEngines(p, REACTIONS).find((i) => i.code === 'nozzle-direction-not-unit')!
+    expect(issue.message).toContain('zero-length')
+  })
+
+  it('checks SubPart-owned and solid nozzles too, and stays quiet on canted unit vectors', () => {
+    const p = goodSolidPart()
+    p.gameData.solidNozzles[0].exhaustDirection = { x: 0, y: 0, z: 3 }
+    p.placements.push(placement('rcs_1', 'Core.Rcs'))
+    p.subPartGameData.push({
+      ...createSubPartGameData('Core.Rcs'),
+      // Core's own RCS vector: unit-length but non-axial — must NOT be flagged.
+      nozzles: [
+        { ...createNozzle('Thruster'), exhaustDirection: { x: 0.707106, y: 0, z: 0.707106 } },
+      ],
+    })
+    expect(
+      codes(validateEngines(p, REACTIONS)).filter((c) => c === 'nozzle-direction-not-unit'),
+    ).toHaveLength(1)
+  })
+
+  it('ignores the FX direction, which stock deliberately ships non-unit', () => {
+    const p = goodLiquidPart()
+    p.gameData.nozzles[0].fxExhaustDirection = { x: 0, y: 0.55, z: -1 }
+    expect(has(p, 'nozzle-direction-not-unit')).toBe(false)
+  })
 })
 
 describe('validateEngines — reaction lookup fallbacks', () => {

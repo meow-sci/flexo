@@ -273,6 +273,74 @@ function signedScaleOrOne(s: number): number {
 }
 
 /**
+ * Lifts a nozzle's exhaust LOCATION out of its owner's assembly frame into Part space,
+ * exactly as KSA composes it (`RocketNozzle.ResetState`, `decomp/KSA/RocketNozzle.cs:103-108`):
+ *
+ * ```csharp
+ * state.ThrustLocationVehicleAsmb = LocationAsmb.Transform(Parent.MatrixAsmb2VehicleAsmb);
+ * ```
+ *
+ * `MatrixAsmb2VehicleAsmb` is `Scale · Rotation · Translation` (`decomp/KSA/Part.cs:217`),
+ * so the owner's **scale DOES apply** to the offset — a nozzle on a placement scaled 2×
+ * really does sit twice as far out in-game. `owner` is the placement the nozzle's
+ * `<SubPartGameData>` travels with, or **null** for a part-level `<PartGameData>` nozzle,
+ * whose vectors already are Part-space (KSA makes the SubPart its own child `Part` with the
+ * `<SubPartRef><Transform>`, `decomp/KSA/Part.cs:1131-1152`).
+ */
+export function exhaustWorldLocation(location: Vec3, owner: Transform | null): Vec3 {
+  if (owner === null) return { ...location }
+  const v = new THREE.Vector3(location.x, location.y, location.z).applyMatrix4(
+    matrixFromTransform(owner),
+  )
+  return { x: v.x, y: v.y, z: v.z }
+}
+
+/** Exact inverse of {@link exhaustWorldLocation} — what a translate drag writes back. */
+export function exhaustLocalLocation(world: Vec3, owner: Transform | null): Vec3 {
+  if (owner === null) return { ...world }
+  const v = new THREE.Vector3(world.x, world.y, world.z).applyMatrix4(
+    matrixFromTransform(owner).invert(),
+  )
+  return { x: v.x, y: v.y, z: v.z }
+}
+
+/**
+ * Lifts a nozzle's exhaust DIRECTION out of its owner's assembly frame into Part space.
+ *
+ * ⚠️ Deliberately **rotation-only** — unlike {@link exhaustWorldLocation}. KSA transforms
+ * the direction by `Parent.Asmb2VehicleAsmb`, a *quaternion* (`RocketNozzle.cs:104,107`;
+ * `Part.cs:644-656`), so a non-uniform owner scale skews the mesh but NOT the thrust axis.
+ * Running the direction through the full matrix (the `Vector3.transformDirection` trap)
+ * would shear it and, worse, write the sheared vector back through the inverse.
+ *
+ * MAGNITUDE IS PRESERVED, not normalized: thrust is applied unnormalized
+ * (`decomp/KSA/VehicleUpdateState.cs`: `TotalThrust * ThrustDirectionVehicleAsmb`) so the
+ * physics vector's length is real data, and stock ships non-unit FX vectors
+ * (`0, 0.550, -1.000`). Normalizing is the caller's policy decision, per channel.
+ */
+export function exhaustWorldDirection(direction: Vec3, owner: Transform | null): Vec3 {
+  if (owner === null) return { ...direction }
+  const v = new THREE.Vector3(direction.x, direction.y, direction.z).applyQuaternion(
+    ownerQuat(owner),
+  )
+  return { x: v.x, y: v.y, z: v.z }
+}
+
+/** Exact inverse of {@link exhaustWorldDirection} — what a rotate drag writes back. */
+export function exhaustLocalDirection(world: Vec3, owner: Transform | null): Vec3 {
+  if (owner === null) return { ...world }
+  const v = new THREE.Vector3(world.x, world.y, world.z).applyQuaternion(ownerQuat(owner).invert())
+  return { x: v.x, y: v.y, z: v.z }
+}
+
+/** The owner placement's rotation as a quaternion, through the calibrated euler order. */
+function ownerQuat(owner: Transform): THREE.Quaternion {
+  return new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(owner.rotation.x, owner.rotation.y, owner.rotation.z, EULER_ORDER),
+  )
+}
+
+/**
  * The AIM of a light rotation: the rotated local **+X** unit vector — KSA aims a
  * Spot along `double3.UnitX.Transform(rotationValue)` (`LightModule.cs:115`), the
  * same "facing = local +X" convention as every flexo marker. Feed it a light's

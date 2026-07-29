@@ -4,6 +4,10 @@ import {
   applyPlacement,
   colliderLocalFromWorld,
   colliderWorld,
+  exhaustLocalDirection,
+  exhaustLocalLocation,
+  exhaustWorldDirection,
+  exhaustWorldLocation,
   lightAimRotation,
   lightLocalFromWorld,
   lightWorld,
@@ -342,5 +346,77 @@ describe('lightAimRotation (aim-vector commit — ΔQ · R, plan §3.9-7)', () =
   it('rejects a degenerate (≈zero) aim with null — the caller keeps the prior rotation', () => {
     expect(lightAimRotation({ x: 0.2, y: 0.4, z: -0.6 }, { x: 0, y: 0, z: 0 })).toBeNull()
     expect(lightAimRotation({ x: 0, y: 0, z: 0 }, { x: 1e-9, y: -1e-9, z: 0 })).toBeNull()
+  })
+})
+
+/**
+ * Nozzle exhaust frames. The asymmetry is the whole point and is load-bearing:
+ * `RocketNozzle.ResetState` (`decomp/KSA/RocketNozzle.cs:103-108`) transforms the LOCATION
+ * by `Parent.MatrixAsmb2VehicleAsmb` (= `Scale · Rotation · Translation`, `Part.cs:217`) but
+ * the DIRECTION by `Parent.Asmb2VehicleAsmb`, a bare quaternion. Running the direction
+ * through the full matrix would shear it under a non-uniform owner scale — and then write
+ * the sheared vector back through the inverse.
+ */
+describe('coords exhaust frames', () => {
+  const owner: Transform = {
+    position: { x: 1.5, y: -2, z: 0.25 },
+    rotation: { x: 0.3, y: -0.7, z: 1.1 },
+    scale: { x: 2, y: 3, z: 0.5 }, // deliberately non-uniform
+  }
+  const expectVec = (a: Vec3, b: Vec3, digits = 10) => {
+    expect(a.x).toBeCloseTo(b.x, digits)
+    expect(a.y).toBeCloseTo(b.y, digits)
+    expect(a.z).toBeCloseTo(b.z, digits)
+  }
+
+  it('applies the owner SCALE to the exhaust location (KSA composes the full matrix)', () => {
+    const scaled: Transform = { ...owner, rotation: { x: 0, y: 0, z: 0 } }
+    const world = exhaustWorldLocation({ x: 1, y: 1, z: 1 }, scaled)
+    // position + scale ∘ local, with no rotation to confuse it.
+    expectVec(world, { x: 1.5 + 2, y: -2 + 3, z: 0.25 + 0.5 })
+  })
+
+  it('does NOT apply the owner scale to the exhaust direction (rotation only)', () => {
+    // A −X axis under a scale-only owner must stay exactly −X, not (−2,0,0).
+    const scaleOnly: Transform = {
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 2, y: 3, z: 0.5 },
+    }
+    expectVec(exhaustWorldDirection({ x: -1, y: 0, z: 0 }, scaleOnly), { x: -1, y: 0, z: 0 })
+  })
+
+  it('rotates the direction exactly as applyPlacement rotates the mesh', () => {
+    const obj = new THREE.Object3D()
+    applyPlacement(obj, owner)
+    const local = { x: -1, y: 0, z: 0 }
+    const expected = new THREE.Vector3(local.x, local.y, local.z).applyQuaternion(obj.quaternion)
+    expectVec(exhaustWorldDirection(local, owner), {
+      x: expected.x,
+      y: expected.y,
+      z: expected.z,
+    })
+  })
+
+  it('preserves a non-unit direction MAGNITUDE (stock ships non-unit FX vectors)', () => {
+    const local = { x: 0, y: 0.55, z: -1 } // verbatim from Core's RCS FxExhaustDirection
+    const world = exhaustWorldDirection(local, owner)
+    expect(Math.hypot(world.x, world.y, world.z)).toBeCloseTo(Math.hypot(0, 0.55, -1), 10)
+  })
+
+  it('round-trips location and direction through the owner frame', () => {
+    const loc = { x: -1.23, y: 0.4, z: 0.75 }
+    const dir = { x: 0.707106, y: 0, z: 0.707106 }
+    expectVec(exhaustLocalLocation(exhaustWorldLocation(loc, owner), owner), loc)
+    expectVec(exhaustLocalDirection(exhaustWorldDirection(dir, owner), owner), dir)
+  })
+
+  it('is the identity for a part-level nozzle (null owner ⇒ already Part space)', () => {
+    const loc = { x: 3, y: -1, z: 0.5 }
+    const dir = { x: 0, y: 1, z: 0 }
+    expectVec(exhaustWorldLocation(loc, null), loc)
+    expectVec(exhaustLocalLocation(loc, null), loc)
+    expectVec(exhaustWorldDirection(dir, null), dir)
+    expectVec(exhaustLocalDirection(dir, null), dir)
   })
 })

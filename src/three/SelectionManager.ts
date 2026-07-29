@@ -1,8 +1,11 @@
 import * as THREE from 'three'
 
-/** What a hit object resolves to: a SubPart instance, connector, collider, IVA seat, kitten, or light. */
+/**
+ * What a hit object resolves to: a SubPart instance, connector, collider, IVA seat, kitten,
+ * light, or an Engine-designer nozzle-exhaust handle (`id` = the nozzle target key).
+ */
 export interface Selectable {
-  kind: 'subpart' | 'connector' | 'collider' | 'ivaSeat' | 'kitten' | 'light'
+  kind: 'subpart' | 'connector' | 'collider' | 'ivaSeat' | 'kitten' | 'light' | 'nozzle'
   id: string
   /**
    * Which VISUAL of a multi-instance entity was hit. Only SubPart-owned colliders and
@@ -69,14 +72,16 @@ export class SelectionManager {
 
     const additive = e.metaKey || e.ctrlKey || e.shiftKey
     const hits = this.raycaster.intersectObjects(this.root.children, true)
-    for (const hit of hits) {
-      const selectable = findSelectable(hit.object)
-      if (selectable) {
-        this.onSelect(selectable, additive)
-        return
-      }
-    }
-    this.onSelect(null, additive)
+    const resolved = hits
+      .map((hit) => findSelectable(hit.object))
+      .filter((s): s is Selectable => s !== null)
+    // Nozzle-exhaust handles win over distance: they are drawn depth-test-free precisely
+    // because an exhaust point sits inside the bell that describes it, so honouring depth
+    // order here would make a visible handle unclickable (the mesh in front of it wins).
+    // They only exist while the Engine designer is placing exhaust, so nothing else is
+    // shadowed by this rule.
+    const nozzle = resolved.find((s) => s.kind === 'nozzle')
+    this.onSelect(nozzle ?? resolved[0] ?? null, additive)
   }
 
   dispose(): void {

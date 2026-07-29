@@ -4,7 +4,7 @@ import { Boxes, Clapperboard, Rocket } from 'lucide-react'
 import { Toolbar, Button } from './kit'
 import { $part } from '../state/editorStore'
 import { setInspectorMode } from '../state/uiStore'
-import { $engineTemplateIds } from '../state/engineStore'
+import { $engineEntries } from '../state/engineStore'
 import { LayersButton } from './LayersButton'
 import { CustomAssetsModal } from './CustomAssetsModal'
 
@@ -16,11 +16,13 @@ import { CustomAssetsModal } from './CustomAssetsModal'
  */
 export function AssetsToolbar() {
   const part = useStore($part)
-  const engineTemplateIds = useStore($engineTemplateIds)
+  const engineEntries = useStore($engineEntries)
   const [customOpen, setCustomOpen] = useState(false)
   const customCount = part.customTextures.length + part.customMeshes.length
   const animCount = part.animations.length
-  const engineCount = engineTemplateIds.length
+  // Counts engine SCOPES, so a part whose engine hardware lives on `<PartGameData>` (the
+  // stock RCS pattern) shows up too rather than reading as "no engines".
+  const engineCount = engineEntries.length
 
   return (
     <>

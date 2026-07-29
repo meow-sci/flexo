@@ -155,6 +155,34 @@ pushed into the existing shell materials as a uniform, which is what makes dragg
 Intensity field re-shade live. The unit sphere the shells instance is one module-level
 geometry shared by every light and is never disposed per object.
 
+### Nozzle-exhaust handles
+
+A `NozzleHandleObject` marks one nozzle exhaust placement while the Engine designer is open
+(see [engines.md](./engines.md)): a cube at the LOCATION plus a cone along the DIRECTION, the
+`ConnectorObject` cube+cone language with the cone aimed at an arbitrary vector instead of
+local +X. They differ from every other marker in three deliberate ways:
+
+- **N per engine, not one.** `EditorScene` reconciles a `Map<targetKey, NozzleHandleObject>`
+  from `$resolvedNozzleTargets` — one handle per nozzle × flavor × **placement of the owning
+  template** × channel, amber for the thrust pair and **cyan** for an FX override (KSA's own
+  debug-arrow colours). The gizmo's target is at full opacity, the rest dimmed. The placement
+  axis is the collider/light multi-instance pattern again (a SubPart-owned nozzle is
+  instantiated per placement, which is how a stock RCS block gets 4 thrusters from one
+  `<DeLavalNozzle>`), so a drag through one handle moves its siblings in sync — the
+  `NozzleRef` names the placement its write-back frame comes from, exactly as
+  `$lightEditContext` does for lights. Handles are **disposed**, not hidden, when the designer
+  closes: three.js raycasts invisible objects, so a hidden-but-pickable marker would keep
+  stealing clicks.
+- **`depthTest: false`** (plus `renderOrder`), because an exhaust point sits inside or at the
+  lip of the very bell it describes — a depth-tested marker would be swallowed by it.
+  `SelectionManager` therefore also lets a `kind: 'nozzle'` hit **win over distance**, since
+  honouring depth order would make a visibly-on-top handle unclickable.
+- **Clicking one is not a document selection.** It routes to `setActiveNozzleRef` and leaves
+  the mesh/connector selection untouched (the engine's own SubPart is usually what's
+  selected while you place its exhaust). The gizmo still drags a *proxy*
+  (`engine-exhaust-proxy`), like the animation pose pivot — posed with both the position and
+  the orientation of the exhaust axis, which is what gives the rotate rings meaning.
+
 ### Seat view (the IVA camera preview)
 
 `Viewport` has a second camera mode. `EditorScene` resolves `$seatView` (a seat **id**) against

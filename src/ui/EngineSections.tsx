@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useStore } from '@nanostores/react'
-import { Button, ListBoxItem, Select, Switch, TextField } from './kit'
+import { Button, cn, ListBoxItem, noteBox, Select, Switch, TextField, warningBox } from './kit'
 import { PreciseNumberInput } from './PreciseNumberInput'
 import { Vec3Field } from './Vec3Field'
 import { Field, ItemCard } from './GameDataSections'
@@ -64,6 +64,7 @@ import {
   updateRocketController,
 } from '../state/editorStore'
 import { addCustomReaction, removeCustomReaction, updateCustomReaction } from '../state/editorStore'
+import { UNIT_EPSILON } from '../ksa/engineValidation'
 import { $allReactionIndex, $allReactions, ensureReactionsLoaded } from '../state/reactionStore'
 import { mixtureRatioBounds, reactionDataToCustom, type ReactionData } from '../ksa/reactionCatalog'
 import {
@@ -91,6 +92,7 @@ import {
   type RocketControllerKind,
   type SubPartGameData,
   type SubPartIdRef,
+  type Vec3,
 } from '../ksa/types'
 
 const LABEL = 'text-xs text-fg-subtle'
@@ -338,14 +340,17 @@ function CombustorFields({
 function NozzleFields({
   nozzle,
   onUpdate,
+  instanceCount,
 }: {
   nozzle: DeLavalNozzle
   onUpdate: (patch: Partial<DeLavalNozzle>) => void
+  instanceCount?: number
 }) {
   return (
     <RocketNozzleFields
       nozzle={nozzle}
       onUpdate={onUpdate}
+      instanceCount={instanceCount}
       throat={
         <Field label="Area ratio (exit / throat)">
           <PreciseNumberInput
@@ -369,14 +374,17 @@ function NozzleFields({
 function SolidNozzleFields({
   nozzle,
   onUpdate,
+  instanceCount,
 }: {
   nozzle: SolidMotorNozzle
   onUpdate: (patch: Partial<SolidMotorNozzle>) => void
+  instanceCount?: number
 }) {
   return (
     <RocketNozzleFields
       nozzle={nozzle}
       onUpdate={onUpdate}
+      instanceCount={instanceCount}
       throat={
         <p className="text-[11px] leading-snug text-fg-subtle">
           KSA sizes the throat automatically (exit area ÷ 12) — solid nozzles have no area ratio.
@@ -394,12 +402,26 @@ function RocketNozzleFields({
   nozzle,
   onUpdate,
   throat,
+  instanceCount,
 }: {
   nozzle: SolidMotorNozzle
   onUpdate: (patch: Partial<SolidMotorNozzle>) => void
   throat: React.ReactNode
+  /**
+   * How many times this nozzle's owning SubPart template is placed — i.e. how many real
+   * thrusters these ONE set of numbers drives. Omitted (or 1) for part-level nozzles and
+   * template-scoped editing where there is nothing to disambiguate.
+   */
+  instanceCount?: number
 }) {
   const begin = () => pushUndo('edit nozzle', '')
+  // The FX pair is ONE authoring decision (KSA nulls fall back to the physics pair
+  // independently, but authoring them independently is a trap: the fields would read as
+  // live while one of them changed nothing). Either field being set means "overridden";
+  // the switch seeds both from the physics pair and clears both.
+  const fxOverride = nozzle.fxExhaustLocation !== null || nozzle.fxExhaustDirection !== null
+  const fxLocation = nozzle.fxExhaustLocation ?? nozzle.exhaustLocation
+  const fxDirection = nozzle.fxExhaustDirection ?? nozzle.exhaustDirection
   return (
     <>
       <Field label="Exit diameter (m)">
@@ -432,6 +454,18 @@ function RocketNozzleFields({
           onCommit={(pct) => onUpdate({ expansionEfficiency: clamp01(pct / 100) })}
         />
       </Field>
+      {instanceCount != null && instanceCount > 1 && (
+        <div className={cn(noteBox, 'text-[11px] leading-snug')}>
+          <span>
+            These vectors are <b>shared by all {instanceCount} placements</b> of this SubPart — KSA
+            instantiates this one <code>&lt;DeLavalNozzle&gt;</code> per placement, so the numbers
+            below drive {instanceCount} thrusters at once. They are in each placement's OWN frame,
+            so a rotated instance moves the opposite way in world space (that is what aims each
+            thruster outward). To place thrusters independently, author a nozzle per thruster at{' '}
+            <b>part level</b> instead.
+          </span>
+        </div>
+      )}
       <div className="flex flex-col gap-1">
         <span className={LABEL}>Exhaust location (m)</span>
         <Vec3Field
@@ -451,7 +485,62 @@ function RocketNozzleFields({
             onUpdate({ exhaustDirection: { ...nozzle.exhaustDirection, [axis]: v } })
           }
         />
+        <p className="text-[11px] leading-snug text-fg-subtle">
+          The direction gas LEAVES; thrust acts along −this. Stock bells point down −X in their own
+          SubPart frame. Rotating the SubPart rotates mesh and exhaust together, so only this vector
+          can fix a bell whose axis isn't −X.
+        </p>
+        <DirectionLengthWarning
+          direction={nozzle.exhaustDirection}
+          onNormalize={(unit) => {
+            pushUndo('normalize direction', nozzle.id)
+            onUpdate({ exhaustDirection: unit })
+          }}
+        />
       </div>
+      <Switch
+        isSelected={fxOverride}
+        onChange={(on) => {
+          pushUndo('edit nozzle', nozzle.id)
+          onUpdate(
+            on
+              ? {
+                  fxExhaustLocation: { ...nozzle.exhaustLocation },
+                  fxExhaustDirection: { ...nozzle.exhaustDirection },
+                }
+              : { fxExhaustLocation: null, fxExhaustDirection: null },
+          )
+        }}
+      >
+        Override FX placement (plume ≠ thrust)
+      </Switch>
+      {fxOverride && (
+        <div className="flex flex-col gap-2 rounded-md border border-border bg-panel-sunken p-2">
+          <p className="text-[11px] leading-snug text-fg-subtle">
+            Where the visible plume comes from, independent of where thrust is applied — stock uses
+            it to cant an RCS plume off the hull while thrust stays axial. Off ⇒ both inherit the
+            physics pair (KSA's own fallback). Cyan handle in the 3D viewport.
+          </p>
+          <div className="flex flex-col gap-1">
+            <span className={LABEL}>FX location (m)</span>
+            <Vec3Field
+              value={fxLocation}
+              onInteractionStart={begin}
+              onCommit={(axis, v) => onUpdate({ fxExhaustLocation: { ...fxLocation, [axis]: v } })}
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className={LABEL}>FX direction (any length — visual only)</span>
+            <Vec3Field
+              value={fxDirection}
+              onInteractionStart={begin}
+              onCommit={(axis, v) =>
+                onUpdate({ fxExhaustDirection: { ...fxDirection, [axis]: v } })
+              }
+            />
+          </div>
+        </div>
+      )}
       <Field label="FX exit diameter (m, 0 = match exit — visual only)">
         <PreciseNumberInput
           aria-label="FX exit diameter in meters"
@@ -510,6 +599,45 @@ function RocketNozzleFields({
         Exhaust light
       </Switch>
     </>
+  )
+}
+
+/**
+ * Warns when a nozzle's PHYSICS exhaust direction isn't unit-length, with a one-click fix.
+ *
+ * KSA applies thrust as `TotalThrust * -ExhaustDirection` **unnormalized**
+ * (`decomp/KSA/VehicleUpdateState.cs:294`) and `Vector3Reference` does no normalizing at
+ * load, so a `(0,0,-2)` direction silently doubles the engine's thrust and a `(0,0,-0.5)`
+ * halves it — a bug with no in-game symptom other than wrong numbers. The value is left
+ * VERBATIM rather than auto-corrected: that is how the XML is authored, imported content
+ * must round-trip unchanged, and a silent rewrite would hide the very mistake being flagged.
+ * (The 3D rotate handle always writes unit vectors, so this only ever fires on typed input
+ * or an import.) Renders nothing when the length is already 1 within {@link UNIT_EPSILON}.
+ */
+function DirectionLengthWarning({
+  direction,
+  onNormalize,
+}: {
+  direction: Vec3
+  onNormalize: (unit: Vec3) => void
+}) {
+  const len = Math.hypot(direction.x, direction.y, direction.z)
+  if (Math.abs(len - 1) <= UNIT_EPSILON) return null
+  const unit: Vec3 =
+    len > 0
+      ? { x: direction.x / len, y: direction.y / len, z: direction.z / len }
+      : { x: -1, y: 0, z: 0 } // KSA's default axis; a zero vector has no direction to keep
+  return (
+    <div className={cn(warningBox, 'flex items-start justify-between gap-2')}>
+      <span className="min-w-0">
+        {len > 0
+          ? `Length ${len.toFixed(4)}, not 1 — KSA multiplies thrust by it, so this engine pushes ${len.toFixed(2)}× its rated thrust.`
+          : 'Zero length — this nozzle applies no thrust and has no plume axis.'}
+      </span>
+      <Button size="sm" className="shrink-0" onPress={() => onNormalize(unit)}>
+        Normalize
+      </Button>
+    </div>
   )
 }
 
@@ -698,11 +826,15 @@ const clampThrottle = (n: number) => Math.min(1, Math.max(0.01, n))
  * every prefab reusing it inherits the engine (the controller + gimbals are per-part).
  */
 export function SubPartEngineSection({ spd }: { spd: SubPartGameData }) {
+  const part = useStore($part)
   const tid = spd.subPartTemplateId
   // A <Rocket>'s <Core Id>/<Nozzle Id> may name either family, so both are offered
   // (mixing them is a load error, which engineValidation flags).
   const combustorIds = [...spd.combustors.map((c) => c.id), ...spd.solidMotors.map((m) => m.id)]
   const nozzleIds = [...spd.nozzles.map((n) => n.id), ...spd.solidNozzles.map((n) => n.id)]
+  // How many real thrusters each nozzle here drives: KSA instantiates a SubPart-owned nozzle
+  // once per placement of its template, so ONE set of exhaust vectors serves them all.
+  const instanceCount = part.placements.filter((p) => p.subPartTemplateId === tid).length
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
@@ -725,7 +857,11 @@ export function SubPartEngineSection({ spd }: { spd: SubPartGameData }) {
       <div className="flex flex-col gap-2">
         {spd.nozzles.map((n, i) => (
           <ItemCard key={i} title={`Nozzle — ${n.id}`} onRemove={() => removeNozzle(tid, i)}>
-            <NozzleFields nozzle={n} onUpdate={(patch) => updateNozzle(tid, i, patch)} />
+            <NozzleFields
+              nozzle={n}
+              instanceCount={instanceCount}
+              onUpdate={(patch) => updateNozzle(tid, i, patch)}
+            />
           </ItemCard>
         ))}
         <Button size="sm" onPress={() => addNozzle(tid)} className="self-start">
@@ -755,6 +891,7 @@ export function SubPartEngineSection({ spd }: { spd: SubPartGameData }) {
           >
             <SolidNozzleFields
               nozzle={n}
+              instanceCount={instanceCount}
               onUpdate={(patch) => updateSubPartSolidNozzle(tid, i, patch)}
             />
           </ItemCard>

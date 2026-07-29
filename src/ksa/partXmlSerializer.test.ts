@@ -635,6 +635,65 @@ describe('serializeGameData', () => {
     expect(child(noz, 'ExhaustLight')!.getAttribute('Value')).toBe('false')
   })
 
+  // The FX pair is KSA's inherit-vs-override switch: `RocketNozzleTemplate.OnDataLoad`
+  // copies the physics pair into whichever of the two is absent. Emitting the fields at
+  // their inherited values would be lossless in-game but would turn an inherit into a hard
+  // override in the XML — so the "Override FX placement" switch OFF must emit NOTHING.
+  it('omits both FxExhaust elements when the FX placement is not overridden', () => {
+    const part2 = editingPart({
+      subPartGameData: [
+        {
+          ...createSubPartGameData('T'),
+          nozzles: [
+            {
+              ...createNozzle('N'),
+              exhaustLocation: { x: -1.2, y: 0, z: 0 },
+              exhaustDirection: { x: 0, y: 0, z: -1 },
+              fxExhaustLocation: null,
+              fxExhaustDirection: null,
+            },
+          ],
+        },
+      ],
+    })
+    const noz = tags(parse(serializeGameData(part2)), 'DeLavalNozzle')[0]
+    expect(child(noz, 'ExhaustLocation')!.getAttribute('X')).toBe('-1.2')
+    expect(child(noz, 'ExhaustDirection')!.getAttribute('Z')).toBe('-1')
+    expect(child(noz, 'FxExhaustLocation')).toBeNull()
+    expect(child(noz, 'FxExhaustDirection')).toBeNull()
+  })
+
+  it('emits each overridden FxExhaust element independently, non-unit magnitude intact', () => {
+    // Verbatim from Core's RCS authoring: an FX location override with the direction still
+    // inherited, and (second nozzle) a deliberately non-unit FX direction.
+    const part2 = editingPart({
+      subPartGameData: [
+        {
+          ...createSubPartGameData('T'),
+          nozzles: [
+            {
+              ...createNozzle('LocOnly'),
+              fxExhaustLocation: { x: -0.05, y: 0.22, z: 0.315 },
+              fxExhaustDirection: null,
+            },
+            {
+              ...createNozzle('Desynced'),
+              exhaustDirection: { x: 0, y: 0, z: -1 },
+              fxExhaustLocation: { x: -0.16, y: 0.23, z: 0.312 },
+              fxExhaustDirection: { x: 0, y: 0.55, z: -1 },
+            },
+          ],
+        },
+      ],
+    })
+    const [locOnly, desynced] = tags(parse(serializeGameData(part2)), 'DeLavalNozzle')
+    expect(child(locOnly, 'FxExhaustLocation')!.getAttribute('Y')).toBe('0.22')
+    expect(child(locOnly, 'FxExhaustDirection')).toBeNull()
+    expect(child(desynced, 'FxExhaustLocation')!.getAttribute('X')).toBe('-0.16')
+    expect(child(desynced, 'FxExhaustDirection')!.getAttribute('Y')).toBe('0.55')
+    expect(child(desynced, 'FxExhaustDirection')!.getAttribute('Z')).toBe('-1')
+  })
+
   it('emits the part-level controller, gas-generator, and gimbal overlays', () => {
     const enginePart = editingPart({
       gameData: {

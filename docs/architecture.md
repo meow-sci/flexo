@@ -97,6 +97,15 @@ and [scope/plumbing-and-feeds.md](../scope/plumbing-and-feeds.md).
 - Package manager: **pnpm**. Scripts: `pnpm dev`, `pnpm build`, `pnpm typecheck`,
   `pnpm lint`, `pnpm fmt`, `pnpm test`. (The standalone `scripts/` mini-workspace
   runs on Bun instead — see `scripts/CLAUDE.md`.)
+- **Two builds, not one.** `pnpm build` is `tsc -b && vite build && vite build
+  apps/partpreview`: the editor SPA (single entry, `base: '/flexo/'`, output `dist/`)
+  followed by each **mini app** under `apps/<name>/` — its own Vite root, config and
+  bundle, built into `dist/apps/<name>/`. They are separate builds precisely so the
+  editor's chunk graph is untouched (a second `rollupOptions.input` would hoist shared
+  modules into common chunks). Mini apps import shared code straight from `src/` and
+  fetch the heavyweight static assets from the main app's copy via `assetBase()` /
+  `VITE_ASSET_BASE` rather than duplicating them. Today's only mini app is
+  `apps/partpreview/` — see [wiki part preview](./wiki-part-preview.md).
 - **React Compiler** runs in the Vite build (babel-plugin-react-compiler via
   `@rolldown/plugin-babel`) and auto-memoizes every component/hook — the codebase
   contains no manual `useMemo`/`useCallback`/`React.memo`. Rules-of-React are
@@ -115,3 +124,4 @@ and [scope/plumbing-and-feeds.md](../scope/plumbing-and-feeds.md).
 - [Part XML serialize/parse](./xml-io.md)
 - [Texturing](./texturing.md)
 - [Asset pipeline & production build](./asset-pipeline.md)
+- [Wiki part preview mini app](./wiki-part-preview.md)

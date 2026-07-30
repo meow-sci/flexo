@@ -14,6 +14,32 @@ The KTX2 transcoder worker assets are addressed from `/basis/` and live in
 `public/basis/` — Vite copies `public/` into `dist/` automatically, so those work in
 the production build already. Only the `/ksa/` assets need the plugin below.
 
+### `assetBase()` — one copy, two consumers
+
+Those three prefixes (`ksa/`, `hdr/`, `basis/`) are **not** resolved against
+`import.meta.env.BASE_URL` directly. They go through `assetBase()`
+(`src/assetBase.ts`), which returns `import.meta.env.VITE_ASSET_BASE ||
+import.meta.env.BASE_URL`. Call sites: `src/ksa/catalog.ts` (`toUrl`, i.e. every
+catalog/mesh/texture URL), `src/three/textureSupport.ts` (KTX2 transcoder) and
+`src/three/SceneEnvironment.ts` (HDR).
+
+The main app never sets `VITE_ASSET_BASE`, so there `assetBase() ≡ BASE_URL` and nothing
+changed. The **second consumer** is the `apps/partpreview/` mini app (see
+[wiki-part-preview.md](./wiki-part-preview.md)), whose own base is
+`/flexo/apps/partpreview/`: its build `define`s `VITE_ASSET_BASE` to `'/flexo/'` so it
+downloads the *main* app's copy of these assets. `dist/apps/partpreview/` therefore
+contains **no `ksa/`, `hdr/` or `basis/` copy at all** — its config omits the
+`ksaAssets()` plugin on build and sets `publicDir: false`. In dev the mini app serves
+them itself under its own base (plugin included, `publicDir` pointed at the repo's
+`public/`), which is why `VITE_ASSET_BASE` is its own base there.
+
+`assetBase()` must always be called **inside a function body**, never at module scope:
+the `catalog.ts → partCatalog.ts → partXmlParser.ts` chain is imported from Node by the
+`previewManifest` Vite plugin, where `import.meta.env` does not exist.
+
+`loadModelFile.ts` (Draco) and `projectShareLink.ts` deliberately stay on `BASE_URL` —
+the importer and share links are main-app-only.
+
 ## `public/draco/` — the Draco decoder for model import
 
 `public/draco/` holds the committed Draco glTF decoder (`draco_decoder.js`,
@@ -85,13 +111,21 @@ If `KSA_ASSETS_DIR` is unset or the directory is missing, the plugin warns (dev:
 ## Base path / sub-path deploy
 
 The app ships under **`/flexo/`** (`base: '/flexo/'` in `vite.config.ts`), e.g.
-`https://meow.science.fail/flexo/`. The `/ksa/` and `/basis/` URL prefixes respect
-`import.meta.env.BASE_URL`, so they resolve to `/flexo/ksa/…` and `/flexo/basis/…`:
-- `src/ksa/catalog.ts` (`KSA_BASE`, used by all catalog/mesh/texture URLs),
+`https://meow.science.fail/flexo/`. The `/ksa/`, `/hdr/` and `/basis/` URL prefixes
+respect the shared-asset base (`assetBase()` above, which for the main app is
+`import.meta.env.BASE_URL`), so they resolve to `/flexo/ksa/…`, `/flexo/hdr/…` and
+`/flexo/basis/…`:
+- `src/ksa/catalog.ts` (`toUrl`, used by all catalog/mesh/texture URLs),
 - `src/three/textureSupport.ts` (KTX2 transcoder path),
+- `src/three/SceneEnvironment.ts` (HDR environments),
 - `src/three/debugCalibration.ts` (uses `toUrl`).
 
 The `ksaAssets()` dev middleware matches `${base}ksa/` (also base-aware).
+
+Mini apps deploy **under** that base — `apps/partpreview/` is
+`base: '/flexo/apps/partpreview/'` with output `dist/apps/partpreview/` — and point
+`VITE_ASSET_BASE` back at `/flexo/` so a sub-path deploy still has exactly one copy of
+the heavyweight assets.
 
 ## CI / deploy
 
@@ -123,10 +157,17 @@ pnpm build
 #   dist/ksa/Meshes/CoreStructuralA_MeshAtlas.glb                  (.glb)
 #   dist/ksa/Textures/CoreStructuralA_TextureAtlas_Diffuse.ktx2    (.ktx2)
 #   dist/basis/basis_transcoder.wasm                  (copied by Vite from public/)
-pnpm preview   # serves dist/; add a SubPart and confirm it renders textured
+# the mini apps' own bundles — note there is NO ksa/, hdr/ or basis/ here:
+#   dist/apps/partpreview/index.html
+#   dist/apps/partpreview/assets/*.js|css
+#   dist/apps/partpreview/manifest.json      (part_ids / skybox_ids / ksa_build)
+pnpm preview   # serves ALL of dist/ at /flexo/; add a SubPart and confirm it renders
+               # textured, then open /flexo/apps/partpreview/?part_id=<id>
 ```
 
 ## Current status
 - ✅ Dev (`pnpm dev`): `/ksa/*` served from `KSA_ASSETS_DIR`; `/basis/*` from `public/`.
 - ✅ Build (`pnpm build`): `/basis/*` from `public/`; `/ksa/*` emitted by the
   `writeBundle` hook (full `KSA_ASSETS_DIR` tree copied into `dist/ksa/`).
+- ✅ Mini apps (`dist/apps/*`): no asset copy of their own — every `ksa/`, `hdr/` and
+  `basis/` URL resolves to the main app's `/flexo/` copy via `VITE_ASSET_BASE`.

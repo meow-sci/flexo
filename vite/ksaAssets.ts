@@ -42,7 +42,10 @@ export function ksaAssets(): Plugin {
       urlPrefix = `${config.base}ksa/`
       // loadEnv with an empty prefix reads unprefixed vars from .env* files and
       // the shell (Vite only exposes VITE_-prefixed vars to import.meta.env).
-      const dir = loadEnv(config.mode, config.root, '').KSA_ASSETS_DIR
+      // `envDir` (not `root`) is where Vite looks for .env files — identical to `root`
+      // for the main app, but a mini app under apps/<name>/ points `envDir` back at the
+      // repo root so the shared .env (KSA_ASSETS_DIR) is still found.
+      const dir = loadEnv(config.mode, config.envDir, '').KSA_ASSETS_DIR
       if (dir) assetsDir = resolve(config.root, dir)
     },
     // Emit the assets the app fetches at /ksa/* into dist/ksa/ for production.

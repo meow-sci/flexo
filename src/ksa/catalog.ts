@@ -9,6 +9,7 @@
  * <PartModel><Mesh Id="..."/> and exist as named nodes inside the atlas GLB.
  */
 
+import { assetBase } from '../assetBase'
 import { collidersFromElement } from './partXmlParser'
 import type { PartCollider } from './types'
 
@@ -85,11 +86,13 @@ export const ASSET_FILES = [
   'PartAssets.xml',
 ]
 
-// Respects Vite's `base` (e.g. "/flexo/") so /ksa/ URLs resolve under a sub-path deploy.
-const KSA_BASE = `${import.meta.env.BASE_URL}ksa/`
-
+/**
+ * Absolute URL of a KSA asset. Respects the shared-asset base (Vite's `base`, or
+ * `VITE_ASSET_BASE` for a mini app) so /ksa/ URLs resolve under a sub-path deploy.
+ * Computed per call, NOT at module scope — see {@link assetBase}.
+ */
 export function toUrl(relPath: string): string {
-  return KSA_BASE + relPath.replace(/^\/+/, '')
+  return assetBase() + 'ksa/' + relPath.replace(/^\/+/, '')
 }
 
 /** Result of fetching+parsing a /ksa/ XML file. 'missing' = file genuinely absent (real 404, or vite's SPA index.html fallback served with 200 for an unknown path). */

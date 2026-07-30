@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
+import { assetBase } from '../assetBase'
 
 /**
  * Owns the renderer-aware KTX2Loader used to load KSA's texture atlases, and
@@ -23,9 +24,7 @@ let maxAnisotropy = 1
 /** Initialize once, after the WebGLRenderer exists. Idempotent. */
 export function initTextureSupport(renderer: THREE.WebGLRenderer): void {
   if (loader) return
-  loader = new KTX2Loader()
-    .setTranscoderPath(`${import.meta.env.BASE_URL}basis/`)
-    .detectSupport(renderer)
+  loader = new KTX2Loader().setTranscoderPath(`${assetBase()}basis/`).detectSupport(renderer)
 
   maxAnisotropy = renderer.capabilities.getMaxAnisotropy()
 

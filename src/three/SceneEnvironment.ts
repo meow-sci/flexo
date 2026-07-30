@@ -1,11 +1,9 @@
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
 import { loadEquirectHDR } from './envCache'
-import {
-  ENVIRONMENT_PRESETS,
-  type LightingSettings,
-  type ToneMappingMode,
-} from '../state/lightingStore'
+import { assetBase } from '../assetBase'
+import { ENVIRONMENT_PRESETS } from '../state/environmentPresets'
+import type { LightingSettings, ToneMappingMode } from '../state/lightingStore'
 
 const TONE_MAPPING: Record<ToneMappingMode, THREE.ToneMapping> = {
   aces: THREE.ACESFilmicToneMapping,
@@ -53,7 +51,7 @@ export class SceneEnvironment {
     let equirect: THREE.DataTexture | null = null
     if (preset.file) {
       try {
-        equirect = await loadEquirectHDR(`${import.meta.env.BASE_URL}hdr/${preset.file}`)
+        equirect = await loadEquirectHDR(`${assetBase()}hdr/${preset.file}`)
       } catch (err) {
         console.warn(`SceneEnvironment: failed to load HDR '${preset.file}'`, err)
       }

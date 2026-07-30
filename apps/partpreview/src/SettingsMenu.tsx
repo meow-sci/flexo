@@ -131,7 +131,7 @@ export function SettingsMenu() {
             >
               Lighting…
             </MenuItem>
-            {/* Restores what this embed was ASKED for (?part_id/?skybox_id/?connectors),
+            {/* Restores what this embed was ASKED for (?skybox_id/?connectors/?measure),
                 not DEFAULT_LIGHTING — see resetPreviewSettings. */}
             <MenuItem
               id="reset"

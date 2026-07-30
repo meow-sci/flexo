@@ -37,6 +37,22 @@ React Compiler toolchain as the main app): the catalog loaders and stores,
 `PartPreviewViewport` and its whole `SubPartObject`/`MaterialFactory`/cache stack,
 `loadProgressStore`, and the `src/ui/kit` primitives + design tokens.
 
+### Running it locally
+
+```sh
+pnpm dev:partpreview   # dev server; serves ksa/, hdr/, basis/ and manifest.json itself
+pnpm build             # main app, then the mini app into dist/apps/partpreview/
+pnpm preview           # serves all of dist/ at /flexo/
+```
+
+Then open `http://localhost:4173/flexo/apps/partpreview/?part_id=<id>` — **with the trailing
+slash** (see [Embed a part](#2-embed-a-part) for why; without it you get the main editor).
+
+Building only the mini app (`vite build apps/partpreview`) is safe — it never empties `dist/` —
+but the page will 404 on meshes and textures unless a main-app build has already produced
+`dist/ksa/`, `dist/hdr/` and `dist/basis/`. There is deliberately no `vite preview
+apps/partpreview`: it would serve only `dist/apps/partpreview/`, which carries no asset copy.
+
 ---
 
 ## The wiki-facing contract
@@ -75,6 +91,12 @@ GET https://meow.science.fail/flexo/apps/partpreview/manifest.json
 | `skybox_id`  | no       | Use that HDR environment as the IBL **and** the visible background.                           |
 | `connectors` | no       | `1` or `true` shows the connector marker cubes (editor affordances; off by default).           |
 | `measure`    | no       | `1` or `true` shows the part's extents — a wireframe box plus a `x × y × z m` readout (off by default). |
+
+**Keep the trailing slash** on `…/partpreview/`. It is a directory, so `…/partpreview?part_id=x`
+is not a file path: a static host either 404s it or — as Vite's `preview` server and any
+SPA-fallback host do — rewrites it to the site's root `index.html`, which silently serves the
+**main flexo editor** instead of this app. The symptom is the full editor loading in the
+iframe, with no error to explain it.
 
 Every other look-and-feel value is fixed to flexo's `DEFAULT_LIGHTING` (exposure 0.85,
 `neutral` tone mapping, environment intensity 1, no background blur) so a wiki render

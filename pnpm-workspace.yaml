@@ -1,2 +1,3 @@
 minimumReleaseAgeExclude:
   - react-hotkeys-hook@5.3.3
+  - nanostores@1.4.2

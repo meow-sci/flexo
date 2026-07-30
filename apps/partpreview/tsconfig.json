@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "../../node_modules/.tmp/tsconfig.partpreview.tsbuildinfo"
+  },
+  "include": ["src", "../../src/vite-env.d.ts"]
+}

@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "dev:partpreview": "vite apps/partpreview",
+    "build": "tsc -b && vite build && vite build apps/partpreview",
     "typecheck": "tsc -b",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",

@@ -13,7 +13,15 @@ import {
 } from '../../../src/ui/kit'
 import { ENVIRONMENT_PRESETS, type EnvironmentPreset } from '../../../src/state/environmentPresets'
 import { LightingDialog } from './LightingDialog'
-import { $connectors, $previewLighting, resetPreviewSettings, setPreviewLighting } from './settings'
+// $measurements here is the MINI APP's session atom (./settings), never the
+// editor's same-named store in src/state/measurementStore.
+import {
+  $connectors,
+  $measurements,
+  $previewLighting,
+  resetPreviewSettings,
+  setPreviewLighting,
+} from './settings'
 
 /**
  * The preview's settings cog, third button in the floating control bar.
@@ -32,12 +40,14 @@ import { $connectors, $previewLighting, resetPreviewSettings, setPreviewLighting
 export function SettingsMenu() {
   const lighting = useStore($previewLighting)
   const connectors = useStore($connectors)
+  const measurements = useStore($measurements)
   const [lightingOpen, setLightingOpen] = useState(false)
 
   // Pure render-body derivations — cheap, and what React Compiler memoizes.
   const envHasSky = ENVIRONMENT_PRESETS.find((p) => p.id === lighting.environment)?.file != null
   const shown = new Set<string>()
   if (connectors) shown.add('connectors')
+  if (measurements) shown.add('measure')
   if (lighting.showEnvironmentBackground) shown.add('sky')
 
   return (
@@ -93,14 +103,18 @@ export function SettingsMenu() {
               selectedKeys={shown}
               onSelectionChange={(keys) => {
                 // `Selection` is 'all' | Set<Key> — narrow before asking .has().
-                const s = keys === 'all' ? new Set(['connectors', 'sky']) : keys
+                const s = keys === 'all' ? new Set(['connectors', 'measure', 'sky']) : keys
                 $connectors.set(s.has('connectors'))
+                $measurements.set(s.has('measure'))
                 setPreviewLighting({ showEnvironmentBackground: s.has('sky') })
               }}
             >
               <MenuHeader>Show</MenuHeader>
               <MenuItem id="connectors" className="gap-1.5 px-1.5 py-1 text-xs">
                 Connectors
+              </MenuItem>
+              <MenuItem id="measure" className="gap-1.5 px-1.5 py-1 text-xs">
+                Measurements
               </MenuItem>
               <MenuItem id="sky" isDisabled={!envHasSky} className="gap-1.5 px-1.5 py-1 text-xs">
                 Sky background

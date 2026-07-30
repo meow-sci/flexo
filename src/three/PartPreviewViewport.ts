@@ -10,6 +10,13 @@ import { SceneEnvironment } from './SceneEnvironment'
 import { $connectorSettings } from '../state/settingsStore'
 import { $lighting, type LightingSettings } from '../state/lightingStore'
 import { initTextureSupport } from './textureSupport'
+import { computeSelectionBounds, type ComputedBounds } from '../measure/bounds'
+
+/**
+ * Extents-box color — the same cyan `MeasurementLayer` uses for the editor's
+ * selection-bounds box, so the two read as one feature.
+ */
+const MEASURE_COLOR = 0x6ee7ff
 
 export interface PartPreviewViewportOptions {
   /** Store driving environment/tonemapping/background. Default: the global `$lighting`. */
@@ -30,6 +37,12 @@ export interface PartPreviewViewportOptions {
    * sized late.
    */
   reframeOnResize?: boolean
+  /**
+   * Called with the part's precise world-space bounds after each successful
+   * `setPart` (null when cleared or empty). Lets an embedder show a readout
+   * without reaching into the scene. Default: not called.
+   */
+  onBounds?: (bounds: ComputedBounds | null) => void
 }
 
 /**
@@ -61,6 +74,7 @@ export class PartPreviewViewport {
   private readonly connectorSize: number | undefined
   private readonly fillFraction: number | undefined
   private readonly reframeOnResize: boolean
+  private readonly onBounds: ((bounds: ComputedBounds | null) => void) | undefined
 
   private objects: SubPartObject[] = []
   private connectorObjects: ConnectorObject[] = []
@@ -74,12 +88,19 @@ export class PartPreviewViewport {
   /** Scratch vector for {@link zoomBy} (avoids a per-call allocation). */
   private readonly zoomScratch = new THREE.Vector3()
 
+  /** Precise world bounds of the loaded part, recomputed on each {@link setPart}. */
+  private partBounds: ComputedBounds | null = null
+  private showMeasurements = false
+  /** Wireframe extents box; rebuilt whenever {@link partBounds} changes. */
+  private measureBox: THREE.LineSegments | null = null
+
   constructor(host: HTMLElement, options: PartPreviewViewportOptions = {}) {
     this.host = host
     this.showConnectors = options.showConnectors ?? true
     this.connectorSize = options.connectorSize
     this.fillFraction = options.fillFraction
     this.reframeOnResize = options.reframeOnResize ?? false
+    this.onBounds = options.onBounds
     this.scene.background = new THREE.Color(0x16171d)
 
     const w = host.clientWidth || 1
@@ -169,6 +190,9 @@ export class PartPreviewViewport {
         this.scene.add(obj.group)
       }
       this.frame()
+      // After the objects are in the scene (and framed, which needs their world
+      // matrices anyway) — the extents box is never part of the framing input.
+      this.updateBounds()
       this.loop.invalidate()
     } catch (err) {
       console.warn(`PartPreviewViewport: failed to load Part '${part.id}'`, err)
@@ -186,6 +210,75 @@ export class PartPreviewViewport {
       obj.dispose()
     }
     this.connectorObjects = []
+    this.clearBounds()
+    this.loop.invalidate()
+  }
+
+  // --- Measurements (whole-part extents) --------------------------------------
+
+  /**
+   * Recomputes the part's extents from the loaded SubParts and rebuilds the box.
+   *
+   * Always the ACCURATE (per-vertex) world-space AABB: this app has no selection
+   * and no precision setting, so "measure" means the true extents of the whole
+   * part. Connector markers are editor affordances, not physical geometry, so
+   * they are excluded here whatever `showConnectors` says.
+   */
+  private updateBounds(): void {
+    this.partBounds = computeSelectionBounds(
+      this.objects.map((o) => o.group),
+      'world',
+      true,
+    )
+    this.rebuildMeasureBox()
+    this.onBounds?.(this.partBounds)
+  }
+
+  private clearBounds(): void {
+    this.partBounds = null
+    this.disposeMeasureBox()
+    this.onBounds?.(null)
+  }
+
+  /** Rebuilds the wireframe extents box from {@link partBounds}. */
+  private rebuildMeasureBox(): void {
+    this.disposeMeasureBox()
+    const b = this.partBounds
+    if (!b) return
+    // 'world' bounds are axis-aligned (identity quaternion), so min/max are the
+    // world corners and a Box3Helper needs no extra orientation.
+    const box = new THREE.Box3(
+      new THREE.Vector3(b.min.x, b.min.y, b.min.z),
+      new THREE.Vector3(b.max.x, b.max.y, b.max.z),
+    )
+    const helper = new THREE.Box3Helper(box, new THREE.Color(MEASURE_COLOR))
+    const material = helper.material as THREE.LineBasicMaterial
+    // Overlay, not geometry: always on top and never tone-mapped, so the color
+    // stays exactly MEASURE_COLOR under any exposure/sky.
+    material.depthTest = false
+    material.toneMapped = false
+    helper.renderOrder = 999
+    helper.visible = this.showMeasurements
+    // Deliberately NOT pushed into `objects`/`connectorObjects`: those two arrays
+    // are what `frame()` measures, and the box must never influence framing.
+    this.scene.add(helper)
+    this.measureBox = helper
+    this.loop.invalidate()
+  }
+
+  private disposeMeasureBox(): void {
+    if (!this.measureBox) return
+    this.scene.remove(this.measureBox)
+    this.measureBox.geometry.dispose()
+    ;(this.measureBox.material as THREE.Material).dispose()
+    this.measureBox = null
+    this.loop.invalidate()
+  }
+
+  /** Show/hide a wireframe box around the whole part's extents. */
+  setShowMeasurements(show: boolean): void {
+    this.showMeasurements = show
+    if (this.measureBox) this.measureBox.visible = show
     this.loop.invalidate()
   }
 

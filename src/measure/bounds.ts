@@ -9,6 +9,13 @@ import type { BoundsMode } from '../state/measurementStore'
  *    world rotation). For a single rotated mesh this hugs the mesh; for a
  *    multi-selection it uses that one frame as a pragmatic approximation (not a
  *    true minimum-volume OBB across arbitrary meshes).
+ *
+ * 'world' additionally has a fast/precise switch. By default it expands by each
+ * object's GEOMETRY BOUNDING BOX transformed into world space, which for a
+ * rotated mesh is the world AABB of the mesh's own (already padded) local AABB —
+ * strictly an over-estimate. `precise` instead walks every vertex of the position
+ * attribute in world space, which is what "accurate" measurement means here.
+ * 'oriented' has always walked vertices, so the flag does not apply to it.
  */
 
 export interface ComputedBounds {
@@ -26,16 +33,27 @@ export interface ComputedBounds {
 
 const toVec3 = (v: THREE.Vector3): Vec3 => ({ x: v.x, y: v.y, z: v.z })
 
-/** Computes the selection box for the given scene objects, or null if empty/degenerate. */
+/**
+ * Computes the selection box for the given scene objects, or null if
+ * empty/degenerate.
+ *
+ * `precise` only affects `'world'`: it makes `Box3.expandByObject` walk each
+ * mesh's position attribute in world space instead of transforming the
+ * geometry's cached bounding box. Transforming an AABB yields the AABB OF the
+ * rotated AABB, so a rotated mesh measures too large in the fast path; the
+ * precise path is the accurate one and costs a full vertex pass. Defaults to
+ * `false` so existing callers are unchanged.
+ */
 export function computeSelectionBounds(
   objects: THREE.Object3D[],
   mode: BoundsMode,
+  precise = false,
 ): ComputedBounds | null {
   if (objects.length === 0) return null
 
   if (mode === 'world') {
     const box = new THREE.Box3()
-    for (const obj of objects) box.expandByObject(obj)
+    for (const obj of objects) box.expandByObject(obj, precise)
     if (box.isEmpty()) return null
     const size = new THREE.Vector3()
     const center = new THREE.Vector3()

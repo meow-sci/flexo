@@ -66,7 +66,7 @@ GET https://meow.science.fail/flexo/apps/partpreview/manifest.json
 ### 2. Embed a part
 
 ```html
-<iframe src="https://meow.science.fail/flexo/apps/partpreview/?part_id=<id>[&skybox_id=<id>][&connectors=1]"></iframe>
+<iframe src="https://meow.science.fail/flexo/apps/partpreview/?part_id=<id>[&skybox_id=<id>][&connectors=1][&measure=1]"></iframe>
 ```
 
 | Param        | Required | Effect                                                                                       |
@@ -74,6 +74,7 @@ GET https://meow.science.fail/flexo/apps/partpreview/manifest.json
 | `part_id`    | yes      | The Part to render. Must be one of `manifest.json`'s `part_ids`.                              |
 | `skybox_id`  | no       | Use that HDR environment as the IBL **and** the visible background.                           |
 | `connectors` | no       | `1` or `true` shows the connector marker cubes (editor affordances; off by default).           |
+| `measure`    | no       | `1` or `true` shows the part's extents — a wireframe box plus a `x × y × z m` readout (off by default). |
 
 Every other look-and-feel value is fixed to flexo's `DEFAULT_LIGHTING` (exposure 0.85,
 `neutral` tone mapping, environment intensity 1, no background blur) so a wiki render
@@ -166,9 +167,10 @@ a 200×200 iframe):
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | **Environment**   | Single-select over all nine presets. Picking a sky also turns its background on; picking **Studio** clears it.            |
 | **Show → Connectors** | Toggles the connector marker cubes (the `?connectors=1` state).                                                      |
+| **Show → Measurements** | Toggles the whole part's extents (the `?measure=1` state).                                                         |
 | **Show → Sky background** | Toggles the sky as a visible background. Disabled for **Studio**, which has no sky.                              |
 | **Lighting…**     | A modal with tone mapping, exposure, reflections (environment intensity) and sky blur — same ranges/steps as the editor's View menu. |
-| **Reset settings** | Restores what **this embed asked for** (`?skybox_id` / `?connectors`), not `DEFAULT_LIGHTING`.                           |
+| **Reset settings** | Restores what **this embed asked for** (`?skybox_id` / `?connectors` / `?measure`), not `DEFAULT_LIGHTING`.              |
 
 All of it writes to plain in-memory atoms in `apps/partpreview/src/settings.ts` that live
 and die with the page. The mini app is served from the **same origin** as the editor, so
@@ -177,6 +179,18 @@ leak a user's editor settings into a wiki render, or clobber them on write.
 
 Framing on load: the part's bounding sphere spans **90%** of the viewport's *limiting*
 dimension (`fillFraction: 0.9`, aspect-aware), so nothing is cropped on the other axis.
+
+**Measurements** is one toggle and nothing else. It measures the **whole part** — there is
+no selection here to measure a subset of — as a world-axis-aligned box computed
+**per-vertex** (`computeSelectionBounds(objects, 'world', precise)`, i.e. the editor's
+_Accurate_ path, hardcoded: transforming each mesh's cached AABB instead would over-report a
+rotated SubPart). Connector markers are excluded whether or not they are shown; they are
+editor affordances, not part geometry. The box is a plain cyan wireframe drawn on top of the
+part (the same `SELECTION_COLOR` as the editor's selection-bounds box) and it never
+influences framing. The dimensions read out as one line of HTML in the bottom-left corner —
+the editor's three floating per-axis labels are unreadable at 200×200. There are deliberately
+**no** precision, orientation (world/oriented) or unit options: the mini app is always
+accurate, always world-aligned, and always meters (KSA-native).
 
 While the catalog XML and then the meshes/textures download, a thin aggregate progress bar
 hugs the bottom edge (indeterminate for the catalog phase, which reports no byte totals;

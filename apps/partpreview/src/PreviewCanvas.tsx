@@ -3,8 +3,9 @@ import { useStore } from '@nanostores/react'
 import type { CatalogPart } from '../../../src/ksa/partCatalog'
 import { $catalogIndex } from '../../../src/state/catalogStore'
 import { PartPreviewViewport } from '../../../src/three/PartPreviewViewport'
+import { MeasurementReadout } from './MeasurementReadout'
 import { SettingsMenu } from './SettingsMenu'
-import { $connectors, $previewLighting } from './settings'
+import { $connectors, $measurements, $partBounds, $previewLighting } from './settings'
 import { ZoomControls } from './ZoomControls'
 
 /**
@@ -29,12 +30,17 @@ export function PreviewCanvas({ part }: { part: CatalogPart }) {
       connectorSize: DEFAULT_CONNECTOR_SIZE,
       fillFraction: 0.9,
       reframeOnResize: true,
+      // The viewport owns the measurement math; the atom is how it reaches React
+      // without a setState-in-effect.
+      onBounds: (bounds) => $partBounds.set(bounds),
     })
     viewportRef.current = viewport
     // Fires immediately with the current value — idempotent with the option above.
     const unsubscribe = $connectors.subscribe((show) => viewport.setShowConnectors(show))
+    const unsubscribeMeasure = $measurements.subscribe((show) => viewport.setShowMeasurements(show))
     return () => {
       unsubscribe()
+      unsubscribeMeasure()
       viewport.dispose()
       viewportRef.current = null
     }
@@ -48,6 +54,7 @@ export function PreviewCanvas({ part }: { part: CatalogPart }) {
     // Must stay `relative`: the overlays anchor to it.
     <div className="relative h-full w-full">
       <div ref={hostRef} className="h-full w-full" />
+      <MeasurementReadout />
       <div className="absolute bottom-2 right-2 flex gap-1">
         <ZoomControls onZoom={(factor) => viewportRef.current?.zoomBy(factor)} />
         <SettingsMenu />

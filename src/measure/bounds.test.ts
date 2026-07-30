@@ -41,6 +41,36 @@ describe('computeSelectionBounds — world', () => {
   })
 })
 
+describe('computeSelectionBounds — world, precise', () => {
+  /** A radius-0.5 sphere: its vertices do NOT reach its AABB's corners. */
+  function ball(rotY = 0): THREE.Mesh {
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 16))
+    mesh.rotation.y = rotY
+    mesh.updateMatrixWorld(true)
+    return mesh
+  }
+
+  it('agrees with the fast path for an unrotated mesh', () => {
+    const fast = computeSelectionBounds([ball()], 'world', false)!
+    const exact = computeSelectionBounds([ball()], 'world', true)!
+    expect(exact.size.x).toBeCloseTo(fast.size.x, 6)
+    expect(exact.size.y).toBeCloseTo(fast.size.y, 6)
+    expect(exact.size.z).toBeCloseTo(fast.size.z, 6)
+  })
+
+  it('is strictly smaller than the fast path for a rotated mesh', () => {
+    // The fast path transforms the geometry's AABB, so it measures the AABB OF
+    // the rotated AABB (~1 × √2 for a 45° spin); the vertex walk still finds the
+    // real ~1 m sphere.
+    const fast = computeSelectionBounds([ball(Math.PI / 4)], 'world', false)!
+    const exact = computeSelectionBounds([ball(Math.PI / 4)], 'world', true)!
+    expect(fast.size.x).toBeCloseTo(Math.SQRT2, 3)
+    expect(exact.size.x).toBeCloseTo(1, 2)
+    expect(exact.size.x).toBeLessThan(fast.size.x - 1e-3)
+    expect(exact.size.z).toBeLessThan(fast.size.z - 1e-3)
+  })
+})
+
 describe('computeSelectionBounds — oriented', () => {
   it('hugs a rotated cube tightly (≈1×1×1 in its own frame)', () => {
     const b = computeSelectionBounds([cube([0, 0, 0], Math.PI / 4)], 'oriented')!

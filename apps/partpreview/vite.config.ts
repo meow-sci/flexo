@@ -13,6 +13,7 @@ import react, { reactCompilerPreset } from '@vitejs/plugin-react'
 import babel from '@rolldown/plugin-babel'
 import tailwindcss from '@tailwindcss/vite'
 import { ksaAssets } from '../../vite/ksaAssets'
+import { previewManifest } from '../../vite/previewManifest'
 
 const repoRoot = resolve(import.meta.dirname, '../..')
 
@@ -46,6 +47,8 @@ export default defineConfig(({ command }) => ({
     // Dev only: in a build the main app already emitted dist/ksa/, and including
     // the plugin here would duplicate the whole tree into this mini outDir.
     ...(command === 'serve' ? [ksaAssets()] : []),
+    // Unconditional: its writeBundle only fires on build, configureServer only in dev.
+    previewManifest(),
   ],
   server: {
     host: '0.0.0.0',

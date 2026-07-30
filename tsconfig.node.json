@@ -22,5 +22,8 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "vite/**/*.ts", "apps/*/vite.config.ts"]
+  /* src/vite-env.d.ts is listed explicitly (it is imported by nothing): the
+     previewManifest plugin pulls src/ksa/catalog.ts into this program, whose
+     assetBase() references `import.meta.env`. */
+  "include": ["vite.config.ts", "vite/**/*.ts", "apps/*/vite.config.ts", "src/vite-env.d.ts"]
 }

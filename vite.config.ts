@@ -24,7 +24,7 @@ export default defineConfig(({ mode }) => ({
   ],
   test: {
     environment: 'happy-dom',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'vite/**/*.test.ts'],
     // Expose KSA_ASSETS_DIR (the flexo-private-assets `assets/` tree the ksaAssets
     // plugin serves) to tests on process.env, so real-asset tests read the licensed
     // GLB/XML from the private repo instead of a gitignored thirdparty/ checkout.

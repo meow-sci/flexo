@@ -3,6 +3,7 @@ import { useStore } from '@nanostores/react'
 import type { CatalogPart } from '../../../src/ksa/partCatalog'
 import { $catalogIndex } from '../../../src/state/catalogStore'
 import { PartPreviewViewport } from '../../../src/three/PartPreviewViewport'
+import { SettingsMenu } from './SettingsMenu'
 import { $connectors, $previewLighting } from './settings'
 import { ZoomControls } from './ZoomControls'
 
@@ -47,7 +48,10 @@ export function PreviewCanvas({ part }: { part: CatalogPart }) {
     // Must stay `relative`: the overlays anchor to it.
     <div className="relative h-full w-full">
       <div ref={hostRef} className="h-full w-full" />
-      <ZoomControls onZoom={(factor) => viewportRef.current?.zoomBy(factor)} />
+      <div className="absolute bottom-2 right-2 flex gap-1">
+        <ZoomControls onZoom={(factor) => viewportRef.current?.zoomBy(factor)} />
+        <SettingsMenu />
+      </div>
     </div>
   )
 }

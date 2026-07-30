@@ -2,14 +2,17 @@ import { Minus, Plus } from 'lucide-react'
 import { Button } from '../../../src/ui/kit'
 
 /**
- * Floating +/− buttons for visitors without a mouse wheel (touch pinch and wheel
- * zoom both already work through OrbitControls).
+ * +/− buttons for visitors without a mouse wheel (touch pinch and wheel zoom both
+ * already work through OrbitControls).
+ *
+ * Unpositioned on purpose: these are two buttons in the shared floating control
+ * bar, whose positioning lives in `PreviewCanvas`.
  */
 export function ZoomControls({ onZoom }: { onZoom: (factor: number) => void }) {
   // `zoomBy` scales the camera's DISTANCE to the target: >1 moves away (zoom out),
   // <1 moves closer (zoom in). Do not "fix" these to read the other way around.
   return (
-    <div className="absolute bottom-2 right-2 flex gap-1">
+    <>
       <Button
         size="sm"
         iconOnly
@@ -28,6 +31,6 @@ export function ZoomControls({ onZoom }: { onZoom: (factor: number) => void }) {
       >
         <Plus size={14} />
       </Button>
-    </div>
+    </>
   )
 }

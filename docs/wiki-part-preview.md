@@ -88,7 +88,7 @@ GET https://meow.science.fail/flexo/apps/partpreview/manifest.json
 | Param        | Required | Effect                                                                                       |
 | ------------ | -------- | -------------------------------------------------------------------------------------------- |
 | `part_id`    | yes      | The Part to render. Must be one of `manifest.json`'s `part_ids`.                              |
-| `skybox_id`  | no       | Use that HDR environment as the IBL **and** the visible background.                           |
+| `skybox_id`  | no       | Light the part with that HDR environment. The sky itself stays **hidden** — the part renders over the solid charcoal background until a viewer turns **Show sky background** on in the Lighting dialog. |
 | `connectors` | no       | `1` or `true` shows the connector marker cubes (editor affordances; off by default).           |
 | `measure`    | no       | `1` or `true` shows the part's extents — a wireframe box plus a `x × y × z m` readout (off by default). |
 
@@ -99,14 +99,14 @@ SPA-fallback host do — rewrites it to the site's root `index.html`, which sile
 iframe, with no error to explain it.
 
 Every other look-and-feel value is fixed to flexo's `DEFAULT_LIGHTING` (exposure 0.85,
-`neutral` tone mapping, environment intensity 1, no background blur) so a wiki render
-matches the in-app part preview.
+`neutral` tone mapping, environment intensity 1, no background blur, **no visible sky**) so
+a wiki render matches the in-app part preview.
 
 ### 3. How it degrades
 
 | Situation                                | Result                                                                                                                                                   |
 | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `skybox_id` unknown, absent, or `room`   | **No skybox**: the procedural studio environment (zero download) lights the part, over the solid charcoal background. Never an error.                     |
+| `skybox_id` unknown, absent, or `room`   | **No HDR at all**: the procedural studio environment (zero download) lights the part, over the solid charcoal background. Never an error.                  |
 | `part_id` unknown                        | Inline centered message `Unknown part id "…"`. **No WebGL context is created** — an unknown id costs nothing.                                              |
 | `part_id` absent                         | Inline usage hint: `Missing "part_id"` + `?part_id=<id>&skybox_id=<id>`.                                                                                  |
 
@@ -183,16 +183,23 @@ clamped around the framed distance, and count as user interaction (so a late ifr
 resize will not re-frame away the zoom just chosen).
 
 The cog opens a compact settings menu (deliberately flat — a submenu has nowhere to go in
-a 200×200 iframe):
+a 200×200 iframe, and a react-aria `Menu` owns pointer/keyboard for its items, so a
+`Select` or a `Slider` cannot live inside the collection):
 
 | Item              | What it does                                                                                                             |
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| **Environment**   | Single-select over all nine presets. Picking a sky also turns its background on; picking **Studio** clears it.            |
 | **Show → Connectors** | Toggles the connector marker cubes (the `?connectors=1` state).                                                      |
 | **Show → Measurements** | Toggles the whole part's extents (the `?measure=1` state).                                                         |
-| **Show → Sky background** | Toggles the sky as a visible background. Disabled for **Studio**, which has no sky.                              |
-| **Lighting…**     | A modal with tone mapping, exposure, reflections (environment intensity) and sky blur — same ranges/steps as the editor's View menu. |
+| **Lighting…**     | The modal below — everything about how the part is lit.                                                                  |
 | **Reset settings** | Restores what **this embed asked for** (`?skybox_id` / `?connectors` / `?measure`), not `DEFAULT_LIGHTING`.              |
+
+The **Lighting** modal:
+
+| Control                | What it does                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **Environment**        | A dropdown over all nine presets. Changes the IBL only — it never touches the sky toggle, so switching between skies while one is shown keeps showing it. |
+| **Show sky background** | Draws the environment as the visible background instead of the charcoal fill. **Off by default**, whatever `?skybox_id` says; disabled for **Studio**, which is procedural and has no sky. |
+| **Tone mapping**, **Exposure**, **Reflections**, **Sky blur** | Same ranges/steps as the editor's View menu.                              |
 
 All of it writes to plain in-memory atoms in `apps/partpreview/src/settings.ts` that live
 and die with the page. The mini app is served from the **same origin** as the editor, so
@@ -202,6 +209,26 @@ leak a user's editor settings into a wiki render, or clobber them on write.
 Framing on load: the part's bounding sphere spans **90%** of the viewport's *limiting*
 dimension (`fillFraction: 0.9`, aspect-aware), so nothing is cropped on the other axis.
 
+### The orientation triad
+
+A labelled **X / Y / Z** arrow triad sits in the top-left corner and spins with the camera,
+so a viewer can always tell which way the part faces. It is `src/three/AxisGizmo.ts`,
+enabled by the viewport's `axisGizmo` option (off elsewhere — the in-app Part browser popup
+shows none).
+
+It is **not** in the scene: it owns a private scene + orthographic camera and is drawn in a
+second pass after the main render (`autoClear` off, depth cleared, a corner
+`setViewport`), so it can never influence framing, bounds or the environment. Its
+materials are unlit and `toneMapped: false`, which is what makes the rendered arrows come
+out at exactly the hex in `src/three/axisColors.ts` — the single source of truth shared
+with the HTML readout below, so a red arrow in one always names the same axis as the red
+arrow in the other.
+
+three's own `three/addons/helpers/ViewHelper.js` does the same trick, but hardcodes a
+**128px** square — over half the width of a 200×200 embed — and carries a click-to-snap
+animation path this has no use for. Here the square is `20%` of the smaller viewport side,
+clamped to 44–84px, and it hides itself outright if it would not fit.
+
 **Measurements** is one toggle and nothing else. It measures the **whole part** — there is
 no selection here to measure a subset of — as a world-axis-aligned box computed
 **per-vertex** (`computeSelectionBounds(objects, 'world', precise)`, i.e. the editor's
@@ -209,10 +236,19 @@ _Accurate_ path, hardcoded: transforming each mesh's cached AABB instead would o
 rotated SubPart). Connector markers are excluded whether or not they are shown; they are
 editor affordances, not part geometry. The box is a plain cyan wireframe drawn on top of the
 part (the same `SELECTION_COLOR` as the editor's selection-bounds box) and it never
-influences framing. The dimensions read out as one line of HTML in the bottom-left corner —
-the editor's three floating per-axis labels are unreadable at 200×200. There are deliberately
-**no** precision, orientation (world/oriented) or unit options: the mini app is always
-accurate, always world-aligned, and always meters (KSA-native).
+influences framing. There are deliberately **no** precision, orientation (world/oriented) or
+unit options: the mini app is always accurate, always world-aligned, and always meters
+(KSA-native).
+
+The dimensions read out as one line of **HTML** centered along the bottom edge — the
+editor's three floating per-axis labels are unreadable at 200×200. Real DOM, not canvas, so
+the text can be selected; and it is a react-aria `Button` (ghost — no background until
+hover/focus) whose whole job is to **copy `x × y × z m` to the clipboard**, confirmed by a
+✓ for 1.2s. Each number is prefixed by a small arrow in its axis color
+(`AXIS_COLOR_CSS`), pointing the way that axis projects on screen in the default framing:
+→ X, ↑ Y, ↙ Z. A clipboard write can be refused (an iframe without
+`allow="clipboard-write"`, or an insecure context) — that is caught and simply shows no ✓;
+nothing else changes.
 
 While the catalog XML and then the meshes/textures download, a thin aggregate progress bar
 hugs the bottom edge (indeterminate for the catalog phase, which reports no byte totals;

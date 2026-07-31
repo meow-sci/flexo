@@ -11,17 +11,10 @@ import {
   MenuTrigger,
   Popover,
 } from '../../../src/ui/kit'
-import { ENVIRONMENT_PRESETS, type EnvironmentPreset } from '../../../src/state/environmentPresets'
 import { LightingDialog } from './LightingDialog'
 // $measurements here is the MINI APP's session atom (./settings), never the
 // editor's same-named store in src/state/measurementStore.
-import {
-  $connectors,
-  $measurements,
-  $previewLighting,
-  resetPreviewSettings,
-  setPreviewLighting,
-} from './settings'
+import { $connectors, $measurements, resetPreviewSettings } from './settings'
 
 /**
  * The preview's settings cog, third button in the floating control bar.
@@ -34,21 +27,20 @@ import {
  * Deliberately flat: no submenus (a submenu has nowhere to go in a 200×200
  * iframe — react-aria flips it back on top of its parent) and no inline sliders
  * (a react-aria `Menu` owns pointer/keyboard for its items, so interactive
- * non-item content inside the collection is unsupported). The numeric knobs live
- * in {@link LightingDialog}.
+ * non-item content inside the collection is unsupported). Everything about the
+ * environment — which one, and whether its sky is visible — lives in
+ * {@link LightingDialog} alongside the numeric knobs, so this menu stays two
+ * toggles tall.
  */
 export function SettingsMenu() {
-  const lighting = useStore($previewLighting)
   const connectors = useStore($connectors)
   const measurements = useStore($measurements)
   const [lightingOpen, setLightingOpen] = useState(false)
 
-  // Pure render-body derivations — cheap, and what React Compiler memoizes.
-  const envHasSky = ENVIRONMENT_PRESETS.find((p) => p.id === lighting.environment)?.file != null
+  // Pure render-body derivation — cheap, and what React Compiler memoizes.
   const shown = new Set<string>()
   if (connectors) shown.add('connectors')
   if (measurements) shown.add('measure')
-  if (lighting.showEnvironmentBackground) shown.add('sky')
 
   return (
     <>
@@ -70,43 +62,13 @@ export function SettingsMenu() {
             escapeKeyBehavior="none"
           >
             <MenuSection
-              selectionMode="single"
-              disallowEmptySelection
-              selectedKeys={new Set([lighting.environment])}
-              onSelectionChange={(keys) => {
-                if (keys === 'all') return
-                const id = [...keys][0] as EnvironmentPreset | undefined
-                if (!id) return
-                const preset = ENVIRONMENT_PRESETS.find((p) => p.id === id)
-                // Picking a sky means "show me that sky" (the `?skybox_id=`
-                // semantics); 'room' is the procedural studio with no sky, so it
-                // clears the background rather than leaving a checkbox claiming
-                // something the environment can't do.
-                setPreviewLighting({
-                  environment: id,
-                  showEnvironmentBackground: preset?.file != null,
-                })
-              }}
-            >
-              <MenuHeader>Environment</MenuHeader>
-              {ENVIRONMENT_PRESETS.map((p) => (
-                <MenuItem key={p.id} id={p.id} className="gap-1.5 px-1.5 py-1 text-xs">
-                  {p.label}
-                </MenuItem>
-              ))}
-            </MenuSection>
-
-            <MenuSeparator />
-
-            <MenuSection
               selectionMode="multiple"
               selectedKeys={shown}
               onSelectionChange={(keys) => {
                 // `Selection` is 'all' | Set<Key> — narrow before asking .has().
-                const s = keys === 'all' ? new Set(['connectors', 'measure', 'sky']) : keys
+                const s = keys === 'all' ? new Set(['connectors', 'measure']) : keys
                 $connectors.set(s.has('connectors'))
                 $measurements.set(s.has('measure'))
-                setPreviewLighting({ showEnvironmentBackground: s.has('sky') })
               }}
             >
               <MenuHeader>Show</MenuHeader>
@@ -115,9 +77,6 @@ export function SettingsMenu() {
               </MenuItem>
               <MenuItem id="measure" className="gap-1.5 px-1.5 py-1 text-xs">
                 Measurements
-              </MenuItem>
-              <MenuItem id="sky" isDisabled={!envHasSky} className="gap-1.5 px-1.5 py-1 text-xs">
-                Sky background
               </MenuItem>
             </MenuSection>
 

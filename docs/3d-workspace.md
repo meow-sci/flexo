@@ -19,6 +19,7 @@ All code is under `src/three/`.
 | `lightVolume.ts` | The pure (three-free) half of the coverage viz: shell radii and the auto/absolute display exposure. |
 | `samplePoints.ts` | Shared world-space geometry sampler (bbox corners or every vertex) for collider fitting and container containment warnings. |
 | `Grid.ts` | Origin grid (XZ plane) + colored axes (1 cell = 1 m). |
+| `AxisGizmo.ts` | Corner **X/Y/Z** orientation triad, drawn in a second scissored pass over a finished frame (private scene + ortho camera, so it never affects framing/bounds). Not used by the editor viewport — it is opt-in via `PartPreviewViewport`'s `axisGizmo` option, which only the `partpreview` mini app sets. Colors come from `axisColors.ts`, shared with that app's HTML dimension readout. See [wiki-part-preview.md](./wiki-part-preview.md). |
 | `SelectionManager.ts` | Raycast click-to-select (fires on pointerup only when the pointer barely moved, so orbit/gizmo drags aren't clicks). |
 | `TransformGizmo.ts` | Wraps `TransformControls` (translate/rotate/scale); disables orbit while dragging; emits transform changes. |
 | `ViewportCanvas.tsx` | React glue: mounts `EditorScene` into a div in a `useEffect`, disposes on unmount (StrictMode-safe). |

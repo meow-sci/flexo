@@ -10,6 +10,7 @@ import { SceneEnvironment } from './SceneEnvironment'
 import { $connectorSettings } from '../state/settingsStore'
 import { $lighting, type LightingSettings } from '../state/lightingStore'
 import { initTextureSupport } from './textureSupport'
+import { AxisGizmo } from './AxisGizmo'
 import { computeSelectionBounds, type ComputedBounds } from '../measure/bounds'
 
 /**
@@ -43,6 +44,11 @@ export interface PartPreviewViewportOptions {
    * without reaching into the scene. Default: not called.
    */
   onBounds?: (bounds: ComputedBounds | null) => void
+  /**
+   * Draw a world-orientation triad in the top-left corner ({@link AxisGizmo}).
+   * Default false — the in-app Part browser popup shows none.
+   */
+  axisGizmo?: boolean
 }
 
 /**
@@ -75,6 +81,8 @@ export class PartPreviewViewport {
   private readonly fillFraction: number | undefined
   private readonly reframeOnResize: boolean
   private readonly onBounds: ((bounds: ComputedBounds | null) => void) | undefined
+  /** Corner orientation triad, drawn in its own pass after the scene. Null when off. */
+  private readonly axisGizmo: AxisGizmo | null
 
   private objects: SubPartObject[] = []
   private connectorObjects: ConnectorObject[] = []
@@ -101,6 +109,7 @@ export class PartPreviewViewport {
     this.fillFraction = options.fillFraction
     this.reframeOnResize = options.reframeOnResize ?? false
     this.onBounds = options.onBounds
+    this.axisGizmo = options.axisGizmo ? new AxisGizmo() : null
     this.scene.background = new THREE.Color(0x16171d)
 
     const w = host.clientWidth || 1
@@ -361,6 +370,8 @@ export class PartPreviewViewport {
     // asking for frames until it settles.
     this.controls.update()
     this.renderer.render(this.scene, this.camera)
+    // Second pass, over the finished frame — see AxisGizmo.render.
+    this.axisGizmo?.render(this.renderer, this.camera)
   }
 
   dispose(): void {
@@ -370,6 +381,7 @@ export class PartPreviewViewport {
     this.controls.removeEventListener('change', this.onNeedsRender)
     this.controls.removeEventListener('start', this.onInteractionStart)
     this.clearObjects()
+    this.axisGizmo?.dispose()
     this.controls.dispose()
     this.lightingUnsub()
     this.sceneEnv.dispose()

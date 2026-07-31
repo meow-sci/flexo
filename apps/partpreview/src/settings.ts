@@ -53,13 +53,18 @@ export const INITIAL_MEASUREMENTS: boolean = flag('measure')
  * Deliberately keeps every other `DEFAULT_LIGHTING` value — `exposure: 0.85`,
  * `toneMapping: 'neutral'`, `environmentIntensity: 1`, `backgroundBlur: 0` — so a
  * wiki render matches the in-app part preview. `'room'` is the procedural studio
- * (zero download, no sky) which stands in for "no skybox"; the solid charcoal
- * background then shows instead.
+ * (zero download, no sky) which stands in for "no skybox".
+ *
+ * The sky is ALWAYS hidden to start with, `?skybox_id=` or not: an embed wants the
+ * part to read against the flat charcoal background, and the environment's job is
+ * lighting the part (exactly how the main editor treats it — `DEFAULT_LIGHTING`
+ * ships `showEnvironmentBackground: false` too). Showing it is one toggle away in
+ * the Lighting dialog.
  */
 export const INITIAL_LIGHTING: LightingSettings = {
   ...DEFAULT_LIGHTING,
   environment: SKYBOX_ID ?? 'room',
-  showEnvironmentBackground: SKYBOX_ID != null,
+  showEnvironmentBackground: false,
 }
 
 export const $previewLighting = atom<LightingSettings>(INITIAL_LIGHTING)

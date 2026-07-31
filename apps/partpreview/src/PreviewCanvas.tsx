@@ -30,6 +30,9 @@ export function PreviewCanvas({ part }: { part: CatalogPart }) {
       connectorSize: DEFAULT_CONNECTOR_SIZE,
       fillFraction: 0.9,
       reframeOnResize: true,
+      // The corner orientation triad — always on here (unlike the in-app Part
+      // browser popup): an embed has no other cue for which way the part faces.
+      axisGizmo: true,
       // The viewport owns the measurement math; the atom is how it reaches React
       // without a setState-in-effect.
       onBounds: (bounds) => $partBounds.set(bounds),

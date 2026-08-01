@@ -13,7 +13,7 @@ import {
   useIsPhone,
 } from './kit'
 import type { CatalogPart } from '../ksa/partCatalog'
-import type { Layer } from '../ksa/types'
+import { ENTITY_ONLY_LAYER_IDS, type Layer } from '../ksa/types'
 import { $catalogIndex } from '../state/catalogStore'
 import { $partCatalog, $partCatalogLoading } from '../state/partCatalogStore'
 import { $part, createLayer } from '../state/editorStore'
@@ -199,11 +199,15 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
           >
             <ListBoxItem id={NEW_LAYER}>New Layer</ListBoxItem>
             <ListBoxItem id={CURRENT_LAYER}>Current Layer</ListBoxItem>
-            {part.layers.map((l) => (
-              <ListBoxItem key={l.id} id={l.id} textValue={l.name}>
-                {l.name}
-              </ListBoxItem>
-            ))}
+            {/* Only ordinary layers: the pinned ones (IVA seats / lights / kittens) hold
+                their own kind exclusively and would reject the import. */}
+            {part.layers
+              .filter((l) => !ENTITY_ONLY_LAYER_IDS.includes(l.id))
+              .map((l) => (
+                <ListBoxItem key={l.id} id={l.id} textValue={l.name}>
+                  {l.name}
+                </ListBoxItem>
+              ))}
           </Select>
           <Button size="sm" variant="primary" isDisabled={!selected} onPress={add}>
             Add

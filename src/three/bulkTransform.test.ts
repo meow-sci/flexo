@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import type { PlacementTransform } from '../state/editorStore'
-import { centroidOf, scaledAroundOriginTransform, scaledInPlaceTransform } from './bulkTransform'
+import {
+  centroidOf,
+  groupScaledTransform,
+  scaledAroundOriginTransform,
+  scaledInPlaceTransform,
+  scalesWithGroup,
+} from './bulkTransform'
 
 /** A placement at `position` with unit scale and the given (optional) own scale. */
 function place(
@@ -65,5 +71,41 @@ describe('scaledAroundOriginTransform (smart bulk scale)', () => {
     const out = scaledAroundOriginTransform(t, { x: 0.5, y: 1, z: 1 }, { x: 0, y: 0, z: 0 })
     expect(out.position.x).toBeCloseTo(5)
     expect(out.position.y).toBeCloseTo(0)
+  })
+})
+
+describe('groupScaledTransform (kind-aware group scale)', () => {
+  const origin = { x: 0, y: 0, z: 0 }
+  const f = { x: 2, y: 2, z: 2 }
+  const t = place({ x: 3, y: -1, z: 0 }, { x: 1.5, y: 1.5, z: 1.5 })
+
+  it('scales a SubPart and a collider like the plain smart scale', () => {
+    for (const kind of ['subpart', 'collider'] as const) {
+      expect(groupScaledTransform(kind, t, f, origin)).toEqual(
+        scaledAroundOriginTransform(t, f, origin),
+      )
+      expect(scalesWithGroup(kind)).toBe(true)
+    }
+  })
+
+  it('MOVES a connector with the group but never re-grades its own scale', () => {
+    const out = groupScaledTransform('connector', t, f, origin)
+    // Position rides the group exactly like a SubPart's...
+    expect(out.position).toEqual(scaledAroundOriginTransform(t, f, origin).position)
+    // ...but <Scale> is KSA's attach-node size class, not geometry (issue #6).
+    expect(out.scale).toEqual(t.scale)
+    expect(scalesWithGroup('connector')).toBe(false)
+  })
+
+  it('is a no-op on a connector in "in place" mode (nothing to resize)', () => {
+    const out = groupScaledTransform('connector', t, f, null)
+    expect(out.position).toEqual(t.position)
+    expect(out.scale).toEqual(t.scale)
+    expect(out.rotation).toEqual(t.rotation)
+  })
+
+  it('scales in place (positions fixed) when no origin is given', () => {
+    const out = groupScaledTransform('subpart', t, f, null)
+    expect(out).toEqual(scaledInPlaceTransform(t, f))
   })
 })

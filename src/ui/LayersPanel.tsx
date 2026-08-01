@@ -43,14 +43,7 @@ import {
   toggleLayerVisible,
 } from '../state/layerStore'
 import { $layerSummaries, type LayerSummary } from '../state/selectors'
-import {
-  BUILT_IN_LAYER_IDS,
-  CONNECTOR_LAYER_ID,
-  DEFAULT_LAYER_ID,
-  COLLIDER_LAYER_ID,
-  KITTEN_LAYER_ID,
-  type Layer,
-} from '../ksa/types'
+import { BUILT_IN_LAYER_IDS, DEFAULT_LAYER_ID, KITTEN_LAYER_ID, type Layer } from '../ksa/types'
 import {
   BlendIcon,
   EyeIcon,
@@ -229,13 +222,10 @@ function LayerRow({
   const view = layerViewState(layerView, layer.id)
   const locked = view.locked
   const isBuiltIn = BUILT_IN_LAYER_IDS.includes(layer.id)
-  // The Connectors/Kittens layers can't be deleted, but their delete button instead
-  // clears the layer's contents (after a confirm). The Default layer stays fully
-  // protected. Custom layers use the normal delete-layer flow.
-  const isClearable =
-    layer.id === CONNECTOR_LAYER_ID ||
-    layer.id === COLLIDER_LAYER_ID ||
-    layer.id === KITTEN_LAYER_ID
+  // The Kittens layer can't be deleted, but its delete button instead clears the layer's
+  // contents (after a confirm). The Default layer stays fully protected. Custom layers use
+  // the normal delete-layer flow.
+  const isClearable = layer.id === KITTEN_LAYER_ID
   const deleteTooltip = isClearable
     ? 'Delete all items in layer'
     : isBuiltIn
@@ -459,8 +449,10 @@ function DeleteLayerDialog({
   others: Layer[]
   onClose: () => void
 }) {
-  const { layer, subParts, connectors, kittens } = summary
-  const total = subParts + connectors + kittens
+  const { layer, subParts, connectors, colliders } = summary
+  // Only the kinds that can live on a deletable layer count here (seats/lights/kittens
+  // are pinned to their own built-in layers, which can't reach this dialog).
+  const total = subParts + connectors + colliders
   const [mode, setMode] = useState<DeleteLayerOptions['mode']>('move-items')
   const [targetId, setTargetId] = useState(others[0]?.id ?? DEFAULT_LAYER_ID)
 
@@ -472,7 +464,7 @@ function DeleteLayerDialog({
       text={
         total === 0
           ? 'This layer is empty.'
-          : `This layer has ${subParts} SubPart${subParts === 1 ? '' : 's'} and ${connectors} connector${connectors === 1 ? '' : 's'}.`
+          : `This layer has ${subParts} SubPart${subParts === 1 ? '' : 's'}, ${connectors} connector${connectors === 1 ? '' : 's'} and ${colliders} collider${colliders === 1 ? '' : 's'}.`
       }
       confirmLabel="Delete layer"
       confirmVariant="danger"
@@ -526,13 +518,13 @@ function DeleteLayerDialog({
 }
 
 /**
- * Confirms clearing a protected built-in layer (Connectors/Kittens): the layer
- * itself stays, but every item on it is removed. Used in place of {@link DeleteLayerDialog}
- * for those layers, which can't be deleted.
+ * Confirms clearing a protected built-in layer (Kittens): the layer itself stays, but
+ * every item on it is removed. Used in place of {@link DeleteLayerDialog} for that layer,
+ * which can't be deleted.
  */
 function ClearLayerDialog({ summary, onClose }: { summary: LayerSummary; onClose: () => void }) {
-  const { layer, subParts, connectors, kittens } = summary
-  const total = subParts + connectors + kittens
+  const { layer, subParts, connectors, colliders, kittens } = summary
+  const total = subParts + connectors + colliders + kittens
   return (
     <ConfirmDialog
       isOpen

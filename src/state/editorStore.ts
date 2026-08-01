@@ -45,9 +45,7 @@ import type {
 } from '../ksa/types'
 import {
   BUILT_IN_LAYER_IDS,
-  COLLIDER_LAYER_ID,
   COLLIDER_SHAPES,
-  CONNECTOR_LAYER_ID,
   createCombustor,
   createEmptyPart,
   createGimbal,
@@ -67,6 +65,7 @@ import {
   isSubPartGameDataEmpty,
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
+  type LayerableKind,
   LIGHT_LAYER_ID,
 } from '../ksa/types'
 import { normalizeColliderSize } from '../ksa/colliderSize'
@@ -694,6 +693,8 @@ function applyImportedGameData(
   src: ImportedGameData,
   connectorIdMap: ReadonlyMap<string, string>,
   idMap: ReadonlyMap<string, string>,
+  /** Layer the import's geometry landed on — colliders follow it (seats/lights are pinned). */
+  layerId: string,
 ): void {
   const game = target.gameData
   if (game.decoupler == null && src.decoupler) {
@@ -765,13 +766,14 @@ function applyImportedGameData(
   game.consumerFeedWiring.push(
     ...src.consumerFeedWiring.map((w) => remapConsumerFeedWiring(w, connectorIdMap, idMap)),
   )
-  // Colliders are a top-level list, not GameData: append with fresh ids on the built-in
-  // Colliders layer. Nothing references a collider by id, so no map is threaded out.
+  // Colliders are a top-level list, not GameData: append with fresh ids on the SAME layer
+  // the import's SubParts landed on (a collider belongs with the geometry it wraps).
+  // Nothing references a collider by id, so no map is threaded out.
   for (const c of src.colliders) {
     target.colliders.push({
       ...structuredClone(c),
       id: nextColliderId(target),
-      layerId: COLLIDER_LAYER_ID,
+      layerId,
     })
   }
   // Seats are a top-level list too: append with fresh ids on the built-in IVA Seats layer,
@@ -810,10 +812,10 @@ const rangeFrom = (start: number, end: number): number[] =>
  * are regenerated so they never collide with entities already in the project; the
  * imported editor tags are unioned into the project's tags and coupling bindings
  * are rewired to the regenerated connector ids. Imported SubParts land in
- * `targetLayerId` when given (and it exists), else the active layer; connectors
- * always go to the built-in Connectors layer
- * (layers are editor-only and absent from KSA XML). Everything the import added is
- * left selected — SubParts, connectors, colliders, IVA seats and lights — so the
+ * `targetLayerId` when given (and it exists), else the active layer; the Part's
+ * connectors and colliders land on that SAME layer, so one import is one logical
+ * group (layers are editor-only and absent from KSA XML). Everything the import added
+ * is left selected — SubParts, connectors, colliders, IVA seats and lights — so the
  * fresh Part can be moved as a unit.
  */
 export function addPart(
@@ -848,10 +850,10 @@ export function addPart(
         : `${placements.length} parts, ${connectors.length} connectors`
   pushUndo('import', importDetail)
   const part = clone($part.get())
+  // An import always lands on an ORDINARY layer: a pinned one (seats/lights/kittens)
+  // holds its own kind exclusively, so a caller naming one falls back to the active layer.
   const layerId =
-    targetLayerId && part.layers.some((l) => l.id === targetLayerId)
-      ? targetLayerId
-      : currentLayerId(part)
+    targetLayerId && isMoveTarget(part, targetLayerId) ? targetLayerId : currentLayerId(part)
   for (const tag of editorTags) {
     if (!part.editorTags.includes(tag)) part.editorTags.push(tag)
   }
@@ -892,7 +894,7 @@ export function addPart(
       flags: [...src.flags],
       capabilities: [...src.capabilities],
       siblingIds: [...src.siblingIds],
-      layerId: CONNECTOR_LAYER_ID, // connectors always live in the Connectors layer
+      layerId, // with the SubParts they attach to
     })
   }
   // Sibling refs point at other connectors by their original id — rewire to the
@@ -905,21 +907,21 @@ export function addPart(
   const colliderStart = part.colliders.length
   const seatStart = part.ivaSeats.length
   const lightStart = part.lights.length
-  if (imported) applyImportedGameData(part, imported, connectorIdMap, idMap)
+  if (imported) applyImportedGameData(part, imported, connectorIdMap, idMap, layerId)
   $part.set(part)
   // Select exactly what this import added — SubParts AND its connectors / colliders /
   // IVA seats / lights (each kind is appended, so the imported ones are the tail past
   // the pre-import length). Selecting every kind is what lets a "move the part I just
   // imported" drag carry its colliders and connectors along instead of stranding them.
   // Pre-existing entities on the same layers are deliberately left out. Entity kinds
-  // whose built-in layer is hidden or locked are skipped, matching the select-all rule
-  // in AssetsList (and keeping the "locked ⇒ never selected" invariant of setLayerLocked).
-  const selectable = (layerId: string): boolean =>
-    isLayerVisible(layerId) && !isLayerLocked(layerId)
-  const importedConnectorIndices = selectable(CONNECTOR_LAYER_ID)
+  // whose layer is hidden or locked are skipped, matching the select-all rule in
+  // AssetsList (and keeping the "locked ⇒ never selected" invariant of setLayerLocked).
+  const selectable = (id: string): boolean => isLayerVisible(id) && !isLayerLocked(id)
+  const importedOnLayer = selectable(layerId)
+  const importedConnectorIndices = importedOnLayer
     ? rangeFrom(connectorStart, part.connectors.length)
     : []
-  const importedColliderIndices = selectable(COLLIDER_LAYER_ID)
+  const importedColliderIndices = importedOnLayer
     ? rangeFrom(colliderStart, part.colliders.length)
     : []
   const importedSeatIndices = selectable(IVA_SEAT_LAYER_ID)
@@ -967,8 +969,7 @@ export function importProjectData(env: ProjectExportEnvelope): ImportSummary {
   return summary
 }
 
-/** Adds a connector at the origin (facing local +X) and selects it. Connectors
- * always belong to the built-in Connectors layer, not the active layer. */
+/** Adds a connector at the origin (facing local +X), on the active layer, and selects it. */
 export function addConnector(): void {
   const current = $part.get()
   const newId = nextConnectorId(current)
@@ -982,14 +983,14 @@ export function addConnector(): void {
     flags: [],
     capabilities: [],
     siblingIds: [],
-    layerId: CONNECTOR_LAYER_ID,
+    layerId: currentLayerId(part),
   })
   $part.set(part)
   selectConnector(part.connectors.length - 1)
 }
 
 /**
- * Adds a collision primitive at the origin (on the built-in Colliders layer) and selects it.
+ * Adds a collision primitive at the origin (on the active layer) and selects it.
  *
  * `transform` seeds position/rotation/size — the fitting tools pass a fitted one; without it
  * the collider starts as a 1 m unit shape at the Part origin. `ownerTemplateId` names the
@@ -1011,7 +1012,7 @@ export function addCollider(
     position: transform ? { ...transform.position } : { x: 0, y: 0, z: 0 },
     rotation: transform ? { ...transform.rotation } : { x: 0, y: 0, z: 0 },
     scale: normalizeColliderSize(shape, transform?.scale ?? { x: 1, y: 1, z: 1 }),
-    layerId: COLLIDER_LAYER_ID,
+    layerId: currentLayerId(part),
   })
   $part.set(part)
   selectCollider(part.colliders.length - 1)
@@ -1552,11 +1553,8 @@ export function duplicateSelected(): void {
   for (const i of [...col].sort((a, b) => a - b)) {
     const src = part.colliders[i]
     if (!src) continue
-    part.colliders.push({
-      ...structuredClone(src),
-      id: nextColliderId(part),
-      layerId: COLLIDER_LAYER_ID,
-    })
+    // Keeps the source's layer, like a duplicated placement or connector.
+    part.colliders.push({ ...structuredClone(src), id: nextColliderId(part) })
     newCol.push(part.colliders.length - 1)
   }
   // Copies land at the END of the seat list, i.e. last in the IVA cycle order.
@@ -1584,6 +1582,15 @@ export function duplicateSelected(): void {
   }
   $part.set(part)
   setSelection(newSub, newCon, newKit, newCol, newSeat, newLig)
+}
+
+/**
+ * Layer a pasted entity lands on: the one it was copied from when that layer still
+ * exists, else the active layer. The clipboard outlives layer deletion, so this is the
+ * one guard that keeps a paste from stranding entities on a layer nothing lists.
+ */
+function pasteLayerId(part: EditingPart, sourceLayerId: string): string {
+  return part.layers.some((l) => l.id === sourceLayerId) ? sourceLayerId : currentLayerId(part)
 }
 
 /** Human label for a count of mixed entities, e.g. "3 parts" or "5 items". */
@@ -1638,10 +1645,10 @@ export function copySelected(): number {
  * Pastes the {@link $clipboard} contents back into the workspace in place (same
  * position/rotation/scale they were copied at), regenerating ids so the pastes
  * never collide with existing entities, and selects the newly pasted entities.
- * Discrete mutation → records one undo step. A pasted SubPart keeps its original
- * layer when that layer still exists, else falls back to the active layer (the
- * clipboard can outlive the layer it was copied from). Returns how many entities
- * were pasted (0 when the clipboard is empty).
+ * Discrete mutation → records one undo step. A pasted SubPart, connector or collider
+ * keeps its original layer when that layer still exists, else falls back to the active
+ * layer (see {@link pasteLayerId} — the clipboard can outlive the layer it was copied
+ * from). Returns how many entities were pasted (0 when the clipboard is empty).
  */
 export function pasteClipboard(): number {
   const clip = $clipboard.get()
@@ -1675,9 +1682,7 @@ export function pasteClipboard(): number {
     const count = part.placements.filter(
       (p) => p.subPartTemplateId === src.subPartTemplateId,
     ).length
-    const layerId = part.layers.some((l) => l.id === src.layerId)
-      ? src.layerId
-      : currentLayerId(part)
+    const layerId = pasteLayerId(part, src.layerId)
     part.placements.push({
       instanceId: `${base}_${count + 1}`,
       subPartTemplateId: src.subPartTemplateId,
@@ -1697,7 +1702,7 @@ export function pasteClipboard(): number {
       flags: [...src.flags],
       capabilities: [...src.capabilities],
       siblingIds: [...src.siblingIds],
-      layerId: CONNECTOR_LAYER_ID,
+      layerId: pasteLayerId(part, src.layerId),
     })
     newCon.push(part.connectors.length - 1)
   }
@@ -1716,7 +1721,7 @@ export function pasteClipboard(): number {
     part.colliders.push({
       ...structuredClone(src),
       id: nextColliderId(part),
-      layerId: COLLIDER_LAYER_ID,
+      layerId: pasteLayerId(part, src.layerId),
     })
     newCol.push(part.colliders.length - 1)
   }
@@ -2226,8 +2231,14 @@ function assignLight(l: PartLight | undefined, t: PlacementTransform): void {
  * This is the animation-safe counterpart to a multi-select gizmo resize, which
  * only touches the selected placements and silently breaks animation offsets.
  *
- * GEOMETRY INSTANCES (placements/connectors/kittens) are rig LEAVES — a point
- * map `Σ·placement` — so both `position` and `scale` multiply (the mesh grows).
+ * GEOMETRY INSTANCES (placements/kittens) are rig LEAVES — a point map
+ * `Σ·placement` — so both `position` and `scale` multiply (the mesh grows).
+ *
+ * CONNECTORS only MOVE. A connector's `<Scale>` is KSA's attach-node size CLASS
+ * (compared across parts to resolve nested/internal connections), not the size of
+ * anything drawn, so re-grading it on a workspace resize would silently change how the
+ * Part connects in the vehicle editor. Same rule as the group-scale gizmo — see
+ * `scalesWithGroup` in src/three/bulkTransform.ts.
  *
  * ANIMATION JOINT POSES are INTERIOR nodes of the preview/export rig:
  *   world(leaf,t) = L_root·…·L_J · placement,  L_J = T(pos)·R(rot)·S(scale)
@@ -2256,8 +2267,9 @@ export function scaleEverything(factor: Vec3): void {
     e.scale = scalePos(e.scale)
   }
   for (const p of part.placements) scaleInstance(p)
-  for (const c of part.connectors) scaleInstance(c)
   for (const k of part.kittens) scaleInstance(k)
+  // Position only — the connector's own size class is left alone (see above).
+  for (const c of part.connectors) c.position = scalePos(c.position)
   // A collider's `scale` is its SIZE in meters, so the same multiply is right for it too
   // (the shape constraint is re-applied so a non-uniform factor can't skew a cylinder).
   for (const c of part.colliders) {
@@ -3595,9 +3607,9 @@ export interface DeleteLayerOptions {
 }
 
 /**
- * Deletes a layer. The built-in Default/Connectors layers are protected (no-op).
- * Entities in the layer are either removed ('delete-items') or moved to another
- * layer ('move-items').
+ * Deletes a layer. The built-in layers are protected (no-op). Entities in the layer —
+ * placements, connectors AND colliders, every kind that can live on an ordinary layer —
+ * are either removed ('delete-items') or moved to another layer ('move-items').
  */
 export function deleteLayer(id: string, opts: DeleteLayerOptions): void {
   if (BUILT_IN_LAYER_IDS.includes(id)) return
@@ -3609,13 +3621,16 @@ export function deleteLayer(id: string, opts: DeleteLayerOptions): void {
     const valid =
       opts.targetLayerId &&
       opts.targetLayerId !== id &&
+      !ENTITY_ONLY_LAYER_IDS.includes(opts.targetLayerId) &&
       part.layers.some((l) => l.id === opts.targetLayerId)
     const target = valid ? opts.targetLayerId! : DEFAULT_LAYER_ID
     for (const p of part.placements) if (p.layerId === id) p.layerId = target
     for (const c of part.connectors) if (c.layerId === id) c.layerId = target
+    for (const c of part.colliders) if (c.layerId === id) c.layerId = target
   } else {
     part.placements = part.placements.filter((p) => p.layerId !== id)
     part.connectors = part.connectors.filter((c) => c.layerId !== id)
+    part.colliders = part.colliders.filter((c) => c.layerId !== id)
   }
   part.layers = part.layers.filter((l) => l.id !== id)
   $part.set(part)
@@ -3624,10 +3639,10 @@ export function deleteLayer(id: string, opts: DeleteLayerOptions): void {
 }
 
 /**
- * Removes every entity (SubParts, connectors, kittens) on a layer WITHOUT deleting
- * the layer itself. Used by the protected built-in Connectors/Kittens layers, whose
- * delete button clears their contents instead of removing the (undeletable) layer.
- * Discrete mutation → one undo step. No-op when the layer is already empty.
+ * Removes every entity on a layer WITHOUT deleting the layer itself. Used by the
+ * protected built-in Kittens layer, whose delete button clears its contents instead of
+ * removing the (undeletable) layer. Discrete mutation → one undo step. No-op when the
+ * layer is already empty.
  */
 export function clearLayer(id: string): void {
   const current = $part.get()
@@ -3635,12 +3650,14 @@ export function clearLayer(id: string): void {
   const total =
     current.placements.filter(onLayer).length +
     current.connectors.filter(onLayer).length +
+    current.colliders.filter(onLayer).length +
     current.kittens.filter(onLayer).length
   if (total === 0) return
   pushUndo('clear layer', current.layers.find((l) => l.id === id)?.name ?? id)
   const part = clone(current)
   part.placements = part.placements.filter((p) => p.layerId !== id)
   part.connectors = part.connectors.filter((c) => c.layerId !== id)
+  part.colliders = part.colliders.filter((c) => c.layerId !== id)
   part.kittens = part.kittens.filter((k) => k.layerId !== id)
   $part.set(part)
   clampSelection()
@@ -3659,51 +3676,87 @@ export function reorderLayers(orderedIds: readonly string[]): void {
   $part.set(part)
 }
 
+/** The `EditingPart` list holding a given layerable kind, as mutable rows. */
+function layerableList(part: EditingPart, kind: LayerableKind): { layerId: string }[] {
+  return kind === 'subpart'
+    ? part.placements
+    : kind === 'connector'
+      ? part.connectors
+      : part.colliders
+}
+
+/** True when `layerId` is a layer ordinary entities may be moved onto. */
+function isMoveTarget(part: EditingPart, layerId: string): boolean {
+  return !ENTITY_ONLY_LAYER_IDS.includes(layerId) && part.layers.some((l) => l.id === layerId)
+}
+
 /**
- * Moves a single SubPart to another layer (used by the per-row context menu).
- * Discrete mutation → records undo. No-op for an unknown index/layer or when the
- * SubPart is already on that layer.
+ * Moves a single entity — SubPart, connector or collider — to another layer (used by
+ * the per-row context menu). Discrete mutation → records undo. No-op for an unknown
+ * index/layer, one of the entity-only built-in layers, or when it is already there.
  */
-export function movePlacementToLayer(index: number, layerId: string): void {
-  // SubParts can't live on the entity-only built-in layers.
-  if (ENTITY_ONLY_LAYER_IDS.includes(layerId)) return
+export function moveEntityToLayer(kind: LayerableKind, index: number, layerId: string): void {
   const current = $part.get()
-  const placement = current.placements[index]
-  if (!placement || placement.layerId === layerId) return
-  if (!current.layers.some((l) => l.id === layerId)) return
+  if (!isMoveTarget(current, layerId)) return
+  const entity = layerableList(current, kind)[index]
+  if (!entity || entity.layerId === layerId) return
+  const name =
+    kind === 'subpart'
+      ? current.placements[index].instanceId
+      : kind === 'connector'
+        ? current.connectors[index].id
+        : current.colliders[index].id
   pushUndo(
     'move to layer',
-    `${current.placements[index].instanceId} → ${current.layers.find((l) => l.id === layerId)?.name ?? layerId}`,
+    `${name} → ${current.layers.find((l) => l.id === layerId)?.name ?? layerId}`,
   )
   const part = clone(current)
-  part.placements[index].layerId = layerId
+  layerableList(part, kind)[index].layerId = layerId
   $part.set(part)
 }
 
 /**
- * Moves every selected SubPart to `layerId` in a single undo step. Selection is
- * preserved: editing a placement's layerId doesn't reorder `placements`, so the
- * selected indices keep pointing at the same SubParts (and the Assets list shows
- * all layers, so they stay visible without changing the active layer). No-op for
- * the entity-only built-in layers, an unknown layer, or an empty selection.
+ * Moves every selected SubPart, connector and collider to `layerId` in a single undo
+ * step (pinned kinds — IVA seats, lights, kittens — are left where they are). Selection
+ * is preserved: editing an entity's layerId doesn't reorder its list, so the selected
+ * indices keep pointing at the same entities (and the Assets list shows all layers, so
+ * they stay visible without changing the active layer). No-op for the entity-only
+ * built-in layers, an unknown layer, or a selection with nothing movable in it.
  */
-export function moveSelectedPlacementsToLayer(layerId: string): void {
-  // SubParts can't live on the entity-only built-in layers.
-  if (ENTITY_ONLY_LAYER_IDS.includes(layerId)) return
-  const indices = $selectedIndices.get()
-  if (indices.length === 0) return
+export function moveSelectionToLayer(layerId: string): void {
   const current = $part.get()
-  if (!current.layers.some((l) => l.id === layerId)) return
+  if (!isMoveTarget(current, layerId)) return
+  const sub = $selectedIndices.get()
+  const con = $selectedConnectorIndices.get()
+  const col = $selectedColliderIndices.get()
+  const total = sub.length + con.length + col.length
+  if (total === 0) return
   const destLayerName = current.layers.find((l) => l.id === layerId)?.name ?? layerId
-  const moveDetail =
-    indices.length === 1
-      ? `${current.placements[indices[0]]?.instanceId ?? ''} → ${destLayerName}`
-      : `${indices.length} parts → ${destLayerName}`
-  pushUndo('move to layer', moveDetail)
+  const only =
+    total === 1
+      ? ((sub.length
+          ? current.placements[sub[0]]?.instanceId
+          : con.length
+            ? current.connectors[con[0]]?.id
+            : current.colliders[col[0]]?.id) ?? '')
+      : null
+  pushUndo(
+    'move to layer',
+    only != null
+      ? `${only} → ${destLayerName}`
+      : `${entityCountLabel(sub.length, con.length, 0, col.length)} → ${destLayerName}`,
+  )
   const part = clone(current)
-  for (const i of indices) {
-    const placement = part.placements[i]
-    if (placement) placement.layerId = layerId
+  for (const [kind, indices] of [
+    ['subpart', sub],
+    ['connector', con],
+    ['collider', col],
+  ] as const) {
+    const list = layerableList(part, kind)
+    for (const i of indices) {
+      const entity = list[i]
+      if (entity) entity.layerId = layerId
+    }
   }
   $part.set(part)
 }

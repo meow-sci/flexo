@@ -27,12 +27,7 @@ import {
   setSelectedLights,
   setSelectedPlacements,
 } from './editorStore'
-import {
-  COLLIDER_LAYER_ID,
-  DEFAULT_LAYER_ID,
-  IVA_SEAT_LAYER_ID,
-  LIGHT_LAYER_ID,
-} from '../ksa/types'
+import { DEFAULT_LAYER_ID, IVA_SEAT_LAYER_ID, LIGHT_LAYER_ID } from '../ksa/types'
 
 beforeEach(() => {
   $layerView.set({})
@@ -78,9 +73,10 @@ describe('layerStore — listed flag', () => {
   })
 
   // Regression: `deselectLayer` used to prune only placements/connectors/kittens, so locking
-  // the Colliders or IVA Seats layer left the gizmo attached to an already-selected entity —
-  // `EditorScene` only re-checks the lock when the SELECTION changes, so the next drag moved it.
-  it('locking a built-in layer prunes EVERY selectable kind, including colliders, IVA seats and lights', () => {
+  // a layer holding a collider or an IVA seat left the gizmo attached to an already-selected
+  // entity — `EditorScene` only re-checks the lock when the SELECTION changes, so the next
+  // drag moved it.
+  it('locking a layer prunes EVERY selectable kind, including colliders, IVA seats and lights', () => {
     addCollider('Box')
     addIvaSeat()
     addLight(null)
@@ -90,7 +86,7 @@ describe('layerStore — listed flag', () => {
     expect($selectedColliderIndices.get()).toEqual([0])
     setLayerLocked(IVA_SEAT_LAYER_ID, true)
     expect($selectedColliderIndices.get()).toEqual([0]) // a different layer — untouched
-    setLayerLocked(COLLIDER_LAYER_ID, true)
+    setLayerLocked(DEFAULT_LAYER_ID, true)
     expect($selectedColliderIndices.get()).toEqual([])
 
     setLayerLocked(IVA_SEAT_LAYER_ID, false)
@@ -101,13 +97,13 @@ describe('layerStore — listed flag', () => {
 
     setSelectedLights([0])
     expect($selectedLightIndices.get()).toEqual([0])
-    setLayerLocked(COLLIDER_LAYER_ID, true)
+    setLayerLocked(DEFAULT_LAYER_ID, true)
     expect($selectedLightIndices.get()).toEqual([0]) // a different layer — untouched
     setLayerLocked(LIGHT_LAYER_ID, true)
     expect($selectedLightIndices.get()).toEqual([])
   })
 
-  it('selectLayerEntities selects a built-in layer’s colliders, IVA seats and lights', () => {
+  it('selectLayerEntities selects a layer’s colliders, IVA seats and lights', () => {
     addCollider('Box')
     addIvaSeat()
     addLight(null)
@@ -118,7 +114,7 @@ describe('layerStore — listed flag', () => {
     expect($selectedColliderIndices.get()).toEqual([])
     expect($selectedLightIndices.get()).toEqual([])
 
-    selectLayerEntities(COLLIDER_LAYER_ID)
+    selectLayerEntities(DEFAULT_LAYER_ID)
     expect($selectedColliderIndices.get()).toEqual([0])
     expect($selectedIvaSeatIndices.get()).toEqual([])
 

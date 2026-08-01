@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  COLLIDER_LAYER_ID,
-  CONNECTOR_LAYER_ID,
   DEFAULT_LAYER_ID,
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
@@ -59,7 +57,7 @@ function sourcePart(): EditingPart {
     flags: ['Internal'],
     capabilities: [],
     siblingIds: [],
-    layerId: CONNECTOR_LAYER_ID,
+    layerId: 'layer1', // an ordinary layer, alongside the SubParts it attaches to
     ...t(0),
   })
   p.kittens.push({ id: 'kitten_1', kind: 'hunter', layerId: KITTEN_LAYER_ID, ...t(0) })
@@ -325,7 +323,12 @@ describe('mergeProjectImport into an empty project', () => {
     // The built-in Default still exists but holds nothing imported.
     expect(part.layers.some((l) => l.id === DEFAULT_LAYER_ID)).toBe(true)
     expect(part.placements.some((p) => p.layerId === DEFAULT_LAYER_ID)).toBe(false)
-    expect(part.connectors[0].layerId).toBe(CONNECTOR_LAYER_ID)
+    // The connector rode its own source layer ("Engines") through the same mapping the
+    // placements did — it is an ordinary layer citizen, not a pinned one.
+    const engines = part.placements.find((p) => p.instanceId === 'trussbara_2')?.layerId
+    expect(part.connectors[0].layerId).toBe(engines)
+    expect(newLayerIds).toContain(part.connectors[0].layerId)
+    // Kittens stay pinned to their built-in layer.
     expect(part.kittens[0].layerId).toBe(KITTEN_LAYER_ID)
   })
 
@@ -416,7 +419,7 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
       flags: [],
       capabilities: [],
       siblingIds: [],
-      layerId: CONNECTOR_LAYER_ID,
+      layerId: DEFAULT_LAYER_ID,
       ...t(0),
     })
     const { part } = mergeProjectImport(dest, buildProjectExport(src, 'X'))
@@ -472,7 +475,7 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
       flags: [],
       capabilities: [],
       siblingIds: [],
-      layerId: CONNECTOR_LAYER_ID,
+      layerId: DEFAULT_LAYER_ID,
       ...t(0),
     })
     dest.placements.push({
@@ -574,8 +577,8 @@ describe('envelopeToPart', () => {
     expect(part.connectors[0].id).toBe('_connector1')
     expect(part.animations[0].id).toBe('anim_src1')
     expect(part.gameData.decoupler?.connectorId).toBe('_connector1')
-    // The three undeletable built-in layers are present.
-    for (const id of [DEFAULT_LAYER_ID, CONNECTOR_LAYER_ID, KITTEN_LAYER_ID]) {
+    // The undeletable built-in layers are present.
+    for (const id of [DEFAULT_LAYER_ID, IVA_SEAT_LAYER_ID, LIGHT_LAYER_ID, KITTEN_LAYER_ID]) {
       expect(part.layers.some((l) => l.id === id)).toBe(true)
     }
     // Binary-backed assets always start empty.
@@ -584,14 +587,14 @@ describe('envelopeToPart', () => {
 })
 
 describe('collider merge', () => {
-  it('appends colliders with fresh _colliderN ids on the built-in Colliders layer', () => {
+  it('appends colliders with fresh _colliderN ids on their mirrored source layer', () => {
     const src = createEmptyPart()
     src.colliders.push({
       id: '_collider1',
       shape: 'Cylinder',
       ownerTemplateId: null,
       ...t(0.5),
-      layerId: COLLIDER_LAYER_ID,
+      layerId: DEFAULT_LAYER_ID,
     })
     const dest = createEmptyPart()
     dest.colliders.push({
@@ -599,15 +602,41 @@ describe('collider merge', () => {
       shape: 'Box',
       ownerTemplateId: null,
       ...identityTransform(),
-      layerId: COLLIDER_LAYER_ID,
+      layerId: DEFAULT_LAYER_ID,
     })
 
     const { part, summary } = mergeProjectImport(dest, buildProjectExport(src, 'S'))
     expect(part.colliders.map((c) => c.id)).toEqual(['_collider1', '_collider2'])
     expect(part.colliders[1].shape).toBe('Cylinder')
     expect(part.colliders[1].position).toEqual({ x: 0.5, y: 0.5, z: 0.5 })
-    expect(part.colliders.every((c) => c.layerId === COLLIDER_LAYER_ID)).toBe(true)
+    // The destination's own collider stays put; the imported one lands on the fresh
+    // mirror of the source's Default, never merging into the destination's Default.
+    expect(part.colliders[0].layerId).toBe(DEFAULT_LAYER_ID)
+    expect(part.colliders[1].layerId).not.toBe(DEFAULT_LAYER_ID)
+    expect(part.layers.some((l) => l.id === part.colliders[1].layerId)).toBe(true)
     expect(summary.colliders).toBe(1)
+  })
+
+  it('puts an imported collider on the SAME layer as the SubParts it came in with', () => {
+    const src = createEmptyPart()
+    src.layers.push({ id: 'layer1', name: 'Engines' })
+    src.placements.push({
+      instanceId: 'trussbara_1',
+      subPartTemplateId: 'Core.TrussBarA',
+      layerId: 'layer1',
+      ...t(1),
+    })
+    src.colliders.push({
+      id: '_collider1',
+      shape: 'Box',
+      ownerTemplateId: null,
+      ...identityTransform(),
+      layerId: 'layer1',
+    })
+
+    const { part } = mergeProjectImport(createEmptyPart(), buildProjectExport(src, 'S'))
+    expect(part.colliders[0].layerId).toBe(part.placements[0].layerId)
+    expect(part.layers.find((l) => l.id === part.colliders[0].layerId)?.name).toBe('Engines')
   })
 
   it('leaves a SubPart owner pointing at a built-in template untouched', () => {
@@ -617,16 +646,16 @@ describe('collider merge', () => {
       shape: 'Box',
       ownerTemplateId: 'CoreLandingA_Subpart_MediumFootA',
       ...identityTransform(),
-      layerId: COLLIDER_LAYER_ID,
+      layerId: DEFAULT_LAYER_ID,
     })
     const { part } = mergeProjectImport(createEmptyPart(), buildProjectExport(src, 'S'))
     expect(part.colliders[0].ownerTemplateId).toBe('CoreLandingA_Subpart_MediumFootA')
   })
 
-  it('restores the Colliders layer when a payload omits it', () => {
+  it('restores a built-in layer when a payload omits it', () => {
     const env = buildProjectExport(createEmptyPart(), 'S')
-    env.data.layers = env.data.layers.filter((l) => l.id !== COLLIDER_LAYER_ID)
-    expect(envelopeToPart(env).layers.map((l) => l.id)).toContain(COLLIDER_LAYER_ID)
+    env.data.layers = env.data.layers.filter((l) => l.id !== IVA_SEAT_LAYER_ID)
+    expect(envelopeToPart(env).layers.map((l) => l.id)).toContain(IVA_SEAT_LAYER_ID)
   })
 })
 

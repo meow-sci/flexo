@@ -13,9 +13,11 @@ import {
 } from './kit'
 import {
   $part,
+  $selectedColliderIndices,
+  $selectedConnectorIndices,
   $selectedIndices,
   isGlassTemplate,
-  moveSelectedPlacementsToLayer,
+  moveSelectionToLayer,
   removeSelected,
   setPlacementsInternal,
 } from '../state/editorStore'
@@ -31,13 +33,16 @@ export function MultiSelectToolbar() {
   const hasMultiSelection = useStore($hasMultiSelection)
   const count = useStore($selectionCount)
   const subCount = useStore($selectedIndices).length
+  const conCount = useStore($selectedConnectorIndices).length
+  const colCount = useStore($selectedColliderIndices).length
 
   if (!hasMultiSelection) return null
 
   return (
     <Toolbar aria-label="Multi-selection actions">
-      {/* Only SubParts can change layer (connectors/kittens are pinned to theirs). */}
-      {subCount > 0 && <ChangeLayerButton />}
+      {/* SubParts, connectors and colliders can change layer; seats/lights/kittens are
+          pinned to their own, and are simply left where they are. */}
+      {subCount + conCount + colCount > 0 && <ChangeLayerButton />}
       {subCount > 0 && <InteriorButton />}
       <DeleteAllButton count={count} />
     </Toolbar>
@@ -47,7 +52,7 @@ export function MultiSelectToolbar() {
 /** "Change Layer" menu: picks a destination layer for the whole selection. */
 function ChangeLayerButton() {
   const part = useStore($part)
-  // SubParts never belong to the entity-only built-in layers (connectors/colliders/seats/lights/kittens).
+  // Nothing may be moved ONTO the entity-only built-in layers (seats/lights/kittens).
   const layers = part.layers.filter((l) => !ENTITY_ONLY_LAYER_IDS.includes(l.id))
 
   return (
@@ -57,7 +62,7 @@ function ChangeLayerButton() {
         Change Layer
       </Button>
       <Popover placement="bottom start" className="w-48">
-        <Menu onAction={(key) => moveSelectedPlacementsToLayer(String(key))}>
+        <Menu onAction={(key) => moveSelectionToLayer(String(key))}>
           {layers.map((l) => (
             <MenuItem key={l.id} id={l.id}>
               {l.name}

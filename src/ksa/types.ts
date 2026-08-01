@@ -109,7 +109,11 @@ export interface Connector extends Transform {
    * verbatim so importing then re-exporting a prefab keeps its node grouping.
    */
   siblingIds: string[]
-  /** Id of the {@link Layer} this connector belongs to (editor-only grouping). */
+  /**
+   * Id of the {@link Layer} this connector belongs to (editor-only grouping). An ORDINARY
+   * layer, exactly like a placement's — a connector is organized, hidden and locked
+   * alongside the SubParts it attaches to.
+   */
   layerId: string
 }
 
@@ -167,7 +171,11 @@ export interface PartCollider extends Transform {
    * (`KeyframeAnimationModule.ApplyAnimationTransforms` flags `NeedsColliderUpdate`).
    */
   ownerTemplateId: string | null
-  /** Always {@link COLLIDER_LAYER_ID}; present for parity with the other layered entities. */
+  /**
+   * Id of the {@link Layer} this collider belongs to (editor-only grouping). An ORDINARY
+   * layer, exactly like a placement's: colliders are organized, hidden and locked alongside
+   * the SubParts whose volume they wrap.
+   */
   layerId: string
 }
 
@@ -300,24 +308,11 @@ export const DEFAULT_PART_ID = 'fixme_part_id'
 export const DEFAULT_LAYER_ID = 'default'
 
 /**
- * Id of the built-in "Connectors" layer. Connectors are always added here so they
- * can be hidden/locked/managed separately from SubPart meshes. Cannot be deleted.
- */
-export const CONNECTOR_LAYER_ID = 'connectors'
-
-/**
  * Id of the built-in "Kittens" layer. Kitten visual aides ({@link KittenInstance})
  * always live here so they can be hidden/locked separately from the part. They are
  * editor-only and are NEVER serialized to export. Cannot be deleted.
  */
 export const KITTEN_LAYER_ID = 'kittens'
-
-/**
- * Id of the built-in "Colliders" layer. {@link PartCollider}s always live here so the
- * collision volume can be hidden/locked separately from the meshes it wraps. Cannot be
- * deleted.
- */
-export const COLLIDER_LAYER_ID = 'colliders'
 
 /**
  * Id of the built-in "IVA Seats" layer. {@link IvaSeat}s always live here so the interior
@@ -338,19 +333,9 @@ export function createDefaultLayer(): Layer {
   return { id: DEFAULT_LAYER_ID, name: 'Default' }
 }
 
-/** The built-in Connectors layer that every new Part starts with. */
-export function createConnectorLayer(): Layer {
-  return { id: CONNECTOR_LAYER_ID, name: 'Connectors' }
-}
-
 /** The built-in Kittens layer that every new Part starts with (editor-only visual aides). */
 export function createKittenLayer(): Layer {
   return { id: KITTEN_LAYER_ID, name: 'Kittens' }
-}
-
-/** The built-in Colliders layer that every new Part starts with. */
-export function createColliderLayer(): Layer {
-  return { id: COLLIDER_LAYER_ID, name: 'Colliders' }
 }
 
 /** The built-in IVA Seats layer that every new Part starts with. */
@@ -366,27 +351,36 @@ export function createLightLayer(): Layer {
 /** The built-in layers present in every Part (and never deletable). */
 export const BUILT_IN_LAYER_IDS: readonly string[] = [
   DEFAULT_LAYER_ID,
-  CONNECTOR_LAYER_ID,
-  COLLIDER_LAYER_ID,
   IVA_SEAT_LAYER_ID,
   LIGHT_LAYER_ID,
   KITTEN_LAYER_ID,
 ]
 
 /**
- * Built-in layers that host their own entity kind EXCLUSIVELY — a SubPart placement can
- * never live on (or be moved to) one of these. {@link DEFAULT_LAYER_ID} is deliberately
- * absent: it is the ordinary placement layer. Every "move to layer" surface (row menu,
- * multi-select toolbar, store guards) filters through this ONE list so a newly added
- * entity layer can't be forgotten at one of the sites.
+ * Built-in layers that host their own entity kind EXCLUSIVELY — nothing else can live on
+ * (or be moved to) one of these. {@link DEFAULT_LAYER_ID} is deliberately absent: it is the
+ * ordinary layer. Every "move to layer" surface (row menu, multi-select toolbar, store
+ * guards) filters through this ONE list so a newly added entity layer can't be forgotten at
+ * one of the sites.
+ *
+ * Connectors and colliders are NOT here: they are ordinary layer citizens like placements
+ * (they ship as part of the Part, so they belong in the same logical groupings as the
+ * geometry). Only the kinds whose identity IS their layer stay pinned — IVA seats and
+ * lights, whose rows are ordinals/markers rather than geometry, and kittens, which are
+ * editor-only visual aides that never reach the export.
  */
 export const ENTITY_ONLY_LAYER_IDS: readonly string[] = [
-  CONNECTOR_LAYER_ID,
-  COLLIDER_LAYER_ID,
   IVA_SEAT_LAYER_ID,
   LIGHT_LAYER_ID,
   KITTEN_LAYER_ID,
 ]
+
+/**
+ * Entity kinds that live on ORDINARY layers and can be moved between them — SubPart
+ * placements, connectors and colliders. The union the "Change Layer" surfaces and
+ * {@link import('../state/editorStore').moveEntitiesToLayer} operate on.
+ */
+export type LayerableKind = 'subpart' | 'connector' | 'collider'
 
 /**
  * One row of KSA's editor-tag registry (`<EditorTagDef>` in
@@ -2195,14 +2189,7 @@ export function createEmptyPart(): EditingPart {
     gameData: createEmptyGameData(),
     subPartGameData: [],
     internalFlags: {},
-    layers: [
-      createDefaultLayer(),
-      createConnectorLayer(),
-      createColliderLayer(),
-      createIvaSeatLayer(),
-      createLightLayer(),
-      createKittenLayer(),
-    ],
+    layers: [createDefaultLayer(), createIvaSeatLayer(), createLightLayer(), createKittenLayer()],
     placements: [],
     connectors: [],
     colliders: [],

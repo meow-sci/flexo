@@ -33,10 +33,9 @@ import { $selectedEntity, $selectionCount, $selectedRefs } from '../state/select
 import { $layerView, isLayerLocked } from '../state/layerStore'
 import {
   centroidOf,
+  groupScaledTransform,
   quatFromEulerDeg,
   rotatedAroundOriginTransform,
-  scaledAroundOriginTransform,
-  scaledInPlaceTransform,
   translatedTransform,
 } from '../three/bulkTransform'
 import {
@@ -338,9 +337,7 @@ function BulkTransformPanel() {
       refs.map((r) => ({
         kind: r.kind,
         index: r.index,
-        transform: origin
-          ? scaledAroundOriginTransform(r.transform, f, origin)
-          : scaledInPlaceTransform(r.transform, f),
+        transform: groupScaledTransform(r.kind, r.transform, f, origin),
       })),
     )
   }

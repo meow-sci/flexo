@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { validateIvaSeats, hasBlockingIvaSeatIssue } from './ivaSeatValidation'
 import {
-  COLLIDER_LAYER_ID,
   DEFAULT_LAYER_ID,
   IVA_SEAT_LAYER_ID,
   createEmptyPart,
@@ -77,7 +76,7 @@ function collider(over: Partial<PartCollider> = {}): PartCollider {
     ownerTemplateId: null,
     ...identityTransform(),
     scale: { x: 2, y: 2, z: 2 },
-    layerId: COLLIDER_LAYER_ID,
+    layerId: DEFAULT_LAYER_ID,
     ...over,
   }
 }

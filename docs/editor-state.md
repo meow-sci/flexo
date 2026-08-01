@@ -8,7 +8,7 @@ the 3D scene subscribes with vanilla `subscribe()`, React reads via
 
 | Atom | Type | Meaning |
 |---|---|---|
-| `$part` | `EditingPart` | The whole part: `partId`, `editorTags`, `gameData` (display name, mass, tanks, power, coupling — the popup-only metadata with no 3D form), `layers[]`, `placements[]`, `connectors[]` (each placement/connector carries a `layerId`; connector `flags` is a `ConnectorFlag[]`). Treated as **immutable** — every mutation replaces it with a fresh object (so subscribers fire). |
+| `$part` | `EditingPart` | The whole part: `partId`, `editorTags`, `gameData` (display name, mass, tanks, power, coupling — the popup-only metadata with no 3D form), `layers[]`, `placements[]`, `connectors[]`, `colliders[]` (each carries a `layerId` naming an ordinary layer; connector `flags` is a `ConnectorFlag[]`). Treated as **immutable** — every mutation replaces it with a fresh object (so subscribers fire). |
 | `$selectedIndices` / `$selectedIndex` | `number[]` / `number` | SubPart selection (multi); `$selectedIndex` is the primary (last) one or `-1`. |
 | `$selectedConnectorIndex` | `number` | Selected connector, or `-1`. Mutually exclusive with SubPart selection. |
 | `$selectedColliderIndices` / `$selectedColliderIndex` | `number[]` / `number` | Collider selection — the **fourth** `SelectableKind`, alongside subpart/connector/kitten. Mutually exclusive under the single-kind setters, but `setSelection` / `toggleEntity` can span all five (the Assets list's cross-kind multi-select). |
@@ -109,7 +109,8 @@ one of two patterns:
    `setConnectorFlags`, `setEditorTags`, the GameData list/toggle/Select actions
    (`addTank`/`removeTank`/`setTankShape`, power add/remove, coupling enable +
    `set*Connector`, `setCustomMassEnabled`), and the layer mutators `createLayer`,
-   `renameLayer`, `deleteLayer`, `reorderLayers` (see [layers.md](./layers.md)).
+   `renameLayer`, `deleteLayer`, `clearLayer`, `reorderLayers`, `moveEntityToLayer`,
+   `moveSelectionToLayer` (see [layers.md](./layers.md)).
 2. **Streaming** (rapid updates that collapse to one step — a gizmo drag or a typing
    session): the action does **not** push; the caller pushes once at interaction
    start (gizmo drag-start; field focus). `updatePlacementTransform(s)`,

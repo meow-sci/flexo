@@ -11,7 +11,7 @@ import {
   undo,
 } from '../state/editorStore'
 import { setLayerLocked } from '../state/layerStore'
-import { CONNECTOR_LAYER_ID, DEFAULT_LAYER_ID } from '../ksa/types'
+import { DEFAULT_LAYER_ID } from '../ksa/types'
 import { rotateSelectionBy } from './rotateSelection'
 
 const HALF_PI = Math.PI / 2
@@ -20,7 +20,7 @@ beforeEach(() => {
   newPart()
   // Clear any persisted lock state from a previous test.
   setLayerLocked(DEFAULT_LAYER_ID, false)
-  setLayerLocked(CONNECTOR_LAYER_ID, false)
+  setLayerLocked(DEFAULT_LAYER_ID, false)
 })
 
 /** Seeds the part with `n` placements at the given positions and selects them all. */

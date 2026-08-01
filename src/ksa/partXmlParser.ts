@@ -1,8 +1,6 @@
 import {
-  COLLIDER_LAYER_ID,
   COLLIDER_SHAPES,
   CONNECTOR_CAPABILITIES,
-  CONNECTOR_LAYER_ID,
   createEmptyGameData,
   createSubPartGameData,
   DEFAULT_LAYER_ID,
@@ -179,9 +177,9 @@ export function connectorsFromPartElement(part: Element): Connector[] {
       siblingIds: directChildren(conn, 'Sibling')
         .map((s) => s.getAttribute('Id') ?? '')
         .filter((s) => s),
-      // Connectors live in the built-in Connectors layer (managed separately from
-      // SubPart meshes); importing into the editor keeps them there.
-      layerId: CONNECTOR_LAYER_ID,
+      // XML carries no layers: everything parsed lands on Default, exactly like the
+      // SubPart placements it sits with (an import then re-homes the whole Part).
+      layerId: DEFAULT_LAYER_ID,
     })
   }
   return connectors
@@ -238,7 +236,8 @@ export function collidersFromElement(
         // <Collider2Asmb> is Euler XYZ radians — the same convention as a <Rotation>.
         rotation: readVec3Attrs(directChildren(shapeEl, 'Collider2Asmb')[0], ZERO_VEC3) as EulerXYZ,
         scale: colliderSizeFromDimensions(shape, dims),
-        layerId: COLLIDER_LAYER_ID,
+        // XML carries no layers — Default, like the placements/connectors alongside it.
+        layerId: DEFAULT_LAYER_ID,
       })
     }
   }

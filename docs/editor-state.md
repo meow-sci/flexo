@@ -16,6 +16,7 @@ the 3D scene subscribes with vanilla `subscribe()`, React reads via
 | `$selectedLightIndices` / `$selectedLightIndex` | `number[]` / `number` | Light selection — the **sixth** `SelectableKind` (`'light'`), same shape again. See [lights.md](./lights.md). |
 | `$lightEditContext` | `Record<string, number>` | Per light id, **which placement of its owner template** was last clicked. Ephemeral (not persisted, not undone). One atom, so the gizmo's write-back frame and the inspector's part-frame fields can never disagree about which instance an edit converts through. |
 | `$activeLayerId` | `string` | Layer new items land in. Ephemeral (not persisted, not undone); clamped to a live layer. See [layers.md](./layers.md). |
+| `$chainSession` | `ChainSession \| null` | The open action-chain session (`src/state/chainStore.ts`): frozen seed `instanceId`s + the ordered step list. **Ephemeral by design** — never persisted, never undone; the document is untouched until Apply, which is what makes Cancel unconditionally safe. The only persisted piece is the module-private `flexo:chainDefaults` (last-used parameters per op kind). See [action-chains.md](./action-chains.md). |
 | `$toolMode` | `'translate'\|'rotate'\|'scale'` | Drives the 3D gizmo. |
 | `$snap` | `{ translate?, rotateDeg? }` | Grid / rotation snap (0/undefined = off). |
 | `$canUndo` / `$canRedo` | `boolean` | For toolbar button enablement. |
@@ -84,6 +85,20 @@ than silently drop the write).
 `set*Connector` / `setDecouplerForce` / `setDockingPort{LatchingImpulse,PushoffForce}`.
 List add/remove, checkboxes and
 Select picks are **discrete**; free-text/number field edits are **streaming**.
+
+**Action-chain actions** (see [action-chains.md](./action-chains.md)) live in two places. The
+**session** is `src/state/chainStore.ts` — `openChain(seedIds)` / `closeChain()` /
+`addChainOp(kind)` / `updateChainOp(id, patch)` / `removeChainOp(id)` / `moveChainOp(id, ±1)`,
+plus `defaultOp` and `clampOp`. **None of them push undo**: the session is ephemeral UI state
+(selection-tier), not document state, so the invariant below does not apply to them.
+`updateChainOp` also writes the op's parameters to the persisted `flexo:chainDefaults` blob,
+which `defaultOp` reads back defensively (unknown or malformed fields degrade to the hardcoded
+defaults — no migration). The **commit** is `applyActionChain(entries, detail)` in
+`editorStore.ts`, a discrete mutation that collapses seed moves *and* every clone into one undo
+entry, and selects seeds + copies afterwards. The live evaluation between the two,
+`$chainEval`, is a `computed([$part, $chainSession], …)` in **`src/three/chainEval.ts`** rather
+than `src/state/` — it needs the three.js math engine (`chainMath.ts`), and it is what both the
+palette footer and the ghost preview read.
 
 Conventions:
 - Instance ids: `lastDotSegment(templateId).toLowerCase() + "_" + (count+1)`
@@ -204,6 +219,10 @@ Shift+click on pointer-down (before react-aria's own, anchorless extension runs)
 - `PartDataButton.tsx` — the **Part Data** dialog (Part id, editor tags, and the
   `gameData` sections; see [xml-io.md](./xml-io.md)). `ExportButton.tsx` exports.
 - `LayersButton.tsx` / `LayersPanel.tsx` — sidebar Layers popover (see [layers.md](./layers.md)).
+- `chain/ChainPalette.tsx` / `chain/ChainStepCard.tsx` — the floating, **non-modal**
+  action-chain palette (`mod+K` or the selection toolbar's Chain button; self-gates on
+  `$chainSession`) and its per-step parameter cards. Applying is one undo step; see
+  [action-chains.md](./action-chains.md).
 - `EnginePanel.tsx` / `EngineToolbar.tsx` — the full-sidebar **Engine Designer**
   (`$inspectorMode === 'engine'`, ephemeral atoms in `engineStore.ts`) with a live
   thrust/Isp readout; `EngineSections.tsx` holds the reusable combustor/nozzle/controller/

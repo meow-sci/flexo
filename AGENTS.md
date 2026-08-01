@@ -49,6 +49,7 @@ Feature docs live in `docs/`. Read the relevant one before working on an area, a
 - [docs/importing-models.md](docs/importing-models.md) - importing a Blender/DCC `.glb`/`.gltf` as real KSA SubParts: the Blender recipe, the glTF→SubPart/placement/material mapping, the warning catalog, storage + export, and the deliberate limits
 - [docs/iva-seats.md](docs/iva-seats.md) - authoring interior camera vantage points: the `<IVASeat>` document model, the rotation ⇄ `<ForwardAxis>`/`<UpAxis>` convention, seat order as game data, the "sit in this seat" preview and its honest limits, and the per-SubPart-template `<Internal>` interior-only flag
 - [docs/lights.md](docs/lights.md) - part cast lights (`<Light>`) as first-class 3D entities: the normalized `PartLight` model (part-level AND SubPart-owned sites), the built-in Lights layer, the bulb + **+X** aim-cone markers, selection semantics ("one light per template → N markers, edits affect all")
+- [docs/action-chains.md](docs/action-chains.md) - the `mod+K` action-chain palette: composable transform/array steps over a frozen SubPart selection, the op semantics (count includes the original, iterated linear delta, the radial angle-step rule and +X default axis), the instance/ghost caps, and what the one-undo-step commit does and does NOT carry (no reference remapping, collision-skipping fresh ids)
 
 # project constitution
 

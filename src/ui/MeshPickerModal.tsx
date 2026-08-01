@@ -4,6 +4,7 @@ import { GridList, GridListItem, type Selection } from 'react-aria-components'
 import { Button, Dialog, DialogHeader, Modal, SearchField, cn, gridRowClass } from './kit'
 import { $part } from '../state/editorStore'
 import { $activeAnimation, $activeJointId, attachToJoint } from '../state/animationStore'
+import { useShiftRangeSelect } from './rangeSelect'
 
 /** One pickable SubPart row (a placed instance — the unit a joint drives). */
 interface PickRow {
@@ -41,7 +42,12 @@ export function MeshPickerModal({
       : [],
   )
 
-  const onSelectionChange = (keys: Selection) => {
+  // Same list conventions as the Assets list: click, Cmd/Ctrl+click, Cmd/Ctrl+A, and
+  // Shift+click to extend across everything in between (see useShiftRangeSelect).
+  const range = useShiftRangeSelect({ orderedKeys: rows.map((r) => r.id), selectedKeys: picked })
+
+  const onSelectionChange = (reported: Selection) => {
+    const keys = range.resolveSelection(reported)
     if (keys === 'all') {
       setPicked(new Set(rows.map((r) => r.id)))
       return
@@ -101,6 +107,7 @@ export function MeshPickerModal({
                 <GridListItem
                   id={row.id}
                   textValue={row.name}
+                  {...range.rowProps(row.id)}
                   className={(rp) => cn(gridRowClass(rp), 'py-1.5')}
                 >
                   <div className="flex min-w-0 flex-1 flex-col">

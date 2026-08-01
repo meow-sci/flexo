@@ -159,9 +159,43 @@ typed; that is what made fractional/negative entry feel like a fight. The shared
 Focus is still the streaming-undo boundary (`onInteractionStart`), so a typing session —
 live commits, arrow steps and all — collapses into one undo step.
 
+## List selection — `src/ui/rangeSelect.ts`
+
+The app's multi-select lists — the **Assets list** (`AssetsList.tsx`, the sectioned
+SubParts/connectors/colliders/seats/lights/kittens list) and the anim-mode **Mesh
+Picker** (`MeshPickerModal.tsx`) — carry the usual desktop-list gestures: click
+replaces, Cmd/Ctrl+click toggles one row, Cmd/Ctrl+A takes everything selectable,
+Shift+arrows extend by a row, and **Shift+click extends across every row in between**.
+
+Only the last one is ours. react-aria's `SelectionManager.extendSelection` reads the
+range anchor off the `Selection` object it handed to `onSelectionChange` — and both
+lists are **controlled** (the Assets list from the six per-kind selection stores, the
+picker from local state), so what comes back down is a freshly built plain `Set` with
+no `anchorKey`. react-aria then anchors on the clicked row itself and a Shift+click
+degenerates into "add the one row you clicked", which is the bug behind issue #5.
+
+`useShiftRangeSelect` takes the gesture over: `rowProps(key)` records a primary-button
+Shift+click on pointer-down (before react-aria's own, anchorless extension runs), and
+`resolveSelection` swaps react-aria's keys for the computed range at the top of
+`onSelectionChange`. Every other gesture passes through untouched. The rule
+(`shiftRangeSelection`, unit-tested in `rangeSelect.test.ts`):
+
+- the range runs from the clicked row to the **nearest already-selected row**, inclusive,
+  and is added to the current selection — so for the ordinary contiguous selection this
+  is exactly the expected convention, in either direction
+- it only ever **grows**: there is no persistent anchor to trim toward, because selection
+  here also arrives from the 3D viewport and "select all in layer". A Shift+click inside
+  the selection fills the closest gap instead of shrinking the range, and a
+  Cmd/Ctrl-built non-contiguous selection keeps its other holes.
+- rows that can't be selected are **skipped, not blocking**: in the Assets list a range
+  spans past (and up to) rows on a hidden or locked layer without selecting them, the
+  same rule click-selection and the 3D viewport already follow
+- ranges are computed over the displayed row order with the layer sections flattened, so
+  one range can span layers *and* entity kinds (`setSelection` takes all six at once)
+
 ## UI panels (`src/ui/`)
 - `SubPartBrowser.tsx` — filterable catalog list; click adds via `addSubPart`.
-- `PlacementList.tsx` — placed instances; select/duplicate/delete.
+- `AssetsList.tsx` — the placed-entity list (see above); select/duplicate/delete.
 - `TransformInspector.tsx` — numeric position/rotation/scale (two-way bound); for a
   selected connector, the three flag checkboxes (Internal/ToSurface/FromSurface).
 - `Toolbar.tsx` — tool mode (Segmented), snap (NumberField), undo/redo.
@@ -188,3 +222,8 @@ selection clamping, and undo/redo — including that discrete mutations self-rec
 (`setEditorTags`, `setConnectorFlags`), that streaming mutations add no step on their
 own (`updatePlacementTransform`; `setPartId` reverts only when the caller pushed at
 interaction start).
+
+`src/ui/rangeSelect.test.ts` covers the Shift+click range rule (direction, gap filling,
+ties, unselectable rows, rows filtered out by a search) plus the mounted-hook plumbing:
+a Shift+click replaces react-aria's keys exactly once, and every other gesture — plain
+click, Cmd/Ctrl+click, Cmd/Ctrl+A, Shift+secondary-button — passes straight through.

@@ -47,19 +47,21 @@ export const $selectedPlacements = computed(
     }),
 )
 
-/** True when anything (SubParts, connectors, IVA seats, lights, or kittens) is selected. */
+/** True when anything (SubParts, connectors, colliders, IVA seats, lights, kittens) is selected. */
 export const $hasSelection = computed(
   [
     $selectedIndices,
     $selectedConnectorIndices,
     $selectedKittenIndices,
+    $selectedColliderIndices,
     $selectedIvaSeatIndices,
     $selectedLightIndices,
   ],
-  (indices, conIndices, kitIndices, seatIndices, ligIndices): boolean =>
+  (indices, conIndices, kitIndices, colIndices, seatIndices, ligIndices): boolean =>
     indices.length > 0 ||
     conIndices.length > 0 ||
     kitIndices.length > 0 ||
+    colIndices.length > 0 ||
     seatIndices.length > 0 ||
     ligIndices.length > 0,
 )
@@ -73,11 +75,12 @@ export const $hasMultiSelection = computed(
     $selectedIndices,
     $selectedConnectorIndices,
     $selectedKittenIndices,
+    $selectedColliderIndices,
     $selectedIvaSeatIndices,
     $selectedLightIndices,
   ],
-  (sub, con, kit, seat, lig): boolean =>
-    sub.length + con.length + kit.length + seat.length + lig.length > 1,
+  (sub, con, kit, col, seat, lig): boolean =>
+    sub.length + con.length + kit.length + col.length + seat.length + lig.length > 1,
 )
 
 /** Total number of selected entities across all kinds. */

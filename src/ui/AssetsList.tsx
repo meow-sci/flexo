@@ -34,7 +34,7 @@ import {
   duplicatePlacement,
   duplicateSelected,
   isGlassTemplate,
-  movePlacementToLayer,
+  moveEntityToLayer,
   removePlacement,
   removeSelected,
   selectCollider,
@@ -48,16 +48,7 @@ import {
 import { $catalogIndex } from '../state/catalogStore'
 import { resolveInternal } from '../ksa/modExport'
 import { $layerView, layerViewState } from '../state/layerStore'
-import {
-  COLLIDER_LAYER_ID,
-  CONNECTOR_LAYER_ID,
-  ENTITY_ONLY_LAYER_IDS,
-  IVA_SEAT_LAYER_ID,
-  KITTEN_LAYER_ID,
-  LIGHT_LAYER_ID,
-  meshKind,
-  type Layer,
-} from '../ksa/types'
+import { ENTITY_ONLY_LAYER_IDS, meshKind, type Layer, type LayerableKind } from '../ksa/types'
 import { seatAxesFromRotation } from '../ksa/ivaSeatAxes'
 import { enterSeatView } from '../state/ivaStore'
 import { formatG6 } from '../ksa/formatG6'
@@ -124,10 +115,11 @@ function parseKey(key: string): { kind: Kind; raw: string } {
 }
 
 /**
- * The unified inspector "Assets" list: one section per layer (filtered by each
- * layer's "in asset list" toggle), with normal layers listing SubParts and the
- * built-in entity layers listing their own kind (connectors, colliders, IVA seats,
- * lights, kittens).
+ * The unified inspector "Assets" list: one section per layer (filtered by each layer's
+ * "in asset list" toggle), listing everything that layer holds. SubParts, connectors and
+ * colliders are ordinary layer citizens and freely mix within a section (grouped by kind
+ * for readability); the pinned kinds — IVA seats, lights, kittens — only ever appear
+ * under their own built-in layer.
  *
  * It is a single react-aria GridList so multi-select spans layers. Because the
  * per-kind selection stores are mutually exclusive, row keys are kind-prefixed and
@@ -165,128 +157,137 @@ export function AssetsList() {
 
   const q = search.trim().toLowerCase()
   const match = (...vals: string[]) => q === '' || vals.some((v) => v.toLowerCase().includes(q))
+  // Row builders, one per kind, each filtering to the layer being rendered. A layer holds
+  // whatever was put on it — a mix of SubParts, connectors and colliders is the normal
+  // case — so every builder runs for every layer and the kinds simply come out grouped.
+  const subPartRows = (layerId: string, hidden: boolean): Row[] =>
+    part.placements.flatMap((p, i) => {
+      if (p.layerId !== layerId) return []
+      // The resolved <Internal> flag (document override → the built-in's catalogued value)
+      // is shown on the row: it now defaults to the game's own value instead of being
+      // normalised away on export, so it has to be visible — and searchable.
+      const interior = resolveInternal(
+        part,
+        p.subPartTemplateId,
+        catalogIndex.get(p.subPartTemplateId),
+      )
+      if (!match(p.instanceId, p.subPartTemplateId, interior ? 'interior' : '')) return []
+      return [
+        {
+          id: keyOf('subpart', p.instanceId),
+          kind: 'subpart' as const,
+          index: i,
+          name: p.instanceId,
+          sub: interior ? `${p.subPartTemplateId} · interior` : p.subPartTemplateId,
+          hidden,
+        },
+      ]
+    })
+  const connectorRows = (layerId: string, hidden: boolean): Row[] =>
+    part.connectors.flatMap((c, i) =>
+      c.layerId === layerId && match(c.id, ...c.flags, ...c.capabilities)
+        ? [
+            {
+              id: keyOf('connector', c.id),
+              kind: 'connector' as const,
+              index: i,
+              name: c.id,
+              // Flags (how it orients) and capabilities (what may flow across it)
+              // are independent axes — show both, e.g. "ToSurface · BulkFluid".
+              sub: [...c.flags, ...c.capabilities].join(' · ') || 'no flags',
+              hidden,
+            },
+          ]
+        : [],
+    )
+  const colliderRows = (layerId: string, hidden: boolean): Row[] =>
+    part.colliders.flatMap((c, i) =>
+      c.layerId === layerId && match(c.id, c.shape, c.ownerTemplateId ?? '')
+        ? [
+            {
+              id: keyOf('collider', c.id),
+              kind: 'collider' as const,
+              index: i,
+              name: c.id,
+              // Shape plus its owner — a SubPart-owned collider behaves very
+              // differently (one per placement, follows animation), so say so.
+              sub: `${c.shape} · ${c.ownerTemplateId ? lastSegment(c.ownerTemplateId) : 'Part'}`,
+              hidden,
+            },
+          ]
+        : [],
+    )
+  // Seats have no user-facing name of their own (their document id is never exported),
+  // so the row IS the ordinal — and the order is the game's seat cycle order, with
+  // index 0 the seat IVA opens on.
+  const ivaSeatRows = (layerId: string, hidden: boolean): Row[] =>
+    part.ivaSeats.flatMap((s, i) => {
+      const name = `Seat ${i + 1}`
+      const isDefault = i === 0
+      if (!(s.layerId === layerId && match(s.id, name, isDefault ? 'default' : ''))) return []
+      // The derived <ForwardAxis> — the vector that actually ships in the XML.
+      const { forward } = seatAxesFromRotation(s.rotation)
+      const aim = `${formatG6(forward.x)}, ${formatG6(forward.y)}, ${formatG6(forward.z)}`
+      return [
+        {
+          id: keyOf('ivaSeat', s.id),
+          kind: 'ivaSeat' as const,
+          index: i,
+          name,
+          sub: `→ ${aim}${isDefault ? ' · default' : ''}`,
+          hidden,
+        },
+      ]
+    })
+  const lightRows = (layerId: string, hidden: boolean): Row[] =>
+    part.lights.flatMap((li, i) =>
+      li.layerId === layerId && match(li.id, li.type, li.ownerTemplateId ?? '')
+        ? [
+            {
+              id: keyOf('light', li.id),
+              kind: 'light' as const,
+              index: i,
+              name: li.id,
+              // Type plus its owner — a SubPart-owned light behaves very differently
+              // (one marker per placement, edits affect all), so say so; a part-level
+              // light just shows its type.
+              sub: li.ownerTemplateId
+                ? `${li.type} · via ${lastSegment(li.ownerTemplateId)}`
+                : li.type,
+              hidden,
+            },
+          ]
+        : [],
+    )
+  const kittenRows = (layerId: string, hidden: boolean): Row[] =>
+    part.kittens.flatMap((k, i) =>
+      k.layerId === layerId && match(k.id, k.kind)
+        ? [
+            {
+              id: keyOf('kitten', k.id),
+              kind: 'kitten' as const,
+              index: i,
+              name: k.id,
+              sub: k.kind,
+              hidden,
+            },
+          ]
+        : [],
+    )
+
   const sections: Section[] = part.layers
     .filter((l) => layerViewState(layerView, l.id).listed)
     .map((l) => {
       const view = layerViewState(layerView, l.id)
       const hidden = !view.visible
-      let rows: Row[]
-      if (l.id === CONNECTOR_LAYER_ID) {
-        rows = part.connectors.flatMap((c, i) =>
-          c.layerId === l.id && match(c.id, ...c.flags, ...c.capabilities)
-            ? [
-                {
-                  id: keyOf('connector', c.id),
-                  kind: 'connector' as const,
-                  index: i,
-                  name: c.id,
-                  // Flags (how it orients) and capabilities (what may flow across it)
-                  // are independent axes — show both, e.g. "ToSurface · BulkFluid".
-                  sub: [...c.flags, ...c.capabilities].join(' · ') || 'no flags',
-                  hidden,
-                },
-              ]
-            : [],
-        )
-      } else if (l.id === COLLIDER_LAYER_ID) {
-        rows = part.colliders.flatMap((c, i) =>
-          c.layerId === l.id && match(c.id, c.shape, c.ownerTemplateId ?? '')
-            ? [
-                {
-                  id: keyOf('collider', c.id),
-                  kind: 'collider' as const,
-                  index: i,
-                  name: c.id,
-                  // Shape plus its owner — a SubPart-owned collider behaves very
-                  // differently (one per placement, follows animation), so say so.
-                  sub: `${c.shape} · ${c.ownerTemplateId ? lastSegment(c.ownerTemplateId) : 'Part'}`,
-                  hidden,
-                },
-              ]
-            : [],
-        )
-      } else if (l.id === IVA_SEAT_LAYER_ID) {
-        // Seats have no user-facing name of their own (their document id is never
-        // exported), so the row IS the ordinal — and the order is the game's seat
-        // cycle order, with index 0 the seat IVA opens on.
-        rows = part.ivaSeats.flatMap((s, i) => {
-          const name = `Seat ${i + 1}`
-          const isDefault = i === 0
-          if (!(s.layerId === l.id && match(s.id, name, isDefault ? 'default' : ''))) return []
-          // The derived <ForwardAxis> — the vector that actually ships in the XML.
-          const { forward } = seatAxesFromRotation(s.rotation)
-          const aim = `${formatG6(forward.x)}, ${formatG6(forward.y)}, ${formatG6(forward.z)}`
-          return [
-            {
-              id: keyOf('ivaSeat', s.id),
-              kind: 'ivaSeat' as const,
-              index: i,
-              name,
-              sub: `→ ${aim}${isDefault ? ' · default' : ''}`,
-              hidden,
-            },
-          ]
-        })
-      } else if (l.id === LIGHT_LAYER_ID) {
-        rows = part.lights.flatMap((li, i) =>
-          li.layerId === l.id && match(li.id, li.type, li.ownerTemplateId ?? '')
-            ? [
-                {
-                  id: keyOf('light', li.id),
-                  kind: 'light' as const,
-                  index: i,
-                  name: li.id,
-                  // Type plus its owner — a SubPart-owned light behaves very
-                  // differently (one marker per placement, edits affect all), so
-                  // say so; a part-level light just shows its type.
-                  sub: li.ownerTemplateId
-                    ? `${li.type} · via ${lastSegment(li.ownerTemplateId)}`
-                    : li.type,
-                  hidden,
-                },
-              ]
-            : [],
-        )
-      } else if (l.id === KITTEN_LAYER_ID) {
-        rows = part.kittens.flatMap((k, i) =>
-          k.layerId === l.id && match(k.id, k.kind)
-            ? [
-                {
-                  id: keyOf('kitten', k.id),
-                  kind: 'kitten' as const,
-                  index: i,
-                  name: k.id,
-                  sub: k.kind,
-                  hidden,
-                },
-              ]
-            : [],
-        )
-      } else {
-        rows = part.placements.flatMap((p, i) => {
-          // The resolved <Internal> flag (document override → the built-in's catalogued value)
-          // is shown on the row: it now defaults to the game's own value instead of being
-          // normalised away on export, so it has to be visible — and searchable.
-          const interior = resolveInternal(
-            part,
-            p.subPartTemplateId,
-            catalogIndex.get(p.subPartTemplateId),
-          )
-          return p.layerId === l.id &&
-            match(p.instanceId, p.subPartTemplateId, interior ? 'interior' : '')
-            ? [
-                {
-                  id: keyOf('subpart', p.instanceId),
-                  kind: 'subpart' as const,
-                  index: i,
-                  name: p.instanceId,
-                  sub: interior ? `${p.subPartTemplateId} · interior` : p.subPartTemplateId,
-                  hidden,
-                },
-              ]
-            : []
-        })
-      }
+      const rows = [
+        ...subPartRows(l.id, hidden),
+        ...connectorRows(l.id, hidden),
+        ...colliderRows(l.id, hidden),
+        ...ivaSeatRows(l.id, hidden),
+        ...lightRows(l.id, hidden),
+        ...kittenRows(l.id, hidden),
+      ]
       return { id: l.id, layer: l, rows, count: rows.length, hidden, locked: view.locked }
     })
     .filter((s) => s.rows.length > 0)
@@ -490,10 +491,44 @@ function AssetRowMenu({ row }: { row: Row }) {
 }
 
 /**
+ * "Change Layer" submenu — the shared surface for every kind that lives on an ordinary
+ * layer (SubParts, connectors, colliders). The entity-only built-in layers (IVA seats,
+ * lights, kittens) are filtered out because nothing else may live there, and the row's
+ * own layer is disabled.
+ */
+function ChangeLayerItem({
+  kind,
+  index,
+  layerId,
+}: {
+  kind: LayerableKind
+  index: number
+  layerId: string
+}) {
+  const part = useStore($part)
+  const layers = part.layers.filter((l) => !ENTITY_ONLY_LAYER_IDS.includes(l.id))
+  return (
+    <SubmenuTrigger>
+      <MenuItem>Change Layer</MenuItem>
+      <Popover className="w-44">
+        <Menu
+          disabledKeys={[layerId]}
+          onAction={(key) => moveEntityToLayer(kind, index, String(key))}
+        >
+          {layers.map((l) => (
+            <MenuItem key={l.id} id={l.id}>
+              {l.name}
+            </MenuItem>
+          ))}
+        </Menu>
+      </Popover>
+    </SubmenuTrigger>
+  )
+}
+
+/**
  * Per-row menu for a placed SubPart: Duplicate, Manage Textures (custom meshes
- * only), Manage Tanks, Interior (IVA only), Change Layer (a submenu of layers,
- * excluding the special Connectors/Kittens layers SubParts can't live on), and
- * Delete (confirmed).
+ * only), Manage Tanks, Interior (IVA only), Change Layer, and Delete (confirmed).
  *
  * Every item acts on THIS row by index, independent of the multi-selection —
  * with ONE exception: `Interior (IVA only)` applies to the whole SubPart
@@ -507,7 +542,6 @@ function SubPartRowMenu({ index }: { index: number }) {
   const [managingTanks, setManagingTanks] = useState(false)
   const placement = part.placements[index]
   if (!placement) return null
-  const layers = part.layers.filter((l) => !ENTITY_ONLY_LAYER_IDS.includes(l.id))
   const customMesh = part.customMeshes.find((m) => m.subPartId === placement.subPartTemplateId)
 
   // The one multi-selection-aware item: this row alone unless it is part of the current
@@ -578,21 +612,7 @@ function SubPartRowMenu({ index }: { index: number }) {
                 </Popover>
               </SubmenuTrigger>
             )}
-            <SubmenuTrigger>
-              <MenuItem>Change Layer</MenuItem>
-              <Popover className="w-44">
-                <Menu
-                  disabledKeys={[placement.layerId]}
-                  onAction={(key) => movePlacementToLayer(index, String(key))}
-                >
-                  {layers.map((l) => (
-                    <MenuItem key={l.id} id={l.id}>
-                      {l.name}
-                    </MenuItem>
-                  ))}
-                </Menu>
-              </Popover>
-            </SubmenuTrigger>
+            <ChangeLayerItem kind="subpart" index={index} layerId={placement.layerId} />
             <MenuItem variant="danger" onAction={() => setConfirmDelete(true)}>
               Delete
             </MenuItem>
@@ -622,12 +642,22 @@ function SubPartRowMenu({ index }: { index: number }) {
 
 /**
  * Per-row menu for a connector, collider, IVA seat, light or kitten: Duplicate +
- * Delete. These act via the shared selection-based store actions (which branch by
- * kind), so the row is selected first — natural for a single-row action.
+ * Delete, plus Change Layer for the two kinds that live on ordinary layers. Duplicate
+ * and Delete act via the shared selection-based store actions (which branch by kind),
+ * so the row is selected first — natural for a single-row action.
  */
 function SimpleRowMenu({ row }: { row: Row }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const part = useStore($part)
+  // Only connectors and colliders can change layer; the rest are pinned to their own.
+  const layerable: LayerableKind | null =
+    row.kind === 'connector' ? 'connector' : row.kind === 'collider' ? 'collider' : null
+  const rowLayerId =
+    row.kind === 'connector'
+      ? part.connectors[row.index]?.layerId
+      : row.kind === 'collider'
+        ? part.colliders[row.index]?.layerId
+        : undefined
   const label =
     row.kind === 'connector'
       ? 'connector'
@@ -686,6 +716,9 @@ function SimpleRowMenu({ row }: { row: Row }) {
             >
               Duplicate
             </MenuItem>
+            {layerable && rowLayerId != null && (
+              <ChangeLayerItem kind={layerable} index={row.index} layerId={rowLayerId} />
+            )}
             <MenuItem variant="danger" onAction={() => setConfirmDelete(true)}>
               Delete
             </MenuItem>

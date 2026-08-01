@@ -5,7 +5,7 @@ import {
   pointInCollider,
   type PlacedCollider,
 } from './colliderCoverage'
-import { COLLIDER_LAYER_ID, identityTransform, type ColliderShape, type Vec3 } from '../ksa/types'
+import { DEFAULT_LAYER_ID, identityTransform, type ColliderShape, type Vec3 } from '../ksa/types'
 
 const IDENTITY: readonly [number, number, number, number] = [0, 0, 0, 1]
 
@@ -22,7 +22,7 @@ function placed(
       ownerTemplateId: null,
       ...identityTransform(),
       scale: size,
-      layerId: COLLIDER_LAYER_ID,
+      layerId: DEFAULT_LAYER_ID,
     },
     position,
     quaternion,

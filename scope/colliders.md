@@ -23,24 +23,24 @@ already models.
 
 ## Flexo modules
 
-| Path                                         | Role                                                                                                                                        |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/ksa/types.ts`                           | `ColliderShape`, `COLLIDER_SHAPES`, `PartCollider`, `EditingPart.colliders`, `COLLIDER_LAYER_ID` + `createColliderLayer`.                   |
-| `src/ksa/colliderSize.ts`                    | **The only place that knows the size ↔ `<LengthX\|Y\|Z>`/`<Radius>` mapping** and the per-shape `normalizeColliderSize` constraints.        |
-| `src/ksa/partXmlParser.ts`                   | `collidersFromElement` (serves all four authoring sites) + `subPartCollidersFromRoot`; `'Collider'` in both `KNOWN_*_GAMEDATA_CHILDREN`.    |
-| `src/ksa/partXmlSerializer.ts`               | `buildColliderElement` + `collidersByOwner`; owner grouping inside `serializeGameData`. `COLLIDER_COMPONENT_ID`.                            |
-| `src/ksa/catalog.ts`                         | `CatalogSubPart.colliders` — geometry `<SubPart><Collider>`, used ONLY for the export-variant carry-forward.                                |
-| `src/ksa/partCatalog.ts`                     | `CatalogPart.colliders` — geometry `<Part><Collider>` + `<PartGameData><Collider>` + the `<SubPartGameData><Collider>` of placed templates. |
-| `src/ksa/modExport.ts`                       | `hasSubPartGameData` counts colliders (forces a variant); `ExportVariant.colliders`.                                                        |
-| `src/ksa/assetsXmlSerializer.ts`             | Re-declares an inherited built-in collider on a `ReferenceSubPartPlan` (`INHERITED_COLLIDER_COMPONENT_ID`).                                 |
-| `src/state/editorStore.ts`                   | `ImportedGameData.colliders`; fresh `_colliderN` ids on import.                                                                             |
-| `src/state/projectCodec.ts` / `-Transfer.ts` | `CCollider` (`cl`) wire form; additive paste with fresh ids.                                                                                |
-| `src/three/ColliderObject.ts`                | Unit-normalised wireframe + fill; `group.scale` IS the size in meters.                                                                      |
-| `src/three/wireShapes.ts`                    | Shared unit outlines (incl. the ratio-dependent capsule), also used by `ContainerLayer`.                                                    |
-| `src/three/coords.ts`                        | `colliderWorld` / `colliderLocalFromWorld` — the owner-frame composition, mirroring `ColliderModule.cs:38-42`.                              |
-| `src/ksa/colliderFit.ts`                     | Pure primitive fitting around sampled points (`src/three/samplePoints.ts`).                                                                 |
-| `src/ksa/colliderValidation.ts`              | The block/warn rules, each citing the game-side member it mirrors.                                                                          |
-| `src/measure/colliderCoverage.ts`            | `pointInCollider` (Bepu shape semantics again, as a containment test) + the gap/bloat readout.                                              |
+| Path                                         | Role                                                                                                                                         |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/ksa/types.ts`                           | `ColliderShape`, `COLLIDER_SHAPES`, `PartCollider`, `EditingPart.colliders` (a collider sits on an ordinary editor layer — `LayerableKind`). |
+| `src/ksa/colliderSize.ts`                    | **The only place that knows the size ↔ `<LengthX\|Y\|Z>`/`<Radius>` mapping** and the per-shape `normalizeColliderSize` constraints.         |
+| `src/ksa/partXmlParser.ts`                   | `collidersFromElement` (serves all four authoring sites) + `subPartCollidersFromRoot`; `'Collider'` in both `KNOWN_*_GAMEDATA_CHILDREN`.     |
+| `src/ksa/partXmlSerializer.ts`               | `buildColliderElement` + `collidersByOwner`; owner grouping inside `serializeGameData`. `COLLIDER_COMPONENT_ID`.                             |
+| `src/ksa/catalog.ts`                         | `CatalogSubPart.colliders` — geometry `<SubPart><Collider>`, used ONLY for the export-variant carry-forward.                                 |
+| `src/ksa/partCatalog.ts`                     | `CatalogPart.colliders` — geometry `<Part><Collider>` + `<PartGameData><Collider>` + the `<SubPartGameData><Collider>` of placed templates.  |
+| `src/ksa/modExport.ts`                       | `hasSubPartGameData` counts colliders (forces a variant); `ExportVariant.colliders`.                                                         |
+| `src/ksa/assetsXmlSerializer.ts`             | Re-declares an inherited built-in collider on a `ReferenceSubPartPlan` (`INHERITED_COLLIDER_COMPONENT_ID`).                                  |
+| `src/state/editorStore.ts`                   | `ImportedGameData.colliders`; fresh `_colliderN` ids on import.                                                                              |
+| `src/state/projectCodec.ts` / `-Transfer.ts` | `CCollider` (`cl`) wire form; additive paste with fresh ids.                                                                                 |
+| `src/three/ColliderObject.ts`                | Unit-normalised wireframe + fill; `group.scale` IS the size in meters.                                                                       |
+| `src/three/wireShapes.ts`                    | Shared unit outlines (incl. the ratio-dependent capsule), also used by `ContainerLayer`.                                                     |
+| `src/three/coords.ts`                        | `colliderWorld` / `colliderLocalFromWorld` — the owner-frame composition, mirroring `ColliderModule.cs:38-42`.                               |
+| `src/ksa/colliderFit.ts`                     | Pure primitive fitting around sampled points (`src/three/samplePoints.ts`).                                                                  |
+| `src/ksa/colliderValidation.ts`              | The block/warn rules, each citing the game-side member it mirrors.                                                                           |
+| `src/measure/colliderCoverage.ts`            | `pointInCollider` (Bepu shape semantics again, as a containment test) + the gap/bloat readout.                                               |
 
 ---
 

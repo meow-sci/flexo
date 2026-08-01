@@ -46,9 +46,8 @@ import {
 } from './coords'
 import {
   centroidOf,
+  groupScaledTransform,
   rotatedAroundOriginTransform,
-  scaledAroundOriginTransform,
-  scaledInPlaceTransform,
   translatedTransform,
 } from './bulkTransform'
 import { initTextureSupport } from './textureSupport'
@@ -1988,10 +1987,12 @@ export class EditorScene {
       return {
         kind,
         index,
-        transform:
-          $bulkScaleMode.get() === 'smart'
-            ? scaledAroundOriginTransform(base, factor, snap.centroid)
-            : scaledInPlaceTransform(base, factor),
+        transform: groupScaledTransform(
+          kind,
+          base,
+          factor,
+          $bulkScaleMode.get() === 'smart' ? snap.centroid : null,
+        ),
       }
     })
     // Owner-local again on the way back down (see worldTransformRefs) — each kind

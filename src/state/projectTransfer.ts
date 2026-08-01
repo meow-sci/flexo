@@ -19,15 +19,11 @@ import type {
   Vec3,
 } from '../ksa/types'
 import {
-  COLLIDER_LAYER_ID,
-  CONNECTOR_LAYER_ID,
   DEFAULT_LAYER_ID,
   DEFAULT_PART_ID,
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
   LIGHT_LAYER_ID,
-  createColliderLayer,
-  createConnectorLayer,
   createDefaultLayer,
   createIvaSeatLayer,
   createKittenLayer,
@@ -267,12 +263,10 @@ export function envelopeToPart(env: ProjectExportEnvelope): EditingPart {
   return part
 }
 
-/** Guarantees the six undeletable built-in layers exist (in case a payload omitted any). */
+/** Guarantees the undeletable built-in layers exist (in case a payload omitted any). */
 function ensureBuiltInLayers(part: EditingPart): void {
   const has = (id: string) => part.layers.some((l) => l.id === id)
   if (!has(DEFAULT_LAYER_ID)) part.layers.unshift(createDefaultLayer())
-  if (!has(CONNECTOR_LAYER_ID)) part.layers.push(createConnectorLayer())
-  if (!has(COLLIDER_LAYER_ID)) part.layers.push(createColliderLayer())
   if (!has(IVA_SEAT_LAYER_ID)) part.layers.push(createIvaSeatLayer())
   if (!has(LIGHT_LAYER_ID)) part.layers.push(createLightLayer())
   if (!has(KITTEN_LAYER_ID)) part.layers.push(createKittenLayer())
@@ -285,7 +279,8 @@ function ensureBuiltInLayers(part: EditingPart): void {
  * imported kitten custom mesh) is rewritten through the new ids. Layer mapping: each
  * source layer that holds meshes — INCLUDING the source's Default — becomes a NEW layer
  * (keeping its name) so imported content never merges into the user's existing Default;
- * connectors reuse the built-in Connectors layer and kittens the Kittens layer.
+ * connectors and colliders follow their own source layer through the same mapping, and
+ * kittens reuse the built-in Kittens layer.
  */
 export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvelope): MergeResult {
   const part = structuredClone(current)
@@ -327,10 +322,12 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
   const sourceLayerName = new Map<string, string>()
   for (const l of data.layers) sourceLayerName.set(l.id, l.name)
 
-  // Connectors/Kittens reuse their built-in layers; every other source layer (custom
-  // OR Default) is mirrored as a fresh layer, lazily, the first time it's referenced.
+  // Kittens (and the other pinned kinds) reuse their built-in layer; every other source
+  // layer — the ordinary ones holding placements, connectors and colliders, INCLUDING the
+  // source's Default — is mirrored as a fresh layer, lazily, the first time it's
+  // referenced, so imported content never merges into the destination's own Default.
   const getOrCreateImportLayer = (oldLayerId: string): string => {
-    if (oldLayerId === CONNECTOR_LAYER_ID || oldLayerId === KITTEN_LAYER_ID) return oldLayerId
+    if (oldLayerId === KITTEN_LAYER_ID) return oldLayerId
     const existing = layerIdMap.get(oldLayerId)
     if (existing) return existing
     const id = nextLayerId(part)
@@ -370,7 +367,8 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
     if (importedTemplates.has(templateId)) part.internalFlags[templateId] = internal
   }
 
-  // Connectors — always on the built-in Connectors layer, fresh _connectorN ids.
+  // Connectors — mirrored onto the same imported layer their source layer maps to, fresh
+  // _connectorN ids.
   const connectorStart = part.connectors.length
   for (const src of data.connectors) {
     const id = nextConnectorId(part)
@@ -382,7 +380,7 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
       flags: [...(src.flags ?? [])],
       capabilities: [...(src.capabilities ?? [])],
       siblingIds: [...(src.siblingIds ?? [])],
-      layerId: CONNECTOR_LAYER_ID,
+      layerId: getOrCreateImportLayer(src.layerId),
     })
     connectorIdMap.set(src.id, id)
   }
@@ -393,7 +391,7 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
       .filter((s): s is string => s != null)
   }
 
-  // Colliders — always on the built-in Colliders layer, fresh _colliderN ids. Nothing
+  // Colliders — mirrored onto their source layer's imported twin, fresh _colliderN ids. Nothing
   // references a collider by id (it is not in the feed-container namespace — only the
   // `<Collider>` COMPONENT id is, and flexo generates that at serialize time), so unlike
   // connectors there is no ref map to thread through. `ownerTemplateId` IS a reference
@@ -407,7 +405,7 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
       position: vec(src.position, 0),
       rotation: vec(src.rotation, 0),
       scale: vec(src.scale, 1),
-      layerId: COLLIDER_LAYER_ID,
+      layerId: getOrCreateImportLayer(src.layerId),
     })
   }
 

@@ -23,7 +23,7 @@ import {
   hydrateProjectOnBoot,
   DEFAULT_PROJECT_NAME,
 } from './projectStore'
-import { CONNECTOR_LAYER_ID, DEFAULT_LAYER_ID, createGlow } from '../ksa/types'
+import { DEFAULT_LAYER_ID, createGlow } from '../ksa/types'
 
 beforeEach(() => {
   localStorage.clear()
@@ -37,9 +37,9 @@ describe('projectStore persistence', () => {
     $projectName.set('Rocket')
     const engines = createLayer('Engines') // active = Engines, undoable
     addSubPart('Core.A') // lands in Engines
-    addConnector()
+    addConnector() // lands in Engines too — connectors are ordinary layer citizens
     toggleLayerVisible(engines)
-    setLayerLocked(CONNECTOR_LAYER_ID, true)
+    setLayerLocked(DEFAULT_LAYER_ID, true)
     expect($canUndo.get()).toBe(true)
     saveCurrentProject()
 
@@ -52,10 +52,10 @@ describe('projectStore persistence', () => {
     expect(loadProject('Rocket')).toBe(true)
     expect($projectName.get()).toBe('Rocket')
     expect($part.get().placements.map((p) => p.layerId)).toEqual([engines])
-    expect($part.get().connectors.length).toBe(1)
+    expect($part.get().connectors.map((c) => c.layerId)).toEqual([engines])
     expect($activeLayerId.get()).toBe(engines)
     expect($layerView.get()[engines]?.visible).toBe(false)
-    expect($layerView.get()[CONNECTOR_LAYER_ID]?.locked).toBe(true)
+    expect($layerView.get()[DEFAULT_LAYER_ID]?.locked).toBe(true)
 
     // History came back: a single undo removes the connector that was added last.
     expect($canUndo.get()).toBe(true)

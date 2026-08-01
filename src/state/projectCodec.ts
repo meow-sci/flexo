@@ -48,9 +48,7 @@ import type {
   Vec3,
 } from '../ksa/types'
 import {
-  COLLIDER_LAYER_ID,
   COLLIDER_SHAPES,
-  CONNECTOR_LAYER_ID,
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
   LIGHT_LAYER_ID,
@@ -207,14 +205,14 @@ function decPlacement(c: CPlacement): SubPartPlacement {
 
 interface CConnector extends CTransform {
   i: string // id
+  l: string // layerId
   f?: Connector['flags'] // flags (omitted when empty)
   cp?: ConnectorCapability[] // capabilities (omitted when empty ⇒ KSA's implicit default)
   sb?: string[] // siblingIds (omitted when empty)
 }
 
 function encConnector(c: Connector): CConnector {
-  // layerId is always CONNECTOR_LAYER_ID — restored on decode, never serialized.
-  const o: CConnector = { i: c.id, ...encTransform(c) }
+  const o: CConnector = { i: c.id, l: c.layerId, ...encTransform(c) }
   if (c.flags.length > 0) o.f = c.flags
   if (c.capabilities.length > 0) o.cp = c.capabilities
   if (c.siblingIds.length > 0) o.sb = c.siblingIds
@@ -227,7 +225,7 @@ function decConnector(c: CConnector): Connector {
     flags: arr<Connector['flags'][number]>(c.f),
     capabilities: arr<ConnectorCapability>(c.cp),
     siblingIds: arr<string>(c.sb).map((s) => str(s)),
-    layerId: CONNECTOR_LAYER_ID,
+    layerId: str(c.l),
     ...decTransform(c),
   }
 }
@@ -235,15 +233,15 @@ function decConnector(c: CConnector): Connector {
 /** `s` is taken by {@link CTransform}'s scale, so the shape token is `sh`. */
 interface CCollider extends CTransform {
   i: string // id
+  l: string // layerId
   sh: ColliderShape // shape
   o?: string // ownerTemplateId (omitted ⇒ null ⇒ part-level)
 }
 
 function encCollider(c: PartCollider): CCollider {
-  // layerId is always COLLIDER_LAYER_ID — restored on decode, never serialized.
   // `scale` carries the collider's SIZE in meters; the shared CTransform encoder omits
   // it at (1,1,1), which decodes back to a 1 m cube — the same shape.
-  const o: CCollider = { i: c.id, sh: c.shape, ...encTransform(c) }
+  const o: CCollider = { i: c.id, l: c.layerId, sh: c.shape, ...encTransform(c) }
   if (c.ownerTemplateId) o.o = c.ownerTemplateId
   return o
 }
@@ -253,7 +251,7 @@ function decCollider(c: CCollider): PartCollider {
     id: str(c.i),
     shape: COLLIDER_SHAPES.includes(c.sh) ? c.sh : 'Cylinder',
     ownerTemplateId: c.o ? str(c.o) : null,
-    layerId: COLLIDER_LAYER_ID,
+    layerId: str(c.l),
     ...decTransform(c),
   }
 }

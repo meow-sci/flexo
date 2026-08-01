@@ -12,17 +12,17 @@ contract (schema, Bepu semantics, runtime behaviour, gotchas) lives in
 
 ## Document model
 
-`EditingPart.colliders: PartCollider[]` — a flat top-level list pinned to the built-in
-**Colliders** layer, following the connector/kitten pattern rather than burying numbers in
-`gameData`. That buys selection, the transform gizmo, multi-select, copy/paste, the Assets
-list, layer visibility/lock/opacity and undo with almost no new machinery.
+`EditingPart.colliders: PartCollider[]` — a flat top-level list, following the
+connector/placement pattern rather than burying numbers in `gameData`. That buys selection,
+the transform gizmo, multi-select, copy/paste, the Assets list, layer
+visibility/lock/opacity and undo with almost no new machinery.
 
 ```ts
 interface PartCollider extends Transform {
   id: string                        // "_collider1"; also the emitted shape Id
   shape: 'Box' | 'Sphere' | 'Cylinder' | 'Capsule'
   ownerTemplateId: string | null    // null = part-level; else a subPartTemplateId
-  layerId: string                   // always COLLIDER_LAYER_ID
+  layerId: string                   // any ordinary layer, like a placement's
 }
 ```
 
@@ -197,10 +197,17 @@ thousands of points against every collider.
 
 ## Layer
 
-Colliders live on the built-in, undeletable **Colliders** layer
-(`COLLIDER_LAYER_ID = 'colliders'`), between Connectors and Kittens. Like the other built-in
-layers it can be hidden, locked and cleared but not deleted or renamed, and it is never
-serialized to KSA XML. See [docs/layers.md](layers.md).
+A collider is an **ordinary layer citizen**, exactly like a SubPart placement or a
+connector: it lands on the active layer, appears in that layer's Assets section, moves
+between layers via "Change Layer" (single row or whole selection), and rides the layer's
+visibility / opacity / lock. Group it with the geometry it wraps and one eye toggle hides
+the mesh and its collision volume together. `addPart` puts an imported Part's colliders on
+the same layer as its SubParts.
+
+Because a collider's `scale` IS its size in meters, it **participates fully in a group or
+whole-workspace scale** — its position and size both follow the part. (A connector, by
+contrast, only moves; see [docs/layers.md](layers.md).) Layers are never serialized to
+KSA XML.
 
 ## Deliberate limits
 

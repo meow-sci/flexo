@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  COLLIDER_LAYER_ID,
+  DEFAULT_LAYER_ID,
   createEmptyPart,
   createGlow,
   createPartAnimation,
@@ -448,7 +448,7 @@ function partWithCustomMeshGameData(withCollider = false): EditingPart {
       id: '_collider1',
       shape: 'Cylinder',
       ownerTemplateId: CUSTOM_ROD,
-      layerId: COLLIDER_LAYER_ID,
+      layerId: DEFAULT_LAYER_ID,
       ...identityTransform(),
     })
   } else {
@@ -1329,7 +1329,7 @@ describe('export variants carry the built-in template’s own colliders forward'
     position: { x: 0, y: 0, z: -0.00894 },
     rotation: { x: 0, y: 0, z: 0 },
     scale: { x: 0.79467, y: 0.59602, z: 0.02531 },
-    layerId: COLLIDER_LAYER_ID,
+    layerId: DEFAULT_LAYER_ID,
   }
 
   /** The light catalog, but the built-in template also declares its own geometry collider. */
@@ -1355,7 +1355,7 @@ describe('export variants carry the built-in template’s own colliders forward'
       shape: 'Cylinder',
       ownerTemplateId: SPOTLIGHT,
       ...identityTransform(),
-      layerId: COLLIDER_LAYER_ID,
+      layerId: DEFAULT_LAYER_ID,
     })
     expect(buildExportVariantMap(part, lightCatalog(), 'X').size).toBe(1)
   })

@@ -13,7 +13,6 @@ import {
   createSolidMotorNozzle,
   createSubPartGameData,
   createTank,
-  CONNECTOR_LAYER_ID,
   DEFAULT_LAYER_ID,
   identityTransform,
 } from './types'
@@ -61,7 +60,7 @@ function connector(id: string, capabilities: ConnectorCapability[] = []) {
     flags: [],
     capabilities,
     siblingIds: [],
-    layerId: CONNECTOR_LAYER_ID,
+    layerId: DEFAULT_LAYER_ID,
   }
 }
 

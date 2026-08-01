@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { describe, it, expect } from 'vitest'
 import { DOMParser } from '@xmldom/xmldom'
 import { mergeGameData, parseGameDataFile, parsePartsFile, type CatalogPart } from './partCatalog'
-import { COLLIDER_LAYER_ID, createTank, IVA_SEAT_LAYER_ID, LIGHT_LAYER_ID } from './types'
+import { DEFAULT_LAYER_ID, createTank, IVA_SEAT_LAYER_ID, LIGHT_LAYER_ID } from './types'
 import {
   hasKsaAssets,
   ksaAsset,
@@ -177,7 +177,7 @@ describe('parseGameDataFile + mergeGameData', () => {
         position: { x: 0, y: 0, z: 0 },
         rotation: { x: 0, y: 0, z: 0 },
         scale: { x: 1, y: 2, z: 1 },
-        layerId: COLLIDER_LAYER_ID,
+        layerId: DEFAULT_LAYER_ID,
       },
     ])
   })
@@ -509,7 +509,7 @@ describe('geometry <Part><Collider> (gap E — vendored fixtures)', () => {
         position: { x: 0.0064, y: 0, z: -0.1695 },
         rotation: { x: 0, y: 0, z: 0 },
         scale: { x: 0.387, y: 0.6, z: 0.387 }, // (2R, LengthY, 2R)
-        layerId: COLLIDER_LAYER_ID,
+        layerId: DEFAULT_LAYER_ID,
       },
     ])
   })

@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  COLLIDER_LAYER_ID,
-  CONNECTOR_LAYER_ID,
   DEFAULT_LAYER_ID,
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
@@ -68,7 +66,7 @@ function richPart(): EditingPart {
     flags: ['Internal', 'ToSurface'],
     capabilities: ['BulkFluid', 'DecouplerJoint'],
     siblingIds: [],
-    layerId: CONNECTOR_LAYER_ID,
+    layerId: DEFAULT_LAYER_ID,
     ...xf([0.5, 0, 0], [0, 0, 0], [1, 1, 1]),
   })
 
@@ -423,8 +421,9 @@ describe('projectCodec round-trip', () => {
     // Identity placement carries only its ids — no transform keys.
     const identity = c.p?.find((x) => x.i === 'truss_1')
     expect(identity).toEqual({ i: 'truss_1', t: 'Core.TrussBarA', l: DEFAULT_LAYER_ID })
-    // Connectors/kittens never serialize their (constant) layerId.
-    expect(c.c?.[0]).not.toHaveProperty('l')
+    // Connectors carry their layer like a placement (they live on ordinary layers);
+    // a kitten's is constant and never serialized.
+    expect(c.c?.[0].l).toBe(DEFAULT_LAYER_ID)
     expect(c.k?.[0]).not.toHaveProperty('l')
     // Cylindrical tank with the default material is the bare {l,r,w}; spherical sets sph.
     expect(c.sg?.[0].tk?.[0]).toEqual({ l: 2, r: 0.5, w: 2 })
@@ -537,32 +536,55 @@ describe('collider codec', () => {
         position: { x: 0.1, y: 0, z: -2 },
         rotation: { x: 0, y: 0, z: 1.5708 },
         scale: { x: 1.2, y: 3, z: 1.2 },
-        layerId: COLLIDER_LAYER_ID,
+        layerId: DEFAULT_LAYER_ID,
       },
       {
         id: '_collider2',
         shape: 'Capsule',
         ownerTemplateId: 'CoreLandingA_Subpart_MediumFootA',
         ...identityTransform(),
-        layerId: COLLIDER_LAYER_ID,
+        layerId: DEFAULT_LAYER_ID,
       },
     )
     const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.colliders
     expect(back).toEqual(p.colliders)
   })
 
-  it('omits the constant layerId and a null owner from the wire form', () => {
+  it('omits a null owner from the wire form but keeps the layer', () => {
     const p = createEmptyPart()
     p.colliders.push({
       id: '_collider1',
       shape: 'Box',
       ownerTemplateId: null,
       ...identityTransform(),
-      layerId: COLLIDER_LAYER_ID,
+      layerId: DEFAULT_LAYER_ID,
     })
     const c = encodeProject(buildProjectExport(p, 'P'))
-    // Identity transform + null owner ⇒ just the id and the shape token.
-    expect(c.cl?.[0]).toEqual({ i: '_collider1', sh: 'Box' })
+    // Identity transform + null owner ⇒ just the id, the layer and the shape token.
+    expect(c.cl?.[0]).toEqual({ i: '_collider1', l: DEFAULT_LAYER_ID, sh: 'Box' })
+  })
+
+  it('round-trips a connector and a collider parked on a custom layer', () => {
+    const p = createEmptyPart()
+    p.layers.push({ id: 'layer1', name: 'Engines' })
+    p.connectors.push({
+      id: '_connector1',
+      flags: [],
+      capabilities: [],
+      siblingIds: [],
+      ...identityTransform(),
+      layerId: 'layer1',
+    })
+    p.colliders.push({
+      id: '_collider1',
+      shape: 'Box',
+      ownerTemplateId: null,
+      ...identityTransform(),
+      layerId: 'layer1',
+    })
+    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data
+    expect(back.connectors[0].layerId).toBe('layer1')
+    expect(back.colliders[0].layerId).toBe('layer1')
   })
 })
 

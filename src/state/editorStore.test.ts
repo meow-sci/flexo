@@ -132,13 +132,12 @@ import {
   setPartId,
   setPlacementsInternal,
   setSelection,
-  setSelectedPlacements,
   toggleEntity,
   updateSelectedTransforms,
   duplicatePlacement,
   duplicateSelected,
-  movePlacementToLayer,
-  moveSelectedPlacementsToLayer,
+  moveEntityToLayer,
+  moveSelectionToLayer,
   pushUndo,
   removeSelected,
   newPart,
@@ -162,8 +161,6 @@ import {
   scaleEverything,
 } from './editorStore'
 import {
-  COLLIDER_LAYER_ID,
-  CONNECTOR_LAYER_ID,
   DEFAULT_LAYER_ID,
   ENTITY_ONLY_LAYER_IDS,
   IVA_SEAT_LAYER_ID,
@@ -260,7 +257,7 @@ const importedCollider = (id: string): PartCollider => ({
   position: { x: 0, y: 0, z: 0 },
   rotation: { x: 0, y: 0, z: 0 },
   scale: { x: 1, y: 1, z: 1 },
-  layerId: COLLIDER_LAYER_ID,
+  layerId: DEFAULT_LAYER_ID,
 })
 const importedSeat = (id: string): IvaSeat => ({
   id,
@@ -537,20 +534,45 @@ describe('editorStore', () => {
 
   it('addPart leaves imported entities on a hidden or locked layer out of the selection', () => {
     try {
-      toggleLayerVisible(COLLIDER_LAYER_ID) // built-in layers default to visible
-      setLayerLocked(CONNECTOR_LAYER_ID, true)
+      // The import lands on the active layer, so hiding/locking THAT layer is what
+      // excludes its connectors and colliders from the post-import selection.
+      toggleLayerVisible(DEFAULT_LAYER_ID) // layers default to visible
+      setLayerLocked(DEFAULT_LAYER_ID, true)
       addPart([placementOf('imp_1')], [connectorOf('_connector7')], [], undefined, undefined, {
         ...emptyImportedGameData(),
         colliders: [importedCollider('_collider9')],
         lights: [importedLight('_light9')],
       })
       expect($selectedIndices.get()).toEqual([0])
-      expect($selectedConnectorIndices.get()).toEqual([]) // locked
-      expect($selectedColliderIndices.get()).toEqual([]) // hidden
-      expect($selectedLightIndices.get()).toEqual([0]) // untouched layer, still selected
+      expect($selectedConnectorIndices.get()).toEqual([]) // hidden + locked
+      expect($selectedColliderIndices.get()).toEqual([]) // hidden + locked
+      expect($selectedLightIndices.get()).toEqual([0]) // own (untouched) layer, still selected
     } finally {
       $layerView.set({})
     }
+  })
+
+  it('addPart puts the Part’s connectors and colliders on the SAME layer as its SubParts', () => {
+    const engines = createLayer('Engines') // becomes active
+    addPart([placementOf('imp_1')], [connectorOf('_connector7')], [], undefined, undefined, {
+      ...emptyImportedGameData(),
+      colliders: [importedCollider('_collider9')],
+    })
+    const p = $part.get()
+    expect(p.placements[0].layerId).toBe(engines)
+    expect(p.connectors[0].layerId).toBe(engines)
+    expect(p.colliders[0].layerId).toBe(engines)
+    // An explicit target layer wins over the active one, for every kind.
+    const wings = createLayer('Wings')
+    setActiveLayer(engines)
+    addPart([placementOf('imp_2')], [connectorOf('_connector8')], [], wings, undefined, {
+      ...emptyImportedGameData(),
+      colliders: [importedCollider('_collider10')],
+    })
+    const q = $part.get()
+    expect(q.placements[1].layerId).toBe(wings)
+    expect(q.connectors[1].layerId).toBe(wings)
+    expect(q.colliders[1].layerId).toBe(wings)
   })
 
   it('addPart rewrites <ConnectorRef>s inside preserved raw XML onto the regenerated connector ids', () => {
@@ -912,7 +934,7 @@ describe('editorStore', () => {
     selectLayerEntities(LIGHT_LAYER_ID)
     expect($selectedLightIndices.get()).toEqual([0, 1])
     // Sweeping another layer clears the light term (setSelection clears omitted kinds).
-    selectLayerEntities(COLLIDER_LAYER_ID)
+    selectLayerEntities(DEFAULT_LAYER_ID)
     expect($selectedLightIndices.get()).toEqual([])
   })
 
@@ -1197,11 +1219,9 @@ describe('editorStore kittens', () => {
 })
 
 describe('editorStore layers', () => {
-  it('starts with built-in Default + Connectors + Colliders + IVA Seats + Lights + Kittens layers; Default is active', () => {
+  it('starts with built-in Default + IVA Seats + Lights + Kittens layers; Default is active', () => {
     expect($part.get().layers).toEqual([
       { id: DEFAULT_LAYER_ID, name: 'Default' },
-      { id: CONNECTOR_LAYER_ID, name: 'Connectors' },
-      { id: COLLIDER_LAYER_ID, name: 'Colliders' },
       { id: IVA_SEAT_LAYER_ID, name: 'IVA Seats' },
       { id: LIGHT_LAYER_ID, name: 'Lights' },
       { id: KITTEN_LAYER_ID, name: 'Kittens' },
@@ -1213,8 +1233,6 @@ describe('editorStore layers', () => {
     const id = createLayer('Engines')
     expect($part.get().layers.map((l) => l.name)).toEqual([
       'Default',
-      'Connectors',
-      'Colliders',
       'IVA Seats',
       'Lights',
       'Kittens',
@@ -1225,8 +1243,6 @@ describe('editorStore layers', () => {
     // Layer removed AND the active layer falls back to Default (it no longer exists).
     expect($part.get().layers.map((l) => l.name)).toEqual([
       'Default',
-      'Connectors',
-      'Colliders',
       'IVA Seats',
       'Lights',
       'Kittens',
@@ -1234,15 +1250,17 @@ describe('editorStore layers', () => {
     expect($activeLayerId.get()).toBe(DEFAULT_LAYER_ID)
   })
 
-  it('SubParts land in the active layer; connectors always in the Connectors layer', () => {
+  it('SubParts, connectors AND colliders all land in the active layer', () => {
     const id = createLayer('Engines') // becomes active
     addSubPart('Core.A')
     addConnector()
+    addCollider('Box')
     expect($part.get().placements[0].layerId).toBe(id)
-    expect($part.get().connectors[0].layerId).toBe(CONNECTOR_LAYER_ID)
+    expect($part.get().connectors[0].layerId).toBe(id)
+    expect($part.get().colliders[0].layerId).toBe(id)
   })
 
-  it('duplicate keeps the source layer (connectors stay in the Connectors layer)', () => {
+  it('duplicate keeps the source layer for every layerable kind', () => {
     addSubPart('Core.A') // active = Default
     const engines = createLayer('Engines')
     addSubPart('Core.C') // in Engines
@@ -1250,10 +1268,15 @@ describe('editorStore layers', () => {
     const placements = $part.get().placements
     expect(placements[placements.length - 1].layerId).toBe(engines)
 
-    addConnector() // in Connectors layer
+    addConnector() // in Engines too (the active layer)
     duplicateSelected()
     const connectors = $part.get().connectors
-    expect(connectors[connectors.length - 1].layerId).toBe(CONNECTOR_LAYER_ID)
+    expect(connectors[connectors.length - 1].layerId).toBe(engines)
+
+    addCollider('Box')
+    duplicateSelected()
+    const colliders = $part.get().colliders
+    expect(colliders[colliders.length - 1].layerId).toBe(engines)
   })
 
   it('renameLayer changes the name and is undoable', () => {
@@ -1272,8 +1295,6 @@ describe('editorStore layers', () => {
     deleteLayer(id, { mode: 'delete-items' })
     expect($part.get().layers.map((l) => l.id)).toEqual([
       DEFAULT_LAYER_ID,
-      CONNECTOR_LAYER_ID,
-      COLLIDER_LAYER_ID,
       IVA_SEAT_LAYER_ID,
       LIGHT_LAYER_ID,
       KITTEN_LAYER_ID,
@@ -1290,8 +1311,6 @@ describe('editorStore layers', () => {
     expect($part.get().placements[0].layerId).toBe(b)
     expect($part.get().layers.map((l) => l.id)).toEqual([
       DEFAULT_LAYER_ID,
-      CONNECTOR_LAYER_ID,
-      COLLIDER_LAYER_ID,
       IVA_SEAT_LAYER_ID,
       LIGHT_LAYER_ID,
       KITTEN_LAYER_ID,
@@ -1307,8 +1326,6 @@ describe('editorStore layers', () => {
     undo()
     expect($part.get().layers.map((l) => l.id)).toEqual([
       DEFAULT_LAYER_ID,
-      CONNECTOR_LAYER_ID,
-      COLLIDER_LAYER_ID,
       IVA_SEAT_LAYER_ID,
       LIGHT_LAYER_ID,
       KITTEN_LAYER_ID,
@@ -1317,19 +1334,15 @@ describe('editorStore layers', () => {
     expect($part.get().placements[0].layerId).toBe(id)
   })
 
-  it('refuses to delete the built-in Default, Connectors, Colliders, IVA Seats, Lights and Kittens layers', () => {
+  it('refuses to delete the built-in Default, IVA Seats, Lights and Kittens layers', () => {
     addSubPart('Core.A')
     addConnector()
     deleteLayer(DEFAULT_LAYER_ID, { mode: 'delete-items' })
-    deleteLayer(CONNECTOR_LAYER_ID, { mode: 'delete-items' })
-    deleteLayer(COLLIDER_LAYER_ID, { mode: 'delete-items' })
     deleteLayer(IVA_SEAT_LAYER_ID, { mode: 'delete-items' })
     deleteLayer(LIGHT_LAYER_ID, { mode: 'delete-items' })
     deleteLayer(KITTEN_LAYER_ID, { mode: 'delete-items' })
     expect($part.get().layers.map((l) => l.id)).toEqual([
       DEFAULT_LAYER_ID,
-      CONNECTOR_LAYER_ID,
-      COLLIDER_LAYER_ID,
       IVA_SEAT_LAYER_ID,
       LIGHT_LAYER_ID,
       KITTEN_LAYER_ID,
@@ -1338,55 +1351,48 @@ describe('editorStore layers', () => {
     expect($part.get().connectors.length).toBe(1)
   })
 
-  it('clearLayer removes a built-in layer’s items but keeps the layer (undoable)', () => {
-    addConnector() // Connectors layer
+  it('clearLayer removes a layer’s items of every kind but keeps the layer (undoable)', () => {
+    const scrap = createLayer('Scrap') // becomes active
+    addConnector() // Scrap
     addConnector()
-    addKitten('hunter') // Kittens layer
+    addCollider('Box') // Scrap
+    addKitten('hunter') // pinned to the Kittens layer
     setActiveLayer(DEFAULT_LAYER_ID)
-    addSubPart('Core.A') // Default layer — must survive clearing Connectors
-    clearLayer(CONNECTOR_LAYER_ID)
+    addSubPart('Core.A') // Default layer — must survive clearing Scrap
+    clearLayer(scrap)
     expect($part.get().connectors.length).toBe(0)
+    expect($part.get().colliders.length).toBe(0)
     expect($part.get().kittens.length).toBe(1)
     expect($part.get().placements.length).toBe(1)
     // The layer itself is untouched.
     expect($part.get().layers.map((l) => l.id)).toEqual([
       DEFAULT_LAYER_ID,
-      CONNECTOR_LAYER_ID,
-      COLLIDER_LAYER_ID,
       IVA_SEAT_LAYER_ID,
       LIGHT_LAYER_ID,
       KITTEN_LAYER_ID,
+      scrap,
     ])
     undo()
     expect($part.get().connectors.length).toBe(2)
   })
 
   it('clearLayer is a no-op for an empty layer (no undo entry)', () => {
-    addSubPart('Core.A')
-    const before = $canUndo.get()
-    clearLayer(CONNECTOR_LAYER_ID) // no connectors exist
-    expect($canUndo.get()).toBe(before)
-    expect($part.get().placements.length).toBe(1)
+    const empty = createLayer('Empty')
+    setActiveLayer(DEFAULT_LAYER_ID)
+    addSubPart('Core.A') // Default
+    clearLayer(empty) // nothing on it
+    // No undo step was recorded: one undo still lands on "before the SubPart".
+    undo()
+    expect($part.get().placements.length).toBe(0)
   })
 
   it('reorderLayers reorders by id and is undoable', () => {
     const a = createLayer('A')
     const b = createLayer('B')
-    reorderLayers([
-      a,
-      DEFAULT_LAYER_ID,
-      CONNECTOR_LAYER_ID,
-      COLLIDER_LAYER_ID,
-      IVA_SEAT_LAYER_ID,
-      LIGHT_LAYER_ID,
-      KITTEN_LAYER_ID,
-      b,
-    ])
+    reorderLayers([a, DEFAULT_LAYER_ID, IVA_SEAT_LAYER_ID, LIGHT_LAYER_ID, KITTEN_LAYER_ID, b])
     expect($part.get().layers.map((l) => l.id)).toEqual([
       a,
       DEFAULT_LAYER_ID,
-      CONNECTOR_LAYER_ID,
-      COLLIDER_LAYER_ID,
       IVA_SEAT_LAYER_ID,
       LIGHT_LAYER_ID,
       KITTEN_LAYER_ID,
@@ -1395,8 +1401,6 @@ describe('editorStore layers', () => {
     undo()
     expect($part.get().layers.map((l) => l.id)).toEqual([
       DEFAULT_LAYER_ID,
-      CONNECTOR_LAYER_ID,
-      COLLIDER_LAYER_ID,
       IVA_SEAT_LAYER_ID,
       LIGHT_LAYER_ID,
       KITTEN_LAYER_ID,
@@ -1405,19 +1409,20 @@ describe('editorStore layers', () => {
     ])
   })
 
-  it('selectLayerEntities prefers SubParts, else first connector', () => {
+  it('selectLayerEntities sweeps a layer’s SubParts AND its connectors together', () => {
     const id = createLayer('Mixed')
     addSubPart('Core.A')
     addSubPart('Core.B')
+    addConnector() // same (active) layer
     selectLayerEntities(id)
     expect($selectedIndices.get()).toEqual([0, 1])
-    expect($selectedConnectorIndex.get()).toBe(-1)
+    expect($selectedConnectorIndex.get()).toBe(0)
 
-    // Connectors live in the built-in Connectors layer; selecting it picks the connector.
-    addConnector()
-    selectLayerEntities(CONNECTOR_LAYER_ID)
+    // A layer holding nothing selects nothing.
+    const empty = createLayer('Empty')
+    selectLayerEntities(empty)
     expect($selectedIndices.get()).toEqual([])
-    expect($selectedConnectorIndex.get()).toBe($part.get().connectors.length - 1)
+    expect($selectedConnectorIndex.get()).toBe(-1)
   })
 
   it('duplicatePlacement copies one row by index, keeps its layer, selects the copy, and is undoable', () => {
@@ -1440,28 +1445,57 @@ describe('editorStore layers', () => {
     expect($part.get().placements.length).toBe(2)
   })
 
-  it('movePlacementToLayer refuses every entity-only built-in layer', () => {
+  it('moveEntityToLayer refuses every entity-only built-in layer', () => {
     addSubPart('Core.A') // index 0, Default
-    for (const layerId of ENTITY_ONLY_LAYER_IDS) movePlacementToLayer(0, layerId)
+    for (const layerId of ENTITY_ONLY_LAYER_IDS) moveEntityToLayer('subpart', 0, layerId)
     expect($part.get().placements[0].layerId).toBe(DEFAULT_LAYER_ID)
     // A normal layer still works.
     const engines = createLayer('Engines')
-    movePlacementToLayer(0, engines)
+    moveEntityToLayer('subpart', 0, engines)
     expect($part.get().placements[0].layerId).toBe(engines)
   })
 
-  it('moveSelectedPlacementsToLayer refuses special layers and does NOT change the active layer', () => {
+  it('moveEntityToLayer moves a connector or a collider like any other row', () => {
+    const engines = createLayer('Engines') // active = Engines
+    setActiveLayer(DEFAULT_LAYER_ID)
+    addConnector() // Default
+    addCollider('Box') // Default
+
+    moveEntityToLayer('connector', 0, engines)
+    moveEntityToLayer('collider', 0, engines)
+    expect($part.get().connectors[0].layerId).toBe(engines)
+    expect($part.get().colliders[0].layerId).toBe(engines)
+
+    // Undoable, one step per move.
+    undo()
+    expect($part.get().colliders[0].layerId).toBe(DEFAULT_LAYER_ID)
+    expect($part.get().connectors[0].layerId).toBe(engines)
+
+    // And still refused for the pinned layers.
+    for (const layerId of ENTITY_ONLY_LAYER_IDS) moveEntityToLayer('connector', 0, layerId)
+    expect($part.get().connectors[0].layerId).toBe(engines)
+  })
+
+  it('moveSelectionToLayer moves every layerable kind, refuses pinned layers, keeps the active layer', () => {
     const engines = createLayer('Engines') // active = Engines
     setActiveLayer(DEFAULT_LAYER_ID)
     addSubPart('Core.A') // index 0, Default
     addSubPart('Core.B') // index 1, Default
-    setSelectedPlacements([0, 1])
+    addConnector() // Default
+    addCollider('Box') // Default
+    addKitten('hunter') // pinned to Kittens
+    setSelection([0, 1], [0], [0], [0])
 
-    for (const layerId of ENTITY_ONLY_LAYER_IDS) moveSelectedPlacementsToLayer(layerId)
+    for (const layerId of ENTITY_ONLY_LAYER_IDS) moveSelectionToLayer(layerId)
     expect($part.get().placements.every((p) => p.layerId === DEFAULT_LAYER_ID)).toBe(true)
+    expect($part.get().connectors[0].layerId).toBe(DEFAULT_LAYER_ID)
 
-    moveSelectedPlacementsToLayer(engines)
+    moveSelectionToLayer(engines)
     expect($part.get().placements.every((p) => p.layerId === engines)).toBe(true)
+    expect($part.get().connectors[0].layerId).toBe(engines)
+    expect($part.get().colliders[0].layerId).toBe(engines)
+    // The pinned kitten came along in the selection but stays on its own layer.
+    expect($part.get().kittens[0].layerId).toBe(KITTEN_LAYER_ID)
     // The active layer is unchanged (selection spans layers; no forced snap).
     expect($activeLayerId.get()).toBe(DEFAULT_LAYER_ID)
   })
@@ -1657,8 +1691,8 @@ describe('scaleEverything', () => {
           flags: [],
           capabilities: [],
           siblingIds: [],
-          layerId: CONNECTOR_LAYER_ID,
-          ...tf([1, 1, 1], [0, 0, 0], [1, 1, 1]),
+          layerId: DEFAULT_LAYER_ID,
+          ...tf([1, 1, 1], [0, 0, 0], [1.5, 1.5, 1.5]),
         },
       ],
       kittens: [
@@ -1693,6 +1727,9 @@ describe('scaleEverything', () => {
     expect(p.placements[0].scale).toEqual({ x: 2, y: 6, z: 2 })
     expect(p.placements[0].rotation).toEqual({ x: 0.1, y: 0.2, z: 0.3 }) // unchanged
     expect(p.connectors[0].position).toEqual({ x: 2, y: 3, z: 0.5 })
+    // A connector MOVES but is never re-graded: its <Scale> is KSA's attach-node size
+    // class, not the size of anything drawn (issue #6).
+    expect(p.connectors[0].scale).toEqual({ x: 1.5, y: 1.5, z: 1.5 })
     expect(p.kittens[0].position).toEqual({ x: 6, y: 0, z: 0 })
     expect(p.kittens[0].scale).toEqual({ x: 4, y: 6, z: 1 })
 
@@ -2048,7 +2085,7 @@ describe('importing a Part with colliders', () => {
       position: { x: 0, y: 0, z: -0.17 },
       rotation: { x: 0, y: 0, z: 0 },
       scale: { x: 0.39, y: 0.6, z: 0.39 },
-      layerId: COLLIDER_LAYER_ID,
+      layerId: DEFAULT_LAYER_ID,
     },
     {
       id: 'Puck',
@@ -2057,11 +2094,11 @@ describe('importing a Part with colliders', () => {
       position: { x: 0, y: 0, z: 0 },
       rotation: { x: 0, y: 0, z: 0 },
       scale: { x: 1, y: 0.34, z: 1 },
-      layerId: COLLIDER_LAYER_ID,
+      layerId: DEFAULT_LAYER_ID,
     },
   ]
 
-  it('regenerates ids onto the Colliders layer, keeping owner + geometry', () => {
+  it('regenerates ids onto the import layer, keeping owner + geometry', () => {
     importWithColliders(IMPORTED)
     const colliders = $part.get().colliders
     // Core reuses ids like "CylinderCollider1" across dozens of parts, so import
@@ -2072,7 +2109,7 @@ describe('importing a Part with colliders', () => {
       'CoreLandingA_Subpart_MediumFootA',
     ])
     expect(colliders[1].scale).toEqual({ x: 1, y: 0.34, z: 1 })
-    expect(colliders.every((c) => c.layerId === COLLIDER_LAYER_ID)).toBe(true)
+    expect(colliders.every((c) => c.layerId === DEFAULT_LAYER_ID)).toBe(true)
   })
 
   it('keeps ids collision-free across a second import and is undoable', () => {
@@ -2166,7 +2203,7 @@ describe('importing a Part with IVA seats', () => {
 })
 
 describe('collider mutations', () => {
-  it('addCollider drops a unit shape on the Colliders layer, selects it, and is undoable', () => {
+  it('addCollider drops a unit shape on the active layer, selects it, and is undoable', () => {
     addCollider('Cylinder')
     addCollider('Box')
     const colliders = $part.get().colliders
@@ -2174,7 +2211,7 @@ describe('collider mutations', () => {
       ['_collider1', 'Cylinder'],
       ['_collider2', 'Box'],
     ])
-    expect(colliders.every((c) => c.layerId === COLLIDER_LAYER_ID)).toBe(true)
+    expect(colliders.every((c) => c.layerId === DEFAULT_LAYER_ID)).toBe(true)
     expect(colliders[0].scale).toEqual({ x: 1, y: 1, z: 1 })
     expect(colliders[0].ownerTemplateId).toBeNull()
     expect($selectedColliderIndex.get()).toBe(1)

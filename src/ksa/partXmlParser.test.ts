@@ -12,7 +12,7 @@ import {
 import { serializeGameData, serializePart } from './partXmlSerializer'
 import type { Connector, EditingPart, IvaSeat, RawXmlNode } from './types'
 import {
-  COLLIDER_LAYER_ID,
+  DEFAULT_LAYER_ID,
   createCombustor,
   createCustomReaction,
   createDefaultLayer,
@@ -26,7 +26,6 @@ import {
   EDITOR_TAG_DEFS,
   identityTransform,
   createTank,
-  DEFAULT_LAYER_ID,
   IVA_SEAT_LAYER_ID,
   KNOWN_EDITOR_TAGS,
   LIGHT_LAYER_ID,
@@ -755,7 +754,7 @@ describe('unmodeled-XML passthrough (gap 6)', () => {
         rotation: { x: 0, y: 0, z: 0 },
         // Cylinder size = (2R, LengthY, 2R).
         scale: { x: 1.0014, y: 1.0197, z: 1.0014 },
-        layerId: COLLIDER_LAYER_ID,
+        layerId: DEFAULT_LAYER_ID,
       },
     ])
   })
@@ -1510,7 +1509,7 @@ describe('colliders', () => {
         // Euler XYZ radians — the Z=1.57 that lays the cylinder along X.
         rotation: { x: 0, y: 0, z: 1.57 },
         scale: { x: 1, y: 2, z: 1 }, // (2R, LengthY, 2R)
-        layerId: COLLIDER_LAYER_ID,
+        layerId: DEFAULT_LAYER_ID,
       },
       {
         id: 'SphereCollider1',
@@ -1519,7 +1518,7 @@ describe('colliders', () => {
         position: { x: -0.11, y: 0, z: 0 },
         rotation: { x: 0, y: 0, z: 0 },
         scale: { x: 1.78, y: 1.78, z: 1.78 },
-        layerId: COLLIDER_LAYER_ID,
+        layerId: DEFAULT_LAYER_ID,
       },
     ])
   })
@@ -1592,7 +1591,7 @@ describe('colliders', () => {
           shape: 'Box',
           ownerTemplateId: 'Tmpl',
           ...identityTransform(),
-          layerId: COLLIDER_LAYER_ID,
+          layerId: DEFAULT_LAYER_ID,
         },
       ],
     })
@@ -1615,7 +1614,7 @@ describe('colliders', () => {
           position: { x: 0, y: 0, z: 0 },
           rotation: { x: 0, y: 0, z: 0 },
           scale: { x: 1, y: 1, z: 1 }, // every extent at its "default" — still emitted
-          layerId: COLLIDER_LAYER_ID,
+          layerId: DEFAULT_LAYER_ID,
         },
       ],
     })

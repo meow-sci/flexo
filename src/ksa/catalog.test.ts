@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { DOMParser } from '@xmldom/xmldom'
 import { parseAssetsFile, type CatalogSubPart } from './catalog'
 import { hasKsaAssets, ksaAsset, readVendoredAsset } from './ksaTestAssets'
-import { COLLIDER_LAYER_ID } from './types'
+import { DEFAULT_LAYER_ID } from './types'
 
 function parseFile(name: string): CatalogSubPart[] {
   const text = readFileSync(ksaAsset(name), 'utf-8')
@@ -200,7 +200,7 @@ describe('geometry <SubPart><Collider> (gap E — vendored fixtures)', () => {
         // 0.800 × 0.600 × 0.025 m. A half-extent reading would make this a 5 cm-thick,
         // 1.6 m panel instead of the 2.5 cm-thick 0.79 × 0.60 m one it is.
         scale: { x: 0.7947, y: 0.596, z: 0.0253 },
-        layerId: COLLIDER_LAYER_ID,
+        layerId: DEFAULT_LAYER_ID,
       },
     ])
   })

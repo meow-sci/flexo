@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { EulerXYZ, Vec3 } from '../ksa/types'
-import type { PlacementTransform } from '../state/editorStore'
+import type { PlacementTransform, SelectableKind } from '../state/editorStore'
 
 /**
  * Pure transform math for bulk-editing a multi-selection of SubParts. Shared by
@@ -16,6 +16,9 @@ import type { PlacementTransform } from '../state/editorStore'
  *                only multiplies each SubPart's own scale, leaving positions fixed.
  *   - rotate:    rotate every SubPart around a shared origin (default: centroid),
  *                rotating both its position about the origin AND its orientation.
+ *
+ * Scale is the one operation that is KIND-AWARE: {@link groupScaledTransform} moves a
+ * connector with the group but never re-grades its `<Scale>` (see {@link scalesWithGroup}).
  *
  * Rotation uses the same Euler order as {@link applyPlacement} in coords.ts:
  * 'ZYX', because KSA's stored "XYZ" Euler equals three.js 'ZYX' (see coords.ts).
@@ -83,6 +86,40 @@ export function scaledAroundOriginTransform(
     rotation: { ...t.rotation },
     scale: { x: t.scale.x * factor.x, y: t.scale.y * factor.y, z: t.scale.z * factor.z },
   }
+}
+
+/**
+ * Whether a group/global resize may multiply this kind's OWN `scale`, or only move it.
+ *
+ * A connector's `<Scale>` is not the size of anything drawn: KSA reads it as the attach
+ * node's size CLASS and compares it across parts (`Part.Connector` scale comparisons pick
+ * which nested/internal connector wins a connection). Resizing the arrangement must
+ * therefore relocate a connector without re-grading it — see docs/layers.md.
+ *
+ * A collider's `scale` IS its size in meters, tied to the geometry it wraps, so it scales
+ * with the part. Seats and lights have no size at all (their write path pins `scale` to
+ * (1,1,1)), so they are listed here for completeness only.
+ */
+export function scalesWithGroup(kind: SelectableKind): boolean {
+  return kind !== 'connector'
+}
+
+/**
+ * Group-scale for one selected entity, honoring {@link scalesWithGroup}. `origin` is the
+ * shared pivot for "smart" mode (positions scale about it), or null for "in place" mode
+ * (each entity keeps its position and only its own scale grows). A connector in "in place"
+ * mode therefore comes back untouched — there is nothing about it to resize.
+ */
+export function groupScaledTransform(
+  kind: SelectableKind,
+  t: PlacementTransform,
+  factor: Vec3,
+  origin: Vec3 | null,
+): PlacementTransform {
+  const scaled = origin
+    ? scaledAroundOriginTransform(t, factor, origin)
+    : scaledInPlaceTransform(t, factor)
+  return scalesWithGroup(kind) ? scaled : { ...scaled, scale: { ...t.scale } }
 }
 
 /**

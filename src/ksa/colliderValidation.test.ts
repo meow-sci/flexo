@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import { validateColliders } from './colliderValidation'
 import { COLLIDER_COMPONENT_ID } from './partXmlSerializer'
 import {
-  COLLIDER_LAYER_ID,
   DEFAULT_LAYER_ID,
   createEmptyPart,
   createTank,
@@ -18,7 +17,7 @@ function collider(over: Partial<PartCollider> = {}): PartCollider {
     shape: 'Cylinder' as ColliderShape,
     ownerTemplateId: null,
     ...identityTransform(),
-    layerId: COLLIDER_LAYER_ID,
+    layerId: DEFAULT_LAYER_ID,
     ...over,
   }
 }

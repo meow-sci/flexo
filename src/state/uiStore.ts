@@ -25,7 +25,7 @@ export function setInspectorMode(mode: InspectorMode): void {
 export const $inspectorVisible = persistentJSON<boolean>('flexo:inspectorVisible', true)
 
 /** Width of the inspector panel in pixels (set by the left-edge drag handle). */
-export const $inspectorWidth = persistentJSON<number>('flexo:inspectorWidth', 288)
+export const $inspectorWidth = persistentJSON<number>('flexo:inspectorWidth', 450)
 
 export const INSPECTOR_MIN_WIDTH = 240
 export const INSPECTOR_MAX_WIDTH = 640

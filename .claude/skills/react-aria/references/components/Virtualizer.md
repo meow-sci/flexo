@@ -701,6 +701,82 @@ for (let i = 0; i < 1000; i++) {
 </Virtualizer>
 ```
 
+## Dynamic item sizes
+
+Use the `shouldObserveItemSize` prop to automatically re-layout when items change size.
+Note that this uses a `ResizeObserver` internally and may have performance overhead.
+
+```tsx
+import {Virtualizer, ListLayout} from 'react-aria-components/Virtualizer';
+import {GridList, GridListItem, Text} from 'vanilla-starter/GridList';
+import {Button} from 'vanilla-starter/Button';
+import {useState} from 'react';
+import {ChevronRight, ChevronDown} from 'lucide-react';
+
+let items: {
+  id: string;
+  name: string;
+}[] = [];
+for (let i = 0; i < 10; i++) {
+  items.push({id: `item_${i}`, name: `Item ${i}`});
+}
+
+function ExpandableItem({item}) {
+  let [expanded, setExpanded] = useState(false);
+  return (
+    <div className="expandable-item">
+      <Text>{item.name}</Text>
+      <Button
+        variant="quiet"
+        onPress={() => setExpanded(!expanded)} 
+        aria-label={expanded ? 'Collapse' : 'Expand'}>
+        {expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+      </Button>
+      <Text slot="description" style={{display: expanded ? 'block' : 'none'}}>This is an expanded item.</Text>
+    </div>
+  );
+}
+
+<Virtualizer
+  layout={ListLayout}
+  layoutOptions={{
+    estimatedRowHeight: 25,
+    gap: 4,
+  }}
+  /*- begin highlight -*/
+  shouldObserveItemSize>
+  {/*- end highlight -*/}
+  <GridList
+    style={{display: 'block', padding: 4, height: 400, width: '100%'}}
+    aria-label="virtualized with expandable rows"
+    items={items}>
+    {item =>
+    <GridListItem textValue={item.name} style={{padding: 0}}><ExpandableItem item={item} /></GridListItem>}
+  </GridList>
+</Virtualizer>
+```
+
+```css
+.expandable-item {
+  display: grid;
+  padding: 4px;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+
+  .react-aria-Text {
+    grid-column: 1 / 1;
+  }
+  .react-aria-Button {
+    grid-column: 2 / 2;
+  }
+  .react-aria-Text[slot="description"] {
+    grid-column: 1 / span 2;
+    padding-top: 4px;
+  }
+}
+```
+
 ## Examples
 
 <ExampleList
@@ -715,61 +791,65 @@ for (let i = 0; i < 1000; i++) {
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
 | `children` | `React.ReactNode` | — | The child collection to virtualize (e.g. ListBox, GridList, or Table). |
-| `layout` | `LayoutClass<O> | ILayout<O>` | — | The layout object that determines the position and size of the visible elements. |
+| `layout` | `ILayout<O> | LayoutClass<O>` | — | The layout object that determines the position and size of the visible elements. |
 | `layoutOptions` | `O | undefined` | — | Options for the layout. |
+| `shouldObserveItemSize` | `boolean | undefined` | — | Whether to observe each item's size with a ResizeObserver and re-measure when it changes. |
 
 ### ListLayout
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `orientation` | `Orientation | undefined` | 'vertical' | The primary orientation of the items. Usually this is the direction that the collection scrolls. |
-| `rowSize` | `number | undefined` | 48 | The fixed size of a row in px with respect to the applied orientation. |
-| `estimatedRowSize` | `number | undefined` | — | The estimated size of a row in px with respect to the applied orientation, when row sizes are variable. |
-| `headingSize` | `number | undefined` | 48 | The fixed size of a section header in px with respect to the applied orientation. |
-| `estimatedHeadingSize` | `number | undefined` | — | The estimated size of a section header in px with respect to the applied orientation, when heading sizes are variable. |
-| `loaderSize` | `number | undefined` | 48 | The fixed size of a loader element in px with respect to the applied orientation. This loader is specifically for "load more" elements rendered when loading more rows at the root level or inside nested row/sections. |
+| `anchorTo` | `"end" | undefined` | — | Anchors the vertical list content to the end (bottom) of the viewport. When set to `'end'`, the viewport stays pinned to the latest content unless the user scrolls up. |
 | `dropIndicatorThickness` | `number | undefined` | 2 | The thickness of the drop indicator. |
+| `estimatedHeadingSize` | `number | undefined` | — | The estimated size of a section header in px with respect to the applied orientation, when heading sizes are variable. |
+| `estimatedRowSize` | `number | undefined` | — | The estimated size of a row in px with respect to the applied orientation, when row sizes are variable. |
 | `gap` | `number | undefined` | 0 | The gap between items. |
+| `headingSize` | `number | undefined` | 48 | The fixed size of a section header in px with respect to the applied orientation. |
+| `loaderSize` | `number | undefined` | 48 | The fixed size of a loader element in px with respect to the applied orientation. This loader is specifically for "load more" elements rendered when loading more rows at the root level or inside nested row/sections. |
+| `orientation` | `Orientation | undefined` | 'vertical' | The primary orientation of the items. Usually this is the direction that the collection scrolls. |
 | `padding` | `number | undefined` | 0 | The padding around the list. |
+| `rowSize` | `number | undefined` | 48 | The fixed size of a row in px with respect to the applied orientation. |
+| `scrollEndThreshold` | `number | undefined` | 0 | The maximum distance in px from the anchored edge of the content for the viewport to be considered "near the end". While near the end, appended content and streaming size changes will keep the viewport pinned to `anchorTo`. |
 
 ### GridLayout
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `minItemSize` | `Size | undefined` | 200 x 200 | The minimum item size. |
-| `maxItemSize` | `Size | undefined` | Infinity | The maximum item size. |
-| `preserveAspectRatio` | `boolean | undefined` | false | Whether to preserve the aspect ratio of the `minItemSize`. By default, grid rows may have variable heights. When `preserveAspectRatio` is true, all rows will have equal heights. |
-| `minSpace` | `Size | undefined` | 18 x 18 | The minimum space required between items. |
-| `maxHorizontalSpace` | `number | undefined` | Infinity | The maximum allowed horizontal space between items. |
+| `cardOrientation` | `Orientation | undefined` | vertical | The orientation of the cards withn the grid. |
+| `collator` | `Intl.Collator | undefined` | — | — |
+| `itemPadding` | `number | undefined` | 95 | The additional padding along the card's main axis. Affects the sizing of the content area following the card image. |
+| `margin` | `number | undefined` | 24 | The margin around the grid view between the edges and the items. |
 | `maxColumns` | `number | undefined` | Infinity | The maximum number of columns. |
-| `dropIndicatorThickness` | `number | undefined` | 2 | The thickness of the drop indicator. |
-| `loaderHeight` | `number | undefined` | 48 | The fixed height of a loader element in px. This loader is specifically for "load more" elements rendered when loading more rows at the root level or inside nested row/sections. |
+| `maxItemSize` | `Size | undefined` | Infinity | The maximum item size. |
+| `minItemSize` | `Size | undefined` | 208 x 208 for horizontal card orientation. 102 x 102 for vertical card orientation. | The minimum item size. |
+| `minSpace` | `Size | undefined` | 18 x 18 | The minimum space required between items. |
+| `scale` | `Scale | undefined` | — | — |
 
 ### WaterfallLayout
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `minItemSize` | `Size | undefined` | 200 x 200 | The minimum item size. |
-| `maxItemSize` | `Size | undefined` | Infinity | The maximum item size. |
-| `minSpace` | `Size | undefined` | 18 x 18 | The minimum space required between items. |
-| `maxHorizontalSpace` | `number | undefined` | Infinity | The maximum allowed horizontal space between items. |
+| `collator` | `Intl.Collator | undefined` | — | — |
+| `margin` | `number | undefined` | 24 | The margin around the grid view between the edges and the items. |
 | `maxColumns` | `number | undefined` | Infinity | The maximum number of columns. |
-| `dropIndicatorThickness` | `number | undefined` | 2 | The thickness of the drop indicator. |
-| `loaderHeight` | `number | undefined` | 48 | The fixed height of a loader element in px. This loader is specifically for "load more" elements rendered when loading more rows at the root level or inside nested row/sections. |
+| `maxItemSize` | `Size | undefined` | Infinity | The maximum item size. |
+| `minItemSize` | `Size | undefined` | 240 x 136 | The minimum item size. |
+| `minSpace` | `Size | undefined` | 18 x 18 | The minimum space required between items. |
+| `scale` | `Scale | undefined` | — | — |
 
 ### TableLayout
 
 | Name | Type | Default | Description |
 |------|------|---------|-------------|
-| `rowHeight` | `number | undefined` | 48 | The fixed height of a row in px. |
-| `estimatedRowHeight` | `number | undefined` | — | The estimated height of a row, when row heights are variable. |
-| `headingHeight` | `number | undefined` | 48 | The fixed height of a section header in px. |
-| `estimatedHeadingHeight` | `number | undefined` | — | The estimated height of a section header, when the height is variable. |
-| `loaderHeight` | `number | undefined` | 48 | The fixed height of a loader element in px. This loader is specifically for "load more" elements rendered when loading more rows at the root level or inside nested row/sections. |
 | `columnWidths` | `Map<Key, number> | undefined` | — | — |
 | `dropIndicatorThickness` | `number | undefined` | 2 | The thickness of the drop indicator. |
+| `estimatedHeadingHeight` | `number | undefined` | — | The estimated height of a section header, when the height is variable. |
+| `estimatedRowHeight` | `number | undefined` | — | The estimated height of a row, when row heights are variable. |
 | `gap` | `number | undefined` | 0 | The gap between items. |
+| `headingHeight` | `number | undefined` | 48 | The fixed height of a section header in px. |
+| `loaderHeight` | `number | undefined` | 48 | The fixed height of a loader element in px. This loader is specifically for "load more" elements rendered when loading more rows at the root level or inside nested row/sections. |
 | `padding` | `number | undefined` | 0 | The padding around the list. |
+| `rowHeight` | `number | undefined` | 48 | The fixed height of a row in px. |
 
 ## Related Types
 

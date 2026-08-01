@@ -106,6 +106,7 @@ one of two patterns:
 
 1. **Discrete** (one gesture = one change): the action calls `pushUndo()` itself.
    `addSubPart`, `addPart`, `addConnector`, `removeSelected`, `duplicateSelected`,
+   `applyActionChain` (a whole action chain — seed moves + every clone — is one step),
    `setConnectorFlags`, `setEditorTags`, the GameData list/toggle/Select actions
    (`addTank`/`removeTank`/`setTankShape`, power add/remove, coupling enable +
    `set*Connector`, `setCustomMassEnabled`), and the layer mutators `createLayer`,

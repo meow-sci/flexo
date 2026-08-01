@@ -310,7 +310,8 @@ export const $historyList = atom<HistoryListItem[]>([]);
  *
  *   1. Discrete mutation (one user gesture = one change): call `pushUndo()`
  *      internally, before cloning. Examples: addSubPart, addConnector,
- *      removeSelected, duplicateSelected, setConnectorFlags, setEditorTags.
+ *      removeSelected, duplicateSelected, applyActionChain, setConnectorFlags,
+ *      setEditorTags.
  *
  *   2. Streaming mutation (many rapid updates that collapse into one undo step,
  *      e.g. a gizmo drag or a typing session): do NOT call `pushUndo()` here; the
@@ -1764,6 +1765,93 @@ export function duplicatePlacement(index: number): void {
   });
   $part.set(part);
   setSelectedPlacements([part.placements.length - 1]);
+}
+
+/** One evaluated action-chain instance, ready to commit (see {@link applyActionChain}). */
+export interface ChainCommitEntry {
+  /** `instanceId` of the seed placement this instance descends from. */
+  seedInstanceId: string;
+  /** Where the instance ends up — already fully evaluated by the chain engine. */
+  transform: PlacementTransform;
+  /** True for the one instance per seed that IS the seed (it moves in place, no clone). */
+  isSeed: boolean;
+}
+
+/**
+ * Fresh, collision-free `instanceId` for an action-chain clone of `templateId`.
+ *
+ * Starts from the app-wide convention — `<last dot-segment, lowercased>_<count + 1>`,
+ * counted against the GROWING `part.placements` exactly like the duplicate loop — then
+ * skips forward while the candidate is already taken. That skip is a deliberate deviation
+ * from `duplicateSelected`/`duplicatePlacement`, which stop at `count + 1` and therefore
+ * collide with survivors of a deletion (delete `bolt_1`, keep `bolt_2` → count 1 → a
+ * second `bolt_2`). One odd id from a single Duplicate is a known, tolerated quirk; a
+ * chain mass-produces up to 500 placements in ONE gesture, where the same formula would
+ * stamp out colliding ids wholesale and only surface much later as the pre-export
+ * duplicate-id warning in `ExportButton.tsx`. Existing duplicate paths are untouched.
+ */
+function nextChainInstanceId(part: EditingPart, templateId: string): string {
+  const base = lastSegmentLower(templateId);
+  let n = part.placements.filter((p) => p.subPartTemplateId === templateId).length + 1;
+  while (part.placements.some((p) => p.instanceId === `${base}_${n}`)) n++;
+  return `${base}_${n}`;
+}
+
+/**
+ * Commits an evaluated action chain: seed entries overwrite their original placement's
+ * transform (identity, template and layer untouched); every other entry appends a clone
+ * of its seed — same template and layer, fresh collision-free `instanceId`. Like
+ * `duplicateSelected`, clones carry NO references (animations, gimbals, feeds,
+ * couplings); template-keyed behavior follows automatically.
+ *
+ * Discrete mutation → ONE undo entry for the whole chain. Afterwards the seeds plus every
+ * new copy are selected, so the user can immediately chain or transform the result.
+ *
+ * Returns the number of placements created, or `-1` when `entries` is empty or any
+ * `seedInstanceId` no longer resolves (no mutation, no undo entry — the caller's seeds
+ * were deleted out from under the session).
+ */
+export function applyActionChain(entries: readonly ChainCommitEntry[], detail: string): number {
+  if (entries.length === 0) return -1;
+  const current = $part.get();
+  // Resolve every distinct seed FIRST: a partial commit would be worse than none.
+  const seedIndexById = new Map<string, number>();
+  for (const entry of entries) {
+    if (seedIndexById.has(entry.seedInstanceId)) continue;
+    const index = current.placements.findIndex((p) => p.instanceId === entry.seedInstanceId);
+    if (index < 0) return -1;
+    seedIndexById.set(entry.seedInstanceId, index);
+  }
+
+  pushUndo('action chain', detail);
+  const part = clone(current);
+  const seedIndices: number[] = [];
+  for (const entry of entries) {
+    if (!entry.isSeed) continue;
+    const index = seedIndexById.get(entry.seedInstanceId)!;
+    const target = part.placements[index];
+    target.position = { ...entry.transform.position };
+    target.rotation = { ...entry.transform.rotation };
+    target.scale = { ...entry.transform.scale };
+    seedIndices.push(index);
+  }
+  const newIndices: number[] = [];
+  for (const entry of entries) {
+    if (entry.isSeed) continue;
+    const seed = part.placements[seedIndexById.get(entry.seedInstanceId)!];
+    part.placements.push({
+      instanceId: nextChainInstanceId(part, seed.subPartTemplateId),
+      subPartTemplateId: seed.subPartTemplateId,
+      position: { ...entry.transform.position },
+      rotation: { ...entry.transform.rotation },
+      scale: { ...entry.transform.scale },
+      layerId: seed.layerId,
+    });
+    newIndices.push(part.placements.length - 1);
+  }
+  $part.set(part);
+  setSelectedPlacements([...seedIndices, ...newIndices]);
+  return newIndices.length;
 }
 
 /** Replaces the SubPart selection with a single index (clears any connector/kitten selection). */

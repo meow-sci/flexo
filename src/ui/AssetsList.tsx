@@ -63,6 +63,7 @@ import { enterSeatView } from '../state/ivaStore'
 import { formatG6 } from '../ksa/formatG6'
 import { setManagingMeshId } from '../state/customAssetStore'
 import { ManageTanksModal } from './ManageTanksModal'
+import { useShiftRangeSelect } from './rangeSelect'
 
 /** Trailing `_Subpart_Foo` segment of a template id — the part users actually read. */
 function lastSegment(id: string): string {
@@ -134,6 +135,11 @@ function parseKey(key: string): { kind: Kind; raw: string } {
  * touched. Rows on locked layers are disabled; rows on hidden layers stay listed
  * (so they remain manageable via the row menu) but can't be selected — mirroring
  * the 3D rule that selection works only for visible + unlocked entities.
+ *
+ * Selection gestures are the usual list conventions: click replaces, Cmd/Ctrl+click
+ * toggles one row, Cmd/Ctrl+A takes everything selectable, and **Shift+click extends
+ * across the rows in between** — the last one through {@link useShiftRangeSelect},
+ * because react-aria's own range extension can't survive a store-controlled list.
  */
 export function AssetsList() {
   const part = useStore($part)
@@ -322,7 +328,16 @@ export function AssetsList() {
     if (l) selectedKeys.add(keyOf('light', l.id))
   }
 
-  const onSelectionChange = (keys: Selection) => {
+  // Shift+click ranges run over the displayed row order, which is the sections
+  // flattened — a range can therefore span layers, exactly like a plain multi-select.
+  const range = useShiftRangeSelect({
+    orderedKeys: sections.flatMap((s) => s.rows.map((r) => r.id)),
+    selectedKeys,
+    isSelectable: (key) => !disabledKeys.has(key) && !hiddenKeys.has(key),
+  })
+
+  const onSelectionChange = (reported: Selection) => {
+    const keys = range.resolveSelection(reported)
     const sub: number[] = []
     const con: number[] = []
     const kit: number[] = []
@@ -434,6 +449,9 @@ export function AssetsList() {
                     // element) so the $revealEntity scroll-into-view effect can find this row.
                     data-asset-key={row.id}
                     textValue={row.name}
+                    // Records a Shift+click before react-aria's own (anchorless, and so
+                    // useless) range extension runs — see useShiftRangeSelect.
+                    {...range.rowProps(row.id)}
                     // Right-click opens the same menu as the ⋮ button by triggering
                     // a click on it — reusing react-aria's trigger so positioning and
                     // dismissal behave identically.

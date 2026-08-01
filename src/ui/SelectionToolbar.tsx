@@ -1,5 +1,7 @@
 import { useStore } from '@nanostores/react';
+import { Workflow } from 'lucide-react';
 import { Toolbar, ToolbarSeparator, ToggleButtonGroup, ToggleButton, Button } from './kit';
+import { toggleChainPalette } from './chain/openChainPalette';
 import {
   duplicateSelected,
   removeSelected,
@@ -69,6 +71,12 @@ export function SelectionToolbar() {
 
           <Button size="sm" onPress={() => duplicateSelected()}>
             Duplicate
+          </Button>
+          {/* Opens the action-chain palette over the current SubPart selection. Shown for
+              any selection: the open guards re-check that it holds unlocked placements. */}
+          <Button size="sm" onPress={() => toggleChainPalette()}>
+            <Workflow size={14} />
+            Chain
           </Button>
           <Button size="sm" variant="danger" onPress={() => removeSelected()}>
             Delete

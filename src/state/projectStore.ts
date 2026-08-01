@@ -10,6 +10,7 @@ import {
   newPart,
   type HistorySnapshot,
 } from './editorStore';
+import { closeChain } from './chainStore';
 import { $layerView, type LayerViewState } from './layerStore';
 import { $cameraState, resetCamera, setCameraRestore, type CameraState } from './viewStore';
 import { $measurements, type LineMeasurement } from './measurementStore';
@@ -253,6 +254,9 @@ function applyProjectSnapshot(snap: ProjectSnapshot): void {
     $measurements.set(snap.measurements ?? []);
     $containers.set(snap.containers ?? []);
     clearSelection();
+    // An open action chain is seeded by instanceIds from the OUTGOING document; loading
+    // a project makes every one of them meaningless, so end the session with the selection.
+    closeChain();
     if (snap.camera) {
       // Pre-fill $cameraState so it's included in the next autosave, then signal
       // EditorScene to reposition the Viewport (fires on subscribe when it mounts).

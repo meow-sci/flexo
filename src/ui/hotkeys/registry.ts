@@ -6,6 +6,7 @@ import { rotateSelectionAroundPair } from '../../three/rotateSelection';
 import { FAST_NUDGE_MULTIPLIER, nudgeSelectionBy } from '../../three/nudgeSelection';
 import { changeNudgeAxis, lowerNudgeStep, raiseNudgeStep } from '../nudgeControls';
 import { changeRotateAxes, lowerRotateStep, raiseRotateStep } from '../rotateControls';
+import { toggleChainPalette } from '../chain/openChainPalette';
 import { toast } from '../kit';
 
 /**
@@ -156,6 +157,14 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
         keys: 'mod+v',
         chords: [['mod', 'V']],
         run: runPaste,
+      },
+      {
+        id: 'action-chain',
+        label: 'Action chain palette (selection)',
+        keys: 'mod+k',
+        chords: [['mod', 'K']],
+        // Toggles: the shared preventDefault also suppresses the browser's own ⌘K/Ctrl+K.
+        run: () => toggleChainPalette(),
       },
       {
         id: 'undo',

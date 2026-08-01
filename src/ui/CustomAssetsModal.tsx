@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { Palette, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { Palette, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import {
   Button,
   ConfirmDialog,
@@ -12,8 +12,8 @@ import {
   Modal,
   SectionTitle,
   Select,
-} from './kit'
-import { $part, addSubPart } from '../state/editorStore'
+} from './kit';
+import { $part, addSubPart } from '../state/editorStore';
 import {
   $customTextureUrls,
   openImportModel,
@@ -24,9 +24,9 @@ import {
   removeImport,
   setManagingMeshId,
   setTextureChannel,
-} from '../state/customAssetStore'
-import { MaterialDialog } from './MaterialDialog'
-import { CHANNEL_LABELS } from './channelLabels'
+} from '../state/customAssetStore';
+import { MaterialDialog } from './MaterialDialog';
+import { CHANNEL_LABELS } from './channelLabels';
 import {
   materialTextureIds,
   meshKind,
@@ -36,17 +36,17 @@ import {
   type EditingPart,
   type ImportedMeshSource,
   type TextureChannel,
-} from '../ksa/types'
+} from '../ksa/types';
 
 /** One import batch (one dropped glTF file) as the "Imported models" section shows it. */
 interface ImportBatch {
-  importId: string
-  sourceFile: string
-  meshes: (CustomMesh & { imported: ImportedMeshSource })[]
-  placements: number
-  triangles: number
+  importId: string;
+  sourceFile: string;
+  meshes: (CustomMesh & { imported: ImportedMeshSource })[];
+  placements: number;
+  triangles: number;
   /** The textures this batch's SubParts are dressed in (via their materials). */
-  textures: CustomTexture[]
+  textures: CustomTexture[];
 }
 
 /**
@@ -57,11 +57,11 @@ interface ImportBatch {
  * re-assignment (the same reference-counting stance as `planImportRemoval`).
  */
 function groupImports(part: EditingPart): ImportBatch[] {
-  const byId = new Map<string, ImportBatch>()
+  const byId = new Map<string, ImportBatch>();
   for (const m of part.customMeshes) {
-    if (meshKind(m) !== 'imported' || !m.imported) continue
-    const imported = m.imported
-    let batch = byId.get(imported.importId)
+    if (meshKind(m) !== 'imported' || !m.imported) continue;
+    const imported = m.imported;
+    let batch = byId.get(imported.importId);
     if (!batch) {
       batch = {
         importId: imported.importId,
@@ -70,38 +70,40 @@ function groupImports(part: EditingPart): ImportBatch[] {
         placements: 0,
         triangles: 0,
         textures: [],
-      }
-      byId.set(imported.importId, batch)
+      };
+      byId.set(imported.importId, batch);
     }
-    batch.meshes.push({ ...m, imported })
-    batch.triangles += imported.triangles
-    batch.placements += part.placements.filter((pl) => pl.subPartTemplateId === m.subPartId).length
+    batch.meshes.push({ ...m, imported });
+    batch.triangles += imported.triangles;
+    batch.placements += part.placements.filter((pl) => pl.subPartTemplateId === m.subPartId).length;
   }
   for (const batch of byId.values()) {
-    const texIds = new Set<string>()
+    const texIds = new Set<string>();
     for (const m of batch.meshes) {
-      const mat = m.materialId ? part.customMaterials.find((x) => x.id === m.materialId) : undefined
-      if (mat) for (const id of materialTextureIds(mat)) texIds.add(id)
+      const mat = m.materialId
+        ? part.customMaterials.find((x) => x.id === m.materialId)
+        : undefined;
+      if (mat) for (const id of materialTextureIds(mat)) texIds.add(id);
     }
-    batch.textures = part.customTextures.filter((t) => texIds.has(t.id))
+    batch.textures = part.customTextures.filter((t) => texIds.has(t.id));
   }
-  return [...byId.values()]
+  return [...byId.values()];
 }
 
 /** "3 SubParts, 5 placements, 2 materials, 4 textures" — the confirm dialog's inventory. */
 function removalSummary(counts: {
-  meshes: number
-  placements: number
-  materials: number
-  textures: number
+  meshes: number;
+  placements: number;
+  materials: number;
+  textures: number;
 }): string {
-  const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+  const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
   return [
     plural(counts.meshes, 'SubPart'),
     plural(counts.placements, 'placement'),
     plural(counts.materials, 'material'),
     plural(counts.textures, 'texture'),
-  ].join(', ')
+  ].join(', ');
 }
 
 /**
@@ -117,53 +119,53 @@ export function CustomAssetsModal({
   isOpen,
   onOpenChange,
 }: {
-  isOpen: boolean
-  onOpenChange: (open: boolean) => void
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const part = useStore($part)
-  const thumbs = useStore($customTextureUrls)
-  const { customTextures } = part
+  const part = useStore($part);
+  const thumbs = useStore($customTextureUrls);
+  const { customTextures } = part;
   // Three disjoint mesh kinds, three different homes: part-ified kitten submeshes are managed
   // as placed SubParts on their layer (not here at all), imported ones get their own
   // per-batch section below, and the "Meshes" list is the hand-authored primitives.
-  const customMeshes = part.customMeshes.filter((m) => meshKind(m) === 'primitive')
-  const batches = groupImports(part)
-  const [pendingTexture, setPendingTexture] = useState<CustomTexture | null>(null)
-  const [pendingMesh, setPendingMesh] = useState<CustomMesh | null>(null)
-  const [pendingMaterial, setPendingMaterial] = useState<CustomMaterial | null>(null)
-  const [pendingImport, setPendingImport] = useState<ImportBatch | null>(null)
-  const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null)
+  const customMeshes = part.customMeshes.filter((m) => meshKind(m) === 'primitive');
+  const batches = groupImports(part);
+  const [pendingTexture, setPendingTexture] = useState<CustomTexture | null>(null);
+  const [pendingMesh, setPendingMesh] = useState<CustomMesh | null>(null);
+  const [pendingMaterial, setPendingMaterial] = useState<CustomMaterial | null>(null);
+  const [pendingImport, setPendingImport] = useState<ImportBatch | null>(null);
+  const [editingMaterialId, setEditingMaterialId] = useState<string | null>(null);
 
   const textureFaceUses = (id: string) =>
     customMeshes.reduce(
       (n, m) => n + Object.values(m.faceTextures).filter((f) => f?.textureId === id).length,
       0,
-    )
+    );
   const meshInstanceCount = (m: CustomMesh) =>
-    part.placements.filter((p) => p.subPartTemplateId === m.subPartId).length
+    part.placements.filter((p) => p.subPartTemplateId === m.subPartId).length;
   // Imported SubParts wear materials too — count every non-kitten mesh (kitten submeshes
   // carry their own KSA PBR set and never reference a CustomMaterial).
   const materialUses = (id: string) =>
-    part.customMeshes.filter((m) => meshKind(m) !== 'kitten' && m.materialId === id).length
-  const importRemoval = pendingImport ? planImportRemoval(part, pendingImport.importId) : null
+    part.customMeshes.filter((m) => meshKind(m) !== 'kitten' && m.materialId === id).length;
+  const importRemoval = pendingImport ? planImportRemoval(part, pendingImport.importId) : null;
 
   const addToScene = (m: CustomMesh) => {
-    addSubPart(m.subPartId)
-    onOpenChange(false)
-  }
+    addSubPart(m.subPartId);
+    onOpenChange(false);
+  };
   const manageTextures = (m: CustomMesh) => {
-    setManagingMeshId(m.id)
-    onOpenChange(false)
-  }
+    setManagingMeshId(m.id);
+    onOpenChange(false);
+  };
   /**
    * Re-import: hand the batch to the ONE import dialog in replace mode (it opens on its drop
    * step, since the point is to pick the file you just re-exported from Blender). This modal
    * closes — two stacked fullscreen modals would trap focus in the wrong one.
    */
   const replaceImport = (batch: ImportBatch) => {
-    openImportModel([], batch.importId)
-    onOpenChange(false)
-  }
+    openImportModel([], batch.importId);
+    onOpenChange(false);
+  };
 
   return (
     <>
@@ -429,7 +431,7 @@ export function CustomAssetsModal({
         <MaterialDialog materialId={editingMaterialId} onClose={() => setEditingMaterialId(null)} />
       )}
     </>
-  )
+  );
 }
 
 /**
@@ -446,13 +448,13 @@ function ImportBatchCard({
   onReplaceImport,
   onRemoveImport,
 }: {
-  batch: ImportBatch
-  instanceCount: (m: CustomMesh) => number
-  onAddInstance: (m: CustomMesh) => void
-  onManage: (m: CustomMesh) => void
-  onDeleteMesh: (m: CustomMesh) => void
-  onReplaceImport: () => void
-  onRemoveImport: () => void
+  batch: ImportBatch;
+  instanceCount: (m: CustomMesh) => number;
+  onAddInstance: (m: CustomMesh) => void;
+  onManage: (m: CustomMesh) => void;
+  onDeleteMesh: (m: CustomMesh) => void;
+  onReplaceImport: () => void;
+  onRemoveImport: () => void;
 }) {
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-panel-sunken/40 p-2">
@@ -519,7 +521,7 @@ function ImportBatchCard({
         </p>
       )}
     </div>
-  )
+  );
 }
 
 /** Small preview chip: the picked color, or the base-color image thumbnail. */
@@ -527,10 +529,10 @@ function MaterialSwatch({
   material,
   thumbs,
 }: {
-  material: CustomMaterial
-  thumbs: Record<string, string>
+  material: CustomMaterial;
+  thumbs: Record<string, string>;
 }) {
-  const base = material.baseColor
+  const base = material.baseColor;
   return (
     <span className="h-9 w-9 shrink-0 overflow-hidden rounded border border-border bg-panel-sunken">
       {base.kind === 'color' ? (
@@ -544,12 +546,12 @@ function MaterialSwatch({
         )
       )}
     </span>
-  )
+  );
 }
 
 /** Compact metal/rough readout, e.g. "M 100% · R 15%" (uniform channels only). */
 function materialSummary(m: CustomMaterial): string {
   const pct = (c: CustomMaterial['metalness']) =>
-    c.kind === 'value' ? `${Math.round(c.value * 100)}%` : 'map'
-  return `M ${pct(m.metalness)} · R ${pct(m.roughness)}`
+    c.kind === 'value' ? `${Math.round(c.value * 100)}%` : 'map';
+  return `M ${pct(m.metalness)} · R ${pct(m.roughness)}`;
 }

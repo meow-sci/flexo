@@ -1,11 +1,11 @@
-import { useStore } from '@nanostores/react'
-import { Euler, Quaternion, MathUtils } from 'three'
-import { Button, ToggleButton, ToggleButtonGroup, SectionTitle, Switch } from './kit'
-import { FloatingEditorPanel } from './FloatingEditorPanel'
-import { PreciseNumberInput } from './PreciseNumberInput'
-import { SliderRow } from './SliderRow'
-import { Vec3Field } from './Vec3Field'
-import { ColorAlphaField } from './ColorAlphaField'
+import { useStore } from '@nanostores/react';
+import { Euler, Quaternion, MathUtils } from 'three';
+import { Button, ToggleButton, ToggleButtonGroup, SectionTitle, Switch } from './kit';
+import { FloatingEditorPanel } from './FloatingEditorPanel';
+import { PreciseNumberInput } from './PreciseNumberInput';
+import { SliderRow } from './SliderRow';
+import { Vec3Field } from './Vec3Field';
+import { ColorAlphaField } from './ColorAlphaField';
 import {
   $activeContainerId,
   $containerGizmoMode,
@@ -18,25 +18,25 @@ import {
   updateContainer,
   type ContainerGizmoMode,
   type ReferenceContainer,
-} from '../state/containerStore'
-import { pushUndo } from '../state/editorStore'
-import type { Vec3 } from '../ksa/types'
+} from '../state/containerStore';
+import { pushUndo } from '../state/editorStore';
+import type { Vec3 } from '../ksa/types';
 
 const SHAPE_LABEL: Record<ReferenceContainer['shape'], string> = {
   rect: 'Box container',
   cylinder: 'Cylinder container',
   sphere: 'Sphere container',
-}
+};
 
 const MODES: { id: ContainerGizmoMode; label: string }[] = [
   { id: 'translate', label: 'Move' },
   { id: 'rotate', label: 'Rotate' },
   { id: 'scale', label: 'Scale' },
-]
+];
 
 function quatToEulerDeg(q: [number, number, number, number]): Vec3 {
-  const e = new Euler().setFromQuaternion(new Quaternion(q[0], q[1], q[2], q[3]), 'XYZ')
-  return { x: MathUtils.radToDeg(e.x), y: MathUtils.radToDeg(e.y), z: MathUtils.radToDeg(e.z) }
+  const e = new Euler().setFromQuaternion(new Quaternion(q[0], q[1], q[2], q[3]), 'XYZ');
+  return { x: MathUtils.radToDeg(e.x), y: MathUtils.radToDeg(e.y), z: MathUtils.radToDeg(e.z) };
 }
 
 function eulerDegToQuat(deg: Vec3): [number, number, number, number] {
@@ -45,9 +45,9 @@ function eulerDegToQuat(deg: Vec3): [number, number, number, number] {
     MathUtils.degToRad(deg.y),
     MathUtils.degToRad(deg.z),
     'XYZ',
-  )
-  const q = new Quaternion().setFromEuler(e)
-  return [q.x, q.y, q.z, q.w]
+  );
+  const q = new Quaternion().setFromEuler(e);
+  return [q.x, q.y, q.z, q.w];
 }
 
 /**
@@ -56,22 +56,22 @@ function eulerDegToQuat(deg: Vec3): [number, number, number, number] {
  * data read-only. Closing leaves the container placed (re-open from the list).
  */
 export function ContainerEditor() {
-  const activeId = useStore($activeContainerId)
-  const containers = useStore($containers)
-  const mode = useStore($containerGizmoMode)
+  const activeId = useStore($activeContainerId);
+  const containers = useStore($containers);
+  const mode = useStore($containerGizmoMode);
 
-  const c = activeId ? containers.find((x) => x.id === activeId) : undefined
-  if (!c) return null
+  const c = activeId ? containers.find((x) => x.id === activeId) : undefined;
+  if (!c) return null;
 
-  const setSize = (next: Vec3) => updateContainer(c.id, { size: normalizeSize(c.shape, next) })
-  const euler = quatToEulerDeg(c.rotation)
+  const setSize = (next: Vec3) => updateContainer(c.id, { size: normalizeSize(c.shape, next) });
+  const euler = quatToEulerDeg(c.rotation);
   const setEuler = (axis: keyof Vec3, val: number) =>
-    updateContainer(c.id, { rotation: eulerDegToQuat({ ...euler, [axis]: val }) })
+    updateContainer(c.id, { rotation: eulerDegToQuat({ ...euler, [axis]: val }) });
 
-  const pushCenter = () => pushUndo('container center')
-  const pushSize = () => pushUndo('container size')
-  const pushRotation = () => pushUndo('container rotation')
-  const pushStyle = () => pushUndo('container style')
+  const pushCenter = () => pushUndo('container center');
+  const pushSize = () => pushUndo('container size');
+  const pushRotation = () => pushUndo('container rotation');
+  const pushStyle = () => pushUndo('container style');
 
   return (
     <FloatingEditorPanel
@@ -98,8 +98,8 @@ export function ContainerEditor() {
               disallowEmptySelection
               selectedKeys={[mode]}
               onSelectionChange={(keys) => {
-                const next = [...keys][0] as ContainerGizmoMode | undefined
-                if (next) setContainerGizmoMode(next)
+                const next = [...keys][0] as ContainerGizmoMode | undefined;
+                if (next) setContainerGizmoMode(next);
               }}
             >
               {MODES.map((m) => (
@@ -170,8 +170,8 @@ export function ContainerEditor() {
             <Switch
               isSelected={c.warnEnabled}
               onChange={(warnEnabled) => {
-                pushUndo('container warning')
-                updateContainer(c.id, { warnEnabled })
+                pushUndo('container warning');
+                updateContainer(c.id, { warnEnabled });
               }}
             >
               Detect out of bounds
@@ -195,7 +195,7 @@ export function ContainerEditor() {
         </div>
       )}
     </FloatingEditorPanel>
-  )
+  );
 }
 
 /** Per-shape dimension inputs, written back through size (with shape constraints). */
@@ -204,9 +204,9 @@ function Dimensions({
   onSize,
   onInteractionStart,
 }: {
-  container: ReferenceContainer
-  onSize: (size: Vec3) => void
-  onInteractionStart?: () => void
+  container: ReferenceContainer;
+  onSize: (size: Vec3) => void;
+  onInteractionStart?: () => void;
 }) {
   if (c.shape === 'rect') {
     return (
@@ -218,9 +218,9 @@ function Dimensions({
           onCommit={(axis, val) => onSize({ ...c.size, [axis]: Math.max(0, val) })}
         />
       </div>
-    )
+    );
   }
-  const radius = c.size.x / 2
+  const radius = c.size.x / 2;
   return (
     <div className="flex flex-col gap-1">
       <SectionTitle>Size (m)</SectionTitle>
@@ -251,10 +251,10 @@ function Dimensions({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function fmt(v: Vec3): string {
-  const n = (x: number) => x.toFixed(2)
-  return `${n(v.x)}, ${n(v.y)}, ${n(v.z)}`
+  const n = (x: number) => x.toFixed(2);
+  return `${n(v.x)}, ${n(v.y)}, ${n(v.z)}`;
 }

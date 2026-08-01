@@ -1,5 +1,5 @@
-import * as THREE from 'three'
-import type { EulerXYZ, Transform, Vec3 } from '../ksa/types'
+import * as THREE from 'three';
+import type { EulerXYZ, Transform, Vec3 } from '../ksa/types';
 
 /**
  * The single chokepoint for converting between KSA Part-space transforms (as
@@ -25,25 +25,25 @@ import type { EulerXYZ, Transform, Vec3 } from '../ksa/types'
  */
 
 // KSA's Euler "XYZ" equals three.js 'ZYX' (opposite compose order) — see above.
-const EULER_ORDER = 'ZYX' as const
+const EULER_ORDER = 'ZYX' as const;
 
 export function applyPlacement(obj: THREE.Object3D, p: Transform): void {
-  obj.position.set(p.position.x, p.position.y, p.position.z)
-  obj.rotation.set(p.rotation.x, p.rotation.y, p.rotation.z, EULER_ORDER)
-  obj.scale.set(p.scale.x, p.scale.y, p.scale.z)
+  obj.position.set(p.position.x, p.position.y, p.position.z);
+  obj.rotation.set(p.rotation.x, p.rotation.y, p.rotation.z, EULER_ORDER);
+  obj.scale.set(p.scale.x, p.scale.y, p.scale.z);
 }
 
 export function readPlacementTransform(obj: THREE.Object3D): {
-  position: Vec3
-  rotation: EulerXYZ
-  scale: Vec3
+  position: Vec3;
+  rotation: EulerXYZ;
+  scale: Vec3;
 } {
-  const euler = new THREE.Euler().setFromQuaternion(obj.quaternion, EULER_ORDER)
+  const euler = new THREE.Euler().setFromQuaternion(obj.quaternion, EULER_ORDER);
   return {
     position: { x: obj.position.x, y: obj.position.y, z: obj.position.z },
     rotation: { x: euler.x, y: euler.y, z: euler.z },
     scale: { x: obj.scale.x, y: obj.scale.y, z: obj.scale.z },
-  }
+  };
 }
 
 /**
@@ -54,26 +54,26 @@ export function readPlacementTransform(obj: THREE.Object3D): {
  * rendered, so an animation's rest pose matches the static pose).
  */
 export function matrixFromTransform(t: Transform): THREE.Matrix4 {
-  const pos = new THREE.Vector3(t.position.x, t.position.y, t.position.z)
+  const pos = new THREE.Vector3(t.position.x, t.position.y, t.position.z);
   const quat = new THREE.Quaternion().setFromEuler(
     new THREE.Euler(t.rotation.x, t.rotation.y, t.rotation.z, EULER_ORDER),
-  )
-  const scale = new THREE.Vector3(t.scale.x, t.scale.y, t.scale.z)
-  return new THREE.Matrix4().compose(pos, quat, scale)
+  );
+  const scale = new THREE.Vector3(t.scale.x, t.scale.y, t.scale.z);
+  return new THREE.Matrix4().compose(pos, quat, scale);
 }
 
 /** Inverse of {@link matrixFromTransform}: decomposes a matrix back to a KSA Transform. */
 export function transformFromMatrix(m: THREE.Matrix4): Transform {
-  const pos = new THREE.Vector3()
-  const quat = new THREE.Quaternion()
-  const scale = new THREE.Vector3()
-  m.decompose(pos, quat, scale)
-  const euler = new THREE.Euler().setFromQuaternion(quat, EULER_ORDER)
+  const pos = new THREE.Vector3();
+  const quat = new THREE.Quaternion();
+  const scale = new THREE.Vector3();
+  m.decompose(pos, quat, scale);
+  const euler = new THREE.Euler().setFromQuaternion(quat, EULER_ORDER);
   return {
     position: { x: pos.x, y: pos.y, z: pos.z },
     rotation: { x: euler.x, y: euler.y, z: euler.z },
     scale: { x: scale.x, y: scale.y, z: scale.z },
-  }
+  };
 }
 
 /**
@@ -94,20 +94,20 @@ export function transformFromMatrix(m: THREE.Matrix4): Transform {
 export function colliderWorld(collider: Transform, placement: Transform): Transform {
   const parentQuat = new THREE.Quaternion().setFromEuler(
     new THREE.Euler(placement.rotation.x, placement.rotation.y, placement.rotation.z, EULER_ORDER),
-  )
+  );
   const localPos = new THREE.Vector3(
     collider.position.x,
     collider.position.y,
     collider.position.z,
-  ).applyQuaternion(parentQuat)
+  ).applyQuaternion(parentQuat);
   const worldQuat = parentQuat
     .clone()
     .multiply(
       new THREE.Quaternion().setFromEuler(
         new THREE.Euler(collider.rotation.x, collider.rotation.y, collider.rotation.z, EULER_ORDER),
       ),
-    )
-  const euler = new THREE.Euler().setFromQuaternion(worldQuat, EULER_ORDER)
+    );
+  const euler = new THREE.Euler().setFromQuaternion(worldQuat, EULER_ORDER);
   return {
     position: {
       x: placement.position.x + localPos.x,
@@ -116,7 +116,7 @@ export function colliderWorld(collider: Transform, placement: Transform): Transf
     },
     rotation: { x: euler.x, y: euler.y, z: euler.z },
     scale: { ...collider.scale },
-  }
+  };
 }
 
 /** Inverse of {@link colliderWorld}: a Part-space transform back into the owner's local frame. */
@@ -130,25 +130,25 @@ export function colliderLocalFromWorld(world: Transform, placement: Transform): 
         EULER_ORDER,
       ),
     )
-    .invert()
+    .invert();
   const localPos = new THREE.Vector3(
     world.position.x - placement.position.x,
     world.position.y - placement.position.y,
     world.position.z - placement.position.z,
-  ).applyQuaternion(parentInv)
+  ).applyQuaternion(parentInv);
   const localQuat = parentInv
     .clone()
     .multiply(
       new THREE.Quaternion().setFromEuler(
         new THREE.Euler(world.rotation.x, world.rotation.y, world.rotation.z, EULER_ORDER),
       ),
-    )
-  const euler = new THREE.Euler().setFromQuaternion(localQuat, EULER_ORDER)
+    );
+  const euler = new THREE.Euler().setFromQuaternion(localQuat, EULER_ORDER);
   return {
     position: { x: localPos.x, y: localPos.y, z: localPos.z },
     rotation: { x: euler.x, y: euler.y, z: euler.z },
     scale: { ...world.scale },
-  }
+  };
 }
 
 /**
@@ -187,24 +187,24 @@ export function lightWorld(light: Transform, owner: Transform | null): Transform
       position: { ...light.position },
       rotation: { ...light.rotation },
       scale: { x: 1, y: 1, z: 1 },
-    }
+    };
   }
   const ownerQuat = new THREE.Quaternion().setFromEuler(
     new THREE.Euler(owner.rotation.x, owner.rotation.y, owner.rotation.z, EULER_ORDER),
-  )
+  );
   const offset = new THREE.Vector3(
     light.position.x * owner.scale.x,
     light.position.y * owner.scale.y,
     light.position.z * owner.scale.z,
-  ).applyQuaternion(ownerQuat)
+  ).applyQuaternion(ownerQuat);
   const worldQuat = ownerQuat
     .clone()
     .multiply(
       new THREE.Quaternion().setFromEuler(
         new THREE.Euler(light.rotation.x, light.rotation.y, light.rotation.z, EULER_ORDER),
       ),
-    )
-  const euler = new THREE.Euler().setFromQuaternion(worldQuat, EULER_ORDER)
+    );
+  const euler = new THREE.Euler().setFromQuaternion(worldQuat, EULER_ORDER);
   return {
     position: {
       x: owner.position.x + offset.x,
@@ -213,7 +213,7 @@ export function lightWorld(light: Transform, owner: Transform | null): Transform
     },
     rotation: { x: euler.x, y: euler.y, z: euler.z },
     scale: { x: 1, y: 1, z: 1 },
-  }
+  };
 }
 
 /**
@@ -236,26 +236,26 @@ export function lightLocalFromWorld(world: Transform, owner: Transform | null): 
       position: { ...world.position },
       rotation: { ...world.rotation },
       scale: { x: 1, y: 1, z: 1 },
-    }
+    };
   }
   const ownerInv = new THREE.Quaternion()
     .setFromEuler(
       new THREE.Euler(owner.rotation.x, owner.rotation.y, owner.rotation.z, EULER_ORDER),
     )
-    .invert()
+    .invert();
   const rotated = new THREE.Vector3(
     world.position.x - owner.position.x,
     world.position.y - owner.position.y,
     world.position.z - owner.position.z,
-  ).applyQuaternion(ownerInv)
+  ).applyQuaternion(ownerInv);
   const localQuat = ownerInv
     .clone()
     .multiply(
       new THREE.Quaternion().setFromEuler(
         new THREE.Euler(world.rotation.x, world.rotation.y, world.rotation.z, EULER_ORDER),
       ),
-    )
-  const euler = new THREE.Euler().setFromQuaternion(localQuat, EULER_ORDER)
+    );
+  const euler = new THREE.Euler().setFromQuaternion(localQuat, EULER_ORDER);
   return {
     position: {
       x: rotated.x / signedScaleOrOne(owner.scale.x),
@@ -264,12 +264,12 @@ export function lightLocalFromWorld(world: Transform, owner: Transform | null): 
     },
     rotation: { x: euler.x, y: euler.y, z: euler.z },
     scale: { x: 1, y: 1, z: 1 },
-  }
+  };
 }
 
 /** Signed scale divisor for {@link lightLocalFromWorld}: `|s| < 1e-9` degenerates to 1. */
 function signedScaleOrOne(s: number): number {
-  return Math.abs(s) < 1e-9 ? 1 : s
+  return Math.abs(s) < 1e-9 ? 1 : s;
 }
 
 /**
@@ -288,20 +288,20 @@ function signedScaleOrOne(s: number): number {
  * `<SubPartRef><Transform>`, `decomp/KSA/Part.cs:1131-1152`).
  */
 export function exhaustWorldLocation(location: Vec3, owner: Transform | null): Vec3 {
-  if (owner === null) return { ...location }
+  if (owner === null) return { ...location };
   const v = new THREE.Vector3(location.x, location.y, location.z).applyMatrix4(
     matrixFromTransform(owner),
-  )
-  return { x: v.x, y: v.y, z: v.z }
+  );
+  return { x: v.x, y: v.y, z: v.z };
 }
 
 /** Exact inverse of {@link exhaustWorldLocation} — what a translate drag writes back. */
 export function exhaustLocalLocation(world: Vec3, owner: Transform | null): Vec3 {
-  if (owner === null) return { ...world }
+  if (owner === null) return { ...world };
   const v = new THREE.Vector3(world.x, world.y, world.z).applyMatrix4(
     matrixFromTransform(owner).invert(),
-  )
-  return { x: v.x, y: v.y, z: v.z }
+  );
+  return { x: v.x, y: v.y, z: v.z };
 }
 
 /**
@@ -319,25 +319,25 @@ export function exhaustLocalLocation(world: Vec3, owner: Transform | null): Vec3
  * (`0, 0.550, -1.000`). Normalizing is the caller's policy decision, per channel.
  */
 export function exhaustWorldDirection(direction: Vec3, owner: Transform | null): Vec3 {
-  if (owner === null) return { ...direction }
+  if (owner === null) return { ...direction };
   const v = new THREE.Vector3(direction.x, direction.y, direction.z).applyQuaternion(
     ownerQuat(owner),
-  )
-  return { x: v.x, y: v.y, z: v.z }
+  );
+  return { x: v.x, y: v.y, z: v.z };
 }
 
 /** Exact inverse of {@link exhaustWorldDirection} — what a rotate drag writes back. */
 export function exhaustLocalDirection(world: Vec3, owner: Transform | null): Vec3 {
-  if (owner === null) return { ...world }
-  const v = new THREE.Vector3(world.x, world.y, world.z).applyQuaternion(ownerQuat(owner).invert())
-  return { x: v.x, y: v.y, z: v.z }
+  if (owner === null) return { ...world };
+  const v = new THREE.Vector3(world.x, world.y, world.z).applyQuaternion(ownerQuat(owner).invert());
+  return { x: v.x, y: v.y, z: v.z };
 }
 
 /** The owner placement's rotation as a quaternion, through the calibrated euler order. */
 function ownerQuat(owner: Transform): THREE.Quaternion {
   return new THREE.Quaternion().setFromEuler(
     new THREE.Euler(owner.rotation.x, owner.rotation.y, owner.rotation.z, EULER_ORDER),
-  )
+  );
 }
 
 /**
@@ -352,8 +352,8 @@ export function lightWorldAim(rotation: EulerXYZ): Vec3 {
     new THREE.Quaternion().setFromEuler(
       new THREE.Euler(rotation.x, rotation.y, rotation.z, EULER_ORDER),
     ),
-  )
-  return { x: aim.x, y: aim.y, z: aim.z }
+  );
+  return { x: aim.x, y: aim.y, z: aim.z };
 }
 
 /**
@@ -373,14 +373,14 @@ export function lightWorldAim(rotation: EulerXYZ): Vec3 {
  *    perpendicular axis for the 180° flip (never NaN).
  */
 export function lightAimRotation(rotation: EulerXYZ, newAim: Vec3): EulerXYZ | null {
-  const len = Math.hypot(newAim.x, newAim.y, newAim.z)
-  if (len < 1e-6) return null
-  const target = new THREE.Vector3(newAim.x / len, newAim.y / len, newAim.z / len)
+  const len = Math.hypot(newAim.x, newAim.y, newAim.z);
+  if (len < 1e-6) return null;
+  const target = new THREE.Vector3(newAim.x / len, newAim.y / len, newAim.z / len);
   const current = new THREE.Quaternion().setFromEuler(
     new THREE.Euler(rotation.x, rotation.y, rotation.z, EULER_ORDER),
-  )
-  const currentAim = new THREE.Vector3(1, 0, 0).applyQuaternion(current)
-  const deltaQ = new THREE.Quaternion().setFromUnitVectors(currentAim, target)
-  const euler = new THREE.Euler().setFromQuaternion(deltaQ.multiply(current), EULER_ORDER)
-  return { x: euler.x, y: euler.y, z: euler.z }
+  );
+  const currentAim = new THREE.Vector3(1, 0, 0).applyQuaternion(current);
+  const deltaQ = new THREE.Quaternion().setFromUnitVectors(currentAim, target);
+  const euler = new THREE.Euler().setFromQuaternion(deltaQ.multiply(current), EULER_ORDER);
+  return { x: euler.x, y: euler.y, z: euler.z };
 }

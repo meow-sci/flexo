@@ -1,8 +1,8 @@
-import * as THREE from 'three'
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
-import type { GLTF } from 'three/addons/loaders/GLTFLoader.js'
-import { assetKeys, getAsset } from '../state/assetDb'
-import { getSubPartGeometry } from './MeshAtlasCache'
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
+import { assetKeys, getAsset } from '../state/assetDb';
+import { getSubPartGeometry } from './MeshAtlasCache';
 
 /**
  * Runtime side of IMPORTED (glTF/GLB) geometry: the `importId → blob: URL` registry over the
@@ -29,13 +29,13 @@ import { getSubPartGeometry } from './MeshAtlasCache'
  */
 
 /** import batch id → blob: URL of its normalized atlas GLB. */
-const atlasUrls = new Map<string, string>()
+const atlasUrls = new Map<string, string>();
 /** blob: URL → parsed GLTF, for the raw (export) path only; the editor path uses MeshAtlasCache. */
-const rawGltfs = new Map<string, Promise<GLTF>>()
+const rawGltfs = new Map<string, Promise<GLTF>>();
 /** `<blobUrl>#<meshName>` → raw geometry (indexed, no tangents). */
-const rawGeometries = new Map<string, THREE.BufferGeometry>()
+const rawGeometries = new Map<string, THREE.BufferGeometry>();
 
-const rawLoader = new GLTFLoader()
+const rawLoader = new GLTFLoader();
 
 /**
  * Registers an import batch's GLB bytes and returns the blob URL they are served from.
@@ -43,16 +43,16 @@ const rawLoader = new GLTFLoader()
  * stable cache key for MeshAtlasCache and for `CatalogSubPart.atlasUrl`.
  */
 export function registerImportAtlas(importId: string, glb: Uint8Array): string {
-  const existing = atlasUrls.get(importId)
-  if (existing) return existing
-  const url = URL.createObjectURL(new Blob([glb.slice()], { type: 'model/gltf-binary' }))
-  atlasUrls.set(importId, url)
-  return url
+  const existing = atlasUrls.get(importId);
+  if (existing) return existing;
+  const url = URL.createObjectURL(new Blob([glb.slice()], { type: 'model/gltf-binary' }));
+  atlasUrls.set(importId, url);
+  return url;
 }
 
 /** The blob URL for an already-registered import batch, or null. */
 export function importAtlasUrl(importId: string): string | null {
-  return atlasUrls.get(importId) ?? null
+  return atlasUrls.get(importId) ?? null;
 }
 
 /**
@@ -62,16 +62,16 @@ export function importAtlasUrl(importId: string): string | null {
  * there is no other copy of imported geometry.
  */
 export async function ensureImportAtlas(importId: string): Promise<string | null> {
-  const existing = atlasUrls.get(importId)
-  if (existing) return existing
-  const blob = await getAsset(assetKeys.importGlb(importId))
+  const existing = atlasUrls.get(importId);
+  if (existing) return existing;
+  const blob = await getAsset(assetKeys.importGlb(importId));
   if (!blob) {
-    console.warn(`flexo: imported model '${importId}' has no stored geometry`)
-    return null
+    console.warn(`flexo: imported model '${importId}' has no stored geometry`);
+    return null;
   }
-  const url = URL.createObjectURL(blob)
-  atlasUrls.set(importId, url)
-  return url
+  const url = URL.createObjectURL(blob);
+  atlasUrls.set(importId, url);
+  return url;
 }
 
 /**
@@ -83,16 +83,16 @@ export async function getImportedGeometry(
   importId: string,
   meshName: string,
 ): Promise<THREE.BufferGeometry | null> {
-  const url = importAtlasUrl(importId)
+  const url = importAtlasUrl(importId);
   if (!url) {
-    console.warn(`flexo: imported model '${importId}' is not registered (mesh '${meshName}')`)
-    return null
+    console.warn(`flexo: imported model '${importId}' is not registered (mesh '${meshName}')`);
+    return null;
   }
   try {
-    return await getSubPartGeometry(url, meshName)
+    return await getSubPartGeometry(url, meshName);
   } catch (err) {
-    console.warn(`flexo: imported mesh '${meshName}' failed to resolve`, err)
-    return null
+    console.warn(`flexo: imported mesh '${meshName}' failed to resolve`, err);
+    return null;
   }
 }
 
@@ -113,37 +113,37 @@ export async function getImportedRawGeometry(
   importId: string,
   meshName: string,
 ): Promise<THREE.BufferGeometry | null> {
-  const url = importAtlasUrl(importId)
+  const url = importAtlasUrl(importId);
   if (!url) {
-    console.warn(`flexo: imported model '${importId}' is not registered (mesh '${meshName}')`)
-    return null
+    console.warn(`flexo: imported model '${importId}' is not registered (mesh '${meshName}')`);
+    return null;
   }
-  const cacheKey = `${url}#${meshName}`
-  const cached = rawGeometries.get(cacheKey)
-  if (cached) return cached
+  const cacheKey = `${url}#${meshName}`;
+  const cached = rawGeometries.get(cacheKey);
+  if (cached) return cached;
   try {
-    let pending = rawGltfs.get(url)
+    let pending = rawGltfs.get(url);
     if (!pending) {
-      pending = rawLoader.loadAsync(url)
-      rawGltfs.set(url, pending)
+      pending = rawLoader.loadAsync(url);
+      rawGltfs.set(url, pending);
     }
-    const gltf = await pending
-    const node = gltf.scene.getObjectByName(meshName)
-    const mesh = node && (node as THREE.Mesh).isMesh ? (node as THREE.Mesh) : null
+    const gltf = await pending;
+    const node = gltf.scene.getObjectByName(meshName);
+    const mesh = node && (node as THREE.Mesh).isMesh ? (node as THREE.Mesh) : null;
     if (!mesh) {
-      console.warn(`flexo: imported mesh '${meshName}' not found in model '${importId}'`)
-      return null
+      console.warn(`flexo: imported mesh '${meshName}' not found in model '${importId}'`);
+      return null;
     }
     // The import atlas writes every mesh at identity, but bake the node transform anyway so
     // this accessor stays faithful to the file the way MeshAtlasCache is.
-    const geometry = mesh.geometry.clone()
-    mesh.updateWorldMatrix(true, false)
-    geometry.applyMatrix4(mesh.matrixWorld)
-    rawGeometries.set(cacheKey, geometry)
-    return geometry
+    const geometry = mesh.geometry.clone();
+    mesh.updateWorldMatrix(true, false);
+    geometry.applyMatrix4(mesh.matrixWorld);
+    rawGeometries.set(cacheKey, geometry);
+    return geometry;
   } catch (err) {
-    console.warn(`flexo: imported mesh '${meshName}' failed to load`, err)
-    return null
+    console.warn(`flexo: imported mesh '${meshName}' failed to load`, err);
+    return null;
   }
 }
 
@@ -158,15 +158,15 @@ export async function getImportedRawGeometry(
  * removal restores the descriptors, never the bytes (the same contract as removeCustomTexture).
  */
 export function releaseImportAtlas(importId: string): void {
-  const url = atlasUrls.get(importId)
-  if (!url) return
-  URL.revokeObjectURL(url)
-  atlasUrls.delete(importId)
-  rawGltfs.delete(url)
+  const url = atlasUrls.get(importId);
+  if (!url) return;
+  URL.revokeObjectURL(url);
+  atlasUrls.delete(importId);
+  rawGltfs.delete(url);
   // Deleting the CURRENT key during a Map iteration is well-defined (the iterator only
   // skips entries removed ahead of it), so no snapshot copy is needed.
   for (const key of rawGeometries.keys()) {
-    if (key.startsWith(`${url}#`)) rawGeometries.delete(key)
+    if (key.startsWith(`${url}#`)) rawGeometries.delete(key);
   }
 }
 
@@ -177,8 +177,8 @@ export function releaseImportAtlas(importId: string): void {
  * entries can never be mis-resolved, they simply age out with the page.
  */
 export function clearImportAtlases(): void {
-  for (const url of atlasUrls.values()) URL.revokeObjectURL(url)
-  atlasUrls.clear()
-  rawGltfs.clear()
-  rawGeometries.clear()
+  for (const url of atlasUrls.values()) URL.revokeObjectURL(url);
+  atlasUrls.clear();
+  rawGltfs.clear();
+  rawGeometries.clear();
 }

@@ -1,5 +1,5 @@
-import { persistentJSON } from '@nanostores/persistent'
-import { deselectLayer } from './editorStore'
+import { persistentJSON } from '@nanostores/persistent';
+import { deselectLayer } from './editorStore';
 
 /**
  * Per-layer VIEW state: visibility (eye) and lock. Unlike layer definitions and
@@ -16,16 +16,16 @@ import { deselectLayer } from './editorStore'
  */
 
 export interface LayerViewState {
-  visible: boolean
-  locked: boolean
+  visible: boolean;
+  locked: boolean;
   /** Whether the layer's entities appear in the inspector "Assets" list. */
-  listed: boolean
+  listed: boolean;
   /**
    * Viewport opacity multiplier, 0–1 (default 1 = fully opaque). Fades the layer's
    * rendered meshes so parts behind show through while repositioning. Editor-only —
    * never affects the exported document.
    */
-  opacity: number
+  opacity: number;
 }
 
 export const DEFAULT_LAYER_STATE: Readonly<LayerViewState> = {
@@ -33,44 +33,44 @@ export const DEFAULT_LAYER_STATE: Readonly<LayerViewState> = {
   locked: false,
   listed: true,
   opacity: 1,
-}
+};
 
 /** Map of layerId → view state. Entries are sparse (defaults filled on read). */
-export const $layerView = persistentJSON<Record<string, LayerViewState>>('flexo:layerView', {})
+export const $layerView = persistentJSON<Record<string, LayerViewState>>('flexo:layerView', {});
 
 /** View state for a layer, filling in defaults for any unset fields. */
 export function layerViewState(view: Record<string, LayerViewState>, id: string): LayerViewState {
-  return { ...DEFAULT_LAYER_STATE, ...view[id] }
+  return { ...DEFAULT_LAYER_STATE, ...view[id] };
 }
 
 /** True when the layer is currently visible (default true). */
 export function isLayerVisible(id: string): boolean {
-  return layerViewState($layerView.get(), id).visible
+  return layerViewState($layerView.get(), id).visible;
 }
 
 /** True when the layer is locked (default false). */
 export function isLayerLocked(id: string): boolean {
-  return layerViewState($layerView.get(), id).locked
+  return layerViewState($layerView.get(), id).locked;
 }
 
 /** True when the layer's entities are shown in the Assets list (default true). */
 export function isLayerListed(id: string): boolean {
-  return layerViewState($layerView.get(), id).listed
+  return layerViewState($layerView.get(), id).listed;
 }
 
 /** A layer's viewport opacity multiplier, 0–1 (default 1). */
 export function layerOpacity(id: string): number {
-  return layerViewState($layerView.get(), id).opacity
+  return layerViewState($layerView.get(), id).opacity;
 }
 
 function setLayerView(id: string, patch: Partial<LayerViewState>): void {
-  const current = $layerView.get()
-  $layerView.set({ ...current, [id]: { ...layerViewState(current, id), ...patch } })
+  const current = $layerView.get();
+  $layerView.set({ ...current, [id]: { ...layerViewState(current, id), ...patch } });
 }
 
 /** Toggles a layer's visibility. Hidden layers render nothing in the viewport. */
 export function toggleLayerVisible(id: string): void {
-  setLayerView(id, { visible: !isLayerVisible(id) })
+  setLayerView(id, { visible: !isLayerVisible(id) });
 }
 
 /**
@@ -79,7 +79,7 @@ export function toggleLayerVisible(id: string): void {
  * selection persists even for layers hidden from the list).
  */
 export function toggleLayerListed(id: string): void {
-  setLayerView(id, { listed: !isLayerListed(id) })
+  setLayerView(id, { listed: !isLayerListed(id) });
 }
 
 /**
@@ -88,7 +88,7 @@ export function toggleLayerListed(id: string): void {
  * hidden by a prior hide/unlist of that layer.
  */
 export function revealLayer(id: string): void {
-  setLayerView(id, { visible: true, listed: true })
+  setLayerView(id, { visible: true, listed: true });
 }
 
 /**
@@ -97,16 +97,16 @@ export function revealLayer(id: string): void {
  * selection (locked entities are also non-clickable; see EditorScene).
  */
 export function setLayerLocked(id: string, locked: boolean): void {
-  setLayerView(id, { locked })
-  if (locked) deselectLayer(id)
+  setLayerView(id, { locked });
+  if (locked) deselectLayer(id);
 }
 
 /** Toggles a layer's lock (see {@link setLayerLocked}). */
 export function toggleLayerLocked(id: string): void {
-  setLayerLocked(id, !isLayerLocked(id))
+  setLayerLocked(id, !isLayerLocked(id));
 }
 
 /** Sets a layer's viewport opacity multiplier, clamped to 0–1. */
 export function setLayerOpacity(id: string, opacity: number): void {
-  setLayerView(id, { opacity: Math.min(1, Math.max(0, opacity)) })
+  setLayerView(id, { opacity: Math.min(1, Math.max(0, opacity)) });
 }

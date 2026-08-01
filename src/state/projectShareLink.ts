@@ -1,12 +1,12 @@
-import type { EditingPart } from '../ksa/types'
-import { compressZstd, decompressZstd } from '../ktx/zstd'
-import { base64UrlToBytes, bytesToBase64Url } from '../util/base64url'
+import type { EditingPart } from '../ksa/types';
+import { compressZstd, decompressZstd } from '../ktx/zstd';
+import { base64UrlToBytes, bytesToBase64Url } from '../util/base64url';
 import {
   buildProjectExport,
   parseProjectImport,
   serializeProjectJson,
   type ParseResult,
-} from './projectTransfer'
+} from './projectTransfer';
 
 /**
  * STATELESS SHARE LINKS — encodes an entire project into a single URL so it can be
@@ -22,52 +22,52 @@ import {
  */
 
 /** The query-string parameter that carries a shared project payload. */
-export const SHARE_PARAM = 'load'
+export const SHARE_PARAM = 'load';
 
 /**
  * Zstd level for share links. Higher than the texture default — the payload is tiny,
  * so we spend the extra CPU for the shortest possible URL. 19 is the max "standard"
  * level (20–22 are "ultra" and need a larger window than this data warrants).
  */
-const SHARE_ZSTD_LEVEL = 19
+const SHARE_ZSTD_LEVEL = 19;
 
 /** Encodes an export envelope's worth of project state into a `?load=` payload string. */
 export async function encodeSharePayload(part: EditingPart, projectName: string): Promise<string> {
-  const json = serializeProjectJson(buildProjectExport(part, projectName))
-  const bytes = new TextEncoder().encode(json)
-  const compressed = await compressZstd(bytes, SHARE_ZSTD_LEVEL)
-  return bytesToBase64Url(compressed)
+  const json = serializeProjectJson(buildProjectExport(part, projectName));
+  const bytes = new TextEncoder().encode(json);
+  const compressed = await compressZstd(bytes, SHARE_ZSTD_LEVEL);
+  return bytesToBase64Url(compressed);
 }
 
 /** Decodes a `?load=` payload back into a parsed/validated project envelope. */
 export async function decodeSharePayload(payload: string): Promise<ParseResult> {
-  let json: string
+  let json: string;
   try {
-    const compressed = base64UrlToBytes(payload.trim())
-    const bytes = await decompressZstd(compressed)
-    json = new TextDecoder().decode(bytes)
+    const compressed = base64UrlToBytes(payload.trim());
+    const bytes = await decompressZstd(compressed);
+    json = new TextDecoder().decode(bytes);
   } catch (err) {
-    return { ok: false, error: `Could not read shared link: ${(err as Error).message}` }
+    return { ok: false, error: `Could not read shared link: ${(err as Error).message}` };
   }
-  return parseProjectImport(json)
+  return parseProjectImport(json);
 }
 
 /** Builds the full shareable URL (origin + app base path + `?load=`) for a payload. */
 export function buildShareUrl(payload: string): string {
-  const base = import.meta.env.BASE_URL || '/'
-  return `${window.location.origin}${base}?${SHARE_PARAM}=${payload}`
+  const base = import.meta.env.BASE_URL || '/';
+  return `${window.location.origin}${base}?${SHARE_PARAM}=${payload}`;
 }
 
 /** Convenience: the full shareable URL for the current project state. */
 export async function createShareLink(part: EditingPart, projectName: string): Promise<string> {
-  return buildShareUrl(await encodeSharePayload(part, projectName))
+  return buildShareUrl(await encodeSharePayload(part, projectName));
 }
 
 /** Reads the `?load=` payload from the current URL, or null when absent. */
 export function readShareParam(): string | null {
-  if (typeof window === 'undefined') return null
-  const value = new URLSearchParams(window.location.search).get(SHARE_PARAM)
-  return value && value.trim() ? value : null
+  if (typeof window === 'undefined') return null;
+  const value = new URLSearchParams(window.location.search).get(SHARE_PARAM);
+  return value && value.trim() ? value : null;
 }
 
 /**
@@ -76,9 +76,9 @@ export function readShareParam(): string | null {
  * replaceState — no navigation, no history entry.
  */
 export function clearShareParam(): void {
-  if (typeof window === 'undefined') return
-  const url = new URL(window.location.href)
-  if (!url.searchParams.has(SHARE_PARAM)) return
-  url.searchParams.delete(SHARE_PARAM)
-  window.history.replaceState(null, '', url.toString())
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has(SHARE_PARAM)) return;
+  url.searchParams.delete(SHARE_PARAM);
+  window.history.replaceState(null, '', url.toString());
 }

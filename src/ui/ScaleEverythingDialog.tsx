@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { Modal, Dialog, DialogHeader, Button, Switch, toast } from './kit'
-import { PreciseNumberInput } from './PreciseNumberInput'
-import { scaleEverything } from '../state/editorStore'
+import { useState } from 'react';
+import { Modal, Dialog, DialogHeader, Button, Switch, toast } from './kit';
+import { PreciseNumberInput } from './PreciseNumberInput';
+import { scaleEverything } from '../state/editorStore';
 
 /**
  * "Scale Everything" — multiplies the whole workspace (every part, connector,
@@ -13,47 +13,47 @@ export function ScaleEverythingDialog({
   isOpen,
   onOpenChange,
 }: {
-  isOpen: boolean
-  onOpenChange: (v: boolean) => void
+  isOpen: boolean;
+  onOpenChange: (v: boolean) => void;
 }) {
-  const [x, setX] = useState(1)
-  const [y, setY] = useState(1)
-  const [z, setZ] = useState(1)
+  const [x, setX] = useState(1);
+  const [y, setY] = useState(1);
+  const [z, setZ] = useState(1);
   // When linked, the single X value drives all three axes (the common case).
-  const [linked, setLinked] = useState(true)
+  const [linked, setLinked] = useState(true);
 
   const reset = (): void => {
-    setX(1)
-    setY(1)
-    setZ(1)
-  }
+    setX(1);
+    setY(1);
+    setZ(1);
+  };
 
   const close = (): void => {
-    onOpenChange(false)
-    reset()
-  }
+    onOpenChange(false);
+    reset();
+  };
 
   const setAxisX = (v: number): void => {
-    setX(v)
+    setX(v);
     if (linked) {
-      setY(v)
-      setZ(v)
+      setY(v);
+      setZ(v);
     }
-  }
+  };
 
-  const noop = x === 1 && y === 1 && z === 1
+  const noop = x === 1 && y === 1 && z === 1;
 
   const apply = (): void => {
-    scaleEverything({ x, y, z })
-    toast({ title: `Scaled everything ${x}×${y}×${z}` }, { timeout: 1800 })
-    close()
-  }
+    scaleEverything({ x, y, z });
+    toast({ title: `Scaled everything ${x}×${y}×${z}` }, { timeout: 1800 });
+    close();
+  };
 
   return (
     <Modal
       isOpen={isOpen}
       onOpenChange={(o) => {
-        if (!o) close()
+        if (!o) close();
       }}
       isDismissable
       variant="center"
@@ -72,11 +72,11 @@ export function ScaleEverythingDialog({
               aria-label="Scale all axes uniformly"
               isSelected={linked}
               onChange={(on) => {
-                setLinked(on)
+                setLinked(on);
                 if (on) {
                   // Re-linking collapses every axis onto the current X factor.
-                  setY(x)
-                  setZ(x)
+                  setY(x);
+                  setZ(x);
                 }
               }}
             />
@@ -99,7 +99,7 @@ export function ScaleEverythingDialog({
         </div>
       </Dialog>
     </Modal>
-  )
+  );
 }
 
 function AxisField({
@@ -108,10 +108,10 @@ function AxisField({
   onCommit,
   isDisabled,
 }: {
-  label: string
-  value: number
-  onCommit: (n: number) => void
-  isDisabled?: boolean
+  label: string;
+  value: number;
+  onCommit: (n: number) => void;
+  isDisabled?: boolean;
 }) {
   return (
     <label className="flex flex-col gap-1">
@@ -125,5 +125,5 @@ function AxisField({
         isDisabled={isDisabled}
       />
     </label>
-  )
+  );
 }

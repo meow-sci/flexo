@@ -1,4 +1,4 @@
-import { useStore } from '@nanostores/react'
+import { useStore } from '@nanostores/react';
 import {
   DialogTrigger,
   Popover,
@@ -14,7 +14,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   SectionTitle,
-} from './kit'
+} from './kit';
 import {
   $measureTool,
   $measurementSettings,
@@ -23,44 +23,44 @@ import {
   setMeasurementSettings,
   type BoundsMode,
   type MeasurementUnit,
-} from '../state/measurementStore'
+} from '../state/measurementStore';
 import {
   $containerSettings,
   addContainer,
   setContainerSettings,
   type ReferenceShape,
   type WarnPrecision,
-} from '../state/containerStore'
-import { MeasurementList } from './MeasurementList'
-import { ContainerList } from './ContainerList'
+} from '../state/containerStore';
+import { MeasurementList } from './MeasurementList';
+import { ContainerList } from './ContainerList';
 
 const SHAPES: { id: ReferenceShape; label: string }[] = [
   { id: 'rect', label: 'Box' },
   { id: 'cylinder', label: 'Cylinder' },
   { id: 'sphere', label: 'Sphere' },
-]
+];
 
 const WARN_PRECISION: { id: WarnPrecision; label: string }[] = [
   { id: 'bbox', label: 'Fast' },
   { id: 'vertex', label: 'Accurate' },
-]
+];
 
 const UNITS: { id: MeasurementUnit; label: string }[] = [
   { id: 'm', label: 'Meters (m)' },
   { id: 'cm', label: 'Centimeters (cm)' },
   { id: 'mm', label: 'Millimeters (mm)' },
-]
+];
 
 const BOUNDS_MODES: { id: BoundsMode; label: string }[] = [
   { id: 'world', label: 'World' },
   { id: 'oriented', label: 'Oriented' },
-]
+];
 
 /** `close` dismisses the surrounding popover (desktop) or sheet (mobile). */
 function MeasureContent({ close }: { close: () => void }) {
-  const settings = useStore($measurementSettings)
-  const tool = useStore($measureTool)
-  const containerSettings = useStore($containerSettings)
+  const settings = useStore($measurementSettings);
+  const tool = useStore($measureTool);
+  const containerSettings = useStore($containerSettings);
 
   return (
     <>
@@ -80,8 +80,8 @@ function MeasureContent({ close }: { close: () => void }) {
             disallowEmptySelection
             selectedKeys={[settings.boundsMode]}
             onSelectionChange={(keys) => {
-              const next = [...keys][0]
-              if (next) setMeasurementSettings({ boundsMode: next as BoundsMode })
+              const next = [...keys][0];
+              if (next) setMeasurementSettings({ boundsMode: next as BoundsMode });
             }}
           >
             {BOUNDS_MODES.map((m) => (
@@ -110,8 +110,8 @@ function MeasureContent({ close }: { close: () => void }) {
         <Button
           size="sm"
           onPress={() => {
-            addReferenceLine()
-            close()
+            addReferenceLine();
+            close();
           }}
         >
           Add reference line
@@ -120,8 +120,8 @@ function MeasureContent({ close }: { close: () => void }) {
           size="sm"
           variant={tool === 'point' ? 'primary' : undefined}
           onPress={() => {
-            setMeasureTool(tool === 'point' ? 'none' : 'point')
-            close()
+            setMeasureTool(tool === 'point' ? 'none' : 'point');
+            close();
           }}
         >
           {tool === 'point' ? 'Point-to-point: click 2 points…' : 'Point-to-point'}
@@ -142,8 +142,8 @@ function MeasureContent({ close }: { close: () => void }) {
               size="sm"
               className="flex-1"
               onPress={() => {
-                addContainer(s.id)
-                close()
+                addContainer(s.id);
+                close();
               }}
             >
               {s.label}
@@ -159,8 +159,8 @@ function MeasureContent({ close }: { close: () => void }) {
             disallowEmptySelection
             selectedKeys={[containerSettings.warnPrecision]}
             onSelectionChange={(keys) => {
-              const next = [...keys][0]
-              if (next) setContainerSettings({ warnPrecision: next as WarnPrecision })
+              const next = [...keys][0];
+              if (next) setContainerSettings({ warnPrecision: next as WarnPrecision });
             }}
           >
             {WARN_PRECISION.map((p) => (
@@ -189,12 +189,12 @@ function MeasureContent({ close }: { close: () => void }) {
         </Select>
       </section>
     </>
-  )
+  );
 }
 
 interface MeasureButtonProps {
-  isOpen?: boolean
-  onOpenChange?: (v: boolean) => void
+  isOpen?: boolean;
+  onOpenChange?: (v: boolean) => void;
 }
 
 /**
@@ -202,7 +202,7 @@ interface MeasureButtonProps {
  * Desktop: opens as a positioned popover. Mobile menu: opens as a bottom sheet.
  */
 export function MeasureButton({ isOpen: externalOpen, onOpenChange }: MeasureButtonProps = {}) {
-  const isControlled = externalOpen !== undefined
+  const isControlled = externalOpen !== undefined;
 
   if (isControlled) {
     return (
@@ -218,7 +218,7 @@ export function MeasureButton({ isOpen: externalOpen, onOpenChange }: MeasureBut
           )}
         </Dialog>
       </Modal>
-    )
+    );
   }
 
   return (
@@ -230,5 +230,5 @@ export function MeasureButton({ isOpen: externalOpen, onOpenChange }: MeasureBut
         </PopoverDialog>
       </Popover>
     </DialogTrigger>
-  )
+  );
 }

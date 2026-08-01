@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { GridList, GridListItem } from 'react-aria-components'
-import { History, MoveRight } from 'lucide-react'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { GridList, GridListItem } from 'react-aria-components';
+import { History, MoveRight } from 'lucide-react';
 import {
   DialogTrigger,
   Popover,
@@ -11,18 +11,18 @@ import {
   DialogHeader,
   ToolbarButton,
   toast,
-} from './kit'
-import { $historyList, jumpToHistory, type HistoryListItem } from '../state/editorStore'
+} from './kit';
+import { $historyList, jumpToHistory, type HistoryListItem } from '../state/editorStore';
 
 interface HistoryContentProps {
-  className?: string
-  onJump: (item: HistoryListItem) => void
+  className?: string;
+  onJump: (item: HistoryListItem) => void;
 }
 
 function HistoryContent({ className, onJump }: HistoryContentProps) {
-  const historyList = useStore($historyList)
-  const redoItems = historyList.filter((item) => item.stepsFromCurrent > 0)
-  const undoItems = historyList.filter((item) => item.stepsFromCurrent < 0)
+  const historyList = useStore($historyList);
+  const redoItems = historyList.filter((item) => item.stepsFromCurrent > 0);
+  const undoItems = historyList.filter((item) => item.stepsFromCurrent < 0);
 
   return (
     <div className={className}>
@@ -56,12 +56,12 @@ function HistoryContent({ className, onJump }: HistoryContentProps) {
         </GridList>
       )}
     </div>
-  )
+  );
 }
 
 interface HistoryButtonProps {
-  isOpen?: boolean
-  onOpenChange?: (v: boolean) => void
+  isOpen?: boolean;
+  onOpenChange?: (v: boolean) => void;
 }
 
 /**
@@ -72,23 +72,23 @@ export function HistoryButton({
   isOpen: externalOpen,
   onOpenChange: externalOnChange,
 }: HistoryButtonProps = {}) {
-  const [internalOpen, setInternalOpen] = useState(false)
-  const historyList = useStore($historyList)
-  const isControlled = externalOpen !== undefined
-  const open = isControlled ? externalOpen! : internalOpen
-  const setOpen = isControlled ? (v: boolean) => externalOnChange?.(v) : setInternalOpen
+  const [internalOpen, setInternalOpen] = useState(false);
+  const historyList = useStore($historyList);
+  const isControlled = externalOpen !== undefined;
+  const open = isControlled ? externalOpen! : internalOpen;
+  const setOpen = isControlled ? (v: boolean) => externalOnChange?.(v) : setInternalOpen;
 
-  const redoItems = historyList.filter((item) => item.stepsFromCurrent > 0)
-  const undoItems = historyList.filter((item) => item.stepsFromCurrent < 0)
-  const hasHistory = redoItems.length > 0 || undoItems.length > 0
+  const redoItems = historyList.filter((item) => item.stepsFromCurrent > 0);
+  const undoItems = historyList.filter((item) => item.stepsFromCurrent < 0);
+  const hasHistory = redoItems.length > 0 || undoItems.length > 0;
 
   const handleJump = (item: HistoryListItem) => {
-    if (item.stepsFromCurrent === 0) return
-    const label = jumpToHistory(item.stepsFromCurrent)
-    const prefix = item.stepsFromCurrent < 0 ? 'Undo' : 'Redo'
-    toast({ title: `${prefix}: ${label}` }, { timeout: 1500 })
-    setOpen(false)
-  }
+    if (item.stepsFromCurrent === 0) return;
+    const label = jumpToHistory(item.stepsFromCurrent);
+    const prefix = item.stepsFromCurrent < 0 ? 'Undo' : 'Redo';
+    toast({ title: `${prefix}: ${label}` }, { timeout: 1500 });
+    setOpen(false);
+  };
 
   if (isControlled) {
     return (
@@ -98,7 +98,7 @@ export function HistoryButton({
           <HistoryContent className="flex flex-col overflow-auto p-1" onJump={handleJump} />
         </Dialog>
       </Modal>
-    )
+    );
   }
 
   return (
@@ -117,7 +117,7 @@ export function HistoryButton({
         </PopoverDialog>
       </Popover>
     </DialogTrigger>
-  )
+  );
 }
 
 function HistoryRow({
@@ -125,13 +125,13 @@ function HistoryRow({
   label,
   onPress,
 }: {
-  item: HistoryListItem
-  label: 'Undo' | 'Redo'
-  onPress: (item: HistoryListItem) => void
+  item: HistoryListItem;
+  label: 'Undo' | 'Redo';
+  onPress: (item: HistoryListItem) => void;
 }) {
   const textValue = item.detail
     ? `${label}: ${item.description} · ${item.detail}`
-    : `${label}: ${item.description}`
+    : `${label}: ${item.description}`;
   return (
     <GridListItem
       id={String(item.stepsFromCurrent)}
@@ -150,5 +150,5 @@ function HistoryRow({
         {item.detail ? ` · ${item.detail}` : ''}
       </span>
     </GridListItem>
-  )
+  );
 }

@@ -1,10 +1,10 @@
-import { useStore } from '@nanostores/react'
-import { ProgressBar } from 'react-aria-components'
-import { $loadProgress } from '../../../src/state/loadProgressStore'
+import { useStore } from '@nanostores/react';
+import { ProgressBar } from 'react-aria-components';
+import { $loadProgress } from '../../../src/state/loadProgressStore';
 
 /** Bytes → "1.1" MB string (single-decimal, SI megabytes). */
 function mb(bytes: number): string {
-  return (bytes / 1e6).toFixed(1)
+  return (bytes / 1e6).toFixed(1);
 }
 
 /**
@@ -19,18 +19,18 @@ function mb(bytes: number): string {
  * (`src/ui/LoadProgress.tsx` does the same); this is that render-prop shape, smaller.
  */
 export function DownloadProgress({ catalogLoading }: { catalogLoading: boolean }) {
-  const state = useStore($loadProgress)
-  if (!catalogLoading && !state.active) return null
+  const state = useStore($loadProgress);
+  if (!catalogLoading && !state.active) return null;
 
-  let loaded = 0
-  let total = 0
+  let loaded = 0;
+  let total = 0;
   if (!catalogLoading) {
     for (const d of state.downloads) {
-      loaded += d.loaded
-      if (d.total > 0) total += d.total
+      loaded += d.loaded;
+      if (d.total > 0) total += d.total;
     }
   }
-  const determinate = !catalogLoading && total > 0
+  const determinate = !catalogLoading && total > 0;
 
   return (
     // pointer-events-none: the overlay sits over the canvas and must never eat an
@@ -55,5 +55,5 @@ export function DownloadProgress({ catalogLoading }: { catalogLoading: boolean }
         )}
       </ProgressBar>
     </div>
-  )
+  );
 }

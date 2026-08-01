@@ -8,10 +8,10 @@ import {
   type MenuProps,
   type MenuItemProps,
   type SeparatorProps,
-} from 'react-aria-components'
-import { Check, ChevronRight } from 'lucide-react'
-import { tv } from 'tailwind-variants'
-import { composeTw, cn } from './styles'
+} from 'react-aria-components';
+import { Check, ChevronRight } from 'lucide-react';
+import { tv } from 'tailwind-variants';
+import { composeTw, cn } from './styles';
 
 const menuItem = tv({
   base: 'flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none disabled:opacity-45',
@@ -22,7 +22,7 @@ const menuItem = tv({
     },
   },
   defaultVariants: { variant: 'default' },
-})
+});
 
 export function Menu<T extends object>({ className, ...props }: MenuProps<T>) {
   return (
@@ -30,15 +30,15 @@ export function Menu<T extends object>({ className, ...props }: MenuProps<T>) {
       {...props}
       className={composeTw('max-h-[inherit] min-w-36 overflow-auto p-1 outline-none', className)}
     />
-  )
+  );
 }
 
 export interface MenuItemKitProps extends MenuItemProps {
-  variant?: 'default' | 'danger'
+  variant?: 'default' | 'danger';
 }
 
 export function MenuItem({ className, children, variant, ...props }: MenuItemKitProps) {
-  const textValue = props.textValue ?? (typeof children === 'string' ? children : undefined)
+  const textValue = props.textValue ?? (typeof children === 'string' ? children : undefined);
   return (
     <AriaMenuItem
       {...props}
@@ -57,13 +57,13 @@ export function MenuItem({ className, children, variant, ...props }: MenuItemKit
         </>
       ))}
     </AriaMenuItem>
-  )
+  );
 }
 
 export function MenuSection<T extends object>(
   props: React.ComponentProps<typeof AriaMenuSection<T>>,
 ) {
-  return <AriaMenuSection {...props} />
+  return <AriaMenuSection {...props} />;
 }
 
 export function MenuHeader({ className, ...props }: React.ComponentProps<typeof Header>) {
@@ -75,9 +75,9 @@ export function MenuHeader({ className, ...props }: React.ComponentProps<typeof 
         className,
       )}
     />
-  )
+  );
 }
 
 export function MenuSeparator({ className, ...props }: SeparatorProps) {
-  return <Separator {...props} className={cn('my-1 h-px bg-border', className)} />
+  return <Separator {...props} className={cn('my-1 h-px bg-border', className)} />;
 }

@@ -6,14 +6,14 @@ import {
   useFilter,
   composeRenderProps,
   type SelectProps as AriaSelectProps,
-} from 'react-aria-components'
-import { ChevronsUpDown } from 'lucide-react'
-import { tv, type VariantProps } from 'tailwind-variants'
-import { Label } from './Field'
-import { focusRing, cn } from './styles'
-import { Popover } from './Popover'
-import { ListBox } from './ListBox'
-import { SearchField } from './SearchField'
+} from 'react-aria-components';
+import { ChevronsUpDown } from 'lucide-react';
+import { tv, type VariantProps } from 'tailwind-variants';
+import { Label } from './Field';
+import { focusRing, cn } from './styles';
+import { Popover } from './Popover';
+import { ListBox } from './ListBox';
+import { SearchField } from './SearchField';
 
 const trigger = tv({
   extend: focusRing,
@@ -25,20 +25,20 @@ const trigger = tv({
     },
   },
   defaultVariants: { size: 'md' },
-})
+});
 
 export interface SelectKitProps<T extends object>
   extends Omit<AriaSelectProps<T>, 'children'>, VariantProps<typeof trigger> {
-  label?: React.ReactNode
-  items?: Iterable<T>
-  children: React.ReactNode | ((item: T) => React.ReactNode)
-  className?: string
-  triggerClassName?: string
-  popoverClassName?: string
+  label?: React.ReactNode;
+  items?: Iterable<T>;
+  children: React.ReactNode | ((item: T) => React.ReactNode);
+  className?: string;
+  triggerClassName?: string;
+  popoverClassName?: string;
   /** Adds a search field inside the dropdown to filter options (react-aria Autocomplete). */
-  searchable?: boolean
+  searchable?: boolean;
   /** Placeholder/label for the in-dropdown search field (searchable selects only). */
-  searchPlaceholder?: string
+  searchPlaceholder?: string;
 }
 
 /**
@@ -58,7 +58,7 @@ export function Select<T extends object>({
   searchPlaceholder,
   ...props
 }: SelectKitProps<T>) {
-  const { contains } = useFilter({ sensitivity: 'base' })
+  const { contains } = useFilter({ sensitivity: 'base' });
   return (
     <AriaSelect {...props} className={cn('flex flex-col gap-1', className)}>
       {label && <Label>{label}</Label>}
@@ -100,5 +100,5 @@ export function Select<T extends object>({
         )}
       </Popover>
     </AriaSelect>
-  )
+  );
 }

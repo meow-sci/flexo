@@ -1,8 +1,8 @@
-import { useStore } from '@nanostores/react'
-import { AlertTriangle, PackageCheck, RefreshCw, X } from 'lucide-react'
-import { Button, DisclosureSection } from './kit'
-import { $importReport, dismissImportReport, type ImportReport } from '../state/customAssetStore'
-import { groupWarnings, type WarningSeverity } from '../ksa/importEstimates'
+import { useStore } from '@nanostores/react';
+import { AlertTriangle, PackageCheck, RefreshCw, X } from 'lucide-react';
+import { Button, DisclosureSection } from './kit';
+import { $importReport, dismissImportReport, type ImportReport } from '../state/customAssetStore';
+import { groupWarnings, type WarningSeverity } from '../ksa/importEstimates';
 
 /**
  * The post-import summary: what the last import or replace actually created, matched and
@@ -18,16 +18,16 @@ import { groupWarnings, type WarningSeverity } from '../ksa/importEstimates'
  * It clears itself when the user starts another import — the store overwrites `$importReport`.
  */
 export function ImportReportCard() {
-  const report = useStore($importReport)
-  if (!report) return null
-  return <ReportBody key={report.id} report={report} />
+  const report = useStore($importReport);
+  if (!report) return null;
+  return <ReportBody key={report.id} report={report} />;
 }
 
 function ReportBody({ report }: { report: ImportReport }) {
-  const replace = report.mode === 'replace'
-  const warnings = groupWarnings(report.warnings)
-  const warningCount = warnings.reduce((n, g) => n + g.items.length, 0)
-  const worst: WarningSeverity | undefined = warnings[0]?.severity
+  const replace = report.mode === 'replace';
+  const warnings = groupWarnings(report.warnings);
+  const warningCount = warnings.reduce((n, g) => n + g.items.length, 0);
+  const worst: WarningSeverity | undefined = warnings[0]?.severity;
 
   return (
     <div className="pointer-events-none absolute inset-x-3 bottom-3 z-40 flex justify-end sm:inset-x-auto sm:right-3">
@@ -101,7 +101,7 @@ function ReportBody({ report }: { report: ImportReport }) {
         )}
       </div>
     </div>
-  )
+  );
 }
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -110,5 +110,5 @@ function Row({ label, value }: { label: string; value: string }) {
       <dt className="text-fg-subtle">{label}</dt>
       <dd className="font-mono tabular-nums">{value}</dd>
     </div>
-  )
+  );
 }

@@ -1,6 +1,6 @@
-import { useStore } from '@nanostores/react'
-import { $measurementSettings, $selectionBounds } from '../state/measurementStore'
-import { formatLength } from '../measure/format'
+import { useStore } from '@nanostores/react';
+import { $measurementSettings, $selectionBounds } from '../state/measurementStore';
+import { formatLength } from '../measure/format';
 
 /**
  * Bottom-left floating readout of the selected meshes' bounding-box dimensions
@@ -8,19 +8,19 @@ import { formatLength } from '../measure/format'
  * three.js {@link MeasurementLayer} writes from the live selection.
  */
 export function MeasurementInfo() {
-  const bounds = useStore($selectionBounds)
-  const { unit } = useStore($measurementSettings)
+  const bounds = useStore($selectionBounds);
+  const { unit } = useStore($measurementSettings);
 
-  if (!bounds) return null
+  if (!bounds) return null;
 
-  const { size } = bounds
-  const diagonal = Math.sqrt(size.x * size.x + size.y * size.y + size.z * size.z)
+  const { size } = bounds;
+  const diagonal = Math.sqrt(size.x * size.x + size.y * size.y + size.z * size.z);
   const rows: [string, number][] = [
     ['Width (X)', size.x],
     ['Height (Y)', size.y],
     ['Depth (Z)', size.z],
     ['Diagonal', diagonal],
-  ]
+  ];
 
   return (
     <div className="pointer-events-none absolute bottom-3 left-3 select-none rounded-xl border border-border bg-panel/95 px-3 py-2 text-fg shadow-popover backdrop-blur-md">
@@ -37,5 +37,5 @@ export function MeasurementInfo() {
         ))}
       </dl>
     </div>
-  )
+  );
 }

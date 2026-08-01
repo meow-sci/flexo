@@ -1,9 +1,9 @@
-import * as THREE from 'three'
-import type { CatalogSubPart } from '../ksa/catalog'
-import type { RgbColor, TextureWrap } from '../ksa/types'
-import type { ImageLevel } from '../ktx/decodeImage'
-import { loadTexture, loadWrappedTexture } from './TextureCache'
-import { applyKsaShaderPatches } from './normalMapPatch'
+import * as THREE from 'three';
+import type { CatalogSubPart } from '../ksa/catalog';
+import type { RgbColor, TextureWrap } from '../ksa/types';
+import type { ImageLevel } from '../ktx/decodeImage';
+import { loadTexture, loadWrappedTexture } from './TextureCache';
+import { applyKsaShaderPatches } from './normalMapPatch';
 
 /**
  * Builds the PBR material for a SubPart from its catalog texture atlases,
@@ -21,10 +21,10 @@ import { applyKsaShaderPatches } from './normalMapPatch'
  * capability gate needed; see textureSupport).
  */
 
-const materialCache = new Map<string, Promise<THREE.MeshStandardMaterial>>()
+const materialCache = new Map<string, Promise<THREE.MeshStandardMaterial>>();
 
 export function makeFlatMaterial(): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ color: 0xbfc4cc, metalness: 0.6, roughness: 0.5 })
+  return new THREE.MeshStandardMaterial({ color: 0xbfc4cc, metalness: 0.6, roughness: 0.5 });
 }
 
 /**
@@ -32,20 +32,20 @@ export function makeFlatMaterial(): THREE.MeshStandardMaterial {
  * synthetic NeutralORM solid is (AO=255, Rough=128, Metal=0). The editor materials use the
  * SAME values so what you see is what ships.
  */
-export const NEUTRAL_METALNESS = 0
-export const NEUTRAL_ROUGHNESS = 128 / 255
+export const NEUTRAL_METALNESS = 0;
+export const NEUTRAL_ROUGHNESS = 128 / 255;
 
 /** Builds a diffuse-only material for a single custom-mesh face (no user material assigned). */
 export async function buildCustomFaceMaterial(
   ktx2Url: string,
   wrap: TextureWrap = 'repeat',
 ): Promise<THREE.MeshStandardMaterial> {
-  const texture = await loadWrappedTexture(ktx2Url, 'srgb', wrap)
+  const texture = await loadWrappedTexture(ktx2Url, 'srgb', wrap);
   return new THREE.MeshStandardMaterial({
     map: texture,
     metalness: NEUTRAL_METALNESS,
     roughness: NEUTRAL_ROUGHNESS,
-  })
+  });
 }
 
 /**
@@ -57,16 +57,16 @@ export async function buildCustomFaceMaterial(
  * (R=AO, G=rough, B=metal) which is also three's native map convention.
  */
 export interface MaterialChannelMaps {
-  metalness: number
-  roughness: number
-  metalnessMapUrl?: string
-  roughnessMapUrl?: string
-  occlusionMapUrl?: string
+  metalness: number;
+  roughness: number;
+  metalnessMapUrl?: string;
+  roughnessMapUrl?: string;
+  occlusionMapUrl?: string;
   /** A pre-packed AO/Rough/Metal image; overrides the three separate maps. */
-  ormPackedUrl?: string
-  normalMapUrl?: string
+  ormPackedUrl?: string;
+  normalMapUrl?: string;
   /** Normal strength — editor-side normalScale; baked into RG on export. */
-  normalScale?: number
+  normalScale?: number;
 }
 
 /** Loads and attaches a material's scalar/map channels onto a three material. */
@@ -74,31 +74,31 @@ export async function applyMaterialChannels(
   mat: THREE.MeshStandardMaterial,
   ch: MaterialChannelMaps,
 ): Promise<void> {
-  mat.metalness = ch.metalness
-  mat.roughness = ch.roughness
+  mat.metalness = ch.metalness;
+  mat.roughness = ch.roughness;
   if (ch.ormPackedUrl) {
-    const orm = await loadTexture(ch.ormPackedUrl, 'linear')
-    mat.aoMap = orm
-    mat.roughnessMap = orm
-    mat.metalnessMap = orm
-    mat.aoMap.channel = 0 // KSA uses TEXCOORD_0 for all maps
-    mat.aoMapIntensity = 1
+    const orm = await loadTexture(ch.ormPackedUrl, 'linear');
+    mat.aoMap = orm;
+    mat.roughnessMap = orm;
+    mat.metalnessMap = orm;
+    mat.aoMap.channel = 0; // KSA uses TEXCOORD_0 for all maps
+    mat.aoMapIntensity = 1;
   } else {
     if (ch.occlusionMapUrl) {
-      mat.aoMap = await loadTexture(ch.occlusionMapUrl, 'linear')
-      mat.aoMap.channel = 0
-      mat.aoMapIntensity = 1
+      mat.aoMap = await loadTexture(ch.occlusionMapUrl, 'linear');
+      mat.aoMap.channel = 0;
+      mat.aoMapIntensity = 1;
     }
-    if (ch.roughnessMapUrl) mat.roughnessMap = await loadTexture(ch.roughnessMapUrl, 'linear')
-    if (ch.metalnessMapUrl) mat.metalnessMap = await loadTexture(ch.metalnessMapUrl, 'linear')
+    if (ch.roughnessMapUrl) mat.roughnessMap = await loadTexture(ch.roughnessMapUrl, 'linear');
+    if (ch.metalnessMapUrl) mat.metalnessMap = await loadTexture(ch.metalnessMapUrl, 'linear');
   }
   if (ch.normalMapUrl) {
-    mat.normalMap = await loadTexture(ch.normalMapUrl, 'linear')
-    mat.normalMapType = THREE.TangentSpaceNormalMap
-    const s = ch.normalScale ?? 1
+    mat.normalMap = await loadTexture(ch.normalMapUrl, 'linear');
+    mat.normalMapType = THREE.TangentSpaceNormalMap;
+    const s = ch.normalScale ?? 1;
     // The stored map already carries the strength-1 KSA transform (X-flip); the
     // editor applies strength as normalScale, the export bakes it into RG — same math.
-    mat.normalScale.set(s, s)
+    mat.normalScale.set(s, s);
   }
 }
 
@@ -109,38 +109,38 @@ export async function applyMaterialChannels(
  */
 export interface CustomFaceSpec extends MaterialChannelMaps {
   /** Diffuse .ktx2 blob URL; wins over {@link color} when set. */
-  mapUrl?: string
+  mapUrl?: string;
   /** Uniform base color (sRGB 0..255) when there is no image. */
-  color?: RgbColor
-  wrap: TextureWrap
+  color?: RgbColor;
+  wrap: TextureWrap;
 }
 
 /** Builds the editor material for a custom-mesh face driven by a {@link CustomMaterial}. */
 export async function buildCustomMaterial(
   spec: CustomFaceSpec,
 ): Promise<THREE.MeshStandardMaterial> {
-  const mat = new THREE.MeshStandardMaterial()
+  const mat = new THREE.MeshStandardMaterial();
   if (spec.mapUrl) {
-    mat.map = await loadWrappedTexture(spec.mapUrl, 'srgb', spec.wrap)
+    mat.map = await loadWrappedTexture(spec.mapUrl, 'srgb', spec.wrap);
   } else if (spec.color) {
     mat.color.setRGB(
       spec.color.r / 255,
       spec.color.g / 255,
       spec.color.b / 255,
       THREE.SRGBColorSpace,
-    )
+    );
   }
-  await applyMaterialChannels(mat, spec)
+  await applyMaterialChannels(mat, spec);
   // The KSA normal decode (RG, X-flip, Z-reconstruct) — SubPartObject re-applies per
   // clone from the final map set; applied here too so direct renders are correct.
-  applyKsaShaderPatches(mat, { normal: !!mat.normalMap, emissive: false })
-  return mat
+  applyKsaShaderPatches(mat, { normal: !!mat.normalMap, emissive: false });
+  return mat;
 }
 
 function wrapMode(wrap: TextureWrap): THREE.Wrapping {
-  if (wrap === 'mirror') return THREE.MirroredRepeatWrapping
-  if (wrap === 'clamp') return THREE.ClampToEdgeWrapping
-  return THREE.RepeatWrapping
+  if (wrap === 'mirror') return THREE.MirroredRepeatWrapping;
+  if (wrap === 'clamp') return THREE.ClampToEdgeWrapping;
+  return THREE.RepeatWrapping;
 }
 
 /** A DataTexture from raw RGBA8, matching the KTX2/GLB UV convention (flipY=false; see TextureCache). */
@@ -155,15 +155,15 @@ function makeDataTexture(
     level.height,
     THREE.RGBAFormat,
     THREE.UnsignedByteType,
-  )
-  tex.colorSpace = colorSpace
-  tex.wrapS = tex.wrapT = wrapMode(wrap)
-  tex.flipY = false
-  tex.generateMipmaps = true
-  tex.minFilter = THREE.LinearMipmapLinearFilter
-  tex.magFilter = THREE.LinearFilter
-  tex.needsUpdate = true
-  return tex
+  );
+  tex.colorSpace = colorSpace;
+  tex.wrapS = tex.wrapT = wrapMode(wrap);
+  tex.flipY = false;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  tex.needsUpdate = true;
+  return tex;
 }
 
 /**
@@ -180,35 +180,35 @@ export function buildGlowingFaceMaterial(
   wrap: TextureWrap = 'repeat',
   pbr?: { metalness: number; roughness: number },
 ): THREE.MeshStandardMaterial {
-  const map = makeDataTexture(diffuse, THREE.SRGBColorSpace, wrap)
-  const emissiveMap = makeDataTexture(mask, THREE.NoColorSpace, wrap)
+  const map = makeDataTexture(diffuse, THREE.SRGBColorSpace, wrap);
+  const emissiveMap = makeDataTexture(mask, THREE.NoColorSpace, wrap);
   const mat = new THREE.MeshStandardMaterial({
     map,
     metalness: pbr?.metalness ?? NEUTRAL_METALNESS,
     roughness: pbr?.roughness ?? NEUTRAL_ROUGHNESS,
-  })
-  mat.emissiveMap = emissiveMap
+  });
+  mat.emissiveMap = emissiveMap;
   // emissive uniform deliberately left black (free for the selection highlight); the glow is
   // ADDED from the mask in the shader patch — see normalMapPatch + SubPartObject.setSelected.
-  applyKsaShaderPatches(mat, { normal: false, emissive: true })
-  return mat
+  applyKsaShaderPatches(mat, { normal: false, emissive: true });
+  return mat;
 }
 
 /** Resolves the shared material for a catalog entry (cached by material id). */
 export function getSharedMaterial(entry: CatalogSubPart): Promise<THREE.MeshStandardMaterial> {
   if (!entry.diffuseUrl) {
-    return Promise.resolve(makeFlatMaterial())
+    return Promise.resolve(makeFlatMaterial());
   }
-  const key = entry.materialId ?? entry.diffuseUrl
-  let pending = materialCache.get(key)
+  const key = entry.materialId ?? entry.diffuseUrl;
+  let pending = materialCache.get(key);
   if (!pending) {
     pending = buildTextured(entry).catch((err) => {
-      console.warn(`MaterialFactory: textured material failed for ${key}`, err)
-      return makeFlatMaterial()
-    })
-    materialCache.set(key, pending)
+      console.warn(`MaterialFactory: textured material failed for ${key}`, err);
+      return makeFlatMaterial();
+    });
+    materialCache.set(key, pending);
   }
-  return pending
+  return pending;
 }
 
 async function buildTextured(entry: CatalogSubPart): Promise<THREE.MeshStandardMaterial> {
@@ -217,30 +217,30 @@ async function buildTextured(entry: CatalogSubPart): Promise<THREE.MeshStandardM
     entry.aoRoughMetalUrl ? loadTexture(entry.aoRoughMetalUrl, 'linear') : null,
     entry.normalUrl ? loadTexture(entry.normalUrl, 'linear') : null,
     entry.emissiveUrl ? loadTexture(entry.emissiveUrl, 'linear') : null,
-  ])
+  ]);
 
   const mat = new THREE.MeshStandardMaterial({
     map,
     metalness: 1, // KSA reads metal/rough straight from the map (no multiplier)
     roughness: 1,
-  })
+  });
 
   if (pbr) {
-    mat.aoMap = pbr
-    mat.roughnessMap = pbr
-    mat.metalnessMap = pbr
-    mat.aoMap.channel = 0 // KSA uses TEXCOORD_0 for all maps (no second UV set)
-    mat.aoMapIntensity = 1
+    mat.aoMap = pbr;
+    mat.roughnessMap = pbr;
+    mat.metalnessMap = pbr;
+    mat.aoMap.channel = 0; // KSA uses TEXCOORD_0 for all maps (no second UV set)
+    mat.aoMapIntensity = 1;
   }
 
   if (normal) {
-    mat.normalMap = normal
-    mat.normalMapType = THREE.TangentSpaceNormalMap
-    mat.normalScale.set(1, 1)
+    mat.normalMap = normal;
+    mat.normalMapType = THREE.TangentSpaceNormalMap;
+    mat.normalScale.set(1, 1);
   }
 
   if (emissive) {
-    mat.emissiveMap = emissive
+    mat.emissiveMap = emissive;
     // The part's own emissive is derived from the map and ADDED in the shader
     // patch (with the boost baked in there). We deliberately leave `mat.emissive`
     // black / intensity at the default so the standard `emissive` uniform stays
@@ -249,6 +249,6 @@ async function buildTextured(entry: CatalogSubPart): Promise<THREE.MeshStandardM
     // normalMapPatch + SubPartObject.setSelected.
   }
 
-  applyKsaShaderPatches(mat, { normal: !!normal, emissive: !!emissive })
-  return mat
+  applyKsaShaderPatches(mat, { normal: !!normal, emissive: !!emissive });
+  return mat;
 }

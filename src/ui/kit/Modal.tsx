@@ -6,10 +6,10 @@ import {
   Button as AriaButton,
   type ModalOverlayProps,
   type DialogProps,
-} from 'react-aria-components'
-import { X } from 'lucide-react'
-import { tv, type VariantProps } from 'tailwind-variants'
-import { cn } from './styles'
+} from 'react-aria-components';
+import { X } from 'lucide-react';
+import { tv, type VariantProps } from 'tailwind-variants';
+import { cn } from './styles';
 
 const overlay = tv({
   base: 'fixed inset-0 z-50 flex bg-overlay/60 backdrop-blur-sm transition-opacity data-[entering]:opacity-0 data-[exiting]:opacity-0',
@@ -22,7 +22,7 @@ const overlay = tv({
     },
   },
   defaultVariants: { variant: 'center' },
-})
+});
 
 const modal = tv({
   base: 'border-border bg-panel-raised text-fg shadow-popover',
@@ -39,10 +39,10 @@ const modal = tv({
     },
   },
   defaultVariants: { variant: 'center' },
-})
+});
 
 export interface ModalKitProps extends ModalOverlayProps, VariantProps<typeof modal> {
-  className?: string
+  className?: string;
 }
 
 /**
@@ -57,7 +57,7 @@ export function Modal({ variant, className, children, ...props }: ModalKitProps)
     <ModalOverlay {...props} className={overlay({ variant })}>
       <AriaModal className={cn(modal({ variant }), className)}>{children}</AriaModal>
     </ModalOverlay>
-  )
+  );
 }
 
 export function Dialog({ className, ...props }: DialogProps) {
@@ -66,7 +66,7 @@ export function Dialog({ className, ...props }: DialogProps) {
       {...props}
       className={cn('flex max-h-[inherit] flex-col outline-none', className)}
     />
-  )
+  );
 }
 
 /** Standard title bar for form/browser modals (title + close button). */
@@ -84,5 +84,5 @@ export function DialogHeader({ title, onClose }: { title: React.ReactNode; onClo
         <X size={16} />
       </AriaButton>
     </div>
-  )
+  );
 }

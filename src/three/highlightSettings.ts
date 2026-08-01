@@ -1,5 +1,5 @@
-import * as THREE from 'three'
-import { $selectionHighlight, type SelectionHighlightSettings } from '../state/settingsStore'
+import * as THREE from 'three';
+import { $selectionHighlight, type SelectionHighlightSettings } from '../state/settingsStore';
 
 /**
  * Three.js-side mirror of the persisted {@link SelectionHighlightSettings}: the
@@ -10,30 +10,30 @@ import { $selectionHighlight, type SelectionHighlightSettings } from '../state/s
  */
 export interface ParsedHighlight {
   /** Emissive tint (mutated in place on settings change — do not retain copies). */
-  readonly color: THREE.Color
+  readonly color: THREE.Color;
   /** Tint strength (0–1) → emissive intensity. */
-  alpha: number
+  alpha: number;
 }
 
-const mesh: ParsedHighlight = { color: new THREE.Color(), alpha: 1 }
-const kitten: ParsedHighlight = { color: new THREE.Color(), alpha: 1 }
+const mesh: ParsedHighlight = { color: new THREE.Color(), alpha: 1 };
+const kitten: ParsedHighlight = { color: new THREE.Color(), alpha: 1 };
 
 function apply(s: SelectionHighlightSettings): void {
-  mesh.color.set(s.meshColor)
-  mesh.alpha = s.meshAlpha
-  kitten.color.set(s.kittenColor)
-  kitten.alpha = s.kittenAlpha
+  mesh.color.set(s.meshColor);
+  mesh.alpha = s.meshAlpha;
+  kitten.color.set(s.kittenColor);
+  kitten.alpha = s.kittenAlpha;
 }
 
-apply($selectionHighlight.get())
-$selectionHighlight.subscribe(apply)
+apply($selectionHighlight.get());
+$selectionHighlight.subscribe(apply);
 
 /** Current parsed highlight for SubPart meshes. */
 export function meshHighlight(): ParsedHighlight {
-  return mesh
+  return mesh;
 }
 
 /** Current parsed highlight for kitten visual aides. */
 export function kittenHighlight(): ParsedHighlight {
-  return kitten
+  return kitten;
 }

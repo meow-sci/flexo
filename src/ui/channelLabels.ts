@@ -1,4 +1,4 @@
-import type { TextureChannel } from '../ksa/types'
+import type { TextureChannel } from '../ksa/types';
 
 /** User-facing labels for what an uploaded image is authored as. */
 export const CHANNEL_LABELS: Record<TextureChannel, string> = {
@@ -9,7 +9,7 @@ export const CHANNEL_LABELS: Record<TextureChannel, string> = {
   occlusion: 'Ambient occlusion (grayscale)',
   orm: 'Packed ORM (AO/Rough/Metal)',
   emissiveMask: 'Emissive mask (grayscale)',
-}
+};
 
 /** Display/select order for the channel picker. */
 export const CHANNEL_ORDER: TextureChannel[] = [
@@ -20,4 +20,4 @@ export const CHANNEL_ORDER: TextureChannel[] = [
   'occlusion',
   'orm',
   'emissiveMask',
-]
+];

@@ -1,12 +1,12 @@
-import { useEffect } from 'react'
-import { useStore } from '@nanostores/react'
-import { Button, cn, ListBoxItem, noteBox, Select, Switch, TextField, warningBox } from './kit'
-import { PreciseNumberInput } from './PreciseNumberInput'
-import { Vec3Field } from './Vec3Field'
-import { Field, ItemCard } from './GameDataSections'
-import { FeedsField } from './FeedsField'
-import { consumerOptionsOf, feedTargetsOf, unwiredConsumersOf } from '../state/feedTargets'
-import { $part, pushUndo } from '../state/editorStore'
+import { useEffect } from 'react';
+import { useStore } from '@nanostores/react';
+import { Button, cn, ListBoxItem, noteBox, Select, Switch, TextField, warningBox } from './kit';
+import { PreciseNumberInput } from './PreciseNumberInput';
+import { Vec3Field } from './Vec3Field';
+import { Field, ItemCard } from './GameDataSections';
+import { FeedsField } from './FeedsField';
+import { consumerOptionsOf, feedTargetsOf, unwiredConsumersOf } from '../state/feedTargets';
+import { $part, pushUndo } from '../state/editorStore';
 import {
   addCombustor,
   addNozzle,
@@ -62,11 +62,19 @@ import {
   updatePartRocket,
   updateRocket,
   updateRocketController,
-} from '../state/editorStore'
-import { addCustomReaction, removeCustomReaction, updateCustomReaction } from '../state/editorStore'
-import { UNIT_EPSILON } from '../ksa/engineValidation'
-import { $allReactionIndex, $allReactions, ensureReactionsLoaded } from '../state/reactionStore'
-import { mixtureRatioBounds, reactionDataToCustom, type ReactionData } from '../ksa/reactionCatalog'
+} from '../state/editorStore';
+import {
+  addCustomReaction,
+  removeCustomReaction,
+  updateCustomReaction,
+} from '../state/editorStore';
+import { UNIT_EPSILON } from '../ksa/engineValidation';
+import { $allReactionIndex, $allReactions, ensureReactionsLoaded } from '../state/reactionStore';
+import {
+  mixtureRatioBounds,
+  reactionDataToCustom,
+  type ReactionData,
+} from '../ksa/reactionCatalog';
 import {
   createCustomReaction,
   DEFAULT_ENGINE_SOUND_ID,
@@ -95,12 +103,12 @@ import {
   type SubPartGameData,
   type SubPartIdRef,
   type Vec3,
-} from '../ksa/types'
+} from '../ksa/types';
 
-const LABEL = 'text-xs text-fg-subtle'
+const LABEL = 'text-xs text-fg-subtle';
 
 /** Bar ⇄ Pa for the editable chamber-pressure field (stored SI Pa, shown in bar). */
-const PA_PER_BAR = 1e5
+const PA_PER_BAR = 1e5;
 
 // ── shared pickers ───────────────────────────────────────────────────────────
 
@@ -111,10 +119,10 @@ const PA_PER_BAR = 1e5
  * is absent.
  */
 function defaultRatioFor(id: string, catalog: ReactionData[]): number | null {
-  const live = catalog.find((c) => c.id === id)
-  if (live) return live.kind === 'Mixture' ? live.defaultMixtureRatio : null
-  const known = KNOWN_REACTIONS.find((k) => k.id === id)
-  return known?.defaultMixtureRatio ?? null
+  const live = catalog.find((c) => c.id === id);
+  if (live) return live.kind === 'Mixture' ? live.defaultMixtureRatio : null;
+  const known = KNOWN_REACTIONS.find((k) => k.id === id);
+  return known?.defaultMixtureRatio ?? null;
 }
 
 /**
@@ -128,20 +136,20 @@ function ReactionSelect({
   value,
   onChange,
 }: {
-  value: string
-  onChange: (id: string, mixtureRatio: number | null) => void
+  value: string;
+  onChange: (id: string, mixtureRatio: number | null) => void;
 }) {
   useEffect(() => {
-    void ensureReactionsLoaded()
-  }, [])
-  const catalog = useStore($allReactions)
-  const ids = catalog.length ? catalog.map((c) => c.id) : KNOWN_REACTIONS.map((k) => k.id)
+    void ensureReactionsLoaded();
+  }, []);
+  const catalog = useStore($allReactions);
+  const ids = catalog.length ? catalog.map((c) => c.id) : KNOWN_REACTIONS.map((k) => k.id);
   const labels = new Map(
     catalog.length
       ? catalog.map((c) => [c.id, c.name] as const)
       : KNOWN_REACTIONS.map((k) => [k.id, k.name] as const),
-  )
-  const options = value && !ids.includes(value) ? [value, ...ids] : ids
+  );
+  const options = value && !ids.includes(value) ? [value, ...ids] : ids;
   return (
     <Field label="Propellant (reaction)">
       <Select
@@ -158,7 +166,7 @@ function ReactionSelect({
         ))}
       </Select>
     </Field>
-  )
+  );
 }
 
 /** A generic id dropdown that keeps the current value selectable even if absent. */
@@ -169,17 +177,17 @@ function IdSelect({
   onChange,
   allowRoot,
 }: {
-  label: string
-  ids: string[]
-  value: string | null
-  onChange: (id: string | null) => void
+  label: string;
+  ids: string[];
+  value: string | null;
+  onChange: (id: string | null) => void;
   /** When true, offers a "(root part)" option mapping to null (for instance refs). */
-  allowRoot?: boolean
+  allowRoot?: boolean;
 }) {
-  const ROOT = '\0root'
-  const present = value ?? (allowRoot ? ROOT : '')
-  const base = allowRoot ? [ROOT, ...ids] : ids
-  const options = value && !ids.includes(value) ? [value, ...base] : base
+  const ROOT = '\0root';
+  const present = value ?? (allowRoot ? ROOT : '');
+  const base = allowRoot ? [ROOT, ...ids] : ids;
+  const options = value && !ids.includes(value) ? [value, ...base] : base;
   return (
     <Field label={label}>
       <Select
@@ -196,7 +204,7 @@ function IdSelect({
         ))}
       </Select>
     </Field>
-  )
+  );
 }
 
 /** Instance dropdown over a part's placements (with a "(root part)" option). */
@@ -206,10 +214,10 @@ function InstanceSelect({
   value,
   onChange,
 }: {
-  label: string
-  part: EditingPart
-  value: string | null
-  onChange: (id: string | null) => void
+  label: string;
+  part: EditingPart;
+  value: string | null;
+  onChange: (id: string | null) => void;
 }) {
   return (
     <IdSelect
@@ -219,7 +227,7 @@ function InstanceSelect({
       onChange={onChange}
       allowRoot
     />
-  )
+  );
 }
 
 // ── combustor + nozzle field groups (reused by per-SubPart + part-level) ───────
@@ -232,27 +240,27 @@ function CombustorFields({
   onSetFeeds,
   onSetPlumbing,
 }: {
-  combustor: Combustor
-  onSetReaction: (id: string, mixtureRatio: number | null) => void
-  onUpdate: (patch: Partial<Combustor>) => void
-  onSetFeeds: (feeds: FeedSource[]) => void
-  onSetPlumbing: (plumbing: PlumbingClass) => void
+  combustor: Combustor;
+  onSetReaction: (id: string, mixtureRatio: number | null) => void;
+  onUpdate: (patch: Partial<Combustor>) => void;
+  onSetFeeds: (feeds: FeedSource[]) => void;
+  onSetPlumbing: (plumbing: PlumbingClass) => void;
 }) {
-  const index = useStore($allReactionIndex)
-  const part = useStore($part)
-  const targets = feedTargetsOf(part)
-  const reaction = index.get(combustor.reactionId)
-  const known = KNOWN_REACTIONS.find((k) => k.id === combustor.reactionId)
+  const index = useStore($allReactionIndex);
+  const part = useStore($part);
+  const targets = feedTargetsOf(part);
+  const reaction = index.get(combustor.reactionId);
+  const known = KNOWN_REACTIONS.find((k) => k.id === combustor.reactionId);
   // Whether this reaction takes an O/F ratio: prefer the live catalog, then the
   // static snapshot; an unknown id with a ratio already set keeps the field editable.
   const isMixture = reaction
     ? reaction.kind === 'Mixture'
     : known
       ? known.kind === 'Mixture'
-      : combustor.mixtureRatio != null
-  const bounds = reaction ? mixtureRatioBounds(reaction) : null
-  const ratioMin = bounds?.min ?? known?.ratioMin
-  const ratioMax = bounds?.max ?? known?.ratioMax
+      : combustor.mixtureRatio != null;
+  const bounds = reaction ? mixtureRatioBounds(reaction) : null;
+  const ratioMin = bounds?.min ?? known?.ratioMin;
+  const ratioMax = bounds?.max ?? known?.ratioMax;
   return (
     <>
       <Field label="Plumbing (which fluid network it draws through)">
@@ -335,7 +343,7 @@ function CombustorFields({
         />
       </Field>
     </>
-  )
+  );
 }
 
 /** The editable fields of one De Laval nozzle (geometry, efficiencies, exhaust placement, FX). */
@@ -344,9 +352,9 @@ function NozzleFields({
   onUpdate,
   instanceCount,
 }: {
-  nozzle: DeLavalNozzle
-  onUpdate: (patch: Partial<DeLavalNozzle>) => void
-  instanceCount?: number
+  nozzle: DeLavalNozzle;
+  onUpdate: (patch: Partial<DeLavalNozzle>) => void;
+  instanceCount?: number;
 }) {
   return (
     <RocketNozzleFields
@@ -365,7 +373,7 @@ function NozzleFields({
         </Field>
       }
     />
-  )
+  );
 }
 
 /**
@@ -378,9 +386,9 @@ function SolidNozzleFields({
   onUpdate,
   instanceCount,
 }: {
-  nozzle: SolidMotorNozzle
-  onUpdate: (patch: Partial<SolidMotorNozzle>) => void
-  instanceCount?: number
+  nozzle: SolidMotorNozzle;
+  onUpdate: (patch: Partial<SolidMotorNozzle>) => void;
+  instanceCount?: number;
 }) {
   return (
     <RocketNozzleFields
@@ -393,7 +401,7 @@ function SolidNozzleFields({
         </p>
       }
     />
-  )
+  );
 }
 
 /**
@@ -406,24 +414,24 @@ function RocketNozzleFields({
   throat,
   instanceCount,
 }: {
-  nozzle: SolidMotorNozzle
-  onUpdate: (patch: Partial<SolidMotorNozzle>) => void
-  throat: React.ReactNode
+  nozzle: SolidMotorNozzle;
+  onUpdate: (patch: Partial<SolidMotorNozzle>) => void;
+  throat: React.ReactNode;
   /**
    * How many times this nozzle's owning SubPart template is placed — i.e. how many real
    * thrusters these ONE set of numbers drives. Omitted (or 1) for part-level nozzles and
    * template-scoped editing where there is nothing to disambiguate.
    */
-  instanceCount?: number
+  instanceCount?: number;
 }) {
-  const begin = () => pushUndo('edit nozzle', '')
+  const begin = () => pushUndo('edit nozzle', '');
   // The FX pair is ONE authoring decision (KSA nulls fall back to the physics pair
   // independently, but authoring them independently is a trap: the fields would read as
   // live while one of them changed nothing). Either field being set means "overridden";
   // the switch seeds both from the physics pair and clears both.
-  const fxOverride = nozzle.fxExhaustLocation !== null || nozzle.fxExhaustDirection !== null
-  const fxLocation = nozzle.fxExhaustLocation ?? nozzle.exhaustLocation
-  const fxDirection = nozzle.fxExhaustDirection ?? nozzle.exhaustDirection
+  const fxOverride = nozzle.fxExhaustLocation !== null || nozzle.fxExhaustDirection !== null;
+  const fxLocation = nozzle.fxExhaustLocation ?? nozzle.exhaustLocation;
+  const fxDirection = nozzle.fxExhaustDirection ?? nozzle.exhaustDirection;
   return (
     <>
       <Field label="Exit diameter (m)">
@@ -495,15 +503,15 @@ function RocketNozzleFields({
         <DirectionLengthWarning
           direction={nozzle.exhaustDirection}
           onNormalize={(unit) => {
-            pushUndo('normalize direction', nozzle.id)
-            onUpdate({ exhaustDirection: unit })
+            pushUndo('normalize direction', nozzle.id);
+            onUpdate({ exhaustDirection: unit });
           }}
         />
       </div>
       <Switch
         isSelected={fxOverride}
         onChange={(on) => {
-          pushUndo('edit nozzle', nozzle.id)
+          pushUndo('edit nozzle', nozzle.id);
           onUpdate(
             on
               ? {
@@ -511,7 +519,7 @@ function RocketNozzleFields({
                   fxExhaustDirection: { ...nozzle.exhaustDirection },
                 }
               : { fxExhaustLocation: null, fxExhaustDirection: null },
-          )
+          );
         }}
       >
         Override FX placement (plume ≠ thrust)
@@ -597,8 +605,8 @@ function RocketNozzleFields({
       <Switch
         isSelected={nozzle.sound != null}
         onChange={(on) => {
-          pushUndo('edit nozzle', '')
-          onUpdate({ sound: on ? { action: 'On', soundId: DEFAULT_ENGINE_SOUND_ID } : null })
+          pushUndo('edit nozzle', '');
+          onUpdate({ sound: on ? { action: 'On', soundId: DEFAULT_ENGINE_SOUND_ID } : null });
         }}
       >
         Engine sound
@@ -606,14 +614,14 @@ function RocketNozzleFields({
       <Switch
         isSelected={nozzle.exhaustLight}
         onChange={(on) => {
-          pushUndo('edit nozzle', '')
-          onUpdate({ exhaustLight: on })
+          pushUndo('edit nozzle', '');
+          onUpdate({ exhaustLight: on });
         }}
       >
         Exhaust light
       </Switch>
     </>
-  )
+  );
 }
 
 /**
@@ -632,15 +640,15 @@ function DirectionLengthWarning({
   direction,
   onNormalize,
 }: {
-  direction: Vec3
-  onNormalize: (unit: Vec3) => void
+  direction: Vec3;
+  onNormalize: (unit: Vec3) => void;
 }) {
-  const len = Math.hypot(direction.x, direction.y, direction.z)
-  if (Math.abs(len - 1) <= UNIT_EPSILON) return null
+  const len = Math.hypot(direction.x, direction.y, direction.z);
+  if (Math.abs(len - 1) <= UNIT_EPSILON) return null;
   const unit: Vec3 =
     len > 0
       ? { x: direction.x / len, y: direction.y / len, z: direction.z / len }
-      : { x: -1, y: 0, z: 0 } // KSA's default axis; a zero vector has no direction to keep
+      : { x: -1, y: 0, z: 0 }; // KSA's default axis; a zero vector has no direction to keep
   return (
     <div className={cn(warningBox, 'flex items-start justify-between gap-2')}>
       <span className="min-w-0">
@@ -652,7 +660,7 @@ function DirectionLengthWarning({
         Normalize
       </Button>
     </div>
-  )
+  );
 }
 
 /**
@@ -665,24 +673,24 @@ function SolidMotorFields({
   onUpdate,
   onSetFeeds,
 }: {
-  motor: SolidMotor
-  onUpdate: (patch: Partial<SolidMotor>) => void
-  onSetFeeds: (feeds: FeedSource[]) => void
+  motor: SolidMotor;
+  onUpdate: (patch: Partial<SolidMotor>) => void;
+  onSetFeeds: (feeds: FeedSource[]) => void;
 }) {
-  const part = useStore($part)
-  const catalog = useStore($allReactions)
-  const targets = feedTargetsOf(part)
-  const begin = () => pushUndo('edit solid motor', '')
+  const part = useStore($part);
+  const catalog = useStore($allReactions);
+  const targets = feedTargetsOf(part);
+  const begin = () => pushUndo('edit solid motor', '');
   // Only solid reactions are offered — a liquid one is a hard load error, not a choice.
   const solidIds = (
     catalog.length
       ? catalog.filter((c) => c.category === 'Solid').map((c) => c.id)
       : KNOWN_REACTIONS.filter((k) => k.category === 'Solid').map((k) => k.id)
-  ).concat(part.customReactions.filter((r) => r.category === 'Solid').map((r) => r.id))
+  ).concat(part.customReactions.filter((r) => r.category === 'Solid').map((r) => r.id));
   const options =
     motor.reactionId && !solidIds.includes(motor.reactionId)
       ? [motor.reactionId, ...solidIds]
-      : solidIds
+      : solidIds;
   return (
     <>
       <Field label="Solid propellant (reaction)">
@@ -692,8 +700,8 @@ function SolidMotorFields({
           placeholder="Select a solid propellant"
           value={motor.reactionId || null}
           onChange={(k) => {
-            pushUndo('solid motor reaction', String(k))
-            onUpdate({ reactionId: String(k) })
+            pushUndo('solid motor reaction', String(k));
+            onUpdate({ reactionId: String(k) });
           }}
         >
           {options.map((id) => (
@@ -709,8 +717,8 @@ function SolidMotorFields({
           aria-label="Grain geometry"
           value={motor.grainGeometryId || NONE}
           onChange={(k) => {
-            pushUndo('grain profile', String(k))
-            onUpdate({ grainGeometryId: k === NONE ? '' : String(k) })
+            pushUndo('grain profile', String(k));
+            onUpdate({ grainGeometryId: k === NONE ? '' : String(k) });
           }}
         >
           <ListBoxItem id={NONE}>(library default)</ListBoxItem>
@@ -749,7 +757,7 @@ function SolidMotorFields({
         onChange={onSetFeeds}
       />
     </>
-  )
+  );
 }
 
 /**
@@ -762,11 +770,11 @@ function SolidGrainSegmentFields({
   onUpdate,
   onSetId,
 }: {
-  segment: SolidGrainSegment
-  onUpdate: (patch: Partial<SolidGrainSegment>) => void
-  onSetId: (id: string) => void
+  segment: SolidGrainSegment;
+  onUpdate: (patch: Partial<SolidGrainSegment>) => void;
+  onSetId: (id: string) => void;
 }) {
-  const begin = () => pushUndo('edit grain segment', '')
+  const begin = () => pushUndo('edit grain segment', '');
   return (
     <>
       <Field label="Feed id (reference it from a motor's Feeds from → Container)">
@@ -825,12 +833,12 @@ function SolidGrainSegmentFields({
         />
       </div>
     </>
-  )
+  );
 }
 
-const NONE = '\0none'
-const clamp01 = (n: number) => Math.min(1, Math.max(0, n))
-const clampThrottle = (n: number) => Math.min(1, Math.max(0.01, n))
+const NONE = '\0none';
+const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
+const clampThrottle = (n: number) => Math.min(1, Math.max(0.01, n));
 
 // ── per-SubPart engine sections (used in the SubPart Data modal) ──────────────
 
@@ -840,15 +848,15 @@ const clampThrottle = (n: number) => Math.min(1, Math.max(0.01, n))
  * every prefab reusing it inherits the engine (the controller + gimbals are per-part).
  */
 export function SubPartEngineSection({ spd }: { spd: SubPartGameData }) {
-  const part = useStore($part)
-  const tid = spd.subPartTemplateId
+  const part = useStore($part);
+  const tid = spd.subPartTemplateId;
   // A <Rocket>'s <Core Id>/<Nozzle Id> may name either family, so both are offered
   // (mixing them is a load error, which engineValidation flags).
-  const combustorIds = [...spd.combustors.map((c) => c.id), ...spd.solidMotors.map((m) => m.id)]
-  const nozzleIds = [...spd.nozzles.map((n) => n.id), ...spd.solidNozzles.map((n) => n.id)]
+  const combustorIds = [...spd.combustors.map((c) => c.id), ...spd.solidMotors.map((m) => m.id)];
+  const nozzleIds = [...spd.nozzles.map((n) => n.id), ...spd.solidNozzles.map((n) => n.id)];
   // How many real thrusters each nozzle here drives: KSA instantiates a SubPart-owned nozzle
   // once per placement of its template, so ONE set of exhaust vectors serves them all.
-  const instanceCount = part.placements.filter((p) => p.subPartTemplateId === tid).length
+  const instanceCount = part.placements.filter((p) => p.subPartTemplateId === tid).length;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
@@ -952,7 +960,7 @@ export function SubPartEngineSection({ spd }: { spd: SubPartGameData }) {
         </Button>
       </div>
     </div>
-  )
+  );
 }
 
 /** Editor for one `<Rocket>`'s wiring: its id, core combustor, and nozzle list. */
@@ -963,17 +971,17 @@ function RocketFields({
   onUpdate,
   part,
 }: {
-  rocket: Rocket
-  combustorIds: string[]
-  nozzleIds: string[]
-  onUpdate: (patch: Partial<Rocket>) => void
+  rocket: Rocket;
+  combustorIds: string[];
+  nozzleIds: string[];
+  onUpdate: (patch: Partial<Rocket>) => void;
   /** When present, nozzle/core refs can target other SubPart instances (gas-generator case). */
-  part?: EditingPart
+  part?: EditingPart;
 }) {
   const setNozzleRef = (idx: number, ref: SubPartIdRef) => {
-    const nozzles = rocket.nozzles.map((n, j) => (j === idx ? ref : n))
-    onUpdate({ nozzles })
-  }
+    const nozzles = rocket.nozzles.map((n, j) => (j === idx ? ref : n));
+    onUpdate({ nozzles });
+  };
   return (
     <>
       <Field label="Rocket id (referenced by the controller)">
@@ -1044,23 +1052,23 @@ function RocketFields({
         </Button>
       </div>
     </>
-  )
+  );
 }
 
 // ── part-level engine sections (used in the Part Data modal) ──────────────────
 
 /** All rocket ids in the part (per-SubPart + part-level) — what a controller can reference. */
 function allRocketIds(part: EditingPart): string[] {
-  const ids: string[] = []
-  for (const s of part.subPartGameData) for (const r of s.rockets) ids.push(r.id)
-  for (const r of part.gameData.rockets) ids.push(r.id)
-  return ids
+  const ids: string[] = [];
+  for (const s of part.subPartGameData) for (const r of s.rockets) ids.push(r.id);
+  for (const r of part.gameData.rockets) ids.push(r.id);
+  return ids;
 }
 
 /** Part-level engine controllers — the modules that make the part fire. */
 export function RocketControllersSection({ part }: { part: EditingPart }) {
-  const controllers = part.gameData.rocketControllers
-  const rocketIds = allRocketIds(part)
+  const controllers = part.gameData.rocketControllers;
+  const rocketIds = allRocketIds(part);
   return (
     <div className="flex flex-col gap-2">
       {controllers.map((c, i) => (
@@ -1160,13 +1168,13 @@ export function RocketControllersSection({ part }: { part: EditingPart }) {
         </Button>
       </div>
     </div>
-  )
+  );
 }
 
 /** Per-instance gimbal overlays (thrust-vectoring). */
 /** Encodes a consumer choice as one Select key (a consumer id repeats across placements). */
 function consumerKey(consumerId: string, subPartInstanceId: string | null): string {
-  return `${subPartInstanceId ?? ''} ${consumerId}`
+  return `${subPartInstanceId ?? ''} ${consumerId}`;
 }
 
 /**
@@ -1177,10 +1185,10 @@ function consumerKey(consumerId: string, subPartInstanceId: string | null): stri
  * ConsumerFeedWiring wiring for it"* and the engine reaches no propellant.
  */
 export function ConsumerFeedWiringSection({ part }: { part: EditingPart }) {
-  const wiring = part.gameData.consumerFeedWiring
-  const consumers = consumerOptionsOf(part)
-  const targets = feedTargetsOf(part)
-  const unwired = unwiredConsumersOf(part)
+  const wiring = part.gameData.consumerFeedWiring;
+  const consumers = consumerOptionsOf(part);
+  const targets = feedTargetsOf(part);
+  const unwired = unwiredConsumersOf(part);
   return (
     <div className="flex flex-col gap-2">
       {wiring.map((w, i) => (
@@ -1198,8 +1206,8 @@ export function ConsumerFeedWiringSection({ part }: { part: EditingPart }) {
               onChange={(k) => {
                 const opt = consumers.find(
                   (c) => consumerKey(c.consumerId, c.subPartInstanceId) === String(k),
-                )
-                if (opt) setConsumerFeedWiringTarget(i, opt.consumerId, opt.subPartInstanceId)
+                );
+                if (opt) setConsumerFeedWiringTarget(i, opt.consumerId, opt.subPartInstanceId);
               }}
             >
               {/* Keep a consumer the part no longer carries selectable, so re-picking is
@@ -1259,7 +1267,7 @@ export function ConsumerFeedWiringSection({ part }: { part: EditingPart }) {
         )}
       </div>
     </div>
-  )
+  );
 }
 
 /**
@@ -1268,7 +1276,7 @@ export function ConsumerFeedWiringSection({ part }: { part: EditingPart }) {
  * (usually) reuses a shared thrust-assembly SubPart for the `<SolidMotorNozzle>`.
  */
 export function PartSolidMotorSection({ part }: { part: EditingPart }) {
-  const g = part.gameData
+  const g = part.gameData;
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs text-fg-subtle">
@@ -1325,14 +1333,14 @@ export function PartSolidMotorSection({ part }: { part: EditingPart }) {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 export function GimbalsSection({ part }: { part: EditingPart }) {
-  const gimbals = part.gameData.gimbals
+  const gimbals = part.gameData.gimbals;
   // Instances that don't yet have a gimbal — candidates to add one to.
-  const used = new Set(gimbals.map((g) => g.subPartInstanceId))
-  const free = part.placements.map((p) => p.instanceId).filter((id) => !used.has(id))
+  const used = new Set(gimbals.map((g) => g.subPartInstanceId));
+  const free = part.placements.map((p) => p.instanceId).filter((id) => !used.has(id));
   return (
     <div className="flex flex-col gap-2">
       {gimbals.map((g) => (
@@ -1356,11 +1364,11 @@ export function GimbalsSection({ part }: { part: EditingPart }) {
         </Field>
       )}
     </div>
-  )
+  );
 }
 
 function GimbalCard({ gimbal }: { gimbal: Gimbal }) {
-  const id = gimbal.subPartInstanceId
+  const id = gimbal.subPartInstanceId;
   return (
     <ItemCard title={`Gimbal — ${id}`} onRemove={() => removeGimbal(id)}>
       <Field label="Max angle Y (°)">
@@ -1386,30 +1394,30 @@ function GimbalCard({ gimbal }: { gimbal: Gimbal }) {
       <Switch
         isSelected={gimbal.constrainToCircle}
         onChange={(on) => {
-          pushUndo('edit gimbal', '')
-          setGimbal(id, { constrainToCircle: on })
+          pushUndo('edit gimbal', '');
+          setGimbal(id, { constrainToCircle: on });
         }}
       >
         Constrain to circle
       </Switch>
     </ItemCard>
-  )
+  );
 }
 
 /** Advanced: part-level rockets/combustors/nozzles for gas-generator cycles. */
 export function PartGasGeneratorSection({ part }: { part: EditingPart }) {
-  const g = part.gameData
-  const combustorIds = g.combustors.map((c) => c.id)
-  const partNozzleIds = g.nozzles.map((n) => n.id)
+  const g = part.gameData;
+  const combustorIds = g.combustors.map((c) => c.id);
+  const partNozzleIds = g.nozzles.map((n) => n.id);
   // Nozzles can also live on a SubPart, so offer those ids too for part-level rocket refs.
   const allNozzleIds = [
     ...partNozzleIds,
     ...part.subPartGameData.flatMap((s) => s.nozzles.map((n) => n.id)),
-  ]
+  ];
   const allCombustorIds = [
     ...combustorIds,
     ...part.subPartGameData.flatMap((s) => s.combustors.map((c) => c.id)),
-  ]
+  ];
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
@@ -1455,7 +1463,7 @@ export function PartGasGeneratorSection({ part }: { part: EditingPart }) {
         </Button>
       </div>
     </div>
-  )
+  );
 }
 
 // ── custom propellants (user-authored FixedReactions) ─────────────────────────
@@ -1466,12 +1474,12 @@ function uniquePropellantId(name: string, taken: Iterable<string>): string {
     name
       .trim()
       .replace(/[^A-Za-z0-9_.]+/g, '_')
-      .replace(/^_+|_+$/g, '') || 'Propellant'
-  const set = new Set(taken)
-  if (!set.has(base)) return base
-  let n = 2
-  while (set.has(`${base}_${n}`)) n++
-  return `${base}_${n}`
+      .replace(/^_+|_+$/g, '') || 'Propellant';
+  const set = new Set(taken);
+  if (!set.has(base)) return base;
+  let n = 2;
+  while (set.has(`${base}_${n}`)) n++;
+  return `${base}_${n}`;
 }
 
 /**
@@ -1485,11 +1493,11 @@ function uniquePropellantId(name: string, taken: Iterable<string>): string {
  */
 export function CustomPropellantsSection({ part }: { part: EditingPart }) {
   useEffect(() => {
-    void ensureReactionsLoaded()
-  }, [])
-  const catalog = useStore($allReactions)
-  const custom = part.customReactions
-  const takenIds = () => [...catalog.map((c) => c.id), ...custom.map((c) => c.id)]
+    void ensureReactionsLoaded();
+  }, []);
+  const catalog = useStore($allReactions);
+  const custom = part.customReactions;
+  const takenIds = () => [...catalog.map((c) => c.id), ...custom.map((c) => c.id)];
 
   return (
     <div className="flex flex-col gap-3">
@@ -1509,10 +1517,10 @@ export function CustomPropellantsSection({ part }: { part: EditingPart }) {
             placeholder="Pick one to clone…"
             value={null}
             onChange={(k) => {
-              const src = catalog.find((c) => c.id === String(k))
-              if (!src) return
-              const id = uniquePropellantId(`${src.id}_custom`, takenIds())
-              addCustomReaction(reactionDataToCustom(src, id, `${src.name} (custom)`))
+              const src = catalog.find((c) => c.id === String(k));
+              if (!src) return;
+              const id = uniquePropellantId(`${src.id}_custom`, takenIds());
+              addCustomReaction(reactionDataToCustom(src, id, `${src.name} (custom)`));
             }}
           >
             {catalog.map((c) => (
@@ -1536,7 +1544,7 @@ export function CustomPropellantsSection({ part }: { part: EditingPart }) {
         </Button>
       </div>
     </div>
-  )
+  );
 }
 
 const REACTION_CATEGORIES: readonly ReactionCategory[] = [
@@ -1545,13 +1553,13 @@ const REACTION_CATEGORIES: readonly ReactionCategory[] = [
   'Monopropellant',
   'Solid',
   'Thermal',
-]
+];
 
 function CustomPropellantCard({ process }: { process: CustomReaction }) {
-  const id = process.id
+  const id = process.id;
   const setReactants = (reactants: ReactionReactantSpec[]) =>
-    updateCustomReaction(id, { reactants })
-  const setLut = (lut: ReactionLutRowSpec[]) => updateCustomReaction(id, { lut })
+    updateCustomReaction(id, { reactants });
+  const setLut = (lut: ReactionLutRowSpec[]) => updateCustomReaction(id, { lut });
   return (
     <ItemCard title={`Propellant — ${id}`} onRemove={() => removeCustomReaction(id)}>
       <Field label="Name">
@@ -1569,8 +1577,8 @@ function CustomPropellantCard({ process }: { process: CustomReaction }) {
           aria-label="Reaction category"
           value={process.category}
           onChange={(k) => {
-            pushUndo('edit propellant', '')
-            updateCustomReaction(id, { category: k as ReactionCategory })
+            pushUndo('edit propellant', '');
+            updateCustomReaction(id, { category: k as ReactionCategory });
           }}
         >
           {REACTION_CATEGORIES.map((c) => (
@@ -1637,7 +1645,7 @@ function CustomPropellantCard({ process }: { process: CustomReaction }) {
       {process.category === 'Solid' && <SolidPropellantFields process={process} />}
       <CustomPropellantLut process={process} setLut={setLut} />
     </ItemCard>
-  )
+  );
 }
 
 /**
@@ -1647,13 +1655,13 @@ function CustomPropellantCard({ process }: { process: CustomReaction }) {
  * error banner rather than a soft warning. Cloning APCP/DoubleBase fills these in.
  */
 function SolidPropellantFields({ process }: { process: CustomReaction }) {
-  const id = process.id
-  const begin = () => pushUndo('edit propellant', '')
-  const br = process.burnRate
+  const id = process.id;
+  const begin = () => pushUndo('edit propellant', '');
+  const br = process.burnRate;
   const setBurnRate = (patch: Partial<NonNullable<CustomReaction['burnRate']>>) =>
     updateCustomReaction(id, {
       burnRate: { coefficientMPerS: 0, exponent: 0, ...br, ...patch },
-    })
+    });
   return (
     <div className="flex flex-col gap-2">
       <span className={LABEL}>Solid propellant (required — burn-rate law r = a·pⁿ)</span>
@@ -1715,19 +1723,19 @@ function SolidPropellantFields({ process }: { process: CustomReaction }) {
         </p>
       )}
     </div>
-  )
+  );
 }
 
 function CustomPropellantLut({
   process,
   setLut,
 }: {
-  process: CustomReaction
-  setLut: (lut: ReactionLutRowSpec[]) => void
+  process: CustomReaction;
+  setLut: (lut: ReactionLutRowSpec[]) => void;
 }) {
   const patchRow = (i: number, patch: Partial<ReactionLutRowSpec>) =>
-    setLut(process.lut.map((row, j) => (j === i ? { ...row, ...patch } : row)))
-  const begin = () => pushUndo('edit propellant', '')
+    setLut(process.lut.map((row, j) => (j === i ? { ...row, ...patch } : row)));
+  const begin = () => pushUndo('edit propellant', '');
   return (
     <div className="flex flex-col gap-2">
       <span className={LABEL}>Gas table — {process.lut.length} row(s) (ln P, T·K, γ, g/mol)</span>
@@ -1775,7 +1783,7 @@ function CustomPropellantLut({
         variant="ghost"
         className="self-start"
         onPress={() => {
-          const last = process.lut[process.lut.length - 1]
+          const last = process.lut[process.lut.length - 1];
           setLut([
             ...process.lut,
             last
@@ -1786,13 +1794,13 @@ function CustomPropellantLut({
                   gamma: 1.2,
                   molarMassGPerMol: 14,
                 },
-          ])
+          ]);
         }}
       >
         + Row
       </Button>
     </div>
-  )
+  );
 }
 
-export { CombustorFields, NozzleFields }
+export { CombustorFields, NozzleFields };

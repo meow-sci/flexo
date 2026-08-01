@@ -1,5 +1,5 @@
-import * as THREE from 'three'
-import type { Vec3 } from '../ksa/types'
+import * as THREE from 'three';
+import type { Vec3 } from '../ksa/types';
 
 /**
  * How finely a scene object is sampled into points.
@@ -10,7 +10,7 @@ import type { Vec3 } from '../ksa/types'
  *    irregular geometry (a bbox-corner fit of a rotated mesh over-estimates), at the cost
  *    of walking the whole buffer.
  */
-export type SamplePrecision = 'bbox' | 'vertex'
+export type SamplePrecision = 'bbox' | 'vertex';
 
 /**
  * World-space sample points for a set of scene objects. Shared by the reference-container
@@ -22,32 +22,32 @@ export function collectWorldPoints(
   objects: readonly THREE.Object3D[],
   mode: SamplePrecision,
 ): Vec3[] {
-  const out: Vec3[] = []
+  const out: Vec3[] = [];
   if (mode === 'bbox') {
-    const box = new THREE.Box3()
+    const box = new THREE.Box3();
     for (const obj of objects) {
-      box.setFromObject(obj)
-      if (box.isEmpty()) continue
-      const { min, max } = box
+      box.setFromObject(obj);
+      if (box.isEmpty()) continue;
+      const { min, max } = box;
       for (const x of [min.x, max.x])
-        for (const y of [min.y, max.y]) for (const z of [min.z, max.z]) out.push({ x, y, z })
+        for (const y of [min.y, max.y]) for (const z of [min.z, max.z]) out.push({ x, y, z });
     }
-    return out
+    return out;
   }
-  const v = new THREE.Vector3()
+  const v = new THREE.Vector3();
   for (const obj of objects) {
-    obj.updateWorldMatrix(true, true)
+    obj.updateWorldMatrix(true, true);
     obj.traverse((child) => {
-      const mesh = child as THREE.Mesh
+      const mesh = child as THREE.Mesh;
       const pos = (mesh.geometry as THREE.BufferGeometry | undefined)?.attributes?.position as
         | THREE.BufferAttribute
-        | undefined
-      if (!mesh.isMesh || !pos) return
+        | undefined;
+      if (!mesh.isMesh || !pos) return;
       for (let i = 0; i < pos.count; i++) {
-        v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld)
-        out.push({ x: v.x, y: v.y, z: v.z })
+        v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+        out.push({ x: v.x, y: v.y, z: v.z });
       }
-    })
+    });
   }
-  return out
+  return out;
 }

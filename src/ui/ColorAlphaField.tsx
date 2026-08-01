@@ -1,4 +1,4 @@
-import { Slider } from './kit'
+import { Slider } from './kit';
 
 /**
  * Hex color picker plus an alpha (opacity) slider. The native `<input type="color">`
@@ -12,11 +12,11 @@ export function ColorAlphaField({
   onChange,
   onInteractionStart,
 }: {
-  label: string
-  color: string
-  opacity: number
-  onChange: (next: { color: string; opacity: number }) => void
-  onInteractionStart?: () => void
+  label: string;
+  color: string;
+  opacity: number;
+  onChange: (next: { color: string; opacity: number }) => void;
+  onInteractionStart?: () => void;
 }) {
   return (
     <div className="flex items-center gap-2">
@@ -44,5 +44,5 @@ export function ColorAlphaField({
         {Math.round(opacity * 100)}%
       </span>
     </div>
-  )
+  );
 }

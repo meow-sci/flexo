@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { useStore } from '@nanostores/react'
-import type { Key, Selection } from 'react-aria-components'
+import { useEffect, useState } from 'react';
+import { useStore } from '@nanostores/react';
+import type { Key, Selection } from 'react-aria-components';
 import {
   Button,
   SearchField,
@@ -11,31 +11,31 @@ import {
   SectionTitle,
   toast,
   useIsPhone,
-} from './kit'
-import type { CatalogPart } from '../ksa/partCatalog'
-import { ENTITY_ONLY_LAYER_IDS, type Layer } from '../ksa/types'
-import { $catalogIndex } from '../state/catalogStore'
-import { $partCatalog, $partCatalogLoading } from '../state/partCatalogStore'
-import { $part, createLayer } from '../state/editorStore'
-import { importBuiltInPart } from '../state/partImport'
-import { revealLayer } from '../state/layerStore'
-import { closeBrowserPopup, openBrowserPopup } from '../state/loadProgressStore'
-import { PartPreview } from './PartPreview'
-import { PreviewLoadProgress } from './LoadProgress'
-import { BrowserLayout, BrowserPopup } from './BrowserShell'
+} from './kit';
+import type { CatalogPart } from '../ksa/partCatalog';
+import { ENTITY_ONLY_LAYER_IDS, type Layer } from '../ksa/types';
+import { $catalogIndex } from '../state/catalogStore';
+import { $partCatalog, $partCatalogLoading } from '../state/partCatalogStore';
+import { $part, createLayer } from '../state/editorStore';
+import { importBuiltInPart } from '../state/partImport';
+import { revealLayer } from '../state/layerStore';
+import { closeBrowserPopup, openBrowserPopup } from '../state/loadProgressStore';
+import { PartPreview } from './PartPreview';
+import { PreviewLoadProgress } from './LoadProgress';
+import { BrowserLayout, BrowserPopup } from './BrowserShell';
 
-const MAX_RESULTS = 200
-const NEW_LAYER = '__new_layer__'
-const CURRENT_LAYER = '__current_layer__'
+const MAX_RESULTS = 200;
+const NEW_LAYER = '__new_layer__';
+const CURRENT_LAYER = '__current_layer__';
 
 /** Next free "New Layer N" name (max existing numeric suffix + 1). */
 function nextNewLayerName(layers: readonly Layer[]): string {
-  let max = 0
+  let max = 0;
   for (const l of layers) {
-    const m = /^New Layer (\d+)$/.exec(l.name)
-    if (m) max = Math.max(max, Number.parseInt(m[1], 10))
+    const m = /^New Layer (\d+)$/.exec(l.name);
+    if (m) max = Math.max(max, Number.parseInt(m[1], 10));
   }
-  return `New Layer ${max + 1}`
+  return `New Layer ${max + 1}`;
 }
 
 /**
@@ -48,70 +48,70 @@ export function PartPopup({
   open,
   onOpenChange,
 }: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   return (
     <BrowserPopup title="Add Part" open={open} onOpenChange={onOpenChange}>
       <BrowserBody onClose={() => onOpenChange(false)} />
     </BrowserPopup>
-  )
+  );
 }
 
 function BrowserBody({ onClose }: { onClose: () => void }) {
-  const catalog = useStore($partCatalog)
-  const loading = useStore($partCatalogLoading)
-  const subPartIndex = useStore($catalogIndex)
-  const part = useStore($part)
-  const [query, setQuery] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [targetLayer, setTargetLayer] = useState<string>(NEW_LAYER)
-  const isPhone = useIsPhone()
+  const catalog = useStore($partCatalog);
+  const loading = useStore($partCatalogLoading);
+  const subPartIndex = useStore($catalogIndex);
+  const part = useStore($part);
+  const [query, setQuery] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [targetLayer, setTargetLayer] = useState<string>(NEW_LAYER);
+  const isPhone = useIsPhone();
 
   useEffect(() => {
-    openBrowserPopup()
-    return closeBrowserPopup
-  }, [])
+    openBrowserPopup();
+    return closeBrowserPopup;
+  }, []);
 
-  const q = query.trim().toLowerCase()
+  const q = query.trim().toLowerCase();
   const matches = q
     ? catalog.filter(
         (p) =>
           p.id.toLowerCase().includes(q) || p.editorTags.some((t) => t.toLowerCase().includes(q)),
       )
-    : catalog
-  const filtered = matches.slice(0, MAX_RESULTS)
+    : catalog;
+  const filtered = matches.slice(0, MAX_RESULTS);
 
-  const selected = selectedId ? (catalog.find((p) => p.id === selectedId) ?? null) : null
+  const selected = selectedId ? (catalog.find((p) => p.id === selectedId) ?? null) : null;
 
   const onSelection = (keys: Selection) => {
-    if (keys === 'all') return
-    setSelectedId(([...keys][0] as string) ?? null)
-  }
+    if (keys === 'all') return;
+    setSelectedId(([...keys][0] as string) ?? null);
+  };
 
   const resolveLayerId = () =>
     targetLayer === NEW_LAYER
       ? createLayer(nextNewLayerName(part.layers))
       : targetLayer === CURRENT_LAYER
         ? undefined
-        : targetLayer
+        : targetLayer;
 
   const add = async () => {
-    if (!selected) return
+    if (!selected) return;
     // importBuiltInPart imports the SubParts + any keyframe animations, selects the
     // imported SubParts, and returns the layer they landed on; reveal it (visible + in
     // the Assets list) so the import is never hidden.
-    revealLayer(await importBuiltInPart(selected, resolveLayerId()))
-    toast({ title: 'Part Added', description: selected.id }, { timeout: 2500 })
-  }
+    revealLayer(await importBuiltInPart(selected, resolveLayerId()));
+    toast({ title: 'Part Added', description: selected.id }, { timeout: 2500 });
+  };
 
   const addAndClose = async (key: Key) => {
-    const p = catalog.find((c) => c.id === String(key))
-    if (!p) return
-    revealLayer(await importBuiltInPart(p, resolveLayerId()))
-    toast({ title: 'Part Added', description: p.id }, { timeout: 2500 })
-    onClose()
-  }
+    const p = catalog.find((c) => c.id === String(key));
+    if (!p) return;
+    revealLayer(await importBuiltInPart(p, resolveLayerId()));
+    toast({ title: 'Part Added', description: p.id }, { timeout: 2500 });
+    onClose();
+  };
 
   const listPane = (
     <div className="h-full overflow-auto rounded-lg border border-border bg-panel-sunken">
@@ -145,7 +145,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
         </GridList>
       )}
     </div>
-  )
+  );
 
   const previewPane = (
     <div className="relative h-full overflow-hidden rounded-lg border border-border bg-panel-sunken">
@@ -158,7 +158,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
       )}
       <PreviewLoadProgress />
     </div>
-  )
+  );
 
   const detailsPane = (
     <div className="h-full overflow-auto rounded-lg border border-border bg-panel-sunken p-3">
@@ -168,7 +168,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
         <span className="text-sm text-fg-subtle">Select a Part to see its details.</span>
       )}
     </div>
-  )
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5">
@@ -228,7 +228,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
         }
       />
     </div>
-  )
+  );
 }
 
 /**
@@ -239,11 +239,11 @@ function CompactPartSummary({
   part,
   subPartIndex,
 }: {
-  part: CatalogPart
-  subPartIndex: Map<string, unknown>
+  part: CatalogPart;
+  subPartIndex: Map<string, unknown>;
 }) {
-  const uniqueTypes = new Set(part.placements.map((p) => p.subPartTemplateId))
-  const missing = [...uniqueTypes].filter((t) => !subPartIndex.has(t)).length
+  const uniqueTypes = new Set(part.placements.map((p) => p.subPartTemplateId));
+  const missing = [...uniqueTypes].filter((t) => !subPartIndex.has(t)).length;
 
   return (
     <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border bg-panel-sunken px-2 py-1 text-xs">
@@ -268,7 +268,7 @@ function CompactPartSummary({
         </span>
       )}
     </div>
-  )
+  );
 }
 
 /**
@@ -280,18 +280,18 @@ function PartDetails({
   part,
   subPartIndex,
 }: {
-  part: CatalogPart
-  subPartIndex: Map<string, unknown>
+  part: CatalogPart;
+  subPartIndex: Map<string, unknown>;
 }) {
-  const counts = new Map<string, number>()
+  const counts = new Map<string, number>();
   for (const p of part.placements) {
-    counts.set(p.subPartTemplateId, (counts.get(p.subPartTemplateId) ?? 0) + 1)
+    counts.set(p.subPartTemplateId, (counts.get(p.subPartTemplateId) ?? 0) + 1);
   }
   const breakdown = Array.from(counts, ([templateId, count]) => ({ templateId, count })).sort(
     (a, b) => b.count - a.count || a.templateId.localeCompare(b.templateId),
-  )
+  );
 
-  const missing = breakdown.filter((b) => !subPartIndex.has(b.templateId)).length
+  const missing = breakdown.filter((b) => !subPartIndex.has(b.templateId)).length;
 
   return (
     <div className="flex flex-col gap-3 text-xs">
@@ -343,7 +343,7 @@ function PartDetails({
         <SectionTitle>SubParts</SectionTitle>
         <ul className="mt-1 flex flex-col gap-0.5">
           {breakdown.map((b) => {
-            const previewable = subPartIndex.has(b.templateId)
+            const previewable = subPartIndex.has(b.templateId);
             return (
               <li key={b.templateId} className="flex items-center justify-between gap-2">
                 <span
@@ -354,10 +354,10 @@ function PartDetails({
                 </span>
                 <span className="shrink-0 text-fg-subtle">×{b.count}</span>
               </li>
-            )
+            );
           })}
         </ul>
       </div>
     </div>
-  )
+  );
 }

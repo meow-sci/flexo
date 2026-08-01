@@ -1,7 +1,7 @@
-import { useStore } from '@nanostores/react'
-import type { Selection } from 'react-aria-components'
-import { Lock, Unlock, Trash2 } from 'lucide-react'
-import { Button, GridList, GridListItem } from './kit'
+import { useStore } from '@nanostores/react';
+import type { Selection } from 'react-aria-components';
+import { Lock, Unlock, Trash2 } from 'lucide-react';
+import { Button, GridList, GridListItem } from './kit';
 import {
   $activeMeasurementId,
   $measurements,
@@ -9,9 +9,9 @@ import {
   removeMeasurement,
   setActiveMeasurement,
   setMeasurementLocked,
-} from '../state/measurementStore'
-import { distance } from '../measure/bounds'
-import { formatLength } from '../measure/format'
+} from '../state/measurementStore';
+import { distance } from '../measure/bounds';
+import { formatLength } from '../measure/format';
 
 /**
  * List of placed line measurements (reference + point-to-point). Selecting a row
@@ -19,20 +19,20 @@ import { formatLength } from '../measure/format'
  * Mirrors {@link AssetsList}'s react-aria GridList pattern.
  */
 export function MeasurementList({ onSelect }: { onSelect?: () => void } = {}) {
-  const measurements = useStore($measurements)
-  const activeId = useStore($activeMeasurementId)
-  const { unit } = useStore($measurementSettings)
+  const measurements = useStore($measurements);
+  const activeId = useStore($activeMeasurementId);
+  const { unit } = useStore($measurementSettings);
 
   if (measurements.length === 0) {
-    return <p className="px-1 py-2 text-xs text-fg-subtle">No measurements placed.</p>
+    return <p className="px-1 py-2 text-xs text-fg-subtle">No measurements placed.</p>;
   }
 
   const onSelectionChange = (keys: Selection) => {
-    if (keys === 'all') return
-    const id = ([...keys][0] as string) ?? null
-    setActiveMeasurement(id)
-    if (id) onSelect?.()
-  }
+    if (keys === 'all') return;
+    const id = ([...keys][0] as string) ?? null;
+    setActiveMeasurement(id);
+    if (id) onSelect?.();
+  };
 
   return (
     <GridList
@@ -72,5 +72,5 @@ export function MeasurementList({ onSelect }: { onSelect?: () => void } = {}) {
         </GridListItem>
       )}
     </GridList>
-  )
+  );
 }

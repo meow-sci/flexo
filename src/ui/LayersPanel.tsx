@@ -1,12 +1,12 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
 import {
   Button as DragButton,
   GridList,
   GridListItem,
   useDragAndDrop,
   type Selection,
-} from 'react-aria-components'
+} from 'react-aria-components';
 import {
   Button,
   Chip,
@@ -22,7 +22,7 @@ import {
   ListBoxItem,
   Tooltip,
   SectionTitle,
-} from './kit'
+} from './kit';
 import {
   $activeLayerId,
   clearLayer,
@@ -33,7 +33,7 @@ import {
   selectLayerEntities,
   setActiveLayer,
   type DeleteLayerOptions,
-} from '../state/editorStore'
+} from '../state/editorStore';
 import {
   $layerView,
   layerViewState,
@@ -41,9 +41,9 @@ import {
   toggleLayerListed,
   toggleLayerLocked,
   toggleLayerVisible,
-} from '../state/layerStore'
-import { $layerSummaries, type LayerSummary } from '../state/selectors'
-import { BUILT_IN_LAYER_IDS, DEFAULT_LAYER_ID, KITTEN_LAYER_ID, type Layer } from '../ksa/types'
+} from '../state/layerStore';
+import { $layerSummaries, type LayerSummary } from '../state/selectors';
+import { BUILT_IN_LAYER_IDS, DEFAULT_LAYER_ID, KITTEN_LAYER_ID, type Layer } from '../ksa/types';
 import {
   BlendIcon,
   EyeIcon,
@@ -57,8 +57,8 @@ import {
   TrashIcon,
   UnlistedIcon,
   UnlockIcon,
-} from './layerIcons'
-import { useNumberDraft } from './numberDraft'
+} from './layerIcons';
+import { useNumberDraft } from './numberDraft';
 
 /** Moves the dragged keys to before/after the target id within `ids`. */
 function computeReorder(
@@ -67,26 +67,26 @@ function computeReorder(
   targetId: string,
   position: 'before' | 'after',
 ): string[] {
-  const moving = ids.filter((id) => movingKeys.has(id))
-  const rest = ids.filter((id) => !movingKeys.has(id))
-  const idx = rest.indexOf(targetId)
-  if (idx < 0) return [...ids]
-  const insertAt = position === 'before' ? idx : idx + 1
-  return [...rest.slice(0, insertAt), ...moving, ...rest.slice(insertAt)]
+  const moving = ids.filter((id) => movingKeys.has(id));
+  const rest = ids.filter((id) => !movingKeys.has(id));
+  const idx = rest.indexOf(targetId);
+  if (idx < 0) return [...ids];
+  const insertAt = position === 'before' ? idx : idx + 1;
+  return [...rest.slice(0, insertAt), ...moving, ...rest.slice(insertAt)];
 }
 
 const rowClass = ({
   isSelected,
   isFocusVisible,
 }: {
-  isSelected: boolean
-  isFocusVisible: boolean
+  isSelected: boolean;
+  isFocusVisible: boolean;
 }) =>
   [
     'flex min-w-0 cursor-default select-none items-center gap-1 rounded-md px-2 py-1 text-fg outline-none',
     isSelected ? 'bg-white/[0.08] ring-2 ring-inset ring-accent' : 'hover:bg-white/[0.06]',
     isFocusVisible && !isSelected ? 'ring-1 ring-inset ring-accent' : '',
-  ].join(' ')
+  ].join(' ');
 
 /**
  * The layers list shown inside the Layers popover. A react-aria GridList so each
@@ -96,41 +96,41 @@ const rowClass = ({
  * rename/reorder/delete mutate the document and are undoable.
  */
 export function LayersPanel({ onLayerSelected }: { onLayerSelected?: () => void } = {}) {
-  const summaries = useStore($layerSummaries)
-  const activeId = useStore($activeLayerId)
-  const [newName, setNewName] = useState('')
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
-  const [pendingClearId, setPendingClearId] = useState<string | null>(null)
+  const summaries = useStore($layerSummaries);
+  const activeId = useStore($activeLayerId);
+  const [newName, setNewName] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [pendingClearId, setPendingClearId] = useState<string | null>(null);
 
-  const orderedIds = summaries.map((s) => s.layer.id)
+  const orderedIds = summaries.map((s) => s.layer.id);
 
   const { dragAndDropHooks } = useDragAndDrop({
     getItems: (keys) => [...keys].map((key) => ({ 'text/plain': String(key) })),
     onReorder(e) {
-      const position = e.target.dropPosition === 'before' ? 'before' : 'after'
-      const keys = new Set([...e.keys].map(String))
-      reorderLayers(computeReorder(orderedIds, keys, String(e.target.key), position))
+      const position = e.target.dropPosition === 'before' ? 'before' : 'after';
+      const keys = new Set([...e.keys].map(String));
+      reorderLayers(computeReorder(orderedIds, keys, String(e.target.key), position));
     },
-  })
+  });
 
   const onSelectionChange = (keys: Selection) => {
-    if (keys === 'all') return
-    const [first] = [...keys]
+    if (keys === 'all') return;
+    const [first] = [...keys];
     if (first != null) {
-      setActiveLayer(String(first))
-      onLayerSelected?.()
+      setActiveLayer(String(first));
+      onLayerSelected?.();
     }
-  }
+  };
 
   const createFromInput = () => {
-    if (!newName.trim()) return
-    createLayer(newName)
-    setNewName('')
-  }
+    if (!newName.trim()) return;
+    createLayer(newName);
+    setNewName('');
+  };
 
-  const pendingLayer = summaries.find((s) => s.layer.id === pendingDeleteId)
-  const pendingClearLayer = summaries.find((s) => s.layer.id === pendingClearId)
+  const pendingLayer = summaries.find((s) => s.layer.id === pendingDeleteId);
+  const pendingClearLayer = summaries.find((s) => s.layer.id === pendingClearId);
 
   return (
     <div className="flex w-full flex-col gap-2">
@@ -144,7 +144,7 @@ export function LayersPanel({ onLayerSelected }: { onLayerSelected?: () => void 
           onChange={setNewName}
           placeholder="New layer name"
           onKeyDown={(e) => {
-            if (e.key === 'Enter') createFromInput()
+            if (e.key === 'Enter') createFromInput();
           }}
         />
         <Button size="sm" onPress={createFromInput} isDisabled={!newName.trim()}>
@@ -190,7 +190,7 @@ export function LayersPanel({ onLayerSelected }: { onLayerSelected?: () => void 
         <ClearLayerDialog summary={pendingClearLayer} onClose={() => setPendingClearId(null)} />
       )}
     </div>
-  )
+  );
 }
 
 function LayerRow({
@@ -201,15 +201,15 @@ function LayerRow({
   onRequestDelete,
   onRequestClear,
 }: {
-  summary: LayerSummary
-  isEditing: boolean
-  onStartRename: () => void
-  onEndRename: () => void
-  onRequestDelete: () => void
-  onRequestClear: () => void
+  summary: LayerSummary;
+  isEditing: boolean;
+  onStartRename: () => void;
+  onEndRename: () => void;
+  onRequestDelete: () => void;
+  onRequestClear: () => void;
 }) {
-  const { layer, subParts, connectors, kittens, ivaSeats, colliders, lights } = summary
-  const total = subParts + connectors + kittens + ivaSeats + colliders + lights
+  const { layer, subParts, connectors, kittens, ivaSeats, colliders, lights } = summary;
+  const total = subParts + connectors + kittens + ivaSeats + colliders + lights;
   const countTitle = [
     `${subParts} SubParts`,
     `${connectors} connectors`,
@@ -217,23 +217,23 @@ function LayerRow({
     ...(ivaSeats > 0 ? [`${ivaSeats} IVA seats`] : []),
     ...(colliders > 0 ? [`${colliders} colliders`] : []),
     ...(lights > 0 ? [`${lights} lights`] : []),
-  ].join(', ')
-  const layerView = useStore($layerView)
-  const view = layerViewState(layerView, layer.id)
-  const locked = view.locked
-  const isBuiltIn = BUILT_IN_LAYER_IDS.includes(layer.id)
+  ].join(', ');
+  const layerView = useStore($layerView);
+  const view = layerViewState(layerView, layer.id);
+  const locked = view.locked;
+  const isBuiltIn = BUILT_IN_LAYER_IDS.includes(layer.id);
   // The Kittens layer can't be deleted, but its delete button instead clears the layer's
   // contents (after a confirm). The Default layer stays fully protected. Custom layers use
   // the normal delete-layer flow.
-  const isClearable = layer.id === KITTEN_LAYER_ID
+  const isClearable = layer.id === KITTEN_LAYER_ID;
   const deleteTooltip = isClearable
     ? 'Delete all items in layer'
     : isBuiltIn
       ? 'Built-in layer cannot be deleted'
-      : 'Delete layer'
+      : 'Delete layer';
 
   // Stops react-aria's row press from firing when interacting with row controls.
-  const stopRowPress = (e: React.PointerEvent) => e.stopPropagation()
+  const stopRowPress = (e: React.PointerEvent) => e.stopPropagation();
 
   return (
     <>
@@ -336,7 +336,7 @@ function LayerRow({
         </Tooltip>
       </div>
     </>
-  )
+  );
 }
 
 /**
@@ -347,8 +347,8 @@ function LayerRow({
  * layer is dimmed below 100%.
  */
 function LayerOpacityButton({ layerId, opacity }: { layerId: string; opacity: number }) {
-  const pct = Math.round(opacity * 100)
-  const dimmed = pct < 100
+  const pct = Math.round(opacity * 100);
+  const dimmed = pct < 100;
   return (
     <DialogTrigger>
       <Tooltip content={dimmed ? `Opacity ${pct}%` : 'Layer opacity'}>
@@ -368,7 +368,7 @@ function LayerOpacityButton({ layerId, opacity }: { layerId: string; opacity: nu
         </PopoverDialog>
       </Popover>
     </DialogTrigger>
-  )
+  );
 }
 
 /** Number input (0–100) + slider, both committing to {@link setLayerOpacity}. */
@@ -380,7 +380,7 @@ function OpacityFields({ layerId, pct }: { layerId: string; pct: number }) {
     min: 0,
     max: 100,
     onCommit: (n) => setLayerOpacity(layerId, Math.round(n) / 100),
-  })
+  });
   return (
     <div className="flex items-center gap-2">
       <TextField
@@ -392,8 +392,8 @@ function OpacityFields({ layerId, pct }: { layerId: string; pct: number }) {
         {...field}
         onKeyDown={(e) => {
           // Keep grid typeahead/selection keys from stealing keystrokes.
-          e.stopPropagation()
-          field.onKeyDown(e)
+          e.stopPropagation();
+          field.onKeyDown(e);
         }}
       />
       <Slider
@@ -406,15 +406,15 @@ function OpacityFields({ layerId, pct }: { layerId: string; pct: number }) {
         onChange={(v) => setLayerOpacity(layerId, v / 100)}
       />
     </div>
-  )
+  );
 }
 
 function RenameInput({ layer, onDone }: { layer: Layer; onDone: () => void }) {
-  const [draft, setDraft] = useState(layer.name)
+  const [draft, setDraft] = useState(layer.name);
   const commit = () => {
-    renameLayer(layer.id, draft)
-    onDone()
-  }
+    renameLayer(layer.id, draft);
+    onDone();
+  };
   return (
     <div className="flex items-center gap-1">
       <TextField
@@ -426,9 +426,9 @@ function RenameInput({ layer, onDone }: { layer: Layer; onDone: () => void }) {
         onChange={setDraft}
         // Keep grid typeahead/selection keys from stealing the keystrokes.
         onKeyDown={(e) => {
-          e.stopPropagation()
-          if (e.key === 'Enter') commit()
-          else if (e.key === 'Escape') onDone()
+          e.stopPropagation();
+          if (e.key === 'Enter') commit();
+          else if (e.key === 'Escape') onDone();
         }}
       />
       <Tooltip content="Save name">
@@ -437,7 +437,7 @@ function RenameInput({ layer, onDone }: { layer: Layer; onDone: () => void }) {
         </Button>
       </Tooltip>
     </div>
-  )
+  );
 }
 
 function DeleteLayerDialog({
@@ -445,16 +445,16 @@ function DeleteLayerDialog({
   others,
   onClose,
 }: {
-  summary: LayerSummary
-  others: Layer[]
-  onClose: () => void
+  summary: LayerSummary;
+  others: Layer[];
+  onClose: () => void;
 }) {
-  const { layer, subParts, connectors, colliders } = summary
+  const { layer, subParts, connectors, colliders } = summary;
   // Only the kinds that can live on a deletable layer count here (seats/lights/kittens
   // are pinned to their own built-in layers, which can't reach this dialog).
-  const total = subParts + connectors + colliders
-  const [mode, setMode] = useState<DeleteLayerOptions['mode']>('move-items')
-  const [targetId, setTargetId] = useState(others[0]?.id ?? DEFAULT_LAYER_ID)
+  const total = subParts + connectors + colliders;
+  const [mode, setMode] = useState<DeleteLayerOptions['mode']>('move-items');
+  const [targetId, setTargetId] = useState(others[0]?.id ?? DEFAULT_LAYER_ID);
 
   return (
     <ConfirmDialog
@@ -477,8 +477,8 @@ function DeleteLayerDialog({
             disallowEmptySelection
             selectedKeys={[mode]}
             onSelectionChange={(keys) => {
-              const next = [...keys][0]
-              if (next) setMode(next as DeleteLayerOptions['mode'])
+              const next = [...keys][0];
+              if (next) setMode(next as DeleteLayerOptions['mode']);
             }}
           >
             <ToggleButton id="move-items" size="sm">
@@ -514,7 +514,7 @@ function DeleteLayerDialog({
         </div>
       )}
     </ConfirmDialog>
-  )
+  );
 }
 
 /**
@@ -523,8 +523,8 @@ function DeleteLayerDialog({
  * which can't be deleted.
  */
 function ClearLayerDialog({ summary, onClose }: { summary: LayerSummary; onClose: () => void }) {
-  const { layer, subParts, connectors, colliders, kittens } = summary
-  const total = subParts + connectors + colliders + kittens
+  const { layer, subParts, connectors, colliders, kittens } = summary;
+  const total = subParts + connectors + colliders + kittens;
   return (
     <ConfirmDialog
       isOpen
@@ -538,8 +538,8 @@ function ClearLayerDialog({ summary, onClose }: { summary: LayerSummary; onClose
       confirmLabel={total === 0 ? 'Close' : `Delete ${total} item${total === 1 ? '' : 's'}`}
       confirmVariant={total === 0 ? 'primary' : 'danger'}
       onConfirm={() => {
-        if (total > 0) clearLayer(layer.id)
+        if (total > 0) clearLayer(layer.id);
       }}
     />
-  )
+  );
 }

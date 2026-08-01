@@ -1,5 +1,5 @@
-import { useRef, type PointerEvent } from 'react'
-import type { Selection } from 'react-aria-components'
+import { useRef, type PointerEvent } from 'react';
+import type { Selection } from 'react-aria-components';
 
 /**
  * Shift+click range selection for the app's multi-select lists.
@@ -19,15 +19,15 @@ import type { Selection } from 'react-aria-components'
 
 export interface ShiftRangeOptions {
   /** Every row key of the list, in displayed order (sections flattened). */
-  orderedKeys: readonly string[]
+  orderedKeys: readonly string[];
   /** The keys currently selected — the same set handed to the list. */
-  selectedKeys: ReadonlySet<string>
+  selectedKeys: ReadonlySet<string>;
   /**
    * Rows that may not be selected (a locked or hidden layer, in the Assets list).
    * They are skipped while filling a range instead of blocking it, so a range can
    * span past them. Defaults to "everything is selectable".
    */
-  isSelectable?: (key: string) => boolean
+  isSelectable?: (key: string) => boolean;
 }
 
 /**
@@ -55,34 +55,34 @@ export function shiftRangeSelection(
 ): Set<string> {
   // Starting from the current selection is what makes the gesture additive; it also
   // preserves selected rows that aren't listed right now (filtered out by a search).
-  const next = new Set(selectedKeys)
-  const clicked = orderedKeys.indexOf(clickedKey)
-  if (clicked < 0) return next
+  const next = new Set(selectedKeys);
+  const clicked = orderedKeys.indexOf(clickedKey);
+  if (clicked < 0) return next;
 
-  let anchor = -1
-  let nearest = Infinity
+  let anchor = -1;
+  let nearest = Infinity;
   for (let i = 0; i < orderedKeys.length; i++) {
-    if (!selectedKeys.has(orderedKeys[i])) continue
-    const distance = Math.abs(i - clicked)
+    if (!selectedKeys.has(orderedKeys[i])) continue;
+    const distance = Math.abs(i - clicked);
     // Strict `<` keeps the earlier row on a tie.
     if (distance < nearest) {
-      nearest = distance
-      anchor = i
+      nearest = distance;
+      anchor = i;
     }
   }
 
   if (anchor < 0) {
-    if (isSelectable(clickedKey)) next.add(clickedKey)
-    return next
+    if (isSelectable(clickedKey)) next.add(clickedKey);
+    return next;
   }
 
-  const lo = Math.min(anchor, clicked)
-  const hi = Math.max(anchor, clicked)
+  const lo = Math.min(anchor, clicked);
+  const hi = Math.max(anchor, clicked);
   for (let i = lo; i <= hi; i++) {
-    const key = orderedKeys[i]
-    if (isSelectable(key)) next.add(key)
+    const key = orderedKeys[i];
+    if (isSelectable(key)) next.add(key);
   }
-  return next
+  return next;
 }
 
 export interface ShiftRangeSelect {
@@ -91,13 +91,13 @@ export interface ShiftRangeSelect {
    * on it. Row-level controls that already stop pointer-down propagation (the ⋮ menu
    * button) keep suppressing it, exactly as they suppress the row press.
    */
-  rowProps: (key: string) => { onPointerDown: (e: PointerEvent) => void }
+  rowProps: (key: string) => { onPointerDown: (e: PointerEvent) => void };
   /**
    * Wrap the `Selection` react-aria reports: returns the range for a Shift+click and
    * react-aria's own keys for every other gesture (plain click, Cmd/Ctrl+click,
    * Cmd/Ctrl+A, Shift+arrows).
    */
-  resolveSelection: (keys: Selection) => Selection
+  resolveSelection: (keys: Selection) => Selection;
 }
 
 /**
@@ -110,31 +110,31 @@ export function useShiftRangeSelect(options: ShiftRangeOptions): ShiftRangeSelec
   // The row a Shift+click landed on, awaiting the selection change react-aria is about
   // to fire for it. A ref, not state: it is written and read within a single event
   // dispatch and must never trigger a render.
-  const pendingKey = useRef<string | null>(null)
+  const pendingKey = useRef<string | null>(null);
 
   const onRowPointerDown = (key: string, e: PointerEvent) => {
     // Primary button only — Shift+right-click belongs to the row's context menu.
     if (!e.shiftKey || e.button !== 0) {
-      pendingKey.current = null
-      return
+      pendingKey.current = null;
+      return;
     }
-    pendingKey.current = key
+    pendingKey.current = key;
     // react-aria selects on pointer-down, so `resolveSelection` runs later in THIS
     // dispatch. The microtask only cleans up after a Shift+click that produced no
     // selection change at all (a disabled row), so the next gesture can't misread it.
     queueMicrotask(() => {
-      pendingKey.current = null
-    })
-  }
+      pendingKey.current = null;
+    });
+  };
 
   return {
     rowProps: (key) => ({ onPointerDown: (e) => onRowPointerDown(key, e) }),
     resolveSelection: (keys) => {
-      const clicked = pendingKey.current
-      pendingKey.current = null
+      const clicked = pendingKey.current;
+      pendingKey.current = null;
       // `'all'` is Cmd/Ctrl+A, never a Shift+click.
-      if (clicked == null || keys === 'all') return keys
-      return shiftRangeSelection(clicked, options)
+      if (clicked == null || keys === 'all') return keys;
+      return shiftRangeSelection(clicked, options);
     },
-  }
+  };
 }

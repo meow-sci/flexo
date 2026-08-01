@@ -1,25 +1,25 @@
-import { type Ref } from 'react'
+import { type Ref } from 'react';
 import {
   TextField as AriaTextField,
   Input as AriaInput,
   type TextFieldProps,
-} from 'react-aria-components'
-import { type VariantProps } from 'tailwind-variants'
-import { inputStyles, Label, Description, FieldError, composeTw } from './Field'
+} from 'react-aria-components';
+import { type VariantProps } from 'tailwind-variants';
+import { inputStyles, Label, Description, FieldError, composeTw } from './Field';
 
 export interface TextFieldKitProps
   extends Omit<TextFieldProps, 'children'>, VariantProps<typeof inputStyles> {
-  label?: React.ReactNode
-  description?: React.ReactNode
-  errorMessage?: string
-  placeholder?: string
-  type?: string
-  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode']
-  inputClassName?: string
-  inputRef?: Ref<HTMLInputElement>
-  onFocus?: React.FocusEventHandler<HTMLInputElement>
-  onBlur?: React.FocusEventHandler<HTMLInputElement>
-  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>
+  label?: React.ReactNode;
+  description?: React.ReactNode;
+  errorMessage?: string;
+  placeholder?: string;
+  type?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
+  inputClassName?: string;
+  inputRef?: Ref<HTMLInputElement>;
+  onFocus?: React.FocusEventHandler<HTMLInputElement>;
+  onBlur?: React.FocusEventHandler<HTMLInputElement>;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
 }
 
 /**
@@ -61,5 +61,5 @@ export function TextField({
       {description && <Description>{description}</Description>}
       {errorMessage && <FieldError>{errorMessage}</FieldError>}
     </AriaTextField>
-  )
+  );
 }

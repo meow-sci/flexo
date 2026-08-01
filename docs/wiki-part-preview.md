@@ -40,17 +40,20 @@ React Compiler toolchain as the main app): the catalog loaders and stores,
 ### Running it locally
 
 ```sh
-pnpm dev:partpreview   # dev server; serves ksa/, hdr/, basis/ and manifest.json itself
-pnpm build             # main app, then the mini app into dist/apps/partpreview/
-pnpm preview           # serves all of dist/ at /flexo/
+pnpm dev:partpreview     # dev server; serves ksa/, hdr/, basis/ and manifest.json itself
+pnpm build               # main app, then the mini app into dist/apps/partpreview/
+pnpm thumbs:partpreview  # optional: render the static thumbnails INTO that build
+pnpm preview             # serves all of dist/ at /flexo/
 ```
 
 Then open `http://localhost:4173/flexo/apps/partpreview/?part_id=<id>` — **with the trailing
 slash** (see [Embed a part](#2-embed-a-part) for why; without it you get the main editor).
 
-Building only the mini app (`vite build apps/partpreview`) is safe — it never empties `dist/` —
-but the page will 404 on meshes and textures unless a main-app build has already produced
-`dist/ksa/`, `dist/hdr/` and `dist/basis/`. There is deliberately no `vite preview
+Building only the mini app (`vite build apps/partpreview`) is safe for the main app — it never
+empties `dist/` — but it *does* empty `dist/apps/partpreview/`, discarding any captured
+[thumbnails](#part-thumbnails) and the manifest patch that names them; and the page will 404 on
+meshes and textures unless a main-app build has already produced `dist/ksa/`, `dist/hdr/` and
+`dist/basis/`. There is deliberately no `vite preview
 apps/partpreview`: it would serve only `dist/apps/partpreview/`, which carries no asset copy.
 
 ---
@@ -69,7 +72,16 @@ GET https://meow.science.fail/flexo/apps/partpreview/manifest.json
 {
   "part_ids": ["CoreCommandA_Prefab_MediumCapsuleVariantA", "…"],
   "skybox_ids": ["room", "kloofendal", "…"],
-  "ksa_build": "2026.7.10.5056"
+  "ksa_build": "2026.7.10.5056",
+  "thumbs": {
+    "CoreCommandA_Prefab_MediumCapsuleVariantA": [
+      "https://meow.science.fail/flexo/apps/partpreview/assets/thumbs/CoreCommandA_Prefab_MediumCapsuleVariantA_01.png",
+      "… 10 URLs in angle order …"
+    ]
+  },
+  "partgifs": {
+    "CoreCommandA_Prefab_MediumCapsuleVariantA": "https://meow.science.fail/flexo/apps/partpreview/assets/gifs/CoreCommandA_Prefab_MediumCapsuleVariantA.gif"
+  }
 }
 ```
 
@@ -78,6 +90,8 @@ GET https://meow.science.fail/flexo/apps/partpreview/manifest.json
 | `part_ids`    | Every `part_id` the viewer accepts, `localeCompare`-sorted and deduplicated (143 at build `2026.7.10.5056`). Produced by the app's own parser — see [The manifest](#the-manifest).        |
 | `skybox_ids`  | Every `skybox_id` the viewer understands — all **nine** environment presets, `'room'` included. `'room'` is the procedural studio (no sky), i.e. the default; it is listed so a wiki can round-trip whatever value it read back into a URL. |
 | `ksa_build`   | The KSA build the catalog data was parsed from (the `build` field of the private asset tree's `version.json`), or `null` if unavailable. This is the **cache-busting handle**: when it changes, the game data changed, so re-fetch the manifest and invalidate any cached embed/thumbnail. |
+| `thumbs`      | **Optional.** Part id → the 10 full URLs of its pre-rendered turntable PNGs, in angle order (index 0 = the default view). Keys are `localeCompare`-sorted; a part with no renderable geometry has **no entry**, so always test for the key. Absent entirely from a plain build — see [Part thumbnails](#part-thumbnails). |
+| `partgifs`    | **Optional.** Part id → the full URL of that part's animated turntable GIF (one string, not an array): the same 10 frames played as a looping animation (4 s by default). Same key set as `thumbs` on a complete run, same optionality — always test for the key. |
 
 ### 2. Embed a part
 
@@ -338,6 +352,81 @@ the viewer accepts.
 
 ---
 
+## Part thumbnails
+
+Alongside the live embed, the build can produce **static PNG turntables**: 10 angles per
+part, 36° apart, at `dist/apps/partpreview/assets/thumbs/<part_id>_NN.png` (`NN` = `01`…`10`),
+plus **one animated GIF per part** at `assets/gifs/<part_id>.gif` — the same 10 frames as a
+looping animation, 4 seconds per revolution by default. They exist so a wiki can show a grid of parts without booting 143 WebGL
+contexts.
+
+```sh
+pnpm build                # always first — the capture renders dist/, not src/
+pnpm thumbs:partpreview   # ~42 s for all 143 parts on a laptop (GIFs included)
+```
+
+Requires **ffmpeg** on `PATH` for the GIFs (`brew install ffmpeg`,
+`sudo apt-get install -y ffmpeg`); the script checks for it up front and `--no-gif` opts out.
+
+| | |
+| --- | --- |
+| **Angle 01** | Exactly the embed's default view — same camera direction `(1, 0.6, 1)`, same 90% aspect-aware fill — so a thumbnail and the iframe that replaces it agree. |
+| **Angles 02–10** | The **camera** orbited about world Y through the framed target, in 36° steps; `_06` is the back view. Object transforms are never touched, so the world-fixed key light sweeps across the part over the sequence (that reads as shape; the dominant studio IBL is soft). |
+| **Look** | The mini app's default and nothing else: `DEFAULT_LIGHTING`, the procedural studio environment, opaque charcoal background, **no** connectors, **no** axis triad, **no** measurement box, no UI. |
+| **Size** | 250×250 by default; `--width`/`--height` for anything else. |
+| **The GIF** | The same frames, in the same order, at `THUMB_COUNT / --gif-seconds` fps (10 ÷ 4 s = 2.5 fps by default), looping forever. ffmpeg muxes it with a two-pass palette (`palettegen stats_mode=full` → `paletteuse dither=bayer`): one global palette over all frames, so colors don't crawl as the part spins, and an ordered dither that keeps a dark render from banding without shimmering. ~120 kB each, ~17 MB for the set. |
+
+### How it works
+
+`scripts/capture-part-thumbs.ts` (a **vanilla Node 24** script — no Bun, no transpiler; see
+[scripts/README.md](../scripts/README.md)) serves the repo's `dist/` at
+`http://127.0.0.1:<port>/flexo/` exactly as production does, then drives **one** headless
+Chromium page through the whole run: `apps/partpreview/capture.html` — a second Vite input,
+a bare host div and no React — boots the catalogs once, builds one `PartPreviewViewport`,
+and exposes `window.__flexoCapture.capturePart(id)`, which loads the part and returns 10 PNG
+data URLs. One page, one WebGL context, one catalog parse, and the module-level
+geometry/material/texture caches make repeated SubParts free; per angle the cost is a single
+render plus `canvas.toDataURL`.
+
+The renderer is deliberately the app's **own** viewport code, so a thumbnail cannot drift
+from what the live embed shows. The names, the URL shape, the angle count and the
+`window.__flexoCapture` contract all come from one dependency-free module,
+`apps/partpreview/src/thumbsSpec.ts`, imported by the page, the Node driver and its unit
+test alike.
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--width`, `--height` | `250` | Canvas size in px. The first PNG's IHDR is verified against it, so a device-pixel-ratio surprise aborts the run instead of shipping wrong-sized images. |
+| `--site-origin` | `https://meow.science.fail` | Origin the manifest URLs are built from. |
+| `--parts a,b,c` | all `part_ids` | Capture a subset (debugging). Unknown ids are a hard error. GIFs are still (re-)made for every part with a complete frame set on disk — it costs ~1.3 s and keeps every GIF consistent with its frames. |
+| `--skip-existing` | off | Skip parts whose 10 PNGs already exist, and parts whose GIF already exists — resumes a partial run. |
+| `--gif-seconds <s>` | `4` | Length of one full GIF loop, i.e. one revolution. The frame rate follows (`10 / s`). |
+| `--no-gif` | off | Skip GIF synthesis entirely; ffmpeg is then not needed. A previous run's `partgifs` entries are kept. |
+| `--verbose` | off | Forward every page console message, not just errors. |
+
+A part that loads but has **no renderable geometry** is reported and skipped without failing
+the run: `KittenBackPackPart`'s only placement instances `<SubPart Id="KittenBackPackSubPart"/>`,
+which carries no mesh, so the live embed renders it just as empty. Any other failure fails
+the run (exit 1) — every other `part_id` is renderable by construction, so a failure is a
+real bug, and CI must not publish a manifest with holes in it.
+
+### Lifecycle — mind the order
+
+`vite build apps/partpreview` runs with `emptyOutDir`, which **wipes the thumbnails, the GIFs
+and the patched manifest**. The order is always `pnpm build` → `pnpm thumbs:partpreview`,
+never the reverse, and never a mini-app rebuild afterwards. Consumers must therefore treat
+`thumbs` and `partgifs` as optional: a plain build emits a manifest without either.
+`ksa_build` remains the cache-busting handle for both, exactly as for embeds.
+
+Production gets them because `.github/workflows/deploy.yml` installs Playwright's Chromium
+**and ffmpeg** (neither is on the runner image) and runs the capture **between** the build
+and the Pages upload — `dist/` only ever exists inside that job.
+
+Design + rejected alternatives (per-part navigation, headless-gl, a build plugin):
+`plans/PART_PREVIEW_THUMBS.md`.
+
+---
+
 ## Adding another mini app
 
 The `apps/` → `dist/apps/` pattern is the reusable groundwork. To add `apps/<name>/`:
@@ -364,8 +453,10 @@ file.
 
 - **Built-in Parts only.** No custom or user-authored parts, no kittens, no animations, no
   IVA modes — the viewer resolves `part_id` against the Core Part catalog and nothing else.
-- **No screenshot or thumbnail generation.** The mini app renders live in the visitor's
-  browser; it produces no images server-side.
+- **Thumbnails are a build-adjacent extra, not a service.** `pnpm thumbs:partpreview`
+  pre-renders PNGs into `dist/` after a build (see [Part thumbnails](#part-thumbnails));
+  there is no on-demand image endpoint, no transparent-background variant, and nothing is
+  rendered server-side at request time.
 - **No deep links back into flexo.** The preview does not offer "open this part in the
   editor", and the editor does not link out to it.
 - **No wiki-side code.** Enumerating the manifest, laying out the iframes and caching on

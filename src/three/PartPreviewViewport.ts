@@ -1,54 +1,65 @@
-import * as THREE from 'three'
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import type { ReadableAtom } from 'nanostores'
-import type { CatalogSubPart } from '../ksa/catalog'
-import type { CatalogPart } from '../ksa/partCatalog'
-import { SubPartObject } from './SubPartObject'
-import { ConnectorObject } from './ConnectorObject'
-import { RenderLoop } from './RenderLoop'
-import { SceneEnvironment } from './SceneEnvironment'
-import { $connectorSettings } from '../state/settingsStore'
-import { $lighting, type LightingSettings } from '../state/lightingStore'
-import { initTextureSupport } from './textureSupport'
-import { AxisGizmo } from './AxisGizmo'
-import { computeSelectionBounds, type ComputedBounds } from '../measure/bounds'
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import type { ReadableAtom } from 'nanostores';
+import type { CatalogSubPart } from '../ksa/catalog';
+import type { CatalogPart } from '../ksa/partCatalog';
+import { SubPartObject } from './SubPartObject';
+import { ConnectorObject } from './ConnectorObject';
+import { RenderLoop } from './RenderLoop';
+import { SceneEnvironment } from './SceneEnvironment';
+import { $connectorSettings } from '../state/settingsStore';
+import { $lighting, type LightingSettings } from '../state/lightingStore';
+import { initTextureSupport } from './textureSupport';
+import { AxisGizmo } from './AxisGizmo';
+import { computeSelectionBounds, type ComputedBounds } from '../measure/bounds';
 
 /**
  * Extents-box color — the same cyan `MeasurementLayer` uses for the editor's
  * selection-bounds box, so the two read as one feature.
  */
-const MEASURE_COLOR = 0x6ee7ff
+const MEASURE_COLOR = 0x6ee7ff;
+
+/**
+ * The viewing direction {@link PartPreviewViewport.frame} places the camera on —
+ * a three-quarter view from slightly above. Named because {@link
+ * PartPreviewViewport.setViewAzimuth} rotates exactly this vector, so the
+ * turntable's first angle reproduces the default framing bit for bit.
+ */
+const FRAME_DIR = new THREE.Vector3(1, 0.6, 1).normalize();
+
+/** Turntable axis for {@link PartPreviewViewport.setViewAzimuth}. */
+const WORLD_UP = new THREE.Vector3(0, 1, 0);
 
 export interface PartPreviewViewportOptions {
   /** Store driving environment/tonemapping/background. Default: the global `$lighting`. */
-  lighting?: ReadableAtom<LightingSettings>
+  lighting?: ReadableAtom<LightingSettings>;
   /** Render connector markers (default true, matching the Part browser popup). */
-  showConnectors?: boolean
+  showConnectors?: boolean;
   /** Connector cube size in meters. Default: the global `$connectorSettings` size. */
-  connectorSize?: number
+  connectorSize?: number;
   /**
    * When set, `frame()` makes the part's bounding sphere span this fraction of the
    * LIMITING viewport dimension (aspect-aware). Default: today's vertical-fov-only
    * `r / sin(fov/2) × 1.3` framing.
    */
-  fillFraction?: number
+  fillFraction?: number;
   /**
    * Re-run `frame()` on resize until the user first interacts (orbit/zoom/pan).
    * Default false. Needed because iframes commonly lay out at 0×0 first and get
    * sized late.
    */
-  reframeOnResize?: boolean
+  reframeOnResize?: boolean;
   /**
    * Called with the part's precise world-space bounds after each successful
    * `setPart` (null when cleared or empty). Lets an embedder show a readout
    * without reaching into the scene. Default: not called.
    */
-  onBounds?: (bounds: ComputedBounds | null) => void
+  onBounds?: (bounds: ComputedBounds | null) => void;
   /**
    * Draw a world-orientation triad in the top-left corner ({@link AxisGizmo}).
    * Default false — the in-app Part browser popup shows none.
    */
-  axisGizmo?: boolean
+  axisGizmo?: boolean;
 }
 
 /**
@@ -67,99 +78,105 @@ export interface PartPreviewViewportOptions {
  * Part browser behavior exactly.
  */
 export class PartPreviewViewport {
-  private readonly scene = new THREE.Scene()
-  private readonly camera: THREE.PerspectiveCamera
-  private readonly renderer: THREE.WebGLRenderer
-  private readonly controls: OrbitControls
-  private readonly host: HTMLElement
-  private readonly resizeObserver: ResizeObserver
-  private readonly sceneEnv: SceneEnvironment
-  private readonly lightingUnsub: () => void
-  private readonly loop = new RenderLoop(() => this.renderFrame())
+  private readonly scene = new THREE.Scene();
+  private readonly camera: THREE.PerspectiveCamera;
+  private readonly renderer: THREE.WebGLRenderer;
+  private readonly controls: OrbitControls;
+  private readonly host: HTMLElement;
+  private readonly resizeObserver: ResizeObserver;
+  private readonly sceneEnv: SceneEnvironment;
+  private readonly lightingUnsub: () => void;
+  private readonly loop = new RenderLoop(() => this.renderFrame());
 
-  private readonly connectorSize: number | undefined
-  private readonly fillFraction: number | undefined
-  private readonly reframeOnResize: boolean
-  private readonly onBounds: ((bounds: ComputedBounds | null) => void) | undefined
+  private readonly connectorSize: number | undefined;
+  private readonly fillFraction: number | undefined;
+  private readonly reframeOnResize: boolean;
+  private readonly onBounds: ((bounds: ComputedBounds | null) => void) | undefined;
   /** Corner orientation triad, drawn in its own pass after the scene. Null when off. */
-  private readonly axisGizmo: AxisGizmo | null
+  private readonly axisGizmo: AxisGizmo | null;
 
-  private objects: SubPartObject[] = []
-  private connectorObjects: ConnectorObject[] = []
+  private objects: SubPartObject[] = [];
+  private connectorObjects: ConnectorObject[] = [];
   /** Bumped on each setPart so a superseded async load discards its result. */
-  private loadToken = 0
-  private showConnectors: boolean
+  private loadToken = 0;
+  private showConnectors: boolean;
   /** Distance chosen by the last {@link frame}; anchors {@link zoomBy}'s clamp. */
-  private framedDistance = 0
+  private framedDistance = 0;
   /** True once the user has orbited/zoomed/panned — suppresses `reframeOnResize`. */
-  private hasInteracted = false
+  private hasInteracted = false;
   /** Scratch vector for {@link zoomBy} (avoids a per-call allocation). */
-  private readonly zoomScratch = new THREE.Vector3()
+  private readonly zoomScratch = new THREE.Vector3();
+  /** Scratch vector for {@link setViewAzimuth}. */
+  private readonly azimuthScratch = new THREE.Vector3();
+  /** The most recent {@link SceneEnvironment.apply}; awaited by {@link envApplied}. */
+  private envPromise: Promise<void> = Promise.resolve();
 
   /** Precise world bounds of the loaded part, recomputed on each {@link setPart}. */
-  private partBounds: ComputedBounds | null = null
-  private showMeasurements = false
+  private partBounds: ComputedBounds | null = null;
+  private showMeasurements = false;
   /** Wireframe extents box; rebuilt whenever {@link partBounds} changes. */
-  private measureBox: THREE.LineSegments | null = null
+  private measureBox: THREE.LineSegments | null = null;
 
   constructor(host: HTMLElement, options: PartPreviewViewportOptions = {}) {
-    this.host = host
-    this.showConnectors = options.showConnectors ?? true
-    this.connectorSize = options.connectorSize
-    this.fillFraction = options.fillFraction
-    this.reframeOnResize = options.reframeOnResize ?? false
-    this.onBounds = options.onBounds
-    this.axisGizmo = options.axisGizmo ? new AxisGizmo() : null
-    this.scene.background = new THREE.Color(0x16171d)
+    this.host = host;
+    this.showConnectors = options.showConnectors ?? true;
+    this.connectorSize = options.connectorSize;
+    this.fillFraction = options.fillFraction;
+    this.reframeOnResize = options.reframeOnResize ?? false;
+    this.onBounds = options.onBounds;
+    this.axisGizmo = options.axisGizmo ? new AxisGizmo() : null;
+    this.scene.background = new THREE.Color(0x16171d);
 
-    const w = host.clientWidth || 1
-    const h = host.clientHeight || 1
+    const w = host.clientWidth || 1;
+    const h = host.clientHeight || 1;
 
-    this.camera = new THREE.PerspectiveCamera(50, w / h, 0.01, 1000)
-    this.camera.position.set(3, 2, 4)
+    this.camera = new THREE.PerspectiveCamera(50, w / h, 0.01, 1000);
+    this.camera.position.set(3, 2, 4);
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true })
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    this.renderer.setSize(w, h)
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace
-    host.appendChild(this.renderer.domElement)
+    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setSize(w, h);
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    host.appendChild(this.renderer.domElement);
 
-    initTextureSupport(this.renderer)
+    initTextureSupport(this.renderer);
 
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement)
-    this.controls.enableDamping = true
-    this.controls.target.set(0, 0, 0)
-    this.controls.update()
-    this.controls.addEventListener('change', this.onNeedsRender)
-    this.controls.addEventListener('start', this.onInteractionStart)
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+    this.controls.target.set(0, 0, 0);
+    this.controls.update();
+    this.controls.addEventListener('change', this.onNeedsRender);
+    this.controls.addEventListener('start', this.onInteractionStart);
 
     // Environment/tonemapping/background driven by the $lighting store (global by default).
-    this.sceneEnv = new SceneEnvironment(this.renderer, this.scene)
+    this.sceneEnv = new SceneEnvironment(this.renderer, this.scene);
     this.lightingUnsub = (options.lighting ?? $lighting).subscribe((s) => {
-      this.loop.invalidate()
-      void this.sceneEnv.apply(s).then(() => this.loop.invalidate())
-    })
+      this.loop.invalidate();
+      // Kept (rather than voided) so an offscreen capture can await the IBL being
+      // ready before it renders — see envApplied().
+      this.envPromise = this.sceneEnv.apply(s).then(() => this.loop.invalidate());
+    });
 
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x404050, 0.4)
-    this.scene.add(hemi)
-    const dir = new THREE.DirectionalLight(0xffffff, 2.0)
-    dir.position.set(5, 10, 7)
-    this.scene.add(dir)
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x404050, 0.4);
+    this.scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xffffff, 2.0);
+    dir.position.set(5, 10, 7);
+    this.scene.add(dir);
 
-    this.resizeObserver = new ResizeObserver(() => this.handleResize())
-    this.resizeObserver.observe(host)
-    this.renderer.domElement.addEventListener('webglcontextrestored', this.onNeedsRender)
+    this.resizeObserver = new ResizeObserver(() => this.handleResize());
+    this.resizeObserver.observe(host);
+    this.renderer.domElement.addEventListener('webglcontextrestored', this.onNeedsRender);
 
-    this.loop.invalidate()
+    this.loop.invalidate();
   }
 
   private readonly onNeedsRender = (): void => {
-    this.loop.invalidate()
-  }
+    this.loop.invalidate();
+  };
 
   private readonly onInteractionStart = (): void => {
-    this.hasInteracted = true
-  }
+    this.hasInteracted = true;
+  };
 
   /**
    * Loads and shows the given Part (or clears the preview when null). `index`
@@ -167,60 +184,60 @@ export class PartPreviewViewport {
    * placement whose template is missing from the catalog is skipped.
    */
   async setPart(part: CatalogPart | null, index: Map<string, CatalogSubPart>): Promise<void> {
-    const token = ++this.loadToken
-    this.clearObjects()
-    if (!part) return
+    const token = ++this.loadToken;
+    this.clearObjects();
+    if (!part) return;
 
     // Connectors build synchronously (cube + arrow), so add them up front. They
     // are always built (so toggling visibility is instant) but may start hidden.
-    const size = this.connectorSize ?? $connectorSettings.get().size
+    const size = this.connectorSize ?? $connectorSettings.get().size;
     for (const connector of part.connectors) {
-      const obj = new ConnectorObject(connector, size)
-      obj.group.visible = this.showConnectors
-      this.connectorObjects.push(obj)
-      this.scene.add(obj.group)
+      const obj = new ConnectorObject(connector, size);
+      obj.group.visible = this.showConnectors;
+      this.connectorObjects.push(obj);
+      this.scene.add(obj.group);
     }
 
     try {
       const built = await Promise.all(
         part.placements.map(async (placement) => {
-          const entry = index.get(placement.subPartTemplateId)
-          if (!entry) return null
-          return SubPartObject.create(entry, placement)
+          const entry = index.get(placement.subPartTemplateId);
+          if (!entry) return null;
+          return SubPartObject.create(entry, placement);
         }),
-      )
+      );
       if (token !== this.loadToken) {
-        for (const obj of built) obj?.dispose()
-        return // a newer selection superseded this load
+        for (const obj of built) obj?.dispose();
+        return; // a newer selection superseded this load
       }
       for (const obj of built) {
-        if (!obj) continue
-        this.objects.push(obj)
-        this.scene.add(obj.group)
+        if (!obj) continue;
+        this.objects.push(obj);
+        this.scene.add(obj.group);
       }
-      this.frame()
+      this.frame();
       // After the objects are in the scene (and framed, which needs their world
       // matrices anyway) — the extents box is never part of the framing input.
-      this.updateBounds()
-      this.loop.invalidate()
+      this.updateBounds();
+      this.loop.invalidate();
     } catch (err) {
-      console.warn(`PartPreviewViewport: failed to load Part '${part.id}'`, err)
+      console.warn(`PartPreviewViewport: failed to load Part '${part.id}'`, err);
     }
   }
 
   private clearObjects(): void {
     for (const obj of this.objects) {
-      this.scene.remove(obj.group)
-      obj.dispose()
+      this.scene.remove(obj.group);
+      obj.dispose();
     }
-    this.objects = []
+    this.objects = [];
     for (const obj of this.connectorObjects) {
-      this.scene.remove(obj.group)
-      obj.dispose()
+      this.scene.remove(obj.group);
+      obj.dispose();
     }
-    this.connectorObjects = []
-    this.clearBounds()
-    this.loop.invalidate()
+    this.connectorObjects = [];
+    this.clearBounds();
+    this.loop.invalidate();
   }
 
   // --- Measurements (whole-part extents) --------------------------------------
@@ -238,93 +255,92 @@ export class PartPreviewViewport {
       this.objects.map((o) => o.group),
       'world',
       true,
-    )
-    this.rebuildMeasureBox()
-    this.onBounds?.(this.partBounds)
+    );
+    this.rebuildMeasureBox();
+    this.onBounds?.(this.partBounds);
   }
 
   private clearBounds(): void {
-    this.partBounds = null
-    this.disposeMeasureBox()
-    this.onBounds?.(null)
+    this.partBounds = null;
+    this.disposeMeasureBox();
+    this.onBounds?.(null);
   }
 
   /** Rebuilds the wireframe extents box from {@link partBounds}. */
   private rebuildMeasureBox(): void {
-    this.disposeMeasureBox()
-    const b = this.partBounds
-    if (!b) return
+    this.disposeMeasureBox();
+    const b = this.partBounds;
+    if (!b) return;
     // 'world' bounds are axis-aligned (identity quaternion), so min/max are the
     // world corners and a Box3Helper needs no extra orientation.
     const box = new THREE.Box3(
       new THREE.Vector3(b.min.x, b.min.y, b.min.z),
       new THREE.Vector3(b.max.x, b.max.y, b.max.z),
-    )
-    const helper = new THREE.Box3Helper(box, new THREE.Color(MEASURE_COLOR))
-    const material = helper.material as THREE.LineBasicMaterial
+    );
+    const helper = new THREE.Box3Helper(box, new THREE.Color(MEASURE_COLOR));
+    const material = helper.material as THREE.LineBasicMaterial;
     // Overlay, not geometry: always on top and never tone-mapped, so the color
     // stays exactly MEASURE_COLOR under any exposure/sky.
-    material.depthTest = false
-    material.toneMapped = false
-    helper.renderOrder = 999
-    helper.visible = this.showMeasurements
+    material.depthTest = false;
+    material.toneMapped = false;
+    helper.renderOrder = 999;
+    helper.visible = this.showMeasurements;
     // Deliberately NOT pushed into `objects`/`connectorObjects`: those two arrays
     // are what `frame()` measures, and the box must never influence framing.
-    this.scene.add(helper)
-    this.measureBox = helper
-    this.loop.invalidate()
+    this.scene.add(helper);
+    this.measureBox = helper;
+    this.loop.invalidate();
   }
 
   private disposeMeasureBox(): void {
-    if (!this.measureBox) return
-    this.scene.remove(this.measureBox)
-    this.measureBox.geometry.dispose()
-    ;(this.measureBox.material as THREE.Material).dispose()
-    this.measureBox = null
-    this.loop.invalidate()
+    if (!this.measureBox) return;
+    this.scene.remove(this.measureBox);
+    this.measureBox.geometry.dispose();
+    (this.measureBox.material as THREE.Material).dispose();
+    this.measureBox = null;
+    this.loop.invalidate();
   }
 
   /** Show/hide a wireframe box around the whole part's extents. */
   setShowMeasurements(show: boolean): void {
-    this.showMeasurements = show
-    if (this.measureBox) this.measureBox.visible = show
-    this.loop.invalidate()
+    this.showMeasurements = show;
+    if (this.measureBox) this.measureBox.visible = show;
+    this.loop.invalidate();
   }
 
   /** Frames the camera to the combined bounding box of the assembled Part. */
   private frame(): void {
-    const box = new THREE.Box3()
-    for (const obj of this.objects) box.expandByObject(obj.group)
+    const box = new THREE.Box3();
+    for (const obj of this.objects) box.expandByObject(obj.group);
     // Hidden connectors must not pad the framing with invisible geometry.
     if (this.showConnectors) {
-      for (const obj of this.connectorObjects) box.expandByObject(obj.group)
+      for (const obj of this.connectorObjects) box.expandByObject(obj.group);
     }
-    if (box.isEmpty()) return
+    if (box.isEmpty()) return;
 
-    const sphere = box.getBoundingSphere(new THREE.Sphere())
-    const radius = Math.max(sphere.radius, 0.001)
-    const vHalf = (this.camera.fov * Math.PI) / 180 / 2
-    let distance: number
+    const sphere = box.getBoundingSphere(new THREE.Sphere());
+    const radius = Math.max(sphere.radius, 0.001);
+    const vHalf = (this.camera.fov * Math.PI) / 180 / 2;
+    let distance: number;
     if (this.fillFraction != null) {
       // Aspect-aware: the sphere's projected diameter spans `fillFraction` of the
       // LIMITING viewport dimension. Screen-space extent is proportional to
       // tan(angle), so solve tan(θ) = fillFraction × tan(half) and then d = r/sin(θ)
       // (a sphere of radius r at distance d has silhouette half-angle asin(r/d)).
-      const hHalf = Math.atan(Math.tan(vHalf) * this.camera.aspect)
-      const theta = Math.atan(this.fillFraction * Math.tan(Math.min(vHalf, hHalf)))
-      distance = radius / Math.sin(theta)
+      const hHalf = Math.atan(Math.tan(vHalf) * this.camera.aspect);
+      const theta = Math.atan(this.fillFraction * Math.tan(Math.min(vHalf, hHalf)));
+      distance = radius / Math.sin(theta);
     } else {
-      distance = (radius / Math.sin(vHalf)) * 1.3
+      distance = (radius / Math.sin(vHalf)) * 1.3;
     }
 
-    const dir = new THREE.Vector3(1, 0.6, 1).normalize()
-    this.controls.target.copy(sphere.center)
-    this.camera.position.copy(sphere.center).addScaledVector(dir, distance)
-    this.camera.near = Math.max(distance / 100, 0.001)
-    this.camera.far = distance * 100
-    this.camera.updateProjectionMatrix()
-    this.controls.update()
-    this.framedDistance = distance
+    this.controls.target.copy(sphere.center);
+    this.camera.position.copy(sphere.center).addScaledVector(FRAME_DIR, distance);
+    this.camera.near = Math.max(distance / 100, 0.001);
+    this.camera.far = distance * 100;
+    this.camera.updateProjectionMatrix();
+    this.controls.update();
+    this.framedDistance = distance;
   }
 
   /**
@@ -332,62 +348,113 @@ export class PartPreviewViewport {
    * sane range around the framed distance).
    */
   zoomBy(factor: number): void {
-    const offset = this.zoomScratch.copy(this.camera.position).sub(this.controls.target)
-    const dist = offset.length()
-    if (dist === 0 || !Number.isFinite(factor)) return
+    const offset = this.zoomScratch.copy(this.camera.position).sub(this.controls.target);
+    const dist = offset.length();
+    if (dist === 0 || !Number.isFinite(factor)) return;
     // Counts as user interaction (it IS one — the +/- buttons), so a late iframe
     // resize doesn't re-frame away the zoom they just chose.
-    this.hasInteracted = true
+    this.hasInteracted = true;
     // Stay well inside the near/far window frame() picked (distance/100 .. distance*100).
-    const anchor = this.framedDistance || dist
-    const next = THREE.MathUtils.clamp(dist * factor, anchor / 20, anchor * 10)
-    this.camera.position.copy(this.controls.target).addScaledVector(offset.divideScalar(dist), next)
-    this.controls.update()
-    this.loop.invalidate()
+    const anchor = this.framedDistance || dist;
+    const next = THREE.MathUtils.clamp(dist * factor, anchor / 20, anchor * 10);
+    this.camera.position
+      .copy(this.controls.target)
+      .addScaledVector(offset.divideScalar(dist), next);
+    this.controls.update();
+    this.loop.invalidate();
+  }
+
+  // --- Offscreen capture (the thumbnail turntable) ----------------------------
+  //
+  // Four small hooks used by apps/partpreview/src/capture.ts to render a part from
+  // N angles into PNGs (plans/PART_PREVIEW_THUMBS.md). All additive: nothing here
+  // runs, or changes, in the interactive app.
+
+  /**
+   * Places the camera on the framed sphere at {@link FRAME_DIR} rotated about world
+   * Y by `offsetRad`, keeping the elevation and the distance {@link frame} chose.
+   *
+   * Offset 0 therefore reproduces `frame()`'s pose exactly, so a turntable's first
+   * angle IS the view the embed shows on load. Rotating the camera (rather than the
+   * part) means object transforms are never touched — at the cost of the world-fixed
+   * key light sweeping across the part over a sequence.
+   */
+  setViewAzimuth(offsetRad: number): void {
+    const dir = this.azimuthScratch.copy(FRAME_DIR).applyAxisAngle(WORLD_UP, offsetRad);
+    this.camera.position.copy(this.controls.target).addScaledVector(dir, this.framedDistance);
+    this.controls.update();
+    this.loop.invalidate();
+  }
+
+  /**
+   * Renders one frame and reads the canvas back as a PNG data URL.
+   *
+   * Synchronous by necessity: without `preserveDrawingBuffer` the drawing buffer is
+   * only guaranteed to hold its contents until the task yields, so the render and
+   * the `toDataURL` must happen in the same task. Deliberately does NOT go through
+   * {@link RenderLoop} for the same reason.
+   */
+  renderToDataURL(): string {
+    this.renderFrame();
+    return this.renderer.domElement.toDataURL('image/png');
+  }
+
+  /**
+   * Resolves once the latest lighting change's environment (PMREM room bake or HDR
+   * fetch) has been applied. Rendering before it settles would capture the part
+   * lit by the fallback lights alone.
+   */
+  envApplied(): Promise<void> {
+    return this.envPromise;
+  }
+
+  /** True when the last {@link setPart} produced at least one SubPart object. */
+  hasContent(): boolean {
+    return this.objects.length > 0;
   }
 
   /** Show/hide the connector markers without re-loading or re-framing the part. */
   setShowConnectors(show: boolean): void {
-    this.showConnectors = show
-    for (const obj of this.connectorObjects) obj.group.visible = show
-    this.loop.invalidate()
+    this.showConnectors = show;
+    for (const obj of this.connectorObjects) obj.group.visible = show;
+    this.loop.invalidate();
   }
 
   private handleResize(): void {
-    const w = this.host.clientWidth || 1
-    const h = this.host.clientHeight || 1
-    this.camera.aspect = w / h
-    this.camera.updateProjectionMatrix()
-    this.renderer.setSize(w, h)
+    const w = this.host.clientWidth || 1;
+    const h = this.host.clientHeight || 1;
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(w, h);
     // An iframe commonly lays out 0×0 first and is sized late, so the initial
     // framing was computed against a bogus aspect — redo it until the user acts.
-    if (this.reframeOnResize && !this.hasInteracted && this.objects.length > 0) this.frame()
-    this.loop.invalidate()
+    if (this.reframeOnResize && !this.hasInteracted && this.objects.length > 0) this.frame();
+    this.loop.invalidate();
   }
 
   private renderFrame(): void {
     // Damping here dispatches `change` → invalidate, so an inertial orbit keeps
     // asking for frames until it settles.
-    this.controls.update()
-    this.renderer.render(this.scene, this.camera)
+    this.controls.update();
+    this.renderer.render(this.scene, this.camera);
     // Second pass, over the finished frame — see AxisGizmo.render.
-    this.axisGizmo?.render(this.renderer, this.camera)
+    this.axisGizmo?.render(this.renderer, this.camera);
   }
 
   dispose(): void {
-    this.loop.dispose()
-    this.resizeObserver.disconnect()
-    this.renderer.domElement.removeEventListener('webglcontextrestored', this.onNeedsRender)
-    this.controls.removeEventListener('change', this.onNeedsRender)
-    this.controls.removeEventListener('start', this.onInteractionStart)
-    this.clearObjects()
-    this.axisGizmo?.dispose()
-    this.controls.dispose()
-    this.lightingUnsub()
-    this.sceneEnv.dispose()
-    this.renderer.dispose()
+    this.loop.dispose();
+    this.resizeObserver.disconnect();
+    this.renderer.domElement.removeEventListener('webglcontextrestored', this.onNeedsRender);
+    this.controls.removeEventListener('change', this.onNeedsRender);
+    this.controls.removeEventListener('start', this.onInteractionStart);
+    this.clearObjects();
+    this.axisGizmo?.dispose();
+    this.controls.dispose();
+    this.lightingUnsub();
+    this.sceneEnv.dispose();
+    this.renderer.dispose();
     if (this.renderer.domElement.parentNode === this.host) {
-      this.host.removeChild(this.renderer.domElement)
+      this.host.removeChild(this.renderer.domElement);
     }
   }
 }

@@ -18,31 +18,31 @@
  * same rule `EditorScene` uses to place the visuals).
  */
 
-import type { PartCollider, Vec3 } from '../ksa/types'
+import type { PartCollider, Vec3 } from '../ksa/types';
 
 /** A collider placed in the space the sample points are expressed in. */
 export interface PlacedCollider {
   /** The document entity (for `id` / `shape` / `scale` — its own transform is ignored). */
-  collider: PartCollider
+  collider: PartCollider;
   /** Shape centre in sample-point space. */
-  position: Vec3
+  position: Vec3;
   /** Shape orientation as a quaternion `[x, y, z, w]` in that space. */
-  quaternion: readonly [number, number, number, number]
+  quaternion: readonly [number, number, number, number];
 }
 
 export interface CoverageReport {
   /** How many sample points were tested. */
-  sampled: number
+  sampled: number;
   /** Points inside at least one collider. */
-  covered: number
+  covered: number;
   /** `covered / sampled` in [0, 1]; 1 when there was nothing to sample. */
-  fraction: number
+  fraction: number;
   /** The uncovered points, so the viewport can show WHERE the hole is. */
-  uncovered: Vec3[]
+  uncovered: Vec3[];
   /** Summed collider volume (m³). Overlaps are counted twice — see {@link bloat}. */
-  colliderVolumeM3: number
+  colliderVolumeM3: number;
   /** Volume of the sample points' world AABB (m³); 0 when degenerate. */
-  meshBoundsVolumeM3: number
+  meshBoundsVolumeM3: number;
   /**
    * `colliderVolumeM3 / meshBoundsVolumeM3`, or null when the mesh bounds are degenerate.
    * A ratio near 1 is normal (Core's colliders are deliberately coarse); several times
@@ -50,27 +50,27 @@ export interface CoverageReport {
    * KSA (a Bepu compound never self-collides), so an overlapping composite legitimately
    * scores high — read this as a smell, not a rule.
    */
-  bloat: number | null
+  bloat: number | null;
 }
 
 /** Rotates `v` by the CONJUGATE of `q` — i.e. takes a point into the shape's local frame. */
 function toLocal(v: Vec3, q: readonly [number, number, number, number]): Vec3 {
-  const [qx, qy, qz, w] = q
-  const x = -qx
-  const y = -qy
-  const z = -qz
-  const tx = 2 * (y * v.z - z * v.y)
-  const ty = 2 * (z * v.x - x * v.z)
-  const tz = 2 * (x * v.y - y * v.x)
+  const [qx, qy, qz, w] = q;
+  const x = -qx;
+  const y = -qy;
+  const z = -qz;
+  const tx = 2 * (y * v.z - z * v.y);
+  const ty = 2 * (z * v.x - x * v.z);
+  const tz = 2 * (x * v.y - y * v.x);
   return {
     x: v.x + w * tx + (y * tz - z * ty),
     y: v.y + w * ty + (z * tx - x * tz),
     z: v.z + w * tz + (x * ty - y * tx),
-  }
+  };
 }
 
 /** Small tolerance so a point exactly ON a face counts as inside. */
-const EPS = 1e-6
+const EPS = 1e-6;
 
 /**
  * True when `point` (in the same space as `placed.position`) is inside the primitive.
@@ -79,7 +79,7 @@ const EPS = 1e-6
  * height, so the segment is `y - x`).
  */
 export function pointInCollider(point: Vec3, placed: PlacedCollider): boolean {
-  const { collider } = placed
+  const { collider } = placed;
   const d = toLocal(
     {
       x: point.x - placed.position.x,
@@ -87,40 +87,40 @@ export function pointInCollider(point: Vec3, placed: PlacedCollider): boolean {
       z: point.z - placed.position.z,
     },
     placed.quaternion,
-  )
-  const hx = collider.scale.x / 2
-  const hy = collider.scale.y / 2
-  const hz = collider.scale.z / 2
+  );
+  const hx = collider.scale.x / 2;
+  const hy = collider.scale.y / 2;
+  const hz = collider.scale.z / 2;
   switch (collider.shape) {
     case 'Box':
-      return Math.abs(d.x) <= hx + EPS && Math.abs(d.y) <= hy + EPS && Math.abs(d.z) <= hz + EPS
+      return Math.abs(d.x) <= hx + EPS && Math.abs(d.y) <= hy + EPS && Math.abs(d.z) <= hz + EPS;
     case 'Sphere':
-      return Math.hypot(d.x, d.y, d.z) <= hx + EPS
+      return Math.hypot(d.x, d.y, d.z) <= hx + EPS;
     case 'Cylinder':
-      return Math.abs(d.y) <= hy + EPS && Math.hypot(d.x, d.z) <= hx + EPS
+      return Math.abs(d.y) <= hy + EPS && Math.hypot(d.x, d.z) <= hx + EPS;
     case 'Capsule': {
       // Distance to the segment: clamp onto it along Y, then measure radially.
-      const halfSegment = Math.max(0, (collider.scale.y - collider.scale.x) / 2)
-      const dy = Math.max(-halfSegment, Math.min(halfSegment, d.y))
-      return Math.hypot(d.x, d.y - dy, d.z) <= hx + EPS
+      const halfSegment = Math.max(0, (collider.scale.y - collider.scale.x) / 2);
+      const dy = Math.max(-halfSegment, Math.min(halfSegment, d.y));
+      return Math.hypot(d.x, d.y - dy, d.z) <= hx + EPS;
     }
   }
 }
 
 /** Outer volume (m³) of one primitive, from its outer size. */
 export function colliderVolumeM3(collider: PartCollider): number {
-  const { x, y } = collider.scale
-  const r = x / 2
+  const { x, y } = collider.scale;
+  const r = x / 2;
   switch (collider.shape) {
     case 'Box':
-      return collider.scale.x * collider.scale.y * collider.scale.z
+      return collider.scale.x * collider.scale.y * collider.scale.z;
     case 'Sphere':
-      return (4 / 3) * Math.PI * r ** 3
+      return (4 / 3) * Math.PI * r ** 3;
     case 'Cylinder':
-      return Math.PI * r ** 2 * y
+      return Math.PI * r ** 2 * y;
     case 'Capsule': {
-      const segment = Math.max(0, y - x)
-      return Math.PI * r ** 2 * segment + (4 / 3) * Math.PI * r ** 3
+      const segment = Math.max(0, y - x);
+      return Math.PI * r ** 2 * segment + (4 / 3) * Math.PI * r ** 3;
     }
   }
 }
@@ -135,25 +135,25 @@ export function evaluateCoverage(
   colliders: readonly PlacedCollider[],
   maxUncovered = 2000,
 ): CoverageReport {
-  let covered = 0
-  const uncovered: Vec3[] = []
-  const min = { x: Infinity, y: Infinity, z: Infinity }
-  const max = { x: -Infinity, y: -Infinity, z: -Infinity }
+  let covered = 0;
+  const uncovered: Vec3[] = [];
+  const min = { x: Infinity, y: Infinity, z: Infinity };
+  const max = { x: -Infinity, y: -Infinity, z: -Infinity };
 
   for (const p of points) {
-    min.x = Math.min(min.x, p.x)
-    min.y = Math.min(min.y, p.y)
-    min.z = Math.min(min.z, p.z)
-    max.x = Math.max(max.x, p.x)
-    max.y = Math.max(max.y, p.y)
-    max.z = Math.max(max.z, p.z)
-    if (colliders.some((c) => pointInCollider(p, c))) covered++
-    else if (uncovered.length < maxUncovered) uncovered.push(p)
+    min.x = Math.min(min.x, p.x);
+    min.y = Math.min(min.y, p.y);
+    min.z = Math.min(min.z, p.z);
+    max.x = Math.max(max.x, p.x);
+    max.y = Math.max(max.y, p.y);
+    max.z = Math.max(max.z, p.z);
+    if (colliders.some((c) => pointInCollider(p, c))) covered++;
+    else if (uncovered.length < maxUncovered) uncovered.push(p);
   }
 
   const meshBoundsVolumeM3 =
-    points.length > 0 ? (max.x - min.x) * (max.y - min.y) * (max.z - min.z) : 0
-  const volume = colliders.reduce((sum, c) => sum + colliderVolumeM3(c.collider), 0)
+    points.length > 0 ? (max.x - min.x) * (max.y - min.y) * (max.z - min.z) : 0;
+  const volume = colliders.reduce((sum, c) => sum + colliderVolumeM3(c.collider), 0);
   return {
     sampled: points.length,
     covered,
@@ -162,5 +162,5 @@ export function evaluateCoverage(
     colliderVolumeM3: volume,
     meshBoundsVolumeM3,
     bloat: meshBoundsVolumeM3 > EPS ? volume / meshBoundsVolumeM3 : null,
-  }
+  };
 }

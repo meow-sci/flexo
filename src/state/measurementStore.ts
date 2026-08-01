@@ -1,8 +1,8 @@
-import { atom } from 'nanostores'
-import { persistentJSON } from '@nanostores/persistent'
-import { randomId } from './ids'
-import type { Vec3 } from '../ksa/types'
-import { pushUndo } from './editorStore'
+import { atom } from 'nanostores';
+import { persistentJSON } from '@nanostores/persistent';
+import { randomId } from './ids';
+import type { Vec3 } from '../ksa/types';
+import { pushUndo } from './editorStore';
 
 /**
  * Measurement state (nanostores). Like {@link editorStore} this has no React /
@@ -14,56 +14,56 @@ import { pushUndo } from './editorStore'
  * the project (see projectStore); display settings are a global user pref.
  */
 
-export type MeasurementUnit = 'm' | 'cm' | 'mm'
-export type BoundsMode = 'world' | 'oriented'
-export type AxisLock = 'none' | 'x' | 'y' | 'z'
+export type MeasurementUnit = 'm' | 'cm' | 'mm';
+export type BoundsMode = 'world' | 'oriented';
+export type AxisLock = 'none' | 'x' | 'y' | 'z';
 /** Active click-to-create interaction (ephemeral). */
-export type MeasureTool = 'none' | 'point' | 'meshDistance'
+export type MeasureTool = 'none' | 'point' | 'meshDistance';
 
 /** A placed line measurement (reference line or point-to-point). Persisted, never exported. */
 export interface LineMeasurement {
-  id: string
+  id: string;
   /** Endpoint A in world/part meters. */
-  a: Vec3
+  a: Vec3;
   /** Endpoint B in world/part meters. */
-  b: Vec3
+  b: Vec3;
   /** Constrains the line direction to an axis when not 'none'. */
-  axisLock: AxisLock
+  axisLock: AxisLock;
   /** Hex color, e.g. '#38bdf8'. */
-  color: string
+  color: string;
   /** Line opacity 0..1. */
-  lineOpacity: number
+  lineOpacity: number;
   /** Line thickness in px (fat-line linewidth). */
-  lineWidth: number
+  lineWidth: number;
   /** When locked, editing gizmos/inputs are hidden and the line is read-only. */
-  locked: boolean
+  locked: boolean;
   /** Creation method; rendering is identical. */
-  source: 'reference' | 'point'
+  source: 'reference' | 'point';
 }
 
 export interface MeasurementSettings {
-  unit: MeasurementUnit
-  boundsMode: BoundsMode
-  showSelectionBounds: boolean
-  showPerMesh: boolean
+  unit: MeasurementUnit;
+  boundsMode: BoundsMode;
+  showSelectionBounds: boolean;
+  showPerMesh: boolean;
   /** When on and exactly two meshes are selected, show the gap between them. */
-  showMeshDistance: boolean
+  showMeshDistance: boolean;
 }
 
 /** Computed AABB/OBB of the current selection, written by {@link MeasurementLayer}. */
 export interface SelectionBounds {
-  size: Vec3
-  min: Vec3
-  max: Vec3
-  mode: BoundsMode
+  size: Vec3;
+  min: Vec3;
+  max: Vec3;
+  mode: BoundsMode;
 }
 
-const DEFAULT_COLOR = '#38bdf8'
-const DEFAULT_LINE_OPACITY = 0.5
-const DEFAULT_LINE_WIDTH = 2
+const DEFAULT_COLOR = '#38bdf8';
+const DEFAULT_LINE_OPACITY = 0.5;
+const DEFAULT_LINE_WIDTH = 2;
 
 /** Placed line measurements (persisted with the project, never exported). */
-export const $measurements = atom<LineMeasurement[]>([])
+export const $measurements = atom<LineMeasurement[]>([]);
 
 /** Global display settings (localStorage, not per-project — like $grids). */
 export const $measurementSettings = persistentJSON<MeasurementSettings>('flexo:measure', {
@@ -72,22 +72,22 @@ export const $measurementSettings = persistentJSON<MeasurementSettings>('flexo:m
   showSelectionBounds: false,
   showPerMesh: false,
   showMeshDistance: false,
-})
+});
 
 /** Active click-to-create tool (ephemeral). */
-export const $measureTool = atom<MeasureTool>('none')
+export const $measureTool = atom<MeasureTool>('none');
 
 /** Currently-edited measurement id (ephemeral). */
-export const $activeMeasurementId = atom<string | null>(null)
+export const $activeMeasurementId = atom<string | null>(null);
 
 /** Which endpoint the editing gizmo controls (ephemeral). */
-export const $activeEndpoint = atom<'a' | 'b'>('b')
+export const $activeEndpoint = atom<'a' | 'b'>('b');
 
 /** Selection bounds, written by the three layer; read by the React info display. */
-export const $selectionBounds = atom<SelectionBounds | null>(null)
+export const $selectionBounds = atom<SelectionBounds | null>(null);
 
 function newId(): string {
-  return randomId()
+  return randomId();
 }
 
 /** Adds a measurement and makes it the active (editable) one. Returns its id. */
@@ -95,8 +95,8 @@ export function addMeasurement(
   m: Omit<LineMeasurement, 'id' | 'color' | 'locked' | 'axisLock' | 'lineOpacity' | 'lineWidth'> &
     Partial<Pick<LineMeasurement, 'color' | 'locked' | 'axisLock' | 'lineOpacity' | 'lineWidth'>>,
 ): string {
-  pushUndo(m.source === 'reference' ? 'add reference line' : 'add measurement')
-  const id = newId()
+  pushUndo(m.source === 'reference' ? 'add reference line' : 'add measurement');
+  const id = newId();
   const measurement: LineMeasurement = {
     id,
     a: m.a,
@@ -107,42 +107,42 @@ export function addMeasurement(
     lineOpacity: m.lineOpacity ?? DEFAULT_LINE_OPACITY,
     lineWidth: m.lineWidth ?? DEFAULT_LINE_WIDTH,
     locked: m.locked ?? false,
-  }
-  $measurements.set([...$measurements.get(), measurement])
-  $activeMeasurementId.set(id)
-  return id
+  };
+  $measurements.set([...$measurements.get(), measurement]);
+  $activeMeasurementId.set(id);
+  return id;
 }
 
 /** Streaming mutation: no undo push — the caller pushes once at interaction start. */
 export function updateMeasurement(id: string, patch: Partial<Omit<LineMeasurement, 'id'>>): void {
-  $measurements.set($measurements.get().map((m) => (m.id === id ? { ...m, ...patch } : m)))
+  $measurements.set($measurements.get().map((m) => (m.id === id ? { ...m, ...patch } : m)));
 }
 
 export function removeMeasurement(id: string): void {
-  pushUndo('delete line')
-  $measurements.set($measurements.get().filter((m) => m.id !== id))
-  if ($activeMeasurementId.get() === id) $activeMeasurementId.set(null)
+  pushUndo('delete line');
+  $measurements.set($measurements.get().filter((m) => m.id !== id));
+  if ($activeMeasurementId.get() === id) $activeMeasurementId.set(null);
 }
 
 export function setMeasurementLocked(id: string, locked: boolean): void {
-  pushUndo(locked ? 'lock line' : 'unlock line')
-  updateMeasurement(id, { locked })
+  pushUndo(locked ? 'lock line' : 'unlock line');
+  updateMeasurement(id, { locked });
 }
 
 export function setMeasurementSettings(patch: Partial<MeasurementSettings>): void {
-  $measurementSettings.set({ ...$measurementSettings.get(), ...patch })
+  $measurementSettings.set({ ...$measurementSettings.get(), ...patch });
 }
 
 export function setMeasureTool(tool: MeasureTool): void {
-  $measureTool.set(tool)
+  $measureTool.set(tool);
 }
 
 export function setActiveMeasurement(id: string | null): void {
-  $activeMeasurementId.set(id)
+  $activeMeasurementId.set(id);
 }
 
 export function setActiveEndpoint(end: 'a' | 'b'): void {
-  $activeEndpoint.set(end)
+  $activeEndpoint.set(end);
 }
 
 /** Adds a 1m reference line centered on `center` (defaults to the origin), along X. */
@@ -151,15 +151,15 @@ export function addReferenceLine(center: Vec3 = { x: 0, y: 0, z: 0 }): string {
     source: 'reference',
     a: { x: center.x - 0.5, y: center.y, z: center.z },
     b: { x: center.x + 0.5, y: center.y, z: center.z },
-  })
+  });
 }
 
 /** Re-aligns endpoint `b` so the segment is parallel to `axis` (keeps b's axis component). */
 export function snappedToAxis(a: Vec3, b: Vec3, axis: AxisLock): Vec3 {
-  if (axis === 'none') return b
+  if (axis === 'none') return b;
   return {
     x: axis === 'x' ? b.x : a.x,
     y: axis === 'y' ? b.y : a.y,
     z: axis === 'z' ? b.z : a.z,
-  }
+  };
 }

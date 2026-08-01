@@ -1,5 +1,5 @@
-import { persistentJSON } from '@nanostores/persistent'
-import { atom } from 'nanostores'
+import { persistentJSON } from '@nanostores/persistent';
+import { atom } from 'nanostores';
 
 /**
  * Global editor settings (nanostores, persisted to localStorage). No React /
@@ -16,15 +16,15 @@ import { atom } from 'nanostores'
 
 export interface ConnectorSettings {
   /** Edge length of the connector cube, in meters. The facing cone derives from this. */
-  size: number
+  size: number;
 }
 
 export const $connectorSettings = persistentJSON<ConnectorSettings>('flexo:connectorSettings', {
   size: 0.125,
-})
+});
 
 export function setConnectorSettings(patch: Partial<ConnectorSettings>): void {
-  $connectorSettings.set({ ...$connectorSettings.get(), ...patch })
+  $connectorSettings.set({ ...$connectorSettings.get(), ...patch });
 }
 
 /**
@@ -36,22 +36,22 @@ export function setConnectorSettings(patch: Partial<ConnectorSettings>): void {
  */
 export interface IvaSeatSettings {
   /** Diameter of the seat's eye sphere, in meters. The forward cone and up stick derive from it. */
-  markerSize: number
+  markerSize: number;
   /**
    * Draw the translucent gaze cone ahead of each seat. INDICATIVE ONLY — it is a 45°
    * half-angle cone, while the game's actual clamp is a 90° hemisphere around the forward
    * axis (a half-space, which has no readable shape).
    */
-  showGazeCone: boolean
+  showGazeCone: boolean;
 }
 
 export const $ivaSeatSettings = persistentJSON<IvaSeatSettings>('flexo:ivaSeatSettings', {
   markerSize: 0.12,
   showGazeCone: false,
-})
+});
 
 export function setIvaSeatSettings(patch: Partial<IvaSeatSettings>): void {
-  $ivaSeatSettings.set({ ...$ivaSeatSettings.get(), ...patch })
+  $ivaSeatSettings.set({ ...$ivaSeatSettings.get(), ...patch });
 }
 
 /**
@@ -68,14 +68,14 @@ export interface LightVizSettings {
    * Overall marker size in meters (the bulb sphere's radius is 0.4× this; the Spot
    * aim cone derives from it). Default matches the IVA seat marker.
    */
-  markerSize: number
+  markerSize: number;
   /**
    * Which lights draw their coverage — the falloff shell stack + the hard boundary
    * wireframe. `'selected'` (default) keeps the viewport calm: only the selected
    * light's context instance glows. `'all'` is the "where does this part actually
    * light up?" view; `'off'` leaves just the markers.
    */
-  showVolumes: 'selected' | 'all' | 'off'
+  showVolumes: 'selected' | 'all' | 'off';
   /**
    * How the coverage shading maps illuminance to screen brightness (the Reinhard knee
    * `E₀` in `E / (E + E₀)`):
@@ -86,9 +86,9 @@ export interface LightVizSettings {
    *  - `'absolute'` — every light uses {@link vizExposure}, so relative brightness is
    *    honest across lights (and a genuinely dim light looks dim).
    */
-  exposureMode: 'auto' | 'absolute'
+  exposureMode: 'auto' | 'absolute';
   /** Absolute-mode `E₀`, in the same illuminance units as `Intensity / d²`. */
-  vizExposure: number
+  vizExposure: number;
   /**
    * Hang a REAL three.js light off every light marker so the part meshes are actually
    * lit ({@link import('../three/LightObject').LightObject} `setPreview`). Default
@@ -97,7 +97,7 @@ export interface LightVizSettings {
    * scene's light count, which makes three re-link every shader program. The coverage
    * shells stay the exact read.
    */
-  livePreview: boolean
+  livePreview: boolean;
 }
 
 export const DEFAULT_LIGHT_SETTINGS: LightVizSettings = {
@@ -106,12 +106,12 @@ export const DEFAULT_LIGHT_SETTINGS: LightVizSettings = {
   exposureMode: 'auto',
   vizExposure: 1,
   livePreview: false,
-}
+};
 
 export const $lightSettings = persistentJSON<LightVizSettings>(
   'flexo:lightSettings',
   DEFAULT_LIGHT_SETTINGS,
-)
+);
 
 /**
  * The settings with every field guaranteed present. `persistentJSON` replays a
@@ -123,11 +123,11 @@ export const $lightSettings = persistentJSON<LightVizSettings>(
  * an old shape, and a stale field simply resolves to its default.
  */
 export function lightSettings(): LightVizSettings {
-  return { ...DEFAULT_LIGHT_SETTINGS, ...$lightSettings.get() }
+  return { ...DEFAULT_LIGHT_SETTINGS, ...$lightSettings.get() };
 }
 
 export function setLightSettings(patch: Partial<LightVizSettings>): void {
-  $lightSettings.set({ ...lightSettings(), ...patch })
+  $lightSettings.set({ ...lightSettings(), ...patch });
 }
 
 /** How many light instances the live preview actually lights, and how many exist. */
@@ -136,13 +136,13 @@ export interface LightPreviewCount {
    * Preview lights currently in the scene. 0 when {@link LightVizSettings.livePreview}
    * is off or the Lights layer is hidden; otherwise `min(total, MAX_PREVIEW_LIGHTS)`.
    */
-  enabled: number
+  enabled: number;
   /**
    * Light INSTANCES in the document — a SubPart-owned light counts once per placement of
    * its template, because that is how many lights KSA instantiates (and how many preview
    * lights the scene would need).
    */
-  total: number
+  total: number;
 }
 
 /**
@@ -152,13 +152,13 @@ export interface LightPreviewCount {
  * from {@link import('../three/lightVolume').planPreviewBudget}; `ViewButton` reads it to
  * say "previewing N of M" when the cap truncates.
  */
-export const $lightPreviewCount = atom<LightPreviewCount>({ enabled: 0, total: 0 })
+export const $lightPreviewCount = atom<LightPreviewCount>({ enabled: 0, total: 0 });
 
 /** Publishes the preview cap report, no-oping when nothing changed (avoids idle re-renders). */
 export function setLightPreviewCount(next: LightPreviewCount): void {
-  const current = $lightPreviewCount.get()
-  if (current.enabled === next.enabled && current.total === next.total) return
-  $lightPreviewCount.set(next)
+  const current = $lightPreviewCount.get();
+  if (current.enabled === next.enabled && current.total === next.total) return;
+  $lightPreviewCount.set(next);
 }
 
 /**
@@ -170,13 +170,13 @@ export function setLightPreviewCount(next: LightPreviewCount): void {
  */
 export interface SelectionHighlightSettings {
   /** CSS hex (`#rrggbb`) emissive tint for selected SubPart meshes. */
-  meshColor: string
+  meshColor: string;
   /** Tint strength for SubPart meshes (0–1). */
-  meshAlpha: number
+  meshAlpha: number;
   /** CSS hex (`#rrggbb`) emissive tint for selected kittens. */
-  kittenColor: string
+  kittenColor: string;
   /** Tint strength for kittens (0–1). */
-  kittenAlpha: number
+  kittenAlpha: number;
 }
 
 const DEFAULT_HIGHLIGHT: SelectionHighlightSettings = {
@@ -184,15 +184,15 @@ const DEFAULT_HIGHLIGHT: SelectionHighlightSettings = {
   meshAlpha: 0.35,
   kittenColor: '#ff00f7',
   kittenAlpha: 0.35,
-}
+};
 
 export const $selectionHighlight = persistentJSON<SelectionHighlightSettings>(
   'flexo:selectionHighlight',
   DEFAULT_HIGHLIGHT,
-)
+);
 
 export function setSelectionHighlight(patch: Partial<SelectionHighlightSettings>): void {
-  $selectionHighlight.set({ ...$selectionHighlight.get(), ...patch })
+  $selectionHighlight.set({ ...$selectionHighlight.get(), ...patch });
 }
 
 /**
@@ -205,23 +205,23 @@ export function setSelectionHighlight(patch: Partial<SelectionHighlightSettings>
  *  - 'bundle' — copy the .ktx2 verbatim into the mod's Textures/ folder (portable).
  */
 export interface KittenTextureExportSettings {
-  mode: 'reference' | 'bundle'
+  mode: 'reference' | 'bundle';
   /** Game Content/Core folder, used to build absolute texture paths in 'reference' mode. */
-  contentCorePath: string
+  contentCorePath: string;
 }
 
 const DEFAULT_KITTEN_TEXTURE_EXPORT: KittenTextureExportSettings = {
   mode: 'reference',
   contentCorePath: 'C:\\Program Files\\Kitten Space Agency\\Content\\Core',
-}
+};
 
 export const $kittenTextureExport = persistentJSON<KittenTextureExportSettings>(
   'flexo:kittenTextureExport',
   DEFAULT_KITTEN_TEXTURE_EXPORT,
-)
+);
 
 export function setKittenTextureExport(patch: Partial<KittenTextureExportSettings>): void {
-  $kittenTextureExport.set({ ...$kittenTextureExport.get(), ...patch })
+  $kittenTextureExport.set({ ...$kittenTextureExport.get(), ...patch });
 }
 
 /**
@@ -247,13 +247,13 @@ export interface ModelImportSettings {
    * Longest-edge cap for imported images. flexo's KTX2 is uncompressed RGBA8 + Zstd, so
    * in-game VRAM is ~w·h·4·4/3 PER TEXTURE — 4096² costs ~85 MB. Hence a 2048 default.
    */
-  maxTextureSize: 1024 | 2048 | 4096
+  maxTextureSize: 1024 | 2048 | 4096;
   /** Which axis the source file calls "up" ('z' applies the RotX(-90°) correction). */
-  upAxis: 'y' | 'z'
+  upAxis: 'y' | 'z';
   /** Bake the instance scale into the geometry (predictable texel density + gizmo behaviour). */
-  bakeScale: boolean
+  bakeScale: boolean;
   /** Decimate the exported `<MeshView>` picking meshes (KSA hover-picks on the CPU). */
-  decimateViewMeshes: boolean
+  decimateViewMeshes: boolean;
 }
 
 const DEFAULT_MODEL_IMPORT: ModelImportSettings = {
@@ -261,15 +261,15 @@ const DEFAULT_MODEL_IMPORT: ModelImportSettings = {
   upAxis: 'y',
   bakeScale: true,
   decimateViewMeshes: true,
-}
+};
 
 export const $modelImportSettings = persistentJSON<ModelImportSettings>(
   'flexo:modelImport',
   DEFAULT_MODEL_IMPORT,
-)
+);
 
 export function setModelImportSettings(patch: Partial<ModelImportSettings>): void {
-  $modelImportSettings.set({ ...$modelImportSettings.get(), ...patch })
+  $modelImportSettings.set({ ...$modelImportSettings.get(), ...patch });
 }
 
 /**
@@ -278,10 +278,10 @@ export function setModelImportSettings(patch: Partial<ModelImportSettings>): voi
  * and at a fixed ~0.75 opacity. ON ⇒ the editor mimics that (WYSIWYG); OFF ⇒ it shows the chosen
  * tint vividly (best for picking a color). Read by customAssetStore when building visor materials.
  */
-export const $simulateGlass = persistentJSON<boolean>('flexo:simulateGlass', false)
+export const $simulateGlass = persistentJSON<boolean>('flexo:simulateGlass', false);
 
 export function setSimulateGlass(value: boolean): void {
-  $simulateGlass.set(value)
+  $simulateGlass.set(value);
 }
 
 /**
@@ -289,8 +289,8 @@ export function setSimulateGlass(value: boolean): void {
  * {@link src/three/Viewport.ts} subscribes and mounts/unmounts the panel. Cleared
  * by the global data reset (it `localStorage.clear()`s every `flexo:` key).
  */
-export const $showFpsCounter = persistentJSON<boolean>('flexo:showFpsCounter', false)
+export const $showFpsCounter = persistentJSON<boolean>('flexo:showFpsCounter', false);
 
 export function setShowFpsCounter(value: boolean): void {
-  $showFpsCounter.set(value)
+  $showFpsCounter.set(value);
 }

@@ -7,22 +7,22 @@ import {
   type TagGroupProps,
   type TagListProps,
   type TagProps,
-} from 'react-aria-components'
-import { X } from 'lucide-react'
-import { composeTw, cn } from './styles'
+} from 'react-aria-components';
+import { X } from 'lucide-react';
+import { composeTw, cn } from './styles';
 
 export function TagGroup({ className, ...props }: TagGroupProps) {
-  return <AriaTagGroup {...props} className={cn('flex flex-col gap-1', className)} />
+  return <AriaTagGroup {...props} className={cn('flex flex-col gap-1', className)} />;
 }
 
 export function TagList<T extends object>({ className, ...props }: TagListProps<T>) {
   return (
     <AriaTagList {...props} className={composeTw('flex flex-wrap gap-1 outline-none', className)} />
-  )
+  );
 }
 
 export function Tag({ className, children, ...props }: TagProps) {
-  const textValue = props.textValue ?? (typeof children === 'string' ? children : undefined)
+  const textValue = props.textValue ?? (typeof children === 'string' ? children : undefined);
   return (
     <AriaTag
       {...props}
@@ -48,7 +48,7 @@ export function Tag({ className, children, ...props }: TagProps) {
         </>
       ))}
     </AriaTag>
-  )
+  );
 }
 
 /** Static, non-interactive count/status pill. */
@@ -61,5 +61,5 @@ export function Chip({ className, ...props }: React.HTMLAttributes<HTMLSpanEleme
         className,
       )}
     />
-  )
+  );
 }

@@ -1,5 +1,5 @@
-import { atom } from 'nanostores'
-import { persistentJSON } from '@nanostores/persistent'
+import { atom } from 'nanostores';
+import { persistentJSON } from '@nanostores/persistent';
 
 /**
  * Viewport "View" settings (nanostores): per-axis reference grids and one-shot
@@ -8,16 +8,16 @@ import { persistentJSON } from '@nanostores/persistent'
  * and React reads via `useStore`.
  */
 
-export type Axis = 'x' | 'y' | 'z'
-export type CameraDir = 'left' | 'right' | 'front' | 'back' | 'top' | 'bottom'
+export type Axis = 'x' | 'y' | 'z';
+export type CameraDir = 'left' | 'right' | 'front' | 'back' | 'top' | 'bottom';
 
 export interface GridConfig {
-  enabled: boolean
+  enabled: boolean;
   /** Cell size in meters. */
-  spacing: number
+  spacing: number;
 }
 
-export type GridsState = Record<Axis, GridConfig>
+export type GridsState = Record<Axis, GridConfig>;
 
 /**
  * Reference grids keyed by the axis they're normal to: `x` → YZ plane, `y` → XZ
@@ -28,11 +28,11 @@ export const $grids = persistentJSON<GridsState>('flexo:grids', {
   x: { enabled: false, spacing: 1 },
   y: { enabled: true, spacing: 1 },
   z: { enabled: false, spacing: 1 },
-})
+});
 
 export function setGrid(axis: Axis, config: Partial<GridConfig>): void {
-  const current = $grids.get()
-  $grids.set({ ...current, [axis]: { ...current[axis], ...config } })
+  const current = $grids.get();
+  $grids.set({ ...current, [axis]: { ...current[axis], ...config } });
 }
 
 /**
@@ -45,50 +45,50 @@ export function setGrid(axis: Axis, config: Partial<GridConfig>): void {
  * composes it with layer visibility (a mesh draws iff its layer is visible AND this does
  * not hide it) rather than fighting `applyLayerView` for `.visible`.
  */
-export const $hideInterior = persistentJSON<boolean>('flexo:hideInterior', false)
+export const $hideInterior = persistentJSON<boolean>('flexo:hideInterior', false);
 
 export function setHideInterior(hide: boolean): void {
-  $hideInterior.set(hide)
+  $hideInterior.set(hide);
 }
 
 /**
  * One-shot camera-snap command. The `nonce` makes every request a distinct value
  * so the three.js subscriber fires even when the same direction is chosen twice.
  */
-export const $cameraSnap = atom<{ dir: CameraDir; nonce: number } | null>(null)
+export const $cameraSnap = atom<{ dir: CameraDir; nonce: number } | null>(null);
 
-let snapNonce = 0
+let snapNonce = 0;
 export function snapCamera(dir: CameraDir): void {
-  $cameraSnap.set({ dir, nonce: ++snapNonce })
+  $cameraSnap.set({ dir, nonce: ++snapNonce });
 }
 
 export interface CameraState {
-  position: [number, number, number]
-  target: [number, number, number]
-  up: [number, number, number]
+  position: [number, number, number];
+  target: [number, number, number];
+  up: [number, number, number];
 }
 
 /** Current camera state — written by the Viewport on controls 'end' (once per gesture). */
-export const $cameraState = atom<CameraState | null>(null)
+export const $cameraState = atom<CameraState | null>(null);
 
 /**
  * One-shot camera-restore command, mirroring {@link $cameraSnap}.
  * Written by projectStore on project load; applied by EditorScene on subscribe.
  */
-export const $cameraRestore = atom<{ state: CameraState; nonce: number } | null>(null)
-let restoreNonce = 0
+export const $cameraRestore = atom<{ state: CameraState; nonce: number } | null>(null);
+let restoreNonce = 0;
 export function setCameraRestore(state: CameraState): void {
-  $cameraRestore.set({ state, nonce: ++restoreNonce })
+  $cameraRestore.set({ state, nonce: ++restoreNonce });
 }
 
 const DEFAULT_CAMERA_STATE: CameraState = {
   position: [3, 2, 4],
   target: [0, 0, 0],
   up: [0, 1, 0],
-}
+};
 
 /** Clears the saved camera state and restores the Viewport to its default position. */
 export function resetCamera(): void {
-  $cameraState.set(null)
-  setCameraRestore(DEFAULT_CAMERA_STATE)
+  $cameraState.set(null);
+  setCameraRestore(DEFAULT_CAMERA_STATE);
 }

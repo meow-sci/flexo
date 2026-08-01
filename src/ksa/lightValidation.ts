@@ -38,26 +38,26 @@
  * ported-math layer).
  */
 
-import { MAX_OUTER_ANGLE_RAD } from './lightFalloff'
-import type { EditingPart, SubPartPlacement } from './types'
+import { MAX_OUTER_ANGLE_RAD } from './lightFalloff';
+import type { EditingPart, SubPartPlacement } from './types';
 
 /**
  * `warn` ⇒ it loads but the light misbehaves; `info` ⇒ legal and probably intended, but
  * KSA does something to it worth knowing. There is no `block` — see the module JSDoc.
  */
-export type LightIssueSeverity = 'warn' | 'info'
+export type LightIssueSeverity = 'warn' | 'info';
 
 export interface LightIssue {
-  severity: LightIssueSeverity
+  severity: LightIssueSeverity;
   /** Stable kebab-case code — the UI and tests match on this, not on the prose. */
-  code: string
-  message: string
+  code: string;
+  message: string;
   /**
    * The offending light's editor-only `PartLight.id`, so the UI can select/reveal it.
    * `null` for the one PART-wide rule (`light-always-on`), which is a property of the
    * Part's power wiring rather than of any single light.
    */
-  lightId: string | null
+  lightId: string | null;
 }
 
 /**
@@ -65,24 +65,24 @@ export interface LightIssue {
  * a channel to 0.005 meant black, and `<Color R="0" G="0" B="0"/>` is only the most
  * obvious spelling of it.
  */
-const BLACK_MAX_CHANNEL = 0.01
+const BLACK_MAX_CHANNEL = 0.01;
 
 /** A placement whose scale is not the same on all three axes (KSA skews the aim). */
 function isNonUniform(p: SubPartPlacement): boolean {
-  return p.scale.x !== p.scale.y || p.scale.y !== p.scale.z
+  return p.scale.x !== p.scale.y || p.scale.y !== p.scale.z;
 }
 
 /** A placement with any negative scale component — a reflection flexo cannot draw. */
 function isMirrored(p: SubPartPlacement): boolean {
-  return p.scale.x < 0 || p.scale.y < 0 || p.scale.z < 0
+  return p.scale.x < 0 || p.scale.y < 0 || p.scale.z < 0;
 }
 
 export function validateLights(part: EditingPart): LightIssue[] {
-  const issues: LightIssue[] = []
+  const issues: LightIssue[] = [];
   const warn = (lightId: string | null, code: string, message: string) =>
-    issues.push({ severity: 'warn', code, message, lightId })
+    issues.push({ severity: 'warn', code, message, lightId });
   const info = (lightId: string | null, code: string, message: string) =>
-    issues.push({ severity: 'info', code, message, lightId })
+    issues.push({ severity: 'info', code, message, lightId });
 
   for (const light of part.lights) {
     // Range ≤ 0 and Intensity ≤ 0 are culled on the CPU, before the light is ever
@@ -97,7 +97,7 @@ export function validateLights(part: EditingPart): LightIssue[] {
         `Light "${light.id}" has Range ${light.rangeM} m. KSA culls Range ≤ 0 lights ` +
           `CPU-side before they reach the renderer (ClusteredLightSystem.cs:669,760), so it ` +
           `never lights anything — give it a positive range.`,
-      )
+      );
     }
 
     if (light.intensity <= 0) {
@@ -107,7 +107,7 @@ export function validateLights(part: EditingPart): LightIssue[] {
         `Light "${light.id}" has Intensity ${light.intensity}. KSA culls Intensity ≤ 0 ` +
           `lights CPU-side (ClusteredLightSystem.cs:760), so it contributes nothing — it is ` +
           `not a dim light, it is no light at all.`,
-      )
+      );
     }
 
     if (light.type === 'Spot' && light.innerAngleRad > light.outerAngleRad) {
@@ -117,7 +117,7 @@ export function validateLights(part: EditingPart): LightIssue[] {
         `Light "${light.id}" has an inner cone WIDER than its outer cone. KSA silently ` +
           `swaps them (Light.cs:56-61), so it renders as if you had typed them the other way ` +
           `round — almost certainly not what you meant.`,
-      )
+      );
     }
 
     // INFO, not warn: Core's own FloodlightA authors OuterAngle=1.57 precisely to sit on
@@ -129,22 +129,22 @@ export function validateLights(part: EditingPart): LightIssue[] {
         `Light "${light.id}" has an outer cone wider than KSA's ceiling, so the game clamps ` +
           `it to ≈89.94° (MAX_OUTER_ANGLE, Light.cs:10). Core's own floodlight does exactly ` +
           `this to get a hemisphere — the cone simply cannot open any further.`,
-      )
+      );
     }
 
-    const maxChannel = Math.max(light.color.r, light.color.g, light.color.b)
+    const maxChannel = Math.max(light.color.r, light.color.g, light.color.b);
     if (maxChannel < BLACK_MAX_CHANNEL) {
       info(
         light.id,
         'light-color-black',
         `Light "${light.id}" is black (all colour channels below ${BLACK_MAX_CHANNEL}). It ` +
           `still costs a light slot in game but adds no visible illumination.`,
-      )
+      );
     }
 
-    if (light.ownerTemplateId === null) continue
+    if (light.ownerTemplateId === null) continue;
 
-    const owners = part.placements.filter((p) => p.subPartTemplateId === light.ownerTemplateId)
+    const owners = part.placements.filter((p) => p.subPartTemplateId === light.ownerTemplateId);
     if (owners.length === 0) {
       warn(
         light.id,
@@ -152,8 +152,8 @@ export function validateLights(part: EditingPart): LightIssue[] {
         `Light "${light.id}" is owned by "${light.ownerTemplateId}", which this Part doesn't ` +
           `place. A SubPart light exists once per PLACEMENT of its template, so with no ` +
           `placement it is never instantiated in game — dead data.`,
-      )
-      continue
+      );
+      continue;
     }
 
     // KSA aims a Spot by pushing its local +X through the OWNER's upper-3×3 — scale
@@ -161,7 +161,7 @@ export function validateLights(part: EditingPart): LightIssue[] {
     // offset by the owner's FULL matrix. flexo's marker composes quaternions instead
     // (`src/three/coords.ts` `lightWorld`), which is exact only for a uniform POSITIVE
     // owner scale. Both remaining cases are reported rather than reproduced.
-    const skewed = owners.filter(isNonUniform)
+    const skewed = owners.filter(isNonUniform);
     if (skewed.length > 0) {
       warn(
         light.id,
@@ -171,10 +171,10 @@ export function validateLights(part: EditingPart): LightIssue[] {
           `upper-3×3 before normalising, so the in-game beam SKEWS off-axis and the offset ` +
           `stretches with the placement; flexo's marker shows the uniform-scale ` +
           `approximation (coords.ts lightWorld).`,
-      )
+      );
     }
 
-    const mirrored = owners.filter(isMirrored)
+    const mirrored = owners.filter(isMirrored);
     if (mirrored.length > 0) {
       warn(
         light.id,
@@ -184,7 +184,7 @@ export function validateLights(part: EditingPart): LightIssue[] {
           `survives its normalize, so a (−1,−1,−1) owner flips the in-game beam a full 180° ` +
           `— while flexo composes quaternions, which can never produce a reflection ` +
           `(coords.ts lightWorld). The marker's aim is not the direction KSA will cast.`,
-      )
+      );
     }
   }
 
@@ -200,8 +200,8 @@ export function validateLights(part: EditingPart): LightIssue[] {
         `gate never fires and no in-game checkbox appears (HOW_LIGHT_PARTS_WORK §8.1). ` +
         `Deliberate for indicator lamps; add a light switch in Part Data ▸ Power for anything ` +
         `the player should be able to turn off.`,
-    )
+    );
   }
 
-  return issues
+  return issues;
 }

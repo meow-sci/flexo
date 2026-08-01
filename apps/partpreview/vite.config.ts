@@ -7,15 +7,15 @@
  * production rather than duplicated here. See plans/WIKI_PART_PREVIEW_PLAN.md
  * (§2.2 for the dev/prod asset matrix, §2.5 structure, §2.7 build wiring).
  */
-import { resolve } from 'node:path'
-import { defineConfig } from 'vite'
-import react, { reactCompilerPreset } from '@vitejs/plugin-react'
-import babel from '@rolldown/plugin-babel'
-import tailwindcss from '@tailwindcss/vite'
-import { ksaAssets } from '../../vite/ksaAssets'
-import { previewManifest } from '../../vite/previewManifest'
+import { resolve } from 'node:path';
+import { defineConfig } from 'vite';
+import react, { reactCompilerPreset } from '@vitejs/plugin-react';
+import babel from '@rolldown/plugin-babel';
+import tailwindcss from '@tailwindcss/vite';
+import { ksaAssets } from '../../vite/ksaAssets';
+import { previewManifest } from '../../vite/previewManifest';
 
-const repoRoot = resolve(import.meta.dirname, '../..')
+const repoRoot = resolve(import.meta.dirname, '../..');
 
 export default defineConfig(({ command }) => ({
   // Nested under the main app so one origin serves both.
@@ -38,6 +38,16 @@ export default defineConfig(({ command }) => ({
     // Explicit because outDir is outside this app's root: it only empties that
     // subfolder, never dist/ itself.
     emptyOutDir: true,
+    rollupOptions: {
+      // A SECOND entry: the inert offscreen thumbnail-capture harness driven by
+      // `pnpm thumbs:partpreview` (plans/PART_PREVIEW_THUMBS.md). Reshaping THIS
+      // app's chunk graph is fine — the "standalone, unchanged output" constraint
+      // protects the main editor, which has its own build.
+      input: {
+        index: resolve(import.meta.dirname, 'index.html'),
+        capture: resolve(import.meta.dirname, 'capture.html'),
+      },
+    },
   },
   plugins: [
     tailwindcss(),
@@ -53,4 +63,4 @@ export default defineConfig(({ command }) => ({
   server: {
     host: '0.0.0.0',
   },
-}))
+}));

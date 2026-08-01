@@ -1,5 +1,5 @@
-import { Minus, Plus } from 'lucide-react'
-import { Button } from '../../../src/ui/kit'
+import { Minus, Plus } from 'lucide-react';
+import { Button } from '../../../src/ui/kit';
 
 /**
  * +/− buttons for visitors without a mouse wheel (touch pinch and wheel zoom both
@@ -32,5 +32,5 @@ export function ZoomControls({ onZoom }: { onZoom: (factor: number) => void }) {
         <Plus size={14} />
       </Button>
     </>
-  )
+  );
 }

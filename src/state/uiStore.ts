@@ -1,5 +1,5 @@
-import { atom } from 'nanostores'
-import { persistentJSON } from '@nanostores/persistent'
+import { atom } from 'nanostores';
+import { persistentJSON } from '@nanostores/persistent';
 
 /**
  * Persistent UI/layout state (nanostores → localStorage). These are end-user
@@ -14,35 +14,35 @@ import { persistentJSON } from '@nanostores/persistent'
  * buttons switch in; each editor's toolbar "Close" switches back. In a full-sidebar
  * mode the Assets list is hidden and reachable only via the Mesh Picker dialog.
  */
-export type InspectorMode = 'assets' | 'anim' | 'engine'
-export const $inspectorMode = atom<InspectorMode>('assets')
+export type InspectorMode = 'assets' | 'anim' | 'engine';
+export const $inspectorMode = atom<InspectorMode>('assets');
 
 export function setInspectorMode(mode: InspectorMode): void {
-  $inspectorMode.set(mode)
+  $inspectorMode.set(mode);
 }
 
 /** Whether the right-side inspector panel is shown (vs. collapsed to an icon). */
-export const $inspectorVisible = persistentJSON<boolean>('flexo:inspectorVisible', true)
+export const $inspectorVisible = persistentJSON<boolean>('flexo:inspectorVisible', true);
 
 /** Width of the inspector panel in pixels (set by the left-edge drag handle). */
-export const $inspectorWidth = persistentJSON<number>('flexo:inspectorWidth', 450)
+export const $inspectorWidth = persistentJSON<number>('flexo:inspectorWidth', 450);
 
-export const INSPECTOR_MIN_WIDTH = 240
-export const INSPECTOR_MAX_WIDTH = 640
+export const INSPECTOR_MIN_WIDTH = 240;
+export const INSPECTOR_MAX_WIDTH = 640;
 
 export function setInspectorVisible(visible: boolean): void {
-  $inspectorVisible.set(visible)
+  $inspectorVisible.set(visible);
 }
 
 export function setInspectorWidth(width: number): void {
-  const clamped = Math.max(INSPECTOR_MIN_WIDTH, Math.min(INSPECTOR_MAX_WIDTH, width))
-  $inspectorWidth.set(clamped)
+  const clamped = Math.max(INSPECTOR_MIN_WIDTH, Math.min(INSPECTOR_MAX_WIDTH, width));
+  $inspectorWidth.set(clamped);
 }
 
 /** Top-left viewport position (px) of the floating selection inspector. */
 export interface FloatPosition {
-  x: number
-  y: number
+  x: number;
+  y: number;
 }
 
 /**
@@ -54,10 +54,10 @@ export interface FloatPosition {
 export const $inspectorFloatPos = persistentJSON<FloatPosition | null>(
   'flexo:inspectorFloatPos',
   null,
-)
+);
 
 export function setInspectorFloatPos(pos: FloatPosition | null): void {
-  $inspectorFloatPos.set(pos)
+  $inspectorFloatPos.set(pos);
 }
 
 /**
@@ -69,8 +69,8 @@ export function setInspectorFloatPos(pos: FloatPosition | null): void {
 export const $animPreviewFloatPos = persistentJSON<FloatPosition | null>(
   'flexo:animPreviewFloatPos',
   null,
-)
+);
 
 export function setAnimPreviewFloatPos(pos: FloatPosition | null): void {
-  $animPreviewFloatPos.set(pos)
+  $animPreviewFloatPos.set(pos);
 }

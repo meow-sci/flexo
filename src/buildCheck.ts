@@ -1,9 +1,9 @@
-import { atom } from 'nanostores'
+import { atom } from 'nanostores';
 
-const STORAGE_KEY = 'flexo_build_id'
+const STORAGE_KEY = 'flexo_build_id';
 
 /** True when a prod build ID mismatch is detected on startup. */
-export const $buildMismatch = atom(false)
+export const $buildMismatch = atom(false);
 
 /**
  * On prod builds: compare the embedded VITE_BUILD_ID against the last-seen
@@ -13,15 +13,15 @@ export const $buildMismatch = atom(false)
  * Skipped entirely in dev (import.meta.env.DEV).
  */
 export function checkBuildId(): void {
-  if (import.meta.env.DEV) return
+  if (import.meta.env.DEV) return;
 
-  const current = import.meta.env.VITE_BUILD_ID
-  if (!current) return
+  const current = import.meta.env.VITE_BUILD_ID;
+  if (!current) return;
 
-  const previous = localStorage.getItem(STORAGE_KEY)
-  localStorage.setItem(STORAGE_KEY, current)
+  const previous = localStorage.getItem(STORAGE_KEY);
+  localStorage.setItem(STORAGE_KEY, current);
 
   if (previous !== null && previous !== current) {
-    $buildMismatch.set(true)
+    $buildMismatch.set(true);
   }
 }

@@ -1,9 +1,9 @@
-import { defineConfig } from 'vitest/config'
-import { loadEnv } from 'vite'
-import react, { reactCompilerPreset } from '@vitejs/plugin-react'
-import babel from '@rolldown/plugin-babel'
-import tailwindcss from '@tailwindcss/vite'
-import { ksaAssets } from './vite/ksaAssets'
+import { defineConfig } from 'vitest/config';
+import { loadEnv } from 'vite';
+import react, { reactCompilerPreset } from '@vitejs/plugin-react';
+import babel from '@rolldown/plugin-babel';
+import tailwindcss from '@tailwindcss/vite';
+import { ksaAssets } from './vite/ksaAssets';
 
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -24,7 +24,7 @@ export default defineConfig(({ mode }) => ({
   ],
   test: {
     environment: 'happy-dom',
-    include: ['src/**/*.test.ts', 'vite/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'vite/**/*.test.ts', 'apps/**/src/**/*.test.ts'],
     // Expose KSA_ASSETS_DIR (the flexo-private-assets `assets/` tree the ksaAssets
     // plugin serves) to tests on process.env, so real-asset tests read the licensed
     // GLB/XML from the private repo instead of a gitignored thirdparty/ checkout.
@@ -34,4 +34,4 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: '0.0.0.0',
   },
-}))
+}));

@@ -16,7 +16,7 @@
  * whole-Part import maps every id the references can legitimately name.
  */
 
-import type { ConsumerFeedWiring, FeedSource } from './types'
+import type { ConsumerFeedWiring, FeedSource } from './types';
 
 /**
  * Remaps one feed point: a connector feed's `connectorId` through `connectorIdMap`, a
@@ -30,7 +30,7 @@ export function remapFeed(
   idMap: ReadonlyMap<string, string>,
 ): FeedSource {
   if (f.kind === 'connector') {
-    return { kind: 'connector', connectorId: connectorIdMap.get(f.connectorId) ?? f.connectorId }
+    return { kind: 'connector', connectorId: connectorIdMap.get(f.connectorId) ?? f.connectorId };
   }
   if (f.kind === 'container') {
     return {
@@ -39,9 +39,9 @@ export function remapFeed(
       subPartInstanceId: f.subPartInstanceId
         ? (idMap.get(f.subPartInstanceId) ?? f.subPartInstanceId)
         : null,
-    }
+    };
   }
-  return f
+  return f;
 }
 
 /** Remaps every feed point of a consumer (a `Combustor` or a `SolidMotor`). */
@@ -50,7 +50,7 @@ export function remapConsumerFeeds<T extends { feeds: FeedSource[] }>(
   connectorIdMap: ReadonlyMap<string, string>,
   idMap: ReadonlyMap<string, string>,
 ): T {
-  return { ...consumer, feeds: consumer.feeds.map((f) => remapFeed(f, connectorIdMap, idMap)) }
+  return { ...consumer, feeds: consumer.feeds.map((f) => remapFeed(f, connectorIdMap, idMap)) };
 }
 
 /**
@@ -70,5 +70,5 @@ export function remapConsumerFeedWiring(
       ? (idMap.get(w.subPartInstanceId) ?? w.subPartInstanceId)
       : null,
     feeds: w.feeds.map((f) => remapFeed(f, connectorIdMap, idMap)),
-  }
+  };
 }

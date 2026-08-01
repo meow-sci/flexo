@@ -1,12 +1,12 @@
-import { useStore } from '@nanostores/react'
-import { AssetsToolbar } from './AssetsToolbar'
-import { AssetsList } from './AssetsList'
-import { TransformInspector } from './TransformInspector'
-import { AnimToolbar } from './AnimToolbar'
-import { AnimationPanel } from './AnimationPanel'
-import { EngineToolbar } from './EngineToolbar'
-import { EnginePanel } from './EnginePanel'
-import { $inspectorMode } from '../state/uiStore'
+import { useStore } from '@nanostores/react';
+import { AssetsToolbar } from './AssetsToolbar';
+import { AssetsList } from './AssetsList';
+import { TransformInspector } from './TransformInspector';
+import { AnimToolbar } from './AnimToolbar';
+import { AnimationPanel } from './AnimationPanel';
+import { EngineToolbar } from './EngineToolbar';
+import { EnginePanel } from './EnginePanel';
+import { $inspectorMode } from '../state/uiStore';
 
 /**
  * The body of the inspector. Two modes (driven by {@link $inspectorMode}):
@@ -21,7 +21,7 @@ import { $inspectorMode } from '../state/uiStore'
  * floating layer, so it opts back in inline via {@link showTransform} (assets mode only).
  */
 export function InspectorContent({ showTransform = false }: { showTransform?: boolean }) {
-  const mode = useStore($inspectorMode)
+  const mode = useStore($inspectorMode);
 
   if (mode === 'anim') {
     return (
@@ -31,7 +31,7 @@ export function InspectorContent({ showTransform = false }: { showTransform?: bo
           <AnimationPanel />
         </div>
       </div>
-    )
+    );
   }
 
   if (mode === 'engine') {
@@ -42,7 +42,7 @@ export function InspectorContent({ showTransform = false }: { showTransform?: bo
           <EnginePanel />
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -57,5 +57,5 @@ export function InspectorContent({ showTransform = false }: { showTransform?: bo
         </div>
       )}
     </div>
-  )
+  );
 }

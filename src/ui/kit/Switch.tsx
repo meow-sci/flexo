@@ -1,6 +1,6 @@
-import { Switch as AriaSwitch, composeRenderProps, type SwitchProps } from 'react-aria-components'
-import { tv } from 'tailwind-variants'
-import { composeTw, focusRing } from './styles'
+import { Switch as AriaSwitch, composeRenderProps, type SwitchProps } from 'react-aria-components';
+import { tv } from 'tailwind-variants';
+import { composeTw, focusRing } from './styles';
 
 const track = tv({
   extend: focusRing,
@@ -11,7 +11,7 @@ const track = tv({
       true: 'border-accent bg-accent',
     },
   },
-})
+});
 
 export function Switch({ className, children, ...props }: SwitchProps) {
   return (
@@ -35,5 +35,5 @@ export function Switch({ className, children, ...props }: SwitchProps) {
         </>
       ))}
     </AriaSwitch>
-  )
+  );
 }

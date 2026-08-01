@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { Menu as MenuIcon, Redo, Undo } from 'lucide-react'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { Menu as MenuIcon, Redo, Undo } from 'lucide-react';
 import {
   Toolbar,
   ToolbarSeparator,
@@ -12,20 +12,20 @@ import {
   MenuTrigger,
   Popover,
   ConfirmDialog,
-} from './kit'
-import { $canRedo, $canUndo, redo, undo } from '../state/editorStore'
-import { AddButton } from './AddButton'
-import { ProjectButton } from './ProjectButton'
-import { PartDataButton } from './PartDataButton'
-import { ExportButton } from './ExportButton'
-import { ViewButton } from './ViewButton'
-import { MeasureButton } from './MeasureButton'
-import { HistoryButton } from './HistoryButton'
-import { SettingsModal } from './SettingsButton'
-import { ScaleEverythingDialog } from './ScaleEverythingDialog'
-import { nukeAndReload } from './nukeAndReload'
-import { openHelp } from '../state/helpStore'
-import { openAbout } from '../state/aboutStore'
+} from './kit';
+import { $canRedo, $canUndo, redo, undo } from '../state/editorStore';
+import { AddButton } from './AddButton';
+import { ProjectButton } from './ProjectButton';
+import { PartDataButton } from './PartDataButton';
+import { ExportButton } from './ExportButton';
+import { ViewButton } from './ViewButton';
+import { MeasureButton } from './MeasureButton';
+import { HistoryButton } from './HistoryButton';
+import { SettingsModal } from './SettingsButton';
+import { ScaleEverythingDialog } from './ScaleEverythingDialog';
+import { nukeAndReload } from './nukeAndReload';
+import { openHelp } from '../state/helpStore';
+import { openAbout } from '../state/aboutStore';
 
 /**
  * Phone-only top toolbar. Primary actions (Project, Add, Undo/Redo) are always
@@ -34,17 +34,17 @@ import { openAbout } from '../state/aboutStore'
  * no menu-inside-a-menu nesting.
  */
 export function MobileTopBar() {
-  const canUndo = useStore($canUndo)
-  const canRedo = useStore($canRedo)
+  const canUndo = useStore($canUndo);
+  const canRedo = useStore($canRedo);
 
-  const [partDataOpen, setPartDataOpen] = useState(false)
-  const [exportOpen, setExportOpen] = useState(false)
-  const [viewOpen, setViewOpen] = useState(false)
-  const [measureOpen, setMeasureOpen] = useState(false)
-  const [historyOpen, setHistoryOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [scaleOpen, setScaleOpen] = useState(false)
-  const [confirmReset, setConfirmReset] = useState(false)
+  const [partDataOpen, setPartDataOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [measureOpen, setMeasureOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [scaleOpen, setScaleOpen] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   return (
     <>
@@ -61,8 +61,8 @@ export function MobileTopBar() {
           isDisabled={!canUndo}
           aria-label="Undo"
           onPress={() => {
-            const d = undo()
-            if (d) toast({ title: `Undo: ${d}` }, { timeout: 1500 })
+            const d = undo();
+            if (d) toast({ title: `Undo: ${d}` }, { timeout: 1500 });
           }}
         >
           <Undo size={16} />
@@ -71,8 +71,8 @@ export function MobileTopBar() {
           isDisabled={!canRedo}
           aria-label="Redo"
           onPress={() => {
-            const d = redo()
-            if (d) toast({ title: `Redo: ${d}` }, { timeout: 1500 })
+            const d = redo();
+            if (d) toast({ title: `Redo: ${d}` }, { timeout: 1500 });
           }}
         >
           <Redo size={16} />
@@ -85,16 +85,16 @@ export function MobileTopBar() {
           <Popover placement="bottom end" className="w-48">
             <Menu
               onAction={(key) => {
-                if (key === 'partData') setPartDataOpen(true)
-                else if (key === 'export') setExportOpen(true)
-                else if (key === 'view') setViewOpen(true)
-                else if (key === 'measure') setMeasureOpen(true)
-                else if (key === 'scale') setScaleOpen(true)
-                else if (key === 'history') setHistoryOpen(true)
-                else if (key === 'settings') setSettingsOpen(true)
-                else if (key === 'shortcuts') openHelp()
-                else if (key === 'reset') setConfirmReset(true)
-                else if (key === 'about') openAbout()
+                if (key === 'partData') setPartDataOpen(true);
+                else if (key === 'export') setExportOpen(true);
+                else if (key === 'view') setViewOpen(true);
+                else if (key === 'measure') setMeasureOpen(true);
+                else if (key === 'scale') setScaleOpen(true);
+                else if (key === 'history') setHistoryOpen(true);
+                else if (key === 'settings') setSettingsOpen(true);
+                else if (key === 'shortcuts') openHelp();
+                else if (key === 'reset') setConfirmReset(true);
+                else if (key === 'about') openAbout();
               }}
             >
               <MenuItem id="partData">Part Data</MenuItem>
@@ -133,5 +133,5 @@ export function MobileTopBar() {
         onConfirm={() => void nukeAndReload()}
       />
     </>
-  )
+  );
 }

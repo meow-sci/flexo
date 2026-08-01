@@ -5,22 +5,22 @@ import {
   UNSTABLE_ToastContent as ToastContent,
   Button as AriaButton,
   Text,
-} from 'react-aria-components'
-import { X } from 'lucide-react'
-import { tv } from 'tailwind-variants'
+} from 'react-aria-components';
+import { X } from 'lucide-react';
+import { tv } from 'tailwind-variants';
 
 export interface ToastMessage {
-  title: string
-  description?: string
-  variant?: 'default' | 'success' | 'danger' | 'warning'
+  title: string;
+  description?: string;
+  variant?: 'default' | 'success' | 'danger' | 'warning';
 }
 
 /** App-wide toast queue. Render {@link GlobalToastRegion} once near the root. */
-export const toastQueue = new ToastQueue<ToastMessage>({ maxVisibleToasts: 4 })
+export const toastQueue = new ToastQueue<ToastMessage>({ maxVisibleToasts: 4 });
 
 /** Imperative entry point — enqueue a toast from anywhere, no hook required. */
 export function toast(message: ToastMessage, options?: { timeout?: number }) {
-  return toastQueue.add(message, { timeout: options?.timeout ?? 4000 })
+  return toastQueue.add(message, { timeout: options?.timeout ?? 4000 });
 }
 
 const toastStyle = tv({
@@ -34,7 +34,7 @@ const toastStyle = tv({
     },
   },
   defaultVariants: { variant: 'default' },
-})
+});
 
 export function GlobalToastRegion() {
   return (
@@ -64,5 +64,5 @@ export function GlobalToastRegion() {
         </AriaToast>
       )}
     </ToastRegion>
-  )
+  );
 }

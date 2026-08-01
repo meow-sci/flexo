@@ -17,9 +17,9 @@ import {
   KHR_DF_CHANNEL_RGBSDA_ALPHA,
   KHR_SUPERCOMPRESSION_ZSTD,
   KHR_SUPERCOMPRESSION_NONE,
-} from 'ktx-parse'
-import type { DecodedImage } from './decodeImage'
-import { compressZstd } from './zstd'
+} from 'ktx-parse';
+import type { DecodedImage } from './decodeImage';
+import { compressZstd } from './zstd';
 
 /**
  * Assembles a standards-compliant KTX2 file from decoded RGBA8 pixels + mip chain.
@@ -47,41 +47,43 @@ import { compressZstd } from './zstd'
 
 export interface EncodeKtx2Options {
   /** Apply Zstd supercompression to each level (matches KSA atlases). Default true. */
-  zstd?: boolean
+  zstd?: boolean;
 }
 
 /** 8-bit UNORM sample range. bitLength is stored as (bits − 1) = 7 per the spec. */
-const SAMPLE_BIT_LENGTH = 7
-const SAMPLE_UPPER_UNORM8 = 255
+const SAMPLE_BIT_LENGTH = 7;
+const SAMPLE_UPPER_UNORM8 = 255;
 
 export async function encodeImageToKtx2(
   image: DecodedImage,
   options: EncodeKtx2Options = {},
 ): Promise<Uint8Array> {
-  const useZstd = options.zstd ?? true
+  const useZstd = options.zstd ?? true;
 
-  const container = createDefaultContainer()
-  container.vkFormat = VK_FORMAT_R8G8B8A8_UNORM
-  container.typeSize = 1
-  container.pixelWidth = image.width
-  container.pixelHeight = image.height
-  container.pixelDepth = 0
-  container.layerCount = 0
-  container.faceCount = 1
+  const container = createDefaultContainer();
+  container.vkFormat = VK_FORMAT_R8G8B8A8_UNORM;
+  container.typeSize = 1;
+  container.pixelWidth = image.width;
+  container.pixelHeight = image.height;
+  container.pixelDepth = 0;
+  container.layerCount = 0;
+  container.faceCount = 1;
   // ktx-parse's write() emits exactly `levelCount` levels — it does NOT infer the
   // count from the levels array — so it must equal the mip chain length.
-  container.levelCount = image.levels.length
-  container.supercompressionScheme = useZstd ? KHR_SUPERCOMPRESSION_ZSTD : KHR_SUPERCOMPRESSION_NONE
+  container.levelCount = image.levels.length;
+  container.supercompressionScheme = useZstd
+    ? KHR_SUPERCOMPRESSION_ZSTD
+    : KHR_SUPERCOMPRESSION_NONE;
 
   // levels[0] = base (largest); ktx-parse handles the on-disk level ordering/padding.
-  container.levels = []
+  container.levels = [];
   for (const level of image.levels) {
-    const raw = level.rgba
-    const levelData = useZstd ? await compressZstd(raw) : raw
+    const raw = level.rgba;
+    const levelData = useZstd ? await compressZstd(raw) : raw;
     container.levels.push({
       levelData,
       uncompressedByteLength: raw.byteLength,
-    })
+    });
   }
 
   container.dataFormatDescriptor = [
@@ -103,10 +105,10 @@ export async function encodeImageToKtx2(
         sample(24, KHR_DF_CHANNEL_RGBSDA_ALPHA | KHR_DF_SAMPLE_DATATYPE_LINEAR),
       ],
     },
-  ]
+  ];
 
   // ktx-parse's write() expects an ArrayBuffer-backed view; returns a Uint8Array.
-  return write(container, { keepWriter: false })
+  return write(container, { keepWriter: false });
 }
 
 /**
@@ -123,20 +125,20 @@ export function makeSolidKtx2(
   b: number,
   options: { a?: number } = {},
 ): Promise<Uint8Array> {
-  const rgba = new Uint8Array([r, g, b, options.a ?? 255])
+  const rgba = new Uint8Array([r, g, b, options.a ?? 255]);
   return encodeImageToKtx2(
     { width: 1, height: 1, levels: [{ width: 1, height: 1, rgba }] },
     { zstd: true },
-  )
+  );
 }
 
-const KTX2_MAGIC = [0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a]
+const KTX2_MAGIC = [0xab, 0x4b, 0x54, 0x58, 0x20, 0x32, 0x30, 0xbb, 0x0d, 0x0a, 0x1a, 0x0a];
 
 /** vkFormat (uint32 LE at byte offset 12) of a KTX2 file, or -1 when not a KTX2 header. */
 export function ktx2VkFormat(bytes: Uint8Array): number {
-  if (bytes.length < 16) return -1
-  for (let i = 0; i < KTX2_MAGIC.length; i++) if (bytes[i] !== KTX2_MAGIC[i]) return -1
-  return bytes[12] | (bytes[13] << 8) | (bytes[14] << 16) | (bytes[15] << 24)
+  if (bytes.length < 16) return -1;
+  for (let i = 0; i < KTX2_MAGIC.length; i++) if (bytes[i] !== KTX2_MAGIC[i]) return -1;
+  return bytes[12] | (bytes[13] << 8) | (bytes[14] << 16) | (bytes[15] << 24);
 }
 
 /**
@@ -145,7 +147,7 @@ export function ktx2VkFormat(bytes: Uint8Array): number {
  * the stored encode is a derived cache of the source image, so callers regenerate it.
  */
 export function isLegacySrgbKtx2(bytes: Uint8Array): boolean {
-  return ktx2VkFormat(bytes) === VK_FORMAT_R8G8B8A8_SRGB
+  return ktx2VkFormat(bytes) === VK_FORMAT_R8G8B8A8_SRGB;
 }
 
 /** One 8-bit UNORM DFD sample for a given bit offset + channel (with any qualifier flags). */
@@ -157,5 +159,5 @@ function sample(bitOffset: number, channelType: number) {
     samplePosition: [0, 0, 0, 0],
     sampleLower: 0,
     sampleUpper: SAMPLE_UPPER_UNORM8,
-  }
+  };
 }

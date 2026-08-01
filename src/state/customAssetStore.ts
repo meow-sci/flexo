@@ -1,7 +1,7 @@
-import * as THREE from 'three'
-import { atom } from 'nanostores'
-import type { CatalogSubPart } from '../ksa/catalog'
-import { toUrl } from '../ksa/catalog'
+import * as THREE from 'three';
+import { atom } from 'nanostores';
+import type { CatalogSubPart } from '../ksa/catalog';
+import { toUrl } from '../ksa/catalog';
 import type {
   CustomMaterial,
   CustomMesh,
@@ -19,7 +19,7 @@ import type {
   TextureChannel,
   Transform,
   VisorSurface,
-} from '../ksa/types'
+} from '../ksa/types';
 import {
   BUILT_IN_LAYER_IDS,
   DEFAULT_LAYER_ID,
@@ -28,10 +28,10 @@ import {
   createGlow,
   materialTextureIds,
   meshKind,
-} from '../ksa/types'
-import type { NormalizedImport, NormalizedMesh } from '../ksa/importNormalize'
-import type { ImportMaterialPlan } from '../ksa/importMaterials'
-import type { ImportWarning } from '../ksa/importPlan'
+} from '../ksa/types';
+import type { NormalizedImport, NormalizedMesh } from '../ksa/importNormalize';
+import type { ImportMaterialPlan } from '../ksa/importMaterials';
+import type { ImportWarning } from '../ksa/importPlan';
 import {
   $activeLayerId,
   $part,
@@ -40,20 +40,20 @@ import {
   nextLayerId,
   setActiveLayer,
   setSelection,
-} from './editorStore'
-import { $projectName } from './projectStore'
-import { $customCatalog } from './catalogStore'
-import { $modelImportSettings, $simulateGlass } from './settingsStore'
-import { assetKeys, deleteAsset, getAsset, putAsset } from './assetDb'
+} from './editorStore';
+import { $projectName } from './projectStore';
+import { $customCatalog } from './catalogStore';
+import { $modelImportSettings, $simulateGlass } from './settingsStore';
+import { assetKeys, deleteAsset, getAsset, putAsset } from './assetDb';
 import {
   buildPrimitiveGeometry,
   PRIMITIVE_FACE_KEYS,
   applyFaceUvTransforms,
-} from '../three/primitives'
-import { buildMeshAtlasGlb } from '../ksa/exportGlb'
-import { decodeImage, type ImageLevel } from '../ktx/decodeImage'
-import { encodeImageToKtx2, isLegacySrgbKtx2 } from '../ktx/encodeKtx2'
-import { prepareChannelImage } from '../ktx/channelTransforms'
+} from '../three/primitives';
+import { buildMeshAtlasGlb } from '../ksa/exportGlb';
+import { decodeImage, type ImageLevel } from '../ktx/decodeImage';
+import { encodeImageToKtx2, isLegacySrgbKtx2 } from '../ktx/encodeKtx2';
+import { prepareChannelImage } from '../ktx/channelTransforms';
 import {
   baseSizeFor,
   compositeGlow,
@@ -63,7 +63,7 @@ import {
   solidBase,
   type GlowBitmap,
   type GlowComposite,
-} from '../ktx/glowComposite'
+} from '../ktx/glowComposite';
 import {
   applyMaterialChannels,
   buildCustomFaceMaterial,
@@ -71,9 +71,9 @@ import {
   makeFlatMaterial,
   buildGlowingFaceMaterial,
   type MaterialChannelMaps,
-} from '../three/MaterialFactory'
-import { kittenPartSubMeshes, kittenSpecFromSource } from '../ksa/kittenAssets'
-import { bakeKittenSubMeshes, buildKittenMaterial } from '../three/kittenBake'
+} from '../three/MaterialFactory';
+import { kittenPartSubMeshes, kittenSpecFromSource } from '../ksa/kittenAssets';
+import { bakeKittenSubMeshes, buildKittenMaterial } from '../three/kittenBake';
 import {
   clearImportAtlases,
   ensureImportAtlas,
@@ -81,7 +81,7 @@ import {
   importAtlasUrl,
   registerImportAtlas,
   releaseImportAtlas,
-} from '../three/importedMeshCache'
+} from '../three/importedMeshCache';
 
 /**
  * Orchestrates user-created custom assets (textures + primitive meshes). Ties the
@@ -105,29 +105,29 @@ import {
  */
 
 // ── runtime blob URLs (not persisted) ───────────────────────────────────────
-let atlasUrl: string | null = null
+let atlasUrl: string | null = null;
 /** texture id -> encoded .ktx2 blob URL (used as the catalog diffuse URL). */
-const textureKtx2Urls = new Map<string, string>()
+const textureKtx2Urls = new Map<string, string>();
 /** texture id -> source-image blob URL (used for UI thumbnails). */
-const textureSrcUrls = new Map<string, string>()
+const textureSrcUrls = new Map<string, string>();
 /** mesh id -> painted-glow-bitmap blob URL (used for the Glow panel thumbnail). */
-const emissivePaintUrls = new Map<string, string>()
+const emissivePaintUrls = new Map<string, string>();
 
 /** Reactive map of texture id -> source-image URL, for UI previews. */
-export const $customTextureUrls = atom<Record<string, string>>({})
+export const $customTextureUrls = atom<Record<string, string>>({});
 /** Reactive map of mesh id -> painted-glow-bitmap URL, for the Glow panel thumbnail. */
-export const $emissivePaintUrls = atom<Record<string, string>>({})
+export const $emissivePaintUrls = atom<Record<string, string>>({});
 
 function publishEmissivePaintUrls(): void {
-  const rec: Record<string, string> = {}
-  for (const [id, url] of emissivePaintUrls) rec[id] = url
-  $emissivePaintUrls.set(rec)
+  const rec: Record<string, string> = {};
+  for (const [id, url] of emissivePaintUrls) rec[id] = url;
+  $emissivePaintUrls.set(rec);
 }
 
 function publishTextureUrls(): void {
-  const rec: Record<string, string> = {}
-  for (const [id, url] of textureSrcUrls) rec[id] = url
-  $customTextureUrls.set(rec)
+  const rec: Record<string, string> = {};
+  for (const [id, url] of textureSrcUrls) rec[id] = url;
+  $customTextureUrls.set(rec);
 }
 
 /**
@@ -138,23 +138,23 @@ function publishTextureUrls(): void {
 export const customMeshRenderCache = new Map<
   string,
   {
-    geometry: THREE.BufferGeometry
-    materials: THREE.MeshStandardMaterial[]
+    geometry: THREE.BufferGeometry;
+    materials: THREE.MeshStandardMaterial[];
   }
->()
+>();
 
 /** Id of the custom mesh whose textures are currently being edited (null = panel closed). */
-export const $managingMeshId = atom<string | null>(null)
+export const $managingMeshId = atom<string | null>(null);
 
 export function setManagingMeshId(id: string | null): void {
-  $managingMeshId.set(id)
+  $managingMeshId.set(id);
 }
 
 /** Id of the mesh whose glow is being painted in the GlowPaintDialog (null = closed). */
-export const $glowPaintMeshId = atom<string | null>(null)
+export const $glowPaintMeshId = atom<string | null>(null);
 
 export function setGlowPaintMeshId(id: string | null): void {
-  $glowPaintMeshId.set(id)
+  $glowPaintMeshId.set(id);
 }
 
 /**
@@ -166,24 +166,24 @@ export function setGlowPaintMeshId(id: string | null): void {
  * on every open so the dialog body remounts with fresh per-import state.
  */
 export interface ImportModelRequest {
-  id: string
-  files: File[]
+  id: string;
+  files: File[];
   /**
    * Set by "Replace…": the dialog runs in REPLACE mode and the chosen file swaps THAT batch's
    * geometry in place ({@link replaceImport}) instead of creating a new batch. One request
    * store, one dialog — a second modal would duplicate the whole parse/review/options surface.
    */
-  replaceImportId?: string
+  replaceImportId?: string;
 }
 
-export const $importModelRequest = atom<ImportModelRequest | null>(null)
+export const $importModelRequest = atom<ImportModelRequest | null>(null);
 
 export function openImportModel(files: File[] = [], replaceImportId?: string): void {
-  $importModelRequest.set({ id: shortId(), files, replaceImportId })
+  $importModelRequest.set({ id: shortId(), files, replaceImportId });
 }
 
 export function closeImportModel(): void {
-  $importModelRequest.set(null)
+  $importModelRequest.set(null);
 }
 
 /**
@@ -197,36 +197,36 @@ export function closeImportModel(): void {
  */
 export interface ImportReport {
   /** Fresh per report, so the card remounts (and re-announces) for each one. */
-  id: string
-  mode: 'import' | 'replace'
-  fileName: string
+  id: string;
+  mode: 'import' | 'replace';
+  fileName: string;
   /** SubParts CREATED (for a replace: the added ones only — matched SubParts already existed). */
-  subParts: number
+  subParts: number;
   /** Placements created. */
-  placements: number
-  textures: number
-  materials: number
+  placements: number;
+  textures: number;
+  materials: number;
   /** Replace only: how many existing SubParts kept their identity. */
-  matched?: number
+  matched?: number;
   /** Replace only: display names of the SubParts the new file no longer contains. */
-  removed?: string[]
+  removed?: string[];
   /** Non-blocking warnings from the geometry + material passes, carried through verbatim. */
-  warnings: ImportWarning[]
+  warnings: ImportWarning[];
 }
 
-export const $importReport = atom<ImportReport | null>(null)
+export const $importReport = atom<ImportReport | null>(null);
 
 export function dismissImportReport(): void {
-  $importReport.set(null)
+  $importReport.set(null);
 }
 
 function shortId(): string {
-  return crypto.randomUUID().replace(/-/g, '').slice(0, 8)
+  return crypto.randomUUID().replace(/-/g, '').slice(0, 8);
 }
 
 function sanitizeIdent(name: string): string {
-  const cleaned = name.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '')
-  return cleaned || 'Asset'
+  const cleaned = name.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return cleaned || 'Asset';
 }
 
 // ── document mutation ────────────────────────────────────────────────────────
@@ -236,18 +236,18 @@ function sanitizeIdent(name: string): string {
  * and reacts ONLY to external $part swaps (undo/redo, project load). nanostores
  * notifies synchronously inside `set()`, so the flag reliably brackets the notify.
  */
-let internalCustomChange = false
+let internalCustomChange = false;
 
 function mutate(description: string, detail: string, fn: (part: EditingPart) => void): void {
-  const current = $part.get()
-  pushUndo(description, detail)
-  const next = structuredClone(current)
-  fn(next)
-  internalCustomChange = true
+  const current = $part.get();
+  pushUndo(description, detail);
+  const next = structuredClone(current);
+  fn(next);
+  internalCustomChange = true;
   try {
-    $part.set(next)
+    $part.set(next);
   } finally {
-    internalCustomChange = false
+    internalCustomChange = false;
   }
 }
 
@@ -255,13 +255,13 @@ function mutate(description: string, detail: string, fn: (part: EditingPart) => 
 
 /** True for a part-ified kitten submesh (geometry baked from the kitten gltf, not a primitive). */
 export function isKittenMesh(m: CustomMesh): m is CustomMesh & { kitten: KittenMeshSource } {
-  return !!m.kitten
+  return !!m.kitten;
 }
 
 /** The shared cached baked geometry for a kitten submesh, or null if the bake failed. */
 async function bakedKittenGeometry(src: KittenMeshSource): Promise<THREE.BufferGeometry | null> {
-  const subs = await bakeKittenSubMeshes(src.kind)
-  return subs.find((s) => s.specKey === src.specKey)?.geometry ?? null
+  const subs = await bakeKittenSubMeshes(src.kind);
+  return subs.find((s) => s.specKey === src.specKey)?.geometry ?? null;
 }
 
 /**
@@ -274,14 +274,14 @@ export function getPrimaryTextureId(m: CustomMesh): string {
   switch (meshKind(m)) {
     case 'kitten':
     case 'imported':
-      return ''
+      return '';
     case 'primitive': {
-      if (!m.primitive) return ''
+      if (!m.primitive) return '';
       for (const key of PRIMITIVE_FACE_KEYS[m.primitive.kind]) {
-        const tid = m.faceTextures[key]?.textureId
-        if (tid) return tid
+        const tid = m.faceTextures[key]?.textureId;
+        if (tid) return tid;
       }
-      return ''
+      return '';
     }
   }
 }
@@ -296,7 +296,7 @@ export function getPrimaryTextureId(m: CustomMesh): string {
  * submesh, imported mesh reference) and per-face texture assignments — the inputs to
  * the cache/atlas.
  */
-let appliedMeshSig = ''
+let appliedMeshSig = '';
 
 function meshSignature(part: EditingPart): string {
   return JSON.stringify({
@@ -319,22 +319,22 @@ function meshSignature(part: EditingPart): string {
     // Material CONTENTS feed the render cache (color/metal/rough per face), so an
     // undo/redo of a material edit must re-trigger a rebuild too.
     materials: part.customMaterials,
-  })
+  });
 }
 
 /** The mesh's material, or undefined when unassigned / dangling. */
 function materialFor(part: EditingPart, m: CustomMesh): CustomMaterial | undefined {
-  return m.materialId ? part.customMaterials.find((x) => x.id === m.materialId) : undefined
+  return m.materialId ? part.customMaterials.find((x) => x.id === m.materialId) : undefined;
 }
 
 /** The uniform value of a scalar channel; a mapped channel multiplies at 1 (three convention). */
 function scalarValue(c: ScalarChannel, fallback: number): number {
-  return c.kind === 'value' ? c.value : fallback
+  return c.kind === 'value' ? c.value : fallback;
 }
 
 /** ktx2 blob URL for a map-kind scalar channel, if any. */
 function scalarMapUrl(c: ScalarChannel): string | undefined {
-  return c.kind === 'map' ? textureKtx2Urls.get(c.textureId) : undefined
+  return c.kind === 'map' ? textureKtx2Urls.get(c.textureId) : undefined;
 }
 
 /**
@@ -347,13 +347,13 @@ function scalarMapUrl(c: ScalarChannel): string | undefined {
 function resolveMaterialChannels(material: CustomMaterial): MaterialChannelMaps {
   const ormPackedUrl = material.ormPacked
     ? textureKtx2Urls.get(material.ormPacked.textureId)
-    : undefined
-  const metalnessMapUrl = ormPackedUrl ? undefined : scalarMapUrl(material.metalness)
-  const roughnessMapUrl = ormPackedUrl ? undefined : scalarMapUrl(material.roughness)
+    : undefined;
+  const metalnessMapUrl = ormPackedUrl ? undefined : scalarMapUrl(material.metalness);
+  const roughnessMapUrl = ormPackedUrl ? undefined : scalarMapUrl(material.roughness);
   const occlusionMapUrl =
     ormPackedUrl || !material.occlusion
       ? undefined
-      : textureKtx2Urls.get(material.occlusion.textureId)
+      : textureKtx2Urls.get(material.occlusion.textureId);
   return {
     metalness: ormPackedUrl || metalnessMapUrl ? 1 : scalarValue(material.metalness, 0),
     roughness: ormPackedUrl || roughnessMapUrl ? 1 : scalarValue(material.roughness, 0.5),
@@ -363,14 +363,14 @@ function resolveMaterialChannels(material: CustomMaterial): MaterialChannelMaps 
     ormPackedUrl,
     normalMapUrl: material.normal ? textureKtx2Urls.get(material.normal.textureId) : undefined,
     normalScale: material.normal?.strength,
-  }
+  };
 }
 
 /** A mesh's resolved glow: the keyed bitmap plus how {@link compositeGlow} should read it. */
 export interface MeshGlow {
   /** rgb = glow color, a = the greyscale key. */
-  bitmap: GlowBitmap
-  settings: GlowComposite
+  bitmap: GlowBitmap;
+  settings: GlowComposite;
 }
 
 /**
@@ -378,18 +378,18 @@ export interface MeshGlow {
  * glow. The two travel together so every consumer (editor material, exporter) reads one source.
  */
 export async function glowFor(m: CustomMesh): Promise<MeshGlow | null> {
-  const e = m.emissive
-  if (!e) return null
-  const settings = glowCompositeOf(e)
+  const e = m.emissive;
+  if (!e) return null;
+  const settings = glowCompositeOf(e);
   if (e.shape === 'painted') {
-    const png = await getAsset(assetKeys.emissivePaint(m.id))
+    const png = await getAsset(assetKeys.emissivePaint(m.id));
     if (png) {
-      const lvl = (await decodeImage(png)).levels[0]
-      return { bitmap: { width: lvl.width, height: lvl.height, rgba: lvl.rgba }, settings }
+      const lvl = (await decodeImage(png)).levels[0];
+      return { bitmap: { width: lvl.width, height: lvl.height, rgba: lvl.rgba }, settings };
     }
     // painted but no bitmap stored yet → fall back to the flat color as a fully-keyed solid.
   }
-  return { bitmap: solidGlowBitmap(e.color), settings }
+  return { bitmap: solidGlowBitmap(e.color), settings };
 }
 
 /**
@@ -406,15 +406,15 @@ async function faceBaseImage(
   glow?: GlowBitmap | null,
 ): Promise<ImageLevel> {
   const mapTexId =
-    texId || (material?.baseColor.kind === 'map' ? material.baseColor.textureId : undefined)
+    texId || (material?.baseColor.kind === 'map' ? material.baseColor.textureId : undefined);
   if (mapTexId) {
-    const src = await getAsset(assetKeys.textureSource(mapTexId))
-    if (src) return (await decodeImage(src)).levels[0]
+    const src = await getAsset(assetKeys.textureSource(mapTexId));
+    if (src) return (await decodeImage(src)).levels[0];
   }
-  const { width, height } = baseSizeFor(glow)
+  const { width, height } = baseSizeFor(glow);
   if (material?.baseColor.kind === 'color')
-    return solidBase(material.baseColor.color, width, height)
-  return neutralBase(width, height)
+    return solidBase(material.baseColor.color, width, height);
+  return neutralBase(width, height);
 }
 
 /**
@@ -426,10 +426,10 @@ async function buildKittenCatalogEntry(
   m: CustomMesh,
   kitten: KittenMeshSource,
 ): Promise<CatalogSubPart> {
-  const geometry = await bakedKittenGeometry(kitten)
-  const mat = await buildKittenSubMeshMaterial(m, kitten)
-  mat.side = THREE.DoubleSide
-  if (geometry) customMeshRenderCache.set(m.subPartId, { geometry, materials: [mat] })
+  const geometry = await bakedKittenGeometry(kitten);
+  const mat = await buildKittenSubMeshMaterial(m, kitten);
+  mat.side = THREE.DoubleSide;
+  if (geometry) customMeshRenderCache.set(m.subPartId, { geometry, materials: [mat] });
   return {
     id: m.subPartId,
     atlasUrl: atlasUrl!,
@@ -437,7 +437,7 @@ async function buildKittenCatalogEntry(
     materialId: undefined,
     diffuseUrl: toUrl(kitten.diffuse),
     sourceFile: '(kitten)',
-  }
+  };
 }
 
 /**
@@ -454,25 +454,25 @@ async function buildKittenSubMeshMaterial(
   m: CustomMesh,
   kitten: KittenMeshSource,
 ): Promise<THREE.MeshStandardMaterial> {
-  const transparent = !!kitten.transparent
-  const surface = transparent ? (m.surface ?? 'glass') : undefined
+  const transparent = !!kitten.transparent;
+  const surface = transparent ? (m.surface ?? 'glass') : undefined;
 
-  const opaqueGlow = transparent ? surface === 'glow' : !!m.emissive
+  const opaqueGlow = transparent ? surface === 'glow' : !!m.emissive;
   if (opaqueGlow && m.emissive) {
-    const glow = await glowFor(m)
+    const glow = await glowFor(m);
     if (glow) {
-      const size = baseSizeFor(glow.bitmap)
+      const size = baseSizeFor(glow.bitmap);
       const { diffuse, mask } = compositeGlow(
         neutralBase(size.width, size.height),
         glow.bitmap,
         glow.settings,
-      )
-      return buildGlowingFaceMaterial(diffuse, mask)
+      );
+      return buildGlowingFaceMaterial(diffuse, mask);
     }
   }
 
-  const wantTint = surface === 'glass' || surface === 'glassGlow'
-  const glowUniform = surface === 'glassGlow' ? m.emissive : undefined
+  const wantTint = surface === 'glass' || surface === 'glassGlow';
+  const glowUniform = surface === 'glassGlow' ? m.emissive : undefined;
   return buildKittenMaterial(
     kittenSpecFromSource(kitten, {
       tint: wantTint ? m.glass?.tint : undefined,
@@ -481,7 +481,7 @@ async function buildKittenSubMeshMaterial(
       glowColor: glowUniform?.color,
       glowStrength: glowUniform?.strength,
     }),
-  )
+  );
 }
 
 /**
@@ -504,46 +504,46 @@ async function buildImportedCatalogEntry(
   m: CustomMesh,
   imported: ImportedMeshSource,
 ): Promise<CatalogSubPart | null> {
-  const url = importAtlasUrl(imported.importId)
-  const geometry = await getImportedGeometry(imported.importId, imported.meshName)
+  const url = importAtlasUrl(imported.importId);
+  const geometry = await getImportedGeometry(imported.importId, imported.meshName);
   if (!url || !geometry) {
-    console.warn(`flexo: imported mesh '${m.name}' has no resolvable geometry — skipped`)
-    return null
+    console.warn(`flexo: imported mesh '${m.name}' has no resolvable geometry — skipped`);
+    return null;
   }
 
-  const material = materialFor(part, m)
-  const channels = material ? resolveMaterialChannels(material) : undefined
+  const material = materialFor(part, m);
+  const channels = material ? resolveMaterialChannels(material) : undefined;
   const baseMapUrl =
     material?.baseColor.kind === 'map'
       ? textureKtx2Urls.get(material.baseColor.textureId)
-      : undefined
-  const glow = await glowFor(m)
+      : undefined;
+  const glow = await glowFor(m);
 
-  let mat: THREE.MeshStandardMaterial
+  let mat: THREE.MeshStandardMaterial;
   if (glow) {
     const { diffuse, mask } = compositeGlow(
       await faceBaseImage(undefined, material, glow.bitmap),
       glow.bitmap,
       glow.settings,
-    )
+    );
     const pbr = channels
       ? { metalness: channels.metalness, roughness: channels.roughness }
-      : undefined
-    mat = buildGlowingFaceMaterial(diffuse, mask, 'repeat', pbr)
+      : undefined;
+    mat = buildGlowingFaceMaterial(diffuse, mask, 'repeat', pbr);
     // SubPartObject re-applies the shader patches per instance from the final map set, so
     // attaching the material's map channels here leaves the flags correct.
-    if (channels) await applyMaterialChannels(mat, channels)
+    if (channels) await applyMaterialChannels(mat, channels);
   } else if (channels) {
     mat = await buildCustomMaterial({
       mapUrl: baseMapUrl,
       color: material?.baseColor.kind === 'color' ? material.baseColor.color : undefined,
       wrap: 'repeat',
       ...channels,
-    })
+    });
   } else {
-    mat = makeFlatMaterial()
+    mat = makeFlatMaterial();
   }
-  customMeshRenderCache.set(m.subPartId, { geometry, materials: [mat] })
+  customMeshRenderCache.set(m.subPartId, { geometry, materials: [mat] });
   return {
     id: m.subPartId,
     atlasUrl: url,
@@ -557,7 +557,7 @@ async function buildImportedCatalogEntry(
     // Cache-busting key for the shared-material cache, exactly like the primitive path.
     diffuseUrl: baseMapUrl,
     sourceFile: '(imported)',
-  }
+  };
 }
 
 /**
@@ -569,49 +569,49 @@ async function buildPrimitiveCatalogEntry(
   m: CustomMesh,
 ): Promise<CatalogSubPart | null> {
   if (!m.primitive) {
-    console.warn(`flexo: custom mesh '${m.name}' has no geometry source — skipped`)
-    return null
+    console.warn(`flexo: custom mesh '${m.name}' has no geometry source — skipped`);
+    return null;
   }
-  const ft = m.faceTextures
-  const faceKeys = PRIMITIVE_FACE_KEYS[m.primitive.kind]
+  const ft = m.faceTextures;
+  const faceKeys = PRIMITIVE_FACE_KEYS[m.primitive.kind];
 
   // Build geometry with UV transforms baked in.
-  const geometry = buildPrimitiveGeometry(m.primitive)
-  applyFaceUvTransforms(geometry, faceKeys, ft)
+  const geometry = buildPrimitiveGeometry(m.primitive);
+  applyFaceUvTransforms(geometry, faceKeys, ft);
 
   // One material per face group. Resolution per face: the face's own texture overrides
   // the mesh material's base color; the scalar/map/normal channels always come from the
   // mesh material (neutral when unassigned). A glowing mesh composites its glow bitmap
   // over the same resolved base so editor == export; meshes with neither material nor
   // face texture keep the legacy flat look.
-  const glow = await glowFor(m)
-  const material = materialFor(part, m)
-  const channels = material ? resolveMaterialChannels(material) : undefined
-  const materials: THREE.MeshStandardMaterial[] = []
+  const glow = await glowFor(m);
+  const material = materialFor(part, m);
+  const channels = material ? resolveMaterialChannels(material) : undefined;
+  const materials: THREE.MeshStandardMaterial[] = [];
   for (const key of faceKeys) {
-    const texId = ft[key]?.textureId
-    const wrap = ft[key]?.wrap ?? 'repeat'
+    const texId = ft[key]?.textureId;
+    const wrap = ft[key]?.wrap ?? 'repeat';
     if (glow) {
       const { diffuse, mask } = compositeGlow(
         await faceBaseImage(texId, material, glow.bitmap),
         glow.bitmap,
         glow.settings,
-      )
+      );
       const pbr = channels
         ? { metalness: channels.metalness, roughness: channels.roughness }
-        : undefined
-      const gmat = buildGlowingFaceMaterial(diffuse, mask, wrap, pbr)
+        : undefined;
+      const gmat = buildGlowingFaceMaterial(diffuse, mask, wrap, pbr);
       // Attach the material's map channels too; SubPartObject re-applies the shader
       // patches per instance from the final map set, so the flags end up correct.
-      if (channels) await applyMaterialChannels(gmat, channels)
-      materials.push(gmat)
+      if (channels) await applyMaterialChannels(gmat, channels);
+      materials.push(gmat);
     } else if (material && channels) {
-      const faceUrl = texId ? textureKtx2Urls.get(texId) : undefined
+      const faceUrl = texId ? textureKtx2Urls.get(texId) : undefined;
       const baseMapUrl =
         faceUrl ??
         (material.baseColor.kind === 'map'
           ? textureKtx2Urls.get(material.baseColor.textureId)
-          : undefined)
+          : undefined);
       materials.push(
         await buildCustomMaterial({
           mapUrl: baseMapUrl,
@@ -619,16 +619,16 @@ async function buildPrimitiveCatalogEntry(
           wrap,
           ...channels,
         }),
-      )
+      );
     } else {
-      const ktx2Url = texId ? textureKtx2Urls.get(texId) : undefined
-      materials.push(ktx2Url ? await buildCustomFaceMaterial(ktx2Url, wrap) : makeFlatMaterial())
+      const ktx2Url = texId ? textureKtx2Urls.get(texId) : undefined;
+      materials.push(ktx2Url ? await buildCustomFaceMaterial(ktx2Url, wrap) : makeFlatMaterial());
     }
   }
 
-  customMeshRenderCache.set(m.subPartId, { geometry, materials })
+  customMeshRenderCache.set(m.subPartId, { geometry, materials });
 
-  const primaryTexId = getPrimaryTextureId(m)
+  const primaryTexId = getPrimaryTextureId(m);
   return {
     id: m.subPartId,
     atlasUrl: atlasUrl!,
@@ -636,16 +636,16 @@ async function buildPrimitiveCatalogEntry(
     materialId: undefined,
     diffuseUrl: primaryTexId ? textureKtx2Urls.get(primaryTexId) : undefined,
     sourceFile: '(custom)',
-  }
+  };
 }
 
 async function refreshCatalog(): Promise<void> {
   // Whatever we build below reflects the current $part; record it so the $part
   // subscriber doesn't treat our own rebuild as an external (undo/redo) change.
-  appliedMeshSig = meshSignature($part.get())
-  const part = $part.get()
+  appliedMeshSig = meshSignature($part.get());
+  const part = $part.get();
 
-  customMeshRenderCache.clear()
+  customMeshRenderCache.clear();
 
   // The shared atlas backs primitive + kitten meshes ONLY, so its absence must not silence
   // imported ones: a project whose only custom meshes are imported has no shared atlas at all
@@ -654,15 +654,15 @@ async function refreshCatalog(): Promise<void> {
     part.customMeshes.map(async (m): Promise<CatalogSubPart | null> => {
       switch (meshKind(m)) {
         case 'imported':
-          return m.imported ? buildImportedCatalogEntry(part, m, m.imported) : null
+          return m.imported ? buildImportedCatalogEntry(part, m, m.imported) : null;
         case 'kitten':
-          return m.kitten && atlasUrl ? buildKittenCatalogEntry(m, m.kitten) : null
+          return m.kitten && atlasUrl ? buildKittenCatalogEntry(m, m.kitten) : null;
         case 'primitive':
-          return atlasUrl ? buildPrimitiveCatalogEntry(part, m) : null
+          return atlasUrl ? buildPrimitiveCatalogEntry(part, m) : null;
       }
     }),
-  )
-  $customCatalog.set(entries.filter((e) => e !== null))
+  );
+  $customCatalog.set(entries.filter((e) => e !== null));
 }
 
 /**
@@ -675,51 +675,51 @@ async function refreshCatalog(): Promise<void> {
  * would be a serious perf regression for zero gain.
  */
 async function rebuildAtlasNow(): Promise<void> {
-  const part = $part.get()
+  const part = $part.get();
   if (atlasUrl) {
-    URL.revokeObjectURL(atlasUrl)
-    atlasUrl = null
+    URL.revokeObjectURL(atlasUrl);
+    atlasUrl = null;
   }
-  const nodes: { name: string; geometry: THREE.BufferGeometry }[] = []
+  const nodes: { name: string; geometry: THREE.BufferGeometry }[] = [];
   for (const m of part.customMeshes) {
     switch (meshKind(m)) {
       case 'imported':
-        break // has its own GLB — see the header above
+        break; // has its own GLB — see the header above
       case 'kitten': {
-        if (!m.kitten) break
+        if (!m.kitten) break;
         // Clone the shared cached bake so the post-build dispose() below frees the
         // clone and leaves the cache (used by the render path) intact.
-        const baked = await bakedKittenGeometry(m.kitten)
+        const baked = await bakedKittenGeometry(m.kitten);
         nodes.push({
           name: m.subPartId,
           geometry: baked ? baked.clone() : new THREE.BufferGeometry(),
-        })
-        break
+        });
+        break;
       }
       case 'primitive': {
-        if (!m.primitive) break
-        const faceKeys = PRIMITIVE_FACE_KEYS[m.primitive.kind]
-        const geometry = buildPrimitiveGeometry(m.primitive)
-        applyFaceUvTransforms(geometry, faceKeys, m.faceTextures)
-        nodes.push({ name: m.subPartId, geometry })
-        break
+        if (!m.primitive) break;
+        const faceKeys = PRIMITIVE_FACE_KEYS[m.primitive.kind];
+        const geometry = buildPrimitiveGeometry(m.primitive);
+        applyFaceUvTransforms(geometry, faceKeys, m.faceTextures);
+        nodes.push({ name: m.subPartId, geometry });
+        break;
       }
     }
   }
   if (nodes.length > 0) {
     try {
-      const glb = await buildMeshAtlasGlb(nodes)
-      atlasUrl = URL.createObjectURL(new Blob([glb.slice()], { type: 'model/gltf-binary' }))
+      const glb = await buildMeshAtlasGlb(nodes);
+      atlasUrl = URL.createObjectURL(new Blob([glb.slice()], { type: 'model/gltf-binary' }));
     } finally {
-      for (const n of nodes) n.geometry.dispose()
+      for (const n of nodes) n.geometry.dispose();
     }
   }
   // Always refresh: an import-only project builds no shared atlas but still has a catalog.
-  await refreshCatalog()
+  await refreshCatalog();
 }
 
-let rebuilding: Promise<void> | null = null
-let rebuildAgain = false
+let rebuilding: Promise<void> | null = null;
+let rebuildAgain = false;
 
 /**
  * Serializes atlas rebuilds. Rebuilds revoke + recreate the shared atlas blob URL,
@@ -730,20 +730,20 @@ let rebuildAgain = false
  */
 function scheduleRebuild(): Promise<void> {
   if (rebuilding) {
-    rebuildAgain = true
-    return rebuilding
+    rebuildAgain = true;
+    return rebuilding;
   }
   rebuilding = (async () => {
     try {
       do {
-        rebuildAgain = false
-        await rebuildAtlasNow()
-      } while (rebuildAgain)
+        rebuildAgain = false;
+        await rebuildAtlasNow();
+      } while (rebuildAgain);
     } finally {
-      rebuilding = null
+      rebuilding = null;
     }
-  })()
-  return rebuilding
+  })();
+  return rebuilding;
 }
 
 // ── textures ─────────────────────────────────────────────────────────────────
@@ -762,16 +762,16 @@ async function createTextureAsset(
   channel: TextureChannel,
   maxSize?: number,
 ): Promise<CustomTexture> {
-  const id = `tex_${shortId()}`
-  const decoded = prepareChannelImage(await decodeImage(file, maxSize), channel)
-  const ktx2 = await encodeImageToKtx2(decoded, { zstd: true })
+  const id = `tex_${shortId()}`;
+  const decoded = prepareChannelImage(await decodeImage(file, maxSize), channel);
+  const ktx2 = await encodeImageToKtx2(decoded, { zstd: true });
 
-  await putAsset(assetKeys.textureSource(id), file, file.type || 'image/png')
-  await putAsset(assetKeys.textureKtx2(id), ktx2, 'image/ktx2')
+  await putAsset(assetKeys.textureSource(id), file, file.type || 'image/png');
+  await putAsset(assetKeys.textureKtx2(id), ktx2, 'image/ktx2');
 
-  textureKtx2Urls.set(id, URL.createObjectURL(new Blob([ktx2.slice()], { type: 'image/ktx2' })))
-  textureSrcUrls.set(id, URL.createObjectURL(file))
-  publishTextureUrls()
+  textureKtx2Urls.set(id, URL.createObjectURL(new Blob([ktx2.slice()], { type: 'image/ktx2' })));
+  textureSrcUrls.set(id, URL.createObjectURL(file));
+  publishTextureUrls();
 
   return {
     id,
@@ -779,7 +779,7 @@ async function createTextureAsset(
     width: decoded.width,
     height: decoded.height,
     channel,
-  }
+  };
 }
 
 export async function addCustomTexture(
@@ -787,11 +787,11 @@ export async function addCustomTexture(
   name: string,
   channel: TextureChannel = 'baseColor',
 ): Promise<CustomTexture> {
-  const tex = await createTextureAsset(file, name, channel)
+  const tex = await createTextureAsset(file, name, channel);
   mutate('add texture', tex.name, (p) => {
-    p.customTextures.push(tex)
-  })
-  return tex
+    p.customTextures.push(tex);
+  });
+  return tex;
 }
 
 /**
@@ -800,22 +800,22 @@ export async function addCustomTexture(
  * a derived cache of the source), updates the descriptor, and rebuilds the catalog.
  */
 export async function setTextureChannel(id: string, channel: TextureChannel): Promise<void> {
-  const src = await getAsset(assetKeys.textureSource(id))
-  if (!src) return
-  const decoded = prepareChannelImage(await decodeImage(src), channel)
-  const ktx2 = await encodeImageToKtx2(decoded, { zstd: true })
-  await putAsset(assetKeys.textureKtx2(id), ktx2, 'image/ktx2')
-  const old = textureKtx2Urls.get(id)
-  if (old) URL.revokeObjectURL(old)
-  textureKtx2Urls.set(id, URL.createObjectURL(new Blob([ktx2.slice()], { type: 'image/ktx2' })))
-  publishTextureUrls()
+  const src = await getAsset(assetKeys.textureSource(id));
+  if (!src) return;
+  const decoded = prepareChannelImage(await decodeImage(src), channel);
+  const ktx2 = await encodeImageToKtx2(decoded, { zstd: true });
+  await putAsset(assetKeys.textureKtx2(id), ktx2, 'image/ktx2');
+  const old = textureKtx2Urls.get(id);
+  if (old) URL.revokeObjectURL(old);
+  textureKtx2Urls.set(id, URL.createObjectURL(new Blob([ktx2.slice()], { type: 'image/ktx2' })));
+  publishTextureUrls();
 
-  const name = $part.get().customTextures.find((t) => t.id === id)?.name ?? ''
+  const name = $part.get().customTextures.find((t) => t.id === id)?.name ?? '';
   mutate('texture channel', name, (p) => {
-    const t = p.customTextures.find((x) => x.id === id)
-    if (t) t.channel = channel
-  })
-  await refreshCatalog()
+    const t = p.customTextures.find((x) => x.id === id);
+    if (t) t.channel = channel;
+  });
+  await refreshCatalog();
 }
 
 /**
@@ -824,39 +824,39 @@ export async function setTextureChannel(id: string, channel: TextureChannel): Pr
  * (the project-JSON export gate relies on this invariant — see projectTransfer).
  */
 function clearMaterialTextureRefs(mat: CustomMaterial, textureId: string): void {
-  const fresh = createDefaultMaterial(mat.id, mat.name)
+  const fresh = createDefaultMaterial(mat.id, mat.name);
   if (mat.baseColor.kind === 'map' && mat.baseColor.textureId === textureId) {
-    mat.baseColor = fresh.baseColor
+    mat.baseColor = fresh.baseColor;
   }
   if (mat.metalness.kind === 'map' && mat.metalness.textureId === textureId) {
-    mat.metalness = fresh.metalness
+    mat.metalness = fresh.metalness;
   }
   if (mat.roughness.kind === 'map' && mat.roughness.textureId === textureId) {
-    mat.roughness = fresh.roughness
+    mat.roughness = fresh.roughness;
   }
-  if (mat.occlusion?.textureId === textureId) delete mat.occlusion
-  if (mat.ormPacked?.textureId === textureId) delete mat.ormPacked
-  if (mat.normal?.textureId === textureId) delete mat.normal
+  if (mat.occlusion?.textureId === textureId) delete mat.occlusion;
+  if (mat.ormPacked?.textureId === textureId) delete mat.ormPacked;
+  if (mat.normal?.textureId === textureId) delete mat.normal;
 }
 
 export function removeCustomTexture(id: string): void {
-  const name = $part.get().customTextures.find((t) => t.id === id)?.name ?? ''
+  const name = $part.get().customTextures.find((t) => t.id === id)?.name ?? '';
   mutate('remove texture', name, (p) => {
-    p.customTextures = p.customTextures.filter((t) => t.id !== id)
+    p.customTextures = p.customTextures.filter((t) => t.id !== id);
     for (const m of p.customMeshes) {
       for (const key of Object.keys(m.faceTextures)) {
         if (m.faceTextures[key]?.textureId === id) {
-          m.faceTextures[key] = { ...m.faceTextures[key]!, textureId: '' }
+          m.faceTextures[key] = { ...m.faceTextures[key]!, textureId: '' };
         }
       }
     }
-    for (const mat of p.customMaterials) clearMaterialTextureRefs(mat, id)
-  })
-  revokeTexture(id)
-  void deleteAsset(assetKeys.textureSource(id))
-  void deleteAsset(assetKeys.textureKtx2(id))
-  publishTextureUrls()
-  void refreshCatalog()
+    for (const mat of p.customMaterials) clearMaterialTextureRefs(mat, id);
+  });
+  revokeTexture(id);
+  void deleteAsset(assetKeys.textureSource(id));
+  void deleteAsset(assetKeys.textureKtx2(id));
+  publishTextureUrls();
+  void refreshCatalog();
 }
 
 // ── materials ────────────────────────────────────────────────────────────────
@@ -873,7 +873,7 @@ function buildCustomMaterialDescriptor(
   return {
     ...createDefaultMaterial(`mat_${shortId()}`, name.trim() || 'material'),
     ...init,
-  }
+  };
 }
 
 /**
@@ -884,36 +884,36 @@ export async function addCustomMaterial(
   name: string,
   init?: Partial<Omit<CustomMaterial, 'id' | 'name'>>,
 ): Promise<CustomMaterial> {
-  const mat = buildCustomMaterialDescriptor(name, init)
+  const mat = buildCustomMaterialDescriptor(name, init);
   mutate('add material', mat.name, (p) => {
-    p.customMaterials.push(mat)
-  })
-  await refreshCatalog()
-  return mat
+    p.customMaterials.push(mat);
+  });
+  await refreshCatalog();
+  return mat;
 }
 
 export async function updateCustomMaterial(
   id: string,
   patch: Partial<Omit<CustomMaterial, 'id'>>,
 ): Promise<void> {
-  const name = $part.get().customMaterials.find((m) => m.id === id)?.name ?? ''
+  const name = $part.get().customMaterials.find((m) => m.id === id)?.name ?? '';
   mutate('edit material', patch.name ?? name, (p) => {
-    const m = p.customMaterials.find((x) => x.id === id)
-    if (m) Object.assign(m, patch)
-  })
-  await refreshCatalog()
+    const m = p.customMaterials.find((x) => x.id === id);
+    if (m) Object.assign(m, patch);
+  });
+  await refreshCatalog();
 }
 
 /** Removes a material and unassigns it from every mesh that referenced it. */
 export async function removeCustomMaterial(id: string): Promise<void> {
-  const name = $part.get().customMaterials.find((m) => m.id === id)?.name ?? ''
+  const name = $part.get().customMaterials.find((m) => m.id === id)?.name ?? '';
   mutate('remove material', name, (p) => {
-    p.customMaterials = p.customMaterials.filter((m) => m.id !== id)
+    p.customMaterials = p.customMaterials.filter((m) => m.id !== id);
     for (const m of p.customMeshes) {
-      if (m.materialId === id) delete m.materialId
+      if (m.materialId === id) delete m.materialId;
     }
-  })
-  await refreshCatalog()
+  });
+  await refreshCatalog();
 }
 
 /** Assigns (or clears, with `undefined`) a mesh's material. */
@@ -921,43 +921,43 @@ export async function setMeshMaterial(
   meshId: string,
   materialId: string | undefined,
 ): Promise<void> {
-  const name = $part.get().customMeshes.find((m) => m.id === meshId)?.name ?? ''
+  const name = $part.get().customMeshes.find((m) => m.id === meshId)?.name ?? '';
   mutate('assign material', name, (p) => {
-    const m = p.customMeshes.find((x) => x.id === meshId)
-    if (!m) return
-    if (materialId) m.materialId = materialId
-    else delete m.materialId
-  })
-  await refreshCatalog()
+    const m = p.customMeshes.find((x) => x.id === meshId);
+    if (!m) return;
+    if (materialId) m.materialId = materialId;
+    else delete m.materialId;
+  });
+  await refreshCatalog();
 }
 
 function revokeTexture(id: string): void {
-  const k = textureKtx2Urls.get(id)
-  if (k) URL.revokeObjectURL(k)
-  textureKtx2Urls.delete(id)
-  const s = textureSrcUrls.get(id)
-  if (s) URL.revokeObjectURL(s)
-  textureSrcUrls.delete(id)
+  const k = textureKtx2Urls.get(id);
+  if (k) URL.revokeObjectURL(k);
+  textureKtx2Urls.delete(id);
+  const s = textureSrcUrls.get(id);
+  if (s) URL.revokeObjectURL(s);
+  textureSrcUrls.delete(id);
 }
 
 // ── meshes ───────────────────────────────────────────────────────────────────
 export async function addCustomMesh(args: {
-  name: string
-  primitive: PrimitiveSpec
+  name: string;
+  primitive: PrimitiveSpec;
   /** Seeds every face with this texture (the quick "image on a shape" path). */
-  textureId: string
+  textureId: string;
   /** The {@link CustomMaterial} for the whole mesh (color/metal/rough/normal). */
-  materialId?: string
+  materialId?: string;
 }): Promise<CustomMesh> {
-  const id = `mesh_${shortId()}`
-  const faceTextures: Partial<Record<string, FaceTextureConfig>> = {}
+  const id = `mesh_${shortId()}`;
+  const faceTextures: Partial<Record<string, FaceTextureConfig>> = {};
   if (args.textureId) {
     for (const key of PRIMITIVE_FACE_KEYS[args.primitive.kind]) {
       faceTextures[key] = {
         textureId: args.textureId,
         uvScale: { x: 1, y: 1 },
         uvOffset: { x: 0, y: 0 },
-      }
+      };
     }
   }
   const mesh: CustomMesh = {
@@ -966,14 +966,14 @@ export async function addCustomMesh(args: {
     subPartId: `flexo_${sanitizeIdent(args.name)}_${shortId()}`,
     primitive: args.primitive,
     faceTextures,
-  }
-  if (args.materialId) mesh.materialId = args.materialId
+  };
+  if (args.materialId) mesh.materialId = args.materialId;
   mutate('add mesh', mesh.name, (p) => {
-    p.customMeshes.push(mesh)
-  })
-  await scheduleRebuild()
-  addSubPart(mesh.subPartId)
-  return mesh
+    p.customMeshes.push(mesh);
+  });
+  await scheduleRebuild();
+  addSubPart(mesh.subPartId);
+  return mesh;
 }
 
 /**
@@ -984,26 +984,26 @@ export async function addCustomMesh(args: {
  * publishes the catalog/render-cache so they render via the normal SubPart pipeline.
  */
 export async function makeKittenMeshPart(kind: KittenKind): Promise<void> {
-  const subs = kittenPartSubMeshes(kind)
-  const label = KITTEN_LABELS[kind]
-  const layerId = nextLayerId($part.get())
-  const newPlacementIndices: number[] = []
+  const subs = kittenPartSubMeshes(kind);
+  const label = KITTEN_LABELS[kind];
+  const layerId = nextLayerId($part.get());
+  const newPlacementIndices: number[] = [];
   mutate('make kitten mesh', label, (p) => {
-    p.layers.push({ id: layerId, name: `${label} Mesh` })
+    p.layers.push({ id: layerId, name: `${label} Mesh` });
     for (const sub of subs) {
-      const subPartId = `flexo_${kind}_${sub.specKey}_${shortId()}`
+      const subPartId = `flexo_${kind}_${sub.specKey}_${shortId()}`;
       p.customMeshes.push({
         id: `mesh_${shortId()}`,
         name: `${label} ${sub.label}`,
         subPartId,
         kitten: sub.source,
         faceTextures: {},
-      })
+      });
       // Keep instanceId unique across the whole part (e.g. two part-ified Hunters).
-      const base = `${kind}_${sub.specKey}`
+      const base = `${kind}_${sub.specKey}`;
       const taken = p.placements.filter(
         (pl) => pl.instanceId === base || pl.instanceId.startsWith(`${base}_`),
-      ).length
+      ).length;
       p.placements.push({
         instanceId: `${base}_${taken + 1}`,
         subPartTemplateId: subPartId,
@@ -1011,19 +1011,19 @@ export async function makeKittenMeshPart(kind: KittenKind): Promise<void> {
         rotation: { x: 0, y: 0, z: 0 },
         scale: { x: 1, y: 1, z: 1 },
         layerId,
-      })
-      newPlacementIndices.push(p.placements.length - 1)
+      });
+      newPlacementIndices.push(p.placements.length - 1);
     }
-  })
-  await scheduleRebuild()
+  });
+  await scheduleRebuild();
   // Active layer + selection are ephemeral (not undo-tracked).
-  setActiveLayer(layerId)
-  setSelection(newPlacementIndices, [], [])
+  setActiveLayer(layerId);
+  setSelection(newPlacementIndices, [], []);
 }
 
 /** Layer/instance-id base for an imported SubPart: lowercase, id-safe, never empty. */
 function instanceBase(name: string): string {
-  return sanitizeIdent(name).toLowerCase()
+  return sanitizeIdent(name).toLowerCase();
 }
 
 /**
@@ -1039,11 +1039,11 @@ function pushImportedPlacement(
   transform: Transform,
   layerId: string,
 ): void {
-  const base = instanceBase(name)
+  const base = instanceBase(name);
   let n =
     p.placements.filter((pl) => pl.instanceId === base || pl.instanceId.startsWith(`${base}_`))
-      .length + 1
-  while (p.placements.some((pl) => pl.instanceId === `${base}_${n}`)) n++
+      .length + 1;
+  while (p.placements.some((pl) => pl.instanceId === `${base}_${n}`)) n++;
   p.placements.push({
     instanceId: `${base}_${n}`,
     subPartTemplateId: subPartId,
@@ -1051,7 +1051,7 @@ function pushImportedPlacement(
     rotation: { ...transform.rotation },
     scale: { ...transform.scale },
     layerId,
-  })
+  });
 }
 
 /** The {@link ImportedMeshSource} for one normalized mesh of a batch. */
@@ -1071,10 +1071,10 @@ function importedSourceFor(
     sourceMaterial: mesh.sourceMaterial,
     triangles: mesh.triangles,
     vertices: mesh.vertices,
-  }
+  };
   // "Render as glass" is the user's export decision about this SubPart, not the file's.
-  if (keep?.transparent) source.transparent = true
-  return source
+  if (keep?.transparent) source.transparent = true;
+  return source;
 }
 
 /**
@@ -1093,14 +1093,14 @@ async function attachImportedMaterial(
   plan: ImportMaterialPlan | undefined,
   materials: Map<string, CustomMaterial>,
 ): Promise<void> {
-  const key = plan?.materialKeyByGroup.get(mesh.materialGroupKey)
-  const material = key ? materials.get(key) : undefined
-  const spec = key ? plan?.materials.find((m) => m.key === key) : undefined
-  if (material) descriptor.materialId = material.id
-  else delete descriptor.materialId
-  if (spec?.transparent && descriptor.imported) descriptor.imported.transparent = true
+  const key = plan?.materialKeyByGroup.get(mesh.materialGroupKey);
+  const material = key ? materials.get(key) : undefined;
+  const spec = key ? plan?.materials.find((m) => m.key === key) : undefined;
+  if (material) descriptor.materialId = material.id;
+  else delete descriptor.materialId;
+  if (spec?.transparent && descriptor.imported) descriptor.imported.transparent = true;
 
-  const hadGlow = !!descriptor.emissive
+  const hadGlow = !!descriptor.emissive;
   if (spec?.glowPng) {
     // REUSE OF THE 'painted' SHAPE (plans/IMPORT_MODELS.md §3.4 called for a new 'map'
     // shape): an imported emissive is exactly what 'painted' already models — an RGBA
@@ -1108,11 +1108,11 @@ async function attachImportedMaterial(
     // assetKeys.emissivePaint(meshId). Reusing it means glowFor(), compositeGlow(),
     // the editor material and the exporter all work unchanged, and the user can retouch
     // an imported glow in the existing paint dialog.
-    const png = new Blob([spec.glowPng.slice()], { type: 'image/png' })
-    await putAsset(assetKeys.emissivePaint(descriptor.id), png, 'image/png')
-    const old = emissivePaintUrls.get(descriptor.id)
-    if (old) URL.revokeObjectURL(old)
-    emissivePaintUrls.set(descriptor.id, URL.createObjectURL(png))
+    const png = new Blob([spec.glowPng.slice()], { type: 'image/png' });
+    await putAsset(assetKeys.emissivePaint(descriptor.id), png, 'image/png');
+    const old = emissivePaintUrls.get(descriptor.id);
+    if (old) URL.revokeObjectURL(old);
+    emissivePaintUrls.set(descriptor.id, URL.createObjectURL(png));
     // coverage/strength = 1: the bitmap's alpha already carries the glTF emissive's own falloff,
     // so passing it through unscaled reproduces the source material exactly. The user dials the
     // white back afterwards if it blows out in-game.
@@ -1122,13 +1122,13 @@ async function attachImportedMaterial(
       color: spec.glowColor ?? createGlow().color,
       strength: 1,
       coverage: 1,
-    }
+    };
   } else if (hadGlow) {
-    delete descriptor.emissive
-    const old = emissivePaintUrls.get(descriptor.id)
-    if (old) URL.revokeObjectURL(old)
-    emissivePaintUrls.delete(descriptor.id)
-    void deleteAsset(assetKeys.emissivePaint(descriptor.id))
+    delete descriptor.emissive;
+    const old = emissivePaintUrls.get(descriptor.id);
+    if (old) URL.revokeObjectURL(old);
+    emissivePaintUrls.delete(descriptor.id);
+    void deleteAsset(assetKeys.emissivePaint(descriptor.id));
   }
 }
 
@@ -1145,23 +1145,23 @@ async function attachImportedMaterial(
 async function createImportMaterialAssets(
   plan: ImportMaterialPlan,
 ): Promise<{ textures: CustomTexture[]; materials: Map<string, CustomMaterial> }> {
-  const textureByKey = new Map<string, CustomTexture>()
+  const textureByKey = new Map<string, CustomTexture>();
   // The SAME cap `planImportMaterials` decoded with (settingsStore), so the .ktx2 that ships
   // is the size the import dialog costed — flexo's KTX2 is uncompressed RGBA8, so this cap is
   // the user's only VRAM lever until block compression lands.
-  const maxSize = $modelImportSettings.get().maxTextureSize
+  const maxSize = $modelImportSettings.get().maxTextureSize;
   for (const spec of plan.textures) {
-    const blob = new Blob([spec.bytes.slice()], { type: spec.mime })
-    textureByKey.set(spec.key, await createTextureAsset(blob, spec.name, spec.channel, maxSize))
+    const blob = new Blob([spec.bytes.slice()], { type: spec.mime });
+    textureByKey.set(spec.key, await createTextureAsset(blob, spec.name, spec.channel, maxSize));
   }
 
-  const materials = new Map<string, CustomMaterial>()
+  const materials = new Map<string, CustomMaterial>();
   for (const spec of plan.materials) {
     const baseTex = spec.baseColorTextureKey
       ? textureByKey.get(spec.baseColorTextureKey)
-      : undefined
-    const ormTex = spec.ormTextureKey ? textureByKey.get(spec.ormTextureKey) : undefined
-    const normalTex = spec.normalTextureKey ? textureByKey.get(spec.normalTextureKey) : undefined
+      : undefined;
+    const ormTex = spec.ormTextureKey ? textureByKey.get(spec.ormTextureKey) : undefined;
+    const normalTex = spec.normalTextureKey ? textureByKey.get(spec.normalTextureKey) : undefined;
     const init: Partial<Omit<CustomMaterial, 'id' | 'name'>> = {
       baseColor: baseTex
         ? { kind: 'map', textureId: baseTex.id }
@@ -1170,12 +1170,12 @@ async function createImportMaterialAssets(
       // an ormPacked texture overrides them in both the editor and the export.
       metalness: { kind: 'value', value: spec.metalness },
       roughness: { kind: 'value', value: spec.roughness },
-    }
-    if (ormTex) init.ormPacked = { textureId: ormTex.id }
-    if (normalTex) init.normal = { textureId: normalTex.id, strength: spec.normalStrength }
-    materials.set(spec.key, buildCustomMaterialDescriptor(spec.name, init))
+    };
+    if (ormTex) init.ormPacked = { textureId: ormTex.id };
+    if (normalTex) init.normal = { textureId: normalTex.id, strength: spec.normalStrength };
+    materials.set(spec.key, buildCustomMaterialDescriptor(spec.name, init));
   }
-  return { textures: [...textureByKey.values()], materials }
+  return { textures: [...textureByKey.values()], materials };
 }
 
 /**
@@ -1200,19 +1200,19 @@ export async function importModelAsMeshes(
   fileName: string,
   materialPlan?: ImportMaterialPlan,
 ): Promise<void> {
-  await putAsset(assetKeys.importGlb(normalized.importId), normalized.glb, 'model/gltf-binary')
-  registerImportAtlas(normalized.importId, normalized.glb)
+  await putAsset(assetKeys.importGlb(normalized.importId), normalized.glb, 'model/gltf-binary');
+  registerImportAtlas(normalized.importId, normalized.glb);
 
   const assets = materialPlan
     ? await createImportMaterialAssets(materialPlan)
-    : { textures: [], materials: new Map<string, CustomMaterial>() }
+    : { textures: [], materials: new Map<string, CustomMaterial>() };
 
   /**
    * Mesh descriptors are built BEFORE the mutation because a glowing material's bitmap is
    * keyed by the mesh id (assetKeys.emissivePaint), so the id has to exist before the blob
    * can be written — and the blob has to exist before the rebuild reads it.
    */
-  const meshes: CustomMesh[] = []
+  const meshes: CustomMesh[] = [];
   for (const mesh of normalized.meshes) {
     const descriptor: CustomMesh = {
       id: `mesh_${shortId()}`,
@@ -1220,32 +1220,32 @@ export async function importModelAsMeshes(
       subPartId: mesh.subPartId,
       imported: importedSourceFor(normalized, mesh),
       faceTextures: {},
-    }
-    await attachImportedMaterial(descriptor, mesh, materialPlan, assets.materials)
-    meshes.push(descriptor)
+    };
+    await attachImportedMaterial(descriptor, mesh, materialPlan, assets.materials);
+    meshes.push(descriptor);
   }
-  publishEmissivePaintUrls()
+  publishEmissivePaintUrls();
 
-  const layerId = nextLayerId($part.get())
-  const layerName = fileName.replace(/\.[^.]+$/, '') || 'Imported model'
-  const newPlacementIndices: number[] = []
+  const layerId = nextLayerId($part.get());
+  const layerName = fileName.replace(/\.[^.]+$/, '') || 'Imported model';
+  const newPlacementIndices: number[] = [];
   mutate('import model', fileName, (p) => {
-    p.layers.push({ id: layerId, name: layerName })
-    p.customTextures.push(...assets.textures)
-    p.customMaterials.push(...assets.materials.values())
+    p.layers.push({ id: layerId, name: layerName });
+    p.customTextures.push(...assets.textures);
+    p.customMaterials.push(...assets.materials.values());
     for (let i = 0; i < normalized.meshes.length; i++) {
-      const mesh = normalized.meshes[i]!
-      p.customMeshes.push(meshes[i]!)
+      const mesh = normalized.meshes[i]!;
+      p.customMeshes.push(meshes[i]!);
       for (const t of mesh.placements) {
-        pushImportedPlacement(p, mesh.subPartId, mesh.name, t, layerId)
-        newPlacementIndices.push(p.placements.length - 1)
+        pushImportedPlacement(p, mesh.subPartId, mesh.name, t, layerId);
+        newPlacementIndices.push(p.placements.length - 1);
       }
     }
-  })
-  await scheduleRebuild()
+  });
+  await scheduleRebuild();
   // Active layer + selection are ephemeral (not undo-tracked).
-  setActiveLayer(layerId)
-  setSelection(newPlacementIndices, [], [])
+  setActiveLayer(layerId);
+  setSelection(newPlacementIndices, [], []);
   $importReport.set({
     id: shortId(),
     mode: 'import',
@@ -1255,7 +1255,7 @@ export async function importModelAsMeshes(
     textures: assets.textures.length,
     materials: assets.materials.size,
     warnings: [...normalized.warnings, ...(materialPlan?.warnings ?? [])],
-  })
+  });
 }
 
 /**
@@ -1265,24 +1265,24 @@ export async function importModelAsMeshes(
  */
 export interface ImportRemovalPlan {
   /** {@link CustomMesh.id} of every SubPart of the batch. */
-  meshIds: string[]
+  meshIds: string[];
   /** Their {@link CustomMesh.subPartId}s (what placements reference). */
-  subPartIds: string[]
+  subPartIds: string[];
   /** How many placements reference those SubParts. */
-  placements: number
+  placements: number;
   /** Materials the batch leaves unreferenced (see the reference-counting note below). */
-  materialIds: string[]
+  materialIds: string[];
   /** Textures those materials (and the removed meshes' faces) leave unreferenced. */
-  textureIds: string[]
+  textureIds: string[];
   /** Layers left with no entity at all once the batch is gone (dropped with it). */
-  layerIds: string[]
+  layerIds: string[];
 }
 
 /** Every texture a mesh's per-face grid points at (primitives only; imported meshes have none). */
 function meshFaceTextureIds(m: CustomMesh): string[] {
   return Object.values(m.faceTextures)
     .map((f) => f?.textureId)
-    .filter((id): id is string => !!id)
+    .filter((id): id is string => !!id);
 }
 
 /**
@@ -1315,29 +1315,29 @@ function planOrphanedAssets(
 ): { materialIds: string[]; textureIds: string[] } {
   // Materials: candidates are the ones the released meshes wore; survivors are those any
   // remaining mesh still wears.
-  const releasedMaterialIds = new Set(released.map((m) => m.materialId).filter(Boolean))
-  const survivingMaterialIds = new Set(surviving.map((m) => m.materialId).filter(Boolean))
+  const releasedMaterialIds = new Set(released.map((m) => m.materialId).filter(Boolean));
+  const survivingMaterialIds = new Set(surviving.map((m) => m.materialId).filter(Boolean));
   const purgedMaterials = part.customMaterials.filter(
     (mat) => releasedMaterialIds.has(mat.id) && !survivingMaterialIds.has(mat.id),
-  )
-  const purgedMaterialIds = new Set(purgedMaterials.map((m) => m.id))
+  );
+  const purgedMaterialIds = new Set(purgedMaterials.map((m) => m.id));
 
   // Textures: candidates are those the purged materials + the released meshes' faces pointed
   // at; survivors are those any SURVIVING material channel or remaining mesh face still does.
-  const candidates = new Set<string>()
-  for (const mat of purgedMaterials) for (const id of materialTextureIds(mat)) candidates.add(id)
-  for (const m of released) for (const id of meshFaceTextureIds(m)) candidates.add(id)
-  const stillUsed = new Set<string>()
+  const candidates = new Set<string>();
+  for (const mat of purgedMaterials) for (const id of materialTextureIds(mat)) candidates.add(id);
+  for (const m of released) for (const id of meshFaceTextureIds(m)) candidates.add(id);
+  const stillUsed = new Set<string>();
   for (const mat of [...part.customMaterials, ...added]) {
-    if (purgedMaterialIds.has(mat.id)) continue
-    for (const id of materialTextureIds(mat)) stillUsed.add(id)
+    if (purgedMaterialIds.has(mat.id)) continue;
+    for (const id of materialTextureIds(mat)) stillUsed.add(id);
   }
-  for (const m of surviving) for (const id of meshFaceTextureIds(m)) stillUsed.add(id)
+  for (const m of surviving) for (const id of meshFaceTextureIds(m)) stillUsed.add(id);
   const textureIds = part.customTextures
     .filter((t) => candidates.has(t.id) && !stillUsed.has(t.id))
-    .map((t) => t.id)
+    .map((t) => t.id);
 
-  return { materialIds: [...purgedMaterialIds], textureIds }
+  return { materialIds: [...purgedMaterialIds], textureIds };
 }
 
 /**
@@ -1345,17 +1345,17 @@ function planOrphanedAssets(
  * the assets the batch LEAVES BEHIND ({@link planOrphanedAssets}).
  */
 export function planImportRemoval(part: EditingPart, importId: string): ImportRemovalPlan {
-  const removed = part.customMeshes.filter((m) => m.imported?.importId === importId)
-  const meshIds = new Set(removed.map((m) => m.id))
-  const subPartIds = new Set(removed.map((m) => m.subPartId))
-  const kept = part.customMeshes.filter((m) => !meshIds.has(m.id))
-  const { materialIds, textureIds } = planOrphanedAssets(part, removed, kept)
+  const removed = part.customMeshes.filter((m) => m.imported?.importId === importId);
+  const meshIds = new Set(removed.map((m) => m.id));
+  const subPartIds = new Set(removed.map((m) => m.subPartId));
+  const kept = part.customMeshes.filter((m) => !meshIds.has(m.id));
+  const { materialIds, textureIds } = planOrphanedAssets(part, removed, kept);
 
   // Layers: only ones this batch was placed on, and only when nothing at all is left on them
   // (the import's own layer, unless the user has since moved other entities onto it).
   const batchLayers = new Set(
     part.placements.filter((pl) => subPartIds.has(pl.subPartTemplateId)).map((pl) => pl.layerId),
-  )
+  );
   const layerIds = [...batchLayers].filter(
     (id) =>
       !BUILT_IN_LAYER_IDS.includes(id) &&
@@ -1364,7 +1364,7 @@ export function planImportRemoval(part: EditingPart, importId: string): ImportRe
       !part.connectors.some((c) => c.layerId === id) &&
       !part.colliders.some((c) => c.layerId === id) &&
       !part.kittens.some((k) => k.layerId === id),
-  )
+  );
 
   return {
     meshIds: [...meshIds],
@@ -1373,7 +1373,7 @@ export function planImportRemoval(part: EditingPart, importId: string): ImportRe
     materialIds,
     textureIds,
     layerIds,
-  }
+  };
 }
 
 /**
@@ -1388,48 +1388,48 @@ export function planImportRemoval(part: EditingPart, importId: string): ImportRe
  * mesh would render nothing. The confirm dialog in CustomAssetsModal says exactly this.
  */
 export async function removeImport(importId: string): Promise<void> {
-  const before = $part.get()
-  const plan = planImportRemoval(before, importId)
-  if (plan.meshIds.length === 0) return
+  const before = $part.get();
+  const plan = planImportRemoval(before, importId);
+  if (plan.meshIds.length === 0) return;
 
-  const meshIds = new Set(plan.meshIds)
-  const subPartIds = new Set(plan.subPartIds)
-  const materialIds = new Set(plan.materialIds)
-  const textureIds = new Set(plan.textureIds)
-  const layerIds = new Set(plan.layerIds)
+  const meshIds = new Set(plan.meshIds);
+  const subPartIds = new Set(plan.subPartIds);
+  const materialIds = new Set(plan.materialIds);
+  const textureIds = new Set(plan.textureIds);
+  const layerIds = new Set(plan.layerIds);
   const label = before.customMeshes.find((m) => m.imported?.importId === importId)?.imported
-    ?.sourceFile
+    ?.sourceFile;
 
   mutate('remove import', label ?? importId, (p) => {
-    p.customMeshes = p.customMeshes.filter((m) => !meshIds.has(m.id))
-    p.placements = p.placements.filter((pl) => !subPartIds.has(pl.subPartTemplateId))
-    p.customMaterials = p.customMaterials.filter((m) => !materialIds.has(m.id))
-    p.customTextures = p.customTextures.filter((t) => !textureIds.has(t.id))
-    p.layers = p.layers.filter((l) => !layerIds.has(l.id))
-  })
+    p.customMeshes = p.customMeshes.filter((m) => !meshIds.has(m.id));
+    p.placements = p.placements.filter((pl) => !subPartIds.has(pl.subPartTemplateId));
+    p.customMaterials = p.customMaterials.filter((m) => !materialIds.has(m.id));
+    p.customTextures = p.customTextures.filter((t) => !textureIds.has(t.id));
+    p.layers = p.layers.filter((l) => !layerIds.has(l.id));
+  });
 
   // Selection/active layer are ephemeral; both may now point at something that no longer
   // exists (placement INDICES shift when placements are spliced out).
-  setSelection([], [], [])
-  if (layerIds.has($activeLayerId.get())) setActiveLayer(DEFAULT_LAYER_ID)
+  setSelection([], [], []);
+  if (layerIds.has($activeLayerId.get())) setActiveLayer(DEFAULT_LAYER_ID);
 
   for (const id of textureIds) {
-    revokeTexture(id)
-    void deleteAsset(assetKeys.textureSource(id))
-    void deleteAsset(assetKeys.textureKtx2(id))
+    revokeTexture(id);
+    void deleteAsset(assetKeys.textureSource(id));
+    void deleteAsset(assetKeys.textureKtx2(id));
   }
-  publishTextureUrls()
+  publishTextureUrls();
   for (const id of meshIds) {
-    const url = emissivePaintUrls.get(id)
-    if (url) URL.revokeObjectURL(url)
-    emissivePaintUrls.delete(id)
-    void deleteAsset(assetKeys.emissivePaint(id))
+    const url = emissivePaintUrls.get(id);
+    if (url) URL.revokeObjectURL(url);
+    emissivePaintUrls.delete(id);
+    void deleteAsset(assetKeys.emissivePaint(id));
   }
-  publishEmissivePaintUrls()
-  void deleteAsset(assetKeys.importGlb(importId))
-  releaseImportAtlas(importId)
+  publishEmissivePaintUrls();
+  void deleteAsset(assetKeys.importGlb(importId));
+  releaseImportAtlas(importId);
 
-  await scheduleRebuild()
+  await scheduleRebuild();
 }
 
 // ── re-import / replace ──────────────────────────────────────────────────────
@@ -1442,11 +1442,11 @@ export async function removeImport(importId: string): Promise<void> {
  */
 export interface ImportMatchPlan<T> {
   /** Existing SubParts the new file still contains — these keep their identity. */
-  matched: { mesh: CustomMesh; incoming: T }[]
+  matched: { mesh: CustomMesh; incoming: T }[];
   /** Meshes in the new file with no counterpart — these become new SubParts. */
-  added: T[]
+  added: T[];
   /** Existing SubParts the new file no longer contains — these must go (see below). */
-  removed: CustomMesh[]
+  removed: CustomMesh[];
 }
 
 /**
@@ -1470,38 +1470,38 @@ export function matchImportedMeshes<T extends { sourceNode: string; sourceMateri
   incoming: readonly T[],
 ): ImportMatchPlan<T> {
   const key = (v: { sourceNode: string; sourceMaterial: string }) =>
-    `${v.sourceNode}\u0000${v.sourceMaterial}`
-  const pool = new Map<string, CustomMesh[]>()
+    `${v.sourceNode}\u0000${v.sourceMaterial}`;
+  const pool = new Map<string, CustomMesh[]>();
   for (const mesh of existing) {
-    if (!mesh.imported) continue
-    const k = key(mesh.imported)
-    const bucket = pool.get(k)
-    if (bucket) bucket.push(mesh)
-    else pool.set(k, [mesh])
+    if (!mesh.imported) continue;
+    const k = key(mesh.imported);
+    const bucket = pool.get(k);
+    if (bucket) bucket.push(mesh);
+    else pool.set(k, [mesh]);
   }
 
-  const matched: { mesh: CustomMesh; incoming: T }[] = []
-  const added: T[] = []
-  const consumed = new Set<string>()
+  const matched: { mesh: CustomMesh; incoming: T }[] = [];
+  const added: T[] = [];
+  const consumed = new Set<string>();
   for (const item of incoming) {
-    const mesh = pool.get(key(item))?.shift()
+    const mesh = pool.get(key(item))?.shift();
     if (mesh) {
-      matched.push({ mesh, incoming: item })
-      consumed.add(mesh.id)
+      matched.push({ mesh, incoming: item });
+      consumed.add(mesh.id);
     } else {
-      added.push(item)
+      added.push(item);
     }
   }
-  return { matched, added, removed: existing.filter((m) => !consumed.has(m.id)) }
+  return { matched, added, removed: existing.filter((m) => !consumed.has(m.id)) };
 }
 
 /** The batch's own layer: whatever its placements sit on today (fallback: the active layer). */
 function importBatchLayer(part: EditingPart, batch: readonly CustomMesh[]): string {
-  const subPartIds = new Set(batch.map((m) => m.subPartId))
+  const subPartIds = new Set(batch.map((m) => m.subPartId));
   return (
     part.placements.find((pl) => subPartIds.has(pl.subPartTemplateId))?.layerId ??
     $activeLayerId.get()
-  )
+  );
 }
 
 /**
@@ -1538,40 +1538,40 @@ export async function replaceImport(
   opts: { updateMaterials: boolean },
   materialPlan?: ImportMaterialPlan,
 ): Promise<void> {
-  const before = $part.get()
-  const existing = before.customMeshes.filter((m) => m.imported?.importId === importId)
-  if (existing.length === 0) return
+  const before = $part.get();
+  const existing = before.customMeshes.filter((m) => m.imported?.importId === importId);
+  if (existing.length === 0) return;
 
-  const match = matchImportedMeshes(existing, normalized.meshes)
-  const layerId = importBatchLayer(before, existing)
+  const match = matchImportedMeshes(existing, normalized.meshes);
+  const layerId = importBatchLayer(before, existing);
 
-  await putAsset(assetKeys.importGlb(normalized.importId), normalized.glb, 'model/gltf-binary')
-  registerImportAtlas(normalized.importId, normalized.glb)
+  await putAsset(assetKeys.importGlb(normalized.importId), normalized.glb, 'model/gltf-binary');
+  registerImportAtlas(normalized.importId, normalized.glb);
 
   // "Update materials from file" OFF drops the translated plan entirely: no textures are
   // encoded, no materials are created, and matched SubParts keep the material + glow they
   // wear today (the point of the option).
-  const applied = opts.updateMaterials ? materialPlan : undefined
-  const useMaterials = !!applied
+  const applied = opts.updateMaterials ? materialPlan : undefined;
+  const useMaterials = !!applied;
   const assets = applied
     ? await createImportMaterialAssets(applied)
-    : { textures: [], materials: new Map<string, CustomMaterial>() }
+    : { textures: [], materials: new Map<string, CustomMaterial>() };
 
   // Descriptors are built (and their glow bitmaps written) BEFORE the mutation, exactly as in
   // importModelAsMeshes: the rebuild the mutation triggers resolves geometry, texture URLs and
   // glow bitmaps out of these binaries.
-  const updated = new Map<string, CustomMesh>()
+  const updated = new Map<string, CustomMesh>();
   for (const { mesh, incoming } of match.matched) {
     const descriptor: CustomMesh = {
       ...structuredClone(mesh),
       imported: importedSourceFor(normalized, incoming, mesh.imported),
-    }
+    };
     if (useMaterials) {
-      await attachImportedMaterial(descriptor, incoming, applied, assets.materials)
+      await attachImportedMaterial(descriptor, incoming, applied, assets.materials);
     }
-    updated.set(mesh.id, descriptor)
+    updated.set(mesh.id, descriptor);
   }
-  const added: { descriptor: CustomMesh; incoming: NormalizedMesh }[] = []
+  const added: { descriptor: CustomMesh; incoming: NormalizedMesh }[] = [];
   for (const incoming of match.added) {
     const descriptor: CustomMesh = {
       id: `mesh_${shortId()}`,
@@ -1579,83 +1579,83 @@ export async function replaceImport(
       subPartId: incoming.subPartId,
       imported: importedSourceFor(normalized, incoming),
       faceTextures: {},
-    }
+    };
     if (useMaterials) {
-      await attachImportedMaterial(descriptor, incoming, applied, assets.materials)
+      await attachImportedMaterial(descriptor, incoming, applied, assets.materials);
     }
-    added.push({ descriptor, incoming })
+    added.push({ descriptor, incoming });
   }
-  publishEmissivePaintUrls()
+  publishEmissivePaintUrls();
 
-  const removedIds = new Set(match.removed.map((m) => m.id))
-  const removedSubPartIds = new Set(match.removed.map((m) => m.subPartId))
+  const removedIds = new Set(match.removed.map((m) => m.id));
+  const removedSubPartIds = new Set(match.removed.map((m) => m.subPartId));
   const surviving = [
     ...before.customMeshes.filter((m) => !removedIds.has(m.id)).map((m) => updated.get(m.id) ?? m),
     ...added.map((a) => a.descriptor),
-  ]
+  ];
   // With materials updated, every mesh of the batch releases what it wore; without, only the
   // SubParts that are actually going away can orphan anything.
-  const released = useMaterials ? existing : match.removed
-  const gc = planOrphanedAssets(before, released, surviving, [...assets.materials.values()])
-  const purgedMaterialIds = new Set(gc.materialIds)
-  const purgedTextureIds = new Set(gc.textureIds)
+  const released = useMaterials ? existing : match.removed;
+  const gc = planOrphanedAssets(before, released, surviving, [...assets.materials.values()]);
+  const purgedMaterialIds = new Set(gc.materialIds);
+  const purgedTextureIds = new Set(gc.textureIds);
 
   const removedPlacements = before.placements.filter((pl) =>
     removedSubPartIds.has(pl.subPartTemplateId),
-  ).length
-  const newPlacementIndices: number[] = []
+  ).length;
+  const newPlacementIndices: number[] = [];
   mutate('replace model', normalized.fileName, (p) => {
     p.customMeshes = p.customMeshes
       .filter((m) => !removedIds.has(m.id))
-      .map((m) => updated.get(m.id) ?? m)
-    p.customMeshes.push(...added.map((a) => a.descriptor))
-    p.placements = p.placements.filter((pl) => !removedSubPartIds.has(pl.subPartTemplateId))
+      .map((m) => updated.get(m.id) ?? m);
+    p.customMeshes.push(...added.map((a) => a.descriptor));
+    p.placements = p.placements.filter((pl) => !removedSubPartIds.has(pl.subPartTemplateId));
     p.customTextures = [...p.customTextures, ...assets.textures].filter(
       (t) => !purgedTextureIds.has(t.id),
-    )
+    );
     p.customMaterials = [...p.customMaterials, ...assets.materials.values()].filter(
       (m) => !purgedMaterialIds.has(m.id),
-    )
+    );
 
     // Matched SubParts keep the placements the user arranged; only a file that now has MORE
     // copies of a mesh than the project has placements of it contributes the surplus.
     for (const { mesh, incoming } of match.matched) {
-      const have = p.placements.filter((pl) => pl.subPartTemplateId === mesh.subPartId).length
+      const have = p.placements.filter((pl) => pl.subPartTemplateId === mesh.subPartId).length;
       for (const t of incoming.placements.slice(have)) {
-        pushImportedPlacement(p, mesh.subPartId, mesh.name, t, layerId)
-        newPlacementIndices.push(p.placements.length - 1)
+        pushImportedPlacement(p, mesh.subPartId, mesh.name, t, layerId);
+        newPlacementIndices.push(p.placements.length - 1);
       }
     }
     for (const { descriptor, incoming } of added) {
       for (const t of incoming.placements) {
-        pushImportedPlacement(p, descriptor.subPartId, descriptor.name, t, layerId)
-        newPlacementIndices.push(p.placements.length - 1)
+        pushImportedPlacement(p, descriptor.subPartId, descriptor.name, t, layerId);
+        newPlacementIndices.push(p.placements.length - 1);
       }
     }
-  })
+  });
 
   // Selection is ephemeral: prefer the new placements, but never leave stale INDICES behind
   // (they shift when removed placements are spliced out).
-  if (newPlacementIndices.length > 0) setSelection(newPlacementIndices, [], [])
-  else if (removedPlacements > 0) setSelection([], [], [])
+  if (newPlacementIndices.length > 0) setSelection(newPlacementIndices, [], []);
+  else if (removedPlacements > 0) setSelection([], [], []);
 
   for (const id of purgedTextureIds) {
-    revokeTexture(id)
-    void deleteAsset(assetKeys.textureSource(id))
-    void deleteAsset(assetKeys.textureKtx2(id))
+    revokeTexture(id);
+    void deleteAsset(assetKeys.textureSource(id));
+    void deleteAsset(assetKeys.textureKtx2(id));
   }
-  publishTextureUrls()
+  publishTextureUrls();
   for (const mesh of match.removed) {
-    const url = emissivePaintUrls.get(mesh.id)
-    if (url) URL.revokeObjectURL(url)
-    emissivePaintUrls.delete(mesh.id)
-    void deleteAsset(assetKeys.emissivePaint(mesh.id))
+    const url = emissivePaintUrls.get(mesh.id);
+    if (url) URL.revokeObjectURL(url);
+    emissivePaintUrls.delete(mesh.id);
+    void deleteAsset(assetKeys.emissivePaint(mesh.id));
   }
-  publishEmissivePaintUrls()
-  void deleteAsset(assetKeys.importGlb(importId))
-  releaseImportAtlas(importId)
+  publishEmissivePaintUrls();
+  void deleteAsset(assetKeys.importGlb(importId));
+  releaseImportAtlas(importId);
 
-  await scheduleRebuild()
+  await scheduleRebuild();
   $importReport.set({
     id: shortId(),
     mode: 'replace',
@@ -1667,7 +1667,7 @@ export async function replaceImport(
     matched: match.matched.length,
     removed: match.removed.map((m) => m.name),
     warnings: [...normalized.warnings, ...(applied?.warnings ?? [])],
-  })
+  });
 }
 
 export async function updateCustomMesh(
@@ -1675,11 +1675,11 @@ export async function updateCustomMesh(
   patch: Partial<Pick<CustomMesh, 'name' | 'primitive' | 'faceTextures'>>,
 ): Promise<void> {
   mutate('edit mesh', id, (p) => {
-    const m = p.customMeshes.find((x) => x.id === id)
-    if (m) Object.assign(m, patch)
-  })
-  if (patch.primitive) await scheduleRebuild()
-  else await refreshCatalog()
+    const m = p.customMeshes.find((x) => x.id === id);
+    if (m) Object.assign(m, patch);
+  });
+  if (patch.primitive) await scheduleRebuild();
+  else await refreshCatalog();
 }
 
 /** Updates a single face's texture + UV config for a custom mesh. */
@@ -1689,11 +1689,11 @@ export async function updateMeshFaceConfig(
   config: FaceTextureConfig,
 ): Promise<void> {
   mutate('edit face texture', meshId, (p) => {
-    const m = p.customMeshes.find((x) => x.id === meshId)
-    if (!m) return
-    m.faceTextures[faceKey] = config
-  })
-  await refreshCatalog()
+    const m = p.customMeshes.find((x) => x.id === meshId);
+    if (!m) return;
+    m.faceTextures[faceKey] = config;
+  });
+  await refreshCatalog();
 }
 
 /**
@@ -1702,19 +1702,19 @@ export async function updateMeshFaceConfig(
  */
 export async function setMeshGlow(meshId: string, cfg: EmissiveConfig | undefined): Promise<void> {
   mutate('edit glow', meshId, (p) => {
-    const m = p.customMeshes.find((x) => x.id === meshId)
-    if (m) m.emissive = cfg
-  })
-  await refreshCatalog()
+    const m = p.customMeshes.find((x) => x.id === meshId);
+    if (m) m.emissive = cfg;
+  });
+  await refreshCatalog();
 }
 
 /** Sets (or clears) the translucent-glass tint for a glass-capable (visor) mesh. */
 export async function setMeshGlass(meshId: string, cfg: GlassConfig | undefined): Promise<void> {
   mutate('edit visor tint', meshId, (p) => {
-    const m = p.customMeshes.find((x) => x.id === meshId)
-    if (m) m.glass = cfg
-  })
-  await refreshCatalog()
+    const m = p.customMeshes.find((x) => x.id === meshId);
+    if (m) m.glass = cfg;
+  });
+  await refreshCatalog();
 }
 
 /**
@@ -1730,17 +1730,17 @@ export async function setMeshGlass(meshId: string, cfg: GlassConfig | undefined)
  * {@link setMeshSurface}).
  */
 export async function setMeshTransparent(meshId: string, transparent: boolean): Promise<void> {
-  const name = $part.get().customMeshes.find((m) => m.id === meshId)?.name ?? ''
+  const name = $part.get().customMeshes.find((m) => m.id === meshId)?.name ?? '';
   mutate('render as glass', name, (p) => {
-    const m = p.customMeshes.find((x) => x.id === meshId)
-    if (!m?.imported) return
-    if (transparent) m.imported.transparent = true
-    else delete m.imported.transparent
-  })
-  await refreshCatalog()
+    const m = p.customMeshes.find((x) => x.id === meshId);
+    if (!m?.imported) return;
+    if (transparent) m.imported.transparent = true;
+    else delete m.imported.transparent;
+  });
+  await refreshCatalog();
 }
 
-const DEFAULT_GLASS_TINT: GlassConfig = { tint: { r: 120, g: 200, b: 255 }, opacity: 0.45 }
+const DEFAULT_GLASS_TINT: GlassConfig = { tint: { r: 120, g: 200, b: 255 }, opacity: 0.45 };
 
 /**
  * Sets a glass-capable (visor) mesh's surface mode, seeding default tint/glow configs so the
@@ -1749,14 +1749,14 @@ const DEFAULT_GLASS_TINT: GlassConfig = { tint: { r: 120, g: 200, b: 255 }, opac
  */
 export async function setMeshSurface(meshId: string, surface: VisorSurface): Promise<void> {
   mutate('visor surface', meshId, (p) => {
-    const m = p.customMeshes.find((x) => x.id === meshId)
-    if (!m) return
-    m.surface = surface
+    const m = p.customMeshes.find((x) => x.id === meshId);
+    if (!m) return;
+    m.surface = surface;
     if ((surface === 'glass' || surface === 'glassGlow') && !m.glass)
-      m.glass = { ...DEFAULT_GLASS_TINT }
-    if ((surface === 'glow' || surface === 'glassGlow') && !m.emissive) m.emissive = createGlow()
-  })
-  await refreshCatalog()
+      m.glass = { ...DEFAULT_GLASS_TINT };
+    if ((surface === 'glow' || surface === 'glassGlow') && !m.emissive) m.emissive = createGlow();
+  });
+  await refreshCatalog();
 }
 
 /**
@@ -1771,16 +1771,16 @@ export async function setMeshGlowPainted(
   png: Blob,
   brushColor: RgbColor,
 ): Promise<void> {
-  await putAsset(assetKeys.emissivePaint(meshId), png, 'image/png')
-  const old = emissivePaintUrls.get(meshId)
-  if (old) URL.revokeObjectURL(old)
-  emissivePaintUrls.set(meshId, URL.createObjectURL(png))
-  publishEmissivePaintUrls()
+  await putAsset(assetKeys.emissivePaint(meshId), png, 'image/png');
+  const old = emissivePaintUrls.get(meshId);
+  if (old) URL.revokeObjectURL(old);
+  emissivePaintUrls.set(meshId, URL.createObjectURL(png));
+  publishEmissivePaintUrls();
   mutate('paint glow', meshId, (p) => {
-    const m = p.customMeshes.find((x) => x.id === meshId)
-    if (m) m.emissive = { ...(m.emissive ?? createGlow()), shape: 'painted', color: brushColor }
-  })
-  await refreshCatalog()
+    const m = p.customMeshes.find((x) => x.id === meshId);
+    if (m) m.emissive = { ...(m.emissive ?? createGlow()), shape: 'painted', color: brushColor };
+  });
+  await refreshCatalog();
 }
 
 /**
@@ -1792,17 +1792,17 @@ export async function setMeshGlowPainted(
  * ("Remove import" in the Custom Assets modal — plans/IMPORT_MODELS.md §4.3, Phase 5).
  */
 export async function removeCustomMesh(id: string): Promise<void> {
-  const mesh = $part.get().customMeshes.find((x) => x.id === id)
+  const mesh = $part.get().customMeshes.find((x) => x.id === id);
   mutate('remove mesh', mesh?.name ?? '', (p) => {
-    p.customMeshes = p.customMeshes.filter((x) => x.id !== id)
-    if (mesh) p.placements = p.placements.filter((pl) => pl.subPartTemplateId !== mesh.subPartId)
-  })
-  const paintUrl = emissivePaintUrls.get(id)
-  if (paintUrl) URL.revokeObjectURL(paintUrl)
-  emissivePaintUrls.delete(id)
-  publishEmissivePaintUrls()
-  void deleteAsset(assetKeys.emissivePaint(id))
-  await scheduleRebuild()
+    p.customMeshes = p.customMeshes.filter((x) => x.id !== id);
+    if (mesh) p.placements = p.placements.filter((pl) => pl.subPartTemplateId !== mesh.subPartId);
+  });
+  const paintUrl = emissivePaintUrls.get(id);
+  if (paintUrl) URL.revokeObjectURL(paintUrl);
+  emissivePaintUrls.delete(id);
+  publishEmissivePaintUrls();
+  void deleteAsset(assetKeys.emissivePaint(id));
+  await scheduleRebuild();
 }
 
 /**
@@ -1813,45 +1813,45 @@ export async function removeCustomMesh(id: string): Promise<void> {
  * migration; see encodeKtx2.ts).
  */
 async function ensureCurrentKtx2(id: string, stored: Blob): Promise<Blob> {
-  const header = new Uint8Array(await stored.slice(0, 16).arrayBuffer())
-  if (!isLegacySrgbKtx2(header)) return stored
-  const src = await getAsset(assetKeys.textureSource(id))
-  if (!src) return stored
-  const ktx2 = await encodeImageToKtx2(await decodeImage(src), { zstd: true })
-  await putAsset(assetKeys.textureKtx2(id), ktx2, 'image/ktx2')
-  return new Blob([ktx2.slice()], { type: 'image/ktx2' })
+  const header = new Uint8Array(await stored.slice(0, 16).arrayBuffer());
+  if (!isLegacySrgbKtx2(header)) return stored;
+  const src = await getAsset(assetKeys.textureSource(id));
+  if (!src) return stored;
+  const ktx2 = await encodeImageToKtx2(await decodeImage(src), { zstd: true });
+  await putAsset(assetKeys.textureKtx2(id), ktx2, 'image/ktx2');
+  return new Blob([ktx2.slice()], { type: 'image/ktx2' });
 }
 
 // ── hydration on project load ─────────────────────────────────────────────────
 export async function hydrateCustomAssets(): Promise<void> {
-  for (const id of [...textureKtx2Urls.keys(), ...textureSrcUrls.keys()]) revokeTexture(id)
-  publishTextureUrls()
-  for (const url of emissivePaintUrls.values()) URL.revokeObjectURL(url)
-  emissivePaintUrls.clear()
-  clearImportAtlases()
+  for (const id of [...textureKtx2Urls.keys(), ...textureSrcUrls.keys()]) revokeTexture(id);
+  publishTextureUrls();
+  for (const url of emissivePaintUrls.values()) URL.revokeObjectURL(url);
+  emissivePaintUrls.clear();
+  clearImportAtlases();
 
-  const part = $part.get()
+  const part = $part.get();
   for (const t of part.customTextures) {
-    const k = await getAsset(assetKeys.textureKtx2(t.id))
-    if (k) textureKtx2Urls.set(t.id, URL.createObjectURL(await ensureCurrentKtx2(t.id, k)))
-    const s = await getAsset(assetKeys.textureSource(t.id))
-    if (s) textureSrcUrls.set(t.id, URL.createObjectURL(s))
+    const k = await getAsset(assetKeys.textureKtx2(t.id));
+    if (k) textureKtx2Urls.set(t.id, URL.createObjectURL(await ensureCurrentKtx2(t.id, k)));
+    const s = await getAsset(assetKeys.textureSource(t.id));
+    if (s) textureSrcUrls.set(t.id, URL.createObjectURL(s));
   }
-  publishTextureUrls()
+  publishTextureUrls();
   // Reload painted-glow bitmaps (the 'whole' shape is regenerated from color/strength — no blob).
   for (const m of part.customMeshes) {
     if (m.emissive?.shape === 'painted') {
-      const png = await getAsset(assetKeys.emissivePaint(m.id))
-      if (png) emissivePaintUrls.set(m.id, URL.createObjectURL(png))
+      const png = await getAsset(assetKeys.emissivePaint(m.id));
+      if (png) emissivePaintUrls.set(m.id, URL.createObjectURL(png));
     }
   }
-  publishEmissivePaintUrls()
+  publishEmissivePaintUrls();
   // Re-register every import batch's geometry GLB (the only copy — nothing regenerates it)
   // BEFORE the rebuild, which resolves imported meshes out of those blob URLs by name.
-  const importIds = new Set<string>()
-  for (const m of part.customMeshes) if (m.imported) importIds.add(m.imported.importId)
-  for (const importId of importIds) await ensureImportAtlas(importId)
-  await scheduleRebuild()
+  const importIds = new Set<string>();
+  for (const m of part.customMeshes) if (m.imported) importIds.add(m.imported.importId);
+  for (const importId of importIds) await ensureImportAtlas(importId);
+  await scheduleRebuild();
 }
 
 /**
@@ -1864,26 +1864,26 @@ export async function hydrateCustomAssets(): Promise<void> {
  * same-value sets), so the real project's assets would never load.
  */
 export function initCustomAssets(): void {
-  if (typeof indexedDB === 'undefined' || typeof window === 'undefined') return
+  if (typeof indexedDB === 'undefined' || typeof window === 'undefined') return;
   $projectName.subscribe(() => {
     void hydrateCustomAssets().catch((err) =>
       console.warn('flexo: custom-asset hydrate failed', err),
-    )
-  })
+    );
+  });
   // Undo/redo (and any external $part swap) restores customMeshes without running
   // the mutation helpers, so the atlas / render cache / $customCatalog go stale and
   // the restored — or any newly added — instances render nothing until reload. Watch
   // for a mesh-set/geometry/face-texture change the runtime hasn't applied yet and
   // rebuild. Cheap no-op on unrelated $part changes (transform edits, etc.).
   $part.subscribe((part) => {
-    if (internalCustomChange) return // our own helpers rebuild explicitly
+    if (internalCustomChange) return; // our own helpers rebuild explicitly
     if (meshSignature(part) !== appliedMeshSig) {
-      void scheduleRebuild().catch((err) => console.warn('flexo: custom-mesh rebuild failed', err))
+      void scheduleRebuild().catch((err) => console.warn('flexo: custom-mesh rebuild failed', err));
     }
-  })
+  });
   // The "simulate in-game glass" preview toggle changes how tinted visor materials are built —
   // rebuild the catalog (materials only) when it flips. `.listen` skips the initial value.
   $simulateGlass.listen(() => {
-    void refreshCatalog().catch((err) => console.warn('flexo: glass-sim refresh failed', err))
-  })
+    void refreshCatalog().catch((err) => console.warn('flexo: glass-sim refresh failed', err));
+  });
 }

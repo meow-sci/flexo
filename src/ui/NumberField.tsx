@@ -1,6 +1,6 @@
-import { TextField } from './kit'
-import { fmt } from './format'
-import { useNumberDraft } from './numberDraft'
+import { TextField } from './kit';
+import { fmt } from './format';
+import { useNumberDraft } from './numberDraft';
 
 /**
  * A draft-aware numeric field with a short inline label. Free-types while focused (local
@@ -12,22 +12,30 @@ import { useNumberDraft } from './numberDraft'
  */
 export function NumberField(props: {
   /** Visible label — ONE character wide (the slot is `w-3`); use `ariaLabel` for the rest. */
-  label: string
+  label: string;
   /** Accessible name when {@link label} is a symbol (e.g. "Ø" ⇒ "Diameter"). */
-  ariaLabel?: string
-  value: number
-  onCommit: (n: number) => void
-  onInteractionStart?: () => void
+  ariaLabel?: string;
+  value: number;
+  onCommit: (n: number) => void;
+  onInteractionStart?: () => void;
   /** Bounds: out-of-range keystrokes are not committed, and the final value is clamped. */
-  min?: number
-  max?: number
+  min?: number;
+  max?: number;
   /** Arrow-key increment (default 1); Shift ⇒ ×10, Alt ⇒ ×0.1. */
-  step?: number
-  isDisabled?: boolean
+  step?: number;
+  isDisabled?: boolean;
 }) {
   const { label, ariaLabel, value, onCommit, onInteractionStart, min, max, step, isDisabled } =
-    props
-  const field = useNumberDraft({ value, onCommit, onInteractionStart, min, max, step, format: fmt })
+    props;
+  const field = useNumberDraft({
+    value,
+    onCommit,
+    onInteractionStart,
+    min,
+    max,
+    step,
+    format: fmt,
+  });
 
   return (
     <label className="flex items-center gap-1">
@@ -42,5 +50,5 @@ export function NumberField(props: {
         {...field}
       />
     </label>
-  )
+  );
 }

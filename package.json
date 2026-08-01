@@ -13,6 +13,7 @@
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "preview": "vite preview",
+    "thumbs:partpreview": "node scripts/capture-part-thumbs.ts",
     "test": "vitest run"
   },
   "dependencies": {

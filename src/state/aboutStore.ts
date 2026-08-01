@@ -1,5 +1,5 @@
-import { atom } from 'nanostores'
-import { persistentJSON } from '@nanostores/persistent'
+import { atom } from 'nanostores';
+import { persistentJSON } from '@nanostores/persistent';
 
 /**
  * Ephemeral open/closed state for the "About" overlay. Lives in a store (not React
@@ -7,7 +7,7 @@ import { persistentJSON } from '@nanostores/persistent'
  * overflow menu and the mobile overflow menu — without threading props or lifting
  * state. Not persisted. Mirrors {@link ../state/helpStore}.
  */
-export const $aboutOpen = atom(false)
+export const $aboutOpen = atom(false);
 
 /**
  * Persisted flag: has the About overlay been auto-shown at least once? Drives the
@@ -15,14 +15,14 @@ export const $aboutOpen = atom(false)
  * so it's wiped — and the intro shows again — when "Reset Everything" clears storage
  * (see {@link ../ui/nukeAndReload}).
  */
-export const $aboutSeen = persistentJSON<boolean>('flexo:aboutSeen', false)
+export const $aboutSeen = persistentJSON<boolean>('flexo:aboutSeen', false);
 
 export function openAbout(): void {
-  $aboutOpen.set(true)
+  $aboutOpen.set(true);
 }
 
 export function closeAbout(): void {
-  $aboutOpen.set(false)
+  $aboutOpen.set(false);
 }
 
 /**
@@ -32,11 +32,11 @@ export function closeAbout(): void {
  * deliberately leave {@link $aboutSeen} untouched so the intro still shows on the user's
  * next ordinary visit. Not persisted; in-memory only.
  */
-let suppressFirstUse = false
+let suppressFirstUse = false;
 
 /** Suppress the About first-use auto-open for this session (see {@link suppressFirstUse}). */
 export function suppressAboutFirstUse(): void {
-  suppressFirstUse = true
+  suppressFirstUse = true;
 }
 
 /**
@@ -48,8 +48,8 @@ export function suppressAboutFirstUse(): void {
  * neither opens the overlay nor marks it seen.
  */
 export function showAboutOnFirstUse(): void {
-  if (suppressFirstUse) return
-  if ($aboutSeen.get()) return
-  $aboutSeen.set(true)
-  $aboutOpen.set(true)
+  if (suppressFirstUse) return;
+  if ($aboutSeen.get()) return;
+  $aboutSeen.set(true);
+  $aboutOpen.set(true);
 }

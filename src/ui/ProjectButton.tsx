@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { FolderOpen } from 'lucide-react'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { FolderOpen } from 'lucide-react';
 import {
   DialogTrigger,
   Popover,
@@ -13,10 +13,10 @@ import {
   TextField,
   SectionTitle,
   ToolbarButton,
-} from './kit'
-import { TrashIcon } from './layerIcons'
-import { ExportProjectDialog, ImportProjectDialog } from './ProjectTransferDialogs'
-import { ShareProjectDialog } from './ShareProjectDialog'
+} from './kit';
+import { TrashIcon } from './layerIcons';
+import { ExportProjectDialog, ImportProjectDialog } from './ProjectTransferDialogs';
+import { ShareProjectDialog } from './ShareProjectDialog';
 import {
   $projectName,
   createProject,
@@ -26,7 +26,7 @@ import {
   renameCurrentProject,
   uniqueProjectName,
   type ProjectSummary,
-} from '../state/projectStore'
+} from '../state/projectStore';
 
 /**
  * Top toolbar "Project" action. The trigger shows the current project's name; the
@@ -35,12 +35,12 @@ import {
  * there's no explicit save action.
  */
 export function ProjectButton() {
-  const name = useStore($projectName)
-  const [popoverOpen, setPopoverOpen] = useState(false)
-  const [loadOpen, setLoadOpen] = useState(false)
-  const [shareOpen, setShareOpen] = useState(false)
-  const [exportOpen, setExportOpen] = useState(false)
-  const [importOpen, setImportOpen] = useState(false)
+  const name = useStore($projectName);
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [loadOpen, setLoadOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   return (
     <>
@@ -60,8 +60,8 @@ export function ProjectButton() {
               <Button
                 size="sm"
                 onPress={() => {
-                  setPopoverOpen(false)
-                  setLoadOpen(true)
+                  setPopoverOpen(false);
+                  setLoadOpen(true);
                 }}
               >
                 Load Project...
@@ -70,8 +70,8 @@ export function ProjectButton() {
                 size="sm"
                 variant="ghost"
                 onPress={() => {
-                  createProject(uniqueProjectName())
-                  setPopoverOpen(false)
+                  createProject(uniqueProjectName());
+                  setPopoverOpen(false);
                 }}
               >
                 New Project
@@ -84,8 +84,8 @@ export function ProjectButton() {
                   size="sm"
                   variant="ghost"
                   onPress={() => {
-                    setPopoverOpen(false)
-                    setShareOpen(true)
+                    setPopoverOpen(false);
+                    setShareOpen(true);
                   }}
                 >
                   Share Project...
@@ -94,8 +94,8 @@ export function ProjectButton() {
                   size="sm"
                   variant="ghost"
                   onPress={() => {
-                    setPopoverOpen(false)
-                    setExportOpen(true)
+                    setPopoverOpen(false);
+                    setExportOpen(true);
                   }}
                 >
                   Export...
@@ -104,8 +104,8 @@ export function ProjectButton() {
                   size="sm"
                   variant="ghost"
                   onPress={() => {
-                    setPopoverOpen(false)
-                    setImportOpen(true)
+                    setPopoverOpen(false);
+                    setImportOpen(true);
                   }}
                 >
                   Import...
@@ -121,13 +121,13 @@ export function ProjectButton() {
       <ExportProjectDialog isOpen={exportOpen} onOpenChange={setExportOpen} />
       <ImportProjectDialog isOpen={importOpen} onOpenChange={setImportOpen} />
     </>
-  )
+  );
 }
 
 /** Renames the current project on blur / Enter. Seeded from `name` (remount to resync). */
 function ProjectNameInput({ name }: { name: string }) {
-  const [draft, setDraft] = useState(name)
-  const commit = () => renameCurrentProject(draft)
+  const [draft, setDraft] = useState(name);
+  const commit = () => renameCurrentProject(draft);
 
   return (
     <TextField
@@ -139,31 +139,31 @@ function ProjectNameInput({ name }: { name: string }) {
       placeholder="Project name"
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
-          commit()
-          ;(e.target as HTMLInputElement).blur()
+          commit();
+          (e.target as HTMLInputElement).blur();
         }
       }}
     />
-  )
+  );
 }
 
 function formatSavedAt(ms: number): string {
-  if (!ms) return 'unsaved'
-  return new Date(ms).toLocaleString()
+  if (!ms) return 'unsaved';
+  return new Date(ms).toLocaleString();
 }
 
 function LoadProjectDialog({
   isOpen,
   onOpenChange,
 }: {
-  isOpen: boolean
-  onOpenChange: (open: boolean) => void
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const currentName = useStore($projectName)
+  const currentName = useStore($projectName);
   // setTick re-renders to refresh the list after a delete (localStorage isn't reactive).
-  const [, setTick] = useState(0)
-  const [pendingDelete, setPendingDelete] = useState<ProjectSummary | null>(null)
-  const projects: ProjectSummary[] = isOpen ? listProjects() : []
+  const [, setTick] = useState(0);
+  const [pendingDelete, setPendingDelete] = useState<ProjectSummary | null>(null);
+  const projects: ProjectSummary[] = isOpen ? listProjects() : [];
 
   return (
     <Modal
@@ -180,7 +180,7 @@ function LoadProjectDialog({
             <div className="p-2 text-sm text-fg-subtle">No saved projects yet.</div>
           ) : (
             projects.map((p) => {
-              const isCurrent = p.name === currentName
+              const isCurrent = p.name === currentName;
               return (
                 <div
                   key={p.name}
@@ -200,8 +200,8 @@ function LoadProjectDialog({
                     size="sm"
                     isDisabled={isCurrent}
                     onPress={() => {
-                      loadProject(p.name)
-                      onOpenChange(false)
+                      loadProject(p.name);
+                      onOpenChange(false);
                     }}
                   >
                     {isCurrent ? 'Loaded' : 'Load'}
@@ -216,7 +216,7 @@ function LoadProjectDialog({
                     <TrashIcon />
                   </Button>
                 </div>
-              )
+              );
             })
           )}
         </div>
@@ -230,10 +230,10 @@ function LoadProjectDialog({
         confirmLabel="Delete"
         confirmVariant="danger"
         onConfirm={() => {
-          if (pendingDelete) deleteProject(pendingDelete.name)
-          setTick((t) => t + 1)
+          if (pendingDelete) deleteProject(pendingDelete.name);
+          setTick((t) => t + 1);
         }}
       />
     </Modal>
-  )
+  );
 }

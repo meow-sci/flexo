@@ -11,5 +11,5 @@
  * where `import.meta.env` does not exist.
  */
 export function assetBase(): string {
-  return import.meta.env.VITE_ASSET_BASE || import.meta.env.BASE_URL
+  return import.meta.env.VITE_ASSET_BASE || import.meta.env.BASE_URL;
 }

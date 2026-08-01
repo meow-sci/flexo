@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { ArrowDownLeft, ArrowRight, ArrowUp, Check, Copy } from 'lucide-react'
-import { Button } from '../../../src/ui/kit'
-import { AXIS_COLOR_CSS } from '../../../src/three/axisColors'
-import { formatLengthValue, formatVec } from '../../../src/measure/format'
-import { $measurements, $partBounds } from './settings'
+import { useEffect, useRef, useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { ArrowDownLeft, ArrowRight, ArrowUp, Check, Copy } from 'lucide-react';
+import { Button } from '../../../src/ui/kit';
+import { AXIS_COLOR_CSS } from '../../../src/three/axisColors';
+import { formatLengthValue, formatVec } from '../../../src/measure/format';
+import { $measurements, $partBounds } from './settings';
 
 /**
  * The three axes in readout order, each with the arrow that matches how that axis
@@ -17,10 +17,10 @@ const AXES = [
   { key: 'x', Icon: ArrowRight, label: 'width' },
   { key: 'y', Icon: ArrowUp, label: 'height' },
   { key: 'z', Icon: ArrowDownLeft, label: 'depth' },
-] as const
+] as const;
 
 /** How long the ✓ replaces the copy icon after a successful copy. */
-const COPIED_MS = 1200
+const COPIED_MS = 1200;
 
 /**
  * The whole part's extents as one compact, selectable, copy-on-click line.
@@ -34,32 +34,32 @@ const COPIED_MS = 1200
  * unit / orientation / precision options — just the one toggle.
  */
 export function MeasurementReadout() {
-  const show = useStore($measurements)
-  const bounds = useStore($partBounds)
-  const [copied, setCopied] = useState(false)
-  const timerRef = useRef<number | undefined>(undefined)
+  const show = useStore($measurements);
+  const bounds = useStore($partBounds);
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<number | undefined>(undefined);
   // Only cleanup — a pending flash must not fire into an unmounted component.
-  useEffect(() => () => window.clearTimeout(timerRef.current), [])
+  useEffect(() => () => window.clearTimeout(timerRef.current), []);
 
-  if (!show || !bounds) return null
+  if (!show || !bounds) return null;
 
   // What lands on the clipboard: the plain `x × y × z m` line, no arrow glyphs.
-  const text = formatVec(bounds.size, 'm')
+  const text = formatVec(bounds.size, 'm');
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(text)
+      await navigator.clipboard.writeText(text);
     } catch {
       // Blocked (an iframe without `allow="clipboard-write"`, or an insecure
       // context). Nothing to recover — just don't claim it worked.
-      return
+      return;
     }
-    setCopied(true)
-    window.clearTimeout(timerRef.current)
-    timerRef.current = window.setTimeout(() => setCopied(false), COPIED_MS)
-  }
+    setCopied(true);
+    window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => setCopied(false), COPIED_MS);
+  };
 
-  const CopyIcon = copied ? Check : Copy
+  const CopyIcon = copied ? Check : Copy;
 
   return (
     // Bottom-CENTER, but ABOVE the bottom edge: the [−][+][⚙] bar is 28px tall at
@@ -83,5 +83,5 @@ export function MeasurementReadout() {
       <span className="text-fg-subtle">m</span>
       <CopyIcon size={10} className="text-fg-subtle" aria-hidden />
     </Button>
-  )
+  );
 }

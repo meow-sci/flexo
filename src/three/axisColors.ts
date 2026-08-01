@@ -11,11 +11,11 @@
  * Deliberately dependency-free (no three, no react): both sides import it.
  */
 
-export type AxisKey = 'x' | 'y' | 'z'
+export type AxisKey = 'x' | 'y' | 'z';
 
 /** Red / green / blue, brightened for legibility on flexo's charcoal canvas. */
 export const AXIS_COLOR_CSS: Record<AxisKey, string> = {
   x: '#ff5468',
   y: '#7fd94b',
   z: '#4d9dff',
-}
+};

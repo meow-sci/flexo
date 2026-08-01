@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { PackageOpen } from 'lucide-react'
-import { openImportModel } from '../state/customAssetStore'
+import { useState } from 'react';
+import { PackageOpen } from 'lucide-react';
+import { openImportModel } from '../state/customAssetStore';
 
 /**
  * Drag a `.glb` (or a `.gltf` + its sidecars) onto the 3D workspace to import it — the entry
@@ -18,34 +18,34 @@ import { openImportModel } from '../state/customAssetStore'
  * ignored so normal editor dragging is unaffected.
  */
 export function ViewportDropZone({ children }: { children: React.ReactNode }) {
-  const [active, setActive] = useState(false)
+  const [active, setActive] = useState(false);
 
   /** True only for an OS file drag — `types` is all we're allowed to read during dragover. */
-  const carriesFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files')
+  const carriesFiles = (e: React.DragEvent) => e.dataTransfer.types.includes('Files');
 
   return (
     <div
       className="absolute inset-0"
       onDragOver={(e) => {
-        if (!carriesFiles(e)) return
-        e.preventDefault() // required for `drop` to fire at all
-        e.dataTransfer.dropEffect = 'copy'
-        if (!active) setActive(true)
+        if (!carriesFiles(e)) return;
+        e.preventDefault(); // required for `drop` to fire at all
+        e.dataTransfer.dropEffect = 'copy';
+        if (!active) setActive(true);
       }}
       onDragLeave={(e) => {
         // Only the drag leaving the zone itself counts; moving between children re-enters.
-        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
-        setActive(false)
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        setActive(false);
       }}
       onDrop={(e) => {
-        if (!carriesFiles(e)) return
-        e.preventDefault()
-        setActive(false)
-        const files = Array.from(e.dataTransfer.files)
+        if (!carriesFiles(e)) return;
+        e.preventDefault();
+        setActive(false);
+        const files = Array.from(e.dataTransfer.files);
         // No model in the drop ⇒ not ours. Say nothing and let the user try again; the
         // dialog's own drop zone is where a mistaken file gets an explanation.
-        if (!files.some(isModelFile)) return
-        openImportModel(files)
+        if (!files.some(isModelFile)) return;
+        openImportModel(files);
       }}
     >
       {children}
@@ -58,10 +58,10 @@ export function ViewportDropZone({ children }: { children: React.ReactNode }) {
         </div>
       )}
     </div>
-  )
+  );
 }
 
 /** The entry files `loadModelFile` accepts (sidecars ride along but never trigger a drop). */
 function isModelFile(file: File): boolean {
-  return /\.(glb|gltf)$/i.test(file.name)
+  return /\.(glb|gltf)$/i.test(file.name);
 }

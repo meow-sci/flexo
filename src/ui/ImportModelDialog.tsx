@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
-import { useStore } from '@nanostores/react'
-import type { Object3D } from 'three'
-import { AlertTriangle, Info, PackageOpen, Upload } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react';
+import { useStore } from '@nanostores/react';
+import type { Object3D } from 'three';
+import { AlertTriangle, Info, PackageOpen, Upload } from 'lucide-react';
 import {
   Button,
   Dialog,
@@ -15,7 +15,7 @@ import {
   toast,
   Tooltip,
   warningBox,
-} from './kit'
+} from './kit';
 import {
   $importModelRequest,
   closeImportModel,
@@ -23,12 +23,12 @@ import {
   matchImportedMeshes,
   replaceImport,
   type ImportMatchPlan,
-} from '../state/customAssetStore'
-import { $part } from '../state/editorStore'
-import type { CustomMesh } from '../ksa/types'
-import { $modelImportSettings, setModelImportSettings } from '../state/settingsStore'
-import { loadModelFile, type LoadedModel } from '../three/loadModelFile'
-import { ModelPreviewViewport } from '../three/ModelPreviewViewport'
+} from '../state/customAssetStore';
+import { $part } from '../state/editorStore';
+import type { CustomMesh } from '../ksa/types';
+import { $modelImportSettings, setModelImportSettings } from '../state/settingsStore';
+import { loadModelFile, type LoadedModel } from '../three/loadModelFile';
+import { ModelPreviewViewport } from '../three/ModelPreviewViewport';
 import {
   analyzeImport,
   canMerge,
@@ -36,9 +36,9 @@ import {
   plannedTotals,
   type ImportOptions,
   type ImportPlan,
-} from '../ksa/importPlan'
-import { normalizeImport } from '../ksa/importNormalize'
-import { planImportMaterials, type ImportMaterialPlan } from '../ksa/importMaterials'
+} from '../ksa/importPlan';
+import { normalizeImport } from '../ksa/importNormalize';
+import { planImportMaterials, type ImportMaterialPlan } from '../ksa/importMaterials';
 import {
   estimateImportCost,
   formatBytes,
@@ -47,10 +47,10 @@ import {
   SCALE_PRESETS,
   type WarningGroup,
   type WarningSeverity,
-} from '../ksa/importEstimates'
-import { VIEW_MESH_TRIANGLE_BUDGET } from '../ksa/modExport'
-import { fmt } from './format'
-import { useNumberDraft } from './numberDraft'
+} from '../ksa/importEstimates';
+import { VIEW_MESH_TRIANGLE_BUDGET } from '../ksa/modExport';
+import { fmt } from './format';
+import { useNumberDraft } from './numberDraft';
 
 /**
  * Import a model (glTF/GLB) as KSA SubParts. Three states in ONE modal, no wizard chrome:
@@ -80,8 +80,8 @@ import { useNumberDraft } from './numberDraft'
  * points (the Add menu, a drag-drop onto the 3D viewport, and "Replace…") and one dialog.
  */
 export function ImportModelDialog() {
-  const request = useStore($importModelRequest)
-  if (!request) return null
+  const request = useStore($importModelRequest);
+  if (!request) return null;
   // Keyed by the request id so every open starts with fresh per-import state.
   return (
     <ImportModelBody
@@ -89,7 +89,7 @@ export function ImportModelDialog() {
       initialFiles={request.files}
       replaceImportId={request.replaceImportId}
     />
-  )
+  );
 }
 
 /** Re-analysis is cheap; re-parsing is not. Everything here derives from a parsed model. */
@@ -97,65 +97,65 @@ function ImportModelBody({
   initialFiles,
   replaceImportId,
 }: {
-  initialFiles: File[]
-  replaceImportId?: string
+  initialFiles: File[];
+  replaceImportId?: string;
 }) {
-  const settings = useStore($modelImportSettings)
-  const part = useStore($part)
-  const [files, setFiles] = useState<File[]>(initialFiles)
-  const [model, setModel] = useState<LoadedModel | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [materialPlan, setMaterialPlan] = useState<ImportMaterialPlan | null>(null)
+  const settings = useStore($modelImportSettings);
+  const part = useStore($part);
+  const [files, setFiles] = useState<File[]>(initialFiles);
+  const [model, setModel] = useState<LoadedModel | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [materialPlan, setMaterialPlan] = useState<ImportMaterialPlan | null>(null);
   /** Non-null only during state 3; the message is the current phase. */
-  const [importing, setImporting] = useState<string | null>(null)
-  const [dropActive, setDropActive] = useState(false)
+  const [importing, setImporting] = useState<string | null>(null);
+  const [dropActive, setDropActive] = useState(false);
 
   // Per-import options (the sticky ones live in $modelImportSettings — see settingsStore).
-  const [namePrefix, setNamePrefix] = useState('')
-  const [scale, setScale] = useState(1)
-  const [bakeTransforms, setBakeTransforms] = useState(false)
-  const [doubleSided, setDoubleSided] = useState(false)
-  const [merge, setMerge] = useState(false)
+  const [namePrefix, setNamePrefix] = useState('');
+  const [scale, setScale] = useState(1);
+  const [bakeTransforms, setBakeTransforms] = useState(false);
+  const [doubleSided, setDoubleSided] = useState(false);
+  const [merge, setMerge] = useState(false);
   /** Replace only. On (default): take the new file's textures/materials/glow too. */
-  const [updateMaterials, setUpdateMaterials] = useState(true)
+  const [updateMaterials, setUpdateMaterials] = useState(true);
 
-  const fileInput = useRef<HTMLInputElement>(null)
+  const fileInput = useRef<HTMLInputElement>(null);
 
   // ── parse (state 1 → 2) ────────────────────────────────────────────────────
   //
   // The effect only WRITES state from its async callbacks; the reset (model/plan/error) is
   // done by whoever changes `files`, so nothing here cascades a render.
   useEffect(() => {
-    if (files.length === 0) return
-    let cancelled = false
+    if (files.length === 0) return;
+    let cancelled = false;
     loadModelFile(files)
       .then((loaded) => {
-        if (!cancelled) setModel(loaded)
+        if (!cancelled) setModel(loaded);
       })
       .catch((err: unknown) => {
-        if (cancelled) return
-        console.error('flexo: model parse failed', err)
-        const message = err instanceof Error ? err.message : String(err)
-        setError(message)
+        if (cancelled) return;
+        console.error('flexo: model parse failed', err);
+        const message = err instanceof Error ? err.message : String(err);
+        setError(message);
         // The dialog stays open on its drop state so another file can be picked.
-        toast({ title: 'Could not read that model', description: message, variant: 'danger' })
-      })
+        toast({ title: 'Could not read that model', description: message, variant: 'danger' });
+      });
     return () => {
-      cancelled = true
-    }
-  }, [files])
+      cancelled = true;
+    };
+  }, [files]);
 
   /** State 1 is still working: files chosen, nothing parsed yet and nothing to report. */
-  const parsing = files.length > 0 && !model && !error
+  const parsing = files.length > 0 && !model && !error;
 
   // Shared draft editing (see useNumberDraft); a zero/negative scale would degenerate the
   // preview and import, so those commits are ignored rather than clamped.
   const scaleField = useNumberDraft({
     value: scale,
     onCommit: (n) => {
-      if (n > 0) setScale(n)
+      if (n > 0) setScale(n);
     },
-  })
+  });
 
   // Analysis is re-run on every scale / up-axis change: it walks the already-parsed scene
   // graph and never touches the file, so it is cheap enough to drive the live preview,
@@ -165,8 +165,8 @@ function ImportModelBody({
     ...DEFAULT_IMPORT_OPTIONS,
     scale,
     upAxis: settings.upAxis,
-  }
-  const plan: ImportPlan | null = model ? analyzeImport(model, analyzeOptions) : null
+  };
+  const plan: ImportPlan | null = model ? analyzeImport(model, analyzeOptions) : null;
 
   // ── material translation (textures: count, VRAM, warnings) ─────────────────
   //
@@ -178,28 +178,28 @@ function ImportModelBody({
   // job of whoever invalidates it (`pickFiles` / `changeTextureCap`), so this effect never
   // writes state synchronously.
   useEffect(() => {
-    if (!model) return
-    let cancelled = false
+    if (!model) return;
+    let cancelled = false;
     planImportMaterials(model, analyzeImport(model, DEFAULT_IMPORT_OPTIONS), {
       maxTextureSize: settings.maxTextureSize,
     })
       .then((translated) => {
-        if (!cancelled) setMaterialPlan(translated)
+        if (!cancelled) setMaterialPlan(translated);
       })
       .catch((err: unknown) => {
-        if (cancelled) return
-        console.warn('flexo: import material translation failed', err)
+        if (cancelled) return;
+        console.warn('flexo: import material translation failed', err);
         setMaterialPlan({
           textures: [],
           materials: [],
           materialKeyByGroup: new Map(),
           warnings: [],
-        })
-      })
+        });
+      });
     return () => {
-      cancelled = true
-    }
-  }, [model, settings.maxTextureSize])
+      cancelled = true;
+    };
+  }, [model, settings.maxTextureSize]);
 
   // ── replace mode ───────────────────────────────────────────────────────────
   //
@@ -210,12 +210,12 @@ function ImportModelBody({
   // single existing SubPart identity.
   const existingBatch: CustomMesh[] = replaceImportId
     ? part.customMeshes.filter((m) => m.imported?.importId === replaceImportId)
-    : []
+    : [];
   const match: ImportMatchPlan<{ sourceNode: string; sourceMaterial: string }> | null =
-    replaceImportId && plan ? matchImportedMeshes(existingBatch, plan.groups) : null
+    replaceImportId && plan ? matchImportedMeshes(existingBatch, plan.groups) : null;
 
-  const mergeable = !replaceImportId && plan ? canMerge(plan) : false
-  const totals = plan ? plannedTotals(plan, merge && mergeable) : null
+  const mergeable = !replaceImportId && plan ? canMerge(plan) : false;
+  const totals = plan ? plannedTotals(plan, merge && mergeable) : null;
   const cost = estimateImportCost({
     textureSizes: (materialPlan?.textures ?? []).map((t) => imageSizeOf(t.bytes)),
     maxTextureSize: settings.maxTextureSize,
@@ -223,26 +223,26 @@ function ImportModelBody({
     vertices: totals?.vertices ?? 0,
     subParts: totals?.subParts ?? 0,
     viewMeshBudget: settings.decimateViewMeshes ? VIEW_MESH_TRIANGLE_BUDGET : undefined,
-  })
-  const warnings = groupWarnings([...(plan?.warnings ?? []), ...(materialPlan?.warnings ?? [])])
-  const canImport = !!plan && plan.groups.length > 0 && !importing
+  });
+  const warnings = groupWarnings([...(plan?.warnings ?? []), ...(materialPlan?.warnings ?? [])]);
+  const canImport = !!plan && plan.groups.length > 0 && !importing;
 
   const pickFiles = (picked: File[]) => {
-    if (picked.length === 0) return
-    setModel(null)
-    setMaterialPlan(null)
-    setError(null)
-    setFiles(picked)
-  }
+    if (picked.length === 0) return;
+    setModel(null);
+    setMaterialPlan(null);
+    setError(null);
+    setFiles(picked);
+  };
 
   /** The VRAM/mod estimate and the encoded .ktx2 both depend on the cap — re-translate. */
   const changeTextureCap = (maxTextureSize: 1024 | 2048 | 4096) => {
-    setMaterialPlan(null)
-    setModelImportSettings({ maxTextureSize })
-  }
+    setMaterialPlan(null);
+    setModelImportSettings({ maxTextureSize });
+  };
 
   const runImport = async () => {
-    if (!model || !plan) return
+    if (!model || !plan) return;
     const options: ImportOptions = {
       scale,
       upAxis: settings.upAxis,
@@ -251,44 +251,44 @@ function ImportModelBody({
       doubleSided,
       namePrefix,
       merge: merge && mergeable,
-    }
-    setError(null)
-    setImporting('Translating materials…')
+    };
+    setError(null);
+    setImporting('Translating materials…');
     try {
       // Reuse the translation the review step already paid for; only re-run it if the user
       // confirmed before it finished.
       const materials =
         materialPlan ??
-        (await planImportMaterials(model, plan, { maxTextureSize: settings.maxTextureSize }))
-      setImporting('Normalizing geometry…')
-      const normalized = await normalizeImport(plan, options)
+        (await planImportMaterials(model, plan, { maxTextureSize: settings.maxTextureSize }));
+      setImporting('Normalizing geometry…');
+      const normalized = await normalizeImport(plan, options);
       setImporting(
         replaceImportId
           ? 'Swapping geometry and materials…'
           : 'Encoding textures and creating SubParts…',
-      )
+      );
       try {
         if (replaceImportId) {
-          await replaceImport(replaceImportId, normalized, { updateMaterials }, materials)
+          await replaceImport(replaceImportId, normalized, { updateMaterials }, materials);
         } else {
-          await importModelAsMeshes(normalized, model.fileName, materials)
+          await importModelAsMeshes(normalized, model.fileName, materials);
         }
       } finally {
         // The atlas GLB is now the geometry's home (the editor renders from it via
         // importedMeshCache), so these working copies are ours to free.
-        for (const mesh of normalized.meshes) mesh.geometry.dispose()
+        for (const mesh of normalized.meshes) mesh.geometry.dispose();
       }
       // The outcome is reported by the ImportReportCard (counts, removed SubParts, warnings) —
       // a success toast would say strictly less, twice.
-      closeImportModel()
+      closeImportModel();
     } catch (err: unknown) {
-      console.error('flexo: model import failed', err)
-      const message = err instanceof Error ? err.message : String(err)
-      setImporting(null)
-      setError(message)
-      toast({ title: 'Import failed', description: message, variant: 'danger' })
+      console.error('flexo: model import failed', err);
+      const message = err instanceof Error ? err.message : String(err);
+      setImporting(null);
+      setError(message);
+      toast({ title: 'Import failed', description: message, variant: 'danger' });
     }
-  }
+  };
 
   return (
     <Modal
@@ -304,7 +304,7 @@ function ImportModelBody({
         <DialogHeader
           title={replaceImportId ? 'Replace model' : 'Import model'}
           onClose={() => {
-            if (!importing) closeImportModel()
+            if (!importing) closeImportModel();
           }}
         />
 
@@ -482,15 +482,15 @@ function ImportModelBody({
           multiple
           className="hidden"
           onChange={(e) => {
-            const input = e.currentTarget
-            const picked = Array.from(input.files ?? [])
-            input.value = '' // re-picking the same file must fire change again
-            pickFiles(picked)
+            const input = e.currentTarget;
+            const picked = Array.from(input.files ?? []);
+            input.value = ''; // re-picking the same file must fire change again
+            pickFiles(picked);
           }}
         />
       </Dialog>
     </Modal>
-  )
+  );
 }
 
 // ── state 1: drop ────────────────────────────────────────────────────────────
@@ -504,13 +504,13 @@ function DropStep({
   onDropActive,
   onFiles,
 }: {
-  parsing: boolean
-  error: string | null
-  dropActive: boolean
-  replacing: boolean
-  onPick: () => void
-  onDropActive: (active: boolean) => void
-  onFiles: (files: File[]) => void
+  parsing: boolean;
+  error: string | null;
+  dropActive: boolean;
+  replacing: boolean;
+  onPick: () => void;
+  onDropActive: (active: boolean) => void;
+  onFiles: (files: File[]) => void;
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
@@ -525,14 +525,14 @@ function DropStep({
         type="button"
         onClick={onPick}
         onDragOver={(e) => {
-          e.preventDefault()
-          onDropActive(true)
+          e.preventDefault();
+          onDropActive(true);
         }}
         onDragLeave={() => onDropActive(false)}
         onDrop={(e) => {
-          e.preventDefault()
-          onDropActive(false)
-          onFiles(Array.from(e.dataTransfer.files ?? []))
+          e.preventDefault();
+          onDropActive(false);
+          onFiles(Array.from(e.dataTransfer.files ?? []));
         }}
         className={`flex min-h-40 flex-col items-center justify-center gap-2 rounded-lg border border-dashed p-6 text-center text-sm text-fg-muted transition-colors ${
           dropActive ? 'border-accent bg-accent/10' : 'border-border bg-panel-sunken'
@@ -583,7 +583,7 @@ function DropStep({
         </p>
       </DisclosureSection>
     </div>
-  )
+  );
 }
 
 /** The Blender export settings that map onto what KSA can actually load (plan §1.3). */
@@ -597,7 +597,7 @@ const BLENDER_RECIPE: readonly { section: string; setting: string }[] = [
   { section: 'Data ▸ Material', setting: 'Materials: Export, Images: Automatic (PNG/JPEG)' },
   { section: 'Shape Keys / Skinning', setting: 'off (KSA parts have neither)' },
   { section: 'Compression', setting: 'Draco off preferred (accepted either way)' },
-]
+];
 
 // ── state 2 pieces ───────────────────────────────────────────────────────────
 
@@ -606,29 +606,29 @@ function ModelPreview({
   scale,
   upAxis,
 }: {
-  scene: Object3D
-  scale: number
-  upAxis: 'y' | 'z'
+  scene: Object3D;
+  scale: number;
+  upAxis: 'y' | 'z';
 }) {
-  const hostRef = useRef<HTMLDivElement>(null)
-  const viewportRef = useRef<ModelPreviewViewport | null>(null)
+  const hostRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<ModelPreviewViewport | null>(null);
 
   useEffect(() => {
-    const host = hostRef.current
-    if (!host) return
-    const viewport = new ModelPreviewViewport(host)
-    viewportRef.current = viewport
+    const host = hostRef.current;
+    if (!host) return;
+    const viewport = new ModelPreviewViewport(host);
+    viewportRef.current = viewport;
     return () => {
-      viewport.dispose()
-      viewportRef.current = null
-    }
-  }, [])
+      viewport.dispose();
+      viewportRef.current = null;
+    };
+  }, []);
 
   useEffect(() => {
-    viewportRef.current?.setModel(scene, { scale, upAxis })
-  }, [scene, scale, upAxis])
+    viewportRef.current?.setModel(scene, { scale, upAxis });
+  }, [scene, scale, upAxis]);
 
-  return <div ref={hostRef} className="h-full w-full" />
+  return <div ref={hostRef} className="h-full w-full" />;
 }
 
 function Stats({
@@ -637,12 +637,12 @@ function Stats({
   cost,
   pending,
 }: {
-  plan: ImportPlan
-  totals: ImportPlan['totals']
-  cost: ReturnType<typeof estimateImportCost>
-  pending: boolean
+  plan: ImportPlan;
+  totals: ImportPlan['totals'];
+  cost: ReturnType<typeof estimateImportCost>;
+  pending: boolean;
 }) {
-  const size = plan.bounds.size
+  const size = plan.bounds.size;
   return (
     <dl className="grid grid-cols-2 gap-x-3 gap-y-1 rounded-lg border border-border bg-panel p-2 text-xs sm:grid-cols-3">
       <Stat label="SubParts" value={String(totals.subParts)} />
@@ -662,7 +662,7 @@ function Stats({
         tooltip="flexo's KTX2 textures are uncompressed RGBA8 + Zstd, so each one costs width × height × 4 bytes of VRAM in-game, plus a third again for its mip chain — a 4096² map is ~85 MB. Lower “Max texture size” to cut it."
       />
     </dl>
-  )
+  );
 }
 
 /**
@@ -676,8 +676,8 @@ function ReplaceSummary({
   match,
   batchSize,
 }: {
-  match: ImportMatchPlan<{ sourceNode: string; sourceMaterial: string }>
-  batchSize: number
+  match: ImportMatchPlan<{ sourceNode: string; sourceMaterial: string }>;
+  batchSize: number;
 }) {
   return (
     <div className="flex flex-col gap-1 rounded-lg border border-accent/40 bg-accent/5 p-2 text-xs">
@@ -701,7 +701,7 @@ function ReplaceSummary({
         </p>
       )}
     </div>
-  )
+  );
 }
 
 function Stat({ label, value, tooltip }: { label: string; value: string; tooltip?: string }) {
@@ -719,17 +719,17 @@ function Stat({ label, value, tooltip }: { label: string; value: string; tooltip
       </dt>
       <dd className="truncate font-mono text-fg">{value}</dd>
     </div>
-  )
+  );
 }
 
 const SEVERITY_CLASS: Record<WarningSeverity, string> = {
   error: 'border-danger/40 bg-danger/10 text-danger',
   warning: 'border-warning/40 bg-warning/10 text-warning',
   info: 'border-border bg-panel text-fg-muted',
-}
+};
 
 function Warnings({ groups }: { groups: WarningGroup[] }) {
-  if (groups.length === 0) return null
+  if (groups.length === 0) return null;
   return (
     <DisclosureSection
       title="What KSA can't represent"
@@ -758,11 +758,11 @@ function Warnings({ groups }: { groups: WarningGroup[] }) {
         </div>
       ))}
     </DisclosureSection>
-  )
+  );
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function round2(v: number): number {
-  return Math.round(v * 100) / 100
+  return Math.round(v * 100) / 100;
 }

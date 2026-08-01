@@ -1,5 +1,5 @@
-import { TextField } from './kit'
-import { useNumberDraft } from './numberDraft'
+import { TextField } from './kit';
+import { useNumberDraft } from './numberDraft';
 
 /**
  * Numeric input that preserves the user's exact typed value — no step-snapping
@@ -9,22 +9,22 @@ import { useNumberDraft } from './numberDraft'
  * external store changes when not focused.
  */
 export function PreciseNumberInput(props: {
-  value: number
-  onCommit: (n: number) => void
+  value: number;
+  onCommit: (n: number) => void;
   /** Called once when the field gains focus — use to push a single undo step
    *  so a whole typing session collapses into one undo (see editor-state docs). */
-  onInteractionStart?: () => void
+  onInteractionStart?: () => void;
   /** Bounds: out-of-range keystrokes are not committed, and the final value is clamped. */
-  min?: number
-  max?: number
+  min?: number;
+  max?: number;
   /** Arrow-key increment (default 1); Shift ⇒ ×10, Alt ⇒ ×0.1. */
-  step?: number
-  className?: string
-  isDisabled?: boolean
-  'aria-label': string
+  step?: number;
+  className?: string;
+  isDisabled?: boolean;
+  'aria-label': string;
 }) {
-  const { value, onCommit, onInteractionStart, min, max, step, className, isDisabled } = props
-  const field = useNumberDraft({ value, onCommit, onInteractionStart, min, max, step })
+  const { value, onCommit, onInteractionStart, min, max, step, className, isDisabled } = props;
+  const field = useNumberDraft({ value, onCommit, onInteractionStart, min, max, step });
 
   return (
     <TextField
@@ -37,5 +37,5 @@ export function PreciseNumberInput(props: {
       isDisabled={isDisabled}
       {...field}
     />
-  )
+  );
 }

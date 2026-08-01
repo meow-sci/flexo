@@ -1,7 +1,7 @@
-import type { EulerXYZ } from '../ksa/types'
-import { $rotateStep, rotatePairAxis, type RotatePair } from '../state/editorStore'
-import { quatFromEulerDeg, rotatedAroundOriginTransform } from './bulkTransform'
-import { applySelectionTransform } from './selectionTransform'
+import type { EulerXYZ } from '../ksa/types';
+import { $rotateStep, rotatePairAxis, type RotatePair } from '../state/editorStore';
+import { quatFromEulerDeg, rotatedAroundOriginTransform } from './bulkTransform';
+import { applySelectionTransform } from './selectionTransform';
 
 /**
  * Rotates the current selection by `deg` (world-axis Euler degrees) about the
@@ -11,10 +11,10 @@ import { applySelectionTransform } from './selectionTransform'
  * for the shared selection / lock / undo semantics.
  */
 export function rotateSelectionBy(deg: EulerXYZ): void {
-  const deltaQuat = quatFromEulerDeg(deg)
+  const deltaQuat = quatFromEulerDeg(deg);
   applySelectionTransform('rotate', (current, centroid) =>
     rotatedAroundOriginTransform(current, deltaQuat, centroid),
-  )
+  );
 }
 
 /**
@@ -24,11 +24,11 @@ export function rotateSelectionBy(deg: EulerXYZ): void {
  * {@link rotatePairAxis}. Thin wrapper over {@link rotateSelectionBy}.
  */
 export function rotateSelectionAroundPair(pair: RotatePair, sign: 1 | -1): void {
-  const axis = rotatePairAxis(pair)
-  const amount = $rotateStep.get() * sign
+  const axis = rotatePairAxis(pair);
+  const amount = $rotateStep.get() * sign;
   rotateSelectionBy({
     x: axis === 'x' ? amount : 0,
     y: axis === 'y' ? amount : 0,
     z: axis === 'z' ? amount : 0,
-  })
+  });
 }

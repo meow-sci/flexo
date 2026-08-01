@@ -61,6 +61,23 @@ jobs:
       - name: Build
         run: pnpm run build
 
+      # Part thumbnails are rendered OUT of the freshly built dist/ by headless
+      # Chromium and written back into it (plus the manifest's `thumbs` field), so
+      # these two steps must sit between Build and Upload: dist/ only exists in CI,
+      # and a rebuild of the mini app would wipe them. See
+      # plans/PART_PREVIEW_THUMBS.md §7.
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # ffmpeg muxes the captured frames into one animated GIF per part. Not
+      # preinstalled on the Ubuntu runner image, and the capture step fails fast
+      # without it.
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Capture part thumbnails
+        run: pnpm run thumbs:partpreview
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:

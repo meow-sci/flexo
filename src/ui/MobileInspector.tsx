@@ -1,15 +1,15 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { ChevronUp, X } from 'lucide-react'
-import { Heading } from 'react-aria-components'
-import { Button, Modal, Dialog } from './kit'
-import { InspectorContent } from './InspectorContent'
-import { $activeLayer } from '../state/selectors'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { ChevronUp, X } from 'lucide-react';
+import { Heading } from 'react-aria-components';
+import { Button, Modal, Dialog } from './kit';
+import { InspectorContent } from './InspectorContent';
+import { $activeLayer } from '../state/selectors';
 import {
   $selectedConnectorIndices,
   $selectedIndices,
   $selectedKittenIndices,
-} from '../state/editorStore'
+} from '../state/editorStore';
 
 /**
  * Phone-only inspector: a pinned bottom-right button (showing the active layer +
@@ -18,12 +18,12 @@ import {
  * canvas until the user explicitly opens the inspector.
  */
 export function MobileInspector() {
-  const [open, setOpen] = useState(false)
-  const activeLayer = useStore($activeLayer)
+  const [open, setOpen] = useState(false);
+  const activeLayer = useStore($activeLayer);
   const selectedCount =
     useStore($selectedIndices).length +
     useStore($selectedConnectorIndices).length +
-    useStore($selectedKittenIndices).length
+    useStore($selectedKittenIndices).length;
 
   return (
     <>
@@ -71,5 +71,5 @@ export function MobileInspector() {
         </Dialog>
       </Modal>
     </>
-  )
+  );
 }

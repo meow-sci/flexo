@@ -1,5 +1,5 @@
-import { persistentJSON } from '@nanostores/persistent'
-import type { EnvironmentPreset } from './environmentPresets'
+import { persistentJSON } from '@nanostores/persistent';
+import type { EnvironmentPreset } from './environmentPresets';
 
 /**
  * Global lighting / rendering settings (nanostores, persisted to localStorage).
@@ -9,14 +9,14 @@ import type { EnvironmentPreset } from './environmentPresets'
  * everywhere.
  */
 
-export { ENVIRONMENT_PRESETS } from './environmentPresets'
-export type { EnvironmentPreset, EnvironmentPresetInfo } from './environmentPresets'
+export { ENVIRONMENT_PRESETS } from './environmentPresets';
+export type { EnvironmentPreset, EnvironmentPresetInfo } from './environmentPresets';
 
-export type ToneMappingMode = 'aces' | 'agx' | 'neutral' | 'linear'
+export type ToneMappingMode = 'aces' | 'agx' | 'neutral' | 'linear';
 
 export interface ToneMappingInfo {
-  id: ToneMappingMode
-  label: string
+  id: ToneMappingMode;
+  label: string;
 }
 
 export const TONE_MAPPING_MODES: ToneMappingInfo[] = [
@@ -24,21 +24,21 @@ export const TONE_MAPPING_MODES: ToneMappingInfo[] = [
   { id: 'agx', label: 'AgX' },
   { id: 'neutral', label: 'Neutral' },
   { id: 'linear', label: 'Linear' },
-]
+];
 
 export interface LightingSettings {
   /** Image-based-lighting environment used for reflections (and optionally the background). */
-  environment: EnvironmentPreset
+  environment: EnvironmentPreset;
   /** Strength of environment reflections/illumination and the sky background (scene.environmentIntensity). */
-  environmentIntensity: number
+  environmentIntensity: number;
   /** Show the HDR environment as the visible background instead of a solid color. Ignored for 'room'. */
-  showEnvironmentBackground: boolean
+  showEnvironmentBackground: boolean;
   /** Blur applied to the environment background, 0..1 (scene.backgroundBlurriness). */
-  backgroundBlur: number
+  backgroundBlur: number;
   /** Renderer tone-mapping exposure (overall brightness). */
-  exposure: number
+  exposure: number;
   /** Tone-mapping operator. */
-  toneMapping: ToneMappingMode
+  toneMapping: ToneMappingMode;
 }
 
 export const DEFAULT_LIGHTING: LightingSettings = {
@@ -48,10 +48,10 @@ export const DEFAULT_LIGHTING: LightingSettings = {
   backgroundBlur: 0,
   exposure: 0.85,
   toneMapping: 'neutral',
-}
+};
 
-export const $lighting = persistentJSON<LightingSettings>('flexo:lighting', DEFAULT_LIGHTING)
+export const $lighting = persistentJSON<LightingSettings>('flexo:lighting', DEFAULT_LIGHTING);
 
 export function setLighting(patch: Partial<LightingSettings>): void {
-  $lighting.set({ ...$lighting.get(), ...patch })
+  $lighting.set({ ...$lighting.get(), ...patch });
 }

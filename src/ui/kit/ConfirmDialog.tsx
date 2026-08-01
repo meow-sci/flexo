@@ -1,17 +1,17 @@
-import { Heading } from 'react-aria-components'
-import { Modal, Dialog } from './Modal'
-import { Button, type ButtonKitProps } from './Button'
+import { Heading } from 'react-aria-components';
+import { Modal, Dialog } from './Modal';
+import { Button, type ButtonKitProps } from './Button';
 
 export interface ConfirmDialogProps {
-  isOpen: boolean
-  onOpenChange: (open: boolean) => void
-  title: string
-  text?: React.ReactNode
-  children?: React.ReactNode
-  confirmLabel?: string
-  cancelLabel?: string
-  confirmVariant?: ButtonKitProps['variant']
-  onConfirm: () => void
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  title: string;
+  text?: React.ReactNode;
+  children?: React.ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  confirmVariant?: ButtonKitProps['variant'];
+  onConfirm: () => void;
 }
 
 /** Controlled confirm/alert dialog: title + message + cancel/confirm actions. */
@@ -43,8 +43,8 @@ export function ConfirmDialog({
               <Button
                 variant={confirmVariant}
                 onPress={() => {
-                  onConfirm()
-                  close()
+                  onConfirm();
+                  close();
                 }}
               >
                 {confirmLabel}
@@ -54,5 +54,5 @@ export function ConfirmDialog({
         )}
       </Dialog>
     </Modal>
-  )
+  );
 }

@@ -2,10 +2,10 @@ import {
   Checkbox as AriaCheckbox,
   composeRenderProps,
   type CheckboxProps,
-} from 'react-aria-components'
-import { Check, Minus } from 'lucide-react'
-import { tv } from 'tailwind-variants'
-import { composeTw, focusRing } from './styles'
+} from 'react-aria-components';
+import { Check, Minus } from 'lucide-react';
+import { tv } from 'tailwind-variants';
+import { composeTw, focusRing } from './styles';
 
 const box = tv({
   extend: focusRing,
@@ -16,7 +16,7 @@ const box = tv({
       true: 'border-accent bg-accent',
     },
   },
-})
+});
 
 export function Checkbox({ className, children, ...props }: CheckboxProps) {
   return (
@@ -28,7 +28,7 @@ export function Checkbox({ className, children, ...props }: CheckboxProps) {
       )}
     >
       {composeRenderProps(children, (kids, { isSelected, isIndeterminate, isFocusVisible }) => {
-        const on = isSelected || isIndeterminate
+        const on = isSelected || isIndeterminate;
         return (
           <>
             <span className={box({ isSelected: on, isFocusVisible })}>
@@ -40,8 +40,8 @@ export function Checkbox({ className, children, ...props }: CheckboxProps) {
             </span>
             {kids != null && kids !== '' ? <span>{kids}</span> : null}
           </>
-        )
+        );
       })}
     </AriaCheckbox>
-  )
+  );
 }

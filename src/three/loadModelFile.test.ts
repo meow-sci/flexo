@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest'
-import * as THREE from 'three'
-import { loadModelFile } from './loadModelFile'
+import { describe, it, expect } from 'vitest';
+import * as THREE from 'three';
+import { loadModelFile } from './loadModelFile';
 
 /**
  * These tests exist for ONE reason: three's `GLTFLoader` does not put the glTF NODE name on
@@ -14,35 +14,35 @@ import { loadModelFile } from './loadModelFile'
  * nodes), which is exactly what would rot silently in a binary blob.
  */
 
-const FLOAT = 5126
-const USHORT = 5123
+const FLOAT = 5126;
+const USHORT = 5123;
 
 function pad4(n: number): number {
-  return (4 - (n % 4)) % 4
+  return (4 - (n % 4)) % 4;
 }
 
 /** Minimal glTF 2.0 binary: one triangle's worth of accessors, reused by every primitive. */
 function buildGlb(json: Record<string, unknown>, bin: Uint8Array): Uint8Array<ArrayBuffer> {
-  const jsonBytes = new TextEncoder().encode(JSON.stringify(json))
-  const jsonPad = new Uint8Array(jsonBytes.length + pad4(jsonBytes.length)).fill(0x20)
-  jsonPad.set(jsonBytes)
-  const binPad = new Uint8Array(bin.length + pad4(bin.length))
-  binPad.set(bin)
+  const jsonBytes = new TextEncoder().encode(JSON.stringify(json));
+  const jsonPad = new Uint8Array(jsonBytes.length + pad4(jsonBytes.length)).fill(0x20);
+  jsonPad.set(jsonBytes);
+  const binPad = new Uint8Array(bin.length + pad4(bin.length));
+  binPad.set(bin);
 
-  const total = 12 + 8 + jsonPad.length + 8 + binPad.length
-  const out = new Uint8Array(total)
-  const dv = new DataView(out.buffer)
-  dv.setUint32(0, 0x46546c67, true)
-  dv.setUint32(4, 2, true)
-  dv.setUint32(8, total, true)
-  dv.setUint32(12, jsonPad.length, true)
-  dv.setUint32(16, 0x4e4f534a, true) // 'JSON'
-  out.set(jsonPad, 20)
-  const binStart = 20 + jsonPad.length
-  dv.setUint32(binStart, binPad.length, true)
-  dv.setUint32(binStart + 4, 0x004e4942, true) // 'BIN\0'
-  out.set(binPad, binStart + 8)
-  return out
+  const total = 12 + 8 + jsonPad.length + 8 + binPad.length;
+  const out = new Uint8Array(total);
+  const dv = new DataView(out.buffer);
+  dv.setUint32(0, 0x46546c67, true);
+  dv.setUint32(4, 2, true);
+  dv.setUint32(8, total, true);
+  dv.setUint32(12, jsonPad.length, true);
+  dv.setUint32(16, 0x4e4f534a, true); // 'JSON'
+  out.set(jsonPad, 20);
+  const binStart = 20 + jsonPad.length;
+  dv.setUint32(binStart, binPad.length, true);
+  dv.setUint32(binStart + 4, 0x004e4942, true); // 'BIN\0'
+  out.set(binPad, binStart + 8);
+  return out;
 }
 
 /**
@@ -52,13 +52,13 @@ function buildGlb(json: Record<string, unknown>, bin: Uint8Array): Uint8Array<Ar
  *   mesh "StrutMesh" — one primitive, referenced by TWO nodes, "Strut" and "StrutMirror"
  */
 function twoShapeGlb(): Uint8Array<ArrayBuffer> {
-  const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0])
-  const indices = new Uint16Array([0, 1, 2, 0, 0, 0]) // padded to 4-byte alignment
-  const bin = new Uint8Array(positions.byteLength + indices.byteLength)
-  bin.set(new Uint8Array(positions.buffer), 0)
-  bin.set(new Uint8Array(indices.buffer), positions.byteLength)
+  const positions = new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+  const indices = new Uint16Array([0, 1, 2, 0, 0, 0]); // padded to 4-byte alignment
+  const bin = new Uint8Array(positions.byteLength + indices.byteLength);
+  bin.set(new Uint8Array(positions.buffer), 0);
+  bin.set(new Uint8Array(indices.buffer), positions.byteLength);
 
-  const primitive = { attributes: { POSITION: 0 }, indices: 1 }
+  const primitive = { attributes: { POSITION: 0 }, indices: 1 };
   return buildGlb(
     {
       asset: { version: '2.0' },
@@ -98,15 +98,15 @@ function twoShapeGlb(): Uint8Array<ArrayBuffer> {
       buffers: [{ byteLength: bin.length }],
     },
     bin,
-  )
+  );
 }
 
 function meshesOf(root: THREE.Object3D): THREE.Mesh[] {
-  const out: THREE.Mesh[] = []
+  const out: THREE.Mesh[] = [];
   root.traverse((o) => {
-    if ((o as THREE.Mesh).isMesh) out.push(o as THREE.Mesh)
-  })
-  return out
+    if ((o as THREE.Mesh).isMesh) out.push(o as THREE.Mesh);
+  });
+  return out;
 }
 
 describe('loadModelFile — ModelSource.nodeName', () => {
@@ -116,21 +116,21 @@ describe('loadModelFile — ModelSource.nodeName', () => {
     // data-block ("HullMesh", "HullMesh_1") and nested under a Group carrying the node name.
     // The object name is what the user authored, what the provenance block shows, and half of
     // the (sourceNode, sourceMaterial) key a re-import matches on — so it has to survive.
-    const model = await loadModelFile([new File([twoShapeGlb()], 'rig.glb')])
-    const meshes = meshesOf(model.scene)
-    const source = model.source!
+    const model = await loadModelFile([new File([twoShapeGlb()], 'rig.glb')]);
+    const meshes = meshesOf(model.scene);
+    const source = model.source!;
 
-    const hull = meshes.filter((m) => m.name.startsWith('HullMesh'))
-    expect(hull).toHaveLength(2)
-    expect(hull.map((m) => m.name)).toEqual(['HullMesh', 'HullMesh_1'])
-    expect(hull.map((m) => source.nodeName(m))).toEqual(['Hull', 'Hull'])
-  })
+    const hull = meshes.filter((m) => m.name.startsWith('HullMesh'));
+    expect(hull).toHaveLength(2);
+    expect(hull.map((m) => m.name)).toEqual(['HullMesh', 'HullMesh_1']);
+    expect(hull.map((m) => source.nodeName(m))).toEqual(['Hull', 'Hull']);
+  });
 
   it('reports each instance node separately for a mesh referenced by several nodes', async () => {
-    const model = await loadModelFile([new File([twoShapeGlb()], 'rig.glb')])
-    const source = model.source!
-    const struts = meshesOf(model.scene).filter((m) => !m.name.startsWith('HullMesh'))
+    const model = await loadModelFile([new File([twoShapeGlb()], 'rig.glb')]);
+    const source = model.source!;
+    const struts = meshesOf(model.scene).filter((m) => !m.name.startsWith('HullMesh'));
 
-    expect(struts.map((m) => source.nodeName(m)).sort()).toEqual(['Strut', 'StrutMirror'])
-  })
-})
+    expect(struts.map((m) => source.nodeName(m)).sort()).toEqual(['Strut', 'StrutMirror']);
+  });
+});

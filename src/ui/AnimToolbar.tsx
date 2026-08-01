@@ -1,10 +1,10 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { Boxes, X } from 'lucide-react'
-import { Toolbar, Button } from './kit'
-import { $activeAnimation } from '../state/animationStore'
-import { setInspectorMode } from '../state/uiStore'
-import { MeshPickerModal } from './MeshPickerModal'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { Boxes, X } from 'lucide-react';
+import { Toolbar, Button } from './kit';
+import { $activeAnimation } from '../state/animationStore';
+import { setInspectorMode } from '../state/uiStore';
+import { MeshPickerModal } from './MeshPickerModal';
 
 /**
  * Toolbar shown above the Animation editor while the inspector is in 'anim' mode
@@ -12,8 +12,8 @@ import { MeshPickerModal } from './MeshPickerModal'
  * attaching parts to the active joint; "Close" returns to the Assets list.
  */
 export function AnimToolbar() {
-  const active = useStore($activeAnimation)
-  const [pickerOpen, setPickerOpen] = useState(false)
+  const active = useStore($activeAnimation);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   return (
     <>
@@ -42,5 +42,5 @@ export function AnimToolbar() {
       </Toolbar>
       <MeshPickerModal isOpen={pickerOpen} onOpenChange={setPickerOpen} />
     </>
-  )
+  );
 }

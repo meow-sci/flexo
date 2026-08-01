@@ -6,27 +6,27 @@
  * Refresh stays intact (a module that exports both components and helpers loses it).
  */
 
-import type { EditingPart } from '../ksa/types'
+import type { EditingPart } from '../ksa/types';
 
 /** One selectable feed container: a `<Tank Id>` or a `<SolidGrainSegment Id>`. */
 export interface FeedContainerOption {
   /** The container's `Id` (what `<FeedsFrom Container>` names). */
-  id: string
+  id: string;
   /** Human label, e.g. "Fuel (part)" or "Grain (EngineAssembly1)". */
-  label: string
+  label: string;
   /** Placement instanceId the container lives on; null ⇒ the owning template. */
-  subPartInstanceId: string | null
+  subPartInstanceId: string | null;
 }
 
 /** One selectable consumer: a combustor / solid motor on the part or on a placed SubPart. */
 export interface ConsumerOption {
   /** The consumer's TEMPLATE id (what `<ConsumerFeedWiring Id>` names). */
-  consumerId: string
+  consumerId: string;
   /** The placement carrying it; null ⇒ the root part. */
-  subPartInstanceId: string | null
-  label: string
+  subPartInstanceId: string | null;
+  label: string;
   /** True when it declares `<FeedsFrom Parent="true"/>` and so NEEDS a wiring entry. */
-  defersToParent: boolean
+  defersToParent: boolean;
 }
 
 /**
@@ -38,64 +38,64 @@ export interface ConsumerOption {
  * container simply cannot be addressed.
  */
 export function feedTargetsOf(part: EditingPart): {
-  connectorIds: string[]
-  containers: FeedContainerOption[]
+  connectorIds: string[];
+  containers: FeedContainerOption[];
 } {
-  const containers: FeedContainerOption[] = []
+  const containers: FeedContainerOption[] = [];
   const push = (id: string, subPartInstanceId: string | null, scope: string) => {
-    if (id.trim()) containers.push({ id, label: `${id} (${scope})`, subPartInstanceId })
-  }
-  for (const t of part.gameData.tanks) push(t.id, null, 'part')
-  for (const s of part.gameData.solidGrainSegments) push(s.id, null, 'part')
+    if (id.trim()) containers.push({ id, label: `${id} (${scope})`, subPartInstanceId });
+  };
+  for (const t of part.gameData.tanks) push(t.id, null, 'part');
+  for (const s of part.gameData.solidGrainSegments) push(s.id, null, 'part');
   // A SubPart's containers are addressed THROUGH the placement that carries them
   // (`<FeedsFrom SubPart=… Container=…>`), so one template placed twice yields two
   // distinct feed targets.
   for (const placement of part.placements) {
     const spd = part.subPartGameData.find(
       (s) => s.subPartTemplateId === placement.subPartTemplateId,
-    )
-    if (!spd) continue
-    for (const t of spd.tanks) push(t.id, placement.instanceId, placement.instanceId)
-    for (const s of spd.solidGrainSegments) push(s.id, placement.instanceId, placement.instanceId)
+    );
+    if (!spd) continue;
+    for (const t of spd.tanks) push(t.id, placement.instanceId, placement.instanceId);
+    for (const s of spd.solidGrainSegments) push(s.id, placement.instanceId, placement.instanceId);
   }
-  return { connectorIds: part.connectors.map((c) => c.id), containers }
+  return { connectorIds: part.connectors.map((c) => c.id), containers };
 }
 
 /** Every consumer this Part carries, part-level and on each placed SubPart. */
 export function consumerOptionsOf(part: EditingPart): ConsumerOption[] {
-  const out: ConsumerOption[] = []
+  const out: ConsumerOption[] = [];
   const push = (
     id: string,
     subPartInstanceId: string | null,
     defersToParent: boolean,
     scope: string,
   ) => {
-    if (!id.trim()) return
-    out.push({ consumerId: id, subPartInstanceId, defersToParent, label: `${id} (${scope})` })
-  }
+    if (!id.trim()) return;
+    out.push({ consumerId: id, subPartInstanceId, defersToParent, label: `${id} (${scope})` });
+  };
   for (const c of [...part.gameData.combustors, ...part.gameData.solidMotors]) {
     push(
       c.id,
       null,
       c.feeds.some((f) => f.kind === 'parent'),
       'part',
-    )
+    );
   }
   for (const placement of part.placements) {
     const spd = part.subPartGameData.find(
       (s) => s.subPartTemplateId === placement.subPartTemplateId,
-    )
-    if (!spd) continue
+    );
+    if (!spd) continue;
     for (const c of [...spd.combustors, ...spd.solidMotors]) {
       push(
         c.id,
         placement.instanceId,
         c.feeds.some((f) => f.kind === 'parent'),
         placement.instanceId,
-      )
+      );
     }
   }
-  return out
+  return out;
 }
 
 /**
@@ -106,7 +106,7 @@ export function consumerOptionsOf(part: EditingPart): ConsumerOption[] {
  * *"Consumer X feeds from its parent part, but Y has no ConsumerFeedWiring wiring for it"*.
  */
 export function unwiredConsumersOf(part: EditingPart): ConsumerOption[] {
-  const wiring = part.gameData.consumerFeedWiring
+  const wiring = part.gameData.consumerFeedWiring;
   return consumerOptionsOf(part).filter(
     (c) =>
       c.defersToParent &&
@@ -116,5 +116,5 @@ export function unwiredConsumersOf(part: EditingPart): ConsumerOption[] {
           w.consumerId === c.consumerId &&
           (w.subPartInstanceId === c.subPartInstanceId || w.subPartInstanceId === null),
       ),
-  )
+  );
 }

@@ -1,5 +1,5 @@
-import { useHotkeys } from 'react-hotkeys-hook'
-import { ALL_BINDINGS, type HotkeyBinding } from './registry'
+import { useHotkeys } from 'react-hotkeys-hook';
+import { ALL_BINDINGS, type HotkeyBinding } from './registry';
 
 /**
  * Mounts every global hotkey from the registry. Rendered once near the app root.
@@ -18,7 +18,7 @@ export function GlobalHotkeys() {
         <BindingMount key={binding.id} binding={binding} />
       ))}
     </>
-  )
+  );
 }
 
 /**
@@ -32,11 +32,11 @@ export function GlobalHotkeys() {
  * so gate on that instead. Covers any react-aria virtual-focus widget, not just this one.
  */
 function isTypingInField(): boolean {
-  const el = document.activeElement as HTMLElement | null
-  if (!el) return false
-  if (el.isContentEditable) return true
-  const tag = el.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+  const el = document.activeElement as HTMLElement | null;
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
 }
 
 function BindingMount({ binding }: { binding: HotkeyBinding }) {
@@ -44,6 +44,6 @@ function BindingMount({ binding }: { binding: HotkeyBinding }) {
     preventDefault: true,
     ignoreEventWhen: isTypingInField,
     ...binding.options,
-  })
-  return null
+  });
+  return null;
 }

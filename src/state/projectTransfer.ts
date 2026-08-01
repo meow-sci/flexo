@@ -223,8 +223,11 @@ export function parseProjectObject(raw: unknown): ParseResult {
       error: `Not a flexo project (format: ${JSON.stringify((raw as { f?: unknown }).f)}).`,
     };
   }
-  // Exact-version match only: older payloads carry pre-rename keys that would decode
-  // silently wrong (no migration, per the constitution), newer ones are unknown.
+  // Exact-version match only. PROJECT_EXPORT_VERSION is the compatibility contract: a
+  // backwards-compatible additive change never bumps it (decode is tolerant and fills the
+  // new field's default), so a mismatch means a genuinely incompatible payload — older ones
+  // carry pre-rename keys that would decode silently wrong (no migration, per the
+  // constitution), newer ones are unknown. Rejected, never converted.
   if (typeof raw.v !== 'number' || raw.v !== PROJECT_EXPORT_VERSION) {
     return { ok: false, error: `Unsupported project version: ${JSON.stringify(raw.v)}.` };
   }

@@ -1850,8 +1850,8 @@ export interface EmissiveConfig {
 
 /**
  * Default glow: a moderate cyan whose emissive stays low enough that the color survives the white
- * KSA adds. Also the model template `projectStore.snapshotMatchesModel` validates stored glows
- * against — a snapshot missing a field is purged, never migrated.
+ * KSA adds. Also the model template `projectStore.normalizePart` default-fills stored glows
+ * from — a snapshot missing a field gets this value, never a migration.
  */
 export function createGlow(): EmissiveConfig {
   return {

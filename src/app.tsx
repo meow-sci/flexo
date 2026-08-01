@@ -19,6 +19,7 @@ import { ContainerEditor } from './ui/ContainerEditor';
 import { ManageTexturesPanel } from './ui/ManageTexturesPanel';
 import { GlowPaintDialog } from './ui/GlowPaintDialog';
 import { TransformHud } from './ui/TransformHud';
+import { ChainPalette } from './ui/chain/ChainPalette';
 import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys';
 import { HelpDialog } from './ui/hotkeys/HelpDialog';
 import { AboutDialog } from './ui/AboutDialog';
@@ -121,6 +122,10 @@ function App() {
 
       {/* Bottom-center bubble: rotate-key axes/step + arrow-key nudge axis/step. */}
       <TransformHud />
+
+      {/* Left-side floating command palette for action chains (⌘K). Self-gates on the
+          chain session, and stays non-modal so the viewport keeps working while open. */}
+      <ChainPalette />
     </div>
   );
 }

@@ -35,7 +35,7 @@ import {
   Tooltip as AriaTooltip,
   type TooltipProps as AriaTooltipProps,
   TooltipTrigger as AriaTooltipTrigger,
-  type TooltipTriggerComponentProps,
+  type TooltipTriggerComponentProps
 } from 'react-aria-components/Tooltip';
 import './Tooltip.css';
 
@@ -43,18 +43,16 @@ export interface TooltipProps extends Omit<AriaTooltipProps, 'children'> {
   children: React.ReactNode;
 }
 
-export function Tooltip({ children, ...props }: TooltipProps) {
+export function Tooltip({children, ...props}: TooltipProps) {
   return (
-    (
-      <AriaTooltip {...props}>
-        <OverlayArrow>
-          <svg width={8} height={8} viewBox="0 0 8 8">
-            <path d="M0 0 L4 4 L8 0" />
-          </svg>
-        </OverlayArrow>
-        {children}
-      </AriaTooltip>
-    )
+    <AriaTooltip {...props}>
+      <OverlayArrow>
+        <svg width={8} height={8} viewBox="0 0 8 8">
+          <path d="M0 0 L4 4 L8 0" />
+        </svg>
+      </OverlayArrow>
+      {children}
+    </AriaTooltip>
   );
 }
 
@@ -67,7 +65,7 @@ export function TooltipTrigger(props: TooltipTriggerComponentProps) {
 ### Tooltip.css
 
 ```css
-@import "./theme.css";
+@import './theme.css';
 
 .react-aria-Tooltip {
   box-shadow: 0 8px 20px rgba(0 0 0 / 0.1);
@@ -80,7 +78,9 @@ export function TooltipTrigger(props: TooltipTriggerComponentProps) {
   max-width: 150px;
   /* fixes FF gap */
   transform: translate3d(0, 0, 0);
-  transition: transform 200ms, opacity 200ms;
+  transition:
+    transform 200ms,
+    opacity 200ms;
   font: var(--font-size) system-ui;
 
   &[data-entering],
@@ -89,12 +89,12 @@ export function TooltipTrigger(props: TooltipTriggerComponentProps) {
     opacity: 0;
   }
 
-  &[data-placement=top] {
+  &[data-placement='top'] {
     margin-bottom: 10px;
     --origin: translateY(4px);
   }
 
-  &[data-placement=bottom] {
+  &[data-placement='bottom'] {
     margin-top: 10px;
     --origin: translateY(-4px);
     & .react-aria-OverlayArrow svg {
@@ -102,7 +102,7 @@ export function TooltipTrigger(props: TooltipTriggerComponentProps) {
     }
   }
 
-  &[data-placement=right] {
+  &[data-placement='right'] {
     margin-left: 10px;
     --origin: translateX(-4px);
     & .react-aria-OverlayArrow svg {
@@ -110,7 +110,7 @@ export function TooltipTrigger(props: TooltipTriggerComponentProps) {
     }
   }
 
-  &[data-placement=left] {
+  &[data-placement='left'] {
     margin-right: 10px;
     --origin: translateX(4px);
     & .react-aria-OverlayArrow svg {
@@ -155,9 +155,13 @@ function Example(props) {
 ```tsx
 'use client';
 import React from 'react';
-import { Tooltip as AriaTooltip, type TooltipProps as AriaTooltipProps, OverlayArrow } from 'react-aria-components/Tooltip';
-import { composeRenderProps } from 'react-aria-components/composeRenderProps';
-import { tv } from 'tailwind-variants';
+import {
+  Tooltip as AriaTooltip,
+  type TooltipProps as AriaTooltipProps,
+  OverlayArrow
+} from 'react-aria-components/Tooltip';
+import {composeRenderProps} from 'react-aria-components/composeRenderProps';
+import {tv} from 'tailwind-variants';
 
 export interface TooltipProps extends Omit<AriaTooltipProps, 'children'> {
   children: React.ReactNode;
@@ -175,11 +179,20 @@ const styles = tv({
   }
 });
 
-export function Tooltip({ children, ...props }: TooltipProps) {
+export function Tooltip({children, ...props}: TooltipProps) {
   return (
-    <AriaTooltip {...props} offset={10} className={composeRenderProps(props.className, (className, renderProps) => styles({...renderProps, className}))}>
+    <AriaTooltip
+      {...props}
+      offset={10}
+      className={composeRenderProps(props.className, (className, renderProps) =>
+        styles({...renderProps, className})
+      )}>
       <OverlayArrow>
-        <svg width={8} height={8} viewBox="0 0 8 8" className="block fill-neutral-700 dark:fill-neutral-600 forced-colors:fill-[Canvas] stroke-neutral-800 dark:stroke-white/10 forced-colors:stroke-[ButtonBorder] group-placement-bottom:rotate-180 group-placement-left:-rotate-90 group-placement-right:rotate-90">
+        <svg
+          width={8}
+          height={8}
+          viewBox="0 0 8 8"
+          className="block fill-neutral-700 dark:fill-neutral-600 forced-colors:fill-[Canvas] stroke-neutral-800 dark:stroke-white/10 forced-colors:stroke-[ButtonBorder] group-placement-bottom:rotate-180 group-placement-left:-rotate-90 group-placement-right:rotate-90">
           <path d="M0 0 L4 4 L8 0" />
         </svg>
       </OverlayArrow>
@@ -232,7 +245,7 @@ function Example(props) {
   UNSAFE_style={{marginTop: '2rem'}}
 >
   <Heading>Accessibility</Heading>
-  <Content>Tooltips are not shown on touch screen interactions. Ensure that your UI is usable without tooltips, or use an alternative component such as a [Popover](Popover.md) to show information in an adjacent element.</Content>
+  <Content>Tooltips are not shown on touch screen interactions. Ensure that your UI is usable without tooltips, or use an alternative component such as a [PreviewTrigger](PreviewTrigger.md) or a [Popover](Popover.md) to show information in an adjacent element.</Content>
 </InlineAlert>
 
 ## Custom trigger
@@ -368,10 +381,10 @@ const CustomTrigger = React.forwardRef((props, ref) => (
 | `onWheel` | `React.WheelEventHandler<HTMLDivElement> | undefined` | — |  |
 | `onWheelCapture` | `React.WheelEventHandler<HTMLDivElement> | undefined` | — |  |
 | `placement` | `Placement | undefined` | 'top' | The placement of the tooltip with respect to the trigger. |
-| `render` | `DOMRenderFunction<"div", TooltipRenderProps> | undefined` | — | Overrides the default DOM element with a custom render function. This allows rendering existing components with built-in styles and behaviors such as router links, animation libraries, and pre-styled components. Requirements: \* You must render the expected element type (e.g. if `<button>` is expected, you cannot render an `<a>`). \* Only a single root DOM element can be rendered (no fragments). \* You must pass through props and ref to the underlying DOM element, merging with your own prop as appropriate. |
+| `render` | `DOMRenderFunction<"div", TooltipRenderProps> | undefined` | — | Overrides the default DOM element with a custom render function. This allows rendering existing components with built-in styles and behaviors such as router links, animation libraries, and pre-styled components. Requirements: - You must render the expected element type (e.g. if `<button>` is expected, you cannot render an   `<a>`). - Only a single root DOM element can be rendered (no fragments). - You must pass through props and ref to the underlying DOM element, merging with your own prop   as appropriate. |
 | `shouldFlip` | `boolean | undefined` | true | Whether the element should flip its orientation (e.g. top to bottom or left to right) when there is insufficient room for it to render completely. |
-| `style` | `(React.CSSProperties | ((values: TooltipRenderProps & { defaultStyle: CSSProperties; }) => CSSProperties | undefined)) | undefined` | — | The inline [style](https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/style) for the element. A function may be provided to compute the style based on component state. |
-| `translate` | `"yes" | "no" | undefined` | — |  |
+| `style` | `StyleOrFunction<TooltipRenderProps> | undefined` | — | The inline [style](https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/style) for the element. A function may be provided to compute the style based on component state. |
+| `translate` | `"no" | "yes" | undefined` | — |  |
 | `triggerRef` | `RefObject<Element | null> | undefined` | — | The ref for the element which the tooltip positions itself with respect to. When used within a TooltipTrigger this is set automatically. It is only required when used standalone. |
 
 ### OverlayArrow
@@ -382,7 +395,7 @@ const CustomTrigger = React.forwardRef((props, ref) => (
 | `accessKey` | `string | undefined` | — |  |
 | `aria-activedescendant` | `string | undefined` | — | Identifies the currently active element when DOM focus is on a composite widget, textbox, group, or application. |
 | `aria-atomic` | `(boolean | "true" | "false") | undefined` | — | Indicates whether assistive technologies will present all, or only parts of, the changed region based on the change notifications defined by the aria-relevant attribute. |
-| `aria-autocomplete` | `"none" | "list" | "inline" | "both" | undefined` | — | Indicates whether inputting text could trigger display of one or more predictions of the user's intended value for an input and specifies how predictions would be presented if they are made. |
+| `aria-autocomplete` | `"both" | "inline" | "list" | "none" | undefined` | — | Indicates whether inputting text could trigger display of one or more predictions of the user's intended value for an input and specifies how predictions would be presented if they are made. |
 | `aria-braillelabel` | `string | undefined` | — | Indicates an element is being modified and that assistive technologies MAY want to wait until the modifications are complete before exposing them to the user. |
 | `aria-brailleroledescription` | `string | undefined` | — | Defines a human-readable, author-localized abbreviated description for the role of an element, which is intended to be converted into Braille. |
 | `aria-busy` | `(boolean | "true" | "false") | undefined` | — |  |
@@ -392,7 +405,7 @@ const CustomTrigger = React.forwardRef((props, ref) => (
 | `aria-colindextext` | `string | undefined` | — | Defines a human readable text alternative of aria-colindex. |
 | `aria-colspan` | `number | undefined` | — | Defines the number of columns spanned by a cell or gridcell within a table, grid, or treegrid. |
 | `aria-controls` | `string | undefined` | — | Identifies the element (or elements) whose contents or presence are controlled by the current element. |
-| `aria-current` | `boolean | "step" | "true" | "false" | "page" | "location" | "date" | "time" | undefined` | — | Indicates the element that represents the current item within a container or set of related elements. |
+| `aria-current` | `boolean | "true" | "false" | "date" | "location" | "page" | "step" | "time" | undefined` | — | Indicates the element that represents the current item within a container or set of related elements. |
 | `aria-describedby` | `string | undefined` | — | Identifies the element (or elements) that describes the object. |
 | `aria-description` | `string | undefined` | — | Defines a string value that describes or annotates the current element. |
 | `aria-details` | `string | undefined` | — | Identifies the element that provides a detailed, extended description for the object. |
@@ -407,7 +420,7 @@ const CustomTrigger = React.forwardRef((props, ref) => (
 | `aria-label` | `string | undefined` | — | Defines a string value that labels the current element. |
 | `aria-labelledby` | `string | undefined` | — | Identifies the element (or elements) that labels the current element. |
 | `aria-level` | `number | undefined` | — | Defines the hierarchical level of an element within a structure. |
-| `aria-live` | `"off" | "assertive" | "polite" | undefined` | — | Indicates that an element will be updated, and describes the types of updates the user agents, assistive technologies, and user can expect from the live region. |
+| `aria-live` | `"assertive" | "off" | "polite" | undefined` | — | Indicates that an element will be updated, and describes the types of updates the user agents, assistive technologies, and user can expect from the live region. |
 | `aria-modal` | `(boolean | "true" | "false") | undefined` | — | Indicates whether an element is modal when displayed. |
 | `aria-multiline` | `(boolean | "true" | "false") | undefined` | — | Indicates whether a text box accepts multiple lines of input or only a single line. |
 | `aria-multiselectable` | `(boolean | "true" | "false") | undefined` | — | Indicates that the user may select more than one item from the current selectable descendants. |
@@ -417,7 +430,7 @@ const CustomTrigger = React.forwardRef((props, ref) => (
 | `aria-posinset` | `number | undefined` | — | Defines an element's number or position in the current set of listitems or treeitems. Not required if all elements in the set are present in the DOM. |
 | `aria-pressed` | `boolean | "true" | "false" | "mixed" | undefined` | — | Indicates the current "pressed" state of toggle buttons. |
 | `aria-readonly` | `(boolean | "true" | "false") | undefined` | — | Indicates that the element is not editable, but is otherwise operable. |
-| `aria-relevant` | `"text" | "additions" | "additions removals" | "additions text" | "all" | "removals" | "removals additions" | "removals text" | "text additions" | "text removals" | undefined` | — | Indicates what notifications the user agent will trigger when the accessibility tree within a live region is modified. |
+| `aria-relevant` | `"additions" | "additions removals" | "additions text" | "all" | "removals" | "removals additions" | "removals text" | "text" | "text additions" | "text removals" | undefined` | — | Indicates what notifications the user agent will trigger when the accessibility tree within a live region is modified. |
 | `aria-required` | `(boolean | "true" | "false") | undefined` | — | Indicates that user input is required on the element before a form may be submitted. |
 | `aria-roledescription` | `string | undefined` | — | Defines a human-readable, author-localized description for the role of an element. |
 | `aria-rowcount` | `number | undefined` | — | Defines the total number of rows in a table, grid, or treegrid. |
@@ -426,12 +439,12 @@ const CustomTrigger = React.forwardRef((props, ref) => (
 | `aria-rowspan` | `number | undefined` | — | Defines the number of rows spanned by a cell or gridcell within a table, grid, or treegrid. |
 | `aria-selected` | `(boolean | "true" | "false") | undefined` | — | Indicates the current "selected" state of various widgets. |
 | `aria-setsize` | `number | undefined` | — | Defines the number of items in the current set of listitems or treeitems. Not required if all elements in the set are present in the DOM. |
-| `aria-sort` | `"none" | "ascending" | "descending" | "other" | undefined` | — | Indicates if items in a table or grid are sorted in ascending or descending order. |
+| `aria-sort` | `"ascending" | "descending" | "none" | "other" | undefined` | — | Indicates if items in a table or grid are sorted in ascending or descending order. |
 | `aria-valuemax` | `number | undefined` | — | Defines the maximum allowed value for a range widget. |
 | `aria-valuemin` | `number | undefined` | — | Defines the minimum allowed value for a range widget. |
 | `aria-valuenow` | `number | undefined` | — | Defines the current value for a range widget. |
 | `aria-valuetext` | `string | undefined` | — | Defines the human readable text alternative of aria-valuenow for a range widget. |
-| `autoCapitalize` | `"off" | "none" | "on" | "sentences" | "words" | "characters" | (string & {}) | undefined` | — |  |
+| `autoCapitalize` | `"characters" | "none" | "off" | "on" | "sentences" | "words" | (string & {}) | undefined` | — |  |
 | `autoCorrect` | `string | undefined` | — |  |
 | `autoFocus` | `boolean | undefined` | — |  |
 | `autoSave` | `string | undefined` | — |  |
@@ -439,21 +452,21 @@ const CustomTrigger = React.forwardRef((props, ref) => (
 | `className` | `ClassNameOrFunction<OverlayArrowRenderProps> | undefined` | 'react-aria-OverlayArrow' | The CSS [className](https://developer.mozilla.org/en-US/docs/Web/API/Element/className) for the element. A function may be provided to compute the class based on component state. |
 | `color` | `string | undefined` | — |  |
 | `content` | `string | undefined` | — |  |
-| `contentEditable` | `(boolean | "true" | "false") | "inherit" | "plaintext-only" | undefined` | — |  |
+| `contentEditable` | `"inherit" | "plaintext-only" | (boolean | "true" | "false") | undefined` | — |  |
 | `contextMenu` | `string | undefined` | — |  |
 | `dangerouslySetInnerHTML` | `{ __html: string | TrustedHTML; } | undefined` | — |  |
 | `datatype` | `string | undefined` | — |  |
 | `defaultChecked` | `boolean | undefined` | — |  |
-| `defaultValue` | `string | number | readonly string[] | undefined` | — |  |
+| `defaultValue` | `number | string | readonly string[] | undefined` | — |  |
 | `dir` | `string | undefined` | — |  |
 | `draggable` | `(boolean | "true" | "false") | undefined` | — |  |
-| `enterKeyHint` | `"enter" | "done" | "go" | "next" | "previous" | "search" | "send" | undefined` | — |  |
+| `enterKeyHint` | `"done" | "enter" | "go" | "next" | "previous" | "search" | "send" | undefined` | — |  |
 | `exportparts` | `string | undefined` | — |  |
 | `hidden` | `boolean | undefined` | — |  |
 | `id` | `string | undefined` | — |  |
 | `inert` | `boolean | undefined` | — |  |
 | `inlist` | `any` | — |  |
-| `inputMode` | `"none" | "search" | "text" | "tel" | "url" | "email" | "numeric" | "decimal" | undefined` | — | Hints at the type of data that might be entered by the user while editing the element or its contents |
+| `inputMode` | `"decimal" | "email" | "none" | "numeric" | "search" | "tel" | "text" | "url" | undefined` | — | Hints at the type of data that might be entered by the user while editing the element or its contents |
 | `is` | `string | undefined` | — | Specify that a standard HTML element should behave like a defined custom built-in element |
 | `itemID` | `string | undefined` | — |  |
 | `itemProp` | `string | undefined` | — |  |
@@ -631,12 +644,12 @@ const CustomTrigger = React.forwardRef((props, ref) => (
 | `part` | `string | undefined` | — |  |
 | `popover` | `"" | "auto" | "manual" | undefined` | — |  |
 | `popoverTarget` | `string | undefined` | — |  |
-| `popoverTargetAction` | `"toggle" | "show" | "hide" | undefined` | — |  |
+| `popoverTargetAction` | `"hide" | "show" | "toggle" | undefined` | — |  |
 | `prefix` | `string | undefined` | — |  |
 | `property` | `string | undefined` | — |  |
 | `radioGroup` | `string | undefined` | — |  |
 | `rel` | `string | undefined` | — |  |
-| `render` | `DOMRenderFunction<"div", OverlayArrowRenderProps> | undefined` | — | Overrides the default DOM element with a custom render function. This allows rendering existing components with built-in styles and behaviors such as router links, animation libraries, and pre-styled components. Requirements: \* You must render the expected element type (e.g. if `<button>` is expected, you cannot render an `<a>`). \* Only a single root DOM element can be rendered (no fragments). \* You must pass through props and ref to the underlying DOM element, merging with your own prop as appropriate. |
+| `render` | `DOMRenderFunction<"div", OverlayArrowRenderProps> | undefined` | — | Overrides the default DOM element with a custom render function. This allows rendering existing components with built-in styles and behaviors such as router links, animation libraries, and pre-styled components. Requirements: - You must render the expected element type (e.g. if `<button>` is expected, you cannot render an   `<a>`). - Only a single root DOM element can be rendered (no fragments). - You must pass through props and ref to the underlying DOM element, merging with your own prop   as appropriate. |
 | `resource` | `string | undefined` | — |  |
 | `results` | `number | undefined` | — |  |
 | `rev` | `string | undefined` | — |  |
@@ -644,12 +657,12 @@ const CustomTrigger = React.forwardRef((props, ref) => (
 | `security` | `string | undefined` | — |  |
 | `slot` | `string | undefined` | — |  |
 | `spellCheck` | `(boolean | "true" | "false") | undefined` | — |  |
-| `style` | `(React.CSSProperties | ((values: OverlayArrowRenderProps & { defaultStyle: CSSProperties; }) => CSSProperties | undefined)) | undefined` | — | The inline [style](https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/style) for the element. A function may be provided to compute the style based on component state. |
+| `style` | `StyleOrFunction<OverlayArrowRenderProps> | undefined` | — | The inline [style](https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/style) for the element. A function may be provided to compute the style based on component state. |
 | `suppressContentEditableWarning` | `boolean | undefined` | — |  |
 | `suppressHydrationWarning` | `boolean | undefined` | — |  |
 | `tabIndex` | `number | undefined` | — |  |
 | `title` | `string | undefined` | — |  |
-| `translate` | `"yes" | "no" | undefined` | — |  |
+| `translate` | `"no" | "yes" | undefined` | — |  |
 | `typeof` | `string | undefined` | — |  |
 | `unselectable` | `"off" | "on" | undefined` | — |  |
 | `vocab` | `string | undefined` | — |  |

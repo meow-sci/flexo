@@ -46,7 +46,7 @@ kept next to the mutation, not sprinkled at call sites:
 | Async SubPart / kitten builds | explicit `viewport.invalidate()` in the `.then` — geometry lands long after the store change that asked for it |
 | Camera (orbit, pan, zoom, damping, snap, restore) | `OrbitControls`' `change` event. Damping keeps re-firing until it settles, so inertia still animates and then stops |
 | Any of the three `TransformControls` (selection gizmo, measurement endpoint, container) | their `change` event — covers hover-axis highlight, attach/detach and drag steps |
-| `MeasurementLayer` / `ContainerLayer` | every mutation funnels through `refresh()`, which invalidates at the end |
+| `MeasurementLayer` / `ContainerLayer` / `ChainPreviewLayer` | every mutation funnels through `refresh()`, which invalidates at the end |
 | Environment / tonemapping / exposure | `$lighting` subscription invalidates twice: once for the synchronous half, once when the async HDR + PMREM lands |
 | Resize | `handleResize()` |
 | WebGL context restored | `webglcontextrestored` listener — an on-demand loop has no "next frame" to repair a blank canvas |
@@ -183,6 +183,35 @@ local +X. They differ from every other marker in three deliberate ways:
   selected while you place its exhaust). The gizmo still drags a *proxy*
   (`engine-exhaust-proxy`), like the animation pose pivot — posed with both the position and
   the orientation of the exhaust axis, which is what gives the rotate rings meaning.
+
+### Chain preview ghosts
+
+While an action-chain session is open, `ChainPreviewLayer` draws what
+Apply would produce: one translucent accent-green clone per evaluated instance. It is the
+only overlay built by *cloning* document objects rather than authoring its own geometry, so
+its rules are about not paying for that twice:
+
+- Its group lives on **`viewport.scene`, not `EditorScene.root`** (the `MeasurementLayer`
+  precedent) — ghosts are an editor aid, so they stay out of the exported `flexo-part`
+  hierarchy, out of `applyLayerView`'s visibility/opacity bookkeeping, and out of the pick
+  set. Every cloned node additionally gets a no-op `raycast`, so a ghost can never steal a
+  click from the real object underneath it.
+- `Group.clone(true)` shares geometry by reference and **every cloned mesh's material is
+  replaced with one module-level singleton** (`MeshBasicMaterial`, unlit + translucent).
+  A refresh therefore allocates no GPU resources and disposes none — `refresh()` is
+  `group.clear()` plus re-clone, cheap enough to run on every keystroke, and the singleton
+  outlives the layer. Swapping the material also means a selected seed's highlight emissive
+  never bleeds into its ghosts.
+- A **cap of 500 ghosts** (`PREVIEW_MAX_GHOSTS`; the chain itself may evaluate up to 2000
+  instances). Past it the preview stops adding and the palette footer says it was capped.
+- A seed is ghosted **only when the chain moves it** (any of its 9 transform numbers differs
+  by more than `1e-9` from the live placement) — that is what makes a pure-transform chain,
+  which creates nothing, previewable. Instances whose source object is still loading are
+  skipped, not queued.
+- Refresh triggers: the `$chainEval` subscription (which recomputes on session edits *and*
+  `$part` changes, so gizmo-dragging a seed re-flows the array live, and closing the session
+  clears the ghosts), plus the async `SubPartObject.create` completion block, so a seed that
+  finished loading mid-session gets its ghosts. Both end in `viewport.invalidate()`.
 
 ### Seat view (the IVA camera preview)
 

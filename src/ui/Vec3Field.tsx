@@ -12,6 +12,9 @@ export function Vec3Field({
   labelWidth = 'w-12',
   value,
   disabled,
+  min,
+  max,
+  step,
   onCommit,
   onInteractionStart,
 }: {
@@ -20,6 +23,10 @@ export function Vec3Field({
   labelWidth?: string;
   value: Vec3;
   disabled?: { x: boolean; y: boolean; z: boolean };
+  /** Bounds/arrow-step applied to all three axes (see {@link PreciseNumberInput}). */
+  min?: number;
+  max?: number;
+  step?: number;
   onCommit: (axis: keyof Vec3, value: number) => void;
   onInteractionStart?: () => void;
 }) {
@@ -33,6 +40,9 @@ export function Vec3Field({
           aria-label={`${label ?? ''} ${axis.toUpperCase()}`}
           className="min-w-0 flex-1"
           value={value[axis]}
+          min={min}
+          max={max}
+          step={step}
           isDisabled={disabled?.[axis]}
           onInteractionStart={onInteractionStart}
           onCommit={(val) => onCommit(axis, val)}

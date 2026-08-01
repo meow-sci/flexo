@@ -30,6 +30,8 @@ import { SelectionManager } from './SelectionManager';
 import { TransformGizmo } from './TransformGizmo';
 import { MeasurementLayer } from './MeasurementLayer';
 import { ContainerLayer } from './ContainerLayer';
+import { ChainPreviewLayer } from './ChainPreviewLayer';
+import { $chainEval } from './chainEval';
 import { NozzleHandleObject } from './NozzleHandleObject';
 import {
   colliderLocalFromWorld,
@@ -219,6 +221,7 @@ export class EditorScene {
   private readonly gizmo: TransformGizmo;
   private readonly measurements: MeasurementLayer;
   private readonly containers: ContainerLayer;
+  private readonly chainPreview: ChainPreviewLayer;
   private highlighted: SelectableObject[] = [];
   private attachedObject: THREE.Object3D | null = null;
   /** Instance ids whose group transform is currently overridden by the animation preview. */
@@ -465,6 +468,9 @@ export class EditorScene {
     this.containers = new ContainerLayer(this.viewport, () =>
       [...this.objects.values()].map((o) => o.group),
     );
+    // Ghosts clone the built objects, so the layer reads them straight out of this
+    // map — an instance still loading simply has no ghost until the build lands.
+    this.chainPreview = new ChainPreviewLayer(this.viewport, (id) => this.objects.get(id));
 
     const dom = this.viewport.renderer.domElement;
     dom.addEventListener('pointerdown', this.onPickPointerDown);
@@ -526,6 +532,10 @@ export class EditorScene {
       this.reconcile(part);
     });
     this.sub($part, (part) => this.reconcile(part));
+    // $chainEval already recomputes on $part changes as well as session edits, so this
+    // one subscription covers everything the ghosts react to — gizmo drags of a seed,
+    // parameter typing, undo, session close (it goes null and the ghosts clear).
+    this.sub($chainEval, () => this.chainPreview.refresh());
     // Animation preview: re-apply the joint-driven transform override when the active
     // animation, scrub position, or edited keyframe changes ($part changes already
     // re-apply via reconcile). Fires immediately on subscribe (harmless no-op at rest).
@@ -691,6 +701,7 @@ export class EditorScene {
           this.applyLayerView(); // respect the layer's visibility + opacity for the new object
           this.updateSelection(); // highlight/attach if this is the selected one
           this.applyAnimationPreview(); // re-apply if this object is animation-driven
+          this.chainPreview.refresh(); // a chain seed that finished loading can now be ghosted
           this.viewport.invalidate(); // geometry landed after the store change that asked for it
         })
         .catch((err) => {
@@ -2124,6 +2135,7 @@ export class EditorScene {
     this.root.remove(this.poseProxy);
     this.root.remove(this.pivotHelper);
     this.pivotHelper.dispose();
+    this.chainPreview.dispose();
     this.root.remove(this.engineProxy);
     for (const handle of this.nozzleHandles.values()) {
       this.root.remove(handle.group);

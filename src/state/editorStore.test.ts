@@ -74,7 +74,10 @@ import {
   $selectedLightIndex,
   $selectedLightIndices,
   $canUndo,
+  $historyList,
+  $undoDescription,
   addCollider,
+  applyActionChain,
   removeCollider,
   selectCollider,
   addIvaSeat,
@@ -181,7 +184,7 @@ import type {
   Transform,
 } from '../ksa/types';
 import { $layerView, setLayerLocked, toggleLayerVisible } from './layerStore';
-import type { ImportedGameData } from './editorStore';
+import type { ChainCommitEntry, ImportedGameData, PlacementTransform } from './editorStore';
 import {
   importModelAsMeshes,
   removeImport,
@@ -2572,5 +2575,207 @@ describe('IVA seat mutations', () => {
     expect(seat.position).toEqual({ x: 2, y: -4, z: 6 });
     expect(seat.rotation).toEqual({ x: 0, y: 0.5, z: 0 });
     expect(seat.scale).toEqual({ x: 1, y: 1, z: 1 });
+  });
+});
+
+describe('applyActionChain', () => {
+  /** A {@link PlacementTransform} from three terse triples (rotation in radians). */
+  const xf = (
+    pos: [number, number, number],
+    rot: [number, number, number] = [0, 0, 0],
+    scale: [number, number, number] = [1, 1, 1],
+  ): PlacementTransform => ({
+    position: { x: pos[0], y: pos[1], z: pos[2] },
+    rotation: { x: rot[0], y: rot[1], z: rot[2] },
+    scale: { x: scale[0], y: scale[1], z: scale[2] },
+  });
+
+  const seedEntry = (id: string, t: PlacementTransform): ChainCommitEntry => ({
+    seedInstanceId: id,
+    transform: t,
+    isSeed: true,
+  });
+  const cloneEntry = (id: string, t: PlacementTransform): ChainCommitEntry => ({
+    seedInstanceId: id,
+    transform: t,
+    isSeed: false,
+  });
+
+  const STRUTS_LAYER_ID = 'lay_struts';
+
+  /** Seeds the document directly (the chain engine's input is always live `$part` state). */
+  function setPlacements(
+    entries: { id: string; template?: string; layer?: string; transform?: PlacementTransform }[],
+  ): void {
+    const base = createEmptyPart();
+    $part.set({
+      ...base,
+      layers: [...base.layers, { id: STRUTS_LAYER_ID, name: 'Struts' }],
+      placements: entries.map((e) => ({
+        instanceId: e.id,
+        subPartTemplateId: e.template ?? 'Core.Bolt',
+        layerId: e.layer ?? DEFAULT_LAYER_ID,
+        ...(e.transform ?? xf([0, 0, 0])),
+      })),
+    });
+  }
+
+  it('moves seed placements in place as one undoable step (no new placements)', () => {
+    setPlacements([{ id: 'bolt_1' }, { id: 'bolt_2' }]);
+
+    const created = applyActionChain(
+      [
+        seedEntry('bolt_1', xf([1, 2, 3], [0, Math.PI / 2, 0], [2, 2, 2])),
+        seedEntry('bolt_2', xf([-1, 0, 0])),
+      ],
+      '2 transformed',
+    );
+
+    expect(created).toBe(0);
+    const p = $part.get().placements;
+    expect(p.length).toBe(2);
+    expect(p[0].instanceId).toBe('bolt_1'); // identity untouched
+    expect(p[0].position).toEqual({ x: 1, y: 2, z: 3 });
+    expect(p[0].rotation).toEqual({ x: 0, y: Math.PI / 2, z: 0 });
+    expect(p[0].scale).toEqual({ x: 2, y: 2, z: 2 });
+    expect(p[1].position).toEqual({ x: -1, y: 0, z: 0 });
+
+    expect($canUndo.get()).toBe(true);
+    undo();
+    const restored = $part.get().placements;
+    expect(restored[0].position).toEqual({ x: 0, y: 0, z: 0 });
+    expect(restored[0].scale).toEqual({ x: 1, y: 1, z: 1 });
+    expect(restored[1].position).toEqual({ x: 0, y: 0, z: 0 });
+    expect($canUndo.get()).toBe(false);
+
+    redo();
+    expect($part.get().placements[0].position).toEqual({ x: 1, y: 2, z: 3 });
+    expect($part.get().placements[1].position).toEqual({ x: -1, y: 0, z: 0 });
+  });
+
+  it('appends clones that inherit their seed’s template and layer, with the entry transforms', () => {
+    const struts = STRUTS_LAYER_ID;
+    setPlacements([{ id: 'bolt_1', template: 'Core.Bolt', layer: struts }]);
+
+    const created = applyActionChain(
+      [
+        seedEntry('bolt_1', xf([0, 0, 0])),
+        cloneEntry('bolt_1', xf([2, 0, 0], [0.25, 0, 0])),
+        cloneEntry('bolt_1', xf([4, 0, 0], [0.5, 0, 0], [1, 3, 1])),
+      ],
+      '+2 SubParts',
+    );
+
+    expect(created).toBe(2);
+    const p = $part.get().placements;
+    expect(p.length).toBe(3);
+    expect(p.map((x) => x.subPartTemplateId)).toEqual(['Core.Bolt', 'Core.Bolt', 'Core.Bolt']);
+    expect(p.map((x) => x.layerId)).toEqual([struts, struts, struts]);
+    expect(p[1].position).toEqual({ x: 2, y: 0, z: 0 });
+    expect(p[1].rotation).toEqual({ x: 0.25, y: 0, z: 0 });
+    expect(p[2].position).toEqual({ x: 4, y: 0, z: 0 });
+    expect(p[2].scale).toEqual({ x: 1, y: 3, z: 1 });
+    expect(p.map((x) => x.instanceId)).toEqual(['bolt_1', 'bolt_2', 'bolt_3']);
+  });
+
+  it('skips instance ids the naive count+1 formula would collide with', () => {
+    // `a_2` was deleted at some point: count is 2, so count+1 = `a_3` — already taken.
+    setPlacements([
+      { id: 'a_1', template: 'Core.A' },
+      { id: 'a_3', template: 'Core.A' },
+    ]);
+
+    applyActionChain(
+      [
+        seedEntry('a_1', xf([0, 0, 0])),
+        cloneEntry('a_1', xf([1, 0, 0])),
+        cloneEntry('a_1', xf([2, 0, 0])),
+      ],
+      '+2 SubParts',
+    );
+
+    expect($part.get().placements.map((p) => p.instanceId)).toEqual(['a_1', 'a_3', 'a_4', 'a_5']);
+  });
+
+  it('selects the seeds followed by the new copies, in that order', () => {
+    setPlacements([{ id: 'bolt_1' }, { id: 'bolt_2' }, { id: 'bolt_3' }]);
+
+    applyActionChain(
+      [
+        seedEntry('bolt_1', xf([0, 0, 0])),
+        seedEntry('bolt_3', xf([0, 1, 0])),
+        cloneEntry('bolt_1', xf([2, 0, 0])),
+        cloneEntry('bolt_3', xf([2, 1, 0])),
+      ],
+      '+2 SubParts',
+    );
+
+    expect($selectedIndices.get()).toEqual([0, 2, 3, 4]);
+  });
+
+  it('returns -1 without mutating or pushing undo when a seed no longer exists', () => {
+    setPlacements([{ id: 'bolt_1' }]);
+    const before = structuredClone($part.get());
+
+    const created = applyActionChain(
+      [seedEntry('bolt_1', xf([1, 0, 0])), cloneEntry('gone_9', xf([2, 0, 0]))],
+      '+1 SubParts',
+    );
+
+    expect(created).toBe(-1);
+    expect($part.get()).toEqual(before);
+    expect($canUndo.get()).toBe(false);
+    expect(applyActionChain([], 'nothing')).toBe(-1);
+    expect($canUndo.get()).toBe(false);
+  });
+
+  it('labels the undo entry “action chain” and carries the caller’s detail', () => {
+    setPlacements([{ id: 'bolt_1' }]);
+
+    applyActionChain(
+      [seedEntry('bolt_1', xf([0, 0, 0])), cloneEntry('bolt_1', xf([3, 0, 0]))],
+      '+1 SubParts',
+    );
+
+    expect($undoDescription.get()).toBe('action chain');
+    const entry = $historyList.get().find((h) => h.stepsFromCurrent === -1);
+    expect(entry).toEqual({
+      description: 'action chain',
+      detail: '+1 SubParts',
+      stepsFromCurrent: -1,
+    });
+  });
+
+  it('round-trips a mixed commit (seeds moved + clones appended) through one undo', () => {
+    setPlacements([
+      { id: 'bolt_1', transform: xf([0, 0, 0]) },
+      { id: 'bolt_2', transform: xf([0, 1, 0]) },
+    ]);
+
+    const created = applyActionChain(
+      [
+        seedEntry('bolt_1', xf([5, 0, 0])),
+        seedEntry('bolt_2', xf([5, 1, 0])),
+        cloneEntry('bolt_1', xf([6, 0, 0])),
+        cloneEntry('bolt_2', xf([6, 1, 0])),
+        cloneEntry('bolt_1', xf([7, 0, 0])),
+        cloneEntry('bolt_2', xf([7, 1, 0])),
+      ],
+      '+4 SubParts',
+    );
+
+    expect(created).toBe(4);
+    expect($part.get().placements.length).toBe(6);
+    expect($part.get().placements.map((p) => p.position.x)).toEqual([5, 5, 6, 6, 7, 7]);
+
+    undo();
+    const after = $part.get().placements;
+    expect(after.length).toBe(2);
+    expect(after.map((p) => p.instanceId)).toEqual(['bolt_1', 'bolt_2']);
+    expect(after.map((p) => p.position.x)).toEqual([0, 0]);
+
+    redo();
+    expect($part.get().placements.length).toBe(6);
+    expect($part.get().placements.map((p) => p.position.x)).toEqual([5, 5, 6, 6, 7, 7]);
   });
 });

@@ -1,11 +1,11 @@
-import { atom, computed } from 'nanostores'
+import { atom, computed } from 'nanostores';
 import type {
   SolidMotorNozzle,
   SubPartGameData,
   SubPartPlacement,
   Transform,
   Vec3,
-} from '../ksa/types'
+} from '../ksa/types';
 import {
   $part,
   $toolMode,
@@ -14,8 +14,8 @@ import {
   updatePartSolidNozzle,
   updateSubPartSolidNozzle,
   type ToolMode,
-} from './editorStore'
-import { $inspectorMode, setInspectorMode } from './uiStore'
+} from './editorStore';
+import { $inspectorMode, setInspectorMode } from './uiStore';
 
 /**
  * Ephemeral editor state for the Engine Designer — the full-sidebar `$inspectorMode
@@ -34,16 +34,16 @@ import { $inspectorMode, setInspectorMode } from './uiStore'
  */
 
 /** Which scope the designer is editing: a reusable SubPart template, or the part itself. */
-export type EngineEntry = { kind: 'subpart'; templateId: string } | { kind: 'part' }
+export type EngineEntry = { kind: 'subpart'; templateId: string } | { kind: 'part' };
 
 /** The engine (scope) currently open in the designer, or null. */
-export const $activeEngineEntry = atom<EngineEntry | null>(null)
+export const $activeEngineEntry = atom<EngineEntry | null>(null);
 
 /** Whether the 3D exhaust gizmo is active for the targeted nozzle. */
-export const $engineExhaustGizmo = atom<boolean>(false)
+export const $engineExhaustGizmo = atom<boolean>(false);
 
 /** De Laval (`<DeLavalNozzle>`) vs solid-motor (`<SolidMotorNozzle>`) — separate lists in KSA. */
-export type NozzleKind = 'delaval' | 'solid'
+export type NozzleKind = 'delaval' | 'solid';
 
 /**
  * Which of a nozzle's two placement pairs a handle/gizmo edits:
@@ -53,7 +53,7 @@ export type NozzleKind = 'delaval' | 'solid'
  *    content uses to desync the visible plume from the thrust axis. Absent ⇒ inherits the
  *    physics pair (`RocketNozzleTemplate.OnDataLoad`).
  */
-export type NozzleChannel = 'physics' | 'fx'
+export type NozzleChannel = 'physics' | 'fx';
 
 /**
  * Names ONE nozzle handle anywhere in the part. Ephemeral (never serialized), and resolved
@@ -69,20 +69,20 @@ export type NozzleChannel = 'physics' | 'fx'
  */
 export type NozzleRef =
   | {
-      scope: 'subpart'
-      templateId: string
+      scope: 'subpart';
+      templateId: string;
       /** Placement whose frame this handle sits in; null ⇒ the template isn't placed. */
-      instanceId: string | null
-      kind: NozzleKind
-      index: number
-      channel: NozzleChannel
+      instanceId: string | null;
+      kind: NozzleKind;
+      index: number;
+      channel: NozzleChannel;
     }
-  | { scope: 'part'; kind: NozzleKind; index: number; channel: NozzleChannel }
+  | { scope: 'part'; kind: NozzleKind; index: number; channel: NozzleChannel };
 
 /** Stable identity for a {@link NozzleRef} — the scene's handle key and the chip list's key. */
 export function nozzleRefKey(ref: NozzleRef): string {
-  const scope = ref.scope === 'subpart' ? `${ref.templateId}@${ref.instanceId ?? ''}` : ''
-  return `${ref.scope}|${scope}|${ref.kind}|${ref.index}|${ref.channel}`
+  const scope = ref.scope === 'subpart' ? `${ref.templateId}@${ref.instanceId ?? ''}` : '';
+  return `${ref.scope}|${scope}|${ref.kind}|${ref.index}|${ref.channel}`;
 }
 
 /**
@@ -95,28 +95,28 @@ export function nozzleRefKey(ref: NozzleRef): string {
  * them edits that one nozzle, so every sibling handle moves in sync — the light rule.
  */
 export interface NozzleTarget {
-  ref: NozzleRef
-  key: string
-  nozzle: SolidMotorNozzle
+  ref: NozzleRef;
+  key: string;
+  nozzle: SolidMotorNozzle;
   /**
    * The placement whose assembly frame {@link location}/{@link direction} are expressed
    * in; **null ⇒ the Part frame** (a part-level nozzle, or a template with no placement).
    */
-  frame: Transform | null
+  frame: Transform | null;
   /** Owner-frame location to draw at — for the fx channel, `fxExhaustLocation ?? exhaustLocation`. */
-  location: Vec3
+  location: Vec3;
   /** Owner-frame direction to aim along — for the fx channel, `fxExhaustDirection ?? exhaustDirection`. */
-  direction: Vec3
+  direction: Vec3;
   /** 0-based position of {@link frame} among the owning template's placements. */
-  instanceIndex: number
+  instanceIndex: number;
   /** How many placements the owning template has (1 for part scope / an unplaced template). */
-  instanceCount: number
+  instanceCount: number;
   /** The one target the gizmo is attached to (exactly one when any exist). */
-  isActive: boolean
+  isActive: boolean;
 }
 
 /** Which nozzle the 3D gizmo edits; null ⇒ the first resolved target. */
-export const $activeNozzleRef = atom<NozzleRef | null>(null)
+export const $activeNozzleRef = atom<NozzleRef | null>(null);
 
 /** True for a SubPart template that carries any engine hardware (so the designer can reach it). */
 function hasEngineModules(s: SubPartGameData): boolean {
@@ -125,7 +125,7 @@ function hasEngineModules(s: SubPartGameData): boolean {
     s.solidMotors.length > 0 ||
     s.nozzles.length > 0 ||
     s.solidNozzles.length > 0
-  )
+  );
 }
 
 /**
@@ -137,18 +137,18 @@ function hasEngineModules(s: SubPartGameData): boolean {
 export const $engineEntries = computed([$part], (part): EngineEntry[] => {
   const entries: EngineEntry[] = part.subPartGameData
     .filter(hasEngineModules)
-    .map((s) => ({ kind: 'subpart', templateId: s.subPartTemplateId }))
-  const g = part.gameData
+    .map((s) => ({ kind: 'subpart', templateId: s.subPartTemplateId }));
+  const g = part.gameData;
   if (
     g.combustors.length > 0 ||
     g.solidMotors.length > 0 ||
     g.nozzles.length > 0 ||
     g.solidNozzles.length > 0
   ) {
-    entries.push({ kind: 'part' })
+    entries.push({ kind: 'part' });
   }
-  return entries
-})
+  return entries;
+});
 
 /** The active SubPart engine's `SubPartGameData` entry, or null (also null for the part entry). */
 export const $activeEngineData = computed(
@@ -157,7 +157,7 @@ export const $activeEngineData = computed(
     entry?.kind === 'subpart'
       ? (part.subPartGameData.find((s) => s.subPartTemplateId === entry.templateId) ?? null)
       : null,
-)
+);
 
 /**
  * Every nozzle handle for the open engine: BOTH lists (De Laval + solid motor) × **every
@@ -179,11 +179,11 @@ export const $activeEngineData = computed(
 export const $resolvedNozzleTargets = computed(
   [$part, $activeEngineEntry, $activeNozzleRef],
   (part, entry, activeRef): NozzleTarget[] => {
-    if (!entry) return []
+    if (!entry) return [];
     const spd =
       entry.kind === 'subpart'
         ? part.subPartGameData.find((s) => s.subPartTemplateId === entry.templateId)
-        : undefined
+        : undefined;
     const groups: { kind: NozzleKind; list: readonly SolidMotorNozzle[] }[] =
       entry.kind === 'part'
         ? [
@@ -193,16 +193,16 @@ export const $resolvedNozzleTargets = computed(
         : [
             { kind: 'delaval', list: spd?.nozzles ?? [] },
             { kind: 'solid', list: spd?.solidNozzles ?? [] },
-          ]
+          ];
     // One frame per instantiation. `[null]` (not `[]`) for part scope and for an unplaced
     // template: both still get exactly one handle, drawn in the Part frame.
     const owners =
       entry.kind === 'subpart'
         ? part.placements.filter((p) => p.subPartTemplateId === entry.templateId)
-        : []
-    const frames: (SubPartPlacement | null)[] = owners.length > 0 ? owners : [null]
+        : [];
+    const frames: (SubPartPlacement | null)[] = owners.length > 0 ? owners : [null];
 
-    const out: NozzleTarget[] = []
+    const out: NozzleTarget[] = [];
     for (const { kind, list } of groups) {
       for (const [index, nozzle] of list.entries()) {
         for (const [instanceIndex, frame] of frames.entries()) {
@@ -216,50 +216,50 @@ export const $resolvedNozzleTargets = computed(
                   kind,
                   index,
                   channel,
-                }
+                };
           const common = {
             nozzle,
             frame,
             instanceIndex,
             instanceCount: frames.length,
             isActive: false,
-          }
-          const physics = refFor('physics')
+          };
+          const physics = refFor('physics');
           out.push({
             ...common,
             ref: physics,
             key: nozzleRefKey(physics),
             location: nozzle.exhaustLocation,
             direction: nozzle.exhaustDirection,
-          })
+          });
           // The fx handle exists ONLY when an override does — matching KSA's own debug
           // overlay, which draws the cyan plume arrow only for an overridden nozzle.
           if (nozzle.fxExhaustLocation !== null || nozzle.fxExhaustDirection !== null) {
-            const fx = refFor('fx')
+            const fx = refFor('fx');
             out.push({
               ...common,
               ref: fx,
               key: nozzleRefKey(fx),
               location: nozzle.fxExhaustLocation ?? nozzle.exhaustLocation,
               direction: nozzle.fxExhaustDirection ?? nozzle.exhaustDirection,
-            })
+            });
           }
         }
       }
     }
 
-    const activeKey = activeRef ? nozzleRefKey(activeRef) : null
-    const found = activeKey ? out.findIndex((t) => t.key === activeKey) : -1
-    const active = found >= 0 ? found : 0
-    return out.map((t, i) => (i === active ? { ...t, isActive: true } : t))
+    const activeKey = activeRef ? nozzleRefKey(activeRef) : null;
+    const found = activeKey ? out.findIndex((t) => t.key === activeKey) : -1;
+    const active = found >= 0 ? found : 0;
+    return out.map((t, i) => (i === active ? { ...t, isActive: true } : t));
   },
-)
+);
 
 /** The one nozzle the exhaust gizmo edits, or null when the open engine has no nozzles. */
 export const $activeNozzleTarget = computed(
   [$resolvedNozzleTargets],
   (targets): NozzleTarget | null => targets.find((t) => t.isActive) ?? null,
-)
+);
 
 /**
  * True while the exhaust gizmo is actually attached to something. Drives the
@@ -269,7 +269,7 @@ export const $activeNozzleTarget = computed(
 export const $isExhaustPlacing = computed(
   [$inspectorMode, $engineExhaustGizmo, $activeNozzleTarget],
   (mode, on, target) => mode === 'engine' && on && target !== null,
-)
+);
 
 /**
  * The tool mode the gizmo actually runs in, clamped for exhaust placement: a nozzle
@@ -284,40 +284,40 @@ export const $isExhaustPlacing = computed(
 export const $effectiveToolMode = computed(
   [$toolMode, $isExhaustPlacing],
   (mode, placing): ToolMode => (placing && mode === 'scale' ? 'translate' : mode),
-)
+);
 
 /** Opens the Engine designer, optionally on a specific engine scope. */
 export function enterEngineMode(entry?: EngineEntry | null): void {
-  if (entry !== undefined) setActiveEngine(entry)
-  setInspectorMode('engine')
+  if (entry !== undefined) setActiveEngine(entry);
+  setInspectorMode('engine');
 }
 
 /** Closes the Engine designer, returning to the Assets list. */
 export function exitEngineMode(): void {
-  $engineExhaustGizmo.set(false)
-  setInspectorMode('assets')
+  $engineExhaustGizmo.set(false);
+  setInspectorMode('assets');
 }
 
 /** Selects which engine (scope) the designer edits, resetting its sub-selection. */
 export function setActiveEngine(entry: EngineEntry | null): void {
-  $activeEngineEntry.set(entry)
-  $activeNozzleRef.set(null)
-  $engineExhaustGizmo.set(false)
+  $activeEngineEntry.set(entry);
+  $activeNozzleRef.set(null);
+  $engineExhaustGizmo.set(false);
 }
 
 /** Selects the SubPart-template engine with the given id (null ⇒ none). */
 export function setActiveEngineTemplate(id: string | null): void {
-  setActiveEngine(id ? { kind: 'subpart', templateId: id } : null)
+  setActiveEngine(id ? { kind: 'subpart', templateId: id } : null);
 }
 
 /** Targets one nozzle handle with the 3D gizmo (null ⇒ back to the first). */
 export function setActiveNozzleRef(ref: NozzleRef | null): void {
-  $activeNozzleRef.set(ref)
+  $activeNozzleRef.set(ref);
 }
 
 /** Toggles the 3D exhaust gizmo for the targeted nozzle. */
 export function setEngineExhaustGizmo(on: boolean): void {
-  $engineExhaustGizmo.set(on)
+  $engineExhaustGizmo.set(on);
 }
 
 /**
@@ -329,10 +329,10 @@ export function setEngineExhaustGizmo(on: boolean): void {
  */
 export function updateNozzleAt(ref: NozzleRef, patch: Partial<SolidMotorNozzle>): void {
   if (ref.scope === 'subpart') {
-    if (ref.kind === 'delaval') updateNozzle(ref.templateId, ref.index, patch)
-    else updateSubPartSolidNozzle(ref.templateId, ref.index, patch)
-    return
+    if (ref.kind === 'delaval') updateNozzle(ref.templateId, ref.index, patch);
+    else updateSubPartSolidNozzle(ref.templateId, ref.index, patch);
+    return;
   }
-  if (ref.kind === 'delaval') updatePartNozzle(ref.index, patch)
-  else updatePartSolidNozzle(ref.index, patch)
+  if (ref.kind === 'delaval') updatePartNozzle(ref.index, patch);
+  else updatePartSolidNozzle(ref.index, patch);
 }

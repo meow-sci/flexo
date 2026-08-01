@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { Settings } from 'lucide-react'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { Settings } from 'lucide-react';
 import {
   Button,
   Menu,
@@ -10,11 +10,11 @@ import {
   MenuSeparator,
   MenuTrigger,
   Popover,
-} from '../../../src/ui/kit'
-import { LightingDialog } from './LightingDialog'
+} from '../../../src/ui/kit';
+import { LightingDialog } from './LightingDialog';
 // $measurements here is the MINI APP's session atom (./settings), never the
 // editor's same-named store in src/state/measurementStore.
-import { $connectors, $measurements, resetPreviewSettings } from './settings'
+import { $connectors, $measurements, resetPreviewSettings } from './settings';
 
 /**
  * The preview's settings cog, third button in the floating control bar.
@@ -33,14 +33,14 @@ import { $connectors, $measurements, resetPreviewSettings } from './settings'
  * toggles tall.
  */
 export function SettingsMenu() {
-  const connectors = useStore($connectors)
-  const measurements = useStore($measurements)
-  const [lightingOpen, setLightingOpen] = useState(false)
+  const connectors = useStore($connectors);
+  const measurements = useStore($measurements);
+  const [lightingOpen, setLightingOpen] = useState(false);
 
   // Pure render-body derivation — cheap, and what React Compiler memoizes.
-  const shown = new Set<string>()
-  if (connectors) shown.add('connectors')
-  if (measurements) shown.add('measure')
+  const shown = new Set<string>();
+  if (connectors) shown.add('connectors');
+  if (measurements) shown.add('measure');
 
   return (
     <>
@@ -66,9 +66,9 @@ export function SettingsMenu() {
               selectedKeys={shown}
               onSelectionChange={(keys) => {
                 // `Selection` is 'all' | Set<Key> — narrow before asking .has().
-                const s = keys === 'all' ? new Set(['connectors', 'measure']) : keys
-                $connectors.set(s.has('connectors'))
-                $measurements.set(s.has('measure'))
+                const s = keys === 'all' ? new Set(['connectors', 'measure']) : keys;
+                $connectors.set(s.has('connectors'));
+                $measurements.set(s.has('measure'));
               }}
             >
               <MenuHeader>Show</MenuHeader>
@@ -107,5 +107,5 @@ export function SettingsMenu() {
           handles the mount/unmount off `isOpen`. */}
       <LightingDialog isOpen={lightingOpen} onOpenChange={setLightingOpen} />
     </>
-  )
+  );
 }

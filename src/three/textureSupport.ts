@@ -1,6 +1,6 @@
-import * as THREE from 'three'
-import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js'
-import { assetBase } from '../assetBase'
+import * as THREE from 'three';
+import { KTX2Loader } from 'three/addons/loaders/KTX2Loader.js';
+import { assetBase } from '../assetBase';
 
 /**
  * Owns the renderer-aware KTX2Loader used to load KSA's texture atlases, and
@@ -17,21 +17,21 @@ import { assetBase } from '../assetBase'
  * The transcoder worker assets live at /basis/ (public/basis/, committed); the
  * worker also runs the Zstd decoder + the Basis (UASTC) transcoder.
  */
-let loader: KTX2Loader | null = null
-let bcSupported = false
-let maxAnisotropy = 1
+let loader: KTX2Loader | null = null;
+let bcSupported = false;
+let maxAnisotropy = 1;
 
 /** Initialize once, after the WebGLRenderer exists. Idempotent. */
 export function initTextureSupport(renderer: THREE.WebGLRenderer): void {
-  if (loader) return
-  loader = new KTX2Loader().setTranscoderPath(`${assetBase()}basis/`).detectSupport(renderer)
+  if (loader) return;
+  loader = new KTX2Loader().setTranscoderPath(`${assetBase()}basis/`).detectSupport(renderer);
 
-  maxAnisotropy = renderer.capabilities.getMaxAnisotropy()
+  maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
 
-  const gl = renderer.getContext()
+  const gl = renderer.getContext();
   bcSupported =
     !!gl.getExtension('EXT_texture_compression_bptc') &&
-    !!gl.getExtension('EXT_texture_compression_rgtc')
+    !!gl.getExtension('EXT_texture_compression_rgtc');
 
   if (!bcSupported) {
     // SubParts are UASTC and transcode fine here; only the raw-BCn kitten
@@ -40,13 +40,13 @@ export function initTextureSupport(renderer: THREE.WebGLRenderer): void {
       'flexo: raw BC7/BC5 texture compression unavailable in this browser/GPU — ' +
         'SubParts still render (UASTC transcodes); only kitten character textures ' +
         'fall back to flat. (Desktop Chrome exposes BPTC/RGTC.)',
-    )
+    );
   }
 }
 
 export function getKtx2Loader(): KTX2Loader {
-  if (!loader) throw new Error('textureSupport: call initTextureSupport(renderer) first')
-  return loader
+  if (!loader) throw new Error('textureSupport: call initTextureSupport(renderer) first');
+  return loader;
 }
 
 /**
@@ -54,7 +54,7 @@ export function getKtx2Loader(): KTX2Loader {
  * kitten `Characters/` atlases still need this; UASTC SubPart atlases do not.
  */
 export function isBcnSupported(): boolean {
-  return bcSupported
+  return bcSupported;
 }
 
 /**
@@ -63,5 +63,5 @@ export function isBcnSupported(): boolean {
  * angles instead of falling back to a blurrier lower mip. 1 until init runs.
  */
 export function getMaxAnisotropy(): number {
-  return maxAnisotropy
+  return maxAnisotropy;
 }

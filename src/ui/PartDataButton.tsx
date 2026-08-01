@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
 import {
   Modal,
   Dialog,
@@ -9,9 +9,9 @@ import {
   TextField,
   ToolbarButton,
   useIsPhone,
-} from './kit'
-import { $part, pushUndo, setEditorTags, setPartId } from '../state/editorStore'
-import { EditorTagsField } from './EditorTagsField'
+} from './kit';
+import { $part, pushUndo, setEditorTags, setPartId } from '../state/editorStore';
+import { EditorTagsField } from './EditorTagsField';
 import {
   CouplingSection,
   IdentityFields,
@@ -19,40 +19,40 @@ import {
   PowerSection,
   SizeControlFields,
   TanksSection,
-} from './GameDataSections'
+} from './GameDataSections';
 import {
   ConsumerFeedWiringSection,
   GimbalsSection,
   PartGasGeneratorSection,
   PartSolidMotorSection,
   RocketControllersSection,
-} from './EngineSections'
-import { EngineIssuesPanel } from './EngineIssuesPanel'
+} from './EngineSections';
+import { EngineIssuesPanel } from './EngineIssuesPanel';
 
 interface Props {
-  isOpen?: boolean
-  onOpenChange?: (v: boolean) => void
+  isOpen?: boolean;
+  onOpenChange?: (v: boolean) => void;
 }
 
 export function PartDataButton({
   isOpen: externalOpen,
   onOpenChange: externalOnChange,
 }: Props = {}) {
-  const [internalOpen, setInternalOpen] = useState(false)
-  const isPhone = useIsPhone()
-  const isControlled = externalOpen !== undefined
-  const open = isControlled ? externalOpen! : internalOpen
-  const setOpen = isControlled ? (v: boolean) => externalOnChange?.(v) : setInternalOpen
-  const part = useStore($part)
-  const { gameData } = part
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isPhone = useIsPhone();
+  const isControlled = externalOpen !== undefined;
+  const open = isControlled ? externalOpen! : internalOpen;
+  const setOpen = isControlled ? (v: boolean) => externalOnChange?.(v) : setInternalOpen;
+  const part = useStore($part);
+  const { gameData } = part;
 
   const powerCount =
     gameData.batteries.length +
     gameData.generators.length +
     gameData.solarPanels.length +
-    (gameData.powerConsumer ? 1 : 0)
+    (gameData.powerConsumer ? 1 : 0);
   const couplingCount =
-    (gameData.decoupler ? 1 : 0) + (gameData.dockingPort ? 1 : 0) + (gameData.evaDoor ? 1 : 0)
+    (gameData.decoupler ? 1 : 0) + (gameData.dockingPort ? 1 : 0) + (gameData.evaDoor ? 1 : 0);
   const engineCount =
     gameData.rocketControllers.length +
     gameData.gimbals.length +
@@ -62,7 +62,7 @@ export function PartDataButton({
     gameData.consumerFeedWiring.length +
     gameData.solidMotors.length +
     gameData.solidNozzles.length +
-    gameData.solidGrainSegments.length
+    gameData.solidGrainSegments.length;
 
   return (
     <>
@@ -142,5 +142,5 @@ export function PartDataButton({
         </Dialog>
       </Modal>
     </>
-  )
+  );
 }

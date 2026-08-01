@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { CirclePlus } from 'lucide-react'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { CirclePlus } from 'lucide-react';
 import {
   MenuTrigger,
   Menu,
@@ -9,7 +9,7 @@ import {
   Popover,
   SubmenuTrigger,
   ToolbarButton,
-} from './kit'
+} from './kit';
 import {
   $part,
   addCollider,
@@ -20,34 +20,34 @@ import {
   addSubPart,
   revealEntity,
   selectLight,
-} from '../state/editorStore'
-import { requestColliderFit } from '../state/colliderStore'
-import { enterEngineMode } from '../state/engineStore'
-import { makeKittenMeshPart, openImportModel } from '../state/customAssetStore'
+} from '../state/editorStore';
+import { requestColliderFit } from '../state/colliderStore';
+import { enterEngineMode } from '../state/engineStore';
+import { makeKittenMeshPart, openImportModel } from '../state/customAssetStore';
 import {
   COLLIDER_SHAPES,
   meshKind,
   type ColliderShape,
   type KittenKind,
   type LightType,
-} from '../ksa/types'
-import { SubPartPopup } from './SubPartBrowser'
-import { PartPopup } from './PartBrowser'
-import { CustomTextureDialog } from './CustomTextureDialog'
-import { CreateMeshDialog } from './CreateMeshDialog'
-import { MaterialDialog } from './MaterialDialog'
+} from '../ksa/types';
+import { SubPartPopup } from './SubPartBrowser';
+import { PartPopup } from './PartBrowser';
+import { CustomTextureDialog } from './CustomTextureDialog';
+import { CreateMeshDialog } from './CreateMeshDialog';
+import { MaterialDialog } from './MaterialDialog';
 
 export function AddButton() {
-  const part = useStore($part)
+  const part = useStore($part);
   // Every re-placeable custom SubPart — hand-authored primitives AND imported glTF meshes.
   // Kitten submeshes are the exception: they have their own "Make Kitten Mesh" entry and
   // shouldn't clutter the "Custom Meshes" re-add submenu.
-  const customMeshes = part.customMeshes.filter((m) => meshKind(m) !== 'kitten')
-  const [subPartOpen, setSubPartOpen] = useState(false)
-  const [partOpen, setPartOpen] = useState(false)
-  const [textureOpen, setTextureOpen] = useState(false)
-  const [materialOpen, setMaterialOpen] = useState(false)
-  const [meshOpen, setMeshOpen] = useState(false)
+  const customMeshes = part.customMeshes.filter((m) => meshKind(m) !== 'kitten');
+  const [subPartOpen, setSubPartOpen] = useState(false);
+  const [partOpen, setPartOpen] = useState(false);
+  const [textureOpen, setTextureOpen] = useState(false);
+  const [materialOpen, setMaterialOpen] = useState(false);
+  const [meshOpen, setMeshOpen] = useState(false);
 
   return (
     <>
@@ -59,18 +59,18 @@ export function AddButton() {
         <Popover placement="bottom start" className="w-52">
           <Menu
             onAction={(key) => {
-              if (key === 'subpart') setSubPartOpen(true)
-              else if (key === 'connector') addConnector()
-              else if (key === 'part') setPartOpen(true)
-              else if (key === 'texture') setTextureOpen(true)
-              else if (key === 'material') setMaterialOpen(true)
-              else if (key === 'mesh') setMeshOpen(true)
+              if (key === 'subpart') setSubPartOpen(true);
+              else if (key === 'connector') addConnector();
+              else if (key === 'part') setPartOpen(true);
+              else if (key === 'texture') setTextureOpen(true);
+              else if (key === 'material') setMaterialOpen(true);
+              else if (key === 'mesh') setMeshOpen(true);
               // Opens with no files, i.e. on its drop/pick step (see ImportModelDialog).
-              else if (key === 'import-model') openImportModel()
-              else if (key === 'engine') enterEngineMode()
+              else if (key === 'import-model') openImportModel();
+              else if (key === 'engine') enterEngineMode();
               // One kind of seat, so no submenu: it lands at the origin looking +X
               // (KSA's own `<IVASeat>` defaults) and the inspector aims it.
-              else if (key === 'iva-seat') addIvaSeat()
+              else if (key === 'iva-seat') addIvaSeat();
             }}
           >
             <MenuHeader>Add</MenuHeader>
@@ -129,10 +129,10 @@ export function AddButton() {
                     light is the last entry (it returns nothing). */}
                 <Menu
                   onAction={(key) => {
-                    addLight(null, { type: key as LightType })
-                    const lights = $part.get().lights
-                    selectLight(lights.length - 1)
-                    revealEntity('light', lights[lights.length - 1].id)
+                    addLight(null, { type: key as LightType });
+                    const lights = $part.get().lights;
+                    selectLight(lights.length - 1);
+                    revealEntity('light', lights[lights.length - 1].id);
                   }}
                 >
                   <MenuItem id="Spot">Spot light</MenuItem>
@@ -175,5 +175,5 @@ export function AddButton() {
       {materialOpen && <MaterialDialog onClose={() => setMaterialOpen(false)} />}
       {meshOpen && <CreateMeshDialog onClose={() => setMeshOpen(false)} />}
     </>
-  )
+  );
 }

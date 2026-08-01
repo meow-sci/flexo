@@ -1,10 +1,10 @@
-import * as THREE from 'three'
-import type { Connector } from '../ksa/types'
-import { applyPlacement } from './coords'
-import { applyMaterialOpacity, captureOpacityBase, type MaterialOpacityBase } from './layerOpacity'
+import * as THREE from 'three';
+import type { Connector } from '../ksa/types';
+import { applyPlacement } from './coords';
+import { applyMaterialOpacity, captureOpacityBase, type MaterialOpacityBase } from './layerOpacity';
 
-const COLOR_DEFAULT = 0xf2f0e9
-const COLOR_SELECTED = 0x22dd44
+const COLOR_DEFAULT = 0xf2f0e9;
+const COLOR_SELECTED = 0x22dd44;
 
 /**
  * A connector in the scene: an untextured cube (the attachment point) plus a
@@ -15,75 +15,75 @@ const COLOR_SELECTED = 0x22dd44
  * connector's own transform is applied to the Group on top of that base size.
  */
 export class ConnectorObject {
-  readonly group = new THREE.Group()
-  readonly id: string
+  readonly group = new THREE.Group();
+  readonly id: string;
 
-  private readonly cubeGeometry: THREE.BoxGeometry
-  private readonly cubeMaterial: THREE.MeshStandardMaterial
-  private readonly coneGeometry: THREE.ConeGeometry
-  private readonly coneMaterial: THREE.MeshStandardMaterial
-  private readonly opacityBases: MaterialOpacityBase[]
+  private readonly cubeGeometry: THREE.BoxGeometry;
+  private readonly cubeMaterial: THREE.MeshStandardMaterial;
+  private readonly coneGeometry: THREE.ConeGeometry;
+  private readonly coneMaterial: THREE.MeshStandardMaterial;
+  private readonly opacityBases: MaterialOpacityBase[];
 
   constructor(connector: Connector, size: number) {
-    this.id = connector.id
-    this.group.name = `connector:${connector.id}`
-    this.group.userData.selectable = { kind: 'connector', id: connector.id }
+    this.id = connector.id;
+    this.group.name = `connector:${connector.id}`;
+    this.group.userData.selectable = { kind: 'connector', id: connector.id };
 
-    this.cubeGeometry = new THREE.BoxGeometry(size, size, size)
+    this.cubeGeometry = new THREE.BoxGeometry(size, size, size);
     this.cubeMaterial = new THREE.MeshStandardMaterial({
       color: COLOR_DEFAULT,
       roughness: 0.6,
       metalness: 0.1,
-    })
-    const cube = new THREE.Mesh(this.cubeGeometry, this.cubeMaterial)
-    cube.userData.selectable = { kind: 'connector', id: connector.id }
-    this.group.add(cube)
+    });
+    const cube = new THREE.Mesh(this.cubeGeometry, this.cubeMaterial);
+    cube.userData.selectable = { kind: 'connector', id: connector.id };
+    this.group.add(cube);
 
     // Cone shows the facing direction (local +X): diameter == cube width, length
     // == 1.5x cube width, base flush against the +X face.
-    const coneLength = size * 1.5
-    this.coneGeometry = new THREE.ConeGeometry(size / 2, coneLength, 24)
+    const coneLength = size * 1.5;
+    this.coneGeometry = new THREE.ConeGeometry(size / 2, coneLength, 24);
     this.coneMaterial = new THREE.MeshStandardMaterial({
       color: COLOR_DEFAULT,
       roughness: 0.5,
       metalness: 0.1,
-    })
-    const cone = new THREE.Mesh(this.coneGeometry, this.coneMaterial)
-    cone.userData.selectable = { kind: 'connector', id: connector.id }
-    cone.rotation.z = -Math.PI / 2 // cone's default +Y axis -> +X
-    cone.position.x = size / 2 + coneLength / 2
-    this.group.add(cone)
+    });
+    const cone = new THREE.Mesh(this.coneGeometry, this.coneMaterial);
+    cone.userData.selectable = { kind: 'connector', id: connector.id };
+    cone.rotation.z = -Math.PI / 2; // cone's default +Y axis -> +X
+    cone.position.x = size / 2 + coneLength / 2;
+    this.group.add(cone);
 
     this.opacityBases = [
       captureOpacityBase(this.cubeMaterial),
       captureOpacityBase(this.coneMaterial),
-    ]
+    ];
 
-    this.setConnector(connector)
+    this.setConnector(connector);
   }
 
   /** Applies the connector's transform to the group. */
   setConnector(connector: Connector): void {
-    applyPlacement(this.group, connector)
+    applyPlacement(this.group, connector);
   }
 
   /** Bright green when selected, offwhite otherwise (cube + cone). */
   setSelected(selected: boolean): void {
-    const hex = selected ? COLOR_SELECTED : COLOR_DEFAULT
-    this.cubeMaterial.color.setHex(hex)
-    this.coneMaterial.color.setHex(hex)
+    const hex = selected ? COLOR_SELECTED : COLOR_DEFAULT;
+    this.cubeMaterial.color.setHex(hex);
+    this.coneMaterial.color.setHex(hex);
   }
 
   /** Dims this connector to `factor` (0–1) of its base opacity for the layer fade. */
   setLayerOpacity(factor: number): void {
-    applyMaterialOpacity(this.cubeMaterial, this.opacityBases[0], factor)
-    applyMaterialOpacity(this.coneMaterial, this.opacityBases[1], factor)
+    applyMaterialOpacity(this.cubeMaterial, this.opacityBases[0], factor);
+    applyMaterialOpacity(this.coneMaterial, this.opacityBases[1], factor);
   }
 
   dispose(): void {
-    this.cubeGeometry.dispose()
-    this.cubeMaterial.dispose()
-    this.coneGeometry.dispose()
-    this.coneMaterial.dispose()
+    this.cubeGeometry.dispose();
+    this.cubeMaterial.dispose();
+    this.coneGeometry.dispose();
+    this.coneMaterial.dispose();
   }
 }

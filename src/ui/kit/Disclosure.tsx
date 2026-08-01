@@ -4,10 +4,10 @@ import {
   Button as AriaButton,
   Heading,
   type DisclosureProps,
-} from 'react-aria-components'
-import { ChevronRight } from 'lucide-react'
-import { focusRing } from './styles'
-import { cn } from './styles'
+} from 'react-aria-components';
+import { ChevronRight } from 'lucide-react';
+import { focusRing } from './styles';
+import { cn } from './styles';
 
 /**
  * A single collapsible section: a full-width header button (chevron + title +
@@ -23,11 +23,11 @@ export function DisclosureSection({
   children,
   ...props
 }: {
-  title: React.ReactNode
+  title: React.ReactNode;
   /** Optional trailing hint, e.g. an item count ("2") shown in the header. */
-  badge?: React.ReactNode
-  defaultExpanded?: boolean
-  children: React.ReactNode
+  badge?: React.ReactNode;
+  defaultExpanded?: boolean;
+  children: React.ReactNode;
 } & Omit<DisclosureProps, 'children'>) {
   return (
     <AriaDisclosure
@@ -59,5 +59,5 @@ export function DisclosureSection({
         {children}
       </AriaDisclosurePanel>
     </AriaDisclosure>
-  )
+  );
 }

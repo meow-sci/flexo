@@ -1,4 +1,4 @@
-import type * as THREE from 'three'
+import type * as THREE from 'three';
 
 /**
  * Per-layer opacity dimming (see {@link LayerViewState.opacity}). A layer can be
@@ -13,14 +13,14 @@ import type * as THREE from 'three'
 
 /** Render state of a material before any layer-opacity dimming is applied. */
 export interface MaterialOpacityBase {
-  opacity: number
-  transparent: boolean
-  depthWrite: boolean
+  opacity: number;
+  transparent: boolean;
+  depthWrite: boolean;
 }
 
 /** Snapshots a material's base opacity/transparency so dimming stays reversible. */
 export function captureOpacityBase(mat: THREE.Material): MaterialOpacityBase {
-  return { opacity: mat.opacity, transparent: mat.transparent, depthWrite: mat.depthWrite }
+  return { opacity: mat.opacity, transparent: mat.transparent, depthWrite: mat.depthWrite };
 }
 
 /**
@@ -34,11 +34,11 @@ export function applyMaterialOpacity(
   base: MaterialOpacityBase,
   factor: number,
 ): void {
-  const transparent = base.transparent || factor < 1
+  const transparent = base.transparent || factor < 1;
   if (mat.transparent !== transparent) {
-    mat.transparent = transparent
-    mat.needsUpdate = true
+    mat.transparent = transparent;
+    mat.needsUpdate = true;
   }
-  mat.opacity = base.opacity * factor
-  mat.depthWrite = factor < 1 ? false : base.depthWrite
+  mat.opacity = base.opacity * factor;
+  mat.depthWrite = factor < 1 ? false : base.depthWrite;
 }

@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { Eye, Layers } from 'lucide-react'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { Eye, Layers } from 'lucide-react';
 import {
   Toolbar,
   Button,
@@ -10,7 +10,7 @@ import {
   MenuItem,
   Popover,
   ConfirmDialog,
-} from './kit'
+} from './kit';
 import {
   $part,
   $selectedColliderIndices,
@@ -20,9 +20,9 @@ import {
   moveSelectionToLayer,
   removeSelected,
   setPlacementsInternal,
-} from '../state/editorStore'
-import { $hasMultiSelection, $selectionCount } from '../state/selectors'
-import { ENTITY_ONLY_LAYER_IDS } from '../ksa/types'
+} from '../state/editorStore';
+import { $hasMultiSelection, $selectionCount } from '../state/selectors';
+import { ENTITY_ONLY_LAYER_IDS } from '../ksa/types';
 
 /**
  * Floating toolbar stacked beneath {@link SelectionToolbar}, shown only when more
@@ -30,13 +30,13 @@ import { ENTITY_ONLY_LAYER_IDS } from '../ksa/types'
  * (bulk layer move, bulk delete) and act on the whole selection at once.
  */
 export function MultiSelectToolbar() {
-  const hasMultiSelection = useStore($hasMultiSelection)
-  const count = useStore($selectionCount)
-  const subCount = useStore($selectedIndices).length
-  const conCount = useStore($selectedConnectorIndices).length
-  const colCount = useStore($selectedColliderIndices).length
+  const hasMultiSelection = useStore($hasMultiSelection);
+  const count = useStore($selectionCount);
+  const subCount = useStore($selectedIndices).length;
+  const conCount = useStore($selectedConnectorIndices).length;
+  const colCount = useStore($selectedColliderIndices).length;
 
-  if (!hasMultiSelection) return null
+  if (!hasMultiSelection) return null;
 
   return (
     <Toolbar aria-label="Multi-selection actions">
@@ -46,14 +46,14 @@ export function MultiSelectToolbar() {
       {subCount > 0 && <InteriorButton />}
       <DeleteAllButton count={count} />
     </Toolbar>
-  )
+  );
 }
 
 /** "Change Layer" menu: picks a destination layer for the whole selection. */
 function ChangeLayerButton() {
-  const part = useStore($part)
+  const part = useStore($part);
   // Nothing may be moved ONTO the entity-only built-in layers (seats/lights/kittens).
-  const layers = part.layers.filter((l) => !ENTITY_ONLY_LAYER_IDS.includes(l.id))
+  const layers = part.layers.filter((l) => !ENTITY_ONLY_LAYER_IDS.includes(l.id));
 
   return (
     <MenuTrigger>
@@ -71,7 +71,7 @@ function ChangeLayerButton() {
         </Menu>
       </Popover>
     </MenuTrigger>
-  )
+  );
 }
 
 /**
@@ -84,18 +84,18 @@ function ChangeLayerButton() {
  * `<Internal>` field, so the flag would be silently ignored).
  */
 function InteriorButton() {
-  const part = useStore($part)
-  const indices = useStore($selectedIndices)
+  const part = useStore($part);
+  const indices = useStore($selectedIndices);
 
   const templateIds = [
     ...new Set(
       indices.flatMap((i) => {
-        const p = part.placements[i]
-        return p ? [p.subPartTemplateId] : []
+        const p = part.placements[i];
+        return p ? [p.subPartTemplateId] : [];
       }),
     ),
-  ]
-  const glassOnly = templateIds.length > 0 && templateIds.every((id) => isGlassTemplate(part, id))
+  ];
+  const glassOnly = templateIds.length > 0 && templateIds.every((id) => isGlassTemplate(part, id));
 
   return (
     <MenuTrigger>
@@ -115,12 +115,12 @@ function InteriorButton() {
         </Menu>
       </Popover>
     </MenuTrigger>
-  )
+  );
 }
 
 /** "Delete All (N)" with a confirm dialog; clears the selection on confirm. */
 function DeleteAllButton({ count }: { count: number }) {
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   return (
     <>
@@ -138,5 +138,5 @@ function DeleteAllButton({ count }: { count: number }) {
         onConfirm={() => removeSelected()}
       />
     </>
-  )
+  );
 }

@@ -1,5 +1,5 @@
-import * as THREE from 'three'
-import { atom, computed } from 'nanostores'
+import * as THREE from 'three';
+import { atom, computed } from 'nanostores';
 import type {
   AnimationKeyframe,
   AnimationMode,
@@ -9,13 +9,13 @@ import type {
   SolarTrackingSpec,
   Transform,
   Vec3,
-} from '../ksa/types'
-import { createPartAnimation, identityTransform, VEC3_ONE } from '../ksa/types'
-import { jointWorld, restAnchorTime, sampleJointLocal } from '../ksa/animationRig'
-import { isLinearEasing } from '../ksa/easing'
-import { matrixFromTransform, transformFromMatrix } from '../three/coords'
-import { $inspectorMode } from './uiStore'
-import { $part, $selectedIndices, $toolMode, pushUndo } from './editorStore'
+} from '../ksa/types';
+import { createPartAnimation, identityTransform, VEC3_ONE } from '../ksa/types';
+import { jointWorld, restAnchorTime, sampleJointLocal } from '../ksa/animationRig';
+import { isLinearEasing } from '../ksa/easing';
+import { matrixFromTransform, transformFromMatrix } from '../three/coords';
+import { $inspectorMode } from './uiStore';
+import { $part, $selectedIndices, $toolMode, pushUndo } from './editorStore';
 
 /**
  * Document actions + ephemeral editor state for custom animations (see
@@ -34,13 +34,13 @@ import { $part, $selectedIndices, $toolMode, pushUndo } from './editorStore'
 // ── ephemeral editor state (NOT in undo, like selection) ─────────────────────
 
 /** The animation currently open in the editor (drives the preview + pose UI), or null. */
-export const $activeAnimationId = atom<string | null>(null)
+export const $activeAnimationId = atom<string | null>(null);
 /** The joint whose pose the gizmo/fields edit, or null. */
-export const $activeJointId = atom<string | null>(null)
+export const $activeJointId = atom<string | null>(null);
 /** The keyframe being posed (pins the preview to its time); null = free scrub. */
-export const $editKeyframeId = atom<string | null>(null)
+export const $editKeyframeId = atom<string | null>(null);
 /** Free preview scrub position 0→1 (mapped to 0→duration). 0 = the t=0 keyframe. */
-export const $animPreviewU = atom<number>(0)
+export const $animPreviewU = atom<number>(0);
 /**
  * True while the user is actively dragging the preview scrubber. The viewport applies
  * the joint override ONLY while scrubbing (or editing a keyframe); otherwise SubParts
@@ -48,15 +48,15 @@ export const $animPreviewU = atom<number>(0)
  * whose rest is the DEPLOYED last keyframe — sit deployed at rest yet still fold to
  * stowed (t=0) while you drag, snapping back to the modeled pose on release.
  */
-export const $animScrubbing = atom<boolean>(false)
+export const $animScrubbing = atom<boolean>(false);
 
 /** True while {@link playAnimationPreview} is auto-advancing the scrubber (vs. a manual drag). */
-export const $animPlaying = atom<boolean>(false)
+export const $animPlaying = atom<boolean>(false);
 
 /** The active animation object, or null. */
 export const $activeAnimation = computed([$part, $activeAnimationId], (part, id) =>
   id ? (part.animations.find((a) => a.id === id) ?? null) : null,
-)
+);
 
 /**
  * True while the Animations editor has a joint + keyframe open for posing. The
@@ -67,7 +67,7 @@ export const $activeAnimation = computed([$part, $activeAnimationId], (part, id)
 export const $isPoseEditing = computed(
   [$inspectorMode, $activeAnimationId, $activeJointId, $editKeyframeId],
   (mode, animId, jointId, kfId) => mode === 'anim' && !!animId && !!jointId && !!kfId,
-)
+);
 
 /**
  * Selects a keyframe for pose editing and auto-picks the 3D gizmo tool: Move for the
@@ -76,18 +76,18 @@ export const $isPoseEditing = computed(
  * still switch tools afterwards.
  */
 export function selectKeyframeForEditing(animId: string, keyframeId: string): void {
-  $editKeyframeId.set(keyframeId)
-  const anim = $activeAnimation.get()
-  const k = anim?.keyframes.find((x) => x.id === keyframeId)
+  $editKeyframeId.set(keyframeId);
+  const anim = $activeAnimation.get();
+  const k = anim?.keyframes.find((x) => x.id === keyframeId);
   if (k && anim && $activeAnimationId.get() === animId) {
-    $toolMode.set(k.timeSec === restAnchorTime(anim) ? 'translate' : 'rotate')
+    $toolMode.set(k.timeSec === restAnchorTime(anim) ? 'translate' : 'rotate');
   }
 }
 
 // ── preview playback ──────────────────────────────────────────────────────────
 
 /** Handle of the in-flight requestAnimationFrame loop (0 = idle). */
-let playRaf = 0
+let playRaf = 0;
 
 /**
  * Stops the auto-play loop but LEAVES the current scrub position/override in place — used
@@ -95,9 +95,9 @@ let playRaf = 0
  * own release then handles the spring-loaded snap-back).
  */
 export function cancelPlayback(): void {
-  if (playRaf) cancelAnimationFrame(playRaf)
-  playRaf = 0
-  if ($animPlaying.get()) $animPlaying.set(false)
+  if (playRaf) cancelAnimationFrame(playRaf);
+  playRaf = 0;
+  if ($animPlaying.get()) $animPlaying.set(false);
 }
 
 /**
@@ -105,9 +105,9 @@ export function cancelPlayback(): void {
  * the spring-loaded reset the preview slider performs on release. Safe to call when idle.
  */
 export function stopAnimationPreview(): void {
-  cancelPlayback()
-  if ($animScrubbing.get()) $animScrubbing.set(false)
-  if ($animPreviewU.get() !== 0) $animPreviewU.set(0)
+  cancelPlayback();
+  if ($animScrubbing.get()) $animScrubbing.set(false);
+  if ($animPreviewU.get() !== 0) $animPreviewU.set(0);
 }
 
 /**
@@ -119,121 +119,121 @@ export function stopAnimationPreview(): void {
  * the animation is missing / zero-length.
  */
 export function playAnimationPreview(animId: string): void {
-  const anim = $part.get().animations.find((a) => a.id === animId)
-  if (!anim || anim.durationSec <= 0) return
-  cancelPlayback()
-  $editKeyframeId.set(null) // unpin any edited keyframe; the timeline takes over
-  $animScrubbing.set(true)
-  $animPreviewU.set(0)
-  $animPlaying.set(true)
-  const durMs = anim.durationSec * 1000
-  let startTs = 0
+  const anim = $part.get().animations.find((a) => a.id === animId);
+  if (!anim || anim.durationSec <= 0) return;
+  cancelPlayback();
+  $editKeyframeId.set(null); // unpin any edited keyframe; the timeline takes over
+  $animScrubbing.set(true);
+  $animPreviewU.set(0);
+  $animPlaying.set(true);
+  const durMs = anim.durationSec * 1000;
+  let startTs = 0;
   const tick = (ts: number) => {
-    if (!$animPlaying.get()) return // stopped externally (stop already reset state)
-    if ($activeAnimationId.get() !== animId) return stopAnimationPreview() // clip switched/closed
-    if (!startTs) startTs = ts
-    const u = Math.min(1, (ts - startTs) / durMs)
-    $animPreviewU.set(u)
-    if (u < 1) playRaf = requestAnimationFrame(tick)
-    else stopAnimationPreview() // reached the end → snap back to the modeled rest pose
-  }
-  playRaf = requestAnimationFrame(tick)
+    if (!$animPlaying.get()) return; // stopped externally (stop already reset state)
+    if ($activeAnimationId.get() !== animId) return stopAnimationPreview(); // clip switched/closed
+    if (!startTs) startTs = ts;
+    const u = Math.min(1, (ts - startTs) / durMs);
+    $animPreviewU.set(u);
+    if (u < 1) playRaf = requestAnimationFrame(tick);
+    else stopAnimationPreview(); // reached the end → snap back to the modeled rest pose
+  };
+  playRaf = requestAnimationFrame(tick);
 }
 
 // ── undo plumbing (mirrors customAssetStore.mutate, minus the atlas flag) ─────
 
 function rid(prefix: string): string {
-  return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`
+  return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
 }
 
 /** Discrete mutation: snapshot undo, clone, mutate, publish. */
 function mutate(description: string, detail: string, fn: (part: EditingPart) => void): void {
-  pushUndo(description, detail)
-  const next = structuredClone($part.get())
-  fn(next)
-  $part.set(next)
+  pushUndo(description, detail);
+  const next = structuredClone($part.get());
+  fn(next);
+  $part.set(next);
 }
 
 /** Streaming mutation: no undo push (caller pushes at interaction start). */
 function stream(fn: (part: EditingPart) => void): void {
-  const next = structuredClone($part.get())
-  fn(next)
-  $part.set(next)
+  const next = structuredClone($part.get());
+  fn(next);
+  $part.set(next);
 }
 
 function findAnim(part: EditingPart, animId: string): PartAnimation | undefined {
-  return part.animations.find((a) => a.id === animId)
+  return part.animations.find((a) => a.id === animId);
 }
 
 /** Sorted keyframes (rest at t=0 first), as a live reference into the array. */
 function sortKeyframes(anim: PartAnimation): void {
-  anim.keyframes.sort((a, b) => a.timeSec - b.timeSec)
+  anim.keyframes.sort((a, b) => a.timeSec - b.timeSec);
 }
 
 // ── animations ───────────────────────────────────────────────────────────────
 
 /** Creates an animation, makes it active, returns its id. */
 export function addAnimation(name = 'Animation', mode: AnimationMode = 'actuate'): string {
-  const id = rid('anim')
-  const anim = createPartAnimation(id, name)
-  anim.mode = mode
-  mutate('add animation', anim.name, (p) => p.animations.push(anim))
-  $activeAnimationId.set(id)
-  $activeJointId.set(null)
-  $editKeyframeId.set(null)
-  $animPreviewU.set(0)
-  $animScrubbing.set(false)
-  return id
+  const id = rid('anim');
+  const anim = createPartAnimation(id, name);
+  anim.mode = mode;
+  mutate('add animation', anim.name, (p) => p.animations.push(anim));
+  $activeAnimationId.set(id);
+  $activeJointId.set(null);
+  $editKeyframeId.set(null);
+  $animPreviewU.set(0);
+  $animScrubbing.set(false);
+  return id;
 }
 
 export function removeAnimation(animId: string): void {
-  const name = findAnim($part.get(), animId)?.name ?? ''
+  const name = findAnim($part.get(), animId)?.name ?? '';
   mutate('remove animation', name, (p) => {
-    p.animations = p.animations.filter((a) => a.id !== animId)
-  })
+    p.animations = p.animations.filter((a) => a.id !== animId);
+  });
   if ($activeAnimationId.get() === animId) {
-    $activeAnimationId.set(null)
-    $activeJointId.set(null)
-    $editKeyframeId.set(null)
+    $activeAnimationId.set(null);
+    $activeJointId.set(null);
+    $editKeyframeId.set(null);
   }
 }
 
 export function renameAnimation(animId: string, name: string): void {
-  const trimmed = name.trim()
-  const anim = findAnim($part.get(), animId)
-  if (!anim || !trimmed || anim.name === trimmed) return
+  const trimmed = name.trim();
+  const anim = findAnim($part.get(), animId);
+  if (!anim || !trimmed || anim.name === trimmed) return;
   mutate('rename animation', `${anim.name} → ${trimmed}`, (p) => {
-    const a = findAnim(p, animId)
-    if (a) a.name = trimmed
-  })
+    const a = findAnim(p, animId);
+    if (a) a.name = trimmed;
+  });
 }
 
 export function setAnimationMode(animId: string, mode: AnimationMode): void {
   mutate('animation mode', mode, (p) => {
-    const a = findAnim(p, animId)
-    if (a) a.mode = mode
-  })
+    const a = findAnim(p, animId);
+    if (a) a.mode = mode;
+  });
 }
 
 /** Sets the duration (s); rescales every keyframe time proportionally to keep shape. */
 export function setAnimationDuration(animId: string, durationSec: number): void {
-  const dur = Math.max(0.01, durationSec)
+  const dur = Math.max(0.01, durationSec);
   // streaming: duration is typed in a numeric field (caller focus-pushes once)
   stream((p) => {
-    const a = findAnim(p, animId)
-    if (!a) return
-    const old = a.durationSec
-    if (old > 0) for (const k of a.keyframes) k.timeSec = (k.timeSec / old) * dur
-    a.durationSec = dur
-    sortKeyframes(a)
-  })
+    const a = findAnim(p, animId);
+    if (!a) return;
+    const old = a.durationSec;
+    if (old > 0) for (const k of a.keyframes) k.timeSec = (k.timeSec / old) * dur;
+    a.durationSec = dur;
+    sortKeyframes(a);
+  });
 }
 
 export function setSolarTracking(animId: string, spec: SolarTrackingSpec | null): void {
   mutate('solar tracking', spec ? 'on' : 'off', (p) => {
-    const a = findAnim(p, animId)
-    if (a) a.solarTracking = spec
-  })
+    const a = findAnim(p, animId);
+    if (a) a.solarTracking = spec;
+  });
 }
 
 // ── joints ─────────────────────────────────────────────────────────────────--
@@ -249,65 +249,65 @@ export function addJoint(
   name = 'Joint',
   parentJointId: string | null = null,
 ): string {
-  const id = rid('joint')
-  const seed = selectionCentroidPose()
+  const id = rid('joint');
+  const seed = selectionCentroidPose();
   mutate('add joint', name, (p) => {
-    const a = findAnim(p, animId)
-    if (!a) return
-    a.joints.push({ id, name, parentJointId, memberInstanceIds: [] })
-    for (const k of a.keyframes) k.poses[id] = cloneTransform(seed)
-  })
-  $activeJointId.set(id)
-  return id
+    const a = findAnim(p, animId);
+    if (!a) return;
+    a.joints.push({ id, name, parentJointId, memberInstanceIds: [] });
+    for (const k of a.keyframes) k.poses[id] = cloneTransform(seed);
+  });
+  $activeJointId.set(id);
+  return id;
 }
 
 /** A deep copy of a Transform (poses must not share mutable refs across keyframes). */
 function cloneTransform(t: Transform): Transform {
-  return { position: { ...t.position }, rotation: { ...t.rotation }, scale: { ...t.scale } }
+  return { position: { ...t.position }, rotation: { ...t.rotation }, scale: { ...t.scale } };
 }
 
 /** A rest pose at the current viewport selection's centroid (identity if none selected). */
 function selectionCentroidPose(): Transform {
-  const placements = $part.get().placements
+  const placements = $part.get().placements;
   const pts = $selectedIndices
     .get()
     .map((i) => placements[i])
-    .filter(Boolean)
-  if (pts.length === 0) return identityTransform()
-  const c = { x: 0, y: 0, z: 0 }
+    .filter(Boolean);
+  if (pts.length === 0) return identityTransform();
+  const c = { x: 0, y: 0, z: 0 };
   for (const pl of pts) {
-    c.x += pl.position.x
-    c.y += pl.position.y
-    c.z += pl.position.z
+    c.x += pl.position.x;
+    c.y += pl.position.y;
+    c.z += pl.position.z;
   }
   return {
     position: { x: c.x / pts.length, y: c.y / pts.length, z: c.z / pts.length },
     rotation: { x: 0, y: 0, z: 0 },
     scale: { x: 1, y: 1, z: 1 },
-  }
+  };
 }
 
 export function removeJoint(animId: string, jointId: string): void {
   mutate('remove joint', '', (p) => {
-    const a = findAnim(p, animId)
-    if (!a) return
+    const a = findAnim(p, animId);
+    if (!a) return;
     // Re-parent children to the removed joint's parent (keep the chain connected).
-    const removed = a.joints.find((j) => j.id === jointId)
-    const newParent = removed?.parentJointId ?? null
-    for (const j of a.joints) if (j.parentJointId === jointId) j.parentJointId = newParent
-    a.joints = a.joints.filter((j) => j.id !== jointId)
-    for (const k of a.keyframes) delete k.poses[jointId]
-  })
-  if ($activeJointId.get() === jointId) $activeJointId.set(null)
+    const removed = a.joints.find((j) => j.id === jointId);
+    const newParent = removed?.parentJointId ?? null;
+    for (const j of a.joints) if (j.parentJointId === jointId) j.parentJointId = newParent;
+    a.joints = a.joints.filter((j) => j.id !== jointId);
+    for (const k of a.keyframes) delete k.poses[jointId];
+  });
+  if ($activeJointId.get() === jointId) $activeJointId.set(null);
 }
 
 export function renameJoint(animId: string, jointId: string, name: string): void {
-  const trimmed = name.trim()
-  if (!trimmed) return
+  const trimmed = name.trim();
+  if (!trimmed) return;
   mutate('rename joint', trimmed, (p) => {
-    const j = findAnim(p, animId)?.joints.find((x) => x.id === jointId)
-    if (j) j.name = trimmed
-  })
+    const j = findAnim(p, animId)?.joints.find((x) => x.id === jointId);
+    if (j) j.name = trimmed;
+  });
 }
 
 /** Sets a joint's parent (for chains), guarding against cycles and self-parenting. */
@@ -317,26 +317,26 @@ export function setJointParent(
   parentJointId: string | null,
 ): void {
   mutate('joint parent', '', (p) => {
-    const a = findAnim(p, animId)
-    if (!a) return
-    if (parentJointId && wouldCycle(a, jointId, parentJointId)) return
-    const j = a.joints.find((x) => x.id === jointId)
-    if (j) j.parentJointId = parentJointId
-  })
+    const a = findAnim(p, animId);
+    if (!a) return;
+    if (parentJointId && wouldCycle(a, jointId, parentJointId)) return;
+    const j = a.joints.find((x) => x.id === jointId);
+    if (j) j.parentJointId = parentJointId;
+  });
 }
 
 /** True if making `parentId` the parent of `jointId` would create a cycle. */
 function wouldCycle(anim: PartAnimation, jointId: string, parentId: string): boolean {
-  if (parentId === jointId) return true
-  const byId = new Map(anim.joints.map((j) => [j.id, j]))
-  let cur: string | null = parentId
-  const seen = new Set<string>()
+  if (parentId === jointId) return true;
+  const byId = new Map(anim.joints.map((j) => [j.id, j]));
+  let cur: string | null = parentId;
+  const seen = new Set<string>();
   while (cur && !seen.has(cur)) {
-    if (cur === jointId) return true
-    seen.add(cur)
-    cur = byId.get(cur)?.parentJointId ?? null
+    if (cur === jointId) return true;
+    seen.add(cur);
+    cur = byId.get(cur)?.parentJointId ?? null;
   }
-  return false
+  return false;
 }
 
 /**
@@ -348,27 +348,27 @@ export function attachToJoint(
   jointId: string,
   instanceIds: readonly string[],
 ): void {
-  if (instanceIds.length === 0) return
+  if (instanceIds.length === 0) return;
   mutate(
     'attach to joint',
     `${instanceIds.length} part${instanceIds.length === 1 ? '' : 's'}`,
     (p) => {
-      const a = findAnim(p, animId)
-      if (!a) return
-      const set = new Set(instanceIds)
+      const a = findAnim(p, animId);
+      if (!a) return;
+      const set = new Set(instanceIds);
       for (const j of a.joints)
-        j.memberInstanceIds = j.memberInstanceIds.filter((id) => !set.has(id))
-      const target = a.joints.find((j) => j.id === jointId)
-      if (target) target.memberInstanceIds.push(...instanceIds)
+        j.memberInstanceIds = j.memberInstanceIds.filter((id) => !set.has(id));
+      const target = a.joints.find((j) => j.id === jointId);
+      if (target) target.memberInstanceIds.push(...instanceIds);
     },
-  )
+  );
 }
 
 export function detachFromJoint(animId: string, jointId: string, instanceId: string): void {
   mutate('detach from joint', instanceId, (p) => {
-    const j = findAnim(p, animId)?.joints.find((x) => x.id === jointId)
-    if (j) j.memberInstanceIds = j.memberInstanceIds.filter((id) => id !== instanceId)
-  })
+    const j = findAnim(p, animId)?.joints.find((x) => x.id === jointId);
+    if (j) j.memberInstanceIds = j.memberInstanceIds.filter((id) => id !== instanceId);
+  });
 }
 
 // ── keyframes (poses) ─────────────────────────────────────────────────────────
@@ -379,47 +379,47 @@ export function detachFromJoint(animId: string, jointId: string, instanceId: str
  * and returns its id.
  */
 export function addKeyframe(animId: string, timeSec: number): string {
-  const id = rid('kf')
-  const t = Math.max(0.001, timeSec)
+  const id = rid('kf');
+  const t = Math.max(0.001, timeSec);
   mutate('add keyframe', `${t.toFixed(2)}s`, (p) => {
-    const a = findAnim(p, animId)
-    if (!a) return
-    const poses: Record<string, Transform> = {}
-    for (const j of a.joints) poses[j.id] = transformFromMatrix(sampleJointLocal(a, j.id, t))
-    a.keyframes.push({ id, timeSec: t, poses })
-    sortKeyframes(a)
+    const a = findAnim(p, animId);
+    if (!a) return;
+    const poses: Record<string, Transform> = {};
+    for (const j of a.joints) poses[j.id] = transformFromMatrix(sampleJointLocal(a, j.id, t));
+    a.keyframes.push({ id, timeSec: t, poses });
+    sortKeyframes(a);
     // Inserting into a segment halves the preceding keyframe's outgoing easing span —
     // drop it so both sub-segments are linear through the on-curve pose we just
     // sampled (re-author easing per sub-segment afterwards; see AnimationKeyframe).
-    const idx = a.keyframes.findIndex((k) => k.id === id)
-    const prev = idx > 0 ? a.keyframes[idx - 1] : null
-    if (prev?.easings) delete prev.easings
-  })
-  $editKeyframeId.set(id)
-  return id
+    const idx = a.keyframes.findIndex((k) => k.id === id);
+    const prev = idx > 0 ? a.keyframes[idx - 1] : null;
+    if (prev?.easings) delete prev.easings;
+  });
+  $editKeyframeId.set(id);
+  return id;
 }
 
 export function removeKeyframe(animId: string, keyframeId: string): void {
   mutate('remove keyframe', '', (p) => {
-    const a = findAnim(p, animId)
-    if (!a) return
-    const k = a.keyframes.find((x) => x.id === keyframeId)
-    if (!k || k.timeSec === 0) return // never remove the rest (t=0) keyframe
-    a.keyframes = a.keyframes.filter((x) => x.id !== keyframeId)
-  })
-  if ($editKeyframeId.get() === keyframeId) $editKeyframeId.set(null)
+    const a = findAnim(p, animId);
+    if (!a) return;
+    const k = a.keyframes.find((x) => x.id === keyframeId);
+    if (!k || k.timeSec === 0) return; // never remove the rest (t=0) keyframe
+    a.keyframes = a.keyframes.filter((x) => x.id !== keyframeId);
+  });
+  if ($editKeyframeId.get() === keyframeId) $editKeyframeId.set(null);
 }
 
 /** Moves a keyframe in time (streaming; can't move the rest keyframe off t=0). */
 export function setKeyframeTime(animId: string, keyframeId: string, timeSec: number): void {
   stream((p) => {
-    const a = findAnim(p, animId)
-    if (!a) return
-    const k = a.keyframes.find((x) => x.id === keyframeId)
-    if (!k || k.timeSec === 0) return
-    k.timeSec = Math.min(a.durationSec, Math.max(0.001, timeSec))
-    sortKeyframes(a)
-  })
+    const a = findAnim(p, animId);
+    if (!a) return;
+    const k = a.keyframes.find((x) => x.id === keyframeId);
+    if (!k || k.timeSec === 0) return;
+    k.timeSec = Math.min(a.durationSec, Math.max(0.001, timeSec));
+    sortKeyframes(a);
+  });
 }
 
 /**
@@ -433,14 +433,14 @@ export function setJointPose(
   pose: Transform,
 ): void {
   stream((p) => {
-    const k = findAnim(p, animId)?.keyframes.find((x) => x.id === keyframeId)
+    const k = findAnim(p, animId)?.keyframes.find((x) => x.id === keyframeId);
     if (k)
       k.poses[jointId] = {
         position: { ...pose.position },
         rotation: { ...pose.rotation },
         scale: { ...pose.scale },
-      }
-  })
+      };
+  });
 }
 
 // ── segment easing ─────────────────────────────────────────────────────────--
@@ -449,13 +449,13 @@ export function setJointPose(
 function applyEasing(k: AnimationKeyframe, jointId: string, cfg: EasingConfig): void {
   if (isLinearEasing(cfg)) {
     if (k.easings) {
-      delete k.easings[jointId]
-      if (Object.keys(k.easings).length === 0) delete k.easings
+      delete k.easings[jointId];
+      if (Object.keys(k.easings).length === 0) delete k.easings;
     }
-    return
+    return;
   }
-  if (!k.easings) k.easings = {}
-  k.easings[jointId] = cfg
+  if (!k.easings) k.easings = {};
+  k.easings[jointId] = cfg;
 }
 
 /**
@@ -471,9 +471,9 @@ export function setJointSegmentEasing(
   cfg: EasingConfig,
 ): void {
   stream((p) => {
-    const k = findAnim(p, animId)?.keyframes.find((x) => x.id === keyframeId)
-    if (k) applyEasing(k, jointId, cfg)
-  })
+    const k = findAnim(p, animId)?.keyframes.find((x) => x.id === keyframeId);
+    if (k) applyEasing(k, jointId, cfg);
+  });
 }
 
 /** Sets the same easing on EVERY joint for the segment leaving `keyframeId` (discrete undo). */
@@ -483,11 +483,11 @@ export function setSegmentEasingAllJoints(
   cfg: EasingConfig,
 ): void {
   mutate('segment easing', isLinearEasing(cfg) ? 'linear' : 'eased', (p) => {
-    const a = findAnim(p, animId)
-    const k = a?.keyframes.find((x) => x.id === keyframeId)
-    if (!a || !k) return
-    for (const j of a.joints) applyEasing(k, j.id, cfg)
-  })
+    const a = findAnim(p, animId);
+    const k = a?.keyframes.find((x) => x.id === keyframeId);
+    if (!a || !k) return;
+    for (const j of a.joints) applyEasing(k, j.id, cfg);
+  });
 }
 
 /**
@@ -501,24 +501,24 @@ export function setSegmentEasingAllJoints(
  */
 export function moveJointPivot(animId: string, jointId: string, delta: Vec3): void {
   stream((p) => {
-    const a = findAnim(p, animId)
-    if (!a) return
+    const a = findAnim(p, animId);
+    if (!a) return;
     for (const k of a.keyframes) {
-      const pose = k.poses[jointId]
+      const pose = k.poses[jointId];
       if (pose) {
-        pose.position.x += delta.x
-        pose.position.y += delta.y
-        pose.position.z += delta.z
+        pose.position.x += delta.x;
+        pose.position.y += delta.y;
+        pose.position.z += delta.z;
       }
     }
-  })
+  });
 }
 
 /** The rotation component of a matrix, as a quaternion. */
 function quatOf(m: THREE.Matrix4): THREE.Quaternion {
-  const q = new THREE.Quaternion()
-  m.decompose(new THREE.Vector3(), q, new THREE.Vector3())
-  return q
+  const q = new THREE.Quaternion();
+  m.decompose(new THREE.Vector3(), q, new THREE.Vector3());
+  return q;
 }
 
 /**
@@ -532,18 +532,18 @@ function quatOf(m: THREE.Matrix4): THREE.Quaternion {
  * pre-mutation poses (the write loop must not read half-rewritten state).
  */
 function rebaseJointToWorld(a: PartAnimation, jointId: string, Wtgt: THREE.Matrix4): void {
-  const joint = a.joints.find((j) => j.id === jointId)
-  if (!joint) return
-  const B = Wtgt.clone().multiply(jointWorld(a, jointId, restAnchorTime(a)).invert())
+  const joint = a.joints.find((j) => j.id === jointId);
+  if (!joint) return;
+  const B = Wtgt.clone().multiply(jointWorld(a, jointId, restAnchorTime(a)).invert());
   const precomputed = a.keyframes.map((k) => ({
     k,
     Wk: jointWorld(a, jointId, k.timeSec),
     WpInv: joint.parentJointId
       ? jointWorld(a, joint.parentJointId, k.timeSec).invert()
       : new THREE.Matrix4(),
-  }))
+  }));
   for (const { k, Wk, WpInv } of precomputed) {
-    k.poses[jointId] = transformFromMatrix(WpInv.multiply(B.clone().multiply(Wk))) // W_parent⁻¹ · B · W_J
+    k.poses[jointId] = transformFromMatrix(WpInv.multiply(B.clone().multiply(Wk))); // W_parent⁻¹ · B · W_J
   }
 }
 
@@ -555,11 +555,11 @@ function pivotTargetWorld(
   target: Transform,
   useOrientation: boolean,
 ): THREE.Matrix4 {
-  const pos = new THREE.Vector3(target.position.x, target.position.y, target.position.z)
+  const pos = new THREE.Vector3(target.position.x, target.position.y, target.position.z);
   const quat = useOrientation
     ? quatOf(matrixFromTransform({ ...target, scale: VEC3_ONE }))
-    : quatOf(jointWorld(a, jointId, restAnchorTime(a)))
-  return new THREE.Matrix4().compose(pos, quat, new THREE.Vector3(1, 1, 1))
+    : quatOf(jointWorld(a, jointId, restAnchorTime(a)));
+  return new THREE.Matrix4().compose(pos, quat, new THREE.Vector3(1, 1, 1));
 }
 
 /**
@@ -575,12 +575,12 @@ export function setJointPivot(
   target: Transform,
   opts: { orientation?: boolean } = {},
 ): void {
-  const useOrientation = opts.orientation ?? true
+  const useOrientation = opts.orientation ?? true;
   mutate('set pivot', '', (p) => {
-    const a = findAnim(p, animId)
-    if (!a || !a.joints.some((j) => j.id === jointId)) return
-    rebaseJointToWorld(a, jointId, pivotTargetWorld(a, jointId, target, useOrientation))
-  })
+    const a = findAnim(p, animId);
+    if (!a || !a.joints.some((j) => j.id === jointId)) return;
+    rebaseJointToWorld(a, jointId, pivotTargetWorld(a, jointId, target, useOrientation));
+  });
 }
 
 /**
@@ -591,10 +591,10 @@ export function setJointPivot(
  */
 export function reorientJointPivot(animId: string, jointId: string, worldFrame: Transform): void {
   stream((p) => {
-    const a = findAnim(p, animId)
-    if (!a || !a.joints.some((j) => j.id === jointId)) return
-    rebaseJointToWorld(a, jointId, matrixFromTransform({ ...worldFrame, scale: VEC3_ONE }))
-  })
+    const a = findAnim(p, animId);
+    if (!a || !a.joints.some((j) => j.id === jointId)) return;
+    rebaseJointToWorld(a, jointId, matrixFromTransform({ ...worldFrame, scale: VEC3_ONE }));
+  });
 }
 
 // ── ephemeral-state clamping (after undo/redo or external $part swaps) ─────────
@@ -606,19 +606,19 @@ export function reorientJointPivot(animId: string, jointId: string, worldFrame: 
  */
 export function initAnimationStore(): void {
   $part.subscribe((part) => {
-    const animId = $activeAnimationId.get()
+    const animId = $activeAnimationId.get();
     if (animId && !part.animations.some((a) => a.id === animId)) {
-      $activeAnimationId.set(null)
-      $activeJointId.set(null)
-      $editKeyframeId.set(null)
-      return
+      $activeAnimationId.set(null);
+      $activeJointId.set(null);
+      $editKeyframeId.set(null);
+      return;
     }
-    const anim = animId ? part.animations.find((a) => a.id === animId) : null
+    const anim = animId ? part.animations.find((a) => a.id === animId) : null;
     if (anim) {
       if ($activeJointId.get() && !anim.joints.some((j) => j.id === $activeJointId.get()))
-        $activeJointId.set(null)
+        $activeJointId.set(null);
       if ($editKeyframeId.get() && !anim.keyframes.some((k) => k.id === $editKeyframeId.get()))
-        $editKeyframeId.set(null)
+        $editKeyframeId.set(null);
     }
-  })
+  });
 }

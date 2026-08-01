@@ -6,7 +6,7 @@
  */
 export const IS_APPLE: boolean =
   typeof navigator !== 'undefined' &&
-  /mac|iphone|ipad|ipod/i.test(navigator.platform || navigator.userAgent || '')
+  /mac|iphone|ipad|ipod/i.test(navigator.platform || navigator.userAgent || '');
 
 /**
  * A display token rendered as a single <kbd> chip. `mod` is the platform-agnostic
@@ -15,7 +15,7 @@ export const IS_APPLE: boolean =
  * the registry stays platform-neutral.
  */
 export function keyLabel(token: string): string {
-  if (token === 'mod') return IS_APPLE ? '⌘' : 'Ctrl'
-  if (token === 'shift') return IS_APPLE ? '⇧' : 'Shift'
-  return token
+  if (token === 'mod') return IS_APPLE ? '⌘' : 'Ctrl';
+  if (token === 'shift') return IS_APPLE ? '⇧' : 'Shift';
+  return token;
 }

@@ -1,4 +1,4 @@
-import { atom } from 'nanostores'
+import { atom } from 'nanostores';
 import {
   $activeLayerId,
   $canRedo,
@@ -9,20 +9,20 @@ import {
   importHistory,
   newPart,
   type HistorySnapshot,
-} from './editorStore'
-import { $layerView, type LayerViewState } from './layerStore'
-import { $cameraState, resetCamera, setCameraRestore, type CameraState } from './viewStore'
-import { $measurements, type LineMeasurement } from './measurementStore'
-import { $containers, type ReferenceContainer } from './containerStore'
+} from './editorStore';
+import { $layerView, type LayerViewState } from './layerStore';
+import { $cameraState, resetCamera, setCameraRestore, type CameraState } from './viewStore';
+import { $measurements, type LineMeasurement } from './measurementStore';
+import { $containers, type ReferenceContainer } from './containerStore';
 import {
   createEmptyGameData,
   createEmptyPart,
   createGlow,
   createSubPartGameData,
   DEFAULT_LAYER_ID,
-} from '../ksa/types'
-import type { EditingPart } from '../ksa/types'
-import { envelopeToPart, type ProjectExportEnvelope } from './projectTransfer'
+} from '../ksa/types';
+import type { EditingPart } from '../ksa/types';
+import { envelopeToPart, type ProjectExportEnvelope } from './projectTransfer';
 
 /**
  * PROJECTS — the editing experience is "project"-based. A project bundles all of
@@ -53,77 +53,77 @@ import { envelopeToPart, type ProjectExportEnvelope } from './projectTransfer'
  * No React / three.js imports — UI reads `$projectName` via `useStore`.
  */
 
-const PROJECT_KEY_PREFIX = 'flexo:project:'
-const CURRENT_PROJECT_KEY = 'flexo:currentProject'
+const PROJECT_KEY_PREFIX = 'flexo:project:';
+const CURRENT_PROJECT_KEY = 'flexo:currentProject';
 // Stamped into each snapshot. Snapshots whose shape doesn't match the current data
 // model are discarded at boot (see sanitizeProjectStorage) — never migrated.
-const PROJECT_VERSION = 2
-export const DEFAULT_PROJECT_NAME = 'Untitled'
+const PROJECT_VERSION = 2;
+export const DEFAULT_PROJECT_NAME = 'Untitled';
 
 /** The current project's name (its identity / localStorage key). Live working state. */
-export const $projectName = atom<string>(DEFAULT_PROJECT_NAME)
+export const $projectName = atom<string>(DEFAULT_PROJECT_NAME);
 
 /** Everything needed to fully restore a project's workspace. */
 export interface ProjectSnapshot {
-  version: number
-  name: string
-  part: EditingPart
+  version: number;
+  name: string;
+  part: EditingPart;
   /** Per-layer visibility/lock (layerStore view state), keyed by layer id. */
-  layerView: Record<string, LayerViewState>
+  layerView: Record<string, LayerViewState>;
   /** Layer new items land in (clamped to a live layer on load). */
-  activeLayerId: string
+  activeLayerId: string;
   /** Undo/redo stacks so history survives a reload. */
-  history: HistorySnapshot
+  history: HistorySnapshot;
   /** Epoch millis of the last save — drives "most recent" ordering in the picker. */
-  savedAt: number
+  savedAt: number;
   /** Camera position/target/up — restored when the project loads. */
-  camera?: CameraState
+  camera?: CameraState;
   /** Placed measurement lines (editor aid; never written to the exported XML). */
-  measurements?: LineMeasurement[]
+  measurements?: LineMeasurement[];
   /** Placed reference containers (editor aid; never written to the exported XML). */
-  containers?: ReferenceContainer[]
+  containers?: ReferenceContainer[];
 }
 
 /** A lightweight project descriptor for the load-project list (no full document). */
 export interface ProjectSummary {
-  name: string
-  savedAt: number
-  partId: string
-  subPartCount: number
+  name: string;
+  savedAt: number;
+  partId: string;
+  subPartCount: number;
 }
 
 function projectKey(name: string): string {
-  return PROJECT_KEY_PREFIX + name
+  return PROJECT_KEY_PREFIX + name;
 }
 
 function readSnapshotByKey(key: string): ProjectSnapshot | null {
-  const raw = localStorage.getItem(key)
-  if (!raw) return null
+  const raw = localStorage.getItem(key);
+  if (!raw) return null;
   try {
-    const snap = JSON.parse(raw) as ProjectSnapshot
-    if (!snap || typeof snap.name !== 'string' || !snap.part) return null
-    return snap
+    const snap = JSON.parse(raw) as ProjectSnapshot;
+    if (!snap || typeof snap.name !== 'string' || !snap.part) return null;
+    return snap;
   } catch {
-    return null
+    return null;
   }
 }
 
 function readSnapshot(name: string): ProjectSnapshot | null {
-  return readSnapshotByKey(projectKey(name))
+  return readSnapshotByKey(projectKey(name));
 }
 
 function writeCurrentPointer(name: string): void {
-  localStorage.setItem(CURRENT_PROJECT_KEY, JSON.stringify({ name }))
+  localStorage.setItem(CURRENT_PROJECT_KEY, JSON.stringify({ name }));
 }
 
 function readCurrentPointer(): string | null {
-  const raw = localStorage.getItem(CURRENT_PROJECT_KEY)
-  if (!raw) return null
+  const raw = localStorage.getItem(CURRENT_PROJECT_KEY);
+  if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as { name?: unknown }
-    return typeof parsed.name === 'string' ? parsed.name : null
+    const parsed = JSON.parse(raw) as { name?: unknown };
+    return typeof parsed.name === 'string' ? parsed.name : null;
   } catch {
-    return null
+    return null;
   }
 }
 
@@ -140,7 +140,7 @@ function serializeCurrentProject(): ProjectSnapshot {
     camera: $cameraState.get() ?? undefined,
     measurements: $measurements.get(),
     containers: $containers.get(),
-  }
+  };
 }
 
 /**
@@ -149,13 +149,13 @@ function serializeCurrentProject(): ProjectSnapshot {
  * detail }; legacy saves stored a bare EditingPart — handle whichever shape).
  */
 function snapshotParts(snap: ProjectSnapshot): EditingPart[] {
-  const out: EditingPart[] = []
-  if (snap.part) out.push(snap.part)
+  const out: EditingPart[] = [];
+  if (snap.part) out.push(snap.part);
   for (const e of [...(snap.history?.undo ?? []), ...(snap.history?.redo ?? [])]) {
-    const part = (e as { part?: EditingPart }).part ?? (e as unknown as EditingPart)
-    if (part) out.push(part)
+    const part = (e as { part?: EditingPart }).part ?? (e as unknown as EditingPart);
+    if (part) out.push(part);
   }
-  return out
+  return out;
 }
 
 /**
@@ -168,29 +168,29 @@ function snapshotParts(snap: ProjectSnapshot): EditingPart[] {
  * automatically becomes required here — no per-field upkeep, no migration.
  */
 function hasAllKeys(obj: unknown, template: object): boolean {
-  if (!obj || typeof obj !== 'object') return false
-  for (const k of Object.keys(template)) if (!(k in obj)) return false
-  return true
+  if (!obj || typeof obj !== 'object') return false;
+  for (const k of Object.keys(template)) if (!(k in obj)) return false;
+  return true;
 }
 
 function snapshotMatchesModel(snap: ProjectSnapshot): boolean {
-  const partTemplate = createEmptyPart()
-  const gameDataTemplate = createEmptyGameData()
-  const subPartTemplate = createSubPartGameData('')
-  const glowTemplate = createGlow()
+  const partTemplate = createEmptyPart();
+  const gameDataTemplate = createEmptyGameData();
+  const subPartTemplate = createSubPartGameData('');
+  const glowTemplate = createGlow();
   for (const part of snapshotParts(snap)) {
-    if (!hasAllKeys(part, partTemplate)) return false
-    if (!hasAllKeys(part.gameData, gameDataTemplate)) return false
+    if (!hasAllKeys(part, partTemplate)) return false;
+    if (!hasAllKeys(part.gameData, gameDataTemplate)) return false;
     for (const spd of part.subPartGameData ?? []) {
-      if (!hasAllKeys(spd, subPartTemplate)) return false
+      if (!hasAllKeys(spd, subPartTemplate)) return false;
     }
     // A glow authored before coverage/strength were split would silently composite as an
     // all-or-nothing white blowout, so an incomplete EmissiveConfig is unloadable too.
     for (const mesh of part.customMeshes ?? []) {
-      if (mesh.emissive && !hasAllKeys(mesh.emissive, glowTemplate)) return false
+      if (mesh.emissive && !hasAllKeys(mesh.emissive, glowTemplate)) return false;
     }
   }
-  return true
+  return true;
 }
 
 /**
@@ -199,11 +199,11 @@ function snapshotMatchesModel(snap: ProjectSnapshot): boolean {
  * boot — never throws.
  */
 function isSnapshotLoadable(snap: ProjectSnapshot | null): boolean {
-  if (!snap) return false
+  if (!snap) return false;
   try {
-    return snapshotMatchesModel(snap)
+    return snapshotMatchesModel(snap);
   } catch {
-    return false
+    return false;
   }
 }
 
@@ -215,24 +215,24 @@ function isSnapshotLoadable(snap: ProjectSnapshot | null): boolean {
  * keys are reported in a single console.warn.
  */
 function sanitizeProjectStorage(): void {
-  const removed: string[] = []
+  const removed: string[] = [];
   // Iterate high→low: removeItem reindexes localStorage, so descending is stable.
   for (let i = localStorage.length - 1; i >= 0; i--) {
-    const key = localStorage.key(i)
-    if (!key || !key.startsWith(PROJECT_KEY_PREFIX)) continue
-    if (isSnapshotLoadable(readSnapshotByKey(key))) continue
-    localStorage.removeItem(key)
-    removed.push(key)
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(PROJECT_KEY_PREFIX)) continue;
+    if (isSnapshotLoadable(readSnapshotByKey(key))) continue;
+    localStorage.removeItem(key);
+    removed.push(key);
   }
-  const pointer = readCurrentPointer()
+  const pointer = readCurrentPointer();
   if (pointer != null && localStorage.getItem(projectKey(pointer)) == null) {
-    localStorage.removeItem(CURRENT_PROJECT_KEY)
+    localStorage.removeItem(CURRENT_PROJECT_KEY);
   }
   if (removed.length > 0) {
     console.warn(
       `flexo: removed ${removed.length} incompatible project(s) from localStorage (old/unsupported data model):`,
       removed,
-    )
+    );
   }
 }
 
@@ -243,68 +243,68 @@ function sanitizeProjectStorage(): void {
  * cleared (a fresh slate, like a normal page load).
  */
 function applyProjectSnapshot(snap: ProjectSnapshot): void {
-  suspended = true
+  suspended = true;
   try {
-    importHistory(snap.history ?? { undo: [], redo: [] })
-    $part.set(snap.part)
-    const activeValid = snap.part.layers.some((l) => l.id === snap.activeLayerId)
-    $activeLayerId.set(activeValid ? snap.activeLayerId : DEFAULT_LAYER_ID)
-    $layerView.set(snap.layerView ?? {})
-    $measurements.set(snap.measurements ?? [])
-    $containers.set(snap.containers ?? [])
-    clearSelection()
+    importHistory(snap.history ?? { undo: [], redo: [] });
+    $part.set(snap.part);
+    const activeValid = snap.part.layers.some((l) => l.id === snap.activeLayerId);
+    $activeLayerId.set(activeValid ? snap.activeLayerId : DEFAULT_LAYER_ID);
+    $layerView.set(snap.layerView ?? {});
+    $measurements.set(snap.measurements ?? []);
+    $containers.set(snap.containers ?? []);
+    clearSelection();
     if (snap.camera) {
       // Pre-fill $cameraState so it's included in the next autosave, then signal
       // EditorScene to reposition the Viewport (fires on subscribe when it mounts).
-      $cameraState.set(snap.camera)
-      setCameraRestore(snap.camera)
+      $cameraState.set(snap.camera);
+      setCameraRestore(snap.camera);
     }
   } finally {
-    suspended = false
+    suspended = false;
   }
 }
 
 /** Persists the current workspace to its `flexo:project:<name>` entry + pointer. */
 export function saveCurrentProject(): void {
-  const snap = serializeCurrentProject()
+  const snap = serializeCurrentProject();
   try {
-    localStorage.setItem(projectKey(snap.name), JSON.stringify(snap))
-    writeCurrentPointer(snap.name)
+    localStorage.setItem(projectKey(snap.name), JSON.stringify(snap));
+    writeCurrentPointer(snap.name);
   } catch (err) {
     // localStorage can throw (quota / private mode) — surface but don't crash editing.
-    console.warn('flexo: failed to persist project', err)
+    console.warn('flexo: failed to persist project', err);
   }
 }
 
 /** Every saved project (most-recently-saved first), as lightweight summaries. */
 export function listProjects(): ProjectSummary[] {
-  const out: ProjectSummary[] = []
+  const out: ProjectSummary[] = [];
   for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i)
-    if (!key || !key.startsWith(PROJECT_KEY_PREFIX)) continue
-    const snap = readSnapshotByKey(key)
-    if (!snap) continue
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(PROJECT_KEY_PREFIX)) continue;
+    const snap = readSnapshotByKey(key);
+    if (!snap) continue;
     out.push({
       name: snap.name,
       savedAt: snap.savedAt ?? 0,
       partId: snap.part.partId ?? '',
       subPartCount: snap.part.placements?.length ?? 0,
-    })
+    });
   }
-  return out.sort((a, b) => b.savedAt - a.savedAt)
+  return out.sort((a, b) => b.savedAt - a.savedAt);
 }
 
 /** True when a project with this exact name is already saved. */
 export function projectExists(name: string): boolean {
-  return localStorage.getItem(projectKey(name)) != null
+  return localStorage.getItem(projectKey(name)) != null;
 }
 
 /** Returns `base`, or `base 2`, `base 3`, … — the first name not already taken. */
 export function uniqueProjectName(base: string = DEFAULT_PROJECT_NAME): string {
-  if (!projectExists(base)) return base
+  if (!projectExists(base)) return base;
   for (let n = 2; ; n++) {
-    const candidate = `${base} ${n}`
-    if (!projectExists(candidate)) return candidate
+    const candidate = `${base} ${n}`;
+    if (!projectExists(candidate)) return candidate;
   }
 }
 
@@ -313,21 +313,21 @@ export function uniqueProjectName(base: string = DEFAULT_PROJECT_NAME): string {
  * no such project exists (the workspace is left untouched).
  */
 export function loadProject(name: string): boolean {
-  const snap = readSnapshot(name)
-  if (!snap) return false
+  const snap = readSnapshot(name);
+  if (!snap) return false;
   try {
-    applyProjectSnapshot(snap)
+    applyProjectSnapshot(snap);
   } catch (err) {
     // Defensive: sanitizeProjectStorage() should have already purged anything that
     // can't apply, but never let one bad project crash boot. Discard it and fail.
-    suspended = false
-    console.warn(`flexo: failed to load project "${name}" — removing it`, err)
-    localStorage.removeItem(projectKey(name))
-    return false
+    suspended = false;
+    console.warn(`flexo: failed to load project "${name}" — removing it`, err);
+    localStorage.removeItem(projectKey(name));
+    return false;
   }
-  $projectName.set(snap.name)
-  writeCurrentPointer(snap.name)
-  return true
+  $projectName.set(snap.name);
+  writeCurrentPointer(snap.name);
+  return true;
 }
 
 /**
@@ -335,17 +335,17 @@ export function loadProject(name: string): boolean {
  * Clears the document, history, and per-layer view state.
  */
 export function createProject(name: string): void {
-  const trimmed = name.trim() || DEFAULT_PROJECT_NAME
-  suspended = true
+  const trimmed = name.trim() || DEFAULT_PROJECT_NAME;
+  suspended = true;
   try {
-    newPart()
-    $layerView.set({})
-    resetCamera()
+    newPart();
+    $layerView.set({});
+    resetCamera();
   } finally {
-    suspended = false
+    suspended = false;
   }
-  $projectName.set(trimmed)
-  saveCurrentProject()
+  $projectName.set(trimmed);
+  saveCurrentProject();
 }
 
 /**
@@ -355,24 +355,24 @@ export function createProject(name: string): void {
  * local project. Reconstructed faithfully (no id remapping); camera/selection reset.
  */
 export function loadSharedProject(env: ProjectExportEnvelope): string {
-  const part = envelopeToPart(env)
-  const name = uniqueProjectName(env.projectName.trim() || 'Shared Project')
-  suspended = true
+  const part = envelopeToPart(env);
+  const name = uniqueProjectName(env.projectName.trim() || 'Shared Project');
+  suspended = true;
   try {
-    importHistory({ undo: [], redo: [] })
-    $part.set(part)
-    $activeLayerId.set(DEFAULT_LAYER_ID)
-    $layerView.set({})
-    $measurements.set([])
-    $containers.set([])
-    clearSelection()
-    resetCamera()
+    importHistory({ undo: [], redo: [] });
+    $part.set(part);
+    $activeLayerId.set(DEFAULT_LAYER_ID);
+    $layerView.set({});
+    $measurements.set([]);
+    $containers.set([]);
+    clearSelection();
+    resetCamera();
   } finally {
-    suspended = false
+    suspended = false;
   }
-  $projectName.set(name)
-  saveCurrentProject()
-  return name
+  $projectName.set(name);
+  saveCurrentProject();
+  return name;
 }
 
 /**
@@ -380,12 +380,12 @@ export function loadSharedProject(env: ProjectExportEnvelope): string {
  * removed). No-op when blank or unchanged.
  */
 export function renameCurrentProject(name: string): void {
-  const trimmed = name.trim()
-  const old = $projectName.get()
-  if (!trimmed || trimmed === old) return
-  localStorage.removeItem(projectKey(old))
-  $projectName.set(trimmed)
-  saveCurrentProject()
+  const trimmed = name.trim();
+  const old = $projectName.get();
+  if (!trimmed || trimmed === old) return;
+  localStorage.removeItem(projectKey(old));
+  $projectName.set(trimmed);
+  saveCurrentProject();
 }
 
 /**
@@ -393,11 +393,11 @@ export function renameCurrentProject(name: string): void {
  * remaining project, or starts a fresh default project when none are left.
  */
 export function deleteProject(name: string): void {
-  localStorage.removeItem(projectKey(name))
-  if ($projectName.get() !== name) return
-  const remaining = listProjects()
-  if (remaining.length > 0) loadProject(remaining[0].name)
-  else createProject(DEFAULT_PROJECT_NAME)
+  localStorage.removeItem(projectKey(name));
+  if ($projectName.get() !== name) return;
+  const remaining = listProjects();
+  if (remaining.length > 0) loadProject(remaining[0].name);
+  else createProject(DEFAULT_PROJECT_NAME);
 }
 
 // ---------------------------------------------------------------------------
@@ -410,32 +410,32 @@ export function deleteProject(name: string): void {
 // collapses a gizmo drag (many per-frame `$part` writes) into a single save.
 // ---------------------------------------------------------------------------
 
-const SAVE_DEBOUNCE_MS = 300
-let suspended = false
-let saveTimer: ReturnType<typeof setTimeout> | null = null
-let autosaveStarted = false
+const SAVE_DEBOUNCE_MS = 300;
+let suspended = false;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let autosaveStarted = false;
 
 function scheduleSave(): void {
-  if (suspended) return
-  if (saveTimer) clearTimeout(saveTimer)
+  if (suspended) return;
+  if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    saveTimer = null
-    saveCurrentProject()
-  }, SAVE_DEBOUNCE_MS)
+    saveTimer = null;
+    saveCurrentProject();
+  }, SAVE_DEBOUNCE_MS);
 }
 
 function startAutosave(): void {
-  if (autosaveStarted) return
-  autosaveStarted = true
-  $part.subscribe(scheduleSave)
-  $canUndo.subscribe(scheduleSave)
-  $canRedo.subscribe(scheduleSave)
-  $activeLayerId.subscribe(scheduleSave)
-  $layerView.subscribe(scheduleSave)
-  $projectName.subscribe(scheduleSave)
-  $cameraState.subscribe(scheduleSave)
-  $measurements.subscribe(scheduleSave)
-  $containers.subscribe(scheduleSave)
+  if (autosaveStarted) return;
+  autosaveStarted = true;
+  $part.subscribe(scheduleSave);
+  $canUndo.subscribe(scheduleSave);
+  $canRedo.subscribe(scheduleSave);
+  $activeLayerId.subscribe(scheduleSave);
+  $layerView.subscribe(scheduleSave);
+  $projectName.subscribe(scheduleSave);
+  $cameraState.subscribe(scheduleSave);
+  $measurements.subscribe(scheduleSave);
+  $containers.subscribe(scheduleSave);
 }
 
 /**
@@ -447,13 +447,13 @@ function startAutosave(): void {
 export function hydrateProjectOnBoot(): void {
   // Purge corrupt / old-data-model projects first so we never try to load one (which
   // would crash the app). Anything removed is reported via console.warn.
-  sanitizeProjectStorage()
-  const pointerName = readCurrentPointer()
-  const loaded = pointerName != null && loadProject(pointerName)
+  sanitizeProjectStorage();
+  const pointerName = readCurrentPointer();
+  const loaded = pointerName != null && loadProject(pointerName);
   if (!loaded) {
-    const projects = listProjects()
-    if (projects.length > 0) loadProject(projects[0].name)
-    else createProject(DEFAULT_PROJECT_NAME)
+    const projects = listProjects();
+    if (projects.length > 0) loadProject(projects[0].name);
+    else createProject(DEFAULT_PROJECT_NAME);
   }
-  startAutosave()
+  startAutosave();
 }

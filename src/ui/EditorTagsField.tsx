@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState } from 'react';
 import {
   DialogTrigger,
   Popover,
@@ -9,11 +9,11 @@ import {
   TagGroup,
   TagList,
   Tag,
-} from './kit'
-import { EDITOR_TAG_DEFS, KNOWN_EDITOR_TAGS } from '../ksa/types'
+} from './kit';
+import { EDITOR_TAG_DEFS, KNOWN_EDITOR_TAGS } from '../ksa/types';
 
 /** Tag id → `NotaCategory` flag (true ⇒ a functional tag, not a part-picker category). */
-const TAG_IS_FUNCTIONAL = new Map(EDITOR_TAG_DEFS.map((d) => [d.id, d.notaCategory]))
+const TAG_IS_FUNCTIONAL = new Map(EDITOR_TAG_DEFS.map((d) => [d.id, d.notaCategory]));
 
 /**
  * Editor-tag combobox for the Part Data dialog: removable tag chips plus a
@@ -29,28 +29,28 @@ export function EditorTagsField({
   tags,
   onChange,
 }: {
-  tags: string[]
-  onChange: (tags: string[]) => void
+  tags: string[];
+  onChange: (tags: string[]) => void;
 }) {
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState('');
 
   const addTag = (raw: string) => {
-    const tag = raw.trim()
-    if (tag && !tags.includes(tag)) onChange([...tags, tag])
-    setQuery('')
-  }
-  const removeTags = (keys: Set<React.Key>) => onChange(tags.filter((t) => !keys.has(t)))
+    const tag = raw.trim();
+    if (tag && !tags.includes(tag)) onChange([...tags, tag]);
+    setQuery('');
+  };
+  const removeTags = (keys: Set<React.Key>) => onChange(tags.filter((t) => !keys.has(t)));
 
-  const q = query.trim().toLowerCase()
+  const q = query.trim().toLowerCase();
   const suggestions = KNOWN_EDITOR_TAGS.filter(
     (t) => !tags.includes(t) && (q === '' || t.toLowerCase().includes(q)),
-  )
-  const categoryTags = suggestions.filter((t) => !TAG_IS_FUNCTIONAL.get(t))
-  const functionalTags = suggestions.filter((t) => TAG_IS_FUNCTIONAL.get(t))
+  );
+  const categoryTags = suggestions.filter((t) => !TAG_IS_FUNCTIONAL.get(t));
+  const functionalTags = suggestions.filter((t) => TAG_IS_FUNCTIONAL.get(t));
   const showCustom =
     q !== '' &&
     !tags.some((t) => t.toLowerCase() === q) &&
-    !KNOWN_EDITOR_TAGS.some((t) => t.toLowerCase() === q)
+    !KNOWN_EDITOR_TAGS.some((t) => t.toLowerCase() === q);
 
   return (
     <div className="mt-2 flex flex-col gap-2">
@@ -123,5 +123,5 @@ export function EditorTagsField({
         </Popover>
       </DialogTrigger>
     </div>
-  )
+  );
 }

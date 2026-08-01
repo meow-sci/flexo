@@ -1,14 +1,14 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { Modal, Dialog, DialogHeader, Button, monoTextarea, toast, warningBox } from './kit'
-import { $part, importProjectData } from '../state/editorStore'
-import { $projectName } from '../state/projectStore'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { Modal, Dialog, DialogHeader, Button, monoTextarea, toast, warningBox } from './kit';
+import { $part, importProjectData } from '../state/editorStore';
+import { $projectName } from '../state/projectStore';
 import {
   buildProjectExport,
   hasCustomAssets,
   parseProjectImport,
   serializeProjectJson,
-} from '../state/projectTransfer'
+} from '../state/projectTransfer';
 
 /**
  * "Project Data" Export / Import dialogs (data-only JSON, opened from the Project
@@ -18,45 +18,45 @@ import {
  */
 
 function plural(n: number, singular: string, pluralForm = `${singular}s`): string {
-  return `${n} ${n === 1 ? singular : pluralForm}`
+  return `${n} ${n === 1 ? singular : pluralForm}`;
 }
 
 export function ExportProjectDialog({
   isOpen,
   onOpenChange,
 }: {
-  isOpen: boolean
-  onOpenChange: (open: boolean) => void
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const part = useStore($part)
-  const name = useStore($projectName)
-  const blocked = hasCustomAssets(part)
-  const [copied, setCopied] = useState(false)
+  const part = useStore($part);
+  const name = useStore($projectName);
+  const blocked = hasCustomAssets(part);
+  const [copied, setCopied] = useState(false);
 
   // Only serialize while the dialog is open and export is allowed.
-  const json = isOpen && !blocked ? serializeProjectJson(buildProjectExport(part, name)) : ''
+  const json = isOpen && !blocked ? serializeProjectJson(buildProjectExport(part, name)) : '';
 
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(json)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
+      await navigator.clipboard.writeText(json);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
     } catch (err) {
-      console.warn('clipboard write failed', err)
+      console.warn('clipboard write failed', err);
     }
-  }
+  };
 
   const download = () => {
-    const blob = new Blob([json], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${name || 'project'}.flexo.json`
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    URL.revokeObjectURL(url)
-  }
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${name || 'project'}.flexo.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <Modal
@@ -96,30 +96,30 @@ export function ExportProjectDialog({
         </div>
       </Dialog>
     </Modal>
-  )
+  );
 }
 
 export function ImportProjectDialog({
   isOpen,
   onOpenChange,
 }: {
-  isOpen: boolean
-  onOpenChange: (open: boolean) => void
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const [text, setText] = useState('')
+  const [text, setText] = useState('');
 
   const close = (open: boolean) => {
-    if (!open) setText('')
-    onOpenChange(open)
-  }
+    if (!open) setText('');
+    onOpenChange(open);
+  };
 
   const runImport = () => {
-    const result = parseProjectImport(text)
+    const result = parseProjectImport(text);
     if (!result.ok) {
-      toast({ title: 'Import failed', description: result.error, variant: 'danger' })
-      return
+      toast({ title: 'Import failed', description: result.error, variant: 'danger' });
+      return;
     }
-    const s = importProjectData(result.env)
+    const s = importProjectData(result.env);
     toast({
       title: 'Project imported',
       description: `${plural(s.meshes, 'mesh', 'meshes')}, ${plural(s.connectors, 'connector')}, ${plural(
@@ -127,9 +127,9 @@ export function ImportProjectDialog({
         'animation',
       )}, ${plural(s.newLayers, 'layer')}`,
       variant: 'success',
-    })
-    close(false)
-  }
+    });
+    close(false);
+  };
 
   return (
     <Modal
@@ -162,5 +162,5 @@ export function ImportProjectDialog({
         </div>
       </Dialog>
     </Modal>
-  )
+  );
 }

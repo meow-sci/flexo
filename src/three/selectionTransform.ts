@@ -1,12 +1,12 @@
-import type { Vec3 } from '../ksa/types'
+import type { Vec3 } from '../ksa/types';
 import {
   pushUndo,
   selectedTransformRefs,
   updateSelectedTransforms,
   type PlacementTransform,
-} from '../state/editorStore'
-import { isLayerLocked } from '../state/layerStore'
-import { centroidOf } from './bulkTransform'
+} from '../state/editorStore';
+import { isLayerLocked } from '../state/layerStore';
+import { centroidOf } from './bulkTransform';
 
 /**
  * Applies `transform` to every selected entity (SubParts, connectors, AND kittens)
@@ -26,16 +26,16 @@ export function applySelectionTransform(
   label: string,
   transform: (current: PlacementTransform, centroid: Vec3) => PlacementTransform,
 ): void {
-  const refs = selectedTransformRefs()
-  if (refs.length === 0 || refs.some((r) => isLayerLocked(r.layerId))) return
+  const refs = selectedTransformRefs();
+  if (refs.length === 0 || refs.some((r) => isLayerLocked(r.layerId))) return;
 
-  const centroid = centroidOf(refs.map((r) => r.transform.position))
-  pushUndo(label, refs.length === 1 ? refs[0].name : `${refs.length} items`)
+  const centroid = centroidOf(refs.map((r) => r.transform.position));
+  pushUndo(label, refs.length === 1 ? refs[0].name : `${refs.length} items`);
   updateSelectedTransforms(
     refs.map((r) => ({
       kind: r.kind,
       index: r.index,
       transform: transform(r.transform, centroid),
     })),
-  )
+  );
 }

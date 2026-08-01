@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
-import { Upload } from 'lucide-react'
-import { Modal, Dialog, DialogHeader, Button, TextField, Select, ListBoxItem, toast } from './kit'
-import { addCustomTexture } from '../state/customAssetStore'
-import { CHANNEL_LABELS, CHANNEL_ORDER } from './channelLabels'
-import type { TextureChannel } from '../ksa/types'
+import { useEffect, useRef, useState } from 'react';
+import { Upload } from 'lucide-react';
+import { Modal, Dialog, DialogHeader, Button, TextField, Select, ListBoxItem, toast } from './kit';
+import { addCustomTexture } from '../state/customAssetStore';
+import { CHANNEL_LABELS, CHANNEL_ORDER } from './channelLabels';
+import type { TextureChannel } from '../ksa/types';
 
 interface CustomTextureDialogProps {
-  onClose: () => void
+  onClose: () => void;
 }
 
 /**
@@ -19,77 +19,79 @@ interface CustomTextureDialogProps {
  * useState with no reset effect.
  */
 export function CustomTextureDialog({ onClose }: CustomTextureDialogProps) {
-  const [file, setFile] = useState<File | null>(null)
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [name, setName] = useState('')
-  const [channel, setChannel] = useState<TextureChannel>('baseColor')
-  const [busy, setBusy] = useState(false)
-  const fileInput = useRef<HTMLInputElement>(null)
+  const [file, setFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [channel, setChannel] = useState<TextureChannel>('baseColor');
+  const [busy, setBusy] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   // Revoke the last preview object URL on unmount (cleanup only — no setState).
   useEffect(
     () => () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl)
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
     },
     [previewUrl],
-  )
+  );
 
   const pickFile = (f: File | null | undefined) => {
-    if (!f) return
+    if (!f) return;
     if (!f.type.startsWith('image/')) {
       toast({
         title: 'Not an image',
         description: `“${f.name}” is not an image file.`,
         variant: 'warning',
-      })
-      return
+      });
+      return;
     }
     setPreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev)
-      return URL.createObjectURL(f)
-    })
-    setFile(f)
-    setName((prev) => prev || f.name.replace(/\.[^.]+$/, ''))
-  }
+      if (prev) URL.revokeObjectURL(prev);
+      return URL.createObjectURL(f);
+    });
+    setFile(f);
+    setName((prev) => prev || f.name.replace(/\.[^.]+$/, ''));
+  };
 
   // Paste an image from the clipboard. pickFile runs in the event callback, not
   // synchronously in the effect body, so it's allowed.
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
-      const item = Array.from(e.clipboardData?.items ?? []).find((i) => i.type.startsWith('image/'))
-      const f = item?.getAsFile()
+      const item = Array.from(e.clipboardData?.items ?? []).find((i) =>
+        i.type.startsWith('image/'),
+      );
+      const f = item?.getAsFile();
       if (f) {
-        e.preventDefault()
-        pickFile(f)
+        e.preventDefault();
+        pickFile(f);
       }
-    }
-    window.addEventListener('paste', onPaste)
-    return () => window.removeEventListener('paste', onPaste)
-  }, [])
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, []);
 
   const onDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    pickFile(e.dataTransfer.files?.[0])
-  }
+    e.preventDefault();
+    pickFile(e.dataTransfer.files?.[0]);
+  };
 
   const submit = async () => {
-    if (!file) return
-    setBusy(true)
+    if (!file) return;
+    setBusy(true);
     try {
-      await addCustomTexture(file, name, channel)
-      toast({ title: 'Texture added', description: name || file.name, variant: 'success' })
-      onClose()
+      await addCustomTexture(file, name, channel);
+      toast({ title: 'Texture added', description: name || file.name, variant: 'success' });
+      onClose();
     } catch (err) {
-      console.warn('texture encode failed', err)
+      console.warn('texture encode failed', err);
       toast({
         title: 'Encode failed',
         description: String((err as Error)?.message ?? err),
         variant: 'danger',
-      })
+      });
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   return (
     <Modal
@@ -154,5 +156,5 @@ export function CustomTextureDialog({ onClose }: CustomTextureDialogProps) {
         </div>
       </Dialog>
     </Modal>
-  )
+  );
 }

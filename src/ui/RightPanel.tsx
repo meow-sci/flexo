@@ -1,13 +1,13 @@
-import { useStore } from '@nanostores/react'
-import { PanelRight } from 'lucide-react'
-import { Button, Tooltip } from './kit'
-import { InspectorContent } from './InspectorContent'
+import { useStore } from '@nanostores/react';
+import { PanelRight } from 'lucide-react';
+import { Button, Tooltip } from './kit';
+import { InspectorContent } from './InspectorContent';
 import {
   $inspectorVisible,
   $inspectorWidth,
   setInspectorVisible,
   setInspectorWidth,
-} from '../state/uiStore'
+} from '../state/uiStore';
 
 /**
  * Thin grab strip on the panel's left edge. Dragging left widens the panel,
@@ -15,21 +15,21 @@ import {
  */
 function ResizeHandle() {
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    const startX = e.clientX
-    const startWidth = $inspectorWidth.get()
-    const el = e.currentTarget
-    el.setPointerCapture(e.pointerId)
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = $inspectorWidth.get();
+    const el = e.currentTarget;
+    el.setPointerCapture(e.pointerId);
     const onMove = (ev: PointerEvent) => {
-      setInspectorWidth(startWidth - (ev.clientX - startX))
-    }
+      setInspectorWidth(startWidth - (ev.clientX - startX));
+    };
     const onUp = () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-  }
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
 
   return (
     <div
@@ -39,7 +39,7 @@ function ResizeHandle() {
     >
       <div className="mx-auto h-full w-0.5 bg-transparent transition-colors group-hover:bg-border-strong" />
     </div>
-  )
+  );
 }
 
 /**
@@ -48,8 +48,8 @@ function ResizeHandle() {
  * — see {@link MobileInspector}.
  */
 export function RightPanel() {
-  const visible = useStore($inspectorVisible)
-  const width = useStore($inspectorWidth)
+  const visible = useStore($inspectorVisible);
+  const width = useStore($inspectorWidth);
 
   const toggleButton = (
     <Tooltip content={visible ? 'Hide inspector' : 'Show inspector'}>
@@ -63,10 +63,10 @@ export function RightPanel() {
         <PanelRight className="size-4" />
       </Button>
     </Tooltip>
-  )
+  );
 
   if (!visible) {
-    return <div className="absolute right-3 top-3">{toggleButton}</div>
+    return <div className="absolute right-3 top-3">{toggleButton}</div>;
   }
 
   // The container spans the full height (top-3 → bottom-3) but its visible content
@@ -87,5 +87,5 @@ export function RightPanel() {
         <InspectorContent />
       </div>
     </div>
-  )
+  );
 }

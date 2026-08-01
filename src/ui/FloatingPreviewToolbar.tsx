@@ -1,10 +1,10 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { GripVertical } from 'lucide-react'
-import { PreviewScrubber } from './PreviewScrubber'
-import { useIsPhone } from './kit'
-import { $activeAnimation } from '../state/animationStore'
-import { $inspectorMode, $animPreviewFloatPos, setAnimPreviewFloatPos } from '../state/uiStore'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { GripVertical } from 'lucide-react';
+import { PreviewScrubber } from './PreviewScrubber';
+import { useIsPhone } from './kit';
+import { $activeAnimation } from '../state/animationStore';
+import { $inspectorMode, $animPreviewFloatPos, setAnimPreviewFloatPos } from '../state/uiStore';
 
 /**
  * A floating toolbar holding the animation preview scrubber + play button, hovering over
@@ -23,18 +23,18 @@ import { $inspectorMode, $animPreviewFloatPos, setAnimPreviewFloatPos } from '..
  */
 
 /** Keep at least this much of the toolbar on-screen when dragging / after a resize. */
-const KEEP_VISIBLE_X = 140
-const KEEP_VISIBLE_Y = 28
+const KEEP_VISIBLE_X = 140;
+const KEEP_VISIBLE_Y = 28;
 
 export function FloatingPreviewToolbar() {
-  const isPhone = useIsPhone()
-  const mode = useStore($inspectorMode)
-  const anim = useStore($activeAnimation)
-  const stored = useStore($animPreviewFloatPos)
-  const [drag, setDrag] = useState<{ x: number; y: number } | null>(null)
+  const isPhone = useIsPhone();
+  const mode = useStore($inspectorMode);
+  const anim = useStore($activeAnimation);
+  const stored = useStore($animPreviewFloatPos);
+  const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
 
   // Only while the Animation editor has a clip open (its atoms persist across mode switches).
-  if (mode !== 'anim' || !anim) return null
+  if (mode !== 'anim' || !anim) return null;
 
   // Phone: in-flow bar in the centered top stack — no absolute positioning or drag.
   if (isPhone) {
@@ -42,40 +42,40 @@ export function FloatingPreviewToolbar() {
       <div className="pointer-events-auto flex w-80 max-w-[calc(100vw-1rem)] items-center gap-1.5 rounded-lg border border-border bg-panel/95 px-2 py-1.5 shadow-popover backdrop-blur-md">
         <PreviewScrubber anim={anim} />
       </div>
-    )
+    );
   }
 
   const onGripPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-    if (e.button !== 0) return
-    e.preventDefault()
-    const win = e.currentTarget.parentElement as HTMLElement
-    const rect = win.getBoundingClientRect()
-    const startX = e.clientX
-    const startY = e.clientY
-    const baseLeft = rect.left
-    const baseTop = rect.top
-    e.currentTarget.setPointerCapture(e.pointerId)
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const win = e.currentTarget.parentElement as HTMLElement;
+    const rect = win.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const baseLeft = rect.left;
+    const baseTop = rect.top;
+    e.currentTarget.setPointerCapture(e.pointerId);
 
     const compute = (ev: PointerEvent) => {
-      const maxX = window.innerWidth - KEEP_VISIBLE_X
-      const maxY = window.innerHeight - KEEP_VISIBLE_Y
+      const maxX = window.innerWidth - KEEP_VISIBLE_X;
+      const maxY = window.innerHeight - KEEP_VISIBLE_Y;
       return {
         x: Math.max(0, Math.min(maxX, baseLeft + (ev.clientX - startX))),
         y: Math.max(0, Math.min(maxY, baseTop + (ev.clientY - startY))),
-      }
-    }
-    const onMove = (ev: PointerEvent) => setDrag(compute(ev))
+      };
+    };
+    const onMove = (ev: PointerEvent) => setDrag(compute(ev));
     const onUp = (ev: PointerEvent) => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-      setAnimPreviewFloatPos(compute(ev))
-      setDrag(null)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-  }
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setAnimPreviewFloatPos(compute(ev));
+      setDrag(null);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
 
-  const pos = drag ?? stored
+  const pos = drag ?? stored;
   // null → default top-center anchor (0.5rem below the main toolbar); otherwise clamp the
   // stored top-left into view (covers a viewport that shrank since the position was saved).
   const style: React.CSSProperties = pos
@@ -83,7 +83,7 @@ export function FloatingPreviewToolbar() {
         left: Math.max(0, Math.min(pos.x, window.innerWidth - KEEP_VISIBLE_X)),
         top: Math.max(0, Math.min(pos.y, window.innerHeight - KEEP_VISIBLE_Y)),
       }
-    : { left: '50%', top: '4rem', transform: 'translateX(-50%)' }
+    : { left: '50%', top: '4rem', transform: 'translateX(-50%)' };
 
   return (
     <div
@@ -101,5 +101,5 @@ export function FloatingPreviewToolbar() {
       </button>
       <PreviewScrubber anim={anim} />
     </div>
-  )
+  );
 }

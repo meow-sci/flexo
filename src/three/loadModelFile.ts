@@ -1,7 +1,7 @@
-import * as THREE from 'three'
-import { GLTFLoader, type GLTFParser } from 'three/addons/loaders/GLTFLoader.js'
-import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
-import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
+import * as THREE from 'three';
+import { GLTFLoader, type GLTFParser } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 
 /**
  * File(s) → a three.js scene, the front door of the model importer.
@@ -35,78 +35,78 @@ import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js'
 
 /** A `textureInfo`: which texture, which UV set, plus any per-reference extensions. */
 export interface GltfTextureRef {
-  index: number
+  index: number;
   /** TEXCOORD_n. KSA reads UV0 only (decomp/KSA/MeshReference.cs:83), so ≠0 warns. */
-  texCoord?: number
-  extensions?: Record<string, unknown>
+  texCoord?: number;
+  extensions?: Record<string, unknown>;
 }
 
 /** `material.normalTexture` — a texture ref plus the bump `scale`. */
 export interface GltfNormalTextureRef extends GltfTextureRef {
-  scale?: number
+  scale?: number;
 }
 
 /** `material.occlusionTexture` — a texture ref plus the AO `strength`. */
 export interface GltfOcclusionTextureRef extends GltfTextureRef {
-  strength?: number
+  strength?: number;
 }
 
 /** One `materials[i]` entry, metallic-roughness only (the model KSA's PbrMaterial mirrors). */
 export interface GltfMaterialDef {
-  name?: string
+  name?: string;
   pbrMetallicRoughness?: {
     /** Linear RGBA multiplier, default [1,1,1,1]. */
-    baseColorFactor?: number[]
-    baseColorTexture?: GltfTextureRef
+    baseColorFactor?: number[];
+    baseColorTexture?: GltfTextureRef;
     /** Default 1. */
-    metallicFactor?: number
+    metallicFactor?: number;
     /** Default 1. */
-    roughnessFactor?: number
-    metallicRoughnessTexture?: GltfTextureRef
-  }
-  normalTexture?: GltfNormalTextureRef
-  occlusionTexture?: GltfOcclusionTextureRef
+    roughnessFactor?: number;
+    metallicRoughnessTexture?: GltfTextureRef;
+  };
+  normalTexture?: GltfNormalTextureRef;
+  occlusionTexture?: GltfOcclusionTextureRef;
   /** Linear RGB, default [0,0,0]. */
-  emissiveFactor?: number[]
-  emissiveTexture?: GltfTextureRef
-  alphaMode?: string
-  doubleSided?: boolean
-  extensions?: Record<string, unknown>
+  emissiveFactor?: number[];
+  emissiveTexture?: GltfTextureRef;
+  alphaMode?: string;
+  doubleSided?: boolean;
+  extensions?: Record<string, unknown>;
 }
 
 /** One `textures[i]` entry — the sampler + image indirection. */
 export interface GltfTextureDef {
-  source?: number
-  sampler?: number
-  extensions?: Record<string, unknown>
+  source?: number;
+  sampler?: number;
+  extensions?: Record<string, unknown>;
 }
 
 /** One `samplers[i]` entry. KSA's global sampler is Repeat on U/V/W, so these are advisory. */
 export interface GltfSamplerDef {
-  wrapS?: number
-  wrapT?: number
+  wrapS?: number;
+  wrapT?: number;
 }
 
 /** One `images[i]` entry — either a GLB `bufferView` or a (possibly sidecar) `uri`. */
 export interface GltfImageDef {
-  name?: string
-  uri?: string
-  mimeType?: string
-  bufferView?: number
+  name?: string;
+  uri?: string;
+  mimeType?: string;
+  bufferView?: number;
 }
 
 /** The typed slice of the glTF JSON document flexo reads. */
 export interface GltfJson {
-  materials?: GltfMaterialDef[]
-  textures?: GltfTextureDef[]
-  samplers?: GltfSamplerDef[]
-  images?: GltfImageDef[]
+  materials?: GltfMaterialDef[];
+  textures?: GltfTextureDef[];
+  samplers?: GltfSamplerDef[];
+  images?: GltfImageDef[];
 }
 
 /** An image's ORIGINAL encoded bytes (PNG/JPEG as authored) — never a canvas re-encode. */
 export interface GltfImageBytes {
-  bytes: Uint8Array
-  mime: string
+  bytes: Uint8Array;
+  mime: string;
 }
 
 /**
@@ -121,9 +121,9 @@ export interface GltfImageBytes {
  */
 export interface ModelSource {
   /** The parsed glTF JSON document. */
-  json: GltfJson
+  json: GltfJson;
   /** `materials[i]` index for a three material (via `parser.associations`), or null. */
-  materialIndex(material: THREE.Material): number | null
+  materialIndex(material: THREE.Material): number | null;
   /**
    * The name of the glTF NODE an object came from — the Blender OBJECT name — or null when
    * the object isn't from a glTF node.
@@ -136,7 +136,7 @@ export interface ModelSource {
    * mesh-data name ("Cube.003") that means nothing to the user. `associations` tags every
    * node object with its `nodes` index, so the nearest such ancestor IS the node.
    */
-  nodeName(object: THREE.Object3D): string | null
+  nodeName(object: THREE.Object3D): string | null;
   /**
    * The ORIGINAL encoded bytes of `images[i]`.
    *
@@ -145,29 +145,29 @@ export interface ModelSource {
    * ensureCurrentKtx2). A canvas readback would silently become the new "source", so a later
    * channel change would re-encode a lossy copy. Returns null when the image is unreachable.
    */
-  imageBytes(imageIndex: number): Promise<GltfImageBytes | null>
+  imageBytes(imageIndex: number): Promise<GltfImageBytes | null>;
 }
 
 /** A parsed model, ready for `analyzeImport`. */
 export interface LoadedModel {
   /** The glTF scene root. Node transforms are still on the graph — nothing is baked yet. */
-  scene: THREE.Group
+  scene: THREE.Group;
   /** The entry file's name, e.g. "rcs_pod.glb" — provenance + the default layer/name prefix. */
-  fileName: string
+  fileName: string;
   /**
    * The glTF-source façade. Always present for a file loaded by {@link loadModelFile};
    * optional so a programmatically built scene (unit tests, a future non-glTF source) is
    * still a valid model — the material pass then simply contributes nothing.
    */
-  source?: ModelSource
+  source?: ModelSource;
 }
 
 /** Entry-file extensions we accept, in preference order. */
-const ENTRY_EXTENSIONS = ['.glb', '.gltf'] as const
+const ENTRY_EXTENSIONS = ['.glb', '.gltf'] as const;
 
 function extensionOf(name: string): string {
-  const dot = name.lastIndexOf('.')
-  return dot < 0 ? '' : name.slice(dot).toLowerCase()
+  const dot = name.lastIndexOf('.');
+  return dot < 0 ? '' : name.slice(dot).toLowerCase();
 }
 
 /**
@@ -176,32 +176,32 @@ function extensionOf(name: string): string {
  * so it is an error with a message naming what we found.
  */
 function pickEntryFile(files: File[]): File {
-  if (files.length === 0) throw new Error('No files were provided.')
+  if (files.length === 0) throw new Error('No files were provided.');
   for (const ext of ENTRY_EXTENSIONS) {
-    const matches = files.filter((f) => extensionOf(f.name) === ext)
-    if (matches.length === 1) return matches[0]!
+    const matches = files.filter((f) => extensionOf(f.name) === ext);
+    if (matches.length === 1) return matches[0]!;
     if (matches.length > 1) {
-      const names = matches.map((f) => f.name).join(', ')
-      throw new Error(`Drop one model at a time — found ${matches.length} ${ext} files: ${names}.`)
+      const names = matches.map((f) => f.name).join(', ');
+      throw new Error(`Drop one model at a time — found ${matches.length} ${ext} files: ${names}.`);
     }
   }
-  const names = files.map((f) => f.name).join(', ')
-  throw new Error(`No .glb or .gltf file found in: ${names}. flexo imports glTF 2.0 models only.`)
+  const names = files.map((f) => f.name).join(', ');
+  throw new Error(`No .glb or .gltf file found in: ${names}. flexo imports glTF 2.0 models only.`);
 }
 
 /** The last path segment of a URL/URI, without query or fragment. */
 function lastSegment(uri: string): string {
-  const clean = uri.split(/[?#]/, 1)[0] ?? uri
-  const slash = clean.lastIndexOf('/')
-  return slash < 0 ? clean : clean.slice(slash + 1)
+  const clean = uri.split(/[?#]/, 1)[0] ?? uri;
+  const slash = clean.lastIndexOf('/');
+  return slash < 0 ? clean : clean.slice(slash + 1);
 }
 
 /** `decodeURIComponent` that yields the input when it isn't valid percent-encoding. */
 function decodeSafe(s: string): string {
   try {
-    return decodeURIComponent(s)
+    return decodeURIComponent(s);
   } catch {
-    return s
+    return s;
   }
 }
 
@@ -212,30 +212,30 @@ function decodeSafe(s: string): string {
  * contains a space.
  */
 function buildSiblings(files: File[]): {
-  byName: Map<string, File>
-  urls: Map<string, string>
-  created: string[]
+  byName: Map<string, File>;
+  urls: Map<string, string>;
+  created: string[];
 } {
-  const byName = new Map<string, File>()
-  const urls = new Map<string, string>()
-  const created: string[] = []
+  const byName = new Map<string, File>();
+  const urls = new Map<string, string>();
+  const created: string[] = [];
   for (const file of files) {
-    const url = URL.createObjectURL(file)
-    created.push(url)
+    const url = URL.createObjectURL(file);
+    created.push(url);
     for (const key of [file.name, decodeSafe(file.name)]) {
-      byName.set(key, file)
-      urls.set(key, url)
+      byName.set(key, file);
+      urls.set(key, url);
     }
   }
-  return { byName, urls, created }
+  return { byName, urls, created };
 }
 
 /** MIME type from a file extension, for sidecar images whose glTF entry omits `mimeType`. */
 function mimeFromName(name: string): string {
-  const ext = extensionOf(name)
-  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg'
-  if (ext === '.webp') return 'image/webp'
-  return 'image/png'
+  const ext = extensionOf(name);
+  if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg';
+  if (ext === '.webp') return 'image/webp';
+  return 'image/png';
 }
 
 /**
@@ -253,30 +253,30 @@ async function readImageBytes(
   siblings: Map<string, File>,
   index: number,
 ): Promise<GltfImageBytes | null> {
-  const image = json.images?.[index]
-  if (!image) return null
+  const image = json.images?.[index];
+  if (!image) return null;
   if (image.bufferView !== undefined) {
     // `loadBufferView` already slices the view out of the GLB binary chunk.
-    const view = (await parser.getDependency('bufferView', image.bufferView)) as ArrayBuffer
-    return { bytes: new Uint8Array(view), mime: image.mimeType || 'image/png' }
+    const view = (await parser.getDependency('bufferView', image.bufferView)) as ArrayBuffer;
+    return { bytes: new Uint8Array(view), mime: image.mimeType || 'image/png' };
   }
-  if (!image.uri) return null
+  if (!image.uri) return null;
   if (image.uri.startsWith('data:')) {
-    const res = await fetch(image.uri)
-    const bytes = new Uint8Array(await res.arrayBuffer())
-    return { bytes, mime: image.mimeType || res.headers.get('content-type') || 'image/png' }
+    const res = await fetch(image.uri);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    return { bytes, mime: image.mimeType || res.headers.get('content-type') || 'image/png' };
   }
-  const segment = lastSegment(image.uri)
-  const file = siblings.get(segment) ?? siblings.get(decodeSafe(segment))
-  if (!file) return null
-  const bytes = new Uint8Array(await file.arrayBuffer())
-  return { bytes, mime: image.mimeType || file.type || mimeFromName(file.name) }
+  const segment = lastSegment(image.uri);
+  const file = siblings.get(segment) ?? siblings.get(decodeSafe(segment));
+  if (!file) return null;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  return { bytes, mime: image.mimeType || file.type || mimeFromName(file.name) };
 }
 
 /** Builds the {@link ModelSource} façade, memoizing each image read (one image, N channels). */
 function makeSource(parser: GLTFParser, siblings: Map<string, File>): ModelSource {
-  const json = parser.json as GltfJson
-  const images = new Map<number, Promise<GltfImageBytes | null>>()
+  const json = parser.json as GltfJson;
+  const images = new Map<number, Promise<GltfImageBytes | null>>();
   return {
     json,
     materialIndex: (material) => parser.associations.get(material)?.materials ?? null,
@@ -286,22 +286,22 @@ function makeSource(parser: GLTFParser, siblings: Map<string, File>): ModelSourc
       // carrying one is the node. A single-primitive mesh IS that object; a multi-primitive
       // one is a Group above the per-primitive Meshes.
       for (let o: THREE.Object3D | null = object; o; o = o.parent) {
-        if (parser.associations.get(o)?.nodes !== undefined) return o.name || null
+        if (parser.associations.get(o)?.nodes !== undefined) return o.name || null;
       }
-      return null
+      return null;
     },
     imageBytes: (index) => {
-      let pending = images.get(index)
+      let pending = images.get(index);
       if (!pending) {
         pending = readImageBytes(parser, json, siblings, index).catch((err) => {
-          console.warn(`flexo: glTF image ${index} could not be read`, err)
-          return null
-        })
-        images.set(index, pending)
+          console.warn(`flexo: glTF image ${index} could not be read`, err);
+          return null;
+        });
+        images.set(index, pending);
       }
-      return pending
+      return pending;
     },
-  }
+  };
 }
 
 /**
@@ -311,23 +311,23 @@ function makeSource(parser: GLTFParser, siblings: Map<string, File>): ModelSourc
  * glTF animations aren't imported, and this is three's own place to hang them.
  */
 function withAnimations(gltf: {
-  scene: THREE.Group
-  animations: THREE.AnimationClip[]
+  scene: THREE.Group;
+  animations: THREE.AnimationClip[];
 }): THREE.Group {
-  gltf.scene.animations = gltf.animations
-  return gltf.scene
+  gltf.scene.animations = gltf.animations;
+  return gltf.scene;
 }
 
 function makeGltfLoader(manager?: THREE.LoadingManager): GLTFLoader {
-  const loader = new GLTFLoader(manager)
+  const loader = new GLTFLoader(manager);
   // Decoder assets are committed under public/draco/ (mirroring public/basis/) and are
   // BASE_URL-relative so they resolve under the app's /flexo/ sub-path deploy.
-  const draco = new DRACOLoader(manager)
-  draco.setDecoderPath(`${import.meta.env.BASE_URL}draco/`)
-  loader.setDRACOLoader(draco)
+  const draco = new DRACOLoader(manager);
+  draco.setDecoderPath(`${import.meta.env.BASE_URL}draco/`);
+  loader.setDRACOLoader(draco);
   // EXT_meshopt_compression: the decoder is a pure-JS/WASM module with no renderer dependency.
-  loader.setMeshoptDecoder(MeshoptDecoder)
-  return loader
+  loader.setMeshoptDecoder(MeshoptDecoder);
+  return loader;
 }
 
 /**
@@ -337,38 +337,38 @@ function makeGltfLoader(manager?: THREE.LoadingManager): GLTFLoader {
  * loader has fully read them by then, since `parse()` resolves after all dependencies load.
  */
 export async function loadModelFile(files: File[]): Promise<LoadedModel> {
-  const entry = pickEntryFile(files)
-  const bytes = await entry.arrayBuffer()
+  const entry = pickEntryFile(files);
+  const bytes = await entry.arrayBuffer();
 
   if (extensionOf(entry.name) === '.glb') {
     // Self-contained: no sibling resolution, no manager needed.
-    const loader = makeGltfLoader()
-    const gltf = await loader.parseAsync(bytes, '')
+    const loader = makeGltfLoader();
+    const gltf = await loader.parseAsync(bytes, '');
     return {
       scene: withAnimations(gltf),
       fileName: entry.name,
       source: makeSource(gltf.parser, new Map()),
-    }
+    };
   }
 
-  const { byName, urls, created } = buildSiblings(files.filter((f) => f !== entry))
-  const manager = new THREE.LoadingManager()
+  const { byName, urls, created } = buildSiblings(files.filter((f) => f !== entry));
+  const manager = new THREE.LoadingManager();
   manager.setURLModifier((url) => {
-    const segment = lastSegment(url)
-    return urls.get(segment) ?? urls.get(decodeSafe(segment)) ?? url
-  })
+    const segment = lastSegment(url);
+    return urls.get(segment) ?? urls.get(decodeSafe(segment)) ?? url;
+  });
   try {
-    const loader = makeGltfLoader(manager)
+    const loader = makeGltfLoader(manager);
     // Empty resource path: relative URIs stay relative and are rewritten by the modifier above.
-    const gltf = await loader.parseAsync(new TextDecoder().decode(bytes), '')
+    const gltf = await loader.parseAsync(new TextDecoder().decode(bytes), '');
     // The blob URLs die with this function, but the File objects live on in `byName`, which is
     // what the source façade reads image bytes from — see readImageBytes.
     return {
       scene: withAnimations(gltf),
       fileName: entry.name,
       source: makeSource(gltf.parser, byName),
-    }
+    };
   } finally {
-    for (const url of created) URL.revokeObjectURL(url)
+    for (const url of created) URL.revokeObjectURL(url);
   }
 }

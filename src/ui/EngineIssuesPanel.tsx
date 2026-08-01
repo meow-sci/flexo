@@ -1,8 +1,8 @@
-import { useStore } from '@nanostores/react'
-import { SectionTitle } from './kit'
-import { $allReactionIndex } from '../state/reactionStore'
-import { validateEngines } from '../ksa/engineValidation'
-import type { EditingPart } from '../ksa/types'
+import { useStore } from '@nanostores/react';
+import { SectionTitle } from './kit';
+import { $allReactionIndex } from '../state/reactionStore';
+import { validateEngines } from '../ksa/engineValidation';
+import type { EditingPart } from '../ksa/types';
 
 /**
  * Surfaces {@link validateEngines}'s findings inline in the Engine panel, split by what
@@ -13,11 +13,11 @@ import type { EditingPart } from '../ksa/types'
  * Renders nothing when the part is clean, so it stays out of the way while authoring.
  */
 export function EngineIssuesPanel({ part }: { part: EditingPart }) {
-  const reactions = useStore($allReactionIndex)
-  const issues = validateEngines(part, reactions)
-  if (issues.length === 0) return null
-  const blocking = issues.filter((i) => i.severity === 'block')
-  const warnings = issues.filter((i) => i.severity === 'warn')
+  const reactions = useStore($allReactionIndex);
+  const issues = validateEngines(part, reactions);
+  if (issues.length === 0) return null;
+  const blocking = issues.filter((i) => i.severity === 'block');
+  const warnings = issues.filter((i) => i.severity === 'warn');
   return (
     <div className="flex flex-col gap-2">
       {blocking.length > 0 && (
@@ -45,5 +45,5 @@ export function EngineIssuesPanel({ part }: { part: EditingPart }) {
         </div>
       )}
     </div>
-  )
+  );
 }

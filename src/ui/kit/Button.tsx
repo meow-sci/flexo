@@ -1,6 +1,6 @@
-import { Button as AriaButton, composeRenderProps, type ButtonProps } from 'react-aria-components'
-import { tv, type VariantProps } from 'tailwind-variants'
-import { focusRing } from './styles'
+import { Button as AriaButton, composeRenderProps, type ButtonProps } from 'react-aria-components';
+import { tv, type VariantProps } from 'tailwind-variants';
+import { focusRing } from './styles';
 
 export const button = tv({
   extend: focusRing,
@@ -29,7 +29,7 @@ export const button = tv({
     { iconOnly: true, size: 'lg', class: 'w-11' },
   ],
   defaultVariants: { variant: 'secondary', size: 'md' },
-})
+});
 
 export interface ButtonKitProps extends ButtonProps, VariantProps<typeof button> {}
 
@@ -41,5 +41,5 @@ export function Button({ variant, size, iconOnly, className, ...props }: ButtonK
         button({ ...renderProps, variant, size, iconOnly, className: cls }),
       )}
     />
-  )
+  );
 }

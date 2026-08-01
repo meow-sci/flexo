@@ -1,8 +1,8 @@
-import * as THREE from 'three'
-import type { NozzleChannel } from '../state/engineStore'
+import * as THREE from 'three';
+import type { NozzleChannel } from '../state/engineStore';
 
 /** Amber — the PHYSICS channel (`<ExhaustLocation>`/`<ExhaustDirection>`, i.e. the thrust axis). */
-const COLOR_PHYSICS = 0xff8c2a
+const COLOR_PHYSICS = 0xff8c2a;
 
 /**
  * Cyan — the FX override channel. Mirrors KSA's own in-game debug overlay, which draws the
@@ -10,7 +10,7 @@ const COLOR_PHYSICS = 0xff8c2a
  * thrust arrow stays red/white. Keeping the game's colour language means a flexo author can
  * read the debug overlay against what they authored without a translation step.
  */
-const COLOR_FX = 0x2ad4ff
+const COLOR_FX = 0x2ad4ff;
 
 /**
  * How far an inactive handle's colour is pulled toward black. Applied in the renderer's
@@ -19,14 +19,14 @@ const COLOR_FX = 0x2ad4ff
  * {@link OPACITY_INACTIVE} already carries "secondary" and the whole point of drawing every
  * nozzle is that the inactive ones stay legible.
  */
-const DIM_FACTOR = 0.45
-const OPACITY_ACTIVE = 0.95
-const OPACITY_INACTIVE = 0.4
+const DIM_FACTOR = 0.45;
+const OPACITY_ACTIVE = 0.95;
+const OPACITY_INACTIVE = 0.4;
 
 /** Draw order for the depth-test-free handles; above geometry, below nothing else we own. */
-const RENDER_ORDER = 10
+const RENDER_ORDER = 10;
 
-const PLUS_X = new THREE.Vector3(1, 0, 0)
+const PLUS_X = new THREE.Vector3(1, 0, 0);
 
 /**
  * A pickable 3D marker for one nozzle exhaust placement: a small cube at the exhaust
@@ -45,11 +45,11 @@ const PLUS_X = new THREE.Vector3(1, 0, 0)
  * invisible and, now that it is pickable, unclickable.
  */
 export class NozzleHandleObject {
-  readonly group = new THREE.Group()
-  private readonly cubeGeometry: THREE.BoxGeometry
-  private readonly coneGeometry: THREE.ConeGeometry
-  private readonly material: THREE.MeshBasicMaterial
-  private readonly baseColor: THREE.Color
+  readonly group = new THREE.Group();
+  private readonly cubeGeometry: THREE.BoxGeometry;
+  private readonly coneGeometry: THREE.ConeGeometry;
+  private readonly material: THREE.MeshBasicMaterial;
+  private readonly baseColor: THREE.Color;
 
   /**
    * `selectableId` is the {@link import('../state/engineStore').NozzleTarget.key} this
@@ -57,53 +57,53 @@ export class NozzleHandleObject {
    * is the marker's world size in meters (cube edge).
    */
   constructor(selectableId: string, channel: NozzleChannel, size = 0.12) {
-    this.group.name = `nozzle-exhaust-handle:${selectableId}`
-    const selectable = { kind: 'nozzle', id: selectableId }
-    this.group.userData.selectable = selectable
-    this.baseColor = new THREE.Color(channel === 'fx' ? COLOR_FX : COLOR_PHYSICS)
+    this.group.name = `nozzle-exhaust-handle:${selectableId}`;
+    const selectable = { kind: 'nozzle', id: selectableId };
+    this.group.userData.selectable = selectable;
+    this.baseColor = new THREE.Color(channel === 'fx' ? COLOR_FX : COLOR_PHYSICS);
     this.material = new THREE.MeshBasicMaterial({
       color: this.baseColor.clone(),
       transparent: true,
       opacity: OPACITY_ACTIVE,
       depthTest: false,
       depthWrite: false,
-    })
+    });
 
-    this.cubeGeometry = new THREE.BoxGeometry(size, size, size)
-    const cube = new THREE.Mesh(this.cubeGeometry, this.material)
-    cube.renderOrder = RENDER_ORDER
-    cube.userData.selectable = selectable
-    this.group.add(cube)
+    this.cubeGeometry = new THREE.BoxGeometry(size, size, size);
+    const cube = new THREE.Mesh(this.cubeGeometry, this.material);
+    cube.renderOrder = RENDER_ORDER;
+    cube.userData.selectable = selectable;
+    this.group.add(cube);
 
-    const coneLength = size * 2
-    this.coneGeometry = new THREE.ConeGeometry(size / 2, coneLength, 16)
-    const cone = new THREE.Mesh(this.coneGeometry, this.material)
-    cone.renderOrder = RENDER_ORDER
-    cone.userData.selectable = selectable
+    const coneLength = size * 2;
+    this.coneGeometry = new THREE.ConeGeometry(size / 2, coneLength, 16);
+    const cone = new THREE.Mesh(this.coneGeometry, this.material);
+    cone.renderOrder = RENDER_ORDER;
+    cone.userData.selectable = selectable;
     // The cone is built around +Y; rotate so it points along the group's +X, then the
     // group's quaternion aims +X at the exhaust direction (set in setPose).
-    cone.rotation.z = -Math.PI / 2
-    cone.position.x = size / 2 + coneLength / 2
-    this.group.add(cone)
+    cone.rotation.z = -Math.PI / 2;
+    cone.position.x = size / 2 + coneLength / 2;
+    this.group.add(cone);
   }
 
   /** Places the marker at a world position and aims its cone along a world direction. */
   setPose(worldPos: THREE.Vector3, worldDir: THREE.Vector3): void {
-    this.group.position.copy(worldPos)
-    const dir = worldDir.lengthSq() > 1e-9 ? worldDir.clone().normalize() : PLUS_X
-    this.group.quaternion.setFromUnitVectors(PLUS_X, dir)
+    this.group.position.copy(worldPos);
+    const dir = worldDir.lengthSq() > 1e-9 ? worldDir.clone().normalize() : PLUS_X;
+    this.group.quaternion.setFromUnitVectors(PLUS_X, dir);
   }
 
   /** Full colour for the gizmo's target; dimmed for the other nozzles of the same engine. */
   setActive(active: boolean): void {
-    this.material.color.copy(this.baseColor)
-    if (!active) this.material.color.multiplyScalar(DIM_FACTOR)
-    this.material.opacity = active ? OPACITY_ACTIVE : OPACITY_INACTIVE
+    this.material.color.copy(this.baseColor);
+    if (!active) this.material.color.multiplyScalar(DIM_FACTOR);
+    this.material.opacity = active ? OPACITY_ACTIVE : OPACITY_INACTIVE;
   }
 
   dispose(): void {
-    this.cubeGeometry.dispose()
-    this.coneGeometry.dispose()
-    this.material.dispose()
+    this.cubeGeometry.dispose();
+    this.coneGeometry.dispose();
+    this.material.dispose();
   }
 }

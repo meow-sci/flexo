@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_LAYER_ID,
   IVA_SEAT_LAYER_ID,
@@ -13,15 +13,15 @@ import {
   identityTransform,
   type CustomMesh,
   type EditingPart,
-} from '../ksa/types'
-import { buildProjectExport, parseProjectObject } from './projectTransfer'
+} from '../ksa/types';
+import { buildProjectExport, parseProjectObject } from './projectTransfer';
 import {
   PROJECT_EXPORT_FORMAT,
   PROJECT_EXPORT_VERSION,
   decodeProject,
   encodeProject,
   isCompactProject,
-} from './projectCodec'
+} from './projectCodec';
 
 /** A transform whose every number is ≤6 decimals, so a single encode is lossless. */
 function xf(p: [number, number, number], r: [number, number, number], s: [number, number, number]) {
@@ -29,7 +29,7 @@ function xf(p: [number, number, number], r: [number, number, number], s: [number
     position: { x: p[0], y: p[1], z: p[2] },
     rotation: { x: r[0], y: r[1], z: r[2] },
     scale: { x: s[0], y: s[1], z: s[2] },
-  }
+  };
 }
 
 /**
@@ -40,10 +40,10 @@ function xf(p: [number, number, number], r: [number, number, number], s: [number
  * lossless and the decode must reproduce the input exactly.
  */
 function richPart(): EditingPart {
-  const p = createEmptyPart()
-  p.partId = 'rich_part'
-  p.editorTags = ['Structural', 'Lights']
-  p.layers.push({ id: 'layer1', name: 'Engines' })
+  const p = createEmptyPart();
+  p.partId = 'rich_part';
+  p.editorTags = ['Structural', 'Lights'];
+  p.layers.push({ id: 'layer1', name: 'Engines' });
 
   p.placements.push(
     // Identity transform → compact form must omit p/r/s entirely.
@@ -59,7 +59,7 @@ function richPart(): EditingPart {
       layerId: 'layer1',
       ...xf([1.5, -2.25, 0.125], [0.392699, 0, 1.570796], [2, 2, 2]),
     },
-  )
+  );
 
   p.connectors.push({
     id: '_connector1',
@@ -68,17 +68,17 @@ function richPart(): EditingPart {
     siblingIds: [],
     layerId: DEFAULT_LAYER_ID,
     ...xf([0.5, 0, 0], [0, 0, 0], [1, 1, 1]),
-  })
+  });
 
   p.kittens.push({
     id: 'kitten_1',
     kind: 'polaris',
     layerId: KITTEN_LAYER_ID,
     ...identityTransform(),
-  })
+  });
 
-  p.gameData.displayName = 'Rich Display'
-  p.gameData.customMass = 1234.5
+  p.gameData.displayName = 'Rich Display';
+  p.gameData.customMass = 1234.5;
   // Preserved unmodeled <CustomMass> children (inertia) ride along with the Kg scalar.
   p.gameData.customMassExtras = [
     {
@@ -86,9 +86,9 @@ function richPart(): EditingPart {
       attrs: { Ixx: '0.325', Iyy: '0.668', Izz: '0.668' },
       children: [],
     },
-  ]
-  p.gameData.diameterM = 2.5
-  p.gameData.controllable = true
+  ];
+  p.gameData.diameterM = 2.5;
+  p.gameData.controllable = true;
   // Unmodeled passthrough on the part itself: a nested <Collider> (attrs + child tree).
   p.gameData.unknownChildren = [
     {
@@ -105,21 +105,21 @@ function richPart(): EditingPart {
         },
       ],
     },
-  ]
-  p.gameData.batteries.push({ capacityWh: 5 }, { capacityWh: 10.25 })
-  p.gameData.generators.push({ outputWatts: 100 })
+  ];
+  p.gameData.batteries.push({ capacityWh: 5 }, { capacityWh: 10.25 });
+  p.gameData.generators.push({ outputWatts: 100 });
   p.gameData.solarPanels.push(
     { outputWatts: 80, transform: identityTransform() },
     { outputWatts: 50, transform: xf([0, 1, 0], [0, 0.5, 0], [1, 1, 1]) },
-  )
-  p.gameData.powerConsumer = { consumedWatts: 12.5, lightSwitch: true, lightIsActive: true }
-  p.gameData.decoupler = { connectorId: '_connector1', force: 1000 }
+  );
+  p.gameData.powerConsumer = { consumedWatts: 12.5, lightSwitch: true, lightIsActive: true };
+  p.gameData.decoupler = { connectorId: '_connector1', force: 1000 };
   p.gameData.dockingPort = {
     connectorId: '_connector1',
     latchingKineticEnergyJ: 50,
     pushoffImpulseNs: 25,
-  }
-  p.gameData.evaDoor = { connectorId: '_connector1' }
+  };
+  p.gameData.evaDoor = { connectorId: '_connector1' };
 
   // Part-level engine modules: a controller, a gas-generator rocket+combustor, gimbals.
   p.gameData.rocketControllers.push({
@@ -130,12 +130,12 @@ function richPart(): EditingPart {
       { id: 'GasGenerator', subPartInstanceId: null },
     ],
     controlMapFlags: null,
-  })
+  });
   p.gameData.rockets.push({
     id: 'GasGenerator',
     core: { id: 'GasGeneratorChamber', subPartInstanceId: null },
     nozzles: [{ id: 'TurbineExhaustNozzle', subPartInstanceId: 'wing_1' }],
-  })
+  });
   p.gameData.combustors.push({
     id: 'GasGeneratorChamber',
     reactionId: 'Hydrolox',
@@ -152,11 +152,11 @@ function richPart(): EditingPart {
       { kind: 'container' as const, containerId: 'Grain', subPartInstanceId: 'wing_1' },
     ],
     plumbing: 'Bulk' as const,
-  })
+  });
   p.gameData.gimbals.push(
     { subPartInstanceId: 'wing_1', maxAngleYDeg: 5, maxAngleZDeg: 5, constrainToCircle: false },
     { subPartInstanceId: 'truss_1', maxAngleYDeg: 70, maxAngleZDeg: 0, constrainToCircle: true },
-  )
+  );
 
   // KSA 2026.7.9 plumbing topology: a part-level feed container, the solid-motor trio,
   // and a wiring entry pointing a placed SubPart's consumer at a real connector.
@@ -166,33 +166,33 @@ function richPart(): EditingPart {
     lengthM: 3,
     outerRadiusM: 0.8,
     locationAsmb: { x: 0.25, y: 0, z: -0.5 },
-  })
+  });
   p.gameData.solidMotors.push({
     ...createSolidMotor('MotorCore'),
     feeds: [
       { kind: 'container', containerId: 'Grain', subPartInstanceId: null },
       { kind: 'connector', connectorId: '_connector1' },
     ],
-  })
+  });
   p.gameData.solidNozzles.push({
     ...createSolidMotorNozzle('SrbNozzle'),
     exitDiameterM: 1.2,
     fxExitDiameterM: 0.587008,
     exhaustLocation: { x: -0.470039, y: 0, z: 0 },
     sound: { action: 'On', soundId: 'DefaultEngineSoundBehavior' },
-  })
+  });
   p.gameData.solidGrainSegments.push({
     ...createSolidGrainSegment('Grain'),
     outerRadiusM: 1,
     wallThicknessMm: 8,
     lengthM: 0.65227,
     locationAsmb: { x: -0.1, y: 0, z: 0 },
-  })
+  });
   p.gameData.consumerFeedWiring.push({
     consumerId: 'ThrustChamber',
     subPartInstanceId: 'wing_1',
     feeds: [{ kind: 'connector', connectorId: '_connector1' }],
-  })
+  });
 
   p.subPartGameData.push({
     ...createSubPartGameData('Core.Wing'),
@@ -276,7 +276,7 @@ function richPart(): EditingPart {
     // Unmodeled passthrough: a SubPartGameData DisplayName attr + a SubstanceStorageVolume child.
     unknownAttrs: { DisplayName: 'Wing Tank' },
     unknownChildren: [{ tag: 'SubstanceStorageVolume', attrs: { Id: 'Vol1' }, children: [] }],
-  })
+  });
 
   // Lights are first-class part entities (v8): one SubPart-owned Spot with a non-identity
   // transform, one part-level Point (identity transform → p/r omitted on the wire).
@@ -307,7 +307,7 @@ function richPart(): EditingPart {
       rayTracing: true,
       layerId: LIGHT_LAYER_ID,
     },
-  )
+  );
 
   p.customMeshes.push({
     id: 'mesh_k',
@@ -325,7 +325,7 @@ function richPart(): EditingPart {
     emissive: { shape: 'whole', color: { r: 0, g: 255, b: 128 }, strength: 0.6, coverage: 1 },
     glass: { tint: { r: 10, g: 200, b: 220 }, opacity: 0.45 },
     surface: 'glassGlow',
-  })
+  });
 
   p.animations.push({
     id: 'anim_1',
@@ -359,7 +359,7 @@ function richPart(): EditingPart {
       subPartInstanceId: 'wing_1',
       excludeInstanceIds: ['truss_1'],
     },
-  })
+  });
 
   // A custom propellant (numbers pre-rounded to ≤6 decimals so encode is lossless).
   p.customMaterials.push(
@@ -380,7 +380,7 @@ function richPart(): EditingPart {
       ormPacked: { textureId: 'tex_orm' },
       normal: { textureId: 'tex_n', strength: 1.5 },
     },
-  )
+  );
 
   p.customReactions.push({
     id: 'MyKerolox_2.6',
@@ -398,82 +398,82 @@ function richPart(): EditingPart {
     minimumBurnPressurePa: 1500000,
     maxStablePressurePa: 15000000,
     exhaustCondensedFraction: 0.336965,
-  })
+  });
 
-  return p
+  return p;
 }
 
 describe('projectCodec round-trip', () => {
   it('losslessly reconstructs a fully-populated project', () => {
-    const env = buildProjectExport(richPart(), 'Rich')
-    const decoded = decodeProject(encodeProject(env))
-    expect(decoded.format).toBe(PROJECT_EXPORT_FORMAT)
-    expect(decoded.version).toBe(PROJECT_EXPORT_VERSION)
-    expect(decoded.projectName).toBe('Rich')
-    expect(decoded.sourcePartId).toBe('rich_part')
+    const env = buildProjectExport(richPart(), 'Rich');
+    const decoded = decodeProject(encodeProject(env));
+    expect(decoded.format).toBe(PROJECT_EXPORT_FORMAT);
+    expect(decoded.version).toBe(PROJECT_EXPORT_VERSION);
+    expect(decoded.projectName).toBe('Rich');
+    expect(decoded.sourcePartId).toBe('rich_part');
     // The full data tree survives encode→decode unchanged (numbers are pre-rounded).
-    expect(decoded.data).toEqual(env.data)
-  })
+    expect(decoded.data).toEqual(env.data);
+  });
 
   it('drops defaults from the wire form (identity transforms, constant layerIds)', () => {
-    const env = buildProjectExport(richPart(), 'Rich')
-    const c = encodeProject(env)
+    const env = buildProjectExport(richPart(), 'Rich');
+    const c = encodeProject(env);
     // Identity placement carries only its ids — no transform keys.
-    const identity = c.p?.find((x) => x.i === 'truss_1')
-    expect(identity).toEqual({ i: 'truss_1', t: 'Core.TrussBarA', l: DEFAULT_LAYER_ID })
+    const identity = c.p?.find((x) => x.i === 'truss_1');
+    expect(identity).toEqual({ i: 'truss_1', t: 'Core.TrussBarA', l: DEFAULT_LAYER_ID });
     // Connectors carry their layer like a placement (they live on ordinary layers);
     // a kitten's is constant and never serialized.
-    expect(c.c?.[0].l).toBe(DEFAULT_LAYER_ID)
-    expect(c.k?.[0]).not.toHaveProperty('l')
+    expect(c.c?.[0].l).toBe(DEFAULT_LAYER_ID);
+    expect(c.k?.[0]).not.toHaveProperty('l');
     // Cylindrical tank with the default material is the bare {l,r,w}; spherical sets sph.
-    expect(c.sg?.[0].tk?.[0]).toEqual({ l: 2, r: 0.5, w: 2 })
-    expect(c.sg?.[0].tk?.[1]).toMatchObject({ sph: 1, m: 'Steel.A36(s)' })
+    expect(c.sg?.[0].tk?.[0]).toEqual({ l: 2, r: 0.5, w: 2 });
+    expect(c.sg?.[0].tk?.[1]).toMatchObject({ sph: 1, m: 'Steel.A36(s)' });
     // A feed point deferring to the placing part is a single character.
     expect(c.g?.cb?.[0].fd).toEqual([
       'p',
       ['c', '_connector1'],
       ['t', 'Fuel'],
       ['t', 'Grain', 'wing_1'],
-    ])
+    ]);
     // Bulk is the schema default, so `pl` appears only on the Service combustor.
-    expect(c.g?.cb?.[0]).not.toHaveProperty('pl')
-    expect(c.sg?.[0].cb?.[0].pl).toBe(1)
+    expect(c.g?.cb?.[0]).not.toHaveProperty('pl');
+    expect(c.sg?.[0].cb?.[0].pl).toBe(1);
     // A solid nozzle never carries an area ratio (KSA derives throat = exitArea/12).
-    expect(c.g?.sn?.[0]).not.toHaveProperty('ar')
+    expect(c.g?.sn?.[0]).not.toHaveProperty('ar');
     // Empty capabilities are omitted (they mean KSA's implicit Electricity|ServiceFluid).
-    expect(c.g?.sm?.[0].g).toBe('Neutral')
-    expect(c.sg?.[0].sm?.[0]).not.toHaveProperty('g')
-  })
+    expect(c.g?.sm?.[0].g).toBe('Neutral');
+    expect(c.sg?.[0].sm?.[0]).not.toHaveProperty('g');
+  });
 
   // Per the no-migration rule a v7 envelope is REJECTED, never converted — so the
   // marker must actually be 8, not just "whatever the constant says".
   it('stamps wire version 8 (lights as first-class part entities)', () => {
-    expect(PROJECT_EXPORT_VERSION).toBe(8)
-    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P')).v).toBe(8)
-  })
+    expect(PROJECT_EXPORT_VERSION).toBe(8);
+    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P')).v).toBe(8);
+  });
 
   it('round-trips internalFlags and omits them when empty', () => {
-    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P'))).not.toHaveProperty('ifl')
-    const p = createEmptyPart()
-    p.internalFlags = { CoreIVAPropA_Subpart_SeatA: true, CoreIVAPropA_Subpart_PanelA: false }
-    const back = decodeProject(encodeProject(buildProjectExport(p, 'P')))
-    expect(back.data.internalFlags).toEqual(p.internalFlags)
-  })
+    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P'))).not.toHaveProperty('ifl');
+    const p = createEmptyPart();
+    p.internalFlags = { CoreIVAPropA_Subpart_SeatA: true, CoreIVAPropA_Subpart_PanelA: false };
+    const back = decodeProject(encodeProject(buildProjectExport(p, 'P')));
+    expect(back.data.internalFlags).toEqual(p.internalFlags);
+  });
 
   it('rounds high-precision floats to 6 decimals', () => {
-    const p = createEmptyPart()
+    const p = createEmptyPart();
     p.placements.push({
       instanceId: 'a',
       subPartTemplateId: 'X',
       layerId: DEFAULT_LAYER_ID,
       ...xf([Math.PI, 0, 0], [0, 0, 0], [1, 1, 1]),
-    })
-    const decoded = decodeProject(encodeProject(buildProjectExport(p, 'P')))
-    expect(decoded.data.placements[0].position.x).toBe(3.141593)
-  })
+    });
+    const decoded = decodeProject(encodeProject(buildProjectExport(p, 'P')));
+    expect(decoded.data.placements[0].position.x).toBe(3.141593);
+  });
 
   it('round-trips an imported glTF mesh descriptor (source + material + glass flag)', () => {
-    const p = createEmptyPart()
+    const p = createEmptyPart();
     const imported: CustomMesh = {
       id: 'mesh_imp1',
       name: 'RCS Pod · Painted Metal',
@@ -491,43 +491,43 @@ describe('projectCodec round-trip', () => {
       materialId: 'mat_paint',
       faceTextures: {},
       emissive: { shape: 'painted', color: { r: 255, g: 120, b: 0 }, strength: 0.8, coverage: 1 },
-    }
-    p.customMeshes.push(imported)
+    };
+    p.customMeshes.push(imported);
     // buildProjectExport deliberately filters imported meshes out (binary-backed, gated by
     // hasCustomAssets) — the CODEC still has to be lossless, so feed the envelope directly.
-    const env = buildProjectExport(p, 'P')
-    env.data.customMeshes = [imported]
-    const decoded = decodeProject(encodeProject(env))
-    expect(decoded.data.customMeshes).toEqual([imported])
+    const env = buildProjectExport(p, 'P');
+    env.data.customMeshes = [imported];
+    const decoded = decodeProject(encodeProject(env));
+    expect(decoded.data.customMeshes).toEqual([imported]);
     // …and it is encoded under the compact `imp` key, not as a degenerate kitten mesh.
-    const c = encodeProject(env)
-    expect(c.m?.[0]).toMatchObject({ imp: { i: 'imp_9f8e', f: 'rcs_pod.glb', tr: 1 } })
-    expect(c.m?.[0]).not.toHaveProperty('kit')
-  })
+    const c = encodeProject(env);
+    expect(c.m?.[0]).toMatchObject({ imp: { i: 'imp_9f8e', f: 'rcs_pod.glb', tr: 1 } });
+    expect(c.m?.[0]).not.toHaveProperty('kit');
+  });
 
   // No migration, ever: a payload stamped with the previous version is rejected outright
   // rather than half-decoded (v7 carried lights inside `sg[].li` with a nested transform,
   // which would decode silently wrong).
   it('rejects an older payload instead of converting it', () => {
-    const current = encodeProject(buildProjectExport(createEmptyPart(), 'P'))
-    expect(parseProjectObject(current).ok).toBe(true)
+    const current = encodeProject(buildProjectExport(createEmptyPart(), 'P'));
+    expect(parseProjectObject(current).ok).toBe(true);
     for (const v of [4, 6, 7]) {
-      const older = parseProjectObject({ ...current, v })
-      expect(older.ok).toBe(false)
-      expect(older.ok === false && older.error).toContain('Unsupported project version')
+      const older = parseProjectObject({ ...current, v });
+      expect(older.ok).toBe(false);
+      expect(older.ok === false && older.error).toContain('Unsupported project version');
     }
-  })
+  });
 
   it('recognizes its own format marker', () => {
-    expect(isCompactProject({ f: PROJECT_EXPORT_FORMAT, v: 1 })).toBe(true)
-    expect(isCompactProject({ format: PROJECT_EXPORT_FORMAT })).toBe(false)
-    expect(isCompactProject(null)).toBe(false)
-  })
-})
+    expect(isCompactProject({ f: PROJECT_EXPORT_FORMAT, v: 1 })).toBe(true);
+    expect(isCompactProject({ format: PROJECT_EXPORT_FORMAT })).toBe(false);
+    expect(isCompactProject(null)).toBe(false);
+  });
+});
 
 describe('collider codec', () => {
   it('round-trips every shape, owner and size, restoring the constant layerId', () => {
-    const p = createEmptyPart()
+    const p = createEmptyPart();
     p.colliders.push(
       {
         id: '_collider1',
@@ -545,28 +545,28 @@ describe('collider codec', () => {
         ...identityTransform(),
         layerId: DEFAULT_LAYER_ID,
       },
-    )
-    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.colliders
-    expect(back).toEqual(p.colliders)
-  })
+    );
+    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.colliders;
+    expect(back).toEqual(p.colliders);
+  });
 
   it('omits a null owner from the wire form but keeps the layer', () => {
-    const p = createEmptyPart()
+    const p = createEmptyPart();
     p.colliders.push({
       id: '_collider1',
       shape: 'Box',
       ownerTemplateId: null,
       ...identityTransform(),
       layerId: DEFAULT_LAYER_ID,
-    })
-    const c = encodeProject(buildProjectExport(p, 'P'))
+    });
+    const c = encodeProject(buildProjectExport(p, 'P'));
     // Identity transform + null owner ⇒ just the id, the layer and the shape token.
-    expect(c.cl?.[0]).toEqual({ i: '_collider1', l: DEFAULT_LAYER_ID, sh: 'Box' })
-  })
+    expect(c.cl?.[0]).toEqual({ i: '_collider1', l: DEFAULT_LAYER_ID, sh: 'Box' });
+  });
 
   it('round-trips a connector and a collider parked on a custom layer', () => {
-    const p = createEmptyPart()
-    p.layers.push({ id: 'layer1', name: 'Engines' })
+    const p = createEmptyPart();
+    p.layers.push({ id: 'layer1', name: 'Engines' });
     p.connectors.push({
       id: '_connector1',
       flags: [],
@@ -574,54 +574,54 @@ describe('collider codec', () => {
       siblingIds: [],
       ...identityTransform(),
       layerId: 'layer1',
-    })
+    });
     p.colliders.push({
       id: '_collider1',
       shape: 'Box',
       ownerTemplateId: null,
       ...identityTransform(),
       layerId: 'layer1',
-    })
-    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data
-    expect(back.connectors[0].layerId).toBe('layer1')
-    expect(back.colliders[0].layerId).toBe('layer1')
-  })
-})
+    });
+    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data;
+    expect(back.connectors[0].layerId).toBe('layer1');
+    expect(back.colliders[0].layerId).toBe('layer1');
+  });
+});
 
 describe('IVA seat codec', () => {
   it('round-trips id/position/rotation, restoring the constant layerId and unit scale', () => {
-    const p = createEmptyPart()
+    const p = createEmptyPart();
     p.ivaSeats.push({
       id: '_seat1',
       position: { x: 0.1, y: 0.62, z: -0.35 },
       rotation: { x: 0, y: 1.5708, z: 0 },
       scale: { x: 1, y: 1, z: 1 },
       layerId: IVA_SEAT_LAYER_ID,
-    })
-    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.ivaSeats
-    expect(back).toEqual(p.ivaSeats)
-    expect(back[0].layerId).toBe(IVA_SEAT_LAYER_ID)
+    });
+    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.ivaSeats;
+    expect(back).toEqual(p.ivaSeats);
+    expect(back[0].layerId).toBe(IVA_SEAT_LAYER_ID);
     // `scale` is unused, never serialized, and always decodes back to (1,1,1).
-    expect(back[0].scale).toEqual({ x: 1, y: 1, z: 1 })
-  })
+    expect(back[0].scale).toEqual({ x: 1, y: 1, z: 1 });
+  });
 
   it('omits the constant layerId, the unused scale, and `iv` entirely when there are no seats', () => {
-    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P'))).not.toHaveProperty('iv')
-    const p = createEmptyPart()
+    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P'))).not.toHaveProperty('iv');
+    const p = createEmptyPart();
     p.ivaSeats.push({
       id: '_seat1',
       ...identityTransform(),
       layerId: IVA_SEAT_LAYER_ID,
-    })
-    const c = encodeProject(buildProjectExport(p, 'P'))
+    });
+    const c = encodeProject(buildProjectExport(p, 'P'));
     // Identity transform ⇒ just the id.
-    expect(c.iv?.[0]).toEqual({ i: '_seat1' })
-    expect(c.iv?.[0]).not.toHaveProperty('l')
-    expect(c.iv?.[0]).not.toHaveProperty('s')
-  })
+    expect(c.iv?.[0]).toEqual({ i: '_seat1' });
+    expect(c.iv?.[0]).not.toHaveProperty('l');
+    expect(c.iv?.[0]).not.toHaveProperty('s');
+  });
 
   it('preserves seat ORDER exactly (index 0 is the seat IVA opens on)', () => {
-    const p = createEmptyPart()
+    const p = createEmptyPart();
     for (const id of ['_seat3', '_seat1', '_seat2']) {
       p.ivaSeats.push({
         id,
@@ -629,17 +629,17 @@ describe('IVA seat codec', () => {
         rotation: { x: 0, y: 0, z: 0 },
         scale: { x: 1, y: 1, z: 1 },
         layerId: IVA_SEAT_LAYER_ID,
-      })
+      });
     }
-    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.ivaSeats
-    expect(back.map((s) => s.id)).toEqual(['_seat3', '_seat1', '_seat2'])
-    expect(back.map((s) => s.position.x)).toEqual([0, 1, 2])
-  })
-})
+    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.ivaSeats;
+    expect(back.map((s) => s.id)).toEqual(['_seat3', '_seat1', '_seat2']);
+    expect(back.map((s) => s.position.x)).toEqual([0, 1, 2]);
+  });
+});
 
 describe('light codec', () => {
   it('round-trips both owners and types, restoring the constant layerId and pinned scale', () => {
-    const p = createEmptyPart()
+    const p = createEmptyPart();
     p.lights.push(
       {
         id: '_light1',
@@ -669,17 +669,17 @@ describe('light codec', () => {
         rayTracing: true,
         layerId: LIGHT_LAYER_ID,
       },
-    )
-    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.lights
-    expect(back).toEqual(p.lights)
-    expect(back.every((l) => l.layerId === LIGHT_LAYER_ID)).toBe(true)
+    );
+    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.lights;
+    expect(back).toEqual(p.lights);
+    expect(back.every((l) => l.layerId === LIGHT_LAYER_ID)).toBe(true);
     // `scale` is unused, never serialized, and always decodes back to (1,1,1).
-    expect(back.every((l) => l.scale.x === 1 && l.scale.y === 1 && l.scale.z === 1)).toBe(true)
-  })
+    expect(back.every((l) => l.scale.x === 1 && l.scale.y === 1 && l.scale.z === 1)).toBe(true);
+  });
 
   it('drops defaults from the wire form (layerId, null owner, identity transform, Spot, no RT)', () => {
-    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P'))).not.toHaveProperty('li')
-    const p = createEmptyPart()
+    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P'))).not.toHaveProperty('li');
+    const p = createEmptyPart();
     p.lights.push({
       id: '_light1',
       type: 'Spot',
@@ -692,8 +692,8 @@ describe('light codec', () => {
       outerAngleRad: 0.785398,
       rayTracing: false,
       layerId: LIGHT_LAYER_ID,
-    })
-    const c = encodeProject(buildProjectExport(p, 'P'))
+    });
+    const c = encodeProject(buildProjectExport(p, 'P'));
     // Identity transform + null owner + Spot + no ray tracing ⇒ scalar fields only.
     expect(c.li?.[0]).toEqual({
       i: '_light1',
@@ -702,6 +702,6 @@ describe('light codec', () => {
       co: [1, 1, 1],
       ia: 0.392699,
       oa: 0.785398,
-    })
-  })
-})
+    });
+  });
+});

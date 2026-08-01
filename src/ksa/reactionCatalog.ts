@@ -23,39 +23,39 @@
  * must treat an empty catalog as "live physics preview unavailable", not an error.
  */
 
-import { fetchXmlFile } from './catalog'
-import type { CombustionLut, CombustionLutRow, MixtureLut } from './enginePhysics'
-import { sliceLutAtMixtureRatio, UNIVERSAL_GAS_CONSTANT } from './enginePhysics'
-import { directChildren } from './partXmlParser'
+import { fetchXmlFile } from './catalog';
+import type { CombustionLut, CombustionLutRow, MixtureLut } from './enginePhysics';
+import { sliceLutAtMixtureRatio, UNIVERSAL_GAS_CONSTANT } from './enginePhysics';
+import { directChildren } from './partXmlParser';
 import type {
   BurnRateLaw,
   CustomReaction,
   ReactionCategory,
   ReactionLutRowSpec,
   ReactionReactantSpec,
-} from './types'
+} from './types';
 
 /** One reactant of a reaction (a substance phase id + its mixture share). */
 export interface ReactionReactant {
   /** Substance phase id, e.g. "H2(l)" / "O2(l)" / "Kerosene(l)". */
-  phaseId: string
+  phaseId: string;
   /** Raw `<Reactant MassShare>` value (the mixture-ratio numerator). */
-  massShare: number
+  massShare: number;
   /** Normalized mass fraction (all reactants sum to 1). */
-  massFraction: number
+  massFraction: number;
 }
 
 /** A parsed reaction: identity, mixture, and its gas LUT(s) for the physics. */
-export type ReactionData = FixedReactionData | MixtureReactionData
+export type ReactionData = FixedReactionData | MixtureReactionData;
 
 interface ReactionDataBase {
   /** Reaction element `Id`, e.g. "Hydrolox" / "HTPDecomposition". */
-  id: string
+  id: string;
   /** `<Name Value>`, falling back to {@link id}. */
-  name: string
+  name: string;
   /** `Category` attribute (Bipropellant/Hypergolic/Monopropellant/Solid/Thermal). */
-  category: ReactionCategory
-  reactants: ReactionReactant[]
+  category: ReactionCategory;
+  reactants: ReactionReactant[];
 }
 
 /**
@@ -66,59 +66,59 @@ interface ReactionDataBase {
  * custom solid reaction KSA will actually load.
  */
 export interface FixedReactionData extends ReactionDataBase {
-  kind: 'Fixed'
-  lut: CombustionLut
+  kind: 'Fixed';
+  lut: CombustionLut;
   /** `<BurnRate CoefficientMPerS Exponent>` — Vieille's law `r = a·p^n`. */
-  burnRate: BurnRateLaw | null
+  burnRate: BurnRateLaw | null;
   /** `<MinimumBurnPressure>` deflagration limit, Pa. */
-  minimumBurnPressurePa: number | null
+  minimumBurnPressurePa: number | null;
   /** `<MaxStablePressure>` slope-break limit, Pa — a solid motor's `<DefaultPressure>` ceiling. */
-  maxStablePressurePa: number | null
+  maxStablePressurePa: number | null;
   /** `<ExhaustCondensedFraction Value>` condensed-phase exhaust mass fraction, [0, 1). */
-  exhaustCondensedFraction: number | null
+  exhaustCondensedFraction: number | null;
 }
 
 /** A `<MixtureReaction>` — a 2-D O/F × pressure LUT plus its default ratio. */
 export interface MixtureReactionData extends ReactionDataBase {
-  kind: 'Mixture'
-  mixtureLut: MixtureLut
+  kind: 'Mixture';
+  mixtureLut: MixtureLut;
   /** `<DefaultMixtureRatio>` — REQUIRED by KSA (load throws without it). */
-  defaultMixtureRatio: number
+  defaultMixtureRatio: number;
 }
 
 /** The reaction data file name served under `/ksa/` (sibling of the catalog `*Assets.xml`). */
-export const REACTIONS_FILE = 'Reactions.xml'
+export const REACTIONS_FILE = 'Reactions.xml';
 
 function readAttrNum(el: Element | null | undefined, attr: string): number {
-  const raw = el?.getAttribute(attr)
-  if (raw == null) return Number.NaN
-  const n = Number.parseFloat(raw)
-  return Number.isFinite(n) ? n : Number.NaN
+  const raw = el?.getAttribute(attr);
+  if (raw == null) return Number.NaN;
+  const n = Number.parseFloat(raw);
+  return Number.isFinite(n) ? n : Number.NaN;
 }
 
 /** Sums the set unit attributes of a unit-bearing reference element (NaN-skipped, like KSA). */
 function sumUnits(el: Element | null | undefined, units: Record<string, number>): number {
-  if (!el) return Number.NaN
-  let value = Number.NaN
+  if (!el) return Number.NaN;
+  let value = Number.NaN;
   for (const [attr, scale] of Object.entries(units)) {
-    const n = readAttrNum(el, attr)
-    if (Number.isFinite(n)) value = (Number.isNaN(value) ? 0 : value) + n * scale
+    const n = readAttrNum(el, attr);
+    if (Number.isFinite(n)) value = (Number.isNaN(value) ? 0 : value) + n * scale;
   }
-  return value
+  return value;
 }
 
 /** Reads a numeric element text content (`<DefaultMixtureRatio>2.3</…>`), NaN when absent. */
 function readTextNum(el: Element | null | undefined): number {
-  const raw = el?.textContent?.trim()
-  if (!raw) return Number.NaN
-  const n = Number.parseFloat(raw)
-  return Number.isFinite(n) ? n : Number.NaN
+  const raw = el?.textContent?.trim();
+  if (!raw) return Number.NaN;
+  const n = Number.parseFloat(raw);
+  return Number.isFinite(n) ? n : Number.NaN;
 }
 
 /** Sums a `PressureReference`'s unit attributes into Pa; null when none are set. */
 function readPressurePa(el: Element | null | undefined): number | null {
-  const pa = sumUnits(el, { Pa: 1, KPa: 1e3, MPa: 1e6, MBar: 100, Bar: 1e5, Atm: 101325 })
-  return Number.isFinite(pa) ? pa : null
+  const pa = sumUnits(el, { Pa: 1, KPa: 1e3, MPa: 1e6, MBar: 100, Bar: 1e5, Atm: 101325 });
+  return Number.isFinite(pa) ? pa : null;
 }
 
 const REACTION_CATEGORIES: ReadonlySet<string> = new Set([
@@ -127,12 +127,12 @@ const REACTION_CATEGORIES: ReadonlySet<string> = new Set([
   'Monopropellant',
   'Solid',
   'Thermal',
-])
+]);
 
 /** The `Category` attribute, with the per-flavor fallback `ReactionTemplate.ResolveCategory` applies. */
 function readCategory(el: Element, fallback: ReactionCategory): ReactionCategory {
-  const raw = el.getAttribute('Category')
-  return raw && REACTION_CATEGORIES.has(raw) ? (raw as ReactionCategory) : fallback
+  const raw = el.getAttribute('Category');
+  return raw && REACTION_CATEGORIES.has(raw) ? (raw as ReactionCategory) : fallback;
 }
 
 /** Reactants → normalized mass fractions (ReactionTemplate.CreateReactants). */
@@ -142,34 +142,34 @@ function readReactants(el: Element): ReactionReactant[] {
       phaseId: r.getAttribute('Id') ?? '',
       massShare: readAttrNum(r, 'MassShare'),
     }))
-    .filter((r) => r.phaseId && Number.isFinite(r.massShare) && r.massShare > 0)
-  const totalShare = raw.reduce((s, r) => s + r.massShare, 0)
+    .filter((r) => r.phaseId && Number.isFinite(r.massShare) && r.massShare > 0);
+  const totalShare = raw.reduce((s, r) => s + r.massShare, 0);
   return raw.map((r) => ({
     phaseId: r.phaseId,
     massShare: r.massShare,
     massFraction: totalShare > 0 ? r.massShare / totalShare : 0,
-  }))
+  }));
 }
 
 /** `<PressureCondition>` children → sorted 1-D LUT rows (ReactionTemplate.FillRow units). */
 function readPressureConditions(el: Element): CombustionLutRow[] {
-  const rows: CombustionLutRow[] = []
+  const rows: CombustionLutRow[] = [];
   for (const cond of directChildren(el, 'PressureCondition')) {
-    const lnPressure = readAttrNum(directChildren(cond, 'LnPressure')[0], 'Value')
-    const temperature = sumUnits(directChildren(cond, 'Temperature')[0], { K: 1 })
-    const gamma = readAttrNum(directChildren(cond, 'Gamma')[0], 'Value')
+    const lnPressure = readAttrNum(directChildren(cond, 'LnPressure')[0], 'Value');
+    const temperature = sumUnits(directChildren(cond, 'Temperature')[0], { K: 1 });
+    const gamma = readAttrNum(directChildren(cond, 'Gamma')[0], 'Value');
     // MolarMassReference: GPerMol×0.001 + KgPerMol×1 → kg/mol.
     const molarMassKgPerMol = sumUnits(directChildren(cond, 'MolarMass')[0], {
       GPerMol: 0.001,
       KgPerMol: 1,
-    })
+    });
     if (
       !Number.isFinite(lnPressure) ||
       !Number.isFinite(temperature) ||
       !Number.isFinite(gamma) ||
       !(molarMassKgPerMol > 0)
     ) {
-      continue
+      continue;
     }
     rows.push({
       lnPressure,
@@ -177,12 +177,12 @@ function readPressureConditions(el: Element): CombustionLutRow[] {
       temperature,
       gamma,
       specificGasConstant: UNIVERSAL_GAS_CONSTANT / molarMassKgPerMol,
-    })
+    });
   }
   // KSA sorts + validates the axis at load; sort defensively so a hand-authored
   // reaction can't break the binary search.
-  rows.sort((a, b) => a.lnPressure - b.lnPressure)
-  return rows
+  rows.sort((a, b) => a.lnPressure - b.lnPressure);
+  return rows;
 }
 
 /**
@@ -191,19 +191,19 @@ function readPressureConditions(el: Element): CombustionLutRow[] {
  * burn them — see the module doc).
  */
 export function parseReactionsFile(doc: Document, out: ReactionData[]): void {
-  const root = doc.documentElement
-  if (!root) return
+  const root = doc.documentElement;
+  if (!root) return;
 
   for (const el of directChildren(root, 'FixedReaction')) {
-    const id = el.getAttribute('Id')
-    if (!id) continue
-    const rows = readPressureConditions(el)
-    if (rows.length === 0) continue
+    const id = el.getAttribute('Id');
+    if (!id) continue;
+    const rows = readPressureConditions(el);
+    if (rows.length === 0) continue;
     // Solid-propellant data (mandatory for Category="Solid", absent otherwise).
-    const brEl = directChildren(el, 'BurnRate')[0]
-    const a = readAttrNum(brEl, 'CoefficientMPerS')
-    const n = readAttrNum(brEl, 'Exponent')
-    const condensed = readAttrNum(directChildren(el, 'ExhaustCondensedFraction')[0], 'Value')
+    const brEl = directChildren(el, 'BurnRate')[0];
+    const a = readAttrNum(brEl, 'CoefficientMPerS');
+    const n = readAttrNum(brEl, 'Exponent');
+    const condensed = readAttrNum(directChildren(el, 'ExhaustCondensedFraction')[0], 'Value');
     out.push({
       kind: 'Fixed',
       id,
@@ -216,23 +216,23 @@ export function parseReactionsFile(doc: Document, out: ReactionData[]): void {
       minimumBurnPressurePa: readPressurePa(directChildren(el, 'MinimumBurnPressure')[0]),
       maxStablePressurePa: readPressurePa(directChildren(el, 'MaxStablePressure')[0]),
       exhaustCondensedFraction: Number.isFinite(condensed) ? condensed : null,
-    })
+    });
   }
 
   for (const el of directChildren(root, 'MixtureReaction')) {
-    const id = el.getAttribute('Id')
-    if (!id) continue
-    const defaultMixtureRatio = readTextNum(directChildren(el, 'DefaultMixtureRatio')[0])
+    const id = el.getAttribute('Id');
+    if (!id) continue;
+    const defaultMixtureRatio = readTextNum(directChildren(el, 'DefaultMixtureRatio')[0]);
     // Rows sorted by their O/F ratio (MixtureReactionTemplate.Create sorts, then
     // rejects non-rectangular tables — we drop rows that don't match the first
     // row's pressure-axis length instead of throwing).
     const rowEls = directChildren(el, 'MixtureRatioCondition')
       .map((rowEl) => ({ ratio: readAttrNum(rowEl, 'Value'), rows: readPressureConditions(rowEl) }))
       .filter((r) => Number.isFinite(r.ratio) && r.rows.length > 0)
-      .sort((a, b) => a.ratio - b.ratio)
-    const cols = rowEls[0]?.rows.length ?? 0
-    const rectangular = rowEls.filter((r) => r.rows.length === cols)
-    if (rectangular.length === 0 || !Number.isFinite(defaultMixtureRatio)) continue
+      .sort((a, b) => a.ratio - b.ratio);
+    const cols = rowEls[0]?.rows.length ?? 0;
+    const rectangular = rowEls.filter((r) => r.rows.length === cols);
+    if (rectangular.length === 0 || !Number.isFinite(defaultMixtureRatio)) continue;
     out.push({
       kind: 'Mixture',
       id,
@@ -244,7 +244,7 @@ export function parseReactionsFile(doc: Document, out: ReactionData[]): void {
         slices: rectangular.map((r) => ({ rows: r.rows })),
       },
       defaultMixtureRatio,
-    })
+    });
   }
 }
 
@@ -254,23 +254,23 @@ export function parseReactionsFile(doc: Document, out: ReactionData[]): void {
  * asset tree falls back to "no live physics preview", still able to author engines.
  */
 export async function loadReactionCatalog(): Promise<ReactionData[]> {
-  const r = await fetchXmlFile(REACTIONS_FILE)
+  const r = await fetchXmlFile(REACTIONS_FILE);
   if (r.kind !== 'ok') {
     if (r.kind === 'missing') {
-      console.info(`flexo reaction catalog: ${REACTIONS_FILE} not served — live physics disabled`)
+      console.info(`flexo reaction catalog: ${REACTIONS_FILE} not served — live physics disabled`);
     }
-    return []
+    return [];
   }
-  const out: ReactionData[] = []
-  parseReactionsFile(r.doc, out)
-  out.sort((a, b) => a.id.localeCompare(b.id))
-  console.info(`flexo reaction catalog: ${out.length} reactions loaded`)
-  return out
+  const out: ReactionData[] = [];
+  parseReactionsFile(r.doc, out);
+  out.sort((a, b) => a.id.localeCompare(b.id));
+  console.info(`flexo reaction catalog: ${out.length} reactions loaded`);
+  return out;
 }
 
 /** Builds an id→reaction index for O(1) lookups by `<Reaction Id>`. */
 export function indexReactionCatalog(entries: ReactionData[]): Map<string, ReactionData> {
-  return new Map(entries.map((e) => [e.id, e]))
+  return new Map(entries.map((e) => [e.id, e]));
 }
 
 /**
@@ -283,9 +283,9 @@ export function resolveReactionLut(
   reaction: ReactionData,
   mixtureRatio: number | null,
 ): CombustionLut | null {
-  if (reaction.kind === 'Fixed') return reaction.lut
-  if (mixtureRatio == null || !Number.isFinite(mixtureRatio)) return null
-  return sliceLutAtMixtureRatio(reaction.mixtureLut, mixtureRatio)
+  if (reaction.kind === 'Fixed') return reaction.lut;
+  if (mixtureRatio == null || !Number.isFinite(mixtureRatio)) return null;
+  return sliceLutAtMixtureRatio(reaction.mixtureLut, mixtureRatio);
 }
 
 /**
@@ -296,13 +296,13 @@ export function resolveReactionLut(
  * lnPressure. Rows with non-finite/invalid values are dropped.
  */
 export function customToReactionData(custom: CustomReaction): FixedReactionData {
-  const valid = custom.reactants.filter((r) => r.phaseId && r.massShare > 0)
-  const total = valid.reduce((s, r) => s + r.massShare, 0)
+  const valid = custom.reactants.filter((r) => r.phaseId && r.massShare > 0);
+  const total = valid.reduce((s, r) => s + r.massShare, 0);
   const reactants: ReactionReactant[] = valid.map((r) => ({
     phaseId: r.phaseId,
     massShare: r.massShare,
     massFraction: total > 0 ? r.massShare / total : 0,
-  }))
+  }));
   const rows: CombustionLutRow[] = custom.lut
     .filter(
       (r) =>
@@ -318,7 +318,7 @@ export function customToReactionData(custom: CustomReaction): FixedReactionData 
       gamma: r.gamma,
       specificGasConstant: UNIVERSAL_GAS_CONSTANT / (r.molarMassGPerMol * 0.001),
     }))
-    .sort((a, b) => a.lnPressure - b.lnPressure)
+    .sort((a, b) => a.lnPressure - b.lnPressure);
   return {
     kind: 'Fixed',
     id: custom.id,
@@ -330,7 +330,7 @@ export function customToReactionData(custom: CustomReaction): FixedReactionData 
     minimumBurnPressurePa: custom.minimumBurnPressurePa,
     maxStablePressurePa: custom.maxStablePressurePa,
     exhaustCondensedFraction: custom.exhaustCondensedFraction,
-  }
+  };
 }
 
 /**
@@ -348,17 +348,17 @@ export function reactionDataToCustom(
   const lutSource =
     data.kind === 'Fixed'
       ? data.lut
-      : sliceLutAtMixtureRatio(data.mixtureLut, data.defaultMixtureRatio)
+      : sliceLutAtMixtureRatio(data.mixtureLut, data.defaultMixtureRatio);
   const reactants: ReactionReactantSpec[] = data.reactants.map((r) => ({
     phaseId: r.phaseId,
     massShare: r.massShare,
-  }))
+  }));
   const lut: ReactionLutRowSpec[] = lutSource.rows.map((row) => ({
     lnPressure: row.lnPressure,
     temperatureK: row.temperature,
     gamma: row.gamma,
     molarMassGPerMol: (UNIVERSAL_GAS_CONSTANT / row.specificGasConstant) * 1000,
-  }))
+  }));
   return {
     id: newId,
     name: newName || newId,
@@ -372,12 +372,12 @@ export function reactionDataToCustom(
     minimumBurnPressurePa: data.kind === 'Fixed' ? data.minimumBurnPressurePa : null,
     maxStablePressurePa: data.kind === 'Fixed' ? data.maxStablePressurePa : null,
     exhaustCondensedFraction: data.kind === 'Fixed' ? data.exhaustCondensedFraction : null,
-  }
+  };
 }
 
 /** The O/F row range a mixture reaction's ratio is clamped into; null for fixed reactions. */
 export function mixtureRatioBounds(reaction: ReactionData): { min: number; max: number } | null {
-  if (reaction.kind !== 'Mixture') return null
-  const ratios = reaction.mixtureLut.ratios
-  return { min: ratios[0], max: ratios[ratios.length - 1] }
+  if (reaction.kind !== 'Mixture') return null;
+  const ratios = reaction.mixtureLut.ratios;
+  return { min: ratios[0], max: ratios[ratios.length - 1] };
 }

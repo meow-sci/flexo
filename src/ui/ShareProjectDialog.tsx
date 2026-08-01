@@ -1,10 +1,10 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { Modal, Dialog, DialogHeader, Button, warningBox } from './kit'
-import { $part } from '../state/editorStore'
-import { $projectName } from '../state/projectStore'
-import { hasCustomAssets } from '../state/projectTransfer'
-import { createShareLink } from '../state/projectShareLink'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { Modal, Dialog, DialogHeader, Button, warningBox } from './kit';
+import { $part } from '../state/editorStore';
+import { $projectName } from '../state/projectStore';
+import { hasCustomAssets } from '../state/projectTransfer';
+import { createShareLink } from '../state/projectShareLink';
 
 /**
  * "Share Project" dialog — generates a single, stateless deep link that encodes the
@@ -17,51 +17,51 @@ export function ShareProjectDialog({
   isOpen,
   onOpenChange,
 }: {
-  isOpen: boolean
-  onOpenChange: (open: boolean) => void
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const part = useStore($part)
-  const name = useStore($projectName)
-  const blocked = hasCustomAssets(part)
+  const part = useStore($part);
+  const name = useStore($projectName);
+  const blocked = hasCustomAssets(part);
 
-  const [link, setLink] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [link, setLink] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const close = (open: boolean) => {
     if (!open) {
       // Reset so the next open regenerates against the latest project state.
-      setLink(null)
-      setError(null)
-      setCopied(false)
+      setLink(null);
+      setError(null);
+      setCopied(false);
     }
-    onOpenChange(open)
-  }
+    onOpenChange(open);
+  };
 
   const generate = async () => {
-    setBusy(true)
-    setError(null)
-    setCopied(false)
+    setBusy(true);
+    setError(null);
+    setCopied(false);
     try {
-      setLink(await createShareLink(part, name))
+      setLink(await createShareLink(part, name));
     } catch (err) {
-      setError(`Could not build link: ${(err as Error).message}`)
+      setError(`Could not build link: ${(err as Error).message}`);
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   const copy = async () => {
-    if (!link) return
+    if (!link) return;
     try {
-      await navigator.clipboard.writeText(link)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
     } catch (err) {
-      console.warn('clipboard write failed', err)
+      console.warn('clipboard write failed', err);
     }
-  }
+  };
 
   return (
     <Modal
@@ -129,5 +129,5 @@ export function ShareProjectDialog({
         </div>
       </Dialog>
     </Modal>
-  )
+  );
 }

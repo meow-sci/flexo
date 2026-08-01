@@ -1,4 +1,4 @@
-import * as THREE from 'three'
+import * as THREE from 'three';
 import type {
   BoxParams,
   CylinderParams,
@@ -7,7 +7,7 @@ import type {
   PrimitiveKind,
   PrimitiveSpec,
   SphereParams,
-} from '../ksa/types'
+} from '../ksa/types';
 
 /**
  * Parametric primitive shapes for user-created custom meshes. Each builder returns
@@ -24,27 +24,27 @@ import type {
  */
 
 export const DEFAULT_PRIMITIVE_PARAMS: {
-  box: BoxParams
-  cylinder: CylinderParams
-  sphere: SphereParams
-  plane: PlaneParams
+  box: BoxParams;
+  cylinder: CylinderParams;
+  sphere: SphereParams;
+  plane: PlaneParams;
 } = {
   box: { width: 1, height: 1, depth: 1 },
   cylinder: { radius: 0.5, height: 1, radialSegments: 32 },
   sphere: { radius: 0.5, segments: 32 },
   plane: { width: 1, height: 1 },
-}
+};
 
 export function defaultSpec(kind: PrimitiveKind): PrimitiveSpec {
   switch (kind) {
     case 'box':
-      return { kind, params: { ...DEFAULT_PRIMITIVE_PARAMS.box } }
+      return { kind, params: { ...DEFAULT_PRIMITIVE_PARAMS.box } };
     case 'cylinder':
-      return { kind, params: { ...DEFAULT_PRIMITIVE_PARAMS.cylinder } }
+      return { kind, params: { ...DEFAULT_PRIMITIVE_PARAMS.cylinder } };
     case 'sphere':
-      return { kind, params: { ...DEFAULT_PRIMITIVE_PARAMS.sphere } }
+      return { kind, params: { ...DEFAULT_PRIMITIVE_PARAMS.sphere } };
     case 'plane':
-      return { kind, params: { ...DEFAULT_PRIMITIVE_PARAMS.plane } }
+      return { kind, params: { ...DEFAULT_PRIMITIVE_PARAMS.plane } };
   }
 }
 
@@ -56,21 +56,21 @@ export function defaultSpec(kind: PrimitiveKind): PrimitiveSpec {
 export function buildPrimitiveGeometry(spec: PrimitiveSpec): THREE.BufferGeometry {
   switch (spec.kind) {
     case 'box': {
-      const { width, height, depth } = spec.params
-      return new THREE.BoxGeometry(width, height, depth)
+      const { width, height, depth } = spec.params;
+      return new THREE.BoxGeometry(width, height, depth);
     }
     case 'cylinder': {
-      const { radius, height, radialSegments } = spec.params
-      return new THREE.CylinderGeometry(radius, radius, height, Math.max(3, radialSegments))
+      const { radius, height, radialSegments } = spec.params;
+      return new THREE.CylinderGeometry(radius, radius, height, Math.max(3, radialSegments));
     }
     case 'sphere': {
-      const { radius, segments } = spec.params
-      const s = Math.max(3, segments)
-      return new THREE.SphereGeometry(radius, s * 2, s)
+      const { radius, segments } = spec.params;
+      const s = Math.max(3, segments);
+      return new THREE.SphereGeometry(radius, s * 2, s);
     }
     case 'plane': {
-      const { width, height } = spec.params
-      return new THREE.PlaneGeometry(width, height)
+      const { width, height } = spec.params;
+      return new THREE.PlaneGeometry(width, height);
     }
   }
 }
@@ -81,9 +81,9 @@ export const PRIMITIVE_LABELS: Record<PrimitiveKind, string> = {
   cylinder: 'Cylinder',
   sphere: 'Sphere',
   plane: 'Plane',
-}
+};
 
-export const PRIMITIVE_KINDS: readonly PrimitiveKind[] = ['box', 'cylinder', 'sphere', 'plane']
+export const PRIMITIVE_KINDS: readonly PrimitiveKind[] = ['box', 'cylinder', 'sphere', 'plane'];
 
 /**
  * Ordered face-group key names for each primitive kind. The order matches
@@ -98,7 +98,7 @@ export const PRIMITIVE_FACE_KEYS: Record<PrimitiveKind, readonly string[]> = {
   cylinder: ['side', 'top', 'bottom'],
   sphere: ['all'],
   plane: ['all'],
-}
+};
 
 /** Long label for each face key (e.g. "Right (+X)" for 'right'). */
 export const FACE_LABELS: Record<string, string> = {
@@ -110,7 +110,7 @@ export const FACE_LABELS: Record<string, string> = {
   back: 'Back (−Z)',
   side: 'Side',
   all: 'All Faces',
-}
+};
 
 /**
  * Applies per-face UV scale + offset transforms to a BufferGeometry's UV attribute
@@ -128,46 +128,46 @@ export function applyFaceUvTransforms(
   faceKeys: readonly string[],
   configs: Partial<Record<string, FaceTextureConfig>>,
 ): void {
-  const uvAttr = geometry.getAttribute('uv') as THREE.BufferAttribute | undefined
-  if (!uvAttr) return
+  const uvAttr = geometry.getAttribute('uv') as THREE.BufferAttribute | undefined;
+  if (!uvAttr) return;
 
   if (geometry.groups.length === 0) {
-    const cfg = configs['all']
-    if (!cfg) return
-    const { x: sx, y: sy } = cfg.uvScale
-    const { x: ox, y: oy } = cfg.uvOffset
-    if (sx === 1 && sy === 1 && ox === 0 && oy === 0) return
+    const cfg = configs['all'];
+    if (!cfg) return;
+    const { x: sx, y: sy } = cfg.uvScale;
+    const { x: ox, y: oy } = cfg.uvOffset;
+    if (sx === 1 && sy === 1 && ox === 0 && oy === 0) return;
     for (let i = 0; i < uvAttr.count; i++) {
-      uvAttr.setXY(i, uvAttr.getX(i) * sx + ox, uvAttr.getY(i) * sy + oy)
+      uvAttr.setXY(i, uvAttr.getX(i) * sx + ox, uvAttr.getY(i) * sy + oy);
     }
-    uvAttr.needsUpdate = true
-    return
+    uvAttr.needsUpdate = true;
+    return;
   }
 
-  const idx = geometry.index
+  const idx = geometry.index;
   for (const group of geometry.groups) {
-    const key = group.materialIndex != null ? faceKeys[group.materialIndex] : undefined
-    if (!key) continue
-    const cfg = configs[key]
-    if (!cfg) continue
-    const { x: sx, y: sy } = cfg.uvScale
-    const { x: ox, y: oy } = cfg.uvOffset
-    if (sx === 1 && sy === 1 && ox === 0 && oy === 0) continue
+    const key = group.materialIndex != null ? faceKeys[group.materialIndex] : undefined;
+    if (!key) continue;
+    const cfg = configs[key];
+    if (!cfg) continue;
+    const { x: sx, y: sy } = cfg.uvScale;
+    const { x: ox, y: oy } = cfg.uvOffset;
+    if (sx === 1 && sy === 1 && ox === 0 && oy === 0) continue;
 
-    const end = group.start + group.count
+    const end = group.start + group.count;
     if (idx) {
-      const visited = new Set<number>()
+      const visited = new Set<number>();
       for (let i = group.start; i < end; i++) {
-        const vi = idx.getX(i)
-        if (visited.has(vi)) continue
-        visited.add(vi)
-        uvAttr.setXY(vi, uvAttr.getX(vi) * sx + ox, uvAttr.getY(vi) * sy + oy)
+        const vi = idx.getX(i);
+        if (visited.has(vi)) continue;
+        visited.add(vi);
+        uvAttr.setXY(vi, uvAttr.getX(vi) * sx + ox, uvAttr.getY(vi) * sy + oy);
       }
     } else {
       for (let i = group.start; i < end; i++) {
-        uvAttr.setXY(i, uvAttr.getX(i) * sx + ox, uvAttr.getY(i) * sy + oy)
+        uvAttr.setXY(i, uvAttr.getX(i) * sx + ox, uvAttr.getY(i) * sy + oy);
       }
     }
-    uvAttr.needsUpdate = true
+    uvAttr.needsUpdate = true;
   }
 }

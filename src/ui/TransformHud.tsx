@@ -1,6 +1,6 @@
-import { useStore } from '@nanostores/react'
-import { MoveDiagonal2, MoveHorizontal, MoveVertical, type LucideIcon } from 'lucide-react'
-import { Button, Tooltip, useIsPhone } from './kit'
+import { useStore } from '@nanostores/react';
+import { MoveDiagonal2, MoveHorizontal, MoveVertical, type LucideIcon } from 'lucide-react';
+import { Button, Tooltip, useIsPhone } from './kit';
 import {
   $nudgeAxis,
   $nudgeStep,
@@ -9,19 +9,19 @@ import {
   rotatePairAxis,
   ROTATE_PAIRS,
   type NudgeAxis,
-} from '../state/editorStore'
-import { FAST_NUDGE_MULTIPLIER } from '../three/nudgeSelection'
-import { changeNudgeAxis, formatNudgeStep } from './nudgeControls'
-import { changeRotateAxes } from './rotateControls'
-import { Kbd } from './hotkeys/Kbd'
-import { keyLabel } from './hotkeys/keyDisplay'
+} from '../state/editorStore';
+import { FAST_NUDGE_MULTIPLIER } from '../three/nudgeSelection';
+import { changeNudgeAxis, formatNudgeStep } from './nudgeControls';
+import { changeRotateAxes } from './rotateControls';
+import { Kbd } from './hotkeys/Kbd';
+import { keyLabel } from './hotkeys/keyDisplay';
 
 /** Arrow colour per axis, matching the three.js gizmo axis handles. */
 const AXIS_COLOR: Record<NudgeAxis, string> = {
   x: '#ff0000', // gizmo X — red
   y: '#00ff00', // gizmo Y — green
   z: '#0000ff', // gizmo Z — blue
-}
+};
 
 /**
  * Double-headed arrow per axis, oriented to the default camera view: X reads
@@ -32,12 +32,12 @@ const AXIS_ICON: Record<NudgeAxis, LucideIcon> = {
   x: MoveHorizontal,
   y: MoveVertical,
   z: MoveDiagonal2,
-}
+};
 
 /** A small colored double-headed arrow for `axis`. */
 function AxisArrow({ axis, size = 13 }: { axis: NudgeAxis; size?: number }) {
-  const Icon = AXIS_ICON[axis]
-  return <Icon size={size} style={{ color: AXIS_COLOR[axis] }} aria-hidden />
+  const Icon = AXIS_ICON[axis];
+  return <Icon size={size} style={{ color: AXIS_COLOR[axis] }} aria-hidden />;
 }
 
 /**
@@ -49,14 +49,14 @@ function AxisArrow({ axis, size = 13 }: { axis: NudgeAxis; size?: number }) {
  * distance; click (or ←/→) to cycle the axis. Keyboard-only, so hidden on phones.
  */
 export function TransformHud() {
-  const isPhone = useIsPhone()
-  const nudgeAxis = useStore($nudgeAxis)
-  const nudgeStep = useStore($nudgeStep)
-  const rotateStep = useStore($rotateStep)
+  const isPhone = useIsPhone();
+  const nudgeAxis = useStore($nudgeAxis);
+  const nudgeStep = useStore($nudgeStep);
+  const rotateStep = useStore($rotateStep);
   // Subscribe so the rotate arrows re-render when R cycles the axis mapping.
-  useStore($rotateAxisOffset)
+  useStore($rotateAxisOffset);
 
-  if (isPhone) return null
+  if (isPhone) return null;
 
   return (
     <div className="absolute inset-x-0 bottom-2 flex justify-center">
@@ -105,7 +105,7 @@ export function TransformHud() {
         </Tooltip>
       </div>
     </div>
-  )
+  );
 }
 
 /** Tooltip rows for the rotate cluster (left side of the HUD). */
@@ -123,7 +123,7 @@ function RotateHint() {
       <HintRow chords={[['R']]} label="Cycle rotation axes" />
       <HintRow chords={[['F'], ['shift', 'F']]} label="Rotation step (larger · smaller)" />
     </div>
-  )
+  );
 }
 
 /** Tooltip rows for the nudge cluster (right side of the HUD). */
@@ -147,7 +147,7 @@ function NudgeHint() {
         label="Change nudge step"
       />
     </div>
-  )
+  );
 }
 
 function HintRow({ chords, label, sep }: { chords: string[][]; label: string; sep?: string }) {
@@ -165,5 +165,5 @@ function HintRow({ chords, label, sep }: { chords: string[][]; label: string; se
       </span>
       <span>{label}</span>
     </span>
-  )
+  );
 }

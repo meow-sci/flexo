@@ -1,4 +1,4 @@
-import { atom } from 'nanostores'
+import { atom } from 'nanostores';
 
 /**
  * Ephemeral open/closed state for the keyboard-shortcuts help overlay. Lives in a
@@ -6,16 +6,16 @@ import { atom } from 'nanostores'
  * places — the global `?` hotkey, the Settings dialog, the mobile overflow menu —
  * without threading props or lifting state. Not persisted.
  */
-export const $helpOpen = atom(false)
+export const $helpOpen = atom(false);
 
 export function openHelp(): void {
-  $helpOpen.set(true)
+  $helpOpen.set(true);
 }
 
 export function closeHelp(): void {
-  $helpOpen.set(false)
+  $helpOpen.set(false);
 }
 
 export function toggleHelp(): void {
-  $helpOpen.set(!$helpOpen.get())
+  $helpOpen.set(!$helpOpen.get());
 }

@@ -1,6 +1,6 @@
-import { useStore } from '@nanostores/react'
-import { Play, Square } from 'lucide-react'
-import { Button, Slider, cn } from './kit'
+import { useStore } from '@nanostores/react';
+import { Play, Square } from 'lucide-react';
+import { Button, Slider, cn } from './kit';
 import {
   $animPreviewU,
   $animScrubbing,
@@ -9,8 +9,8 @@ import {
   playAnimationPreview,
   stopAnimationPreview,
   cancelPlayback,
-} from '../state/animationStore'
-import type { PartAnimation } from '../ksa/types'
+} from '../state/animationStore';
+import type { PartAnimation } from '../ksa/types';
 
 /**
  * The animation preview control: a spring-loaded scrub slider plus a play button. Shared
@@ -20,8 +20,8 @@ import type { PartAnimation } from '../ksa/types'
  * back to the modeled rest pose. Play runs the clip once at real speed then resets.
  */
 export function PreviewScrubber({ anim, className }: { anim: PartAnimation; className?: string }) {
-  const previewU = useStore($animPreviewU)
-  const playing = useStore($animPlaying)
+  const previewU = useStore($animPreviewU);
+  const playing = useStore($animPlaying);
 
   return (
     <div className={cn('flex flex-1 items-center gap-2', className)}>
@@ -34,16 +34,16 @@ export function PreviewScrubber({ anim, className }: { anim: PartAnimation; clas
         step={0.01}
         onChange={(v) => {
           // Grabbing the slider mid-play takes over scrubbing (stop auto-advance, keep pose).
-          if ($animPlaying.get()) cancelPlayback()
-          if (!$animScrubbing.get()) $animScrubbing.set(true)
-          $editKeyframeId.set(null)
-          $animPreviewU.set(typeof v === 'number' ? v : v[0])
+          if ($animPlaying.get()) cancelPlayback();
+          if (!$animScrubbing.get()) $animScrubbing.set(true);
+          $editKeyframeId.set(null);
+          $animPreviewU.set(typeof v === 'number' ? v : v[0]);
         }}
         onChangeEnd={() => {
           // Release → back to the modeled (static) pose; reset so the next grab starts at
           // the rest end (u=0) of the timeline.
-          $animScrubbing.set(false)
-          $animPreviewU.set(0)
+          $animScrubbing.set(false);
+          $animPreviewU.set(0);
         }}
       />
       <Button
@@ -56,5 +56,5 @@ export function PreviewScrubber({ anim, className }: { anim: PartAnimation; clas
         {playing ? <Square size={13} /> : <Play size={13} />}
       </Button>
     </div>
-  )
+  );
 }

@@ -1,5 +1,5 @@
-import * as THREE from 'three'
-import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
+import * as THREE from 'three';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
 
 /**
  * Exports custom primitive geometry as a single binary GLB "mesh atlas", mirroring
@@ -59,19 +59,19 @@ import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js'
  */
 
 /** Suffix KSA's Core content uses for view (picking) meshes; see file header. */
-export const VIEW_MESH_SUFFIX = '_VM'
+export const VIEW_MESH_SUFFIX = '_VM';
 
 export interface MeshAtlasNode {
   /** Node + mesh name == the SubPart Mesh Id, e.g. "MyMod_Subpart_Panel". */
-  name: string
-  geometry: THREE.BufferGeometry
+  name: string;
+  geometry: THREE.BufferGeometry;
 }
 
 /**
  * three.js attribute names that survive into the atlas, i.e. the ones KSA's mesh loader
  * actually imports (POSITION / NORMAL / TEXCOORD_0). See the GEOMETRY block in the header.
  */
-const KSA_READ_ATTRIBUTES = new Set(['position', 'normal', 'uv'])
+const KSA_READ_ATTRIBUTES = new Set(['position', 'normal', 'uv']);
 
 /**
  * Returns a NEW geometry that satisfies KSA's mesh loader: indexed, and carrying only the
@@ -79,19 +79,19 @@ const KSA_READ_ATTRIBUTES = new Set(['position', 'normal', 'uv'])
  * editor's caches. See the GEOMETRY block in the file header for why each step is required.
  */
 function toKsaGeometry(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
-  const out = geometry.clone()
+  const out = geometry.clone();
   for (const name of Object.keys(out.attributes)) {
-    if (!KSA_READ_ATTRIBUTES.has(name)) out.deleteAttribute(name)
+    if (!KSA_READ_ATTRIBUTES.has(name)) out.deleteAttribute(name);
   }
   if (!out.getIndex()) {
     // De-indexed input (MikkTSpace tangents, geometry.toNonIndexed(), some DCC exports):
     // rebuild the trivial 0..count-1 index so GLTFExporter emits an `indices` accessor.
-    const count = out.getAttribute('position')?.count ?? 0
-    const index = count > 65536 ? new Uint32Array(count) : new Uint16Array(count)
-    for (let i = 0; i < count; i++) index[i] = i
-    out.setIndex(new THREE.BufferAttribute(index, 1))
+    const count = out.getAttribute('position')?.count ?? 0;
+    const index = count > 65536 ? new Uint32Array(count) : new Uint16Array(count);
+    for (let i = 0; i < count; i++) index[i] = i;
+    out.setIndex(new THREE.BufferAttribute(index, 1));
   }
-  return out
+  return out;
 }
 
 /**
@@ -101,7 +101,7 @@ function toKsaGeometry(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
  * stop early and ship a mesh that still costs the full per-hover raycast. Picking tolerance is
  * the only thing at stake: the _VM mesh is never rendered.
  */
-const VIEW_MESH_TARGET_ERROR = 0.05
+const VIEW_MESH_TARGET_ERROR = 0.05;
 
 /**
  * Decimates a view mesh IN PLACE to at most `budget` triangles, by replacing its index buffer
@@ -115,32 +115,32 @@ const VIEW_MESH_TARGET_ERROR = 0.05
  * warning. A slow hover in-game is a nuisance; a failed export is not acceptable.
  */
 async function decimateViewGeometry(geometry: THREE.BufferGeometry, budget: number): Promise<void> {
-  const index = geometry.getIndex()
-  const position = geometry.getAttribute('position')
-  if (!index || !position) return
-  const target = budget * 3
-  if (index.count <= target) return // already within budget
+  const index = geometry.getIndex();
+  const position = geometry.getAttribute('position');
+  if (!index || !position) return;
+  const target = budget * 3;
+  if (index.count <= target) return; // already within budget
   if (position.itemSize !== 3 || 'isInterleavedBufferAttribute' in position) {
-    console.warn('flexo export: view mesh kept full-resolution (unexpected position layout)')
-    return
+    console.warn('flexo export: view mesh kept full-resolution (unexpected position layout)');
+    return;
   }
   try {
-    const { MeshoptSimplifier } = await import('three/addons/libs/meshopt_simplifier.module.js')
-    await MeshoptSimplifier.ready
+    const { MeshoptSimplifier } = await import('three/addons/libs/meshopt_simplifier.module.js');
+    await MeshoptSimplifier.ready;
     const positions =
       position.array instanceof Float32Array
         ? position.array
-        : new Float32Array(position.array as ArrayLike<number>)
+        : new Float32Array(position.array as ArrayLike<number>);
     // meshopt accepts 16/32-bit index arrays; normalize so a ubyte/ushort source can't trip it.
-    const indices = new Uint32Array(index.array as ArrayLike<number>)
+    const indices = new Uint32Array(index.array as ArrayLike<number>);
     const [simplified] = MeshoptSimplifier.simplify(
       indices,
       positions,
       3,
       target,
       VIEW_MESH_TARGET_ERROR,
-    )
-    if (simplified.length === 0 || simplified.length >= indices.length) return // no win
+    );
+    if (simplified.length === 0 || simplified.length >= indices.length) return; // no win
     // Unused vertices stay in the buffers (meshopt returns indices into the ORIGINAL arrays).
     // That costs a few bytes in the shipped GLB; what it saves is the per-hover CPU loop and
     // the double3-per-index PositionsCompare allocation, which is the whole point.
@@ -149,9 +149,9 @@ async function decimateViewGeometry(geometry: THREE.BufferGeometry, budget: numb
         position.count > 65535 ? simplified : new Uint16Array(simplified),
         1,
       ),
-    )
+    );
   } catch (err) {
-    console.warn('flexo export: view mesh decimation unavailable — shipping full resolution', err)
+    console.warn('flexo export: view mesh decimation unavailable — shipping full resolution', err);
   }
 }
 
@@ -165,32 +165,32 @@ export interface MeshAtlasOptions {
    * generated from the same geometry at export time (and may be decimated there), so
    * carrying them in the import atlas would double its size for nothing.
    */
-  viewMeshes?: boolean
+  viewMeshes?: boolean;
   /**
    * Max triangles in an emitted `<id>_VM` view mesh; anything above it is simplified down
    * (render meshes are never touched). Undefined ⇒ never decimate. See VIEW-MESH COST in the
    * file header for why this matters in-game; `buildCustomBundle` sets the shipped default.
    */
-  viewMeshBudget?: number
+  viewMeshBudget?: number;
 }
 
 export async function buildMeshAtlasGlb(
   nodes: MeshAtlasNode[],
   { viewMeshes = true, viewMeshBudget }: MeshAtlasOptions = {},
 ): Promise<Uint8Array> {
-  if (nodes.length === 0) throw new Error('buildMeshAtlasGlb: no nodes to export')
+  if (nodes.length === 0) throw new Error('buildMeshAtlasGlb: no nodes to export');
 
-  const scene = new THREE.Scene()
+  const scene = new THREE.Scene();
   // A single shared placeholder material — KSA ignores GLB materials and applies
   // the XML PbrMaterial, but GLTFExporter requires meshes to have one.
-  const placeholder = new THREE.MeshStandardMaterial()
-  const temporaries: THREE.BufferGeometry[] = []
+  const placeholder = new THREE.MeshStandardMaterial();
+  const temporaries: THREE.BufferGeometry[] = [];
   for (const node of nodes) {
-    const geometry = toKsaGeometry(node.geometry)
-    temporaries.push(geometry)
-    const mesh = new THREE.Mesh(geometry, placeholder)
-    mesh.name = node.name // → glTF node name (what flexo's MeshAtlasCache resolves)
-    scene.add(mesh)
+    const geometry = toKsaGeometry(node.geometry);
+    temporaries.push(geometry);
+    const mesh = new THREE.Mesh(geometry, placeholder);
+    mesh.name = node.name; // → glTF node name (what flexo's MeshAtlasCache resolves)
+    scene.add(mesh);
     // Paired view (picking) mesh so the in-game editor can hover/select the part.
     // Same shape — flexo primitives are low-poly, so a simplified picking mesh buys
     // nothing. The geometry must be a distinct instance (not the render geometry):
@@ -198,28 +198,28 @@ export async function buildMeshAtlasGlb(
     // would collapse the render and view meshes and leave KSA only one registered name.
     // Referenced from <MeshView> in the Assets XML. See file header.
     if (viewMeshes) {
-      const viewGeometry = toKsaGeometry(node.geometry)
-      temporaries.push(viewGeometry)
+      const viewGeometry = toKsaGeometry(node.geometry);
+      temporaries.push(viewGeometry);
       // Heavy (imported) geometry gets a decimated picking hull — see VIEW-MESH COST above.
-      if (viewMeshBudget != null) await decimateViewGeometry(viewGeometry, viewMeshBudget)
-      const viewMesh = new THREE.Mesh(viewGeometry, placeholder)
-      viewMesh.name = node.name + VIEW_MESH_SUFFIX
-      scene.add(viewMesh)
+      if (viewMeshBudget != null) await decimateViewGeometry(viewGeometry, viewMeshBudget);
+      const viewMesh = new THREE.Mesh(viewGeometry, placeholder);
+      viewMesh.name = node.name + VIEW_MESH_SUFFIX;
+      scene.add(viewMesh);
     }
   }
 
-  const exporter = new GLTFExporter()
-  const result = await exporter.parseAsync(scene, { binary: true, onlyVisible: false })
-  placeholder.dispose()
-  for (const g of temporaries) g.dispose()
+  const exporter = new GLTFExporter();
+  const result = await exporter.parseAsync(scene, { binary: true, onlyVisible: false });
+  placeholder.dispose();
+  for (const g of temporaries) g.dispose();
   if (!(result instanceof ArrayBuffer)) {
-    throw new Error('buildMeshAtlasGlb: expected binary GLB output')
+    throw new Error('buildMeshAtlasGlb: expected binary GLB output');
   }
-  return nameMeshesFromNodes(new Uint8Array(result))
+  return nameMeshesFromNodes(new Uint8Array(result));
 }
 
-const GLB_MAGIC = 0x46546c67
-const CHUNK_JSON = 0x4e4f534a
+const GLB_MAGIC = 0x46546c67;
+const CHUNK_JSON = 0x4e4f534a;
 
 /**
  * Rewrites a binary GLB so each glTF mesh carries the name of the node that
@@ -228,45 +228,45 @@ const CHUNK_JSON = 0x4e4f534a
  * padding and updated lengths.
  */
 function nameMeshesFromNodes(glb: Uint8Array): Uint8Array {
-  const dv = new DataView(glb.buffer, glb.byteOffset, glb.byteLength)
-  if (dv.getUint32(0, true) !== GLB_MAGIC) throw new Error('nameMeshesFromNodes: not a GLB')
-  const totalLength = dv.getUint32(8, true)
+  const dv = new DataView(glb.buffer, glb.byteOffset, glb.byteLength);
+  if (dv.getUint32(0, true) !== GLB_MAGIC) throw new Error('nameMeshesFromNodes: not a GLB');
+  const totalLength = dv.getUint32(8, true);
 
   // First chunk must be JSON.
-  const jsonLen = dv.getUint32(12, true)
+  const jsonLen = dv.getUint32(12, true);
   if (dv.getUint32(16, true) !== CHUNK_JSON)
-    throw new Error('nameMeshesFromNodes: first chunk is not JSON')
-  const jsonStart = 20
-  const json = JSON.parse(new TextDecoder().decode(glb.subarray(jsonStart, jsonStart + jsonLen)))
+    throw new Error('nameMeshesFromNodes: first chunk is not JSON');
+  const jsonStart = 20;
+  const json = JSON.parse(new TextDecoder().decode(glb.subarray(jsonStart, jsonStart + jsonLen)));
 
   for (const node of json.nodes ?? []) {
     if (typeof node.mesh === 'number' && node.name && json.meshes?.[node.mesh]) {
-      json.meshes[node.mesh].name = node.name
+      json.meshes[node.mesh].name = node.name;
     }
   }
 
   // The binary chunk (if any) follows the JSON chunk.
-  const binChunkStart = jsonStart + jsonLen
-  const binChunk = binChunkStart < totalLength ? glb.subarray(binChunkStart) : new Uint8Array(0)
+  const binChunkStart = jsonStart + jsonLen;
+  const binChunk = binChunkStart < totalLength ? glb.subarray(binChunkStart) : new Uint8Array(0);
 
   // Re-encode JSON, pad to a 4-byte boundary with spaces (per the GLB spec).
-  let jsonBytes = new TextEncoder().encode(JSON.stringify(json))
-  const pad = (4 - (jsonBytes.length % 4)) % 4
+  let jsonBytes = new TextEncoder().encode(JSON.stringify(json));
+  const pad = (4 - (jsonBytes.length % 4)) % 4;
   if (pad) {
-    const padded = new Uint8Array(jsonBytes.length + pad)
-    padded.set(jsonBytes)
-    padded.fill(0x20, jsonBytes.length) // ASCII space
-    jsonBytes = padded
+    const padded = new Uint8Array(jsonBytes.length + pad);
+    padded.set(jsonBytes);
+    padded.fill(0x20, jsonBytes.length); // ASCII space
+    jsonBytes = padded;
   }
 
-  const out = new Uint8Array(12 + 8 + jsonBytes.length + binChunk.length)
-  const odv = new DataView(out.buffer)
-  odv.setUint32(0, GLB_MAGIC, true)
-  odv.setUint32(4, 2, true) // glTF version
-  odv.setUint32(8, out.length, true) // total length
-  odv.setUint32(12, jsonBytes.length, true) // JSON chunk length
-  odv.setUint32(16, CHUNK_JSON, true)
-  out.set(jsonBytes, 20)
-  out.set(binChunk, 20 + jsonBytes.length)
-  return out
+  const out = new Uint8Array(12 + 8 + jsonBytes.length + binChunk.length);
+  const odv = new DataView(out.buffer);
+  odv.setUint32(0, GLB_MAGIC, true);
+  odv.setUint32(4, 2, true); // glTF version
+  odv.setUint32(8, out.length, true); // total length
+  odv.setUint32(12, jsonBytes.length, true); // JSON chunk length
+  odv.setUint32(16, CHUNK_JSON, true);
+  out.set(jsonBytes, 20);
+  out.set(binChunk, 20 + jsonBytes.length);
+  return out;
 }

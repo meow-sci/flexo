@@ -1,12 +1,12 @@
-import type { Keys, Options } from 'react-hotkeys-hook'
-import { copySelected, pasteClipboard, redo, removeSelected, undo } from '../../state/editorStore'
-import { toggleHelp } from '../../state/helpStore'
-import { $seatView, exitSeatView } from '../../state/ivaStore'
-import { rotateSelectionAroundPair } from '../../three/rotateSelection'
-import { FAST_NUDGE_MULTIPLIER, nudgeSelectionBy } from '../../three/nudgeSelection'
-import { changeNudgeAxis, lowerNudgeStep, raiseNudgeStep } from '../nudgeControls'
-import { changeRotateAxes, lowerRotateStep, raiseRotateStep } from '../rotateControls'
-import { toast } from '../kit'
+import type { Keys, Options } from 'react-hotkeys-hook';
+import { copySelected, pasteClipboard, redo, removeSelected, undo } from '../../state/editorStore';
+import { toggleHelp } from '../../state/helpStore';
+import { $seatView, exitSeatView } from '../../state/ivaStore';
+import { rotateSelectionAroundPair } from '../../three/rotateSelection';
+import { FAST_NUDGE_MULTIPLIER, nudgeSelectionBy } from '../../three/nudgeSelection';
+import { changeNudgeAxis, lowerNudgeStep, raiseNudgeStep } from '../nudgeControls';
+import { changeRotateAxes, lowerRotateStep, raiseRotateStep } from '../rotateControls';
+import { toast } from '../kit';
 
 /**
  * The single source of truth for global hotkeys. This registry drives BOTH the
@@ -16,47 +16,47 @@ import { toast } from '../kit'
  */
 
 /** One key chord, as display tokens (resolved to glyphs by {@link keyLabel}). */
-export type KeyChord = string[]
+export type KeyChord = string[];
 
 export interface HotkeyBinding {
-  id: string
+  id: string;
   /** Human-readable description shown in the help table. */
-  label: string
+  label: string;
   /** react-hotkeys-hook key string(s) this binding listens for. */
-  keys: Keys
+  keys: Keys;
   /**
    * The chords shown as <kbd> chips in help. Multiple chords render as alternatives
    * ("A or B"); usually a single chord matching `keys`.
    */
-  chords: KeyChord[]
+  chords: KeyChord[];
   /** Per-binding react-hotkeys-hook options (merged over the shared defaults). */
-  options?: Options
+  options?: Options;
   /** Invoked when the chord fires. Receives the keyboard event (e.g. to tell arrows apart). */
-  run: (event: KeyboardEvent) => void
+  run: (event: KeyboardEvent) => void;
 }
 
 export interface HotkeyGroup {
-  title: string
-  bindings: HotkeyBinding[]
+  title: string;
+  bindings: HotkeyBinding[];
 }
 
 /** Undo/redo wrappers that mirror the toolbar buttons (run the action, toast the label). */
 function runUndo(): void {
-  const d = undo()
-  if (d) toast({ title: `Undo: ${d}` }, { timeout: 1500 })
+  const d = undo();
+  if (d) toast({ title: `Undo: ${d}` }, { timeout: 1500 });
 }
 function runRedo(): void {
-  const d = redo()
-  if (d) toast({ title: `Redo: ${d}` }, { timeout: 1500 })
+  const d = redo();
+  if (d) toast({ title: `Redo: ${d}` }, { timeout: 1500 });
 }
 /** Copy/paste wrappers that toast a count so the action is self-describing. */
 function runCopy(): void {
-  const n = copySelected()
-  if (n) toast({ title: `Copied ${n} ${n === 1 ? 'item' : 'items'}` }, { timeout: 1500 })
+  const n = copySelected();
+  if (n) toast({ title: `Copied ${n} ${n === 1 ? 'item' : 'items'}` }, { timeout: 1500 });
 }
 function runPaste(): void {
-  const n = pasteClipboard()
-  if (n) toast({ title: `Pasted ${n} ${n === 1 ? 'item' : 'items'}` }, { timeout: 1500 })
+  const n = pasteClipboard();
+  if (n) toast({ title: `Pasted ${n} ${n === 1 ? 'item' : 'items'}` }, { timeout: 1500 });
 }
 
 export const HOTKEY_GROUPS: HotkeyGroup[] = [
@@ -202,12 +202,12 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
         // the atom keeps this binding inert unless the seat preview is actually up, so it
         // never eats an Escape meant for something layered above the viewport.
         run: () => {
-          if ($seatView.get() !== null) exitSeatView()
+          if ($seatView.get() !== null) exitSeatView();
         },
       },
     ],
   },
-]
+];
 
 /** Flattened bindings, for the component that wires `useHotkeys` per binding. */
-export const ALL_BINDINGS: HotkeyBinding[] = HOTKEY_GROUPS.flatMap((g) => g.bindings)
+export const ALL_BINDINGS: HotkeyBinding[] = HOTKEY_GROUPS.flatMap((g) => g.bindings);

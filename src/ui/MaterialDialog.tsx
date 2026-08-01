@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
-import { useStore } from '@nanostores/react'
-import * as THREE from 'three'
-import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
+import { useEffect, useRef, useState } from 'react';
+import { useStore } from '@nanostores/react';
+import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import {
   Modal,
   Dialog,
@@ -15,21 +15,21 @@ import {
   ListBoxItem,
   Slider,
   toast,
-} from './kit'
-import { $part } from '../state/editorStore'
+} from './kit';
+import { $part } from '../state/editorStore';
 import {
   $customTextureUrls,
   addCustomMaterial,
   updateCustomMaterial,
-} from '../state/customAssetStore'
+} from '../state/customAssetStore';
 import type {
   BaseColorChannel,
   CustomMaterial,
   RgbColor,
   ScalarChannel,
   TextureChannel,
-} from '../ksa/types'
-import { createDefaultMaterial } from '../ksa/types'
+} from '../ksa/types';
+import { createDefaultMaterial } from '../ksa/types';
 
 /**
  * Create/edit a reusable {@link CustomMaterial}: base color (picked color or an
@@ -47,69 +47,69 @@ export function MaterialDialog({
   onCreated,
 }: {
   /** Edit this material; absent = create a new one. */
-  materialId?: string
-  onClose: () => void
+  materialId?: string;
+  onClose: () => void;
   /** Create mode: invoked with the new material (e.g. to auto-assign it). */
-  onCreated?: (mat: CustomMaterial) => void
+  onCreated?: (mat: CustomMaterial) => void;
 }) {
-  const part = useStore($part)
-  const textureUrls = useStore($customTextureUrls)
-  const existing = materialId ? part.customMaterials.find((m) => m.id === materialId) : undefined
-  const byChannel = (c: TextureChannel) => part.customTextures.filter((t) => t.channel === c)
-  const baseColorTextures = byChannel('baseColor')
-  const normalTextures = byChannel('normal')
-  const occlusionTextures = byChannel('occlusion')
-  const ormTextures = byChannel('orm')
-  const roughnessTextures = byChannel('roughness')
-  const metalnessTextures = byChannel('metalness')
+  const part = useStore($part);
+  const textureUrls = useStore($customTextureUrls);
+  const existing = materialId ? part.customMaterials.find((m) => m.id === materialId) : undefined;
+  const byChannel = (c: TextureChannel) => part.customTextures.filter((t) => t.channel === c);
+  const baseColorTextures = byChannel('baseColor');
+  const normalTextures = byChannel('normal');
+  const occlusionTextures = byChannel('occlusion');
+  const ormTextures = byChannel('orm');
+  const roughnessTextures = byChannel('roughness');
+  const metalnessTextures = byChannel('metalness');
 
-  const seed = existing ?? createDefaultMaterial('', 'Material')
-  const [name, setName] = useState(existing ? existing.name : 'Material')
+  const seed = existing ?? createDefaultMaterial('', 'Material');
+  const [name, setName] = useState(existing ? existing.name : 'Material');
   const [colorHex, setColorHex] = useState(
     seed.baseColor.kind === 'color' ? rgbToHex(seed.baseColor.color) : '#bfc4cc',
-  )
+  );
   const [baseTextureId, setBaseTextureId] = useState(
     seed.baseColor.kind === 'map' ? seed.baseColor.textureId : '',
-  )
-  const [baseMode, setBaseMode] = useState<'color' | 'map'>(seed.baseColor.kind)
-  const [metalness, setMetalness] = useState(scalar(seed.metalness))
-  const [roughness, setRoughness] = useState(scalar(seed.roughness))
-  const [metalMapId, setMetalMapId] = useState(mapId(seed.metalness))
-  const [roughMapId, setRoughMapId] = useState(mapId(seed.roughness))
-  const [occlusionMapId, setOcclusionMapId] = useState(seed.occlusion?.textureId ?? '')
-  const [ormPackedId, setOrmPackedId] = useState(seed.ormPacked?.textureId ?? '')
-  const [normalMapId, setNormalMapId] = useState(seed.normal?.textureId ?? '')
-  const [normalStrength, setNormalStrength] = useState(seed.normal?.strength ?? 1)
-  const [busy, setBusy] = useState(false)
+  );
+  const [baseMode, setBaseMode] = useState<'color' | 'map'>(seed.baseColor.kind);
+  const [metalness, setMetalness] = useState(scalar(seed.metalness));
+  const [roughness, setRoughness] = useState(scalar(seed.roughness));
+  const [metalMapId, setMetalMapId] = useState(mapId(seed.metalness));
+  const [roughMapId, setRoughMapId] = useState(mapId(seed.roughness));
+  const [occlusionMapId, setOcclusionMapId] = useState(seed.occlusion?.textureId ?? '');
+  const [ormPackedId, setOrmPackedId] = useState(seed.ormPacked?.textureId ?? '');
+  const [normalMapId, setNormalMapId] = useState(seed.normal?.textureId ?? '');
+  const [normalStrength, setNormalStrength] = useState(seed.normal?.strength ?? 1);
+  const [busy, setBusy] = useState(false);
 
-  const hasAdvanced = !!(metalMapId || roughMapId || occlusionMapId || ormPackedId || normalMapId)
+  const hasAdvanced = !!(metalMapId || roughMapId || occlusionMapId || ormPackedId || normalMapId);
   const anyAdvancedTextures =
     normalTextures.length > 0 ||
     occlusionTextures.length > 0 ||
     ormTextures.length > 0 ||
     roughnessTextures.length > 0 ||
-    metalnessTextures.length > 0
+    metalnessTextures.length > 0;
 
   const activePreset =
     MATERIAL_PRESETS.find((p) => p.metalness === metalness && p.roughness === roughness)?.id ??
-    'custom'
+    'custom';
 
   const applyPreset = (id: string) => {
-    const p = MATERIAL_PRESETS.find((x) => x.id === id)
-    if (!p) return
-    setMetalness(p.metalness)
-    setRoughness(p.roughness)
-  }
+    const p = MATERIAL_PRESETS.find((x) => x.id === id);
+    if (!p) return;
+    setMetalness(p.metalness);
+    setRoughness(p.roughness);
+  };
 
   const buildChannels = (): Omit<CustomMaterial, 'id' | 'name'> => {
     const baseColor: BaseColorChannel =
       baseMode === 'map' && baseTextureId
         ? { kind: 'map', textureId: baseTextureId }
-        : { kind: 'color', color: hexToRgb(colorHex) }
+        : { kind: 'color', color: hexToRgb(colorHex) };
     // A packed ORM supersedes the separate AO/rough/metal channels.
-    const usePacked = !!ormPackedId
+    const usePacked = !!ormPackedId;
     const scalarOrMap = (map: string, value: number): ScalarChannel =>
-      map && !usePacked ? { kind: 'map', textureId: map } : { kind: 'value', value }
+      map && !usePacked ? { kind: 'map', textureId: map } : { kind: 'value', value };
     return {
       baseColor,
       metalness: scalarOrMap(metalMapId, metalness),
@@ -117,37 +117,38 @@ export function MaterialDialog({
       occlusion: !usePacked && occlusionMapId ? { textureId: occlusionMapId } : undefined,
       ormPacked: usePacked ? { textureId: ormPackedId } : undefined,
       normal: normalMapId ? { textureId: normalMapId, strength: normalStrength } : undefined,
-    }
-  }
+    };
+  };
 
   const submit = async () => {
-    setBusy(true)
+    setBusy(true);
     try {
       if (existing) {
-        await updateCustomMaterial(existing.id, { name, ...buildChannels() })
-        toast({ title: 'Material saved', description: name, variant: 'success' })
+        await updateCustomMaterial(existing.id, { name, ...buildChannels() });
+        toast({ title: 'Material saved', description: name, variant: 'success' });
       } else {
-        const mat = await addCustomMaterial(name, buildChannels())
-        toast({ title: 'Material created', description: name, variant: 'success' })
-        onCreated?.(mat)
+        const mat = await addCustomMaterial(name, buildChannels());
+        toast({ title: 'Material created', description: name, variant: 'success' });
+        onCreated?.(mat);
       }
-      onClose()
+      onClose();
     } catch (err) {
-      console.warn('material save failed', err)
+      console.warn('material save failed', err);
       toast({
         title: 'Save failed',
         description: String((err as Error)?.message ?? err),
         variant: 'danger',
-      })
+      });
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   // Preview textures load from the SOURCE image blob URLs (plain PNG/JPG →
   // THREE.TextureLoader). Normal maps preview through three's standard glTF-convention
   // decode of the original — mathematically what KSA renders from the flipped export.
-  const previewMapUrl = baseMode === 'map' && baseTextureId ? textureUrls[baseTextureId] : undefined
+  const previewMapUrl =
+    baseMode === 'map' && baseTextureId ? textureUrls[baseTextureId] : undefined;
   const preview = {
     colorHex: baseMode === 'color' ? colorHex : undefined,
     mapUrl: previewMapUrl,
@@ -159,7 +160,7 @@ export function MaterialDialog({
     roughMapUrl: !ormPackedId && roughMapId ? textureUrls[roughMapId] : undefined,
     metalMapUrl: !ormPackedId && metalMapId ? textureUrls[metalMapId] : undefined,
     occlusionMapUrl: !ormPackedId && occlusionMapId ? textureUrls[occlusionMapId] : undefined,
-  }
+  };
 
   return (
     <Modal
@@ -191,8 +192,8 @@ export function MaterialDialog({
                 disallowEmptySelection
                 selectedKeys={[baseMode]}
                 onSelectionChange={(keys) => {
-                  const k = [...keys][0] as 'color' | 'map' | undefined
-                  if (k) setBaseMode(k)
+                  const k = [...keys][0] as 'color' | 'map' | undefined;
+                  if (k) setBaseMode(k);
                 }}
               >
                 <ToggleButton id="color" size="sm">
@@ -330,7 +331,7 @@ export function MaterialDialog({
         </div>
       </Dialog>
     </Modal>
-  )
+  );
 }
 
 function ScalarSlider({
@@ -339,11 +340,11 @@ function ScalarSlider({
   onChange,
   mapped = false,
 }: {
-  label: string
-  value: number
-  onChange: (v: number) => void
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
   /** True when a map drives this channel — the slider is inert and shows "map". */
-  mapped?: boolean
+  mapped?: boolean;
 }) {
   return (
     <div className="flex items-center gap-2">
@@ -362,7 +363,7 @@ function ScalarSlider({
         {mapped ? 'map' : `${Math.round(value * 100)}%`}
       </span>
     </div>
-  )
+  );
 }
 
 /** Texture picker for one advanced map slot ("(none)" clears it). */
@@ -372,10 +373,10 @@ function MapSelect({
   onChange,
   textures,
 }: {
-  label: string
-  value: string
-  onChange: (id: string) => void
-  textures: { id: string; name: string }[]
+  label: string;
+  value: string;
+  onChange: (id: string) => void;
+  textures: { id: string; name: string }[];
 }) {
   return (
     <Select label={label} value={value} onChange={(k) => onChange(String(k))}>
@@ -386,7 +387,7 @@ function MapSelect({
         </ListBoxItem>
       ))}
     </Select>
-  )
+  );
 }
 
 /** Presets are just uniform metal/rough pairs — one click, then tweak (plan §3.6). */
@@ -400,31 +401,31 @@ const MATERIAL_PRESETS: { id: string; label: string; metalness: number; roughnes
   { id: 'chrome', label: 'Chrome / mirror', metalness: 1, roughness: 0.04 },
   { id: 'rubber', label: 'Rubber', metalness: 0, roughness: 0.95 },
   { id: 'neutral', label: 'Neutral (default)', metalness: 0, roughness: 0.5 },
-]
+];
 
 interface PreviewState {
-  renderer: THREE.WebGLRenderer
-  scene: THREE.Scene
-  camera: THREE.PerspectiveCamera
-  material: THREE.MeshStandardMaterial
-  pmrem: THREE.PMREMGenerator
-  envTarget: THREE.WebGLRenderTarget
+  renderer: THREE.WebGLRenderer;
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  material: THREE.MeshStandardMaterial;
+  pmrem: THREE.PMREMGenerator;
+  envTarget: THREE.WebGLRenderTarget;
 }
 
 interface MaterialPreviewProps {
   /** Uniform base color hex; ignored when {@link mapUrl} is set. */
-  colorHex?: string
+  colorHex?: string;
   /** Base-color SOURCE image blob URL — overrides the uniform color. */
-  mapUrl?: string
-  metalness: number
-  roughness: number
-  normalMapUrl?: string
-  normalStrength?: number
+  mapUrl?: string;
+  metalness: number;
+  roughness: number;
+  normalMapUrl?: string;
+  normalStrength?: number;
   /** Packed ORM source image; overrides the separate grayscale maps below. */
-  ormUrl?: string
-  roughMapUrl?: string
-  metalMapUrl?: string
-  occlusionMapUrl?: string
+  ormUrl?: string;
+  roughMapUrl?: string;
+  metalMapUrl?: string;
+  occlusionMapUrl?: string;
 }
 
 /**
@@ -445,88 +446,88 @@ function MaterialPreview({
   metalMapUrl,
   occlusionMapUrl,
 }: MaterialPreviewProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const stateRef = useRef<PreviewState | null>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stateRef = useRef<PreviewState | null>(null);
 
   useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    renderer.setSize(canvas.clientWidth, canvas.clientHeight, false)
-    renderer.toneMapping = THREE.NeutralToneMapping
-    renderer.toneMappingExposure = 0.85
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
+    renderer.toneMapping = THREE.NeutralToneMapping;
+    renderer.toneMappingExposure = 0.85;
 
-    const scene = new THREE.Scene()
-    const pmrem = new THREE.PMREMGenerator(renderer)
-    const envTarget = pmrem.fromScene(new RoomEnvironment(), 0.04)
-    scene.environment = envTarget.texture
+    const scene = new THREE.Scene();
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    const envTarget = pmrem.fromScene(new RoomEnvironment(), 0.04);
+    scene.environment = envTarget.texture;
 
     const camera = new THREE.PerspectiveCamera(
       35,
       canvas.clientWidth / canvas.clientHeight,
       0.1,
       10,
-    )
-    camera.position.set(0, 0, 2.6)
+    );
+    camera.position.set(0, 0, 2.6);
 
-    const material = new THREE.MeshStandardMaterial()
-    const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.85, 48, 24), material)
-    scene.add(sphere)
+    const material = new THREE.MeshStandardMaterial();
+    const sphere = new THREE.Mesh(new THREE.SphereGeometry(0.85, 48, 24), material);
+    scene.add(sphere);
 
-    stateRef.current = { renderer, scene, camera, material, pmrem, envTarget }
+    stateRef.current = { renderer, scene, camera, material, pmrem, envTarget };
     return () => {
-      stateRef.current = null
-      sphere.geometry.dispose()
-      material.dispose()
-      envTarget.dispose()
-      pmrem.dispose()
-      renderer.dispose()
-    }
-  }, [])
+      stateRef.current = null;
+      sphere.geometry.dispose();
+      material.dispose();
+      envTarget.dispose();
+      pmrem.dispose();
+      renderer.dispose();
+    };
+  }, []);
 
   useEffect(() => {
-    const s = stateRef.current
-    if (!s) return
-    let cancelled = false
+    const s = stateRef.current;
+    if (!s) return;
+    let cancelled = false;
     const loadImage = async (url: string, srgb: boolean): Promise<THREE.Texture> => {
-      const tex = await new THREE.TextureLoader().loadAsync(url)
-      tex.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace
-      tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-      return tex
-    }
+      const tex = await new THREE.TextureLoader().loadAsync(url);
+      tex.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      return tex;
+    };
     const apply = async () => {
-      const m = s.material
-      m.metalness = metalness
-      m.roughness = roughness
+      const m = s.material;
+      m.metalness = metalness;
+      m.roughness = roughness;
       if (mapUrl) {
-        const tex = await loadImage(mapUrl, true)
-        if (cancelled) return
-        m.map = tex
-        m.color.set(0xffffff)
+        const tex = await loadImage(mapUrl, true);
+        if (cancelled) return;
+        m.map = tex;
+        m.color.set(0xffffff);
       } else {
-        m.map = null
+        m.map = null;
         if (colorHex) {
-          const { r, g, b } = hexToRgb(colorHex)
-          m.color.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace)
+          const { r, g, b } = hexToRgb(colorHex);
+          m.color.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
         }
       }
       // Normal preview uses three's standard glTF-convention decode of the ORIGINAL
       // upload — mathematically what KSA renders from the X-flipped export.
-      m.normalMap = normalMapUrl ? await loadImage(normalMapUrl, false) : null
-      m.normalScale.set(normalStrength, normalStrength)
-      const orm = ormUrl ? await loadImage(ormUrl, false) : null
-      m.aoMap = orm ?? (occlusionMapUrl ? await loadImage(occlusionMapUrl, false) : null)
-      m.roughnessMap = orm ?? (roughMapUrl ? await loadImage(roughMapUrl, false) : null)
-      m.metalnessMap = orm ?? (metalMapUrl ? await loadImage(metalMapUrl, false) : null)
-      if (cancelled) return
-      m.needsUpdate = true
-      s.renderer.render(s.scene, s.camera)
-    }
-    void apply().catch((err) => console.warn('flexo: material preview failed', err))
+      m.normalMap = normalMapUrl ? await loadImage(normalMapUrl, false) : null;
+      m.normalScale.set(normalStrength, normalStrength);
+      const orm = ormUrl ? await loadImage(ormUrl, false) : null;
+      m.aoMap = orm ?? (occlusionMapUrl ? await loadImage(occlusionMapUrl, false) : null);
+      m.roughnessMap = orm ?? (roughMapUrl ? await loadImage(roughMapUrl, false) : null);
+      m.metalnessMap = orm ?? (metalMapUrl ? await loadImage(metalMapUrl, false) : null);
+      if (cancelled) return;
+      m.needsUpdate = true;
+      s.renderer.render(s.scene, s.camera);
+    };
+    void apply().catch((err) => console.warn('flexo: material preview failed', err));
     return () => {
-      cancelled = true
-    }
+      cancelled = true;
+    };
   }, [
     colorHex,
     mapUrl,
@@ -538,7 +539,7 @@ function MaterialPreview({
     roughMapUrl,
     metalMapUrl,
     occlusionMapUrl,
-  ])
+  ]);
 
   return (
     <canvas
@@ -546,23 +547,23 @@ function MaterialPreview({
       className="h-40 w-full rounded-lg border border-border bg-panel-sunken"
       aria-label="Material preview"
     />
-  )
+  );
 }
 
 function rgbToHex({ r, g, b }: RgbColor): string {
-  const h = (n: number) => Math.round(n).toString(16).padStart(2, '0')
-  return `#${h(r)}${h(g)}${h(b)}`
+  const h = (n: number) => Math.round(n).toString(16).padStart(2, '0');
+  return `#${h(r)}${h(g)}${h(b)}`;
 }
 
 function hexToRgb(hex: string): RgbColor {
-  const v = parseInt(hex.slice(1), 16)
-  return { r: (v >> 16) & 255, g: (v >> 8) & 255, b: v & 255 }
+  const v = parseInt(hex.slice(1), 16);
+  return { r: (v >> 16) & 255, g: (v >> 8) & 255, b: v & 255 };
 }
 
 function scalar(c: ScalarChannel): number {
-  return c.kind === 'value' ? c.value : 0.5
+  return c.kind === 'value' ? c.value : 0.5;
 }
 
 function mapId(c: ScalarChannel): string {
-  return c.kind === 'map' ? c.textureId : ''
+  return c.kind === 'map' ? c.textureId : '';
 }

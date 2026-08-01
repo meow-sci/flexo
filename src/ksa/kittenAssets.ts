@@ -16,8 +16,8 @@
  * Attachments (helmet, visor, MMU backpack) are separate gltfs socketed to skeleton
  * bones (Head_M / Chest_M) — see KittenObject.
  */
-import { toUrl } from './catalog'
-import type { KittenKind, KittenMeshSource } from './types'
+import { toUrl } from './catalog';
+import type { KittenKind, KittenMeshSource } from './types';
 
 /**
  * One PBR material override, keyed by the gltf material's name. `aoRoughMetalUrl`
@@ -27,49 +27,49 @@ import type { KittenKind, KittenMeshSource } from './types'
  */
 export interface KittenMaterialSpec {
   /** Diffuse/base-color texture (sRGB). Omit for a flat {@link color} surface. */
-  diffuseUrl?: string
+  diffuseUrl?: string;
   /** Flat base color (hex) used when {@link diffuseUrl} is absent. Default white. */
-  color?: number
+  color?: number;
   /** Tangent-space normal map (linear), if any. */
-  normalUrl?: string
+  normalUrl?: string;
   /** Packed AO(r)/Roughness(g)/Metalness(b) map (linear), if any. */
-  aoRoughMetalUrl?: string
+  aoRoughMetalUrl?: string;
   /** Glass-like transparency (the visor). */
-  transparent?: boolean
+  transparent?: boolean;
   /** Glass tint color 0..255, applied to a transparent material's base color (the visor tint). */
-  tint?: { r: number; g: number; b: number }
+  tint?: { r: number; g: number; b: number };
   /** Editor opacity 0..1 for a transparent material (default 0.45; in-game is engine-fixed). */
-  opacity?: number
+  opacity?: number;
   /** When tinting a transparent material, mimic KSA's muted in-game glass look (darker + ~0.75 opacity). */
-  simulateGlass?: boolean
+  simulateGlass?: boolean;
   /** 'glassGlow' editor approximation: an emissive-uniform glow color 0..255 shown through the shell. */
-  glowColor?: { r: number; g: number; b: number }
+  glowColor?: { r: number; g: number; b: number };
   /** Strength 0..1 for {@link glowColor}. */
-  glowStrength?: number
+  glowStrength?: number;
 }
 
 /** A bone-socketed attachment gltf with per-gltf-material overrides. */
 export interface KittenAttachment {
   /** Human label (helmet/visor/mmu) — for debugging/logging. */
-  name: string
+  name: string;
   /** URL of the attachment gltf. */
-  gltfUrl: string
+  gltfUrl: string;
   /** Name of the skeleton bone this attaches to (e.g. "Head_M", "Chest_M"). */
-  socketBone: string
+  socketBone: string;
   /** Material overrides keyed by the attachment gltf's material name. */
-  materials: Record<string, KittenMaterialSpec>
+  materials: Record<string, KittenMaterialSpec>;
 }
 
 // ── Content/Core-relative texture subpaths (single source of truth) ──────────
-const TEX = 'Textures/Characters'
-const ATT = 'Textures/Characters/Attachments'
+const TEX = 'Textures/Characters';
+const ATT = 'Textures/Characters/Attachments';
 
 /** Bare-subpath material source (before {@link toUrl}). */
 interface MatSrc {
-  diffuse: string
-  normal?: string
-  aoRoughMetal?: string
-  transparent?: boolean
+  diffuse: string;
+  normal?: string;
+  aoRoughMetal?: string;
+  transparent?: boolean;
 }
 
 // Shared body suit (identical across all three kittens).
@@ -77,8 +77,8 @@ const SUIT_SRC: MatSrc = {
   diffuse: `${TEX}/Kitten_EMU_A.ktx2`,
   normal: `${TEX}/Kitten_EMU_N.ktx2`,
   aoRoughMetal: `${TEX}/Kitten_EMU_ORM.ktx2`,
-}
-const HEAD_NORMAL_SRC = `${TEX}/KittenHead_N.ktx2`
+};
+const HEAD_NORMAL_SRC = `${TEX}/KittenHead_N.ktx2`;
 
 // Per-kitten head pattern + eye color (the ONLY visual difference).
 const PER_KITTEN_SRC: Record<KittenKind, { headDiffuse: string; eyeDiffuse: string }> = {
@@ -94,29 +94,29 @@ const PER_KITTEN_SRC: Record<KittenKind, { headDiffuse: string; eyeDiffuse: stri
     headDiffuse: `${TEX}/KittenHead_Tuxedo_A.ktx2`,
     eyeDiffuse: `${TEX}/Kitten_Eye_Yellow_A.ktx2`,
   },
-}
+};
 
 const HELMET_SRC: MatSrc = {
   diffuse: `${ATT}/Kitty_Helmet_A.ktx2`,
   normal: `${ATT}/Kitty_Helmet_N.ktx2`,
   aoRoughMetal: `${ATT}/Kitty_Helmet_ORM.ktx2`,
-}
+};
 const VISOR_SRC: MatSrc = {
   diffuse: `${ATT}/Kitty_Helmet_Visor_A.ktx2`,
   normal: `${ATT}/Kitty_Helmet_Visor_N.ktx2`,
   aoRoughMetal: `${ATT}/Kitty_Helmet_Visor_ORM.ktx2`,
   transparent: true,
-}
+};
 const MMU_BODY_SRC: MatSrc = {
   diffuse: `${ATT}/KSA_MMU_Color.ktx2`,
   normal: `${ATT}/KSA_MMU_Normal.ktx2`,
   aoRoughMetal: `${ATT}/KSA_MMU_ORM.ktx2`,
-}
+};
 // Labels/decals: KSA uses no normal and a constant empty ORM → plain surface.
-const MMU_LABELS_SRC: MatSrc = { diffuse: `${ATT}/KSA_MMU_Texts.ktx2` }
+const MMU_LABELS_SRC: MatSrc = { diffuse: `${ATT}/KSA_MMU_Texts.ktx2` };
 
 /** URL of the shared skinned kitten body mesh. */
-export const KITTEN_BODY_GLTF_URL = toUrl('Characters/Kitten/KSA_Cat.gltf')
+export const KITTEN_BODY_GLTF_URL = toUrl('Characters/Kitten/KSA_Cat.gltf');
 
 /** Builds a runtime (served-URL) material spec from bare subpaths. */
 function urlSpec(src: MatSrc): KittenMaterialSpec {
@@ -125,7 +125,7 @@ function urlSpec(src: MatSrc): KittenMaterialSpec {
     normalUrl: src.normal ? toUrl(src.normal) : undefined,
     aoRoughMetalUrl: src.aoRoughMetal ? toUrl(src.aoRoughMetal) : undefined,
     transparent: src.transparent,
-  }
+  };
 }
 
 /**
@@ -138,7 +138,7 @@ export function kittenSpecFromSource(
     Pick<KittenMaterialSpec, 'tint' | 'opacity' | 'simulateGlass' | 'glowColor' | 'glowStrength'>
   >,
 ): KittenMaterialSpec {
-  return { ...urlSpec(src), ...extra }
+  return { ...urlSpec(src), ...extra };
 }
 
 /**
@@ -149,14 +149,14 @@ export function kittenSpecFromSource(
  * the per-kitten head texture; the sclera is plain white.
  */
 export function kittenBodyMaterials(kind: KittenKind): Record<string, KittenMaterialSpec> {
-  const { headDiffuse, eyeDiffuse } = PER_KITTEN_SRC[kind]
-  const head = urlSpec({ diffuse: headDiffuse, normal: HEAD_NORMAL_SRC })
+  const { headDiffuse, eyeDiffuse } = PER_KITTEN_SRC[kind];
+  const head = urlSpec({ diffuse: headDiffuse, normal: HEAD_NORMAL_SRC });
   return {
     'model:Kitty_Suit': urlSpec(SUIT_SRC),
     'model:KittyHead_mt': head,
     'model:M_CHA_Kitten_Head': head, // fur shell over the head/ears
     'model:KittyEye_mt': urlSpec({ diffuse: eyeDiffuse }), // iris (full eye texture)
-  }
+  };
 }
 
 /**
@@ -166,7 +166,7 @@ export function kittenBodyMaterials(kind: KittenKind): Record<string, KittenMate
  * occludes the iris, so it is hidden (the iris mesh already carries the full eye
  * texture, whites included).
  */
-export const HIDDEN_BODY_MATERIALS: ReadonlySet<string> = new Set(['model:Eyes_KittySklera_mt'])
+export const HIDDEN_BODY_MATERIALS: ReadonlySet<string> = new Set(['model:Eyes_KittySklera_mt']);
 
 /** The EVA attachments (shared across all kittens), in render order. */
 export const KITTEN_ATTACHMENTS: readonly KittenAttachment[] = [
@@ -191,7 +191,7 @@ export const KITTEN_ATTACHMENTS: readonly KittenAttachment[] = [
       KSA_MMU_mt: urlSpec(MMU_BODY_SRC),
     },
   },
-]
+];
 
 /**
  * One part-ified kitten submesh: a stable specKey/label, the gltf material names
@@ -199,11 +199,11 @@ export const KITTEN_ATTACHMENTS: readonly KittenAttachment[] = [
  * texture subpaths). See {@link kittenPartSubMeshes}.
  */
 export interface KittenPartSubMesh {
-  specKey: string
-  label: string
+  specKey: string;
+  label: string;
   /** gltf material names (across the body + attachment gltfs) that merge into this submesh. */
-  materialNames: string[]
-  source: KittenMeshSource
+  materialNames: string[];
+  source: KittenMeshSource;
 }
 
 /**
@@ -214,7 +214,7 @@ export interface KittenPartSubMesh {
  * document descriptors synchronously; geometry is baked later (see kittenBake.ts).
  */
 export function kittenPartSubMeshes(kind: KittenKind): KittenPartSubMesh[] {
-  const { headDiffuse, eyeDiffuse } = PER_KITTEN_SRC[kind]
+  const { headDiffuse, eyeDiffuse } = PER_KITTEN_SRC[kind];
   const make = (specKey: string, src: MatSrc): KittenMeshSource => ({
     kind,
     specKey,
@@ -222,7 +222,7 @@ export function kittenPartSubMeshes(kind: KittenKind): KittenPartSubMesh[] {
     normal: src.normal,
     aoRoughMetal: src.aoRoughMetal,
     transparent: src.transparent,
-  })
+  });
   return [
     {
       specKey: 'suit',
@@ -266,5 +266,5 @@ export function kittenPartSubMeshes(kind: KittenKind): KittenPartSubMesh[] {
       materialNames: ['KSA_MMU_labels_mt'],
       source: make('packLabels', MMU_LABELS_SRC),
     },
-  ]
+  ];
 }

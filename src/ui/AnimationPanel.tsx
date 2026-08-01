@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { Trash2, Plus, Crosshair, ChevronLeft, Move3d, RotateCcw } from 'lucide-react'
+import { useEffect, useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { Trash2, Plus, Crosshair, ChevronLeft, Move3d, RotateCcw } from 'lucide-react';
 import {
   Button,
   TextField,
@@ -12,9 +12,9 @@ import {
   Tooltip,
   SectionTitle,
   cn,
-} from './kit'
-import { $part, $toolMode, pushUndo } from '../state/editorStore'
-import { $selectedPlacements, $selectedPlacement } from '../state/selectors'
+} from './kit';
+import { $part, $toolMode, pushUndo } from '../state/editorStore';
+import { $selectedPlacements, $selectedPlacement } from '../state/selectors';
 import {
   $activeAnimation,
   $activeAnimationId,
@@ -43,11 +43,11 @@ import {
   selectKeyframeForEditing,
   setSolarTracking,
   stopAnimationPreview,
-} from '../state/animationStore'
-import { isAnimationExportable } from '../ksa/animationNaming'
-import { EasingEditor } from './EasingEditor'
-import { PreviewScrubber } from './PreviewScrubber'
-import { NumberField } from './NumberField'
+} from '../state/animationStore';
+import { isAnimationExportable } from '../ksa/animationNaming';
+import { EasingEditor } from './EasingEditor';
+import { PreviewScrubber } from './PreviewScrubber';
+import { NumberField } from './NumberField';
 import {
   identityTransform,
   type AnimationJoint,
@@ -56,16 +56,16 @@ import {
   type EasingConfig,
   type PartAnimation,
   type SubPartPlacement,
-} from '../ksa/types'
+} from '../ksa/types';
 
-import { DEG2RAD, RAD2DEG, fmt } from './format'
+import { DEG2RAD, RAD2DEG, fmt } from './format';
 
 /** Clears the active animation and its joint/keyframe sub-selection (back to the list). */
 function closeAnimation(): void {
-  $activeAnimationId.set(null)
-  $activeJointId.set(null)
-  $editKeyframeId.set(null)
-  stopAnimationPreview() // cancel any in-flight playback + snap back to rest
+  $activeAnimationId.set(null);
+  $activeJointId.set(null);
+  $editKeyframeId.set(null);
+  stopAnimationPreview(); // cancel any in-flight playback + snap back to rest
 }
 
 /**
@@ -75,23 +75,23 @@ function closeAnimation(): void {
  * drives the live preview + pose gizmos; this panel owns the structural editing.
  */
 export function AnimationPanel() {
-  const part = useStore($part)
-  const active = useStore($activeAnimation)
-  const exportableCount = part.animations.filter(isAnimationExportable).length
+  const part = useStore($part);
+  const active = useStore($activeAnimation);
+  const exportableCount = part.animations.filter(isAnimationExportable).length;
 
   // Escape unwinds keyframe → joint → animation (ignored while typing in a field).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return
-      const t = e.target as HTMLElement | null
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return
-      if ($editKeyframeId.get()) $editKeyframeId.set(null)
-      else if ($activeJointId.get()) $activeJointId.set(null)
-      else if ($activeAnimationId.get()) closeAnimation()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
+      if (e.key !== 'Escape') return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if ($editKeyframeId.get()) $editKeyframeId.set(null);
+      else if ($activeJointId.get()) $activeJointId.set(null);
+      else if ($activeAnimationId.get()) closeAnimation();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 rounded-xl border border-border bg-panel p-2">
@@ -121,7 +121,7 @@ export function AnimationPanel() {
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function AnimationRow({ anim, active }: { anim: PartAnimation; active: boolean }) {
@@ -152,11 +152,11 @@ function AnimationRow({ anim, active }: { anim: PartAnimation; active: boolean }
         <Trash2 size={13} />
       </Button>
     </div>
-  )
+  );
 }
 
 function AnimationEditor({ anim }: { anim: PartAnimation }) {
-  const [nameDraft, setNameDraft] = useState<string | null>(null)
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border bg-panel-sunken p-2">
@@ -177,8 +177,8 @@ function AnimationEditor({ anim }: { anim: PartAnimation }) {
           onFocus={() => setNameDraft(anim.name)}
           onChange={(v) => setNameDraft(v)}
           onBlur={() => {
-            if (nameDraft != null) renameAnimation(anim.id, nameDraft)
-            setNameDraft(null)
+            if (nameDraft != null) renameAnimation(anim.id, nameDraft);
+            setNameDraft(null);
           }}
         />
       </div>
@@ -217,7 +217,7 @@ function AnimationEditor({ anim }: { anim: PartAnimation }) {
       <PoseEditor anim={anim} />
       <SolarTrackingEditor anim={anim} />
     </div>
-  )
+  );
 }
 
 /**
@@ -228,9 +228,9 @@ function AnimationEditor({ anim }: { anim: PartAnimation }) {
  * up in AnimationEditor cascaded a full-subtree reconcile ~120×/s and tanked playback FPS.
  */
 function PreviewProgressLabel() {
-  const editKfId = useStore($editKeyframeId)
-  const previewU = useStore($animPreviewU)
-  const scrubbing = useStore($animScrubbing)
+  const editKfId = useStore($editKeyframeId);
+  const previewU = useStore($animPreviewU);
+  const scrubbing = useStore($animScrubbing);
   return (
     <SectionTitle>
       Preview{' '}
@@ -240,14 +240,14 @@ function PreviewProgressLabel() {
           ? `${Math.round(previewU * 100)}%`
           : '(drag, or ▶ to play)'}
     </SectionTitle>
-  )
+  );
 }
 
 /** Optional sun-tracking passthrough (KSA `<SolarTracking>`); deploy/retract only. */
 function SolarTrackingEditor({ anim }: { anim: PartAnimation }) {
-  if (anim.mode !== 'deployRetract') return null
-  const members = anim.joints.flatMap((j) => j.memberInstanceIds)
-  const st = anim.solarTracking
+  if (anim.mode !== 'deployRetract') return null;
+  const members = anim.joints.flatMap((j) => j.memberInstanceIds);
+  const st = anim.solarTracking;
   return (
     <div className="flex flex-col gap-1.5 rounded-md border border-border p-1.5">
       <Switch
@@ -311,14 +311,14 @@ function SolarTrackingEditor({ anim }: { anim: PartAnimation }) {
         </>
       )}
     </div>
-  )
+  );
 }
 
 function JointsSection({ anim }: { anim: PartAnimation }) {
-  const activeJointId = useStore($activeJointId)
-  const selected = useStore($selectedPlacements)
-  const single = useStore($selectedPlacement)
-  const selectedIds = selected.map((s) => s.placement.instanceId)
+  const activeJointId = useStore($activeJointId);
+  const selected = useStore($selectedPlacements);
+  const single = useStore($selectedPlacement);
+  const selectedIds = selected.map((s) => s.placement.instanceId);
 
   return (
     <div className="flex flex-col gap-1">
@@ -341,7 +341,7 @@ function JointsSection({ anim }: { anim: PartAnimation }) {
         <Plus size={13} /> Joint
       </Button>
     </div>
-  )
+  );
 }
 
 function JointRow({
@@ -351,14 +351,14 @@ function JointRow({
   selectedIds,
   singlePlacement,
 }: {
-  anim: PartAnimation
-  joint: AnimationJoint
-  active: boolean
-  selectedIds: string[]
-  singlePlacement: SubPartPlacement | null
+  anim: PartAnimation;
+  joint: AnimationJoint;
+  active: boolean;
+  selectedIds: string[];
+  singlePlacement: SubPartPlacement | null;
 }) {
-  const [nameDraft, setNameDraft] = useState<string | null>(null)
-  const others = anim.joints.filter((j) => j.id !== joint.id)
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const others = anim.joints.filter((j) => j.id !== joint.id);
 
   return (
     <div
@@ -370,7 +370,7 @@ function JointRow({
       // clicks bubble here but a no-op re-select is harmless; deselect via the crosshair
       // toggle or Escape. Guarded on `!active` so the crosshair's deselect isn't undone.
       onClick={() => {
-        if (!active) $activeJointId.set(joint.id)
+        if (!active) $activeJointId.set(joint.id);
       }}
     >
       <div className="flex items-center gap-1">
@@ -380,10 +380,10 @@ function JointRow({
           // Toggle: re-clicking the active joint deselects it (and closes the pose editor).
           onClick={() => {
             if (active) {
-              $activeJointId.set(null)
-              $editKeyframeId.set(null)
+              $activeJointId.set(null);
+              $editKeyframeId.set(null);
             } else {
-              $activeJointId.set(joint.id)
+              $activeJointId.set(joint.id);
             }
           }}
         >
@@ -397,8 +397,8 @@ function JointRow({
           onFocus={() => setNameDraft(joint.name)}
           onChange={(v) => setNameDraft(v)}
           onBlur={() => {
-            if (nameDraft != null && nameDraft.trim()) renameJoint(anim.id, joint.id, nameDraft)
-            setNameDraft(null)
+            if (nameDraft != null && nameDraft.trim()) renameJoint(anim.id, joint.id, nameDraft);
+            setNameDraft(null);
           }}
         />
         <Button
@@ -500,12 +500,12 @@ function JointRow({
         </span>
       )}
     </div>
-  )
+  );
 }
 
 function KeyframesSection({ anim }: { anim: PartAnimation }) {
-  const editKfId = useStore($editKeyframeId)
-  const sorted = [...anim.keyframes].sort((a, b) => a.timeSec - b.timeSec)
+  const editKfId = useStore($editKeyframeId);
+  const sorted = [...anim.keyframes].sort((a, b) => a.timeSec - b.timeSec);
 
   return (
     <div className="flex flex-col gap-1">
@@ -521,7 +521,7 @@ function KeyframesSection({ anim }: { anim: PartAnimation }) {
         <Plus size={13} /> Pose at {fmt(anim.durationSec)}s
       </Button>
     </div>
-  )
+  );
 }
 
 function KeyframeRow({
@@ -529,11 +529,11 @@ function KeyframeRow({
   kf,
   editing,
 }: {
-  anim: PartAnimation
-  kf: AnimationKeyframe
-  editing: boolean
+  anim: PartAnimation;
+  kf: AnimationKeyframe;
+  editing: boolean;
 }) {
-  const isRest = kf.timeSec === 0
+  const isRest = kf.timeSec === 0;
   return (
     <div
       className={cn(
@@ -574,16 +574,16 @@ function KeyframeRow({
         </Button>
       )}
     </div>
-  )
+  );
 }
 
 /** Numeric pose editor for the active joint at the edited keyframe (mirrors the 3D gizmo). */
 function PoseEditor({ anim }: { anim: PartAnimation }) {
-  const jointId = useStore($activeJointId)
-  const kfId = useStore($editKeyframeId)
-  const tool = useStore($toolMode)
-  const joint = anim.joints.find((j) => j.id === jointId)
-  const kf = anim.keyframes.find((k) => k.id === kfId)
+  const jointId = useStore($activeJointId);
+  const kfId = useStore($editKeyframeId);
+  const tool = useStore($toolMode);
+  const joint = anim.joints.find((j) => j.id === jointId);
+  const kf = anim.keyframes.find((k) => k.id === kfId);
   if (!joint || !kf) {
     return (
       <p className="rounded-md bg-panel px-2 py-1.5 text-xs text-fg-subtle">
@@ -591,28 +591,29 @@ function PoseEditor({ anim }: { anim: PartAnimation }) {
         — move it with the gizmo; later poses are where the joint swings to. Or select the hinge
         part and click <b>Set pivot</b> on the joint to place the anchor in one click.
       </p>
-    )
+    );
   }
-  const pose = kf.poses[joint.id] ?? identityTransform()
-  const isRest = kf.timeSec === 0
+  const pose = kf.poses[joint.id] ?? identityTransform();
+  const isRest = kf.timeSec === 0;
   // The easing applies to the segment LEAVING this pose; only meaningful if a later
   // pose exists for the joint to interpolate toward.
-  const sorted = [...anim.keyframes].sort((a, b) => a.timeSec - b.timeSec)
-  const hasNext = sorted.findIndex((k) => k.id === kf.id) < sorted.length - 1
-  const easing = kf.easings?.[joint.id]
+  const sorted = [...anim.keyframes].sort((a, b) => a.timeSec - b.timeSec);
+  const hasNext = sorted.findIndex((k) => k.id === kf.id) < sorted.length - 1;
+  const easing = kf.easings?.[joint.id];
 
   const commit = (mut: (t: ReturnType<typeof identityTransform>) => void) => {
     const next = {
       position: { ...pose.position },
       rotation: { ...pose.rotation },
       scale: { ...pose.scale },
-    }
-    mut(next)
-    setJointPose(anim.id, kf.id, joint.id, next)
-  }
-  const start = () => pushUndo('pose', `${joint.name} @ ${isRest ? 'rest' : `${fmt(kf.timeSec)}s`}`)
-  const axes = ['x', 'y', 'z'] as const
-  const LINEAR: EasingConfig = { kind: 'preset', preset: 'linear' }
+    };
+    mut(next);
+    setJointPose(anim.id, kf.id, joint.id, next);
+  };
+  const start = () =>
+    pushUndo('pose', `${joint.name} @ ${isRest ? 'rest' : `${fmt(kf.timeSec)}s`}`);
+  const axes = ['x', 'y', 'z'] as const;
+  const LINEAR: EasingConfig = { kind: 'preset', preset: 'linear' };
 
   return (
     <div className="flex flex-col gap-2 rounded-md border border-accent/40 bg-panel p-2">
@@ -675,5 +676,5 @@ function PoseEditor({ anim }: { anim: PartAnimation }) {
         </div>
       )}
     </div>
-  )
+  );
 }

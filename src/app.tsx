@@ -1,38 +1,38 @@
-import { useEffect } from 'react'
-import { ViewportCanvas } from './three/ViewportCanvas'
-import { ViewportDropZone } from './ui/ViewportDropZone'
-import { ImportModelDialog } from './ui/ImportModelDialog'
-import { ImportReportCard } from './ui/ImportReportCard'
-import { EditorToolbar } from './ui/Toolbar'
-import { MobileTopBar } from './ui/MobileTopBar'
-import { SelectionToolbar } from './ui/SelectionToolbar'
-import { MultiSelectToolbar } from './ui/MultiSelectToolbar'
-import { RightPanel } from './ui/RightPanel'
-import { MobileInspector } from './ui/MobileInspector'
-import { FloatingInspector } from './ui/FloatingInspector'
-import { FloatingPreviewToolbar } from './ui/FloatingPreviewToolbar'
-import { SeatViewBar } from './ui/SeatViewBar'
-import { WorkspaceLoadProgress } from './ui/LoadProgress'
-import { MeasurementInfo } from './ui/MeasurementInfo'
-import { MeasurementEditor } from './ui/MeasurementEditor'
-import { ContainerEditor } from './ui/ContainerEditor'
-import { ManageTexturesPanel } from './ui/ManageTexturesPanel'
-import { GlowPaintDialog } from './ui/GlowPaintDialog'
-import { TransformHud } from './ui/TransformHud'
-import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys'
-import { HelpDialog } from './ui/hotkeys/HelpDialog'
-import { AboutDialog } from './ui/AboutDialog'
-import { useIsPhone } from './ui/kit'
-import { ensureCatalogLoaded } from './state/catalogStore'
-import { ensurePartCatalogLoaded } from './state/partCatalogStore'
+import { useEffect } from 'react';
+import { ViewportCanvas } from './three/ViewportCanvas';
+import { ViewportDropZone } from './ui/ViewportDropZone';
+import { ImportModelDialog } from './ui/ImportModelDialog';
+import { ImportReportCard } from './ui/ImportReportCard';
+import { EditorToolbar } from './ui/Toolbar';
+import { MobileTopBar } from './ui/MobileTopBar';
+import { SelectionToolbar } from './ui/SelectionToolbar';
+import { MultiSelectToolbar } from './ui/MultiSelectToolbar';
+import { RightPanel } from './ui/RightPanel';
+import { MobileInspector } from './ui/MobileInspector';
+import { FloatingInspector } from './ui/FloatingInspector';
+import { FloatingPreviewToolbar } from './ui/FloatingPreviewToolbar';
+import { SeatViewBar } from './ui/SeatViewBar';
+import { WorkspaceLoadProgress } from './ui/LoadProgress';
+import { MeasurementInfo } from './ui/MeasurementInfo';
+import { MeasurementEditor } from './ui/MeasurementEditor';
+import { ContainerEditor } from './ui/ContainerEditor';
+import { ManageTexturesPanel } from './ui/ManageTexturesPanel';
+import { GlowPaintDialog } from './ui/GlowPaintDialog';
+import { TransformHud } from './ui/TransformHud';
+import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys';
+import { HelpDialog } from './ui/hotkeys/HelpDialog';
+import { AboutDialog } from './ui/AboutDialog';
+import { useIsPhone } from './ui/kit';
+import { ensureCatalogLoaded } from './state/catalogStore';
+import { ensurePartCatalogLoaded } from './state/partCatalogStore';
 
 function App() {
-  const isPhone = useIsPhone()
+  const isPhone = useIsPhone();
 
   useEffect(() => {
-    void ensureCatalogLoaded()
-    void ensurePartCatalogLoaded()
-  }, [])
+    void ensureCatalogLoaded();
+    void ensurePartCatalogLoaded();
+  }, []);
 
   return (
     <div className="fixed inset-0 bg-canvas text-fg">
@@ -122,7 +122,7 @@ function App() {
       {/* Bottom-center bubble: rotate-key axes/step + arrow-key nudge axis/step. */}
       <TransformHud />
     </div>
-  )
+  );
 }
 
-export default App
+export default App;

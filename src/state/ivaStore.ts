@@ -1,6 +1,6 @@
-import { atom } from 'nanostores'
-import { clampSeatLook } from '../ksa/ivaLook'
-import type { Vec3 } from '../ksa/types'
+import { atom } from 'nanostores';
+import { clampSeatLook } from '../ksa/ivaLook';
+import type { Vec3 } from '../ksa/types';
 
 /**
  * Ephemeral state for the IVA SEAT VIEW — "sit in this seat and look around".
@@ -24,9 +24,9 @@ import type { Vec3 } from '../ksa/types'
 
 /** A seat's eye axes in workspace coordinates — KSA's `<ForwardAxis>` / `<UpAxis>`. */
 export interface SeatAxes {
-  forward: Vec3
+  forward: Vec3;
   /** RAW, magnitude included: {@link clampSeatLook}'s pole test is against the un-normalized axis. */
-  up: Vec3
+  up: Vec3;
 }
 
 /**
@@ -38,7 +38,7 @@ export interface SeatAxes {
  * A vanished id — deleted seat, swapped project — is resolved by `EditorScene` as "exit
  * cleanly" rather than by reading a stale pose.
  */
-export const $seatView = atom<string | null>(null)
+export const $seatView = atom<string | null>(null);
 
 /**
  * The current look DIRECTION in workspace coordinates (unit), or null before the seat has
@@ -52,19 +52,19 @@ export const $seatView = atom<string | null>(null)
  * the preview escapes both of them (measured: ~103° off forward, `|dot(look, up)| = 0.90`
  * against a 0.9 limit). Feeding the clamped result back is what makes the bound hold.
  */
-export const $seatLook = atom<Vec3 | null>(null)
+export const $seatLook = atom<Vec3 | null>(null);
 
 /** Sits in `seatId`, facing straight down its forward axis (the free-look resets). */
 export function enterSeatView(seatId: string): void {
-  $seatLook.set(null)
-  $seatView.set(seatId)
+  $seatLook.set(null);
+  $seatView.set(seatId);
 }
 
 /** Leaves seat view. Safe to call when not in it. */
 export function exitSeatView(): void {
-  if ($seatView.get() === null) return
-  $seatView.set(null)
-  $seatLook.set(null)
+  if ($seatView.get() === null) return;
+  $seatView.set(null);
+  $seatLook.set(null);
 }
 
 /**
@@ -72,9 +72,9 @@ export function exitSeatView(): void {
  * the seat's forward axis before the first {@link reclampSeatLook}. Always unit.
  */
 export function seatLookDirection(axes: SeatAxes): Vec3 {
-  const stored = $seatLook.get()
-  if (stored) return stored
-  return normalizeOrNull(axes.forward) ?? { x: 1, y: 0, z: 0 }
+  const stored = $seatLook.get();
+  if (stored) return stored;
+  return normalizeOrNull(axes.forward) ?? { x: 1, y: 0, z: 0 };
 }
 
 /**
@@ -90,16 +90,16 @@ export function seatLookDirection(axes: SeatAxes): Vec3 {
  * for the next entry.
  */
 export function nudgeSeatLook(deltaYaw: number, deltaPitch: number, axes: SeatAxes): void {
-  if ($seatView.get() === null) return
-  const dir = seatLookDirection(axes)
+  if ($seatView.get() === null) return;
+  const dir = seatLookDirection(axes);
   // Degenerate only for a look sitting exactly on the up axis — which the clamps make
   // unreachable by dragging; any perpendicular keeps a degenerate seat draggable rather
   // than frozen (the game NaNs its camera there instead).
-  const right = normalizeOrNull(cross(dir, axes.up)) ?? anyPerpendicular(dir)
-  const camUp = normalizeOrNull(cross(right, dir)) ?? right
-  const pitched = rotateAboutAxis(dir, right, deltaPitch)
-  const yawed = rotateAboutAxis(pitched, camUp, deltaYaw)
-  $seatLook.set(clampSeatLook(yawed, axes.forward, axes.up))
+  const right = normalizeOrNull(cross(dir, axes.up)) ?? anyPerpendicular(dir);
+  const camUp = normalizeOrNull(cross(right, dir)) ?? right;
+  const pitched = rotateAboutAxis(dir, right, deltaPitch);
+  const yawed = rotateAboutAxis(pitched, camUp, deltaYaw);
+  $seatLook.set(clampSeatLook(yawed, axes.forward, axes.up));
 }
 
 /**
@@ -109,13 +109,13 @@ export function nudgeSeatLook(deltaYaw: number, deltaPitch: number, axes: SeatAx
  * camera, either of which can leave a previously legal look outside the new limits.
  */
 export function reclampSeatLook(axes: SeatAxes): void {
-  if ($seatView.get() === null) return
-  const clamped = clampSeatLook(seatLookDirection(axes), axes.forward, axes.up)
-  const stored = $seatLook.get()
+  if ($seatView.get() === null) return;
+  const clamped = clampSeatLook(seatLookDirection(axes), axes.forward, axes.up);
+  const stored = $seatLook.get();
   // Every reconcile pushes the pose again; skipping the no-op write keeps that from
   // invalidating a frame per document change.
-  if (stored && near(stored, clamped)) return
-  $seatLook.set(clamped)
+  if (stored && near(stored, clamped)) return;
+  $seatLook.set(clamped);
 }
 
 // --- Vector helpers. Duplicated from `ivaSeatAxes.ts` / `ivaLook.ts` rather than widening
@@ -126,40 +126,40 @@ function cross(a: Vec3, b: Vec3): Vec3 {
     x: a.y * b.z - a.z * b.y,
     y: a.z * b.x - a.x * b.z,
     z: a.x * b.y - a.y * b.x,
-  }
+  };
 }
 
 function dot(a: Vec3, b: Vec3): number {
-  return a.x * b.x + a.y * b.y + a.z * b.z
+  return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
 /** Unit-length `v`, or `null` when `v` is (near) zero — where KSA would produce NaN. */
 function normalizeOrNull(v: Vec3): Vec3 | null {
-  const len = Math.hypot(v.x, v.y, v.z)
-  if (!(len > 1e-12)) return null
-  return { x: v.x / len, y: v.y / len, z: v.z / len }
+  const len = Math.hypot(v.x, v.y, v.z);
+  if (!(len > 1e-12)) return null;
+  return { x: v.x / len, y: v.y / len, z: v.z / len };
 }
 
 /** Some unit vector perpendicular to the UNIT `v` — cross with whichever axis `v` leans on least. */
 function anyPerpendicular(v: Vec3): Vec3 {
-  const seed = Math.abs(v.x) < 0.9 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 }
-  return normalizeOrNull(cross(v, seed)) ?? { x: 0, y: 1, z: 0 }
+  const seed = Math.abs(v.x) < 0.9 ? { x: 1, y: 0, z: 0 } : { x: 0, y: 1, z: 0 };
+  return normalizeOrNull(cross(v, seed)) ?? { x: 0, y: 1, z: 0 };
 }
 
 /** Rodrigues rotation of `v` about a UNIT `axis`, right-handed — as `QuaternionEx` does it. */
 function rotateAboutAxis(v: Vec3, axis: Vec3, angle: number): Vec3 {
-  if (angle === 0) return v
-  const c = Math.cos(angle)
-  const s = Math.sin(angle)
-  const k = cross(axis, v)
-  const d = dot(axis, v) * (1 - c)
+  if (angle === 0) return v;
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  const k = cross(axis, v);
+  const d = dot(axis, v) * (1 - c);
   return {
     x: v.x * c + k.x * s + axis.x * d,
     y: v.y * c + k.y * s + axis.y * d,
     z: v.z * c + k.z * s + axis.z * d,
-  }
+  };
 }
 
 function near(a: Vec3, b: Vec3): boolean {
-  return Math.abs(a.x - b.x) < 1e-12 && Math.abs(a.y - b.y) < 1e-12 && Math.abs(a.z - b.z) < 1e-12
+  return Math.abs(a.x - b.x) < 1e-12 && Math.abs(a.y - b.y) < 1e-12 && Math.abs(a.z - b.z) < 1e-12;
 }

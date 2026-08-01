@@ -1,4 +1,4 @@
-import * as THREE from 'three'
+import * as THREE from 'three';
 
 /**
  * Patches a MeshStandardMaterial's shader to match KSA's vessel fragment shader
@@ -23,7 +23,7 @@ import * as THREE from 'three'
  * in this file only.
  */
 /** KSA's emissive intensity for the BC4 mask (mirrors the original vessel shader). */
-const EMISSIVE_BOOST = 1.25
+const EMISSIVE_BOOST = 1.25;
 export function applyKsaShaderPatches(
   material: THREE.MeshStandardMaterial,
   opts: { normal: boolean; emissive: boolean },
@@ -39,7 +39,7 @@ export function applyKsaShaderPatches(
           mapN.z = sqrt( max( 0.0, 1.0 - dot( mapN.xy, mapN.xy ) ) );
           normal = normalize( tbn * mapN );
         `,
-      )
+      );
     }
     if (opts.emissive) {
       // KSA: lightColor += gammaToLinear(vec3(mask) * EMISSIVE_MULTIPLIER), with
@@ -51,10 +51,10 @@ export function applyKsaShaderPatches(
           vec4 emissiveColor = texture2D( emissiveMap, vEmissiveMapUv );
           totalEmissiveRadiance += pow( emissiveColor.rrr * ${EMISSIVE_BOOST.toFixed(2)}, vec3( 2.2 ) );
         `,
-      )
+      );
     }
-  }
+  };
   // Materials with the same patch flags share one compiled program.
-  const key = `flexo-ksa-n${opts.normal ? 1 : 0}-e${opts.emissive ? 1 : 0}`
-  material.customProgramCacheKey = () => key
+  const key = `flexo-ksa-n${opts.normal ? 1 : 0}-e${opts.emissive ? 1 : 0}`;
+  material.customProgramCacheKey = () => key;
 }

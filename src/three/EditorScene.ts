@@ -1,12 +1,12 @@
-import * as THREE from 'three'
-import type { ReadableAtom } from 'nanostores'
-import { Viewport } from './Viewport'
-import { SubPartObject } from './SubPartObject'
-import { ConnectorObject } from './ConnectorObject'
-import { ColliderObject } from './ColliderObject'
-import { IvaSeatObject } from './IvaSeatObject'
-import { collectWorldPoints } from './samplePoints'
-import { fitCollider, IDENTITY_QUAT, type Quat } from '../ksa/colliderFit'
+import * as THREE from 'three';
+import type { ReadableAtom } from 'nanostores';
+import { Viewport } from './Viewport';
+import { SubPartObject } from './SubPartObject';
+import { ConnectorObject } from './ConnectorObject';
+import { ColliderObject } from './ColliderObject';
+import { IvaSeatObject } from './IvaSeatObject';
+import { collectWorldPoints } from './samplePoints';
+import { fitCollider, IDENTITY_QUAT, type Quat } from '../ksa/colliderFit';
 import {
   $colliderFitRequest,
   $colliderSettings,
@@ -14,23 +14,23 @@ import {
   $coverageRequest,
   setCoverageReport,
   type ColliderFitRequest,
-} from '../state/colliderStore'
+} from '../state/colliderStore';
 import {
   $ivaSeatAimRequest,
   clearIvaSeatAimRequest,
   type IvaSeatAimRequest,
-} from '../state/ivaSeatStore'
-import { $seatView, exitSeatView } from '../state/ivaStore'
-import { SEAT_LOCAL_UP, seatAxesFromRotation, seatRotationFromAxes } from '../ksa/ivaSeatAxes'
-import { evaluateCoverage, type PlacedCollider } from '../measure/colliderCoverage'
-import { KittenObject } from './KittenObject'
-import { LightObject } from './LightObject'
-import { planPreviewBudget } from './lightVolume'
-import { SelectionManager } from './SelectionManager'
-import { TransformGizmo } from './TransformGizmo'
-import { MeasurementLayer } from './MeasurementLayer'
-import { ContainerLayer } from './ContainerLayer'
-import { NozzleHandleObject } from './NozzleHandleObject'
+} from '../state/ivaSeatStore';
+import { $seatView, exitSeatView } from '../state/ivaStore';
+import { SEAT_LOCAL_UP, seatAxesFromRotation, seatRotationFromAxes } from '../ksa/ivaSeatAxes';
+import { evaluateCoverage, type PlacedCollider } from '../measure/colliderCoverage';
+import { KittenObject } from './KittenObject';
+import { LightObject } from './LightObject';
+import { planPreviewBudget } from './lightVolume';
+import { SelectionManager } from './SelectionManager';
+import { TransformGizmo } from './TransformGizmo';
+import { MeasurementLayer } from './MeasurementLayer';
+import { ContainerLayer } from './ContainerLayer';
+import { NozzleHandleObject } from './NozzleHandleObject';
 import {
   colliderLocalFromWorld,
   colliderWorld,
@@ -43,15 +43,15 @@ import {
   matrixFromTransform,
   readPlacementTransform,
   transformFromMatrix,
-} from './coords'
+} from './coords';
 import {
   centroidOf,
   groupScaledTransform,
   rotatedAroundOriginTransform,
   translatedTransform,
-} from './bulkTransform'
-import { initTextureSupport } from './textureSupport'
-import type { CatalogSubPart } from '../ksa/catalog'
+} from './bulkTransform';
+import { initTextureSupport } from './textureSupport';
+import type { CatalogSubPart } from '../ksa/catalog';
 import type {
   EditingPart,
   PartCollider,
@@ -59,7 +59,7 @@ import type {
   SubPartPlacement,
   Transform,
   Vec3,
-} from '../ksa/types'
+} from '../ksa/types';
 import {
   $bulkScaleMode,
   $lightEditContext,
@@ -91,8 +91,8 @@ import {
   updateSelectedTransform,
   updateSelectedTransforms,
   type SelectedTransformRef,
-} from '../state/editorStore'
-import { $catalogIndex, $customCatalog } from '../state/catalogStore'
+} from '../state/editorStore';
+import { $catalogIndex, $customCatalog } from '../state/catalogStore';
 import {
   $activeMeasurementId,
   $measureTool,
@@ -101,8 +101,8 @@ import {
   setActiveMeasurement,
   setMeasureTool,
   updateMeasurement,
-} from '../state/measurementStore'
-import { $activeContainerId, setActiveContainer } from '../state/containerStore'
+} from '../state/measurementStore';
+import { $activeContainerId, setActiveContainer } from '../state/containerStore';
 import {
   $activeAnimationId,
   $activeJointId,
@@ -112,10 +112,10 @@ import {
   moveJointPivot,
   reorientJointPivot,
   setJointPose,
-} from '../state/animationStore'
-import { jointWorld, previewOverrideMatrix } from '../ksa/animationRig'
-import type { PartAnimation } from '../ksa/types'
-import { $inspectorMode } from '../state/uiStore'
+} from '../state/animationStore';
+import { jointWorld, previewOverrideMatrix } from '../ksa/animationRig';
+import type { PartAnimation } from '../ksa/types';
+import { $inspectorMode } from '../state/uiStore';
 import {
   $activeEngineEntry,
   $activeNozzleRef,
@@ -127,7 +127,7 @@ import {
   updateNozzleAt,
   type NozzleRef,
   type NozzleTarget,
-} from '../state/engineStore'
+} from '../state/engineStore';
 import {
   $connectorSettings,
   $ivaSeatSettings,
@@ -138,18 +138,18 @@ import {
   type ConnectorSettings,
   type IvaSeatSettings,
   type LightVizSettings,
-} from '../state/settingsStore'
-import { $cameraRestore, $cameraSnap, $grids, $hideInterior } from '../state/viewStore'
-import { resolveInternal } from '../ksa/modExport'
-import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../state/layerStore'
+} from '../state/settingsStore';
+import { $cameraRestore, $cameraSnap, $grids, $hideInterior } from '../state/viewStore';
+import { resolveInternal } from '../ksa/modExport';
+import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../state/layerStore';
 // The app's one user-facing notification channel (`GlobalToastRegion` is mounted at the
 // root) — the scene has no other way to say "that did nothing, and here is why".
-import { toast } from '../ui/kit'
+import { toast } from '../ui/kit';
 
 /** A highlightable scene entity — both SubPartObject and ConnectorObject match. */
 interface SelectableObject {
-  readonly group: THREE.Group
-  setSelected(selected: boolean): void
+  readonly group: THREE.Group;
+  setSelected(selected: boolean): void;
 }
 
 /**
@@ -167,30 +167,30 @@ interface SelectableObject {
  * the change invisible until something else happened to trigger a frame.
  */
 export class EditorScene {
-  readonly viewport: Viewport
-  private readonly root = new THREE.Group()
-  private readonly objects = new Map<string, SubPartObject>()
-  private readonly connectorObjects = new Map<string, ConnectorObject>()
-  private readonly kittenObjects = new Map<string, KittenObject>()
+  readonly viewport: Viewport;
+  private readonly root = new THREE.Group();
+  private readonly objects = new Map<string, SubPartObject>();
+  private readonly connectorObjects = new Map<string, ConnectorObject>();
+  private readonly kittenObjects = new Map<string, KittenObject>();
   /**
    * Collider visuals, keyed by collider id. An ARRAY per collider because a SubPart-owned
    * one is drawn once per PLACEMENT of its template — KSA has no per-instance collider, so
    * every instance really does carry the same shape (see scope/colliders.md §4). A
    * part-level collider always has exactly one entry.
    */
-  private readonly colliderObjects = new Map<string, ColliderObject[]>()
+  private readonly colliderObjects = new Map<string, ColliderObject[]>();
   /**
    * Collider id → which of its per-placement visuals the gizmo edits (set by the last
    * click on it; defaults to 0). Only meaningful for a SubPart-owned collider — the one
    * document entity is drawn N times, so a drag has to name the frame it writes back
    * through. Ephemeral view state.
    */
-  private readonly colliderInstance = new Map<string, number>()
+  private readonly colliderInstance = new Map<string, number>();
   /**
    * IVA seat markers, keyed by seat id. ONE visual per seat — a seat is Part-level data
    * (`<IVASeat>` on `<PartGameData>`), so unlike a collider it is never drawn per placement.
    */
-  private readonly seatObjects = new Map<string, IvaSeatObject>()
+  private readonly seatObjects = new Map<string, IvaSeatObject>();
   /**
    * Light markers, keyed by light id. An ARRAY per light because a SubPart-owned one is
    * drawn once per PLACEMENT of its owning template — KSA instantiates the template's
@@ -198,52 +198,52 @@ export class EditorScene {
    * plans/LIGHT_MANAGEMENT_PLAN.md §1.3), so every instance really does cast the same
    * light. A part-level light always has exactly one entry.
    */
-  private readonly lightObjects = new Map<string, LightObject[]>()
+  private readonly lightObjects = new Map<string, LightObject[]>();
   // NOTE the light analogue of {@link colliderInstance} is NOT a private map: the
   // editing context (which per-placement visual the gizmo writes through) also drives
   // the inspector's part-frame fields, so it lives in the store as $lightEditContext —
   // one source both read via {@link lightContextIndex}, so they can never disagree.
   /** Red dots marking sample points outside every collider (the last coverage check). */
-  private coverageDots: THREE.Points | null = null
-  private readonly building = new Set<string>()
-  private readonly kittenBuilding = new Set<string>()
-  private index: Map<string, CatalogSubPart> = new Map()
-  private connectorSettings: ConnectorSettings = $connectorSettings.get()
-  private ivaSeatSettings: IvaSeatSettings = $ivaSeatSettings.get()
+  private coverageDots: THREE.Points | null = null;
+  private readonly building = new Set<string>();
+  private readonly kittenBuilding = new Set<string>();
+  private index: Map<string, CatalogSubPart> = new Map();
+  private connectorSettings: ConnectorSettings = $connectorSettings.get();
+  private ivaSeatSettings: IvaSeatSettings = $ivaSeatSettings.get();
   // Read through lightSettings() so a settings object persisted before a field
   // existed resolves that field to its default instead of `undefined` (which would
   // silently disable coverage) — see the resolver's JSDoc.
-  private lightSettings: LightVizSettings = lightSettings()
-  private readonly unsubscribers: Array<() => void> = []
-  private readonly selection: SelectionManager
-  private readonly gizmo: TransformGizmo
-  private readonly measurements: MeasurementLayer
-  private readonly containers: ContainerLayer
-  private highlighted: SelectableObject[] = []
-  private attachedObject: THREE.Object3D | null = null
+  private lightSettings: LightVizSettings = lightSettings();
+  private readonly unsubscribers: Array<() => void> = [];
+  private readonly selection: SelectionManager;
+  private readonly gizmo: TransformGizmo;
+  private readonly measurements: MeasurementLayer;
+  private readonly containers: ContainerLayer;
+  private highlighted: SelectableObject[] = [];
+  private attachedObject: THREE.Object3D | null = null;
   /** Instance ids whose group transform is currently overridden by the animation preview. */
-  private animOverridden = new Set<string>()
+  private animOverridden = new Set<string>();
   /**
    * Empty group the gizmo attaches to when 2+ SubParts are selected. Positioned
    * at the selection centroid with identity rotation/scale; the gizmo drives it
    * and {@link applyBulkFromPivot} fans the delta out to every selected SubPart.
    */
-  private readonly pivot = new THREE.Group()
+  private readonly pivot = new THREE.Group();
   /** Per-SubPart starting transforms captured at the start of a bulk gizmo drag. */
-  private bulkSnapshot: { centroid: Vec3; items: SelectedTransformRef[] } | null = null
+  private bulkSnapshot: { centroid: Vec3; items: SelectedTransformRef[] } | null = null;
   /**
    * Empty group the gizmo attaches to while editing a joint pose. Positioned at the
    * joint's world frame W_J(t) of the edited keyframe; a gizmo drag moves it, and
    * {@link handlePoseGizmoChange} reads it back to the joint's local pose (Part-space
    * since {@link root} is at identity). Takes precedence over the selection gizmo.
    */
-  private readonly poseProxy = new THREE.Group()
+  private readonly poseProxy = new THREE.Group();
   /**
    * Always-on marker at the active joint's REST pivot (the rotation anchor) while the
    * Animations editor is open, so it's obvious where attached parts swing from (and that
    * a fresh joint's pivot sits at the origin until moved). Non-pickable, read-only.
    */
-  private readonly pivotHelper = new THREE.AxesHelper(0.4)
+  private readonly pivotHelper = new THREE.AxesHelper(0.4);
 
   /**
    * Engine designer: ONE marker per nozzle exhaust placement of the open engine (both
@@ -256,42 +256,42 @@ export class EditorScene {
    * has an engine open; the gizmo attaches only when {@link $engineExhaustGizmo} is on.
    * Mirrors the pose pivot/proxy pair.
    */
-  private readonly nozzleHandles = new Map<string, NozzleHandleObject>()
+  private readonly nozzleHandles = new Map<string, NozzleHandleObject>();
   /** Target key → the nozzle it names, so a click on a handle resolves back to a ref. */
-  private readonly nozzleRefs = new Map<string, NozzleRef>()
-  private readonly engineProxy = new THREE.Group()
+  private readonly nozzleRefs = new Map<string, NozzleRef>();
+  private readonly engineProxy = new THREE.Group();
 
   // Point-to-point measurement picking.
-  private readonly raycaster = new THREE.Raycaster()
-  private pendingMeasurementId: string | null = null
-  private pickPointerDown: { x: number; y: number } | null = null
+  private readonly raycaster = new THREE.Raycaster();
+  private pendingMeasurementId: string | null = null;
+  private pickPointerDown: { x: number; y: number } | null = null;
 
   // Click-selection is suppressed by several independent modes at once, so each keeps
   // its own flag and {@link applySelectionSuppression} ORs them — a shared boolean would
   // let whichever mode ended last re-enable picking under one that is still active.
-  private suppressPickDrag = false
-  private suppressPickMeasure = false
-  private suppressPickSeatView = false
+  private suppressPickDrag = false;
+  private suppressPickMeasure = false;
+  private suppressPickSeatView = false;
 
   constructor(host: HTMLElement) {
-    this.viewport = new Viewport(host)
+    this.viewport = new Viewport(host);
     // Must precede the store subscriptions below (they build SubParts, which
     // request textures through the loader initialized here).
-    initTextureSupport(this.viewport.renderer)
-    this.root.name = 'flexo-part'
-    this.viewport.scene.add(this.root)
+    initTextureSupport(this.viewport.renderer);
+    this.root.name = 'flexo-part';
+    this.viewport.scene.add(this.root);
     if (import.meta.env.DEV)
-      (window as unknown as { __editorScene?: EditorScene }).__editorScene = this
-    this.pivot.name = 'bulk-pivot'
-    this.root.add(this.pivot)
-    this.poseProxy.name = 'pose-proxy'
-    this.root.add(this.poseProxy)
-    this.pivotHelper.name = 'joint-pivot'
-    this.pivotHelper.visible = false
-    this.pivotHelper.raycast = () => {} // never selectable / pickable
-    this.root.add(this.pivotHelper)
-    this.engineProxy.name = 'engine-exhaust-proxy'
-    this.root.add(this.engineProxy)
+      (window as unknown as { __editorScene?: EditorScene }).__editorScene = this;
+    this.pivot.name = 'bulk-pivot';
+    this.root.add(this.pivot);
+    this.poseProxy.name = 'pose-proxy';
+    this.root.add(this.poseProxy);
+    this.pivotHelper.name = 'joint-pivot';
+    this.pivotHelper.visible = false;
+    this.pivotHelper.raycast = () => {}; // never selectable / pickable
+    this.root.add(this.pivotHelper);
+    this.engineProxy.name = 'engine-exhaust-proxy';
+    this.root.add(this.engineProxy);
 
     this.selection = new SelectionManager(
       this.viewport.camera,
@@ -299,134 +299,134 @@ export class EditorScene {
       this.root,
       (selected, additive) => {
         if (!selected) {
-          if (!additive) clearSelection()
-          return
+          if (!additive) clearSelection();
+          return;
         }
         // A nozzle-exhaust handle is not a document entity — clicking one re-targets the
         // exhaust gizmo and deliberately leaves the mesh/connector selection alone (the
         // engine's own SubPart usually IS what's selected while you place its exhaust).
         if (selected.kind === 'nozzle') {
-          const ref = this.nozzleRefs.get(selected.id)
-          if (ref) setActiveNozzleRef(ref)
-          return
+          const ref = this.nozzleRefs.get(selected.id);
+          if (ref) setActiveNozzleRef(ref);
+          return;
         }
-        setActiveMeasurement(null) // selecting a mesh closes any measurement edit
+        setActiveMeasurement(null); // selecting a mesh closes any measurement edit
         if (selected.kind === 'subpart') {
-          const placements = $part.get().placements
-          const index = placements.findIndex((p) => p.instanceId === selected.id)
-          if (index < 0) return
-          const layerId = placements[index].layerId
-          if (isLayerLocked(layerId)) return
-          if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
+          const placements = $part.get().placements;
+          const index = placements.findIndex((p) => p.instanceId === selected.id);
+          if (index < 0) return;
+          const layerId = placements[index].layerId;
+          if (isLayerLocked(layerId)) return;
+          if (!isLayerVisible(layerId)) return; // three.js does not skip invisible objects during raycasting
           if (additive) {
-            const added = !$selectedIndices.get().includes(index)
-            toggleEntity('subpart', index)
-            if (added) revealEntity('subpart', selected.id) // scroll the just-added row into view in the Assets list
+            const added = !$selectedIndices.get().includes(index);
+            toggleEntity('subpart', index);
+            if (added) revealEntity('subpart', selected.id); // scroll the just-added row into view in the Assets list
           } else {
-            selectPlacement(index)
-            revealEntity('subpart', selected.id)
+            selectPlacement(index);
+            revealEntity('subpart', selected.id);
           }
         } else if (selected.kind === 'connector') {
-          const connectors = $part.get().connectors
-          const index = connectors.findIndex((c) => c.id === selected.id)
-          if (index < 0) return
-          const layerId = connectors[index].layerId
-          if (isLayerLocked(layerId)) return
-          if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
+          const connectors = $part.get().connectors;
+          const index = connectors.findIndex((c) => c.id === selected.id);
+          if (index < 0) return;
+          const layerId = connectors[index].layerId;
+          if (isLayerLocked(layerId)) return;
+          if (!isLayerVisible(layerId)) return; // three.js does not skip invisible objects during raycasting
           if (additive) {
-            const added = !$selectedConnectorIndices.get().includes(index)
-            toggleEntity('connector', index)
-            if (added) revealEntity('connector', selected.id)
+            const added = !$selectedConnectorIndices.get().includes(index);
+            toggleEntity('connector', index);
+            if (added) revealEntity('connector', selected.id);
           } else {
-            selectConnector(index)
-            revealEntity('connector', selected.id)
+            selectConnector(index);
+            revealEntity('connector', selected.id);
           }
         } else if (selected.kind === 'collider') {
-          const colliders = $part.get().colliders
-          const index = colliders.findIndex((c) => c.id === selected.id)
-          if (index < 0) return
-          const layerId = colliders[index].layerId
-          if (isLayerLocked(layerId)) return
-          if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
+          const colliders = $part.get().colliders;
+          const index = colliders.findIndex((c) => c.id === selected.id);
+          if (index < 0) return;
+          const layerId = colliders[index].layerId;
+          if (isLayerLocked(layerId)) return;
+          if (!isLayerVisible(layerId)) return; // three.js does not skip invisible objects during raycasting
           // Remember WHICH visual was clicked so the gizmo edits that instance's frame.
-          this.colliderInstance.set(selected.id, selected.instanceIndex ?? 0)
+          this.colliderInstance.set(selected.id, selected.instanceIndex ?? 0);
           if (additive) {
-            const added = !$selectedColliderIndices.get().includes(index)
-            toggleEntity('collider', index)
-            if (added) revealEntity('collider', selected.id)
+            const added = !$selectedColliderIndices.get().includes(index);
+            toggleEntity('collider', index);
+            if (added) revealEntity('collider', selected.id);
           } else {
-            selectCollider(index)
-            revealEntity('collider', selected.id)
+            selectCollider(index);
+            revealEntity('collider', selected.id);
           }
         } else if (selected.kind === 'ivaSeat') {
-          const seats = $part.get().ivaSeats
-          const index = seats.findIndex((s) => s.id === selected.id)
-          if (index < 0) return
-          const layerId = seats[index].layerId
-          if (isLayerLocked(layerId)) return
-          if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
+          const seats = $part.get().ivaSeats;
+          const index = seats.findIndex((s) => s.id === selected.id);
+          if (index < 0) return;
+          const layerId = seats[index].layerId;
+          if (isLayerLocked(layerId)) return;
+          if (!isLayerVisible(layerId)) return; // three.js does not skip invisible objects during raycasting
           if (additive) {
-            const added = !$selectedIvaSeatIndices.get().includes(index)
-            toggleEntity('ivaSeat', index)
-            if (added) revealEntity('ivaSeat', selected.id)
+            const added = !$selectedIvaSeatIndices.get().includes(index);
+            toggleEntity('ivaSeat', index);
+            if (added) revealEntity('ivaSeat', selected.id);
           } else {
-            selectIvaSeat(index)
-            revealEntity('ivaSeat', selected.id)
+            selectIvaSeat(index);
+            revealEntity('ivaSeat', selected.id);
           }
         } else if (selected.kind === 'light') {
-          const lights = $part.get().lights
-          const index = lights.findIndex((l) => l.id === selected.id)
-          if (index < 0) return
-          const layerId = lights[index].layerId
-          if (isLayerLocked(layerId)) return
-          if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
+          const lights = $part.get().lights;
+          const index = lights.findIndex((l) => l.id === selected.id);
+          if (index < 0) return;
+          const layerId = lights[index].layerId;
+          if (isLayerLocked(layerId)) return;
+          if (!isLayerVisible(layerId)) return; // three.js does not skip invisible objects during raycasting
           // Remember WHICH visual was clicked so the highlight, the gizmo and the
           // inspector's part-frame fields all edit through that instance's frame.
-          setLightEditContext(selected.id, selected.instanceIndex ?? 0)
+          setLightEditContext(selected.id, selected.instanceIndex ?? 0);
           if (additive) {
-            const added = !$selectedLightIndices.get().includes(index)
-            toggleEntity('light', index)
-            if (added) revealEntity('light', selected.id)
+            const added = !$selectedLightIndices.get().includes(index);
+            toggleEntity('light', index);
+            if (added) revealEntity('light', selected.id);
           } else {
-            selectLight(index)
-            revealEntity('light', selected.id)
+            selectLight(index);
+            revealEntity('light', selected.id);
           }
         } else {
-          const kittens = $part.get().kittens
-          const index = kittens.findIndex((k) => k.id === selected.id)
-          if (index < 0) return
-          const layerId = kittens[index].layerId
-          if (isLayerLocked(layerId)) return
-          if (!isLayerVisible(layerId)) return // three.js does not skip invisible objects during raycasting
+          const kittens = $part.get().kittens;
+          const index = kittens.findIndex((k) => k.id === selected.id);
+          if (index < 0) return;
+          const layerId = kittens[index].layerId;
+          if (isLayerLocked(layerId)) return;
+          if (!isLayerVisible(layerId)) return; // three.js does not skip invisible objects during raycasting
           if (additive) {
-            const added = !$selectedKittenIndices.get().includes(index)
-            toggleEntity('kitten', index)
-            if (added) revealEntity('kitten', selected.id)
+            const added = !$selectedKittenIndices.get().includes(index);
+            toggleEntity('kitten', index);
+            if (added) revealEntity('kitten', selected.id);
           } else {
-            selectKitten(index)
-            revealEntity('kitten', selected.id)
+            selectKitten(index);
+            revealEntity('kitten', selected.id);
           }
         }
       },
-    )
+    );
 
     this.gizmo = new TransformGizmo(this.viewport, {
       onDragStart: () => {
         // Editing a joint pose: one undo step, no bulk snapshot.
-        const pose = this.attachedObject === this.poseProxy ? this.poseEditTarget() : null
+        const pose = this.attachedObject === this.poseProxy ? this.poseEditTarget() : null;
         if (pose) {
-          const when = pose.kf.timeSec === 0 ? 'rest' : `${pose.kf.timeSec}s`
-          pushUndo('pose', `${pose.joint.name} @ ${when}`)
-          return
+          const when = pose.kf.timeSec === 0 ? 'rest' : `${pose.kf.timeSec}s`;
+          pushUndo('pose', `${pose.joint.name} @ ${when}`);
+          return;
         }
         // Placing a nozzle exhaust: one undo step, no bulk snapshot.
         if (this.attachedObject === this.engineProxy) {
-          const target = this.activeNozzleTarget()
-          pushUndo(target?.ref.channel === 'fx' ? 'plume FX' : 'exhaust', target?.nozzle.id ?? '')
-          return
+          const target = this.activeNozzleTarget();
+          pushUndo(target?.ref.channel === 'fx' ? 'plume FX' : 'exhaust', target?.nozzle.id ?? '');
+          return;
         }
-        const mode = $toolMode.get()
-        const refs = selectedTransformRefs()
+        const mode = $toolMode.get();
+        const refs = selectedTransformRefs();
         // A seat has no size — KSA has no seat size field, so `assignIvaSeat` pins scale to
         // (1,1,1) and a scale drag on seats alone changes nothing. Pushing an undo step for
         // it would only make the next Ctrl+Z look dead. The bulk snapshot still runs.
@@ -435,161 +435,161 @@ export class EditorScene {
         const seatScaleOnly =
           mode === 'scale' &&
           refs.length > 0 &&
-          refs.every((r) => r.kind === 'ivaSeat' || r.kind === 'light')
+          refs.every((r) => r.kind === 'ivaSeat' || r.kind === 'light');
         if (!seatScaleOnly) {
-          const desc = mode === 'rotate' ? 'rotate' : mode === 'scale' ? 'scale' : 'move'
+          const desc = mode === 'rotate' ? 'rotate' : mode === 'scale' ? 'scale' : 'move';
           const detail =
-            refs.length === 1 ? refs[0].name : refs.length > 1 ? `${refs.length} items` : ''
-          pushUndo(desc, detail)
+            refs.length === 1 ? refs[0].name : refs.length > 1 ? `${refs.length} items` : '';
+          pushUndo(desc, detail);
         }
-        this.beginBulkDrag()
+        this.beginBulkDrag();
       },
       onChange: (object) => {
-        if (object === this.poseProxy) this.handlePoseGizmoChange()
-        else if (object === this.engineProxy) this.handleEngineGizmoChange()
-        else this.handleGizmoChange(object)
+        if (object === this.poseProxy) this.handlePoseGizmoChange();
+        else if (object === this.engineProxy) this.handleEngineGizmoChange();
+        else this.handleGizmoChange(object);
       },
       onDraggingChanged: (dragging) => {
-        this.suppressPickDrag = dragging
-        this.applySelectionSuppression()
+        this.suppressPickDrag = dragging;
+        this.applySelectionSuppression();
         if (!dragging) {
-          this.endBulkDrag()
-          this.updateSelection() // re-snap the pose proxy to the committed pose
+          this.endBulkDrag();
+          this.updateSelection(); // re-snap the pose proxy to the committed pose
         }
       },
-    })
+    });
 
     this.measurements = new MeasurementLayer(this.viewport, () =>
       this.selectedObjects().map((o) => o.group),
-    )
+    );
     this.containers = new ContainerLayer(this.viewport, () =>
       [...this.objects.values()].map((o) => o.group),
-    )
+    );
 
-    const dom = this.viewport.renderer.domElement
-    dom.addEventListener('pointerdown', this.onPickPointerDown)
-    dom.addEventListener('pointerup', this.onPickPointerUp)
+    const dom = this.viewport.renderer.domElement;
+    dom.addEventListener('pointerdown', this.onPickPointerDown);
+    dom.addEventListener('pointerup', this.onPickPointerUp);
     this.sub($measureTool, (tool) => {
-      const picking = tool !== 'none'
-      this.suppressPickMeasure = picking
-      this.applySelectionSuppression()
-      dom.style.cursor = picking ? 'crosshair' : ''
-      if (!picking) this.cancelPendingMeasurement()
-    })
+      const picking = tool !== 'none';
+      this.suppressPickMeasure = picking;
+      this.applySelectionSuppression();
+      dom.style.cursor = picking ? 'crosshair' : '';
+      if (!picking) this.cancelPendingMeasurement();
+    });
     // Editing a measurement, editing a container, and selecting a mesh are all
     // mutually exclusive, so only one gizmo is ever active at a time.
     this.sub($activeMeasurementId, (id) => {
       if (id) {
-        clearSelection()
-        setActiveContainer(null)
+        clearSelection();
+        setActiveContainer(null);
       }
-    })
+    });
     this.sub($activeContainerId, (id) => {
       if (id) {
-        clearSelection()
-        setActiveMeasurement(null)
+        clearSelection();
+        setActiveMeasurement(null);
       }
-    })
+    });
     // Selecting any mesh closes container editing (its gizmo would otherwise fight
     // the selection gizmo).
     const clearContainerOnSelect = () => {
-      if (this.selectedObjects().length > 0) setActiveContainer(null)
-    }
-    this.sub($selectedIndices, clearContainerOnSelect)
-    this.sub($selectedConnectorIndices, clearContainerOnSelect)
-    this.sub($selectedKittenIndices, clearContainerOnSelect)
-    this.sub($selectedColliderIndices, clearContainerOnSelect)
-    this.sub($selectedIvaSeatIndices, clearContainerOnSelect)
-    this.sub($selectedLightIndices, clearContainerOnSelect)
+      if (this.selectedObjects().length > 0) setActiveContainer(null);
+    };
+    this.sub($selectedIndices, clearContainerOnSelect);
+    this.sub($selectedConnectorIndices, clearContainerOnSelect);
+    this.sub($selectedKittenIndices, clearContainerOnSelect);
+    this.sub($selectedColliderIndices, clearContainerOnSelect);
+    this.sub($selectedIvaSeatIndices, clearContainerOnSelect);
+    this.sub($selectedLightIndices, clearContainerOnSelect);
 
     // nanostores `subscribe` fires immediately with the current value.
     this.sub($catalogIndex, (index) => {
-      this.index = index
-      this.reconcile($part.get())
-    })
+      this.index = index;
+      this.reconcile($part.get());
+    });
     // A custom template's geometry/texture can change in place (the catalog entry's
     // atlas/diffuse blob URL changes) while its placements keep the same template id.
     // reconcile() never rebuilds existing objects, so dispose the affected ones and
     // let reconcile re-create them from the fresh entry.
     this.sub($customCatalog, (custom) => {
-      const customIds = new Set(custom.map((c) => c.id))
-      const part = $part.get()
+      const customIds = new Set(custom.map((c) => c.id));
+      const part = $part.get();
       for (const [id, obj] of this.objects) {
-        const placement = part.placements.find((p) => p.instanceId === id)
+        const placement = part.placements.find((p) => p.instanceId === id);
         if (placement && customIds.has(placement.subPartTemplateId)) {
-          this.root.remove(obj.group)
-          obj.dispose()
-          this.objects.delete(id)
+          this.root.remove(obj.group);
+          obj.dispose();
+          this.objects.delete(id);
         }
       }
-      this.index = $catalogIndex.get()
-      this.reconcile(part)
-    })
-    this.sub($part, (part) => this.reconcile(part))
+      this.index = $catalogIndex.get();
+      this.reconcile(part);
+    });
+    this.sub($part, (part) => this.reconcile(part));
     // Animation preview: re-apply the joint-driven transform override when the active
     // animation, scrub position, or edited keyframe changes ($part changes already
     // re-apply via reconcile). Fires immediately on subscribe (harmless no-op at rest).
     const onPreviewChange = () => {
-      this.applyAnimationPreview()
-      this.updateSelection() // re-evaluate gizmo suppression for posed animated parts
-    }
-    this.sub($activeAnimationId, onPreviewChange)
-    this.sub($activeJointId, onPreviewChange)
-    this.sub($animPreviewU, onPreviewChange)
-    this.sub($animScrubbing, onPreviewChange)
-    this.sub($editKeyframeId, onPreviewChange)
+      this.applyAnimationPreview();
+      this.updateSelection(); // re-evaluate gizmo suppression for posed animated parts
+    };
+    this.sub($activeAnimationId, onPreviewChange);
+    this.sub($activeJointId, onPreviewChange);
+    this.sub($animPreviewU, onPreviewChange);
+    this.sub($animScrubbing, onPreviewChange);
+    this.sub($editKeyframeId, onPreviewChange);
     // Leaving/entering the Animation editor toggles the preview + pose gizmo on/off.
-    this.sub($inspectorMode, onPreviewChange)
+    this.sub($inspectorMode, onPreviewChange);
     // Engine designer: refresh the exhaust markers + (re)attach the exhaust gizmo when the
     // open engine / target instance / targeted nozzle / gizmo toggle / mode changes. NOT
     // $resolvedNozzleTargets itself — it also derives from $part, which reconcile() already
     // covers, so subscribing to it would do every handle pass twice per document edit.
     const onEngineChange = () => {
-      this.applyEngineHandles()
-      this.updateSelection()
-    }
-    this.sub($activeEngineEntry, onEngineChange)
-    this.sub($activeNozzleRef, onEngineChange)
-    this.sub($engineExhaustGizmo, onEngineChange)
-    this.sub($inspectorMode, onEngineChange)
-    this.sub($selectedIndices, () => this.updateSelection())
-    this.sub($selectedConnectorIndices, () => this.updateSelection())
-    this.sub($selectedKittenIndices, () => this.updateSelection())
-    this.sub($selectedColliderIndices, () => this.updateSelection())
-    this.sub($selectedIvaSeatIndices, () => this.updateSelection())
-    this.sub($selectedLightIndices, () => this.updateSelection())
+      this.applyEngineHandles();
+      this.updateSelection();
+    };
+    this.sub($activeEngineEntry, onEngineChange);
+    this.sub($activeNozzleRef, onEngineChange);
+    this.sub($engineExhaustGizmo, onEngineChange);
+    this.sub($inspectorMode, onEngineChange);
+    this.sub($selectedIndices, () => this.updateSelection());
+    this.sub($selectedConnectorIndices, () => this.updateSelection());
+    this.sub($selectedKittenIndices, () => this.updateSelection());
+    this.sub($selectedColliderIndices, () => this.updateSelection());
+    this.sub($selectedIvaSeatIndices, () => this.updateSelection());
+    this.sub($selectedLightIndices, () => this.updateSelection());
     // A context change re-targets a selected light's highlight + gizmo to the newly
     // clicked instance even when the selection indices themselves are unchanged.
-    this.sub($lightEditContext, () => this.updateSelection())
+    this.sub($lightEditContext, () => this.updateSelection());
     // Collider fitting needs world geometry, which only exists here — the UI publishes an
     // intent and this consumes it (see colliderStore).
     this.sub($colliderFitRequest, (req) => {
-      if (req) this.handleColliderFit(req)
-    })
+      if (req) this.handleColliderFit(req);
+    });
     this.sub($coverageRequest, (wanted) => {
-      if (wanted) this.handleCoverageCheck()
-    })
+      if (wanted) this.handleCoverageCheck();
+    });
     // The uncovered-point dots are a snapshot of one check; editing invalidates them.
-    this.sub($coverageReport, () => this.applyCoverageDots())
+    this.sub($coverageReport, () => this.applyCoverageDots());
     // Aiming a seat needs the world-space centroid of the selection, which only exists
     // here — same intent → scene → store round trip as the collider fit (see ivaSeatStore).
     this.sub($ivaSeatAimRequest, (req) => {
-      if (req) this.handleIvaSeatAim(req)
-    })
+      if (req) this.handleIvaSeatAim(req);
+    });
     // Sitting in a seat: resolve the previewed seat id against the document and hand the
     // pose to the viewport (reconcile does the same on every document change, so a moved
     // or deleted seat is picked up there).
-    this.sub($seatView, () => this.applySeatView())
+    this.sub($seatView, () => this.applySeatView());
     this.sub($connectorSettings, (settings) => {
-      this.connectorSettings = settings
-      this.rebuildConnectors()
-    })
+      this.connectorSettings = settings;
+      this.rebuildConnectors();
+    });
     // Marker size / gaze cone are global view settings, not document data: the markers
     // have no in-place resize, so a change rebuilds them (as $connectorSettings does).
     this.sub($ivaSeatSettings, (settings) => {
-      this.ivaSeatSettings = settings
-      this.rebuildIvaSeats()
-    })
+      this.ivaSeatSettings = settings;
+      this.rebuildIvaSeats();
+    });
     // Light markers: only the SIZE needs the rebuild (no in-place resize path, the
     // $ivaSeatSettings pattern). The coverage settings are live — pushing the exposure
     // into the existing shell materials and re-running the visibility pass is both
@@ -597,35 +597,35 @@ export class EditorScene {
     // PREVIEW is live too: `setPreview` adds/removes one real light per marker, so
     // flipping the toggle must NOT rebuild every marker's geometry.
     this.sub($lightSettings, () => {
-      const settings = lightSettings()
-      const resize = settings.markerSize !== this.lightSettings.markerSize
-      this.lightSettings = settings
+      const settings = lightSettings();
+      const resize = settings.markerSize !== this.lightSettings.markerSize;
+      this.lightSettings = settings;
       if (resize) {
-        this.rebuildLights() // reconcileLights re-applies coverage + preview
-        return
+        this.rebuildLights(); // reconcileLights re-applies coverage + preview
+        return;
       }
-      for (const objs of this.lightObjects.values()) for (const obj of objs) obj.setViz(settings)
-      this.applyLightCoverage()
-      this.applyLightPreview()
-    })
+      for (const objs of this.lightObjects.values()) for (const obj of objs) obj.setViz(settings);
+      this.applyLightCoverage();
+      this.applyLightPreview();
+    });
     // Re-apply the highlight tint to the current selection when the color/strength
     // setting changes (fires immediately on subscribe — a harmless no-op when nothing
     // is selected).
-    this.sub($selectionHighlight, () => this.updateSelection())
-    this.sub($layerView, () => this.applyLayerView())
-    this.sub($hideInterior, () => this.applyLayerView())
+    this.sub($selectionHighlight, () => this.updateSelection());
+    this.sub($layerView, () => this.applyLayerView());
+    this.sub($hideInterior, () => this.applyLayerView());
     // $effectiveToolMode, not $toolMode: exhaust placement clamps Scale away (a nozzle
     // placement has nothing to scale), and the toolbar reads the same computed so the
     // displayed tool always matches the tool a drag performs.
-    this.sub($effectiveToolMode, (mode) => this.gizmo.setMode(mode))
-    this.sub($snap, (snap) => this.gizmo.setSnap(snap))
-    this.sub($grids, (grids) => this.viewport.grids.setConfig(grids))
+    this.sub($effectiveToolMode, (mode) => this.gizmo.setMode(mode));
+    this.sub($snap, (snap) => this.gizmo.setSnap(snap));
+    this.sub($grids, (grids) => this.viewport.grids.setConfig(grids));
     this.sub($cameraSnap, (cmd) => {
-      if (cmd) this.viewport.snapCamera(cmd.dir)
-    })
+      if (cmd) this.viewport.snapCamera(cmd.dir);
+    });
     this.sub($cameraRestore, (cmd) => {
-      if (cmd) this.viewport.restoreCamera(cmd.state)
-    })
+      if (cmd) this.viewport.restoreCamera(cmd.state);
+    });
   }
 
   /**
@@ -641,75 +641,75 @@ export class EditorScene {
   private sub<T>(store: ReadableAtom<T>, run: (value: T) => void): void {
     this.unsubscribers.push(
       store.subscribe((value) => {
-        run(value)
-        this.viewport.invalidate()
+        run(value);
+        this.viewport.invalidate();
       }),
-    )
+    );
   }
 
   /** Returns the scene object for a placed instance, if built. */
   getObject(instanceId: string): SubPartObject | undefined {
-    return this.objects.get(instanceId)
+    return this.objects.get(instanceId);
   }
 
   private reconcile(part: EditingPart): void {
-    const wanted = new Set(part.placements.map((p) => p.instanceId))
+    const wanted = new Set(part.placements.map((p) => p.instanceId));
 
     // Remove objects whose placement is gone.
     for (const [id, obj] of this.objects) {
       if (!wanted.has(id)) {
-        this.root.remove(obj.group)
-        obj.dispose()
-        this.objects.delete(id)
+        this.root.remove(obj.group);
+        obj.dispose();
+        this.objects.delete(id);
       }
     }
 
     // Add new objects; update transforms of existing ones.
     for (const placement of part.placements) {
-      const existing = this.objects.get(placement.instanceId)
+      const existing = this.objects.get(placement.instanceId);
       if (existing) {
-        existing.setPlacement(placement)
-        continue
+        existing.setPlacement(placement);
+        continue;
       }
-      if (this.building.has(placement.instanceId)) continue
+      if (this.building.has(placement.instanceId)) continue;
 
-      const entry = this.index.get(placement.subPartTemplateId)
-      if (!entry) continue // catalog not ready or unknown template
+      const entry = this.index.get(placement.subPartTemplateId);
+      if (!entry) continue; // catalog not ready or unknown template
 
-      this.building.add(placement.instanceId)
+      this.building.add(placement.instanceId);
       void SubPartObject.create(entry, placement)
         .then((obj) => {
-          this.building.delete(placement.instanceId)
-          const latest = $part.get().placements.find((p) => p.instanceId === placement.instanceId)
+          this.building.delete(placement.instanceId);
+          const latest = $part.get().placements.find((p) => p.instanceId === placement.instanceId);
           if (!latest) {
-            obj.dispose() // removed while loading
-            return
+            obj.dispose(); // removed while loading
+            return;
           }
-          obj.setPlacement(latest)
-          this.root.add(obj.group)
-          this.objects.set(placement.instanceId, obj)
-          this.applyLayerView() // respect the layer's visibility + opacity for the new object
-          this.updateSelection() // highlight/attach if this is the selected one
-          this.applyAnimationPreview() // re-apply if this object is animation-driven
-          this.viewport.invalidate() // geometry landed after the store change that asked for it
+          obj.setPlacement(latest);
+          this.root.add(obj.group);
+          this.objects.set(placement.instanceId, obj);
+          this.applyLayerView(); // respect the layer's visibility + opacity for the new object
+          this.updateSelection(); // highlight/attach if this is the selected one
+          this.applyAnimationPreview(); // re-apply if this object is animation-driven
+          this.viewport.invalidate(); // geometry landed after the store change that asked for it
         })
         .catch((err) => {
-          this.building.delete(placement.instanceId)
-          console.warn(`EditorScene: failed to build '${placement.instanceId}'`, err)
-        })
+          this.building.delete(placement.instanceId);
+          console.warn(`EditorScene: failed to build '${placement.instanceId}'`, err);
+        });
     }
 
-    this.reconcileConnectors(part)
-    this.reconcileColliders(part)
-    this.reconcileIvaSeats(part)
-    this.reconcileLights(part)
-    this.reconcileKittens(part)
-    this.applyLayerView()
-    this.updateSelection()
-    this.applyAnimationPreview()
-    this.applyEngineHandles()
+    this.reconcileConnectors(part);
+    this.reconcileColliders(part);
+    this.reconcileIvaSeats(part);
+    this.reconcileLights(part);
+    this.reconcileKittens(part);
+    this.applyLayerView();
+    this.updateSelection();
+    this.applyAnimationPreview();
+    this.applyEngineHandles();
     // Last: the previewed seat may have moved, been re-aimed, or vanished with this change.
-    this.applySeatView()
+    this.applySeatView();
   }
 
   /**
@@ -724,30 +724,30 @@ export class EditorScene {
    * seat markers — you are INSIDE the marker you sat in, so it would fill the screen.
    */
   private applySeatView(): void {
-    const seatId = $seatView.get()
-    const seat = seatId ? $part.get().ivaSeats.find((s) => s.id === seatId) : undefined
+    const seatId = $seatView.get();
+    const seat = seatId ? $part.get().ivaSeats.find((s) => s.id === seatId) : undefined;
     if (seatId && !seat) {
       // Re-enters through the $seatView subscription with a null id, which tears down.
-      exitSeatView()
-      return
+      exitSeatView();
+      return;
     }
     if (seat) {
-      const { forward, up } = seatAxesFromRotation(seat.rotation)
-      this.viewport.enterSeatView({ position: seat.position, forward, up })
+      const { forward, up } = seatAxesFromRotation(seat.rotation);
+      this.viewport.enterSeatView({ position: seat.position, forward, up });
     } else {
-      this.viewport.exitSeatView()
+      this.viewport.exitSeatView();
     }
-    this.suppressPickSeatView = seat != null
-    this.applySelectionSuppression()
-    this.applyLayerView() // shows/hides the seat markers
-    this.updateSelection() // attaches/detaches the gizmo
+    this.suppressPickSeatView = seat != null;
+    this.applySelectionSuppression();
+    this.applyLayerView(); // shows/hides the seat markers
+    this.updateSelection(); // attaches/detaches the gizmo
   }
 
   /** Applies the OR of every reason click-selection is currently off. */
   private applySelectionSuppression(): void {
     this.selection.setSuppressed(
       this.suppressPickDrag || this.suppressPickMeasure || this.suppressPickSeatView,
-    )
+    );
   }
 
   /**
@@ -763,130 +763,132 @@ export class EditorScene {
    */
   /** True when the preview shows a posed (non-rest) frame: editing a keyframe, or scrubbing past 0. */
   private isPreviewPosed(): boolean {
-    if ($inspectorMode.get() !== 'anim') return false
-    if ($editKeyframeId.get()) return true
-    return $animScrubbing.get() && $animPreviewU.get() > 1e-6
+    if ($inspectorMode.get() !== 'anim') return false;
+    if ($editKeyframeId.get()) return true;
+    return $animScrubbing.get() && $animPreviewU.get() > 1e-6;
   }
 
   /** True when any selected SubPart is attached to a joint of the active animation. */
   private selectedIsAnimated(): boolean {
-    const animId = $activeAnimationId.get()
-    const part = $part.get()
-    const anim = animId ? part.animations.find((a) => a.id === animId) : null
-    if (!anim) return false
-    const members = new Set<string>()
-    for (const j of anim.joints) for (const id of j.memberInstanceIds) members.add(id)
+    const animId = $activeAnimationId.get();
+    const part = $part.get();
+    const anim = animId ? part.animations.find((a) => a.id === animId) : null;
+    if (!anim) return false;
+    const members = new Set<string>();
+    for (const j of anim.joints) for (const id of j.memberInstanceIds) members.add(id);
     if ($selectedIndices.get().some((i) => members.has(part.placements[i]?.instanceId ?? '')))
-      return true
+      return true;
     // A SubPart-owned collider rides its instance, so while a POSED frame is shown its
     // gizmo would write back through the posed (not modeled) frame — lock it too. A
     // SubPart-owned LIGHT rides its instances the same way (positionLights poses it),
     // so it gets the identical lock: without it a drag would bake the preview pose
     // into the document (lightGizmoFrame always resolves the STATIC placement).
     const ownedByAnimated = (ownerTemplateId: string | null | undefined): boolean => {
-      if (!ownerTemplateId) return false
+      if (!ownerTemplateId) return false;
       return part.placements.some(
         (p) => p.subPartTemplateId === ownerTemplateId && members.has(p.instanceId),
-      )
-    }
+      );
+    };
     if (
       $selectedColliderIndices
         .get()
         .some((i) => ownedByAnimated(part.colliders[i]?.ownerTemplateId))
     )
-      return true
-    return $selectedLightIndices.get().some((i) => ownedByAnimated(part.lights[i]?.ownerTemplateId))
+      return true;
+    return $selectedLightIndices
+      .get()
+      .some((i) => ownedByAnimated(part.lights[i]?.ownerTemplateId));
   }
 
   private applyAnimationPreview(): void {
-    const part = $part.get()
-    const byId = new Map(part.placements.map((p) => [p.instanceId, p]))
+    const part = $part.get();
+    const byId = new Map(part.placements.map((p) => [p.instanceId, p]));
     // Revert last round's overrides to their static placement.
     for (const id of this.animOverridden) {
-      const obj = this.objects.get(id)
-      const placement = byId.get(id)
-      if (obj && placement) obj.setPlacement(placement)
+      const obj = this.objects.get(id);
+      const placement = byId.get(id);
+      if (obj && placement) obj.setPlacement(placement);
     }
-    this.animOverridden.clear()
+    this.animOverridden.clear();
 
     // Preview only runs while the Animation editor is open (its atoms persist across
     // inspector mode switches); in assets mode parts show their static placements.
-    const animId = $inspectorMode.get() === 'anim' ? $activeAnimationId.get() : null
-    const anim = animId ? part.animations.find((a) => a.id === animId) : null
+    const animId = $inspectorMode.get() === 'anim' ? $activeAnimationId.get() : null;
+    const anim = animId ? part.animations.find((a) => a.id === animId) : null;
     if (!anim) {
-      this.positionColliders(part) // back to static frames
-      this.positionLights(part)
-      return
+      this.positionColliders(part); // back to static frames
+      this.positionLights(part);
+      return;
     }
-    const editKf = $editKeyframeId.get()
+    const editKf = $editKeyframeId.get();
     // Override only while actively posing a keyframe or dragging the scrubber; otherwise
     // SubParts rest at their static modeled placement (an imported deploy clip's rest is
     // its DEPLOYED last keyframe, so this keeps it shown deployed until you scrub).
     if (!editKf && !$animScrubbing.get()) {
-      this.positionColliders(part)
-      this.positionLights(part)
-      return
+      this.positionColliders(part);
+      this.positionLights(part);
+      return;
     }
-    const posed = new Map<string, Transform>()
-    const pinned = editKf ? anim.keyframes.find((k) => k.id === editKf) : null
-    const u = Math.min(1, Math.max(0, $animPreviewU.get()))
-    const t = pinned ? pinned.timeSec : u * anim.durationSec
+    const posed = new Map<string, Transform>();
+    const pinned = editKf ? anim.keyframes.find((k) => k.id === editKf) : null;
+    const u = Math.min(1, Math.max(0, $animPreviewU.get()));
+    const t = pinned ? pinned.timeSec : u * anim.durationSec;
 
     for (const joint of anim.joints) {
       for (const instId of joint.memberInstanceIds) {
-        const obj = this.objects.get(instId)
-        const placement = byId.get(instId)
-        if (!obj || !placement) continue
-        const m = previewOverrideMatrix(anim, instId, t, placement)
-        if (!m) continue
-        m.decompose(obj.group.position, obj.group.quaternion, obj.group.scale)
-        this.animOverridden.add(instId)
-        posed.set(instId, transformFromMatrix(m))
+        const obj = this.objects.get(instId);
+        const placement = byId.get(instId);
+        if (!obj || !placement) continue;
+        const m = previewOverrideMatrix(anim, instId, t, placement);
+        if (!m) continue;
+        m.decompose(obj.group.position, obj.group.quaternion, obj.group.scale);
+        this.animOverridden.add(instId);
+        posed.set(instId, transformFromMatrix(m));
       }
     }
     // A SubPart-owned collider rides its instance, so it must follow the pose too —
     // and so does a SubPart-owned light (part-level lights never move with animation).
-    this.positionColliders(part, posed)
-    this.positionLights(part, posed)
+    this.positionColliders(part, posed);
+    this.positionLights(part, posed);
   }
 
   /** Builds/updates/removes kitten visual aides (async, like SubParts). */
   private reconcileKittens(part: EditingPart): void {
-    const wanted = new Set(part.kittens.map((k) => k.id))
+    const wanted = new Set(part.kittens.map((k) => k.id));
     for (const [id, obj] of this.kittenObjects) {
       if (!wanted.has(id)) {
-        this.root.remove(obj.group)
-        obj.dispose()
-        this.kittenObjects.delete(id)
+        this.root.remove(obj.group);
+        obj.dispose();
+        this.kittenObjects.delete(id);
       }
     }
     for (const kitten of part.kittens) {
-      const existing = this.kittenObjects.get(kitten.id)
+      const existing = this.kittenObjects.get(kitten.id);
       if (existing) {
-        existing.setInstance(kitten)
-        continue
+        existing.setInstance(kitten);
+        continue;
       }
-      if (this.kittenBuilding.has(kitten.id)) continue
-      this.kittenBuilding.add(kitten.id)
+      if (this.kittenBuilding.has(kitten.id)) continue;
+      this.kittenBuilding.add(kitten.id);
       void KittenObject.create(kitten.kind, kitten)
         .then((obj) => {
-          this.kittenBuilding.delete(kitten.id)
-          const latest = $part.get().kittens.find((k) => k.id === kitten.id)
+          this.kittenBuilding.delete(kitten.id);
+          const latest = $part.get().kittens.find((k) => k.id === kitten.id);
           if (!latest || latest.kind !== kitten.kind) {
-            obj.dispose() // removed or changed kind while loading
-            return
+            obj.dispose(); // removed or changed kind while loading
+            return;
           }
-          obj.setInstance(latest)
-          this.root.add(obj.group)
-          this.kittenObjects.set(kitten.id, obj)
-          this.applyLayerView()
-          this.updateSelection()
-          this.viewport.invalidate() // as above: the build landed after its store change
+          obj.setInstance(latest);
+          this.root.add(obj.group);
+          this.kittenObjects.set(kitten.id, obj);
+          this.applyLayerView();
+          this.updateSelection();
+          this.viewport.invalidate(); // as above: the build landed after its store change
         })
         .catch((err) => {
-          this.kittenBuilding.delete(kitten.id)
-          console.warn(`EditorScene: failed to build kitten '${kitten.id}'`, err)
-        })
+          this.kittenBuilding.delete(kitten.id);
+          console.warn(`EditorScene: failed to build kitten '${kitten.id}'`, err);
+        });
     }
   }
 
@@ -897,91 +899,91 @@ export class EditorScene {
    * hidden/non-active-layer hits explicitly.
    */
   private applyLayerView(): void {
-    const part = $part.get()
-    const view = $layerView.get()
+    const part = $part.get();
+    const view = $layerView.get();
     // "Hide interior" previews KSA's OUTSIDE-IVA render gate (`!Template.Internal`), so it
     // composes with the layer's own visibility instead of overwriting it: a mesh draws iff
     // its layer is visible AND the toggle doesn't hide it. This is the ONLY writer of
     // `group.visible`, which is what keeps the two systems from fighting.
-    const hideInterior = $hideInterior.get()
+    const hideInterior = $hideInterior.get();
     for (const p of part.placements) {
-      const obj = this.objects.get(p.instanceId)
+      const obj = this.objects.get(p.instanceId);
       if (obj) {
-        const lv = layerViewState(view, p.layerId)
+        const lv = layerViewState(view, p.layerId);
         const interior =
           hideInterior &&
-          resolveInternal(part, p.subPartTemplateId, this.index.get(p.subPartTemplateId))
-        obj.group.visible = lv.visible && !interior
-        obj.setLayerOpacity(lv.opacity)
+          resolveInternal(part, p.subPartTemplateId, this.index.get(p.subPartTemplateId));
+        obj.group.visible = lv.visible && !interior;
+        obj.setLayerOpacity(lv.opacity);
       }
     }
     for (const c of part.connectors) {
-      const obj = this.connectorObjects.get(c.id)
+      const obj = this.connectorObjects.get(c.id);
       if (obj) {
-        const lv = layerViewState(view, c.layerId)
-        obj.group.visible = lv.visible
-        obj.setLayerOpacity(lv.opacity)
+        const lv = layerViewState(view, c.layerId);
+        obj.group.visible = lv.visible;
+        obj.setLayerOpacity(lv.opacity);
       }
     }
     for (const c of part.colliders) {
-      const lv = layerViewState(view, c.layerId)
+      const lv = layerViewState(view, c.layerId);
       for (const obj of this.colliderObjects.get(c.id) ?? []) {
-        obj.group.visible = lv.visible
-        obj.setLayerOpacity(lv.opacity)
+        obj.group.visible = lv.visible;
+        obj.setLayerOpacity(lv.opacity);
       }
     }
     // Every seat marker is hidden while sitting in one: the camera is inside the marker
     // it sat in (it would fill the screen), and the others are eye points, not scenery.
-    const inSeatView = $seatView.get() !== null
+    const inSeatView = $seatView.get() !== null;
     for (const s of part.ivaSeats) {
-      const obj = this.seatObjects.get(s.id)
+      const obj = this.seatObjects.get(s.id);
       if (obj) {
-        const lv = layerViewState(view, s.layerId)
-        obj.group.visible = lv.visible && !inSeatView
-        obj.setLayerOpacity(lv.opacity)
+        const lv = layerViewState(view, s.layerId);
+        obj.group.visible = lv.visible && !inSeatView;
+        obj.setLayerOpacity(lv.opacity);
       }
     }
     for (const l of part.lights) {
-      const lv = layerViewState(view, l.layerId)
+      const lv = layerViewState(view, l.layerId);
       for (const obj of this.lightObjects.get(l.id) ?? []) {
-        obj.group.visible = lv.visible
-        obj.setLayerOpacity(lv.opacity)
+        obj.group.visible = lv.visible;
+        obj.setLayerOpacity(lv.opacity);
       }
     }
     // The coverage children are a SECOND, composed gate (view setting × layer), applied
     // to their own `.visible` flags — this method stays the only writer of `group.visible`.
     // The live preview lights compose the same way (toggle × layer × budget).
-    this.applyLightCoverage()
-    this.applyLightPreview()
+    this.applyLightCoverage();
+    this.applyLightPreview();
     for (const k of part.kittens) {
-      const obj = this.kittenObjects.get(k.id)
+      const obj = this.kittenObjects.get(k.id);
       if (obj) {
-        const lv = layerViewState(view, k.layerId)
-        obj.group.visible = lv.visible
-        obj.setLayerOpacity(lv.opacity)
+        const lv = layerViewState(view, k.layerId);
+        obj.group.visible = lv.visible;
+        obj.setLayerOpacity(lv.opacity);
       }
     }
   }
 
   /** Connectors build synchronously (cube + arrow), so reconciliation is simple. */
   private reconcileConnectors(part: EditingPart): void {
-    const wanted = new Set(part.connectors.map((c) => c.id))
+    const wanted = new Set(part.connectors.map((c) => c.id));
     for (const [id, obj] of this.connectorObjects) {
       if (!wanted.has(id)) {
-        this.root.remove(obj.group)
-        obj.dispose()
-        this.connectorObjects.delete(id)
+        this.root.remove(obj.group);
+        obj.dispose();
+        this.connectorObjects.delete(id);
       }
     }
     for (const connector of part.connectors) {
-      const existing = this.connectorObjects.get(connector.id)
+      const existing = this.connectorObjects.get(connector.id);
       if (existing) {
-        existing.setConnector(connector)
-        continue
+        existing.setConnector(connector);
+        continue;
       }
-      const obj = new ConnectorObject(connector, this.connectorSettings.size)
-      this.root.add(obj.group)
-      this.connectorObjects.set(connector.id, obj)
+      const obj = new ConnectorObject(connector, this.connectorSettings.size);
+      this.root.add(obj.group);
+      this.connectorObjects.set(connector.id, obj);
     }
   }
 
@@ -990,32 +992,32 @@ export class EditorScene {
    * data with exactly one visual — so this is the connector reconcile, not the collider one.
    */
   private reconcileIvaSeats(part: EditingPart): void {
-    const wanted = new Set(part.ivaSeats.map((s) => s.id))
+    const wanted = new Set(part.ivaSeats.map((s) => s.id));
     for (const [id, obj] of this.seatObjects) {
       if (!wanted.has(id)) {
-        this.root.remove(obj.group)
-        obj.dispose()
-        this.seatObjects.delete(id)
+        this.root.remove(obj.group);
+        obj.dispose();
+        this.seatObjects.delete(id);
       }
     }
     // The badge is the seat's DOCUMENT INDEX, so it must be re-stamped on every reconcile:
     // `moveIvaSeat` renumbers seats without changing any of them.
     part.ivaSeats.forEach((seat, index) => {
-      const existing = this.seatObjects.get(seat.id)
+      const existing = this.seatObjects.get(seat.id);
       if (existing) {
-        existing.setSeat(seat)
-        existing.setIndex(index)
-        return
+        existing.setSeat(seat);
+        existing.setIndex(index);
+        return;
       }
       const obj = new IvaSeatObject(
         seat,
         this.ivaSeatSettings.markerSize,
         this.ivaSeatSettings.showGazeCone,
         index,
-      )
-      this.root.add(obj.group)
-      this.seatObjects.set(seat.id, obj)
-    })
+      );
+      this.root.add(obj.group);
+      this.seatObjects.set(seat.id, obj);
+    });
   }
 
   /**
@@ -1024,35 +1026,35 @@ export class EditorScene {
    * ({@link colliderWorld}); a part-level one gets a single visual in the Part frame.
    */
   private reconcileColliders(part: EditingPart): void {
-    const wanted = new Set(part.colliders.map((c) => c.id))
+    const wanted = new Set(part.colliders.map((c) => c.id));
     for (const [id, objs] of this.colliderObjects) {
-      if (wanted.has(id)) continue
+      if (wanted.has(id)) continue;
       for (const obj of objs) {
-        this.root.remove(obj.group)
-        obj.dispose()
+        this.root.remove(obj.group);
+        obj.dispose();
       }
-      this.colliderObjects.delete(id)
+      this.colliderObjects.delete(id);
     }
 
     for (const collider of part.colliders) {
-      const wanted = this.colliderOwners(part, collider).length || 1
-      let objs = this.colliderObjects.get(collider.id)
+      const wanted = this.colliderOwners(part, collider).length || 1;
+      let objs = this.colliderObjects.get(collider.id);
       if (!objs) {
-        objs = []
-        this.colliderObjects.set(collider.id, objs)
+        objs = [];
+        this.colliderObjects.set(collider.id, objs);
       }
       while (objs.length > wanted) {
-        const obj = objs.pop()!
-        this.root.remove(obj.group)
-        obj.dispose()
+        const obj = objs.pop()!;
+        this.root.remove(obj.group);
+        obj.dispose();
       }
       while (objs.length < wanted) {
-        const obj = new ColliderObject(collider, objs.length)
-        this.root.add(obj.group)
-        objs.push(obj)
+        const obj = new ColliderObject(collider, objs.length);
+        this.root.add(obj.group);
+        objs.push(obj);
       }
     }
-    this.positionColliders(part)
+    this.positionColliders(part);
   }
 
   /**
@@ -1062,8 +1064,8 @@ export class EditorScene {
    * flags it as dead data).
    */
   private colliderOwners(part: EditingPart, collider: PartCollider): SubPartPlacement[] {
-    if (!collider.ownerTemplateId) return []
-    return part.placements.filter((p) => p.subPartTemplateId === collider.ownerTemplateId)
+    if (!collider.ownerTemplateId) return [];
+    return part.placements.filter((p) => p.subPartTemplateId === collider.ownerTemplateId);
   }
 
   /**
@@ -1075,16 +1077,16 @@ export class EditorScene {
    */
   private positionColliders(part: EditingPart, posed?: ReadonlyMap<string, Transform>): void {
     for (const collider of part.colliders) {
-      const objs = this.colliderObjects.get(collider.id)
-      if (!objs) continue
-      const owners = this.colliderOwners(part, collider)
+      const objs = this.colliderObjects.get(collider.id);
+      if (!objs) continue;
+      const owners = this.colliderOwners(part, collider);
       if (owners.length === 0) {
-        objs[0]?.setCollider(collider)
-        continue
+        objs[0]?.setCollider(collider);
+        continue;
       }
       for (let i = 0; i < owners.length && i < objs.length; i++) {
-        const frame = posed?.get(owners[i].instanceId) ?? owners[i]
-        objs[i].setCollider(collider, colliderWorld(collider, frame))
+        const frame = posed?.get(owners[i].instanceId) ?? owners[i];
+        objs[i].setCollider(collider, colliderWorld(collider, frame));
       }
     }
   }
@@ -1097,27 +1099,27 @@ export class EditorScene {
    * pattern; positioning is {@link positionLights}' job.
    */
   private reconcileLights(part: EditingPart): void {
-    const wanted = new Set(part.lights.map((l) => l.id))
+    const wanted = new Set(part.lights.map((l) => l.id));
     for (const [id, objs] of this.lightObjects) {
-      if (wanted.has(id)) continue
+      if (wanted.has(id)) continue;
       for (const obj of objs) {
-        this.root.remove(obj.group)
-        obj.dispose()
+        this.root.remove(obj.group);
+        obj.dispose();
       }
-      this.lightObjects.delete(id)
+      this.lightObjects.delete(id);
     }
 
     for (const light of part.lights) {
-      const wantedCount = this.lightOwners(part, light).length || 1
-      let objs = this.lightObjects.get(light.id)
+      const wantedCount = this.lightOwners(part, light).length || 1;
+      let objs = this.lightObjects.get(light.id);
       if (!objs) {
-        objs = []
-        this.lightObjects.set(light.id, objs)
+        objs = [];
+        this.lightObjects.set(light.id, objs);
       }
       while (objs.length > wantedCount) {
-        const obj = objs.pop()!
-        this.root.remove(obj.group)
-        obj.dispose()
+        const obj = objs.pop()!;
+        this.root.remove(obj.group);
+        obj.dispose();
       }
       while (objs.length < wantedCount) {
         const obj = new LightObject(
@@ -1125,16 +1127,16 @@ export class EditorScene {
           this.lightSettings.markerSize,
           objs.length,
           this.lightSettings,
-        )
-        this.root.add(obj.group)
-        objs.push(obj)
+        );
+        this.root.add(obj.group);
+        objs.push(obj);
       }
     }
-    this.positionLights(part)
+    this.positionLights(part);
     // A fresh LightObject starts with no preview light, and the instance budget shifts
     // whenever lights (or their owners' placements) come and go — so the preview pass
     // belongs here, not only on the settings toggle.
-    this.applyLightPreview()
+    this.applyLightPreview();
   }
 
   /**
@@ -1144,8 +1146,8 @@ export class EditorScene {
    * convention; validation flags it as dead data in Phase 7).
    */
   private lightOwners(part: EditingPart, light: PartLight): SubPartPlacement[] {
-    if (!light.ownerTemplateId) return []
-    return part.placements.filter((p) => p.subPartTemplateId === light.ownerTemplateId)
+    if (!light.ownerTemplateId) return [];
+    return part.placements.filter((p) => p.subPartTemplateId === light.ownerTemplateId);
   }
 
   /**
@@ -1155,8 +1157,8 @@ export class EditorScene {
    * inspector's part-frame fields (which read the same atom), so they always agree.
    */
   private lightContextIndex(lightId: string, count: number): number {
-    const i = $lightEditContext.get()[lightId] ?? 0
-    return Math.max(0, Math.min(i, count - 1))
+    const i = $lightEditContext.get()[lightId] ?? 0;
+    return Math.max(0, Math.min(i, count - 1));
   }
 
   /**
@@ -1170,16 +1172,16 @@ export class EditorScene {
    */
   private positionLights(part: EditingPart, posed?: ReadonlyMap<string, Transform>): void {
     for (const light of part.lights) {
-      const objs = this.lightObjects.get(light.id)
-      if (!objs) continue
-      const owners = this.lightOwners(part, light)
+      const objs = this.lightObjects.get(light.id);
+      if (!objs) continue;
+      const owners = this.lightOwners(part, light);
       if (owners.length === 0) {
-        objs[0]?.setLight(light, lightWorld(light, null), 0)
-        continue
+        objs[0]?.setLight(light, lightWorld(light, null), 0);
+        continue;
       }
       for (let i = 0; i < owners.length && i < objs.length; i++) {
-        const frame = posed?.get(owners[i].instanceId) ?? owners[i]
-        objs[i].setLight(light, lightWorld(light, frame), i)
+        const frame = posed?.get(owners[i].instanceId) ?? owners[i];
+        objs[i].setLight(light, lightWorld(light, frame), i);
       }
     }
   }
@@ -1201,30 +1203,30 @@ export class EditorScene {
    * context) and from the `$lightSettings` subscription.
    */
   private applyLightCoverage(): void {
-    const part = $part.get()
-    const view = $layerView.get()
-    const mode = this.lightSettings.showVolumes
-    const selectedIds = new Set<string>()
+    const part = $part.get();
+    const view = $layerView.get();
+    const mode = this.lightSettings.showVolumes;
+    const selectedIds = new Set<string>();
     if (mode === 'selected') {
       for (const i of $selectedLightIndices.get()) {
-        const light = part.lights[i]
-        if (light) selectedIds.add(light.id)
+        const light = part.lights[i];
+        if (light) selectedIds.add(light.id);
       }
     }
     for (const light of part.lights) {
-      const objs = this.lightObjects.get(light.id)
-      if (!objs) continue
-      const layerVisible = layerViewState(view, light.layerId).visible
-      const context = this.lightContextIndex(light.id, objs.length)
+      const objs = this.lightObjects.get(light.id);
+      if (!objs) continue;
+      const layerVisible = layerViewState(view, light.layerId).visible;
+      const context = this.lightContextIndex(light.id, objs.length);
       objs.forEach((obj, i) => {
         const wanted =
           mode === 'all'
             ? true
             : mode === 'selected'
               ? selectedIds.has(light.id) && i === context
-              : false
-        obj.setCoverageVisible(wanted && layerVisible)
-      })
+              : false;
+        obj.setCoverageVisible(wanted && layerVisible);
+      });
     }
   }
 
@@ -1246,22 +1248,22 @@ export class EditorScene {
    * say when the cap truncated.
    */
   private applyLightPreview(): void {
-    const part = $part.get()
-    const view = $layerView.get()
-    const on = this.lightSettings.livePreview
+    const part = $part.get();
+    const view = $layerView.get();
+    const on = this.lightSettings.livePreview;
     const budget = planPreviewBudget(
       part.lights.map((l) => this.lightObjects.get(l.id)?.length ?? 0),
-    )
-    let enabled = 0
+    );
+    let enabled = 0;
     part.lights.forEach((light, li) => {
-      const objs = this.lightObjects.get(light.id)
-      if (!objs) return
-      const layerVisible = layerViewState(view, light.layerId).visible
-      const allowed = on && layerVisible ? budget.perLight[li] : 0
-      enabled += allowed
-      objs.forEach((obj, i) => obj.setPreview(i < allowed))
-    })
-    setLightPreviewCount({ enabled, total: budget.total })
+      const objs = this.lightObjects.get(light.id);
+      if (!objs) return;
+      const layerVisible = layerViewState(view, light.layerId).visible;
+      const allowed = on && layerVisible ? budget.perLight[li] : 0;
+      enabled += allowed;
+      objs.forEach((obj, i) => obj.setPreview(i < allowed));
+    });
+    setLightPreviewCount({ enabled, total: budget.total });
   }
 
   /**
@@ -1271,63 +1273,63 @@ export class EditorScene {
    * the scene.
    */
   private handleCoverageCheck(): void {
-    $coverageRequest.set(false)
-    const part = $part.get()
+    $coverageRequest.set(false);
+    const part = $part.get();
     const points = collectWorldPoints(
       [...this.objects.values()].map((o) => o.group),
       $colliderSettings.get().precision,
-    )
+    );
     // Every collider, lifted into Part space — a SubPart-owned one is scored once per
     // placement of its template, exactly as it exists in-game.
-    const placed: PlacedCollider[] = []
+    const placed: PlacedCollider[] = [];
     for (const collider of part.colliders) {
-      const owners = this.colliderOwners(part, collider)
+      const owners = this.colliderOwners(part, collider);
       const frames: Transform[] =
-        owners.length > 0 ? owners.map((o) => colliderWorld(collider, o)) : [collider]
+        owners.length > 0 ? owners.map((o) => colliderWorld(collider, o)) : [collider];
       for (const f of frames) {
         // Through coords.matrixFromTransform so the Euler convention stays in one place.
-        const q = new THREE.Quaternion()
-        matrixFromTransform(f).decompose(new THREE.Vector3(), q, new THREE.Vector3())
-        placed.push({ collider, position: { ...f.position }, quaternion: [q.x, q.y, q.z, q.w] })
+        const q = new THREE.Quaternion();
+        matrixFromTransform(f).decompose(new THREE.Vector3(), q, new THREE.Vector3());
+        placed.push({ collider, position: { ...f.position }, quaternion: [q.x, q.y, q.z, q.w] });
       }
     }
-    setCoverageReport(evaluateCoverage(points, placed))
+    setCoverageReport(evaluateCoverage(points, placed));
   }
 
   /** Draws (or clears) the uncovered sample points from the latest coverage report. */
   private applyCoverageDots(): void {
-    const report = $coverageReport.get()
-    const points = report?.uncovered ?? []
+    const report = $coverageReport.get();
+    const points = report?.uncovered ?? [];
     if (points.length === 0) {
       if (this.coverageDots) {
-        this.root.remove(this.coverageDots)
-        this.coverageDots.geometry.dispose()
-        ;(this.coverageDots.material as THREE.Material).dispose()
-        this.coverageDots = null
+        this.root.remove(this.coverageDots);
+        this.coverageDots.geometry.dispose();
+        (this.coverageDots.material as THREE.Material).dispose();
+        this.coverageDots = null;
       }
-      return
+      return;
     }
-    const positions = new Float32Array(points.length * 3)
+    const positions = new Float32Array(points.length * 3);
     points.forEach((p, i) => {
-      positions[i * 3] = p.x
-      positions[i * 3 + 1] = p.y
-      positions[i * 3 + 2] = p.z
-    })
-    const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+      positions[i * 3] = p.x;
+      positions[i * 3 + 1] = p.y;
+      positions[i * 3 + 2] = p.z;
+    });
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     if (this.coverageDots) {
-      this.coverageDots.geometry.dispose()
-      this.coverageDots.geometry = geometry
-      return
+      this.coverageDots.geometry.dispose();
+      this.coverageDots.geometry = geometry;
+      return;
     }
     const dots = new THREE.Points(
       geometry,
       new THREE.PointsMaterial({ color: 0xff3355, size: 6, sizeAttenuation: false }),
-    )
-    dots.name = 'collider-coverage-gaps'
-    dots.raycast = () => {} // a readout, never selectable
-    this.coverageDots = dots
-    this.root.add(dots)
+    );
+    dots.name = 'collider-coverage-gaps';
+    dots.raycast = () => {}; // a readout, never selectable
+    this.coverageDots = dots;
+    this.root.add(dots);
   }
 
   /**
@@ -1336,35 +1338,35 @@ export class EditorScene {
    * Clears the request either way so a repeated identical fit still fires.
    */
   private handleColliderFit(req: ColliderFitRequest): void {
-    $colliderFitRequest.set(null)
-    const settings = $colliderSettings.get()
-    const part = $part.get()
+    $colliderFitRequest.set(null);
+    const settings = $colliderSettings.get();
+    const part = $part.get();
 
     // "Fit to selection" means the selected MESHES; with nothing selected (or when the
     // caller asked for it) fall back to the whole part — an empty part fits nothing.
     const selected = req.useSelection
       ? $selectedIndices.get().flatMap((i) => {
-          const obj = part.placements[i] && this.objects.get(part.placements[i].instanceId)
-          return obj ? [obj.group] : []
+          const obj = part.placements[i] && this.objects.get(part.placements[i].instanceId);
+          return obj ? [obj.group] : [];
         })
-      : []
-    const targets = selected.length > 0 ? selected : [...this.objects.values()].map((o) => o.group)
-    const points = collectWorldPoints(targets, settings.precision)
+      : [];
+    const targets = selected.length > 0 ? selected : [...this.objects.values()].map((o) => o.group);
+    const points = collectWorldPoints(targets, settings.precision);
     if (points.length === 0) {
-      console.warn('flexo: nothing to fit a collider to (no geometry loaded yet?)')
-      return
+      console.warn('flexo: nothing to fit a collider to (no geometry loaded yet?)');
+      return;
     }
 
     // Orient to the LAST selected placement so a tilted tank gets a tilted cylinder.
-    const frameSource = selected.length > 0 ? selected[selected.length - 1] : null
-    let frame: Quat = IDENTITY_QUAT
+    const frameSource = selected.length > 0 ? selected[selected.length - 1] : null;
+    let frame: Quat = IDENTITY_QUAT;
     if (settings.orientToSelection && frameSource) {
-      const q = frameSource.getWorldQuaternion(new THREE.Quaternion())
-      frame = [q.x, q.y, q.z, q.w]
+      const q = frameSource.getWorldQuaternion(new THREE.Quaternion());
+      frame = [q.x, q.y, q.z, q.w];
     }
 
-    const fit = fitCollider(req.shape, points, frame, settings.margin)
-    if (!fit) return
+    const fit = fitCollider(req.shape, points, frame, settings.margin);
+    if (!fit) return;
     // Quaternion → KSA Euler goes through coords.ts, the one sanctioned place.
     const transform = transformFromMatrix(
       new THREE.Matrix4().compose(
@@ -1372,22 +1374,22 @@ export class EditorScene {
         new THREE.Quaternion(...fit.quaternion),
         new THREE.Vector3(fit.size.x, fit.size.y, fit.size.z),
       ),
-    )
+    );
 
     if (req.target.kind === 'new') {
-      addCollider(req.shape, transform)
-      return
+      addCollider(req.shape, transform);
+      return;
     }
-    const existing = part.colliders[req.target.index]
-    if (!existing) return
+    const existing = part.colliders[req.target.index];
+    if (!existing) return;
     // Refit keeps the collider's id and owner; a SubPart-owned one must come back into
     // its template's local frame or it would jump by the placement transform.
     const owner = existing.ownerTemplateId
       ? part.placements.find((p) => p.subPartTemplateId === existing.ownerTemplateId)
-      : undefined
-    const local = owner ? colliderLocalFromWorld(transform, owner) : transform
-    pushUndo('fit collider', existing.id)
-    updateColliderTransform(req.target.index, local)
+      : undefined;
+    const local = owner ? colliderLocalFromWorld(transform, owner) : transform;
+    pushUndo('fit collider', existing.id);
+    updateColliderTransform(req.target.index, local);
   }
 
   /**
@@ -1401,37 +1403,37 @@ export class EditorScene {
    * {@link handleColliderFit} uses.
    */
   private handleIvaSeatAim(req: IvaSeatAimRequest): void {
-    clearIvaSeatAimRequest()
-    const part = $part.get()
-    const seat = part.ivaSeats[req.index]
-    if (!seat) return
+    clearIvaSeatAimRequest();
+    const part = $part.get();
+    const seat = part.ivaSeats[req.index];
+    if (!seat) return;
 
-    const centroid = this.selectedGeometryCentroid()
+    const centroid = this.selectedGeometryCentroid();
     if (!centroid) {
       // Silence here reads as a dead button: the aim needs BUILT geometry (the selection's,
       // or the whole part's), which a still-loading or empty part does not have.
-      console.warn('flexo: nothing to aim an IVA seat at (no geometry loaded yet?)')
+      console.warn('flexo: nothing to aim an IVA seat at (no geometry loaded yet?)');
       toast({
         title: 'Nothing to aim at',
         description: 'No SubPart geometry is loaded yet.',
         variant: 'warning',
-      })
-      return
+      });
+      return;
     }
     const forward = {
       x: centroid.x - seat.position.x,
       y: centroid.y - seat.position.y,
       z: centroid.z - seat.position.z,
-    }
+    };
     // Keep the seat's current up where it survives the new forward, so re-aiming doesn't
     // silently roll the camera; otherwise take a default that is not parallel to forward.
-    const current = req.keepUp ? seatAxesFromRotation(seat.rotation).up : null
-    const up = current && !isParallel(forward, current) ? current : perpendicularUp(forward)
+    const current = req.keepUp ? seatAxesFromRotation(seat.rotation).up : null;
+    const up = current && !isParallel(forward, current) ? current : perpendicularUp(forward);
     // Degenerate (seat sitting exactly on the centroid, or an unusable up): do NOTHING
     // rather than store a NaN rotation — that is what the null return is for.
-    const rotation = seatRotationFromAxes(forward, up)
-    if (!rotation) return
-    aimIvaSeat(req.index, rotation)
+    const rotation = seatRotationFromAxes(forward, up);
+    if (!rotation) return;
+    aimIvaSeat(req.index, rotation);
   }
 
   /**
@@ -1443,104 +1445,104 @@ export class EditorScene {
    * scene consumes rather than a store action (see ivaSeatStore).
    */
   private selectedGeometryCentroid(): Vec3 | null {
-    const part = $part.get()
+    const part = $part.get();
     const selected = $selectedIndices.get().flatMap((i) => {
-      const obj = part.placements[i] && this.objects.get(part.placements[i].instanceId)
-      return obj ? [obj.group] : []
-    })
-    const groups = selected.length > 0 ? selected : [...this.objects.values()].map((o) => o.group)
-    const centers: Vec3[] = []
-    const box = new THREE.Box3()
-    const center = new THREE.Vector3()
+      const obj = part.placements[i] && this.objects.get(part.placements[i].instanceId);
+      return obj ? [obj.group] : [];
+    });
+    const groups = selected.length > 0 ? selected : [...this.objects.values()].map((o) => o.group);
+    const centers: Vec3[] = [];
+    const box = new THREE.Box3();
+    const center = new THREE.Vector3();
     for (const group of groups) {
-      box.setFromObject(group)
-      if (box.isEmpty()) continue
-      box.getCenter(center)
-      centers.push({ x: center.x, y: center.y, z: center.z })
+      box.setFromObject(group);
+      if (box.isEmpty()) continue;
+      box.getCenter(center);
+      centers.push({ x: center.x, y: center.y, z: center.z });
     }
-    return centers.length > 0 ? centroidOf(centers) : null
+    return centers.length > 0 ? centroidOf(centers) : null;
   }
 
   /** Rebuilds every connector from scratch (cube/arrow sizes are global settings). */
   private rebuildConnectors(): void {
     for (const obj of this.connectorObjects.values()) {
-      this.root.remove(obj.group)
-      obj.dispose()
+      this.root.remove(obj.group);
+      obj.dispose();
     }
-    this.connectorObjects.clear()
-    this.reconcileConnectors($part.get())
-    this.applyLayerView()
-    this.updateSelection()
+    this.connectorObjects.clear();
+    this.reconcileConnectors($part.get());
+    this.applyLayerView();
+    this.updateSelection();
   }
 
   /** Rebuilds every seat marker from scratch (marker size / gaze cone are global settings). */
   private rebuildIvaSeats(): void {
     for (const obj of this.seatObjects.values()) {
-      this.root.remove(obj.group)
-      obj.dispose()
+      this.root.remove(obj.group);
+      obj.dispose();
     }
-    this.seatObjects.clear()
-    this.reconcileIvaSeats($part.get())
-    this.applyLayerView()
-    this.updateSelection()
+    this.seatObjects.clear();
+    this.reconcileIvaSeats($part.get());
+    this.applyLayerView();
+    this.updateSelection();
   }
 
   /** Rebuilds every light marker from scratch (marker size is a global setting). */
   private rebuildLights(): void {
     for (const objs of this.lightObjects.values()) {
       for (const obj of objs) {
-        this.root.remove(obj.group)
-        obj.dispose()
+        this.root.remove(obj.group);
+        obj.dispose();
       }
     }
-    this.lightObjects.clear()
-    this.reconcileLights($part.get())
-    this.applyLayerView()
-    this.updateSelection()
+    this.lightObjects.clear();
+    this.reconcileLights($part.get());
+    this.applyLayerView();
+    this.updateSelection();
   }
 
   /** Resolves all currently selected scene objects (SubParts + connectors + colliders + seats + kittens + lights) that are built. */
   private selectedObjects(): SelectableObject[] {
-    const part = $part.get()
-    const out: SelectableObject[] = []
+    const part = $part.get();
+    const out: SelectableObject[] = [];
     for (const i of $selectedIndices.get()) {
-      const placement = part.placements[i]
-      const obj = placement && this.objects.get(placement.instanceId)
-      if (obj) out.push(obj)
+      const placement = part.placements[i];
+      const obj = placement && this.objects.get(placement.instanceId);
+      if (obj) out.push(obj);
     }
     for (const i of $selectedConnectorIndices.get()) {
-      const connector = part.connectors[i]
-      const obj = connector && this.connectorObjects.get(connector.id)
-      if (obj) out.push(obj)
+      const connector = part.connectors[i];
+      const obj = connector && this.connectorObjects.get(connector.id);
+      if (obj) out.push(obj);
     }
     for (const i of $selectedColliderIndices.get()) {
-      const collider = part.colliders[i]
+      const collider = part.colliders[i];
       // Every instance of a SubPart-owned collider highlights together — they are one
       // document entity, so highlighting only the gizmo target would read as a bug.
-      for (const obj of (collider && this.colliderObjects.get(collider.id)) ?? []) out.push(obj)
+      for (const obj of (collider && this.colliderObjects.get(collider.id)) ?? []) out.push(obj);
     }
     for (const i of $selectedIvaSeatIndices.get()) {
-      const seat = part.ivaSeats[i]
-      const obj = seat && this.seatObjects.get(seat.id)
-      if (obj) out.push(obj)
+      const seat = part.ivaSeats[i];
+      const obj = seat && this.seatObjects.get(seat.id);
+      if (obj) out.push(obj);
     }
     for (const i of $selectedKittenIndices.get()) {
-      const kitten = part.kittens[i]
-      const obj = kitten && this.kittenObjects.get(kitten.id)
-      if (obj) out.push(obj)
+      const kitten = part.kittens[i];
+      const obj = kitten && this.kittenObjects.get(kitten.id);
+      if (obj) out.push(obj);
     }
     for (const i of $selectedLightIndices.get()) {
-      const light = part.lights[i]
-      if (!light) continue
+      const light = part.lights[i];
+      if (!light) continue;
       // The CONTEXT instance only (last-clicked, default 0): a SubPart-owned light is
       // one document entity drawn N times, and highlighting just the instance being
       // worked through is what tells the user which frame their edits go through
       // (plans/LIGHT_MANAGEMENT_PLAN.md §3.7-4 — deliberately unlike colliders).
-      const objs = this.lightObjects.get(light.id) ?? []
-      const obj = objs[this.lightContextIndex(light.id, objs.length)]
-      if (obj) out.push(obj)
+      const objs = this.lightObjects.get(light.id) ?? [];
+      const obj = objs[this.lightContextIndex(light.id, objs.length)];
+      if (obj) out.push(obj);
     }
-    return out
+    return out;
   }
 
   /**
@@ -1557,89 +1559,89 @@ export class EditorScene {
   private worldTransformRefs(): SelectedTransformRef[] {
     return selectedTransformRefs().map((ref) => {
       if (ref.kind === 'collider') {
-        const frame = this.colliderGizmoFrame(ref.index)
-        return frame ? { ...ref, transform: colliderWorld(ref.transform, frame) } : ref
+        const frame = this.colliderGizmoFrame(ref.index);
+        return frame ? { ...ref, transform: colliderWorld(ref.transform, frame) } : ref;
       }
       if (ref.kind === 'light')
         // lightWorld takes the null frame itself: a part-level (or unplaced-owner)
         // light's local transform already IS its part-frame pose.
-        return { ...ref, transform: lightWorld(ref.transform, this.lightGizmoFrame(ref.index)) }
-      return ref
-    })
+        return { ...ref, transform: lightWorld(ref.transform, this.lightGizmoFrame(ref.index)) };
+      return ref;
+    });
   }
 
   /** Centroid of all selected entities, from Part-space positions. */
   private selectionCentroid(): Vec3 {
-    return centroidOf(this.worldTransformRefs().map((r) => r.transform.position))
+    return centroidOf(this.worldTransformRefs().map((r) => r.transform.position));
   }
 
   /** Resets the pivot to the selection centroid with identity rotation/scale. */
   private repositionPivot(): void {
-    const c = this.selectionCentroid()
-    this.pivot.position.set(c.x, c.y, c.z)
-    this.pivot.quaternion.identity()
-    this.pivot.scale.set(1, 1, 1)
+    const c = this.selectionCentroid();
+    this.pivot.position.set(c.x, c.y, c.z);
+    this.pivot.quaternion.identity();
+    this.pivot.scale.set(1, 1, 1);
   }
 
   /** Syncs the selection highlight and gizmo attachment to the current selection. */
   private updateSelection(): void {
-    this.updatePivotHelper() // before any early-return below; tracks the pivot live during drags
+    this.updatePivotHelper(); // before any early-return below; tracks the pivot live during drags
     // "Coverage on the selected light" is selection-driven, so it re-applies here too —
     // before the mid-drag early-return, so it also tracks a change of edit context.
-    this.applyLightCoverage()
-    const selected = this.selectedObjects()
-    const next = new Set(selected)
-    for (const obj of this.highlighted) if (!next.has(obj)) obj.setSelected(false)
-    for (const obj of selected) obj.setSelected(true)
-    this.highlighted = selected
-    this.measurements.refresh()
+    this.applyLightCoverage();
+    const selected = this.selectedObjects();
+    const next = new Set(selected);
+    for (const obj of this.highlighted) if (!next.has(obj)) obj.setSelected(false);
+    for (const obj of selected) obj.setSelected(true);
+    this.highlighted = selected;
+    this.measurements.refresh();
     // Recompute container out-of-bounds warnings here too: this runs after
     // reconcile (so removed meshes are already gone) and inside the async SubPart
     // build callback (so newly-added meshes exist with geometry loaded). The
     // layer's own `$part` subscription only catches mesh *moves*, firing before
     // reconcile — too early to see adds/removes.
-    this.containers.refresh()
+    this.containers.refresh();
 
     // Gizmo attachment — never re-attach mid-drag (it would reset the drag).
-    if (this.gizmo.isDragging) return
+    if (this.gizmo.isDragging) return;
 
     // Pose-editing takes precedence: when a joint + keyframe are active, the gizmo
     // edits the joint's pose via an empty proxy positioned at the joint's world frame.
-    const poseTarget = this.poseEditTarget()
+    const poseTarget = this.poseEditTarget();
     if (poseTarget) {
-      const m = jointWorld(poseTarget.anim, poseTarget.joint.id, poseTarget.kf.timeSec)
-      m.decompose(this.poseProxy.position, this.poseProxy.quaternion, this.poseProxy.scale)
-      this.poseProxy.updateMatrixWorld(true)
-      this.attachGizmo(this.poseProxy)
-      return
+      const m = jointWorld(poseTarget.anim, poseTarget.joint.id, poseTarget.kf.timeSec);
+      m.decompose(this.poseProxy.position, this.poseProxy.quaternion, this.poseProxy.scale);
+      this.poseProxy.updateMatrixWorld(true);
+      this.attachGizmo(this.poseProxy);
+      return;
     }
 
     // Engine designer: when the exhaust gizmo is on, attach it to a proxy posed at the
     // targeted nozzle's exhaust POINT and AXIS, so Move relocates the point and Rotate
     // re-aims the direction. Posing the proxy's rotation (rather than resetting it to
     // identity) is what makes the rotate rings mean something.
-    const nozzle = this.activeNozzleTarget()
+    const nozzle = this.activeNozzleTarget();
     if (nozzle && $engineExhaustGizmo.get()) {
-      const pos = exhaustWorldLocation(nozzle.location, nozzle.frame)
-      this.engineProxy.position.set(pos.x, pos.y, pos.z)
+      const pos = exhaustWorldLocation(nozzle.location, nozzle.frame);
+      this.engineProxy.position.set(pos.x, pos.y, pos.z);
       this.engineProxy.quaternion.copy(
         aimQuaternion(exhaustWorldDirection(nozzle.direction, nozzle.frame)),
-      )
-      this.engineProxy.scale.setScalar(1)
-      this.engineProxy.updateMatrixWorld(true)
-      this.attachGizmo(this.engineProxy)
-      return
+      );
+      this.engineProxy.scale.setScalar(1);
+      this.engineProxy.updateMatrixWorld(true);
+      this.attachGizmo(this.engineProxy);
+      return;
     }
 
     // 2+ entities -> attach to the centroid pivot for bulk transforms; otherwise
     // attach directly to the single selected object (SubPart, connector, seat, ...).
-    const part = $part.get()
-    const indices = $selectedIndices.get()
-    const conIndices = $selectedConnectorIndices.get()
-    const kitIndices = $selectedKittenIndices.get()
-    const colIndices = $selectedColliderIndices.get()
-    const seatIndices = $selectedIvaSeatIndices.get()
-    const ligIndices = $selectedLightIndices.get()
+    const part = $part.get();
+    const indices = $selectedIndices.get();
+    const conIndices = $selectedConnectorIndices.get();
+    const kitIndices = $selectedKittenIndices.get();
+    const colIndices = $selectedColliderIndices.get();
+    const seatIndices = $selectedIvaSeatIndices.get();
+    const ligIndices = $selectedLightIndices.get();
     const multi =
       indices.length +
         conIndices.length +
@@ -1647,8 +1649,8 @@ export class EditorScene {
         colIndices.length +
         seatIndices.length +
         ligIndices.length >
-      1
-    let target: THREE.Object3D | null
+      1;
+    let target: THREE.Object3D | null;
 
     // Suppress the gizmo when any selected entity is in a locked layer (items
     // can be selected from the Assets list for inspection but must not be moved).
@@ -1658,38 +1660,38 @@ export class EditorScene {
       kitIndices.some((ki) => isLayerLocked(part.kittens[ki]?.layerId ?? '')) ||
       colIndices.some((i) => isLayerLocked(part.colliders[i]?.layerId ?? '')) ||
       seatIndices.some((i) => isLayerLocked(part.ivaSeats[i]?.layerId ?? '')) ||
-      ligIndices.some((i) => isLayerLocked(part.lights[i]?.layerId ?? ''))
+      ligIndices.some((i) => isLayerLocked(part.lights[i]?.layerId ?? ''));
     // While the preview shows a POSED frame (t>0 / editing), an animated SubPart's
     // group sits at its animated transform — suppress the gizmo so a drag can't write
     // the posed transform back as the static placement. At rest (t=0) it's safe.
-    const previewLocked = this.isPreviewPosed() && this.selectedIsAnimated()
+    const previewLocked = this.isPreviewPosed() && this.selectedIsAnimated();
     // Sitting in a seat: the gizmo would render at (or inside) the camera and there is
     // nothing to aim it with — the whole viewport is the preview.
     if (anyLocked || previewLocked || $seatView.get() !== null) {
-      target = null
+      target = null;
     } else if (multi) {
-      this.repositionPivot()
-      target = this.pivot
+      this.repositionPivot();
+      target = this.pivot;
     } else if (colIndices.length === 1) {
       // A SubPart-owned collider has one visual PER PLACEMENT; attach to whichever the
       // user last clicked (see colliderInstance) so the drag has an unambiguous frame.
-      const collider = part.colliders[colIndices[0]]
-      const objs = collider ? (this.colliderObjects.get(collider.id) ?? []) : []
-      const i = Math.min(this.colliderInstance.get(collider?.id ?? '') ?? 0, objs.length - 1)
-      target = objs[Math.max(0, i)]?.group ?? null
+      const collider = part.colliders[colIndices[0]];
+      const objs = collider ? (this.colliderObjects.get(collider.id) ?? []) : [];
+      const i = Math.min(this.colliderInstance.get(collider?.id ?? '') ?? 0, objs.length - 1);
+      target = objs[Math.max(0, i)]?.group ?? null;
     } else if (ligIndices.length === 1) {
       // Same rule for a SubPart-owned light: attach to the CONTEXT instance
       // ($lightEditContext — last clicked, default 0) so the drag has an unambiguous
       // frame; handleGizmoChange converts back through the same placement via
       // lightGizmoFrame. (selectedObjects() already returns only this instance, but
       // resolving it here keeps the attach rule explicit and collider-parallel.)
-      const light = part.lights[ligIndices[0]]
-      const objs = light ? (this.lightObjects.get(light.id) ?? []) : []
-      target = light ? (objs[this.lightContextIndex(light.id, objs.length)]?.group ?? null) : null
+      const light = part.lights[ligIndices[0]];
+      const objs = light ? (this.lightObjects.get(light.id) ?? []) : [];
+      target = light ? (objs[this.lightContextIndex(light.id, objs.length)]?.group ?? null) : null;
     } else {
-      target = selected[0]?.group ?? null
+      target = selected[0]?.group ?? null;
     }
-    this.attachGizmo(target)
+    this.attachGizmo(target);
   }
 
   /**
@@ -1699,10 +1701,10 @@ export class EditorScene {
    */
   private attachGizmo(target: THREE.Object3D | null): void {
     if (target !== this.attachedObject) {
-      this.gizmo.attach(target)
-      this.attachedObject = target
+      this.gizmo.attach(target);
+      this.attachedObject = target;
     }
-    this.gizmo.setMode($effectiveToolMode.get())
+    this.gizmo.setMode($effectiveToolMode.get());
   }
 
   /**
@@ -1712,39 +1714,39 @@ export class EditorScene {
    * runs on preview, selection, $part, and drag-end changes).
    */
   private updatePivotHelper(): void {
-    const animId = $activeAnimationId.get()
-    const jointId = $activeJointId.get()
-    const anim = animId ? $part.get().animations.find((a) => a.id === animId) : undefined
-    const joint = anim?.joints.find((j) => j.id === jointId)
+    const animId = $activeAnimationId.get();
+    const jointId = $activeJointId.get();
+    const anim = animId ? $part.get().animations.find((a) => a.id === animId) : undefined;
+    const joint = anim?.joints.find((j) => j.id === jointId);
     if ($inspectorMode.get() !== 'anim' || !anim || !joint) {
-      this.pivotHelper.visible = false
-      return
+      this.pivotHelper.visible = false;
+      return;
     }
-    const pos = new THREE.Vector3()
-    const quat = new THREE.Quaternion()
-    jointWorld(anim, joint.id, 0).decompose(pos, quat, new THREE.Vector3())
-    this.pivotHelper.position.copy(pos)
-    this.pivotHelper.quaternion.copy(quat)
-    this.pivotHelper.scale.setScalar(1) // strip any pivot scale; always a clean unit frame
-    this.pivotHelper.visible = true
+    const pos = new THREE.Vector3();
+    const quat = new THREE.Quaternion();
+    jointWorld(anim, joint.id, 0).decompose(pos, quat, new THREE.Vector3());
+    this.pivotHelper.position.copy(pos);
+    this.pivotHelper.quaternion.copy(quat);
+    this.pivotHelper.scale.setScalar(1); // strip any pivot scale; always a clean unit frame
+    this.pivotHelper.visible = true;
   }
 
   /** Streams a gizmo change back to the store (single entity) or all selected (bulk). */
   private handleGizmoChange(object: THREE.Object3D): void {
     if (this.bulkSnapshot) {
-      this.applyBulkFromPivot()
-      return
+      this.applyBulkFromPivot();
+      return;
     }
-    const world = readPlacementTransform(object)
+    const world = readPlacementTransform(object);
     // A collider visual sits in PART space; its document transform is in its owner's
     // frame, so a SubPart-owned one has to be converted back before it is stored.
-    const sel = object.userData.selectable as { kind?: string; id?: string } | undefined
+    const sel = object.userData.selectable as { kind?: string; id?: string } | undefined;
     if (sel?.kind === 'collider') {
-      const index = $part.get().colliders.findIndex((c) => c.id === sel.id)
+      const index = $part.get().colliders.findIndex((c) => c.id === sel.id);
       if (index >= 0) {
-        const frame = this.colliderGizmoFrame(index)
-        updateColliderTransform(index, frame ? colliderLocalFromWorld(world, frame) : world)
-        return
+        const frame = this.colliderGizmoFrame(index);
+        updateColliderTransform(index, frame ? colliderLocalFromWorld(world, frame) : world);
+        return;
       }
     }
     // Same for a light visual — converted through the CONTEXT placement's STATIC frame
@@ -1753,14 +1755,14 @@ export class EditorScene {
     // detaches the gizmo entirely (the collider rule), so a drag can never read a
     // posed pose and write it back as the modeled transform.
     if (sel?.kind === 'light') {
-      const index = $part.get().lights.findIndex((l) => l.id === sel.id)
+      const index = $part.get().lights.findIndex((l) => l.id === sel.id);
       if (index >= 0) {
         // lightLocalFromWorld takes the null frame itself (part-level ⇒ verbatim).
-        updateLightTransform(index, lightLocalFromWorld(world, this.lightGizmoFrame(index)))
-        return
+        updateLightTransform(index, lightLocalFromWorld(world, this.lightGizmoFrame(index)));
+        return;
       }
     }
-    updateSelectedTransform(world)
+    updateSelectedTransform(world);
   }
 
   /**
@@ -1769,13 +1771,13 @@ export class EditorScene {
    * owner template isn't placed: those live directly in Part space.
    */
   private colliderGizmoFrame(index: number): Transform | null {
-    const part = $part.get()
-    const collider = part.colliders[index]
-    if (!collider) return null
-    const owners = this.colliderOwners(part, collider)
-    if (owners.length === 0) return null
-    const i = Math.min(this.colliderInstance.get(collider.id) ?? 0, owners.length - 1)
-    return owners[Math.max(0, i)] ?? null
+    const part = $part.get();
+    const collider = part.colliders[index];
+    if (!collider) return null;
+    const owners = this.colliderOwners(part, collider);
+    if (owners.length === 0) return null;
+    const i = Math.min(this.colliderInstance.get(collider.id) ?? 0, owners.length - 1);
+    return owners[Math.max(0, i)] ?? null;
   }
 
   /**
@@ -1788,31 +1790,31 @@ export class EditorScene {
    * gizmo so no drag can go through the wrong frame.
    */
   private lightGizmoFrame(index: number): Transform | null {
-    const part = $part.get()
-    const light = part.lights[index]
-    if (!light) return null
-    const owners = this.lightOwners(part, light)
-    if (owners.length === 0) return null
-    return owners[this.lightContextIndex(light.id, owners.length)] ?? null
+    const part = $part.get();
+    const light = part.lights[index];
+    if (!light) return null;
+    const owners = this.lightOwners(part, light);
+    if (owners.length === 0) return null;
+    return owners[this.lightContextIndex(light.id, owners.length)] ?? null;
   }
 
   /** The active pose-edit target (active animation + joint + keyframe), or null. */
   private poseEditTarget(): {
-    anim: PartAnimation
-    joint: PartAnimation['joints'][number]
-    kf: PartAnimation['keyframes'][number]
+    anim: PartAnimation;
+    joint: PartAnimation['joints'][number];
+    kf: PartAnimation['keyframes'][number];
   } | null {
     // Only while the Animation editor is open (its atoms persist across mode switches).
-    if ($inspectorMode.get() !== 'anim') return null
-    const animId = $activeAnimationId.get()
-    const jointId = $activeJointId.get()
-    const kfId = $editKeyframeId.get()
-    if (!animId || !jointId || !kfId) return null
-    const anim = $part.get().animations.find((a) => a.id === animId)
-    const joint = anim?.joints.find((j) => j.id === jointId)
-    const kf = anim?.keyframes.find((k) => k.id === kfId)
-    if (!anim || !joint || !kf) return null
-    return { anim, joint, kf }
+    if ($inspectorMode.get() !== 'anim') return null;
+    const animId = $activeAnimationId.get();
+    const jointId = $activeJointId.get();
+    const kfId = $editKeyframeId.get();
+    if (!animId || !jointId || !kfId) return null;
+    const anim = $part.get().animations.find((a) => a.id === animId);
+    const joint = anim?.joints.find((j) => j.id === jointId);
+    const kf = anim?.keyframes.find((k) => k.id === kfId);
+    if (!anim || !joint || !kf) return null;
+    return { anim, joint, kf };
   }
 
   /**
@@ -1824,37 +1826,37 @@ export class EditorScene {
    * pushed undo once).
    */
   private handlePoseGizmoChange(): void {
-    const target = this.poseEditTarget()
-    if (!target) return
-    const { anim, joint, kf } = target
+    const target = this.poseEditTarget();
+    if (!target) return;
+    const { anim, joint, kf } = target;
     const proxyWorld = new THREE.Matrix4().compose(
       this.poseProxy.position,
       this.poseProxy.quaternion,
       this.poseProxy.scale,
-    )
+    );
     const parentWorld = joint.parentJointId
       ? jointWorld(anim, joint.parentJointId, kf.timeSec)
-      : new THREE.Matrix4()
-    const newLocal = parentWorld.invert().multiply(proxyWorld)
-    const t = transformFromMatrix(newLocal)
+      : new THREE.Matrix4();
+    const newLocal = parentWorld.invert().multiply(proxyWorld);
+    const t = transformFromMatrix(newLocal);
 
     if (kf.timeSec === 0) {
       // The rest pose IS the pivot. Move relocates the anchor; Rotate re-orients it.
       // Both preserve the t=0 geometry and rigidly carry t>0 motion; scale is ignored
       // (a pivot must stay unit-scaled), so a scale drag at rest is a no-op.
       if ($toolMode.get() === 'translate') {
-        const cur = kf.poses[joint.id]?.position ?? { x: 0, y: 0, z: 0 }
+        const cur = kf.poses[joint.id]?.position ?? { x: 0, y: 0, z: 0 };
         moveJointPivot(anim.id, joint.id, {
           x: t.position.x - cur.x,
           y: t.position.y - cur.y,
           z: t.position.z - cur.z,
-        })
+        });
       } else if ($toolMode.get() === 'rotate') {
         // proxyWorld is the pivot's Part-space frame; rebase converts to parent-local.
-        reorientJointPivot(anim.id, joint.id, transformFromMatrix(proxyWorld))
+        reorientJointPivot(anim.id, joint.id, transformFromMatrix(proxyWorld));
       }
     } else {
-      setJointPose(anim.id, kf.id, joint.id, t)
+      setJointPose(anim.id, kf.id, joint.id, t);
     }
   }
 
@@ -1865,12 +1867,12 @@ export class EditorScene {
    * so the mode gate lives here rather than in the store).
    */
   private nozzleTargets(): NozzleTarget[] {
-    return $inspectorMode.get() === 'engine' ? $resolvedNozzleTargets.get() : []
+    return $inspectorMode.get() === 'engine' ? $resolvedNozzleTargets.get() : [];
   }
 
   /** The one nozzle placement the exhaust gizmo edits, or null. */
   private activeNozzleTarget(): NozzleTarget | null {
-    return $inspectorMode.get() === 'engine' ? $activeNozzleTarget.get() : null
+    return $inspectorMode.get() === 'engine' ? $activeNozzleTarget.get() : null;
   }
 
   /**
@@ -1882,27 +1884,30 @@ export class EditorScene {
    * invisible objects).
    */
   private applyEngineHandles(): void {
-    const targets = this.nozzleTargets()
-    const wanted = new Set(targets.map((t) => t.key))
+    const targets = this.nozzleTargets();
+    const wanted = new Set(targets.map((t) => t.key));
     for (const [key, handle] of this.nozzleHandles) {
-      if (wanted.has(key)) continue
-      this.root.remove(handle.group)
-      handle.dispose()
-      this.nozzleHandles.delete(key)
-      this.nozzleRefs.delete(key)
+      if (wanted.has(key)) continue;
+      this.root.remove(handle.group);
+      handle.dispose();
+      this.nozzleHandles.delete(key);
+      this.nozzleRefs.delete(key);
     }
     for (const target of targets) {
-      let handle = this.nozzleHandles.get(target.key)
+      let handle = this.nozzleHandles.get(target.key);
       if (!handle) {
-        handle = new NozzleHandleObject(target.key, target.ref.channel)
-        this.nozzleHandles.set(target.key, handle)
-        this.root.add(handle.group)
+        handle = new NozzleHandleObject(target.key, target.ref.channel);
+        this.nozzleHandles.set(target.key, handle);
+        this.root.add(handle.group);
       }
-      this.nozzleRefs.set(target.key, target.ref)
-      const pos = exhaustWorldLocation(target.location, target.frame)
-      const dir = exhaustWorldDirection(target.direction, target.frame)
-      handle.setPose(new THREE.Vector3(pos.x, pos.y, pos.z), new THREE.Vector3(dir.x, dir.y, dir.z))
-      handle.setActive(target.isActive)
+      this.nozzleRefs.set(target.key, target.ref);
+      const pos = exhaustWorldLocation(target.location, target.frame);
+      const dir = exhaustWorldDirection(target.direction, target.frame);
+      handle.setPose(
+        new THREE.Vector3(pos.x, pos.y, pos.z),
+        new THREE.Vector3(dir.x, dir.y, dir.z),
+      );
+      handle.setActive(target.isActive);
     }
   }
 
@@ -1926,64 +1931,67 @@ export class EditorScene {
    * STREAMING (drag-start pushed undo once).
    */
   private handleEngineGizmoChange(): void {
-    const target = this.activeNozzleTarget()
-    if (!target) return
-    const { ref, frame, nozzle } = target
-    const isFx = ref.channel === 'fx'
+    const target = this.activeNozzleTarget();
+    if (!target) return;
+    const { ref, frame, nozzle } = target;
+    const isFx = ref.channel === 'fx';
 
     if ($toolMode.get() === 'rotate') {
-      const world = new THREE.Vector3(1, 0, 0).applyQuaternion(this.engineProxy.quaternion)
-      const local = exhaustLocalDirection({ x: world.x, y: world.y, z: world.z }, frame)
+      const world = new THREE.Vector3(1, 0, 0).applyQuaternion(this.engineProxy.quaternion);
+      const local = exhaustLocalDirection({ x: world.x, y: world.y, z: world.z }, frame);
       if (!isFx) {
-        updateNozzleAt(ref, { exhaustDirection: normalizedVec(local) })
-        return
+        updateNozzleAt(ref, { exhaustDirection: normalizedVec(local) });
+        return;
       }
-      const authored = nozzle.fxExhaustDirection ?? nozzle.exhaustDirection
-      const scale = Math.hypot(authored.x, authored.y, authored.z) || 1
-      const unit = normalizedVec(local)
+      const authored = nozzle.fxExhaustDirection ?? nozzle.exhaustDirection;
+      const scale = Math.hypot(authored.x, authored.y, authored.z) || 1;
+      const unit = normalizedVec(local);
       updateNozzleAt(ref, {
         fxExhaustDirection: { x: unit.x * scale, y: unit.y * scale, z: unit.z * scale },
-      })
-      return
+      });
+      return;
     }
 
-    const p = this.engineProxy.position
-    const local = exhaustLocalLocation({ x: p.x, y: p.y, z: p.z }, frame)
-    updateNozzleAt(ref, isFx ? { fxExhaustLocation: local } : { exhaustLocation: local })
+    const p = this.engineProxy.position;
+    const local = exhaustLocalLocation({ x: p.x, y: p.y, z: p.z }, frame);
+    updateNozzleAt(ref, isFx ? { fxExhaustLocation: local } : { exhaustLocation: local });
   }
 
   /** Snapshots all selected entities' transforms at the start of a bulk gizmo drag. */
   private beginBulkDrag(): void {
-    const refs = this.worldTransformRefs()
+    const refs = this.worldTransformRefs();
     if (refs.length <= 1) {
-      this.bulkSnapshot = null
-      return
+      this.bulkSnapshot = null;
+      return;
     }
-    this.bulkSnapshot = { centroid: centroidOf(refs.map((r) => r.transform.position)), items: refs }
+    this.bulkSnapshot = {
+      centroid: centroidOf(refs.map((r) => r.transform.position)),
+      items: refs,
+    };
   }
 
   /** Applies the pivot's delta (per the active tool mode) to every snapshotted entity. */
   private applyBulkFromPivot(): void {
-    const snap = this.bulkSnapshot
-    if (!snap) return
-    const mode = $toolMode.get()
+    const snap = this.bulkSnapshot;
+    if (!snap) return;
+    const mode = $toolMode.get();
     const updates = snap.items.map(({ kind, index, transform: base }) => {
       if (mode === 'translate') {
         const delta = {
           x: this.pivot.position.x - snap.centroid.x,
           y: this.pivot.position.y - snap.centroid.y,
           z: this.pivot.position.z - snap.centroid.z,
-        }
-        return { kind, index, transform: translatedTransform(base, delta) }
+        };
+        return { kind, index, transform: translatedTransform(base, delta) };
       }
       if (mode === 'rotate') {
         return {
           kind,
           index,
           transform: rotatedAroundOriginTransform(base, this.pivot.quaternion, snap.centroid),
-        }
+        };
       }
-      const factor = { x: this.pivot.scale.x, y: this.pivot.scale.y, z: this.pivot.scale.z }
+      const factor = { x: this.pivot.scale.x, y: this.pivot.scale.y, z: this.pivot.scale.z };
       return {
         kind,
         index,
@@ -1993,150 +2001,150 @@ export class EditorScene {
           factor,
           $bulkScaleMode.get() === 'smart' ? snap.centroid : null,
         ),
-      }
-    })
+      };
+    });
     // Owner-local again on the way back down (see worldTransformRefs) — each kind
     // through the inverse of the SAME lift it went up with.
     updateSelectedTransforms(
       updates.map((u) => {
         if (u.kind === 'collider') {
-          const frame = this.colliderGizmoFrame(u.index)
-          return frame ? { ...u, transform: colliderLocalFromWorld(u.transform, frame) } : u
+          const frame = this.colliderGizmoFrame(u.index);
+          return frame ? { ...u, transform: colliderLocalFromWorld(u.transform, frame) } : u;
         }
         if (u.kind === 'light')
           return {
             ...u,
             transform: lightLocalFromWorld(u.transform, this.lightGizmoFrame(u.index)),
-          }
-        return u
+          };
+        return u;
       }),
-    )
+    );
   }
 
   /** Ends a bulk drag: drops the snapshot and re-centers the pivot on the new layout. */
   private endBulkDrag(): void {
-    if (!this.bulkSnapshot) return
-    this.bulkSnapshot = null
-    this.repositionPivot()
+    if (!this.bulkSnapshot) return;
+    this.bulkSnapshot = null;
+    this.repositionPivot();
   }
 
   private readonly onPickPointerDown = (e: PointerEvent): void => {
-    if ($measureTool.get() === 'none') return
-    this.pickPointerDown = { x: e.clientX, y: e.clientY }
-  }
+    if ($measureTool.get() === 'none') return;
+    this.pickPointerDown = { x: e.clientX, y: e.clientY };
+  };
 
   private readonly onPickPointerUp = (e: PointerEvent): void => {
-    if ($measureTool.get() === 'none') return
-    const down = this.pickPointerDown
-    this.pickPointerDown = null
+    if ($measureTool.get() === 'none') return;
+    const down = this.pickPointerDown;
+    this.pickPointerDown = null;
     // Treat >4px of movement as an orbit drag, not a pick.
-    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) return
+    if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) return;
 
-    const point = this.pickWorldPoint(e)
-    if (!point) return
+    const point = this.pickWorldPoint(e);
+    if (!point) return;
 
     if (this.pendingMeasurementId === null) {
-      const id = addMeasurement({ source: 'point', a: point, b: point })
-      this.pendingMeasurementId = id
-      setActiveMeasurement(null) // keep the editor/gizmo away until the 2nd click
+      const id = addMeasurement({ source: 'point', a: point, b: point });
+      this.pendingMeasurementId = id;
+      setActiveMeasurement(null); // keep the editor/gizmo away until the 2nd click
     } else {
-      updateMeasurement(this.pendingMeasurementId, { b: point })
-      setActiveMeasurement(this.pendingMeasurementId)
-      this.pendingMeasurementId = null
-      setMeasureTool('none')
+      updateMeasurement(this.pendingMeasurementId, { b: point });
+      setActiveMeasurement(this.pendingMeasurementId);
+      this.pendingMeasurementId = null;
+      setMeasureTool('none');
     }
-  }
+  };
 
   /** Raycasts the pointer against part meshes, snapping to the nearest face vertex. */
   private pickWorldPoint(e: PointerEvent): Vec3 | null {
-    const dom = this.viewport.renderer.domElement
-    const rect = dom.getBoundingClientRect()
+    const dom = this.viewport.renderer.domElement;
+    const rect = dom.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((e.clientX - rect.left) / rect.width) * 2 - 1,
       -((e.clientY - rect.top) / rect.height) * 2 + 1,
-    )
-    this.raycaster.setFromCamera(ndc, this.viewport.camera)
-    const hits = this.raycaster.intersectObjects(this.root.children, true)
-    const hit = hits[0]
+    );
+    this.raycaster.setFromCamera(ndc, this.viewport.camera);
+    const hits = this.raycaster.intersectObjects(this.root.children, true);
+    const hit = hits[0];
     if (hit) {
-      const snapped = nearestFaceVertex(hit)
-      const p = snapped ?? hit.point
-      return { x: p.x, y: p.y, z: p.z }
+      const snapped = nearestFaceVertex(hit);
+      const p = snapped ?? hit.point;
+      return { x: p.x, y: p.y, z: p.z };
     }
     // No mesh under the cursor: fall back to the Y=0 ground plane so points can
     // be placed in empty space.
-    const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-    const target = new THREE.Vector3()
+    const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const target = new THREE.Vector3();
     if (this.raycaster.ray.intersectPlane(ground, target)) {
-      return { x: target.x, y: target.y, z: target.z }
+      return { x: target.x, y: target.y, z: target.z };
     }
-    return null
+    return null;
   }
 
   private cancelPendingMeasurement(): void {
     if (this.pendingMeasurementId !== null) {
-      removeMeasurement(this.pendingMeasurementId)
-      this.pendingMeasurementId = null
+      removeMeasurement(this.pendingMeasurementId);
+      this.pendingMeasurementId = null;
     }
   }
 
   dispose(): void {
     // The scene going away takes the preview with it — the bar must not survive it.
-    exitSeatView()
+    exitSeatView();
     if (this.coverageDots) {
-      this.root.remove(this.coverageDots)
-      this.coverageDots.geometry.dispose()
-      ;(this.coverageDots.material as THREE.Material).dispose()
-      this.coverageDots = null
+      this.root.remove(this.coverageDots);
+      this.coverageDots.geometry.dispose();
+      (this.coverageDots.material as THREE.Material).dispose();
+      this.coverageDots = null;
     }
     for (const objs of this.colliderObjects.values()) {
       for (const obj of objs) {
-        this.root.remove(obj.group)
-        obj.dispose()
+        this.root.remove(obj.group);
+        obj.dispose();
       }
     }
-    this.colliderObjects.clear()
+    this.colliderObjects.clear();
     for (const objs of this.lightObjects.values()) {
       for (const obj of objs) {
-        this.root.remove(obj.group)
-        obj.dispose()
+        this.root.remove(obj.group);
+        obj.dispose();
       }
     }
-    this.lightObjects.clear()
+    this.lightObjects.clear();
     // The cap report describes a scene that no longer exists.
-    setLightPreviewCount({ enabled: 0, total: 0 })
-    const dom = this.viewport.renderer.domElement
-    dom.removeEventListener('pointerdown', this.onPickPointerDown)
-    dom.removeEventListener('pointerup', this.onPickPointerUp)
-    dom.style.cursor = ''
-    for (const unsub of this.unsubscribers) unsub()
-    this.unsubscribers.length = 0
-    this.selection.dispose()
-    this.gizmo.dispose()
-    this.root.remove(this.poseProxy)
-    this.root.remove(this.pivotHelper)
-    this.pivotHelper.dispose()
-    this.root.remove(this.engineProxy)
+    setLightPreviewCount({ enabled: 0, total: 0 });
+    const dom = this.viewport.renderer.domElement;
+    dom.removeEventListener('pointerdown', this.onPickPointerDown);
+    dom.removeEventListener('pointerup', this.onPickPointerUp);
+    dom.style.cursor = '';
+    for (const unsub of this.unsubscribers) unsub();
+    this.unsubscribers.length = 0;
+    this.selection.dispose();
+    this.gizmo.dispose();
+    this.root.remove(this.poseProxy);
+    this.root.remove(this.pivotHelper);
+    this.pivotHelper.dispose();
+    this.root.remove(this.engineProxy);
     for (const handle of this.nozzleHandles.values()) {
-      this.root.remove(handle.group)
-      handle.dispose()
+      this.root.remove(handle.group);
+      handle.dispose();
     }
-    this.nozzleHandles.clear()
-    this.nozzleRefs.clear()
-    this.measurements.dispose()
-    this.containers.dispose()
-    for (const obj of this.objects.values()) obj.dispose()
-    this.objects.clear()
-    for (const obj of this.connectorObjects.values()) obj.dispose()
-    this.connectorObjects.clear()
+    this.nozzleHandles.clear();
+    this.nozzleRefs.clear();
+    this.measurements.dispose();
+    this.containers.dispose();
+    for (const obj of this.objects.values()) obj.dispose();
+    this.objects.clear();
+    for (const obj of this.connectorObjects.values()) obj.dispose();
+    this.connectorObjects.clear();
     for (const obj of this.seatObjects.values()) {
-      this.root.remove(obj.group)
-      obj.dispose()
+      this.root.remove(obj.group);
+      obj.dispose();
     }
-    this.seatObjects.clear()
-    for (const obj of this.kittenObjects.values()) obj.dispose()
-    this.kittenObjects.clear()
-    this.viewport.dispose()
+    this.seatObjects.clear();
+    for (const obj of this.kittenObjects.values()) obj.dispose();
+    this.kittenObjects.clear();
+    this.viewport.dispose();
   }
 }
 
@@ -2146,27 +2154,27 @@ export class EditorScene {
  * A degenerate direction falls back to identity rather than producing a NaN quaternion.
  */
 function aimQuaternion(dir: Vec3): THREE.Quaternion {
-  const v = new THREE.Vector3(dir.x, dir.y, dir.z)
-  if (v.lengthSq() < 1e-18) return new THREE.Quaternion()
-  return new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), v.normalize())
+  const v = new THREE.Vector3(dir.x, dir.y, dir.z);
+  if (v.lengthSq() < 1e-18) return new THREE.Quaternion();
+  return new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(1, 0, 0), v.normalize());
 }
 
 /** Unit-length copy of `v`; a zero vector degenerates to KSA's default exhaust axis (−X). */
 function normalizedVec(v: Vec3): Vec3 {
-  const len = Math.hypot(v.x, v.y, v.z)
-  if (!(len > 0)) return { x: -1, y: 0, z: 0 }
-  return { x: v.x / len, y: v.y / len, z: v.z / len }
+  const len = Math.hypot(v.x, v.y, v.z);
+  if (!(len > 0)) return { x: -1, y: 0, z: 0 };
+  return { x: v.x / len, y: v.y / len, z: v.z / len };
 }
 
 /** True when `a` and `b` point along (or against) the same line — where `seatRotationFromAxes` NaNs. */
 function isParallel(a: Vec3, b: Vec3): boolean {
-  const la = Math.hypot(a.x, a.y, a.z)
-  const lb = Math.hypot(b.x, b.y, b.z)
-  if (!(la > 0) || !(lb > 0)) return true
-  const cx = a.y * b.z - a.z * b.y
-  const cy = a.z * b.x - a.x * b.z
-  const cz = a.x * b.y - a.y * b.x
-  return Math.hypot(cx, cy, cz) / (la * lb) < 1e-6
+  const la = Math.hypot(a.x, a.y, a.z);
+  const lb = Math.hypot(b.x, b.y, b.z);
+  if (!(la > 0) || !(lb > 0)) return true;
+  const cx = a.y * b.z - a.z * b.y;
+  const cy = a.z * b.x - a.x * b.z;
+  const cz = a.x * b.y - a.y * b.x;
+  return Math.hypot(cx, cy, cz) / (la * lb) < 1e-6;
 }
 
 /**
@@ -2175,8 +2183,8 @@ function isParallel(a: Vec3, b: Vec3): boolean {
  * perpendicular — `seatRotationFromAxes` orthogonalises exactly as the game does.
  */
 function perpendicularUp(forward: Vec3): Vec3 {
-  if (!isParallel(forward, SEAT_LOCAL_UP)) return { ...SEAT_LOCAL_UP }
-  return { x: 0, y: 1, z: 0 }
+  if (!isParallel(forward, SEAT_LOCAL_UP)) return { ...SEAT_LOCAL_UP };
+  return { x: 0, y: 1, z: 0 };
 }
 
 /**
@@ -2185,20 +2193,20 @@ function perpendicularUp(forward: Vec3): Vec3 {
  * intersection has no usable face/geometry.
  */
 function nearestFaceVertex(hit: THREE.Intersection): THREE.Vector3 | null {
-  const face = hit.face
-  const mesh = hit.object as THREE.Mesh
-  const geom = mesh.geometry as THREE.BufferGeometry | undefined
-  const pos = geom?.attributes?.position as THREE.BufferAttribute | undefined
-  if (!face || !pos) return null
-  let best: THREE.Vector3 | null = null
-  let bestDist = Infinity
+  const face = hit.face;
+  const mesh = hit.object as THREE.Mesh;
+  const geom = mesh.geometry as THREE.BufferGeometry | undefined;
+  const pos = geom?.attributes?.position as THREE.BufferAttribute | undefined;
+  if (!face || !pos) return null;
+  let best: THREE.Vector3 | null = null;
+  let bestDist = Infinity;
   for (const idx of [face.a, face.b, face.c]) {
-    const v = new THREE.Vector3().fromBufferAttribute(pos, idx).applyMatrix4(mesh.matrixWorld)
-    const d = v.distanceToSquared(hit.point)
+    const v = new THREE.Vector3().fromBufferAttribute(pos, idx).applyMatrix4(mesh.matrixWorld);
+    const d = v.distanceToSquared(hit.point);
     if (d < bestDist) {
-      bestDist = d
-      best = v
+      bestDist = d;
+      best = v;
     }
   }
-  return best
+  return best;
 }

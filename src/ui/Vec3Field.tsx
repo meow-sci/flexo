@@ -1,6 +1,6 @@
-import { cn } from './kit'
-import { PreciseNumberInput } from './PreciseNumberInput'
-import type { Vec3 } from '../ksa/types'
+import { cn } from './kit';
+import { PreciseNumberInput } from './PreciseNumberInput';
+import type { Vec3 } from '../ksa/types';
 
 /**
  * Three numeric inputs (X/Y/Z) editing a {@link Vec3} in a row, with an optional leading
@@ -15,15 +15,15 @@ export function Vec3Field({
   onCommit,
   onInteractionStart,
 }: {
-  label?: string
+  label?: string;
   /** Tailwind width for the leading label (default 'w-12'); single-char labels use 'w-3'. */
-  labelWidth?: string
-  value: Vec3
-  disabled?: { x: boolean; y: boolean; z: boolean }
-  onCommit: (axis: keyof Vec3, value: number) => void
-  onInteractionStart?: () => void
+  labelWidth?: string;
+  value: Vec3;
+  disabled?: { x: boolean; y: boolean; z: boolean };
+  onCommit: (axis: keyof Vec3, value: number) => void;
+  onInteractionStart?: () => void;
 }) {
-  const axes: (keyof Vec3)[] = ['x', 'y', 'z']
+  const axes: (keyof Vec3)[] = ['x', 'y', 'z'];
   return (
     <div className="flex items-center gap-1.5">
       {label && <span className={cn(labelWidth, 'shrink-0 text-xs text-fg-muted')}>{label}</span>}
@@ -39,5 +39,5 @@ export function Vec3Field({
         />
       ))}
     </div>
-  )
+  );
 }

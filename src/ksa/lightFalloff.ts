@@ -37,27 +37,27 @@
  * `decomp/KSA.Rendering.Lighting/Light.cs:10`. Core's own `OuterAngle=1.57`
  * floodlights exceed it and rely on the runtime clamp.
  */
-export const MAX_OUTER_ANGLE_RAD = 1.5697963
+export const MAX_OUTER_ANGLE_RAD = 1.5697963;
 
 /**
  * Spot outer-cone half-angle floor, radians — `MIN_OUTER_ANGLE`,
  * `decomp/KSA.Rendering.Lighting/Light.cs:12`.
  */
-export const MIN_OUTER_ANGLE_RAD = 1e-5
+export const MIN_OUTER_ANGLE_RAD = 1e-5;
 
 /** `SPOT_DENOM_EPSILON` (`LightPrePass.comp:38`) — the spot-edge denominator floor. */
-const SPOT_DENOM_EPSILON = 1e-4
+const SPOT_DENOM_EPSILON = 1e-4;
 
 /**
  * flexo's d² floor. The GPU floors the squared distance at `DIST_EPSILON = 1e-12`
  * (`LightPrePass.comp:36`), which puts E(0) at ~10¹²·Intensity; flexo floors at 1e-6
  * so the on-axis value stays display-scale finite. Identical for every d ≥ 1e-3 m.
  */
-const DIST_SQ_FLOOR = 1e-6
+const DIST_SQ_FLOOR = 1e-6;
 
 /** GLSL `saturate` — clamp to [0, 1]. */
 function saturate(x: number): number {
-  return x < 0 ? 0 : x > 1 ? 1 : x
+  return x < 0 ? 0 : x > 1 ? 1 : x;
 }
 
 /**
@@ -72,12 +72,12 @@ export function clampSpotAngles(
   innerRad: number,
   outerRad: number,
 ): { innerRad: number; outerRad: number } {
-  const swap = innerRad > outerRad
-  const rawInner = swap ? outerRad : innerRad
-  const rawOuter = swap ? innerRad : outerRad
-  const outer = Math.min(Math.max(rawOuter, MIN_OUTER_ANGLE_RAD), MAX_OUTER_ANGLE_RAD)
-  const inner = Math.min(Math.max(rawInner, 0), outer)
-  return { innerRad: inner, outerRad: outer }
+  const swap = innerRad > outerRad;
+  const rawInner = swap ? outerRad : innerRad;
+  const rawOuter = swap ? innerRad : outerRad;
+  const outer = Math.min(Math.max(rawOuter, MIN_OUTER_ANGLE_RAD), MAX_OUTER_ANGLE_RAD);
+  const inner = Math.min(Math.max(rawInner, 0), outer);
+  return { innerRad: inner, outerRad: outer };
 }
 
 /**
@@ -96,10 +96,10 @@ export function clampSpotAngles(
  * over (0, range).
  */
 export function lightIlluminance(d: number, rangeM: number, intensity: number): number {
-  if (rangeM <= 0 || d >= rangeM) return 0
-  const x2 = (d * d) / (rangeM * rangeM)
-  const win = saturate(1 - x2 * x2)
-  return (intensity * win) / Math.max(d * d, DIST_SQ_FLOOR)
+  if (rangeM <= 0 || d >= rangeM) return 0;
+  const x2 = (d * d) / (rangeM * rangeM);
+  const win = saturate(1 - x2 * x2);
+  return (intensity * win) / Math.max(d * d, DIST_SQ_FLOOR);
 }
 
 /**
@@ -114,7 +114,7 @@ export function lightIlluminance(d: number, rangeM: number, intensity: number): 
  * exactly 0 on and outside the outer cone; out-of-range `cosTheta` just saturates.
  */
 export function spotAttenuation(cosTheta: number, innerRad: number, outerRad: number): number {
-  const denom = Math.max(Math.cos(innerRad) - Math.cos(outerRad), SPOT_DENOM_EPSILON)
-  const s = saturate((cosTheta - Math.cos(outerRad)) / denom)
-  return s * s
+  const denom = Math.max(Math.cos(innerRad) - Math.cos(outerRad), SPOT_DENOM_EPSILON);
+  const s = saturate((cosTheta - Math.cos(outerRad)) / denom);
+  return s * s;
 }

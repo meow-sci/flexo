@@ -1,6 +1,6 @@
-import { useEffect } from 'react'
-import { useStore } from '@nanostores/react'
-import { Crosshair } from 'lucide-react'
+import { useEffect } from 'react';
+import { useStore } from '@nanostores/react';
+import { Crosshair } from 'lucide-react';
 import {
   DisclosureSection,
   ListBoxItem,
@@ -9,8 +9,8 @@ import {
   SectionTitle,
   ToggleButton,
   ToggleButtonGroup,
-} from './kit'
-import { Field } from './GameDataSections'
+} from './kit';
+import { Field } from './GameDataSections';
 import {
   CustomPropellantsSection,
   GimbalsSection,
@@ -18,8 +18,8 @@ import {
   PartSolidMotorSection,
   RocketControllersSection,
   SubPartEngineSection,
-} from './EngineSections'
-import { $part, addEngine, addSrbEngine } from '../state/editorStore'
+} from './EngineSections';
+import { $part, addEngine, addSrbEngine } from '../state/editorStore';
 import {
   $activeEngineData,
   $activeEngineEntry,
@@ -32,24 +32,24 @@ import {
   setEngineExhaustGizmo,
   type EngineEntry,
   type NozzleTarget,
-} from '../state/engineStore'
-import { $allReactionIndex, ensureReactionsLoaded } from '../state/reactionStore'
-import { predictPerformance, type EnginePerformance } from '../ksa/enginePhysics'
-import { resolveReactionLut } from '../ksa/reactionCatalog'
-import type { Combustor, DeLavalNozzle, EditingPart, SubPartGameData } from '../ksa/types'
+} from '../state/engineStore';
+import { $allReactionIndex, ensureReactionsLoaded } from '../state/reactionStore';
+import { predictPerformance, type EnginePerformance } from '../ksa/enginePhysics';
+import { resolveReactionLut } from '../ksa/reactionCatalog';
+import type { Combustor, DeLavalNozzle, EditingPart, SubPartGameData } from '../ksa/types';
 
 /** Short, human label for a SubPart template id (its last underscore segment). */
 function shortLabel(templateId: string): string {
-  const seg = templateId.split('_').pop() ?? templateId
-  return seg.replace(/Assembly$/, '')
+  const seg = templateId.split('_').pop() ?? templateId;
+  return seg.replace(/Assembly$/, '');
 }
 
 /** Select key for the part-scope entry — the `NONE` sentinel idiom, not a template id. */
-const PART_ENTRY_KEY = '\0part'
+const PART_ENTRY_KEY = '\0part';
 
-const entryKey = (e: EngineEntry): string => (e.kind === 'part' ? PART_ENTRY_KEY : e.templateId)
+const entryKey = (e: EngineEntry): string => (e.kind === 'part' ? PART_ENTRY_KEY : e.templateId);
 const entryLabel = (e: EngineEntry): string =>
-  e.kind === 'part' ? 'Part-level (RCS / gas generator)' : shortLabel(e.templateId)
+  e.kind === 'part' ? 'Part-level (RCS / gas generator)' : shortLabel(e.templateId);
 
 /**
  * The Engine Designer body (full-sidebar `$inspectorMode === 'engine'`). Lists the part's
@@ -61,20 +61,20 @@ const entryLabel = (e: EngineEntry): string =>
  * and the controller + gimbal wiring. Mirrors the Animation editor's list-on-top layout.
  */
 export function EnginePanel() {
-  const part = useStore($part)
-  const entries = useStore($engineEntries)
-  const activeEntry = useStore($activeEngineEntry)
-  const activeSpd = useStore($activeEngineData)
+  const part = useStore($part);
+  const entries = useStore($engineEntries);
+  const activeEntry = useStore($activeEngineEntry);
+  const activeSpd = useStore($activeEngineData);
 
   useEffect(() => {
-    void ensureReactionsLoaded()
-  }, [])
+    void ensureReactionsLoaded();
+  }, []);
 
   // Placements whose template isn't an engine yet — candidates for "New engine".
   const engineTemplateSet = new Set(
     entries.flatMap((e) => (e.kind === 'subpart' ? [e.templateId] : [])),
-  )
-  const candidates = part.placements.filter((p) => !engineTemplateSet.has(p.subPartTemplateId))
+  );
+  const candidates = part.placements.filter((p) => !engineTemplateSet.has(p.subPartTemplateId));
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-auto p-1">
@@ -110,10 +110,10 @@ export function EnginePanel() {
                 placeholder="Pick a placement…"
                 value={null}
                 onChange={(k) => {
-                  const placement = part.placements.find((p) => p.instanceId === String(k))
-                  if (!placement) return
-                  addEngine(placement.subPartTemplateId, placement.instanceId)
-                  setActiveEngineTemplate(placement.subPartTemplateId)
+                  const placement = part.placements.find((p) => p.instanceId === String(k));
+                  if (!placement) return;
+                  addEngine(placement.subPartTemplateId, placement.instanceId);
+                  setActiveEngineTemplate(placement.subPartTemplateId);
                 }}
               >
                 {candidates.map((p) => (
@@ -130,10 +130,10 @@ export function EnginePanel() {
                 placeholder="Pick a placement…"
                 value={null}
                 onChange={(k) => {
-                  const placement = part.placements.find((p) => p.instanceId === String(k))
-                  if (!placement) return
-                  addSrbEngine(placement.subPartTemplateId, placement.instanceId)
-                  setActiveEngineTemplate(placement.subPartTemplateId)
+                  const placement = part.placements.find((p) => p.instanceId === String(k));
+                  if (!placement) return;
+                  addSrbEngine(placement.subPartTemplateId, placement.instanceId);
+                  setActiveEngineTemplate(placement.subPartTemplateId);
                 }}
               >
                 {candidates.map((p) => (
@@ -176,7 +176,7 @@ export function EnginePanel() {
         <CustomPropellantsSection part={part} />
       </DisclosureSection>
     </div>
-  )
+  );
 }
 
 /** The wiring block, shared by both scopes — controllers and gimbals are always part-level. */
@@ -194,7 +194,7 @@ function WiringSection({ part }: { part: EditingPart }) {
         </div>
       </div>
     </DisclosureSection>
-  )
+  );
 }
 
 function SubPartEngineEditor({
@@ -202,11 +202,11 @@ function SubPartEngineEditor({
   nozzle,
   spd,
 }: {
-  combustor: Combustor | null
-  nozzle: DeLavalNozzle | null
-  spd: SubPartGameData
+  combustor: Combustor | null;
+  nozzle: DeLavalNozzle | null;
+  spd: SubPartGameData;
 }) {
-  const part = useStore($part)
+  const part = useStore($part);
   return (
     <div className="flex flex-col gap-3">
       {combustor && nozzle && <PerformanceReadout combustor={combustor} nozzle={nozzle} />}
@@ -225,7 +225,7 @@ function SubPartEngineEditor({
         <PartGasGeneratorSection part={part} />
       </DisclosureSection>
     </div>
-  )
+  );
 }
 
 /**
@@ -235,7 +235,7 @@ function SubPartEngineEditor({
  * this the designer couldn't see such a part as an engine at all.
  */
 function PartEngineEditor({ part }: { part: EditingPart }) {
-  const g = part.gameData
+  const g = part.gameData;
   return (
     <div className="flex flex-col gap-3">
       {g.combustors[0] && g.nozzles[0] && (
@@ -259,7 +259,7 @@ function PartEngineEditor({ part }: { part: EditingPart }) {
 
       <WiringSection part={part} />
     </div>
-  )
+  );
 }
 
 /**
@@ -268,8 +268,8 @@ function PartEngineEditor({ part }: { part: EditingPart }) {
  * would repeat), and `· FX` for the plume-override channel.
  */
 function targetLabel(t: NozzleTarget): string {
-  const instance = t.instanceCount > 1 ? ` #${t.instanceIndex + 1}` : ''
-  return `${t.nozzle.id}${instance}${t.ref.channel === 'fx' ? ' · FX' : ''}`
+  const instance = t.instanceCount > 1 ? ` #${t.instanceIndex + 1}` : '';
+  return `${t.nozzle.id}${instance}${t.ref.channel === 'fx' ? ' · FX' : ''}`;
 }
 
 /**
@@ -286,11 +286,11 @@ function targetLabel(t: NozzleTarget): string {
  * warning the light inspector gives for its per-placement markers.
  */
 function ExhaustPlacement() {
-  const gizmoOn = useStore($engineExhaustGizmo)
-  const targets = useStore($resolvedNozzleTargets)
-  if (targets.length === 0) return null
-  const active = targets.find((t) => t.isActive)
-  const shared = active && active.instanceCount > 1
+  const gizmoOn = useStore($engineExhaustGizmo);
+  const targets = useStore($resolvedNozzleTargets);
+  if (targets.length === 0) return null;
+  const active = targets.find((t) => t.isActive);
+  const shared = active && active.instanceCount > 1;
   return (
     <div className="flex flex-col gap-2">
       <Switch isSelected={gizmoOn} onChange={setEngineExhaustGizmo}>
@@ -306,9 +306,9 @@ function ExhaustPlacement() {
           disallowEmptySelection
           selectedKeys={active ? [active.key] : []}
           onSelectionChange={(keys) => {
-            const key = [...keys][0]
-            const target = targets.find((t) => t.key === key)
-            if (target) setActiveNozzleRef(target.ref)
+            const key = [...keys][0];
+            const target = targets.find((t) => t.key === key);
+            if (target) setActiveNozzleRef(target.ref);
           }}
         >
           {/* flex-none: ToggleButton is flex-1 for segmented controls, which would stretch
@@ -348,7 +348,7 @@ function ExhaustPlacement() {
         </p>
       )}
     </div>
-  )
+  );
 }
 
 /** A two-column metric row. */
@@ -358,7 +358,7 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: s
       <span className="text-xs text-fg-subtle">{label}</span>
       <span className="font-mono text-sm tabular-nums">{value}</span>
     </div>
-  )
+  );
 }
 
 /**
@@ -372,11 +372,11 @@ function PerformanceReadout({
   combustor,
   nozzle,
 }: {
-  combustor: Combustor
-  nozzle: DeLavalNozzle
+  combustor: Combustor;
+  nozzle: DeLavalNozzle;
 }) {
-  const index = useStore($allReactionIndex)
-  const reaction = index.get(combustor.reactionId)
+  const index = useStore($allReactionIndex);
+  const reaction = index.get(combustor.reactionId);
 
   if (!reaction) {
     return (
@@ -384,17 +384,17 @@ function PerformanceReadout({
         Live performance needs the reaction catalog (Reactions.xml). Pick a known propellant, or
         it's unavailable in this build — the engine still exports correctly.
       </div>
-    )
+    );
   }
 
-  const lut = resolveReactionLut(reaction, combustor.mixtureRatio)
+  const lut = resolveReactionLut(reaction, combustor.mixtureRatio);
   if (!lut) {
     return (
       <div className="rounded-md border border-border bg-panel-sunken p-2 text-xs text-fg-subtle">
         {reaction.name} is a mixture reaction — set the combustor's O/F mixture ratio to preview
         performance (KSA requires it to load the engine).
       </div>
-    )
+    );
   }
 
   const perf: EnginePerformance = predictPerformance({
@@ -405,9 +405,9 @@ function PerformanceReadout({
     thermalEfficiency: combustor.thermalEfficiency,
     flowEfficiency: nozzle.flowEfficiency,
     expansionEfficiency: nozzle.expansionEfficiency,
-  })
-  const kN = (n: number) => `${(n / 1000).toFixed(1)} kN`
-  const s = (n: number) => `${n.toFixed(1)} s`
+  });
+  const kN = (n: number) => `${(n / 1000).toFixed(1)} kN`;
+  const s = (n: number) => `${n.toFixed(1)} s`;
 
   return (
     <div className="flex flex-col gap-1 rounded-md border border-border bg-panel-sunken p-2">
@@ -431,5 +431,5 @@ function PerformanceReadout({
         hint="Ambient pressure at which the exhaust is perfectly expanded."
       />
     </div>
-  )
+  );
 }

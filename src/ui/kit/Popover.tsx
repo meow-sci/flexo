@@ -4,8 +4,8 @@ import {
   composeRenderProps,
   type PopoverProps,
   type DialogProps,
-} from 'react-aria-components'
-import { cn } from './styles'
+} from 'react-aria-components';
+import { cn } from './styles';
 
 /** Styled floating surface for menus, selects, and custom popover content. */
 export function Popover({ className, offset = 6, ...props }: PopoverProps) {
@@ -21,10 +21,10 @@ export function Popover({ className, offset = 6, ...props }: PopoverProps) {
         ),
       )}
     />
-  )
+  );
 }
 
 /** Dialog wrapper for arbitrary popover content (focus management + a11y). */
 export function PopoverDialog({ className, ...props }: DialogProps) {
-  return <Dialog {...props} className={cn('outline-none', className)} />
+  return <Dialog {...props} className={cn('outline-none', className)} />;
 }

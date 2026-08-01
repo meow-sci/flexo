@@ -1,15 +1,20 @@
-import { useStore } from '@nanostores/react'
-import { Toolbar, ToolbarSeparator, ToggleButtonGroup, ToggleButton, Button } from './kit'
-import { duplicateSelected, removeSelected, setToolMode, type ToolMode } from '../state/editorStore'
-import { $hasSelection } from '../state/selectors'
-import { $isPoseEditing } from '../state/animationStore'
-import { $effectiveToolMode, $isExhaustPlacing } from '../state/engineStore'
+import { useStore } from '@nanostores/react';
+import { Toolbar, ToolbarSeparator, ToggleButtonGroup, ToggleButton, Button } from './kit';
+import {
+  duplicateSelected,
+  removeSelected,
+  setToolMode,
+  type ToolMode,
+} from '../state/editorStore';
+import { $hasSelection } from '../state/selectors';
+import { $isPoseEditing } from '../state/animationStore';
+import { $effectiveToolMode, $isExhaustPlacing } from '../state/engineStore';
 
 const MODES: { mode: ToolMode; label: string }[] = [
   { mode: 'translate', label: 'Move' },
   { mode: 'rotate', label: 'Rotate' },
   { mode: 'scale', label: 'Scale' },
-]
+];
 
 /**
  * Floating toolbar that appears centered below the main toolbar whenever anything is
@@ -27,12 +32,12 @@ const MODES: { mode: ToolMode; label: string }[] = [
  * from an earlier edit displays Move, exactly as the gizmo behaves.
  */
 export function SelectionToolbar() {
-  const hasSelection = useStore($hasSelection)
-  const isPoseEditing = useStore($isPoseEditing)
-  const isExhaustPlacing = useStore($isExhaustPlacing)
-  const mode = useStore($effectiveToolMode)
+  const hasSelection = useStore($hasSelection);
+  const isPoseEditing = useStore($isPoseEditing);
+  const isExhaustPlacing = useStore($isExhaustPlacing);
+  const mode = useStore($effectiveToolMode);
 
-  if (!hasSelection && !isPoseEditing && !isExhaustPlacing) return null
+  if (!hasSelection && !isPoseEditing && !isExhaustPlacing) return null;
 
   return (
     <Toolbar aria-label="Selection actions">
@@ -42,8 +47,8 @@ export function SelectionToolbar() {
         disallowEmptySelection
         selectedKeys={[mode]}
         onSelectionChange={(keys) => {
-          const next = [...keys][0]
-          if (next) setToolMode(next as ToolMode)
+          const next = [...keys][0];
+          if (next) setToolMode(next as ToolMode);
         }}
       >
         {MODES.map((m) => (
@@ -71,5 +76,5 @@ export function SelectionToolbar() {
         </>
       )}
     </Toolbar>
-  )
+  );
 }

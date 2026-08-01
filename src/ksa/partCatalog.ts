@@ -8,7 +8,7 @@
  * Uses the browser DOMParser — no third-party XML lib, no build step.
  */
 
-import { ASSET_FILES, fetchXmlFile } from './catalog'
+import { ASSET_FILES, fetchXmlFile } from './catalog';
 import {
   collidersFromElement,
   connectorsFromPartElement,
@@ -19,7 +19,7 @@ import {
   subPartCollidersFromRoot,
   subPartGameDataFromDoc,
   subPartLightsFromRoot,
-} from './partXmlParser'
+} from './partXmlParser';
 import type {
   Battery,
   CatalogAnimationModule,
@@ -48,93 +48,93 @@ import type {
   SubPartGameData,
   SubPartPlacement,
   Tank,
-} from './types'
+} from './types';
 
 export interface CatalogPart {
   /** Part id as declared in the Assets XML, e.g. "CoreFuelTankA_Prefab_LF1W1HA". */
-  id: string
+  id: string;
   /** Editor tags from <EditorTag Value="..."/> (e.g. "Fuel Tanks"), in order. */
-  editorTags: string[]
+  editorTags: string[];
   /** The SubPart instances composing this Part, with their relative transforms. */
-  placements: SubPartPlacement[]
+  placements: SubPartPlacement[];
   /** The connector attachment points of this Part, with their relative transforms. */
-  connectors: Connector[]
+  connectors: Connector[];
   /**
    * The Part's collision volume, gathered from ALL of its authoring sites: the geometry
    * `<Part><Collider>` (which flexo used to drop — gap E), the `<PartGameData><Collider>`,
    * and every `<SubPartGameData><Collider>` for a template this Part places. Part-level
    * shapes carry `ownerTemplateId: null`; SubPart-owned ones name their template.
    */
-  colliders: PartCollider[]
+  colliders: PartCollider[];
   /**
    * The Part's IVA camera vantage points, gathered from BOTH Part-level authoring sites —
    * the geometry `<Part><IVASeat>` first, then the `<PartGameData><IVASeat>`s (KSA merges
    * `Components` additively, no dedupe) — with `_seatN` re-numbered over the merged list.
    * SubPart-level seats are deliberately not gathered (plans/IVA_PLAN.md §6).
    */
-  ivaSeats: IvaSeat[]
+  ivaSeats: IvaSeat[];
   /**
    * The Part's cast lights, gathered from both GameData authoring sites: the
    * `<PartGameData><Light>`s (`ownerTemplateId: null`) and every
    * `<SubPartGameData><Light>` for a template this Part places (owner = that template
    * id), with `_lightN` re-numbered over the merged list.
    */
-  lights: PartLight[]
+  lights: PartLight[];
   /** KeyframeAnimationModules (from GameData), decoded + imported alongside the Part. */
-  animationModules: CatalogAnimationModule[]
+  animationModules: CatalogAnimationModule[];
   /** Connector-bound coupling game-data (from GameData); connectorIds are in the Part's original id space. */
-  decoupler: Decoupler | null
-  dockingPort: DockingPort | null
-  evaDoor: EvaDoor | null
+  decoupler: Decoupler | null;
+  dockingPort: DockingPort | null;
+  evaDoor: EvaDoor | null;
   /** Part diameter in meters (<Diameter M/>, VAB size-class filter), or null. */
-  diameterM: number | null
+  diameterM: number | null;
   /** Extra `<Diameter M/>` size classes beyond {@link diameterM} (adapter prefabs), preserved for round-trip. */
-  extraDiametersM: number[]
+  extraDiametersM: number[];
   /** Command-capability marker (<Control/>): the part can pilot a vehicle. */
-  controllable: boolean
+  controllable: boolean;
   /** Part-level `<CustomMass><Mass Kg>` override, or null (the part masses from its tanks/inert masses). */
-  customMass: number | null
+  customMass: number | null;
   /** Unmodeled children of that `<CustomMass>` (inertia, offsets), preserved verbatim. */
-  customMassExtras: RawXmlNode[]
+  customMassExtras: RawXmlNode[];
   /** Unmodeled `<PartGameData>` attrs + child elements, preserved verbatim for round-trip. */
-  unknownAttrs: Record<string, string>
-  unknownChildren: RawXmlNode[]
+  unknownAttrs: Record<string, string>;
+  unknownChildren: RawXmlNode[];
   /** Part-level power modules (from GameData), carried into the editor on import. */
-  batteries: Battery[]
-  generators: Generator[]
-  solarPanels: SolarPanel[]
+  batteries: Battery[];
+  generators: Generator[];
+  solarPanels: SolarPanel[];
   /** The part's single power consumer / light switch, or null (KSA has one switch slot). */
-  powerConsumer: PowerConsumer | null
+  powerConsumer: PowerConsumer | null;
   /** Per-SubPart-template data (tanks / solar panels / engine modules) for the SubParts this Part places. */
-  subPartGameData: SubPartGameData[]
+  subPartGameData: SubPartGameData[];
   /** Part-level engine modules (controllers/rockets/combustors/nozzles/gimbals); instance refs in original id space. */
-  rocketControllers: RocketController[]
-  rockets: Rocket[]
-  combustors: Combustor[]
-  nozzles: DeLavalNozzle[]
-  gimbals: Gimbal[]
+  rocketControllers: RocketController[];
+  rockets: Rocket[];
+  combustors: Combustor[];
+  nozzles: DeLavalNozzle[];
+  gimbals: Gimbal[];
   /** Part-level `<Tank>`s (where Core authors its prefab tank data since KSA 2026.7.6). */
-  tanks: Tank[]
+  tanks: Tank[];
   /** Part-level solid-motor hardware (SRB cases / nozzles / grain segments). */
-  solidMotors: SolidMotor[]
-  solidNozzles: SolidMotorNozzle[]
-  solidGrainSegments: SolidGrainSegment[]
+  solidMotors: SolidMotor[];
+  solidNozzles: SolidMotorNozzle[];
+  solidGrainSegments: SolidGrainSegment[];
   /** `<ConsumerFeedWiring>`; SubPart + connector refs in the Part's ORIGINAL id space. */
-  consumerFeedWiring: ConsumerFeedWiring[]
+  consumerFeedWiring: ConsumerFeedWiring[];
   /** Originating XML file (for debugging / grouping). */
-  sourceFile: string
+  sourceFile: string;
 }
 
 export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPart[]): void {
   for (const part of Array.from(doc.getElementsByTagName('Part'))) {
-    const id = part.getAttribute('Id')
-    if (!id) continue
+    const id = part.getAttribute('Id');
+    if (!id) continue;
     const editorTags = directChildren(part, 'EditorTag')
       .map((t) => t.getAttribute('Value'))
-      .filter((v): v is string => !!v)
-    const placements = placementsFromPartElement(part)
-    if (placements.length === 0) continue // nothing renderable/importable
-    const connectors = connectorsFromPartElement(part)
+      .filter((v): v is string => !!v);
+    const placements = placementsFromPartElement(part);
+    if (placements.length === 0) continue; // nothing renderable/importable
+    const connectors = connectorsFromPartElement(part);
     out.push({
       id,
       editorTags,
@@ -178,7 +178,7 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
       solidGrainSegments: [],
       consumerFeedWiring: [],
       sourceFile,
-    })
+    });
   }
 }
 
@@ -189,66 +189,66 @@ export function parsePartsFile(doc: Document, sourceFile: string, out: CatalogPa
  * the editor tags and the connector <Flags> (e.g. ToSurface on solar panels).
  */
 export interface PartGameData {
-  editorTags: string[]
+  editorTags: string[];
   /** connector id -> its flags (only connectors carrying <Flags> are recorded). */
-  connectorFlags: Map<string, ConnectorFlag[]>
+  connectorFlags: Map<string, ConnectorFlag[]>;
   /** connector id -> its capabilities (only connectors carrying <Capabilities> are recorded). */
-  connectorCapabilities: Map<string, ConnectorCapability[]>
+  connectorCapabilities: Map<string, ConnectorCapability[]>;
   /** KeyframeAnimationModules declared on this <PartGameData>. */
-  animationModules: CatalogAnimationModule[]
+  animationModules: CatalogAnimationModule[];
   /** `<PartGameData><Collider>` shapes (part-level, `ownerTemplateId: null`). */
-  colliders: PartCollider[]
+  colliders: PartCollider[];
   /** `<PartGameData><IVASeat>` camera vantage points, in document (= cycle) order. */
-  ivaSeats: IvaSeat[]
+  ivaSeats: IvaSeat[];
   /** `<PartGameData><Light>`s (part-level, `ownerTemplateId: null`). */
-  lights: PartLight[]
+  lights: PartLight[];
   /** Connector-bound coupling game-data, so built-in part imports carry them in. */
-  decoupler: Decoupler | null
-  dockingPort: DockingPort | null
-  evaDoor: EvaDoor | null
+  decoupler: Decoupler | null;
+  dockingPort: DockingPort | null;
+  evaDoor: EvaDoor | null;
   /** Part diameter (<Diameter M/>) and command marker (<Control/>) declared on this <PartGameData>. */
-  diameterM: number | null
+  diameterM: number | null;
   /** Extra `<Diameter M/>` size classes beyond {@link diameterM} (adapter prefabs), preserved for round-trip. */
-  extraDiametersM: number[]
-  controllable: boolean
+  extraDiametersM: number[];
+  controllable: boolean;
   /** Part-level `<CustomMass>` mass override (Kg) + its preserved unmodeled children. */
-  customMass: number | null
-  customMassExtras: RawXmlNode[]
+  customMass: number | null;
+  customMassExtras: RawXmlNode[];
   /** Unmodeled `<PartGameData>` attrs + child elements preserved from this entry. */
-  unknownAttrs: Record<string, string>
-  unknownChildren: RawXmlNode[]
+  unknownAttrs: Record<string, string>;
+  unknownChildren: RawXmlNode[];
   /** Part-level power modules declared on this <PartGameData>. */
-  batteries: Battery[]
-  generators: Generator[]
-  solarPanels: SolarPanel[]
+  batteries: Battery[];
+  generators: Generator[];
+  solarPanels: SolarPanel[];
   /** The part's single power consumer / light switch, or null (KSA has one switch slot). */
-  powerConsumer: PowerConsumer | null
+  powerConsumer: PowerConsumer | null;
   /** Part-level engine modules declared on this <PartGameData>. */
-  rocketControllers: RocketController[]
-  rockets: Rocket[]
-  combustors: Combustor[]
-  nozzles: DeLavalNozzle[]
-  gimbals: Gimbal[]
+  rocketControllers: RocketController[];
+  rockets: Rocket[];
+  combustors: Combustor[];
+  nozzles: DeLavalNozzle[];
+  gimbals: Gimbal[];
   /** Part-level tanks, solid-motor hardware and consumer feed wiring declared here. */
-  tanks: Tank[]
-  solidMotors: SolidMotor[]
-  solidNozzles: SolidMotorNozzle[]
-  solidGrainSegments: SolidGrainSegment[]
-  consumerFeedWiring: ConsumerFeedWiring[]
+  tanks: Tank[];
+  solidMotors: SolidMotor[];
+  solidNozzles: SolidMotorNozzle[];
+  solidGrainSegments: SolidGrainSegment[];
+  consumerFeedWiring: ConsumerFeedWiring[];
 }
 
 /** Parsed GameData for a whole file: per-Part data + per-SubPart-template data (keyed by template id). */
 interface ParsedGameDataFile {
-  parts: Map<string, PartGameData>
-  subParts: Map<string, SubPartGameData>
+  parts: Map<string, PartGameData>;
+  subParts: Map<string, SubPartGameData>;
   /** `<SubPartGameData><Collider>` shapes, keyed by the owning SubPart template id. */
-  subPartColliders: Map<string, PartCollider[]>
+  subPartColliders: Map<string, PartCollider[]>;
   /** `<SubPartGameData><Light>`s, keyed by the owning SubPart template id. */
-  subPartLights: Map<string, PartLight[]>
+  subPartLights: Map<string, PartLight[]>;
 }
 
 /** GameData sibling of each catalog asset file (e.g. CoreElectricalAAssets.xml -> CoreElectricalAGameData.xml). Not every asset file has one. */
-const GAMEDATA_FILES = ASSET_FILES.map((f) => f.replace(/Assets\.xml$/, 'GameData.xml'))
+const GAMEDATA_FILES = ASSET_FILES.map((f) => f.replace(/Assets\.xml$/, 'GameData.xml'));
 
 /**
  * Parses a GameData document: `<PartGameData>` entries (editor tags, connector
@@ -258,9 +258,9 @@ const GAMEDATA_FILES = ASSET_FILES.map((f) => f.replace(/Assets\.xml$/, 'GameDat
  */
 export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void {
   for (const gd of Array.from(doc.getElementsByTagName('PartGameData'))) {
-    const id = gd.getAttribute('Id')
-    if (!id) continue
-    const parsed = parseGameDataElement(gd)
+    const id = gd.getAttribute('Id');
+    if (!id) continue;
+    const parsed = parseGameDataElement(gd);
     const entry: PartGameData = out.parts.get(id) ?? {
       editorTags: [],
       connectorFlags: new Map(),
@@ -293,62 +293,62 @@ export function parseGameDataFile(doc: Document, out: ParsedGameDataFile): void 
       solidNozzles: [],
       solidGrainSegments: [],
       consumerFeedWiring: [],
-    }
+    };
     for (const tag of parsed.editorTags) {
-      if (!entry.editorTags.includes(tag)) entry.editorTags.push(tag)
+      if (!entry.editorTags.includes(tag)) entry.editorTags.push(tag);
     }
-    for (const [connId, flags] of parsed.connectorFlags) entry.connectorFlags.set(connId, flags)
+    for (const [connId, flags] of parsed.connectorFlags) entry.connectorFlags.set(connId, flags);
     for (const [connId, caps] of parsed.connectorCapabilities)
-      entry.connectorCapabilities.set(connId, caps)
-    entry.animationModules.push(...parsed.animationModules)
-    entry.colliders.push(...parsed.colliders)
-    entry.ivaSeats.push(...parsed.ivaSeats)
+      entry.connectorCapabilities.set(connId, caps);
+    entry.animationModules.push(...parsed.animationModules);
+    entry.colliders.push(...parsed.colliders);
+    entry.ivaSeats.push(...parsed.ivaSeats);
     // Duplicate-Id <PartGameData> entries merge additively in KSA — lights accumulate.
-    entry.lights.push(...parsed.lights)
-    entry.decoupler ??= parsed.gameData.decoupler
-    entry.dockingPort ??= parsed.gameData.dockingPort
-    entry.evaDoor ??= parsed.gameData.evaDoor
+    entry.lights.push(...parsed.lights);
+    entry.decoupler ??= parsed.gameData.decoupler;
+    entry.dockingPort ??= parsed.gameData.dockingPort;
+    entry.evaDoor ??= parsed.gameData.evaDoor;
     // Adopt the first entry's diameter + its extra adapter size classes together.
     if (entry.diameterM == null && parsed.gameData.diameterM != null) {
-      entry.diameterM = parsed.gameData.diameterM
-      entry.extraDiametersM = parsed.gameData.extraDiametersM
+      entry.diameterM = parsed.gameData.diameterM;
+      entry.extraDiametersM = parsed.gameData.extraDiametersM;
     }
-    entry.controllable ||= parsed.gameData.controllable
+    entry.controllable ||= parsed.gameData.controllable;
     // Adopt the first entry's custom mass; its preserved extras (inertia) ride along.
     if (entry.customMass == null && parsed.gameData.customMass != null) {
-      entry.customMass = parsed.gameData.customMass
-      entry.customMassExtras = parsed.gameData.customMassExtras
+      entry.customMass = parsed.gameData.customMass;
+      entry.customMassExtras = parsed.gameData.customMassExtras;
     }
     // First entry with passthrough wins (these represent one part's leftover XML).
     if (Object.keys(entry.unknownAttrs).length === 0)
-      entry.unknownAttrs = parsed.gameData.unknownAttrs
-    if (entry.unknownChildren.length === 0) entry.unknownChildren = parsed.gameData.unknownChildren
-    entry.batteries.push(...parsed.gameData.batteries)
-    entry.generators.push(...parsed.gameData.generators)
-    entry.solarPanels.push(...parsed.gameData.solarPanels)
-    entry.powerConsumer ??= parsed.gameData.powerConsumer
-    entry.rocketControllers.push(...parsed.gameData.rocketControllers)
-    entry.rockets.push(...parsed.gameData.rockets)
-    entry.combustors.push(...parsed.gameData.combustors)
-    entry.nozzles.push(...parsed.gameData.nozzles)
-    entry.gimbals.push(...parsed.gameData.gimbals)
-    entry.tanks.push(...parsed.gameData.tanks)
-    entry.solidMotors.push(...parsed.gameData.solidMotors)
-    entry.solidNozzles.push(...parsed.gameData.solidNozzles)
-    entry.solidGrainSegments.push(...parsed.gameData.solidGrainSegments)
-    entry.consumerFeedWiring.push(...parsed.gameData.consumerFeedWiring)
-    out.parts.set(id, entry)
+      entry.unknownAttrs = parsed.gameData.unknownAttrs;
+    if (entry.unknownChildren.length === 0) entry.unknownChildren = parsed.gameData.unknownChildren;
+    entry.batteries.push(...parsed.gameData.batteries);
+    entry.generators.push(...parsed.gameData.generators);
+    entry.solarPanels.push(...parsed.gameData.solarPanels);
+    entry.powerConsumer ??= parsed.gameData.powerConsumer;
+    entry.rocketControllers.push(...parsed.gameData.rocketControllers);
+    entry.rockets.push(...parsed.gameData.rockets);
+    entry.combustors.push(...parsed.gameData.combustors);
+    entry.nozzles.push(...parsed.gameData.nozzles);
+    entry.gimbals.push(...parsed.gameData.gimbals);
+    entry.tanks.push(...parsed.gameData.tanks);
+    entry.solidMotors.push(...parsed.gameData.solidMotors);
+    entry.solidNozzles.push(...parsed.gameData.solidNozzles);
+    entry.solidGrainSegments.push(...parsed.gameData.solidGrainSegments);
+    entry.consumerFeedWiring.push(...parsed.gameData.consumerFeedWiring);
+    out.parts.set(id, entry);
   }
-  for (const spd of subPartGameDataFromDoc(doc)) out.subParts.set(spd.subPartTemplateId, spd)
+  for (const spd of subPartGameDataFromDoc(doc)) out.subParts.set(spd.subPartTemplateId, spd);
   for (const c of subPartCollidersFromRoot(doc.documentElement as Element)) {
-    const list = out.subPartColliders.get(c.ownerTemplateId!)
-    if (list) list.push(c)
-    else out.subPartColliders.set(c.ownerTemplateId!, [c])
+    const list = out.subPartColliders.get(c.ownerTemplateId!);
+    if (list) list.push(c);
+    else out.subPartColliders.set(c.ownerTemplateId!, [c]);
   }
   for (const l of subPartLightsFromRoot(doc.documentElement as Element)) {
-    const list = out.subPartLights.get(l.ownerTemplateId!)
-    if (list) list.push(l)
-    else out.subPartLights.set(l.ownerTemplateId!, [l])
+    const list = out.subPartLights.get(l.ownerTemplateId!);
+    if (list) list.push(l);
+    else out.subPartLights.set(l.ownerTemplateId!, [l]);
   }
 }
 
@@ -358,16 +358,16 @@ async function loadGameData(): Promise<ParsedGameDataFile> {
     subParts: new Map(),
     subPartColliders: new Map(),
     subPartLights: new Map(),
-  }
+  };
   await Promise.all(
     GAMEDATA_FILES.map(async (file) => {
-      const r = await fetchXmlFile(file)
+      const r = await fetchXmlFile(file);
       // Most asset files have no GameData sibling ('missing' — expected and silent);
       // genuine parse/network errors are logged verbosely inside fetchXmlFile.
-      if (r.kind === 'ok') parseGameDataFile(r.doc, out)
+      if (r.kind === 'ok') parseGameDataFile(r.doc, out);
     }),
-  )
-  return out
+  );
+  return out;
 }
 
 /**
@@ -377,70 +377,70 @@ async function loadGameData(): Promise<ParsedGameDataFile> {
  */
 export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile): void {
   for (const part of parts) {
-    const gd = gameData.parts.get(part.id)
+    const gd = gameData.parts.get(part.id);
     if (gd) {
       for (const tag of gd.editorTags) {
-        if (!part.editorTags.includes(tag)) part.editorTags.push(tag)
+        if (!part.editorTags.includes(tag)) part.editorTags.push(tag);
       }
       for (const conn of part.connectors) {
-        const flags = gd.connectorFlags.get(conn.id)
-        if (flags) conn.flags = flags
+        const flags = gd.connectorFlags.get(conn.id);
+        if (flags) conn.flags = flags;
         // <Capabilities> decides what may FLOW across the connector (BulkFluid /
         // SolidMotorCase / DecouplerJoint) — dropping it makes an imported fuel tank,
         // SRB segment or decoupler dead on re-export.
-        const caps = gd.connectorCapabilities.get(conn.id)
-        if (caps) conn.capabilities = caps
+        const caps = gd.connectorCapabilities.get(conn.id);
+        if (caps) conn.capabilities = caps;
       }
-      if (gd.animationModules.length) part.animationModules = gd.animationModules
-      part.decoupler = gd.decoupler
-      part.dockingPort = gd.dockingPort
-      part.evaDoor = gd.evaDoor
-      part.diameterM = gd.diameterM
-      part.extraDiametersM = gd.extraDiametersM
-      part.controllable = gd.controllable
-      part.customMass = gd.customMass
-      part.customMassExtras = gd.customMassExtras
-      part.unknownAttrs = gd.unknownAttrs
-      part.unknownChildren = gd.unknownChildren
-      part.batteries = gd.batteries
-      part.generators = gd.generators
-      part.solarPanels = gd.solarPanels
-      part.powerConsumer = gd.powerConsumer
-      part.rocketControllers = gd.rocketControllers
-      part.rockets = gd.rockets
-      part.combustors = gd.combustors
-      part.nozzles = gd.nozzles
-      part.gimbals = gd.gimbals
-      part.tanks = gd.tanks
-      part.solidMotors = gd.solidMotors
-      part.solidNozzles = gd.solidNozzles
-      part.solidGrainSegments = gd.solidGrainSegments
-      part.consumerFeedWiring = gd.consumerFeedWiring
+      if (gd.animationModules.length) part.animationModules = gd.animationModules;
+      part.decoupler = gd.decoupler;
+      part.dockingPort = gd.dockingPort;
+      part.evaDoor = gd.evaDoor;
+      part.diameterM = gd.diameterM;
+      part.extraDiametersM = gd.extraDiametersM;
+      part.controllable = gd.controllable;
+      part.customMass = gd.customMass;
+      part.customMassExtras = gd.customMassExtras;
+      part.unknownAttrs = gd.unknownAttrs;
+      part.unknownChildren = gd.unknownChildren;
+      part.batteries = gd.batteries;
+      part.generators = gd.generators;
+      part.solarPanels = gd.solarPanels;
+      part.powerConsumer = gd.powerConsumer;
+      part.rocketControllers = gd.rocketControllers;
+      part.rockets = gd.rockets;
+      part.combustors = gd.combustors;
+      part.nozzles = gd.nozzles;
+      part.gimbals = gd.gimbals;
+      part.tanks = gd.tanks;
+      part.solidMotors = gd.solidMotors;
+      part.solidNozzles = gd.solidNozzles;
+      part.solidGrainSegments = gd.solidGrainSegments;
+      part.consumerFeedWiring = gd.consumerFeedWiring;
       // APPEND — the geometry `<Part><Collider>` read in parsePartsFile is already here,
       // and KSA applies both (Components merge additively, no dedupe).
-      part.colliders.push(...gd.colliders)
+      part.colliders.push(...gd.colliders);
       // Same additive merge for IVA seats, then re-number `_seatN` across the merged list so
       // the ids stay unique and in document order (geometry `<Part>` first, then GameData).
       // The ids are editor-only and never emitted, so renumbering is free.
-      part.ivaSeats.push(...gd.ivaSeats)
+      part.ivaSeats.push(...gd.ivaSeats);
       part.ivaSeats.forEach((seat, i) => {
-        seat.id = `_seat${i + 1}`
-      })
+        seat.id = `_seat${i + 1}`;
+      });
       // Part-level <Light>s (Core: CoreCommandA headlights, CoreIVASpaceA interior light).
-      part.lights.push(...gd.lights)
+      part.lights.push(...gd.lights);
     }
     // SubPart-template data is keyed globally by template id; carry only the entries
     // for templates this Part places (deduped — many instances share one template).
-    const templateIds = new Set(part.placements.map((p) => p.subPartTemplateId))
+    const templateIds = new Set(part.placements.map((p) => p.subPartTemplateId));
     part.subPartGameData = [...templateIds]
       .map((tid) => gameData.subParts.get(tid))
-      .filter((spd): spd is SubPartGameData => spd != null)
+      .filter((spd): spd is SubPartGameData => spd != null);
     // Same scoping for SubPart-owned colliders. NOTE: the geometry `<SubPart><Collider>`
     // of a placed built-in template is deliberately NOT pulled in — the placement keeps
     // referencing the built-in id, so that collider already applies in-game (see
     // CatalogSubPart.colliders).
     for (const tid of templateIds) {
-      part.colliders.push(...(gameData.subPartColliders.get(tid) ?? []))
+      part.colliders.push(...(gameData.subPartColliders.get(tid) ?? []));
     }
     // Same scoping for SubPart-owned lights (Core: CoreElectricalA spotlights), then
     // re-number `_lightN` across the merged list (part-level first) — the ids are
@@ -448,37 +448,37 @@ export function mergeGameData(parts: CatalogPart[], gameData: ParsedGameDataFile
     // the per-template lists are shared by every Part placing the template, and the
     // renumber below writes ids.
     for (const tid of templateIds) {
-      part.lights.push(...structuredClone(gameData.subPartLights.get(tid) ?? []))
+      part.lights.push(...structuredClone(gameData.subPartLights.get(tid) ?? []));
     }
     part.lights.forEach((light, i) => {
-      light.id = `_light${i + 1}`
-    })
+      light.id = `_light${i + 1}`;
+    });
   }
 }
 
 /** Fetches and parses every Core asset file into a sorted Part catalog. */
 export async function loadCorePartCatalog(): Promise<CatalogPart[]> {
-  const out: CatalogPart[] = []
+  const out: CatalogPart[] = [];
   const [, gameData] = await Promise.all([
     Promise.all(
       ASSET_FILES.map(async (file) => {
-        const r = await fetchXmlFile(file)
+        const r = await fetchXmlFile(file);
         if (r.kind === 'missing') {
-          console.error(`partCatalog: required asset file ${file} not found`)
-          return
+          console.error(`partCatalog: required asset file ${file} not found`);
+          return;
         }
-        if (r.kind === 'ok') parsePartsFile(r.doc, file, out)
+        if (r.kind === 'ok') parsePartsFile(r.doc, file, out);
       }),
     ),
     loadGameData(),
-  ])
-  mergeGameData(out, gameData)
-  out.sort((a, b) => a.id.localeCompare(b.id))
-  console.info(`flexo part catalog: ${out.length} Parts loaded`)
-  return out
+  ]);
+  mergeGameData(out, gameData);
+  out.sort((a, b) => a.id.localeCompare(b.id));
+  console.info(`flexo part catalog: ${out.length} Parts loaded`);
+  return out;
 }
 
 /** Builds an id->entry index for O(1) lookups by Part id. */
 export function indexPartCatalog(entries: CatalogPart[]): Map<string, CatalogPart> {
-  return new Map(entries.map((e) => [e.id, e]))
+  return new Map(entries.map((e) => [e.id, e]));
 }

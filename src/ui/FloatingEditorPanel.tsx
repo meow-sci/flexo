@@ -1,9 +1,9 @@
-import type { ReactNode } from 'react'
-import { Lock, Unlock, X } from 'lucide-react'
-import { Button, cn, useIsPhone } from './kit'
+import type { ReactNode } from 'react';
+import { Lock, Unlock, X } from 'lucide-react';
+import { Button, cn, useIsPhone } from './kit';
 
 const CHROME =
-  'rounded-xl border border-border bg-panel/95 p-3 text-fg shadow-popover backdrop-blur-md'
+  'rounded-xl border border-border bg-panel/95 p-3 text-fg shadow-popover backdrop-blur-md';
 
 /**
  * Floating editor shell shared by the active-container and active-measurement editors.
@@ -19,18 +19,18 @@ export function FloatingEditorPanel({
   onClose,
   children,
 }: {
-  title: ReactNode
+  title: ReactNode;
   /** Desktop card width utility, e.g. 'w-64' (phone ignores it — full-width sheet). */
-  width: string
-  locked: boolean
-  onToggleLock: () => void
-  onClose: () => void
-  children: ReactNode
+  width: string;
+  locked: boolean;
+  onToggleLock: () => void;
+  onClose: () => void;
+  children: ReactNode;
 }) {
-  const isPhone = useIsPhone()
+  const isPhone = useIsPhone();
   const containerClass = isPhone
     ? cn('absolute inset-x-2 bottom-20 z-10', CHROME)
-    : cn('absolute left-3 top-1/2 z-10 -translate-y-1/2', width, CHROME)
+    : cn('absolute left-3 top-1/2 z-10 -translate-y-1/2', width, CHROME);
 
   return (
     <div className={containerClass}>
@@ -47,5 +47,5 @@ export function FloatingEditorPanel({
       </div>
       {children}
     </div>
-  )
+  );
 }

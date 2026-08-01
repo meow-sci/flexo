@@ -1,9 +1,9 @@
-import { useStore } from '@nanostores/react'
-import { Modal, Dialog, DialogHeader, SectionTitle, useIsPhone } from '../kit'
-import { $helpOpen, closeHelp } from '../../state/helpStore'
-import { HOTKEY_GROUPS, type KeyChord } from './registry'
-import { keyLabel } from './keyDisplay'
-import { Kbd } from './Kbd'
+import { useStore } from '@nanostores/react';
+import { Modal, Dialog, DialogHeader, SectionTitle, useIsPhone } from '../kit';
+import { $helpOpen, closeHelp } from '../../state/helpStore';
+import { HOTKEY_GROUPS, type KeyChord } from './registry';
+import { keyLabel } from './keyDisplay';
+import { Kbd } from './Kbd';
 
 /**
  * Keyboard-shortcuts help overlay, driven by {@link HOTKEY_GROUPS}. Opened by the
@@ -12,8 +12,8 @@ import { Kbd } from './Kbd'
  * full screen on phones.
  */
 export function HelpDialog() {
-  const isPhone = useIsPhone()
-  const open = useStore($helpOpen)
+  const isPhone = useIsPhone();
+  const open = useStore($helpOpen);
 
   return (
     <Modal
@@ -48,7 +48,7 @@ export function HelpDialog() {
         </p>
       </Dialog>
     </Modal>
-  )
+  );
 }
 
 /** Renders one or more chords as <kbd> chips, alternatives joined by "or". */
@@ -66,5 +66,5 @@ function Chords({ chords }: { chords: KeyChord[] }) {
         </span>
       ))}
     </span>
-  )
+  );
 }

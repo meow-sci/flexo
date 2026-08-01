@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react'
-import { EditorScene } from './EditorScene'
-import { loadDockingPortCalibration } from './debugCalibration'
+import { useEffect, useRef } from 'react';
+import { EditorScene } from './EditorScene';
+import { loadDockingPortCalibration } from './debugCalibration';
 
 /**
  * Mounts the three.js {@link EditorScene} (Viewport + store-driven SubPart sync)
@@ -8,21 +8,21 @@ import { loadDockingPortCalibration } from './debugCalibration'
  * React StrictMode's double-invoke in dev).
  */
 export function ViewportCanvas() {
-  const hostRef = useRef<HTMLDivElement>(null)
+  const hostRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const host = hostRef.current
-    if (!host) return
-    const scene = new EditorScene(host)
+    const host = hostRef.current;
+    if (!host) return;
+    const scene = new EditorScene(host);
 
     if (new URLSearchParams(window.location.search).get('debug') === 'dockingport') {
       // Adds to the scene long after boot, and rendering is on-demand — so ask for
       // the frame that shows it.
-      void loadDockingPortCalibration(scene.viewport.scene).then(() => scene.viewport.invalidate())
+      void loadDockingPortCalibration(scene.viewport.scene).then(() => scene.viewport.invalidate());
     }
 
-    return () => scene.dispose()
-  }, [])
+    return () => scene.dispose();
+  }, []);
 
   // `tabIndex={-1}` + focus-on-pointerdown makes the viewport the focus owner
   // whenever the user interacts with the 3D scene (selecting, orbiting). That keeps
@@ -35,5 +35,5 @@ export function ViewportCanvas() {
       onPointerDown={() => hostRef.current?.focus()}
       className="absolute inset-0 outline-none"
     />
-  )
+  );
 }

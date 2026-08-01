@@ -1,7 +1,7 @@
-import { useStore } from '@nanostores/react'
-import type { Selection } from 'react-aria-components'
-import { Lock, Unlock, Trash2, Square, Cylinder, Circle } from 'lucide-react'
-import { Button, GridList, GridListItem } from './kit'
+import { useStore } from '@nanostores/react';
+import type { Selection } from 'react-aria-components';
+import { Lock, Unlock, Trash2, Square, Cylinder, Circle } from 'lucide-react';
+import { Button, GridList, GridListItem } from './kit';
 import {
   $activeContainerId,
   $containers,
@@ -9,38 +9,38 @@ import {
   setActiveContainer,
   setContainerLocked,
   type ReferenceShape,
-} from '../state/containerStore'
+} from '../state/containerStore';
 
 const SHAPE_ICON: Record<ReferenceShape, typeof Square> = {
   rect: Square,
   cylinder: Cylinder,
   sphere: Circle,
-}
+};
 
 const SHAPE_LABEL: Record<ReferenceShape, string> = {
   rect: 'Box',
   cylinder: 'Cylinder',
   sphere: 'Sphere',
-}
+};
 
 /**
  * List of placed reference containers. Selecting a row makes it active (opening
  * the editor); per-row lock and delete. Mirrors {@link MeasurementList}.
  */
 export function ContainerList({ onSelect }: { onSelect?: () => void } = {}) {
-  const containers = useStore($containers)
-  const activeId = useStore($activeContainerId)
+  const containers = useStore($containers);
+  const activeId = useStore($activeContainerId);
 
   if (containers.length === 0) {
-    return <p className="px-1 py-2 text-xs text-fg-subtle">No containers placed.</p>
+    return <p className="px-1 py-2 text-xs text-fg-subtle">No containers placed.</p>;
   }
 
   const onSelectionChange = (keys: Selection) => {
-    if (keys === 'all') return
-    const id = ([...keys][0] as string) ?? null
-    setActiveContainer(id)
-    if (id) onSelect?.()
-  }
+    if (keys === 'all') return;
+    const id = ([...keys][0] as string) ?? null;
+    setActiveContainer(id);
+    if (id) onSelect?.();
+  };
 
   return (
     <GridList
@@ -51,7 +51,7 @@ export function ContainerList({ onSelect }: { onSelect?: () => void } = {}) {
       items={containers}
     >
       {(c) => {
-        const Icon = SHAPE_ICON[c.shape]
+        const Icon = SHAPE_ICON[c.shape];
         return (
           <GridListItem id={c.id} textValue={SHAPE_LABEL[c.shape]}>
             <span
@@ -77,8 +77,8 @@ export function ContainerList({ onSelect }: { onSelect?: () => void } = {}) {
               <Trash2 size={13} />
             </Button>
           </GridListItem>
-        )
+        );
       }}
     </GridList>
-  )
+  );
 }

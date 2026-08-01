@@ -1,6 +1,6 @@
-import { lightIlluminance } from '../ksa/lightFalloff'
-import { volumeExposure } from '../three/lightVolume'
-import { fmt } from './format'
+import { lightIlluminance } from '../ksa/lightFalloff';
+import { volumeExposure } from '../three/lightVolume';
+import { fmt } from './format';
 
 /**
  * The light inspector's falloff sparkline (plans/LIGHT_MANAGEMENT_PLAN.md §3.11): how
@@ -28,16 +28,16 @@ import { fmt } from './format'
  */
 
 /** Samples across the plotted range. */
-const SAMPLES = 48
+const SAMPLES = 48;
 
 /** First sample as a fraction of range (`1/d²` is unbounded at `d = 0`). */
-const FIRST_SAMPLE_FRACTION = 0.02
+const FIRST_SAMPLE_FRACTION = 0.02;
 
-const VIEW_W = 200
-const VIEW_H = 56
+const VIEW_W = 200;
+const VIEW_H = 56;
 
 /** Inset so the 1.5px stroke isn't clipped at the extremes (`y` spans the full 0–1). */
-const PAD = 2
+const PAD = 2;
 
 export function LightFalloffCurve({
   rangeM,
@@ -45,30 +45,30 @@ export function LightFalloffCurve({
   exposureMode,
   vizExposure,
 }: {
-  rangeM: number
-  intensity: number
-  exposureMode: 'auto' | 'absolute'
-  vizExposure: number
+  rangeM: number;
+  intensity: number;
+  exposureMode: 'auto' | 'absolute';
+  vizExposure: number;
 }) {
   // A non-positive or non-finite range draws NOTHING, matching `shellRadii`'s refusal to
   // draw coverage for a light KSA culls CPU-side (ClusteredLightSystem.cs:669,760) — a
   // curve pinned at zero would look like a shape rather than an absence.
-  const drawable = Number.isFinite(rangeM) && rangeM > 0 && Number.isFinite(intensity)
-  const exposure = volumeExposure(rangeM, intensity, exposureMode, vizExposure)
+  const drawable = Number.isFinite(rangeM) && rangeM > 0 && Number.isFinite(intensity);
+  const exposure = volumeExposure(rangeM, intensity, exposureMode, vizExposure);
 
-  const points: string[] = []
+  const points: string[] = [];
   for (let i = 0; i < SAMPLES; i++) {
-    const t = i / (SAMPLES - 1)
-    const d = rangeM * (FIRST_SAMPLE_FRACTION + (1 - FIRST_SAMPLE_FRACTION) * t)
-    const e = lightIlluminance(d, rangeM, intensity)
-    const y = e / (e + exposure)
-    const px = PAD + t * (VIEW_W - 2 * PAD)
-    const py = VIEW_H - PAD - y * (VIEW_H - 2 * PAD)
-    points.push(`${px.toFixed(2)},${py.toFixed(2)}`)
+    const t = i / (SAMPLES - 1);
+    const d = rangeM * (FIRST_SAMPLE_FRACTION + (1 - FIRST_SAMPLE_FRACTION) * t);
+    const e = lightIlluminance(d, rangeM, intensity);
+    const y = e / (e + exposure);
+    const px = PAD + t * (VIEW_W - 2 * PAD);
+    const py = VIEW_H - PAD - y * (VIEW_H - 2 * PAD);
+    points.push(`${px.toFixed(2)},${py.toFixed(2)}`);
   }
-  const line = points.join(' ')
+  const line = points.join(' ');
   // Closed back along the baseline so the area under the curve can be tinted.
-  const area = `${PAD},${VIEW_H - PAD} ${line} ${VIEW_W - PAD},${VIEW_H - PAD}`
+  const area = `${PAD},${VIEW_H - PAD} ${line} ${VIEW_W - PAD},${VIEW_H - PAD}`;
 
   return (
     <div className="flex flex-col gap-0.5">
@@ -109,5 +109,5 @@ export function LightFalloffCurve({
         <span>{drawable ? `${fmt(rangeM)} m — E = 0` : 'no range'}</span>
       </div>
     </div>
-  )
+  );
 }

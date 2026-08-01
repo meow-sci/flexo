@@ -18,35 +18,35 @@
  * `base` is the decoded primary diffuse, or {@link neutralBase} when the mesh has no texture
  * (e.g. a glow-only primitive, or any part-ified kitten submesh — KSA `.ktx2` can't be CPU-decoded).
  */
-import type { EmissiveConfig } from '../ksa/types'
-import type { ImageLevel } from './decodeImage'
-import { sampleGlowRamp } from './glowRamp'
+import type { EmissiveConfig } from '../ksa/types';
+import type { ImageLevel } from './decodeImage';
+import { sampleGlowRamp } from './glowRamp';
 
 /** A glow bitmap: rgb = glow color, a = the greyscale key (all 0..255). */
 export interface GlowBitmap {
-  width: number
-  height: number
+  width: number;
+  height: number;
   /** Tightly packed RGBA8, length = width*height*4. */
-  rgba: Uint8Array
+  rgba: Uint8Array;
 }
 
 /**
  * How {@link compositeGlow} interprets a bitmap's greyscale key — the subset of
  * {@link EmissiveConfig} that affects pixels (`shape` picks the bitmap, not the math).
  */
-export type GlowComposite = Pick<EmissiveConfig, 'coverage' | 'strength' | 'ramp'>
+export type GlowComposite = Pick<EmissiveConfig, 'coverage' | 'strength' | 'ramp'>;
 
 /** The composite settings of an emissive config. */
 export function glowCompositeOf(e: EmissiveConfig): GlowComposite {
-  return { coverage: e.coverage, strength: e.strength, ramp: e.ramp }
+  return { coverage: e.coverage, strength: e.strength, ramp: e.ramp };
 }
 
 function clamp01(v: number): number {
-  return v < 0 ? 0 : v > 1 ? 1 : v
+  return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
 function lerp8(a: number, b: number, t: number): number {
-  return Math.round(a + (b - a) * t)
+  return Math.round(a + (b - a) * t);
 }
 
 /**
@@ -57,14 +57,14 @@ function lerp8(a: number, b: number, t: number): number {
  * color and how much white that becomes is the caller's two sliders.
  */
 export function solidGlowBitmap(color: { r: number; g: number; b: number }, size = 4): GlowBitmap {
-  const rgba = new Uint8Array(size * size * 4)
+  const rgba = new Uint8Array(size * size * 4);
   for (let i = 0; i < size * size; i++) {
-    rgba[i * 4] = color.r
-    rgba[i * 4 + 1] = color.g
-    rgba[i * 4 + 2] = color.b
-    rgba[i * 4 + 3] = 255
+    rgba[i * 4] = color.r;
+    rgba[i * 4 + 1] = color.g;
+    rgba[i * 4 + 2] = color.b;
+    rgba[i * 4 + 3] = 255;
   }
-  return { width: size, height: size, rgba }
+  return { width: size, height: size, rgba };
 }
 
 /**
@@ -75,22 +75,22 @@ export function solidGlowBitmap(color: { r: number; g: number; b: number }, size
  * no intrinsic resolution, so it is simply generated at the glow's — same colour, no loss.
  */
 export function baseSizeFor(glow: { width: number; height: number } | null | undefined): {
-  width: number
-  height: number
+  width: number;
+  height: number;
 } {
-  return { width: Math.max(4, glow?.width ?? 4), height: Math.max(4, glow?.height ?? 4) }
+  return { width: Math.max(4, glow?.width ?? 4), height: Math.max(4, glow?.height ?? 4) };
 }
 
 /** A neutral mid-gray opaque base (for a glow on a mesh with no decodable diffuse). */
 export function neutralBase(width = 4, height = 4, value = 128): ImageLevel {
-  const rgba = new Uint8Array(width * height * 4)
+  const rgba = new Uint8Array(width * height * 4);
   for (let i = 0; i < width * height; i++) {
-    rgba[i * 4] = value
-    rgba[i * 4 + 1] = value
-    rgba[i * 4 + 2] = value
-    rgba[i * 4 + 3] = 255
+    rgba[i * 4] = value;
+    rgba[i * 4 + 1] = value;
+    rgba[i * 4 + 2] = value;
+    rgba[i * 4 + 3] = 255;
   }
-  return { width, height, rgba }
+  return { width, height, rgba };
 }
 
 /**
@@ -102,14 +102,14 @@ export function solidBase(
   width = 4,
   height = width,
 ): ImageLevel {
-  const rgba = new Uint8Array(width * height * 4)
+  const rgba = new Uint8Array(width * height * 4);
   for (let i = 0; i < width * height; i++) {
-    rgba[i * 4] = color.r
-    rgba[i * 4 + 1] = color.g
-    rgba[i * 4 + 2] = color.b
-    rgba[i * 4 + 3] = 255
+    rgba[i * 4] = color.r;
+    rgba[i * 4 + 1] = color.g;
+    rgba[i * 4 + 2] = color.b;
+    rgba[i * 4 + 3] = 255;
   }
-  return { width, height, rgba }
+  return { width, height, rgba };
 }
 
 /**
@@ -129,35 +129,37 @@ export function compositeGlow(
   glow: GlowBitmap,
   settings: GlowComposite,
 ): { diffuse: ImageLevel; mask: ImageLevel } {
-  const { width, height } = base
-  const coverage = clamp01(settings.coverage)
-  const strength = clamp01(settings.strength)
-  const ramp = settings.ramp
-  const diffuse = new Uint8Array(width * height * 4)
-  const mask = new Uint8Array(width * height * 4)
+  const { width, height } = base;
+  const coverage = clamp01(settings.coverage);
+  const strength = clamp01(settings.strength);
+  const ramp = settings.ramp;
+  const diffuse = new Uint8Array(width * height * 4);
+  const mask = new Uint8Array(width * height * 4);
   for (let y = 0; y < height; y++) {
     const gy =
-      glow.height === height ? y : Math.min(glow.height - 1, Math.floor((y * glow.height) / height))
+      glow.height === height
+        ? y
+        : Math.min(glow.height - 1, Math.floor((y * glow.height) / height));
     for (let x = 0; x < width; x++) {
       const gx =
-        glow.width === width ? x : Math.min(glow.width - 1, Math.floor((x * glow.width) / width))
-      const bi = (y * width + x) * 4
-      const gi = (gy * glow.width + gx) * 4
-      const key = glow.rgba[gi + 3] / 255
+        glow.width === width ? x : Math.min(glow.width - 1, Math.floor((x * glow.width) / width));
+      const bi = (y * width + x) * 4;
+      const gi = (gy * glow.width + gx) * 4;
+      const key = glow.rgba[gi + 3] / 255;
       const color = ramp
         ? sampleGlowRamp(ramp, key)
-        : { r: glow.rgba[gi], g: glow.rgba[gi + 1], b: glow.rgba[gi + 2] }
-      const t = key * coverage
-      diffuse[bi] = lerp8(base.rgba[bi], color.r, t)
-      diffuse[bi + 1] = lerp8(base.rgba[bi + 1], color.g, t)
-      diffuse[bi + 2] = lerp8(base.rgba[bi + 2], color.b, t)
-      diffuse[bi + 3] = 255
-      const m = Math.round(key * strength * 255)
-      mask[bi] = m
-      mask[bi + 1] = m
-      mask[bi + 2] = m
-      mask[bi + 3] = 255
+        : { r: glow.rgba[gi], g: glow.rgba[gi + 1], b: glow.rgba[gi + 2] };
+      const t = key * coverage;
+      diffuse[bi] = lerp8(base.rgba[bi], color.r, t);
+      diffuse[bi + 1] = lerp8(base.rgba[bi + 1], color.g, t);
+      diffuse[bi + 2] = lerp8(base.rgba[bi + 2], color.b, t);
+      diffuse[bi + 3] = 255;
+      const m = Math.round(key * strength * 255);
+      mask[bi] = m;
+      mask[bi + 1] = m;
+      mask[bi + 2] = m;
+      mask[bi + 3] = 255;
     }
   }
-  return { diffuse: { width, height, rgba: diffuse }, mask: { width, height, rgba: mask } }
+  return { diffuse: { width, height, rgba: diffuse }, mask: { width, height, rgba: mask } };
 }

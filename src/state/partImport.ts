@@ -1,13 +1,13 @@
-import { addPart } from './editorStore'
-import { toUrl } from '../ksa/catalog'
+import { addPart } from './editorStore';
+import { toUrl } from '../ksa/catalog';
 import {
   decodeAnimationGlb,
   remapImportedAnimation,
   type ImportedAnimation,
-} from '../ksa/animationImport'
-import { fitAnimationEasing } from '../ksa/easingFit'
-import type { PartAnimation, Transform } from '../ksa/types'
-import type { CatalogPart } from '../ksa/partCatalog'
+} from '../ksa/animationImport';
+import { fitAnimationEasing } from '../ksa/easingFit';
+import type { PartAnimation, Transform } from '../ksa/types';
+import type { CatalogPart } from '../ksa/partCatalog';
 
 /**
  * Imports a built-in catalog Part INCLUDING its keyframe animations. The three.js
@@ -21,24 +21,24 @@ export async function importBuiltInPart(
   part: CatalogPart,
   targetLayerId?: string,
 ): Promise<string> {
-  const instanceIds = new Set(part.placements.map((p) => p.instanceId))
-  const placements = new Map<string, Transform>(part.placements.map((p) => [p.instanceId, p]))
-  const decoded: ImportedAnimation[] = []
+  const instanceIds = new Set(part.placements.map((p) => p.instanceId));
+  const placements = new Map<string, Transform>(part.placements.map((p) => [p.instanceId, p]));
+  const decoded: ImportedAnimation[] = [];
   for (const mod of part.animationModules ?? []) {
     try {
-      const res = await fetch(toUrl(mod.glbPath))
+      const res = await fetch(toUrl(mod.glbPath));
       if (!res.ok) {
-        console.error(`flexo: animation GLB ${mod.glbPath} not found (${res.status})`)
-        continue
+        console.error(`flexo: animation GLB ${mod.glbPath} not found (${res.status})`);
+        continue;
       }
       const imp = decodeAnimationGlb(await res.arrayBuffer(), {
         instanceIds,
         module: mod,
         placements,
-      })
-      if (imp) decoded.push(imp)
+      });
+      if (imp) decoded.push(imp);
     } catch (err) {
-      console.error(`flexo: failed to import animation ${mod.glbPath}`, err)
+      console.error(`flexo: failed to import animation ${mod.glbPath}`, err);
     }
   }
 
@@ -48,14 +48,14 @@ export async function importBuiltInPart(
   // authored clips this equals the geometry placement (a no-op); when they disagree
   // (a stale/rotated geometry placement) it's what keeps the imported animation
   // matching the game instead of anchoring the joint motion to the wrong spot.
-  const restPlacements = new Map<string, Transform>()
-  for (const d of decoded) for (const [id, t] of d.memberRestPlacements) restPlacements.set(id, t)
+  const restPlacements = new Map<string, Transform>();
+  for (const d of decoded) for (const [id, t] of d.memberRestPlacements) restPlacements.set(id, t);
   const importedPlacements = part.placements.map((p) => {
-    const t = restPlacements.get(p.instanceId)
+    const t = restPlacements.get(p.instanceId);
     return t
       ? { ...p, position: { ...t.position }, rotation: { ...t.rotation }, scale: { ...t.scale } }
-      : p
-  })
+      : p;
+  });
 
   return addPart(
     importedPlacements,
@@ -64,12 +64,12 @@ export async function importBuiltInPart(
     targetLayerId,
     (idMap): PartAnimation[] =>
       decoded.map((d) => {
-        const fitted = fitAnimationEasing(remapImportedAnimation(d, idMap, makeId))
+        const fitted = fitAnimationEasing(remapImportedAnimation(d, idMap, makeId));
         // KSA deploy clips are modeled fully-deployed (their LAST keyframe), so anchor
         // the preview/export there instead of the stowed t=0 (see restKeyframeId docs).
-        if (!d.restAtLastKeyframe || fitted.keyframes.length === 0) return fitted
-        const last = fitted.keyframes.reduce((a, b) => (b.timeSec > a.timeSec ? b : a))
-        return { ...fitted, restKeyframeId: last.id }
+        if (!d.restAtLastKeyframe || fitted.keyframes.length === 0) return fitted;
+        const last = fitted.keyframes.reduce((a, b) => (b.timeSec > a.timeSec ? b : a));
+        return { ...fitted, restKeyframeId: last.id };
       }),
     // Deep-clone so later edits to the imported part's GameData never mutate the
     // cached catalog entry (which can be imported again).
@@ -103,9 +103,9 @@ export async function importBuiltInPart(
       ivaSeats: part.ivaSeats,
       lights: part.lights,
     }),
-  )
+  );
 }
 
 function makeId(prefix: string): string {
-  return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`
+  return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
 }

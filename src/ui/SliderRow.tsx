@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
-import { Slider } from './kit'
+import type { ReactNode } from 'react';
+import { Slider } from './kit';
 
 /**
  * A labeled slider row with a right-aligned mono readout — the slider-only sibling of
@@ -18,15 +18,15 @@ export function SliderRow({
   onInteractionStart,
   format,
 }: {
-  label: string
-  ariaLabel: string
-  value: number
-  min: number
-  max: number
-  step?: number
-  onChange: (value: number) => void
-  onInteractionStart?: () => void
-  format?: (value: number) => ReactNode
+  label: string;
+  ariaLabel: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  onChange: (value: number) => void;
+  onInteractionStart?: () => void;
+  format?: (value: number) => ReactNode;
 }) {
   return (
     <div className="flex items-center gap-2" onPointerDown={onInteractionStart}>
@@ -44,5 +44,5 @@ export function SliderRow({
         {format ? format(value) : value}
       </span>
     </div>
-  )
+  );
 }

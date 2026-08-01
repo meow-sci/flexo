@@ -1,5 +1,5 @@
-import { Modal, Dialog, DialogHeader, useIsPhone } from './kit'
-import { VerticalSplit, HorizontalSplit } from './VerticalSplit'
+import { Modal, Dialog, DialogHeader, useIsPhone } from './kit';
+import { VerticalSplit, HorizontalSplit } from './VerticalSplit';
 
 /**
  * Full-viewport modal shell shared by the Part / SubPart catalog browsers.
@@ -12,10 +12,10 @@ export function BrowserPopup({
   onOpenChange,
   children,
 }: {
-  title: string
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  children: React.ReactNode
+  title: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: React.ReactNode;
 }) {
   return (
     <Modal
@@ -30,7 +30,7 @@ export function BrowserPopup({
         {open && children}
       </Dialog>
     </Modal>
-  )
+  );
 }
 
 /**
@@ -45,12 +45,12 @@ export function BrowserLayout({
   details,
   phoneBottom,
 }: {
-  list: React.ReactNode
-  preview: React.ReactNode
-  details: React.ReactNode
-  phoneBottom?: React.ReactNode
+  list: React.ReactNode;
+  preview: React.ReactNode;
+  details: React.ReactNode;
+  phoneBottom?: React.ReactNode;
 }) {
-  const isPhone = useIsPhone()
+  const isPhone = useIsPhone();
   return (
     <div className="min-h-0 flex-1">
       {isPhone ? (
@@ -59,5 +59,5 @@ export function BrowserLayout({
         <HorizontalSplit left={list} right={<VerticalSplit top={preview} bottom={details} />} />
       )}
     </div>
-  )
+  );
 }

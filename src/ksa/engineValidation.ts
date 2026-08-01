@@ -13,7 +13,7 @@
  * without the private asset tree (and so a modded reaction library validates too).
  */
 
-import { isCustomReactionExportable, KNOWN_REACTIONS } from './types'
+import { isCustomReactionExportable, KNOWN_REACTIONS } from './types';
 import type {
   Combustor,
   EditingPart,
@@ -23,31 +23,31 @@ import type {
   SolidMotor,
   SolidMotorNozzle,
   SubPartIdRef,
-} from './types'
-import type { ReactionData } from './reactionCatalog'
+} from './types';
+import type { ReactionData } from './reactionCatalog';
 
 /**
  * How far `|ExhaustDirection|` may drift from 1 before it is called out. Generous enough to
  * absorb the rounding in `formatG6`-serialized unit vectors, tight enough to catch a real
  * mis-scaled axis. Shared with the nozzle editor's inline warning so the two can't disagree.
  */
-export const UNIT_EPSILON = 1e-3
+export const UNIT_EPSILON = 1e-3;
 
 /** `block` ⇒ KSA throws at load; `warn` ⇒ it loads but the part misbehaves. */
-export type EngineIssueSeverity = 'block' | 'warn'
+export type EngineIssueSeverity = 'block' | 'warn';
 
 export interface EngineIssue {
-  severity: EngineIssueSeverity
+  severity: EngineIssueSeverity;
   /** Stable kebab-case code — the UI groups/tests match on this, not on the prose. */
-  code: string
-  message: string
+  code: string;
+  message: string;
 }
 
 /** What a reaction lookup needs to answer; a subset of {@link ReactionData}. */
 interface ReactionFacts {
-  category: ReactionCategory
-  minimumBurnPressurePa: number | null
-  maxStablePressurePa: number | null
+  category: ReactionCategory;
+  minimumBurnPressurePa: number | null;
+  maxStablePressurePa: number | null;
 }
 
 /**
@@ -61,7 +61,7 @@ function reactionFacts(
   part: EditingPart,
   reactions: ReadonlyMap<string, ReactionData> | undefined,
 ): ReactionFacts | null {
-  const live = reactions?.get(id)
+  const live = reactions?.get(id);
   if (live) {
     return live.kind === 'Fixed'
       ? {
@@ -69,38 +69,38 @@ function reactionFacts(
           minimumBurnPressurePa: live.minimumBurnPressurePa,
           maxStablePressurePa: live.maxStablePressurePa,
         }
-      : { category: live.category, minimumBurnPressurePa: null, maxStablePressurePa: null }
+      : { category: live.category, minimumBurnPressurePa: null, maxStablePressurePa: null };
   }
-  const custom = part.customReactions.find((r) => r.id === id)
+  const custom = part.customReactions.find((r) => r.id === id);
   if (custom) {
     return {
       category: custom.category,
       minimumBurnPressurePa: custom.minimumBurnPressurePa,
       maxStablePressurePa: custom.maxStablePressurePa,
-    }
+    };
   }
-  const known = KNOWN_REACTIONS.find((k) => k.id === id)
+  const known = KNOWN_REACTIONS.find((k) => k.id === id);
   // The static snapshot carries no pressure limits — category-only checks still run.
   return known
     ? { category: known.category, minimumBurnPressurePa: null, maxStablePressurePa: null }
-    : null
+    : null;
 }
 
 /** A consumer (`RocketCore`) located at a specific scope on the part. */
 interface LocatedConsumer {
-  id: string
+  id: string;
   /** Placement instanceId it lives on; null ⇒ the root part. */
-  subPartInstanceId: string | null
-  isSolid: boolean
-  feeds: FeedSource[]
+  subPartInstanceId: string | null;
+  isSolid: boolean;
+  feeds: FeedSource[];
   /** Combustors only — solid motors have no `<Plumbing>` (they feed from grain). */
-  combustor: Combustor | null
-  solidMotor: SolidMotor | null
+  combustor: Combustor | null;
+  solidMotor: SolidMotor | null;
 }
 
 /** Every combustor + solid motor on the part, part-level and per placed SubPart. */
 function locateConsumers(part: EditingPart): LocatedConsumer[] {
-  const out: LocatedConsumer[] = []
+  const out: LocatedConsumer[] = [];
   const add = (
     id: string,
     scope: string | null,
@@ -114,19 +114,19 @@ function locateConsumers(part: EditingPart): LocatedConsumer[] {
       feeds: (combustor ?? solidMotor)!.feeds,
       combustor,
       solidMotor,
-    })
-  }
-  for (const c of part.gameData.combustors) add(c.id, null, c, null)
-  for (const m of part.gameData.solidMotors) add(m.id, null, null, m)
+    });
+  };
+  for (const c of part.gameData.combustors) add(c.id, null, c, null);
+  for (const m of part.gameData.solidMotors) add(m.id, null, null, m);
   for (const placement of part.placements) {
     const spd = part.subPartGameData.find(
       (s) => s.subPartTemplateId === placement.subPartTemplateId,
-    )
-    if (!spd) continue
-    for (const c of spd.combustors) add(c.id, placement.instanceId, c, null)
-    for (const m of spd.solidMotors) add(m.id, placement.instanceId, null, m)
+    );
+    if (!spd) continue;
+    for (const c of spd.combustors) add(c.id, placement.instanceId, c, null);
+    for (const m of spd.solidMotors) add(m.id, placement.instanceId, null, m);
   }
-  return out
+  return out;
 }
 
 /**
@@ -135,55 +135,55 @@ function locateConsumers(part: EditingPart): LocatedConsumer[] {
  * structurally this plus `<AreaRatio>` — so one walk covers `RocketNozzleTemplate`'s fields.
  */
 function locateNozzleModules(part: EditingPart): { nozzle: SolidMotorNozzle; scope: string }[] {
-  const out: { nozzle: SolidMotorNozzle; scope: string }[] = []
-  for (const n of part.gameData.nozzles) out.push({ nozzle: n, scope: part.partId })
-  for (const n of part.gameData.solidNozzles) out.push({ nozzle: n, scope: part.partId })
+  const out: { nozzle: SolidMotorNozzle; scope: string }[] = [];
+  for (const n of part.gameData.nozzles) out.push({ nozzle: n, scope: part.partId });
+  for (const n of part.gameData.solidNozzles) out.push({ nozzle: n, scope: part.partId });
   for (const spd of part.subPartGameData) {
-    for (const n of spd.nozzles) out.push({ nozzle: n, scope: spd.subPartTemplateId })
-    for (const n of spd.solidNozzles) out.push({ nozzle: n, scope: spd.subPartTemplateId })
+    for (const n of spd.nozzles) out.push({ nozzle: n, scope: spd.subPartTemplateId });
+    for (const n of spd.solidNozzles) out.push({ nozzle: n, scope: spd.subPartTemplateId });
   }
-  return out
+  return out;
 }
 
 /** Nozzle ids on the part, split by family (a `<Nozzle Id>` may name either). */
 function locateNozzles(part: EditingPart): { liquid: Set<string>; solid: Set<string> } {
-  const liquid = new Set<string>()
-  const solid = new Set<string>()
-  for (const n of part.gameData.nozzles) liquid.add(n.id)
-  for (const n of part.gameData.solidNozzles) solid.add(n.id)
+  const liquid = new Set<string>();
+  const solid = new Set<string>();
+  for (const n of part.gameData.nozzles) liquid.add(n.id);
+  for (const n of part.gameData.solidNozzles) solid.add(n.id);
   for (const spd of part.subPartGameData) {
-    for (const n of spd.nozzles) liquid.add(n.id)
-    for (const n of spd.solidNozzles) solid.add(n.id)
+    for (const n of spd.nozzles) liquid.add(n.id);
+    for (const n of spd.solidNozzles) solid.add(n.id);
   }
-  return { liquid, solid }
+  return { liquid, solid };
 }
 
 /** Container ids addressable within a given scope (null ⇒ the root part's own). */
 function containersInScope(part: EditingPart, subPartInstanceId: string | null): Set<string> {
-  const ids = new Set<string>()
+  const ids = new Set<string>();
   if (subPartInstanceId === null) {
-    for (const t of part.gameData.tanks) if (t.id.trim()) ids.add(t.id)
-    for (const g of part.gameData.solidGrainSegments) if (g.id.trim()) ids.add(g.id)
-    return ids
+    for (const t of part.gameData.tanks) if (t.id.trim()) ids.add(t.id);
+    for (const g of part.gameData.solidGrainSegments) if (g.id.trim()) ids.add(g.id);
+    return ids;
   }
-  const placement = part.placements.find((p) => p.instanceId === subPartInstanceId)
-  if (!placement) return ids
-  const spd = part.subPartGameData.find((s) => s.subPartTemplateId === placement.subPartTemplateId)
-  if (!spd) return ids
-  for (const t of spd.tanks) if (t.id.trim()) ids.add(t.id)
-  for (const g of spd.solidGrainSegments) if (g.id.trim()) ids.add(g.id)
-  return ids
+  const placement = part.placements.find((p) => p.instanceId === subPartInstanceId);
+  if (!placement) return ids;
+  const spd = part.subPartGameData.find((s) => s.subPartTemplateId === placement.subPartTemplateId);
+  if (!spd) return ids;
+  for (const t of spd.tanks) if (t.id.trim()) ids.add(t.id);
+  for (const g of spd.solidGrainSegments) if (g.id.trim()) ids.add(g.id);
+  return ids;
 }
 
 /** True when the rocket's `<Core Id>` resolves to a solid motor rather than a combustor. */
 function coreIsSolid(rocket: Rocket, consumers: LocatedConsumer[]): boolean | null {
-  const match = consumers.find((c) => matchesRef(c.id, c.subPartInstanceId, rocket.core))
-  return match ? match.isSolid : null
+  const match = consumers.find((c) => matchesRef(c.id, c.subPartInstanceId, rocket.core));
+  return match ? match.isSolid : null;
 }
 
 /** KSA's `SubPartIdReference` match: same template id, and same scope (empty ⇒ root). */
 function matchesRef(id: string, scope: string | null, ref: SubPartIdRef): boolean {
-  return id === ref.id && (ref.subPartInstanceId ?? null) === scope
+  return id === ref.id && (ref.subPartInstanceId ?? null) === scope;
 }
 
 /**
@@ -194,69 +194,70 @@ export function validateEngines(
   part: EditingPart,
   reactions?: ReadonlyMap<string, ReactionData>,
 ): EngineIssue[] {
-  const issues: EngineIssue[] = []
-  const block = (code: string, message: string) => issues.push({ severity: 'block', code, message })
-  const warn = (code: string, message: string) => issues.push({ severity: 'warn', code, message })
+  const issues: EngineIssue[] = [];
+  const block = (code: string, message: string) =>
+    issues.push({ severity: 'block', code, message });
+  const warn = (code: string, message: string) => issues.push({ severity: 'warn', code, message });
 
-  const consumers = locateConsumers(part)
-  const nozzles = locateNozzles(part)
-  const connectors = new Map(part.connectors.map((c) => [c.id, c]))
-  const rockets = [...part.gameData.rockets, ...part.subPartGameData.flatMap((s) => s.rockets)]
+  const consumers = locateConsumers(part);
+  const nozzles = locateNozzles(part);
+  const connectors = new Map(part.connectors.map((c) => [c.id, c]));
+  const rockets = [...part.gameData.rockets, ...part.subPartGameData.flatMap((s) => s.rockets)];
 
   // --- Rocket assembly (RocketTemplate.Create — all THROW) ---
   for (const rocket of rockets) {
-    const solidCore = coreIsSolid(rocket, consumers)
-    if (solidCore === null) continue // unknown core: not a solid/liquid question
+    const solidCore = coreIsSolid(rocket, consumers);
+    if (solidCore === null) continue; // unknown core: not a solid/liquid question
     for (const n of rocket.nozzles) {
-      const isSolidNozzle = nozzles.solid.has(n.id)
-      const isLiquidNozzle = nozzles.liquid.has(n.id)
-      if (!isSolidNozzle && !isLiquidNozzle) continue // unresolvable id — a different bug
+      const isSolidNozzle = nozzles.solid.has(n.id);
+      const isLiquidNozzle = nozzles.liquid.has(n.id);
+      if (!isSolidNozzle && !isLiquidNozzle) continue; // unresolvable id — a different bug
       if (solidCore !== isSolidNozzle) {
         block(
           'rocket-mixes-solid-and-liquid',
           `KSA throws: Rocket ${rocket.id} mixes solid and liquid components — core ` +
             `${rocket.core.id} is ${solidCore ? 'solid' : 'liquid'} but nozzle ${n.id} is ` +
             `${isSolidNozzle ? 'solid' : 'liquid'}.`,
-        )
+        );
       }
     }
     if (solidCore && rocket.nozzles.length === 0) {
       block(
         'solid-rocket-needs-nozzle',
         `KSA throws: Solid motor rocket ${rocket.id} needs at least one nozzle.`,
-      )
+      );
     }
   }
 
   // --- Thruster controllers may not drive a solid motor (RocketThrusterControllerTemplate.Create) ---
   for (const controller of part.gameData.rocketControllers) {
-    if (controller.kind !== 'thruster') continue
+    if (controller.kind !== 'thruster') continue;
     for (const ref of controller.rocketRefs) {
-      const rocket = rockets.find((r) => r.id === ref.id)
-      if (!rocket || coreIsSolid(rocket, consumers) !== true) continue
+      const rocket = rockets.find((r) => r.id === ref.id);
+      if (!rocket || coreIsSolid(rocket, consumers) !== true) continue;
       block(
         'solid-motor-on-thruster-controller',
         `KSA throws: Solid motor ${rocket.core.id} cannot be driven by thruster controller ` +
           `${controller.id}.`,
-      )
+      );
     }
   }
 
   // --- Solid motor reaction + pressure (SolidMotorTemplate.Create — both THROW) ---
   for (const c of consumers) {
-    const motor = c.solidMotor
-    if (!motor) continue
-    const facts = reactionFacts(motor.reactionId, part, reactions)
+    const motor = c.solidMotor;
+    if (!motor) continue;
+    const facts = reactionFacts(motor.reactionId, part, reactions);
     if (facts && facts.category !== 'Solid') {
       block(
         'solid-motor-needs-solid-reaction',
         `KSA throws: Solid motor ${motor.id} requires a solid reaction; got ` +
           `${motor.reactionId} (${facts.category}).`,
-      )
+      );
     }
     // KSA: throws when pressure <= MinimumBurnPressure or > MaxStablePressure.
-    const min = facts?.minimumBurnPressurePa
-    const max = facts?.maxStablePressurePa
+    const min = facts?.minimumBurnPressurePa;
+    const max = facts?.maxStablePressurePa;
     if (
       (min != null && motor.defaultPressurePa <= min) ||
       (max != null && motor.defaultPressurePa > max)
@@ -267,7 +268,7 @@ export function validateEngines(
           `${(motor.defaultPressurePa / 1e5).toFixed(1)} bar is outside ${motor.reactionId}'s ` +
           `stable range (${min != null ? (min / 1e5).toFixed(1) : '?'} to ` +
           `${max != null ? (max / 1e5).toFixed(1) : '?'} bar).`,
-      )
+      );
     }
   }
 
@@ -282,8 +283,8 @@ export function validateEngines(
       nozzle.exhaustDirection.x,
       nozzle.exhaustDirection.y,
       nozzle.exhaustDirection.z,
-    )
-    if (Math.abs(len - 1) <= UNIT_EPSILON) continue
+    );
+    if (Math.abs(len - 1) <= UNIT_EPSILON) continue;
     warn(
       'nozzle-direction-not-unit',
       len > 0
@@ -292,18 +293,18 @@ export function validateEngines(
             `${len.toFixed(2)}× its rated thrust.`
         : `Nozzle ${nozzle.id} on ${scope} has a zero-length ExhaustDirection — it will ` +
             `apply no thrust.`,
-    )
+    );
   }
 
   // --- Solid reactions KSA refuses to load (FixedReactionTemplate.Create) ---
   for (const reaction of part.customReactions) {
-    if (isCustomReactionExportable(reaction)) continue
+    if (isCustomReactionExportable(reaction)) continue;
     block(
       'solid-reaction-incomplete',
       `KSA throws: solid reaction ${reaction.id} needs a burn-rate law (a > 0, 0 <= n < 0.95), ` +
         `a minimum burn pressure > 0, a max stable pressure above it, and an exhaust ` +
         `condensed fraction in [0, 1). It will be omitted from the export.`,
-    )
+    );
   }
 
   // --- Feed resolution (PartTemplate.AddResolvedFeed / ResolveConsumerFeeds — all LOG) ---
@@ -311,22 +312,22 @@ export function validateEngines(
     for (const f of c.feeds) {
       if (f.kind === 'container') {
         // A SubPart= scope re-roots the lookup; otherwise it's the consumer's own owner.
-        const scope = f.subPartInstanceId ?? c.subPartInstanceId
+        const scope = f.subPartInstanceId ?? c.subPartInstanceId;
         if (!containersInScope(part, scope).has(f.containerId)) {
           warn(
             'feed-unknown-container',
             `KSA logs: consumer ${c.id} feeds from unknown container '${f.containerId}'` +
               `${scope ? ` on ${scope}` : ''} — it will get nothing from it.`,
-          )
+          );
         }
       } else if (f.kind === 'connector') {
-        const connector = connectors.get(f.connectorId)
+        const connector = connectors.get(f.connectorId);
         if (!connector) {
           warn(
             'feed-unknown-connector',
             `KSA logs: consumer ${c.id} feeds from unknown connector '${f.connectorId}'.`,
-          )
-          continue
+          );
+          continue;
         }
         // A connection carries a resource only when BOTH ends declare the capability
         // (ConnectorCapabilityExtensions.Intersect). Bulk needs BulkFluid; Service rides
@@ -336,14 +337,14 @@ export function validateEngines(
             'feed-connector-missing-bulkfluid',
             `Add BulkFluid to connector ${f.connectorId} or combustor ${c.id} gets no propellant ` +
               `across it (Bulk plumbing needs the BulkFluid capability at both ends).`,
-          )
+          );
         }
         if (c.solidMotor && !connector.capabilities.includes('SolidMotorCase')) {
           warn(
             'feed-connector-missing-solidmotorcase',
             `Add SolidMotorCase to connector ${f.connectorId} so grain segments can stack onto ` +
               `solid motor ${c.id}.`,
-          )
+          );
         }
       } else if (c.subPartInstanceId !== null) {
         // <FeedsFrom Parent="true"/> on a placed SubPart needs a matching wiring entry
@@ -352,13 +353,13 @@ export function validateEngines(
           (w) =>
             w.consumerId === c.id &&
             (w.subPartInstanceId === c.subPartInstanceId || w.subPartInstanceId === null),
-        )
+        );
         if (!wired) {
           warn(
             'consumer-not-wired',
             `KSA logs: consumer ${c.id} feeds from its parent part, but ${part.partId} has no ` +
               `ConsumerFeedWiring wiring for it — it will reach no propellant.`,
-          )
+          );
         }
       }
     }
@@ -367,12 +368,12 @@ export function validateEngines(
         'consumer-no-feeds',
         `KSA logs: rocket core ${c.id} declares no FeedsFrom feed points; it will reach no ` +
           `propellant (and produce no thrust).`,
-      )
+      );
     }
   }
 
   return [
     ...issues.filter((i) => i.severity === 'block'),
     ...issues.filter((i) => i.severity === 'warn'),
-  ]
+  ];
 }

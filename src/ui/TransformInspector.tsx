@@ -1,10 +1,10 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { ListBoxItem } from 'react-aria-components'
-import { Cat, ChevronDown, ChevronUp, Eye } from 'lucide-react'
-import { Button, Chip, TextField, Switch, SectionTitle, Select } from './kit'
-import { NumberField } from './NumberField'
-import { isPartialNumber, parseNumericDraft } from './numberDraft'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { ListBoxItem } from 'react-aria-components';
+import { Cat, ChevronDown, ChevronUp, Eye } from 'lucide-react';
+import { Button, Chip, TextField, Switch, SectionTitle, Select } from './kit';
+import { NumberField } from './NumberField';
+import { isPartialNumber, parseNumericDraft } from './numberDraft';
 import {
   $bulkScaleMode,
   $lightEditContext,
@@ -27,17 +27,17 @@ import {
   updateLightTransform,
   updateSelectedTransform,
   updateSelectedTransforms,
-} from '../state/editorStore'
-import type { PlacementTransform } from '../state/editorStore'
-import { $selectedEntity, $selectionCount, $selectedRefs } from '../state/selectors'
-import { $layerView, isLayerLocked } from '../state/layerStore'
+} from '../state/editorStore';
+import type { PlacementTransform } from '../state/editorStore';
+import { $selectedEntity, $selectionCount, $selectedRefs } from '../state/selectors';
+import { $layerView, isLayerLocked } from '../state/layerStore';
 import {
   centroidOf,
   groupScaledTransform,
   quatFromEulerDeg,
   rotatedAroundOriginTransform,
   translatedTransform,
-} from '../three/bulkTransform'
+} from '../three/bulkTransform';
 import {
   COLLIDER_SHAPES,
   CONNECTOR_CAPABILITIES,
@@ -50,8 +50,8 @@ import {
   type PartCollider,
   type PartLight,
   type Vec3,
-} from '../ksa/types'
-import { colliderSizeLabels, type ColliderSizeLabel } from '../ksa/colliderSize'
+} from '../ksa/types';
+import { colliderSizeLabels, type ColliderSizeLabel } from '../ksa/colliderSize';
 import {
   colliderLocalFromWorld,
   colliderWorld,
@@ -59,12 +59,12 @@ import {
   lightLocalFromWorld,
   lightWorld,
   lightWorldAim,
-} from '../three/coords'
-import { Field } from './GameDataSections'
-import { LightFalloffCurve } from './LightFalloffCurve'
-import { hexToRgb01, rgb01ToHex } from './colorHex'
-import { PreciseNumberInput } from './PreciseNumberInput'
-import { $lightSettings, DEFAULT_LIGHT_SETTINGS } from '../state/settingsStore'
+} from '../three/coords';
+import { Field } from './GameDataSections';
+import { LightFalloffCurve } from './LightFalloffCurve';
+import { hexToRgb01, rgb01ToHex } from './colorHex';
+import { PreciseNumberInput } from './PreciseNumberInput';
+import { $lightSettings, DEFAULT_LIGHT_SETTINGS } from '../state/settingsStore';
 import {
   $colliderSettings,
   $coverageReport,
@@ -72,18 +72,18 @@ import {
   requestColliderFit,
   requestCoverageCheck,
   setColliderSettings,
-} from '../state/colliderStore'
-import { requestIvaSeatAim } from '../state/ivaSeatStore'
-import { enterSeatView } from '../state/ivaStore'
-import { SEAT_LOCAL_UP, seatAxesFromRotation, seatRotationFromAxes } from '../ksa/ivaSeatAxes'
-import { formatG6 } from '../ksa/formatG6'
-import { $catalogIndex } from '../state/catalogStore'
-import { resolveInternal } from '../ksa/modExport'
-import { DEG2RAD, RAD2DEG, fmt } from './format'
+} from '../state/colliderStore';
+import { requestIvaSeatAim } from '../state/ivaSeatStore';
+import { enterSeatView } from '../state/ivaStore';
+import { SEAT_LOCAL_UP, seatAxesFromRotation, seatRotationFromAxes } from '../ksa/ivaSeatAxes';
+import { formatG6 } from '../ksa/formatG6';
+import { $catalogIndex } from '../state/catalogStore';
+import { resolveInternal } from '../ksa/modExport';
+import { DEG2RAD, RAD2DEG, fmt } from './format';
 
-const panelClass = 'flex flex-col gap-2 rounded-xl border border-border bg-panel p-2'
+const panelClass = 'flex flex-col gap-2 rounded-xl border border-border bg-panel p-2';
 
-type Axis = 'x' | 'y' | 'z'
+type Axis = 'x' | 'y' | 'z';
 
 /**
  * Numeric transform inspector for the selected entity (SubPart, connector, collider,
@@ -105,11 +105,11 @@ type Axis = 'x' | 'y' | 'z'
  *    pins `scale` to (1,1,1)), so the group is omitted entirely rather than shown inert.
  */
 export function TransformInspector() {
-  const count = useStore($selectionCount)
-  const entity = useStore($selectedEntity)
-  useStore($layerView) // re-render when lock state changes
-  if (count > 1) return <BulkTransformPanel />
-  if (!entity) return null
+  const count = useStore($selectionCount);
+  const entity = useStore($selectedEntity);
+  useStore($layerView); // re-render when lock state changes
+  if (count > 1) return <BulkTransformPanel />;
+  if (!entity) return null;
 
   // Lights: the whole panel is the LightHeader — its owner-frame/part-frame groups
   // replace the generic Position/Rotation ones (and a light has no size, so nothing
@@ -123,7 +123,7 @@ export function TransformInspector() {
           locked={isLayerLocked(entity.light.layerId)}
         />
       </div>
-    )
+    );
   }
 
   const target =
@@ -133,19 +133,19 @@ export function TransformInspector() {
         ? entity.connector
         : entity.kind === 'collider'
           ? entity.collider
-          : entity.seat
-  const locked = isLayerLocked(target.layerId)
-  const transform = target
+          : entity.seat;
+  const locked = isLayerLocked(target.layerId);
+  const transform = target;
 
   const commit = (mutate: (t: PlacementTransform) => void) => {
     const next: PlacementTransform = {
       position: { ...transform.position },
       rotation: { ...transform.rotation },
       scale: { ...transform.scale },
-    }
-    mutate(next)
-    updateSelectedTransform(next)
-  }
+    };
+    mutate(next);
+    updateSelectedTransform(next);
+  };
 
   const entityName =
     entity.kind === 'subpart'
@@ -154,7 +154,7 @@ export function TransformInspector() {
         ? entity.connector.id
         : entity.kind === 'collider'
           ? entity.collider.id
-          : entity.seat.id
+          : entity.seat.id;
 
   const posField = (axis: Axis) => (
     <NumberField
@@ -164,7 +164,7 @@ export function TransformInspector() {
       onInteractionStart={() => pushUndo('move', entityName)}
       onCommit={(n) => commit((t) => (t.position[axis] = n))}
     />
-  )
+  );
   const rotField = (axis: Axis) => (
     <NumberField
       label={axis.toUpperCase()}
@@ -173,7 +173,7 @@ export function TransformInspector() {
       onInteractionStart={() => pushUndo('rotate', entityName)}
       onCommit={(deg) => commit((t) => (t.rotation[axis] = deg * DEG2RAD))}
     />
-  )
+  );
   const scaleField = (axis: Axis, label?: ColliderSizeLabel) => (
     <NumberField
       label={label?.short ?? axis.toUpperCase()}
@@ -183,10 +183,10 @@ export function TransformInspector() {
       onInteractionStart={() => pushUndo('scale', entityName)}
       onCommit={(n) => commit((t) => (t.scale[axis] = n))}
     />
-  )
+  );
   // A collider's size is normalized per shape on write (a cylinder's X and Z are one
   // diameter), so only the independently-editable axes get a field.
-  const sizeLabels = entity.kind === 'collider' ? colliderSizeLabels(entity.collider.shape) : null
+  const sizeLabels = entity.kind === 'collider' ? colliderSizeLabels(entity.collider.shape) : null;
 
   return (
     <div className={panelClass}>
@@ -236,7 +236,7 @@ export function TransformInspector() {
         </Section>
       )}
     </div>
-  )
+  );
 }
 
 function Section(props: { title: string; children: React.ReactNode }) {
@@ -245,7 +245,7 @@ function Section(props: { title: string; children: React.ReactNode }) {
       <SectionTitle>{props.title}</SectionTitle>
       <div className="grid grid-cols-3 gap-1">{props.children}</div>
     </div>
-  )
+  );
 }
 
 function SubPartHeader({
@@ -254,12 +254,12 @@ function SubPartHeader({
   templateId,
   locked,
 }: {
-  index: number
-  instanceId: string
-  templateId: string
-  locked: boolean
+  index: number;
+  instanceId: string;
+  templateId: string;
+  locked: boolean;
 }) {
-  const [draft, setDraft] = useState<string | null>(null)
+  const [draft, setDraft] = useState<string | null>(null);
 
   return (
     <div className="flex flex-col gap-0.5">
@@ -270,12 +270,12 @@ function SubPartHeader({
         inputClassName="font-mono"
         isDisabled={locked}
         onFocus={() => {
-          setDraft(instanceId)
-          pushUndo('edit instance ID', instanceId)
+          setDraft(instanceId);
+          pushUndo('edit instance ID', instanceId);
         }}
         onChange={(v) => {
-          setDraft(v)
-          if (v.trim()) setSubPartInstanceId(index, v.trim())
+          setDraft(v);
+          if (v.trim()) setSubPartInstanceId(index, v.trim());
         }}
         onBlur={() => setDraft(null)}
       />
@@ -283,7 +283,7 @@ function SubPartHeader({
         {templateId}
       </span>
     </div>
-  )
+  );
 }
 
 /**
@@ -294,53 +294,53 @@ function SubPartHeader({
  * (single undo step) and reset afterward.
  */
 function BulkTransformPanel() {
-  const refs = useStore($selectedRefs)
-  const scaleMode = useStore($bulkScaleMode)
-  useStore($layerView) // re-render when lock state changes
-  const anyLocked = refs.some((r) => isLayerLocked(r.layerId))
+  const refs = useStore($selectedRefs);
+  const scaleMode = useStore($bulkScaleMode);
+  useStore($layerView); // re-render when lock state changes
+  const anyLocked = refs.some((r) => isLayerLocked(r.layerId));
 
-  const bulkDetail = refs.length === 1 ? refs[0].name : `${refs.length} items`
+  const bulkDetail = refs.length === 1 ? refs[0].name : `${refs.length} items`;
 
   const applyMove = (delta: [number, number, number]) => {
-    if (refs.length === 0) return
-    pushUndo('move', bulkDetail)
-    const d = { x: delta[0], y: delta[1], z: delta[2] }
+    if (refs.length === 0) return;
+    pushUndo('move', bulkDetail);
+    const d = { x: delta[0], y: delta[1], z: delta[2] };
     updateSelectedTransforms(
       refs.map((r) => ({
         kind: r.kind,
         index: r.index,
         transform: translatedTransform(r.transform, d),
       })),
-    )
-  }
+    );
+  };
 
   const applyRotate = (deg: [number, number, number]) => {
-    if (refs.length === 0) return
-    pushUndo('rotate', bulkDetail)
-    const deltaQuat = quatFromEulerDeg({ x: deg[0], y: deg[1], z: deg[2] })
-    const origin = centroidOf(refs.map((r) => r.transform.position))
+    if (refs.length === 0) return;
+    pushUndo('rotate', bulkDetail);
+    const deltaQuat = quatFromEulerDeg({ x: deg[0], y: deg[1], z: deg[2] });
+    const origin = centroidOf(refs.map((r) => r.transform.position));
     updateSelectedTransforms(
       refs.map((r) => ({
         kind: r.kind,
         index: r.index,
         transform: rotatedAroundOriginTransform(r.transform, deltaQuat, origin),
       })),
-    )
-  }
+    );
+  };
 
   const applyScale = (factor: [number, number, number]) => {
-    if (refs.length === 0) return
-    pushUndo('scale', bulkDetail)
-    const f = { x: factor[0], y: factor[1], z: factor[2] }
-    const origin = scaleMode === 'smart' ? centroidOf(refs.map((r) => r.transform.position)) : null
+    if (refs.length === 0) return;
+    pushUndo('scale', bulkDetail);
+    const f = { x: factor[0], y: factor[1], z: factor[2] };
+    const origin = scaleMode === 'smart' ? centroidOf(refs.map((r) => r.transform.position)) : null;
     updateSelectedTransforms(
       refs.map((r) => ({
         kind: r.kind,
         index: r.index,
         transform: groupScaledTransform(r.kind, r.transform, f, origin),
       })),
-    )
-  }
+    );
+  };
 
   return (
     <div className={panelClass}>
@@ -373,7 +373,7 @@ function BulkTransformPanel() {
         </Switch>
       </div>
     </div>
-  )
+  );
 }
 
 /**
@@ -382,34 +382,34 @@ function BulkTransformPanel() {
  * per axis), invokes `onApply`, then resets the drafts to the default.
  */
 function VectorApply(props: {
-  title: string
-  defaultValue: [number, number, number]
-  isDisabled?: boolean
-  onApply: (value: [number, number, number]) => void
+  title: string;
+  defaultValue: [number, number, number];
+  isDisabled?: boolean;
+  onApply: (value: [number, number, number]) => void;
 }) {
-  const { title, defaultValue, isDisabled, onApply } = props
-  const initial = defaultValue.map(fmt) as [string, string, string]
-  const [drafts, setDrafts] = useState<[string, string, string]>(initial)
+  const { title, defaultValue, isDisabled, onApply } = props;
+  const initial = defaultValue.map(fmt) as [string, string, string];
+  const [drafts, setDrafts] = useState<[string, string, string]>(initial);
 
   const setAxis = (axis: number, value: string) => {
     // Drop keystrokes that can't become a number, but keep partial entries ('-', '0.').
-    if (!isPartialNumber(value)) return
+    if (!isPartialNumber(value)) return;
     setDrafts((prev) => {
-      const next = [...prev] as [string, string, string]
-      next[axis] = value
-      return next
-    })
-  }
+      const next = [...prev] as [string, string, string];
+      next[axis] = value;
+      return next;
+    });
+  };
 
   const apply = () => {
     const parsed = drafts.map((s, i) => parseNumericDraft(s) ?? defaultValue[i]) as [
       number,
       number,
       number,
-    ]
-    onApply(parsed)
-    setDrafts(initial)
-  }
+    ];
+    onApply(parsed);
+    setDrafts(initial);
+  };
 
   return (
     <div className="flex flex-col gap-1">
@@ -434,7 +434,7 @@ function VectorApply(props: {
         </Button>
       </div>
     </div>
-  )
+  );
 }
 
 function ConnectorHeader({
@@ -444,32 +444,32 @@ function ConnectorHeader({
   capabilities,
   locked,
 }: {
-  index: number
-  id: string
-  flags: ConnectorFlag[]
-  capabilities: ConnectorCapability[]
-  locked: boolean
+  index: number;
+  id: string;
+  flags: ConnectorFlag[];
+  capabilities: ConnectorCapability[];
+  locked: boolean;
 }) {
   // Toggle one flag, re-emitting the full set in canonical order so the XML and
   // the inspector stay stable regardless of click order.
   const toggleFlag = (flag: ConnectorFlag, on: boolean) => {
-    const next = new Set(flags)
-    if (on) next.add(flag)
-    else next.delete(flag)
+    const next = new Set(flags);
+    if (on) next.add(flag);
+    else next.delete(flag);
     setConnectorFlags(
       index,
       CONNECTOR_FLAGS.filter((f) => next.has(f)),
-    )
-  }
+    );
+  };
   const toggleCapability = (cap: ConnectorCapability, on: boolean) => {
-    const next = new Set(capabilities)
-    if (on) next.add(cap)
-    else next.delete(cap)
+    const next = new Set(capabilities);
+    if (on) next.add(cap);
+    else next.delete(cap);
     setConnectorCapabilities(
       index,
       CONNECTOR_CAPABILITIES.filter((c) => next.has(c)),
-    )
-  }
+    );
+  };
   return (
     <div className="flex flex-col gap-1.5">
       <span className="truncate font-mono text-sm" title={id}>
@@ -507,7 +507,7 @@ function ConnectorHeader({
         connector.
       </p>
     </div>
-  )
+  );
 }
 
 /**
@@ -525,15 +525,15 @@ function ColliderHeader({
   collider,
   locked,
 }: {
-  index: number
-  collider: PartCollider
-  locked: boolean
+  index: number;
+  collider: PartCollider;
+  locked: boolean;
 }) {
-  const part = useStore($part)
+  const part = useStore($part);
   // Every DISTINCT template actually placed in the part is a candidate owner.
-  const templates = [...new Set(part.placements.map((p) => p.subPartTemplateId))].sort()
-  const owner = collider.ownerTemplateId
-  const instances = owner ? part.placements.filter((p) => p.subPartTemplateId === owner).length : 0
+  const templates = [...new Set(part.placements.map((p) => p.subPartTemplateId))].sort();
+  const owner = collider.ownerTemplateId;
+  const instances = owner ? part.placements.filter((p) => p.subPartTemplateId === owner).length : 0;
   // KSA composes only position + rotation, so a non-unit placement scale silently halves
   // (or doubles) the collider relative to what you see — warn rather than compensate.
   /**
@@ -543,18 +543,18 @@ function ColliderHeader({
    * Falls back to a plain re-home when a frame is unavailable (an unplaced template).
    */
   const changeOwner = (next: string | null) => {
-    const from = owner ? part.placements.find((p) => p.subPartTemplateId === owner) : null
-    const to = next ? part.placements.find((p) => p.subPartTemplateId === next) : null
-    const world = from ? colliderWorld(collider, from) : collider
-    setColliderOwner(index, next, to ? colliderLocalFromWorld(world, to) : world)
-  }
+    const from = owner ? part.placements.find((p) => p.subPartTemplateId === owner) : null;
+    const to = next ? part.placements.find((p) => p.subPartTemplateId === next) : null;
+    const world = from ? colliderWorld(collider, from) : collider;
+    setColliderOwner(index, next, to ? colliderLocalFromWorld(world, to) : world);
+  };
 
   const scaledOwner =
     owner != null &&
     part.placements.some(
       (p) =>
         p.subPartTemplateId === owner && (p.scale.x !== 1 || p.scale.y !== 1 || p.scale.z !== 1),
-    )
+    );
 
   return (
     <div className="flex flex-col gap-1">
@@ -615,7 +615,7 @@ function ColliderHeader({
       )}
       <CoveragePanel />
     </div>
-  )
+  );
 }
 
 /**
@@ -628,10 +628,10 @@ function ColliderHeader({
  * inflates the vehicle bounding box KSA derives from the collider compound.
  */
 function CoveragePanel() {
-  const report = useStore($coverageReport)
-  const settings = useStore($colliderSettings)
-  const pct = report ? Math.round(report.fraction * 1000) / 10 : 0
-  const missing = report ? report.sampled - report.covered : 0
+  const report = useStore($coverageReport);
+  const settings = useStore($colliderSettings);
+  const pct = report ? Math.round(report.fraction * 1000) / 10 : 0;
+  const missing = report ? report.sampled - report.covered : 0;
 
   return (
     <div className="flex flex-col gap-0.5 border-t border-border pt-1">
@@ -674,7 +674,7 @@ function CoveragePanel() {
         <span className="text-xs text-fg-subtle">Sample every vertex (slower, accurate)</span>
       </Switch>
     </div>
-  )
+  );
 }
 
 /**
@@ -688,15 +688,15 @@ const AIM_PRESETS: readonly { id: string; label: string; forward: Vec3 }[] = [
   { id: '-y', label: '−Y', forward: { x: 0, y: -1, z: 0 } },
   { id: '+z', label: '+Z', forward: { x: 0, y: 0, z: 1 } },
   { id: '-z', label: '−Z', forward: { x: 0, y: 0, z: -1 } },
-]
+];
 
 /** `x, y, z` through the SAME G6 formatter the exporter writes the seat axes with. */
-const fmtVec = (v: Vec3) => `${formatG6(v.x)}, ${formatG6(v.y)}, ${formatG6(v.z)}`
+const fmtVec = (v: Vec3) => `${formatG6(v.x)}, ${formatG6(v.y)}, ${formatG6(v.z)}`;
 
-const dot = (a: Vec3, b: Vec3) => a.x * b.x + a.y * b.y + a.z * b.z
+const dot = (a: Vec3, b: Vec3) => a.x * b.x + a.y * b.y + a.z * b.z;
 
 /** Cosine beyond which two unit axes count as parallel (KSA would NaN the camera). */
-const PARALLEL_DOT = 0.999
+const PARALLEL_DOT = 0.999;
 
 /**
  * The full inspector panel for a selected light (plan §3.9 — this replaces the generic
@@ -729,31 +729,31 @@ function LightHeader({
   light,
   locked,
 }: {
-  index: number
-  light: PartLight
-  locked: boolean
+  index: number;
+  light: PartLight;
+  locked: boolean;
 }) {
-  const part = useStore($part)
-  const editContext = useStore($lightEditContext)
+  const part = useStore($part);
+  const editContext = useStore($lightEditContext);
   // Defaulted the way `settingsStore.lightSettings()` does — `persistentJSON` replays a
   // stored object verbatim, so a settings blob written before a field existed would read
   // it as `undefined` and the curve would silently pick a different exposure than the
   // viewport's shells.
-  const storedViz = useStore($lightSettings)
-  const viz = { ...DEFAULT_LIGHT_SETTINGS, ...storedViz }
+  const storedViz = useStore($lightSettings);
+  const viz = { ...DEFAULT_LIGHT_SETTINGS, ...storedViz };
 
-  const isSpot = light.type === 'Spot'
+  const isSpot = light.type === 'Spot';
   const owners = light.ownerTemplateId
     ? part.placements.filter((p) => p.subPartTemplateId === light.ownerTemplateId)
-    : []
+    : [];
   // The scene's context rule verbatim (last clicked, default 0, clamped) — one atom,
   // one rule, so the part-frame fields below and the gizmo can never disagree.
-  const contextIndex = Math.max(0, Math.min(editContext[light.id] ?? 0, owners.length - 1))
-  const contextOwner = owners[contextIndex] ?? null
-  const world = lightWorld(light, contextOwner)
-  const worldAim = lightWorldAim(world.rotation)
+  const contextIndex = Math.max(0, Math.min(editContext[light.id] ?? 0, owners.length - 1));
+  const contextOwner = owners[contextIndex] ?? null;
+  const world = lightWorld(light, contextOwner);
+  const worldAim = lightWorldAim(world.rotation);
   // Every DISTINCT template actually placed in the part is a candidate owner.
-  const templates = [...new Set(part.placements.map((p) => p.subPartTemplateId))].sort()
+  const templates = [...new Set(part.placements.map((p) => p.subPartTemplateId))].sort();
 
   /**
    * Re-homes the light, CONVERTING its transform through the old and new owners' first
@@ -763,17 +763,17 @@ function LightHeader({
   const changeOwner = (next: string | null) => {
     const from = light.ownerTemplateId
       ? part.placements.find((p) => p.subPartTemplateId === light.ownerTemplateId)
-      : null
-    const to = next ? part.placements.find((p) => p.subPartTemplateId === next) : null
+      : null;
+    const to = next ? part.placements.find((p) => p.subPartTemplateId === next) : null;
     // The pose currently RENDERED: an unplaced/old-owner-less light draws in the Part
     // frame, which lightWorld(light, null) returns verbatim.
-    const worldPose = lightWorld(light, from ?? null)
+    const worldPose = lightWorld(light, from ?? null);
     setLightOwner(
       index,
       next,
       to ? lightLocalFromWorld(worldPose, to) : next === null ? worldPose : undefined,
-    )
-  }
+    );
+  };
 
   const localPosField = (axis: Axis) => (
     <NumberField
@@ -783,7 +783,7 @@ function LightHeader({
       onInteractionStart={() => pushUndo('move', light.id)}
       onCommit={(n) => setLightPosition(index, { ...light.position, [axis]: n })}
     />
-  )
+  );
   const aimRotField = (axis: Axis) => (
     <NumberField
       label={axis.toUpperCase()}
@@ -792,7 +792,7 @@ function LightHeader({
       onInteractionStart={() => pushUndo('rotate', light.id)}
       onCommit={(deg) => setLightRotation(index, { ...light.rotation, [axis]: deg * DEG2RAD })}
     />
-  )
+  );
   const partPosField = (axis: Axis) => (
     <NumberField
       label={axis.toUpperCase()}
@@ -809,7 +809,7 @@ function LightHeader({
         )
       }
     />
-  )
+  );
   const aimField = (axis: Axis) => (
     <NumberField
       label={axis.toUpperCase()}
@@ -819,12 +819,12 @@ function LightHeader({
       onCommit={(n) => {
         // Normalized on entry; a degenerate (≈zero) aim returns null — keep the prior
         // rotation rather than writing a NaN pose.
-        const rotation = lightAimRotation(world.rotation, { ...worldAim, [axis]: n })
-        if (!rotation) return
-        updateLightTransform(index, lightLocalFromWorld({ ...world, rotation }, contextOwner))
+        const rotation = lightAimRotation(world.rotation, { ...worldAim, [axis]: n });
+        if (!rotation) return;
+        updateLightTransform(index, lightLocalFromWorld({ ...world, rotation }, contextOwner));
       }}
     />
-  )
+  );
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -992,7 +992,7 @@ function LightHeader({
         Ray tracing (IVA only)
       </Switch>
     </div>
-  )
+  );
 }
 
 /**
@@ -1007,15 +1007,15 @@ function LightHeader({
  * hence the reorder buttons and the badge on index 0.
  */
 function IvaSeatHeader({ index, seat, locked }: { index: number; seat: IvaSeat; locked: boolean }) {
-  const part = useStore($part)
-  const catalogIndex = useStore($catalogIndex)
-  const total = part.ivaSeats.length
-  const { forward, up } = seatAxesFromRotation(seat.rotation)
+  const part = useStore($part);
+  const catalogIndex = useStore($catalogIndex);
+  const total = part.ivaSeats.length;
+  const { forward, up } = seatAxesFromRotation(seat.rotation);
   // KSA culls back faces unconditionally, so from a seat the surrounding hull is simply
   // not there: without interior-only geometry the seat looks straight out at space.
   const hasInterior = part.placements.some((p) =>
     resolveInternal(part, p.subPartTemplateId, catalogIndex.get(p.subPartTemplateId)),
-  )
+  );
 
   /**
    * Re-aims the seat along `nextForward`, KEEPING the current up axis so a re-aim never
@@ -1029,10 +1029,10 @@ function IvaSeatHeader({ index, seat, locked }: { index: number; seat: IvaSeat; 
         ? up
         : Math.abs(dot(nextForward, SEAT_LOCAL_UP)) < PARALLEL_DOT
           ? SEAT_LOCAL_UP
-          : { x: 0, y: 1, z: 0 }
-    const rotation = seatRotationFromAxes(nextForward, nextUp)
-    if (rotation) aimIvaSeat(index, rotation)
-  }
+          : { x: 0, y: 1, z: 0 };
+    const rotation = seatRotationFromAxes(nextForward, nextUp);
+    if (rotation) aimIvaSeat(index, rotation);
+  };
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -1127,8 +1127,8 @@ function IvaSeatHeader({ index, seat, locked }: { index: number; seat: IvaSeat; 
         </p>
       )}
     </div>
-  )
+  );
 }
 
 /** Select key standing in for `ownerTemplateId: null` (a Select can't carry null). */
-const PART_OWNER_KEY = '\u0000part'
+const PART_OWNER_KEY = '\u0000part';

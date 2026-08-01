@@ -1,12 +1,12 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { Boxes, Clapperboard, Rocket } from 'lucide-react'
-import { Toolbar, Button } from './kit'
-import { $part } from '../state/editorStore'
-import { setInspectorMode } from '../state/uiStore'
-import { $engineEntries } from '../state/engineStore'
-import { LayersButton } from './LayersButton'
-import { CustomAssetsModal } from './CustomAssetsModal'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { Boxes, Clapperboard, Rocket } from 'lucide-react';
+import { Toolbar, Button } from './kit';
+import { $part } from '../state/editorStore';
+import { setInspectorMode } from '../state/uiStore';
+import { $engineEntries } from '../state/engineStore';
+import { LayersButton } from './LayersButton';
+import { CustomAssetsModal } from './CustomAssetsModal';
 
 /**
  * Toolbar above the Assets list. Holds the Layers button (stretches to fill,
@@ -15,14 +15,14 @@ import { CustomAssetsModal } from './CustomAssetsModal'
  * "Anim (N)" button that swaps the inspector to the full-sidebar Animation editor.
  */
 export function AssetsToolbar() {
-  const part = useStore($part)
-  const engineEntries = useStore($engineEntries)
-  const [customOpen, setCustomOpen] = useState(false)
-  const customCount = part.customTextures.length + part.customMeshes.length
-  const animCount = part.animations.length
+  const part = useStore($part);
+  const engineEntries = useStore($engineEntries);
+  const [customOpen, setCustomOpen] = useState(false);
+  const customCount = part.customTextures.length + part.customMeshes.length;
+  const animCount = part.animations.length;
   // Counts engine SCOPES, so a part whose engine hardware lives on `<PartGameData>` (the
   // stock RCS pattern) shows up too rather than reading as "no engines".
-  const engineCount = engineEntries.length
+  const engineCount = engineEntries.length;
 
   return (
     <>
@@ -60,5 +60,5 @@ export function AssetsToolbar() {
       </Toolbar>
       <CustomAssetsModal isOpen={customOpen} onOpenChange={setCustomOpen} />
     </>
-  )
+  );
 }

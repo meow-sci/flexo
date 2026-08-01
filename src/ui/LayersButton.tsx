@@ -1,10 +1,10 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { Layers } from 'lucide-react'
-import { DialogTrigger, Popover, PopoverDialog, Button, Tooltip } from './kit'
-import { $part } from '../state/editorStore'
-import { $activeLayer } from '../state/selectors'
-import { LayersPanel } from './LayersPanel'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { Layers } from 'lucide-react';
+import { DialogTrigger, Popover, PopoverDialog, Button, Tooltip } from './kit';
+import { $part } from '../state/editorStore';
+import { $activeLayer } from '../state/selectors';
+import { LayersPanel } from './LayersPanel';
 
 /**
  * "Layers" action: opens a popover with the layer list (create, reorder,
@@ -13,9 +13,9 @@ import { LayersPanel } from './LayersPanel'
  * the toolbar and ellipsis-truncates a long name, with a tooltip for the full name.
  */
 export function LayersButton() {
-  const part = useStore($part)
-  const activeLayer = useStore($activeLayer)
-  const [open, setOpen] = useState(false)
+  const part = useStore($part);
+  const activeLayer = useStore($activeLayer);
+  const [open, setOpen] = useState(false);
 
   return (
     <DialogTrigger isOpen={open} onOpenChange={setOpen}>
@@ -39,5 +39,5 @@ export function LayersButton() {
         </PopoverDialog>
       </Popover>
     </DialogTrigger>
-  )
+  );
 }

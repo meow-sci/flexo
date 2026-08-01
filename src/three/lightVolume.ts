@@ -1,4 +1,4 @@
-import { clampSpotAngles, lightIlluminance } from '../ksa/lightFalloff'
+import { clampSpotAngles, lightIlluminance } from '../ksa/lightFalloff';
 
 /**
  * The **pure** half of the light coverage visualization (plans/LIGHT_MANAGEMENT_PLAN.md
@@ -19,29 +19,29 @@ import { clampSpotAngles, lightIlluminance } from '../ksa/lightFalloff'
  */
 
 /** Concentric shells per light. Enough to read as a gradient, cheap enough for 10+ lights. */
-export const SHELL_COUNT = 16
+export const SHELL_COUNT = 16;
 
 /**
  * Peak alpha of ONE shell. The shells blend additively, so a fully saturated view ray
  * through all {@link SHELL_COUNT} of them sums to ≲1.6 — bright, but not blown out.
  */
-export const SHELL_MAX_ALPHA = 1.6 / SHELL_COUNT
+export const SHELL_MAX_ALPHA = 1.6 / SHELL_COUNT;
 
 /** Where the auto exposure probes the light, as a fraction of its range (§3.6). */
-const AUTO_EXPOSURE_SAMPLE = 0.2
+const AUTO_EXPOSURE_SAMPLE = 0.2;
 
 /** Floor for the probed illuminance, so a degenerate light still yields a finite knee. */
-const MIN_AUTO_ILLUMINANCE = 1e-3
+const MIN_AUTO_ILLUMINANCE = 1e-3;
 
 /**
  * Divisor applied to the probed illuminance. Putting the knee BELOW the probe value
  * lands the 0.2·R sample at E/(E+E₀) = 0.75, i.e. the visible gradient is spent on the
  * light's own working range instead of saturating at the source.
  */
-const AUTO_EXPOSURE_DIVISOR = 3
+const AUTO_EXPOSURE_DIVISOR = 3;
 
 /** Absolute-mode floor: `E/(E+E₀)` is 0/0 at the range boundary when E₀ is 0. */
-const MIN_EXPOSURE = 1e-6
+const MIN_EXPOSURE = 1e-6;
 
 /**
  * Radii of the falloff shells for a light of range `rangeM`, innermost first:
@@ -55,10 +55,10 @@ const MIN_EXPOSURE = 1e-6
  * would be a lie.
  */
 export function shellRadii(rangeM: number): number[] {
-  if (!Number.isFinite(rangeM) || rangeM <= 0) return []
-  const out: number[] = []
-  for (let i = 0; i < SHELL_COUNT; i++) out.push(((i + 0.5) / SHELL_COUNT) * rangeM)
-  return out
+  if (!Number.isFinite(rangeM) || rangeM <= 0) return [];
+  const out: number[] = [];
+  for (let i = 0; i < SHELL_COUNT; i++) out.push(((i + 0.5) / SHELL_COUNT) * rangeM);
+  return out;
 }
 
 /**
@@ -69,8 +69,8 @@ export function shellRadii(rangeM: number): number[] {
  * invisible, which is honest but useless while editing it).
  */
 export function autoExposure(rangeM: number, intensity: number): number {
-  const probe = lightIlluminance(AUTO_EXPOSURE_SAMPLE * rangeM, rangeM, intensity)
-  return Math.max(probe, MIN_AUTO_ILLUMINANCE) / AUTO_EXPOSURE_DIVISOR
+  const probe = lightIlluminance(AUTO_EXPOSURE_SAMPLE * rangeM, rangeM, intensity);
+  return Math.max(probe, MIN_AUTO_ILLUMINANCE) / AUTO_EXPOSURE_DIVISOR;
 }
 
 /**
@@ -86,9 +86,9 @@ export function volumeExposure(
   vizExposure: number,
 ): number {
   if (mode === 'absolute') {
-    return Number.isFinite(vizExposure) ? Math.max(vizExposure, MIN_EXPOSURE) : MIN_EXPOSURE
+    return Number.isFinite(vizExposure) ? Math.max(vizExposure, MIN_EXPOSURE) : MIN_EXPOSURE;
   }
-  return Math.max(autoExposure(rangeM, intensity), MIN_EXPOSURE)
+  return Math.max(autoExposure(rangeM, intensity), MIN_EXPOSURE);
 }
 
 // ── Live lighting preview (plans/LIGHT_MANAGEMENT_PLAN.md §3.10) ─────────────────────
@@ -102,7 +102,7 @@ export function volumeExposure(
  * scene re-links its shader programs whenever the count changes; 16 is generous for a
  * part while keeping the toggle responsive (and the WebGL uniform budget comfortable).
  */
-export const MAX_PREVIEW_LIGHTS = 16
+export const MAX_PREVIEW_LIGHTS = 16;
 
 /**
  * three's `SpotLight.penumbra` for a KSA cone: the fraction of the outer half-angle the
@@ -118,10 +118,10 @@ export const MAX_PREVIEW_LIGHTS = 16
  * three drop the whole spot.
  */
 export function spotPenumbra(innerRad: number, outerRad: number): number {
-  if (!Number.isFinite(outerRad) || outerRad <= 0) return 0
-  const p = 1 - innerRad / outerRad
-  if (!Number.isFinite(p)) return 0
-  return p < 0 ? 0 : p > 1 ? 1 : p
+  if (!Number.isFinite(outerRad) || outerRad <= 0) return 0;
+  const p = 1 - innerRad / outerRad;
+  if (!Number.isFinite(p)) return 0;
+  return p < 0 ? 0 : p > 1 ? 1 : p;
 }
 
 /**
@@ -134,18 +134,18 @@ export function spotPreviewCone(
   innerRad: number,
   outerRad: number,
 ): { angleRad: number; penumbra: number } {
-  const clamped = clampSpotAngles(innerRad, outerRad)
-  return { angleRad: clamped.outerRad, penumbra: spotPenumbra(clamped.innerRad, clamped.outerRad) }
+  const clamped = clampSpotAngles(innerRad, outerRad);
+  return { angleRad: clamped.outerRad, penumbra: spotPenumbra(clamped.innerRad, clamped.outerRad) };
 }
 
 /** {@link planPreviewBudget}'s answer: how many instances of each light to light up. */
 export interface PreviewBudget {
   /** Per light, in document order: how many of its instances get a preview light. */
-  perLight: number[]
+  perLight: number[];
   /** Total preview lights the plan enables (≤ the cap). */
-  enabled: number
+  enabled: number;
   /** Total light instances offered. */
-  total: number
+  total: number;
 }
 
 /**
@@ -161,16 +161,16 @@ export function planPreviewBudget(
   instanceCounts: readonly number[],
   cap: number = MAX_PREVIEW_LIGHTS,
 ): PreviewBudget {
-  const budget = Number.isFinite(cap) ? Math.max(Math.floor(cap), 0) : 0
-  const perLight: number[] = []
-  let enabled = 0
-  let total = 0
+  const budget = Number.isFinite(cap) ? Math.max(Math.floor(cap), 0) : 0;
+  const perLight: number[] = [];
+  let enabled = 0;
+  let total = 0;
   for (const raw of instanceCounts) {
-    const count = Number.isFinite(raw) ? Math.max(Math.floor(raw), 0) : 0
-    total += count
-    const take = Math.min(count, budget - enabled)
-    perLight.push(take)
-    enabled += take
+    const count = Number.isFinite(raw) ? Math.max(Math.floor(raw), 0) : 0;
+    total += count;
+    const take = Math.min(count, budget - enabled);
+    perLight.push(take);
+    enabled += take;
   }
-  return { perLight, enabled, total }
+  return { perLight, enabled, total };
 }

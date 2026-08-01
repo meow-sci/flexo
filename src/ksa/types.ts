@@ -5,9 +5,9 @@
  */
 
 export interface Vec3 {
-  x: number
-  y: number
-  z: number
+  x: number;
+  y: number;
+  z: number;
 }
 
 /**
@@ -16,33 +16,33 @@ export interface Vec3 {
  * conversion to three.js Object3D rotation lives in `three/coords.ts`.
  */
 export interface EulerXYZ {
-  x: number
-  y: number
-  z: number
+  x: number;
+  y: number;
+  z: number;
 }
 
-export const VEC3_ZERO: Readonly<Vec3> = { x: 0, y: 0, z: 0 }
-export const VEC3_ONE: Readonly<Vec3> = { x: 1, y: 1, z: 1 }
-export const EULER_ZERO: Readonly<EulerXYZ> = { x: 0, y: 0, z: 0 }
+export const VEC3_ZERO: Readonly<Vec3> = { x: 0, y: 0, z: 0 };
+export const VEC3_ONE: Readonly<Vec3> = { x: 1, y: 1, z: 1 };
+export const EULER_ZERO: Readonly<EulerXYZ> = { x: 0, y: 0, z: 0 };
 
 /** A position/rotation/scale triple — the shape both SubParts and Connectors share. */
 export interface Transform {
   /** Position relative to the Part origin, in meters. */
-  position: Vec3
+  position: Vec3;
   /** Rotation in radians (Euler XYZ). */
-  rotation: EulerXYZ
+  rotation: EulerXYZ;
   /** Scale, default (1,1,1). */
-  scale: Vec3
+  scale: Vec3;
 }
 
 /** One placed SubPart instance within the Part being edited. */
 export interface SubPartPlacement extends Transform {
   /** Unique instance id within this Part, e.g. "trussbara_1". */
-  instanceId: string
+  instanceId: string;
   /** Catalog SubPart template id, e.g. "CoreStructuralA_Subpart_TrussBarA". */
-  subPartTemplateId: string
+  subPartTemplateId: string;
   /** Id of the {@link Layer} this placement belongs to (editor-only grouping). */
-  layerId: string
+  layerId: string;
 }
 
 /**
@@ -52,9 +52,9 @@ export interface SubPartPlacement extends Transform {
  * {@link Connector.flags} array is the default connect-to-anything mode and
  * emits no <Flags>. See docs/ksa-part-connector-notes.md for what each means.
  */
-export type ConnectorFlag = 'Internal' | 'ToSurface' | 'FromSurface'
+export type ConnectorFlag = 'Internal' | 'ToSurface' | 'FromSurface';
 
-export const CONNECTOR_FLAGS: readonly ConnectorFlag[] = ['Internal', 'ToSurface', 'FromSurface']
+export const CONNECTOR_FLAGS: readonly ConnectorFlag[] = ['Internal', 'ToSurface', 'FromSurface'];
 
 /**
  * What is allowed to FLOW across a connector, serialized as the whitespace-separated
@@ -78,7 +78,7 @@ export type ConnectorCapability =
   | 'SolidMotorCase'
   | 'NoElectricity'
   | 'NoServiceFluid'
-  | 'DecouplerJoint'
+  | 'DecouplerJoint';
 
 export const CONNECTOR_CAPABILITIES: readonly ConnectorCapability[] = [
   'BulkFluid',
@@ -86,21 +86,21 @@ export const CONNECTOR_CAPABILITIES: readonly ConnectorCapability[] = [
   'NoElectricity',
   'NoServiceFluid',
   'DecouplerJoint',
-]
+];
 
 /** A connector attachment point within the Part. Faces local +X (its arrow). */
 export interface Connector extends Transform {
   /** Connector id used in the exported XML, e.g. "_connector1". */
-  id: string
+  id: string;
   /** Connection behavior flags (independent, may combine). Empty = default mode. */
-  flags: ConnectorFlag[]
+  flags: ConnectorFlag[];
   /**
    * `<Capabilities>` — what may flow across this connector. KSA merges the geometry
    * `<Part>` and `<PartGameData>` values with `|=` (`PartTemplate.ApplyGameData`), so
    * flexo emits the same list in both documents (idempotent). Empty ⇒ KSA's default
    * `Electricity | ServiceFluid`. See {@link ConnectorCapability}.
    */
-  capabilities: ConnectorCapability[]
+  capabilities: ConnectorCapability[];
   /**
    * Ids of sibling connectors, serialized as nested `<Sibling Id/>` children of the
    * geometry `<Connector>`. KSA 2026.7 added this to group the attach nodes of
@@ -108,13 +108,13 @@ export interface Connector extends Transform {
    * `<PartGameData>`'s `<Aligned>`. flexo doesn't edit these, but preserves them
    * verbatim so importing then re-exporting a prefab keeps its node grouping.
    */
-  siblingIds: string[]
+  siblingIds: string[];
   /**
    * Id of the {@link Layer} this connector belongs to (editor-only grouping). An ORDINARY
    * layer, exactly like a placement's — a connector is organized, hidden and locked
    * alongside the SubParts it attaches to.
    */
-  layerId: string
+  layerId: string;
 }
 
 /**
@@ -124,13 +124,13 @@ export interface Connector extends Transform {
  * part collider, so a collision volume is always a handful of these primitives.
  * See scope/colliders.md.
  */
-export type ColliderShape = 'Box' | 'Sphere' | 'Cylinder' | 'Capsule'
+export type ColliderShape = 'Box' | 'Sphere' | 'Cylinder' | 'Capsule';
 
 /**
  * All collider shapes, in UI order. Cylinder leads because Core uses it 66× vs
  * Box 29 / Sphere 21 / Capsule 0 across the shipped `Content/` tree.
  */
-export const COLLIDER_SHAPES: readonly ColliderShape[] = ['Cylinder', 'Box', 'Sphere', 'Capsule']
+export const COLLIDER_SHAPES: readonly ColliderShape[] = ['Cylinder', 'Box', 'Sphere', 'Capsule'];
 
 /** Human-facing shape labels (menus, inspector). */
 export const COLLIDER_SHAPE_LABELS: Record<ColliderShape, string> = {
@@ -138,7 +138,7 @@ export const COLLIDER_SHAPE_LABELS: Record<ColliderShape, string> = {
   Box: 'Box',
   Sphere: 'Sphere',
   Capsule: 'Capsule',
-}
+};
 
 /**
  * One collision primitive of the Part being edited. {@link Transform} is reused with a
@@ -159,8 +159,8 @@ export const COLLIDER_SHAPE_LABELS: Record<ColliderShape, string> = {
  */
 export interface PartCollider extends Transform {
   /** Document id, also emitted as the shape element's `Id`, e.g. "_collider1". */
-  id: string
-  shape: ColliderShape
+  id: string;
+  shape: ColliderShape;
   /**
    * `null` ⇒ part-level: emitted under `<PartGameData>`, transform in the Part's
    * assembly frame. Otherwise a `subPartTemplateId` ⇒ emitted under that template's
@@ -170,13 +170,13 @@ export interface PartCollider extends Transform {
    * template data) and follows joint animation
    * (`KeyframeAnimationModule.ApplyAnimationTransforms` flags `NeedsColliderUpdate`).
    */
-  ownerTemplateId: string | null
+  ownerTemplateId: string | null;
   /**
    * Id of the {@link Layer} this collider belongs to (editor-only grouping). An ORDINARY
    * layer, exactly like a placement's: colliders are organized, hidden and locked alongside
    * the SubParts whose volume they wrap.
    */
-  layerId: string
+  layerId: string;
 }
 
 /**
@@ -199,9 +199,9 @@ export interface PartCollider extends Transform {
  */
 export interface IvaSeat extends Transform {
   /** Editor-only document id, e.g. "_seat1". NEVER emitted — see plans/IVA_PLAN.md §3.5. */
-  id: string
+  id: string;
   /** Always {@link IVA_SEAT_LAYER_ID}; present for parity with the other layered entities. */
-  layerId: string
+  layerId: string;
 }
 
 /**
@@ -222,8 +222,8 @@ export interface IvaSeat extends Transform {
  */
 export interface PartLight extends Transform {
   /** Editor-only document id, e.g. "_light1". NEVER emitted (Core authors no <Light Id>). */
-  id: string
-  type: LightType
+  id: string;
+  type: LightType;
   /**
    * `null` ⇒ part-level: emitted under `<PartGameData>`, transform in the Part's
    * assembly frame (Core: CoreCommandA headlights, CoreIVASpaceA interior light).
@@ -233,38 +233,38 @@ export interface PartLight extends Transform {
    * under a BUILT-IN template id routes through the export-variant remap so Core's
    * shared template is never mutated (modExport.buildExportVariantMap).
    */
-  ownerTemplateId: string | null
+  ownerTemplateId: string | null;
   /** Falloff distance in meters (<Range Value/>). Illuminance is EXACTLY 0 at d ≥ range (§1.4). */
-  rangeM: number
+  rangeM: number;
   /** Brightness (<Intensity Value/>). Candela-like: E ≈ intensity/d² near the source. */
-  intensity: number
+  intensity: number;
   /** RGB color, channels 0–1 (<Color R G B/>). KSA schema default is Gray (0.5,0.5,0.5). */
-  color: { r: number; g: number; b: number }
+  color: { r: number; g: number; b: number };
   /** Spot inner cone half-angle, radians (<InnerAngle Value/>). Full-bright inside. */
-  innerAngleRad: number
+  innerAngleRad: number;
   /** Spot outer cone half-angle, radians (<OuterAngle Value/>). Runtime-clamped to ≤ 1.5697963 (§1.4). */
-  outerAngleRad: number
+  outerAngleRad: number;
   /** <RayTracing>true</RayTracing> — IVA ray-traced list routing only. */
-  rayTracing: boolean
+  rayTracing: boolean;
   /** Always {@link LIGHT_LAYER_ID}; parity with the other layered entities. */
-  layerId: string
+  layerId: string;
 }
 
 /**
  * Which of the three default KSA kittens to render. They share the same body mesh
  * and EVA suit; only the head pattern and eye color differ. See src/ksa/kittenAssets.ts.
  */
-export type KittenKind = 'hunter' | 'polaris' | 'banjo'
+export type KittenKind = 'hunter' | 'polaris' | 'banjo';
 
 /** All kitten kinds, in menu order. */
-export const KITTEN_KINDS: readonly KittenKind[] = ['hunter', 'polaris', 'banjo']
+export const KITTEN_KINDS: readonly KittenKind[] = ['hunter', 'polaris', 'banjo'];
 
 /** Human-facing kitten names (menus, "<Name> Mesh" layer names). */
 export const KITTEN_LABELS: Record<KittenKind, string> = {
   hunter: 'Hunter',
   polaris: 'Polaris',
   banjo: 'Banjo',
-}
+};
 
 /**
  * A placed kitten EVA character — a purely visual aide (scale/placement reference).
@@ -275,11 +275,11 @@ export const KITTEN_LABELS: Record<KittenKind, string> = {
  */
 export interface KittenInstance extends Transform {
   /** Unique instance id within this Part, e.g. "kitten_1". */
-  id: string
+  id: string;
   /** Which kitten to render (hunter/polaris/banjo). */
-  kind: KittenKind
+  kind: KittenKind;
   /** Always {@link KITTEN_LAYER_ID}; present for parity with other layered entities. */
-  layerId: string
+  layerId: string;
 }
 
 /**
@@ -292,9 +292,9 @@ export interface KittenInstance extends Transform {
  */
 export interface Layer {
   /** Stable unique id; the built-in layer uses {@link DEFAULT_LAYER_ID}. */
-  id: string
+  id: string;
   /** User-facing label, e.g. "Default", "Engines". */
-  name: string
+  name: string;
 }
 
 /**
@@ -302,50 +302,50 @@ export interface Layer {
  * sentinel so an unset id is obvious in the inspector and the exported XML. Project
  * import treats a partId still equal to this as "unset" and adopts the imported one.
  */
-export const DEFAULT_PART_ID = 'fixme_part_id'
+export const DEFAULT_PART_ID = 'fixme_part_id';
 
 /** Id of the built-in "Default" layer. It always exists and cannot be deleted. */
-export const DEFAULT_LAYER_ID = 'default'
+export const DEFAULT_LAYER_ID = 'default';
 
 /**
  * Id of the built-in "Kittens" layer. Kitten visual aides ({@link KittenInstance})
  * always live here so they can be hidden/locked separately from the part. They are
  * editor-only and are NEVER serialized to export. Cannot be deleted.
  */
-export const KITTEN_LAYER_ID = 'kittens'
+export const KITTEN_LAYER_ID = 'kittens';
 
 /**
  * Id of the built-in "IVA Seats" layer. {@link IvaSeat}s always live here so the interior
  * camera vantage points can be hidden/locked separately from the meshes around them.
  * Cannot be deleted.
  */
-export const IVA_SEAT_LAYER_ID = 'ivaSeats'
+export const IVA_SEAT_LAYER_ID = 'ivaSeats';
 
 /**
  * Id of the built-in "Lights" layer. {@link PartLight}s always live here so the part's
  * cast lights can be hidden/locked separately from the meshes they sit on. Cannot be
  * deleted.
  */
-export const LIGHT_LAYER_ID = 'lights'
+export const LIGHT_LAYER_ID = 'lights';
 
 /** The built-in Default layer (for SubParts) that every new Part starts with. */
 export function createDefaultLayer(): Layer {
-  return { id: DEFAULT_LAYER_ID, name: 'Default' }
+  return { id: DEFAULT_LAYER_ID, name: 'Default' };
 }
 
 /** The built-in Kittens layer that every new Part starts with (editor-only visual aides). */
 export function createKittenLayer(): Layer {
-  return { id: KITTEN_LAYER_ID, name: 'Kittens' }
+  return { id: KITTEN_LAYER_ID, name: 'Kittens' };
 }
 
 /** The built-in IVA Seats layer that every new Part starts with. */
 export function createIvaSeatLayer(): Layer {
-  return { id: IVA_SEAT_LAYER_ID, name: 'IVA Seats' }
+  return { id: IVA_SEAT_LAYER_ID, name: 'IVA Seats' };
 }
 
 /** The built-in Lights layer that every new Part starts with. */
 export function createLightLayer(): Layer {
-  return { id: LIGHT_LAYER_ID, name: 'Lights' }
+  return { id: LIGHT_LAYER_ID, name: 'Lights' };
 }
 
 /** The built-in layers present in every Part (and never deletable). */
@@ -354,7 +354,7 @@ export const BUILT_IN_LAYER_IDS: readonly string[] = [
   IVA_SEAT_LAYER_ID,
   LIGHT_LAYER_ID,
   KITTEN_LAYER_ID,
-]
+];
 
 /**
  * Built-in layers that host their own entity kind EXCLUSIVELY — nothing else can live on
@@ -373,14 +373,14 @@ export const ENTITY_ONLY_LAYER_IDS: readonly string[] = [
   IVA_SEAT_LAYER_ID,
   LIGHT_LAYER_ID,
   KITTEN_LAYER_ID,
-]
+];
 
 /**
  * Entity kinds that live on ORDINARY layers and can be moved between them — SubPart
  * placements, connectors and colliders. The union the "Change Layer" surfaces and
  * {@link import('../state/editorStore').moveEntitiesToLayer} operate on.
  */
-export type LayerableKind = 'subpart' | 'connector' | 'collider'
+export type LayerableKind = 'subpart' | 'connector' | 'collider';
 
 /**
  * One row of KSA's editor-tag registry (`<EditorTagDef>` in
@@ -393,9 +393,9 @@ export type LayerableKind = 'subpart' | 'connector' | 'collider'
  */
 export interface EditorTagDef {
   /** The tag string emitted as `<EditorTag Value>`, e.g. "Fuel Tanks". */
-  id: string
+  id: string;
   /** `<EditorTagDef NotaCategory>` — `true` ⇒ a functional tag, not a part-picker category. */
-  notaCategory: boolean
+  notaCategory: boolean;
 }
 
 /**
@@ -423,7 +423,7 @@ export const EDITOR_TAG_DEFS: readonly EditorTagDef[] = [
   { id: 'NoFaceSnapping', notaCategory: true },
   { id: 'All', notaCategory: true },
   { id: 'Hidden', notaCategory: true },
-]
+];
 
 /**
  * The editor tags KSA's Core data uses to bucket parts in the in-game part picker.
@@ -431,13 +431,13 @@ export const EDITOR_TAG_DEFS: readonly EditorTagDef[] = [
  * allowed — KSA registers any tag string it sees). Derived from {@link EDITOR_TAG_DEFS}
  * in registry order.
  */
-export const KNOWN_EDITOR_TAGS: readonly string[] = EDITOR_TAG_DEFS.map((d) => d.id)
+export const KNOWN_EDITOR_TAGS: readonly string[] = EDITOR_TAG_DEFS.map((d) => d.id);
 
 /**
  * Tank cross-section shape. Cylindrical tanks have a length; spherical ones are
  * defined by radius alone. Mirrors space-tape's `TankShape`.
  */
-export type TankShape = 'Cylindrical' | 'Spherical'
+export type TankShape = 'Cylindrical' | 'Spherical';
 
 /**
  * A fuel/oxidizer tank definition (a part may have several). Parametric — no 3D
@@ -454,16 +454,16 @@ export interface Tank {
    * `[XmlAttribute]`) in `PartTemplate.AddResolvedFeed`, and logs *"feeds from unknown
    * container '…'"* when it misses. `''` ⇒ emit no `Id` (an unaddressable tank).
    */
-  id: string
-  shape: TankShape
+  id: string;
+  shape: TankShape;
   /** Wall material id, e.g. "Aluminum.2014(s)". Blank omits <Material>. */
-  wallMaterialId: string
+  wallMaterialId: string;
   /** Cylinder length in meters (ignored/omitted for spherical tanks). */
-  lengthM: number
+  lengthM: number;
   /** Outer radius in meters. */
-  outerRadiusM: number
+  outerRadiusM: number;
   /** Wall thickness in millimeters. */
-  wallThicknessMm: number
+  wallThicknessMm: number;
   /**
    * `<RoleAffinity>` — which consumer kind this tank prefers to feed (KSA
    * 2026.7.5's replacement for the old pre-filled `<CombustionProcess Id/>`).
@@ -472,19 +472,19 @@ export interface Tank {
    * propellant mixture for their affinity. Defaults to `Engine` (the element is
    * omitted at the default); Core's RCS spheres declare `Thruster`.
    */
-  roleAffinity: TankRoleAffinity
+  roleAffinity: TankRoleAffinity;
   /**
    * `<LocationAsmb X Y Z>` inside the shape element — the tank's mass offset in the
    * assembly frame (`AsmbTransformTemplate.LocationAsmb`). Omitted at (0,0,0).
    */
-  locationAsmb: Vec3
+  locationAsmb: Vec3;
 }
 
 /**
  * KSA `ConsumerRole` [Flags] enum as its XmlSerializer text form (flags are
  * space-separated). `Engine` is the schema default.
  */
-export type TankRoleAffinity = 'None' | 'Engine' | 'Thruster' | 'Engine Thruster'
+export type TankRoleAffinity = 'None' | 'Engine' | 'Thruster' | 'Engine Thruster';
 
 /**
  * Battery storage (multiple allowed). Serialized as <Battery><MaximumCapacity J/>.
@@ -494,7 +494,7 @@ export type TankRoleAffinity = 'None' | 'Engine' | 'Thruster' | 'Engine Thruster
  * (a 500 J cell is 0.139 Wh, which the game itself renders as "0.14 Wh").
  */
 export interface Battery {
-  capacityWh: number
+  capacityWh: number;
 }
 
 /**
@@ -503,7 +503,7 @@ export interface Battery {
  * generator produces continuously, regardless of orientation or sun exposure.
  */
 export interface Generator {
-  outputWatts: number
+  outputWatts: number;
 }
 
 /**
@@ -513,8 +513,8 @@ export interface Generator {
  * so imported built-in panels keep facing the right way.
  */
 export interface SolarPanel {
-  outputWatts: number
-  transform: Transform
+  outputWatts: number;
+  transform: Transform;
 }
 
 /**
@@ -536,11 +536,11 @@ export interface SolarPanel {
  * `analysis/HOW_LIGHT_PARTS_WORK.md`.
  */
 export interface PowerConsumer {
-  consumedWatts: number
+  consumedWatts: number;
   /** `LightSwitch` — makes this consumer a flight-toggleable light switch. */
-  lightSwitch: boolean
+  lightSwitch: boolean;
   /** `LightIsActive` — initial on state when {@link lightSwitch} is set. */
-  lightIsActive: boolean
+  lightIsActive: boolean;
 }
 
 /**
@@ -549,13 +549,13 @@ export interface PowerConsumer {
  * cone `Spot`. A Spot is aimed by its {@link PartLight.rotation} and adds the
  * inner/outer cone angles.
  */
-export type LightType = 'Spot' | 'Point'
+export type LightType = 'Spot' | 'Point';
 
 /** Decoupler bound to a connector. Serialized as <Decoupler ConnectorId Force/>. */
 export interface Decoupler {
-  connectorId: string
+  connectorId: string;
   /** Separation force in newtons. */
-  force: number
+  force: number;
 }
 
 /**
@@ -563,16 +563,16 @@ export interface Decoupler {
  * <DockingPort><ConnectorId Value/><LatchingKineticEnergy J/><PushoffImpulse Ns/></DockingPort>.
  */
 export interface DockingPort {
-  connectorId: string
+  connectorId: string;
   /** Magnetic latching kinetic-energy budget in joules (<LatchingKineticEnergy J/>; KSA default 50). */
-  latchingKineticEnergyJ: number
+  latchingKineticEnergyJ: number;
   /** Undock push-off impulse in newton-seconds (<PushoffImpulse Ns/>; KSA default 5000). */
-  pushoffImpulseNs: number
+  pushoffImpulseNs: number;
 }
 
 /** EVA hatch bound to a connector. Serialized as <EVADoor ConnectorId/>. */
 export interface EvaDoor {
-  connectorId: string
+  connectorId: string;
 }
 
 /**
@@ -604,20 +604,20 @@ export interface EvaDoor {
  */
 export type FeedSource =
   | {
-      kind: 'container'
+      kind: 'container';
       /** `<FeedsFrom Container>` — a `Components` entry `Id` (a `<Tank>`/`<SolidGrainSegment>`). */
-      containerId: string
+      containerId: string;
       /** `<FeedsFrom SubPart>` — placement instanceId owning the container; null ⇒ the owning template. */
-      subPartInstanceId: string | null
+      subPartInstanceId: string | null;
     }
   | { kind: 'connector'; connectorId: string }
-  | { kind: 'parent' }
+  | { kind: 'parent' };
 
 /** True when a feed source names a target KSA can resolve (drop invalid ones on export). */
 export function isFeedSourceValid(f: FeedSource): boolean {
-  if (f.kind === 'container') return f.containerId.trim().length > 0
-  if (f.kind === 'connector') return f.connectorId.trim().length > 0
-  return true
+  if (f.kind === 'container') return f.containerId.trim().length > 0;
+  if (f.kind === 'connector') return f.connectorId.trim().length > 0;
+  return true;
 }
 
 /**
@@ -629,7 +629,7 @@ export function isFeedSourceValid(f: FeedSource): boolean {
  * it demands `BulkFluid` across connectors that only carry `ServiceFluid` and gets
  * no propellant. Every Core RCS combustor declares `Service`.
  */
-export type PlumbingClass = 'Bulk' | 'Service'
+export type PlumbingClass = 'Bulk' | 'Service';
 
 /**
  * `<ConsumerFeedWiring>` on a `<PartGameData>` — how the Part that PLACES a reusable
@@ -640,19 +640,19 @@ export type PlumbingClass = 'Bulk' | 'Service'
  */
 export interface ConsumerFeedWiring {
   /** `<ConsumerFeedWiring Id>` — the consumer's TEMPLATE id (e.g. "ThrustChamber"). */
-  consumerId: string
+  consumerId: string;
   /**
    * `<ConsumerFeedWiring SubPartId>` — the placement instanceId carrying the consumer;
    * null ⇒ the root part. KSA prefers an instance-scoped entry and falls back to an
    * unscoped one (`ResolveConsumerFeeds`).
    */
-  subPartInstanceId: string | null
+  subPartInstanceId: string | null;
   /**
    * `<FeedsFrom>` children. MUST NOT contain `{ kind: 'parent' }` — KSA logs
    * *"ConsumerFeedWiring for X cannot itself defer to Parent"*. An entry that wires
    * zero feed points is likewise an error, so the serializer omits it.
    */
-  feeds: FeedSource[]
+  feeds: FeedSource[];
 }
 
 /**
@@ -671,9 +671,9 @@ export interface ConsumerFeedWiring {
  */
 
 /** The KSA default reaction — the most common Core propellant (LH2/LOX). */
-export const DEFAULT_REACTION_ID = 'Hydrolox'
+export const DEFAULT_REACTION_ID = 'Hydrolox';
 /** The O/F mixture ratio Core's Hydrolox engines run (also Hydrolox's `<DefaultMixtureRatio>`). */
-export const DEFAULT_MIXTURE_RATIO = 5.5
+export const DEFAULT_MIXTURE_RATIO = 5.5;
 
 /** KSA `ReactionCategory` (the `Category` attribute on every reaction element). */
 export type ReactionCategory =
@@ -681,19 +681,19 @@ export type ReactionCategory =
   | 'Hypergolic'
   | 'Monopropellant'
   | 'Solid'
-  | 'Thermal'
+  | 'Thermal';
 
 /** One entry of the static Core-reaction snapshot ({@link KNOWN_REACTIONS}). */
 export interface KnownReaction {
-  id: string
-  name: string
-  kind: 'Fixed' | 'Mixture'
-  category: ReactionCategory
+  id: string;
+  name: string;
+  kind: 'Fixed' | 'Mixture';
+  category: ReactionCategory;
   /** `<DefaultMixtureRatio>` (mixtures only). */
-  defaultMixtureRatio?: number
+  defaultMixtureRatio?: number;
   /** The mixture LUT's O/F row range — KSA clamps a combustor's ratio into it. */
-  ratioMin?: number
-  ratioMax?: number
+  ratioMin?: number;
+  ratioMax?: number;
 }
 
 /**
@@ -719,7 +719,7 @@ export const KNOWN_REACTIONS: readonly KnownReaction[] = [
   { id: 'HydrazineDecomposition', name: 'Hydrazine', kind: 'Fixed', category: 'Monopropellant' },
   { id: 'APCP', name: 'APCP', kind: 'Fixed', category: 'Solid' },
   { id: 'DoubleBase', name: 'Double-Base', kind: 'Fixed', category: 'Solid' },
-]
+];
 
 /** The 7 `<VolumetricExhaust>` plume templates shipped in Core (referenced by id; auto-scale to the nozzle). */
 export const VOLUMETRIC_EXHAUST_IDS: readonly string[] = [
@@ -730,7 +730,7 @@ export const VOLUMETRIC_EXHAUST_IDS: readonly string[] = [
   'EngineATurbine',
   'RCS',
   'MmuRcsVac',
-]
+];
 
 /**
  * The `<PlumeTrailTemplate>` ids shipped in Core (volumetric plume trails, referenced by
@@ -740,7 +740,7 @@ export const VOLUMETRIC_EXHAUST_IDS: readonly string[] = [
  * now assigns it ONLY to solid-motor nozzles ("Only use plume trails on SRBs", rev 4996)
  * — every liquid nozzle in Core carries none.
  */
-export const PLUME_TRAIL_IDS: readonly string[] = ['DefaultPlumeTrail']
+export const PLUME_TRAIL_IDS: readonly string[] = ['DefaultPlumeTrail'];
 
 /**
  * One `<ReactionPlume>` entry on a nozzle — the reaction-keyed exhaust FX bucket KSA
@@ -756,13 +756,13 @@ export const PLUME_TRAIL_IDS: readonly string[] = ['DefaultPlumeTrail']
  */
 export interface ReactionPlume {
   /** `<ReactionPlume Reaction>` — the reaction id this plume is keyed to; null ⇒ unkeyed. */
-  reactionId: string | null
+  reactionId: string | null;
   /** `<ReactionPlume Default>` — the fallback used when no keyed entry matches. */
-  isDefault: boolean
+  isDefault: boolean;
   /** `<VolumetricExhaust Id>` plume template (one of {@link VOLUMETRIC_EXHAUST_IDS}); null ⇒ none. */
-  volumetricExhaustId: string | null
+  volumetricExhaustId: string | null;
   /** `<PlumeTrail Id>` volumetric trail template (one of {@link PLUME_TRAIL_IDS}); null ⇒ none. */
-  plumeTrailId: string | null
+  plumeTrailId: string | null;
 }
 
 /**
@@ -770,7 +770,7 @@ export interface ReactionPlume {
  * lands on when no `Reaction`-keyed entry matches. Null when the nozzle has none.
  */
 export function defaultReactionPlume(plumes: readonly ReactionPlume[]): ReactionPlume | null {
-  return plumes.find((p) => p.isDefault) ?? null
+  return plumes.find((p) => p.isDefault) ?? null;
 }
 
 /**
@@ -787,24 +787,24 @@ export function withDefaultReactionPlume(
     isDefault: true,
     volumetricExhaustId: null,
     plumeTrailId: null,
-  }
-  const next: ReactionPlume = { ...current, ...patch }
-  const others = plumes.filter((p) => !p.isDefault)
-  if (!next.volumetricExhaustId && !next.plumeTrailId) return others
-  return [next, ...others]
+  };
+  const next: ReactionPlume = { ...current, ...patch };
+  const others = plumes.filter((p) => !p.isDefault);
+  if (!next.volumetricExhaustId && !next.plumeTrailId) return others;
+  return [next, ...others];
 }
 
 /** KSA's default engine sound behavior id (the `<SoundEvent SoundId>` Core engines use). */
-export const DEFAULT_ENGINE_SOUND_ID = 'DefaultEngineSoundBehavior'
+export const DEFAULT_ENGINE_SOUND_ID = 'DefaultEngineSoundBehavior';
 
 /** What a `<SoundEvent>` does when the nozzle activates. Mirrors KSA's RocketSoundAction. */
-export type RocketSoundAction = 'On' | 'Off' | 'None'
+export type RocketSoundAction = 'On' | 'Off' | 'None';
 
 /** A nozzle's engine-audio event. Serialized as <SoundEvent Action SoundId/>. */
 export interface RocketSoundEvent {
-  action: RocketSoundAction
+  action: RocketSoundAction;
   /** Sound behavior id, e.g. "DefaultEngineSoundBehavior". */
-  soundId: string
+  soundId: string;
 }
 
 /**
@@ -816,9 +816,9 @@ export interface RocketSoundEvent {
  */
 export interface SubPartIdRef {
   /** The target module's template id (the `<Core Id>` / `<Nozzle Id>` / `<RocketReference Id>`). */
-  id: string
+  id: string;
   /** Placement instanceId the module lives on; null/'' ⇒ the root part. */
-  subPartInstanceId: string | null
+  subPartInstanceId: string | null;
 }
 
 /**
@@ -828,7 +828,7 @@ export interface SubPartIdRef {
  */
 export interface Combustor {
   /** `<Combustor Id>`, targeted by a Rocket's `<Core Id>`, e.g. "ThrustChamber". */
-  id: string
+  id: string;
   /**
    * `<FeedsFrom>` — where this chamber draws propellant. **Required since KSA
    * 2026.7.9**: `RocketCoreTemplate.OnDataLoad` logs *"Rocket core X declares no
@@ -837,26 +837,26 @@ export interface Combustor {
    * single `{ kind: 'parent' }` and lets the placing Part's
    * {@link ConsumerFeedWiring} name the real container/connector.
    */
-  feeds: FeedSource[]
+  feeds: FeedSource[];
   /** `<Plumbing>` — which fluid network to draw through. `Bulk` is the schema default. */
-  plumbing: PlumbingClass
+  plumbing: PlumbingClass;
   /** `<Reaction Id>` — a Reaction id, e.g. "Hydrolox" / "MMH_NTO" / a custom FixedReaction. */
-  reactionId: string
+  reactionId: string;
   /**
    * `<MixtureRatio>` child of `<Reaction>` — the O/F mass ratio fed to the chamber.
    * REQUIRED by KSA when the reaction is a MixtureReaction (load throws without it);
    * meaningless for FixedReactions. null ⇒ omitted. KSA clamps it into the reaction
    * LUT's row range at resolve time (MixtureReaction.AtMixtureRatio).
    */
-  mixtureRatio: number | null
+  mixtureRatio: number | null;
   /** `<MaxPressure>` chamber pressure at full throttle. Stored SI (Pa); emitted as Bar. Default 5e6. */
-  maxPressurePa: number
+  maxPressurePa: number;
   /** `<ThermalEfficiency Value>` (0–1). Default 1. */
-  thermalEfficiency: number
+  thermalEfficiency: number;
   /** `<MinimumThrottle Value>` (clamped [0.01,1]). Default 1 ⇒ non-throttleable (on/off). */
-  minimumThrottle: number
+  minimumThrottle: number;
   /** `<MinimumPulseTime Seconds>` minimum firing duration; null ⇒ omit (KSA default 0.001 s). */
-  minimumPulseTimeS: number | null
+  minimumPulseTimeS: number | null;
 }
 
 /**
@@ -867,31 +867,31 @@ export interface Combustor {
  */
 export interface DeLavalNozzle {
   /** `<DeLavalNozzle Id>`, targeted by a Rocket's `<Nozzle Id>`, e.g. "Nozzle". */
-  id: string
+  id: string;
   /** `<ExitDiameter>` exit-plane diameter (m). Emitted as M, or Cm under 1 m. Default 1. */
-  exitDiameterM: number
+  exitDiameterM: number;
   /** `<FxExitDiameter>` visual plume width (m); null ⇒ uses {@link exitDiameterM}. VISUAL ONLY. */
-  fxExitDiameterM: number | null
+  fxExitDiameterM: number | null;
   /** `<AreaRatio Value>` exit/throat area ratio. Required (finite, > 0). */
-  areaRatio: number
+  areaRatio: number;
   /** `<FlowEfficiency Value>` (0–1) inlet pressure drop; primarily cuts thrust. Default 1. */
-  flowEfficiency: number
+  flowEfficiency: number;
   /** `<ExpansionEfficiency Value>` (0–1) stagnation drop; primarily cuts Isp. Default 1. */
-  expansionEfficiency: number
+  expansionEfficiency: number;
   /** `<ExhaustLocation X Y Z>` thrust application point (assembly frame). Default (0,0,0). */
-  exhaustLocation: Vec3
+  exhaustLocation: Vec3;
   /** `<ExhaustDirection X Y Z>` direction exhaust leaves (thrust acts along −this). Default (−1,0,0). */
-  exhaustDirection: Vec3
+  exhaustDirection: Vec3;
   /** `<FxExhaustLocation>` plume origin; null ⇒ uses {@link exhaustLocation}. */
-  fxExhaustLocation: Vec3 | null
+  fxExhaustLocation: Vec3 | null;
   /** `<FxExhaustDirection>` plume axis; null ⇒ uses {@link exhaustDirection}. */
-  fxExhaustDirection: Vec3 | null
+  fxExhaustDirection: Vec3 | null;
   /** `<ReactionPlume>` exhaust-FX entries, in document order. Empty ⇒ no plume. */
-  reactionPlumes: ReactionPlume[]
+  reactionPlumes: ReactionPlume[];
   /** `<ExhaustLight Value>` dynamic exhaust point light. Default true. */
-  exhaustLight: boolean
+  exhaustLight: boolean;
   /** `<SoundEvent>` engine audio, or null. */
-  sound: RocketSoundEvent | null
+  sound: RocketSoundEvent | null;
 }
 
 /**
@@ -900,15 +900,15 @@ export interface DeLavalNozzle {
  */
 export interface Rocket {
   /** `<Rocket Id>`, targeted by a controller's `<RocketReference Id>`, e.g. "Engine". */
-  id: string
+  id: string;
   /** `<Core Id [SubPartId]>` — the combustor. */
-  core: SubPartIdRef
+  core: SubPartIdRef;
   /** `<Nozzle Id [SubPartId]>` (≥1 needed for thrust), repeatable. */
-  nozzles: SubPartIdRef[]
+  nozzles: SubPartIdRef[];
 }
 
 /** Main engine (throttle + staging) vs RCS thruster (pulsed, control-mapped). */
-export type RocketControllerKind = 'engine' | 'thruster'
+export type RocketControllerKind = 'engine' | 'thruster';
 
 /**
  * Groups one-or-more {@link Rocket}s under a single command source. Serialized as
@@ -917,12 +917,12 @@ export type RocketControllerKind = 'engine' | 'thruster'
  */
 export interface RocketController {
   /** `<… Id>` controller / engine display id, e.g. "LR91-AJ-3". */
-  id: string
-  kind: RocketControllerKind
+  id: string;
+  kind: RocketControllerKind;
   /** `<RocketReference Id [SubPartId]>` — the rockets this controller drives. */
-  rocketRefs: SubPartIdRef[]
+  rocketRefs: SubPartIdRef[];
   /** Thruster only: `<ControlMap CSV>` 6-DOF axis flags; null ⇒ auto-computed from geometry. */
-  controlMapFlags: string[] | null
+  controlMapFlags: string[] | null;
 }
 
 /**
@@ -933,13 +933,13 @@ export interface RocketController {
  */
 export interface Gimbal {
   /** Placement instanceId this gimbal sits on (the `<SubPart Id>` wrapper). */
-  subPartInstanceId: string
+  subPartInstanceId: string;
   /** `<MaxAngleY Degrees>` max deflection about local Y. 0 ⇒ no Y actuation. */
-  maxAngleYDeg: number
+  maxAngleYDeg: number;
   /** `<MaxAngleZ Degrees>` max deflection about local Z. 0 ⇒ no Z actuation. */
-  maxAngleZDeg: number
+  maxAngleZDeg: number;
   /** `<ConstrainToCircle Value>` clamp combined Y/Z to a circle vs a square. Default true. */
-  constrainToCircle: boolean
+  constrainToCircle: boolean;
 }
 
 /**
@@ -960,28 +960,28 @@ export interface Gimbal {
  */
 export interface SolidMotor {
   /** `<SolidMotor Id>`, targeted by a Rocket's `<Core Id>`, e.g. "MotorCore". */
-  id: string
+  id: string;
   /**
    * `<Reaction Id>` — MUST resolve to a `Category="Solid"` FixedReaction with a burn-rate
    * law, else `SolidMotorTemplate.Create` throws *"Solid motor X requires a solid reaction"*.
    * Core ships `APCP` and `DoubleBase`.
    */
-  reactionId: string
+  reactionId: string;
   /** `<ThermalEfficiency Value>` (0–1). Default 1. */
-  thermalEfficiency: number
+  thermalEfficiency: number;
   /**
    * `<DefaultPressure>` chamber pressure. Stored SI (Pa); emitted as Bar. Default 7e6.
    * KSA throws when it is `<= reaction.MinimumBurnPressure` or `> reaction.MaxStablePressure`.
    */
-  defaultPressurePa: number
+  defaultPressurePa: number;
   /**
    * `<Grain Id>` — a `<GrainGeometry>` id (the burn-area-vs-depth profile, i.e. the
    * thrust curve shape). `''` ⇒ omit the element and take `GrainGeometryLibrary.Default`.
    * Moved from the segment XML to the motor XML in rev 5002.
    */
-  grainGeometryId: string
+  grainGeometryId: string;
   /** `<FeedsFrom>` feed points — see {@link Combustor.feeds}; a motor feeds from grain segments. */
-  feeds: FeedSource[]
+  feeds: FeedSource[];
 }
 
 /**
@@ -991,33 +991,33 @@ export interface SolidMotor {
  */
 export interface SolidMotorNozzle {
   /** `<SolidMotorNozzle Id>`, targeted by a Rocket's `<Nozzle Id>`, e.g. "Nozzle". */
-  id: string
+  id: string;
   /** `<ExitDiameter>` exit-plane diameter (m). Default 1. */
-  exitDiameterM: number
+  exitDiameterM: number;
   /** `<FxExitDiameter>` visual plume width (m); null ⇒ uses {@link exitDiameterM}. VISUAL ONLY. */
-  fxExitDiameterM: number | null
+  fxExitDiameterM: number | null;
   /** `<FlowEfficiency Value>` (0–1). Default 1. */
-  flowEfficiency: number
+  flowEfficiency: number;
   /** `<ExpansionEfficiency Value>` (0–1). Default 1. */
-  expansionEfficiency: number
+  expansionEfficiency: number;
   /** `<ExhaustLocation X Y Z>` thrust application point (assembly frame). Default (0,0,0). */
-  exhaustLocation: Vec3
+  exhaustLocation: Vec3;
   /** `<ExhaustDirection X Y Z>` direction exhaust leaves (thrust acts along −this). Default (−1,0,0). */
-  exhaustDirection: Vec3
+  exhaustDirection: Vec3;
   /** `<FxExhaustLocation>` plume origin; null ⇒ uses {@link exhaustLocation}. */
-  fxExhaustLocation: Vec3 | null
+  fxExhaustLocation: Vec3 | null;
   /** `<FxExhaustDirection>` plume axis; null ⇒ uses {@link exhaustDirection}. */
-  fxExhaustDirection: Vec3 | null
+  fxExhaustDirection: Vec3 | null;
   /**
    * `<ReactionPlume>` exhaust-FX entries, in document order. Empty ⇒ no plume. Core's
    * SRB nozzle carries two: an unkeyed `Default="true"` trail plus a `Reaction="DoubleBase"`
    * volumetric exhaust.
    */
-  reactionPlumes: ReactionPlume[]
+  reactionPlumes: ReactionPlume[];
   /** `<ExhaustLight Value>` dynamic exhaust point light. Default true. */
-  exhaustLight: boolean
+  exhaustLight: boolean;
   /** `<SoundEvent>` engine audio, or null. */
-  sound: RocketSoundEvent | null
+  sound: RocketSoundEvent | null;
 }
 
 /**
@@ -1029,17 +1029,17 @@ export interface SolidMotorNozzle {
  */
 export interface SolidGrainSegment {
   /** `<SolidGrainSegment Id>` — the feed container id, e.g. "Grain". */
-  id: string
+  id: string;
   /** `<Grain><Material Id>` propellant/casing material, e.g. "Steel.300(s)". Blank omits it. */
-  wallMaterialId: string
+  wallMaterialId: string;
   /** `<Grain><OuterRadius M>` casing outer radius in meters. */
-  outerRadiusM: number
+  outerRadiusM: number;
   /** `<Grain><WallThickness Mm>` casing wall thickness in millimeters. */
-  wallThicknessMm: number
+  wallThicknessMm: number;
   /** `<Grain><Length M>` segment length in meters. */
-  lengthM: number
+  lengthM: number;
   /** `<Grain><LocationAsmb X Y Z>` mass offset in the assembly frame. Omitted at (0,0,0). */
-  locationAsmb: Vec3
+  locationAsmb: Vec3;
 }
 
 /**
@@ -1054,7 +1054,7 @@ export const GRAIN_GEOMETRY_IDS: readonly string[] = [
   'Neutral',
   'Progressive',
   'Regressive',
-]
+];
 
 /** Default solid motor: APCP at 70 bar with a neutral star grain (matches Core's SRBs). */
 export function createSolidMotor(id: string): SolidMotor {
@@ -1065,7 +1065,7 @@ export function createSolidMotor(id: string): SolidMotor {
     defaultPressurePa: 7_000_000,
     grainGeometryId: 'Neutral',
     feeds: [],
-  }
+  };
 }
 
 /** Default solid nozzle: 1 m exit, Core's 0.95/0.98 efficiencies, firing along −X. */
@@ -1090,7 +1090,7 @@ export function createSolidMotorNozzle(id: string): SolidMotorNozzle {
     ],
     exhaustLight: true,
     sound: null,
-  }
+  };
 }
 
 /** Default grain segment: a 1 m long, 0.5 m radius steel case with a 6 mm wall. */
@@ -1102,7 +1102,7 @@ export function createSolidGrainSegment(id: string): SolidGrainSegment {
     wallThicknessMm: 6,
     lengthM: 1,
     locationAsmb: { x: 0, y: 0, z: 0 },
-  }
+  };
 }
 
 /**
@@ -1116,13 +1116,13 @@ export function createSolidGrainSegment(id: string): SolidGrainSegment {
  */
 export interface RawXmlNode {
   /** Element tag name, e.g. "Collider". */
-  tag: string
+  tag: string;
   /** Attributes as a name→value map, in source order. */
-  attrs: Record<string, string>
+  attrs: Record<string, string>;
   /** Child elements (recursive). Empty for a leaf element. */
-  children: RawXmlNode[]
+  children: RawXmlNode[];
   /** Trimmed text content — present only for a childless leaf that carries text. */
-  text?: string
+  text?: string;
 }
 
 /**
@@ -1133,9 +1133,9 @@ export interface RawXmlNode {
  */
 export interface PartGameData {
   /** In-game display name (PartGameData DisplayName attribute). Blank omits it. */
-  displayName: string
+  displayName: string;
   /** Mass override in kg, or null for the part's default mass. */
-  customMass: number | null
+  customMass: number | null;
   /**
    * Unmodeled children of the modeled `<CustomMass>` element (KSA's `CustomMassTemplate`
    * carries more than `<Mass Kg>`: `<MassSpecificInertia Ixx/Iyy/Izz>` plus the
@@ -1143,13 +1143,13 @@ export interface PartGameData {
    * `<CustomMass>` so importing a built-in part keeps its inertia. Meaningless (and
    * dropped) when {@link customMass} is null — KSA requires `Mass > 0` on a CustomMass.
    */
-  customMassExtras: RawXmlNode[]
+  customMassExtras: RawXmlNode[];
   /**
    * Part diameter in meters, serialized as <Diameter M/>. KSA's VAB part-picker
    * size-class filter (the `DiameterFilterlist` editor tags) — no physics effect.
    * null ⇒ no <Diameter> element (the part isn't size-filtered).
    */
-  diameterM: number | null
+  diameterM: number | null;
   /**
    * Additional `<Diameter M/>` size classes beyond {@link diameterM}. KSA 2026.7
    * made `<Diameter>` repeatable so adapter prefabs (interstage bridges, engine
@@ -1158,53 +1158,53 @@ export interface PartGameData {
    * round-tripped adapter keeps appearing under all its size-class filters. Empty
    * for the common single-diameter case.
    */
-  extraDiametersM: number[]
+  extraDiametersM: number[];
   /**
    * Command-capability marker, serialized as a bare <Control/>. When true the part
    * can pilot a vehicle (KSA `Vehicle.IsControllable`). KSA's ControlTemplate is an
    * empty marker with no fields, so this is a plain on/off flag.
    */
-  controllable: boolean
-  batteries: Battery[]
-  generators: Generator[]
-  solarPanels: SolarPanel[]
+  controllable: boolean;
+  batteries: Battery[];
+  generators: Generator[];
+  solarPanels: SolarPanel[];
   /**
    * The part's single power consumer / light switch, or null. KSA has exactly one
    * `Part.LightSwitch` slot, so flexo models at most one consumer per part — see
    * {@link PowerConsumer} and `analysis/HOW_LIGHT_PARTS_WORK.md`.
    */
-  powerConsumer: PowerConsumer | null
-  decoupler: Decoupler | null
-  dockingPort: DockingPort | null
-  evaDoor: EvaDoor | null
+  powerConsumer: PowerConsumer | null;
+  decoupler: Decoupler | null;
+  dockingPort: DockingPort | null;
+  evaDoor: EvaDoor | null;
   /** Engine controllers (what makes a Part fire). Reference rockets by id + SubPart instance. */
-  rocketControllers: RocketController[]
+  rocketControllers: RocketController[];
   /** Part-level rockets (e.g. a gas-generator stitching a root combustor to a SubPart nozzle). */
-  rockets: Rocket[]
+  rockets: Rocket[];
   /** Part-level combustors (e.g. a gas-generator chamber on the root part). */
-  combustors: Combustor[]
+  combustors: Combustor[];
   /** Part-level nozzles (uncommon — nozzles usually live on a SubPart). */
-  nozzles: DeLavalNozzle[]
+  nozzles: DeLavalNozzle[];
   /**
    * Part-level `<Tank>`s. Core authors its prefab tank data here rather than on the
    * SubPart, and since KSA 2026.7.9 a part-level tank is what an engine addresses with
    * `<FeedsFrom Container="…">` without a `SubPart=` scope.
    */
-  tanks: Tank[]
+  tanks: Tank[];
   /** Solid motor cases (the SRB analogue of {@link combustors}). */
-  solidMotors: SolidMotor[]
+  solidMotors: SolidMotor[];
   /** Solid-motor nozzles (the SRB analogue of {@link nozzles}). */
-  solidNozzles: SolidMotorNozzle[]
+  solidNozzles: SolidMotorNozzle[];
   /** Stackable solid propellant grain segments (the SRB analogue of {@link tanks}). */
-  solidGrainSegments: SolidGrainSegment[]
+  solidGrainSegments: SolidGrainSegment[];
   /** How this Part satisfies its placed SubParts' `<FeedsFrom Parent="true"/>` consumers. */
-  consumerFeedWiring: ConsumerFeedWiring[]
+  consumerFeedWiring: ConsumerFeedWiring[];
   /** Per-instance gimbal overlays (thrust-vectoring), keyed by placement instanceId. */
-  gimbals: Gimbal[]
+  gimbals: Gimbal[];
   /** Unmodeled `<PartGameData>` attributes (anything but `Id`/`DisplayName`), preserved verbatim. */
-  unknownAttrs: Record<string, string>
+  unknownAttrs: Record<string, string>;
   /** Unmodeled `<PartGameData>` child elements, preserved verbatim (see {@link RawXmlNode}). */
-  unknownChildren: RawXmlNode[]
+  unknownChildren: RawXmlNode[];
 }
 
 /**
@@ -1218,25 +1218,25 @@ export interface PartGameData {
  */
 export interface SubPartGameData {
   /** The SubPart template id this data belongs to, e.g. "CoreFuelTankA_Subpart_Skin2W1HB". */
-  subPartTemplateId: string
-  tanks: Tank[]
-  solarPanels: SolarPanel[]
+  subPartTemplateId: string;
+  tanks: Tank[];
+  solarPanels: SolarPanel[];
   /** Reusable thrust-chamber combustors that travel with this mesh. */
-  combustors: Combustor[]
+  combustors: Combustor[];
   /** Reusable nozzles that travel with this mesh. */
-  nozzles: DeLavalNozzle[]
+  nozzles: DeLavalNozzle[];
   /** Reusable `<Rocket>` bindings (core + nozzles) that travel with this mesh. */
-  rockets: Rocket[]
+  rockets: Rocket[];
   /** Reusable solid motor cases that travel with this mesh. */
-  solidMotors: SolidMotor[]
+  solidMotors: SolidMotor[];
   /** Reusable solid-motor nozzles that travel with this mesh. */
-  solidNozzles: SolidMotorNozzle[]
+  solidNozzles: SolidMotorNozzle[];
   /** Reusable solid propellant grain segments that travel with this mesh (a stackable SRB segment). */
-  solidGrainSegments: SolidGrainSegment[]
+  solidGrainSegments: SolidGrainSegment[];
   /** Unmodeled `<SubPartGameData>` attributes (anything but `Id` — e.g. Core's `DisplayName`), preserved verbatim. */
-  unknownAttrs: Record<string, string>
+  unknownAttrs: Record<string, string>;
   /** Unmodeled `<SubPartGameData>` child elements, preserved verbatim (see {@link RawXmlNode}). */
-  unknownChildren: RawXmlNode[]
+  unknownChildren: RawXmlNode[];
 }
 
 /** True when a SubPart's data is empty and the entry can be pruned. */
@@ -1252,7 +1252,7 @@ export function isSubPartGameDataEmpty(spd: SubPartGameData): boolean {
     spd.solidGrainSegments.length === 0 &&
     spd.unknownChildren.length === 0 &&
     Object.keys(spd.unknownAttrs).length === 0
-  )
+  );
 }
 
 /** Default tank: 2 m cylinder, 0.5 m radius, 2 mm aluminium wall (matches TankState). */
@@ -1266,12 +1266,12 @@ export function createTank(): Tank {
     wallThicknessMm: 2.0,
     roleAffinity: 'Engine',
     locationAsmb: { x: 0, y: 0, z: 0 },
-  }
+  };
 }
 
 /** Default solar panel: 50 W, facing its local axis (identity orientation). */
 export function createSolarPanel(): SolarPanel {
-  return { outputWatts: 50, transform: identityTransform() }
+  return { outputWatts: 50, transform: identityTransform() };
 }
 
 /**
@@ -1280,7 +1280,7 @@ export function createSolarPanel(): SolarPanel {
  * on; clear it for a plain always-on draw.
  */
 export function createPowerConsumer(): PowerConsumer {
-  return { consumedWatts: 60, lightSwitch: true, lightIsActive: false }
+  return { consumedWatts: 60, lightSwitch: true, lightIsActive: false };
 }
 
 /**
@@ -1301,7 +1301,7 @@ export function createPartLight(ownerTemplateId: string | null, id: string): Par
     outerAngleRad: Math.PI / 4,
     rayTracing: false,
     layerId: LIGHT_LAYER_ID,
-  }
+  };
 }
 
 /** An empty GameData block (no display name, default mass, no sub-items). */
@@ -1332,7 +1332,7 @@ export function createEmptyGameData(): PartGameData {
     gimbals: [],
     unknownAttrs: {},
     unknownChildren: [],
-  }
+  };
 }
 
 /** A fresh, empty per-SubPart-template GameData entry. */
@@ -1349,7 +1349,7 @@ export function createSubPartGameData(subPartTemplateId: string): SubPartGameDat
     solidGrainSegments: [],
     unknownAttrs: {},
     unknownChildren: [],
-  }
+  };
 }
 
 /** Default combustor: Hydrolox at its default O/F, 50 bar chamber, fully throttleable, no min-pulse. Mirrors CombustorTemplate. */
@@ -1366,7 +1366,7 @@ export function createCombustor(id: string): Combustor {
     // an empty list would make KSA log "declares no FeedsFrom feed points".
     feeds: [{ kind: 'parent' }],
     plumbing: 'Bulk',
-  }
+  };
 }
 
 /**
@@ -1389,7 +1389,7 @@ export function createNozzle(id: string): DeLavalNozzle {
     reactionPlumes: [],
     exhaustLight: true,
     sound: null,
-  }
+  };
 }
 
 /** A `<Rocket>` binding one core to N nozzles (defaults to the given core/nozzle ids on the same SubPart). */
@@ -1398,7 +1398,7 @@ export function createRocket(id: string, coreId = '', nozzleIds: string[] = []):
     id,
     core: { id: coreId, subPartInstanceId: null },
     nozzles: nozzleIds.map((nid) => ({ id: nid, subPartInstanceId: null })),
-  }
+  };
 }
 
 /** A controller (default: main engine) driving the given rocket ids. */
@@ -1412,20 +1412,20 @@ export function createRocketController(
     kind,
     rocketRefs: rocketIds.map((rid) => ({ id: rid, subPartInstanceId: null })),
     controlMapFlags: null,
-  }
+  };
 }
 
 /** A fixed (0/0) gimbal on a placement; raise the max angles to make it actuate. */
 export function createGimbal(subPartInstanceId: string): Gimbal {
-  return { subPartInstanceId, maxAngleYDeg: 0, maxAngleZDeg: 0, constrainToCircle: true }
+  return { subPartInstanceId, maxAngleYDeg: 0, maxAngleZDeg: 0, constrainToCircle: true };
 }
 
 /** One reactant in a custom reaction: a substance-phase id + its mixture mass share. */
 export interface ReactionReactantSpec {
   /** Substance phase id, e.g. "H2(l)" / "O2(l)". */
-  phaseId: string
+  phaseId: string;
   /** `<Reactant MassShare>` — the mixture-ratio numerator (normalized to fractions at load). */
-  massShare: number
+  massShare: number;
 }
 
 /**
@@ -1435,13 +1435,13 @@ export interface ReactionReactantSpec {
  */
 export interface ReactionLutRowSpec {
   /** ln(chamber pressure / Pa). */
-  lnPressure: number
+  lnPressure: number;
   /** Flame temperature (K). */
-  temperatureK: number
+  temperatureK: number;
   /** Ratio of specific heats γ. */
-  gamma: number
+  gamma: number;
   /** Mean molar mass of the combustion products (g/mol). */
-  molarMassGPerMol: number
+  molarMassGPerMol: number;
 }
 
 /**
@@ -1452,9 +1452,9 @@ export interface ReactionLutRowSpec {
  */
 export interface BurnRateLaw {
   /** `<BurnRate CoefficientMPerS>` — must be > 0. */
-  coefficientMPerS: number
+  coefficientMPerS: number;
   /** `<BurnRate Exponent>` — must be >= 0 and < 0.95. */
-  exponent: number
+  exponent: number;
 }
 
 /**
@@ -1469,23 +1469,23 @@ export interface BurnRateLaw {
  */
 export interface CustomReaction {
   /** Unique reaction id referenced by `<Reaction Id>`, e.g. "MyKerolox_2.6". */
-  id: string
+  id: string;
   /** Display name (`<Name Value>`), falling back to {@link id}. */
-  name: string
+  name: string;
   /** `Category` attribute (grouping; KSA's FixedReaction fallback is Monopropellant). */
-  category: ReactionCategory
+  category: ReactionCategory;
   /** Reactant mixture (≥1). */
-  reactants: ReactionReactantSpec[]
+  reactants: ReactionReactantSpec[];
   /** Pressure-indexed gas LUT (≥1 `<PressureCondition>` row). */
-  lut: ReactionLutRowSpec[]
+  lut: ReactionLutRowSpec[];
   /** `<BurnRate>` — REQUIRED when {@link category} is `Solid`; null otherwise. */
-  burnRate: BurnRateLaw | null
+  burnRate: BurnRateLaw | null;
   /** `<MinimumBurnPressure>` deflagration limit (Pa). Required for Solid, must be > 0. */
-  minimumBurnPressurePa: number | null
+  minimumBurnPressurePa: number | null;
   /** `<MaxStablePressure>` slope-break limit (Pa). Required for Solid, must be > {@link minimumBurnPressurePa}. */
-  maxStablePressurePa: number | null
+  maxStablePressurePa: number | null;
   /** `<ExhaustCondensedFraction Value>` condensed-phase exhaust mass fraction. Required for Solid, [0, 1). */
-  exhaustCondensedFraction: number | null
+  exhaustCondensedFraction: number | null;
 }
 
 /** A minimal valid custom reaction (one reactant, one LUT row) — a blank to edit. */
@@ -1502,7 +1502,7 @@ export function createCustomReaction(id: string, name: string): CustomReaction {
     minimumBurnPressurePa: null,
     maxStablePressurePa: null,
     exhaustCondensedFraction: null,
-  }
+  };
 }
 
 /**
@@ -1516,7 +1516,7 @@ export function createCustomReaction(id: string, name: string): CustomReaction {
  *   DoubleBase — a=0.0024 m/s, n=0.65, min 30 bar, max 100 bar, condensed 0
  */
 export function isCustomReactionExportable(r: CustomReaction): boolean {
-  if (r.category !== 'Solid') return true
+  if (r.category !== 'Solid') return true;
   return (
     r.burnRate != null &&
     r.burnRate.coefficientMPerS > 0 &&
@@ -1529,7 +1529,7 @@ export function isCustomReactionExportable(r: CustomReaction): boolean {
     r.exhaustCondensedFraction != null &&
     r.exhaustCondensedFraction >= 0 &&
     r.exhaustCondensedFraction < 1
-  )
+  );
 }
 
 /**
@@ -1542,26 +1542,26 @@ export function isCustomReactionExportable(r: CustomReaction): boolean {
  */
 
 /** Parametric primitive shape kinds offered by the mesh creator (v1). */
-export type PrimitiveKind = 'box' | 'cylinder' | 'sphere' | 'plane'
+export type PrimitiveKind = 'box' | 'cylinder' | 'sphere' | 'plane';
 
 export interface BoxParams {
-  width: number
-  height: number
-  depth: number
+  width: number;
+  height: number;
+  depth: number;
 }
 export interface CylinderParams {
-  radius: number
-  height: number
-  radialSegments: number
+  radius: number;
+  height: number;
+  radialSegments: number;
 }
 export interface SphereParams {
-  radius: number
+  radius: number;
   /** Vertical segments; horizontal = 2× this. */
-  segments: number
+  segments: number;
 }
 export interface PlaneParams {
-  width: number
-  height: number
+  width: number;
+  height: number;
 }
 
 /** A primitive shape + its parameters (framework-agnostic; built in three/primitives.ts). */
@@ -1569,7 +1569,7 @@ export type PrimitiveSpec =
   | { kind: 'box'; params: BoxParams }
   | { kind: 'cylinder'; params: CylinderParams }
   | { kind: 'sphere'; params: SphereParams }
-  | { kind: 'plane'; params: PlaneParams }
+  | { kind: 'plane'; params: PlaneParams };
 
 /**
  * Which PBR channel an uploaded image was authored for. Drives the encode params
@@ -1585,7 +1585,7 @@ export type TextureChannel =
   | 'roughness' // grayscale → packed into ORM green
   | 'metalness' // grayscale → packed into ORM blue
   | 'occlusion' // grayscale → packed into ORM red
-  | 'emissiveMask' // grayscale glow mask → <Emissive>
+  | 'emissiveMask'; // grayscale glow mask → <Emissive>
 
 /**
  * A user-uploaded texture. Carries a single image authored for one {@link channel};
@@ -1593,21 +1593,21 @@ export type TextureChannel =
  */
 export interface CustomTexture {
   /** Stable unique id (also the IndexedDB key), e.g. "tex_ab12cd". */
-  id: string
+  id: string;
   /** User-facing label, also the basis for the exported .ktx2 filename. */
-  name: string
+  name: string;
   /** Base level dimensions of the encoded texture (post-decode/resize). */
-  width: number
-  height: number
+  width: number;
+  height: number;
   /** The PBR channel this image is authored for (decides encode params + valid slots). */
-  channel: TextureChannel
+  channel: TextureChannel;
 }
 
 /** An sRGB color, 0..255 per channel. */
 export interface RgbColor {
-  r: number
-  g: number
-  b: number
+  r: number;
+  g: number;
+  b: number;
 }
 
 /**
@@ -1615,12 +1615,12 @@ export interface RgbColor {
  * sourced: a uniform value (exported as a solid texel — KSA's PbrMaterial has NO
  * scalar parameters, everything is a texture) or a grayscale {@link CustomTexture}.
  */
-export type ScalarChannel = { kind: 'value'; value: number } | { kind: 'map'; textureId: string }
+export type ScalarChannel = { kind: 'value'; value: number } | { kind: 'map'; textureId: string };
 
 /** How a {@link CustomMaterial}'s base color is sourced: a picked color or an image. */
 export type BaseColorChannel =
   | { kind: 'color'; color: RgbColor }
-  | { kind: 'map'; textureId: string }
+  | { kind: 'map'; textureId: string };
 
 /**
  * A tangent-space normal map channel. KSA has no usable per-material normal-strength
@@ -1628,9 +1628,9 @@ export type BaseColorChannel =
  * {@link strength} is baked into the map's RG values at encode time.
  */
 export interface NormalChannel {
-  textureId: string
+  textureId: string;
   /** Bump strength multiplier, baked into RG at encode. 1 = as authored. */
-  strength: number
+  strength: number;
 }
 
 /**
@@ -1642,20 +1642,20 @@ export interface NormalChannel {
  */
 export interface CustomMaterial {
   /** Stable unique id, e.g. "mat_ab12cd". */
-  id: string
+  id: string;
   /** User-facing label, also the basis for the exported material id. */
-  name: string
-  baseColor: BaseColorChannel
+  name: string;
+  baseColor: BaseColorChannel;
   /** 0 = dielectric, 1 = metal. KSA reads it from the ORM blue channel. */
-  metalness: ScalarChannel
+  metalness: ScalarChannel;
   /** 0 = mirror-smooth, 1 = fully rough. KSA reads it from the ORM green channel. */
-  roughness: ScalarChannel
+  roughness: ScalarChannel;
   /** Ambient occlusion map (ORM red). Absent = fully unoccluded (255). */
-  occlusion?: { textureId: string }
+  occlusion?: { textureId: string };
   /** Pre-packed AO/Rough/Metal image; when set it overrides the three channels above. */
-  ormPacked?: { textureId: string }
+  ormPacked?: { textureId: string };
   /** Tangent-space normal map. Absent = flat (the shared synthetic FlatNormal). */
-  normal?: NormalChannel
+  normal?: NormalChannel;
 }
 
 /** The neutral material: matches what an un-materialed custom mesh has always exported
@@ -1668,7 +1668,7 @@ export function createDefaultMaterial(id: string, name: string): CustomMaterial 
     baseColor: { kind: 'color', color: { r: 191, g: 196, b: 204 } },
     metalness: { kind: 'value', value: 0 },
     roughness: { kind: 'value', value: 0.5 },
-  }
+  };
 }
 
 /**
@@ -1678,14 +1678,14 @@ export function createDefaultMaterial(id: string, name: string): CustomMaterial 
  * counts exactly like the separate channels it overrides, mirroring the export.
  */
 export function materialTextureIds(mat: CustomMaterial): string[] {
-  const ids: string[] = []
-  if (mat.baseColor.kind === 'map') ids.push(mat.baseColor.textureId)
-  if (mat.metalness.kind === 'map') ids.push(mat.metalness.textureId)
-  if (mat.roughness.kind === 'map') ids.push(mat.roughness.textureId)
-  if (mat.occlusion) ids.push(mat.occlusion.textureId)
-  if (mat.ormPacked) ids.push(mat.ormPacked.textureId)
-  if (mat.normal) ids.push(mat.normal.textureId)
-  return [...new Set(ids)]
+  const ids: string[] = [];
+  if (mat.baseColor.kind === 'map') ids.push(mat.baseColor.textureId);
+  if (mat.metalness.kind === 'map') ids.push(mat.metalness.textureId);
+  if (mat.roughness.kind === 'map') ids.push(mat.roughness.textureId);
+  if (mat.occlusion) ids.push(mat.occlusion.textureId);
+  if (mat.ormPacked) ids.push(mat.ormPacked.textureId);
+  if (mat.normal) ids.push(mat.normal.textureId);
+  return [...new Set(ids)];
 }
 
 /**
@@ -1696,25 +1696,25 @@ export function materialTextureIds(mat: CustomMaterial): string[] {
  */
 export interface FaceTextureConfig {
   /** Id of the {@link CustomTexture} to use on this face (empty = untextured). */
-  textureId: string
+  textureId: string;
   /**
    * UV scale. { x: 1, y: 1 } = the whole image fills the face (default).
    * Values > 1 tile the image (e.g. 3 → 3×3 repeats, honoring {@link wrap});
    * values < 1 zoom into a sub-region (combine with {@link uvOffset} to pan).
    */
-  uvScale: { x: number; y: number }
+  uvScale: { x: number; y: number };
   /** UV offset (translation), used to pan the sampled region. { x: 0, y: 0 } = no offset (default). */
-  uvOffset: { x: number; y: number }
+  uvOffset: { x: number; y: number };
   /**
    * How the texture samples where UVs fall outside 0–1 (scale > 1, or an offset
    * that pushes past an edge): 'repeat' tiles, 'mirror' tiles flipped each tile
    * (seamless), 'clamp' stretches the edge pixels. Defaults to 'repeat' when absent.
    */
-  wrap?: TextureWrap
+  wrap?: TextureWrap;
 }
 
 /** UV wrap mode for a textured face — how samples outside the 0–1 range behave. */
-export type TextureWrap = 'repeat' | 'mirror' | 'clamp'
+export type TextureWrap = 'repeat' | 'mirror' | 'clamp';
 
 /**
  * A part-ified kitten submesh's geometry + material source. Present ONLY on a
@@ -1728,22 +1728,22 @@ export type TextureWrap = 'repeat' | 'mirror' | 'clamp'
  */
 export interface KittenMeshSource {
   /** Which kitten this submesh came from. */
-  kind: KittenKind
+  kind: KittenKind;
   /** Stable per-submesh-type token (e.g. 'suit'|'head'|'eye'|'helmet'|'visor'|'pack'|'packLabels'). Drives the bake cache + subPart naming. */
-  specKey: string
+  specKey: string;
   /** Diffuse .ktx2 subpath, e.g. "Textures/Characters/Kitten_EMU_A.ktx2" (sRGB). */
-  diffuse: string
+  diffuse: string;
   /** Tangent-space normal .ktx2 subpath (linear), if any. */
-  normal?: string
+  normal?: string;
   /** Packed AO/Rough/Metal .ktx2 subpath (linear), if any. */
-  aoRoughMetal?: string
+  aoRoughMetal?: string;
   /**
    * Glass-like transparency (the visor). Drives BOTH the translucent editor material
    * (see kittenBake `buildKittenMaterial`) AND the `<PartModelGlass>` export path (see
    * modExport `planKittenSubPart` → assetsXmlSerializer). A mesh with this set is
    * "glass-capable" and may carry a {@link CustomMesh.surface} mode + {@link GlassConfig}.
    */
-  transparent?: boolean
+  transparent?: boolean;
 }
 
 /**
@@ -1763,25 +1763,25 @@ export interface KittenMeshSource {
  */
 export interface ImportedMeshSource {
   /** Import batch id — IndexedDB key of the normalized geometry GLB (assetKeys.importGlb). */
-  importId: string
+  importId: string;
   /** Node/mesh name inside that GLB (== {@link CustomMesh.subPartId}). */
-  meshName: string
+  meshName: string;
   /** Provenance: the original file name, e.g. "rcs_pod.glb". Shown in the UI. */
-  sourceFile: string
+  sourceFile: string;
   /** Provenance: the glTF node/object name this SubPart was cut from. Also the re-import match key. */
-  sourceNode: string
+  sourceNode: string;
   /** Provenance: the glTF material name this SubPart was cut from. Also the re-import match key. */
-  sourceMaterial: string
+  sourceMaterial: string;
   /** Triangle count of the normalized geometry (budget warnings + the provenance block). */
-  triangles: number
+  triangles: number;
   /** Vertex count of the normalized geometry. */
-  vertices: number
+  vertices: number;
   /**
    * Export through KSA's translucent `<PartModelGlass>` path instead of `<PartModel>`
    * (offered when the glTF material used `alphaMode: BLEND`; opt-in, because KSA glass is a
    * fixed ~0.75-opacity, ~10%-tinted, non-glowing shader — see MeshGlassIndirect.frag).
    */
-  transparent?: boolean
+  transparent?: boolean;
 }
 
 /**
@@ -1790,13 +1790,13 @@ export interface ImportedMeshSource {
  *  - 'painted' — an RGBA glow bitmap authored in the in-browser paint tool (stored in IndexedDB
  *                under assetKeys.emissivePaint(meshId)); rgb = glow color, a = the GREYSCALE KEY.
  */
-export type EmissiveShape = 'whole' | 'painted'
+export type EmissiveShape = 'whole' | 'painted';
 
 /** One stop of a {@link GlowRamp}: an sRGB color pinned at a key position 0..1. */
 export interface GlowRampStop {
   /** Key position 0..1. Stops are kept sorted ascending; duplicates make a hard edge. */
-  at: number
-  color: RgbColor
+  at: number;
+  color: RgbColor;
 }
 
 /**
@@ -1811,7 +1811,7 @@ export interface GlowRampStop {
  */
 export interface GlowRamp {
   /** Ordered ascending by {@link GlowRampStop.at}; at least 2 stops. */
-  stops: GlowRampStop[]
+  stops: GlowRampStop[];
 }
 
 /**
@@ -1830,22 +1830,22 @@ export interface GlowRamp {
  * {@link strength} with a `<Light>` carrying {@link Light.color} — see §5.1 of the analysis.
  */
 export interface EmissiveConfig {
-  shape: EmissiveShape
+  shape: EmissiveShape;
   /** Glow color 0..255. The painter's brush color for 'painted'. Ignored when {@link ramp} is set. */
-  color: RgbColor
+  color: RgbColor;
   /**
    * Emissive mask scale 0..1 — the `<Emissive>` gray value KSA adds as white. Keep it moderate
    * (~0.2–0.4): 1.0 adds ≈1.63 linear white and swamps any color.
    */
-  strength: number
+  strength: number;
   /** How much of the base color the glow color replaces at full key, 0..1. */
-  coverage: number
+  coverage: number;
   /**
    * Optional color ramp keyed by the greyscale value, replacing the flat {@link color}. Only
    * meaningful for 'painted' (a 'whole' glow has one key everywhere, so a ramp would resolve to a
    * single color).
    */
-  ramp?: GlowRamp
+  ramp?: GlowRamp;
 }
 
 /**
@@ -1859,7 +1859,7 @@ export function createGlow(): EmissiveConfig {
     color: { r: 120, g: 220, b: 255 },
     strength: 0.3,
     coverage: 1,
-  }
+  };
 }
 
 /**
@@ -1870,9 +1870,9 @@ export function createGlow(): EmissiveConfig {
  */
 export interface GlassConfig {
   /** Glass tint color 0..255. */
-  tint: { r: number; g: number; b: number }
+  tint: { r: number; g: number; b: number };
   /** Editor-preview opacity 0..1 (default 0.45). In-game opacity is engine-fixed (~0.75). */
-  opacity?: number
+  opacity?: number;
 }
 
 /**
@@ -1883,7 +1883,7 @@ export interface GlassConfig {
  *  - 'glassGlow' — layered: a translucent glass shell + an inset opaque emissive layer behind it
  *                  (two SubParts on export; a single approximated material in the editor).
  */
-export type VisorSurface = 'glass' | 'glow' | 'glassGlow'
+export type VisorSurface = 'glass' | 'glow' | 'glassGlow';
 
 /**
  * A user-created custom SubPart — a primitive mesh + per-face textures, a part-ified
@@ -1895,27 +1895,27 @@ export type VisorSurface = 'glass' | 'glow' | 'glassGlow'
  */
 export interface CustomMesh {
   /** Stable unique id (IndexedDB key for the generated GLB), e.g. "mesh_ab12cd". */
-  id: string
+  id: string;
   /** User-facing label, also the basis for the SubPart/material names. */
-  name: string
+  name: string;
   /**
    * Stable SubPart template id (== GLB node name == Assets.xml SubPart Id). Decoupled
    * from {@link name}/project name so renames never break existing placements.
    */
-  subPartId: string
+  subPartId: string;
   /** The primitive shape + parameters. Absent for kitten ({@link kitten}) and imported ({@link imported}) meshes. */
-  primitive?: PrimitiveSpec
+  primitive?: PrimitiveSpec;
   /** Part-ified kitten submesh source. When set, {@link primitive} and {@link imported} are absent. */
-  kitten?: KittenMeshSource
+  kitten?: KittenMeshSource;
   /** Imported glTF/GLB mesh source. When set, {@link primitive} and {@link kitten} are absent. */
-  imported?: ImportedMeshSource
+  imported?: ImportedMeshSource;
   /**
    * Per-face texture + UV configuration. Keys are primitive-kind-specific face names
    * from PRIMITIVE_FACE_KEYS ('right'/'left'/… for box, 'side'/'top'/'bottom' for
    * cylinder, 'all' for sphere/plane). Absent keys → untextured face, default UVs.
    * Always empty ({}) for kitten submeshes (they carry their material in {@link kitten}).
    */
-  faceTextures: Partial<Record<string, FaceTextureConfig>>
+  faceTextures: Partial<Record<string, FaceTextureConfig>>;
   /**
    * The {@link CustomMaterial} for the whole mesh (base color / metal / rough / normal).
    * Absent ⇒ the legacy neutral look (flat gray, NeutralORM on export). A face's
@@ -1923,25 +1923,25 @@ export interface CustomMesh {
    * the scalar/normal channels always come from the material. Never set on kitten
    * submeshes (they carry their own full PBR set in {@link kitten}).
    */
-  materialId?: string
+  materialId?: string;
   /**
    * Optional per-mesh emissive glow. For a glass-capable visor it is the glow layer used when
    * {@link surface} ∈ {'glow','glassGlow'}. A 'painted' shape stores its RGBA bitmap in IndexedDB
    * under assetKeys.emissivePaint(id).
    */
-  emissive?: EmissiveConfig
+  emissive?: EmissiveConfig;
   /** Optional translucent-glass tint (visor); used when {@link surface} ∈ {'glass','glassGlow'}. */
-  glass?: GlassConfig
+  glass?: GlassConfig;
   /**
    * Surface mode for a glass-capable (visor) mesh — one whose {@link kitten} has `transparent`.
    * Ignored for non-transparent meshes (their glow is driven by {@link emissive} alone).
    * Undefined ⇒ 'glass'.
    */
-  surface?: VisorSurface
+  surface?: VisorSurface;
 }
 
 /** Which geometry source backs a {@link CustomMesh}. See {@link meshKind}. */
-export type CustomMeshKind = 'primitive' | 'kitten' | 'imported'
+export type CustomMeshKind = 'primitive' | 'kitten' | 'imported';
 
 /**
  * The discriminator for {@link CustomMesh}'s three mutually exclusive geometry sources.
@@ -1954,9 +1954,9 @@ export type CustomMeshKind = 'primitive' | 'kitten' | 'imported'
  * default and the only kind whose absence is recoverable (an empty PrimitiveSpec).
  */
 export function meshKind(m: CustomMesh): CustomMeshKind {
-  if (m.kitten) return 'kitten'
-  if (m.imported) return 'imported'
-  return 'primitive'
+  if (m.kitten) return 'kitten';
+  if (m.imported) return 'imported';
+  return 'primitive';
 }
 
 /**
@@ -1978,7 +1978,7 @@ export type AnimationMode =
   /** Deploy/Retract buttons (ShowDeployRetract="true"): binary stowed↔deployed. */
   | 'deployRetract'
   /** "Actuate" 0→1 slider (ShowDeployRetract absent): free manual positioning. */
-  | 'actuate'
+  | 'actuate';
 
 /**
  * A pivot frame the animation rotates/translates. SubParts in
@@ -1988,13 +1988,13 @@ export type AnimationMode =
  */
 export interface AnimationJoint {
   /** Stable unique id within the animation, e.g. "joint_ab12cd". */
-  id: string
+  id: string;
   /** User-facing label, e.g. "Hinge", "Hip", "Knee". */
-  name: string
+  name: string;
   /** Parent joint id for a chain, or null when posed directly in Part space. */
-  parentJointId: string | null
+  parentJointId: string | null;
   /** Instance ids of placements rigidly attached to this joint (become glb leaves). */
-  memberInstanceIds: string[]
+  memberInstanceIds: string[];
 }
 
 /**
@@ -2011,7 +2011,7 @@ export type EasingPreset =
   | 'easeInOutCubic'
   | 'easeInSine'
   | 'easeOutSine'
-  | 'easeInOutSine'
+  | 'easeInOutSine';
 
 /**
  * How a joint's pose interpolates across ONE keyframe segment. The canonical form is
@@ -2021,7 +2021,7 @@ export type EasingPreset =
  */
 export type EasingConfig =
   | { kind: 'preset'; preset: EasingPreset }
-  | { kind: 'cubicBezier'; x1: number; y1: number; x2: number; y2: number }
+  | { kind: 'cubicBezier'; x1: number; y1: number; x2: number; y2: number };
 
 /**
  * A snapshot of every joint's LOCAL frame (relative to its parent joint, or Part
@@ -2030,11 +2030,11 @@ export type EasingConfig =
  */
 export interface AnimationKeyframe {
   /** Stable unique id within the animation, e.g. "kf_ab12cd". */
-  id: string
+  id: string;
   /** Time in seconds (KSA: 1 s sim = 1 s timeline). The first keyframe is always 0. */
-  timeSec: number
+  timeSec: number;
   /** jointId → that joint's local frame at this time. Every joint has an entry. */
-  poses: Record<string, Transform>
+  poses: Record<string, Transform>;
   /**
    * Optional easing for each joint over the OUTGOING segment [this kf → next kf].
    * A missing jointId entry (or `linear`) means linear interpolation for that joint
@@ -2042,7 +2042,7 @@ export interface AnimationKeyframe {
    * Stored per-joint because keyframe times are global but joints animate in
    * different sub-windows — on one segment joint A may ease while joint B holds.
    */
-  easings?: Record<string, EasingConfig>
+  easings?: Record<string, EasingConfig>;
 }
 
 /**
@@ -2052,11 +2052,11 @@ export interface AnimationKeyframe {
  */
 export interface SolarTrackingSpec {
   /** Tracking rotation speed, degrees per second. */
-  degreesPerSecond: number
+  degreesPerSecond: number;
   /** Instance id of the SubPart that rotates to track the sun (the drive rotor). */
-  subPartInstanceId: string
+  subPartInstanceId: string;
   /** Instance ids excluded from the tracking rotation (e.g. the fixed housing). */
-  excludeInstanceIds: string[]
+  excludeInstanceIds: string[];
 }
 
 /**
@@ -2066,16 +2066,16 @@ export interface SolarTrackingSpec {
  */
 export interface PartAnimation {
   /** Stable unique id (basis for the module Id + glb filename), e.g. "anim_ab12cd". */
-  id: string
+  id: string;
   /** User-facing label, e.g. "Bay Doors", "Deploy". */
-  name: string
+  name: string;
   /** Full deploy time in seconds = KSA Duration (the max keyframe time). */
-  durationSec: number
-  mode: AnimationMode
+  durationSec: number;
+  mode: AnimationMode;
   /** The pose skeleton. Single-joint for doors/hinges; nested for chains. */
-  joints: AnimationJoint[]
+  joints: AnimationJoint[];
   /** Poses over time, sorted by timeSec; keyframes[0].timeSec === 0. */
-  keyframes: AnimationKeyframe[]
+  keyframes: AnimationKeyframe[];
   /**
    * Id of the keyframe whose composed pose equals each SubPart's static placement —
    * the "modeled rest" the in-editor preview and the GLB export anchor on
@@ -2086,9 +2086,9 @@ export interface PartAnimation {
    * (t=0 is the stowed start), so anchoring at t=0 would re-apply the whole deploy on
    * top of an already-deployed part. Flexo-internal only — never serialized to KSA.
    */
-  restKeyframeId?: string
+  restKeyframeId?: string;
   /** Optional sun-tracking extension, or null. */
-  solarTracking: SolarTrackingSpec | null
+  solarTracking: SolarTrackingSpec | null;
 }
 
 /**
@@ -2099,19 +2099,19 @@ export interface PartAnimation {
  */
 export interface CatalogAnimationModule {
   /** Module Id attribute (e.g. "SolarPanelAnimation"). */
-  moduleId: string
+  moduleId: string;
   /** Maps to {@link AnimationMode}: ShowDeployRetract="true" ⇒ deployRetract. */
-  showDeployRetract: boolean
+  showDeployRetract: boolean;
   /** Relative path to the animation GLB, e.g. "Animations/..._Anim.glb". */
-  glbPath: string
+  glbPath: string;
   /** `<KeyframeAnimation Id>` of the GLB (informational). */
-  glbId: string
+  glbId: string;
   /** Optional sun-tracking, with SubPart refs in ORIGINAL instance-id space. */
   solarTracking: {
-    degreesPerSecond: number
-    subPartOriginalId: string
-    excludeOriginalIds: string[]
-  } | null
+    degreesPerSecond: number;
+    subPartOriginalId: string;
+    excludeOriginalIds: string[];
+  } | null;
 }
 
 /** An identity (rest) transform — position 0, rotation 0, scale 1. */
@@ -2120,7 +2120,7 @@ export function identityTransform(): Transform {
     position: { x: 0, y: 0, z: 0 },
     rotation: { x: 0, y: 0, z: 0 },
     scale: { x: 1, y: 1, z: 1 },
-  }
+  };
 }
 
 /** A fresh, empty animation: one rest keyframe at t=0, no joints, 1 s actuate. */
@@ -2133,19 +2133,19 @@ export function createPartAnimation(id: string, name: string): PartAnimation {
     joints: [],
     keyframes: [{ id: `${id}_kf0`, timeSec: 0, poses: {} }],
     solarTracking: null,
-  }
+  };
 }
 
 /** The full Part being assembled in the editor. */
 export interface EditingPart {
   /** Part id used in the exported XML (must be unique), e.g. "fixme_part_id". */
-  partId: string
+  partId: string;
   /** Editor tags emitted as <EditorTag Value="..."/> on the <PartGameData>. */
-  editorTags: string[]
+  editorTags: string[];
   /** Optional popup-only GameData (display name, mass, power, coupling). */
-  gameData: PartGameData
+  gameData: PartGameData;
   /** Per-SubPart-template GameData (tanks). Keyed by subPartTemplateId. */
-  subPartGameData: SubPartGameData[]
+  subPartGameData: SubPartGameData[];
   /**
    * Per-SubPart-template `<Internal>` (interior-only) flag, keyed by `subPartTemplateId`.
    * ABSENT ⇒ inherit the template's own value: a built-in's catalogued `<Internal>`
@@ -2155,31 +2155,31 @@ export interface EditingPart {
    * per-placement one — setting it affects every placement of that template (same rule as a
    * SubPart-owned {@link PartCollider}). See docs/iva-seats.md.
    */
-  internalFlags: Record<string, boolean>
+  internalFlags: Record<string, boolean>;
   /** Editor-only layers; array order is the display order. Always includes Default. */
-  layers: Layer[]
+  layers: Layer[];
   /** All placed SubPart instances. */
-  placements: SubPartPlacement[]
+  placements: SubPartPlacement[];
   /** All connector attachment points. */
-  connectors: Connector[]
+  connectors: Connector[];
   /** The Part's collision volume — analytic primitives grouped by owner on export. */
-  colliders: PartCollider[]
+  colliders: PartCollider[];
   /** The Part's IVA camera vantage points, in cycle order (index 0 is the default seat). */
-  ivaSeats: IvaSeat[]
+  ivaSeats: IvaSeat[];
   /** The Part's cast lights — normalised out of GameData, grouped by owner on export. */
-  lights: PartLight[]
+  lights: PartLight[];
   /** Editor-only kitten visual aides (never serialized to export). */
-  kittens: KittenInstance[]
+  kittens: KittenInstance[];
   /** User-uploaded textures (descriptors only; binaries in IndexedDB). */
-  customTextures: CustomTexture[]
+  customTextures: CustomTexture[];
   /** User-authored reusable PBR materials (pure descriptors; see {@link CustomMaterial}). */
-  customMaterials: CustomMaterial[]
+  customMaterials: CustomMaterial[];
   /** User-created primitive meshes / custom SubPart templates. */
-  customMeshes: CustomMesh[]
+  customMeshes: CustomMesh[];
   /** User-authored keyframe animations (KeyframeAnimationModule + Animations/*.glb). */
-  animations: PartAnimation[]
+  animations: PartAnimation[];
   /** User-authored reactions (custom propellants), exported as <FixedReaction>. */
-  customReactions: CustomReaction[]
+  customReactions: CustomReaction[];
 }
 
 export function createEmptyPart(): EditingPart {
@@ -2201,5 +2201,5 @@ export function createEmptyPart(): EditingPart {
     customMeshes: [],
     animations: [],
     customReactions: [],
-  }
+  };
 }

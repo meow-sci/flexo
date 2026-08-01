@@ -8,9 +8,9 @@ import {
   type TextProps,
   type FieldErrorProps,
   type GroupProps,
-} from 'react-aria-components'
-import { tv } from 'tailwind-variants'
-import { cn, composeTw, focusRing } from './styles'
+} from 'react-aria-components';
+import { tv } from 'tailwind-variants';
+import { cn, composeTw, focusRing } from './styles';
 
 /** Standalone numeric/text input surface, shared by TextField/NumberField. */
 export const inputStyles = tv({
@@ -22,20 +22,20 @@ export const inputStyles = tv({
     },
   },
   defaultVariants: { size: 'md' },
-})
+});
 
 /** Bordered container used to group an input with adjacent buttons (steppers). */
 export const fieldGroup = tv({
   extend: focusRing,
   base: 'flex items-center overflow-hidden rounded-md border border-border bg-panel-sunken transition-colors hover:border-border-strong focus-within:border-accent',
-})
+});
 
 export function Label({ className, ...props }: LabelProps) {
-  return <AriaLabel {...props} className={cn('text-xs font-medium text-fg-muted', className)} />
+  return <AriaLabel {...props} className={cn('text-xs font-medium text-fg-muted', className)} />;
 }
 
 export function Description({ className, ...props }: TextProps) {
-  return <Text {...props} slot="description" className={cn('text-xs text-fg-subtle', className)} />
+  return <Text {...props} slot="description" className={cn('text-xs text-fg-subtle', className)} />;
 }
 
 export function FieldError({ className, ...props }: FieldErrorProps) {
@@ -44,7 +44,7 @@ export function FieldError({ className, ...props }: FieldErrorProps) {
       {...props}
       className={composeRenderProps(className, (cls) => cn('text-xs text-danger', cls))}
     />
-  )
+  );
 }
 
 export function FieldGroup({ className, ...props }: GroupProps) {
@@ -55,7 +55,7 @@ export function FieldGroup({ className, ...props }: GroupProps) {
         fieldGroup({ ...renderProps, className: cls }),
       )}
     />
-  )
+  );
 }
 
 /** Small uppercase grouping heading used inside panels/popovers. */
@@ -65,7 +65,7 @@ export function SectionTitle({ className, ...props }: React.HTMLAttributes<HTMLD
       {...props}
       className={cn('text-xs font-semibold uppercase tracking-wide text-fg-subtle', className)}
     />
-  )
+  );
 }
 
-export { composeTw }
+export { composeTw };

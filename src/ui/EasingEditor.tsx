@@ -1,7 +1,12 @@
-import { useRef } from 'react'
-import { Select, ListBoxItem } from './kit'
-import { controlPointsOf, evalBezierPoints, EASING_PRESETS, type BezierPoints } from '../ksa/easing'
-import type { EasingConfig, EasingPreset } from '../ksa/types'
+import { useRef } from 'react';
+import { Select, ListBoxItem } from './kit';
+import {
+  controlPointsOf,
+  evalBezierPoints,
+  EASING_PRESETS,
+  type BezierPoints,
+} from '../ksa/easing';
+import type { EasingConfig, EasingPreset } from '../ksa/types';
 
 /**
  * Authoring widget for one keyframe-segment's easing: a preset dropdown plus a
@@ -22,7 +27,7 @@ const PRESET_ORDER: EasingPreset[] = [
   'easeInSine',
   'easeOutSine',
   'easeInOutSine',
-]
+];
 
 const PRESET_LABELS: Record<EasingPreset, string> = {
   linear: 'Linear',
@@ -35,80 +40,80 @@ const PRESET_LABELS: Record<EasingPreset, string> = {
   easeInSine: 'Ease In · Sine',
   easeOutSine: 'Ease Out · Sine',
   easeInOutSine: 'Ease In-Out · Sine',
-}
+};
 
 /** The preset whose control points match `pts` (within ε), or null for a custom curve. */
 function matchingPreset(pts: BezierPoints): EasingPreset | null {
   for (const name of PRESET_ORDER) {
-    const p = EASING_PRESETS[name]
-    if (pts.every((v, i) => Math.abs(v - p[i]) < 1e-4)) return name
+    const p = EASING_PRESETS[name];
+    if (pts.every((v, i) => Math.abs(v - p[i]) < 1e-4)) return name;
   }
-  return null
+  return null;
 }
 
 // Unit square → SVG user units. Curve (0,0) is bottom-left, (1,1) top-right.
-const S = 100
-const toSvg = (cx: number, cy: number) => ({ x: cx * S, y: (1 - cy) * S })
+const S = 100;
+const toSvg = (cx: number, cy: number) => ({ x: cx * S, y: (1 - cy) * S });
 
 export function EasingEditor({
   value,
   onChange,
   onEditStart,
 }: {
-  value: EasingConfig | undefined
+  value: EasingConfig | undefined;
   /** Streamed on every preset pick / handle drag. */
-  onChange: (cfg: EasingConfig) => void
+  onChange: (cfg: EasingConfig) => void;
   /** Called once at the start of a drag / preset change (push undo here). */
-  onEditStart?: () => void
+  onEditStart?: () => void;
 }) {
-  const svgRef = useRef<SVGSVGElement>(null)
-  const dragging = useRef<0 | 1 | null>(null)
-  const points = controlPointsOf(value)
-  const [x1, y1, x2, y2] = points
-  const selectedKey = matchingPreset(points) ?? 'custom'
+  const svgRef = useRef<SVGSVGElement>(null);
+  const dragging = useRef<0 | 1 | null>(null);
+  const points = controlPointsOf(value);
+  const [x1, y1, x2, y2] = points;
+  const selectedKey = matchingPreset(points) ?? 'custom';
 
   const curvePath = (() => {
-    const N = 40
-    let d = ''
+    const N = 40;
+    let d = '';
     for (let i = 0; i <= N; i++) {
-      const cx = i / N
-      const { x, y } = toSvg(cx, evalBezierPoints(points, cx))
-      d += `${i === 0 ? 'M' : 'L'}${x.toFixed(2)} ${y.toFixed(2)} `
+      const cx = i / N;
+      const { x, y } = toSvg(cx, evalBezierPoints(points, cx));
+      d += `${i === 0 ? 'M' : 'L'}${x.toFixed(2)} ${y.toFixed(2)} `;
     }
-    return d
-  })()
+    return d;
+  })();
 
   const clientToCurve = (clientX: number, clientY: number): { x: number; y: number } | null => {
-    const svg = svgRef.current
-    const ctm = svg?.getScreenCTM()
-    if (!svg || !ctm) return null
-    const local = new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse())
-    return { x: local.x / S, y: 1 - local.y / S }
-  }
+    const svg = svgRef.current;
+    const ctm = svg?.getScreenCTM();
+    if (!svg || !ctm) return null;
+    const local = new DOMPoint(clientX, clientY).matrixTransform(ctm.inverse());
+    return { x: local.x / S, y: 1 - local.y / S };
+  };
 
   const onHandleDown = (handle: 0 | 1) => (e: React.PointerEvent) => {
-    e.preventDefault()
-    ;(e.target as Element).setPointerCapture(e.pointerId)
-    dragging.current = handle
-    onEditStart?.()
-  }
+    e.preventDefault();
+    (e.target as Element).setPointerCapture(e.pointerId);
+    dragging.current = handle;
+    onEditStart?.();
+  };
   const onPointerMove = (e: React.PointerEvent) => {
-    if (dragging.current === null) return
-    const c = clientToCurve(e.clientX, e.clientY)
-    if (!c) return
-    const cx = Math.min(1, Math.max(0, c.x)) // x clamped: time must stay monotonic
-    const cy = Math.min(1.5, Math.max(-0.5, c.y)) // y free (overshoot), bounded for sanity
-    const next: BezierPoints = dragging.current === 0 ? [cx, cy, x2, y2] : [x1, y1, cx, cy]
-    onChange({ kind: 'cubicBezier', x1: next[0], y1: next[1], x2: next[2], y2: next[3] })
-  }
+    if (dragging.current === null) return;
+    const c = clientToCurve(e.clientX, e.clientY);
+    if (!c) return;
+    const cx = Math.min(1, Math.max(0, c.x)); // x clamped: time must stay monotonic
+    const cy = Math.min(1.5, Math.max(-0.5, c.y)); // y free (overshoot), bounded for sanity
+    const next: BezierPoints = dragging.current === 0 ? [cx, cy, x2, y2] : [x1, y1, cx, cy];
+    onChange({ kind: 'cubicBezier', x1: next[0], y1: next[1], x2: next[2], y2: next[3] });
+  };
   const onPointerUp = () => {
-    dragging.current = null
-  }
+    dragging.current = null;
+  };
 
-  const h1 = toSvg(x1, y1)
-  const h2 = toSvg(x2, y2)
-  const c0 = toSvg(0, 0)
-  const c1 = toSvg(1, 1)
+  const h1 = toSvg(x1, y1);
+  const h2 = toSvg(x2, y2);
+  const c0 = toSvg(0, 0);
+  const c1 = toSvg(1, 1);
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -117,8 +122,8 @@ export function EasingEditor({
         aria-label="Easing preset"
         value={selectedKey}
         onChange={(k) => {
-          onEditStart?.()
-          onChange({ kind: 'preset', preset: k as EasingPreset })
+          onEditStart?.();
+          onChange({ kind: 'preset', preset: k as EasingPreset });
         }}
       >
         {PRESET_ORDER.map((p) => (
@@ -196,5 +201,5 @@ export function EasingEditor({
         ))}
       </svg>
     </div>
-  )
+  );
 }

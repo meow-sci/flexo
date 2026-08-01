@@ -1,10 +1,10 @@
-import { useStore } from '@nanostores/react'
-import { Button, ToggleButton, ToggleButtonGroup, SectionTitle } from './kit'
-import { FloatingEditorPanel } from './FloatingEditorPanel'
-import { PreciseNumberInput } from './PreciseNumberInput'
-import { SliderRow } from './SliderRow'
-import { Vec3Field } from './Vec3Field'
-import { ColorAlphaField } from './ColorAlphaField'
+import { useStore } from '@nanostores/react';
+import { Button, ToggleButton, ToggleButtonGroup, SectionTitle } from './kit';
+import { FloatingEditorPanel } from './FloatingEditorPanel';
+import { PreciseNumberInput } from './PreciseNumberInput';
+import { SliderRow } from './SliderRow';
+import { Vec3Field } from './Vec3Field';
+import { ColorAlphaField } from './ColorAlphaField';
 import {
   $activeEndpoint,
   $activeMeasurementId,
@@ -18,39 +18,39 @@ import {
   updateMeasurement,
   type AxisLock,
   type LineMeasurement,
-} from '../state/measurementStore'
-import { pushUndo } from '../state/editorStore'
-import { distance } from '../measure/bounds'
-import { formatLength } from '../measure/format'
-import type { Vec3 } from '../ksa/types'
+} from '../state/measurementStore';
+import { pushUndo } from '../state/editorStore';
+import { distance } from '../measure/bounds';
+import { formatLength } from '../measure/format';
+import type { Vec3 } from '../ksa/types';
 
 const AXES: { id: AxisLock; label: string }[] = [
   { id: 'none', label: 'Free' },
   { id: 'x', label: 'X' },
   { id: 'y', label: 'Y' },
   { id: 'z', label: 'Z' },
-]
+];
 
 /** Sets endpoint b so the segment keeps its direction but has the given length. */
 function withLength(m: LineMeasurement, length: number): Vec3 {
   const dir =
     m.axisLock === 'none'
       ? unit({ x: m.b.x - m.a.x, y: m.b.y - m.a.y, z: m.b.z - m.a.z })
-      : axisDir(m)
-  return { x: m.a.x + dir.x * length, y: m.a.y + dir.y * length, z: m.a.z + dir.z * length }
+      : axisDir(m);
+  return { x: m.a.x + dir.x * length, y: m.a.y + dir.y * length, z: m.a.z + dir.z * length };
 }
 
 function unit(v: Vec3): Vec3 {
-  const len = Math.hypot(v.x, v.y, v.z)
-  return len < 1e-9 ? { x: 1, y: 0, z: 0 } : { x: v.x / len, y: v.y / len, z: v.z / len }
+  const len = Math.hypot(v.x, v.y, v.z);
+  return len < 1e-9 ? { x: 1, y: 0, z: 0 } : { x: v.x / len, y: v.y / len, z: v.z / len };
 }
 
 /** Unit vector along the locked axis, preserving the current sign of b−a. */
 function axisDir(m: LineMeasurement): Vec3 {
-  const sign = (d: number) => (d < 0 ? -1 : 1)
-  if (m.axisLock === 'x') return { x: sign(m.b.x - m.a.x), y: 0, z: 0 }
-  if (m.axisLock === 'y') return { x: 0, y: sign(m.b.y - m.a.y), z: 0 }
-  return { x: 0, y: 0, z: sign(m.b.z - m.a.z) }
+  const sign = (d: number) => (d < 0 ? -1 : 1);
+  if (m.axisLock === 'x') return { x: sign(m.b.x - m.a.x), y: 0, z: 0 };
+  if (m.axisLock === 'y') return { x: 0, y: sign(m.b.y - m.a.y), z: 0 };
+  return { x: 0, y: 0, z: sign(m.b.z - m.a.z) };
 }
 
 /**
@@ -59,31 +59,31 @@ function axisDir(m: LineMeasurement): Vec3 {
  * the same data shown read-only (no inputs, no gizmo — driven by the layer).
  */
 export function MeasurementEditor() {
-  const activeId = useStore($activeMeasurementId)
-  const measurements = useStore($measurements)
-  const endpoint = useStore($activeEndpoint)
-  const { unit: displayUnit } = useStore($measurementSettings)
+  const activeId = useStore($activeMeasurementId);
+  const measurements = useStore($measurements);
+  const endpoint = useStore($activeEndpoint);
+  const { unit: displayUnit } = useStore($measurementSettings);
 
-  const m = activeId ? measurements.find((x) => x.id === activeId) : undefined
-  if (!m) return null
+  const m = activeId ? measurements.find((x) => x.id === activeId) : undefined;
+  if (!m) return null;
 
-  const length = distance(m.a, m.b)
+  const length = distance(m.a, m.b);
   const setEndpoint = (key: 'a' | 'b', axis: keyof Vec3, value: number) => {
-    const next: Vec3 = { ...m[key], [axis]: value }
+    const next: Vec3 = { ...m[key], [axis]: value };
     if (key === 'a') {
       updateMeasurement(m.id, {
         a: m.axisLock === 'none' ? next : snappedToAxis(m.b, next, m.axisLock),
-      })
+      });
     } else {
       updateMeasurement(m.id, {
         b: m.axisLock === 'none' ? next : snappedToAxis(m.a, next, m.axisLock),
-      })
+      });
     }
-  }
+  };
 
-  const pushEndpoint = () => pushUndo('line endpoint')
-  const pushLength = () => pushUndo('line length')
-  const pushStyle = () => pushUndo('line style')
+  const pushEndpoint = () => pushUndo('line endpoint');
+  const pushLength = () => pushUndo('line length');
+  const pushStyle = () => pushUndo('line style');
 
   return (
     <FloatingEditorPanel
@@ -110,8 +110,8 @@ export function MeasurementEditor() {
               disallowEmptySelection
               selectedKeys={[endpoint]}
               onSelectionChange={(keys) => {
-                const next = [...keys][0]
-                if (next) setActiveEndpoint(next as 'a' | 'b')
+                const next = [...keys][0];
+                if (next) setActiveEndpoint(next as 'a' | 'b');
               }}
             >
               <ToggleButton id="a" size="sm" className="flex-1">
@@ -164,11 +164,11 @@ export function MeasurementEditor() {
               disallowEmptySelection
               selectedKeys={[m.axisLock]}
               onSelectionChange={(keys) => {
-                const next = [...keys][0] as AxisLock | undefined
-                if (!next) return
-                pushUndo('line axis lock')
-                const b = next === 'none' ? m.b : snappedToAxis(m.a, m.b, next)
-                updateMeasurement(m.id, { axisLock: next, b })
+                const next = [...keys][0] as AxisLock | undefined;
+                if (!next) return;
+                pushUndo('line axis lock');
+                const b = next === 'none' ? m.b : snappedToAxis(m.a, m.b, next);
+                updateMeasurement(m.id, { axisLock: next, b });
               }}
             >
               {AXES.map((a) => (
@@ -213,5 +213,5 @@ export function MeasurementEditor() {
         </div>
       )}
     </FloatingEditorPanel>
-  )
+  );
 }

@@ -3,8 +3,8 @@ import {
   SliderTrack,
   SliderThumb,
   type SliderProps,
-} from 'react-aria-components'
-import { composeTw } from './styles'
+} from 'react-aria-components';
+import { composeTw } from './styles';
 
 export function Slider<T extends number | number[]>({ className, ...props }: SliderProps<T>) {
   return (
@@ -22,5 +22,5 @@ export function Slider<T extends number | number[]>({ className, ...props }: Sli
         )}
       </SliderTrack>
     </AriaSlider>
-  )
+  );
 }

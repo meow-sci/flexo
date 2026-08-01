@@ -1,10 +1,10 @@
-import { useStore } from '@nanostores/react'
-import { Button, Switch, Select, ListBoxItem, TextField, SectionTitle } from './kit'
-import { PreciseNumberInput } from './PreciseNumberInput'
-import { Vec3Field } from './Vec3Field'
-import { DEG2RAD, RAD2DEG } from './format'
-import { hexToRgb01, rgb01ToHex } from './colorHex'
-import { $part, pushUndo } from '../state/editorStore'
+import { useStore } from '@nanostores/react';
+import { Button, Switch, Select, ListBoxItem, TextField, SectionTitle } from './kit';
+import { PreciseNumberInput } from './PreciseNumberInput';
+import { Vec3Field } from './Vec3Field';
+import { DEG2RAD, RAD2DEG } from './format';
+import { hexToRgb01, rgb01ToHex } from './colorHex';
+import { $part, pushUndo } from '../state/editorStore';
 import {
   addBattery,
   addGenerator,
@@ -49,7 +49,7 @@ import {
   setTankShape,
   updateLight,
   updateTank,
-} from '../state/editorStore'
+} from '../state/editorStore';
 import type {
   EditingPart,
   EulerXYZ,
@@ -59,7 +59,7 @@ import type {
   SolarPanel,
   Tank,
   TankShape,
-} from '../ksa/types'
+} from '../ksa/types';
 
 /**
  * The "popup-only" GameData editors used inside the Part Data dialog — every
@@ -72,7 +72,7 @@ import type {
  * and the mobile scroll sheet.
  */
 
-const RAD_LABEL = 'text-xs text-fg-subtle'
+const RAD_LABEL = 'text-xs text-fg-subtle';
 
 /** A label above a control (stacks cleanly on narrow/mobile widths). Shared with EngineSections. */
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -81,7 +81,7 @@ export function Field({ label, children }: { label: string; children: React.Reac
       <span className={RAD_LABEL}>{label}</span>
       {children}
     </label>
-  )
+  );
 }
 
 /** A removable card wrapping one list item's fields (tank, battery, …). Shared with EngineSections. */
@@ -90,9 +90,9 @@ export function ItemCard({
   onRemove,
   children,
 }: {
-  title: string
-  onRemove: () => void
-  children: React.ReactNode
+  title: string;
+  onRemove: () => void;
+  children: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border bg-panel-sunken p-2">
@@ -104,7 +104,7 @@ export function ItemCard({
       </div>
       {children}
     </div>
-  )
+  );
 }
 
 // --- Identity (display name) ---
@@ -121,7 +121,7 @@ export function IdentityFields({ gameData }: { gameData: PartGameData }) {
         placeholder="(uses Part Id)"
       />
     </Field>
-  )
+  );
 }
 
 // --- Size class (diameter) + command capability ---
@@ -133,7 +133,7 @@ export function IdentityFields({ gameData }: { gameData: PartGameData }) {
  * Both are optional; diameter toggles between absent (null) and a value.
  */
 export function SizeControlFields({ gameData }: { gameData: PartGameData }) {
-  const diameterEnabled = gameData.diameterM != null
+  const diameterEnabled = gameData.diameterM != null;
   return (
     <div className="flex flex-col gap-2">
       <Switch isSelected={diameterEnabled} onChange={setDiameterEnabled}>
@@ -154,13 +154,13 @@ export function SizeControlFields({ gameData }: { gameData: PartGameData }) {
         Command capable (controllable)
       </Switch>
     </div>
-  )
+  );
 }
 
 // --- Mass ---
 
 export function MassSection({ gameData }: { gameData: PartGameData }) {
-  const enabled = gameData.customMass != null
+  const enabled = gameData.customMass != null;
   return (
     <div className="flex flex-col gap-2">
       <Switch isSelected={enabled} onChange={setCustomMassEnabled}>
@@ -178,7 +178,7 @@ export function MassSection({ gameData }: { gameData: PartGameData }) {
         </Field>
       )}
     </div>
-  )
+  );
 }
 
 // --- Tanks (per SubPart template) ---
@@ -187,13 +187,13 @@ export function TanksSection({
   tanks,
   subPartTemplateId,
 }: {
-  tanks: Tank[]
+  tanks: Tank[];
   /**
    * The tank owner: a SubPart template id, or `null` for the `<PartGameData>` itself.
    * Part-level is where Core authors its prefab tank data, and the only level a
    * `<FeedsFrom Container>` can address without a `SubPart=` scope.
    */
-  subPartTemplateId: string | null
+  subPartTemplateId: string | null;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -266,7 +266,7 @@ export function TanksSection({
         + Tank
       </Button>
     </div>
-  )
+  );
 }
 
 // --- Lights (owned by one SubPart template) ---
@@ -283,10 +283,10 @@ export function TanksSection({
  * undo, while numeric/color fields focus-push a single undo step (streaming).
  */
 export function LightsSection({ subPartTemplateId }: { subPartTemplateId: string }) {
-  const part = useStore($part)
+  const part = useStore($part);
   const owned = part.lights
     .map((light, index) => ({ light, index }))
-    .filter(({ light }) => light.ownerTemplateId === subPartTemplateId)
+    .filter(({ light }) => light.ownerTemplateId === subPartTemplateId);
   return (
     <div className="flex flex-col gap-2">
       {owned.length > 0 && (
@@ -296,7 +296,7 @@ export function LightsSection({ subPartTemplateId }: { subPartTemplateId: string
         </span>
       )}
       {owned.map(({ light, index }, i) => {
-        const isSpot = light.type === 'Spot'
+        const isSpot = light.type === 'Spot';
         return (
           <ItemCard key={light.id} title={`Light ${i + 1}`} onRemove={() => removeLight(index)}>
             {/* Lights are first-class 3D entities: hand off to the workspace marker
@@ -306,8 +306,8 @@ export function LightsSection({ subPartTemplateId }: { subPartTemplateId: string
               variant="ghost"
               className="self-start"
               onPress={() => {
-                selectLight(index)
-                revealEntity('light', light.id)
+                selectLight(index);
+                revealEntity('light', light.id);
               }}
             >
               Select in 3D
@@ -412,13 +412,13 @@ export function LightsSection({ subPartTemplateId }: { subPartTemplateId: string
               Ray tracing (IVA only)
             </Switch>
           </ItemCard>
-        )
+        );
       })}
       <Button size="sm" onPress={() => addLight(subPartTemplateId)} className="self-start">
         + Light
       </Button>
     </div>
-  )
+  );
 }
 
 // --- Power (batteries / generators / consumers) ---
@@ -433,13 +433,13 @@ function PowerList({
   onChange,
   addLabel,
 }: {
-  label: string
-  unit: string
-  values: number[]
-  onAdd: () => void
-  onRemove: (i: number) => void
-  onChange: (i: number, n: number) => void
-  addLabel: string
+  label: string;
+  unit: string;
+  values: number[];
+  onAdd: () => void;
+  onRemove: (i: number) => void;
+  onChange: (i: number, n: number) => void;
+  addLabel: string;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -469,7 +469,7 @@ function PowerList({
         + {addLabel}
       </Button>
     </div>
-  )
+  );
 }
 
 /**
@@ -481,16 +481,16 @@ function PowerList({
  * when a switch controls nothing, or when lights exist with no switch (always on).
  */
 function PowerConsumerSection({ powerConsumer }: { powerConsumer: PowerConsumer | null }) {
-  const part = useStore($part)
-  const placed = new Set(part.placements.map((p) => p.subPartTemplateId))
+  const part = useStore($part);
+  const placed = new Set(part.placements.map((p) => p.subPartTemplateId));
   // A light counts only when it will actually exist in-game: part-level always, a
   // SubPart-owned one only while its owner template is placed at least once.
   const hasLights = part.lights.some(
     (l) => l.ownerTemplateId === null || placed.has(l.ownerTemplateId),
-  )
-  const hasGlow = part.customMeshes.some((m) => placed.has(m.subPartId) && m.emissive)
-  const switchControlsNothing = !!powerConsumer?.lightSwitch && !hasLights && !hasGlow
-  const lightsAlwaysOn = hasLights && !powerConsumer?.lightSwitch
+  );
+  const hasGlow = part.customMeshes.some((m) => placed.has(m.subPartId) && m.emissive);
+  const switchControlsNothing = !!powerConsumer?.lightSwitch && !hasLights && !hasGlow;
+  const lightsAlwaysOn = hasLights && !powerConsumer?.lightSwitch;
 
   return (
     <div className="flex flex-col gap-2">
@@ -536,7 +536,7 @@ function PowerConsumerSection({ powerConsumer }: { powerConsumer: PowerConsumer 
         </span>
       )}
     </div>
-  )
+  );
 }
 
 /**
@@ -551,11 +551,11 @@ export function SolarPanelsSection({
   onChangeOutput,
   onChangeRotation,
 }: {
-  solarPanels: SolarPanel[]
-  onAdd: () => void
-  onRemove: (i: number) => void
-  onChangeOutput: (i: number, watts: number) => void
-  onChangeRotation: (i: number, rotation: EulerXYZ) => void
+  solarPanels: SolarPanel[];
+  onAdd: () => void;
+  onRemove: (i: number) => void;
+  onChangeOutput: (i: number, watts: number) => void;
+  onChangeRotation: (i: number, rotation: EulerXYZ) => void;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -587,7 +587,7 @@ export function SolarPanelsSection({
         + Solar Panel
       </Button>
     </div>
-  )
+  );
 }
 
 export function PowerSection({ gameData }: { gameData: PartGameData }) {
@@ -620,7 +620,7 @@ export function PowerSection({ gameData }: { gameData: PartGameData }) {
       />
       <PowerConsumerSection powerConsumer={gameData.powerConsumer} />
     </div>
-  )
+  );
 }
 
 // --- Coupling (decoupler / docking port / EVA door) ---
@@ -631,11 +631,11 @@ function ConnectorSelect({
   value,
   onChange,
 }: {
-  connectorIds: string[]
-  value: string
-  onChange: (id: string) => void
+  connectorIds: string[];
+  value: string;
+  onChange: (id: string) => void;
 }) {
-  const options = value && !connectorIds.includes(value) ? [value, ...connectorIds] : connectorIds
+  const options = value && !connectorIds.includes(value) ? [value, ...connectorIds] : connectorIds;
   return (
     <Field label="Connector">
       {options.length === 0 ? (
@@ -656,12 +656,12 @@ function ConnectorSelect({
         </Select>
       )}
     </Field>
-  )
+  );
 }
 
 export function CouplingSection({ part }: { part: EditingPart }) {
-  const ids = part.connectors.map((c) => c.id)
-  const { decoupler, dockingPort, evaDoor } = part.gameData
+  const ids = part.connectors.map((c) => c.id);
+  const { decoupler, dockingPort, evaDoor } = part.gameData;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
@@ -734,5 +734,5 @@ export function CouplingSection({ part }: { part: EditingPart }) {
         )}
       </div>
     </div>
-  )
+  );
 }

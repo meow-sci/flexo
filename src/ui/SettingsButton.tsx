@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { Menu as MenuIcon } from 'lucide-react'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { Menu as MenuIcon } from 'lucide-react';
 import {
   MenuTrigger,
   Menu,
@@ -18,7 +18,7 @@ import {
   ToolbarButton,
   ConfirmDialog,
   Popover,
-} from './kit'
+} from './kit';
 import {
   $connectorSettings,
   $ivaSeatSettings,
@@ -30,27 +30,27 @@ import {
   setKittenTextureExport,
   setSelectionHighlight,
   setShowFpsCounter,
-} from '../state/settingsStore'
-import type { KittenTextureExportSettings } from '../state/settingsStore'
-import { openHelp } from '../state/helpStore'
-import { openAbout } from '../state/aboutStore'
-import { PreciseNumberInput } from './PreciseNumberInput'
-import { ScaleEverythingDialog } from './ScaleEverythingDialog'
+} from '../state/settingsStore';
+import type { KittenTextureExportSettings } from '../state/settingsStore';
+import { openHelp } from '../state/helpStore';
+import { openAbout } from '../state/aboutStore';
+import { PreciseNumberInput } from './PreciseNumberInput';
+import { ScaleEverythingDialog } from './ScaleEverythingDialog';
 
-import { nukeAndReload } from './nukeAndReload'
+import { nukeAndReload } from './nukeAndReload';
 
 export function SettingsModal({
   isOpen,
   onOpenChange,
 }: {
-  isOpen: boolean
-  onOpenChange: (v: boolean) => void
+  isOpen: boolean;
+  onOpenChange: (v: boolean) => void;
 }) {
-  const connectors = useStore($connectorSettings)
-  const highlight = useStore($selectionHighlight)
-  const ivaSeats = useStore($ivaSeatSettings)
-  const kittenTex = useStore($kittenTextureExport)
-  const showFps = useStore($showFpsCounter)
+  const connectors = useStore($connectorSettings);
+  const highlight = useStore($selectionHighlight);
+  const ivaSeats = useStore($ivaSeatSettings);
+  const kittenTex = useStore($kittenTextureExport);
+  const showFps = useStore($showFpsCounter);
   return (
     <Modal isOpen={isOpen} onOpenChange={onOpenChange} isDismissable variant="center">
       <Dialog>
@@ -160,7 +160,7 @@ export function SettingsModal({
         </div>
       </Dialog>
     </Modal>
-  )
+  );
 }
 
 /** A color swatch + strength slider row for one selection-highlight target. */
@@ -171,11 +171,11 @@ function HighlightRow({
   onColor,
   onAlpha,
 }: {
-  label: string
-  color: string
-  alpha: number
-  onColor: (hex: string) => void
-  onAlpha: (alpha: number) => void
+  label: string;
+  color: string;
+  alpha: number;
+  onColor: (hex: string) => void;
+  onAlpha: (alpha: number) => void;
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
@@ -202,14 +202,14 @@ function HighlightRow({
         </span>
       </div>
     </div>
-  )
+  );
 }
 
 export function SettingsButton() {
-  const [settingsOpen, setSettingsOpen] = useState(false)
-  const [scaleOpen, setScaleOpen] = useState(false)
-  const [confirmReset, setConfirmReset] = useState(false)
-  const [resetFsGrants, setResetFsGrants] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [scaleOpen, setScaleOpen] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetFsGrants, setResetFsGrants] = useState(false);
 
   return (
     <>
@@ -221,13 +221,13 @@ export function SettingsButton() {
         <Popover placement="bottom end" className="w-44">
           <Menu
             onAction={(key) => {
-              if (key === 'scale') setScaleOpen(true)
-              else if (key === 'settings') setSettingsOpen(true)
-              else if (key === 'shortcuts') openHelp()
+              if (key === 'scale') setScaleOpen(true);
+              else if (key === 'settings') setSettingsOpen(true);
+              else if (key === 'shortcuts') openHelp();
               else if (key === 'reset') {
-                setResetFsGrants(false)
-                setConfirmReset(true)
-              } else if (key === 'about') openAbout()
+                setResetFsGrants(false);
+                setConfirmReset(true);
+              } else if (key === 'about') openAbout();
             }}
           >
             <MenuItem id="scale">Scale Everything</MenuItem>
@@ -261,5 +261,5 @@ export function SettingsButton() {
         </Switch>
       </ConfirmDialog>
     </>
-  )
+  );
 }

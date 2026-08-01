@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
-import { useStore } from '@nanostores/react'
-import type { Key, Selection } from 'react-aria-components'
+import { useEffect, useState } from 'react';
+import { useStore } from '@nanostores/react';
+import type { Key, Selection } from 'react-aria-components';
 import {
   Button,
   Chip,
@@ -10,16 +10,16 @@ import {
   SectionTitle,
   toast,
   useIsPhone,
-} from './kit'
-import { $catalog, $catalogLoading } from '../state/catalogStore'
-import type { CatalogSubPart } from '../ksa/catalog'
-import { addSubPart } from '../state/editorStore'
-import { closeBrowserPopup, openBrowserPopup } from '../state/loadProgressStore'
-import { SubPartPreview } from './SubPartPreview'
-import { PreviewLoadProgress } from './LoadProgress'
-import { BrowserLayout, BrowserPopup } from './BrowserShell'
+} from './kit';
+import { $catalog, $catalogLoading } from '../state/catalogStore';
+import type { CatalogSubPart } from '../ksa/catalog';
+import { addSubPart } from '../state/editorStore';
+import { closeBrowserPopup, openBrowserPopup } from '../state/loadProgressStore';
+import { SubPartPreview } from './SubPartPreview';
+import { PreviewLoadProgress } from './LoadProgress';
+import { BrowserLayout, BrowserPopup } from './BrowserShell';
 
-const MAX_RESULTS = 200
+const MAX_RESULTS = 200;
 
 /**
  * Full-viewport browser for adding a catalog SubPart (opened from the Add menu).
@@ -31,51 +31,51 @@ export function SubPartPopup({
   open,
   onOpenChange,
 }: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   return (
     <BrowserPopup title="Add SubPart" open={open} onOpenChange={onOpenChange}>
       <BrowserBody onClose={() => onOpenChange(false)} />
     </BrowserPopup>
-  )
+  );
 }
 
 function BrowserBody({ onClose }: { onClose: () => void }) {
-  const catalog = useStore($catalog)
-  const loading = useStore($catalogLoading)
-  const [query, setQuery] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const isPhone = useIsPhone()
+  const catalog = useStore($catalog);
+  const loading = useStore($catalogLoading);
+  const [query, setQuery] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const isPhone = useIsPhone();
 
   useEffect(() => {
-    openBrowserPopup()
-    return closeBrowserPopup
-  }, [])
+    openBrowserPopup();
+    return closeBrowserPopup;
+  }, []);
 
-  const q = query.trim().toLowerCase()
-  const matches = q ? catalog.filter((s) => s.id.toLowerCase().includes(q)) : catalog
-  const filtered = matches.slice(0, MAX_RESULTS)
+  const q = query.trim().toLowerCase();
+  const matches = q ? catalog.filter((s) => s.id.toLowerCase().includes(q)) : catalog;
+  const filtered = matches.slice(0, MAX_RESULTS);
 
-  const selected = selectedId ? (catalog.find((s) => s.id === selectedId) ?? null) : null
+  const selected = selectedId ? (catalog.find((s) => s.id === selectedId) ?? null) : null;
 
   const onSelection = (keys: Selection) => {
-    if (keys === 'all') return
-    setSelectedId(([...keys][0] as string) ?? null)
-  }
+    if (keys === 'all') return;
+    setSelectedId(([...keys][0] as string) ?? null);
+  };
 
   const add = () => {
-    if (!selectedId) return
-    addSubPart(selectedId)
-    toast({ title: 'SubPart Added', description: selectedId }, { timeout: 2500 })
-  }
+    if (!selectedId) return;
+    addSubPart(selectedId);
+    toast({ title: 'SubPart Added', description: selectedId }, { timeout: 2500 });
+  };
 
   const addAndClose = (key: Key) => {
-    const id = String(key)
-    addSubPart(id)
-    toast({ title: 'SubPart Added', description: id }, { timeout: 2500 })
-    onClose()
-  }
+    const id = String(key);
+    addSubPart(id);
+    toast({ title: 'SubPart Added', description: id }, { timeout: 2500 });
+    onClose();
+  };
 
   const listPane = (
     <div className="h-full overflow-auto rounded-lg border border-border bg-panel-sunken">
@@ -116,7 +116,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
         </GridList>
       )}
     </div>
-  )
+  );
 
   const previewPane = (
     <div className="relative h-full overflow-hidden rounded-lg border border-border bg-panel-sunken">
@@ -129,7 +129,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
       )}
       <PreviewLoadProgress />
     </div>
-  )
+  );
 
   const detailsPane = (
     <div className="h-full overflow-auto rounded-lg border border-border bg-panel-sunken p-3">
@@ -139,7 +139,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
         <span className="text-sm text-fg-subtle">Select a SubPart to see its details.</span>
       )}
     </div>
-  )
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1.5 p-1.5">
@@ -162,7 +162,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
 
       <BrowserLayout list={listPane} preview={previewPane} details={detailsPane} />
     </div>
-  )
+  );
 }
 
 /** Right-bottom panel on desktop: technical details for the highlighted SubPart. */
@@ -172,7 +172,7 @@ function SubPartDetails({ subPart }: { subPart: CatalogSubPart }) {
     { label: 'Normal', url: subPart.normalUrl },
     { label: 'AO/Rough/Metal', url: subPart.aoRoughMetalUrl },
     { label: 'Emissive', url: subPart.emissiveUrl },
-  ].filter((t) => t.url)
+  ].filter((t) => t.url);
 
   return (
     <div className="flex flex-col gap-3 text-xs">
@@ -220,5 +220,5 @@ function SubPartDetails({ subPart }: { subPart: CatalogSubPart }) {
         </div>
       )}
     </div>
-  )
+  );
 }

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState } from 'react';
 
 /**
  * Internal: shared split with a draggable divider. `direction` is the axis the
@@ -16,35 +16,35 @@ function Split({
   minPct,
   maxPct,
 }: {
-  direction: 'vertical' | 'horizontal'
-  first: React.ReactNode
-  second: React.ReactNode
-  initialSplit: number
-  minPct: number
-  maxPct: number
+  direction: 'vertical' | 'horizontal';
+  first: React.ReactNode;
+  second: React.ReactNode;
+  initialSplit: number;
+  minPct: number;
+  maxPct: number;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [splitPct, setSplitPct] = useState(initialSplit)
-  const isVertical = direction === 'vertical'
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [splitPct, setSplitPct] = useState(initialSplit);
+  const isVertical = direction === 'vertical';
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    const c = containerRef.current
-    if (!c) return
-    const rect = c.getBoundingClientRect()
+    e.preventDefault();
+    const c = containerRef.current;
+    if (!c) return;
+    const rect = c.getBoundingClientRect();
     const onMove = (ev: PointerEvent) => {
       const pct = isVertical
         ? ((ev.clientY - rect.top) / rect.height) * 100
-        : ((ev.clientX - rect.left) / rect.width) * 100
-      setSplitPct(Math.max(minPct, Math.min(maxPct, pct)))
-    }
+        : ((ev.clientX - rect.left) / rect.width) * 100;
+      setSplitPct(Math.max(minPct, Math.min(maxPct, pct)));
+    };
     const onUp = () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-  }
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
 
   return (
     <div
@@ -77,7 +77,7 @@ function Split({
         {second}
       </div>
     </div>
-  )
+  );
 }
 
 /** Stacks two panes top/bottom with a draggable horizontal divider. */
@@ -88,11 +88,11 @@ export function VerticalSplit({
   minPct = 15,
   maxPct = 85,
 }: {
-  top: React.ReactNode
-  bottom: React.ReactNode
-  initialSplit?: number
-  minPct?: number
-  maxPct?: number
+  top: React.ReactNode;
+  bottom: React.ReactNode;
+  initialSplit?: number;
+  minPct?: number;
+  maxPct?: number;
 }) {
   return (
     <Split
@@ -103,7 +103,7 @@ export function VerticalSplit({
       minPct={minPct}
       maxPct={maxPct}
     />
-  )
+  );
 }
 
 /** Lays two panes left/right with a draggable vertical divider. */
@@ -114,11 +114,11 @@ export function HorizontalSplit({
   minPct = 15,
   maxPct = 85,
 }: {
-  left: React.ReactNode
-  right: React.ReactNode
-  initialSplit?: number
-  minPct?: number
-  maxPct?: number
+  left: React.ReactNode;
+  right: React.ReactNode;
+  initialSplit?: number;
+  minPct?: number;
+  maxPct?: number;
 }) {
   return (
     <Split
@@ -129,5 +129,5 @@ export function HorizontalSplit({
       minPct={minPct}
       maxPct={maxPct}
     />
-  )
+  );
 }

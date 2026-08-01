@@ -1,4 +1,4 @@
-import * as THREE from 'three'
+import * as THREE from 'three';
 import type {
   CustomMaterial,
   CustomMesh,
@@ -8,35 +8,35 @@ import type {
   RgbColor,
   ScalarChannel,
   TextureChannel,
-} from './types'
-import { isSubPartGameDataEmpty, meshKind } from './types'
-import type { PartCollider } from './types'
-import { serializeGameData, serializePart } from './partXmlSerializer'
+} from './types';
+import { isSubPartGameDataEmpty, meshKind } from './types';
+import type { PartCollider } from './types';
+import { serializeGameData, serializePart } from './partXmlSerializer';
 import {
   serializeAssets,
   type AssetsMaterialPlan,
   type AssetsSubPartPlan,
   type ReferenceSubPartPlan,
-} from './assetsXmlSerializer'
-import { buildMeshAtlasGlb } from './exportGlb'
-import { buildAnimationRig } from './animationRig'
-import { buildAnimationGlb } from './exportAnimationGlb'
-import { animGlbPath, isAnimationExportable } from './animationNaming'
-import { toUrl, type CatalogSubPart } from './catalog'
+} from './assetsXmlSerializer';
+import { buildMeshAtlasGlb } from './exportGlb';
+import { buildAnimationRig } from './animationRig';
+import { buildAnimationGlb } from './exportAnimationGlb';
+import { animGlbPath, isAnimationExportable } from './animationNaming';
+import { toUrl, type CatalogSubPart } from './catalog';
 import {
   buildPrimitiveGeometry,
   PRIMITIVE_FACE_KEYS,
   applyFaceUvTransforms,
-} from '../three/primitives'
-import { bakeKittenSubMeshes } from '../three/kittenBake'
-import { getImportedRawGeometry } from '../three/importedMeshCache'
-import { getPrimaryTextureId, glowFor, type MeshGlow } from '../state/customAssetStore'
-import { assetKeys, getAsset } from '../state/assetDb'
-import { $modelImportSettings, type KittenTextureExportSettings } from '../state/settingsStore'
-import { createZip, type ZipEntry } from '../util/zip'
-import { encodeImageToKtx2, makeSolidKtx2 } from '../ktx/encodeKtx2'
-import { decodeImage, buildMipChain, type ImageLevel } from '../ktx/decodeImage'
-import { packOrmLevel, prepareChannelImage, type OrmSource } from '../ktx/channelTransforms'
+} from '../three/primitives';
+import { bakeKittenSubMeshes } from '../three/kittenBake';
+import { getImportedRawGeometry } from '../three/importedMeshCache';
+import { getPrimaryTextureId, glowFor, type MeshGlow } from '../state/customAssetStore';
+import { assetKeys, getAsset } from '../state/assetDb';
+import { $modelImportSettings, type KittenTextureExportSettings } from '../state/settingsStore';
+import { createZip, type ZipEntry } from '../util/zip';
+import { encodeImageToKtx2, makeSolidKtx2 } from '../ktx/encodeKtx2';
+import { decodeImage, buildMipChain, type ImageLevel } from '../ktx/decodeImage';
+import { packOrmLevel, prepareChannelImage, type OrmSource } from '../ktx/channelTransforms';
 import {
   baseSizeFor,
   compositeGlow,
@@ -44,15 +44,15 @@ import {
   neutralBase,
   solidBase,
   type GlowBitmap,
-} from '../ktx/glowComposite'
-import { hashBytes } from './importMaterials'
+} from '../ktx/glowComposite';
+import { hashBytes } from './importMaterials';
 
 /** How part-ified kitten SubParts supply their textures on export (see settingsStore). */
-export type KittenTextureExportConfig = KittenTextureExportSettings
+export type KittenTextureExportConfig = KittenTextureExportSettings;
 const DEFAULT_KITTEN_TEXTURE_EXPORT: KittenTextureExportConfig = {
   mode: 'bundle',
   contentCorePath: '',
-}
+};
 
 /**
  * KSA part-mod export. A "part mod" is a folder the game loads from
@@ -72,21 +72,21 @@ const DEFAULT_KITTEN_TEXTURE_EXPORT: KittenTextureExportConfig = {
  *     folder — no filesystem permission required, works in any browser.
  */
 
-export const MOD_FOLDER_NAME = 'flexo-parts'
-export const MOD_TOML_NAME = 'mod.toml'
+export const MOD_FOLDER_NAME = 'flexo-parts';
+export const MOD_TOML_NAME = 'mod.toml';
 /** The `name` field written into mod.toml. */
-export const MOD_NAME = 'flexo-parts'
+export const MOD_NAME = 'flexo-parts';
 
 /** Project name → a safe, space-free base for XML filenames (e.g. "My Part" → "MyPart"). */
 export function sanitizeBaseName(projectName: string): string {
-  const cleaned = projectName.replace(/[^A-Za-z0-9]+/g, '')
-  return cleaned || 'Mod'
+  const cleaned = projectName.replace(/[^A-Za-z0-9]+/g, '');
+  return cleaned || 'Mod';
 }
 
 /** Serializes mod.toml with the given asset filenames (matches KSA's format). */
 export function serializeModToml(assets: string[]): string {
-  const list = assets.length === 0 ? '[]' : `[ ${assets.map((a) => `"${a}"`).join(', ')}]`
-  return `name = "${MOD_NAME}"\nassets = ${list}\n`
+  const list = assets.length === 0 ? '[]' : `[ ${assets.map((a) => `"${a}"`).join(', ')}]`;
+  return `name = "${MOD_NAME}"\nassets = ${list}\n`;
 }
 
 /**
@@ -95,26 +95,26 @@ export function serializeModToml(assets: string[]): string {
  * (matching case-insensitive filesystems like macOS/Windows).
  */
 export function uniqueFileName(taken: Set<string>, base: string, ext: string): string {
-  const first = `${base}.${ext}`
-  if (!taken.has(first.toLowerCase())) return first
+  const first = `${base}.${ext}`;
+  if (!taken.has(first.toLowerCase())) return first;
   for (let n = 2; ; n++) {
-    const candidate = `${base}-${n}.${ext}`
-    if (!taken.has(candidate.toLowerCase())) return candidate
+    const candidate = `${base}-${n}.${ext}`;
+    if (!taken.has(candidate.toLowerCase())) return candidate;
   }
 }
 
 export interface ModContent {
-  base: string
+  base: string;
   /**
    * Built-in SubPart export variants this part needs (see {@link buildExportVariantMap}),
    * keyed by original template id. Threaded into {@link buildCustomBundle} so the Assets XML
    * declares the same reference SubParts the Part/GameData XML now points at.
    */
-  variants: Map<string, ExportVariant>
-  partFile: string
-  partXml: string
-  gameDataFile: string
-  gameDataXml: string
+  variants: Map<string, ExportVariant>;
+  partFile: string;
+  partXml: string;
+  gameDataFile: string;
+  gameDataXml: string;
 }
 
 /**
@@ -129,9 +129,9 @@ export function buildModContent(
   projectName: string,
   catalog: ReadonlyMap<string, CatalogSubPart> = new Map(),
 ): ModContent {
-  const base = sanitizeBaseName(projectName)
-  const variants = buildExportVariantMap(part, catalog, base)
-  const remap = variantRemap(variants)
+  const base = sanitizeBaseName(projectName);
+  const variants = buildExportVariantMap(part, catalog, base);
+  const remap = variantRemap(variants);
   return {
     base,
     variants,
@@ -139,12 +139,12 @@ export function buildModContent(
     partXml: serializePart(part, remap),
     gameDataFile: `${base}GameData.xml`,
     gameDataXml: serializeGameData(part, base, remap),
-  }
+  };
 }
 
 /** A token safe for an asset filename segment (letters/digits only). */
 function sanitizeAssetToken(name: string): string {
-  return name.replace(/[^A-Za-z0-9]+/g, '') || 'asset'
+  return name.replace(/[^A-Za-z0-9]+/g, '') || 'asset';
 }
 
 /**
@@ -155,17 +155,17 @@ function sanitizeAssetToken(name: string): string {
  */
 export interface ExportVariant {
   /** Built-in SubPart template id placed in the part, e.g. "CoreElectricalA_Subpart_SpotlightA". */
-  originalId: string
+  originalId: string;
   /** Project-unique export variant id referenced by placements + SubPartGameData, declared in Assets. */
-  variantId: string
+  variantId: string;
   /** Built-in <Mesh Id> the variant reuses (NOT redeclared). */
-  meshId: string
+  meshId: string;
   /**
    * Built-in `<Material Id>` the variant reuses. NEVER null: a `<PartModel>` with no `<Material>`
    * is a hard startup crash (see {@link buildExportVariantMap}), so a material-less built-in is
    * skipped rather than redeclared.
    */
-  materialId: string
+  materialId: string;
   /**
    * The built-in template's OWN geometry `<Collider>`s, copied forward onto the variant.
    * A variant is a FRESH `<SubPart Id>` that reuses only the built-in Mesh/Material — it
@@ -173,18 +173,18 @@ export interface ExportVariant {
    * variant would silently lose the built-in collision volume (e.g. the solar-panel cells'
    * `<Box>`). Empty for a template that authors none.
    */
-  colliders: PartCollider[]
+  colliders: PartCollider[];
   /**
    * The `<Internal>` (interior-only) value the variant declares — {@link resolveInternal}'s
    * result. `false` emits no element at all (KSA's default).
    */
-  internal: boolean
+  internal: boolean;
   /**
    * The built-in template's raw `<RayTracing>` token, carried forward verbatim (null = none
    * authored). A variant inherits nothing but the Mesh/Material it names, so dropping this
    * would turn e.g. a `ShadowProxy` occluder into a visible mesh.
    */
-  rayTracing: string | null
+  rayTracing: string | null;
   /**
    * The built-in template's `<ShadowCaster>` bool, carried forward (null = none authored, which
    * is KSA's `true` default). Same inheritance rule as {@link rayTracing}: dropping a built-in's
@@ -193,7 +193,7 @@ export interface ExportVariant {
    * never on its own be a REASON to redeclare a template, only a value carried along when a
    * variant already exists.
    */
-  shadowCaster: boolean | null
+  shadowCaster: boolean | null;
 }
 
 /**
@@ -201,7 +201,7 @@ export interface ExportVariant {
  * material or glow. Matches the editor's untextured look (`MaterialFactory.makeFlatMaterial`'s
  * `0xbfc4cc`), so a bare mesh renders the same in-game as it does in the viewport.
  */
-const NEUTRAL_BASE_COLOR: RgbColor = { r: 0xbf, g: 0xc4, b: 0xcc }
+const NEUTRAL_BASE_COLOR: RgbColor = { r: 0xbf, g: 0xc4, b: 0xcc };
 
 /**
  * The `<Internal>` value a SubPart template exports with: the user's explicit flag if the
@@ -213,7 +213,7 @@ export function resolveInternal(
   templateId: string,
   entry: CatalogSubPart | undefined,
 ): boolean {
-  return part.internalFlags[templateId] ?? entry?.internal ?? false
+  return part.internalFlags[templateId] ?? entry?.internal ?? false;
 }
 
 /**
@@ -229,7 +229,7 @@ function hasSubPartGameData(part: EditingPart, templateId: string): boolean {
     ) ||
     part.colliders.some((c) => c.ownerTemplateId === templateId) ||
     part.lights.some((l) => l.ownerTemplateId === templateId)
-  )
+  );
 }
 
 /**
@@ -262,26 +262,26 @@ export function buildExportVariantMap(
   catalog: ReadonlyMap<string, CatalogSubPart>,
   base: string,
 ): Map<string, ExportVariant> {
-  const out = new Map<string, ExportVariant>()
+  const out = new Map<string, ExportVariant>();
   // expandGlassGlow appends synthetic `_Glow` meshes to customMeshes before this runs, so they
   // are covered here too.
-  const customIds = new Set(part.customMeshes.map((m) => m.subPartId))
+  const customIds = new Set(part.customMeshes.map((m) => m.subPartId));
   for (const p of part.placements) {
-    const templateId = p.subPartTemplateId
-    if (out.has(templateId)) continue
-    if (customIds.has(templateId)) continue // declared directly by this export — never a variant
-    const entry = catalog.get(templateId)
-    if (!entry) continue // unknown template — leave the reference as authored
-    const wantInternal = resolveInternal(part, templateId, entry)
-    const internalDiffers = wantInternal !== (entry.internal ?? false)
-    if (!internalDiffers && !hasSubPartGameData(part, templateId)) continue
+    const templateId = p.subPartTemplateId;
+    if (out.has(templateId)) continue;
+    if (customIds.has(templateId)) continue; // declared directly by this export — never a variant
+    const entry = catalog.get(templateId);
+    if (!entry) continue; // unknown template — leave the reference as authored
+    const wantInternal = resolveInternal(part, templateId, entry);
+    const internalDiffers = wantInternal !== (entry.internal ?? false);
+    if (!internalDiffers && !hasSubPartGameData(part, templateId)) continue;
     // meshNodeName is the built-in <Mesh Id> (null only for the rare whole-atlas mesh). Without
     // it we can't reference the geometry — leave the built-in reference as-is.
     if (!entry.meshNodeName) {
       console.warn(
         `flexo export: built-in SubPart '${templateId}' has no mesh node — left as a direct reference`,
-      )
-      continue
+      );
+      continue;
     }
     // Same rule for the material: a variant reuses the built-in's <Material Id>, and a
     // <PartModel> with no <Material> crashes KSA at startup (AddDraw derefs it unguarded). No
@@ -290,8 +290,8 @@ export function buildExportVariantMap(
     if (!entry.materialId) {
       console.warn(
         `flexo export: built-in SubPart '${templateId}' has no material — left as a direct reference (its SubPart GameData / Internal flag cannot be applied)`,
-      )
-      continue
+      );
+      continue;
     }
     out.set(templateId, {
       originalId: templateId,
@@ -302,14 +302,14 @@ export function buildExportVariantMap(
       internal: wantInternal,
       rayTracing: entry.rayTracing ?? null,
       shadowCaster: entry.shadowCaster ?? null,
-    })
+    });
   }
-  return out
+  return out;
 }
 
 /** Derives the `originalTemplateId → variantId` remap consumed by the Part/GameData serializers. */
 function variantRemap(variants: Map<string, ExportVariant>): Map<string, string> {
-  return new Map([...variants.values()].map((v) => [v.originalId, v.variantId]))
+  return new Map([...variants.values()].map((v) => [v.originalId, v.variantId]));
 }
 
 /** Encodes a decoded image to a Zstd KTX2, generating its mip chain. */
@@ -317,18 +317,18 @@ function encodeLevel(level: ImageLevel): Promise<Uint8Array> {
   return encodeImageToKtx2(
     { width: level.width, height: level.height, levels: buildMipChain(level) },
     { zstd: true },
-  )
+  );
 }
 
 /** Relative paths of one emitted glow pair (the composited diffuse + its grayscale mask). */
 interface GlowPaths {
-  diffusePath: string
-  emissivePath: string
+  diffusePath: string;
+  emissivePath: string;
 }
 
 /** 8 hex chars of a content key — the part of a glow filename that moves when the pixels do. */
 function shortHash(key: string): string {
-  return hashBytes(new TextEncoder().encode(key)).slice(0, 8)
+  return hashBytes(new TextEncoder().encode(key)).slice(0, 8);
 }
 
 /**
@@ -346,13 +346,13 @@ function glowBaseKey(
 ): string {
   const mapTex =
     tex ??
-    (material?.baseColor.kind === 'map' ? texById.get(material.baseColor.textureId) : undefined)
-  if (mapTex) return `tex:${mapTex.id}`
+    (material?.baseColor.kind === 'map' ? texById.get(material.baseColor.textureId) : undefined);
+  if (mapTex) return `tex:${mapTex.id}`;
   if (material?.baseColor.kind === 'color') {
-    const c = material.baseColor.color
-    return `color:${c.r},${c.g},${c.b}`
+    const c = material.baseColor.color;
+    return `color:${c.r},${c.g},${c.b}`;
   }
-  return 'neutral'
+  return 'neutral';
 }
 
 /**
@@ -366,14 +366,14 @@ function glowBaseKey(
  * by the flat color solidGlowBitmap fills.
  */
 async function glowCacheKey(m: CustomMesh, baseKey: string): Promise<string> {
-  const e = m.emissive!
-  let glowKey = `color:${e.color.r},${e.color.g},${e.color.b}`
+  const e = m.emissive!;
+  let glowKey = `color:${e.color.r},${e.color.g},${e.color.b}`;
   if (e.shape === 'painted') {
-    const png = await getAsset(assetKeys.emissivePaint(m.id))
+    const png = await getAsset(assetKeys.emissivePaint(m.id));
     // No stored bitmap ⇒ glowFor falls back to the flat color, so the key must too.
-    if (png) glowKey = `png:${hashBytes(new Uint8Array(await png.arrayBuffer()))}`
+    if (png) glowKey = `png:${hashBytes(new Uint8Array(await png.arrayBuffer()))}`;
   }
-  return `${baseKey}|${glowKey}|${JSON.stringify(glowCompositeOf(e))}`
+  return `${baseKey}|${glowKey}|${JSON.stringify(glowCompositeOf(e))}`;
 }
 
 /**
@@ -392,35 +392,35 @@ async function exportBaseImage(
 ): Promise<ImageLevel> {
   const mapTex =
     tex ??
-    (material?.baseColor.kind === 'map' ? texById.get(material.baseColor.textureId) : undefined)
+    (material?.baseColor.kind === 'map' ? texById.get(material.baseColor.textureId) : undefined);
   if (mapTex) {
-    const src = await getAsset(assetKeys.textureSource(mapTex.id))
-    if (src) return (await decodeImage(src)).levels[0]
+    const src = await getAsset(assetKeys.textureSource(mapTex.id));
+    if (src) return (await decodeImage(src)).levels[0];
   }
-  const { width, height } = baseSizeFor(glow)
+  const { width, height } = baseSizeFor(glow);
   if (material?.baseColor.kind === 'color')
-    return solidBase(material.baseColor.color, width, height)
-  return neutralBase(width, height)
+    return solidBase(material.baseColor.color, width, height);
+  return neutralBase(width, height);
 }
 
 /** Two-digit lowercase hex of a 0..255 value (solid-texture filename tokens). */
 function hex2(v: number): string {
   return Math.max(0, Math.min(255, Math.round(v)))
     .toString(16)
-    .padStart(2, '0')
+    .padStart(2, '0');
 }
 
 /** A 0..1 channel value quantized to a texel byte. */
 function toTexel(v: number): number {
-  return Math.max(0, Math.min(255, Math.round(v * 255)))
+  return Math.max(0, Math.min(255, Math.round(v * 255)));
 }
 
 /** Resolved texture channels for one <PbrMaterial> (all binaries already emitted). */
 interface ResolvedChannels {
-  diffusePath: string
-  normalPath: string
-  aoRoughMetalPath: string
-  emissivePath?: string
+  diffusePath: string;
+  normalPath: string;
+  aoRoughMetalPath: string;
+  emissivePath?: string;
 }
 
 /**
@@ -429,34 +429,34 @@ interface ResolvedChannels {
  * shared by many SubParts), pushing each binary exactly once.
  */
 class BundleTextures {
-  private readonly solids = new Map<string, Promise<string>>()
-  private readonly glows = new Map<string, Promise<GlowPaths>>()
-  private readonly materialByChannels = new Map<string, string>()
+  private readonly solids = new Map<string, Promise<string>>();
+  private readonly glows = new Map<string, Promise<GlowPaths>>();
+  private readonly materialByChannels = new Map<string, string>();
   /** The deduped <PbrMaterial> list, in first-use order. */
-  readonly materials: AssetsMaterialPlan[] = []
-  private readonly token: string
-  private readonly binaries: { path: string; data: Uint8Array }[]
+  readonly materials: AssetsMaterialPlan[] = [];
+  private readonly token: string;
+  private readonly binaries: { path: string; data: Uint8Array }[];
 
   constructor(token: string, binaries: { path: string; data: Uint8Array }[]) {
-    this.token = token
-    this.binaries = binaries
+    this.token = token;
+    this.binaries = binaries;
   }
 
   private solid(key: string, path: string, r: number, g: number, b: number): Promise<string> {
-    let pending = this.solids.get(key)
+    let pending = this.solids.get(key);
     if (!pending) {
       pending = makeSolidKtx2(r, g, b).then((data) => {
-        this.binaries.push({ path, data })
-        return path
-      })
-      this.solids.set(key, pending)
+        this.binaries.push({ path, data });
+        return path;
+      });
+      this.solids.set(key, pending);
     }
-    return pending
+    return pending;
   }
 
   /** The shared flat tangent-space normal (128,128,255 ≈ +Z) for map-less materials. */
   flatNormal(): Promise<string> {
-    return this.solid('normal', `Textures/${this.token}_FlatNormal.ktx2`, 128, 128, 255)
+    return this.solid('normal', `Textures/${this.token}_FlatNormal.ktx2`, 128, 128, 255);
   }
 
   /**
@@ -467,8 +467,8 @@ class BundleTextures {
     const path =
       ao === 255 && rough === 128 && metal === 0
         ? `Textures/${this.token}_NeutralORM.ktx2`
-        : `Textures/${this.token}_ORM_${hex2(ao)}${hex2(rough)}${hex2(metal)}.ktx2`
-    return this.solid(`orm:${ao},${rough},${metal}`, path, ao, rough, metal)
+        : `Textures/${this.token}_ORM_${hex2(ao)}${hex2(rough)}${hex2(metal)}.ktx2`;
+    return this.solid(`orm:${ao},${rough},${metal}`, path, ao, rough, metal);
   }
 
   /**
@@ -490,26 +490,29 @@ class BundleTextures {
     name: string,
     make: () => Promise<{ base: ImageLevel; glow: MeshGlow }>,
   ): Promise<GlowPaths> {
-    let pending = this.glows.get(key)
+    let pending = this.glows.get(key);
     if (!pending) {
-      const stem = `Textures/${this.token}_${sanitizeAssetToken(name)}_${shortHash(key)}`
+      const stem = `Textures/${this.token}_${sanitizeAssetToken(name)}_${shortHash(key)}`;
       pending = (async () => {
-        const { base, glow } = await make()
-        const { diffuse, mask } = compositeGlow(base, glow.bitmap, glow.settings)
-        const paths = { diffusePath: `${stem}_Diffuse.ktx2`, emissivePath: `${stem}_Emissive.ktx2` }
-        this.binaries.push({ path: paths.diffusePath, data: await encodeLevel(diffuse) })
-        this.binaries.push({ path: paths.emissivePath, data: await encodeLevel(mask) })
-        return paths
-      })()
-      this.glows.set(key, pending)
+        const { base, glow } = await make();
+        const { diffuse, mask } = compositeGlow(base, glow.bitmap, glow.settings);
+        const paths = {
+          diffusePath: `${stem}_Diffuse.ktx2`,
+          emissivePath: `${stem}_Emissive.ktx2`,
+        };
+        this.binaries.push({ path: paths.diffusePath, data: await encodeLevel(diffuse) });
+        this.binaries.push({ path: paths.emissivePath, data: await encodeLevel(mask) });
+        return paths;
+      })();
+      this.glows.set(key, pending);
     }
-    return pending
+    return pending;
   }
 
   /** A solid diffuse of the picked sRGB color (KSA's shader gamma-decodes it once). */
   baseColorSolid(c: RgbColor): Promise<string> {
-    const path = `Textures/${this.token}_BaseColor_${hex2(c.r)}${hex2(c.g)}${hex2(c.b)}.ktx2`
-    return this.solid(`base:${c.r},${c.g},${c.b}`, path, c.r, c.g, c.b)
+    const path = `Textures/${this.token}_BaseColor_${hex2(c.r)}${hex2(c.g)}${hex2(c.b)}.ktx2`;
+    return this.solid(`base:${c.r},${c.g},${c.b}`, path, c.r, c.g, c.b);
   }
 
   /**
@@ -518,28 +521,28 @@ class BundleTextures {
    * material serves every SubPart in the pack.
    */
   intern(channels: ResolvedChannels, preferredId: string): string {
-    const key = `${channels.diffusePath}|${channels.normalPath}|${channels.aoRoughMetalPath}|${channels.emissivePath ?? ''}`
-    const existing = this.materialByChannels.get(key)
-    if (existing) return existing
-    this.materialByChannels.set(key, preferredId)
-    this.materials.push({ id: preferredId, ...channels })
-    return preferredId
+    const key = `${channels.diffusePath}|${channels.normalPath}|${channels.aoRoughMetalPath}|${channels.emissivePath ?? ''}`;
+    const existing = this.materialByChannels.get(key);
+    if (existing) return existing;
+    this.materialByChannels.set(key, preferredId);
+    this.materials.push({ id: preferredId, ...channels });
+    return preferredId;
   }
 }
 
 /** The uniform value of a scalar channel. */
 function scalarValue(c: ScalarChannel, fallback: number): number {
-  return c.kind === 'value' ? c.value : fallback
+  return c.kind === 'value' ? c.value : fallback;
 }
 
 /** The map texture id of a scalar channel, if any. */
 function scalarMapId(c: ScalarChannel): string | undefined {
-  return c.kind === 'map' ? c.textureId : undefined
+  return c.kind === 'map' ? c.textureId : undefined;
 }
 
 /** The exported <PbrMaterial Id> for a mesh rendering its material verbatim (shareable). */
 function materialExportId(material: CustomMaterial): string {
-  return `flexo_${sanitizeAssetToken(material.name)}_${material.id.replace(/^mat_/, '')}_Material`
+  return `flexo_${sanitizeAssetToken(material.name)}_${material.id.replace(/^mat_/, '')}_Material`;
 }
 
 /** Exported filename suffix per texture channel (mirrors Core's naming). */
@@ -551,24 +554,24 @@ const CHANNEL_SUFFIX: Record<TextureChannel, string> = {
   metalness: 'Metal',
   occlusion: 'AO',
   emissiveMask: 'Emissive',
-}
+};
 
 /** Last path segment of a "Textures/Characters/Foo.ktx2" subpath, e.g. "Foo.ktx2". */
 function basename(subpath: string): string {
-  return subpath.split('/').pop() || subpath
+  return subpath.split('/').pop() || subpath;
 }
 
 /** Joins the game Content/Core prefix with a Content-relative subpath as a Windows absolute path. */
 function joinContentCore(prefix: string, subpath: string): string {
-  const root = prefix.replace(/[\\/]+$/, '') // drop a trailing separator
-  return `${root}\\${subpath.replace(/\//g, '\\')}`
+  const root = prefix.replace(/[\\/]+$/, ''); // drop a trailing separator
+  return `${root}\\${subpath.replace(/\//g, '\\')}`;
 }
 
 /** Fetches a KSA .ktx2 (served under /ksa/) verbatim, for the 'bundle' export mode. */
 async function fetchKtx2(subpath: string): Promise<Uint8Array> {
-  const res = await fetch(toUrl(subpath))
-  if (!res.ok) throw new Error(`kitten texture fetch failed (${res.status}): ${subpath}`)
-  return new Uint8Array(await res.arrayBuffer())
+  const res = await fetch(toUrl(subpath));
+  if (!res.ok) throw new Error(`kitten texture fetch failed (${res.status}): ${subpath}`);
+  return new Uint8Array(await res.arrayBuffer());
 }
 
 /**
@@ -587,23 +590,23 @@ async function planKittenSubPart(
   bundleToken: string,
   tex: BundleTextures,
 ): Promise<AssetsSubPartPlan> {
-  const src = m.kitten!
-  const subPartId = m.subPartId
-  const transparent = !!src.transparent
-  const surface = transparent ? (m.surface ?? 'glass') : undefined
+  const src = m.kitten!;
+  const subPartId = m.subPartId;
+  const transparent = !!src.transparent;
+  const surface = transparent ? (m.surface ?? 'glass') : undefined;
 
   // Opaque emissive glow (a non-glass submesh with a glow, or a visor in 'glow' mode): emit a
   // solid glow-color diffuse + grayscale mask through KSA's opaque <PartModel> path (glass can't
   // glow). The kitten's own .ktx2 can't be CPU-decoded, so the glow composites over a neutral base.
-  const opaqueGlow = transparent ? surface === 'glow' : !!m.emissive
+  const opaqueGlow = transparent ? surface === 'glow' : !!m.emissive;
   if (opaqueGlow && m.emissive) {
     // Content-addressed: two part-ified kittens glowing the same way share one composited pair
     // (and therefore one <PbrMaterial>) instead of each getting a private copy of the bytes.
     const paths = await tex.glowTextures(await glowCacheKey(m, 'neutral'), m.name, async () => {
-      const glow = (await glowFor(m))! // non-null: m.emissive is set (guard above)
-      const size = baseSizeFor(glow.bitmap)
-      return { base: neutralBase(size.width, size.height), glow }
-    })
+      const glow = (await glowFor(m))!; // non-null: m.emissive is set (guard above)
+      const size = baseSizeFor(glow.bitmap);
+      return { base: neutralBase(size.width, size.height), glow };
+    });
     const materialId = tex.intern(
       {
         diffusePath: paths.diffusePath,
@@ -612,35 +615,35 @@ async function planKittenSubPart(
         emissivePath: paths.emissivePath,
       },
       `${subPartId}_Material`,
-    )
-    return { subPartId, materialId, glass: false }
+    );
+    return { subPartId, materialId, glass: false };
   }
 
   const resolve = async (subpath: string): Promise<string> => {
-    if (cfg.mode === 'reference') return joinContentCore(cfg.contentCorePath, subpath)
-    let rel = bundled.get(subpath)
+    if (cfg.mode === 'reference') return joinContentCore(cfg.contentCorePath, subpath);
+    let rel = bundled.get(subpath);
     if (!rel) {
-      rel = `Textures/${basename(subpath)}`
-      bundled.set(subpath, rel)
-      binaries.push({ path: rel, data: await fetchKtx2(subpath) })
+      rel = `Textures/${basename(subpath)}`;
+      bundled.set(subpath, rel);
+      binaries.push({ path: rel, data: await fetchKtx2(subpath) });
     }
-    return rel
-  }
+    return rel;
+  };
 
   // Glass shell (visor 'glass'/'glassGlow'): a chosen tint becomes a solid diffuse of the picked
   // sRGB color (KSA's glass shader derives only ~10% of its color from the diffuse, so a saturated
   // solid reads as a subtle tinted glass); no tint keeps the real visor diffuse. Non-glass
   // submeshes also land here. Glass materials never carry <Emissive> (KSA glass ignores it).
-  const tint = surface === 'glass' || surface === 'glassGlow' ? m.glass?.tint : undefined
-  let diffusePath: string
+  const tint = surface === 'glass' || surface === 'glassGlow' ? m.glass?.tint : undefined;
+  let diffusePath: string;
   if (tint) {
-    diffusePath = `Textures/${bundleToken}_${subPartId}_Diffuse.ktx2`
+    diffusePath = `Textures/${bundleToken}_${subPartId}_Diffuse.ktx2`;
     binaries.push({
       path: diffusePath,
       data: await makeSolidKtx2(tint.r, tint.g, tint.b),
-    })
+    });
   } else {
-    diffusePath = await resolve(src.diffuse)
+    diffusePath = await resolve(src.diffuse);
   }
   const materialId = tex.intern(
     {
@@ -651,9 +654,9 @@ async function planKittenSubPart(
         : await tex.ormSolid(255, 128, 0),
     },
     `${subPartId}_Material`,
-  )
+  );
   // The visor renders through KSA's translucent glass path.
-  return { subPartId, materialId, glass: transparent }
+  return { subPartId, materialId, glass: transparent };
 }
 
 /**
@@ -662,25 +665,25 @@ async function planKittenSubPart(
  * through without z-fighting. Mutates + returns `geo` (caller passes a clone).
  */
 function insetGeometry(geo: THREE.BufferGeometry, factor: number): THREE.BufferGeometry {
-  const pos = geo.getAttribute('position') as THREE.BufferAttribute | undefined
-  if (!pos) return geo // nothing to inset (e.g. a missing/empty bake)
-  geo.computeBoundingBox()
-  const center = new THREE.Vector3()
-  geo.boundingBox!.getCenter(center)
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute | undefined;
+  if (!pos) return geo; // nothing to inset (e.g. a missing/empty bake)
+  geo.computeBoundingBox();
+  const center = new THREE.Vector3();
+  geo.boundingBox!.getCenter(center);
   for (let i = 0; i < pos.count; i++) {
     pos.setXYZ(
       i,
       center.x + (pos.getX(i) - center.x) * factor,
       center.y + (pos.getY(i) - center.y) * factor,
       center.z + (pos.getZ(i) - center.z) * factor,
-    )
+    );
   }
-  pos.needsUpdate = true
-  return geo
+  pos.needsUpdate = true;
+  return geo;
 }
 
 /** How far inside the glass shell the layered glow sits (1 = coincident → z-fights). */
-const GLASS_GLOW_INSET = 0.99
+const GLASS_GLOW_INSET = 0.99;
 
 /**
  * Expands a part for export so each placed 'glassGlow' visor becomes TWO SubParts at one transform —
@@ -698,22 +701,22 @@ const GLASS_GLOW_INSET = 0.99
  * behaviour (MeshGlassIndirect.frag never samples emissive).
  */
 export function expandGlassGlow(part: EditingPart): { part: EditingPart; insetIds: Set<string> } {
-  const placed = new Set(part.placements.map((p) => p.subPartTemplateId))
+  const placed = new Set(part.placements.map((p) => p.subPartTemplateId));
   const layered = part.customMeshes.filter(
     (m) =>
       meshKind(m) === 'kitten' &&
       m.kitten?.transparent &&
       m.surface === 'glassGlow' &&
       placed.has(m.subPartId),
-  )
-  if (layered.length === 0) return { part, insetIds: new Set() }
+  );
+  if (layered.length === 0) return { part, insetIds: new Set() };
 
-  const customMeshes = [...part.customMeshes]
-  const placements = [...part.placements]
-  const insetIds = new Set<string>()
+  const customMeshes = [...part.customMeshes];
+  const placements = [...part.placements];
+  const insetIds = new Set<string>();
   for (const m of layered) {
-    const glowId = `${m.subPartId}_Glow`
-    insetIds.add(glowId)
+    const glowId = `${m.subPartId}_Glow`;
+    insetIds.add(glowId);
     customMeshes.push({
       id: m.id, // share the IndexedDB key so a 'painted' glow's bitmap resolves
       name: `${m.name} Glow`,
@@ -722,14 +725,14 @@ export function expandGlassGlow(part: EditingPart): { part: EditingPart; insetId
       faceTextures: {},
       emissive: m.emissive,
       surface: 'glow', // opaque emissive layer on export
-    })
+    });
     for (const pl of part.placements) {
       if (pl.subPartTemplateId === m.subPartId) {
-        placements.push({ ...pl, instanceId: `${pl.instanceId}_glow`, subPartTemplateId: glowId })
+        placements.push({ ...pl, instanceId: `${pl.instanceId}_glow`, subPartTemplateId: glowId });
       }
     }
   }
-  return { part: { ...part, customMeshes, placements }, insetIds }
+  return { part: { ...part, customMeshes, placements }, insetIds };
 }
 
 /**
@@ -746,7 +749,7 @@ export function expandGlassGlow(part: EditingPart): { part: EditingPart; insetId
  * imported model at 1.3% of its raw picking cost. Picking accuracy is the only trade, and the
  * _VM mesh is never rendered.
  */
-export const VIEW_MESH_TRIANGLE_BUDGET = 2000
+export const VIEW_MESH_TRIANGLE_BUDGET = 2000;
 
 /**
  * The `_VM` budget this export runs with: the constant above, or `undefined` (ship the view
@@ -756,16 +759,16 @@ export const VIEW_MESH_TRIANGLE_BUDGET = 2000
  * ever persisted, which is also what tests get.
  */
 function viewMeshBudget(): number | undefined {
-  return $modelImportSettings.get().decimateViewMeshes ? VIEW_MESH_TRIANGLE_BUDGET : undefined
+  return $modelImportSettings.get().decimateViewMeshes ? VIEW_MESH_TRIANGLE_BUDGET : undefined;
 }
 
 /** A custom-asset bundle for export: the Assets XML + the binary files it references. */
 export interface CustomBundle {
   /** Desired Assets XML filename, or null when there are no custom assets to emit. */
-  assetsFile: string | null
-  assetsXml: string | null
+  assetsFile: string | null;
+  assetsXml: string | null;
   /** Binary files, each path relative to the mod folder (e.g. "Meshes/X.glb"). */
-  binaries: { path: string; data: Uint8Array }[]
+  binaries: { path: string; data: Uint8Array }[];
 }
 
 /**
@@ -790,19 +793,19 @@ export async function buildCustomBundle(
   variants: Map<string, ExportVariant> = new Map(),
   insetIds: ReadonlySet<string> = new Set(),
 ): Promise<CustomBundle> {
-  const binaries: { path: string; data: Uint8Array }[] = []
+  const binaries: { path: string; data: Uint8Array }[] = [];
 
   // Animations export independently of custom meshes (a Core-only part can still be
   // animated): one Animations/<id>.glb per exportable animation, path-matched to the
   // <KeyframeAnimation Path> emitted in the GameData XML.
   for (const anim of part.animations) {
-    if (!isAnimationExportable(anim)) continue
-    const rig = buildAnimationRig(anim, part.placements, part.partId)
-    binaries.push({ path: animGlbPath(base, anim), data: buildAnimationGlb(rig) })
+    if (!isAnimationExportable(anim)) continue;
+    const rig = buildAnimationRig(anim, part.placements, part.partId);
+    binaries.push({ path: animGlbPath(base, anim), data: buildAnimationGlb(rig) });
   }
 
-  const placed = new Set(part.placements.map((p) => p.subPartTemplateId))
-  const meshes = part.customMeshes.filter((m) => placed.has(m.subPartId))
+  const placed = new Set(part.placements.map((p) => p.subPartTemplateId));
+  const meshes = part.customMeshes.filter((m) => placed.has(m.subPartId));
 
   // Export variants (overridden <Internal> + built-in SubParts carrying GameData): reference-only
   // SubParts reusing built-in Mesh/Material (no binaries).
@@ -814,25 +817,25 @@ export async function buildCustomBundle(
     internal: v.internal,
     rayTracing: v.rayTracing,
     shadowCaster: v.shadowCaster,
-  }))
+  }));
 
   // Nothing to declare → no Assets XML, but still ship any animation glbs above.
   if (meshes.length === 0 && referenceSubParts.length === 0) {
-    return { assetsFile: null, assetsXml: null, binaries }
+    return { assetsFile: null, assetsXml: null, binaries };
   }
 
   // Custom geometry (primitive/kitten/imported meshes) → build the mesh-atlas GLB, its textures,
   // and the deduped PbrMaterial list. Skipped entirely for a variant-only part (no atlas needed).
-  let meshAtlasPath: string | undefined
-  const subParts: AssetsSubPartPlan[] = []
-  let materials: AssetsMaterialPlan[] = []
+  let meshAtlasPath: string | undefined;
+  const subParts: AssetsSubPartPlan[] = [];
+  let materials: AssetsMaterialPlan[] = [];
   if (meshes.length > 0) {
     // Derive a bundle token from base (project name) + the first mesh's random id suffix.
     // Mesh ids contain a random UUID fragment generated at creation time, so this is
     // unique across different parts even when they share the same default partId.
     // Using base keeps the filename human-readable; the hash suffix makes it unique.
-    const bundleToken = `${base}_${meshes[0].id.replace(/^mesh_/, '')}`
-    meshAtlasPath = `Meshes/${bundleToken}_MeshAtlas.glb`
+    const bundleToken = `${base}_${meshes[0].id.replace(/^mesh_/, '')}`;
+    meshAtlasPath = `Meshes/${bundleToken}_MeshAtlas.glb`;
     // One atlas node per placed custom mesh, resolved per geometry source. A source that can't
     // produce geometry yields null: the SubPart is dropped from BOTH the atlas and the Assets XML
     // below (a <SubPart> whose <Mesh Id> names nothing would be a dangling reference in-game),
@@ -845,81 +848,81 @@ export async function buildCustomBundle(
               // Always bundle the baked geometry (KSA can't skin the source gltf); clone the
               // shared cache so the post-build dispose() frees the clone, not the cache. A layered
               // 'glassGlow' glow layer is inset so it sits just inside its glass shell.
-              const subs = await bakeKittenSubMeshes(m.kitten!.kind)
-              const geo = subs.find((s) => s.specKey === m.kitten!.specKey)?.geometry
-              let cloned = geo ? geo.clone() : new THREE.BufferGeometry()
-              if (insetIds.has(m.subPartId)) cloned = insetGeometry(cloned, GLASS_GLOW_INSET)
-              return { name: m.subPartId, geometry: cloned }
+              const subs = await bakeKittenSubMeshes(m.kitten!.kind);
+              const geo = subs.find((s) => s.specKey === m.kitten!.specKey)?.geometry;
+              let cloned = geo ? geo.clone() : new THREE.BufferGeometry();
+              if (insetIds.has(m.subPartId)) cloned = insetGeometry(cloned, GLASS_GLOW_INSET);
+              return { name: m.subPartId, geometry: cloned };
             }
             case 'imported': {
               // The RAW (untangented, indexed) geometry — never the editor's MikkTSpace cache,
               // which is de-indexed and would export as a silent no-draw (see the GEOMETRY block
               // in exportGlb.ts and getImportedRawGeometry's own comment). Cloned for the same
               // reason as the kitten bake: the cache is shared and must survive dispose().
-              const src = m.imported!
-              const geo = await getImportedRawGeometry(src.importId, src.meshName)
+              const src = m.imported!;
+              const geo = await getImportedRawGeometry(src.importId, src.meshName);
               if (!geo) {
                 console.warn(
                   `flexo export: imported mesh '${src.meshName}' (${src.sourceFile}) has no geometry — SubPart '${m.subPartId}' skipped`,
-                )
-                return null
+                );
+                return null;
               }
-              return { name: m.subPartId, geometry: geo.clone() }
+              return { name: m.subPartId, geometry: geo.clone() };
             }
             case 'primitive': {
-              const geometry = buildPrimitiveGeometry(m.primitive!)
+              const geometry = buildPrimitiveGeometry(m.primitive!);
               applyFaceUvTransforms(
                 geometry,
                 PRIMITIVE_FACE_KEYS[m.primitive!.kind],
                 m.faceTextures,
-              )
-              return { name: m.subPartId, geometry }
+              );
+              return { name: m.subPartId, geometry };
             }
           }
         }),
       )
-    ).filter((n) => n !== null)
-    const emitted = new Set(nodes.map((n) => n.name))
+    ).filter((n) => n !== null);
+    const emitted = new Set(nodes.map((n) => n.name));
     if (nodes.length === 0) {
-      meshAtlasPath = undefined // every mesh failed to resolve — declare no atlas at all
+      meshAtlasPath = undefined; // every mesh failed to resolve — declare no atlas at all
     } else {
       try {
         binaries.push({
           path: meshAtlasPath,
           data: await buildMeshAtlasGlb(nodes, { viewMeshBudget: viewMeshBudget() }),
-        })
+        });
       } finally {
-        for (const n of nodes) n.geometry.dispose()
+        for (const n of nodes) n.geometry.dispose();
       }
     }
 
-    const tex = new BundleTextures(bundleToken, binaries)
-    const texById = new Map(part.customTextures.map((t) => [t.id, t]))
-    const materialById = new Map(part.customMaterials.map((mt) => [mt.id, mt]))
-    const texPath = new Map<string, string>() // texId -> relative path (dedupe shared textures)
-    const kittenTexPath = new Map<string, string>() // kitten subpath -> mod path (bundle mode)
+    const tex = new BundleTextures(bundleToken, binaries);
+    const texById = new Map(part.customTextures.map((t) => [t.id, t]));
+    const materialById = new Map(part.customMaterials.map((mt) => [mt.id, mt]));
+    const texPath = new Map<string, string>(); // texId -> relative path (dedupe shared textures)
+    const kittenTexPath = new Map<string, string>(); // kitten subpath -> mod path (bundle mode)
 
     /** Copies a stored uploaded .ktx2 into the bundle once, returning its path (null = blob gone). */
     const storedTexturePath = async (texId: string): Promise<string | null> => {
-      const t = texById.get(texId)
-      if (!t) return null
-      let rel = texPath.get(t.id)
+      const t = texById.get(texId);
+      if (!t) return null;
+      let rel = texPath.get(t.id);
       if (!rel) {
-        const blob = await getAsset(assetKeys.textureKtx2(t.id))
-        if (!blob) return null
-        const suffix = CHANNEL_SUFFIX[t.channel ?? 'baseColor']
-        rel = `Textures/${sanitizeAssetToken(t.name)}_${sanitizeAssetToken(t.id)}_${suffix}.ktx2`
-        texPath.set(t.id, rel)
-        binaries.push({ path: rel, data: new Uint8Array(await blob.arrayBuffer()) })
+        const blob = await getAsset(assetKeys.textureKtx2(t.id));
+        if (!blob) return null;
+        const suffix = CHANNEL_SUFFIX[t.channel ?? 'baseColor'];
+        rel = `Textures/${sanitizeAssetToken(t.name)}_${sanitizeAssetToken(t.id)}_${suffix}.ktx2`;
+        texPath.set(t.id, rel);
+        binaries.push({ path: rel, data: new Uint8Array(await blob.arrayBuffer()) });
       }
-      return rel
-    }
+      return rel;
+    };
 
     /** The decoded base level of a stored texture's SOURCE image, or null. */
     const sourceLevel = async (texId: string): Promise<ImageLevel | null> => {
-      const src = await getAsset(assetKeys.textureSource(texId))
-      return src ? (await decodeImage(src)).levels[0] : null
-    }
+      const src = await getAsset(assetKeys.textureSource(texId));
+      return src ? (await decodeImage(src)).levels[0] : null;
+    };
 
     /**
      * The <Normal> path for a material: strength 1 copies the stored .ktx2 verbatim
@@ -928,35 +931,35 @@ export async function buildCustomBundle(
      * applies the same multiplier, so both render identically. Deduped per
      * (texture, strength); null → caller falls back to the flat solid.
      */
-    const normalPaths = new Map<string, Promise<string | null>>()
+    const normalPaths = new Map<string, Promise<string | null>>();
     const normalPathFor = (normal: NormalChannel): Promise<string | null> => {
-      const key = `${normal.textureId}@${normal.strength}`
-      let pending = normalPaths.get(key)
+      const key = `${normal.textureId}@${normal.strength}`;
+      let pending = normalPaths.get(key);
       if (!pending) {
         pending = (async () => {
-          if (normal.strength === 1) return storedTexturePath(normal.textureId)
-          const t = texById.get(normal.textureId)
-          const src = t ? await getAsset(assetKeys.textureSource(t.id)) : null
-          if (!t || !src) return null
-          const prepared = prepareChannelImage(await decodeImage(src), 'normal', normal.strength)
-          const pct = Math.round(normal.strength * 100)
-          const rel = `Textures/${sanitizeAssetToken(t.name)}_${sanitizeAssetToken(t.id)}_s${pct}_Normal.ktx2`
-          binaries.push({ path: rel, data: await encodeImageToKtx2(prepared, { zstd: true }) })
-          return rel
-        })()
-        normalPaths.set(key, pending)
+          if (normal.strength === 1) return storedTexturePath(normal.textureId);
+          const t = texById.get(normal.textureId);
+          const src = t ? await getAsset(assetKeys.textureSource(t.id)) : null;
+          if (!t || !src) return null;
+          const prepared = prepareChannelImage(await decodeImage(src), 'normal', normal.strength);
+          const pct = Math.round(normal.strength * 100);
+          const rel = `Textures/${sanitizeAssetToken(t.name)}_${sanitizeAssetToken(t.id)}_s${pct}_Normal.ktx2`;
+          binaries.push({ path: rel, data: await encodeImageToKtx2(prepared, { zstd: true }) });
+          return rel;
+        })();
+        normalPaths.set(key, pending);
       }
-      return pending
-    }
+      return pending;
+    };
 
     /** The material's <Normal> path (its map when set and resolvable, else the flat solid). */
     const resolveNormal = async (material: CustomMaterial | undefined): Promise<string> => {
       if (material?.normal) {
-        const p = await normalPathFor(material.normal)
-        if (p) return p
+        const p = await normalPathFor(material.normal);
+        if (p) return p;
       }
-      return tex.flatNormal()
-    }
+      return tex.flatNormal();
+    };
 
     /**
      * The material's <AoRoughMetal> path: a pre-packed upload copies verbatim; any
@@ -964,42 +967,42 @@ export async function buildCustomBundle(
      * (R=AO G=rough B=metal); all-uniform channels become a solid texel. Deduped by
      * the source combination.
      */
-    const ormPacks = new Map<string, Promise<string | null>>()
+    const ormPacks = new Map<string, Promise<string | null>>();
     const resolveOrm = async (material: CustomMaterial | undefined): Promise<string> => {
-      if (!material) return tex.ormSolid(255, 128, 0) // legacy neutral (no material assigned)
+      if (!material) return tex.ormSolid(255, 128, 0); // legacy neutral (no material assigned)
       if (material.ormPacked) {
-        const p = await storedTexturePath(material.ormPacked.textureId)
-        if (p) return p
+        const p = await storedTexturePath(material.ormPacked.textureId);
+        if (p) return p;
       }
-      const aoId = material.occlusion?.textureId
-      const roughId = scalarMapId(material.roughness)
-      const metalId = scalarMapId(material.metalness)
-      const roughByte = toTexel(scalarValue(material.roughness, 0.5))
-      const metalByte = toTexel(scalarValue(material.metalness, 0))
-      if (!aoId && !roughId && !metalId) return tex.ormSolid(255, roughByte, metalByte)
+      const aoId = material.occlusion?.textureId;
+      const roughId = scalarMapId(material.roughness);
+      const metalId = scalarMapId(material.metalness);
+      const roughByte = toTexel(scalarValue(material.roughness, 0.5));
+      const metalByte = toTexel(scalarValue(material.metalness, 0));
+      if (!aoId && !roughId && !metalId) return tex.ormSolid(255, roughByte, metalByte);
 
-      const key = `${aoId ?? '-'}|${roughId ?? roughByte}|${metalId ?? metalByte}`
-      let pending = ormPacks.get(key)
+      const key = `${aoId ?? '-'}|${roughId ?? roughByte}|${metalId ?? metalByte}`;
+      let pending = ormPacks.get(key);
       if (!pending) {
         pending = (async () => {
           const src = async (id: string | undefined, value: number): Promise<OrmSource> => {
-            const level = id ? await sourceLevel(id) : null
-            return level ? { level } : { value }
-          }
+            const level = id ? await sourceLevel(id) : null;
+            return level ? { level } : { value };
+          };
           const packed = packOrmLevel(
             await src(aoId, 255),
             await src(roughId, roughByte),
             await src(metalId, metalByte),
-          )
-          const rel = `Textures/${bundleToken}_${sanitizeAssetToken(material.name)}_${material.id.replace(/^mat_/, '')}_AoRoughMetal.ktx2`
-          binaries.push({ path: rel, data: await encodeLevel(packed) })
-          return rel
-        })()
-        ormPacks.set(key, pending)
+          );
+          const rel = `Textures/${bundleToken}_${sanitizeAssetToken(material.name)}_${material.id.replace(/^mat_/, '')}_AoRoughMetal.ktx2`;
+          binaries.push({ path: rel, data: await encodeLevel(packed) });
+          return rel;
+        })();
+        ormPacks.set(key, pending);
       }
-      const packedPath = await pending
-      return packedPath ?? tex.ormSolid(255, roughByte, metalByte)
-    }
+      const packedPath = await pending;
+      return packedPath ?? tex.ormSolid(255, roughByte, metalByte);
+    };
 
     /**
      * Stamps a planned custom SubPart with its `<Internal>` (interior-only) value.
@@ -1014,10 +1017,10 @@ export async function buildCustomBundle(
     const withInternal = (plan: AssetsSubPartPlan): AssetsSubPartPlan => ({
       ...plan,
       internal: !plan.glass && resolveInternal(part, plan.subPartId, undefined),
-    })
+    });
 
     for (const m of meshes) {
-      if (!emitted.has(m.subPartId)) continue // geometry failed to resolve (warned above)
+      if (!emitted.has(m.subPartId)) continue; // geometry failed to resolve (warned above)
       // Part-ified kitten submesh: full PBR from the KSA .ktx2 (referenced/bundled), or a generated
       // solid tint diffuse (glass) / glow textures (emissive) per the visor surface mode.
       if (meshKind(m) === 'kitten') {
@@ -1025,14 +1028,14 @@ export async function buildCustomBundle(
           withInternal(
             await planKittenSubPart(m, kittenTex, kittenTexPath, binaries, bundleToken, tex),
           ),
-        )
-        continue
+        );
+        continue;
       }
       // An imported mesh flagged `transparent` (glTF alphaMode BLEND, opt-in at import) renders
       // through KSA's translucent <PartModelGlass> instead of <PartModel>. Primitives are never
       // glass — the flag only exists on kitten/imported sources.
-      const glass = m.imported?.transparent === true
-      const material = m.materialId ? materialById.get(m.materialId) : undefined
+      const glass = m.imported?.transparent === true;
+      const material = m.materialId ? materialById.get(m.materialId) : undefined;
       // Glowing primitive/imported mesh: composite the glow into the diffuse (color baked in) +
       // emit the grayscale emissive mask. The base under the glow resolves exactly like the
       // editor: face texture > material baseColor image > material color > neutral gray. The
@@ -1042,8 +1045,8 @@ export async function buildCustomBundle(
       // all, so an <Emissive> on a glass material is dead weight that only muddies material
       // interning — the same rule planKittenSubPart applies to a 'glass' visor.
       if (!glass && m.emissive) {
-        const primaryTexId = getPrimaryTextureId(m)
-        const baseTex = primaryTexId ? texById.get(primaryTexId) : undefined
+        const primaryTexId = getPrimaryTextureId(m);
+        const baseTex = primaryTexId ? texById.get(primaryTexId) : undefined;
         // Content-addressed (base image + glow bitmap + composite settings): meshes whose glows
         // composite to the same pixels share one emitted pair, so a glowing CustomMaterial worn by
         // N meshes still ships ONE <PbrMaterial> — it forks only where the GLOW actually differs.
@@ -1051,10 +1054,10 @@ export async function buildCustomBundle(
           await glowCacheKey(m, glowBaseKey(baseTex, material, texById)),
           material?.name ?? m.name,
           async () => {
-            const glow = (await glowFor(m))! // non-null: m.emissive is set (guard above)
-            return { base: await exportBaseImage(baseTex, material, texById, glow.bitmap), glow }
+            const glow = (await glowFor(m))!; // non-null: m.emissive is set (guard above)
+            return { base: await exportBaseImage(baseTex, material, texById, glow.bitmap), glow };
           },
-        )
+        );
         const materialId = tex.intern(
           {
             diffusePath: paths.diffusePath,
@@ -1063,9 +1066,9 @@ export async function buildCustomBundle(
             emissivePath: paths.emissivePath,
           },
           `${m.subPartId}_Material`,
-        )
-        subParts.push(withInternal({ subPartId: m.subPartId, materialId, glass }))
-        continue
+        );
+        subParts.push(withInternal({ subPartId: m.subPartId, materialId, glass }));
+        continue;
       }
       // Diffuse resolution: the primary (first textured) face wins, then the material's
       // base color (image or picked-color solid). Neither → the shared neutral material.
@@ -1075,13 +1078,13 @@ export async function buildCustomBundle(
       // <Material> crashes the game at startup. Zero Core PartModels omit it. The fallback
       // interns to ONE <PbrMaterial> across every bare mesh, and its color matches the editor's
       // untextured look (MaterialFactory.makeFlatMaterial) so in-game == viewport.
-      const primaryTexId = getPrimaryTextureId(m)
-      let diffusePath = primaryTexId ? await storedTexturePath(primaryTexId) : null
+      const primaryTexId = getPrimaryTextureId(m);
+      let diffusePath = primaryTexId ? await storedTexturePath(primaryTexId) : null;
       if (!diffusePath && material) {
         diffusePath =
           material.baseColor.kind === 'map'
             ? await storedTexturePath(material.baseColor.textureId)
-            : await tex.baseColorSolid(material.baseColor.color)
+            : await tex.baseColorSolid(material.baseColor.color);
       }
       if (!diffusePath) {
         const materialId = tex.intern(
@@ -1091,14 +1094,14 @@ export async function buildCustomBundle(
             aoRoughMetalPath: await tex.ormSolid(255, 128, 0),
           },
           `${bundleToken}_NeutralMaterial`,
-        )
-        subParts.push(withInternal({ subPartId: m.subPartId, materialId, glass }))
-        continue
+        );
+        subParts.push(withInternal({ subPartId: m.subPartId, materialId, glass }));
+        continue;
       }
       // A mesh rendering its material verbatim (no per-face diffuse override) interns under
       // the material's own exported id, so meshes sharing a material share one <PbrMaterial>.
       const preferredId =
-        material && !primaryTexId ? materialExportId(material) : `${m.subPartId}_Material`
+        material && !primaryTexId ? materialExportId(material) : `${m.subPartId}_Material`;
       const materialId = tex.intern(
         {
           diffusePath,
@@ -1106,11 +1109,11 @@ export async function buildCustomBundle(
           aoRoughMetalPath: await resolveOrm(material),
         },
         preferredId,
-      )
-      subParts.push(withInternal({ subPartId: m.subPartId, materialId, glass }))
+      );
+      subParts.push(withInternal({ subPartId: m.subPartId, materialId, glass }));
     }
 
-    materials = tex.materials
+    materials = tex.materials;
   }
 
   return {
@@ -1122,7 +1125,7 @@ export async function buildCustomBundle(
       referenceSubParts,
     }),
     binaries,
-  }
+  };
 }
 
 /**
@@ -1139,18 +1142,18 @@ export async function buildModZip(
 ): Promise<Blob> {
   // Layered 'glassGlow' visors expand into glass + inset-glow SubPart pairs; feed the augmented
   // part to BOTH the Part/GameData serializers and the bundle so placements + geometry agree.
-  const { part: expandedPart, insetIds } = expandGlassGlow(part)
-  const content = buildModContent(expandedPart, projectName, catalog)
+  const { part: expandedPart, insetIds } = expandGlassGlow(part);
+  const content = buildModContent(expandedPart, projectName, catalog);
   const bundle = await buildCustomBundle(
     expandedPart,
     content.base,
     kittenTex,
     content.variants,
     insetIds,
-  )
-  const encoder = new TextEncoder()
-  const xmlAssets = [content.partFile, content.gameDataFile]
-  if (bundle.assetsFile) xmlAssets.push(bundle.assetsFile)
+  );
+  const encoder = new TextEncoder();
+  const xmlAssets = [content.partFile, content.gameDataFile];
+  if (bundle.assetsFile) xmlAssets.push(bundle.assetsFile);
 
   const entries: ZipEntry[] = [
     {
@@ -1162,28 +1165,28 @@ export async function buildModZip(
       name: `${MOD_FOLDER_NAME}/${content.gameDataFile}`,
       data: encoder.encode(content.gameDataXml),
     },
-  ]
+  ];
   if (bundle.assetsFile && bundle.assetsXml) {
     entries.push({
       name: `${MOD_FOLDER_NAME}/${bundle.assetsFile}`,
       data: encoder.encode(bundle.assetsXml),
-    })
+    });
   }
   for (const b of bundle.binaries) {
-    entries.push({ name: `${MOD_FOLDER_NAME}/${b.path}`, data: b.data })
+    entries.push({ name: `${MOD_FOLDER_NAME}/${b.path}`, data: b.data });
   }
-  return createZip(entries)
+  return createZip(entries);
 }
 
-const isXml = (name: string) => name.toLowerCase().endsWith('.xml')
+const isXml = (name: string) => name.toLowerCase().endsWith('.xml');
 
 /** All file names directly inside `dir`. */
 async function listFileNames(dir: FileSystemDirectoryHandle): Promise<string[]> {
-  const names: string[] = []
+  const names: string[] = [];
   for await (const [name, handle] of dir.entries()) {
-    if (handle.kind === 'file') names.push(name)
+    if (handle.kind === 'file') names.push(name);
   }
-  return names
+  return names;
 }
 
 async function writeTextFile(
@@ -1191,10 +1194,10 @@ async function writeTextFile(
   name: string,
   contents: string,
 ): Promise<void> {
-  const fileHandle = await dir.getFileHandle(name, { create: true })
-  const writable = await fileHandle.createWritable()
-  await writable.write(contents)
-  await writable.close()
+  const fileHandle = await dir.getFileHandle(name, { create: true });
+  const writable = await fileHandle.createWritable();
+  await writable.write(contents);
+  await writable.close();
 }
 
 /** Writes binary bytes at a "Sub/Dir/file.ext" path under `root`, creating subdirs. */
@@ -1203,22 +1206,22 @@ async function writeBinaryAtPath(
   relPath: string,
   data: Uint8Array,
 ): Promise<void> {
-  const segments = relPath.split('/')
-  const fileName = segments.pop()!
-  let dir = root
-  for (const seg of segments) dir = await dir.getDirectoryHandle(seg, { create: true })
-  const fileHandle = await dir.getFileHandle(fileName, { create: true })
-  const writable = await fileHandle.createWritable()
-  await writable.write(data as unknown as BufferSource)
-  await writable.close()
+  const segments = relPath.split('/');
+  const fileName = segments.pop()!;
+  let dir = root;
+  for (const seg of segments) dir = await dir.getDirectoryHandle(seg, { create: true });
+  const fileHandle = await dir.getFileHandle(fileName, { create: true });
+  const writable = await fileHandle.createWritable();
+  await writable.write(data as unknown as BufferSource);
+  await writable.close();
 }
 
 export interface WriteResult {
-  partFile: string
-  gameDataFile: string
+  partFile: string;
+  gameDataFile: string;
   /** Assets XML filename when custom assets were written, else null. */
-  assetsFile: string | null
-  assets: string[]
+  assetsFile: string | null;
+  assets: string[];
 }
 
 /**
@@ -1236,9 +1239,9 @@ export async function writeModToFolder(
   kittenTex?: KittenTextureExportConfig,
   catalog: ReadonlyMap<string, CatalogSubPart> = new Map(),
 ): Promise<WriteResult> {
-  const modDir = await modsDir.getDirectoryHandle(MOD_FOLDER_NAME, { create: true })
-  const { part: expandedPart, insetIds } = expandGlassGlow(part)
-  const content = buildModContent(expandedPart, projectName, catalog)
+  const modDir = await modsDir.getDirectoryHandle(MOD_FOLDER_NAME, { create: true });
+  const { part: expandedPart, insetIds } = expandGlassGlow(part);
+  const content = buildModContent(expandedPart, projectName, catalog);
 
   const bundle = await buildCustomBundle(
     expandedPart,
@@ -1246,31 +1249,31 @@ export async function writeModToFolder(
     kittenTex,
     content.variants,
     insetIds,
-  )
+  );
 
-  const taken = new Set((await listFileNames(modDir)).map((n) => n.toLowerCase()))
-  const partFile = uniqueFileName(taken, `${content.base}Part`, 'xml')
-  taken.add(partFile.toLowerCase())
-  const gameDataFile = uniqueFileName(taken, `${content.base}GameData`, 'xml')
-  taken.add(gameDataFile.toLowerCase())
+  const taken = new Set((await listFileNames(modDir)).map((n) => n.toLowerCase()));
+  const partFile = uniqueFileName(taken, `${content.base}Part`, 'xml');
+  taken.add(partFile.toLowerCase());
+  const gameDataFile = uniqueFileName(taken, `${content.base}GameData`, 'xml');
+  taken.add(gameDataFile.toLowerCase());
 
-  await writeTextFile(modDir, partFile, content.partXml)
-  await writeTextFile(modDir, gameDataFile, content.gameDataXml)
+  await writeTextFile(modDir, partFile, content.partXml);
+  await writeTextFile(modDir, gameDataFile, content.gameDataXml);
 
   // Custom assets: the Assets XML respects the non-overwrite contract (suffixed on
   // collision); the binaries it references are regenerated deterministically and
   // written into Meshes/, Textures/, and Animations/ (overwrite is fine — same content).
-  let assetsFile: string | null = null
+  let assetsFile: string | null = null;
   if (bundle.assetsFile && bundle.assetsXml) {
-    assetsFile = uniqueFileName(taken, `${content.base}Assets`, 'xml')
-    await writeTextFile(modDir, assetsFile, bundle.assetsXml)
+    assetsFile = uniqueFileName(taken, `${content.base}Assets`, 'xml');
+    await writeTextFile(modDir, assetsFile, bundle.assetsXml);
   }
   // Binaries are written even with no Assets XML — an animation-only part (Core
   // SubParts) ships an Animations/*.glb referenced by the GameData XML.
-  for (const b of bundle.binaries) await writeBinaryAtPath(modDir, b.path, b.data)
+  for (const b of bundle.binaries) await writeBinaryAtPath(modDir, b.path, b.data);
 
-  const assets = (await listFileNames(modDir)).filter(isXml).sort((a, b) => a.localeCompare(b))
-  await writeTextFile(modDir, MOD_TOML_NAME, serializeModToml(assets))
+  const assets = (await listFileNames(modDir)).filter(isXml).sort((a, b) => a.localeCompare(b));
+  await writeTextFile(modDir, MOD_TOML_NAME, serializeModToml(assets));
 
-  return { partFile, gameDataFile, assetsFile, assets }
+  return { partFile, gameDataFile, assetsFile, assets };
 }

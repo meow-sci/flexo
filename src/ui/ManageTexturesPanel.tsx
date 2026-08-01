@@ -1,7 +1,7 @@
-import { useRef, useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { X } from 'lucide-react'
-import { Button as AriaButton } from 'react-aria-components'
+import { useRef, useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { X } from 'lucide-react';
+import { Button as AriaButton } from 'react-aria-components';
 import {
   Modal,
   Dialog,
@@ -13,12 +13,12 @@ import {
   TextField,
   Switch,
   useIsPhone,
-} from './kit'
-import { ColorAlphaField } from './ColorAlphaField'
-import { useNumberDraft } from './numberDraft'
-import { SliderRow } from './SliderRow'
-import { MaterialDialog } from './MaterialDialog'
-import { $part, addLight } from '../state/editorStore'
+} from './kit';
+import { ColorAlphaField } from './ColorAlphaField';
+import { useNumberDraft } from './numberDraft';
+import { SliderRow } from './SliderRow';
+import { MaterialDialog } from './MaterialDialog';
+import { $part, addLight } from '../state/editorStore';
 import {
   $managingMeshId,
   setManagingMeshId,
@@ -29,10 +29,10 @@ import {
   setMeshSurface,
   setMeshTransparent,
   setGlowPaintMeshId,
-} from '../state/customAssetStore'
-import { $simulateGlass, setSimulateGlass } from '../state/settingsStore'
-import { PRIMITIVE_FACE_KEYS, FACE_LABELS } from '../three/primitives'
-import { decodeImage } from '../ktx/decodeImage'
+} from '../state/customAssetStore';
+import { $simulateGlass, setSimulateGlass } from '../state/settingsStore';
+import { PRIMITIVE_FACE_KEYS, FACE_LABELS } from '../three/primitives';
+import { decodeImage } from '../ktx/decodeImage';
 import {
   GLOW_RAMP_PRESETS,
   defaultGlowRamp,
@@ -42,7 +42,7 @@ import {
   normalizeGlowRamp,
   rgbToHex,
   sampleGlowRamp,
-} from '../ktx/glowRamp'
+} from '../ktx/glowRamp';
 import {
   createGlow,
   meshKind,
@@ -55,33 +55,33 @@ import {
   type RgbColor,
   type TextureWrap,
   type VisorSurface,
-} from '../ksa/types'
+} from '../ksa/types';
 
 const DEFAULT_CONFIG: FaceTextureConfig = {
   textureId: '',
   uvScale: { x: 1, y: 1 },
   uvOffset: { x: 0, y: 0 },
   wrap: 'repeat',
-}
+};
 
 const WRAP_LABELS: { id: TextureWrap; label: string }[] = [
   { id: 'repeat', label: 'Tile (repeat)' },
   { id: 'mirror', label: 'Mirror' },
   { id: 'clamp', label: 'Stretch edge' },
-]
+];
 
 /** Emissive mask values above this blow a glow's color out to white in-game (see GlowSettings). */
-const GLOW_WASHOUT_STRENGTH = 0.6
+const GLOW_WASHOUT_STRENGTH = 0.6;
 
 /** The kind label in the panel header — a primitive names its shape, the other two their kind. */
 function meshKindLabel(mesh: CustomMesh): string {
   switch (meshKind(mesh)) {
     case 'kitten':
-      return 'kitten'
+      return 'kitten';
     case 'imported':
-      return 'imported'
+      return 'imported';
     case 'primitive':
-      return mesh.primitive?.kind ?? 'mesh'
+      return mesh.primitive?.kind ?? 'mesh';
   }
 }
 
@@ -93,31 +93,31 @@ function meshKindLabel(mesh: CustomMesh): string {
  * id to open, null to close.
  */
 export function ManageTexturesPanel() {
-  const meshId = useStore($managingMeshId)
-  const part = useStore($part)
-  const isPhone = useIsPhone()
+  const meshId = useStore($managingMeshId);
+  const part = useStore($part);
+  const isPhone = useIsPhone();
 
-  const mesh = meshId ? part.customMeshes.find((m) => m.id === meshId) : undefined
+  const mesh = meshId ? part.customMeshes.find((m) => m.id === meshId) : undefined;
 
   // Per-face textures only exist for primitive meshes: a kitten submesh carries its own KSA PBR
   // set, and an imported mesh is one glTF primitive with exactly one material (a KSA <PartModel>).
   const faceKeys =
     mesh && meshKind(mesh) === 'primitive' && mesh.primitive
       ? PRIMITIVE_FACE_KEYS[mesh.primitive.kind]
-      : []
-  const [selectedFace, setSelectedFace] = useState(faceKeys[0] ?? '')
-  const activeFace = faceKeys.includes(selectedFace) ? selectedFace : (faceKeys[0] ?? '')
+      : [];
+  const [selectedFace, setSelectedFace] = useState(faceKeys[0] ?? '');
+  const activeFace = faceKeys.includes(selectedFace) ? selectedFace : (faceKeys[0] ?? '');
 
   const update = (faceKey: string, patch: Partial<FaceTextureConfig>) => {
-    const currentMesh = $part.get().customMeshes.find((m) => m.id === meshId)
-    const existing = currentMesh?.faceTextures[faceKey] ?? DEFAULT_CONFIG
-    void updateMeshFaceConfig(meshId!, faceKey, { ...existing, ...patch })
-  }
+    const currentMesh = $part.get().customMeshes.find((m) => m.id === meshId);
+    const existing = currentMesh?.faceTextures[faceKey] ?? DEFAULT_CONFIG;
+    void updateMeshFaceConfig(meshId!, faceKey, { ...existing, ...patch });
+  };
 
-  if (!mesh) return null
+  if (!mesh) return null;
 
-  const currentConfig: FaceTextureConfig = mesh.faceTextures[activeFace] ?? DEFAULT_CONFIG
-  const close = () => setManagingMeshId(null)
+  const currentConfig: FaceTextureConfig = mesh.faceTextures[activeFace] ?? DEFAULT_CONFIG;
+  const close = () => setManagingMeshId(null);
 
   const inner = (
     <PanelContent
@@ -129,7 +129,7 @@ export function ManageTexturesPanel() {
       update={update}
       onClose={close}
     />
-  )
+  );
 
   if (isPhone) {
     return (
@@ -139,7 +139,7 @@ export function ManageTexturesPanel() {
           <div className="overflow-y-auto p-4">{inner}</div>
         </Dialog>
       </Modal>
-    )
+    );
   }
 
   return (
@@ -160,17 +160,17 @@ export function ManageTexturesPanel() {
       </div>
       {inner}
     </div>
-  )
+  );
 }
 
 interface PanelContentProps {
-  mesh: CustomMesh
-  faceKeys: readonly string[]
-  selectedFace: string
-  onFaceChange: (key: string) => void
-  currentConfig: FaceTextureConfig
-  update: (faceKey: string, patch: Partial<FaceTextureConfig>) => void
-  onClose: () => void
+  mesh: CustomMesh;
+  faceKeys: readonly string[];
+  selectedFace: string;
+  onFaceChange: (key: string) => void;
+  currentConfig: FaceTextureConfig;
+  update: (faceKey: string, patch: Partial<FaceTextureConfig>) => void;
+  onClose: () => void;
 }
 
 function PanelContent({
@@ -182,8 +182,8 @@ function PanelContent({
   update,
   onClose,
 }: PanelContentProps) {
-  const part = useStore($part)
-  const kind = meshKind(mesh)
+  const part = useStore($part);
+  const kind = meshKind(mesh);
 
   return (
     <div className="flex flex-col gap-3">
@@ -288,7 +288,7 @@ function PanelContent({
         Close
       </Button>
     </div>
-  )
+  );
 }
 
 /**
@@ -298,17 +298,17 @@ function PanelContent({
  * flagged below when the mesh mixes several face textures (export uses the first).
  */
 function MaterialSection({ mesh }: { mesh: CustomMesh }) {
-  const part = useStore($part)
-  const [dialog, setDialog] = useState<'closed' | 'edit' | 'create'>('closed')
+  const part = useStore($part);
+  const [dialog, setDialog] = useState<'closed' | 'edit' | 'create'>('closed');
   const material = mesh.materialId
     ? part.customMaterials.find((m) => m.id === mesh.materialId)
-    : undefined
+    : undefined;
 
   const distinctFaceTextures = new Set(
     Object.values(mesh.faceTextures)
       .map((f) => f?.textureId)
       .filter(Boolean),
-  )
+  );
 
   return (
     <SectionShell title="Material">
@@ -356,7 +356,7 @@ function MaterialSection({ mesh }: { mesh: CustomMesh }) {
         />
       )}
     </SectionShell>
-  )
+  );
 }
 
 /**
@@ -389,7 +389,7 @@ function ImportedSection({ mesh, imported }: { mesh: CustomMesh; imported: Impor
         can&apos;t glow. Editor preview stays opaque.
       </p>
     </SectionShell>
-  )
+  );
 }
 
 function ProvenanceRow({ label, value }: { label: string; value: string }) {
@@ -400,7 +400,7 @@ function ProvenanceRow({ label, value }: { label: string; value: string }) {
         {value}
       </dd>
     </>
-  )
+  );
 }
 
 /** Glow / visor-surface controls — a visor (glass-capable) gets the Surface selector; others a Glow mode. */
@@ -409,7 +409,7 @@ function GlowSection({ mesh }: { mesh: CustomMesh }) {
     <VisorSurfaceControls mesh={mesh} />
   ) : (
     <GlowModeControls mesh={mesh} />
-  )
+  );
 }
 
 function SectionShell({ title, children }: { title: string; children: React.ReactNode }) {
@@ -418,11 +418,11 @@ function SectionShell({ title, children }: { title: string; children: React.Reac
       <span className="text-[11px] uppercase tracking-wide text-fg-subtle">{title}</span>
       {children}
     </div>
-  )
+  );
 }
 
 function TintField({ mesh }: { mesh: CustomMesh }) {
-  const glass = mesh.glass ?? { tint: { r: 120, g: 200, b: 255 }, opacity: 0.45 }
+  const glass = mesh.glass ?? { tint: { r: 120, g: 200, b: 255 }, opacity: 0.45 };
   return (
     <ColorAlphaField
       label="Tint"
@@ -432,7 +432,7 @@ function TintField({ mesh }: { mesh: CustomMesh }) {
         void setMeshGlass(mesh.id, { tint: hexToRgb(color), opacity })
       }
     />
-  )
+  );
 }
 
 /**
@@ -446,8 +446,8 @@ function TintField({ mesh }: { mesh: CustomMesh }) {
  *    white" symptom. See analysis/KSA_EMISSIVE_AND_LUT.md.
  */
 function GlowSettings({ mesh, glow }: { mesh: CustomMesh; glow: EmissiveConfig }) {
-  const patch = (next: Partial<EmissiveConfig>) => void setMeshGlow(mesh.id, { ...glow, ...next })
-  const ramped = !!glow.ramp
+  const patch = (next: Partial<EmissiveConfig>) => void setMeshGlow(mesh.id, { ...glow, ...next });
+  const ramped = !!glow.ramp;
   return (
     <>
       {glow.shape === 'painted' && (
@@ -504,7 +504,7 @@ function GlowSettings({ mesh, glow }: { mesh: CustomMesh; glow: EmissiveConfig }
       )}
       <AddMatchingLightButton mesh={mesh} glow={glow} />
     </>
-  )
+  );
 }
 
 /**
@@ -513,7 +513,7 @@ function GlowSettings({ mesh, glow }: { mesh: CustomMesh; glow: EmissiveConfig }
  * map is white-only. A Point light at the SubPart origin; range/aim are edited in SubPart Data.
  */
 function AddMatchingLightButton({ mesh, glow }: { mesh: CustomMesh; glow: EmissiveConfig }) {
-  const color = glow.ramp ? sampleGlowRamp(glow.ramp, 1) : glow.color
+  const color = glow.ramp ? sampleGlowRamp(glow.ramp, 1) : glow.color;
   return (
     <Button
       size="sm"
@@ -527,14 +527,14 @@ function AddMatchingLightButton({ mesh, glow }: { mesh: CustomMesh; glow: Emissi
     >
       Add matching light
     </Button>
-  )
+  );
 }
 
 function VisorSurfaceControls({ mesh }: { mesh: CustomMesh }) {
-  const simulate = useStore($simulateGlass)
-  const surface: VisorSurface = mesh.surface ?? 'glass'
-  const showGlass = surface === 'glass' || surface === 'glassGlow'
-  const showGlow = surface === 'glow' || surface === 'glassGlow'
+  const simulate = useStore($simulateGlass);
+  const surface: VisorSurface = mesh.surface ?? 'glass';
+  const showGlass = surface === 'glass' || surface === 'glassGlow';
+  const showGlow = surface === 'glow' || surface === 'glassGlow';
   return (
     <SectionShell title="Visor surface">
       <Select
@@ -560,21 +560,21 @@ function VisorSurfaceControls({ mesh }: { mesh: CustomMesh }) {
         visor opaque; “Glass + Glow” keeps it see-through with a glow layer behind it.
       </p>
     </SectionShell>
-  )
+  );
 }
 
 function GlowModeControls({ mesh }: { mesh: CustomMesh }) {
-  const mode = mesh.emissive?.shape ?? 'off'
+  const mode = mesh.emissive?.shape ?? 'off';
   const setMode = (m: string) => {
     if (m === 'off') {
-      void setMeshGlow(mesh.id, undefined)
-      return
+      void setMeshGlow(mesh.id, undefined);
+      return;
     }
     void setMeshGlow(mesh.id, {
       ...(mesh.emissive ?? createGlow()),
       shape: m as 'whole' | 'painted',
-    })
-  }
+    });
+  };
   return (
     <SectionShell title="Glow (emissive)">
       <Select label="Mode" selectedKey={mode} onSelectionChange={(k) => setMode(String(k))}>
@@ -594,7 +594,7 @@ function GlowModeControls({ mesh }: { mesh: CustomMesh }) {
         real colored light, keep Emissive low and add a matching light.
       </p>
     </SectionShell>
-  )
+  );
 }
 
 /**
@@ -607,22 +607,22 @@ function GlowModeControls({ mesh }: { mesh: CustomMesh }) {
  * or drag the stops afterwards).
  */
 function GlowRampEditor({ ramp, onChange }: { ramp: GlowRamp; onChange: (r: GlowRamp) => void }) {
-  const fileInput = useRef<HTMLInputElement>(null)
-  const [importError, setImportError] = useState('')
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [importError, setImportError] = useState('');
 
   const importImage = async (file: File | undefined) => {
-    if (!file) return
+    if (!file) return;
     try {
-      const decoded = await decodeImage(file)
-      onChange(normalizeGlowRamp(glowRampFromImage(decoded.levels[0]).stops))
-      setImportError('')
+      const decoded = await decodeImage(file);
+      onChange(normalizeGlowRamp(glowRampFromImage(decoded.levels[0]).stops));
+      setImportError('');
     } catch {
-      setImportError('Could not read that image.')
+      setImportError('Could not read that image.');
     }
-  }
+  };
 
   const patchStop = (i: number, next: Partial<GlowRampStop>) =>
-    onChange(normalizeGlowRamp(ramp.stops.map((s, j) => (j === i ? { ...s, ...next } : s))))
+    onChange(normalizeGlowRamp(ramp.stops.map((s, j) => (j === i ? { ...s, ...next } : s))));
 
   return (
     <div className="flex flex-col gap-2">
@@ -640,8 +640,8 @@ function GlowRampEditor({ ramp, onChange }: { ramp: GlowRamp; onChange: (r: Glow
           placeholder="Preset…"
           selectedKey={null}
           onSelectionChange={(k) => {
-            const preset = GLOW_RAMP_PRESETS.find((p) => p.id === String(k))
-            if (preset) onChange(normalizeGlowRamp(preset.ramp.stops))
+            const preset = GLOW_RAMP_PRESETS.find((p) => p.id === String(k));
+            if (preset) onChange(normalizeGlowRamp(preset.ramp.stops));
           }}
           className="flex-1"
         >
@@ -704,12 +704,12 @@ function GlowRampEditor({ ramp, onChange }: { ramp: GlowRamp; onChange: (r: Glow
         Add stop
       </Button>
     </div>
-  )
+  );
 }
 
 /** The ramp's own color at the midpoint — so a new stop lands on the curve instead of jumping. */
 function midStop(ramp: GlowRamp): RgbColor {
-  return sampleGlowRamp(ramp, 0.5)
+  return sampleGlowRamp(ramp, 0.5);
 }
 
 /**
@@ -722,11 +722,11 @@ function UvNumberField({
   value,
   onChange,
 }: {
-  label: string
-  value: number
-  onChange: (v: number) => void
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
 }) {
-  const field = useNumberDraft({ value, onCommit: onChange, format: formatNum })
+  const field = useNumberDraft({ value, onCommit: onChange, format: formatNum });
   return (
     <TextField
       label={label}
@@ -735,10 +735,10 @@ function UvNumberField({
       inputMode="url"
       {...field}
     />
-  )
+  );
 }
 
 function formatNum(n: number): string {
-  if (Number.isInteger(n)) return String(n)
-  return n.toFixed(4).replace(/\.?0+$/, '') || '0'
+  if (Number.isInteger(n)) return String(n);
+  return n.toFixed(4).replace(/\.?0+$/, '') || '0';
 }

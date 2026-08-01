@@ -1,16 +1,16 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { GridList, GridListItem, type Selection } from 'react-aria-components'
-import { Button, Dialog, DialogHeader, Modal, SearchField, cn, gridRowClass } from './kit'
-import { $part } from '../state/editorStore'
-import { $activeAnimation, $activeJointId, attachToJoint } from '../state/animationStore'
-import { useShiftRangeSelect } from './rangeSelect'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { GridList, GridListItem, type Selection } from 'react-aria-components';
+import { Button, Dialog, DialogHeader, Modal, SearchField, cn, gridRowClass } from './kit';
+import { $part } from '../state/editorStore';
+import { $activeAnimation, $activeJointId, attachToJoint } from '../state/animationStore';
+import { useShiftRangeSelect } from './rangeSelect';
 
 /** One pickable SubPart row (a placed instance — the unit a joint drives). */
 interface PickRow {
-  id: string
-  name: string
-  sub: string
+  id: string;
+  name: string;
+  sub: string;
 }
 
 /**
@@ -23,52 +23,52 @@ export function MeshPickerModal({
   isOpen,
   onOpenChange,
 }: {
-  isOpen: boolean
-  onOpenChange: (open: boolean) => void
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const part = useStore($part)
-  const anim = useStore($activeAnimation)
-  const activeJointId = useStore($activeJointId)
-  const [search, setSearch] = useState('')
-  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const part = useStore($part);
+  const anim = useStore($activeAnimation);
+  const activeJointId = useStore($activeJointId);
+  const [search, setSearch] = useState('');
+  const [picked, setPicked] = useState<Set<string>>(new Set());
 
-  const joint = anim?.joints.find((j) => j.id === activeJointId) ?? null
+  const joint = anim?.joints.find((j) => j.id === activeJointId) ?? null;
 
-  const q = search.trim().toLowerCase()
-  const match = (...vals: string[]) => q === '' || vals.some((v) => v.toLowerCase().includes(q))
+  const q = search.trim().toLowerCase();
+  const match = (...vals: string[]) => q === '' || vals.some((v) => v.toLowerCase().includes(q));
   const rows: PickRow[] = part.placements.flatMap((p) =>
     match(p.instanceId, p.subPartTemplateId)
       ? [{ id: p.instanceId, name: p.instanceId, sub: p.subPartTemplateId }]
       : [],
-  )
+  );
 
   // Same list conventions as the Assets list: click, Cmd/Ctrl+click, Cmd/Ctrl+A, and
   // Shift+click to extend across everything in between (see useShiftRangeSelect).
-  const range = useShiftRangeSelect({ orderedKeys: rows.map((r) => r.id), selectedKeys: picked })
+  const range = useShiftRangeSelect({ orderedKeys: rows.map((r) => r.id), selectedKeys: picked });
 
   const onSelectionChange = (reported: Selection) => {
-    const keys = range.resolveSelection(reported)
+    const keys = range.resolveSelection(reported);
     if (keys === 'all') {
-      setPicked(new Set(rows.map((r) => r.id)))
-      return
+      setPicked(new Set(rows.map((r) => r.id)));
+      return;
     }
-    setPicked(new Set([...keys].map(String)))
-  }
+    setPicked(new Set([...keys].map(String)));
+  };
 
   const attach = () => {
-    if (!anim || !joint || picked.size === 0) return
-    attachToJoint(anim.id, joint.id, [...picked])
-    onOpenChange(false)
-  }
+    if (!anim || !joint || picked.size === 0) return;
+    attachToJoint(anim.id, joint.id, [...picked]);
+    onOpenChange(false);
+  };
 
   // Reset picks each time the dialog is reopened.
   const handleOpenChange = (open: boolean) => {
     if (!open) {
-      setPicked(new Set())
-      setSearch('')
+      setPicked(new Set());
+      setSearch('');
     }
-    onOpenChange(open)
-  }
+    onOpenChange(open);
+  };
 
   return (
     <Modal
@@ -132,5 +132,5 @@ export function MeshPickerModal({
         </div>
       </Dialog>
     </Modal>
-  )
+  );
 }

@@ -19,14 +19,14 @@
  * calls at call sites.
  */
 export class RenderLoop {
-  private readonly draw: () => void
+  private readonly draw: () => void;
   /** In-flight rAF handle (0 = no frame scheduled). */
-  private handle = 0
-  private continuous = false
-  private disposed = false
+  private handle = 0;
+  private continuous = false;
+  private disposed = false;
 
   constructor(draw: () => void) {
-    this.draw = draw
+    this.draw = draw;
   }
 
   /**
@@ -34,8 +34,8 @@ export class RenderLoop {
    * touches twenty objects can call this twenty times and still cost one render.
    */
   invalidate(): void {
-    if (this.disposed || this.handle !== 0) return
-    this.handle = requestAnimationFrame(this.tick)
+    if (this.disposed || this.handle !== 0) return;
+    this.handle = requestAnimationFrame(this.tick);
   }
 
   /**
@@ -44,23 +44,23 @@ export class RenderLoop {
    * reading would be meaningless (and alarming) against an on-demand loop.
    */
   setContinuous(on: boolean): void {
-    if (on === this.continuous) return
-    this.continuous = on
-    if (on) this.invalidate()
+    if (on === this.continuous) return;
+    this.continuous = on;
+    if (on) this.invalidate();
   }
 
   private readonly tick = (): void => {
-    this.handle = 0
-    if (this.disposed) return
+    this.handle = 0;
+    if (this.disposed) return;
     // Re-arm BEFORE drawing so an invalidate() raised during the draw (damping,
     // for one) coalesces into the frame already scheduled instead of being lost.
-    if (this.continuous) this.invalidate()
-    this.draw()
-  }
+    if (this.continuous) this.invalidate();
+    this.draw();
+  };
 
   dispose(): void {
-    this.disposed = true
-    if (this.handle !== 0) cancelAnimationFrame(this.handle)
-    this.handle = 0
+    this.disposed = true;
+    if (this.handle !== 0) cancelAnimationFrame(this.handle);
+    this.handle = 0;
   }
 }

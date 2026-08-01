@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
 import {
   Modal,
   Dialog,
@@ -11,15 +11,15 @@ import {
   Select,
   ListBoxItem,
   toast,
-} from './kit'
-import { $part } from '../state/editorStore'
-import { useNumberDraft } from './numberDraft'
-import { addCustomMesh } from '../state/customAssetStore'
-import { DEFAULT_PRIMITIVE_PARAMS, PRIMITIVE_KINDS, PRIMITIVE_LABELS } from '../three/primitives'
-import type { PrimitiveKind, PrimitiveSpec } from '../ksa/types'
+} from './kit';
+import { $part } from '../state/editorStore';
+import { useNumberDraft } from './numberDraft';
+import { addCustomMesh } from '../state/customAssetStore';
+import { DEFAULT_PRIMITIVE_PARAMS, PRIMITIVE_KINDS, PRIMITIVE_LABELS } from '../three/primitives';
+import type { PrimitiveKind, PrimitiveSpec } from '../ksa/types';
 
 interface CreateMeshDialogProps {
-  onClose: () => void
+  onClose: () => void;
 }
 
 /**
@@ -31,26 +31,29 @@ interface CreateMeshDialogProps {
  * useState with no reset effect.
  */
 export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
-  const part = useStore($part)
+  const part = useStore($part);
   // Base-color images only — data maps (normal/ORM/…) are picked inside a material.
-  const textures = part.customTextures.filter((t) => t.channel === 'baseColor')
-  const materials = part.customMaterials
-  const [kind, setKind] = useState<PrimitiveKind>('box')
-  const [params, setParams] = useState<Record<string, number>>({ ...DEFAULT_PRIMITIVE_PARAMS.box })
-  const [name, setName] = useState('Panel')
-  const [textureId, setTextureId] = useState<string>(() => textures[0]?.id ?? '')
-  const [materialId, setMaterialId] = useState<string>('')
-  const [busy, setBusy] = useState(false)
+  const textures = part.customTextures.filter((t) => t.channel === 'baseColor');
+  const materials = part.customMaterials;
+  const [kind, setKind] = useState<PrimitiveKind>('box');
+  const [params, setParams] = useState<Record<string, number>>({ ...DEFAULT_PRIMITIVE_PARAMS.box });
+  const [name, setName] = useState('Panel');
+  const [textureId, setTextureId] = useState<string>(() => textures[0]?.id ?? '');
+  const [materialId, setMaterialId] = useState<string>('');
+  const [busy, setBusy] = useState(false);
 
   const changeKind = (k: PrimitiveKind) => {
-    setKind(k)
-    setParams({ ...(DEFAULT_PRIMITIVE_PARAMS[k] as unknown as Record<string, number>) })
-  }
+    setKind(k);
+    setParams({ ...(DEFAULT_PRIMITIVE_PARAMS[k] as unknown as Record<string, number>) });
+  };
 
   const buildSpec = (): PrimitiveSpec => {
     switch (kind) {
       case 'box':
-        return { kind, params: { width: params.width, height: params.height, depth: params.depth } }
+        return {
+          kind,
+          params: { width: params.width, height: params.height, depth: params.depth },
+        };
       case 'cylinder':
         return {
           kind,
@@ -59,38 +62,38 @@ export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
             height: params.height,
             radialSegments: params.radialSegments,
           },
-        }
+        };
       case 'sphere':
-        return { kind, params: { radius: params.radius, segments: params.segments } }
+        return { kind, params: { radius: params.radius, segments: params.segments } };
       case 'plane':
-        return { kind, params: { width: params.width, height: params.height } }
+        return { kind, params: { width: params.width, height: params.height } };
     }
-  }
+  };
 
   const submit = async () => {
-    setBusy(true)
+    setBusy(true);
     try {
       await addCustomMesh({
         name,
         primitive: buildSpec(),
         textureId,
         materialId: materialId || undefined,
-      })
-      toast({ title: 'Mesh created', description: name, variant: 'success' })
-      onClose()
+      });
+      toast({ title: 'Mesh created', description: name, variant: 'success' });
+      onClose();
     } catch (err) {
-      console.warn('mesh create failed', err)
+      console.warn('mesh create failed', err);
       toast({
         title: 'Create failed',
         description: String((err as Error)?.message ?? err),
         variant: 'danger',
-      })
+      });
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
-  const fields = PARAM_FIELDS[kind]
+  const fields = PARAM_FIELDS[kind];
 
   return (
     <Modal
@@ -108,8 +111,8 @@ export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
             disallowEmptySelection
             selectedKeys={[kind]}
             onSelectionChange={(keys) => {
-              const k = [...keys][0] as PrimitiveKind | undefined
-              if (k) changeKind(k)
+              const k = [...keys][0] as PrimitiveKind | undefined;
+              if (k) changeKind(k);
             }}
           >
             {PRIMITIVE_KINDS.map((k) => (
@@ -183,7 +186,7 @@ export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
         </div>
       </Dialog>
     </Modal>
-  )
+  );
 }
 
 /**
@@ -192,7 +195,7 @@ export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
  * while focused; blur/Enter restores the pre-edit value if the draft isn't a number.
  */
 function ParamNumberField(props: { label: string; value: number; onCommit: (n: number) => void }) {
-  const field = useNumberDraft({ value: props.value, onCommit: props.onCommit })
+  const field = useNumberDraft({ value: props.value, onCommit: props.onCommit });
   return (
     <TextField
       label={props.label}
@@ -202,12 +205,12 @@ function ParamNumberField(props: { label: string; value: number; onCommit: (n: n
       inputClassName="font-mono"
       {...field}
     />
-  )
+  );
 }
 
 interface ParamField {
-  key: string
-  label: string
+  key: string;
+  label: string;
 }
 
 /** Editable numeric fields per primitive kind (keys match the param interfaces). */
@@ -230,4 +233,4 @@ const PARAM_FIELDS: Record<PrimitiveKind, ParamField[]> = {
     { key: 'width', label: 'Width (m)' },
     { key: 'height', label: 'Height (m)' },
   ],
-}
+};

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>flexo part thumbnail capture</title>
+    <!-- Inert offscreen-capture harness for scripts/capture-part-thumbs.ts: no
+         React, no UI, no overlays — just a fixed-size host for one
+         PartPreviewViewport, sized from ?w= / ?h=. It ships in dist/ because it
+         is a second Vite input; visiting it does nothing but render nothing.
+         See plans/PART_PREVIEW_THUMBS.md §4. -->
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        /* Same charcoal the viewport clears to, so the page never flashes white. */
+        background: #16171d;
+        overflow: hidden;
+      }
+      /* Exact pixel box: the canvas backing store must be exactly w x h. */
+      #host {
+        overflow: hidden;
+      }
+      #error {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px;
+        color: #ff8080;
+        font:
+          12px/1.4 ui-monospace,
+          monospace;
+        text-align: center;
+        white-space: pre-wrap;
+      }
+      #error:empty {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="host"></div>
+    <div id="error"></div>
+    <script type="module" src="/src/capture.ts"></script>
+  </body>
+</html>

@@ -32,35 +32,35 @@
  * against the decomp rather than against this file's prose. Pure: no stores, no React, no three.
  */
 
-import { pointInCollider, type PlacedCollider } from '../measure/colliderCoverage'
-import { ksaQuatFromEulerXyz, seatAxesFromRotation } from './ivaSeatAxes'
-import { resolveInternal } from './modExport'
-import type { CatalogSubPart } from './catalog'
-import type { EditingPart, Vec3 } from './types'
+import { pointInCollider, type PlacedCollider } from '../measure/colliderCoverage';
+import { ksaQuatFromEulerXyz, seatAxesFromRotation } from './ivaSeatAxes';
+import { resolveInternal } from './modExport';
+import type { CatalogSubPart } from './catalog';
+import type { EditingPart, Vec3 } from './types';
 
 /** `block` ⇒ the exported Part is broken in game; `warn` ⇒ it loads but misbehaves. */
-export type IvaSeatIssueSeverity = 'block' | 'warn'
+export type IvaSeatIssueSeverity = 'block' | 'warn';
 
 export interface IvaSeatIssue {
-  severity: IvaSeatIssueSeverity
+  severity: IvaSeatIssueSeverity;
   /** Stable kebab-case code — the UI and tests match on this, not on the prose. */
-  code: string
-  message: string
+  code: string;
+  message: string;
 }
 
 /** Positions/axes closer than this count as "the same" for the duplicate-seat check. */
-const SAME_EPS = 1e-9
+const SAME_EPS = 1e-9;
 
 function sameVec(a: Vec3, b: Vec3): boolean {
   return (
     Math.abs(a.x - b.x) <= SAME_EPS &&
     Math.abs(a.y - b.y) <= SAME_EPS &&
     Math.abs(a.z - b.z) <= SAME_EPS
-  )
+  );
 }
 
 function finiteVec(v: Vec3): boolean {
-  return Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z)
+  return Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
 }
 
 /**
@@ -68,7 +68,7 @@ function finiteVec(v: Vec3): boolean {
  * cycle past (`IVASeats` is walked in document order, §1.4). Named the way
  * `colliderValidation.MANY_COLLIDERS` is: a smell threshold, not a game limit.
  */
-const MANY_SEATS = 8
+const MANY_SEATS = 8;
 
 /**
  * The colliders a seat position can honestly be tested against.
@@ -93,7 +93,7 @@ function partLevelColliders(part: EditingPart): PlacedCollider[] {
       // Same Euler convention as `matrixFromTransform` — `ivaSeatAxes.test.ts` locks the two
       // together, so this stays consistent with what the viewport draws.
       quaternion: ksaQuatFromEulerXyz(collider.rotation),
-    }))
+    }));
 }
 
 /**
@@ -110,44 +110,45 @@ function partLevelColliders(part: EditingPart): PlacedCollider[] {
  * (whose glass-ness lives in the catalog's asset XML, which flexo does not model).
  */
 function isGlassTemplate(part: EditingPart, templateId: string): boolean {
-  const mesh = part.customMeshes.find((m) => m.subPartId === templateId)
-  if (!mesh) return false
-  if (mesh.imported?.transparent) return true
-  if (!mesh.kitten?.transparent) return false
-  const surface = mesh.surface ?? 'glass'
-  return surface === 'glass' || surface === 'glassGlow'
+  const mesh = part.customMeshes.find((m) => m.subPartId === templateId);
+  if (!mesh) return false;
+  if (mesh.imported?.transparent) return true;
+  if (!mesh.kitten?.transparent) return false;
+  const surface = mesh.surface ?? 'glass';
+  return surface === 'glass' || surface === 'glassGlow';
 }
 
 export function validateIvaSeats(
   part: EditingPart,
   catalog: ReadonlyMap<string, CatalogSubPart>,
 ): IvaSeatIssue[] {
-  const issues: IvaSeatIssue[] = []
-  const block = (code: string, message: string) => issues.push({ severity: 'block', code, message })
-  const warn = (code: string, message: string) => issues.push({ severity: 'warn', code, message })
+  const issues: IvaSeatIssue[] = [];
+  const block = (code: string, message: string) =>
+    issues.push({ severity: 'block', code, message });
+  const warn = (code: string, message: string) => issues.push({ severity: 'warn', code, message });
 
   // Seat ids are editor-only and NEVER emitted, so messages name a seat by its 1-based
   // position — which is also the load-bearing thing about it (cycle order, §1.4).
-  const derived = part.ivaSeats.map((s) => seatAxesFromRotation(s.rotation))
-  const hull = partLevelColliders(part)
+  const derived = part.ivaSeats.map((s) => seatAxesFromRotation(s.rotation));
+  const hull = partLevelColliders(part);
 
   for (const [i, seat] of part.ivaSeats.entries()) {
-    const { forward, up } = derived[i]
+    const { forward, up } = derived[i];
     if (!finiteVec(forward) || !finiteVec(up) || !finiteVec(seat.position)) {
       block(
         'iva-seat-non-finite',
         `Seat ${i + 1} has a non-finite position or orientation, so its <ForwardAxis>/<UpAxis> ` +
           `come out NaN — KSA would build a NaN camera rotation from them ` +
           `(Camera.LookAtRotation) and the IVA view would be unusable.`,
-      )
-      continue
+      );
+      continue;
     }
 
     // Exact-duplicate seats: legal XML, but `C` cycles onto a seat that looks identical, so
     // the key appears to do nothing. Almost always a duplicate the author forgot to move.
     for (let j = 0; j < i; j++) {
-      const other = part.ivaSeats[j]
-      const otherAxes = derived[j]
+      const other = part.ivaSeats[j];
+      const otherAxes = derived[j];
       if (
         sameVec(seat.position, other.position) &&
         sameVec(forward, otherAxes.forward) &&
@@ -158,8 +159,8 @@ export function validateIvaSeats(
           `Seats ${j + 1} and ${i + 1} share the identical position and orientation. KSA loads ` +
             `both, but cycling to seat ${i + 1} with C will appear to do nothing — probably a ` +
             `duplicate you forgot to move.`,
-        )
-        break
+        );
+        break;
       }
     }
 
@@ -171,7 +172,7 @@ export function validateIvaSeats(
         'iva-seat-at-origin',
         `Seat ${i + 1} is at the Part's origin (0, 0, 0) — the default. <Position> is the eye ` +
           `point, so unless the origin really is head height inside the cabin, move the seat.`,
-      )
+      );
     }
 
     // Outside the collision volume ⇒ the eye is almost certainly outside the hull. Only
@@ -181,7 +182,7 @@ export function validateIvaSeats(
         'iva-seat-outside-colliders',
         `Seat ${i + 1} sits outside every collider on this Part. The eye point is outside the ` +
           `collision volume, which usually means the seat is outside the hull.`,
-      )
+      );
     }
   }
 
@@ -190,15 +191,15 @@ export function validateIvaSeats(
       'iva-seat-count',
       `${part.ivaSeats.length} IVA seats — every extra seat is one more press of C to cycle ` +
         `past in game, so keep the count to the crew that actually sits here.`,
-    )
+    );
   }
 
   // Interior geometry = a placed template whose <PartModel> exports <Internal>true</Internal>
   // (PartModel.cs:387 renders it in IVA and nowhere else).
-  const placedTemplates = [...new Set(part.placements.map((p) => p.subPartTemplateId))]
+  const placedTemplates = [...new Set(part.placements.map((p) => p.subPartTemplateId))];
   const interiorTemplates = placedTemplates.filter((id) =>
     resolveInternal(part, id, catalog.get(id)),
-  )
+  );
 
   if (part.ivaSeats.length > 0 && interiorTemplates.length === 0) {
     warn(
@@ -208,7 +209,7 @@ export function validateIvaSeats(
         `neighbouring part supplies the interior you look at, from the seat the hull is simply ` +
         `not there and you look straight out at space. Place interior meshes and mark them ` +
         `“Interior (IVA only)”.`,
-    )
+    );
   }
 
   if (interiorTemplates.length > 0 && part.ivaSeats.length === 0) {
@@ -219,20 +220,20 @@ export function validateIvaSeats(
         `seat. <Internal> hides it outside IVA, and with no seat the IVA camera mode is never ` +
         `offered — so it is invisible in EVERY camera mode, unless another part in the vehicle ` +
         `supplies a seat.`,
-    )
+    );
   }
 
   for (const id of interiorTemplates) {
-    if (!isGlassTemplate(part, id)) continue
+    if (!isGlassTemplate(part, id)) continue;
     warn(
       'iva-interior-on-glass',
       `“${id}” is marked “Interior (IVA only)” but exports through <PartModelGlass>, which has ` +
         `no <Internal> field — KSA silently ignores the flag and the mesh renders in every ` +
         `camera mode.`,
-    )
+    );
   }
 
-  return issues
+  return issues;
 }
 
 /**
@@ -242,5 +243,5 @@ export function validateIvaSeats(
  * callers that want to headline the worst severity present.
  */
 export function hasBlockingIvaSeatIssue(issues: readonly IvaSeatIssue[]): boolean {
-  return issues.some((i) => i.severity === 'block')
+  return issues.some((i) => i.severity === 'block');
 }

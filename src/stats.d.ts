@@ -6,13 +6,13 @@
 declare module 'stats.js' {
   class Stats {
     /** Panel container element — append it to the DOM to show the overlay. */
-    readonly dom: HTMLDivElement
+    readonly dom: HTMLDivElement;
     /** Choose the visible panel — 0: FPS, 1: ms/frame, 2: MB (if available). */
-    showPanel(id: number): void
+    showPanel(id: number): void;
     /** Start sampling the current frame; pair with {@link end}. */
-    begin(): void
+    begin(): void;
     /** Finish sampling the current frame and update the active panel. */
-    end(): number
+    end(): number;
   }
-  export default Stats
+  export default Stats;
 }

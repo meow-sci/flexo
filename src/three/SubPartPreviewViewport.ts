@@ -1,12 +1,12 @@
-import * as THREE from 'three'
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import type { CatalogSubPart } from '../ksa/catalog'
-import { getSubPartGeometry } from './MeshAtlasCache'
-import { getSharedMaterial } from './MaterialFactory'
-import { RenderLoop } from './RenderLoop'
-import { SceneEnvironment } from './SceneEnvironment'
-import { $lighting } from '../state/lightingStore'
-import { initTextureSupport } from './textureSupport'
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import type { CatalogSubPart } from '../ksa/catalog';
+import { getSubPartGeometry } from './MeshAtlasCache';
+import { getSharedMaterial } from './MaterialFactory';
+import { RenderLoop } from './RenderLoop';
+import { SceneEnvironment } from './SceneEnvironment';
+import { $lighting } from '../state/lightingStore';
+import { initTextureSupport } from './textureSupport';
 
 /**
  * A self-contained, read-only 3D preview of a single SubPart for the catalog
@@ -21,140 +21,140 @@ import { initTextureSupport } from './textureSupport'
  * cost a GPU frame every vsync just to show a part sitting still.
  */
 export class SubPartPreviewViewport {
-  private readonly scene = new THREE.Scene()
-  private readonly camera: THREE.PerspectiveCamera
-  private readonly renderer: THREE.WebGLRenderer
-  private readonly controls: OrbitControls
-  private readonly host: HTMLElement
-  private readonly resizeObserver: ResizeObserver
-  private readonly sceneEnv: SceneEnvironment
-  private readonly lightingUnsub: () => void
-  private readonly loop = new RenderLoop(() => this.renderFrame())
+  private readonly scene = new THREE.Scene();
+  private readonly camera: THREE.PerspectiveCamera;
+  private readonly renderer: THREE.WebGLRenderer;
+  private readonly controls: OrbitControls;
+  private readonly host: HTMLElement;
+  private readonly resizeObserver: ResizeObserver;
+  private readonly sceneEnv: SceneEnvironment;
+  private readonly lightingUnsub: () => void;
+  private readonly loop = new RenderLoop(() => this.renderFrame());
 
-  private current: THREE.Mesh | null = null
+  private current: THREE.Mesh | null = null;
   /** Bumped on each setSubPart so a superseded async load discards its result. */
-  private loadToken = 0
+  private loadToken = 0;
 
   constructor(host: HTMLElement) {
-    this.host = host
-    this.scene.background = new THREE.Color(0x16171d)
+    this.host = host;
+    this.scene.background = new THREE.Color(0x16171d);
 
-    const w = host.clientWidth || 1
-    const h = host.clientHeight || 1
+    const w = host.clientWidth || 1;
+    const h = host.clientHeight || 1;
 
-    this.camera = new THREE.PerspectiveCamera(50, w / h, 0.01, 1000)
-    this.camera.position.set(3, 2, 4)
+    this.camera = new THREE.PerspectiveCamera(50, w / h, 0.01, 1000);
+    this.camera.position.set(3, 2, 4);
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true })
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    this.renderer.setSize(w, h)
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace
-    host.appendChild(this.renderer.domElement)
+    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setSize(w, h);
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    host.appendChild(this.renderer.domElement);
 
     // No-op if the main editor viewport already initialized it; same GPU, so the
     // detected compressed-texture support is identical either way.
-    initTextureSupport(this.renderer)
+    initTextureSupport(this.renderer);
 
-    this.controls = new OrbitControls(this.camera, this.renderer.domElement)
-    this.controls.enableDamping = true
-    this.controls.target.set(0, 0, 0)
-    this.controls.update()
-    this.controls.addEventListener('change', this.onNeedsRender)
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+    this.controls.target.set(0, 0, 0);
+    this.controls.update();
+    this.controls.addEventListener('change', this.onNeedsRender);
 
     // Environment/tonemapping/background driven by the global $lighting store.
-    this.sceneEnv = new SceneEnvironment(this.renderer, this.scene)
+    this.sceneEnv = new SceneEnvironment(this.renderer, this.scene);
     this.lightingUnsub = $lighting.subscribe((s) => {
-      this.loop.invalidate()
-      void this.sceneEnv.apply(s).then(() => this.loop.invalidate())
-    })
+      this.loop.invalidate();
+      void this.sceneEnv.apply(s).then(() => this.loop.invalidate());
+    });
 
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x404050, 0.4)
-    this.scene.add(hemi)
-    const dir = new THREE.DirectionalLight(0xffffff, 2.0)
-    dir.position.set(5, 10, 7)
-    this.scene.add(dir)
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x404050, 0.4);
+    this.scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xffffff, 2.0);
+    dir.position.set(5, 10, 7);
+    this.scene.add(dir);
 
-    this.resizeObserver = new ResizeObserver(() => this.handleResize())
-    this.resizeObserver.observe(host)
-    this.renderer.domElement.addEventListener('webglcontextrestored', this.onNeedsRender)
+    this.resizeObserver = new ResizeObserver(() => this.handleResize());
+    this.resizeObserver.observe(host);
+    this.renderer.domElement.addEventListener('webglcontextrestored', this.onNeedsRender);
 
-    this.loop.invalidate()
+    this.loop.invalidate();
   }
 
   private readonly onNeedsRender = (): void => {
-    this.loop.invalidate()
-  }
+    this.loop.invalidate();
+  };
 
   /** Loads and shows the given SubPart (or clears the preview when null). */
   async setSubPart(entry: CatalogSubPart | null): Promise<void> {
-    const token = ++this.loadToken
+    const token = ++this.loadToken;
     if (this.current) {
-      this.scene.remove(this.current)
-      this.current = null
-      this.loop.invalidate()
+      this.scene.remove(this.current);
+      this.current = null;
+      this.loop.invalidate();
     }
-    if (!entry) return
+    if (!entry) return;
 
     try {
       const [geometry, material] = await Promise.all([
         getSubPartGeometry(entry.atlasUrl, entry.meshNodeName),
         getSharedMaterial(entry),
-      ])
-      if (token !== this.loadToken) return // a newer selection superseded this load
-      const mesh = new THREE.Mesh(geometry, material)
-      this.scene.add(mesh)
-      this.current = mesh
-      this.frame(geometry)
-      this.loop.invalidate()
+      ]);
+      if (token !== this.loadToken) return; // a newer selection superseded this load
+      const mesh = new THREE.Mesh(geometry, material);
+      this.scene.add(mesh);
+      this.current = mesh;
+      this.frame(geometry);
+      this.loop.invalidate();
     } catch (err) {
-      console.warn(`SubPartPreviewViewport: failed to load '${entry.id}'`, err)
+      console.warn(`SubPartPreviewViewport: failed to load '${entry.id}'`, err);
     }
   }
 
   /** Frames the camera to the geometry's bounding sphere from a 3/4 angle. */
   private frame(geometry: THREE.BufferGeometry): void {
-    if (!geometry.boundingSphere) geometry.computeBoundingSphere()
-    const sphere = geometry.boundingSphere!
-    const radius = Math.max(sphere.radius, 0.001)
-    const fov = (this.camera.fov * Math.PI) / 180
-    const distance = (radius / Math.sin(fov / 2)) * 1.3
+    if (!geometry.boundingSphere) geometry.computeBoundingSphere();
+    const sphere = geometry.boundingSphere!;
+    const radius = Math.max(sphere.radius, 0.001);
+    const fov = (this.camera.fov * Math.PI) / 180;
+    const distance = (radius / Math.sin(fov / 2)) * 1.3;
 
-    const dir = new THREE.Vector3(1, 0.6, 1).normalize()
-    this.controls.target.copy(sphere.center)
-    this.camera.position.copy(sphere.center).addScaledVector(dir, distance)
-    this.camera.near = Math.max(distance / 100, 0.001)
-    this.camera.far = distance * 100
-    this.camera.updateProjectionMatrix()
-    this.controls.update()
+    const dir = new THREE.Vector3(1, 0.6, 1).normalize();
+    this.controls.target.copy(sphere.center);
+    this.camera.position.copy(sphere.center).addScaledVector(dir, distance);
+    this.camera.near = Math.max(distance / 100, 0.001);
+    this.camera.far = distance * 100;
+    this.camera.updateProjectionMatrix();
+    this.controls.update();
   }
 
   private handleResize(): void {
-    const w = this.host.clientWidth || 1
-    const h = this.host.clientHeight || 1
-    this.camera.aspect = w / h
-    this.camera.updateProjectionMatrix()
-    this.renderer.setSize(w, h)
-    this.loop.invalidate()
+    const w = this.host.clientWidth || 1;
+    const h = this.host.clientHeight || 1;
+    this.camera.aspect = w / h;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setSize(w, h);
+    this.loop.invalidate();
   }
 
   private renderFrame(): void {
     // Damping here dispatches `change` → invalidate, so an inertial orbit keeps
     // asking for frames until it settles.
-    this.controls.update()
-    this.renderer.render(this.scene, this.camera)
+    this.controls.update();
+    this.renderer.render(this.scene, this.camera);
   }
 
   dispose(): void {
-    this.loop.dispose()
-    this.resizeObserver.disconnect()
-    this.renderer.domElement.removeEventListener('webglcontextrestored', this.onNeedsRender)
-    this.controls.removeEventListener('change', this.onNeedsRender)
-    this.controls.dispose()
-    this.lightingUnsub()
-    this.sceneEnv.dispose()
-    this.renderer.dispose()
+    this.loop.dispose();
+    this.resizeObserver.disconnect();
+    this.renderer.domElement.removeEventListener('webglcontextrestored', this.onNeedsRender);
+    this.controls.removeEventListener('change', this.onNeedsRender);
+    this.controls.dispose();
+    this.lightingUnsub();
+    this.sceneEnv.dispose();
+    this.renderer.dispose();
     if (this.renderer.domElement.parentNode === this.host) {
-      this.host.removeChild(this.renderer.domElement)
+      this.host.removeChild(this.renderer.domElement);
     }
   }
 }

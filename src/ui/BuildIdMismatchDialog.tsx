@@ -1,19 +1,19 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { $buildMismatch } from '../buildCheck'
-import { nukeAndReload } from './nukeAndReload'
-import { Button, ConfirmDialog, Dialog, Modal, Switch } from './kit'
-import { Heading } from 'react-aria-components'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { $buildMismatch } from '../buildCheck';
+import { nukeAndReload } from './nukeAndReload';
+import { Button, ConfirmDialog, Dialog, Modal, Switch } from './kit';
+import { Heading } from 'react-aria-components';
 
 export function BuildIdMismatchDialog() {
-  const mismatch = useStore($buildMismatch)
-  const [confirmOpen, setConfirmOpen] = useState(false)
-  const [resetFsGrants, setResetFsGrants] = useState(false)
+  const mismatch = useStore($buildMismatch);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [resetFsGrants, setResetFsGrants] = useState(false);
 
-  if (!mismatch) return null
+  if (!mismatch) return null;
 
   function dismiss() {
-    $buildMismatch.set(false)
+    $buildMismatch.set(false);
   }
 
   return (
@@ -34,8 +34,8 @@ export function BuildIdMismatchDialog() {
             <Button
               variant="danger"
               onPress={() => {
-                setResetFsGrants(false)
-                setConfirmOpen(true)
+                setResetFsGrants(false);
+                setConfirmOpen(true);
               }}
             >
               Reset everything
@@ -58,5 +58,5 @@ export function BuildIdMismatchDialog() {
         </Switch>
       </ConfirmDialog>
     </>
-  )
+  );
 }

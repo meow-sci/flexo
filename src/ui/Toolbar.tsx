@@ -1,15 +1,15 @@
-import { useStore } from '@nanostores/react'
-import { Undo, Redo } from 'lucide-react'
-import { Toolbar, ToolbarButton, ToolbarSeparator, toast } from './kit'
-import { $canRedo, $canUndo, redo, undo } from '../state/editorStore'
-import { AddButton } from './AddButton'
-import { ProjectButton } from './ProjectButton'
-import { PartDataButton } from './PartDataButton'
-import { ExportButton } from './ExportButton'
-import { ViewButton } from './ViewButton'
-import { MeasureButton } from './MeasureButton'
-import { SettingsButton } from './SettingsButton'
-import { HistoryButton } from './HistoryButton'
+import { useStore } from '@nanostores/react';
+import { Undo, Redo } from 'lucide-react';
+import { Toolbar, ToolbarButton, ToolbarSeparator, toast } from './kit';
+import { $canRedo, $canUndo, redo, undo } from '../state/editorStore';
+import { AddButton } from './AddButton';
+import { ProjectButton } from './ProjectButton';
+import { PartDataButton } from './PartDataButton';
+import { ExportButton } from './ExportButton';
+import { ViewButton } from './ViewButton';
+import { MeasureButton } from './MeasureButton';
+import { SettingsButton } from './SettingsButton';
+import { HistoryButton } from './HistoryButton';
 
 /**
  * Top toolbar: part actions (add/import/part-data/export), the View popover
@@ -17,8 +17,8 @@ import { HistoryButton } from './HistoryButton'
  * in the floating per-SubPart toolbar that appears when a SubPart is selected.
  */
 export function EditorToolbar() {
-  const canUndo = useStore($canUndo)
-  const canRedo = useStore($canRedo)
+  const canUndo = useStore($canUndo);
+  const canRedo = useStore($canRedo);
 
   return (
     <Toolbar aria-label="Editor actions" className="flex-wrap lg:flex-nowrap">
@@ -41,8 +41,8 @@ export function EditorToolbar() {
         isDisabled={!canUndo}
         aria-label="Undo"
         onPress={() => {
-          const d = undo()
-          if (d) toast({ title: `Undo: ${d}` }, { timeout: 1500 })
+          const d = undo();
+          if (d) toast({ title: `Undo: ${d}` }, { timeout: 1500 });
         }}
       >
         <Undo size={16} />
@@ -51,8 +51,8 @@ export function EditorToolbar() {
         isDisabled={!canRedo}
         aria-label="Redo"
         onPress={() => {
-          const d = redo()
-          if (d) toast({ title: `Redo: ${d}` }, { timeout: 1500 })
+          const d = redo();
+          if (d) toast({ title: `Redo: ${d}` }, { timeout: 1500 });
         }}
       >
         <Redo size={16} />
@@ -63,5 +63,5 @@ export function EditorToolbar() {
 
       <SettingsButton />
     </Toolbar>
-  )
+  );
 }

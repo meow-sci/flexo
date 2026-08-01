@@ -4,8 +4,8 @@
 // REDUCTION over the caller's original vertex arrays, which is why attributes ride along.
 declare module 'three/addons/libs/meshopt_simplifier.module.js' {
   export const MeshoptSimplifier: {
-    ready: Promise<void>
-    supported: boolean
+    ready: Promise<void>;
+    supported: boolean;
     simplify(
       indices: Uint32Array,
       vertexPositions: Float32Array,
@@ -13,6 +13,6 @@ declare module 'three/addons/libs/meshopt_simplifier.module.js' {
       targetIndexCount: number,
       targetError: number,
       flags?: string[],
-    ): [Uint32Array, number]
-  }
+    ): [Uint32Array, number];
+  };
 }

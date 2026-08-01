@@ -1,4 +1,4 @@
-import { useStore } from '@nanostores/react'
+import { useStore } from '@nanostores/react';
 import {
   Dialog,
   DialogHeader,
@@ -7,10 +7,10 @@ import {
   Select,
   Slider,
   Switch,
-} from '../../../src/ui/kit'
-import { ENVIRONMENT_PRESETS, type EnvironmentPreset } from '../../../src/state/environmentPresets'
-import { TONE_MAPPING_MODES, type ToneMappingMode } from '../../../src/state/lightingStore'
-import { $previewLighting, setPreviewLighting } from './settings'
+} from '../../../src/ui/kit';
+import { ENVIRONMENT_PRESETS, type EnvironmentPreset } from '../../../src/state/environmentPresets';
+import { TONE_MAPPING_MODES, type ToneMappingMode } from '../../../src/state/lightingStore';
+import { $previewLighting, setPreviewLighting } from './settings';
 
 /**
  * Everything about how the part is lit — the environment, whether its sky is
@@ -25,13 +25,13 @@ export function LightingDialog({
   isOpen,
   onOpenChange,
 }: {
-  isOpen: boolean
-  onOpenChange: (open: boolean) => void
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const lighting = useStore($previewLighting)
+  const lighting = useStore($previewLighting);
   // Pure render-body derivation (what React Compiler memoizes) — the studio
   // environment is procedural and has no sky to show or blur.
-  const envHasSky = ENVIRONMENT_PRESETS.find((p) => p.id === lighting.environment)?.file != null
+  const envHasSky = ENVIRONMENT_PRESETS.find((p) => p.id === lighting.environment)?.file != null;
 
   return (
     // An ABSOLUTE max height (not `max-h-full`): the kit Dialog inherits it via
@@ -143,5 +143,5 @@ export function LightingDialog({
         </div>
       </Dialog>
     </Modal>
-  )
+  );
 }

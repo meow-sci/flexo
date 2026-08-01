@@ -11,95 +11,95 @@
  */
 
 export interface ImageLevel {
-  width: number
-  height: number
+  width: number;
+  height: number;
   /** Tightly packed RGBA8, length = width * height * 4. */
-  rgba: Uint8Array
+  rgba: Uint8Array;
 }
 
 export interface DecodedImage {
   /** Base level dimensions (after any max-size downscale). */
-  width: number
-  height: number
+  width: number;
+  height: number;
   /** Full mip chain, level 0 = base, last = 1×1. */
-  levels: ImageLevel[]
+  levels: ImageLevel[];
 }
 
-export const DEFAULT_MAX_TEXTURE_SIZE = 2048
+export const DEFAULT_MAX_TEXTURE_SIZE = 2048;
 
 /** Decodes a Blob to RGBA8 + mip chain. Throws on undecodable input. */
 export async function decodeImage(
   source: Blob,
   maxSize = DEFAULT_MAX_TEXTURE_SIZE,
 ): Promise<DecodedImage> {
-  let bitmap: ImageBitmap
+  let bitmap: ImageBitmap;
   try {
-    bitmap = await createImageBitmap(source)
+    bitmap = await createImageBitmap(source);
   } catch (err) {
     throw new Error(`decodeImage: could not decode image (${source.type || 'unknown type'})`, {
       cause: err,
-    })
+    });
   }
   try {
-    const base = drawToRgba(bitmap, maxSize)
-    const levels = buildMipChain(base)
-    return { width: base.width, height: base.height, levels }
+    const base = drawToRgba(bitmap, maxSize);
+    const levels = buildMipChain(base);
+    return { width: base.width, height: base.height, levels };
   } finally {
-    bitmap.close()
+    bitmap.close();
   }
 }
 
 /** Draws a bitmap to a canvas (downscaled to fit maxSize) and reads back RGBA8. */
 function drawToRgba(bitmap: ImageBitmap, maxSize: number): ImageLevel {
-  const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height))
-  const width = Math.max(1, Math.round(bitmap.width * scale))
-  const height = Math.max(1, Math.round(bitmap.height * scale))
+  const scale = Math.min(1, maxSize / Math.max(bitmap.width, bitmap.height));
+  const width = Math.max(1, Math.round(bitmap.width * scale));
+  const height = Math.max(1, Math.round(bitmap.height * scale));
 
-  const canvas = makeCanvas(width, height)
+  const canvas = makeCanvas(width, height);
   const ctx = canvas.getContext('2d', { willReadFrequently: true }) as
     | CanvasRenderingContext2D
     | OffscreenCanvasRenderingContext2D
-    | null
-  if (!ctx) throw new Error('decodeImage: 2D canvas context unavailable')
-  ctx.drawImage(bitmap, 0, 0, width, height)
-  const { data } = ctx.getImageData(0, 0, width, height)
-  return { width, height, rgba: new Uint8Array(data.buffer.slice(0)) }
+    | null;
+  if (!ctx) throw new Error('decodeImage: 2D canvas context unavailable');
+  ctx.drawImage(bitmap, 0, 0, width, height);
+  const { data } = ctx.getImageData(0, 0, width, height);
+  return { width, height, rgba: new Uint8Array(data.buffer.slice(0)) };
 }
 
 /** Generates the full mip chain (incl. base) down to 1×1 via 2×2 box filtering. */
 export function buildMipChain(base: ImageLevel): ImageLevel[] {
-  const levels: ImageLevel[] = [base]
-  let cur = base
+  const levels: ImageLevel[] = [base];
+  let cur = base;
   while (cur.width > 1 || cur.height > 1) {
-    cur = downsampleHalf(cur)
-    levels.push(cur)
+    cur = downsampleHalf(cur);
+    levels.push(cur);
   }
-  return levels
+  return levels;
 }
 
 /** Halves dimensions (min 1) averaging each 2×2 source block per RGBA channel. */
 function downsampleHalf(src: ImageLevel): ImageLevel {
-  const dw = Math.max(1, src.width >> 1)
-  const dh = Math.max(1, src.height >> 1)
-  const out = new Uint8Array(dw * dh * 4)
+  const dw = Math.max(1, src.width >> 1);
+  const dh = Math.max(1, src.height >> 1);
+  const out = new Uint8Array(dw * dh * 4);
   for (let y = 0; y < dh; y++) {
-    const sy0 = Math.min(src.height - 1, y * 2)
-    const sy1 = Math.min(src.height - 1, y * 2 + 1)
+    const sy0 = Math.min(src.height - 1, y * 2);
+    const sy1 = Math.min(src.height - 1, y * 2 + 1);
     for (let x = 0; x < dw; x++) {
-      const sx0 = Math.min(src.width - 1, x * 2)
-      const sx1 = Math.min(src.width - 1, x * 2 + 1)
-      const i00 = (sy0 * src.width + sx0) * 4
-      const i01 = (sy0 * src.width + sx1) * 4
-      const i10 = (sy1 * src.width + sx0) * 4
-      const i11 = (sy1 * src.width + sx1) * 4
-      const o = (y * dw + x) * 4
+      const sx0 = Math.min(src.width - 1, x * 2);
+      const sx1 = Math.min(src.width - 1, x * 2 + 1);
+      const i00 = (sy0 * src.width + sx0) * 4;
+      const i01 = (sy0 * src.width + sx1) * 4;
+      const i10 = (sy1 * src.width + sx0) * 4;
+      const i11 = (sy1 * src.width + sx1) * 4;
+      const o = (y * dw + x) * 4;
       for (let c = 0; c < 4; c++) {
         out[o + c] =
-          (src.rgba[i00 + c] + src.rgba[i01 + c] + src.rgba[i10 + c] + src.rgba[i11 + c] + 2) >> 2
+          (src.rgba[i00 + c] + src.rgba[i01 + c] + src.rgba[i10 + c] + src.rgba[i11 + c] + 2) >> 2;
       }
     }
   }
-  return { width: dw, height: dh, rgba: out }
+  return { width: dw, height: dh, rgba: out };
 }
 
 /**
@@ -111,30 +111,30 @@ function downsampleHalf(src: ImageLevel): ImageLevel {
  * `createImageBitmap` reads it back byte-exactly.
  */
 export async function encodeLevelToPng(level: ImageLevel): Promise<Uint8Array> {
-  const canvas = makeCanvas(level.width, level.height)
+  const canvas = makeCanvas(level.width, level.height);
   const ctx = canvas.getContext('2d') as
     | CanvasRenderingContext2D
     | OffscreenCanvasRenderingContext2D
-    | null
-  if (!ctx) throw new Error('encodeLevelToPng: 2D canvas context unavailable')
+    | null;
+  if (!ctx) throw new Error('encodeLevelToPng: 2D canvas context unavailable');
   ctx.putImageData(
     new ImageData(new Uint8ClampedArray(level.rgba), level.width, level.height),
     0,
     0,
-  )
+  );
   const blob =
     'convertToBlob' in canvas
       ? await canvas.convertToBlob({ type: 'image/png' })
-      : await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-  if (!blob) throw new Error('encodeLevelToPng: canvas produced no PNG')
-  return new Uint8Array(await blob.arrayBuffer())
+      : await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+  if (!blob) throw new Error('encodeLevelToPng: canvas produced no PNG');
+  return new Uint8Array(await blob.arrayBuffer());
 }
 
 /** OffscreenCanvas when available (also works off the main thread), else a DOM canvas. */
 function makeCanvas(width: number, height: number): OffscreenCanvas | HTMLCanvasElement {
-  if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(width, height)
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-  return canvas
+  if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(width, height);
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  return canvas;
 }

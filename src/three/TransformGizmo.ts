@@ -1,7 +1,7 @@
-import * as THREE from 'three'
-import { TransformControls } from 'three/addons/controls/TransformControls.js'
-import type { Viewport } from './Viewport'
-import type { ToolMode, SnapSettings } from '../state/editorStore'
+import * as THREE from 'three';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import type { Viewport } from './Viewport';
+import type { ToolMode, SnapSettings } from '../state/editorStore';
 
 /**
  * Wraps three's TransformControls for translate/rotate/scale of the attached
@@ -9,62 +9,62 @@ import type { ToolMode, SnapSettings } from '../state/editorStore'
  * start, and streams per-frame transform changes back out via callbacks.
  */
 export class TransformGizmo {
-  private readonly controls: TransformControls
+  private readonly controls: TransformControls;
 
   constructor(
     viewport: Viewport,
     callbacks: {
-      onDragStart: () => void
-      onChange: (object: THREE.Object3D) => void
-      onDraggingChanged: (dragging: boolean) => void
+      onDragStart: () => void;
+      onChange: (object: THREE.Object3D) => void;
+      onDraggingChanged: (dragging: boolean) => void;
     },
   ) {
-    this.controls = new TransformControls(viewport.camera, viewport.renderer.domElement)
-    viewport.scene.add(this.controls.getHelper())
+    this.controls = new TransformControls(viewport.camera, viewport.renderer.domElement);
+    viewport.scene.add(this.controls.getHelper());
 
     // TransformControls raises `change` for every visible state it owns — the
     // hovered axis, the mode, attach/detach, and each drag step — so this one
     // hookup keeps the gizmo's own repaints on the on-demand loop.
-    this.controls.addEventListener('change', () => viewport.invalidate())
+    this.controls.addEventListener('change', () => viewport.invalidate());
 
     this.controls.addEventListener('dragging-changed', (event) => {
-      const dragging = event.value as boolean
-      viewport.controls.enabled = !dragging
-      callbacks.onDraggingChanged(dragging)
-      if (dragging) callbacks.onDragStart()
-    })
+      const dragging = event.value as boolean;
+      viewport.controls.enabled = !dragging;
+      callbacks.onDraggingChanged(dragging);
+      if (dragging) callbacks.onDragStart();
+    });
 
     this.controls.addEventListener('objectChange', () => {
-      const obj = this.controls.object
-      if (obj) callbacks.onChange(obj)
-    })
+      const obj = this.controls.object;
+      if (obj) callbacks.onChange(obj);
+    });
   }
 
   attach(object: THREE.Object3D | null): void {
-    if (object) this.controls.attach(object)
-    else this.controls.detach()
+    if (object) this.controls.attach(object);
+    else this.controls.detach();
   }
 
   setMode(mode: ToolMode): void {
-    this.controls.setMode(mode)
+    this.controls.setMode(mode);
   }
 
   setSnap(snap: SnapSettings): void {
-    this.controls.setTranslationSnap(snap.translate ?? null)
+    this.controls.setTranslationSnap(snap.translate ?? null);
     this.controls.setRotationSnap(
       snap.rotateDeg != null ? THREE.MathUtils.degToRad(snap.rotateDeg) : null,
-    )
-    this.controls.setScaleSnap(null)
+    );
+    this.controls.setScaleSnap(null);
   }
 
   get isDragging(): boolean {
-    return this.controls.dragging
+    return this.controls.dragging;
   }
 
   dispose(): void {
-    this.controls.detach()
-    const helper = this.controls.getHelper()
-    helper.removeFromParent()
-    this.controls.dispose()
+    this.controls.detach();
+    const helper = this.controls.getHelper();
+    helper.removeFromParent();
+    this.controls.dispose();
   }
 }

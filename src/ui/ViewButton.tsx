@@ -1,4 +1,4 @@
-import { useStore } from '@nanostores/react'
+import { useStore } from '@nanostores/react';
 import {
   DialogTrigger,
   Popover,
@@ -13,7 +13,7 @@ import {
   ListBoxItem,
   Slider,
   SectionTitle,
-} from './kit'
+} from './kit';
 import {
   $grids,
   $hideInterior,
@@ -22,7 +22,7 @@ import {
   snapCamera,
   type Axis,
   type CameraDir,
-} from '../state/viewStore'
+} from '../state/viewStore';
 import {
   $lighting,
   setLighting,
@@ -30,40 +30,40 @@ import {
   TONE_MAPPING_MODES,
   type EnvironmentPreset,
   type ToneMappingMode,
-} from '../state/lightingStore'
+} from '../state/lightingStore';
 import {
   $lightPreviewCount,
   $lightSettings,
   DEFAULT_LIGHT_SETTINGS,
   setLightSettings,
   type LightVizSettings,
-} from '../state/settingsStore'
-import { MAX_PREVIEW_LIGHTS } from '../three/lightVolume'
-import { PreciseNumberInput } from './PreciseNumberInput'
+} from '../state/settingsStore';
+import { MAX_PREVIEW_LIGHTS } from '../three/lightVolume';
+import { PreciseNumberInput } from './PreciseNumberInput';
 
 const SNAP_ROWS: [CameraDir, CameraDir][] = [
   ['left', 'right'],
   ['front', 'back'],
   ['top', 'bottom'],
-]
+];
 
 const GRID_AXES: { axis: Axis; label: string }[] = [
   { axis: 'x', label: 'X' },
   { axis: 'y', label: 'Y' },
   { axis: 'z', label: 'Z' },
-]
+];
 
 function ViewContent() {
-  const grids = useStore($grids)
-  const hideInterior = useStore($hideInterior)
-  const lighting = useStore($lighting)
+  const grids = useStore($grids);
+  const hideInterior = useStore($hideInterior);
+  const lighting = useStore($lighting);
   // Resolved read: a settings object persisted before these fields existed must show
   // its defaults in the menu, not blank selects (see lightSettings()'s JSDoc).
-  const lightViz = { ...DEFAULT_LIGHT_SETTINGS, ...useStore($lightSettings) }
+  const lightViz = { ...DEFAULT_LIGHT_SETTINGS, ...useStore($lightSettings) };
   // Published by EditorScene each time the preview pass runs — ephemeral, so it always
   // describes the document on screen right now.
-  const preview = useStore($lightPreviewCount)
-  const envHasSky = ENVIRONMENT_PRESETS.find((p) => p.id === lighting.environment)?.file != null
+  const preview = useStore($lightPreviewCount);
+  const envHasSky = ENVIRONMENT_PRESETS.find((p) => p.id === lighting.environment)?.file != null;
 
   return (
     <>
@@ -84,7 +84,7 @@ function ViewContent() {
       <section className="flex flex-col gap-2">
         <SectionTitle>Grids</SectionTitle>
         {GRID_AXES.map(({ axis, label }) => {
-          const cfg = grids[axis]
+          const cfg = grids[axis];
           return (
             <div key={axis} className="flex items-center gap-2">
               <Switch
@@ -103,7 +103,7 @@ function ViewContent() {
               />
               <span className="text-xs text-fg-subtle">m</span>
             </div>
-          )
+          );
         })}
       </section>
 
@@ -280,12 +280,12 @@ function ViewContent() {
         )}
       </section>
     </>
-  )
+  );
 }
 
 interface ViewButtonProps {
-  isOpen?: boolean
-  onOpenChange?: (v: boolean) => void
+  isOpen?: boolean;
+  onOpenChange?: (v: boolean) => void;
 }
 
 /**
@@ -293,7 +293,7 @@ interface ViewButtonProps {
  * Desktop: opens as a positioned popover. Mobile menu: opens as a bottom sheet.
  */
 export function ViewButton({ isOpen: externalOpen, onOpenChange }: ViewButtonProps = {}) {
-  const isControlled = externalOpen !== undefined
+  const isControlled = externalOpen !== undefined;
 
   if (isControlled) {
     return (
@@ -305,7 +305,7 @@ export function ViewButton({ isOpen: externalOpen, onOpenChange }: ViewButtonPro
           </div>
         </Dialog>
       </Modal>
-    )
+    );
   }
 
   return (
@@ -317,5 +317,5 @@ export function ViewButton({ isOpen: externalOpen, onOpenChange }: ViewButtonPro
         </PopoverDialog>
       </Popover>
     </DialogTrigger>
-  )
+  );
 }

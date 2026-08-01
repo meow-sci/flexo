@@ -1,9 +1,9 @@
-import { useStore } from '@nanostores/react'
-import { ChevronLeft, ChevronRight, Info, X } from 'lucide-react'
-import { Button, Tooltip } from './kit'
-import { Kbd } from './hotkeys/Kbd'
-import { $seatView, enterSeatView, exitSeatView } from '../state/ivaStore'
-import { $part, selectIvaSeat } from '../state/editorStore'
+import { useStore } from '@nanostores/react';
+import { ChevronLeft, ChevronRight, Info, X } from 'lucide-react';
+import { Button, Tooltip } from './kit';
+import { Kbd } from './hotkeys/Kbd';
+import { $seatView, enterSeatView, exitSeatView } from '../state/ivaStore';
+import { $part, selectIvaSeat } from '../state/editorStore';
 
 /**
  * The floating bar shown while sitting in an IVA seat — the only chrome the seat preview
@@ -19,23 +19,23 @@ import { $part, selectIvaSeat } from '../state/editorStore'
  * view").
  */
 export function SeatViewBar() {
-  const seatId = useStore($seatView)
-  const part = useStore($part)
+  const seatId = useStore($seatView);
+  const part = useStore($part);
 
-  const index = part.ivaSeats.findIndex((s) => s.id === seatId)
+  const index = part.ivaSeats.findIndex((s) => s.id === seatId);
   // A vanished seat is torn down by EditorScene; until that lands, render nothing.
-  if (seatId === null || index < 0) return null
-  const total = part.ivaSeats.length
+  if (seatId === null || index < 0) return null;
+  const total = part.ivaSeats.length;
 
   /** Moves `delta` seats along the cycle, wrapping — and follows with the selection so
    *  the inspector shows the seat you are sitting in when you leave. */
   const go = (delta: number) => {
-    const nextIndex = (index + delta + total) % total
-    const next = part.ivaSeats[nextIndex]
-    if (!next) return
-    enterSeatView(next.id)
-    selectIvaSeat(nextIndex)
-  }
+    const nextIndex = (index + delta + total) % total;
+    const next = part.ivaSeats[nextIndex];
+    if (!next) return;
+    enterSeatView(next.id);
+    selectIvaSeat(nextIndex);
+  };
 
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-14 z-30 flex justify-center px-2">
@@ -90,5 +90,5 @@ export function SeatViewBar() {
         </Button>
       </div>
     </div>
-  )
+  );
 }

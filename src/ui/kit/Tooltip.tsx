@@ -3,13 +3,13 @@ import {
   Tooltip as AriaTooltip,
   composeRenderProps,
   type TooltipProps,
-} from 'react-aria-components'
-import { cn } from './styles'
+} from 'react-aria-components';
+import { cn } from './styles';
 
 export interface TooltipKitProps extends Omit<TooltipProps, 'children'> {
-  content: React.ReactNode
-  children: React.ReactNode
-  delay?: number
+  content: React.ReactNode;
+  children: React.ReactNode;
+  delay?: number;
 }
 
 /** Wrap a single focusable child (e.g. a Button) to give it a hover/focus tooltip. */
@@ -31,5 +31,5 @@ export function Tooltip({ content, children, delay = 500, className, ...props }:
         {content}
       </AriaTooltip>
     </TooltipTrigger>
-  )
+  );
 }

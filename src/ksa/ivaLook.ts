@@ -11,13 +11,13 @@
  * hand-rolled vector math, no three.js import, no store imports.
  */
 
-import type { Vec3 } from './types'
+import type { Vec3 } from './types';
 
 /** KSA's up-pole exclusion threshold: `|dot(look, UpAxisAsmb)| > 0.9` (`IVAController.cs:97`). */
-export const IVA_UP_DOT_LIMIT = 0.9
+export const IVA_UP_DOT_LIMIT = 0.9;
 
 function dot(a: Vec3, b: Vec3): number {
-  return a.x * b.x + a.y * b.y + a.z * b.z
+  return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
 function cross(a: Vec3, b: Vec3): Vec3 {
@@ -25,23 +25,23 @@ function cross(a: Vec3, b: Vec3): Vec3 {
     x: a.y * b.z - a.z * b.y,
     y: a.z * b.x - a.x * b.z,
     z: a.x * b.y - a.y * b.x,
-  }
+  };
 }
 
 function length(v: Vec3): number {
-  return Math.hypot(v.x, v.y, v.z)
+  return Math.hypot(v.x, v.y, v.z);
 }
 
 /** Verbatim `double3.NormalizeOrZero` (`Brutal.Numerics/double3.cs:545-553`) — zero stays zero. */
 function normalizeOrZero(v: Vec3): Vec3 {
-  const len = length(v)
-  if (len === 0) return { x: 0, y: 0, z: 0 }
-  return { x: v.x / len, y: v.y / len, z: v.z / len }
+  const len = length(v);
+  if (len === 0) return { x: 0, y: 0, z: 0 };
+  return { x: v.x / len, y: v.y / len, z: v.z / len };
 }
 
 /** Verbatim `MathEx.SafeAcos` (`decomp/KSA/MathEx.cs:211-214`) — `acos` of the clamped input. */
 function safeAcos(value: number): number {
-  return Math.acos(Math.min(1, Math.max(-1, value)))
+  return Math.acos(Math.min(1, Math.max(-1, value)));
 }
 
 /**
@@ -49,15 +49,15 @@ function safeAcos(value: number): number {
  * + `double3.Transform(rotation)` pair the controller uses, right-handed and in that order.
  */
 function rotateAboutAxis(v: Vec3, axis: Vec3, angle: number): Vec3 {
-  const c = Math.cos(angle)
-  const s = Math.sin(angle)
-  const k = cross(axis, v)
-  const d = dot(axis, v) * (1 - c)
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  const k = cross(axis, v);
+  const d = dot(axis, v) * (1 - c);
   return {
     x: v.x * c + k.x * s + axis.x * d,
     y: v.y * c + k.y * s + axis.y * d,
     z: v.z * c + k.z * s + axis.z * d,
-  }
+  };
 }
 
 /**
@@ -99,34 +99,34 @@ export function clampSeatLook(look: Vec3, forward: Vec3, up: Vec3): Vec3 {
   // In the game `double7` (`:80`) is `Double3Ex.Forward` rotated by a quaternion, so it is unit
   // by construction. flexo's callers compose a look from yaw/pitch, so normalize defensively —
   // both dot tests below are only meaningful against a unit look.
-  let dir = normalizeOrZero(look)
+  let dir = normalizeOrZero(look);
   if (length(dir) === 0) {
     // Not reachable in the game (a zero `double7` cannot exist); fall back to the seat's facing.
-    const f = normalizeOrZero(forward)
-    return length(f) === 0 ? { x: 1, y: 0, z: 0 } : f
+    const f = normalizeOrZero(forward);
+    return length(f) === 0 ? { x: 1, y: 0, z: 0 } : f;
   }
 
   // --- Clamp 1: the forward hemisphere (`IVAController.cs:81-94`). ---
-  const fwd = normalizeOrZero(forward)
+  const fwd = normalizeOrZero(forward);
   // The C# uses `.Normalized()`, which NaNs on a zero axis; flexo skips the clamp instead so a
   // degenerate authored `<ForwardAxis>` cannot poison the preview.
   if (length(fwd) !== 0) {
-    const num2 = Math.min(1, Math.max(-1, dot(dir, fwd)))
+    const num2 = Math.min(1, Math.max(-1, dot(dir, fwd)));
     if (num2 < 0) {
-      const num5 = safeAcos(num2) - safeAcos(0)
-      const axis = normalizeOrZero(cross(dir, fwd))
-      if (num5 !== 0 && length(axis) !== 0) dir = rotateAboutAxis(dir, axis, num5)
+      const num5 = safeAcos(num2) - safeAcos(0);
+      const axis = normalizeOrZero(cross(dir, fwd));
+      if (num5 !== 0 && length(axis) !== 0) dir = rotateAboutAxis(dir, axis, num5);
     }
   }
 
   // --- Clamp 2: the up-pole exclusion, against the RAW up axis (`IVAController.cs:95-108`). ---
-  const value = dot(dir, up)
+  const value = dot(dir, up);
   if (Math.abs(value) > IVA_UP_DOT_LIMIT) {
-    const num8 = safeAcos(value) - safeAcos(IVA_UP_DOT_LIMIT * Math.sign(value))
-    const axis = normalizeOrZero(cross(dir, up))
-    if (num8 !== 0 && length(axis) !== 0) dir = rotateAboutAxis(dir, axis, num8)
+    const num8 = safeAcos(value) - safeAcos(IVA_UP_DOT_LIMIT * Math.sign(value));
+    const axis = normalizeOrZero(cross(dir, up));
+    if (num8 !== 0 && length(axis) !== 0) dir = rotateAboutAxis(dir, axis, num8);
   }
 
   // Both rotations preserve length; re-normalize only to shed accumulated float drift.
-  return normalizeOrZero(dir)
+  return normalizeOrZero(dir);
 }

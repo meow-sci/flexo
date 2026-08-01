@@ -1,9 +1,9 @@
-import { useState } from 'react'
-import { useStore } from '@nanostores/react'
-import { GripHorizontal } from 'lucide-react'
-import { TransformInspector } from './TransformInspector'
-import { $selectedEntity, $selectionCount } from '../state/selectors'
-import { $inspectorFloatPos, setInspectorFloatPos } from '../state/uiStore'
+import { useState } from 'react';
+import { useStore } from '@nanostores/react';
+import { GripHorizontal } from 'lucide-react';
+import { TransformInspector } from './TransformInspector';
+import { $selectedEntity, $selectionCount } from '../state/selectors';
+import { $inspectorFloatPos, setInspectorFloatPos } from '../state/uiStore';
 
 /**
  * The selected-asset details (transform / connector flags / bulk transform) as a
@@ -19,52 +19,52 @@ import { $inspectorFloatPos, setInspectorFloatPos } from '../state/uiStore'
  */
 
 /** Default inset from the workspace edges, in px (0.25rem). */
-const MARGIN = 4
+const MARGIN = 4;
 /** Keep at least this much of the window on-screen when dragging/after a resize. */
-const KEEP_VISIBLE_X = 80
-const KEEP_VISIBLE_Y = 28
+const KEEP_VISIBLE_X = 80;
+const KEEP_VISIBLE_Y = 28;
 
 export function FloatingInspector() {
-  const count = useStore($selectionCount)
-  const entity = useStore($selectedEntity)
-  const stored = useStore($inspectorFloatPos)
-  const [drag, setDrag] = useState<{ x: number; y: number } | null>(null)
+  const count = useStore($selectionCount);
+  const entity = useStore($selectedEntity);
+  const stored = useStore($inspectorFloatPos);
+  const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
 
   // Mirror TransformInspector's own visibility: bulk panel (2+) or a single entity.
-  const hasContent = count > 1 || entity != null
-  if (!hasContent) return null
+  const hasContent = count > 1 || entity != null;
+  if (!hasContent) return null;
 
   const onHeaderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return
-    e.preventDefault()
-    const win = e.currentTarget.parentElement as HTMLElement
-    const rect = win.getBoundingClientRect()
-    const startX = e.clientX
-    const startY = e.clientY
-    const baseLeft = rect.left
-    const baseTop = rect.top
-    e.currentTarget.setPointerCapture(e.pointerId)
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const win = e.currentTarget.parentElement as HTMLElement;
+    const rect = win.getBoundingClientRect();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const baseLeft = rect.left;
+    const baseTop = rect.top;
+    e.currentTarget.setPointerCapture(e.pointerId);
 
     const compute = (ev: PointerEvent) => {
-      const maxX = window.innerWidth - KEEP_VISIBLE_X
-      const maxY = window.innerHeight - KEEP_VISIBLE_Y
+      const maxX = window.innerWidth - KEEP_VISIBLE_X;
+      const maxY = window.innerHeight - KEEP_VISIBLE_Y;
       return {
         x: Math.max(0, Math.min(maxX, baseLeft + (ev.clientX - startX))),
         y: Math.max(0, Math.min(maxY, baseTop + (ev.clientY - startY))),
-      }
-    }
-    const onMove = (ev: PointerEvent) => setDrag(compute(ev))
+      };
+    };
+    const onMove = (ev: PointerEvent) => setDrag(compute(ev));
     const onUp = (ev: PointerEvent) => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-      setInspectorFloatPos(compute(ev))
-      setDrag(null)
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-  }
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      setInspectorFloatPos(compute(ev));
+      setDrag(null);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
 
-  const pos = drag ?? stored
+  const pos = drag ?? stored;
   // null → default bottom-left anchor; otherwise clamp the stored top-left into view
   // (covers a viewport that shrank since the position was saved).
   const style: React.CSSProperties = pos
@@ -72,7 +72,7 @@ export function FloatingInspector() {
         left: Math.max(0, Math.min(pos.x, window.innerWidth - KEEP_VISIBLE_X)),
         top: Math.max(0, Math.min(pos.y, window.innerHeight - KEEP_VISIBLE_Y)),
       }
-    : { left: MARGIN, bottom: MARGIN }
+    : { left: MARGIN, bottom: MARGIN };
 
   return (
     <div
@@ -91,5 +91,5 @@ export function FloatingInspector() {
         <TransformInspector />
       </div>
     </div>
-  )
+  );
 }

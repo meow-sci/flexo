@@ -8,17 +8,17 @@ import {
   type ListBoxItemProps,
   type GridListProps,
   type GridListItemProps,
-} from 'react-aria-components'
-import { Check } from 'lucide-react'
-import { composeTw, cn } from './styles'
+} from 'react-aria-components';
+import { Check } from 'lucide-react';
+import { composeTw, cn } from './styles';
 
 const itemBase =
-  'group flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm text-fg outline-none hover:bg-white/[0.06] focus-visible:bg-white/[0.08] selected:bg-white/[0.06] disabled:opacity-45'
+  'group flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm text-fg outline-none hover:bg-white/[0.06] focus-visible:bg-white/[0.08] selected:bg-white/[0.06] disabled:opacity-45';
 
 // GridList rows use a green inset ring for selection (and a thinner ring for
 // keyboard focus), matching the Assets mesh-part list (see AssetsList.tsx).
 const gridItemBase =
-  'flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm text-fg outline-none disabled:opacity-45'
+  'flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm text-fg outline-none disabled:opacity-45';
 
 export function ListBox<T extends object>({ className, ...props }: ListBoxProps<T>) {
   return (
@@ -26,11 +26,11 @@ export function ListBox<T extends object>({ className, ...props }: ListBoxProps<
       {...props}
       className={composeTw('flex flex-col gap-0.5 p-1 outline-none', className)}
     />
-  )
+  );
 }
 
 export function ListBoxItem({ className, children, ...props }: ListBoxItemProps) {
-  const textValue = props.textValue ?? (typeof children === 'string' ? children : undefined)
+  const textValue = props.textValue ?? (typeof children === 'string' ? children : undefined);
   return (
     <AriaListBoxItem
       {...props}
@@ -44,7 +44,7 @@ export function ListBoxItem({ className, children, ...props }: ListBoxItemProps)
         </>
       ))}
     </AriaListBoxItem>
-  )
+  );
 }
 
 export function GridList<T extends object>({ className, ...props }: GridListProps<T>) {
@@ -53,11 +53,11 @@ export function GridList<T extends object>({ className, ...props }: GridListProp
       {...props}
       className={composeTw('flex flex-col gap-0.5 p-1 outline-none', className)}
     />
-  )
+  );
 }
 
 export function GridListItem({ className, children, ...props }: GridListItemProps) {
-  const textValue = props.textValue ?? (typeof children === 'string' ? children : undefined)
+  const textValue = props.textValue ?? (typeof children === 'string' ? children : undefined);
   return (
     <AriaGridListItem
       {...props}
@@ -73,5 +73,5 @@ export function GridListItem({ className, children, ...props }: GridListItemProp
     >
       {children}
     </AriaGridListItem>
-  )
+  );
 }

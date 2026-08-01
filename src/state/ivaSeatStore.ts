@@ -1,4 +1,4 @@
-import { atom } from 'nanostores'
+import { atom } from 'nanostores';
 
 /**
  * Ephemeral state for IVA-seat AUTHORING. The seats themselves are document state on
@@ -22,25 +22,25 @@ import { atom } from 'nanostores'
 
 export interface IvaSeatAimRequest {
   /** Index into `EditingPart.ivaSeats` of the seat to re-aim. */
-  index: number
+  index: number;
   /**
    * Keep the seat's current up axis when the new forward leaves it usable (non-parallel),
    * rather than deriving a fresh one. True for the inspector's button: re-aiming a seat
    * shouldn't silently roll the camera.
    */
-  keepUp: boolean
+  keepUp: boolean;
 }
 
 /** Pending aim request, consumed by `EditorScene`. Never persisted, never in undo. */
-export const $ivaSeatAimRequest = atom<IvaSeatAimRequest | null>(null)
+export const $ivaSeatAimRequest = atom<IvaSeatAimRequest | null>(null);
 
 /** Asks the 3D scene to aim seat `index` at the current selection (see {@link $ivaSeatAimRequest}). */
 export function requestIvaSeatAim(index: number, keepUp = true): void {
-  if (index < 0) return
-  $ivaSeatAimRequest.set({ index, keepUp })
+  if (index < 0) return;
+  $ivaSeatAimRequest.set({ index, keepUp });
 }
 
 /** Drops a pending aim request — called by the consumer once it has been handled. */
 export function clearIvaSeatAimRequest(): void {
-  $ivaSeatAimRequest.set(null)
+  $ivaSeatAimRequest.set(null);
 }

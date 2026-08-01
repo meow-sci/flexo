@@ -5,8 +5,8 @@ import {
   increaseRotateStep,
   rotatePairAxis,
   ROTATE_PAIRS,
-} from '../state/editorStore'
-import { toast } from './kit'
+} from '../state/editorStore';
+import { toast } from './kit';
 
 /**
  * UI-layer wrappers around the pure rotate-axis / rotate-step store actions that
@@ -15,25 +15,25 @@ import { toast } from './kit'
  * originates, and keeps editorStore free of UI/toast dependencies.
  */
 
-const FEEDBACK_MS = 2000
+const FEEDBACK_MS = 2000;
 
 /** Cycles the rotate-axis mapping (R) and toasts the new per-pair assignment. */
 export function changeRotateAxes(): void {
-  cycleRotateAxes(1)
+  cycleRotateAxes(1);
   const summary = ROTATE_PAIRS.map(
     (pair) => `${pair.toUpperCase().split('').join('/')}→${rotatePairAxis(pair).toUpperCase()}`,
-  ).join(' · ')
-  toast({ title: `Rotate axes: ${summary}` }, { timeout: FEEDBACK_MS })
+  ).join(' · ');
+  toast({ title: `Rotate axes: ${summary}` }, { timeout: FEEDBACK_MS });
 }
 
 /** Increases the rotate step and toasts the new angle (F hotkey). */
 export function raiseRotateStep(): void {
-  increaseRotateStep()
-  toast({ title: `Rotation step: ${$rotateStep.get()}°` }, { timeout: FEEDBACK_MS })
+  increaseRotateStep();
+  toast({ title: `Rotation step: ${$rotateStep.get()}°` }, { timeout: FEEDBACK_MS });
 }
 
 /** Decreases the rotate step and toasts the new angle (⇧F hotkey). */
 export function lowerRotateStep(): void {
-  decreaseRotateStep()
-  toast({ title: `Rotation step: ${$rotateStep.get()}°` }, { timeout: FEEDBACK_MS })
+  decreaseRotateStep();
+  toast({ title: `Rotation step: ${$rotateStep.get()}°` }, { timeout: FEEDBACK_MS });
 }

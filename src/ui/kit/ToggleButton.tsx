@@ -4,9 +4,9 @@ import {
   composeRenderProps,
   type ToggleButtonProps,
   type ToggleButtonGroupProps,
-} from 'react-aria-components'
-import { tv, type VariantProps } from 'tailwind-variants'
-import { focusRing, composeTw } from './styles'
+} from 'react-aria-components';
+import { tv, type VariantProps } from 'tailwind-variants';
+import { focusRing, composeTw } from './styles';
 
 const toggle = tv({
   extend: focusRing,
@@ -22,7 +22,7 @@ const toggle = tv({
     },
   },
   defaultVariants: { size: 'md' },
-})
+});
 
 export interface ToggleButtonKitProps
   extends ToggleButtonProps, Pick<VariantProps<typeof toggle>, 'size'> {}
@@ -36,7 +36,7 @@ export function ToggleButton({ size, className, ...props }: ToggleButtonKitProps
         toggle({ ...renderProps, size, className: cls }),
       )}
     />
-  )
+  );
 }
 
 /** Segmented control: a row of connected {@link ToggleButton}s. */
@@ -49,5 +49,5 @@ export function ToggleButtonGroup({ className, ...props }: ToggleButtonGroupProp
         className,
       )}
     />
-  )
+  );
 }

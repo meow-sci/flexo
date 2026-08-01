@@ -135,7 +135,11 @@ Beyond individual preference atoms, the **entire editing workspace** is persiste
 *project*: the `$part` document, per-layer view state, active layer, and the undo/redo
 history. This is a separate, hand-rolled localStorage layer (not `@nanostores/persistent`)
 because it bundles multiple stores under a named, switchable key and restores them before
-React renders. See [projects.md](./projects.md).
+React renders. Project snapshots are **schema-versioned** (`PROJECT_SCHEMA_VERSION`): they are
+preserved across backwards-compatible model changes by default-filling the missing fields from
+the live constructors, and purged at boot (with a user-visible notice) only on a version bump
+or corruption — never migrated. See [projects.md](./projects.md) and the project constitution
+in [AGENTS.md](../AGENTS.md).
 
 ## Related
 

@@ -668,11 +668,11 @@
     <!-- Capsules and Interstages -->
 
     <SubPartGameData Id="CoreCommandA_Subpart_MediumCapsuleCrewDoorA">
-        <EVADoor />
+        <EVADoor SeatId="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA" />
     </SubPartGameData>
 
     <SubPartGameData Id="CoreCommandA_Subpart_MediumCapsuleCrewDoorB">
-        <EVADoor />
+        <EVADoor SeatId="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatB" />
     </SubPartGameData>
 
 </Assets>

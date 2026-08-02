@@ -6,14 +6,6 @@
     <Battery HasStatusLight="true">
       <MaximumCapacity J="1000" />
     </Battery>
-    <Collider Id="Collider1">
-      <Cylinder Id="CylinderCollider1">
-        <LocationAsmb X="0" Y="0" Z="0" />
-        <Collider2Asmb X="0" Y="0" Z="1.57" />
-        <LengthY M="0.25" />
-        <Radius M="0.5" />
-      </Cylinder>
-    </Collider>
   </PartGameData>
 
   <PartGameData Id="CoreElectricalA_Prefab_InlineBatteryBankB">
@@ -126,16 +118,6 @@
     <Battery HasStatusLight="true">
       <MaximumCapacity J="100" />
     </Battery>
-
-    <Collider Id="Collider1">
-      <Box Id="BoxCollider1">
-        <LocationAsmb X="0.01" Y="0.005" Z="0.03" />
-        <Collider2Asmb X="0" Y="0" Z="0" />
-        <LengthX M="0.4292" />
-        <LengthY M="0.3057" />
-        <LengthZ M="0.2185" />
-      </Box>
-    </Collider>
   </PartGameData>
 
   <PartGameData Id="CoreElectricalA_Prefab_RadialBatteryB">
@@ -143,16 +125,6 @@
     <Battery HasStatusLight="true">
       <MaximumCapacity J="500" />
     </Battery>
-
-    <Collider Id="Collider1">
-      <Box Id="BoxCollider1">
-        <LocationAsmb X="-0.0059" Y="-0.005" Z="0.05" />
-        <Collider2Asmb X="0" Y="0" Z="0" />
-        <LengthX M="0.6704" />
-        <LengthY M="0.5138" />
-        <LengthZ M="0.35" />
-      </Box>
-    </Collider>
   </PartGameData>
 
   <PartGameData Id="CoreElectricalA_Prefab_SolarPanelA">

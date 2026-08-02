@@ -6,10 +6,21 @@
 > [part-and-subpart-xml.md](part-and-subpart-xml.md) (which owns the surrounding `<Part>` /
 > `<PartGameData>` document structure).
 
-**Baseline:** verified against KSA build **2026.7.10.5056** (`decomp/` + shipped `Content/Core`)
+**Baseline:** re-verified against KSA build **2026.8.3.5117** (`decomp/` + shipped `Content/Core`)
 and the real GLB meshes in `flexo-private-assets/assets/Meshes`.
 **Baseline status:** ✅ **MODELED** — closes the 4939 geometry-template `<Collider>` gap
 (gap **E** in [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md)).
+
+**5117:** schema INTACT — `ColliderModule.cs` and all four
+`Box`/`Sphere`/`Cylinder`/`CapsuleColliderTemplate.cs` classes are absent from the
+`5056 → 5117` decomp diff. Core's collider DATA moved again: rev 5078 deleted several
+now-redundant placeholder `<Collider>` blocks from `CoreElectricalAGameData.xml` (a cylinder on
+`InlineBatteryBankA`, boxes on `RadialBatteryA`/`RadialBatteryB`) after re-importing that art
+set. Vendored fixtures re-synced; `catalog.test.ts` / `partCatalog.test.ts` still pass.
+`AssetBundler.Collider` gained only prefixed warning text (`Console.Error` → `Console.WriteLine`)
+for skipped non-cylinder / stretched collider primitives. Unrelated but worth noting for the
+future: `NarrowPhaseCallbacks.cs` and the new `VehicleStructuralLimits.cs` add whole-vehicle
+destruction by g-limit / dynamic pressure (rev 5115) — vehicle-level, with no part-template field.
 
 **5056:** schema INTACT — no collider template class changed. Core's collider VALUES did move,
 because rev 5025/5026 regenerated nine part files through the in-repo `GlbToXmlUtility`, which

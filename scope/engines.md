@@ -5,8 +5,11 @@
 > **BREAKING** for the live thrust/Isp readout. Read alongside [docs/engines.md](../docs/engines.md)
 > and [analysis/KSA_ENGINE_DETAILS.md](../analysis/KSA_ENGINE_DETAILS.md).
 
-**Baseline:** re-vetted against KSA build **2026.7.10.5056** (decomp @ 5056 + shipped Core XML).
-**Baseline status:** ✅ **CURRENT** — but 5056 landed the first nozzle-schema BREAK since 4939:
+**Baseline:** re-vetted against KSA build **2026.8.3.5117** (decomp @ 5117 + shipped Core XML).
+**Baseline status:** ✅ **CURRENT** — at 5117 every verbatim-ported physics class is byte-identical
+and no engine template field moved; the only new item is an optional validator-parity gap (**Q4**,
+see [What changed in 5117](#what-changed-in-5117)).
+Historically: 5056 landed the first nozzle-schema BREAK since 4939:
 `<VolumetricExhaust>`/`<PlumeTrail>` moved inside `<ReactionPlume>` (see
 [What changed in 5056](#what-changed-in-5056)). Ported physics remains byte-identical.
 4980 (like 4939) left every ported physics class and
@@ -159,6 +162,42 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
   `<Combustor>` (flexo's SRB recipe now burns APCP) — but there is still no solid-motor
   hardware (no grain-regression thrust curve; the propellant reservoir is still a liquid-style
   tank), so a true SRB is still not reproducible.
+
+## What changed in 5117
+
+**Ported physics byte-identical — re-verified INTACT. One optional new capability.**
+
+Every verbatim-ported class is unchanged at 5117: `DeLavalNozzleConfig.cs`, `CombustorConfig.cs`,
+`GasProperties.cs`, `CombustionTable.cs`, `NozzlePerformance.cs`, `RocketDesign.cs`,
+`RocketControllerData.cs` and `EngineDesigner.cs` do not appear in the `5056 → 5117` decomp diff
+at all, so `src/ksa/enginePhysics.ts` needs no re-port and the constants (`9.80665`,
+`8.31446261815324`, `101325`) stand. `Reactions.xml` is unchanged. `RocketControllerTemplate.cs`,
+`Rocket.cs`, `RocketCore.cs`, `RocketNozzle.cs` and `SolidMotor.cs` changed **only** by gaining
+warning logs and UI fill-bars; no template field moved.
+
+**MISSING-CAPABILITY (low, optional): mirror KSA's new engine-wiring warnings.** Rev 5091 ("Added
+many warnings for part modules which are not wired up correctly in the template XML") added five
+`Warning`-level checks flexo's `validateEngines` (`src/ksa/engineValidation.ts`) does not yet
+have. All are silent-no-thrust failures — exactly the class of bug that validator exists for:
+
+| Game-side site                        | Warning                                                                                           |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `RocketControllerTemplate.OnDataLoad` | controller with an empty `RocketReferences` list — "references no Rockets; it will drive nothing" |
+| `Rocket.OnFullPartCreated`            | rocket with a core but `Nozzles.Length == 0` — "no nozzles; it will produce no thrust"            |
+| `RocketNozzle.OnFullPartCreated`      | nozzle no `<Rocket>` names — "referenced by no Rocket … will produce no thrust"                   |
+| `RocketCore.OnFullPartCreated`        | core no `<Rocket>` names as its `Core`, or whose rocket has no controller — "cannot be activated" |
+| `RocketCore.BindFeedPoints`           | a feed point that resolves to nothing on the owning part/sub-part                                 |
+
+flexo's existing checks cover the cases KSA **throws** on; these are the ones it merely logs, so
+they belong as `warn`-severity issues. Tracked as gap **Q4**.
+
+**Substance data (informational).** `Volatiles.xml` / `SolidPropellants.xml` gained
+`<Substance DefaultPhase="Gas|Liquid|Solid">` and a `<Color R G B>` child (`SubstanceTemplate.cs`
+
+- new `SubstancePhaseName.cs`), which also changed the **display** names KSA builds
+  (`"Gaseous X"` → `"X Vapor"`, and the default phase now renders bare). flexo consumes only
+  substance-phase **ids** (`base.Id + "(g)"/"(l)"/"(s)"`, e.g. `H2(l)`), which are unchanged — no
+  impact.
 
 ## What changed in 5056 — `<ReactionPlume>` (BREAKING) and nothing else
 

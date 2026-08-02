@@ -4,7 +4,7 @@
 > scale/placement aides (never exported) — a faithful three.js re-implementation of KSA's
 > Character rendering. The contract is a long list of asset/material/bone names + render quirks.
 
-**Baseline:** re-vetted against KSA build **2026.7.10.5056** (decomp @ 5056 + shipped Core XML).
+**Baseline:** re-verified against KSA build **2026.8.3.5117** (decomp @ 5117 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — `CharacterAssets.xml` is byte-identical (md5 match),
 `KittenRenderable.cs` is identical, and the eye/glass shader merge (rev 4745) is a verbatim
 refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code change needed.
@@ -67,6 +67,18 @@ refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code
 5. Don't `computeVertexNormals()` (faceted helmet dome from seam-split verts).
 6. Attachment correction is required & order-sensitive.
 7. `Characters/` atlases stay raw **BC7** (for verbatim mod bundle-export); without BPTC/RGTC they fall back to flat.
+
+## What changed in 5117
+
+**Nothing in this area — re-verified INTACT.** `CharacterAssets.xml` is unchanged (absent from the
+`Content` diff), as are `KittenRenderable.cs`, `AnimatedRenderable.cs` and
+`CharacterRenderResources.cs`. `ModelTranslucent.frag` and `Fur.frag` each changed by **exactly
+one line** — `sunlight *= GetCloudShadow(inWorldPos);` (rev 5100, cloud shadows on vessels and
+kittens) — which touches neither the material names, the socket bones, the `ATTACHMENT_CORRECTION`
+derivation nor the embedded-`DefaultORM.png` redirect. 5117's large kitten feature set
+(`KittenRoster`, name generator, KIA flag, crew assignment) is **save-game and UI only**: it adds
+`UniverseData` / `VehicleData` / `IVASeat.SaveData` XML, none of which is part-template data flexo
+reads or writes.
 
 ## What changed in 5056
 

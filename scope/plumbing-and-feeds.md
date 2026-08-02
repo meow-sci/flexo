@@ -11,7 +11,8 @@
 > alongside [engines.md](engines.md), [connectors-coordinates-iva.md](connectors-coordinates-iva.md)
 > and [gamedata-modules.md](gamedata-modules.md).
 
-**Baseline:** vetted against KSA build **2026.7.10.5056** (decomp @ 5056 + shipped Core XML).
+**Baseline:** re-verified against KSA build **2026.8.3.5117** (decomp @ 5117 + shipped Core XML);
+surface introduced at **2026.7.9.5018**.
 **Baseline status:** ✅ **CURRENT** — modeled end-to-end (parse, serialize, import/paste
 remapping, project codec v4, authoring UI, export pre-flight) by the 5018 upgrade.
 
@@ -187,6 +188,21 @@ template-local `Components` id and is never regenerated, so it passes through un
   places the _part_), so flexo's "unwired consumer" check only fires for SubPart-level ones.
 
 ---
+
+## What changed in 5117
+
+**Nothing that changes flexo — re-verified INTACT, with one semantic relaxation worth recording.**
+`ConnectorCapability*.cs`, `FeedsFromReference.cs`, `ConsumerFeedWiring.cs` and
+`RocketCoreTemplate.cs` are unchanged. `PartTemplate.ResolveConsumerFeeds` /
+`AddResolvedFeed` now resolve `<FeedsFrom SubPart="…">` against the new
+`PartInstance.RuntimeId` — `Id` when non-empty, else `Part.ResolveRuntimeId("", template)` (the
+template `Id`), else `InstanceOf` — instead of the raw `PartInstance.Id`. That **widens** what
+resolves: a `<SubPart>` placement authored without an `Id` is now addressable by its template id.
+flexo always emits an explicit placement `Id` (and `idRemap.ts` rewrites it), so nothing changes;
+the note matters only if flexo ever starts omitting placement ids.
+
+Rev 5091 also added a `RocketCore.BindFeedPoints` warning for a feed point that resolves to
+nothing — see [engines.md](engines.md#what-changed-in-5117) gap **Q4**.
 
 ## What changed in 5056
 

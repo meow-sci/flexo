@@ -87,6 +87,30 @@ Consequences / what's STILL drop-on-round-trip (passthrough is scoped to GameDat
 - A `<Part>` with no matching `<PartGameData>` has no tags/modules → invisible in the part picker.
 - `DockingPort` parses only the current child-element form (`<ConnectorId Value>`, `<LatchingKineticEnergy J>`, `<PushoffImpulse Ns>`) — no legacy fallback; see [gamedata-modules.md](gamedata-modules.md).
 
+## What changed in 5117
+
+**Nothing in this area — re-verified INTACT.** `PartTemplate.cs` and `Part.cs` changed only in
+runtime plumbing: a new `Part.ResolveRuntimeId(instanceName, template)` helper plus
+`PartInstance.RuntimeId` (`Id` when non-empty, else the resolved template `Id`, else `InstanceOf`),
+which `PartTemplate.ResolveConsumerFeeds` / `AddResolvedFeed` now match `<FeedsFrom SubPart=>`
+against instead of the raw `PartInstance.Id`. That is a **relaxation** — an id-less `<SubPart>`
+placement is now addressable by its template id — and flexo always emits explicit placement ids,
+so both parse and emit are unaffected. The rest of `Part.cs` is the `MatrixAsmb2VehicleAsmb`
+cache (rev 5112, sentinel `Identity` → `NaN`), pure performance. `SubPartTemplate.cs` is
+byte-identical.
+
+**Editor tags: still in sync.** `EditorTag.cs` gained three statics (`Booster`, `Coupling`,
+`Cargo`) — the C# side catching up to `CoreEditorTagsGameData.xml`, which is **unchanged** at 5117. flexo's `EDITOR_TAG_DEFS` snapshot (`src/ksa/types.ts`) already lists all 17 registry
+entries in registry order with matching `NotaCategory` flags; re-diffed entry-for-entry against
+the 5117 file. No refresh needed.
+
+**Fixtures re-synced.** All six vendored files under `src/ksa/__fixtures__/` were re-synced from
+the 5117 mirror (`cd scripts && bun run sync-fixtures`). The real content deltas were
+`PartGameData.xml` (`<EVADoor SeatId>` — gap **Q1**), `CoreIVASpaceAGameData.xml`
+(`<IVASeat Id>` — gap **Q2**), `CoreElectricalAGameData.xml` (placeholder `<Collider>` blocks
+deleted) and `CoreFuelTankAGameData.xml` (tank oversizing re-tuned + explanatory comments).
+The full `src/ksa` suite passes against them.
+
 ## What changed in 5056
 
 **Structure unchanged; content regenerated at lower precision.** No new `[XmlElement]` /

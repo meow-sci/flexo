@@ -1,9 +1,147 @@
 # Plan — Fix flexo gaps from KSA updates (running)
 
-> **Latest review: `2026.7.9.5018` → `2026.7.10.5056` (see below). One BREAKING gap
-> (`<ReactionPlume>`), ✅ FIXED. Three new 📋 OPEN items: reaction-keyed plume authoring (P1),
-> the unmapped `KSA.GlbImport` surface (P2), and the additive clutter slope/altitude fields
-> (P3).** The `4980 → 5018` review follows, then the earlier ones as history.
+> **Latest review: `2026.7.10.5056` → `2026.8.3.5117` (see below). NO BREAKING gap. Four new
+> 📋 OPEN items: `<EVADoor SeatId>` (Q1) and its partner `<IVASeat Id>` (Q2), the clutter
+> `<Collideable>` → `<CollisionType>` rename (Q3, docs-only), and validator parity with KSA's
+> new engine-wiring warnings (Q4).** The `5018 → 5056` review follows, then the earlier ones as
+> history.
+
+---
+
+# 5117 review — `2026.7.10.5056` → `2026.8.3.5117`
+
+**Derived from:** the [scope/](../scope/FULL_SCOPE.md) catalog review — `diff -rq` of the two
+provided asset trees (`ksa-game-assemblies_prev/current` @ 5056 vs `ksa-game-assemblies/current`
+@ 5117) plus a sweep of every changed `decomp/*.cs` for `[XmlElement]` / `[XmlAttribute]` /
+`[XmlType]` hunks. `version.json` @ 5117 documents revs 5057–5116.
+
+5117 is a **large release with a tiny schema surface**: crew/kitten rosters, burn-planning UX,
+launch pads, whole-vehicle destruction, and plume-trail/atmosphere refactors — but the entire
+XML-contract delta is **seven attribute/element hunks**, of which two reach flexo. Both come from
+the same feature (rev 5085, EVA-door ↔ IVA-seat linking).
+
+**The one thing that looked breaking and wasn't:** rev 5067 **deleted**
+`Double3Ex.Up`/`Down`/`Right`/`Left`/`Forward`/`Backward`, a named anchor in
+[connectors-coordinates-iva.md](../scope/connectors-coordinates-iva.md). The three surviving
+vectors moved to `Camera.ForwardView` / `RightView` / `UpView` with **identical values**
+(`-UnitZ` / `+UnitX` / `+UnitY`), and `QuaternionEx.GetAxis`'s fallback became the identical
+`double3.UnitY`. `CreateFromXyzRadians` is byte-identical. No recalibration of `coords.ts`'s
+`EULER_ORDER`; `ivaSeatAxes.test.ts` (the canary) passes.
+
+## Priority summary (5117)
+
+| # | Gap | Severity | Status | Scope doc |
+|---|---|---|---|---|
+| Q1 | `<EVADoor SeatId>` (new `[XmlAttribute]` on `EVADoorTemplate`, authored by Core) is dropped on import→export — the attribute sits on a MODELED child, so the GameData passthrough does not cover it | MISSING-CAPABILITY | 📋 **OPEN** | [gamedata-modules](../scope/gamedata-modules.md#what-changed-in-5117) |
+| Q2 | `<IVASeat Id>` is discarded on import and never emitted, but is now the target `<EVADoor SeatId>` resolves against — Core authors one on both capsule seats | MISSING-CAPABILITY | 📋 **OPEN** | [connectors-coordinates-iva](../scope/connectors-coordinates-iva.md#what-changed-in-5117) |
+| Q3 | Clutter ecotype `<Collideable Value>` renamed to `<CollisionType Value="None\|PrimitiveList\|Mesh">`; the cartoon-moon scaffold emits neither, so docs-only | SCHEMA-DRIFT (docs) | 📋 **OPEN** | [ground-clutter](../scope/ground-clutter.md#what-changed-in-5117) |
+| Q4 | `validateEngines` has no parity with KSA's five new engine-wiring warnings (rev 5091) — all silent no-thrust failures | MISSING-CAPABILITY (low) | 📋 **OPEN** | [engines](../scope/engines.md#what-changed-in-5117) |
+| — | Everything else | NONE | ✅ re-verified INTACT | — |
+
+### Q1 + Q2 — the EVA-door ↔ seat link (fix these together)
+
+Rev 5085 wired hatches to specific seats. Game side:
+
+```csharp
+// decomp/KSA/EVADoorTemplate.cs — the class's FIRST field ever
+[XmlAttribute("SeatId")]
+public string SeatId = string.Empty;
+
+// decomp/KSA/EVADoor.cs — ResolveAlignedSeats
+if (!(iVASeat.TemplateId != eVADoor.SeatId)) { eVADoor.AlignedSeat = iVASeat; break; }
+```
+
+`IVASeat.TemplateId` comes from `ModuleBase.TemplateDataBase.Id` — the `Id` attribute that has
+always been schema-legal on `<IVASeat>` and that flexo has always deliberately skipped. Core now
+authors both ends (`Content/Core/PartGameData.xml` +
+`Content/Core/CoreIVASpaceAGameData.xml`):
+
+```xml
+<SubPartGameData Id="CoreCommandA_Subpart_MediumCapsuleCrewDoorA">
+    <EVADoor SeatId="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA" />
+</SubPartGameData>
+
+<IVASeat Id="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA"> … </IVASeat>
+```
+
+It is functionally load-bearing, not cosmetic: `EVADoor.ShowContextMenu` returns early — **no
+EVA button at all** — when the aligned seat has no assigned kitten, and boarding targets that
+seat specifically (with the range raised 15 m → 25 m).
+
+**flexo `file:line` targets:**
+
+| File | Symbol | Change |
+|---|---|---|
+| `src/ksa/types.ts` (`EvaDoor`, ~`:573`) | `interface EvaDoor { connectorId }` | add `seatId: string` (`''` ⇒ emit no attribute) |
+| `src/ksa/types.ts` (`IvaSeat`, ~`:200`) | `id` is documented "NEVER emitted" | add a distinct user-authored `ksaId: string`; keep `id` as the internal `_seatN` document id |
+| `src/ksa/partXmlParser.ts` ~`:674` | `const eva = directChildren(gd, 'EVADoor')[0]` | read `SeatId` alongside `ConnectorId` |
+| `src/ksa/partXmlParser.ts` ~`:289` | `ivaSeatsFromElement` | keep `el.getAttribute('Id')` in `ksaId` instead of discarding it |
+| `src/ksa/partXmlSerializer.ts` ~`:257` | the `<EVADoor>` builder | emit `SeatId` when non-empty |
+| `src/ksa/partXmlSerializer.ts` ~`:456` | `buildIvaSeatElement` | emit `Id` when `ksaId` is non-empty; **update the doc comment** — its "nothing references a seat by id" premise is now false |
+| `src/ksa/partCatalog.ts` ~`:147`/`:201` | seat merge across both authoring sites | carry `ksaId` through the merge/renumber |
+| `src/state/projectCodec.ts` | seat + EVA-door codecs | add the two fields |
+| UI | Part Data / seat inspector | a seat-id field, and an EVA-door seat picker offering the part's seat ids |
+
+**Constraint that survives (do not lose it):** `TemplateDataBase.Id` shares the namespace
+`<FeedsFrom Container="…">` resolves against (`PartTemplate.AddResolvedFeed` scans every
+`Components[].Id`). So flexo must emit a **user-authored** id, never its internal `_seatN`, and
+an empty `ksaId` must emit no attribute at all — matching Core's pre-5117 seats byte-for-byte.
+
+**Per the no-migration rule:** this is a straight add of the current form. No fallback for
+`<EVADoor>` without `SeatId` beyond "the attribute is absent", and stale persisted projects are
+discarded by the boot purge (`sanitizeProjectStorage` → `snapshotMatchesModel`), not converted.
+
+### Q3 — clutter `<Collideable>` → `<CollisionType>` (docs-only)
+
+Rev 5099 replaced `ClutterEcotypeReference`'s `[XmlElement("Collideable")] BoolReference` with
+`[XmlElement("CollisionType")] ClutterCollisionTypeReference` (new file; one
+`[XmlAttribute("Value")]` enum `None` | `PrimitiveList` | `Mesh`, default `None`), keeping a
+derived `[XmlIgnore] bool Collideable`. `ksa-mods/cartoon-moon/` emits **neither** element, so
+the scaffold is valid under both spellings — the only work is the scope-doc correction (done)
+plus recording rev 5098/5099's two new rules: collideable ecotypes must have **uniform** scale
+(now an `IsValid` error) and placement scale is quantized to **16 discrete steps** between
+`MinScale`/`MaxScale` (runtime only, no schema).
+
+### Q4 — validator parity with KSA's new wiring warnings (low)
+
+Rev 5091 added five `Warning`-level checks for engine modules "not wired up correctly in the
+template XML" (`RocketControllerTemplate.OnDataLoad`, `Rocket`/`RocketCore`/`RocketNozzle`
+`.OnFullPartCreated`, `RocketCore.BindFeedPoints`). `src/ksa/engineValidation.ts`'s
+`validateEngines` (~`:193`) covers the cases KSA **throws** on but none of these — they are
+silent no-thrust failures, exactly what that validator exists to catch. Add them at `warn`
+severity with codes mirroring the game's wording.
+
+### Non-gaps worth recording
+
+- **`PartInstance.RuntimeId` (rev 5085) is a relaxation, not a break.** `<FeedsFrom SubPart=>`
+  now resolves against `Id` → template `Id` → `InstanceOf` instead of the raw `PartInstance.Id`,
+  so an id-less `<SubPart>` placement became addressable. flexo always emits explicit placement
+  ids. [plumbing-and-feeds](../scope/plumbing-and-feeds.md#what-changed-in-5117).
+- **`EditorTag.cs` gaining `Booster`/`Coupling`/`Cargo` statics is the C# side catching up** to
+  `CoreEditorTagsGameData.xml`, which is **unchanged**. flexo's `EDITOR_TAG_DEFS` already lists
+  all 17 registry entries in order — re-diffed, no refresh needed.
+- **The kitten roster / crew assignment feature is save-game + UI only.** `KittenRosterData`,
+  `IVASeat.SaveData` (`AssignedKittenName`), `VehicleData.HasLaunched` and `UniverseData`'s
+  `<KittenRoster>` are all SAVE schema. flexo authors part templates, not vehicle saves.
+- **`<Substance DefaultPhase>` + `<Color>`** (`Volatiles.xml` / `SolidPropellants.xml`) changed
+  KSA's substance **display** names (`"Gaseous X"` → `"X Vapor"`; default phase renders bare).
+  flexo consumes only substance-phase **ids** (`H2(l)` et al.), which are unchanged.
+- **`<Landmark IsLaunchPad>`** (`LandmarkReference.cs`) + the launch-pad clutter exclusion zone
+  is a celestial/landmark authoring surface with no flexo integration point. Not a new scope row
+  unless flexo ever authors landmarks.
+- **`AssetBundler.WarnIfUnappliedTransform` (rev 5060) confirms existing flexo behaviour** —
+  KSA's importer now warns on non-identity mesh-atlas node TRS; `exportGlb.ts` writes no node
+  TRS at all. [custom-assets](../scope/custom-assets-and-mod-export.md#what-changed-in-5117).
+- **`ThumbnailRenderResources.cs` is byte-identical** ⇒ the un-guarded `NormalReference` /
+  `AoRoughMetalReference` deref survives ⇒ synthetic Normal + ORM remain mandatory on every
+  `<PbrMaterial>`.
+- **Ported engine physics is byte-identical** — none of `DeLavalNozzleConfig`, `CombustorConfig`,
+  `GasProperties`, `CombustionTable`, `NozzlePerformance`, `RocketDesign`, `RocketControllerData`
+  or `EngineDesigner` appears in the decomp diff. Zero changes to `enginePhysics.ts`.
+- **Content-only churn:** `CoreElectricalAGameData.xml` deleted redundant placeholder
+  `<Collider>` blocks; `CoreFuelTankA/B` re-tuned tank oversizing (values + comments);
+  `CorePropulsionAAssets.xml` was re-imported with transforms applied to vertices. All six
+  vendored `src/ksa/__fixtures__/` files re-synced; `src/ksa` suite (614 tests) passes.
 
 ---
 

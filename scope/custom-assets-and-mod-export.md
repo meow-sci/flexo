@@ -9,8 +9,10 @@
 > [docs/importing-models.md](../docs/importing-models.md),
 > [docs/texturing.md](../docs/texturing.md), [docs/asset-pipeline.md](../docs/asset-pipeline.md).
 
-**Baseline:** re-vetted against KSA build **2026.7.10.5056** (decomp @ 5056 + shipped Core XML).
-**Baseline status:** ✅ **INTACT** — every schema/reference class and renderer quirk flexo's
+**Baseline:** re-vetted against KSA build **2026.8.3.5117** (decomp @ 5117 + shipped Core XML).
+**Baseline status:** ✅ **INTACT** (re-verified @5117 — `ThumbnailRenderResources` byte-identical,
+so the synthetic Normal/ORM rule holds; the GLB importer now _warns_ on non-identity mesh node
+transforms, which flexo already satisfies — see [What changed in 5117](#what-changed-in-5117)) — every schema/reference class and renderer quirk flexo's
 export depends on is byte-identical or behavior-preserving. No code change required. Two
 durable watch-items noted below.
 
@@ -80,6 +82,31 @@ durable watch-items noted below.
 
 18. **`<PartModel>` and `<PartModelDynamic>` are two shader VARIANTS of one file: emissive XOR temperature.** `PartModelRenderer.ColorData` compiles `MeshIndirect.vert/frag` twice — `Pipeline` with `ENABLE_EMISSIVE`+`ENABLE_THIN_FILM` (`decomp/KSA/PartModelRenderer.cs:111-112`) and `PipelineDynamic` with `ENABLE_TEMPERATURE`+`ENABLE_THIN_FILM` (`:200-201`) — then draws `PartModel` and `PartModelDynamic` under them back to back (`:343-345`). So an `<Emissive>` on a `<PartModelDynamic>` SubPart is **never sampled** (the block at `MeshIndirect.frag:273-291` is preprocessed out and `:324-326` forces `emissive = false`), and the heat gradient — the `<ThinFilm>`/`_TFI` texture's G channel keyed through the global `temperatureLut` (`MeshIndirect.frag:293-300`) — is never sampled on a `<PartModel>` one. Shipped Core data obeys this exactly: every category with an `<Emissive>` has zero `<PartModelDynamic>` (CommandA / ElectricalA / IVAPropA / PassageA / PartAssets) and every `<PartModelDynamic>` category has zero `<Emissive>` (FuelTankA / PropulsionA / PropulsionC). flexo only ever emits `<PartModel>`/`<PartModelGlass>`, so it sits on the emissive side by construction — but **ThinFilm heat (the plan's Phase 3) can never coexist with a glow on the same SubPart**, and adopting `<PartModelDynamic>` would silently kill every glow on it.
 19. **An export VARIANT is minted only when flexo changes something, and it inherits NOTHING it does not name.** A variant re-declares a built-in SubPart template under a project-unique id (`flexo_<base>_<originalId>` — one naming rule, no interior-prop special case any more) that REUSES the built-in `<Mesh>` + `<Material>` by id. `buildExportVariantMap` mints one **only** when the placed built-in template (a) carries flexo SubPart GameData — a `<Light>`/tank/… or a SubPart-owned `<Collider>`, which under the shared built-in id would MERGE onto the built-in template globally — **or** (b) wants an `<Internal>` that differs from the built-in's own catalogued value. Everything else references the built-in id directly and keeps the built-in's flags for free. Because the variant is a fresh `<SubPart>` that inherits only what it names, `ReferenceSubPartPlan` copies the built-in's `<Internal>`, `<RayTracing>` (raw token) and `<ShadowCaster>` forward, plus the built-in's own geometry `<Collider>`s — dropping `<RayTracing>` turned a `ShadowProxy` occluder into a **visible** mesh, dropping `<ShadowCaster>` made Core's explicitly-`false` capsule windows start casting shadows. Element order mirrors Core: `Internal, Mesh, Material, RayTracing, ShadowCaster`. The `<PartModel Id>` must still be **fresh** (contract #8) or the dedup collapses the variant back onto the original, dragging the original's flags back with it. **A custom (flexo-authored) mesh must NEVER get a variant, and `buildExportVariantMap` skips them by DOCUMENT lookup (`part.customMeshes`), not by catalog absence.** The catalog it receives is `$catalogIndex`, which merges `$customCatalog` (`state/catalogStore.ts`), so a membership test silently let custom meshes through: giving a custom mesh SubPart GameData (a `<Light>`, or a SubPart-owned collider) minted a variant of flexo's own SubPart, and because custom catalog entries carry **no `materialId`** (their material lives in `customMeshRenderCache`) the variant emitted a `<PartModel>` with no `<Material>` — the contract-#3 startup crash — while orphaning the correct, fully-materialed declaration and pointing `<MeshView>` at the render mesh instead of the decimated `_VM`. The rule is semantic, not defensive: a custom SubPart id is project-unique and declared by this same export, so there is nothing to merge onto. A custom mesh emits `<Internal>true</Internal>` in its own `<PartModel>` when the user marks it interior-only. **Glass can NEVER be interior-only**: `<PartModelGlass>` has no `<Internal>` field (the one `[XmlElement("Internal")]` in the decomp is `PartModelModule.cs:35`), a `glassGlow` mesh counts as glass whole, and the flag is forced off on that path. Full contract in [connectors-coordinates-iva.md](connectors-coordinates-iva.md).
+
+## What changed in 5117
+
+**Every export contract INTACT — including the one that has caused an in-game crash.**
+`KSA.Rendering.Thumbnails/ThumbnailRenderResources.cs` is **byte-identical**, so
+`AddDraw`'s unguarded `inTemplate.Material.NormalReference.BindlessHandle` /
+`AoRoughMetalReference` deref survives ⇒ flexo's synthetic Normal + AoRoughMetal on every
+`<PbrMaterial>` remain **mandatory**. `Mod.cs`, `ModLibrary.cs`, `AssetBundle.cs`,
+`PbrMaterialReference.cs`, `MeshAtlasFileReference.cs`, `PartModelModule.cs` and
+`PartModelRenderer` are all unchanged, so the mod-loader contract, the SubPart-id-from-mesh-name
+rule and `ENABLE_EMISSIVE` all stand. `DefaultAssets.xml` only added the launch-pad GLB and
+dropped editor icon/shader entries flexo does not touch.
+
+**New (confirms an existing flexo behaviour): the GLB importer now warns on non-identity mesh
+node transforms.** Rev 5060 added `AssetBundler.WarnIfUnappliedTransform`
+(`decomp/KSA.GlbImport/AssetBundler.cs`), which prints
+_"Mesh atlas node 'X' has a non-identity translation/rotation/scale"_ plus a per-file
+_"…subpart origins will be offset from the visual mesh locations, which will make positioning
+game data like rocket nozzles, tanks, and masses very challenging"_ for any non-`_`-prefixed
+atlas node with a mesh. KSA then re-imported its own art to comply (rev 5075/5078,
+`CorePropulsionAAssets.xml` / `CoreElectricalAAssets.xml`). flexo's `exportGlb.ts` writes **no**
+node TRS at all (glTF nodes default to identity), so its atlases already satisfy this — but it
+is now an explicit, warned-on expectation worth keeping. `AssetBundler`'s other changes are a
+`setPrefix` threading and `Console.Error` → `Console.WriteLine` for the collider-primitive
+warnings.
 
 ## What changed in 5056
 

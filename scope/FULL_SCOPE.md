@@ -20,14 +20,55 @@ update, this is the checklist you diff against to find what breaks flexo.**
 
 ## Baseline game version
 
-|                      | Build            | Path                                                                                                                                                             |
-| -------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Verified against** | `2026.7.10.5056` | `/Users/asherwin/repos/meow-sci/ksa-game-assemblies/current` (decomp @ 5056) + `flexo-private-assets/assets` (Core XML @ 5056, re-encoded)                       |
-| Previous baseline    | `2026.7.9.5018`  | `ksa-game-assemblies` git commit `3106557` + the `flexo-private-assets_prev` dir copy (diff decomp via git history; the mirror \_prev copies go stale over time) |
+|                      | Build            | Path                                                                                                                                                |
+| -------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Verified against** | `2026.8.3.5117`  | `/Users/asherwin/repos/meow-sci/ksa-game-assemblies/current` (decomp @ 5117) + `flexo-private-assets/assets` (Core XML @ 5117, re-encoded)          |
+| Previous baseline    | `2026.7.10.5056` | `ksa-game-assemblies_prev/current` (decomp @ 5056) + the `flexo-private-assets_prev` dir copy (also diffable via `ksa-game-assemblies` git history) |
+| Baseline before that | `2026.7.9.5018`  | `ksa-game-assemblies` git commit `3106557` (diff decomp via git history; the mirror \_prev copies go stale over time)                               |
 
 Each snapshot holds `decomp/` (decompiled C#; schema lives in `[XmlType]`/`[XmlElement]`/
 `[XmlAttribute]` + public fields), `Content/Core/` (the shipped game-data XML + GLSL shaders),
 and `version.json` (a commit-by-commit changelog — the fastest first read on any update).
+
+> **5117 review method.** Full `5056 → 5117` diff via `diff -rq` of the two provided asset
+> trees (`ksa-game-assemblies_prev/current` @ 5056 vs `ksa-game-assemblies/current` @ 5117),
+> plus a sweep of every changed `decomp/*.cs` for `[XmlElement]`/`[XmlAttribute]`/`[XmlType]`
+> hunks — the only way an XML contract can move. `version.json` @ 5117 documents revs
+> 5057–5116: a large release (crew/kitten roster, burn-planning UX, launch pads, vehicle
+> destruction, plume-trail and atmosphere refactors) whose **entire XML schema delta is seven
+> lines**, of which two touch flexo. **No BREAKING item.** Two **MISSING-CAPABILITY** gaps,
+> both from the same feature (rev 5085, EVA-door ↔ seat linking): `<EVADoor SeatId>` is a new
+> attribute flexo drops, and `<IVASeat Id>` — long schema-legal via `ModuleBase.TemplateDataBase`
+> and deliberately never emitted by flexo — became **load-bearing** as the target of that link
+> (`EVADoor.ResolveAlignedSeats` matches `IVASeat.TemplateId` against `EVADoor.SeatId`), with
+> Core now authoring both ends. One **SCHEMA-DRIFT** (docs-only): rev 5099 replaced the clutter
+> ecotype's `<Collideable Value>` with `<CollisionType Value="None|PrimitiveList|Mesh">`; the
+> cartoon-moon scaffold emits neither, so no generator change is required.
+>
+> Explicitly **re-verified intact**: every ported engine-physics class is byte-identical
+> (`DeLavalNozzleConfig` / `CombustorConfig` / `GasProperties` / `CombustionTable` /
+> `NozzlePerformance` / `RocketDesign` / `EngineDesigner` all unchanged); the coordinate
+> convention survived rev 5067's **deletion of `Double3Ex.Up/Down/Right/Left/Forward/Backward`**
+> — the vectors moved to `Camera.ForwardView`/`RightView`/`UpView` with **identical values**
+> (`-UnitZ` / `+UnitX` / `+UnitY`) and `QuaternionEx.GetAxis`'s fallback became the equally
+> identical `double3.UnitY`, so `coords.ts`'s `EULER_ORDER` calibration is untouched;
+> `QuaternionEx.CreateFromXyzRadians`, `KeyframeAnimationData`/`KeyframeAnimationModule`,
+> `Control`/`ControlTemplate` (still empty markers — a `controlpoint`/`referencetransform`
+> grep over the 5117 decomp finds only Vulkan tessellation and spline-editor hits),
+> `FlightComputer.UpdateAttitudeTrackError` (still aims body **+X**), `PartModelModule`'s
+> `[XmlElement("Internal")]` (still the only one in the tree), `Mod`/`ModLibrary`/`AssetBundle`/
+> `PbrMaterialReference`, `CharacterAssets.xml` + `KittenRenderable`, and
+> `ThumbnailRenderResources` (byte-identical — the un-guarded `Material.NormalReference`/
+> `AoRoughMetalReference` deref survives, so flexo's synthetic Normal + ORM stay mandatory).
+> `ModelTranslucent.frag`/`Fur.frag` changed by exactly one line each (a `GetCloudShadow`
+> multiply), which does not touch the kitten material contract.
+>
+> Content-side: `CoreElectricalAGameData.xml` dropped placeholder `<Collider>` blocks and
+> `CoreFuelTankA/B` re-tuned tank oversizing (values + comments, no schema); `CorePropulsionAAssets.xml`
+> was re-imported with transforms applied to vertices; `Volatiles.xml`/`SolidPropellants.xml`
+> gained `DefaultPhase=` + `<Color>` on `<Substance>` (flexo consumes only substance-phase **ids**
+> like `H2(l)`, which are unchanged). All six vendored `src/ksa/__fixtures__/` files were
+> re-synced from the 5117 mirror and the full `src/ksa` suite (614 tests) passes.
 
 > **5056 review method.** Full `5018 → 5056` diff via **git history inside
 > `ksa-game-assemblies`** (`git diff 3106557 13595c1`) + `diff -rq` of the two private-mirror
@@ -199,8 +240,13 @@ detail: [part-and-subpart-xml.md](part-and-subpart-xml.md#-master-invariant--fle
 
 ## Integration map (at a glance)
 
-Status reflects the `5018 → 5056` review. 🔴 breaking · 🟡 missing/drift · 📝 docs · ✅ intact.
-Rows whose contract did not move at 5056 keep their 5018 verdict and are marked "re-verified".
+Status reflects the `5056 → 5117` review. 🔴 breaking · 🟡 missing/drift · 📝 docs · ✅ intact.
+Rows whose contract did not move at 5117 keep their prior verdict and are marked "re-verified".
+
+**5117 deltas to the table below:** _Connectors/coordinates/IVA_ → 🟡 (`<EVADoor SeatId>` +
+load-bearing `<IVASeat Id>`, gaps **Q1**/**Q2**); _GameData module blocks_ → 🟡 (the same
+`<EVADoor SeatId>`); _Ground clutter_ → 🟡 (`<Collideable>` → `<CollisionType>`, docs-only,
+gap **Q3**); every other row re-verified ✅ against 5117.
 
 | Area                                                                                      | Detail doc                                                         | Primary game anchors                                                                                                                                                                                                                                                                                                         | 5018 status                                                                                                                                                                                                         |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -239,6 +285,34 @@ Rows whose contract did not move at 5056 keep their 5018 verdict and are marked 
 > **Re-check on a game update:** an `<EmissiveLut>`/tint slot appearing on
 > `PbrMaterialReference`, or `ENABLE_EMISSIVE` reaching `BuildPipelineDynamic`, would let
 > flexo ship the ramp instead of baking it.
+
+### Open gaps from 5117 → [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md)
+
+The `5056 → 5117` review found **no BREAKING item**. Three gaps, all **📋 OPEN**:
+
+- **Q1 — `<EVADoor SeatId>` is dropped (🟡 MISSING-CAPABILITY).** Rev 5085 added
+  `[XmlAttribute("SeatId")]` to `EVADoorTemplate`; Core authors it
+  (`PartGameData.xml` → `<EVADoor SeatId="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA" />`).
+  flexo's `EvaDoor` models only `connectorId`, and because the attribute sits on a **modeled**
+  child it does not ride the GameData passthrough — importing then exporting a crew-door part
+  silently unlinks the hatch from its seat. In-game the door then falls back to
+  `Vehicle.GetFirstOccupiedSeat()` and the "EVA" button gating changes.
+- **Q2 — `<IVASeat Id>` is never emitted, but is now the link target (🟡 MISSING-CAPABILITY).**
+  Paired with Q1: `EVADoor.ResolveAlignedSeats` matches `IVASeat.TemplateId` against
+  `EVADoor.SeatId`, and Core now authors `<IVASeat Id="…_SeatA">`. flexo regenerates
+  throwaway `_seat1`/`_seat2` ids on import and deliberately writes no `Id`. Note the
+  serializer's stated rationale — "nothing references a seat by id" — is now **false**; the
+  remaining half of it still holds (`TemplateDataBase.Id` shares the namespace
+  `<FeedsFrom Container=>` resolves against), so the fix must emit a user-authored id rather
+  than flexo's internal one.
+- **Q3 — clutter `<Collideable>` → `<CollisionType>` (📝 SCHEMA-DRIFT, docs-only).** Rev 5099
+  replaced `ClutterEcotypeReference`'s `[XmlElement("Collideable")] BoolReference` with
+  `[XmlElement("CollisionType")] ClutterCollisionTypeReference` (`Value="None|PrimitiveList|Mesh"`,
+  new `ClutterCollisionTypeReference.cs`). `ksa-mods/cartoon-moon/` emits neither element and
+  both defaults mean "no collision", so nothing is broken — but `scope/ground-clutter.md`
+  documents the old name and must be corrected. Rev 5098 also made ecotype scale **16 discrete
+  steps** between `MinScale`/`MaxScale` (runtime only, no schema) and rev 5099 made
+  non-uniform scale an `IsValid` **error** for collideable ecotypes.
 
 ### Open gaps from 5056 → [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md)
 

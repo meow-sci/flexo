@@ -7,8 +7,13 @@
 > `<Internal>` flag) and
 > [docs/ksa-part-connector-notes.md](../docs/ksa-part-connector-notes.md).
 
-**Baseline:** re-vetted against KSA build **2026.7.10.5056** (decomp @ 5056 + shipped Core XML).
-**Baseline status:** ✅ **CURRENT** — the coordinate calibration, connector flag _schema_, and the
+**Baseline:** re-vetted against KSA build **2026.8.3.5117** (decomp @ 5117 + shipped Core XML).
+**Baseline status:** 🟡 **DRIFTED (seats only)** — the coordinate calibration survived rev 5067's
+deletion of `Double3Ex.Up/Forward/Right` (the vectors moved to `Camera.ForwardView`/`RightView`/
+`UpView` with identical values) and the connector/`<Internal>` contracts are byte-identical, but
+5117's crew feature added `<EVADoor SeatId>` and made `<IVASeat Id>` load-bearing — flexo drops
+both (gaps **Q1**/**Q2**, see [What changed in 5117](#what-changed-in-5117)).
+Historically: the coordinate calibration, connector flag _schema_, and the
 IVA render gate are all **intact**; the `<DockingPort>` GameData schema (BREAKING in 4750) is fixed.
 As of 4826, connectors carry new attach-node grouping (`<Sibling>` geometry / `<Aligned>` GameData);
 `<Sibling>` is now preserved via `Connector.siblingIds`, `<Aligned>` rides the gap-6 passthrough
@@ -97,9 +102,15 @@ child of `<PartGameData>`. Its ENTIRE authored schema is three vectors:
   **double** attributes. `<Position>` is the eye point **in the owning Part's assembly frame**,
   meters — the identical space flexo already places SubParts, connectors and colliders in
   (`IVAController.cs:40-41` → `Part.PositionVehicleAsmbOffset`). `<IVASeat Id>` exists
-  (`TemplateDataBase.Id`) but **flexo emits none**: Core authors none, nothing references a seat by
-  id, and that id shares the namespace `<FeedsFrom Container="…">` resolves against
-  (`PartTemplate.AddResolvedFeed`) — see [plumbing-and-feeds.md](plumbing-and-feeds.md).
+  (`TemplateDataBase.Id`) and **flexo emits none** — but ⚠️ **as of 5117 that is a gap, not a
+  clean choice**. Two of the three reasons it rested on died at rev 5085: Core now authors
+  `<IVASeat Id="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA">` (`CoreIVASpaceAGameData.xml`), and
+  `EVADoor.ResolveAlignedSeats` references a seat by that id (matching `IVASeat.TemplateId`
+  against `EVADoorTemplate.SeatId`). The third still holds: the id shares the namespace
+  `<FeedsFrom Container="…">` resolves against (`PartTemplate.AddResolvedFeed`) — see
+  [plumbing-and-feeds.md](plumbing-and-feeds.md) — so whatever flexo emits must be a
+  user-authored id, never the throwaway `_seatN` document id. Gap **Q2**, see
+  [What changed in 5117](#what-changed-in-5117).
 - ⚠️ **Element-absent and attribute-absent are DIFFERENT defaults.** An entirely **absent element**
   takes the C# field initializer — `ForwardAxisAsmb = (1,0,0)`, `UpAxisAsmb = (0,0,-1)`
   (`IVASeat.cs:9-27`). A **present** element defaults each missing **attribute** to `0`, so a bare
@@ -278,8 +289,60 @@ follows the root part.
 6. **The interior must be `<Internal>`**, or it renders in the exterior view too — and **glass cannot be** (`<PartModelGlass>` has no such field), so a window pane always renders in every camera mode.
 7. **You are inside your own exterior hull, and KSA culls back faces unconditionally** (contract #15 in [custom-assets-and-mod-export.md](custom-assets-and-mod-export.md)), so from a seat the hull is simply **not there** — an IVA part needs real interior geometry or the seat looks straight out at space.
 8. **Interior geometry with no seat anywhere in the vehicle is invisible in EVERY camera mode** — `<Internal>` hides it outside IVA, and with no seat the IVA mode is never offered. This is the failure mode the deleted automatic rewrite used to mask.
-9. **`<IVASeat Id>` shares the feed-container id namespace** (`PartTemplate.AddResolvedFeed` scans every `Components[].Id`). flexo emits no `Id`, matching Core byte-for-byte and dodging it entirely.
+9. **`<IVASeat Id>` shares the feed-container id namespace** (`PartTemplate.AddResolvedFeed` scans every `Components[].Id`) **and, since 5117, is the target of `<EVADoor SeatId>`**. flexo emits no `Id`, which no longer matches Core (it authors one on both capsule seats) and drops the hatch↔seat link. Gap **Q2**.
 10. **There is no in-game editor IVA preview.** The KSA vehicle editor has no IVA mode; the only in-game check is launch → **Shift+C** twice → **C** to cycle. This is why flexo ships its own seat preview (above) — and why that preview's honest limits matter.
+
+## What changed in 5117
+
+**Coordinates: INTACT (through a scary-looking rename). Seats: 🟡 two MISSING-CAPABILITY gaps.**
+
+**Coordinate convention — intact.** Rev 5067 **deleted**
+`Double3Ex.Up`/`Down`/`Right`/`Left`/`Forward`/`Backward` ("misleading and often misused") and
+re-homed the three that survive onto `Camera` as `ForwardView`/`RightView`/`UpView`, with
+**identical values** — `-double3.UnitZ` / `+double3.UnitX` / `+double3.UnitY`, exactly what
+`Double3Ex` returned. `Camera.GetForward()`/`GetRight()`/`GetUp()` became
+`GetForwardEcl()`/`GetRightEcl()`/`GetUpEcl()` (same bodies, clearer frame naming), and
+`QuaternionEx.GetAxis`'s degenerate fallback went from `Double3Ex.Up` to the identical
+`double3.UnitY`. `QuaternionEx.CreateFromXyzRadians` is byte-identical. **No recalibration:**
+`coords.ts`'s `EULER_ORDER` and `ivaSeatAxes.ts` are untouched, and `ivaSeatAxes.test.ts` — the
+canary — passes. When quoting the axis convention, cite `Camera.ForwardView` et al. from 5117
+onward; `Double3Ex` no longer has them.
+
+**`ivaLook.ts` port — intact.** `IVAController.OnFrame` changed only by following that rename
+(`Camera.GetUp()` → `GetUpEcl()`, `Double3Ex.Forward` → `KSA.Camera.ForwardView`). Both view
+clamps, the `0.9` up-pole test and the seat-cycling / `OnSwitchOn` order semantics are unchanged.
+`IVASeatTemplate`'s three `Vector3Reference` fields and their defaults are byte-identical.
+
+**Seats and hatches — the crew-assignment feature (rev 5083/5085) reached the template schema.**
+
+|                   | 5056                                                  | 5117                                                                                             |
+| ----------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `EVADoorTemplate` | no fields at all                                      | `[XmlAttribute("SeatId")] string SeatId = ""`                                                    |
+| `<IVASeat Id>`    | schema-legal, authored by nobody                      | authored by Core, resolved by `EVADoor.ResolveAlignedSeats`                                      |
+| Boarding          | "Enter vehicle" takes the first free seat, 15 m range | targets the door's **aligned** seat, 25 m range, and the button hides when that seat is occupied |
+| EVA               | spawns a fresh `Kitten_N`                             | spawns the kitten assigned to the aligned seat (`KittenRoster`)                                  |
+
+`EVADoor.ShowContextMenu` now returns early — **no EVA button at all** — when the aligned seat
+has no assigned kitten, so the link is functionally load-bearing, not cosmetic.
+
+**What flexo drops (gaps Q1 + Q2).** `<EVADoor SeatId>` sits on a **modeled** child element, so
+it does **not** ride the `<PartGameData>`/`<SubPartGameData>` passthrough: `partXmlParser.ts`
+reads only `ConnectorId` (`evaDoorFromGameData`, ~~`:674`) and `partXmlSerializer.ts` writes only
+`ConnectorId` (~~`:257`), so import→export of Core's `MediumCapsuleCrewDoorA/B` silently unlinks
+the hatch. Its partner `<IVASeat Id>` is discarded on import (`ivaSeatsFromElement` regenerates
+`_seatN`, ~`:289`) and never written (`buildIvaSeatElement`, ~`:456`). Per the no-migration rule
+the fix is to **model both**: add `seatId` to `EvaDoor` and a user-authored `ksaId` to `IvaSeat`,
+emitting the latter only when set. Both are tracked in
+[plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md).
+
+**Everything else in this area — re-verified INTACT.** `Control.cs`/`ControlTemplate.cs` are
+unchanged empty markers and a `controlpoint|control from here|referencetransform` grep over the
+5117 decomp returns only Vulkan tessellation state and the spline editor — so "up follows the
+root part" still holds, `FlightComputer.UpdateAttitudeTrackError` still aims body **+X**, and
+`VehicleEditor` still pins the root to identity. `PartModelModule`'s `[XmlElement("Internal")]`
+is still the only one in the tree (`<PartModelGlass>` gained none). `Part.Connector`'s `Flag`
+enum and `<Flags>` schema are unchanged; `ConnectAndMerge` only gained an `out PoseChange` for
+the new docking-camera smoothing.
 
 ## What changed in 5056
 

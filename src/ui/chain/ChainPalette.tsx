@@ -4,6 +4,7 @@ import { useHotkeys } from 'react-hotkeys-hook';
 import { X } from 'lucide-react';
 import { $chainSession, addChainOp, closeChain, type ChainOpKind } from '../../state/chainStore';
 import { applyActionChain, type ChainCommitEntry } from '../../state/editorStore';
+import { isDialogOpen } from '../../state/dialogStore';
 import { $chainEval } from '../../three/chainEval';
 import { PREVIEW_MAX_GHOSTS } from '../../three/ChainPreviewLayer';
 import {
@@ -71,7 +72,14 @@ export function ChainPalette() {
     toast({ title: `Applied chain · ${created > 0 ? `+${created} SubParts` : detail}` });
   };
 
-  const cancel = () => closeChain();
+  // Escape-ladder precedence (foundation §11.4): dialog dismiss is rung 2, chain cancel is
+  // rung 6, so an Escape aimed at an overlay dialog must never also throw the session away
+  // — least of all the discard-confirm, whose whole job is to protect it. Checked at
+  // keypress time because `$openDialog` changing does not re-render this component.
+  const cancel = () => {
+    if (isDialogOpen()) return;
+    closeChain();
+  };
 
   useHotkeys('mod+enter', apply, {
     enabled: session !== null,

@@ -15,6 +15,8 @@ import { CustomAssetsModal } from '../CustomAssetsModal';
 import { CustomTextureDialog } from '../CustomTextureDialog';
 import { CreateMeshDialog } from '../CreateMeshDialog';
 import { MaterialDialog } from '../MaterialDialog';
+import { ConfirmDialog } from '../kit';
+import { discardChainAndRestart } from '../chain/openChainPalette';
 
 /**
  * The single mount point for every overlay dialog (design:
@@ -88,10 +90,33 @@ export function DialogRoot() {
       return <HelpDialog isOpen onOpenChange={dismiss} />;
     case 'about':
       return <AboutDialog isOpen onOpenChange={dismiss} />;
+    // A chain session with steps is never discarded silently (design:
+    // design-system-services.md §3.5). ConfirmDialog is blessed here because this IS the
+    // top-level confirm — the chain window is non-modal, not a dialog.
+    case 'chain-discard-confirm':
+      return (
+        <ConfirmDialog
+          isOpen
+          onOpenChange={dismiss}
+          title={`Discard chain (${chainSteps(open.params)} steps)?`}
+          text="The chain has unapplied steps. Discarding starts a fresh chain over the current selection."
+          confirmLabel="Discard"
+          confirmVariant="danger"
+          onConfirm={() => {
+            discardChainAndRestart();
+            closeDialog();
+          }}
+        />
+      );
     // Hosts are added here as each dialog is rehosted onto dialogStore.
     default:
       return null;
   }
+}
+
+/** Step count carried by `'chain-discard-confirm'` params. */
+function chainSteps(params: unknown): number {
+  return (params as { steps?: number } | undefined)?.steps ?? 0;
 }
 
 /** react-aria's `onOpenChange` contract → `closeDialog()`. Escape-ladder rung 2. */

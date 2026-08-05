@@ -50,6 +50,13 @@ export interface Command {
   keywords?: string;
   /** Store selector, evaluated on menu open / palette render. Absent ⇒ always enabled. */
   enabled?: () => boolean;
+  /**
+   * Why this command is unavailable, for the menu item's tooltip and the palette's
+   * grayed-row reason. Set on the "visible but not implementable yet" stubs (foundation §3
+   * keeps them VISIBLE for discoverability) and on any command whose disabled state is not
+   * self-evident. A later phase clears it when it re-points the command's `run`.
+   */
+  disabledReason?: string;
   /** ✓ / ◉ state for View-menu-style items, evaluated at the same moments as `enabled`. */
   checked?: () => boolean;
   /** Palette ⌘↩ "run and keep the palette open" eligibility (design §3.4). */

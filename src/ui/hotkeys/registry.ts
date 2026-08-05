@@ -1,19 +1,29 @@
 import type { Keys, Options } from 'react-hotkeys-hook';
-import { copySelected, pasteClipboard, redo, removeSelected, undo } from '../../state/editorStore';
-import { closeDialog, isDialogOpen, openDialog } from '../../state/dialogStore';
-import { $seatView, exitSeatView } from '../../state/ivaStore';
+import { runCommand } from '../../state/commandStore';
+import { closeDialog, isDialogOpen } from '../../state/dialogStore';
 import { rotateSelectionAroundPair } from '../../three/rotateSelection';
 import { FAST_NUDGE_MULTIPLIER, nudgeSelectionBy } from '../../three/nudgeSelection';
 import { changeNudgeAxis, lowerNudgeStep, raiseNudgeStep } from '../nudgeControls';
 import { changeRotateAxes, lowerRotateStep, raiseRotateStep } from '../rotateControls';
-import { toggleChainPalette } from '../chain/openChainPalette';
-import { toast } from '../kit';
 
 /**
  * The single source of truth for global hotkeys. This registry drives BOTH the
  * live bindings (GlobalHotkeys wires `useHotkeys` from `keys`/`options`/`run`) AND
  * the help overlay (which renders `chords`/`label` per group). Add a shortcut once
  * here and it shows up in both places — no risk of the docs drifting from behavior.
+ *
+ * **Binding ids ARE command ids** wherever a command exists, and those bindings do nothing
+ * but `runCommand(id)`. That is what lets a menu item, a palette row and a chord chip all
+ * describe one behavior (design: foundation §4): the toast strings, the enabled predicates
+ * and the actual work live in `src/ui/commands/*.ts`, and `chordsFor(commandId)`
+ * (`../commands/chords`) reads back this table. The remaining non-command bindings
+ * (rotate/nudge) are the viewport spatial keys, which become scope-owned commands when the
+ * scoped registry replaces this flat list.
+ *
+ * Deliberately NOT here yet: bare letters and digits (`1`–`5`, `T`, `B`, `M`, `F`,
+ * `[`/`]`), the ⌘A select family and `⌥[`/`⌥]`. All of those are scope-sensitive — a bare
+ * letter must never fire behind an open dialog — and they arrive with the scoped registry.
+ * Their commands exist today; they simply render without a chord chip.
  */
 
 /** One key chord, as display tokens (resolved to glyphs by {@link keyLabel}). */
@@ -39,25 +49,6 @@ export interface HotkeyBinding {
 export interface HotkeyGroup {
   title: string;
   bindings: HotkeyBinding[];
-}
-
-/** Undo/redo wrappers that mirror the toolbar buttons (run the action, toast the label). */
-function runUndo(): void {
-  const d = undo();
-  if (d) toast({ title: `Undo: ${d}` }, { timeout: 1500 });
-}
-function runRedo(): void {
-  const d = redo();
-  if (d) toast({ title: `Redo: ${d}` }, { timeout: 1500 });
-}
-/** Copy/paste wrappers that toast a count so the action is self-describing. */
-function runCopy(): void {
-  const n = copySelected();
-  if (n) toast({ title: `Copied ${n} ${n === 1 ? 'item' : 'items'}` }, { timeout: 1500 });
-}
-function runPaste(): void {
-  const n = pasteClipboard();
-  if (n) toast({ title: `Pasted ${n} ${n === 1 ? 'item' : 'items'}` }, { timeout: 1500 });
 }
 
 export const HOTKEY_GROUPS: HotkeyGroup[] = [
@@ -138,50 +129,114 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
     title: 'Editing',
     bindings: [
       {
-        id: 'delete',
+        id: 'edit.delete',
         label: 'Delete selection',
         keys: ['delete', 'backspace'],
         chords: [['Delete'], ['Backspace']],
-        run: () => removeSelected(),
+        run: () => runCommand('edit.delete'),
       },
       {
-        id: 'copy',
+        id: 'edit.copy',
         label: 'Copy selection',
         keys: 'mod+c',
         chords: [['mod', 'C']],
-        run: runCopy,
+        run: () => runCommand('edit.copy'),
       },
       {
-        id: 'paste',
+        id: 'edit.cut',
+        label: 'Cut selection',
+        keys: 'mod+x',
+        chords: [['mod', 'X']],
+        run: () => runCommand('edit.cut'),
+      },
+      {
+        id: 'edit.paste',
         label: 'Paste in place',
         keys: 'mod+v',
         chords: [['mod', 'V']],
-        run: runPaste,
+        run: () => runCommand('edit.paste'),
       },
       {
-        id: 'action-chain',
-        label: 'Action chain palette (selection)',
-        keys: 'mod+k',
-        chords: [['mod', 'K']],
-        // Toggles: the shared preventDefault also suppresses the browser's own ⌘K/Ctrl+K.
-        run: () => toggleChainPalette(),
+        id: 'edit.duplicate',
+        label: 'Duplicate selection',
+        keys: 'mod+d',
+        chords: [['mod', 'D']],
+        run: () => runCommand('edit.duplicate'),
       },
       {
-        id: 'undo',
+        id: 'chain.begin',
+        label: 'Begin action chain (selection)',
+        // Rebound from ⌘K, which the command palette now owns (LOCKED). A session with
+        // steps is never discarded silently — the command asks first.
+        keys: 'mod+shift+k',
+        chords: [['mod', 'shift', 'K']],
+        run: () => runCommand('chain.begin'),
+      },
+      {
+        id: 'edit.undo',
         label: 'Undo',
         keys: 'mod+z',
         chords: [['mod', 'Z']],
-        run: runUndo,
+        run: () => runCommand('edit.undo'),
       },
       {
-        id: 'redo',
+        id: 'edit.redo',
         label: 'Redo',
         keys: ['mod+y', 'mod+shift+z'],
         chords: [
           ['mod', 'Y'],
           ['mod', 'shift', 'Z'],
         ],
-        run: runRedo,
+        run: () => runCommand('edit.redo'),
+      },
+    ],
+  },
+  {
+    title: 'Dialogs & app',
+    bindings: [
+      {
+        id: 'palette.open',
+        label: 'Search commands',
+        keys: 'mod+k',
+        chords: [['mod', 'K']],
+        run: () => runCommand('palette.open'),
+      },
+      {
+        id: 'file.projects',
+        label: 'Projects',
+        keys: 'mod+o',
+        chords: [['mod', 'O']],
+        run: () => runCommand('file.projects'),
+      },
+      {
+        id: 'file.exportKsa',
+        label: 'Export to KSA',
+        keys: 'mod+e',
+        chords: [['mod', 'E']],
+        run: () => runCommand('file.exportKsa'),
+      },
+      {
+        id: 'window.assetManager',
+        label: 'Asset Manager',
+        keys: 'mod+shift+a',
+        chords: [['mod', 'shift', 'A']],
+        run: () => runCommand('window.assetManager'),
+      },
+      {
+        id: 'edit.settings',
+        label: 'Settings',
+        keys: 'mod+comma',
+        chords: [['mod', ',']],
+        run: () => runCommand('edit.settings'),
+      },
+      {
+        id: 'noop.autosaveFlash',
+        // There is no Save: the workspace autosaves. ⌘S answers the reflex instead of
+        // handing the user the browser's save-page dialog (the shared preventDefault).
+        label: 'Save (autosave is always on)',
+        keys: 'mod+s',
+        chords: [['mod', 'S']],
+        run: () => runCommand('noop.autosaveFlash'),
       },
     ],
   },
@@ -189,7 +244,7 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
     title: 'General',
     bindings: [
       {
-        id: 'help',
+        id: 'help.shortcuts',
         label: 'Show keyboard shortcuts',
         keys: '?',
         // Match the produced character ("?") regardless of physical key/layout, and
@@ -197,21 +252,23 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
         // otherwise rejects the match because the held Shift isn't part of the combo.
         options: { useKey: true, ignoreModifiers: true },
         chords: [['?']],
-        run: () => (isDialogOpen('help') ? closeDialog() : openDialog({ id: 'help' })),
+        // Toggling is v1 behavior worth keeping, and a command cannot express it (the
+        // menu item must only ever OPEN); the close half stays here.
+        run: () => (isDialogOpen('help') ? closeDialog() : void runCommand('help.shortcuts')),
       },
       {
-        id: 'exit-seat-view',
+        id: 'seat.exit',
         label: 'Leave IVA seat view',
         keys: 'escape',
         chords: [['Escape']],
         // Never preventDefault: Escape also dismisses dialogs/popovers/menus (react-aria
         // and the browser both act on it), and this binding must not shadow those.
         options: { preventDefault: false },
-        // Escape is everyone's dismiss key (dialogs, popovers, the gizmo drag). Gating on
-        // the atom keeps this binding inert unless the seat preview is actually up, so it
-        // never eats an Escape meant for something layered above the viewport.
+        // Escape is everyone's dismiss key (dialogs, popovers, the gizmo drag). The
+        // command's own `enabled` gate (seat view actually up) keeps this inert otherwise,
+        // so it never eats an Escape meant for something layered above the viewport.
         run: () => {
-          if ($seatView.get() !== null) exitSeatView();
+          runCommand('seat.exit');
         },
       },
     ],

@@ -30,6 +30,11 @@ import { ensureCatalogLoaded } from './state/catalogStore';
 import { ensurePartCatalogLoaded } from './state/partCatalogStore';
 import { consumeRemovedProjectsNotice } from './state/projectStore';
 import { showAboutOnFirstUse } from './state/aboutStore';
+// Side-effect import: registering every command + dynamic provider IS importing this
+// module (see src/ui/commands/index.ts). The menubar, the ⌘K palette, the phone MenuSheet
+// and the hotkey registry all resolve against what it registers, so it must load once,
+// here, before any of them render.
+import './ui/commands';
 
 /**
  * The v2 docked shell (foundation.md §1):

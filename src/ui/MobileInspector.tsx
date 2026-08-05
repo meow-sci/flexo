@@ -8,9 +8,10 @@ import { $activeLayer, $selectionCount } from '../state/selectors';
 
 /**
  * Phone-only inspector: a pinned bottom-right button (showing the active layer +
- * a selection-count badge) that opens a bottom sheet with the layers bar +
- * placement list + transform inspector. Frees the entire viewport for the 3D
- * canvas until the user explicitly opens the inspector.
+ * a selection-count badge) that opens a bottom sheet with the mode primary (the Outliner in
+ * Build) plus the focus editor beneath it. Frees the entire viewport for the 3D canvas until
+ * the user explicitly opens the inspector. P5B.29 replaces this with the designed phone
+ * variants.
  */
 export function MobileInspector() {
   const [open, setOpen] = useState(false);
@@ -58,7 +59,7 @@ export function MobileInspector() {
             </Button>
           </div>
           <div className="min-h-0 flex-1 p-2">
-            <ModeSidebar showTransform />
+            <ModeSidebar showFocusEditor />
           </div>
         </Dialog>
       </Modal>

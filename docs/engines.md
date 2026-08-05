@@ -146,7 +146,7 @@ the gizmo editing the wrong one:
   the exhaust axis simply does nothing — it is undefined in-game (the plume is axially
   symmetric and `Vehicle.SpawnThrusterSparks` invents an arbitrary basis), so there is no
   roll lock to discover. **Scale is disabled** while placing: a nozzle placement has nothing
-  to scale (`$effectiveToolMode` clamps it, and `SelectionToolbar` shows the clamped tool, so the
+  to scale (`$effectiveToolMode` clamps it, and the Tool bar window shows the clamped tool, so the
   displayed mode can never disagree with what a drag does).
 - **The FX pair** (`<FxExhaustLocation>`/`<FxExhaustDirection>`) is an explicit override,
   behind "Override FX placement (plume ≠ thrust)". OFF ⇒ both fields are `null` and KSA

@@ -292,7 +292,7 @@ export const $isExhaustPlacing = computed(
  * present dead handles, Scale degrades to Move while placing.
  *
  * ONE source of truth on purpose: both the gizmo (`EditorScene`) and the mode switcher
- * (`SelectionToolbar`) read this, so the displayed tool can never disagree with the tool
+ * (the Tool bar window) read this, so the displayed tool can never disagree with the tool
  * the drag performs.
  */
 export const $effectiveToolMode = computed(

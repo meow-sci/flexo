@@ -13,6 +13,7 @@ import {
 import type {
   Connector,
   IvaSeat,
+  KittenInstance,
   Layer,
   PartCollider,
   PartLight,
@@ -101,17 +102,20 @@ export const $selectedRefs = computed([$part, $selection], (): SelectedTransform
 /**
  * The single selected entity as a discriminated union, non-null ONLY when EXACTLY ONE
  * entity is selected (the v1 per-kind mutual-exclusion assumption is gone with the index
- * atoms). Carries the stable `id` on every branch; `index` is transitional (TransformInspector
- * still indexes into `$part` until 5B dissolves it).
+ * atoms). Carries the stable `id` on every branch; `index` is retained because the store's
+ * per-kind mutators (`setLightType`, `moveIvaSeat`, `setColliderShape`, …) still address
+ * their entity positionally.
+ *
+ * All SIX kinds are represented. v1's union had no `kitten` branch — a lone selected kitten
+ * showed no panel at all — which the Build focus editor's `KittenInspector` closes.
  */
 export type SelectedEntity =
   | { kind: 'subpart'; id: string; index: number; placement: SubPartPlacement }
   | { kind: 'connector'; id: string; index: number; connector: Connector }
   | { kind: 'collider'; id: string; index: number; collider: PartCollider }
   | { kind: 'ivaSeat'; id: string; index: number; seat: IvaSeat }
-  | { kind: 'light'; id: string; index: number; light: PartLight };
-// TODO(P5B.13): add the 'kitten' branch when KittenInspector lands (v1 parity — the v1
-// union has none, so a lone selected kitten shows no per-entity panel today).
+  | { kind: 'light'; id: string; index: number; light: PartLight }
+  | { kind: 'kitten'; id: string; index: number; kitten: KittenInstance };
 
 export const $selectedEntity = computed([$part, $selection], (part, sel): SelectedEntity | null => {
   if (sel.length !== 1) return null;
@@ -130,7 +134,7 @@ export const $selectedEntity = computed([$part, $selection], (part, sel): Select
     case 'light':
       return { kind: 'light', id: ref.id, index, light: part.lights[index] };
     case 'kitten':
-      return null;
+      return { kind: 'kitten', id: ref.id, index, kitten: part.kittens[index] };
   }
 });
 

@@ -1,7 +1,7 @@
 /**
  * KSA color (RGB floats 0–1, the `<Color R G B/>` shape) ⇄ the "#rrggbb" hex string
  * the native `<input type="color">` speaks. Shared by every light color row (the
- * SubPart-Data LightsSection and the TransformInspector's LightHeader) — a separate
+ * SubPart-Data LightsSection and the Build focus editor's LightInspector) — a separate
  * module because component files must only export components (fast refresh).
  */
 

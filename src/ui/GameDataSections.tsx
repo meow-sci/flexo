@@ -277,7 +277,7 @@ export function TanksSection({
  * ({@link PartLight.ownerTemplateId} === `subPartTemplateId`); each card edits one
  * light, and the store indices passed to every mutator are into `part.lights`, NOT
  * this filtered view. Cone angles and the aim rotation are shown in DEGREES
- * (matching the workspace TransformInspector) and converted to the radians KSA
+ * (matching the workspace focus editor) and converted to the radians KSA
  * stores; Point lights hide the aim rotation + cone angles since KSA ignores them.
  * Mirrors {@link TanksSection}: discrete add/remove/type/raytracing self-record
  * undo, while numeric/color fields focus-push a single undo step (streaming).

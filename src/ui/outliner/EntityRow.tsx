@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react';
-import { Armchair, Box, Cat, CircleDot, Frame, Lightbulb, MoreVertical } from 'lucide-react';
+import { MoreVertical } from 'lucide-react';
 import {
   Button,
   Chip,
@@ -24,7 +24,6 @@ import {
   removeSelected,
   select,
   setPlacementsInternal,
-  type EntityKind,
 } from '../../state/editorStore';
 import { $selectionByKind } from '../../state/selectors';
 import { isLayerVisible, revealLayer } from '../../state/layerStore';
@@ -33,6 +32,7 @@ import { enterSeatView } from '../../state/ivaStore';
 import { setManagingMeshId } from '../../state/customAssetStore';
 import { requestColliderFit } from '../../state/colliderStore';
 import { ENTITY_ONLY_LAYER_IDS, type LayerableKind } from '../../ksa/types';
+import { KIND_ICONS } from './kindIcons';
 import { openSubPartData } from './subPartData';
 import type { OutlinerRow } from './outlinerTree';
 
@@ -51,15 +51,6 @@ import type { OutlinerRow } from './outlinerTree';
  * component is mounted by a react-aria `Popover` — which unmounts on close. A menu that stayed
  * mounted would freeze those predicates at their first-open values.
  */
-
-const KIND_ICONS: Record<EntityKind, typeof Box> = {
-  subpart: Box,
-  connector: CircleDot,
-  collider: Frame,
-  ivaSeat: Armchair,
-  light: Lightbulb,
-  kitten: Cat,
-};
 
 export function EntityRow({
   row,

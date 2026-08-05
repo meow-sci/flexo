@@ -1,6 +1,6 @@
 import { useStore } from '@nanostores/react';
 import { OutlinerPanel } from './outliner/OutlinerPanel';
-import { TransformInspector } from './TransformInspector';
+import { BuildFocusEditor } from './build/BuildFocusEditor';
 import { AnimToolbar } from './AnimToolbar';
 import { AnimationPanel } from './AnimationPanel';
 import { EngineToolbar } from './EngineToolbar';
@@ -14,14 +14,15 @@ import { $mode } from '../state/modeStore';
  * three-way inspector atom: the mode machine's sidebar contribution now has a visible
  * switcher (menubar + status chip) instead of per-toolbar Close buttons.
  *
- * Shared between the desktop right sidebar and the phone bottom-sheet inspector. The
- * selected-asset {@link TransformInspector} is NOT part of this stack on desktop — it
- * floats over the workspace ({@link FloatingInspector}). The phone sheet has no floating
- * layer, so it opts back in inline via {@link showTransform} (Build mode only).
+ * Shared between the desktop right sidebar and the phone bottom-sheet inspector. The focus
+ * editor ({@link BuildFocusEditor}) is NOT part of this stack on desktop — it is the LEFT
+ * sidebar (`ModeFocusEditor`). The phone has no second sidebar, so its sheet opts the Build
+ * focus card back in inline via {@link showFocusEditor} until P5B.29 gives the phone its own
+ * variant.
  *
  * Undo enrollment: NONE — the mode is view state (foundation §13).
  */
-export function ModeSidebar({ showTransform = false }: { showTransform?: boolean }) {
+export function ModeSidebar({ showFocusEditor = false }: { showFocusEditor?: boolean }) {
   const mode = useStore($mode);
 
   if (mode === 'animation') {
@@ -55,9 +56,9 @@ export function ModeSidebar({ showTransform = false }: { showTransform?: boolean
       <div className="min-h-0 flex-1">
         <OutlinerPanel />
       </div>
-      {showTransform && (
-        <div className="flex shrink-0 flex-col gap-2">
-          <TransformInspector />
+      {showFocusEditor && (
+        <div className="max-h-[45%] shrink-0 overflow-y-auto border-t border-border">
+          <BuildFocusEditor />
         </div>
       )}
     </div>

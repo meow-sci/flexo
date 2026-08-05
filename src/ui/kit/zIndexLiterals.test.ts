@@ -25,8 +25,8 @@ const EXEMPT_FILES = new Set(['zIndex.ts', 'zIndexLiterals.test.ts']);
 // SHRINK ONLY — files leave this list as their surfaces die (foundation §6.3 death
 // list); never add a file.
 const ALLOWLIST = [
-  'src/ui/FloatingEditorPanel.tsx',
-  'src/ui/FloatingInspector.tsx',
+  // FloatingEditorPanel.tsx + FloatingInspector.tsx left with P5B.16/P5B.17 — the aid editors
+  // and the selected-asset inspector now live in the docked left sidebar's focus slot.
   'src/ui/FloatingPreviewToolbar.tsx',
   'src/ui/LoadProgress.tsx',
   'src/ui/ManageTexturesPanel.tsx',

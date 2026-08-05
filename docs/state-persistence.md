@@ -63,7 +63,7 @@ The former `flexo:inspectorVisible` / `flexo:inspectorWidth` keys are **retired 
 intentionally NOT migrated** — per the project constitution (AGENTS.md), a persisted
 schema change is purged, never converted. `flexo:inspectorFloatPos` /
 `flexo:animPreviewFloatPos` (`src/state/uiStore.ts`) still exist as their own keys,
-backing the legacy `FloatingInspector` / `FloatingPreviewToolbar` drag positions, until
+backing the legacy `FloatingPreviewToolbar` drag position, until
 a later phase folds them into `flexo:layout.float`.
 
 ### Command palette recents

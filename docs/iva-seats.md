@@ -161,7 +161,7 @@ click-select, multi-select across kinds, nudge/rotate/duplicate/delete hotkeys, 
 the Outliner, and layer visibility/lock/opacity. See
 [editor-state.md](editor-state.md) for the store atoms and each mutator's undo enrolment.
 
-`IvaSeatHeader` (`src/ui/TransformInspector.tsx`) is where the game contract becomes visible:
+`SeatInspector` (`src/ui/build/SeatInspector.tsx`) is where the game contract becomes visible:
 
 - **`Seat N of M`** with ▲/▼ reorder buttons, and an **"IVA opens on this seat"** chip on
   index 0.

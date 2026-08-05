@@ -148,7 +148,7 @@ GameData files under `/ksa/`; `vite/ksaAssets.ts` copies the existing ones into
   gives the GameData forms a permanent home. The section editors live in `src/ui/GameDataSections.tsx`;
   numeric fields reuse `PreciseNumberInput` (with `onInteractionStart` to push one
   undo step per typing session). Connectors are **not** here — they're edited in the
-  3D workspace, and their flags are three checkboxes in `TransformInspector.tsx`.
+  3D workspace, and their flags are three switches in `ui/build/ConnectorInspector.tsx`.
 - `src/ui/ExportDialog.tsx` / `src/ksa/modExport.ts`: write/zip the per-project
   `Part.xml` + `GameData.xml`.
 

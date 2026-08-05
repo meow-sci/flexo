@@ -29,7 +29,7 @@ const CHROME = `${panelChrome} p-3`;
  * tweaking a seed while watching the array re-flow is the whole point of the feature.
  *
  * The card is left-anchored so it never fights the right-side inspector; on a phone it
- * becomes a bottom sheet above the inspector FAB (the FloatingEditorPanel split).
+ * becomes a bottom sheet above the inspector FAB.
  *
  * Self-gating: it renders nothing without a session, so `app.tsx` can mount it
  * unconditionally. Nothing here touches the document — the only write is Apply.

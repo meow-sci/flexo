@@ -39,19 +39,19 @@ only when all three agree:
 
 ## Flexo modules
 
-| Path                            | Role                                                                                                                                        |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/ksa/types.ts`              | `ConnectorCapability` + `CONNECTOR_CAPABILITIES`, `FeedSource`, `PlumbingClass`, `ConsumerFeedWiring`, `isFeedSourceValid`.                 |
-| `src/ksa/partXmlParser.ts`      | `parseConnectorCapabilities`, `feedFromElement`/`feedsFromElement`, `readPlumbing`, the `<ConsumerFeedWiring>` + part-level `<Tank>` parse. |
-| `src/ksa/partXmlSerializer.ts`  | `appendConnectorTokens` (shared by BOTH documents), `buildFeedElements`, `buildConsumerFeedWiringElement`, `buildTankWrapperElement`.       |
-| `src/ksa/idRemap.ts`            | `remapFeed` / `remapConsumerFeeds` / `remapConsumerFeedWiring` — rewrites feed refs onto regenerated ids on import + paste.                 |
-| `src/ksa/engineValidation.ts`   | Pre-flight: `block` (KSA throws at load) vs `warn` (loads, misbehaves).                                                                     |
-| `src/ksa/partCatalog.ts`        | `connectorCapabilities` map merged onto the imported connectors by id.                                                                      |
-| `src/state/feedTargets.ts`      | `feedTargetsOf` / `consumerOptionsOf` / `unwiredConsumersOf` — the pickable options + the auto-wire candidate set.                          |
-| `src/state/editorStore.ts`      | `setConnectorCapabilities`, `setCombustorFeeds`/`Plumbing` (+ part-level), the `ConsumerFeedWiring` actions, `autoWireUnwiredConsumers`.    |
-| `src/ui/FeedsField.tsx`         | The `<FeedsFrom>` list editor.                                                                                                              |
-| `src/ui/EngineSections.tsx`     | `ConsumerFeedWiringSection`, plumbing/feeds inside `CombustorFields`.                                                                       |
-| `src/ui/TransformInspector.tsx` | The connector Capabilities switch row.                                                                                                      |
+| Path                                  | Role                                                                                                                                        |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/ksa/types.ts`                    | `ConnectorCapability` + `CONNECTOR_CAPABILITIES`, `FeedSource`, `PlumbingClass`, `ConsumerFeedWiring`, `isFeedSourceValid`.                 |
+| `src/ksa/partXmlParser.ts`            | `parseConnectorCapabilities`, `feedFromElement`/`feedsFromElement`, `readPlumbing`, the `<ConsumerFeedWiring>` + part-level `<Tank>` parse. |
+| `src/ksa/partXmlSerializer.ts`        | `appendConnectorTokens` (shared by BOTH documents), `buildFeedElements`, `buildConsumerFeedWiringElement`, `buildTankWrapperElement`.       |
+| `src/ksa/idRemap.ts`                  | `remapFeed` / `remapConsumerFeeds` / `remapConsumerFeedWiring` — rewrites feed refs onto regenerated ids on import + paste.                 |
+| `src/ksa/engineValidation.ts`         | Pre-flight: `block` (KSA throws at load) vs `warn` (loads, misbehaves).                                                                     |
+| `src/ksa/partCatalog.ts`              | `connectorCapabilities` map merged onto the imported connectors by id.                                                                      |
+| `src/state/feedTargets.ts`            | `feedTargetsOf` / `consumerOptionsOf` / `unwiredConsumersOf` — the pickable options + the auto-wire candidate set.                          |
+| `src/state/editorStore.ts`            | `setConnectorCapabilities`, `setCombustorFeeds`/`Plumbing` (+ part-level), the `ConsumerFeedWiring` actions, `autoWireUnwiredConsumers`.    |
+| `src/ui/FeedsField.tsx`               | The `<FeedsFrom>` list editor.                                                                                                              |
+| `src/ui/EngineSections.tsx`           | `ConsumerFeedWiringSection`, plumbing/feeds inside `CombustorFields`.                                                                       |
+| `src/ui/build/ConnectorInspector.tsx` | The connector Capabilities switch row.                                                                                                      |
 
 ## Game-side anchors (`decomp/KSA/`)
 

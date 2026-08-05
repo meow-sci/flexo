@@ -3,14 +3,10 @@ import { ViewportCanvas } from './three/ViewportCanvas';
 import { ViewportDropZone } from './ui/ViewportDropZone';
 import { MarqueeOverlay } from './ui/MarqueeOverlay';
 import { ImportModelDialog } from './ui/ImportModelDialog';
-import { SelectionToolbar } from './ui/SelectionToolbar';
-import { MultiSelectToolbar } from './ui/MultiSelectToolbar';
 import { ModeSidebar } from './ui/ModeSidebar';
+import { ModeFocusEditor } from './ui/ModeFocusEditor';
 import { MobileInspector } from './ui/MobileInspector';
-import { FloatingInspector } from './ui/FloatingInspector';
 import { FloatingPreviewToolbar } from './ui/FloatingPreviewToolbar';
-import { MeasurementEditor } from './ui/MeasurementEditor';
-import { ContainerEditor } from './ui/ContainerEditor';
 import { ManageTexturesPanel } from './ui/ManageTexturesPanel';
 import { GlowPaintDialog } from './ui/GlowPaintDialog';
 import { ChainPalette } from './ui/chain/ChainPalette';
@@ -109,9 +105,11 @@ function App() {
       <div data-workspace-band className="relative flex min-h-0 flex-1">
         {!isPhone && (
           <Sidebar side="left">
-            {/* Interim placeholder — the focus editor (foundation §7) arrives with the
-                Build-mode rehost phase. */}
-            <div className="p-(--density-panel-p) text-xs text-fg-subtle">Nothing selected</div>
+            {/* THE focus editor (foundation §7): tool parameter card → focus card → mode
+                cheat-card, as a pure function of (mode, focus). It is the ONE focus slot —
+                what structurally ended v1's left-centre triple-booking of the floating
+                inspector, the measurement editor and the container editor. */}
+            <ModeFocusEditor />
           </Sidebar>
         )}
 
@@ -142,39 +140,25 @@ function App() {
                 against the CELL, so everything clamps to the workspace by construction.
                 Each surface keeps self-gating exactly as before. ── */}
 
-          {/* Below the menubar: per-selection tools, only when something is
-              selected. The multi-select toolbar stacks beneath. On phone the animation
-              scrubber pins to the top of this stack so the clip can be scrubbed/replayed
-              without opening the inspector sheet over the 3D view. */}
-          <div
-            className={`absolute left-1/2 flex -translate-x-1/2 flex-col items-center gap-2 ${
-              isPhone ? 'top-2' : 'top-16'
-            }`}
-          >
-            {isPhone && <FloatingPreviewToolbar />}
-            <SelectionToolbar />
-            <MultiSelectToolbar />
-          </div>
+          {/* On phone the animation scrubber pins to the top-centre of the cell so the clip
+              can be scrubbed/replayed without opening the inspector sheet over the 3D view.
+              The v1 selection toolbars that used to stack here are gone: the gizmo switcher
+              lives in the Tool bar window and the selection actions in the left focus card
+              and the Edit menu (foundation §6.3). */}
+          {isPhone && (
+            <div className="absolute left-1/2 top-2 flex -translate-x-1/2 flex-col items-center gap-2">
+              <FloatingPreviewToolbar />
+            </div>
+          )}
 
           {/* Phone inspector: a FAB in the cell's corner opening a bottom sheet. The
               desktop inspector is the right sidebar below. */}
           {isPhone && <MobileInspector />}
 
-          {/* Selected-asset details as a floating, draggable window over the workspace
-              (desktop only — the phone sheet keeps it inline). */}
-          {!isPhone && <FloatingInspector />}
-
           {/* Floating, draggable animation preview scrubber over the workspace while the
               Animation editor has a clip open (desktop only — the phone variant pins into
-              the top toolbar stack above). */}
+              the top-centre stack above). */}
           {!isPhone && <FloatingPreviewToolbar />}
-
-          {/* Editor for the active line measurement (left card on desktop, bottom
-              sheet on phone — handled within the component). */}
-          <MeasurementEditor />
-
-          {/* Editor for the active reference container (same placement as above). */}
-          <ContainerEditor />
 
           {/* Floating per-mesh material editor (glow / visor surface / per-face textures). */}
           <ManageTexturesPanel />

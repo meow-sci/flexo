@@ -113,7 +113,7 @@ into part space (`lightWorld`) for the shared pivot math and push them back down
 same context frames.
 
 The transform inspector shows a **dedicated light panel** (`LightHeader`,
-`src/ui/TransformInspector.tsx`) instead of the generic position/rotation groups:
+`src/ui/build/LightInspector.tsx`) instead of the generic position/rotation groups:
 
 - identity (`Light — Spot/Point`, `part-level` or `via <template> · N instance(s)`, and —
   when N > 1 — which instance edits are going through);

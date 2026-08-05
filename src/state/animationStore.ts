@@ -61,7 +61,7 @@ export const $activeAnimation = computed([$part, $activeAnimationId], (part, id)
 /**
  * True while the Animations editor has a joint + keyframe open for posing. The
  * Move/Rotate/Scale toolbar normally appears only for a viewport selection, which is
- * empty during pose editing — this lets {@link SelectionToolbar} show it so all three
+ * empty during pose editing — this lets the Tool bar window show itself so all three
  * gizmos stay reachable while posing.
  */
 export const $isPoseEditing = computed(

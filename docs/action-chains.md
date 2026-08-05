@@ -177,7 +177,7 @@ is what makes Cancel unconditionally safe.
 | Gesture | Effect |
 |---|---|
 | `⇧⌘K`, **Edit ▸ Begin Action Chain…**, or the ⌘K command palette (`chain.begin`, keywords "array grid radial ring repeat") | `beginActionChain()` — opens over the current selection; see the discard rule below |
-| The **Chain** button in `SelectionToolbar.tsx` | `toggleChainPalette()` — the v1 toggle, kept until the Build-mode rework replaces that toolbar |
+| The **Chain…** button in the left sidebar's multi-select focus card (`ui/build/MultiSelectPanel.tsx`) | `beginActionChain()` — the same entry point, same discard rule |
 | `mod+↵` | Apply — registry binding `chain.apply` at scope `surface:chain`, `enableOnFormTags: true` |
 | `Escape`, ✕, **Cancel** | Cancel — **rung 6 of the Escape ladder** |
 | Typing in the search field | Filters the command list; `↓` moves into it, `↵` on a row adds that step |
@@ -188,8 +188,8 @@ is what makes Cancel unconditionally safe.
 re-pressing the binding threw away a session without a word: **a session with ≥1 step is never
 discarded silently** — `beginActionChain()` raises a "Discard chain (N steps)?" confirm first. An
 EMPTY session is re-seeded from the current selection silently, and no session at all just opens
-one. The old toggle (`toggleChainPalette`) survives only behind the SelectionToolbar's Chain
-button.
+one. The v1 `toggleChainPalette()` helper died with the floating SelectionToolbar that was its
+only caller — every entry point now goes through `beginActionChain()`.
 
 **Open guards** (`tryOpenChain`, `src/ui/chain/openChainPalette.ts`), in order: no SubPart
 placements in the selection → the status bar's message channel flashes *"Select SubParts to
@@ -291,7 +291,7 @@ resulting selection, and the `-1` no-op path.
 | `src/three/chainMath.ts` | `evalChain` + `rotatedPositionOnlyTransform` + the caps (three.js math only) |
 | `src/three/chainEval.ts` | `$chainEval` — the computed that resolves seeds against `$part` and evaluates |
 | `src/three/ChainPreviewLayer.ts` | the ghost overlay |
-| `src/ui/chain/openChainPalette.ts` | `beginActionChain()` (the `chain.begin` command) + `discardChainAndRestart()` + the legacy `toggleChainPalette()`, and the open guards they share |
+| `src/ui/chain/openChainPalette.ts` | `beginActionChain()` (the `chain.begin` command) + `discardChainAndRestart()`, and the open guards they share |
 | `src/ui/chain/ChainPalette.tsx`, `ChainStepCard.tsx`, `chainCommands.ts` | the floating palette, its step cards, and the command catalog |
 | `src/state/editorStore.ts` | `applyActionChain` + `ChainCommitEntry` + `nextChainInstanceId` |
 

@@ -58,7 +58,7 @@ bulk-transform math pairs a snapshot with its write-back positionally.
 `{kind, id, index, transform, layerId, name}` per selected entity in `KIND_ORDER`, and
 `updateSelectedTransforms([{kind, id, transform}])` resolves each id fresh and switches on the
 kind exhaustively. (`index` is recomputed on every call and is transitional — only
-`TransformInspector` and `EditorScene`'s collider/light owner-frame lookups still use it.)
+`EditorScene`'s collider/light owner-frame lookups still use it.)
 The v1 version indexed the arrays and fell through to a kitten default, so a kind that missed
 its branch silently moved the kitten sitting at the same index; that trap is gone.
 
@@ -217,7 +217,7 @@ is also documented at the top of the undo/redo section in `editorStore.ts`.
 
 Both edit the same store:
 - Gizmo drag → `EditorScene` → `updatePlacementTransform(index, …)`.
-- Inspector field → `src/ui/TransformInspector.tsx` → `updatePlacementTransform(index, …)`.
+- Focus-editor field → `src/ui/build/TransformGroups.tsx` → `updateSelectedTransform(…)`.
 
 The inspector uses a focus-scoped `draft` string per field so free typing works while
 focused, and the field reflects live store values (e.g. gizmo drags) when not focused.
@@ -285,8 +285,13 @@ Shift+click on pointer-down (before react-aria's own, anchorless extension runs)
   rows, entity rows grouped by kind with per-kind ⋮ menus, fuzzy search, the Aids section
   (see [layers.md](./layers.md)). It replaced the v1 `AssetsList` + `AssetsToolbar` +
   Layers button/popover.
-- `TransformInspector.tsx` — numeric position/rotation/scale (two-way bound); for a
-  selected connector, the three flag checkboxes (Internal/ToSurface/FromSurface).
+- `ui/build/BuildFocusEditor.tsx` — the **focus editor**, Build mode's left sidebar: one
+  card per focus (tool parameter → aid editor → multi-select panel → per-kind inspector →
+  empty cheat-card). The per-kind cards are `SubPartInspector` / `ConnectorInspector` /
+  `ColliderInspector` / `SeatInspector` / `LightInspector` / `KittenInspector`, over the
+  shared `TransformGroups` (position/rotation + a per-kind third group). It replaced the v1
+  `TransformInspector` + `FloatingInspector` + `SelectionToolbar` + `MultiSelectToolbar` +
+  the left-centre floating measurement/container editors.
 - `shell/MenuBar.tsx` — the docked menubar: the eight menus rendered from
   `ui/menu/menuSpec.ts`, the mode switcher, the project chip and the undo/redo pair.
   Every item runs a **command** (`state/commandStore.ts`, defined in `ui/commands/`);

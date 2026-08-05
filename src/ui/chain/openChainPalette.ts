@@ -76,15 +76,3 @@ export function discardChainAndRestart(): void {
   closeChain();
   tryOpenChain();
 }
-
-/**
- * v1 toggle semantics, still used by the SelectionToolbar's Chain button until the
- * Build-mode rework replaces that toolbar. Prefer {@link beginActionChain}.
- */
-export function toggleChainPalette(): void {
-  if ($chainSession.get() !== null) {
-    closeChain();
-    return;
-  }
-  tryOpenChain();
-}

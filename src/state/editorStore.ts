@@ -2067,9 +2067,8 @@ export interface SelectedTransformRef {
   /** The entity's STABLE id — what the write-back addresses it by. */
   id: string;
   /**
-   * index: transitional — EditorScene's `colliderGizmoFrame`/`lightGizmoFrame` and
-   * TransformInspector still index into `$part`; remove when 5B dissolves
-   * TransformInspector. Recomputed fresh on every call, so it is always valid at read time.
+   * index: EditorScene's `colliderGizmoFrame`/`lightGizmoFrame` still index into `$part`.
+   * Recomputed fresh on every call, so it is always valid at read time.
    */
   index: number;
   transform: PlacementTransform;

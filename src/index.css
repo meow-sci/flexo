@@ -1,5 +1,14 @@
-@import 'tailwindcss';
+@import 'tailwindcss' source(none);
 @plugin 'tailwindcss-react-aria-components';
+
+/* Tailwind v4 auto-detects sources from the repo root, which sweeps in the
+   prose under plans/, analysis/, docs/ and scope/. That prose contains
+   class-name-shaped text (e.g. a literal `min-[...]:inline` in a plan) which
+   Tailwind emits as an arbitrary breakpoint and lightningcss then rejects,
+   breaking `pnpm build`. Detection is therefore off; sources are explicit.
+   (apps/partpreview/src/app.css names its own extra sources the same way.) */
+@source '../index.html';
+@source '../src';
 
 /* ============================================================================
    Design tokens — refreshed dark theme, radioactive-green accent (#2cfa1f).
@@ -37,6 +46,20 @@
 
   /* Elevation */
   --shadow-popover: 0 16px 48px -12px rgb(0 0 0 / 0.6);
+
+  /* Density scale (foundation §1.2 / system-services §7.1) */
+  --bar-py: 0.125rem; /* menubar + status bar vertical padding */
+  --density-row-py: 0.25rem; /* sidebar list rows, menu items */
+  --density-panel-p: 0.5rem; /* sidebar section padding */
+  --density-gap: 0.375rem; /* control gaps in dense panels */
+  --rail-reopen-w: 20px; /* collapsed-sidebar reopen tabs */
+
+  /* Hover/press wash tokens (system-services §7.6) — replace raw bg-white/[0.0x] washes.
+     Named in the Tailwind v4 --color-* namespace so bg-wash-hover / bg-wash-press /
+     bg-wash-selected utilities are generated (the design's --wash-* tokens, encoded). */
+  --color-wash-hover: rgb(255 255 255 / 0.06);
+  --color-wash-press: rgb(255 255 255 / 0.1);
+  --color-wash-selected: rgb(255 255 255 / 0.08);
 }
 
 :root {

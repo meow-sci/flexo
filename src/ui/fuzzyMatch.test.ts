@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fuzzyMatch } from './fuzzyMatch';
+import { fuzzyAny, fuzzyFind, fuzzyMatch } from './fuzzyMatch';
 
 /** Convenience: the score of a match that is expected to exist. */
 function score(query: string, target: string): number {
@@ -91,5 +91,52 @@ describe('fuzzyMatch — the caller sort contract', () => {
       .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
     expect(ranked[0].score).toBe(ranked[1].score);
     expect(ranked.map((r) => r.title)).toEqual(['Alfa Item', 'Zulu Item']);
+  });
+});
+
+describe('fuzzyFind — the list-filter adapter', () => {
+  it('matches EVERYTHING on an empty query, where fuzzyMatch returns null', () => {
+    expect(fuzzyFind('', 'anything')).toEqual({ matched: true, ranges: [] });
+    expect(fuzzyFind('   ', 'anything')).toEqual({ matched: true, ranges: [] });
+    expect(fuzzyMatch('', 'anything')).toBeNull();
+  });
+
+  it('reports a subsequence hit with its ranges, merged where adjacent', () => {
+    expect(fuzzyFind('tnk', 'tank_2')).toEqual({
+      matched: true,
+      ranges: [
+        [0, 1],
+        [2, 4],
+      ],
+    });
+    expect(fuzzyFind('tank', 'tank')).toEqual({ matched: true, ranges: [[0, 4]] });
+  });
+
+  it('reports a miss with no ranges', () => {
+    expect(fuzzyFind('xz', 'tank')).toEqual({ matched: false, ranges: [] });
+  });
+
+  it('is case-insensitive, like the core', () => {
+    expect(fuzzyFind('TNK', 'tank').matched).toBe(true);
+    expect(fuzzyFind('tnk', 'TANK').matched).toBe(true);
+  });
+
+  it('returns a fresh result each call (callers may keep the ranges array)', () => {
+    const a = fuzzyFind('', 'x');
+    const b = fuzzyFind('', 'y');
+    expect(a).not.toBe(b);
+    expect(a.ranges).not.toBe(b.ranges);
+  });
+});
+
+describe('fuzzyAny — the multi-field adapter', () => {
+  it('is true when ANY candidate matches', () => {
+    expect(fuzzyAny('tn', 'x', 'tank')).toBe(true);
+    expect(fuzzyAny('tn', 'x', 'y')).toBe(false);
+  });
+
+  it('is true for an empty query and ignores empty candidates', () => {
+    expect(fuzzyAny('', 'x')).toBe(true);
+    expect(fuzzyAny('a', '', '')).toBe(false);
   });
 });

@@ -2,15 +2,19 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   $layerView,
   DEFAULT_LAYER_STATE,
+  expandLayer,
+  isLayerCollapsed,
   isLayerListed,
   isLayerVisible,
   layerViewState,
   revealLayer,
+  toggleLayerCollapsed,
   setLayerLocked,
   toggleLayerListed,
   toggleLayerVisible,
 } from './layerStore';
 import {
+  $canUndo,
   $selection,
   addCollider,
   addIvaSeat,
@@ -59,6 +63,7 @@ describe('layerStore — listed flag', () => {
       locked: true,
       listed: true,
       opacity: 1,
+      collapsed: false,
     });
   });
 
@@ -133,6 +138,55 @@ describe('layerStore — listed flag', () => {
     expect(isLayerListed('engines')).toBe(false);
     revealLayer('engines');
     expect(isLayerVisible('engines')).toBe(true);
+    expect(isLayerListed('engines')).toBe(true);
+  });
+});
+
+describe('layerStore — Outliner collapsed flag', () => {
+  it('defaults to expanded for a layer with no stored entry', () => {
+    expect(DEFAULT_LAYER_STATE.collapsed).toBe(false);
+    expect(isLayerCollapsed('engines')).toBe(false);
+    expect(layerViewState({}, 'engines').collapsed).toBe(false);
+  });
+
+  it('fills the default for a stored entry written before the field existed', () => {
+    // A snapshot from an earlier build: the other four fields, no `collapsed`.
+    $layerView.set({
+      engines: { visible: false, locked: true, listed: true, opacity: 0.5 } as never,
+    });
+    expect(isLayerCollapsed('engines')).toBe(false);
+    expect(isLayerVisible('engines')).toBe(false);
+  });
+
+  it('toggleLayerCollapsed flips and persists into $layerView', () => {
+    toggleLayerCollapsed('engines');
+    expect(isLayerCollapsed('engines')).toBe(true);
+    expect($layerView.get().engines?.collapsed).toBe(true);
+    toggleLayerCollapsed('engines');
+    expect(isLayerCollapsed('engines')).toBe(false);
+  });
+
+  it('expandLayer is idempotent and never collapses', () => {
+    expandLayer('engines');
+    expect(isLayerCollapsed('engines')).toBe(false);
+    toggleLayerCollapsed('engines');
+    expandLayer('engines');
+    expandLayer('engines');
+    expect(isLayerCollapsed('engines')).toBe(false);
+  });
+
+  it('creates no undo step (layer view state is never undo-tracked)', () => {
+    expect($canUndo.get()).toBe(false);
+    toggleLayerCollapsed('engines');
+    expandLayer('engines');
+    expect($canUndo.get()).toBe(false);
+  });
+
+  it('leaves the other view fields alone', () => {
+    toggleLayerVisible('engines');
+    toggleLayerCollapsed('engines');
+    expect(isLayerVisible('engines')).toBe(false);
+    expect(isLayerCollapsed('engines')).toBe(true);
     expect(isLayerListed('engines')).toBe(true);
   });
 });

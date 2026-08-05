@@ -208,9 +208,9 @@ describe('4 — every binding id resolves', () => {
   /**
    * The synthetic families `validateRegistry` accepts: `transform.*` (pure-key viewport
    * behaviors with no menu home), `mirror.*` (list-surface edit mirrors, which run their
-   * twin's command), and two named ids.
+   * twin's command), and three named ids.
    */
-  const SYNTHETIC = ['esc.ladder', 'chain.apply'];
+  const SYNTHETIC = ['esc.ladder', 'chain.apply', 'outliner.search'];
 
   it.each(ALL_BINDINGS.map((binding) => [binding.id] as const))('%s', (id) => {
     const synthetic =

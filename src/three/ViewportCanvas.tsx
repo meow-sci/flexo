@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { EditorScene } from './EditorScene';
 import { loadDockingPortCalibration } from './debugCalibration';
+import { VIEWPORT_HOST_ATTR } from './viewportFocus';
 
 /**
  * Mounts the three.js {@link EditorScene} (Viewport + store-driven SubPart sync)
@@ -31,6 +32,7 @@ export function ViewportCanvas() {
   return (
     <div
       ref={hostRef}
+      {...{ [VIEWPORT_HOST_ATTR]: '' }}
       tabIndex={-1}
       onPointerDown={() => hostRef.current?.focus()}
       className="absolute inset-0 outline-none"

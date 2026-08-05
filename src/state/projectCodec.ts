@@ -24,6 +24,7 @@ import type {
   KittenInstance,
   KittenMeshSource,
   Layer,
+  LayerColor,
   PartAnimation,
   PartCollider,
   PartGameData,
@@ -50,6 +51,7 @@ import type {
 import {
   COLLIDER_SHAPES,
   IVA_SEAT_LAYER_ID,
+  LAYER_COLORS,
   KITTEN_LAYER_ID,
   LIGHT_LAYER_ID,
   createDefaultMaterial,
@@ -319,6 +321,17 @@ function decKitten(c: CKitten): KittenInstance {
 interface CLayer {
   i: string;
   n: string;
+  /** Layer color swatch name; omitted when the layer has none (the common case). */
+  c?: string;
+}
+
+/**
+ * A wire color name → the {@link LayerColor} it denotes, or `undefined` for anything that
+ * is not one of the twelve. Decode stays total and tolerant: an unknown swatch (a payload
+ * from a build with a different palette, or hand-edited JSON) simply means "no color".
+ */
+function decLayerColor(raw: unknown): LayerColor | undefined {
+  return LAYER_COLORS.includes(raw as LayerColor) ? (raw as LayerColor) : undefined;
 }
 
 // ── game data ────────────────────────────────────────────────────────────────
@@ -1385,7 +1398,10 @@ export function encodeProject(env: ProjectExportEnvelope): CompactProject {
   const g = encGameData(d.gameData);
   if (Object.keys(g).length) o.g = g;
   if (d.subPartGameData.length) o.sg = d.subPartGameData.map(encSubPartGameData);
-  if (d.layers.length) o.l = d.layers.map((x): CLayer => ({ i: x.id, n: x.name }));
+  if (d.layers.length)
+    o.l = d.layers.map(
+      (x): CLayer => (x.color ? { i: x.id, n: x.name, c: x.color } : { i: x.id, n: x.name }),
+    );
   if (d.placements.length) o.p = d.placements.map(encPlacement);
   if (d.connectors.length) o.c = d.connectors.map(encConnector);
   if (d.colliders.length) o.cl = d.colliders.map(encCollider);
@@ -1413,7 +1429,10 @@ export function decodeProject(raw: CompactProject): ProjectExportEnvelope {
       editorTags: arr<string>(raw.tg),
       gameData: decGameData(raw.g),
       subPartGameData: arr<CSubPartGameData>(raw.sg).map(decSubPartGameData),
-      layers: arr<CLayer>(raw.l).map((x): Layer => ({ id: str(x.i), name: str(x.n) })),
+      layers: arr<CLayer>(raw.l).map((x): Layer => {
+        const color = decLayerColor(x.c);
+        return color ? { id: str(x.i), name: str(x.n), color } : { id: str(x.i), name: str(x.n) };
+      }),
       placements: arr<CPlacement>(raw.p).map(decPlacement),
       connectors: arr<CConnector>(raw.c).map(decConnector),
       colliders: arr<CCollider>(raw.cl).map(decCollider),

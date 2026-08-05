@@ -20,6 +20,8 @@ import type {
   Gimbal,
   IvaSeat,
   KittenKind,
+  Layer,
+  LayerColor,
   LightType,
   ColliderShape,
   PartAnimation,
@@ -3693,6 +3695,96 @@ export function renameLayer(id: string, name: string): void {
   const target = part.layers.find((l) => l.id === id)!;
   target.name = trimmed;
   $part.set(part);
+}
+
+/**
+ * Sets (or clears, with `undefined`) a layer's Outliner swatch. Document state — the color
+ * rides the project snapshot and the undo stack — but purely editor-facing: no serializer
+ * reads it (design: design-build-mode.md §2.3.1). No-op for an unknown layer or a no-change
+ * write, so re-picking the current swatch never grows the history.
+ */
+export function setLayerColor(id: string, color: LayerColor | undefined): void {
+  const current = $part.get();
+  const layer = current.layers.find((l) => l.id === id);
+  if (!layer || layer.color === color) return;
+  pushUndo('layer color', layer.name);
+  const part = clone(current);
+  part.layers = part.layers.map((l) =>
+    l.id === id ? (color === undefined ? { id: l.id, name: l.name } : { ...l, color }) : l,
+  );
+  $part.set(part);
+}
+
+/**
+ * Duplicates a layer AND everything movable on it — SubParts, connectors, colliders — in
+ * ONE undo step (design: design-build-mode.md §2.2 ⋮ menu). The copy is inserted directly
+ * after the source, becomes the active layer, and its clones become the selection.
+ *
+ * Built-in layers are refused: Default is the fallback every delete/move lands on, and the
+ * three entity-only layers are pinned (their kinds may never live anywhere else), so a
+ * second copy of either could not hold what its name promises. Returns the new layer id, or
+ * null when nothing was done.
+ *
+ * Ids come from the SAME generators {@link duplicateSelected} uses, so a duplicated layer
+ * and a duplicated selection can never mint colliding ids.
+ */
+export function duplicateLayer(id: string): string | null {
+  const current = $part.get();
+  if (BUILT_IN_LAYER_IDS.includes(id)) return null;
+  const sourceIndex = current.layers.findIndex((l) => l.id === id);
+  if (sourceIndex < 0) return null;
+  const source = current.layers[sourceIndex];
+  pushUndo('duplicate layer', source.name);
+
+  const part = clone(current);
+  const newId = nextLayerId(part);
+  const copy: Layer = source.color
+    ? { id: newId, name: `${source.name} copy`, color: source.color }
+    : { id: newId, name: `${source.name} copy` };
+  part.layers.splice(sourceIndex + 1, 0, copy);
+
+  const copies: SelectionRef[] = [];
+  // Snapshot the source rows first: the loops push onto the very arrays they read.
+  for (const src of part.placements.filter((p) => p.layerId === id)) {
+    const base = lastSegmentLower(src.subPartTemplateId);
+    const count = part.placements.filter(
+      (p) => p.subPartTemplateId === src.subPartTemplateId,
+    ).length;
+    const instanceId = `${base}_${count + 1}`;
+    part.placements.push({
+      instanceId,
+      subPartTemplateId: src.subPartTemplateId,
+      position: { ...src.position },
+      rotation: { ...src.rotation },
+      scale: { ...src.scale },
+      layerId: newId,
+    });
+    copies.push({ kind: 'subpart', id: instanceId });
+  }
+  for (const src of part.connectors.filter((c) => c.layerId === id)) {
+    const connectorId = nextConnectorId(part);
+    part.connectors.push({
+      id: connectorId,
+      position: { ...src.position },
+      rotation: { ...src.rotation },
+      scale: { ...src.scale },
+      flags: [...src.flags],
+      capabilities: [...src.capabilities],
+      siblingIds: [...src.siblingIds],
+      layerId: newId,
+    });
+    copies.push({ kind: 'connector', id: connectorId });
+  }
+  for (const src of part.colliders.filter((c) => c.layerId === id)) {
+    const colliderId = nextColliderId(part);
+    part.colliders.push({ ...structuredClone(src), id: colliderId, layerId: newId });
+    copies.push({ kind: 'collider', id: colliderId });
+  }
+
+  $part.set(part);
+  $activeLayerId.set(newId);
+  select(copies);
+  return newId;
 }
 
 export interface DeleteLayerOptions {

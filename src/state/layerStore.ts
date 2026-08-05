@@ -26,6 +26,12 @@ export interface LayerViewState {
    * never affects the exported document.
    */
   opacity: number;
+  /**
+   * Whether the Outliner draws this layer's entity rows collapsed (header only). Purely a
+   * list-display preference like {@link LayerViewState.listed} — the 3D scene never reads
+   * it, and searching ignores it (a filtered Outliner always shows its matches).
+   */
+  collapsed: boolean;
 }
 
 export const DEFAULT_LAYER_STATE: Readonly<LayerViewState> = {
@@ -33,9 +39,18 @@ export const DEFAULT_LAYER_STATE: Readonly<LayerViewState> = {
   locked: false,
   listed: true,
   opacity: 1,
+  collapsed: false,
 };
 
-/** Map of layerId → view state. Entries are sparse (defaults filled on read). */
+/**
+ * Map of layerId → view state. Entries are sparse (defaults filled on read), so a field
+ * added to {@link LayerViewState} needs no migration — an old entry simply reads its
+ * default.
+ *
+ * NOTE: the global key is transitional — P9.07 makes the project snapshot the only
+ * persistence (`projectStore` already snapshots `layerView` per project, so nothing is
+ * lost when the global mirror goes).
+ */
 export const $layerView = persistentJSON<Record<string, LayerViewState>>('flexo:layerView', {});
 
 /** View state for a layer, filling in defaults for any unset fields. */
@@ -104,6 +119,24 @@ export function setLayerLocked(id: string, locked: boolean): void {
 /** Toggles a layer's lock (see {@link setLayerLocked}). */
 export function toggleLayerLocked(id: string): void {
   setLayerLocked(id, !isLayerLocked(id));
+}
+
+/** True when the layer's entity rows are collapsed in the Outliner (default false). */
+export function isLayerCollapsed(id: string): boolean {
+  return layerViewState($layerView.get(), id).collapsed;
+}
+
+/** Toggles the Outliner's expand/collapse chevron for a layer. */
+export function toggleLayerCollapsed(id: string): void {
+  setLayerView(id, { collapsed: !isLayerCollapsed(id) });
+}
+
+/**
+ * Ensures a layer's rows are expanded (idempotent). Used by `revealEntity` and the search
+ * auto-expand, which must never leave a match hiding behind a collapsed header.
+ */
+export function expandLayer(id: string): void {
+  if (isLayerCollapsed(id)) setLayerView(id, { collapsed: false });
 }
 
 /** Sets a layer's viewport opacity multiplier, clamped to 0–1. */

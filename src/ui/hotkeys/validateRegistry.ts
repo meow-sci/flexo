@@ -33,8 +33,12 @@ import type { HotkeyBinding } from './registry';
  * - `esc.ladder` — the Escape dispatcher itself; its RUNGS are the user-facing actions.
  * - `chain.apply` — only meaningful inside a live chain session, which the palette already
  *   reaches through `chain.begin`.
+ * - `outliner.search` — focuses a field inside the panel that already has focus. As a
+ *   command it would be a palette row that runs, closes the palette and then focuses
+ *   whatever the palette handed focus back to: a promise the surface cannot keep. Help
+ *   lists it from the binding, under `surface:outliner`, which is where it belongs.
  */
-const SYNTHETIC_BINDING_IDS: readonly string[] = ['esc.ladder', 'chain.apply'];
+const SYNTHETIC_BINDING_IDS: readonly string[] = ['esc.ladder', 'chain.apply', 'outliner.search'];
 
 /**
  * `mirror.<surface>.<action>` — a list-surface edit mirror (`listSurfaceMirrors.ts`). It

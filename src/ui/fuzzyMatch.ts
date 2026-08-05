@@ -3,10 +3,10 @@
  *
  * One subsequence matcher, dependency-free, shared by every search surface: the ⌘K command
  * palette today, and the Outliner / catalog-browser / asset-list searches as they are
- * upgraded from substring matching (design: foundation §8). **Do not fork it** — a later
- * phase EXTENDS this module with boolean adapters (`fuzzyFind` / `fuzzyAny`) for plain list
- * filtering, which is why {@link fuzzyMatch}'s scored signature is treated as stable API
- * and why this file has no imports.
+ * upgraded from substring matching (design: foundation §8). **Do not fork it** — the boolean
+ * adapters {@link fuzzyFind} / {@link fuzzyAny} that list filtering wants live in this same
+ * file, over this same core, which is why {@link fuzzyMatch}'s scored signature is treated
+ * as stable API and why this file has no imports.
  *
  * ## Scoring
  *
@@ -142,6 +142,41 @@ export function fuzzyMatch(query: string, target: string): FuzzyMatchResult | nu
   }
 
   return { score: topScore / target.length, ranges: toRanges(matched) };
+}
+
+/**
+ * A list-filter verdict: whether the row survives, and where to highlight if it does.
+ * `ranges` are the same half-open `[start, end)` spans {@link FuzzyMatchResult} carries.
+ */
+export interface FuzzyResult {
+  matched: boolean;
+  ranges: [start: number, end: number][];
+}
+
+/**
+ * Boolean adapter over {@link fuzzyMatch} for plain list filtering (the Outliner, the
+ * catalog browsers, the Data/Engine navigators).
+ *
+ * The one difference from the scored matcher is the EMPTY query: a palette with no query
+ * shows its own empty state, so `fuzzyMatch` returns null; a filtered list with no query
+ * shows everything, so this returns `matched: true` with no highlight. Score is dropped —
+ * a filter keeps its list in document order, it does not rank.
+ */
+export function fuzzyFind(query: string, text: string): FuzzyResult {
+  if (query.trim().length === 0) return { matched: true, ranges: [] };
+  const match = fuzzyMatch(query, text);
+  return match ? { matched: true, ranges: match.ranges } : { matched: false, ranges: [] };
+}
+
+/**
+ * Does `query` fuzzy-find ANY of `texts`? The form a row uses when several of its fields
+ * are searchable (name, id, template id, kind word…) but only one of them is highlighted.
+ * An empty query matches everything, as in {@link fuzzyFind}; empty candidate strings are
+ * skipped, so a caller may pass `''` for an inapplicable field.
+ */
+export function fuzzyAny(query: string, ...texts: string[]): boolean {
+  if (query.trim().length === 0) return true;
+  return texts.some((text) => text.length > 0 && fuzzyMatch(query, text) !== null);
 }
 
 /** String start, after a non-alphanumeric, or the lowercase→uppercase camelCase seam. */

@@ -290,11 +290,44 @@ export interface KittenInstance extends Transform {
  * undo-tracked); per-layer *visibility/lock* is ephemeral view state persisted to
  * localStorage (see src/state/layerStore.ts).
  */
+/**
+ * The twelve layer swatch names (design: `design-build-mode.md` §2.3.1). A CLOSED list:
+ * the persisted value is one of these names, never a hex string, so the palette can be
+ * restyled without rewriting saved documents — and an unknown name decodes to "no color"
+ * rather than a broken swatch. The hex each name renders as is a UI concern
+ * (`src/ui/outliner/layerColors.ts`).
+ */
+export const LAYER_COLORS = [
+  'slate',
+  'red',
+  'orange',
+  'amber',
+  'lime',
+  'green',
+  'teal',
+  'cyan',
+  'blue',
+  'violet',
+  'fuchsia',
+  'rose',
+] as const;
+
+export type LayerColor = (typeof LAYER_COLORS)[number];
+
 export interface Layer {
   /** Stable unique id; the built-in layer uses {@link DEFAULT_LAYER_ID}. */
   id: string;
   /** User-facing label, e.g. "Default", "Engines". */
   name: string;
+  /**
+   * Editor-only swatch shown in the Outliner (header dot + a tint on the layer's entity
+   * rows). NEVER applied to 3D materials — `applyLayerView` stays the one visibility/opacity
+   * writer — and NEVER serialized to KSA XML, like everything else about a layer.
+   *
+   * Absent = no color. Optional with a safe default, so adding it did NOT bump
+   * `PROJECT_SCHEMA_VERSION` / `PROJECT_EXPORT_VERSION` (AGENTS.md persisted-data rule 1).
+   */
+  color?: LayerColor;
 }
 
 /**

@@ -131,10 +131,12 @@ import {
   clearLayer,
   createLayer,
   deleteLayer,
+  duplicateLayer,
   renameLayer,
   reorderLayers,
   selectLayerEntities,
   setActiveLayer,
+  setLayerColor,
   setEditorTags,
   setPartId,
   setPlacementsInternal,
@@ -1669,6 +1671,122 @@ describe('editorStore layers', () => {
     // Selection is exactly the two imported parts (indices 1 & 2), not the pre-existing one.
     expect([...$selectedIndices.get()].sort((a, b) => a - b)).toEqual([1, 2]);
     expect($part.get().placements[1].layerId).toBe(engines);
+  });
+});
+
+describe('editorStore layer color', () => {
+  it('setLayerColor sets, changes and clears the swatch, and is undoable', () => {
+    const id = createLayer('Engines');
+    setLayerColor(id, 'teal');
+    expect($part.get().layers.find((l) => l.id === id)?.color).toBe('teal');
+    setLayerColor(id, 'rose');
+    expect($part.get().layers.find((l) => l.id === id)?.color).toBe('rose');
+    undo();
+    expect($part.get().layers.find((l) => l.id === id)?.color).toBe('teal');
+    setLayerColor(id, undefined);
+    expect($part.get().layers.find((l) => l.id === id)?.color).toBeUndefined();
+    // Cleared with no leftover key at all, so an uncolored layer encodes as it always did.
+    expect(Object.keys($part.get().layers.find((l) => l.id === id)!)).toEqual(['id', 'name']);
+    undo();
+    expect($part.get().layers.find((l) => l.id === id)?.color).toBe('teal');
+  });
+
+  it('setLayerColor records ONE undo step labelled "layer color"', () => {
+    const id = createLayer('Engines');
+    setLayerColor(id, 'teal');
+    expect($undoDescription.get()).toBe('layer color');
+  });
+
+  it('setLayerColor is a no-op for an unknown layer or an unchanged color', () => {
+    const id = createLayer('Engines');
+    setLayerColor(id, 'teal');
+    const before = $part.get();
+    setLayerColor(id, 'teal');
+    setLayerColor('nope', 'red');
+    expect($part.get()).toBe(before);
+  });
+
+  it('leaves the other layers untouched', () => {
+    const id = createLayer('Engines');
+    setLayerColor(id, 'lime');
+    expect($part.get().layers.filter((l) => l.color !== undefined)).toHaveLength(1);
+  });
+});
+
+describe('editorStore duplicateLayer', () => {
+  it('inserts the copy directly after the source, named "<name> copy", carrying its color', () => {
+    const engines = createLayer('Engines');
+    createLayer('Wings');
+    setLayerColor(engines, 'amber');
+    const copy = duplicateLayer(engines);
+    expect(copy).not.toBeNull();
+    expect($part.get().layers.map((l) => l.name)).toEqual([
+      'Default',
+      'IVA Seats',
+      'Lights',
+      'Kittens',
+      'Engines',
+      'Engines copy',
+      'Wings',
+    ]);
+    expect($part.get().layers.find((l) => l.id === copy)?.color).toBe('amber');
+    expect($activeLayerId.get()).toBe(copy);
+  });
+
+  it('clones only the movable kinds, with fresh ids, onto the new layer', () => {
+    const engines = createLayer('Engines');
+    addSubPart('Core.A');
+    addConnector();
+    addCollider('Box');
+    addIvaSeat(); // pinned — lives on IVA Seats, must not be cloned
+    addKitten('hunter'); // pinned likewise
+    const copy = duplicateLayer(engines)!;
+    const part = $part.get();
+    expect(part.placements.filter((p) => p.layerId === copy)).toHaveLength(1);
+    expect(part.connectors.filter((c) => c.layerId === copy)).toHaveLength(1);
+    expect(part.colliders.filter((c) => c.layerId === copy)).toHaveLength(1);
+    expect(part.ivaSeats).toHaveLength(1);
+    expect(part.kittens).toHaveLength(1);
+    // Fresh ids everywhere — nothing collides with the source row.
+    expect(new Set(part.placements.map((p) => p.instanceId)).size).toBe(2);
+    expect(new Set(part.connectors.map((c) => c.id)).size).toBe(2);
+    expect(new Set(part.colliders.map((c) => c.id)).size).toBe(2);
+  });
+
+  it('selects the copies', () => {
+    const engines = createLayer('Engines');
+    addSubPart('Core.A');
+    addConnector();
+    const copy = duplicateLayer(engines)!;
+    const part = $part.get();
+    expect($selection.get().map((r) => r.kind)).toEqual(['subpart', 'connector']);
+    for (const ref of $selection.get()) {
+      const layerId =
+        ref.kind === 'subpart'
+          ? part.placements.find((p) => p.instanceId === ref.id)?.layerId
+          : part.connectors.find((c) => c.id === ref.id)?.layerId;
+      expect(layerId).toBe(copy);
+    }
+  });
+
+  it('is ONE undo step for the layer AND its clones', () => {
+    const engines = createLayer('Engines');
+    addSubPart('Core.A');
+    addSubPart('Core.B');
+    duplicateLayer(engines);
+    expect($undoDescription.get()).toBe('duplicate layer');
+    expect($part.get().placements).toHaveLength(4);
+    undo();
+    expect($part.get().placements).toHaveLength(2);
+    expect($part.get().layers.map((l) => l.name)).not.toContain('Engines copy');
+  });
+
+  it('refuses the built-in layers', () => {
+    expect(duplicateLayer(DEFAULT_LAYER_ID)).toBeNull();
+    expect(duplicateLayer(KITTEN_LAYER_ID)).toBeNull();
+    expect(duplicateLayer('nope')).toBeNull();
+    expect($part.get().layers).toHaveLength(4);
+    expect($canUndo.get()).toBe(false);
   });
 });
 

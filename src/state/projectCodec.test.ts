@@ -588,6 +588,41 @@ describe('collider codec', () => {
   });
 });
 
+describe('layer color codec', () => {
+  it('round-trips a colored layer and omits `c` for an uncolored one', () => {
+    const p = createEmptyPart();
+    p.layers.push({ id: 'layer1', name: 'Engines', color: 'teal' });
+    p.layers.push({ id: 'layer2', name: 'Wings' });
+    const c = encodeProject(buildProjectExport(p, 'P'));
+    const engines = c.l?.find((l) => l.i === 'layer1');
+    const wings = c.l?.find((l) => l.i === 'layer2');
+    expect(engines).toEqual({ i: 'layer1', n: 'Engines', c: 'teal' });
+    expect(wings).toEqual({ i: 'layer2', n: 'Wings' });
+
+    const back = decodeProject(c).data;
+    expect(back.layers.find((l) => l.id === 'layer1')?.color).toBe('teal');
+    expect(back.layers.find((l) => l.id === 'layer2')?.color).toBeUndefined();
+  });
+
+  it('decodes a payload written before the field existed (no `c`) as uncolored', () => {
+    const back = decodeProject({
+      f: PROJECT_EXPORT_FORMAT,
+      v: PROJECT_EXPORT_VERSION,
+      l: [{ i: 'layer1', n: 'Engines' }],
+    }).data;
+    expect(back.layers[0]).toEqual({ id: 'layer1', name: 'Engines' });
+  });
+
+  it('drops an unknown swatch name instead of trusting it', () => {
+    const back = decodeProject({
+      f: PROJECT_EXPORT_FORMAT,
+      v: PROJECT_EXPORT_VERSION,
+      l: [{ i: 'layer1', n: 'Engines', c: 'plaid' }],
+    }).data;
+    expect(back.layers[0].color).toBeUndefined();
+  });
+});
+
 describe('IVA seat codec', () => {
   it('round-trips id/position/rotation, restoring the constant layerId and unit scale', () => {
     const p = createEmptyPart();

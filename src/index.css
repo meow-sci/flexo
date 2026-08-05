@@ -91,3 +91,20 @@ body {
     Arial,
     sans-serif;
 }
+
+/* Outliner reveal flash (design-build-mode.md §2.4): the row a 3D-viewport click revealed
+   pulses once so the eye can find it after the scroll. It animates the BACKGROUND, not a
+   ring — a revealed row is always also the selected row, and gridRowClass already spends
+   the accent ring on selection, so a ring flash would be invisible exactly when it matters. */
+@keyframes flexo-row-flash {
+  from {
+    background-color: color-mix(in srgb, var(--color-accent) 35%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+.row-flash {
+  animation: flexo-row-flash 0.8s ease-out;
+}

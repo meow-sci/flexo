@@ -18,6 +18,7 @@ import { normalizeKeys, scopeRank, type Scope } from './keys';
 import { isInteractiveCollectionFocus } from './typingGuard';
 import { dispatchEsc, registerEscRung } from './escLadder';
 import { registerListSurfaceEditMirrors } from './listSurfaceMirrors';
+import { focusOutlinerSearch } from '../outliner/outlinerSearch';
 import { validateRegistry } from './validateRegistry';
 
 /**
@@ -509,7 +510,19 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
     // rows and pressing ⌫ keeps working after the viewport scope stopped covering collection
     // focus (foundation §11.1). One entry per stamped surface; the rest arrive with their
     // panels (see the DEFERRED ledger below).
-    bindings: [...registerListSurfaceEditMirrors('outliner')],
+    bindings: [
+      ...registerListSurfaceEditMirrors('outliner'),
+      {
+        // The Outliner's own search. Scoped to the panel, so ⌘F stays the browser's Find
+        // everywhere else — and so it can never fight the field-local keys of another list.
+        id: 'outliner.search',
+        label: 'Search the Outliner',
+        keys: 'mod+f',
+        chords: [['mod', 'F']],
+        scope: 'surface:outliner',
+        run: () => focusOutlinerSearch(),
+      },
+    ],
   },
 ];
 
@@ -530,7 +543,7 @@ export const ALL_BINDINGS: HotkeyBinding[] = HOTKEY_GROUPS.flatMap((g) => g.bind
 // | measure / seat-view / exhaust arming routed through `$activeTool`,        | P5B (F-section) |
 // |   plus the tool definitions and the status-bar tool segments              |              |
 // | chain discard-confirm on Esc / mode switch / ⇧⌘K re-invoke (LOCKED)       | P5B.28       |
-// | `surface:outliner` `⌘F` + inline-rename Enter/Esc                         | P5A (Outliner) |
+// | `surface:outliner` inline-rename Enter/Esc (⌘F landed in P5A.13)          | P5A.14       |
 // |   (v1 rename source: `src/ui/LayersPanel.tsx` `onKeyDown`)                |              |
 // | `surface:data-navigator` edit mirrors                                     | P6           |
 // | `surface:engine-tree` edit mirrors · `tool:exhaust` `,`/`.` target cycle  | P7           |

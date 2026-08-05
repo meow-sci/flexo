@@ -16,7 +16,10 @@ src/
   ui/         React panels built on react-aria-components, with the shared
               primitives in ui/kit/ (tailwind-variants styling). Read/write the
               store via @nanostores/react.
-  app.tsx     Composes the viewport canvas + floating panels.
+  app.tsx     The docked shell: column(MenuBar, row(LeftSidebar, ViewportHost,
+              RightSidebar), StatusBar). Legacy floating chrome (toolbar,
+              selection toolbars, HUDs, aid editors) is re-parented inside the
+              viewport cell pending its v2 rehost (design: foundation.md §1).
   main.tsx    React root: <App /> + GlobalToastRegion + BuildIdMismatchDialog.
 ```
 

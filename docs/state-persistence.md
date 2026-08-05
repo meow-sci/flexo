@@ -47,6 +47,25 @@ Persist any state that represents **user-facing settings or UI state** that end-
 - **Recent data** — last opened part, recent SubParts, filters/search state
 - **Display options** — theme, layout preferences, debug flags
 
+### Shell layout
+
+The v2 docked shell (left sidebar / viewport / right sidebar, plus the Animation
+timeline dock) persists as **one** key, `flexo:layout`, written via
+`@nanostores/persistent`'s `persistentJSON` (`src/state/layoutStore.ts`): left/right
+sidebar `{width, collapsed}`, the timeline dock `{height, collapsed}`, and
+floating-window position/z-order/visibility (`float`/`floatOrder`/`floatHidden` — unused
+until the FloatingWindow phase mounts real tenants there). A defensive
+sanitize-on-boot read (`sanitizeLayout`) validates each slice independently and falls
+back to that slice's default on a shape mismatch, rather than discarding the whole
+value.
+
+The former `flexo:inspectorVisible` / `flexo:inspectorWidth` keys are **retired and
+intentionally NOT migrated** — per the project constitution (AGENTS.md), a persisted
+schema change is purged, never converted. `flexo:inspectorFloatPos` /
+`flexo:animPreviewFloatPos` (`src/state/uiStore.ts`) still exist as their own keys,
+backing the legacy `FloatingInspector` / `FloatingPreviewToolbar` drag positions, until
+a later phase folds them into `flexo:layout.float`.
+
 ## What NOT to Persist
 
 Do **not** persist:

@@ -8,6 +8,7 @@ import { TOOLS_COMMANDS } from './toolsCommands';
 import { WINDOW_COMMANDS } from './windowCommands';
 import { HELP_COMMANDS } from './helpCommands';
 import { MODE_COMMANDS } from './modeCommands';
+import { DATA_COMMANDS } from './dataCommands';
 import { COMMAND_PROVIDERS } from './providers';
 
 /**
@@ -29,6 +30,8 @@ registerCommands([
   ...WINDOW_COMMANDS,
   ...HELP_COMMANDS,
   ...MODE_COMMANDS,
+  // Palette-only (no MENU_SPEC entry) — see dataCommands.ts for why.
+  ...DATA_COMMANDS,
 ]);
 
 for (const provider of COMMAND_PROVIDERS) {

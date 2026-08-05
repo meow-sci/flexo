@@ -32,7 +32,7 @@ see [colliders.md](colliders.md). `<IVASeat>` has likewise moved out of the pass
 | `src/state/partImport.ts`      | `importBuiltInPart`: drops a catalog Part (placements/connectors/editorTags/gameData/animations) into the editor.                                                                               |
 | `src/ui/EditorTagsField.tsx`   | Editor-tag combobox; suggests `KNOWN_EDITOR_TAGS`, allows freeform.                                                                                                                             |
 | `src/ui/PartBrowser.tsx`       | "Add Part" browser; searches catalog by `id` + `editorTags`.                                                                                                                                    |
-| `src/ui/PartDataButton.tsx`    | Part Data dialog host (Identity → Part Id + `EditorTagsField`).                                                                                                                                 |
+| `src/ui/PartDataDialog.tsx`    | Part Data dialog host (Identity → Part Id + `EditorTagsField`).                                                                                                                                 |
 
 ## Game-side anchors (NEW snapshot: `ksa-game-assemblies/current/`)
 

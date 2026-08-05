@@ -19,7 +19,7 @@ the 3D scene subscribes with vanilla `subscribe()`, React reads via
 | `$chainSession` | `ChainSession \| null` | The open action-chain session (`src/state/chainStore.ts`): frozen seed `instanceId`s + the ordered step list. **Ephemeral by design** — never persisted, never undone; the document is untouched until Apply, which is what makes Cancel unconditionally safe. The only persisted piece is the module-private `flexo:chainDefaults` (last-used parameters per op kind). See [action-chains.md](./action-chains.md). |
 | `$toolMode` | `'translate'\|'rotate'\|'scale'` | Drives the 3D gizmo. |
 | `$snap` | `{ translate?, rotateDeg? }` | Grid / rotation snap (0/undefined = off). |
-| `$canUndo` / `$canRedo` | `boolean` | For toolbar button enablement. |
+| `$canUndo` / `$canRedo` | `boolean` | Enablement for the menubar ↶ ↷ pair and the `edit.undo`/`edit.redo` commands. |
 
 Per-layer **visibility/lock** is NOT in `$part` — it's persisted view state in
 `src/state/layerStore.ts` (`$layerView`). See [layers.md](./layers.md).
@@ -132,7 +132,7 @@ one of two patterns:
    start (gizmo drag-start; field focus). `updatePlacementTransform(s)`,
    `updateConnectorTransform`, `updateSelectedTransform`, `setPartId`, and the GameData
    field setters (`setDisplayName`, `setCustomMass`, `updateTank`, power `set*`,
-   `set*Force`) — all focus-pushed by their dialog field (`PartDataButton` /
+   `set*Force`) — all focus-pushed by their dialog field (`PartDataDialog` /
    `GameDataSections` / `PreciseNumberInput`'s `onInteractionStart`).
 
 `newPart()` clears both stacks (a new document has no history). Adding a `$part`
@@ -215,12 +215,23 @@ Shift+click on pointer-down (before react-aria's own, anchorless extension runs)
 - `AssetsList.tsx` — the placed-entity list (see above); select/duplicate/delete.
 - `TransformInspector.tsx` — numeric position/rotation/scale (two-way bound); for a
   selected connector, the three flag checkboxes (Internal/ToSurface/FromSurface).
-- `Toolbar.tsx` — tool mode (Segmented), snap (NumberField), undo/redo.
-- `PartDataButton.tsx` — the **Part Data** dialog (Part id, editor tags, and the
-  `gameData` sections; see [xml-io.md](./xml-io.md)). `ExportDialog.tsx` exports.
+- `shell/MenuBar.tsx` — the docked menubar: the eight menus rendered from
+  `ui/menu/menuSpec.ts`, the mode switcher, the project chip and the undo/redo pair.
+  Every item runs a **command** (`state/commandStore.ts`, defined in `ui/commands/`);
+  there is no v1 `Toolbar.tsx` any more.
+- `shell/phone/PhoneTopBar.tsx` + `shell/phone/MenuSheet.tsx` — the phone's one-row bar
+  and its `☰` drill-down over that same `MENU_SPEC` (`ui/menu/MenuDrillDown.tsx`, shared
+  with the narrow-desktop `☰` collapse).
+- `shell/DialogRoot.tsx` — the single mount point for every overlay dialog, keyed by
+  `state/dialogStore.ts`'s `$openDialog` id. No dialog is owned by a trigger button.
+- `PartDataDialog.tsx` — the **Part Data** dialog (Part id, editor tags, and the
+  `gameData` sections; see [xml-io.md](./xml-io.md)), dialog id `'part-data'`, reached
+  from the ⌘K palette (`data.partData`) until Data mode gives it a permanent home.
+  `ExportDialog.tsx` exports (dialog id `'export-ksa'`, File ▸ Export to KSA… / ⌘E).
 - `LayersButton.tsx` / `LayersPanel.tsx` — sidebar Layers popover (see [layers.md](./layers.md)).
 - `chain/ChainPalette.tsx` / `chain/ChainStepCard.tsx` — the floating, **non-modal**
-  action-chain palette (`mod+K` or the selection toolbar's Chain button; self-gates on
+  action-chain palette (`⇧⌘K` / Edit ▸ Begin Action Chain… / the selection toolbar's
+  Chain button; self-gates on
   `$chainSession`) and its per-step parameter cards. Applying is one undo step; see
   [action-chains.md](./action-chains.md).
 - `EnginePanel.tsx` / `EngineToolbar.tsx` — the full-sidebar **Engine Designer**

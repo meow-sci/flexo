@@ -2,8 +2,9 @@
 
 The editor is **project-based**: the whole workspace is a named project, autosaved to
 localStorage and restored on the next page load. Switching projects swaps the entire
-workspace. Implemented in `src/state/projectStore.ts`; the UI is `src/ui/ProjectButton.tsx`
-(top toolbar).
+workspace. Implemented in `src/state/projectStore.ts`; the UI is the menubar's **project
+chip** plus the **File** menu, which open the root-hosted dialogs in
+`src/ui/projects/ProjectDialogs.tsx`.
 
 ## What a project captures
 
@@ -114,12 +115,25 @@ a seat's `layerId` is restored from `IVA_SEAT_LAYER_ID` on decode rather than se
 its unused `scale` omitted by the shared transform encoder. `ifl` is decoded defensively —
 only `string → boolean` entries survive, bad data is dropped.
 
-## UI — `src/ui/ProjectButton.tsx`
+## UI — the project chip, the File menu, and `src/ui/projects/ProjectDialogs.tsx`
 
-A top-toolbar "Project" popover showing the current project name (editable input that
-renames on blur/Enter), a **New Project** button, and a **Load Project…** button that opens
-a `Dialog` listing every saved project with load + delete (delete is `useDialog().confirm`).
-Autosave means there's no explicit Save action.
+The current project name lives in the menubar's right cluster as the **project chip**
+(`src/ui/shell/MenuBar.tsx`; the phone shows it in `PhoneTopBar`). Tapping it runs the
+`file.projects` command, which is the same thing **File ▸ Projects…** and the ⌘K palette
+run: `openDialog({ id: 'projects' })`.
+
+Both dialogs are mounted once by `src/ui/shell/DialogRoot.tsx` and named by
+`dialogStore`'s `$openDialog` id — no dialog is owned by a trigger button any more:
+
+- **`'projects'`** (`LoadProjectDialog`) — every saved project with its SubPart count and
+  save time, load on click, per-row delete behind an inline confirm.
+- **`'rename-project'`** (`RenameProjectDialog`) — a small dialog with the v1 rename
+  semantics, run from **File ▸ Rename Project…** (`file.renameProject`).
+
+**File ▸ New Project** (`file.new`) creates and switches. Autosave means there is no Save
+action and no Save item in the menu. The reactive project index, the archive export and the
+collision-safe rename are the project-storage phase's upgrades; what ships today is the v1
+behavior behind the new entry points.
 
 ## Tests
 

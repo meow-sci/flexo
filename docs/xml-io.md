@@ -140,9 +140,12 @@ GameData files under `/ksa/`; `vite/ksaAssets.ts` copies the existing ones into
 
 ## Editing UI
 
-- `src/ui/PartDataButton.tsx`: the **Part Data** dialog — collapsible sections
+- `src/ui/PartDataDialog.tsx`: the **Part Data** dialog — collapsible sections
   (Identity / Mass / Tanks / Power / Coupling) over `EditingPart.gameData` + the
-  Part Id and editor tags. The section editors live in `src/ui/GameDataSections.tsx`;
+  Part Id and editor tags. Mounted by `src/ui/shell/DialogRoot.tsx` under the
+  `dialogStore` id `'part-data'`; the entry point is the ⌘K palette command
+  `data.partData` ("Part Data…"), which is deliberately palette-only until Data mode
+  gives the GameData forms a permanent home. The section editors live in `src/ui/GameDataSections.tsx`;
   numeric fields reuse `PreciseNumberInput` (with `onInteractionStart` to push one
   undo step per typing session). Connectors are **not** here — they're edited in the
   3D workspace, and their flags are three checkboxes in `TransformInspector.tsx`.

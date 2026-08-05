@@ -343,6 +343,25 @@ describe('disabled stubs stay visible but never run', () => {
   });
 });
 
+describe('palette-only commands', () => {
+  /**
+   * Part Data has no home in the authoritative tree (Data mode replaces the dialog), and
+   * its v1 toolbar button is gone — the palette IS its entry point until then. If this ever
+   * gains a MENU_SPEC entry, that is a tree change and belongs in the transcription lists
+   * above, not here.
+   */
+  it('data.partData is registered, titled and absent from the menu tree', () => {
+    const command = getCommand('data.partData');
+    expect(command?.title).toBe('Part Data…');
+    expect(command?.menuPath).toBeUndefined();
+
+    const referenced = ALL_ENTRIES.filter((e) => e.kind === 'command').map(
+      (e) => (e as { commandId: string }).commandId,
+    );
+    expect(referenced).not.toContain('data.partData');
+  });
+});
+
 describe('mode commands', () => {
   it('registers all five, with Data and Surface disabled until their phases', () => {
     for (const id of ['mode.build', 'mode.animation', 'mode.engine']) {

@@ -176,13 +176,22 @@ is what makes Cancel unconditionally safe.
 
 | Gesture | Effect |
 |---|---|
-| `mod+K`, or the **Chain** button in `SelectionToolbar.tsx` | `toggleChainPalette()` — opens over the current selection, or cancels an open session |
+| `⇧⌘K`, **Edit ▸ Begin Action Chain…**, or the ⌘K command palette (`chain.begin`, keywords "array grid radial ring repeat") | `beginActionChain()` — opens over the current selection; see the discard rule below |
+| The **Chain** button in `SelectionToolbar.tsx` | `toggleChainPalette()` — the v1 toggle, kept until the Build-mode rework replaces that toolbar |
 | `mod+↵` | Apply (component-local hotkey, `enableOnFormTags: true`) |
 | `Escape`, ✕, **Cancel** | Cancel |
 | Typing in the search field | Filters the command list; `↓` moves into it, `↵` on a row adds that step |
 | `↑`/`↓` in any number field | Step by the field's unit (Shift ⇒ ×10, Alt ⇒ ×0.1) — `useNumberDraft` semantics |
 
-**Open guards** (`toggleChainPalette`, `src/ui/chain/openChainPalette.ts`), in order: no SubPart
+**`⌘K` is the command palette, not the chain.** The chain moved to `⇧⌘K` (`chain.begin`) so that
+`⌘K` could become the app-wide command palette, and the move also killed the v1 trap where
+re-pressing the binding threw away a session without a word: **a session with ≥1 step is never
+discarded silently** — `beginActionChain()` raises a "Discard chain (N steps)?" confirm first. An
+EMPTY session is re-seeded from the current selection silently, and no session at all just opens
+one. The old toggle (`toggleChainPalette`) survives only behind the SelectionToolbar's Chain
+button.
+
+**Open guards** (`tryOpenChain`, `src/ui/chain/openChainPalette.ts`), in order: no SubPart
 placements in the selection → toast *"Select SubParts to chain"*; any seed on a locked layer →
 toast *"Selection is on a locked layer"* (every other transform tool refuses the same way).
 Otherwise the selected placements' `instanceId`s are frozen **in selection order** as the seeds.
@@ -272,7 +281,7 @@ resulting selection, and the `-1` no-op path.
 | `src/three/chainMath.ts` | `evalChain` + `rotatedPositionOnlyTransform` + the caps (three.js math only) |
 | `src/three/chainEval.ts` | `$chainEval` — the computed that resolves seeds against `$part` and evaluates |
 | `src/three/ChainPreviewLayer.ts` | the ghost overlay |
-| `src/ui/chain/openChainPalette.ts` | `toggleChainPalette()` — the open guards |
+| `src/ui/chain/openChainPalette.ts` | `beginActionChain()` (the `chain.begin` command) + `discardChainAndRestart()` + the legacy `toggleChainPalette()`, and the open guards they share |
 | `src/ui/chain/ChainPalette.tsx`, `ChainStepCard.tsx`, `chainCommands.ts` | the floating palette, its step cards, and the command catalog |
 | `src/state/editorStore.ts` | `applyActionChain` + `ChainCommitEntry` + `nextChainInstanceId` |
 

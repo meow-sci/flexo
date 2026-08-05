@@ -3,7 +3,6 @@ import { ViewportCanvas } from './three/ViewportCanvas';
 import { ViewportDropZone } from './ui/ViewportDropZone';
 import { ImportModelDialog } from './ui/ImportModelDialog';
 import { ImportReportCard } from './ui/ImportReportCard';
-import { MobileTopBar } from './ui/MobileTopBar';
 import { SelectionToolbar } from './ui/SelectionToolbar';
 import { MultiSelectToolbar } from './ui/MultiSelectToolbar';
 import { InspectorContent } from './ui/InspectorContent';
@@ -21,6 +20,7 @@ import { TransformHud } from './ui/TransformHud';
 import { ChainPalette } from './ui/chain/ChainPalette';
 import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys';
 import { MenuBar } from './ui/shell/MenuBar';
+import { PhoneTopBar } from './ui/shell/phone/PhoneTopBar';
 import { DialogRoot } from './ui/shell/DialogRoot';
 import { CommandPalette } from './ui/palette/CommandPalette';
 import { Sidebar } from './ui/shell/Sidebar';
@@ -85,10 +85,11 @@ function App() {
       {/* Global keyboard shortcuts (no UI). */}
       <GlobalHotkeys />
 
-      {/* Top row: the slim docked menubar on desktop; the phone's full-width compact
-          bar with an overflow menu, now IN FLOW rather than absolutely positioned. */}
+      {/* Top row, in flow on both platforms: the slim docked menubar on desktop; on the
+          phone the one-row PhoneTopBar whose ☰ opens the MenuSheet — the same MENU_SPEC
+          drill-down, so no menu item loses its phone path (foundation §12). */}
       {!isPhone && <MenuBar />}
-      {isPhone && <MobileTopBar />}
+      {isPhone && <PhoneTopBar />}
 
       {/* The workspace band (foundation §6.2): everything between the two bars.
           FloatingWindow tenants (later phase) mount inside this element. */}

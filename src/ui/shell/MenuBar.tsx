@@ -1,17 +1,20 @@
-import { useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { useStore } from '@nanostores/react';
 import { ChevronDown, FolderOpen, Menu as MenuIcon, Redo, Search, Undo } from 'lucide-react';
 import {
   Button,
+  DialogTrigger,
   Kbd,
   keyLabel,
   MenuBar as KitMenuBar,
-  MenuTrigger,
+  Popover,
+  PopoverDialog,
   Tooltip,
   type MenuBarMenu,
 } from '../kit';
 import { MenuSpecMenu } from '../menu/MenuSpecMenu';
-import { MENU_SPEC, type MenuEntry } from '../menu/menuSpec';
+import { MenuDrillDown } from '../menu/MenuDrillDown';
+import { MENU_SPEC } from '../menu/menuSpec';
 import { ModeSwitcher } from './ModeSwitcher';
 import { runCommand } from '../../state/commandStore';
 import { $canRedo, $canUndo, $redoDescription, $undoDescription } from '../../state/editorStore';
@@ -27,8 +30,8 @@ import { $projectName } from '../../state/projectStore';
  * Nothing else lives here — no burger, no Save (S12; autosave-only).
  *
  * The eight menus come straight from `MENU_SPEC`; below ~900px they collapse into a single
- * `☰ Menu` trigger rendering that same tree as one drill-down of submenus. The phone runs
- * the identical data through its own bar.
+ * `☰ Menu` trigger hosting `MenuDrillDown` — literally the component the phone's MenuSheet
+ * hosts, so the collapse and the phone can never fall behind the menus.
  *
  * Undo enrollment: NONE. Every action here is a `runCommand` into the registry, and the
  * commands are thin dispatchers over mutators that already own their `pushUndo`.
@@ -39,14 +42,6 @@ const MENUS: MenuBarMenu[] = MENU_SPEC.map((menu) => ({
   label: menu.label,
   // A fresh element tree per open — that is what re-evaluates enabled/checked (foundation §4).
   renderMenu: () => <MenuSpecMenu entries={menu.entries} ariaLabel={menu.label} />,
-}));
-
-/** The same eight menus as one collapsed drill-down (narrow desktop `☰`). */
-const COLLAPSED_ENTRIES: MenuEntry[] = MENU_SPEC.map((menu) => ({
-  kind: 'submenu',
-  id: menu.id,
-  label: menu.label,
-  entries: menu.entries,
 }));
 
 /** Below this the eight triggers do not fit beside the mode switcher (foundation §3). */
@@ -68,18 +63,29 @@ function useIsNarrow(): boolean {
 
 export function MenuBar() {
   const narrow = useIsNarrow();
+  const [collapsedOpen, setCollapsedOpen] = useState(false);
 
   return (
     <div className="grid flex-none grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-border bg-panel px-1 py-(--bar-py) text-xs text-fg">
       <div className="flex min-w-0 items-center">
         {narrow ? (
-          <MenuTrigger>
+          // The SAME drill-down the phone MenuSheet hosts, in a popover (P2.15): one
+          // level-stack component, so the collapse can never fall behind the menus.
+          <DialogTrigger isOpen={collapsedOpen} onOpenChange={setCollapsedOpen}>
             <Button size="xs" variant="ghost" className="px-2" aria-label="Menu">
               <MenuIcon size={14} />
               Menu
             </Button>
-            <MenuSpecMenu entries={COLLAPSED_ENTRIES} ariaLabel="Menu" />
-          </MenuTrigger>
+            <Popover placement="bottom start" className="w-72">
+              <PopoverDialog aria-label="Menu">
+                <MenuDrillDown
+                  size="xs"
+                  className="max-h-[min(70vh,32rem)]"
+                  onDismiss={() => setCollapsedOpen(false)}
+                />
+              </PopoverDialog>
+            </Popover>
+          </DialogTrigger>
         ) : (
           <KitMenuBar menus={MENUS} />
         )}

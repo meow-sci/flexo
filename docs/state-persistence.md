@@ -66,6 +66,19 @@ schema change is purged, never converted. `flexo:inspectorFloatPos` /
 backing the legacy `FloatingInspector` / `FloatingPreviewToolbar` drag positions, until
 a later phase folds them into `flexo:layout.float`.
 
+### Command palette recents
+
+`flexo:paletteRecents` (`$paletteRecents` in `src/state/commandStore.ts`, `persistentJSON`)
+is the ⌘K palette's **Recent** section: the last 8 command ids that were run *from the
+palette*, newest first, deduped. It is the command registry's ONLY persisted state —
+registrations, `$paletteOpen` and every dialog/menu open state are ephemeral.
+
+Menu and hotkey invocations deliberately do not record: `runCommand` never touches the
+list, only the palette's own activation path calls `recordRecent`. A stored id that no
+longer resolves (a dynamic `layer:activate:<layerId>` for a deleted layer) is not pruned on
+write — it is simply skipped when the palette renders, which is the "no migration" rule
+applied to a preference key.
+
 ## What NOT to Persist
 
 Do **not** persist:

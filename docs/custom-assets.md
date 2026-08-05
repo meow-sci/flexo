@@ -381,8 +381,9 @@ interior-only is worse than not offering it.
   ("is this oriented, scaled and split the way I meant?"); the accurate surface preview is
   the editor viewport after import, which renders the real KSA channels. It clones the
   scene (SkeletonUtils) and never disposes geometry/materials it doesn't own.
-- entry points wired from the **Add** menu (`AddButton.tsx`) — including **Import model…**,
-  which opens `ImportModelDialog` on its drop state.
+- entry points wired from the **Add** menu (`src/ui/commands/addCommands.ts`, rendered by
+  `src/ui/menu/menuSpec.ts`) — including **Import model…**, which opens `ImportModelDialog`
+  on its drop state.
 
 #### Import settings — sticky vs per-import
 

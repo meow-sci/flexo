@@ -106,7 +106,8 @@ the project's `customReactions` (custom wins on id).
     disclosure stays only under a SubPart engine, where it genuinely is advanced.
 - **Modal sections** (round-trip + no-3D editing): `EngineSections.tsx` renders the
   thrust-chamber editors in **SubPart Data** (`ManageTanksModal`) and the controllers +
-  gimbals + gas-generator in **Part Data** (`PartDataButton`, "Engine" section).
+  gimbals + gas-generator in **Part Data** (`PartDataDialog`, "Engine" section — dialog id
+  `'part-data'`, reached from the ⌘K palette's `data.partData` command).
 
 ### Placing the exhaust in 3D
 
@@ -143,7 +144,7 @@ the gizmo editing the wrong one:
   the exhaust axis simply does nothing — it is undefined in-game (the plume is axially
   symmetric and `Vehicle.SpawnThrusterSparks` invents an arbitrary basis), so there is no
   roll lock to discover. **Scale is disabled** while placing: a nozzle placement has nothing
-  to scale (`$effectiveToolMode` clamps it, and the toolbar shows the clamped tool, so the
+  to scale (`$effectiveToolMode` clamps it, and `SelectionToolbar` shows the clamped tool, so the
   displayed mode can never disagree with what a drag does).
 - **The FX pair** (`<FxExhaustLocation>`/`<FxExhaustDirection>`) is an explicit override,
   behind "Override FX placement (plume ≠ thrust)". OFF ⇒ both fields are `null` and KSA

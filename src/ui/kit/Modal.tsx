@@ -7,12 +7,13 @@ import {
   type ModalOverlayProps,
   type DialogProps,
 } from 'react-aria-components';
-import { X } from 'lucide-react';
+import { ChevronLeft, X } from 'lucide-react';
 import { tv, type VariantProps } from 'tailwind-variants';
 import { cn } from './styles';
+import { z } from './zIndex';
 
 const overlay = tv({
-  base: 'fixed inset-0 z-50 flex bg-overlay/60 backdrop-blur-sm transition-opacity data-[entering]:opacity-0 data-[exiting]:opacity-0',
+  base: 'fixed inset-0 flex bg-overlay/60 backdrop-blur-sm transition-opacity data-[entering]:opacity-0 data-[exiting]:opacity-0',
   variants: {
     variant: {
       center: 'items-center justify-center p-4',
@@ -54,7 +55,7 @@ export interface ModalKitProps extends ModalOverlayProps, VariantProps<typeof mo
  */
 export function Modal({ variant, className, children, ...props }: ModalKitProps) {
   return (
-    <ModalOverlay {...props} className={overlay({ variant })}>
+    <ModalOverlay {...props} className={overlay({ variant })} style={{ zIndex: z.overlay }}>
       <AriaModal className={cn(modal({ variant }), className)}>{children}</AriaModal>
     </ModalOverlay>
   );
@@ -69,18 +70,34 @@ export function Dialog({ className, ...props }: DialogProps) {
   );
 }
 
-/** Standard title bar for form/browser modals (title + close button). */
-export function DialogHeader({ title, onClose }: { title: React.ReactNode; onClose: () => void }) {
+const headerIconButton =
+  'flex size-7 shrink-0 items-center justify-center rounded-md text-fg-subtle outline-none hover:bg-white/10 hover:text-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent';
+
+/**
+ * Standard title bar for form/browser modals (title + close button). Pass `onBack` when the
+ * dialog owns a {@link DialogViewStack} deeper than its root view: the header then reads
+ * `‹ Title` and the chevron pops one view (foundation §10.1).
+ */
+export function DialogHeader({
+  title,
+  onClose,
+  onBack,
+}: {
+  title: React.ReactNode;
+  onClose: () => void;
+  onBack?: () => void;
+}) {
   return (
     <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-4 py-2.5">
-      <Heading slot="title" className="text-sm font-semibold text-fg">
+      {onBack && (
+        <AriaButton onPress={onBack} aria-label="Back" className={headerIconButton}>
+          <ChevronLeft size={16} />
+        </AriaButton>
+      )}
+      <Heading slot="title" className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">
         {title}
       </Heading>
-      <AriaButton
-        onPress={onClose}
-        aria-label="Close"
-        className="flex size-7 items-center justify-center rounded-md text-fg-subtle outline-none hover:bg-white/10 hover:text-fg focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-      >
+      <AriaButton onPress={onClose} aria-label="Close" className={headerIconButton}>
         <X size={16} />
       </AriaButton>
     </div>

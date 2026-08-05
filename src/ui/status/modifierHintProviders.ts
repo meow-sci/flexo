@@ -16,9 +16,11 @@ import { registerModifierHints } from '../../state/modifierStore';
  *
  * | Provider | Gesture | Owner |
  * |---|---|---|
- * | `build-viewport` ⌥ Duplicate drag | ⌥-drag to duplicate (LOCKED gesture #7) | Build-mode phase |
  * | `timeline` ⌃ Snap to keys | keyframe drag snapping | Animation phase |
  * | `animation-pose` ⇧ Axis lock | pose-gizmo axis lock | Animation phase |
+ *
+ * (`⌥ Duplicate drag` LANDED in P5B.18 and lives on the `gizmo-drag` provider below,
+ * beside the ⌃ snap-invert row it shares a gesture with.)
  *
  * **Known interim limitation**: `HintContext` carries `hover`, `hasSelection` and
  * `dialogOpen` only — there is no mode, active-tool or dragging field yet, because
@@ -66,14 +68,19 @@ export function initModifierHintProviders(): void {
       : [],
   );
 
-  // ⌃ held DURING a gizmo drag inverts snapping (EditorScene → `applySnapToGizmo`,
-  // foundation §14.2). Advertised on the gizmo hover context, and — because nothing stamps
-  // `'gizmo'` yet — also over the viewport WITH a selection, which is exactly when a gizmo
-  // is on screen and the gesture is live. Never with an empty selection: there is no gizmo
-  // to drag, so the hint would be a lie.
+  // The two gizmo-drag modifiers, both live since P5B.18 (foundation §14.2, LOCKED #7):
+  // ⌥ held AT drag start duplicates the selection and drags the copies as ONE undo step
+  // (`EditorScene.beginDuplicateDrag`), and ⌃ held DURING the drag inverts snapping
+  // (`applySnapToGizmo`). Advertised on the gizmo hover context, and — because nothing
+  // stamps `'gizmo'` yet — also over the viewport WITH a selection, which is exactly when a
+  // gizmo is on screen and both gestures are live. Never with an empty selection: there is
+  // no gizmo to drag, so the hints would be a lie.
   registerModifierHints('gizmo-drag', (ctx) =>
     ctx.hover === 'gizmo' || (ctx.hover.startsWith('viewport') && ctx.hasSelection)
-      ? [{ mod: 'ctrl', label: 'Snap (invert while dragging)', priority: 35 }]
+      ? [
+          { mod: 'alt', label: 'Duplicate drag', priority: 25 },
+          { mod: 'ctrl', label: 'Snap (invert while dragging)', priority: 35 },
+        ]
       : [],
   );
 

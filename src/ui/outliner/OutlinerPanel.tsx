@@ -9,7 +9,7 @@ import {
   MenuTrigger,
   type Selection,
 } from 'react-aria-components';
-import { Search } from 'lucide-react';
+import { EyeOff, Search } from 'lucide-react';
 import { Button, Popover, SearchField, TextField, cn, gridRowClass } from '../kit';
 import {
   $part,
@@ -23,6 +23,7 @@ import {
 } from '../../state/editorStore';
 import { $catalogIndex } from '../../state/catalogStore';
 import { $layerView, expandLayer, toggleLayerCollapsed } from '../../state/layerStore';
+import { $kindVisibility, isKindVisible } from '../../state/viewStore';
 import { runCommand } from '../../state/commandStore';
 import { focusViewport } from '../../three/viewportFocus';
 import { useShiftRangeSelect } from '../rangeSelect';
@@ -65,6 +66,9 @@ export function OutlinerPanel() {
   const layerView = useStore($layerView);
   const selection = useStore($selection);
   const catalogIndex = useStore($catalogIndex);
+  // Only to re-render the kind subheaders' crossed-eye glyph; the predicate reads the
+  // merge helper, never this raw value (a stored object may be missing a kind).
+  const kindVisibility = useStore($kindVisibility);
   const reveal = useStore($revealEntity);
   const searchFocusNonce = useStore($outlinerSearchFocus);
   const tanksTemplateId = useStore($subPartDataTemplateId);
@@ -273,16 +277,27 @@ export function OutlinerPanel() {
                 </GridListHeader>
                 <Collection
                   items={rowsVisible ? itemsFor(section) : []}
-                  dependencies={[search, flashKey]}
+                  dependencies={[search, flashKey, kindVisibility]}
                 >
                   {(item: Item) =>
                     item.kind === 'subheader' ? (
                       <GridListItem
                         id={item.key}
                         textValue={item.label}
-                        className="cursor-default px-2 pt-1 text-[11px] uppercase tracking-wide text-fg-subtle outline-none"
+                        className="flex cursor-default items-center gap-1 px-2 pt-1 text-[11px] uppercase tracking-wide text-fg-subtle outline-none"
                       >
-                        {item.label} ({item.count})
+                        <span>
+                          {item.label} ({item.count})
+                        </span>
+                        {/* View ▸ Display Filters hid this kind: say so where the rows are,
+                            so "my connectors vanished" is never a mystery (design §5.4). */}
+                        {item.filteredOff && (
+                          <EyeOff
+                            size={11}
+                            className="shrink-0"
+                            aria-label="Hidden by View ▸ Display Filters"
+                          />
+                        )}
                       </GridListItem>
                     ) : (
                       <GridListItem
@@ -393,8 +408,18 @@ export function OutlinerPanel() {
 
 /** A collection entry: either a kind subheader (inert) or an entity row. */
 type Item =
-  | { kind: 'subheader'; key: string; label: string; count: number }
+  | { kind: 'subheader'; key: string; label: string; count: number; filteredOff: boolean }
   | { kind: 'row'; key: string; row: OutlinerRow };
+
+/**
+ * Is this kind currently hidden by **View ▸ Display Filters**? Drives the subheader's
+ * crossed-eye glyph (design-build-mode.md §5.4: "state visible, rows untouched" — the rows
+ * themselves keep their normal styling, because the entities still exist and are still
+ * listed; only the viewport stops drawing them).
+ */
+function isKindFilteredOff(kind: EntityKind): boolean {
+  return kind !== 'subpart' && !isKindVisible(kind);
+}
 
 /**
  * Whether a layer draws its kind subheaders. A pinned entity-only layer can only ever hold
@@ -421,6 +446,7 @@ function itemsFor(section: OutlinerLayerSection): Item[] {
             key: subheaderKey(section, group.kind),
             label: group.label,
             count: group.rows.length,
+            filteredOff: isKindFilteredOff(group.kind),
           },
         ]
       : []),

@@ -250,7 +250,13 @@ describe('menu transcription (authoritative tree)', () => {
       '  Off',
       'Live Light Preview',
       '─',
-      'Display Filters',
+      'Display Filters ▸',
+      '  Connectors',
+      '  Colliders',
+      '  IVA Seats',
+      '  Lights',
+      '  Kittens',
+      '  Measurement Aids',
       'Motion Trails',
       '─',
       'Measurement Overlays ▸',
@@ -323,7 +329,8 @@ describe('disabled stubs stay visible but never run', () => {
     // `view.frameSelection` / `view.resetCamera` graduated out of this list: the camera
     // phase gave them real targets (`frameCamera()` / `resetCamera()`). `tool.marquee`
     // graduated with the Build-mode selection phase: it arms the real box-select tool.
-    'view.displayFilters',
+    // `view.displayFilters` graduated too: it is now a SUBMENU of six live per-kind
+    // checkboxes (`view.displayFilter:*`) driving `$kindVisibility` — see its own test below.
     'view.motionTrails',
     'window.timeline',
     // `window.toolbar` graduated with the Build-mode Tool bar: it now toggles the floating
@@ -346,6 +353,19 @@ describe('disabled stubs stay visible but never run', () => {
       ).map((e) => (e as { commandId: string }).commandId),
     );
     for (const id of STUBS) expect(referenced.has(id)).toBe(true);
+  });
+
+  it('View ▸ Display Filters rows are live and toggle their kind', () => {
+    for (const kind of ['connector', 'collider', 'ivaSeat', 'light', 'kitten', 'aid']) {
+      const command = getCommand(`view.displayFilter:${kind}`);
+      expect(command?.enabled?.()).not.toBe(false);
+      expect(command?.disabledReason).toBeUndefined();
+
+      const wasChecked = command?.checked?.();
+      command?.run(undefined);
+      expect(command?.checked?.()).toBe(!wasChecked);
+      command?.run(undefined); // back to default (all kinds visible)
+    }
   });
 
   it('window.notifications is live (the notification center exists) and still in a menu', () => {

@@ -172,7 +172,9 @@ export function EntityMenu({ row }: { row: OutlinerRow }) {
     select([ref]);
     removeSelected();
     select(prior);
-    status(`Deleted ${row.name}`, { severity: 'info', action: undoStatusAction() });
+    // Same severity as `edit.delete`'s flash: `danger` is what the ONE severity→duration
+    // table spells as the 10 s takeback window §14.3 asks for. One policy, one look.
+    status(`Deleted ${row.name}`, { severity: 'danger', action: undoStatusAction() });
   };
 
   if (index < 0) return <Menu aria-label="Row options" />;

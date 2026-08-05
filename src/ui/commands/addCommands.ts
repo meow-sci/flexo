@@ -22,16 +22,20 @@ import {
   type LightType,
 } from '../../ksa/types';
 import { $mode, setMode } from '../../state/modeStore';
-import { enterEngineMode } from '../../state/engineStore';
+import { toast } from '../toast';
+import type { EntityKind } from '../../state/editorStore';
 
 /**
  * Add menu commands (design: foundation §3 "Add").
  *
- * Every entity item lands on the ACTIVE layer at the origin (KSA defaults, unchanged from
- * v1) and — where v1 did — selects and reveals the result. Asset dialogs open in place.
+ * The choreography EVERY instant entity item runs, in order (design §6.1 table row 1):
+ * auto-switch to Build (S27) → the store action, which lands the entity on the ACTIVE layer
+ * at the origin with KSA's own defaults (connector faces +X, seat looks +X, kitten faces
+ * −Z) and selects it → `revealEntity` scrolls its Outliner row into view → a transient
+ * status flash naming what landed. Asset dialogs open in place and run none of it.
  *
  * Undo enrollment: none here. `addConnector` / `addCollider` / `addIvaSeat` / `addLight` /
- * `addKitten` / `addSubPart` each push their own discrete undo step.
+ * `addKitten` / `addSubPart` each push their own discrete undo step — never double-push.
  */
 
 /**
@@ -41,6 +45,34 @@ import { enterEngineMode } from '../../state/engineStore';
  */
 function ensureBuildMode(): void {
   if ($mode.get() !== 'build') setMode('build');
+}
+
+/**
+ * The tail of the choreography: reveal the entity the store just added and select-flashed,
+ * then flash what landed. `id` is read from the document AFTER the action (the store
+ * actions generate their own ids), so this is always the entity that was really appended.
+ */
+function landed(kind: EntityKind, id: string | undefined, label: string): void {
+  if (id) revealEntity(kind, id);
+  toast({ title: `${label} added` });
+}
+
+/** The id of the last entity of `kind` in the document — i.e. the one just appended. */
+function lastId(
+  kind: 'connector' | 'collider' | 'ivaSeat' | 'light' | 'kitten',
+): string | undefined {
+  const part = $part.get();
+  const list =
+    kind === 'connector'
+      ? part.connectors
+      : kind === 'collider'
+        ? part.colliders
+        : kind === 'ivaSeat'
+          ? part.ivaSeats
+          : kind === 'light'
+            ? part.lights
+            : part.kittens;
+  return list[list.length - 1]?.id;
 }
 
 const colliderCommands: Command[] = COLLIDER_SHAPES.flatMap((shape) => [
@@ -53,6 +85,7 @@ const colliderCommands: Command[] = COLLIDER_SHAPES.flatMap((shape) => [
     run: () => {
       ensureBuildMode();
       addCollider(shape);
+      landed('collider', lastId('collider'), 'Collider');
     },
   },
   {
@@ -83,8 +116,7 @@ const lightCommands: Command[] = (['Spot', 'Point'] as LightType[]).map((type) =
     // is authored from the SubPart Data dialog, where the owner template is unambiguous.
     // `addLight` selects what it added (like every other add*), so only the reveal is left.
     addLight(null, { type });
-    const lights = $part.get().lights;
-    revealEntity('light', lights[lights.length - 1].id);
+    landed('light', lastId('light'), 'Light');
   },
 }));
 
@@ -97,6 +129,7 @@ const kittenCommands: Command[] = KITTEN_KINDS.map((kind) => ({
   run: () => {
     ensureBuildMode();
     addKitten(kind);
+    landed('kitten', lastId('kitten'), 'Kitten');
   },
 }));
 
@@ -135,6 +168,7 @@ export const ADD_COMMANDS: Command[] = [
     run: () => {
       ensureBuildMode();
       addConnector();
+      landed('connector', lastId('connector'), 'Connector');
     },
   },
   ...colliderCommands,
@@ -149,6 +183,7 @@ export const ADD_COMMANDS: Command[] = [
       // One kind of seat, so no submenu: it lands at the origin looking +X (KSA's own
       // <IVASeat> defaults) and the inspector aims it.
       addIvaSeat();
+      landed('ivaSeat', lastId('ivaSeat'), 'IVA Seat');
     },
   },
   ...lightCommands,
@@ -188,8 +223,11 @@ export const ADD_COMMANDS: Command[] = [
     title: 'Define Engine…',
     menuPath: 'Add',
     keywords: 'engine rocket combustor nozzle thrust',
-    // The Engine-mode jump keeps the designer's retained engine entry (§2.4).
-    run: () => enterEngineMode(),
+    // The Engine-mode jump keeps the designer's retained engine entry (§2.4). The payload
+    // asks the designer to open on its NEW-engine picker rather than the retained scope
+    // (design §6.4); the interim engine host has no `onEnter` hook, so it is accepted and
+    // ignored until P7 builds the picker.
+    run: () => setMode('engine', { defineNew: true }),
   },
 ];
 
@@ -212,6 +250,8 @@ export function customMeshInstanceCommands(): Command[] {
       run: () => {
         ensureBuildMode();
         addSubPart(mesh.subPartId);
+        const placements = $part.get().placements;
+        landed('subpart', placements[placements.length - 1]?.instanceId, 'SubPart');
       },
     }));
 }

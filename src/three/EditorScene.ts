@@ -80,6 +80,7 @@ import {
   $toolMode,
   aimIvaSeat,
   clearSelection,
+  duplicateSelected,
   pushUndo,
   revealEntity,
   addCollider,
@@ -156,6 +157,9 @@ import {
   $gizmoDragging,
   $grids,
   $hideInterior,
+  $kindVisibility,
+  isKindVisible,
+  kindVisibility,
 } from '../state/viewStore';
 import { computeSelectionBounds, computeVisibleWorldBounds } from '../measure/bounds';
 import { resolveInternal } from '../ksa/modExport';
@@ -250,8 +254,12 @@ export class EditorScene {
   /** Per-SubPart starting transforms captured at the start of a bulk gizmo drag. */
   private bulkSnapshot: {
     centroid: Vec3;
+    /** The pivot's POSITION when the drag began — the translate delta's origin. */
+    startPos: THREE.Vector3;
     /** The pivot's orientation when the drag began (see {@link beginBulkDrag}). */
     startQuat: THREE.Quaternion;
+    /** The pivot's SCALE when the drag began — the scale factor's denominator. */
+    startScale: THREE.Vector3;
     items: SelectedTransformRef[];
   } | null = null;
   /**
@@ -361,6 +369,7 @@ export class EditorScene {
         const layerId = refLayerId(part, { kind, id: selected.id });
         if (isLayerLocked(layerId)) return;
         if (!isLayerVisible(layerId)) return; // three.js does not skip invisible objects during raycasting
+        if (!this.isKindDisplayed(kind)) return; // …nor kinds hidden by View ▸ Display Filters
         // Remember WHICH visual of a multi-instance entity was clicked, so the gizmo (and,
         // for a light, the inspector's part-frame fields) edit through that instance's frame.
         if (kind === 'collider') setColliderEditContext(selected.id, selected.instanceIndex ?? 0);
@@ -386,6 +395,10 @@ export class EditorScene {
           pushUndo(target?.ref.channel === 'fx' ? 'plume FX' : 'exhaust', target?.nozzle.id ?? '');
           return;
         }
+        // ⌥ at drag start duplicates FIRST and drags the copies, as ONE undo step labeled
+        // 'duplicate' — so the normal move/rotate/scale push below is deliberately skipped
+        // (design-build-mode.md §5.1). Streaming per-frame writes proceed as normal.
+        if (this.beginDuplicateDrag()) return;
         const mode = $toolMode.get();
         const refs = selectedTransformRefs();
         // A seat has no size — KSA has no seat size field, so `assignIvaSeat` pins scale to
@@ -586,6 +599,8 @@ export class EditorScene {
     this.sub($selectionHighlight, () => this.updateSelection());
     this.sub($layerView, () => this.applyLayerView());
     this.sub($hideInterior, () => this.applyLayerView());
+    // View ▸ Display Filters composes into the same single visibility writer.
+    this.sub($kindVisibility, () => this.applyLayerView());
     // $effectiveToolMode, not $toolMode: exhaust placement clamps Scale away (a nozzle
     // placement has nothing to scale), and the toolbar reads the same computed so the
     // displayed tool always matches the tool a drag performs.
@@ -902,10 +917,16 @@ export class EditorScene {
    * visibility (eye toggle) and opacity (fade slider). Note: three.js does NOT skip
    * invisible objects during raycasting, so the `onSelect` callback guards against
    * hidden/non-active-layer hits explicitly.
+   *
+   * **View ▸ Display Filters** composes in HERE (design-build-mode.md §5.4): a group draws
+   * iff its layer is visible AND its kind is not filtered off. Same discipline as "hide
+   * interior" — this method stays the single writer of `group.visible`, so the two systems
+   * can never fight over it.
    */
   private applyLayerView(): void {
     const part = $part.get();
     const view = $layerView.get();
+    const kinds = kindVisibility();
     // "Hide interior" previews KSA's OUTSIDE-IVA render gate (`!Template.Internal`), so it
     // composes with the layer's own visibility instead of overwriting it: a mesh draws iff
     // its layer is visible AND the toggle doesn't hide it. This is the ONLY writer of
@@ -926,14 +947,14 @@ export class EditorScene {
       const obj = this.connectorObjects.get(c.id);
       if (obj) {
         const lv = layerViewState(view, c.layerId);
-        obj.group.visible = lv.visible;
+        obj.group.visible = lv.visible && kinds.connector;
         obj.setLayerOpacity(lv.opacity);
       }
     }
     for (const c of part.colliders) {
       const lv = layerViewState(view, c.layerId);
       for (const obj of this.colliderObjects.get(c.id) ?? []) {
-        obj.group.visible = lv.visible;
+        obj.group.visible = lv.visible && kinds.collider;
         obj.setLayerOpacity(lv.opacity);
       }
     }
@@ -944,14 +965,14 @@ export class EditorScene {
       const obj = this.seatObjects.get(s.id);
       if (obj) {
         const lv = layerViewState(view, s.layerId);
-        obj.group.visible = lv.visible && !inSeatView;
+        obj.group.visible = lv.visible && kinds.ivaSeat && !inSeatView;
         obj.setLayerOpacity(lv.opacity);
       }
     }
     for (const l of part.lights) {
       const lv = layerViewState(view, l.layerId);
       for (const obj of this.lightObjects.get(l.id) ?? []) {
-        obj.group.visible = lv.visible;
+        obj.group.visible = lv.visible && kinds.light;
         obj.setLayerOpacity(lv.opacity);
       }
     }
@@ -964,10 +985,14 @@ export class EditorScene {
       const obj = this.kittenObjects.get(k.id);
       if (obj) {
         const lv = layerViewState(view, k.layerId);
-        obj.group.visible = lv.visible;
+        obj.group.visible = lv.visible && kinds.kitten;
         obj.setLayerOpacity(lv.opacity);
       }
     }
+    // Aids are not layer citizens (they never touch the document), so the `aid` filter is
+    // enforced by the two overlay layers that own them.
+    this.measurements.setAidsVisible(kinds.aid);
+    this.containers.setVisible(kinds.aid);
   }
 
   /** Connectors build synchronously (cube + arrow), so reconciliation is simple. */
@@ -1218,7 +1243,8 @@ export class EditorScene {
     for (const light of part.lights) {
       const objs = this.lightObjects.get(light.id);
       if (!objs) continue;
-      const layerVisible = layerViewState(view, light.layerId).visible;
+      // …AND the Lights display filter: a filtered-off light shows no shells either.
+      const layerVisible = layerViewState(view, light.layerId).visible && isKindVisible('light');
       const context = this.lightContextIndex(light.id, objs.length);
       objs.forEach((obj, i) => {
         const wanted =
@@ -1260,7 +1286,7 @@ export class EditorScene {
     part.lights.forEach((light, li) => {
       const objs = this.lightObjects.get(light.id);
       if (!objs) return;
-      const layerVisible = layerViewState(view, light.layerId).visible;
+      const layerVisible = layerViewState(view, light.layerId).visible && isKindVisible('light');
       const allowed = on && layerVisible ? budget.perLight[li] : 0;
       enabled += allowed;
       objs.forEach((obj, i) => obj.setPreview(i < allowed));
@@ -2026,21 +2052,66 @@ export class EditorScene {
     updateNozzleAt(ref, isFx ? { fxExhaustLocation: local } : { exhaustLocation: local });
   }
 
-  /** Snapshots all selected entities' transforms at the start of a bulk gizmo drag. */
-  private beginBulkDrag(): void {
+  /**
+   * Snapshots all selected entities' transforms at the start of a bulk gizmo drag.
+   *
+   * `force` re-routes a SINGLE-entity drag through the bulk path too, which is what the
+   * ⌥-duplicate gesture needs: the freshly duplicated entity's scene object may not exist
+   * yet (SubPart geometry builds asynchronously), so the gizmo drags {@link pivot} and the
+   * delta is fanned out to the copies by id — see {@link beginDuplicateDrag}.
+   */
+  private beginBulkDrag(force = false): void {
     const refs = liftedSelectionRefs();
-    if (refs.length <= 1) {
+    if (refs.length === 0 || (refs.length === 1 && !force)) {
       this.bulkSnapshot = null;
       return;
     }
     this.bulkSnapshot = {
       centroid: centroidOf(refs.map((r) => r.transform.position)),
-      // The pivot's orientation AT DRAG START. Identity in world space; the primary's
-      // orientation in local space — in which case the gizmo's live quaternion is
-      // `start · Δlocal`, so the applied delta is `live · start⁻¹` either way.
+      // The pivot's frame AT DRAG START. `TransformControls` writes `start · Δ` into the
+      // attached object every move, so every delta below is taken against these three —
+      // which is also what lets the duplicate drag seed the pivot from whatever object the
+      // gizmo actually grabbed (identity/centroid in the ordinary multi-select case).
+      startPos: this.pivot.position.clone(),
       startQuat: this.pivot.quaternion.clone(),
+      startScale: this.pivot.scale.clone(),
       items: refs,
     };
+  }
+
+  /**
+   * ⌥ held at gizmo drag start ⇒ **duplicate, then drag the copies** (design-build-mode.md
+   * §5.1; foundation §14.2, LOCKED #7). Returns true when it took over the gesture.
+   *
+   * ONE undo step for the whole gesture: `duplicateSelected` pushes `'duplicate'` and the
+   * caller then SKIPS its own `'move'`/`'rotate'`/`'scale'` push, so a single ⌘Z removes the
+   * copies entirely (DCC convention) instead of leaving them parked on their sources.
+   *
+   * Mechanics: the copies land exactly on their sources (`offset: false` — the drag IS the
+   * offset) and become the selection, but their scene objects may not be built yet, so the
+   * gizmo is re-seated onto {@link pivot} carrying the grabbed object's exact local frame.
+   * `TransformControls` captured its `_positionStart`/`_quaternionStart`/`_scaleStart` from
+   * that same object one statement earlier, so the swap is invisible to the drag math, and
+   * `applyBulkFromPivot` fans the delta out to the copies by id every frame.
+   */
+  private beginDuplicateDrag(): boolean {
+    if (!$heldModifiers.get().alt) return false;
+    // Pose and exhaust proxies are not the selection — ⌥ means nothing there.
+    const grabbed = this.attachedObject;
+    if (!grabbed || grabbed === this.poseProxy || grabbed === this.engineProxy) return false;
+    if ($selection.get().length === 0) return false;
+
+    duplicateSelected({ offset: false });
+
+    if (grabbed !== this.pivot) {
+      this.pivot.position.copy(grabbed.position);
+      this.pivot.quaternion.copy(grabbed.quaternion);
+      this.pivot.scale.copy(grabbed.scale);
+      this.pivot.updateMatrixWorld(true);
+      this.attachGizmo(this.pivot);
+    }
+    this.beginBulkDrag(true);
+    return true;
   }
 
   /** Applies the pivot's delta (per the active tool mode) to every snapshotted entity. */
@@ -2051,9 +2122,9 @@ export class EditorScene {
     const updates = snap.items.map(({ kind, id, index, transform: base }) => {
       if (mode === 'translate') {
         const delta = {
-          x: this.pivot.position.x - snap.centroid.x,
-          y: this.pivot.position.y - snap.centroid.y,
-          z: this.pivot.position.z - snap.centroid.z,
+          x: this.pivot.position.x - snap.startPos.x,
+          y: this.pivot.position.y - snap.startPos.y,
+          z: this.pivot.position.z - snap.startPos.z,
         };
         return { kind, id, index, transform: translatedTransform(base, delta) };
       }
@@ -2069,7 +2140,13 @@ export class EditorScene {
           transform: rotatedAroundOriginTransform(base, delta, snap.centroid),
         };
       }
-      const factor = { x: this.pivot.scale.x, y: this.pivot.scale.y, z: this.pivot.scale.z };
+      // RELATIVE to the drag-start scale: the ordinary pivot starts unit-scaled, but a
+      // ⌥-duplicate drag seeds it from the grabbed object, which may not be.
+      const factor = {
+        x: this.pivot.scale.x / snap.startScale.x,
+        y: this.pivot.scale.y / snap.startScale.y,
+        z: this.pivot.scale.z / snap.startScale.z,
+      };
       return {
         kind,
         id,
@@ -2275,7 +2352,6 @@ export class EditorScene {
 
     const eligible = (layerId: string): boolean =>
       isLayerVisible(layerId) && !isLayerLocked(layerId);
-    // TODO(P5B): compose $kindVisibility (View ▸ Display Filters) into this predicate.
     const displayed = (kind: EntityKind): boolean => this.isKindDisplayed(kind);
 
     if (displayed('subpart'))
@@ -2321,11 +2397,15 @@ export class EditorScene {
   }
 
   /**
-   * Seam for P5B's Display Filters: a kind hidden by `$kindVisibility` must be
-   * unmarquee-able, exactly as it is unclickable. Defaults to "everything is displayed".
+   * **View ▸ Display Filters** (design-build-mode.md §5.4): is this kind currently shown?
+   *
+   * The ONE predicate the three enforcement sites share — {@link applyLayerView} (which
+   * composes it into `group.visible`), the click-select guards, and
+   * {@link marqueeBoxes} — so a hidden kind is invisible, unclickable and unmarquee-able by
+   * the same rule a hidden LAYER is. SubParts have no filter and are always displayed.
    */
-  private isKindDisplayed(_kind: EntityKind): boolean {
-    return true;
+  private isKindDisplayed(kind: EntityKind): boolean {
+    return kind === 'subpart' || isKindVisible(kind);
   }
 
   private readonly onPickPointerDown = (e: PointerEvent): void => {

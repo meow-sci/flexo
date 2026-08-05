@@ -3,9 +3,12 @@ import { pushUndo } from './editorStore';
 import {
   $advisories,
   $progress,
+  $statusConfirm,
   $statusMessage,
   clearAdvisory,
   clearStatus,
+  dismissStatusConfirm,
+  requestStatusConfirm,
   setAdvisory,
   STATUS_DURATION,
   status,
@@ -88,6 +91,30 @@ describe('status message channel', () => {
     $statusMessage.get()?.action?.run();
     expect(run).toHaveBeenCalledOnce();
     expect($statusMessage.get()?.notificationId).toBe('n1');
+  });
+});
+
+describe('status confirm channel (foundation §14.3 large-delete strip)', () => {
+  it('takes the message channel and answers exactly once', () => {
+    const onConfirm = vi.fn();
+    status('something earlier');
+    requestStatusConfirm({ label: 'Delete 8 items?', confirmLabel: 'Delete', onConfirm });
+
+    // The question replaces whatever was flashing — one slot, and it is not a queue.
+    expect($statusMessage.get()).toBeNull();
+    expect($statusConfirm.get()?.label).toBe('Delete 8 items?');
+
+    $statusConfirm.get()?.onConfirm();
+    dismissStatusConfirm();
+    expect(onConfirm).toHaveBeenCalledOnce();
+    expect($statusConfirm.get()).toBeNull();
+  });
+
+  it('a newer question replaces an unanswered one', () => {
+    requestStatusConfirm({ label: 'first?', confirmLabel: 'Do it', onConfirm: () => {} });
+    requestStatusConfirm({ label: 'second?', confirmLabel: 'Do it', onConfirm: () => {} });
+    expect($statusConfirm.get()?.label).toBe('second?');
+    dismissStatusConfirm();
   });
 });
 

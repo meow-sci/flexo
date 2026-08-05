@@ -89,6 +89,36 @@ export const $lastStatusMessage = atom<StatusMessage | null>(null);
 /** The armed tool's segment model, or null when no tool/chain session is live. */
 export const $toolStatus = atom<ToolStatus | null>(null);
 
+/**
+ * A confirm-before-destroy question awaiting an answer, rendered by the status bar's
+ * message channel as a kit `InlineConfirmStrip` (foundation §14.3: "confirm (inline strip
+ * or stacked view), stating counts").
+ *
+ * This is the host for confirms raised by a COMMAND rather than by a row — ⌫ on a large
+ * selection has no row to swap, and §10.1 bans stacking a modal over whatever is open. The
+ * strip is in flow at the bottom of the shell, so nothing is overlaid and nothing portals.
+ * A row-level confirm (Outliner, multi panel, Asset Manager) keeps using the strip in place.
+ */
+export interface StatusConfirm {
+  /** The question, counts included — e.g. `Delete 8 selected items?`. */
+  label: string;
+  confirmLabel: string;
+  onConfirm(): void;
+}
+
+export const $statusConfirm = atom<StatusConfirm | null>(null);
+
+/** Raises the confirm question, replacing any unanswered one and clearing the message. */
+export function requestStatusConfirm(confirm: StatusConfirm): void {
+  clearStatus();
+  $statusConfirm.set(confirm);
+}
+
+/** Drops the question unanswered (Cancel, the strip's own 8s timeout, or a superseding one). */
+export function dismissStatusConfirm(): void {
+  if ($statusConfirm.get() !== null) $statusConfirm.set(null);
+}
+
 /** Frames per second, throttled to ~2Hz by the viewport while the FPS counter is on. */
 export const $fpsReport = atom<number | null>(null);
 

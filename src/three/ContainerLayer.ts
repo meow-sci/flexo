@@ -159,6 +159,17 @@ export class ContainerLayer {
     this.viewport.invalidate();
   }
 
+  /**
+   * **View ▸ Display Filters ▸ Measurement Aids** (design-build-mode.md §5.4), written by
+   * `EditorScene.applyLayerView`. Reference containers are the layer's ONLY content, so the
+   * whole group takes the flag. Idempotent.
+   */
+  setVisible(visible: boolean): void {
+    if (this.group.visible === visible) return;
+    this.group.visible = visible;
+    this.refresh(); // re-evaluates the edit gizmo, which must go with the shapes
+  }
+
   private updateContainers(): void {
     const containers = $containers.get();
     const activeId = $activeContainerId.get();
@@ -273,7 +284,8 @@ export class ContainerLayer {
   private updateGizmo(): void {
     const activeId = $activeContainerId.get();
     const c = activeId ? $containers.get().find((x) => x.id === activeId) : undefined;
-    if (!c || c.locked) {
+    // A filtered-off container has no visible shape to grab, so the gizmo goes too.
+    if (!c || c.locked || !this.group.visible) {
       this.detachGizmo();
       return;
     }

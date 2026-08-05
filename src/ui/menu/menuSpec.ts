@@ -53,6 +53,15 @@ const ENVIRONMENT_IDS = [
   'blue_lagoon_night',
 ] as const;
 const KITTEN_IDS = ['hunter', 'polaris', 'banjo'] as const;
+/** `View ▸ Display Filters` order, per design-build-mode.md §5.4. */
+const DISPLAY_FILTER_KINDS = [
+  'connector',
+  'collider',
+  'ivaSeat',
+  'light',
+  'kitten',
+  'aid',
+] as const;
 
 const FILE_MENU: TopMenu = {
   id: 'file',
@@ -238,7 +247,12 @@ const VIEW_MENU: TopMenu = {
     },
     checkbox('view.livePreview'),
     separator,
-    command('view.displayFilters'),
+    {
+      kind: 'submenu',
+      id: 'view.displayFilters',
+      label: 'Display Filters',
+      entries: DISPLAY_FILTER_KINDS.map((kind) => checkbox(`view.displayFilter:${kind}`)),
+    },
     command('view.motionTrails'),
     separator,
     {

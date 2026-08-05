@@ -128,6 +128,14 @@ export class MeasurementLayer {
   private readonly endpointProxy = new THREE.Object3D();
   private gizmoAttached = false;
 
+  /**
+   * **View ▸ Display Filters ▸ Measurement Aids** (design-build-mode.md §5.4), written by
+   * `EditorScene.applyLayerView`. It gates the PLACED measurements only — the selection
+   * bounding box, per-mesh dimensions and the mesh-to-mesh distance are "Measurement
+   * Overlays" with their own View-menu checkboxes, and this group also holds those.
+   */
+  private aidsVisible = true;
+
   constructor(viewport: Viewport, getSelected: () => THREE.Object3D[]) {
     this.viewport = viewport;
     this.getSelected = getSelected;
@@ -150,6 +158,13 @@ export class MeasurementLayer {
     this.unsubs.push($activeMeasurementId.subscribe(() => this.refresh()));
     this.unsubs.push($activeEndpoint.subscribe(() => this.refresh()));
     this.unsubs.push($measureTool.subscribe(() => this.refresh()));
+  }
+
+  /** Shows/hides the placed measurements (see {@link aidsVisible}). Idempotent. */
+  setAidsVisible(visible: boolean): void {
+    if (this.aidsVisible === visible) return;
+    this.aidsVisible = visible;
+    this.refresh();
   }
 
   /**
@@ -314,8 +329,12 @@ export class MeasurementLayer {
       gfx.markerA.scale.setScalar(markerScale);
       gfx.markerB.scale.setScalar(markerScale);
 
+      gfx.line.lines.visible = this.aidsVisible;
+      gfx.markerA.visible = this.aidsVisible;
+      gfx.markerB.visible = this.aidsVisible;
+
       gfx.label.obj.position.set((m.a.x + m.b.x) / 2, (m.a.y + m.b.y) / 2, (m.a.z + m.b.z) / 2);
-      gfx.label.obj.visible = true;
+      gfx.label.obj.visible = this.aidsVisible;
       const len = vecDistance(m.a, m.b);
       gfx.label.el.textContent =
         m.axisLock === 'none'
@@ -331,7 +350,8 @@ export class MeasurementLayer {
     const m = activeId ? $measurements.get().find((x) => x.id === activeId) : undefined;
     const end = $activeEndpoint.get();
 
-    if (!m || m.locked || $measureTool.get() !== 'none') {
+    // A filtered-off measurement has no visible endpoints to grab, so the gizmo goes too.
+    if (!m || m.locked || !this.aidsVisible || $measureTool.get() !== 'none') {
       this.detachGizmo();
       return;
     }

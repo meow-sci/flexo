@@ -4,12 +4,15 @@ import {
   $grids,
   $hideInterior,
   frameCamera,
+  isKindVisible,
   resetCamera,
   setGrid,
   setHideInterior,
   snapCamera,
+  toggleKindVisible,
   type Axis,
   type CameraDir,
+  type VisibilityKind,
 } from '../../state/viewStore';
 import { $lighting, ENVIRONMENT_PRESETS, setLighting } from '../../state/lightingStore';
 import {
@@ -63,6 +66,21 @@ const BOUNDS_MODES: { id: BoundsMode; label: string }[] = [
 
 const UNITS: MeasurementUnit[] = ['m', 'cm', 'mm'];
 
+/**
+ * **View ▸ Display Filters ▸** (design-build-mode.md §5.4, area addition) — per-kind
+ * view-only visibility, in the design's order. SubParts are deliberately absent: hiding the
+ * geometry you are building is what layers are for; the filter's value is the connectors and
+ * colliders that get mixed INTO ordinary layers, where a layer eye cannot separate them.
+ */
+const DISPLAY_FILTERS: { kind: VisibilityKind; label: string }[] = [
+  { kind: 'connector', label: 'Connectors' },
+  { kind: 'collider', label: 'Colliders' },
+  { kind: 'ivaSeat', label: 'IVA Seats' },
+  { kind: 'light', label: 'Lights' },
+  { kind: 'kitten', label: 'Kittens' },
+  { kind: 'aid', label: 'Measurement Aids' },
+];
+
 const cameraSnapCommands: Command[] = CAMERA_DIRS.map(({ dir, label }) => ({
   id: `view.cameraSnap:${dir}`,
   title: label,
@@ -114,6 +132,18 @@ const boundsModeCommands: Command[] = BOUNDS_MODES.map(({ id, label }) => ({
   checked: () => $measurementSettings.get().boundsMode === id,
   keepOpen: true,
   run: () => setMeasurementSettings({ boundsMode: id }),
+}));
+
+const displayFilterCommands: Command[] = DISPLAY_FILTERS.map(({ kind, label }) => ({
+  id: `view.displayFilter:${kind}`,
+  title: label,
+  menuPath: 'View ▸ Display Filters',
+  keywords: `display filter show hide ${label.toLowerCase()}`,
+  // Read through the merge helper, never the raw atom — a stored object written before a
+  // kind existed replays verbatim and would read as undefined (see kindVisibility()).
+  checked: () => isKindVisible(kind),
+  keepOpen: true,
+  run: () => toggleKindVisible(kind),
 }));
 
 const unitCommands: Command[] = UNITS.map((unit) => ({
@@ -200,15 +230,7 @@ export const VIEW_COMMANDS: Command[] = [
     keepOpen: true,
     run: () => setLightSettings({ livePreview: !lightSettings().livePreview }),
   },
-  {
-    id: 'view.displayFilters',
-    title: 'Display Filters',
-    menuPath: 'View',
-    keywords: 'display filter show hide entity kinds',
-    enabled: () => false,
-    disabledReason: 'Per-kind display filters arrive with the Build-mode rework',
-    run: () => {},
-  },
+  ...displayFilterCommands,
   {
     id: 'view.motionTrails',
     title: 'Motion Trails',

@@ -9,8 +9,8 @@ import { ExportDialog } from '../ExportDialog';
 import { PartDataDialog } from '../PartDataDialog';
 import { SettingsDialog, type SettingsDialogParams } from '../SettingsDialog';
 import { ScaleEverythingDialog } from '../ScaleEverythingDialog';
-import { SubPartPopup } from '../SubPartBrowser';
-import { PartPopup } from '../PartBrowser';
+import { SubPartBrowserDialog } from '../build/SubPartBrowserDialog';
+import { PartBrowserDialog } from '../build/PartBrowserDialog';
 import { CustomAssetsModal } from '../CustomAssetsModal';
 import { CustomTextureDialog } from '../CustomTextureDialog';
 import { CreateMeshDialog } from '../CreateMeshDialog';
@@ -74,9 +74,9 @@ export function DialogRoot() {
     // Both browsers restart their session (search, splits, selection) on every open —
     // that comes free from being unmounted while closed.
     case 'subpart-browser':
-      return <SubPartPopup open onOpenChange={dismiss} />;
+      return <SubPartBrowserDialog open onOpenChange={dismiss} />;
     case 'part-browser':
-      return <PartPopup open onOpenChange={dismiss} />;
+      return <PartBrowserDialog open onOpenChange={dismiss} />;
     case 'custom-assets':
       return <CustomAssetsModal isOpen onOpenChange={dismiss} />;
     // These three self-close via `onClose` rather than react-aria's `onOpenChange`.

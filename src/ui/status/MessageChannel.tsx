@@ -1,7 +1,12 @@
 import { useStore } from '@nanostores/react';
-import { Button, cn } from '../kit';
+import { Button, InlineConfirmStrip, cn } from '../kit';
 import { SEVERITY_DOT, SEVERITY_TEXT } from './statusTokens';
-import { $lastStatusMessage, $statusMessage } from '../../state/statusStore';
+import {
+  $lastStatusMessage,
+  $statusConfirm,
+  $statusMessage,
+  dismissStatusConfirm,
+} from '../../state/statusStore';
 import { openNotificationCenter } from '../../state/notificationStore';
 
 /**
@@ -18,6 +23,7 @@ import { openNotificationCenter } from '../../state/notificationStore';
  */
 
 export function MessageChannel() {
+  const confirm = useStore($statusConfirm);
   const message = useStore($statusMessage);
   // The expired message keeps RENDERING while it fades out, so the text comes from the
   // store's retained copy and only the OPACITY is keyed on `message` being live. Nothing
@@ -27,6 +33,25 @@ export function MessageChannel() {
 
   const action = shown?.action;
   const actionDisabled = action?.disabled?.() === true;
+
+  // A command-raised confirm TAKES the channel while it is unanswered (foundation §14.3) —
+  // the strip is remounted per question, so its 8s auto-cancel restarts each time.
+  if (confirm) {
+    return (
+      <div role="status" className="flex min-w-0 flex-1 items-center justify-center px-2">
+        <InlineConfirmStrip
+          size="xs"
+          label={confirm.label}
+          confirmLabel={confirm.confirmLabel}
+          onConfirm={() => {
+            dismissStatusConfirm();
+            confirm.onConfirm();
+          }}
+          onCancel={dismissStatusConfirm}
+        />
+      </div>
+    );
+  }
 
   return (
     <div

@@ -40,7 +40,7 @@ export function GlobalToastRegion() {
   return (
     <ToastRegion
       queue={toastQueue}
-      className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 outline-none"
+      className="fixed bottom-8 right-4 z-[100] flex flex-col gap-2 outline-none"
     >
       {({ toast }) => (
         <AriaToast toast={toast} className={toastStyle({ variant: toast.content.variant })}>

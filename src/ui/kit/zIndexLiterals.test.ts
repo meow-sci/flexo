@@ -31,7 +31,6 @@ const ALLOWLIST = [
   'src/ui/ImportReportCard.tsx',
   'src/ui/LoadProgress.tsx',
   'src/ui/ManageTexturesPanel.tsx',
-  'src/ui/RightPanel.tsx',
   'src/ui/SeatViewBar.tsx',
   'src/ui/ViewportDropZone.tsx',
   'src/ui/chain/ChainPalette.tsx',

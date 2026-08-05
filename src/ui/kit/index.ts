@@ -34,6 +34,7 @@ export {
 } from './Menu';
 export { Popover, PopoverDialog } from './Popover';
 export { Modal, Dialog, DialogHeader } from './Modal';
+export { Sheet, type SheetProps } from './Sheet';
 export { ConfirmDialog, type ConfirmDialogProps } from './ConfirmDialog';
 export {
   DialogViewStack,

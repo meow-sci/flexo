@@ -133,7 +133,8 @@ toggled; stale entries for deleted layers are harmless.
 
 ## UI — sidebar Layers popover
 
-A small toolbar above the inspector surface (`src/ui/RightPanel.tsx`) holds the
+A small toolbar above the inspector surface (the docked right sidebar,
+`src/ui/shell/Sidebar.tsx` → `src/ui/InspectorContent.tsx`) holds the
 **Layers** button (`LayersButton.tsx`), which opens a popover with `LayersPanel.tsx`:
 
 - A name input + Add button creates a layer (becomes active).

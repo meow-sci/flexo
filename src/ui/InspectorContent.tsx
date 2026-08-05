@@ -14,7 +14,7 @@ import { $inspectorMode } from '../state/uiStore';
  *    list (all listed layers, sectioned).
  *  - 'anim': the full-sidebar Animation editor (the Assets list is hidden; parts are
  *    reachable via the Mesh Picker dialog in the {@link AnimToolbar}).
- * Shared between the desktop {@link RightPanel} and the mobile bottom-sheet inspector.
+ * Shared between the desktop right {@link Sidebar} and the mobile bottom-sheet inspector.
  *
  * The selected-asset {@link TransformInspector} is NOT part of this stack on desktop
  * — it floats over the workspace ({@link FloatingInspector}). The phone sheet has no

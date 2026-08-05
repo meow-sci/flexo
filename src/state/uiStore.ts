@@ -5,6 +5,13 @@ import { persistentJSON } from '@nanostores/persistent';
  * Persistent UI/layout state (nanostores → localStorage). These are end-user
  * presentation preferences that should survive reloads, kept out of the editor
  * document state. React reads via `useStore`.
+ *
+ * **Sunset notice.** Everything left in this module is v1 state with a named v2
+ * successor; nothing new belongs here. The docked shell's sidebar width/collapse moved
+ * to `src/state/layoutStore.ts` (`flexo:layout`) — the v1 keys `flexo:inspectorVisible`
+ * and `flexo:inspectorWidth` are simply ABANDONED, never migrated (constitution;
+ * design-system-services.md §9). Reset Everything (`localStorage.clear()`) still wipes
+ * them.
  */
 
 /**
@@ -13,30 +20,14 @@ import { persistentJSON } from '@nanostores/persistent';
  * selection, it resets to 'assets' on reload. The Assets toolbar's "Anim"/"Engine"
  * buttons switch in; each editor's toolbar "Close" switches back. In a full-sidebar
  * mode the Assets list is hidden and reachable only via the Mesh Picker dialog.
+ *
+ * Replaced by `modeStore.$mode` in the mode-machine phase (foundation §2, §17 step 4).
  */
 export type InspectorMode = 'assets' | 'anim' | 'engine';
 export const $inspectorMode = atom<InspectorMode>('assets');
 
 export function setInspectorMode(mode: InspectorMode): void {
   $inspectorMode.set(mode);
-}
-
-/** Whether the right-side inspector panel is shown (vs. collapsed to an icon). */
-export const $inspectorVisible = persistentJSON<boolean>('flexo:inspectorVisible', true);
-
-/** Width of the inspector panel in pixels (set by the left-edge drag handle). */
-export const $inspectorWidth = persistentJSON<number>('flexo:inspectorWidth', 450);
-
-export const INSPECTOR_MIN_WIDTH = 240;
-export const INSPECTOR_MAX_WIDTH = 640;
-
-export function setInspectorVisible(visible: boolean): void {
-  $inspectorVisible.set(visible);
-}
-
-export function setInspectorWidth(width: number): void {
-  const clamped = Math.max(INSPECTOR_MIN_WIDTH, Math.min(INSPECTOR_MAX_WIDTH, width));
-  $inspectorWidth.set(clamped);
 }
 
 /** Top-left viewport position (px) of the floating selection inspector. */
@@ -50,6 +41,8 @@ export interface FloatPosition {
  * panel that hovers over the 3D workspace). `null` = the default anchor: bottom-left,
  * 0.25rem off both edges. Once the user drags the window it stores explicit top-left
  * px. Persisted at app level and cleared by the global data reset (localStorage.clear).
+ *
+ * Replaced by `layoutStore.$layout.float` in the FloatingWindow phase (§17 step 5).
  */
 export const $inspectorFloatPos = persistentJSON<FloatPosition | null>(
   'flexo:inspectorFloatPos',
@@ -65,6 +58,8 @@ export function setInspectorFloatPos(pos: FloatPosition | null): void {
  * over the workspace while the Animation editor is open). `null` = the default anchor:
  * top-center, just below the main toolbar. Stores explicit top-left px once dragged.
  * Persisted at app level and cleared by the global data reset (localStorage.clear).
+ *
+ * Replaced by `layoutStore.$layout.float` in the FloatingWindow phase (§17 step 5).
  */
 export const $animPreviewFloatPos = persistentJSON<FloatPosition | null>(
   'flexo:animPreviewFloatPos',

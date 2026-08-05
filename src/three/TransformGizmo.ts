@@ -49,6 +49,16 @@ export class TransformGizmo {
     this.controls.setMode(mode);
   }
 
+  /**
+   * World- vs local-axis handles ({@link import('../state/editorStore').$gizmoSpace},
+   * design-build-mode.md §4.2). `TransformControls` supports this natively: `local` orients
+   * the handles by the attached object's own world quaternion. (three ignores it in scale
+   * mode, which always operates on the object's local axes.)
+   */
+  setSpace(space: 'world' | 'local'): void {
+    this.controls.setSpace(space);
+  }
+
   setSnap(snap: SnapSettings): void {
     this.controls.setTranslationSnap(snap.translate ?? null);
     this.controls.setRotationSnap(

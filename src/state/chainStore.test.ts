@@ -265,6 +265,33 @@ describe('removeChainOp / moveChainOp', () => {
     store.moveChainOp('nope', 1);
     expect(order()).toEqual([first, second, third]);
   });
+
+  it('moveChainOpTo re-inserts at an absolute index (drag-reorder)', () => {
+    const first = store.addChainOp('translate');
+    const second = store.addChainOp('rotate');
+    const third = store.addChainOp('scale');
+    const order = () => sessionOps().map((op) => op.id);
+
+    // first → last
+    store.moveChainOpTo(first, 2);
+    expect(order()).toEqual([second, third, first]);
+
+    // middle → 0
+    store.moveChainOpTo(third, 0);
+    expect(order()).toEqual([third, second, first]);
+
+    // out of range clamps to the ends, in both directions
+    store.moveChainOpTo(third, 99);
+    expect(order()).toEqual([second, first, third]);
+    store.moveChainOpTo(third, -5);
+    expect(order()).toEqual([third, second, first]);
+
+    // unchanged index and unknown id are both no-ops
+    store.moveChainOpTo(third, 0);
+    expect(order()).toEqual([third, second, first]);
+    store.moveChainOpTo('nope', 2);
+    expect(order()).toEqual([third, second, first]);
+  });
 });
 
 describe('persisted per-kind defaults', () => {

@@ -9,6 +9,7 @@ import { ToolSegment } from './ToolSegment';
 import { SelectionReadout } from './SelectionReadout';
 import { ProgressSegment } from './ProgressSegment';
 import { TransformChips } from './TransformChips';
+import { SnapChip } from './SnapChip';
 import { AdvisoryChips } from './AdvisoryChips';
 import { ModifierHints } from './ModifierHints';
 import { FpsSegment } from './FpsSegment';
@@ -56,8 +57,7 @@ export function StatusBar() {
         <AdvisoryChips />
         <ModifierHints />
         <TransformChips />
-        {/* segment 9: snap chip — the Build-mode phase, which creates `snapStore`. This is
-            the ONE segment of the design's eleven that Phase 3 deliberately leaves empty. */}
+        <SnapChip />
         <FpsSegment />
         <NotificationBell />
       </div>

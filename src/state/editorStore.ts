@@ -310,6 +310,12 @@ export interface PartClipboard {
   kittens: KittenInstance[];
   colliders: PartCollider[];
   ivaSeats: IvaSeat[];
+  /**
+   * Lights copy like every other kind (design-build-mode.md §7.2). v1 left them out of the
+   * clipboard entirely, so ⌘C/⌘V silently dropped them while Duplicate kept them — the
+   * census's pain 5.
+   */
+  lights: PartLight[];
 }
 export const $clipboard = atom<PartClipboard | null>(null);
 /** True once something has been copied — drives enable/disable of paste affordances. */
@@ -321,7 +327,35 @@ export const $hasClipboard = computed($clipboard, (c) => c != null);
  */
 export const $activeLayerId = atom<string>(DEFAULT_LAYER_ID);
 export const $toolMode = atom<ToolMode>('translate');
+/**
+ * Which frame the gizmo's handles live in (design-build-mode.md §4.2 — a DECISION):
+ * `'world'` = axis-aligned handles (v1's only, invisible, behavior); `'local'` = the
+ * entity's own axes, and for a multi-selection the PRIMARY (last-selected) entity's
+ * orientation on the centroid pivot.
+ *
+ * Keyboard nudge/rotate deliberately stay world-axis regardless — see
+ * `src/three/selectionTransform.ts`. Persisted view state, **never undoable**.
+ */
+export type GizmoSpace = 'world' | 'local';
+export const $gizmoSpace = persistentJSON<GizmoSpace>('flexo:gizmoSpace', 'world');
 export const $snap = atom<SnapSettings>({});
+/**
+ * Which per-placement visual of a SubPart-owned COLLIDER the gizmo, the numeric fields and
+ * the keyboard tools all edit through — collider id → instance index (default 0, readers
+ * clamp to the owner's placement count). The exact analogue of {@link $lightEditContext},
+ * and it lives here for the same reason: a private map inside `EditorScene` (v1) could not
+ * be read by `selectionTransform`, which is how keyboard nudge and the gizmo ended up
+ * lifting owned entities through different frames (census pain 4). Ephemeral view state:
+ * never serialized, deliberately outside undo.
+ */
+export const $colliderEditContext = atom<Readonly<Record<string, number>>>({});
+
+/** Records the collider instance last clicked in 3D (see {@link $colliderEditContext}). */
+export function setColliderEditContext(colliderId: string, instanceIndex: number): void {
+  const current = $colliderEditContext.get();
+  if (current[colliderId] === instanceIndex) return;
+  $colliderEditContext.set({ ...current, [colliderId]: instanceIndex });
+}
 // Nudge/rotate tool preferences. Global (not per-project) and persisted to
 // localStorage so they survive reloads and apply across every project; cleared by
 // "Reset Everything" (which wipes localStorage). React reads via `useStore`.
@@ -1441,6 +1475,18 @@ export function setConnectorCapabilities(
  * clears the selection.
  */
 export function removeSelected(): void {
+  deleteSelection(null);
+}
+
+/**
+ * The delete body, shared by {@link removeSelected} and {@link cutSelected}.
+ *
+ * `label` overrides the computed `'delete …'` undo description (Cut passes `'cut'`) while
+ * keeping the same description-detail ladder. Factored out so a cut pushes exactly ONE
+ * undo step — `copySelected()` followed by `removeSelected()` would push a `'delete'` the
+ * user never asked for and make ⌘Z look like it only half-worked.
+ */
+function deleteSelection(label: string | null): void {
   const part0 = $part.get();
   const sub = selectionIndicesOf(part0, 'subpart');
   const con = selectionIndicesOf(part0, 'connector');
@@ -1507,7 +1553,7 @@ export function removeSelected(): void {
         ]
           .filter(Boolean)
           .join(', ');
-  pushUndo(description, detail);
+  pushUndo(label ?? description, detail);
 
   const part = clone(part0);
   // Splice each array in descending order so earlier indices stay valid.
@@ -1561,8 +1607,35 @@ export function removePlacement(index: number): void {
   clampSelection(); // id refs survive the splice; only the removed one has to go
 }
 
-/** Duplicates every selected entity (SubParts, connectors, colliders, seats, lights, kittens) and selects the copies. */
-export function duplicateSelected(): void {
+/** No offset — the shared "duplicate lands exactly on its source" vector. */
+const NO_OFFSET: Vec3 = { x: 0, y: 0, z: 0 };
+
+/**
+ * How far a duplicate lands from its source: one nudge step along the ACTIVE nudge axis
+ * (design-build-mode.md §7.1, LOCKED #7 — "copies never invisibly stacked"). Reusing the
+ * nudge posture means the offset is already visible in the status bar's nudge chip and
+ * already adjustable with `⇧←`/`⇧→`, instead of being a second hidden constant.
+ */
+function duplicateOffset(): Vec3 {
+  const step = $nudgeStep.get();
+  const axis = $nudgeAxis.get();
+  return { x: axis === 'x' ? step : 0, y: axis === 'y' ? step : 0, z: axis === 'z' ? step : 0 };
+}
+
+function shifted(p: Vec3, by: Vec3): Vec3 {
+  return { x: p.x + by.x, y: p.y + by.y, z: p.z + by.z };
+}
+
+/**
+ * Duplicates every selected entity (SubParts, connectors, colliders, seats, lights, kittens)
+ * and selects the copies.
+ *
+ * Copies land one nudge step off their source by default ({@link duplicateOffset}). ⌥-drag
+ * duplicate passes `{ offset: false }` — the drag itself is the offset, and nudging the
+ * copies first would make the gesture start from the wrong place.
+ */
+export function duplicateSelected(options?: { offset?: boolean }): void {
+  const by = options?.offset === false ? NO_OFFSET : duplicateOffset();
   const part0 = $part.get();
   const sub = selectionIndicesOf(part0, 'subpart');
   const con = selectionIndicesOf(part0, 'connector');
@@ -1602,7 +1675,7 @@ export function duplicateSelected(): void {
     part.placements.push({
       instanceId,
       subPartTemplateId: src.subPartTemplateId,
-      position: { ...src.position },
+      position: shifted(src.position, by),
       rotation: { ...src.rotation },
       scale: { ...src.scale },
       layerId: src.layerId,
@@ -1615,7 +1688,7 @@ export function duplicateSelected(): void {
     const id = nextConnectorId(part);
     part.connectors.push({
       id,
-      position: { ...src.position },
+      position: shifted(src.position, by),
       rotation: { ...src.rotation },
       scale: { ...src.scale },
       flags: [...src.flags],
@@ -1632,7 +1705,7 @@ export function duplicateSelected(): void {
     part.kittens.push({
       id,
       kind: src.kind,
-      position: { ...src.position },
+      position: shifted(src.position, by),
       rotation: { ...src.rotation },
       scale: { ...src.scale },
       layerId: KITTEN_LAYER_ID,
@@ -1644,7 +1717,7 @@ export function duplicateSelected(): void {
     if (!src) continue;
     // Keeps the source's layer, like a duplicated placement or connector.
     const id = nextColliderId(part);
-    part.colliders.push({ ...structuredClone(src), id });
+    part.colliders.push({ ...structuredClone(src), id, position: shifted(src.position, by) });
     copies.push({ kind: 'collider', id });
   }
   // Copies land at the END of the seat list, i.e. last in the IVA cycle order.
@@ -1652,7 +1725,12 @@ export function duplicateSelected(): void {
     const src = part.ivaSeats[i];
     if (!src) continue;
     const id = nextIvaSeatId(part);
-    part.ivaSeats.push({ ...structuredClone(src), id, layerId: IVA_SEAT_LAYER_ID });
+    part.ivaSeats.push({
+      ...structuredClone(src),
+      id,
+      position: shifted(src.position, by),
+      layerId: IVA_SEAT_LAYER_ID,
+    });
     copies.push({ kind: 'ivaSeat', id });
   }
   // A duplicate keeps the source's owner: a SubPart-owned copy lands on the same
@@ -1661,7 +1739,12 @@ export function duplicateSelected(): void {
     const src = part.lights[i];
     if (!src) continue;
     const id = nextLightId(part);
-    part.lights.push({ ...structuredClone(src), id, layerId: LIGHT_LAYER_ID });
+    part.lights.push({
+      ...structuredClone(src),
+      id,
+      position: shifted(src.position, by),
+      layerId: LIGHT_LAYER_ID,
+    });
     copies.push({ kind: 'light', id });
   }
   $part.set(part);
@@ -1711,7 +1794,8 @@ export function copySelected(): number {
   const kit = selectionIndicesOf(part, 'kitten');
   const col = selectionIndicesOf(part, 'collider');
   const seat = selectionIndicesOf(part, 'ivaSeat');
-  const total = sub.length + con.length + kit.length + col.length + seat.length;
+  const lig = selectionIndicesOf(part, 'light');
+  const total = sub.length + con.length + kit.length + col.length + seat.length + lig.length;
   if (total === 0) return 0;
   const order = (a: number, b: number) => a - b;
   $clipboard.set({
@@ -1721,7 +1805,19 @@ export function copySelected(): number {
     colliders: [...col].sort(order).map((i) => structuredClone(part.colliders[i])),
     // Sorted by index so a paste preserves the seats' relative cycle order.
     ivaSeats: [...seat].sort(order).map((i) => structuredClone(part.ivaSeats[i])),
+    lights: [...lig].sort(order).map((i) => structuredClone(part.lights[i])),
   });
+  return total;
+}
+
+/**
+ * ⌘X — copies the selection into the {@link $clipboard} and deletes it in **one** undo step
+ * labeled `'cut'` (design-build-mode.md §7.2). Returns how many entities were cut.
+ */
+export function cutSelected(): number {
+  const total = copySelected();
+  if (total === 0) return 0;
+  deleteSelection('cut');
   return total;
 }
 
@@ -1742,7 +1838,8 @@ export function pasteClipboard(): number {
     clip.connectors.length +
     clip.kittens.length +
     clip.colliders.length +
-    clip.ivaSeats.length;
+    clip.ivaSeats.length +
+    clip.lights.length;
   if (total === 0) return 0;
 
   pushUndo(
@@ -1753,6 +1850,7 @@ export function pasteClipboard(): number {
       clip.kittens.length,
       clip.colliders.length,
       clip.ivaSeats.length,
+      clip.lights.length,
     ),
   );
   const part = clone($part.get());
@@ -1815,6 +1913,14 @@ export function pasteClipboard(): number {
     part.ivaSeats.push({ ...structuredClone(src), id, layerId: IVA_SEAT_LAYER_ID });
     pasted.push({ kind: 'ivaSeat', id });
   }
+  // A pasted light keeps its OWNER template (so a SubPart-owned copy still travels with
+  // every placement of that mesh) and is re-pinned to the built-in Lights layer, exactly
+  // like a duplicate. `assignLight` keeps its scale at (1,1,1) on every later write.
+  for (const src of clip.lights) {
+    const id = nextLightId(part);
+    part.lights.push({ ...structuredClone(src), id, layerId: LIGHT_LAYER_ID });
+    pasted.push({ kind: 'light', id });
+  }
   $part.set(part);
   select(pasted);
   return total;
@@ -1823,7 +1929,8 @@ export function pasteClipboard(): number {
 /**
  * Duplicates a single SubPart by index (used by the per-row context menu, which
  * acts on its own row regardless of the current selection). Discrete mutation →
- * records undo. The copy lands on the same layer and is selected.
+ * records undo. The copy lands on the same layer, one nudge step off its source
+ * ({@link duplicateOffset} — same rule as {@link duplicateSelected}), and is selected.
  */
 export function duplicatePlacement(index: number): void {
   const current = $part.get();
@@ -1837,7 +1944,7 @@ export function duplicatePlacement(index: number): void {
   part.placements.push({
     instanceId,
     subPartTemplateId: src.subPartTemplateId,
-    position: { ...src.position },
+    position: shifted(src.position, duplicateOffset()),
     rotation: { ...src.rotation },
     scale: { ...src.scale },
     layerId: src.layerId,
@@ -3906,6 +4013,11 @@ export function setSnap(snap: SnapSettings): void {
   $snap.set(snap);
 }
 
+/** Flips the gizmo between world- and local-axis handles ({@link $gizmoSpace}). */
+export function toggleGizmoSpace(): void {
+  $gizmoSpace.set($gizmoSpace.get() === 'world' ? 'local' : 'world');
+}
+
 // ---------------------------------------------------------------------------
 // Nudge plane / step actions (persisted global tool prefs — not in undo history).
 // ---------------------------------------------------------------------------
@@ -3949,7 +4061,7 @@ function roundStep(v: number): number {
 }
 
 /**
- * Increases the nudge step by one decade-sized increment (the M hotkey). The
+ * Increases the nudge step by one decade-sized increment (`⇧→`). The
  * increment tracks the value's magnitude — 0.1→0.2…0.9→1→2 — and below a decade
  * boundary it's correspondingly finer (0.09→0.1 via 0.01). Symmetric with
  * {@link decrementNudgeStep}.
@@ -3960,7 +4072,7 @@ export function incrementNudgeStep(): void {
 }
 
 /**
- * Decreases the nudge step by one decade-sized increment (Shift+M). At the bottom
+ * Decreases the nudge step by one decade-sized increment (`⇧←`). At the bottom
  * of a decade the increment refines to 1/10 (0.1→0.09, 0.01→0.009), clamped at
  * {@link MIN_NUDGE_STEP}.
  */

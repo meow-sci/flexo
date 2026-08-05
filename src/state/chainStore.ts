@@ -401,6 +401,26 @@ export function removeChainOp(id: string): void {
   $chainSession.set({ ...session, ops });
 }
 
+/**
+ * Moves a step to an absolute slot — what the chain window's **drag-reorder** commits
+ * (design-build-mode.md §9.2). The index is clamped into range, so a drop past either end
+ * lands at that end; an unknown id or an unchanged position is a no-op.
+ *
+ * Session edits are ephemeral: never undoable, never in the document.
+ */
+export function moveChainOpTo(id: string, index: number): void {
+  const session = $chainSession.get();
+  if (!session) return;
+  const from = session.ops.findIndex((op) => op.id === id);
+  if (from < 0) return;
+  const to = Math.max(0, Math.min(index, session.ops.length - 1));
+  if (to === from) return;
+  const ops = session.ops.slice();
+  const [moved] = ops.splice(from, 1);
+  ops.splice(to, 0, moved);
+  $chainSession.set({ ...session, ops });
+}
+
 /** Moves a step one slot up (`-1`) or down (`+1`); a no-op at the ends or for an unknown id. */
 export function moveChainOp(id: string, dir: -1 | 1): void {
   const session = $chainSession.get();

@@ -9,7 +9,7 @@ import { toast } from './toast';
 
 /**
  * UI-layer wrappers around the pure nudge-axis / nudge-step store actions that flash the
- * new posture so changes triggered by keyboard (←/→, M/Shift+M) are visible. Used by both
+ * new posture so changes triggered by keyboard (←/→, ⇧←/⇧→) are visible. Used by both
  * the hotkey registry and the status bar's nudge chip so the feedback is identical wherever
  * the change originates. Kept out of editorStore, which stays free of UI dependencies.
  *
@@ -30,13 +30,13 @@ export function changeNudgeAxis(direction: 1 | -1): void {
   toast({ title: `Nudge axis: ${$nudgeAxis.get().toUpperCase()}` });
 }
 
-/** Increases the nudge step and toasts the new distance (M hotkey). */
+/** Increases the nudge step and toasts the new distance (`⇧→`). */
 export function raiseNudgeStep(): void {
   incrementNudgeStep();
   toast({ title: `Nudge step: ${formatNudgeStep($nudgeStep.get())} m` });
 }
 
-/** Decreases the nudge step and toasts the new distance (Shift+M hotkey). */
+/** Decreases the nudge step and toasts the new distance (`⇧←`). */
 export function lowerNudgeStep(): void {
   decrementNudgeStep();
   toast({ title: `Nudge step: ${formatNudgeStep($nudgeStep.get())} m` });

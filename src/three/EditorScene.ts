@@ -65,6 +65,8 @@ import type {
 } from '../ksa/types';
 import {
   $bulkScaleMode,
+  $colliderEditContext,
+  $gizmoSpace,
   $lightEditContext,
   $part,
   $selection,
@@ -81,14 +83,17 @@ import {
   pushUndo,
   revealEntity,
   addCollider,
+  selectedTransformRefs,
+  setColliderEditContext,
   setLightEditContext,
   updateColliderTransform,
   updateLightTransform,
-  selectedTransformRefs,
   updateSelectedTransform,
-  updateSelectedTransforms,
   type SelectedTransformRef,
 } from '../state/editorStore';
+import { liftedSelectionRefs, writeBackLifted } from './selectionTransform';
+import { applySnapToGizmo } from '../state/snapStore';
+import { $heldModifiers } from '../state/modifierStore';
 import { $catalogIndex, $customCatalog } from '../state/catalogStore';
 import {
   $activeMeasurementId,
@@ -193,13 +198,11 @@ export class EditorScene {
    * part-level collider always has exactly one entry.
    */
   private readonly colliderObjects = new Map<string, ColliderObject[]>();
-  /**
-   * Collider id → which of its per-placement visuals the gizmo edits (set by the last
-   * click on it; defaults to 0). Only meaningful for a SubPart-owned collider — the one
-   * document entity is drawn N times, so a drag has to name the frame it writes back
-   * through. Ephemeral view state.
-   */
-  private readonly colliderInstance = new Map<string, number>();
+  // NOTE which per-placement collider visual the gizmo edits through is NOT a private map
+  // here (it was in v1): like the light context it lives in the store, as
+  // `$colliderEditContext`, so the gizmo, the numeric fields and the KEYBOARD tools
+  // (`selectionTransform.liftedSelectionRefs`) all resolve the same frame — the fix for the
+  // census's pain 4. Read via {@link colliderContextIndex}.
   /**
    * IVA seat markers, keyed by seat id. ONE visual per seat — a seat is Part-level data
    * (`<IVASeat>` on `<PartGameData>`), so unlike a collider it is never drawn per placement.
@@ -213,10 +216,10 @@ export class EditorScene {
    * light. A part-level light always has exactly one entry.
    */
   private readonly lightObjects = new Map<string, LightObject[]>();
-  // NOTE the light analogue of {@link colliderInstance} is NOT a private map: the
-  // editing context (which per-placement visual the gizmo writes through) also drives
-  // the inspector's part-frame fields, so it lives in the store as $lightEditContext —
-  // one source both read via {@link lightContextIndex}, so they can never disagree.
+  // NOTE the light editing context (which per-placement visual the gizmo writes through)
+  // also drives the inspector's part-frame fields, so it lives in the store as
+  // $lightEditContext — one source every consumer reads via {@link lightContextIndex}, so
+  // they can never disagree. `$colliderEditContext` is its exact twin.
   /** Red dots marking sample points outside every collider (the last coverage check). */
   private coverageDots: THREE.Points | null = null;
   private readonly building = new Set<string>();
@@ -245,7 +248,12 @@ export class EditorScene {
    */
   private readonly pivot = new THREE.Group();
   /** Per-SubPart starting transforms captured at the start of a bulk gizmo drag. */
-  private bulkSnapshot: { centroid: Vec3; items: SelectedTransformRef[] } | null = null;
+  private bulkSnapshot: {
+    centroid: Vec3;
+    /** The pivot's orientation when the drag began (see {@link beginBulkDrag}). */
+    startQuat: THREE.Quaternion;
+    items: SelectedTransformRef[];
+  } | null = null;
   /**
    * Empty group the gizmo attaches to while editing a joint pose. Positioned at the
    * joint's world frame W_J(t) of the edited keyframe; a gizmo drag moves it, and
@@ -355,8 +363,7 @@ export class EditorScene {
         if (!isLayerVisible(layerId)) return; // three.js does not skip invisible objects during raycasting
         // Remember WHICH visual of a multi-instance entity was clicked, so the gizmo (and,
         // for a light, the inspector's part-frame fields) edit through that instance's frame.
-        if (kind === 'collider')
-          this.colliderInstance.set(selected.id, selected.instanceIndex ?? 0);
+        if (kind === 'collider') setColliderEditContext(selected.id, selected.instanceIndex ?? 0);
         if (kind === 'light') setLightEditContext(selected.id, selected.instanceIndex ?? 0);
         if (additive) toggleRef({ kind, id: selected.id });
         else select([{ kind, id: selected.id }]);
@@ -408,6 +415,8 @@ export class EditorScene {
         // Publishes the drag to the Escape ladder (rung 4 — `$gizmoCancel` below).
         $gizmoDragging.set(dragging);
         this.applySelectionSuppression();
+        // ⌃ inverts snap for the duration of the drag only; release restores the setting.
+        applySnapToGizmo(dragging && $heldModifiers.get().ctrl);
         if (!dragging) {
           this.endBulkDrag();
           this.updateSelection(); // re-snap the pose proxy to the committed pose
@@ -522,6 +531,8 @@ export class EditorScene {
     // A context change re-targets a selected light's highlight + gizmo to the newly
     // clicked instance even when the selection indices themselves are unchanged.
     this.sub($lightEditContext, () => this.updateSelection());
+    // The collider twin: the frame every consumer edits an owned collider through.
+    this.sub($colliderEditContext, () => this.updateSelection());
     // Collider fitting needs world geometry, which only exists here — the UI publishes an
     // intent and this consumes it (see colliderStore).
     this.sub($colliderFitRequest, (req) => {
@@ -578,8 +589,26 @@ export class EditorScene {
     // $effectiveToolMode, not $toolMode: exhaust placement clamps Scale away (a nozzle
     // placement has nothing to scale), and the toolbar reads the same computed so the
     // displayed tool always matches the tool a drag performs.
-    this.sub($effectiveToolMode, (mode) => this.gizmo.setMode(mode));
+    this.sub($effectiveToolMode, (mode) => {
+      this.gizmo.setMode(mode);
+      // Scale never takes the local pivot orientation (see repositionPivot), so switching
+      // tool can change how the bulk pivot must sit.
+      if (!this.gizmo.isDragging && this.attachedObject === this.pivot) this.repositionPivot();
+    });
+    // W/L: the handles' frame (design-build-mode.md §4.2). Re-seats the bulk pivot too —
+    // in `local` it adopts the primary entity's orientation.
+    this.sub($gizmoSpace, () => {
+      this.applyGizmoSpace();
+      if (!this.gizmo.isDragging && this.attachedObject === this.pivot) this.repositionPivot();
+    });
     this.sub($snap, (snap) => this.gizmo.setSnap(snap));
+    // ⌃ held DURING a gizmo drag = temporary snap invert (foundation §14.2, LOCKED #7).
+    // Drag-scoped on purpose: outside a drag ⌃ is a plain modifier and must not silently
+    // re-arm snapping. `applySnapToGizmo` writes `$snap`, so the subscription above is
+    // still the one path into the gizmo.
+    this.sub($heldModifiers, (held) => {
+      if (this.gizmo.isDragging) applySnapToGizmo(held.ctrl);
+    });
     this.sub($grids, (grids) => this.viewport.grids.setConfig(grids));
     // The snap orbits the SELECTION centroid when there is a selection, else the origin
     // (LOCKED #7; design: design-build-mode.md §5.3) — the command side is unchanged, the
@@ -1584,41 +1613,44 @@ export class EditorScene {
   }
 
   /**
-   * Every selected entity's transform in PART space. Identical to
-   * {@link selectedTransformRefs} except for SubPart-owned colliders and lights, whose
-   * stored transforms are in their owner's local frame — bulk gizmo math (and the
-   * centroid the pivot sits on) has to work in one shared space, so those are lifted
-   * here (colliders through {@link colliderWorld}, lights through {@link lightWorld} —
-   * NOT interchangeable: the light rule applies the owner's scale to the position
-   * offset) and pushed back down through the matching inverse in
-   * {@link applyBulkFromPivot}. Each lift goes through the entity's CONTEXT instance
-   * frame, the same one its single-selection gizmo edits through.
+   * Re-seats the bulk pivot: at the selection centroid, unit scale, and oriented per
+   * {@link $gizmoSpace} — identity in `world` (v1's only behavior), the PRIMARY
+   * (last-selected) entity's Part-space orientation in `local`, so the rotate rings turn
+   * about that entity's axes through the shared centroid (design-build-mode.md §4.2).
+   *
+   * **Scale mode keeps the identity orientation on purpose.** A per-axis scale factor about
+   * rotated axes is not representable as the (position, Euler, scale) triple every entity
+   * stores — it would need a shear — so orienting the pivot for Scale would show handles
+   * whose drag cannot be honoured. (three's `TransformControls` also forces local space for
+   * scale internally, so with an identity pivot the two agree by construction.)
    */
-  private worldTransformRefs(): SelectedTransformRef[] {
-    return selectedTransformRefs().map((ref) => {
-      if (ref.kind === 'collider') {
-        const frame = this.colliderGizmoFrame(ref.index);
-        return frame ? { ...ref, transform: colliderWorld(ref.transform, frame) } : ref;
-      }
-      if (ref.kind === 'light')
-        // lightWorld takes the null frame itself: a part-level (or unplaced-owner)
-        // light's local transform already IS its part-frame pose.
-        return { ...ref, transform: lightWorld(ref.transform, this.lightGizmoFrame(ref.index)) };
-      return ref;
-    });
-  }
-
-  /** Centroid of all selected entities, from Part-space positions. */
-  private selectionCentroid(): Vec3 {
-    return centroidOf(this.worldTransformRefs().map((r) => r.transform.position));
-  }
-
-  /** Resets the pivot to the selection centroid with identity rotation/scale. */
   private repositionPivot(): void {
-    const c = this.selectionCentroid();
+    const refs = liftedSelectionRefs();
+    const c = centroidOf(refs.map((r) => r.transform.position));
     this.pivot.position.set(c.x, c.y, c.z);
-    this.pivot.quaternion.identity();
     this.pivot.scale.set(1, 1, 1);
+
+    const primaryId = $selection.get().at(-1)?.id;
+    const primary = refs.find((r) => r.id === primaryId);
+    if ($gizmoSpace.get() === 'local' && $effectiveToolMode.get() !== 'scale' && primary) {
+      // Through `matrixFromTransform` so the KSA↔three Euler order stays coords.ts's alone.
+      // Unit scale, because a mirrored placement would otherwise decompose its reflection
+      // into the quaternion and tilt the handles.
+      matrixFromTransform({
+        position: { x: 0, y: 0, z: 0 },
+        rotation: primary.transform.rotation,
+        scale: { x: 1, y: 1, z: 1 },
+      }).decompose(new THREE.Vector3(), this.pivot.quaternion, new THREE.Vector3());
+    } else {
+      this.pivot.quaternion.identity();
+    }
+  }
+
+  /** The gizmo space the CURRENT attach target honours — proxies stay world (see attachGizmo). */
+  private applyGizmoSpace(): void {
+    const proxy =
+      this.attachedObject === this.poseProxy || this.attachedObject === this.engineProxy;
+    this.gizmo.setSpace(proxy ? 'world' : $gizmoSpace.get());
   }
 
   /** Syncs the selection highlight and gizmo attachment to the current selection. */
@@ -1696,11 +1728,10 @@ export class EditorScene {
       target = this.pivot;
     } else if (colliderRefs.length === 1) {
       // A SubPart-owned collider has one visual PER PLACEMENT; attach to whichever the
-      // user last clicked (see colliderInstance) so the drag has an unambiguous frame.
+      // user last clicked ($colliderEditContext) so the drag has an unambiguous frame.
       const id = colliderRefs[0].id;
       const objs = this.colliderObjects.get(id) ?? [];
-      const i = Math.min(this.colliderInstance.get(id) ?? 0, objs.length - 1);
-      target = objs[Math.max(0, i)]?.group ?? null;
+      target = objs[this.colliderContextIndex(id, objs.length)]?.group ?? null;
     } else if (lightRefs.length === 1) {
       // Same rule for a SubPart-owned light: attach to the CONTEXT instance
       // ($lightEditContext — last clicked, default 0) so the drag has an unambiguous
@@ -1727,6 +1758,12 @@ export class EditorScene {
       this.attachedObject = target;
     }
     this.gizmo.setMode($effectiveToolMode.get());
+    // The pose and exhaust proxies keep v1's world-space handles: `$gizmoSpace` is a BUILD
+    // tool parameter (design-build-mode.md §4.2), and posing/aiming already carry their own
+    // oriented proxies. Every entity target honours it — for a single owned collider/light
+    // the gizmo is attached to the instance VISUAL, which already sits in the owner's
+    // world frame, so `local` aligns to the entity's own axes with no extra work.
+    this.applyGizmoSpace();
   }
 
   /**
@@ -1798,8 +1835,18 @@ export class EditorScene {
     if (!collider) return null;
     const owners = this.colliderOwners(part, collider);
     if (owners.length === 0) return null;
-    const i = Math.min(this.colliderInstance.get(collider.id) ?? 0, owners.length - 1);
-    return owners[Math.max(0, i)] ?? null;
+    return owners[this.colliderContextIndex(collider.id, owners.length)] ?? null;
+  }
+
+  /**
+   * The context instance index for a collider — the visual last clicked
+   * ({@link $colliderEditContext}; default 0, clamped to `count`). The collider twin of
+   * {@link lightContextIndex}, and the same rule `selectionTransform` applies, so the
+   * gizmo, the numeric fields and the keyboard tools always work through one frame.
+   */
+  private colliderContextIndex(colliderId: string, count: number): number {
+    const i = $colliderEditContext.get()[colliderId] ?? 0;
+    return Math.max(0, Math.min(i, count - 1));
   }
 
   /**
@@ -1981,13 +2028,17 @@ export class EditorScene {
 
   /** Snapshots all selected entities' transforms at the start of a bulk gizmo drag. */
   private beginBulkDrag(): void {
-    const refs = this.worldTransformRefs();
+    const refs = liftedSelectionRefs();
     if (refs.length <= 1) {
       this.bulkSnapshot = null;
       return;
     }
     this.bulkSnapshot = {
       centroid: centroidOf(refs.map((r) => r.transform.position)),
+      // The pivot's orientation AT DRAG START. Identity in world space; the primary's
+      // orientation in local space — in which case the gizmo's live quaternion is
+      // `start · Δlocal`, so the applied delta is `live · start⁻¹` either way.
+      startQuat: this.pivot.quaternion.clone(),
       items: refs,
     };
   }
@@ -2007,11 +2058,15 @@ export class EditorScene {
         return { kind, id, index, transform: translatedTransform(base, delta) };
       }
       if (mode === 'rotate') {
+        // The DELTA since drag start, not the pivot's absolute orientation: in local space
+        // the pivot starts at the primary entity's orientation, and applying that would
+        // spin the whole selection the moment the ring is touched.
+        const delta = this.pivot.quaternion.clone().multiply(snap.startQuat.clone().invert());
         return {
           kind,
           id,
           index,
-          transform: rotatedAroundOriginTransform(base, this.pivot.quaternion, snap.centroid),
+          transform: rotatedAroundOriginTransform(base, delta, snap.centroid),
         };
       }
       const factor = { x: this.pivot.scale.x, y: this.pivot.scale.y, z: this.pivot.scale.z };
@@ -2027,22 +2082,9 @@ export class EditorScene {
         ),
       };
     });
-    // Owner-local again on the way back down (see worldTransformRefs) — each kind
-    // through the inverse of the SAME lift it went up with.
-    updateSelectedTransforms(
-      updates.map((u) => {
-        if (u.kind === 'collider') {
-          const frame = this.colliderGizmoFrame(u.index);
-          return frame ? { ...u, transform: colliderLocalFromWorld(u.transform, frame) } : u;
-        }
-        if (u.kind === 'light')
-          return {
-            ...u,
-            transform: lightLocalFromWorld(u.transform, this.lightGizmoFrame(u.index)),
-          };
-        return u;
-      }),
-    );
+    // Owner-local again on the way back down — each kind through the inverse of the SAME
+    // lift `liftedSelectionRefs` took it up with (shared with the keyboard tools).
+    writeBackLifted(updates);
   }
 
   /** Ends a bulk drag: drops the snapshot and re-centers the pivot on the new layout. */
@@ -2154,7 +2196,7 @@ export class EditorScene {
     // on one of its visuals would (design §1.4).
     for (const hit of hits) {
       if (hit.firstInstance === undefined) continue;
-      if (hit.ref.kind === 'collider') this.colliderInstance.set(hit.ref.id, hit.firstInstance);
+      if (hit.ref.kind === 'collider') setColliderEditContext(hit.ref.id, hit.firstInstance);
       else if (hit.ref.kind === 'light') setLightEditContext(hit.ref.id, hit.firstInstance);
     }
     select(

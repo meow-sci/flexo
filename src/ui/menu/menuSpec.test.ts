@@ -326,7 +326,8 @@ describe('disabled stubs stay visible but never run', () => {
     'view.displayFilters',
     'view.motionTrails',
     'window.timeline',
-    'window.toolbar',
+    // `window.toolbar` graduated with the Build-mode Tool bar: it now toggles the floating
+    // window's `floatHidden` entry — see its own test below.
     // `window.notifications` graduated out of this list: the status-bar phase gave it a
     // real target (it opens the notification center) — see its own test below.
   ];
@@ -356,6 +357,25 @@ describe('disabled stubs stay visible but never run', () => {
       (e) => (e as { commandId: string }).commandId,
     );
     expect(referenced).toContain('window.notifications');
+  });
+
+  it('window.toolbar is live (the floating Tool bar exists) and toggles its visibility', () => {
+    const command = getCommand('window.toolbar');
+    expect(command?.enabled?.()).not.toBe(false);
+    expect(command?.disabledReason).toBeUndefined();
+
+    // Checked ⇔ not in `floatHidden`, and running it flips exactly that.
+    const wasChecked = command?.checked?.();
+    command?.run(undefined);
+    expect(command?.checked?.()).toBe(!wasChecked);
+    command?.run(undefined);
+    expect(command?.checked?.()).toBe(wasChecked);
+
+    // It is a CHECKBOX entry — the ✓ is the window's visibility.
+    const referenced = ALL_ENTRIES.filter((e) => e.kind === 'checkbox').map(
+      (e) => (e as { commandId: string }).commandId,
+    );
+    expect(referenced).toContain('window.toolbar');
   });
 });
 

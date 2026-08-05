@@ -1,5 +1,5 @@
 import type { Command } from '../../state/commandStore';
-import { $layout, resetLayout, toggleSidebar } from '../../state/layoutStore';
+import { $layout, resetLayout, setFloatHidden, toggleSidebar } from '../../state/layoutStore';
 import { openDialog } from '../../state/dialogStore';
 import { openNotificationCenter } from '../../state/notificationStore';
 
@@ -40,10 +40,13 @@ export const WINDOW_COMMANDS: Command[] = [
     id: 'window.toolbar',
     title: 'Tool Bar',
     menuPath: 'Window',
-    keywords: 'tool bar gizmo float window',
-    enabled: () => false,
-    disabledReason: 'The floating Tool bar arrives with the Build-mode rework',
-    run: () => {},
+    keywords: 'tool bar gizmo snap move rotate scale float window',
+    // `'toolbar'` is `ToolBarWindow`'s FloatingWindow id. Hidden-ness is the persisted
+    // `floatHidden` list; the window ALSO self-gates on having a gizmo target, so a checked
+    // item can still show nothing while the selection is empty.
+    checked: () => !$layout.get().floatHidden.includes('toolbar'),
+    keepOpen: true,
+    run: () => setFloatHidden('toolbar', !$layout.get().floatHidden.includes('toolbar')),
   },
   {
     id: 'window.resetLayout',

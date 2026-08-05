@@ -17,7 +17,6 @@ import { registerModifierHints } from '../../state/modifierStore';
  * | Provider | Gesture | Owner |
  * |---|---|---|
  * | `build-viewport` ⌥ Duplicate drag | ⌥-drag to duplicate (LOCKED gesture #7) | Build-mode phase |
- * | `gizmo-drag` ⌃ Snap invert | hold-⌃ snap inversion (needs `snapStore`) | Build-mode phase |
  * | `timeline` ⌃ Snap to keys | keyframe drag snapping | Animation phase |
  * | `animation-pose` ⇧ Axis lock | pose-gizmo axis lock | Animation phase |
  *
@@ -64,6 +63,17 @@ export function initModifierHintProviders(): void {
           { mod: 'shift', label: 'Drag box-select', priority: 40 },
           { mod: 'alt', label: 'Drag to subtract (with ⇧)', priority: 50 },
         ]
+      : [],
+  );
+
+  // ⌃ held DURING a gizmo drag inverts snapping (EditorScene → `applySnapToGizmo`,
+  // foundation §14.2). Advertised on the gizmo hover context, and — because nothing stamps
+  // `'gizmo'` yet — also over the viewport WITH a selection, which is exactly when a gizmo
+  // is on screen and the gesture is live. Never with an empty selection: there is no gizmo
+  // to drag, so the hint would be a lie.
+  registerModifierHints('gizmo-drag', (ctx) =>
+    ctx.hover === 'gizmo' || (ctx.hover.startsWith('viewport') && ctx.hasSelection)
+      ? [{ mod: 'ctrl', label: 'Snap (invert while dragging)', priority: 35 }]
       : [],
   );
 

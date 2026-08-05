@@ -14,6 +14,7 @@ import { ContainerEditor } from './ui/ContainerEditor';
 import { ManageTexturesPanel } from './ui/ManageTexturesPanel';
 import { GlowPaintDialog } from './ui/GlowPaintDialog';
 import { ChainPalette } from './ui/chain/ChainPalette';
+import { ToolBarWindow } from './ui/build/ToolBarWindow';
 import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys';
 import { MenuBar } from './ui/shell/MenuBar';
 import { PhoneTopBar } from './ui/shell/phone/PhoneTopBar';
@@ -182,6 +183,12 @@ function App() {
               chain session, and stays non-modal so the viewport keeps working while open. */}
           <ChainPalette />
         </div>
+
+        {/* Floating windows mount here, as children of the BAND: their positions are
+            band-absolute px and clamp to the workspace, so they must not sit inside the
+            viewport cell (foundation §6.1). The Tool bar self-gates on having a gizmo
+            target and on Window ▸ Tool Bar. */}
+        <ToolBarWindow />
 
         {!isPhone && (
           <Sidebar side="right">

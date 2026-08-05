@@ -52,6 +52,59 @@ export function setHideInterior(hide: boolean): void {
 }
 
 /**
+ * The kinds **View ▸ Display Filters ▸** can hide (design-build-mode.md §5.4 — the DCC
+ * "display filters cluster"). `aid` covers the measurement/container overlays, which are
+ * not entities at all; the other six are the selectable kinds minus SubParts (hiding the
+ * geometry you are building is what layers are for).
+ */
+export type VisibilityKind = 'connector' | 'collider' | 'ivaSeat' | 'light' | 'kitten' | 'aid';
+
+export type KindVisibility = Record<VisibilityKind, boolean>;
+
+const KIND_VISIBILITY_DEFAULTS: KindVisibility = {
+  connector: true,
+  collider: true,
+  ivaSeat: true,
+  light: true,
+  kitten: true,
+  aid: true,
+};
+
+/**
+ * Per-kind view-only visibility. A pure browser-level VIEW preference: never document
+ * data, never undoable, and never serialized to KSA — it composes with layer visibility
+ * inside `applyLayerView` (the single-visibility-writer invariant holds), and a hidden
+ * kind is unpickable and marquee-excluded exactly as a hidden layer is.
+ */
+export const $kindVisibility = persistentJSON<KindVisibility>(
+  'flexo:kindVisibility',
+  KIND_VISIBILITY_DEFAULTS,
+);
+
+/**
+ * Defensive read (never migration): a stored value contributes only the keys it actually
+ * has, so a kind added later simply defaults to visible and an unknown key is dropped.
+ */
+export function kindVisibility(): KindVisibility {
+  const stored = $kindVisibility.get();
+  const out = { ...KIND_VISIBILITY_DEFAULTS };
+  for (const key of Object.keys(out) as VisibilityKind[]) {
+    if (typeof stored?.[key] === 'boolean') out[key] = stored[key];
+  }
+  return out;
+}
+
+/** True when `kind` is currently shown — the one predicate the scene and menus share. */
+export function isKindVisible(kind: VisibilityKind): boolean {
+  return kindVisibility()[kind];
+}
+
+export function toggleKindVisible(kind: VisibilityKind): void {
+  const current = kindVisibility();
+  $kindVisibility.set({ ...current, [kind]: !current[kind] });
+}
+
+/**
  * One-shot camera-snap command. The `nonce` makes every request a distinct value
  * so the three.js subscriber fires even when the same direction is chosen twice.
  */

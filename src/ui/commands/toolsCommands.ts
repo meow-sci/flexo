@@ -1,5 +1,13 @@
 import type { Command } from '../../state/commandStore';
-import { $part, $toolMode, select, setToolMode, type ToolMode } from '../../state/editorStore';
+import {
+  $gizmoSpace,
+  $part,
+  $toolMode,
+  select,
+  setToolMode,
+  toggleGizmoSpace,
+  type ToolMode,
+} from '../../state/editorStore';
 import { $seatView, enterSeatView, exitSeatView } from '../../state/ivaStore';
 import { $mode } from '../../state/modeStore';
 import { $engineExhaustGizmo, setEngineExhaustGizmo } from '../../state/engineStore';
@@ -89,6 +97,20 @@ export const TOOLS_COMMANDS: Command[] = [
     // `params === -1` cycles backward — the ⇧T half of the one binding. The palette and the
     // menus pass nothing and get the forward step.
     run: (params) => cycleGizmoTool(params === -1 ? -1 : 1),
+  },
+  {
+    // Palette-only as well: the toggle's home is the Tool bar's W/L segmented control (it
+    // changes EDITS, not display, so it is a tool parameter and never a View item —
+    // design-build-mode.md §4.2). No chord: the authoritative table assigns none.
+    id: 'tool.toggleGizmoSpace',
+    title: 'Toggle gizmo space',
+    keywords: 'gizmo space world local axes orientation handles',
+    keepOpen: true,
+    checked: () => $gizmoSpace.get() === 'local',
+    run: () => {
+      toggleGizmoSpace();
+      toast({ title: `Gizmo space: ${$gizmoSpace.get() === 'local' ? 'Local' : 'World'}` });
+    },
   },
   {
     // Palette-only for the same reason (design: design-data-engine-modes §B10 — Engine mode

@@ -16,6 +16,7 @@ import { $measurements, $activeMeasurementId } from './state/measurementStore';
 import { registerEditorAidStores } from './state/editorStore';
 import { initModifierListeners } from './state/modifierStore';
 import { initHotkeyStore } from './state/hotkeyStore';
+import { applySnapToGizmo } from './state/snapStore';
 import { registerModeHooks } from './state/modeStore';
 import { ensureReactionsLoaded } from './state/reactionStore';
 
@@ -65,6 +66,11 @@ initModifierListeners();
 // Track which surface owns focus, so the scoped hotkey registry can gate `surface:*`
 // bindings on it (design-system-services §4.2). Same idempotent-guard pattern.
 initHotkeyStore();
+
+// Push the persisted snap settings into the gizmo once, before the first drag: `$snap` is
+// ephemeral (it is the gizmo's live setting), so without this the magnet would read "on"
+// after a reload while nothing actually snapped (design-build-mode.md §4.1).
+applySnapToGizmo(false);
 
 // Detect a share-link launch up front: it changes how the next two startup steps behave.
 const sharePayload = readShareParam();

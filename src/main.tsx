@@ -2,7 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './app.tsx';
-import { GlobalToastRegion, toast } from './ui/kit';
+import { toast } from './ui/toast';
 import { BuildIdMismatchDialog } from './ui/BuildIdMismatchDialog';
 import { checkBuildId } from './buildCheck';
 import { hydrateProjectOnBoot, loadSharedProject } from './state/projectStore';
@@ -85,7 +85,6 @@ if (sharePayload) {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
-    <GlobalToastRegion />
     <BuildIdMismatchDialog />
   </StrictMode>,
 );

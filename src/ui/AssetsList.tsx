@@ -694,7 +694,8 @@ function SimpleRowMenu({ row }: { row: Row }) {
         </Button>
         <Popover placement="bottom end" className="w-48">
           <Menu>
-            {/* Seats only: put the camera at this eye point (see SeatViewBar). Selecting
+            {/* Seats only: put the camera at this eye point (the status bar's tool segment
+                is the chrome while seated). Selecting
                 first keeps the inspector on the seat you are sitting in. */}
             {row.kind === 'ivaSeat' && (
               <MenuItem

@@ -12,7 +12,6 @@ import {
   Select,
   Switch,
   TextField,
-  toast,
   Tooltip,
   warningBox,
 } from './kit';
@@ -51,6 +50,7 @@ import {
 import { VIEW_MESH_TRIANGLE_BUDGET } from '../ksa/modExport';
 import { fmt } from './format';
 import { useNumberDraft } from './numberDraft';
+import { toast } from './toast';
 
 /**
  * Import a model (glTF/GLB) as KSA SubParts. Three states in ONE modal, no wizard chrome:

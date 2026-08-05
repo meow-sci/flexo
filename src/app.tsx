@@ -9,14 +9,10 @@ import { InspectorContent } from './ui/InspectorContent';
 import { MobileInspector } from './ui/MobileInspector';
 import { FloatingInspector } from './ui/FloatingInspector';
 import { FloatingPreviewToolbar } from './ui/FloatingPreviewToolbar';
-import { SeatViewBar } from './ui/SeatViewBar';
-import { WorkspaceLoadProgress } from './ui/LoadProgress';
-import { MeasurementInfo } from './ui/MeasurementInfo';
 import { MeasurementEditor } from './ui/MeasurementEditor';
 import { ContainerEditor } from './ui/ContainerEditor';
 import { ManageTexturesPanel } from './ui/ManageTexturesPanel';
 import { GlowPaintDialog } from './ui/GlowPaintDialog';
-import { TransformHud } from './ui/TransformHud';
 import { ChainPalette } from './ui/chain/ChainPalette';
 import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys';
 import { MenuBar } from './ui/shell/MenuBar';
@@ -25,7 +21,8 @@ import { DialogRoot } from './ui/shell/DialogRoot';
 import { CommandPalette } from './ui/palette/CommandPalette';
 import { Sidebar } from './ui/shell/Sidebar';
 import { StatusBar } from './ui/status/StatusBar';
-import { toast, useIsPhone } from './ui/kit';
+import { useIsPhone } from './ui/kit';
+import { toast } from './ui/toast';
 import { ensureCatalogLoaded } from './state/catalogStore';
 import { ensurePartCatalogLoaded } from './state/partCatalogStore';
 import { consumeRemovedProjectsNotice } from './state/projectStore';
@@ -35,6 +32,12 @@ import { showAboutOnFirstUse } from './state/aboutStore';
 // and the hotkey registry all resolve against what it registers, so it must load once,
 // here, before any of them render.
 import './ui/commands';
+import { initToolStatusWiring } from './ui/status/toolStatusWiring';
+
+// Start feeding the status bar's tool segment from the v1 tool sessions (seat view, measure,
+// exhaust placement). Module scope, not an effect: the segment must be truthful from the
+// first paint, and the subscription outlives every component. Idempotent.
+initToolStatusWiring();
 
 /**
  * The v2 docked shell (foundation.md §1):
@@ -59,18 +62,17 @@ function App() {
 
   // Boot purged saved projects written by an incompatible schema version (see
   // projectStore.PROJECT_SCHEMA_VERSION) — tell the user which ones vanished. The notice
-  // is consumed, so a remount never repeats it.
+  // is consumed, so a remount never repeats it. Routed as a `warning`: an 8s amber status
+  // flash AND an unread notification-center entry, so the names survive being looked away
+  // from (v1 leaned on a 10s toast and lost them — design-system-services §2.5).
   useEffect(() => {
     const removed = consumeRemovedProjectsNotice();
     if (removed.length === 0) return;
-    toast(
-      {
-        title: `Removed ${removed.length} incompatible saved project${removed.length === 1 ? '' : 's'}`,
-        description: `${removed.join(', ')} — saved by an older, incompatible version of flexo.`,
-        variant: 'warning',
-      },
-      { timeout: 10000 },
-    );
+    toast({
+      title: `Removed ${removed.length} incompatible saved project${removed.length === 1 ? '' : 's'}`,
+      description: `${removed.join(', ')} — saved by an older, incompatible version of flexo.`,
+      variant: 'warning',
+    });
   }, []);
 
   // First-ever visit: greet the user with the About overlay (dialog id 'about'), then
@@ -142,10 +144,6 @@ function App() {
               the top toolbar stack above). */}
           {!isPhone && <FloatingPreviewToolbar />}
 
-          {/* Bottom-center: seat cycle + exit while sitting in an IVA seat. Phone and
-              desktop alike — in seat view the viewport IS the UI. */}
-          <SeatViewBar />
-
           {/* Editor for the active line measurement (left card on desktop, bottom
               sheet on phone — handled within the component). */}
           <MeasurementEditor />
@@ -159,15 +157,6 @@ function App() {
           {/* Bottom-right: what the last import/replace created, matched and removed.
               Dismissible, non-modal, never focus-stealing. */}
           <ImportReportCard />
-
-          {/* Bottom-left: live selection bounding-box dimensions. */}
-          <MeasurementInfo />
-
-          {/* Bottom-center: live download progress for HDR environments. */}
-          <WorkspaceLoadProgress />
-
-          {/* Bottom-center bubble: rotate-key axes/step + arrow-key nudge axis/step. */}
-          <TransformHud />
 
           {/* Left-side floating command palette for action chains (⌘K). Self-gates on the
               chain session, and stays non-modal so the viewport keeps working while open. */}

@@ -11,7 +11,6 @@ import {
   dangerBox,
   monoTextareaFill,
   noteBox,
-  toast,
   warningBox,
 } from './kit';
 import { $part } from '../state/editorStore';
@@ -36,6 +35,7 @@ import {
   expandGlassGlow,
   writeModToFolder,
 } from '../ksa/modExport';
+import { toast } from './toast';
 
 type Mode = 'xml' | 'mod';
 type Tab = 'part' | 'gamedata' | 'assets';

@@ -7,7 +7,7 @@ import {
   pickModFolder,
   requestModFolderPermission,
 } from '../../state/modFolderStore';
-import { toast } from '../kit';
+import { toast } from '../toast';
 
 /**
  * File menu commands (design: `plans/flexo_v2/design/foundation.md` §3 "File").
@@ -78,7 +78,7 @@ export const FILE_COMMANDS: Command[] = [
     id: 'noop.autosaveFlash',
     title: 'Save',
     keywords: 'autosave save',
-    run: () => toast({ title: 'Autosaved ✓' }, { timeout: 1500 }),
+    run: () => toast({ title: 'Autosaved ✓' }),
   },
 ];
 

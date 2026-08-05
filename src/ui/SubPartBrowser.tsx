@@ -1,16 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import type { Key, Selection } from 'react-aria-components';
-import {
-  Button,
-  Chip,
-  SearchField,
-  GridList,
-  GridListItem,
-  SectionTitle,
-  toast,
-  useIsPhone,
-} from './kit';
+import { Button, Chip, SearchField, GridList, GridListItem, SectionTitle, useIsPhone } from './kit';
 import { $catalog, $catalogLoading } from '../state/catalogStore';
 import type { CatalogSubPart } from '../ksa/catalog';
 import { addSubPart } from '../state/editorStore';
@@ -18,6 +9,7 @@ import { closeBrowserPopup, openBrowserPopup } from '../state/loadProgressStore'
 import { SubPartPreview } from './SubPartPreview';
 import { PreviewLoadProgress } from './LoadProgress';
 import { BrowserLayout, BrowserPopup } from './BrowserShell';
+import { toast } from './toast';
 
 const MAX_RESULTS = 200;
 
@@ -67,13 +59,13 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
   const add = () => {
     if (!selectedId) return;
     addSubPart(selectedId);
-    toast({ title: 'SubPart Added', description: selectedId }, { timeout: 2500 });
+    toast({ title: 'SubPart Added', description: selectedId });
   };
 
   const addAndClose = (key: Key) => {
     const id = String(key);
     addSubPart(id);
-    toast({ title: 'SubPart Added', description: id }, { timeout: 2500 });
+    toast({ title: 'SubPart Added', description: id });
     onClose();
   };
 

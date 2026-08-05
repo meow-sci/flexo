@@ -9,7 +9,6 @@ import {
   GridList,
   GridListItem,
   SectionTitle,
-  toast,
   useIsPhone,
 } from './kit';
 import type { CatalogPart } from '../ksa/partCatalog';
@@ -23,6 +22,7 @@ import { closeBrowserPopup, openBrowserPopup } from '../state/loadProgressStore'
 import { PartPreview } from './PartPreview';
 import { PreviewLoadProgress } from './LoadProgress';
 import { BrowserLayout, BrowserPopup } from './BrowserShell';
+import { toast } from './toast';
 
 const MAX_RESULTS = 200;
 const NEW_LAYER = '__new_layer__';
@@ -102,14 +102,14 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
     // imported SubParts, and returns the layer they landed on; reveal it (visible + in
     // the Assets list) so the import is never hidden.
     revealLayer(await importBuiltInPart(selected, resolveLayerId()));
-    toast({ title: 'Part Added', description: selected.id }, { timeout: 2500 });
+    toast({ title: 'Part Added', description: selected.id });
   };
 
   const addAndClose = async (key: Key) => {
     const p = catalog.find((c) => c.id === String(key));
     if (!p) return;
     revealLayer(await importBuiltInPart(p, resolveLayerId()));
-    toast({ title: 'Part Added', description: p.id }, { timeout: 2500 });
+    toast({ title: 'Part Added', description: p.id });
     onClose();
   };
 

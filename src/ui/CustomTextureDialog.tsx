@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Upload } from 'lucide-react';
-import { Modal, Dialog, DialogHeader, Button, TextField, Select, ListBoxItem, toast } from './kit';
+import { Modal, Dialog, DialogHeader, Button, TextField, Select, ListBoxItem } from './kit';
 import { addCustomTexture } from '../state/customAssetStore';
 import { CHANNEL_LABELS, CHANNEL_ORDER } from './channelLabels';
 import type { TextureChannel } from '../ksa/types';
+import { toast } from './toast';
 
 interface CustomTextureDialogProps {
   onClose: () => void;

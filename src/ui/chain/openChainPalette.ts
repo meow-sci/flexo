@@ -2,7 +2,7 @@ import { $chainSession, closeChain, openChain } from '../../state/chainStore';
 import { $part, $selectedIndices } from '../../state/editorStore';
 import { isLayerLocked } from '../../state/layerStore';
 import { openDialog } from '../../state/dialogStore';
-import { toast } from '../kit';
+import { toast } from '../toast';
 
 /**
  * Opens an action-chain session over the current SubPart selection.

@@ -171,23 +171,27 @@ export class MeasurementLayer {
   // --- Selection bounding box ------------------------------------------------
 
   private updateSelectionBox(objects: THREE.Object3D[]): void {
-    if (!this.settings.showSelectionBounds || objects.length === 0) {
+    // The bounds are computed whenever there IS a selection — NOT only when the 3D box is
+    // switched on. `showSelectionBounds` gates the in-scene overlay; the status bar's
+    // selection readout is a readout and stays live either way
+    // (design-system-services §1.2 #4, explicit ruling).
+    const bounds =
+      objects.length > 0 ? computeSelectionBounds(objects, this.settings.boundsMode) : null;
+    $selectionBounds.set(
+      bounds
+        ? {
+            size: bounds.size,
+            min: bounds.min,
+            max: bounds.max,
+            mode: this.settings.boundsMode,
+          }
+        : null,
+    );
+
+    if (!bounds || !this.settings.showSelectionBounds) {
       this.hideSelectionBox();
-      $selectionBounds.set(null);
       return;
     }
-    const bounds = computeSelectionBounds(objects, this.settings.boundsMode);
-    if (!bounds) {
-      this.hideSelectionBox();
-      $selectionBounds.set(null);
-      return;
-    }
-    $selectionBounds.set({
-      size: bounds.size,
-      min: bounds.min,
-      max: bounds.max,
-      mode: this.settings.boundsMode,
-    });
 
     if (!this.selectionBox) this.selectionBox = this.makeBox(SELECTION_COLOR);
     placeBox(this.selectionBox.lines, bounds);

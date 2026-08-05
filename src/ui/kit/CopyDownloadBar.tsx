@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, Copy, Download } from 'lucide-react';
 import { Button } from './Button';
-import { toast } from './Toast';
+import { toast } from '../toast';
 
 /**
  * The one copy-with-✓ + download pair (foundation §10.1; design-system-services §7.5),

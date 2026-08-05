@@ -21,7 +21,7 @@ src/
               and the ⌘K CommandPalette. Legacy floating chrome (selection
               toolbars, HUDs, aid editors, the chain palette) is re-parented inside
               the viewport cell pending its v2 rehost (design: foundation.md §1).
-  main.tsx    React root: <App /> + GlobalToastRegion + BuildIdMismatchDialog.
+  main.tsx    React root: <App /> + BuildIdMismatchDialog.
 ```
 
 **Dependency rule:** `state/` and `ksa/` must never import `react` or `react-dom`

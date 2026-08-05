@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '@nanostores/react';
-import { Modal, Dialog, DialogHeader, Button, monoTextarea, toast, warningBox } from './kit';
+import { Modal, Dialog, DialogHeader, Button, monoTextarea, warningBox } from './kit';
 import { $part, importProjectData } from '../state/editorStore';
 import { $projectName } from '../state/projectStore';
 import {
@@ -9,6 +9,7 @@ import {
   parseProjectImport,
   serializeProjectJson,
 } from '../state/projectTransfer';
+import { toast } from './toast';
 
 /**
  * "Project Data" Export / Import dialogs (data-only JSON, opened from the Project

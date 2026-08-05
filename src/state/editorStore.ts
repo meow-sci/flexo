@@ -4128,11 +4128,23 @@ export const MIN_ROTATE_STEP = 15;
 export const MAX_ROTATE_STEP = 180;
 const ROTATE_STEP_INCREMENT = 15;
 
-/** The world axis a pair currently rotates about, given {@link $rotateAxisOffset}. */
-export function rotatePairAxis(pair: RotatePair): NudgeAxis {
+/**
+ * The world axis a pair rotates about at an explicit offset — the PURE form.
+ *
+ * React render bodies must use this one with the offset they subscribed to. Calling the
+ * store-reading {@link rotatePairAxis} during render is not idempotent for the same props
+ * and state, so React Compiler is free to cache the result forever — which is exactly what
+ * it did to the status bar's rotate chip (the arrows stopped re-tinting on `R`).
+ */
+export function rotatePairAxisAt(pair: RotatePair, offset: number): NudgeAxis {
   const order = NUDGE_AXIS_ORDER;
   const base = order.indexOf(ROTATE_BASE_AXIS[pair]);
-  return order[(base + $rotateAxisOffset.get()) % order.length];
+  return order[(base + offset) % order.length];
+}
+
+/** The world axis a pair currently rotates about, given {@link $rotateAxisOffset}. */
+export function rotatePairAxis(pair: RotatePair): NudgeAxis {
+  return rotatePairAxisAt(pair, $rotateAxisOffset.get());
 }
 
 /**

@@ -31,10 +31,8 @@ const ALLOWLIST = [
   'src/ui/ImportReportCard.tsx',
   'src/ui/LoadProgress.tsx',
   'src/ui/ManageTexturesPanel.tsx',
-  'src/ui/SeatViewBar.tsx',
   'src/ui/ViewportDropZone.tsx',
   'src/ui/chain/ChainPalette.tsx',
-  'src/ui/kit/Toast.tsx',
 ];
 
 function walk(dir: string, out: string[]): string[] {

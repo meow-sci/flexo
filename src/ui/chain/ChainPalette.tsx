@@ -15,11 +15,11 @@ import {
   cn,
   keyLabel,
   panelChrome,
-  toast,
   useIsPhone,
 } from '../kit';
 import { CHAIN_COMMANDS, type ChainCommandDef } from './chainCommands';
 import { ChainStepCard } from './ChainStepCard';
+import { toast } from '../toast';
 
 const CHROME = `${panelChrome} p-3`;
 

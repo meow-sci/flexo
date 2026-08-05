@@ -24,6 +24,8 @@ import {
 } from '../ksa/types';
 import type { EditingPart } from '../ksa/types';
 import { envelopeToPart, type ProjectExportEnvelope } from './projectTransfer';
+import { status } from './statusStore';
+import { notify } from './notificationStore';
 
 /**
  * PROJECTS — the editing experience is "project"-based. A project bundles all of
@@ -305,6 +307,22 @@ export function saveCurrentProject(): void {
   } catch (err) {
     // localStorage can throw (quota / private mode) — surface but don't crash editing.
     console.warn('flexo: failed to persist project', err);
+    // v1 stopped at that console.warn, so the user kept editing work that was no longer
+    // being saved with no sign anything was wrong. This is the loudest tier flexo has: a
+    // red 10s status flash AND a sticky unread notification carrying the full error text
+    // (design-system-services §2.2 errors row, "newly surfaced").
+    //
+    // Called directly rather than through the `toast()` facade because `src/state/` may
+    // not import from `src/ui/` — state → state is the sanctioned spelling.
+    const id = notify({
+      severity: 'danger',
+      title: 'Autosave failed',
+      body: `Your latest changes were not saved — storage full? ${String(err)}`,
+    });
+    status('Autosave failed — your latest changes were not saved', {
+      severity: 'danger',
+      notificationId: id,
+    });
   }
 }
 

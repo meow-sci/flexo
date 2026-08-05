@@ -115,6 +115,20 @@ export interface NozzleTarget {
   isActive: boolean;
 }
 
+/**
+ * Display label for one nozzle handle: the nozzle id, `#N` when its template is placed more
+ * than once (all those handles are the SAME nozzle in different frames, so the id alone
+ * would repeat), and `· FX` for the plume-override channel.
+ *
+ * Lives here rather than in the Engine panel because the status bar's tool segment names
+ * the same handle while exhaust placement is armed — two spellings of "which nozzle" would
+ * be free to drift.
+ */
+export function nozzleTargetLabel(target: NozzleTarget): string {
+  const instance = target.instanceCount > 1 ? ` #${target.instanceIndex + 1}` : '';
+  return `${target.nozzle.id}${instance}${target.ref.channel === 'fx' ? ' · FX' : ''}`;
+}
+
 /** Which nozzle the 3D gizmo edits; null ⇒ the first resolved target. */
 export const $activeNozzleRef = atom<NozzleRef | null>(null);
 

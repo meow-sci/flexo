@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Modal, Dialog, DialogHeader, Button, Switch, toast } from './kit';
+import { Modal, Dialog, DialogHeader, Button, Switch } from './kit';
 import { PreciseNumberInput } from './PreciseNumberInput';
 import { scaleEverything } from '../state/editorStore';
+import { toast } from './toast';
 
 /**
  * "Scale Everything" — multiplies the whole workspace (every part, connector,
@@ -47,7 +48,7 @@ export function ScaleEverythingDialog({
 
   const apply = (): void => {
     scaleEverything({ x, y, z });
-    toast({ title: `Scaled everything ${x}×${y}×${z}` }, { timeout: 1800 });
+    toast({ title: `Scaled everything ${x}×${y}×${z}` });
     close();
   };
 

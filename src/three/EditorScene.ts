@@ -144,9 +144,10 @@ import {
 import { $cameraRestore, $cameraSnap, $grids, $hideInterior } from '../state/viewStore';
 import { resolveInternal } from '../ksa/modExport';
 import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../state/layerStore';
-// The app's one user-facing notification channel (`GlobalToastRegion` is mounted at the
-// root) — the scene has no other way to say "that did nothing, and here is why".
-import { toast } from '../ui/kit';
+// The app's one user-facing feedback channel (a module function by design, since there is
+// no React context down here) — the scene has no other way to say "that did nothing, and
+// here is why".
+import { toast } from '../ui/toast';
 
 /** A highlightable scene entity — both SubPartObject and ConnectorObject match. */
 interface SelectableObject {
@@ -1424,10 +1425,12 @@ export class EditorScene {
       // Silence here reads as a dead button: the aim needs BUILT geometry (the selection's,
       // or the whole part's), which a still-loading or empty part does not have.
       console.warn('flexo: nothing to aim an IVA seat at (no geometry loaded yet?)');
+      // Transient, not a `warning`: this is immediate feedback on a button the user just
+      // pressed, so it belongs in the status channel and NOT in the notification center
+      // (design-system-services §2.2 — the wording carries the warning, the route doesn't).
       toast({
         title: 'Nothing to aim at',
         description: 'No SubPart geometry is loaded yet.',
-        variant: 'warning',
       });
       return;
     }

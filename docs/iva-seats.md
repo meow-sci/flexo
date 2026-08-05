@@ -250,8 +250,8 @@ Two behaviours are faithful to the C# and worth knowing before "fixing" them:
 (flexo always *emits* unit axes, so the non-unit case is only reachable from hand-authored
 game XML.)
 
-The floating `SeatViewBar` gives prev/next (wrapping, mirroring `C`), an **Exit** button and
-`Escape`. The `Escape` hotkey is registered with `preventDefault: false` and gated on
+The status bar's **tool segment** (`src/ui/status/ToolSegment.tsx`) gives prev/next (wrapping,
+mirroring `C`), the honesty tooltip, an **Exit** button and `Escape`. The `Escape` hotkey is registered with `preventDefault: false` and gated on
 `$seatView` so it never shadows a dialog/popover dismiss.
 
 ### What the preview does and does not simulate

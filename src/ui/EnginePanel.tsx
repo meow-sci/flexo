@@ -26,12 +26,12 @@ import {
   $engineEntries,
   $engineExhaustGizmo,
   $resolvedNozzleTargets,
+  nozzleTargetLabel,
   setActiveEngine,
   setActiveEngineTemplate,
   setActiveNozzleRef,
   setEngineExhaustGizmo,
   type EngineEntry,
-  type NozzleTarget,
 } from '../state/engineStore';
 import { $allReactionIndex, ensureReactionsLoaded } from '../state/reactionStore';
 import { predictPerformance, type EnginePerformance } from '../ksa/enginePhysics';
@@ -263,16 +263,6 @@ function PartEngineEditor({ part }: { part: EditingPart }) {
 }
 
 /**
- * Chip label for one nozzle handle: the nozzle id, `#N` when its template is placed more
- * than once (all those handles are the SAME nozzle in different frames, so the id alone
- * would repeat), and `· FX` for the plume-override channel.
- */
-function targetLabel(t: NozzleTarget): string {
-  const instance = t.instanceCount > 1 ? ` #${t.instanceIndex + 1}` : '';
-  return `${t.nozzle.id}${instance}${t.ref.channel === 'fx' ? ' · FX' : ''}`;
-}
-
-/**
  * The "Place exhaust in 3D" toggle plus one chip per nozzle handle of the open engine.
  *
  * Chips rather than a Select because SPATIAL identity is the point: the chip list mirrors the
@@ -321,11 +311,11 @@ function ExhaustPlacement() {
               className="flex-none"
               aria-label={
                 t.ref.scope === 'subpart' && t.ref.instanceId
-                  ? `${targetLabel(t)} on ${t.ref.instanceId}`
-                  : targetLabel(t)
+                  ? `${nozzleTargetLabel(t)} on ${t.ref.instanceId}`
+                  : nozzleTargetLabel(t)
               }
             >
-              {targetLabel(t)}
+              {nozzleTargetLabel(t)}
             </ToggleButton>
           ))}
         </ToggleButtonGroup>

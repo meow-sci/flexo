@@ -54,7 +54,9 @@ export { Slider } from './Slider';
 export { Tooltip, type TooltipKitProps } from './Tooltip';
 export { TagGroup, TagList, Tag, Chip } from './Tag';
 
-export { GlobalToastRegion, toast, toastQueue, type ToastMessage } from './Toast';
+// No toast exports: v1's stacking bottom-right region and its hard-coded top stacking layer
+// are deleted (foundation §6.3 death list). Transient feedback goes through
+// `src/ui/toast.ts` into the status bar's message channel + the notification center.
 
 export { Kbd } from './Kbd';
 export { IS_APPLE, keyLabel } from './keyDisplay';

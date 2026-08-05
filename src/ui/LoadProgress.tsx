@@ -1,23 +1,21 @@
 import { useStore } from '@nanostores/react';
 import { ProgressBar } from 'react-aria-components';
 import {
-  $browserPopupCount,
   $loadProgress,
   type DownloadInfo,
   type LoadProgressState,
 } from '../state/loadProgressStore';
 
 /**
- * Two always-available surfaces for the global asset {@link $loadProgress},
- * both rendering the same shared {@link Panel} widget:
+ * {@link PreviewLoadProgress} — a backdrop overlay centered over a preview pane, for the
+ * GLB/KTX2 downloads triggered by the Add Part / Add SubPart popups. It shows a
+ * `Loading N…` header (N = in-flight downloads) above one bar per file, each determinate
+ * whenever the download reports a Content-Length.
  *
- * - {@link WorkspaceLoadProgress}: a panel centered 1rem off the bottom of the
- *   screen, for environment (HDR) downloads while the 3D workspace is visible.
- * - {@link PreviewLoadProgress}: a backdrop overlay centered over a preview pane,
- *   for the GLB/KTX2 downloads triggered by the Add Part / Add SubPart popups.
- *
- * The panel shows a `Loading N…` header (N = in-flight downloads) above one bar
- * per file, each determinate whenever the download reports a Content-Length.
+ * The workspace-wide sibling that used to live here is gone: global asset progress is a
+ * status-bar segment now (`src/ui/status/ProgressSegment.tsx`), which also killed the
+ * hide-while-a-browser-is-open swap the two surfaces used to negotiate — both may show
+ * (design-system-services §1.2 #6).
  */
 function FileBar({ download }: { download: DownloadInfo }) {
   return (
@@ -61,20 +59,6 @@ function Panel({ state }: { state: LoadProgressState }) {
       {state.downloads.map((download) => (
         <FileBar key={download.id} download={download} />
       ))}
-    </div>
-  );
-}
-
-/** Bottom-center panel for the 3D workspace; hidden while an asset-browser popup is open. */
-export function WorkspaceLoadProgress() {
-  const state = useStore($loadProgress);
-  const popupCount = useStore($browserPopupCount);
-  if (!state.active || popupCount > 0) return null;
-  return (
-    <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2">
-      <div className="rounded-lg border border-border bg-panel/90 px-3 py-2 shadow-lg backdrop-blur">
-        <Panel state={state} />
-      </div>
     </div>
   );
 }

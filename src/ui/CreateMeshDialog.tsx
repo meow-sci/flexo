@@ -10,13 +10,13 @@ import {
   ToggleButton,
   Select,
   ListBoxItem,
-  toast,
 } from './kit';
 import { $part } from '../state/editorStore';
 import { useNumberDraft } from './numberDraft';
 import { addCustomMesh } from '../state/customAssetStore';
 import { DEFAULT_PRIMITIVE_PARAMS, PRIMITIVE_KINDS, PRIMITIVE_LABELS } from '../three/primitives';
 import type { PrimitiveKind, PrimitiveSpec } from '../ksa/types';
+import { toast } from './toast';
 
 interface CreateMeshDialogProps {
   onClose: () => void;

@@ -91,9 +91,10 @@ export function trackDownload(label: string): DownloadTracker {
 }
 
 /**
- * Number of open asset-browser popups (Add Part / Add SubPart). The workspace
- * progress bar hides while a popup is open because the popup shows its own
- * overlay variant over the preview pane.
+ * Number of open asset-browser popups (Add Part / Add SubPart), tracked so a browser can
+ * tell whether it owns the foreground. The status bar's progress segment no longer hides
+ * behind it — a browser's own preview-pane overlay and the segment may both show
+ * (design-system-services §1.2 #6).
  */
 export const $browserPopupCount = atom(0);
 

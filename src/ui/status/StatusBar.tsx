@@ -4,6 +4,10 @@ import { Chip, Menu, MenuItem, MenuTrigger, Popover, Tooltip } from '../kit';
 import { StatusChipButton, StatusDivider } from './StatusChip';
 import { MessageChannel } from './MessageChannel';
 import { NotificationBell } from './NotificationBell';
+import { ToolSegment } from './ToolSegment';
+import { SelectionReadout } from './SelectionReadout';
+import { ProgressSegment } from './ProgressSegment';
+import { TransformChips } from './TransformChips';
 import { getCommand, runCommand } from '../../state/commandStore';
 import { $interimMode, INTERIM_MODES, type InterimMode } from '../commands/interimMode';
 import { $activeLayer, $layerSummaries } from '../../state/selectors';
@@ -35,19 +39,19 @@ export function StatusBar() {
       <div className="flex flex-none items-center">
         <ModeChip />
         <LayerChip />
-        {/* segment 3: tool segment (measure / seat view / exhaust / marquee / chain) — P3.08 */}
-        {/* segment 4: selection readout (absorbs MeasurementInfo) — P3.09 */}
+        <ToolSegment />
+        <SelectionReadout />
       </div>
 
-      {/* Center group — segment 5. Absorbs all slack. */}
+      {/* Center group — segments 5 and 6. Absorbs all slack. */}
       <MessageChannel />
-      {/* segment 6: progress (absorbs WorkspaceLoadProgress) — P3.10 */}
+      <ProgressSegment />
 
       {/* Right group — hints and chips. Never shifts: `flex-none`. */}
       <div className="flex flex-none items-center">
         {/* segment 6b: advisory chips — P3.11 */}
         {/* segment 7: modifier hints — P3.12 */}
-        {/* segment 8: rotate / nudge chips (absorbs TransformHud) — P3.07 */}
+        <TransformChips />
         {/* segment 9: snap chip — P5B (needs snapStore) */}
         {/* segment 10: FPS readout — P3.13 */}
         <NotificationBell />

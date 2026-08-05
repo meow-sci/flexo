@@ -14,7 +14,6 @@ import {
   Select,
   ListBoxItem,
   Slider,
-  toast,
 } from './kit';
 import { $part } from '../state/editorStore';
 import {
@@ -30,6 +29,7 @@ import type {
   TextureChannel,
 } from '../ksa/types';
 import { createDefaultMaterial } from '../ksa/types';
+import { toast } from './toast';
 
 /**
  * Create/edit a reusable {@link CustomMaterial}: base color (picked color or an

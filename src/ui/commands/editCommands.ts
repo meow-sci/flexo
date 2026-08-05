@@ -17,7 +17,7 @@ import {
 } from '../../state/editorStore';
 import { $hasSelection } from '../../state/selectors';
 import { beginActionChain } from '../chain/openChainPalette';
-import { toast } from '../kit';
+import { toast } from '../toast';
 
 /**
  * Edit menu commands (design: foundation §3 "Edit").
@@ -39,7 +39,7 @@ export const EDIT_COMMANDS: Command[] = [
     enabled: () => $canUndo.get(),
     run: () => {
       const description = undo();
-      if (description) toast({ title: `Undo: ${description}` }, { timeout: 1500 });
+      if (description) toast({ title: `Undo: ${description}` });
     },
   },
   {
@@ -50,7 +50,7 @@ export const EDIT_COMMANDS: Command[] = [
     enabled: () => $canRedo.get(),
     run: () => {
       const description = redo();
-      if (description) toast({ title: `Redo: ${description}` }, { timeout: 1500 });
+      if (description) toast({ title: `Redo: ${description}` });
     },
   },
   {
@@ -76,7 +76,7 @@ export const EDIT_COMMANDS: Command[] = [
     enabled: () => $hasSelection.get(),
     run: () => {
       const n = copySelected();
-      if (n) toast({ title: `Copied ${n} ${n === 1 ? 'item' : 'items'}` }, { timeout: 1500 });
+      if (n) toast({ title: `Copied ${n} ${n === 1 ? 'item' : 'items'}` });
     },
   },
   {
@@ -87,7 +87,7 @@ export const EDIT_COMMANDS: Command[] = [
     enabled: () => $hasClipboard.get(),
     run: () => {
       const n = pasteClipboard();
-      if (n) toast({ title: `Pasted ${n} ${n === 1 ? 'item' : 'items'}` }, { timeout: 1500 });
+      if (n) toast({ title: `Pasted ${n} ${n === 1 ? 'item' : 'items'}` });
     },
   },
   {
@@ -158,7 +158,7 @@ export function historyCommands(): Command[] {
       keywords: 'history jump step',
       run: () => {
         const label = jumpToHistory(item.stepsFromCurrent);
-        toast({ title: `${verb}: ${label}` }, { timeout: 1500 });
+        toast({ title: `${verb}: ${label}` });
       },
     };
   });

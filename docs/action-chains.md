@@ -192,8 +192,9 @@ one. The old toggle (`toggleChainPalette`) survives only behind the SelectionToo
 button.
 
 **Open guards** (`tryOpenChain`, `src/ui/chain/openChainPalette.ts`), in order: no SubPart
-placements in the selection → toast *"Select SubParts to chain"*; any seed on a locked layer →
-toast *"Selection is on a locked layer"* (every other transform tool refuses the same way).
+placements in the selection → the status bar's message channel flashes *"Select SubParts to
+chain"*; any seed on a locked layer → *"Selection is on a locked layer"* (every other transform
+tool refuses the same way).
 Otherwise the selected placements' `instanceId`s are frozen **in selection order** as the seeds.
 
 **While open the palette is non-modal**, on purpose. Orbiting, gizmo drags, the single-key
@@ -212,9 +213,14 @@ second). That is the app-wide convention — the first Escape reverts the field 
 the second closes the palette.
 
 **Apply** reads `$chainEval` fresh, maps instances to `ChainCommitEntry[]`, commits, closes and
-toasts `Applied chain · +N SubParts` (or `· N transformed` when the chain created nothing). If a
-seed vanished between the last recompute and the click, `applyActionChain` returns `-1` and the
-toast says *"Chain not applied — seeds no longer exist"* rather than claiming success.
+flashes `Applied chain · +N SubParts` in the status bar's message channel (or `· N transformed`
+when the chain created nothing). If a seed vanished between the last recompute and the click,
+`applyActionChain` returns `-1` and the message says *"Chain not applied — seeds no longer
+exist"* rather than claiming success.
+
+While a session is open the status bar mirrors the chain window's footer as a read-only chip
+(`⛓ N instances · +M new`, or the evaluation error in red) — `ToolSegment.tsx`, fed by
+`$chainSession`/`$chainEval`.
 
 Per-op parameters are remembered across sessions in the module-private `flexo:chainDefaults`
 blob (written on every `updateChainOp`), so an accidental Escape loses the step *list*, not the

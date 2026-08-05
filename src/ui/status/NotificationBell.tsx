@@ -24,7 +24,17 @@ import {
  * different things open the same surface: this button, the Window ▸ Notifications… command
  * and a click on a status message that mirrors a center entry.
  */
-export function NotificationBell() {
+export interface NotificationBellProps {
+  /**
+   * Extra classes for the trigger chip. The phone's `CondensedStatusBar` uses it to grow the
+   * chip to a 44px touch target (foundation §14.4) — the desktop bar passes nothing.
+   */
+  className?: string;
+  /** Icon size in px. The phone bumps it for the `sm` tier. */
+  iconSize?: number;
+}
+
+export function NotificationBell({ className, iconSize = 13 }: NotificationBellProps = {}) {
   const unread = useStore($unreadCount);
   const open = useStore($notificationCenterOpen);
   const isPhone = useIsPhone();
@@ -55,10 +65,10 @@ export function NotificationBell() {
   const trigger = (
     <StatusChipButton
       aria-label={label}
-      className={cn('relative transition-transform duration-150', pulse && 'scale-125')}
+      className={cn('relative transition-transform duration-150', pulse && 'scale-125', className)}
       onPress={() => (open ? closeNotificationCenter() : openNotificationCenter())}
     >
-      <Bell size={13} />
+      <Bell size={iconSize} />
       {unread > 0 && (
         <span className="min-w-3.5 rounded-full bg-accent px-1 text-[10px] font-medium leading-[14px] tabular-nums text-accent-fg">
           {unread > 9 ? '9+' : unread}

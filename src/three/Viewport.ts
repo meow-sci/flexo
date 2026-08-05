@@ -8,6 +8,7 @@ import { SceneEnvironment } from './SceneEnvironment';
 import { $cameraState, type CameraDir, type CameraState } from '../state/viewStore';
 import { $lighting } from '../state/lightingStore';
 import { $showFpsCounter } from '../state/settingsStore';
+import { $fpsReport } from '../state/statusStore';
 import {
   $seatLook,
   nudgeSeatLook,
@@ -58,6 +59,10 @@ export class Viewport {
   /** FPS overlay (stats.js), mounted only while {@link $showFpsCounter} is on. */
   private stats: Stats | null = null;
   private readonly fpsUnsub: () => void;
+  /** Frames drawn since {@link fpsWindowStart} — the numerator of the 2Hz status report. */
+  private fpsFrames = 0;
+  /** `performance.now()` at the start of the current FPS sampling window; 0 = not sampling. */
+  private fpsWindowStart = 0;
   /**
    * Active IVA seat preview, or null. Holds everything {@link exitSeatView} has to undo:
    * the orbit camera as it was, and the `$seatLook` subscription that drives the camera.
@@ -152,10 +157,20 @@ export class Viewport {
    * fast can this scene draw", and against an on-demand loop it would otherwise
    * read ~0 fps whenever the user stopped moving. Turning it on is therefore also
    * opting into the idle cost it measures.
+   *
+   * The same switch feeds the status bar's FPS segment through
+   * {@link import('../state/statusStore').$fpsReport} — a scene→UI report atom, the same
+   * sanctioned three→state direction as `$selectionBounds` and `$lightPreviewCount`. The
+   * graph panel stays here in the viewport; the bar gets the number. Turning the counter
+   * OFF clears the atom, so this remains the one and only continuous-render opt-in and
+   * nothing keeps a stale reading on screen.
    */
   private setFpsCounter(on: boolean): void {
     if (on === (this.stats !== null)) return;
     this.loop.setContinuous(on);
+    this.fpsFrames = 0;
+    this.fpsWindowStart = 0;
+    if (!on) $fpsReport.set(null);
     if (on) {
       const stats = new Stats();
       stats.showPanel(0); // 0: FPS
@@ -395,6 +410,29 @@ export class Viewport {
     this.renderer.render(this.scene, this.camera);
     this.labelRenderer.render(this.scene, this.camera);
     this.stats?.end();
+    if (this.stats) this.reportFps();
+  }
+
+  /**
+   * Publishes frames-per-second to the status bar at most twice a second, counted over the
+   * frames actually drawn since the last report.
+   *
+   * Only ever called while the stats panel is up — i.e. while the loop is already
+   * continuous — so it can never be the thing keeping the loop alive.
+   */
+  private reportFps(): void {
+    const now = performance.now();
+    if (this.fpsWindowStart === 0) {
+      this.fpsWindowStart = now;
+      this.fpsFrames = 0;
+      return;
+    }
+    this.fpsFrames++;
+    const elapsed = now - this.fpsWindowStart;
+    if (elapsed < 500) return;
+    $fpsReport.set(Math.round((this.fpsFrames * 1000) / elapsed));
+    this.fpsFrames = 0;
+    this.fpsWindowStart = now;
   }
 
   dispose(): void {

@@ -79,6 +79,20 @@ longer resolves (a dynamic `layer:activate:<layerId>` for a deleted layer) is no
 write — it is simply skipped when the palette renders, which is the "no migration" rule
 applied to a preference key.
 
+### Feedback: status messages and notifications (persisted: nothing)
+
+The toast system is gone. Transient feedback is ephemeral `statusStore` state — one message
+slot, one tool-status model, the progress aggregate, the FPS report and the advisory list —
+all in memory and none of it persisted; a message simply expires. The notification center
+(`notificationStore`) is a **session-only ring buffer of 100**: notifications are news, not
+data, so a reload starts empty and anything that must survive a reload is document or asset
+state living elsewhere. Modifier-hint state (`modifierStore`) is ephemeral for the same
+reason.
+
+Phase 3 of the v2 shell added **no new persisted keys**. The state the status bar *edits* —
+bounds mode (`flexo:measure`), nudge/rotate preferences, `flexo:showFpsCounter`, the active
+layer — stays owned by the stores that already persist it.
+
 ## What NOT to Persist
 
 Do **not** persist:

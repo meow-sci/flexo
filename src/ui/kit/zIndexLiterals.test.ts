@@ -28,7 +28,6 @@ const ALLOWLIST = [
   'src/ui/FloatingEditorPanel.tsx',
   'src/ui/FloatingInspector.tsx',
   'src/ui/FloatingPreviewToolbar.tsx',
-  'src/ui/ImportReportCard.tsx',
   'src/ui/LoadProgress.tsx',
   'src/ui/ManageTexturesPanel.tsx',
   'src/ui/ViewportDropZone.tsx',

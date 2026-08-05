@@ -57,6 +57,12 @@ measure how fast the scene *can* draw, and would otherwise read ~0 fps whenever
 the user stopped moving. Turning the overlay on is therefore also opting into the
 idle cost it reports.
 
+While the overlay is up, `Viewport` also publishes the frame rate to
+`statusStore.$fpsReport` (rounded, at most every 500 ms) so the status bar can show the
+number next to the bell; the graph panel itself stays in the viewport. Switching the
+counter off clears the atom and returns the loop to on-demand — the reporting adds no
+frames of its own.
+
 A missed invalidate does not crash — it shows as a viewport that is silently one
 edit out of date. When adding a new scene mutation, ask what wakes the frame.
 

@@ -42,6 +42,7 @@ import {
   setSelection,
 } from './editorStore';
 import { $projectName } from './projectStore';
+import { notify } from './notificationStore';
 import { $customCatalog } from './catalogStore';
 import { $modelImportSettings, $simulateGlass } from './settingsStore';
 import { assetKeys, deleteAsset, getAsset, putAsset } from './assetDb';
@@ -187,13 +188,13 @@ export function closeImportModel(): void {
 }
 
 /**
- * What one completed import or replace actually did, for the post-import summary
- * ({@link import('../ui/ImportReportCard').ImportReportCard}).
+ * What one completed import or replace actually did, for the post-import summary.
  *
- * A toast can hold one line; an import creates a layer, N SubParts, N placements, N textures
- * and N materials, and a REPLACE additionally destroys SubParts — the user has to be able to
- * read which ones. So the outcome is published as document-independent state and rendered as a
- * dismissible card that never takes focus, rather than being crammed into a toast description.
+ * A status message holds one line; an import creates a layer, N SubParts, N placements, N
+ * textures and N materials, and a REPLACE additionally destroys SubParts — the user has to be
+ * able to read which ones. So the outcome is published as document-independent state AND
+ * posted as a sticky RICH notification-center entry ({@link postImportReport}), whose body is
+ * rendered by `src/ui/status/notificationBodies.tsx` and never truncated.
  */
 export interface ImportReport {
   /** Fresh per report, so the card remounts (and re-announces) for each one. */
@@ -214,10 +215,34 @@ export interface ImportReport {
   warnings: ImportWarning[];
 }
 
+/**
+ * The LAST import's outcome. Nothing renders it today — the report is shown by the
+ * notification entry {@link postImportReport} posts — but it is deliberately kept as the
+ * document-independent record of "what the last import did" for the import-pipeline rework
+ * to build on (plan: P3.14 "keep `$importReport`; the CARD is what dies").
+ */
 export const $importReport = atom<ImportReport | null>(null);
 
 export function dismissImportReport(): void {
   $importReport.set(null);
+}
+
+/**
+ * Publishes a finished import both ways: into the {@link $importReport} atom and as the
+ * sticky rich notification that REPLACED the old floating `ImportReportCard`
+ * (design-system-services §2.5).
+ *
+ * Sticky-until-dismissed and one entry PER import, so a second import no longer erases the
+ * first report — the center keeps the history (`notificationStore` defaults `rich` to unread
+ * + sticky, and the bell pulses).
+ */
+function postImportReport(report: ImportReport): void {
+  $importReport.set(report);
+  notify({
+    severity: 'rich',
+    title: `Import report — ${report.fileName}`,
+    rich: { kind: 'import-report', payload: report },
+  });
 }
 
 function shortId(): string {
@@ -1246,7 +1271,7 @@ export async function importModelAsMeshes(
   // Active layer + selection are ephemeral (not undo-tracked).
   setActiveLayer(layerId);
   setSelection(newPlacementIndices, [], []);
-  $importReport.set({
+  postImportReport({
     id: shortId(),
     mode: 'import',
     fileName,
@@ -1656,7 +1681,7 @@ export async function replaceImport(
   releaseImportAtlas(importId);
 
   await scheduleRebuild();
-  $importReport.set({
+  postImportReport({
     id: shortId(),
     mode: 'replace',
     fileName: normalized.fileName,

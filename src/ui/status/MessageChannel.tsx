@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/react';
 import { Button, cn } from '../kit';
-import { $lastStatusMessage, $statusMessage, type Severity } from '../../state/statusStore';
+import { SEVERITY_DOT, SEVERITY_TEXT } from './statusTokens';
+import { $lastStatusMessage, $statusMessage } from '../../state/statusStore';
 import { openNotificationCenter } from '../../state/notificationStore';
 
 /**
@@ -15,21 +16,6 @@ import { openNotificationCenter } from '../../state/notificationStore';
  *
  * Undo enrollment: NONE (foundation §13).
  */
-
-/** The 2px leading severity dot (§1.2 #5). */
-const DOT: Record<Severity, string> = {
-  info: 'bg-fg-muted',
-  success: 'bg-accent',
-  warning: 'bg-warning',
-  danger: 'bg-danger',
-};
-
-const TEXT: Record<Severity, string> = {
-  info: 'text-fg-muted',
-  success: 'text-fg',
-  warning: 'text-warning',
-  danger: 'text-danger',
-};
 
 export function MessageChannel() {
   const message = useStore($statusMessage);
@@ -56,20 +42,22 @@ export function MessageChannel() {
       >
         {shown && (
           <>
-            <span className={cn('size-[2px] shrink-0 rounded-full', DOT[shown.severity])} />
+            <span
+              className={cn('size-[2px] shrink-0 rounded-full', SEVERITY_DOT[shown.severity])}
+            />
             {shown.notificationId ? (
               // The mirrored center entry is one click away — the message is a receipt,
               // the entry is the record (design §1.2 #5).
               <Button
                 size="xs"
                 variant="ghost"
-                className={cn('min-w-0 px-1 font-normal', TEXT[shown.severity])}
+                className={cn('min-w-0 px-1 font-normal', SEVERITY_TEXT[shown.severity])}
                 onPress={() => openNotificationCenter(shown.notificationId)}
               >
                 <span className="truncate">{shown.text}</span>
               </Button>
             ) : (
-              <span className={cn('truncate', TEXT[shown.severity])}>{shown.text}</span>
+              <span className={cn('truncate', SEVERITY_TEXT[shown.severity])}>{shown.text}</span>
             )}
             {action && (
               <Button

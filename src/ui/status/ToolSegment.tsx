@@ -1,17 +1,8 @@
 import { useStore } from '@nanostores/react';
-import {
-  ChevronLeft,
-  ChevronRight,
-  Eye,
-  Flame,
-  Info,
-  Link2,
-  Ruler,
-  X,
-  type LucideIcon,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight, Info, Link2, X } from 'lucide-react';
 import { Kbd, Tooltip } from '../kit';
 import { StatusChip, StatusChipButton, StatusDivider } from './StatusChip';
+import { TOOL_ICONS } from './statusTokens';
 import { $toolStatus, type ToolStatus } from '../../state/statusStore';
 import { $seatView, enterSeatView, exitSeatView } from '../../state/ivaStore';
 import { $part, selectIvaSeat } from '../../state/editorStore';
@@ -35,13 +26,6 @@ import { $chainEval } from '../../three/chainEval';
  *
  * Undo enrollment: NONE.
  */
-
-/** The lucide names `ToolStatus.icon` may carry. */
-const TOOL_ICONS: Record<string, LucideIcon> = {
-  Eye,
-  Ruler,
-  Flame,
-};
 
 export function ToolSegment() {
   const tool = useStore($toolStatus);

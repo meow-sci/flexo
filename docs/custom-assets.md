@@ -365,12 +365,15 @@ interior-only is worse than not offering it.
     review step (kept / new / removed, with the removed SubParts named) and the **Update
     materials from file** switch; merging is not offered, since collapsing everything into
     one SubPart could not preserve a single existing identity.
-- `ImportReportCard.tsx` — the post-import summary: a small dismissible card (bottom-right,
-  non-modal, never focus-stealing) driven by `$importReport`, which both
-  `importModelAsMeshes()` and `replaceImport()` publish. It reports what was created
-  (SubParts / placements / textures / materials), and for a replace the kept / removed counts
-  with the **removed SubParts named**, plus the non-blocking warnings. A one-line toast could
-  not carry that, so the success toast was dropped in its favour.
+- The **post-import summary** — a sticky *rich* entry in the notification center
+  (`src/ui/status/ImportReportBody.tsx`, registered under the `'import-report'` kind in
+  `notificationBodies.tsx`), posted by `customAssetStore.postImportReport()` from both
+  `importModelAsMeshes()` and `replaceImport()` alongside the `$importReport` atom. It
+  reports what was created (SubParts / placements / textures / materials), and for a replace
+  the kept / removed counts with the **removed SubParts named**, plus the non-blocking
+  warnings. A one-line status message could not carry that, so there is no success flash for
+  an import. The entry is sticky (survives "Clear all", dismissed only by its ✕) and each
+  import posts its own, so the center keeps a history of the last imports.
 - `ViewportDropZone.tsx` — wraps the 3D workspace so dropping a `.glb`/`.gltf` (or a
   multi-file `.gltf` set) opens the same dialog pre-loaded. Plain React drag handlers, not
   three.js: `dragover` must `preventDefault()` or no `drop` fires, drags with no file are

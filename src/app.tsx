@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { ViewportCanvas } from './three/ViewportCanvas';
 import { ViewportDropZone } from './ui/ViewportDropZone';
 import { ImportModelDialog } from './ui/ImportModelDialog';
-import { ImportReportCard } from './ui/ImportReportCard';
 import { SelectionToolbar } from './ui/SelectionToolbar';
 import { MultiSelectToolbar } from './ui/MultiSelectToolbar';
 import { InspectorContent } from './ui/InspectorContent';
@@ -17,6 +16,7 @@ import { ChainPalette } from './ui/chain/ChainPalette';
 import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys';
 import { MenuBar } from './ui/shell/MenuBar';
 import { PhoneTopBar } from './ui/shell/phone/PhoneTopBar';
+import { CondensedStatusBar } from './ui/shell/phone/CondensedStatusBar';
 import { DialogRoot } from './ui/shell/DialogRoot';
 import { CommandPalette } from './ui/palette/CommandPalette';
 import { Sidebar } from './ui/shell/Sidebar';
@@ -33,11 +33,19 @@ import { showAboutOnFirstUse } from './state/aboutStore';
 // here, before any of them render.
 import './ui/commands';
 import { initToolStatusWiring } from './ui/status/toolStatusWiring';
+import { initAdvisoryWiring } from './ui/status/advisoryWiring';
+import { initModifierHintProviders } from './ui/status/modifierHintProviders';
+import { setHoverContext } from './state/modifierStore';
 
 // Start feeding the status bar's tool segment from the v1 tool sessions (seat view, measure,
 // exhaust placement). Module scope, not an effect: the segment must be truthful from the
 // first paint, and the subscription outlives every component. Idempotent.
 initToolStatusWiring();
+
+// Raise/lower the status bar's advisory chips (light-preview cap, mods-folder re-grant) and
+// register the shipped modifier-hint providers. Same reasoning, same idempotency.
+initAdvisoryWiring();
+initModifierHintProviders();
 
 /**
  * The v2 docked shell (foundation.md §1):
@@ -106,7 +114,17 @@ function App() {
 
         {/* The canvas cell. Canvas fills it exactly ⇒ orbit center == visible center.
             Min size per foundation §1.1. */}
-        <div data-viewport-cell className="relative min-h-[180px] min-w-[240px] flex-1">
+        <div
+          data-viewport-cell
+          className="relative min-h-[180px] min-w-[240px] flex-1"
+          // Coarse hover stamping for the status bar's modifier hints (design-system-services
+          // §1.4): the hints answer "what would ⇧ do HERE", so the host regions — not the
+          // individual entities — report what the pointer is over. `'viewport-entity'` needs a
+          // hover raycast the scene does not publish yet; the viewport provider matches both
+          // values, so it upgrades for free when the Build-mode phase adds the reporting.
+          onPointerEnter={() => setHoverContext('viewport')}
+          onPointerLeave={() => setHoverContext('none')}
+        >
           {/* The 3D workspace, wrapped so a dropped .glb opens the import dialog. The
               drop zone wraps the CELL only — a drop on a sidebar does nothing. */}
           <ViewportDropZone>
@@ -154,10 +172,6 @@ function App() {
           {/* Floating per-mesh material editor (glow / visor surface / per-face textures). */}
           <ManageTexturesPanel />
 
-          {/* Bottom-right: what the last import/replace created, matched and removed.
-              Dismissible, non-modal, never focus-stealing. */}
-          <ImportReportCard />
-
           {/* Left-side floating command palette for action chains (⌘K). Self-gates on the
               chain session, and stays non-modal so the viewport keeps working while open. */}
           <ChainPalette />
@@ -165,12 +179,27 @@ function App() {
 
         {!isPhone && (
           <Sidebar side="right">
-            <InspectorContent />
+            {/* The right sidebar is flexo's list surface (⇧ range-select, ⌘ toggle), so it
+                stamps `'list'` for the modifier hints. `display: contents` on purpose — the
+                wrapper must add ZERO layout (the panel inside is `h-full` against the
+                sidebar's scroll body), and React synthesizes enter/leave from the FIBER
+                tree, so a box-less element still receives them. */}
+            <div
+              className="contents"
+              data-hover-list
+              onPointerEnter={() => setHoverContext('list')}
+              onPointerLeave={() => setHoverContext('none')}
+            >
+              <InspectorContent />
+            </div>
           </Sidebar>
         )}
       </div>
 
       {!isPhone && <StatusBar />}
+      {/* The phone's condensed strip — the last flex child, exactly like the desktop bar.
+          The ModeTabBar docks BELOW it when the mode machine lands (foundation §12). */}
+      {isPhone && <CondensedStatusBar />}
 
       {/* Overlay dialogs — portal to body; mount position is irrelevant. */}
 

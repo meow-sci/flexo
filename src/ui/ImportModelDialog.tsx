@@ -278,8 +278,8 @@ function ImportModelBody({
         // importedMeshCache), so these working copies are ours to free.
         for (const mesh of normalized.meshes) mesh.geometry.dispose();
       }
-      // The outcome is reported by the ImportReportCard (counts, removed SubParts, warnings) —
-      // a success toast would say strictly less, twice.
+      // The outcome is reported by the import-report notification (counts, removed SubParts,
+      // warnings — posted by customAssetStore); a success flash would say strictly less, twice.
       closeImportModel();
     } catch (err: unknown) {
       console.error('flexo: model import failed', err);

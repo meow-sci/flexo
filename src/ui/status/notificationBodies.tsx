@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react';
+import { ImportReportBody } from './ImportReportBody';
+import type { ImportReport } from '../../state/customAssetStore';
 
 /**
  * The rich-notification body registry (design:
@@ -16,7 +18,8 @@ import type { ReactNode } from 'react';
  * The payload arrives as `unknown`: each body owns the cast, right next to the `notify()`
  * call site that produced it.
  *
- * Registered kinds: (none yet — `'import-report'` lands with the ImportReportCard
- * absorption, P3.14.)
+ * Registered kinds: `'import-report'`.
  */
-export const notificationBodies: Record<string, (props: { payload: unknown }) => ReactNode> = {};
+export const notificationBodies: Record<string, (props: { payload: unknown }) => ReactNode> = {
+  'import-report': ({ payload }) => <ImportReportBody report={payload as ImportReport} />,
+};

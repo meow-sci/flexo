@@ -74,8 +74,14 @@ extend the normalizer. A **breaking** change (removed/renamed/retyped field, cha
 meaning/units) MUST bump `PROJECT_SCHEMA_VERSION`, which *is* the purge switch. The full rule
 lives in the project constitution in [AGENTS.md](../AGENTS.md).
 
-When a purge does happen, the removed project names are surfaced to the user in a boot toast
-(the UI drains them via `consumeRemovedProjectsNotice()`) — not just a `console.warn`.
+When a purge does happen, the removed project names are surfaced to the user at boot as a
+**warning**: an 8-second amber flash in the status bar's message channel **and** an unread
+entry in the notification center, so the names survive being looked away from (the UI drains
+them via `consumeRemovedProjectsNotice()`) — not just a `console.warn`.
+
+An **autosave write failure** (quota exceeded, private mode) is surfaced the same way at the
+loudest tier: a red status flash plus a sticky unread notification carrying the full error
+text. Before v2 this was a silent `console.warn` and editing simply stopped being saved.
 
 ## Actions (projectStore exports)
 

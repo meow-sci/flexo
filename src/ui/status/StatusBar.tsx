@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/react';
-import { Boxes, Check, ChevronDown, Lock, Palette, PlayCircle, Rocket, Table2 } from 'lucide-react';
+import { Check, ChevronDown, Lock } from 'lucide-react';
 import { Chip, Menu, MenuItem, MenuTrigger, Popover, Tooltip } from '../kit';
+import { MODE_ICONS } from './statusTokens';
 import { StatusChipButton, StatusDivider } from './StatusChip';
 import { MessageChannel } from './MessageChannel';
 import { NotificationBell } from './NotificationBell';
@@ -8,8 +9,11 @@ import { ToolSegment } from './ToolSegment';
 import { SelectionReadout } from './SelectionReadout';
 import { ProgressSegment } from './ProgressSegment';
 import { TransformChips } from './TransformChips';
+import { AdvisoryChips } from './AdvisoryChips';
+import { ModifierHints } from './ModifierHints';
+import { FpsSegment } from './FpsSegment';
 import { getCommand, runCommand } from '../../state/commandStore';
-import { $interimMode, INTERIM_MODES, type InterimMode } from '../commands/interimMode';
+import { $interimMode, INTERIM_MODES } from '../commands/interimMode';
 import { $activeLayer, $layerSummaries } from '../../state/selectors';
 import { $layerView, layerViewState } from '../../state/layerStore';
 import { setActiveLayer } from '../../state/editorStore';
@@ -49,24 +53,17 @@ export function StatusBar() {
 
       {/* Right group — hints and chips. Never shifts: `flex-none`. */}
       <div className="flex flex-none items-center">
-        {/* segment 6b: advisory chips — P3.11 */}
-        {/* segment 7: modifier hints — P3.12 */}
+        <AdvisoryChips />
+        <ModifierHints />
         <TransformChips />
-        {/* segment 9: snap chip — P5B (needs snapStore) */}
-        {/* segment 10: FPS readout — P3.13 */}
+        {/* segment 9: snap chip — the Build-mode phase, which creates `snapStore`. This is
+            the ONE segment of the design's eleven that Phase 3 deliberately leaves empty. */}
+        <FpsSegment />
         <NotificationBell />
       </div>
     </div>
   );
 }
-
-const MODE_ICONS: Record<InterimMode, typeof Boxes> = {
-  build: Boxes,
-  animation: PlayCircle,
-  data: Table2,
-  engine: Rocket,
-  surface: Palette,
-};
 
 /**
  * Segment 1 — the mode chip. Permanent (design §1.7: the bar never fully empties), and the

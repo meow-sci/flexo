@@ -1,0 +1,67 @@
+import { registerModifierHints } from '../../state/modifierStore';
+
+/**
+ * The modifier-hint providers flexo ships TODAY (design:
+ * `plans/flexo_v2/design/design-system-services.md` §1.4).
+ *
+ * A provider is registered DATA, not a component: it answers "what would holding a modifier
+ * do right now, for the surface under the pointer". The rule for adding one is strict —
+ * **only gestures that actually exist may be advertised**. A hint for a gesture that does
+ * nothing is worse than no hint at all, so the roster below is limited to the two pointer
+ * modifiers verified in the v1 code (additive click-select in `SelectionManager`, and the
+ * shift-range/toggle selection in the list hooks).
+ *
+ * **Not registered here, on purpose** — each lands with the phase that builds its gesture,
+ * registered next to the gesture itself so the two can never drift apart:
+ *
+ * | Provider | Gesture | Owner |
+ * |---|---|---|
+ * | `build-viewport` ⌥ Duplicate drag | ⌥-drag to duplicate (LOCKED gesture #7) | Build-mode phase |
+ * | `marquee` ⇧ Box select / ⌥⇧ Subtract | marquee drag | Build-mode phase |
+ * | `gizmo-drag` ⌃ Snap invert | hold-⌃ snap inversion (needs `snapStore`) | Build-mode phase |
+ * | `timeline` ⌃ Snap to keys | keyframe drag snapping | Animation phase |
+ * | `animation-pose` ⇧ Axis lock | pose-gizmo axis lock | Animation phase |
+ *
+ * **Known interim limitation**: `HintContext` carries `hover`, `hasSelection` and
+ * `dialogOpen` only — there is no mode, active-tool or dragging field yet, because
+ * `modeStore` / the `$activeTool` slot do not exist (they arrive with the mode phase). The
+ * design writes its providers in mode terms (`ctx.mode === 'build' && …`); the two below are
+ * therefore expressed with the narrower context, which makes them mode-agnostic. That is
+ * honest — additive click-select works in every mode today. When the mode machine lands,
+ * `viewport-select` becomes the design's `build-viewport` provider and gains its ⌥ and ⌃
+ * rows.
+ *
+ * Also interim: the scene reports no per-entity hover, so `$hoverContext` never takes the
+ * `'viewport-entity'` value. The viewport provider matches BOTH viewport contexts so it
+ * fires correctly either way once hover raycasting starts reporting.
+ */
+
+let registered = false;
+
+/** Registers the shipped providers. Idempotent (StrictMode / hot-reload safe). */
+export function initModifierHintProviders(): void {
+  if (registered) return;
+  registered = true;
+
+  // ⌘/⌃-click and ⇧-click both add to the selection in the viewport (v1
+  // `SelectionManager.handleClick` additive path). Only meaningful once something is
+  // selected — with an empty selection every click is a plain pick.
+  registerModifierHints('viewport-select', (ctx) =>
+    ctx.hover.startsWith('viewport') && ctx.hasSelection
+      ? [
+          { mod: 'shift', label: 'Add to selection', priority: 20 },
+          { mod: 'meta', label: 'Toggle in selection', priority: 30 },
+        ]
+      : [],
+  );
+
+  // The list hooks: ⇧ extends a range from the anchor (grow-only), ⌘/⌃ toggles one row.
+  registerModifierHints('list', (ctx) =>
+    ctx.hover === 'list'
+      ? [
+          { mod: 'shift', label: 'Range select', priority: 10 },
+          { mod: 'meta', label: 'Toggle', priority: 20 },
+        ]
+      : [],
+  );
+}

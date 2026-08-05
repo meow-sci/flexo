@@ -52,7 +52,7 @@ const entryLabel = (e: EngineEntry): string =>
   e.kind === 'part' ? 'Part-level (RCS / gas generator)' : shortLabel(e.templateId);
 
 /**
- * The Engine Designer body (full-sidebar `$inspectorMode === 'engine'`). Lists the part's
+ * The Engine Designer body (the right sidebar in `$mode === 'engine'`). Lists the part's
  * engines — every SubPart template carrying a thrust chamber, PLUS a part-scope entry when
  * `<PartGameData>` carries engine hardware itself (how stock authors an RCS battery and
  * gas-generator cycles) — lets you define a new one on a reused placement, and, for the

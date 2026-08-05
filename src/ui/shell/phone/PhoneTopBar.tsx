@@ -6,7 +6,7 @@ import { MenuSheet } from './MenuSheet';
 import { runCommand } from '../../../state/commandStore';
 import { $canRedo, $canUndo } from '../../../state/editorStore';
 import { $projectName } from '../../../state/projectStore';
-import { $interimMode, INTERIM_MODES } from '../../commands/interimMode';
+import { $mode, MODES } from '../../../state/modeStore';
 
 /**
  * The phone's one slim top row (design: `plans/flexo_v2/design/foundation.md` §12 phone
@@ -25,12 +25,12 @@ import { $interimMode, INTERIM_MODES } from '../../commands/interimMode';
  */
 export function PhoneTopBar() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const mode = useStore($interimMode);
+  const mode = useStore($mode);
   const projectName = useStore($projectName);
   const canUndo = useStore($canUndo);
   const canRedo = useStore($canRedo);
 
-  const modeLabel = INTERIM_MODES.find((entry) => entry.id === mode)?.label ?? '';
+  const modeLabel = MODES.find((entry) => entry.id === mode)?.label ?? '';
 
   return (
     <>

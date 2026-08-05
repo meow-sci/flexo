@@ -4,7 +4,8 @@ import { GripVertical } from 'lucide-react';
 import { PreviewScrubber } from './PreviewScrubber';
 import { cn, panelChrome, useIsPhone } from './kit';
 import { $activeAnimation } from '../state/animationStore';
-import { $inspectorMode, $animPreviewFloatPos, setAnimPreviewFloatPos } from '../state/uiStore';
+import { $animPreviewFloatPos, setAnimPreviewFloatPos } from '../state/uiStore';
+import { $mode } from '../state/modeStore';
 
 /**
  * A floating toolbar holding the animation preview scrubber + play button, hovering over
@@ -28,13 +29,13 @@ const KEEP_VISIBLE_Y = 28;
 
 export function FloatingPreviewToolbar() {
   const isPhone = useIsPhone();
-  const mode = useStore($inspectorMode);
+  const mode = useStore($mode);
   const anim = useStore($activeAnimation);
   const stored = useStore($animPreviewFloatPos);
   const [drag, setDrag] = useState<{ x: number; y: number } | null>(null);
 
-  // Only while the Animation editor has a clip open (its atoms persist across mode switches).
-  if (mode !== 'anim' || !anim) return null;
+  // Only in Animation mode with a clip open (its atoms persist across mode switches).
+  if (mode !== 'animation' || !anim) return null;
 
   // Phone: in-flow bar in the centered top stack — no absolute positioning or drag.
   if (isPhone) {

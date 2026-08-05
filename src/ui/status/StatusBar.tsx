@@ -13,7 +13,7 @@ import { AdvisoryChips } from './AdvisoryChips';
 import { ModifierHints } from './ModifierHints';
 import { FpsSegment } from './FpsSegment';
 import { getCommand, runCommand } from '../../state/commandStore';
-import { $interimMode, INTERIM_MODES } from '../commands/interimMode';
+import { $mode, MODES } from '../../state/modeStore';
 import { $activeLayer, $layerSummaries } from '../../state/selectors';
 import { $layerView, layerViewState } from '../../state/layerStore';
 import { setActiveLayer } from '../../state/editorStore';
@@ -69,13 +69,13 @@ export function StatusBar() {
  * Segment 1 — the mode chip. Permanent (design §1.7: the bar never fully empties), and the
  * fix for v1's "which mode am I in?" invisibility.
  *
- * Reads the INTERIM mode adapter; the mode phase swaps `$interimMode`/`INTERIM_MODES` for
- * the real `modeStore` and this component follows without another edit.
+ * Reads `modeStore` directly for the icon + label, and runs the `mode.*` COMMANDS from its
+ * menu — the same dataset the menubar switcher and the palette use.
  */
 function ModeChip() {
-  const mode = useStore($interimMode);
+  const mode = useStore($mode);
   const Icon = MODE_ICONS[mode];
-  const label = INTERIM_MODES.find((m) => m.id === mode)?.label ?? 'Build';
+  const label = MODES.find((m) => m.id === mode)?.label ?? 'Build';
 
   return (
     <MenuTrigger>
@@ -99,7 +99,7 @@ function ModeChip() {
 function ModeMenuBody() {
   return (
     <Menu aria-label="Editing mode">
-      {INTERIM_MODES.map((mode) => {
+      {MODES.map((mode) => {
         const command = getCommand(`mode.${mode.id}`);
         const disabled = command?.enabled?.() === false;
         const checked = command?.checked?.() === true;
@@ -142,7 +142,7 @@ function ModeMenuBody() {
  * targets adds. Setting it is view state — not undoable.
  */
 function LayerChip() {
-  const mode = useStore($interimMode);
+  const mode = useStore($mode);
   const layer = useStore($activeLayer);
 
   if (mode !== 'build' && mode !== 'animation') return null;

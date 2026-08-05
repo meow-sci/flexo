@@ -1,7 +1,7 @@
 import { Boxes, Eye, Flame, Palette, PlayCircle, Rocket, Ruler, Table2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Severity } from '../../state/statusStore';
-import type { InterimMode } from '../commands/interimMode';
+import type { Mode } from '../../state/modeStore';
 
 /**
  * The lookup tables the **desktop status bar and the phone's `CondensedStatusBar` share**
@@ -14,7 +14,7 @@ import type { InterimMode } from '../commands/interimMode';
  */
 
 /** Mode → chip icon (segment 1 / the phone's mode-or-tool chip). */
-export const MODE_ICONS: Record<InterimMode, LucideIcon> = {
+export const MODE_ICONS: Record<Mode, LucideIcon> = {
   build: Boxes,
   animation: PlayCircle,
   data: Table2,

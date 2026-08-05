@@ -4,7 +4,7 @@ import { Check, ChevronDown, Lock, X } from 'lucide-react';
 import { Button, Chip, cn, Dialog, Sheet } from '../../kit';
 import { NotificationBell } from '../../status/NotificationBell';
 import { MODE_ICONS, SEVERITY_DOT, SEVERITY_TEXT, TOOL_ICONS } from '../../status/statusTokens';
-import { $interimMode, INTERIM_MODES } from '../../commands/interimMode';
+import { $mode, MODES } from '../../../state/modeStore';
 import { getCommand, runCommand } from '../../../state/commandStore';
 import {
   $lastStatusMessage,
@@ -65,7 +65,7 @@ export function CondensedStatusBar() {
  * commands the desktop chip and the menubar switcher run.
  */
 function ModeOrToolChip() {
-  const mode = useStore($interimMode);
+  const mode = useStore($mode);
   const tool = useStore($toolStatus);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -87,7 +87,7 @@ function ModeOrToolChip() {
   }
 
   const ModeIcon = MODE_ICONS[mode];
-  const label = INTERIM_MODES.find((entry) => entry.id === mode)?.label ?? 'Build';
+  const label = MODES.find((entry) => entry.id === mode)?.label ?? 'Build';
 
   return (
     <>
@@ -124,7 +124,7 @@ function cancelTool(toolId: string): void {
 function ModeRows({ onDone }: { onDone(): void }) {
   return (
     <div className="flex flex-col p-1">
-      {INTERIM_MODES.map((entry) => {
+      {MODES.map((entry) => {
         const command = getCommand(`mode.${entry.id}`);
         const Icon = MODE_ICONS[entry.id];
         return (
@@ -157,7 +157,7 @@ function ModeRows({ onDone }: { onDone(): void }) {
  * state, not undoable). This is the v1 phone-FAB parity item foundation §12 calls out.
  */
 function LayerChip() {
-  const mode = useStore($interimMode);
+  const mode = useStore($mode);
   const layer = useStore($activeLayer);
   const [pickerOpen, setPickerOpen] = useState(false);
 

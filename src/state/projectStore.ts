@@ -11,6 +11,7 @@ import {
   type HistorySnapshot,
 } from './editorStore';
 import { closeChain } from './chainStore';
+import { resetModeForProjectLoad } from './modeStore';
 import { $layerView, type LayerViewState } from './layerStore';
 import { $cameraState, resetCamera, setCameraRestore, type CameraState } from './viewStore';
 import { $measurements, type LineMeasurement } from './measurementStore';
@@ -287,6 +288,9 @@ function applyProjectSnapshot(snap: ProjectSnapshot): void {
     // An open action chain is seeded by instanceIds from the OUTGOING document; loading
     // a project makes every one of them meaningless, so end the session with the selection.
     closeChain();
+    // A project is opened in Build with no tool armed (foundation §2.4) — the editor's
+    // posture belongs to the session, not to the incoming document.
+    resetModeForProjectLoad();
     if (snap.camera) {
       // Pre-fill $cameraState so it's included in the next autosave, then signal
       // EditorScene to reposition the Viewport (fires on subscribe when it mounts).

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { $part, importHistory, pushUndo, undo } from './editorStore';
-import { setInspectorMode } from './uiStore';
+import { $mode, setMode } from './modeStore';
 import {
   createEmptyPart,
   createNozzle,
@@ -55,7 +55,7 @@ beforeEach(() => {
   importHistory({ undo: [], redo: [] });
   setActiveEngine(null);
   setToolMode('translate');
-  setInspectorMode('assets');
+  $mode.set('build');
 });
 
 describe('engineStore — $engineEntries', () => {
@@ -441,7 +441,7 @@ describe('engineStore — exhaust placement mode discipline', () => {
   beforeEach(() => {
     $part.set(subPartEnginePart(['A']));
     setActiveEngine({ kind: 'subpart', templateId: TMPL });
-    setInspectorMode('engine');
+    setMode('engine');
   });
 
   it('is not placing until the gizmo is on AND a nozzle resolves', () => {
@@ -452,12 +452,25 @@ describe('engineStore — exhaust placement mode discipline', () => {
     expect($isExhaustPlacing.get()).toBe(false);
   });
 
-  it('stops placing when the designer is left, without forgetting the toggle', () => {
+  it('stops placing while the mode is elsewhere, without forgetting the toggle', () => {
+    // The derived gate alone: the atom is written directly, so the exit hook below does
+    // not run and only the `$mode === 'engine'` term of $isExhaustPlacing is exercised.
     setEngineExhaustGizmo(true);
-    setInspectorMode('assets');
+    $mode.set('build');
     expect($isExhaustPlacing.get()).toBe(false);
-    setInspectorMode('engine');
+    $mode.set('engine');
     expect($isExhaustPlacing.get()).toBe(true);
+  });
+
+  it('leaving engine mode turns the exhaust gizmo off but keeps the active engine entry', () => {
+    // Hidden-but-pickable nozzle handles steal viewport clicks, so the disarm must happen
+    // on EVERY route out of the mode — hence a registered exit hook, not the Close button.
+    setEngineExhaustGizmo(true);
+    setMode('build');
+    expect($engineExhaustGizmo.get()).toBe(false);
+    expect($isExhaustPlacing.get()).toBe(false);
+    // The open engine survives for the return trip (foundation §2.4).
+    expect($activeEngineEntry.get()).toEqual({ kind: 'subpart', templateId: TMPL });
   });
 
   it('clamps Scale to Move while placing, and leaves $toolMode itself untouched', () => {

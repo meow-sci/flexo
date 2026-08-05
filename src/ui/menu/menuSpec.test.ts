@@ -375,12 +375,13 @@ describe('palette-only commands', () => {
 });
 
 describe('mode commands', () => {
-  it('registers all five, with Data and Surface disabled until their phases', () => {
-    for (const id of ['mode.build', 'mode.animation', 'mode.engine']) {
-      expect(getCommand(id)?.enabled?.()).toBe(true);
-    }
-    for (const id of ['mode.data', 'mode.surface']) {
-      expect(getCommand(id)?.enabled?.()).toBe(false);
+  it('registers all five, every one of them switchable', () => {
+    // All five modes exist now; Data and Surface show interim placeholder sidebars until
+    // their own phases build the real primaries, so nothing is disabled any more.
+    for (const id of ['mode.build', 'mode.animation', 'mode.data', 'mode.engine', 'mode.surface']) {
+      const command = getCommand(id);
+      expect(command).toBeDefined();
+      expect(command?.enabled?.() ?? true).toBe(true);
     }
   });
 

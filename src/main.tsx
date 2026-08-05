@@ -15,6 +15,8 @@ import { $containers, $activeContainerId } from './state/containerStore';
 import { $measurements, $activeMeasurementId } from './state/measurementStore';
 import { registerEditorAidStores } from './state/editorStore';
 import { initModifierListeners } from './state/modifierStore';
+import { registerModeHooks } from './state/modeStore';
+import { ensureReactionsLoaded } from './state/reactionStore';
 
 // Wire containerStore and measurementStore into the undo/redo system. Must run
 // before any user interactions (and before hydrateProjectOnBoot so the callbacks
@@ -31,6 +33,16 @@ registerEditorAidStores({
     $measurements.set(m);
     const active = $activeMeasurementId.get();
     if (active !== null && !m.some((x) => x.id === active)) $activeMeasurementId.set(null);
+  },
+});
+
+// Entering Data mode preloads the reaction catalog — the one sanctioned mode-entry effect
+// (foundation §2.4: read-only, side-effect-free w.r.t. the document; already idempotent).
+// It is wired from boot rather than from reactionStore so that store stays free of any
+// modeStore dependency.
+registerModeHooks('data', {
+  onEnter: () => {
+    void ensureReactionsLoaded();
   },
 });
 

@@ -14,7 +14,7 @@ import { createPartAnimation, identityTransform, VEC3_ONE } from '../ksa/types';
 import { jointWorld, restAnchorTime, sampleJointLocal } from '../ksa/animationRig';
 import { isLinearEasing } from '../ksa/easing';
 import { matrixFromTransform, transformFromMatrix } from '../three/coords';
-import { $inspectorMode } from './uiStore';
+import { $mode, registerModeHooks } from './modeStore';
 import { $part, $selectedIndices, $toolMode, pushUndo } from './editorStore';
 
 /**
@@ -65,8 +65,8 @@ export const $activeAnimation = computed([$part, $activeAnimationId], (part, id)
  * gizmos stay reachable while posing.
  */
 export const $isPoseEditing = computed(
-  [$inspectorMode, $activeAnimationId, $activeJointId, $editKeyframeId],
-  (mode, animId, jointId, kfId) => mode === 'anim' && !!animId && !!jointId && !!kfId,
+  [$mode, $activeAnimationId, $activeJointId, $editKeyframeId],
+  (mode, animId, jointId, kfId) => mode === 'animation' && !!animId && !!jointId && !!kfId,
 );
 
 /**
@@ -109,6 +109,23 @@ export function stopAnimationPreview(): void {
   if ($animScrubbing.get()) $animScrubbing.set(false);
   if ($animPreviewU.get() !== 0) $animPreviewU.set(0);
 }
+
+/**
+ * Leaving Animation mode (design: foundation.md §2.4). Registered here rather than driven
+ * from the UI so it runs on EVERY route out of the mode — the switcher, the status chip,
+ * a digit key, a project load — not just the editor's own Close button.
+ *
+ * `$activeAnimationId`/`$activeJointId` deliberately SURVIVE, so returning to the mode
+ * lands back on the clip you were editing. The pose gizmo, pivot marker and trajectories
+ * need no hook: they are derived in the three layer from `$isPoseEditing`/`$mode`, which
+ * flip the moment `$mode` leaves `'animation'`.
+ */
+registerModeHooks('animation', {
+  onExit: () => {
+    $editKeyframeId.set(null); // end posing
+    stopAnimationPreview(); // stop playback + spring back to the modeled rest pose
+  },
+});
 
 /**
  * Plays the active animation's preview through once at real speed (u 0→1 over

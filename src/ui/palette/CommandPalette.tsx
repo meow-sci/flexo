@@ -14,7 +14,7 @@ import {
   type Command,
 } from '../../state/commandStore';
 import { chordsFor } from '../commands/chords';
-import { INTERIM_MODES } from '../commands/interimMode';
+import { MODES } from '../../state/modeStore';
 import { fuzzyMatch } from '../fuzzyMatch';
 
 /**
@@ -281,7 +281,7 @@ function buildRows(query: string, recents: string[], _revision: number): Palette
       });
     }
     const modeRows: PaletteRow[] = [];
-    for (const mode of INTERIM_MODES) {
+    for (const mode of MODES) {
       const command = getCommand(`mode.${mode.id}`);
       if (!command || seen.has(command.id)) continue;
       seen.add(command.id);

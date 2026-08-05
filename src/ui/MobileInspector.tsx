@@ -3,7 +3,7 @@ import { useStore } from '@nanostores/react';
 import { ChevronUp, X } from 'lucide-react';
 import { Heading } from 'react-aria-components';
 import { Button, Modal, Dialog } from './kit';
-import { InspectorContent } from './InspectorContent';
+import { ModeSidebar } from './ModeSidebar';
 import { $activeLayer } from '../state/selectors';
 import {
   $selectedConnectorIndices,
@@ -66,7 +66,7 @@ export function MobileInspector() {
             </Button>
           </div>
           <div className="min-h-0 flex-1 p-2">
-            <InspectorContent showTransform />
+            <ModeSidebar showTransform />
           </div>
         </Dialog>
       </Modal>

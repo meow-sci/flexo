@@ -1,4 +1,3 @@
-import { atom } from 'nanostores';
 import { persistentJSON } from '@nanostores/persistent';
 
 /**
@@ -13,22 +12,6 @@ import { persistentJSON } from '@nanostores/persistent';
  * design-system-services.md §9). Reset Everything (`localStorage.clear()`) still wipes
  * them.
  */
-
-/**
- * Which body the inspector shows: the Assets list, the full-sidebar Animation
- * editor, or the full-sidebar Engine designer. Ephemeral (not persisted) — like
- * selection, it resets to 'assets' on reload. The Assets toolbar's "Anim"/"Engine"
- * buttons switch in; each editor's toolbar "Close" switches back. In a full-sidebar
- * mode the Assets list is hidden and reachable only via the Mesh Picker dialog.
- *
- * Replaced by `modeStore.$mode` in the mode-machine phase (foundation §2, §17 step 4).
- */
-export type InspectorMode = 'assets' | 'anim' | 'engine';
-export const $inspectorMode = atom<InspectorMode>('assets');
-
-export function setInspectorMode(mode: InspectorMode): void {
-  $inspectorMode.set(mode);
-}
 
 /** Top-left viewport position (px) of the floating selection inspector. */
 export interface FloatPosition {

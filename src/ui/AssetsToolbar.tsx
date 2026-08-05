@@ -2,7 +2,7 @@ import { useStore } from '@nanostores/react';
 import { Boxes, Clapperboard, Rocket } from 'lucide-react';
 import { Toolbar, Button } from './kit';
 import { $part } from '../state/editorStore';
-import { setInspectorMode } from '../state/uiStore';
+import { setMode } from '../state/modeStore';
 import { $engineEntries } from '../state/engineStore';
 import { openDialog } from '../state/dialogStore';
 import { LayersButton } from './LayersButton';
@@ -37,12 +37,7 @@ export function AssetsToolbar() {
         <Boxes size={16} className="shrink-0" />
         Custom ({customCount})
       </Button>
-      <Button
-        size="sm"
-        variant="secondary"
-        className="shrink-0"
-        onPress={() => setInspectorMode('engine')}
-      >
+      <Button size="sm" variant="secondary" className="shrink-0" onPress={() => setMode('engine')}>
         <Rocket size={16} className="shrink-0" />
         Engine{engineCount ? ` (${engineCount})` : ''}
       </Button>
@@ -50,7 +45,7 @@ export function AssetsToolbar() {
         size="sm"
         variant="secondary"
         className="shrink-0"
-        onPress={() => setInspectorMode('anim')}
+        onPress={() => setMode('animation')}
       >
         <Clapperboard size={16} className="shrink-0" />
         Anim{animCount ? ` (${animCount})` : ''}

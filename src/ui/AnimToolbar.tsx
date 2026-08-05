@@ -3,7 +3,7 @@ import { useStore } from '@nanostores/react';
 import { Boxes, X } from 'lucide-react';
 import { Toolbar, Button } from './kit';
 import { $activeAnimation } from '../state/animationStore';
-import { setInspectorMode } from '../state/uiStore';
+import { setMode } from '../state/modeStore';
 import { MeshPickerModal } from './MeshPickerModal';
 
 /**
@@ -30,12 +30,7 @@ export function AnimToolbar() {
         <span className="min-w-0 flex-1 truncate px-1 text-sm text-fg-subtle" title={active?.name}>
           {active?.name ?? 'Animations'}
         </span>
-        <Button
-          size="sm"
-          variant="secondary"
-          className="shrink-0"
-          onPress={() => setInspectorMode('assets')}
-        >
+        <Button size="sm" variant="secondary" className="shrink-0" onPress={() => setMode('build')}>
           <X size={16} className="shrink-0" />
           Close
         </Button>

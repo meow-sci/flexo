@@ -1,25 +1,35 @@
 import type { Command } from '../../state/commandStore';
-import { $interimMode, INTERIM_MODES, setInterimMode } from './interimMode';
+import { $mode, MODES, setMode } from '../../state/modeStore';
+import { enterEngineMode } from '../../state/engineStore';
 
 /**
  * The five mode switches (design: foundation §2, LOCKED #1). They are not MenuSpec items —
  * the menubar renders them as the centered mode switcher and the palette lists them in its
- * empty state — but they are ordinary commands so all three surfaces share one dataset.
+ * "Modes" section — but they are ordinary commands so every surface that switches modes
+ * (switcher, status chip, phone sheet, palette, and the `1`–`5` chords) shares ONE dataset.
  *
- * **INTERIM wiring**: `setInterimMode` maps onto v1's `$inspectorMode`. The mode phase
- * deletes `interimMode.ts` and RE-POINTS these five `run`/`enabled`/`checked` at
- * `modeStore.setMode` — the ids below are canonical and must not be re-registered
- * (`registerCommand` throws on a duplicate id). Their `1`–`5` chords are scope-sensitive
- * and land with the scoped registry, not here.
+ * The ids are canonical and registered exactly once: to change what a mode switch DOES,
+ * re-point the `run` below — never register a second command with the same id
+ * (`registerCommand` throws on a duplicate).
+ *
+ * Engine goes through `enterEngineMode()` rather than `setMode('engine')` so the designer
+ * re-opens on its retained engine entry; every other mode is a plain switch. Leaving Engine
+ * needs no special casing — the exhaust-gizmo teardown is a registered mode exit hook, so
+ * it runs on every route out (engineStore).
+ *
+ * Undo enrollment: NONE — mode is view state (foundation §13).
  */
-export const MODE_COMMANDS: Command[] = INTERIM_MODES.map((mode) => ({
+export const MODE_COMMANDS: Command[] = MODES.map((mode) => ({
   id: `mode.${mode.id}`,
-  title: mode.label,
+  // The palette's phrasing (design: system-services §3.2). Surfaces that render a mode
+  // ROW — the switcher chips, the status-chip menu, the phone sheet — use `MODES[].label`
+  // instead, so the bare name shows where the context already says "mode".
+  title: `Go to ${mode.label} mode`,
   menuPath: 'Mode',
   keywords: `mode switch ${mode.label.toLowerCase()}`,
-  // Data and Surface have no mode to switch to yet: they render disabled, never hidden.
-  enabled: () => mode.available,
-  ...(mode.available ? {} : { disabledReason: `${mode.label} mode arrives with its own phase` }),
-  checked: () => $interimMode.get() === mode.id,
-  run: () => setInterimMode(mode.id),
+  checked: () => $mode.get() === mode.id,
+  run: () => {
+    if (mode.id === 'engine') enterEngineMode();
+    else setMode(mode.id);
+  },
 }));

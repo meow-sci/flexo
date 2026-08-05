@@ -15,11 +15,11 @@ import {
   updateSubPartSolidNozzle,
   type ToolMode,
 } from './editorStore';
-import { $inspectorMode, setInspectorMode } from './uiStore';
+import { $mode, registerModeHooks, setMode } from './modeStore';
 
 /**
- * Ephemeral editor state for the Engine Designer — the full-sidebar `$inspectorMode
- * === 'engine'` mode (mirrors animationStore's ephemeral atoms). NONE of this is in
+ * Ephemeral editor state for the Engine Designer — the `$mode === 'engine'` mode
+ * (mirrors animationStore's ephemeral atoms). NONE of this is in
  * `$part`/undo: it is sub-selection, like which engine is open, which of its nozzles the
  * 3D handles target, and whether the exhaust gizmo is showing. The engine data itself
  * (combustors/nozzles/rockets/…) lives on `$part` and is mutated through editorStore's
@@ -281,7 +281,7 @@ export const $activeNozzleTarget = computed(
  * leaving the gizmo stuck on whichever tool was last used (and on dead scale handles).
  */
 export const $isExhaustPlacing = computed(
-  [$inspectorMode, $engineExhaustGizmo, $activeNozzleTarget],
+  [$mode, $engineExhaustGizmo, $activeNozzleTarget],
   (mode, on, target) => mode === 'engine' && on && target !== null,
 );
 
@@ -303,14 +303,29 @@ export const $effectiveToolMode = computed(
 /** Opens the Engine designer, optionally on a specific engine scope. */
 export function enterEngineMode(entry?: EngineEntry | null): void {
   if (entry !== undefined) setActiveEngine(entry);
-  setInspectorMode('engine');
+  setMode('engine');
 }
 
-/** Closes the Engine designer, returning to the Assets list. */
+/** Closes the Engine designer, returning to Build. */
 export function exitEngineMode(): void {
-  $engineExhaustGizmo.set(false);
-  setInspectorMode('assets');
+  setMode('build');
 }
+
+/**
+ * Leaving Engine mode (design: foundation.md §2.4). The gizmo teardown lives HERE, not in
+ * {@link exitEngineMode}, so it runs on every route out of the mode — a digit key, the
+ * menubar switcher, the status chip — and not only the designer's Close button. Hidden
+ * but pickable nozzle handles steal viewport clicks (census invariant); the handles
+ * themselves are disposed by EditorScene's `$mode` subscription.
+ *
+ * `$activeEngineEntry` is deliberately RETAINED so returning to the mode reopens the same
+ * engine (§2.4 per-mode sub-state survives).
+ */
+registerModeHooks('engine', {
+  onExit: () => {
+    $engineExhaustGizmo.set(false);
+  },
+});
 
 /** Selects which engine (scope) the designer edits, resetting its sub-selection. */
 export function setActiveEngine(entry: EngineEntry | null): void {

@@ -117,7 +117,7 @@ import {
 } from '../state/animationStore';
 import { jointWorld, previewOverrideMatrix } from '../ksa/animationRig';
 import type { PartAnimation } from '../ksa/types';
-import { $inspectorMode } from '../state/uiStore';
+import { $mode } from '../state/modeStore';
 import {
   $activeEngineEntry,
   $activeNozzleRef,
@@ -256,7 +256,7 @@ export class EditorScene {
    *
    * All of them are drawn, not just the target: KSA authors many nozzles on one owner (the
    * MMU RCS puts its whole battery on `<PartGameData>`), and a single marker made an N-bell
-   * block unreadable. Only present while the Engine designer ($inspectorMode==='engine')
+   * block unreadable. Only present while the Engine designer ($mode==='engine')
    * has an engine open; the gizmo attaches only when {@link $engineExhaustGizmo} is on.
    * Mirrors the pose pivot/proxy pair.
    */
@@ -550,7 +550,7 @@ export class EditorScene {
     this.sub($animScrubbing, onPreviewChange);
     this.sub($editKeyframeId, onPreviewChange);
     // Leaving/entering the Animation editor toggles the preview + pose gizmo on/off.
-    this.sub($inspectorMode, onPreviewChange);
+    this.sub($mode, onPreviewChange);
     // Engine designer: refresh the exhaust markers + (re)attach the exhaust gizmo when the
     // open engine / target instance / targeted nozzle / gizmo toggle / mode changes. NOT
     // $resolvedNozzleTargets itself — it also derives from $part, which reconcile() already
@@ -562,7 +562,7 @@ export class EditorScene {
     this.sub($activeEngineEntry, onEngineChange);
     this.sub($activeNozzleRef, onEngineChange);
     this.sub($engineExhaustGizmo, onEngineChange);
-    this.sub($inspectorMode, onEngineChange);
+    this.sub($mode, onEngineChange);
     this.sub($selectedIndices, () => this.updateSelection());
     this.sub($selectedConnectorIndices, () => this.updateSelection());
     this.sub($selectedKittenIndices, () => this.updateSelection());
@@ -775,7 +775,7 @@ export class EditorScene {
    */
   /** True when the preview shows a posed (non-rest) frame: editing a keyframe, or scrubbing past 0. */
   private isPreviewPosed(): boolean {
-    if ($inspectorMode.get() !== 'anim') return false;
+    if ($mode.get() !== 'animation') return false;
     if ($editKeyframeId.get()) return true;
     return $animScrubbing.get() && $animPreviewU.get() > 1e-6;
   }
@@ -823,9 +823,9 @@ export class EditorScene {
     }
     this.animOverridden.clear();
 
-    // Preview only runs while the Animation editor is open (its atoms persist across
-    // inspector mode switches); in assets mode parts show their static placements.
-    const animId = $inspectorMode.get() === 'anim' ? $activeAnimationId.get() : null;
+    // Preview only runs in Animation mode (its atoms persist across mode switches); in
+    // every other mode parts show their static placements.
+    const animId = $mode.get() === 'animation' ? $activeAnimationId.get() : null;
     const anim = animId ? part.animations.find((a) => a.id === animId) : null;
     if (!anim) {
       this.positionColliders(part); // back to static frames
@@ -1732,7 +1732,7 @@ export class EditorScene {
     const jointId = $activeJointId.get();
     const anim = animId ? $part.get().animations.find((a) => a.id === animId) : undefined;
     const joint = anim?.joints.find((j) => j.id === jointId);
-    if ($inspectorMode.get() !== 'anim' || !anim || !joint) {
+    if ($mode.get() !== 'animation' || !anim || !joint) {
       this.pivotHelper.visible = false;
       return;
     }
@@ -1819,7 +1819,7 @@ export class EditorScene {
     kf: PartAnimation['keyframes'][number];
   } | null {
     // Only while the Animation editor is open (its atoms persist across mode switches).
-    if ($inspectorMode.get() !== 'anim') return null;
+    if ($mode.get() !== 'animation') return null;
     const animId = $activeAnimationId.get();
     const jointId = $activeJointId.get();
     const kfId = $editKeyframeId.get();
@@ -1881,12 +1881,12 @@ export class EditorScene {
    * so the mode gate lives here rather than in the store).
    */
   private nozzleTargets(): NozzleTarget[] {
-    return $inspectorMode.get() === 'engine' ? $resolvedNozzleTargets.get() : [];
+    return $mode.get() === 'engine' ? $resolvedNozzleTargets.get() : [];
   }
 
   /** The one nozzle placement the exhaust gizmo edits, or null. */
   private activeNozzleTarget(): NozzleTarget | null {
-    return $inspectorMode.get() === 'engine' ? $activeNozzleTarget.get() : null;
+    return $mode.get() === 'engine' ? $activeNozzleTarget.get() : null;
   }
 
   /**

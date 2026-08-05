@@ -15,7 +15,7 @@ import { $hasSelection } from '../../state/selectors';
 import { FAST_NUDGE_MULTIPLIER } from '../../three/nudgeSelection';
 import { changeNudgeAxis, formatNudgeStep } from '../nudgeControls';
 import { changeRotateAxes } from '../rotateControls';
-import { $interimMode } from '../commands/interimMode';
+import { $mode } from '../../state/modeStore';
 
 /**
  * Status-bar segment 8 — the **rotate and nudge chips** (design:
@@ -60,7 +60,7 @@ function AxisArrow({ axis, size = 12 }: { axis: AxisKey; size?: number }) {
 }
 
 export function TransformChips() {
-  const mode = useStore($interimMode);
+  const mode = useStore($mode);
   const hasSelection = useStore($hasSelection);
   const nudgeAxis = useStore($nudgeAxis);
   const nudgeStep = useStore($nudgeStep);

@@ -4,7 +4,7 @@ import { ViewportDropZone } from './ui/ViewportDropZone';
 import { ImportModelDialog } from './ui/ImportModelDialog';
 import { SelectionToolbar } from './ui/SelectionToolbar';
 import { MultiSelectToolbar } from './ui/MultiSelectToolbar';
-import { InspectorContent } from './ui/InspectorContent';
+import { ModeSidebar } from './ui/ModeSidebar';
 import { MobileInspector } from './ui/MobileInspector';
 import { FloatingInspector } from './ui/FloatingInspector';
 import { FloatingPreviewToolbar } from './ui/FloatingPreviewToolbar';
@@ -190,7 +190,7 @@ function App() {
               onPointerEnter={() => setHoverContext('list')}
               onPointerLeave={() => setHoverContext('none')}
             >
-              <InspectorContent />
+              <ModeSidebar />
             </div>
           </Sidebar>
         )}

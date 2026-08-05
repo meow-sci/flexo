@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as THREE from 'three';
 import { $part, undo, redo, importHistory, $selectedIndices } from './editorStore';
-import { setInspectorMode } from './uiStore';
+import { $mode, setMode } from './modeStore';
 import { createEmptyPart } from '../ksa/types';
 import type { PartAnimation, SubPartPlacement, Transform } from '../ksa/types';
 import { matrixFromTransform } from '../three/coords';
@@ -11,6 +11,8 @@ import {
   $activeJointId,
   $editKeyframeId,
   $animPreviewU,
+  $animPlaying,
+  $animScrubbing,
   $isPoseEditing,
   addAnimation,
   addJoint,
@@ -35,8 +37,10 @@ beforeEach(() => {
   $activeJointId.set(null);
   $editKeyframeId.set(null);
   $animPreviewU.set(0);
+  $animScrubbing.set(false);
+  $animPlaying.set(false);
   $selectedIndices.set([]);
-  setInspectorMode('assets');
+  $mode.set('build');
 });
 
 // ── pivot test helpers ─────────────────────────────────────────────────────────
@@ -267,10 +271,31 @@ describe('animationStore — joint pivots', () => {
     expect(rest.rotation.z).toBeCloseTo(0);
   });
 
-  it('$isPoseEditing is true only in anim mode with a joint + keyframe selected', () => {
+  it('leaving animation mode unpins the edited keyframe and stops playback', () => {
     const { aid, jid, kid } = setupDoor();
-    expect($isPoseEditing.get()).toBe(false); // assets mode by default
-    setInspectorMode('anim');
+    setMode('animation');
+    $activeAnimationId.set(aid);
+    $activeJointId.set(jid);
+    $editKeyframeId.set(kid);
+    $animScrubbing.set(true);
+    $animPlaying.set(true);
+    $animPreviewU.set(0.5);
+
+    setMode('build');
+
+    expect($editKeyframeId.get()).toBe(null);
+    expect($animPlaying.get()).toBe(false);
+    expect($animScrubbing.get()).toBe(false);
+    expect($animPreviewU.get()).toBe(0);
+    // The clip + joint survive so returning to the mode lands where you left off (§2.4).
+    expect($activeAnimationId.get()).toBe(aid);
+    expect($activeJointId.get()).toBe(jid);
+  });
+
+  it('$isPoseEditing is true only in animation mode with a joint + keyframe selected', () => {
+    const { aid, jid, kid } = setupDoor();
+    expect($isPoseEditing.get()).toBe(false); // Build mode by default
+    setMode('animation');
     $activeAnimationId.set(aid);
     $activeJointId.set(jid);
     $editKeyframeId.set(kid);

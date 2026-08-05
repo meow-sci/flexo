@@ -22,7 +22,8 @@ import {
   meshKind,
   type LightType,
 } from '../../ksa/types';
-import { $interimMode, setInterimMode } from './interimMode';
+import { $mode, setMode } from '../../state/modeStore';
+import { enterEngineMode } from '../../state/engineStore';
 
 /**
  * Add menu commands (design: foundation §3 "Add").
@@ -35,13 +36,12 @@ import { $interimMode, setInterimMode } from './interimMode';
  */
 
 /**
- * INTERIM auto-switch (the S27 precursor): an entity added while the sidebar is showing
- * the animation or engine editor would land somewhere the user cannot see it, so entity
- * adds bounce back to Build first. The mode phase replaces this with the real
- * mode-machine auto-switch.
+ * The S27 auto-switch: an entity added from another mode would land in a sidebar that
+ * cannot show it, so every entity add switches to Build first (design: foundation §2.5 —
+ * a jump, not a stack). Selection, camera and undo history are untouched by the switch.
  */
 function ensureBuildMode(): void {
-  if ($interimMode.get() !== 'build') setInterimMode('build');
+  if ($mode.get() !== 'build') setMode('build');
 }
 
 const colliderCommands: Command[] = COLLIDER_SHAPES.flatMap((shape) => [
@@ -190,9 +190,8 @@ export const ADD_COMMANDS: Command[] = [
     title: 'Define Engine…',
     menuPath: 'Add',
     keywords: 'engine rocket combustor nozzle thrust',
-    // v1 `enterEngineMode()` semantics via the interim mode adapter; the mode phase
-    // re-points this at the real mode jump with its "new engine" focus payload.
-    run: () => setInterimMode('engine'),
+    // The Engine-mode jump keeps the designer's retained engine entry (§2.4).
+    run: () => enterEngineMode(),
   },
 ];
 

@@ -6,6 +6,7 @@ import { StatusChipButton, StatusDivider } from './StatusChip';
 import { MessageChannel } from './MessageChannel';
 import { NotificationBell } from './NotificationBell';
 import { ToolSegment } from './ToolSegment';
+import { DataSegment } from './DataSegment';
 import { SelectionReadout } from './SelectionReadout';
 import { ProgressSegment } from './ProgressSegment';
 import { TransformChips } from './TransformChips';
@@ -44,6 +45,7 @@ export function StatusBar() {
       <div className="flex flex-none items-center">
         <ModeChip />
         <LayerChip />
+        <DataSegment />
         <ToolSegment />
         <SelectionReadout />
       </div>

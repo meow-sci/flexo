@@ -240,7 +240,7 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
       powerConsumer: { consumedWatts: 3, lightSwitch: true, lightIsActive: true },
       decoupler: { connectorId: '_c2', force: 750 },
       dockingPort: { connectorId: '_c3', latchingKineticEnergyJ: 6000, pushoffImpulseNs: 7000 },
-      evaDoor: { connectorId: '_c3' },
+      evaDoor: { connectorId: '_c3', seatId: null },
     },
     subPartGameData: [
       {
@@ -354,7 +354,7 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
       latchingKineticEnergyJ: 6000,
       pushoffImpulseNs: 7000,
     });
-    expect(parsed.gameData.evaDoor).toEqual({ connectorId: '_c3' });
+    expect(parsed.gameData.evaDoor).toEqual({ connectorId: '_c3', seatId: null });
   });
 
   it('recovers connector flags by id', () => {
@@ -1679,18 +1679,22 @@ describe('colliders', () => {
 // (<ForwardAxis>, <UpAxis>) pair and stored as an equivalent rotation (src/ksa/ivaSeatAxes.ts),
 // so identity rotation ⇔ KSA's own schema defaults (forward +X, up −Z). See plans/IVA_PLAN.md.
 describe('IVA seats', () => {
-  /** Core's `CoreIVASpaceA_Prefab_MediumCapsuleA` seat block, verbatim (the only shipped one). */
+  /**
+   * Core's `CoreIVASpaceA_Prefab_MediumCapsuleA` seat block, verbatim (the only shipped one).
+   * The `Id`s arrived with KSA 2026.8.3.5117's crew feature — they are what the capsule's
+   * `<EVADoor SeatId>`s resolve against (`CoreIVASpaceAGameData.xml:18-28`).
+   */
   const CORE_CAPSULE = `<Assets>
     <PartGameData Id="CoreIVASpaceA_Prefab_MediumCapsuleA">
         <EditorTag Value="Hidden"/>
 
-        <IVASeat>
+        <IVASeat Id="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA">
             <Position X="-0.45" Y="0.42" Z="-0.35" />
             <ForwardAxis X="1" />
             <UpAxis Z="-1" />
         </IVASeat>
 
-        <IVASeat>
+        <IVASeat Id="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatB">
             <Position X="-0.45" Y="-0.42" Z="-0.35" />
             <ForwardAxis X="1" />
             <UpAxis Z="-1" />
@@ -1716,6 +1720,7 @@ describe('IVA seats', () => {
     expect(seats(parsed)).toEqual([
       {
         id: '_seat1',
+        ksaId: 'CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA',
         position: { x: -0.45, y: 0.42, z: -0.35 },
         // <ForwardAxis X="1"/> + <UpAxis Z="-1"/> ARE flexo's local axes ⇒ no rotation.
         rotation: { x: 0, y: 0, z: 0 },
@@ -1724,6 +1729,7 @@ describe('IVA seats', () => {
       },
       {
         id: '_seat2',
+        ksaId: 'CoreIVASpaceA_Prefab_MediumCapsuleA_SeatB',
         position: { x: -0.45, y: -0.42, z: -0.35 },
         rotation: { x: 0, y: 0, z: 0 },
         scale: { x: 1, y: 1, z: 1 },
@@ -1757,12 +1763,22 @@ describe('IVA seats', () => {
     expect(seats(parsed)).toEqual([
       {
         id: '_seat1',
+        // No `Id` attribute ⇒ no authored KSA id.
+        ksaId: null,
         position: { x: 1, y: 0, z: 0 },
         rotation: { x: 0, y: 0, z: 0 },
         scale: { x: 1, y: 1, z: 1 },
         layerId: IVA_SEAT_LAYER_ID,
       },
     ]);
+  });
+
+  it('captures the authored <IVASeat Id> separately from the regenerated editor id', () => {
+    const parsed = parseSeats(
+      `<Assets><PartGameData Id="P"><IVASeat Id="pilot"><Position X="1" /></IVASeat></PartGameData></Assets>`,
+    );
+    expect(parsed.ivaSeats[0].id).toBe('_seat1');
+    expect(parsed.ivaSeats[0].ksaId).toBe('pilot');
   });
 
   it('drops a seat whose axis element is PRESENT but empty (each attr defaults to 0), and warns', () => {

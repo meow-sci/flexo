@@ -257,6 +257,9 @@ export function serializeGameData(
   if (game.evaDoor) {
     const el = doc.createElement('EVADoor');
     el.setAttribute('ConnectorId', game.evaDoor.connectorId);
+    // `SeatId` only when authored: KSA's default is "" and `ResolveAlignedSeats` skips an
+    // empty one, so an always-emitted `SeatId=""` would be noise Core does not write.
+    if (game.evaDoor.seatId) el.setAttribute('SeatId', game.evaDoor.seatId);
     gd.appendChild(el);
   }
 
@@ -441,12 +444,14 @@ function buildVec3Attrs(doc: XmlDocument, name: string, v: Vec3): XmlElement {
 }
 
 /**
- * `<IVASeat><Position/><ForwardAxis/><UpAxis/></IVASeat>` — one IVA vantage point.
+ * `<IVASeat Id?><Position/><ForwardAxis/><UpAxis/></IVASeat>` — one IVA vantage point.
  *
- * NO `Id` attribute: Core authors none, nothing references a seat by id, and
+ * `Id` is emitted ONLY when the seat carries a user-authored {@link IvaSeat.ksaId}. Since
+ * KSA 2026.8.3.5117 an `<EVADoor SeatId>` resolves a seat by that id
+ * (`EVADoor.ResolveAlignedSeats`) and Core authors one on both capsule seats, so a seat that
+ * a hatch opens onto MUST carry it. flexo's editor-only `_seatN` id is still never emitted:
  * `TemplateDataBase.Id` shares the namespace `<FeedsFrom Container="…">` resolves against
- * (`PartTemplate.AddResolvedFeed`) — so emitting flexo's editor-only id would put a seat into
- * the feed-container namespace for zero benefit.
+ * (`PartTemplate.AddResolvedFeed`), so only a deliberate, user-authored id belongs there.
  *
  * All three axes of all three elements are ALWAYS emitted. A `Vector3Reference` defaults each
  * absent ATTRIBUTE to 0 while an absent ELEMENT takes the C# field default, so an "omit at
@@ -455,6 +460,7 @@ function buildVec3Attrs(doc: XmlDocument, name: string, v: Vec3): XmlElement {
  */
 function buildIvaSeatElement(doc: XmlDocument, seat: IvaSeat): XmlElement {
   const el = doc.createElement('IVASeat');
+  if (seat.ksaId) el.setAttribute('Id', seat.ksaId);
   const { forward, up } = seatAxesFromRotation(seat.rotation);
   el.appendChild(buildVec3Attrs(doc, 'Position', seat.position));
   el.appendChild(buildVec3Attrs(doc, 'ForwardAxis', forward));

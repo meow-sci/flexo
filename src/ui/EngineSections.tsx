@@ -1,9 +1,19 @@
 import { useEffect } from 'react';
 import { useStore } from '@nanostores/react';
-import { Button, cn, ListBoxItem, noteBox, Select, Switch, TextField, warningBox } from './kit';
+import {
+  Button,
+  cn,
+  Field,
+  ItemCard,
+  ListBoxItem,
+  noteBox,
+  Select,
+  Switch,
+  TextField,
+  warningBox,
+} from './kit';
 import { PreciseNumberInput } from './PreciseNumberInput';
 import { Vec3Field } from './Vec3Field';
-import { Field, ItemCard } from './GameDataSections';
 import { FeedsField } from './FeedsField';
 import { consumerOptionsOf, feedTargetsOf, unwiredConsumersOf } from '../state/feedTargets';
 import { $part, pushUndo } from '../state/editorStore';

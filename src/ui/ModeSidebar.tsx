@@ -1,5 +1,6 @@
 import { useStore } from '@nanostores/react';
 import { OutlinerPanel } from './outliner/OutlinerPanel';
+import { DataNavigator } from './data/DataNavigator';
 import { AnimToolbar } from './AnimToolbar';
 import { AnimationPanel } from './AnimationPanel';
 import { EngineToolbar } from './EngineToolbar';
@@ -45,7 +46,17 @@ export function ModeSidebar() {
     );
   }
 
-  if (mode === 'data' || mode === 'surface') {
+  if (mode === 'data') {
+    return (
+      <div className="flex h-full min-h-0 flex-col gap-2">
+        <div className="min-h-0 flex-1">
+          <DataNavigator />
+        </div>
+      </div>
+    );
+  }
+
+  if (mode === 'surface') {
     return <ModePlaceholder mode={mode} />;
   }
 
@@ -58,15 +69,8 @@ export function ModeSidebar() {
   );
 }
 
-// INTERIM (P4): replaced by DataNavigator (P6) / SurfacePanel (P8).
+// INTERIM (P4): replaced by SurfacePanel (P8). Data's placeholder died with P6's navigator.
 const PLACEHOLDERS = {
-  // The copy names where each surface ACTUALLY lives today (verified), not where the plan
-  // text guessed: Part Data is palette-only by design (dataCommands.ts) and SubPart Data is
-  // a row menu on the Build-mode asset list.
-  data: {
-    title: 'Data',
-    body: 'Data mode arrives in a later phase — Part Data is in the ⌘K palette, and SubPart Data stays on each SubPart’s row menu in Build mode.',
-  },
   surface: {
     title: 'Surface',
     body: 'Surface mode arrives in a later phase — mesh materials and textures stay editable from Window ▸ Asset Manager….',
@@ -78,7 +82,7 @@ const PLACEHOLDERS = {
  * RULE ZERO — nothing is removed: it names where the mode's v1 surfaces still live, so the
  * mode existing never costs the user access to a feature.
  */
-function ModePlaceholder({ mode }: { mode: 'data' | 'surface' }) {
+function ModePlaceholder({ mode }: { mode: 'surface' }) {
   const { title, body } = PLACEHOLDERS[mode];
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">

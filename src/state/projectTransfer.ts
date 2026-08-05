@@ -445,6 +445,9 @@ export function mergeProjectImport(current: EditingPart, env: ProjectExportEnvel
   for (const src of data.ivaSeats) {
     part.ivaSeats.push({
       id: nextIvaSeatId(part),
+      // The AUTHORED `<IVASeat Id>` rides along (an <EVADoor SeatId> may name it); the
+      // editor-only `_seatN` is regenerated above.
+      ksaId: src.ksaId ?? null,
       position: vec(src.position, 0),
       rotation: vec(src.rotation, 0),
       scale: vec(src.scale, 1),
@@ -611,7 +614,7 @@ function mergeGameData(
   }
   if (target.evaDoor == null && src.evaDoor) {
     const id = connectorIdMap.get(src.evaDoor.connectorId);
-    if (id) target.evaDoor = { connectorId: id };
+    if (id) target.evaDoor = { connectorId: id, seatId: src.evaDoor.seatId ?? null };
   }
   // Engine modules: append with every SubPart-instance reference remapped to the
   // freshly-generated instance ids (mirrors applyImportedGameData in editorStore).

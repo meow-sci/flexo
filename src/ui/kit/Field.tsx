@@ -10,6 +10,7 @@ import {
   type GroupProps,
 } from 'react-aria-components';
 import { tv } from 'tailwind-variants';
+import { Button } from './Button';
 import { cn, composeTw, focusRing } from './styles';
 
 /** Standalone numeric/text input surface, shared by TextField/NumberField. */
@@ -71,3 +72,44 @@ export function SectionTitle({ className, ...props }: React.HTMLAttributes<HTMLD
 }
 
 export { composeTw };
+
+/** The label style {@link Field} stacks above its control. */
+const FIELD_LABEL = 'text-xs text-fg-subtle';
+
+/**
+ * A label above a control, stacked so the same markup works at every sidebar width and in a
+ * phone sheet. Moved here from `GameDataSections.tsx` in P6.06 — it is a primitive, and a
+ * primitive living in a feature file is what made `EngineSections` import the Part-Data
+ * dialog (design-data-engine-modes.md §C1 "kills the utility-in-feature-file debt").
+ */
+export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className={FIELD_LABEL}>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+/** A removable card wrapping one list item's fields (tank, battery, nozzle, …). */
+export function ItemCard({
+  title,
+  onRemove,
+  children,
+}: {
+  title: string;
+  onRemove: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-border bg-panel-sunken p-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-fg-muted">{title}</span>
+        <Button size="sm" variant="ghost" onPress={onRemove} aria-label={`Remove ${title}`}>
+          Remove
+        </Button>
+      </div>
+      {children}
+    </div>
+  );
+}

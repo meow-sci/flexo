@@ -392,3 +392,42 @@ describe('validateEngines — reaction lookup fallbacks', () => {
     expect(has(p, 'solid-motor-pressure-out-of-range')).toBe(false);
   });
 });
+
+// The `source` metadata is EDITOR targeting only (design D4 / §A7): it must never change a
+// code, a message or a severity — the findings pipeline uses it to scope + scroll.
+describe('validateEngines — issue source metadata', () => {
+  it('tags a template-owned combustor issue with its template id', () => {
+    const p = createEmptyPart();
+    p.partId = 'Tmpl';
+    p.placements.push(placement('thruster_1', 'ThrusterA'));
+    p.subPartGameData.push({
+      ...createSubPartGameData('ThrusterA'),
+      combustors: [{ ...createCombustor('Chamber'), feeds: [] }],
+    });
+
+    const issue = validateEngines(p, REACTIONS).find((i) => i.code === 'consumer-no-feeds')!;
+    expect(issue.source).toEqual({ templateId: 'ThrusterA', module: 'combustor' });
+  });
+
+  it('tags a part-level module with a null template id, and an unwired consumer as wiring', () => {
+    const p = createEmptyPart();
+    p.partId = 'Part';
+    p.placements.push(placement('thruster_1', 'ThrusterA'));
+    p.subPartGameData.push({
+      ...createSubPartGameData('ThrusterA'),
+      combustors: [{ ...createCombustor('Chamber'), feeds: [{ kind: 'parent' }] }],
+    });
+    p.gameData.nozzles.push({ ...createNozzle('Nozzle'), exhaustDirection: { x: -2, y: 0, z: 0 } });
+
+    const issues = validateEngines(p, REACTIONS);
+    expect(issues.find((i) => i.code === 'consumer-not-wired')!.source).toEqual({
+      templateId: null,
+      module: 'wiring',
+    });
+    expect(issues.find((i) => i.code === 'nozzle-direction-not-unit')!.source).toEqual({
+      templateId: null,
+      module: 'nozzle',
+      index: 0,
+    });
+  });
+});

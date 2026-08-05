@@ -21,8 +21,9 @@ list, layer visibility/lock/opacity and undo with almost no new machinery.
 
 ```ts
 interface IvaSeat extends Transform {
-  id: string        // "_seat1"; editor-only, NEVER emitted
-  layerId: string   // always IVA_SEAT_LAYER_ID
+  id: string             // "_seat1"; editor-only, NEVER emitted
+  ksaId: string | null   // the authored <IVASeat Id>; null ⇒ the attribute is omitted
+  layerId: string        // always IVA_SEAT_LAYER_ID
 }
 ```
 
@@ -94,7 +95,7 @@ passthrough verbatim: round-tripped, just not editable (see *Deliberate limits*)
 ```xml
 <PartGameData Id="...">
     …
-    <IVASeat>
+    <IVASeat Id="pilot">                           <!-- only when the user authored one -->
         <Position X="-0.45" Y="0.42" Z="-0.35"/>   <!-- eye point, Part assembly frame -->
         <ForwardAxis X="1" Y="0" Z="0"/>           <!-- always all three axes -->
         <UpAxis X="0" Y="0" Z="-1"/>
@@ -111,11 +112,21 @@ Two rules that are not negotiable:
   uses `buildVec3Attrs` (shared with the collider frame vectors), never the omit-at-default
   `buildEngineVec3` style, and `ivaSeatsFromElement` branches on element presence on the way
   in. See [xml-io.md](xml-io.md#iva-seats).
-- **No `Id` attribute is ever emitted.** Core authors none, nothing references a seat by id,
-  and `TemplateDataBase.Id` shares the namespace `<FeedsFrom Container="…">` resolves
-  against. Seat ids are regenerated on every import/paste and never leave the editor, so
-  nothing needs an `idRemap` entry for them — order is a seat's only in-game identity, and
-  order is preserved.
+- **The editor's `_seatN` id is never emitted; the authored `Id` is.** Two different ids live
+  on a seat and must not be confused. `IvaSeat.id` is a throwaway document id, regenerated on
+  every import/paste, and it never leaves the editor. `IvaSeat.ksaId` is real game data — the
+  `<IVASeat Id>` attribute (`ModuleBase.TemplateDataBase.Id`) — emitted **only when set**, so a
+  seat nobody linked round-trips byte-for-byte as before.
+
+  Since KSA 2026.8.3.5117 that id is load-bearing: an `<EVADoor SeatId>` names the seat a hatch
+  boards, and `EVADoor.ResolveAlignedSeats` matches the two. `EVADoor.ShowContextMenu` returns
+  early — no EVA button at all — when the aligned seat has no assigned kitten, so a hatch with
+  a broken link is a hatch you cannot use.
+
+  ⚠️ `TemplateDataBase.Id` also shares the namespace `<FeedsFrom Container="…">` resolves
+  against (`PartTemplate.AddResolvedFeed` scans every `Components[].Id`), which is why flexo
+  never auto-fills it. The one place an id is minted is the Data-mode seat picker below, and it
+  uniquifies against that whole namespace.
 
 A seat whose authored `<ForwardAxis>`/`<UpAxis>` pair is degenerate is **dropped on import
 with a console warning** rather than imported: round-tripping it would only preserve a
@@ -365,11 +376,33 @@ cleared but not deleted or renamed, and it is never serialized to KSA XML. See
   are **rejected, never converted**. A seat's `layerId` is restored from `IVA_SEAT_LAYER_ID`
   on decode and never serialized; its unused `scale` is omitted by the shared transform
   encoder. See [projects.md](projects.md#the-compact-project-codec).
+- The authored `<IVASeat Id>` rides the same `iv` entries as key **`k`**, and the EVA door's
+  `SeatId` rides `ed.s`. Both are **additive** optional fields with a safe `null` default, so
+  neither `PROJECT_SCHEMA_VERSION` nor `PROJECT_EXPORT_VERSION` was bumped: a payload written
+  before they existed decodes with no link, which is exactly what it meant.
 - `$ivaSeatSettings` (`flexo:ivaSeatSettings` — marker size, gaze cone) and `$hideInterior`
   (`flexo:hideInterior`) are persisted **view** settings, outside the document and outside
   undo. See [state-persistence.md](state-persistence.md).
 - Everything about the seat *view* (`$seatView`, `$seatLook`) and the aim intent
   (`$ivaSeatAimRequest`) is ephemeral: never persisted, never in undo.
+
+## Aligning an EVA door to a seat
+
+KSA 2026.8.3.5117's crew feature links a hatch to a specific seat: `<EVADoor SeatId>` names an
+`<IVASeat Id>`, boarding targets that seat, and the EVA button only appears when the aligned
+seat is occupied. flexo authors both halves from **Data mode → Part scope → Coupling**, on the
+EVA Door card:
+
+- The **Seat** select lists the part's seats in document order ("Seat 1"…"Seat N") plus a
+  `(default)` sentinel meaning *no link* — which emits no `SeatId` attribute at all, exactly
+  like a pre-5117 part.
+- Picking a seat runs `setEvaDoorSeat(index)` (`src/state/editorStore.ts`): **one** undo step
+  that mints the seat's `ksaId` if it has none (`seat_<n>`, uniquified against the shared
+  `Components[].Id` namespace — tank feed ids, solid grain-segment ids and the other seats)
+  and points the door's `seatId` at it. Authoring only one half would ship a hatch with no EVA
+  button, so the two are never separable.
+- A `seatId` that matches no seat stays selectable and labelled, like every other stale
+  reference in flexo — it is never silently retargeted.
 
 ## Deliberate limits
 
@@ -381,8 +414,9 @@ cleared but not deleted or renamed, and it is never serialized to KSA XML. See
   references it; flexo authors seats on its own Part, so the seat frame **is** the part frame
   with no offset to compose. An imported `<AttachedInternal>` is preserved verbatim, but flexo
   will not follow the reference to import another Part's seats.
-- **The seat `Id` is not round-tripped.** flexo emits none and regenerates `_seatN` in
-  document order. Order is the only identity a seat has in-game, and order is preserved.
+- **A seat has no in-game NAME, only an id.** The picker labels seats by their ordinal
+  ("Seat 1", "Seat 2") because document order is the `C`-cycle order; `ksaId` is a machine
+  reference, not a display name.
 - **A non-perpendicular authored `<UpAxis>` is re-orthogonalised** — textually lossy,
   semantically lossless.
 - **The preview is not the game view** (see the table above).

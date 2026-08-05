@@ -119,7 +119,7 @@ function richPart(): EditingPart {
     latchingKineticEnergyJ: 50,
     pushoffImpulseNs: 25,
   };
-  p.gameData.evaDoor = { connectorId: '_connector1' };
+  p.gameData.evaDoor = { connectorId: '_connector1', seatId: null };
 
   // Part-level engine modules: a controller, a gas-generator rocket+combustor, gimbals.
   p.gameData.rocketControllers.push({
@@ -628,6 +628,7 @@ describe('IVA seat codec', () => {
     const p = createEmptyPart();
     p.ivaSeats.push({
       id: '_seat1',
+      ksaId: null,
       position: { x: 0.1, y: 0.62, z: -0.35 },
       rotation: { x: 0, y: 1.5708, z: 0 },
       scale: { x: 1, y: 1, z: 1 },
@@ -645,6 +646,7 @@ describe('IVA seat codec', () => {
     const p = createEmptyPart();
     p.ivaSeats.push({
       id: '_seat1',
+      ksaId: null,
       ...identityTransform(),
       layerId: IVA_SEAT_LAYER_ID,
     });
@@ -660,6 +662,7 @@ describe('IVA seat codec', () => {
     for (const id of ['_seat3', '_seat1', '_seat2']) {
       p.ivaSeats.push({
         id,
+        ksaId: null,
         position: { x: p.ivaSeats.length, y: 0, z: 0 },
         rotation: { x: 0, y: 0, z: 0 },
         scale: { x: 1, y: 1, z: 1 },

@@ -3,6 +3,7 @@ import { useStore } from '@nanostores/react';
 import { Crosshair } from 'lucide-react';
 import {
   DisclosureSection,
+  Field,
   ListBoxItem,
   Select,
   Switch,
@@ -10,7 +11,6 @@ import {
   ToggleButton,
   ToggleButtonGroup,
 } from './kit';
-import { Field } from './GameDataSections';
 import {
   CustomPropellantsSection,
   GimbalsSection,

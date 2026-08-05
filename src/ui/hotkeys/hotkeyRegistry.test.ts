@@ -264,13 +264,19 @@ describe('6 — list-surface edit mirrors', () => {
     invertSelection: 'select.invert',
   };
 
-  it('keeps the registry valid when another surface registers them', () => {
-    const mirrors = registerListSurfaceEditMirrors('data-navigator');
+  it('keeps the registry valid when a FURTHER surface registers them', () => {
+    // `outliner` (P5A) and `data-navigator` (P6) are already in ALL_BINDINGS; the next
+    // surface to stamp itself must not disturb the conflict validator either.
+    const mirrors = registerListSurfaceEditMirrors('engine-tree');
     expect(() => validateRegistry([...ALL_BINDINGS, ...mirrors])).not.toThrow();
   });
 
   it('delegates to commands that exist, and never mirrors ⌘A', () => {
     const mirrors = registerListSurfaceEditMirrors('data-navigator');
+    // The Data navigator's own six are LIVE in the registry (P6.07 stamped the surface).
+    expect(ALL_BINDINGS.filter((b) => b.scope === 'surface:data-navigator')).toHaveLength(
+      mirrors.length,
+    );
     expect(mirrors).toHaveLength(Object.keys(COMMANDS).length);
     for (const mirror of mirrors) {
       const suffix = mirror.id.split('.').pop()!;

@@ -180,9 +180,19 @@ function serializeCurrentProject(): ProjectSnapshot {
  */
 function normalizePart(part: EditingPart): EditingPart {
   const filled: EditingPart = { ...createEmptyPart(), ...part };
+  const gameData = { ...createEmptyGameData(), ...filled.gameData };
   return {
     ...filled,
-    gameData: { ...createEmptyGameData(), ...filled.gameData },
+    gameData: {
+      ...gameData,
+      // Two additive fields live BELOW the constructor-spread level, so they need their own
+      // default (they have no constructor of their own): `<EVADoor SeatId>` and
+      // `<IVASeat Id>`, both modeled in KSA 2026.8.3.5117.
+      evaDoor: gameData.evaDoor
+        ? { ...gameData.evaDoor, seatId: gameData.evaDoor.seatId ?? null }
+        : null,
+    },
+    ivaSeats: (filled.ivaSeats ?? []).map((seat) => ({ ...seat, ksaId: seat.ksaId ?? null })),
     subPartGameData: (filled.subPartGameData ?? []).map((spd) => ({
       ...createSubPartGameData(spd.subPartTemplateId ?? ''),
       ...spd,

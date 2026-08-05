@@ -1,5 +1,6 @@
 import { useStore } from '@nanostores/react';
 import { BuildFocusEditor } from './build/BuildFocusEditor';
+import { DataScopeForm } from './data/DataScopeForm';
 import { $mode } from '../state/modeStore';
 
 /**
@@ -10,8 +11,8 @@ import { $mode } from '../state/modeStore';
  * The framework is shared by all five modes: each contributes a ruleset that answers *what am
  * I focused on, and what can I do to it?* as a pure function of `(mode, focus)` — tool
  * parameter card, then the focus card, then a mode cheat-card when nothing applies. Build's
- * ruleset is {@link BuildFocusEditor} (§7.1); Animation (§7.2), Data (§7.3), Engine (§7.4)
- * and Surface (§7.5) land with their own phases and plug in here.
+ * ruleset is {@link BuildFocusEditor} (§7.1) and Data's is {@link DataScopeForm} (§7.3);
+ * Animation (§7.2), Engine (§7.4) and Surface (§7.5) land with their own phases.
  *
  * **Undo enrollment: NONE** — the mode is view state (foundation §13).
  */
@@ -19,9 +20,12 @@ export function ModeFocusEditor() {
   const mode = useStore($mode);
 
   if (mode === 'build') return <BuildFocusEditor />;
+  // Data's ruleset is not a selection inspector: the LEFT panel shows the GameData form for
+  // the scope the right navigator picked (foundation §7.3).
+  if (mode === 'data') return <DataScopeForm />;
 
-  // INTERIM: the other four modes keep their editors in the right sidebar / dialogs until
-  // their own phases build a left ruleset. RULE ZERO — nothing is removed, so an empty slot
+  // INTERIM: the remaining three modes keep their editors in the right sidebar / dialogs
+  // until their own phases build a left ruleset. RULE ZERO — nothing is removed, so an empty slot
   // costs the user no feature.
   return (
     <p className="p-(--density-panel-p) text-xs text-fg-subtle">

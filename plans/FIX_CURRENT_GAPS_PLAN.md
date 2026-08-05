@@ -1,10 +1,10 @@
 # Plan — Fix flexo gaps from KSA updates (running)
 
 > **Latest review: `2026.7.10.5056` → `2026.8.3.5117` (see below). NO BREAKING gap. Four new
-> 📋 OPEN items: `<EVADoor SeatId>` (Q1) and its partner `<IVASeat Id>` (Q2), the clutter
-> `<Collideable>` → `<CollisionType>` rename (Q3, docs-only), and validator parity with KSA's
-> new engine-wiring warnings (Q4).** The `5018 → 5056` review follows, then the earlier ones as
-> history.
+> items were raised: `<EVADoor SeatId>` (Q1) and its partner `<IVASeat Id>` (Q2) are now
+> ✅ **FIXED** (flexo v2 P6.04); still 📋 OPEN are the clutter `<Collideable>` →
+> `<CollisionType>` rename (Q3, docs-only) and validator parity with KSA's new engine-wiring
+> warnings (Q4).** The `5018 → 5056` review follows, then the earlier ones as history.
 
 ---
 
@@ -32,13 +32,26 @@ vectors moved to `Camera.ForwardView` / `RightView` / `UpView` with **identical 
 
 | # | Gap | Severity | Status | Scope doc |
 |---|---|---|---|---|
-| Q1 | `<EVADoor SeatId>` (new `[XmlAttribute]` on `EVADoorTemplate`, authored by Core) is dropped on import→export — the attribute sits on a MODELED child, so the GameData passthrough does not cover it | MISSING-CAPABILITY | 📋 **OPEN** | [gamedata-modules](../scope/gamedata-modules.md#what-changed-in-5117) |
-| Q2 | `<IVASeat Id>` is discarded on import and never emitted, but is now the target `<EVADoor SeatId>` resolves against — Core authors one on both capsule seats | MISSING-CAPABILITY | 📋 **OPEN** | [connectors-coordinates-iva](../scope/connectors-coordinates-iva.md#what-changed-in-5117) |
+| Q1 | `<EVADoor SeatId>` (new `[XmlAttribute]` on `EVADoorTemplate`, authored by Core) was dropped on import→export — the attribute sits on a MODELED child, so the GameData passthrough does not cover it | MISSING-CAPABILITY | ✅ **FIXED** (P6.04 — `EvaDoor.seatId`) | [gamedata-modules](../scope/gamedata-modules.md#what-changed-in-5117) |
+| Q2 | `<IVASeat Id>` was discarded on import and never emitted, but is the target `<EVADoor SeatId>` resolves against — Core authors one on both capsule seats | MISSING-CAPABILITY | ✅ **FIXED** (P6.04 — `IvaSeat.ksaId`) | [connectors-coordinates-iva](../scope/connectors-coordinates-iva.md#what-changed-in-5117) |
 | Q3 | Clutter ecotype `<Collideable Value>` renamed to `<CollisionType Value="None\|PrimitiveList\|Mesh">`; the cartoon-moon scaffold emits neither, so docs-only | SCHEMA-DRIFT (docs) | 📋 **OPEN** | [ground-clutter](../scope/ground-clutter.md#what-changed-in-5117) |
 | Q4 | `validateEngines` has no parity with KSA's five new engine-wiring warnings (rev 5091) — all silent no-thrust failures | MISSING-CAPABILITY (low) | 📋 **OPEN** | [engines](../scope/engines.md#what-changed-in-5117) |
 | — | Everything else | NONE | ✅ re-verified INTACT | — |
 
-### Q1 + Q2 — the EVA-door ↔ seat link (fix these together)
+### Q1 + Q2 — the EVA-door ↔ seat link (fix these together) — ✅ FIXED
+
+**Shipped in flexo v2 P6.04 (design decision D17), exactly as prescribed below.** `EvaDoor`
+gained `seatId: string | null` and `IvaSeat` a user-authored `ksaId: string | null` (`null` ⇒ the
+attribute is omitted); parser + serializer read/write both; the project codec carries them as
+`ed.s` and `iv[].k` (additive, so NEITHER `PROJECT_SCHEMA_VERSION` nor `PROJECT_EXPORT_VERSION`
+was bumped — an old payload lacking them decodes to `null`, which is exactly "no link"). The
+editor half is Data mode's Coupling seat picker over `setEvaDoorSeat`, which mints the seat id
+(uniquified against the shared `Components[].Id` namespace) and points the door at it in ONE
+undo step. Round-trip tests: `src/ksa/partXmlSerializer.test.ts`
+`describe('EVA door ⇄ IVA seat link (D17)')`. `partCatalog.ts` needed no change — it carries
+whole `IvaSeat`/`EvaDoor` objects through the merge, so both fields ride along.
+
+The original analysis is kept below as the record of WHY.
 
 Rev 5085 wired hatches to specific seats. Game side:
 

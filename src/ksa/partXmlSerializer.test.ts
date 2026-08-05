@@ -258,7 +258,7 @@ describe('serializeGameData', () => {
         latchingKineticEnergyJ: 6000,
         pushoffImpulseNs: 7000,
       },
-      evaDoor: { connectorId: '_connector3' },
+      evaDoor: { connectorId: '_connector3', seatId: null },
     },
     subPartGameData: [
       {
@@ -526,6 +526,24 @@ describe('serializeGameData', () => {
     expect(child(dp, 'LatchingKineticEnergy')!.getAttribute('J')).toBe('6000');
     expect(child(dp, 'PushoffImpulse')!.getAttribute('Ns')).toBe('7000');
     expect(tags(doc, 'EVADoor')[0].getAttribute('ConnectorId')).toBe('_connector3');
+    // KSA's `EVADoorTemplate.SeatId` default is "" — an unset link emits no attribute.
+    expect(tags(doc, 'EVADoor')[0].hasAttribute('SeatId')).toBe(false);
+  });
+
+  // D17 / KSA 2026.8.3.5117: `<EVADoor SeatId>` names the `<IVASeat Id>` the hatch is
+  // aligned to; without it `EVADoor.ShowContextMenu` never draws the EVA button.
+  it('emits EVADoor SeatId only when the door is linked to a seat', () => {
+    const linked = parse(
+      serializeGameData(
+        editingPart({
+          gameData: {
+            ...createEmptyGameData(),
+            evaDoor: { connectorId: '_connector3', seatId: 'pilot' },
+          },
+        }),
+      ),
+    );
+    expect(tags(linked, 'EVADoor')[0].getAttribute('SeatId')).toBe('pilot');
   });
 
   it('omits empty/default game data entirely', () => {
@@ -830,6 +848,7 @@ describe('serializeGameData', () => {
 describe('serializeGameData IVA seats', () => {
   const seat = (over: Partial<IvaSeat>): IvaSeat => ({
     id: '_seat1',
+    ksaId: null,
     position: { ...VEC3_ZERO },
     rotation: { ...EULER_ZERO },
     scale: { ...VEC3_ONE },
@@ -856,7 +875,7 @@ describe('serializeGameData IVA seats', () => {
     expect(xml).toContain('<UpAxis X="0" Y="0" Z="-1"/>');
   });
 
-  it('never emits an Id attribute on <IVASeat>', () => {
+  it('never emits the editor-only _seatN id, and omits Id when the seat has no authored one', () => {
     const xml = serializeGameData(
       editingPart({
         ivaSeats: [seat({}), seat({ id: '_seat2', rotation: { x: 0.3, y: 0, z: 1 } })],
@@ -864,6 +883,19 @@ describe('serializeGameData IVA seats', () => {
     );
     for (const el of tags(parse(xml), 'IVASeat')) expect(el.getAttribute('Id')).toBe(null);
     expect(xml).not.toContain('_seat');
+  });
+
+  // D17 / KSA 2026.8.3.5117: an authored `<IVASeat Id>` is what an `<EVADoor SeatId>`
+  // resolves against (`EVADoor.ResolveAlignedSeats`), so it must survive verbatim.
+  it('emits the authored <IVASeat Id> when the seat carries one', () => {
+    const xml = serializeGameData(
+      editingPart({ ivaSeats: [seat({ ksaId: 'CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA' })] }),
+    );
+    expect(tags(parse(xml), 'IVASeat')[0].getAttribute('Id')).toBe(
+      'CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA',
+    );
+    // Still never the editor id.
+    expect(xml).not.toContain('_seat1');
   });
 
   it('emits UNIT axes for a rotated seat', () => {
@@ -929,5 +961,41 @@ describe('serializeGameData IVA seats', () => {
         expect(got.up[k]).toBeCloseTo(want.up[k], 5);
       }
     }
+  });
+});
+
+// D17 — the KSA 2026.8.3.5117 hatch↔seat link (`EVADoorTemplate.SeatId` ⇄
+// `IVASeatTemplate.Id`, resolved by `EVADoor.ResolveAlignedSeats`). Import → export must
+// reproduce both verbatim, and absent attributes must stay absent.
+describe('EVA door ⇄ IVA seat link (D17)', () => {
+  const IMPORTED = `<Assets><PartGameData Id="P">
+      <EVADoor ConnectorId="_c1" SeatId="pilot" />
+      <IVASeat Id="pilot"><Position X="1" /><ForwardAxis X="1" /><UpAxis Z="-1" /></IVASeat>
+    </PartGameData></Assets>`;
+
+  function reexport(xml: string): XmlDocument {
+    const parsed = gameDataFromAssets(xml, 'P', new DOMParser())!;
+    return parse(
+      serializeGameData(
+        editingPart({ gameData: parsed.gameData, ivaSeats: parsed.ivaSeats, connectors: [] }),
+      ),
+    );
+  }
+
+  it('reproduces <EVADoor SeatId> and <IVASeat Id> verbatim', () => {
+    const doc = reexport(IMPORTED);
+    expect(tags(doc, 'EVADoor')[0].getAttribute('SeatId')).toBe('pilot');
+    expect(tags(doc, 'IVASeat')[0].getAttribute('Id')).toBe('pilot');
+  });
+
+  it('leaves both attributes absent when the source authored neither', () => {
+    const doc = reexport(
+      `<Assets><PartGameData Id="P">
+        <EVADoor ConnectorId="_c1" />
+        <IVASeat><Position X="1" /><ForwardAxis X="1" /><UpAxis Z="-1" /></IVASeat>
+      </PartGameData></Assets>`,
+    );
+    expect(tags(doc, 'EVADoor')[0].hasAttribute('SeatId')).toBe(false);
+    expect(tags(doc, 'IVASeat')[0].hasAttribute('Id')).toBe(false);
   });
 });

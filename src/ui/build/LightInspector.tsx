@@ -1,11 +1,10 @@
 import { useStore } from '@nanostores/react';
 import { ListBoxItem } from 'react-aria-components';
-import { ColorField, SectionTitle, Select, Switch } from '../kit';
+import { ColorField, Field, SectionTitle, Select, Switch } from '../kit';
 import { Section } from './TransformGroups';
 import { PART_OWNER_KEY } from './ColliderInspector';
 import { NumberField } from '../NumberField';
 import { PreciseNumberInput } from '../PreciseNumberInput';
-import { Field } from '../GameDataSections';
 import { LightFalloffCurve } from '../LightFalloffCurve';
 import { hexToRgb01, rgb01ToHex } from '../colorHex';
 import { DEG2RAD, RAD2DEG } from '../format';

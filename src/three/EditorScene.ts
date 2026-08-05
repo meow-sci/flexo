@@ -126,6 +126,8 @@ import {
   disarmTool,
   registerTool,
 } from '../state/modeStore';
+import { $dataFlash, $dataHighlight, setDataScope } from '../state/dataModeStore';
+import { status } from '../state/statusStore';
 import {
   $activeEngineEntry,
   $activeNozzleRef,
@@ -168,6 +170,25 @@ import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../st
 // no React context down here) — the scene has no other way to say "that did nothing, and
 // here is why".
 import { toast } from '../ui/toast';
+
+/**
+ * How strongly a Data-mode scope tint drives the shared selection-highlight emissive. Well
+ * under the full selection value so "this is what your form edits" never reads as "this is
+ * selected" (design §A2).
+ */
+const DATA_TINT_STRENGTH = 0.4;
+
+/**
+ * Plural nouns for the "this kind carries no SubPart data" status message Data mode posts
+ * when a non-capable entity is clicked (design §A2 last paragraph).
+ */
+const NON_CAPABLE_NOUN: Record<Exclude<EntityKind, 'subpart'>, string> = {
+  connector: 'Connectors',
+  collider: 'Colliders',
+  ivaSeat: 'IVA seats',
+  light: 'Lights',
+  kitten: 'Kittens',
+};
 
 /** A highlightable scene entity — both SubPartObject and ConnectorObject match. */
 interface SelectableObject {
@@ -242,6 +263,8 @@ export class EditorScene {
   private readonly containers: ContainerLayer;
   private readonly chainPreview: ChainPreviewLayer;
   private highlighted: SelectableObject[] = [];
+  /** Placements currently wearing Data mode's scope tint (never a selected one). */
+  private tinted: SubPartObject[] = [];
   private attachedObject: THREE.Object3D | null = null;
   /** Instance ids whose group transform is currently overridden by the animation preview. */
   private animOverridden = new Set<string>();
@@ -377,6 +400,19 @@ export class EditorScene {
         if (additive) toggleRef({ kind, id: selected.id });
         else select([{ kind, id: selected.id }]);
         revealEntity(kind, selected.id); // scroll the row into view in the entity list
+        // Select-in-3D, the other direction (design §A2): in Data mode a click on a
+        // placement ALSO retargets the scope, and a click on anything else says why it
+        // cannot. Selection behavior itself is unchanged in every mode.
+        if ($mode.get() === 'data') {
+          if (kind === 'subpart') {
+            const templateId = part.placements.find(
+              (p) => p.instanceId === selected.id,
+            )?.subPartTemplateId;
+            if (templateId) setDataScope({ kind: 'template', templateId });
+          } else {
+            status(`${NON_CAPABLE_NOUN[kind]} have no SubPart data — edited in Build mode`);
+          }
+        }
       },
     );
 
@@ -545,6 +581,10 @@ export class EditorScene {
     this.sub($engineExhaustGizmo, onEngineChange);
     this.sub($mode, onEngineChange);
     this.sub($selection, () => this.updateSelection());
+    // Data mode's scope tint + the one-shot flash (design §A2, §A5). Both go through
+    // `sub`, so the on-demand render loop is invalidated for us.
+    this.sub($dataHighlight, () => this.applyDataTint());
+    this.sub($dataFlash, () => this.applyDataTint());
     // A context change re-targets a selected light's highlight + gizmo to the newly
     // clicked instance even when the selection indices themselves are unchanged.
     this.sub($lightEditContext, () => this.updateSelection());
@@ -1683,6 +1723,30 @@ export class EditorScene {
     this.gizmo.setSpace(proxy ? 'world' : $gizmoSpace.get());
   }
 
+  /**
+   * Data mode's scope tint + the one-shot hover/eye flash (design §A2, §A5). A TINT, not a
+   * selection: it runs through the same emissive path at a lower strength, and a placement
+   * that is genuinely SELECTED keeps the full highlight (the selection always wins, so the
+   * two can never half-overwrite each other).
+   *
+   * Re-run from {@link updateSelection} as well as from its own subscriptions, because
+   * deselecting a tinted placement must put its tint back rather than the base emissive.
+   */
+  private applyDataTint(): void {
+    const selected = new Set(this.selectedObjects());
+    const wanted = new Set<SubPartObject>();
+    const flash = $dataFlash.get();
+    for (const id of [...$dataHighlight.get(), ...(flash?.instanceIds ?? [])]) {
+      const obj = this.objects.get(id);
+      if (obj && !selected.has(obj)) wanted.add(obj);
+    }
+    for (const obj of this.tinted) {
+      if (!wanted.has(obj) && !selected.has(obj)) obj.setTint(0);
+    }
+    for (const obj of wanted) obj.setTint(DATA_TINT_STRENGTH);
+    this.tinted = [...wanted];
+  }
+
   /** Syncs the selection highlight and gizmo attachment to the current selection. */
   private updateSelection(): void {
     this.updatePivotHelper(); // before any early-return below; tracks the pivot live during drags
@@ -1694,6 +1758,9 @@ export class EditorScene {
     for (const obj of this.highlighted) if (!next.has(obj)) obj.setSelected(false);
     for (const obj of selected) obj.setSelected(true);
     this.highlighted = selected;
+    // After the selection has been applied, so a just-deselected placement of the Data-mode
+    // scope goes back to the TINT rather than to its base emissive.
+    this.applyDataTint();
     this.measurements.refresh();
     // Recompute container out-of-bounds warnings here too: this runs after
     // reconcile (so removed meshes are already gone) and inside the async SubPart

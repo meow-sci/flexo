@@ -511,6 +511,7 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
     // panels (see the DEFERRED ledger below).
     bindings: [
       ...registerListSurfaceEditMirrors('outliner'),
+      ...registerListSurfaceEditMirrors('data-navigator'),
       {
         // The Outliner's own search. Scoped to the panel, so ⌘F stays the browser's Find
         // everywhere else — and so it can never fight the field-local keys of another list.
@@ -539,7 +540,6 @@ export const ALL_BINDINGS: HotkeyBinding[] = HOTKEY_GROUPS.flatMap((g) => g.bind
 //
 // | Binding (authoritative-table row)                                        | Owning phase |
 // |--------------------------------------------------------------------------|--------------|
-// | `surface:data-navigator` edit mirrors                                     | P6           |
 // | `surface:engine-tree` edit mirrors · `tool:exhaust` `,`/`.` target cycle  | P7           |
 // | `surface:glow-paint` `⌘Z` / `⇧⌘Z` per-stroke paint undo                   | P8           |
 // | `mode:animation` `Space` · `,` `.` · `K` (transport / prev-next key /     | P11 (timeline) |

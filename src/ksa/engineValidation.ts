@@ -36,11 +36,37 @@ export const UNIT_EPSILON = 1e-3;
 /** `block` ⇒ KSA throws at load; `warn` ⇒ it loads but the part misbehaves. */
 export type EngineIssueSeverity = 'block' | 'warn';
 
+/**
+ * Which authoring surface an issue belongs to. **Editor metadata only** — it exists so the
+ * Data/Engine findings pipeline can scope + scroll to the offending card (design
+ * design-data-engine-modes.md §A7, D4). It is NOT part of the game contract: no code,
+ * message or severity depends on it.
+ */
+export interface EngineIssueSource {
+  /** The SubPart template that owns the module; `null` ⇒ part-level (`<PartGameData>`). */
+  templateId: string | null;
+  module?:
+    | 'combustor'
+    | 'nozzle'
+    | 'solidMotor'
+    | 'solidNozzle'
+    | 'grain'
+    | 'rocket'
+    | 'controller'
+    | 'wiring'
+    | 'gimbal'
+    | 'propellant';
+  /** Index within that module list, when the surface can address one card. */
+  index?: number;
+}
+
 export interface EngineIssue {
   severity: EngineIssueSeverity;
   /** Stable kebab-case code — the UI groups/tests match on this, not on the prose. */
   code: string;
   message: string;
+  /** Editor-targeting metadata; see {@link EngineIssueSource}. */
+  source?: EngineIssueSource;
 }
 
 /** What a reaction lookup needs to answer; a subset of {@link ReactionData}. */
@@ -91,6 +117,8 @@ interface LocatedConsumer {
   id: string;
   /** Placement instanceId it lives on; null ⇒ the root part. */
   subPartInstanceId: string | null;
+  /** The template whose `<SubPartGameData>` authors it; null ⇒ `<PartGameData>`. */
+  subPartTemplateId: string | null;
   isSolid: boolean;
   feeds: FeedSource[];
   /** Combustors only — solid motors have no `<Plumbing>` (they feed from grain). */
@@ -104,27 +132,30 @@ function locateConsumers(part: EditingPart): LocatedConsumer[] {
   const add = (
     id: string,
     scope: string | null,
+    templateId: string | null,
     combustor: Combustor | null,
     solidMotor: SolidMotor | null,
   ) => {
     out.push({
       id,
       subPartInstanceId: scope,
+      subPartTemplateId: templateId,
       isSolid: solidMotor != null,
       feeds: (combustor ?? solidMotor)!.feeds,
       combustor,
       solidMotor,
     });
   };
-  for (const c of part.gameData.combustors) add(c.id, null, c, null);
-  for (const m of part.gameData.solidMotors) add(m.id, null, null, m);
+  for (const c of part.gameData.combustors) add(c.id, null, null, c, null);
+  for (const m of part.gameData.solidMotors) add(m.id, null, null, null, m);
   for (const placement of part.placements) {
     const spd = part.subPartGameData.find(
       (s) => s.subPartTemplateId === placement.subPartTemplateId,
     );
     if (!spd) continue;
-    for (const c of spd.combustors) add(c.id, placement.instanceId, c, null);
-    for (const m of spd.solidMotors) add(m.id, placement.instanceId, null, m);
+    for (const c of spd.combustors) add(c.id, placement.instanceId, spd.subPartTemplateId, c, null);
+    for (const m of spd.solidMotors)
+      add(m.id, placement.instanceId, spd.subPartTemplateId, null, m);
   }
   return out;
 }
@@ -134,13 +165,39 @@ function locateConsumers(part: EditingPart): LocatedConsumer[] {
  * {@link SolidMotorNozzle} because that IS the shared shape — a `DeLavalNozzle` is
  * structurally this plus `<AreaRatio>` — so one walk covers `RocketNozzleTemplate`'s fields.
  */
-function locateNozzleModules(part: EditingPart): { nozzle: SolidMotorNozzle; scope: string }[] {
-  const out: { nozzle: SolidMotorNozzle; scope: string }[] = [];
-  for (const n of part.gameData.nozzles) out.push({ nozzle: n, scope: part.partId });
-  for (const n of part.gameData.solidNozzles) out.push({ nozzle: n, scope: part.partId });
+function locateNozzleModules(
+  part: EditingPart,
+): { nozzle: SolidMotorNozzle; scope: string; source: EngineIssueSource }[] {
+  const out: { nozzle: SolidMotorNozzle; scope: string; source: EngineIssueSource }[] = [];
+  part.gameData.nozzles.forEach((n, index) =>
+    out.push({
+      nozzle: n,
+      scope: part.partId,
+      source: { templateId: null, module: 'nozzle', index },
+    }),
+  );
+  part.gameData.solidNozzles.forEach((n, index) =>
+    out.push({
+      nozzle: n,
+      scope: part.partId,
+      source: { templateId: null, module: 'solidNozzle', index },
+    }),
+  );
   for (const spd of part.subPartGameData) {
-    for (const n of spd.nozzles) out.push({ nozzle: n, scope: spd.subPartTemplateId });
-    for (const n of spd.solidNozzles) out.push({ nozzle: n, scope: spd.subPartTemplateId });
+    spd.nozzles.forEach((n, index) =>
+      out.push({
+        nozzle: n,
+        scope: spd.subPartTemplateId,
+        source: { templateId: spd.subPartTemplateId, module: 'nozzle', index },
+      }),
+    );
+    spd.solidNozzles.forEach((n, index) =>
+      out.push({
+        nozzle: n,
+        scope: spd.subPartTemplateId,
+        source: { templateId: spd.subPartTemplateId, module: 'solidNozzle', index },
+      }),
+    );
   }
   return out;
 }
@@ -195,17 +252,29 @@ export function validateEngines(
   reactions?: ReadonlyMap<string, ReactionData>,
 ): EngineIssue[] {
   const issues: EngineIssue[] = [];
-  const block = (code: string, message: string) =>
-    issues.push({ severity: 'block', code, message });
-  const warn = (code: string, message: string) => issues.push({ severity: 'warn', code, message });
+  const block = (code: string, message: string, source?: EngineIssueSource) =>
+    issues.push({ severity: 'block', code, message, source });
+  const warn = (code: string, message: string, source?: EngineIssueSource) =>
+    issues.push({ severity: 'warn', code, message, source });
 
   const consumers = locateConsumers(part);
   const nozzles = locateNozzles(part);
   const connectors = new Map(part.connectors.map((c) => [c.id, c]));
-  const rockets = [...part.gameData.rockets, ...part.subPartGameData.flatMap((s) => s.rockets)];
+  const rockets: { rocket: Rocket; source: EngineIssueSource }[] = [
+    ...part.gameData.rockets.map((rocket, index) => ({
+      rocket,
+      source: { templateId: null, module: 'rocket' as const, index },
+    })),
+    ...part.subPartGameData.flatMap((s) =>
+      s.rockets.map((rocket, index) => ({
+        rocket,
+        source: { templateId: s.subPartTemplateId, module: 'rocket' as const, index },
+      })),
+    ),
+  ];
 
   // --- Rocket assembly (RocketTemplate.Create — all THROW) ---
-  for (const rocket of rockets) {
+  for (const { rocket, source } of rockets) {
     const solidCore = coreIsSolid(rocket, consumers);
     if (solidCore === null) continue; // unknown core: not a solid/liquid question
     for (const n of rocket.nozzles) {
@@ -218,6 +287,7 @@ export function validateEngines(
           `KSA throws: Rocket ${rocket.id} mixes solid and liquid components — core ` +
             `${rocket.core.id} is ${solidCore ? 'solid' : 'liquid'} but nozzle ${n.id} is ` +
             `${isSolidNozzle ? 'solid' : 'liquid'}.`,
+          source,
         );
       }
     }
@@ -225,34 +295,41 @@ export function validateEngines(
       block(
         'solid-rocket-needs-nozzle',
         `KSA throws: Solid motor rocket ${rocket.id} needs at least one nozzle.`,
+        source,
       );
     }
   }
 
   // --- Thruster controllers may not drive a solid motor (RocketThrusterControllerTemplate.Create) ---
-  for (const controller of part.gameData.rocketControllers) {
-    if (controller.kind !== 'thruster') continue;
+  part.gameData.rocketControllers.forEach((controller, index) => {
+    if (controller.kind !== 'thruster') return;
     for (const ref of controller.rocketRefs) {
-      const rocket = rockets.find((r) => r.id === ref.id);
+      const rocket = rockets.find((r) => r.rocket.id === ref.id)?.rocket;
       if (!rocket || coreIsSolid(rocket, consumers) !== true) continue;
       block(
         'solid-motor-on-thruster-controller',
         `KSA throws: Solid motor ${rocket.core.id} cannot be driven by thruster controller ` +
           `${controller.id}.`,
+        { templateId: null, module: 'controller', index },
       );
     }
-  }
+  });
 
   // --- Solid motor reaction + pressure (SolidMotorTemplate.Create — both THROW) ---
   for (const c of consumers) {
     const motor = c.solidMotor;
     if (!motor) continue;
+    const motorSource: EngineIssueSource = {
+      templateId: c.subPartTemplateId,
+      module: 'solidMotor',
+    };
     const facts = reactionFacts(motor.reactionId, part, reactions);
     if (facts && facts.category !== 'Solid') {
       block(
         'solid-motor-needs-solid-reaction',
         `KSA throws: Solid motor ${motor.id} requires a solid reaction; got ` +
           `${motor.reactionId} (${facts.category}).`,
+        motorSource,
       );
     }
     // KSA: throws when pressure <= MinimumBurnPressure or > MaxStablePressure.
@@ -268,6 +345,7 @@ export function validateEngines(
           `${(motor.defaultPressurePa / 1e5).toFixed(1)} bar is outside ${motor.reactionId}'s ` +
           `stable range (${min != null ? (min / 1e5).toFixed(1) : '?'} to ` +
           `${max != null ? (max / 1e5).toFixed(1) : '?'} bar).`,
+        motorSource,
       );
     }
   }
@@ -278,7 +356,7 @@ export function validateEngines(
   // LENGTH is a silent thrust multiplier. It loads and runs, hence `warn`. Only the physics
   // vector: the FX pair is NormalizeOrZero()d by every consumer and stock ships non-unit
   // FX vectors deliberately.
-  for (const { nozzle, scope } of locateNozzleModules(part)) {
+  for (const { nozzle, scope, source } of locateNozzleModules(part)) {
     const len = Math.hypot(
       nozzle.exhaustDirection.x,
       nozzle.exhaustDirection.y,
@@ -293,22 +371,31 @@ export function validateEngines(
             `${len.toFixed(2)}× its rated thrust.`
         : `Nozzle ${nozzle.id} on ${scope} has a zero-length ExhaustDirection — it will ` +
             `apply no thrust.`,
+      source,
     );
   }
 
   // --- Solid reactions KSA refuses to load (FixedReactionTemplate.Create) ---
-  for (const reaction of part.customReactions) {
-    if (isCustomReactionExportable(reaction)) continue;
+  part.customReactions.forEach((reaction, index) => {
+    if (isCustomReactionExportable(reaction)) return;
     block(
       'solid-reaction-incomplete',
       `KSA throws: solid reaction ${reaction.id} needs a burn-rate law (a > 0, 0 <= n < 0.95), ` +
         `a minimum burn pressure > 0, a max stable pressure above it, and an exhaust ` +
         `condensed fraction in [0, 1). It will be omitted from the export.`,
+      { templateId: null, module: 'propellant', index },
     );
-  }
+  });
 
   // --- Feed resolution (PartTemplate.AddResolvedFeed / ResolveConsumerFeeds — all LOG) ---
   for (const c of consumers) {
+    // The card the finding belongs to: the consumer's own editor (combustor or solid motor)
+    // in its owning scope. `consumer-not-wired` is the exception — the fix lives on the
+    // PART's `<ConsumerFeedWiring>` list, so it points there instead.
+    const feedSource: EngineIssueSource = {
+      templateId: c.subPartTemplateId,
+      module: c.isSolid ? 'solidMotor' : 'combustor',
+    };
     for (const f of c.feeds) {
       if (f.kind === 'container') {
         // A SubPart= scope re-roots the lookup; otherwise it's the consumer's own owner.
@@ -318,6 +405,7 @@ export function validateEngines(
             'feed-unknown-container',
             `KSA logs: consumer ${c.id} feeds from unknown container '${f.containerId}'` +
               `${scope ? ` on ${scope}` : ''} — it will get nothing from it.`,
+            feedSource,
           );
         }
       } else if (f.kind === 'connector') {
@@ -326,6 +414,7 @@ export function validateEngines(
           warn(
             'feed-unknown-connector',
             `KSA logs: consumer ${c.id} feeds from unknown connector '${f.connectorId}'.`,
+            feedSource,
           );
           continue;
         }
@@ -337,6 +426,7 @@ export function validateEngines(
             'feed-connector-missing-bulkfluid',
             `Add BulkFluid to connector ${f.connectorId} or combustor ${c.id} gets no propellant ` +
               `across it (Bulk plumbing needs the BulkFluid capability at both ends).`,
+            feedSource,
           );
         }
         if (c.solidMotor && !connector.capabilities.includes('SolidMotorCase')) {
@@ -344,6 +434,7 @@ export function validateEngines(
             'feed-connector-missing-solidmotorcase',
             `Add SolidMotorCase to connector ${f.connectorId} so grain segments can stack onto ` +
               `solid motor ${c.id}.`,
+            feedSource,
           );
         }
       } else if (c.subPartInstanceId !== null) {
@@ -359,6 +450,7 @@ export function validateEngines(
             'consumer-not-wired',
             `KSA logs: consumer ${c.id} feeds from its parent part, but ${part.partId} has no ` +
               `ConsumerFeedWiring wiring for it — it will reach no propellant.`,
+            { templateId: null, module: 'wiring' },
           );
         }
       }
@@ -368,6 +460,7 @@ export function validateEngines(
         'consumer-no-feeds',
         `KSA logs: rocket core ${c.id} declares no FeedsFrom feed points; it will reach no ` +
           `propellant (and produce no thrust).`,
+        feedSource,
       );
     }
   }

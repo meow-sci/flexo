@@ -18,7 +18,16 @@ export { Button, button, type ButtonKitProps } from './Button';
 export { ToggleButton, ToggleButtonGroup, type ToggleButtonKitProps } from './ToggleButton';
 export { Toolbar, ToolbarSeparator, ToolbarButton } from './Toolbar';
 
-export { Label, Description, FieldError, FieldGroup, SectionTitle, inputStyles } from './Field';
+export {
+  Description,
+  Field,
+  FieldError,
+  FieldGroup,
+  inputStyles,
+  ItemCard,
+  Label,
+  SectionTitle,
+} from './Field';
 export { TextField, type TextFieldKitProps } from './TextField';
 export { SearchField, type SearchFieldKitProps } from './SearchField';
 export { Select, type SelectKitProps } from './Select';

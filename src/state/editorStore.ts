@@ -840,7 +840,9 @@ function applyImportedGameData(
   }
   if (game.evaDoor == null && src.evaDoor) {
     const id = connectorIdMap.get(src.evaDoor.connectorId);
-    if (id) game.evaDoor = { connectorId: id };
+    // `seatId` names an <IVASeat Id>, which is user-authored game data (NOT the regenerated
+    // `_seatN`), so it carries across verbatim like every other authored id.
+    if (id) game.evaDoor = { connectorId: id, seatId: src.evaDoor.seatId };
   }
   // Part diameter + command marker: filled only when not already set. The extra
   // adapter size classes ride along with the primary (they're meaningless without it).
@@ -1257,6 +1259,9 @@ export function addIvaSeat(transform?: PlacementTransform): void {
   const part = clone(current);
   part.ivaSeats.push({
     id: newId,
+    // A brand-new seat has no KSA id until the user gives it one (an <EVADoor SeatId> pick
+    // authors it) — flexo never auto-fills the feed-container id namespace.
+    ksaId: null,
     position: transform ? { ...transform.position } : { x: 0, y: 0, z: 0 },
     rotation: transform ? { ...transform.rotation } : { x: 0, y: 0, z: 0 },
     scale: { x: 1, y: 1, z: 1 },
@@ -2473,6 +2478,22 @@ export function setDiameter(diameterM: number): void {
   });
 }
 
+/**
+ * Streaming: replace the ADDITIONAL size classes (`gameData.extraDiametersM`) — the repeated
+ * `<Diameter>` entries an adapter authors so it matches several racks in the VAB filter.
+ *
+ * No internal `pushUndo`: the list editor pushes once at interaction start like every other
+ * streaming field, and its add/remove buttons push their own discrete step BEFORE calling
+ * this (the `PowerList` convention). Design D3 — previously round-trip-only data, now
+ * authorable; the serializer already emits repeated `<Diameter>`, so nothing in `src/ksa/`
+ * changes.
+ */
+export function setExtraDiameters(diametersM: readonly number[]): void {
+  mutateGameData((g) => {
+    g.extraDiametersM = [...diametersM];
+  });
+}
+
 /** Discrete: toggle the part's command-capability marker (<Control/>). */
 export function setControllable(enabled: boolean): void {
   commitGameData('command capable', enabled ? 'on' : 'off', (g) => {
@@ -2506,6 +2527,36 @@ function commitSubPartData(
 ): void {
   pushUndo(label, detail);
   mutateSubPartData(subPartTemplateId, mutate);
+}
+
+/**
+ * Discrete: erase everything Data mode's template scope authors for a SubPart template — its
+ * `<SubPartGameData>` entry (tanks, solar panels, engine hardware, preserved passthrough
+ * XML) and the template-owned lights normalised out of it.
+ *
+ * Colliders are deliberately NOT touched: a template-owned collider is a Build entity with
+ * its own inspector and its own Outliner row, and Data mode lists it as not-data-capable —
+ * deleting it from a "delete all DATA" gesture would be a surprise.
+ *
+ * ONE undo step, so the whole-container confirm the Data-mode scope header raises
+ * (foundation §14.3) has exactly one takeback. The confirm lives in the UI; this is only
+ * the action.
+ */
+export function removeAllTemplateData(subPartTemplateId: string): void {
+  const current = $part.get();
+  const hasData =
+    current.subPartGameData.some((s) => s.subPartTemplateId === subPartTemplateId) ||
+    current.lights.some((l) => l.ownerTemplateId === subPartTemplateId);
+  if (!hasData) return;
+
+  pushUndo('delete SubPart data', subPartTemplateId);
+  const part = clone(current);
+  part.subPartGameData = part.subPartGameData.filter(
+    (s) => s.subPartTemplateId !== subPartTemplateId,
+  );
+  part.lights = part.lights.filter((l) => l.ownerTemplateId !== subPartTemplateId);
+  $part.set(part);
+  clampSelection();
 }
 
 // --- Tanks (part level or per SubPart template) ---
@@ -3128,7 +3179,7 @@ export function setDockingPortPushoffImpulse(pushoffImpulseNs: number): void {
 /** Discrete: enable/disable the EVA door. */
 export function setEvaDoorEnabled(enabled: boolean): void {
   commitGameData('EVA door', enabled ? 'on' : 'off', (g) => {
-    g.evaDoor = enabled ? (g.evaDoor ?? { connectorId: '' }) : null;
+    g.evaDoor = enabled ? (g.evaDoor ?? { connectorId: '', seatId: null }) : null;
   });
 }
 /** Discrete: bind the EVA door to a connector id. */
@@ -3136,6 +3187,64 @@ export function setEvaDoorConnector(connectorId: string): void {
   commitGameData('EVA connector', connectorId, (g) => {
     if (g.evaDoor) g.evaDoor.connectorId = connectorId;
   });
+}
+
+/**
+ * Every id that lives in KSA's `Components[].Id` namespace — what `<FeedsFrom Container=…>`
+ * resolves against (`PartTemplate.AddResolvedFeed`) AND what `<EVADoor SeatId>` resolves
+ * against (`EVADoor.ResolveAlignedSeats`). Tanks, solid grain segments and IVA seats all
+ * share it, at BOTH game-data levels, so a generated seat id must dodge all of them.
+ */
+function componentIdNamespace(part: EditingPart): Set<string> {
+  const taken = new Set<string>();
+  const add = (id: string | null | undefined) => {
+    if (id && id.trim()) taken.add(id.trim());
+  };
+  for (const t of part.gameData.tanks) add(t.id);
+  for (const g of part.gameData.solidGrainSegments) add(g.id);
+  for (const spd of part.subPartGameData) {
+    for (const t of spd.tanks) add(t.id);
+    for (const g of spd.solidGrainSegments) add(g.id);
+  }
+  for (const s of part.ivaSeats) add(s.ksaId);
+  return taken;
+}
+
+/**
+ * Discrete: align the EVA door to the IVA seat at `seatIndex` (document order), or clear the
+ * link with `null` (KSA's `""` default — the attribute is then omitted).
+ *
+ * ONE undo step covering BOTH halves of the 5117 link: a seat with no authored
+ * `<IVASeat Id>` gets one minted here (`seat_<n>`, dodging the shared component-id
+ * namespace), and the door's `SeatId` is pointed at it. Authoring only one half would ship a
+ * hatch with no EVA button in-game (`EVADoor.ShowContextMenu` returns early).
+ */
+export function setEvaDoorSeat(seatIndex: number | null): void {
+  const current = $part.get();
+  if (!current.gameData.evaDoor) return;
+
+  if (seatIndex === null) {
+    commitGameData('EVA door seat', 'none', (g) => {
+      if (g.evaDoor) g.evaDoor.seatId = null;
+    });
+    return;
+  }
+  const seat = current.ivaSeats[seatIndex];
+  if (!seat) return;
+
+  let ksaId = seat.ksaId;
+  if (!ksaId) {
+    const taken = componentIdNamespace(current);
+    let n = seatIndex + 1;
+    while (taken.has(`seat_${n}`)) n++;
+    ksaId = `seat_${n}`;
+  }
+
+  pushUndo('EVA door seat', ksaId);
+  const part = clone(current);
+  part.ivaSeats[seatIndex].ksaId = ksaId;
+  if (part.gameData.evaDoor) part.gameData.evaDoor.seatId = ksaId;
+  $part.set(part);
 }
 
 // --- Engine controllers + gimbals + gas-generator modules (part-level) ---

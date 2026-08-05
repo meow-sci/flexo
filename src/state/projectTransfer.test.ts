@@ -661,7 +661,7 @@ describe('collider merge', () => {
 
 /** A seat at `n` on every axis, on the built-in IVA Seats layer. */
 function seat(id: string, n = 0) {
-  return { id, ...t(n), layerId: IVA_SEAT_LAYER_ID };
+  return { id, ksaId: null, ...t(n), layerId: IVA_SEAT_LAYER_ID };
 }
 
 describe('IVA seat transfer', () => {

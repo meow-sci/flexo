@@ -47,7 +47,12 @@ function fixture(): EditingPart {
     layerId: DEFAULT_LAYER_ID,
     ...identityTransform(),
   });
-  part.ivaSeats.push({ id: '_seat1', layerId: IVA_SEAT_LAYER_ID, ...identityTransform() });
+  part.ivaSeats.push({
+    id: '_seat1',
+    ksaId: null,
+    layerId: IVA_SEAT_LAYER_ID,
+    ...identityTransform(),
+  });
   part.lights.push({
     id: '_light1',
     type: 'Spot',
@@ -137,7 +142,12 @@ describe('buildOutlinerTree — kind grouping', () => {
 describe('buildOutlinerTree — row names and sub lines', () => {
   it('names a seat by its ordinal and flags the first as the IVA default', () => {
     const part = fixture();
-    part.ivaSeats.push({ id: '_seat2', layerId: IVA_SEAT_LAYER_ID, ...identityTransform() });
+    part.ivaSeats.push({
+      id: '_seat2',
+      ksaId: null,
+      layerId: IVA_SEAT_LAYER_ID,
+      ...identityTransform(),
+    });
     const rows = section(build(part), IVA_SEAT_LAYER_ID).groups[0].rows;
     expect(rows.map((r) => r.name)).toEqual(['Seat 1', 'Seat 2']);
     expect(rows[0].sub).toContain('· default');

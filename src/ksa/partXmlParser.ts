@@ -305,6 +305,9 @@ export function ivaSeatsFromElement(owner: Element): IvaSeat[] {
     }
     out.push({
       id: `_seat${out.length + 1}`,
+      // The AUTHORED `<IVASeat Id>` (KSA `TemplateDataBase.Id`) — kept verbatim so an
+      // `<EVADoor SeatId>` pointing at it survives the round trip. Absent ⇒ null.
+      ksaId: el.getAttribute('Id') || null,
       position: readVec3Attrs(directChildren(el, 'Position')[0], ZERO_VEC3),
       rotation,
       // KSA has no seat size; scale is unused and never emitted.
@@ -672,7 +675,13 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
     };
   }
   const eva = directChildren(gd, 'EVADoor')[0];
-  if (eva) game.evaDoor = { connectorId: eva.getAttribute('ConnectorId') ?? '' };
+  if (eva) {
+    game.evaDoor = {
+      connectorId: eva.getAttribute('ConnectorId') ?? '',
+      // `<EVADoor SeatId>` (KSA 5117) — the `<IVASeat Id>` this hatch is aligned to.
+      seatId: eva.getAttribute('SeatId') || null,
+    };
+  }
 
   // Part-level `<Tank>`s — Core authors its prefab tank data here, and a part-level
   // tank id is what `<FeedsFrom Container>` addresses without a `SubPart=` scope.

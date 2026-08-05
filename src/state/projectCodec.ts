@@ -267,19 +267,21 @@ function decCollider(c: CCollider): PartCollider {
 
 /** An IVA seat. `scale` is unused, so the shared CTransform encoder always omits it. */
 interface CIvaSeat extends CTransform {
-  i: string; // id
+  i: string; // id (editor-only `_seatN`)
+  k?: string; // ksaId — the authored `<IVASeat Id>`, omitted when the seat has none
 }
 
 function encIvaSeat(s: IvaSeat): CIvaSeat {
   // layerId is always IVA_SEAT_LAYER_ID — restored on decode, never serialized.
   // `scale` is unused (KSA has no seat size); it is pinned to (1,1,1), which the shared
   // CTransform encoder omits and `decTransform` restores from its `1` default.
-  return { i: s.id, ...encTransform(s) };
+  return s.ksaId ? { i: s.id, k: s.ksaId, ...encTransform(s) } : { i: s.id, ...encTransform(s) };
 }
 
 function decIvaSeat(c: CIvaSeat): IvaSeat {
   return {
     id: str(c.i),
+    ksaId: c.k ? str(c.k) : null,
     layerId: IVA_SEAT_LAYER_ID,
     ...decTransform(c),
   };
@@ -382,7 +384,7 @@ interface CGameData {
   pc?: CPowerConsumer; // powerConsumer (one per part)
   dc?: { c: string; f: number }; // decoupler
   dp?: { c: string; ke: number; pi: number }; // dockingPort
-  ed?: { c: string }; // evaDoor
+  ed?: { c: string; s?: string }; // evaDoor (c = connectorId, s = SeatId when authored)
   ct?: CController[]; // rocketControllers
   ro?: CRocket[]; // part-level rockets (gas generators)
   cb?: CCombustor[]; // part-level combustors
@@ -417,7 +419,10 @@ function encGameData(g: PartGameData): CGameData {
       pi: round(g.dockingPort.pushoffImpulseNs),
     };
   }
-  if (g.evaDoor) o.ed = { c: g.evaDoor.connectorId };
+  if (g.evaDoor) {
+    o.ed = { c: g.evaDoor.connectorId };
+    if (g.evaDoor.seatId) o.ed.s = g.evaDoor.seatId;
+  }
   if (g.rocketControllers.length) o.ct = g.rocketControllers.map(encController);
   if (g.rockets.length) o.ro = g.rockets.map(encRocket);
   if (g.combustors.length) o.cb = g.combustors.map(encCombustor);
@@ -454,7 +459,7 @@ function decGameData(c: CGameData | undefined): PartGameData {
         pushoffImpulseNs: num(c.dp.pi),
       }
     : null;
-  g.evaDoor = c.ed ? { connectorId: str(c.ed.c) } : null;
+  g.evaDoor = c.ed ? { connectorId: str(c.ed.c), seatId: c.ed.s ? str(c.ed.s) : null } : null;
   g.rocketControllers = arr<CController>(c.ct).map(decController);
   g.rockets = arr<CRocket>(c.ro).map(decRocket);
   g.combustors = arr<CCombustor>(c.cb).map(decCombustor);

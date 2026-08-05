@@ -100,12 +100,30 @@ export class SubPartObject {
    * MaterialFactory + normalMapPatch.
    */
   setSelected(selected: boolean): void {
+    this.applyEmissiveTint(selected ? 1 : 0);
+  }
+
+  /**
+   * The weaker cousin of {@link setSelected}: Data mode tints every placement of the scoped
+   * template so the form and the meshes it drives read as one thing (design
+   * design-data-engine-modes.md §A2 "placements of the scoped template get a highlight
+   * tint"). Same material path, deliberately — a second mechanism would fight the selection
+   * for the emissive uniform.
+   *
+   * `strength` 0 restores the base emissive; the caller (EditorScene) is what guarantees a
+   * SELECTED object is never downgraded to a tint.
+   */
+  setTint(strength: number): void {
+    this.applyEmissiveTint(strength);
+  }
+
+  private applyEmissiveTint(strength: number): void {
     const hl = meshHighlight();
     for (let i = 0; i < this.materials.length; i++) {
       const mat = this.materials[i];
-      if (selected) {
+      if (strength > 0) {
         mat.emissive.copy(hl.color);
-        mat.emissiveIntensity = hl.alpha;
+        mat.emissiveIntensity = hl.alpha * strength;
       } else {
         mat.emissive.copy(this.baseEmissives[i].color);
         mat.emissiveIntensity = this.baseEmissives[i].intensity;

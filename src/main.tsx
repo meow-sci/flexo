@@ -17,8 +17,7 @@ import { registerEditorAidStores } from './state/editorStore';
 import { initModifierListeners } from './state/modifierStore';
 import { initHotkeyStore } from './state/hotkeyStore';
 import { applySnapToGizmo } from './state/snapStore';
-import { registerModeHooks } from './state/modeStore';
-import { ensureReactionsLoaded } from './state/reactionStore';
+import { initDataMode } from './state/dataModeStore';
 
 // Wire containerStore and measurementStore into the undo/redo system. Must run
 // before any user interactions (and before hydrateProjectOnBoot so the callbacks
@@ -38,15 +37,10 @@ registerEditorAidStores({
   },
 });
 
-// Entering Data mode preloads the reaction catalog — the one sanctioned mode-entry effect
-// (foundation §2.4: read-only, side-effect-free w.r.t. the document; already idempotent).
-// It is wired from boot rather than from reactionStore so that store stays free of any
-// modeStore dependency.
-registerModeHooks('data', {
-  onEnter: () => {
-    void ensureReactionsLoaded();
-  },
-});
+// Data mode's entry choreography: the foundation §2.4 scope ladder plus the reaction-catalog
+// preload (the one sanctioned mode-entry effect — read-only, idempotent). Wired from boot so
+// the registration cannot depend on which component imported the store first.
+initDataMode();
 
 // Restore the current project into the editor stores BEFORE the first render, so
 // the workspace paints once with the right data (no second visual refresh).

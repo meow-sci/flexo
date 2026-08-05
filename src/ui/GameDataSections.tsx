@@ -1,5 +1,14 @@
 import { useStore } from '@nanostores/react';
-import { Button, Switch, Select, ListBoxItem, TextField, SectionTitle } from './kit';
+import {
+  Button,
+  Field,
+  ItemCard,
+  ListBoxItem,
+  SectionTitle,
+  Select,
+  Switch,
+  TextField,
+} from './kit';
 import { PreciseNumberInput } from './PreciseNumberInput';
 import { Vec3Field } from './Vec3Field';
 import { DEG2RAD, RAD2DEG } from './format';
@@ -72,40 +81,11 @@ import type {
  * and the mobile scroll sheet.
  */
 
+// `Field` and `ItemCard` moved to `src/ui/kit/Field.tsx` in P6.06 — they are primitives, and
+// this file is a feature file. This module keeps no copy.
+
+/** Dim caption style for the inline notes below a control. */
 const RAD_LABEL = 'text-xs text-fg-subtle';
-
-/** A label above a control (stacks cleanly on narrow/mobile widths). Shared with EngineSections. */
-export function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="flex flex-col gap-1">
-      <span className={RAD_LABEL}>{label}</span>
-      {children}
-    </label>
-  );
-}
-
-/** A removable card wrapping one list item's fields (tank, battery, …). Shared with EngineSections. */
-export function ItemCard({
-  title,
-  onRemove,
-  children,
-}: {
-  title: string;
-  onRemove: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-2 rounded-md border border-border bg-panel-sunken p-2">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-fg-muted">{title}</span>
-        <Button size="sm" variant="ghost" onPress={onRemove} aria-label={`Remove ${title}`}>
-          Remove
-        </Button>
-      </div>
-      {children}
-    </div>
-  );
-}
 
 // --- Identity (display name) ---
 

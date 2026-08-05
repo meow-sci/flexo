@@ -243,10 +243,10 @@ detail: [part-and-subpart-xml.md](part-and-subpart-xml.md#-master-invariant--fle
 Status reflects the `5056 → 5117` review. 🔴 breaking · 🟡 missing/drift · 📝 docs · ✅ intact.
 Rows whose contract did not move at 5117 keep their prior verdict and are marked "re-verified".
 
-**5117 deltas to the table below:** _Connectors/coordinates/IVA_ → 🟡 (`<EVADoor SeatId>` +
-load-bearing `<IVASeat Id>`, gaps **Q1**/**Q2**); _GameData module blocks_ → 🟡 (the same
-`<EVADoor SeatId>`); _Ground clutter_ → 🟡 (`<Collideable>` → `<CollisionType>`, docs-only,
-gap **Q3**); every other row re-verified ✅ against 5117.
+**5117 deltas to the table below:** _Connectors/coordinates/IVA_ and _GameData module blocks_
+were 🟡 for `<EVADoor SeatId>` + a load-bearing `<IVASeat Id>` (gaps **Q1**/**Q2**) — **both are
+now modeled**, so both rows are ✅ again; _Ground clutter_ → 🟡 (`<Collideable>` →
+`<CollisionType>`, docs-only, gap **Q3**); every other row re-verified ✅ against 5117.
 
 | Area                                                                                      | Detail doc                                                         | Primary game anchors                                                                                                                                                                                                                                                                                                         | 5018 status                                                                                                                                                                                                         |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -288,23 +288,24 @@ gap **Q3**); every other row re-verified ✅ against 5117.
 
 ### Open gaps from 5117 → [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md)
 
-The `5056 → 5117` review found **no BREAKING item**. Three gaps, all **📋 OPEN**:
+The `5056 → 5117` review found **no BREAKING item**. Three gaps; **Q1 and Q2 are now FIXED**,
+Q3 remains 📋 OPEN:
 
-- **Q1 — `<EVADoor SeatId>` is dropped (🟡 MISSING-CAPABILITY).** Rev 5085 added
+- **Q1 — `<EVADoor SeatId>` was dropped (🟡 MISSING-CAPABILITY) — ✅ FIXED.** Rev 5085 added
   `[XmlAttribute("SeatId")]` to `EVADoorTemplate`; Core authors it
-  (`PartGameData.xml` → `<EVADoor SeatId="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA" />`).
-  flexo's `EvaDoor` models only `connectorId`, and because the attribute sits on a **modeled**
-  child it does not ride the GameData passthrough — importing then exporting a crew-door part
-  silently unlinks the hatch from its seat. In-game the door then falls back to
-  `Vehicle.GetFirstOccupiedSeat()` and the "EVA" button gating changes.
-- **Q2 — `<IVASeat Id>` is never emitted, but is now the link target (🟡 MISSING-CAPABILITY).**
-  Paired with Q1: `EVADoor.ResolveAlignedSeats` matches `IVASeat.TemplateId` against
-  `EVADoor.SeatId`, and Core now authors `<IVASeat Id="…_SeatA">`. flexo regenerates
-  throwaway `_seat1`/`_seat2` ids on import and deliberately writes no `Id`. Note the
-  serializer's stated rationale — "nothing references a seat by id" — is now **false**; the
-  remaining half of it still holds (`TemplateDataBase.Id` shares the namespace
-  `<FeedsFrom Container=>` resolves against), so the fix must emit a user-authored id rather
-  than flexo's internal one.
+  (`Content/Core/PartGameData.xml` →
+  `<EVADoor SeatId="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA" />`). Because the attribute sits
+  on a **modeled** child it never rode the GameData passthrough, so importing then exporting a
+  crew-door part silently unlinked the hatch from its seat. flexo's `EvaDoor` now carries
+  `seatId: string | null`, parsed and emitted (omitted when unset).
+- **Q2 — `<IVASeat Id>` was never emitted, but is the link target (🟡 MISSING-CAPABILITY) —
+  ✅ FIXED.** Paired with Q1: `EVADoor.ResolveAlignedSeats` matches `IVASeat.TemplateId`
+  (= `ModuleBase.TemplateDataBase.Id`) against `EVADoor.SeatId`, and Core now authors
+  `<IVASeat Id="…_SeatA">`. `IvaSeat` gained a **user-authored** `ksaId` distinct from the
+  regenerated `_seatN` editor id, emitted only when set — the serializer's old rationale
+  ("nothing references a seat by id") was retired, while its still-true half survives: the id
+  shares the namespace `<FeedsFrom Container=>` resolves against, so flexo never auto-fills it
+  with an internal id.
 - **Q3 — clutter `<Collideable>` → `<CollisionType>` (📝 SCHEMA-DRIFT, docs-only).** Rev 5099
   replaced `ClutterEcotypeReference`'s `[XmlElement("Collideable")] BoolReference` with
   `[XmlElement("CollisionType")] ClutterCollisionTypeReference` (`Value="None|PrimitiveList|Mesh"`,

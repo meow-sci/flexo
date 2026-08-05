@@ -25,6 +25,7 @@ function seat(position: Vec3 = { x: 0, y: 0.5, z: 0 }, rotation?: EulerXYZ): Iva
     position,
     ...(rotation ? { rotation } : {}),
     id: '_seat1',
+    ksaId: null,
     layerId: IVA_SEAT_LAYER_ID,
   };
 }

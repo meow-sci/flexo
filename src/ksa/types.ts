@@ -200,6 +200,18 @@ export interface PartCollider extends Transform {
 export interface IvaSeat extends Transform {
   /** Editor-only document id, e.g. "_seat1". NEVER emitted — see plans/IVA_PLAN.md §3.5. */
   id: string;
+  /**
+   * `<IVASeat Id>` — the USER-AUTHORED KSA id (`TemplateDataBase.Id`), or null when the seat
+   * has none and the attribute is omitted.
+   *
+   * Separate from {@link id} on purpose. The editor id is a throwaway `_seatN` that changes
+   * on every import, while this one is real game data: since KSA 2026.8.3.5117 an
+   * `<EVADoor SeatId>` names a seat by it (`EVADoor.ResolveAlignedSeats`), and Core authors
+   * one on both capsule seats. ⚠️ It also shares the id namespace `<FeedsFrom Container=…>`
+   * resolves against (`PartTemplate.AddResolvedFeed` scans every `Components[].Id`), so it
+   * must never be auto-filled with the editor id.
+   */
+  ksaId: string | null;
   /** Always {@link IVA_SEAT_LAYER_ID}; present for parity with the other layered entities. */
   layerId: string;
 }
@@ -603,9 +615,21 @@ export interface DockingPort {
   pushoffImpulseNs: number;
 }
 
-/** EVA hatch bound to a connector. Serialized as <EVADoor ConnectorId/>. */
+/**
+ * EVA hatch. Serialized as `<EVADoor ConnectorId SeatId/>`.
+ *
+ * `SeatId` arrived with KSA 2026.8.3.5117's crew feature (rev 5085,
+ * `EVADoorTemplate.SeatId`): it names the `<IVASeat Id>` this hatch is ALIGNED to, and
+ * `EVADoor.ResolveAlignedSeats` matches it against `IVASeat.TemplateId`. The link is
+ * load-bearing, not cosmetic — `EVADoor.ShowContextMenu` returns early (no EVA button at
+ * all) when the aligned seat carries no assigned kitten. KSA's default is `""`, so flexo
+ * stores `null` for "unset" and omits the attribute entirely.
+ * See scope/connectors-coordinates-iva.md.
+ */
 export interface EvaDoor {
   connectorId: string;
+  /** `<EVADoor SeatId>` — the {@link IvaSeat.ksaId} this hatch opens onto; null ⇒ omitted. */
+  seatId: string | null;
 }
 
 /**

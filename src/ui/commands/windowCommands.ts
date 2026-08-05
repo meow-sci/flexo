@@ -1,6 +1,7 @@
 import type { Command } from '../../state/commandStore';
 import { $layout, resetLayout, toggleSidebar } from '../../state/layoutStore';
 import { openDialog } from '../../state/dialogStore';
+import { openNotificationCenter } from '../../state/notificationStore';
 
 /**
  * Window menu commands (design: foundation §3 "Window").
@@ -65,8 +66,8 @@ export const WINDOW_COMMANDS: Command[] = [
     title: 'Notifications…',
     menuPath: 'Window',
     keywords: 'notifications bell center alerts',
-    enabled: () => false,
-    disabledReason: 'The notification center arrives with the status-bar phase',
-    run: () => {},
+    // The same surface the status-bar bell opens — the open state is a store precisely so
+    // this command, the bell and a status-message click-through cannot disagree.
+    run: () => openNotificationCenter(),
   },
 ];

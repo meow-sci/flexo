@@ -14,6 +14,7 @@ import { initModFolder } from './state/modFolderStore';
 import { $containers, $activeContainerId } from './state/containerStore';
 import { $measurements, $activeMeasurementId } from './state/measurementStore';
 import { registerEditorAidStores } from './state/editorStore';
+import { initModifierListeners } from './state/modifierStore';
 
 // Wire containerStore and measurementStore into the undo/redo system. Must run
 // before any user interactions (and before hydrateProjectOnBoot so the callbacks
@@ -43,6 +44,10 @@ initCustomAssets();
 
 // Keep the active animation/joint/keyframe selection clamped across undo/redo.
 initAnimationStore();
+
+// Track held modifier keys for the status bar's hint segment (design-system-services §1.4;
+// §9 "boot order additions"). Idempotent, so StrictMode's double boot is harmless.
+initModifierListeners();
 
 // Detect a share-link launch up front: it changes how the next two startup steps behave.
 const sharePayload = readShareParam();

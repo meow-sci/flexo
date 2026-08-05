@@ -323,7 +323,8 @@ describe('disabled stubs stay visible but never run', () => {
     'view.motionTrails',
     'window.timeline',
     'window.toolbar',
-    'window.notifications',
+    // `window.notifications` graduated out of this list: the status-bar phase gave it a
+    // real target (it opens the notification center) — see its own test below.
   ];
 
   it.each(STUBS)('%s is disabled and explains why', (id) => {
@@ -340,6 +341,17 @@ describe('disabled stubs stay visible but never run', () => {
       ).map((e) => (e as { commandId: string }).commandId),
     );
     for (const id of STUBS) expect(referenced.has(id)).toBe(true);
+  });
+
+  it('window.notifications is live (the notification center exists) and still in a menu', () => {
+    const command = getCommand('window.notifications');
+    expect(command?.enabled?.()).not.toBe(false);
+    expect(command?.disabledReason).toBeUndefined();
+
+    const referenced = ALL_ENTRIES.filter((e) => e.kind === 'command').map(
+      (e) => (e as { commandId: string }).commandId,
+    );
+    expect(referenced).toContain('window.notifications');
   });
 });
 

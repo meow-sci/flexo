@@ -1,20 +1,206 @@
+import { useStore } from '@nanostores/react';
+import { Boxes, Check, ChevronDown, Lock, Palette, PlayCircle, Rocket, Table2 } from 'lucide-react';
+import { Chip, Menu, MenuItem, MenuTrigger, Popover, Tooltip } from '../kit';
+import { StatusChipButton, StatusDivider } from './StatusChip';
+import { MessageChannel } from './MessageChannel';
+import { NotificationBell } from './NotificationBell';
+import { getCommand, runCommand } from '../../state/commandStore';
+import { $interimMode, INTERIM_MODES, type InterimMode } from '../commands/interimMode';
+import { $activeLayer, $layerSummaries } from '../../state/selectors';
+import { $layerView, layerViewState } from '../../state/layerStore';
+import { setActiveLayer } from '../../state/editorStore';
+
 /**
- * The docked shell's fixed slim bottom row — same recipe as {@link MenuBar}
- * (foundation.md §1.1 region rules: content height, never collapses, never resizes).
+ * The docked shell's fixed slim bottom row — the **status bar** (design:
+ * `plans/flexo_v2/design/design-system-services.md` §1; foundation §5). Same bar recipe as
+ * {@link MenuBar}: content height, never collapses, never resizes (foundation §1.1).
  *
- * Placeholder shell — the segments (mode chip, layer chip, tool segment, message
- * channel, progress, modifier hints, notification bell) land with `statusStore`
- * (foundation §5, §17 step 3). This file is already at its FINAL path so that phase
- * fills it in place (design-system-services.md §1.0). Until then TransformHud,
- * MeasurementInfo, SeatViewBar, WorkspaceLoadProgress and the toast region keep
- * working as floating chrome inside the viewport cell.
+ * Three alignment groups in ONE flex row — left (posture), center (`flex-1`, the message
+ * channel + progress), right (hints, chips, bell). The left and right groups are
+ * `flex-none` and the center absorbs all the slack, which is what stops a segment
+ * unmounting from shifting its siblings (§1.0).
+ *
+ * No z-index: the bar is in flow. v1's top toast layer is deleted (foundation §1.3) —
+ * transient feedback renders HERE, and anything persistent lives in the notification
+ * center popover.
+ *
+ * Undo enrollment: NONE. The bar's own state is ephemeral; the persisted state it *edits*
+ * (active layer, and later bounds mode / snap / nudge-rotate prefs) stays owned by the
+ * stores that already persist it (§1.6).
  */
 export function StatusBar() {
-  // `min-h-[21px]` spells out foundation §1.1's shared bar recipe — a `text-xs` line
-  // box (1rem) + 2 × `--bar-py` + the 1px border — because an EMPTY bar has no line
-  // box of its own and would otherwise collapse to a 5px sliver. It becomes a no-op
-  // once the real segments land (foundation §5).
   return (
-    <div className="flex min-h-[21px] flex-none select-none items-center border-t border-border bg-panel px-2 py-(--bar-py) text-xs text-fg-muted" />
+    <div className="flex flex-none select-none items-center border-t border-border bg-panel px-2 py-(--bar-py) text-xs text-fg-muted">
+      {/* Left group — posture. Never shifts: `flex-none`. */}
+      <div className="flex flex-none items-center">
+        <ModeChip />
+        <LayerChip />
+        {/* segment 3: tool segment (measure / seat view / exhaust / marquee / chain) — P3.08 */}
+        {/* segment 4: selection readout (absorbs MeasurementInfo) — P3.09 */}
+      </div>
+
+      {/* Center group — segment 5. Absorbs all slack. */}
+      <MessageChannel />
+      {/* segment 6: progress (absorbs WorkspaceLoadProgress) — P3.10 */}
+
+      {/* Right group — hints and chips. Never shifts: `flex-none`. */}
+      <div className="flex flex-none items-center">
+        {/* segment 6b: advisory chips — P3.11 */}
+        {/* segment 7: modifier hints — P3.12 */}
+        {/* segment 8: rotate / nudge chips (absorbs TransformHud) — P3.07 */}
+        {/* segment 9: snap chip — P5B (needs snapStore) */}
+        {/* segment 10: FPS readout — P3.13 */}
+        <NotificationBell />
+      </div>
+    </div>
+  );
+}
+
+const MODE_ICONS: Record<InterimMode, typeof Boxes> = {
+  build: Boxes,
+  animation: PlayCircle,
+  data: Table2,
+  engine: Rocket,
+  surface: Palette,
+};
+
+/**
+ * Segment 1 — the mode chip. Permanent (design §1.7: the bar never fully empties), and the
+ * fix for v1's "which mode am I in?" invisibility.
+ *
+ * Reads the INTERIM mode adapter; the mode phase swaps `$interimMode`/`INTERIM_MODES` for
+ * the real `modeStore` and this component follows without another edit.
+ */
+function ModeChip() {
+  const mode = useStore($interimMode);
+  const Icon = MODE_ICONS[mode];
+  const label = INTERIM_MODES.find((m) => m.id === mode)?.label ?? 'Build';
+
+  return (
+    <MenuTrigger>
+      <Tooltip content="Editing mode — 1–5 to switch">
+        <StatusChipButton aria-label={`Editing mode: ${label}`} className="text-fg">
+          <Icon size={13} />
+          <span>{label}</span>
+          <ChevronDown size={11} className="text-fg-subtle" />
+        </StatusChipButton>
+      </Tooltip>
+      {/* The body is a component the Popover MOUNTS, so `enabled()`/`checked()` are
+          evaluated on every open — see MenuSpecMenu's header for why building the items
+          here instead would freeze them under React Compiler memoization. */}
+      <Popover className="w-48">
+        <ModeMenuBody />
+      </Popover>
+    </MenuTrigger>
+  );
+}
+
+function ModeMenuBody() {
+  return (
+    <Menu aria-label="Editing mode">
+      {INTERIM_MODES.map((mode) => {
+        const command = getCommand(`mode.${mode.id}`);
+        const disabled = command?.enabled?.() === false;
+        const checked = command?.checked?.() === true;
+        const Icon = MODE_ICONS[mode.id];
+        return (
+          <MenuItem
+            key={mode.id}
+            id={mode.id}
+            density="dense"
+            textValue={mode.label}
+            isDisabled={disabled}
+            onAction={() => {
+              runCommand(`mode.${mode.id}`);
+            }}
+          >
+            {/* Native `title`, not the kit Tooltip: a disabled react-aria menu item is not
+                hoverable, so a TooltipTrigger would never fire on the rows that need it. */}
+            <span
+              className="flex min-w-0 flex-1 items-center gap-2"
+              title={disabled ? command?.disabledReason : undefined}
+            >
+              <span className="flex w-3.5 shrink-0 justify-center text-accent">
+                {checked && <Check size={13} />}
+              </span>
+              <Icon size={13} className="shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{mode.label}</span>
+            </span>
+          </MenuItem>
+        );
+      })}
+    </Menu>
+  );
+}
+
+/**
+ * Segment 2 — the active layer chip, shown in Build and Animation only.
+ *
+ * This closes the v1 gap where the layer new entities land on was visible NOWHERE (design
+ * §1.2 #2). Locked layers stay selectable, matching v1 semantics: the active layer only
+ * targets adds. Setting it is view state — not undoable.
+ */
+function LayerChip() {
+  const mode = useStore($interimMode);
+  const layer = useStore($activeLayer);
+
+  if (mode !== 'build' && mode !== 'animation') return null;
+
+  const name = layer?.name ?? 'None';
+  return (
+    <>
+      <StatusDivider />
+      <MenuTrigger>
+        <Tooltip content="Active layer — new items land here">
+          <StatusChipButton aria-label={`Active layer: ${name}`}>
+            <span className="text-fg-subtle">Layer:</span>
+            <span className="max-w-[14ch] truncate text-fg">{name}</span>
+            <ChevronDown size={11} className="text-fg-subtle" />
+          </StatusChipButton>
+        </Tooltip>
+        <Popover className="w-64">
+          <LayerMenuBody />
+        </Popover>
+      </MenuTrigger>
+    </>
+  );
+}
+
+function LayerMenuBody() {
+  const summaries = useStore($layerSummaries);
+  const active = useStore($activeLayer);
+  const view = useStore($layerView);
+
+  return (
+    <Menu aria-label="Active layer">
+      {summaries.map((summary) => {
+        const count =
+          summary.subParts +
+          summary.connectors +
+          summary.kittens +
+          summary.ivaSeats +
+          summary.colliders +
+          summary.lights;
+        const locked = layerViewState(view, summary.id).locked;
+        return (
+          <MenuItem
+            key={summary.id}
+            id={summary.id}
+            density="dense"
+            textValue={summary.layer.name}
+            onAction={() => setActiveLayer(summary.id)}
+          >
+            <span className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="flex w-3.5 shrink-0 justify-center text-accent">
+                {summary.id === active?.id && <Check size={13} />}
+              </span>
+              <span className="min-w-0 flex-1 truncate">{summary.layer.name}</span>
+              {locked && <Lock size={11} className="shrink-0 text-fg-subtle" />}
+              <Chip className="shrink-0">{count}</Chip>
+            </span>
+          </MenuItem>
+        );
+      })}
+    </Menu>
   );
 }

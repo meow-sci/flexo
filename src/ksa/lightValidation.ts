@@ -4,7 +4,7 @@
  * Same exported shape as {@link import('./colliderValidation').validateColliders} and
  * {@link import('./ivaSeatValidation').validateIvaSeats} — one `validate*(part)` entry
  * point returning a flat list of `{ severity, code, message }` — and, like both, it is
- * ADVISORY: `ExportButton` merely DISPLAYS the findings, nothing gates the export.
+ * ADVISORY: `ExportDialog` merely DISPLAYS the findings, nothing gates the export.
  *
  * ⚠️ **The severity band is shifted, and deliberately so: a light can never `block`.**
  * `<Light>` has no required element, no id anything resolves against, and every

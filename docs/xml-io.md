@@ -146,7 +146,7 @@ GameData files under `/ksa/`; `vite/ksaAssets.ts` copies the existing ones into
   numeric fields reuse `PreciseNumberInput` (with `onInteractionStart` to push one
   undo step per typing session). Connectors are **not** here — they're edited in the
   3D workspace, and their flags are three checkboxes in `TransformInspector.tsx`.
-- `src/ui/ExportButton.tsx` / `src/ksa/modExport.ts`: write/zip the per-project
+- `src/ui/ExportDialog.tsx` / `src/ksa/modExport.ts`: write/zip the per-project
   `Part.xml` + `GameData.xml`.
 
 ## Tests

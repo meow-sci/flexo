@@ -1,13 +1,13 @@
-import { atom } from 'nanostores';
 import { persistentJSON } from '@nanostores/persistent';
+import { openDialog } from './dialogStore';
 
 /**
- * Ephemeral open/closed state for the "About" overlay. Lives in a store (not React
- * local state) so it can be opened from several disconnected places — the desktop
- * overflow menu and the mobile overflow menu — without threading props or lifting
- * state. Not persisted. Mirrors {@link ../state/helpStore}.
+ * First-use bookkeeping for the "About" overlay. The overlay's own open/closed state
+ * lives in `dialogStore` under the id `'about'` (foundation §10.1 — every dialog is
+ * root-hosted and opened by writing `$openDialog`); what stays here is the persisted
+ * "have we greeted this user yet" flag and the share-link suppression, both of which
+ * are behaviour rather than open state.
  */
-export const $aboutOpen = atom(false);
 
 /**
  * Persisted flag: has the About overlay been auto-shown at least once? Drives the
@@ -16,14 +16,6 @@ export const $aboutOpen = atom(false);
  * (see {@link ../ui/nukeAndReload}).
  */
 export const $aboutSeen = persistentJSON<boolean>('flexo:aboutSeen', false);
-
-export function openAbout(): void {
-  $aboutOpen.set(true);
-}
-
-export function closeAbout(): void {
-  $aboutOpen.set(false);
-}
 
 /**
  * Session-only flag: suppress the first-use auto-open for this page load. Set at boot
@@ -51,5 +43,5 @@ export function showAboutOnFirstUse(): void {
   if (suppressFirstUse) return;
   if ($aboutSeen.get()) return;
   $aboutSeen.set(true);
-  $aboutOpen.set(true);
+  openDialog({ id: 'about' });
 }

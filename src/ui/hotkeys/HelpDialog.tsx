@@ -1,27 +1,31 @@
-import { useStore } from '@nanostores/react';
 import { Dialog, DialogHeader, Kbd, keyLabel, Modal, SectionTitle, useIsPhone } from '../kit';
-import { $helpOpen, closeHelp } from '../../state/helpStore';
 import { HOTKEY_GROUPS, type KeyChord } from './registry';
 
 /**
- * Keyboard-shortcuts help overlay, driven by {@link HOTKEY_GROUPS}. Opened by the
- * `?` hotkey, the Settings dialog, or the mobile overflow menu (all via the shared
- * {@link $helpOpen} store). Nearly-fullscreen, centered on desktop; edge-to-edge
- * full screen on phones.
+ * Keyboard-shortcuts help overlay, driven by {@link HOTKEY_GROUPS}. Root-hosted by
+ * `DialogRoot` under the dialog id `'help'`; opened by the `?` hotkey, the Help menu or
+ * the command palette. Nearly-fullscreen, centered on desktop; edge-to-edge full screen
+ * on phones.
  */
-export function HelpDialog() {
+export function HelpDialog({
+  isOpen,
+  onOpenChange,
+}: {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const isPhone = useIsPhone();
-  const open = useStore($helpOpen);
+  const close = () => onOpenChange(false);
 
   return (
     <Modal
-      isOpen={open}
-      onOpenChange={(o) => !o && closeHelp()}
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
       isDismissable
       variant={isPhone ? 'cover' : 'fullscreen'}
     >
       <Dialog aria-label="Keyboard shortcuts">
-        <DialogHeader title="Keyboard Shortcuts" onClose={closeHelp} />
+        <DialogHeader title="Keyboard Shortcuts" onClose={close} />
         <div className="grid gap-x-10 gap-y-6 overflow-auto p-4 sm:p-6 md:grid-cols-2">
           {HOTKEY_GROUPS.map((group) => (
             <section key={group.title} className="flex flex-col gap-2">

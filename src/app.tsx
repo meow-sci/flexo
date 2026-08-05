@@ -21,8 +21,6 @@ import { GlowPaintDialog } from './ui/GlowPaintDialog';
 import { TransformHud } from './ui/TransformHud';
 import { ChainPalette } from './ui/chain/ChainPalette';
 import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys';
-import { HelpDialog } from './ui/hotkeys/HelpDialog';
-import { AboutDialog } from './ui/AboutDialog';
 import { MenuBar } from './ui/shell/MenuBar';
 import { DialogRoot } from './ui/shell/DialogRoot';
 import { Sidebar } from './ui/shell/Sidebar';
@@ -31,6 +29,7 @@ import { toast, useIsPhone, z } from './ui/kit';
 import { ensureCatalogLoaded } from './state/catalogStore';
 import { ensurePartCatalogLoaded } from './state/partCatalogStore';
 import { consumeRemovedProjectsNotice } from './state/projectStore';
+import { showAboutOnFirstUse } from './state/aboutStore';
 
 /**
  * The v2 docked shell (foundation.md §1):
@@ -69,12 +68,17 @@ function App() {
     );
   }, []);
 
+  // First-ever visit: greet the user with the About overlay (dialog id 'about'), then
+  // remember it. Lives here rather than in AboutDialog because the dialog is only mounted
+  // while open now — nothing would run the check otherwise. Idempotent under StrictMode.
+  useEffect(() => {
+    showAboutOnFirstUse();
+  }, []);
+
   return (
     <div className="fixed inset-0 flex flex-col bg-canvas text-fg">
-      {/* Global keyboard shortcuts (no UI) + the help overlay they open. */}
+      {/* Global keyboard shortcuts (no UI). */}
       <GlobalHotkeys />
-      <HelpDialog />
-      <AboutDialog />
 
       {/* Top row: the slim docked menubar on desktop; the phone's full-width compact
           bar with an overflow menu, now IN FLOW rather than absolutely positioned. */}

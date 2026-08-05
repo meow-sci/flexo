@@ -317,7 +317,7 @@ export const $historyList = atom<HistoryListItem[]>([]);
  *      e.g. a gizmo drag or a typing session): do NOT call `pushUndo()` here; the
  *      caller pushes once at interaction start (gizmo drag-start, field focus).
  *      Examples: updatePlacementTransform(s), updateConnectorTransform,
- *      updateSelectedTransform, and setPartId (focus-pushed by PartDataButton).
+ *      updateSelectedTransform, and setPartId (focus-pushed by PartDataDialog).
  *
  * If you add a `$part` mutator and pick neither pattern, that change silently
  * bypasses undo — a bug. Keep docs/editor-state.md and AGENTS.md in sync.
@@ -1788,7 +1788,7 @@ export interface ChainCommitEntry {
  * second `bolt_2`). One odd id from a single Duplicate is a known, tolerated quirk; a
  * chain mass-produces up to 500 placements in ONE gesture, where the same formula would
  * stamp out colliding ids wholesale and only surface much later as the pre-export
- * duplicate-id warning in `ExportButton.tsx`. Existing duplicate paths are untouched.
+ * duplicate-id warning in `ExportDialog.tsx`. Existing duplicate paths are untouched.
  */
 function nextChainInstanceId(part: EditingPart, templateId: string): string {
   const base = lastSegmentLower(templateId);
@@ -2415,7 +2415,7 @@ export function updateSelectedTransform(t: PlacementTransform): void {
 
 /**
  * Sets the Part id. Streaming mutation (per-keystroke from a text field): does NOT
- * push undo — the caller pushes once on field focus (see PartDataButton) so a
+ * push undo — the caller pushes once on field focus (see PartDataDialog) so a
  * typing session collapses into a single undo step.
  */
 export function setPartId(partId: string): void {

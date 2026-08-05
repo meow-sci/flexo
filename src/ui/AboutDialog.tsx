@@ -1,34 +1,36 @@
-import { useEffect } from 'react';
-import { useStore } from '@nanostores/react';
 import { Modal, Dialog, DialogHeader, SectionTitle, useIsPhone } from './kit';
-import { $aboutOpen, closeAbout, showAboutOnFirstUse } from '../state/aboutStore';
 
 /**
  * "About" overlay — project blurb, license, source link and asset attribution.
- * Opened from the desktop and mobile overflow menus via the shared {@link $aboutOpen}
- * store. Auto-sized and centered on desktop (the content is short, so it doesn't
- * warrant the fullscreen treatment the shortcuts panel gets); edge-to-edge full
- * screen on phones.
+ * Root-hosted by `DialogRoot` under the dialog id `'about'`; opened from the Help menu,
+ * the command palette, or automatically on a first-ever visit (`showAboutOnFirstUse` in
+ * `src/state/aboutStore.ts`, driven from `app.tsx`). Auto-sized and centered on desktop
+ * (the content is short, so it doesn't warrant the fullscreen treatment the shortcuts
+ * panel gets); edge-to-edge full screen on phones.
+ *
+ * The RocketWerkz / Dean Hall attribution and the MIT license text below are legally
+ * load-bearing — do not trim them.
  */
-export function AboutDialog() {
+export function AboutDialog({
+  isOpen,
+  onOpenChange,
+}: {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const isPhone = useIsPhone();
-  const open = useStore($aboutOpen);
-
-  // First-ever visit: greet the user with the About overlay, then remember it.
-  useEffect(() => {
-    showAboutOnFirstUse();
-  }, []);
+  const close = () => onOpenChange(false);
 
   return (
     <Modal
-      isOpen={open}
-      onOpenChange={(o) => !o && closeAbout()}
+      isOpen={isOpen}
+      onOpenChange={onOpenChange}
       isDismissable
       variant={isPhone ? 'cover' : 'center'}
       className={isPhone ? undefined : 'flex max-h-[85vh] w-full max-w-2xl flex-col'}
     >
       <Dialog aria-label="About Flexo" className={isPhone ? 'flex-1 min-h-0' : undefined}>
-        <DialogHeader title="About Flexo" onClose={closeAbout} />
+        <DialogHeader title="About Flexo" onClose={close} />
         <div className="min-h-0 flex-1 overflow-auto p-4 sm:p-6">
           <div className="flex flex-col gap-6">
             <section className="flex flex-col gap-2">

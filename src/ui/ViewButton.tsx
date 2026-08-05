@@ -11,7 +11,6 @@ import {
   Switch,
   Select,
   ListBoxItem,
-  Slider,
   SectionTitle,
 } from './kit';
 import {
@@ -27,9 +26,7 @@ import {
   $lighting,
   setLighting,
   ENVIRONMENT_PRESETS,
-  TONE_MAPPING_MODES,
   type EnvironmentPreset,
-  type ToneMappingMode,
 } from '../state/lightingStore';
 import {
   $lightPreviewCount,
@@ -39,7 +36,6 @@ import {
   type LightVizSettings,
 } from '../state/settingsStore';
 import { MAX_PREVIEW_LIGHTS } from '../three/lightVolume';
-import { PreciseNumberInput } from './PreciseNumberInput';
 
 const SNAP_ROWS: [CameraDir, CameraDir][] = [
   ['left', 'right'],
@@ -83,28 +79,20 @@ function ViewContent() {
 
       <section className="flex flex-col gap-2">
         <SectionTitle>Grids</SectionTitle>
-        {GRID_AXES.map(({ axis, label }) => {
-          const cfg = grids[axis];
-          return (
-            <div key={axis} className="flex items-center gap-2">
-              <Switch
-                aria-label={`Show ${label} grid`}
-                isSelected={cfg.enabled}
-                onChange={(enabled) => setGrid(axis, { enabled })}
-              >
-                <span className="w-4 text-sm text-fg-muted">{label}</span>
-              </Switch>
-              <PreciseNumberInput
-                aria-label={`${label} grid spacing (m)`}
-                className="flex-1"
-                min={0.05}
-                value={cfg.spacing}
-                onCommit={(spacing) => setGrid(axis, { spacing })}
-              />
-              <span className="text-xs text-fg-subtle">m</span>
-            </div>
-          );
-        })}
+        {GRID_AXES.map(({ axis, label }) => (
+          <div key={axis} className="flex items-center gap-2">
+            <Switch
+              aria-label={`Show ${label} grid`}
+              isSelected={grids[axis].enabled}
+              onChange={(enabled) => setGrid(axis, { enabled })}
+            >
+              <span className="w-4 text-sm text-fg-muted">{label}</span>
+            </Switch>
+          </div>
+        ))}
+        <p className="text-xs leading-snug text-fg-subtle">
+          Per-axis grid spacing lives in Settings.
+        </p>
       </section>
 
       <section className="flex flex-col gap-2">
@@ -136,36 +124,6 @@ function ViewContent() {
         <p className="text-xs leading-snug text-fg-subtle">
           Draws each light's reach — the graded falloff volume plus its hard range boundary — using
           the game's own attenuation.
-        </p>
-
-        <div className="flex items-center gap-2">
-          <span className="w-24 shrink-0 text-sm text-fg-muted">Exposure</span>
-          <Select
-            size="sm"
-            className="flex-1"
-            aria-label="Light coverage exposure"
-            value={lightViz.exposureMode}
-            onChange={(k) =>
-              setLightSettings({ exposureMode: k as LightVizSettings['exposureMode'] })
-            }
-          >
-            <ListBoxItem id="auto">Auto</ListBoxItem>
-            <ListBoxItem id="absolute">Absolute</ListBoxItem>
-          </Select>
-          {lightViz.exposureMode === 'absolute' && (
-            <PreciseNumberInput
-              aria-label="Absolute coverage exposure"
-              className="w-20 shrink-0"
-              min={0}
-              step={0.1}
-              value={lightViz.vizExposure}
-              onCommit={(vizExposure) => setLightSettings({ vizExposure })}
-            />
-          )}
-        </div>
-        <p className="text-xs leading-snug text-fg-subtle">
-          <b>Auto</b> scales each light to its own brightness (best for editing one).{' '}
-          <b>Absolute</b> shades every light against the same reference, so a dim light looks dim.
         </p>
 
         <Switch
@@ -206,54 +164,6 @@ function ViewContent() {
           </Select>
         </div>
 
-        <div className="flex items-center gap-2">
-          <span className="w-20 shrink-0 text-sm text-fg-muted">Tone map</span>
-          <Select
-            size="sm"
-            className="flex-1"
-            aria-label="Tone mapping"
-            value={lighting.toneMapping}
-            items={TONE_MAPPING_MODES}
-            onChange={(k) => setLighting({ toneMapping: k as ToneMappingMode })}
-          >
-            {(m) => (
-              <ListBoxItem id={m.id} textValue={m.label}>
-                {m.label}
-              </ListBoxItem>
-            )}
-          </Select>
-        </div>
-
-        <label className="flex flex-col gap-1">
-          <span className="flex justify-between text-sm text-fg-muted">
-            <span>Exposure</span>
-            <span className="text-fg-subtle">{lighting.exposure.toFixed(2)}</span>
-          </span>
-          <Slider
-            aria-label="Exposure"
-            minValue={0.1}
-            maxValue={3}
-            step={0.05}
-            value={lighting.exposure}
-            onChange={(exposure) => setLighting({ exposure: exposure as number })}
-          />
-        </label>
-
-        <label className="flex flex-col gap-1">
-          <span className="flex justify-between text-sm text-fg-muted">
-            <span>Reflections</span>
-            <span className="text-fg-subtle">{lighting.environmentIntensity.toFixed(2)}</span>
-          </span>
-          <Slider
-            aria-label="Reflections"
-            minValue={0}
-            maxValue={3}
-            step={0.05}
-            value={lighting.environmentIntensity}
-            onChange={(v) => setLighting({ environmentIntensity: v as number })}
-          />
-        </label>
-
         <Switch
           isDisabled={!envHasSky}
           isSelected={envHasSky && lighting.showEnvironmentBackground}
@@ -261,23 +171,9 @@ function ViewContent() {
         >
           Show sky background
         </Switch>
-
-        {envHasSky && lighting.showEnvironmentBackground && (
-          <label className="flex flex-col gap-1">
-            <span className="flex justify-between text-sm text-fg-muted">
-              <span>Sky blur</span>
-              <span className="text-fg-subtle">{lighting.backgroundBlur.toFixed(2)}</span>
-            </span>
-            <Slider
-              aria-label="Sky blur"
-              minValue={0}
-              maxValue={1}
-              step={0.01}
-              value={lighting.backgroundBlur}
-              onChange={(v) => setLighting({ backgroundBlur: v as number })}
-            />
-          </label>
-        )}
+        <p className="text-xs leading-snug text-fg-subtle">
+          Tone map, exposure, reflections and sky blur live in Settings ▸ Scene.
+        </p>
       </section>
     </>
   );

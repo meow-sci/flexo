@@ -315,7 +315,7 @@ is visible AND the toggle does not hide it, and `applyLayerView` stays the only 
 
 `src/ksa/ivaSeatValidation.ts` grades every problem the way `colliderValidation` does, and
 the Export dialog renders them alongside the engine and collider issues. Like those, it is
-**advisory** — `ExportButton` *displays* the issues; **nothing gates the export**.
+**advisory** — `ExportDialog` *displays* the issues; **nothing gates the export**.
 
 | Severity  | Code                         | Rule                                                       |
 | --------- | ---------------------------- | ---------------------------------------------------------- |

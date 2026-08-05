@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { CirclePlus } from 'lucide-react';
 import {
@@ -31,23 +30,20 @@ import {
   type KittenKind,
   type LightType,
 } from '../ksa/types';
-import { SubPartPopup } from './SubPartBrowser';
-import { PartPopup } from './PartBrowser';
-import { CustomTextureDialog } from './CustomTextureDialog';
-import { CreateMeshDialog } from './CreateMeshDialog';
-import { MaterialDialog } from './MaterialDialog';
+import { openDialog } from '../state/dialogStore';
 
+/**
+ * INTERIM v1 toolbar "Add" menu. Its five dialogs are now root-hosted behind `dialogStore`
+ * ids; the instant actions still call their store mutators directly until the Add menu
+ * becomes commands. The menubar replaces this button and this file dies with the old
+ * toolbar.
+ */
 export function AddButton() {
   const part = useStore($part);
   // Every re-placeable custom SubPart — hand-authored primitives AND imported glTF meshes.
   // Kitten submeshes are the exception: they have their own "Make Kitten Mesh" entry and
   // shouldn't clutter the "Custom Meshes" re-add submenu.
   const customMeshes = part.customMeshes.filter((m) => meshKind(m) !== 'kitten');
-  const [subPartOpen, setSubPartOpen] = useState(false);
-  const [partOpen, setPartOpen] = useState(false);
-  const [textureOpen, setTextureOpen] = useState(false);
-  const [materialOpen, setMaterialOpen] = useState(false);
-  const [meshOpen, setMeshOpen] = useState(false);
 
   return (
     <>
@@ -59,12 +55,12 @@ export function AddButton() {
         <Popover placement="bottom start" className="w-52">
           <Menu
             onAction={(key) => {
-              if (key === 'subpart') setSubPartOpen(true);
+              if (key === 'subpart') openDialog({ id: 'subpart-browser' });
               else if (key === 'connector') addConnector();
-              else if (key === 'part') setPartOpen(true);
-              else if (key === 'texture') setTextureOpen(true);
-              else if (key === 'material') setMaterialOpen(true);
-              else if (key === 'mesh') setMeshOpen(true);
+              else if (key === 'part') openDialog({ id: 'part-browser' });
+              else if (key === 'texture') openDialog({ id: 'upload-texture' });
+              else if (key === 'material') openDialog({ id: 'material' });
+              else if (key === 'mesh') openDialog({ id: 'create-mesh' });
               // Opens with no files, i.e. on its drop/pick step (see ImportModelDialog).
               else if (key === 'import-model') openImportModel();
               else if (key === 'engine') enterEngineMode();
@@ -169,11 +165,6 @@ export function AddButton() {
           </Menu>
         </Popover>
       </MenuTrigger>
-      <SubPartPopup open={subPartOpen} onOpenChange={setSubPartOpen} />
-      <PartPopup open={partOpen} onOpenChange={setPartOpen} />
-      {textureOpen && <CustomTextureDialog onClose={() => setTextureOpen(false)} />}
-      {materialOpen && <MaterialDialog onClose={() => setMaterialOpen(false)} />}
-      {meshOpen && <CreateMeshDialog onClose={() => setMeshOpen(false)} />}
     </>
   );
 }

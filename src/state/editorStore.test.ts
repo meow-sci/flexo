@@ -1159,7 +1159,7 @@ describe('editorStore', () => {
   });
 
   it('setPartId reverts under undo when the caller pushed at interaction start', () => {
-    // Mirrors PartDataButton: pushUndo() on field focus, setPartId() per keystroke.
+    // Mirrors PartDataDialog: pushUndo() on field focus, setPartId() per keystroke.
     pushUndo('edit part ID');
     setPartId('p');
     setPartId('part_id');

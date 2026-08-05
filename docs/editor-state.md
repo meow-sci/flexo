@@ -217,7 +217,7 @@ Shift+click on pointer-down (before react-aria's own, anchorless extension runs)
   selected connector, the three flag checkboxes (Internal/ToSurface/FromSurface).
 - `Toolbar.tsx` — tool mode (Segmented), snap (NumberField), undo/redo.
 - `PartDataButton.tsx` — the **Part Data** dialog (Part id, editor tags, and the
-  `gameData` sections; see [xml-io.md](./xml-io.md)). `ExportButton.tsx` exports.
+  `gameData` sections; see [xml-io.md](./xml-io.md)). `ExportDialog.tsx` exports.
 - `LayersButton.tsx` / `LayersPanel.tsx` — sidebar Layers popover (see [layers.md](./layers.md)).
 - `chain/ChainPalette.tsx` / `chain/ChainStepCard.tsx` — the floating, **non-modal**
   action-chain palette (`mod+K` or the selection toolbar's Chain button; self-gates on

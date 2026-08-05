@@ -1,5 +1,20 @@
 import { useStore } from '@nanostores/react';
-import { $openDialog } from '../../state/dialogStore';
+import { $openDialog, closeDialog } from '../../state/dialogStore';
+import { AboutDialog } from '../AboutDialog';
+import { HelpDialog } from '../hotkeys/HelpDialog';
+import { LoadProjectDialog, RenameProjectDialog } from '../projects/ProjectDialogs';
+import { ExportProjectDialog, ImportProjectDialog } from '../ProjectTransferDialogs';
+import { ShareProjectDialog } from '../ShareProjectDialog';
+import { ExportDialog } from '../ExportDialog';
+import { PartDataDialog } from '../PartDataDialog';
+import { SettingsDialog, type SettingsDialogParams } from '../SettingsDialog';
+import { ScaleEverythingDialog } from '../ScaleEverythingDialog';
+import { SubPartPopup } from '../SubPartBrowser';
+import { PartPopup } from '../PartBrowser';
+import { CustomAssetsModal } from '../CustomAssetsModal';
+import { CustomTextureDialog } from '../CustomTextureDialog';
+import { CreateMeshDialog } from '../CreateMeshDialog';
+import { MaterialDialog } from '../MaterialDialog';
 
 /**
  * The single mount point for every overlay dialog (design:
@@ -30,8 +45,56 @@ export function DialogRoot() {
   const open = useStore($openDialog);
   if (!open) return null;
   switch (open.id) {
+    case 'projects':
+      return <LoadProjectDialog isOpen onOpenChange={dismiss} />;
+    case 'rename-project':
+      return <RenameProjectDialog isOpen onOpenChange={dismiss} />;
+    case 'share-link':
+      return <ShareProjectDialog isOpen onOpenChange={dismiss} />;
+    case 'export-project':
+      return <ExportProjectDialog isOpen onOpenChange={dismiss} />;
+    case 'import-project':
+      return <ImportProjectDialog isOpen onOpenChange={dismiss} />;
+    case 'export-ksa':
+      return <ExportDialog isOpen onOpenChange={dismiss} />;
+    case 'part-data':
+      return <PartDataDialog isOpen onOpenChange={dismiss} />;
+    case 'settings':
+      return (
+        <SettingsDialog
+          isOpen
+          onOpenChange={dismiss}
+          params={open.params as SettingsDialogParams | undefined}
+        />
+      );
+    case 'scale-everything':
+      return <ScaleEverythingDialog isOpen onOpenChange={dismiss} />;
+    // Both browsers restart their session (search, splits, selection) on every open —
+    // that comes free from being unmounted while closed.
+    case 'subpart-browser':
+      return <SubPartPopup open onOpenChange={dismiss} />;
+    case 'part-browser':
+      return <PartPopup open onOpenChange={dismiss} />;
+    case 'custom-assets':
+      return <CustomAssetsModal isOpen onOpenChange={dismiss} />;
+    // These three self-close via `onClose` rather than react-aria's `onOpenChange`.
+    case 'upload-texture':
+      return <CustomTextureDialog onClose={closeDialog} />;
+    case 'create-mesh':
+      return <CreateMeshDialog onClose={closeDialog} />;
+    case 'material':
+      return <MaterialDialog onClose={closeDialog} />;
+    case 'help':
+      return <HelpDialog isOpen onOpenChange={dismiss} />;
+    case 'about':
+      return <AboutDialog isOpen onOpenChange={dismiss} />;
     // Hosts are added here as each dialog is rehosted onto dialogStore.
     default:
       return null;
   }
+}
+
+/** react-aria's `onOpenChange` contract → `closeDialog()`. Escape-ladder rung 2. */
+function dismiss(open: boolean): void {
+  if (!open) closeDialog();
 }

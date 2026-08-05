@@ -11,40 +11,30 @@ import {
   MenuSeparator,
   MenuTrigger,
   Popover,
-  ConfirmDialog,
 } from './kit';
 import { $canRedo, $canUndo, redo, undo } from '../state/editorStore';
 import { AddButton } from './AddButton';
 import { ProjectButton } from './ProjectButton';
-import { PartDataButton } from './PartDataButton';
-import { ExportButton } from './ExportButton';
 import { ViewButton } from './ViewButton';
 import { MeasureButton } from './MeasureButton';
 import { HistoryButton } from './HistoryButton';
-import { SettingsModal } from './SettingsButton';
-import { ScaleEverythingDialog } from './ScaleEverythingDialog';
-import { nukeAndReload } from './nukeAndReload';
-import { openHelp } from '../state/helpStore';
-import { openAbout } from '../state/aboutStore';
+import { openDialog } from '../state/dialogStore';
 
 /**
- * Phone-only top toolbar. Primary actions (Project, Add, Undo/Redo) are always
- * visible. Secondary actions live in a proper react-aria Menu (☰) that
- * auto-dismisses on selection. Each overlay is controlled from here so there's
- * no menu-inside-a-menu nesting.
+ * INTERIM phone-only top toolbar. Primary actions (Project, Add, Undo/Redo) are always
+ * visible; secondary actions live in a react-aria Menu (☰) that auto-dismisses on
+ * selection. Every overlay it reaches is now root-hosted behind a `dialogStore` id, so
+ * this bar carries no dialog mounts of its own — except View / Measure / History, whose
+ * popover components still own their bottom-sheet variants until the phone MenuSheet
+ * replaces this bar.
  */
 export function MobileTopBar() {
   const canUndo = useStore($canUndo);
   const canRedo = useStore($canRedo);
 
-  const [partDataOpen, setPartDataOpen] = useState(false);
-  const [exportOpen, setExportOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [measureOpen, setMeasureOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [scaleOpen, setScaleOpen] = useState(false);
-  const [confirmReset, setConfirmReset] = useState(false);
 
   return (
     <>
@@ -85,16 +75,15 @@ export function MobileTopBar() {
           <Popover placement="bottom end" className="w-48">
             <Menu
               onAction={(key) => {
-                if (key === 'partData') setPartDataOpen(true);
-                else if (key === 'export') setExportOpen(true);
+                if (key === 'partData') openDialog({ id: 'part-data' });
+                else if (key === 'export') openDialog({ id: 'export-ksa' });
                 else if (key === 'view') setViewOpen(true);
                 else if (key === 'measure') setMeasureOpen(true);
-                else if (key === 'scale') setScaleOpen(true);
+                else if (key === 'scale') openDialog({ id: 'scale-everything' });
                 else if (key === 'history') setHistoryOpen(true);
-                else if (key === 'settings') setSettingsOpen(true);
-                else if (key === 'shortcuts') openHelp();
-                else if (key === 'reset') setConfirmReset(true);
-                else if (key === 'about') openAbout();
+                else if (key === 'settings') openDialog({ id: 'settings' });
+                else if (key === 'shortcuts') openDialog({ id: 'help' });
+                else if (key === 'about') openDialog({ id: 'about' });
               }}
             >
               <MenuItem id="partData">Part Data</MenuItem>
@@ -107,31 +96,18 @@ export function MobileTopBar() {
               <MenuItem id="settings">Settings</MenuItem>
               <MenuItem id="shortcuts">Shortcuts</MenuItem>
               <MenuItem id="about">About</MenuItem>
-              <MenuSeparator />
-              <MenuItem id="reset" variant="danger">
-                Reset Everything 🔥
-              </MenuItem>
             </Menu>
           </Popover>
         </MenuTrigger>
       </Toolbar>
 
-      <PartDataButton isOpen={partDataOpen} onOpenChange={setPartDataOpen} />
-      <ExportButton isOpen={exportOpen} onOpenChange={setExportOpen} />
+      {/* The three surfaces that are still popovers rather than dialogStore dialogs.
+          "Reset Everything" is deliberately absent: it now lives only in Settings, which
+          also fixes the v1 phone bug where the phone's confirm skipped the
+          reset-folder-grants switch. */}
       <ViewButton isOpen={viewOpen} onOpenChange={setViewOpen} />
       <MeasureButton isOpen={measureOpen} onOpenChange={setMeasureOpen} />
       <HistoryButton isOpen={historyOpen} onOpenChange={setHistoryOpen} />
-      <SettingsModal isOpen={settingsOpen} onOpenChange={setSettingsOpen} />
-      <ScaleEverythingDialog isOpen={scaleOpen} onOpenChange={setScaleOpen} />
-      <ConfirmDialog
-        isOpen={confirmReset}
-        onOpenChange={setConfirmReset}
-        title="Reset everything?"
-        text="This permanently deletes every saved project, layer view state, the granted mods folder, and any other locally-stored data, then reloads the page. There's no undo."
-        confirmLabel="RESET EVERYTHING 🔥"
-        confirmVariant="danger"
-        onConfirm={() => void nukeAndReload()}
-      />
     </>
   );
 }

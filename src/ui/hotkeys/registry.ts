@@ -1,6 +1,6 @@
 import type { Keys, Options } from 'react-hotkeys-hook';
 import { copySelected, pasteClipboard, redo, removeSelected, undo } from '../../state/editorStore';
-import { toggleHelp } from '../../state/helpStore';
+import { closeDialog, isDialogOpen, openDialog } from '../../state/dialogStore';
 import { $seatView, exitSeatView } from '../../state/ivaStore';
 import { rotateSelectionAroundPair } from '../../three/rotateSelection';
 import { FAST_NUDGE_MULTIPLIER, nudgeSelectionBy } from '../../three/nudgeSelection';
@@ -197,7 +197,7 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
         // otherwise rejects the match because the held Shift isn't part of the combo.
         options: { useKey: true, ignoreModifiers: true },
         chords: [['?']],
-        run: () => toggleHelp(),
+        run: () => (isDialogOpen('help') ? closeDialog() : openDialog({ id: 'help' })),
       },
       {
         id: 'exit-seat-view',

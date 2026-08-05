@@ -8,6 +8,8 @@ import { scaleEverything } from '../state/editorStore';
  * kitten) AND every animation keyframe by per-axis factors around the origin,
  * in one undoable step. The animation-safe alternative to a multi-select resize,
  * which can't reach animation offsets and breaks animated parts when scaled.
+ *
+ * Root-hosted by `DialogRoot` under the dialog id `'scale-everything'`.
  */
 export function ScaleEverythingDialog({
   isOpen,

@@ -48,6 +48,34 @@ flag prevents the cascade of store writes during a *load* from triggering a redu
 (or the most recent, or a fresh `Untitled`) into the stores before the first paint — the
 workspace renders once, with the right data. Then it starts autosave.
 
+## Schema version & preservation
+
+Saved projects are the user's own work, so they survive app updates whenever compatibility
+allows. `PROJECT_SCHEMA_VERSION` (currently **2**, in `projectStore.ts`) is stamped into every
+snapshot and is the entire compatibility contract: `sanitizeProjectStorage()` runs first in
+`hydrateProjectOnBoot()` and drops a `flexo:project:*` entry **only** when it is corrupt or its
+stamped `version !== PROJECT_SCHEMA_VERSION`. Everything else is kept. (The old behavior — a
+strict structural check that purged every saved project on any *additive* model change — is
+gone.)
+
+A kept snapshot is run through `normalizePart`, a template-driven normalizer that fills fields
+the snapshot is **missing** from the live constructors, at four sites: the `EditingPart` top
+level (`createEmptyPart()`), `gameData` (`createEmptyGameData()`), each `subPartGameData[]`
+entry (`createSubPartGameData`), and each `customMeshes[].emissive` (`createGlow()`) — for the
+document *and* every undo/redo history entry. Values already present are never overwritten.
+This is default-filling of additive fields, **not** migration; the templates come from the live
+constructors, so there is no per-field upkeep. `loadProject`'s try/catch discard stays as the
+backstop for anything deeper than the normalizer reaches.
+
+So: an **additive** change (a new field with a safe constructor default) needs no version bump
+— old projects keep loading, and if the field sits deeper than an existing normalizer site,
+extend the normalizer. A **breaking** change (removed/renamed/retyped field, changed
+meaning/units) MUST bump `PROJECT_SCHEMA_VERSION`, which *is* the purge switch. The full rule
+lives in the project constitution in [AGENTS.md](../AGENTS.md).
+
+When a purge does happen, the removed project names are surfaced to the user in a boot toast
+(the UI drains them via `consumeRemovedProjectsNotice()`) — not just a `console.warn`.
+
 ## Actions (projectStore exports)
 
 `saveCurrentProject()`, `loadProject(name)`, `createProject(name)`,
@@ -69,10 +97,16 @@ document — the localStorage snapshot and the project export/import JSON alike.
 `ifl` the per-SubPart-template `<Internal>` flags, `k` kittens, `a` animations, `m` custom
 meshes, …), omitting anything empty or at its default.
 
-`PROJECT_EXPORT_VERSION` is currently **7**. That bump covered **both** halves of the IVA
-work at once — `iv` and `ifl` — because they shipped together. Per the no-migration rule in
-AGENTS.md, **older payloads are rejected on import, never converted**, and a stale
-localStorage snapshot is discarded by the boot-time purge rather than upgraded.
+`PROJECT_EXPORT_VERSION` is currently **8** (lights normalized out of `SubPartGameData` into
+first-class part entities). Import accepts **exactly** that version — older payloads are
+rejected, never converted — and that mechanic is unchanged. What changed is the **bump
+policy**: an additive, backwards-compatible change **MUST NOT** bump it, because decode is
+total and tolerant (missing fields fall back to defaults, so an older same-version payload
+still imports cleanly). Only a **breaking** change bumps it, and adds its own `// vN: what
+broke` line to the constant's changelog comment. Historically the version was bumped for
+additive work too (v3 custom materials, v6 colliders); that stops. A document-model break
+bumps this **and** `PROJECT_SCHEMA_VERSION`; a wire-format-only change (codec key renames)
+bumps only this one. See the constitution in [AGENTS.md](../AGENTS.md).
 
 Two encoding rules worth knowing, both about seats: the **array order of `iv` is
 load-bearing** (it is KSA's in-game seat cycle order — see [iva-seats.md](./iva-seats.md)), and
@@ -91,4 +125,7 @@ Autosave means there's no explicit Save action.
 
 `src/state/projectStore.test.ts` covers the save→load round-trip (document, active layer,
 layer view, and history), stale-active-layer clamping, list ordering/summaries, create,
-rename re-keying, delete-current fallback, and unique-name generation.
+rename re-keying, delete-current fallback, and unique-name generation. It also covers the
+schema-version contract: a snapshot missing additive fields is **kept** and default-filled by
+`normalizePart` (document + history entries), while a corrupt or version-mismatched snapshot is
+purged by `sanitizeProjectStorage()` and reported through `consumeRemovedProjectsNotice()`.

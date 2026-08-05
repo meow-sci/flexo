@@ -79,6 +79,13 @@ export const PROJECT_EXPORT_FORMAT = 'flexo-project';
 // v8: lights normalized out of SubPartGameData (`sg[].li` with a nested transform) into
 // first-class part entities: top-level `li` (flat inline `p`/`r`, `ot` owner template,
 // editor-only id) — part-level `<Light>` support.
+// This number is a COMPATIBILITY CONTRACT, not a changelog counter: from now on a
+// BACKWARDS-COMPATIBLE additive change MUST NOT bump it — decode is total and tolerant, so
+// a same-version payload written before the new field existed simply decodes with that
+// field's default. Only a BREAKING wire/model change (an existing token's shape or meaning
+// changes, or a new field whose default would decode silently wrong) bumps it, and appends
+// its own `// vN:` line above. Bumping needlessly makes every payload already in the wild —
+// saved JSON files, pasted share links — unopenable.
 // Per the no-migration rule, older payloads are REJECTED on import, never converted.
 export const PROJECT_EXPORT_VERSION = 8;
 

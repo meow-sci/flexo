@@ -56,9 +56,28 @@ import { envelopeToPart, type ProjectExportEnvelope } from './projectTransfer';
 
 const PROJECT_KEY_PREFIX = 'flexo:project:';
 const CURRENT_PROJECT_KEY = 'flexo:currentProject';
-// Stamped into each snapshot. Snapshots whose shape doesn't match the current data
-// model are discarded at boot (see sanitizeProjectStorage) — never migrated.
-const PROJECT_VERSION = 2;
+
+/**
+ * The version of the localStorage {@link ProjectSnapshot} format, stamped into every
+ * saved project. It IS the compatibility contract: {@link sanitizeProjectStorage} keeps
+ * a stored project iff it parses AND its `version` equals this number, and purges it at
+ * boot otherwise (version mismatch or corruption — nothing else).
+ *
+ * Changing it:
+ *  - A BACKWARDS-COMPATIBLE model change — a new field the live constructors can fill
+ *    with a default that means what the old data meant — MUST NOT bump this. Bumping
+ *    would delete every existing user's saved projects over an additive field;
+ *    {@link normalizePart} fills the default on load instead.
+ *  - A BREAKING change — an existing field's shape/meaning changes, or a new field whose
+ *    default would silently mean the wrong thing — MUST bump this and append a
+ *    `// vN: what broke` line below, so the log explains each purge event.
+ *
+ * Per the no-migration rule (AGENTS.md "project constitution") a mismatched snapshot is
+ * DISCARDED, never converted — there is no upgrade path and none may be added.
+ */
+// v2: the version this became an enforced gate at; earlier builds stamped it but checked
+// the model shape instead, so any additive field purged every saved project.
+export const PROJECT_SCHEMA_VERSION = 2;
 export const DEFAULT_PROJECT_NAME = 'Untitled';
 
 /** The current project's name (its identity / localStorage key). Live working state. */
@@ -131,7 +150,7 @@ function readCurrentPointer(): string | null {
 /** Builds a snapshot of the current workspace from the live stores. */
 function serializeCurrentProject(): ProjectSnapshot {
   return {
-    version: PROJECT_VERSION,
+    version: PROJECT_SCHEMA_VERSION,
     name: $projectName.get(),
     part: $part.get(),
     layerView: $layerView.get(),
@@ -145,93 +164,102 @@ function serializeCurrentProject(): ProjectSnapshot {
 }
 
 /**
- * Every EditingPart reachable from a snapshot: the live document plus the part
- * inside each undo/redo history entry (normal entries are { part, description,
- * detail }; legacy saves stored a bare EditingPart — handle whichever shape).
+ * Fills in whatever keys a stored part is missing, taking every default from the LIVE
+ * model constructors. Pure: nothing passed in is mutated (each level is rebuilt by
+ * spread), and a key that IS present always wins over the template.
+ *
+ * This is default-filling of additive fields, NOT migration. The templates are the same
+ * constructors the editor builds a fresh document with, so a field added there is
+ * automatically filled here — no per-field upkeep. Anything a default can't correctly
+ * absorb (a field whose meaning or shape changed, where the default would silently mean
+ * the wrong thing) is by definition a BREAKING change: bump {@link PROJECT_SCHEMA_VERSION}
+ * so those snapshots are purged instead (see AGENTS.md "project constitution").
  */
-function snapshotParts(snap: ProjectSnapshot): EditingPart[] {
-  const out: EditingPart[] = [];
-  if (snap.part) out.push(snap.part);
-  for (const e of [...(snap.history?.undo ?? []), ...(snap.history?.redo ?? [])]) {
-    const part = (e as { part?: EditingPart }).part ?? (e as unknown as EditingPart);
-    if (part) out.push(part);
-  }
-  return out;
+function normalizePart(part: EditingPart): EditingPart {
+  const filled: EditingPart = { ...createEmptyPart(), ...part };
+  return {
+    ...filled,
+    gameData: { ...createEmptyGameData(), ...filled.gameData },
+    subPartGameData: (filled.subPartGameData ?? []).map((spd) => ({
+      ...createSubPartGameData(spd.subPartTemplateId ?? ''),
+      ...spd,
+    })),
+    // A glow authored before coverage/strength were split would composite as an
+    // all-or-nothing white blowout without its missing half.
+    customMeshes: (filled.customMeshes ?? []).map((mesh) =>
+      mesh.emissive ? { ...mesh, emissive: { ...createGlow(), ...mesh.emissive } } : mesh,
+    ),
+  };
 }
 
 /**
- * True only when every part in the snapshot carries all the fields the CURRENT model
- * defines — top-level EditingPart keys plus the nested GameData / SubPartGameData keys.
- * We do NOT migrate old project data; anything structurally behind the current model is
- * from an incompatible build and would crash the editor (e.g. the engine computeds read
- * `subPartGameData[].combustors.length`), so it's unloadable and purged at boot. The
- * templates come from the live constructors, so a field added there in future
- * automatically becomes required here — no per-field upkeep, no migration.
+ * Normalizes every EditingPart reachable from a snapshot: the live document plus the
+ * part inside each undo/redo history entry (normal entries are { part, description,
+ * detail }; legacy saves stored a bare EditingPart — handle whichever shape). History
+ * needs it too, or the first undo would restore a part missing the added fields.
  */
-function hasAllKeys(obj: unknown, template: object): boolean {
-  if (!obj || typeof obj !== 'object') return false;
-  for (const k of Object.keys(template)) if (!(k in obj)) return false;
-  return true;
+function normalizeSnapshot(snap: ProjectSnapshot): ProjectSnapshot {
+  type HistoryEntry = HistorySnapshot['undo'][number];
+  const normalizeEntry = (e: HistoryEntry): HistoryEntry => ({
+    ...e,
+    part: normalizePart(e.part ?? (e as unknown as EditingPart)),
+  });
+  const history = snap.history ?? { undo: [], redo: [] };
+  return {
+    ...snap,
+    part: normalizePart(snap.part),
+    history: {
+      undo: (history.undo ?? []).map(normalizeEntry),
+      redo: (history.redo ?? []).map(normalizeEntry),
+    },
+  };
 }
 
-function snapshotMatchesModel(snap: ProjectSnapshot): boolean {
-  const partTemplate = createEmptyPart();
-  const gameDataTemplate = createEmptyGameData();
-  const subPartTemplate = createSubPartGameData('');
-  const glowTemplate = createGlow();
-  for (const part of snapshotParts(snap)) {
-    if (!hasAllKeys(part, partTemplate)) return false;
-    if (!hasAllKeys(part.gameData, gameDataTemplate)) return false;
-    for (const spd of part.subPartGameData ?? []) {
-      if (!hasAllKeys(spd, subPartTemplate)) return false;
-    }
-    // A glow authored before coverage/strength were split would silently composite as an
-    // all-or-nothing white blowout, so an incomplete EmissiveConfig is unloadable too.
-    for (const mesh of part.customMeshes ?? []) {
-      if (mesh.emissive && !hasAllKeys(mesh.emissive, glowTemplate)) return false;
-    }
-  }
-  return true;
+/** Display names of the projects the last purge removed, awaiting a user-facing notice. */
+let removedProjectNames: string[] = [];
+
+/**
+ * The names of the projects {@link sanitizeProjectStorage} removed on this boot, handed
+ * out ONCE and then cleared (so a remount can't re-notify). Empty when nothing was
+ * purged. The UI turns this into a toast — this module stays React-free.
+ */
+export function consumeRemovedProjectsNotice(): string[] {
+  const names = removedProjectNames;
+  removedProjectNames = [];
+  return names;
 }
 
 /**
- * Whether a stored snapshot can be loaded into the current editor: it must parse and
- * match the current data model exactly (no migration). Used to decide what to purge at
- * boot — never throws.
- */
-function isSnapshotLoadable(snap: ProjectSnapshot | null): boolean {
-  if (!snap) return false;
-  try {
-    return snapshotMatchesModel(snap);
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Boot-time cleanup: drop any `flexo:project:*` entry that can't be loaded into the
- * current editor (corrupt JSON, or an older data model we don't migrate). Loading such
- * data crashes the whole app, so we delete it rather than try to honor it. A dangling
- * current-project pointer (now pointing at a removed entry) is cleared too. Removed
- * keys are reported in a single console.warn.
+ * Boot-time cleanup: drop any `flexo:project:*` entry we can't honor. That is exactly two
+ * cases — the entry isn't a readable snapshot (corrupt JSON / missing name or part), or it
+ * was written against a different {@link PROJECT_SCHEMA_VERSION}, i.e. a build whose format
+ * we don't migrate from. Everything else is KEPT and default-filled on load by
+ * {@link normalizePart}. A dangling current-project pointer (now pointing at a removed
+ * entry) is cleared too. Removed keys are reported in a single console.warn, and their
+ * display names are kept for {@link consumeRemovedProjectsNotice}.
  */
 function sanitizeProjectStorage(): void {
   const removed: string[] = [];
+  const names: string[] = [];
   // Iterate high→low: removeItem reindexes localStorage, so descending is stable.
   for (let i = localStorage.length - 1; i >= 0; i--) {
     const key = localStorage.key(i);
     if (!key || !key.startsWith(PROJECT_KEY_PREFIX)) continue;
-    if (isSnapshotLoadable(readSnapshotByKey(key))) continue;
+    const snap = readSnapshotByKey(key);
+    if (snap && snap.version === PROJECT_SCHEMA_VERSION) continue;
     localStorage.removeItem(key);
     removed.push(key);
+    // A corrupt entry has no readable name — fall back to the key's suffix.
+    names.push(snap?.name ?? key.slice(PROJECT_KEY_PREFIX.length));
   }
   const pointer = readCurrentPointer();
   if (pointer != null && localStorage.getItem(projectKey(pointer)) == null) {
     localStorage.removeItem(CURRENT_PROJECT_KEY);
   }
+  removedProjectNames = names;
   if (removed.length > 0) {
     console.warn(
-      `flexo: removed ${removed.length} incompatible project(s) from localStorage (old/unsupported data model):`,
+      `flexo: removed ${removed.length} incompatible project(s) from localStorage (schema version mismatch or corrupt data):`,
       removed,
     );
   }
@@ -320,10 +348,11 @@ export function loadProject(name: string): boolean {
   const snap = readSnapshot(name);
   if (!snap) return false;
   try {
-    applyProjectSnapshot(snap);
+    // Default-fill first: a same-version snapshot may predate an additive field.
+    applyProjectSnapshot(normalizeSnapshot(snap));
   } catch (err) {
-    // Defensive: sanitizeProjectStorage() should have already purged anything that
-    // can't apply, but never let one bad project crash boot. Discard it and fail.
+    // Defensive backstop for staleness deeper than the normalizer's reach: never let one
+    // bad project crash boot. Discard it and fail.
     suspended = false;
     console.warn(`flexo: failed to load project "${name}" — removing it`, err);
     localStorage.removeItem(projectKey(name));
@@ -449,8 +478,9 @@ function startAutosave(): void {
  * synchronous, so no async wait is needed.
  */
 export function hydrateProjectOnBoot(): void {
-  // Purge corrupt / old-data-model projects first so we never try to load one (which
-  // would crash the app). Anything removed is reported via console.warn.
+  // Purge corrupt / wrong-schema-version projects first so we never try to load one
+  // (which would crash the app). Anything removed is reported via console.warn and
+  // surfaced to the user by consumeRemovedProjectsNotice().
   sanitizeProjectStorage();
   const pointerName = readCurrentPointer();
   const loaded = pointerName != null && loadProject(pointerName);

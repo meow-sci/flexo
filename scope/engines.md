@@ -437,8 +437,9 @@ reaction hierarchy; processes no longer hard-code an O/F ratio. Game-side eviden
   (bounds from the LUT rows, KSA-designer-style default-on-pick) + a "ratio required" warning;
   custom-propellant editor gained a Category select; cloning a mixture bakes it at its default
   ratio (what the game's combustor does). SRB recipe now burns `APCP`.
-- Persisted projects: model shape changed → stale snapshots are **discarded** by the boot purge
-  (`snapshotMatchesModel`), per the constitution.
+- Persisted projects: model shape changed → stale snapshots were **discarded** by the boot purge
+  (then structural; today the purge is gated by `PROJECT_SCHEMA_VERSION` — see the constitution's
+  schema-versioned preservation rule), per the constitution.
 - Fixtures re-synced @ 4892 (`PartGameData.xml` also lost its UTF-8 BOM upstream); regression
   tests updated — the Hydrolox parity snapshot is now Isp_vac ≈ 445.4 s / 932.6 kN (the
   ThermoToolkit-regenerated LUT shifted the data slightly; the port itself is unchanged).

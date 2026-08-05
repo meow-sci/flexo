@@ -23,9 +23,10 @@ import { ChainPalette } from './ui/chain/ChainPalette';
 import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys';
 import { HelpDialog } from './ui/hotkeys/HelpDialog';
 import { AboutDialog } from './ui/AboutDialog';
-import { useIsPhone } from './ui/kit';
+import { toast, useIsPhone } from './ui/kit';
 import { ensureCatalogLoaded } from './state/catalogStore';
 import { ensurePartCatalogLoaded } from './state/partCatalogStore';
+import { consumeRemovedProjectsNotice } from './state/projectStore';
 
 function App() {
   const isPhone = useIsPhone();
@@ -33,6 +34,22 @@ function App() {
   useEffect(() => {
     void ensureCatalogLoaded();
     void ensurePartCatalogLoaded();
+  }, []);
+
+  // Boot purged saved projects written by an incompatible schema version (see
+  // projectStore.PROJECT_SCHEMA_VERSION) — tell the user which ones vanished. The notice
+  // is consumed, so a remount never repeats it.
+  useEffect(() => {
+    const removed = consumeRemovedProjectsNotice();
+    if (removed.length === 0) return;
+    toast(
+      {
+        title: `Removed ${removed.length} incompatible saved project${removed.length === 1 ? '' : 's'}`,
+        description: `${removed.join(', ')} — saved by an older, incompatible version of flexo.`,
+        variant: 'warning',
+      },
+      { timeout: 10000 },
+    );
   }, []);
 
   return (

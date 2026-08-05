@@ -15,7 +15,7 @@ interface CustomTextureDialogProps {
  * The channel drives the encode transforms (normal maps get the KSA X-flip) and
  * which material slots the texture can fill.
  *
- * Mounted only while open (see AddButton) so per-open state initializes via
+ * Mounted only while open (see DialogRoot) so per-open state initializes via
  * useState with no reset effect.
  */
 export function CustomTextureDialog({ onClose }: CustomTextureDialogProps) {

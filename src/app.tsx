@@ -3,7 +3,6 @@ import { ViewportCanvas } from './three/ViewportCanvas';
 import { ViewportDropZone } from './ui/ViewportDropZone';
 import { ImportModelDialog } from './ui/ImportModelDialog';
 import { ImportReportCard } from './ui/ImportReportCard';
-import { EditorToolbar } from './ui/Toolbar';
 import { MobileTopBar } from './ui/MobileTopBar';
 import { SelectionToolbar } from './ui/SelectionToolbar';
 import { MultiSelectToolbar } from './ui/MultiSelectToolbar';
@@ -23,9 +22,10 @@ import { ChainPalette } from './ui/chain/ChainPalette';
 import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys';
 import { MenuBar } from './ui/shell/MenuBar';
 import { DialogRoot } from './ui/shell/DialogRoot';
+import { CommandPalette } from './ui/palette/CommandPalette';
 import { Sidebar } from './ui/shell/Sidebar';
 import { StatusBar } from './ui/status/StatusBar';
-import { toast, useIsPhone, z } from './ui/kit';
+import { toast, useIsPhone } from './ui/kit';
 import { ensureCatalogLoaded } from './state/catalogStore';
 import { ensurePartCatalogLoaded } from './state/partCatalogStore';
 import { consumeRemovedProjectsNotice } from './state/projectStore';
@@ -114,19 +114,7 @@ function App() {
                 against the CELL, so everything clamps to the workspace by construction.
                 Each surface keeps self-gating exactly as before. ── */}
 
-          {/* Top-center: the v1 editor toolbar. Plain centering is correct at every
-              width now that the cell excludes the sidebars (the toolbar's own
-              flex-wrap still handles narrow cells). */}
-          {!isPhone && (
-            <div
-              className="absolute left-1/2 top-3 -translate-x-1/2"
-              style={{ zIndex: z.canvasOverlay }}
-            >
-              <EditorToolbar />
-            </div>
-          )}
-
-          {/* Below the top toolbar: per-selection tools, only when something is
+          {/* Below the menubar: per-selection tools, only when something is
               selected. The multi-select toolbar stacks beneath. On phone the animation
               scrubber pins to the top of this stack so the clip can be scrubbed/replayed
               without opening the inspector sheet over the 3D view. */}
@@ -200,6 +188,10 @@ function App() {
           Renders only the one dialog `$openDialog` names — see DialogRoot's header for
           how to add one. */}
       <DialogRoot />
+
+      {/* ⌘K: fuzzy search over the whole command registry. Desktop and phone alike —
+          it is the phone's only way to reach a command with no menu home. */}
+      <CommandPalette />
 
       {/* Modal paint canvas for a mesh's 'painted' glow bitmap. */}
       <GlowPaintDialog />

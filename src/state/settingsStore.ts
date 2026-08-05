@@ -149,7 +149,7 @@ export interface LightPreviewCount {
  * The live preview's cap report — **ephemeral, deliberately NOT persisted** (unlike every
  * other store in this module): it describes the CURRENT document, not a preference, so
  * replaying a stale count from localStorage would be a lie. `EditorScene` publishes it
- * from {@link import('../three/lightVolume').planPreviewBudget}; `ViewButton` reads it to
+ * from {@link import('../three/lightVolume').planPreviewBudget}; the Settings dialog's light-coverage section reads it to
  * say "previewing N of M" when the cap truncates.
  */
 export const $lightPreviewCount = atom<LightPreviewCount>({ enabled: 0, total: 0 });

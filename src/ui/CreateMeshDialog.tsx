@@ -27,7 +27,7 @@ interface CreateMeshDialogProps {
  * apply a custom texture. On confirm it becomes a custom SubPart template, is
  * placed in the scene, and selected. v1 = one texture stretched across the mesh.
  *
- * Mounted only while open (see AddButton) so per-open state initializes via
+ * Mounted only while open (see DialogRoot) so per-open state initializes via
  * useState with no reset effect.
  */
 export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {

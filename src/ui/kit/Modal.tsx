@@ -17,6 +17,9 @@ const overlay = tv({
   variants: {
     variant: {
       center: 'items-center justify-center p-4',
+      // Anchored a third of the way down, the command-palette convention (design:
+      // design-system-services.md §3.1 "size S variant anchored top-third").
+      palette: 'items-start justify-center p-4 pt-[15vh]',
       sheet: 'items-end justify-center',
       fullscreen: 'items-stretch justify-center p-3 sm:p-6',
       cover: 'items-stretch justify-center p-0',
@@ -31,6 +34,8 @@ const modal = tv({
     variant: {
       center:
         'w-full max-w-md rounded-xl border transition-[transform,opacity] data-[entering]:scale-95 data-[entering]:opacity-0 data-[exiting]:scale-95 data-[exiting]:opacity-0',
+      palette:
+        'flex max-h-[70vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border transition-[transform,opacity] data-[entering]:scale-95 data-[entering]:opacity-0 data-[exiting]:scale-95 data-[exiting]:opacity-0',
       sheet:
         'flex max-h-[88vh] w-full flex-col rounded-t-2xl border-t transition-transform data-[entering]:translate-y-full data-[exiting]:translate-y-full',
       fullscreen:

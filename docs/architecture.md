@@ -17,10 +17,11 @@ src/
               primitives in ui/kit/ (tailwind-variants styling). Read/write the
               store via @nanostores/react.
   app.tsx     The docked shell: column(MenuBar | PhoneTopBar, row(LeftSidebar,
-              ViewportHost, RightSidebar), StatusBar), plus the single DialogRoot
-              and the ⌘K CommandPalette. Legacy floating chrome (selection
-              toolbars, HUDs, aid editors, the chain palette) is re-parented inside
-              the viewport cell pending its v2 rehost (design: foundation.md §1).
+              ViewportHost, RightSidebar), StatusBar | CondensedStatusBar +
+              PhoneModeTabs), plus the single DialogRoot and the ⌘K CommandPalette.
+              Legacy floating chrome (selection toolbars, HUDs, aid editors, the
+              chain palette) is re-parented inside the viewport cell pending its v2
+              rehost (design: foundation.md §1).
   main.tsx    React root: <App /> + BuildIdMismatchDialog.
 ```
 
@@ -64,6 +65,27 @@ hold divergent copies.
 objects from state — it diffs `$part.placements` against a `Map<instanceId,
 SubPartObject>` and adds/removes/updates accordingly (async geometry/material loads
 are guarded against placements removed mid-load).
+
+## Modes, commands and keys
+
+Three shell services sit between the UI and the stores, and each is a single dataset:
+
+- **The mode machine** (`state/modeStore.ts`) — one `$mode` atom over five modes
+  (Build / Animation / Data / Engine / Surface), one `$activeTool` slot, and `setMode` as the
+  ONLY place mode-switch choreography runs. It is view state: never persisted, never an undo
+  step, and it never touches the document. It replaced v1's hidden `$inspectorMode`. See
+  [editor-state.md](./editor-state.md#the-mode-machine--srcstatemodestorets).
+- **The command registry** (`state/commandStore.ts`, commands defined in `ui/commands/`) —
+  every menubar item, palette row and keyboard binding dispatches one command id. Menus are
+  data (`ui/menu/menuSpec.ts`) and dialogs are ids (`state/dialogStore.ts`).
+- **The scoped hotkey registry** (`ui/hotkeys/registry.ts`) — every binding declares a scope
+  (`global`, `viewport`, `mode:*`, `tool:*`, `surface:*`) and is enabled iff that scope is in
+  `hotkeyStore.$activeScopes`, with precedence `surface > tool > mode > viewport > global`.
+  **There are no off-registry bindings**: a pure-key behavior with no menu home carries a
+  synthetic id so Help and the conflict validator still see it. `validateRegistry` enumerates
+  every reachable scope set at dev time and in `hotkeyRegistry.test.ts`. Escape is ONE binding
+  running an ordered ladder (`ui/hotkeys/escLadder.ts`), and the Help dialog is generated from
+  the registry — a rebind moves the menu chip, the palette chip and the Help row together.
 
 ## Key invariants
 

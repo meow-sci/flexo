@@ -24,6 +24,29 @@ the 3D scene subscribes with vanilla `subscribe()`, React reads via
 Per-layer **visibility/lock** is NOT in `$part` — it's persisted view state in
 `src/state/layerStore.ts` (`$layerView`). See [layers.md](./layers.md).
 
+## The mode machine — `src/state/modeStore.ts`
+
+The editor's posture is one atom. There is no `$inspectorMode` any more: the v1 three-way
+sidebar atom (`'assets' | 'anim' | 'engine'`) is gone, and every consumer reads `$mode`.
+
+| Export | Meaning |
+|---|---|
+| `$mode` | `'build' \| 'animation' \| 'data' \| 'engine' \| 'surface'`. **Ephemeral** — boots to `'build'` on every reload, never persisted, **never an undo step**. |
+| `$activeTool` | The single transient-tool slot (`'measure' \| 'seat-view' \| 'exhaust' \| 'marquee' \| 'member-paint' \| 'pivot-pick'`, or `null`). Arming one cancels the previous. The chain session is deliberately NOT in this slot — it is a parallel, non-modal session. |
+| `MODES` / `TOOLS` | The display-order datasets the menubar switcher, the status chip, the phone tab bar, the palette and the hotkey validator all render from. |
+| `setMode(next, payload?)` | **THE** choreography point: exit hooks → cancel the armed tool (unless its `ToolDef` says `survivesModeSwitch`) → set `$mode` → enter hooks. It never touches the document, `$part`, undo history, the selection, the camera, layer view state or the active layer. |
+| `registerModeHooks` / `registerTool` | How an area store declares its own entry/exit choreography and tool teardown. Hooks are wrapped in try/catch — a broken area hook can never strand the UI between modes. |
+| `resetModeForProjectLoad()` | Project load/switch: mode → Build, tool slot cleared. Called from `applyProjectSnapshot`. |
+
+Two derived flags moved with it: `$isPoseEditing` and `$isExhaustPlacing` now derive from
+`$mode` (plus their own area state) instead of the deleted inspector atom.
+
+Scope state for the keyboard lives beside it in `src/state/hotkeyStore.ts`
+(`$focusedSurface`, `$dialogOpen`, `$activeScopes`) — a binding declares one scope string and
+is enabled iff that string is in `$activeScopes`. See
+[3d-workspace.md](./3d-workspace.md#viewport-keys) for the viewport bindings and the Escape
+ladder.
+
 Undo/redo stacks are module-private arrays (depth 50), not atoms. They're exposed
 for project persistence only via `exportHistory()` / `importHistory(snapshot)` (so
 undo survives a reload) — see [projects.md](./projects.md).
@@ -234,8 +257,12 @@ Shift+click on pointer-down (before react-aria's own, anchorless extension runs)
   Chain button; self-gates on
   `$chainSession`) and its per-step parameter cards. Applying is one undo step; see
   [action-chains.md](./action-chains.md).
+- `ModeSidebar.tsx` — the right sidebar's body, one switch on `$mode` (it replaced v1's
+  `InspectorContent`). Build renders the assets toolbar + list; Animation and Engine render
+  their panels; Data and Surface show an interim placeholder naming where those surfaces
+  still live.
 - `EnginePanel.tsx` / `EngineToolbar.tsx` — the full-sidebar **Engine Designer**
-  (`$inspectorMode === 'engine'`, ephemeral atoms in `engineStore.ts`) with a live
+  (`$mode === 'engine'`, ephemeral atoms in `engineStore.ts`) with a live
   thrust/Isp readout; `EngineSections.tsx` holds the reusable combustor/nozzle/controller/
   gimbal/propellant editors (also rendered in the Part/SubPart Data modals). See
   [engines.md](./engines.md).

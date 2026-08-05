@@ -215,9 +215,9 @@ export const $snap = atom<SnapSettings>({});
 // "Reset Everything" (which wipes localStorage). React reads via `useStore`.
 /** Active nudge axis. Default 'y' — the vertical/world-up axis. */
 export const $nudgeAxis = persistentJSON<NudgeAxis>('flexo:nudgeAxis', 'y');
-/** Distance (m) each arrow-key nudge moves the selection. Adjusted by the M keys. */
+/** Distance (m) each arrow-key nudge moves the selection. Adjusted by ⇧← / ⇧→. */
 export const $nudgeStep = persistentJSON<number>('flexo:nudgeStep', 0.1);
-/** Degrees each rotate key (W/S, A/D, Q/E) turns the selection. Adjusted by F/⇧F. */
+/** Degrees each rotate key (W/S, A/D, Q/E) turns the selection. Adjusted by [ / ]. */
 export const $rotateStep = persistentJSON<number>('flexo:rotateStep', 45);
 /**
  * Cyclic offset (0/1/2) applied to every rotate pair's base axis, advanced by the
@@ -4156,12 +4156,12 @@ export function cycleRotateAxes(direction: 1 | -1 = 1): void {
   $rotateAxisOffset.set(($rotateAxisOffset.get() + direction + n) % n);
 }
 
-/** Increases the rotate step by 15°, clamped at {@link MAX_ROTATE_STEP} (F). */
+/** Increases the rotate step by 15°, clamped at {@link MAX_ROTATE_STEP} (`]`). */
 export function increaseRotateStep(): void {
   $rotateStep.set(Math.min(MAX_ROTATE_STEP, $rotateStep.get() + ROTATE_STEP_INCREMENT));
 }
 
-/** Decreases the rotate step by 15°, clamped at {@link MIN_ROTATE_STEP} (⇧F). */
+/** Decreases the rotate step by 15°, clamped at {@link MIN_ROTATE_STEP} (`[`). */
 export function decreaseRotateStep(): void {
   $rotateStep.set(Math.max(MIN_ROTATE_STEP, $rotateStep.get() - ROTATE_STEP_INCREMENT));
 }

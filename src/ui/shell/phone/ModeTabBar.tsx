@@ -5,8 +5,8 @@ import { Button, cn } from '../../kit';
  * The phone bottom mode tab bar (foundation §12, §2.2): the five modes as a fixed row of
  * icon-over-label tabs, safe-area padded, pinned below the condensed status bar.
  *
- * Pure presentation — no store imports. The modeStore phase mounts it in the phone frame
- * and wires `$mode` / the Panel-sheet opening; it renders nowhere yet.
+ * Pure presentation — no store imports. `PhoneModeTabs` is the container that mounts it in
+ * the phone frame and wires `$mode`, the `mode.*` commands and the Panel sheet.
  */
 export interface ModeTabSpec {
   /** Mode id — a plain string here; the modeStore phase supplies the `Mode` union. */

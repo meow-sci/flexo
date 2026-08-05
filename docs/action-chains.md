@@ -178,8 +178,8 @@ is what makes Cancel unconditionally safe.
 |---|---|
 | `⇧⌘K`, **Edit ▸ Begin Action Chain…**, or the ⌘K command palette (`chain.begin`, keywords "array grid radial ring repeat") | `beginActionChain()` — opens over the current selection; see the discard rule below |
 | The **Chain** button in `SelectionToolbar.tsx` | `toggleChainPalette()` — the v1 toggle, kept until the Build-mode rework replaces that toolbar |
-| `mod+↵` | Apply (component-local hotkey, `enableOnFormTags: true`) |
-| `Escape`, ✕, **Cancel** | Cancel |
+| `mod+↵` | Apply — registry binding `chain.apply` at scope `surface:chain`, `enableOnFormTags: true` |
+| `Escape`, ✕, **Cancel** | Cancel — **rung 6 of the Escape ladder** |
 | Typing in the search field | Filters the command list; `↓` moves into it, `↵` on a row adds that step |
 | `↑`/`↓` in any number field | Step by the field's unit (Shift ⇒ ×10, Alt ⇒ ×0.1) — `useNumberDraft` semantics |
 
@@ -207,10 +207,14 @@ count.
 footer shows `Seeds no longer exist` and Apply is disabled — the palette does not auto-close.
 Loading a project closes the session (`applyProjectSnapshot` → `closeChain()`).
 
-**Escape interplay**: the palette's Escape hotkey is registered *without* `preventDefault`,
-because `useNumberDraft` swallows Escape while a field edit is dirty (revert first, close
-second). That is the app-wide convention — the first Escape reverts the field you are typing in,
-the second closes the palette.
+**Escape interplay**: cancelling is **rung 6 of the one documented Escape ladder**
+(`src/ui/hotkeys/escLadder.ts`; foundation §11.4), no longer a component-local hotkey. Its
+contract is unchanged and is what the rung declares: `preventDefault: false`, because
+`useNumberDraft` swallows Escape while a field edit is dirty (rung 1 — revert first, close
+second), and `enableWhileTyping` so the session still cancels from inside its own step fields.
+The rungs above it fire first, so a dirty field, an open menu/dialog and the ⌘K palette each
+take the first press. The ≥1-step discard confirm on Escape is not wired yet — today Escape
+cancels silently, exactly as in v1; it lands with the chain's FloatingWindow rehost.
 
 **Apply** reads `$chainEval` fresh, maps instances to `ChainCommitEntry[]`, commits, closes and
 flashes `Applied chain · +N SubParts` in the status bar's message channel (or `· N transformed`

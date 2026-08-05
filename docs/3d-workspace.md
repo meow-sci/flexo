@@ -239,6 +239,51 @@ seat markers themselves** (you are inside the one you sat in, so it would fill t
 too, so a leaked pointer handler can never outlive the canvas. A previewed seat that no longer
 exists exits cleanly rather than parking the camera on a stale eye point.
 
+## Camera commands
+
+Three camera moves, each a command (**View** menu, the ⌘K palette, and — for framing — a key).
+The UI side lives in `viewStore` intent atoms (`frameCamera`/`snapCamera`/`resetCamera`) that
+`EditorScene` consumes, because only the scene can answer "around what".
+
+| Command | Key | Behavior |
+|---|---|---|
+| **Frame Selection** (`view.frameSelection`) | `F` | Fits the selection and re-centers the orbit target on it, keeping the current view direction. **Frame-all fallback**: with nothing selected it frames the whole part — placements, colliders, lights, connectors, IVA seats and kittens, whatever the scene holds — and an empty part lands on the origin at the default distance. The fallback measures only what is actually DRAWN (`computeVisibleWorldBounds`), so hidden layers and a light marker's hidden coverage shells never inflate the box. |
+| **Camera Snap ▸** six directions (`view.cameraSnap:<dir>`) | — | Axis-aligned view at the current distance, orbiting the **selection centroid** (the selection's world bounds centre) — or the origin when nothing is selected. |
+| **Reset Camera** (`view.resetCamera`) | — | Back to the default three-quarter pose. |
+
+`F` was v1's rotate-step key. It is Frame Selection now, and the rotation step moved to
+`[` / `]`.
+
+## Viewport keys
+
+Every binding is declared once in the scoped hotkey registry (`src/ui/hotkeys/registry.ts`)
+and shown in **Help ▸ Keyboard Shortcuts…** (`?`), which is generated from it. The keys the
+3D workspace owns are **viewport-scoped**: they are live only when no overlay dialog is open,
+you are not typing in a field, and focus is not inside an interactive list — a focused
+Outliner/asset list keeps its own row navigation. They stay live in *every* mode.
+
+| Keys | Action |
+|---|---|
+| `W`/`S` · `A`/`D` · `Q`/`E` | Rotate the selection about the three cycling axis pairs |
+| `R` | Cycle the rotation-axis mapping |
+| `[` / `]` | Rotation step smaller / larger (**was `F`/`⇧F` in v1**) |
+| `↑` `↓` · `⇧↑` `⇧↓` · `←` `→` · `⇧←` `⇧→` | Nudge · fast nudge · cycle nudge axis · cycle nudge step |
+| `F` | Frame Selection (above) |
+| `T` / `⇧T` | Cycle the gizmo tool Move → Rotate → Scale (forward / back) |
+| `M` | Arm the point-to-point measure tool |
+| `⌘A` · `⌥⌘A` · `⇧⌘I` | Select all · deselect · invert |
+| `⌘C` `⌘X` `⌘V` `⌘D` `⌫` | Copy · cut · paste in place · duplicate · delete |
+
+App-level chords stay **global** (they keep working with a dialog open): `⌘Z`/`⇧⌘Z`,
+`⌘K` (command palette), `⇧⌘K` (action chain), `1`–`5` (switch mode — gated so they never fire
+behind a dialog), `?` (Help), `Esc`.
+
+`Esc` is ONE binding running an ordered ladder (`src/ui/hotkeys/escLadder.ts`): dirty numeric
+field revert → menu/popover/dialog dismiss → palette close → **gizmo drag cancel** →
+armed-tool cancel → chain cancel → animation unwind → seat-view exit → nothing. Escape never
+clears the selection and never leaves a mode. The gizmo rung is the scene's: `$gizmoCancel`
+makes `TransformControls.reset()` restore the drag-start transform.
+
 ## Layer visibility & lock
 
 `EditorScene` subscribes to `$layerView` and `applyLayerVisibility()` sets each

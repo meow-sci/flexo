@@ -36,7 +36,9 @@ import { setEngineExhaustGizmo } from '../../../state/engineStore';
  * absent:
  * - Selection-count chip and snap chip — they arrive with their features (the Build-mode
  *   phase); their slots sit between the message channel and the bell.
- * - `ModeTabBar` will dock BELOW this strip when the mode machine lands.
+ * - The mode/tool chip's mini mode menu is kept even though `ModeTabBar` now docks below
+ *   this strip: the chip is what the tool takes over, and the menu is the reachable route
+ *   while a tool is armed.
  * - Modifier hints, rotate/nudge chips and the FPS readout are desktop-only by design
  *   (keyboard features; §8.1). The Inspector-sheet touch steppers that answer v1's phone
  *   nudge/rotate gap (§8.2) belong to the selection-area phase.

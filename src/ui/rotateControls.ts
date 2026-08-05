@@ -10,7 +10,7 @@ import { toast } from './toast';
 
 /**
  * UI-layer wrappers around the pure rotate-axis / rotate-step store actions that flash the
- * new posture so changes triggered by keyboard (R, F/⇧F) are visible. Mirrors
+ * new posture so changes triggered by keyboard (`R`, `[`/`]`) are visible. Mirrors
  * {@link ../ui/nudgeControls} so feedback is identical wherever the change originates, and
  * keeps editorStore free of UI dependencies. The flash is transient (status-bar message
  * channel only — never the notification center; design-system-services §2.2).
@@ -25,13 +25,13 @@ export function changeRotateAxes(): void {
   toast({ title: `Rotate axes: ${summary}` });
 }
 
-/** Increases the rotate step and toasts the new angle (F hotkey). */
+/** Increases the rotate step and toasts the new angle (`]` hotkey). */
 export function raiseRotateStep(): void {
   increaseRotateStep();
   toast({ title: `Rotation step: ${$rotateStep.get()}°` });
 }
 
-/** Decreases the rotate step and toasts the new angle (⇧F hotkey). */
+/** Decreases the rotate step and toasts the new angle (`[` hotkey). */
 export function lowerRotateStep(): void {
   decreaseRotateStep();
   toast({ title: `Rotation step: ${$rotateStep.get()}°` });

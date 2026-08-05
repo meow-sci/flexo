@@ -106,6 +106,52 @@ export function computeSelectionBounds(
   };
 }
 
+/**
+ * World AABB over only what is actually DRAWN: an object whose `visible` is false — and
+ * everything under it — contributes nothing.
+ *
+ * `Box3.expandByObject` deliberately ignores visibility, which is right for measuring a
+ * selection but wrong for "frame everything you can see": a light marker carries its
+ * coverage sphere and boundary wire as hidden children sized to the light's Range, so a
+ * 100 m floodlight would otherwise blow the frame-all box up to 200 m around a 2 m part.
+ * Hidden layers drop out for the same reason, and for free.
+ *
+ * Returns null when nothing visible has geometry.
+ */
+export function computeVisibleWorldBounds(objects: THREE.Object3D[]): ComputedBounds | null {
+  const box = new THREE.Box3();
+  for (const object of objects) expandByVisible(box, object);
+  if (box.isEmpty()) return null;
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+  box.getSize(size);
+  box.getCenter(center);
+  return {
+    size: toVec3(size),
+    center: toVec3(center),
+    min: toVec3(box.min),
+    max: toVec3(box.max),
+    quaternion: [0, 0, 0, 1],
+  };
+}
+
+const scratchBox = new THREE.Box3();
+
+function expandByVisible(box: THREE.Box3, object: THREE.Object3D): void {
+  if (!object.visible) return;
+  const mesh = object as THREE.Mesh;
+  const geometry = mesh.geometry as THREE.BufferGeometry | undefined;
+  if (geometry) {
+    object.updateWorldMatrix(true, false);
+    if (!geometry.boundingBox) geometry.computeBoundingBox();
+    if (geometry.boundingBox) {
+      scratchBox.copy(geometry.boundingBox).applyMatrix4(object.matrixWorld);
+      box.union(scratchBox);
+    }
+  }
+  for (const child of object.children) expandByVisible(box, child);
+}
+
 /** Euclidean distance between two points, in meters. */
 export function distance(a: Vec3, b: Vec3): number {
   const dx = a.x - b.x;

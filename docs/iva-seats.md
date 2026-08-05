@@ -251,8 +251,11 @@ Two behaviours are faithful to the C# and worth knowing before "fixing" them:
 game XML.)
 
 The status bar's **tool segment** (`src/ui/status/ToolSegment.tsx`) gives prev/next (wrapping,
-mirroring `C`), the honesty tooltip, an **Exit** button and `Escape`. The `Escape` hotkey is registered with `preventDefault: false` and gated on
-`$seatView` so it never shadows a dialog/popover dismiss.
+mirroring `C`), the honesty tooltip, an **Exit** button and `Escape`. Leaving by `Escape` is
+**rung 8 of the app's one Escape ladder** (`src/ui/hotkeys/escLadder.ts`; foundation §11.4) —
+the last flexo rung, so every other cancel takes the key first. Its v1 contract is preserved
+verbatim as the rung's own declaration: `preventDefault: false`, and gated on `$seatView`, so
+it never shadows a dialog/popover dismiss.
 
 ### What the preview does and does not simulate
 

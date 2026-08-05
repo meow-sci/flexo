@@ -88,8 +88,10 @@ the project's `customReactions` (custom wins on id).
 
 ## Authoring UX
 
-- **Sidebar designer** (`$inspectorMode === 'engine'`, `EnginePanel`/`EngineToolbar`):
-  entered from the Add menu ("Define Engine…") or the Assets toolbar "Engine (N)" button.
+- **Sidebar designer** (Engine mode — `$mode === 'engine'`, `EnginePanel`/`EngineToolbar`):
+  entered from the mode switcher (or `4`), the Add menu ("Define Engine…") or the Assets
+  toolbar "Engine (N)" button. `X` toggles the exhaust-placement tool while the mode is
+  active; leaving the mode kills the exhaust handles.
   Pick/define an engine, watch the **live SL/vacuum thrust + Isp**, edit the
   chamber/nozzle/FX (picking a mixture reaction exposes an **O/F mixture-ratio** field,
   defaulted and bounded by the reaction's LUT rows — KSA refuses to load a ratio-less

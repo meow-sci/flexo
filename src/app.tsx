@@ -17,6 +17,7 @@ import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys';
 import { MenuBar } from './ui/shell/MenuBar';
 import { PhoneTopBar } from './ui/shell/phone/PhoneTopBar';
 import { CondensedStatusBar } from './ui/shell/phone/CondensedStatusBar';
+import { PhoneModeTabs } from './ui/shell/phone/PhoneModeTabs';
 import { DialogRoot } from './ui/shell/DialogRoot';
 import { CommandPalette } from './ui/palette/CommandPalette';
 import { Sidebar } from './ui/shell/Sidebar';
@@ -197,9 +198,11 @@ function App() {
       </div>
 
       {!isPhone && <StatusBar />}
-      {/* The phone's condensed strip — the last flex child, exactly like the desktop bar.
-          The ModeTabBar docks BELOW it when the mode machine lands (foundation §12). */}
+      {/* The phone's condensed strip, with the five mode tabs docked below it as the last
+          flex child of the frame (foundation §12). Re-tapping the active tab opens that
+          mode's Panel sheet — the phone's route to the right-sidebar content. */}
       {isPhone && <CondensedStatusBar />}
+      {isPhone && <PhoneModeTabs />}
 
       {/* Overlay dialogs — portal to body; mount position is irrelevant. */}
 

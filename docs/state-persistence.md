@@ -79,6 +79,15 @@ longer resolves (a dynamic `layer:activate:<layerId>` for a deleted layer) is no
 write — it is simply skipped when the palette renders, which is the "no migration" rule
 applied to a preference key.
 
+### The Help rebind notice
+
+`flexo:rebindNoticeSeen` (module-private in `src/ui/hotkeys/HelpDialog.tsx`,
+`persistentJSON<number>`, default `0`) stores **when the user first opened the v2 Help**, as
+epoch ms. Within 30 days of that stamp the "two keys moved" box (`F`, `⌘K`) renders
+prominently at the top of the dialog; after that it folds into a collapsed disclosure. It is
+dialog-local preference state, so it lives with the dialog rather than in `src/state/` —
+nothing else reads it. A fresh key: no migration concern.
+
 ### Feedback: status messages and notifications (persisted: nothing)
 
 The toast system is gone. Transient feedback is ephemeral `statusStore` state — one message
@@ -89,7 +98,9 @@ data, so a reload starts empty and anything that must survive a reload is docume
 state living elsewhere. Modifier-hint state (`modifierStore`) is ephemeral for the same
 reason.
 
-Phase 3 of the v2 shell added **no new persisted keys**. The state the status bar *edits* —
+Phase 3 of the v2 shell added **no new persisted keys**, and Phase 4 added exactly one
+(`flexo:rebindNoticeSeen`, above) — the mode, the armed tool and every hotkey scope are
+ephemeral by design (a reload boots into Build). The state the status bar *edits* —
 bounds mode (`flexo:measure`), nudge/rotate preferences, `flexo:showFpsCounter`, the active
 layer — stays owned by the stores that already persist it.
 

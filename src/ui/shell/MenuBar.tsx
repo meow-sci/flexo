@@ -16,6 +16,7 @@ import { MenuSpecMenu } from '../menu/MenuSpecMenu';
 import { MenuDrillDown } from '../menu/MenuDrillDown';
 import { MENU_SPEC } from '../menu/menuSpec';
 import { ModeSwitcher } from './ModeSwitcher';
+import { chordsFor } from '../commands/chords';
 import { runCommand } from '../../state/commandStore';
 import { $canRedo, $canUndo, $redoDescription, $undoDescription } from '../../state/editorStore';
 import { $projectName } from '../../state/projectStore';
@@ -104,7 +105,11 @@ export function MenuBar() {
           onPress={() => runCommand('palette.open')}
         >
           <Search size={13} />
-          <Kbd>{`${keyLabel('mod')}K`}</Kbd>
+          {/* The chip comes from the registry like every other one — this button must not
+              be the single place that still claims ⌘K by hand (design §4.7). */}
+          {(chordsFor('palette.open')?.[0] ?? []).map((token) => (
+            <Kbd key={token}>{keyLabel(token)}</Kbd>
+          ))}
         </Button>
       </div>
     </div>

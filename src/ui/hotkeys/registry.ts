@@ -95,10 +95,10 @@ export interface HotkeyGroup {
 }
 
 /**
- * The bindings, grouped for the (still v1) Help dialog.
- *
- * TODO(P4.11): Help regenerates from `scope` with the static sections and the rebind diff;
- * these titles are the interim grouping, not part of the registry contract.
+ * The bindings. The grouping is **source organization only** — it keeps related bindings
+ * together in this file and nothing consumes the titles: Help groups by `scope`
+ * (`HelpDialog.tsx`), and every other consumer reads the flat {@link ALL_BINDINGS}. Add a
+ * binding to whichever group reads best, or start a new one.
  */
 export const HOTKEY_GROUPS: HotkeyGroup[] = [
   {
@@ -530,8 +530,12 @@ export const ALL_BINDINGS: HotkeyBinding[] = HOTKEY_GROUPS.flatMap((g) => g.bind
 // | `surface:timeline` `←→ ⇧←→ ⌘A ⌥⌘A ⌘C ⌘X ⌘V ⌫ = - F ⇧F Esc`                | P11          |
 // |   + `surface:members` edit mirrors                                        |              |
 // | ModeSwitcher / ModeTabBar attention dots                                  | P7 (engine blockers) / P11 (draft clips) |
-// | `surface:palette` `↑↓ ↩ ⌘↩` — still component-local in `CommandPalette`,  | P4.11 (Help) |
-// |   registered only so Help can list them (Esc is already ladder rung 3)    |              |
+//
+// **Closed, not deferred**: `surface:palette` `↑↓ ↩ ⌘↩` stay component-local in
+// `CommandPalette` (the input owns DOM focus for the whole session) and are documented as a
+// STATIC Help section (`helpStatics.ts` `PALETTE_SECTION`) rather than registered — a fake
+// binding nothing dispatches would only add four chords to the conflict validator. Palette
+// Esc is already ladder rung 3.
 
 // ── the Escape ladder's flexo-owned rungs (foundation §11.4) ─────────────────
 //

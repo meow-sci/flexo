@@ -11,8 +11,9 @@ import { z } from './zIndex';
  * MenuSheet, the notification sheet — is built from this one component; no bespoke
  * phone sheet forks.
  *
- * Not mounted anywhere yet. The phone-shell/modeStore phases mount it; `MobileInspector`
- * keeps its kit `Modal variant="sheet"` until then.
+ * Tenants today: the `PanelSheet` (the mode's right-sidebar body) and the condensed status
+ * bar's mode / active-layer pickers. `MobileInspector` still uses the kit
+ * `Modal variant="sheet"` until the selection phase folds it into the Inspector sheet.
  *
  * Modal only: the non-blocking 50% variant the chain window needs (foundation §12,
  * "Floating windows") is a LATER addition made in the FloatingWindow/chain phase.

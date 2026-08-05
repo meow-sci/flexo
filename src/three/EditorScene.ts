@@ -150,7 +150,7 @@ import {
   $grids,
   $hideInterior,
 } from '../state/viewStore';
-import { computeSelectionBounds } from '../measure/bounds';
+import { computeSelectionBounds, computeVisibleWorldBounds } from '../measure/bounds';
 import { resolveInternal } from '../ksa/modExport';
 import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../state/layerStore';
 // The app's one user-facing feedback channel (a module function by design, since there is
@@ -1540,14 +1540,22 @@ export class EditorScene {
 
   /**
    * **Frame Selection** (`F` / View menu / palette — LOCKED #7): fits the selection in view
-   * and re-centers the orbit target on it. With nothing selected it frames the whole part
-   * (design: design-build-mode.md §5.3 "frame-all fallback"); with nothing to frame at all
-   * it lands on the origin at the default distance.
+   * and re-centers the orbit target on it. With nothing selected it frames **the whole
+   * part** (design: design-build-mode.md §5.3 "No selection ⇒ frame-all (whole part; empty
+   * part ⇒ origin at default distance)") — not just the SubPart placements: a project whose
+   * only entities are a collider, a light or an IVA seat still has something to look at, and
+   * framing nothing there would read as a dead key.
+   *
+   * The fallback deliberately measures only what is DRAWN
+   * ({@link computeVisibleWorldBounds}) — hidden layers and a light marker's hidden coverage
+   * shells never inflate the box.
    */
   private frameSelection(): void {
-    let objects = this.selectedObjects().map((o) => o.group);
-    if (objects.length === 0) objects = [...this.objects.values()].map((o) => o.group);
-    const bounds = computeSelectionBounds(objects, 'world');
+    const selected = this.selectedObjects().map((o) => o.group);
+    const bounds =
+      selected.length > 0
+        ? computeSelectionBounds(selected, 'world')
+        : computeVisibleWorldBounds(this.allEntityGroups());
     if (!bounds) {
       this.viewport.frameBounds(new THREE.Vector3(), new THREE.Vector3());
       return;
@@ -1556,6 +1564,24 @@ export class EditorScene {
       new THREE.Vector3(bounds.center.x, bounds.center.y, bounds.center.z),
       new THREE.Vector3(bounds.size.x, bounds.size.y, bounds.size.z),
     );
+  }
+
+  /**
+   * Every built entity group in the scene — placements, connectors, colliders (one per
+   * placement of a SubPart-owned one), IVA seats, kittens and lights. The frame-all set.
+   * Editor aids that are not part of the Part (measurements, reference containers, grids)
+   * are deliberately excluded.
+   */
+  private allEntityGroups(): THREE.Object3D[] {
+    const groups: THREE.Object3D[] = [];
+    for (const obj of this.objects.values()) groups.push(obj.group);
+    for (const obj of this.connectorObjects.values()) groups.push(obj.group);
+    for (const objs of this.colliderObjects.values())
+      for (const obj of objs) groups.push(obj.group);
+    for (const obj of this.seatObjects.values()) groups.push(obj.group);
+    for (const obj of this.kittenObjects.values()) groups.push(obj.group);
+    for (const objs of this.lightObjects.values()) for (const obj of objs) groups.push(obj.group);
+    return groups;
   }
 
   /**

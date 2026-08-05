@@ -15,6 +15,7 @@ import { $hasSelection } from '../../state/selectors';
 import { FAST_NUDGE_MULTIPLIER } from '../../three/nudgeSelection';
 import { changeNudgeAxis, formatNudgeStep } from '../nudgeControls';
 import { changeRotateAxes } from '../rotateControls';
+import { chordsFor } from '../commands/chords';
 import { $mode } from '../../state/modeStore';
 
 /**
@@ -26,7 +27,7 @@ import { $mode } from '../../state/modeStore';
  * mapping assigns, arrows nudge along whichever axis is active. Without a visible posture
  * readout every one of those keys is a guess — which is why this is a permanent segment and
  * not a popover. Clicking either chip cycles it, exactly as `R` and `→` do, and the chord
- * tables live in the tooltips verbatim from v1.
+ * tables in the tooltips are generated from the hotkey registry by binding id.
  *
  * Axis tints come from {@link AXIS_COLOR} — the SAME constants the 3D gizmo uses. v1 kept a
  * private `#ff0000`/`#00ff00`/`#0000ff` copy under a comment claiming it matched the gizmo;
@@ -117,49 +118,47 @@ export function TransformChips() {
 }
 
 /**
- * The rotate chord table — v1's `RotateHint`, verbatim.
+ * The rotate chord table.
  *
- * The `F`/`⇧F` step chords are the CURRENT bindings and must stay that way: the rebind to
- * `[`/`]` lands with the scoped hotkey registry, and the tooltip is updated in the same
- * change that makes it true. A tooltip that lies about a chord is worse than no tooltip.
+ * Every chip is looked up by binding id (`chordsFor`) rather than typed out — the ONE lookup
+ * path the menus, the palette and Help share (design §4.7). This tooltip is why that rule
+ * exists: it kept claiming `F`/`⇧F` for the rotation step after the registry rebound it to
+ * `[`/`]`, and a tooltip that lies about a chord is worse than no tooltip.
  */
 function RotateHint() {
   return (
     <div className="flex flex-col gap-1">
       <HintRow
         chords={[
-          ['W', 'S'],
-          ['A', 'D'],
-          ['Q', 'E'],
+          ...(chordsFor('transform.rotate.ws') ?? []),
+          ...(chordsFor('transform.rotate.ad') ?? []),
+          ...(chordsFor('transform.rotate.qe') ?? []),
         ]}
         label="Rotate selection"
       />
-      <HintRow chords={[['R']]} label="Cycle rotation axes" />
-      <HintRow chords={[['F'], ['shift', 'F']]} label="Rotation step (larger · smaller)" />
+      <HintRow chords={chordsFor('transform.rotate.cycleAxes') ?? []} label="Cycle rotation axes" />
+      <HintRow
+        chords={[
+          ...(chordsFor('transform.rotateStep.down') ?? []),
+          ...(chordsFor('transform.rotateStep.up') ?? []),
+        ]}
+        label="Rotation step (smaller · larger)"
+      />
     </div>
   );
 }
 
-/** The nudge chord table — v1's `NudgeHint`, verbatim. */
+/** The nudge chord table — same registry lookup as {@link RotateHint}. */
 function NudgeHint() {
   return (
     <div className="flex flex-col gap-1">
-      <HintRow chords={[['↑'], ['↓']]} label="Nudge along axis" />
+      <HintRow chords={chordsFor('transform.nudge.move') ?? []} label="Nudge along axis" />
       <HintRow
-        chords={[
-          ['shift', '↑'],
-          ['shift', '↓'],
-        ]}
+        chords={chordsFor('transform.nudge.moveFast') ?? []}
         label={`Nudge ×${FAST_NUDGE_MULTIPLIER}`}
       />
-      <HintRow chords={[['←'], ['→']]} label="Change nudge axis" />
-      <HintRow
-        chords={[
-          ['shift', '←'],
-          ['shift', '→'],
-        ]}
-        label="Change nudge step"
-      />
+      <HintRow chords={chordsFor('transform.nudge.axis') ?? []} label="Change nudge axis" />
+      <HintRow chords={chordsFor('transform.nudge.step') ?? []} label="Change nudge step" />
     </div>
   );
 }

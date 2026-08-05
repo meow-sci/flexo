@@ -258,8 +258,8 @@ The "Core" mod ships with the game and acts as the default data which includes P
 flexo authors complete KSA rocket engines on reused SubPart meshes — combustor + De Laval
 nozzle + rocket + controller + gimbals, with a **live in-browser thrust/Isp readout** ported
 verbatim from KSA's decompiled engine math (`src/ksa/enginePhysics.ts`). Engines add no
-geometry (they decorate placements with GameData). The full-sidebar designer is
-`$inspectorMode === 'engine'` (`EnginePanel`/`EngineToolbar` + `EngineSections.tsx`, ephemeral
+geometry (they decorate placements with GameData). The full-sidebar designer is **Engine
+mode** (`$mode === 'engine'` — `EnginePanel`/`EngineToolbar` + `EngineSections.tsx`, ephemeral
 state in `engineStore.ts`); the same editors also appear in the Part/SubPart Data modals.
 Custom propellants (top-level `<FixedReaction>`; a combustor references `<Reaction Id>` with a
 `<MixtureRatio>` for Core's mixture reactions) are clone-and-remix.

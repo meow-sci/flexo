@@ -79,7 +79,7 @@ import { mergeProjectImport } from './projectTransfer';
 import type { ImportSummary, ProjectExportEnvelope } from './projectTransfer';
 // layerStore imports back into this module (deselectLayer); both directions are
 // function-scoped, so the cycle never runs at module-init time.
-import { isLayerLocked, isLayerVisible } from './layerStore';
+import { isLayerListed, isLayerLocked, isLayerVisible } from './layerStore';
 
 /**
  * Framework-agnostic editor state (nanostores). No React / three.js imports —
@@ -3933,6 +3933,67 @@ export function selectLayerEntities(id: string): void {
     part.colliders.flatMap((c, i) => (c.layerId === id ? [i] : [])),
     part.ivaSeats.flatMap((s, i) => (s.layerId === id ? [i] : [])),
     part.lights.flatMap((l, i) => (l.layerId === id ? [i] : [])),
+  );
+}
+
+/**
+ * The Select-menu eligibility rule: an entity can be swept up by Select ▸ All / Invert
+ * only when its layer is LISTED and UNLOCKED (design: foundation §3 Select — "every
+ * entity on listed + unlocked layers"). Locked is the hard guard (a locked layer's
+ * entities must never end up under the gizmo); unlisted means the user has hidden the
+ * layer from the entity list, so a blind select-all shouldn't drag it back in.
+ */
+function isSelectableLayer(layerId: string): boolean {
+  return isLayerListed(layerId) && !isLayerLocked(layerId);
+}
+
+/** Indices of the entities on eligible layers that also pass `keep`. */
+function selectableIndices<T extends { layerId: string }>(
+  entities: readonly T[],
+  keep: (index: number) => boolean,
+): number[] {
+  return entities.flatMap((entity, i) => (isSelectableLayer(entity.layerId) && keep(i) ? [i] : []));
+}
+
+/**
+ * Selects every entity on listed + unlocked layers, across all six kinds (Select ▸ All —
+ * foundation §3). Selection is view state: NO undo enrollment (see the invariant block
+ * above).
+ *
+ * **INTERIM**: the stable-id selection rework replaces this with
+ * `src/state/selectionOps.ts` (whose eligibility rule additionally excludes HIDDEN
+ * layers) and deletes both helpers here — keep them thin.
+ */
+export function selectAllEntities(): void {
+  const part = $part.get();
+  const all = (): boolean => true;
+  setSelection(
+    selectableIndices(part.placements, all),
+    selectableIndices(part.connectors, all),
+    selectableIndices(part.kittens, all),
+    selectableIndices(part.colliders, all),
+    selectableIndices(part.ivaSeats, all),
+    selectableIndices(part.lights, all),
+  );
+}
+
+/**
+ * Inverts the selection WITHIN the population of {@link selectAllEntities} — so inverting
+ * an empty selection selects everything selectable, and inverting that clears it. Entities
+ * on locked/unlisted layers are never pulled in. No undo enrollment (view state).
+ *
+ * **INTERIM**: replaced together with {@link selectAllEntities} (see its note).
+ */
+export function invertSelection(): void {
+  const part = $part.get();
+  const not = (selected: readonly number[]) => (i: number) => !selected.includes(i);
+  setSelection(
+    selectableIndices(part.placements, not($selectedIndices.get())),
+    selectableIndices(part.connectors, not($selectedConnectorIndices.get())),
+    selectableIndices(part.kittens, not($selectedKittenIndices.get())),
+    selectableIndices(part.colliders, not($selectedColliderIndices.get())),
+    selectableIndices(part.ivaSeats, not($selectedIvaSeatIndices.get())),
+    selectableIndices(part.lights, not($selectedLightIndices.get())),
   );
 }
 

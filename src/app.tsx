@@ -24,6 +24,7 @@ import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys';
 import { HelpDialog } from './ui/hotkeys/HelpDialog';
 import { AboutDialog } from './ui/AboutDialog';
 import { MenuBar } from './ui/shell/MenuBar';
+import { DialogRoot } from './ui/shell/DialogRoot';
 import { Sidebar } from './ui/shell/Sidebar';
 import { StatusBar } from './ui/status/StatusBar';
 import { toast, useIsPhone, z } from './ui/kit';
@@ -185,6 +186,11 @@ function App() {
       {!isPhone && <StatusBar />}
 
       {/* Overlay dialogs — portal to body; mount position is irrelevant. */}
+
+      {/* The single root host for every dialogStore-owned dialog (desktop AND phone).
+          Renders only the one dialog `$openDialog` names — see DialogRoot's header for
+          how to add one. */}
+      <DialogRoot />
 
       {/* Modal paint canvas for a mesh's 'painted' glow bitmap. */}
       <GlowPaintDialog />

@@ -129,7 +129,9 @@ import {
   deleteLayer,
   renameLayer,
   reorderLayers,
+  selectAllEntities,
   selectLayerEntities,
+  invertSelection,
   setActiveLayer,
   setEditorTags,
   setPartId,
@@ -183,7 +185,7 @@ import type {
   SubPartPlacement,
   Transform,
 } from '../ksa/types';
-import { $layerView, setLayerLocked, toggleLayerVisible } from './layerStore';
+import { $layerView, setLayerLocked, toggleLayerListed, toggleLayerVisible } from './layerStore';
 import type { ChainCommitEntry, ImportedGameData, PlacementTransform } from './editorStore';
 import {
   importModelAsMeshes,
@@ -2777,5 +2779,111 @@ describe('applyActionChain', () => {
     redo();
     expect($part.get().placements.length).toBe(6);
     expect($part.get().placements.map((p) => p.position.x)).toEqual([5, 5, 6, 6, 7, 7]);
+  });
+});
+
+/**
+ * Select ▸ All and Select ▸ Invert — the two Select-menu actions with no v1 backing
+ * (design: foundation §3 Select). Both sweep every selectable kind at once, both are
+ * bounded by the same eligibility rule (listed + unlocked layers), and neither touches
+ * the document, so neither may ever push an undo step.
+ */
+describe('selectAllEntities / invertSelection', () => {
+  beforeEach(() => {
+    // Per-layer view state is persisted, so a lock/unlist set by an earlier test would
+    // otherwise leak into this one.
+    $layerView.set({});
+  });
+
+  /** One entity of every selectable kind, each on its own (built-in or active) layer. */
+  function addOneOfEachKind(): void {
+    addSubPart('Core.A');
+    addConnector();
+    addCollider('Box');
+    addIvaSeat();
+    addLight(null);
+    addKitten('hunter');
+  }
+
+  it('selects every kind on listed, unlocked layers', () => {
+    addOneOfEachKind();
+    clearSelection();
+
+    selectAllEntities();
+    expect($selectedIndices.get()).toEqual([0]);
+    expect($selectedConnectorIndices.get()).toEqual([0]);
+    expect($selectedColliderIndices.get()).toEqual([0]);
+    expect($selectedIvaSeatIndices.get()).toEqual([0]);
+    expect($selectedLightIndices.get()).toEqual([0]);
+    expect($selectedKittenIndices.get()).toEqual([0]);
+  });
+
+  it('excludes a LOCKED layer and an UNLISTED layer', () => {
+    addSubPart('Core.A'); // index 0, Default
+    const locked = createLayer('Locked'); // becomes active
+    addSubPart('Core.B'); // index 1
+    const unlisted = createLayer('Unlisted');
+    addSubPart('Core.C'); // index 2
+    setActiveLayer(DEFAULT_LAYER_ID);
+
+    setLayerLocked(locked, true);
+    toggleLayerListed(unlisted);
+
+    selectAllEntities();
+    expect($selectedIndices.get()).toEqual([0]);
+
+    // Unlocking + re-listing brings them back — the rule is read live, never cached.
+    setLayerLocked(locked, false);
+    toggleLayerListed(unlisted);
+    selectAllEntities();
+    expect($selectedIndices.get()).toEqual([0, 1, 2]);
+  });
+
+  it('inverts an empty selection into the select-all result, and back to empty', () => {
+    addOneOfEachKind();
+
+    clearSelection();
+    invertSelection();
+    const inverted = [...$selectedIndices.get()];
+    selectAllEntities();
+    expect(inverted).toEqual($selectedIndices.get());
+    expect($selectedLightIndices.get()).toEqual([0]);
+
+    // Inverting a full selection empties it.
+    invertSelection();
+    expect($selectedIndices.get()).toEqual([]);
+    expect($selectedConnectorIndices.get()).toEqual([]);
+    expect($selectedColliderIndices.get()).toEqual([]);
+    expect($selectedIvaSeatIndices.get()).toEqual([]);
+    expect($selectedLightIndices.get()).toEqual([]);
+    expect($selectedKittenIndices.get()).toEqual([]);
+  });
+
+  it('inverts per kind, keeping the unselected entities of every other kind', () => {
+    addSubPart('Core.A');
+    addSubPart('Core.B');
+    addSubPart('Core.C');
+    addConnector();
+    setSelection([1], [], []);
+
+    invertSelection();
+    expect($selectedIndices.get()).toEqual([0, 2]);
+    expect($selectedConnectorIndices.get()).toEqual([0]);
+  });
+
+  it('never pushes an undo step — selection is view state, not document state', () => {
+    addSubPart('Core.A');
+    addConnector();
+    const document = $part.get();
+    const canUndo = $canUndo.get();
+    const description = $undoDescription.get();
+
+    selectAllEntities();
+    invertSelection();
+    invertSelection();
+
+    expect($part.get()).toBe(document);
+    expect($canUndo.get()).toBe(canUndo);
+    expect($undoDescription.get()).toBe(description);
   });
 });

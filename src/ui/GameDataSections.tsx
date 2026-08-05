@@ -19,7 +19,7 @@ import {
   removeSolarPanel,
   removeTank,
   revealEntity,
-  selectLight,
+  select,
   setBatteryCapacity,
   setControllable,
   setCustomMass,
@@ -306,7 +306,7 @@ export function LightsSection({ subPartTemplateId }: { subPartTemplateId: string
               variant="ghost"
               className="self-start"
               onPress={() => {
-                selectLight(index);
+                select([{ kind: 'light', id: light.id }]);
                 revealEntity('light', light.id);
               }}
             >

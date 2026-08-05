@@ -27,6 +27,7 @@ import { KittenObject } from './KittenObject';
 import { LightObject } from './LightObject';
 import { planPreviewBudget } from './lightVolume';
 import { SelectionManager } from './SelectionManager';
+import { marqueeHits, type ScreenAabb } from './marqueeSelect';
 import { TransformGizmo } from './TransformGizmo';
 import { MeasurementLayer } from './MeasurementLayer';
 import { ContainerLayer } from './ContainerLayer';
@@ -66,12 +67,13 @@ import {
   $bulkScaleMode,
   $lightEditContext,
   $part,
-  $selectedColliderIndices,
-  $selectedConnectorIndices,
-  $selectedIndices,
-  $selectedIvaSeatIndices,
-  $selectedKittenIndices,
-  $selectedLightIndices,
+  $selection,
+  deselectRefs,
+  entityIndexOf,
+  refLayerId,
+  select,
+  toggleRef,
+  type EntityKind,
   $snap,
   $toolMode,
   aimIvaSeat,
@@ -79,17 +81,10 @@ import {
   pushUndo,
   revealEntity,
   addCollider,
-  selectCollider,
-  selectConnector,
-  selectIvaSeat,
-  selectLight,
   setLightEditContext,
   updateColliderTransform,
   updateLightTransform,
-  selectKitten,
-  selectPlacement,
   selectedTransformRefs,
-  toggleEntity,
   updateSelectedTransform,
   updateSelectedTransforms,
   type SelectedTransformRef,
@@ -117,7 +112,14 @@ import {
 } from '../state/animationStore';
 import { jointWorld, previewOverrideMatrix } from '../ksa/animationRig';
 import type { PartAnimation } from '../ksa/types';
-import { $mode } from '../state/modeStore';
+import {
+  $activeTool,
+  $marqueeRect,
+  $mode,
+  armTool,
+  disarmTool,
+  registerTool,
+} from '../state/modeStore';
 import {
   $activeEngineEntry,
   $activeNozzleRef,
@@ -285,6 +287,26 @@ export class EditorScene {
   private suppressPickDrag = false;
   private suppressPickMeasure = false;
   private suppressPickSeatView = false;
+  private suppressPickMarquee = false;
+
+  /**
+   * The marquee drag in flight (design-build-mode.md §1.4), or null. `boxes` is snapshotted
+   * ONCE at pointerdown — orbit is disabled for the duration, so the camera cannot move and
+   * the projection cannot go stale. `armed` records that the `B` tool started this drag, so
+   * release can honour the one-shot rule.
+   */
+  private marquee: {
+    mode: 'replace' | 'add' | 'subtract';
+    armed: boolean;
+    downX: number;
+    downY: number;
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+    boxes: ScreenAabb[];
+    pointerId: number;
+  } | null = null;
 
   constructor(host: HTMLElement) {
     this.viewport = new Viewport(host);
@@ -324,102 +346,21 @@ export class EditorScene {
           return;
         }
         setActiveMeasurement(null); // selecting a mesh closes any measurement edit
-        if (selected.kind === 'subpart') {
-          const placements = $part.get().placements;
-          const index = placements.findIndex((p) => p.instanceId === selected.id);
-          if (index < 0) return;
-          const layerId = placements[index].layerId;
-          if (isLayerLocked(layerId)) return;
-          if (!isLayerVisible(layerId)) return; // three.js does not skip invisible objects during raycasting
-          if (additive) {
-            const added = !$selectedIndices.get().includes(index);
-            toggleEntity('subpart', index);
-            if (added) revealEntity('subpart', selected.id); // scroll the just-added row into view in the Assets list
-          } else {
-            selectPlacement(index);
-            revealEntity('subpart', selected.id);
-          }
-        } else if (selected.kind === 'connector') {
-          const connectors = $part.get().connectors;
-          const index = connectors.findIndex((c) => c.id === selected.id);
-          if (index < 0) return;
-          const layerId = connectors[index].layerId;
-          if (isLayerLocked(layerId)) return;
-          if (!isLayerVisible(layerId)) return; // three.js does not skip invisible objects during raycasting
-          if (additive) {
-            const added = !$selectedConnectorIndices.get().includes(index);
-            toggleEntity('connector', index);
-            if (added) revealEntity('connector', selected.id);
-          } else {
-            selectConnector(index);
-            revealEntity('connector', selected.id);
-          }
-        } else if (selected.kind === 'collider') {
-          const colliders = $part.get().colliders;
-          const index = colliders.findIndex((c) => c.id === selected.id);
-          if (index < 0) return;
-          const layerId = colliders[index].layerId;
-          if (isLayerLocked(layerId)) return;
-          if (!isLayerVisible(layerId)) return; // three.js does not skip invisible objects during raycasting
-          // Remember WHICH visual was clicked so the gizmo edits that instance's frame.
+        const part = $part.get();
+        const kind = selected.kind;
+        const index = entityIndexOf(part, kind, selected.id);
+        if (index < 0) return;
+        const layerId = refLayerId(part, { kind, id: selected.id });
+        if (isLayerLocked(layerId)) return;
+        if (!isLayerVisible(layerId)) return; // three.js does not skip invisible objects during raycasting
+        // Remember WHICH visual of a multi-instance entity was clicked, so the gizmo (and,
+        // for a light, the inspector's part-frame fields) edit through that instance's frame.
+        if (kind === 'collider')
           this.colliderInstance.set(selected.id, selected.instanceIndex ?? 0);
-          if (additive) {
-            const added = !$selectedColliderIndices.get().includes(index);
-            toggleEntity('collider', index);
-            if (added) revealEntity('collider', selected.id);
-          } else {
-            selectCollider(index);
-            revealEntity('collider', selected.id);
-          }
-        } else if (selected.kind === 'ivaSeat') {
-          const seats = $part.get().ivaSeats;
-          const index = seats.findIndex((s) => s.id === selected.id);
-          if (index < 0) return;
-          const layerId = seats[index].layerId;
-          if (isLayerLocked(layerId)) return;
-          if (!isLayerVisible(layerId)) return; // three.js does not skip invisible objects during raycasting
-          if (additive) {
-            const added = !$selectedIvaSeatIndices.get().includes(index);
-            toggleEntity('ivaSeat', index);
-            if (added) revealEntity('ivaSeat', selected.id);
-          } else {
-            selectIvaSeat(index);
-            revealEntity('ivaSeat', selected.id);
-          }
-        } else if (selected.kind === 'light') {
-          const lights = $part.get().lights;
-          const index = lights.findIndex((l) => l.id === selected.id);
-          if (index < 0) return;
-          const layerId = lights[index].layerId;
-          if (isLayerLocked(layerId)) return;
-          if (!isLayerVisible(layerId)) return; // three.js does not skip invisible objects during raycasting
-          // Remember WHICH visual was clicked so the highlight, the gizmo and the
-          // inspector's part-frame fields all edit through that instance's frame.
-          setLightEditContext(selected.id, selected.instanceIndex ?? 0);
-          if (additive) {
-            const added = !$selectedLightIndices.get().includes(index);
-            toggleEntity('light', index);
-            if (added) revealEntity('light', selected.id);
-          } else {
-            selectLight(index);
-            revealEntity('light', selected.id);
-          }
-        } else {
-          const kittens = $part.get().kittens;
-          const index = kittens.findIndex((k) => k.id === selected.id);
-          if (index < 0) return;
-          const layerId = kittens[index].layerId;
-          if (isLayerLocked(layerId)) return;
-          if (!isLayerVisible(layerId)) return; // three.js does not skip invisible objects during raycasting
-          if (additive) {
-            const added = !$selectedKittenIndices.get().includes(index);
-            toggleEntity('kitten', index);
-            if (added) revealEntity('kitten', selected.id);
-          } else {
-            selectKitten(index);
-            revealEntity('kitten', selected.id);
-          }
-        }
+        if (kind === 'light') setLightEditContext(selected.id, selected.instanceIndex ?? 0);
+        if (additive) toggleRef({ kind, id: selected.id });
+        else select([{ kind, id: selected.id }]);
+        revealEntity(kind, selected.id); // scroll the row into view in the entity list
       },
     );
 
@@ -487,6 +428,14 @@ export class EditorScene {
     const dom = this.viewport.renderer.domElement;
     dom.addEventListener('pointerdown', this.onPickPointerDown);
     dom.addEventListener('pointerup', this.onPickPointerUp);
+    // AFTER the SelectionManager's own listeners on purpose: its (suppressed) pointerup
+    // must run before the marquee's, which is what clears the suppression again.
+    dom.addEventListener('pointerdown', this.onMarqueePointerDown);
+    dom.addEventListener('pointermove', this.onMarqueePointerMove);
+    dom.addEventListener('pointerup', this.onMarqueePointerUp);
+    // The tool slot's first real tenant (foundation §2.6): Esc-ladder rung 5 and a mode
+    // switch both cancel through here, so the gesture has exactly ONE teardown path.
+    registerTool('marquee', { onCancel: () => this.cancelMarquee() });
     this.sub($measureTool, (tool) => {
       const picking = tool !== 'none';
       this.suppressPickMeasure = picking;
@@ -513,12 +462,7 @@ export class EditorScene {
     const clearContainerOnSelect = () => {
       if (this.selectedObjects().length > 0) setActiveContainer(null);
     };
-    this.sub($selectedIndices, clearContainerOnSelect);
-    this.sub($selectedConnectorIndices, clearContainerOnSelect);
-    this.sub($selectedKittenIndices, clearContainerOnSelect);
-    this.sub($selectedColliderIndices, clearContainerOnSelect);
-    this.sub($selectedIvaSeatIndices, clearContainerOnSelect);
-    this.sub($selectedLightIndices, clearContainerOnSelect);
+    this.sub($selection, clearContainerOnSelect);
 
     // nanostores `subscribe` fires immediately with the current value.
     this.sub($catalogIndex, (index) => {
@@ -574,12 +518,7 @@ export class EditorScene {
     this.sub($activeNozzleRef, onEngineChange);
     this.sub($engineExhaustGizmo, onEngineChange);
     this.sub($mode, onEngineChange);
-    this.sub($selectedIndices, () => this.updateSelection());
-    this.sub($selectedConnectorIndices, () => this.updateSelection());
-    this.sub($selectedKittenIndices, () => this.updateSelection());
-    this.sub($selectedColliderIndices, () => this.updateSelection());
-    this.sub($selectedIvaSeatIndices, () => this.updateSelection());
-    this.sub($selectedLightIndices, () => this.updateSelection());
+    this.sub($selection, () => this.updateSelection());
     // A context change re-targets a selected light's highlight + gizmo to the newly
     // clicked instance even when the selection indices themselves are unchanged.
     this.sub($lightEditContext, () => this.updateSelection());
@@ -781,7 +720,10 @@ export class EditorScene {
   /** Applies the OR of every reason click-selection is currently off. */
   private applySelectionSuppression(): void {
     this.selection.setSuppressed(
-      this.suppressPickDrag || this.suppressPickMeasure || this.suppressPickSeatView,
+      this.suppressPickDrag ||
+        this.suppressPickMeasure ||
+        this.suppressPickSeatView ||
+        this.suppressPickMarquee,
     );
   }
 
@@ -811,8 +753,8 @@ export class EditorScene {
     if (!anim) return false;
     const members = new Set<string>();
     for (const j of anim.joints) for (const id of j.memberInstanceIds) members.add(id);
-    if ($selectedIndices.get().some((i) => members.has(part.placements[i]?.instanceId ?? '')))
-      return true;
+    const selected = $selection.get();
+    if (selected.some((r) => r.kind === 'subpart' && members.has(r.id))) return true;
     // A SubPart-owned collider rides its instance, so while a POSED frame is shown its
     // gizmo would write back through the posed (not modeled) frame — lock it too. A
     // SubPart-owned LIGHT rides its instances the same way (positionLights poses it),
@@ -824,15 +766,14 @@ export class EditorScene {
         (p) => p.subPartTemplateId === ownerTemplateId && members.has(p.instanceId),
       );
     };
-    if (
-      $selectedColliderIndices
-        .get()
-        .some((i) => ownedByAnimated(part.colliders[i]?.ownerTemplateId))
-    )
-      return true;
-    return $selectedLightIndices
-      .get()
-      .some((i) => ownedByAnimated(part.lights[i]?.ownerTemplateId));
+    const ownerOf = (kind: 'collider' | 'light', id: string): string | null | undefined =>
+      kind === 'collider'
+        ? part.colliders.find((c) => c.id === id)?.ownerTemplateId
+        : part.lights.find((l) => l.id === id)?.ownerTemplateId;
+    return selected.some(
+      (r) =>
+        (r.kind === 'collider' || r.kind === 'light') && ownedByAnimated(ownerOf(r.kind, r.id)),
+    );
   }
 
   private applyAnimationPreview(): void {
@@ -1243,10 +1184,7 @@ export class EditorScene {
     const mode = this.lightSettings.showVolumes;
     const selectedIds = new Set<string>();
     if (mode === 'selected') {
-      for (const i of $selectedLightIndices.get()) {
-        const light = part.lights[i];
-        if (light) selectedIds.add(light.id);
-      }
+      for (const ref of $selection.get()) if (ref.kind === 'light') selectedIds.add(ref.id);
     }
     for (const light of part.lights) {
       const objs = this.lightObjects.get(light.id);
@@ -1379,12 +1317,7 @@ export class EditorScene {
 
     // "Fit to selection" means the selected MESHES; with nothing selected (or when the
     // caller asked for it) fall back to the whole part — an empty part fits nothing.
-    const selected = req.useSelection
-      ? $selectedIndices.get().flatMap((i) => {
-          const obj = part.placements[i] && this.objects.get(part.placements[i].instanceId);
-          return obj ? [obj.group] : [];
-        })
-      : [];
+    const selected = req.useSelection ? this.selectedPlacementGroups() : [];
     const targets = selected.length > 0 ? selected : [...this.objects.values()].map((o) => o.group);
     const points = collectWorldPoints(targets, settings.precision);
     if (points.length === 0) {
@@ -1482,11 +1415,7 @@ export class EditorScene {
    * scene consumes rather than a store action (see ivaSeatStore).
    */
   private selectedGeometryCentroid(): Vec3 | null {
-    const part = $part.get();
-    const selected = $selectedIndices.get().flatMap((i) => {
-      const obj = part.placements[i] && this.objects.get(part.placements[i].instanceId);
-      return obj ? [obj.group] : [];
-    });
+    const selected = this.selectedPlacementGroups();
     const groups = selected.length > 0 ? selected : [...this.objects.values()].map((o) => o.group);
     const centers: Vec3[] = [];
     const box = new THREE.Box3();
@@ -1602,46 +1531,56 @@ export class EditorScene {
 
   /** Resolves all currently selected scene objects (SubParts + connectors + colliders + seats + kittens + lights) that are built. */
   private selectedObjects(): SelectableObject[] {
-    const part = $part.get();
     const out: SelectableObject[] = [];
-    for (const i of $selectedIndices.get()) {
-      const placement = part.placements[i];
-      const obj = placement && this.objects.get(placement.instanceId);
-      if (obj) out.push(obj);
-    }
-    for (const i of $selectedConnectorIndices.get()) {
-      const connector = part.connectors[i];
-      const obj = connector && this.connectorObjects.get(connector.id);
-      if (obj) out.push(obj);
-    }
-    for (const i of $selectedColliderIndices.get()) {
-      const collider = part.colliders[i];
-      // Every instance of a SubPart-owned collider highlights together — they are one
-      // document entity, so highlighting only the gizmo target would read as a bug.
-      for (const obj of (collider && this.colliderObjects.get(collider.id)) ?? []) out.push(obj);
-    }
-    for (const i of $selectedIvaSeatIndices.get()) {
-      const seat = part.ivaSeats[i];
-      const obj = seat && this.seatObjects.get(seat.id);
-      if (obj) out.push(obj);
-    }
-    for (const i of $selectedKittenIndices.get()) {
-      const kitten = part.kittens[i];
-      const obj = kitten && this.kittenObjects.get(kitten.id);
-      if (obj) out.push(obj);
-    }
-    for (const i of $selectedLightIndices.get()) {
-      const light = part.lights[i];
-      if (!light) continue;
-      // The CONTEXT instance only (last-clicked, default 0): a SubPart-owned light is
-      // one document entity drawn N times, and highlighting just the instance being
-      // worked through is what tells the user which frame their edits go through
-      // (plans/LIGHT_MANAGEMENT_PLAN.md §3.7-4 — deliberately unlike colliders).
-      const objs = this.lightObjects.get(light.id) ?? [];
-      const obj = objs[this.lightContextIndex(light.id, objs.length)];
-      if (obj) out.push(obj);
+    for (const ref of $selection.get()) {
+      switch (ref.kind) {
+        case 'subpart': {
+          const obj = this.objects.get(ref.id);
+          if (obj) out.push(obj);
+          break;
+        }
+        case 'connector': {
+          const obj = this.connectorObjects.get(ref.id);
+          if (obj) out.push(obj);
+          break;
+        }
+        case 'collider':
+          // Every instance of a SubPart-owned collider highlights together — they are one
+          // document entity, so highlighting only the gizmo target would read as a bug.
+          for (const obj of this.colliderObjects.get(ref.id) ?? []) out.push(obj);
+          break;
+        case 'ivaSeat': {
+          const obj = this.seatObjects.get(ref.id);
+          if (obj) out.push(obj);
+          break;
+        }
+        case 'kitten': {
+          const obj = this.kittenObjects.get(ref.id);
+          if (obj) out.push(obj);
+          break;
+        }
+        case 'light': {
+          // The CONTEXT instance only (last-clicked, default 0): a SubPart-owned light is
+          // one document entity drawn N times, and highlighting just the instance being
+          // worked through is what tells the user which frame their edits go through
+          // (plans/LIGHT_MANAGEMENT_PLAN.md §3.7-4 — deliberately unlike colliders).
+          const objs = this.lightObjects.get(ref.id) ?? [];
+          const obj = objs[this.lightContextIndex(ref.id, objs.length)];
+          if (obj) out.push(obj);
+          break;
+        }
+      }
     }
     return out;
+  }
+
+  /** The built scene groups of the selected SubPart placements (fit + aim targets). */
+  private selectedPlacementGroups(): THREE.Group[] {
+    return $selection.get().flatMap((ref) => {
+      if (ref.kind !== 'subpart') return [];
+      const obj = this.objects.get(ref.id);
+      return obj ? [obj.group] : [];
+    });
   }
 
   /**
@@ -1735,31 +1674,15 @@ export class EditorScene {
     // 2+ entities -> attach to the centroid pivot for bulk transforms; otherwise
     // attach directly to the single selected object (SubPart, connector, seat, ...).
     const part = $part.get();
-    const indices = $selectedIndices.get();
-    const conIndices = $selectedConnectorIndices.get();
-    const kitIndices = $selectedKittenIndices.get();
-    const colIndices = $selectedColliderIndices.get();
-    const seatIndices = $selectedIvaSeatIndices.get();
-    const ligIndices = $selectedLightIndices.get();
-    const multi =
-      indices.length +
-        conIndices.length +
-        kitIndices.length +
-        colIndices.length +
-        seatIndices.length +
-        ligIndices.length >
-      1;
+    const sel = $selection.get();
+    const colliderRefs = sel.filter((r) => r.kind === 'collider');
+    const lightRefs = sel.filter((r) => r.kind === 'light');
+    const multi = sel.length > 1;
     let target: THREE.Object3D | null;
 
     // Suppress the gizmo when any selected entity is in a locked layer (items
-    // can be selected from the Assets list for inspection but must not be moved).
-    const anyLocked =
-      indices.some((i) => isLayerLocked(part.placements[i]?.layerId ?? '')) ||
-      conIndices.some((ci) => isLayerLocked(part.connectors[ci]?.layerId ?? '')) ||
-      kitIndices.some((ki) => isLayerLocked(part.kittens[ki]?.layerId ?? '')) ||
-      colIndices.some((i) => isLayerLocked(part.colliders[i]?.layerId ?? '')) ||
-      seatIndices.some((i) => isLayerLocked(part.ivaSeats[i]?.layerId ?? '')) ||
-      ligIndices.some((i) => isLayerLocked(part.lights[i]?.layerId ?? ''));
+    // can be selected from the entity list for inspection but must not be moved).
+    const anyLocked = sel.some((r) => isLayerLocked(refLayerId(part, r)));
     // While the preview shows a POSED frame (t>0 / editing), an animated SubPart's
     // group sits at its animated transform — suppress the gizmo so a drag can't write
     // the posed transform back as the static placement. At rest (t=0) it's safe.
@@ -1771,22 +1694,22 @@ export class EditorScene {
     } else if (multi) {
       this.repositionPivot();
       target = this.pivot;
-    } else if (colIndices.length === 1) {
+    } else if (colliderRefs.length === 1) {
       // A SubPart-owned collider has one visual PER PLACEMENT; attach to whichever the
       // user last clicked (see colliderInstance) so the drag has an unambiguous frame.
-      const collider = part.colliders[colIndices[0]];
-      const objs = collider ? (this.colliderObjects.get(collider.id) ?? []) : [];
-      const i = Math.min(this.colliderInstance.get(collider?.id ?? '') ?? 0, objs.length - 1);
+      const id = colliderRefs[0].id;
+      const objs = this.colliderObjects.get(id) ?? [];
+      const i = Math.min(this.colliderInstance.get(id) ?? 0, objs.length - 1);
       target = objs[Math.max(0, i)]?.group ?? null;
-    } else if (ligIndices.length === 1) {
+    } else if (lightRefs.length === 1) {
       // Same rule for a SubPart-owned light: attach to the CONTEXT instance
       // ($lightEditContext — last clicked, default 0) so the drag has an unambiguous
       // frame; handleGizmoChange converts back through the same placement via
       // lightGizmoFrame. (selectedObjects() already returns only this instance, but
       // resolving it here keeps the attach rule explicit and collider-parallel.)
-      const light = part.lights[ligIndices[0]];
-      const objs = light ? (this.lightObjects.get(light.id) ?? []) : [];
-      target = light ? (objs[this.lightContextIndex(light.id, objs.length)]?.group ?? null) : null;
+      const id = lightRefs[0].id;
+      const objs = this.lightObjects.get(id) ?? [];
+      target = objs[this.lightContextIndex(id, objs.length)]?.group ?? null;
     } else {
       target = selected[0]?.group ?? null;
     }
@@ -2074,18 +1997,19 @@ export class EditorScene {
     const snap = this.bulkSnapshot;
     if (!snap) return;
     const mode = $toolMode.get();
-    const updates = snap.items.map(({ kind, index, transform: base }) => {
+    const updates = snap.items.map(({ kind, id, index, transform: base }) => {
       if (mode === 'translate') {
         const delta = {
           x: this.pivot.position.x - snap.centroid.x,
           y: this.pivot.position.y - snap.centroid.y,
           z: this.pivot.position.z - snap.centroid.z,
         };
-        return { kind, index, transform: translatedTransform(base, delta) };
+        return { kind, id, index, transform: translatedTransform(base, delta) };
       }
       if (mode === 'rotate') {
         return {
           kind,
+          id,
           index,
           transform: rotatedAroundOriginTransform(base, this.pivot.quaternion, snap.centroid),
         };
@@ -2093,6 +2017,7 @@ export class EditorScene {
       const factor = { x: this.pivot.scale.x, y: this.pivot.scale.y, z: this.pivot.scale.z };
       return {
         kind,
+        id,
         index,
         transform: groupScaledTransform(
           kind,
@@ -2125,6 +2050,240 @@ export class EditorScene {
     if (!this.bulkSnapshot) return;
     this.bulkSnapshot = null;
     this.repositionPivot();
+  }
+
+  // ── marquee box select (design-build-mode.md §1.4; foundation §14.1) ────────
+  //
+  // Three ways in, one gesture: the `B` tool arms a one-shot REPLACE marquee; ⇧-drag
+  // starting on empty canvas ADDS; ⌥⇧-drag SUBTRACTS. A plain drag is still orbit, and a
+  // ⇧-drag that starts ON an entity is still the additive click. The rectangle is DOM
+  // (`MarqueeOverlay` reads `$marqueeRect`), so the on-demand render loop never wakes.
+  //
+  // Marquee NEVER creates an undo step.
+
+  /** Does a raycast at the pointer hit any selectable entity? (⇧-drag only starts on empty.) */
+  private hitsSelectable(e: PointerEvent): boolean {
+    const dom = this.viewport.renderer.domElement;
+    const rect = dom.getBoundingClientRect();
+    this.raycaster.setFromCamera(
+      new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      ),
+      this.viewport.camera,
+    );
+    for (const hit of this.raycaster.intersectObjects(this.root.children, true)) {
+      for (let node: THREE.Object3D | null = hit.object; node; node = node.parent)
+        if (node.userData?.selectable) return true;
+    }
+    return false;
+  }
+
+  private readonly onMarqueePointerDown = (e: PointerEvent): void => {
+    if (e.button !== 0 || this.marquee) return;
+    // Never steal the pointer from a gizmo drag, a measurement pick or seat view.
+    if (this.suppressPickDrag || this.suppressPickMeasure || this.suppressPickSeatView) return;
+    const armed = $activeTool.get() === 'marquee';
+    // Another tool holds the slot: its gesture wins (single-slot invariant, foundation §2.6).
+    if (!armed && $activeTool.get() !== null) return;
+
+    let mode: 'replace' | 'add' | 'subtract';
+    if (armed) mode = 'replace';
+    else if (e.shiftKey && !this.hitsSelectable(e)) mode = e.altKey ? 'subtract' : 'add';
+    else return; // plain drag stays orbit; ⇧-click on an entity stays the additive click
+
+    const rect = this.viewport.renderer.domElement.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    this.marquee = {
+      mode,
+      armed,
+      downX: e.clientX,
+      downY: e.clientY,
+      x0: x,
+      y0: y,
+      x1: x,
+      y1: y,
+      boxes: this.marqueeBoxes(rect),
+      pointerId: e.pointerId,
+    };
+    // Capture so a drag that leaves the canvas keeps reporting (and still releases).
+    this.viewport.renderer.domElement.setPointerCapture(e.pointerId);
+    // Orbit off (which is also what freezes the projection the boxes were taken from) and
+    // click-select off, so releasing the drag never also fires a pick.
+    this.viewport.controls.enabled = false;
+    this.suppressPickMarquee = true;
+    this.applySelectionSuppression();
+    // Every marquee — armed or gesture-started — occupies the tool slot while it runs, so
+    // the status segment, the Esc rung and cancel-on-mode-switch all have one thing to name.
+    if (!armed) armTool('marquee');
+    $marqueeRect.set({ x0: x, y0: y, x1: x, y1: y, count: 0 });
+  };
+
+  private readonly onMarqueePointerMove = (e: PointerEvent): void => {
+    const marquee = this.marquee;
+    if (!marquee) return;
+    const rect = this.viewport.renderer.domElement.getBoundingClientRect();
+    marquee.x1 = e.clientX - rect.left;
+    marquee.y1 = e.clientY - rect.top;
+    $marqueeRect.set({
+      x0: marquee.x0,
+      y0: marquee.y0,
+      x1: marquee.x1,
+      y1: marquee.y1,
+      count: marqueeHits(marquee, marquee.boxes).length,
+    });
+  };
+
+  private readonly onMarqueePointerUp = (e: PointerEvent): void => {
+    const marquee = this.marquee;
+    if (!marquee) return;
+    this.endMarquee();
+    // Under 4px in BOTH axes is a click, not a drag: an armed `B` micro-click just disarms,
+    // and a ⇧ micro-drag on empty space is the no-op that a ⇧-click on empty space already is.
+    const moved =
+      Math.abs(e.clientX - marquee.downX) >= 4 || Math.abs(e.clientY - marquee.downY) >= 4;
+    if (!moved) return;
+
+    const hits = marqueeHits(marquee, marquee.boxes);
+    if (marquee.mode === 'subtract') {
+      deselectRefs(hits.map((h) => h.ref));
+      return;
+    }
+    // Record the edit context for every multi-instance entity caught, exactly as a click
+    // on one of its visuals would (design §1.4).
+    for (const hit of hits) {
+      if (hit.firstInstance === undefined) continue;
+      if (hit.ref.kind === 'collider') this.colliderInstance.set(hit.ref.id, hit.firstInstance);
+      else if (hit.ref.kind === 'light') setLightEditContext(hit.ref.id, hit.firstInstance);
+    }
+    select(
+      hits.map((h) => h.ref),
+      { additive: marquee.mode === 'add' },
+    );
+  };
+
+  /** Cancels a marquee in flight without selecting anything (Esc-ladder rung 5). */
+  private cancelMarquee(): void {
+    if (!this.marquee) return;
+    this.endMarquee();
+  }
+
+  /** Restores orbit + picking, clears the rect, and releases the one-shot tool slot. */
+  private endMarquee(): void {
+    const dom = this.viewport.renderer.domElement;
+    if (this.marquee && dom.hasPointerCapture(this.marquee.pointerId))
+      dom.releasePointerCapture(this.marquee.pointerId);
+    this.marquee = null;
+    this.viewport.controls.enabled = true;
+    this.suppressPickMarquee = false;
+    this.applySelectionSuppression();
+    $marqueeRect.set(null);
+    // One-shot: the tool disarms itself after a single marquee (foundation §2.6). Guarded on
+    // the id so a successor tool armed meanwhile is not stomped; `disarmTool` re-enters
+    // `onCancel` → `cancelMarquee`, which is a no-op now that `this.marquee` is null.
+    if ($activeTool.get() === 'marquee') disarmTool('marquee');
+  }
+
+  /**
+   * Screen-space AABBs for every marquee-eligible visual, in canvas pixels.
+   *
+   * Eligibility mirrors click-select exactly: entities on a HIDDEN or LOCKED layer are
+   * excluded (§1.4). Aids — measurements, containers, the grid, the gizmo — are not in the
+   * entity maps at all, so they are excluded for free.
+   */
+  private marqueeBoxes(rect: DOMRect): ScreenAabb[] {
+    const part = $part.get();
+    const boxes: ScreenAabb[] = [];
+    const camera = this.viewport.camera;
+    const box3 = new THREE.Box3();
+    const corner = new THREE.Vector3();
+
+    const push = (
+      kind: EntityKind,
+      id: string,
+      group: THREE.Object3D,
+      instanceIndex?: number,
+    ): void => {
+      box3.setFromObject(group);
+      if (box3.isEmpty()) return;
+      let minX = Infinity;
+      let minY = Infinity;
+      let maxX = -Infinity;
+      let maxY = -Infinity;
+      for (let i = 0; i < 8; i++) {
+        corner.set(
+          i & 1 ? box3.max.x : box3.min.x,
+          i & 2 ? box3.max.y : box3.min.y,
+          i & 4 ? box3.max.z : box3.min.z,
+        );
+        corner.project(camera);
+        // Behind the camera the projection mirrors; a box straddling the near plane would
+        // otherwise report a bogus screen extent, so skip the whole entity.
+        if (corner.z > 1) return;
+        const x = ((corner.x + 1) / 2) * rect.width;
+        const y = ((1 - corner.y) / 2) * rect.height;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+      boxes.push({ kind, id, instanceIndex, minX, minY, maxX, maxY });
+    };
+
+    const eligible = (layerId: string): boolean =>
+      isLayerVisible(layerId) && !isLayerLocked(layerId);
+    // TODO(P5B): compose $kindVisibility (View ▸ Display Filters) into this predicate.
+    const displayed = (kind: EntityKind): boolean => this.isKindDisplayed(kind);
+
+    if (displayed('subpart'))
+      for (const p of part.placements) {
+        if (!eligible(p.layerId)) continue;
+        const obj = this.objects.get(p.instanceId);
+        if (obj) push('subpart', p.instanceId, obj.group);
+      }
+    if (displayed('connector'))
+      for (const c of part.connectors) {
+        if (!eligible(c.layerId)) continue;
+        const obj = this.connectorObjects.get(c.id);
+        if (obj) push('connector', c.id, obj.group);
+      }
+    if (displayed('collider'))
+      for (const c of part.colliders) {
+        if (!eligible(c.layerId)) continue;
+        // Each instance tests independently; marqueeHits collapses them to one entity.
+        (this.colliderObjects.get(c.id) ?? []).forEach((obj, i) =>
+          push('collider', c.id, obj.group, i),
+        );
+      }
+    if (displayed('ivaSeat'))
+      for (const seat of part.ivaSeats) {
+        if (!eligible(seat.layerId)) continue;
+        const obj = this.seatObjects.get(seat.id);
+        if (obj) push('ivaSeat', seat.id, obj.group);
+      }
+    if (displayed('kitten'))
+      for (const k of part.kittens) {
+        if (!eligible(k.layerId)) continue;
+        const obj = this.kittenObjects.get(k.id);
+        if (obj) push('kitten', k.id, obj.group);
+      }
+    if (displayed('light'))
+      for (const light of part.lights) {
+        if (!eligible(light.layerId)) continue;
+        (this.lightObjects.get(light.id) ?? []).forEach((obj, i) =>
+          push('light', light.id, obj.group, i),
+        );
+      }
+    return boxes;
+  }
+
+  /**
+   * Seam for P5B's Display Filters: a kind hidden by `$kindVisibility` must be
+   * unmarquee-able, exactly as it is unclickable. Defaults to "everything is displayed".
+   */
+  private isKindDisplayed(_kind: EntityKind): boolean {
+    return true;
   }
 
   private readonly onPickPointerDown = (e: PointerEvent): void => {
@@ -2215,6 +2374,10 @@ export class EditorScene {
     const dom = this.viewport.renderer.domElement;
     dom.removeEventListener('pointerdown', this.onPickPointerDown);
     dom.removeEventListener('pointerup', this.onPickPointerUp);
+    dom.removeEventListener('pointerdown', this.onMarqueePointerDown);
+    dom.removeEventListener('pointermove', this.onMarqueePointerMove);
+    dom.removeEventListener('pointerup', this.onMarqueePointerUp);
+    this.cancelMarquee();
     dom.style.cursor = '';
     for (const unsub of this.unsubscribers) unsub();
     this.unsubscribers.length = 0;

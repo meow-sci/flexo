@@ -2,12 +2,11 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   $part,
   $canUndo,
-  $selectedIndices,
+  $selection,
   addConnector,
+  clearSelection,
   newPart,
-  selectConnector,
-  setSelectedConnectors,
-  setSelectedPlacements,
+  select,
   undo,
 } from '../state/editorStore';
 import { setLayerLocked } from '../state/layerStore';
@@ -37,7 +36,7 @@ function seedPlacements(positions: { x: number; y: number; z: number }[]): void 
       layerId: DEFAULT_LAYER_ID,
     })),
   });
-  setSelectedPlacements(positions.map((_, i) => i));
+  select(positions.map((_, i) => ({ kind: 'subpart', id: `p_${i}` })));
 }
 
 describe('rotateSelectionBy', () => {
@@ -73,15 +72,14 @@ describe('rotateSelectionBy', () => {
 
   it('rotates a selected connector', () => {
     addConnector();
-    selectConnector(0);
+    select([{ kind: 'connector', id: '_connector1' }]);
     rotateSelectionBy({ x: 90, y: 0, z: 0 });
     expect($part.get().connectors[0].rotation.x).toBeCloseTo(HALF_PI, 5);
   });
 
   it('is a no-op when nothing is selected', () => {
     seedPlacements([{ x: 1, y: 0, z: 0 }]);
-    setSelectedPlacements([]);
-    setSelectedConnectors([]);
+    clearSelection();
     rotateSelectionBy({ x: 0, y: 90, z: 0 });
     expect($canUndo.get()).toBe(false);
     expect($part.get().placements[0].rotation.y).toBeCloseTo(0, 5);
@@ -92,7 +90,7 @@ describe('rotateSelectionBy', () => {
     // survives and exercises rotateSelectionBy's own locked-layer guard.
     setLayerLocked(DEFAULT_LAYER_ID, true);
     seedPlacements([{ x: 1, y: 0, z: 0 }]);
-    expect($selectedIndices.get()).toEqual([0]);
+    expect($selection.get()).toEqual([{ kind: 'subpart', id: 'p_0' }]);
     rotateSelectionBy({ x: 0, y: 90, z: 0 });
     expect($canUndo.get()).toBe(false);
     expect($part.get().placements[0].rotation.y).toBeCloseTo(0, 5);

@@ -14,7 +14,7 @@ import { $activeJointId, $editKeyframeId } from '../../state/animationStore';
 import { $mode } from '../../state/modeStore';
 import { $seatView } from '../../state/ivaStore';
 import { $gizmoDragging, $gizmoCancel } from '../../state/viewStore';
-import { $selectedIndices, setSelectedPlacements } from '../../state/editorStore';
+import { $selection, addSubPart, newPart, select } from '../../state/editorStore';
 
 /**
  * The Escape ladder (design: `plans/flexo_v2/design/foundation.md` §11.4). Every test drives
@@ -46,7 +46,7 @@ beforeEach(() => {
   $seatView.set(null);
   $gizmoDragging.set(false);
   $gizmoCancel.set(null);
-  setSelectedPlacements([]);
+  newPart(); // also clears the selection
 });
 
 afterEach(() => {
@@ -148,11 +148,16 @@ describe('rung order', () => {
   });
 
   it('does nothing at all when no rung applies — rung 9', () => {
-    setSelectedPlacements([0, 1]);
+    addSubPart('Core.A');
+    addSubPart('Core.B');
+    select([
+      { kind: 'subpart', id: 'a_1' },
+      { kind: 'subpart', id: 'b_1' },
+    ]);
     const event = esc();
     dispatchEsc(event);
     expect(event.defaultPrevented).toBe(false);
     // Escape never clears the selection (foundation §11.4 rung 9).
-    expect($selectedIndices.get()).toEqual([0, 1]);
+    expect($selection.get().map((r) => r.id)).toEqual(['a_1', 'b_1']);
   });
 });

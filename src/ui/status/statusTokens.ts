@@ -1,4 +1,14 @@
-import { Boxes, Eye, Flame, Palette, PlayCircle, Rocket, Ruler, Table2 } from 'lucide-react';
+import {
+  Boxes,
+  BoxSelect,
+  Eye,
+  Flame,
+  Palette,
+  PlayCircle,
+  Rocket,
+  Ruler,
+  Table2,
+} from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Severity } from '../../state/statusStore';
 import type { Mode } from '../../state/modeStore';
@@ -31,6 +41,7 @@ export const TOOL_ICONS: Record<string, LucideIcon> = {
   Eye,
   Ruler,
   Flame,
+  BoxSelect,
 };
 
 /** The message channel's 2px leading severity dot (§1.2 #5). */

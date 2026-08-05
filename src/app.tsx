@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { ViewportCanvas } from './three/ViewportCanvas';
 import { ViewportDropZone } from './ui/ViewportDropZone';
+import { MarqueeOverlay } from './ui/MarqueeOverlay';
 import { ImportModelDialog } from './ui/ImportModelDialog';
 import { SelectionToolbar } from './ui/SelectionToolbar';
 import { MultiSelectToolbar } from './ui/MultiSelectToolbar';
@@ -131,6 +132,10 @@ function App() {
           <ViewportDropZone>
             <ViewportCanvas />
           </ViewportDropZone>
+
+          {/* The box-select rectangle + live count chip. A DOM overlay, so dragging it
+              never forces a three.js frame (design-build-mode §1.4). */}
+          <MarqueeOverlay />
 
           {/* ── Legacy floating chrome, re-parented: absolute anchors now resolve
                 against the CELL, so everything clamps to the workspace by construction.

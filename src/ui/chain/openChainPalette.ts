@@ -1,5 +1,5 @@
 import { $chainSession, closeChain, openChain } from '../../state/chainStore';
-import { $part, $selectedIndices } from '../../state/editorStore';
+import { $part, $selection } from '../../state/editorStore';
 import { isLayerLocked } from '../../state/layerStore';
 import { openDialog } from '../../state/dialogStore';
 import { toast } from '../toast';
@@ -25,10 +25,13 @@ import { toast } from '../toast';
  */
 function tryOpenChain(): void {
   const part = $part.get();
-  const placements = $selectedIndices
-    .get()
-    .filter((i) => i >= 0 && i < part.placements.length)
-    .map((i) => part.placements[i]);
+  // Selection ORDER is the seed order and is frozen at open (design-build-mode §9.1) —
+  // the ordered `$selection` makes that exact.
+  const placements = $selection.get().flatMap((ref) => {
+    if (ref.kind !== 'subpart') return [];
+    const placement = part.placements.find((p) => p.instanceId === ref.id);
+    return placement ? [placement] : [];
+  });
 
   if (placements.length === 0) {
     toast({ title: 'Select SubParts to chain', variant: 'warning' });

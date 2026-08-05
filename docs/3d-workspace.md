@@ -80,11 +80,23 @@ Async builds (`SubPartObject.create`) load geometry + material in parallel.
 
 ## Selection & gizmo (both via the store)
 
-- Clicking a mesh → `SelectionManager` resolves `instanceId` from `userData` →
-  `selectPlacement(index)`. Clicking empty space → `selectPlacement(-1)`.
-- `EditorScene.updateSelection()` (subscribed to `$selectedIndex`) toggles the
+- Clicking a mesh → `SelectionManager` resolves `{kind, id}` from `userData` →
+  `select([{kind, id}])`, or `toggleRef({kind, id})` when a ⇧/⌘/⌃ modifier makes the click
+  additive. Clicking empty space clears — but only when the click is NOT additive.
+  Selection is by stable **id**, never by index ([editor-state.md](./editor-state.md)).
+- `EditorScene.updateSelection()` (subscribed to `$selection`) toggles the
   highlight (per-instance emissive, saved/restored) and attaches the gizmo to the
   selected object's group. It **never re-attaches mid-drag** (would reset the drag).
+- **Marquee box select**: the `B` tool (Select ▸ Box Select) arms a one-shot **replace**
+  marquee for the next drag; `⇧`-drag starting on empty canvas **adds**, `⌥⇧`-drag
+  **subtracts**. A plain drag is still orbit. The hit rule is the pure
+  `src/three/marqueeSelect.ts` (screen-space AABB intersection, inclusive edges, one hit per
+  entity however many instances it draws), fed by boxes `EditorScene` projects once at
+  pointerdown — orbit is disabled for the gesture, so the projection cannot go stale.
+  Entities on hidden or locked layers are never included, exactly as for a click. The
+  rectangle itself is a **DOM** overlay (`src/ui/MarqueeOverlay.tsx`, `z.canvasOverlay`), so
+  dragging it never wakes the on-demand render loop. Esc cancels mid-drag (Escape-ladder
+  rung 5, via the `$activeTool` slot's `onCancel`). No marquee ever creates an undo step.
 - Gizmo: mode follows `$toolMode`; snap follows `$snap`
   (`setTranslationSnap`/`setRotationSnap`). On drag start it pushes one undo
   snapshot; on `objectChange` it reads the transform via

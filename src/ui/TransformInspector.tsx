@@ -308,7 +308,7 @@ function BulkTransformPanel() {
     updateSelectedTransforms(
       refs.map((r) => ({
         kind: r.kind,
-        index: r.index,
+        id: r.id,
         transform: translatedTransform(r.transform, d),
       })),
     );
@@ -322,7 +322,7 @@ function BulkTransformPanel() {
     updateSelectedTransforms(
       refs.map((r) => ({
         kind: r.kind,
-        index: r.index,
+        id: r.id,
         transform: rotatedAroundOriginTransform(r.transform, deltaQuat, origin),
       })),
     );
@@ -336,7 +336,7 @@ function BulkTransformPanel() {
     updateSelectedTransforms(
       refs.map((r) => ({
         kind: r.kind,
-        index: r.index,
+        id: r.id,
         transform: groupScaledTransform(r.kind, r.transform, f, origin),
       })),
     );

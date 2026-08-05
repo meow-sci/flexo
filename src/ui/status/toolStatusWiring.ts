@@ -4,6 +4,7 @@ import { $seatView } from '../../state/ivaStore';
 import { $part } from '../../state/editorStore';
 import { $measureTool } from '../../state/measurementStore';
 import { $activeNozzleTarget, $isExhaustPlacing, nozzleTargetLabel } from '../../state/engineStore';
+import { $activeTool, $marqueeRect } from '../../state/modeStore';
 
 /**
  * Feeds the status bar's tool segment (`statusStore.$toolStatus`) from the v1 tool-ish
@@ -30,8 +31,24 @@ import { $activeNozzleTarget, $isExhaustPlacing, nozzleTargetLabel } from '../..
  * everything because nothing in v1 disarms it.
  */
 const $derivedToolStatus = computed(
-  [$seatView, $part, $isExhaustPlacing, $activeNozzleTarget, $measureTool],
-  (seatId, part, exhaustPlacing, nozzleTarget, measureTool): ToolStatus | null => {
+  [
+    $seatView,
+    $part,
+    $isExhaustPlacing,
+    $activeNozzleTarget,
+    $measureTool,
+    $activeTool,
+    $marqueeRect,
+  ],
+  (
+    seatId,
+    part,
+    exhaustPlacing,
+    nozzleTarget,
+    measureTool,
+    activeTool,
+    marqueeRect,
+  ): ToolStatus | null => {
     if (seatId !== null) {
       const index = part.ivaSeats.findIndex((seat) => seat.id === seatId);
       // A vanished seat is torn down by EditorScene a beat later; show nothing meanwhile
@@ -43,6 +60,19 @@ const $derivedToolStatus = computed(
           text: `Seat ${index + 1} / ${part.ivaSeats.length}`,
         };
       }
+    }
+
+    // The marquee holds the tool slot for the whole gesture, so an armed-but-idle `B` and a
+    // live drag are the same tool with two instructions (foundation §2.6; design §1.4).
+    if (activeTool === 'marquee') {
+      return marqueeRect
+        ? {
+            toolId: 'marquee',
+            icon: 'BoxSelect',
+            text: 'Box select — release to select',
+            kbdHints: [['Esc']],
+          }
+        : { toolId: 'marquee', icon: 'BoxSelect', text: 'Box select — drag to select' };
     }
 
     if (exhaustPlacing && nozzleTarget) {

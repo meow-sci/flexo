@@ -2,18 +2,13 @@ import { computed } from 'nanostores';
 import {
   $activeLayerId,
   $part,
-  $selectedColliderIndex,
-  $selectedColliderIndices,
-  $selectedConnectorIndex,
-  $selectedConnectorIndices,
-  $selectedIndices,
-  $selectedIvaSeatIndex,
-  $selectedIvaSeatIndices,
-  $selectedKittenIndices,
-  $selectedLightIndex,
-  $selectedLightIndices,
+  $selection,
+  entityIndexOf,
+  KIND_ORDER,
   selectedTransformRefs,
+  type EntityKind,
   type SelectedTransformRef,
+  type SelectionRef,
 } from './editorStore';
 import type {
   Connector,
@@ -24,11 +19,23 @@ import type {
   SubPartPlacement,
 } from '../ksa/types';
 
+/**
+ * Derived views over the ONE stable-id selection atom (design:
+ * `plans/flexo_v2/design/design-build-mode.md` §1.1 "Derived compatibility views").
+ *
+ * Every consumer reads the selection THROUGH this module rather than partitioning
+ * `$selection` itself — that is what let the six per-kind index atoms disappear without
+ * touching the panels that consume them.
+ */
+
 /** The currently selected placement when exactly one SubPart is selected, else null. */
 export const $selectedPlacement = computed(
-  [$part, $selectedIndices],
-  (part, indices): SubPartPlacement | null =>
-    indices.length === 1 ? (part.placements[indices[0]] ?? null) : null,
+  [$part, $selection],
+  (part, sel): SubPartPlacement | null => {
+    const subs = sel.filter((r) => r.kind === 'subpart');
+    if (subs.length !== 1) return null;
+    return part.placements.find((p) => p.instanceId === subs[0].id) ?? null;
+  },
 );
 
 /** A selected SubPart paired with its index. */
@@ -38,121 +45,94 @@ export interface SelectedPlacement {
 }
 
 /** All currently selected SubParts (index + placement), in selection order. */
-export const $selectedPlacements = computed(
-  [$part, $selectedIndices],
-  (part, indices): SelectedPlacement[] =>
-    indices.flatMap((index) => {
-      const placement = part.placements[index];
-      return placement ? [{ index, placement }] : [];
-    }),
+export const $selectedPlacements = computed([$part, $selection], (part, sel): SelectedPlacement[] =>
+  sel.flatMap((ref) => {
+    if (ref.kind !== 'subpart') return [];
+    const index = entityIndexOf(part, 'subpart', ref.id);
+    return index < 0 ? [] : [{ index, placement: part.placements[index] }];
+  }),
 );
 
 /** True when anything (SubParts, connectors, colliders, IVA seats, lights, kittens) is selected. */
-export const $hasSelection = computed(
-  [
-    $selectedIndices,
-    $selectedConnectorIndices,
-    $selectedKittenIndices,
-    $selectedColliderIndices,
-    $selectedIvaSeatIndices,
-    $selectedLightIndices,
-  ],
-  (indices, conIndices, kitIndices, colIndices, seatIndices, ligIndices): boolean =>
-    indices.length > 0 ||
-    conIndices.length > 0 ||
-    kitIndices.length > 0 ||
-    colIndices.length > 0 ||
-    seatIndices.length > 0 ||
-    ligIndices.length > 0,
-);
+export const $hasSelection = computed($selection, (sel): boolean => sel.length > 0);
 
 /**
  * True when more than one entity is selected (across any kinds) — the trigger for
  * the multi-select toolbar and the bulk transform panel.
  */
-export const $hasMultiSelection = computed(
-  [
-    $selectedIndices,
-    $selectedConnectorIndices,
-    $selectedKittenIndices,
-    $selectedColliderIndices,
-    $selectedIvaSeatIndices,
-    $selectedLightIndices,
-  ],
-  (sub, con, kit, col, seat, lig): boolean =>
-    sub.length + con.length + kit.length + col.length + seat.length + lig.length > 1,
-);
+export const $hasMultiSelection = computed($selection, (sel): boolean => sel.length > 1);
 
 /** Total number of selected entities across all kinds. */
-export const $selectionCount = computed(
-  [
-    $selectedIndices,
-    $selectedConnectorIndices,
-    $selectedKittenIndices,
-    $selectedColliderIndices,
-    $selectedIvaSeatIndices,
-    $selectedLightIndices,
-  ],
-  (sub, con, kit, col, seat, lig): number =>
-    sub.length + con.length + kit.length + col.length + seat.length + lig.length,
-);
+export const $selectionCount = computed($selection, (sel): number => sel.length);
 
 /**
- * Every selected entity with its current transform (SubParts, then connectors,
- * then colliders, then IVA seats, then kittens, then lights). Drives the bulk
- * transform panel for a unified multi-selection.
+ * The selection partitioned by kind, in selection order. All six keys are always present
+ * (an unselected kind is an empty array), so consumers can index it without a guard —
+ * this is the design's `$selectedByKind(kind)`.
  */
-export const $selectedRefs = computed(
-  [
-    $part,
-    $selectedIndices,
-    $selectedConnectorIndices,
-    $selectedKittenIndices,
-    $selectedColliderIndices,
-    $selectedIvaSeatIndices,
-    $selectedLightIndices,
-  ],
-  (): SelectedTransformRef[] => selectedTransformRefs(),
-);
-
-/**
- * The single selected entity (SubPart, connector, collider, IVA seat or light) as a
- * discriminated union, or null. The SubPart branch is non-null ONLY when exactly one
- * SubPart is selected; multi-selection is represented by {@link $selectedPlacements}
- * instead and drives the bulk transform UI. The kinds are mutually exclusive.
- */
-export type SelectedEntity =
-  | { kind: 'subpart'; index: number; placement: SubPartPlacement }
-  | { kind: 'connector'; index: number; connector: Connector }
-  | { kind: 'collider'; index: number; collider: PartCollider }
-  | { kind: 'ivaSeat'; index: number; seat: IvaSeat }
-  | { kind: 'light'; index: number; light: PartLight };
-
-export const $selectedEntity = computed(
-  [
-    $part,
-    $selectedIndices,
-    $selectedConnectorIndex,
-    $selectedColliderIndex,
-    $selectedIvaSeatIndex,
-    $selectedLightIndex,
-  ],
-  (part, subIndices, conIndex, colIndex, seatIndex, lightIndex): SelectedEntity | null => {
-    if (subIndices.length === 1) {
-      const placement = part.placements[subIndices[0]];
-      if (placement) return { kind: 'subpart', index: subIndices[0], placement };
-    }
-    const connector = part.connectors[conIndex];
-    if (conIndex >= 0 && connector) return { kind: 'connector', index: conIndex, connector };
-    const collider = part.colliders[colIndex];
-    if (colIndex >= 0 && collider) return { kind: 'collider', index: colIndex, collider };
-    const seat = part.ivaSeats[seatIndex];
-    if (seatIndex >= 0 && seat) return { kind: 'ivaSeat', index: seatIndex, seat };
-    const light = part.lights[lightIndex];
-    if (lightIndex >= 0 && light) return { kind: 'light', index: lightIndex, light };
-    return null;
+export const $selectionByKind = computed(
+  $selection,
+  (sel): Record<EntityKind, readonly SelectionRef[]> => {
+    const out = {} as Record<EntityKind, SelectionRef[]>;
+    for (const kind of KIND_ORDER) out[kind] = [];
+    for (const ref of sel) out[ref.kind].push(ref);
+    return out;
   },
 );
+
+/**
+ * The PRIMARY ref of one kind — the last of that kind added to the selection, or null.
+ * The design's `$primaryOf(kind)`; replaces the six `$selected*Index` atoms.
+ */
+export function primaryOf(kind: EntityKind): SelectionRef | null {
+  const sel = $selection.get();
+  for (let i = sel.length - 1; i >= 0; i--) if (sel[i].kind === kind) return sel[i];
+  return null;
+}
+
+/**
+ * Every selected entity with its current transform, in {@link KIND_ORDER}. Drives the
+ * bulk transform panel for a unified multi-selection.
+ */
+export const $selectedRefs = computed([$part, $selection], (): SelectedTransformRef[] =>
+  selectedTransformRefs(),
+);
+
+/**
+ * The single selected entity as a discriminated union, non-null ONLY when EXACTLY ONE
+ * entity is selected (the v1 per-kind mutual-exclusion assumption is gone with the index
+ * atoms). Carries the stable `id` on every branch; `index` is transitional (TransformInspector
+ * still indexes into `$part` until 5B dissolves it).
+ */
+export type SelectedEntity =
+  | { kind: 'subpart'; id: string; index: number; placement: SubPartPlacement }
+  | { kind: 'connector'; id: string; index: number; connector: Connector }
+  | { kind: 'collider'; id: string; index: number; collider: PartCollider }
+  | { kind: 'ivaSeat'; id: string; index: number; seat: IvaSeat }
+  | { kind: 'light'; id: string; index: number; light: PartLight };
+// TODO(P5B.13): add the 'kitten' branch when KittenInspector lands (v1 parity — the v1
+// union has none, so a lone selected kitten shows no per-entity panel today).
+
+export const $selectedEntity = computed([$part, $selection], (part, sel): SelectedEntity | null => {
+  if (sel.length !== 1) return null;
+  const ref = sel[0];
+  const index = entityIndexOf(part, ref.kind, ref.id);
+  if (index < 0) return null;
+  switch (ref.kind) {
+    case 'subpart':
+      return { kind: 'subpart', id: ref.id, index, placement: part.placements[index] };
+    case 'connector':
+      return { kind: 'connector', id: ref.id, index, connector: part.connectors[index] };
+    case 'collider':
+      return { kind: 'collider', id: ref.id, index, collider: part.colliders[index] };
+    case 'ivaSeat':
+      return { kind: 'ivaSeat', id: ref.id, index, seat: part.ivaSeats[index] };
+    case 'light':
+      return { kind: 'light', id: ref.id, index, light: part.lights[index] };
+    case 'kitten':
+      return null;
+  }
+});
 
 /**
  * A layer paired with how many entities of each kind belong to it. `id` mirrors

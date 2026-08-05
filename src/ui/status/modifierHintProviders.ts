@@ -17,7 +17,6 @@ import { registerModifierHints } from '../../state/modifierStore';
  * | Provider | Gesture | Owner |
  * |---|---|---|
  * | `build-viewport` ⌥ Duplicate drag | ⌥-drag to duplicate (LOCKED gesture #7) | Build-mode phase |
- * | `marquee` ⇧ Box select / ⌥⇧ Subtract | marquee drag | Build-mode phase |
  * | `gizmo-drag` ⌃ Snap invert | hold-⌃ snap inversion (needs `snapStore`) | Build-mode phase |
  * | `timeline` ⌃ Snap to keys | keyframe drag snapping | Animation phase |
  * | `animation-pose` ⇧ Axis lock | pose-gizmo axis lock | Animation phase |
@@ -51,6 +50,19 @@ export function initModifierHintProviders(): void {
       ? [
           { mod: 'shift', label: 'Add to selection', priority: 20 },
           { mod: 'meta', label: 'Toggle in selection', priority: 30 },
+        ]
+      : [],
+  );
+
+  // The marquee: ⇧-drag from empty canvas box-selects additively, ⌥⇧-drag subtracts. Both
+  // gestures are live (EditorScene's marquee handlers), so both may be advertised. They are
+  // useful with an empty selection too — a plain ⇧-drag is how you box-select at all — so
+  // unlike `viewport-select` this does not gate on `hasSelection`.
+  registerModifierHints('marquee', (ctx) =>
+    ctx.hover.startsWith('viewport')
+      ? [
+          { mod: 'shift', label: 'Drag box-select', priority: 40 },
+          { mod: 'alt', label: 'Drag to subtract (with ⇧)', priority: 50 },
         ]
       : [],
   );

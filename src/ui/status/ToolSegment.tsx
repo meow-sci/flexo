@@ -5,7 +5,7 @@ import { StatusChip, StatusChipButton, StatusDivider } from './StatusChip';
 import { TOOL_ICONS } from './statusTokens';
 import { $toolStatus, type ToolStatus } from '../../state/statusStore';
 import { $seatView, enterSeatView, exitSeatView } from '../../state/ivaStore';
-import { $part, selectIvaSeat } from '../../state/editorStore';
+import { $part, select } from '../../state/editorStore';
 import { $chainSession } from '../../state/chainStore';
 import { $chainEval } from '../../three/chainEval';
 
@@ -88,7 +88,7 @@ function SeatViewControls() {
     const next = part.ivaSeats[nextIndex];
     if (!next) return;
     enterSeatView(next.id);
-    selectIvaSeat(nextIndex);
+    select([{ kind: 'ivaSeat', id: next.id }]);
   };
 
   return (

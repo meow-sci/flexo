@@ -15,7 +15,7 @@ import { jointWorld, restAnchorTime, sampleJointLocal } from '../ksa/animationRi
 import { isLinearEasing } from '../ksa/easing';
 import { matrixFromTransform, transformFromMatrix } from '../three/coords';
 import { $mode, registerModeHooks } from './modeStore';
-import { $part, $selectedIndices, $toolMode, pushUndo } from './editorStore';
+import { $part, $selection, $toolMode, pushUndo } from './editorStore';
 
 /**
  * Document actions + ephemeral editor state for custom animations (see
@@ -286,10 +286,11 @@ function cloneTransform(t: Transform): Transform {
 /** A rest pose at the current viewport selection's centroid (identity if none selected). */
 function selectionCentroidPose(): Transform {
   const placements = $part.get().placements;
-  const pts = $selectedIndices
+  const pts = $selection
     .get()
-    .map((i) => placements[i])
-    .filter(Boolean);
+    .flatMap((ref) =>
+      ref.kind === 'subpart' ? (placements.find((p) => p.instanceId === ref.id) ?? []) : [],
+    );
   if (pts.length === 0) return identityTransform();
   const c = { x: 0, y: 0, z: 0 };
   for (const pl of pts) {

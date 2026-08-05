@@ -4,12 +4,7 @@ import { ChevronUp, X } from 'lucide-react';
 import { Heading } from 'react-aria-components';
 import { Button, Modal, Dialog } from './kit';
 import { ModeSidebar } from './ModeSidebar';
-import { $activeLayer } from '../state/selectors';
-import {
-  $selectedConnectorIndices,
-  $selectedIndices,
-  $selectedKittenIndices,
-} from '../state/editorStore';
+import { $activeLayer, $selectionCount } from '../state/selectors';
 
 /**
  * Phone-only inspector: a pinned bottom-right button (showing the active layer +
@@ -20,10 +15,7 @@ import {
 export function MobileInspector() {
   const [open, setOpen] = useState(false);
   const activeLayer = useStore($activeLayer);
-  const selectedCount =
-    useStore($selectedIndices).length +
-    useStore($selectedConnectorIndices).length +
-    useStore($selectedKittenIndices).length;
+  const selectedCount = useStore($selectionCount);
 
   return (
     <>

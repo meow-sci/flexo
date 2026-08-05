@@ -79,7 +79,7 @@ import { mergeProjectImport } from './projectTransfer';
 import type { ImportSummary, ProjectExportEnvelope } from './projectTransfer';
 // layerStore imports back into this module (deselectLayer); both directions are
 // function-scoped, so the cycle never runs at module-init time.
-import { isLayerListed, isLayerLocked, isLayerVisible } from './layerStore';
+import { isLayerLocked, isLayerVisible } from './layerStore';
 
 /**
  * Framework-agnostic editor state (nanostores). No React / three.js imports —
@@ -111,77 +111,233 @@ export interface PlacementTransform {
 }
 
 export const $part = atom<EditingPart>(createEmptyPart());
-/**
- * Selected SubPart indices, ordered by selection (empty when none). This is the
- * source of truth for SubPart selection. SubPart and connector selection are
- * mutually exclusive: when this is non-empty, {@link $selectedConnectorIndex} is -1.
- */
-export const $selectedIndices = atom<number[]>([]);
-/**
- * Primary selected SubPart index (the last one added to the selection), or -1.
- * Derived from {@link $selectedIndices}; drives single-entity behavior (gizmo
- * attach, the per-entity inspector) and back-compat for existing readers.
- */
-export const $selectedIndex = computed($selectedIndices, (indices) =>
-  indices.length > 0 ? indices[indices.length - 1] : -1,
-);
-/**
- * Selected connector indices (multi-select), ordered by selection. Mutually
- * exclusive with {@link $selectedIndices} — when this is non-empty,
- * {@link $selectedIndices} is [].
- */
-export const $selectedConnectorIndices = atom<number[]>([]);
-/**
- * Primary selected connector index (the last one added to the selection), or -1.
- * Derived from {@link $selectedConnectorIndices}; drives single-entity behavior
- * (gizmo attach, the per-entity inspector) and back-compat for existing readers.
- */
-export const $selectedConnectorIndex = computed($selectedConnectorIndices, (indices) =>
-  indices.length > 0 ? indices[indices.length - 1] : -1,
-);
-/**
- * Selected kitten indices (multi-select), ordered by selection. Mutually exclusive
- * with {@link $selectedIndices} and {@link $selectedConnectorIndices} — selecting a
- * kitten clears the other two. Kittens are editor-only visual aides.
- */
-export const $selectedKittenIndices = atom<number[]>([]);
-/** Primary selected kitten index (last added to the selection), or -1. */
-export const $selectedKittenIndex = computed($selectedKittenIndices, (indices) =>
-  indices.length > 0 ? indices[indices.length - 1] : -1,
-);
+
+// ---------------------------------------------------------------------------
+// THE SELECTION (design: plans/flexo_v2/design/design-build-mode.md §1.1)
+//
+// ONE ordered atom of stable {kind, id} refs. It replaced six per-kind INDEX
+// arrays, whose positional nature made the selection alias a different entity
+// after an undo (clamping an index that now names someone else) and forced every
+// selection operation to be hand-expanded six ways. Ids already exist on every
+// entity kind, so a ref survives splices, reorders and undo/redo untouched:
+// "clamping" is now a filter that drops refs whose entity is gone.
+//
+// Selection is EPHEMERAL: never persisted, never an undo step, survives mode
+// switches (foundation §2.4).
+// ---------------------------------------------------------------------------
+
+/** An entity kind that can be selected. (Renamed from `SelectableKind` — design §1.1.) */
+export type EntityKind = 'subpart' | 'connector' | 'collider' | 'ivaSeat' | 'light' | 'kitten';
 
 /**
- * Selected collider indices (multi-select), ordered by selection. Mutually exclusive
- * with the other kind stores under the single-kind setters, but participates equally in
- * the unified {@link setSelection} / {@link toggleEntity} paths.
+ * @deprecated transitional alias for {@link EntityKind}, kept so v1 surfaces compile
+ * unchanged. DELETE in P5A.17 with the last of them.
  */
-export const $selectedColliderIndices = atom<number[]>([]);
-/** Primary selected collider index (last added to the selection), or -1. */
-export const $selectedColliderIndex = computed($selectedColliderIndices, (indices) =>
-  indices.length > 0 ? indices[indices.length - 1] : -1,
-);
+export type SelectableKind = EntityKind;
 
 /**
- * Selected IVA-seat indices (multi-select), ordered by selection. Mutually exclusive
- * with the other kind stores under the single-kind setters, but participates equally in
- * the unified {@link setSelection} / {@link toggleEntity} paths — exactly like colliders.
+ * A stable reference to a selected entity: `id` is the instanceId (SubParts) or the
+ * entity id (connector / collider / seat / light / kitten).
  */
-export const $selectedIvaSeatIndices = atom<number[]>([]);
-/** Primary selected IVA-seat index (last added to the selection), or -1. */
-export const $selectedIvaSeatIndex = computed($selectedIvaSeatIndices, (indices) =>
-  indices.length > 0 ? indices[indices.length - 1] : -1,
-);
+export interface SelectionRef {
+  kind: EntityKind;
+  id: string;
+}
 
 /**
- * Selected light indices (multi-select), ordered by selection. Mutually exclusive
- * with the other kind stores under the single-kind setters, but participates equally in
- * the unified {@link setSelection} / {@link toggleEntity} paths — exactly like colliders.
+ * THE selection. Ordered — the LAST element is the primary (what a single-entity
+ * inspector and the gizmo's single-attach branch resolve through).
  */
-export const $selectedLightIndices = atom<number[]>([]);
-/** Primary selected light index (last added to the selection), or -1. */
-export const $selectedLightIndex = computed($selectedLightIndices, (indices) =>
-  indices.length > 0 ? indices[indices.length - 1] : -1,
-);
+export const $selection = atom<readonly SelectionRef[]>([]);
+
+/**
+ * The order kinds are enumerated in whenever a selection is BUILT or flattened
+ * (`selectedTransformRefs`, `selectLayerEntities`, `selectionOps`). Bulk transform math
+ * pairs a snapshot with a write-back by position, so this order is load-bearing.
+ */
+export const KIND_ORDER: readonly EntityKind[] = [
+  'subpart',
+  'connector',
+  'collider',
+  'ivaSeat',
+  'kitten',
+  'light',
+];
+
+const refKey = (r: SelectionRef): string => `${r.kind}:${r.id}`;
+
+/** The `$part` list holding `kind`, as read-only rows carrying the field every kind shares. */
+function entityList(part: EditingPart, kind: EntityKind): readonly { layerId: string }[] {
+  switch (kind) {
+    case 'subpart':
+      return part.placements;
+    case 'connector':
+      return part.connectors;
+    case 'collider':
+      return part.colliders;
+    case 'ivaSeat':
+      return part.ivaSeats;
+    case 'light':
+      return part.lights;
+    case 'kitten':
+      return part.kittens;
+  }
+}
+
+/** Where the entity a ref names currently sits in its list, or -1 when it no longer exists. */
+export function entityIndexOf(part: EditingPart, kind: EntityKind, id: string): number {
+  switch (kind) {
+    case 'subpart':
+      return part.placements.findIndex((p) => p.instanceId === id);
+    case 'connector':
+      return part.connectors.findIndex((c) => c.id === id);
+    case 'collider':
+      return part.colliders.findIndex((c) => c.id === id);
+    case 'ivaSeat':
+      return part.ivaSeats.findIndex((s) => s.id === id);
+    case 'light':
+      return part.lights.findIndex((l) => l.id === id);
+    case 'kitten':
+      return part.kittens.findIndex((k) => k.id === id);
+  }
+}
+
+/** The stable id of the entity at `index`, or null when the index is out of range. */
+export function entityIdAt(part: EditingPart, kind: EntityKind, index: number): string | null {
+  switch (kind) {
+    case 'subpart':
+      return part.placements[index]?.instanceId ?? null;
+    case 'connector':
+      return part.connectors[index]?.id ?? null;
+    case 'collider':
+      return part.colliders[index]?.id ?? null;
+    case 'ivaSeat':
+      return part.ivaSeats[index]?.id ?? null;
+    case 'light':
+      return part.lights[index]?.id ?? null;
+    case 'kitten':
+      return part.kittens[index]?.id ?? null;
+  }
+}
+
+/** The layerId of the entity a ref names (`''` when the ref is dead). */
+export function refLayerId(part: EditingPart, ref: SelectionRef): string {
+  const index = entityIndexOf(part, ref.kind, ref.id);
+  return index < 0 ? '' : entityList(part, ref.kind)[index].layerId;
+}
+
+/** A ref for the entity at `index`, or null when nothing is there. */
+function refAt(part: EditingPart, kind: EntityKind, index: number): SelectionRef | null {
+  const id = entityIdAt(part, kind, index);
+  return id === null ? null : { kind, id };
+}
+
+function sameRefs(a: readonly SelectionRef[], b: readonly SelectionRef[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++)
+    if (a[i].kind !== b[i].kind || a[i].id !== b[i].id) return false;
+  return true;
+}
+
+/** Writes the selection, skipping the store update when nothing actually changed. */
+function setSelectionRefs(next: readonly SelectionRef[]): void {
+  if (!sameRefs($selection.get(), next)) $selection.set(next);
+}
+
+/**
+ * Replaces (or additively extends) the selection. Deduped by `kind:id`, first occurrence
+ * wins, and refs whose entity does not exist are silently dropped.
+ */
+export function select(refs: readonly SelectionRef[], opts?: { additive?: boolean }): void {
+  const part = $part.get();
+  const base = opts?.additive ? $selection.get() : [];
+  const seen = new Set(base.map(refKey));
+  const next: SelectionRef[] = [...base];
+  for (const ref of refs) {
+    const key = refKey(ref);
+    if (seen.has(key)) continue;
+    if (entityIndexOf(part, ref.kind, ref.id) < 0) continue;
+    seen.add(key);
+    next.push({ kind: ref.kind, id: ref.id });
+  }
+  setSelectionRefs(next);
+}
+
+/**
+ * Adds or removes ONE ref, leaving the rest of the selection intact (the additive
+ * viewport click). An appended ref becomes the primary (last).
+ */
+export function toggleRef(ref: SelectionRef): void {
+  const key = refKey(ref);
+  const current = $selection.get();
+  if (current.some((r) => refKey(r) === key)) {
+    setSelectionRefs(current.filter((r) => refKey(r) !== key));
+    return;
+  }
+  if (entityIndexOf($part.get(), ref.kind, ref.id) < 0) return;
+  setSelectionRefs([...current, { kind: ref.kind, id: ref.id }]);
+}
+
+/** Drops `refs` from the selection, leaving everything else (the subtractive marquee). */
+export function deselectRefs(refs: readonly SelectionRef[]): void {
+  if (refs.length === 0) return;
+  const drop = new Set(refs.map(refKey));
+  setSelectionRefs($selection.get().filter((r) => !drop.has(refKey(r))));
+}
+
+/**
+ * The selection's refs of one kind, resolved to live indices in SELECTION order (dead refs
+ * dropped). The bridge for the mutators that still splice/read `$part` positionally.
+ */
+function selectedIndicesOf(part: EditingPart, kind: EntityKind): number[] {
+  const out: number[] = [];
+  for (const ref of $selection.get()) {
+    if (ref.kind !== kind) continue;
+    const index = entityIndexOf(part, kind, ref.id);
+    if (index >= 0) out.push(index);
+  }
+  return out;
+}
+
+// ── legacy per-kind INDEX views ──────────────────────────────────────────────
+//
+// The six atoms {@link $selection} replaced, re-expressed as derived views so the v1
+// surfaces that still index into `$part` (AssetsList and friends) keep running
+// unchanged. Every one of them is deleted with its last consumer in P5A.17.
+
+const indicesOf = (kind: EntityKind) =>
+  computed([$selection, $part], (sel, part) =>
+    sel
+      .flatMap((r) => (r.kind === kind ? [entityIndexOf(part, r.kind, r.id)] : []))
+      .filter((i) => i >= 0),
+  );
+const primaryIndexOf = (view: ReturnType<typeof indicesOf>) =>
+  computed(view, (indices) => (indices.length > 0 ? indices[indices.length - 1] : -1));
+
+/** @deprecated legacy index view — DELETE in P5A.17. */
+export const $selectedIndices = indicesOf('subpart');
+/** @deprecated legacy index view — DELETE in P5A.17. */
+export const $selectedIndex = primaryIndexOf($selectedIndices);
+/** @deprecated legacy index view — DELETE in P5A.17. */
+export const $selectedConnectorIndices = indicesOf('connector');
+/** @deprecated legacy index view — DELETE in P5A.17. */
+export const $selectedConnectorIndex = primaryIndexOf($selectedConnectorIndices);
+/** @deprecated legacy index view — DELETE in P5A.17. */
+export const $selectedColliderIndices = indicesOf('collider');
+/** @deprecated legacy index view — DELETE in P5A.17. */
+export const $selectedColliderIndex = primaryIndexOf($selectedColliderIndices);
+/** @deprecated legacy index view — DELETE in P5A.17. */
+export const $selectedIvaSeatIndices = indicesOf('ivaSeat');
+/** @deprecated legacy index view — DELETE in P5A.17. */
+export const $selectedIvaSeatIndex = primaryIndexOf($selectedIvaSeatIndices);
+/** @deprecated legacy index view — DELETE in P5A.17. */
+export const $selectedKittenIndices = indicesOf('kitten');
+/** @deprecated legacy index view — DELETE in P5A.17. */
+export const $selectedKittenIndex = primaryIndexOf($selectedKittenIndices);
+/** @deprecated legacy index view — DELETE in P5A.17. */
+export const $selectedLightIndices = indicesOf('light');
+/** @deprecated legacy index view — DELETE in P5A.17. */
+export const $selectedLightIndex = primaryIndexOf($selectedLightIndices);
 
 /**
  * Snapshots of copied entities (SubParts, connectors, kittens, colliders, IVA seats),
@@ -354,31 +510,17 @@ function refreshHistoryFlags(): void {
   $historyList.set(items);
 }
 
+/**
+ * Drops every selection ref whose entity no longer exists (after undo/redo, a delete, a
+ * layer wipe). This is the WHOLE of what v1 called clamping: an id either resolves or it
+ * doesn't, so a survivor is never silently re-pointed at a different entity the way a
+ * clamped index was (census: selection-transform pain 14).
+ */
 function clampSelection(): void {
   const part = $part.get();
-  const max = part.placements.length - 1;
-  const current = $selectedIndices.get();
-  const filtered = current.filter((i) => i >= 0 && i <= max);
-  if (filtered.length !== current.length) $selectedIndices.set(filtered);
-  const clampedCon = $selectedConnectorIndices.get().filter((i) => i < part.connectors.length);
-  if (clampedCon.length !== $selectedConnectorIndices.get().length)
-    $selectedConnectorIndices.set(clampedCon);
-  const clampedKit = $selectedKittenIndices.get().filter((i) => i >= 0 && i < part.kittens.length);
-  if (clampedKit.length !== $selectedKittenIndices.get().length)
-    $selectedKittenIndices.set(clampedKit);
-  const clampedSeat = $selectedIvaSeatIndices
-    .get()
-    .filter((i) => i >= 0 && i < part.ivaSeats.length);
-  if (clampedSeat.length !== $selectedIvaSeatIndices.get().length)
-    $selectedIvaSeatIndices.set(clampedSeat);
-  const clampedCol = $selectedColliderIndices
-    .get()
-    .filter((i) => i >= 0 && i < part.colliders.length);
-  if (clampedCol.length !== $selectedColliderIndices.get().length)
-    $selectedColliderIndices.set(clampedCol);
-  const clampedLig = $selectedLightIndices.get().filter((i) => i >= 0 && i < part.lights.length);
-  if (clampedLig.length !== $selectedLightIndices.get().length)
-    $selectedLightIndices.set(clampedLig);
+  const current = $selection.get();
+  const kept = current.filter((r) => entityIndexOf(part, r.kind, r.id) >= 0);
+  if (kept.length !== current.length) $selection.set(kept);
 }
 
 /** Resets the active layer to Default if it no longer exists (e.g. after undo). */
@@ -574,7 +716,7 @@ export function addSubPart(templateId: string): void {
     layerId: currentLayerId(part),
   });
   $part.set(part);
-  selectPlacement(part.placements.length - 1);
+  select([{ kind: 'subpart', id: instanceId }]);
 }
 
 /** GameData carried into {@link addPart} from a built-in Part so its imports keep it. */
@@ -803,10 +945,6 @@ function applyImportedGameData(
   }
 }
 
-/** `[start, end)` as an index list — the tail an import appended to a list. */
-const rangeFrom = (start: number, end: number): number[] =>
-  Array.from({ length: Math.max(0, end - start) }, (_, i) => start + i);
-
 /**
  * Imports a whole Part by appending all of its SubPart instances to the current
  * project, preserving each one's position/rotation/scale, along with the Part's
@@ -860,7 +998,7 @@ export function addPart(
   for (const tag of editorTags) {
     if (!part.editorTags.includes(tag)) part.editorTags.push(tag);
   }
-  const importedSubIndices: number[] = [];
+  const importedSubIds: string[] = [];
   // Original KSA instance id → regenerated id, so imported animations can rewire their
   // joint members / solar-tracking refs (which target SubParts by their original id).
   const idMap = new Map<string, string>();
@@ -879,7 +1017,7 @@ export function addPart(
       scale: { ...src.scale },
       layerId,
     });
-    importedSubIndices.push(part.placements.length - 1);
+    importedSubIds.push(instanceId);
   }
   if (buildAnimations) part.animations.push(...buildAnimations(idMap));
   // Original KSA connector id → regenerated id, so imported coupling bindings
@@ -921,26 +1059,20 @@ export function addPart(
   // AssetsList (and keeping the "locked ⇒ never selected" invariant of setLayerLocked).
   const selectable = (id: string): boolean => isLayerVisible(id) && !isLayerLocked(id);
   const importedOnLayer = selectable(layerId);
-  const importedConnectorIndices = importedOnLayer
-    ? rangeFrom(connectorStart, part.connectors.length)
-    : [];
-  const importedColliderIndices = importedOnLayer
-    ? rangeFrom(colliderStart, part.colliders.length)
-    : [];
-  const importedSeatIndices = selectable(IVA_SEAT_LAYER_ID)
-    ? rangeFrom(seatStart, part.ivaSeats.length)
-    : [];
-  const importedLightIndices = selectable(LIGHT_LAYER_ID)
-    ? rangeFrom(lightStart, part.lights.length)
-    : [];
-  setSelection(
-    importedSubIndices,
-    importedConnectorIndices,
-    [],
-    importedColliderIndices,
-    importedSeatIndices,
-    importedLightIndices,
-  );
+  const refs: SelectionRef[] = importedSubIds.map((id) => ({ kind: 'subpart', id }));
+  const tailRefs = (kind: EntityKind, from: number, to: number): void => {
+    for (let i = from; i < to; i++) {
+      const ref = refAt(part, kind, i);
+      if (ref) refs.push(ref);
+    }
+  };
+  if (importedOnLayer) {
+    tailRefs('connector', connectorStart, part.connectors.length);
+    tailRefs('collider', colliderStart, part.colliders.length);
+  }
+  if (selectable(IVA_SEAT_LAYER_ID)) tailRefs('ivaSeat', seatStart, part.ivaSeats.length);
+  if (selectable(LIGHT_LAYER_ID)) tailRefs('light', lightStart, part.lights.length);
+  select(refs);
   return layerId;
 }
 
@@ -989,7 +1121,7 @@ export function addConnector(): void {
     layerId: currentLayerId(part),
   });
   $part.set(part);
-  selectConnector(part.connectors.length - 1);
+  select([{ kind: 'connector', id: newId }]);
 }
 
 /**
@@ -1018,7 +1150,7 @@ export function addCollider(
     layerId: currentLayerId(part),
   });
   $part.set(part);
-  selectCollider(part.colliders.length - 1);
+  select([{ kind: 'collider', id: newId }]);
 }
 
 /**
@@ -1106,9 +1238,7 @@ export function removeCollider(index: number): void {
   const part = clone(current);
   part.colliders.splice(index, 1);
   $part.set(part);
-  const sel = $selectedColliderIndices.get();
-  const next = sel.filter((i) => i !== index).map((i) => (i > index ? i - 1 : i));
-  $selectedColliderIndices.set(next);
+  clampSelection(); // id refs survive the splice; only the removed one has to go
 }
 
 // ── IVA seats ────────────────────────────────────────────────────────────────
@@ -1139,7 +1269,7 @@ export function addIvaSeat(transform?: PlacementTransform): void {
     layerId: IVA_SEAT_LAYER_ID,
   });
   $part.set(part);
-  selectIvaSeat(part.ivaSeats.length - 1);
+  select([{ kind: 'ivaSeat', id: newId }]);
 }
 
 /** Like {@link updatePlacementTransform} but for an IVA seat (scale pinned). No undo. */
@@ -1197,14 +1327,8 @@ export function moveIvaSeat(index: number, delta: number): void {
   const [moved] = part.ivaSeats.splice(index, 1);
   part.ivaSeats.splice(target, 0, moved);
   $part.set(part);
-  // Follow the seats through the splice so the selection keeps pointing at the same ones.
-  $selectedIvaSeatIndices.set(
-    $selectedIvaSeatIndices.get().map((i) => {
-      if (i === index) return target;
-      if (index < target) return i > index && i <= target ? i - 1 : i;
-      return i >= target && i < index ? i + 1 : i;
-    }),
-  );
+  // No selection fix-up: seat ids are stable across a reorder, so the refs already
+  // point at the same seats (the v1 index remap died with the index model).
 }
 
 /** Removes a single IVA seat by index (per-row context menu). Discrete → undo. */
@@ -1215,9 +1339,7 @@ export function removeIvaSeat(index: number): void {
   const part = clone(current);
   part.ivaSeats.splice(index, 1);
   $part.set(part);
-  const sel = $selectedIvaSeatIndices.get();
-  const next = sel.filter((i) => i !== index).map((i) => (i > index ? i - 1 : i));
-  $selectedIvaSeatIndices.set(next);
+  clampSelection(); // id refs survive the splice; only the removed one has to go
 }
 
 /** Adds a kitten visual aide at the origin (on the built-in Kittens layer) and selects it. */
@@ -1235,7 +1357,7 @@ export function addKitten(kind: KittenKind): void {
     layerId: KITTEN_LAYER_ID,
   });
   $part.set(part);
-  selectKitten(part.kittens.length - 1);
+  select([{ kind: 'kitten', id: newId }]);
 }
 
 /**
@@ -1278,7 +1400,7 @@ export function addKittenAtSeat(seatIndex: number, kind: KittenKind = 'hunter'):
     layerId: KITTEN_LAYER_ID,
   });
   $part.set(part);
-  selectKitten(part.kittens.length - 1);
+  select([{ kind: 'kitten', id: newId }]);
 }
 
 /** Returns the next free "kitten_N" id (max existing N + 1). */
@@ -1360,12 +1482,12 @@ export function setConnectorCapabilities(
  */
 export function removeSelected(): void {
   const part0 = $part.get();
-  const sub = $selectedIndices.get().filter((i) => i >= 0 && i < part0.placements.length);
-  const con = $selectedConnectorIndices.get().filter((i) => i >= 0 && i < part0.connectors.length);
-  const kit = $selectedKittenIndices.get().filter((i) => i >= 0 && i < part0.kittens.length);
-  const col = $selectedColliderIndices.get().filter((i) => i >= 0 && i < part0.colliders.length);
-  const seat = $selectedIvaSeatIndices.get().filter((i) => i >= 0 && i < part0.ivaSeats.length);
-  const lig = $selectedLightIndices.get().filter((i) => i >= 0 && i < part0.lights.length);
+  const sub = selectedIndicesOf(part0, 'subpart');
+  const con = selectedIndicesOf(part0, 'connector');
+  const kit = selectedIndicesOf(part0, 'kitten');
+  const col = selectedIndicesOf(part0, 'collider');
+  const seat = selectedIndicesOf(part0, 'ivaSeat');
+  const lig = selectedIndicesOf(part0, 'light');
   const total = sub.length + con.length + kit.length + col.length + seat.length + lig.length;
   if (total === 0) return;
 
@@ -1437,28 +1559,37 @@ export function removeSelected(): void {
   for (const i of [...lig].sort((a, b) => b - a)) part.lights.splice(i, 1);
   $part.set(part);
 
-  if (total === 1 && sub.length === 1 && part.placements.length > 0) {
-    setSelection([Math.min(sub[0], part.placements.length - 1)], [], []);
-  } else if (total === 1 && con.length === 1 && part.connectors.length > 0) {
-    setSelection([], [Math.min(con[0], part.connectors.length - 1)], []);
-  } else if (total === 1 && kit.length === 1 && part.kittens.length > 0) {
-    setSelection([], [], [Math.min(kit[0], part.kittens.length - 1)]);
-  } else if (total === 1 && col.length === 1 && part.colliders.length > 0) {
-    setSelection([], [], [], [Math.min(col[0], part.colliders.length - 1)]);
-  } else if (total === 1 && seat.length === 1 && part.ivaSeats.length > 0) {
-    setSelection([], [], [], [], [Math.min(seat[0], part.ivaSeats.length - 1)]);
-  } else if (total === 1 && lig.length === 1 && part.lights.length > 0) {
-    setSelection([], [], [], [], [], [Math.min(lig[0], part.lights.length - 1)]);
-  } else {
-    clearSelection();
-  }
+  // After a SINGLE-entity delete keep a neighbor of the same kind selected. The
+  // neighbor is resolved against the PRE-splice document (the entity after the removed
+  // one, else the one before it) and then re-selected by ID — v1's post-splice
+  // `Math.min(index, length - 1)` was the index-aliasing hazard in miniature.
+  const onlyKind: EntityKind | null =
+    total !== 1
+      ? null
+      : sub.length
+        ? 'subpart'
+        : con.length
+          ? 'connector'
+          : kit.length
+            ? 'kitten'
+            : col.length
+              ? 'collider'
+              : seat.length
+                ? 'ivaSeat'
+                : 'light';
+  const onlyIndex = sub[0] ?? con[0] ?? kit[0] ?? col[0] ?? seat[0] ?? lig[0];
+  const neighborId = onlyKind
+    ? (entityIdAt(part0, onlyKind, onlyIndex + 1) ?? entityIdAt(part0, onlyKind, onlyIndex - 1))
+    : null;
+  if (onlyKind && neighborId !== null) select([{ kind: onlyKind, id: neighborId }]);
+  else clearSelection();
 }
 
 /**
  * Removes a single SubPart by index (used by the per-row context menu, which acts
  * on its own row regardless of the current selection). Discrete mutation → records
- * undo. Selection is adjusted: the removed index is dropped and indices after it
- * shift down by one so the selection keeps pointing at the same SubParts.
+ * undo. The selection needs no fix-up beyond dropping the deleted entity: stable-id
+ * refs keep naming the same SubParts across the splice.
  */
 export function removePlacement(index: number): void {
   const current = $part.get();
@@ -1467,21 +1598,18 @@ export function removePlacement(index: number): void {
   const part = clone(current);
   part.placements.splice(index, 1);
   $part.set(part);
-  const sel = $selectedIndices.get();
-  const next = sel.filter((i) => i !== index).map((i) => (i > index ? i - 1 : i));
-  if (next.length !== sel.length) $selectedIndices.set(next);
-  else if (next.some((v, k) => v !== sel[k])) $selectedIndices.set(next);
+  clampSelection(); // id refs survive the splice; only the removed one has to go
 }
 
 /** Duplicates every selected entity (SubParts, connectors, colliders, seats, lights, kittens) and selects the copies. */
 export function duplicateSelected(): void {
   const part0 = $part.get();
-  const sub = $selectedIndices.get().filter((i) => i >= 0 && i < part0.placements.length);
-  const con = $selectedConnectorIndices.get().filter((i) => i >= 0 && i < part0.connectors.length);
-  const kit = $selectedKittenIndices.get().filter((i) => i >= 0 && i < part0.kittens.length);
-  const col = $selectedColliderIndices.get().filter((i) => i >= 0 && i < part0.colliders.length);
-  const seat = $selectedIvaSeatIndices.get().filter((i) => i >= 0 && i < part0.ivaSeats.length);
-  const lig = $selectedLightIndices.get().filter((i) => i >= 0 && i < part0.lights.length);
+  const sub = selectedIndicesOf(part0, 'subpart');
+  const con = selectedIndicesOf(part0, 'connector');
+  const kit = selectedIndicesOf(part0, 'kitten');
+  const col = selectedIndicesOf(part0, 'collider');
+  const seat = selectedIndicesOf(part0, 'ivaSeat');
+  const lig = selectedIndicesOf(part0, 'light');
   const total = sub.length + con.length + kit.length + col.length + seat.length + lig.length;
   if (total === 0) return;
 
@@ -1502,12 +1630,7 @@ export function duplicateSelected(): void {
   pushUndo('duplicate', detail);
 
   const part = clone(part0);
-  const newSub: number[] = [];
-  const newCon: number[] = [];
-  const newKit: number[] = [];
-  const newCol: number[] = [];
-  const newSeat: number[] = [];
-  const newLig: number[] = [];
+  const copies: SelectionRef[] = [];
   for (const i of [...sub].sort((a, b) => a - b)) {
     const src = part.placements[i];
     if (!src) continue;
@@ -1515,21 +1638,23 @@ export function duplicateSelected(): void {
     const count = part.placements.filter(
       (p) => p.subPartTemplateId === src.subPartTemplateId,
     ).length;
+    const instanceId = `${base}_${count + 1}`;
     part.placements.push({
-      instanceId: `${base}_${count + 1}`,
+      instanceId,
       subPartTemplateId: src.subPartTemplateId,
       position: { ...src.position },
       rotation: { ...src.rotation },
       scale: { ...src.scale },
       layerId: src.layerId,
     });
-    newSub.push(part.placements.length - 1);
+    copies.push({ kind: 'subpart', id: instanceId });
   }
   for (const i of [...con].sort((a, b) => a - b)) {
     const src = part.connectors[i];
     if (!src) continue;
+    const id = nextConnectorId(part);
     part.connectors.push({
-      id: nextConnectorId(part),
+      id,
       position: { ...src.position },
       rotation: { ...src.rotation },
       scale: { ...src.scale },
@@ -1538,53 +1663,49 @@ export function duplicateSelected(): void {
       siblingIds: [...src.siblingIds],
       layerId: src.layerId,
     });
-    newCon.push(part.connectors.length - 1);
+    copies.push({ kind: 'connector', id });
   }
   for (const i of [...kit].sort((a, b) => a - b)) {
     const src = part.kittens[i];
     if (!src) continue;
+    const id = nextKittenId(part);
     part.kittens.push({
-      id: nextKittenId(part),
+      id,
       kind: src.kind,
       position: { ...src.position },
       rotation: { ...src.rotation },
       scale: { ...src.scale },
       layerId: KITTEN_LAYER_ID,
     });
-    newKit.push(part.kittens.length - 1);
+    copies.push({ kind: 'kitten', id });
   }
   for (const i of [...col].sort((a, b) => a - b)) {
     const src = part.colliders[i];
     if (!src) continue;
     // Keeps the source's layer, like a duplicated placement or connector.
-    part.colliders.push({ ...structuredClone(src), id: nextColliderId(part) });
-    newCol.push(part.colliders.length - 1);
+    const id = nextColliderId(part);
+    part.colliders.push({ ...structuredClone(src), id });
+    copies.push({ kind: 'collider', id });
   }
   // Copies land at the END of the seat list, i.e. last in the IVA cycle order.
   for (const i of [...seat].sort((a, b) => a - b)) {
     const src = part.ivaSeats[i];
     if (!src) continue;
-    part.ivaSeats.push({
-      ...structuredClone(src),
-      id: nextIvaSeatId(part),
-      layerId: IVA_SEAT_LAYER_ID,
-    });
-    newSeat.push(part.ivaSeats.length - 1);
+    const id = nextIvaSeatId(part);
+    part.ivaSeats.push({ ...structuredClone(src), id, layerId: IVA_SEAT_LAYER_ID });
+    copies.push({ kind: 'ivaSeat', id });
   }
   // A duplicate keeps the source's owner: a SubPart-owned copy lands on the same
   // template (and therefore on every placement of it), like colliders.
   for (const i of [...lig].sort((a, b) => a - b)) {
     const src = part.lights[i];
     if (!src) continue;
-    part.lights.push({
-      ...structuredClone(src),
-      id: nextLightId(part),
-      layerId: LIGHT_LAYER_ID,
-    });
-    newLig.push(part.lights.length - 1);
+    const id = nextLightId(part);
+    part.lights.push({ ...structuredClone(src), id, layerId: LIGHT_LAYER_ID });
+    copies.push({ kind: 'light', id });
   }
   $part.set(part);
-  setSelection(newSub, newCon, newKit, newCol, newSeat, newLig);
+  select(copies);
 }
 
 /**
@@ -1625,11 +1746,11 @@ function entityCountLabel(
  */
 export function copySelected(): number {
   const part = $part.get();
-  const sub = $selectedIndices.get().filter((i) => i >= 0 && i < part.placements.length);
-  const con = $selectedConnectorIndices.get().filter((i) => i >= 0 && i < part.connectors.length);
-  const kit = $selectedKittenIndices.get().filter((i) => i >= 0 && i < part.kittens.length);
-  const col = $selectedColliderIndices.get().filter((i) => i >= 0 && i < part.colliders.length);
-  const seat = $selectedIvaSeatIndices.get().filter((i) => i >= 0 && i < part.ivaSeats.length);
+  const sub = selectedIndicesOf(part, 'subpart');
+  const con = selectedIndicesOf(part, 'connector');
+  const kit = selectedIndicesOf(part, 'kitten');
+  const col = selectedIndicesOf(part, 'collider');
+  const seat = selectedIndicesOf(part, 'ivaSeat');
   const total = sub.length + con.length + kit.length + col.length + seat.length;
   if (total === 0) return 0;
   const order = (a: number, b: number) => a - b;
@@ -1675,30 +1796,28 @@ export function pasteClipboard(): number {
     ),
   );
   const part = clone($part.get());
-  const newSub: number[] = [];
-  const newCon: number[] = [];
-  const newKit: number[] = [];
-  const newCol: number[] = [];
-  const newSeat: number[] = [];
+  const pasted: SelectionRef[] = [];
   for (const src of clip.placements) {
     const base = lastSegmentLower(src.subPartTemplateId);
     const count = part.placements.filter(
       (p) => p.subPartTemplateId === src.subPartTemplateId,
     ).length;
     const layerId = pasteLayerId(part, src.layerId);
+    const instanceId = `${base}_${count + 1}`;
     part.placements.push({
-      instanceId: `${base}_${count + 1}`,
+      instanceId,
       subPartTemplateId: src.subPartTemplateId,
       position: { ...src.position },
       rotation: { ...src.rotation },
       scale: { ...src.scale },
       layerId,
     });
-    newSub.push(part.placements.length - 1);
+    pasted.push({ kind: 'subpart', id: instanceId });
   }
   for (const src of clip.connectors) {
+    const id = nextConnectorId(part);
     part.connectors.push({
-      id: nextConnectorId(part),
+      id,
       position: { ...src.position },
       rotation: { ...src.rotation },
       scale: { ...src.scale },
@@ -1707,38 +1826,37 @@ export function pasteClipboard(): number {
       siblingIds: [...src.siblingIds],
       layerId: pasteLayerId(part, src.layerId),
     });
-    newCon.push(part.connectors.length - 1);
+    pasted.push({ kind: 'connector', id });
   }
   for (const src of clip.kittens) {
+    const id = nextKittenId(part);
     part.kittens.push({
-      id: nextKittenId(part),
+      id,
       kind: src.kind,
       position: { ...src.position },
       rotation: { ...src.rotation },
       scale: { ...src.scale },
       layerId: KITTEN_LAYER_ID,
     });
-    newKit.push(part.kittens.length - 1);
+    pasted.push({ kind: 'kitten', id });
   }
   for (const src of clip.colliders) {
+    const id = nextColliderId(part);
     part.colliders.push({
       ...structuredClone(src),
-      id: nextColliderId(part),
+      id,
       layerId: pasteLayerId(part, src.layerId),
     });
-    newCol.push(part.colliders.length - 1);
+    pasted.push({ kind: 'collider', id });
   }
   // Pasted seats land at the END of the cycle order, in the order they were copied.
   for (const src of clip.ivaSeats) {
-    part.ivaSeats.push({
-      ...structuredClone(src),
-      id: nextIvaSeatId(part),
-      layerId: IVA_SEAT_LAYER_ID,
-    });
-    newSeat.push(part.ivaSeats.length - 1);
+    const id = nextIvaSeatId(part);
+    part.ivaSeats.push({ ...structuredClone(src), id, layerId: IVA_SEAT_LAYER_ID });
+    pasted.push({ kind: 'ivaSeat', id });
   }
   $part.set(part);
-  setSelection(newSub, newCon, newKit, newCol, newSeat);
+  select(pasted);
   return total;
 }
 
@@ -1755,8 +1873,9 @@ export function duplicatePlacement(index: number): void {
   const part = clone(current);
   const base = lastSegmentLower(src.subPartTemplateId);
   const count = part.placements.filter((p) => p.subPartTemplateId === src.subPartTemplateId).length;
+  const instanceId = `${base}_${count + 1}`;
   part.placements.push({
-    instanceId: `${base}_${count + 1}`,
+    instanceId,
     subPartTemplateId: src.subPartTemplateId,
     position: { ...src.position },
     rotation: { ...src.rotation },
@@ -1764,7 +1883,7 @@ export function duplicatePlacement(index: number): void {
     layerId: src.layerId,
   });
   $part.set(part);
-  setSelectedPlacements([part.placements.length - 1]);
+  select([{ kind: 'subpart', id: instanceId }]);
 }
 
 /** One evaluated action-chain instance, ready to commit (see {@link applyActionChain}). */
@@ -1825,7 +1944,7 @@ export function applyActionChain(entries: readonly ChainCommitEntry[], detail: s
 
   pushUndo('action chain', detail);
   const part = clone(current);
-  const seedIndices: number[] = [];
+  const seedRefs: SelectionRef[] = [];
   for (const entry of entries) {
     if (!entry.isSeed) continue;
     const index = seedIndexById.get(entry.seedInstanceId)!;
@@ -1833,213 +1952,117 @@ export function applyActionChain(entries: readonly ChainCommitEntry[], detail: s
     target.position = { ...entry.transform.position };
     target.rotation = { ...entry.transform.rotation };
     target.scale = { ...entry.transform.scale };
-    seedIndices.push(index);
+    seedRefs.push({ kind: 'subpart', id: target.instanceId });
   }
-  const newIndices: number[] = [];
+  const cloneRefs: SelectionRef[] = [];
   for (const entry of entries) {
     if (entry.isSeed) continue;
     const seed = part.placements[seedIndexById.get(entry.seedInstanceId)!];
+    const instanceId = nextChainInstanceId(part, seed.subPartTemplateId);
     part.placements.push({
-      instanceId: nextChainInstanceId(part, seed.subPartTemplateId),
+      instanceId,
       subPartTemplateId: seed.subPartTemplateId,
       position: { ...entry.transform.position },
       rotation: { ...entry.transform.rotation },
       scale: { ...entry.transform.scale },
       layerId: seed.layerId,
     });
-    newIndices.push(part.placements.length - 1);
+    cloneRefs.push({ kind: 'subpart', id: instanceId });
   }
   $part.set(part);
-  setSelectedPlacements([...seedIndices, ...newIndices]);
-  return newIndices.length;
+  select([...seedRefs, ...cloneRefs]);
+  return cloneRefs.length;
 }
 
-/** Replaces the SubPart selection with a single index (clears any connector/kitten selection). */
-export function selectPlacement(index: number): void {
-  $selectedConnectorIndices.set([]);
-  $selectedColliderIndices.set([]);
-  $selectedIvaSeatIndices.set([]);
-  $selectedLightIndices.set([]);
-  $selectedKittenIndices.set([]);
-  $selectedIndices.set(index >= 0 ? [index] : []);
-}
+// ── deprecated index-based setter shims ─────────────────────────────────────
+//
+// Same exported names + signatures as the v1 per-kind setters, re-expressed over
+// {@link select} / {@link toggleRef}. They exist ONLY so the v1 surfaces that still speak
+// indices (AssetsList and friends) compile untouched; each one dies with its last
+// consumer in P5A.17. New code selects by ref.
 
-/** Replaces the SubPart selection with the given indices (deduped, order-preserving). */
-export function setSelectedPlacements(indices: readonly number[]): void {
-  $selectedConnectorIndices.set([]);
-  $selectedColliderIndices.set([]);
-  $selectedIvaSeatIndices.set([]);
-  $selectedLightIndices.set([]);
-  $selectedKittenIndices.set([]);
-  const seen = new Set<number>();
-  const next: number[] = [];
+/** Indices → refs, dropping anything that does not resolve. */
+function refsFromIndices(kind: EntityKind, indices: readonly number[]): SelectionRef[] {
+  const part = $part.get();
+  const out: SelectionRef[] = [];
   for (const i of indices) {
-    if (i >= 0 && !seen.has(i)) {
-      seen.add(i);
-      next.push(i);
-    }
+    const ref = refAt(part, kind, i);
+    if (ref) out.push(ref);
   }
-  $selectedIndices.set(next);
-}
-
-/** Adds or removes a SubPart index from the current selection (clears connector/kitten selection). */
-export function togglePlacement(index: number): void {
-  if (index < 0) return;
-  $selectedConnectorIndices.set([]);
-  $selectedKittenIndices.set([]);
-  const current = $selectedIndices.get();
-  $selectedIndices.set(
-    current.includes(index) ? current.filter((i) => i !== index) : [...current, index],
-  );
-}
-
-/** Selects a connector by index (clears any SubPart/kitten selection). */
-export function selectConnector(index: number): void {
-  $selectedIndices.set([]);
-  $selectedColliderIndices.set([]);
-  $selectedIvaSeatIndices.set([]);
-  $selectedLightIndices.set([]);
-  $selectedKittenIndices.set([]);
-  $selectedConnectorIndices.set(index >= 0 ? [index] : []);
-}
-
-/** Replaces connector selection with the given indices (deduped, order-preserving). Clears SubPart/kitten selection. */
-export function setSelectedConnectors(indices: readonly number[]): void {
-  $selectedIndices.set([]);
-  $selectedColliderIndices.set([]);
-  $selectedIvaSeatIndices.set([]);
-  $selectedLightIndices.set([]);
-  $selectedKittenIndices.set([]);
-  const seen = new Set<number>();
-  const next: number[] = [];
-  for (const i of indices) {
-    if (i >= 0 && !seen.has(i)) {
-      seen.add(i);
-      next.push(i);
-    }
-  }
-  $selectedConnectorIndices.set(next);
-}
-
-/** Selects a kitten by index (clears any SubPart/connector selection). */
-export function selectKitten(index: number): void {
-  $selectedIndices.set([]);
-  $selectedConnectorIndices.set([]);
-  $selectedColliderIndices.set([]);
-  $selectedIvaSeatIndices.set([]);
-  $selectedLightIndices.set([]);
-  $selectedKittenIndices.set(index >= 0 ? [index] : []);
-}
-
-/** Selects a collider by index (clears any SubPart/connector/kitten selection). */
-export function selectCollider(index: number): void {
-  $selectedIndices.set([]);
-  $selectedConnectorIndices.set([]);
-  $selectedIvaSeatIndices.set([]);
-  $selectedLightIndices.set([]);
-  $selectedKittenIndices.set([]);
-  $selectedColliderIndices.set(index >= 0 ? [index] : []);
-}
-
-/** Replaces collider selection with the given indices (deduped). Clears the other kinds. */
-export function setSelectedColliders(indices: readonly number[]): void {
-  $selectedIndices.set([]);
-  $selectedConnectorIndices.set([]);
-  $selectedIvaSeatIndices.set([]);
-  $selectedLightIndices.set([]);
-  $selectedKittenIndices.set([]);
-  $selectedColliderIndices.set(dedupeIndices(indices));
-}
-
-/** Selects an IVA seat by index (clears any SubPart/connector/collider/kitten selection). */
-export function selectIvaSeat(index: number): void {
-  $selectedIndices.set([]);
-  $selectedConnectorIndices.set([]);
-  $selectedColliderIndices.set([]);
-  $selectedLightIndices.set([]);
-  $selectedKittenIndices.set([]);
-  $selectedIvaSeatIndices.set(index >= 0 ? [index] : []);
-}
-
-/** Replaces IVA-seat selection with the given indices (deduped). Clears the other kinds. */
-export function setSelectedIvaSeats(indices: readonly number[]): void {
-  $selectedIndices.set([]);
-  $selectedConnectorIndices.set([]);
-  $selectedColliderIndices.set([]);
-  $selectedLightIndices.set([]);
-  $selectedKittenIndices.set([]);
-  $selectedIvaSeatIndices.set(dedupeIndices(indices));
-}
-
-/** Selects a light by index (clears any SubPart/connector/collider/seat/kitten selection). */
-export function selectLight(index: number): void {
-  $selectedIndices.set([]);
-  $selectedConnectorIndices.set([]);
-  $selectedColliderIndices.set([]);
-  $selectedIvaSeatIndices.set([]);
-  $selectedKittenIndices.set([]);
-  $selectedLightIndices.set(index >= 0 ? [index] : []);
-}
-
-/** Replaces light selection with the given indices (deduped). Clears the other kinds. */
-export function setSelectedLights(indices: readonly number[]): void {
-  $selectedIndices.set([]);
-  $selectedConnectorIndices.set([]);
-  $selectedColliderIndices.set([]);
-  $selectedIvaSeatIndices.set([]);
-  $selectedKittenIndices.set([]);
-  $selectedLightIndices.set(dedupeIndices(indices));
-}
-
-/** Replaces kitten selection with the given indices (deduped, order-preserving). Clears SubPart/connector selection. */
-export function setSelectedKittens(indices: readonly number[]): void {
-  $selectedIndices.set([]);
-  $selectedConnectorIndices.set([]);
-  $selectedColliderIndices.set([]);
-  $selectedIvaSeatIndices.set([]);
-  $selectedLightIndices.set([]);
-  const seen = new Set<number>();
-  const next: number[] = [];
-  for (const i of indices) {
-    if (i >= 0 && !seen.has(i)) {
-      seen.add(i);
-      next.push(i);
-    }
-  }
-  $selectedKittenIndices.set(next);
-}
-
-/** Clears all selection. */
-export function clearSelection(): void {
-  $selectedIndices.set([]);
-  $selectedConnectorIndices.set([]);
-  $selectedColliderIndices.set([]);
-  $selectedIvaSeatIndices.set([]);
-  $selectedLightIndices.set([]);
-  $selectedKittenIndices.set([]);
-}
-
-/** An entity kind that can be selected (SubPart placement, connector, collider, IVA seat, kitten, or light). */
-export type SelectableKind = 'subpart' | 'connector' | 'collider' | 'ivaSeat' | 'kitten' | 'light';
-
-const dedupeIndices = (xs: readonly number[]): number[] => {
-  const seen = new Set<number>();
-  const out: number[] = [];
-  for (const i of xs)
-    if (i >= 0 && !seen.has(i)) {
-      seen.add(i);
-      out.push(i);
-    }
   return out;
-};
+}
+
+/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
+export function selectPlacement(index: number): void {
+  select(refsFromIndices('subpart', [index]));
+}
+
+/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
+export function setSelectedPlacements(indices: readonly number[]): void {
+  select(refsFromIndices('subpart', indices));
+}
+
+/** @deprecated index-based shim — DELETE in P5A.17. Use `toggleRef`. */
+export function togglePlacement(index: number): void {
+  const ref = refAt($part.get(), 'subpart', index);
+  if (ref) toggleRef(ref);
+}
+
+/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
+export function selectConnector(index: number): void {
+  select(refsFromIndices('connector', [index]));
+}
+
+/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
+export function setSelectedConnectors(indices: readonly number[]): void {
+  select(refsFromIndices('connector', indices));
+}
+
+/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
+export function selectKitten(index: number): void {
+  select(refsFromIndices('kitten', [index]));
+}
+
+/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
+export function setSelectedKittens(indices: readonly number[]): void {
+  select(refsFromIndices('kitten', indices));
+}
+
+/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
+export function selectCollider(index: number): void {
+  select(refsFromIndices('collider', [index]));
+}
+
+/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
+export function setSelectedColliders(indices: readonly number[]): void {
+  select(refsFromIndices('collider', indices));
+}
+
+/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
+export function selectIvaSeat(index: number): void {
+  select(refsFromIndices('ivaSeat', [index]));
+}
+
+/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
+export function setSelectedIvaSeats(indices: readonly number[]): void {
+  select(refsFromIndices('ivaSeat', indices));
+}
+
+/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
+export function selectLight(index: number): void {
+  select(refsFromIndices('light', [index]));
+}
+
+/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
+export function setSelectedLights(indices: readonly number[]): void {
+  select(refsFromIndices('light', indices));
+}
 
 /**
- * Unified selection setter — sets all six kind stores at once (deduped) WITHOUT
- * the mutual-exclusion clearing that the per-kind setters apply. This lets a
- * selection span SubParts, connectors, colliders, IVA seats, lights and kittens
- * together (the Assets list's native multi-select + select-all). Negative/duplicate
- * indices are dropped. The collider/seat/light lists are DEFAULTED so callers that
- * can't carry those kinds stay unchanged — but note every omitted list is still CLEARED.
+ * @deprecated index-based shim — DELETE in P5A.17. Use `select`.
+ *
+ * The v1 cross-kind setter: every omitted list still CLEARS its kind, which the ref-based
+ * `select` gets for free (it replaces the whole selection).
  */
 export function setSelection(
   subIndices: readonly number[],
@@ -2049,35 +2072,25 @@ export function setSelection(
   seatIndices: readonly number[] = [],
   lightIndices: readonly number[] = [],
 ): void {
-  $selectedIndices.set(dedupeIndices(subIndices));
-  $selectedConnectorIndices.set(dedupeIndices(conIndices));
-  $selectedKittenIndices.set(dedupeIndices(kitIndices));
-  $selectedColliderIndices.set(dedupeIndices(colIndices));
-  $selectedIvaSeatIndices.set(dedupeIndices(seatIndices));
-  $selectedLightIndices.set(dedupeIndices(lightIndices));
+  select([
+    ...refsFromIndices('subpart', subIndices),
+    ...refsFromIndices('connector', conIndices),
+    ...refsFromIndices('collider', colIndices),
+    ...refsFromIndices('ivaSeat', seatIndices),
+    ...refsFromIndices('kitten', kitIndices),
+    ...refsFromIndices('light', lightIndices),
+  ]);
 }
 
-/**
- * Toggles one entity in/out of the current selection, leaving the OTHER kinds
- * intact — additive (Shift/Cmd) click across kinds, so a connector can be added
- * to a SubPart selection without clearing it.
- */
-export function toggleEntity(kind: SelectableKind, index: number): void {
-  if (index < 0) return;
-  const store =
-    kind === 'subpart'
-      ? $selectedIndices
-      : kind === 'connector'
-        ? $selectedConnectorIndices
-        : kind === 'collider'
-          ? $selectedColliderIndices
-          : kind === 'ivaSeat'
-            ? $selectedIvaSeatIndices
-            : kind === 'light'
-              ? $selectedLightIndices
-              : $selectedKittenIndices;
-  const cur = store.get();
-  store.set(cur.includes(index) ? cur.filter((i) => i !== index) : [...cur, index]);
+/** @deprecated index-based shim — DELETE in P5A.17. Use `toggleRef`. */
+export function toggleEntity(kind: EntityKind, index: number): void {
+  const ref = refAt($part.get(), kind, index);
+  if (ref) toggleRef(ref);
+}
+
+/** Clears the whole selection. */
+export function clearSelection(): void {
+  setSelectionRefs([]);
 }
 
 /**
@@ -2088,16 +2101,23 @@ export function toggleEntity(kind: SelectableKind, index: number): void {
  * deselect-then-reselect) so the list's effect re-fires; the list nulls it once
  * consumed. Ephemeral UI state: not persisted, not in undo history.
  */
-export const $revealEntity = atom<{ kind: SelectableKind; id: string } | null>(null);
+export const $revealEntity = atom<{ kind: EntityKind; id: string } | null>(null);
 
 /** Asks the Assets list to scroll `id` (of `kind`) into view — used by 3D-click selection. */
-export function revealEntity(kind: SelectableKind, id: string): void {
+export function revealEntity(kind: EntityKind, id: string): void {
   $revealEntity.set({ kind, id });
 }
 
 /** A selected entity plus its current transform — the unit of bulk transform work. */
 export interface SelectedTransformRef {
-  kind: SelectableKind;
+  kind: EntityKind;
+  /** The entity's STABLE id — what the write-back addresses it by. */
+  id: string;
+  /**
+   * index: transitional — EditorScene's `colliderGizmoFrame`/`lightGizmoFrame` and
+   * TransformInspector still index into `$part`; remove when 5B dissolves
+   * TransformInspector. Recomputed fresh on every call, so it is always valid at read time.
+   */
   index: number;
   transform: PlacementTransform;
   layerId: string;
@@ -2122,39 +2142,23 @@ export function selectedTransformRefs(): SelectedTransformRef[] {
     scale: { ...e.scale },
   });
   const out: SelectedTransformRef[] = [];
-  for (const i of $selectedIndices.get()) {
-    const p = part.placements[i];
-    if (p)
+  // Grouped into KIND_ORDER, not selection order: bulk-math consumers pair a snapshot
+  // with its write-back positionally, so the flattening order must be stable.
+  for (const kind of KIND_ORDER) {
+    for (const ref of $selection.get()) {
+      if (ref.kind !== kind) continue;
+      const index = entityIndexOf(part, kind, ref.id);
+      if (index < 0) continue;
+      const row = entityList(part, kind)[index] as { layerId: string } & PlacementTransform;
       out.push({
-        kind: 'subpart',
-        index: i,
-        transform: tx(p),
-        layerId: p.layerId,
-        name: p.instanceId,
+        kind,
+        id: ref.id,
+        index,
+        transform: tx(row),
+        layerId: row.layerId,
+        name: ref.id,
       });
-  }
-  for (const i of $selectedConnectorIndices.get()) {
-    const c = part.connectors[i];
-    if (c)
-      out.push({ kind: 'connector', index: i, transform: tx(c), layerId: c.layerId, name: c.id });
-  }
-  for (const i of $selectedColliderIndices.get()) {
-    const c = part.colliders[i];
-    if (c)
-      out.push({ kind: 'collider', index: i, transform: tx(c), layerId: c.layerId, name: c.id });
-  }
-  for (const i of $selectedIvaSeatIndices.get()) {
-    const s = part.ivaSeats[i];
-    if (s)
-      out.push({ kind: 'ivaSeat', index: i, transform: tx(s), layerId: s.layerId, name: s.id });
-  }
-  for (const i of $selectedKittenIndices.get()) {
-    const k = part.kittens[i];
-    if (k) out.push({ kind: 'kitten', index: i, transform: tx(k), layerId: k.layerId, name: k.id });
-  }
-  for (const i of $selectedLightIndices.get()) {
-    const l = part.lights[i];
-    if (l) out.push({ kind: 'light', index: i, transform: tx(l), layerId: l.layerId, name: l.id });
+    }
   }
   return out;
 }
@@ -2248,7 +2252,7 @@ export function updateKittenTransform(index: number, t: PlacementTransform): voi
  * pushes once at interaction start.
  */
 export function updateSelectedTransforms(
-  updates: readonly { kind: SelectableKind; index: number; transform: PlacementTransform }[],
+  updates: readonly { kind: EntityKind; id: string; transform: PlacementTransform }[],
 ): void {
   if (updates.length === 0) return;
   const part = clone($part.get());
@@ -2258,15 +2262,32 @@ export function updateSelectedTransforms(
     e.rotation = { ...t.rotation };
     e.scale = { ...t.scale };
   };
-  for (const { kind, index, transform } of updates) {
-    if (kind === 'subpart') assign(part.placements[index], transform);
-    else if (kind === 'connector') assign(part.connectors[index], transform);
-    else if (kind === 'collider') assignCollider(part.colliders[index], transform);
-    else if (kind === 'ivaSeat') assignIvaSeat(part.ivaSeats[index], transform);
-    // 'light' MUST be routed before the kitten fallback: an unhandled kind would fall
-    // into the final else and silently corrupt the KITTEN at the same index.
-    else if (kind === 'light') assignLight(part.lights[index], transform);
-    else assign(part.kittens[index], transform);
+  for (const { kind, id, transform } of updates) {
+    // Addressed BY ID and switched on exhaustively. v1 indexed the list and fell through
+    // to a kitten default, so a kind that missed its branch silently moved the kitten at
+    // the same index — the documented order trap died with the index model.
+    const index = entityIndexOf(part, kind, id);
+    if (index < 0) continue;
+    switch (kind) {
+      case 'subpart':
+        assign(part.placements[index], transform);
+        break;
+      case 'connector':
+        assign(part.connectors[index], transform);
+        break;
+      case 'collider':
+        assignCollider(part.colliders[index], transform);
+        break;
+      case 'ivaSeat':
+        assignIvaSeat(part.ivaSeats[index], transform);
+        break;
+      case 'light':
+        assignLight(part.lights[index], transform);
+        break;
+      case 'kitten':
+        assign(part.kittens[index], transform);
+        break;
+    }
   }
   $part.set(part);
 }
@@ -2385,32 +2406,9 @@ export function scaleEverything(factor: Vec3): void {
  * interaction start.
  */
 export function updateSelectedTransform(t: PlacementTransform): void {
-  const coli = $selectedColliderIndex.get();
-  if (coli >= 0) {
-    updateColliderTransform(coli, t);
-    return;
-  }
-  const seati = $selectedIvaSeatIndex.get();
-  if (seati >= 0) {
-    updateIvaSeatTransform(seati, t);
-    return;
-  }
-  const li = $selectedLightIndex.get();
-  if (li >= 0) {
-    updateLightTransform(li, t);
-    return;
-  }
-  const ki = $selectedKittenIndex.get();
-  if (ki >= 0) {
-    updateKittenTransform(ki, t);
-    return;
-  }
-  const ci = $selectedConnectorIndex.get();
-  if (ci >= 0) {
-    updateConnectorTransform(ci, t);
-    return;
-  }
-  updatePlacementTransform($selectedIndex.get(), t);
+  const primary = $selection.get().at(-1);
+  if (!primary) return;
+  updateSelectedTransforms([{ kind: primary.kind, id: primary.id, transform: t }]);
 }
 
 /**
@@ -2708,6 +2706,9 @@ function nextLightId(part: EditingPart): string {
  * `seed` exists for the glow panel's "Add matching light": KSA's `<Emissive>` map can only ever
  * add WHITE (MeshIndirect.frag:286), so a `<Light>` carrying the glow's colour is the only way a
  * part reads as a COLOURED lamp in-game — see analysis/KSA_EMISSIVE_AND_LUT.md §5.1.
+ *
+ * Selects the new light, like every other `add*` (the Add-menu command used to do this by
+ * index from the outside).
  */
 export function addLight(ownerTemplateId: string | null, seed?: Partial<PartLight>): void {
   const current = $part.get();
@@ -2724,6 +2725,7 @@ export function addLight(ownerTemplateId: string | null, seed?: Partial<PartLigh
     layerId: LIGHT_LAYER_ID,
   });
   $part.set(part);
+  select([{ kind: 'light', id: newId }]);
 }
 
 /** Discrete: remove the light at `index` (into `part.lights`). */
@@ -2734,6 +2736,7 @@ export function removeLight(index: number): void {
   const part = clone(current);
   part.lights.splice(index, 1);
   $part.set(part);
+  clampSelection();
 }
 
 /** Discrete: change a light's type (Spot/Point). */
@@ -3819,9 +3822,9 @@ export function moveEntityToLayer(kind: LayerableKind, index: number, layerId: s
 export function moveSelectionToLayer(layerId: string): void {
   const current = $part.get();
   if (!isMoveTarget(current, layerId)) return;
-  const sub = $selectedIndices.get();
-  const con = $selectedConnectorIndices.get();
-  const col = $selectedColliderIndices.get();
+  const sub = selectedIndicesOf(current, 'subpart');
+  const con = selectedIndicesOf(current, 'connector');
+  const col = selectedIndicesOf(current, 'collider');
   const total = sub.length + con.length + col.length;
   if (total === 0) return;
   const destLayerName = current.layers.find((l) => l.id === layerId)?.name ?? layerId;
@@ -3926,108 +3929,28 @@ export function setActiveLayer(id: string): void {
  */
 export function selectLayerEntities(id: string): void {
   const part = $part.get();
-  setSelection(
-    part.placements.flatMap((p, i) => (p.layerId === id ? [i] : [])),
-    part.connectors.flatMap((c, i) => (c.layerId === id ? [i] : [])),
-    part.kittens.flatMap((k, i) => (k.layerId === id ? [i] : [])),
-    part.colliders.flatMap((c, i) => (c.layerId === id ? [i] : [])),
-    part.ivaSeats.flatMap((s, i) => (s.layerId === id ? [i] : [])),
-    part.lights.flatMap((l, i) => (l.layerId === id ? [i] : [])),
-  );
-}
-
-/**
- * The Select-menu eligibility rule: an entity can be swept up by Select ▸ All / Invert
- * only when its layer is LISTED and UNLOCKED (design: foundation §3 Select — "every
- * entity on listed + unlocked layers"). Locked is the hard guard (a locked layer's
- * entities must never end up under the gizmo); unlisted means the user has hidden the
- * layer from the entity list, so a blind select-all shouldn't drag it back in.
- */
-function isSelectableLayer(layerId: string): boolean {
-  return isLayerListed(layerId) && !isLayerLocked(layerId);
-}
-
-/** Indices of the entities on eligible layers that also pass `keep`. */
-function selectableIndices<T extends { layerId: string }>(
-  entities: readonly T[],
-  keep: (index: number) => boolean,
-): number[] {
-  return entities.flatMap((entity, i) => (isSelectableLayer(entity.layerId) && keep(i) ? [i] : []));
-}
-
-/**
- * Selects every entity on listed + unlocked layers, across all six kinds (Select ▸ All —
- * foundation §3). Selection is view state: NO undo enrollment (see the invariant block
- * above).
- *
- * **INTERIM**: the stable-id selection rework replaces this with
- * `src/state/selectionOps.ts` (whose eligibility rule additionally excludes HIDDEN
- * layers) and deletes both helpers here — keep them thin.
- */
-export function selectAllEntities(): void {
-  const part = $part.get();
-  const all = (): boolean => true;
-  setSelection(
-    selectableIndices(part.placements, all),
-    selectableIndices(part.connectors, all),
-    selectableIndices(part.kittens, all),
-    selectableIndices(part.colliders, all),
-    selectableIndices(part.ivaSeats, all),
-    selectableIndices(part.lights, all),
-  );
-}
-
-/**
- * Inverts the selection WITHIN the population of {@link selectAllEntities} — so inverting
- * an empty selection selects everything selectable, and inverting that clears it. Entities
- * on locked/unlisted layers are never pulled in. No undo enrollment (view state).
- *
- * **INTERIM**: replaced together with {@link selectAllEntities} (see its note).
- */
-export function invertSelection(): void {
-  const part = $part.get();
-  const not = (selected: readonly number[]) => (i: number) => !selected.includes(i);
-  setSelection(
-    selectableIndices(part.placements, not($selectedIndices.get())),
-    selectableIndices(part.connectors, not($selectedConnectorIndices.get())),
-    selectableIndices(part.kittens, not($selectedKittenIndices.get())),
-    selectableIndices(part.colliders, not($selectedColliderIndices.get())),
-    selectableIndices(part.ivaSeats, not($selectedIvaSeatIndices.get())),
-    selectableIndices(part.lights, not($selectedLightIndices.get())),
-  );
+  const refs: SelectionRef[] = [];
+  for (const kind of KIND_ORDER) {
+    const list = entityList(part, kind);
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].layerId !== id) continue;
+      const ref = refAt(part, kind, i);
+      if (ref) refs.push(ref);
+    }
+  }
+  select(refs);
 }
 
 /**
  * Drops any selected entities belonging to `layerId` (used when a layer is locked).
  *
- * MUST cover every selectable kind. `EditorScene` only re-checks the lock when the SELECTION
- * changes, so a kind left un-pruned here keeps the gizmo attached to an entity on a layer the
- * user just locked — and the next drag silently moves it.
+ * ONE filter over `$selection` — the v1 six-kind hand-expansion (and its "MUST cover every
+ * kind" hazard: a kind left un-pruned kept the gizmo attached to an entity on a layer the
+ * user had just locked) died with the index model.
  */
 export function deselectLayer(layerId: string): void {
   const part = $part.get();
-  const current = $selectedIndices.get();
-  const kept = current.filter((i) => part.placements[i]?.layerId !== layerId);
-  if (kept.length !== current.length) $selectedIndices.set(kept);
-  const keptCon = $selectedConnectorIndices
-    .get()
-    .filter((i) => part.connectors[i]?.layerId !== layerId);
-  if (keptCon.length !== $selectedConnectorIndices.get().length)
-    $selectedConnectorIndices.set(keptCon);
-  const keptKit = $selectedKittenIndices.get().filter((i) => part.kittens[i]?.layerId !== layerId);
-  if (keptKit.length !== $selectedKittenIndices.get().length) $selectedKittenIndices.set(keptKit);
-  const keptCol = $selectedColliderIndices
-    .get()
-    .filter((i) => part.colliders[i]?.layerId !== layerId);
-  if (keptCol.length !== $selectedColliderIndices.get().length)
-    $selectedColliderIndices.set(keptCol);
-  const keptSeat = $selectedIvaSeatIndices
-    .get()
-    .filter((i) => part.ivaSeats[i]?.layerId !== layerId);
-  if (keptSeat.length !== $selectedIvaSeatIndices.get().length)
-    $selectedIvaSeatIndices.set(keptSeat);
-  const keptLig = $selectedLightIndices.get().filter((i) => part.lights[i]?.layerId !== layerId);
-  if (keptLig.length !== $selectedLightIndices.get().length) $selectedLightIndices.set(keptLig);
+  setSelectionRefs($selection.get().filter((r) => refLayerId(part, r) !== layerId));
 }
 
 export function newPart(): void {

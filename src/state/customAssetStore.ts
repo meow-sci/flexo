@@ -39,7 +39,8 @@ import {
   addSubPart,
   nextLayerId,
   setActiveLayer,
-  setSelection,
+  select,
+  clearSelection,
 } from './editorStore';
 import { $projectName } from './projectStore';
 import { notify } from './notificationStore';
@@ -1012,7 +1013,7 @@ export async function makeKittenMeshPart(kind: KittenKind): Promise<void> {
   const subs = kittenPartSubMeshes(kind);
   const label = KITTEN_LABELS[kind];
   const layerId = nextLayerId($part.get());
-  const newPlacementIndices: number[] = [];
+  const newPlacementIds: string[] = [];
   mutate('make kitten mesh', label, (p) => {
     p.layers.push({ id: layerId, name: `${label} Mesh` });
     for (const sub of subs) {
@@ -1029,21 +1030,22 @@ export async function makeKittenMeshPart(kind: KittenKind): Promise<void> {
       const taken = p.placements.filter(
         (pl) => pl.instanceId === base || pl.instanceId.startsWith(`${base}_`),
       ).length;
+      const instanceId = `${base}_${taken + 1}`;
       p.placements.push({
-        instanceId: `${base}_${taken + 1}`,
+        instanceId,
         subPartTemplateId: subPartId,
         position: { x: 0, y: 0, z: 0 },
         rotation: { x: 0, y: 0, z: 0 },
         scale: { x: 1, y: 1, z: 1 },
         layerId,
       });
-      newPlacementIndices.push(p.placements.length - 1);
+      newPlacementIds.push(instanceId);
     }
   });
   await scheduleRebuild();
   // Active layer + selection are ephemeral (not undo-tracked).
   setActiveLayer(layerId);
-  setSelection(newPlacementIndices, [], []);
+  select(newPlacementIds.map((id) => ({ kind: 'subpart', id })));
 }
 
 /** Layer/instance-id base for an imported SubPart: lowercase, id-safe, never empty. */
@@ -1063,20 +1065,22 @@ function pushImportedPlacement(
   name: string,
   transform: Transform,
   layerId: string,
-): void {
+): string {
   const base = instanceBase(name);
   let n =
     p.placements.filter((pl) => pl.instanceId === base || pl.instanceId.startsWith(`${base}_`))
       .length + 1;
   while (p.placements.some((pl) => pl.instanceId === `${base}_${n}`)) n++;
+  const instanceId = `${base}_${n}`;
   p.placements.push({
-    instanceId: `${base}_${n}`,
+    instanceId,
     subPartTemplateId: subPartId,
     position: { ...transform.position },
     rotation: { ...transform.rotation },
     scale: { ...transform.scale },
     layerId,
   });
+  return instanceId;
 }
 
 /** The {@link ImportedMeshSource} for one normalized mesh of a batch. */
@@ -1253,7 +1257,7 @@ export async function importModelAsMeshes(
 
   const layerId = nextLayerId($part.get());
   const layerName = fileName.replace(/\.[^.]+$/, '') || 'Imported model';
-  const newPlacementIndices: number[] = [];
+  const newPlacementIds: string[] = [];
   mutate('import model', fileName, (p) => {
     p.layers.push({ id: layerId, name: layerName });
     p.customTextures.push(...assets.textures);
@@ -1262,21 +1266,20 @@ export async function importModelAsMeshes(
       const mesh = normalized.meshes[i]!;
       p.customMeshes.push(meshes[i]!);
       for (const t of mesh.placements) {
-        pushImportedPlacement(p, mesh.subPartId, mesh.name, t, layerId);
-        newPlacementIndices.push(p.placements.length - 1);
+        newPlacementIds.push(pushImportedPlacement(p, mesh.subPartId, mesh.name, t, layerId));
       }
     }
   });
   await scheduleRebuild();
   // Active layer + selection are ephemeral (not undo-tracked).
   setActiveLayer(layerId);
-  setSelection(newPlacementIndices, [], []);
+  select(newPlacementIds.map((id) => ({ kind: 'subpart', id })));
   postImportReport({
     id: shortId(),
     mode: 'import',
     fileName,
     subParts: meshes.length,
-    placements: newPlacementIndices.length,
+    placements: newPlacementIds.length,
     textures: assets.textures.length,
     materials: assets.materials.size,
     warnings: [...normalized.warnings, ...(materialPlan?.warnings ?? [])],
@@ -1433,9 +1436,8 @@ export async function removeImport(importId: string): Promise<void> {
     p.layers = p.layers.filter((l) => !layerIds.has(l.id));
   });
 
-  // Selection/active layer are ephemeral; both may now point at something that no longer
-  // exists (placement INDICES shift when placements are spliced out).
-  setSelection([], [], []);
+  // Selection/active layer are ephemeral; the removed placements are gone either way.
+  clearSelection();
   if (layerIds.has($activeLayerId.get())) setActiveLayer(DEFAULT_LAYER_ID);
 
   for (const id of textureIds) {
@@ -1628,7 +1630,7 @@ export async function replaceImport(
   const removedPlacements = before.placements.filter((pl) =>
     removedSubPartIds.has(pl.subPartTemplateId),
   ).length;
-  const newPlacementIndices: number[] = [];
+  const newPlacementIds: string[] = [];
   mutate('replace model', normalized.fileName, (p) => {
     p.customMeshes = p.customMeshes
       .filter((m) => !removedIds.has(m.id))
@@ -1647,22 +1649,22 @@ export async function replaceImport(
     for (const { mesh, incoming } of match.matched) {
       const have = p.placements.filter((pl) => pl.subPartTemplateId === mesh.subPartId).length;
       for (const t of incoming.placements.slice(have)) {
-        pushImportedPlacement(p, mesh.subPartId, mesh.name, t, layerId);
-        newPlacementIndices.push(p.placements.length - 1);
+        newPlacementIds.push(pushImportedPlacement(p, mesh.subPartId, mesh.name, t, layerId));
       }
     }
     for (const { descriptor, incoming } of added) {
       for (const t of incoming.placements) {
-        pushImportedPlacement(p, descriptor.subPartId, descriptor.name, t, layerId);
-        newPlacementIndices.push(p.placements.length - 1);
+        newPlacementIds.push(
+          pushImportedPlacement(p, descriptor.subPartId, descriptor.name, t, layerId),
+        );
       }
     }
   });
 
-  // Selection is ephemeral: prefer the new placements, but never leave stale INDICES behind
-  // (they shift when removed placements are spliced out).
-  if (newPlacementIndices.length > 0) setSelection(newPlacementIndices, [], []);
-  else if (removedPlacements > 0) setSelection([], [], []);
+  // Selection is ephemeral: prefer the new placements; refs to removed ones are dropped by
+  // clampSelection, so there is nothing stale to clean up when nothing new arrived.
+  if (newPlacementIds.length > 0) select(newPlacementIds.map((id) => ({ kind: 'subpart', id })));
+  else if (removedPlacements > 0) clearSelection();
 
   for (const id of purgedTextureIds) {
     revokeTexture(id);
@@ -1686,7 +1688,7 @@ export async function replaceImport(
     mode: 'replace',
     fileName: normalized.fileName,
     subParts: added.length,
-    placements: newPlacementIndices.length,
+    placements: newPlacementIds.length,
     textures: assets.textures.length,
     materials: assets.materials.size,
     matched: match.matched.length,

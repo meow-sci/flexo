@@ -6,14 +6,8 @@ import {
   $selectionBounds,
   setMeasurementSettings,
 } from '../../state/measurementStore';
-import {
-  $selectedColliderIndices,
-  $selectedConnectorIndices,
-  $selectedIndices,
-  $selectedIvaSeatIndices,
-  $selectedKittenIndices,
-  $selectedLightIndices,
-} from '../../state/editorStore';
+import type { EntityKind } from '../../state/editorStore';
+import { $selectionByKind } from '../../state/selectors';
 import { formatLength, formatVec } from '../../measure/format';
 
 /**
@@ -38,13 +32,13 @@ import { formatLength, formatVec } from '../../measure/format';
  */
 
 /** Singular / plural label per selectable kind, in the order they read best. */
-const KIND_LABELS: [singular: string, plural: string][] = [
-  ['SubPart', 'SubParts'],
-  ['Connector', 'Connectors'],
-  ['Collider', 'Colliders'],
-  ['IVA Seat', 'IVA Seats'],
-  ['Light', 'Lights'],
-  ['Kitten', 'Kittens'],
+const KIND_LABELS: [kind: EntityKind, singular: string, plural: string][] = [
+  ['subpart', 'SubPart', 'SubParts'],
+  ['connector', 'Connector', 'Connectors'],
+  ['collider', 'Collider', 'Colliders'],
+  ['ivaSeat', 'IVA Seat', 'IVA Seats'],
+  ['light', 'Light', 'Lights'],
+  ['kitten', 'Kitten', 'Kittens'],
 ];
 
 /**
@@ -52,8 +46,8 @@ const KIND_LABELS: [singular: string, plural: string][] = [
  * the enumeration is longer than the bar and says less than the total (§1.2 #4).
  */
 function countsLabel(counts: number[]): string {
-  const present = counts.flatMap((count, kind) =>
-    count > 0 ? [`${count} ${KIND_LABELS[kind][count === 1 ? 0 : 1]}`] : [],
+  const present = counts.flatMap((count, i) =>
+    count > 0 ? [`${count} ${KIND_LABELS[i][count === 1 ? 1 : 2]}`] : [],
   );
   if (present.length === 0) return '';
   if (present.length > 2) {
@@ -64,23 +58,11 @@ function countsLabel(counts: number[]): string {
 }
 
 export function SelectionReadout() {
-  const subParts = useStore($selectedIndices);
-  const connectors = useStore($selectedConnectorIndices);
-  const colliders = useStore($selectedColliderIndices);
-  const ivaSeats = useStore($selectedIvaSeatIndices);
-  const lights = useStore($selectedLightIndices);
-  const kittens = useStore($selectedKittenIndices);
+  const byKind = useStore($selectionByKind);
   const bounds = useStore($selectionBounds);
   const { unit } = useStore($measurementSettings);
 
-  const counts = [
-    subParts.length,
-    connectors.length,
-    colliders.length,
-    ivaSeats.length,
-    lights.length,
-    kittens.length,
-  ];
+  const counts = KIND_LABELS.map(([kind]) => byKind[kind].length);
   const label = countsLabel(counts);
 
   // Both conditions, per §1.1's "shown when" row: an empty selection has nothing to count,

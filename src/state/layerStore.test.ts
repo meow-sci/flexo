@@ -11,23 +11,25 @@ import {
   toggleLayerVisible,
 } from './layerStore';
 import {
-  $selectedColliderIndices,
-  $selectedIndices,
-  $selectedIvaSeatIndices,
-  $selectedLightIndices,
+  $selection,
   addCollider,
   addIvaSeat,
   addLight,
   addSubPart,
   clearSelection,
   newPart,
+  select,
   selectLayerEntities,
-  setSelectedColliders,
-  setSelectedIvaSeats,
-  setSelectedLights,
-  setSelectedPlacements,
+  type EntityKind,
 } from './editorStore';
 import { DEFAULT_LAYER_ID, IVA_SEAT_LAYER_ID, LIGHT_LAYER_ID } from '../ksa/types';
+
+/** Ids of the selected entities of one kind, in selection order. */
+const selectedIds = (kind: EntityKind): string[] =>
+  $selection
+    .get()
+    .filter((r) => r.kind === kind)
+    .map((r) => r.id);
 
 beforeEach(() => {
   $layerView.set({});
@@ -62,14 +64,14 @@ describe('layerStore — listed flag', () => {
 
   it('toggling listed does NOT prune the selection (unlike lock)', () => {
     addSubPart('Core.A'); // lands on the active Default layer
-    setSelectedPlacements([0]);
-    expect($selectedIndices.get()).toEqual([0]);
+    select([{ kind: 'subpart', id: 'a_1' }]);
+    expect(selectedIds('subpart')).toEqual(['a_1']);
 
     toggleLayerListed(DEFAULT_LAYER_ID);
-    expect($selectedIndices.get()).toEqual([0]); // still selected
+    expect(selectedIds('subpart')).toEqual(['a_1']); // still selected
 
     setLayerLocked(DEFAULT_LAYER_ID, true);
-    expect($selectedIndices.get()).toEqual([]); // lock prunes
+    expect(selectedIds('subpart')).toEqual([]); // lock prunes
   });
 
   // Regression: `deselectLayer` used to prune only placements/connectors/kittens, so locking
@@ -81,26 +83,26 @@ describe('layerStore — listed flag', () => {
     addIvaSeat();
     addLight(null);
 
-    // The kinds are mutually exclusive, so each is checked on its own.
-    setSelectedColliders([0]);
-    expect($selectedColliderIndices.get()).toEqual([0]);
+    // Each kind is checked on its own so a pruning gap in one can't hide behind another.
+    select([{ kind: 'collider', id: '_collider1' }]);
+    expect(selectedIds('collider')).toEqual(['_collider1']);
     setLayerLocked(IVA_SEAT_LAYER_ID, true);
-    expect($selectedColliderIndices.get()).toEqual([0]); // a different layer — untouched
+    expect(selectedIds('collider')).toEqual(['_collider1']); // a different layer — untouched
     setLayerLocked(DEFAULT_LAYER_ID, true);
-    expect($selectedColliderIndices.get()).toEqual([]);
+    expect(selectedIds('collider')).toEqual([]);
 
     setLayerLocked(IVA_SEAT_LAYER_ID, false);
-    setSelectedIvaSeats([0]);
-    expect($selectedIvaSeatIndices.get()).toEqual([0]);
+    select([{ kind: 'ivaSeat', id: '_seat1' }]);
+    expect(selectedIds('ivaSeat')).toEqual(['_seat1']);
     setLayerLocked(IVA_SEAT_LAYER_ID, true);
-    expect($selectedIvaSeatIndices.get()).toEqual([]);
+    expect(selectedIds('ivaSeat')).toEqual([]);
 
-    setSelectedLights([0]);
-    expect($selectedLightIndices.get()).toEqual([0]);
+    select([{ kind: 'light', id: '_light1' }]);
+    expect(selectedIds('light')).toEqual(['_light1']);
     setLayerLocked(DEFAULT_LAYER_ID, true);
-    expect($selectedLightIndices.get()).toEqual([0]); // a different layer — untouched
+    expect(selectedIds('light')).toEqual(['_light1']); // a different layer — untouched
     setLayerLocked(LIGHT_LAYER_ID, true);
-    expect($selectedLightIndices.get()).toEqual([]);
+    expect(selectedIds('light')).toEqual([]);
   });
 
   it('selectLayerEntities selects a layer’s colliders, IVA seats and lights', () => {
@@ -110,18 +112,18 @@ describe('layerStore — listed flag', () => {
     clearSelection();
 
     selectLayerEntities(IVA_SEAT_LAYER_ID);
-    expect($selectedIvaSeatIndices.get()).toEqual([0]);
-    expect($selectedColliderIndices.get()).toEqual([]);
-    expect($selectedLightIndices.get()).toEqual([]);
+    expect(selectedIds('ivaSeat')).toEqual(['_seat1']);
+    expect(selectedIds('collider')).toEqual([]);
+    expect(selectedIds('light')).toEqual([]);
 
     selectLayerEntities(DEFAULT_LAYER_ID);
-    expect($selectedColliderIndices.get()).toEqual([0]);
-    expect($selectedIvaSeatIndices.get()).toEqual([]);
+    expect(selectedIds('collider')).toEqual(['_collider1']);
+    expect(selectedIds('ivaSeat')).toEqual([]);
 
     selectLayerEntities(LIGHT_LAYER_ID);
-    expect($selectedLightIndices.get()).toEqual([0]);
-    expect($selectedColliderIndices.get()).toEqual([]);
-    expect($selectedIvaSeatIndices.get()).toEqual([]);
+    expect(selectedIds('light')).toEqual(['_light1']);
+    expect(selectedIds('collider')).toEqual([]);
+    expect(selectedIds('ivaSeat')).toEqual([]);
   });
 
   it('revealLayer makes a hidden + unlisted layer visible and listed again', () => {

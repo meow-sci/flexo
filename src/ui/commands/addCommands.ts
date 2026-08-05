@@ -9,7 +9,6 @@ import {
   addLight,
   addSubPart,
   revealEntity,
-  selectLight,
 } from '../../state/editorStore';
 import { $hasSelection } from '../../state/selectors';
 import { requestColliderFit } from '../../state/colliderStore';
@@ -82,10 +81,9 @@ const lightCommands: Command[] = (['Spot', 'Point'] as LightType[]).map((type) =
     ensureBuildMode();
     // Part-level at the origin — instantly visible and selectable. A SubPart-owned light
     // is authored from the SubPart Data dialog, where the owner template is unambiguous.
-    // addLight appends and returns nothing, so the new light is the last entry.
+    // `addLight` selects what it added (like every other add*), so only the reveal is left.
     addLight(null, { type });
     const lights = $part.get().lights;
-    selectLight(lights.length - 1);
     revealEntity('light', lights[lights.length - 1].id);
   },
 }));

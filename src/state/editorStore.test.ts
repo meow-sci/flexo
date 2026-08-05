@@ -61,6 +61,10 @@ import { previewOverrideMatrix } from '../ksa/animationRig';
 import {
   $part,
   $activeLayerId,
+  $selection,
+  select,
+  toggleRef,
+  type SelectionRef,
   $selectedIndex,
   $selectedIndices,
   $selectedConnectorIndex,
@@ -129,9 +133,7 @@ import {
   deleteLayer,
   renameLayer,
   reorderLayers,
-  selectAllEntities,
   selectLayerEntities,
-  invertSelection,
   setActiveLayer,
   setEditorTags,
   setPartId,
@@ -139,12 +141,14 @@ import {
   setSelection,
   toggleEntity,
   updateSelectedTransforms,
+  selectedTransformRefs,
   duplicatePlacement,
   duplicateSelected,
   moveEntityToLayer,
   moveSelectionToLayer,
   pushUndo,
   removeSelected,
+  removePlacement,
   newPart,
   redo,
   setConnectorFlags,
@@ -185,7 +189,7 @@ import type {
   SubPartPlacement,
   Transform,
 } from '../ksa/types';
-import { $layerView, setLayerLocked, toggleLayerListed, toggleLayerVisible } from './layerStore';
+import { $layerView, setLayerLocked, toggleLayerVisible } from './layerStore';
 import type { ChainCommitEntry, ImportedGameData, PlacementTransform } from './editorStore';
 import {
   importModelAsMeshes,
@@ -978,7 +982,7 @@ describe('editorStore', () => {
     updateSelectedTransforms([
       {
         kind: 'light',
-        index: 0,
+        id: '_light1',
         transform: {
           position: { x: 1, y: 2, z: 3 },
           rotation: { x: 0.1, y: 0, z: 0 },
@@ -1632,9 +1636,9 @@ describe('editorStore layers', () => {
       scale: { x: 1, y: 1, z: 1 },
     });
     updateSelectedTransforms([
-      { kind: 'subpart', index: 0, transform: t(1) },
-      { kind: 'connector', index: 0, transform: t(2) },
-      { kind: 'kitten', index: 0, transform: t(3) },
+      { kind: 'subpart', id: 'a_1', transform: t(1) },
+      { kind: 'connector', id: '_connector1', transform: t(2) },
+      { kind: 'kitten', id: 'kitten_1', transform: t(3) },
     ]);
     expect($part.get().placements[0].position.x).toBe(1);
     expect($part.get().connectors[0].position.x).toBe(2);
@@ -2272,7 +2276,7 @@ describe('collider mutations', () => {
     updateSelectedTransforms([
       {
         kind: 'collider',
-        index: 0,
+        id: '_collider1',
         transform: {
           position: { x: 0, y: 0, z: 0 },
           rotation: { x: 0, y: 0, z: 0 },
@@ -2423,7 +2427,7 @@ describe('IVA seat mutations', () => {
     // …but position + rotation from the same write still land.
     expect($part.get().ivaSeats[0].rotation).toEqual(AIMED.rotation);
     updateSelectedTransforms([
-      { kind: 'ivaSeat', index: 0, transform: { ...AIMED, scale: { x: 2, y: 7, z: 3 } } },
+      { kind: 'ivaSeat', id: '_seat1', transform: { ...AIMED, scale: { x: 2, y: 7, z: 3 } } },
     ]);
     expect($part.get().ivaSeats[0].scale).toEqual({ x: 1, y: 1, z: 1 });
   });
@@ -2788,102 +2792,221 @@ describe('applyActionChain', () => {
  * bounded by the same eligibility rule (listed + unlocked layers), and neither touches
  * the document, so neither may ever push an undo step.
  */
-describe('selectAllEntities / invertSelection', () => {
-  beforeEach(() => {
-    // Per-layer view state is persisted, so a lock/unlist set by an earlier test would
-    // otherwise leak into this one.
-    $layerView.set({});
+describe('stable-id selection', () => {
+  const sub = (id: string): SelectionRef => ({ kind: 'subpart', id });
+
+  it('survives a delete + undo without ever aliasing a different entity (census pain 14)', () => {
+    addSubPart('Core.A'); // a_1
+    addSubPart('Core.B'); // b_1
+    addSubPart('Core.C'); // c_1
+    const ids = $part.get().placements.map((p) => p.instanceId);
+    expect(ids).toEqual(['a_1', 'b_1', 'c_1']);
+
+    select([sub('c_1')]);
+    // Deleting an EARLIER row shifts every later index down — v1 remapped by hand here.
+    removePlacement(0);
+    expect($selection.get()).toEqual([sub('c_1')]);
+    expect($selectedIndices.get()).toEqual([1]); // resolved fresh, not remembered
+
+    // The v1 bug: undo restored 3 placements, clampSelection let index 2 stand, and the
+    // selection silently pointed at whatever now sat there.
+    undo();
+    expect($part.get().placements.map((p) => p.instanceId)).toEqual(['a_1', 'b_1', 'c_1']);
+    expect($selection.get()).toEqual([sub('c_1')]);
+    expect($selectedIndices.get()).toEqual([2]);
   });
 
-  /** One entity of every selectable kind, each on its own (built-in or active) layer. */
-  function addOneOfEachKind(): void {
+  it('drops refs whose entity is gone, and only those', () => {
+    addSubPart('Core.A');
+    addSubPart('Core.B');
+    select([sub('a_1'), sub('b_1')]);
+    removePlacement(0);
+    expect($selection.get()).toEqual([sub('b_1')]);
+  });
+
+  it('refuses to select an entity that does not exist', () => {
+    addSubPart('Core.A');
+    select([sub('a_1'), sub('ghost_9')]);
+    expect($selection.get()).toEqual([sub('a_1')]);
+  });
+
+  it('toggleRef appends (primary = last) and removes, leaving the other kinds intact', () => {
+    addSubPart('Core.A');
+    addSubPart('Core.B');
+    addConnector();
+    select([sub('a_1')]);
+
+    toggleRef({ kind: 'connector', id: '_connector1' });
+    toggleRef(sub('b_1'));
+    expect($selection.get()).toEqual([
+      sub('a_1'),
+      { kind: 'connector', id: '_connector1' },
+      sub('b_1'),
+    ]);
+    expect($selection.get().at(-1)).toEqual(sub('b_1')); // primary = last
+
+    toggleRef({ kind: 'connector', id: '_connector1' });
+    expect($selection.get()).toEqual([sub('a_1'), sub('b_1')]);
+  });
+
+  it('select({additive}) never duplicates a ref and keeps first-occurrence order', () => {
+    addSubPart('Core.A');
+    addSubPart('Core.B');
+    select([sub('a_1'), sub('b_1'), sub('a_1')]);
+    expect($selection.get()).toEqual([sub('a_1'), sub('b_1')]);
+
+    select([sub('a_1')], { additive: true });
+    expect($selection.get()).toEqual([sub('a_1'), sub('b_1')]);
+  });
+
+  it('deselectLayer prunes every kind in ONE filter', () => {
     addSubPart('Core.A');
     addConnector();
     addCollider('Box');
     addIvaSeat();
     addLight(null);
     addKitten('hunter');
-  }
+    selectLayerEntities(DEFAULT_LAYER_ID);
+    const kept = $selection.get().length;
+    expect(kept).toBe(3); // SubPart + connector + collider live on Default
 
-  it('selects every kind on listed, unlocked layers', () => {
-    addOneOfEachKind();
-    clearSelection();
+    deselectLayer(DEFAULT_LAYER_ID);
+    expect($selection.get()).toEqual([]);
 
-    selectAllEntities();
-    expect($selectedIndices.get()).toEqual([0]);
-    expect($selectedConnectorIndices.get()).toEqual([0]);
-    expect($selectedColliderIndices.get()).toEqual([0]);
-    expect($selectedIvaSeatIndices.get()).toEqual([0]);
-    expect($selectedLightIndices.get()).toEqual([0]);
-    expect($selectedKittenIndices.get()).toEqual([0]);
+    // …and the pinned layers prune independently.
+    selectLayerEntities(LIGHT_LAYER_ID);
+    expect($selection.get()).toEqual([{ kind: 'light', id: '_light1' }]);
+    deselectLayer(LIGHT_LAYER_ID);
+    expect($selection.get()).toEqual([]);
   });
 
-  it('excludes a LOCKED layer and an UNLISTED layer', () => {
-    addSubPart('Core.A'); // index 0, Default
-    const locked = createLayer('Locked'); // becomes active
-    addSubPart('Core.B'); // index 1
-    const unlisted = createLayer('Unlisted');
-    addSubPart('Core.C'); // index 2
-    setActiveLayer(DEFAULT_LAYER_ID);
-
-    setLayerLocked(locked, true);
-    toggleLayerListed(unlisted);
-
-    selectAllEntities();
-    expect($selectedIndices.get()).toEqual([0]);
-
-    // Unlocking + re-listing brings them back — the rule is read live, never cached.
-    setLayerLocked(locked, false);
-    toggleLayerListed(unlisted);
-    selectAllEntities();
-    expect($selectedIndices.get()).toEqual([0, 1, 2]);
+  it('moveIvaSeat keeps the selected seat selected across a reorder — no remap code', () => {
+    addIvaSeat();
+    addIvaSeat();
+    addIvaSeat();
+    select([{ kind: 'ivaSeat', id: '_seat3' }]);
+    moveIvaSeat(2, -1);
+    expect($part.get().ivaSeats.map((s) => s.id)).toEqual(['_seat1', '_seat3', '_seat2']);
+    expect($selection.get()).toEqual([{ kind: 'ivaSeat', id: '_seat3' }]);
+    expect($selectedIvaSeatIndices.get()).toEqual([1]); // the view follows for free
   });
 
-  it('inverts an empty selection into the select-all result, and back to empty', () => {
-    addOneOfEachKind();
-
-    clearSelection();
-    invertSelection();
-    const inverted = [...$selectedIndices.get()];
-    selectAllEntities();
-    expect(inverted).toEqual($selectedIndices.get());
-    expect($selectedLightIndices.get()).toEqual([0]);
-
-    // Inverting a full selection empties it.
-    invertSelection();
-    expect($selectedIndices.get()).toEqual([]);
-    expect($selectedConnectorIndices.get()).toEqual([]);
-    expect($selectedColliderIndices.get()).toEqual([]);
-    expect($selectedIvaSeatIndices.get()).toEqual([]);
-    expect($selectedLightIndices.get()).toEqual([]);
-    expect($selectedKittenIndices.get()).toEqual([]);
-  });
-
-  it('inverts per kind, keeping the unselected entities of every other kind', () => {
+  it('a single-entity delete selects the NEXT entity of that kind by id', () => {
     addSubPart('Core.A');
     addSubPart('Core.B');
     addSubPart('Core.C');
-    addConnector();
-    setSelection([1], [], []);
+    select([sub('b_1')]);
+    removeSelected();
+    expect($selection.get()).toEqual([sub('c_1')]);
 
-    invertSelection();
-    expect($selectedIndices.get()).toEqual([0, 2]);
-    expect($selectedConnectorIndices.get()).toEqual([0]);
+    // Deleting the LAST one falls back to its predecessor.
+    removeSelected();
+    expect($selection.get()).toEqual([sub('a_1')]);
+
+    // Deleting the only remaining one clears.
+    removeSelected();
+    expect($selection.get()).toEqual([]);
   });
 
-  it('never pushes an undo step — selection is view state, not document state', () => {
+  it('every add* selects exactly what it added', () => {
+    addSubPart('Core.A');
+    expect($selection.get()).toEqual([sub('a_1')]);
+    addConnector();
+    expect($selection.get()).toEqual([{ kind: 'connector', id: '_connector1' }]);
+    addCollider('Box');
+    expect($selection.get()).toEqual([{ kind: 'collider', id: '_collider1' }]);
+    addIvaSeat();
+    expect($selection.get()).toEqual([{ kind: 'ivaSeat', id: '_seat1' }]);
+    addLight(null);
+    expect($selection.get()).toEqual([{ kind: 'light', id: '_light1' }]);
+    addKitten('hunter');
+    expect($selection.get()).toEqual([{ kind: 'kitten', id: 'kitten_1' }]);
+  });
+
+  it('selection is never an undo step', () => {
     addSubPart('Core.A');
     addConnector();
-    const document = $part.get();
     const canUndo = $canUndo.get();
     const description = $undoDescription.get();
-
-    selectAllEntities();
-    invertSelection();
-    invertSelection();
-
-    expect($part.get()).toBe(document);
+    select([sub('a_1')]);
+    toggleRef({ kind: 'connector', id: '_connector1' });
+    clearSelection();
+    selectLayerEntities(DEFAULT_LAYER_ID);
     expect($canUndo.get()).toBe(canUndo);
     expect($undoDescription.get()).toBe(description);
+  });
+});
+
+describe('by-id transform write-back', () => {
+  it('addresses a kitten and a light selected TOGETHER without the v1 index-order trap', () => {
+    addKitten('hunter'); // kitten_1 at index 0
+    addLight(null); // _light1 at index 0 — the same index, different list
+    select([
+      { kind: 'kitten', id: 'kitten_1' },
+      { kind: 'light', id: '_light1' },
+    ]);
+    const t = (x: number) => ({
+      position: { x, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 9, y: 9, z: 9 },
+    });
+    updateSelectedTransforms([
+      { kind: 'kitten', id: 'kitten_1', transform: t(1) },
+      { kind: 'light', id: '_light1', transform: t(2) },
+    ]);
+    expect($part.get().kittens[0].position.x).toBe(1);
+    expect($part.get().lights[0].position.x).toBe(2);
+    // Normalization is untouched: a light's scale stays pinned, a kitten's does not.
+    expect($part.get().lights[0].scale).toEqual({ x: 1, y: 1, z: 1 });
+    expect($part.get().kittens[0].scale).toEqual({ x: 9, y: 9, z: 9 });
+  });
+
+  it('skips an update whose entity is gone instead of writing to a neighbor', () => {
+    addSubPart('Core.A');
+    addSubPart('Core.B');
+    updateSelectedTransforms([
+      {
+        kind: 'subpart',
+        id: 'ghost_1',
+        transform: {
+          position: { x: 5, y: 0, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+        },
+      },
+    ]);
+    expect($part.get().placements.every((p) => p.position.x === 0)).toBe(true);
+  });
+
+  it('selectedTransformRefs flattens in KIND_ORDER regardless of selection order, carrying ids', () => {
+    addLight(null);
+    addSubPart('Core.A');
+    addConnector();
+    select([
+      { kind: 'light', id: '_light1' },
+      { kind: 'connector', id: '_connector1' },
+      { kind: 'subpart', id: 'a_1' },
+    ]);
+    expect(selectedTransformRefs().map((r) => [r.kind, r.id, r.index])).toEqual([
+      ['subpart', 'a_1', 0],
+      ['connector', '_connector1', 0],
+      ['light', '_light1', 0],
+    ]);
+  });
+
+  it('updateSelectedTransform routes through the PRIMARY ref (last selected)', () => {
+    addSubPart('Core.A');
+    addKitten('hunter');
+    select([
+      { kind: 'subpart', id: 'a_1' },
+      { kind: 'kitten', id: 'kitten_1' },
+    ]);
+    updateSelectedTransform({
+      position: { x: 4, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+    });
+    expect($part.get().kittens[0].position.x).toBe(4);
+    expect($part.get().placements[0].position.x).toBe(0);
   });
 });

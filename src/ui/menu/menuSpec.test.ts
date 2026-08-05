@@ -320,9 +320,9 @@ describe('menu transcription (authoritative tree)', () => {
 describe('disabled stubs stay visible but never run', () => {
   /** Every command the plan marks [stub] — visible, disabled, owned by a later phase. */
   const STUBS = [
-    'tool.marquee',
     // `view.frameSelection` / `view.resetCamera` graduated out of this list: the camera
-    // phase gave them real targets (`frameCamera()` / `resetCamera()`).
+    // phase gave them real targets (`frameCamera()` / `resetCamera()`). `tool.marquee`
+    // graduated with the Build-mode selection phase: it arms the real box-select tool.
     'view.displayFilters',
     'view.motionTrails',
     'window.timeline',

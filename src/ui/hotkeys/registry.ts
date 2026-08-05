@@ -6,7 +6,7 @@ import { $chainSession, closeChain } from '../../state/chainStore';
 import { $measureTool, setMeasureTool } from '../../state/measurementStore';
 import { $isExhaustPlacing, setEngineExhaustGizmo } from '../../state/engineStore';
 import { $activeJointId, $editKeyframeId } from '../../state/animationStore';
-import { $mode, MODES } from '../../state/modeStore';
+import { $activeTool, $mode, disarmTool, MODES } from '../../state/modeStore';
 import { $seatView } from '../../state/ivaStore';
 import { $gizmoDragging, requestGizmoCancel } from '../../state/viewStore';
 import { rotateSelectionAroundPair } from '../../three/rotateSelection';
@@ -256,6 +256,18 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
         chords: [['T'], ['shift', 'T']],
         scope: 'viewport',
         run: (e) => runCommand('tool.cycleGizmo', e.shiftKey ? -1 : 1),
+      },
+      {
+        // Arms the one-shot replace marquee (design-build-mode.md §1.4; foundation §14.1).
+        // Viewport-scoped for the same C5 reason as `M`: a tool must never arm invisibly
+        // behind a dialog. Escape disarms it through ladder rung 5. Spelled `b`, the
+        // physical key — react-hotkeys-hook matches `event.code` by default.
+        id: 'tool.marquee',
+        label: 'Box select (marquee)',
+        keys: 'b',
+        chords: [['B']],
+        scope: 'viewport',
+        run: () => runCommand('tool.marquee'),
       },
       {
         // Viewport-scoped for symmetry with `B` (design §4.4, the C5 fix): a tool must never
@@ -515,7 +527,6 @@ export const ALL_BINDINGS: HotkeyBinding[] = HOTKEY_GROUPS.flatMap((g) => g.bind
 //
 // | Binding (authoritative-table row)                                        | Owning phase |
 // |--------------------------------------------------------------------------|--------------|
-// | `viewport` `B` — arm box-select (marquee)                                 | P5A (tool + gesture) |
 // | measure / seat-view / exhaust arming routed through `$activeTool`,        | P5B (F-section) |
 // |   plus the tool definitions and the status-bar tool segments              |              |
 // | chain discard-confirm on Esc / mode switch / ⇧⌘K re-invoke (LOCKED)       | P5B.28       |
@@ -567,13 +578,17 @@ registerEscRung({
   rung: 5,
   id: 'tool.cancel',
   label: 'Cancel the armed tool',
-  // P5B re-points this to $activeTool (and adds marquee) once the tools route through the
-  // single slot; the target functions stay the same.
-  when: () => $measureTool.get() !== 'none' || $isExhaustPlacing.get(),
+  // The marquee is the first tenant of the `$activeTool` slot, so it cancels through
+  // `disarmTool` → its registered `onCancel` (EditorScene restores orbit + picking and
+  // drops the rect). P5B routes measure/exhaust through the same slot; until then their
+  // v1 flags are read directly.
+  when: () =>
+    $activeTool.get() !== null || $measureTool.get() !== 'none' || $isExhaustPlacing.get(),
   run: () => {
+    if ($activeTool.get() !== null) disarmTool();
     // EditorScene's existing $measureTool subscription cancels the half-placed pick and
     // restores the cursor, so disarming is the whole cancel.
-    if ($measureTool.get() !== 'none') setMeasureTool('none');
+    else if ($measureTool.get() !== 'none') setMeasureTool('none');
     else setEngineExhaustGizmo(false);
   },
   preventDefault: true,

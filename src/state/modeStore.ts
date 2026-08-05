@@ -76,6 +76,23 @@ export const $mode = atom<Mode>('build');
  */
 export const $activeTool = atom<Tool | null>(null);
 
+/**
+ * The marquee's live drag rectangle in CANVAS pixels, plus how many entities it currently
+ * covers (the count chip). Null whenever no marquee drag is in flight — an ARMED but
+ * not-yet-dragging `B` leaves this null.
+ *
+ * Tool sub-state, so it lives beside the tool slot (design-build-mode.md §12 `marquee`
+ * row). **Ephemeral**: never persisted, never an undo step. The rectangle is drawn as a DOM
+ * overlay, which is what keeps the on-demand render loop untouched (§1.4).
+ */
+export const $marqueeRect = atom<{
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  count: number;
+} | null>(null);
+
 // ── mode enter/exit hooks ────────────────────────────────────────────────────
 
 export interface ModeHooks {

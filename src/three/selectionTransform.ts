@@ -34,7 +34,7 @@ export function applySelectionTransform(
   updateSelectedTransforms(
     refs.map((r) => ({
       kind: r.kind,
-      index: r.index,
+      id: r.id,
       transform: transform(r.transform, centroid),
     })),
   );

@@ -10,9 +10,8 @@ import {
   decrementNudgeStep,
   incrementNudgeStep,
   newPart,
-  selectLight,
+  select,
   setNudgeAxis,
-  setSelectedPlacements,
   undo,
 } from '../state/editorStore';
 import { setLayerLocked } from '../state/layerStore';
@@ -39,7 +38,7 @@ function seedPlacements(positions: { x: number; y: number; z: number }[]): void 
       layerId: DEFAULT_LAYER_ID,
     })),
   });
-  setSelectedPlacements(positions.map((_, i) => i));
+  select(positions.map((_, i) => ({ kind: 'subpart', id: `p_${i}` })));
 }
 
 describe('nudgeDelta', () => {
@@ -103,13 +102,13 @@ describe('nudgeSelectionBy', () => {
     expect($part.get().placements[0].position).toEqual({ x: 0, y: 0, z: 0 });
   });
 
-  // Regression for the SelectableKind misroute hazard: updateSelectedTransforms' final
-  // else is the KITTEN branch, so an unrouted 'light' ref would move the kitten that
-  // happens to share the light's index instead of the light.
+  // Regression for the v1 misroute hazard: updateSelectedTransforms' final else was the
+  // KITTEN branch, so an unrouted 'light' ref moved the kitten that happened to share the
+  // light's index. Refs carry ids now, but the two-entities-at-index-0 setup still guards it.
   it('nudges a selected light — never the kitten at the same index', () => {
     addKitten('hunter'); // kitten index 0, at the origin
     addLight(null); // light index 0, at the origin
-    selectLight(0);
+    select([{ kind: 'light', id: '_light1' }]);
     setNudgeAxis('y');
     nudgeSelectionBy(1);
     expect($part.get().lights[0].position).toEqual({ x: 0, y: 0.1, z: 0 });

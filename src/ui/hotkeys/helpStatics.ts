@@ -27,11 +27,11 @@ export interface HelpStaticSection {
 }
 
 /**
- * Pointer gestures that ship TODAY. The marquee (`⇧`-drag add / `⌥⇧`-drag subtract),
- * `⌥`-drag duplicate, the `⌃` snap invert and the timeline's double-click insert are all
- * real design commitments but are NOT implemented yet, so they are deliberately absent.
+ * Pointer gestures that ship TODAY. `⌥`-drag duplicate, the `⌃` snap invert and the
+ * timeline's double-click insert are real design commitments but are NOT implemented yet, so
+ * they are deliberately absent.
  *
- * EXTEND in P5A (marquee), P5B (⌥-drag duplicate, ⌃ snap invert), P11 (timeline gestures).
+ * EXTEND in P5B (⌥-drag duplicate, ⌃ snap invert), P11 (timeline gestures).
  */
 export const POINTER_SECTION: HelpStaticSection = {
   title: 'Pointer & modifiers',
@@ -39,6 +39,14 @@ export const POINTER_SECTION: HelpStaticSection = {
     {
       chords: [['mod', 'click']],
       text: 'Viewport — add the clicked entity to the selection instead of replacing it (⌃ and ⇧ do the same)',
+    },
+    {
+      chords: [['shift', 'drag']],
+      text: 'Viewport — drag a box from empty space to add everything it touches to the selection',
+    },
+    {
+      chords: [['alt', 'shift', 'drag']],
+      text: 'Viewport — drag a box to remove everything it touches from the selection',
     },
     {
       chords: [['shift', 'click']],

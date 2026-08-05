@@ -1,13 +1,8 @@
 import type { Command } from '../../state/commandStore';
-import {
-  $activeLayerId,
-  clearSelection,
-  invertSelection,
-  selectAllEntities,
-  selectLayerEntities,
-  setActiveLayer,
-} from '../../state/editorStore';
-import { $layerSummaries } from '../../state/selectors';
+import { $activeLayerId, selectLayerEntities, setActiveLayer } from '../../state/editorStore';
+import { deselectAll, hasAnyEntity, invertSelection, selectAll } from '../../state/selectionOps';
+import { $hasSelection, $layerSummaries } from '../../state/selectors';
+import { armTool } from '../../state/modeStore';
 
 /**
  * Select menu commands (design: foundation §3 "Select").
@@ -25,20 +20,23 @@ export const SELECT_COMMANDS: Command[] = [
     title: 'All',
     menuPath: 'Select',
     keywords: 'select all everything',
-    run: () => selectAllEntities(),
+    enabled: () => hasAnyEntity(),
+    run: () => selectAll(),
   },
   {
     id: 'select.none',
     title: 'Deselect',
     menuPath: 'Select',
     keywords: 'deselect none clear selection',
-    run: () => clearSelection(),
+    enabled: () => $hasSelection.get(),
+    run: () => deselectAll(),
   },
   {
     id: 'select.invert',
     title: 'Invert',
     menuPath: 'Select',
     keywords: 'invert flip selection',
+    enabled: () => hasAnyEntity(),
     run: () => invertSelection(),
   },
   {
@@ -49,13 +47,14 @@ export const SELECT_COMMANDS: Command[] = [
     run: () => selectLayerEntities($activeLayerId.get()),
   },
   {
+    // Arms the one-shot replace marquee: the NEXT plain drag in the viewport box-selects
+    // and the tool disarms itself (design-build-mode.md §1.4; foundation §2.6 "Box select").
+    // The ⇧-drag / ⌥⇧-drag gestures need no arming and are handled in the scene.
     id: 'tool.marquee',
     title: 'Box Select',
     menuPath: 'Select',
     keywords: 'marquee box rubber band drag select',
-    enabled: () => false,
-    disabledReason: 'Box select arrives with the Build-mode rework',
-    run: () => {},
+    run: () => armTool('marquee'),
   },
 ];
 

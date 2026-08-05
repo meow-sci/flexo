@@ -5,8 +5,7 @@ import {
   $canUndo,
   $hasClipboard,
   $historyList,
-  $selectedIndices,
-  $selectedLightIndices,
+  $selection,
   copySelected,
   duplicateSelected,
   jumpToHistory,
@@ -63,7 +62,7 @@ export const EDIT_COMMANDS: Command[] = [
     // single 'delete', so ⌘Z puts the cut entities straight back.
     // Lights are not in the clipboard yet, so cutting a selection containing one would
     // DELETE it with no way to paste it back — refuse instead of destroying.
-    enabled: () => $hasSelection.get() && $selectedLightIndices.get().length === 0,
+    enabled: () => $hasSelection.get() && !$selection.get().some((ref) => ref.kind === 'light'),
     run: () => {
       const n = copySelected();
       removeSelected();
@@ -116,7 +115,7 @@ export const EDIT_COMMANDS: Command[] = [
     title: 'Begin Action Chain…',
     menuPath: 'Edit',
     keywords: 'array grid radial ring repeat',
-    enabled: () => $selectedIndices.get().length > 0,
+    enabled: () => $selection.get().some((ref) => ref.kind === 'subpart'),
     run: () => beginActionChain(),
   },
   {

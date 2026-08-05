@@ -1,11 +1,5 @@
 import type { Command } from '../../state/commandStore';
-import {
-  $part,
-  $toolMode,
-  selectIvaSeat,
-  setToolMode,
-  type ToolMode,
-} from '../../state/editorStore';
+import { $part, $toolMode, select, setToolMode, type ToolMode } from '../../state/editorStore';
 import { $seatView, enterSeatView, exitSeatView } from '../../state/ivaStore';
 import { $mode } from '../../state/modeStore';
 import { $engineExhaustGizmo, setEngineExhaustGizmo } from '../../state/engineStore';
@@ -161,7 +155,7 @@ export function seatCommands(): Command[] {
       // v1 pairing: entering the preview also selects the seat, so the inspector is
       // editing the seat you are looking through.
       enterSeatView(seat.id);
-      selectIvaSeat(index);
+      select([{ kind: 'ivaSeat', id: seat.id }]);
     },
   }));
 }

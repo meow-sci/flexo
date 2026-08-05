@@ -9,20 +9,64 @@ the 3D scene subscribes with vanilla `subscribe()`, React reads via
 | Atom | Type | Meaning |
 |---|---|---|
 | `$part` | `EditingPart` | The whole part: `partId`, `editorTags`, `gameData` (display name, mass, tanks, power, coupling — the popup-only metadata with no 3D form), `layers[]`, `placements[]`, `connectors[]`, `colliders[]` (each carries a `layerId` naming an ordinary layer; connector `flags` is a `ConnectorFlag[]`). Treated as **immutable** — every mutation replaces it with a fresh object (so subscribers fire). |
-| `$selectedIndices` / `$selectedIndex` | `number[]` / `number` | SubPart selection (multi); `$selectedIndex` is the primary (last) one or `-1`. |
-| `$selectedConnectorIndex` | `number` | Selected connector, or `-1`. Mutually exclusive with SubPart selection. |
-| `$selectedColliderIndices` / `$selectedColliderIndex` | `number[]` / `number` | Collider selection — the **fourth** `SelectableKind`, alongside subpart/connector/kitten. Mutually exclusive under the single-kind setters, but `setSelection` / `toggleEntity` can span all five (the Assets list's cross-kind multi-select). |
-| `$selectedIvaSeatIndices` / `$selectedIvaSeatIndex` | `number[]` / `number` | IVA seat selection — the **fifth** `SelectableKind` (`'ivaSeat'`), same shape as the collider pair: clamped when the document shrinks, cleared by every other kind's single-kind setter, and carried by `setSelection` / `toggleEntity` / `selectedTransformRefs`. See [iva-seats.md](./iva-seats.md). |
-| `$selectedLightIndices` / `$selectedLightIndex` | `number[]` / `number` | Light selection — the **sixth** `SelectableKind` (`'light'`), same shape again. See [lights.md](./lights.md). |
-| `$lightEditContext` | `Record<string, number>` | Per light id, **which placement of its owner template** was last clicked. Ephemeral (not persisted, not undone). One atom, so the gizmo's write-back frame and the inspector's part-frame fields can never disagree about which instance an edit converts through. |
+| `$selection` | `readonly SelectionRef[]` | **THE selection** — one ordered list of `{kind, id}` refs spanning every entity kind (`'subpart' \| 'connector' \| 'collider' \| 'ivaSeat' \| 'light' \| 'kitten'`). The LAST element is the primary. Ephemeral: never persisted, never undone, survives mode switches. See "The selection" below. |
+| `$lightEditContext` | `Record<string, number>` | Per light id, **which placement of its owner template** was last clicked. |
 | `$activeLayerId` | `string` | Layer new items land in. Ephemeral (not persisted, not undone); clamped to a live layer. See [layers.md](./layers.md). |
 | `$chainSession` | `ChainSession \| null` | The open action-chain session (`src/state/chainStore.ts`): frozen seed `instanceId`s + the ordered step list. **Ephemeral by design** — never persisted, never undone; the document is untouched until Apply, which is what makes Cancel unconditionally safe. The only persisted piece is the module-private `flexo:chainDefaults` (last-used parameters per op kind). See [action-chains.md](./action-chains.md). |
 | `$toolMode` | `'translate'\|'rotate'\|'scale'` | Drives the 3D gizmo. |
 | `$snap` | `{ translate?, rotateDeg? }` | Grid / rotation snap (0/undefined = off). |
 | `$canUndo` / `$canRedo` | `boolean` | Enablement for the menubar ↶ ↷ pair and the `edit.undo`/`edit.redo` commands. |
 
+(`$lightEditContext` is ephemeral too — one atom, so the gizmo's write-back frame and the
+inspector's part-frame fields can never disagree about which instance an edit converts
+through.)
+
 Per-layer **visibility/lock** is NOT in `$part` — it's persisted view state in
 `src/state/layerStore.ts` (`$layerView`). See [layers.md](./layers.md).
+
+## The selection — stable ids, never indices
+
+`$selection` holds `SelectionRef = { kind: EntityKind; id: string }`, where `id` is the
+entity's own stable id (`instanceId` for a SubPart, the entity id for everything else). It
+replaced six per-kind **index** arrays, and the reason is a real bug those had: an index is
+positional, so after an undo the old `clampSelection` could leave a surviving index pointing
+at a **different** entity. An id either resolves or it does not, so "clamping" is now one
+filter that drops dead refs and never re-points a live one.
+
+**Actions** (all in `editorStore.ts`, none of them undoable):
+
+| Action | Meaning |
+|---|---|
+| `select(refs, { additive? })` | Replace (or extend) the selection. Deduped by `kind:id`, first occurrence wins; refs whose entity does not exist are dropped. |
+| `toggleRef(ref)` | Add/remove ONE ref, leaving the rest — the additive (⇧/⌘/⌃) viewport click. An appended ref becomes the primary. |
+| `deselectRefs(refs)` | Drop several refs (the subtractive marquee). |
+| `clearSelection()` | Empty it. |
+| `selectLayerEntities(layerId)` / `deselectLayer(layerId)` | Every entity on a layer / everything on it, in one pass. |
+| `selectAll()` / `invertSelection()` / `deselectAll()` | `src/state/selectionOps.ts` — the Select-menu ops. Their population is every entity on a **listed AND visible AND unlocked** layer. They live in their own module because they need both `editorStore` and `layerStore`, and `layerStore` already imports `editorStore`. |
+
+**Resolution helpers**: `entityIndexOf(part, kind, id)` (→ `-1` when gone),
+`entityIdAt(part, kind, index)`, `refLayerId(part, ref)`, and `KIND_ORDER` — the fixed kind
+order (`subpart, connector, collider, ivaSeat, kitten, light`) every flattening uses, because
+bulk-transform math pairs a snapshot with its write-back positionally.
+
+**Derived views** live in `src/state/selectors.ts`: `$hasSelection`, `$hasMultiSelection`,
+`$selectionCount`, `$selectionByKind` (all six keys always present), `primaryOf(kind)`,
+`$selectedPlacement(s)`, `$selectedEntity` (non-null iff exactly one entity is selected), and
+`$selectedRefs`.
+
+**Transform write-back is by id.** `selectedTransformRefs()` returns
+`{kind, id, index, transform, layerId, name}` per selected entity in `KIND_ORDER`, and
+`updateSelectedTransforms([{kind, id, transform}])` resolves each id fresh and switches on the
+kind exhaustively. (`index` is recomputed on every call and is transitional — only
+`TransformInspector` and `EditorScene`'s collider/light owner-frame lookups still use it.)
+The v1 version indexed the arrays and fell through to a kitten default, so a kind that missed
+its branch silently moved the kitten sitting at the same index; that trap is gone.
+
+> **Deprecated, and dying with their last consumer**: the six `$selected*Indices` /
+> `$selected*Index` names still exist as derived index VIEWS, and the per-kind setters
+> (`selectPlacement`, `setSelectedColliders`, `setSelection`, `toggleEntity`, …) as one-line
+> shims over `select`/`toggleRef`, purely so the v1 assets list compiles unchanged. Do not
+> write new code against them.
 
 ## The mode machine — `src/state/modeStore.ts`
 
@@ -209,7 +253,7 @@ Shift+arrows extend by a row, and **Shift+click extends across every row in betw
 
 Only the last one is ours. react-aria's `SelectionManager.extendSelection` reads the
 range anchor off the `Selection` object it handed to `onSelectionChange` — and both
-lists are **controlled** (the Assets list from the six per-kind selection stores, the
+lists are **controlled** (the Assets list from the selection store, the
 picker from local state), so what comes back down is a freshly built plain `Set` with
 no `anchorKey`. react-aria then anchors on the clicked row itself and a Shift+click
 degenerates into "add the one row you clicked", which is the bug behind issue #5.
@@ -231,7 +275,7 @@ Shift+click on pointer-down (before react-aria's own, anchorless extension runs)
   spans past (and up to) rows on a hidden or locked layer without selecting them, the
   same rule click-selection and the 3D viewport already follow
 - ranges are computed over the displayed row order with the layer sections flattened, so
-  one range can span layers *and* entity kinds (`setSelection` takes all six at once)
+  one range can span layers *and* entity kinds (`$selection` is one cross-kind list)
 
 ## UI panels (`src/ui/`)
 - `SubPartBrowser.tsx` — filterable catalog list; click adds via `addSubPart`.

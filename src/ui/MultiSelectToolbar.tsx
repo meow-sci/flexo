@@ -13,15 +13,13 @@ import {
 } from './kit';
 import {
   $part,
-  $selectedColliderIndices,
-  $selectedConnectorIndices,
-  $selectedIndices,
+  entityIndexOf,
   isGlassTemplate,
   moveSelectionToLayer,
   removeSelected,
   setPlacementsInternal,
 } from '../state/editorStore';
-import { $hasMultiSelection, $selectionCount } from '../state/selectors';
+import { $hasMultiSelection, $selectionByKind, $selectionCount } from '../state/selectors';
 import { ENTITY_ONLY_LAYER_IDS } from '../ksa/types';
 
 /**
@@ -32,9 +30,10 @@ import { ENTITY_ONLY_LAYER_IDS } from '../ksa/types';
 export function MultiSelectToolbar() {
   const hasMultiSelection = useStore($hasMultiSelection);
   const count = useStore($selectionCount);
-  const subCount = useStore($selectedIndices).length;
-  const conCount = useStore($selectedConnectorIndices).length;
-  const colCount = useStore($selectedColliderIndices).length;
+  const byKind = useStore($selectionByKind);
+  const subCount = byKind.subpart.length;
+  const conCount = byKind.connector.length;
+  const colCount = byKind.collider.length;
 
   if (!hasMultiSelection) return null;
 
@@ -85,12 +84,12 @@ function ChangeLayerButton() {
  */
 function InteriorButton() {
   const part = useStore($part);
-  const indices = useStore($selectedIndices);
+  const subRefs = useStore($selectionByKind).subpart;
 
   const templateIds = [
     ...new Set(
-      indices.flatMap((i) => {
-        const p = part.placements[i];
+      subRefs.flatMap((ref) => {
+        const p = part.placements.find((q) => q.instanceId === ref.id);
         return p ? [p.subPartTemplateId] : [];
       }),
     ),
@@ -104,7 +103,16 @@ function InteriorButton() {
         {glassOnly ? 'Interior — n/a for glass' : 'Interior (IVA only)'}
       </Button>
       <Popover placement="bottom start" className="w-64">
-        <Menu onAction={(key) => setPlacementsInternal(indices, key === 'on')}>
+        <Menu
+          onAction={(key) =>
+            // `setPlacementsInternal` keeps its index signature (it is per-template, not
+            // per-entity); the caller resolves refs → live indices.
+            setPlacementsInternal(
+              subRefs.map((ref) => entityIndexOf(part, 'subpart', ref.id)),
+              key === 'on',
+            )
+          }
+        >
           <MenuHeader>
             {templateIds.length === 1
               ? 'Applies to every placement of this SubPart template'

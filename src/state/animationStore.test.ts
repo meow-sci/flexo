@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as THREE from 'three';
-import { $part, undo, redo, importHistory, $selectedIndices } from './editorStore';
+import { $part, undo, redo, importHistory, clearSelection, select } from './editorStore';
 import { $mode, setMode } from './modeStore';
 import { createEmptyPart } from '../ksa/types';
 import type { PartAnimation, SubPartPlacement, Transform } from '../ksa/types';
@@ -39,7 +39,7 @@ beforeEach(() => {
   $animPreviewU.set(0);
   $animScrubbing.set(false);
   $animPlaying.set(false);
-  $selectedIndices.set([]);
+  clearSelection();
   $mode.set('build');
 });
 
@@ -259,7 +259,10 @@ describe('animationStore — joint pivots', () => {
       ...createEmptyPart(),
       placements: [pl('a', tf({ pos: [0, 0, 0] })), pl('b', tf({ pos: [2, 0, 0] }))],
     });
-    $selectedIndices.set([0, 1]);
+    select([
+      { kind: 'subpart', id: 'a' },
+      { kind: 'subpart', id: 'b' },
+    ]);
     const aid = addAnimation('A');
     const jid = addJoint(aid, 'J');
     const rest = anim0().keyframes.find((k) => k.timeSec === 0)!.poses[jid];

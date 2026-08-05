@@ -141,7 +141,14 @@ import {
   type IvaSeatSettings,
   type LightVizSettings,
 } from '../state/settingsStore';
-import { $cameraRestore, $cameraSnap, $grids, $hideInterior } from '../state/viewStore';
+import {
+  $cameraRestore,
+  $cameraSnap,
+  $gizmoCancel,
+  $gizmoDragging,
+  $grids,
+  $hideInterior,
+} from '../state/viewStore';
 import { resolveInternal } from '../ksa/modExport';
 import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../state/layerStore';
 // The app's one user-facing feedback channel (a module function by design, since there is
@@ -455,6 +462,8 @@ export class EditorScene {
       },
       onDraggingChanged: (dragging) => {
         this.suppressPickDrag = dragging;
+        // Publishes the drag to the Escape ladder (rung 4 — `$gizmoCancel` below).
+        $gizmoDragging.set(dragging);
         this.applySelectionSuppression();
         if (!dragging) {
           this.endBulkDrag();
@@ -636,6 +645,12 @@ export class EditorScene {
     });
     this.sub($cameraRestore, (cmd) => {
       if (cmd) this.viewport.restoreCamera(cmd.state);
+    });
+    // Escape ladder rung 4. The undo step pushed at drag start then describes a no-op
+    // change, which is fine and v1-consistent (undoing it restores the same state) — the
+    // stack is never popped behind the user's back.
+    this.sub($gizmoCancel, (cmd) => {
+      if (cmd && this.gizmo.isDragging) this.gizmo.cancelDrag();
     });
   }
 

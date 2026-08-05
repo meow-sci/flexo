@@ -59,10 +59,12 @@ const $derivedToolStatus = computed(
       // store yet; the Build phase lifts it. Until then this says what the tool wants
       // overall, which is still infinitely more than v1's completely invisible armed state.
       //
-      // No `Esc` hint: nothing in the v1 registry disarms the measure tool (the only
-      // Escape binding is `seat.exit`). The escape ladder gives every tool a rung in the
-      // hotkey phase — the hint goes in when the key actually works, not before.
-      return { toolId: 'measure', icon: 'Ruler', text: 'Measure — click two points' };
+      // The `Esc` hint is honest now: rung 5 of the Escape ladder disarms the tool.
+      return {
+        toolId: 'measure',
+        icon: 'Ruler',
+        text: 'Measure — click two points · Esc cancels',
+      };
     }
 
     return null;

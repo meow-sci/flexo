@@ -61,6 +61,16 @@ export class TransformGizmo {
     return this.controls.dragging;
   }
 
+  /**
+   * Restores the transform the drag started from, mid-drag — TransformControls' own
+   * built-in, which is exactly what the Escape ladder's rung 4 ("gizmo drag cancel") means.
+   * It fires `objectChange`, so the restored transform streams back into the document the
+   * same way every other drag step does. No-op when nothing is being dragged.
+   */
+  cancelDrag(): void {
+    this.controls.reset();
+  }
+
   dispose(): void {
     this.controls.detach();
     const helper = this.controls.getHelper();

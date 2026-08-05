@@ -30,6 +30,20 @@ export type Mode = 'build' | 'animation' | 'data' | 'engine' | 'surface';
 export type Tool = 'measure' | 'seat-view' | 'exhaust' | 'marquee' | 'member-paint' | 'pivot-pick';
 
 /**
+ * Every tool id, for the consumers that must ENUMERATE them rather than switch on one — the
+ * hotkey registry's conflict validator walks `tool:*` scopes, and the Help dialog groups by
+ * them. Kept beside the type so the two can never disagree.
+ */
+export const TOOLS: readonly Tool[] = [
+  'measure',
+  'seat-view',
+  'exhaust',
+  'marquee',
+  'member-paint',
+  'pivot-pick',
+];
+
+/**
  * The five modes in switcher/palette/status-menu display order, with their labels. ONE
  * dataset (foundation Law 4) — the menubar switcher, the status-bar chip, the phone mode
  * sheet and the palette's "Modes" section all render from this, and the `mode.<id>`

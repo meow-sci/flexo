@@ -1,10 +1,7 @@
 import { useRef, useState } from 'react';
 import { useStore } from '@nanostores/react';
-import { useHotkeys } from 'react-hotkeys-hook';
 import { X } from 'lucide-react';
 import { $chainSession, addChainOp, closeChain, type ChainOpKind } from '../../state/chainStore';
-import { applyActionChain, type ChainCommitEntry } from '../../state/editorStore';
-import { isDialogOpen } from '../../state/dialogStore';
 import { $chainEval } from '../../three/chainEval';
 import { PREVIEW_MAX_GHOSTS } from '../../three/ChainPreviewLayer';
 import {
@@ -19,7 +16,7 @@ import {
 } from '../kit';
 import { CHAIN_COMMANDS, type ChainCommandDef } from './chainCommands';
 import { ChainStepCard } from './ChainStepCard';
-import { toast } from '../toast';
+import { applyChainSession } from './applyChainSession';
 
 const CHROME = `${panelChrome} p-3`;
 
@@ -36,6 +33,13 @@ const CHROME = `${panelChrome} p-3`;
  *
  * Self-gating: it renders nothing without a session, so `app.tsx` can mount it
  * unconditionally. Nothing here touches the document — the only write is Apply.
+ *
+ * **Its two keys are registry bindings, not component-local hooks** (design:
+ * design-system-services §4.4 "migrated INTO the registry"): `⌘↩` is `chain.apply` at
+ * `surface:chain` scope, and Escape is rung 6 of the Escape ladder. The v1 local handler's
+ * "ignore Escape while a dialog is open" guard survives as ladder ORDER — dialog dismiss is
+ * rung 2, above chain cancel, so an Escape aimed at the discard-confirm can no longer throw
+ * away the very session that confirm protects.
  */
 export function ChainPalette() {
   const session = useStore($chainSession);
@@ -45,50 +49,6 @@ export function ChainPalette() {
   // The kit SearchField owns its <input>, so reach it through the wrapper to restore
   // focus after a command is chosen (keeps type → Enter → type → Enter flowing).
   const searchRef = useRef<HTMLDivElement>(null);
-
-  // Both handlers read the stores fresh instead of closing over render values, so the
-  // callbacks react-hotkeys-hook memoises can never go stale — hence no dependency list.
-  const apply = () => {
-    const state = $chainEval.get();
-    if (!state) return;
-    const { result, resolvedSeedIds } = state;
-    if (result.error !== null || result.instances.length === 0) return;
-
-    const entries: ChainCommitEntry[] = result.instances.map((instance) => ({
-      seedInstanceId: resolvedSeedIds[instance.seedIndex],
-      transform: instance.transform,
-      isSeed: instance.isSeed,
-    }));
-    const detail =
-      result.newCount > 0 ? `+${result.newCount} SubParts` : `${result.totalInstances} transformed`;
-    const created = applyActionChain(entries, detail);
-    closeChain();
-    // -1 means a seed vanished between the last recompute and this click — nothing was
-    // committed and no undo entry was pushed, so say so rather than claiming success.
-    if (created < 0) {
-      toast({ title: 'Chain not applied — seeds no longer exist', variant: 'warning' });
-      return;
-    }
-    toast({ title: `Applied chain · ${created > 0 ? `+${created} SubParts` : detail}` });
-  };
-
-  // Escape-ladder precedence (foundation §11.4): dialog dismiss is rung 2, chain cancel is
-  // rung 6, so an Escape aimed at an overlay dialog must never also throw the session away
-  // — least of all the discard-confirm, whose whole job is to protect it. Checked at
-  // keypress time because `$openDialog` changing does not re-render this component.
-  const cancel = () => {
-    if (isDialogOpen()) return;
-    closeChain();
-  };
-
-  useHotkeys('mod+enter', apply, {
-    enabled: session !== null,
-    enableOnFormTags: true,
-    preventDefault: true,
-  });
-  // No preventDefault: useNumberDraft swallows Escape while a field edit is dirty
-  // (revert first, close second), and Escape must still reach dialogs/popovers.
-  useHotkeys('escape', cancel, { enabled: session !== null, enableOnFormTags: true });
 
   if (!session) return null;
 
@@ -114,6 +74,11 @@ export function ChainPalette() {
 
   return (
     <div
+      // `surface:chain` for the scoped hotkey registry (hotkeyStore §4.2). The scope itself
+      // follows the SESSION, not this focus stamp — the card is non-modal and ⌘↩ must work
+      // from the viewport — but the stamp is what keeps focus inside it from reading as
+      // "some other surface". P5B re-stamps when the card moves into a FloatingWindow.
+      data-surface="chain"
       className={cn(
         'pointer-events-auto z-30 flex flex-col',
         isPhone
@@ -128,7 +93,7 @@ export function ChainPalette() {
           · {seedCount} {seedCount === 1 ? 'seed' : 'seeds'}
         </span>
         <span className="flex-1" />
-        <Button size="sm" aria-label="Close" onPress={cancel}>
+        <Button size="sm" aria-label="Close" onPress={closeChain}>
           <X size={14} />
         </Button>
       </div>
@@ -188,14 +153,14 @@ export function ChainPalette() {
           )}
         </span>
         <div className="flex items-center justify-end gap-2">
-          <Button size="sm" variant="ghost" onPress={cancel}>
+          <Button size="sm" variant="ghost" onPress={closeChain}>
             Cancel
           </Button>
           <Button
             size="sm"
             variant="primary"
             isDisabled={error !== null || totalInstances === 0}
-            onPress={apply}
+            onPress={applyChainSession}
           >
             Apply {keyLabel('mod')}↵
           </Button>

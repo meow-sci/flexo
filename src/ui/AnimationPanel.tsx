@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { Trash2, Plus, Crosshair, ChevronLeft, Move3d, RotateCcw } from 'lucide-react';
 import {
@@ -69,29 +69,20 @@ function closeAnimation(): void {
 }
 
 /**
- * The full-sidebar Animations editor (inspector 'anim' mode). Shows the animation
- * list on top with the active animation's editor filling the space below. Escape
- * unwinds the deepest selection (keyframe → joint → animation). The 3D viewport
- * drives the live preview + pose gizmos; this panel owns the structural editing.
+ * The full-sidebar Animations editor (Animation mode). Shows the animation list on top with
+ * the active animation's editor filling the space below. The 3D viewport drives the live
+ * preview + pose gizmos; this panel owns the structural editing.
+ *
+ * **Escape is no longer handled here.** The v1 raw `window` keydown listener that unwound
+ * keyframe → joint → animation is now rung 7 of the Escape ladder (registered in
+ * `src/ui/hotkeys/registry.ts`), which unwinds keyframe → joint and deliberately stops
+ * there: "the mode itself never exits via Esc" (foundation §11.4). {@link closeAnimation}
+ * stays — the Close button still uses it.
  */
 export function AnimationPanel() {
   const part = useStore($part);
   const active = useStore($activeAnimation);
   const exportableCount = part.animations.filter(isAnimationExportable).length;
-
-  // Escape unwinds keyframe → joint → animation (ignored while typing in a field).
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-      if ($editKeyframeId.get()) $editKeyframeId.set(null);
-      else if ($activeJointId.get()) $activeJointId.set(null);
-      else if ($activeAnimationId.get()) closeAnimation();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2 rounded-xl border border-border bg-panel p-2">

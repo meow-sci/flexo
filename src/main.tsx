@@ -15,6 +15,7 @@ import { $containers, $activeContainerId } from './state/containerStore';
 import { $measurements, $activeMeasurementId } from './state/measurementStore';
 import { registerEditorAidStores } from './state/editorStore';
 import { initModifierListeners } from './state/modifierStore';
+import { initHotkeyStore } from './state/hotkeyStore';
 import { registerModeHooks } from './state/modeStore';
 import { ensureReactionsLoaded } from './state/reactionStore';
 
@@ -60,6 +61,10 @@ initAnimationStore();
 // Track held modifier keys for the status bar's hint segment (design-system-services §1.4;
 // §9 "boot order additions"). Idempotent, so StrictMode's double boot is harmless.
 initModifierListeners();
+
+// Track which surface owns focus, so the scoped hotkey registry can gate `surface:*`
+// bindings on it (design-system-services §4.2). Same idempotent-guard pattern.
+initHotkeyStore();
 
 // Detect a share-link launch up front: it changes how the next two startup steps behave.
 const sharePayload = readShareParam();

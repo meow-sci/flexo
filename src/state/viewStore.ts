@@ -62,6 +62,26 @@ export function snapCamera(dir: CameraDir): void {
   $cameraSnap.set({ dir, nonce: ++snapNonce });
 }
 
+/**
+ * True while a `TransformControls` drag is in flight. Written by `EditorScene` from the
+ * gizmo's own `onDraggingChanged` callback; read by the Escape ladder's rung 4, which is the
+ * only reason it needs to be visible outside the three layer.
+ */
+export const $gizmoDragging = atom<boolean>(false);
+
+/**
+ * One-shot "cancel the drag in flight" intent, mirroring {@link $cameraSnap}'s nonce
+ * pattern. `EditorScene` answers it with `TransformControls.reset()`, which restores the
+ * drag-start object state — that IS the built-in foundation §11.4 rung 4 names; it just
+ * needs an Escape routed to it.
+ */
+export const $gizmoCancel = atom<{ nonce: number } | null>(null);
+let gizmoCancelNonce = 0;
+
+export function requestGizmoCancel(): void {
+  $gizmoCancel.set({ nonce: ++gizmoCancelNonce });
+}
+
 export interface CameraState {
   position: [number, number, number];
   target: [number, number, number];

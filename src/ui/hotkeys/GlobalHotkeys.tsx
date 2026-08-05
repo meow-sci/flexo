@@ -1,15 +1,17 @@
 import { useHotkeys } from 'react-hotkeys-hook';
-import { ALL_BINDINGS, type HotkeyBinding } from './registry';
+import { ALL_BINDINGS, isBindingActive, type HotkeyBinding } from './registry';
+import { isTypingInField } from './typingGuard';
 
 /**
- * Mounts every global hotkey from the registry. Rendered once near the app root.
+ * Mounts every binding from the scoped registry. Rendered once near the app root.
  * Each binding gets its own child so `useHotkeys` is called unconditionally in a
  * stable order (Rules of Hooks), even though the binding list is a module constant.
  *
- * react-hotkeys-hook disables hotkeys while a form element is focused by default
- * (`enableOnFormTags: false`), so WASD / Delete / ⌘Z don't hijack typing in the
- * inspector's text and number fields, and the browser's native field-level undo
- * keeps working.
+ * **Bindings stay MOUNTED; gating is data-driven** (design:
+ * `plans/flexo_v2/design/design-system-services.md` §4.2). Nothing here re-renders when the
+ * mode, the armed tool, the focused surface or the open dialog changes — the gate is a
+ * predicate evaluated per keyboard event against the stores, so there is exactly one
+ * listener per binding for the life of the app.
  */
 export function GlobalHotkeys() {
   return (
@@ -22,27 +24,29 @@ export function GlobalHotkeys() {
 }
 
 /**
- * True when the *real* focus owner is a text-editable field. react-hotkeys-hook's
- * `enableOnFormTags: false` already suppresses hotkeys for focused form fields, but
- * it decides that from the keyboard event's `target`. react-aria's Autocomplete (the
- * searchable `Select`) types with "virtual focus": it stops the input's own keydown
- * and re-dispatches a synthetic `KeyboardEvent` on the listbox, whose target is a
- * `<div role="listbox">` — not a form tag — so those leak through and WASD/Delete fire
- * while you're searching. `document.activeElement` still points at the search `<input>`,
- * so gate on that instead. Covers any react-aria virtual-focus widget, not just this one.
+ * The gate, as react-hotkeys-hook's `ignoreEventWhen` rather than its `enabled` option.
+ *
+ * Both accept a per-event callback in 5.3.3, but the library applies `preventDefault`
+ * BEFORE it consults `enabled` (`x(n, a, M.current), !S(n, a, j.current)` in its dispatch),
+ * so a disabled binding would still swallow the browser's default action — a viewport ⌘C
+ * eating a copy while a list has focus, say. `ignoreEventWhen` runs first and returns
+ * before both, which is the behavior the scope model needs.
+ *
+ * The typing guard is folded in here for the same reason it was v1's shared
+ * `ignoreEventWhen`: `enableOnFormTags` and `ignoreEventWhen` are independent options in
+ * this library, so a binding that opts into firing while typing (the Escape ladder, which
+ * re-applies the guard per rung) has to be exempted explicitly rather than by setting
+ * `enableOnFormTags` alone.
  */
-function isTypingInField(): boolean {
-  const el = document.activeElement as HTMLElement | null;
-  if (!el) return false;
-  if (el.isContentEditable) return true;
-  const tag = el.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+function isEventIgnored(binding: HotkeyBinding): boolean {
+  if (!binding.options?.enableOnFormTags && isTypingInField()) return true;
+  return !isBindingActive(binding);
 }
 
 function BindingMount({ binding }: { binding: HotkeyBinding }) {
   useHotkeys(binding.keys, (e) => binding.run(e), {
     preventDefault: true,
-    ignoreEventWhen: isTypingInField,
+    ignoreEventWhen: () => isEventIgnored(binding),
     ...binding.options,
   });
   return null;

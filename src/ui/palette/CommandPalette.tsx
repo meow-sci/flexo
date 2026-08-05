@@ -113,65 +113,73 @@ function PaletteSession() {
       }}
     >
       <Dialog aria-label="Command palette" className="min-h-0 flex-1">
-        <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
-          <Search size={14} className="shrink-0 text-fg-subtle" />
-          <input
-            autoFocus
-            type="text"
-            role="combobox"
-            aria-expanded
-            aria-controls="command-palette-list"
-            aria-activedescendant={index >= 0 ? rowId(index) : undefined}
-            aria-label="Search commands"
-            placeholder="Search commands…"
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setSelected(0);
-            }}
-            onKeyDown={onKeyDown}
-            className={inputStyles({
-              size: 'sm',
-              className: 'border-0 bg-transparent px-0 text-sm focus:outline-none',
-            })}
-          />
-        </div>
-
-        <div
-          id="command-palette-list"
-          role="listbox"
-          aria-label="Commands"
-          ref={listRef}
-          className="min-h-0 flex-1 overflow-y-auto p-1"
-        >
-          {rows.length === 0 && (
-            <div className="px-3 py-6 text-center text-xs text-fg-subtle">No matching commands</div>
-          )}
-          {rows.map((row, rowIndex) => (
-            <PaletteRowView
-              key={row.command.id}
-              row={row}
-              index={rowIndex}
-              isSelected={rowIndex === index}
-              onRun={() => activate(row, false)}
+        {/* The palette's hotkey surface (`surface:palette`, hotkeyStore §4.2). `display:
+            contents` on purpose — the stamp must add ZERO layout, the children stay the
+            Dialog's own flex items, and `closest('[data-surface]')` walks the DOM tree
+            regardless of display. */}
+        <div className="contents" data-surface="palette">
+          <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
+            <Search size={14} className="shrink-0 text-fg-subtle" />
+            <input
+              autoFocus
+              type="text"
+              role="combobox"
+              aria-expanded
+              aria-controls="command-palette-list"
+              aria-activedescendant={index >= 0 ? rowId(index) : undefined}
+              aria-label="Search commands"
+              placeholder="Search commands…"
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setSelected(0);
+              }}
+              onKeyDown={onKeyDown}
+              className={inputStyles({
+                size: 'sm',
+                className: 'border-0 bg-transparent px-0 text-sm focus:outline-none',
+              })}
             />
-          ))}
-        </div>
-
-        {!isPhone && (
-          <div className="flex shrink-0 items-center gap-3 border-t border-border px-3 py-1.5 text-[11px] text-fg-subtle">
-            <span className="flex items-center gap-1">
-              <Kbd>↩</Kbd> run
-            </span>
-            <span className="flex items-center gap-1">
-              <Kbd>{keyLabel('mod')}</Kbd>
-              <Kbd>↩</Kbd> run &amp; keep open
-            </span>
-            <span className="flex items-center gap-1">
-              <Kbd>esc</Kbd> close
-            </span>
           </div>
-        )}
+
+          <div
+            id="command-palette-list"
+            role="listbox"
+            aria-label="Commands"
+            ref={listRef}
+            className="min-h-0 flex-1 overflow-y-auto p-1"
+          >
+            {rows.length === 0 && (
+              <div className="px-3 py-6 text-center text-xs text-fg-subtle">
+                No matching commands
+              </div>
+            )}
+            {rows.map((row, rowIndex) => (
+              <PaletteRowView
+                key={row.command.id}
+                row={row}
+                index={rowIndex}
+                isSelected={rowIndex === index}
+                onRun={() => activate(row, false)}
+              />
+            ))}
+          </div>
+
+          {!isPhone && (
+            <div className="flex shrink-0 items-center gap-3 border-t border-border px-3 py-1.5 text-[11px] text-fg-subtle">
+              <span className="flex items-center gap-1">
+                <Kbd>↩</Kbd> run
+              </span>
+              <span className="flex items-center gap-1">
+                <Kbd>{keyLabel('mod')}</Kbd>
+                <Kbd>↩</Kbd> run &amp; keep open
+              </span>
+              <span className="flex items-center gap-1">
+                <Kbd>esc</Kbd> close
+              </span>
+            </div>
+          )}
+        </div>
       </Dialog>
     </Modal>
   );

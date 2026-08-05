@@ -30,7 +30,7 @@ convention as flexo's connector and seat markers.
   spotlight/floodlight meshes).
 
 In-game, lights render only while the part's single light switch (if any) is on and powered —
-see the Power & Light Switch section of the Part Data dialog and
+see the Power & Light Switch group in **Data mode ▸ Part ▸ Power** and
 `analysis/HOW_LIGHT_PARTS_WORK.md`.
 
 ## The normalized model
@@ -128,8 +128,9 @@ The transform inspector shows a **dedicated light panel** (`LightHeader`,
   aim to the new one composed on top of the current rotation, preserving roll continuity so
   re-aiming never wildly spins the gizmo; a degenerate (≈zero) vector is rejected;
 - the `<Light>` scalar editors (Range, Intensity, Color, Spot cone half-angles in degrees,
-  Ray tracing) — the same controls as the SubPart Data dialog's Lights section, which stays
-  for template-scoped editing;
+  Ray tracing) — the same controls as **Data mode ▸ \<template\> ▸ Lights**, which is where a
+  SubPart-owned light's *data* is edited (part-level lights are Build entities and have no
+  Data-mode section);
 - the **falloff curve** (`src/ui/LightFalloffCurve.tsx`) — a sparkline of
   `E(d) / (E(d) + E₀)` along the aim axis, 48 samples from 2% of range out to the boundary,
   drawn with the **same** `E₀` the coverage shells use (below), so the panel and the viewport
@@ -278,8 +279,11 @@ wireframe use, so the lit footprint and the wireframe cone describe the same con
 
 - **Add → Light → Spot light / Point light** — a part-level light at the origin, selected and
   revealed immediately.
-- **SubPart Data dialog → Lights → + Light** — a light owned by that SubPart template; each
-  card there has "Select in 3D" to hand off to the workspace marker.
+- **Data mode ▸ \<template\> ▸ Lights ▸ + Light** — a light owned by that SubPart template
+  (also reachable from the navigator's "＋ add data ▸ Add light" on an empty template). Each
+  card has **"Select in 3D"**, which now genuinely works: Data mode is a sidebar, not a
+  fullscreen modal, so the selected light is revealed in the viewport with the form still
+  open beside it.
 - The glow panel's **"Add matching light"** (KSA emissive is white-only, so a colored `<Light>`
   is the only way a part reads as a colored lamp in-game).
 
@@ -306,7 +310,7 @@ severity here, only two bands:
 | `light-owner-unplaced`         | warn     | the owner template has no placement                      | A SubPart light exists once per **placement**; with none, it is never instantiated. Dead data.                                                                                                                                                                                                                |
 | `light-owner-nonuniform-scale` | warn     | any owner placement is scaled non-uniformly              | KSA pushes the aim through the owner's **scaled** upper-3×3 before normalising, so the in-game beam skews off-axis and the position offset stretches with the placement; the marker shows the uniform-scale approximation.                                                                                     |
 | `light-owner-mirrored`         | warn     | any owner placement has a negative scale component       | The game's aim transform is an improper map that survives its normalize — a (−1,−1,−1) owner flips the in-game beam a full 180° — while flexo composes quaternions, which can never produce a reflection (`coords.ts` `lightWorld`). The marker's aim is not the direction KSA will cast.                     |
-| `light-always-on`              | info     | the Part has lights but no `<PowerConsumer LightSwitch>` | Every in-game light gate is `if (Part.LightSwitch != null && …)`, so with no switch the lights are permanently on and **no checkbox appears** (`analysis/HOW_LIGHT_PARTS_WORK.md` §8.1). Correct for indicator lamps; add a switch in **Part Data ▸ Power** for anything the player should be able to turn off. |
+| `light-always-on`              | info     | the Part has lights but no `<PowerConsumer LightSwitch>` | Every in-game light gate is `if (Part.LightSwitch != null && …)`, so with no switch the lights are permanently on and **no checkbox appears** (`analysis/HOW_LIGHT_PARTS_WORK.md` §8.1). Correct for indicator lamps; add a switch in **Data mode ▸ Part ▸ Power** for anything the player should be able to turn off. |
 | `light-color-black`            | info     | every colour channel < 0.01                              | The light still costs a light slot in game and adds no visible illumination.                                                                                                                                                                                                                                 |
 
 Every finding carries the offending `PartLight.id` so the UI can point at it;

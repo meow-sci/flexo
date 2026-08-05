@@ -8,6 +8,7 @@ import {
   $dataSectionJump,
   DATA_FLASH_MS,
   clearFlash,
+  flashConnector,
   flashPlacements,
   jumpToSection,
   sectionsFor,
@@ -145,7 +146,23 @@ describe('flashPlacements', () => {
 
   it('sets a nonce’d flash and clears it after the flash window', () => {
     flashPlacements(['inst_1', 'inst_2']);
-    expect($dataFlash.get()).toEqual({ instanceIds: ['inst_1', 'inst_2'], nonce: 1 });
+    expect($dataFlash.get()).toEqual({
+      instanceIds: ['inst_1', 'inst_2'],
+      connectorIds: [],
+      nonce: 1,
+    });
+
+    vi.advanceTimersByTime(DATA_FLASH_MS);
+    expect($dataFlash.get()).toBe(null);
+  });
+
+  it('flashes a connector in its own id space, leaving placements untouched', () => {
+    flashConnector('_connector1');
+    expect($dataFlash.get()).toEqual({
+      instanceIds: [],
+      connectorIds: ['_connector1'],
+      nonce: 1,
+    });
 
     vi.advanceTimersByTime(DATA_FLASH_MS);
     expect($dataFlash.get()).toBe(null);

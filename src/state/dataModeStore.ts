@@ -182,36 +182,56 @@ export const $dataHighlight = computed([$mode, $dataScope, $part], (mode, scope,
 );
 
 /**
- * A one-shot ~600ms flash of specific placements — hovering a navigator row, a scope chip, a
- * feed target. Nonce'd so flashing the same set twice re-fires. The timer lives HERE (not in
- * a component) so the store stays the single source of truth and the flash survives a
- * re-render; the scene subscribes and re-tints.
+ * A one-shot ~600ms flash of specific entities — hovering a navigator row, a scope chip, a
+ * feed target, the Coupling section's "Show →" eye. Nonce'd so flashing the same set twice
+ * re-fires. The timer lives HERE (not in a component) so the store stays the single source of
+ * truth and the flash survives a re-render; the scene subscribes and re-tints.
+ *
+ * Two id spaces, because the two entity kinds highlight through different scene paths:
+ * `instanceIds` tint their SubPart meshes, `connectorIds` light their connector markers.
  */
-export const $dataFlash = atom<{ instanceIds: readonly string[]; nonce: number } | null>(null);
+export const $dataFlash = atom<{
+  instanceIds: readonly string[];
+  connectorIds: readonly string[];
+  nonce: number;
+} | null>(null);
 
 /** How long a hover/eye-button flash stays lit (design §A5 touch rule: "~600 ms"). */
 export const DATA_FLASH_MS = 600;
 
 let flashTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Flashes `instanceIds` for {@link DATA_FLASH_MS}. An empty list clears any live flash. */
-export function flashPlacements(instanceIds: readonly string[]): void {
+function flash(instanceIds: readonly string[], connectorIds: readonly string[]): void {
   if (flashTimer !== null) clearTimeout(flashTimer);
-  if (instanceIds.length === 0) {
+  if (instanceIds.length === 0 && connectorIds.length === 0) {
     flashTimer = null;
     $dataFlash.set(null);
     return;
   }
-  $dataFlash.set({ instanceIds: [...instanceIds], nonce: ($dataFlash.get()?.nonce ?? 0) + 1 });
+  $dataFlash.set({
+    instanceIds: [...instanceIds],
+    connectorIds: [...connectorIds],
+    nonce: ($dataFlash.get()?.nonce ?? 0) + 1,
+  });
   flashTimer = setTimeout(() => {
     flashTimer = null;
     $dataFlash.set(null);
   }, DATA_FLASH_MS);
 }
 
+/** Flashes `instanceIds` for {@link DATA_FLASH_MS}. An empty list clears any live flash. */
+export function flashPlacements(instanceIds: readonly string[]): void {
+  flash(instanceIds, []);
+}
+
+/** Flashes one connector marker — the Coupling section's "Show →" eye (design §A4.1). */
+export function flashConnector(connectorId: string): void {
+  flash([], connectorId ? [connectorId] : []);
+}
+
 /** Drops a live flash early (pointer left the row before the timer expired). */
 export function clearFlash(): void {
-  flashPlacements([]);
+  flash([], []);
 }
 
 // ── mode entry (foundation §2.4 "Entering Data", design §A2) ────────────────

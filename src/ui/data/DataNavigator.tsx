@@ -14,6 +14,7 @@ import {
   SearchField,
   Tooltip,
   cn,
+  useIsPhone,
 } from '../kit';
 import { FindingsList } from './FindingsList';
 import { buildDataNavigator, type DataNavEntityRow, type IssueLevel } from './dataNavigatorModel';
@@ -40,6 +41,7 @@ import {
   select,
 } from '../../state/editorStore';
 import { setMode } from '../../state/modeStore';
+import { openInspectorSheet } from '../shell/phone/phoneSheets';
 import { focusViewport } from '../../three/viewportFocus';
 
 /**
@@ -61,6 +63,7 @@ import { focusViewport } from '../../three/viewportFocus';
  * that pushes its own single step.
  */
 export function DataNavigator() {
+  const isPhone = useIsPhone();
   const part = useStore($part);
   const scope = useStore($dataScope);
   const search = useStore($dataSearch);
@@ -127,6 +130,9 @@ export function DataNavigator() {
     const key = [...selection][0];
     if (key === undefined) return;
     setDataScope(keyToScope(String(key)));
+    // Phone: the two sheets share one slot, so picking a scope hands off from the Panel
+    // sheet (this list) to the Inspector sheet (the form for what you just picked) — §A8.
+    if (isPhone) openInspectorSheet();
   };
 
   return (
@@ -167,7 +173,7 @@ export function DataNavigator() {
           selectedKeys={new Set([scopeKey])}
           disabledKeys={disabledKeys}
           onSelectionChange={onSelectionChange}
-          dependencies={[search, part, findings, expanded, nonCapableOpen]}
+          dependencies={[search, part, findings, expanded, nonCapableOpen, isPhone]}
           className="flex flex-col gap-0.5 outline-none"
         >
           {(item: NavItem) => (
@@ -179,6 +185,7 @@ export function DataNavigator() {
             >
               <NavRow
                 item={item}
+                isPhone={isPhone}
                 expanded={expanded.has(item.key)}
                 nonCapableOpen={nonCapableOpen}
                 onToggleExpanded={() => toggle(item.key)}
@@ -242,6 +249,7 @@ function keyToScope(key: string): DataScope {
 
 function NavRow({
   item,
+  isPhone,
   expanded,
   nonCapableOpen,
   onToggleExpanded,
@@ -249,6 +257,7 @@ function NavRow({
   onJumpSection,
 }: {
   item: NavItem;
+  isPhone: boolean;
   expanded: boolean;
   nonCapableOpen: boolean;
   onToggleExpanded: () => void;
@@ -274,7 +283,7 @@ function NavRow({
     );
   }
 
-  if (item.type === 'entity') return <EntityRow entity={item.entity} />;
+  if (item.type === 'entity') return <EntityRow entity={item.entity} isPhone={isPhone} />;
 
   if (item.type === 'section') {
     return (
@@ -309,7 +318,13 @@ function NavRow({
         {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
       </Button>
       <IssueDot level={row.issue} />
-      <span className="min-w-0 flex-1 truncate text-xs text-fg">
+      {/* Phone: tapping the row label hands off to the Inspector sheet. It cannot ride
+          `onSelectionChange` alone — re-tapping the ALREADY-scoped row changes no selection,
+          so react-aria fires nothing and the form would be unreachable. */}
+      <span
+        className="min-w-0 flex-1 truncate text-xs text-fg"
+        onClick={isPhone ? openInspectorSheet : undefined}
+      >
         {isTemplate ? row.templateId : `Part — ${row.label}`}
       </span>
       {isTemplate && row.placementCount > 1 && (
@@ -348,6 +363,7 @@ function AddDataMenu({ templateId }: { templateId: string }) {
 }
 
 function AddDataMenuBody({ templateId }: { templateId: string }) {
+  const isPhone = useIsPhone();
   // Each of the first three is ONE discrete editorStore action that lazily creates the
   // `<SubPartGameData>` entry and pushes a single undo step; the UI adds none of its own.
   const add =
@@ -356,6 +372,8 @@ function AddDataMenuBody({ templateId }: { templateId: string }) {
       action(templateId);
       setDataScope({ kind: 'template', templateId });
       jumpToSection(sectionId);
+      // Phone: the thing just created lives in the form, which is the OTHER sheet (§A8).
+      if (isPhone) openInspectorSheet();
     };
   return (
     <Menu aria-label="Add data">
@@ -375,8 +393,44 @@ function AddDataMenuBody({ templateId }: { templateId: string }) {
   );
 }
 
-/** A non-capable entity: dim, focusable (so the explainer is reachable), with a Build jump. */
-function EntityRow({ entity }: { entity: DataNavEntityRow }) {
+/**
+ * A non-capable entity: dim, focusable (so the explainer is reachable), with a Build jump.
+ *
+ * Touch has no hover, so on phone the explainer is rendered INLINE under the label rather
+ * than in a tooltip nothing could ever open (§A8 "tap = show tooltip content inline"), and
+ * the jump button grows to a 44px target.
+ */
+function EntityRow({ entity, isPhone }: { entity: DataNavEntityRow; isPhone: boolean }) {
+  const jump = (
+    <Button
+      iconOnly
+      size="xs"
+      variant="ghost"
+      className={cn('shrink-0', isPhone ? 'size-11' : 'size-4')}
+      aria-label={`Select ${entity.label} in Build mode`}
+      onPress={() => {
+        setMode('build');
+        select([{ kind: entity.kind, id: entity.id }]);
+        revealEntity(entity.kind, entity.id);
+      }}
+    >
+      <ArrowRight size={isPhone ? 16 : 11} />
+    </Button>
+  );
+
+  if (isPhone) {
+    return (
+      <div className="flex w-full min-w-0 items-start gap-1 pl-1">
+        <span className="mt-0.5 shrink-0 text-[11px] text-fg-subtle">◌</span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate text-xs text-fg-muted">{entity.label}</span>
+          <span className="text-[11px] leading-snug text-fg-subtle">{entity.explainer}</span>
+        </span>
+        {jump}
+      </div>
+    );
+  }
+
   return (
     <div className="flex w-full min-w-0 items-center gap-1 pl-1">
       <span className="shrink-0 text-[11px] text-fg-subtle">◌</span>
@@ -385,22 +439,7 @@ function EntityRow({ entity }: { entity: DataNavEntityRow }) {
           {entity.label}
         </span>
       </Tooltip>
-      <Tooltip content="Select in Build">
-        <Button
-          iconOnly
-          size="xs"
-          variant="ghost"
-          className="size-4 shrink-0"
-          aria-label={`Select ${entity.label} in Build mode`}
-          onPress={() => {
-            setMode('build');
-            select([{ kind: entity.kind, id: entity.id }]);
-            revealEntity(entity.kind, entity.id);
-          }}
-        >
-          <ArrowRight size={11} />
-        </Button>
-      </Tooltip>
+      <Tooltip content="Select in Build">{jump}</Tooltip>
     </div>
   );
 }

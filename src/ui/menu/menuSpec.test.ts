@@ -393,20 +393,40 @@ describe('disabled stubs stay visible but never run', () => {
 
 describe('palette-only commands', () => {
   /**
-   * Part Data has no home in the authoritative tree (Data mode replaces the dialog), and
-   * its v1 toolbar button is gone — the palette IS its entry point until then. If this ever
-   * gains a MENU_SPEC entry, that is a tree change and belongs in the transcription lists
-   * above, not here.
+   * Data-mode scoping has no home in the authoritative tree — the mode switcher, `3` and
+   * `mode.data` are the discoverable route, and these are the scope shortcuts on top of it.
+   * If one ever gains a MENU_SPEC entry, that is a tree change and belongs in the
+   * transcription lists above, not here.
+   *
+   * `data.partData` (the deleted Part Data dialog's opener) must NOT still be registered:
+   * the dialog is gone, so a synonym row would open nothing.
    */
-  it('data.partData is registered, titled and absent from the menu tree', () => {
-    const command = getCommand('data.partData');
-    expect(command?.title).toBe('Part Data…');
+  it('data.scopePart is registered, titled and absent from the menu tree', () => {
+    const command = getCommand('data.scopePart');
+    expect(command?.title).toBe('Edit part data');
     expect(command?.menuPath).toBeUndefined();
+    expect(getCommand('data.partData')).toBeUndefined();
 
     const referenced = ALL_ENTRIES.filter((e) => e.kind === 'command').map(
       (e) => (e as { commandId: string }).commandId,
     );
-    expect(referenced).not.toContain('data.partData');
+    expect(referenced).not.toContain('data.scopePart');
+  });
+
+  /** Every Part-scope section is reachable by name from the palette (design §A9). */
+  it('registers an unbound jump command per Part-scope section', () => {
+    for (const id of [
+      'identity',
+      'mass',
+      'tanks',
+      'power',
+      'coupling',
+      'wiring',
+      'advanced',
+      'passthrough',
+    ]) {
+      expect(getCommand(`data.jumpSection:${id}`)).toBeDefined();
+    }
   });
 });
 

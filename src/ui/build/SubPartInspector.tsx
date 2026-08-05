@@ -12,7 +12,7 @@ import {
 import { $catalogIndex } from '../../state/catalogStore';
 import { setManagingMeshId } from '../../state/customAssetStore';
 import { resolveInternal } from '../../ksa/modExport';
-import { openSubPartData } from '../outliner/subPartData';
+import { openSubPartData } from '../data/subPartDataJump';
 import type { SubPartPlacement } from '../../ksa/types';
 
 /**

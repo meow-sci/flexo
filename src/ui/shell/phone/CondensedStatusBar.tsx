@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useStore } from '@nanostores/react';
-import { Check, ChevronDown, Lock, Magnet, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, Lock, Magnet, X } from 'lucide-react';
 import { Button, Chip, cn, Dialog, Sheet } from '../../kit';
 import { NotificationBell } from '../../status/NotificationBell';
+import { FindingsList } from '../../data/FindingsList';
+import { closePhoneSheets } from './phoneSheets';
 import { MODE_ICONS, SEVERITY_DOT, SEVERITY_TEXT, TOOL_ICONS } from '../../status/statusTokens';
 import { $mode, MODES } from '../../../state/modeStore';
 import { getCommand, runCommand } from '../../../state/commandStore';
@@ -19,6 +21,7 @@ import { setActiveLayer } from '../../../state/editorStore';
 import { disarmTool } from '../../../state/modeStore';
 import { $selectionCount } from '../../../state/selectors';
 import { $snapEnabled, toggleSnap } from '../../../state/snapStore';
+import { $gameDataFindings, focusFinding } from '../../../state/dataModeStore';
 
 /**
  * The phone's status strip (design: `plans/flexo_v2/design/design-system-services.md` §8.1;
@@ -49,12 +52,60 @@ export function CondensedStatusBar() {
     <div className="relative flex min-h-11 flex-none items-center gap-1 border-t border-border bg-panel px-1 text-xs text-fg-muted">
       <ModeOrToolChip />
       <LayerChip />
+      <DataIssueChip />
       <PhoneMessageChannel />
       <SelectionChip />
       <SnapChip />
       <NotificationBell className="min-h-11 px-2" iconSize={16} />
       <ProgressUnderline />
     </div>
+  );
+}
+
+/**
+ * The Data-mode issue chip (design-data-engine-modes.md §A8) — `⚠ N`, tapping opens the
+ * findings list as a sheet. It is the phone's stand-in for the desktop status bar's Data
+ * segment, and picking a finding closes the sheet and jumps to the offending card, which is
+ * the same `focusFinding` the navigator's validation strip uses.
+ *
+ * Absent outside Data mode and absent when the part is clean.
+ */
+function DataIssueChip() {
+  const mode = useStore($mode);
+  const findings = useStore($gameDataFindings);
+  const [open, setOpen] = useState(false);
+
+  if (mode !== 'data' || findings.length === 0) return null;
+
+  const blocks = findings.filter((f) => f.severity === 'block').length;
+
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="min-h-11 shrink-0 gap-1 px-2"
+        aria-label={`${findings.length} data issues`}
+        onPress={() => setOpen(true)}
+      >
+        <AlertTriangle size={16} className={cn(blocks > 0 ? 'text-danger' : 'text-warning')} />
+        <span className="font-mono tabular-nums">{findings.length}</span>
+      </Button>
+
+      {/* Mounted only while open, so the list re-reads the live findings on every open. */}
+      <Sheet isOpen={open} onOpenChange={setOpen} detent="50" ariaLabel="Data issues">
+        <Dialog className="min-h-0 flex-1 overflow-y-auto p-2">
+          <FindingsList
+            findings={findings}
+            onSelect={(finding) => {
+              setOpen(false);
+              closePhoneSheets();
+              focusFinding(finding);
+            }}
+          />
+        </Dialog>
+      </Sheet>
+    </>
   );
 }
 

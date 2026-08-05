@@ -27,12 +27,10 @@ import { $kindVisibility, isKindVisible } from '../../state/viewStore';
 import { runCommand } from '../../state/commandStore';
 import { focusViewport } from '../../three/viewportFocus';
 import { useShiftRangeSelect } from '../rangeSelect';
-import { ManageTanksModal } from '../ManageTanksModal';
 import { LAYER_COLOR_HEX } from './layerColors';
 import { DND_ENTITY, LayerHeaderRow } from './LayerHeaderRow';
 import { AidsSection } from './AidsSection';
 import { EntityMenu, EntityRow } from './EntityRow';
-import { $subPartDataTemplateId } from './subPartData';
 import { $outlinerSearchFocus } from './outlinerSearch';
 import { buildOutlinerTree, type OutlinerLayerSection, type OutlinerRow } from './outlinerTree';
 
@@ -71,7 +69,6 @@ export function OutlinerPanel() {
   const kindVisibility = useStore($kindVisibility);
   const reveal = useStore($revealEntity);
   const searchFocusNonce = useStore($outlinerSearchFocus);
-  const tanksTemplateId = useStore($subPartDataTemplateId);
   const [search, setSearch] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
@@ -394,14 +391,6 @@ export function OutlinerPanel() {
           {contextRow && <EntityMenu row={contextRow.row} />}
         </Popover>
       </MenuTrigger>
-
-      {/* INTERIM (TODO P6): the SubPart Data → row action still opens v1's tanks modal. */}
-      {tanksTemplateId && (
-        <ManageTanksModal
-          subPartTemplateId={tanksTemplateId}
-          onClose={() => $subPartDataTemplateId.set(null)}
-        />
-      )}
     </div>
   );
 }

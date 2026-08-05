@@ -1,12 +1,30 @@
 import { useState } from 'react';
 import { useStore } from '@nanostores/react';
-import { AlertTriangle, ChevronDown, ChevronRight, MoreVertical, Plus } from 'lucide-react';
-import { Button, Chip, InlineConfirmStrip, Menu, MenuItem, MenuTrigger, Popover, cn } from '../kit';
-import { useSectionJump } from './useSectionJump';
-import { FlashedCardContext } from './flashedCard';
+import { ChevronLeft, MoreVertical } from 'lucide-react';
+import {
+  Button,
+  InlineConfirmStrip,
+  Menu,
+  MenuItem,
+  MenuTrigger,
+  Popover,
+  useIsPhone,
+} from '../kit';
 import { useInstanceIds } from './instances';
 import { PartScopeChip, TemplateScopeChip } from './ScopeChip';
-import { buildDataNavigator, type IssueLevel } from './dataNavigatorModel';
+import { DataSection, IssueDot } from './DataSection';
+import { EMPTY_SECTION_META, type SectionMeta } from './sectionMeta';
+import { PassthroughViewer } from './PassthroughViewer';
+import { IdentitySection } from './sections/IdentitySection';
+import { MassSection } from './sections/MassSection';
+import { TanksSection } from './sections/TanksSection';
+import { PowerSection, SolarPanelsList } from './sections/PowerSection';
+import { CouplingSection } from './sections/CouplingSection';
+import { WiringSection } from './sections/WiringSection';
+import { AdvancedSection } from './sections/AdvancedSection';
+import { LightsSection } from './sections/LightsSection';
+import { TemplateEngineSection } from './sections/TemplateEngineSection';
+import { buildDataNavigator } from './dataNavigatorModel';
 import {
   $dataScope,
   $gameDataFindings,
@@ -16,18 +34,35 @@ import {
   type DataScope,
   type DataSectionId,
 } from '../../state/dataModeStore';
-import { $part, removeAllTemplateData, revealEntity, select } from '../../state/editorStore';
+import {
+  $part,
+  addLight,
+  addSubPartSolarPanel,
+  addTank,
+  removeAllTemplateData,
+  removeSubPartSolarPanel,
+  revealEntity,
+  select,
+  setSubPartSolarPanelOutput,
+  setSubPartSolarPanelRotation,
+} from '../../state/editorStore';
 import { setMode } from '../../state/modeStore';
+import { openPanelSheet } from '../shell/phone/phoneSheets';
+import type { EditingPart } from '../../ksa/types';
 
 /**
  * **The Data scope form** — Data mode's left sidebar (design:
  * design-data-engine-modes.md §A4/§A5; foundation §7.3, §15.3).
  *
- * The HOST, not the fields: a sticky header naming the scope (with its §A5 chip and an
- * overflow ⋮), a sticky horizontally-scrollable section chip strip, and the section stack
- * itself. Each section is a {@link DataSection} — the extension point every field group
- * plugs into, so a section author writes a body and inherits the jump/scroll/flash/expand
- * behaviour for free.
+ * A sticky header naming the scope (with its §A5 chip and an overflow ⋮), a sticky
+ * horizontally-scrollable section chip strip, and the section stack itself. Every GameData
+ * field the two v1 modals owned lives in one of these sections — that is what let the modals
+ * be deleted rather than merely hidden (RULE ZERO, §C1 rows 1–4).
+ *
+ * The two scopes render different stacks: Part = Identity · Mass · Tanks · Power · Coupling ·
+ * Wiring · Advanced · Passthrough; Template = Tanks · Lights · Solar · Engine · Passthrough.
+ * Both orders come from `sectionsFor()`, the one section dataset the navigator's child rows
+ * and this form's chip strip also render from, so the three can never drift apart.
  *
  * **Undo enrollment: NONE of its own.** Scope, chips and expand flags are ephemeral; the one
  * mutation reachable from the header ("Delete all data…") is a single discrete editorStore
@@ -46,23 +81,144 @@ export function DataScopeForm({ children }: { children?: React.ReactNode }) {
       <ScopeHeader scope={scope} name={name} />
       <SectionChipStrip scope={scope} />
       <div className="flex flex-col gap-2 p-(--density-panel-p)">
-        {children ?? <InterimSections />}
+        {children ??
+          (scope.kind === 'part' ? (
+            <PartSections part={part} />
+          ) : (
+            <TemplateSections part={part} templateId={scope.templateId} />
+          ))}
       </div>
     </div>
   );
 }
 
+// ── section metadata (the ONE dataset, shared with the navigator) ────────────
+
 /**
- * INTERIM (P6.10–P6.16 fill this in): the section stack does not exist yet, so the form says
- * where each field still lives. RULE ZERO — the mode existing must never cost the user access
- * to a feature.
+ * The per-section badge + issue level for a scope, read from the navigator's own row model so
+ * a count can never mean one thing in the tree and another in the form.
  */
-function InterimSections() {
+function useSectionMeta(part: EditingPart, scope: DataScope): (id: DataSectionId) => SectionMeta {
+  const findings = useStore($gameDataFindings);
+  const model = buildDataNavigator(part, findings);
+  const rows =
+    scope.kind === 'part'
+      ? model.part.sections
+      : (model.templates.find((t) => t.templateId === scope.templateId)?.sections ?? []);
+  const byId = new Map(rows.map((row) => [row.sectionId, { count: row.count, issue: row.issue }]));
+  return (id) => byId.get(id) ?? EMPTY_SECTION_META;
+}
+
+// ── Part scope (§A4.1) ───────────────────────────────────────────────────────
+
+function PartSections({ part }: { part: EditingPart }) {
+  const meta = useSectionMeta(part, { kind: 'part' });
+  const g = part.gameData;
+
   return (
-    <p className="text-xs text-fg-subtle">
-      The GameData fields for this scope arrive with the section tasks. Until then, Part Data is in
-      the ⌘K palette and SubPart Data stays on each SubPart&rsquo;s row menu in Build mode.
-    </p>
+    <>
+      <IdentitySection part={part} meta={meta('identity')} />
+      <MassSection part={part} meta={meta('mass')} />
+      <TanksSection owner={null} tanks={g.tanks} meta={meta('tanks')} />
+      <PowerSection part={part} meta={meta('power')} />
+      <CouplingSection part={part} meta={meta('coupling')} />
+      <WiringSection part={part} meta={meta('wiring')} />
+      <AdvancedSection part={part} meta={meta('advanced')} />
+      <PassthroughViewer
+        rootTag="PartGameData"
+        unknownAttrs={g.unknownAttrs}
+        unknownChildren={g.unknownChildren}
+        customMassExtras={g.customMassExtras}
+        meta={meta('passthrough')}
+      />
+    </>
+  );
+}
+
+// ── Template scope (§A4.2) ───────────────────────────────────────────────────
+
+function TemplateSections({ part, templateId }: { part: EditingPart; templateId: string }) {
+  const meta = useSectionMeta(part, { kind: 'template', templateId });
+  const spd = part.subPartGameData.find((s) => s.subPartTemplateId === templateId);
+  const lightCount = part.lights.filter((l) => l.ownerTemplateId === templateId).length;
+  const isEmpty =
+    lightCount === 0 &&
+    (!spd ||
+      spd.tanks.length +
+        spd.solarPanels.length +
+        spd.combustors.length +
+        spd.nozzles.length +
+        spd.rockets.length +
+        spd.solidMotors.length +
+        spd.solidNozzles.length +
+        spd.solidGrainSegments.length +
+        spd.unknownChildren.length ===
+        0);
+
+  return (
+    <>
+      {isEmpty && <TemplateEmptyState templateId={templateId} />}
+      <TanksSection owner={templateId} tanks={spd?.tanks ?? []} meta={meta('tanks')} />
+      <LightsSection part={part} templateId={templateId} meta={meta('lights')} />
+      <DataSection
+        sectionId="solar"
+        count={meta('solar').count}
+        issue={meta('solar').issue}
+        onAdd={() => addSubPartSolarPanel(templateId)}
+      >
+        <SolarPanelsList
+          heading={false}
+          solarPanels={spd?.solarPanels ?? []}
+          onAdd={() => addSubPartSolarPanel(templateId)}
+          onRemove={(i) => removeSubPartSolarPanel(templateId, i)}
+          onChangeOutput={(i, watts) => setSubPartSolarPanelOutput(templateId, i, watts)}
+          onChangeRotation={(i, rotation) => setSubPartSolarPanelRotation(templateId, i, rotation)}
+        />
+      </DataSection>
+      <TemplateEngineSection templateId={templateId} spd={spd} meta={meta('engine')} />
+      <PassthroughViewer
+        rootTag="SubPartGameData"
+        unknownAttrs={spd?.unknownAttrs ?? {}}
+        unknownChildren={spd?.unknownChildren ?? []}
+        meta={meta('passthrough')}
+      />
+    </>
+  );
+}
+
+/**
+ * A template scoped with nothing on it yet: the navigator's "＋ add data" menu, rendered as
+ * buttons (design §A4.2 last line) so an empty scope still has a one-click way in.
+ */
+function TemplateEmptyState({ templateId }: { templateId: string }) {
+  const add = (action: () => void, sectionId: DataSectionId) => () => {
+    action();
+    jumpToSection(sectionId);
+  };
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-border bg-panel p-2">
+      <p className="text-xs text-fg-subtle">
+        No data on this SubPart yet. Give it something KSA can use:
+      </p>
+      <div className="flex flex-wrap gap-1">
+        <Button size="sm" onPress={add(() => addTank(templateId), 'tanks')}>
+          Add tank
+        </Button>
+        <Button size="sm" onPress={add(() => addLight(templateId), 'lights')}>
+          Add light
+        </Button>
+        <Button size="sm" onPress={add(() => addSubPartSolarPanel(templateId), 'solar')}>
+          Add solar panel
+        </Button>
+        <Button
+          size="sm"
+          variant="secondary"
+          onPress={() => setMode('engine', { defineNew: true, templateId })}
+        >
+          Add engine (thrust chamber) →
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -70,11 +226,26 @@ function InterimSections() {
 
 function ScopeHeader({ scope, name }: { scope: DataScope; name: string }) {
   const instanceIds = useInstanceIds(scope.kind === 'template' ? scope.templateId : '');
+  const isPhone = useIsPhone();
   const [confirming, setConfirming] = useState(false);
 
   return (
     <div className="sticky top-0 z-1 flex flex-col gap-1 border-b border-border bg-panel px-(--density-panel-p) py-1">
       <div className="flex min-w-0 items-center gap-1.5">
+        {/* Phone only: the two sheets share one slot, so the form needs a way BACK to the
+            scope list it was opened from (§A8). Desktop has both panels at once. */}
+        {isPhone && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="min-h-11 shrink-0 gap-0.5 px-1"
+            aria-label="Back to data scopes"
+            onPress={openPanelSheet}
+          >
+            <ChevronLeft size={14} />
+            <span>Scopes</span>
+          </Button>
+        )}
         <span className="min-w-0 flex-1 truncate text-xs font-medium text-fg" title={name}>
           {scope.kind === 'part' ? 'Part — ' : 'Template — '}
           {name}
@@ -189,7 +360,7 @@ function SectionChipStrip({ scope }: { scope: DataScope }) {
           sectionId: def.id,
           label: def.label,
           count: 0,
-          issue: null as IssueLevel,
+          issue: null,
         })));
 
   return (
@@ -201,106 +372,11 @@ function SectionChipStrip({ scope }: { scope: DataScope }) {
           className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded border border-border px-1.5 py-0.5 text-[11px] text-fg-muted hover:border-border-strong hover:text-fg"
           onClick={() => jumpToSection(section.sectionId)}
         >
-          {section.issue && <IssueDot level={section.issue} />}
+          <IssueDot level={section.issue} size={10} />
           {sectionDef(section.sectionId).chip}
           {section.count > 0 && <span className="text-fg-subtle">{section.count}</span>}
         </button>
       ))}
     </div>
-  );
-}
-
-function IssueDot({ level }: { level: IssueLevel }) {
-  if (level === null) return null;
-  return (
-    <AlertTriangle
-      size={10}
-      className={cn('shrink-0', level === 'block' ? 'text-danger' : 'text-warning')}
-      aria-hidden
-    />
-  );
-}
-
-// ── the section shell (the extension point every field group plugs into) ─────
-
-/**
- * One collapsible section of a scope form — the shell every §A4 field group renders inside.
- *
- * It owns the behaviours a section author should never re-implement: the badge, the issue
- * dot, the ephemeral expand flag (§A10 — resets on reload, deliberately), and the
- * jump/scroll/expand/flash choreography via {@link useSectionJump}. A section with no content
- * starts collapsed and shows a `＋` in its header when `onAdd` is given (§A4 "empty sections
- * collapsed with a ＋ affordance").
- */
-export function DataSection({
-  sectionId,
-  count = 0,
-  issue = null,
-  defaultExpanded,
-  onAdd,
-  headerAction,
-  children,
-}: {
-  sectionId: DataSectionId;
-  /** Item count for the badge; 0 also decides the default collapsed state. */
-  count?: number;
-  issue?: IssueLevel;
-  /** Force the initial state; defaults to "expanded iff the section has content". */
-  defaultExpanded?: boolean;
-  /** Renders a `＋` in the header (an empty section's one-click way in). */
-  onAdd?: () => void;
-  /** Trailing header control, e.g. an "Open in Engine mode →" link. */
-  headerAction?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  // Destructured, not held as one object: the `attach` callback goes into a `ref` prop, and
-  // the lint's escape analysis would otherwise treat every sibling field as a ref read.
-  const { attach, targeted, flashing, cardKey } = useSectionJump(sectionId);
-  const [open, setOpen] = useState(defaultExpanded ?? count > 0);
-  // A jump always wins over the collapsed flag: the user asked to be taken here.
-  const expanded = open || targeted;
-
-  return (
-    <section
-      ref={attach}
-      className={cn(
-        'flex flex-col overflow-hidden rounded-lg border border-border bg-panel',
-        flashing && cardKey === undefined && 'row-flash',
-      )}
-    >
-      <div className="flex items-center gap-1 px-2 py-1">
-        <button
-          type="button"
-          className="flex min-w-0 flex-1 cursor-pointer items-center gap-1 text-left"
-          onClick={() => setOpen(!expanded)}
-          aria-expanded={expanded}
-        >
-          {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-          <IssueDot level={issue} />
-          <span className="min-w-0 flex-1 truncate text-xs font-medium text-fg">
-            {sectionDef(sectionId).label}
-          </span>
-          {count > 0 && <Chip className="shrink-0">{count}</Chip>}
-        </button>
-        {headerAction}
-        {onAdd && (
-          <Button
-            iconOnly
-            size="xs"
-            variant="ghost"
-            className="size-5 shrink-0"
-            aria-label={`Add to ${sectionDef(sectionId).label}`}
-            onPress={onAdd}
-          >
-            <Plus size={12} />
-          </Button>
-        )}
-      </div>
-      {expanded && (
-        <FlashedCardContext.Provider value={flashing ? cardKey : undefined}>
-          <div className="flex flex-col gap-2 border-t border-border px-2 py-2">{children}</div>
-        </FlashedCardContext.Provider>
-      )}
-    </section>
   );
 }

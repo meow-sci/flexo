@@ -5,6 +5,7 @@ import { modsFolderCommands } from './fileCommands';
 import { customMeshInstanceCommands } from './addCommands';
 import { layerActivateCommands, layerSelectCommands } from './selectCommands';
 import { seatCommands } from './toolsCommands';
+import { dataScopeCommands } from './dataCommands';
 
 /**
  * Every dynamic command provider (design: foundation §4 "Dynamic providers"). Anything
@@ -30,6 +31,8 @@ export const COMMAND_PROVIDERS: { id: string; commands: () => Command[] }[] = [
   // Not list-shaped so much as capability-shaped: the Mods Folder submenu's rows depend on
   // the File System Access grant status (see modsFolderCommands).
   { id: 'modsFolder', commands: modsFolderCommands },
+  // One "Edit data: <template>" row per data-capable SubPart template (design §A9).
+  { id: 'data.scopeTemplate', commands: dataScopeCommands },
 ];
 
 /** Palette-only rows: "Open project: X" for every saved project except the current one. */

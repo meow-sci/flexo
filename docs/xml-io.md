@@ -140,15 +140,23 @@ GameData files under `/ksa/`; `vite/ksaAssets.ts` copies the existing ones into
 
 ## Editing UI
 
-- `src/ui/PartDataDialog.tsx`: the **Part Data** dialog — collapsible sections
-  (Identity / Mass / Tanks / Power / Coupling) over `EditingPart.gameData` + the
-  Part Id and editor tags. Mounted by `src/ui/shell/DialogRoot.tsx` under the
-  `dialogStore` id `'part-data'`; the entry point is the ⌘K palette command
-  `data.partData` ("Part Data…"), which is deliberately palette-only until Data mode
-  gives the GameData forms a permanent home. The section editors live in `src/ui/GameDataSections.tsx`;
-  numeric fields reuse `PreciseNumberInput` (with `onInteractionStart` to push one
+- **Data mode** (`src/ui/data/`) is the one GameData authoring surface. The right sidebar
+  (`DataNavigator`) picks the scope — the Part, or one SubPart template — and the left
+  sidebar (`DataScopeForm`) renders that scope's sections: Identity / Mass / Tanks
+  (feed containers) / Power / Coupling / Wiring / Advanced / Passthrough at Part scope, and
+  Tanks / Lights / Solar / Engine / Passthrough at template scope. Entry points are the mode
+  switcher, `3`, the ⌘K commands `data.scopePart` and `data.scopeTemplate:<id>`, and Build's
+  "SubPart Data →" jump. The v1 **Part Data** and **SubPart Data** fullscreen modals are
+  deleted. Numeric fields reuse `PreciseNumberInput` (with `onInteractionStart` to push one
   undo step per typing session). Connectors are **not** here — they're edited in the
-  3D workspace, and their flags are three switches in `ui/build/ConnectorInspector.tsx`.
+  3D workspace, and their flags are three switches in `ui/build/ConnectorInspector.tsx`;
+  the Wiring section mirrors their `<Capabilities>` read-only, with a jump to that editor.
+- `src/ui/data/PassthroughViewer.tsx`: a **read-only** view of the preserved XML described
+  under "unmodeled XML" below — the `unknownAttrs` / `unknownChildren` tree and, at Part
+  scope, the nodes re-nested inside `<CustomMass>`. It renders and copies; it never writes.
+  **The capture, re-emit and connector-ref remap semantics are UNCHANGED** — the viewer reads
+  the same `RawXmlNode` data the parser already produced, and `src/ksa/` was not touched to
+  add it, so export output is byte-identical to before the viewer existed.
 - `src/ui/ExportDialog.tsx` / `src/ksa/modExport.ts`: write/zip the per-project
   `Part.xml` + `GameData.xml`.
 

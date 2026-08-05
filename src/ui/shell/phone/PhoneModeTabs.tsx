@@ -1,7 +1,7 @@
-import { useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { ModeTabBar, type ModeTabSpec } from './ModeTabBar';
 import { PanelSheet } from './PanelSheet';
+import { $panelSheetOpen, openPanelSheet } from './phoneSheets';
 import { MODE_ICONS } from '../../status/statusTokens';
 import { runCommand } from '../../../state/commandStore';
 import { $mode, MODES } from '../../../state/modeStore';
@@ -24,7 +24,7 @@ import { $mode, MODES } from '../../../state/modeStore';
  */
 export function PhoneModeTabs() {
   const mode = useStore($mode);
-  const [panelOpen, setPanelOpen] = useState(false);
+  const panelOpen = useStore($panelSheetOpen);
 
   const tabs: ModeTabSpec[] = MODES.map((entry) => {
     const Icon = MODE_ICONS[entry.id];
@@ -37,9 +37,9 @@ export function PhoneModeTabs() {
         tabs={tabs}
         activeId={mode}
         onSelect={(id) => runCommand(`mode.${id}`)}
-        onReselect={() => setPanelOpen(true)}
+        onReselect={openPanelSheet}
       />
-      <PanelSheet isOpen={panelOpen} onOpenChange={setPanelOpen} />
+      <PanelSheet isOpen={panelOpen} onOpenChange={(open) => $panelSheetOpen.set(open)} />
     </>
   );
 }

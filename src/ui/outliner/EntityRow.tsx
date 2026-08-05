@@ -33,7 +33,7 @@ import { setManagingMeshId } from '../../state/customAssetStore';
 import { requestColliderFit } from '../../state/colliderStore';
 import { ENTITY_ONLY_LAYER_IDS, type LayerableKind } from '../../ksa/types';
 import { KIND_ICONS } from './kindIcons';
-import { openSubPartData } from './subPartData';
+import { openSubPartData } from '../data/subPartDataJump';
 import type { OutlinerRow } from './outlinerTree';
 
 /**

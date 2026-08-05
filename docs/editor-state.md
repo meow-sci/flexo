@@ -89,6 +89,29 @@ sidebar atom (`'assets' | 'anim' | 'engine'`) is gone, and every consumer reads 
 Two derived flags moved with it: `$isPoseEditing` and `$isExhaustPlacing` now derive from
 `$mode` (plus their own area state) instead of the deleted inspector atom.
 
+### Data mode's sub-state — `src/state/dataModeStore.ts`
+
+Data mode is the canonical GameData surface, and everything that decides *what it is showing*
+lives here. All of it is **ephemeral view state: never persisted, never an undo step.**
+
+| Export | Meaning |
+|---|---|
+| `$dataScopeRaw` / `$dataScope` | The scope the left form shows: `{kind:'part'}` or `{kind:'template', templateId}`. The computed CLAMPS a template with zero placements back to Part, leaving the raw atom alone so undoing the deletion restores the scope. |
+| `sectionsFor(scope)` / `sectionDef(id)` | The ONE section dataset. The navigator's child rows, the form's chip strip and the form's section stack all render from it, so the three can never disagree about order, wording or which sections a scope has. |
+| `$dataSectionJump` / `jumpToSection(id, cardKey?)` | The nonce'd "scroll to + expand + flash" intent a chip, a navigator row or a finding fires. The nonce is what makes a second click on the same chip do something visible. |
+| `$dataSearch` / `setDataSearch` | The navigator's fuzzy filter. |
+| `$dataHighlight` | Instance ids of the scoped template's placements, in Data mode only — a persistent viewport TINT, not a selection. |
+| `$dataFlash` / `flashPlacements` / `flashConnector` / `clearFlash` | The one-shot ~600 ms flash behind row hovers, scope chips and the Coupling section's "Show →" eye. Two id spaces, because placements and connector markers highlight through different scene paths. |
+| `initDataMode()` | Registers the entry ladder (jump payload → surviving scope → selected SubPart's template → Part) plus the reaction-catalog preload. Exit has NO effects: the scope must survive for the return trip. |
+
+### The findings pipeline — `src/state/gameDataFindings.ts`
+
+`$gameDataFindings` is one derived list feeding all three validation surfaces: the navigator's
+pinned strip, the status bar's Data segment and the click-through. Contents are
+`validateEngines`' issues (codes, severities and KSA log wording UNCHANGED) re-addressed to a
+`(scope, section, card)` target, plus a blank Part Id and duplicate tank feed ids within one
+scope. `focusFinding(finding)` is the shared click-through — scope, then jump, then flash.
+
 ### The transient tools — one slot, four tenants
 
 A tool is layered ON TOP of a mode, never a mode of its own. Each one declares its rules
@@ -183,13 +206,28 @@ puts `<Internal>` on the template's `<PartModel>`, so it is never per-placement.
 templates are skipped (`isGlassTemplate`, exported so the menus can *disable* the item rather
 than silently drop the write).
 
-**GameData actions** (`part.gameData`, used by the Part Data dialog): `setDisplayName`,
+**GameData actions** (`part.gameData`, used by Data mode's scope form): `setDisplayName`,
 `setCustomMassEnabled` / `setCustomMass`, tanks `addTank` / `removeTank` /
 `setTankShape` / `updateTank`, power `add*`/`remove*`/`set*` for batteries / generators
 / power-consumers, and coupling `set{Decoupler,DockingPort,EvaDoor}Enabled` /
 `set*Connector` / `setDecouplerForce` / `setDockingPort{LatchingImpulse,PushoffForce}`.
 List add/remove, checkboxes and
 Select picks are **discrete**; free-text/number field edits are **streaming**.
+
+Three of them are Data mode's own:
+
+- **`setExtraDiameters(list)`** — **streaming** over `gameData.extraDiametersM`, the repeated
+  `<Diameter M/>` size classes an adapter declares. It pushes NO undo itself: the list editor
+  streams like any other field, and its add/remove buttons push their own discrete
+  `'add size class'` / `'remove size class'` step before calling it.
+- **`removeAllTemplateData(templateId)`** — ONE discrete `'delete SubPart data'` push behind
+  the scope header's whole-container confirm. It removes the template's `<SubPartGameData>`
+  entry and its template-owned lights, and deliberately does NOT touch colliders: a
+  template-owned collider is a Build entity with its own inspector.
+- **`setEvaDoorSeat(seatIndex | null)`** — ONE discrete push authoring BOTH halves of the
+  `<EVADoor SeatId>` ⇄ `<IVASeat Id>` link (minting `seat_<n>` against the shared component-id
+  namespace when the seat has no authored id). Authoring one half ships a hatch with no
+  in-game EVA button.
 
 **Action-chain actions** (see [action-chains.md](./action-chains.md)) live in two places. The
 **session** is `src/state/chainStore.ts` — `openChain(seedIds)` / `closeChain()` /
@@ -355,9 +393,14 @@ Shift+click on pointer-down (before react-aria's own, anchorless extension runs)
   with the narrow-desktop `☰` collapse).
 - `shell/DialogRoot.tsx` — the single mount point for every overlay dialog, keyed by
   `state/dialogStore.ts`'s `$openDialog` id. No dialog is owned by a trigger button.
-- `PartDataDialog.tsx` — the **Part Data** dialog (Part id, editor tags, and the
-  `gameData` sections; see [xml-io.md](./xml-io.md)), dialog id `'part-data'`, reached
-  from the ⌘K palette (`data.partData`) until Data mode gives it a permanent home.
+- `data/DataNavigator.tsx` + `data/DataScopeForm.tsx` + `data/sections/*` — **Data mode**,
+  the canonical GameData surface. The right sidebar is the scope navigator (pinned Part root
+  with section child rows, one row per SubPart template with content badges, the
+  "not data-capable" inventory, fuzzy search and the pinned validation strip); the left
+  sidebar is the scope form, whose sections cover every `gameData` / `subPartGameData` field
+  (see [xml-io.md](./xml-io.md)). The v1 **Part Data** and **SubPart Data** fullscreen modals
+  (`PartDataDialog` / `ManageTanksModal`) and their shared `GameDataSections.tsx` are
+  DELETED — Build's "SubPart Data →" is now a jump into this mode, not a dialog.
   `ExportDialog.tsx` exports (dialog id `'export-ksa'`, File ▸ Export to KSA… / ⌘E).
 - `chain/ChainWindow.tsx` / `chain/ChainStepCard.tsx` — the **non-modal** action-chain
   session (`⇧⌘K` / Edit ▸ Begin Action Chain… / the multi-select panel's Chain… / the ⌘K
@@ -369,15 +412,16 @@ Shift+click on pointer-down (before react-aria's own, anchorless extension runs)
   variant, a pinned strip above the condensed status bar.
 - `ModeSidebar.tsx` — the right sidebar's body, one switch on `$mode` (it replaced v1's
   `InspectorContent`). Build renders the Outliner; Animation and Engine render their
-  panels; Data and Surface show an interim placeholder naming where those surfaces still
-  live. On phone the same component is the **Panel sheet** (re-tap the active mode tab),
+  panels; Data renders the scope navigator; Surface shows an interim placeholder naming
+  where that surface still lives. On phone the same component is the **Panel sheet** (re-tap the active mode tab),
   and `MobileInspector.tsx` is the **Inspector sheet** hosting `ModeFocusEditor` — the same
   left/right split the desktop has.
 - `EnginePanel.tsx` / `EngineToolbar.tsx` — the full-sidebar **Engine Designer**
   (`$mode === 'engine'`, ephemeral atoms in `engineStore.ts`) with a live
   thrust/Isp readout; `EngineSections.tsx` holds the reusable combustor/nozzle/controller/
-  gimbal/propellant editors (also rendered in the Part/SubPart Data modals). See
-  [engines.md](./engines.md).
+  gimbal/propellant editors. Data mode's Wiring, Advanced and template Engine sections host
+  those same components for one phase (marked `TODO(P7.18)`) until Engine mode's rebuild
+  turns them into shared editors. See [engines.md](./engines.md).
 
 ## Persistence
 

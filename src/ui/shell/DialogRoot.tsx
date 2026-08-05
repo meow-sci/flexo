@@ -6,7 +6,6 @@ import { LoadProjectDialog, RenameProjectDialog } from '../projects/ProjectDialo
 import { ExportProjectDialog, ImportProjectDialog } from '../ProjectTransferDialogs';
 import { ShareProjectDialog } from '../ShareProjectDialog';
 import { ExportDialog } from '../ExportDialog';
-import { PartDataDialog } from '../PartDataDialog';
 import { SettingsDialog, type SettingsDialogParams } from '../SettingsDialog';
 import { ScaleEverythingDialog } from '../ScaleEverythingDialog';
 import { SubPartBrowserDialog } from '../build/SubPartBrowserDialog';
@@ -63,8 +62,6 @@ export function DialogRoot() {
       return <ImportProjectDialog isOpen onOpenChange={dismiss} />;
     case 'export-ksa':
       return <ExportDialog isOpen onOpenChange={dismiss} />;
-    case 'part-data':
-      return <PartDataDialog isOpen onOpenChange={dismiss} />;
     case 'settings':
       return (
         <SettingsDialog

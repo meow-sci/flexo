@@ -463,7 +463,7 @@ export const $historyList = atom<HistoryListItem[]>([]);
  *      e.g. a gizmo drag or a typing session): do NOT call `pushUndo()` here; the
  *      caller pushes once at interaction start (gizmo drag-start, field focus).
  *      Examples: updatePlacementTransform(s), updateConnectorTransform,
- *      updateSelectedTransform, and setPartId (focus-pushed by PartDataDialog).
+ *      updateSelectedTransform, and setPartId (focus-pushed by Data mode's Identity section).
  *
  * If you add a `$part` mutator and pick neither pattern, that change silently
  * bypasses undo — a bug. Keep docs/editor-state.md and AGENTS.md in sync.
@@ -2370,7 +2370,7 @@ export function updateSelectedTransform(t: PlacementTransform): void {
 
 /**
  * Sets the Part id. Streaming mutation (per-keystroke from a text field): does NOT
- * push undo — the caller pushes once on field focus (see PartDataDialog) so a
+ * push undo — the caller pushes once on field focus (see Data mode's Identity section) so a
  * typing session collapses into a single undo step.
  */
 export function setPartId(partId: string): void {

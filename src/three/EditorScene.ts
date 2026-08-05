@@ -265,6 +265,8 @@ export class EditorScene {
   private highlighted: SelectableObject[] = [];
   /** Placements currently wearing Data mode's scope tint (never a selected one). */
   private tinted: SubPartObject[] = [];
+  /** Connector markers lit by a one-shot Data-mode flash (never a selected one). */
+  private flashedConnectors: ConnectorObject[] = [];
   private attachedObject: THREE.Object3D | null = null;
   /** Instance ids whose group transform is currently overridden by the animation preview. */
   private animOverridden = new Set<string>();
@@ -1745,6 +1747,20 @@ export class EditorScene {
     }
     for (const obj of wanted) obj.setTint(DATA_TINT_STRENGTH);
     this.tinted = [...wanted];
+
+    // Connector markers have no tint channel — only the binary selection highlight — so the
+    // Coupling section's "Show →" eye borrows it for the flash window and hands it straight
+    // back. A genuinely selected connector is excluded, so the two can never fight.
+    const wantedConnectors = new Set<ConnectorObject>();
+    for (const id of flash?.connectorIds ?? []) {
+      const obj = this.connectorObjects.get(id);
+      if (obj && !selected.has(obj)) wantedConnectors.add(obj);
+    }
+    for (const obj of this.flashedConnectors) {
+      if (!wantedConnectors.has(obj) && !selected.has(obj)) obj.setSelected(false);
+    }
+    for (const obj of wantedConnectors) obj.setSelected(true);
+    this.flashedConnectors = [...wantedConnectors];
   }
 
   /** Syncs the selection highlight and gizmo attachment to the current selection. */

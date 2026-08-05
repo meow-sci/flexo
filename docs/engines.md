@@ -106,10 +106,12 @@ the project's `customReactions` (custom wins on id).
     generator)" whenever `part.gameData` carries any combustor, nozzle or solid motor.
     Its editors are the primary panel content there; the "Gas generator (advanced)"
     disclosure stays only under a SubPart engine, where it genuinely is advanced.
-- **Modal sections** (round-trip + no-3D editing): `EngineSections.tsx` renders the
-  thrust-chamber editors in **SubPart Data** (`ManageTanksModal`) and the controllers +
-  gimbals + gas-generator in **Part Data** (`PartDataDialog`, "Engine" section — dialog id
-  `'part-data'`, reached from the ⌘K palette's `data.partData` command).
+- **Data mode sections** (the same `EngineSections.tsx` components, no 3D): the
+  thrust-chamber editors under **Data ▸ \<template\> ▸ Engine**, and the controllers, feed
+  wiring and gimbals under **Data ▸ Part ▸ Wiring** with the solid motor and gas generator
+  under **Data ▸ Part ▸ Advanced**. Each carries an "Open in Engine mode →" link, and the
+  two routes render the identical components so they cannot diverge in capability. (The v1
+  Part Data / SubPart Data modals that used to host them are deleted.)
 
 ### Placing the exhaust in 3D
 
@@ -209,7 +211,7 @@ be switched to Service** or it demands `BulkFluid` from service-only connectors.
 
 ### 3. Feed wiring — the Part's answer to "Parent"
 
-**Part Data → Engine → Feed wiring**. One entry per SubPart-level consumer that defers to
+**Data ▸ Part ▸ Wiring → Feed wiring** (or Engine mode). One entry per SubPart-level consumer that defers to
 its parent, naming the real connector or container. A wiring entry may not itself defer to
 Parent. **"Auto-wire unwired consumers"** creates a blank entry for every consumer that
 needs one — the one-click fix for the most common mistake; you still pick the feed points.
@@ -243,8 +245,8 @@ mistakes are warnings, because KSA only logs them.
 ## Solid rocket motors (SRBs) — real, since KSA 2026.7.9
 
 A solid booster is the solid-family mirror of the liquid trio, authored in the Engine
-designer's **part-level entry** ("Solid motor hardware") — or under **Part Data → Engine →
-Solid motor (SRB)**, and per-SubPart in SubPart Data:
+designer's **part-level entry** ("Solid motor hardware") — or under **Data ▸ Part ▸ Advanced
+→ Solid motor (SRB)**, and per-SubPart under **Data ▸ \<template\> ▸ Engine**:
 
 - **`<SolidMotor>`** — the case. Picks a `Category="Solid"` reaction (APCP / DoubleBase /
   a custom one), a **grain profile** (`Neutral`, `Progressive`, `Regressive`,

@@ -78,7 +78,7 @@ const FIELD_LABEL = 'text-xs text-fg-subtle';
 
 /**
  * A label above a control, stacked so the same markup works at every sidebar width and in a
- * phone sheet. Moved here from `GameDataSections.tsx` in P6.06 — it is a primitive, and a
+ * phone sheet. Moved here from the v1 part-data section file — it is a primitive, and a
  * primitive living in a feature file is what made `EngineSections` import the Part-Data
  * dialog (design-data-engine-modes.md §C1 "kills the utility-in-feature-file debt").
  */

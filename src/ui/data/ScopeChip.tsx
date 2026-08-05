@@ -2,6 +2,8 @@ import { Eye } from 'lucide-react';
 import { Button, Menu, MenuItem, MenuTrigger, Popover, Tooltip, cn, useIsPhone } from '../kit';
 import { select } from '../../state/editorStore';
 import { clearFlash, flashPlacements } from '../../state/dataModeStore';
+import { status } from '../../state/statusStore';
+import { closePhoneSheets } from '../shell/phone/phoneSheets';
 
 /**
  * **The scope-chip system** (design: design-data-engine-modes.md §A5) — the one place v1's
@@ -105,18 +107,27 @@ export function InstanceScopeChip({
   );
 }
 
-/** Phone's stand-in for hover: re-flash a target without re-picking it (§A5 touch rule). */
+/**
+ * Phone's stand-in for hover: re-flash a target without re-picking it (§A5 touch rule).
+ *
+ * It also CLOSES the sheet, because on phone the sheet is what the flash would happen behind
+ * (§A8) — the status channel carries the confirmation the user would otherwise miss.
+ */
 function ShowButton({ instanceIds, label }: { instanceIds: readonly string[]; label: string }) {
   return (
     <Button
       iconOnly
       size="xs"
       variant="ghost"
-      className="size-5 shrink-0"
+      className="size-11 shrink-0"
       aria-label={`Show ${label} in the viewport`}
-      onPress={() => flashPlacements(instanceIds)}
+      onPress={() => {
+        flashPlacements(instanceIds);
+        closePhoneSheets();
+        status(`${label} shown in the viewport`);
+      }}
     >
-      <Eye size={11} />
+      <Eye size={16} />
     </Button>
   );
 }

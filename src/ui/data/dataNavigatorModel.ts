@@ -13,7 +13,7 @@ import type { EntityKind } from '../../state/editorStore';
  * seats, part-level lights, kittens) the brief requires as a disabled-style list.
  *
  * The count recipes are ported from the v1 Part Data dialog's badges
- * (`src/ui/PartDataDialog.tsx:46-62`) so nothing changes meaning on the way over.
+ * (deleted with the modal in P6.18) so nothing changed meaning on the way over.
  */
 
 /** The worst finding severity affecting a row/section, or null when clean. */

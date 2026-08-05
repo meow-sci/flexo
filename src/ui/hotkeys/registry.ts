@@ -543,8 +543,6 @@ export const ALL_BINDINGS: HotkeyBinding[] = HOTKEY_GROUPS.flatMap((g) => g.bind
 // | measure / seat-view / exhaust arming routed through `$activeTool`,        | P5B (F-section) |
 // |   plus the tool definitions and the status-bar tool segments              |              |
 // | chain discard-confirm on Esc / mode switch / ⇧⌘K re-invoke (LOCKED)       | P5B.28       |
-// | `surface:outliner` inline-rename Enter/Esc (⌘F landed in P5A.13)          | P5A.14       |
-// |   (v1 rename source: `src/ui/LayersPanel.tsx` `onKeyDown`)                |              |
 // | `surface:data-navigator` edit mirrors                                     | P6           |
 // | `surface:engine-tree` edit mirrors · `tool:exhaust` `,`/`.` target cycle  | P7           |
 // |   + the rung-5 re-point onto `$activeTool`                                |              |
@@ -559,7 +557,8 @@ export const ALL_BINDINGS: HotkeyBinding[] = HOTKEY_GROUPS.flatMap((g) => g.bind
 // `CommandPalette` (the input owns DOM focus for the whole session) and are documented as a
 // STATIC Help section (`helpStatics.ts` `PALETTE_SECTION`) rather than registered — a fake
 // binding nothing dispatches would only add four chords to the conflict validator. Palette
-// Esc is already ladder rung 3.
+// Esc is already ladder rung 3. The Outliner's inline-rename `↩`/`Esc` closed the same way in
+// P5A.14 (`helpStatics.ts` `OUTLINER_SECTION`): they live inside one focused text field.
 
 // ── the Escape ladder's flexo-owned rungs (foundation §11.4) ─────────────────
 //

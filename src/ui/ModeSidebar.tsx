@@ -1,6 +1,5 @@
 import { useStore } from '@nanostores/react';
-import { AssetsToolbar } from './AssetsToolbar';
-import { AssetsList } from './AssetsList';
+import { OutlinerPanel } from './outliner/OutlinerPanel';
 import { TransformInspector } from './TransformInspector';
 import { AnimToolbar } from './AnimToolbar';
 import { AnimationPanel } from './AnimationPanel';
@@ -53,9 +52,8 @@ export function ModeSidebar({ showTransform = false }: { showTransform?: boolean
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-2">
-      <AssetsToolbar />
       <div className="min-h-0 flex-1">
-        <AssetsList />
+        <OutlinerPanel />
       </div>
       {showTransform && (
         <div className="flex shrink-0 flex-col gap-2">

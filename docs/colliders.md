@@ -14,7 +14,7 @@ contract (schema, Bepu semantics, runtime behaviour, gotchas) lives in
 
 `EditingPart.colliders: PartCollider[]` — a flat top-level list, following the
 connector/placement pattern rather than burying numbers in `gameData`. That buys selection,
-the transform gizmo, multi-select, copy/paste, the Assets list, layer
+the transform gizmo, multi-select, copy/paste, the Outliner, layer
 visibility/lock/opacity and undo with almost no new machinery.
 
 ```ts
@@ -132,7 +132,7 @@ one.
 
 Colliders are the **fourth** `SelectableKind`, with the same machinery as the other three:
 click-select, multi-select across kinds, nudge/rotate/duplicate/delete hotkeys, copy/paste,
-the Assets list, and layer visibility/lock/opacity. The inspector's third numeric group
+the Outliner, and layer visibility/lock/opacity. The inspector's third numeric group
 becomes **"Size (m)"** with per-shape fields (Box: X/Y/Z · Sphere: Ø · Cylinder/Capsule:
 Ø + H) — only the axes a shape independently controls are shown, since
 `normalizeColliderSize` derives the rest. Changing the **owner** converts the transform

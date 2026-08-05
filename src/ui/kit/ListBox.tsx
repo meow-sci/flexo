@@ -16,7 +16,7 @@ const itemBase =
   'group flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm text-fg outline-none hover:bg-wash-hover focus-visible:bg-wash-selected selected:bg-wash-selected disabled:opacity-45';
 
 // GridList rows use a green inset ring for selection (and a thinner ring for
-// keyboard focus), matching the Assets mesh-part list (see AssetsList.tsx).
+// keyboard focus), matching the Outliner's entity rows.
 const gridItemBase =
   'flex cursor-default select-none items-center gap-2 rounded-md px-2 text-sm text-fg outline-none disabled:opacity-45';
 

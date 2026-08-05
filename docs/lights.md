@@ -90,7 +90,7 @@ Ctrl/Cmd/Shift-click toggles it within a cross-kind selection); the click also r
 **which instance** was hit in the `$lightEditContext` store atom — the highlight tints that
 context instance, the gizmo attaches to it, and it is the placement frame both the gizmo's
 write-back and the inspector's part-frame fields convert through (one atom, so they can never
-disagree). Selected lights participate in everything selection drives: the Assets list (a
+disagree). Selected lights participate in everything selection drives: the Outliner (a
 Lights section with one row per light, `via <template>` for subpart-owned ones), the dedicated
 light inspector (below), keyboard nudge/rotate, delete/duplicate (a duplicate gets a fresh
 `_lightN` id and keeps its owner), and undo.

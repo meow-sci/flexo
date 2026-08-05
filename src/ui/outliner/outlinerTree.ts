@@ -15,7 +15,7 @@ import { fuzzyAny, fuzzyFind } from '../fuzzyMatch';
 
 /**
  * The Outliner's row model as a PURE function (design: design-build-mode.md §2.1, §2.4,
- * §2.5). It supersedes `AssetsList`'s inline row builders, and lifting it out of the
+ * §2.5). It supersedes v1's inline Assets-list row builders, and lifting it out of the
  * component is what makes the layer partition, the kind grouping, the search semantics and
  * the `shown/total` counts unit-testable without react.
  *

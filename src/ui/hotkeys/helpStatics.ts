@@ -85,8 +85,6 @@ export const NUMERIC_FIELD_SECTION: HelpStaticSection = {
  * registering fake bindings just to list them here would put four chords into the conflict
  * validator that nothing dispatches. Escape is the exception: it is ladder rung 3, and shows
  * up in the Escape section too.
- *
- * EXTEND in P5A.14 (Outliner inline rename: Enter commits, Escape cancels).
  */
 export const PALETTE_SECTION: HelpStaticSection = {
   title: 'Command palette',
@@ -95,6 +93,23 @@ export const PALETTE_SECTION: HelpStaticSection = {
     { chords: [['↵']], text: 'Run the highlighted command' },
     { chords: [['mod', '↵']], text: 'Run it and keep the palette open' },
     { chords: [['Escape']], text: 'Close the palette' },
+  ],
+};
+
+/**
+ * The Outliner's inline rename keys. Like the palette's navigation keys they are
+ * component-local (`LayerHeaderRow`'s `RenameInput` owns them, and they only exist while that
+ * field has focus), so they are DISPLAYED here rather than registered — a binding nothing can
+ * dispatch outside one focused input would only add chords to the conflict validator. The
+ * Outliner's one real binding, `⌘F`, comes from the registry.
+ */
+export const OUTLINER_SECTION: HelpStaticSection = {
+  title: 'Outliner',
+  rows: [
+    { chords: [['double-click']], text: 'Rename a layer — double-click its name' },
+    { chords: [['↵']], text: 'Commit the layer rename' },
+    { chords: [['Escape']], text: 'Cancel the layer rename' },
+    { chords: [['drag']], text: 'Drag entity rows onto a layer header to move them there' },
   ],
 };
 

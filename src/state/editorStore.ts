@@ -132,12 +132,6 @@ export const $part = atom<EditingPart>(createEmptyPart());
 export type EntityKind = 'subpart' | 'connector' | 'collider' | 'ivaSeat' | 'light' | 'kitten';
 
 /**
- * @deprecated transitional alias for {@link EntityKind}, kept so v1 surfaces compile
- * unchanged. DELETE in P5A.17 with the last of them.
- */
-export type SelectableKind = EntityKind;
-
-/**
  * A stable reference to a selected entity: `id` is the instanceId (SubParts) or the
  * entity id (connector / collider / seat / light / kitten).
  */
@@ -291,7 +285,7 @@ export function deselectRefs(refs: readonly SelectionRef[]): void {
  * The selection's refs of one kind, resolved to live indices in SELECTION order (dead refs
  * dropped). The bridge for the mutators that still splice/read `$part` positionally.
  */
-function selectedIndicesOf(part: EditingPart, kind: EntityKind): number[] {
+function selectionIndicesOf(part: EditingPart, kind: EntityKind): number[] {
   const out: number[] = [];
   for (const ref of $selection.get()) {
     if (ref.kind !== kind) continue;
@@ -300,46 +294,6 @@ function selectedIndicesOf(part: EditingPart, kind: EntityKind): number[] {
   }
   return out;
 }
-
-// ── legacy per-kind INDEX views ──────────────────────────────────────────────
-//
-// The six atoms {@link $selection} replaced, re-expressed as derived views so the v1
-// surfaces that still index into `$part` (AssetsList and friends) keep running
-// unchanged. Every one of them is deleted with its last consumer in P5A.17.
-
-const indicesOf = (kind: EntityKind) =>
-  computed([$selection, $part], (sel, part) =>
-    sel
-      .flatMap((r) => (r.kind === kind ? [entityIndexOf(part, r.kind, r.id)] : []))
-      .filter((i) => i >= 0),
-  );
-const primaryIndexOf = (view: ReturnType<typeof indicesOf>) =>
-  computed(view, (indices) => (indices.length > 0 ? indices[indices.length - 1] : -1));
-
-/** @deprecated legacy index view — DELETE in P5A.17. */
-export const $selectedIndices = indicesOf('subpart');
-/** @deprecated legacy index view — DELETE in P5A.17. */
-export const $selectedIndex = primaryIndexOf($selectedIndices);
-/** @deprecated legacy index view — DELETE in P5A.17. */
-export const $selectedConnectorIndices = indicesOf('connector');
-/** @deprecated legacy index view — DELETE in P5A.17. */
-export const $selectedConnectorIndex = primaryIndexOf($selectedConnectorIndices);
-/** @deprecated legacy index view — DELETE in P5A.17. */
-export const $selectedColliderIndices = indicesOf('collider');
-/** @deprecated legacy index view — DELETE in P5A.17. */
-export const $selectedColliderIndex = primaryIndexOf($selectedColliderIndices);
-/** @deprecated legacy index view — DELETE in P5A.17. */
-export const $selectedIvaSeatIndices = indicesOf('ivaSeat');
-/** @deprecated legacy index view — DELETE in P5A.17. */
-export const $selectedIvaSeatIndex = primaryIndexOf($selectedIvaSeatIndices);
-/** @deprecated legacy index view — DELETE in P5A.17. */
-export const $selectedKittenIndices = indicesOf('kitten');
-/** @deprecated legacy index view — DELETE in P5A.17. */
-export const $selectedKittenIndex = primaryIndexOf($selectedKittenIndices);
-/** @deprecated legacy index view — DELETE in P5A.17. */
-export const $selectedLightIndices = indicesOf('light');
-/** @deprecated legacy index view — DELETE in P5A.17. */
-export const $selectedLightIndex = primaryIndexOf($selectedLightIndices);
 
 /**
  * Snapshots of copied entities (SubParts, connectors, kittens, colliders, IVA seats),
@@ -1058,7 +1012,11 @@ export function addPart(
   // imported" drag carry its colliders and connectors along instead of stranding them.
   // Pre-existing entities on the same layers are deliberately left out. Entity kinds
   // whose layer is hidden or locked are skipped, matching the select-all rule in
-  // AssetsList (and keeping the "locked ⇒ never selected" invariant of setLayerLocked).
+  // the Outliner (and keeping the "locked ⇒ never selected" invariant of setLayerLocked).
+  // KNOWN GAP (owned by a later phase): the gate is ASYMMETRIC — the imported SubParts
+  // themselves are selected unconditionally, so a hidden/locked destination layer still
+  // yields a selection. A passing test asserts today's behavior; treat it as a v1 bug that
+  // has not been adjudicated, not as intent.
   const selectable = (id: string): boolean => isLayerVisible(id) && !isLayerLocked(id);
   const importedOnLayer = selectable(layerId);
   const refs: SelectionRef[] = importedSubIds.map((id) => ({ kind: 'subpart', id }));
@@ -1484,12 +1442,12 @@ export function setConnectorCapabilities(
  */
 export function removeSelected(): void {
   const part0 = $part.get();
-  const sub = selectedIndicesOf(part0, 'subpart');
-  const con = selectedIndicesOf(part0, 'connector');
-  const kit = selectedIndicesOf(part0, 'kitten');
-  const col = selectedIndicesOf(part0, 'collider');
-  const seat = selectedIndicesOf(part0, 'ivaSeat');
-  const lig = selectedIndicesOf(part0, 'light');
+  const sub = selectionIndicesOf(part0, 'subpart');
+  const con = selectionIndicesOf(part0, 'connector');
+  const kit = selectionIndicesOf(part0, 'kitten');
+  const col = selectionIndicesOf(part0, 'collider');
+  const seat = selectionIndicesOf(part0, 'ivaSeat');
+  const lig = selectionIndicesOf(part0, 'light');
   const total = sub.length + con.length + kit.length + col.length + seat.length + lig.length;
   if (total === 0) return;
 
@@ -1606,12 +1564,12 @@ export function removePlacement(index: number): void {
 /** Duplicates every selected entity (SubParts, connectors, colliders, seats, lights, kittens) and selects the copies. */
 export function duplicateSelected(): void {
   const part0 = $part.get();
-  const sub = selectedIndicesOf(part0, 'subpart');
-  const con = selectedIndicesOf(part0, 'connector');
-  const kit = selectedIndicesOf(part0, 'kitten');
-  const col = selectedIndicesOf(part0, 'collider');
-  const seat = selectedIndicesOf(part0, 'ivaSeat');
-  const lig = selectedIndicesOf(part0, 'light');
+  const sub = selectionIndicesOf(part0, 'subpart');
+  const con = selectionIndicesOf(part0, 'connector');
+  const kit = selectionIndicesOf(part0, 'kitten');
+  const col = selectionIndicesOf(part0, 'collider');
+  const seat = selectionIndicesOf(part0, 'ivaSeat');
+  const lig = selectionIndicesOf(part0, 'light');
   const total = sub.length + con.length + kit.length + col.length + seat.length + lig.length;
   if (total === 0) return;
 
@@ -1748,11 +1706,11 @@ function entityCountLabel(
  */
 export function copySelected(): number {
   const part = $part.get();
-  const sub = selectedIndicesOf(part, 'subpart');
-  const con = selectedIndicesOf(part, 'connector');
-  const kit = selectedIndicesOf(part, 'kitten');
-  const col = selectedIndicesOf(part, 'collider');
-  const seat = selectedIndicesOf(part, 'ivaSeat');
+  const sub = selectionIndicesOf(part, 'subpart');
+  const con = selectionIndicesOf(part, 'connector');
+  const kit = selectionIndicesOf(part, 'kitten');
+  const col = selectionIndicesOf(part, 'collider');
+  const seat = selectionIndicesOf(part, 'ivaSeat');
   const total = sub.length + con.length + kit.length + col.length + seat.length;
   if (total === 0) return 0;
   const order = (a: number, b: number) => a - b;
@@ -1976,127 +1934,13 @@ export function applyActionChain(entries: readonly ChainCommitEntry[], detail: s
   return cloneRefs.length;
 }
 
-// ── deprecated index-based setter shims ─────────────────────────────────────
-//
-// Same exported names + signatures as the v1 per-kind setters, re-expressed over
-// {@link select} / {@link toggleRef}. They exist ONLY so the v1 surfaces that still speak
-// indices (AssetsList and friends) compile untouched; each one dies with its last
-// consumer in P5A.17. New code selects by ref.
-
-/** Indices → refs, dropping anything that does not resolve. */
-function refsFromIndices(kind: EntityKind, indices: readonly number[]): SelectionRef[] {
-  const part = $part.get();
-  const out: SelectionRef[] = [];
-  for (const i of indices) {
-    const ref = refAt(part, kind, i);
-    if (ref) out.push(ref);
-  }
-  return out;
-}
-
-/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
-export function selectPlacement(index: number): void {
-  select(refsFromIndices('subpart', [index]));
-}
-
-/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
-export function setSelectedPlacements(indices: readonly number[]): void {
-  select(refsFromIndices('subpart', indices));
-}
-
-/** @deprecated index-based shim — DELETE in P5A.17. Use `toggleRef`. */
-export function togglePlacement(index: number): void {
-  const ref = refAt($part.get(), 'subpart', index);
-  if (ref) toggleRef(ref);
-}
-
-/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
-export function selectConnector(index: number): void {
-  select(refsFromIndices('connector', [index]));
-}
-
-/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
-export function setSelectedConnectors(indices: readonly number[]): void {
-  select(refsFromIndices('connector', indices));
-}
-
-/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
-export function selectKitten(index: number): void {
-  select(refsFromIndices('kitten', [index]));
-}
-
-/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
-export function setSelectedKittens(indices: readonly number[]): void {
-  select(refsFromIndices('kitten', indices));
-}
-
-/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
-export function selectCollider(index: number): void {
-  select(refsFromIndices('collider', [index]));
-}
-
-/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
-export function setSelectedColliders(indices: readonly number[]): void {
-  select(refsFromIndices('collider', indices));
-}
-
-/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
-export function selectIvaSeat(index: number): void {
-  select(refsFromIndices('ivaSeat', [index]));
-}
-
-/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
-export function setSelectedIvaSeats(indices: readonly number[]): void {
-  select(refsFromIndices('ivaSeat', indices));
-}
-
-/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
-export function selectLight(index: number): void {
-  select(refsFromIndices('light', [index]));
-}
-
-/** @deprecated index-based shim — DELETE in P5A.17. Use `select`. */
-export function setSelectedLights(indices: readonly number[]): void {
-  select(refsFromIndices('light', indices));
-}
-
-/**
- * @deprecated index-based shim — DELETE in P5A.17. Use `select`.
- *
- * The v1 cross-kind setter: every omitted list still CLEARS its kind, which the ref-based
- * `select` gets for free (it replaces the whole selection).
- */
-export function setSelection(
-  subIndices: readonly number[],
-  conIndices: readonly number[],
-  kitIndices: readonly number[],
-  colIndices: readonly number[] = [],
-  seatIndices: readonly number[] = [],
-  lightIndices: readonly number[] = [],
-): void {
-  select([
-    ...refsFromIndices('subpart', subIndices),
-    ...refsFromIndices('connector', conIndices),
-    ...refsFromIndices('collider', colIndices),
-    ...refsFromIndices('ivaSeat', seatIndices),
-    ...refsFromIndices('kitten', kitIndices),
-    ...refsFromIndices('light', lightIndices),
-  ]);
-}
-
-/** @deprecated index-based shim — DELETE in P5A.17. Use `toggleRef`. */
-export function toggleEntity(kind: EntityKind, index: number): void {
-  const ref = refAt($part.get(), kind, index);
-  if (ref) toggleRef(ref);
-}
-
 /** Clears the whole selection. */
 export function clearSelection(): void {
   setSelectionRefs([]);
 }
 
 /**
- * The entity the Assets list should scroll into view, identified by kind + stable
+ * The entity the Outliner should scroll into view, identified by kind + stable
  * id (instanceId / connector id / kitten id). Set when a selection originates from
  * a 3D viewport click — the list has no other way to know the click happened. A
  * fresh object is published on every reveal (even for the same entity, e.g. a
@@ -2105,7 +1949,7 @@ export function clearSelection(): void {
  */
 export const $revealEntity = atom<{ kind: EntityKind; id: string } | null>(null);
 
-/** Asks the Assets list to scroll `id` (of `kind`) into view — used by 3D-click selection. */
+/** Asks the Outliner to scroll `id` (of `kind`) into view — used by 3D-click selection. */
 export function revealEntity(kind: EntityKind, id: string): void {
   $revealEntity.set({ kind, id });
 }
@@ -3907,16 +3751,16 @@ export function moveEntityToLayer(kind: LayerableKind, index: number, layerId: s
  * Moves every selected SubPart, connector and collider to `layerId` in a single undo
  * step (pinned kinds — IVA seats, lights, kittens — are left where they are). Selection
  * is preserved: editing an entity's layerId doesn't reorder its list, so the selected
- * indices keep pointing at the same entities (and the Assets list shows all layers, so
+ * indices keep pointing at the same entities (and the Outliner shows all layers, so
  * they stay visible without changing the active layer). No-op for the entity-only
  * built-in layers, an unknown layer, or a selection with nothing movable in it.
  */
 export function moveSelectionToLayer(layerId: string): void {
   const current = $part.get();
   if (!isMoveTarget(current, layerId)) return;
-  const sub = selectedIndicesOf(current, 'subpart');
-  const con = selectedIndicesOf(current, 'connector');
-  const col = selectedIndicesOf(current, 'collider');
+  const sub = selectionIndicesOf(current, 'subpart');
+  const con = selectionIndicesOf(current, 'connector');
+  const col = selectionIndicesOf(current, 'collider');
   const total = sub.length + con.length + col.length;
   if (total === 0) return;
   const destLayerName = current.layers.find((l) => l.id === layerId)?.name ?? layerId;

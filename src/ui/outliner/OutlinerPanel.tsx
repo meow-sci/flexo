@@ -6,14 +6,16 @@ import {
   GridListHeader,
   GridListItem,
   GridListSection,
+  MenuTrigger,
   type Selection,
 } from 'react-aria-components';
 import { Search } from 'lucide-react';
-import { Button, SearchField, cn, gridRowClass } from '../kit';
+import { Button, Popover, SearchField, TextField, cn, gridRowClass } from '../kit';
 import {
   $part,
   $revealEntity,
   $selection,
+  createLayer,
   refLayerId,
   select,
   type EntityKind,
@@ -24,15 +26,18 @@ import { $layerView, expandLayer, toggleLayerCollapsed } from '../../state/layer
 import { runCommand } from '../../state/commandStore';
 import { focusViewport } from '../../three/viewportFocus';
 import { useShiftRangeSelect } from '../rangeSelect';
+import { ManageTanksModal } from '../ManageTanksModal';
 import { LAYER_COLOR_HEX } from './layerColors';
-import { LayerHeaderRow } from './LayerHeaderRow';
-import { EntityRow } from './EntityRow';
+import { DND_ENTITY, LayerHeaderRow } from './LayerHeaderRow';
+import { AidsSection } from './AidsSection';
+import { EntityMenu, EntityRow } from './EntityRow';
+import { $subPartDataTemplateId } from './subPartData';
 import { $outlinerSearchFocus } from './outlinerSearch';
 import { buildOutlinerTree, type OutlinerLayerSection, type OutlinerRow } from './outlinerTree';
 
 /**
  * **The Outliner** — Build mode's right sidebar (design: design-build-mode.md §1.3, §2;
- * foundation §8.1). One tree replacing v1's `AssetsList` + `AssetsToolbar` + the Layers
+ * foundation §8.1). One tree replacing v1's Assets list + Assets toolbar + the Layers
  * button/popover + the opacity popover-in-a-popover.
  *
  * The row model is the pure {@link buildOutlinerTree}; this component only renders it and
@@ -45,13 +50,15 @@ import { buildOutlinerTree, type OutlinerLayerSection, type OutlinerRow } from '
  *   (mirroring 3D, where hidden means unpickable);
  * - `⇧-click` ranges run through {@link useShiftRangeSelect} (grow-only, nearest-anchor,
  *   holes preserved) because react-aria's own extension cannot survive a store-controlled
- *   list.
+ *   list;
+ * - right-click opens the row's own menu AT THE CURSOR through one controlled popover
+ *   anchored to a 0×0 fixed div — real context-menu positioning, replacing v1's
+ *   synthetic-click-on-the-⋮-button hack;
+ * - dragging entity rows onto a layer header moves the whole movable selection there.
  *
- * **What lands later, on top of this shell**: the full §2.2 layer controls + ＋ Layer row
- * (P5A.14), per-kind ⋮ menus and drag-to-layer (P5A.15), the Aids section (P5A.16). P5A.17
- * swaps this panel in for `AssetsList` and deletes it.
- *
- * Undo enrollment: NONE. Selection, search text and the collapsed flags are all view state.
+ * Undo enrollment: NONE. Selection, search text and the collapsed flags are all view state;
+ * the document mutations reachable from here (layer edits, row menu actions) each push their
+ * own undo step inside their store mutator.
  */
 export function OutlinerPanel() {
   const part = useStore($part);
@@ -60,10 +67,17 @@ export function OutlinerPanel() {
   const catalogIndex = useStore($catalogIndex);
   const reveal = useStore($revealEntity);
   const searchFocusNonce = useStore($outlinerSearchFocus);
+  const tanksTemplateId = useStore($subPartDataTemplateId);
   const [search, setSearch] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
+  /** The selection as it stood the instant a row was pressed — see the row's `onDragStart`. */
+  const pressSelection = useRef<readonly SelectionRef[]>([]);
   const [flashKey, setFlashKey] = useState<string | null>(null);
+  const [contextRow, setContextRow] = useState<{ row: OutlinerRow; x: number; y: number } | null>(
+    null,
+  );
+  const [creating, setCreating] = useState(false);
 
   const query = search.trim();
   const filtering = query.length > 0;
@@ -98,7 +112,7 @@ export function OutlinerPanel() {
   // Kind subheaders ride the collection as non-selectable rows (the plan's sanctioned
   // alternative to a second section level, which react-aria has no notion of).
   for (const { section, rowsVisible } of sections) {
-    if (!rowsVisible) continue;
+    if (!rowsVisible || !showsSubheaders(section)) continue;
     for (const group of section.groups) disabledKeys.add(subheaderKey(section, group.kind));
   }
 
@@ -175,6 +189,16 @@ export function OutlinerPanel() {
   // can never come from `renderEmptyState` — it is a branch of its own.
   const noMatches = filtering && !isEmpty && tree.every((section) => section.shown === 0);
 
+  const createFrom = (name: string) => {
+    setCreating(false);
+    const id = createLayer(name);
+    requestAnimationFrame(() => {
+      scrollRef.current
+        ?.querySelector<HTMLElement>(`[data-outliner-layer="${CSS.escape(id)}"]`)
+        ?.scrollIntoView({ block: 'nearest' });
+    });
+  };
+
   return (
     // `data-surface="outliner"` puts the panel in the `surface:outliner` hotkey scope
     // (`src/state/hotkeyStore.ts`): ⌘F lives there, and so do the ⌘C/⌘X/⌘V/⌘D/⌫/⇧⌘I edit
@@ -221,9 +245,10 @@ export function OutlinerPanel() {
       </div>
 
       <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
-        {isEmpty ? (
-          <EmptyWorkspace />
-        ) : noMatches ? (
+        {/* The mode empty state is a BANNER, not a replacement: the layer list has to stay
+            reachable or a layer created from ＋ Layer would have nowhere to appear. */}
+        {isEmpty && <EmptyWorkspace />}
+        {noMatches ? (
           <NoMatches query={query} onClear={() => setSearch('')} />
         ) : (
           <GridList
@@ -267,6 +292,13 @@ export function OutlinerPanel() {
                         data-outliner-key={item.key}
                         textValue={item.row.name}
                         {...range.rowProps(item.key)}
+                        // Real context-menu positioning: record the cursor, let the ONE
+                        // controlled popover below open there. ⇧-right-click never ranges —
+                        // `useShiftRangeSelect` ignores non-primary buttons.
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          setContextRow({ row: item.row, x: e.clientX, y: e.clientY });
+                        }}
                         className={(rp) =>
                           cn(
                             gridRowClass(rp),
@@ -281,6 +313,24 @@ export function OutlinerPanel() {
                           tint={
                             section.layer.color ? LAYER_COLOR_HEX[section.layer.color] : undefined
                           }
+                          onPointerDown={() => {
+                            pressSelection.current = $selection.get();
+                          }}
+                          // Dragging a row drags the SELECTION (design §2.4). The selection
+                          // read here is the PRE-PRESS one: react-aria replaces the selection
+                          // on press-down, so by the time `dragstart` fires the other rows
+                          // are already gone. A row that was not in it becomes the selection
+                          // instead, so the gesture reads the same for one row or five.
+                          onDragStart={(e) => {
+                            const prior = pressSelection.current;
+                            select(
+                              prior.some((r) => refKey(r) === item.key)
+                                ? prior
+                                : [parseRefKey(item.key)],
+                            );
+                            e.dataTransfer.setData(DND_ENTITY, item.key);
+                            e.dataTransfer.effectAllowed = 'move';
+                          }}
                         />
                       </GridListItem>
                     )
@@ -290,7 +340,53 @@ export function OutlinerPanel() {
             )}
           </GridList>
         )}
+
+        {!noMatches && (
+          <div className="px-1 pt-1">
+            {creating ? (
+              <NewLayerInput onCommit={createFrom} onCancel={() => setCreating(false)} />
+            ) : (
+              <Button
+                size="xs"
+                variant="ghost"
+                className="w-full justify-start text-fg-subtle"
+                onPress={() => setCreating(true)}
+              >
+                ＋ Layer
+              </Button>
+            )}
+          </div>
+        )}
       </div>
+
+      <AidsSection />
+
+      {/* The context menu: a 0×0 anchor pinned at the cursor, driving the same per-kind menu
+          the row's ⋮ button opens. Both mount their items inside a `Popover`, so every
+          predicate in them re-evaluates on each open (React Compiler). */}
+      <MenuTrigger
+        isOpen={contextRow !== null}
+        onOpenChange={(open) => {
+          if (!open) setContextRow(null);
+        }}
+      >
+        <Button
+          aria-label="Row context menu"
+          className="pointer-events-none fixed size-0 min-h-0 overflow-hidden border-0 p-0 opacity-0"
+          style={{ left: contextRow?.x ?? 0, top: contextRow?.y ?? 0 }}
+        />
+        <Popover placement="bottom start" className="w-56">
+          {contextRow && <EntityMenu row={contextRow.row} />}
+        </Popover>
+      </MenuTrigger>
+
+      {/* INTERIM (TODO P6): the SubPart Data → row action still opens v1's tanks modal. */}
+      {tanksTemplateId && (
+        <ManageTanksModal
+          subPartTemplateId={tanksTemplateId}
+          onClose={() => $subPartDataTemplateId.set(null)}
+        />
+      )}
     </div>
   );
 }
@@ -300,6 +396,15 @@ type Item =
   | { kind: 'subheader'; key: string; label: string; count: number }
   | { kind: 'row'; key: string; row: OutlinerRow };
 
+/**
+ * Whether a layer draws its kind subheaders. A pinned entity-only layer can only ever hold
+ * ONE kind, so "IVA SEATS (2)" under a header already reading "IVA Seats 2" is pure noise —
+ * design §2.1's wireframe shows those layers bare.
+ */
+function showsSubheaders(section: OutlinerLayerSection): boolean {
+  return !(section.pinned && section.groups.length === 1);
+}
+
 /** Subheader keys are namespaced so they can never collide with a `kind:id` row key. */
 function subheaderKey(section: OutlinerLayerSection, kind: EntityKind): string {
   return `header@${section.layer.id}@${kind}`;
@@ -307,13 +412,18 @@ function subheaderKey(section: OutlinerLayerSection, kind: EntityKind): string {
 
 /** A layer's rows, interleaved with their kind subheaders, in display order. */
 function itemsFor(section: OutlinerLayerSection): Item[] {
+  const withHeaders = showsSubheaders(section);
   return section.groups.flatMap((group): Item[] => [
-    {
-      kind: 'subheader',
-      key: subheaderKey(section, group.kind),
-      label: group.label,
-      count: group.rows.length,
-    },
+    ...(withHeaders
+      ? [
+          {
+            kind: 'subheader' as const,
+            key: subheaderKey(section, group.kind),
+            label: group.label,
+            count: group.rows.length,
+          },
+        ]
+      : []),
     ...group.rows.map((row): Item => ({ kind: 'row', key: row.key, row })),
   ]);
 }
@@ -324,6 +434,33 @@ const refKey = (ref: SelectionRef): string => `${ref.kind}:${ref.id}`;
 function parseRefKey(key: string): SelectionRef {
   const i = key.indexOf(':');
   return { kind: key.slice(0, i) as EntityKind, id: key.slice(i + 1) };
+}
+
+/** The ＋ Layer create row's inline field: Enter (or blur with text) creates, Esc cancels. */
+function NewLayerInput({
+  onCommit,
+  onCancel,
+}: {
+  onCommit: (name: string) => void;
+  onCancel: () => void;
+}) {
+  const [draft, setDraft] = useState('');
+  return (
+    <TextField
+      size="sm"
+      autoFocus
+      aria-label="New layer name"
+      placeholder="Layer name (blank = Layer N)"
+      value={draft}
+      onChange={setDraft}
+      onBlur={() => onCommit(draft)}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') onCommit(draft);
+        else if (e.key === 'Escape') onCancel();
+      }}
+    />
+  );
 }
 
 /** Nothing placed at all — first-run guidance doubling as the mode empty state (§2.7). */

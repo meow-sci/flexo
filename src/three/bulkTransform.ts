@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { EulerXYZ, Vec3 } from '../ksa/types';
-import type { PlacementTransform, SelectableKind } from '../state/editorStore';
+import type { PlacementTransform, EntityKind } from '../state/editorStore';
 
 /**
  * Pure transform math for bulk-editing a multi-selection of SubParts. Shared by
@@ -100,7 +100,7 @@ export function scaledAroundOriginTransform(
  * with the part. Seats and lights have no size at all (their write path pins `scale` to
  * (1,1,1)), so they are listed here for completeness only.
  */
-export function scalesWithGroup(kind: SelectableKind): boolean {
+export function scalesWithGroup(kind: EntityKind): boolean {
   return kind !== 'connector';
 }
 
@@ -111,7 +111,7 @@ export function scalesWithGroup(kind: SelectableKind): boolean {
  * mode therefore comes back untouched — there is nothing about it to resize.
  */
 export function groupScaledTransform(
-  kind: SelectableKind,
+  kind: EntityKind,
   t: PlacementTransform,
   factor: Vec3,
   origin: Vec3 | null,

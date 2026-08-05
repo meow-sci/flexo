@@ -62,11 +62,13 @@ kind exhaustively. (`index` is recomputed on every call and is transitional — 
 The v1 version indexed the arrays and fell through to a kitten default, so a kind that missed
 its branch silently moved the kitten sitting at the same index; that trap is gone.
 
-> **Deprecated, and dying with their last consumer**: the six `$selected*Indices` /
-> `$selected*Index` names still exist as derived index VIEWS, and the per-kind setters
-> (`selectPlacement`, `setSelectedColliders`, `setSelection`, `toggleEntity`, …) as one-line
-> shims over `select`/`toggleRef`, purely so the v1 assets list compiles unchanged. Do not
-> write new code against them.
+> **The v1 index layer is gone.** The six `$selected*Indices` / `$selected*Index` views and
+> every per-kind setter (`selectPlacement`, `setSelectedColliders`, `setSelection`,
+> `toggleEntity`, …) were deleted with their last consumer, the v1 assets list. There is
+> nothing to migrate to: read the selection through `selectors.ts`, write it through
+> `select` / `toggleRef` / `deselectRefs`. Note that `primaryOf(kind)` returns a **ref**, not
+> an index, and — unlike the v1 name `$selectedConnectorIndex` suggested — nothing about the
+> selection is single-kind or singular: one selection freely spans all six kinds.
 
 ## The mode machine — `src/state/modeStore.ts`
 
@@ -245,15 +247,15 @@ live commits, arrow steps and all — collapses into one undo step.
 
 ## List selection — `src/ui/rangeSelect.ts`
 
-The app's multi-select lists — the **Assets list** (`AssetsList.tsx`, the sectioned
-SubParts/connectors/colliders/seats/lights/kittens list) and the anim-mode **Mesh
+The app's multi-select lists — the **Outliner** (`ui/outliner/OutlinerPanel.tsx`, the
+sectioned SubParts/connectors/colliders/seats/lights/kittens tree) and the anim-mode **Mesh
 Picker** (`MeshPickerModal.tsx`) — carry the usual desktop-list gestures: click
 replaces, Cmd/Ctrl+click toggles one row, Cmd/Ctrl+A takes everything selectable,
 Shift+arrows extend by a row, and **Shift+click extends across every row in between**.
 
 Only the last one is ours. react-aria's `SelectionManager.extendSelection` reads the
 range anchor off the `Selection` object it handed to `onSelectionChange` — and both
-lists are **controlled** (the Assets list from the selection store, the
+lists are **controlled** (the Outliner from the selection store, the
 picker from local state), so what comes back down is a freshly built plain `Set` with
 no `anchorKey`. react-aria then anchors on the clicked row itself and a Shift+click
 degenerates into "add the one row you clicked", which is the bug behind issue #5.
@@ -271,7 +273,7 @@ Shift+click on pointer-down (before react-aria's own, anchorless extension runs)
   here also arrives from the 3D viewport and "select all in layer". A Shift+click inside
   the selection fills the closest gap instead of shrinking the range, and a
   Cmd/Ctrl-built non-contiguous selection keeps its other holes.
-- rows that can't be selected are **skipped, not blocking**: in the Assets list a range
+- rows that can't be selected are **skipped, not blocking**: in the Outliner a range
   spans past (and up to) rows on a hidden or locked layer without selecting them, the
   same rule click-selection and the 3D viewport already follow
 - ranges are computed over the displayed row order with the layer sections flattened, so
@@ -279,7 +281,10 @@ Shift+click on pointer-down (before react-aria's own, anchorless extension runs)
 
 ## UI panels (`src/ui/`)
 - `SubPartBrowser.tsx` — filterable catalog list; click adds via `addSubPart`.
-- `AssetsList.tsx` — the placed-entity list (see above); select/duplicate/delete.
+- `outliner/OutlinerPanel.tsx` — the **Outliner**, Build mode's right sidebar: layer header
+  rows, entity rows grouped by kind with per-kind ⋮ menus, fuzzy search, the Aids section
+  (see [layers.md](./layers.md)). It replaced the v1 `AssetsList` + `AssetsToolbar` +
+  Layers button/popover.
 - `TransformInspector.tsx` — numeric position/rotation/scale (two-way bound); for a
   selected connector, the three flag checkboxes (Internal/ToSurface/FromSurface).
 - `shell/MenuBar.tsx` — the docked menubar: the eight menus rendered from
@@ -295,7 +300,6 @@ Shift+click on pointer-down (before react-aria's own, anchorless extension runs)
   `gameData` sections; see [xml-io.md](./xml-io.md)), dialog id `'part-data'`, reached
   from the ⌘K palette (`data.partData`) until Data mode gives it a permanent home.
   `ExportDialog.tsx` exports (dialog id `'export-ksa'`, File ▸ Export to KSA… / ⌘E).
-- `LayersButton.tsx` / `LayersPanel.tsx` — sidebar Layers popover (see [layers.md](./layers.md)).
 - `chain/ChainPalette.tsx` / `chain/ChainStepCard.tsx` — the floating, **non-modal**
   action-chain palette (`⇧⌘K` / Edit ▸ Begin Action Chain… / the selection toolbar's
   Chain button; self-gates on

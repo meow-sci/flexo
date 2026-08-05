@@ -158,7 +158,7 @@ index on every pass — that is what renumbers the badges after a reorder.
 
 Seats are the **fifth** `SelectableKind`, with the same machinery as the other four:
 click-select, multi-select across kinds, nudge/rotate/duplicate/delete hotkeys, copy/paste,
-the Assets list, and layer visibility/lock/opacity. See
+the Outliner, and layer visibility/lock/opacity. See
 [editor-state.md](editor-state.md) for the store atoms and each mutator's undo enrolment.
 
 `IvaSeatHeader` (`src/ui/TransformInspector.tsx`) is where the game contract becomes visible:
@@ -188,7 +188,7 @@ inspector publishes an intent (`$ivaSeatAimRequest` in `src/state/ivaSeatStore.t
 back with `aimIvaSeat` (which owns the single undo step). Same pattern as
 `$colliderFitRequest`.
 
-The Assets list gives the IVA Seats layer its own section: the row **name** is the ordinal
+The Outliner gives the IVA Seats layer its own section: the row **name** is the ordinal
 (`Seat 3`), the **sub** line is the derived forward axis (`→ 1, 0, 0`) with `· default`
 appended on index 0, and the row menu adds a **Sit in this seat** item. Search matches the
 seat id, the row name and `default`.
@@ -299,7 +299,7 @@ flexo models `<Internal>` as plain user data:
 
 The user-facing control is **Interior (IVA only) ▸ On / Off** in the SubPart row menu and the
 multi-select toolbar; a template resolving to interior gets a `· interior` badge on its
-Assets-list row and in the SubPart browser. See
+Outliner row and in the SubPart browser. See
 [importing-models.md](importing-models.md#interior-props-and-the-internal-flag) for the
 behaviour change this replaced, and
 [custom-assets.md](custom-assets.md) for marking a custom mesh interior.

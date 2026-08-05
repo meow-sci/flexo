@@ -346,7 +346,7 @@ On / Off** in the SubPart list's row menu (right-click works too) or in the mult
 toolbar. It is the one item in that menu that acts on the multi-selection: if the row you
 opened it from is part of the current selection it applies to all of it — the submenu is
 labelled `Interior (IVA only) — N selected` in that case so it is never ambiguous — otherwise
-to that row alone. A template resolving to interior gets a `· interior` badge on its Assets-list
+to that row alone. A template resolving to interior gets a `· interior` badge on its Outliner
 row (and in the SubPart browser, so you know before placing), and `interior` is a search term.
 
 Three consequences worth knowing:

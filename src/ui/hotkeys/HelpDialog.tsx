@@ -16,6 +16,7 @@ import { ALL_BINDINGS, type HotkeyBinding, type KeyChord } from './registry';
 import {
   escLadderRows,
   NUMERIC_FIELD_SECTION,
+  OUTLINER_SECTION,
   PALETTE_SECTION,
   POINTER_SECTION,
   type HelpStaticSection,
@@ -156,6 +157,7 @@ export function HelpDialog({
             <StaticSection section={NUMERIC_FIELD_SECTION} />
             <EscSection />
             <StaticSection section={PALETTE_SECTION} />
+            <StaticSection section={OUTLINER_SECTION} />
           </div>
         </div>
         <p className="shrink-0 border-t border-border px-4 py-2.5 text-xs text-fg-subtle">

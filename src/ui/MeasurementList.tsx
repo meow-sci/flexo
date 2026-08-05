@@ -16,7 +16,7 @@ import { formatLength } from '../measure/format';
 /**
  * List of placed line measurements (reference + point-to-point). Selecting a row
  * makes it the active measurement (opening the editor); per-row lock and delete.
- * Mirrors {@link AssetsList}'s react-aria GridList pattern.
+ * Mirrors the Outliner's react-aria GridList pattern.
  */
 export function MeasurementList({ onSelect }: { onSelect?: () => void } = {}) {
   const measurements = useStore($measurements);

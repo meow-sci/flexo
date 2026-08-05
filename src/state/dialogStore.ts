@@ -27,7 +27,7 @@ import { atom } from 'nanostores';
  * Deliberately ABSENT (they keep their v1 atoms until the Surface/asset phase rehosts
  * them): `import-model` (`$importModelRequest`) and `glow-paint` (`$glowPaintMeshId`) in
  * `src/state/customAssetStore.ts`, plus `ManageTanksModal` / `MeshPickerModal`, which stay
- * local to the AssetsList / animation toolbar until the Data and Animation phases.
+ * local to the Outliner row menu / animation toolbar until the Data and Animation phases.
  */
 export type DialogId =
   | 'projects'

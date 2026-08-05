@@ -36,8 +36,15 @@ import type { HotkeyBinding } from './registry';
  */
 const SYNTHETIC_BINDING_IDS: readonly string[] = ['esc.ladder', 'chain.apply'];
 
+/**
+ * `mirror.<surface>.<action>` — a list-surface edit mirror (`listSurfaceMirrors.ts`). It
+ * needs its own id because two bindings can never share one (rule 2), but it runs the very
+ * command its viewport twin does, so there is nothing extra to register.
+ */
 function isSyntheticId(id: string): boolean {
-  return id.startsWith('transform.') || SYNTHETIC_BINDING_IDS.includes(id);
+  return (
+    id.startsWith('transform.') || id.startsWith('mirror.') || SYNTHETIC_BINDING_IDS.includes(id)
+  );
 }
 
 /**

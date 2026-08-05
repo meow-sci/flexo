@@ -142,6 +142,7 @@ import {
   type LightVizSettings,
 } from '../state/settingsStore';
 import {
+  $cameraFrame,
   $cameraRestore,
   $cameraSnap,
   $gizmoCancel,
@@ -149,6 +150,7 @@ import {
   $grids,
   $hideInterior,
 } from '../state/viewStore';
+import { computeSelectionBounds } from '../measure/bounds';
 import { resolveInternal } from '../ksa/modExport';
 import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../state/layerStore';
 // The app's one user-facing feedback channel (a module function by design, since there is
@@ -640,8 +642,14 @@ export class EditorScene {
     this.sub($effectiveToolMode, (mode) => this.gizmo.setMode(mode));
     this.sub($snap, (snap) => this.gizmo.setSnap(snap));
     this.sub($grids, (grids) => this.viewport.grids.setConfig(grids));
+    // The snap orbits the SELECTION centroid when there is a selection, else the origin
+    // (LOCKED #7; design: design-build-mode.md §5.3) — the command side is unchanged, the
+    // "around what" answer lives here because only the scene knows.
     this.sub($cameraSnap, (cmd) => {
-      if (cmd) this.viewport.snapCamera(cmd.dir);
+      if (cmd) this.viewport.snapCamera(cmd.dir, this.selectionWorldCenter() ?? undefined);
+    });
+    this.sub($cameraFrame, (cmd) => {
+      if (cmd) this.frameSelection();
     });
     this.sub($cameraRestore, (cmd) => {
       if (cmd) this.viewport.restoreCamera(cmd.state);
@@ -1528,6 +1536,42 @@ export class EditorScene {
     this.reconcileLights($part.get());
     this.applyLayerView();
     this.updateSelection();
+  }
+
+  /**
+   * **Frame Selection** (`F` / View menu / palette — LOCKED #7): fits the selection in view
+   * and re-centers the orbit target on it. With nothing selected it frames the whole part
+   * (design: design-build-mode.md §5.3 "frame-all fallback"); with nothing to frame at all
+   * it lands on the origin at the default distance.
+   */
+  private frameSelection(): void {
+    let objects = this.selectedObjects().map((o) => o.group);
+    if (objects.length === 0) objects = [...this.objects.values()].map((o) => o.group);
+    const bounds = computeSelectionBounds(objects, 'world');
+    if (!bounds) {
+      this.viewport.frameBounds(new THREE.Vector3(), new THREE.Vector3());
+      return;
+    }
+    this.viewport.frameBounds(
+      new THREE.Vector3(bounds.center.x, bounds.center.y, bounds.center.z),
+      new THREE.Vector3(bounds.size.x, bounds.size.y, bounds.size.z),
+    );
+  }
+
+  /**
+   * World bounds centre of the current selection, or null when nothing (built) is selected —
+   * the orbit target for Frame Selection and the camera snaps.
+   *
+   * NOT {@link selectionCentroid}, which averages Part-space transform ORIGINS for the gizmo
+   * pivot: a single off-centre mesh would orbit around its origin rather than around what
+   * you can see. The design's "selection centroid" (design-build-mode.md §5.3) is the
+   * visual centre, which is the bounds centre.
+   */
+  private selectionWorldCenter(): THREE.Vector3 | null {
+    const objects = this.selectedObjects().map((o) => o.group);
+    if (objects.length === 0) return null;
+    const bounds = computeSelectionBounds(objects, 'world');
+    return bounds ? new THREE.Vector3(bounds.center.x, bounds.center.y, bounds.center.z) : null;
   }
 
   /** Resolves all currently selected scene objects (SubParts + connectors + colliders + seats + kittens + lights) that are built. */

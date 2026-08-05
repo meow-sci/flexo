@@ -3,6 +3,8 @@ import { openDialog } from '../../state/dialogStore';
 import {
   $grids,
   $hideInterior,
+  frameCamera,
+  resetCamera,
   setGrid,
   setHideInterior,
   snapCamera,
@@ -67,8 +69,8 @@ const cameraSnapCommands: Command[] = CAMERA_DIRS.map(({ dir, label }) => ({
   menuPath: 'View ▸ Camera Snap',
   keywords: `camera snap view ${dir}`,
   keepOpen: true,
-  // INTERIM: orbits the ORIGIN, exactly as v1 did. Snapping around the selection centroid
-  // (LOCKED) arrives with the camera work in the mode/Build phases.
+  // The intent is direction-only: `EditorScene` supplies the orbit target, which is the
+  // SELECTION centroid when something is selected and the origin otherwise (LOCKED #7).
   run: () => snapCamera(dir),
 }));
 
@@ -135,18 +137,19 @@ export const VIEW_COMMANDS: Command[] = [
     title: 'Frame Selection',
     menuPath: 'View',
     keywords: 'frame focus zoom selection camera',
-    enabled: () => false,
-    disabledReason: 'Frame Selection arrives with the mode machine',
-    run: () => {},
+    // The scene answers the intent (EditorScene.frameSelection): what "the selection" means
+    // and where its bounds are is a three-layer question, so the command only asks.
+    run: () => frameCamera(),
   },
   {
     id: 'view.resetCamera',
     title: 'Reset Camera',
     menuPath: 'View',
     keywords: 'reset camera default view',
-    enabled: () => false,
-    disabledReason: 'Reset Camera arrives with the mode machine',
-    run: () => {},
+    // Default pose, origin target, up reset. `resetCamera` has existed since projects
+    // landed; until now nothing but project load/create could reach it (LOCKED #7 makes it
+    // user-facing).
+    run: () => resetCamera(),
   },
   ...cameraSnapCommands,
   ...gridCommands,

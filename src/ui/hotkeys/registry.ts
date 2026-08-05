@@ -1,12 +1,12 @@
 import type { Keys, Options } from 'react-hotkeys-hook';
 import { $paletteOpen, closePalette, runCommand } from '../../state/commandStore';
 import { closeDialog, isDialogOpen } from '../../state/dialogStore';
-import { $activeScopes } from '../../state/hotkeyStore';
+import { $activeScopes, $dialogOpen } from '../../state/hotkeyStore';
 import { $chainSession, closeChain } from '../../state/chainStore';
 import { $measureTool, setMeasureTool } from '../../state/measurementStore';
 import { $isExhaustPlacing, setEngineExhaustGizmo } from '../../state/engineStore';
 import { $activeJointId, $editKeyframeId } from '../../state/animationStore';
-import { $mode } from '../../state/modeStore';
+import { $mode, MODES } from '../../state/modeStore';
 import { $seatView } from '../../state/ivaStore';
 import { $gizmoDragging, requestGizmoCancel } from '../../state/viewStore';
 import { rotateSelectionAroundPair } from '../../three/rotateSelection';
@@ -17,6 +17,7 @@ import { applyChainSession } from '../chain/applyChainSession';
 import { normalizeKeys, scopeRank, type Scope } from './keys';
 import { isInteractiveCollectionFocus } from './typingGuard';
 import { dispatchEsc, registerEscRung } from './escLadder';
+import { registerListSurfaceEditMirrors } from './listSurfaceMirrors';
 import { validateRegistry } from './validateRegistry';
 
 /**
@@ -136,14 +137,28 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
         run: () => changeRotateAxes(),
       },
       {
-        // TODO(P4.08): rebound to `[` / `]` as two bindings, `transform.rotateStep.down/up`
-        // (design: foundation S6). `F` becomes Frame Selection in P4.09.
-        id: 'transform.rotateStep',
-        label: 'Rotation step (F larger · ⇧F smaller)',
-        keys: ['f', 'shift+f'],
-        chords: [['F'], ['shift', 'F']],
+        // REBOUND from `⇧F` (design: foundation S6 — "the bracket pair reads as
+        // smaller/larger"); `F` is Frame Selection now. One key per binding so the Help
+        // chips read `[` and `]` rather than one two-chord row.
+        //
+        // `bracketleft`, not `[`: react-hotkeys-hook matches `event.code` by default, and
+        // `event.key` only with `useKey`. Naming the physical key is what makes ⌥[ work on
+        // macOS, where Option+[ produces `“` rather than `[` (the same reason the Settings
+        // binding is spelled `mod+comma`).
+        id: 'transform.rotateStep.down',
+        label: 'Rotation step — smaller',
+        keys: 'bracketleft',
+        chords: [['[']],
         scope: 'viewport',
-        run: (e) => (e.shiftKey ? lowerRotateStep() : raiseRotateStep()),
+        run: () => lowerRotateStep(),
+      },
+      {
+        id: 'transform.rotateStep.up',
+        label: 'Rotation step — larger',
+        keys: 'bracketright',
+        chords: [[']']],
+        scope: 'viewport',
+        run: () => raiseRotateStep(),
       },
     ],
   },
@@ -181,6 +196,89 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
         chords: [['shift', '←', '→']],
         scope: 'viewport',
         run: (e) => (e.key === 'ArrowLeft' ? lowerNudgeStep() : raiseNudgeStep()),
+      },
+    ],
+  },
+  {
+    title: 'Camera',
+    bindings: [
+      {
+        // THE rebind (LOCKED #7): `F` was the v1 rotate-step key, which moved to `[`/`]`.
+        // Frames the selection, or the whole part when nothing is selected.
+        id: 'view.frameSelection',
+        label: 'Frame selection',
+        keys: 'f',
+        chords: [['F']],
+        scope: 'viewport',
+        run: () => runCommand('view.frameSelection'),
+      },
+    ],
+  },
+  {
+    title: 'Selection',
+    bindings: [
+      {
+        // Viewport-scoped so a focused react-aria list keeps its own row select-all
+        // (foundation §11.1 exception) — `isScopeActive` drops `viewport` on collection
+        // focus, and the list mirrors deliberately omit ⌘A.
+        id: 'select.all',
+        label: 'Select all',
+        keys: 'mod+a',
+        chords: [['mod', 'A']],
+        scope: 'viewport',
+        run: () => runCommand('select.all'),
+      },
+      {
+        id: 'select.none',
+        label: 'Deselect all',
+        keys: 'alt+mod+a',
+        chords: [['alt', 'mod', 'A']],
+        scope: 'viewport',
+        run: () => runCommand('select.none'),
+      },
+      {
+        id: 'select.invert',
+        label: 'Invert selection',
+        keys: 'mod+shift+i',
+        chords: [['mod', 'shift', 'I']],
+        scope: 'viewport',
+        run: () => runCommand('select.invert'),
+      },
+    ],
+  },
+  {
+    title: 'Tools',
+    bindings: [
+      {
+        id: 'tool.cycleGizmo',
+        label: 'Cycle gizmo tool (⇧T backward)',
+        keys: ['t', 'shift+t'],
+        chords: [['T'], ['shift', 'T']],
+        scope: 'viewport',
+        run: (e) => runCommand('tool.cycleGizmo', e.shiftKey ? -1 : 1),
+      },
+      {
+        // Viewport-scoped for symmetry with `B` (design §4.4, the C5 fix): a tool must never
+        // arm invisibly behind a dialog. Escape disarms it through ladder rung 5.
+        id: 'tool.measure',
+        label: 'Measure point-to-point',
+        keys: 'm',
+        chords: [['M']],
+        scope: 'viewport',
+        run: () => runCommand('tool.measure'),
+      },
+      {
+        // Mode-scoped: exhaust placement only exists inside the Engine designer
+        // (design: design-data-engine-modes.md §B10 — v1 had no engine hotkeys at all).
+        id: 'engine.toggleExhaust',
+        label: 'Toggle exhaust placement',
+        keys: 'x',
+        chords: [['X']],
+        scope: 'mode:engine',
+        // `mode:*` survives an open dialog, so the bare letter needs its own gate to satisfy
+        // the C5 assertion (`validateRegistry` rule 4).
+        when: () => !$dialogOpen.get(),
+        run: () => runCommand('engine.toggleExhaust'),
       },
     ],
   },
@@ -315,6 +413,24 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
         run: () => runCommand('edit.settings'),
       },
       {
+        // `⌥[` / `⌥]` — spelled by physical key (`bracketleft`) rather than `[`, because
+        // Option+[ produces `“` on macOS and `useKey` would never match it.
+        id: 'window.toggleLeft',
+        label: 'Toggle the left sidebar',
+        keys: 'alt+bracketleft',
+        chords: [['alt', '[']],
+        scope: 'global',
+        run: () => runCommand('window.toggleLeft'),
+      },
+      {
+        id: 'window.toggleRight',
+        label: 'Toggle the right sidebar',
+        keys: 'alt+bracketright',
+        chords: [['alt', ']']],
+        scope: 'global',
+        run: () => runCommand('window.toggleRight'),
+      },
+      {
         id: 'noop.autosaveFlash',
         // There is no Save: the workspace autosaves. ⌘S answers the reflex instead of
         // handing the user the browser's save-page dialog (the shared preventDefault).
@@ -325,6 +441,22 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
         run: () => runCommand('noop.autosaveFlash'),
       },
     ],
+  },
+  {
+    title: 'Modes',
+    // Digits `1`–`5` in `MODES` order, one binding each. They are `global` (a mode switch is
+    // an app-level move, not a viewport gesture) but carry the `when` gate the design spells
+    // out: a mode must never switch invisibly behind an overlay dialog (design §4.4 row 1,
+    // the C5 fix — and the validator's bare-digit assertion depends on exactly this `when`).
+    bindings: MODES.map((mode, index) => ({
+      id: `mode.${mode.id}`,
+      label: `Go to ${mode.label} mode`,
+      keys: `${index + 1}`,
+      chords: [[`${index + 1}`]],
+      scope: 'global' as const,
+      when: () => !$dialogOpen.get(),
+      run: () => runCommand(`mode.${mode.id}`),
+    })),
   },
   {
     title: 'General',
@@ -359,10 +491,47 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
       },
     ],
   },
+  {
+    title: 'Lists',
+    // The edit chords, mirrored onto the selection-carrying list surfaces so range-selecting
+    // rows and pressing ⌫ keeps working after the viewport scope stopped covering collection
+    // focus (foundation §11.1). One entry per stamped surface; the rest arrive with their
+    // panels (see the DEFERRED ledger below).
+    bindings: [...registerListSurfaceEditMirrors('outliner')],
+  },
 ];
 
 /** Flattened bindings, for the component that wires `useHotkeys` per binding. */
 export const ALL_BINDINGS: HotkeyBinding[] = HOTKEY_GROUPS.flatMap((g) => g.bindings);
+
+// ── DEFERRED bindings ledger ─────────────────────────────────────────────────
+//
+// Every row of the AUTHORITATIVE binding table (`plans/flexo_v2/design/FINAL_DESIGN_INDEX.md`
+// "Consolidated hotkey table") that is NOT live above, pinned to the phase that owns the
+// behavior it would drive. A binding lands only WITH its behavior — an enabled chord that
+// does nothing is worse than an absent one.
+//
+// **Implementers of later phases: delete your row as you land it.**
+//
+// | Binding (authoritative-table row)                                        | Owning phase |
+// |--------------------------------------------------------------------------|--------------|
+// | `viewport` `B` — arm box-select (marquee)                                 | P5A (tool + gesture) |
+// | measure / seat-view / exhaust arming routed through `$activeTool`,        | P5B (F-section) |
+// |   plus the tool definitions and the status-bar tool segments              |              |
+// | chain discard-confirm on Esc / mode switch / ⇧⌘K re-invoke (LOCKED)       | P5B.28       |
+// | `surface:outliner` `⌘F` + inline-rename Enter/Esc                         | P5A (Outliner) |
+// |   (v1 rename source: `src/ui/LayersPanel.tsx` `onKeyDown`)                |              |
+// | `surface:data-navigator` edit mirrors                                     | P6           |
+// | `surface:engine-tree` edit mirrors · `tool:exhaust` `,`/`.` target cycle  | P7           |
+// |   + the rung-5 re-point onto `$activeTool`                                |              |
+// | `surface:glow-paint` `⌘Z` / `⇧⌘Z` per-stroke paint undo                   | P8           |
+// | `mode:animation` `Space` · `,` `.` · `K` (transport / prev-next key /     | P11 (timeline) |
+// |   insert key at playhead)                                                 |              |
+// | `surface:timeline` `←→ ⇧←→ ⌘A ⌥⌘A ⌘C ⌘X ⌘V ⌫ = - F ⇧F Esc`                | P11          |
+// |   + `surface:members` edit mirrors                                        |              |
+// | ModeSwitcher / ModeTabBar attention dots                                  | P7 (engine blockers) / P11 (draft clips) |
+// | `surface:palette` `↑↓ ↩ ⌘↩` — still component-local in `CommandPalette`,  | P4.11 (Help) |
+// |   registered only so Help can list them (Esc is already ladder rung 3)    |              |
 
 // ── the Escape ladder's flexo-owned rungs (foundation §11.4) ─────────────────
 //

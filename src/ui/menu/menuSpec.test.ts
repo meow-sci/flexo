@@ -106,13 +106,17 @@ describe('chord lookup (one source of truth for menu chips, palette rows and Hel
     ['file.exportKsa', [['mod', 'E']]],
     ['window.assetManager', [['mod', 'shift', 'A']]],
     ['help.shortcuts', [['?']]],
+    // Viewport-scoped bindings from the P4.08 wave — they resolve through the same lookup.
+    ['select.all', [['mod', 'A']]],
+    ['view.frameSelection', [['F']]],
+    ['tool.measure', [['M']]],
   ])('%s resolves to its registry binding', (id, chords) => {
     expect(chordsFor(id)).toEqual(chords);
   });
 
-  it('returns null for a command the flat registry does not bind yet', () => {
-    // Viewport-scoped: `select.all` gets ⌘A with the scoped registry, not before.
-    expect(chordsFor('select.all')).toBeNull();
+  it('returns null for a command with no binding', () => {
+    // Reset Camera is menu + palette only — the design gives it no chord (LOCKED #7).
+    expect(chordsFor('view.resetCamera')).toBeNull();
   });
 });
 
@@ -317,8 +321,8 @@ describe('disabled stubs stay visible but never run', () => {
   /** Every command the plan marks [stub] — visible, disabled, owned by a later phase. */
   const STUBS = [
     'tool.marquee',
-    'view.frameSelection',
-    'view.resetCamera',
+    // `view.frameSelection` / `view.resetCamera` graduated out of this list: the camera
+    // phase gave them real targets (`frameCamera()` / `resetCamera()`).
     'view.displayFilters',
     'view.motionTrails',
     'window.timeline',

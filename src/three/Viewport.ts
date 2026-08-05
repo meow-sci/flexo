@@ -5,6 +5,7 @@ import { CSS2DRenderer } from 'three/addons/renderers/CSS2DRenderer.js';
 import { GridManager } from './Grid';
 import { RenderLoop } from './RenderLoop';
 import { SceneEnvironment } from './SceneEnvironment';
+import { frameDistance } from './cameraFraming';
 import { $cameraState, type CameraDir, type CameraState } from '../state/viewStore';
 import { $lighting } from '../state/lightingStore';
 import { $showFpsCounter } from '../state/settingsStore';
@@ -191,15 +192,16 @@ export class Viewport {
 
   /**
    * Snaps the camera to an axis-aligned orthographic-style view, recentering the
-   * controls target on the origin so the snapped view looks straight down the
-   * axis at (0,0,0). Preserves the current distance (zoom). `up` is adjusted for
-   * the top/bottom views so the camera doesn't gimbal-lock looking straight
-   * down/up.
+   * controls target on `targetOverride` — **the selection centroid** when there is a
+   * selection (LOCKED #7; design: design-build-mode.md §5.3) — or the origin when there
+   * is not. Preserves the current distance (zoom). `up` is adjusted for the top/bottom
+   * views so the camera doesn't gimbal-lock looking straight down/up.
    */
-  snapCamera(dir: CameraDir): void {
+  snapCamera(dir: CameraDir, targetOverride?: THREE.Vector3): void {
     const target = this.controls.target;
     const distance = this.camera.position.distanceTo(target);
-    target.set(0, 0, 0);
+    if (targetOverride) target.copy(targetOverride);
+    else target.set(0, 0, 0);
 
     const offset = new THREE.Vector3();
     const up = new THREE.Vector3(0, 1, 0);
@@ -229,6 +231,27 @@ export class Viewport {
     this.camera.up.copy(up);
     this.camera.position.copy(target).addScaledVector(offset, distance);
     this.camera.lookAt(target);
+    this.controls.update();
+    $cameraState.set(this.readCameraState());
+  }
+
+  /**
+   * **Frame Selection**: fills the view with `center`/`size` and re-centers the orbit target
+   * on it, so orbiting afterwards pivots around what you framed (design:
+   * design-build-mode.md §5.3, LOCKED #7).
+   *
+   * The current VIEW DIRECTION is kept — framing changes what you are looking at, never
+   * which side of it you see. A degenerate direction (camera sitting exactly on its own
+   * target) falls back to the default (3,2,4) three-quarter view.
+   */
+  frameBounds(center: THREE.Vector3, size: THREE.Vector3): void {
+    const dir = new THREE.Vector3().subVectors(this.camera.position, this.controls.target);
+    if (dir.lengthSq() < 1e-12) dir.set(3, 2, 4);
+    dir.normalize();
+    const distance = frameDistance(size, this.camera.fov, this.camera.aspect);
+    this.controls.target.copy(center);
+    this.camera.position.copy(center).addScaledVector(dir, distance);
+    this.camera.lookAt(center);
     this.controls.update();
     $cameraState.set(this.readCameraState());
   }

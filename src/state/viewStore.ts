@@ -63,6 +63,21 @@ export function snapCamera(dir: CameraDir): void {
 }
 
 /**
+ * One-shot **Frame Selection** command (`F`, View menu, palette — design:
+ * `design-build-mode.md` §5.3, LOCKED #7), same nonce pattern as {@link $cameraSnap} so
+ * pressing `F` twice on the same selection re-frames rather than going silent.
+ *
+ * The store deliberately carries no bounds: what "the selection" means is a scene question,
+ * and `EditorScene` is the only layer that can answer it.
+ */
+export const $cameraFrame = atom<{ nonce: number } | null>(null);
+
+let frameNonce = 0;
+export function frameCamera(): void {
+  $cameraFrame.set({ nonce: ++frameNonce });
+}
+
+/**
  * True while a `TransformControls` drag is in flight. Written by `EditorScene` from the
  * gizmo's own `onDraggingChanged` callback; read by the Escape ladder's rung 4, which is the
  * only reason it needs to be visible outside the three layer.

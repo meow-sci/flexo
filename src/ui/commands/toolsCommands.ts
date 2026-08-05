@@ -1,6 +1,15 @@
 import type { Command } from '../../state/commandStore';
-import { $part, selectIvaSeat } from '../../state/editorStore';
+import {
+  $part,
+  $toolMode,
+  selectIvaSeat,
+  setToolMode,
+  type ToolMode,
+} from '../../state/editorStore';
 import { $seatView, enterSeatView, exitSeatView } from '../../state/ivaStore';
+import { $mode } from '../../state/modeStore';
+import { $engineExhaustGizmo, setEngineExhaustGizmo } from '../../state/engineStore';
+import { toast } from '../toast';
 import {
   $measurements,
   $measureTool,
@@ -31,6 +40,30 @@ const CONTAINER_SHAPES: { id: ReferenceShape; label: string }[] = [
   { id: 'sphere', label: 'Sphere' },
 ];
 
+/**
+ * Gizmo tool cycle order (T forward · ⇧T backward) and the label each step flashes.
+ * Move/Rotate/Scale are the same three the v1 toolbar buttons wrote.
+ */
+const GIZMO_CYCLE: { mode: ToolMode; label: string }[] = [
+  { mode: 'translate', label: 'Move' },
+  { mode: 'rotate', label: 'Rotate' },
+  { mode: 'scale', label: 'Scale' },
+];
+
+/**
+ * Cycles `$toolMode` one step (design: foundation §11.2 "T / ⇧T"; S5).
+ *
+ * It writes `$toolMode`, never `$effectiveToolMode` — exhaust placement clamps Scale away
+ * on the READ side (`engineStore.$effectiveToolMode`), exactly as it does for the toolbar
+ * buttons, so cycling past Scale while placing simply displays Move.
+ */
+function cycleGizmoTool(step: number): void {
+  const current = GIZMO_CYCLE.findIndex((entry) => entry.mode === $toolMode.get());
+  const next = GIZMO_CYCLE[(current + step + GIZMO_CYCLE.length) % GIZMO_CYCLE.length];
+  setToolMode(next.mode);
+  toast({ title: `Tool: ${next.label}` });
+}
+
 const containerCommands: Command[] = CONTAINER_SHAPES.map(({ id, label }) => ({
   id: `tools.addContainer:${id}`,
   title: label,
@@ -50,6 +83,28 @@ export const TOOLS_COMMANDS: Command[] = [
     // else is armed) and the status-bar guidance arrive with the mode/Build phases.
     checked: () => $measureTool.get() === 'point',
     run: () => setMeasureTool($measureTool.get() === 'point' ? 'none' : 'point'),
+  },
+  {
+    // Palette-only, deliberately: the authoritative menubar tree (FINAL_DESIGN_INDEX) has no
+    // "cycle tool" item — the gizmo tool is picked from the toolbar. `T`/`⇧T` is the chord
+    // (foundation §11.2) and ⌘K is its discoverable home.
+    id: 'tool.cycleGizmo',
+    title: 'Cycle gizmo tool',
+    keywords: 'gizmo tool move rotate scale cycle translate',
+    keepOpen: true,
+    // `params === -1` cycles backward — the ⇧T half of the one binding. The palette and the
+    // menus pass nothing and get the forward step.
+    run: (params) => cycleGizmoTool(params === -1 ? -1 : 1),
+  },
+  {
+    // Palette-only for the same reason (design: design-data-engine-modes §B10 — Engine mode
+    // has no menubar surface of its own; the designer's own button is the pointer route).
+    id: 'engine.toggleExhaust',
+    title: 'Toggle Exhaust Placement',
+    keywords: 'exhaust nozzle plume placement gizmo engine',
+    enabled: () => $mode.get() === 'engine',
+    checked: () => $engineExhaustGizmo.get(),
+    run: () => setEngineExhaustGizmo(!$engineExhaustGizmo.get()),
   },
   {
     id: 'tools.addRefLine',

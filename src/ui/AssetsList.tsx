@@ -407,7 +407,15 @@ export function AssetsList() {
   }, [reveal]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 rounded-xl border border-border bg-panel p-2">
+    // `data-surface="outliner"` puts this list in the `surface:outliner` hotkey scope
+    // (`src/state/hotkeyStore.ts`), which is what re-arms ⌫ / ⌘C / ⌘X / ⌘V / ⌘D / ⇧⌘I after
+    // range-selecting rows: viewport scope switches off on collection focus, and the
+    // list-surface edit mirrors take over (foundation §11.1). The Outliner proper replaces
+    // this panel in the Build phase and inherits the same stamp.
+    <div
+      data-surface="outliner"
+      className="flex h-full min-h-0 flex-col gap-2 rounded-xl border border-border bg-panel p-2"
+    >
       <div className="px-1">
         <SearchField
           size="sm"

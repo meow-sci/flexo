@@ -58,14 +58,16 @@ export const EDIT_COMMANDS: Command[] = [
     title: 'Cut',
     menuPath: 'Edit',
     keywords: 'clipboard move',
-    // INTERIM composite: two undo steps (one copy — which pushes none — plus one 'delete').
-    // The Build phase ships a real single-step `cutSelected`.
+    // The trivial composite the design asks for (foundation §3 Edit menu: "Cut — copy +
+    // delete"). ONE undo step: `copySelected` pushes none and `removeSelected` pushes the
+    // single 'delete', so ⌘Z puts the cut entities straight back.
     // Lights are not in the clipboard yet, so cutting a selection containing one would
     // DELETE it with no way to paste it back — refuse instead of destroying.
     enabled: () => $hasSelection.get() && $selectedLightIndices.get().length === 0,
     run: () => {
-      copySelected();
+      const n = copySelected();
       removeSelected();
+      if (n) toast({ title: `Cut ${n} ${n === 1 ? 'item' : 'items'}` });
     },
   },
   {

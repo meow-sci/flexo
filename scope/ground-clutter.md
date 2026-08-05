@@ -4,8 +4,14 @@
 > data-only KSA mod that adds a celestial body with `<GroundClutter>` (cards/meshes scattered
 > on the terrain), using **no custom game code**. Reference scaffold for clutter modding.
 
-**Baseline:** re-verified against KSA build **2026.7.10.5056** (decomp @ 5056 + shipped Core XML).
-**Baseline status:** 🟢 **CURRENT (scaffold updated, in-game re-check pending)** — 4892 turned the
+**Baseline:** re-verified against KSA build **2026.8.3.5117** (decomp @ 5117 + shipped Core XML).
+**Baseline status:** 🟡 **SCHEMA-DRIFT, scaffold unaffected (in-game re-check still pending)** —
+5117 (rev 5099) renamed the ecotype's `<Collideable Value>` to
+`<CollisionType Value="None|PrimitiveList|Mesh">` ahead of the Bepu physics integration. The
+`ksa-mods/cartoon-moon/` scaffold emits **neither** element and both defaults mean "no collision",
+so no generator change is needed — but the old name was documented here and is now wrong (gap
+**Q3**, see [What changed in 5117](#what-changed-in-5117)).
+Historically: 4892 turned the
 4826 mesh-atlas change load-bearing: every `<LOD>` now **requires `<Material Id/>` ID-references
 after its `<Mesh>`** and the ecotype `<Material>` became an Id-carrying **list**, so the old
 scaffold XML **throws at data load** (`GroundClutterLodReference.OnDataLoad`). Per the no-migration
@@ -31,7 +37,7 @@ hand-authored mod XML + a build script).
 
 ## The contract — what flexo bakes in
 
-`<GroundClutter>` → `<Ecotype Name>` (a list — Core Earth now ships two) → optional `<Collideable Value>` → `<Placement Biomes>` (`ObjectSeparation M`, `GenerationRange M`, `MinScale/MaxScale`, `Orientation Mode="SurfaceNormal"`, `MinRotation/MaxRotation Degrees`, `DistributionTexture Id`, `DistributionTextureTiling Value`, `UseObjectTypeTexture Value`) → N× `<ClutterObject Name>` each with `<LODs>` of **exactly 5** `<LOD MinScreenSize>`, each LOD = `<Mesh Id Path/>` followed by **one `<Material Id/>` ID-reference per glTF material of the GLB** (a GLB with **no** `materials` array counts as **1**; order-matched to the GLB material order) → ecotype-level `<Material Id="…">` **list** (`<Diffuse>`, `<Normal>`, `<AoRoughMetal>`, optional `<Opacity>` for cutout cards, `UseTerrainMask`, `DoubleSided`, `CastShadows`, `ReceiveShadows`, `BiasNormalsUp`). Body registered via `<LoadFromLibrary>` in the system scenario.
+`<GroundClutter>` → `<Ecotype Name>` (a list — Core Earth now ships two) → optional `<CollisionType Value="None|PrimitiveList|Mesh">` (**renamed from `<Collideable Value>` at 5117**, rev 5099) → `<Placement Biomes>` (`ObjectSeparation M`, `GenerationRange M`, `MinScale/MaxScale`, `Orientation Mode="SurfaceNormal"`, `MinRotation/MaxRotation Degrees`, `DistributionTexture Id`, `DistributionTextureTiling Value`, `UseObjectTypeTexture Value`) → N× `<ClutterObject Name>` each with `<LODs>` of **exactly 5** `<LOD MinScreenSize>`, each LOD = `<Mesh Id Path/>` followed by **one `<Material Id/>` ID-reference per glTF material of the GLB** (a GLB with **no** `materials` array counts as **1**; order-matched to the GLB material order) → ecotype-level `<Material Id="…">` **list** (`<Diffuse>`, `<Normal>`, `<AoRoughMetal>`, optional `<Opacity>` for cutout cards, `UseTerrainMask`, `DoubleSided`, `CastShadows`, `ReceiveShadows`, `BiasNormalsUp`). Body registered via `<LoadFromLibrary>` in the system scenario.
 
 **Baked engine quirks** (the data-only constraints):
 
@@ -39,13 +45,57 @@ hand-authored mod XML + a build script).
 - **LOD `<Material Id/>` refs are mandatory and validated** (`GroundClutterLodReference.OnDataLoad` **throws** on: missing/empty refs, a _concrete_ material definition on a LOD — all materials must be defined on the Ecotype and ID-referenced — and ref count ≠ the GLB's material count).
 - **Ecotype `<Material>` entries need a unique authored `Id`** — an anonymous material registers as an unreferencable `Anon_<hash>`. Material ids live in the **global first-wins ModLibrary namespace**; Core now claims `EarthGrassClutterMaterial`, `Trunk`, `Leaves`, `Tree0Cards`, `Tree1Cards` — the scaffold uses the project-unique `CartoonMoonCrowdMaterial`.
 - **Clutter meshes register globally by GLB mesh name** (first-wins; `_`-prefixed names skipped) → each GLB needs a **unique glTF mesh name**; the scaffold uses `<name>Card` and matches `<Mesh Id>` to it.
-- **`Collideable` forbids `Orientation Mode="SurfaceNormalSmooth"`** (`ClutterEcotypeReference.ToParameters` throws — use `SurfaceNormal`).
+- **A collideable ecotype forbids `Orientation Mode="SurfaceNormalSmooth"`** (`ClutterEcotypeReference.ToParameters` throws — use `SurfaceNormal`). "Collideable" is now the derived `[XmlIgnore] Collideable => CollisionType.Type != None`. Since 5117 (rev 5099) a collideable ecotype must also have **uniform** `MinScale`/`MaxScale` or `IsValid` fails.
 - Synthetic **flat-Normal + neutral-ORM** maps required (the renderer dereferences them — same family of quirk as the part thumbnail renderer).
 - **One Ecotype for the mixed-face crowd** (placement RNG is seeded by cell position, so ecotypes with identical placement params scatter at identical spots and z-fight; multi-ecotype is fine when placements differ — Core Earth's Grass vs Tree) + a **spare ClutterObject** (objectId off-by-one).
 - **Diffuse authored ~×0.5** brightness (KSA decodes clutter diffuse ~×2).
 - **Opacity** cut where R < 0.5 (cutout cards).
 - First-wins + core-first load order, so a clutter mod can **add** a body & reuse textures by `Id`.
 - Loading is gated by the scenario's `<LoadFromLibrary>`.
+
+## What changed in 5117
+
+**One renamed element (`<Collideable>` → `<CollisionType>`) plus two new authoring rules. The
+scaffold emits none of them, so this is docs-only (gap Q3).**
+
+Rev 5099 ("Split 'Collideable' into three collideable types 'None', 'PrimitiveList' and 'Mesh'
+ahead of bepu integration") changed `decomp/KSA/ClutterEcotypeReference.cs`:
+
+```csharp
+-   [XmlElement("Collideable")]
+-   public BoolReference Collideable = new BoolReference(value: false);
++   [XmlElement("CollisionType")]
++   public ClutterCollisionTypeReference CollisionType =
++       new ClutterCollisionTypeReference(ClutterEcotypePhysicalData.CollisionType.None);
++
++   [XmlIgnore]
++   public bool Collideable => CollisionType.Type != ClutterEcotypePhysicalData.CollisionType.None;
+```
+
+The new `decomp/KSA/ClutterCollisionTypeReference.cs` is a one-field `IDataReference`:
+`[XmlAttribute("Value")] ClutterEcotypePhysicalData.CollisionType Type` (enum
+`None` | `PrimitiveList` | `Mesh`, default `None`), validated by `Enum.IsDefined`. So the
+authored form went from `<Collideable Value="true"/>` to
+`<CollisionType Value="Mesh"/>`. Everything downstream still keys off the derived
+`Collideable` bool — the `SurfaceNormalSmooth` throw and the `SnapToMesh` inversion are unchanged.
+
+Two rules landed alongside it:
+
+- **Uniform scale is now required for collideable ecotypes.** `ClutterEcotypeReference.IsValid`
+  fails with _"is collideable and has non-uniform scale"_ (rev 5098's "Added a warning for
+  non-uniform scale for collideable ground clutter objects").
+- **Scale is quantized to 16 discrete steps.** `GroundClutterPlacementReference.ToParameters`
+  now builds an `EcotypeScalesArray` of 16 `Lerp(MinScale, MaxScale, i/15)` entries instead of
+  passing the min/max pair (rev 5098, for Bepu). **Runtime only — no schema change**;
+  `<MinScale>`/`<MaxScale>` are authored exactly as before.
+
+**Impact on flexo: none in code.** `scripts/build-cartoon-moon.ts` emits `<Placement>` with
+uniform `MinScale`/`MaxScale` (6/6/6 → 12/12/12), `Orientation Mode="SurfaceNormal"` and **no**
+collision element at all, so it is valid under both spellings. The 7 schema classes are otherwise
+unchanged (`ClutterObjectReference` moved by one log line number only), and first-wins + core-first
+load order still holds. Also new but outside this surface: `<Landmark IsLaunchPad="true">`
+(`LandmarkReference.cs`) with a clutter **exclusion zone** around launch pads — a celestial/landmark
+authoring surface flexo does not model.
 
 ## What changed in 5056
 

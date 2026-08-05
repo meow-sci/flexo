@@ -15,13 +15,13 @@
             <RayTracing>true</RayTracing>
         </Light>
 
-        <IVASeat>
+        <IVASeat Id="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatA">
             <Position X="-0.45" Y="0.42" Z="-0.35" />
             <ForwardAxis X="1" />
             <UpAxis Z="-1" />
         </IVASeat>
 
-        <IVASeat>
+        <IVASeat Id="CoreIVASpaceA_Prefab_MediumCapsuleA_SeatB">
             <Position X="-0.45" Y="-0.42" Z="-0.35" />
             <ForwardAxis X="1" />
             <UpAxis Z="-1" />

@@ -458,6 +458,14 @@
         <Rotation X="3.1416" Z="3.1416" />
       </Transform>
     </Connector>
+    <Collider Id="Collider1">
+      <Cylinder Id="CylinderCollider1">
+        <LocationAsmb X="0" Y="0" Z="0" />
+        <Collider2Asmb X="0" Y="0" Z="-1.5708" />
+        <LengthY M="0.2468" />
+        <Radius M="0.5" />
+      </Cylinder>
+    </Collider>
   </Part>
   <Part Id="CoreElectricalA_Prefab_InlineBatteryBankB">
     <SubPart Id="CoreElectricalA_Subpart_BatteryBankBEndcapB1" InstanceOf="CoreElectricalA_Subpart_BatteryBankBEndcapB">
@@ -676,6 +684,15 @@
         <Scale X="0.5" Y="0.5" Z="0.5" />
       </Transform>
     </Connector>
+    <Collider Id="Collider1">
+      <Box Id="BoxCollider1">
+        <LocationAsmb X="0.007" Y="0" Z="0.0182" />
+        <Collider2Asmb X="0" Y="0" Z="0" />
+        <LengthX M="0.4305" />
+        <LengthY M="0.2652" />
+        <LengthZ M="0.2099" />
+      </Box>
+    </Collider>
   </Part>
   <Part Id="CoreElectricalA_Prefab_RadialBatteryB">
     <SubPart Id="CoreElectricalA_Subpart_RadialBatteryB1" InstanceOf="CoreElectricalA_Subpart_RadialBatteryB">
@@ -705,6 +722,15 @@
         <Scale X="0.5" Y="0.5" Z="0.5" />
       </Transform>
     </Connector>
+    <Collider Id="Collider1">
+      <Box Id="BoxCollider1">
+        <LocationAsmb X="-0.0071" Y="0" Z="0.0376" />
+        <Collider2Asmb X="0" Y="0" Z="0" />
+        <LengthX M="0.6721" />
+        <LengthY M="0.4828" />
+        <LengthZ M="0.3549" />
+      </Box>
+    </Collider>
   </Part>
   <Part Id="CoreElectricalA_Prefab_SolarPanelA">
     <SubPart Id="CoreElectricalA_Subpart_SolarPanelA_CellA1" InstanceOf="CoreElectricalA_Subpart_SolarPanelA_CellA" />

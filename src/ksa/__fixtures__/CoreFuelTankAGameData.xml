@@ -17,6 +17,7 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.5" /> -->
                 <OuterRadius M="1" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
@@ -47,6 +48,7 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.5" /> -->
                 <OuterRadius M="1" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
@@ -77,6 +79,7 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.5" /> -->
                 <OuterRadius M="1" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
@@ -107,6 +110,7 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.5" /> -->
                 <OuterRadius M="1" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
@@ -137,6 +141,7 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.5" /> -->
                 <OuterRadius M="1" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
@@ -167,6 +172,7 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.5" /> -->
                 <OuterRadius M="1" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
@@ -197,6 +203,7 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="1" /> -->
                 <OuterRadius M="2" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
@@ -244,6 +251,7 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="1" /> -->
                 <OuterRadius M="2" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
@@ -291,6 +299,7 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="2" />
+                <!-- true geometric radius: <OuterRadius M="1" /> -->
                 <OuterRadius M="2" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
@@ -338,6 +347,7 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="2" />
+                <!-- true geometric radius: <OuterRadius M="1" /> -->
                 <OuterRadius M="2" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
@@ -385,6 +395,7 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="2" />
+                <!-- true geometric radius: <OuterRadius M="1" /> -->
                 <OuterRadius M="2" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
@@ -432,6 +443,7 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="4" />
+                <!-- true geometric radius: <OuterRadius M="1" /> -->
                 <OuterRadius M="2" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
@@ -479,6 +491,7 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="4" />
+                <!-- true geometric radius: <OuterRadius M="1" /> -->
                 <OuterRadius M="2" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
@@ -526,6 +539,7 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="4" />
+                <!-- true geometric radius: <OuterRadius M="1" /> -->
                 <OuterRadius M="2" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
@@ -573,6 +587,7 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="4" />
+                <!-- true geometric radius: <OuterRadius M="1" /> -->
                 <OuterRadius M="2" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
@@ -620,7 +635,8 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="3" />
-                <OuterRadius M="4" />
+                <!-- true geometric radius: <OuterRadius M="1.5" /> -->
+                <OuterRadius M="3" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
         </Tank>
@@ -667,7 +683,8 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="3" />
-                <OuterRadius M="4" />
+                <!-- true geometric radius: <OuterRadius M="1.5" /> -->
+                <OuterRadius M="3" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
         </Tank>
@@ -714,7 +731,8 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="6" />
-                <OuterRadius M="4" />
+                <!-- true geometric radius: <OuterRadius M="1.5" /> -->
+                <OuterRadius M="3" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
         </Tank>
@@ -761,7 +779,8 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="6" />
-                <OuterRadius M="4" />
+                <!-- true geometric radius: <OuterRadius M="1.5" /> -->
+                <OuterRadius M="3" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
         </Tank>
@@ -808,7 +827,8 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="6" />
-                <OuterRadius M="4" />
+                <!-- true geometric radius: <OuterRadius M="1.5" /> -->
+                <OuterRadius M="3" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
         </Tank>
@@ -855,7 +875,8 @@
             <CylindricalTank>
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="6" />
-                <OuterRadius M="4" />
+                <!-- true geometric radius: <OuterRadius M="1.5" /> -->
+                <OuterRadius M="3" />
                 <WallThickness Mm="4" />
             </CylindricalTank>
         </Tank>
@@ -903,6 +924,7 @@
                 <LocationAsmb X="0" Y="0" Z="0.25" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -913,6 +935,7 @@
                 <LocationAsmb X="0" Y="0.25" Z="0" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -923,6 +946,7 @@
                 <LocationAsmb X="0" Y="0" Z="-0.25" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -933,6 +957,7 @@
                 <LocationAsmb X="0" Y="-0.25" Z="0" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -965,6 +990,7 @@
                 <LocationAsmb X="0" Y="0" Z="0.25" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -975,6 +1001,7 @@
                 <LocationAsmb X="0" Y="0.25" Z="0" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -985,6 +1012,7 @@
                 <LocationAsmb X="0" Y="0" Z="-0.25" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -995,6 +1023,7 @@
                 <LocationAsmb X="0" Y="-0.25" Z="0" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1027,6 +1056,7 @@
                 <LocationAsmb X="0" Y="0" Z="0.25" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1037,6 +1067,7 @@
                 <LocationAsmb X="0" Y="0.25" Z="0" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1047,6 +1078,7 @@
                 <LocationAsmb X="0" Y="0" Z="-0.25" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1057,6 +1089,7 @@
                 <LocationAsmb X="0" Y="-0.25" Z="0" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1089,6 +1122,7 @@
                 <LocationAsmb X="0" Y="0" Z="0.25" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1099,6 +1133,7 @@
                 <LocationAsmb X="0" Y="0.25" Z="0" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1109,6 +1144,7 @@
                 <LocationAsmb X="0" Y="0" Z="-0.25" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1119,6 +1155,7 @@
                 <LocationAsmb X="0" Y="-0.25" Z="0" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="1" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1151,6 +1188,7 @@
                 <LocationAsmb X="0" Y="0" Z="0.25" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1161,6 +1199,7 @@
                 <LocationAsmb X="0" Y="0.25" Z="0" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1171,6 +1210,7 @@
                 <LocationAsmb X="0" Y="0" Z="-0.25" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1181,6 +1221,7 @@
                 <LocationAsmb X="0" Y="-0.25" Z="0" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1213,6 +1254,7 @@
                 <LocationAsmb X="0" Y="0" Z="0.25" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1223,6 +1265,7 @@
                 <LocationAsmb X="0" Y="0.25" Z="0" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1233,6 +1276,7 @@
                 <LocationAsmb X="0" Y="0" Z="-0.25" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1243,6 +1287,7 @@
                 <LocationAsmb X="0" Y="-0.25" Z="0" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1275,6 +1320,7 @@
                 <LocationAsmb X="0" Y="0" Z="0.25" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1285,6 +1331,7 @@
                 <LocationAsmb X="0" Y="0.25" Z="0" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1295,6 +1342,7 @@
                 <LocationAsmb X="0" Y="0" Z="-0.25" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1305,6 +1353,7 @@
                 <LocationAsmb X="0" Y="-0.25" Z="0" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1337,6 +1386,7 @@
                 <LocationAsmb X="0" Y="0" Z="0.25" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1347,6 +1397,7 @@
                 <LocationAsmb X="0" Y="0.25" Z="0" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1357,6 +1408,7 @@
                 <LocationAsmb X="0" Y="0" Z="-0.25" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1367,6 +1419,7 @@
                 <LocationAsmb X="0" Y="-0.25" Z="0" />
                 <Material Id="Aluminum.2014(s)" />
                 <Length M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.3385" /> -->
                 <OuterRadius M="0.677" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
@@ -1402,7 +1455,8 @@
         <Tank Id="Tank1">
             <SphericalTank>
                 <Material Id="Aluminum.2014(s)" />
-                <OuterRadius M="0.50" />
+                <!-- true geometric radius: <OuterRadius M="0.25" /> -->
+                <OuterRadius M="0.3969" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
             </SphericalTank>
@@ -1430,7 +1484,8 @@
         <Tank Id="Tank1">
             <SphericalTank>
                 <Material Id="Aluminum.2014(s)" />
-                <OuterRadius M="0.5" />
+                <!-- true geometric radius: <OuterRadius M="0.25" /> -->
+                <OuterRadius M="0.3969" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
             </SphericalTank>
@@ -1457,7 +1512,8 @@
         <Tank Id="Tank1">
             <SphericalTank>
                 <Material Id="Aluminum.2014(s)" />
-                <OuterRadius M="0.30" />
+                <!-- true geometric radius: <OuterRadius M="0.15" /> -->
+                <OuterRadius M="0.2381" />
                 <WallThickness Mm="4" />
                 <RoleAffinity>Thruster</RoleAffinity>
             </SphericalTank>

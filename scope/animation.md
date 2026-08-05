@@ -4,7 +4,8 @@
 > lets the user edit them, and re-exports animation GLBs that KSA's `KeyframeAnimationModule`
 > loads. The load-bearing integration is the **animation-GLB node-structure convention**.
 
-**Baseline:** re-vetted against KSA build **2026.7.10.5056** (decomp @ 5056 + shipped Core XML).
+**Baseline:** re-verified against KSA build **2026.8.3.5117** (decomp @ 5117 + shipped Core XML);
+contract established at **2026.7.10.5056** and unchanged since.
 **Baseline status:** ✅ **INTACT** — but 5056 rewrote KSA's own GLB loader (rev 5034) to the
 semantics flexo already implemented, and in doing so made the scene ROOT node's transform
 load-bearing for the first time. See [What changed in 5056](#what-changed-in-5056). The
@@ -76,6 +77,15 @@ GameData schema (`KeyframeAnimationModule`) and the bone/transform math are unch
 3. **Importer interpolation coverage is partial**: flexo handles only FLOAT accessors + LINEAR/STEP. KSA _does_ support **CubicSpline** → a CubicSpline-authored clip would be mis-decoded (silent corruption, not an error). Pre-existing; unverifiable from snapshots (GLBs not shipped).
 4. Only `animations[0]` is read on both sides.
 5. Wrong rest anchor re-applies the deploy (the reason `restKeyframeId` exists).
+
+## What changed in 5117
+
+**Nothing in this area — re-verified INTACT.** Neither `KeyframeAnimationData.cs` (the GLB-loader
+contract) nor `KeyframeAnimationModule.cs` (the schema) appears in the `5056 → 5117` decomp diff,
+so every rule the 5056 review established — identity scene root, an `Animation` per glTF node,
+immediate-parent links, the empty-accessor TRS fallback — still holds unchanged, and the
+rest-anchor / deployed-pose modeling is unaffected. No `Animations/*.glb` changed in the private
+mirror's 5117 sync.
 
 ## What changed in 5056
 

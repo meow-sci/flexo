@@ -232,6 +232,19 @@ function containersInScope(part: EditingPart, subPartInstanceId: string | null):
   return ids;
 }
 
+/**
+ * Whether a wiring entry's own feed point resolves — the `<ConsumerFeedWiring>` half of
+ * `PartTemplate.AddResolvedFeed` (decomp: `KSA/PartTemplate.cs:494-580`). A wiring entry's
+ * feeds are resolved against the PART (`AddResolvedFeed(item2, this, "", …)`), so an
+ * unscoped container feed looks at `<PartGameData>`'s own containers and a `SubPart=`-scoped
+ * one re-roots to that placement's template.
+ */
+function wiringFeedResolves(part: EditingPart, feed: FeedSource): boolean {
+  if (feed.kind === 'parent') return false; // KSA forbids a wiring entry deferring to Parent
+  if (feed.kind === 'connector') return part.connectors.some((c) => c.id === feed.connectorId);
+  return containersInScope(part, feed.subPartInstanceId ?? null).has(feed.containerId);
+}
+
 /** True when the rocket's `<Core Id>` resolves to a solid motor rather than a combustor. */
 function coreIsSolid(rocket: Rocket, consumers: LocatedConsumer[]): boolean | null {
   const match = consumers.find((c) => matchesRef(c.id, c.subPartInstanceId, rocket.core));
@@ -299,6 +312,107 @@ export function validateEngines(
       );
     }
   }
+
+  // --- Wiring parity with KSA rev 5091 (all LOG at Warning; scope/engines.md "5117") ---
+  //
+  // Five "wired up wrong" checks the game added in 5091. Every one of them LOADS and then
+  // silently produces no thrust — exactly the class this validator exists for — so they are
+  // `warn`, not `block`.
+
+  // A `<Rocket>` may be named by many controllers, and a nozzle/core by one rocket; build the
+  // reverse indexes once. Matching is by ID only: KSA matches a full `SubPartIdReference`
+  // (id + scope), but a scope mismatch is a DIFFERENT authoring mistake, and reporting
+  // "referenced by nothing" for a nozzle that is plainly named would read as a false alarm.
+  const nozzleIdsNamedByRockets = new Set(
+    rockets.flatMap((r) => r.rocket.nozzles.map((n) => n.id)),
+  );
+  const coreIdsNamedByRockets = new Set(rockets.map((r) => r.rocket.core.id));
+  const rocketIdsNamedByControllers = new Set(
+    part.gameData.rocketControllers.flatMap((c) => c.rocketRefs.map((r) => r.id)),
+  );
+
+  // RocketControllerTemplate.OnDataLoad — "references no Rockets; it will drive nothing".
+  part.gameData.rocketControllers.forEach((controller, index) => {
+    if (controller.rocketRefs.length > 0) return;
+    warn(
+      'controller-no-rockets',
+      `KSA logs: rocket controller ${controller.id} references no Rockets; it will drive nothing.`,
+      { templateId: null, module: 'controller', index },
+    );
+  });
+
+  // Rocket.OnFullPartCreated — "has core '…' but no nozzles; it will produce no thrust".
+  // A SOLID core with no nozzle is already a `block` above (RocketTemplate.Create throws), so
+  // this covers the liquid/unresolved case only.
+  for (const { rocket, source } of rockets) {
+    if (rocket.nozzles.length > 0 || coreIsSolid(rocket, consumers) === true) continue;
+    warn(
+      'rocket-no-nozzles',
+      `KSA logs: Rocket ${rocket.id} has core ${rocket.core.id} but no nozzles; it will ` +
+        `produce no thrust.`,
+      source,
+    );
+  }
+
+  // RocketNozzle.OnFullPartCreated — "is referenced by no Rocket … will produce no thrust".
+  for (const { nozzle, scope, source } of locateNozzleModules(part)) {
+    if (nozzleIdsNamedByRockets.has(nozzle.id)) continue;
+    warn(
+      'nozzle-not-referenced',
+      `KSA logs: nozzle ${nozzle.id} on ${scope} is referenced by no Rocket (no Rocket names ` +
+        `it as a Nozzle); it will produce no thrust.`,
+      source,
+    );
+  }
+
+  // RocketCore.OnFullPartCreated — the two halves of the same check: a core no Rocket names,
+  // and a core whose Rocket no controller drives ("it cannot be activated").
+  for (const c of consumers) {
+    const source: EngineIssueSource = {
+      templateId: c.subPartTemplateId,
+      module: c.isSolid ? 'solidMotor' : 'combustor',
+    };
+    if (!coreIdsNamedByRockets.has(c.id)) {
+      warn(
+        'core-not-referenced',
+        `KSA logs: rocket core ${c.id} is referenced by no Rocket (no Rocket names it as its ` +
+          `Core); it will produce no thrust.`,
+        source,
+      );
+      continue;
+    }
+    const driven = rockets.some(
+      (r) => r.rocket.core.id === c.id && rocketIdsNamedByControllers.has(r.rocket.id),
+    );
+    if (driven) continue;
+    warn(
+      'core-not-referenced',
+      `KSA logs: rocket core ${c.id} has no controller driving its Rocket (no ` +
+        `RocketEngineController / RocketThrusterController references it); it cannot be activated.`,
+      source,
+    );
+  }
+
+  // PartTemplate.AddResolvedFeed, reached through a `<ConsumerFeedWiring>` entry — the wiring
+  // side of "feeds from unknown container/connector". The consumer-side codes below cover a
+  // consumer's OWN <FeedsFrom>; this covers the entries the Part answers `Parent="true"` with.
+  part.gameData.consumerFeedWiring.forEach((entry, index) => {
+    for (const feed of entry.feeds) {
+      if (wiringFeedResolves(part, feed)) continue;
+      const what =
+        feed.kind === 'parent'
+          ? 'a Parent feed (KSA forbids wiring that defers to Parent again)'
+          : feed.kind === 'connector'
+            ? `unknown connector '${feed.connectorId}'`
+            : `unknown container '${feed.containerId}'`;
+      warn(
+        'wiring-feed-unresolvable',
+        `KSA logs: the ConsumerFeedWiring entry for ${entry.consumerId || '(no consumer)'} ` +
+          `feeds from ${what} — that feed point resolves to nothing, so it delivers no propellant.`,
+        { templateId: null, module: 'wiring', index },
+      );
+    }
+  });
 
   // --- Thruster controllers may not drive a solid motor (RocketThrusterControllerTemplate.Create) ---
   part.gameData.rocketControllers.forEach((controller, index) => {

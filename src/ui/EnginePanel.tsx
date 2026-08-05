@@ -24,13 +24,13 @@ import {
   $activeEngineData,
   $activeEngineEntry,
   $engineEntries,
-  $engineExhaustGizmo,
+  $isExhaustPlacing,
   $resolvedNozzleTargets,
   nozzleTargetLabel,
   setActiveEngine,
   setActiveEngineTemplate,
   setActiveNozzleRef,
-  setEngineExhaustGizmo,
+  setExhaustPlacing,
   type EngineEntry,
 } from '../state/engineStore';
 import { $allReactionIndex, ensureReactionsLoaded } from '../state/reactionStore';
@@ -276,14 +276,14 @@ function PartEngineEditor({ part }: { part: EditingPart }) {
  * warning the light inspector gives for its per-placement markers.
  */
 function ExhaustPlacement() {
-  const gizmoOn = useStore($engineExhaustGizmo);
+  const gizmoOn = useStore($isExhaustPlacing);
   const targets = useStore($resolvedNozzleTargets);
   if (targets.length === 0) return null;
   const active = targets.find((t) => t.isActive);
   const shared = active && active.instanceCount > 1;
   return (
     <div className="flex flex-col gap-2">
-      <Switch isSelected={gizmoOn} onChange={setEngineExhaustGizmo}>
+      <Switch isSelected={gizmoOn} onChange={setExhaustPlacing}>
         <span className="inline-flex items-center gap-1">
           <Crosshair size={14} /> Place exhaust in 3D
         </span>

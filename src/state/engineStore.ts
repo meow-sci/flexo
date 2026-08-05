@@ -1,29 +1,28 @@
 import { atom, computed } from 'nanostores';
 import type {
+  EditingPart,
   SolidMotorNozzle,
   SubPartGameData,
   SubPartPlacement,
   Transform,
   Vec3,
 } from '../ksa/types';
+import { validateEngines, type EngineIssue } from '../ksa/engineValidation';
 import {
   $part,
+  $selection,
   $toolMode,
   updateNozzle,
   updatePartNozzle,
   updatePartSolidNozzle,
   updateSubPartSolidNozzle,
+  type EngineModuleGroup,
+  type EngineModuleRef,
   type ToolMode,
 } from './editorStore';
-import {
-  $activeTool,
-  $mode,
-  armTool,
-  disarmTool,
-  registerModeHooks,
-  registerTool,
-  setMode,
-} from './modeStore';
+import { $allReactionIndex, ensureReactionsLoaded } from './reactionStore';
+import { ensureSolidCurveDataLoaded } from './solidCurveStore';
+import { $activeTool, armTool, disarmTool, registerModeHooks, registerTool } from './modeStore';
 
 /**
  * Ephemeral editor state for the Engine Designer — the `$mode === 'engine'` mode
@@ -47,8 +46,42 @@ export type EngineEntry = { kind: 'subpart'; templateId: string } | { kind: 'par
 /** The engine (scope) currently open in the designer, or null. */
 export const $activeEngineEntry = atom<EngineEntry | null>(null);
 
-/** Whether the 3D exhaust gizmo is active for the targeted nozzle. */
-export const $engineExhaustGizmo = atom<boolean>(false);
+/** The part-scope sentinel used as a Select key wherever an {@link EngineEntry} is a row. */
+export const PART_ENGINE_ENTRY_KEY = '\0part';
+
+/** Stable Select/GridList key for one engine scope (census invariant: sentinels preserved). */
+export function engineEntryKey(entry: EngineEntry): string {
+  return entry.kind === 'part' ? PART_ENGINE_ENTRY_KEY : entry.templateId;
+}
+
+/** The {@link EngineEntry} a {@link engineEntryKey} names. */
+export function engineEntryFromKey(key: string): EngineEntry {
+  return key === PART_ENGINE_ENTRY_KEY ? { kind: 'part' } : { kind: 'subpart', templateId: key };
+}
+
+/**
+ * The ONE label helper for an engine scope (design §6.2 "single label helper in
+ * engineStore"), replacing v1's duplicated `shortLabel`/`entryLabel` pairs in `EnginePanel`
+ * and `EngineToolbar` (census pain 7). `part` is taken so the part-scope entry can name the
+ * document rather than saying "Part-level" twice in a row next to the part's own title.
+ */
+export function engineEntryLabel(entry: EngineEntry, part: EditingPart): string {
+  if (entry.kind === 'part') {
+    const name = part.gameData.displayName.trim() || part.partId.trim();
+    return name ? `Part-level (RCS / gas generator) — ${name}` : 'Part-level (RCS / gas generator)';
+  }
+  return entry.templateId;
+}
+
+/**
+ * The short form for tight chrome (the tree header, the status chip): a template id's last
+ * underscore segment with a trailing `Assembly` dropped — v1's `shortLabel`, verbatim.
+ */
+export function engineEntryShortLabel(entry: EngineEntry): string {
+  if (entry.kind === 'part') return 'Part-level';
+  const segment = entry.templateId.split('_').pop() ?? entry.templateId;
+  return segment.replace(/Assembly$/, '');
+}
 
 /** De Laval (`<DeLavalNozzle>`) vs solid-motor (`<SolidMotorNozzle>`) — separate lists in KSA. */
 export type NozzleKind = 'delaval' | 'solid';
@@ -287,10 +320,15 @@ export const $activeNozzleTarget = computed(
  * True while the exhaust gizmo is actually attached to something. Drives the
  * translate/rotate toolbar, which is otherwise hidden without a viewport selection —
  * leaving the gizmo stuck on whichever tool was last used (and on dead scale handles).
+ *
+ * Derived straight from the `$activeTool` slot (design §B9): v1's separate boolean flag is
+ * gone, so "armed" and "the slot says exhaust" can no longer disagree. The mode is not
+ * re-checked — `registerTool('exhaust', {allowedModes: ['engine']})` below is what makes the
+ * slot unreachable outside Engine mode, and `setMode` cancels it on the way out.
  */
 export const $isExhaustPlacing = computed(
-  [$mode, $engineExhaustGizmo, $activeNozzleTarget],
-  (mode, on, target) => mode === 'engine' && on && target !== null,
+  [$activeTool, $activeNozzleTarget],
+  (tool, target) => tool === 'exhaust' && target !== null,
 );
 
 /**
@@ -308,38 +346,11 @@ export const $effectiveToolMode = computed(
   (mode, placing): ToolMode => (placing && mode === 'scale' ? 'translate' : mode),
 );
 
-/** Opens the Engine designer, optionally on a specific engine scope. */
-export function enterEngineMode(entry?: EngineEntry | null): void {
-  if (entry !== undefined) setActiveEngine(entry);
-  setMode('engine');
-}
-
-/** Closes the Engine designer, returning to Build. */
-export function exitEngineMode(): void {
-  setMode('build');
-}
-
-/**
- * Leaving Engine mode (design: foundation.md §2.4). The gizmo teardown lives HERE, not in
- * {@link exitEngineMode}, so it runs on every route out of the mode — a digit key, the
- * menubar switcher, the status chip — and not only the designer's Close button. Hidden
- * but pickable nozzle handles steal viewport clicks (census invariant); the handles
- * themselves are disposed by EditorScene's `$mode` subscription.
- *
- * `$activeEngineEntry` is deliberately RETAINED so returning to the mode reopens the same
- * engine (§2.4 per-mode sub-state survives).
- */
-registerModeHooks('engine', {
-  onExit: () => {
-    setEngineExhaustGizmo(false);
-  },
-});
-
 /** Selects which engine (scope) the designer edits, resetting its sub-selection. */
 export function setActiveEngine(entry: EngineEntry | null): void {
   $activeEngineEntry.set(entry);
   $activeNozzleRef.set(null);
-  setEngineExhaustGizmo(false);
+  setExhaustPlacing(false);
 }
 
 /** Selects the SubPart-template engine with the given id (null ⇒ none). */
@@ -358,32 +369,42 @@ export function setActiveNozzleRef(ref: NozzleRef | null): void {
  * anywhere else. Arming measure or the marquee cancels it and vice versa — that single
  * slot is what formalizes v1's ad-hoc OR of suppression flags.
  *
- * `onCancel` writes the raw atom, never {@link setEngineExhaustGizmo}, for the same reason
- * the measure and seat-view hooks do: routing back through the setter would re-enter the
- * slot and stomp whichever tool just took it.
+ * There is no `onCancel`: the tool owns no state of its own any more. `$isExhaustPlacing`
+ * reads the slot, so releasing the slot IS the teardown, and there is no second flag left
+ * behind to desync (v1's `$engineExhaustGizmo`, retired here).
  */
-registerTool('exhaust', {
-  allowedModes: ['engine'],
-  onCancel: () => {
-    $engineExhaustGizmo.set(false);
-  },
-});
+registerTool('exhaust', { allowedModes: ['engine'] });
 
 /**
- * Toggles the 3D exhaust gizmo for the targeted nozzle, through the `$activeTool` slot.
+ * Arms / disarms exhaust placement through the `$activeTool` slot (the Exhaust section's
+ * toggle, the nozzle editor's "place this one", `X`, a handle click).
  *
- * Arming asks the slot FIRST and mirrors what actually happened: `armTool` refuses a tool
- * the current mode disallows, and a flag left `true` behind a refusal would desync the two
- * (and then make the next, legal, arm a no-op).
+ * `armTool` silently REFUSES a tool the current mode disallows, so callers outside Engine
+ * mode get a no-op rather than a half-armed state — which is exactly why nothing here
+ * mirrors the request into a second boolean.
  */
-export function setEngineExhaustGizmo(on: boolean): void {
-  if (on) {
-    armTool('exhaust');
-    $engineExhaustGizmo.set($activeTool.get() === 'exhaust');
-    return;
-  }
-  $engineExhaustGizmo.set(false);
-  disarmTool('exhaust');
+export function setExhaustPlacing(on: boolean): void {
+  if (on) armTool('exhaust');
+  else disarmTool('exhaust');
+}
+
+/** `X` / the Exhaust section switch: flips exhaust placement. */
+export function toggleExhaustPlacing(): void {
+  setExhaustPlacing($activeTool.get() !== 'exhaust');
+}
+
+/**
+ * Steps the exhaust target one chip forward (`.`, `delta = 1`) or back (`,`, `delta = -1`),
+ * wrapping at both ends (design §B10). Walks {@link $resolvedNozzleTargets} in chip order so
+ * the keyboard and the chip list can never disagree about what "next" means; a no-op when
+ * the open engine has no nozzles.
+ */
+export function cycleExhaustTarget(delta: 1 | -1): void {
+  const targets = $resolvedNozzleTargets.get();
+  if (targets.length === 0) return;
+  const current = targets.findIndex((t) => t.isActive);
+  const next = ((current < 0 ? 0 : current) + delta + targets.length) % targets.length;
+  $activeNozzleRef.set(targets[next].ref);
 }
 
 /**
@@ -401,4 +422,373 @@ export function updateNozzleAt(ref: NozzleRef, patch: Partial<SolidMotorNozzle>)
   }
   if (ref.kind === 'delaval') updatePartNozzle(ref.index, patch);
   else updatePartSolidNozzle(ref.index, patch);
+}
+
+// ── module focus: which ONE module the left editor shows (design §B3.2/§B4/§B9) ──
+
+/**
+ * The module-tree groups + the module address, re-exported from `editorStore` (which owns
+ * them: they are the address space of the document mutations). Listing them here keeps the
+ * designer's imports in one store.
+ */
+export type { EngineModuleGroup, EngineModuleRef };
+
+/** The groups that only ever exist on `<PartGameData>` — see {@link EngineModuleGroup}. */
+export const PART_ONLY_MODULE_GROUPS: readonly EngineModuleGroup[] = [
+  'controller',
+  'wiring',
+  'gimbal',
+  'propellant',
+];
+
+/** Stable key for an {@link EngineModuleRef} — the tree row's GridList id. */
+export function moduleRefKey(ref: EngineModuleRef): string {
+  return `${ref.group}|${ref.scope}|${ref.index}`;
+}
+
+/** True when both refs name the same module. */
+export function sameModuleRef(a: EngineModuleRef | null, b: EngineModuleRef | null): boolean {
+  return a !== null && b !== null && moduleRefKey(a) === moduleRefKey(b);
+}
+
+/**
+ * How many modules a `(group, scope)` pair holds right now — the ONE place that knows which
+ * `$part` list backs each group, so the tree, the clamp and the editors can never disagree.
+ */
+export function engineModuleCount(
+  part: EditingPart,
+  entry: EngineEntry | null,
+  group: EngineModuleGroup,
+  scope: 'sub' | 'part',
+): number {
+  const g = part.gameData;
+  if (PART_ONLY_MODULE_GROUPS.includes(group)) {
+    if (scope !== 'part') return 0;
+    switch (group) {
+      case 'controller':
+        return g.rocketControllers.length;
+      case 'wiring':
+        return g.consumerFeedWiring.length;
+      case 'gimbal':
+        return g.gimbals.length;
+      default:
+        return part.customReactions.length;
+    }
+  }
+  const owner =
+    scope === 'part'
+      ? g
+      : entry?.kind === 'subpart'
+        ? part.subPartGameData.find((s) => s.subPartTemplateId === entry.templateId)
+        : undefined;
+  if (!owner) return 0;
+  switch (group) {
+    case 'combustor':
+      return owner.combustors.length;
+    case 'nozzle':
+      return owner.nozzles.length;
+    case 'solidMotor':
+      return owner.solidMotors.length;
+    case 'grain':
+      return owner.solidGrainSegments.length;
+    case 'solidNozzle':
+      return owner.solidNozzles.length;
+    default:
+      return owner.rockets.length;
+  }
+}
+
+/**
+ * The RAW module focus. Readers should prefer {@link $activeModuleClamped}: a module list
+ * shrinks under the focus every time one is removed or undone, and the clamp is what makes
+ * that fall back to the overview card instead of rendering an editor over `undefined`.
+ */
+export const $activeModule = atom<EngineModuleRef | null>(null);
+
+/**
+ * Module focus, defensively re-resolved against `$part` on every read — the same contract
+ * {@link $resolvedNozzleTargets} keeps for nozzle refs (census invariant: "stale refs
+ * degrade, never edit the wrong module"). Null when the index is out of range, when a `sub`
+ * ref outlives its scope, or when the open engine changed under it.
+ */
+export const $activeModuleClamped = computed(
+  [$activeModule, $activeEngineEntry, $part],
+  (ref, entry, part): EngineModuleRef | null => {
+    if (!ref || ref.index < 0) return null;
+    return ref.index < engineModuleCount(part, entry, ref.group, ref.scope) ? ref : null;
+  },
+);
+
+/** Focuses one module in the left editor (null ⇒ the engine summary card). */
+export function focusModule(ref: EngineModuleRef | null): void {
+  $activeModule.set(ref);
+}
+
+/**
+ * Opens an engine scope: {@link setActiveEngine} plus a module-focus reset, because a module
+ * ref is indexed WITHIN a scope and would otherwise land on whatever happens to sit at the
+ * same index in the new one.
+ */
+export function activateEngine(entry: EngineEntry | null): void {
+  setActiveEngine(entry);
+  $activeModule.set(null);
+  closeDefineEngineFlow();
+}
+
+// ── the readout selector + the findings pipeline (design §B6, §B3.3) ────────
+
+/** `$rocketReadoutSel` sentinel: the legacy first-combustor + first-nozzle readout (D6). */
+export const FIRST_PAIR_ROCKET = '\0firstPair';
+
+/**
+ * Which `<Rocket>` the Performance card aggregates over, or {@link FIRST_PAIR_ROCKET} for
+ * v1's first-pair readout. Ephemeral, never persisted, never undoable (§B11 last rows).
+ */
+export const $rocketReadoutSel = atom<string>(FIRST_PAIR_ROCKET);
+
+export function setRocketReadoutSel(rocketId: string): void {
+  $rocketReadoutSel.set(rocketId);
+}
+
+/**
+ * Engine mode's findings pipeline (design §B3.3, D4) — the same `validateEngines` output the
+ * export pre-flight and Data mode's strip read, so the three surfaces can never disagree
+ * about what KSA will do with the part. `EngineIssue.source` (P6.02) is what lets a click
+ * land on the offending module.
+ */
+export const $engineFindings = computed([$part, $allReactionIndex], (part, reactions) =>
+  validateEngines(part, reactions),
+);
+
+/** Blocking-issue count — the Engine mode-switcher attention dot (foundation §2.2). */
+export const $engineBlockerCount = computed(
+  [$engineFindings],
+  (findings) => findings.filter((f) => f.severity === 'block').length,
+);
+
+/**
+ * A nonce'd "flash this field" intent consumed by the module editors (design §B3.3
+ * click-through). The nonce is what lets the SAME field be flashed twice in a row — clicking
+ * the same finding again must re-flash rather than silently do nothing.
+ */
+export const $moduleFlash = atom<{ key: string; nonce: number } | null>(null);
+
+/** Field keys the findings click-through can flash (the field-addressable codes, §B3.3). */
+export function flashModuleField(key: string): void {
+  $moduleFlash.set({ key, nonce: ($moduleFlash.get()?.nonce ?? 0) + 1 });
+}
+
+/**
+ * Maps one validation finding onto the module it belongs to, using the editor-targeting
+ * metadata `validateEngines` already carries. Returns null when the issue names no module
+ * (or names one this scope model has no group for), which the ISSUES list renders as a
+ * non-navigating row rather than a jump to nowhere.
+ */
+export function moduleRefForIssue(
+  issue: EngineIssue,
+  part: EditingPart,
+): { entry: EngineEntry; module: EngineModuleRef } | null {
+  const source = issue.source;
+  if (!source?.module) return null;
+  const group = source.module as EngineModuleGroup;
+  const partLevel = PART_ONLY_MODULE_GROUPS.includes(group) || source.templateId === null;
+  const entry: EngineEntry = partLevel
+    ? { kind: 'part' }
+    : { kind: 'subpart', templateId: source.templateId! };
+  const scope: 'sub' | 'part' = partLevel ? 'part' : 'sub';
+  const index = source.index ?? 0;
+  if (index >= engineModuleCount(part, entry, group, scope)) return null;
+  return { entry, module: { group, scope, index } };
+}
+
+/**
+ * ISSUES click-through (design §B3.3): open the finding's scope, focus its module, and flash
+ * the offending field when the code is field-addressable. Lives here rather than in the list
+ * component so the ISSUES section and the status-bar Engine chip behave identically.
+ */
+const FIELD_ADDRESSABLE: Readonly<Record<string, string>> = {
+  'nozzle-direction-not-unit': 'exhaustDirection',
+  'solid-motor-pressure-out-of-range': 'defaultPressure',
+  'solid-motor-needs-solid-reaction': 'reactionId',
+};
+
+export function focusEngineIssue(issue: EngineIssue): void {
+  const target = moduleRefForIssue(issue, $part.get());
+  if (target) {
+    if (
+      engineEntryKey(target.entry) !== engineEntryKey($activeEngineEntry.get() ?? { kind: 'part' })
+    )
+      setActiveEngine(target.entry);
+    focusModule(target.module);
+  }
+  const field = FIELD_ADDRESSABLE[issue.code];
+  if (field) flashModuleField(field);
+}
+
+// ── mode entry / exit choreography (design §B2; foundation §2.4) ────────────
+
+/** The cross-mode jump payload Engine mode understands (foundation §2.5, design §B2). */
+export interface EngineModePayload {
+  /** Add ▸ Define Engine… — open the navigator's define-new menu. */
+  defineNew?: boolean;
+  /** Seeds the define-new target picker (the placement/template the jump came from). */
+  templateId?: string;
+  /**
+   * Data mode's "Open in Engine mode →" links. `'sub'` is the spelling those links already
+   * use; `'subpart'` is {@link EngineEntry}'s. Both are accepted so neither side has to
+   * translate.
+   */
+  engineScope?: { kind: 'part' } | { kind: 'sub' | 'subpart'; templateId: string };
+  /** Scroll the module tree to this group (Data's Wiring/Advanced links). */
+  group?: EngineModuleGroup;
+}
+
+/** The four things "Define new engine ▸" can create (design §B3.1, D12). */
+export type EngineDefineKind = 'liquid' | 'rcs' | 'solid' | 'srb';
+
+/**
+ * The define-new flow's pushed sub-view, or null when the navigator shows the module tree.
+ * `kind: null` = the four-kind chooser; a kind = its target picker (design §B3.1/D13).
+ *
+ * A STORE atom rather than component state on purpose: `Add ▸ Define Engine…` opens this flow
+ * from outside React, and a nonce'd intent copied into `useState` inside an effect is exactly
+ * the `useEffect` + `setState` pattern the project bans (AGENTS.md / Rules of React).
+ */
+export const $engineDefineFlow = atom<{
+  kind: EngineDefineKind | null;
+  /** Seeds the target picker with the template a cross-mode jump named. */
+  templateId: string | null;
+} | null>(null);
+
+/** Opens the define-new flow: `null` kind shows the chooser, a kind opens its target picker. */
+export function openDefineEngineFlow(
+  kind: EngineDefineKind | null,
+  templateId: string | null = null,
+): void {
+  $engineDefineFlow.set({ kind, templateId });
+}
+
+export function closeDefineEngineFlow(): void {
+  $engineDefineFlow.set(null);
+}
+
+/** Asks the navigator to open its define-new chooser, optionally seeded with a template. */
+export function requestDefineNewEngine(templateId: string | null = null): void {
+  openDefineEngineFlow(null, templateId);
+}
+
+/**
+ * The module tree's collapsed groups, by tree-group id. In the store rather than in the
+ * component so a cross-mode jump can REVEAL a group without an effect writing state, and so
+ * the collapse state survives a scope switch.
+ */
+export const $engineTreeCollapsed = atom<ReadonlySet<string>>(new Set());
+
+export function toggleEngineTreeGroup(id: string): void {
+  const next = new Set($engineTreeCollapsed.get());
+  if (!next.delete(id)) next.add(id);
+  $engineTreeCollapsed.set(next);
+}
+
+/** Which tree group each module group belongs to — the solid trio share one. */
+const TREE_GROUP_OF: Readonly<Record<EngineModuleGroup, string>> = {
+  combustor: 'combustors',
+  nozzle: 'nozzles',
+  solidMotor: 'solid',
+  grain: 'solid',
+  solidNozzle: 'solid',
+  rocket: 'rockets',
+  controller: 'controllers',
+  wiring: 'wiring',
+  gimbal: 'gimbals',
+  propellant: 'propellants',
+};
+
+/** Expands the tree group that holds `group` — Data mode's "Open in Engine mode →" links. */
+export function jumpToEngineGroup(group: EngineModuleGroup): void {
+  const id = TREE_GROUP_OF[group];
+  const current = $engineTreeCollapsed.get();
+  if (!current.has(id)) return;
+  const next = new Set(current);
+  next.delete(id);
+  $engineTreeCollapsed.set(next);
+}
+
+/** True when `entry` still names a scope that carries engine hardware. */
+function entryStillValid(entry: EngineEntry | null): boolean {
+  if (!entry) return false;
+  const key = engineEntryKey(entry);
+  return $engineEntries.get().some((e) => engineEntryKey(e) === key);
+}
+
+/** The engine scope of the LAST-selected SubPart placement, if that template is one. */
+function selectedEngineEntry(): EngineEntry | null {
+  const part = $part.get();
+  const ids = new Set(
+    $engineEntries.get().flatMap((e) => (e.kind === 'subpart' ? [e.templateId] : [])),
+  );
+  for (const ref of [...$selection.get()].reverse()) {
+    if (ref.kind !== 'subpart') continue;
+    const templateId = part.placements.find((p) => p.instanceId === ref.id)?.subPartTemplateId;
+    if (templateId && ids.has(templateId)) return { kind: 'subpart', templateId };
+  }
+  return null;
+}
+
+let hooksRegistered = false;
+
+/**
+ * Registers Engine mode's entry choreography — **the scope ladder, first hit wins**
+ * (design §B2):
+ *
+ * 1. a cross-mode `{engineScope}` jump always wins (and may scroll the tree to a group);
+ * 2. else the surviving `$activeEngineEntry`, if it still carries hardware;
+ * 3. else the selection's last SubPart, when its template is an engine scope;
+ * 4. else the ONE engine scope, when the part has exactly one;
+ * 5. else the navigator's empty state.
+ *
+ * Then `{defineNew}` (which is orthogonal — it opens the creation menu on top of whatever
+ * scope the ladder settled on) and the reaction-catalog preload, moved here from the three
+ * per-component `useEffect`s v1 had (design §B5, census pain 11).
+ *
+ * **Exit needs no hook**: `$activeEngineEntry` / `$activeNozzleRef` / `$activeModule` are
+ * deliberately RETAINED for the return trip (foundation §2.4), the exhaust tool is cancelled
+ * by `setMode` through its `registerTool` def, and the nozzle handles are disposed by
+ * `EditorScene`'s `$mode` subscription (hidden-but-pickable handles steal clicks — census
+ * invariant).
+ *
+ * Called from boot (`main.tsx`) like `initDataMode`, so registration order is explicit.
+ * Idempotent — StrictMode's double boot is harmless.
+ *
+ * **DEVIATION (logged)**: the plan's P7.05 file list says "modify `src/state/modeStore.ts`
+ * (engine hooks)". The hooks stay HERE: `modeStore` deliberately imports no feature store
+ * (that would be a cycle — see its module doc), and area hooks register themselves.
+ */
+export function initEngineMode(): void {
+  if (hooksRegistered) return;
+  hooksRegistered = true;
+
+  registerModeHooks('engine', {
+    onEnter: (raw) => {
+      const payload = raw as EngineModePayload | undefined;
+      const jump = payload?.engineScope;
+      if (jump) {
+        activateEngine(
+          jump.kind === 'part'
+            ? { kind: 'part' }
+            : { kind: 'subpart', templateId: jump.templateId },
+        );
+        if (payload?.group) jumpToEngineGroup(payload.group);
+      } else if (!entryStillValid($activeEngineEntry.get())) {
+        const entries = $engineEntries.get();
+        activateEngine(selectedEngineEntry() ?? (entries.length === 1 ? entries[0] : null));
+      }
+      if (payload?.defineNew) requestDefineNewEngine(payload.templateId ?? null);
+      else closeDefineEngineFlow();
+      void ensureReactionsLoaded();
+      // The solid thrust-curve libraries ride the same sanctioned preload (design D7): both
+      // are read-only Core data, and both are legitimately absent in the OSS build.
+      void ensureSolidCurveDataLoaded();
+    },
+  });
 }

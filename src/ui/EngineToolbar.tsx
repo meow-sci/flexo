@@ -1,17 +1,12 @@
 import { useStore } from '@nanostores/react';
 import { Rocket, X } from 'lucide-react';
 import { Toolbar, Button } from './kit';
-import { $activeEngineEntry, exitEngineMode, type EngineEntry } from '../state/engineStore';
-
-/** Short, human label for a SubPart template id (its last underscore segment). */
-function shortLabel(templateId: string): string {
-  return (templateId.split('_').pop() ?? templateId).replace(/Assembly$/, '');
-}
+import { $activeEngineEntry, engineEntryShortLabel, type EngineEntry } from '../state/engineStore';
+import { setMode } from '../state/modeStore';
 
 /** What the toolbar calls the open engine — a template's short name, or the part scope. */
 function entryLabel(entry: EngineEntry | null): string {
-  if (!entry) return 'Engine Designer';
-  return entry.kind === 'part' ? 'Part-level engine' : shortLabel(entry.templateId);
+  return entry ? engineEntryShortLabel(entry) : 'Engine Designer';
 }
 
 /**
@@ -31,7 +26,7 @@ export function EngineToolbar() {
       >
         {label}
       </span>
-      <Button size="sm" variant="secondary" className="shrink-0" onPress={exitEngineMode}>
+      <Button size="sm" variant="secondary" className="shrink-0" onPress={() => setMode('build')}>
         <X size={16} className="shrink-0" />
         Close
       </Button>

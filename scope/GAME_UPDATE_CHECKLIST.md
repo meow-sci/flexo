@@ -88,6 +88,16 @@ against the NEW code/XML. Highest-value checks, by area:
   `RocketDesign`, `EngineDesigner`. Any real (non-decompiler) hunk in them is BREAKING — map it
   to the matching `enginePhysics.ts` function. Confirm the constants `9.80665`, `8.31446261815324`,
   `101325`.
+- **Solid motors** — the second verbatim port (`src/ksa/solidMotorPhysics.ts`, the thrust-curve
+  preview) rides on `SolidMotor` (`TrySampleThrustCurve` / `SolveConditionsForArea` /
+  `ResizeNozzles` / `ComputeTotalThroatArea`), `SolidGrainSegment`
+  (`ComputeBurningAreaAtDepth` / `ComputeGrainMassAtDepth`), `BurnRateLaw`,
+  `GrainGeometryTable` and `SolidMotorNozzle.RefreshTwoPhaseEfficiency`. Confirm the constants
+  `0.5` (quench fraction), `1.02` (bound margin), `1.2`/`12` (area-ratio floor / template seed)
+  and `0.076`/`0.046` (two-phase loss). The two data files it reads —
+  `Content/Core/GrainGeometries.xml` and `Content/Core/SolidPropellants.xml` — must keep being
+  copied by `flexo-private-assets/copy-assets.ts` (they carry no `<Part>`/`<SubPart>` element,
+  so each has its own discovery predicate there).
 - **Animation** — `KeyframeAnimationData.cs` (the GLB-loader contract) and
   `KeyframeAnimationModule.cs` (schema) must be unchanged. New `<KeyframeAnimationModule>` content
   is fine if it matches the existing shape.

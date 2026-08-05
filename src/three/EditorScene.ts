@@ -133,9 +133,9 @@ import {
   $activeNozzleRef,
   $activeNozzleTarget,
   $effectiveToolMode,
-  $engineExhaustGizmo,
   $resolvedNozzleTargets,
   setActiveNozzleRef,
+  setExhaustPlacing,
   updateNozzleAt,
   type NozzleRef,
   type NozzleTarget,
@@ -309,7 +309,7 @@ export class EditorScene {
    * All of them are drawn, not just the target: KSA authors many nozzles on one owner (the
    * MMU RCS puts its whole battery on `<PartGameData>`), and a single marker made an N-bell
    * block unreadable. Only present while the Engine designer ($mode==='engine')
-   * has an engine open; the gizmo attaches only when {@link $engineExhaustGizmo} is on.
+   * has an engine open; the gizmo attaches only while the `exhaust` TOOL is armed.
    * Mirrors the pose pivot/proxy pair.
    */
   private readonly nozzleHandles = new Map<string, NozzleHandleObject>();
@@ -384,6 +384,10 @@ export class EditorScene {
         if (selected.kind === 'nozzle') {
           const ref = this.nozzleRefs.get(selected.id);
           if (ref) setActiveNozzleRef(ref);
+          // Clicking a handle is one of exhaust placement's four arming routes
+          // (design §B7): the handles are mode furniture and stay pickable while the tool
+          // is idle, so a click has to arm the slot as well as re-target it.
+          setExhaustPlacing(true);
           return;
         }
         setActiveMeasurement(null); // selecting a mesh closes any measurement edit
@@ -580,7 +584,9 @@ export class EditorScene {
     };
     this.sub($activeEngineEntry, onEngineChange);
     this.sub($activeNozzleRef, onEngineChange);
-    this.sub($engineExhaustGizmo, onEngineChange);
+    // The exhaust TOOL slot, not a feature flag: arming is what attaches the gizmo
+    // (design §B7 — the one behavior change from v1's separate toggle, same UX).
+    this.sub($activeTool, onEngineChange);
     this.sub($mode, onEngineChange);
     this.sub($selection, () => this.updateSelection());
     // Data mode's scope tint + the one-shot flash (design §A2, §A5). Both go through
@@ -1804,7 +1810,7 @@ export class EditorScene {
     // re-aims the direction. Posing the proxy's rotation (rather than resetting it to
     // identity) is what makes the rotate rings mean something.
     const nozzle = this.activeNozzleTarget();
-    if (nozzle && $engineExhaustGizmo.get()) {
+    if (nozzle && $activeTool.get() === 'exhaust') {
       const pos = exhaustWorldLocation(nozzle.location, nozzle.frame);
       this.engineProxy.position.set(pos.x, pos.y, pos.z);
       this.engineProxy.quaternion.copy(

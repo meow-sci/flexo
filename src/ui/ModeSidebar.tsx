@@ -5,6 +5,7 @@ import { AnimToolbar } from './AnimToolbar';
 import { AnimationPanel } from './AnimationPanel';
 import { EngineToolbar } from './EngineToolbar';
 import { EnginePanel } from './EnginePanel';
+import { EngineNavigator } from './engine/EngineNavigator';
 import { panelChrome } from './kit';
 import { $mode } from '../state/modeStore';
 
@@ -38,8 +39,17 @@ export function ModeSidebar() {
   if (mode === 'engine') {
     return (
       <div className="flex h-full min-h-0 flex-col gap-2">
-        <EngineToolbar />
         <div className="min-h-0 flex-1">
+          <EngineNavigator />
+        </div>
+        {/*
+          INTERIM (P7.19): the v1 host still carries the FIELD editors — the module editors
+          (`src/ui/engine/*Editor.tsx`) land in P7.11–P7.18 and the left sidebar takes over
+          then. RULE ZERO: nothing is removed before its replacement exists, so the designer
+          keeps every v1 editor while the navigator above it becomes the primary.
+        */}
+        <div className="max-h-[45%] min-h-0 shrink-0 overflow-auto border-t border-border pt-2">
+          <EngineToolbar />
           <EnginePanel />
         </div>
       </div>

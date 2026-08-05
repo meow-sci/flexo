@@ -5,6 +5,7 @@ import { $panelSheetOpen, openPanelSheet } from './phoneSheets';
 import { MODE_ICONS } from '../../status/statusTokens';
 import { runCommand } from '../../../state/commandStore';
 import { $mode, MODES } from '../../../state/modeStore';
+import { $engineBlockerCount } from '../../../state/engineStore';
 
 /**
  * The phone's bottom **mode tab bar**, wired (design: foundation §12 — phone parity is
@@ -25,10 +26,17 @@ import { $mode, MODES } from '../../../state/modeStore';
 export function PhoneModeTabs() {
   const mode = useStore($mode);
   const panelOpen = useStore($panelSheetOpen);
+  const engineBlockers = useStore($engineBlockerCount);
 
   const tabs: ModeTabSpec[] = MODES.map((entry) => {
     const Icon = MODE_ICONS[entry.id];
-    return { id: entry.id, label: entry.label, icon: <Icon size={18} /> };
+    return {
+      id: entry.id,
+      label: entry.label,
+      icon: <Icon size={18} />,
+      // Foundation §2.2's attention dot, same data as the desktop switcher's.
+      attention: entry.id === 'engine' && engineBlockers > 0,
+    };
   });
 
   return (

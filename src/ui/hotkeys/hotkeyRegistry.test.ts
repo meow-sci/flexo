@@ -175,6 +175,7 @@ const TOKEN_DISPLAY: Readonly<Record<string, string>> = {
   bracketleft: '[',
   bracketright: ']',
   comma: ',',
+  period: '.',
   space: 'Space',
   mod: 'mod',
   shift: 'shift',
@@ -265,9 +266,10 @@ describe('6 — list-surface edit mirrors', () => {
   };
 
   it('keeps the registry valid when a FURTHER surface registers them', () => {
-    // `outliner` (P5A) and `data-navigator` (P6) are already in ALL_BINDINGS; the next
-    // surface to stamp itself must not disturb the conflict validator either.
-    const mirrors = registerListSurfaceEditMirrors('engine-tree');
+    // `outliner` (P5A), `data-navigator` (P6) and `engine-tree` (P7) are already in
+    // ALL_BINDINGS; the next surface to stamp itself must not disturb the conflict validator
+    // either.
+    const mirrors = registerListSurfaceEditMirrors('members');
     expect(() => validateRegistry([...ALL_BINDINGS, ...mirrors])).not.toThrow();
   });
 

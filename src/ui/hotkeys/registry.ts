@@ -292,6 +292,30 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
         when: () => !$dialogOpen.get(),
         run: () => runCommand('engine.toggleExhaust'),
       },
+      {
+        // Tool-scoped: cycling only means something while the exhaust tool holds the slot,
+        // and the chip list + the 3D handles are the same ordered set (design §B10). The
+        // `,`/`.` collision with `mode:animation`'s transport is nominal — different scopes,
+        // never both active.
+        id: 'engine.prevExhaustTarget',
+        label: 'Previous exhaust target',
+        keys: 'comma',
+        chords: [[',']],
+        scope: 'tool:exhaust',
+        // `tool:*` survives an open dialog like `mode:*` does, and re-targeting a nozzle
+        // behind the Export dialog would be an invisible edit to what the gizmo drags next.
+        when: () => !$dialogOpen.get(),
+        run: () => runCommand('engine.prevExhaustTarget'),
+      },
+      {
+        id: 'engine.nextExhaustTarget',
+        label: 'Next exhaust target',
+        keys: 'period',
+        chords: [['.']],
+        scope: 'tool:exhaust',
+        when: () => !$dialogOpen.get(),
+        run: () => runCommand('engine.nextExhaustTarget'),
+      },
     ],
   },
   {
@@ -512,6 +536,7 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
     bindings: [
       ...registerListSurfaceEditMirrors('outliner'),
       ...registerListSurfaceEditMirrors('data-navigator'),
+      ...registerListSurfaceEditMirrors('engine-tree'),
       {
         // The Outliner's own search. Scoped to the panel, so ⌘F stays the browser's Find
         // everywhere else — and so it can never fight the field-local keys of another list.
@@ -540,13 +565,12 @@ export const ALL_BINDINGS: HotkeyBinding[] = HOTKEY_GROUPS.flatMap((g) => g.bind
 //
 // | Binding (authoritative-table row)                                        | Owning phase |
 // |--------------------------------------------------------------------------|--------------|
-// | `surface:engine-tree` edit mirrors · `tool:exhaust` `,`/`.` target cycle  | P7           |
 // | `surface:glow-paint` `⌘Z` / `⇧⌘Z` per-stroke paint undo                   | P8           |
 // | `mode:animation` `Space` · `,` `.` · `K` (transport / prev-next key /     | P11 (timeline) |
 // |   insert key at playhead)                                                 |              |
 // | `surface:timeline` `←→ ⇧←→ ⌘A ⌥⌘A ⌘C ⌘X ⌘V ⌫ = - F ⇧F Esc`                | P11          |
 // |   + `surface:members` edit mirrors                                        |              |
-// | ModeSwitcher / ModeTabBar attention dots                                  | P7 (engine blockers) / P11 (draft clips) |
+// | ModeSwitcher / ModeTabBar attention dots                                  | P11 (draft clips; Engine blockers landed in P7) |
 //
 // **Closed, not deferred**: `surface:palette` `↑↓ ↩ ⌘↩` stay component-local in
 // `CommandPalette` (the input owns DOM focus for the whole session) and are documented as a

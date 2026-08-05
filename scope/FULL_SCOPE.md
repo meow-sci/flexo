@@ -288,7 +288,7 @@ now modeled**, so both rows are ✅ again; _Ground clutter_ → 🟡 (`<Collidea
 
 ### Open gaps from 5117 → [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md)
 
-The `5056 → 5117` review found **no BREAKING item**. Three gaps; **Q1 and Q2 are now FIXED**,
+The `5056 → 5117` review found **no BREAKING item**. Four gaps; **Q1, Q2 and Q4 are now FIXED**,
 Q3 remains 📋 OPEN:
 
 - **Q1 — `<EVADoor SeatId>` was dropped (🟡 MISSING-CAPABILITY) — ✅ FIXED.** Rev 5085 added
@@ -306,6 +306,13 @@ Q3 remains 📋 OPEN:
   ("nothing references a seat by id") was retired, while its still-true half survives: the id
   shares the namespace `<FeedsFrom Container=>` resolves against, so flexo never auto-fills it
   with an internal id.
+- **Q4 — rev-5091 engine-wiring warnings were unmirrored (🟡 MISSING-CAPABILITY) — ✅ FIXED.**
+  KSA added five `Warning`-level "wired up wrong" checks whose common symptom is an engine that
+  loads and then makes no thrust. `validateEngines` now emits all five at `warn` severity —
+  `controller-no-rockets`, `rocket-no-nozzles`, `nozzle-not-referenced`, `core-not-referenced`,
+  `wiring-feed-unresolvable` — each with `EngineIssue.source` so the findings surfaces jump to
+  the offending module. Game-side sites and the two deliberate narrowings are tabulated in
+  [engines.md](engines.md#what-changed-in-5117).
 - **Q3 — clutter `<Collideable>` → `<CollisionType>` (📝 SCHEMA-DRIFT, docs-only).** Rev 5099
   replaced `ClutterEcotypeReference`'s `[XmlElement("Collideable")] BoolReference` with
   `[XmlElement("CollisionType")] ClutterCollisionTypeReference` (`Value="None|PrimitiveList|Mesh"`,
@@ -333,8 +340,10 @@ The `5018 → 5056` review found **one BREAKING** item, now **✅ FIXED**: the
   emit them. Defaults are inert (`SlopeMaskStrength` 0), so this is additive, not breaking.
 
 Carried forward and still **📋 OPEN**: `FuelPort` authoring (**G**), the cartoon-moon clutter
-LOD retune (**H**), the optional clutter `<LOD CastShadows>` (**F14**), and the solid-motor
-thrust-curve preview.
+LOD retune (**H**) and the optional clutter `<LOD CastShadows>` (**F14**). The solid-motor
+thrust-curve preview is **✅ DONE** — `src/ksa/solidMotorPhysics.ts` ports
+`SolidMotor.TrySampleThrustCurve` + `ResizeNozzles` + `GrainGeometryTable`; see
+[engines.md](engines.md#solid-thrust-curve-preview--srcksasolidmotorphysicsts-ported-was-a-documented-gap).
 
 ### Open gaps from 5018 → [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md)
 
@@ -344,9 +353,10 @@ DATA-LOSS, MISSING-CAPABILITY and SCHEMA-DRIFT rows are **✅ FIXED**; part-leve
 (carried-forward gap **F** from 4939) is closed too, and the geometry-template `<Collider>`
 gap (**E**) is now closed by MODELING `<Collider>` outright ([colliders.md](colliders.md)).
 Still **📋 OPEN**: `FuelPort`
-authoring (**G**), the cartoon-moon clutter LOD retune (**H**), the optional clutter
-`<LOD CastShadows>` (**F14**), and the solid-motor thrust-curve preview (a real port of
-`SolidMotor.TrySampleThrustCurve` + `GrainGeometryTable`, filed as a follow-up).
+authoring (**G**), the cartoon-moon clutter LOD retune (**H**) and the optional clutter
+`<LOD CastShadows>` (**F14**). The solid-motor thrust-curve preview is **✅ DONE**: the port of
+`SolidMotor.TrySampleThrustCurve` + `ResizeNozzles` + `GrainGeometryTable` lives in
+`src/ksa/solidMotorPhysics.ts` ([engines.md](engines.md)).
 **In-game verification of the 5018 output is PENDING** (see the upgrade plan's Phase 8).
 
 ### Open gaps from 4892 → [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md)

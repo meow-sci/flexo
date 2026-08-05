@@ -1,9 +1,19 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+// Engine-mode entry preloads the reaction + grain catalogs (design §B5/D7). Both are `/ksa/`
+// fetches with no server in the unit environment, so stub the ONE fetch they share: the
+// stores' own "file not served" path is exactly what an OSS build sees.
+vi.mock('../ksa/catalog', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../ksa/catalog')>()),
+  fetchXmlFile: async () => ({ kind: 'missing' as const }),
+}));
 import { $part, importHistory, pushUndo, undo } from './editorStore';
-import { $mode, setMode } from './modeStore';
+import { $activeTool, $mode, disarmTool, setMode } from './modeStore';
 import {
+  createCombustor,
   createEmptyPart,
   createNozzle,
+  createRocketController,
   createSolidMotorNozzle,
   createSubPartGameData,
   DEFAULT_LAYER_ID,
@@ -12,17 +22,27 @@ import {
 import type { EditingPart, SubPartPlacement } from '../ksa/types';
 import {
   $activeEngineEntry,
+  $activeModule,
+  $activeModuleClamped,
   $activeNozzleRef,
   $activeNozzleTarget,
   $effectiveToolMode,
   $engineEntries,
-  $engineExhaustGizmo,
   $isExhaustPlacing,
   $resolvedNozzleTargets,
+  $engineDefineFlow,
+  activateEngine,
+  cycleExhaustTarget,
+  engineEntryFromKey,
+  engineEntryKey,
+  engineEntryLabel,
+  engineEntryShortLabel,
+  focusModule,
+  initEngineMode,
   nozzleRefKey,
   setActiveEngine,
   setActiveNozzleRef,
-  setEngineExhaustGizmo,
+  setExhaustPlacing,
   updateNozzleAt,
   type NozzleRef,
 } from './engineStore';
@@ -55,6 +75,7 @@ beforeEach(() => {
   importHistory({ undo: [], redo: [] });
   setActiveEngine(null);
   setToolMode('translate');
+  disarmTool();
   $mode.set('build');
 });
 
@@ -444,30 +465,27 @@ describe('engineStore — exhaust placement mode discipline', () => {
     setMode('engine');
   });
 
-  it('is not placing until the gizmo is on AND a nozzle resolves', () => {
+  it('is not placing until the tool is armed AND a nozzle resolves', () => {
     expect($isExhaustPlacing.get()).toBe(false);
-    setEngineExhaustGizmo(true);
+    setExhaustPlacing(true);
     expect($isExhaustPlacing.get()).toBe(true);
     $part.set(createEmptyPart()); // nozzle gone ⇒ nothing to place
     expect($isExhaustPlacing.get()).toBe(false);
   });
 
-  it('stops placing while the mode is elsewhere, without forgetting the toggle', () => {
-    // The derived gate alone: the atom is written directly, so the exit hook below does
-    // not run and only the `$mode === 'engine'` term of $isExhaustPlacing is exercised.
-    setEngineExhaustGizmo(true);
-    $mode.set('build');
+  it('refuses to arm outside Engine mode (the tool slot owns the mode rule)', () => {
+    setMode('build');
+    setExhaustPlacing(true);
+    expect($activeTool.get()).toBeNull();
     expect($isExhaustPlacing.get()).toBe(false);
-    $mode.set('engine');
-    expect($isExhaustPlacing.get()).toBe(true);
   });
 
-  it('leaving engine mode turns the exhaust gizmo off but keeps the active engine entry', () => {
+  it('leaving engine mode disarms the exhaust tool but keeps the active engine entry', () => {
     // Hidden-but-pickable nozzle handles steal viewport clicks, so the disarm must happen
-    // on EVERY route out of the mode — hence a registered exit hook, not the Close button.
-    setEngineExhaustGizmo(true);
+    // on EVERY route out of the mode — `setMode` cancels the slot for us.
+    setExhaustPlacing(true);
     setMode('build');
-    expect($engineExhaustGizmo.get()).toBe(false);
+    expect($activeTool.get()).toBeNull();
     expect($isExhaustPlacing.get()).toBe(false);
     // The open engine survives for the return trip (foundation §2.4).
     expect($activeEngineEntry.get()).toEqual({ kind: 'subpart', templateId: TMPL });
@@ -476,15 +494,15 @@ describe('engineStore — exhaust placement mode discipline', () => {
   it('clamps Scale to Move while placing, and leaves $toolMode itself untouched', () => {
     setToolMode('scale');
     expect($effectiveToolMode.get()).toBe('scale');
-    setEngineExhaustGizmo(true);
+    setExhaustPlacing(true);
     expect($effectiveToolMode.get()).toBe('translate');
     expect($toolMode.get()).toBe('scale'); // the user's tool choice is theirs to keep
-    setEngineExhaustGizmo(false);
+    setExhaustPlacing(false);
     expect($effectiveToolMode.get()).toBe('scale');
   });
 
   it('passes translate and rotate through unchanged', () => {
-    setEngineExhaustGizmo(true);
+    setExhaustPlacing(true);
     setToolMode('translate');
     expect($effectiveToolMode.get()).toBe('translate');
     setToolMode('rotate');
@@ -504,12 +522,13 @@ describe('engineStore — setActiveEngine resets sub-selection', () => {
       index: 1,
       channel: 'physics',
     });
-    setEngineExhaustGizmo(true);
+    setMode('engine');
+    setExhaustPlacing(true);
 
     setActiveEngine({ kind: 'part' });
     expect($activeEngineEntry.get()).toEqual({ kind: 'part' });
     expect($activeNozzleRef.get()).toBeNull();
-    expect($engineExhaustGizmo.get()).toBe(false);
+    expect($activeTool.get()).toBeNull();
   });
 });
 
@@ -522,5 +541,162 @@ describe('engineStore — target keys are stable and unique', () => {
     const all = keys();
     expect(all).toHaveLength(4);
     expect(new Set(all).size).toBe(4);
+  });
+});
+
+// ── P7.01 — module focus, the readout selector, labels and target cycling ────
+
+describe('engineStore — $activeModuleClamped', () => {
+  beforeEach(() => {
+    const part = subPartEnginePart(['A', 'B']);
+    part.subPartGameData[0].combustors.push(createCombustor('C1'));
+    $part.set(part);
+    activateEngine({ kind: 'subpart', templateId: TMPL });
+  });
+
+  it('passes an in-range ref through', () => {
+    focusModule({ group: 'nozzle', scope: 'sub', index: 1 });
+    expect($activeModuleClamped.get()).toEqual({ group: 'nozzle', scope: 'sub', index: 1 });
+  });
+
+  it('nulls when the list shrinks under the focus', () => {
+    focusModule({ group: 'nozzle', scope: 'sub', index: 1 });
+    $part.set(subPartEnginePart(['A']));
+    expect($activeModuleClamped.get()).toBeNull();
+    // The RAW ref is left alone, so undoing the removal silently restores the focus.
+    expect($activeModule.get()).toEqual({ group: 'nozzle', scope: 'sub', index: 1 });
+  });
+
+  it('nulls a `sub` ref once the open scope is the part', () => {
+    focusModule({ group: 'combustor', scope: 'sub', index: 0 });
+    expect($activeModuleClamped.get()).not.toBeNull();
+    setActiveEngine({ kind: 'part' });
+    expect($activeModuleClamped.get()).toBeNull();
+  });
+
+  it('resolves part-only groups regardless of the open scope', () => {
+    const part = $part.get();
+    part.gameData.rocketControllers.push(createRocketController('ctrl', 'engine', []));
+    $part.set({ ...part });
+    focusModule({ group: 'controller', scope: 'part', index: 0 });
+    expect($activeModuleClamped.get()).toEqual({ group: 'controller', scope: 'part', index: 0 });
+  });
+
+  it('activateEngine resets the module focus', () => {
+    focusModule({ group: 'nozzle', scope: 'sub', index: 1 });
+    activateEngine({ kind: 'part' });
+    expect($activeModule.get()).toBeNull();
+  });
+});
+
+describe('engineStore — cycleExhaustTarget', () => {
+  beforeEach(() => {
+    $part.set(subPartEnginePart(['A', 'B', 'C']));
+    setActiveEngine({ kind: 'subpart', templateId: TMPL });
+  });
+
+  it('walks forward and wraps', () => {
+    const all = keys();
+    expect(all).toHaveLength(3);
+    cycleExhaustTarget(1);
+    expect($activeNozzleTarget.get()?.key).toBe(all[1]);
+    cycleExhaustTarget(1);
+    cycleExhaustTarget(1);
+    expect($activeNozzleTarget.get()?.key).toBe(all[0]);
+  });
+
+  it('walks backward and wraps', () => {
+    const all = keys();
+    cycleExhaustTarget(-1);
+    expect($activeNozzleTarget.get()?.key).toBe(all[2]);
+    cycleExhaustTarget(-1);
+    expect($activeNozzleTarget.get()?.key).toBe(all[1]);
+  });
+
+  it('no-ops with zero targets', () => {
+    setActiveEngine(null);
+    expect(() => cycleExhaustTarget(1)).not.toThrow();
+    expect($activeNozzleRef.get()).toBeNull();
+  });
+});
+
+describe('engineStore — engineEntryLabel', () => {
+  it('names a SubPart scope by its full template id, short form by the last segment', () => {
+    const entry = { kind: 'subpart', templateId: TMPL } as const;
+    expect(engineEntryLabel(entry, createEmptyPart())).toBe(TMPL);
+    expect(engineEntryShortLabel(entry)).toBe('ThrustChamber');
+  });
+
+  it('drops a trailing Assembly from the short form', () => {
+    expect(engineEntryShortLabel({ kind: 'subpart', templateId: 'Core_NoseAssembly' })).toBe(
+      'Nose',
+    );
+  });
+
+  it('names the part scope, qualified by the document when it has a name', () => {
+    const part = createEmptyPart();
+    part.partId = '';
+    expect(engineEntryLabel({ kind: 'part' }, part)).toBe('Part-level (RCS / gas generator)');
+    part.gameData.displayName = 'MMU';
+    expect(engineEntryLabel({ kind: 'part' }, part)).toBe('Part-level (RCS / gas generator) — MMU');
+    expect(engineEntryShortLabel({ kind: 'part' })).toBe('Part-level');
+  });
+
+  it('round-trips through the Select key sentinel', () => {
+    expect(engineEntryKey({ kind: 'part' })).toBe('\0part');
+    expect(engineEntryFromKey('\0part')).toEqual({ kind: 'part' });
+    expect(engineEntryFromKey(TMPL)).toEqual({ kind: 'subpart', templateId: TMPL });
+  });
+});
+
+describe('engineStore — mode entry ladder (P7.05)', () => {
+  beforeEach(() => {
+    initEngineMode();
+    $mode.set('build');
+    activateEngine(null);
+    $engineDefineFlow.set(null);
+  });
+
+  it('activates the ONE engine scope when the part has exactly one', () => {
+    $part.set(subPartEnginePart(['A']));
+    setMode('engine');
+    expect($activeEngineEntry.get()).toEqual({ kind: 'subpart', templateId: TMPL });
+  });
+
+  it('restores the surviving entry rather than re-deriving it', () => {
+    const part = subPartEnginePart(['A']);
+    part.gameData.nozzles.push(createNozzle('P'));
+    $part.set(part);
+    activateEngine({ kind: 'part' });
+    setMode('engine');
+    expect($activeEngineEntry.get()).toEqual({ kind: 'part' });
+  });
+
+  it('falls through when the retained entry no longer carries hardware', () => {
+    $part.set(subPartEnginePart(['A']));
+    activateEngine({ kind: 'subpart', templateId: 'gone' });
+    setMode('engine');
+    expect($activeEngineEntry.get()).toEqual({ kind: 'subpart', templateId: TMPL });
+  });
+
+  it('honours a cross-mode {engineScope} jump', () => {
+    const part = subPartEnginePart(['A']);
+    part.gameData.nozzles.push(createNozzle('P'));
+    $part.set(part);
+    setMode('engine', { engineScope: { kind: 'sub', templateId: TMPL } });
+    expect($activeEngineEntry.get()).toEqual({ kind: 'subpart', templateId: TMPL });
+  });
+
+  it('opens the define-new chooser, seeded, from the Add menu payload', () => {
+    $part.set(subPartEnginePart(['A']));
+    setMode('engine', { defineNew: true, templateId: 'NoseCone' });
+    expect($engineDefineFlow.get()).toEqual({ kind: null, templateId: 'NoseCone' });
+  });
+
+  it('closes a stale define-new flow on a plain entry', () => {
+    $part.set(subPartEnginePart(['A']));
+    $engineDefineFlow.set({ kind: 'solid', templateId: null });
+    setMode('engine');
+    expect($engineDefineFlow.get()).toBeNull();
   });
 });

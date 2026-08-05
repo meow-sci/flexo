@@ -18,6 +18,7 @@ import { initModifierListeners } from './state/modifierStore';
 import { initHotkeyStore } from './state/hotkeyStore';
 import { applySnapToGizmo } from './state/snapStore';
 import { initDataMode } from './state/dataModeStore';
+import { initEngineMode } from './state/engineStore';
 
 // Wire containerStore and measurementStore into the undo/redo system. Must run
 // before any user interactions (and before hydrateProjectOnBoot so the callbacks
@@ -41,6 +42,11 @@ registerEditorAidStores({
 // preload (the one sanctioned mode-entry effect — read-only, idempotent). Wired from boot so
 // the registration cannot depend on which component imported the store first.
 initDataMode();
+
+// Engine mode's entry choreography: the §B2 scope ladder (restore / selection / the only
+// engine), the define-new jump payload and the same reaction-catalog preload. Exit needs no
+// hook — the tool slot and EditorScene own that teardown (see initEngineMode).
+initEngineMode();
 
 // Restore the current project into the editor stores BEFORE the first render, so
 // the workspace paints once with the right data (no second visual refresh).

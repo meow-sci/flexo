@@ -1,6 +1,5 @@
 import type { Command } from '../../state/commandStore';
 import { $mode, MODES, setMode } from '../../state/modeStore';
-import { enterEngineMode } from '../../state/engineStore';
 
 /**
  * The five mode switches (design: foundation §2, LOCKED #1). They are not MenuSpec items —
@@ -12,10 +11,11 @@ import { enterEngineMode } from '../../state/engineStore';
  * re-point the `run` below — never register a second command with the same id
  * (`registerCommand` throws on a duplicate).
  *
- * Engine goes through `enterEngineMode()` rather than `setMode('engine')` so the designer
- * re-opens on its retained engine entry; every other mode is a plain switch. Leaving Engine
- * needs no special casing — the exhaust-gizmo teardown is a registered mode exit hook, so
- * it runs on every route out (engineStore).
+ * Every mode is a plain `setMode`, Engine included: restoring the designer's retained engine
+ * entry is Engine mode's own ENTRY HOOK (`initEngineMode`), not a special caller — which is
+ * what makes `4`, the switcher, the status chip and the palette land in the same place. The
+ * exit side needs no case either: `setMode` cancels the exhaust tool through its `registerTool`
+ * def and `EditorScene` disposes the nozzle handles on `$mode`.
  *
  * Undo enrollment: NONE — mode is view state (foundation §13).
  */
@@ -28,8 +28,5 @@ export const MODE_COMMANDS: Command[] = MODES.map((mode) => ({
   menuPath: 'Mode',
   keywords: `mode switch ${mode.label.toLowerCase()}`,
   checked: () => $mode.get() === mode.id,
-  run: () => {
-    if (mode.id === 'engine') enterEngineMode();
-    else setMode(mode.id);
-  },
+  run: () => setMode(mode.id),
 }));

@@ -83,8 +83,11 @@ dropdown + readout use `$allReactions`/`$allReactionIndex`, which merge the Core
 the project's `customReactions` (custom wins on id).
 
 > `Reactions.xml` is Core game data referenced by `<Reaction Id>`, not by path;
-> `copy-assets.ts` discovers it via its reaction-element tags. If a sync ever drops it, copy
-> it back into `KSA_ASSETS_DIR`.
+> `copy-assets.ts` discovers it via its reaction-element tags. Two more path-less Core files
+> ride the same route for the solid thrust-curve preview — **`GrainGeometries.xml`** (matched
+> on `<GrainGeometry>`) and **`SolidPropellants.xml`** (matched on its file name) — loaded by
+> `src/state/solidCurveStore.ts`. If a sync ever drops one, copy it back into
+> `KSA_ASSETS_DIR`.
 
 ## Authoring UX
 
@@ -268,6 +271,31 @@ max stable pressure, exhaust condensed fraction). They are **mandatory** — KSA
 load a solid reaction without them, so flexo omits an incomplete one from the export and
 says so. Cloning a shipped solid fills them in.
 
+### Solid thrust-curve preview
+
+A solid motor's thrust is not a number, it is a **curve**: as the flame front eats into the
+grain the burning area changes, which changes the chamber pressure, which changes the burn
+rate — and the grain profile is exactly the shape of that feedback. So the Engine designer
+draws it. Under Performance, a scope carrying a `<SolidMotor>` gets a **thrust-vs-time
+sparkline** plus peak thrust, burn time and vacuum Isp.
+
+The numbers come from `src/ksa/solidMotorPhysics.ts`, a verbatim port of KSA's own
+`SolidMotor.TrySampleThrustCurve` on the same terms as the liquid physics: 256 depth steps to
+the grain's maximum regression, an 8-iteration pressure fixed point at each, and a time base
+of `Σ Δdepth / burnRate(p)`. It also ports `SolidMotor.ResizeNozzles`, because the throat a
+solid nozzle actually runs at is **not** the `exitArea / 12` its XML implies — the game
+re-derives the area ratio from the peak burning area at load, and previewing at the seed value
+would misreport thrust across the board.
+
+The preview needs two Core data files served under `/ksa/` alongside `Reactions.xml`:
+`GrainGeometries.xml` (the burn-area-vs-depth profiles) and `SolidPropellants.xml` (the grain
+`<StorageDensity>`). Like the reaction catalog they are licensed content and may be absent —
+the card then says *"preview unavailable — the engine still exports correctly"* and nothing
+else changes. It also says so for a **custom propellant**, which has no storage density to
+read; flexo will not invent one. And because a grain stack can grow across `SolidMotorCase`
+connectors into neighbouring parts in the VAB, the preview is explicitly of THIS part's own
+grain segments.
+
 ## XML I/O
 
 `serializeGameData` emits `<Rocket>`/`<Combustor>`/`<DeLavalNozzle>` and the solid trio
@@ -290,10 +318,8 @@ data when importing a Core engine (e.g. LR91 Vac). Round-trip tests live in
   reaction (no power coupling). Not modelled; needs new game code.
 - ~~**True SRBs**~~ — **now possible.** KSA 2026.7.9 added real solid-motor hardware
   (`<SolidMotor>` / `<SolidMotorNozzle>` / `<SolidGrainSegment>`), which flexo authors — see
-  the SRB chapter above. The old "SRB (approximate)" liquid-tank preset is superseded by it.
-  What flexo still does NOT do is **preview the thrust curve**: sampling it needs a port of
-  `SolidMotor.TrySampleThrustCurve` + `GrainGeometryTable` + `ComputeBurningAreaAtDepth`
-  (~200 lines), so the grain profile is authored by name and evaluated only in-game.
+  the SRB chapter above. The old "SRB (approximate)" liquid-tank preset is superseded by it,
+  and the thrust curve is previewed live (see "Solid thrust-curve preview" below).
 - **Thermal rockets** — `<ThermalReaction>`s ship in Reactions.xml but need a thermal core,
   which no part template provides; KSA's own designer refuses them. Not modelled.
 - **Custom propellant chemistry** is clone-and-remix: the gas LUT is CEA-style pre-solved

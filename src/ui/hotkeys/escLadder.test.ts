@@ -9,7 +9,6 @@ import { $openDialog } from '../../state/dialogStore';
 import { $paletteOpen } from '../../state/commandStore';
 import { $chainSession } from '../../state/chainStore';
 import { $measureTool, setMeasureTool } from '../../state/measurementStore';
-import { $engineExhaustGizmo } from '../../state/engineStore';
 import { $activeJointId, $editKeyframeId } from '../../state/animationStore';
 import { $mode, disarmTool } from '../../state/modeStore';
 import { $seatView } from '../../state/ivaStore';
@@ -41,7 +40,6 @@ beforeEach(() => {
   // Every transient tool is a `$activeTool` tenant now, so the slot — not the feature
   // atom — is what a test must clear; `disarmTool` runs the armed tool's own teardown.
   disarmTool();
-  $engineExhaustGizmo.set(false);
   $mode.set('build');
   $editKeyframeId.set(null);
   $activeJointId.set(null);

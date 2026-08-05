@@ -3,6 +3,7 @@ import { ToggleButton, ToggleButtonGroup } from '../kit';
 import { MODE_ICONS } from '../status/statusTokens';
 import { runCommand } from '../../state/commandStore';
 import { $mode, MODES } from '../../state/modeStore';
+import { $engineBlockerCount } from '../../state/engineStore';
 
 /**
  * The menubar's centered mode switcher (design: foundation §2.2, §3 layout line) — five
@@ -20,13 +21,16 @@ import { $mode, MODES } from '../../state/modeStore';
  * Labels drop below ~1100px so the eight menus and the right cluster keep their room; the
  * icons and the accessible names stay.
  *
- * TODO(P7/P11): per-segment attention dots — Engine validation blockers (P7) and Animation
- * draft clips (P11). The `ModeTabSpec.attention` plumbing already exists for the phone tabs.
+ * **Attention dots** (foundation §2.2): each segment may carry a small dot fed by its own
+ * area store. Engine's is the blocking-validation count — the replacement for v1's
+ * "Engine (N)" toolbar button, which counted SCOPES and so told you nothing about whether the
+ * part would load. Animation's draft-clip dot lands with P11.
  *
  * Undo enrollment: NONE — mode is view state (foundation §13).
  */
 export function ModeSwitcher() {
   const current = useStore($mode);
+  const engineBlockers = useStore($engineBlockerCount);
 
   return (
     <ToggleButtonGroup
@@ -43,15 +47,25 @@ export function ModeSwitcher() {
     >
       {MODES.map((mode) => {
         const Icon = MODE_ICONS[mode.id];
+        const attention = mode.id === 'engine' && engineBlockers > 0;
         return (
           <ToggleButton
             key={mode.id}
             id={mode.id}
             size="xs"
-            aria-label={mode.label}
+            aria-label={
+              attention
+                ? `${mode.label} — ${engineBlockers} blocking issue${engineBlockers === 1 ? '' : 's'}`
+                : mode.label
+            }
             className="flex-none px-2"
           >
-            <Icon size={13} />
+            <span className="relative flex items-center justify-center">
+              <Icon size={13} />
+              {attention && (
+                <span className="absolute -right-1 -top-1 size-1.5 rounded-full bg-danger" />
+              )}
+            </span>
             <span className="hidden min-[1100px]:inline">{mode.label}</span>
           </ToggleButton>
         );

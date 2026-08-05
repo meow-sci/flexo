@@ -208,7 +208,11 @@ describe('validateEngines — KSA throws at load (blocking)', () => {
     p.gameData.rockets[0].nozzles = []; // blocking
     p.gameData.solidMotors[0].feeds.push({ kind: 'connector', connectorId: '_ghost' }); // warning
     const severities = validateEngines(p, REACTIONS).map((i) => i.severity);
-    expect(severities).toEqual(['block', 'warn']);
+    // Blocking first, then every warning — including the 5091 `nozzle-not-referenced` the
+    // emptied nozzle list now also earns (D16).
+    expect(severities[0]).toBe('block');
+    expect(severities.slice(1).every((s) => s === 'warn')).toBe(true);
+    expect(severities.filter((s) => s === 'block')).toHaveLength(1);
   });
 });
 
@@ -429,5 +433,108 @@ describe('validateEngines — issue source metadata', () => {
       module: 'nozzle',
       index: 0,
     });
+  });
+});
+
+// ── D16 — KSA rev-5091 wiring-warning parity (gap Q4) ───────────────────────
+
+describe('validateEngines — 5091 wiring warnings (D16)', () => {
+  const severityOf = (part: EditingPart, code: string) =>
+    validateEngines(part, REACTIONS).find((i) => i.code === code)?.severity;
+
+  it('stays silent on both clean fixtures', () => {
+    for (const build of [goodLiquidPart, goodSolidPart]) {
+      const found = codes(validateEngines(build(), REACTIONS));
+      expect(found).toEqual([]);
+    }
+  });
+
+  // RocketControllerTemplate.OnDataLoad (decomp: KSA/RocketControllerTemplate.cs:16-28)
+  it('flags a controller that references no Rockets', () => {
+    const p = goodLiquidPart();
+    p.gameData.rocketControllers[0].rocketRefs = [];
+    expect(severityOf(p, 'controller-no-rockets')).toBe('warn');
+    expect(
+      validateEngines(p, REACTIONS).find((i) => i.code === 'controller-no-rockets')?.source,
+    ).toEqual({ templateId: null, module: 'controller', index: 0 });
+  });
+
+  // Rocket.OnFullPartCreated (decomp: KSA/Rocket.cs:21-42)
+  it('flags a liquid rocket bound to a core but no nozzles', () => {
+    const p = goodLiquidPart();
+    p.gameData.rockets[0].nozzles = [];
+    expect(severityOf(p, 'rocket-no-nozzles')).toBe('warn');
+  });
+
+  it('leaves the solid case to the existing BLOCK (RocketTemplate.Create throws)', () => {
+    const p = goodSolidPart();
+    p.gameData.rockets[0].nozzles = [];
+    const found = codes(validateEngines(p, REACTIONS));
+    expect(found).toContain('solid-rocket-needs-nozzle');
+    expect(found).not.toContain('rocket-no-nozzles');
+  });
+
+  // RocketNozzle.OnFullPartCreated (decomp: KSA/RocketNozzle.cs:106-121)
+  it('flags a nozzle no Rocket names', () => {
+    const p = goodLiquidPart();
+    p.gameData.nozzles.push(createNozzle('Orphan'));
+    expect(severityOf(p, 'nozzle-not-referenced')).toBe('warn');
+    expect(
+      codes(validateEngines(p, REACTIONS)).filter((c) => c === 'nozzle-not-referenced'),
+    ).toHaveLength(1);
+  });
+
+  // RocketCore.OnFullPartCreated, half 1 (decomp: KSA/RocketCore.cs:28-41)
+  it('flags a core no Rocket names as its Core', () => {
+    const p = goodLiquidPart();
+    p.gameData.rockets[0].core = { id: 'Nonexistent', subPartInstanceId: null };
+    expect(severityOf(p, 'core-not-referenced')).toBe('warn');
+  });
+
+  // RocketCore.OnFullPartCreated, half 2 (decomp: KSA/RocketCore.cs:43-58)
+  it('flags a core whose Rocket no controller drives', () => {
+    const p = goodLiquidPart();
+    p.gameData.rocketControllers = [];
+    const issue = validateEngines(p, REACTIONS).find((i) => i.code === 'core-not-referenced');
+    expect(issue?.severity).toBe('warn');
+    expect(issue?.message).toContain('no controller driving its Rocket');
+  });
+
+  // PartTemplate.AddResolvedFeed reached through a wiring entry (decomp: KSA/PartTemplate.cs:446-466)
+  it('flags a ConsumerFeedWiring feed point that resolves to nothing', () => {
+    const p = goodLiquidPart();
+    p.gameData.consumerFeedWiring.push({
+      consumerId: 'ThrustChamber',
+      subPartInstanceId: null,
+      feeds: [{ kind: 'container', containerId: '_ghost', subPartInstanceId: null }],
+    });
+    expect(severityOf(p, 'wiring-feed-unresolvable')).toBe('warn');
+    expect(
+      validateEngines(p, REACTIONS).find((i) => i.code === 'wiring-feed-unresolvable')?.source,
+    ).toEqual({ templateId: null, module: 'wiring', index: 0 });
+  });
+
+  it('stays quiet on a wiring entry whose feed points resolve', () => {
+    const p = goodLiquidPart();
+    p.gameData.tanks.push({ ...createTank(), id: 'Fuel' });
+    p.gameData.consumerFeedWiring.push({
+      consumerId: 'ThrustChamber',
+      subPartInstanceId: null,
+      feeds: [
+        { kind: 'container', containerId: 'Fuel', subPartInstanceId: null },
+        { kind: 'connector', connectorId: '_connector1' },
+      ],
+    });
+    expect(codes(validateEngines(p, REACTIONS))).not.toContain('wiring-feed-unresolvable');
+  });
+
+  it('addresses a SubPart-scope orphan nozzle to its own template', () => {
+    const p = goodLiquidPart();
+    const spd = createSubPartGameData('Core.Bell');
+    spd.nozzles.push(createNozzle('SubOrphan'));
+    p.subPartGameData.push(spd);
+    p.placements.push(placement('bell_1', 'Core.Bell'));
+    const issue = validateEngines(p, REACTIONS).find((i) => i.code === 'nozzle-not-referenced');
+    expect(issue?.source).toEqual({ templateId: 'Core.Bell', module: 'nozzle', index: 0 });
   });
 });

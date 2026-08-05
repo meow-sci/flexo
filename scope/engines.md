@@ -7,8 +7,8 @@
 
 **Baseline:** re-vetted against KSA build **2026.8.3.5117** (decomp @ 5117 + shipped Core XML).
 **Baseline status:** ✅ **CURRENT** — at 5117 every verbatim-ported physics class is byte-identical
-and no engine template field moved; the only new item is an optional validator-parity gap (**Q4**,
-see [What changed in 5117](#what-changed-in-5117)).
+and no engine template field moved; the one new item, the optional validator-parity gap **Q4**, is
+now **mirrored in flexo** (see [What changed in 5117](#what-changed-in-5117)).
 Historically: 5056 landed the first nozzle-schema BREAK since 4939:
 `<VolumetricExhaust>`/`<PlumeTrail>` moved inside `<ReactionPlume>` (see
 [What changed in 5056](#what-changed-in-5056)). Ported physics remains byte-identical.
@@ -34,6 +34,9 @@ moved — so `enginePhysics.ts` needed one new port (`sliceLutAtMixtureRatio`), 
 | `src/ksa/reactionCatalog.ts`                                  | Loads/parses `Reactions.xml` → Fixed (1-D) / Mixture (2-D O/F×lnP) gas LUTs; custom-reaction ⇄ catalog conversion.                               |
 | `src/state/engineStore.ts`                                    | Ephemeral Engine Designer state (engine SCOPE — SubPart template or part —, instance, targeted `NozzleRef`, exhaust gizmo). Not in undo/`$part`. |
 | `src/state/reactionStore.ts`                                  | Loaded catalog + Core ∪ project custom reactions (`$allReactionIndex`).                                                                          |
+| `src/ksa/solidMotorPhysics.ts`                                | Verbatim port of the solid-motor grain regression: `TrySampleThrustCurve` + `ResizeNozzles` + the burn-rate law + two-phase efficiency.          |
+| `src/ksa/grainGeometryCatalog.ts`                             | Parses `GrainGeometries.xml` (burn-area-vs-depth profiles) + `SolidPropellants.xml` (`<StorageDensity KgPerM3>`).                                |
+| `src/state/solidCurveStore.ts`                                | Loaded grain profiles + solid densities (`$grainIndex`, `$hasSolidCurveData`), preloaded on Engine-mode entry.                                   |
 | `src/ui/EnginePanel.tsx`                                      | Full-sidebar designer; `PerformanceReadout` calls `predictPerformance`.                                                                          |
 | `src/ui/EngineSections.tsx`                                   | Modal section editors (combustor / nozzle / controllers / gimbals / custom propellants).                                                         |
 | `src/ui/EngineToolbar.tsx`, `src/three/NozzleHandleObject.ts` | Engine-mode toolbar; the per-nozzle 3D exhaust handles (amber physics / cyan FX).                                                                |
@@ -175,21 +178,33 @@ at all, so `src/ksa/enginePhysics.ts` needs no re-port and the constants (`9.806
 `Rocket.cs`, `RocketCore.cs`, `RocketNozzle.cs` and `SolidMotor.cs` changed **only** by gaining
 warning logs and UI fill-bars; no template field moved.
 
-**MISSING-CAPABILITY (low, optional): mirror KSA's new engine-wiring warnings.** Rev 5091 ("Added
-many warnings for part modules which are not wired up correctly in the template XML") added five
-`Warning`-level checks flexo's `validateEngines` (`src/ksa/engineValidation.ts`) does not yet
-have. All are silent-no-thrust failures — exactly the class of bug that validator exists for:
+**Engine-wiring warnings — gap Q4 ✅ MIRRORED IN FLEXO.** Rev 5091 ("Added many warnings for part
+modules which are not wired up correctly in the template XML") added five `Warning`-level checks.
+All are silent-no-thrust failures — exactly the class of bug `validateEngines`
+(`src/ksa/engineValidation.ts`) exists for — so flexo now emits all five at **`warn`** severity
+(KSA loads the mod, then the part misbehaves), each carrying `EngineIssue.source` so the Engine /
+Data findings surfaces can jump to the offending module:
 
-| Game-side site                        | Warning                                                                                           |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `RocketControllerTemplate.OnDataLoad` | controller with an empty `RocketReferences` list — "references no Rockets; it will drive nothing" |
-| `Rocket.OnFullPartCreated`            | rocket with a core but `Nozzles.Length == 0` — "no nozzles; it will produce no thrust"            |
-| `RocketNozzle.OnFullPartCreated`      | nozzle no `<Rocket>` names — "referenced by no Rocket … will produce no thrust"                   |
-| `RocketCore.OnFullPartCreated`        | core no `<Rocket>` names as its `Core`, or whose rocket has no controller — "cannot be activated" |
-| `RocketCore.BindFeedPoints`           | a feed point that resolves to nothing on the owning part/sub-part                                 |
+| Game-side site (decomp @ 5117)                           | Warning                                                                                           | flexo code                 |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | -------------------------- |
+| `KSA/RocketControllerTemplate.cs:16-28` `OnDataLoad`     | controller with an empty `RocketReferences` list — "references no Rockets; it will drive nothing" | `controller-no-rockets`    |
+| `KSA/Rocket.cs:21-42` `OnFullPartCreated`                | rocket with a core but `Nozzles.Length == 0` — "no nozzles; it will produce no thrust"            | `rocket-no-nozzles`        |
+| `KSA/RocketNozzle.cs:106-121` `OnFullPartCreated`        | nozzle no `<Rocket>` names — "referenced by no Rocket … will produce no thrust"                   | `nozzle-not-referenced`    |
+| `KSA/RocketCore.cs:24-59` `OnFullPartCreated`            | core no `<Rocket>` names as its `Core`, or whose rocket has no controller — "cannot be activated" | `core-not-referenced`      |
+| `KSA/PartTemplate.cs:494-580` `AddResolvedFeed` (wiring) | a `<ConsumerFeedWiring>` feed point that resolves to nothing                                      | `wiring-feed-unresolvable` |
 
-flexo's existing checks cover the cases KSA **throws** on; these are the ones it merely logs, so
-they belong as `warn`-severity issues. Tracked as gap **Q4**.
+Two deliberate narrowings, so a new warning never duplicates an existing finding:
+
+- `rocket-no-nozzles` fires only for a **liquid/unresolved** core — a SOLID core with no nozzle
+  is already `solid-rocket-needs-nozzle` (a `block`: `RocketTemplate.Create` throws).
+- `wiring-feed-unresolvable` covers the feed points inside a `<ConsumerFeedWiring>` entry.
+  A CONSUMER's own `<FeedsFrom>` keeps its existing `feed-unknown-container` /
+  `feed-unknown-connector` codes; `consumer-not-wired` still covers a `Parent="true"` consumer
+  with no wiring entry at all (`PartTemplate.cs:468-483`).
+
+Nozzle/core reference matching is by **id only**, where KSA matches a full `SubPartIdReference`
+(id + scope): a scope mismatch is a different authoring mistake, and reporting "referenced by
+nothing" for a nozzle that is plainly named would read as a false alarm.
 
 **Substance data (informational).** `Volatiles.xml` / `SolidPropellants.xml` gained
 `<Substance DefaultPhase="Gas|Liquid|Solid">` and a `<Color R G B>` child (`SubstanceTemplate.cs`
@@ -324,6 +339,59 @@ field and the two nozzle builders/parsers share one body so they cannot drift.
 `<SolidGrainSegment>`'s inner `<Grain>` is a `SolidGrainSegmentTemplate` (an
 `AsmbVolumetricMassTemplate`): `<Material Id>` + `<OuterRadius M>` + `<WallThickness Mm>` +
 `<Length M>` + the inherited `<LocationAsmb>`.
+
+⚠️ **`exitArea / 12` is only the SEED.** `PartTree.ResolveSolidMotorStacks` calls
+`SolidMotor.ResizeNozzles()` whenever a motor's grain stack resolves, and that RE-DERIVES the
+area ratio from the peak burning area, clamped between bounds set by the reaction's
+`(MinimumBurnPressure·1.02 … MaxStablePressure)` window and floored at
+`SolidMotorNozzle.MINIMUM_AREA_RATIO = 1.2` — then writes `ThroatArea = ExitArea / ratio` onto
+every nozzle. Anything that predicts solid performance must resize first; the authored XML
+never carries the ratio the motor actually runs at.
+
+### Solid thrust-curve preview — `src/ksa/solidMotorPhysics.ts` (ported, was a documented gap)
+
+flexo now previews the burn. `src/ksa/solidMotorPhysics.ts` is a **verbatim port** on the same
+terms as `enginePhysics.ts` (identical formulae, constants, iteration counts and clamps), from
+the decomp at **2026.8.3.5117**:
+
+| Game-side member (`decomp/KSA/`)                                   | flexo                                          |
+| ------------------------------------------------------------------ | ---------------------------------------------- |
+| `GrainGeometryTable.Lookup` / `MaxDepth` / `InitialGrainArea`      | `grainLookup` + `grainGeometryCatalog.ts`      |
+| `SolidGrainSegment.ComputeBurningAreaAtDepth` (`:230-256`)         | `burningAreaAtDepth`                           |
+| `SolidGrainSegment.ComputeGrainMassAtDepth`                        | `grainMassAtDepth`                             |
+| `BurnRateLaw.Evaluate` = `a·(p·1e−6)^n` (`BurnRateLaw.cs:11-15`)   | `evaluateBurnRate`                             |
+| `SolidMotorNozzle.RefreshTwoPhaseEfficiency` (`:32-36`)            | `twoPhaseEfficiency`                           |
+| `SolidMotor.SolveConditionsForArea` (`:481-516`)                   | `solveConditionsForArea`                       |
+| `SolidMotor.ComputeTotalThroatArea` / `ResizeNozzles` (`:397-455`) | `resizeNozzles`                                |
+| `SolidMotor.TrySampleThrustCurve` (`:299-395`)                     | `sampleThrustCurve`                            |
+| `NozzlePerformance.GetTotalThrust` (`:43-46`)                      | `totalThrust` (momentum + pressure, unclamped) |
+
+Two facts the port depends on, both verified in the decomp:
+
+- **Two-phase efficiency**: `clamp(1 − condensedFraction·(0.076 + 0.046·ln(areaRatio)), 0.5, 1)`,
+  applied to `ActualExhaustVelocity` AFTER `DeLavalNozzleConfig.ComputePerformance` — mass flow
+  is untouched, so the chamber-pressure fixed point is unaffected.
+- **Depth normalization**: a grain profile's three columns are dimensionless, divided by
+  `CasingInnerRadius = OuterRadius − WallThickness`; burning area is `perimeter · r · length`.
+
+**Two new served files** (both licensed Core data under `/ksa/`, both parsed by
+`src/ksa/grainGeometryCatalog.ts`, both loaded by `src/state/solidCurveStore.ts` on Engine-mode
+entry):
+
+| File                   | Read for                                                                          |
+| ---------------------- | --------------------------------------------------------------------------------- |
+| `GrainGeometries.xml`  | `<GrainGeometry Id>` → `<DepthCondition><Depth/><Perimeter/><PortArea/>` triplets |
+| `SolidPropellants.xml` | `<Substance Id><Solid><StorageDensity KgPerM3>` — the grain density               |
+
+Both are OPTIONAL at runtime, the same tolerance contract `Reactions.xml` has: absent ⇒ empty
+catalog ⇒ the card shows "preview unavailable — the engine still exports correctly". The
+preview also returns nothing for a **custom propellant**, which has no `<StorageDensity>` to
+read; flexo never invents a density.
+
+**Deliberate scope limit**: in game a motor's grain stack also grows across `SolidMotorCase`
+connectors into neighbouring PARTS (`PartTree.ResolveSolidMotorStack`). That is a
+vehicle-assembly fact a single-part editor cannot know, so flexo's stack is exactly the grain
+segments the motor's own `<FeedsFrom Container>` names.
 
 ### Solid reactions REQUIRE burn-rate data — BREAKING (crash-class)
 

@@ -31,6 +31,7 @@ import type {
   PlumbingClass,
   PowerConsumer,
   RawXmlNode,
+  ReactionPlume,
   Rocket,
   RocketController,
   RocketControllerKind,
@@ -3645,14 +3646,107 @@ export function addEngine(
 }
 
 /**
- * Discrete (one undo step): defines an "SRB (approximate)" — a data-only solid-rocket
- * fake. It's a normal engine pinned to {@link Combustor.minimumThrottle}=1 (so it
- * can't be throttled, like a solid) burning KSA 2026.7.5's APCP solid-propellant
- * reaction, with a sealed internal propellant Tank on the same SubPart, so it's
- * self-contained. KSA still has no solid-motor hardware, so this CANNOT reproduce
- * a real SRB: thrust is flat (no grain-regression thrust-vs-time curve), it stays
- * shutdown-able / re-ignitable, and the propellant drains like a liquid (CoM shifts).
- * See analysis/KSA_ENGINE_DETAILS.md §10. Returns the combustor id, or null.
+ * Discrete (one undo step): defines an **RCS thruster** — {@link addEngine}'s RCS split
+ * (design: design-data-engine-modes.md §B3.1, D12). Same composite, with two differences
+ * that are what "RCS" means in KSA data:
+ *
+ *  - the controller is a `<RocketThrusterController>` (pulsed, driven by the 6-DOF control
+ *    map) rather than a `<RocketEngineController>`, and the part is tagged `RCS`;
+ *  - the combustor is **Service-plumbed**. `createCombustor` defaults to `Bulk`, which needs
+ *    the `BulkFluid` capability on every connector in the feed path; a thruster rides the
+ *    implicit `Electricity|ServiceFluid` default instead, so authoring it as `Service` is
+ *    what makes a fresh RCS block reach propellant without also editing connectors.
+ *
+ * `subPartTemplateId === null` targets the PART itself — the stock MMU pattern, where the
+ * whole battery of nozzles lives on `<PartGameData>` (design §B3.1 "Part-level target
+ * offered for RCS"). Returns the new combustor id, or null.
+ */
+export function addRcsEngine(
+  subPartTemplateId: string | null,
+  instanceId: string | null,
+): string | null {
+  pushUndo('define RCS thruster', subPartTemplateId ? lastSegmentLower(subPartTemplateId) : 'part');
+  const part = clone($part.get());
+  const ids = allEngineModuleIds(part);
+  const combId = uniqueModuleId('Thruster', ids.combustors);
+  const nozId = uniqueModuleId('Nozzle', ids.nozzles);
+  const rocketId = uniqueModuleId('Rcs', ids.rockets);
+  const ctrlId = uniqueModuleId('Thruster', ids.controllers);
+
+  const owner = subPartTemplateId ? getOrCreateSubPartData(part, subPartTemplateId) : part.gameData;
+  const combustor = createCombustor(combId);
+  combustor.plumbing = 'Service';
+  owner.combustors.push(combustor);
+  owner.nozzles.push(createNozzle(nozId));
+  owner.rockets.push(createRocket(rocketId, combId, [nozId]));
+
+  const controller = createRocketController(ctrlId, 'thruster', [rocketId]);
+  if (instanceId) controller.rocketRefs[0].subPartInstanceId = instanceId;
+  part.gameData.rocketControllers.push(controller);
+  if (!part.editorTags.includes('RCS')) part.editorTags.push('RCS');
+
+  $part.set(part);
+  return combId;
+}
+
+/**
+ * Discrete (one undo step): defines a **real solid motor** — the one-step composite for the
+ * `<SolidMotor>` hardware KSA gained at 5018 (design D12), which is what the legacy
+ * {@link addSrbEngine} preset only approximates.
+ *
+ * Creates on the template's `<SubPartGameData>`: a `<SolidMotor>` (APCP, `Neutral` grain),
+ * one `<SolidGrainSegment>` the motor feeds from, a `<SolidMotorNozzle>` and an ALL-SOLID
+ * `<Rocket>` binding them — `RocketTemplate.Create` throws on a rocket that mixes solid and
+ * liquid parts, and on a solid rocket with no nozzle, so the composite must produce both
+ * halves at once. The part-level engine controller goes on the picked placement.
+ *
+ * Returns the new motor id, or null.
+ */
+export function addSolidEngine(
+  subPartTemplateId: string,
+  instanceId: string | null,
+): string | null {
+  if (!subPartTemplateId) return null;
+  pushUndo('define solid motor', lastSegmentLower(subPartTemplateId));
+  const part = clone($part.get());
+  const ids = allEngineModuleIds(part);
+  const motorId = uniqueModuleId('MotorCore', ids.combustors);
+  const nozId = uniqueModuleId('Nozzle', ids.nozzles);
+  const grainId = uniqueModuleId('Grain', ids.containers);
+  const rocketId = uniqueModuleId('SRB', ids.rockets);
+  const ctrlId = uniqueModuleId('SRB', ids.controllers);
+
+  const spd = getOrCreateSubPartData(part, subPartTemplateId);
+  const motor = createSolidMotor(motorId);
+  // The motor draws from its own grain: a solid `<FeedsFrom>` names grain segments, and an
+  // empty list is the "reaches no propellant" silent-no-thrust failure.
+  motor.feeds = [{ kind: 'container', containerId: grainId, subPartInstanceId: null }];
+  spd.solidMotors.push(motor);
+  spd.solidGrainSegments.push(createSolidGrainSegment(grainId));
+  spd.solidNozzles.push(createSolidMotorNozzle(nozId));
+  spd.rockets.push(createRocket(rocketId, motorId, [nozId]));
+
+  const controller = createRocketController(ctrlId, 'engine', [rocketId]);
+  if (instanceId) controller.rocketRefs[0].subPartInstanceId = instanceId;
+  part.gameData.rocketControllers.push(controller);
+  if (!part.editorTags.includes('Engines')) part.editorTags.push('Engines');
+
+  $part.set(part);
+  return motorId;
+}
+
+/**
+ * Discrete (one undo step): defines the LEGACY "SRB (approximate)" preset — the pre-5018
+ * approximation, kept for parity and explicitly labeled as such in the define-new menu
+ * (design D12). Prefer {@link addSolidEngine}, which authors real `<SolidMotor>` hardware.
+ *
+ * It's a normal engine pinned to {@link Combustor.minimumThrottle}=1 (so it can't be
+ * throttled, like a solid) burning Core's APCP solid-propellant reaction, with a sealed
+ * internal propellant Tank on the same SubPart, so it's self-contained. Being a liquid
+ * chamber underneath, it CANNOT reproduce a real SRB: thrust is flat (no grain-regression
+ * thrust-vs-time curve), it stays shutdown-able / re-ignitable, and the propellant drains
+ * like a liquid (CoM shifts). See analysis/KSA_ENGINE_DETAILS.md §10. Returns the combustor
+ * id, or null.
  */
 export function addSrbEngine(subPartTemplateId: string, instanceId: string | null): string | null {
   if (!subPartTemplateId) return null;
@@ -3682,6 +3776,155 @@ export function addSrbEngine(subPartTemplateId: string, instanceId: string | nul
 
   $part.set(part);
   return combId;
+}
+
+// --- Engine module addressing: duplicate + the nozzle plume-entry list ---
+
+/**
+ * The module-tree groups (design §B3.2), declared HERE because they are the address space
+ * of the mutations below — `engineStore` re-exports the type for the UI. The last four are
+ * always part-level: KSA authors controllers, `<ConsumerFeedWiring>`, `<Gimbal>` and
+ * `<FixedReaction>` on the part, never on a `<SubPartGameData>`.
+ */
+export type EngineModuleGroup =
+  | 'combustor'
+  | 'nozzle'
+  | 'solidMotor'
+  | 'grain'
+  | 'solidNozzle'
+  | 'rocket'
+  | 'controller'
+  | 'wiring'
+  | 'gimbal'
+  | 'propellant';
+
+/** Names ONE module: its group, the scope it lives at, and its index in that list. */
+export interface EngineModuleRef {
+  group: EngineModuleGroup;
+  /** `'sub'` ⇒ the named template's `<SubPartGameData>`; `'part'` ⇒ `<PartGameData>`. */
+  scope: 'sub' | 'part';
+  index: number;
+}
+
+/** Names ONE nozzle across both flavors and both scopes (`templateId: null` ⇒ part-level). */
+export interface NozzleLocator {
+  templateId: string | null;
+  kind: 'delaval' | 'solid';
+  index: number;
+}
+
+/**
+ * Discrete (one undo step): clones the module a {@link EngineModuleRef} names, re-ids the
+ * copy so it cannot collide, and appends it to the same list — the module tree's row menu
+ * (design §B3.2 "Duplicate: module clone, one undo step").
+ *
+ * `subPartTemplateId` supplies the scope a `'sub'` ref is indexed within (the ref itself is
+ * scope-relative; the open engine is `engineStore`'s business, not this layer's).
+ *
+ * **Feed wiring and gimbal rows have no Duplicate**: both are keyed to something else that
+ * must be unique — a wiring entry to its `(consumer, instance)` pair and a `<Gimbal>` to its
+ * placement (`setGimbal` upserts by instance) — so a copy would either be dead data or stomp
+ * its original. The tree omits the item for those two groups; this is the matching no-op.
+ */
+export function duplicateEngineModule(
+  ref: EngineModuleRef,
+  subPartTemplateId: string | null,
+): void {
+  if (ref.group === 'wiring' || ref.group === 'gimbal') return;
+  const current = $part.get();
+  const ids = allEngineModuleIds(current);
+
+  if (ref.group === 'propellant') {
+    const source = current.customReactions[ref.index];
+    if (!source) return;
+    const id = uniqueModuleId(
+      source.id,
+      current.customReactions.map((r) => r.id),
+    );
+    pushUndo('duplicate module', id);
+    const part = clone(current);
+    part.customReactions.push({ ...structuredClone(source), id });
+    $part.set(part);
+    return;
+  }
+
+  if (ref.group === 'controller') {
+    const source = current.gameData.rocketControllers[ref.index];
+    if (!source) return;
+    const id = uniqueModuleId(source.id, ids.controllers);
+    commitGameData('duplicate module', id, (g) =>
+      g.rocketControllers.push({ ...structuredClone(source), id }),
+    );
+    return;
+  }
+
+  const listKey = {
+    combustor: 'combustors',
+    nozzle: 'nozzles',
+    solidMotor: 'solidMotors',
+    grain: 'solidGrainSegments',
+    solidNozzle: 'solidNozzles',
+    rocket: 'rockets',
+  } as const satisfies Record<string, keyof SubPartGameData & keyof PartGameData>;
+  const pool = {
+    combustor: ids.combustors,
+    nozzle: ids.nozzles,
+    // Solid motors share the `<Core Id>` namespace with combustors and solid nozzles the
+    // `<Nozzle Id>` namespace with De Laval ones — a `<Rocket>` ref may name either family.
+    solidMotor: ids.combustors,
+    grain: ids.containers,
+    solidNozzle: ids.nozzles,
+    rocket: ids.rockets,
+  } as const;
+
+  const key = listKey[ref.group];
+  const owner =
+    ref.scope === 'part'
+      ? current.gameData
+      : current.subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId);
+  const source = owner?.[key][ref.index];
+  if (!source) return;
+  const id = uniqueModuleId(source.id, pool[ref.group]);
+  const copy = { ...(structuredClone(source) as typeof source), id };
+
+  if (ref.scope === 'part') {
+    commitGameData('duplicate module', id, (g) => {
+      (g[key] as unknown[]).push(copy);
+    });
+    return;
+  }
+  commitSubPartData('duplicate module', id, subPartTemplateId!, (s) => {
+    (s[key] as unknown[]).push(copy);
+  });
+}
+
+/**
+ * Discrete (one undo step): replaces a nozzle's whole `<ReactionPlume>` list — the
+ * plume-entries editor (design D15, closing scope gap **P1**).
+ *
+ * Discrete rather than streaming because every edit it makes is structural: adding an entry,
+ * removing one, flipping `Default`, or re-keying a row to a reaction. The default-entry FAST
+ * PATH (the two plume/trail Selects) keeps going through the streaming `updateNozzle` patch
+ * + `withDefaultReactionPlume` and is unchanged.
+ */
+export function updateReactionPlumes(
+  ref: NozzleLocator,
+  reactionPlumes: readonly ReactionPlume[],
+): void {
+  const plumes = reactionPlumes.map((p) => ({ ...p }));
+  if (ref.templateId === null) {
+    const list = ref.kind === 'delaval' ? 'nozzles' : 'solidNozzles';
+    if (ref.index < 0 || ref.index >= $part.get().gameData[list].length) return;
+    commitGameData('edit plume entries', '', (g) => {
+      g[list][ref.index] = { ...g[list][ref.index], reactionPlumes: plumes };
+    });
+    return;
+  }
+  const list = ref.kind === 'delaval' ? 'nozzles' : 'solidNozzles';
+  if (!hasSubPartItem(ref.templateId, list, ref.index)) return;
+  commitSubPartData('edit plume entries', '', ref.templateId, (s) => {
+    s[list][ref.index] = { ...s[list][ref.index], reactionPlumes: plumes };
+  });
 }
 
 // --- Custom reactions (user-authored propellants) ---

@@ -10,7 +10,11 @@ import {
 } from '../../state/editorStore';
 import { $seatView, enterSeatView, exitSeatView } from '../../state/ivaStore';
 import { $mode } from '../../state/modeStore';
-import { $engineExhaustGizmo, setEngineExhaustGizmo } from '../../state/engineStore';
+import {
+  $isExhaustPlacing,
+  cycleExhaustTarget,
+  toggleExhaustPlacing,
+} from '../../state/engineStore';
 import { toast } from '../toast';
 import { $measureTool, addReferenceLine, setMeasureTool } from '../../state/measurementStore';
 import {
@@ -112,8 +116,26 @@ export const TOOLS_COMMANDS: Command[] = [
     title: 'Toggle Exhaust Placement',
     keywords: 'exhaust nozzle plume placement gizmo engine',
     enabled: () => $mode.get() === 'engine',
-    checked: () => $engineExhaustGizmo.get(),
-    run: () => setEngineExhaustGizmo(!$engineExhaustGizmo.get()),
+    checked: () => $isExhaustPlacing.get(),
+    run: () => toggleExhaustPlacing(),
+  },
+  {
+    // The `,` / `.` pair from design §B10, as commands so the chords, the palette and any
+    // future button all walk the SAME ordered target list the chip row renders.
+    id: 'engine.prevExhaustTarget',
+    title: 'Previous Exhaust Target',
+    keywords: 'exhaust nozzle previous cycle engine',
+    keepOpen: true,
+    enabled: () => $isExhaustPlacing.get(),
+    run: () => cycleExhaustTarget(-1),
+  },
+  {
+    id: 'engine.nextExhaustTarget',
+    title: 'Next Exhaust Target',
+    keywords: 'exhaust nozzle next cycle engine',
+    keepOpen: true,
+    enabled: () => $isExhaustPlacing.get(),
+    run: () => cycleExhaustTarget(1),
   },
   {
     id: 'tools.addRefLine',

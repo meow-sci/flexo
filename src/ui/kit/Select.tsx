@@ -20,6 +20,8 @@ const trigger = tv({
   base: 'flex w-full items-center justify-between gap-2 rounded-md border border-border bg-panel-sunken text-fg transition-colors hover:border-border-strong disabled:opacity-50',
   variants: {
     size: {
+      // Bars + sidebars only (design-system-services §7.2).
+      xs: 'h-6 px-1.5 text-xs',
       sm: 'h-7 px-2 text-xs',
       md: 'h-9 px-2.5 text-sm',
     },

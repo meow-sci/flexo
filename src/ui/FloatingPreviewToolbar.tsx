@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { GripVertical } from 'lucide-react';
 import { PreviewScrubber } from './PreviewScrubber';
-import { useIsPhone } from './kit';
+import { cn, panelChrome, useIsPhone } from './kit';
 import { $activeAnimation } from '../state/animationStore';
 import { $inspectorMode, $animPreviewFloatPos, setAnimPreviewFloatPos } from '../state/uiStore';
 
@@ -39,7 +39,12 @@ export function FloatingPreviewToolbar() {
   // Phone: in-flow bar in the centered top stack — no absolute positioning or drag.
   if (isPhone) {
     return (
-      <div className="pointer-events-auto flex w-80 max-w-[calc(100vw-1rem)] items-center gap-1.5 rounded-lg border border-border bg-panel/95 px-2 py-1.5 shadow-popover backdrop-blur-md">
+      <div
+        className={cn(
+          'pointer-events-auto flex w-80 max-w-[calc(100vw-1rem)] items-center gap-1.5 px-2 py-1.5',
+          panelChrome,
+        )}
+      >
         <PreviewScrubber anim={anim} />
       </div>
     );
@@ -87,7 +92,10 @@ export function FloatingPreviewToolbar() {
 
   return (
     <div
-      className="pointer-events-auto absolute z-30 flex w-80 max-w-[calc(100vw-1rem)] items-center gap-1.5 rounded-lg border border-border bg-panel/95 px-2 py-1.5 shadow-popover backdrop-blur-md"
+      className={cn(
+        'pointer-events-auto absolute z-30 flex w-80 max-w-[calc(100vw-1rem)] items-center gap-1.5 px-2 py-1.5',
+        panelChrome,
+      )}
       style={style}
     >
       <button

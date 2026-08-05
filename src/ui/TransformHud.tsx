@@ -1,6 +1,6 @@
 import { useStore } from '@nanostores/react';
 import { MoveDiagonal2, MoveHorizontal, MoveVertical, type LucideIcon } from 'lucide-react';
-import { Button, Tooltip, useIsPhone } from './kit';
+import { Button, Kbd, keyLabel, Tooltip, useIsPhone } from './kit';
 import {
   $nudgeAxis,
   $nudgeStep,
@@ -13,8 +13,6 @@ import {
 import { FAST_NUDGE_MULTIPLIER } from '../three/nudgeSelection';
 import { changeNudgeAxis, formatNudgeStep } from './nudgeControls';
 import { changeRotateAxes } from './rotateControls';
-import { Kbd } from './hotkeys/Kbd';
-import { keyLabel } from './hotkeys/keyDisplay';
 
 /** Arrow colour per axis, matching the three.js gizmo axis handles. */
 const AXIS_COLOR: Record<NudgeAxis, string> = {

@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react';
 import { Lock, Unlock, X } from 'lucide-react';
-import { Button, cn, useIsPhone } from './kit';
+import { Button, cn, panelChrome, useIsPhone } from './kit';
 
-const CHROME =
-  'rounded-xl border border-border bg-panel/95 p-3 text-fg shadow-popover backdrop-blur-md';
+const CHROME = `${panelChrome} p-3`;
 
 /**
  * Floating editor shell shared by the active-container and active-measurement editors.

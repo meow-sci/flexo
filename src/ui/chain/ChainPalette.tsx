@@ -6,13 +6,21 @@ import { $chainSession, addChainOp, closeChain, type ChainOpKind } from '../../s
 import { applyActionChain, type ChainCommitEntry } from '../../state/editorStore';
 import { $chainEval } from '../../three/chainEval';
 import { PREVIEW_MAX_GHOSTS } from '../../three/ChainPreviewLayer';
-import { Button, GridList, GridListItem, SearchField, cn, toast, useIsPhone } from '../kit';
-import { keyLabel } from '../hotkeys/keyDisplay';
+import {
+  Button,
+  GridList,
+  GridListItem,
+  SearchField,
+  cn,
+  keyLabel,
+  panelChrome,
+  toast,
+  useIsPhone,
+} from '../kit';
 import { CHAIN_COMMANDS, type ChainCommandDef } from './chainCommands';
 import { ChainStepCard } from './ChainStepCard';
 
-const CHROME =
-  'rounded-xl border border-border bg-panel/95 p-3 text-fg shadow-popover backdrop-blur-md';
+const CHROME = `${panelChrome} p-3`;
 
 /**
  * The action-chain command palette: a floating, NON-MODAL card over the viewport that

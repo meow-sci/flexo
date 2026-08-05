@@ -28,13 +28,13 @@ export function SearchField({
     >
       <Search
         className="pointer-events-none absolute left-2 text-fg-subtle"
-        size={size === 'sm' ? 14 : 16}
+        size={size === 'xs' ? 12 : size === 'sm' ? 14 : 16}
       />
       <Input
         placeholder={placeholder}
         className={inputStyles({
           size,
-          className: 'pl-7 pr-7 [&::-webkit-search-cancel-button]:hidden',
+          className: `${size === 'xs' ? 'pl-6 pr-6' : 'pl-7 pr-7'} [&::-webkit-search-cancel-button]:hidden`,
         })}
       />
       <Button

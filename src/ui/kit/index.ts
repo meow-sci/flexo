@@ -10,6 +10,7 @@ export {
   monoTextarea,
   monoTextareaFill,
   noteBox,
+  panelChrome,
   warningBox,
 } from './styles';
 
@@ -44,7 +45,11 @@ export { TagGroup, TagList, Tag, Chip } from './Tag';
 
 export { GlobalToastRegion, toast, toastQueue, type ToastMessage } from './Toast';
 
+export { Kbd } from './Kbd';
+export { IS_APPLE, keyLabel } from './keyDisplay';
+
 export { useIsPhone } from './useIsPhone';
+export { usePointerDrag, type PointerDragOptions } from './usePointerDrag';
 
 // Triggers / collection pieces that don't need styling are re-exported verbatim
 // so call sites only ever import from the kit.

@@ -1,9 +1,7 @@
 import { useStore } from '@nanostores/react';
-import { Modal, Dialog, DialogHeader, SectionTitle, useIsPhone } from '../kit';
+import { Dialog, DialogHeader, Kbd, keyLabel, Modal, SectionTitle, useIsPhone } from '../kit';
 import { $helpOpen, closeHelp } from '../../state/helpStore';
 import { HOTKEY_GROUPS, type KeyChord } from './registry';
-import { keyLabel } from './keyDisplay';
-import { Kbd } from './Kbd';
 
 /**
  * Keyboard-shortcuts help overlay, driven by {@link HOTKEY_GROUPS}. Opened by the

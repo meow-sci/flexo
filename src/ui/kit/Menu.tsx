@@ -17,7 +17,7 @@ const menuItem = tv({
   base: 'flex cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none disabled:opacity-45',
   variants: {
     variant: {
-      default: 'text-fg hover:bg-white/[0.06] focus:bg-white/[0.08]',
+      default: 'text-fg hover:bg-wash-hover focus:bg-wash-selected',
       danger: 'text-danger hover:bg-danger/15 focus:bg-danger/20',
     },
   },

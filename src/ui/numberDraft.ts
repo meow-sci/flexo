@@ -67,7 +67,7 @@ export interface NumberDraftOptions {
  *   isn't a number at all (empty, `-`, `.`)
  * - Escape cancels the whole edit, ArrowUp/ArrowDown step by `step`
  *
- * Spread the result onto {@link TextField}: `<TextField inputMode="decimal" {...field} />`.
+ * Spread the result onto {@link TextField}: `<TextField inputMode="url" {...field} />`.
  */
 export function useNumberDraft(options: NumberDraftOptions) {
   const { value, onCommit, onInteractionStart, min, max, step = 1, format = String } = options;

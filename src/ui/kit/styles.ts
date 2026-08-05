@@ -45,16 +45,34 @@ export function gridRowClass(rp: {
   return cn(
     'flex cursor-default select-none items-center gap-1 rounded-md px-2 py-1 text-fg outline-none',
     rp.isDisabled && 'opacity-40',
-    rp.isSelected ? 'bg-white/[0.08] ring-2 ring-inset ring-accent' : 'hover:bg-white/[0.06]',
+    rp.isSelected ? 'bg-wash-selected ring-2 ring-inset ring-accent' : 'hover:bg-wash-hover',
     rp.isFocusVisible && !rp.isSelected && 'ring-1 ring-inset ring-accent',
   );
 }
 
-/** Amber callout box for inline warnings inside dialogs and panels. */
+/** The one floating-card chrome (foundation §1.2). Add padding at the call site. */
+export const panelChrome =
+  'rounded-xl border border-border bg-panel/95 text-fg shadow-popover backdrop-blur-md';
+
+/*
+ * Callout severity ladder — pick by what the finding MEANS, not by how loud you want it:
+ * `noteBox` (advisory, legal + often deliberate) < `warningBox` (it works, but it will
+ * misbehave — the user should probably change it) < `dangerBox` (blocking: the action
+ * produces something broken).
+ */
+
+/**
+ * Amber callout box for inline warnings inside dialogs and panels: the thing is
+ * authorable and will load, but it is very likely wrong (the `warn` severity of the
+ * export pre-flight validators). Use `dangerBox` when it cannot work at all.
+ */
 export const warningBox =
   'rounded-lg border border-warning/40 bg-warning/10 p-2 text-xs text-warning';
 
-/** Red callout box for blocking errors (the action would produce something broken). */
+/**
+ * Red callout box for blocking errors — the action would produce something broken
+ * (KSA throws / the export is unusable). Never for merely-suspicious findings.
+ */
 export const dangerBox =
   'flex flex-col gap-1 rounded-lg border border-danger/40 bg-danger/10 p-2 text-xs text-danger';
 

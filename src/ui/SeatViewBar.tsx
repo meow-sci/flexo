@@ -1,7 +1,6 @@
 import { useStore } from '@nanostores/react';
 import { ChevronLeft, ChevronRight, Info, X } from 'lucide-react';
-import { Button, Tooltip } from './kit';
-import { Kbd } from './hotkeys/Kbd';
+import { Button, Kbd, Tooltip } from './kit';
 import { $seatView, enterSeatView, exitSeatView } from '../state/ivaStore';
 import { $part, selectIvaSeat } from '../state/editorStore';
 

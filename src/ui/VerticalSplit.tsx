@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { usePointerDrag } from './kit';
 
 /**
  * Internal: shared split with a draggable divider. `direction` is the axis the
@@ -24,27 +25,33 @@ function Split({
   maxPct: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  // Container box + pointer position at the moment the drag started; the hook
+  // reports deltas from that origin, so the pct is recomputed against it.
+  const originRef = useRef<{ rect: DOMRect; clientX: number; clientY: number } | null>(null);
   const [splitPct, setSplitPct] = useState(initialSplit);
   const isVertical = direction === 'vertical';
 
-  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const c = containerRef.current;
-    if (!c) return;
-    const rect = c.getBoundingClientRect();
-    const onMove = (ev: PointerEvent) => {
+  const { onPointerDown } = usePointerDrag({
+    cursor: isVertical ? 'row-resize' : 'col-resize',
+    onStart(e) {
+      const c = containerRef.current;
+      if (!c) return false;
+      originRef.current = {
+        rect: c.getBoundingClientRect(),
+        clientX: e.clientX,
+        clientY: e.clientY,
+      };
+    },
+    onMove(dx, dy) {
+      const origin = originRef.current;
+      if (!origin) return;
+      const { rect } = origin;
       const pct = isVertical
-        ? ((ev.clientY - rect.top) / rect.height) * 100
-        : ((ev.clientX - rect.left) / rect.width) * 100;
+        ? ((origin.clientY + dy - rect.top) / rect.height) * 100
+        : ((origin.clientX + dx - rect.left) / rect.width) * 100;
       setSplitPct(Math.max(minPct, Math.min(maxPct, pct)));
-    };
-    const onUp = () => {
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
-    };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
-  };
+    },
+  });
 
   return (
     <div
@@ -62,7 +69,7 @@ function Split({
         aria-orientation={isVertical ? 'horizontal' : 'vertical'}
         aria-label="Resize panels"
         onPointerDown={onPointerDown}
-        className={`group relative shrink-0 bg-border transition-colors hover:bg-accent ${
+        className={`group relative shrink-0 touch-none bg-border transition-colors hover:bg-accent ${
           isVertical ? 'h-1 cursor-row-resize' : 'w-1 cursor-col-resize'
         }`}
       >

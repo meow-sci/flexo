@@ -12,6 +12,8 @@ import {
   Slider,
   TextField,
   Switch,
+  cn,
+  panelChrome,
   useIsPhone,
 } from './kit';
 import { ColorAlphaField } from './ColorAlphaField';
@@ -145,7 +147,12 @@ export function ManageTexturesPanel() {
   return (
     // max-h + scroll: an imported mesh adds a provenance/glass section on top of the material
     // and glow ones, which on a short viewport would otherwise run off the bottom of the card.
-    <div className="absolute left-3 top-1/2 z-10 max-h-[calc(100vh-6rem)] w-64 -translate-y-1/2 overflow-y-auto rounded-xl border border-border bg-panel/95 p-3 text-fg shadow-popover backdrop-blur-md">
+    <div
+      className={cn(
+        'absolute left-3 top-1/2 z-10 max-h-[calc(100vh-6rem)] w-64 -translate-y-1/2 overflow-y-auto p-3',
+        panelChrome,
+      )}
+    >
       <div className="mb-3 flex items-center justify-between gap-2">
         <span className="text-[11px] uppercase tracking-wide text-fg-subtle">
           {meshKindLabel(mesh)} · {mesh.name}

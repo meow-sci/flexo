@@ -4,7 +4,7 @@ import { historyCommands } from './editCommands';
 import { modsFolderCommands } from './fileCommands';
 import { customMeshInstanceCommands } from './addCommands';
 import { layerActivateCommands, layerSelectCommands } from './selectCommands';
-import { containerAidCommands, measurementAidCommands, seatCommands } from './toolsCommands';
+import { seatCommands } from './toolsCommands';
 
 /**
  * Every dynamic command provider (design: foundation §4 "Dynamic providers"). Anything
@@ -24,10 +24,9 @@ export const COMMAND_PROVIDERS: { id: string; commands: () => Command[] }[] = [
   { id: 'seats', commands: seatCommands },
   { id: 'customMeshInstances', commands: customMeshInstanceCommands },
   { id: 'projects', commands: projectCommands },
-  // INTERIM until P5A: both aid providers are deleted when the Outliner grows its Aids
-  // section, which is where measurements and reference containers get their real home.
-  { id: 'aids.measurements', commands: measurementAidCommands },
-  { id: 'aids.containers', commands: containerAidCommands },
+  // The two interim `aids.*` providers are gone: the Outliner's Aids section
+  // (`src/ui/outliner/AidsSection.tsx`) is the real home for the measurement and
+  // reference-container lists, so a second copy under Tools would be a duplicate surface.
   // Not list-shaped so much as capability-shaped: the Mods Folder submenu's rows depend on
   // the File System Access grant status (see modsFolderCommands).
   { id: 'modsFolder', commands: modsFolderCommands },

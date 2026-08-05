@@ -288,14 +288,6 @@ describe('menu transcription (authoritative tree)', () => {
       '  {provider:seats}',
       '  ─',
       '  Exit Seat View',
-      // INTERIM (not in the authoritative tree) until the Outliner's Aids section.
-      '─',
-      'Measurements ▸',
-      '  {provider:aids.measurements}',
-      'Containers ▸',
-      '  {provider:aids.containers}',
-      '  ─',
-      '  Accurate Warn Check',
     ]);
   });
 

@@ -179,7 +179,10 @@ is what makes Cancel unconditionally safe.
 | `⇧⌘K`, **Edit ▸ Begin Action Chain…**, or the ⌘K command palette (`chain.begin`, keywords "array grid radial ring repeat") | `beginActionChain()` — opens over the current selection; see the discard rule below |
 | The **Chain…** button in the left sidebar's multi-select focus card (`ui/build/MultiSelectPanel.tsx`) | `beginActionChain()` — the same entry point, same discard rule |
 | `mod+↵` | Apply — registry binding `chain.apply` at scope `surface:chain`, `enableOnFormTags: true` |
-| `Escape`, ✕, **Cancel** | Cancel — **rung 6 of the Escape ladder** |
+| `Escape`, ✕, **Cancel** | Cancel — **rung 6 of the Escape ladder**; a session with ≥1 step confirms first |
+| Dragging the ⠿ title strip | Moves the window; the position persists in `flexo:layout` → `float.chain` |
+| Dragging a step card's ⠿ grip | Reorders the steps (`moveChainOpTo`); the ▲▼ chevrons stay for keyboard and touch |
+| Switching modes with ≥1 step | Confirms — see "Build only" below |
 | Typing in the search field | Filters the command list; `↓` moves into it, `↵` on a row adds that step |
 | `↑`/`↓` in any number field | Step by the field's unit (Shift ⇒ ×10, Alt ⇒ ×0.1) — `useNumberDraft` semantics |
 
@@ -190,6 +193,19 @@ discarded silently** — `beginActionChain()` raises a "Discard chain (N steps)?
 EMPTY session is re-seeded from the current selection silently, and no session at all just opens
 one. The v1 `toggleChainPalette()` helper died with the floating SelectionToolbar that was its
 only caller — every entry point now goes through `beginActionChain()`.
+
+**Build only.** A chain session exists in Build mode and nowhere else, so:
+
+- `⇧⌘K` from another mode **switches to Build first**, then opens;
+- leaving Build with an EMPTY session closes it silently;
+- leaving Build with **≥1 step** raises the same discard confirm, worded for the mode switch:
+  *Discard* drops the session and leaves you in the new mode, *Cancel* puts you back in Build
+  with the chain intact. (A mode-exit hook cannot veto a switch — `setMode` is a one-way
+  choreography — so the prompt resolves it afterwards, and either answer restores the
+  invariant.)
+
+The chain is deliberately **not** a `$activeTool` tenant (foundation §2.6): it is a parallel
+session that legitimately co-exists with a tool, so measuring mid-chain is fine.
 
 **Open guards** (`tryOpenChain`, `src/ui/chain/openChainPalette.ts`), in order: no SubPart
 placements in the selection → the status bar's message channel flashes *"Select SubParts to
@@ -213,8 +229,8 @@ contract is unchanged and is what the rung declares: `preventDefault: false`, be
 `useNumberDraft` swallows Escape while a field edit is dirty (rung 1 — revert first, close
 second), and `enableWhileTyping` so the session still cancels from inside its own step fields.
 The rungs above it fire first, so a dirty field, an open menu/dialog and the ⌘K palette each
-take the first press. The ≥1-step discard confirm on Escape is not wired yet — today Escape
-cancels silently, exactly as in v1; it lands with the chain's FloatingWindow rehost.
+take the first press. Escape, the ✕ and the footer **Cancel** all run `cancelChainSession()`:
+**≥1 step raises the discard confirm, an empty session closes silently.**
 
 **Apply** reads `$chainEval` fresh, maps instances to `ChainCommitEntry[]`, commits, closes and
 flashes `Applied chain · +N SubParts` in the status bar's message channel (or `· N transformed`
@@ -222,9 +238,32 @@ when the chain created nothing). If a seed vanished between the last recompute a
 `applyActionChain` returns `-1` and the message says *"Chain not applied — seeds no longer
 exist"* rather than claiming success.
 
-While a session is open the status bar mirrors the chain window's footer as a read-only chip
+While a session is open the status bar mirrors the chain window's footer as a chip
 (`⛓ N instances · +M new`, or the evaluation error in red) — `ToolSegment.tsx`, fed by
-`$chainSession`/`$chainEval`.
+`$chainSession`/`$chainEval`. **Clicking it raises the chain window**, which is the way back
+to a window dragged behind something.
+
+## Where it lives — the chain window
+
+The session is hosted in `ChainWindow` (`src/ui/chain/ChainWindow.tsx`), one of exactly TWO
+floating windows v2 ships (the other is the gizmo Tool bar). It is a kit `FloatingWindow` with
+window id `chain`:
+
+- default anchor: top-left of the viewport cell, 8px in; **draggable** by its `⠿ Action Chain —
+  N seeds` strip, with `{x, y}` persisted under `flexo:layout` → `float.chain`;
+- **resizable** 300–420px (session-only width), above both sidebars at the `z.float` tier;
+- ✕ = Cancel (with the confirm rule above);
+- it stamps `data-surface="chain"`, which is how the `surface:chain` hotkey scope reaches it.
+
+**There is no focus trap, no overlay and no backdrop** — that is the non-modality constitution
+(DECISIONS.md), not an oversight.
+
+**Phone** (< 640px): the window is replaced by a **50% NON-blocking bottom sheet** (the kit
+`Sheet`'s `blocking={false}` mode, added for exactly this tenant). The viewport above it stays
+live — orbit and gizmo drags keep re-flowing the ghosts — the session survives dismiss and
+reopen, steps reorder with the ▲▼ chevrons only (touch drag between sheet rows is unreliable),
+the search field is not autofocused, and Apply/Cancel are buttons because `⌘↩` does not exist
+on touch.
 
 Per-op parameters are remembered across sessions in the module-private `flexo:chainDefaults`
 blob (written on every `updateChainOp`), so an accidental Escape loses the step *list*, not the
@@ -269,8 +308,9 @@ limits:
   most of the reuse; a preset library is a separate feature.
 - **Layer lock is checked at open, not at Apply** — locking a seed's layer mid-session does not
   block the commit.
-- Also out: viewport pivot picking (click-to-set `center`), a draggable palette, drag-reorder of
-  steps, per-instance jitter, expression inputs, per-ghost labels.
+- Also out: viewport pivot picking (click-to-set `center`), per-instance jitter, expression
+  inputs, per-ghost labels. (**A draggable/resizable window and step drag-reorder shipped** —
+  they were on this list in v1.)
 
 ## Tests
 
@@ -291,8 +331,9 @@ resulting selection, and the `-1` no-op path.
 | `src/three/chainMath.ts` | `evalChain` + `rotatedPositionOnlyTransform` + the caps (three.js math only) |
 | `src/three/chainEval.ts` | `$chainEval` — the computed that resolves seeds against `$part` and evaluates |
 | `src/three/ChainPreviewLayer.ts` | the ghost overlay |
-| `src/ui/chain/openChainPalette.ts` | `beginActionChain()` (the `chain.begin` command) + `discardChainAndRestart()`, and the open guards they share |
-| `src/ui/chain/ChainPalette.tsx`, `ChainStepCard.tsx`, `chainCommands.ts` | the floating palette, its step cards, and the command catalog |
+| `src/ui/chain/openChainPalette.ts` | `beginActionChain()` (the `chain.begin` command), `cancelChainSession()`, the confirm handlers, the leave-Build mode hook, and the open guards they share |
+| `src/ui/chain/applyChainSession.ts` | `applyChainSession()` — the Apply path, shared by the footer button and the `chain.apply` binding |
+| `src/ui/chain/ChainWindow.tsx`, `ChainStepCard.tsx`, `chainCommands.ts` | the floating window (and its phone sheet), the step cards, and the command catalog |
 | `src/state/editorStore.ts` | `applyActionChain` + `ChainCommitEntry` + `nextChainInstanceId` |
 
 Layering follows [architecture.md](./architecture.md): the session store stays React- and

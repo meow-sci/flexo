@@ -1,50 +1,105 @@
 import { useRef, useState } from 'react';
 import { useStore } from '@nanostores/react';
-import { X } from 'lucide-react';
-import { $chainSession, addChainOp, closeChain, type ChainOpKind } from '../../state/chainStore';
+import { $chainSession, addChainOp, type ChainOpKind } from '../../state/chainStore';
 import { $chainEval } from '../../three/chainEval';
 import { PREVIEW_MAX_GHOSTS } from '../../three/ChainPreviewLayer';
 import {
   Button,
+  Dialog,
+  FloatingWindow,
   GridList,
   GridListItem,
   SearchField,
+  Sheet,
   cn,
   keyLabel,
-  panelChrome,
   useIsPhone,
 } from '../kit';
 import { CHAIN_COMMANDS, type ChainCommandDef } from './chainCommands';
 import { ChainStepCard } from './ChainStepCard';
 import { applyChainSession } from './applyChainSession';
-
-const CHROME = `${panelChrome} p-3`;
+import { cancelChainSession } from './openChainPalette';
 
 /**
- * The action-chain command palette: a floating, NON-MODAL card over the viewport that
- * builds a list of steps and applies them to the frozen seed selection in one undo step.
+ * The **Chain window** — one of exactly two floating windows v2 ships (foundation §6.2;
+ * design-build-mode.md §9.2). It replaces v1's fixed-position `ChainPalette` card; the
+ * guts (search + command list, step cards, footer counts) are the same, rehosted.
  *
- * Non-modal on purpose — orbiting, gizmo drags, rotate/nudge keys and undo all stay live
- * while it is open, and because the preview re-evaluates from the CURRENT document,
- * tweaking a seed while watching the array re-flow is the whole point of the feature.
+ * **NON-MODAL by constitution** (DECISIONS.md standing constraints): orbiting, gizmo
+ * drags, the W/S rotate keys, arrow nudge, undo and the measure tool all stay live while
+ * it is open, and because `$chainEval` re-evaluates against the CURRENT document, nudging
+ * a seed and watching the array re-flow is the whole point of the feature. There is
+ * deliberately no focus trap, no overlay and no backdrop — on the phone too, which is why
+ * the sheet below is `blocking={false}`.
  *
- * The card is left-anchored so it never fights the right-side inspector; on a phone it
- * becomes a bottom sheet above the inspector FAB.
- *
- * Self-gating: it renders nothing without a session, so `app.tsx` can mount it
- * unconditionally. Nothing here touches the document — the only write is Apply.
+ * What the window ADDS over v1: a drag strip (position persisted in `flexo:layout` →
+ * `float.chain`), a 300–420px resize handle, drag-reorder of steps by their ⠿ grip, and a
+ * ✕ that asks before discarding a session with steps.
  *
  * **Its two keys are registry bindings, not component-local hooks** (design:
- * design-system-services §4.4 "migrated INTO the registry"): `⌘↩` is `chain.apply` at
- * `surface:chain` scope, and Escape is rung 6 of the Escape ladder. The v1 local handler's
- * "ignore Escape while a dialog is open" guard survives as ladder ORDER — dialog dismiss is
- * rung 2, above chain cancel, so an Escape aimed at the discard-confirm can no longer throw
- * away the very session that confirm protects.
+ * design-system-services §4.4): `⌘↩` is `chain.apply` at `surface:chain` scope (which is
+ * active whenever a SESSION exists, regardless of focus), and Escape is rung 6 of the
+ * Escape ladder — registered WITHOUT preventDefault so `useNumberDraft`'s dirty-field
+ * revert still wins (v1 contract, verbatim).
+ *
+ * Self-gating: renders nothing without a session, so `app.tsx` mounts it unconditionally.
+ * Nothing here touches the document — the only write is Apply.
+ *
+ * **Undo enrollment: NONE.** The session is ephemeral; `applyActionChain` pushes the ONE
+ * step, from `applyChainSession`.
  */
-export function ChainPalette() {
+export function ChainWindow() {
+  const session = useStore($chainSession);
+  const isPhone = useIsPhone();
+
+  if (!session) return null;
+
+  const seedCount = session.seedIds.length;
+
+  // Phone: a 50% NON-blocking sheet (foundation §12 "Floating windows"). The session
+  // survives dismiss/reopen because it lives in the store, not in this component.
+  if (isPhone) {
+    return (
+      <Sheet
+        isOpen
+        onOpenChange={(open) => {
+          if (!open) cancelChainSession();
+        }}
+        detent="50"
+        blocking={false}
+        ariaLabel="Action chain"
+      >
+        <Dialog className="min-h-0 flex-1 overflow-y-auto p-2">
+          <ChainBody phone />
+        </Dialog>
+      </Sheet>
+    );
+  }
+
+  return (
+    <FloatingWindow
+      id="chain"
+      title={`Action Chain — ${seedCount} ${seedCount === 1 ? 'seed' : 'seeds'}`}
+      defaultAnchor={{ h: 'left', v: 'top', dx: 8, dy: 8 }}
+      minSize={{ w: 300, h: 120 }}
+      resizable={{ minW: 300, maxW: 420 }}
+      onClose={cancelChainSession}
+    >
+      <div className="max-h-[70vh] p-2">
+        <ChainBody />
+      </div>
+    </FloatingWindow>
+  );
+}
+
+/**
+ * The palette guts, shared verbatim by both hosts. Split out of {@link ChainWindow} so the
+ * desktop window and the phone sheet mount the SAME component rather than two forks
+ * (foundation §12: "no bespoke phone forks").
+ */
+function ChainBody({ phone = false }: { phone?: boolean }) {
   const session = useStore($chainSession);
   const evalState = useStore($chainEval);
-  const isPhone = useIsPhone();
   const [query, setQuery] = useState('');
   // The kit SearchField owns its <input>, so reach it through the wrapper to restore
   // focus after a command is chosen (keeps type → Enter → type → Enter flowing).
@@ -70,34 +125,9 @@ export function ChainPalette() {
   const error = result?.error ?? null;
   const totalInstances = result?.totalInstances ?? 0;
   const newCount = result?.newCount ?? 0;
-  const seedCount = session.seedIds.length;
 
   return (
-    <div
-      // `surface:chain` for the scoped hotkey registry (hotkeyStore §4.2). The scope itself
-      // follows the SESSION, not this focus stamp — the card is non-modal and ⌘↩ must work
-      // from the viewport — but the stamp is what keeps focus inside it from reading as
-      // "some other surface". P5B re-stamps when the card moves into a FloatingWindow.
-      data-surface="chain"
-      className={cn(
-        'pointer-events-auto z-30 flex flex-col',
-        isPhone
-          ? 'absolute inset-x-2 bottom-20 max-h-[45vh]'
-          : 'absolute left-3 top-16 max-h-[calc(100vh-8rem)] w-[340px]',
-        CHROME,
-      )}
-    >
-      <div className="mb-2 flex shrink-0 items-center gap-2">
-        <span className="text-[11px] uppercase tracking-wide text-fg-subtle">Action chain</span>
-        <span className="text-[11px] text-fg-muted">
-          · {seedCount} {seedCount === 1 ? 'seed' : 'seeds'}
-        </span>
-        <span className="flex-1" />
-        <Button size="sm" aria-label="Close" onPress={closeChain}>
-          <X size={14} />
-        </Button>
-      </div>
-
+    <div className="flex min-h-0 flex-col">
       <div ref={searchRef} className="shrink-0">
         <SearchField
           size="sm"
@@ -105,7 +135,9 @@ export function ChainPalette() {
           placeholder="Add step — translate, radial, grid…"
           value={query}
           onChange={setQuery}
-          autoFocus
+          // Never on touch: an autofocused field raises the software keyboard over the
+          // viewport the session exists to keep visible (the browsers' phone rule, §11.5).
+          autoFocus={!phone}
         />
       </div>
 
@@ -133,7 +165,15 @@ export function ChainPalette() {
       {session.ops.length > 0 && (
         <div className="mt-2 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
           {session.ops.map((op, i) => (
-            <ChainStepCard key={op.id} op={op} index={i} total={session.ops.length} />
+            <ChainStepCard
+              key={op.id}
+              op={op}
+              index={i}
+              total={session.ops.length}
+              // Touch drag between sheet rows is unreliable, so the phone reorders with the
+              // ▲▼ chevrons only (design-build-mode.md §11 item 5).
+              reorderable={!phone}
+            />
           ))}
         </div>
       )}
@@ -153,7 +193,7 @@ export function ChainPalette() {
           )}
         </span>
         <div className="flex items-center justify-end gap-2">
-          <Button size="sm" variant="ghost" onPress={closeChain}>
+          <Button size="sm" variant="ghost" onPress={cancelChainSession}>
             Cancel
           </Button>
           <Button
@@ -162,7 +202,8 @@ export function ChainPalette() {
             isDisabled={error !== null || totalInstances === 0}
             onPress={applyChainSession}
           >
-            Apply {keyLabel('mod')}↵
+            {/* No ⌘↩ on touch — the chord does not exist there (design §11 item 5). */}
+            Apply {phone ? '' : `${keyLabel('mod')}↵`}
           </Button>
         </div>
       </div>

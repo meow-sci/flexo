@@ -14,7 +14,9 @@ the 3D scene subscribes with vanilla `subscribe()`, React reads via
 | `$activeLayerId` | `string` | Layer new items land in. Ephemeral (not persisted, not undone); clamped to a live layer. See [layers.md](./layers.md). |
 | `$chainSession` | `ChainSession \| null` | The open action-chain session (`src/state/chainStore.ts`): frozen seed `instanceId`s + the ordered step list. **Ephemeral by design** — never persisted, never undone; the document is untouched until Apply, which is what makes Cancel unconditionally safe. The only persisted piece is the module-private `flexo:chainDefaults` (last-used parameters per op kind). See [action-chains.md](./action-chains.md). |
 | `$toolMode` | `'translate'\|'rotate'\|'scale'` | Drives the 3D gizmo. |
-| `$snap` | `{ translate?, rotateDeg? }` | Grid / rotation snap (0/undefined = off). |
+| `$gizmoSpace` | `'world' \| 'local'` | Which axes the gizmo's handles use. Persisted (`flexo:gizmoSpace`), never undone; the Tool bar's **W/L** segmented control and the `tool.toggleGizmoSpace` command are its writers. |
+| `$snap` | `{ translate?, rotateDeg? }` | Grid / rotation snap (0/undefined = off). **It has real UI now** — see "Snap" below; nothing else writes it. |
+| `$clipboard` | `Clipboard \| null` | The copy/cut buffer: placements, connectors, kittens, colliders, IVA seats **and lights**, deep-cloned at copy time. Ephemeral, never undone. |
 | `$canUndo` / `$canRedo` | `boolean` | Enablement for the menubar ↶ ↷ pair and the `edit.undo`/`edit.redo` commands. |
 
 (`$lightEditContext` is ephemeral too — one atom, so the gizmo's write-back frame and the
@@ -87,6 +89,40 @@ sidebar atom (`'assets' | 'anim' | 'engine'`) is gone, and every consumer reads 
 Two derived flags moved with it: `$isPoseEditing` and `$isExhaustPlacing` now derive from
 `$mode` (plus their own area state) instead of the deleted inspector atom.
 
+### The transient tools — one slot, four tenants
+
+A tool is layered ON TOP of a mode, never a mode of its own. Each one declares its rules
+once, at module scope in the store that owns its state, via `registerTool(id, def)`:
+
+| Tool | Allowed modes | On mode switch | Status segment | Escape | Owner |
+|---|---|---|---|---|---|
+| `measure` | all | **cancels** (including a half-placed pick) | `Measure — click first point` → `…second point`, with an `Esc` chip | rung 5 — cancels the pending point AND disarms | `measurementStore.ts` |
+| `seat-view` | all | **survives** (`survivesModeSwitch: true` — it is a camera state, not a mode-local affordance) | `Seat 2 / 4` plus the interactive `◀ ▶ ⓘ Exit` controls | rung **8** (never `preventDefault`ed — v1 contract) | `ivaStore.ts` |
+| `exhaust` | **Engine only** | auto-off (the mode disallows it, so `setMode` cancels it) | `Exhaust: NozzleB #2 · FX` | rung 5 | `engineStore.ts` |
+| `marquee` | all | cancels | `Box select — drag to select` → `…release to select` | rung 5 | `EditorScene.ts` |
+
+Two invariants fall out of the single slot and are worth stating plainly:
+
+- **Arming any tool cancels the previous one.** Pressing `M` while seated exits seat view;
+  arming the marquee while measuring discards the half-placed point. This replaced v1's
+  ad-hoc OR of per-feature suppression flags.
+- **Escape rung 5 is generic.** It runs `disarmTool()`, which runs whichever `onCancel` the
+  armed tool registered. Adding a tool needs no new rung. (Seat view is the exception — it
+  keeps rung 8 so its Escape can still reach a dialog underneath.)
+
+A tool's own flag atom (`$measureTool`, `$engineExhaustGizmo`) survives as a MIRROR of the
+slot, because the slot models "which tool", not "which kind of pick". Only the tool's
+public setter writes both; an `onCancel` writes the mirror directly, never back through the
+setter, or arming a successor would recurse.
+
+### Snap
+
+`snapStore.ts` (`flexo:snapEnabled` / `flexo:snapTranslateStep` / `flexo:snapRotateStep`)
+computes and writes `$snap`; `TransformGizmo` reads `$snap` exactly as it always did. The
+effective state is `enabled XOR invert`, where `invert` is "⌃ held during a drag" — holding
+⌃ gives you the temporary opposite of whatever the toggle says. UI: the Tool bar's magnet +
+its step popover, and the status bar's snap chip. Snap is view state: **never undoable**.
+
 Scope state for the keyboard lives beside it in `src/state/hotkeyStore.ts`
 (`$focusedSurface`, `$dialogOpen`, `$activeScopes`) — a binding declares one scope string and
 is enabled iff that string is in `$activeScopes`. See
@@ -157,8 +193,8 @@ Select picks are **discrete**; free-text/number field edits are **streaming**.
 
 **Action-chain actions** (see [action-chains.md](./action-chains.md)) live in two places. The
 **session** is `src/state/chainStore.ts` — `openChain(seedIds)` / `closeChain()` /
-`addChainOp(kind)` / `updateChainOp(id, patch)` / `removeChainOp(id)` / `moveChainOp(id, ±1)`,
-plus `defaultOp` and `clampOp`. **None of them push undo**: the session is ephemeral UI state
+`addChainOp(kind)` / `updateChainOp(id, patch)` / `removeChainOp(id)` / `moveChainOp(id, ±1)`
+/ `moveChainOpTo(id, index)` (the drag-reorder commit), plus `defaultOp` and `clampOp`. **None of them push undo**: the session is ephemeral UI state
 (selection-tier), not document state, so the invariant below does not apply to them.
 `updateChainOp` also writes the op's parameters to the persisted `flexo:chainDefaults` blob,
 which `defaultOp` reads back defensively (unknown or malformed fields degrade to the hardcoded
@@ -174,12 +210,30 @@ Conventions:
   (e.g. `Core.Screw.A` → `a_1`, `a_2`).
 - Mutating actions clone `$part` (`structuredClone`), edit, then `$part.set(next)`.
 
+### Duplicate, clipboard, delete
+
+- **`duplicateSelected({ offset })`** — one undo step `'duplicate'` over every selected kind.
+  By default each copy is offset by the **nudge chip's current step along its current axis**,
+  so copies are never invisibly stacked on their originals; `{ offset: false }` is the
+  in-place variant the ⌥-drag gesture uses (the drag itself supplies the displacement). The
+  copies become the selection.
+- **⌥-drag duplicate** — holding ⌥ when a gizmo drag STARTS duplicates first and then drags
+  the copies, so the whole gesture is one undo step and a single ⌘Z removes the copies.
+- **Clipboard** — `copySelected()` / `cutSelected()` / `pasteClipboard()`. All six kinds are
+  carried, **lights included** (a v1 gap). `cutSelected` copies and deletes in ONE undo step
+  labelled `'cut'`. Paste restores in place with regenerated ids, keeping each entity's
+  original layer where that layer still exists.
+- **Delete policy** — one rule (foundation §14.3): a small delete just happens and flashes an
+  inline `[Undo]` in the status message channel; a large one (above the command's threshold)
+  raises the status bar's inline confirm strip rather than a modal.
+
 ### Undo/redo invariant (must maintain)
 
 History snapshots **`$part` only** (the serialized document: `partId`, `editorTags`,
 `gameData`, `layers`, `placements`, `connectors`, `colliders`, `ivaSeats`, `lights`,
 `internalFlags`, incl. each entity's `layerId`). Selection, `$toolMode`, `$snap` and
-`$activeLayerId` are ephemeral UI and are intentionally excluded; selection + active layer are
+`$activeLayerId` are ephemeral UI and are intentionally excluded (so are `$gizmoSpace` and
+the `snapStore` keys, which are persisted view preferences); selection + active layer are
 *clamped* (not restored) after undo/redo. So are the seat-view and seat-aim atoms (`$seatView`
 / `$seatLook` in `ivaStore.ts`, `$ivaSeatAimRequest` in `ivaSeatStore.ts`) and the light
 editing context (`$lightEditContext`) — an aim request only enters history through the
@@ -305,15 +359,20 @@ Shift+click on pointer-down (before react-aria's own, anchorless extension runs)
   `gameData` sections; see [xml-io.md](./xml-io.md)), dialog id `'part-data'`, reached
   from the ⌘K palette (`data.partData`) until Data mode gives it a permanent home.
   `ExportDialog.tsx` exports (dialog id `'export-ksa'`, File ▸ Export to KSA… / ⌘E).
-- `chain/ChainPalette.tsx` / `chain/ChainStepCard.tsx` — the floating, **non-modal**
-  action-chain palette (`⇧⌘K` / Edit ▸ Begin Action Chain… / the selection toolbar's
-  Chain button; self-gates on
-  `$chainSession`) and its per-step parameter cards. Applying is one undo step; see
+- `chain/ChainWindow.tsx` / `chain/ChainStepCard.tsx` — the **non-modal** action-chain
+  session (`⇧⌘K` / Edit ▸ Begin Action Chain… / the multi-select panel's Chain… / the ⌘K
+  palette; self-gates on `$chainSession`) and its per-step parameter cards. It is one of the
+  two floating windows v2 ships. Applying is one undo step; see
   [action-chains.md](./action-chains.md).
+- `build/ToolBarWindow.tsx` — the other floating window: Move/Rotate/Scale, the **W/L**
+  gizmo-space toggle and the snap magnet + step popover. `ToolBarStrip` is its phone
+  variant, a pinned strip above the condensed status bar.
 - `ModeSidebar.tsx` — the right sidebar's body, one switch on `$mode` (it replaced v1's
-  `InspectorContent`). Build renders the assets toolbar + list; Animation and Engine render
-  their panels; Data and Surface show an interim placeholder naming where those surfaces
-  still live.
+  `InspectorContent`). Build renders the Outliner; Animation and Engine render their
+  panels; Data and Surface show an interim placeholder naming where those surfaces still
+  live. On phone the same component is the **Panel sheet** (re-tap the active mode tab),
+  and `MobileInspector.tsx` is the **Inspector sheet** hosting `ModeFocusEditor` — the same
+  left/right split the desktop has.
 - `EnginePanel.tsx` / `EngineToolbar.tsx` — the full-sidebar **Engine Designer**
   (`$mode === 'engine'`, ephemeral atoms in `engineStore.ts`) with a live
   thrust/Isp readout; `EngineSections.tsx` holds the reusable combustor/nozzle/controller/

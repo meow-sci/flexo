@@ -2,9 +2,7 @@ import type { Keys, Options } from 'react-hotkeys-hook';
 import { $paletteOpen, closePalette, runCommand } from '../../state/commandStore';
 import { closeDialog, isDialogOpen } from '../../state/dialogStore';
 import { $activeScopes, $dialogOpen } from '../../state/hotkeyStore';
-import { $chainSession, closeChain } from '../../state/chainStore';
-import { $measureTool, setMeasureTool } from '../../state/measurementStore';
-import { $isExhaustPlacing, setEngineExhaustGizmo } from '../../state/engineStore';
+import { $chainSession } from '../../state/chainStore';
 import { $activeJointId, $editKeyframeId } from '../../state/animationStore';
 import { $activeTool, $mode, disarmTool, MODES } from '../../state/modeStore';
 import { $seatView } from '../../state/ivaStore';
@@ -14,6 +12,7 @@ import { FAST_NUDGE_MULTIPLIER, nudgeSelectionBy } from '../../three/nudgeSelect
 import { changeNudgeAxis, lowerNudgeStep, raiseNudgeStep } from '../nudgeControls';
 import { changeRotateAxes, lowerRotateStep, raiseRotateStep } from '../rotateControls';
 import { applyChainSession } from '../chain/applyChainSession';
+import { cancelChainSession } from '../chain/openChainPalette';
 import { normalizeKeys, scopeRank, type Scope } from './keys';
 import { isInteractiveCollectionFocus } from './typingGuard';
 import { dispatchEsc, registerEscRung } from './escLadder';
@@ -540,12 +539,8 @@ export const ALL_BINDINGS: HotkeyBinding[] = HOTKEY_GROUPS.flatMap((g) => g.bind
 //
 // | Binding (authoritative-table row)                                        | Owning phase |
 // |--------------------------------------------------------------------------|--------------|
-// | measure / seat-view / exhaust arming routed through `$activeTool`,        | P5B (F-section) |
-// |   plus the tool definitions and the status-bar tool segments              |              |
-// | chain discard-confirm on Esc / mode switch / ⇧⌘K re-invoke (LOCKED)       | P5B.28       |
 // | `surface:data-navigator` edit mirrors                                     | P6           |
 // | `surface:engine-tree` edit mirrors · `tool:exhaust` `,`/`.` target cycle  | P7           |
-// |   + the rung-5 re-point onto `$activeTool`                                |              |
 // | `surface:glow-paint` `⌘Z` / `⇧⌘Z` per-stroke paint undo                   | P8           |
 // | `mode:animation` `Space` · `,` `.` · `K` (transport / prev-next key /     | P11 (timeline) |
 // |   insert key at playhead)                                                 |              |
@@ -590,19 +585,13 @@ registerEscRung({
   rung: 5,
   id: 'tool.cancel',
   label: 'Cancel the armed tool',
-  // The marquee is the first tenant of the `$activeTool` slot, so it cancels through
-  // `disarmTool` → its registered `onCancel` (EditorScene restores orbit + picking and
-  // drops the rect). P5B routes measure/exhaust through the same slot; until then their
-  // v1 flags are read directly.
-  when: () =>
-    $activeTool.get() !== null || $measureTool.get() !== 'none' || $isExhaustPlacing.get(),
-  run: () => {
-    if ($activeTool.get() !== null) disarmTool();
-    // EditorScene's existing $measureTool subscription cancels the half-placed pick and
-    // restores the cursor, so disarming is the whole cancel.
-    else if ($measureTool.get() !== 'none') setMeasureTool('none');
-    else setEngineExhaustGizmo(false);
-  },
+  // Fully generic since P5B.25–27: EVERY transient tool is a tenant of the single
+  // `$activeTool` slot, so one `disarmTool()` runs whichever `onCancel` is registered —
+  // the marquee's rect teardown, the measure tool's half-placed pick + crosshair, exhaust
+  // placement's gizmo. Seat view is the one tool NOT cancelled here: it has its own rung
+  // (8) because its contract is "never preventDefault".
+  when: () => $activeTool.get() !== null && $activeTool.get() !== 'seat-view',
+  run: () => disarmTool(),
   preventDefault: true,
 });
 
@@ -611,9 +600,9 @@ registerEscRung({
   id: 'chain.cancel',
   label: 'Cancel the action chain',
   when: () => $chainSession.get() !== null,
-  // P4 keeps v1's silent cancel. The ≥1-step discard-confirm (LOCKED) ships with the chain
-  // FloatingWindow in P5B.
-  run: () => closeChain(),
+  // ≥1 step raises the discard-confirm (LOCKED); an empty session closes silently. Same
+  // call the window's ✕ and its footer Cancel make.
+  run: () => cancelChainSession(),
   // v1 contract: Escape must still reach dialogs/popovers, and useNumberDraft's dirty
   // revert (rung 1) must win over cancelling the session.
   preventDefault: false,

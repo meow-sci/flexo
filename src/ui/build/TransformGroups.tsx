@@ -1,5 +1,6 @@
-import { SectionTitle } from '../kit';
+import { SectionTitle, useIsPhone } from '../kit';
 import { NumberField } from '../NumberField';
+import { TouchNudgeCluster } from './TouchNudgeCluster';
 import { DEG2RAD, RAD2DEG } from '../format';
 import {
   pushUndo,
@@ -59,6 +60,8 @@ export function TransformGroups({
   locked: boolean;
   third: ThirdGroup;
 }) {
+  const isPhone = useIsPhone();
+
   const commit = (mutate: (t: PlacementTransform) => void) => {
     const next: PlacementTransform = {
       position: { ...transform.position },
@@ -140,6 +143,10 @@ export function TransformGroups({
           </p>
         </div>
       )}
+      {/* The phone's answer to the arrow-key nudge and the W/S rotate keys, appended to the
+          transform card exactly where design-build-mode.md §11 item 2 puts it. Desktop
+          keeps the status-bar chips instead. */}
+      {isPhone && <TouchNudgeCluster locked={locked} />}
     </>
   );
 }

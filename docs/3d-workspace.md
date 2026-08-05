@@ -97,13 +97,35 @@ Async builds (`SubPartObject.create`) load geometry + material in parallel.
   rectangle itself is a **DOM** overlay (`src/ui/MarqueeOverlay.tsx`, `z.canvasOverlay`), so
   dragging it never wakes the on-demand render loop. Esc cancels mid-drag (Escape-ladder
   rung 5, via the `$activeTool` slot's `onCancel`). No marquee ever creates an undo step.
-- Gizmo: mode follows `$toolMode`; snap follows `$snap`
+- Gizmo: mode follows `$toolMode`; the handle axes follow `$gizmoSpace` (**W** = world,
+  **L** = the entity's own axes); snap follows `$snap`
   (`setTranslationSnap`/`setRotationSnap`). On drag start it pushes one undo
   snapshot; on `objectChange` it reads the transform via
   `coords.readPlacementTransform` and calls `updatePlacementTransform`.
+- **⌥-drag duplicate**: holding ⌥ when a gizmo drag STARTS duplicates the selection in place
+  and drags the copies. The duplicate and the movement land in ONE undo step, so a single ⌘Z
+  removes the copies rather than leaving them stacked on the originals.
+- **Snap and the ⌃ invert**: snap is on/off + a translate step (m) and a rotate step (°),
+  persisted in `snapStore` (`flexo:snapEnabled` / `flexo:snapTranslateStep` /
+  `flexo:snapRotateStep`) and applied to the gizmo through the existing `$snap` atom. Holding
+  **⌃ during a drag** gives the temporary OPPOSITE of the toggle — snap-off users get one
+  snapped drag, snap-on users get one free one. Scale never snaps.
 
 Because the gizmo writes through the store and the scene reconciles from the store,
 the transform [inspector](./editor-state.md) and the gizmo are two-way synced.
+
+### The Tool bar window
+
+Gizmo *parameters* live in a floating **Tool bar** (`src/ui/build/ToolBarWindow.tsx`), one of
+the two windows v2 ships: Move / Rotate / Scale, the **W/L** space toggle, and the snap magnet
+with a ▾ popover carrying the two step sizes. It appears whenever a gizmo target exists (a
+selection, a posed joint, or an exhaust being placed), drags by its strip, remembers its
+position in `flexo:layout` → `float.toolbar`, and hides from **Window ▸ Tool Bar**. Selection
+ACTIONS (duplicate / chain / delete) are deliberately NOT here — they are left-sidebar and Edit
+menu material. On phone it is a pinned strip above the condensed status bar (`ToolBarStrip`).
+
+The tool switcher reads `$effectiveToolMode`, not `$toolMode`, so exhaust placement's
+Scale→Move clamp is displayed truthfully instead of showing dead handles.
 
 ### The scale gizmo as a dimension editor
 
@@ -282,7 +304,7 @@ Outliner/asset list keeps its own row navigation. They stay live in *every* mode
 | `↑` `↓` · `⇧↑` `⇧↓` · `←` `→` · `⇧←` `⇧→` | Nudge · fast nudge · cycle nudge axis · cycle nudge step |
 | `F` | Frame Selection (above) |
 | `T` / `⇧T` | Cycle the gizmo tool Move → Rotate → Scale (forward / back) |
-| `M` | Arm the point-to-point measure tool |
+| `M` | Arm the point-to-point measure tool (`Esc` cancels — see below) |
 | `⌘A` · `⌥⌘A` · `⇧⌘I` | Select all · deselect · invert |
 | `⌘C` `⌘X` `⌘V` `⌘D` `⌫` | Copy · cut · paste in place · duplicate · delete |
 
@@ -295,6 +317,37 @@ field revert → menu/popover/dialog dismiss → palette close → **gizmo drag 
 armed-tool cancel → chain cancel → animation unwind → seat-view exit → nothing. Escape never
 clears the selection and never leaves a mode. The gizmo rung is the scene's: `$gizmoCancel`
 makes `TransformControls.reset()` restore the drag-start transform.
+
+The armed-tool rung is fully generic: it runs `disarmTool()` on the single `$activeTool` slot,
+so it cancels the marquee, the measure tool (pending point included) and exhaust placement
+without knowing anything about them. Seat view keeps its own rung further down, because its
+Escape must never be `preventDefault`ed. See
+[editor-state.md](./editor-state.md#the-transient-tools--one-slot-four-tenants) for the tenant
+table.
+
+## Measure — the point-to-point tool
+
+`M` (or **Tools ▸ Measure Point-to-Point**, the Outliner's Aids `＋ p2p`, or the ⌘K palette)
+arms it in the `$activeTool` slot: crosshair cursor, click-selection suppressed, gizmo
+untouched. The first click raycasts the part meshes and snaps to the **nearest face vertex**,
+falling back to the Y=0 ground plane in empty space; the second completes the measurement,
+which activates (taking the left sidebar's focus slot) and disarms the tool. More than 4px of
+pointer movement is an orbit, not a pick. One undo step, `'add measurement'`, on completion.
+
+The status bar's tool segment reads `Measure — click first point` and then
+`Measure — click second point`, and the left sidebar shows a tool parameter card naming the
+placed point (`A placed at (x, y, z) — click point B`). Escape cancels the pending point and
+disarms in one press; switching modes cancels it, half-placed pick and all.
+
+## Display Filters
+
+**View ▸ Display Filters** toggles whole entity KINDS (connectors, colliders, IVA seats,
+lights, kittens, measurement aids) independently of layers — `viewStore.$kindVisibility`, a
+persisted per-browser view preference (`flexo:kindVisibility`), never document state and never
+undone. `EditorScene.isKindDisplayed` is the ONE predicate the three enforcement sites share:
+`applyLayerView` composes it into `group.visible`, the click-select guards read it, and so does
+the marquee's box projection — so a hidden kind is invisible, unclickable and unmarquee-able by
+the same rule a hidden LAYER is. SubParts have no filter and are always displayed.
 
 ## Layer visibility & lock
 

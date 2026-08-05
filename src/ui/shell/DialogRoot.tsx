@@ -16,7 +16,11 @@ import { CustomTextureDialog } from '../CustomTextureDialog';
 import { CreateMeshDialog } from '../CreateMeshDialog';
 import { MaterialDialog } from '../MaterialDialog';
 import { ConfirmDialog } from '../kit';
-import { discardChainAndRestart } from '../chain/openChainPalette';
+import {
+  discardChainAndRestart,
+  discardChainSession,
+  keepChainInBuild,
+} from '../chain/openChainPalette';
 
 /**
  * The single mount point for every overlay dialog (design:
@@ -90,33 +94,54 @@ export function DialogRoot() {
       return <HelpDialog isOpen onOpenChange={dismiss} />;
     case 'about':
       return <AboutDialog isOpen onOpenChange={dismiss} />;
-    // A chain session with steps is never discarded silently (design:
-    // design-system-services.md §3.5). ConfirmDialog is blessed here because this IS the
+    // A chain session with steps is never discarded silently (LOCKED — DECISIONS.md #7;
+    // design-build-mode.md §9.1/§9.2). ConfirmDialog is blessed here because this IS the
     // top-level confirm — the chain window is non-modal, not a dialog.
-    case 'chain-discard-confirm':
+    //
+    // Three flavours, one dialog, distinguished by the params the raiser passes:
+    //  · re-invoke (⇧⌘K over an open session) — discard and RE-SEED from the selection;
+    //  · cancel (✕ / footer Cancel / Esc rung 6) — discard and open nothing;
+    //  · leaving Build — discard and stay in the new mode, or decline and go back to Build,
+    //    because a session may only exist in Build (foundation §2.6).
+    case 'chain-discard-confirm': {
+      const params = chainConfirm(open.params);
       return (
         <ConfirmDialog
           isOpen
           onOpenChange={dismiss}
-          title={`Discard chain (${chainSteps(open.params)} steps)?`}
-          text="The chain has unapplied steps. Discarding starts a fresh chain over the current selection."
+          title={`Discard chain (${params.steps} steps)?`}
+          text={
+            params.leavingBuild
+              ? 'Action chains live in Build mode. The chain has unapplied steps — discard them, or cancel to stay in Build.'
+              : params.close
+                ? 'The chain has unapplied steps. Discarding closes the chain; nothing in the document changes.'
+                : 'The chain has unapplied steps. Discarding starts a fresh chain over the current selection.'
+          }
           confirmLabel="Discard"
           confirmVariant="danger"
           onConfirm={() => {
-            discardChainAndRestart();
+            if (params.close) discardChainSession();
+            else discardChainAndRestart();
             closeDialog();
           }}
+          onCancel={params.leavingBuild ? keepChainInBuild : undefined}
         />
       );
+    }
     // Hosts are added here as each dialog is rehosted onto dialogStore.
     default:
       return null;
   }
 }
 
-/** Step count carried by `'chain-discard-confirm'` params. */
-function chainSteps(params: unknown): number {
-  return (params as { steps?: number } | undefined)?.steps ?? 0;
+/** The `'chain-discard-confirm'` params, defaulted to the re-invoke flavour. */
+function chainConfirm(params: unknown): { steps: number; close: boolean; leavingBuild: boolean } {
+  const raw = params as { steps?: number; close?: boolean; leavingBuild?: boolean } | undefined;
+  return {
+    steps: raw?.steps ?? 0,
+    close: raw?.close === true,
+    leavingBuild: raw?.leavingBuild === true,
+  };
 }
 
 /** react-aria's `onOpenChange` contract → `closeDialog()`. Escape-ladder rung 2. */

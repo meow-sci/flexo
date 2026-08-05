@@ -31,7 +31,8 @@ const ALLOWLIST = [
   'src/ui/LoadProgress.tsx',
   'src/ui/ManageTexturesPanel.tsx',
   'src/ui/ViewportDropZone.tsx',
-  'src/ui/chain/ChainPalette.tsx',
+  // ChainPalette.tsx left with P5B.28 — the chain session now lives in a `FloatingWindow`,
+  // which takes its stacking from the `z` ladder.
 ];
 
 function walk(dir: string, out: string[]): string[] {

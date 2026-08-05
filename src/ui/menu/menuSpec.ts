@@ -302,27 +302,9 @@ const TOOLS_MENU: TopMenu = {
       label: 'Sit in Seat',
       entries: [{ kind: 'provider', providerId: 'seats' }, separator, command('seat.exit')],
     },
-    // ── INTERIM until P5A ──────────────────────────────────────────────────────────
-    // Not in the authoritative tree: these two submenus keep the measurement and
-    // reference-container LISTS reachable after the v1 Measure popover dies. The
-    // Outliner's Aids section replaces them and both providers are deleted then.
-    separator,
-    {
-      kind: 'submenu',
-      id: 'tools.measurements',
-      label: 'Measurements',
-      entries: [{ kind: 'provider', providerId: 'aids.measurements' }],
-    },
-    {
-      kind: 'submenu',
-      id: 'tools.containers',
-      label: 'Containers',
-      entries: [
-        { kind: 'provider', providerId: 'aids.containers' },
-        separator,
-        checkbox('tools.warnPrecision'),
-      ],
-    },
+    // The interim `Measurements ▸` / `Containers ▸` submenus are gone: the Outliner's Aids
+    // section owns both lists (and the warn-precision toggle) now, so Tools matches the
+    // authoritative tree exactly.
   ],
 };
 

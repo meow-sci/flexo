@@ -1,6 +1,5 @@
 import { useStore } from '@nanostores/react';
 import { OutlinerPanel } from './outliner/OutlinerPanel';
-import { BuildFocusEditor } from './build/BuildFocusEditor';
 import { AnimToolbar } from './AnimToolbar';
 import { AnimationPanel } from './AnimationPanel';
 import { EngineToolbar } from './EngineToolbar';
@@ -14,15 +13,14 @@ import { $mode } from '../state/modeStore';
  * three-way inspector atom: the mode machine's sidebar contribution now has a visible
  * switcher (menubar + status chip) instead of per-toolbar Close buttons.
  *
- * Shared between the desktop right sidebar and the phone bottom-sheet inspector. The focus
- * editor ({@link BuildFocusEditor}) is NOT part of this stack on desktop — it is the LEFT
- * sidebar (`ModeFocusEditor`). The phone has no second sidebar, so its sheet opts the Build
- * focus card back in inline via {@link showFocusEditor} until P5B.29 gives the phone its own
- * variant.
+ * Shared between the desktop right sidebar and the phone **Panel sheet** (re-tap the active
+ * mode tab). The focus editor is NOT part of this stack on either platform — it is the LEFT
+ * sidebar (`ModeFocusEditor`) on desktop and the **Inspector sheet** (`MobileInspector`) on
+ * phone, which is the same two-surface split.
  *
  * Undo enrollment: NONE — the mode is view state (foundation §13).
  */
-export function ModeSidebar({ showFocusEditor = false }: { showFocusEditor?: boolean }) {
+export function ModeSidebar() {
   const mode = useStore($mode);
 
   if (mode === 'animation') {
@@ -56,11 +54,6 @@ export function ModeSidebar({ showFocusEditor = false }: { showFocusEditor?: boo
       <div className="min-h-0 flex-1">
         <OutlinerPanel />
       </div>
-      {showFocusEditor && (
-        <div className="max-h-[45%] shrink-0 overflow-y-auto border-t border-border">
-          <BuildFocusEditor />
-        </div>
-      )}
     </div>
   );
 }

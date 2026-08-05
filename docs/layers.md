@@ -181,6 +181,14 @@ Stale entries for deleted layers are harmless.
   layer renders nothing — and because three's raycaster skips `visible === false` objects,
   hidden entities are also non-clickable. It is the SINGLE writer of layer-driven material
   state, which is why layer *color* never touches a material.
+- **Display Filters compose INTO the same writer.** **View ▸ Display Filters** hides whole
+  entity KINDS (`viewStore.$kindVisibility`, persisted as `flexo:kindVisibility`) and is an
+  orthogonal axis to layers: `applyLayerView` multiplies the layer's visibility by
+  `isKindDisplayed(kind)`, so an entity shows only when BOTH agree. That predicate is shared
+  with the click-select guards and the marquee's box projection, so a filtered-out kind is
+  invisible, unclickable and unmarquee-able exactly as a hidden layer's contents are. Kind
+  visibility is a per-browser view preference — never document state, never undone, never
+  exported.
 - **Lock:** the click-select callback rejects hits whose layer is locked, so locked
   entities can't be selected by clicking. Combined with `deselectLayer` on lock and the
   disabled "Select All in Layer" menu item, a locked layer can't be transformed.

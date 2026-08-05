@@ -9,8 +9,8 @@ import { MobileInspector } from './ui/MobileInspector';
 import { FloatingPreviewToolbar } from './ui/FloatingPreviewToolbar';
 import { ManageTexturesPanel } from './ui/ManageTexturesPanel';
 import { GlowPaintDialog } from './ui/GlowPaintDialog';
-import { ChainPalette } from './ui/chain/ChainPalette';
-import { ToolBarWindow } from './ui/build/ToolBarWindow';
+import { ChainWindow } from './ui/chain/ChainWindow';
+import { ToolBarStrip, ToolBarWindow } from './ui/build/ToolBarWindow';
 import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys';
 import { MenuBar } from './ui/shell/MenuBar';
 import { PhoneTopBar } from './ui/shell/phone/PhoneTopBar';
@@ -162,17 +162,16 @@ function App() {
 
           {/* Floating per-mesh material editor (glow / visor surface / per-face textures). */}
           <ManageTexturesPanel />
-
-          {/* Left-side floating command palette for action chains (⌘K). Self-gates on the
-              chain session, and stays non-modal so the viewport keeps working while open. */}
-          <ChainPalette />
         </div>
 
         {/* Floating windows mount here, as children of the BAND: their positions are
             band-absolute px and clamp to the workspace, so they must not sit inside the
-            viewport cell (foundation §6.1). The Tool bar self-gates on having a gizmo
-            target and on Window ▸ Tool Bar. */}
+            viewport cell (foundation §6.1). Exactly two ship (foundation §6.2). Both
+            self-gate — the Tool bar on having a gizmo target and on Window ▸ Tool Bar, the
+            Chain window on an open session — and both render nothing on phone, where they
+            have their own variants below. */}
         <ToolBarWindow />
+        <ChainWindow />
 
         {!isPhone && (
           <Sidebar side="right">
@@ -194,6 +193,9 @@ function App() {
       </div>
 
       {!isPhone && <StatusBar />}
+      {/* The Tool bar's phone variant: a pinned strip in the flex flow directly above the
+          condensed strip, rather than a floating window (foundation §12). */}
+      {isPhone && <ToolBarStrip />}
       {/* The phone's condensed strip, with the five mode tabs docked below it as the last
           flex child of the frame (foundation §12). Re-tapping the active tab opens that
           mode's Panel sheet — the phone's route to the right-sidebar content. */}

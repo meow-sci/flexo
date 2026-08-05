@@ -2,102 +2,83 @@ import { computed } from 'nanostores';
 import { setToolStatus, type ToolStatus } from '../../state/statusStore';
 import { $seatView } from '../../state/ivaStore';
 import { $part } from '../../state/editorStore';
-import { $measureTool } from '../../state/measurementStore';
-import { $activeNozzleTarget, $isExhaustPlacing, nozzleTargetLabel } from '../../state/engineStore';
+import { $measurePending } from '../../state/measurementStore';
+import { $activeNozzleTarget, nozzleTargetLabel } from '../../state/engineStore';
 import { $activeTool, $marqueeRect } from '../../state/modeStore';
 
 /**
- * Feeds the status bar's tool segment (`statusStore.$toolStatus`) from the v1 tool-ish
- * sessions (design: `plans/flexo_v2/design/design-system-services.md` §1.2 #3; foundation
- * §2.6 "each tool owns a status segment").
+ * Feeds the status bar's tool segment (`statusStore.$toolStatus`) from the single
+ * `$activeTool` slot (design: `plans/flexo_v2/design/foundation.md` §2.6 — "each tool owns
+ * a status segment, an Esc-ladder rung and a cancel-on-mode-switch hook";
+ * `design-system-services.md` §1.2 #3).
  *
- * **Interim by design.** The end state is a single `$activeTool` slot whose owning store
- * hooks write their own status model on arm and clear it on disarm; that slot arrives with
- * the mode phase. Until then the three sessions are three independent flags in three
- * stores, so this module derives ONE model from them and pushes it into the atom. The mode
- * phase deletes this file and moves each model next to its tool.
+ * **One derivation, not one per tool.** The slot holds at most one tool, so the segment is a
+ * pure function of `(slot, that tool's sub-state)`. Keeping it in ONE `computed` — rather
+ * than having each store push a model on arm and clear it on disarm — is what makes the
+ * segment incapable of getting stuck showing a tool that is no longer armed: there is no
+ * "clear" to forget.
  *
  * The chain session is deliberately absent: chain is NOT a tool (foundation §2.6 — it is a
- * parallel non-modal session that co-exists with any tool), so `ToolSegment` mirrors it
- * from `$chainSession`/`$chainEval` as a second, compact chip instead.
+ * parallel non-modal session that co-exists with any tool), so `ToolSegment` mirrors it from
+ * `$chainSession`/`$chainEval` as a second, compact chip instead.
  *
  * Undo enrollment: NONE. Nothing here writes document state.
  */
 
-/**
- * Priority when more than one session is live. Seat view wins: it takes the camera over
- * completely, and its segment carries the only pointer route back out (Exit). Exhaust
- * placement is Engine-mode-scoped and outranks the measure toggle, which survives
- * everything because nothing in v1 disarms it.
- */
 const $derivedToolStatus = computed(
-  [
-    $seatView,
-    $part,
-    $isExhaustPlacing,
-    $activeNozzleTarget,
-    $measureTool,
-    $activeTool,
-    $marqueeRect,
-  ],
-  (
-    seatId,
-    part,
-    exhaustPlacing,
-    nozzleTarget,
-    measureTool,
-    activeTool,
-    marqueeRect,
-  ): ToolStatus | null => {
-    if (seatId !== null) {
-      const index = part.ivaSeats.findIndex((seat) => seat.id === seatId);
-      // A vanished seat is torn down by EditorScene a beat later; show nothing meanwhile
-      // rather than "Seat 0 / 3".
-      if (index >= 0) {
+  [$activeTool, $seatView, $part, $activeNozzleTarget, $measurePending, $marqueeRect],
+  (activeTool, seatId, part, nozzleTarget, measurePending, marqueeRect): ToolStatus | null => {
+    switch (activeTool) {
+      case 'seat-view': {
+        const index = part.ivaSeats.findIndex((seat) => seat.id === seatId);
+        // A vanished seat is torn down by EditorScene a beat later; show nothing meanwhile
+        // rather than "Seat 0 / 3".
+        if (index < 0) return null;
         return {
           toolId: 'seat-view',
           icon: 'Eye',
           text: `Seat ${index + 1} / ${part.ivaSeats.length}`,
         };
       }
-    }
 
-    // The marquee holds the tool slot for the whole gesture, so an armed-but-idle `B` and a
-    // live drag are the same tool with two instructions (foundation §2.6; design §1.4).
-    if (activeTool === 'marquee') {
-      return marqueeRect
-        ? {
-            toolId: 'marquee',
-            icon: 'BoxSelect',
-            text: 'Box select — release to select',
-            kbdHints: [['Esc']],
-          }
-        : { toolId: 'marquee', icon: 'BoxSelect', text: 'Box select — drag to select' };
-    }
+      case 'measure':
+        // The live two-step instruction the v1 tool never had: `$measurePending` carries the
+        // half-placed first point (design-build-mode.md §8.1). Escape (ladder rung 5)
+        // cancels the pending point AND disarms in one press.
+        return {
+          toolId: 'measure',
+          icon: 'Ruler',
+          text: measurePending ? 'Measure — click second point' : 'Measure — click first point',
+          kbdHints: [['Esc']],
+        };
 
-    if (exhaustPlacing && nozzleTarget) {
-      return {
-        toolId: 'exhaust',
-        icon: 'Flame',
-        text: `Exhaust: ${nozzleTargetLabel(nozzleTarget)}`,
-      };
-    }
+      case 'marquee':
+        // The marquee holds the slot for the whole gesture, so an armed-but-idle `B` and a
+        // live drag are the same tool with two instructions (design-build-mode.md §1.4).
+        return marqueeRect
+          ? {
+              toolId: 'marquee',
+              icon: 'BoxSelect',
+              text: 'Box select — release to select',
+              kbdHints: [['Esc']],
+            }
+          : { toolId: 'marquee', icon: 'BoxSelect', text: 'Box select — drag to select' };
 
-    if (measureTool === 'point') {
-      // INTERIM text. The live "click first point" → "click second point" instruction needs
-      // the half-placed pick state, which lives inside EditorScene and is not exposed to any
-      // store yet; the Build phase lifts it. Until then this says what the tool wants
-      // overall, which is still infinitely more than v1's completely invisible armed state.
-      //
-      // The `Esc` hint is honest now: rung 5 of the Escape ladder disarms the tool.
-      return {
-        toolId: 'measure',
-        icon: 'Ruler',
-        text: 'Measure — click two points · Esc cancels',
-      };
-    }
+      case 'exhaust':
+        if (!nozzleTarget) return null;
+        return {
+          toolId: 'exhaust',
+          icon: 'Flame',
+          // `nozzleTargetLabel` already spells the `· FX` channel suffix.
+          text: `Exhaust: ${nozzleTargetLabel(nozzleTarget)}`,
+          kbdHints: [['Esc']],
+        };
 
-    return null;
+      // `member-paint` / `pivot-pick` are Animation-mode tools that do not exist yet
+      // (foundation §2.6 rows 5–6); their segments land with that phase.
+      default:
+        return null;
+    }
   },
 );
 

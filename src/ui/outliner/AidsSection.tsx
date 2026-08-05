@@ -97,7 +97,8 @@ function Measurements() {
         <Button size="xs" variant="ghost" onPress={() => setActiveMeasurement(addReferenceLine())}>
           ＋ line
         </Button>
-        {/* TODO(P5B.25): arming moves under `$activeTool` with the rest of the transient tools. */}
+        {/* Arms the measure tool through the single `$activeTool` slot (P5B.25) — the same
+            call the `M` chord, the Tools menu and the palette make. */}
         <Button size="xs" variant="ghost" onPress={() => setMeasureTool('point')}>
           ＋ p2p
         </Button>

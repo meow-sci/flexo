@@ -98,10 +98,10 @@ import { $heldModifiers } from '../state/modifierStore';
 import { $catalogIndex, $customCatalog } from '../state/catalogStore';
 import {
   $activeMeasurementId,
-  $measureTool,
   addMeasurement,
   removeMeasurement,
   setActiveMeasurement,
+  setMeasurePending,
   setMeasureTool,
   updateMeasurement,
 } from '../state/measurementStore';
@@ -458,8 +458,12 @@ export class EditorScene {
     // The tool slot's first real tenant (foundation §2.6): Esc-ladder rung 5 and a mode
     // switch both cancel through here, so the gesture has exactly ONE teardown path.
     registerTool('marquee', { onCancel: () => this.cancelMarquee() });
-    this.sub($measureTool, (tool) => {
-      const picking = tool !== 'none';
+    // Measure is the second `$activeTool` tenant (P5B.25): the suppression now keys off the
+    // SLOT rather than `$measureTool`, so arming any other tool tears the pick down through
+    // exactly one path. The picking flow below is otherwise verbatim v1.
+    this.sub($activeTool, (tool) => {
+      const picking = tool === 'measure';
+      if (picking === this.suppressPickMeasure) return;
       this.suppressPickMeasure = picking;
       this.applySelectionSuppression();
       dom.style.cursor = picking ? 'crosshair' : '';
@@ -2409,12 +2413,12 @@ export class EditorScene {
   }
 
   private readonly onPickPointerDown = (e: PointerEvent): void => {
-    if ($measureTool.get() === 'none') return;
+    if ($activeTool.get() !== 'measure') return;
     this.pickPointerDown = { x: e.clientX, y: e.clientY };
   };
 
   private readonly onPickPointerUp = (e: PointerEvent): void => {
-    if ($measureTool.get() === 'none') return;
+    if ($activeTool.get() !== 'measure') return;
     const down = this.pickPointerDown;
     this.pickPointerDown = null;
     // Treat >4px of movement as an orbit drag, not a pick.
@@ -2427,10 +2431,14 @@ export class EditorScene {
       const id = addMeasurement({ source: 'point', a: point, b: point });
       this.pendingMeasurementId = id;
       setActiveMeasurement(null); // keep the editor/gizmo away until the 2nd click
+      // Publish the half-placed state: the status segment's second instruction and the left
+      // sidebar's tool parameter card both read it (design-build-mode.md §8.1, §3.10).
+      setMeasurePending(point);
     } else {
       updateMeasurement(this.pendingMeasurementId, { b: point });
       setActiveMeasurement(this.pendingMeasurementId);
       this.pendingMeasurementId = null;
+      setMeasurePending(null);
       setMeasureTool('none');
     }
   };
@@ -2462,6 +2470,7 @@ export class EditorScene {
   }
 
   private cancelPendingMeasurement(): void {
+    setMeasurePending(null);
     if (this.pendingMeasurementId !== null) {
       removeMeasurement(this.pendingMeasurementId);
       this.pendingMeasurementId = null;

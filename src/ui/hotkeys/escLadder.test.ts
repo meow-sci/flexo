@@ -8,10 +8,10 @@ import '../commands';
 import { $openDialog } from '../../state/dialogStore';
 import { $paletteOpen } from '../../state/commandStore';
 import { $chainSession } from '../../state/chainStore';
-import { $measureTool } from '../../state/measurementStore';
+import { $measureTool, setMeasureTool } from '../../state/measurementStore';
 import { $engineExhaustGizmo } from '../../state/engineStore';
 import { $activeJointId, $editKeyframeId } from '../../state/animationStore';
-import { $mode } from '../../state/modeStore';
+import { $mode, disarmTool } from '../../state/modeStore';
 import { $seatView } from '../../state/ivaStore';
 import { $gizmoDragging, $gizmoCancel } from '../../state/viewStore';
 import { $selection, addSubPart, newPart, select } from '../../state/editorStore';
@@ -38,7 +38,9 @@ beforeEach(() => {
   $openDialog.set(null);
   $paletteOpen.set(false);
   $chainSession.set(null);
-  $measureTool.set('none');
+  // Every transient tool is a `$activeTool` tenant now, so the slot — not the feature
+  // atom — is what a test must clear; `disarmTool` runs the armed tool's own teardown.
+  disarmTool();
   $engineExhaustGizmo.set(false);
   $mode.set('build');
   $editKeyframeId.set(null);
@@ -90,14 +92,14 @@ describe('rung order', () => {
 
   it('cancels a gizmo drag (4) before disarming a tool (5)', () => {
     $gizmoDragging.set(true);
-    $measureTool.set('point');
+    setMeasureTool('point');
     dispatchEsc(esc());
     expect($gizmoCancel.get()).not.toBe(null);
     expect($measureTool.get()).toBe('point');
   });
 
   it('disarms the measure tool (5) before cancelling a chain session (6)', () => {
-    $measureTool.set('point');
+    setMeasureTool('point');
     $chainSession.set({ seedIds: ['a'], ops: [] });
     dispatchEsc(esc());
     expect($measureTool.get()).toBe('none');
@@ -116,7 +118,7 @@ describe('rung order', () => {
 
   it('skips a typing-guarded rung while a text field has focus', () => {
     typeInAField();
-    $measureTool.set('point');
+    setMeasureTool('point');
     dispatchEsc(esc());
     expect($measureTool.get()).toBe('point');
   });

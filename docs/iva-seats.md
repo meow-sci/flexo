@@ -199,6 +199,13 @@ seat id, the row name and `default`.
 `Shift+C` twice → `C` to cycle. So this mode is what makes seat authoring possible instead of
 guesswork.
 
+Seat view is a **transient tool** — it occupies the single `$activeTool` slot
+(`modeStore.ts`, foundation §2.6), registered by `ivaStore` as `survivesModeSwitch: true`
+because it is a CAMERA state, not a mode-local affordance: you can sit in a seat and then go
+read the part's GameData in Data mode without being ejected. Arming any OTHER tool (measure,
+box select, exhaust placement) cancels it, because the slot holds exactly one tool. It exits
+via `Escape`, the segment's **Exit** button, the seat being deleted, or a project switch.
+
 State is ephemeral and lives in `src/state/ivaStore.ts` — never persisted, never in undo:
 
 - `$seatView: string | null` — the seat being previewed, keyed by **id, not index**, so

@@ -15,7 +15,15 @@ import {
   updateSubPartSolidNozzle,
   type ToolMode,
 } from './editorStore';
-import { $mode, registerModeHooks, setMode } from './modeStore';
+import {
+  $activeTool,
+  $mode,
+  armTool,
+  disarmTool,
+  registerModeHooks,
+  registerTool,
+  setMode,
+} from './modeStore';
 
 /**
  * Ephemeral editor state for the Engine Designer — the `$mode === 'engine'` mode
@@ -323,7 +331,7 @@ export function exitEngineMode(): void {
  */
 registerModeHooks('engine', {
   onExit: () => {
-    $engineExhaustGizmo.set(false);
+    setEngineExhaustGizmo(false);
   },
 });
 
@@ -331,7 +339,7 @@ registerModeHooks('engine', {
 export function setActiveEngine(entry: EngineEntry | null): void {
   $activeEngineEntry.set(entry);
   $activeNozzleRef.set(null);
-  $engineExhaustGizmo.set(false);
+  setEngineExhaustGizmo(false);
 }
 
 /** Selects the SubPart-template engine with the given id (null ⇒ none). */
@@ -344,9 +352,38 @@ export function setActiveNozzleRef(ref: NozzleRef | null): void {
   $activeNozzleRef.set(ref);
 }
 
-/** Toggles the 3D exhaust gizmo for the targeted nozzle. */
+/**
+ * Exhaust placement's tenancy of the single `$activeTool` slot (foundation §2.6 row 3):
+ * **Engine mode only**, so `setMode` cancels it on the way out and `armTool` refuses it
+ * anywhere else. Arming measure or the marquee cancels it and vice versa — that single
+ * slot is what formalizes v1's ad-hoc OR of suppression flags.
+ *
+ * `onCancel` writes the raw atom, never {@link setEngineExhaustGizmo}, for the same reason
+ * the measure and seat-view hooks do: routing back through the setter would re-enter the
+ * slot and stomp whichever tool just took it.
+ */
+registerTool('exhaust', {
+  allowedModes: ['engine'],
+  onCancel: () => {
+    $engineExhaustGizmo.set(false);
+  },
+});
+
+/**
+ * Toggles the 3D exhaust gizmo for the targeted nozzle, through the `$activeTool` slot.
+ *
+ * Arming asks the slot FIRST and mirrors what actually happened: `armTool` refuses a tool
+ * the current mode disallows, and a flag left `true` behind a refusal would desync the two
+ * (and then make the next, legal, arm a no-op).
+ */
 export function setEngineExhaustGizmo(on: boolean): void {
-  $engineExhaustGizmo.set(on);
+  if (on) {
+    armTool('exhaust');
+    $engineExhaustGizmo.set($activeTool.get() === 'exhaust');
+    return;
+  }
+  $engineExhaustGizmo.set(false);
+  disarmTool('exhaust');
 }
 
 /**

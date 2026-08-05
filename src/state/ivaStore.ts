@@ -1,6 +1,7 @@
 import { atom } from 'nanostores';
 import { clampSeatLook } from '../ksa/ivaLook';
 import type { Vec3 } from '../ksa/types';
+import { armTool, disarmTool, registerTool } from './modeStore';
 
 /**
  * Ephemeral state for the IVA SEAT VIEW — "sit in this seat and look around".
@@ -54,17 +55,42 @@ export const $seatView = atom<string | null>(null);
  */
 export const $seatLook = atom<Vec3 | null>(null);
 
-/** Sits in `seatId`, facing straight down its forward axis (the free-look resets). */
+/**
+ * The camera teardown, with no knowledge of the tool slot. Idempotent, and deliberately
+ * NOT a caller of `disarmTool` — it is the slot's own `onCancel`, so calling back into the
+ * slot would either recurse or stomp the tool that just took the slot over.
+ */
+function teardownSeatView(): void {
+  if ($seatView.get() === null) return;
+  $seatView.set(null);
+  $seatLook.set(null);
+}
+
+/**
+ * Seat view's tenancy of the single `$activeTool` slot (foundation §2.6 row 2).
+ *
+ * `survivesModeSwitch: true` and no `allowedModes`: it is a CAMERA state, not a
+ * mode-local affordance — you can sit in a seat and then go read the part's GameData
+ * without being ejected. Arming any OTHER tool (measure, marquee, exhaust) still cancels
+ * it, because the slot holds exactly one tool.
+ */
+registerTool('seat-view', { survivesModeSwitch: true, onCancel: teardownSeatView });
+
+/**
+ * Sits in `seatId`, facing straight down its forward axis (the free-look resets), and
+ * takes the tool slot — so measuring or box-selecting while seated cancels the preview
+ * rather than fighting it for the pointer.
+ */
 export function enterSeatView(seatId: string): void {
   $seatLook.set(null);
   $seatView.set(seatId);
+  armTool('seat-view');
 }
 
 /** Leaves seat view. Safe to call when not in it. */
 export function exitSeatView(): void {
-  if ($seatView.get() === null) return;
-  $seatView.set(null);
-  $seatLook.set(null);
+  teardownSeatView();
+  disarmTool('seat-view');
 }
 
 /**

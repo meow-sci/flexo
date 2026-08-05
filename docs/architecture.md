@@ -19,9 +19,11 @@ src/
   app.tsx     The docked shell: column(MenuBar | PhoneTopBar, row(LeftSidebar,
               ViewportHost, RightSidebar), StatusBar | CondensedStatusBar +
               PhoneModeTabs), plus the single DialogRoot and the ⌘K CommandPalette.
-              Legacy floating chrome (selection toolbars, HUDs, aid editors, the
-              chain palette) is re-parented inside the viewport cell pending its v2
-              rehost (design: foundation.md §1).
+              Exactly TWO floating windows mount inside the workspace band — the
+              gizmo ToolBarWindow and the ChainWindow (design: foundation.md §6.2);
+              the remaining legacy floating chrome (the animation scrubber, the
+              texture panel) is re-parented inside the viewport cell pending its
+              v2 rehost.
   main.tsx    React root: <App /> + BuildIdMismatchDialog.
 ```
 

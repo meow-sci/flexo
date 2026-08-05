@@ -26,11 +26,14 @@ import { $layerView, isLayerLocked } from '../../state/layerStore';
 import { $coverageReport } from '../../state/colliderStore';
 import {
   $activeMeasurementId,
+  $measurePending,
   $measurements,
   removeMeasurement,
   setActiveMeasurement,
+  setMeasureTool,
   setMeasurementLocked,
 } from '../../state/measurementStore';
+import { $activeTool } from '../../state/modeStore';
 import {
   $activeContainerId,
   $containers,
@@ -75,6 +78,8 @@ export function BuildFocusEditor() {
   const hasMulti = useStore($hasMultiSelection);
   const byKind = useStore($selectionByKind);
   const coverage = useStore($coverageReport);
+  const activeTool = useStore($activeTool);
+  const measurePending = useStore($measurePending);
   const measurementId = useStore($activeMeasurementId);
   const measurements = useStore($measurements);
   const containerId = useStore($activeContainerId);
@@ -84,9 +89,13 @@ export function BuildFocusEditor() {
   const measurement = measurementId ? measurements.find((m) => m.id === measurementId) : undefined;
   const container = containerId ? containers.find((c) => c.id === containerId) : undefined;
 
-  // (1) Tool parameter card. The collider card owns its own copy of this panel.
+  // (1) Tool parameter card (design §3.10). The armed tool outranks a coverage report —
+  // it is the thing the next click will do. The collider card owns its own copy of the
+  // coverage panel, hence the kind guard.
   const toolCard =
-    coverage && entity?.kind !== 'collider' ? (
+    activeTool === 'measure' ? (
+      <MeasureToolCard pending={measurePending} />
+    ) : coverage && entity?.kind !== 'collider' ? (
       <div className={focusCard}>
         <CoveragePanel standalone />
       </div>
@@ -175,6 +184,44 @@ export function BuildFocusEditor() {
     <div className="flex flex-col gap-2 p-(--density-panel-p)">
       {toolCard}
       {card}
+    </div>
+  );
+}
+
+/**
+ * The measure tool's parameter card (design-build-mode.md §3.10, foundation §2.6 "tool
+ * parameter UI renders at the top of the left sidebar, never floating"). It reports the
+ * half-placed point in full precision — the status segment only has room for the
+ * instruction — and carries the pointer route out that the phone has no Escape for.
+ */
+function MeasureToolCard({ pending }: { pending: { x: number; y: number; z: number } | null }) {
+  return (
+    <div className={focusCard}>
+      <FocusCardHeader
+        icon={Ruler}
+        title="Measure point-to-point"
+        subtitle={pending ? 'Click point B' : 'Click point A'}
+        actions={
+          <Button
+            iconOnly
+            size="sm"
+            variant="ghost"
+            className="size-5"
+            aria-label="Cancel measure"
+            onPress={() => setMeasureTool('none')}
+          >
+            <X className="size-3.5" />
+          </Button>
+        }
+      />
+      <p className="text-xs text-fg-muted">
+        {pending
+          ? `A placed at (${formatG6(pending.x)}, ${formatG6(pending.y)}, ${formatG6(pending.z)}) — click point B`
+          : 'Click a surface to place point A. Points snap to the nearest face vertex; empty space falls to the ground plane.'}
+      </p>
+      <p className="flex items-center gap-1 text-xs text-fg-subtle">
+        <Kbd>Esc</Kbd> cancels
+      </p>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import { $toolStatus, type ToolStatus } from '../../state/statusStore';
 import { $seatView, enterSeatView, exitSeatView } from '../../state/ivaStore';
 import { $part, select } from '../../state/editorStore';
 import { $chainSession } from '../../state/chainStore';
+import { raiseFloat } from '../../state/layoutStore';
 import { $chainEval } from '../../three/chainEval';
 
 /**
@@ -145,14 +146,12 @@ function SeatViewControls() {
 }
 
 /**
- * A read-only mirror of the chain window's footer (design §1.2 #3): `⛓ 12 instances · +8
- * new`, or the evaluation error in red. Compact (`⛓ 12·+8`) when a tool is also armed, so
- * both fit.
+ * A live mirror of the chain window's footer (design §1.2 #3): `⛓ 12 instances · +8 new`, or
+ * the evaluation error in red. Compact (`⛓ 12·+8`) when a tool is also armed, so both fit.
  *
- * Passive on purpose for now: clicking should raise/focus the chain window, and there is no
- * window manager to raise it in yet — the palette is a fixed-position card that is already
- * on top. TODO(P5B): make this the raise-the-chain-window click target once the
- * FloatingWindow tenancy lands.
+ * Clicking **raises the chain window** — the segment is the way back to a window that has
+ * been dragged behind something or scrolled out of mind (foundation §5 segment 3: "clicking
+ * focuses the owning surface").
  */
 function ChainChip({ compact }: { compact: boolean }) {
   const evalState = useStore($chainEval);
@@ -162,7 +161,18 @@ function ChainChip({ compact }: { compact: boolean }) {
   const created = result?.newCount ?? 0;
 
   return (
-    <StatusChip className={error ? 'text-danger' : undefined}>
+    <StatusChipButton
+      className={error ? 'text-danger' : undefined}
+      aria-label="Show the action chain window"
+      onPress={() => {
+        raiseFloat('chain');
+        // Focus the strip so keyboard users land ON the window they just raised; it is the
+        // only focusable node `FloatingWindow` guarantees.
+        document
+          .querySelector<HTMLElement>('[data-surface="chain"] [aria-roledescription]')
+          ?.focus();
+      }}
+    >
       <Link2 size={13} className="shrink-0" />
       {error ? (
         <span className="truncate">{error}</span>
@@ -174,6 +184,6 @@ function ChainChip({ compact }: { compact: boolean }) {
           {compact ? '' : ' new'}
         </span>
       )}
-    </StatusChip>
+    </StatusChipButton>
   );
 }

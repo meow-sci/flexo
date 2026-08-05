@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '@nanostores/react';
-import { Check, ChevronDown, Lock, X } from 'lucide-react';
+import { Check, ChevronDown, Lock, Magnet, X } from 'lucide-react';
 import { Button, Chip, cn, Dialog, Sheet } from '../../kit';
 import { NotificationBell } from '../../status/NotificationBell';
 import { MODE_ICONS, SEVERITY_DOT, SEVERITY_TEXT, TOOL_ICONS } from '../../status/statusTokens';
@@ -16,9 +16,9 @@ import { openNotificationCenter } from '../../../state/notificationStore';
 import { $activeLayer, $layerSummaries } from '../../../state/selectors';
 import { $layerView, layerViewState } from '../../../state/layerStore';
 import { setActiveLayer } from '../../../state/editorStore';
-import { exitSeatView } from '../../../state/ivaStore';
-import { setMeasureTool } from '../../../state/measurementStore';
-import { setEngineExhaustGizmo } from '../../../state/engineStore';
+import { disarmTool } from '../../../state/modeStore';
+import { $selectionCount } from '../../../state/selectors';
+import { $snapEnabled, toggleSnap } from '../../../state/snapStore';
 
 /**
  * The phone's status strip (design: `plans/flexo_v2/design/design-system-services.md` §8.1;
@@ -32,16 +32,11 @@ import { setEngineExhaustGizmo } from '../../../state/engineStore';
  * phone's Esc, and today it is the only pointer route out of seat view, the measure tool and
  * exhaust placement.
  *
- * **Interim scope.** The strip carries the segments that EXIST after Phase 3. Deliberately
- * absent:
- * - Selection-count chip and snap chip — they arrive with their features (the Build-mode
- *   phase); their slots sit between the message channel and the bell.
- * - The mode/tool chip's mini mode menu is kept even though `ModeTabBar` now docks below
- *   this strip: the chip is what the tool takes over, and the menu is the reachable route
- *   while a tool is armed.
- * - Modifier hints, rotate/nudge chips and the FPS readout are desktop-only by design
- *   (keyboard features; §8.1). The Inspector-sheet touch steppers that answer v1's phone
- *   nudge/rotate gap (§8.2) belong to the selection-area phase.
+ * Deliberately absent: modifier hints, the rotate/nudge chips and the FPS readout are
+ * desktop-only by design (keyboard features; §8.1) — their ACTIONS reach touch through the
+ * Inspector sheet's `TouchNudgeCluster` instead. The mode/tool chip's mini mode menu is kept
+ * even though `ModeTabBar` now docks below this strip: the chip is what the tool takes over,
+ * and the menu is the reachable route while a tool is armed.
  *
  * Sized on the `sm` tier with explicit 44px rows (foundation §14.4 — `sm` alone is a 28px
  * control, which is not a touch target).
@@ -55,16 +50,57 @@ export function CondensedStatusBar() {
       <ModeOrToolChip />
       <LayerChip />
       <PhoneMessageChannel />
+      <SelectionChip />
+      <SnapChip />
       <NotificationBell className="min-h-11 px-2" iconSize={16} />
       <ProgressUnderline />
     </div>
   );
 }
 
+/** The selection-count chip (§8.1) — the phone's echo of the desktop selection readout. */
+function SelectionChip() {
+  const count = useStore($selectionCount);
+
+  if (count === 0) return null;
+  return (
+    <Chip className="shrink-0" aria-label={`${count} selected`}>
+      {count}
+    </Chip>
+  );
+}
+
+/**
+ * The snap chip (§8.1), mirroring the Tool bar strip's magnet. Tapping toggles it — the
+ * "hold ⌃ for the temporary opposite" half is a keyboard feature and simply does not exist
+ * on touch.
+ */
+function SnapChip() {
+  const enabled = useStore($snapEnabled);
+
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      className={cn('min-h-11 shrink-0 px-2', enabled && 'text-accent')}
+      aria-label="Snap while dragging"
+      aria-pressed={enabled}
+      onPress={() => toggleSnap()}
+    >
+      <Magnet size={16} />
+    </Button>
+  );
+}
+
 /**
  * The mode chip — replaced by the ARMED TOOL whenever one is live, in which case tapping it
- * exits the tool (§8.1). With no tool it opens the mini mode menu: the same five `mode.*`
- * commands the desktop chip and the menubar switcher run.
+ * cancels the tool (§8.1). That tap IS the phone's Escape, and since every transient tool is
+ * a tenant of the single `$activeTool` slot (foundation §2.6), one `disarmTool()` runs
+ * whichever teardown the armed tool registered — the measure tool's pending point, the
+ * marquee's rect, seat view's camera, the exhaust gizmo.
+ *
+ * With no tool it opens the mini mode menu: the same five `mode.*` commands the desktop chip
+ * and the menubar switcher run.
  */
 function ModeOrToolChip() {
   const mode = useStore($mode);
@@ -79,7 +115,7 @@ function ModeOrToolChip() {
         variant="ghost"
         className="min-h-11 min-w-0 gap-1 px-2 text-fg"
         aria-label={`${tool.text} — tap to exit`}
-        onPress={() => cancelTool(tool.toolId)}
+        onPress={() => disarmTool()}
       >
         {ToolIcon && <ToolIcon size={16} className="shrink-0" />}
         <span className="max-w-[12ch] truncate">{tool.text}</span>
@@ -114,13 +150,6 @@ function ModeOrToolChip() {
       </Sheet>
     </>
   );
-}
-
-/** The phone's Esc: each armed tool's own disarm call (§8.1). */
-function cancelTool(toolId: string): void {
-  if (toolId === 'seat-view') exitSeatView();
-  else if (toolId === 'measure') setMeasureTool('none');
-  else if (toolId === 'exhaust') setEngineExhaustGizmo(false);
 }
 
 function ModeRows({ onDone }: { onDone(): void }) {

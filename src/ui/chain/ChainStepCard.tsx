@@ -1,8 +1,10 @@
-import type { ReactNode } from 'react';
-import { ChevronDown, ChevronUp, X } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { ChevronDown, ChevronUp, GripVertical, X } from 'lucide-react';
 import type { Vec3 } from '../../ksa/types';
 import {
+  $chainSession,
   moveChainOp,
+  moveChainOpTo,
   removeChainOp,
   updateChainOp,
   type ChainAxis,
@@ -16,7 +18,7 @@ import {
   type ScaleOp,
   type TranslateOp,
 } from '../../state/chainStore';
-import { Button, Checkbox, ListBoxItem, Select } from '../kit';
+import { Button, Checkbox, ListBoxItem, Select, cn } from '../kit';
 import { PreciseNumberInput } from '../PreciseNumberInput';
 import { Vec3Field } from '../Vec3Field';
 import { CHAIN_COMMANDS } from './chainCommands';
@@ -33,14 +35,80 @@ import { CHAIN_COMMANDS } from './chainCommands';
  * ephemeral session state, not the document, so there is nothing to enroll in undo. The
  * single undo entry is pushed once, by Apply.
  */
-export function ChainStepCard({ op, index, total }: { op: ChainOp; index: number; total: number }) {
+/**
+ * Drag payload for step reorder. Native HTML5 DnD, matching the Outliner's layer and entity
+ * grips (see the DND note in `LayerHeaderRow.tsx`): react-aria's `useDragAndDrop` wants to
+ * own the whole collection, and these cards are forms, not a collection.
+ */
+const DND_CHAIN_STEP = 'application/x-flexo-chain-step';
+
+export function ChainStepCard({
+  op,
+  index,
+  total,
+  reorderable = false,
+}: {
+  op: ChainOp;
+  index: number;
+  total: number;
+  /** Adds the ⠿ drag-reorder grip. Off on touch — the ▲▼ chevrons are the phone path. */
+  reorderable?: boolean;
+}) {
+  const [dropHint, setDropHint] = useState<'before' | 'after' | null>(null);
   // Every kind has a command entry; the fallback exists only to satisfy the type.
   const command = CHAIN_COMMANDS.find((c) => c.kind === op.kind) ?? CHAIN_COMMANDS[0];
   const Icon = command.icon;
 
+  const onDragOver = (e: React.DragEvent) => {
+    if (!reorderable || !e.dataTransfer.types.includes(DND_CHAIN_STEP)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const box = e.currentTarget.getBoundingClientRect();
+    setDropHint(e.clientY < box.top + box.height / 2 ? 'before' : 'after');
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    const hint = dropHint;
+    setDropHint(null);
+    const draggedId = e.dataTransfer.getData(DND_CHAIN_STEP);
+    if (!draggedId || draggedId === op.id) return;
+    e.preventDefault();
+    const ops = $chainSession.get()?.ops ?? [];
+    const from = ops.findIndex((o) => o.id === draggedId);
+    if (from < 0) return;
+    // `moveChainOpTo` splices the step OUT first, so the destination index is measured in
+    // the list without it: everything after the source shifts down by one.
+    const targetInRest = index < from ? index : index - 1;
+    moveChainOpTo(draggedId, targetInRest + (hint === 'after' ? 1 : 0));
+  };
+
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-panel-sunken p-2">
+    <div
+      className={cn(
+        'flex flex-col gap-1.5 rounded-lg border border-border bg-panel-sunken p-2',
+        dropHint === 'before' && 'shadow-[inset_0_2px_0_0_var(--color-accent)]',
+        dropHint === 'after' && 'shadow-[inset_0_-2px_0_0_var(--color-accent)]',
+      )}
+      onDragOver={onDragOver}
+      onDragLeave={() => setDropHint(null)}
+      onDrop={onDrop}
+    >
       <div className="flex items-center gap-1.5">
+        {reorderable && (
+          <span
+            draggable
+            aria-hidden
+            title="Drag to reorder"
+            className="-my-1 shrink-0 cursor-grab py-1 text-fg-subtle active:cursor-grabbing"
+            onDragStart={(e) => {
+              e.dataTransfer.setData(DND_CHAIN_STEP, op.id);
+              e.dataTransfer.effectAllowed = 'move';
+            }}
+            onDragEnd={() => setDropHint(null)}
+          >
+            <GripVertical size={14} />
+          </span>
+        )}
         <Icon size={14} className="shrink-0 text-fg-subtle" />
         <span className="text-xs font-medium">{command.label}</span>
         <span className="flex-1" />

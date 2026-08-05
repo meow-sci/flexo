@@ -135,7 +135,7 @@
       in-game verification still pending)
 
 - can we import the built-in animations for e.g. solar panel?  does it map cleanly to flexos representation of an animation system? the built-in solar panel Part in question has Id "CoreElectricalA_Prefab_SolarPanelB"
-- hotkeys for move/rotate/scale (make sure works in animation mode too)
+- ~~hotkeys for move/rotate/scale (make sure works in animation mode too)~~ **DONE** (v2 P5B): `T` / `⇧T` cycle the gizmo tool, viewport-scoped so they are live in every mode; the Tool bar window (`docs/3d-workspace.md`) is the pointer route
 - mod export (zip and folder) should also export the project json
 - can connectors be part of an animation joint and pose?
 - stickers? this probably has to be a standalone code mod to work properly...
@@ -151,5 +151,5 @@
 - prettyXml is super janky, look at pebkac for how i did it there for a DOM/Element native solution
 - part snapping
 - part overlap detection/warning
-- movement snaps
+- ~~movement snaps~~ **DONE** (v2 P5B): `snapStore` drives the dormant `$snap` plumbing — a magnet toggle plus translate/rotate step sizes in the Tool bar, mirrored by the status bar's snap chip, with ⌃-held-during-a-drag giving the temporary opposite (`docs/3d-workspace.md`)
 - blueprint views

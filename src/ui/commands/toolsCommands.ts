@@ -12,18 +12,10 @@ import { $seatView, enterSeatView, exitSeatView } from '../../state/ivaStore';
 import { $mode } from '../../state/modeStore';
 import { $engineExhaustGizmo, setEngineExhaustGizmo } from '../../state/engineStore';
 import { toast } from '../toast';
+import { $measureTool, addReferenceLine, setMeasureTool } from '../../state/measurementStore';
 import {
-  $measurements,
-  $measureTool,
-  addReferenceLine,
-  setActiveMeasurement,
-  setMeasureTool,
-} from '../../state/measurementStore';
-import {
-  $containers,
   $containerSettings,
   addContainer,
-  setActiveContainer,
   setContainerSettings,
   type ReferenceShape,
 } from '../../state/containerStore';
@@ -81,8 +73,9 @@ export const TOOLS_COMMANDS: Command[] = [
     title: 'Measure Point-to-Point',
     menuPath: 'Tools',
     keywords: 'measure distance ruler point',
-    // INTERIM: v1's plain toggle. The single `$activeTool` slot (which cancels whatever
-    // else is armed) and the status-bar guidance arrive with the mode/Build phases.
+    // `setMeasureTool` routes through the single `$activeTool` slot (P5B.25), so arming
+    // here cancels the marquee / seat view / exhaust placement, a mode switch cancels the
+    // half-placed pick, and Escape-ladder rung 5 disarms it. The ✓ mirrors the slot.
     checked: () => $measureTool.get() === 'point',
     run: () => setMeasureTool($measureTool.get() === 'point' ? 'none' : 'point'),
   },
@@ -148,11 +141,10 @@ export const TOOLS_COMMANDS: Command[] = [
     run: () => exitSeatView(),
   },
   {
-    // INTERIM until the Outliner's Aids section: the container warn-precision toggle used
-    // to live in the Measure popover, which dies with the v1 toolbar.
+    // Palette-only: the toggle's real home is the Outliner's Aids section, beside the
+    // container rows whose warnings it changes. Kept as a command so it stays searchable.
     id: 'tools.warnPrecision',
     title: 'Accurate Warn Check',
-    menuPath: 'Tools ▸ Containers',
     keywords: 'container warn precision accurate vertex bbox',
     checked: () => $containerSettings.get().warnPrecision === 'vertex',
     keepOpen: true,
@@ -179,36 +171,5 @@ export function seatCommands(): Command[] {
       enterSeatView(seat.id);
       select([{ kind: 'ivaSeat', id: seat.id }]);
     },
-  }));
-}
-
-/**
- * INTERIM until the Outliner's Aids section: `Tools ▸ Measurements` — the list that used to
- * live in the Measure popover. Selecting a row makes it active, which opens its floating
- * editor (unchanged v1 surface).
- */
-export function measurementAidCommands(): Command[] {
-  return $measurements.get().map((measurement, index) => ({
-    id: `aid:measurement:${measurement.id}`,
-    title: `Measurement ${index + 1}`,
-    menuPath: 'Tools ▸ Measurements',
-    keywords: 'measurement line aid edit',
-    run: () => setActiveMeasurement(measurement.id),
-  }));
-}
-
-/** INTERIM until the Outliner's Aids section — see {@link measurementAidCommands}. */
-export function containerAidCommands(): Command[] {
-  const labels: Record<ReferenceShape, string> = {
-    rect: 'Box',
-    cylinder: 'Cylinder',
-    sphere: 'Sphere',
-  };
-  return $containers.get().map((container, index) => ({
-    id: `aid:container:${container.id}`,
-    title: `${labels[container.shape]} ${index + 1}`,
-    menuPath: 'Tools ▸ Containers',
-    keywords: 'container reference volume aid edit',
-    run: () => setActiveContainer(container.id),
   }));
 }

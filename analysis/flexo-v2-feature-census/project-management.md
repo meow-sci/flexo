@@ -8,6 +8,7 @@ Verified against code (docs cross-checked; drift flagged where found).
 ## 1. Feature inventory
 
 ### 1.1 Current-project display + rename
+
 - **What**: The toolbar shows the current project's name (truncated at 14ch). Inside the popover, a text input renames the project on blur or Enter.
 - **UI path**: Top floating toolbar → leftmost "Project" button (FolderOpen icon + name) → popover → "Project Name" text field. Same button appears leftmost in the phone top bar (`src/ui/MobileTopBar.tsx:52`).
 - **Files**: `src/ui/ProjectButton.tsx:37-125` (button + popover), `ProjectNameInput` at `ProjectButton.tsx:128-148`; store action `renameCurrentProject` at `src/state/projectStore.ts:415-422`.
@@ -16,12 +17,14 @@ Verified against code (docs cross-checked; drift flagged where found).
 - **Hotkeys**: none.
 
 ### 1.2 New project
+
 - **What**: Starts a fresh empty project (empty document, empty history, cleared per-layer view state, reset camera), saved immediately and made current.
 - **UI path**: Project popover → "New Project" button.
 - **Files**: `ProjectButton.tsx:69-78`; `createProject` at `projectStore.ts:370-382`; name collision avoided via `uniqueProjectName()` (`projectStore.ts:335-341`) which yields "Untitled", "Untitled 2", ….
 - **Data model**: full workspace reset via `newPart()` (editorStore), `$layerView.set({})`, `resetCamera()`.
 
 ### 1.3 Load / switch project (project list)
+
 - **What**: A modal listing every saved project, most-recently-saved first, each row showing name, "(current)" marker, SubPart count, and saved-at timestamp, with Load and Delete buttons.
 - **UI path**: Project popover → "Load Project..." → center modal "Load Project".
 - **Files**: `LoadProjectDialog` at `ProjectButton.tsx:155-239`; `listProjects()` at `projectStore.ts:312-327`; `loadProject()` at `projectStore.ts:347-364`; `applyProjectSnapshot()` at `projectStore.ts:274-297`.
@@ -29,22 +32,26 @@ Verified against code (docs cross-checked; drift flagged where found).
 - **Interaction details**: `listProjects()` is only called while the dialog is open (`ProjectButton.tsx:166`); a `setTick` state hack forces re-render after delete because localStorage isn't reactive (`ProjectButton.tsx:164`). Load applies the snapshot (suspending autosave), clamps active layer, clears selection, closes any open action-chain session, restores the saved camera. Loading the current project is disabled ("Loaded").
 
 ### 1.4 Delete project (with confirm)
-- **What**: Permanently removes a saved project. Deleting the *current* project switches to the most-recent remaining one, or creates a fresh "Untitled" if none remain.
+
+- **What**: Permanently removes a saved project. Deleting the _current_ project switches to the most-recent remaining one, or creates a fresh "Untitled" if none remain.
 - **UI path**: Load Project modal → per-row trash button → nested `ConfirmDialog` ("Delete project “X”?").
 - **Files**: `ProjectButton.tsx:209-236`; `deleteProject()` at `projectStore.ts:428-434`.
 - **Notable**: deleting a project does **not** clean up that project's custom-asset binaries in the `flexo-assets` IndexedDB (blobs are only deleted by in-session asset removal in `customAssetStore.ts`) — orphaned blobs accumulate.
 
 ### 1.5 Autosave (no explicit Save)
+
 - **What**: The whole workspace autosaves continuously; there is deliberately no Save button anywhere.
 - **Files**: `startAutosave()` at `projectStore.ts:460-472`; debounce 300 ms (`projectStore.ts:446`); `saveCurrentProject()` at `projectStore.ts:300-309`.
 - **Data model**: subscribes to `$part`, `$canUndo`, `$canRedo`, `$activeLayerId`, `$layerView`, `$projectName`, `$cameraState`, `$measurements`, `$containers`. A `suspended` flag prevents save storms during project load. localStorage write failures (quota / private mode) are caught and only `console.warn`ed (`projectStore.ts:305-308`) — **silent data-loss risk**.
 
 ### 1.6 Boot restore + boot purge notice
+
 - **What**: On page load, before React renders, the current project (pointer key), else the most recent, else a fresh default is loaded synchronously — one paint, no flash. First, `sanitizeProjectStorage()` purges any `flexo:project:*` entry that is corrupt or stamped with a different `PROJECT_SCHEMA_VERSION` (currently **2**). Purged project names surface as a 10 s warning toast on first mount.
 - **Files**: `hydrateProjectOnBoot()` at `projectStore.ts:480-493` called from `src/main.tsx:38`; purge at `projectStore.ts:241-266`; notice drain `consumeRemovedProjectsNotice()` at `projectStore.ts:226-230`, consumed by `src/app.tsx:42-53` (toast).
 - **Notable**: kept same-version snapshots are default-filled by `normalizePart`/`normalizeSnapshot` (`projectStore.ts:178-216`) — live-constructor templates fill missing additive fields in the document AND every undo/redo history entry. `loadProject` has a try/catch backstop that deletes a project that still crashes on load (`projectStore.ts:353-360`).
 
 ### 1.7 Export project data (JSON)
+
 - **What**: Serializes the project to compact data-only JSON (codec short keys, defaults dropped, floats rounded to 6 decimals) shown in a read-only textarea, with "Copy to clipboard" and "Download .json" (`<name>.flexo.json`).
 - **UI path**: Project popover → "Project Data" section → "Export..." → fullscreen modal.
 - **Files**: `ExportProjectDialog` at `src/ui/ProjectTransferDialogs.tsx:24-100`; `buildProjectExport` at `src/state/projectTransfer.ts:165-190`; codec `src/state/projectCodec.ts` (`PROJECT_EXPORT_VERSION = 8`, `projectCodec.ts:90`).
@@ -52,6 +59,7 @@ Verified against code (docs cross-checked; drift flagged where found).
 - **What's carried** (`ProjectExportData`, `projectTransfer.ts:68-98`): editorTags, gameData, subPartGameData, layers, placements, connectors, colliders, ivaSeats (order load-bearing), lights, internalFlags, kittens, animations, kitten customMeshes, customMaterials, customReactions. NOT carried: undo history, camera, layer view state, measurements, containers, project name is metadata only.
 
 ### 1.8 Import project data (additive paste)
+
 - **What**: Paste exported JSON into a textarea → additively merges into the current workspace as ONE undo step ("import project"). Success toast counts meshes/connectors/animations/layers; failure toast with a parse error.
 - **UI path**: Project popover → "Project Data" → "Import..." → fullscreen modal → paste → "Import".
 - **Files**: `ImportProjectDialog` at `ProjectTransferDialogs.tsx:102-166`; parse boundary `parseProjectImport`/`parseProjectObject` (`projectTransfer.ts:202-235`, exact-version match only); merge engine `mergeProjectImport` (`projectTransfer.ts:288-569`); store wrapper `importProjectData` at `src/state/editorStore.ts:954-973` (pushUndo, sets first new layer active).
@@ -62,45 +70,51 @@ Verified against code (docs cross-checked; drift flagged where found).
   - Part Id adoption only when destination still has the placeholder id; `internalFlags` only applied for templates the paste actually brings; light `scale` pinned to (1,1,1); customMaterials/customReactions deduped by id; smuggled non-kitten meshes in a hand-edited payload are dropped.
 
 ### 1.9 Share project (stateless share link)
+
 - **What**: Generates a single URL encoding the entire project: compact JSON → Zstd level 19 → URL-safe Base64 → `?load=<payload>`. Copy button, Regenerate, character count, and a warning when > 8000 chars ("some browsers truncate URLs"). No server, no account.
 - **UI path**: Project popover → "Project Data" → "Share Project..." → fullscreen modal → "Generate link".
 - **Files**: `src/ui/ShareProjectDialog.tsx`; pipeline `src/state/projectShareLink.ts` (`SHARE_PARAM = 'load'`, `SHARE_ZSTD_LEVEL = 19`); same `hasCustomAssets` gate as export (`ShareProjectDialog.tsx:25,77-82`).
 
 ### 1.10 Open a share link
+
 - **What**: Visiting `<origin><base>?load=<payload>` decodes the payload (async — Zstd WASM) and opens it as a **NEW saved project** (name made unique against local projects, e.g. "Rover 2"); the user's existing projects are untouched; camera/selection/history reset. The `?load=` param is stripped via `history.replaceState` so reload doesn't re-import. Success/danger toast.
 - **Files**: boot flow `src/main.tsx:47-79`; `readShareParam`/`decodeSharePayload`/`clearShareParam` (`projectShareLink.ts:43-84`); `loadSharedProject` at `projectStore.ts:390-409`; faithful (no-remap) reconstruction `envelopeToPart` at `projectTransfer.ts:244-267` incl. `ensureBuiltInLayers`.
 - **Interaction details**: a share-link launch **suppresses** both the build-id mismatch check (leaves `flexo_build_id` untouched so the prompt still fires on the next ordinary visit) and the first-use About auto-open (`main.tsx:49-58`, `suppressAboutFirstUse` in `src/state/aboutStore.ts`). The link lands a beat after first paint (WASM decompress) — hydrated project shows briefly.
 
 ### 1.11 Build-id mismatch dialog ("New version available")
+
 - **What**: Prod-only. `checkBuildId()` compares embedded `VITE_BUILD_ID` against localStorage `flexo_build_id`; on mismatch a non-dismissable center modal offers "No thanks, I know what I'm doing" (dismiss) vs "Reset everything" → nested ConfirmDialog with a "Reset folder access grants" switch → `nukeAndReload`.
 - **Files**: `src/buildCheck.ts`; `src/ui/BuildIdMismatchDialog.tsx` (mounted globally in `src/main.tsx:82-88` next to the toast region); `src/ui/nukeAndReload.ts`.
 - **Notable**: fires on **every** deploy even when `PROJECT_SCHEMA_VERSION` didn't change — it predates the schema-version gate, which now handles真 incompatibility precisely; the dialog is scarier than reality. Skipped entirely in dev and on share-link launches.
 
 ### 1.12 Reset Everything (nuke)
+
 - **What**: Clears localStorage + sessionStorage and deletes all IndexedDB databases **except** `flexo-fs` (the mod-folder File System Access grant — a machine capability, preserved by default; opt-in switch deletes it too), then reloads.
 - **UI paths**: (a) Settings popover → "Reset Everything 🔥" → confirm w/ FS-grant switch (`src/ui/SettingsButton.tsx:211-261`); (b) Build-mismatch dialog → "Reset everything" (same confirm); (c) phone overflow menu → "Reset Everything 🔥" → confirm **without** the FS-grant switch (`MobileTopBar.tsx:96-133` — inconsistent with desktop).
 - **Files**: `src/ui/nukeAndReload.ts` (`FS_GRANT_DBS = {'flexo-fs'}`; tolerates missing `indexedDB.databases()` on old Firefox).
 
 ### 1.13 What a project contains (the persisted document)
+
 `ProjectSnapshot` (`projectStore.ts:87-105`): `version`, `name`, `part` (full `EditingPart`: partId, editorTags, layers, placements, connectors, colliders, ivaSeats, lights, internalFlags, kittens, customTextures, customMaterials, customMeshes, animations, customReactions, gameData, subPartGameData), `layerView` (per-layer visibility/lock), `activeLayerId`, `history` (full undo/redo stacks — **undo survives reload**; entries carry part + containers + measurements + description/detail, `editorStore.ts:453-537`), `savedAt`, `camera` (CameraState — **restored on load**), `measurements`, `containers`. NOT captured: selection, tool mode, snap, seat view, chain session.
+
 > Doc drift: the module header comment (`projectStore.ts:32`) and `docs/projects.md:10-11,23` still claim the camera is excluded/ephemeral — the code captures & restores it (`projectStore.ts:99-100,160,288-293`).
 
 ---
 
 ## 2. UI surface map
 
-| Surface | Kind | Mount / positioning | Notes |
-|---|---|---|---|
-| Project button + popover | toolbar-menu (react-aria Popover, portal) | leftmost in `EditorToolbar` (floating top bar, `app.tsx:78`) and `MobileTopBar` | `placement="bottom start"`, w-64; contains rename field + 5 action buttons |
-| Load Project dialog | modal (`variant="center"`, portal overlay `z-50`) | rendered as sibling of the popover in `ProjectButton` | list max-h-60vh scroll; per-row Load/Delete |
-| Delete-project ConfirmDialog | modal-in-modal | nested **inside** the Load Project `<Modal>` (`ProjectButton.tsx:225-236`) | stacked react-aria overlays, both `z-50` |
-| Share Project dialog | modal (`variant="fullscreen"`, max-w-2xl) | sibling in `ProjectButton` | generate/copy/regenerate states; blocked-state warning box |
-| Export Project Data dialog | modal (`fullscreen`, max-w-2xl) | sibling in `ProjectButton` | read-only mono textarea + copy/download |
-| Import Project Data dialog | modal (`fullscreen`, max-w-2xl) | sibling in `ProjectButton` | paste textarea only — no file picker |
-| Build-id mismatch dialog | modal (`center`, non-dismissable, role=alertdialog) | mounted globally in `main.tsx` root render | + nested ConfirmDialog w/ Switch |
-| Reset-everything ConfirmDialogs | modal | Settings popover (desktop), overflow menu (phone) | duplicate implementations, phone lacks FS switch |
-| Purge-notice toast | toast (GlobalToastRegion) | `app.tsx:42-53` | 10 s warning listing purged project names |
-| Share-link result toasts | toast | `main.tsx:71-77` | success ("Opened shared project") / danger |
+| Surface                         | Kind                                                | Mount / positioning                                                             | Notes                                                                      |
+| ------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Project button + popover        | toolbar-menu (react-aria Popover, portal)           | leftmost in `EditorToolbar` (floating top bar, `app.tsx:78`) and `MobileTopBar` | `placement="bottom start"`, w-64; contains rename field + 5 action buttons |
+| Load Project dialog             | modal (`variant="center"`, portal overlay `z-50`)   | rendered as sibling of the popover in `ProjectButton`                           | list max-h-60vh scroll; per-row Load/Delete                                |
+| Delete-project ConfirmDialog    | modal-in-modal                                      | nested **inside** the Load Project `<Modal>` (`ProjectButton.tsx:225-236`)      | stacked react-aria overlays, both `z-50`                                   |
+| Share Project dialog            | modal (`variant="fullscreen"`, max-w-2xl)           | sibling in `ProjectButton`                                                      | generate/copy/regenerate states; blocked-state warning box                 |
+| Export Project Data dialog      | modal (`fullscreen`, max-w-2xl)                     | sibling in `ProjectButton`                                                      | read-only mono textarea + copy/download                                    |
+| Import Project Data dialog      | modal (`fullscreen`, max-w-2xl)                     | sibling in `ProjectButton`                                                      | paste textarea only — no file picker                                       |
+| Build-id mismatch dialog        | modal (`center`, non-dismissable, role=alertdialog) | mounted globally in `main.tsx` root render                                      | + nested ConfirmDialog w/ Switch                                           |
+| Reset-everything ConfirmDialogs | modal                                               | Settings popover (desktop), overflow menu (phone)                               | duplicate implementations, phone lacks FS switch                           |
+| Purge-notice toast              | toast (GlobalToastRegion)                           | `app.tsx:42-53`                                                                 | 10 s warning listing purged project names                                  |
+| Share-link result toasts        | toast                                               | `main.tsx:71-77`                                                                | success ("Opened shared project") / danger                                 |
 
 All modals are react-aria `ModalOverlay` — `fixed inset-0 z-50`, backdrop blur (`src/ui/kit/Modal.tsx:14-25`). No known clipping issues; the modal-in-modal stacking works but is architecturally awkward (see §4).
 
@@ -109,28 +123,32 @@ All modals are react-aria `ModalOverlay` — `fixed inset-0 z-50`, backdrop blur
 ## 3. State & data flow
 
 ### Stores
+
 - `$projectName` (atom, live) — `projectStore.ts:84`.
 - The project itself is NOT a store: it's a hand-rolled localStorage layer bundling `$part` + `$layerView` + `$activeLayerId` + history + `$cameraState` + `$measurements` + `$containers` under a named key.
 - `$buildMismatch` (atom) — `buildCheck.ts`.
 
 ### Persistence layers (complete key map)
-| Layer | Keys | Contents |
-|---|---|---|
-| localStorage (project) | `flexo:project:<name>` (one per project), `flexo:currentProject` (`{name}` pointer) | schema-versioned `ProjectSnapshot` incl. full undo history |
-| localStorage (app) | `flexo_build_id` | last-seen build id |
-| localStorage (`@nanostores/persistent`, all survive project switches, none per-project) | `flexo:connectorSettings`, `flexo:ivaSeatSettings`, `flexo:lightSettings`, `flexo:selectionHighlight`, `flexo:kittenTextureExport`, `flexo:modelImport`, `flexo:simulateGlass`, `flexo:showFpsCounter`, `flexo:measure`, `flexo:nudgeAxis`, `flexo:nudgeStep`, `flexo:rotateStep`, `flexo:rotateAxisOffset`, `flexo:bulkScaleMode`, `flexo:aboutSeen`, `flexo:chainDefaults`, `flexo:lighting`, `flexo:inspectorVisible`, `flexo:inspectorWidth`, `flexo:inspectorFloatPos`, `flexo:animPreviewFloatPos`, `flexo:containers` (settings), `flexo:grids`, `flexo:hideInterior`, `flexo:layerView`, `flexo:colliderSettings` | preferences/UI state |
-| IndexedDB `flexo-assets` | `tex-src:<id>`, `tex-ktx2:<id>`, `mesh-glb:<id>`, `import-glb:<id>`, `emissive-paint:<id>` | custom-asset binaries (`src/state/assetDb.ts`) — descriptors live in the project, bytes here |
-| IndexedDB `flexo-fs` | dir handle | mod-folder FS grant (`modFolderStore.ts`), preserved by nuke by default |
-| URL | `?load=<payload>` | stateless share link (consumed + stripped at boot) |
+
+| Layer                                                                                   | Keys                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Contents                                                                                     |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| localStorage (project)                                                                  | `flexo:project:<name>` (one per project), `flexo:currentProject` (`{name}` pointer)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | schema-versioned `ProjectSnapshot` incl. full undo history                                   |
+| localStorage (app)                                                                      | `flexo_build_id`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | last-seen build id                                                                           |
+| localStorage (`@nanostores/persistent`, all survive project switches, none per-project) | `flexo:connectorSettings`, `flexo:ivaSeatSettings`, `flexo:lightSettings`, `flexo:selectionHighlight`, `flexo:kittenTextureExport`, `flexo:modelImport`, `flexo:simulateGlass`, `flexo:showFpsCounter`, `flexo:measure`, `flexo:nudgeAxis`, `flexo:nudgeStep`, `flexo:rotateStep`, `flexo:rotateAxisOffset`, `flexo:bulkScaleMode`, `flexo:aboutSeen`, `flexo:chainDefaults`, `flexo:lighting`, `flexo:inspectorVisible`, `flexo:inspectorWidth`, `flexo:inspectorFloatPos`, `flexo:animPreviewFloatPos`, `flexo:containers` (settings), `flexo:grids`, `flexo:hideInterior`, `flexo:layerView`, `flexo:colliderSettings` | preferences/UI state                                                                         |
+| IndexedDB `flexo-assets`                                                                | `tex-src:<id>`, `tex-ktx2:<id>`, `mesh-glb:<id>`, `import-glb:<id>`, `emissive-paint:<id>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | custom-asset binaries (`src/state/assetDb.ts`) — descriptors live in the project, bytes here |
+| IndexedDB `flexo-fs`                                                                    | dir handle                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | mod-folder FS grant (`modFolderStore.ts`), preserved by nuke by default                      |
+| URL                                                                                     | `?load=<payload>`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | stateless share link (consumed + stripped at boot)                                           |
 
 Quirk: `$layerView` is **dual-persisted** — it's a `persistentJSON` global key (`layerStore.ts:39`) AND a per-project snapshot field; project load overwrites the global key's value, so the global key just mirrors the last-loaded project.
 
 ### Undo/redo participation
+
 - Project switch/create/load-shared **replaces** the history stacks wholesale (`importHistory`); it is not itself undoable.
 - Additive import IS one undo step (`editorStore.ts:968`).
 - History is persisted inside every snapshot (capped `MAX_UNDO`), so undo survives reload — a deliberate, user-visible behavior.
 
 ### Boot order (main.tsx, load-bearing)
+
 `registerEditorAidStores` → `hydrateProjectOnBoot()` (sync, pre-render) → `initCustomAssets()` (MUST be after hydrate — `customAssetStore.ts:1859-1861`) → `initAnimationStore()` → share-param branch (suppress about/build-check) → `initModFolder()` (async) → render; async share decode lands post-paint.
 
 ---

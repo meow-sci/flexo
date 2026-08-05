@@ -26,8 +26,8 @@ Three strict tiers, deliberately decoupled:
 
 **Rendering is strictly on-demand** (`src/three/RenderLoop.ts`). No free-running loop; a frame draws
 only on `invalidate()`. Every store subscription in `EditorScene` goes through `EditorScene.sub()`
-(EditorScene.ts:651) which invalidates after each callback. Contract: *anything that can change a
-pixel must invalidate*. The only continuous mode is the stats.js FPS overlay
+(EditorScene.ts:651) which invalidates after each callback. Contract: _anything that can change a
+pixel must invalidate_. The only continuous mode is the stats.js FPS overlay
 (`Viewport.setFpsCounter`, Viewport.ts:156 — `loop.setContinuous(on)`). This is a measured ~40%→~1%
 idle CPU win (RenderLoop.ts:1-20) and MUST survive v2.
 
@@ -40,7 +40,7 @@ idle CPU win (RenderLoop.ts:1-20) and MUST survive v2.
   240–640px, collapsible.
 - `Viewport.handleResize` (Viewport.ts:378) sizes camera aspect from the host div = full window.
   OrbitControls orbit around `controls.target`, which projects to the **window** center — but with
-  the 450px sidebar covering the right edge, the *visible* center is ~225px left of the orbit
+  the 450px sidebar covering the right edge, the _visible_ center is ~225px left of the orbit
   center. Hence "rotation feels off-center". Same story for the left-pinned floating editors and
   toolbars: nothing ever insets the canvas.
 - There is no camera-offset compensation (`camera.setViewOffset` is never used).
@@ -62,13 +62,13 @@ still-focused react-aria toolbar/menu/list. Any v2 shell must keep an equivalent
 
 ### 1.1 Camera & navigation
 
-| Feature | Details |
-|---|---|
-| **Orbit / pan / zoom** | `OrbitControls` with damping (Viewport.ts:102-109). Inertia keeps rendering via `change`→invalidate until settled. Orbit disabled during gizmo drags and in seat view. |
+| Feature                 | Details                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Orbit / pan / zoom**  | `OrbitControls` with damping (Viewport.ts:102-109). Inertia keeps rendering via `change`→invalidate until settled. Orbit disabled during gizmo drags and in seat view.                                                                                                                                                                                                                                                                    |
 | **Camera snap presets** | Toolbar → **View** popover → "Camera Snap" section: Left/Right/Front/Back/Top/Bottom buttons (ViewButton.tsx:70-82). `snapCamera(dir)` writes a nonce'd one-shot atom (`viewStore.ts:58-63`); `EditorScene` consumes it (EditorScene.ts:633-635); `Viewport.snapCamera` (Viewport.ts:184-219) recenters target on **origin (0,0,0)**, preserves current distance, adjusts `up` for top/bottom to avoid gimbal lock. No hotkeys for snaps. |
-| **Camera persistence** | `$cameraState` written on every OrbitControls `end` gesture and after snaps (Viewport.ts:355-357); saved into the per-project snapshot (projectStore.ts:160) and restored on project load via one-shot `$cameraRestore` (projectStore.ts:288-292 → EditorScene.ts:636-638). `resetCamera()` (viewStore.ts:91-94) is only called on new-project/import (projectStore.ts:376,402) — **there is no user-facing "reset camera" button**. |
-| **FPS counter** | Toolbar → Settings menu → Settings → Viewport → "FPS counter" switch (SettingsButton.tsx:59-67). `$showFpsCounter` (settingsStore.ts:292) → stats.js panel pinned absolute top-left **inside the viewport host**, z-index 10 (Viewport.ts:156-175); turns the render loop continuous while on. |
-| **Axis triad** | NOT in the editor viewport. `AxisGizmo` (src/three/AxisGizmo.ts) is only used by the wiki `PartPreviewViewport`. The editor shows a 1m `AxesHelper` at the origin instead (Grid.ts:39-40). A corner triad is a candidate v2 addition, code already exists. |
+| **Camera persistence**  | `$cameraState` written on every OrbitControls `end` gesture and after snaps (Viewport.ts:355-357); saved into the per-project snapshot (projectStore.ts:160) and restored on project load via one-shot `$cameraRestore` (projectStore.ts:288-292 → EditorScene.ts:636-638). `resetCamera()` (viewStore.ts:91-94) is only called on new-project/import (projectStore.ts:376,402) — **there is no user-facing "reset camera" button**.      |
+| **FPS counter**         | Toolbar → Settings menu → Settings → Viewport → "FPS counter" switch (SettingsButton.tsx:59-67). `$showFpsCounter` (settingsStore.ts:292) → stats.js panel pinned absolute top-left **inside the viewport host**, z-index 10 (Viewport.ts:156-175); turns the render loop continuous while on.                                                                                                                                            |
+| **Axis triad**          | NOT in the editor viewport. `AxisGizmo` (src/three/AxisGizmo.ts) is only used by the wiki `PartPreviewViewport`. The editor shows a 1m `AxesHelper` at the origin instead (Grid.ts:39-40). A corner triad is a candidate v2 addition, code already exists.                                                                                                                                                                                |
 
 ### 1.2 View popover (Toolbar → "View") — full contents (ViewButton.tsx)
 
@@ -84,7 +84,7 @@ scrollable. Phone: same content in a bottom-sheet `Modal variant="sheet"` (contr
    config change (EditorScene.ts:632). Origin axes helper always shown.
 3. **Visibility**
    - **Hide interior** switch — `$hideInterior` persistentJSON `flexo:hideInterior`
-     (viewStore.ts:48-52). Hides every mesh whose *resolved* `<Internal>` is true, previewing KSA's
+     (viewStore.ts:48-52). Hides every mesh whose _resolved_ `<Internal>` is true, previewing KSA's
      outside-IVA render gate. Composed with layer visibility in `applyLayerView`
      (EditorScene.ts:917-927) — that method is the **only writer of `group.visible`**.
    - **Light coverage** select — Selected / All / Off (`$lightSettings.showVolumes`, default
@@ -236,7 +236,7 @@ warn toggle + color + opacity, lock, delete.
   knobs re-shade live without rebuild (EditorScene.ts:609-620).
 - **Inspector** (`LightHeader`, TransformInspector.tsx:727-996): type select (Spot/Point), owner
   select (re-homes with frame conversion), **dual-frame position editing** (owner frame + part
-  frame, converted through the *context instance* — the placement whose marker was last clicked,
+  frame, converted through the _context instance_ — the placement whose marker was last clicked,
   `$lightEditContext`, one atom shared with the gizmo so they can never disagree), Spot aim as
   owner-frame Euler AND part-frame unit aim vector (roll-continuity via `lightAimRotation`),
   Range (m), Intensity, color swatch, Spot inner/outer half-angles (deg), **falloff sparkline**
@@ -278,7 +278,7 @@ warn toggle + color + opacity, lock, delete.
   - Document changes re-pose/re-clamp the seated camera live; a deleted seat (or project swap)
     exits cleanly (applySeatView, EditorScene.ts:737-755).
   - Chrome: `SeatViewBar` (SeatViewBar.tsx) — bottom-center floating bar (`absolute inset-x-0
-    bottom-14 z-30`): prev/next seat (wraps, follows selection), "Seat N / M", info tooltip about
+bottom-14 z-30`): prev/next seat (wraps, follows selection), "Seat N / M", info tooltip about
     honest limits (flexo draws every SubPart, interior or not), Exit button with `Esc` kbd chip.
   - Hotkey: **Escape** exits (registry.ts:202-216 — gated on the atom, never preventDefault so it
     can't shadow dialog dismissal).
@@ -289,7 +289,7 @@ warn toggle + color + opacity, lock, delete.
 
 - **Add**: Toolbar → Add → Kitten → Hunter/Polaris/Banjo (AddButton.tsx:143-152); also "Add kitten
   at this seat" from the seat inspector. Data: `KittenInstance` (ksa/types.ts:276-283) — transform
-  + kind + fixed kitten layer id. **Never exported** to KSA XML.
+  - kind + fixed kitten layer id. **Never exported** to KSA XML.
 - **Visuals** (`KittenObject`, src/three/KittenObject.ts): loads the game's character GLTFs, bakes
   bind-pose skinned meshes into static meshes with per-instance KSA materials; helmet/visor/MMU
   attachments baked at socket-bone transforms; per-kind head/eye materials. Async build with the
@@ -332,23 +332,23 @@ children have their own composed visibility gates so `group.visible` keeps a sin
 All surfaces are absolutely-positioned overlays inside the `fixed inset-0` app root; none
 participate in layout. Canvas fills the window underneath everything.
 
-| Surface | Kind | Mount / position | Notes |
-|---|---|---|---|
-| Editor toolbar | floating bar | `absolute left-3 top-3 right-[19rem] lg:left-1/2 lg:-translate-x-1/2` (app.tsx:78) | Centered on desktop; below `lg` it left-aligns and reserves right space for the inspector; flex-wraps to two rows on tablets. |
-| View popover | toolbar popover | react-aria Popover under the View button; portal; `max-h-[80vh]` scroll | One long scrolling column mixing camera, grids, visibility, light-viz, and lighting — dense. Phone: bottom sheet. |
-| Measure popover | toolbar popover | same pattern, 22rem | Mixes settings, tools, list, containers, units. Phone: bottom sheet. |
-| Settings modal | dialog | react-aria Modal `variant="center"` | Viewport/connector/seat/highlight/kitten-texture settings. |
-| RightPanel (inspector) | sidebar (floating overlay) | `absolute right-3 top-3 bottom-3`, width 240–640px persisted; collapsible | Floats OVER the canvas; container is pointer-events-none with children opting back in (RightPanel.tsx:72-90). Cause of the off-center orbit complaint. |
-| MeasurementEditor / ContainerEditor | floating card | `FloatingEditorPanel`: desktop `absolute left-3 top-1/2 -translate-y-1/2 z-10`; phone `inset-x-2 bottom-20` | Both share left-center anchor; mutually exclusive by state so never simultaneous. Not draggable. |
-| MeasurementInfo | HUD | `absolute bottom-3 left-3`, pointer-events-none | **Overlaps the FloatingInspector's default bottom-left anchor** (uiStore.ts:49-52). |
-| SeatViewBar | floating bar | `absolute inset-x-0 bottom-14 z-30 flex justify-center` | Only chrome in seat view. Sits above TransformHud (bottom-2) and WorkspaceLoadProgress. |
-| TransformHud | HUD | `absolute inset-x-0 bottom-2` centered pill | Keyboard-tool status; desktop only. |
-| WorkspaceLoadProgress | HUD | bottom-center ~1rem up | HDR download bars; can stack visually near TransformHud/SeatViewBar. |
-| FPS overlay | HUD | stats.js DOM node absolute top-left of viewport host, z-10 (Viewport.ts:162-168) | Under the toolbar visually; imperative DOM, not React. |
-| CSS2D label overlay | HUD layer | absolute full-size div over canvas, pointer-events:none (Viewport.ts:93-100) | Hosts measurement labels + seat badges; one per viewport. |
-| Coverage dots | in-scene | three.js Points | Cleared via inspector "Clear". |
-| Seat gaze cones, light volumes, grids, axes | in-scene | three.js | Toggled via Settings / View. |
-| FloatingInspector, SelectionToolbar, MultiSelectToolbar, ChainPalette, ImportReportCard | adjacent areas | (documented by their owners) | Compete for the same overlay space; listed for stacking context. |
+| Surface                                                                                 | Kind                       | Mount / position                                                                                            | Notes                                                                                                                                                  |
+| --------------------------------------------------------------------------------------- | -------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Editor toolbar                                                                          | floating bar               | `absolute left-3 top-3 right-[19rem] lg:left-1/2 lg:-translate-x-1/2` (app.tsx:78)                          | Centered on desktop; below `lg` it left-aligns and reserves right space for the inspector; flex-wraps to two rows on tablets.                          |
+| View popover                                                                            | toolbar popover            | react-aria Popover under the View button; portal; `max-h-[80vh]` scroll                                     | One long scrolling column mixing camera, grids, visibility, light-viz, and lighting — dense. Phone: bottom sheet.                                      |
+| Measure popover                                                                         | toolbar popover            | same pattern, 22rem                                                                                         | Mixes settings, tools, list, containers, units. Phone: bottom sheet.                                                                                   |
+| Settings modal                                                                          | dialog                     | react-aria Modal `variant="center"`                                                                         | Viewport/connector/seat/highlight/kitten-texture settings.                                                                                             |
+| RightPanel (inspector)                                                                  | sidebar (floating overlay) | `absolute right-3 top-3 bottom-3`, width 240–640px persisted; collapsible                                   | Floats OVER the canvas; container is pointer-events-none with children opting back in (RightPanel.tsx:72-90). Cause of the off-center orbit complaint. |
+| MeasurementEditor / ContainerEditor                                                     | floating card              | `FloatingEditorPanel`: desktop `absolute left-3 top-1/2 -translate-y-1/2 z-10`; phone `inset-x-2 bottom-20` | Both share left-center anchor; mutually exclusive by state so never simultaneous. Not draggable.                                                       |
+| MeasurementInfo                                                                         | HUD                        | `absolute bottom-3 left-3`, pointer-events-none                                                             | **Overlaps the FloatingInspector's default bottom-left anchor** (uiStore.ts:49-52).                                                                    |
+| SeatViewBar                                                                             | floating bar               | `absolute inset-x-0 bottom-14 z-30 flex justify-center`                                                     | Only chrome in seat view. Sits above TransformHud (bottom-2) and WorkspaceLoadProgress.                                                                |
+| TransformHud                                                                            | HUD                        | `absolute inset-x-0 bottom-2` centered pill                                                                 | Keyboard-tool status; desktop only.                                                                                                                    |
+| WorkspaceLoadProgress                                                                   | HUD                        | bottom-center ~1rem up                                                                                      | HDR download bars; can stack visually near TransformHud/SeatViewBar.                                                                                   |
+| FPS overlay                                                                             | HUD                        | stats.js DOM node absolute top-left of viewport host, z-10 (Viewport.ts:162-168)                            | Under the toolbar visually; imperative DOM, not React.                                                                                                 |
+| CSS2D label overlay                                                                     | HUD layer                  | absolute full-size div over canvas, pointer-events:none (Viewport.ts:93-100)                                | Hosts measurement labels + seat badges; one per viewport.                                                                                              |
+| Coverage dots                                                                           | in-scene                   | three.js Points                                                                                             | Cleared via inspector "Clear".                                                                                                                         |
+| Seat gaze cones, light volumes, grids, axes                                             | in-scene                   | three.js                                                                                                    | Toggled via Settings / View.                                                                                                                           |
+| FloatingInspector, SelectionToolbar, MultiSelectToolbar, ChainPalette, ImportReportCard | adjacent areas             | (documented by their owners)                                                                                | Compete for the same overlay space; listed for stacking context.                                                                                       |
 
 Stacking is mostly source-order + ad-hoc z-10/z-30; react-aria popovers/modals portal above
 everything. Known collisions: MeasurementInfo vs FloatingInspector default anchor (both
@@ -361,31 +361,31 @@ hardcodes `bottom-14` to clear the TransformHud.
 
 ### Stores and persistence
 
-| Store | Key | Persistence | Contents |
-|---|---|---|---|
-| `$grids` | `flexo:grids` | localStorage | per-axis enabled + spacing |
-| `$hideInterior` | `flexo:hideInterior` | localStorage | bool |
-| `$cameraSnap` / `$cameraRestore` | — | ephemeral one-shot (nonce) | commands |
-| `$cameraState` | — | ephemeral atom, but snapshotted into **project autosave** | position/target/up |
-| `$lighting` | `flexo:lighting` | localStorage | env preset, intensity, sky, blur, exposure, tonemap |
-| `$measurementSettings` | `flexo:measure` | localStorage | unit, bounds mode, 3 switches |
-| `$measurements` | — | **project snapshot** (projectStore.ts:161) | placed lines |
-| `$measureTool` / `$activeMeasurementId` / `$activeEndpoint` / `$selectionBounds` | — | ephemeral | interaction state |
-| `$containers` | — | **project snapshot** | placed containers |
-| `$containerSettings` | `flexo:containers` | localStorage | warn precision |
-| `$activeContainerId` / `$containerGizmoMode` | — | ephemeral | |
-| `$colliderSettings` | `flexo:colliders` | localStorage | precision, margin, orientToSelection |
-| `$colliderFitRequest` / `$coverageRequest` / `$coverageReport` | — | ephemeral intents/report | |
-| `$ivaSeatAimRequest` | — | ephemeral intent | |
-| `$seatView` / `$seatLook` | — | ephemeral | seat id / clamped look dir |
-| `$connectorSettings` | `flexo:connectorSettings` | localStorage | cube size |
-| `$ivaSeatSettings` | `flexo:ivaSeatSettings` | localStorage | marker size, gaze cone |
-| `$lightSettings` | `flexo:lightSettings` | localStorage | marker size, showVolumes, exposure mode/value, livePreview — read through `lightSettings()` resolver for field defaulting (settingsStore.ts:125-127; NOT migration) |
-| `$lightPreviewCount` | — | ephemeral (deliberately) | scene→UI cap report |
-| `$selectionHighlight` | `flexo:selectionHighlight` | localStorage | mesh/kitten tint |
-| `$showFpsCounter` | `flexo:showFpsCounter` | localStorage | bool |
-| `$inspectorVisible` / `$inspectorWidth` | `flexo:inspector*` | localStorage | right panel |
-| Document entities (colliders, seats, lights, kittens, connectors, placements) | — | `$part` → project snapshot → KSA XML export (except kittens/measurements/containers, editor-only) | |
+| Store                                                                            | Key                        | Persistence                                                                                       | Contents                                                                                                                                                            |
+| -------------------------------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$grids`                                                                         | `flexo:grids`              | localStorage                                                                                      | per-axis enabled + spacing                                                                                                                                          |
+| `$hideInterior`                                                                  | `flexo:hideInterior`       | localStorage                                                                                      | bool                                                                                                                                                                |
+| `$cameraSnap` / `$cameraRestore`                                                 | —                          | ephemeral one-shot (nonce)                                                                        | commands                                                                                                                                                            |
+| `$cameraState`                                                                   | —                          | ephemeral atom, but snapshotted into **project autosave**                                         | position/target/up                                                                                                                                                  |
+| `$lighting`                                                                      | `flexo:lighting`           | localStorage                                                                                      | env preset, intensity, sky, blur, exposure, tonemap                                                                                                                 |
+| `$measurementSettings`                                                           | `flexo:measure`            | localStorage                                                                                      | unit, bounds mode, 3 switches                                                                                                                                       |
+| `$measurements`                                                                  | —                          | **project snapshot** (projectStore.ts:161)                                                        | placed lines                                                                                                                                                        |
+| `$measureTool` / `$activeMeasurementId` / `$activeEndpoint` / `$selectionBounds` | —                          | ephemeral                                                                                         | interaction state                                                                                                                                                   |
+| `$containers`                                                                    | —                          | **project snapshot**                                                                              | placed containers                                                                                                                                                   |
+| `$containerSettings`                                                             | `flexo:containers`         | localStorage                                                                                      | warn precision                                                                                                                                                      |
+| `$activeContainerId` / `$containerGizmoMode`                                     | —                          | ephemeral                                                                                         |                                                                                                                                                                     |
+| `$colliderSettings`                                                              | `flexo:colliders`          | localStorage                                                                                      | precision, margin, orientToSelection                                                                                                                                |
+| `$colliderFitRequest` / `$coverageRequest` / `$coverageReport`                   | —                          | ephemeral intents/report                                                                          |                                                                                                                                                                     |
+| `$ivaSeatAimRequest`                                                             | —                          | ephemeral intent                                                                                  |                                                                                                                                                                     |
+| `$seatView` / `$seatLook`                                                        | —                          | ephemeral                                                                                         | seat id / clamped look dir                                                                                                                                          |
+| `$connectorSettings`                                                             | `flexo:connectorSettings`  | localStorage                                                                                      | cube size                                                                                                                                                           |
+| `$ivaSeatSettings`                                                               | `flexo:ivaSeatSettings`    | localStorage                                                                                      | marker size, gaze cone                                                                                                                                              |
+| `$lightSettings`                                                                 | `flexo:lightSettings`      | localStorage                                                                                      | marker size, showVolumes, exposure mode/value, livePreview — read through `lightSettings()` resolver for field defaulting (settingsStore.ts:125-127; NOT migration) |
+| `$lightPreviewCount`                                                             | —                          | ephemeral (deliberately)                                                                          | scene→UI cap report                                                                                                                                                 |
+| `$selectionHighlight`                                                            | `flexo:selectionHighlight` | localStorage                                                                                      | mesh/kitten tint                                                                                                                                                    |
+| `$showFpsCounter`                                                                | `flexo:showFpsCounter`     | localStorage                                                                                      | bool                                                                                                                                                                |
+| `$inspectorVisible` / `$inspectorWidth`                                          | `flexo:inspector*`         | localStorage                                                                                      | right panel                                                                                                                                                         |
+| Document entities (colliders, seats, lights, kittens, connectors, placements)    | —                          | `$part` → project snapshot → KSA XML export (except kittens/measurements/containers, editor-only) |                                                                                                                                                                     |
 
 Camera, measurements, containers autosave with the project (projectStore.ts:469-471 subscriptions);
 selection/tool/snap deliberately don't.
@@ -421,7 +421,7 @@ selection/tool/snap deliberately don't.
    scene lighting in one 80vh scrolling popover. Light coverage/exposure/preview controls are far
    from the light inspector that they modulate.
 3. **Settings split across two homes.** Marker sizes (connector/seat/light…) — except light marker
-   size, which is *not* in the Settings modal at all (only `$lightSettings.markerSize` default;
+   size, which is _not_ in the Settings modal at all (only `$lightSettings.markerSize` default;
    grep shows no UI writes to markerSize — check: SettingsButton has connector+seat sizes only).
    Meanwhile light-viz settings live in the View popover. Users must learn which knob lives where.
 4. **Collider fit knobs partially unexposed.** `$colliderSettings.margin` and `orientToSelection`
@@ -461,6 +461,7 @@ selection/tool/snap deliberately don't.
 ## 5. Invariants & constraints (MUST survive)
 
 **Rendering / three-layer**
+
 - On-demand render loop and the "everything that changes a pixel invalidates" contract
   (RenderLoop.ts; EditorScene.sub). FPS counter = the only continuous mode.
 - Single writer of `group.visible` = `applyLayerView`; all other visibility composes on children.
@@ -473,6 +474,7 @@ selection/tool/snap deliberately don't.
 - StrictMode-safe mount/dispose of EditorScene (ViewportCanvas.tsx).
 
 **KSA game-contract semantics**
+
 - Coordinates: Y-up meters; "facing = local +X" convention for connectors, seat forward, light aim,
   exhaust. Seat up = local −Z. Euler/quaternion conversions only through `three/coords.ts`.
 - Colliders: KSA composes only position+rotation of the owner — placement scale is ignored (warn,
@@ -494,6 +496,7 @@ selection/tool/snap deliberately don't.
 - Connectors cannot animate with joints (decomp-verified); no UI should suggest otherwise.
 
 **Editor semantics**
+
 - Instance-context editing for SubPart-owned colliders/lights (last-clicked visual = the frame the
   gizmo and inspector write through; `$lightEditContext` shared atom).
 - Gizmo locks: locked layers; posed animation preview (never bake a preview pose into the
@@ -507,6 +510,7 @@ selection/tool/snap deliberately don't.
   project constitution forbids migration code).
 
 **Project conventions**
+
 - ALL numeric fields use `useNumberDraft`-based inputs (`PreciseNumberInput` / `NumberField`) with
   `inputMode="url"` — never ad-hoc `Number(v)` TextFields.
 - No manual memoization (React Compiler); react-aria kit components; nanostores.
@@ -529,7 +533,7 @@ property):
   no: measurements delete via their own editor/list buttons only).
 - **⌘C/⌘V/⌘Z/⌘Y/⌘⇧Z/⌘K**, **?** help — global.
 - Modifier semantics: **Ctrl/Cmd/Shift-click = additive select** (SelectionManager.ts:73);
-  >4px drag = orbit not click; measure pick uses the same 4px rule.
+  > 4px drag = orbit not click; measure pick uses the same 4px rule.
 - Escape during a gizmo drag cancels it (TransformControls built-in; referenced registry.ts:211).
 - Notably ABSENT: camera-snap hotkeys, measure-tool hotkeys, hide-interior toggle, grid toggle.
 
@@ -538,6 +542,7 @@ property):
 ## 7. Cross-area dependencies
 
 **Others → this area**
+
 - Layers: `$layerView`, `isLayerVisible/Locked` gate all selection + visibility here.
 - Animation editor: `$inspectorMode==='anim'`, preview atoms drive `applyAnimationPreview`;
   SubPart-owned colliders/lights follow the pose; pose proxy + pivot helper live in EditorScene.
@@ -553,6 +558,7 @@ property):
 - Import: `ViewportDropZone` wraps the canvas for .glb drop.
 
 **This area → others**
+
 - `$lighting` is global — the Add-Part/SubPart preview viewports and wiki `PartPreviewViewport`
   all apply the same `SceneEnvironment`, so a part looks the same everywhere.
 - Toasts (`ui/kit` toast) are the scene's only user-notification channel (EditorScene.ts:148-149,

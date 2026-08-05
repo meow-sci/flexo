@@ -17,7 +17,7 @@ docs are current and unusually accurate; code is authoritative where they differ
   encode it into the project's custom-texture library. Channel drives encode transforms: normal maps
   get the KSA X-flip (+ strength scaling baked into RG), linear channels stored as-is, mips rebuilt.
 - **UI path**: top Toolbar → **Add** menu → "Upload texture…" (`src/ui/AddButton.tsx:81`). That is the
-  ONLY creation entry point; the Custom Assets modal's empty state merely *tells* you to go there
+  ONLY creation entry point; the Custom Assets modal's empty state merely _tells_ you to go there
   (`CustomAssetsModal.tsx:186` "Use 'Upload texture…' in the Add menu").
 - **Files**: `src/ui/CustomTextureDialog.tsx` (dialog; paste listener at :57-70, drop at :72),
   `src/state/customAssetStore.ts:759-795` (`createTextureAsset`/`addCustomTexture` — decode →
@@ -38,7 +38,7 @@ docs are current and unusually accurate; code is authoritative where they differ
 - **UI path**: right sidebar (Assets tab) → **AssetsToolbar → "Custom (N)"** → Custom Assets modal →
   Textures section → per-row channel `Select` (`CustomAssetsModal.tsx:214-225`).
 - **Files**: `customAssetStore.setTextureChannel` (`customAssetStore.ts:802-819`).
-- **Notes**: this is the only texture *edit* that exists — no rename, no re-upload-in-place,
+- **Notes**: this is the only texture _edit_ that exists — no rename, no re-upload-in-place,
   no preview-at-size.
 
 ### 1.3 Delete texture
@@ -149,7 +149,7 @@ docs are current and unusually accurate; code is authoritative where they differ
   a **color ramp (LUT)** with draggable stops, presets, and import-from-image (reads the middle row
   of the image); independent **Emissive** (white mask) slider with a wash-out warning above 0.6;
   "Add matching light" button that creates a KSA `<Light>` seeded with the glow color (the only way
-  to get colored *light* in KSA — emissive is white-only).
+  to get colored _light_ in KSA — emissive is white-only).
 - **UI path**: ManageTexturesPanel → "Glow (emissive)" section (`ManageTexturesPanel.tsx:566-598`,
   `GlowSettings` :448-508, `GlowRampEditor` :609-708, `AddMatchingLightButton` :515-531).
 - **Files**: `setMeshGlow` (`customAssetStore.ts:1703-1709`), `src/ktx/glowComposite.ts` (the
@@ -219,8 +219,8 @@ docs are current and unusually accurate; code is authoritative where they differ
 - **Materials** (`src/ksa/importMaterials.ts`): glTF metallic-roughness → flexo assets: baseColor
   (factor baked into pixels when textured), metallic/roughness factors or MR texture →
   packed ORM / scalars, occlusion (+strength), normal (+scale), emissive → a 'painted' glow bitmap
-  + color. Textures deduped by content hash; decode capped at the sticky max size; warnings for
-  KTX2 sources, UV1, vertex colors, etc.
+  - color. Textures deduped by content hash; decode capped at the sticky max size; warnings for
+    KTX2 sources, UV1, vertex colors, etc.
 - **Commit** (`customAssetStore.importModelAsMeshes` :1198-1259): binaries first (import GLB under
   `import-glb:<importId>`, every texture, every glow PNG), then ONE `mutate()` = one undo step
   creating: a **new layer named after the file**, all textures, all materials, one `CustomMesh` per
@@ -345,20 +345,20 @@ docs are current and unusually accurate; code is authoritative where they differ
 
 ## 2. UI surface map
 
-| Surface | Kind | Mounts / trigger | Positioning | Stacking | Issues |
-|---|---|---|---|---|---|
-| **Add menu** (texture/material/mesh/import/kitten-mesh entries) | toolbar menu | `AddButton` in `EditorToolbar` (floating top-center bar, `app.tsx:78`) | react-aria Popover (portal) | popover layer | 13+ items + 5 submenus; asset creation mixed with scene-entity creation |
-| **CustomTextureDialog** | modal dialog | conditionally mounted by `AddButton` | kit `Modal` `variant="fullscreen"` `max-w-md` (portal) | modal overlay | window-level paste listener while open |
-| **MaterialDialog** | modal dialog | mounted by `AddButton`, `CustomAssetsModal`, `ManageTexturesPanel` (3 hosts) | `Modal` fullscreen `max-w-md` | modal overlay | opens ON TOP of CustomAssetsModal and on top of the floating ManageTexturesPanel (modal-over-modal); own WebGL context per open |
-| **CreateMeshDialog** | modal dialog | mounted by `AddButton` | `Modal` fullscreen `max-w-md` | modal overlay | no live preview of the primitive |
-| **CustomAssetsModal** ("Custom (N)") | modal dialog | `AssetsToolbar` → button; toolbar lives at top of right-sidebar Assets mode (`InspectorContent.tsx:50`) | `Modal` fullscreen `max-w-2xl` | modal overlay | THE management hub, hidden behind a sidebar button label "Custom (N)"; hosts 4 ConfirmDialogs + MaterialDialog stacked |
-| **ManageTexturesPanel** | floating card (desktop) / fullscreen modal (phone) | app root (`app.tsx:121`), driven by `$managingMeshId` | `absolute left-3 top-1/2 -translate-y-1/2 w-64 max-h-[calc(100vh-6rem)]` | `z-10` | overlaps left-side surfaces (MeasurementEditor/ContainerEditor cards, ChainPalette); not draggable; opening from CustomAssetsModal force-closes the modal |
-| **GlowPaintDialog** | modal dialog | app root (`app.tsx:124`), driven by `$glowPaintMeshId` | `Modal` (default size) | modal overlay | canvas fixed 512²; no undo inside the painter (Clear only) |
-| **ImportModelDialog** | modal dialog (3-state) | app root (`app.tsx:128`), driven by `$importModelRequest` | `Modal` fullscreen `max-w-4xl` | modal overlay | un-dismissable while importing (deliberate); review step is dense (preview + stats + warnings + 10 options) |
-| **ImportReportCard** | corner overlay card | app root (`app.tsx:132`), driven by `$importReport` | `absolute inset-x-3 bottom-3 z-40` right-aligned, `sm:w-80`, max-h 60vh | `z-40` | sits in the toast corner; can cover MeasurementInfo / bottom HUD area on phone (inset-x-3 full width) |
-| **ViewportDropZone overlay** | HUD overlay | wraps `ViewportCanvas` (`app.tsx:63`) | `absolute inset-3 z-10` dashed border | `z-10` | none — pointer-events-none |
-| **Assets list row menus** ("Manage Textures/Material") | context/⋮ menu | right sidebar Assets list rows | Popover (portal) | popover | entry point for surface editing is 2 levels deep and named differently per mesh kind |
-| **Settings → Kitten mesh textures** | modal section | `SettingsButton` in toolbar | `Modal` | modal | an export decision living in global Settings, far from Export |
+| Surface                                                         | Kind                                               | Mounts / trigger                                                                                        | Positioning                                                              | Stacking      | Issues                                                                                                                                                    |
+| --------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Add menu** (texture/material/mesh/import/kitten-mesh entries) | toolbar menu                                       | `AddButton` in `EditorToolbar` (floating top-center bar, `app.tsx:78`)                                  | react-aria Popover (portal)                                              | popover layer | 13+ items + 5 submenus; asset creation mixed with scene-entity creation                                                                                   |
+| **CustomTextureDialog**                                         | modal dialog                                       | conditionally mounted by `AddButton`                                                                    | kit `Modal` `variant="fullscreen"` `max-w-md` (portal)                   | modal overlay | window-level paste listener while open                                                                                                                    |
+| **MaterialDialog**                                              | modal dialog                                       | mounted by `AddButton`, `CustomAssetsModal`, `ManageTexturesPanel` (3 hosts)                            | `Modal` fullscreen `max-w-md`                                            | modal overlay | opens ON TOP of CustomAssetsModal and on top of the floating ManageTexturesPanel (modal-over-modal); own WebGL context per open                           |
+| **CreateMeshDialog**                                            | modal dialog                                       | mounted by `AddButton`                                                                                  | `Modal` fullscreen `max-w-md`                                            | modal overlay | no live preview of the primitive                                                                                                                          |
+| **CustomAssetsModal** ("Custom (N)")                            | modal dialog                                       | `AssetsToolbar` → button; toolbar lives at top of right-sidebar Assets mode (`InspectorContent.tsx:50`) | `Modal` fullscreen `max-w-2xl`                                           | modal overlay | THE management hub, hidden behind a sidebar button label "Custom (N)"; hosts 4 ConfirmDialogs + MaterialDialog stacked                                    |
+| **ManageTexturesPanel**                                         | floating card (desktop) / fullscreen modal (phone) | app root (`app.tsx:121`), driven by `$managingMeshId`                                                   | `absolute left-3 top-1/2 -translate-y-1/2 w-64 max-h-[calc(100vh-6rem)]` | `z-10`        | overlaps left-side surfaces (MeasurementEditor/ContainerEditor cards, ChainPalette); not draggable; opening from CustomAssetsModal force-closes the modal |
+| **GlowPaintDialog**                                             | modal dialog                                       | app root (`app.tsx:124`), driven by `$glowPaintMeshId`                                                  | `Modal` (default size)                                                   | modal overlay | canvas fixed 512²; no undo inside the painter (Clear only)                                                                                                |
+| **ImportModelDialog**                                           | modal dialog (3-state)                             | app root (`app.tsx:128`), driven by `$importModelRequest`                                               | `Modal` fullscreen `max-w-4xl`                                           | modal overlay | un-dismissable while importing (deliberate); review step is dense (preview + stats + warnings + 10 options)                                               |
+| **ImportReportCard**                                            | corner overlay card                                | app root (`app.tsx:132`), driven by `$importReport`                                                     | `absolute inset-x-3 bottom-3 z-40` right-aligned, `sm:w-80`, max-h 60vh  | `z-40`        | sits in the toast corner; can cover MeasurementInfo / bottom HUD area on phone (inset-x-3 full width)                                                     |
+| **ViewportDropZone overlay**                                    | HUD overlay                                        | wraps `ViewportCanvas` (`app.tsx:63`)                                                                   | `absolute inset-3 z-10` dashed border                                    | `z-10`        | none — pointer-events-none                                                                                                                                |
+| **Assets list row menus** ("Manage Textures/Material")          | context/⋮ menu                                     | right sidebar Assets list rows                                                                          | Popover (portal)                                                         | popover       | entry point for surface editing is 2 levels deep and named differently per mesh kind                                                                      |
+| **Settings → Kitten mesh textures**                             | modal section                                      | `SettingsButton` in toolbar                                                                             | `Modal`                                                                  | modal         | an export decision living in global Settings, far from Export                                                                                             |
 
 Approximate z-order (app root, `fixed inset-0`): canvas < drop-zone overlay (z-10) =
 ManageTexturesPanel (z-10) < toolbars < ImportReportCard (z-40) < react-aria portals
@@ -390,13 +390,13 @@ ManageTexturesPanel (z-10) < toolbars < ImportReportCard (z-40) < react-aria por
 
 **Persistence tiers**:
 
-| Data | Where | Undo? |
-|---|---|---|
-| Descriptors (textures/materials/meshes/faceTextures/glow config) | project snapshot in localStorage (projectStore) | yes — one undo step per store helper |
-| Texture source + encoded ktx2, import GLBs, painted-glow PNGs | IndexedDB `flexo-assets` (`assetDb.ts`), keys `tex-src:` / `tex-ktx2:` / `import-glb:` / `emissive-paint:` | **no** — deletes are immediate; undo restores descriptors only (stated in confirm dialogs for imports) |
-| Primitive & kitten geometry | not persisted — regenerated (params / re-bake) | n/a |
-| Sticky import prefs, kitten export mode, simulateGlass | localStorage (`flexo:*`) | no |
-| Blob URLs, atlas, render cache, catalog | session-only, rebuilt by `scheduleRebuild` (serialized, coalescing) | rebuilt on signature change |
+| Data                                                             | Where                                                                                                      | Undo?                                                                                                  |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Descriptors (textures/materials/meshes/faceTextures/glow config) | project snapshot in localStorage (projectStore)                                                            | yes — one undo step per store helper                                                                   |
+| Texture source + encoded ktx2, import GLBs, painted-glow PNGs    | IndexedDB `flexo-assets` (`assetDb.ts`), keys `tex-src:` / `tex-ktx2:` / `import-glb:` / `emissive-paint:` | **no** — deletes are immediate; undo restores descriptors only (stated in confirm dialogs for imports) |
+| Primitive & kitten geometry                                      | not persisted — regenerated (params / re-bake)                                                             | n/a                                                                                                    |
+| Sticky import prefs, kitten export mode, simulateGlass           | localStorage (`flexo:*`)                                                                                   | no                                                                                                     |
+| Blob URLs, atlas, render cache, catalog                          | session-only, rebuilt by `scheduleRebuild` (serialized, coalescing)                                        | rebuilt on signature change                                                                            |
 
 **No per-project namespacing in IndexedDB** — one shared blob store for all projects (ids are
 random so no collisions; orphans possible after deleting a project).
@@ -440,7 +440,7 @@ export time (a setting labeled as an import option silently changing export outp
 7. **Import dialog review step density**: preview + 9-stat grid + match summary + warning groups +
    ~10 option controls in a `max-w-4xl` modal (`ImportModelDialog.tsx:311-427`). Works, but is the
    single densest surface in the app; on phone it's a long scroll.
-8. **`decimateViewMeshes` is a sticky *import* setting that changes *export* output**
+8. **`decimateViewMeshes` is a sticky _import_ setting that changes _export_ output**
    (`modExport.viewMeshBudget()` reads `$modelImportSettings`, `modExport.ts:762`) — invisible at
    export time.
 9. **Kitten texture export mode hides in global Settings** (`SettingsButton.tsx:128`) while every
@@ -491,7 +491,7 @@ full numbered contract list; the load-bearing ones for this area:
   INDEPENDENT sliders; the >0.6 washout warning; "Add matching light" is the colored-light path.
 - Glass: `<PartModelGlass>` fixed shader (≈0.75 opacity, ~10% tint, never emissive, no
   `<Internal>`); glassGlow layered export is kitten-only (inset heuristic unsafe on arbitrary
-  geometry); imported "render as glass" is export-only with an opaque editor preview *by design*.
+  geometry); imported "render as glass" is export-only with an opaque editor preview _by design_.
 - Back-face culling unconditional → mirrored instances split into own SubParts; double-sided =
   duplicate+flip geometry; sampler is always Repeat (wrap modes are editor-baked via UV transform).
 - `_VM` view meshes: must keep indices AND normals; decimation budget 2000 tris; export path uses
@@ -546,6 +546,7 @@ seat-view bindings; no custom-asset hotkey exists. Adjacent key behaviors that t
 ## 7. Cross-area dependencies
 
 **This area calls into:**
+
 - `editorStore`: `addSubPart`, `setSelection`, `setActiveLayer`, `nextLayerId`, `pushUndo`,
   `addLight` (glow "Add matching light"), `$part`.
 - `catalogStore.$customCatalog` → merged into `$catalogIndex` (SubPart browser previews, export
@@ -554,6 +555,7 @@ seat-view bindings; no custom-asset hotkey exists. Adjacent key behaviors that t
 - settingsStore (`$modelImportSettings`, `$kittenTextureExport`, `$simulateGlass`).
 
 **Other areas call into this one:**
+
 - `src/three/SubPartObject.ts` reads `customMeshRenderCache` (render path).
 - `src/ksa/modExport.buildCustomBundle` reads meshes/materials/textures + IndexedDB blobs +
   `getImportedRawGeometry` + `bakeKittenSubMeshes`; `buildExportVariantMap` must skip custom
@@ -602,7 +604,7 @@ seat-view bindings; no custom-asset hotkey exists. Adjacent key behaviors that t
 10. **Texture "where used" / reverse references**: the delete confirms compute counts ad hoc; a v2
     manager could show usage chips (faces, material channels, meshes). Worth specifying now since
     the GC logic (`materialTextureIds`, `planOrphanedAssets`) already computes the graph.
-11. **Glow paint canvas**: keep as separate modal or integrate as a paint *mode* on the mesh in the
+11. **Glow paint canvas**: keep as separate modal or integrate as a paint _mode_ on the mesh in the
     3D viewport (current canvas is 2D UV-space only, 512² fixed)? Big scope difference.
 12. **Custom (N) count semantics** if the button survives anywhere: textures+meshes today; should
     it be per-kind badges or disappear entirely into the manager?

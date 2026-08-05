@@ -10,37 +10,37 @@ All paths below are repo-relative unless absolute.
 ### 1.1 The component kit (`src/ui/kit/`)
 
 The kit is a **centralized react-aria-components + Tailwind wrapper layer**. The stated rule
-(`src/ui/kit/index.ts:1-2`): *import UI primitives from the kit, never from
-`react-aria-components` directly, so styling stays in one place.* Unstyled trigger/collection
+(`src/ui/kit/index.ts:1-2`): _import UI primitives from the kit, never from
+`react-aria-components` directly, so styling stays in one place._ Unstyled trigger/collection
 pieces are re-exported verbatim from react-aria (`index.ts:49-51`): `DialogTrigger`,
 `MenuTrigger`, `SubmenuTrigger`, `Heading`, `Header`.
 
 Every primitive, its API and variants:
 
-| Primitive | File | API / variants | Notes |
-|---|---|---|---|
-| `Button` (+ exported `button` tv) | `kit/Button.tsx:5-45` | `variant`: primary / secondary (default) / ghost / danger / danger-ghost; `size`: sm (h-7, px-2.5, text-xs) / md (h-9, default) / lg (h-11); `iconOnly` (square, w=h) | tv `extend: focusRing`; all react-aria ButtonProps pass through (`onPress`, `isDisabled`, …) |
-| `ToggleButton`, `ToggleButtonGroup` | `kit/ToggleButton.tsx` | sizes sm (h-6) / md (h-8); selected = solid accent fill | Group = segmented control: bordered sunken tray, `p-0.5 gap-0.5` (`:43-53`) |
-| `Checkbox` | `kit/Checkbox.tsx` | react-aria CheckboxProps; renders 16px box + Check/Minus icon; supports indeterminate | label optional (children) |
-| `Switch` | `kit/Switch.tsx` | h-5 w-9 track, accent when on | |
-| `TextField` | `kit/TextField.tsx:10-65` | `label` / `description` / `errorMessage` (stacked when present, bare inline field when not), `size` from `inputStyles`, `inputMode`, `inputClassName`, `inputRef`, `onFocus/onBlur/onKeyDown` passthrough | `onChange` yields the **raw string** — load-bearing for the numeric-draft convention (§1.5) |
-| `SearchField` | `kit/SearchField.tsx` | sizes sm/md; leading Search icon, clear button hidden until non-empty (`group-data-[empty]:hidden`) | native webkit cancel button suppressed |
-| `Field` pieces | `kit/Field.tsx` | `inputStyles` tv (sm h-7 px-2 text-xs / md h-9 px-2.5 text-sm — the shared input surface), `fieldGroup` tv (input+stepper container), `Label` (text-xs fg-muted), `Description`, `FieldError`, `FieldGroup`, `SectionTitle` (uppercase tracking-wide panel heading) | |
-| `Select` | `kit/Select.tsx:49-104` | `items` + render-fn children (react-aria collection API), `size` sm/md, `label`, `triggerClassName`/`popoverClassName`, **`searchable`** + `searchPlaceholder` | searchable = react-aria `Autocomplete` wrapping the ListBox with **virtual focus** (search input keeps DOM focus, arrows move listbox focus). This virtual focus is why `GlobalHotkeys.isTypingInField` exists (§1.3). Popover width = `--trigger-width` |
-| `ListBox` / `ListBoxItem` | `kit/ListBox.tsx:23-48` | item = px-2 py-1.5 text-sm; selected shows trailing accent Check | |
-| `GridList` / `GridListItem` | `kit/ListBox.tsx:50-77` | selection = accent **inset ring** + bg-white/8; keyboard focus = thinner ring | Multi-select list rows (Assets list, Mesh Picker). Same styling exported as function `gridRowClass` in `styles.ts:40-51` for call sites composing extras |
-| `Slider` | `kit/Slider.tsx` | single-thumb styled track; react-aria SliderProps | |
-| `Tag`/`TagGroup`/`TagList` | `kit/Tag.tsx` | removable tags (X button when `allowsRemoving`) | used by e.g. `EditorTagsField` |
-| `Chip` | `kit/Tag.tsx:55-65` | static count/status pill (non-interactive span) | |
-| `DisclosureSection` | `kit/Disclosure.tsx:19-63` | `title`, `badge` (trailing count), `defaultExpanded` | collapsible bordered card; header chevron rotates via `group-data-[expanded]` |
-| `Toolbar` / `ToolbarSeparator` / `ToolbarButton` | `kit/Toolbar.tsx` | react-aria Toolbar ⇒ **arrow-key roving focus** across children; surface = `rounded-xl border bg-panel/95 p-1 shadow-popover backdrop-blur-md`; supports `orientation=vertical`. `ToolbarButton` = `Button variant=ghost size=sm` | the floating-bar chrome all top bars use |
-| `Tooltip` | `kit/Tooltip.tsx` | `content`, `delay` (default 500ms), wraps one focusable child | max-w-xs, opacity transition |
-| `Popover` / `PopoverDialog` | `kit/Popover.tsx` | offset default 6; scale/opacity enter/exit | `PopoverDialog` = focus-managed Dialog for arbitrary popover content |
-| `Menu`/`MenuItem`/`MenuSection`/`MenuHeader`/`MenuSeparator` | `kit/Menu.tsx` | `MenuItem` `variant`: default / danger; auto textValue from string children; check column when `selectionMode !== 'none'`; submenu chevron | |
-| `Modal` / `Dialog` / `DialogHeader` | `kit/Modal.tsx:14-88` | **variants**: `center` (max-w-md card — confirm/small forms), `sheet` (bottom sheet, max-h-88vh — phone), `fullscreen` (max-w-5xl card in padded overlay — big browsers/editors), `cover` (edge-to-edge — phone fullscreen). Overlay: `fixed inset-0 z-50 bg-overlay/60 backdrop-blur-sm`. `DialogHeader` = title + X close row | Controlled via `isOpen`/`onOpenChange`; children are a `Dialog` |
-| `ConfirmDialog` | `kit/ConfirmDialog.tsx` | `title`, `text`, optional `children`, `confirmLabel`/`cancelLabel`, `confirmVariant`, `onConfirm`; `role="alertdialog"`, dismissable | the app-wide destructive-action confirm |
-| Toast (`toast`, `toastQueue`, `GlobalToastRegion`) | `kit/Toast.tsx` | see §1.4 | |
-| `useIsPhone` | `kit/useIsPhone.ts` | `useSyncExternalStore` on `(max-width: 639px)` (Tailwind `sm`) | THE responsive switch: phone ⇒ bottom sheets/FAB/overflow menus; desktop ⇒ floating panels |
+| Primitive                                                    | File                       | API / variants                                                                                                                                                                                                                                                                                                                  | Notes                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------ | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Button` (+ exported `button` tv)                            | `kit/Button.tsx:5-45`      | `variant`: primary / secondary (default) / ghost / danger / danger-ghost; `size`: sm (h-7, px-2.5, text-xs) / md (h-9, default) / lg (h-11); `iconOnly` (square, w=h)                                                                                                                                                           | tv `extend: focusRing`; all react-aria ButtonProps pass through (`onPress`, `isDisabled`, …)                                                                                                                                                             |
+| `ToggleButton`, `ToggleButtonGroup`                          | `kit/ToggleButton.tsx`     | sizes sm (h-6) / md (h-8); selected = solid accent fill                                                                                                                                                                                                                                                                         | Group = segmented control: bordered sunken tray, `p-0.5 gap-0.5` (`:43-53`)                                                                                                                                                                              |
+| `Checkbox`                                                   | `kit/Checkbox.tsx`         | react-aria CheckboxProps; renders 16px box + Check/Minus icon; supports indeterminate                                                                                                                                                                                                                                           | label optional (children)                                                                                                                                                                                                                                |
+| `Switch`                                                     | `kit/Switch.tsx`           | h-5 w-9 track, accent when on                                                                                                                                                                                                                                                                                                   |                                                                                                                                                                                                                                                          |
+| `TextField`                                                  | `kit/TextField.tsx:10-65`  | `label` / `description` / `errorMessage` (stacked when present, bare inline field when not), `size` from `inputStyles`, `inputMode`, `inputClassName`, `inputRef`, `onFocus/onBlur/onKeyDown` passthrough                                                                                                                       | `onChange` yields the **raw string** — load-bearing for the numeric-draft convention (§1.5)                                                                                                                                                              |
+| `SearchField`                                                | `kit/SearchField.tsx`      | sizes sm/md; leading Search icon, clear button hidden until non-empty (`group-data-[empty]:hidden`)                                                                                                                                                                                                                             | native webkit cancel button suppressed                                                                                                                                                                                                                   |
+| `Field` pieces                                               | `kit/Field.tsx`            | `inputStyles` tv (sm h-7 px-2 text-xs / md h-9 px-2.5 text-sm — the shared input surface), `fieldGroup` tv (input+stepper container), `Label` (text-xs fg-muted), `Description`, `FieldError`, `FieldGroup`, `SectionTitle` (uppercase tracking-wide panel heading)                                                             |                                                                                                                                                                                                                                                          |
+| `Select`                                                     | `kit/Select.tsx:49-104`    | `items` + render-fn children (react-aria collection API), `size` sm/md, `label`, `triggerClassName`/`popoverClassName`, **`searchable`** + `searchPlaceholder`                                                                                                                                                                  | searchable = react-aria `Autocomplete` wrapping the ListBox with **virtual focus** (search input keeps DOM focus, arrows move listbox focus). This virtual focus is why `GlobalHotkeys.isTypingInField` exists (§1.3). Popover width = `--trigger-width` |
+| `ListBox` / `ListBoxItem`                                    | `kit/ListBox.tsx:23-48`    | item = px-2 py-1.5 text-sm; selected shows trailing accent Check                                                                                                                                                                                                                                                                |                                                                                                                                                                                                                                                          |
+| `GridList` / `GridListItem`                                  | `kit/ListBox.tsx:50-77`    | selection = accent **inset ring** + bg-white/8; keyboard focus = thinner ring                                                                                                                                                                                                                                                   | Multi-select list rows (Assets list, Mesh Picker). Same styling exported as function `gridRowClass` in `styles.ts:40-51` for call sites composing extras                                                                                                 |
+| `Slider`                                                     | `kit/Slider.tsx`           | single-thumb styled track; react-aria SliderProps                                                                                                                                                                                                                                                                               |                                                                                                                                                                                                                                                          |
+| `Tag`/`TagGroup`/`TagList`                                   | `kit/Tag.tsx`              | removable tags (X button when `allowsRemoving`)                                                                                                                                                                                                                                                                                 | used by e.g. `EditorTagsField`                                                                                                                                                                                                                           |
+| `Chip`                                                       | `kit/Tag.tsx:55-65`        | static count/status pill (non-interactive span)                                                                                                                                                                                                                                                                                 |                                                                                                                                                                                                                                                          |
+| `DisclosureSection`                                          | `kit/Disclosure.tsx:19-63` | `title`, `badge` (trailing count), `defaultExpanded`                                                                                                                                                                                                                                                                            | collapsible bordered card; header chevron rotates via `group-data-[expanded]`                                                                                                                                                                            |
+| `Toolbar` / `ToolbarSeparator` / `ToolbarButton`             | `kit/Toolbar.tsx`          | react-aria Toolbar ⇒ **arrow-key roving focus** across children; surface = `rounded-xl border bg-panel/95 p-1 shadow-popover backdrop-blur-md`; supports `orientation=vertical`. `ToolbarButton` = `Button variant=ghost size=sm`                                                                                               | the floating-bar chrome all top bars use                                                                                                                                                                                                                 |
+| `Tooltip`                                                    | `kit/Tooltip.tsx`          | `content`, `delay` (default 500ms), wraps one focusable child                                                                                                                                                                                                                                                                   | max-w-xs, opacity transition                                                                                                                                                                                                                             |
+| `Popover` / `PopoverDialog`                                  | `kit/Popover.tsx`          | offset default 6; scale/opacity enter/exit                                                                                                                                                                                                                                                                                      | `PopoverDialog` = focus-managed Dialog for arbitrary popover content                                                                                                                                                                                     |
+| `Menu`/`MenuItem`/`MenuSection`/`MenuHeader`/`MenuSeparator` | `kit/Menu.tsx`             | `MenuItem` `variant`: default / danger; auto textValue from string children; check column when `selectionMode !== 'none'`; submenu chevron                                                                                                                                                                                      |                                                                                                                                                                                                                                                          |
+| `Modal` / `Dialog` / `DialogHeader`                          | `kit/Modal.tsx:14-88`      | **variants**: `center` (max-w-md card — confirm/small forms), `sheet` (bottom sheet, max-h-88vh — phone), `fullscreen` (max-w-5xl card in padded overlay — big browsers/editors), `cover` (edge-to-edge — phone fullscreen). Overlay: `fixed inset-0 z-50 bg-overlay/60 backdrop-blur-sm`. `DialogHeader` = title + X close row | Controlled via `isOpen`/`onOpenChange`; children are a `Dialog`                                                                                                                                                                                          |
+| `ConfirmDialog`                                              | `kit/ConfirmDialog.tsx`    | `title`, `text`, optional `children`, `confirmLabel`/`cancelLabel`, `confirmVariant`, `onConfirm`; `role="alertdialog"`, dismissable                                                                                                                                                                                            | the app-wide destructive-action confirm                                                                                                                                                                                                                  |
+| Toast (`toast`, `toastQueue`, `GlobalToastRegion`)           | `kit/Toast.tsx`            | see §1.4                                                                                                                                                                                                                                                                                                                        |                                                                                                                                                                                                                                                          |
+| `useIsPhone`                                                 | `kit/useIsPhone.ts`        | `useSyncExternalStore` on `(max-width: 639px)` (Tailwind `sm`)                                                                                                                                                                                                                                                                  | THE responsive switch: phone ⇒ bottom sheets/FAB/overflow menus; desktop ⇒ floating panels                                                                                                                                                               |
 
 ### 1.2 Styling system, theme, density
 
@@ -90,7 +90,7 @@ Every primitive, its API and variants:
 - Library: **react-hotkeys-hook** (project skill `.claude/skills/hotkeys` documents usage).
 - **Central registry** `src/ui/hotkeys/registry.ts` — the single source of truth. Each
   `HotkeyBinding` = `{ id, label, keys (react-hotkeys-hook string), chords (display tokens
-  for <kbd> chips), options?, run(event) }`, grouped into `HOTKEY_GROUPS` (titles: "Rotate
+for <kbd> chips), options?, run(event) }`, grouped into `HOTKEY_GROUPS` (titles: "Rotate
   selection", "Nudge", "Editing", "General"). The registry drives BOTH the live bindings AND
   the help overlay, so docs can't drift from behavior (`registry.ts:12-17`). Full binding
   table in §6.
@@ -177,7 +177,7 @@ Every primitive, its API and variants:
   - While focused, a raw string draft; keystrokes failing `isPartialNumber` are dropped
     without rewriting the draft (`:21-26`, exponent needs mantissa).
   - Every keystroke that parses **in-range commits live** (gizmos/3D follow along);
-    out-of-range keystrokes are *skipped, not clamped* (`:122-127`) — clamp happens once at
+    out-of-range keystrokes are _skipped, not clamped_ (`:122-127`) — clamp happens once at
     finalize.
   - Blur/Enter finalize: clamp+commit, or restore pre-edit if unparseable. The
     `draft === null` guard in `finalize` (`:84-94`) is load-bearing: after Enter, a
@@ -233,7 +233,7 @@ Every primitive, its API and variants:
 - `VerticalSplit` / `HorizontalSplit` (`src/ui/VerticalSplit.tsx`) — pointer-drag divider
   between two panes; percentage in **local state, resets on remount** (Add Part / Add
   SubPart browser modals rely on the 50/45% snap-back — `:4-10`); min/max pct clamps;
-   wider invisible hit area (`:69-72`); `role="separator"` + aria-orientation. Used only by
+  wider invisible hit area (`:69-72`); `role="separator"` + aria-orientation. Used only by
   `BrowserShell.tsx:57-59` (list/preview/details layout in the part & subpart browsers,
   nested splits on desktop).
 - Right sidebar resize — bespoke in `RightPanel.tsx:17-37`: left-edge `w-2` invisible
@@ -256,25 +256,25 @@ Every primitive, its API and variants:
 
 Mount root is `app.tsx` inside `div.fixed.inset-0`; overlays portal via react-aria.
 
-| Surface | Kind | Mount / position | z | Notes |
-|---|---|---|---|---|
-| `GlobalToastRegion` | toast stack | `main.tsx:83`; `fixed bottom-4 right-4` | **z-[100]** | Highest thing in the app; floats above modals. Overlaps ImportReportCard's corner (below) |
-| Kit `Modal` overlay | dialog scrim | react-aria portal; `fixed inset-0` | **z-50** | All ~28 modal-using files (list: §2.1) share this. Backdrop blur + 60% black |
-| `Popover` / `Menu` / `Tooltip` | popovers | react-aria portal, anchored | react-aria stacking (portal order) | offset 6; no explicit z — relies on portal-last-wins; works because they portal above the app root |
-| `ImportReportCard` | floating card | `absolute bottom-3 right-3` | z-40 | non-modal, sits directly under the toast region — simultaneous toasts cover it |
-| `ChainPalette` | floating non-modal palette | `absolute left-3 top-16 w-[340px]` desktop; bottom-sheet-ish on phone | z-30 | ⌘K; deliberately non-modal so viewport stays live (`ChainPalette.tsx:18-28`) |
-| `FloatingInspector` | draggable window | `absolute` at stored pos, default bottom-left | z-30 | desktop only |
-| `FloatingPreviewToolbar` | draggable bar | `absolute` at stored pos, default top-center | z-30 | anim scrubber; phone variant pinned in top stack |
-| `SeatViewBar` | HUD bar | `absolute inset-x-0 bottom-14`, centered | z-30 | shows `Esc` Kbd |
-| `TransformHud` | HUD pill | `absolute inset-x-0 bottom-2`, centered | (none) | rotate/nudge status bubble; hidden on phone; tooltips carry Kbd hint tables |
-| `RightPanel` | sidebar | `absolute right-0 top/bottom-0`, width from store | (panel z-10 handle) | desktop inspector; collapsible |
-| `FloatingEditorPanel` (Measurement/Container editors) | floating card | `absolute left-3 top-1/2 -translate-y-1/2`; phone: `inset-x-2 bottom-20` | z-10 | shared chrome + lock/close header |
-| `ManageTexturesPanel` | floating panel | `absolute left-3 top-1/2` w-64 | z-10 | same left-center slot as FloatingEditorPanel ⇒ can overlap it |
-| `HelpDialog` | modal | kit Modal fullscreen/cover | z-50 | driven by `$helpOpen` |
-| `MeasurementInfo` | HUD | bottom-left | — | bbox dimensions readout |
-| `WorkspaceLoadProgress` | HUD/overlay | bottom-center / `absolute inset-0` z-10 while blocking | z-10 | |
-| `ViewportDropZone` highlight | inline overlay | `absolute inset-3` z-10 | z-10 | drag-over affordance |
-| Toolbars (Editor/Selection/MultiSelect) | floating bars | top-center stack (`app.tsx:78-95`) | — | kit `Toolbar` chrome; phone = full-width `MobileTopBar` |
+| Surface                                               | Kind                       | Mount / position                                                         | z                                  | Notes                                                                                              |
+| ----------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------ | ---------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `GlobalToastRegion`                                   | toast stack                | `main.tsx:83`; `fixed bottom-4 right-4`                                  | **z-[100]**                        | Highest thing in the app; floats above modals. Overlaps ImportReportCard's corner (below)          |
+| Kit `Modal` overlay                                   | dialog scrim               | react-aria portal; `fixed inset-0`                                       | **z-50**                           | All ~28 modal-using files (list: §2.1) share this. Backdrop blur + 60% black                       |
+| `Popover` / `Menu` / `Tooltip`                        | popovers                   | react-aria portal, anchored                                              | react-aria stacking (portal order) | offset 6; no explicit z — relies on portal-last-wins; works because they portal above the app root |
+| `ImportReportCard`                                    | floating card              | `absolute bottom-3 right-3`                                              | z-40                               | non-modal, sits directly under the toast region — simultaneous toasts cover it                     |
+| `ChainPalette`                                        | floating non-modal palette | `absolute left-3 top-16 w-[340px]` desktop; bottom-sheet-ish on phone    | z-30                               | ⌘K; deliberately non-modal so viewport stays live (`ChainPalette.tsx:18-28`)                       |
+| `FloatingInspector`                                   | draggable window           | `absolute` at stored pos, default bottom-left                            | z-30                               | desktop only                                                                                       |
+| `FloatingPreviewToolbar`                              | draggable bar              | `absolute` at stored pos, default top-center                             | z-30                               | anim scrubber; phone variant pinned in top stack                                                   |
+| `SeatViewBar`                                         | HUD bar                    | `absolute inset-x-0 bottom-14`, centered                                 | z-30                               | shows `Esc` Kbd                                                                                    |
+| `TransformHud`                                        | HUD pill                   | `absolute inset-x-0 bottom-2`, centered                                  | (none)                             | rotate/nudge status bubble; hidden on phone; tooltips carry Kbd hint tables                        |
+| `RightPanel`                                          | sidebar                    | `absolute right-0 top/bottom-0`, width from store                        | (panel z-10 handle)                | desktop inspector; collapsible                                                                     |
+| `FloatingEditorPanel` (Measurement/Container editors) | floating card              | `absolute left-3 top-1/2 -translate-y-1/2`; phone: `inset-x-2 bottom-20` | z-10                               | shared chrome + lock/close header                                                                  |
+| `ManageTexturesPanel`                                 | floating panel             | `absolute left-3 top-1/2` w-64                                           | z-10                               | same left-center slot as FloatingEditorPanel ⇒ can overlap it                                      |
+| `HelpDialog`                                          | modal                      | kit Modal fullscreen/cover                                               | z-50                               | driven by `$helpOpen`                                                                              |
+| `MeasurementInfo`                                     | HUD                        | bottom-left                                                              | —                                  | bbox dimensions readout                                                                            |
+| `WorkspaceLoadProgress`                               | HUD/overlay                | bottom-center / `absolute inset-0` z-10 while blocking                   | z-10                               |                                                                                                    |
+| `ViewportDropZone` highlight                          | inline overlay             | `absolute inset-3` z-10                                                  | z-10                               | drag-over affordance                                                                               |
+| Toolbars (Editor/Selection/MultiSelect)               | floating bars              | top-center stack (`app.tsx:78-95`)                                       | —                                  | kit `Toolbar` chrome; phone = full-width `MobileTopBar`                                            |
 
 **Known overlap/stacking issues** (see §4): bottom-center is contested (TransformHud z-none,
 SeatViewBar z-30 bottom-14, LoadProgress bottom-center); bottom-right contested (toasts
@@ -283,6 +283,7 @@ ManageTexturesPanel + ChainPalette all left-anchored). The z ladder (10/30/40/50
 ad-hoc with no central scale file.
 
 ### 2.1 Modal users (all consume kit Modal/Dialog — every one must survive v2)
+
 `HistoryButton, GlowPaintDialog, MeasureButton, BuildIdMismatchDialog, MeshPickerModal,
 CustomAssetsModal, ImportModelDialog, ExportButton, ProjectTransferDialogs, AssetsList,
 ProjectButton, AssetsToolbar, MobileInspector, CreateMeshDialog, ViewButton,
@@ -308,7 +309,7 @@ modal).
   (editorStore — another area, but this area's HUD/toasts/hotkeys read them).
 - **Split percentages** are React local state (reset on remount by design).
 - **Undo/redo participation**: none of this area's own state is undoable. The contract this
-  area *provides* is `onInteractionStart` (numberDraft focus / SliderRow+ColorAlphaField
+  area _provides_ is `onInteractionStart` (numberDraft focus / SliderRow+ColorAlphaField
   pointer-down) so editorStore can push exactly one undo step per typing/drag session; and
   the undo/redo hotkeys + toasts surfacing `undo()/redo()`'s returned description string.
 - **Cross-store subscriptions**: registry `run` handlers read stores imperatively
@@ -324,7 +325,7 @@ modal).
 
 1. **No hotkey scoping/modes.** Registry bindings are always-on globals; per-context gating
    is hand-rolled inside `run` (`registry.ts:206-216`) or via local `useHotkeys
-   enabled:` flags (`ChainPalette.tsx:70-76`). A v2 mode-based layout (subpart-placement /
+enabled:` flags (`ChainPalette.tsx:70-76`). A v2 mode-based layout (subpart-placement /
    animation / data modes) has nowhere to hang per-mode bindings today, and unmodified
    single letters (W/A/S/D/Q/E/R/F) will collide with future surfaces.
 2. **Help drifts for local bindings.** The registry's "no drift" guarantee
@@ -413,24 +414,24 @@ modal).
 Registry (`src/ui/hotkeys/registry.ts`, defaults `preventDefault:true`, suppressed while
 typing in a field):
 
-| Group | Keys | Action | Notes |
-|---|---|---|---|
-| Rotate | `W`/`S` | rotate selection, pair ws (∓) | `rotateSelectionAroundPair` |
-| Rotate | `A`/`D` | rotate, pair ad | |
-| Rotate | `Q`/`E` | rotate, pair qe | |
-| Rotate | `R` | cycle rotation axes | toasts new mapping |
-| Rotate | `F` / `⇧F` | rotate step larger / smaller | toasts step |
-| Nudge | `↑`/`↓` | nudge along active axis | |
-| Nudge | `⇧↑`/`⇧↓` | nudge ×FAST_NUDGE_MULTIPLIER | |
-| Nudge | `←`/`→` | cycle nudge axis back/forward | toasts axis |
-| Nudge | `⇧←`/`⇧→` | nudge step smaller/larger | toasts step |
-| Editing | `Delete`/`Backspace` | delete selection | |
-| Editing | `mod+C` / `mod+V` | copy / paste-in-place | toasts count |
-| Editing | `mod+K` | toggle action-chain palette | suppresses browser ⌘K |
-| Editing | `mod+Z` | undo | toasts description |
-| Editing | `mod+Y` / `mod+⇧Z` | redo | |
-| General | `?` | toggle help | `useKey`, `ignoreModifiers` |
-| General | `Escape` | exit IVA seat view | `preventDefault:false`, gated on `$seatView` |
+| Group   | Keys                 | Action                        | Notes                                        |
+| ------- | -------------------- | ----------------------------- | -------------------------------------------- |
+| Rotate  | `W`/`S`              | rotate selection, pair ws (∓) | `rotateSelectionAroundPair`                  |
+| Rotate  | `A`/`D`              | rotate, pair ad               |                                              |
+| Rotate  | `Q`/`E`              | rotate, pair qe               |                                              |
+| Rotate  | `R`                  | cycle rotation axes           | toasts new mapping                           |
+| Rotate  | `F` / `⇧F`           | rotate step larger / smaller  | toasts step                                  |
+| Nudge   | `↑`/`↓`              | nudge along active axis       |                                              |
+| Nudge   | `⇧↑`/`⇧↓`            | nudge ×FAST_NUDGE_MULTIPLIER  |                                              |
+| Nudge   | `←`/`→`              | cycle nudge axis back/forward | toasts axis                                  |
+| Nudge   | `⇧←`/`⇧→`            | nudge step smaller/larger     | toasts step                                  |
+| Editing | `Delete`/`Backspace` | delete selection              |                                              |
+| Editing | `mod+C` / `mod+V`    | copy / paste-in-place         | toasts count                                 |
+| Editing | `mod+K`              | toggle action-chain palette   | suppresses browser ⌘K                        |
+| Editing | `mod+Z`              | undo                          | toasts description                           |
+| Editing | `mod+Y` / `mod+⇧Z`   | redo                          |                                              |
+| General | `?`                  | toggle help                   | `useKey`, `ignoreModifiers`                  |
+| General | `Escape`             | exit IVA seat view            | `preventDefault:false`, gated on `$seatView` |
 
 Off-registry (not in help): `mod+Enter` apply chain + `Escape` cancel chain
 (`ChainPalette.tsx:70-76`); `Escape` unwind keyframe→joint→animation

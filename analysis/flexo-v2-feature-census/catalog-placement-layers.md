@@ -14,22 +14,22 @@ Verified against code (docs cross-checked): `docs/layers.md` and `docs/subpart-c
 
 Complete menu contents (top→bottom), each with its action:
 
-| Menu item | Action | Store call | File:line |
-|---|---|---|---|
-| **SubPart** | opens the full-viewport SubPart browser | — (opens `SubPartPopup`) | AddButton.tsx:62,77 |
-| **Connector** | adds an attach node at origin (facing local +X), active layer, selects it | `addConnector()` `src/state/editorStore.ts:976-993` | AddButton.tsx:63 |
-| **Import built-in Part** | opens the full-viewport Part browser | — (opens `PartPopup`) | AddButton.tsx:64,79 |
-| **Define Engine…** | switches the inspector into engine mode | `enterEngineMode()` (`src/state/engineStore.ts`) | AddButton.tsx:70,80 |
-| **Upload texture…** | opens `CustomTextureDialog` | — | AddButton.tsx:65,81 |
-| **Create material…** | opens `MaterialDialog` | — | AddButton.tsx:66,82 |
-| **Create mesh…** | opens `CreateMeshDialog` (primitive mesh); on submit `addCustomMesh` pushes the mesh AND immediately `addSubPart(mesh.subPartId)` places it at origin (`src/state/customAssetStore.ts:944-978`) | `addCustomMesh` | AddButton.tsx:67,83 |
-| **Import model…** | opens `ImportModelDialog` at its drop/pick step | `openImportModel()` (`src/state/customAssetStore.ts:181`) | AddButton.tsx:69,84 |
-| **Custom Meshes ▸** (only when non-kitten custom meshes exist) | submenu listing every re-placeable custom SubPart (primitives + imported glTF meshes; kitten submeshes excluded — `meshKind(m) !== 'kitten'` filter at :45); clicking places another instance at origin | `addSubPart(subPartId)` | AddButton.tsx:85-98 |
-| **Collider ▸** | two menus in one popover: "Add at origin" (per `COLLIDER_SHAPES` shape) and "Fit to selection" (per shape). Fit publishes an intent atom the 3D scene consumes (needs world geometry) rather than a store mutator | `addCollider(shape)` `editorStore.ts:1002`; `requestColliderFit(shape)` (`src/state/colliderStore.ts`) | AddButton.tsx:99-121 |
-| **IVA Seat** | adds a seat at origin looking +X (KSA `<IVASeat>` defaults); no submenu (one seat kind) | `addIvaSeat()` `editorStore.ts:1129` | AddButton.tsx:73,122 |
-| **Light ▸** | Spot / Point. Adds a part-level light at origin, selects it, and `revealEntity` scrolls the Assets list to it. (SubPart-owned lights are authored elsewhere — from the SubPart Data dialog.) | `addLight(null, {type})` + `selectLight` + `revealEntity` | AddButton.tsx:123-142 |
-| **Kitten ▸** | Hunter / Polaris / Banjo — editor-only visual aide at origin on pinned Kittens layer | `addKitten(kind)` `editorStore.ts:1224-1239` | AddButton.tsx:143-152 |
-| **Make Kitten Mesh ▸** | Hunter / Polaris / Banjo — part-ifies a kitten into exportable custom SubParts: creates a "`<Name>` Mesh" layer, adds submeshes (suit/head/eyes/helmet/visor/pack…) as custom meshes + identity placements on that layer, one undo step, then selects them and makes the layer active | `makeKittenMeshPart(kind)` `src/state/customAssetStore.ts:986-1022` | AddButton.tsx:153-168 |
+| Menu item                                                      | Action                                                                                                                                                                                                                                                                                | Store call                                                                                             | File:line             |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | --------------------- |
+| **SubPart**                                                    | opens the full-viewport SubPart browser                                                                                                                                                                                                                                               | — (opens `SubPartPopup`)                                                                               | AddButton.tsx:62,77   |
+| **Connector**                                                  | adds an attach node at origin (facing local +X), active layer, selects it                                                                                                                                                                                                             | `addConnector()` `src/state/editorStore.ts:976-993`                                                    | AddButton.tsx:63      |
+| **Import built-in Part**                                       | opens the full-viewport Part browser                                                                                                                                                                                                                                                  | — (opens `PartPopup`)                                                                                  | AddButton.tsx:64,79   |
+| **Define Engine…**                                             | switches the inspector into engine mode                                                                                                                                                                                                                                               | `enterEngineMode()` (`src/state/engineStore.ts`)                                                       | AddButton.tsx:70,80   |
+| **Upload texture…**                                            | opens `CustomTextureDialog`                                                                                                                                                                                                                                                           | —                                                                                                      | AddButton.tsx:65,81   |
+| **Create material…**                                           | opens `MaterialDialog`                                                                                                                                                                                                                                                                | —                                                                                                      | AddButton.tsx:66,82   |
+| **Create mesh…**                                               | opens `CreateMeshDialog` (primitive mesh); on submit `addCustomMesh` pushes the mesh AND immediately `addSubPart(mesh.subPartId)` places it at origin (`src/state/customAssetStore.ts:944-978`)                                                                                       | `addCustomMesh`                                                                                        | AddButton.tsx:67,83   |
+| **Import model…**                                              | opens `ImportModelDialog` at its drop/pick step                                                                                                                                                                                                                                       | `openImportModel()` (`src/state/customAssetStore.ts:181`)                                              | AddButton.tsx:69,84   |
+| **Custom Meshes ▸** (only when non-kitten custom meshes exist) | submenu listing every re-placeable custom SubPart (primitives + imported glTF meshes; kitten submeshes excluded — `meshKind(m) !== 'kitten'` filter at :45); clicking places another instance at origin                                                                               | `addSubPart(subPartId)`                                                                                | AddButton.tsx:85-98   |
+| **Collider ▸**                                                 | two menus in one popover: "Add at origin" (per `COLLIDER_SHAPES` shape) and "Fit to selection" (per shape). Fit publishes an intent atom the 3D scene consumes (needs world geometry) rather than a store mutator                                                                     | `addCollider(shape)` `editorStore.ts:1002`; `requestColliderFit(shape)` (`src/state/colliderStore.ts`) | AddButton.tsx:99-121  |
+| **IVA Seat**                                                   | adds a seat at origin looking +X (KSA `<IVASeat>` defaults); no submenu (one seat kind)                                                                                                                                                                                               | `addIvaSeat()` `editorStore.ts:1129`                                                                   | AddButton.tsx:73,122  |
+| **Light ▸**                                                    | Spot / Point. Adds a part-level light at origin, selects it, and `revealEntity` scrolls the Assets list to it. (SubPart-owned lights are authored elsewhere — from the SubPart Data dialog.)                                                                                          | `addLight(null, {type})` + `selectLight` + `revealEntity`                                              | AddButton.tsx:123-142 |
+| **Kitten ▸**                                                   | Hunter / Polaris / Banjo — editor-only visual aide at origin on pinned Kittens layer                                                                                                                                                                                                  | `addKitten(kind)` `editorStore.ts:1224-1239`                                                           | AddButton.tsx:143-152 |
+| **Make Kitten Mesh ▸**                                         | Hunter / Polaris / Banjo — part-ifies a kitten into exportable custom SubParts: creates a "`<Name>` Mesh" layer, adds submeshes (suit/head/eyes/helmet/visor/pack…) as custom meshes + identity placements on that layer, one undo step, then selects them and makes the layer active | `makeKittenMeshPart(kind)` `src/state/customAssetStore.ts:986-1022`                                    | AddButton.tsx:153-168 |
 
 There is also a second kitten entry point outside the Add menu: **"Add kitten at seat"** (`addKittenAtSeat`, `editorStore.ts:1265-1282`) reachable from the IVA seat inspector — places the kitten at the seat position with pure-yaw facing (`kittenYawFacing`, :1252).
 
@@ -40,6 +40,7 @@ And a second model-import entry point: **drag-and-drop a `.glb`/`.gltf` onto the
 **UI path:** Add → SubPart. **Files:** `src/ui/SubPartBrowser.tsx` (UI), `src/ui/BrowserShell.tsx` (modal shell + responsive layout), `src/state/catalogStore.ts` ($catalog/$catalogLoading/$catalogIndex), `src/ksa/catalog.ts` (loader), `src/ui/SubPartPreview.tsx` + `src/three/SubPartPreviewViewport.ts` (3D preview), `src/ui/LoadProgress.tsx` (`PreviewLoadProgress` overlay), `src/state/loadProgressStore.ts:98-106` (`openBrowserPopup`/`closeBrowserPopup` suppress the workspace progress bar while a browser is open — registered in a mount effect, SubPartBrowser.tsx:51-54).
 
 Behavior details:
+
 - **Shell:** `BrowserPopup` (`BrowserShell.tsx:9-34`) = react-aria `Modal variant="cover"` (`sm:w-[95vw] sm:max-w-[75rem]`), dismissable, `DialogHeader` with close X. Body only mounts while open ⇒ every open is a fresh session (search/selection/split positions reset).
 - **Layout:** desktop `list | (preview / details)` with two draggable dividers (`HorizontalSplit`/`VerticalSplit`, `src/ui/VerticalSplit.tsx`), both reset to 50/50 per open; phone collapses to a 45/55 vertical list-over-preview (`BrowserShell.tsx:42-63`).
 - **Search:** single `SearchField`, substring match on **id only**, lowercase (`SubPartBrowser.tsx:56-58`). Results capped at `MAX_RESULTS = 200` (`:22`) with **no indicator** that the list was truncated. Autofocus on desktop only (phone keyboard would cover the preview, `:156`).
@@ -56,6 +57,7 @@ Behavior details:
 **UI path:** Add → Import built-in Part. **Files:** `src/ui/PartBrowser.tsx`, same `BrowserShell`, `src/state/partCatalogStore.ts`, `src/ksa/partCatalog.ts` (parses whole `<Part>` prefabs from the same Core XML files), `src/state/partImport.ts` (`importBuiltInPart`), `src/ui/PartPreview.tsx` + `src/three/PartPreviewViewport.ts`.
 
 Differences from the SubPart browser:
+
 - **Search matches id OR editorTags** (`PartBrowser.tsx:77-81`; tags come from `<EditorTag Value>` e.g. "Fuel Tanks"). Still substring, still MAX 200.
 - Row shows the placement count on the right (`:141`).
 - **Destination-layer Select** in the top row (`:193-211`): choices are **"New Layer"** (default; creates "New Layer N" via `nextNewLayerName` `:32-39` + `createLayer`), **"Current Layer"**, or any existing **ordinary** layer (pinned entity-only layers filtered out `:204-205`). Phone stacks search on its own row above Select+Add (`:175-180`).
@@ -64,6 +66,7 @@ Differences from the SubPart browser:
 - **Details:** desktop `PartDetails` (`PartBrowser.tsx:279-363`) — counts (SubParts / unique types / connectors / animations), source file, editor tag chips, per-template breakdown with ×count and non-previewable warning; phone gets `CompactPartSummary` strip above the preview (`:238-272`).
 
 **Import pipeline** (`src/state/partImport.ts:20-107` → `editorStore.addPart:824-945`):
+
 - Fetches + decodes each `KeyframeAnimationModule`'s `_Anim.glb` (three.js decode lives in partImport so editorStore stays three-free), rebuilds `PartAnimation`s through the old→new instance-id map, fits easing, and anchors deploy clips at their **last** keyframe (`restKeyframeId` — imported KSA deploy clips are modeled deployed).
 - Overrides animated SubParts' placements with the GLB-faithful rest pose (`partImport.ts:44-58`) — KSA positions animated SubParts solely from the GLB.
 - `addPart` (one undo step "import"): regenerates instance ids (`<base>_<n>`) and connector ids, remaps sibling refs, coupling bindings, engine-module refs, feed wiring, per-template GameData (`applyImportedGameData`), appends colliders/IVA seats/lights, puts **all geometry (placements + connectors + colliders) on ONE layer** (`targetLayerId` if valid ordinary layer, else active layer; `:856-859`), merges editorTags, and **selects exactly what was imported across every kind** (skipping kinds whose layer is hidden/locked, matching the select-all rule; `:914-943`). Returns the layer id.
@@ -72,11 +75,12 @@ Differences from the SubPart browser:
 ### 1.4 Model import placement (glTF/GLB → SubParts)
 
 Entry points: Add → Import model…, or viewport file drop (§1.1). `src/ui/ImportModelDialog.tsx:55-…` — three states in one modal (DROP → REVIEW with 3D preview/options/warnings/estimates → IMPORTING with progress). Nothing touches the document until confirm. On import, `importModelAsMeshes` (`customAssetStore.ts:1198-1259`):
+
 - **Creates a brand-new layer named after the file** (`fileName` minus extension) and pushes all meshes/placements onto it.
 - Appends custom textures/materials from the material plan, one `mutate('import model', …)` undo step.
 - Makes the new layer **active**, selects the new placements, and publishes an `$importReport` (bottom-right `ImportReportCard`, `App.tsx:132`).
 - A "replace existing import" path (`replaceImport`, matched by node/material names via `matchImportedMeshes`) updates a previous batch in place.
-The import batch's normalized GLB is itself a mesh atlas (one named mesh per SubPart) resolved through the same `MeshAtlasCache` as Core (docs/subpart-catalog.md table).
+  The import batch's normalized GLB is itself a mesh atlas (one named mesh per SubPart) resolved through the same `MeshAtlasCache` as Core (docs/subpart-catalog.md table).
 
 ### 1.5 Duplication flows
 
@@ -91,12 +95,14 @@ There is **no alt-drag duplicate** and **no Ctrl+D hotkey** — duplication is b
 ### 1.6 Layers system (complete capability map)
 
 **Data model** (verified `docs/layers.md` ↔ code):
+
 - `Layer = { id, name }` (`src/ksa/types.ts`) — **no color, no icon, no nesting, no per-layer description**. Array order in `part.layers` = display order.
 - Membership: `layerId` string on every placement/connector/collider/kitten/seat/light.
 - Built-in layers seeded by `createEmptyPart()`, never deletable (`BUILT_IN_LAYER_IDS`): **Default** (`default`), **IVA Seats** (`ivaSeats`), **Lights** (`lights`), **Kittens** (`kittens`). The last three are `ENTITY_ONLY_LAYER_IDS` — pinned: only their own kind lives there, nothing may be moved on or off.
 - `LayerableKind` (ordinary layer citizens): `'subpart' | 'connector' | 'collider'`.
 
 **Document mutations** (all undoable via `pushUndo`, `src/state/editorStore.ts`):
+
 - `createLayer(name)` :3669 — appends, becomes active, blank → "Layer N"; ids `layerN` (`nextLayerId` :3660).
 - `renameLayer` :3683 — committed once on blur/Enter/save button, not per keystroke.
 - `deleteLayer(id, {mode, targetLayerId})` :3707 — `'move-items'` (reassign placements/connectors/colliders, invalid/pinned target → Default) or `'delete-items'`; built-ins protected; active layer falls back to Default; selection clamped.
@@ -106,6 +112,7 @@ There is **no alt-drag duplicate** and **no Ctrl+D hotkey** — duplication is b
 - `moveSelectionToLayer(layerId)` :3819 — every selected SubPart+connector+collider in ONE undo step; pinned kinds silently stay; selection preserved (layerId edit doesn't reorder lists).
 
 **Ephemeral (no undo):**
+
 - `$activeLayerId` atom :210 (where new items land) — `setActiveLayer` :3918; clamped to a live layer on undo/redo (`clampActiveLayer` :385, called at :427/:447); reset by `newPart()` :3978. **Persisted inside each project snapshot** (`projectStore.ts:157, 279-280` — validated on load) and autosave-subscribed (`:466`).
 - `selectLayerEntities(id)` :3927 — selects every entity of every kind on the layer (the "bulk subpart selection via layers" primitive v2 wants).
 - `deselectLayer(id)` :3946 — prunes a layer's entities from selection; MUST cover every selectable kind (gizmo-stuck-on-locked-entity hazard documented in the comment :3941-3945).
@@ -113,6 +120,7 @@ There is **no alt-drag duplicate** and **no Ctrl+D hotkey** — duplication is b
 **View state** — `src/state/layerStore.ts`: `$layerView = persistentJSON('flexo:layerView', {})` — per-layer `{ visible, locked, listed, opacity }`, sparse with defaults (`DEFAULT_LAYER_STATE` :31), localStorage-persisted, deliberately **not** undo-tracked. Actions: `toggleLayerVisible` :72, `toggleLayerListed` :81 (Assets-list display only, does NOT prune selection), `revealLayer` :90 (visible+listed, used post-import), `setLayerLocked`/`toggleLayerLocked` :99-107 (locking prunes selection via one-way import `layerStore → editorStore`), `setLayerOpacity` :110 (clamped 0–1).
 
 **3D enforcement** — `src/three/EditorScene.ts`:
+
 - `applyLayerView()` :907-980 (subscribed to `$layerView` :625) sets each entity group's `.visible` and applies opacity dimming; re-applied after async builds (:701) and reconcile (:718, :753, :895). Light glows honor layer visibility at :1218-1230.
 - Click-select callbacks reject hits on locked **or hidden** layers for every kind (six guards, :322-403 — three.js raycaster does NOT skip invisible objects, hence the explicit visible check).
 - Gizmo/transform path refuses when any selected entity's layer is locked (:1669-1674).
@@ -125,6 +133,7 @@ There is **no alt-drag duplicate** and **no Ctrl+D hotkey** — duplication is b
 **UI path:** right inspector → Assets toolbar → "Layers (N) · <active name>" button (stretches to fill; `src/ui/AssetsToolbar.tsx:30-32`, `src/ui/LayersButton.tsx:15-43`) → `Popover placement="bottom end"` `w-[min(450px, 100vw-1.5rem)]` containing `LayersPanel`.
 
 `src/ui/LayersPanel.tsx:98-194`:
+
 - **Create:** name TextField + Add button (Enter commits; disabled when blank) — new layer becomes active.
 - **List:** react-aria `GridList selectionMode="single" selectionBehavior="replace" disallowEmptySelection`; the single selection **IS the active layer**; selecting a layer **closes the popover** (`onLayerSelected` → `setOpen(false)`, LayersButton.tsx:38). Max height 50vh, scrolls.
 - **Drag-and-drop reorder** via `useDragAndDrop` + explicit grip handle (`DragButton slot="drag"` :240-246) → `reorderLayers` (custom `computeReorder` :64-76).
@@ -159,25 +168,25 @@ There is **no alt-drag duplicate** and **no Ctrl+D hotkey** — duplication is b
 
 All floating chrome is absolutely positioned over the full-viewport 3D canvas (`App.tsx:56-146`); react-aria overlays (Popover/Modal) portal to the document root and manage their own stacking.
 
-| Surface | Kind | Mounts / positioning | Notes |
-|---|---|---|---|
-| Add menu | toolbar-menu (Popover `bottom start`, portal) | top toolbar (desktop centered `left-1/2 top-3`; phone top bar) | 4 nested submenus; opens 2 cover-modals + 3 dialogs |
-| SubPart browser | dialog (Modal `variant="cover"`, ~95vw ×75rem max, portal) | app root via `AddButton` state | 2 draggable split dividers; internal preview canvas; suppresses workspace progress bar via `$browserPopupCount` |
-| Part browser | dialog (Modal cover) | same | + destination-layer Select |
-| Import model dialog | dialog (Modal, 3-state wizard-in-one) | `App.tsx:128`, opened by atom `$importModelRequest` | own 3D preview viewport; drop zone inside |
-| Viewport drop overlay | HUD (absolute `inset-3 z-10`, pointer-events-none) | inside `ViewportDropZone` | only while an OS file drag hovers |
-| Import report card | HUD (bottom-right, non-modal) | `App.tsx:132` | dismissible |
-| Selection toolbar | floating-bar (absolute `top-16 left-1/2`) | `App.tsx:93` | Move/Rotate/Scale + Duplicate + Chain + Delete |
-| Multi-select toolbar | floating-bar (stacks under Selection toolbar) | `App.tsx:94` | Change Layer / Interior / Delete All; the vertical stack can grow tall and overlap the workspace center |
-| Assets toolbar | sidebar strip | right inspector top (`InspectorContent.tsx:50`) | Layers + Custom(N) + Engine(N) + Anim(N) |
-| Layers button + popover | sidebar button → Popover `bottom end` (portal, ≤450px wide) | Assets toolbar | popover closes on active-layer pick |
-| Layers panel | panel inside that popover | — | GridList ≤50vh scroll |
-| Layer opacity popover | popover-in-popover (DialogTrigger inside LayersPanel row) | portal | number field + slider |
-| Delete/Clear layer dialogs | modal (`ConfirmDialog`) spawned from popover | portal | modal-over-popover stack |
-| Assets list | sidebar panel (fills inspector below toolbar) | `InspectorContent.tsx:52`; phone: bottom-sheet `MobileInspector` | per-layer sections; per-row ⋮ menus (Popover), confirm dialogs, ManageTanksModal (modal from row menu) |
-| Mesh Picker | dialog (Modal fullscreen `max-w-2xl`) | AnimToolbar (anim mode) | SubParts only, layer-blind |
-| Right inspector | sidebar (absolute right-3 top-3 bottom-3, resizable via left-edge drag, width persisted) | `RightPanel.tsx:50-91` | container is pointer-events-none with opt-in children to avoid swallowing toolbar clicks — a known fragility pattern |
-| Mobile top bar | full-width bar + ☰ overflow menu | `MobileTopBar.tsx` | Add is a primary action; secondary overlays controlled from here to avoid menu-in-menu |
+| Surface                    | Kind                                                                                     | Mounts / positioning                                             | Notes                                                                                                                |
+| -------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Add menu                   | toolbar-menu (Popover `bottom start`, portal)                                            | top toolbar (desktop centered `left-1/2 top-3`; phone top bar)   | 4 nested submenus; opens 2 cover-modals + 3 dialogs                                                                  |
+| SubPart browser            | dialog (Modal `variant="cover"`, ~95vw ×75rem max, portal)                               | app root via `AddButton` state                                   | 2 draggable split dividers; internal preview canvas; suppresses workspace progress bar via `$browserPopupCount`      |
+| Part browser               | dialog (Modal cover)                                                                     | same                                                             | + destination-layer Select                                                                                           |
+| Import model dialog        | dialog (Modal, 3-state wizard-in-one)                                                    | `App.tsx:128`, opened by atom `$importModelRequest`              | own 3D preview viewport; drop zone inside                                                                            |
+| Viewport drop overlay      | HUD (absolute `inset-3 z-10`, pointer-events-none)                                       | inside `ViewportDropZone`                                        | only while an OS file drag hovers                                                                                    |
+| Import report card         | HUD (bottom-right, non-modal)                                                            | `App.tsx:132`                                                    | dismissible                                                                                                          |
+| Selection toolbar          | floating-bar (absolute `top-16 left-1/2`)                                                | `App.tsx:93`                                                     | Move/Rotate/Scale + Duplicate + Chain + Delete                                                                       |
+| Multi-select toolbar       | floating-bar (stacks under Selection toolbar)                                            | `App.tsx:94`                                                     | Change Layer / Interior / Delete All; the vertical stack can grow tall and overlap the workspace center              |
+| Assets toolbar             | sidebar strip                                                                            | right inspector top (`InspectorContent.tsx:50`)                  | Layers + Custom(N) + Engine(N) + Anim(N)                                                                             |
+| Layers button + popover    | sidebar button → Popover `bottom end` (portal, ≤450px wide)                              | Assets toolbar                                                   | popover closes on active-layer pick                                                                                  |
+| Layers panel               | panel inside that popover                                                                | —                                                                | GridList ≤50vh scroll                                                                                                |
+| Layer opacity popover      | popover-in-popover (DialogTrigger inside LayersPanel row)                                | portal                                                           | number field + slider                                                                                                |
+| Delete/Clear layer dialogs | modal (`ConfirmDialog`) spawned from popover                                             | portal                                                           | modal-over-popover stack                                                                                             |
+| Assets list                | sidebar panel (fills inspector below toolbar)                                            | `InspectorContent.tsx:52`; phone: bottom-sheet `MobileInspector` | per-layer sections; per-row ⋮ menus (Popover), confirm dialogs, ManageTanksModal (modal from row menu)               |
+| Mesh Picker                | dialog (Modal fullscreen `max-w-2xl`)                                                    | AnimToolbar (anim mode)                                          | SubParts only, layer-blind                                                                                           |
+| Right inspector            | sidebar (absolute right-3 top-3 bottom-3, resizable via left-edge drag, width persisted) | `RightPanel.tsx:50-91`                                           | container is pointer-events-none with opt-in children to avoid swallowing toolbar clicks — a known fragility pattern |
+| Mobile top bar             | full-width bar + ☰ overflow menu                                                        | `MobileTopBar.tsx`                                               | Add is a primary action; secondary overlays controlled from here to avoid menu-in-menu                               |
 
 Known overlap/clipping characteristics: the centered toolbar reserves `right-[19rem]` below `lg` to avoid the inspector (`App.tsx:78`); the selection/multi-select stack is not draggable and sits over the model; the Layers popover + opacity popover + confirm modal is a 3-deep stack; browser modals cover the entire workspace (no side-by-side compare with the scene).
 
@@ -186,6 +195,7 @@ Known overlap/clipping characteristics: the centered toolbar reserves `right-[19
 ## 3. State & data flow
 
 **Stores:**
+
 - `$part` (document, `editorStore.ts:113`) — layers array, per-entity `layerId`, placements/connectors/colliders/kittens/seats/lights, customMeshes. Undo/redo via snapshot stacks (`pushUndo` :399, undo/redo :413-451 clamp selection AND active layer). Autosaved (debounced) into the current project (IndexedDB via `projectStore`/`assetDb`); serialized compactly by `projectCodec.ts` (layers as `l:[{i,n}]` :1364-1388; per-entity `l` field; pinned kinds' layerId restored as constants on decode, not stored — :272-314, :535-580).
 - Six per-kind selection index atoms + computed single-index views (`editorStore.ts:119-193`); ephemeral, never persisted; clamped on undo/redo/mutations.
 - `$activeLayerId` — ephemeral atom but snapshotted per project (see §1.6).
@@ -247,6 +257,7 @@ Known overlap/clipping characteristics: the centered toolbar reserves `right-[19
 ## 6. Hotkeys
 
 Registry: `src/ui/hotkeys/registry.ts` (single source for bindings AND the help overlay). This area's relevant bindings — **none are layer- or browser-specific**:
+
 - `mod+c` Copy selection (:148) / `mod+v` Paste in place (:155) / `Delete`/`Backspace` Delete selection (:141)
 - `mod+z` Undo, `mod+y`/`mod+shift+z` Redo (:170-185)
 - `mod+k` Action-chain palette over selection (:162)
@@ -258,6 +269,7 @@ Registry: `src/ui/hotkeys/registry.ts` (single source for bindings AND the help 
 ## 7. Cross-area dependencies
 
 **This area → others:**
+
 - Animation: `importBuiltInPart` builds `PartAnimation`s (animationImport/easingFit); `restKeyframeId` anchoring; deletion of placements cascades into joints (removeSelected/removePlacement handle member pruning elsewhere in editorStore).
 - Engine: Add → "Define Engine…" calls `enterEngineMode`; imported GameData carries engine modules; Assets toolbar shows Engine(N).
 - Custom assets: Add menu opens texture/material/mesh dialogs and model import; `addCustomMesh` calls back into `addSubPart`; `$customCatalog` feeds the shared `$catalogIndex`; Assets row menu opens Manage Textures/Material (`setManagingMeshId`).
@@ -266,6 +278,7 @@ Registry: `src/ui/hotkeys/registry.ts` (single source for bindings AND the help 
 - Project transfer: `importProjectData` mirrors layers; project save/load snapshots `activeLayerId`.
 
 **Others → this area:**
+
 - 3D viewport click-select honors layer visible/lock; `revealEntity` scrolls the Assets list; EditorScene consumes `$layerView` for visibility/opacity and `$catalogIndex` for geometry.
 - Action chains clone placements (keeping layer) via `applyActionChain`.
 - History panel surfaces the layer-mutation descriptions ("add layer", "move to layer", …).

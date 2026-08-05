@@ -14,7 +14,7 @@ All paths relative to `/Users/asherwin/repos/meow-sci/flexo/` unless absolute.
   validation report at the top.
 - **UI path (desktop)**: top Toolbar → "Export" button (`src/ui/Toolbar.tsx:31`) → fullscreen-variant modal.
 - **UI path (mobile)**: MobileTopBar → hamburger Menu → "Export" item (`src/ui/MobileTopBar.tsx:101,120`) —
-  the same `ExportButton` component in *controlled* mode (`isOpen`/`onOpenChange` props,
+  the same `ExportButton` component in _controlled_ mode (`isOpen`/`onOpenChange` props,
   `src/ui/ExportButton.tsx:69-85`); when controlled it renders no trigger button of its own.
 - **Implementing files**: `src/ui/ExportButton.tsx` (whole flow);
   `src/ksa/modExport.ts` (all content building); `src/ksa/partXmlSerializer.ts` (Part + GameData XML);
@@ -53,7 +53,7 @@ All paths relative to `/Users/asherwin/repos/meow-sci/flexo/` unless absolute.
   `<textarea>`, one "Copy to clipboard" button with a 1.5 s "Copied!" state.
 - Part/GameData bodies are computed synchronously per render via
   `expandGlassGlow(part)` → `buildModContent(expandedPart, projectName, catalog)` (:206-207) — the
-  *same* code path as the mod export, so the preview is guaranteed byte-identical to shipped XML
+  _same_ code path as the mod export, so the preview is guaranteed byte-identical to shipped XML
   (including built-in→variant id remapping).
 - Assets XML is built **async** in an effect (`buildCustomBundle` fetches GLB geometry, encodes
   KTX2 textures, etc.); the panel shows "Building Assets XML…" until the built result's inputs
@@ -87,7 +87,7 @@ All paths relative to `/Users/asherwin/repos/meow-sci/flexo/` unless absolute.
 - Creates/opens `<modsDir>/flexo-parts/`.
 - Part/GameData/Assets XML written under **non-conflicting names** — case-insensitive collision check
   against existing files; on collision appends `-2`, `-3`, … (`uniqueFileName`, `src/ksa/modExport.ts:97-104`).
-  Existing XML is *never* overwritten.
+  Existing XML is _never_ overwritten.
 - Binaries (`Meshes/*.glb`, `Textures/*.ktx2`, `Animations/*.glb`) **are** overwritten — they are
   regenerated deterministically, same content ⇒ safe (:1263-1273). Binaries write even when there is
   no Assets XML (animation-only part on Core SubParts still ships `Animations/*.glb`).
@@ -112,7 +112,7 @@ keep exposing every input to it:
   (b) carries flexo SubPart GameData (tank/solar/engine data, SubPart-owned collider or light), is
   re-declared as a fresh `flexo_<base>_<templateId>` variant reusing the built-in Mesh+Material
   and carrying forward the built-in's colliders / `<RayTracing>` / `<ShadowCaster>`. Custom meshes are
-  *never* varianted (skipped by document lookup — the catalog-membership bug crashed KSA at startup;
+  _never_ varianted (skipped by document lookup — the catalog-membership bug crashed KSA at startup;
   see the long comment at :247-259 and scope contract #19).
 - Placements + GameData reference variant ids via `TemplateRemap`
   (`serializePart(part, remap)` / `serializeGameData(part, base, remap)`,
@@ -125,9 +125,9 @@ keep exposing every input to it:
     The GLB itself is hand-rolled (not GLTFExporter) in `src/ksa/exportAnimationGlb.ts` because KSA
     matches SubParts by exact node name and GLTFExporter prunes empty nodes. The rig bakes the
     rest-anchor semantics (`restAnchorTime`, `src/ksa/animationRig.ts:200-203` — deploy clips are
-    modeled at their *deployed* keyframe, not t=0).
+    modeled at their _deployed_ keyframe, not t=0).
   - Mesh-atlas GLB — one named node per **placed** custom mesh; geometry per source kind
-    (primitive params / kitten bake / imported *raw* geometry — never the tangented editor cache);
+    (primitive params / kitten bake / imported _raw_ geometry — never the tangented editor cache);
     paired decimated `<id>_VM` picking mesh per node (budget 2000 triangles,
     `VIEW_MESH_TRIANGLE_BUDGET`, `src/ksa/modExport.ts:752`; toggled off by
     `$modelImportSettings.decimateViewMeshes`). GLB post-processed to copy node names onto
@@ -220,7 +220,7 @@ keep exposing every input to it:
   `localStorage flexo:kittenTextureExport` (`src/state/settingsStore.ts:207-224`).
 - Consumed by `planKittenSubPart` (`src/ksa/modExport.ts:586-660`) and read live by both XmlPanel
   (Assets preview) and ModPanel.
-- **Note**: this is an *export* setting living in the generic Settings modal, physically far from
+- **Note**: this is an _export_ setting living in the generic Settings modal, physically far from
   the Export dialog that consumes it — discoverability concern for v2.
 
 ### 1.7 View-mesh decimation setting (export-relevant import setting)
@@ -250,9 +250,9 @@ keep exposing every input to it:
 ### 1.10 Wiki Part Preview mini-app (`apps/partpreview/`) — standalone external integration
 
 - **What**: A standalone Vite SPA (own root, own `vite.config.ts`, `base
-  '/flexo/apps/partpreview/'`, built into `dist/apps/partpreview/` after the main build) that
+'/flexo/apps/partpreview/'`, built into `dist/apps/partpreview/` after the main build) that
   renders ONE built-in KSA Part chosen by `?part_id=`, meant to be iframed by an external wiki
-  down to 200×200. It is *not* mounted inside the editor — no in-editor entry point links to it,
+  down to 200×200. It is _not_ mounted inside the editor — no in-editor entry point links to it,
   and it deliberately never touches the editor's persistent stores (would leak/clobber user
   settings; in-memory atoms only, `apps/partpreview/src/settings.ts`).
 - **Files**: `apps/partpreview/src/App.tsx` (error views for missing/unknown part_id, load bar),
@@ -278,7 +278,7 @@ keep exposing every input to it:
   renders 10-angle PNG turntables + looping GIFs into `dist/`, patching the manifest; run by CI
   between build and Pages upload. Order matters: build → thumbs, never a mini rebuild after.
 - **Shared-asset mechanism**: `src/assetBase.ts` (`VITE_ASSET_BASE || BASE_URL`) lets the mini app
-  fetch `ksa/`, `hdr/`, `basis/` from the *main* app's copy; must be called inside function bodies
+  fetch `ksa/`, `hdr/`, `basis/` from the _main_ app's copy; must be called inside function bodies
   (Node imports the catalog chain for the manifest plugin).
 - **Explicit limits**: built-in Parts only (no custom parts/kittens/animations/IVA); no deep links
   editor↔preview in either direction.
@@ -302,27 +302,28 @@ keep exposing every input to it:
 
 ## 2. UI surface map
 
-| Surface | Kind | Mounts / positioning | Notes |
-| --- | --- | --- | --- |
-| Export dialog | Modal (react-aria `Modal`, `variant="fullscreen"`, `max-w-2xl`) | Portal via kit Modal; trigger in top Toolbar (desktop) or opened from MobileTopBar menu | Contains mode toggle, validation boxes, tab group + textarea (XML mode) or grant row + 2 big buttons (mod mode). Scrollable body (`overflow-auto`). |
-| Native directory picker | Browser chrome | `window.showDirectoryPicker` | Triggered from inside the Export modal — OS-level dialog over the modal. |
-| Native permission prompt | Browser chrome | `requestPermission` | Can appear when pressing "Export to mods folder" (getWritableModFolder requests inline). |
-| Export Project Data dialog | Modal (`fullscreen` variant, `max-w-2xl`) | Opened from Project popover (popover closes first — no modal-in-popover stacking) | Blocked-state swaps entire body for a warning box. |
-| Import Project Data dialog | Modal (same variant) | ditto | Paste textarea + Import button. |
-| Share Project dialog | Modal (same variant) | ditto | Generate/Regenerate/Copy; >8000-char warning. |
-| Project popover | Popover (`bottom start`, w-64) | Anchored to Project toolbar button | Hosts the three Project-Data launchers + rename/new/load. |
-| Load Project dialog | Modal (`center`, max-w-lg) | From Project popover | Contains nested `ConfirmDialog` for delete (modal-in-modal, kit-supported). |
-| Settings modal → kitten-texture export section | Modal (`center`) | From hamburger Menu | Export-consumed setting lives here. |
-| Reset-everything ConfirmDialog | Modal | From hamburger Menu / BuildIdMismatchDialog | Carries the "Reset folder access grants" switch (modFolder integration). |
-| Build-id mismatch dialog | Modal (`center`, non-dismissable) | Root-mounted (`main.tsx`) | Plus nested ConfirmDialog. |
-| Toasts | `GlobalToastRegion` (kit) root-mounted | Fixed overlay | Export success/failure, share-link open results, import summaries. |
-| **Wiki app** zoom bar | Floating bar, bottom-right fixed | `apps/partpreview/src/ZoomControls.tsx` | `[−][+][⚙]`; cog opens a flat react-aria Menu (submenus can't fit at 200×200). |
-| **Wiki app** Lighting dialog | Modal | partpreview | Env select, sky switch, tone-mapping/exposure sliders. |
-| **Wiki app** measurement readout | HUD, bottom-center HTML | `MeasurementReadout.tsx` | Ghost Button whole-row copy-to-clipboard, ✓ 1.2 s. |
-| **Wiki app** axis triad | Canvas overlay (second render pass), top-left | `src/three/AxisGizmo.ts` | Not DOM; auto-hides when too small. |
-| **Wiki app** download progress | HUD bar hugging bottom edge | `DownloadProgress.tsx` | Indeterminate during catalog phase. |
+| Surface                                        | Kind                                                            | Mounts / positioning                                                                    | Notes                                                                                                                                               |
+| ---------------------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Export dialog                                  | Modal (react-aria `Modal`, `variant="fullscreen"`, `max-w-2xl`) | Portal via kit Modal; trigger in top Toolbar (desktop) or opened from MobileTopBar menu | Contains mode toggle, validation boxes, tab group + textarea (XML mode) or grant row + 2 big buttons (mod mode). Scrollable body (`overflow-auto`). |
+| Native directory picker                        | Browser chrome                                                  | `window.showDirectoryPicker`                                                            | Triggered from inside the Export modal — OS-level dialog over the modal.                                                                            |
+| Native permission prompt                       | Browser chrome                                                  | `requestPermission`                                                                     | Can appear when pressing "Export to mods folder" (getWritableModFolder requests inline).                                                            |
+| Export Project Data dialog                     | Modal (`fullscreen` variant, `max-w-2xl`)                       | Opened from Project popover (popover closes first — no modal-in-popover stacking)       | Blocked-state swaps entire body for a warning box.                                                                                                  |
+| Import Project Data dialog                     | Modal (same variant)                                            | ditto                                                                                   | Paste textarea + Import button.                                                                                                                     |
+| Share Project dialog                           | Modal (same variant)                                            | ditto                                                                                   | Generate/Regenerate/Copy; >8000-char warning.                                                                                                       |
+| Project popover                                | Popover (`bottom start`, w-64)                                  | Anchored to Project toolbar button                                                      | Hosts the three Project-Data launchers + rename/new/load.                                                                                           |
+| Load Project dialog                            | Modal (`center`, max-w-lg)                                      | From Project popover                                                                    | Contains nested `ConfirmDialog` for delete (modal-in-modal, kit-supported).                                                                         |
+| Settings modal → kitten-texture export section | Modal (`center`)                                                | From hamburger Menu                                                                     | Export-consumed setting lives here.                                                                                                                 |
+| Reset-everything ConfirmDialog                 | Modal                                                           | From hamburger Menu / BuildIdMismatchDialog                                             | Carries the "Reset folder access grants" switch (modFolder integration).                                                                            |
+| Build-id mismatch dialog                       | Modal (`center`, non-dismissable)                               | Root-mounted (`main.tsx`)                                                               | Plus nested ConfirmDialog.                                                                                                                          |
+| Toasts                                         | `GlobalToastRegion` (kit) root-mounted                          | Fixed overlay                                                                           | Export success/failure, share-link open results, import summaries.                                                                                  |
+| **Wiki app** zoom bar                          | Floating bar, bottom-right fixed                                | `apps/partpreview/src/ZoomControls.tsx`                                                 | `[−][+][⚙]`; cog opens a flat react-aria Menu (submenus can't fit at 200×200).                                                                      |
+| **Wiki app** Lighting dialog                   | Modal                                                           | partpreview                                                                             | Env select, sky switch, tone-mapping/exposure sliders.                                                                                              |
+| **Wiki app** measurement readout               | HUD, bottom-center HTML                                         | `MeasurementReadout.tsx`                                                                | Ghost Button whole-row copy-to-clipboard, ✓ 1.2 s.                                                                                                  |
+| **Wiki app** axis triad                        | Canvas overlay (second render pass), top-left                   | `src/three/AxisGizmo.ts`                                                                | Not DOM; auto-hides when too small.                                                                                                                 |
+| **Wiki app** download progress                 | HUD bar hugging bottom edge                                     | `DownloadProgress.tsx`                                                                  | Indeterminate during catalog phase.                                                                                                                 |
 
 Known stacking/flow notes:
+
 - No z-index fights observed in this area; all modals go through the kit Modal portal.
 - The Export dialog is one modal doing four jobs (validation report, XML preview ×3 tabs, folder
   grant management, two delivery actions) — density, not stacking, is the issue.
@@ -335,19 +336,20 @@ Known stacking/flow notes:
 
 Stores and persistence:
 
-| Store | File | Persistence | Role in this area |
-| --- | --- | --- | --- |
-| `$modFolder` | `src/state/modFolderStore.ts` | Handle in **IndexedDB** `flexo-fs/handles/modsDir`; status ephemeral, derived on boot | Folder grant status/name. Deliberately separate from projectStore (machine capability, not project data). |
-| `$kittenTextureExport` | `src/state/settingsStore.ts:218` | **localStorage** `flexo:kittenTextureExport` | Kitten texture export mode + Content/Core path. |
-| `$modelImportSettings.decimateViewMeshes` | settingsStore | localStorage | `_VM` decimation on/off, read at export. |
-| `$part` | editorStore | project snapshot (localStorage via projectStore) + IndexedDB blobs | Everything exported. Includes `internalFlags` (per-template `<Internal>` overrides) which persist in the project codec (`projectCodec.ts:1394` key `ifl`) and transfer envelopes. |
-| `$projectName` | projectStore | localStorage | Filename base + mod XML names. |
-| `$catalogIndex` | catalogStore | ephemeral (fetched ksa/ tree) | Variant map source (built-in Internal/colliders/RayTracing/ShadowCaster values). |
-| `$allReactionIndex` | reactionStore | ephemeral + custom reactions in project | Engine validation input. |
-| assetDb | `src/state/assetDb.ts` | **IndexedDB** blobs | Texture KTX2/source bytes, emissive paint PNGs, import atlas GLBs — read during bundle build. |
-| Wiki app settings | `apps/partpreview/src/settings.ts` | **in-memory only** (by contract) | Never touches editor persistent stores. |
+| Store                                     | File                               | Persistence                                                                           | Role in this area                                                                                                                                                                 |
+| ----------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `$modFolder`                              | `src/state/modFolderStore.ts`      | Handle in **IndexedDB** `flexo-fs/handles/modsDir`; status ephemeral, derived on boot | Folder grant status/name. Deliberately separate from projectStore (machine capability, not project data).                                                                         |
+| `$kittenTextureExport`                    | `src/state/settingsStore.ts:218`   | **localStorage** `flexo:kittenTextureExport`                                          | Kitten texture export mode + Content/Core path.                                                                                                                                   |
+| `$modelImportSettings.decimateViewMeshes` | settingsStore                      | localStorage                                                                          | `_VM` decimation on/off, read at export.                                                                                                                                          |
+| `$part`                                   | editorStore                        | project snapshot (localStorage via projectStore) + IndexedDB blobs                    | Everything exported. Includes `internalFlags` (per-template `<Internal>` overrides) which persist in the project codec (`projectCodec.ts:1394` key `ifl`) and transfer envelopes. |
+| `$projectName`                            | projectStore                       | localStorage                                                                          | Filename base + mod XML names.                                                                                                                                                    |
+| `$catalogIndex`                           | catalogStore                       | ephemeral (fetched ksa/ tree)                                                         | Variant map source (built-in Internal/colliders/RayTracing/ShadowCaster values).                                                                                                  |
+| `$allReactionIndex`                       | reactionStore                      | ephemeral + custom reactions in project                                               | Engine validation input.                                                                                                                                                          |
+| assetDb                                   | `src/state/assetDb.ts`             | **IndexedDB** blobs                                                                   | Texture KTX2/source bytes, emissive paint PNGs, import atlas GLBs — read during bundle build.                                                                                     |
+| Wiki app settings                         | `apps/partpreview/src/settings.ts` | **in-memory only** (by contract)                                                      | Never touches editor persistent stores.                                                                                                                                           |
 
 Flow notes:
+
 - **Nothing in the export path participates in undo/redo** — export is read-only over `$part`.
   The only undoable action in this area is Project Data **import** (`importProjectData` = one undo
   step).
@@ -393,11 +395,11 @@ Flow notes:
    Should be one kit primitive in v2.
 7. **hasCustomAssets gate is all-or-nothing and explains itself twice**: the same long warning
    paragraph is duplicated in ExportProjectDialog (:73-78) and ShareProjectDialog (:78-82) with
-   slightly different wording; neither offers to *show* which assets are blocking (user must hunt
+   slightly different wording; neither offers to _show_ which assets are blocking (user must hunt
    through the assets panel). Phase-2 (bundle binaries into project export) is a known TODO
    (memory + comments).
 8. **Project transfer entry points are 3 items deep**: Share/Export/Import live in a popover section
-   under a button labeled with the project *name* (not "Project") — low discoverability for a
+   under a button labeled with the project _name_ (not "Project") — low discoverability for a
    first-time user hunting "how do I save this to a file".
 9. **`validate()` duplicates work already modeled elsewhere**: the ad-hoc trio of basic warnings
    (empty part id / dupes / no placements) is separate from the four structured validators; there is
@@ -448,6 +450,7 @@ Game-contract (all verified in code + `scope/custom-assets-and-mod-export.md`, b
   `name = "flexo-parts"` + `assets = [ ... ]`).
 
 Persistence formats:
+
 - IndexedDB `flexo-fs/handles/modsDir` (directory handle) — survives reloads; permission may lapse;
   re-grant requires a user gesture. The four-state status model must survive.
 - `flexo:kittenTextureExport` localStorage shape `{mode, contentCorePath}`.
@@ -457,6 +460,7 @@ Persistence formats:
 - `internalFlags` codec key `ifl` in saved projects.
 
 Behavioral invariants:
+
 - Project import is additive with id remapping and is ONE undo step.
 - Share-link boot: suppress intro + skip build-check without consuming them; open as NEW project;
   strip `?load=` after consumption; never clobber the current project on decode failure.
@@ -485,6 +489,7 @@ Ctrl/Cmd+E without collision, but nothing must be preserved.
 ## 7. Cross-area dependencies
 
 Inbound (other areas → export):
+
 - **Validators**: engine/collider/IVA-seat/light validators are owned by their feature areas but
   surfaced in the export pre-flight; `EngineIssuesPanel.tsx` shows the engine set independently.
 - **Interior (IVA-only) flag**: set via `MultiSelectToolbar` "Interior (IVA only)" toggle and
@@ -502,6 +507,7 @@ Inbound (other areas → export):
 - **Project store area**: projectName, project envelope/codec, loadSharedProject.
 
 Outbound (export → others / external):
+
 - `writeModToFolder`/`buildModZip` consumed only by ExportButton today.
 - `PartPreviewViewport` shared: editor Part browser popup + wiki app + thumbnail capture page.
 - `src/assetBase.ts` indirection used by catalog/textureSupport/SceneEnvironment for the wiki app's

@@ -20,29 +20,33 @@ Ground truth: the entire feature is on `main`, mounted unconditionally in `src/a
 **What it does:** A floating, **non-modal** command palette that builds an ordered list of steps ("ops") over a frozen set of seed SubPart placements, previews the result live as translucent green ghosts in the viewport, and commits everything as **one undo step**. Use cases: 4 RCS blocks around a tank, 6×4 solar grid, 15-step helix.
 
 **UI paths:**
+
 - `mod+K` (⌘K / Ctrl+K) anywhere — toggles open/cancel (`src/ui/hotkeys/registry.ts:162-168`; preventDefault suppresses the browser's own ⌘K).
 - SelectionToolbar → "Chain" button (Workflow icon) — shown whenever a selection exists (`src/ui/SelectionToolbar.tsx:75-80`).
 - Both route through `toggleChainPalette()` (`src/ui/chain/openChainPalette.ts:24`) so guards can never disagree.
 
 **Open guards** (`src/ui/chain/openChainPalette.ts:36-45`):
+
 - Selection contains no SubPart placements → toast "Select SubParts to chain" (warning). Only SubPart placements can seed — connectors/colliders/lights/IVA seats/kittens deliberately cannot (v1 limit).
 - Any seed on a locked layer → toast "Selection is on a locked layer" (checked at **open**, not at Apply — locking mid-session doesn't block commit; documented deliberate limit, `docs/action-chains.md:251`).
 - Seeds = selected placements' `instanceId`s **frozen in selection order** at open; changing selection afterwards does not change the seeds.
 
 **Implementing files:**
-| File | Role |
-|---|---|
-| `src/state/chainStore.ts` (417 lines) | `$chainSession` atom (ephemeral), 6 op types, `clampOp`/`defaultOp`, add/update/remove/move actions, persisted `flexo:chainDefaults` last-used-params blob |
-| `src/three/chainMath.ts` (422 lines) | `evalChain` — pure fold from (seed transforms, ops) → instance list; `MAX_ARRAY_COUNT = 500`, `MAX_CHAIN_INSTANCES = 2000` (line 89); composes `bulkTransform.ts` primitives (same module as gizmo + numeric transform panel) |
-| `src/three/chainEval.ts` | `$chainEval` computed([$part, $chainSession]) — resolves frozen seed ids against the CURRENT document on every recompute (live re-flow while nudging a seed) |
+
+| File                                         | Role                                                                                                                                                                                                                                    |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/state/chainStore.ts` (417 lines)        | `$chainSession` atom (ephemeral), 6 op types, `clampOp`/`defaultOp`, add/update/remove/move actions, persisted `flexo:chainDefaults` last-used-params blob                                                                              |
+| `src/three/chainMath.ts` (422 lines)         | `evalChain` — pure fold from (seed transforms, ops) → instance list; `MAX_ARRAY_COUNT = 500`, `MAX_CHAIN_INSTANCES = 2000` (line 89); composes `bulkTransform.ts` primitives (same module as gizmo + numeric transform panel)           |
+| `src/three/chainEval.ts`                     | `$chainEval` computed([$part, $chainSession]) — resolves frozen seed ids against the CURRENT document on every recompute (live re-flow while nudging a seed)                                                                            |
 | `src/three/ChainPreviewLayer.ts` (136 lines) | Ghost overlay; `PREVIEW_MAX_GHOSTS = 500`; singleton unlit green material (0x2cfa1f, opacity 0.35, never disposed); group on `viewport.scene` (outside export hierarchy, layer bookkeeping, pick set; every clone gets no-op `raycast`) |
-| `src/ui/chain/ChainPalette.tsx` (205 lines) | The floating card: search field, command list, step cards, footer (instance counts / error), Apply/Cancel |
-| `src/ui/chain/ChainStepCard.tsx` (408 lines) | Per-step parameter form; stateless — writes straight through `updateChainOp` |
-| `src/ui/chain/chainCommands.ts` | Command catalog: label/description/keywords/lucide icon per op kind (search matches label + keywords, e.g. "circle"/"ring"/"polar" → Radial Array) |
-| `src/ui/chain/openChainPalette.ts` | `toggleChainPalette()` open guards |
-| `src/state/editorStore.ts:1770-1855` | `ChainCommitEntry`, `nextChainInstanceId` (collision-skipping id generator), `applyActionChain` (the ONLY document write) |
+| `src/ui/chain/ChainPalette.tsx` (205 lines)  | The floating card: search field, command list, step cards, footer (instance counts / error), Apply/Cancel                                                                                                                               |
+| `src/ui/chain/ChainStepCard.tsx` (408 lines) | Per-step parameter form; stateless — writes straight through `updateChainOp`                                                                                                                                                            |
+| `src/ui/chain/chainCommands.ts`              | Command catalog: label/description/keywords/lucide icon per op kind (search matches label + keywords, e.g. "circle"/"ring"/"polar" → Radial Array)                                                                                      |
+| `src/ui/chain/openChainPalette.ts`           | `toggleChainPalette()` open guards                                                                                                                                                                                                      |
+| `src/state/editorStore.ts:1770-1855`         | `ChainCommitEntry`, `nextChainInstanceId` (collision-skipping id generator), `applyActionChain` (the ONLY document write)                                                                                                               |
 
 **The six op kinds** (`chainStore.ts:29-106`), two families:
+
 - **Transform steps** (move the whole working set, like the multi-select "transform by" panel + a pivot choice):
   - **Translate** — `delta` Vec3 (m).
   - **Rotate** — `degreesDeg` EulerXYZ, `pivot` (centroid | Part origin | custom point), `center` Vec3.
@@ -57,6 +61,7 @@ Ground truth: the entire feature is on `main`, mounted unconditionally in `src/a
 **Clamps** (`clampOp`, `chainStore.ts:250-321`; engine re-validates independently in `evalChain`): distances ±10000 m, angles ±360°, scale 0.01–100 (positive only — **mirror deliberately unreachable**: KSA back-face culls negative-scale placements), linear/grid counts ≤ 500, radial count ≤ 360, chain total ≤ 2000 instances (checked before an array expands).
 
 **Apply** (`applyActionChain`, `editorStore.ts:1814`):
+
 - Resolves every distinct seed FIRST; returns −1 (no mutation, no undo entry) if any is gone; palette then toasts "Chain not applied — seeds no longer exist".
 - One `pushUndo('action chain', detail)` for the whole thing.
 - Clones: same `subPartTemplateId` + `layerId`, fresh `instanceId` via `nextChainInstanceId` (`editorStore.ts:1793`) which **skips forward past taken ids** — a deliberate, documented deviation from `duplicateSelected` (which can collide after deletions; tolerated for 1 duplicate, unacceptable for 500).
@@ -65,6 +70,7 @@ Ground truth: the entire feature is on `main`, mounted unconditionally in `src/a
 - Toasts "Applied chain · +N SubParts" or "· N transformed".
 
 **Interaction details / hotkeys while open** (`ChainPalette.tsx`):
+
 - **Non-modal by design** (component comment lines 17-30): orbiting, gizmo drags, W/S-A/D-Q/E rotate, arrow nudge and undo all stay live; `$chainEval` re-evaluates against the current document so tweaking a seed while the array re-flows is the point.
 - `mod+enter` = Apply (component-local `useHotkeys`, `enableOnFormTags: true`, preventDefault; handlers read stores fresh so memoised callbacks never go stale — no dep list).
 - `escape` = Cancel — registered WITHOUT preventDefault so `useNumberDraft` can swallow the first Escape to revert a dirty field (app-wide convention: revert first, close second).
@@ -75,6 +81,7 @@ Ground truth: the entire feature is on `main`, mounted unconditionally in `src/a
 - Seeds that vanish (deleted/undone) are dropped by `$chainEval`; footer shows "Seeds no longer exist"; palette does NOT auto-close. Loading a project closes the session (`projectStore.ts:287` → `closeChain()`).
 
 **Ghost preview subtleties** (`ChainPreviewLayer.ts:80-136`):
+
 - A seed is only ghosted when the chain MOVES it (any of 9 numbers differs > 1e-9) — makes pure-transform chains previewable.
 - `Group.clone(true)` shares geometry with the mesh cache; ghost material assigned by reference; rebuild-wholesale on every `$chainEval` change is allocation-free.
 - Hidden layer → hidden ghosts (clone copies `visible`); layer opacity fade does NOT carry (material replaced).
@@ -88,6 +95,7 @@ Ground truth: the entire feature is on `main`, mounted unconditionally in `src/a
 **UI path:** top Toolbar (floating, top-center desktop) → rightmost burger icon (`aria-label="Menu"`) → popover menu, `placement="bottom end"`, w-44 (`src/ui/SettingsButton.tsx:208-244`; mounted from `src/ui/Toolbar.tsx:64`).
 
 Menu items (exact order):
+
 1. **Scale Everything** → `ScaleEverythingDialog`
 2. — separator —
 3. **Settings** → `SettingsModal`
@@ -102,18 +110,19 @@ On phone the same items appear inside the single MobileTopBar overflow burger (`
 
 `SettingsModal` (`src/ui/SettingsButton.tsx:42-164`) — centered dismissable Modal. Sections and controls, in order:
 
-| Section | Control | Store (all localStorage-persisted via `persistentJSON`) | Notes |
-|---|---|---|---|
-| **Viewport** | "FPS counter" Switch | `$showFpsCounter` (`flexo:showFpsCounter`, settingsStore.ts:292) | `src/three/Viewport.ts` subscribes, mounts/unmounts stats.js panel |
-| **Connectors** | "Connector size" PreciseNumberInput (m, min 0.01) | `$connectorSettings.size` (`flexo:connectorSettings`, default 0.125) | Global gizmo-cube edge length; facing cone derives from it; three layer subscribes |
-| **IVA seats** | "Marker size" PreciseNumberInput (m, min 0.01) | `$ivaSeatSettings.markerSize` (`flexo:ivaSeatSettings`, default 0.12) | Eye-sphere diameter; cone/up-stick derive; KSA has no seat size so marker never scales with part |
-| | "Show gaze cone" Switch + explanatory caption | `$ivaSeatSettings.showGazeCone` (default false) | Caption warns cone is indicative only — game clamps to 90° hemisphere |
-| **Selection highlight** | "Meshes" row: native `<input type=color>` swatch + strength Slider (0–1, step .05) + % readout | `$selectionHighlight.meshColor/meshAlpha` (`flexo:selectionHighlight`, defaults #fcff66 / 0.35) | Emissive tint for selected SubPart meshes; `src/three/highlightSettings.ts` parses |
-| | "Kittens" row: same pair | `.kittenColor/.kittenAlpha` (defaults #ff00f7 / 0.35) | Connectors keep fixed green, not configurable |
-| **Kitten mesh textures (export)** | "Source" Select: "Reference game install" \| "Bundle copies into mod" | `$kittenTextureExport.mode` (`flexo:kittenTextureExport`, default 'reference') | Feeds Make-Kitten-Mesh mod export |
-| | (reference mode only) "Content/Core path" TextField (mono) + caption | `.contentCorePath` (default `C:\Program Files\Kitten Space Agency\Content\Core`) | Builds absolute `<Diffuse Path>`; relies on .NET Path.Combine passing rooted paths through |
+| Section                           | Control                                                                                        | Store (all localStorage-persisted via `persistentJSON`)                                         | Notes                                                                                            |
+| --------------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **Viewport**                      | "FPS counter" Switch                                                                           | `$showFpsCounter` (`flexo:showFpsCounter`, settingsStore.ts:292)                                | `src/three/Viewport.ts` subscribes, mounts/unmounts stats.js panel                               |
+| **Connectors**                    | "Connector size" PreciseNumberInput (m, min 0.01)                                              | `$connectorSettings.size` (`flexo:connectorSettings`, default 0.125)                            | Global gizmo-cube edge length; facing cone derives from it; three layer subscribes               |
+| **IVA seats**                     | "Marker size" PreciseNumberInput (m, min 0.01)                                                 | `$ivaSeatSettings.markerSize` (`flexo:ivaSeatSettings`, default 0.12)                           | Eye-sphere diameter; cone/up-stick derive; KSA has no seat size so marker never scales with part |
+|                                   | "Show gaze cone" Switch + explanatory caption                                                  | `$ivaSeatSettings.showGazeCone` (default false)                                                 | Caption warns cone is indicative only — game clamps to 90° hemisphere                            |
+| **Selection highlight**           | "Meshes" row: native `<input type=color>` swatch + strength Slider (0–1, step .05) + % readout | `$selectionHighlight.meshColor/meshAlpha` (`flexo:selectionHighlight`, defaults #fcff66 / 0.35) | Emissive tint for selected SubPart meshes; `src/three/highlightSettings.ts` parses               |
+|                                   | "Kittens" row: same pair                                                                       | `.kittenColor/.kittenAlpha` (defaults #ff00f7 / 0.35)                                           | Connectors keep fixed green, not configurable                                                    |
+| **Kitten mesh textures (export)** | "Source" Select: "Reference game install" \| "Bundle copies into mod"                          | `$kittenTextureExport.mode` (`flexo:kittenTextureExport`, default 'reference')                  | Feeds Make-Kitten-Mesh mod export                                                                |
+|                                   | (reference mode only) "Content/Core path" TextField (mono) + caption                           | `.contentCorePath` (default `C:\Program Files\Kitten Space Agency\Content\Core`)                | Builds absolute `<Diffuse Path>`; relies on .NET Path.Combine passing rooted paths through       |
 
 **Settings NOT in the Settings modal but in `settingsStore.ts`** (owned/edited by other areas' UIs, listed for completeness):
+
 - `$lightSettings` (`flexo:lightSettings`) — light marker size, coverage volumes selected/all/off, exposure mode auto/absolute, vizExposure, livePreview; edited from the View menu / lights UI. Note its **field-defaulting read helper** `lightSettings()` (settingsStore.ts:125) — the pattern for adding fields without migration.
 - `$lightPreviewCount` — deliberately ephemeral plain atom (scene→UI report, not a preference).
 - `$modelImportSettings` (`flexo:modelImport`) — maxTextureSize 1024/2048/4096, upAxis y/z, bakeScale, decimateViewMeshes; edited inside ImportModelDialog. Per-import choices (scale factor, prefix, double-sided, merge) are deliberately dialog state, NOT persisted (a leftover 0.01 scale silently corrupting the next import is the documented worst case).
@@ -172,20 +181,20 @@ v2 note: the "Settings" surface is really scattered across the modal, the View m
 
 ## 2. UI surface map
 
-| Surface | Kind | Mounts | Positioning | Z / stacking | Issues |
-|---|---|---|---|---|---|
-| ChainPalette | floating non-modal card | `app.tsx:145` (self-gates on `$chainSession`) | desktop: `absolute left-3 top-16 w-[340px] max-h-[calc(100vh-8rem)]`; phone: bottom sheet `inset-x-2 bottom-20 max-h-[45vh]` | `z-30` | Overlaps left-anchored FloatingEditorPanel cards (MeasurementEditor/ContainerEditor: `absolute left-3 top-1/2 z-10`, `FloatingEditorPanel.tsx:32-33`) — palette wins on z but can fully cover them; on phone both fight for the same bottom-sheet slot (`bottom-20`) |
-| Chain ghost overlay | 3D scene layer | `viewport.scene` (not `EditorScene.root`) | n/a | renders in-scene | ghosts of hidden-layer seeds invisibly cloned (documented) |
-| Burger menu | toolbar popover menu | Toolbar (desktop) / MobileTopBar (phone) | react-aria Popover portal, `bottom end` | portal top-layer | mixes a document action (Scale Everything) with app meta (Settings/About/Reset) |
-| SettingsModal | centered modal dialog | rendered by both SettingsButton and MobileTopBar | react-aria Modal portal, `variant="center"` | modal overlay | single flat scroll; sections unrelated (viewport/connector/IVA/highlight/export) |
-| ScaleEverythingDialog | centered modal | same dual mounts | Modal `variant="center"` | modal overlay | — |
-| AboutDialog | centered modal / phone cover | `app.tsx:60` | Modal center vs `cover` | modal overlay | — |
-| HistoryButton popover | popover (desktop) | Toolbar | Popover `bottom end` w-56, max-h-80 scroll | portal | — |
-| History (mobile) | bottom sheet modal | MobileTopBar | Modal `variant="sheet"` | modal | — |
-| Reset ConfirmDialog | modal-over-menu | SettingsButton / MobileTopBar / BuildIdMismatchDialog | kit ConfirmDialog | modal | modal-in-modal in build-mismatch flow (alertdialog → confirm) |
-| BuildIdMismatchDialog | non-dismissable centered modal | `main.tsx:84` (outside App) | Modal center, `isDismissable={false}` | modal | blocks everything at boot (intended) |
-| WorkspaceLoadProgress | bottom-center HUD | `app.tsx:138` | fixed/absolute bottom-center | below modals | shares bottom-center band with TransformHud (`app.tsx:141`) and SeatViewBar (`app.tsx:111`) |
-| First-run About auto-open | modal | effect in AboutDialog | — | — | can race other boot toasts (purge notice) |
+| Surface                   | Kind                           | Mounts                                                | Positioning                                                                                                                  | Z / stacking     | Issues                                                                                                                                                                                                                                                               |
+| ------------------------- | ------------------------------ | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ChainPalette              | floating non-modal card        | `app.tsx:145` (self-gates on `$chainSession`)         | desktop: `absolute left-3 top-16 w-[340px] max-h-[calc(100vh-8rem)]`; phone: bottom sheet `inset-x-2 bottom-20 max-h-[45vh]` | `z-30`           | Overlaps left-anchored FloatingEditorPanel cards (MeasurementEditor/ContainerEditor: `absolute left-3 top-1/2 z-10`, `FloatingEditorPanel.tsx:32-33`) — palette wins on z but can fully cover them; on phone both fight for the same bottom-sheet slot (`bottom-20`) |
+| Chain ghost overlay       | 3D scene layer                 | `viewport.scene` (not `EditorScene.root`)             | n/a                                                                                                                          | renders in-scene | ghosts of hidden-layer seeds invisibly cloned (documented)                                                                                                                                                                                                           |
+| Burger menu               | toolbar popover menu           | Toolbar (desktop) / MobileTopBar (phone)              | react-aria Popover portal, `bottom end`                                                                                      | portal top-layer | mixes a document action (Scale Everything) with app meta (Settings/About/Reset)                                                                                                                                                                                      |
+| SettingsModal             | centered modal dialog          | rendered by both SettingsButton and MobileTopBar      | react-aria Modal portal, `variant="center"`                                                                                  | modal overlay    | single flat scroll; sections unrelated (viewport/connector/IVA/highlight/export)                                                                                                                                                                                     |
+| ScaleEverythingDialog     | centered modal                 | same dual mounts                                      | Modal `variant="center"`                                                                                                     | modal overlay    | —                                                                                                                                                                                                                                                                    |
+| AboutDialog               | centered modal / phone cover   | `app.tsx:60`                                          | Modal center vs `cover`                                                                                                      | modal overlay    | —                                                                                                                                                                                                                                                                    |
+| HistoryButton popover     | popover (desktop)              | Toolbar                                               | Popover `bottom end` w-56, max-h-80 scroll                                                                                   | portal           | —                                                                                                                                                                                                                                                                    |
+| History (mobile)          | bottom sheet modal             | MobileTopBar                                          | Modal `variant="sheet"`                                                                                                      | modal            | —                                                                                                                                                                                                                                                                    |
+| Reset ConfirmDialog       | modal-over-menu                | SettingsButton / MobileTopBar / BuildIdMismatchDialog | kit ConfirmDialog                                                                                                            | modal            | modal-in-modal in build-mismatch flow (alertdialog → confirm)                                                                                                                                                                                                        |
+| BuildIdMismatchDialog     | non-dismissable centered modal | `main.tsx:84` (outside App)                           | Modal center, `isDismissable={false}`                                                                                        | modal            | blocks everything at boot (intended)                                                                                                                                                                                                                                 |
+| WorkspaceLoadProgress     | bottom-center HUD              | `app.tsx:138`                                         | fixed/absolute bottom-center                                                                                                 | below modals     | shares bottom-center band with TransformHud (`app.tsx:141`) and SeatViewBar (`app.tsx:111`)                                                                                                                                                                          |
+| First-run About auto-open | modal                          | effect in AboutDialog                                 | —                                                                                                                            | —                | can race other boot toasts (purge notice)                                                                                                                                                                                                                            |
 
 Stacking context note: everything modal goes through react-aria portals (top layer); the chain palette is NOT a portal — it's an absolutely-positioned div inside the app root at `z-30`, above the `z-10` floating editor panels and below portaled popovers/modals.
 
@@ -194,6 +203,7 @@ Stacking context note: everything modal goes through react-aria portals (top lay
 ## 3. State & data flow
 
 **Persisted (localStorage, all `flexo:*` keys, wiped by Reset Everything):**
+
 - `flexo:chainDefaults` — module-private, last-used params per op kind; read DEFENSIVELY (`defaultOp` copies only keys existing on the hardcoded shape; `clampOp` sanitizes; corrupted blob degrades to hardcoded defaults — regression-tested). NOT a document format; NOT migrated (constitution).
 - `flexo:connectorSettings`, `flexo:ivaSeatSettings`, `flexo:lightSettings`, `flexo:selectionHighlight`, `flexo:kittenTextureExport`, `flexo:modelImport`, `flexo:simulateGlass`, `flexo:showFpsCounter`, `flexo:aboutSeen`.
 - `flexo_build_id` (note: underscore, not `flexo:` prefix — still caught by `localStorage.clear()`).
@@ -213,7 +223,7 @@ Stacking context note: everything modal goes through react-aria portals (top lay
 3. **"Settings" is scattered.** The Settings modal holds 5 unrelated sections; light-viz settings live in the View menu; import settings live inside ImportModelDialog; glass simulation lives in the texturing UI. Defensible per-feature, but there is no single "preferences" surface, and the modal is one flat unstructured scroll (`SettingsButton.tsx:58-160`).
 4. **Burger menu mixes tiers.** A destructive document transform (Scale Everything), app preferences, help, about, and a data-nuke all share one 6-item menu. In a v2 menubar these belong to different top-level menus (Edit vs App/Help).
 5. **SettingsModal + ScaleEverythingDialog are mounted twice** (SettingsButton for desktop, MobileTopBar for phone) with duplicated open-state plumbing and duplicated menu-item lists (`SettingsButton.tsx:222-242` vs `MobileTopBar.tsx:85-116`). The reset ConfirmDialog is also duplicated (3 sites incl. BuildIdMismatchDialog). Menu content should be data, rendered once.
-6. **The chain palette is not draggable and not resizable**, fixed 340px, and its command list + step cards + footer share one 45vh/100vh-8rem scroll — a long chain buries the search box's command list (mitigated by hide-when-steps-exist, but discoverability of adding a *second* step type via search-only is weak).
+6. **The chain palette is not draggable and not resizable**, fixed 340px, and its command list + step cards + footer share one 45vh/100vh-8rem scroll — a long chain buries the search box's command list (mitigated by hide-when-steps-exist, but discoverability of adding a _second_ step type via search-only is weak).
 7. **`mod+K` is toggle-with-side-effects:** if the palette is open and the user hits ⌘K intending "command palette" muscle memory, it silently cancels the session (step list lost; only field values persist via chainDefaults). No confirm on discard of a multi-step chain.
 8. **Chain button visibility is misleading:** SelectionToolbar shows "Chain" for ANY selection (connectors, kittens…) and lets the guard toast reject it (`SelectionToolbar.tsx:75-77` comment admits this). Fine as a toast, but reads as a bug to users.
 9. **HistoryButton disabled-state quirk:** desktop button disables only when `historyList` is empty, but the list includes only ±N entries; long sessions rely on `$historyList` cap behavior in editorStore (fine today, worth re-checking in v2).
@@ -247,12 +257,12 @@ Stacking context note: everything modal goes through react-aria portals (top lay
 
 ## 6. Hotkeys registered by this area
 
-| Key | Scope | Effect | Where |
-|---|---|---|---|
-| `mod+K` | global (registry, shared preventDefault) | `toggleChainPalette()` — open over selection / cancel open session | `src/ui/hotkeys/registry.ts:160-168` |
-| `mod+Enter` | ChainPalette-local, `enableOnFormTags`, preventDefault, enabled only with session | Apply chain | `ChainPalette.tsx:68-72` |
-| `Escape` | ChainPalette-local, NO preventDefault, enabled only with session | Cancel session (after useNumberDraft's dirty-field revert) | `ChainPalette.tsx:75` |
-| `?` | global, `useKey:true, ignoreModifiers:true` | `toggleHelp()` — shortcuts overlay | `registry.ts:190-201` |
+| Key         | Scope                                                                             | Effect                                                             | Where                                |
+| ----------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------ |
+| `mod+K`     | global (registry, shared preventDefault)                                          | `toggleChainPalette()` — open over selection / cancel open session | `src/ui/hotkeys/registry.ts:160-168` |
+| `mod+Enter` | ChainPalette-local, `enableOnFormTags`, preventDefault, enabled only with session | Apply chain                                                        | `ChainPalette.tsx:68-72`             |
+| `Escape`    | ChainPalette-local, NO preventDefault, enabled only with session                  | Cancel session (after useNumberDraft's dirty-field revert)         | `ChainPalette.tsx:75`                |
+| `?`         | global, `useKey:true, ignoreModifiers:true`                                       | `toggleHelp()` — shortcuts overlay                                 | `registry.ts:190-201`                |
 
 (Undo/redo/copy/paste/delete, rotate W/S/A/D/Q/E + R + F/⇧F, nudge arrows, Escape-exit-seat-view are in the same registry but belong to selection/transform + hotkeys areas.)
 
@@ -261,6 +271,7 @@ Stacking context note: everything modal goes through react-aria portals (top lay
 ## 7. Cross-area dependencies
 
 **This area calls into others:**
+
 - editorStore (selection/transform area): `$part`, `$selectedIndices`, `applyActionChain`, `pushUndo`, `setSelectedPlacements`, `$historyList`/`jumpToHistory`/`undo`/`redo`, `scaleEverything`.
 - layerStore: `isLayerLocked` open guard.
 - three/bulkTransform (viewport area): all chain math primitives; `coords.applyPlacement` for ghosts; Viewport/EditorScene own ChainPreviewLayer lifecycle + refresh triggers.
@@ -268,6 +279,7 @@ Stacking context note: everything modal goes through react-aria portals (top lay
 - helpStore ↔ hotkeys area's HelpDialog.
 
 **Others call into this area:**
+
 - SelectionToolbar renders the Chain button (`toggleChainPalette`).
 - Toolbar + MobileTopBar mount SettingsButton/SettingsModal/ScaleEverythingDialog/HistoryButton and the About/Shortcuts/Reset menu items.
 - projectStore closes chain sessions on project load; main.tsx boot sequence calls checkBuildId/suppressAboutFirstUse.
@@ -279,6 +291,7 @@ Stacking context note: everything modal goes through react-aria portals (top lay
 ## 8. Known backlog (open plans + TODOs the v2 design should absorb)
 
 ### From `plans/FEATURE_TODOS.md` (unchecked items, lines 137-155)
+
 - Import built-in KSA animations (e.g. `CoreElectricalA_Prefab_SolarPanelB`) — does it map to flexo's animation model?
 - Hotkeys for move/rotate/scale tool switching (must work in animation mode too).
 - Mod export (zip + folder) should also include the project JSON.
@@ -294,6 +307,7 @@ Stacking context note: everything modal goes through react-aria portals (top lay
 - Part snapping; part overlap detection/warning; movement snaps; blueprint views.
 
 ### From `plans/ANIMATION_UX_CLEANUP_TODOS.md` (all 5 open; animation agent should co-own)
+
 - Joint SubPart list → GridList with per-row trash button.
 - "Attach selected" Select → Autocomplete (searchable, same styling).
 - Click anywhere in a joint panel selects the joint.
@@ -301,6 +315,7 @@ Stacking context note: everything modal goes through react-aria portals (top lay
 - Play button on the preview slider (real-speed once, reset to 0, honoring rest-pose snap).
 
 ### From `plans/FIX_CURRENT_GAPS_PLAN.md` (5117 review — current game-contract gaps, all OPEN)
+
 - Q1: `<EVADoor SeatId>` attribute dropped on import→export (modeled child, passthrough doesn't cover it).
 - Q2: `<IVASeat Id>` discarded/never emitted, now the EVADoor link target.
 - Q3: clutter `<Collideable>` → `<CollisionType>` rename (docs-only).
@@ -308,6 +323,7 @@ Stacking context note: everything modal goes through react-aria portals (top lay
 - Older still-open scope items (per memory + scope/): geometry-template `<Collider>` passthrough, FuelPort UI, cartoon-moon LOD retune + `<LOD CastShadows>`, solid thrust-curve preview (T5.5, deliberately deferred ~200-line port).
 
 ### Whole plans not implemented
+
 - **`plans/CALCULATORS_PLAN.md`** — NOT implemented (no Calculator code in src). Floating always-on-top Calculators window from the burger menu (mass-first: exact game formulas for tank/primitive/propellant mass from decomp; badged estimates for engines/batteries/solar/crew; one-click copy into Part Data fields; draggable like FloatingInspector, position persisted). Explicitly a review doc — catalog needs keep/cut decisions. **Directly relevant to v2 (a new top-level surface + burger-menu item).**
 - **`plans/KSP_CRAFT_PLAN.md`** — planned, lives in sibling repo ksp2glb; not flexo v2 scope but referenced.
 - `plans/PART_PREVIEW_THUMBS.md` + `plans/WIKI_PART_PREVIEW_PLAN.md` — build-adjacent mini-apps (dist/apps/partpreview + thumbnail capture); check with export/build agent whether landed; not main-app UI.
@@ -319,6 +335,7 @@ Stacking context note: everything modal goes through react-aria portals (top lay
 - `plans/CLEANUP_LIGHTS_PLAN.md` — one-light-switch-per-Part model cleanup; status header has no DONE marker; the "unbounded PowerConsumer[] with per-consumer Light switch toggles" problem it describes is a real UX/contract debt — verify with part-data agent.
 
 ### Action-chain-specific v2 candidates (deliberate v1 exclusions, `docs/action-chains.md:239-254`)
+
 Mirror via geometry (custom-mesh pipeline), non-placement seeds (connectors/colliders/lights/seats/kittens), named preset/macro library, Apply-time lock re-check, viewport pivot picking, draggable palette, drag-reorder steps, per-instance jitter, expression inputs, per-ghost labels.
 
 ---

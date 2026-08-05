@@ -6,10 +6,10 @@ This area covers three distinct "data" surfaces plus the invisible XML round-tri
 
 1. **Part Data dialog** (part-level `<PartGameData>` editing) — `src/ui/PartDataButton.tsx`
 2. **SubPart Data dialog** (per-SubPart-template `<SubPartGameData>` editing) — `src/ui/ManageTanksModal.tsx`
-3. **Reference containers** (editor-aid 3D volumes, *not* KSA tanks) — `src/ui/ContainerEditor.tsx`, `src/ui/ContainerList.tsx`, `src/state/containerStore.ts`
+3. **Reference containers** (editor-aid 3D volumes, _not_ KSA tanks) — `src/ui/ContainerEditor.tsx`, `src/ui/ContainerList.tsx`, `src/state/containerStore.ts`
 4. **RawXmlNode passthrough** (unmodeled-XML preservation, no UI at all) — `src/ksa/partXmlParser.ts`, `src/ksa/partXmlSerializer.ts`
 
-A crucial naming trap for v2 designers: **"containers" means two unrelated things** in this codebase. (a) *Reference containers* — box/cylinder/sphere wireframe volumes that are an editor visual aid, persisted with the project, never exported. (b) *Feed containers* — KSA `<Tank>` / `<SolidGrainSegment>` elements addressable by `<FeedsFrom Container="…">` (see `src/state/feedTargets.ts:11-19`). Keep the vocabulary separated in v2.
+A crucial naming trap for v2 designers: **"containers" means two unrelated things** in this codebase. (a) _Reference containers_ — box/cylinder/sphere wireframe volumes that are an editor visual aid, persisted with the project, never exported. (b) _Feed containers_ — KSA `<Tank>` / `<SolidGrainSegment>` elements addressable by `<FeedsFrom Container="…">` (see `src/state/feedTargets.ts:11-19`). Keep the vocabulary separated in v2.
 
 ---
 
@@ -26,20 +26,24 @@ A crucial naming trap for v2 designers: **"containers" means two unrelated thing
 Sections and every field inside them:
 
 #### Identity (defaultExpanded) — `PartDataButton.tsx:79-98`
-| Field | Widget | Action | Notes |
-|---|---|---|---|
-| Part Id | mono TextField | `setPartId` (streaming; undo pushed on focus) | export id for the whole mod |
-| Display Name | TextField (`IdentityFields`, `GameDataSections.tsx:112-125`) | `setDisplayName` | blank ⇒ Part Id used in-game |
-| Editor Tags | `EditorTagsField` chips + "Add tag…" popover | `setEditorTags` | see §1.3 |
-| Diameter size class | Switch + PreciseNumberInput (`SizeControlFields`, `GameDataSections.tsx:135-158`) | `setDiameterEnabled` / `setDiameter` | `<Diameter M/>` VAB filter, no physics. Only the FIRST diameter is editable — `extraDiametersM` (repeatable `<Diameter>` for adapters, `types.ts:1153-1162`) is preserved verbatim but **invisible in the UI** |
-| Command capable | Switch | `setControllable` | bare `<Control/>` marker |
+
+| Field               | Widget                                                                            | Action                                        | Notes                                                                                                                                                                                                          |
+| ------------------- | --------------------------------------------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Part Id             | mono TextField                                                                    | `setPartId` (streaming; undo pushed on focus) | export id for the whole mod                                                                                                                                                                                    |
+| Display Name        | TextField (`IdentityFields`, `GameDataSections.tsx:112-125`)                      | `setDisplayName`                              | blank ⇒ Part Id used in-game                                                                                                                                                                                   |
+| Editor Tags         | `EditorTagsField` chips + "Add tag…" popover                                      | `setEditorTags`                               | see §1.3                                                                                                                                                                                                       |
+| Diameter size class | Switch + PreciseNumberInput (`SizeControlFields`, `GameDataSections.tsx:135-158`) | `setDiameterEnabled` / `setDiameter`          | `<Diameter M/>` VAB filter, no physics. Only the FIRST diameter is editable — `extraDiametersM` (repeatable `<Diameter>` for adapters, `types.ts:1153-1162`) is preserved verbatim but **invisible in the UI** |
+| Command capable     | Switch                                                                            | `setControllable`                             | bare `<Control/>` marker                                                                                                                                                                                       |
 
 #### Mass (defaultExpanded) — `GameDataSections.tsx:162-182`
+
 - Custom mass override Switch + Mass (kg) field → `setCustomMassEnabled` / `setCustomMass`.
 - Hidden: `customMassExtras: RawXmlNode[]` (`types.ts:1139-1146`) — `<MassSpecificInertia>` etc. from imported parts, re-emitted inside `<CustomMass>` but never shown.
 
 #### Tanks (badge = count, defaultExpanded) — `TanksSection` with `subPartTemplateId={null}` (`GameDataSections.tsx:186-270`)
+
 Part-level `<Tank>`s (where Core authors prefab tanks; the only level an engine's `<FeedsFrom Container>` can address without a `SubPart=` scope — comment at `PartDataButton.tsx:105-107`). Per tank (`ItemCard`):
+
 - Feed id (mono TextField — cross-referenced by FeedsField container pickers)
 - Shape Select (Cylindrical / Spherical) → `setTankShape`
 - Wall Material Id (TextField)
@@ -48,20 +52,25 @@ Part-level `<Tank>`s (where Core authors prefab tanks; the only level an engine'
 - **Modeled but NOT editable in any UI:** `Tank.roleAffinity` (`types.ts:467-475`, serializer emits non-default at `partXmlSerializer.ts:551-556`) and `Tank.locationAsmb` (`<LocationAsmb>` mass offset). Round-trip only. v2 could expose them; must at minimum preserve them.
 
 #### Power (badge = batteries+generators+solar+consumer) — `PowerSection` (`GameDataSections.tsx:593-624`)
+
 - **Batteries** — number list (Wh) via generic `PowerList` (`GameDataSections.tsx:427-473`): add/remove/edit each.
 - **Generators** — number list (W).
 - **Solar Panels** — `SolarPanelsSection` (`GameDataSections.tsx:547-591`): per panel Produced (W) + Orientation Vec3 **in radians** (unlike lights, which show degrees — inconsistency).
 - **Power consumer / light switch** — `PowerConsumerSection` (`GameDataSections.tsx:483-540`): at most ONE per part (KSA has a single `Part.LightSwitch` slot). Fields: Consumed (W), "Light switch" Switch, "Starts on" Switch (disabled unless lightSwitch). Contextual hints: "switch controls nothing" warning (no lights/glow exist — computed against placements + customMeshes at :485-493) and "lights always on" hint.
 
 #### Coupling (badge) — `CouplingSection` (`GameDataSections.tsx:662-738`)
+
 Three optional modules, each toggled by a Switch that creates/deletes the module:
+
 - **Decoupler**: connector picker + Force (N).
 - **Docking Port**: connector picker + Latching Kinetic Energy (J) + Pushoff Impulse (N·s).
 - **EVA Door**: connector picker only. (Scope doc flags KSA 5117's new `<EVADoor SeatId>` as a known drift gap.)
 - `ConnectorSelect` (`GameDataSections.tsx:629-660`) keeps a stale/deleted connector id selectable so it still displays, and shows "Add a connector in the workspace first." when none exist. Connectors themselves are created/edited in the 3D workspace (other area).
 
 #### Engine (badge = 9 list lengths summed; collapsed by default) — `PartDataButton.tsx:118-140`
+
 Composed from `src/ui/EngineSections.tsx` (1806 lines — the single biggest component file in this area):
+
 - **Controllers** — `RocketControllersSection` (`EngineSections.tsx:1069-1172`): per controller: Controller id (mono TextField), Type Select (Engine throttle+staging / Thruster RCS pulsed), "Rockets driven" list of {rocket-id dropdown over ALL rockets part-wide (`allRocketIds` :1061-1066) + "on instance" dropdown with "(root part)" option}. Buttons: "+ Engine controller", "+ RCS controller".
 - **Feed wiring** — `ConsumerFeedWiringSection` (`EngineSections.tsx:1187-1271`): per `<ConsumerFeedWiring>` entry: Consumer Select over `consumerOptionsOf(part)` (combustors + solid motors, part-level and per-placement; missing consumers stay selectable labelled "— not found"), then a `FeedsField` with `allowParent={false}` (KSA forbids wiring entries deferring to Parent — `ConsumerFeedWiring.OnDataLoad`). Warning line counts unwired parent-deferring consumers with KSA's exact log text; **"Auto-wire unwired consumers"** button (`autoWireUnwiredConsumers` in editorStore) appears when any exist. `unwiredConsumersOf` mirrors `PartTemplate.ResolveConsumerFeeds` lookup (`feedTargets.ts:101-120`).
 - **Gimbals** — `GimbalsSection` (`EngineSections.tsx:1339-1405`): per-placement-instance gimbal cards (Max angle Y°, Max angle Z°, Constrain-to-circle Switch); "Add gimbal to instance" Select lists placements without one.
@@ -70,12 +79,14 @@ Composed from `src/ui/EngineSections.tsx` (1806 lines — the single biggest com
 - **Gas generator (advanced)** — nested DisclosureSection → `PartGasGeneratorSection` (`EngineSections.tsx:1408-1467`): part-level Combustors, Nozzles, and Rockets whose core/nozzle refs can target other SubPart instances (`RocketFields` with `part` prop enables the `InstanceSelect`s).
 
 Shared engine field groups (used both here and in SubPart Data / Engine mode):
+
 - **CombustorFields** (`EngineSections.tsx:236-347`): Plumbing Select (Bulk = main engine / Service = RCS, with explanatory microcopy about connector `BulkFluid`), FeedsField (allowParent), Reaction Select (live `reactionStore` catalog with Core-snapshot fallback, picking resets O/F to `<DefaultMixtureRatio>` like KSA's designer), Mixture ratio (only for Mixture reactions; bounds from catalog LUT; missing-ratio warning), Chamber pressure (stored Pa, displayed **bar**), Thermal efficiency %, Minimum throttle % (100 = on/off), Min pulse time s.
 - **NozzleFields / SolidNozzleFields / RocketNozzleFields** (`EngineSections.tsx:349-625`): Exit diameter, Area ratio (De Laval only; NaN-required trap displayed as 0), Flow/Expansion efficiency %, shared-by-N-placements warning banner (`instanceCount`), Exhaust location Vec3, Exhaust direction Vec3 (with **unit-length warning + one-click Normalize** — `DirectionLengthWarning` :639-664; KSA multiplies thrust by the raw length, value kept verbatim by design), FX override Switch (seeds/clears the fx location+direction pair as ONE authoring decision :429-434), FX exit diameter, Exhaust plume Select, Plume trail Select, Engine sound Switch, Exhaust light Switch.
 - **RocketFields** (`EngineSections.tsx:967-1056`): rocket id, Core combustor dropdown, nozzle-ref list (id + optional instance).
 - **CustomPropellantsSection** (`EngineSections.tsx:1494-1804`): user-authored `<FixedReaction>`s — clone-a-shipped-propellant Select, "+ Blank propellant"; per propellant: Name, Category Select (Bipropellant/Hypergolic/Monopropellant/Solid/Thermal), Reactants list (phase id + mass share), Solid-required burn-rate fields (a, n, min/max pressure, condensed fraction) with hard "will be omitted from export" banner via `isCustomReactionExportable`, and the 4-column gas LUT row editor (ln P, T·K, γ, g/mol). **Note: this section renders in the Engine sidebar mode only, NOT in the Part Data dialog** (`EnginePanel.tsx:176`).
 
 #### Hidden part-level data in the dialog's scope (round-trip only, no widgets)
+
 - `PartGameData.unknownAttrs` / `unknownChildren` (RawXmlNode passthrough, §1.5)
 - `extraDiametersM`, `customMassExtras`, `Tank.roleAffinity`, `Tank.locationAsmb`
 - Connector `<Sibling>` refs and `<Aligned>`/`<SymmetryGroup>` groupings (passthrough with id remap)
@@ -91,7 +102,7 @@ Shared engine field groups (used both here and in SubPart Data / Engine mode):
   - **Solar Panels** — same `SolarPanelsSection` wired to `addSubPartSolarPanel`/etc.
   - **Engine (thrust chamber)** DisclosureSection (badge) — `SubPartEngineSection` (`EngineSections.tsx:850-964`): combustors, nozzles, solid motors/nozzles/grain segments, and `<Rocket>` bindings that travel with the mesh. Nozzle cards show the shared-across-N-placements banner.
 
-**Which rows support SubPart data:** only placed **SubPart** rows get the `SubPartRowMenu` with "SubPart Data" (`AssetsList.tsx:538+`) — every SubPart template qualifies, built-in or custom mesh (glass templates are only excluded from the *Interior/IVA* toggle, not from data). Connector / collider / IVA-seat / light / kitten rows get `SimpleRowMenu` (no data entry). Measurements and reference containers have no GameData at all. **v2's data mode should surface exactly this distinction: placements = data-capable; other entity kinds = not.**
+**Which rows support SubPart data:** only placed **SubPart** rows get the `SubPartRowMenu` with "SubPart Data" (`AssetsList.tsx:538+`) — every SubPart template qualifies, built-in or custom mesh (glass templates are only excluded from the _Interior/IVA_ toggle, not from data). Connector / collider / IVA-seat / light / kitten rows get `SimpleRowMenu` (no data entry). Measurements and reference containers have no GameData at all. **v2's data mode should surface exactly this distinction: placements = data-capable; other entity kinds = not.**
 
 ### 1.3 Editor tags
 
@@ -125,23 +136,23 @@ Shared engine field groups (used both here and in SubPart Data / Engine mode):
 
 ### 1.7 The third rendering of the same data: Engine sidebar mode
 
-`$inspectorMode === 'engine'` swaps the right sidebar body to `EngineToolbar` + `EnginePanel` (`src/ui/InspectorContent.tsx:37-46`). `EnginePanel` (`src/ui/EnginePanel.tsx`) re-renders **the identical section components**: `SubPartEngineSection`, `RocketControllersSection`, `GimbalsSection`, `PartGasGeneratorSection`, `PartSolidMotorSection` (part-scope entry), `CustomPropellantsSection` — plus engine-mode-only extras (active-engine Select, "define new engine/SRB on placement", live thrust/Isp `PerformanceReadout`, 3D exhaust-handle toggles via `engineStore`). The engine area agent covers that mode's own features; the fact that these *data editors* exist in 2–3 places at once is a core structural fact for this area.
+`$inspectorMode === 'engine'` swaps the right sidebar body to `EngineToolbar` + `EnginePanel` (`src/ui/InspectorContent.tsx:37-46`). `EnginePanel` (`src/ui/EnginePanel.tsx`) re-renders **the identical section components**: `SubPartEngineSection`, `RocketControllersSection`, `GimbalsSection`, `PartGasGeneratorSection`, `PartSolidMotorSection` (part-scope entry), `CustomPropellantsSection` — plus engine-mode-only extras (active-engine Select, "define new engine/SRB on placement", live thrust/Isp `PerformanceReadout`, 3D exhaust-handle toggles via `engineStore`). The engine area agent covers that mode's own features; the fact that these _data editors_ exist in 2–3 places at once is a core structural fact for this area.
 
 ---
 
 ## 2. UI surface map
 
-| Surface | Kind | Mount / positioning | Stacking | Issues |
-|---|---|---|---|---|
-| Part Data dialog | Modal, `variant="fullscreen"` (phone: `cover`) | react-aria `ModalOverlay`, `fixed inset-0 z-50`, backdrop blur (`src/ui/kit/Modal.tsx:15,20`) | z-50 | Covers the entire viewport incl. 3D view; all data behind one button |
-| SubPart Data dialog (`ManageTanksModal`) | Modal, fullscreen/cover | same kit Modal, mounted inside the AssetsList row component (`AssetsList.tsx:624`) | z-50 | Reached only via a row ⋮ menu; "Select in 3D" inside it can't show the 3D result |
-| Editor-tags popover | Popover (`bottom start`, w-64) inside the Part Data modal | react-aria Popover portal | above modal | popover-in-fullscreen-modal nesting |
-| Every Select in the dialogs | Popover listbox | react-aria portal | above modal | Deep stacks: modal → DisclosureSection → nested DisclosureSection → ItemCard → Select popover |
-| Measure popover ("Reference containers" section) | Toolbar popover (`bottom`, ~22rem) / phone bottom sheet | `DialogTrigger`+`Popover` (`MeasureButton.tsx:225-232`) | popover layer | Containers share one popover with measurements; closes on add |
-| ContainerEditor | Floating card | `absolute left-3 top-1/2 -translate-y-1/2 z-10` desktop; `absolute inset-x-2 bottom-20 z-10` phone (`FloatingEditorPanel.tsx:31-33`) | z-10 over viewport | Shares the exact left-center slot with MeasurementEditor (same `FloatingEditorPanel`) — both mounted in `app.tsx:115,118`; an active measurement + active container would overlap |
-| EngineIssuesPanel | Inline block | inside Part Data Engine section and Engine sidebar | – | validation only visible while the section is open |
-| Engine sidebar mode | Sidebar tab body | RightPanel via `$inspectorMode` | – | duplicates the dialogs' editors (see §4) |
-| TransformInspector connector Capabilities | Floating inspector section | `FloatingInspector` (desktop) / inline phone sheet | – | plumbing config physically distant from feed wiring UI |
+| Surface                                          | Kind                                                      | Mount / positioning                                                                                                                  | Stacking           | Issues                                                                                                                                                                            |
+| ------------------------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Part Data dialog                                 | Modal, `variant="fullscreen"` (phone: `cover`)            | react-aria `ModalOverlay`, `fixed inset-0 z-50`, backdrop blur (`src/ui/kit/Modal.tsx:15,20`)                                        | z-50               | Covers the entire viewport incl. 3D view; all data behind one button                                                                                                              |
+| SubPart Data dialog (`ManageTanksModal`)         | Modal, fullscreen/cover                                   | same kit Modal, mounted inside the AssetsList row component (`AssetsList.tsx:624`)                                                   | z-50               | Reached only via a row ⋮ menu; "Select in 3D" inside it can't show the 3D result                                                                                                  |
+| Editor-tags popover                              | Popover (`bottom start`, w-64) inside the Part Data modal | react-aria Popover portal                                                                                                            | above modal        | popover-in-fullscreen-modal nesting                                                                                                                                               |
+| Every Select in the dialogs                      | Popover listbox                                           | react-aria portal                                                                                                                    | above modal        | Deep stacks: modal → DisclosureSection → nested DisclosureSection → ItemCard → Select popover                                                                                     |
+| Measure popover ("Reference containers" section) | Toolbar popover (`bottom`, ~22rem) / phone bottom sheet   | `DialogTrigger`+`Popover` (`MeasureButton.tsx:225-232`)                                                                              | popover layer      | Containers share one popover with measurements; closes on add                                                                                                                     |
+| ContainerEditor                                  | Floating card                                             | `absolute left-3 top-1/2 -translate-y-1/2 z-10` desktop; `absolute inset-x-2 bottom-20 z-10` phone (`FloatingEditorPanel.tsx:31-33`) | z-10 over viewport | Shares the exact left-center slot with MeasurementEditor (same `FloatingEditorPanel`) — both mounted in `app.tsx:115,118`; an active measurement + active container would overlap |
+| EngineIssuesPanel                                | Inline block                                              | inside Part Data Engine section and Engine sidebar                                                                                   | –                  | validation only visible while the section is open                                                                                                                                 |
+| Engine sidebar mode                              | Sidebar tab body                                          | RightPanel via `$inspectorMode`                                                                                                      | –                  | duplicates the dialogs' editors (see §4)                                                                                                                                          |
+| TransformInspector connector Capabilities        | Floating inspector section                                | `FloatingInspector` (desktop) / inline phone sheet                                                                                   | –                  | plumbing config physically distant from feed wiring UI                                                                                                                            |
 
 ---
 

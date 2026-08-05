@@ -25,10 +25,10 @@ Mounted at `src/app.tsx:78`: `absolute left-3 top-3 right-[19rem] lg:right-auto 
 Full desktop toolbar structure, in order (`Toolbar.tsx:23-66`):
 
 1. **Project** (`src/ui/ProjectButton.tsx`) — trigger shows current project name (truncated at 14ch). Popover (`bottom start`, w-64):
-   - *Project Name* text input — rename on blur/Enter (`renameCurrentProject`, remount-keyed on name).
+   - _Project Name_ text input — rename on blur/Enter (`renameCurrentProject`, remount-keyed on name).
    - **Load Project...** → centered modal listing every saved project (name, SubPart count, saved-at; Load button disabled for current; per-project delete with nested ConfirmDialog). `projectStore.listProjects/loadProject/deleteProject`; list refresh via a manual `setTick` because localStorage isn't reactive (`ProjectButton.tsx:164`).
    - **New Project** → `createProject(uniqueProjectName())`.
-   - *Project Data* section: **Share Project...** (`src/ui/ShareProjectDialog.tsx` — stateless deep link: JSON→Zstd→Base64 URL; disabled when `hasCustomAssets(part)`), **Export...** / **Import...** (`src/ui/ProjectTransferDialogs.tsx` — data-only JSON export (blocked with custom assets, Phase 2 TODO) and ADDITIVE import merged as one undo step via `importProjectData`).
+   - _Project Data_ section: **Share Project...** (`src/ui/ShareProjectDialog.tsx` — stateless deep link: JSON→Zstd→Base64 URL; disabled when `hasCustomAssets(part)`), **Export...** / **Import...** (`src/ui/ProjectTransferDialogs.tsx` — data-only JSON export (blocked with custom assets, Phase 2 TODO) and ADDITIVE import merged as one undo step via `importProjectData`).
    - Workspace autosaves; there is deliberately **no Save action**.
 2. Separator.
 3. **Add** (`src/ui/AddButton.tsx`) — menu (`bottom start`, w-52), items in order:
@@ -50,16 +50,16 @@ Full desktop toolbar structure, in order (`Toolbar.tsx:23-66`):
 5. **Export** (`src/ui/ExportButton.tsx`) — fullscreen modal, max-w-2xl. Two modes (XML / Mod), tabs part|gamedata|assets. Runs the full pre-flight (`validateEngines/Colliders/IvaSeats/Lights` + basic id checks) rendering three severity boxes: `block` (KSA refuses to load), `warn` (loads but misbehaves), `info`. Mod mode writes into a granted mods folder (`modFolderStore`, FS Access API) or downloads a zip.
 6. Separator.
 7. **View** (`src/ui/ViewButton.tsx`) — popover (`bottom`, `w-[min(24rem,calc(100vw-1.5rem))]`, max-h-80vh scroll):
-   - *Camera Snap*: left/right, front/back, top/bottom buttons → `snapCamera` (one-shot nonce atom `$cameraSnap`, `src/state/viewStore.ts:58`).
-   - *Grids*: per-axis (X/Y/Z-normal) enable switch + spacing `PreciseNumberInput` (m) → `$grids` (persisted).
-   - *Visibility*: **Hide interior** switch (`$hideInterior` — renders the part the way KSA does outside IVA); **Light coverage** select (Selected/All/Off), **Exposure** select (Auto/Absolute + absolute value input), **Preview lighting** switch with over-cap warning (`MAX_PREVIEW_LIGHTS`) — all `$lightSettings` (`settingsStore`).
-   - *Lighting*: Environment preset select (HDRs stream with progress → LoadProgress), Tone map select, Exposure slider (0.1–3), Reflections slider (0–3), **Show sky background** switch, Sky blur slider — `$lighting` (`lightingStore`, persisted `flexo:lighting`).
+   - _Camera Snap_: left/right, front/back, top/bottom buttons → `snapCamera` (one-shot nonce atom `$cameraSnap`, `src/state/viewStore.ts:58`).
+   - _Grids_: per-axis (X/Y/Z-normal) enable switch + spacing `PreciseNumberInput` (m) → `$grids` (persisted).
+   - _Visibility_: **Hide interior** switch (`$hideInterior` — renders the part the way KSA does outside IVA); **Light coverage** select (Selected/All/Off), **Exposure** select (Auto/Absolute + absolute value input), **Preview lighting** switch with over-cap warning (`MAX_PREVIEW_LIGHTS`) — all `$lightSettings` (`settingsStore`).
+   - _Lighting_: Environment preset select (HDRs stream with progress → LoadProgress), Tone map select, Exposure slider (0.1–3), Reflections slider (0–3), **Show sky background** switch, Sky blur slider — `$lighting` (`lightingStore`, persisted `flexo:lighting`).
 8. **Measure** (`src/ui/MeasureButton.tsx`) — popover (`bottom`, `w-[min(22rem,…)]`):
-   - *Selection bounds*: show bounding box switch, orientation toggle (World/Oriented), per-mesh dimensions switch, distance-between-two-meshes switch → `$measurementSettings` (persisted `flexo:measure`).
-   - *Tools*: **Add reference line** (`addReferenceLine`, closes popover), **Point-to-point** toggle tool (`setMeasureTool('point')` — click 2 points in the viewport).
-   - *Measurements*: `MeasurementList` (select/activate; activating opens the MeasurementEditor card).
-   - *Reference containers*: Box/Cylinder/Sphere add buttons (`addContainer`), `ContainerList`, warn-precision toggle (Fast bbox / Accurate vertex) → `$containerSettings`.
-   - *Units*: m/cm/mm select.
+   - _Selection bounds_: show bounding box switch, orientation toggle (World/Oriented), per-mesh dimensions switch, distance-between-two-meshes switch → `$measurementSettings` (persisted `flexo:measure`).
+   - _Tools_: **Add reference line** (`addReferenceLine`, closes popover), **Point-to-point** toggle tool (`setMeasureTool('point')` — click 2 points in the viewport).
+   - _Measurements_: `MeasurementList` (select/activate; activating opens the MeasurementEditor card).
+   - _Reference containers_: Box/Cylinder/Sphere add buttons (`addContainer`), `ContainerList`, warn-precision toggle (Fast bbox / Accurate vertex) → `$containerSettings`.
+   - _Units_: m/cm/mm select.
 9. Separator.
 10. **Undo** / **Redo** icon buttons — `undo()/redo()` with toast of the step label; disabled off `$canUndo/$canRedo`.
 11. **History** (`src/ui/HistoryButton.tsx`) — popover (`bottom end`, w-56, max-h-80): the full undo/redo stack as rows with a "current" divider; clicking a row `jumpToHistory(stepsFromCurrent)` + toast. Disabled when no history.
@@ -82,7 +82,7 @@ Full-width bar (`absolute inset-x-0 top-0`, `rounded-none border-x-0 border-t-0`
 - **Collapse**: PanelRight icon button toggles `$inspectorVisible` (persisted `flexo:inspectorVisible`); collapsed state renders only the toggle button at `right-3 top-3`.
 - **Tabs/modes**: `$inspectorMode: 'assets' | 'anim' | 'engine'` (`src/state/uiStore.ts:17`) — ephemeral, resets to `assets` on reload. NOT tabs in the UI sense: full-body swaps.
   - `assets`: `AssetsToolbar` (Layers button stretching to fill + "Custom (N)" → `CustomAssetsModal` + "Engine (N)" → `setInspectorMode('engine')` + "Anim (N)" → `setInspectorMode('anim')`) above `AssetsList` (unified sectioned list of every entity across listed layers, search, multi-select w/ shift-range (`useShiftRangeSelect`), per-row overflow menus, per-row seat-view entry, ManageTanks/manage-textures entry points).
-  - `anim`: `AnimToolbar` (Mesh Picker → `MeshPickerModal`; clip name; Close → back to assets) above `AnimationPanel` (full-sidebar animation editor). The Assets list is *hidden* in this mode — parts reachable only via Mesh Picker.
+  - `anim`: `AnimToolbar` (Mesh Picker → `MeshPickerModal`; clip name; Close → back to assets) above `AnimationPanel` (full-sidebar animation editor). The Assets list is _hidden_ in this mode — parts reachable only via Mesh Picker.
   - `engine`: `EngineToolbar` (active engine scope label; Close → `exitEngineMode`) above `EnginePanel` (full-sidebar engine designer).
 - The selected-entity **TransformInspector is NOT in the sidebar** on desktop — it floats (see 1.4). The phone sheet opts it back inline via `InspectorContent showTransform` (`InspectorContent.tsx:23`).
 
@@ -109,9 +109,10 @@ Bottom-center (`absolute inset-x-0 bottom-14 z-30`), visible while `$seatView` (
 ### 1.9 Measurement editor & container editor — `src/ui/MeasurementEditor.tsx`, `src/ui/ContainerEditor.tsx` via `src/ui/FloatingEditorPanel.tsx`
 
 Shared shell: desktop = left-pinned vertically-centered card (`absolute left-3 top-1/2 z-10 -translate-y-1/2`, width class per panel); phone = full-width sheet above the inspector FAB (`absolute inset-x-2 bottom-20 z-10`). Header = title + lock/unlock + close.
+
 - MeasurementEditor: active line measurement (`$activeMeasurementId`) — numeric endpoints, length (preserves direction), axis lock Free/X/Y/Z, color+alpha, A/B endpoint toggle that drives the 3D gizmo. Locked = read-only.
 - ContainerEditor: active reference container (`$activeContainerId`) — shape-specific size fields, position/rotation (Euler deg ↔ quat), gizmo mode toggle (Move/Rotate/Scale — its own `$containerGizmoMode`, separate from `$toolMode`), color, lock, delete.
-Both participate in undo via `registerEditorAidStores` (`main.tsx:21`).
+  Both participate in undo via `registerEditorAidStores` (`main.tsx:21`).
 
 ### 1.10 Manage-textures panel — `src/ui/ManageTexturesPanel.tsx`
 
@@ -164,28 +165,28 @@ Pinned bottom-right FAB (`absolute bottom-3 right-3`, size lg) showing active la
 
 Stacking context: everything is in one `fixed inset-0` root; `absolute` children stack by z-index then DOM order. React-aria Popovers/Menus render in a **portal at document.body** (above everything except toasts, effectively). Layers, lowest → highest:
 
-| # | Surface | Kind | Mount / position | z | Visible when | Overlaps / collisions |
-|---|---|---|---|---|---|---|
-| 1 | ViewportCanvas | canvas | `absolute inset-0` in root | auto (0) | always | base layer |
-| 2 | FPS stats.js | hud | injected `absolute top-0 left-0` in viewport host | 10 | `$showFpsCounter` | under top toolbar on desktop-left |
-| 3 | ViewportDropZone overlay | hud | `absolute inset-3` | 10 | during file drag | covers viewport only |
-| 4 | EditorToolbar (desktop) | toolbar | `absolute left-3 top-3 right-[19rem] lg:centered` | auto | !isPhone | RightPanel container overlays it (mitigated w/ pointer-events-none); wraps to 2 rows < lg |
-| 5 | MobileTopBar | toolbar | `absolute inset-x-0 top-0` | auto | isPhone | — |
-| 6 | Top-center stack (SelectionToolbar, MultiSelectToolbar, phone FloatingPreviewToolbar) | floating-bar | `absolute left-1/2 top-16` (phone top-14), flex-col | auto | selection / pose / exhaust; multi; anim clip (phone) | desktop FloatingPreviewToolbar default pos = same top-center slot → **stacks visually onto SelectionToolbar area** |
-| 7 | RightPanel | sidebar | `absolute right-3 top-3 bottom-3`, width 240–640px, pointer-events-none shell | auto (handle z-10) | !isPhone (collapsed = button only) | floats over viewport; over toolbar at narrow widths |
-| 8 | MobileInspector FAB | hud | `absolute bottom-3 right-3` | auto | isPhone | shares corner with toasts (z-100) and ImportReportCard |
-| 9 | MeasurementEditor / ContainerEditor / ManageTexturesPanel | floating panel | desktop `absolute left-3 top-1/2 -translate-y-1/2`; phone `inset-x-2 bottom-20` | 10 | active measurement / container / managing mesh | **all three share the exact left-center slot — two active = full overlap**; also collides with ChainPalette (left column) |
-| 10 | MeasurementInfo | hud | `absolute bottom-3 left-3` | auto | selection bounds exist | under left-center panels on short screens |
-| 11 | WorkspaceLoadProgress | hud | `absolute bottom-4 left-1/2` | auto | downloads active & no browser popup | shares bottom-center with TransformHud & SeatViewBar |
-| 12 | TransformHud | hud | `absolute inset-x-0 bottom-2` centered | auto | !isPhone | just under load progress; SeatViewBar sits above it |
-| 13 | SeatViewBar | floating-bar | `absolute inset-x-0 bottom-14` | 30 | `$seatView` ≠ null | above TransformHud slot |
-| 14 | FloatingInspector | floating window | `absolute z-30 w-72`, default bottom-left, draggable, pos persisted | 30 | selection (desktop) | default slot on top of MeasurementInfo's corner; user-draggable anywhere |
-| 15 | FloatingPreviewToolbar (desktop) | floating-bar | `absolute z-30 w-80`, default top-center `top:4rem`, draggable, pos persisted | 30 | anim mode + clip | default collides with SelectionToolbar during pose editing |
-| 16 | ChainPalette | floating panel (non-modal) | desktop `absolute left-3 top-16 w-[340px]`; phone `inset-x-2 bottom-20` | 30 | `$chainSession` | left column: over Measurement/Container/Textures panels |
-| 17 | ImportReportCard | card | `absolute bottom-3 right-3 w-80` (phone full-width) | 40 | `$importReport` | under toasts; over FAB corner on phone |
-| 18 | All Modals (kit Modal: center/sheet/fullscreen/cover) | dialog | `fixed inset-0` overlay | 50 | per dialog | modal-over-modal happens (ConfirmDialog inside LoadProjectDialog etc.) |
-| 19 | Popovers / Menus / Tooltips | popover | react-aria portal, positioned to trigger | portal | open | can extend past viewport edge on small screens |
-| 20 | GlobalToastRegion | toasts | `fixed bottom-4 right-4` | 100 | queue non-empty | topmost |
+| #   | Surface                                                                               | Kind                       | Mount / position                                                                | z                  | Visible when                                         | Overlaps / collisions                                                                                                     |
+| --- | ------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------- | ------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 1   | ViewportCanvas                                                                        | canvas                     | `absolute inset-0` in root                                                      | auto (0)           | always                                               | base layer                                                                                                                |
+| 2   | FPS stats.js                                                                          | hud                        | injected `absolute top-0 left-0` in viewport host                               | 10                 | `$showFpsCounter`                                    | under top toolbar on desktop-left                                                                                         |
+| 3   | ViewportDropZone overlay                                                              | hud                        | `absolute inset-3`                                                              | 10                 | during file drag                                     | covers viewport only                                                                                                      |
+| 4   | EditorToolbar (desktop)                                                               | toolbar                    | `absolute left-3 top-3 right-[19rem] lg:centered`                               | auto               | !isPhone                                             | RightPanel container overlays it (mitigated w/ pointer-events-none); wraps to 2 rows < lg                                 |
+| 5   | MobileTopBar                                                                          | toolbar                    | `absolute inset-x-0 top-0`                                                      | auto               | isPhone                                              | —                                                                                                                         |
+| 6   | Top-center stack (SelectionToolbar, MultiSelectToolbar, phone FloatingPreviewToolbar) | floating-bar               | `absolute left-1/2 top-16` (phone top-14), flex-col                             | auto               | selection / pose / exhaust; multi; anim clip (phone) | desktop FloatingPreviewToolbar default pos = same top-center slot → **stacks visually onto SelectionToolbar area**        |
+| 7   | RightPanel                                                                            | sidebar                    | `absolute right-3 top-3 bottom-3`, width 240–640px, pointer-events-none shell   | auto (handle z-10) | !isPhone (collapsed = button only)                   | floats over viewport; over toolbar at narrow widths                                                                       |
+| 8   | MobileInspector FAB                                                                   | hud                        | `absolute bottom-3 right-3`                                                     | auto               | isPhone                                              | shares corner with toasts (z-100) and ImportReportCard                                                                    |
+| 9   | MeasurementEditor / ContainerEditor / ManageTexturesPanel                             | floating panel             | desktop `absolute left-3 top-1/2 -translate-y-1/2`; phone `inset-x-2 bottom-20` | 10                 | active measurement / container / managing mesh       | **all three share the exact left-center slot — two active = full overlap**; also collides with ChainPalette (left column) |
+| 10  | MeasurementInfo                                                                       | hud                        | `absolute bottom-3 left-3`                                                      | auto               | selection bounds exist                               | under left-center panels on short screens                                                                                 |
+| 11  | WorkspaceLoadProgress                                                                 | hud                        | `absolute bottom-4 left-1/2`                                                    | auto               | downloads active & no browser popup                  | shares bottom-center with TransformHud & SeatViewBar                                                                      |
+| 12  | TransformHud                                                                          | hud                        | `absolute inset-x-0 bottom-2` centered                                          | auto               | !isPhone                                             | just under load progress; SeatViewBar sits above it                                                                       |
+| 13  | SeatViewBar                                                                           | floating-bar               | `absolute inset-x-0 bottom-14`                                                  | 30                 | `$seatView` ≠ null                                   | above TransformHud slot                                                                                                   |
+| 14  | FloatingInspector                                                                     | floating window            | `absolute z-30 w-72`, default bottom-left, draggable, pos persisted             | 30                 | selection (desktop)                                  | default slot on top of MeasurementInfo's corner; user-draggable anywhere                                                  |
+| 15  | FloatingPreviewToolbar (desktop)                                                      | floating-bar               | `absolute z-30 w-80`, default top-center `top:4rem`, draggable, pos persisted   | 30                 | anim mode + clip                                     | default collides with SelectionToolbar during pose editing                                                                |
+| 16  | ChainPalette                                                                          | floating panel (non-modal) | desktop `absolute left-3 top-16 w-[340px]`; phone `inset-x-2 bottom-20`         | 30                 | `$chainSession`                                      | left column: over Measurement/Container/Textures panels                                                                   |
+| 17  | ImportReportCard                                                                      | card                       | `absolute bottom-3 right-3 w-80` (phone full-width)                             | 40                 | `$importReport`                                      | under toasts; over FAB corner on phone                                                                                    |
+| 18  | All Modals (kit Modal: center/sheet/fullscreen/cover)                                 | dialog                     | `fixed inset-0` overlay                                                         | 50                 | per dialog                                           | modal-over-modal happens (ConfirmDialog inside LoadProjectDialog etc.)                                                    |
+| 19  | Popovers / Menus / Tooltips                                                           | popover                    | react-aria portal, positioned to trigger                                        | portal             | open                                                 | can extend past viewport edge on small screens                                                                            |
+| 20  | GlobalToastRegion                                                                     | toasts                     | `fixed bottom-4 right-4`                                                        | 100                | queue non-empty                                      | topmost                                                                                                                   |
 
 Dialog inventory (all kit `Modal`): LoadProjectDialog (center), ShareProjectDialog (fullscreen), ExportProjectDialog / ImportProjectDialog (fullscreen), PartData (fullscreen/cover), Export (fullscreen), SettingsModal (center), ScaleEverythingDialog (center), HelpDialog (fullscreen/cover), AboutDialog (center/cover), BuildIdMismatch (center, non-dismissable), CustomAssetsModal (fullscreen), MeshPickerModal (fullscreen), ManageTanksModal (fullscreen/cover), CustomTextureDialog, MaterialDialog, CreateMeshDialog, ImportModelDialog (fullscreen), GlowPaintDialog (center), SubPart/Part BrowserPopup (cover 95vw), MobileInspector sheet, mobile variants of View/Measure/History (sheet), plus ~6 ConfirmDialogs (delete project, delete selection, reset ×3, asset deletes).
 
@@ -204,6 +205,7 @@ Stores owned by / central to the shell:
 - Mode-ish session stores: `chainStore.$chainSession`, `ivaStore.$seatView`, `engineStore` (`$activeEngineEntry`, `$isExhaustPlacing`, `$effectiveToolMode`), `animationStore` (`$activeAnimation`, `$isPoseEditing`, `$animScrubbing/$animPreviewU/$animPlaying`), `customAssetStore` (`$managingMeshId`, `$glowPaintMeshId`, `$importModelRequest`, `$importReport`), `measurementStore.$activeMeasurementId/$measureTool/$selectionBounds`, `containerStore.$activeContainerId/$containerGizmoMode`.
 
 Persistence tiers (see `docs/state-persistence.md`, verified):
+
 1. **Preference atoms** → localStorage `flexo:*` (18+ keys; full list: aboutSeen, bulkScaleMode, connectorSettings, containers*, grids, hideInterior, inspectorVisible, inspectorWidth, inspectorFloatPos, animPreviewFloatPos, ivaSeatSettings, kittenTextureExport, layerView, lighting, lightSettings, measure, modelImport, nudgeAxis, nudgeStep, rotateAxisOffset, rotateStep, selectionHighlight, showFpsCounter, simulateGlass; *containers/measurements are ALSO snapshotted per-project).
 2. **Project snapshots** → hand-rolled localStorage `flexo:project:<name>` + `flexo:currentProject` (`projectStore.ts:57`), schema-versioned (`PROJECT_SCHEMA_VERSION = 2`); snapshot = `$part` + layerView + undo history + camera + measurements + containers. Boot purge (never migrate) with user notice.
 3. **IndexedDB** — custom-asset binaries (`assetDb.ts`) and the FS-Access mod-folder grant (`flexo-fs`, deliberately survives default reset).
@@ -249,11 +251,12 @@ Undo/redo: shell surfaces feed the single editorStore history; measurement/conta
 ## 6. Hotkeys (complete)
 
 From `src/ui/hotkeys/registry.ts` (global, disabled in text fields):
+
 - W/S, A/D, Q/E — rotate selection about the three (cycling) axes; R — cycle axis assignment; F / ⇧F — rotation step larger/smaller.
 - ↑/↓ — nudge along active axis; ⇧↑/⇧↓ — ×FAST_NUDGE_MULTIPLIER; ←/→ — change nudge axis; ⇧←/⇧→ — change nudge step.
 - Delete/Backspace — delete selection; mod+C / mod+V — copy/paste in place (toast counts); mod+K — toggle chain palette; mod+Z — undo; mod+Y or mod+⇧Z — redo.
 - `?` (useKey, ignoreModifiers) — toggle shortcuts help; Escape (no preventDefault, gated) — leave IVA seat view.
-Component-local: ChainPalette mod+Enter (apply) and Escape (cancel), both `enableOnFormTags`. Assets list & MeshPicker: click / mod+click / mod+A / shift+click range select (`useShiftRangeSelect`). ProjectName/rename inputs: Enter commits. In-game-mirroring seat cycle is UI-only (no C hotkey in flexo).
+  Component-local: ChainPalette mod+Enter (apply) and Escape (cancel), both `enableOnFormTags`. Assets list & MeshPicker: click / mod+click / mod+A / shift+click range select (`useShiftRangeSelect`). ProjectName/rename inputs: Enter commits. In-game-mirroring seat cycle is UI-only (no C hotkey in flexo).
 
 ## 7. Cross-area dependencies
 

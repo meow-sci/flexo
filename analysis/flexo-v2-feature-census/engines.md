@@ -2,20 +2,20 @@
 
 Area owner files (all paths relative to `/Users/asherwin/repos/meow-sci/flexo` unless absolute):
 
-| File | Lines | Role |
-|---|---|---|
-| `src/ui/EnginePanel.tsx` | 435 | Full-sidebar Engine Designer body (mode `'engine'`), performance readout, exhaust-chip placement UI |
-| `src/ui/EngineSections.tsx` | 1806 | ALL field-level editors (combustor, nozzle, solid trio, rocket, controllers, gimbals, feed wiring, custom propellants) — biggest UI file in the repo |
-| `src/ui/EngineToolbar.tsx` | 40 | Mode header bar (engine name + Close) |
-| `src/ui/EngineIssuesPanel.tsx` | 49 | Inline validation-findings list (block/warn) |
-| `src/state/engineStore.ts` | 338 | Ephemeral designer state: active engine scope, nozzle refs, exhaust gizmo, tool-mode clamp |
-| `src/state/reactionStore.ts` | 59 | Reaction catalog load + Core∪custom merge |
-| `src/ksa/enginePhysics.ts` | 626 | Verbatim port of KSA De Laval / combustor math (`predictPerformance`) |
-| `src/ksa/engineValidation.ts` | 379 | Pre-flight rules (block = KSA throws; warn = loads but misbehaves) |
-| `src/ksa/reactionCatalog.ts` | 383 | `Reactions.xml` parse, LUT resolution, custom⇄catalog conversion, `mixtureRatioBounds` |
-| `src/three/NozzleHandleObject.ts` | 109 | Pickable cube+cone exhaust marker (amber physics / cyan FX) |
-| `src/three/EditorScene.ts` (engine parts) | ~1620–1970 | Handle reconciliation, exhaust-gizmo proxy, drag write-back |
-| `src/state/editorStore.ts` (engine actions) | ~2900–3650 | All document mutations (add/remove/update per scope+flavor), `addEngine`, `addSrbEngine`, auto-wire |
+| File                                        | Lines      | Role                                                                                                                                                 |
+| ------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/ui/EnginePanel.tsx`                    | 435        | Full-sidebar Engine Designer body (mode `'engine'`), performance readout, exhaust-chip placement UI                                                  |
+| `src/ui/EngineSections.tsx`                 | 1806       | ALL field-level editors (combustor, nozzle, solid trio, rocket, controllers, gimbals, feed wiring, custom propellants) — biggest UI file in the repo |
+| `src/ui/EngineToolbar.tsx`                  | 40         | Mode header bar (engine name + Close)                                                                                                                |
+| `src/ui/EngineIssuesPanel.tsx`              | 49         | Inline validation-findings list (block/warn)                                                                                                         |
+| `src/state/engineStore.ts`                  | 338        | Ephemeral designer state: active engine scope, nozzle refs, exhaust gizmo, tool-mode clamp                                                           |
+| `src/state/reactionStore.ts`                | 59         | Reaction catalog load + Core∪custom merge                                                                                                            |
+| `src/ksa/enginePhysics.ts`                  | 626        | Verbatim port of KSA De Laval / combustor math (`predictPerformance`)                                                                                |
+| `src/ksa/engineValidation.ts`               | 379        | Pre-flight rules (block = KSA throws; warn = loads but misbehaves)                                                                                   |
+| `src/ksa/reactionCatalog.ts`                | 383        | `Reactions.xml` parse, LUT resolution, custom⇄catalog conversion, `mixtureRatioBounds`                                                               |
+| `src/three/NozzleHandleObject.ts`           | 109        | Pickable cube+cone exhaust marker (amber physics / cyan FX)                                                                                          |
+| `src/three/EditorScene.ts` (engine parts)   | ~1620–1970 | Handle reconciliation, exhaust-gizmo proxy, drag write-back                                                                                          |
+| `src/state/editorStore.ts` (engine actions) | ~2900–3650 | All document mutations (add/remove/update per scope+flavor), `addEngine`, `addSrbEngine`, auto-wire                                                  |
 
 Docs consulted and verified against code: `docs/engines.md` (accurate, current), `scope/engines.md` (baseline 2026.8.3.5117, current), `plans/KSA_ENGINE_DESIGNER_PLAN.md`, `plans/ENGINE_EXHAUST_PLAN.md`.
 
@@ -29,7 +29,7 @@ Docs consulted and verified against code: `docs/engines.md` (accurate, current),
 
 - **Entry paths (2):**
   1. Top Toolbar → **Add menu → "Define Engine…"** (`src/ui/AddButton.tsx:70,80`) → `enterEngineMode()` (`src/state/engineStore.ts:290-293`).
-  2. Right sidebar Assets toolbar → **"Engine (N)"** button (`src/ui/AssetsToolbar.tsx:46-49`) → `setInspectorMode('engine')`. N counts engine *scopes* (`$engineEntries.length`), so part-level-only RCS parts still count.
+  2. Right sidebar Assets toolbar → **"Engine (N)"** button (`src/ui/AssetsToolbar.tsx:46-49`) → `setInspectorMode('engine')`. N counts engine _scopes_ (`$engineEntries.length`), so part-level-only RCS parts still count.
 - **Exit path:** EngineToolbar "Close" button → `exitEngineMode()` (`engineStore.ts:296-299`) — turns off the exhaust gizmo, returns to `'assets'`. No hotkey, no Escape binding.
 - **Mode survival:** `$activeEngineEntry`/`$activeNozzleRef` deliberately survive mode switches (the 3D scene gates on mode instead — `EditorScene.ts:1874-1887`), so reopening the designer restores the last-open engine.
 - The 3D viewport, main toolbar, and floating inspectors stay live during engine mode; only the sidebar body swaps.
@@ -137,7 +137,7 @@ Surfaced at TWO places: **EngineIssuesPanel** inside Part Data modal → Engine 
 
 - **SubPart Data modal** (`src/ui/ManageTanksModal.tsx:56-57`): "Engine (thrust chamber)" DisclosureSection hosting the full `SubPartEngineSection` (combustors, nozzles, solid trio, rockets) for one template — created lazily via a synthetic empty `SubPartGameData` if none exists.
 - **Part Data modal** (`src/ui/PartDataButton.tsx:118-140`): "Engine" DisclosureSection (badge = module count across 9 lists) hosting Controllers, Feed wiring, Gimbals, EngineIssuesPanel, and disclosures "Solid motor (SRB)" and "Gas generator (advanced, part-level rockets)".
-So most engine data is editable via TWO parallel routes (mode + modal), sharing the exact same section components.
+  So most engine data is editable via TWO parallel routes (mode + modal), sharing the exact same section components.
 
 ### 1.13 Reaction catalog loading
 
@@ -147,19 +147,19 @@ So most engine data is editable via TWO parallel routes (mode + modal), sharing 
 
 ## 2. UI surface map
 
-| Surface | Kind | Mounts | Positioning | Notes |
-|---|---|---|---|---|
-| EnginePanel | sidebar body (mode) | `InspectorContent` when `$inspectorMode==='engine'` → desktop `RightPanel` (resizable 240–640 px right sidebar, persisted width) or phone bottom-sheet `MobileInspector` | in-flow flex column, `overflow-auto` | Replaces the Assets list entirely; Assets unreachable while in mode except via other toolbars |
-| EngineToolbar | toolbar strip atop sidebar | same | in-flow | Rocket icon + engine name + Close; mirrors AnimToolbar |
-| Performance readout | inline card | top of EnginePanel body | in-flow | live physics; conditional hint states |
-| Exhaust chip list | inline chip group | EnginePanel | in-flow, `max-h-32 overflow-y-auto` | mirrors viewport handles 1:1 |
-| Nozzle handles | 3D scene objects | `EditorScene.root` | world-space, depthTest off, renderOrder 10 | only while mode==='engine' and an engine open; disposed on close (hidden-but-pickable would steal clicks) |
-| Exhaust gizmo | 3D TransformGizmo on proxy | EditorScene | world-space | shares the one global gizmo; Scale clamped to Move |
-| SelectionToolbar | floating bar over viewport | `src/ui/SelectionToolbar.tsx` | absolute over workspace | force-shown while exhaust-placing; Scale disabled |
-| Part Data → Engine section | fullscreen modal (phone: cover) | `PartDataButton` Modal | react-aria Modal portal | controllers/wiring/gimbals/solid/gas-gen + issues panel |
-| SubPart Data → Engine section | fullscreen modal | `ManageTanksModal` | portal | thrust-chamber editors per template |
-| Export dialog issue boxes | fullscreen modal (max-w-2xl) | `ExportButton` | portal | engine blocking/warn merged with other validators |
-| EngineIssuesPanel | inline list | inside Part Data modal | in-flow | renders nothing when clean |
+| Surface                       | Kind                            | Mounts                                                                                                                                                                   | Positioning                                | Notes                                                                                                     |
+| ----------------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| EnginePanel                   | sidebar body (mode)             | `InspectorContent` when `$inspectorMode==='engine'` → desktop `RightPanel` (resizable 240–640 px right sidebar, persisted width) or phone bottom-sheet `MobileInspector` | in-flow flex column, `overflow-auto`       | Replaces the Assets list entirely; Assets unreachable while in mode except via other toolbars             |
+| EngineToolbar                 | toolbar strip atop sidebar      | same                                                                                                                                                                     | in-flow                                    | Rocket icon + engine name + Close; mirrors AnimToolbar                                                    |
+| Performance readout           | inline card                     | top of EnginePanel body                                                                                                                                                  | in-flow                                    | live physics; conditional hint states                                                                     |
+| Exhaust chip list             | inline chip group               | EnginePanel                                                                                                                                                              | in-flow, `max-h-32 overflow-y-auto`        | mirrors viewport handles 1:1                                                                              |
+| Nozzle handles                | 3D scene objects                | `EditorScene.root`                                                                                                                                                       | world-space, depthTest off, renderOrder 10 | only while mode==='engine' and an engine open; disposed on close (hidden-but-pickable would steal clicks) |
+| Exhaust gizmo                 | 3D TransformGizmo on proxy      | EditorScene                                                                                                                                                              | world-space                                | shares the one global gizmo; Scale clamped to Move                                                        |
+| SelectionToolbar              | floating bar over viewport      | `src/ui/SelectionToolbar.tsx`                                                                                                                                            | absolute over workspace                    | force-shown while exhaust-placing; Scale disabled                                                         |
+| Part Data → Engine section    | fullscreen modal (phone: cover) | `PartDataButton` Modal                                                                                                                                                   | react-aria Modal portal                    | controllers/wiring/gimbals/solid/gas-gen + issues panel                                                   |
+| SubPart Data → Engine section | fullscreen modal                | `ManageTanksModal`                                                                                                                                                       | portal                                     | thrust-chamber editors per template                                                                       |
+| Export dialog issue boxes     | fullscreen modal (max-w-2xl)    | `ExportButton`                                                                                                                                                           | portal                                     | engine blocking/warn merged with other validators                                                         |
+| EngineIssuesPanel             | inline list                     | inside Part Data modal                                                                                                                                                   | in-flow                                    | renders nothing when clean                                                                                |
 
 Stacking/overlap notes: no engine-specific z-index conflicts found; the handles' depth-test-off + renderOrder-10 is intentional (exhaust points sit inside bells). The engine mode competes with the floating selection inspector (`FloatingInspector`) and SelectionToolbar for viewport-adjacent attention but doesn't collide geometrically.
 
@@ -171,8 +171,8 @@ Stacking/overlap notes: no engine-specific z-index conflicts found; the handles'
 - **Ephemeral designer state** (engineStore, NEVER serialized/undone): `$activeEngineEntry`, `$activeNozzleRef`, `$engineExhaustGizmo`. Sub-selection semantics identical to animationStore's ephemeral atoms.
 - **Derived**: `$engineEntries`, `$activeEngineData`, `$resolvedNozzleTargets` (defensive resolution — indices revalidated each read), `$activeNozzleTarget`, `$isExhaustPlacing`, `$effectiveToolMode` (cross-store: `$toolMode` from editorStore + `$inspectorMode` from uiStore).
 - **Reaction catalog**: `$reactionCatalog` (module-level `started` flag, fetch-once), `$allReactions`/`$allReactionIndex` = catalog ∪ `$part.customReactions` (cross-store computed).
-- **Undo/redo**: two conventions — *discrete* actions (`commitGameData`/explicit `pushUndo` inside, e.g. add/remove module, `addEngine` as one step) and *streaming* actions (`update*` mutate without undo; callers push undo on interaction start: `PreciseNumberInput.onInteractionStart`, TextField `onFocus`, gizmo drag-start in `EditorScene.ts:425-428`).
-- **UI prefs persisted** (localStorage via `@nanostores/persistent`): sidebar width/visibility (`flexo:inspectorWidth`, `flexo:inspectorVisible`). Inspector *mode* is NOT persisted.
+- **Undo/redo**: two conventions — _discrete_ actions (`commitGameData`/explicit `pushUndo` inside, e.g. add/remove module, `addEngine` as one step) and _streaming_ actions (`update*` mutate without undo; callers push undo on interaction start: `PreciseNumberInput.onInteractionStart`, TextField `onFocus`, gizmo drag-start in `EditorScene.ts:425-428`).
+- **UI prefs persisted** (localStorage via `@nanostores/persistent`): sidebar width/visibility (`flexo:inspectorWidth`, `flexo:inspectorVisible`). Inspector _mode_ is NOT persisted.
 - **Cross-scene subscription** (`EditorScene.ts:552-564,627-630`): scene subscribes to `$activeEngineEntry`/`$activeNozzleRef`/`$engineExhaustGizmo`/`$inspectorMode` for handle reconciliation (NOT `$resolvedNozzleTargets` directly — it also derives from `$part`, which `reconcile()` already covers) and `$effectiveToolMode` for the gizmo mode.
 
 ---
@@ -180,7 +180,7 @@ Stacking/overlap notes: no engine-specific z-index conflicts found; the handles'
 ## 4. Pain points
 
 1. **EngineSections.tsx is a 1806-line grab-bag** — 20+ components spanning 5 distinct concerns (thrust chamber, rocket wiring, controllers/gimbals, plumbing wiring, custom propellants incl. a LUT table editor). Everything is `export`ed ad-hoc and cross-imported by 3 different hosts. Ripe for splitting along those concern lines.
-2. **Dual editing routes with different capability sets.** The same combustor is editable in the Engine mode AND in the SubPart Data modal; controllers/gimbals in the mode AND Part Data modal — but **ConsumerFeedWiringSection exists ONLY in the Part Data modal** (`PartDataButton.tsx:126`) and **EngineIssuesPanel only in Part Data + Export** — so completing/verifying an engine's plumbing forces a trip out of engine mode into a fullscreen modal. The mode is *almost* self-sufficient but not quite.
+2. **Dual editing routes with different capability sets.** The same combustor is editable in the Engine mode AND in the SubPart Data modal; controllers/gimbals in the mode AND Part Data modal — but **ConsumerFeedWiringSection exists ONLY in the Part Data modal** (`PartDataButton.tsx:126`) and **EngineIssuesPanel only in Part Data + Export** — so completing/verifying an engine's plumbing forces a trip out of engine mode into a fullscreen modal. The mode is _almost_ self-sufficient but not quite.
 3. **Validation is invisible while authoring in the mode.** The engine designer — the place you'd most want "KSA would refuse to load this" — never renders `EngineIssuesPanel`; users discover blockers at export time. Inline per-field warnings partially compensate but don't cover cross-module rules (solid/liquid mixing, thruster-driving-solid, etc.).
 4. **Deep disclosure nesting + card stacks** — EnginePanel → DisclosureSection → ItemCard → sub-lists (rocket nozzle refs, reactant rows, LUT rows) makes a multi-chamber engine a very long scroll; density is high, hierarchy is flat visually. Part Data's Engine section nests disclosures inside a disclosure inside a fullscreen modal (`PartDataButton.tsx:118-140`).
 5. **Readout only covers the FIRST combustor+nozzle pair** (`EnginePanel.tsx:164-165,241-242`) — a multi-chamber or solid engine gets no numbers at all (solid preview is a documented gap, but a liquid nozzle #2 silently isn't previewed either; no per-rocket aggregation like KSA's part tooltip).
@@ -197,6 +197,7 @@ Stacking/overlap notes: no engine-specific z-index conflicts found; the handles'
 ## 5. Invariants & constraints (MUST survive)
 
 **Game contract (verified against decomp, see `scope/engines.md` — baseline 2026.8.3.5117):**
+
 - `enginePhysics.ts` is a **verbatim port**; constants `G0=9.80665`, `Ru=8.31446261815324`, `SEA_LEVEL_PRESSURE=101325`; identical iteration counts/tolerances/clamps (incl. the top-interval clamp quirk of `FixedReactionTable.Lookup`). Any formula drift breaks readout parity.
 - **Exhaust vectors:** physics direction applied UNNORMALIZED by KSA ⇒ gizmo writes unit vectors, typed/imported values stay verbatim + warned; FX direction must NEVER be normalized (stock ships non-unit values). Location transforms through owner's full matrix (scale), direction through rotation only — two different frames.
 - **FX pair is inherit-vs-override**: emit `<FxExhaustLocation/Direction>` iff overridden (`null` = inherit); writing inherited values converts an inherit into a hard override.
@@ -211,6 +212,7 @@ Stacking/overlap notes: no engine-specific z-index conflicts found; the handles'
 - Catalog may be ABSENT (OSS build): authoring + export must work without `Reactions.xml`; `KNOWN_REACTIONS` static fallback backs the dropdown.
 
 **App conventions:**
+
 - ALL numeric fields via `PreciseNumberInput` → `useNumberDraft` + `inputMode="url"` (mobile minus-key; empty≠0; ".06"/"-" typeable). Non-negotiable project-wide.
 - Undo convention: discrete = one step per action; streaming = caller pushes undo at interaction start (`onInteractionStart`/`onFocus`/drag-start). Ephemeral designer state stays out of undo.
 - Bar⇄Pa display conversion (stored SI).
@@ -222,16 +224,18 @@ Stacking/overlap notes: no engine-specific z-index conflicts found; the handles'
 
 ## 6. Hotkeys
 
-**None.** The engine area registers zero hotkeys (verified: no engine references in `src/ui/hotkeys/registry.ts` / `GlobalHotkeys.tsx`). It *inherits* global ones indirectly: the tool-mode keys and gizmo interactions flow through `$toolMode` (clamped by `$effectiveToolMode`), and global undo/redo applies to engine document edits. No Escape-to-exit-mode, no keyboard nozzle cycling. (v2 opportunity, but nothing to preserve.)
+**None.** The engine area registers zero hotkeys (verified: no engine references in `src/ui/hotkeys/registry.ts` / `GlobalHotkeys.tsx`). It _inherits_ global ones indirectly: the tool-mode keys and gizmo interactions flow through `$toolMode` (clamped by `$effectiveToolMode`), and global undo/redo applies to engine document edits. No Escape-to-exit-mode, no keyboard nozzle cycling. (v2 opportunity, but nothing to preserve.)
 
 ---
 
 ## 7. Cross-area dependencies
 
 **Engine → others:**
+
 - `editorStore` (`$part`, `pushUndo`, ~40 engine actions, `$toolMode`); `uiStore` (`$inspectorMode`); `feedTargets.ts` (`feedTargetsOf`, `consumerOptionsOf`, `unwiredConsumersOf` — shared with tanks/containers area); `GameDataSections` (`Field`, `ItemCard` primitives); `FeedsField` (shared with tank/plumbing UI); `coords.ts` `exhaust*` transforms; `TransformGizmo`/`SelectionManager` (shared gizmo + `kind:'nozzle'` selectable route).
 
 **Others → engine:**
+
 - `AddButton` (menu entry → `enterEngineMode`); `AssetsToolbar` (Engine (N) button, `$engineEntries` count); `SelectionToolbar` (`$effectiveToolMode`, `$isExhaustPlacing` — engine clamps the GLOBAL tool switcher); `EditorScene` (handles, proxy, drag write-back); `PartDataButton` + `ManageTanksModal` (host engine sections); `ExportButton` (`validateEngines` merged into export pre-flight); `partXmlSerializer`/`partXmlParser`/`projectCodec` (round-trip); `partCatalog.ts` (importing a Core engine part carries its engine data); import/paste id-remap (`SubPartIdRef.subPartInstanceId`, `Gimbal.subPartInstanceId` — `editorStore.applyImportedGameData` / `projectTransfer.mergeGameData`); connector capability editing (inspector Capabilities row) is the other half of the plumbing contract; tanks/grain segments are the feed targets.
 
 ---

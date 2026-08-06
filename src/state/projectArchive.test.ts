@@ -148,9 +148,10 @@ describe('buildProjectArchive → parseProjectArchive', () => {
     expect(parsed.manifest.name).toBe('Rover-7');
     expect(parsed.manifest.counts.subParts).toBe(1);
     // The binary-backed descriptors survive BECAUSE the container carries their bytes.
-    expect(parsed.envelope.data.customTextures.map((t) => t.id)).toEqual(['tex_1']);
-    expect(parsed.envelope.data.customMeshes.map((m) => m.id)).toEqual(['mesh_1']);
-    expect(parsed.envelope.data.customMeshes[0].faceTextures.right?.textureId).toBe('tex_1');
+    const entry = parsed.envelope.parts[0];
+    expect(entry.data.customTextures.map((t) => t.id)).toEqual(['tex_1']);
+    expect(entry.data.customMeshes.map((m) => m.id)).toEqual(['mesh_1']);
+    expect(entry.data.customMeshes[0].faceTextures.right?.textureId).toBe('tex_1');
 
     const src = parsed.assets.find((a) => a.kind === 'tex-src');
     expect(src?.bytes).toEqual(pixels);

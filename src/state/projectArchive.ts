@@ -186,10 +186,13 @@ export async function buildProjectArchive(
   }
 
   abortIfRequested(signal);
-  // P2 (MULTI_PART_PLAN) replaces this with the multi-part envelope — the wire format is still
-  // single-part, so the archive carries the stored snapshot's ACTIVE part.
-  const active = snapshot.parts.find((p) => p.id === snapshot.activePartId) ?? snapshot.parts[0];
-  const envelope = buildProjectExport(active.part, meta.name, { includeBinaryBacked: true });
+  // Every part of the stored snapshot rides in the envelope, the active one flagged by index.
+  // P2.06 (MULTI_PART_PLAN) adds the manifest's per-part list + summed counts on top of this.
+  const activeIndex = snapshot.parts.findIndex((p) => p.id === snapshot.activePartId);
+  const envelope = buildProjectExport(snapshot.parts, meta.name, {
+    includeBinaryBacked: true,
+    activePartIndex: Math.max(activeIndex, 0),
+  });
   const manifest: ArchiveManifest = {
     format: ARCHIVE_FORMAT,
     archiveVersion: ARCHIVE_VERSION,
@@ -523,20 +526,18 @@ export async function importArchive(
 
   const { $part, importProjectData } = await import('./editorStore');
   const projectId = $currentProjectId.get();
+  // P2.06 (MULTI_PART_PLAN) replaces this branch with the real mode set ('add-parts' +
+  // 'merge-into-active'). Until then the merge is single-entry: only the envelope's FIRST
+  // part is merged into the active one.
+  const entry = parsed.envelope.parts[0];
   const adoption = await planAssetAdoption(
     projectId,
     $part.get(),
-    { textures: parsed.envelope.data.customTextures, meshes: parsed.envelope.data.customMeshes },
+    { textures: entry.data.customTextures, meshes: entry.data.customMeshes },
     parsed.assets,
   );
-  await copyAdoptedBlobs(
-    projectId,
-    parsed.envelope.data.customMeshes,
-    parsed.assets,
-    adoption,
-    onProgress,
-  );
-  importProjectData(parsed.envelope, { adoption });
+  await copyAdoptedBlobs(projectId, entry.data.customMeshes, parsed.assets, adoption, onProgress);
+  importProjectData(entry, { adoption });
   // Re-publish blob URLs / re-register import atlases for the adopted descriptors. The
   // `$part` subscription rebuilds geometry, but texture and glow URLs are hydration's job.
   await hydrateCustomAssets();

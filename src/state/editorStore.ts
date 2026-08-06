@@ -78,7 +78,7 @@ import { unwiredConsumersOf } from './feedTargets';
 import type { ReferenceContainer } from './containerStore';
 import type { LineMeasurement } from './measurementStore';
 import { mergeProjectImport } from './projectTransfer';
-import type { AssetAdoption, ImportSummary, ProjectExportEnvelope } from './projectTransfer';
+import type { AssetAdoption, ImportSummary, PartTransferEntry } from './projectTransfer';
 // layerStore imports back into this module (deselectLayer); both directions are
 // function-scoped, so the cycle never runs at module-init time.
 import { isLayerLocked, isLayerVisible } from './layerStore';
@@ -1127,8 +1127,8 @@ export function addPart(
 }
 
 /**
- * Additively imports a project-export envelope (see src/state/projectTransfer.ts) into
- * the current workspace in one undo step: meshes/connectors/kittens/animations/GameData
+ * Additively imports ONE part of a project-export envelope (see src/state/projectTransfer.ts)
+ * into the ACTIVE part, in one undo step: meshes/connectors/kittens/animations/GameData
  * are appended with collision-free ids and all cross-references remapped. Imported
  * meshes land on freshly-created layers mirroring the source's (so the existing Default
  * is untouched); the first new layer becomes active so the user lands on the import.
@@ -1139,10 +1139,10 @@ export function addPart(
  * step: undoing later removes the adopted descriptors, never the bytes (unchanged contract).
  */
 export function importProjectData(
-  env: ProjectExportEnvelope,
+  entry: PartTransferEntry,
   opts: { adoption?: AssetAdoption } = {},
 ): ImportSummary {
-  const { part, summary, newLayerIds } = mergeProjectImport($part.get(), env, opts);
+  const { part, summary, newLayerIds } = mergeProjectImport($part.get(), entry, opts);
   const detail =
     [
       summary.meshes ? `${summary.meshes} mesh${summary.meshes === 1 ? '' : 'es'}` : '',

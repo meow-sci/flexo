@@ -64,7 +64,11 @@ import {
   meshKind,
 } from '../ksa/types';
 import { normalizeSegmentEasing } from '../ksa/easing';
-import type { ProjectExportEnvelope } from './projectTransfer';
+import type {
+  PartTransferEntry,
+  ProjectExportData,
+  ProjectExportEnvelope,
+} from './projectTransfer';
 
 /**
  * The wire-format marker + version. These live here (not in projectTransfer) so the
@@ -107,7 +111,8 @@ export const PROJECT_EXPORT_FORMAT = 'flexo-project';
 // v10: <Light> layer id — CLight.ly (optional, absent ⇒ the pinned Lights layer) becomes a
 // required CLight.l naming ANY ordinary layer; a v9 payload's lights would decode onto a
 // layer that no longer has that meaning.
-export const PROJECT_EXPORT_VERSION = 10;
+// v11: multi-part — pts: CompactPartEntry[] (nm/pid/ie/vw + per-part body); ap = active index; top-level pid/tg/g/… keys removed (plans/MULTI_PART_PLAN.md)
+export const PROJECT_EXPORT_VERSION = 11;
 
 /**
  * COMPACT PROJECT CODEC — the single wire format for everything that serializes a
@@ -1474,12 +1479,8 @@ function decBurnRate(c: [number, number] | undefined): BurnRateLaw | null {
 
 // ── top-level envelope ───────────────────────────────────────────────────────
 
-/** The compact wire object that `JSON.stringify` / compression operate on. */
-export interface CompactProject {
-  f: typeof PROJECT_EXPORT_FORMAT; // format marker (validates non-flexo paste)
-  v: number; // version
-  n?: string; // projectName
-  pid?: string; // sourcePartId
+/** One part's document, compacted. Every key here is per-part (v11 moved them off the root). */
+interface CompactPartBody {
   tg?: string[]; // editorTags
   g?: CGameData; // gameData
   sg?: CSubPartGameData[]; // subPartGameData
@@ -1498,12 +1499,26 @@ export interface CompactProject {
   cr?: CReaction[]; // customReactions
 }
 
-/** Verbose export envelope → compact wire object (drops defaults, rounds, shortens keys). */
-export function encodeProject(env: ProjectExportEnvelope): CompactProject {
-  const d = env.data;
-  const o: CompactProject = { f: PROJECT_EXPORT_FORMAT, v: PROJECT_EXPORT_VERSION };
-  if (env.projectName) o.n = env.projectName;
-  if (env.sourcePartId) o.pid = env.sourcePartId;
+/** One part entry: its document plus the registry meta a transfer preserves. */
+interface CompactPartEntry extends CompactPartBody {
+  nm?: string; // name (absent ⇒ "Part <index+1>")
+  pid?: string; // sourcePartId
+  ie?: 0 | 1; // includeInExport (absent ⇒ 1)
+  vw?: [vis: 0 | 1, opacity: number, ox: number, oy: number, oz: number]; // view (absent ⇒ defaults)
+}
+
+/** The compact wire object that `JSON.stringify` / compression operate on. */
+export interface CompactProject {
+  f: typeof PROJECT_EXPORT_FORMAT; // format marker (validates non-flexo paste)
+  v: number; // version
+  n?: string; // projectName
+  ap?: number; // activePartIndex (absent ⇒ 0)
+  pts: CompactPartEntry[]; // every part, in registry order
+}
+
+/** One part's document → its compact body. */
+function encodePartBody(d: ProjectExportData): CompactPartBody {
+  const o: CompactPartBody = {};
   if (d.editorTags.length) o.tg = d.editorTags;
   const g = encGameData(d.gameData);
   if (Object.keys(g).length) o.g = g;
@@ -1527,35 +1542,93 @@ export function encodeProject(env: ProjectExportEnvelope): CompactProject {
   return o;
 }
 
+/** A compact body → one part's document (every dropped default restored). */
+function decodePartBody(raw: CompactPartBody): ProjectExportData {
+  return {
+    editorTags: arr<string>(raw.tg),
+    gameData: decGameData(raw.g),
+    subPartGameData: arr<CSubPartGameData>(raw.sg).map(decSubPartGameData),
+    layers: arr<CLayer>(raw.l).map((x): Layer => {
+      const color = decLayerColor(x.c);
+      return color ? { id: str(x.i), name: str(x.n), color } : { id: str(x.i), name: str(x.n) };
+    }),
+    placements: arr<CPlacement>(raw.p).map(decPlacement),
+    connectors: arr<CConnector>(raw.c).map(decConnector),
+    colliders: arr<CCollider>(raw.cl).map(decCollider),
+    ivaSeats: arr<CIvaSeat>(raw.iv).map(decIvaSeat),
+    lights: arr<CLight>(raw.li).map(decLight),
+    internalFlags: decInternalFlags(raw.ifl),
+    kittens: arr<CKitten>(raw.k).map(decKitten),
+    animations: arr<CAnimation>(raw.a).map(decAnimation),
+    customMeshes: arr<CCustomMesh>(raw.m).map(decCustomMesh),
+    customTextures: arr<CTexture>(raw.tex).map(decCustomTexture),
+    customMaterials: arr<CCustomMaterial>(raw.mat).map(decCustomMaterial),
+    customReactions: arr<CReaction>(raw.cr).map(decCustomReaction),
+  };
+}
+
+/** Verbose export envelope → compact wire object (drops defaults, rounds, shortens keys). */
+export function encodeProject(env: ProjectExportEnvelope): CompactProject {
+  const o: CompactProject = {
+    f: PROJECT_EXPORT_FORMAT,
+    v: PROJECT_EXPORT_VERSION,
+    pts: env.parts.map((entry) => {
+      const e: CompactPartEntry = encodePartBody(entry.data);
+      if (entry.name) e.nm = entry.name;
+      if (entry.sourcePartId) e.pid = entry.sourcePartId;
+      if (!entry.includeInExport) e.ie = 0;
+      const off = entry.offset;
+      if (!entry.visible || entry.opacity !== 1 || !isZeroVec(off)) {
+        e.vw = [entry.visible ? 1 : 0, round(entry.opacity), ...encVec(off)];
+      }
+      return e;
+    }),
+  };
+  if (env.projectName) o.n = env.projectName;
+  if (env.activePartIndex) o.ap = env.activePartIndex;
+  return o;
+}
+
+/** One compact entry → one verbose part entry (name, view and flags all default-filled). */
+function decodePartEntry(entry: CompactPartEntry, index: number): PartTransferEntry {
+  const vw = Array.isArray(entry.vw) ? entry.vw : [];
+  return {
+    name: str(entry.nm) || `Part ${index + 1}`,
+    sourcePartId: str(entry.pid),
+    includeInExport: entry.ie !== 0,
+    visible: vw[0] !== 0,
+    opacity: num(vw[1], 1),
+    offset: { x: num(vw[2]), y: num(vw[3]), z: num(vw[4]) },
+    data: decodePartBody(entry),
+  };
+}
+
 /** Compact wire object → verbose export envelope (restores every dropped default). */
 export function decodeProject(raw: CompactProject): ProjectExportEnvelope {
+  const kept = arr<CompactPartEntry>(raw.pts)
+    .map((entry, index) => ({ entry, index }))
+    // A malformed entry is skipped rather than decoded into a half-part — the module's
+    // established tolerance (the parse boundary owns the hard validation). `typeof` calls
+    // arrays and `null` objects too, so both are excluded explicitly.
+    .filter(({ entry }) => typeof entry === 'object' && entry !== null && !Array.isArray(entry));
+  const parts = kept.map(({ entry }, index) => decodePartEntry(entry, index));
+  // Truncated because it is an INDEX: a hand-edited `ap: 1.5` must not become one.
+  const wantedIndex = Math.trunc(num(raw.ap));
   return {
     format: PROJECT_EXPORT_FORMAT,
     version: typeof raw.v === 'number' ? raw.v : PROJECT_EXPORT_VERSION,
     exportedAt: 0,
     projectName: str(raw.n),
-    sourcePartId: str(raw.pid),
-    data: {
-      editorTags: arr<string>(raw.tg),
-      gameData: decGameData(raw.g),
-      subPartGameData: arr<CSubPartGameData>(raw.sg).map(decSubPartGameData),
-      layers: arr<CLayer>(raw.l).map((x): Layer => {
-        const color = decLayerColor(x.c);
-        return color ? { id: str(x.i), name: str(x.n), color } : { id: str(x.i), name: str(x.n) };
-      }),
-      placements: arr<CPlacement>(raw.p).map(decPlacement),
-      connectors: arr<CConnector>(raw.c).map(decConnector),
-      colliders: arr<CCollider>(raw.cl).map(decCollider),
-      ivaSeats: arr<CIvaSeat>(raw.iv).map(decIvaSeat),
-      lights: arr<CLight>(raw.li).map(decLight),
-      internalFlags: decInternalFlags(raw.ifl),
-      kittens: arr<CKitten>(raw.k).map(decKitten),
-      animations: arr<CAnimation>(raw.a).map(decAnimation),
-      customMeshes: arr<CCustomMesh>(raw.m).map(decCustomMesh),
-      customTextures: arr<CTexture>(raw.tex).map(decCustomTexture),
-      customMaterials: arr<CCustomMaterial>(raw.mat).map(decCustomMaterial),
-      customReactions: arr<CReaction>(raw.cr).map(decCustomReaction),
-    },
+    // `ap` indexes the ORIGINAL array, so it is resolved against the pre-filter positions the
+    // survivors carry — skipping an entry renumbers them, which would otherwise activate the
+    // wrong part. An `ap` that points at nothing (dropped or out of range) falls back to 0.
+    activePartIndex: Math.max(
+      kept.findIndex(({ index }) => index === wantedIndex),
+      0,
+    ),
+    // A project always holds at least one part, so a payload carrying none decodes to a
+    // single empty part rather than to a project with nothing to edit.
+    parts: parts.length > 0 ? parts : [decodePartEntry({}, 0)],
   };
 }
 

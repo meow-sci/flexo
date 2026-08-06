@@ -3935,8 +3935,8 @@ describe('editorStore — updateReactionPlumes', () => {
 });
 
 describe('importProjectData (archive merge)', () => {
-  /** An archive-shaped envelope: a primitive mesh + its texture, with the backing table. */
-  function archiveEnvelope() {
+  /** An archive-shaped part entry: a primitive mesh + its texture, with the backing table. */
+  function archiveEntry() {
     const source = createEmptyPart();
     source.layers.push({ id: 'layer1', name: 'Hull' });
     source.customTextures.push({
@@ -3964,7 +3964,20 @@ describe('importProjectData (archive merge)', () => {
       layerId: 'layer1',
     });
     const json = serializeProjectJson(
-      buildProjectExport(source, 'Arch', { includeBinaryBacked: true }),
+      buildProjectExport(
+        [
+          {
+            name: 'Part 1',
+            visible: true,
+            opacity: 1,
+            offset: { x: 0, y: 0, z: 0 },
+            includeInExport: true,
+            part: source,
+          },
+        ],
+        'Arch',
+        { includeBinaryBacked: true },
+      ),
     );
     const parsed = parseProjectImport(json, {
       binaryAssets: [
@@ -3973,7 +3986,8 @@ describe('importProjectData (archive merge)', () => {
       ],
     });
     if (!parsed.ok) throw new Error(parsed.error);
-    return parsed.env;
+    // The merge primitive takes ONE part entry (v11 envelopes are multi-part).
+    return parsed.env.parts[0];
   }
 
   it('is exactly ONE undo step, adopted binaries included', () => {
@@ -3981,7 +3995,7 @@ describe('importProjectData (archive merge)', () => {
     importHistory({ undo: [], redo: [] });
     const before = $part.get();
 
-    importProjectData(archiveEnvelope(), {
+    importProjectData(archiveEntry(), {
       adoption: {
         textures: new Map([['tex_1', 'tex_new']]),
         copiedTextures: new Map([['tex_1', 'tex_new']]),
@@ -4004,7 +4018,7 @@ describe('importProjectData (archive merge)', () => {
   it('adopts nothing binary without a plan, but still rebuilds the primitive', () => {
     $part.set(createEmptyPart());
     importHistory({ undo: [], redo: [] });
-    importProjectData(archiveEnvelope());
+    importProjectData(archiveEntry());
     const part = $part.get();
     // A primitive needs no bytes (it regenerates from its PrimitiveSpec), so it merges under
     // a self-minted id; the TEXTURE is pixels and cannot, so it does not.

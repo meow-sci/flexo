@@ -64,7 +64,7 @@ export { PROJECT_EXPORT_FORMAT, PROJECT_EXPORT_VERSION };
  * (design-projects-export.md §4.1):
  *
  * - a `.flexo.tar.gz` archive ships the bytes alongside, so it opts in with
- *   `buildProjectExport(part, name, {includeBinaryBacked: true})` and imports with a
+ *   `buildProjectExport(parts, name, {includeBinaryBacked: true})` and imports with a
  *   `binaryAssets` table — {@link parseProjectImport} then keeps exactly the descriptors
  *   that table backs;
  * - bare JSON and share links carry nothing binary, so they export without the opt-in and
@@ -115,17 +115,51 @@ export interface ProjectExportData {
 }
 
 /**
- * A versioned export envelope. `sourcePartId` carries the source's Part Id: it's
- * restored verbatim by {@link envelopeToPart} (share-link load) and adopted by
+ * One part on the wire: the registry meta a transfer preserves, plus that part's document.
+ *
+ * Registry entry ids (`pt_…`) deliberately do NOT travel — they are project-internal, so an
+ * import mints fresh ones. `sourcePartId` carries the source's KSA Part Id: it's restored
+ * verbatim by {@link envelopeToParts} (share-link load) and adopted by
  * {@link mergeProjectImport} only when the destination has no Part Id of its own.
+ */
+export interface PartTransferEntry {
+  /** Display name at export time. */
+  name: string;
+  /** `part.partId` — advisory, see above. */
+  sourcePartId: string;
+  includeInExport: boolean;
+  visible: boolean;
+  opacity: number;
+  offset: Vec3;
+  data: ProjectExportData;
+}
+
+/**
+ * A versioned export envelope. A project holds N parts (`plans/MULTI_PART_PLAN.md` D2), and
+ * every one of them travels — a transfer is the whole project, not the KSA export subset.
  */
 export interface ProjectExportEnvelope {
   format: typeof PROJECT_EXPORT_FORMAT;
   version: number;
   exportedAt: number;
   projectName: string;
-  sourcePartId: string;
-  data: ProjectExportData;
+  /** Index into {@link parts} that was active at export time. */
+  activePartIndex: number;
+  parts: PartTransferEntry[];
+}
+
+/**
+ * A part on its way INTO an envelope, or straight back out of one: live registry meta plus
+ * the document. `SavedPartEntry` (`projectDb`) is structurally one of these, so
+ * `partsStore.snapshotParts()` feeds {@link buildProjectExport} with no adapter.
+ */
+export interface ProjectPartSource {
+  name: string;
+  visible: boolean;
+  opacity: number;
+  offset: Vec3;
+  includeInExport: boolean;
+  part: EditingPart;
 }
 
 /** Counts surfaced after an additive import (for the success toast). */
@@ -195,18 +229,21 @@ function isDataOnlyMesh(m: CustomMesh): boolean {
 }
 
 /**
- * True when the project has custom assets that JSON export can't carry — uploaded textures,
- * primitive meshes, or IMPORTED glTF models (all binary-backed: their bytes live in IndexedDB,
- * never in the payload). Kitten part-meshes DON'T count: they're data-only references to game
- * assets and export fine.
+ * True when ANY of the project's parts has custom assets that JSON export can't carry —
+ * uploaded textures, primitive meshes, or IMPORTED glTF models (all binary-backed: their bytes
+ * live in IndexedDB, never in the payload). Kitten part-meshes DON'T count: they're data-only
+ * references to game assets and export fine.
  *
- * This is the gate the Export-Project and Share-Link dialogs disable themselves on, and it is
- * what keeps {@link buildProjectExport}'s kitten-only filter from ever being the only line of
- * defence: an imported mesh descriptor on the wire would decode into a SubPart pointing at an
- * `importId` the receiving browser has no geometry for — an invisible, unfixable placement.
+ * This is the gate the Share-Link dialog disables itself on, and it is what keeps
+ * {@link buildProjectExport}'s kitten-only filter from ever being the only line of defence: an
+ * imported mesh descriptor on the wire would decode into a SubPart pointing at an `importId`
+ * the receiving browser has no geometry for — an invisible, unfixable placement.
  */
-export function hasCustomAssets(part: EditingPart): boolean {
-  return part.customTextures.length > 0 || part.customMeshes.some((m) => !isDataOnlyMesh(m));
+export function hasCustomAssets(parts: readonly { readonly part: EditingPart }[]): boolean {
+  return parts.some(
+    ({ part }) =>
+      part.customTextures.length > 0 || part.customMeshes.some((m) => !isDataOnlyMesh(m)),
+  );
 }
 
 /** Options for {@link buildProjectExport}. */
@@ -218,17 +255,20 @@ export interface ProjectExportOptions {
    * data-only wire byte-identical to v1.
    */
   includeBinaryBacked?: boolean;
+  /** Which entry of `parts` was active at export time. Default 0 (the first part). */
+  activePartIndex?: number;
 }
 
 /**
- * Builds an export envelope. Deep-copies the in-scope fields and stamps provenance.
+ * Builds an export envelope over EVERY part handed in. Deep-copies each part's in-scope
+ * fields and stamps provenance.
  *
  * By default only kitten part-meshes ride in `customMeshes` and `customTextures` is empty —
  * everything else is binary-backed. With `includeBinaryBacked` the container has promised to
- * carry those bytes, so the descriptors go too.
+ * carry those bytes, so the descriptors go too. The gate is applied PER PART.
  */
 export function buildProjectExport(
-  part: EditingPart,
+  parts: readonly ProjectPartSource[],
   projectName: string,
   opts: ProjectExportOptions = {},
 ): ProjectExportEnvelope {
@@ -238,24 +278,35 @@ export function buildProjectExport(
     version: PROJECT_EXPORT_VERSION,
     exportedAt: Date.now(),
     projectName,
-    sourcePartId: part.partId,
-    data: structuredClone({
-      editorTags: part.editorTags,
-      gameData: part.gameData,
-      subPartGameData: part.subPartGameData,
-      layers: part.layers,
-      placements: part.placements,
-      connectors: part.connectors,
-      colliders: part.colliders,
-      ivaSeats: part.ivaSeats,
-      lights: part.lights,
-      internalFlags: part.internalFlags,
-      kittens: part.kittens,
-      animations: part.animations,
-      customMeshes: binary ? part.customMeshes : part.customMeshes.filter(isDataOnlyMesh),
-      customTextures: binary ? part.customTextures : [],
-      customMaterials: part.customMaterials,
-      customReactions: part.customReactions,
+    activePartIndex: opts.activePartIndex ?? 0,
+    parts: parts.map((entry) => {
+      const { part } = entry;
+      return {
+        name: entry.name,
+        sourcePartId: part.partId,
+        includeInExport: entry.includeInExport,
+        visible: entry.visible,
+        opacity: entry.opacity,
+        offset: { ...entry.offset },
+        data: structuredClone({
+          editorTags: part.editorTags,
+          gameData: part.gameData,
+          subPartGameData: part.subPartGameData,
+          layers: part.layers,
+          placements: part.placements,
+          connectors: part.connectors,
+          colliders: part.colliders,
+          ivaSeats: part.ivaSeats,
+          lights: part.lights,
+          internalFlags: part.internalFlags,
+          kittens: part.kittens,
+          animations: part.animations,
+          customMeshes: binary ? part.customMeshes : part.customMeshes.filter(isDataOnlyMesh),
+          customTextures: binary ? part.customTextures : [],
+          customMaterials: part.customMaterials,
+          customReactions: part.customReactions,
+        }),
+      };
     }),
   };
 }
@@ -316,9 +367,22 @@ export function parseProjectObject(raw: unknown, opts?: ProjectImportOptions): P
   // carry pre-rename keys that would decode silently wrong (no migration, per the
   // constitution), newer ones are unknown. Rejected, never converted.
   if (typeof raw.v !== 'number' || raw.v !== PROJECT_EXPORT_VERSION) {
-    return { ok: false, error: `Unsupported project version: ${JSON.stringify(raw.v)}.` };
+    return {
+      ok: false,
+      error: `This project uses format v${JSON.stringify(raw.v)}; this flexo reads v${PROJECT_EXPORT_VERSION}. flexo never converts formats — re-export it from a matching flexo version.`,
+    };
   }
-  return { ok: true, env: dropUnbackedAssets(decodeProject(raw), opts?.binaryAssets ?? null) };
+  const env = decodeProject(raw);
+  const table = opts?.binaryAssets ?? null;
+  // PER PART: each part's descriptors are checked against the container's table on their own,
+  // so an unbacked mesh in one part can never strip another part's content.
+  return {
+    ok: true,
+    env: {
+      ...env,
+      parts: env.parts.map((entry) => ({ ...entry, data: dropUnbackedAssets(entry.data, table) })),
+    },
+  };
 }
 
 /**
@@ -357,25 +421,25 @@ function meshBacking(mesh: CustomMesh): { kind: string; id: string } | 'none' | 
  * texture id nothing owns is exactly the "silently wrong" state the constitution rejects.
  */
 function dropUnbackedAssets(
-  env: ProjectExportEnvelope,
+  data: ProjectExportData,
   table: BackingAssetTable | null,
-): ProjectExportEnvelope {
+): ProjectExportData {
   const backs = (kind: string, id: string): boolean =>
     table != null && id !== '' && table.some((entry) => entry.kind === kind && entry.id === id);
 
-  const meshes = env.data.customMeshes.filter((mesh) => {
+  const meshes = data.customMeshes.filter((mesh) => {
     const backing = meshBacking(mesh);
     if (backing === 'unusable') return false;
     return backing === 'none' || backs(backing.kind, backing.id);
   });
-  const textures = env.data.customTextures.filter(
+  const textures = data.customTextures.filter(
     (t) => backs('tex-src', t.id) || backs('tex-ktx2', t.id),
   );
   if (
-    meshes.length === env.data.customMeshes.length &&
-    textures.length === env.data.customTextures.length
+    meshes.length === data.customMeshes.length &&
+    textures.length === data.customTextures.length
   ) {
-    return env;
+    return data;
   }
 
   const liveTextures = new Set(textures.map((t) => t.id));
@@ -386,7 +450,7 @@ function dropUnbackedAssets(
   // which is worse than the honest partial import (this completes the v1 rule, which dropped
   // only the descriptor).
   const deadTemplates = new Set(
-    env.data.customMeshes
+    data.customMeshes
       .filter((mesh) => !meshes.includes(mesh))
       .map((mesh) => mesh.subPartId)
       .filter(Boolean),
@@ -395,27 +459,22 @@ function dropUnbackedAssets(
     !templateId || !deadTemplates.has(templateId);
 
   return {
-    ...env,
-    data: {
-      ...env.data,
-      customMeshes: meshes.map((mesh) => ({
-        ...mesh,
-        faceTextures: Object.fromEntries(
-          Object.entries(mesh.faceTextures).filter(([, cfg]) => keepTexture(cfg?.textureId)),
-        ),
-      })),
-      customTextures: textures,
-      customMaterials: env.data.customMaterials.map((mat) =>
-        stripDeadTextureRefs(mat, keepTexture),
+    ...data,
+    customMeshes: meshes.map((mesh) => ({
+      ...mesh,
+      faceTextures: Object.fromEntries(
+        Object.entries(mesh.faceTextures).filter(([, cfg]) => keepTexture(cfg?.textureId)),
       ),
-      placements: env.data.placements.filter((p) => live(p.subPartTemplateId)),
-      colliders: env.data.colliders.filter((c) => live(c.ownerTemplateId)),
-      lights: env.data.lights.filter((l) => live(l.ownerTemplateId)),
-      subPartGameData: env.data.subPartGameData.filter((s) => live(s.subPartTemplateId)),
-      internalFlags: Object.fromEntries(
-        Object.entries(env.data.internalFlags).filter(([templateId]) => live(templateId)),
-      ),
-    },
+    })),
+    customTextures: textures,
+    customMaterials: data.customMaterials.map((mat) => stripDeadTextureRefs(mat, keepTexture)),
+    placements: data.placements.filter((p) => live(p.subPartTemplateId)),
+    colliders: data.colliders.filter((c) => live(c.ownerTemplateId)),
+    lights: data.lights.filter((l) => live(l.ownerTemplateId)),
+    subPartGameData: data.subPartGameData.filter((s) => live(s.subPartTemplateId)),
+    internalFlags: Object.fromEntries(
+      Object.entries(data.internalFlags).filter(([templateId]) => live(templateId)),
+    ),
   };
 }
 
@@ -444,16 +503,29 @@ function stripDeadTextureRefs(
 }
 
 /**
- * Faithfully reconstructs a standalone {@link EditingPart} from an export envelope —
- * NO id remapping (the payload's ids are already internally consistent). Used by the
- * share-link "load as a new project" path (see projectStore.loadSharedProject); the
- * paste-Import path uses {@link mergeProjectImport} instead, which merges additively.
- * Custom textures / primitive meshes are never carried, so they start empty.
+ * Faithfully reconstructs EVERY part of an export envelope — NO id remapping (each payload
+ * entry's ids are already internally consistent, and ids are per-part namespaces anyway, I3).
+ * Used by the "load as a new project" path (see projectStore.loadProjectAsNew); the
+ * paste-Import path uses {@link mergeProjectImport} instead, which merges one entry additively.
+ * Custom textures / primitive meshes are never carried by a data-only container, so they start
+ * empty there.
  */
-export function envelopeToPart(env: ProjectExportEnvelope): EditingPart {
-  const d = env.data;
+export function envelopeToParts(env: ProjectExportEnvelope): ProjectPartSource[] {
+  return env.parts.map((entry) => ({
+    name: entry.name,
+    visible: entry.visible,
+    opacity: entry.opacity,
+    offset: entry.offset,
+    includeInExport: entry.includeInExport,
+    part: entryToPart(entry),
+  }));
+}
+
+/** One envelope entry → its standalone {@link EditingPart}. */
+function entryToPart(entry: PartTransferEntry): EditingPart {
+  const d = entry.data;
   const part: EditingPart = {
-    partId: env.sourcePartId || DEFAULT_PART_ID,
+    partId: entry.sourcePartId || DEFAULT_PART_ID,
     editorTags: [...d.editorTags],
     gameData: d.gameData,
     subPartGameData: d.subPartGameData,
@@ -489,8 +561,11 @@ function ensureBuiltInLayers(part: EditingPart): void {
 }
 
 /**
- * Additively merges an export envelope into `current`, returning a fresh part plus a
- * summary. Imported entities get collision-free ids; every cross-reference (animation
+ * Additively merges ONE envelope entry into `current`, returning a fresh part plus a
+ * summary. This is the merge-into-ONE-part primitive and is deliberately not multi-part
+ * aware: a caller with an N-part envelope decides, per entry, what to merge where.
+ *
+ * Imported entities get collision-free ids; every cross-reference (animation
  * members, solar-tracking subparts, GameData couplings, and placements pointing at an
  * imported kitten custom mesh) is rewritten through the new ids. Layer mapping: each
  * source layer that holds meshes — INCLUDING the source's Default — becomes a NEW layer
@@ -500,18 +575,18 @@ function ensureBuiltInLayers(part: EditingPart): void {
  */
 export function mergeProjectImport(
   current: EditingPart,
-  env: ProjectExportEnvelope,
+  entry: PartTransferEntry,
   opts: { adoption?: AssetAdoption } = {},
 ): MergeResult {
   const part = structuredClone(current);
-  const { data } = env;
+  const { data } = entry;
   const adoption = opts.adoption ?? emptyAdoption();
 
   // Part Id: adopt the source's only when the destination still carries the placeholder
   // (i.e. importing into a fresh project) — so an Export→Import round-trip preserves it.
   // A destination that already has a real Part Id keeps it; additive paste never renames.
-  if ((!part.partId.trim() || part.partId === DEFAULT_PART_ID) && env.sourcePartId.trim()) {
-    part.partId = env.sourcePartId;
+  if ((!part.partId.trim() || part.partId === DEFAULT_PART_ID) && entry.sourcePartId.trim()) {
+    part.partId = entry.sourcePartId;
   }
 
   const instanceIdMap = new Map<string, string>();

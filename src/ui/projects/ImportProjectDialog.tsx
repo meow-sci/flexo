@@ -237,6 +237,9 @@ function ReviewView({ pending }: { pending: Pending }) {
   const [destination, setDestination] = useState<'merge' | 'new'>('merge');
 
   const env = pending.kind === 'archive' ? pending.parsed.envelope : pending.env;
+  // P2.06 (MULTI_PART_PLAN) replaces this preview with the manifest's per-part list and the
+  // three-way destination choice; until then it summarizes the envelope's FIRST part.
+  const data = env.parts[0].data;
   const assetBytes =
     pending.kind === 'archive'
       ? pending.parsed.assets.reduce((sum, asset) => sum + asset.bytes.length, 0)
@@ -248,13 +251,13 @@ function ReviewView({ pending }: { pending: Pending }) {
   const newName = uniqueProjectName(projectNameOf(pending));
 
   const counts: [string, number][] = [
-    ['SubParts', env.data.placements.length],
-    ['connectors', env.data.connectors.length],
-    ['colliders', env.data.colliders.length],
-    ['seats', env.data.ivaSeats.length],
-    ['lights', env.data.lights.length],
-    ['animations', env.data.animations.length],
-    ['layers', env.data.layers.length],
+    ['SubParts', data.placements.length],
+    ['connectors', data.connectors.length],
+    ['colliders', data.colliders.length],
+    ['seats', data.ivaSeats.length],
+    ['lights', data.lights.length],
+    ['animations', data.animations.length],
+    ['layers', data.layers.length],
   ];
 
   return (
@@ -347,7 +350,9 @@ function ImportingView({
           });
           finish(mode, result.name);
         } else if (mode === 'merge') {
-          const summary = importProjectData(pending.env);
+          // P2.06 (MULTI_PART_PLAN) makes this the 'merge-into-active' mode, gated on a
+          // single-part source; until then a pasted multi-part payload merges its first part.
+          const summary = importProjectData(pending.env.parts[0]);
           finish(mode, pending.env.projectName, summary.meshes);
         } else {
           const created = await loadProjectAsNew(pending.env);

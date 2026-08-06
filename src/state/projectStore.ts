@@ -25,7 +25,7 @@ import {
   DEFAULT_LAYER_ID,
 } from '../ksa/types';
 import type { EditingPart } from '../ksa/types';
-import { envelopeToPart, type ProjectExportEnvelope } from './projectTransfer';
+import { envelopeToParts, type ProjectExportEnvelope } from './projectTransfer';
 import { status } from './statusStore';
 import { notify } from './notificationStore';
 import {
@@ -851,10 +851,11 @@ export async function loadSharedProject(env: ProjectExportEnvelope): Promise<str
 }
 
 /**
- * Materializes an export envelope as a NEW saved project (design §4.3 "Open as new project",
- * §5 share-link boot). Faithful reconstruction — NO id remapping, built-in layers backfilled —
- * with a fresh project id and a unique name, saved and switched to. **Never an undo step**:
- * it arrives as a project, not as an edit.
+ * Materializes an export envelope — EVERY part it carries — as a NEW saved project (design
+ * §4.3 "Open as new project", §5 share-link boot). Faithful reconstruction — NO id remapping,
+ * built-in layers backfilled — with a fresh project id and a unique name, saved and switched
+ * to, the envelope's active part hydrated into the editor. **Never an undo step**: it arrives
+ * as a project, not as an edit.
  *
  * `adoptAssets` runs with the new project id BEFORE the document is published, so a
  * `.flexo.tar.gz` can write its blobs into the new namespace (ids unchanged — the namespace
@@ -869,33 +870,31 @@ export async function loadProjectAsNew(
     adoptAssets?: (id: ProjectId) => Promise<void>;
   } = {},
 ): Promise<{ id: ProjectId; name: string }> {
-  const part = envelopeToPart(env);
+  // Registry entry ids never travel, so every incoming part is minted a fresh one here. Layer
+  // view state doesn't travel either (it is per-project view state, not document data).
+  const entries: SavedPartEntry[] = envelopeToParts(env).map((entry) => ({
+    id: newPartEntryId(),
+    name: entry.name,
+    visible: entry.visible,
+    opacity: entry.opacity,
+    offset: entry.offset,
+    includeInExport: entry.includeInExport,
+    part: entry.part,
+    layerView: {},
+    activeLayerId: DEFAULT_LAYER_ID,
+  }));
+  // A parts-less envelope has nothing to open: the clamp below would land on -1. Every real
+  // producer guarantees at least one part, so this refuses rather than inventing one.
+  if (entries.length === 0) throw new Error('That project carries no parts.');
+  const active = entries[Math.min(Math.max(env.activePartIndex, 0), entries.length - 1)];
   const id = newProjectId();
   const name = uniqueProjectName(env.projectName.trim() || opts.fallbackName || 'Imported Project');
   if (opts.adoptAssets) await opts.adoptAssets(id);
   suspended = true;
   try {
-    // P2 (MULTI_PART_PLAN) replaces this with the multi-part envelope — the wire format is
-    // still single-part, so the incoming document lands as the project's one part entry.
-    const entryId = newPartEntryId();
-    hydrateParts(
-      [
-        {
-          id: entryId,
-          name: 'Part 1',
-          visible: true,
-          opacity: 1,
-          offset: { x: 0, y: 0, z: 0 },
-          includeInExport: true,
-          part,
-          layerView: {},
-          activeLayerId: DEFAULT_LAYER_ID,
-        },
-      ],
-      entryId,
-    );
+    hydrateParts(entries, active.id);
     importHistory({ undo: [], redo: [] });
-    $part.set(part);
+    $part.set(active.part);
     $activeLayerId.set(DEFAULT_LAYER_ID);
     $layerView.set({});
     $measurements.set([]);

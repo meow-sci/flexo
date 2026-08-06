@@ -153,6 +153,17 @@ export function snapshotParts(): SavedPartEntry[] {
 }
 
 /**
+ * The reactive form of {@link snapshotParts} for React surfaces. `snapshotParts()` takes no
+ * arguments and reads module-mutable state, so a component that calls it in a render body gets
+ * memoized against a dependency the React Compiler cannot see — the result is computed once and
+ * then never refreshed. Subscribe to this instead; it lists every store the snapshot reads from.
+ */
+export const $partsSnapshot = computed(
+  [$partEntries, $activePartId, $inactiveRevision, $part, $layerView, $activeLayerId],
+  () => snapshotParts(),
+);
+
+/**
  * Rebuilds the whole registry from a loaded snapshot: REPLACES both module maps, fills
  * `$partEntries` (counts derived), parks every non-active entry's document and points
  * `$activePartId` at `activeId`. The ACTIVE entry's document is NOT hydrated here — the caller
@@ -305,6 +316,51 @@ export function createPart(name?: string): string {
   closeChain();
   bumpInactiveRevision();
   return id;
+}
+
+/**
+ * Appends imported parts to the registry, each already merged into its own document. Names are
+ * kept when free and suffixed (" 2", " 3", …) when taken — the {@link renamePart} rule, applied
+ * across the batch too. Fresh entry ids (registry ids never travel), counts derived, docs parked
+ * as inactive.
+ *
+ * Deliberately does NOT switch: the caller decides where the user lands. Returns the new ids in
+ * the order they were added.
+ */
+export function addImportedParts(
+  entries: readonly {
+    name: string;
+    visible: boolean;
+    opacity: number;
+    offset: Vec3;
+    includeInExport: boolean;
+    doc: InactivePartDoc;
+  }[],
+): string[] {
+  const taken = new Set($partEntries.get().map((entry) => entry.name));
+  const added: PartMetaEntry[] = [];
+  const ids: string[] = [];
+  for (const entry of entries) {
+    const id = newPartEntryId();
+    const base = entry.name.trim() || 'Part';
+    let name = base;
+    for (let n = 2; taken.has(name); n++) name = `${base} ${n}`;
+    taken.add(name);
+    inactiveDocs.set(id, entry.doc);
+    added.push({
+      id,
+      name,
+      visible: entry.visible,
+      opacity: entry.opacity,
+      offset: entry.offset,
+      includeInExport: entry.includeInExport,
+      counts: deriveCounts(entry.doc.part),
+    });
+    ids.push(id);
+  }
+  $partEntries.set([...$partEntries.get(), ...added]);
+  bumpInactiveRevision();
+  return ids;
 }
 
 /**

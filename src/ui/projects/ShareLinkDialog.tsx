@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { Button, Dialog, DialogHeader, Modal, dangerBox, noteBox } from '../kit';
-import { $part } from '../../state/editorStore';
+import { $activePartId, $partsSnapshot } from '../../state/partsStore';
 import { $currentProjectId, $projectIndex } from '../../state/projectIndexStore';
 import { flushAutosave } from '../../state/projectStore';
-import { getSnapshot } from '../../state/projectDb';
+import { getSnapshot, type SavedPartEntry } from '../../state/projectDb';
 import { hasCustomAssets } from '../../state/projectTransfer';
 import { createShareLink } from '../../state/projectShareLink';
 import { openDialog } from '../../state/dialogStore';
-import type { EditingPart } from '../../ksa/types';
 
 /**
  * **Share Link…** (dialog id `'share-link'`, size M — design:
@@ -59,36 +58,45 @@ export function ShareLinkDialog({
 const LONG_LINK_CHARS = 8000;
 
 function ShareBody({ projectId, onClose }: { projectId?: string; onClose: () => void }) {
-  const currentPart = useStore($part);
   const currentId = useStore($currentProjectId);
   const index = useStore($projectIndex);
   const id = projectId || currentId;
   const isCurrent = id === currentId;
   const meta = index.find((row) => row.id === id) ?? null;
 
+  const live = useStore($partsSnapshot);
+  const activePartId = useStore($activePartId);
+
   /** For a non-current project the source is the STORED snapshot, loaded once (§5). */
-  const [stored, setStored] = useState<EditingPart | null>(null);
+  const [stored, setStored] = useState<{ parts: SavedPartEntry[]; activeIndex: number } | null>(
+    null,
+  );
   const [loadError, setLoadError] = useState<string | null>(null);
   useEffect(() => {
     if (isCurrent) return;
-    let live = true;
+    let alive = true;
     void getSnapshot(id)
       .then((snapshot) => {
-        if (!live) return;
-        // P2 (MULTI_PART_PLAN) replaces this with the multi-part envelope — a share link is
-        // still single-part, so the stored project's ACTIVE part is what travels.
-        const active =
-          snapshot?.parts.find((p) => p.id === snapshot.activePartId) ?? snapshot?.parts[0];
-        if (active) setStored(active.part);
-        else setLoadError('That project could not be read from storage.');
+        if (!alive) return;
+        if (snapshot && snapshot.parts.length > 0) {
+          const activeIndex = snapshot.parts.findIndex((p) => p.id === snapshot.activePartId);
+          setStored({ parts: snapshot.parts, activeIndex: Math.max(activeIndex, 0) });
+        } else setLoadError('That project could not be read from storage.');
       })
-      .catch((err) => live && setLoadError(String(err)));
+      .catch((err) => alive && setLoadError(String(err)));
     return () => {
-      live = false;
+      alive = false;
     };
   }, [id, isCurrent]);
 
-  const part = isCurrent ? currentPart : stored;
+  // Every part travels — a share is a project transfer, not a KSA export (P2.03).
+  const parts = isCurrent ? live : stored?.parts;
+  const activeIndex = isCurrent
+    ? Math.max(
+        (parts ?? []).findIndex((entry) => entry.id === activePartId),
+        0,
+      )
+    : (stored?.activeIndex ?? 0);
   const name = meta?.name ?? 'Project';
 
   const [link, setLink] = useState<string | null>(null);
@@ -97,7 +105,7 @@ function ShareBody({ projectId, onClose }: { projectId?: string; onClose: () => 
   const [copied, setCopied] = useState(false);
 
   const generate = async () => {
-    if (!part) return;
+    if (!parts) return;
     setBusy(true);
     setError(null);
     setCopied(false);
@@ -105,7 +113,7 @@ function ShareBody({ projectId, onClose }: { projectId?: string; onClose: () => 
       // The current project's link must describe what is on screen, so pending autosave is
       // flushed first — the snapshot and the document then agree.
       if (isCurrent) await flushAutosave();
-      setLink(await createShareLink(part, name));
+      setLink(await createShareLink(parts, name, activeIndex));
     } catch (err) {
       setError(`Could not build link: ${(err as Error).message}`);
     } finally {
@@ -129,10 +137,10 @@ function ShareBody({ projectId, onClose }: { projectId?: string; onClose: () => 
       <div className="flex flex-col gap-3 overflow-auto p-4">
         {loadError && <div className={dangerBox}>{loadError}</div>}
 
-        {part && hasCustomAssets(part) ? (
-          <WithAssetsExplainer part={part} projectId={id} onClose={onClose} />
+        {parts && hasCustomAssets(parts) ? (
+          <WithAssetsExplainer parts={parts} projectId={id} onClose={onClose} />
         ) : (
-          part && (
+          parts && (
             <>
               <p className="text-xs leading-snug text-fg-subtle">
                 Generate a self-contained link to this project. Anyone who opens it gets a copy as a
@@ -194,16 +202,20 @@ function ShareBody({ projectId, onClose }: { projectId?: string; onClose: () => 
 
 /** The D10 state: enabled, explained, and pointed at the container that CAN carry bytes. */
 function WithAssetsExplainer({
-  part,
+  parts,
   projectId,
   onClose,
 }: {
-  part: EditingPart;
+  parts: readonly SavedPartEntry[];
   projectId: string;
   onClose: () => void;
 }) {
-  const textures = part.customTextures.length;
-  const meshes = part.customMeshes.filter((mesh) => !mesh.kitten).length;
+  // Counted across every part — assets are per-part (D1), the blocker is project-wide.
+  const textures = parts.reduce((sum, entry) => sum + entry.part.customTextures.length, 0);
+  const meshes = parts.reduce(
+    (sum, entry) => sum + entry.part.customMeshes.filter((mesh) => !mesh.kitten).length,
+    0,
+  );
   const summary = [
     textures > 0 ? `${textures} texture${textures === 1 ? '' : 's'}` : '',
     meshes > 0 ? `${meshes} mesh${meshes === 1 ? '' : 'es'}` : '',

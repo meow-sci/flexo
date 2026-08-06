@@ -263,7 +263,7 @@ top of it.
 {
   "format": "flexo-project-archive",
   "archiveVersion": 1,        // container LAYOUT version (exact-match)
-  "exportVersion": 10,        // PROJECT_EXPORT_VERSION of project.json (exact-match)
+  "exportVersion": 11,        // PROJECT_EXPORT_VERSION of project.json (exact-match)
   "name": "Rover-7", "description": "…",
   "savedAt": 1754300000000, "appBuildId": "abc123",
   "counts": { …ProjectMeta.counts… },
@@ -327,7 +327,7 @@ The wire carries descriptors; `assetDb` carries bytes. So whether a descriptor m
 | imported glTF mesh | its `import-glb` batch blob — the only copy in existence |
 | uploaded texture | its `tex-src` pixels (`tex-ktx2` is a re-encodable cache) |
 
-`buildProjectExport(part, name, {includeBinaryBacked: true})` is the archive's opt-in; without
+`buildProjectExport(parts, name, {includeBinaryBacked: true})` is the archive's opt-in; without
 it the wire stays exactly what v1 produced (kitten meshes only, no textures). On the way back
 in, `parseProjectImport(text, {binaryAssets})` keeps precisely the descriptors the table backs
 and **drops the rest along with everything that referenced them** — the placements of a dropped
@@ -342,7 +342,7 @@ link. It encodes `EditingPart` into short keys (`p` placements, `c` connectors, 
 `m` custom meshes, …), omitting anything empty or at its default. (The stored snapshot is plain
 structured-cloneable data in IndexedDB and does not go through the codec.)
 
-`PROJECT_EXPORT_VERSION` is currently **10** (`<Light>` layer id: `CLight.ly` — optional,
+`PROJECT_EXPORT_VERSION` is currently **11** (`<Light>` layer id: `CLight.ly` — optional,
 absent meaning the old pinned Lights layer — became a **required** `CLight.l` naming ANY
 ordinary layer, now that lights are ordinary layer citizens like connectors and colliders; a
 v9 payload's lights would decode onto a layer id that no longer carries that meaning). The

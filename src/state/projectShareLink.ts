@@ -1,4 +1,3 @@
-import type { EditingPart } from '../ksa/types';
 import { compressZstd, decompressZstd } from '../ktx/zstd';
 import { base64UrlToBytes, bytesToBase64Url } from '../util/base64url';
 import {
@@ -6,19 +5,25 @@ import {
   parseProjectImport,
   serializeProjectJson,
   type ParseResult,
+  type ProjectPartSource,
 } from './projectTransfer';
 
 /**
  * STATELESS SHARE LINKS — encodes an entire project into a single URL so it can be
  * shared with no server/storage. The pipeline:
  *
- *   EditingPart → compact JSON (projectCodec, short keys + dropped defaults)
+ *   every part (partsStore.snapshotParts())
+ *               → compact JSON (projectCodec, short keys + dropped defaults)
  *               → Zstd compress (the JSON is highly repetitive → big win)
  *               → URL-safe Base64 → `?load=<payload>`
  *
  * and the exact reverse on load. Compression + the compact codec together keep even
  * fairly large projects inside a practical URL length. Loading a link is handled at
  * boot (main.tsx) → projectStore.loadSharedProject, which opens it as a NEW project.
+ *
+ * **ALL parts travel, including the ones excluded from KSA export**: a share is a transfer of
+ * the whole project, not a KSA export, so `includeInExport` rides along as data rather than
+ * filtering anything out.
  */
 
 /** The query-string parameter that carries a shared project payload. */
@@ -32,8 +37,12 @@ export const SHARE_PARAM = 'load';
 const SHARE_ZSTD_LEVEL = 19;
 
 /** Encodes an export envelope's worth of project state into a `?load=` payload string. */
-export async function encodeSharePayload(part: EditingPart, projectName: string): Promise<string> {
-  const json = serializeProjectJson(buildProjectExport(part, projectName));
+export async function encodeSharePayload(
+  parts: readonly ProjectPartSource[],
+  projectName: string,
+  activePartIndex = 0,
+): Promise<string> {
+  const json = serializeProjectJson(buildProjectExport(parts, projectName, { activePartIndex }));
   const bytes = new TextEncoder().encode(json);
   const compressed = await compressZstd(bytes, SHARE_ZSTD_LEVEL);
   return bytesToBase64Url(compressed);
@@ -58,9 +67,13 @@ export function buildShareUrl(payload: string): string {
   return `${window.location.origin}${base}?${SHARE_PARAM}=${payload}`;
 }
 
-/** Convenience: the full shareable URL for the current project state. */
-export async function createShareLink(part: EditingPart, projectName: string): Promise<string> {
-  return buildShareUrl(await encodeSharePayload(part, projectName));
+/** Convenience: the full shareable URL for a project's parts. */
+export async function createShareLink(
+  parts: readonly ProjectPartSource[],
+  projectName: string,
+  activePartIndex = 0,
+): Promise<string> {
+  return buildShareUrl(await encodeSharePayload(parts, projectName, activePartIndex));
 }
 
 /** Reads the `?load=` payload from the current URL, or null when absent. */

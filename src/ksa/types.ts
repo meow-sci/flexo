@@ -2272,7 +2272,7 @@ export interface EditingPart {
  * connectors, colliders, lights) whose `layerId` names a layer that is NOT in
  * `part.layers` onto {@link DEFAULT_LAYER_ID}. Pure, and returns `part` itself when every
  * reference already resolves. Called on the two load boundaries — `normalizePart`
- * (stored project snapshots + every undo/redo history entry) and `envelopeToPart`
+ * (stored project snapshots + every undo/redo history entry) and `envelopeToParts`
  * (share links / archives opened as a new project).
  *
  * **This is a repair, not a migration, and deliberately not version-gated.** It never

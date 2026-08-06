@@ -16,13 +16,50 @@ import {
   PROJECT_EXPORT_FORMAT,
   PROJECT_EXPORT_VERSION,
   buildProjectExport,
-  envelopeToPart,
+  envelopeToParts,
   hasCustomAssets,
   mergeProjectImport,
   parseProjectImport,
   serializeProjectJson,
+  type PartTransferEntry,
+  type ProjectExportEnvelope,
+  type ProjectExportOptions,
 } from './projectTransfer';
 import { $part, exportHistory, importHistory, importProjectData, undo } from './editorStore';
+
+/**
+ * The envelope is multi-part since v11. These cases exercise ONE part, so they build a
+ * one-entry envelope — `oneEntry` is that entry, which is what the merge-into-one-part
+ * primitive takes, and `oneEnv` the envelope around it.
+ */
+function oneEnv(
+  part: EditingPart,
+  projectName: string,
+  opts?: ProjectExportOptions,
+): ProjectExportEnvelope {
+  return buildProjectExport(
+    [
+      {
+        name: 'Part 1',
+        visible: true,
+        opacity: 1,
+        offset: { x: 0, y: 0, z: 0 },
+        includeInExport: true,
+        part,
+      },
+    ],
+    projectName,
+    opts,
+  );
+}
+
+function oneEntry(
+  part: EditingPart,
+  projectName: string,
+  opts?: ProjectExportOptions,
+): PartTransferEntry {
+  return oneEnv(part, projectName, opts).parts[0];
+}
 
 /** A transform with all three components set to `n` (scale defaults to 1). */
 function t(n = 0, scale = 1) {
@@ -164,22 +201,23 @@ describe('buildProjectExport', () => {
     const src = sourcePart();
     src.customTextures.push({ id: 'tex_1', name: 'T', width: 4, height: 4, channel: 'baseColor' });
     src.customMeshes.push(primitiveMesh(), kittenMesh());
-    const env = buildProjectExport(src, 'MyShip');
+    const env = oneEnv(src, 'MyShip');
     expect(env.format).toBe(PROJECT_EXPORT_FORMAT);
     expect(env.version).toBe(PROJECT_EXPORT_VERSION);
     expect(env.projectName).toBe('MyShip');
-    expect(env.sourcePartId).toBe('source_part');
+    expect(env.parts).toHaveLength(1);
+    expect(env.parts[0].sourcePartId).toBe('source_part');
     // Only the kitten mesh is carried; the primitive is dropped; textures never exported.
-    expect(env.data.customMeshes).toHaveLength(1);
-    expect(env.data.customMeshes[0].subPartId).toBe('flexo_hunter_suit_abc');
-    expect(env.data.customTextures).toEqual([]);
+    expect(env.parts[0].data.customMeshes).toHaveLength(1);
+    expect(env.parts[0].data.customMeshes[0].subPartId).toBe('flexo_hunter_suit_abc');
+    expect(env.parts[0].data.customTextures).toEqual([]);
   });
 
   it('carries binary-backed meshes + textures when the container opts in', () => {
     const src = sourcePart();
     src.customTextures.push({ id: 'tex_1', name: 'T', width: 4, height: 4, channel: 'baseColor' });
     src.customMeshes.push(primitiveMesh(), kittenMesh());
-    const env = buildProjectExport(src, 'MyShip', { includeBinaryBacked: true });
+    const env = oneEntry(src, 'MyShip', { includeBinaryBacked: true });
     expect(env.data.customMeshes).toHaveLength(2);
     expect(env.data.customTextures.map((t) => t.id)).toEqual(['tex_1']);
   });
@@ -193,7 +231,7 @@ describe('buildProjectExport', () => {
       metalness: { kind: 'value', value: 1 },
       roughness: { kind: 'value', value: 0.15 },
     });
-    const env = buildProjectExport(src, 'MyShip');
+    const env = oneEntry(src, 'MyShip');
     expect(env.data.customMaterials).toHaveLength(1);
     expect(env.data.customMaterials[0].name).toBe('Red Metal');
   });
@@ -209,7 +247,7 @@ describe('mergeProjectImport with custom materials', () => {
       metalness: { kind: 'value', value: 1 },
       roughness: { kind: 'value', value: 0.15 },
     });
-    const env = buildProjectExport(src, 'Src');
+    const env = oneEntry(src, 'Src');
     const once = mergeProjectImport(createEmptyPart(), env);
     expect(once.part.customMaterials).toHaveLength(1);
     const twice = mergeProjectImport(once.part, env);
@@ -219,7 +257,7 @@ describe('mergeProjectImport with custom materials', () => {
 
 describe('hasCustomAssets', () => {
   it('flags uploaded textures and primitive meshes, but not kitten meshes', () => {
-    expect(hasCustomAssets(createEmptyPart())).toBe(false);
+    expect(hasCustomAssets([{ part: createEmptyPart() }])).toBe(false);
 
     const withTex = createEmptyPart();
     withTex.customTextures.push({
@@ -229,15 +267,15 @@ describe('hasCustomAssets', () => {
       height: 1,
       channel: 'baseColor',
     });
-    expect(hasCustomAssets(withTex)).toBe(true);
+    expect(hasCustomAssets([{ part: withTex }])).toBe(true);
 
     const withPrimitive = createEmptyPart();
     withPrimitive.customMeshes.push(primitiveMesh());
-    expect(hasCustomAssets(withPrimitive)).toBe(true);
+    expect(hasCustomAssets([{ part: withPrimitive }])).toBe(true);
 
     const withKitten = createEmptyPart();
     withKitten.customMeshes.push(kittenMesh());
-    expect(hasCustomAssets(withKitten)).toBe(false);
+    expect(hasCustomAssets([{ part: withKitten }])).toBe(false);
   });
 
   // An imported model's geometry is a GLB in IndexedDB — nothing in the JSON could rebuild it,
@@ -245,11 +283,11 @@ describe('hasCustomAssets', () => {
   it('flags imported glTF meshes and keeps them out of the payload', () => {
     const part = createEmptyPart();
     part.customMeshes.push(importedMesh());
-    expect(hasCustomAssets(part)).toBe(true);
-    expect(buildProjectExport(part, 'P').data.customMeshes).toEqual([]);
+    expect(hasCustomAssets([{ part }])).toBe(true);
+    expect(oneEntry(part, 'P').data.customMeshes).toEqual([]);
 
     // Even a hand-edited payload that smuggles one in is dropped by the merge.
-    const env = buildProjectExport(createEmptyPart(), 'P');
+    const env = oneEntry(createEmptyPart(), 'P');
     env.data.customMeshes = [importedMesh()];
     const merged = mergeProjectImport(createEmptyPart(), env);
     expect(merged.part.customMeshes).toEqual([]);
@@ -301,32 +339,32 @@ describe('archive imports (binary-backed assets)', () => {
     { kind: 'import-glb', id: 'imp_1' },
   ];
 
-  function archiveEnvelope() {
+  function archiveEnvelope(): PartTransferEntry {
     const json = serializeProjectJson(
-      buildProjectExport(binarySource(), 'Arch', { includeBinaryBacked: true }),
+      oneEnv(binarySource(), 'Arch', { includeBinaryBacked: true }),
     );
     const parsed = parseProjectImport(json, { binaryAssets: TABLE });
     if (!parsed.ok) throw new Error(parsed.error);
-    return parsed.env;
+    return parsed.env.parts[0];
   }
 
   it('drops what needs bytes the container has not brought', () => {
     const json = serializeProjectJson(
-      buildProjectExport(binarySource(), 'Arch', { includeBinaryBacked: true }),
+      oneEnv(binarySource(), 'Arch', { includeBinaryBacked: true }),
     );
     const parsed = parseProjectImport(json, { binaryAssets: null });
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) return;
     // The IMPORTED mesh's GLB is its only copy, so it goes — with its placement, which would
     // otherwise name a template nothing owns.
-    expect(parsed.env.data.customMeshes.map((m) => m.id)).toEqual(['mesh_1']);
-    expect(parsed.env.data.placements.map((p) => p.subPartTemplateId)).toEqual(['sp_1']);
+    expect(parsed.env.parts[0].data.customMeshes.map((m) => m.id)).toEqual(['mesh_1']);
+    expect(parsed.env.parts[0].data.placements.map((p) => p.subPartTemplateId)).toEqual(['sp_1']);
     // Textures are pixels and nothing else; without them the primitive survives untextured
     // (it rebuilds from its PrimitiveSpec) and every reference to the dropped texture is
     // reset rather than left dangling.
-    expect(parsed.env.data.customTextures).toEqual([]);
-    expect(parsed.env.data.customMeshes[0].faceTextures).toEqual({});
-    expect(parsed.env.data.customMaterials[0].baseColor.kind).toBe('color');
+    expect(parsed.env.parts[0].data.customTextures).toEqual([]);
+    expect(parsed.env.parts[0].data.customMeshes[0].faceTextures).toEqual({});
+    expect(parsed.env.parts[0].data.customMaterials[0].baseColor.kind).toBe('color');
   });
 
   it('keeps them when the table backs them, with fresh ids everywhere', () => {
@@ -437,7 +475,7 @@ describe('mergeProjectImport with a kitten mesh', () => {
   }
 
   it('restores the kitten mesh under a fresh subPartId and repoints its placement', () => {
-    const env = buildProjectExport(kittenSource(), 'K');
+    const env = oneEntry(kittenSource(), 'K');
     const { part } = mergeProjectImport(createEmptyPart(), env);
     expect(part.customMeshes).toHaveLength(1);
     const mesh = part.customMeshes[0];
@@ -452,7 +490,7 @@ describe('mergeProjectImport with a kitten mesh', () => {
   });
 
   it('duplicates the kitten mesh under another fresh id on a second import (additive)', () => {
-    const env = buildProjectExport(kittenSource(), 'K');
+    const env = oneEntry(kittenSource(), 'K');
     const once = mergeProjectImport(createEmptyPart(), env).part;
     const twice = mergeProjectImport(once, env).part;
     const ids = twice.customMeshes.map((m) => m.subPartId);
@@ -467,7 +505,7 @@ describe('mergeProjectImport with a kitten mesh', () => {
 });
 
 describe('mergeProjectImport into an empty project', () => {
-  const env = buildProjectExport(sourcePart(), 'MyShip');
+  const env = oneEntry(sourcePart(), 'MyShip');
   const { part, summary, newLayerIds } = mergeProjectImport(createEmptyPart(), env);
 
   it('appends all meshes, connectors, kittens, and the animation', () => {
@@ -545,7 +583,7 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
     dest.gameData.displayName = 'Existing';
     dest.gameData.customMass = 99;
 
-    const env = buildProjectExport(sourcePart(), 'MyShip');
+    const env = oneEntry(sourcePart(), 'MyShip');
     const { part } = mergeProjectImport(dest, env);
 
     // A destination with a real Part Id keeps it (additive paste never renames).
@@ -596,7 +634,7 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
       layerId: DEFAULT_LAYER_ID,
       ...t(0),
     });
-    const { part } = mergeProjectImport(dest, buildProjectExport(src, 'X'));
+    const { part } = mergeProjectImport(dest, oneEntry(src, 'X'));
     // The imported _connector1 renumbered to _connector2; the Aligned ref follows it.
     expect(part.connectors.map((c) => c.id)).toEqual(['_connector1', '_connector2']);
     expect(part.gameData.unknownChildren).toEqual([
@@ -659,7 +697,7 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
       ...t(0),
     });
 
-    const { part } = mergeProjectImport(dest, buildProjectExport(src, 'X'));
+    const { part } = mergeProjectImport(dest, oneEntry(src, 'X'));
     const newConnectorId = part.connectors[1].id;
     const newWingId = part.placements.find(
       (p) => p.subPartTemplateId === 'Core.Wing' && p.instanceId !== 'wing_1',
@@ -690,7 +728,7 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
   it('skips a coupling whose connector was not imported', () => {
     const src = sourcePart();
     src.connectors = []; // decoupler still references the (now absent) _connector1
-    const env = buildProjectExport(src, 'X');
+    const env = oneEntry(src, 'X');
     const { part } = mergeProjectImport(createEmptyPart(), env);
     expect(part.gameData.decoupler).toBeNull();
   });
@@ -698,7 +736,7 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
   it('drops solar-tracking when its drive subpart is dangling', () => {
     const src = sourcePart();
     src.animations[0].solarTracking!.subPartInstanceId = 'ghost_99';
-    const env = buildProjectExport(src, 'X');
+    const env = oneEntry(src, 'X');
     const { part } = mergeProjectImport(createEmptyPart(), env);
     expect(part.animations[0].solarTracking).toBeNull();
   });
@@ -706,7 +744,7 @@ describe('mergeProjectImport into a non-empty project (remapping)', () => {
 
 describe('parseProjectImport', () => {
   it('accepts a well-formed compact project', () => {
-    const json = serializeProjectJson(buildProjectExport(sourcePart(), 'X'));
+    const json = serializeProjectJson(oneEnv(sourcePart(), 'X'));
     const result = parseProjectImport(json);
     expect(result.ok).toBe(true);
   });
@@ -733,20 +771,22 @@ describe('parseProjectImport', () => {
     );
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.env.data.editorTags).toEqual([]);
-      expect(result.env.data.layers).toEqual([]);
-      expect(result.env.data.placements).toEqual([]);
-      expect(result.env.data.subPartGameData).toEqual([]);
-      expect(result.env.data.customMeshes).toEqual([]);
-      expect(result.env.data.gameData.customMass).toBeNull();
+      // A payload with no `pts` still decodes to the one part a project always has.
+      expect(result.env.parts).toHaveLength(1);
+      expect(result.env.parts[0].data.editorTags).toEqual([]);
+      expect(result.env.parts[0].data.layers).toEqual([]);
+      expect(result.env.parts[0].data.placements).toEqual([]);
+      expect(result.env.parts[0].data.subPartGameData).toEqual([]);
+      expect(result.env.parts[0].data.customMeshes).toEqual([]);
+      expect(result.env.parts[0].data.gameData.customMass).toBeNull();
     }
   });
 });
 
-describe('envelopeToPart', () => {
+describe('envelopeToParts', () => {
   it('faithfully reconstructs a standalone part (no id remapping) with built-in layers', () => {
-    const env = buildProjectExport(sourcePart(), 'MyShip');
-    const part = envelopeToPart(env);
+    const env = oneEnv(sourcePart(), 'MyShip');
+    const part = envelopeToParts(env)[0].part;
     expect(part.partId).toBe('source_part');
     // Ids preserved verbatim — unlike the additive merge, nothing is regenerated.
     expect(part.placements.map((p) => p.instanceId)).toEqual([
@@ -778,11 +818,11 @@ describe('envelopeToPart', () => {
       { ...createPartLight(null, '_light1'), layerId: 'layer1' },
       { ...createPartLight(null, '_light2'), layerId: 'layer2' },
     );
-    const env = buildProjectExport(src, 'S');
+    const env = oneEnv(src, 'S');
     // A hand-edited / foreign payload: the entities name a layer it never carried.
-    env.data.layers = env.data.layers.filter((l) => l.id !== 'layer1');
+    env.parts[0].data.layers = env.parts[0].data.layers.filter((l) => l.id !== 'layer1');
 
-    const part = envelopeToPart(env);
+    const part = envelopeToParts(env)[0].part;
     expect(part.placements[0].layerId).toBe(DEFAULT_LAYER_ID);
     expect(part.lights[0].layerId).toBe(DEFAULT_LAYER_ID);
     // The light on the layer that DID survive keeps it — only broken references are touched.
@@ -809,7 +849,7 @@ describe('collider merge', () => {
       layerId: DEFAULT_LAYER_ID,
     });
 
-    const { part, summary } = mergeProjectImport(dest, buildProjectExport(src, 'S'));
+    const { part, summary } = mergeProjectImport(dest, oneEntry(src, 'S'));
     expect(part.colliders.map((c) => c.id)).toEqual(['_collider1', '_collider2']);
     expect(part.colliders[1].shape).toBe('Cylinder');
     expect(part.colliders[1].position).toEqual({ x: 0.5, y: 0.5, z: 0.5 });
@@ -838,7 +878,7 @@ describe('collider merge', () => {
       layerId: 'layer1',
     });
 
-    const { part } = mergeProjectImport(createEmptyPart(), buildProjectExport(src, 'S'));
+    const { part } = mergeProjectImport(createEmptyPart(), oneEntry(src, 'S'));
     expect(part.colliders[0].layerId).toBe(part.placements[0].layerId);
     expect(part.layers.find((l) => l.id === part.colliders[0].layerId)?.name).toBe('Engines');
   });
@@ -852,14 +892,14 @@ describe('collider merge', () => {
       ...identityTransform(),
       layerId: DEFAULT_LAYER_ID,
     });
-    const { part } = mergeProjectImport(createEmptyPart(), buildProjectExport(src, 'S'));
+    const { part } = mergeProjectImport(createEmptyPart(), oneEntry(src, 'S'));
     expect(part.colliders[0].ownerTemplateId).toBe('CoreLandingA_Subpart_MediumFootA');
   });
 
   it('restores a built-in layer when a payload omits it', () => {
-    const env = buildProjectExport(createEmptyPart(), 'S');
-    env.data.layers = env.data.layers.filter((l) => l.id !== IVA_SEAT_LAYER_ID);
-    expect(envelopeToPart(env).layers.map((l) => l.id)).toContain(IVA_SEAT_LAYER_ID);
+    const env = oneEnv(createEmptyPart(), 'S');
+    env.parts[0].data.layers = env.parts[0].data.layers.filter((l) => l.id !== IVA_SEAT_LAYER_ID);
+    expect(envelopeToParts(env)[0].part.layers.map((l) => l.id)).toContain(IVA_SEAT_LAYER_ID);
   });
 });
 
@@ -872,15 +912,15 @@ describe('IVA seat transfer', () => {
   it('carries seats through buildProjectExport in document order', () => {
     const src = createEmptyPart();
     src.ivaSeats.push(seat('_seat1'), seat('_seat2', 0.5));
-    const env = buildProjectExport(src, 'S');
+    const env = oneEntry(src, 'S');
     expect(env.data.ivaSeats.map((s) => s.id)).toEqual(['_seat1', '_seat2']);
     expect(env.data.ivaSeats[1].position).toEqual({ x: 0.5, y: 0.5, z: 0.5 });
   });
 
-  it('envelopeToPart restores seats verbatim with the IVA Seats layer present', () => {
+  it('envelopeToParts restores seats verbatim with the IVA Seats layer present', () => {
     const src = createEmptyPart();
     src.ivaSeats.push(seat('_seat1'), seat('_seat2', 0.25));
-    const part = envelopeToPart(buildProjectExport(src, 'S'));
+    const part = envelopeToParts(oneEnv(src, 'S'))[0].part;
     // No id remapping on this path — the payload's ids are already consistent.
     expect(part.ivaSeats.map((s) => s.id)).toEqual(['_seat1', '_seat2']);
     expect(part.ivaSeats.every((s) => s.layerId === IVA_SEAT_LAYER_ID)).toBe(true);
@@ -888,9 +928,9 @@ describe('IVA seat transfer', () => {
   });
 
   it('restores the IVA Seats layer when a payload omits it', () => {
-    const env = buildProjectExport(createEmptyPart(), 'S');
-    env.data.layers = env.data.layers.filter((l) => l.id !== IVA_SEAT_LAYER_ID);
-    expect(envelopeToPart(env).layers.map((l) => l.id)).toContain(IVA_SEAT_LAYER_ID);
+    const env = oneEnv(createEmptyPart(), 'S');
+    env.parts[0].data.layers = env.parts[0].data.layers.filter((l) => l.id !== IVA_SEAT_LAYER_ID);
+    expect(envelopeToParts(env)[0].part.layers.map((l) => l.id)).toContain(IVA_SEAT_LAYER_ID);
   });
 
   it('appends pasted seats with fresh _seatN ids AFTER the existing ones', () => {
@@ -899,7 +939,7 @@ describe('IVA seat transfer', () => {
     const dest = createEmptyPart();
     dest.ivaSeats.push(seat('_seat1'));
 
-    const { part, summary } = mergeProjectImport(dest, buildProjectExport(src, 'S'));
+    const { part, summary } = mergeProjectImport(dest, oneEntry(src, 'S'));
     // Fresh ids, no collision with the destination's existing _seat1…
     expect(part.ivaSeats.map((s) => s.id)).toEqual(['_seat1', '_seat2', '_seat3']);
     // …the destination's seat 0 (the default seat) stays first…
@@ -913,15 +953,15 @@ describe('IVA seat transfer', () => {
 });
 
 describe('light transfer', () => {
-  it('carries lights through buildProjectExport and envelopeToPart verbatim', () => {
+  it('carries lights through buildProjectExport and envelopeToParts verbatim', () => {
     const src = createEmptyPart();
     src.lights.push(
       { ...createPartLight(null, '_light1'), position: { x: 0.5, y: 0, z: 0 } },
       { ...createPartLight('Core.Wing', '_light2'), type: 'Point', rangeM: 2 },
     );
-    const env = buildProjectExport(src, 'S');
-    expect(env.data.lights.map((l) => l.id)).toEqual(['_light1', '_light2']);
-    const part = envelopeToPart(env);
+    const env = oneEnv(src, 'S');
+    expect(env.parts[0].data.lights.map((l) => l.id)).toEqual(['_light1', '_light2']);
+    const part = envelopeToParts(env)[0].part;
     // No id remapping on this path — the payload's ids are already consistent, and the
     // layers come from the payload wholesale, so an ordinary light layer survives as-is.
     expect(part.lights).toEqual(src.lights);
@@ -939,7 +979,7 @@ describe('light transfer', () => {
     const dest = createEmptyPart();
     dest.lights.push(createPartLight(null, '_light1'));
 
-    const { part, summary } = mergeProjectImport(dest, buildProjectExport(src, 'S'));
+    const { part, summary } = mergeProjectImport(dest, oneEntry(src, 'S'));
     expect(part.lights.map((l) => l.id)).toEqual(['_light1', '_light2']);
     // A built-in SubPart owner is carried untouched (import never renames templates)…
     expect(part.lights[1].ownerTemplateId).toBe('CoreElectricalA_Subpart_SpotlightA');
@@ -979,7 +1019,7 @@ describe('light transfer', () => {
       layerId: DEFAULT_LAYER_ID,
     });
 
-    const { part } = mergeProjectImport(dest, buildProjectExport(src, 'S'));
+    const { part } = mergeProjectImport(dest, oneEntry(src, 'S'));
     // The template-owned pair is skipped; the source's PART-level light still lands.
     expect(part.lights.map((l) => l.ownerTemplateId)).toEqual([T, null]);
     expect(part.colliders.map((c) => c.ownerTemplateId)).toEqual([T]);
@@ -996,7 +1036,7 @@ describe('light transfer', () => {
     });
     src.lights.push({ ...createPartLight(null, '_light1'), layerId: 'layer1' });
 
-    const { part } = mergeProjectImport(createEmptyPart(), buildProjectExport(src, 'S'));
+    const { part } = mergeProjectImport(createEmptyPart(), oneEntry(src, 'S'));
     expect(part.lights[0].layerId).toBe(part.placements[0].layerId);
     expect(part.layers.find((l) => l.id === part.lights[0].layerId)?.name).toBe('Engines');
     // …and it is a real layer of the destination, never a dangling id.
@@ -1015,7 +1055,7 @@ describe('<Internal> flag transfer', () => {
     });
     src.internalFlags['Core.Wing'] = true;
 
-    const { part } = mergeProjectImport(createEmptyPart(), buildProjectExport(src, 'S'));
+    const { part } = mergeProjectImport(createEmptyPart(), oneEntry(src, 'S'));
     expect(part.internalFlags).toEqual({ 'Core.Wing': true });
   });
 
@@ -1030,7 +1070,7 @@ describe('<Internal> flag transfer', () => {
     });
     src.internalFlags.flexo_hunter_suit_abc = true;
 
-    const { part } = mergeProjectImport(createEmptyPart(), buildProjectExport(src, 'S'));
+    const { part } = mergeProjectImport(createEmptyPart(), oneEntry(src, 'S'));
     // The mesh got a FRESH subPartId; the flag must follow it, not the dead source id.
     const freshId = part.customMeshes[0].subPartId;
     expect(freshId).not.toBe('flexo_hunter_suit_abc');
@@ -1051,14 +1091,14 @@ describe('<Internal> flag transfer', () => {
     });
     dest.internalFlags['Core.Wing'] = true;
 
-    const { part } = mergeProjectImport(dest, buildProjectExport(src, 'S'));
+    const { part } = mergeProjectImport(dest, oneEntry(src, 'S'));
     expect(part.internalFlags).toEqual({ 'Core.Wing': true });
   });
 
   it('leaves the destination alone when the payload carries no flags', () => {
     const dest = createEmptyPart();
     dest.internalFlags['Core.Wing'] = true;
-    const { part } = mergeProjectImport(dest, buildProjectExport(createEmptyPart(), 'S'));
+    const { part } = mergeProjectImport(dest, oneEntry(createEmptyPart(), 'S'));
     expect(part.internalFlags).toEqual({ 'Core.Wing': true });
   });
 });
@@ -1124,10 +1164,10 @@ describe('project transfer carries per-channel easings + the CubicSpline flag (P
 
   /** Encode → string → parse → the paste the Import Project dialog performs. */
   function paste(dest: EditingPart, src: EditingPart) {
-    const parsed = parseProjectImport(serializeProjectJson(buildProjectExport(src, 'Eased')));
+    const parsed = parseProjectImport(serializeProjectJson(oneEnv(src, 'Eased')));
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) throw new Error(parsed.error);
-    return mergeProjectImport(dest, parsed.env);
+    return mergeProjectImport(dest, parsed.env.parts[0]);
   }
 
   it('deep-equals the easing maps after a full encode → parse → paste round trip', () => {
@@ -1180,13 +1220,11 @@ describe('project transfer carries per-channel easings + the CubicSpline flag (P
   it('pastes in exactly ONE undo step', () => {
     $part.set(createEmptyPart());
     importHistory({ undo: [], redo: [] });
-    const parsed = parseProjectImport(
-      serializeProjectJson(buildProjectExport(easedSource(), 'Eased')),
-    );
+    const parsed = parseProjectImport(serializeProjectJson(oneEnv(easedSource(), 'Eased')));
     expect(parsed.ok).toBe(true);
     if (!parsed.ok) throw new Error(parsed.error);
 
-    importProjectData(parsed.env);
+    importProjectData(parsed.env.parts[0]);
     expect(exportHistory().undo).toHaveLength(1);
 
     const kf0 = $part.get().animations[0].keyframes.find((k) => k.timeSec === 0)!;

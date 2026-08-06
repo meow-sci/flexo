@@ -17,7 +17,11 @@ import {
   type PartAnimation,
 } from '../ksa/types';
 import { uniformSegmentEasing } from '../ksa/easing';
-import { buildProjectExport, parseProjectObject } from './projectTransfer';
+import {
+  buildProjectExport,
+  parseProjectObject,
+  type ProjectExportEnvelope,
+} from './projectTransfer';
 import {
   PROJECT_EXPORT_FORMAT,
   PROJECT_EXPORT_VERSION,
@@ -25,6 +29,36 @@ import {
   encodeProject,
   isCompactProject,
 } from './projectCodec';
+
+/**
+ * The wire is multi-part since v11. These cases exercise ONE part's body, so they build a
+ * one-entry envelope and read it back through `parts[0]` (verbose) / `pts[0]` (compact).
+ */
+function oneEnv(part: EditingPart, projectName = 'P'): ProjectExportEnvelope {
+  return buildProjectExport(
+    [
+      {
+        name: 'Part 1',
+        visible: true,
+        opacity: 1,
+        offset: { x: 0, y: 0, z: 0 },
+        includeInExport: true,
+        part,
+      },
+    ],
+    projectName,
+  );
+}
+
+/** The single part's compact body. */
+function encodeOne(part: EditingPart) {
+  return encodeProject(oneEnv(part)).pts[0];
+}
+
+/** The single part's data after a full encode → decode round trip. */
+function roundTripOne(part: EditingPart) {
+  return decodeProject(encodeProject(oneEnv(part))).parts[0].data;
+}
 
 /** A transform whose every number is ≤6 decimals, so a single encode is lossless. */
 function xf(p: [number, number, number], r: [number, number, number], s: [number, number, number]) {
@@ -417,19 +451,18 @@ function richPart(): EditingPart {
 
 describe('projectCodec round-trip', () => {
   it('losslessly reconstructs a fully-populated project', () => {
-    const env = buildProjectExport(richPart(), 'Rich');
+    const env = oneEnv(richPart(), 'Rich');
     const decoded = decodeProject(encodeProject(env));
     expect(decoded.format).toBe(PROJECT_EXPORT_FORMAT);
     expect(decoded.version).toBe(PROJECT_EXPORT_VERSION);
     expect(decoded.projectName).toBe('Rich');
-    expect(decoded.sourcePartId).toBe('rich_part');
+    expect(decoded.parts[0].sourcePartId).toBe('rich_part');
     // The full data tree survives encode→decode unchanged (numbers are pre-rounded).
-    expect(decoded.data).toEqual(env.data);
+    expect(decoded.parts[0].data).toEqual(env.parts[0].data);
   });
 
   it('drops defaults from the wire form (identity transforms, constant layerIds)', () => {
-    const env = buildProjectExport(richPart(), 'Rich');
-    const c = encodeProject(env);
+    const c = encodeProject(oneEnv(richPart(), 'Rich')).pts[0];
     // Identity placement carries only its ids — no transform keys.
     const identity = c.p?.find((x) => x.i === 'truss_1');
     expect(identity).toEqual({ i: 'truss_1', t: 'Core.TrussBarA', l: DEFAULT_LAYER_ID });
@@ -484,9 +517,8 @@ describe('projectCodec round-trip', () => {
       });
       return p;
     }
-    const roundTrip = (p: EditingPart) =>
-      decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.animations[0];
-    const wire = (p: EditingPart) => encodeProject(buildProjectExport(p, 'P')).a![0];
+    const roundTrip = (p: EditingPart) => roundTripOne(p).animations[0];
+    const wire = (p: EditingPart) => encodeOne(p).a![0];
 
     it('round-trips a uniform preset easing on all three channels', () => {
       const seg = uniformSegmentEasing(easeIn)!;
@@ -520,19 +552,18 @@ describe('projectCodec round-trip', () => {
     });
   });
 
-  // Per the no-migration rule a v9 envelope is REJECTED, never converted — so the
-  // marker must actually be 10, not just "whatever the constant says".
-  it('stamps wire version 10 (<Light> layer id)', () => {
-    expect(PROJECT_EXPORT_VERSION).toBe(10);
-    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P')).v).toBe(10);
+  // Per the no-migration rule a v10 envelope is REJECTED, never converted — so the
+  // marker must actually be 11, not just "whatever the constant says".
+  it('stamps wire version 11 (multi-part)', () => {
+    expect(PROJECT_EXPORT_VERSION).toBe(11);
+    expect(encodeProject(oneEnv(createEmptyPart())).v).toBe(11);
   });
 
   it('round-trips internalFlags and omits them when empty', () => {
-    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P'))).not.toHaveProperty('ifl');
+    expect(encodeOne(createEmptyPart())).not.toHaveProperty('ifl');
     const p = createEmptyPart();
     p.internalFlags = { CoreIVAPropA_Subpart_SeatA: true, CoreIVAPropA_Subpart_PanelA: false };
-    const back = decodeProject(encodeProject(buildProjectExport(p, 'P')));
-    expect(back.data.internalFlags).toEqual(p.internalFlags);
+    expect(roundTripOne(p).internalFlags).toEqual(p.internalFlags);
   });
 
   it('rounds high-precision floats to 6 decimals', () => {
@@ -543,8 +574,7 @@ describe('projectCodec round-trip', () => {
       layerId: DEFAULT_LAYER_ID,
       ...xf([Math.PI, 0, 0], [0, 0, 0], [1, 1, 1]),
     });
-    const decoded = decodeProject(encodeProject(buildProjectExport(p, 'P')));
-    expect(decoded.data.placements[0].position.x).toBe(3.141593);
+    expect(roundTripOne(p).placements[0].position.x).toBe(3.141593);
   });
 
   it('round-trips an imported glTF mesh descriptor (source + material + glass flag)', () => {
@@ -570,26 +600,30 @@ describe('projectCodec round-trip', () => {
     p.customMeshes.push(imported);
     // buildProjectExport deliberately filters imported meshes out (binary-backed, gated by
     // hasCustomAssets) — the CODEC still has to be lossless, so feed the envelope directly.
-    const env = buildProjectExport(p, 'P');
-    env.data.customMeshes = [imported];
+    const env = oneEnv(p);
+    env.parts[0].data.customMeshes = [imported];
     const decoded = decodeProject(encodeProject(env));
-    expect(decoded.data.customMeshes).toEqual([imported]);
+    expect(decoded.parts[0].data.customMeshes).toEqual([imported]);
     // …and it is encoded under the compact `imp` key, not as a degenerate kitten mesh.
-    const c = encodeProject(env);
+    const c = encodeProject(env).pts[0];
     expect(c.m?.[0]).toMatchObject({ imp: { i: 'imp_9f8e', f: 'rcs_pod.glb', tr: 1 } });
     expect(c.m?.[0]).not.toHaveProperty('kit');
   });
 
   // No migration, ever: a payload stamped with the previous version is rejected outright
-  // rather than half-decoded (v7 carried lights inside `sg[].li` with a nested transform,
-  // and a v9 light omits the layer token entirely — both would decode silently wrong).
+  // rather than half-decoded (a v10 payload carries ONE part's keys at the root, which v11
+  // would read as a project with no parts at all).
   it('rejects an older payload instead of converting it', () => {
-    const current = encodeProject(buildProjectExport(createEmptyPart(), 'P'));
+    const current = encodeProject(oneEnv(createEmptyPart()));
     expect(parseProjectObject(current).ok).toBe(true);
-    for (const v of [4, 6, 7, 9]) {
+    for (const v of [4, 6, 7, 9, 10]) {
       const older = parseProjectObject({ ...current, v });
       expect(older.ok).toBe(false);
-      expect(older.ok === false && older.error).toContain('Unsupported project version');
+      // The message names BOTH numbers, so the user knows which flexo to re-export from.
+      expect(older.ok === false && older.error).toContain(`v${v};`);
+      expect(older.ok === false && older.error).toContain(
+        `this flexo reads v${PROJECT_EXPORT_VERSION}`,
+      );
     }
   });
 
@@ -621,7 +655,7 @@ describe('collider codec', () => {
         layerId: DEFAULT_LAYER_ID,
       },
     );
-    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.colliders;
+    const back = roundTripOne(p).colliders;
     expect(back).toEqual(p.colliders);
   });
 
@@ -634,7 +668,7 @@ describe('collider codec', () => {
       ...identityTransform(),
       layerId: DEFAULT_LAYER_ID,
     });
-    const c = encodeProject(buildProjectExport(p, 'P'));
+    const c = encodeOne(p);
     // Identity transform + null owner ⇒ just the id, the layer and the shape token.
     expect(c.cl?.[0]).toEqual({ i: '_collider1', l: DEFAULT_LAYER_ID, sh: 'Box' });
   });
@@ -657,7 +691,7 @@ describe('collider codec', () => {
       ...identityTransform(),
       layerId: 'layer1',
     });
-    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data;
+    const back = roundTripOne(p);
     expect(back.connectors[0].layerId).toBe('layer1');
     expect(back.colliders[0].layerId).toBe('layer1');
   });
@@ -668,13 +702,14 @@ describe('layer color codec', () => {
     const p = createEmptyPart();
     p.layers.push({ id: 'layer1', name: 'Engines', color: 'teal' });
     p.layers.push({ id: 'layer2', name: 'Wings' });
-    const c = encodeProject(buildProjectExport(p, 'P'));
+    const encoded = encodeProject(oneEnv(p));
+    const c = encoded.pts[0];
     const engines = c.l?.find((l) => l.i === 'layer1');
     const wings = c.l?.find((l) => l.i === 'layer2');
     expect(engines).toEqual({ i: 'layer1', n: 'Engines', c: 'teal' });
     expect(wings).toEqual({ i: 'layer2', n: 'Wings' });
 
-    const back = decodeProject(c).data;
+    const back = decodeProject(encoded).parts[0].data;
     expect(back.layers.find((l) => l.id === 'layer1')?.color).toBe('teal');
     expect(back.layers.find((l) => l.id === 'layer2')?.color).toBeUndefined();
   });
@@ -683,8 +718,8 @@ describe('layer color codec', () => {
     const back = decodeProject({
       f: PROJECT_EXPORT_FORMAT,
       v: PROJECT_EXPORT_VERSION,
-      l: [{ i: 'layer1', n: 'Engines' }],
-    }).data;
+      pts: [{ l: [{ i: 'layer1', n: 'Engines' }] }],
+    }).parts[0].data;
     expect(back.layers[0]).toEqual({ id: 'layer1', name: 'Engines' });
   });
 
@@ -692,8 +727,8 @@ describe('layer color codec', () => {
     const back = decodeProject({
       f: PROJECT_EXPORT_FORMAT,
       v: PROJECT_EXPORT_VERSION,
-      l: [{ i: 'layer1', n: 'Engines', c: 'plaid' }],
-    }).data;
+      pts: [{ l: [{ i: 'layer1', n: 'Engines', c: 'plaid' }] }],
+    }).parts[0].data;
     expect(back.layers[0].color).toBeUndefined();
   });
 });
@@ -709,7 +744,7 @@ describe('IVA seat codec', () => {
       scale: { x: 1, y: 1, z: 1 },
       layerId: IVA_SEAT_LAYER_ID,
     });
-    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.ivaSeats;
+    const back = roundTripOne(p).ivaSeats;
     expect(back).toEqual(p.ivaSeats);
     expect(back[0].layerId).toBe(IVA_SEAT_LAYER_ID);
     // `scale` is unused, never serialized, and always decodes back to (1,1,1).
@@ -717,7 +752,7 @@ describe('IVA seat codec', () => {
   });
 
   it('omits the constant layerId, the unused scale, and `iv` entirely when there are no seats', () => {
-    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P'))).not.toHaveProperty('iv');
+    expect(encodeOne(createEmptyPart())).not.toHaveProperty('iv');
     const p = createEmptyPart();
     p.ivaSeats.push({
       id: '_seat1',
@@ -725,7 +760,7 @@ describe('IVA seat codec', () => {
       ...identityTransform(),
       layerId: IVA_SEAT_LAYER_ID,
     });
-    const c = encodeProject(buildProjectExport(p, 'P'));
+    const c = encodeOne(p);
     // Identity transform ⇒ just the id.
     expect(c.iv?.[0]).toEqual({ i: '_seat1' });
     expect(c.iv?.[0]).not.toHaveProperty('l');
@@ -744,7 +779,7 @@ describe('IVA seat codec', () => {
         layerId: IVA_SEAT_LAYER_ID,
       });
     }
-    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.ivaSeats;
+    const back = roundTripOne(p).ivaSeats;
     expect(back.map((s) => s.id)).toEqual(['_seat3', '_seat1', '_seat2']);
     expect(back.map((s) => s.position.x)).toEqual([0, 1, 2]);
   });
@@ -784,7 +819,7 @@ describe('light codec', () => {
         layerId: DEFAULT_LAYER_ID,
       },
     );
-    const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.lights;
+    const back = roundTripOne(p).lights;
     expect(back).toEqual(p.lights);
     // A light lives on ANY ordinary layer now, so the layer id is real data on the wire:
     // a non-default one must survive the round-trip untouched (this is why v10 exists).
@@ -794,7 +829,7 @@ describe('light codec', () => {
   });
 
   it('drops defaults from the wire form (null owner, identity transform, Spot, no RT)', () => {
-    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P'))).not.toHaveProperty('li');
+    expect(encodeOne(createEmptyPart())).not.toHaveProperty('li');
     const p = createEmptyPart();
     p.lights.push({
       id: '_light1',
@@ -809,7 +844,7 @@ describe('light codec', () => {
       rayTracing: false,
       layerId: DEFAULT_LAYER_ID,
     });
-    const c = encodeProject(buildProjectExport(p, 'P'));
+    const c = encodeOne(p);
     // Identity transform + null owner + Spot + no ray tracing ⇒ scalar fields only —
     // plus `l`, which is ALWAYS emitted (v10), exactly like a connector's or collider's.
     expect(c.li?.[0]).toEqual({

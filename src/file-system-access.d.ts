@@ -14,5 +14,11 @@ declare global {
       mode?: 'read' | 'readwrite';
       startIn?: string | FileSystemHandle;
     }): Promise<FileSystemDirectoryHandle>;
+    /** Project-archive export's preferred delivery (falls back to `<a download>`). */
+    showSaveFilePicker?(options?: {
+      id?: string;
+      suggestedName?: string;
+      types?: { description?: string; accept: Record<string, string[]> }[];
+    }): Promise<FileSystemFileHandle>;
   }
 }

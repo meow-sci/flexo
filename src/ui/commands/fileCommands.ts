@@ -1,7 +1,7 @@
 import type { Command } from '../../state/commandStore';
 import { openDialog } from '../../state/dialogStore';
 import { createProject, flushAutosave } from '../../state/projectStore';
-import { takeOverLock, uniqueProjectName } from '../../state/projectIndexStore';
+import { $currentProjectId, takeOverLock, uniqueProjectName } from '../../state/projectIndexStore';
 import {
   $modFolder,
   forgetModFolder,
@@ -44,26 +44,28 @@ export const FILE_COMMANDS: Command[] = [
     id: 'file.importProject',
     title: 'Import Project…',
     menuPath: 'File',
-    keywords: 'merge paste json load',
-    // INTERIM: v1 additive-merge import. The projects phase adds the destination radio
-    // (merge vs open-as-new) and .flexo.tar.gz archives behind this same id.
+    keywords: 'merge paste json load archive tar.gz',
+    // Both containers, one dialog: a `.flexo.tar.gz` (binaries included) or the plain JSON
+    // v1 could paste, merged additively as ONE undo step or opened as a new project.
     run: () => openDialog({ id: 'import-project' }),
   },
   {
     id: 'file.exportProject',
-    title: 'Export Project…',
+    title: 'Export Project Archive…',
     menuPath: 'File',
-    keywords: 'save json backup download archive',
-    // INTERIM label + payload: becomes "Export Project Archive…" (.tar.gz with binaries,
-    // LOCKED #3) in the projects phase, under this same command id.
-    run: () => openDialog({ id: 'export-project' }),
+    keywords: 'save backup download archive tar.gz textures meshes',
+    // LOCKED #3: the `.flexo.tar.gz` archive REPLACED v1's JSON snippet, and with it the
+    // `hasCustomAssets` gate — the container carries the binaries, so every project exports.
+    run: () => openDialog({ id: 'export-archive', params: { projectId: $currentProjectId.get() } }),
   },
   {
     id: 'file.shareLink',
     title: 'Share Link…',
     menuPath: 'File',
     keywords: 'url deep link send',
-    run: () => openDialog({ id: 'share-link' }),
+    // ALWAYS enabled (D10). A project with binary assets cannot be shared as a URL, and the
+    // dialog says so and offers the archive — flexo explains, it does not grey out.
+    run: () => openDialog({ id: 'share-link', params: { projectId: $currentProjectId.get() } }),
   },
   {
     id: 'file.exportKsa',
@@ -102,6 +104,14 @@ export const FILE_COMMANDS: Command[] = [
     title: 'Reload flexo',
     keywords: 'refresh reload restart',
     run: () => window.location.reload(),
+  },
+  {
+    // The ONE Reset Everything entry point besides Settings ▸ Advanced itself (design §9.2):
+    // the build-mismatch notification's action opens that tab already showing the confirm.
+    id: 'app.resetEverything',
+    title: 'Reset everything…',
+    keywords: 'reset wipe delete everything nuke storage',
+    run: () => openDialog({ id: 'settings', params: { tab: 'advanced', confirm: 'reset' } }),
   },
 ];
 

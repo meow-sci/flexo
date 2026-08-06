@@ -79,7 +79,7 @@ import { unwiredConsumersOf } from './feedTargets';
 import type { ReferenceContainer } from './containerStore';
 import type { LineMeasurement } from './measurementStore';
 import { mergeProjectImport } from './projectTransfer';
-import type { ImportSummary, ProjectExportEnvelope } from './projectTransfer';
+import type { AssetAdoption, ImportSummary, ProjectExportEnvelope } from './projectTransfer';
 // layerStore imports back into this module (deselectLayer); both directions are
 // function-scoped, so the cycle never runs at module-init time.
 import { isLayerLocked, isLayerVisible } from './layerStore';
@@ -1079,9 +1079,17 @@ export function addPart(
  * are appended with collision-free ids and all cross-references remapped. Imported
  * meshes land on freshly-created layers mirroring the source's (so the existing Default
  * is untouched); the first new layer becomes active so the user lands on the import.
+ *
+ * `opts.adoption` carries a `.flexo.tar.gz` import's binary-asset id remapping
+ * (design-projects-export.md §4.3). Its blobs are copied into this project's namespace
+ * BEFORE this call, because the document mutation below is synchronous and must be ONE undo
+ * step: undoing later removes the adopted descriptors, never the bytes (unchanged contract).
  */
-export function importProjectData(env: ProjectExportEnvelope): ImportSummary {
-  const { part, summary, newLayerIds } = mergeProjectImport($part.get(), env);
+export function importProjectData(
+  env: ProjectExportEnvelope,
+  opts: { adoption?: AssetAdoption } = {},
+): ImportSummary {
+  const { part, summary, newLayerIds } = mergeProjectImport($part.get(), env, opts);
   const detail =
     [
       summary.meshes ? `${summary.meshes} mesh${summary.meshes === 1 ? '' : 'es'}` : '',

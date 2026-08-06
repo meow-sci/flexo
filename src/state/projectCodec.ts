@@ -11,6 +11,7 @@ import type {
   CustomMaterial,
   CustomReaction,
   CustomMesh,
+  CustomTexture,
   DeLavalNozzle,
   FeedSource,
   PlumbingClass,
@@ -30,6 +31,7 @@ import type {
   PartGameData,
   PartLight,
   PowerConsumer,
+  PrimitiveSpec,
   RawXmlNode,
   ReactionCategory,
   ReactionPlume,
@@ -45,6 +47,7 @@ import type {
   SubPartPlacement,
   Tank,
   TankRoleAffinity,
+  TextureChannel,
   Transform,
   Vec3,
 } from '../ksa/types';
@@ -81,6 +84,12 @@ export const PROJECT_EXPORT_FORMAT = 'flexo-project';
 // v8: lights normalized out of SubPartGameData (`sg[].li` with a nested transform) into
 // first-class part entities: top-level `li` (flat inline `p`/`r`, `ot` owner template,
 // editor-only id) — part-level `<Light>` support.
+// NOT a bump (deliberately, AGENTS.md case 1 — additive): the `.flexo.tar.gz` archive added
+// `tex` (custom-texture descriptors) and the mesh-level `prm`/`ft` (primitive spec + face
+// textures) so a container that carries binaries can carry their descriptors too. Every one
+// is a field an older v8 payload simply lacks, and its absence decodes to exactly what that
+// payload meant — no textures, no primitive meshes, no per-face config. Bumping would have
+// made every share link and exported JSON already in the wild unopenable to buy nothing.
 // This number is a COMPATIBILITY CONTRACT, not a changelog counter: from now on a
 // BACKWARDS-COMPATIBLE additive change MUST NOT bump it — decode is total and tolerant, so
 // a same-version payload written before the new field existed simply decodes with that
@@ -1050,7 +1059,43 @@ function decCustomMaterial(c: CCustomMaterial): CustomMaterial {
   return m;
 }
 
-// ── custom (kitten / imported) meshes ────────────────────────────────────────
+// ── custom textures (descriptors only — the bytes ride the archive container) ─
+
+/**
+ * An uploaded texture's DESCRIPTOR. Its pixels live in the asset DB, so this only ever
+ * reaches the wire inside a `.flexo.tar.gz`, whose `assets/tex-src/<id>` entry carries them
+ * (design-projects-export.md §4.1). A bare-JSON / share-link payload never carries one —
+ * `buildProjectExport` leaves the list empty and the import boundary drops any that is
+ * smuggled in, exactly as it does for a binary-backed mesh.
+ */
+interface CTexture {
+  id: string;
+  n: string; // name
+  w: number;
+  h: number;
+  c: TextureChannel; // channel
+  sh?: string; // sha256 of the source bytes (import dedup cache)
+}
+
+function encCustomTexture(t: CustomTexture): CTexture {
+  const o: CTexture = { id: t.id, n: t.name, w: t.width, h: t.height, c: t.channel };
+  if (t.sha256) o.sh = t.sha256;
+  return o;
+}
+
+function decCustomTexture(c: CTexture): CustomTexture {
+  const t: CustomTexture = {
+    id: str(c.id),
+    name: str(c.n),
+    width: num(c.w),
+    height: num(c.h),
+    channel: str(c.c, 'baseColor') as TextureChannel,
+  };
+  if (c.sh) t.sha256 = str(c.sh);
+  return t;
+}
+
+// ── custom (kitten / imported / primitive) meshes ────────────────────────────
 //
 // PRIMITIVE meshes are never encoded (they'd need their generated GLB); IMPORTED meshes ARE
 // encoded, but the data-only transfer paths (project JSON + share link) still refuse to CARRY
@@ -1084,15 +1129,17 @@ interface CCustomMesh {
   id: string;
   n: string; // name
   sub: string; // subPartId
-  kit?: CKittenSource; // kitten submesh source (mutually exclusive with `imp`)
+  kit?: CKittenSource; // kitten submesh source (mutually exclusive with `imp`/`prm`)
   imp?: CImportedSource; // imported glTF mesh source
-  mid?: string; // materialId (imported meshes; kitten submeshes carry their own PBR set)
+  prm?: PrimitiveSpec; // primitive shape + params (small object — kept verbatim)
+  ft?: CustomMesh['faceTextures']; // per-face texture + UV config (primitives only)
+  mid?: string; // materialId (kitten submeshes carry their own PBR set instead)
   em?: CustomMesh['emissive']; // emissive (small object — kept verbatim)
   gl?: CustomMesh['glass']; // glass tint
   su?: CustomMesh['surface']; // visor surface mode
 }
 
-function encCustomMesh(m: CustomMesh): CCustomMesh | null {
+function encCustomMesh(m: CustomMesh): CCustomMesh {
   const o: CCustomMesh = { id: m.id, n: m.name, sub: m.subPartId };
   switch (meshKind(m)) {
     case 'kitten': {
@@ -1116,12 +1163,18 @@ function encCustomMesh(m: CustomMesh): CCustomMesh | null {
         v: i.vertices,
       };
       if (i.transparent) o.imp.tr = 1;
-      if (m.materialId) o.mid = m.materialId;
       break;
     }
     case 'primitive':
-      return null; // regenerable only from a GLB flexo doesn't put on the wire
+      // The spec alone does NOT reconstitute the mesh: its generated GLB lives in the asset
+      // DB. Whether the descriptor may travel is the CONTAINER's call — an archive carries
+      // the bytes, a share link does not — and that gate is `buildProjectExport`'s
+      // `includeBinaryBacked` plus the import-side drop rule, not this encoder's.
+      if (m.primitive) o.prm = m.primitive;
+      break;
   }
+  if (m.materialId) o.mid = m.materialId;
+  if (Object.keys(m.faceTextures).length) o.ft = m.faceTextures;
   if (m.emissive) o.em = m.emissive;
   if (m.glass) o.gl = m.glass;
   if (m.surface) o.su = m.surface;
@@ -1133,9 +1186,12 @@ function decCustomMesh(c: CCustomMesh): CustomMesh {
     id: str(c.id),
     name: str(c.n),
     subPartId: str(c.sub),
-    faceTextures: {},
+    faceTextures: c.ft && typeof c.ft === 'object' ? { ...c.ft } : {},
   };
-  if (c.imp) {
+  if (c.prm && !c.imp && !c.kit) {
+    m.primitive = c.prm;
+    if (c.mid) m.materialId = c.mid;
+  } else if (c.imp) {
     const imported: ImportedMeshSource = {
       importId: str(c.imp.i),
       meshName: str(c.imp.m),
@@ -1388,7 +1444,8 @@ export interface CompactProject {
   ifl?: Record<string, boolean>; // per-SubPart-template <Internal> overrides
   k?: CKitten[]; // kittens
   a?: CAnimation[]; // animations
-  m?: CCustomMesh[]; // customMeshes (kitten + imported; primitives are never encoded)
+  m?: CCustomMesh[]; // customMeshes (every kind — the CONTAINER decides which may travel)
+  tex?: CTexture[]; // customTextures (archive containers only — descriptors, not pixels)
   mat?: CCustomMaterial[]; // customMaterials
   cr?: CReaction[]; // customReactions
 }
@@ -1415,8 +1472,8 @@ export function encodeProject(env: ProjectExportEnvelope): CompactProject {
   if (Object.keys(d.internalFlags).length) o.ifl = { ...d.internalFlags };
   if (d.kittens.length) o.k = d.kittens.map(encKitten);
   if (d.animations.length) o.a = d.animations.map(encAnimation);
-  const meshes = d.customMeshes.map(encCustomMesh).filter((m): m is CCustomMesh => m != null);
-  if (meshes.length) o.m = meshes;
+  if (d.customMeshes.length) o.m = d.customMeshes.map(encCustomMesh);
+  if (d.customTextures.length) o.tex = d.customTextures.map(encCustomTexture);
   if (d.customMaterials.length) o.mat = d.customMaterials.map(encCustomMaterial);
   if (d.customReactions.length) o.cr = d.customReactions.map(encCustomReaction);
   return o;
@@ -1447,6 +1504,7 @@ export function decodeProject(raw: CompactProject): ProjectExportEnvelope {
       kittens: arr<CKitten>(raw.k).map(decKitten),
       animations: arr<CAnimation>(raw.a).map(decAnimation),
       customMeshes: arr<CCustomMesh>(raw.m).map(decCustomMesh),
+      customTextures: arr<CTexture>(raw.tex).map(decCustomTexture),
       customMaterials: arr<CCustomMaterial>(raw.mat).map(decCustomMaterial),
       customReactions: arr<CReaction>(raw.cr).map(decCustomReaction),
     },

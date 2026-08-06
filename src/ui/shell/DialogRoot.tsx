@@ -2,9 +2,11 @@ import { useStore } from '@nanostores/react';
 import { $openDialog, closeDialog } from '../../state/dialogStore';
 import { AboutDialog } from '../AboutDialog';
 import { HelpDialog } from '../hotkeys/HelpDialog';
-import { LoadProjectDialog, RenameProjectDialog } from '../projects/ProjectDialogs';
-import { ExportProjectDialog, ImportProjectDialog } from '../ProjectTransferDialogs';
-import { ShareProjectDialog } from '../ShareProjectDialog';
+import { ProjectManagerDialog } from '../projects/ProjectManagerDialog';
+import { RenameProjectDialog } from '../projects/RenameProjectDialog';
+import { ExportArchiveDialog, type ExportArchiveParams } from '../projects/ExportArchiveDialog';
+import { ImportProjectDialog } from '../projects/ImportProjectDialog';
+import { ShareLinkDialog, type ShareLinkParams } from '../projects/ShareLinkDialog';
 import { ExportDialog } from '../ExportDialog';
 import { SettingsDialog, type SettingsDialogParams } from '../SettingsDialog';
 import { ScaleEverythingDialog } from '../ScaleEverythingDialog';
@@ -54,13 +56,25 @@ export function DialogRoot() {
   if (!open) return null;
   switch (open.id) {
     case 'projects':
-      return <LoadProjectDialog isOpen onOpenChange={dismiss} />;
+      return <ProjectManagerDialog isOpen onOpenChange={dismiss} />;
     case 'rename-project':
       return <RenameProjectDialog isOpen onOpenChange={dismiss} />;
     case 'share-link':
-      return <ShareProjectDialog isOpen onOpenChange={dismiss} />;
-    case 'export-project':
-      return <ExportProjectDialog isOpen onOpenChange={dismiss} />;
+      return (
+        <ShareLinkDialog
+          isOpen
+          onOpenChange={dismiss}
+          params={open.params as ShareLinkParams | undefined}
+        />
+      );
+    case 'export-archive':
+      return (
+        <ExportArchiveDialog
+          isOpen
+          onOpenChange={dismiss}
+          params={open.params as ExportArchiveParams | undefined}
+        />
+      );
     case 'import-project':
       return <ImportProjectDialog isOpen onOpenChange={dismiss} />;
     case 'export-ksa':

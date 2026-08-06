@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
+  $confirmThreshold,
+  confirmThreshold,
+  setConfirmThreshold,
   $ivaSeatSettings,
   $lightPreviewCount,
   $lightSettings,
@@ -194,5 +197,38 @@ describe('$lightPreviewCount', () => {
     expect($lightPreviewCount.get()).toBe(first);
     setLightPreviewCount({ enabled: 3, total: 6 });
     expect($lightPreviewCount.get()).not.toBe(first);
+  });
+});
+
+/**
+ * The ONE confirm-before-destroy threshold (foundation §14.3). Every delete entry point reads
+ * it through {@link confirmThreshold}, which is also the clamp: a hand-edited 0 would turn
+ * every single-entity delete into a question.
+ */
+describe('$confirmThreshold', () => {
+  it('defaults to 5 and persists', () => {
+    localStorage.clear();
+    expect(confirmThreshold()).toBe(5);
+    setConfirmThreshold(12);
+    expect($confirmThreshold.get()).toBe(12);
+    expect(localStorage.getItem('flexo:confirmThreshold')).toBe('12');
+  });
+
+  it('clamps to a whole number ≥ 1', () => {
+    setConfirmThreshold(0);
+    expect($confirmThreshold.get()).toBe(1);
+    setConfirmThreshold(-4);
+    expect($confirmThreshold.get()).toBe(1);
+    setConfirmThreshold(3.6);
+    expect($confirmThreshold.get()).toBe(4);
+    setConfirmThreshold(Number.NaN);
+    expect($confirmThreshold.get()).toBe(5);
+  });
+
+  it('reads through the clamp even when storage holds nonsense', () => {
+    $confirmThreshold.set(0);
+    expect(confirmThreshold()).toBe(5);
+    $confirmThreshold.set(7);
+    expect(confirmThreshold()).toBe(7);
   });
 });

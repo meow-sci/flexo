@@ -128,8 +128,7 @@ describe('menu transcription (authoritative tree)', () => {
       'Rename Project…',
       '─',
       'Import Project…',
-      // Interim label: becomes "Export Project Archive…" with the projects phase.
-      'Export Project…',
+      'Export Project Archive…',
       'Share Link…',
       '─',
       'Export to KSA…',

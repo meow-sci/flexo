@@ -49,6 +49,13 @@ const modal = tv({
 
 export interface ModalKitProps extends ModalOverlayProps, VariantProps<typeof modal> {
   className?: string;
+  /**
+   * Extra classes for the SCRIM. The one caller that needs it is Settings' Scene tab, whose
+   * sliders live-commit against the canvas: a 60%-black blurred backdrop would make judging
+   * exposure impossible (foundation §10.7 "look-dev ergonomics"). Everything else leaves the
+   * scrim alone.
+   */
+  overlayClassName?: string;
 }
 
 /**
@@ -58,9 +65,13 @@ export interface ModalKitProps extends ModalOverlayProps, VariantProps<typeof mo
  *  - sheet: bottom sheet (mobile)
  * Children should be a {@link Dialog}.
  */
-export function Modal({ variant, className, children, ...props }: ModalKitProps) {
+export function Modal({ variant, className, overlayClassName, children, ...props }: ModalKitProps) {
   return (
-    <ModalOverlay {...props} className={overlay({ variant })} style={{ zIndex: z.overlay }}>
+    <ModalOverlay
+      {...props}
+      className={cn(overlay({ variant }), overlayClassName)}
+      style={{ zIndex: z.overlay }}
+    >
       <AriaModal className={cn(modal({ variant }), className)}>{children}</AriaModal>
     </ModalOverlay>
   );

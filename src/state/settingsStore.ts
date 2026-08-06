@@ -295,3 +295,24 @@ export const $showFpsCounter = persistentJSON<boolean>('flexo:showFpsCounter', f
 export function setShowFpsCounter(value: boolean): void {
   $showFpsCounter.set(value);
 }
+
+/**
+ * The §14.3 confirm-before-destroy threshold: deleting up to this many entities skips the
+ * confirm and offers an inline `[Undo]` instead; more than this asks first, stating the count.
+ *
+ * One number, read by every delete entry point (hotkey, Edit menu, row menu), so the policy
+ * cannot fork per surface the way v1's did. Settings ▸ General is its only editor.
+ */
+export const $confirmThreshold = persistentJSON<number>('flexo:confirmThreshold', 5);
+
+/** Sets the threshold, clamped to a whole number ≥ 1 (0 would confirm every single delete). */
+export function setConfirmThreshold(value: number): void {
+  const clamped = Math.max(1, Math.round(Number.isFinite(value) ? value : 5));
+  if (clamped !== $confirmThreshold.get()) $confirmThreshold.set(clamped);
+}
+
+/** The threshold as CONSUMERS must read it — a hand-edited 0 or NaN still means 5. */
+export function confirmThreshold(): number {
+  const value = $confirmThreshold.get();
+  return Number.isFinite(value) && value >= 1 ? Math.round(value) : 5;
+}

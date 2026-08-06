@@ -284,7 +284,19 @@ same path as hand-authored ones. Nothing about them is a parallel universe.
   model GLBs are** (`import-glb:<importId>`, one per import batch): nothing can regenerate
   imported geometry, so that file is the only copy. Deleting an imported mesh therefore
   does *not* delete the batch GLB (undo must restore it, and its sibling SubParts still
-  read from it) — reclaiming it is an explicit user action.
+  read from it) — reclaiming it is an explicit user action. `ASSET_KINDS` / `assetKeyFor` /
+  `parseAssetKey` are the runtime-kind half of the same ownership: the `.flexo.tar.gz` archive
+  lays every blob out as `assets/<kind>/<assetId>` and reads them back through those three,
+  so the container never spells a key of its own.
+
+  **Leaving the project.** A project archive carries these binaries verbatim (see
+  [projects.md](projects.md)): on import as a NEW project they are adopted under the new
+  namespace with their ids unchanged, and on a MERGE they get fresh ids — a byte-identical
+  texture instead dedups onto the one already there (SHA-256 over the `tex-src` bytes, cached on
+  the descriptor as `CustomTexture.sha256`), while meshes and import batches never dedup because
+  identity is load-bearing. A primitive mesh needs no blob at all, so it travels on its
+  `PrimitiveSpec` alone; an imported mesh cannot travel without its batch GLB and is dropped —
+  with its placements — when the container did not bring it.
 
 ### Export plumbing (`src/ksa/modExport.ts`)
 

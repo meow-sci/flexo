@@ -1658,6 +1658,17 @@ export interface CustomTexture {
   height: number;
   /** The PBR channel this image is authored for (decides encode params + valid slots). */
   channel: TextureChannel;
+  /**
+   * SHA-256 (lowercase hex) of the SOURCE image bytes, computed lazily the first time a
+   * `.flexo.tar.gz` import needs to compare this texture against an incoming one and cached
+   * here so repeat imports do not re-hash the library
+   * (design-projects-export.md §4.3 "Dedup").
+   *
+   * ADDITIVE and OPTIONAL by construction: absent simply means "not hashed yet", which is
+   * what every texture authored before archives existed says — so neither
+   * `PROJECT_SCHEMA_VERSION` nor `PROJECT_EXPORT_VERSION` moves for it (AGENTS.md case 1).
+   */
+  sha256?: string;
 }
 
 /** An sRGB color, 0..255 per channel. */

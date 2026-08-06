@@ -172,8 +172,16 @@ describe('buildProjectExport', () => {
     // Only the kitten mesh is carried; the primitive is dropped; textures never exported.
     expect(env.data.customMeshes).toHaveLength(1);
     expect(env.data.customMeshes[0].subPartId).toBe('flexo_hunter_suit_abc');
-    const data = env.data as unknown as Record<string, unknown>;
-    expect(data.customTextures).toBeUndefined();
+    expect(env.data.customTextures).toEqual([]);
+  });
+
+  it('carries binary-backed meshes + textures when the container opts in', () => {
+    const src = sourcePart();
+    src.customTextures.push({ id: 'tex_1', name: 'T', width: 4, height: 4, channel: 'baseColor' });
+    src.customMeshes.push(primitiveMesh(), kittenMesh());
+    const env = buildProjectExport(src, 'MyShip', { includeBinaryBacked: true });
+    expect(env.data.customMeshes).toHaveLength(2);
+    expect(env.data.customTextures.map((t) => t.id)).toEqual(['tex_1']);
   });
 
   it('carries custom materials (pure descriptors)', () => {
@@ -245,6 +253,172 @@ describe('hasCustomAssets', () => {
     env.data.customMeshes = [importedMesh()];
     const merged = mergeProjectImport(createEmptyPart(), env);
     expect(merged.part.customMeshes).toEqual([]);
+  });
+});
+
+describe('archive imports (binary-backed assets)', () => {
+  /** A project with one primitive mesh, one imported mesh, a texture and a mapped material. */
+  function binarySource(): EditingPart {
+    const p = createEmptyPart();
+    p.layers.push({ id: 'layer1', name: 'Hull' });
+    p.customTextures.push({
+      id: 'tex_1',
+      name: 'Panel',
+      width: 8,
+      height: 8,
+      channel: 'baseColor',
+    });
+    p.customMaterials.push({
+      id: 'mat_1',
+      name: 'Panel',
+      baseColor: { kind: 'map', textureId: 'tex_1' },
+      metalness: { kind: 'value', value: 0 },
+      roughness: { kind: 'value', value: 0.5 },
+    });
+    const prim = {
+      ...primitiveMesh(),
+      materialId: 'mat_1',
+      faceTextures: {
+        right: { textureId: 'tex_1', uvScale: { x: 1, y: 1 }, uvOffset: { x: 0, y: 0 } },
+      },
+    };
+    p.customMeshes.push(prim, importedMesh());
+    p.placements.push(
+      { instanceId: 'sp_1_1', subPartTemplateId: 'sp_1', layerId: 'layer1', ...t(0) },
+      {
+        instanceId: 'rcs_1',
+        subPartTemplateId: 'flexo_RcsPod_Metal_ab12cd34',
+        layerId: 'layer1',
+        ...t(0),
+      },
+    );
+    return p;
+  }
+
+  const TABLE = [
+    { kind: 'tex-src', id: 'tex_1' },
+    { kind: 'mesh-glb', id: 'mesh_1' },
+    { kind: 'import-glb', id: 'imp_1' },
+  ];
+
+  function archiveEnvelope() {
+    const json = serializeProjectJson(
+      buildProjectExport(binarySource(), 'Arch', { includeBinaryBacked: true }),
+    );
+    const parsed = parseProjectImport(json, { binaryAssets: TABLE });
+    if (!parsed.ok) throw new Error(parsed.error);
+    return parsed.env;
+  }
+
+  it('drops what needs bytes the container has not brought', () => {
+    const json = serializeProjectJson(
+      buildProjectExport(binarySource(), 'Arch', { includeBinaryBacked: true }),
+    );
+    const parsed = parseProjectImport(json, { binaryAssets: null });
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    // The IMPORTED mesh's GLB is its only copy, so it goes — with its placement, which would
+    // otherwise name a template nothing owns.
+    expect(parsed.env.data.customMeshes.map((m) => m.id)).toEqual(['mesh_1']);
+    expect(parsed.env.data.placements.map((p) => p.subPartTemplateId)).toEqual(['sp_1']);
+    // Textures are pixels and nothing else; without them the primitive survives untextured
+    // (it rebuilds from its PrimitiveSpec) and every reference to the dropped texture is
+    // reset rather than left dangling.
+    expect(parsed.env.data.customTextures).toEqual([]);
+    expect(parsed.env.data.customMeshes[0].faceTextures).toEqual({});
+    expect(parsed.env.data.customMaterials[0].baseColor.kind).toBe('color');
+  });
+
+  it('keeps them when the table backs them, with fresh ids everywhere', () => {
+    const env = archiveEnvelope();
+    expect(env.data.customMeshes).toHaveLength(2);
+    expect(env.data.customTextures).toHaveLength(1);
+
+    const adoption = {
+      textures: new Map([['tex_1', 'tex_new']]),
+      copiedTextures: new Map([['tex_1', 'tex_new']]),
+      meshes: new Map([
+        ['mesh_1', 'mesh_new1'],
+        ['mesh_imp', 'mesh_new2'],
+      ]),
+      imports: new Map([['imp_1', 'imp_new']]),
+      hashes: new Map<string, string>(),
+    };
+    const { part } = mergeProjectImport(createEmptyPart(), env, { adoption });
+
+    expect(part.customTextures.map((x) => x.id)).toEqual(['tex_new']);
+    const prim = part.customMeshes.find((m) => m.primitive)!;
+    const imported = part.customMeshes.find((m) => m.imported)!;
+    expect(prim.id).toBe('mesh_new1');
+    expect(imported.id).toBe('mesh_new2');
+    // A fresh SubPart template id per mesh, and the placements follow it.
+    expect(prim.subPartId).not.toBe('sp_1');
+    expect(part.placements.map((p) => p.subPartTemplateId).sort()).toEqual(
+      [prim.subPartId, imported.subPartId].sort(),
+    );
+    // The import BATCH is re-keyed, but `meshName` — the node name inside the GLB — is not.
+    expect(imported.imported?.importId).toBe('imp_new');
+    expect(imported.imported?.meshName).toBe('flexo_RcsPod_Metal_ab12cd34');
+    // Every texture reference travels through the adoption map.
+    expect(prim.faceTextures.right?.textureId).toBe('tex_new');
+    const mat = part.customMaterials.find((m) => m.id === 'mat_1')!;
+    expect(mat.baseColor).toEqual({ kind: 'map', textureId: 'tex_new' });
+  });
+
+  it('reuses a deduped texture id and copies no descriptor for it', () => {
+    const env = archiveEnvelope();
+    const adoption = {
+      textures: new Map([['tex_1', 'tex_existing']]),
+      copiedTextures: new Map<string, string>(),
+      meshes: new Map([['mesh_1', 'mesh_new1']]),
+      imports: new Map<string, string>(),
+      hashes: new Map([['tex_existing', 'abc']]),
+    };
+    const destination = createEmptyPart();
+    destination.customTextures.push({
+      id: 'tex_existing',
+      name: 'Panel',
+      width: 8,
+      height: 8,
+      channel: 'baseColor',
+    });
+    const { part } = mergeProjectImport(destination, env, { adoption });
+
+    // No second copy of the texture, and the hash learned while deduping is cached.
+    expect(part.customTextures.map((x) => x.id)).toEqual(['tex_existing']);
+    expect(part.customTextures[0].sha256).toBe('abc');
+    expect(part.customMeshes.find((m) => m.primitive)?.faceTextures.right?.textureId).toBe(
+      'tex_existing',
+    );
+    // The IMPORTED mesh had no entry in the plan, so it never lands — its geometry blob was
+    // never copied, and a SubPart with no geometry is worse than one that is absent.
+    expect(part.customMeshes.filter((m) => m.imported)).toEqual([]);
+  });
+
+  it('merges the same archive twice into two independent sets of meshes', () => {
+    const env = archiveEnvelope();
+    const first = mergeProjectImport(createEmptyPart(), env, {
+      adoption: {
+        textures: new Map([['tex_1', 'tex_a']]),
+        copiedTextures: new Map([['tex_1', 'tex_a']]),
+        meshes: new Map([['mesh_1', 'mesh_a']]),
+        imports: new Map(),
+        hashes: new Map(),
+      },
+    });
+    const second = mergeProjectImport(first.part, env, {
+      adoption: {
+        textures: new Map([['tex_1', 'tex_a']]), // deduped onto the first import's texture
+        copiedTextures: new Map(),
+        meshes: new Map([['mesh_1', 'mesh_b']]),
+        imports: new Map(),
+        hashes: new Map(),
+      },
+    });
+    expect(second.part.customMeshes).toHaveLength(2);
+    expect(second.part.customTextures).toHaveLength(1);
+    expect(new Set(second.part.customMeshes.map((m) => m.subPartId)).size).toBe(2);
+    expect(second.part.placements).toHaveLength(2);
   });
 });
 

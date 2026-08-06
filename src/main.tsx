@@ -3,8 +3,7 @@ import { createRoot } from 'react-dom/client';
 import './index.css';
 import App from './app.tsx';
 import { toast } from './ui/toast';
-import { BuildIdMismatchDialog } from './ui/BuildIdMismatchDialog';
-import { checkBuildId } from './buildCheck';
+import { checkBuildId, initBuildMismatchNotice } from './buildCheck';
 import { hydrateProjectOnBoot, loadSharedProject, purgeV1ProjectKeys } from './state/projectStore';
 import { clearShareParam, decodeSharePayload, readShareParam } from './state/projectShareLink';
 import { suppressAboutFirstUse } from './state/aboutStore';
@@ -102,6 +101,9 @@ void (async () => {
     // the intro stays unseen (flexo:aboutSeen unchanged) so it greets them next time.
     suppressAboutFirstUse();
   } else {
+    // S26: a mismatch posts a sticky NOTIFICATION with [Reload] / [Reset everything…]; the
+    // v1 boot modal is gone, and nothing about a redeploy blocks startup.
+    initBuildMismatchNotice();
     checkBuildId();
   }
 
@@ -131,7 +133,6 @@ void (async () => {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <App />
-      <BuildIdMismatchDialog />
     </StrictMode>,
   );
 })();

@@ -124,6 +124,44 @@ export const assetKeys = {
     `${projectPrefix(projectId)}emissive-paint:${id}`,
 };
 
+/**
+ * The five blob tiers, in the order the archive lists them. The literal strings are the
+ * middle segment of every key {@link assetKeys} builds — this array and {@link assetKeyFor}
+ * keep the archive's `assets/<kind>/<id>` layout spelled from the SAME source as the keys,
+ * so a new tier cannot ship half-namespaced.
+ */
+export const ASSET_KINDS = [
+  'tex-src',
+  'tex-ktx2',
+  'mesh-glb',
+  'import-glb',
+  'emissive-paint',
+] as const;
+
+export type AssetKind = (typeof ASSET_KINDS)[number];
+
+/** Builds a key from a runtime-chosen kind (the archive import/export path). */
+export function assetKeyFor(projectId: string, kind: AssetKind, id: string): string {
+  return `${projectPrefix(projectId)}${kind}:${id}`;
+}
+
+/** Splits a namespaced key back into its parts, or `null` when it is not one. */
+export function parseAssetKey(
+  key: string,
+): { projectId: string; kind: AssetKind; id: string } | null {
+  if (!key.startsWith('pa:')) return null;
+  const rest = key.slice(3);
+  const projectEnd = rest.indexOf(':');
+  if (projectEnd < 0) return null;
+  const projectId = rest.slice(0, projectEnd);
+  const tail = rest.slice(projectEnd + 1);
+  const kindEnd = tail.indexOf(':');
+  if (kindEnd < 0) return null;
+  const kind = tail.slice(0, kindEnd) as AssetKind;
+  if (!ASSET_KINDS.includes(kind)) return null;
+  return { projectId, kind, id: tail.slice(kindEnd + 1) };
+}
+
 /** Every key stored under this project's prefix. */
 export function listProjectBlobs(projectId: string): Promise<string[]> {
   return tx('readonly').then(

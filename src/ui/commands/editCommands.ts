@@ -17,17 +17,15 @@ import {
 } from '../../state/editorStore';
 import { $hasSelection, $selectionCount } from '../../state/selectors';
 import { requestStatusConfirm, status, undoStatusAction } from '../../state/statusStore';
+import { confirmThreshold } from '../../state/settingsStore';
 import { beginActionChain } from '../chain/openChainPalette';
 import { toast } from '../toast';
 
-/**
- * The §14.3 confirm threshold: up to this many entities delete with NO confirm and a status
- * flash carrying an inline `[Undo]`; more than this asks first, stating the count. One
- * policy for every delete entry point — hotkey, Edit menu, row menu — which is what heals
- * v1's hotkey-deletes-silently / toolbar-always-asks split (census: selection-transform
- * pain 10).
- */
-const DELETE_CONFIRM_THRESHOLD = 5;
+// The §14.3 confirm threshold lives in `settingsStore` (`$confirmThreshold`, edited in
+// Settings ▸ General): up to that many entities delete with NO confirm and a status flash
+// carrying an inline `[Undo]`; more than that asks first, stating the count. One policy for
+// every delete entry point — hotkey, Edit menu, row menu — which is what heals v1's
+// hotkey-deletes-silently / toolbar-always-asks split (census: selection-transform pain 10).
 
 const items = (n: number): string => `${n} ${n === 1 ? 'item' : 'items'}`;
 
@@ -125,7 +123,7 @@ export const EDIT_COMMANDS: Command[] = [
     run: () => {
       const n = $selectionCount.get();
       if (n === 0) return;
-      if (n > DELETE_CONFIRM_THRESHOLD) {
+      if (n > confirmThreshold()) {
         requestStatusConfirm({
           label: `Delete ${items(n)}?`,
           confirmLabel: 'Delete',

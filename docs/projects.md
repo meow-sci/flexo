@@ -6,7 +6,7 @@ across three modules — `src/state/projectDb.ts` (the database), `src/state/pro
 (the reactive index, the current-project pointer, the multi-tab lock, autosave health) and
 `src/state/projectStore.ts` (snapshots, autosave, boot, the lifecycle actions). The UI is the
 menubar's **project chip** plus the **File** menu, which open the root-hosted dialogs in
-`src/ui/projects/ProjectDialogs.tsx`.
+`src/ui/projects/` (the Project Manager, Rename, Export Archive, Import and Share Link).
 
 ## Identity: a project is an id, not a name
 
@@ -224,13 +224,105 @@ not a document mutation.
 - **Load shared** (a `?load=` share link) opens the decoded project as a **new** saved project
   with a fresh id; the user's existing projects are untouched.
 
-## The `.flexo.tar.gz` container
+## The `.flexo.tar.gz` project archive
 
-`src/state/tarArchive.ts` is the archive primitive: a pure, hand-rolled USTAR packer/unpacker
+An archive is how a whole project leaves the browser — document **and** binaries. It replaced
+v1's "Export Project Data" JSON snippet, which could not carry a single texture byte and
+disabled itself whenever a project had one.
+
+`src/state/tarArchive.ts` is the container primitive: a pure, hand-rolled USTAR packer/unpacker
 plus native gzip/gunzip helpers (`CompressionStream`), with no new dependency. Entry names are
 capped at USTAR's 100-byte `name` field and a longer one throws rather than truncating; only
-regular files are written or read. Nothing consumes it yet — the archive export/import dialogs
-land later in the same phase.
+regular files are written or read. `src/state/projectArchive.ts` builds and reads the archive on
+top of it.
+
+### Layout
+
+```
+<Name>.flexo.tar.gz            gzip over a USTAR tar
+├── manifest.json              MUST be the first entry
+├── project.json               the wire envelope (projectCodec — the SAME one every other
+│                              transfer path produces; there is no archive-only dialect)
+├── thumbnail.webp             optional
+└── assets/<kind>/<assetId>    one entry per blob; kinds are assetDb's own
+                               (tex-src · tex-ktx2 · mesh-glb · import-glb · emissive-paint)
+```
+
+```jsonc
+// manifest.json
+{
+  "format": "flexo-project-archive",
+  "archiveVersion": 1,        // container LAYOUT version (exact-match)
+  "exportVersion": 8,         // PROJECT_EXPORT_VERSION of project.json (exact-match)
+  "name": "Rover-7", "description": "…",
+  "savedAt": 1754300000000, "appBuildId": "abc123",
+  "counts": { …ProjectMeta.counts… },
+  "assets": [
+    { "kind": "tex-src", "id": "t_ab12", "path": "assets/tex-src/t_ab12",
+      "bytes": 152330, "mime": "image/png", "sha256": "…" }
+  ]
+}
+```
+
+### Versioning — two numbers, both exact-match
+
+Import requires an exact `archiveVersion` **and** an exact `exportVersion`; flexo never converts
+formats (the no-migration rule in [AGENTS.md](../AGENTS.md)). A mismatch is a hard error naming
+both numbers. The two are independent: an additive manifest field bumps **neither**, a container
+layout break bumps `ARCHIVE_VERSION`, and the wire rules for `exportVersion` stay the codec's own
+contract. `PROJECT_EXPORT_VERSION` did **not** move for archives — see the codec section below.
+
+### Export (`buildProjectArchive`)
+
+Reads the **stored** snapshot and the project's namespaced blobs, never live editor state, which
+is what lets the Project Manager export any row without opening it (the current project flushes
+its autosave first). It hashes every blob (SHA-256), writes the manifest first, and reports
+`collect → pack → compress` progress; an `AbortSignal` cancels it with no partial file. A
+project with no binaries exports fine — an empty `assets/` and a tiny archive.
+
+### Import (`parseProjectArchive` + `importArchive`)
+
+Parsing is total at the container level and exact at the two version gates, and every failure is
+a message the dialog renders verbatim ("Not a flexo archive.", the version copy, "Archive is
+incomplete (missing …). Nothing was imported."). Nothing touches the workspace until it succeeds.
+
+Then one of two destinations:
+
+- **Merge into the current project** (the default) — additive, with fresh collision-free ids and
+  every cross-reference rewritten, as **ONE undo step**. Binary assets are adopted into this
+  project's namespace under fresh ids before the document mutation, so undoing removes
+  descriptors and never bytes (the unchanged asset contract).
+- **Open as new project** — a faithful reconstruction (no remapping) as a fresh saved project,
+  switched to, with the blobs adopted verbatim under the new namespace. Not an undo step: it
+  arrives as a project, not as an edit.
+
+**Texture dedup** (merge only): an incoming texture is compared against destination textures of
+the same channel with the same source byte length, by SHA-256. A match reuses the existing
+texture id and copies no blob; the hash learned on the way is cached on the descriptor
+(`CustomTexture.sha256`, an additive optional field — no version moves for it). **Meshes and
+imports never dedup** — identity is load-bearing, two identical boxes are two SubParts — and an
+import BATCH gets one fresh `importId` shared by every mesh that came from that file, so its one
+copy of geometry stays one copy. The `meshName` inside that GLB is never rewritten: it is the
+key the geometry resolves by.
+
+### What may travel, and why
+
+The wire carries descriptors; `assetDb` carries bytes. So whether a descriptor may ride is the
+**container's** call, not the payload's:
+
+| Descriptor | Needs from the container |
+| --- | --- |
+| kitten submesh | nothing — it re-bakes from the shipped kitten gltf |
+| primitive mesh | nothing — it is rebuilt from its own `PrimitiveSpec` (no `mesh-glb` blob is ever written; the tier is reserved) |
+| imported glTF mesh | its `import-glb` batch blob — the only copy in existence |
+| uploaded texture | its `tex-src` pixels (`tex-ktx2` is a re-encodable cache) |
+
+`buildProjectExport(part, name, {includeBinaryBacked: true})` is the archive's opt-in; without
+it the wire stays exactly what v1 produced (kitten meshes only, no textures). On the way back
+in, `parseProjectImport(text, {binaryAssets})` keeps precisely the descriptors the table backs
+and **drops the rest along with everything that referenced them** — the placements of a dropped
+mesh, and the material channels and face textures of a dropped texture. A pasted JSON snippet or
+a share link passes `binaryAssets: null`, which is v1's drop-smuggled-meshes rule.
 
 ## The compact project codec
 
@@ -247,7 +339,10 @@ policy**: an additive, backwards-compatible change **MUST NOT** bump it, because
 total and tolerant (missing fields fall back to defaults, so an older same-version payload
 still imports cleanly). Only a **breaking** change bumps it, and adds its own `// vN: what
 broke` line to the constant's changelog comment. Historically the version was bumped for
-additive work too (v3 custom materials, v6 colliders); that stops. A document-model break
+additive work too (v3 custom materials, v6 colliders); that stops — the archive work added
+`tex` (custom-texture descriptors), `prm` (a primitive's spec) and `ft` (per-face textures)
+**without** bumping, because an older v8 payload simply lacks them and their absence decodes to
+exactly what that payload meant. A document-model break
 bumps this **and** `PROJECT_SCHEMA_VERSION`; a wire-format-only change (codec key renames)
 bumps only this one. See the constitution in [AGENTS.md](../AGENTS.md).
 
@@ -257,28 +352,63 @@ a seat's `layerId` is restored from `IVA_SEAT_LAYER_ID` on decode rather than se
 its unused `scale` omitted by the shared transform encoder. `ifl` is decoded defensively —
 only `string → boolean` entries survive, bad data is dropped.
 
-## UI — the project chip, the File menu, and `src/ui/projects/ProjectDialogs.tsx`
+## Share links (asset-less; the one surviving `hasCustomAssets` gate)
+
+`src/state/projectShareLink.ts` is unchanged and byte-compatible with v1: compact JSON → Zstd 19
+→ URL-safe Base64 → `?load=<payload>`, decoded at boot into a **new** project with a fresh id
+(the param is stripped with `replaceState`, first-run About is suppressed but not consumed, and
+the build check is skipped entirely so the stored `flexo_build_id` stays untouched).
+
+The archive removed the `hasCustomAssets` export gate; **share links keep it**, because that gate
+was never policy — a URL cannot carry a texture's bytes. The item is never greyed out: with
+binary assets the dialog explains what is in the way and offers **Export archive instead…**,
+which opens the archive dialog already scoped to that project. Kitten meshes still share fine.
+A link over 8000 characters gets the truncation warning.
+
+## UI — the project chip, the File menu, and `src/ui/projects/`
 
 The current project name lives in the menubar's right cluster as the **project chip**
 (`src/ui/shell/MenuBar.tsx`; the phone shows it in `PhoneTopBar`). Tapping it runs the
-`file.projects` command, which is the same thing **File ▸ Projects…** and the ⌘K palette
-run: `openDialog({ id: 'projects' })`.
+`file.projects` command — the same thing **File ▸ Projects…**, `⌘O` and the ⌘K palette run.
 
-Both dialogs are mounted once by `src/ui/shell/DialogRoot.tsx` and named by
-`dialogStore`'s `$openDialog` id — no dialog is owned by a trigger button any more:
+Every dialog is mounted once by `src/ui/shell/DialogRoot.tsx` and named by `dialogStore`'s
+`$openDialog` id; none is owned by a trigger button:
 
-- **`'projects'`** (`LoadProjectDialog`) — every saved project with its SubPart count and
-  save time, read straight from `$projectIndex`; load on click, per-row delete behind a
-  confirm that names what else goes with it (stored textures and meshes).
-- **`'rename-project'`** (`RenameProjectDialog`) — a small dialog that calls `renameProject`,
-  so a colliding name auto-suffixes instead of clobbering.
+- **`'projects'`** — the **Project Manager** (L cover, `⌘O`, `ProjectManagerDialog.tsx`).
+  Grid or list of every project with thumbnail, description, counts, created/saved times and
+  size; fuzzy search over name + description + part id; sort by last saved / created / name /
+  size (both persisted in `flexo:projectManagerView`). The current project is pinned as a wide
+  card with a `CURRENT` chip and inline rename + description editing. Row actions: Open,
+  Duplicate, Save As… (current only), Export archive…, Share…, Open in new tab, Delete. Deletion
+  confirms with an **inline strip on the row** — never a nested dialog — stating that undo cannot
+  restore it and how many bytes of assets go with it. A row locked by another tab shows the
+  `● open in another tab` badge; a failing autosave pins a red banner above the grid; the footer
+  states "All changes autosave — there is no Save button", the storage estimate and the one-time
+  **Keep storage persistent** button.
+- **`'rename-project'`** — one field, auto-suffixing (menu/palette parity with the inline rename).
+- **`'export-archive'`** — Summary → Progress on one `DialogViewStack`; takes a `projectId` param
+  so ANY row exports. Delivery is `showSaveFilePicker` where available, else a download anchor.
+- **`'import-project'`** — Pick (drop / choose / paste) → Review (destination radio) → Importing.
+- **`'share-link'`** — the link generator, or the explain state above.
 
-**File ▸ New Project** (`file.new`) creates and switches. Autosave means there is no Save
-action and no Save item in the menu (⌘K's **Save** entry exists only so the reflex gets an
-"Autosaved ✓" answer). Three commands exist purely as notification-action targets and appear in
-no menu: `project.retryAutosave`, `project.takeOver` and `app.reload`. The rich Project Manager
-overlay — cards, search, sort, thumbnails, descriptions, duplicate, archive — replaces this
-interim list later in the same phase.
+**File ▸ New Project** creates and switches. Autosave means there is no Save action and no Save
+item in the menu (⌘S exists only so the reflex gets an "Autosaved ✓" answer). Four commands are
+notification-action targets that appear in no menu: `project.retryAutosave`, `project.takeOver`,
+`app.reload` and `app.resetEverything`.
+
+## Build mismatch and Reset Everything
+
+A new deployment is no longer a boot modal. `checkBuildId()` is unchanged (prod-only, skipped on
+share launches, writes the current id) and `initBuildMismatchNotice()` turns `$buildMismatch`
+into ONE sticky notification — *"flexo was updated"* — with **[Reload]** and
+**[Reset everything…]**. Nothing blocks boot; the schema-version purge remains the real guard and
+keeps its own boot notice.
+
+**Reset Everything** has exactly one home: Settings ▸ Advanced, as a pushed confirm view (never a
+modal over a modal) listing the consequences and carrying the **Reset folder access grants**
+switch — default off, present on every platform including phones. `nukeAndReload` is unchanged:
+localStorage + sessionStorage cleared, every IndexedDB deleted except `flexo-fs` unless opted in,
+reload in `finally`.
 
 ## Tests
 
@@ -291,3 +421,12 @@ schema/corruption purge with their notices, the boot fallback ladder, `normalize
 default-filling (document and history entries, never overwriting a present value), and the
 autosave-failure/recovery health flip. `src/state/projectDb.test.ts` covers `newProjectId` and
 `deriveCounts`; `src/state/tarArchive.test.ts` round-trips the USTAR + gzip codec.
+
+`src/state/projectArchive.test.ts` round-trips a real archive over in-memory IndexedDB mocks:
+the envelope, every asset byte and its hash, the manifest being the first entry, an asset-less
+project, the thumbnail, both exact-version errors and the missing-asset error verbatim, an abort
+mid-collect, and `planAssetAdoption`'s dedup (byte-identical texture reuses the incumbent; meshes
+never dedup; one fresh `importId` per batch). `src/state/projectTransfer.test.ts` covers the
+container split — what travels with and without a backing table, the fresh ids and rewritten
+references on adoption, the dedup path and a double merge — and
+`src/state/editorStore.test.ts` asserts an archive merge is exactly ONE undo step.

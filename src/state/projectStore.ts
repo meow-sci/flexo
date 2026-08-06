@@ -748,9 +748,33 @@ export async function deleteProject(id: ProjectId): Promise<void> {
  * are untouched. Reconstructed faithfully (no id remapping); camera/selection/history reset.
  */
 export async function loadSharedProject(env: ProjectExportEnvelope): Promise<string> {
+  const { name } = await loadProjectAsNew(env, { fallbackName: 'Shared Project' });
+  return name;
+}
+
+/**
+ * Materializes an export envelope as a NEW saved project (design §4.3 "Open as new project",
+ * §5 share-link boot). Faithful reconstruction — NO id remapping, built-in layers backfilled —
+ * with a fresh project id and a unique name, saved and switched to. **Never an undo step**:
+ * it arrives as a project, not as an edit.
+ *
+ * `adoptAssets` runs with the new project id BEFORE the document is published, so a
+ * `.flexo.tar.gz` can write its blobs into the new namespace (ids unchanged — the namespace
+ * is what makes them collision-free) and have them there by the time the custom-asset store's
+ * `$currentProjectId` subscriber hydrates against them.
+ */
+export async function loadProjectAsNew(
+  env: ProjectExportEnvelope,
+  opts: {
+    fallbackName?: string;
+    thumbnail?: Blob | null;
+    adoptAssets?: (id: ProjectId) => Promise<void>;
+  } = {},
+): Promise<{ id: ProjectId; name: string }> {
   const part = envelopeToPart(env);
   const id = newProjectId();
-  const name = uniqueProjectName(env.projectName.trim() || 'Shared Project');
+  const name = uniqueProjectName(env.projectName.trim() || opts.fallbackName || 'Imported Project');
+  if (opts.adoptAssets) await opts.adoptAssets(id);
   suspended = true;
   try {
     importHistory({ undo: [], redo: [] });
@@ -771,6 +795,7 @@ export async function loadSharedProject(env: ProjectExportEnvelope): Promise<str
   lastHistoryBytes = 0;
   await writeAllNow();
   await acquireProjectLock(id);
-  requestThumbnail();
-  return name;
+  if (opts.thumbnail) await storeThumbnail(id, opts.thumbnail);
+  else requestThumbnail();
+  return { id, name };
 }

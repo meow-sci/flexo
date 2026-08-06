@@ -33,7 +33,7 @@ export type DialogId =
   | 'projects'
   | 'rename-project'
   | 'share-link'
-  | 'export-project'
+  | 'export-archive'
   | 'import-project'
   | 'export-ksa'
   | 'settings'

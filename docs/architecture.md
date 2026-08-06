@@ -91,6 +91,10 @@ Three shell services sit between the UI and the stores, and each is a single dat
 
 ## Key invariants
 
+- **Boot paints once.** `main.tsx` awaits `hydrateProjectOnBoot()` (IndexedDB is async) before
+  `createRoot().render()`, and `initCustomAssets()` runs strictly after it so blob hydration
+  reads the resolved `$currentProjectId`. Nothing may render ahead of that await — see
+  [projects.md](./projects.md).
 - Transforms convert between store and three.js **only** through
   `src/three/coords.ts` (see [coordinates.md](./coordinates.md)).
 - Numbers serialized to XML go through `formatG6` (see [xml-io.md](./xml-io.md)).

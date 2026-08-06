@@ -114,7 +114,9 @@ Do **not** persist:
 
 ## Implementation Notes
 
-- **localStorage key naming**: Use camelCase with app prefix if needed, e.g. `flexo_toolMode`, `flexo_cameraZoom`
+- **localStorage key naming**: `flexo:` + camelCase — e.g. `flexo:showFpsCounter`,
+  `flexo:projectManagerView`. (Older docs showed `flexo_toolMode`-style underscores; the only
+  underscore key left in the tree is `flexo_build_id`, which predates the convention.)
 - **Defaults**: The second argument to `persistentAtom` is the default when localStorage is empty (first visit)
 - **Encoding**: Use `JSON.stringify`/`JSON.parse` for most data; for complex types, add a custom encode/decode
 - **Subscriptions**: Persist atoms work with all nanostores APIs (`subscribe()`, `useStore()`, computed, etc.)
@@ -207,12 +209,25 @@ user-visible notice) only on a version bump or corruption — never migrated. Se
 | IndexedDB | `flexo-assets` | custom-asset binaries under **project-namespaced** keys, `pa:<projectId>:<kind>:<assetId>` |
 | IndexedDB | `flexo-fs` | the granted mods-folder directory handle (`modFolderStore`) |
 
+Two more preference keys belong to the project surfaces themselves: **`flexo:projectManagerView`**
+(`{view: 'grid' | 'list', sort: 'saved' | 'created' | 'name' | 'size'}` — the Project Manager's
+layout, deliberately NOT including the search query, which is per-session) and
+**`flexo:confirmThreshold`** (the one §14.3 confirm-before-destroy count, edited in
+Settings ▸ General and read by every delete entry point).
+
 Three localStorage keys are **retired and deliberately not migrated**: `flexo:project:<name>`
 (the v1 per-project snapshot entries) and `flexo:currentProject` (the v1 `{ name }` pointer),
 both deleted at boot with a user-visible warning notification per the "purged, never
 converted" rule; and `flexo:layerView` (the global per-layer view state), which is simply no
 longer read or written — that state now lives only inside the project snapshot, so it is per
 project.
+
+### Leaving the browser
+
+A project's full state — document plus every asset binary — travels as a **`.flexo.tar.gz`
+archive** (`manifest.json` + `project.json` + `assets/<kind>/<id>`), which is the only export
+that carries bytes. A **share link** carries the document alone and is therefore offered only for
+projects with no binary assets. Both are described in [projects.md](./projects.md).
 
 ## Related
 

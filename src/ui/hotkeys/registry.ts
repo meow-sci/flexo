@@ -18,6 +18,12 @@ import { isInteractiveCollectionFocus } from './typingGuard';
 import { dispatchEsc, registerEscRung } from './escLadder';
 import { registerListSurfaceEditMirrors } from './listSurfaceMirrors';
 import { focusOutlinerSearch } from '../outliner/outlinerSearch';
+import {
+  glowPaintCanRedo,
+  glowPaintCanUndo,
+  glowPaintRedo,
+  glowPaintUndo,
+} from '../glowPaintControls';
 import { validateRegistry } from './validateRegistry';
 
 /**
@@ -549,6 +555,42 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
       },
     ],
   },
+  {
+    title: 'Glow paint',
+    // Per-STROKE undo inside the paint canvas (design-surface-assets.md D2). Scoped
+    // `surface:glow-paint`, which outranks `global` (foundation §11.1 precedence
+    // surface > … > global) — that is the whole point: while the painter is open ⌘Z must step
+    // a stroke, not the DOCUMENT. Global bindings stay active behind dialogs by design, so
+    // without this scope binding ⌘Z would reach `edit.undo` through the open painter.
+    //
+    // `enableOnFormTags` because the dialog's brush/intensity sliders and colour input can
+    // hold focus while painting; the `when` gate keeps the chord falling through to the
+    // document's undo when there is no stroke to step.
+    bindings: [
+      {
+        id: 'glowPaint.undo',
+        label: 'Undo paint stroke',
+        keys: 'mod+z',
+        chords: [['mod', 'Z']],
+        scope: 'surface:glow-paint',
+        when: () => glowPaintCanUndo(),
+        overrides: ['edit.undo'],
+        options: { enableOnFormTags: true, preventDefault: true },
+        run: () => glowPaintUndo(),
+      },
+      {
+        id: 'glowPaint.redo',
+        label: 'Redo paint stroke',
+        keys: 'mod+shift+z',
+        chords: [['mod', 'shift', 'Z']],
+        scope: 'surface:glow-paint',
+        when: () => glowPaintCanRedo(),
+        overrides: ['edit.redo'],
+        options: { enableOnFormTags: true, preventDefault: true },
+        run: () => glowPaintRedo(),
+      },
+    ],
+  },
 ];
 
 /** Flattened bindings, for the component that wires `useHotkeys` per binding. */
@@ -565,7 +607,6 @@ export const ALL_BINDINGS: HotkeyBinding[] = HOTKEY_GROUPS.flatMap((g) => g.bind
 //
 // | Binding (authoritative-table row)                                        | Owning phase |
 // |--------------------------------------------------------------------------|--------------|
-// | `surface:glow-paint` `⌘Z` / `⇧⌘Z` per-stroke paint undo                   | P8           |
 // | `mode:animation` `Space` · `,` `.` · `K` (transport / prev-next key /     | P11 (timeline) |
 // |   insert key at playhead)                                                 |              |
 // | `surface:timeline` `←→ ⇧←→ ⌘A ⌥⌘A ⌘C ⌘X ⌘V ⌫ = - F ⇧F Esc`                | P11          |

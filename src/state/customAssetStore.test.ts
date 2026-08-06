@@ -100,10 +100,14 @@ vi.mock('../three/kittenBake', () => ({
   }),
 }));
 
-import { $part, newPart, undo } from './editorStore';
+import { $historyList, $part, newPart, undo } from './editorStore';
 import { $customCatalog } from './catalogStore';
 import {
+  $assetUsage,
+  $unplacedCustomMeshes,
   addCustomMaterial,
+  clearMeshFaceConfig,
+  copyFaceConfigToAll,
   customMeshRenderCache,
   importModelAsMeshes,
   makeKittenMeshPart,
@@ -111,10 +115,13 @@ import {
   planImportRemoval,
   removeCustomMaterial,
   removeImport,
+  renameCustomTexture,
   replaceImport,
+  setMeshGlowStreaming,
   setMeshMaterial,
   setMeshTransparent,
   updateCustomMaterial,
+  updateCustomMesh,
 } from './customAssetStore';
 import { analyzeImport, DEFAULT_IMPORT_OPTIONS } from '../ksa/importPlan';
 import { normalizeImport, type NormalizedImport } from '../ksa/importNormalize';
@@ -822,5 +829,176 @@ describe('matchImportedMeshes', () => {
     expect(plan.matched.map((m) => m.mesh.id)).toEqual(['a', 'b']);
     expect(plan.added).toHaveLength(0);
     expect(plan.removed).toHaveLength(0);
+  });
+});
+
+/**
+ * The Phase-8 store additions the Surface sidebar, the left Face card and the Asset Manager
+ * all read (design-surface-assets.md §2.4, §7.1, D10).
+ */
+describe('surface-mode store additions', () => {
+  const box = (over: Partial<CustomMesh> = {}): CustomMesh => ({
+    id: 'mesh_1',
+    name: 'Hull Box',
+    subPartId: 'flexo_HullBox_a1',
+    primitive: { kind: 'box', params: { width: 1, height: 1, depth: 1 } },
+    faceTextures: {},
+    ...over,
+  });
+
+  const placement = (instanceId: string, templateId: string, layerId = 'default') => ({
+    instanceId,
+    subPartTemplateId: templateId,
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+    layerId,
+  });
+
+  /** How many UNDO entries the history holds right now. */
+  const undoDepth = () => $historyList.get().filter((h) => h.stepsFromCurrent < 0).length;
+
+  it('$assetUsage counts faces, material channels and placements', async () => {
+    const mat = await addCustomMaterial('Steel', {
+      baseColor: { kind: 'map', textureId: 'tex_base' },
+      normal: { textureId: 'tex_normal', strength: 1 },
+    });
+    $part.set({
+      ...$part.get(),
+      customTextures: [
+        { id: 'tex_base', name: 'base', width: 2, height: 2, channel: 'baseColor' },
+        { id: 'tex_normal', name: 'nrm', width: 2, height: 2, channel: 'normal' },
+        { id: 'tex_unused', name: 'unused', width: 2, height: 2, channel: 'baseColor' },
+      ],
+      customMeshes: [
+        box({
+          materialId: mat.id,
+          faceTextures: {
+            right: { textureId: 'tex_base', uvScale: { x: 1, y: 1 }, uvOffset: { x: 0, y: 0 } },
+            left: { textureId: 'tex_base', uvScale: { x: 1, y: 1 }, uvOffset: { x: 0, y: 0 } },
+          },
+        }),
+      ],
+      placements: [
+        placement('hull_1', 'flexo_HullBox_a1', 'default'),
+        placement('hull_2', 'flexo_HullBox_a1', 'wings'),
+      ],
+    });
+
+    const usage = $assetUsage.get();
+    expect(usage.texture.get('tex_base')?.faces.map((f) => f.faceKey)).toEqual(['right', 'left']);
+    expect(usage.texture.get('tex_base')?.materials).toEqual([{ matId: mat.id, slot: 'base' }]);
+    expect(usage.texture.get('tex_normal')?.materials).toEqual([{ matId: mat.id, slot: 'normal' }]);
+    // An unassigned texture is present with ZERO uses — that is what the manager's Unused
+    // filter reads, so it must not simply be absent.
+    expect(usage.texture.get('tex_unused')).toEqual({ faces: [], materials: [] });
+    expect(usage.material.get(mat.id)?.meshes).toEqual(['mesh_1']);
+    expect(usage.mesh.get('mesh_1')).toEqual({ placements: 2, layers: ['default', 'wings'] });
+  });
+
+  it('$unplacedCustomMeshes lists zero-placement templates only', () => {
+    $part.set({
+      ...$part.get(),
+      customMeshes: [box(), box({ id: 'mesh_2', subPartId: 'flexo_Fin_b2', name: 'Fin' })],
+      placements: [placement('hull_1', 'flexo_HullBox_a1')],
+    });
+    expect($unplacedCustomMeshes.get().map((m) => m.id)).toEqual(['mesh_2']);
+  });
+
+  it('renameCustomTexture is one undo step and keeps every reference intact', () => {
+    $part.set({
+      ...$part.get(),
+      customTextures: [{ id: 'tex_base', name: 'old', width: 2, height: 2, channel: 'baseColor' }],
+      customMeshes: [
+        box({
+          faceTextures: {
+            right: { textureId: 'tex_base', uvScale: { x: 1, y: 1 }, uvOffset: { x: 0, y: 0 } },
+          },
+        }),
+      ],
+    });
+    const before = undoDepth();
+    renameCustomTexture('tex_base', '  hull plate  ');
+
+    expect(undoDepth()).toBe(before + 1);
+    expect($part.get().customTextures[0].name).toBe('hull plate');
+    expect($part.get().customTextures[0].id).toBe('tex_base');
+    expect($part.get().customMeshes[0].faceTextures.right!.textureId).toBe('tex_base');
+
+    undo();
+    expect($part.get().customTextures[0].name).toBe('old');
+  });
+
+  it('updateCustomMesh primitive patch keeps the placements and the subPartId', async () => {
+    $part.set({
+      ...$part.get(),
+      customMeshes: [box()],
+      placements: [
+        placement('hull_1', 'flexo_HullBox_a1'),
+        placement('hull_2', 'flexo_HullBox_a1'),
+      ],
+    });
+    await updateCustomMesh('mesh_1', {
+      primitive: { kind: 'box', params: { width: 3, height: 1, depth: 1 } },
+    });
+
+    const p = $part.get();
+    expect(p.customMeshes[0].primitive).toEqual({
+      kind: 'box',
+      params: { width: 3, height: 1, depth: 1 },
+    });
+    expect(p.customMeshes[0].subPartId).toBe('flexo_HullBox_a1');
+    expect(p.placements).toHaveLength(2);
+  });
+
+  it('setMeshGlowStreaming(first=true) pushes exactly one undo entry across a drag', async () => {
+    $part.set({
+      ...$part.get(),
+      customMeshes: [
+        box({
+          emissive: { shape: 'whole', color: { r: 1, g: 2, b: 3 }, strength: 0.2, coverage: 1 },
+        }),
+      ],
+    });
+    const before = undoDepth();
+
+    await setMeshGlowStreaming('mesh_1', { strength: 0.3 }, true);
+    await setMeshGlowStreaming('mesh_1', { strength: 0.4 }, false);
+    await setMeshGlowStreaming('mesh_1', { strength: 0.5 }, false);
+
+    expect(undoDepth()).toBe(before + 1);
+    expect($part.get().customMeshes[0].emissive!.strength).toBe(0.5);
+    undo();
+    expect($part.get().customMeshes[0].emissive!.strength).toBe(0.2);
+  });
+
+  it('copyFaceConfigToAll is one undo step covering every face key', async () => {
+    const cfg = { textureId: 'tex_base', uvScale: { x: 2, y: 2 }, uvOffset: { x: 0, y: 0 } };
+    $part.set({
+      ...$part.get(),
+      customMeshes: [box({ faceTextures: { right: cfg } })],
+    });
+    const before = undoDepth();
+
+    await copyFaceConfigToAll('mesh_1', 'right');
+
+    expect(undoDepth()).toBe(before + 1);
+    const faces = $part.get().customMeshes[0].faceTextures;
+    expect(Object.keys(faces).sort()).toEqual(
+      ['right', 'left', 'top', 'bottom', 'front', 'back'].sort(),
+    );
+    expect(faces.back).toEqual(cfg);
+    // Cloned, not aliased — editing one face must never move another.
+    expect(faces.back).not.toBe(faces.right);
+
+    undo();
+    expect(Object.keys($part.get().customMeshes[0].faceTextures)).toEqual(['right']);
+  });
+
+  it('clearMeshFaceConfig removes just that face', async () => {
+    const cfg = { textureId: 'tex_base', uvScale: { x: 1, y: 1 }, uvOffset: { x: 0, y: 0 } };
+    $part.set({ ...$part.get(), customMeshes: [box({ faceTextures: { right: cfg, top: cfg } })] });
+    await clearMeshFaceConfig('mesh_1', 'right');
+    expect(Object.keys($part.get().customMeshes[0].faceTextures)).toEqual(['top']);
   });
 });

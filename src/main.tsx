@@ -19,6 +19,7 @@ import { initHotkeyStore } from './state/hotkeyStore';
 import { applySnapToGizmo } from './state/snapStore';
 import { initDataMode } from './state/dataModeStore';
 import { initEngineMode } from './state/engineStore';
+import { initSurfaceMode } from './state/surfaceModeStore';
 
 // Wire containerStore and measurementStore into the undo/redo system. Must run
 // before any user interactions (and before hydrateProjectOnBoot so the callbacks
@@ -47,6 +48,11 @@ initDataMode();
 // engine), the define-new jump payload and the same reaction-catalog preload. Exit needs no
 // hook — the tool slot and EditorScene own that teardown (see initEngineMode).
 initEngineMode();
+
+// Surface mode's entry choreography (foundation §2.4: jump payload → selected custom-mesh
+// placement → the surviving pick) plus the `$part` clamp that drops a pick whose mesh was
+// undone away. Same reasoning as the two above — wired from boot, never at module scope.
+initSurfaceMode();
 
 // Restore the current project into the editor stores BEFORE the first render, so
 // the workspace paints once with the right data (no second visual refresh).

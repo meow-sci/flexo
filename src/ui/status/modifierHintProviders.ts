@@ -84,6 +84,15 @@ export function initModifierHintProviders(): void {
       : [],
   );
 
+  // DEVIATION (logged, P8.04): design-surface-assets.md §1.5 asks for the Surface-mode hint
+  // `⌥ Duplicate drag · click Pick face`. Its FIRST half is already live — the `gizmo-drag`
+  // provider above advertises ⌥ Duplicate drag over the viewport with a selection, in every
+  // mode. Its second half is NOT a modifier gesture (a plain click), and this roster is
+  // modifier-keyed by construction (`HintRow.mod: keyof HeldModifiers`), so advertising it
+  // here would mean inventing a "no modifier" row the segment has no way to render. The
+  // Surface status segment (`SurfaceSegment.tsx`) carries `mesh: … · face …` instead, which
+  // is where the click's RESULT is visible.
+
   // The list hooks: ⇧ extends a range from the anchor (grow-only), ⌘/⌃ toggles one row.
   registerModifierHints('list', (ctx) =>
     ctx.hover === 'list'

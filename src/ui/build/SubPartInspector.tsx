@@ -10,9 +10,10 @@ import {
   setSubPartInstanceId,
 } from '../../state/editorStore';
 import { $catalogIndex } from '../../state/catalogStore';
-import { setManagingMeshId } from '../../state/customAssetStore';
 import { resolveInternal } from '../../ksa/modExport';
 import { openSubPartData } from '../data/subPartDataJump';
+import { openMeshSurface } from '../surface/surfaceJump';
+import { $mode, setMode } from '../../state/modeStore';
 import type { SubPartPlacement } from '../../ksa/types';
 
 /**
@@ -39,6 +40,7 @@ export function SubPartInspector({
 }) {
   const part = useStore($part);
   const catalogIndex = useStore($catalogIndex);
+  const mode = useStore($mode);
   const [draft, setDraft] = useState<string | null>(null);
 
   const templateId = placement.subPartTemplateId;
@@ -101,10 +103,19 @@ export function SubPartInspector({
         <Button size="sm" variant="secondary" onPress={() => openSubPartData(templateId)}>
           SubPart Data →
         </Button>
-        {/* TODO(P8): re-point at the Surface-mode jump command (mesh picked). */}
+        {/* A JUMP, not a stack (foundation §2.5): Surface mode opens with this mesh picked
+            and its first face selected. ONE label everywhere — the v1 "Manage Textures" /
+            "Manage Material" split by mesh kind is dead (design §6). */}
         {customMesh && (
-          <Button size="sm" variant="secondary" onPress={() => setManagingMeshId(customMesh.id)}>
+          <Button size="sm" variant="secondary" onPress={() => openMeshSurface(customMesh.id)}>
             Edit Surface →
+          </Button>
+        )}
+        {/* This card also mounts in SURFACE mode's left panel, where the route back to the
+            full Build editors has to exist (design §1.4 "its ⋮ gains Open in Build mode →"). */}
+        {mode === 'surface' && (
+          <Button size="sm" variant="ghost" onPress={() => setMode('build')}>
+            Open in Build mode →
           </Button>
         )}
       </div>

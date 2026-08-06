@@ -13,7 +13,9 @@ import { PartBrowserDialog } from '../build/PartBrowserDialog';
 import { CustomAssetsModal } from '../CustomAssetsModal';
 import { CustomTextureDialog } from '../CustomTextureDialog';
 import { CreateMeshDialog } from '../CreateMeshDialog';
-import { MaterialDialog } from '../MaterialDialog';
+import { MaterialDialog, type MaterialDialogParams } from '../MaterialDialog';
+import { GlowPaintDialog } from '../GlowPaintDialog';
+import { setMeshMaterial } from '../../state/customAssetStore';
 import { ConfirmDialog } from '../kit';
 import {
   discardChainAndRestart,
@@ -85,8 +87,27 @@ export function DialogRoot() {
       return <CustomTextureDialog onClose={closeDialog} />;
     case 'create-mesh':
       return <CreateMeshDialog onClose={closeDialog} />;
-    case 'material':
-      return <MaterialDialog onClose={closeDialog} />;
+    case 'material': {
+      const params = open.params as MaterialDialogParams | undefined;
+      return (
+        <MaterialDialog
+          materialId={params?.materialId}
+          onClose={closeDialog}
+          onCreated={
+            params?.assignToMeshId
+              ? (mat) => void setMeshMaterial(params.assignToMeshId!, mat.id)
+              : undefined
+          }
+        />
+      );
+    }
+    // The glow painter (design-surface-assets.md §1.6). Its OWN Cancel path runs the
+    // dirty-discard confirm; `onClose` is only ever called once that has been answered.
+    case 'glow-paint': {
+      const params = open.params as { meshId?: string } | undefined;
+      if (!params?.meshId) return null;
+      return <GlowPaintDialog meshId={params.meshId} onClose={closeDialog} />;
+    }
     case 'help':
       return <HelpDialog isOpen onOpenChange={dismiss} />;
     case 'about':

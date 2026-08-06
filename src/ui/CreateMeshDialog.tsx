@@ -13,6 +13,7 @@ import {
 } from './kit';
 import { $part } from '../state/editorStore';
 import { useNumberDraft } from './numberDraft';
+import { PARAM_FIELDS } from './primitiveParamFields';
 import { addCustomMesh } from '../state/customAssetStore';
 import { DEFAULT_PRIMITIVE_PARAMS, PRIMITIVE_KINDS, PRIMITIVE_LABELS } from '../three/primitives';
 import type { PrimitiveKind, PrimitiveSpec } from '../ksa/types';
@@ -207,30 +208,3 @@ function ParamNumberField(props: { label: string; value: number; onCommit: (n: n
     />
   );
 }
-
-interface ParamField {
-  key: string;
-  label: string;
-}
-
-/** Editable numeric fields per primitive kind (keys match the param interfaces). */
-const PARAM_FIELDS: Record<PrimitiveKind, ParamField[]> = {
-  box: [
-    { key: 'width', label: 'Width (m)' },
-    { key: 'height', label: 'Height (m)' },
-    { key: 'depth', label: 'Depth (m)' },
-  ],
-  cylinder: [
-    { key: 'radius', label: 'Radius (m)' },
-    { key: 'height', label: 'Height (m)' },
-    { key: 'radialSegments', label: 'Segments' },
-  ],
-  sphere: [
-    { key: 'radius', label: 'Radius (m)' },
-    { key: 'segments', label: 'Segments' },
-  ],
-  plane: [
-    { key: 'width', label: 'Width (m)' },
-    { key: 'height', label: 'Height (m)' },
-  ],
-};

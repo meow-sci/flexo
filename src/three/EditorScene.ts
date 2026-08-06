@@ -127,6 +127,14 @@ import {
   registerTool,
 } from '../state/modeStore';
 import { $dataFlash, $dataHighlight, setDataScope } from '../state/dataModeStore';
+import {
+  $faceDraft,
+  $faceHighlight,
+  faceKeysFor,
+  pickSurfaceFace,
+  pickSurfaceMesh,
+} from '../state/surfaceModeStore';
+import { applyFaceUvTransforms, buildPrimitiveGeometry } from './primitives';
 import { status } from '../state/statusStore';
 import {
   $activeEngineEntry,
@@ -267,6 +275,12 @@ export class EditorScene {
   private tinted: SubPartObject[] = [];
   /** Connector markers lit by a one-shot Data-mode flash (never a selected one). */
   private flashedConnectors: ConnectorObject[] = [];
+  /** Placements currently wearing Surface mode's face tint (never a selected one). */
+  private faceHighlighted: SubPartObject[] = [];
+  /** Placements currently rendering the left Face card's live UV draft geometry. */
+  private faceDraftObjects: SubPartObject[] = [];
+  /** The draft geometry those placements share; owned here, disposed on clear. */
+  private faceDraftGeometry: THREE.BufferGeometry | null = null;
   private attachedObject: THREE.Object3D | null = null;
   /** Instance ids whose group transform is currently overridden by the animation preview. */
   private animOverridden = new Set<string>();
@@ -417,6 +431,25 @@ export class EditorScene {
             if (templateId) setDataScope({ kind: 'template', templateId });
           } else {
             status(`${NON_CAPABLE_NOUN[kind]} have no SubPart data — edited in Build mode`);
+          }
+        }
+        // Surface mode's click-to-pick (design-surface-assets.md §1.5): clicking a CUSTOM
+        // mesh's placement also picks its template and, for a primitive, the face under the
+        // cursor. A built-in SubPart is a plain selection — the left sidebar answers it with
+        // the read-only built-in surface card (D7).
+        if ($mode.get() === 'surface' && kind === 'subpart') {
+          const templateId = part.placements.find(
+            (p) => p.instanceId === selected.id,
+          )?.subPartTemplateId;
+          const mesh = part.customMeshes.find((m) => m.subPartId === templateId);
+          if (mesh) {
+            pickSurfaceMesh(mesh.id);
+            // The array order of PRIMITIVE_FACE_KEYS IS the geometry group / materialIndex
+            // order (three/primitives.ts), so the hit's group index maps straight back.
+            const keys = faceKeysFor(mesh);
+            const key =
+              selected.faceGroupIndex !== undefined ? keys[selected.faceGroupIndex] : keys[0];
+            if (key) pickSurfaceFace(key);
           }
         }
       },
@@ -593,6 +626,11 @@ export class EditorScene {
     // `sub`, so the on-demand render loop is invalidated for us.
     this.sub($dataHighlight, () => this.applyDataTint());
     this.sub($dataFlash, () => this.applyDataTint());
+    // Surface mode's template-scoped face tint (design-surface-assets.md §1.5, D12) and the
+    // left Face card's live UV draft (§1.4). Both go through `sub`, so the on-demand loop is
+    // invalidated for us — neither forces a continuous frame (foundation §14.5).
+    this.sub($faceHighlight, () => this.applyFaceHighlight());
+    this.sub($faceDraft, () => this.applyFaceDraft());
     // A context change re-targets a selected light's highlight + gizmo to the newly
     // clicked instance even when the selection indices themselves are unchanged.
     this.sub($lightEditContext, () => this.updateSelection());
@@ -1769,6 +1807,92 @@ export class EditorScene {
     this.flashedConnectors = [...wantedConnectors];
   }
 
+  /**
+   * Surface mode's **face highlight** (design-surface-assets.md §1.5, D12): the picked face
+   * tints on EVERY placement of the picked mesh, which is what makes "face config is
+   * per-template data" visible instead of implied.
+   *
+   * A genuinely SELECTED placement keeps the selection highlight (the two share the emissive
+   * channel, so the selection always wins), and `applyDataTint` is re-run afterwards because
+   * clearing a face tint restores base emissives that a Data-mode scope tint may have owned.
+   */
+  private applyFaceHighlight(): void {
+    const highlight = $faceHighlight.get();
+    const selected = new Set(this.selectedObjects());
+    const wanted: SubPartObject[] = [];
+    let groupIndex: number | null = null;
+    let whole = false;
+
+    if (highlight) {
+      const part = $part.get();
+      const mesh = part.customMeshes.find((m) => m.id === highlight.meshId);
+      if (mesh) {
+        const keys = faceKeysFor(mesh);
+        // No face grid at all (imported / kitten), or the single-key 'all' of a sphere or
+        // plane, or "no face picked" ⇒ the whole mesh tints.
+        whole = keys.length <= 1 || highlight.faceKey === null;
+        const index = highlight.faceKey ? keys.indexOf(highlight.faceKey) : -1;
+        groupIndex = index >= 0 ? index : null;
+        for (const p of part.placements) {
+          if (p.subPartTemplateId !== mesh.subPartId) continue;
+          const obj = this.objects.get(p.instanceId);
+          if (obj) wanted.push(obj);
+        }
+      }
+    }
+
+    const wantedSet = new Set(wanted);
+    for (const obj of this.faceHighlighted) {
+      if (wantedSet.has(obj)) continue;
+      obj.setFaceHighlight(null, false);
+      if (selected.has(obj)) obj.setSelected(true);
+    }
+    for (const obj of wanted) {
+      if (selected.has(obj)) continue;
+      obj.setFaceHighlight(groupIndex, whole);
+    }
+    this.faceHighlighted = wanted;
+    this.applyDataTint();
+  }
+
+  /**
+   * The left Face card's LIVE UV draft (design-surface-assets.md §1.4): while the user types,
+   * the picked mesh's placements render a geometry baked with the draft's scale/offset, and
+   * only the field's COMMIT reaches the document as one undo step.
+   *
+   * It re-bakes through `applyFaceUvTransforms` — the same function the render cache and the
+   * exporter use (guardrail 15, "no new preview math") — so what you see while typing is what
+   * the commit will produce. The draft geometry is owned here and disposed on clear.
+   */
+  private applyFaceDraft(): void {
+    for (const obj of this.faceDraftObjects) obj.setGeometryOverride(null);
+    this.faceDraftObjects = [];
+    if (this.faceDraftGeometry) {
+      this.faceDraftGeometry.dispose();
+      this.faceDraftGeometry = null;
+    }
+
+    const draft = $faceDraft.get();
+    if (!draft) return;
+    const part = $part.get();
+    const mesh = part.customMeshes.find((m) => m.id === draft.meshId);
+    if (!mesh?.primitive) return;
+
+    const geometry = buildPrimitiveGeometry(mesh.primitive);
+    applyFaceUvTransforms(geometry, faceKeysFor(mesh), {
+      ...mesh.faceTextures,
+      [draft.faceKey]: draft.cfg,
+    });
+    this.faceDraftGeometry = geometry;
+    for (const p of part.placements) {
+      if (p.subPartTemplateId !== mesh.subPartId) continue;
+      const obj = this.objects.get(p.instanceId);
+      if (!obj) continue;
+      obj.setGeometryOverride(geometry);
+      this.faceDraftObjects.push(obj);
+    }
+  }
+
   /** Syncs the selection highlight and gizmo attachment to the current selection. */
   private updateSelection(): void {
     this.updatePivotHelper(); // before any early-return below; tracks the pivot live during drags
@@ -1781,8 +1905,9 @@ export class EditorScene {
     for (const obj of selected) obj.setSelected(true);
     this.highlighted = selected;
     // After the selection has been applied, so a just-deselected placement of the Data-mode
-    // scope goes back to the TINT rather than to its base emissive.
-    this.applyDataTint();
+    // scope goes back to the TINT — or of the Surface-mode pick, back to its FACE tint —
+    // rather than to its base emissive. `applyFaceHighlight` re-runs `applyDataTint` itself.
+    this.applyFaceHighlight();
     this.measurements.refresh();
     // Recompute container out-of-bounds warnings here too: this runs after
     // reconcile (so removed meshes are already gone) and inside the async SubPart
@@ -2569,6 +2694,10 @@ export class EditorScene {
   dispose(): void {
     // The scene going away takes the preview with it — the bar must not survive it.
     exitSeatView();
+    if (this.faceDraftGeometry) {
+      this.faceDraftGeometry.dispose();
+      this.faceDraftGeometry = null;
+    }
     if (this.coverageDots) {
       this.root.remove(this.coverageDots);
       this.coverageDots.geometry.dispose();

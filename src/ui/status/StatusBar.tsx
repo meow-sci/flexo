@@ -8,6 +8,7 @@ import { NotificationBell } from './NotificationBell';
 import { ToolSegment } from './ToolSegment';
 import { DataSegment } from './DataSegment';
 import { EngineSegment } from './EngineSegment';
+import { SurfaceSegment } from './SurfaceSegment';
 import { SelectionReadout } from './SelectionReadout';
 import { ProgressSegment } from './ProgressSegment';
 import { TransformChips } from './TransformChips';
@@ -48,6 +49,7 @@ export function StatusBar() {
         <LayerChip />
         <DataSegment />
         <EngineSegment />
+        <SurfaceSegment />
         <ToolSegment />
         <SelectionReadout />
       </div>

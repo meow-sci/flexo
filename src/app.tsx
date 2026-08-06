@@ -8,7 +8,6 @@ import { ModeFocusEditor } from './ui/ModeFocusEditor';
 import { MobileInspector } from './ui/MobileInspector';
 import { FloatingPreviewToolbar } from './ui/FloatingPreviewToolbar';
 import { ManageTexturesPanel } from './ui/ManageTexturesPanel';
-import { GlowPaintDialog } from './ui/GlowPaintDialog';
 import { ChainWindow } from './ui/chain/ChainWindow';
 import { ToolBarStrip, ToolBarWindow } from './ui/build/ToolBarWindow';
 import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys';
@@ -212,9 +211,6 @@ function App() {
       {/* ⌘K: fuzzy search over the whole command registry. Desktop and phone alike —
           it is the phone's only way to reach a command with no menu home. */}
       <CommandPalette />
-
-      {/* Modal paint canvas for a mesh's 'painted' glow bitmap. */}
-      <GlowPaintDialog />
 
       {/* Model import (preview + options + warnings). Mounted once for both entry points:
           the Add menu and a drag-drop onto the viewport above. */}

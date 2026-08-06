@@ -4,7 +4,7 @@ import { DataNavigator } from './data/DataNavigator';
 import { AnimToolbar } from './AnimToolbar';
 import { AnimationPanel } from './AnimationPanel';
 import { EngineNavigator } from './engine/EngineNavigator';
-import { panelChrome } from './kit';
+import { SurfaceSidebar } from './surface/SurfaceSidebar';
 import { $mode } from '../state/modeStore';
 
 /**
@@ -55,7 +55,13 @@ export function ModeSidebar() {
   }
 
   if (mode === 'surface') {
-    return <ModePlaceholder mode={mode} />;
+    return (
+      <div className="flex h-full min-h-0 flex-col gap-2">
+        <div className="min-h-0 flex-1">
+          <SurfaceSidebar />
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -67,27 +73,4 @@ export function ModeSidebar() {
   );
 }
 
-// INTERIM (P4): replaced by SurfacePanel (P8). Data's placeholder died with P6's navigator.
-const PLACEHOLDERS = {
-  surface: {
-    title: 'Surface',
-    body: 'Surface mode arrives in a later phase — mesh materials and textures stay editable from Window ▸ Asset Manager….',
-  },
-} as const;
-
-/**
- * INTERIM (P4): the sidebar body for a mode whose real primary has not been built yet.
- * RULE ZERO — nothing is removed: it names where the mode's v1 surfaces still live, so the
- * mode existing never costs the user access to a feature.
- */
-function ModePlaceholder({ mode }: { mode: 'surface' }) {
-  const { title, body } = PLACEHOLDERS[mode];
-  return (
-    <div className="flex h-full min-h-0 flex-col gap-2">
-      <div className={`${panelChrome} p-3`}>
-        <div className="text-xs font-medium text-fg">{title} mode</div>
-        <p className="mt-1 text-xs text-fg-muted">{body}</p>
-      </div>
-    </div>
-  );
-}
+// Every mode's primary now exists — the P4 placeholder is gone (Surface was the last one).

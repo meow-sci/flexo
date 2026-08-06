@@ -2,6 +2,7 @@ import { useStore } from '@nanostores/react';
 import { BuildFocusEditor } from './build/BuildFocusEditor';
 import { DataScopeForm } from './data/DataScopeForm';
 import { ModuleEditor } from './engine/ModuleEditor';
+import { SurfaceLeftPanel } from './surface/SurfaceLeftPanel';
 import { $mode } from '../state/modeStore';
 
 /**
@@ -26,10 +27,13 @@ export function ModeFocusEditor() {
   if (mode === 'data') return <DataScopeForm />;
   // Engine's ruleset is the module the right tree focused — exactly one at a time (§7.4).
   if (mode === 'engine') return <ModuleEditor />;
+  // Surface's ruleset is the picked FACE (plus the selection inspector and the read-only
+  // built-in surface card beneath it) — §7.5.
+  if (mode === 'surface') return <SurfaceLeftPanel />;
 
-  // INTERIM: the remaining two modes keep their editors in the right sidebar / dialogs
-  // until their own phases build a left ruleset. RULE ZERO — nothing is removed, so an empty slot
-  // costs the user no feature.
+  // INTERIM: Animation keeps its editors in the right sidebar / dialogs until its own phase
+  // builds a left ruleset. RULE ZERO — nothing is removed, so an empty slot costs the user no
+  // feature.
   return (
     <p className="p-(--density-panel-p) text-xs text-fg-subtle">
       Nothing focused — this mode&rsquo;s focus editor arrives in a later phase.

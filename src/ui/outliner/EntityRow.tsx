@@ -29,11 +29,11 @@ import { $selectionByKind } from '../../state/selectors';
 import { isLayerVisible, revealLayer } from '../../state/layerStore';
 import { status, undoStatusAction } from '../../state/statusStore';
 import { enterSeatView } from '../../state/ivaStore';
-import { setManagingMeshId } from '../../state/customAssetStore';
 import { requestColliderFit } from '../../state/colliderStore';
 import { ENTITY_ONLY_LAYER_IDS, type LayerableKind } from '../../ksa/types';
 import { KIND_ICONS } from './kindIcons';
 import { openSubPartData } from '../data/subPartDataJump';
+import { openMeshSurface } from '../surface/surfaceJump';
 import type { OutlinerRow } from './outlinerTree';
 
 /**
@@ -258,9 +258,11 @@ function SubPartItems({ index }: { index: number }) {
       <MenuItem onAction={() => openSubPartData(placement.subPartTemplateId)}>
         SubPart Data →
       </MenuItem>
-      {/* TODO(P8): replace with the Surface-mode jump command (mesh picked). */}
+      {/* A JUMP, not a stack (foundation §2.5): Surface mode opens with this mesh picked.
+          Custom-mesh rows only, and ONE label everywhere — the v1 "Manage Textures" /
+          "Manage Material" split by mesh kind is dead (design-surface-assets.md §6). */}
       {customMesh && (
-        <MenuItem onAction={() => setManagingMeshId(customMesh.id)}>Edit Surface →</MenuItem>
+        <MenuItem onAction={() => openMeshSurface(customMesh.id)}>Edit Surface →</MenuItem>
       )}
       {glassOnly ? (
         <MenuItem isDisabled textValue="Interior (IVA only) — n/a for glass">

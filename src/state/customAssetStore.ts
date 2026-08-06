@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { atom } from 'nanostores';
+import { atom, computed } from 'nanostores';
 import type { CatalogSubPart } from '../ksa/catalog';
 import { toUrl } from '../ksa/catalog';
 import type {
@@ -152,13 +152,6 @@ export function setManagingMeshId(id: string | null): void {
   $managingMeshId.set(id);
 }
 
-/** Id of the mesh whose glow is being painted in the GlowPaintDialog (null = closed). */
-export const $glowPaintMeshId = atom<string | null>(null);
-
-export function setGlowPaintMeshId(id: string | null): void {
-  $glowPaintMeshId.set(id);
-}
-
 /**
  * An open request for the model-import dialog (null = closed). Ephemeral UI state, like the
  * two ids above: the dialog is mounted once in `app.tsx` and opened from THREE entry points —
@@ -265,8 +258,26 @@ function sanitizeIdent(name: string): string {
 let internalCustomChange = false;
 
 function mutate(description: string, detail: string, fn: (part: EditingPart) => void): void {
+  mutateMaybeUndo(description, detail, true, fn);
+}
+
+/**
+ * {@link mutate} with the undo push made optional — the STREAMING half of the undo invariant
+ * (docs/editor-state.md "undo/redo invariant", pattern 2): a slider drag pushes ONE step at
+ * interaction start and then writes without pushing for the rest of the gesture, so the whole
+ * drag collapses into a single undo entry.
+ *
+ * Deliberately private: only the `*Streaming` helpers below may skip the push, so a UI
+ * component can never reach `$part` directly and bypass undo altogether.
+ */
+function mutateMaybeUndo(
+  description: string,
+  detail: string,
+  pushStep: boolean,
+  fn: (part: EditingPart) => void,
+): void {
   const current = $part.get();
-  pushUndo(description, detail);
+  if (pushStep) pushUndo(description, detail);
   const next = structuredClone(current);
   fn(next);
   internalCustomChange = true;
@@ -311,6 +322,115 @@ export function getPrimaryTextureId(m: CustomMesh): string {
     }
   }
 }
+
+// ── reverse references ("where used") ────────────────────────────────────────
+
+/** Where one texture is referenced: primitive faces and material channel slots. */
+export interface TextureUsage {
+  faces: { meshId: string; faceKey: string }[];
+  materials: { matId: string; slot: string }[];
+}
+
+/** Which meshes wear one material. */
+export interface MaterialUsage {
+  meshes: string[];
+}
+
+/** How many times a mesh template is placed, and on which layers. */
+export interface MeshUsage {
+  placements: number;
+  layers: string[];
+}
+
+export interface AssetUsage {
+  texture: Map<string, TextureUsage>;
+  material: Map<string, MaterialUsage>;
+  mesh: Map<string, MeshUsage>;
+}
+
+/** A material's texture references WITH the slot name (`materialTextureIds` drops it). */
+function materialTextureSlots(mat: CustomMaterial): { textureId: string; slot: string }[] {
+  const slots: { textureId: string; slot: string }[] = [];
+  if (mat.baseColor.kind === 'map')
+    slots.push({ textureId: mat.baseColor.textureId, slot: 'base' });
+  if (mat.metalness.kind === 'map')
+    slots.push({ textureId: mat.metalness.textureId, slot: 'metal' });
+  if (mat.roughness.kind === 'map')
+    slots.push({ textureId: mat.roughness.textureId, slot: 'rough' });
+  if (mat.occlusion) slots.push({ textureId: mat.occlusion.textureId, slot: 'ao' });
+  if (mat.ormPacked) slots.push({ textureId: mat.ormPacked.textureId, slot: 'orm' });
+  if (mat.normal) slots.push({ textureId: mat.normal.textureId, slot: 'normal' });
+  return slots;
+}
+
+/**
+ * **The reverse-reference graph** (design: design-surface-assets.md §2.4) — who uses each
+ * custom texture / material / mesh, computed once from `$part` instead of the ad-hoc
+ * per-render recount every v1 delete confirm did (census pain #6/#12).
+ *
+ * It walks the SAME edges {@link planOrphanedAssets} walks (face grids + material channel
+ * slots + placements), which is what keeps the "where used" chips and the GC's idea of
+ * "orphan" from ever disagreeing. Pure and react-free: the Surface picker, the Asset Manager
+ * cards and the delete confirms all read this one selector.
+ */
+export const $assetUsage = computed([$part], (part): AssetUsage => {
+  const texture = new Map<string, TextureUsage>();
+  const material = new Map<string, MaterialUsage>();
+  const mesh = new Map<string, MeshUsage>();
+
+  const textureEntry = (id: string): TextureUsage => {
+    const existing = texture.get(id);
+    if (existing) return existing;
+    const fresh: TextureUsage = { faces: [], materials: [] };
+    texture.set(id, fresh);
+    return fresh;
+  };
+
+  for (const t of part.customTextures) textureEntry(t.id);
+  for (const mat of part.customMaterials) {
+    material.set(mat.id, { meshes: [] });
+    for (const { textureId, slot } of materialTextureSlots(mat)) {
+      textureEntry(textureId).materials.push({ matId: mat.id, slot });
+    }
+  }
+
+  // Placements per template, so each mesh row costs one lookup rather than a rescan.
+  const byTemplate = new Map<string, { placements: number; layers: Set<string> }>();
+  for (const p of part.placements) {
+    const entry = byTemplate.get(p.subPartTemplateId);
+    if (entry) {
+      entry.placements += 1;
+      entry.layers.add(p.layerId);
+    } else {
+      byTemplate.set(p.subPartTemplateId, { placements: 1, layers: new Set([p.layerId]) });
+    }
+  }
+
+  for (const m of part.customMeshes) {
+    const placed = byTemplate.get(m.subPartId);
+    mesh.set(m.id, {
+      placements: placed?.placements ?? 0,
+      layers: placed ? [...placed.layers] : [],
+    });
+    if (m.materialId) material.get(m.materialId)?.meshes.push(m.id);
+    for (const [faceKey, cfg] of Object.entries(m.faceTextures)) {
+      if (cfg?.textureId) textureEntry(cfg.textureId).faces.push({ meshId: m.id, faceKey });
+    }
+  }
+
+  return { texture, material, mesh };
+});
+
+/**
+ * Custom meshes with ZERO placements. They are templates, not orphans — but the mod export
+ * silently drops them (`buildCustomBundle` ships only PLACED meshes), which v1 never said
+ * anywhere (census pain #14). The picker and the Asset Manager render a ⚠ "won't export"
+ * chip off this, and P10's export pre-flight re-derives the identical zero-placement rule.
+ */
+export const $unplacedCustomMeshes = computed([$part], (part): CustomMesh[] => {
+  const placed = new Set(part.placements.map((p) => p.subPartTemplateId));
+  return part.customMeshes.filter((m) => !placed.has(m.subPartId));
+});
 
 // ── catalog + render cache ────────────────────────────────────────────────────
 
@@ -392,6 +512,44 @@ function resolveMaterialChannels(material: CustomMaterial): MaterialChannelMaps 
   };
 }
 
+/**
+ * WORKING glow bitmaps published by the open GlowPaintDialog (design D2 "live 3D preview on
+ * stroke end"). Purely a VIEW override: {@link glowFor} prefers it over the stored PNG, so a
+ * stroke re-runs the identical `compositeGlow` path the export uses (guardrail 15) without
+ * touching the document or undo history. Cleared on Apply and on Cancel.
+ */
+const glowPaintPreviews = new Map<string, Blob>();
+
+/** Publishes (or clears, with `null`) a mesh's in-progress painted glow. Never an undo step. */
+export async function previewMeshGlowPaint(meshId: string, png: Blob | null): Promise<void> {
+  if (png) glowPaintPreviews.set(meshId, png);
+  else glowPaintPreviews.delete(meshId);
+  await refreshCatalog();
+}
+
+/**
+ * A standalone preview material for one {@link CustomMaterial} — the SAME resolver pair the
+ * render cache uses (`resolveMaterialChannels` → `buildCustomMaterial`), exported so the
+ * shared thumbnail renderer (`three/assetThumbs.ts`) can draw a preview sphere without
+ * re-implementing channel semantics (guardrail: preview == export, one code path).
+ *
+ * Caller owns disposal.
+ */
+export async function buildMaterialPreview(
+  material: CustomMaterial,
+): Promise<THREE.MeshStandardMaterial> {
+  const channels = resolveMaterialChannels(material);
+  return buildCustomMaterial({
+    mapUrl:
+      material.baseColor.kind === 'map'
+        ? textureKtx2Urls.get(material.baseColor.textureId)
+        : undefined,
+    color: material.baseColor.kind === 'color' ? material.baseColor.color : undefined,
+    wrap: 'repeat',
+    ...channels,
+  });
+}
+
 /** A mesh's resolved glow: the keyed bitmap plus how {@link compositeGlow} should read it. */
 export interface MeshGlow {
   /** rgb = glow color, a = the greyscale key. */
@@ -408,7 +566,7 @@ export async function glowFor(m: CustomMesh): Promise<MeshGlow | null> {
   if (!e) return null;
   const settings = glowCompositeOf(e);
   if (e.shape === 'painted') {
-    const png = await getAsset(assetKeys.emissivePaint(m.id));
+    const png = glowPaintPreviews.get(m.id) ?? (await getAsset(assetKeys.emissivePaint(m.id)));
     if (png) {
       const lvl = (await decodeImage(png)).levels[0];
       return { bitmap: { width: lvl.width, height: lvl.height, rgba: lvl.rgba }, settings };
@@ -840,6 +998,52 @@ export async function setTextureChannel(id: string, channel: TextureChannel): Pr
   mutate('texture channel', name, (p) => {
     const t = p.customTextures.find((x) => x.id === id);
     if (t) t.channel = channel;
+  });
+  await refreshCatalog();
+}
+
+/**
+ * Renames a texture. Display-name only — the id every face and material channel references
+ * is untouched, so a rename can never break a reference. **Discrete undo** (one step).
+ */
+export function renameCustomTexture(id: string, name: string): void {
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  mutate('rename texture', trimmed, (p) => {
+    const t = p.customTextures.find((x) => x.id === id);
+    if (t) t.name = trimmed;
+  });
+}
+
+/**
+ * Replaces a texture's IMAGE BYTES in place, keeping its id and its declared channel — the
+ * "I re-exported the same map from Substance" path. Both blobs (source + encoded `.ktx2`)
+ * are overwritten under the existing {@link assetKeys} entries, the two blob URLs are
+ * re-minted, and one discrete `mutate` records the new dimensions.
+ *
+ * **Undo restores the descriptor, NOT the bytes** (design D3, the same contract as
+ * `removeCustomTexture` / `removeImport`): the old image is gone the moment this resolves,
+ * so every caller must confirm first.
+ */
+export async function replaceTextureImage(id: string, file: Blob): Promise<void> {
+  const existing = $part.get().customTextures.find((t) => t.id === id);
+  if (!existing) return;
+  const decoded = prepareChannelImage(await decodeImage(file), existing.channel);
+  const ktx2 = await encodeImageToKtx2(decoded, { zstd: true });
+
+  await putAsset(assetKeys.textureSource(id), file, file.type || 'image/png');
+  await putAsset(assetKeys.textureKtx2(id), ktx2, 'image/ktx2');
+
+  revokeTexture(id);
+  textureKtx2Urls.set(id, URL.createObjectURL(new Blob([ktx2.slice()], { type: 'image/ktx2' })));
+  textureSrcUrls.set(id, URL.createObjectURL(file));
+  publishTextureUrls();
+
+  mutate('replace texture image', existing.name, (p) => {
+    const t = p.customTextures.find((x) => x.id === id);
+    if (!t) return;
+    t.width = decoded.width;
+    t.height = decoded.height;
   });
   await refreshCatalog();
 }
@@ -1723,6 +1927,33 @@ export async function updateMeshFaceConfig(
   await refreshCatalog();
 }
 
+/** Clears one face's texture + UV config (back to "untextured, default UVs"). Discrete undo. */
+export async function clearMeshFaceConfig(meshId: string, faceKey: string): Promise<void> {
+  mutate('clear face texture', meshId, (p) => {
+    const m = p.customMeshes.find((x) => x.id === meshId);
+    if (m) delete m.faceTextures[faceKey];
+  });
+  await refreshCatalog();
+}
+
+/**
+ * Copies one face's config onto EVERY face key of the mesh, as ONE undo step (design §1.4
+ * "`Copy to all faces` writes the config to every face key (one undo step)"). The key list
+ * comes from the mesh's own primitive kind, so a cylinder gets three faces and a box six.
+ */
+export async function copyFaceConfigToAll(meshId: string, faceKey: string): Promise<void> {
+  const mesh = $part.get().customMeshes.find((m) => m.id === meshId);
+  const source = mesh?.faceTextures[faceKey];
+  if (!mesh?.primitive || !source) return;
+  const keys = PRIMITIVE_FACE_KEYS[mesh.primitive.kind];
+  mutate('copy face to all', mesh.name, (p) => {
+    const m = p.customMeshes.find((x) => x.id === meshId);
+    if (!m) return;
+    for (const key of keys) m.faceTextures[key] = structuredClone(source);
+  });
+  await refreshCatalog();
+}
+
 /**
  * Sets (or clears, with `undefined`) a mesh's emissive glow config. Covers Off / Whole and the
  * color/strength controls. The painted bitmap is written separately by {@link setMeshGlowPainted}.
@@ -1735,9 +1966,41 @@ export async function setMeshGlow(meshId: string, cfg: EmissiveConfig | undefine
   await refreshCatalog();
 }
 
+/**
+ * {@link setMeshGlow}'s STREAMING twin, for the Coverage / Emissive sliders (design §1.8
+ * "sliders = streaming — one push at interaction start"): the first event of a drag pushes
+ * one undo step, every later event of the same drag writes without pushing, so the whole
+ * gesture collapses into a single entry. `patch` is merged over the mesh's current config,
+ * which is what keeps the two independent sliders from stomping each other mid-drag.
+ */
+export async function setMeshGlowStreaming(
+  meshId: string,
+  patch: Partial<EmissiveConfig>,
+  first: boolean,
+): Promise<void> {
+  mutateMaybeUndo('edit glow', meshId, first, (p) => {
+    const m = p.customMeshes.find((x) => x.id === meshId);
+    if (m?.emissive) m.emissive = { ...m.emissive, ...patch };
+  });
+  await refreshCatalog();
+}
+
 /** Sets (or clears) the translucent-glass tint for a glass-capable (visor) mesh. */
 export async function setMeshGlass(meshId: string, cfg: GlassConfig | undefined): Promise<void> {
   mutate('edit visor tint', meshId, (p) => {
+    const m = p.customMeshes.find((x) => x.id === meshId);
+    if (m) m.glass = cfg;
+  });
+  await refreshCatalog();
+}
+
+/** {@link setMeshGlass}'s streaming twin — the visor tint's color/opacity drag (design §1.8). */
+export async function setMeshGlassStreaming(
+  meshId: string,
+  cfg: GlassConfig,
+  first: boolean,
+): Promise<void> {
+  mutateMaybeUndo('edit visor tint', meshId, first, (p) => {
     const m = p.customMeshes.find((x) => x.id === meshId);
     if (m) m.glass = cfg;
   });
@@ -1799,6 +2062,7 @@ export async function setMeshGlowPainted(
   brushColor: RgbColor,
 ): Promise<void> {
   await putAsset(assetKeys.emissivePaint(meshId), png, 'image/png');
+  glowPaintPreviews.delete(meshId); // the bytes ARE the document's now
   const old = emissivePaintUrls.get(meshId);
   if (old) URL.revokeObjectURL(old);
   emissivePaintUrls.set(meshId, URL.createObjectURL(png));

@@ -37,3 +37,17 @@ export function meshHighlight(): ParsedHighlight {
 export function kittenHighlight(): ParsedHighlight {
   return kitten;
 }
+
+/**
+ * Surface mode's **face** highlight (design-surface-assets.md §1.5/D12). Deliberately a
+ * DIFFERENT hue from the user's selection tint rather than a second intensity of it: a
+ * picked face and a selected placement are both on screen at once (clicking a custom mesh
+ * does both), so one colour family would make them indistinguishable. Not user-configurable
+ * — the selection colour is the one the settings own.
+ */
+const face: ParsedHighlight = { color: new THREE.Color('#ffb454'), alpha: 0.7 };
+
+/** Current parsed highlight for the Surface-mode face tint. */
+export function faceHighlight(): ParsedHighlight {
+  return face;
+}

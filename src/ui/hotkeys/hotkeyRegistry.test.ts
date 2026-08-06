@@ -209,9 +209,17 @@ describe('4 — every binding id resolves', () => {
   /**
    * The synthetic families `validateRegistry` accepts: `transform.*` (pure-key viewport
    * behaviors with no menu home), `mirror.*` (list-surface edit mirrors, which run their
-   * twin's command), and three named ids.
+   * twin's command), and five named ids — the last two being the glow painter's DIALOG-LOCAL
+   * stroke undo/redo, which have no command because the stack only exists while that modal
+   * is mounted.
    */
-  const SYNTHETIC = ['esc.ladder', 'chain.apply', 'outliner.search'];
+  const SYNTHETIC = [
+    'esc.ladder',
+    'chain.apply',
+    'outliner.search',
+    'glowPaint.undo',
+    'glowPaint.redo',
+  ];
 
   it.each(ALL_BINDINGS.map((binding) => [binding.id] as const))('%s', (id) => {
     const synthetic =

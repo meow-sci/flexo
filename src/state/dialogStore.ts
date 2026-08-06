@@ -24,10 +24,9 @@ import { atom } from 'nanostores';
  * Every root-hosted dialog. Adding a dialog = add its id here AND a case in
  * `DialogRoot.tsx`; there is no other registration step and no dynamic id.
  *
- * Deliberately ABSENT (they keep their v1 atoms until the Surface/asset phase rehosts
- * them): `import-model` (`$importModelRequest`) and `glow-paint` (`$glowPaintMeshId`) in
- * `src/state/customAssetStore.ts`, plus `MeshPickerModal`, which stays local to the animation
- * toolbar until the Animation phase.
+ * Deliberately ABSENT (they keep their v1 atoms until the import phase rehosts them):
+ * `import-model` (`$importModelRequest`) in `src/state/customAssetStore.ts`, plus
+ * `MeshPickerModal`, which stays local to the animation toolbar until the Animation phase.
  */
 export type DialogId =
   | 'projects'
@@ -44,6 +43,7 @@ export type DialogId =
   | 'create-mesh'
   | 'upload-texture'
   | 'material'
+  | 'glow-paint'
   | 'help'
   | 'about'
   | 'chain-discard-confirm';

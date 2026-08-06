@@ -6,6 +6,7 @@ import { customMeshInstanceCommands } from './addCommands';
 import { layerActivateCommands, layerSelectCommands } from './selectCommands';
 import { seatCommands } from './toolsCommands';
 import { dataScopeCommands } from './dataCommands';
+import { surfacePickCommands } from './surfaceCommands';
 
 /**
  * Every dynamic command provider (design: foundation §4 "Dynamic providers"). Anything
@@ -33,6 +34,8 @@ export const COMMAND_PROVIDERS: { id: string; commands: () => Command[] }[] = [
   { id: 'modsFolder', commands: modsFolderCommands },
   // One "Edit data: <template>" row per data-capable SubPart template (design §A9).
   { id: 'data.scopeTemplate', commands: dataScopeCommands },
+  // One "Edit surface: <mesh>" row per custom mesh, kitten submeshes included (D6).
+  { id: 'surface.pickMesh', commands: surfacePickCommands },
 ];
 
 /** Palette-only rows: "Open project: X" for every saved project except the current one. */

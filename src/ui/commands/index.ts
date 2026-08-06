@@ -9,6 +9,7 @@ import { WINDOW_COMMANDS } from './windowCommands';
 import { HELP_COMMANDS } from './helpCommands';
 import { MODE_COMMANDS } from './modeCommands';
 import { DATA_COMMANDS } from './dataCommands';
+import { SURFACE_COMMANDS } from './surfaceCommands';
 import { COMMAND_PROVIDERS } from './providers';
 
 /**
@@ -30,8 +31,9 @@ registerCommands([
   ...WINDOW_COMMANDS,
   ...HELP_COMMANDS,
   ...MODE_COMMANDS,
-  // Palette-only (no MENU_SPEC entry) — see dataCommands.ts for why.
+  // Palette-only (no MENU_SPEC entry) — see dataCommands.ts / surfaceCommands.ts for why.
   ...DATA_COMMANDS,
+  ...SURFACE_COMMANDS,
 ]);
 
 for (const provider of COMMAND_PROVIDERS) {

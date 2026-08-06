@@ -6,7 +6,7 @@ import { getSharedMaterial } from './MaterialFactory';
 import { applyKsaShaderPatches } from './normalMapPatch';
 import { applyPlacement } from './coords';
 import { customMeshRenderCache } from '../state/customAssetStore';
-import { meshHighlight } from './highlightSettings';
+import { faceHighlight, meshHighlight } from './highlightSettings';
 import { applyMaterialOpacity, captureOpacityBase, type MaterialOpacityBase } from './layerOpacity';
 
 /**
@@ -30,6 +30,8 @@ export class SubPartObject {
   private readonly materials: THREE.MeshStandardMaterial[];
   private readonly baseEmissives: Array<{ color: THREE.Color; intensity: number }>;
   private readonly opacityBases: MaterialOpacityBase[];
+  private readonly mesh: THREE.Mesh;
+  private readonly baseGeometry: THREE.BufferGeometry;
 
   private constructor(
     instanceId: string,
@@ -37,6 +39,8 @@ export class SubPartObject {
     materials: THREE.MeshStandardMaterial[],
   ) {
     this.instanceId = instanceId;
+    this.mesh = mesh;
+    this.baseGeometry = mesh.geometry;
     this.materials = materials;
     this.baseEmissives = materials.map((m) => ({
       color: m.emissive.clone(),
@@ -117,6 +121,35 @@ export class SubPartObject {
     this.applyEmissiveTint(strength);
   }
 
+  /**
+   * Surface mode's **face** highlight (design-surface-assets.md §1.5, D12): the picked face
+   * tints on EVERY placement of the picked mesh, which is why this is a per-object call the
+   * scene fans out rather than a selection state.
+   *
+   * `groupIndex` is the three.js geometry group / `materialIndex` the face key resolves to
+   * (`PRIMITIVE_FACE_KEYS[kind].indexOf(key)` — that array order IS the group order, see
+   * `three/primitives.ts`). `whole = true` tints every material, which is what a sphere/plane
+   * (`'all'`), an imported mesh or a kitten submesh needs — none of them has a face grid.
+   *
+   * `null` + `whole = false` clears back to the base emissives. It shares the emissive
+   * channel with {@link setSelected}/{@link setTint}, so the caller re-applies selection
+   * afterwards; a distinct colour keeps the two readable when both are on.
+   */
+  setFaceHighlight(groupIndex: number | null, whole: boolean): void {
+    const hl = faceHighlight();
+    for (let i = 0; i < this.materials.length; i++) {
+      const mat = this.materials[i];
+      const lit = whole || (groupIndex !== null && groupIndex === i);
+      if (lit) {
+        mat.emissive.copy(hl.color);
+        mat.emissiveIntensity = hl.alpha;
+      } else {
+        mat.emissive.copy(this.baseEmissives[i].color);
+        mat.emissiveIntensity = this.baseEmissives[i].intensity;
+      }
+    }
+  }
+
   private applyEmissiveTint(strength: number): void {
     const hl = meshHighlight();
     for (let i = 0; i < this.materials.length; i++) {
@@ -129,6 +162,19 @@ export class SubPartObject {
         mat.emissiveIntensity = this.baseEmissives[i].intensity;
       }
     }
+  }
+
+  /**
+   * Swaps in a VIEW-ONLY geometry (Surface mode's live UV draft — design-surface-assets.md
+   * §1.4), or restores the document's own with `null`.
+   *
+   * The override is owned by the CALLER (one draft geometry is shared by every placement of
+   * the mesh, and the cache geometry underneath is shared too), so nothing here disposes
+   * either. Deliberately not a document write: the draft previews while you type and only
+   * the field's commit reaches `$part`.
+   */
+  setGeometryOverride(geometry: THREE.BufferGeometry | null): void {
+    this.mesh.geometry = geometry ?? this.baseGeometry;
   }
 
   /** Dims this instance to `factor` (0–1) of its base opacity for the layer fade. */

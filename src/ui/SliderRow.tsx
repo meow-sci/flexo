@@ -16,6 +16,7 @@ export function SliderRow({
   step = 1,
   onChange,
   onInteractionStart,
+  onInteractionEnd,
   format,
 }: {
   label: string;
@@ -26,6 +27,13 @@ export function SliderRow({
   step?: number;
   onChange: (value: number) => void;
   onInteractionStart?: () => void;
+  /**
+   * react-aria's `onChangeEnd` — the END of one interaction (pointer release, or a settled
+   * keyboard step). Streaming callers re-arm their "first event of this drag" latch here, so
+   * a keyboard-driven slider gets the same one-push-per-interaction undo behaviour a pointer
+   * drag does (`onInteractionStart` alone never fires for the keyboard).
+   */
+  onInteractionEnd?: (value: number) => void;
   format?: (value: number) => ReactNode;
 }) {
   return (
@@ -39,6 +47,7 @@ export function SliderRow({
         step={step}
         value={value}
         onChange={(v) => onChange(v as number)}
+        onChangeEnd={onInteractionEnd ? (v) => onInteractionEnd(v as number) : undefined}
       />
       <span className="w-8 shrink-0 text-right font-mono text-[11px] text-fg-subtle">
         {format ? format(value) : value}

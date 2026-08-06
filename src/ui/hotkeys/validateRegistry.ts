@@ -37,8 +37,18 @@ import type { HotkeyBinding } from './registry';
  *   command it would be a palette row that runs, closes the palette and then focuses
  *   whatever the palette handed focus back to: a promise the surface cannot keep. Help
  *   lists it from the binding, under `surface:outliner`, which is where it belongs.
+ * - `glowPaint.undo` / `glowPaint.redo` — they step the glow painter's DIALOG-LOCAL stroke
+ *   stack, which only exists while that dialog is mounted. As palette rows they would be two
+ *   permanently-dead entries whose one live moment is behind a modal the palette cannot open
+ *   over. Help lists them from the bindings, under `surface:glow-paint`.
  */
-const SYNTHETIC_BINDING_IDS: readonly string[] = ['esc.ladder', 'chain.apply', 'outliner.search'];
+const SYNTHETIC_BINDING_IDS: readonly string[] = [
+  'esc.ladder',
+  'chain.apply',
+  'outliner.search',
+  'glowPaint.undo',
+  'glowPaint.redo',
+];
 
 /**
  * `mirror.<surface>.<action>` — a list-surface edit mirror (`listSurfaceMirrors.ts`). It

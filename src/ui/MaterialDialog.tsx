@@ -41,6 +41,18 @@ import { toast } from './toast';
  * Mounted only while open, so per-open state initializes via useState. Edit mode
  * (materialId set) saves via updateCustomMaterial — one undo step per save.
  */
+export interface MaterialDialogParams {
+  /** Edit this material; absent = create a new one. */
+  materialId?: string;
+  /** Create mode: assign the new material to this mesh on save (design §1.3 "Material"). */
+  assignToMeshId?: string;
+}
+
+/**
+ * The overlay host (dialog id `'material'`, D9). Its GUTS are {@link MaterialForm}, which the
+ * Asset Manager mounts as a pushed view in its own `DialogViewStack` — same component, two
+ * mounts, never a stacked modal.
+ */
 export function MaterialDialog({
   materialId,
   onClose,
@@ -50,6 +62,46 @@ export function MaterialDialog({
   materialId?: string;
   onClose: () => void;
   /** Create mode: invoked with the new material (e.g. to auto-assign it). */
+  onCreated?: (mat: CustomMaterial) => void;
+}) {
+  const part = useStore($part);
+  const existing = materialId ? part.customMaterials.find((m) => m.id === materialId) : undefined;
+  return (
+    <Modal
+      isOpen
+      onOpenChange={(v) => !v && onClose()}
+      isDismissable
+      variant="fullscreen"
+      className="max-w-md"
+    >
+      <Dialog>
+        <DialogHeader title={existing ? 'Edit material' : 'Create material'} onClose={onClose} />
+        <MaterialForm
+          materialId={materialId}
+          onSaved={onClose}
+          onCancel={onClose}
+          onCreated={onCreated}
+        />
+      </Dialog>
+    </Modal>
+  );
+}
+
+/**
+ * The material editor's fields — mountable inside an overlay dialog (Surface sidebar) or as a
+ * pushed view (Asset Manager), per D9. Field set unchanged from v1 (parity row 1.4); the one
+ * v2 addition is a thumbnail swatch on every texture row (census pain #4).
+ */
+export function MaterialForm({
+  materialId,
+  onSaved,
+  onCancel,
+  onCreated,
+}: {
+  materialId?: string;
+  /** Called after a successful save. */
+  onSaved: () => void;
+  onCancel: () => void;
   onCreated?: (mat: CustomMaterial) => void;
 }) {
   const part = useStore($part);
@@ -131,7 +183,7 @@ export function MaterialDialog({
         toast({ title: 'Material created', description: name, variant: 'success' });
         onCreated?.(mat);
       }
-      onClose();
+      onSaved();
     } catch (err) {
       console.warn('material save failed', err);
       toast({
@@ -163,174 +215,163 @@ export function MaterialDialog({
   };
 
   return (
-    <Modal
-      isOpen
-      onOpenChange={(v) => !v && onClose()}
-      isDismissable
-      variant="fullscreen"
-      className="max-w-md"
-    >
-      <Dialog>
-        <DialogHeader title={existing ? 'Edit material' : 'Create material'} onClose={onClose} />
-        <div className="flex flex-col gap-3 overflow-y-auto p-3">
-          <MaterialPreview {...preview} />
+    <div className="flex flex-col gap-3 overflow-y-auto p-3">
+      <MaterialPreview {...preview} />
 
-          <Select label="Preset" value={activePreset} onChange={(k) => applyPreset(String(k))}>
-            {activePreset === 'custom' && <ListBoxItem id="custom">Custom</ListBoxItem>}
-            {MATERIAL_PRESETS.map((p) => (
-              <ListBoxItem key={p.id} id={p.id}>
-                {p.label}
+      <Select label="Preset" value={activePreset} onChange={(k) => applyPreset(String(k))}>
+        {activePreset === 'custom' && <ListBoxItem id="custom">Custom</ListBoxItem>}
+        {MATERIAL_PRESETS.map((p) => (
+          <ListBoxItem key={p.id} id={p.id}>
+            {p.label}
+          </ListBoxItem>
+        ))}
+      </Select>
+
+      <div className="flex flex-col gap-2">
+        <span className="text-xs text-fg-muted">Base color</span>
+        <div className="flex items-center gap-2">
+          <ToggleButtonGroup
+            selectionMode="single"
+            disallowEmptySelection
+            selectedKeys={[baseMode]}
+            onSelectionChange={(keys) => {
+              const k = [...keys][0] as 'color' | 'map' | undefined;
+              if (k) setBaseMode(k);
+            }}
+          >
+            <ToggleButton id="color" size="sm">
+              Color
+            </ToggleButton>
+            <ToggleButton id="map" size="sm" isDisabled={baseColorTextures.length === 0}>
+              Image
+            </ToggleButton>
+          </ToggleButtonGroup>
+          {baseMode === 'color' && (
+            <input
+              type="color"
+              aria-label="Base color"
+              className="h-7 w-9 shrink-0 cursor-pointer rounded border border-border bg-transparent"
+              value={colorHex}
+              onChange={(e) => setColorHex(e.target.value)}
+            />
+          )}
+        </div>
+        {baseMode === 'map' && (
+          <Select
+            aria-label="Base color image"
+            value={baseTextureId}
+            onChange={(k) => setBaseTextureId(String(k))}
+          >
+            {baseColorTextures.map((t) => (
+              <ListBoxItem key={t.id} id={t.id} textValue={t.name}>
+                <TextureRow name={t.name} url={textureUrls[t.id]} />
               </ListBoxItem>
             ))}
           </Select>
+        )}
+      </div>
 
-          <div className="flex flex-col gap-2">
-            <span className="text-xs text-fg-muted">Base color</span>
-            <div className="flex items-center gap-2">
-              <ToggleButtonGroup
-                selectionMode="single"
-                disallowEmptySelection
-                selectedKeys={[baseMode]}
-                onSelectionChange={(keys) => {
-                  const k = [...keys][0] as 'color' | 'map' | undefined;
-                  if (k) setBaseMode(k);
-                }}
-              >
-                <ToggleButton id="color" size="sm">
-                  Color
-                </ToggleButton>
-                <ToggleButton id="map" size="sm" isDisabled={baseColorTextures.length === 0}>
-                  Image
-                </ToggleButton>
-              </ToggleButtonGroup>
-              {baseMode === 'color' && (
-                <input
-                  type="color"
-                  aria-label="Base color"
-                  className="h-7 w-9 shrink-0 cursor-pointer rounded border border-border bg-transparent"
-                  value={colorHex}
-                  onChange={(e) => setColorHex(e.target.value)}
-                />
-              )}
-            </div>
-            {baseMode === 'map' && (
-              <Select
-                aria-label="Base color image"
-                value={baseTextureId}
-                onChange={(k) => setBaseTextureId(String(k))}
-              >
-                {baseColorTextures.map((t) => (
-                  <ListBoxItem key={t.id} id={t.id}>
-                    {t.name}
-                  </ListBoxItem>
-                ))}
-              </Select>
-            )}
-          </div>
+      <ScalarSlider
+        label="Metalness"
+        value={metalness}
+        onChange={setMetalness}
+        mapped={!!(metalMapId || ormPackedId)}
+      />
+      <ScalarSlider
+        label="Roughness"
+        value={roughness}
+        onChange={setRoughness}
+        mapped={!!(roughMapId || ormPackedId)}
+      />
 
-          <ScalarSlider
-            label="Metalness"
-            value={metalness}
-            onChange={setMetalness}
-            mapped={!!(metalMapId || ormPackedId)}
-          />
-          <ScalarSlider
-            label="Roughness"
-            value={roughness}
-            onChange={setRoughness}
-            mapped={!!(roughMapId || ormPackedId)}
-          />
-
-          {anyAdvancedTextures && (
-            <DisclosureSection
-              title="Advanced maps"
-              defaultExpanded={hasAdvanced}
-              badge={hasAdvanced ? '●' : undefined}
-            >
-              {normalTextures.length > 0 && (
-                <>
-                  <MapSelect
-                    label="Normal map"
-                    value={normalMapId}
-                    onChange={setNormalMapId}
-                    textures={normalTextures}
+      {anyAdvancedTextures && (
+        <DisclosureSection
+          title="Advanced maps"
+          defaultExpanded={hasAdvanced}
+          badge={hasAdvanced ? '●' : undefined}
+        >
+          {normalTextures.length > 0 && (
+            <>
+              <MapSelect
+                label="Normal map"
+                value={normalMapId}
+                onChange={setNormalMapId}
+                textures={normalTextures}
+              />
+              {normalMapId && (
+                <div className="flex items-center gap-2">
+                  <span className="w-20 shrink-0 text-xs text-fg-muted">Strength</span>
+                  <Slider
+                    aria-label="Normal strength"
+                    className="flex-1"
+                    minValue={0}
+                    maxValue={2}
+                    step={0.05}
+                    value={normalStrength}
+                    onChange={(v) => setNormalStrength(v as number)}
                   />
-                  {normalMapId && (
-                    <div className="flex items-center gap-2">
-                      <span className="w-20 shrink-0 text-xs text-fg-muted">Strength</span>
-                      <Slider
-                        aria-label="Normal strength"
-                        className="flex-1"
-                        minValue={0}
-                        maxValue={2}
-                        step={0.05}
-                        value={normalStrength}
-                        onChange={(v) => setNormalStrength(v as number)}
-                      />
-                      <span className="w-8 shrink-0 text-right font-mono text-[11px] text-fg-subtle">
-                        {normalStrength.toFixed(2)}
-                      </span>
-                    </div>
-                  )}
-                </>
+                  <span className="w-8 shrink-0 text-right font-mono text-[11px] text-fg-subtle">
+                    {normalStrength.toFixed(2)}
+                  </span>
+                </div>
               )}
-              {ormTextures.length > 0 && (
+            </>
+          )}
+          {ormTextures.length > 0 && (
+            <MapSelect
+              label="Packed ORM"
+              value={ormPackedId}
+              onChange={setOrmPackedId}
+              textures={ormTextures}
+            />
+          )}
+          {ormPackedId ? (
+            <p className="text-[11px] leading-snug text-fg-subtle">
+              The packed ORM supplies AO, roughness and metalness — the sliders and separate maps
+              are ignored while it’s set.
+            </p>
+          ) : (
+            <>
+              {occlusionTextures.length > 0 && (
                 <MapSelect
-                  label="Packed ORM"
-                  value={ormPackedId}
-                  onChange={setOrmPackedId}
-                  textures={ormTextures}
+                  label="AO map"
+                  value={occlusionMapId}
+                  onChange={setOcclusionMapId}
+                  textures={occlusionTextures}
                 />
               )}
-              {ormPackedId ? (
-                <p className="text-[11px] leading-snug text-fg-subtle">
-                  The packed ORM supplies AO, roughness and metalness — the sliders and separate
-                  maps are ignored while it’s set.
-                </p>
-              ) : (
-                <>
-                  {occlusionTextures.length > 0 && (
-                    <MapSelect
-                      label="AO map"
-                      value={occlusionMapId}
-                      onChange={setOcclusionMapId}
-                      textures={occlusionTextures}
-                    />
-                  )}
-                  {roughnessTextures.length > 0 && (
-                    <MapSelect
-                      label="Roughness map"
-                      value={roughMapId}
-                      onChange={setRoughMapId}
-                      textures={roughnessTextures}
-                    />
-                  )}
-                  {metalnessTextures.length > 0 && (
-                    <MapSelect
-                      label="Metalness map"
-                      value={metalMapId}
-                      onChange={setMetalMapId}
-                      textures={metalnessTextures}
-                    />
-                  )}
-                </>
+              {roughnessTextures.length > 0 && (
+                <MapSelect
+                  label="Roughness map"
+                  value={roughMapId}
+                  onChange={setRoughMapId}
+                  textures={roughnessTextures}
+                />
               )}
-            </DisclosureSection>
+              {metalnessTextures.length > 0 && (
+                <MapSelect
+                  label="Metalness map"
+                  value={metalMapId}
+                  onChange={setMetalMapId}
+                  textures={metalnessTextures}
+                />
+              )}
+            </>
           )}
+        </DisclosureSection>
+      )}
 
-          <TextField label="Name" value={name} onChange={setName} size="sm" />
+      <TextField label="Name" value={name} onChange={setName} size="sm" />
 
-          <div className="flex justify-end gap-2">
-            <Button size="sm" variant="ghost" onPress={onClose}>
-              Cancel
-            </Button>
-            <Button size="sm" variant="primary" isDisabled={busy} onPress={submit}>
-              {busy ? 'Saving…' : existing ? 'Save material' : 'Create material'}
-            </Button>
-          </div>
-        </div>
-      </Dialog>
-    </Modal>
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="ghost" onPress={onCancel}>
+          Cancel
+        </Button>
+        <Button size="sm" variant="primary" isDisabled={busy} onPress={submit}>
+          {busy ? 'Saving…' : existing ? 'Save material' : 'Create material'}
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -366,8 +407,13 @@ function ScalarSlider({
   );
 }
 
-/** Texture picker for one advanced map slot ("(none)" clears it). */
-function MapSelect({
+/**
+ * Texture picker for one advanced map slot ("(none)" clears it), with a 24px thumbnail on
+ * every row — the fix for v1's name-only picker (census pain #4: "no thumbnails/previews
+ * where decisions are made"). The swatch is the SOURCE image blob URL, which is what
+ * `$customTextureUrls` publishes.
+ */
+export function MapSelect({
   label,
   value,
   onChange,
@@ -378,15 +424,37 @@ function MapSelect({
   onChange: (id: string) => void;
   textures: { id: string; name: string }[];
 }) {
+  const textureUrls = useStore($customTextureUrls);
   return (
     <Select label={label} value={value} onChange={(k) => onChange(String(k))}>
-      <ListBoxItem id="">(none)</ListBoxItem>
+      <ListBoxItem id="" textValue="(none)">
+        (none)
+      </ListBoxItem>
       {textures.map((t) => (
-        <ListBoxItem key={t.id} id={t.id}>
-          {t.name}
+        <ListBoxItem key={t.id} id={t.id} textValue={t.name}>
+          <TextureRow name={t.name} url={textureUrls[t.id]} />
         </ListBoxItem>
       ))}
     </Select>
+  );
+}
+
+/** A texture row: 24px swatch (checkerboard behind, so alpha reads) + name. */
+export function TextureRow({ name, url }: { name: string; url?: string }) {
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <span
+        className="size-6 shrink-0 overflow-hidden rounded border border-border"
+        style={{
+          background:
+            'repeating-conic-gradient(rgb(255 255 255 / 6%) 0% 25%, rgb(0 0 0 / 25%) 0% 50%)',
+          backgroundSize: '8px 8px',
+        }}
+      >
+        {url && <img src={url} alt="" aria-hidden className="size-full object-cover" />}
+      </span>
+      <span className="min-w-0 flex-1 truncate">{name}</span>
+    </span>
   );
 }
 

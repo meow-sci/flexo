@@ -14,6 +14,13 @@ export interface Selectable {
    * placement's frame a gizmo drag should write back through.
    */
   instanceIndex?: number;
+  /**
+   * The `materialIndex` of the triangle the ray actually hit — i.e. WHICH FACE GROUP of a
+   * multi-material mesh was clicked. Surface mode maps it back to a face key through
+   * `PRIMITIVE_FACE_KEYS` (design-surface-assets.md §1.5 "click-to-pick"); every other
+   * consumer ignores it. Undefined for a single-material or group-less hit.
+   */
+  faceGroupIndex?: number;
 }
 
 /**
@@ -72,8 +79,19 @@ export class SelectionManager {
 
     const additive = e.metaKey || e.ctrlKey || e.shiftKey;
     const hits = this.raycaster.intersectObjects(this.root.children, true);
+    // The face group travels WITH the hit, so it has to be read here rather than re-derived:
+    // the entity's `userData.selectable` says nothing about which triangle was under the
+    // cursor. `face.materialIndex` is undefined on a group-less geometry, which is exactly
+    // the "whole mesh" answer Surface mode wants for a sphere/plane/imported mesh.
     const resolved = hits
-      .map((hit) => findSelectable(hit.object))
+      .map((hit) => {
+        const selectable = findSelectable(hit.object);
+        if (!selectable) return null;
+        const materialIndex = hit.face?.materialIndex;
+        return materialIndex === undefined
+          ? selectable
+          : { ...selectable, faceGroupIndex: materialIndex };
+      })
       .filter((s): s is Selectable => s !== null);
     // Nozzle-exhaust handles win over distance: they are drawn depth-test-free precisely
     // because an exhaust point sits inside the bell that describes it, so honouring depth

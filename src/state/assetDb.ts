@@ -204,7 +204,7 @@ export async function copyProjectAssets(fromId: string, toId: string): Promise<v
 /**
  * Boot purge: deletes every key that is NOT under a `pa:<id>:` prefix — i.e. every v1
  * un-namespaced blob. Per the constitution these are discarded, never adopted (there is no
- * v1 project left to own them once {@link purgeV1ProjectKeys} has run). Returns how many
+ * v1 project left to own them once {@link purgeV1Storage} has run). Returns how many
  * went, so the caller can tell the user.
  */
 export async function purgeUnprefixedAssetKeys(): Promise<number> {

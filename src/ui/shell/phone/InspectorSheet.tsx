@@ -1,16 +1,12 @@
 import { useStore } from '@nanostores/react';
 import { ChevronUp, X } from 'lucide-react';
-import { Button, Dialog, Sheet } from './kit';
-import { ModeFocusEditor } from './ModeFocusEditor';
-import {
-  $inspectorSheetOpen,
-  closePhoneSheets,
-  openInspectorSheet,
-} from './shell/phone/phoneSheets';
-import { $selectionCount } from './../state/selectors';
-import { $dataScope } from '../state/dataModeStore';
-import { $mode } from '../state/modeStore';
-import { $activeAnimation, $activeJointId, $editKeyframeId } from '../state/animationStore';
+import { Button, Dialog, Sheet } from '../../kit';
+import { ModeFocusEditor } from '../../ModeFocusEditor';
+import { $inspectorSheetOpen, closePhoneSheets, openInspectorSheet } from './phoneSheets';
+import { $selectionCount } from '../../../state/selectors';
+import { $dataScope } from '../../../state/dataModeStore';
+import { $mode } from '../../../state/modeStore';
+import { $activeAnimation, $activeJointId, $editKeyframeId } from '../../../state/animationStore';
 
 /**
  * The phone **Inspector sheet** (foundation §12 Sheet row; design-build-mode.md §11 item 2)
@@ -40,7 +36,7 @@ import { $activeAnimation, $activeJointId, $editKeyframeId } from '../state/anim
  *
  * Undo enrollment: NONE — sheet visibility is ephemeral view state.
  */
-export function MobileInspector() {
+export function InspectorSheet() {
   const open = useStore($inspectorSheetOpen);
   const selectedCount = useStore($selectionCount);
   const mode = useStore($mode);

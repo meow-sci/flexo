@@ -211,9 +211,10 @@ describe('4 — every binding id resolves', () => {
   /**
    * The synthetic families `validateRegistry` accepts: `transform.*` (pure-key viewport
    * behaviors with no menu home), `mirror.*` (list-surface edit mirrors, which run their
-   * twin's command), and five named ids — the last two being the glow painter's DIALOG-LOCAL
-   * stroke undo/redo, which have no command because the stack only exists while that modal
-   * is mounted.
+   * twin's command), `timeline.*` (dock-focused only), and the named ids below — the glow
+   * painter's two being DIALOG-LOCAL stroke undo/redo, which have no command because the
+   * stack only exists while that modal is mounted, and the three `anim.*` ones being
+   * keyboard-only playhead/unwind behaviors that never earned a menu row.
    */
   const SYNTHETIC = [
     'esc.ladder',
@@ -221,15 +222,20 @@ describe('4 — every binding id resolves', () => {
     'outliner.search',
     'glowPaint.undo',
     'glowPaint.redo',
+    'anim.prevKeyframe',
+    'anim.nextKeyframe',
+    'anim.unwind',
   ];
 
   it.each(ALL_BINDINGS.map((binding) => [binding.id] as const))('%s', (id) => {
     const synthetic =
       id.startsWith('transform.') ||
       id.startsWith('mirror.') ||
-      // `anim.*` / `timeline.*` (P11B.09): playhead + column-selection keys that only mean
-      // anything with the dock focused, so the palette could not deliver them.
-      id.startsWith('anim.') ||
+      // `timeline.*` (P11B.09): column-selection and scrub keys that only mean anything with
+      // the dock focused and a clip open, so none of them has a palette-reachable command.
+      // `anim.*` is deliberately NOT blanket-exempt: `anim.playPause` and
+      // `anim.insertKeyframe` ARE real commands (Animation menu + palette), and only the
+      // three below stayed key-only.
       id.startsWith('timeline.') ||
       SYNTHETIC.includes(id);
     expect(synthetic || getCommand(id) !== undefined).toBe(true);

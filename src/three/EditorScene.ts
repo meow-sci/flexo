@@ -332,8 +332,9 @@ export class EditorScene {
     items: SelectedTransformRef[];
   } | null = null;
   /**
-   * Empty group the gizmo attaches to while editing a joint pose. Positioned at the
-   * joint's world frame W_J(t) of the edited keyframe; a gizmo drag moves it, and
+   * Empty group the {@link poseGizmo} attaches to while editing a joint pose (and ONLY it —
+   * TransformControls detaches for the session). Positioned at the joint's world frame
+   * W_J(t) of the edited keyframe; a gizmo drag moves it, and
    * {@link handlePoseGizmoChange} reads it back to the joint's local pose (Part-space
    * since {@link root} is at identity). Takes precedence over the selection gizmo.
    */
@@ -499,13 +500,6 @@ export class EditorScene {
 
     this.gizmo = new TransformGizmo(this.viewport, {
       onDragStart: () => {
-        // Editing a joint pose: one undo step, no bulk snapshot.
-        const pose = this.attachedObject === this.poseProxy ? this.poseEditTarget() : null;
-        if (pose) {
-          const when = pose.kf.timeSec === 0 ? 'rest' : `${pose.kf.timeSec}s`;
-          pushUndo('pose', `${pose.joint.name} @ ${when}`);
-          return;
-        }
         // Placing a nozzle exhaust: one undo step, no bulk snapshot.
         if (this.attachedObject === this.engineProxy) {
           const target = this.activeNozzleTarget();
@@ -536,8 +530,7 @@ export class EditorScene {
         this.beginBulkDrag();
       },
       onChange: (object) => {
-        if (object === this.poseProxy) this.handlePoseGizmoChange();
-        else if (object === this.engineProxy) this.handleEngineGizmoChange();
+        if (object === this.engineProxy) this.handleEngineGizmoChange();
         else this.handleGizmoChange(object);
       },
       onDraggingChanged: (dragging) => {
@@ -2007,10 +2000,13 @@ export class EditorScene {
     }
   }
 
-  /** The gizmo space the CURRENT attach target honours — proxies stay world (see attachGizmo). */
+  /**
+   * The gizmo space the CURRENT attach target honours — the exhaust proxy stays world (see
+   * attachGizmo). Posing never reaches here: `PoseGizmo` owns the pose proxy outright and
+   * TransformControls is detached (`attachGizmo(null)`) for the whole pose-editing session.
+   */
   private applyGizmoSpace(): void {
-    const proxy =
-      this.attachedObject === this.poseProxy || this.attachedObject === this.engineProxy;
+    const proxy = this.attachedObject === this.engineProxy;
     this.gizmo.setSpace(proxy ? 'world' : $gizmoSpace.get());
   }
 
@@ -2590,9 +2586,9 @@ export class EditorScene {
    */
   private beginDuplicateDrag(): boolean {
     if (!$heldModifiers.get().alt) return false;
-    // Pose and exhaust proxies are not the selection — ⌥ means nothing there.
+    // The exhaust proxy is not the selection — ⌥ means nothing there.
     const grabbed = this.attachedObject;
-    if (!grabbed || grabbed === this.poseProxy || grabbed === this.engineProxy) return false;
+    if (!grabbed || grabbed === this.engineProxy) return false;
     if ($selection.get().length === 0) return false;
 
     duplicateSelected({ offset: false });

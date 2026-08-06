@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useStore } from '@nanostores/react';
 import type { Selection } from 'react-aria-components';
 import {
@@ -14,7 +14,6 @@ import {
 import { $catalog, $catalogLoading } from '../../state/catalogStore';
 import type { CatalogSubPart } from '../../ksa/catalog';
 import { addSubPart } from '../../state/editorStore';
-import { closeBrowserPopup, openBrowserPopup } from '../../state/loadProgressStore';
 import { SubPartPreview } from '../SubPartPreview';
 import { PreviewLoadProgress } from '../LoadProgress';
 import { BrowserLayout, BrowserPopup } from '../BrowserShell';
@@ -44,8 +43,10 @@ const ALL_SOURCES = '__all__';
  *
  * Everything else is verbatim v1: the cover shell with its draggable splits resetting per
  * open, the fresh session every open (the body only mounts while open — a relied-upon
- * contract), the lighting-mirrored preview viewport, `PreviewLoadProgress` over it, the
- * `$browserPopupCount` workspace-progress suppression, and the details pane's fields.
+ * contract), the lighting-mirrored preview viewport, `PreviewLoadProgress` over it, and the
+ * details pane's fields. v1's `$browserPopupCount` bookkeeping is gone with the workspace
+ * overlay it suppressed — the status bar's progress segment and this pane both show now
+ * (design-system-services §1.2 #6).
  *
  * Undo enrollment: none here — every add is one discrete step inside `addSubPart`.
  */
@@ -71,11 +72,6 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
   const [interior, setInterior] = useState<InteriorFilter>('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const isPhone = useIsPhone();
-
-  useEffect(() => {
-    openBrowserPopup();
-    return closeBrowserPopup;
-  }, []);
 
   // One entry per distinct `*Assets.xml` the catalog was parsed from — the missing category
   // axis, for free, and always exactly the sources actually loaded.

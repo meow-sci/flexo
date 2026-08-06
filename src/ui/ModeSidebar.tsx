@@ -14,7 +14,7 @@ import { $mode } from '../state/modeStore';
  *
  * Shared between the desktop right sidebar and the phone **Panel sheet** (re-tap the active
  * mode tab). The focus editor is NOT part of this stack on either platform — it is the LEFT
- * sidebar (`ModeFocusEditor`) on desktop and the **Inspector sheet** (`MobileInspector`) on
+ * sidebar (`ModeFocusEditor`) on desktop and the **Inspector sheet** (`InspectorSheet`) on
  * phone, which is the same two-surface split.
  *
  * Undo enrollment: NONE — the mode is view state (foundation §13).

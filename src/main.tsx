@@ -4,7 +4,7 @@ import './index.css';
 import App from './app.tsx';
 import { toast } from './ui/toast';
 import { checkBuildId, initBuildMismatchNotice } from './buildCheck';
-import { hydrateProjectOnBoot, loadSharedProject, purgeV1ProjectKeys } from './state/projectStore';
+import { hydrateProjectOnBoot, loadSharedProject, purgeV1Storage } from './state/projectStore';
 import { clearShareParam, decodeSharePayload, readShareParam } from './state/projectShareLink';
 import { suppressAboutFirstUse } from './state/aboutStore';
 import { initCustomAssets } from './state/customAssetStore';
@@ -63,7 +63,7 @@ initSurfaceMode();
 void (async () => {
   // Delete v1's name-keyed localStorage projects, naming them in one notification. There is
   // no adoption path and none may be added (DECISIONS #3 — projects are a clean slate).
-  purgeV1ProjectKeys();
+  purgeV1Storage();
 
   // Restore the current project into the editor stores BEFORE the first render, so
   // the workspace paints once with the right data (no second visual refresh).

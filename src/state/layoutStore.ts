@@ -15,9 +15,10 @@ import { persistentJSON } from '@nanostores/persistent';
  * "mode/layout/status … never create undo steps".
  *
  * **No migration, ever.** The v1 keys `flexo:inspectorVisible` / `flexo:inspectorWidth`
- * / `flexo:inspectorFloatPos` / `flexo:animPreviewFloatPos` are simply abandoned —
- * nothing here reads them or converts their shape (constitution; design-system-
- * services.md §9). A stored `flexo:layout` value is read defensively instead: any
+ * / `flexo:inspectorFloatPos` / `flexo:animPreviewFloatPos` are abandoned — nothing here
+ * reads them or converts their shape (constitution; design-system-services.md §9), and
+ * boot DELETES them outright so they don't linger as clutter (`purgeV1Storage` in
+ * `src/state/projectStore.ts`). A stored `flexo:layout` value is read defensively: any
  * slice that doesn't match its expected shape falls back to that slice's default
  * (the same field-defaulting `lightSettings()` does in `src/state/settingsStore.ts`),
  * so a future field addition or a corrupted value degrades gracefully rather than

@@ -106,7 +106,7 @@ import {
   flushAutosave,
   hydrateProjectOnBoot,
   openProject,
-  purgeV1ProjectKeys,
+  purgeV1Storage,
   PROJECT_SCHEMA_VERSION,
 } from './projectStore';
 import {
@@ -333,7 +333,7 @@ describe('boot purge', () => {
     localStorage.setItem('flexo:layout', '{"kept":true}');
 
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    purgeV1ProjectKeys();
+    purgeV1Storage();
     warn.mockRestore();
 
     expect(localStorage.getItem('flexo:project:Old Rover')).toBeNull();
@@ -350,7 +350,39 @@ describe('boot purge', () => {
   });
 
   it('is a silent no-op when there is no v1 data', () => {
-    purgeV1ProjectKeys();
+    purgeV1Storage();
+    expect($notifications.get()).toEqual([]);
+  });
+
+  it('boot cleanup removes abandoned v1 layout keys', () => {
+    const dead = [
+      'flexo:inspectorVisible',
+      'flexo:inspectorWidth',
+      'flexo:inspectorFloatPos',
+      'flexo:animPreviewFloatPos',
+      'flexo:layerView',
+    ];
+    for (const key of dead) localStorage.setItem(key, '"whatever"');
+    // A representative slice of the LIVE v2 key set, which must survive byte-identical.
+    const live: Record<string, string> = {
+      'flexo:layout': '{"left":{"width":300}}',
+      'flexo:snapEnabled': 'true',
+      'flexo:snapTranslateStep': '0.25',
+      'flexo:snapRotateStep': '15',
+      'flexo:gizmoSpace': '"local"',
+      'flexo:kindVisibility': '{"light":false}',
+      'flexo:paletteRecents': '["edit.undo"]',
+      'flexo:currentProjectId': 'p-123',
+      'flexo:aboutSeen': 'true',
+      'flexo:grids': '{"y":{"visible":true}}',
+    };
+    for (const [key, value] of Object.entries(live)) localStorage.setItem(key, value);
+
+    purgeV1Storage();
+
+    for (const key of dead) expect(localStorage.getItem(key)).toBeNull();
+    for (const [key, value] of Object.entries(live)) expect(localStorage.getItem(key)).toBe(value);
+    // Layout preferences are not the user's work — removing them says nothing.
     expect($notifications.get()).toEqual([]);
   });
 

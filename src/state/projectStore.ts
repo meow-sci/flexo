@@ -114,7 +114,7 @@ import { copyProjectAssets, deleteProjectAssets } from './assetDb';
  *
  * NOTE the v2 storage redesign did NOT bump this. The DOCUMENT model is untouched; what moved
  * is the container (localStorage name-keyed entries → id-keyed IndexedDB records). v1 data is
- * removed by {@link purgeV1ProjectKeys}, not by a version check, so bumping would purge
+ * removed by {@link purgeV1Storage}, not by a version check, so bumping would purge
  * nothing that the key purge does not already remove while destroying the only rows this
  * constant can still protect: the new ones, going forward.
  */
@@ -132,6 +132,22 @@ export type { ProjectId, ProjectMeta, ProjectSnapshotV2 };
 /** v1's localStorage keys — read ONLY to delete them at boot (D6). No adoption, ever. */
 const V1_PROJECT_KEY_PREFIX = 'flexo:project:';
 const V1_CURRENT_PROJECT_KEY = 'flexo:currentProject';
+
+/**
+ * v1 shell-layout keys, replaced by the single `flexo:layout` (foundation §13: "v1 layout
+ * keys are simply abandoned"). Abandoning them leaves clutter that only Reset Everything
+ * ever cleared, so boot deletes them outright — REMOVAL, never migration (AGENTS.md
+ * constitution). Their values are never read.
+ */
+const DEAD_V1_KEYS = [
+  'flexo:inspectorVisible',
+  'flexo:inspectorWidth',
+  'flexo:inspectorFloatPos',
+  'flexo:animPreviewFloatPos',
+  // P9.07 dropped the global layer-view key: per-layer visibility/lock now rides ONLY the
+  // per-project snapshot (docs/layers.md), so a stale global copy could only mislead.
+  'flexo:layerView',
+];
 
 /** `?project=<id>` deep-open, stripped from the URL like `?load=` (design §1.4). */
 const PROJECT_PARAM = 'project';
@@ -478,15 +494,22 @@ function startThumbnailCadence(): void {
 // ── v1 purge (D6 — no adoption, ever) ────────────────────────────────────────
 
 /**
- * Deletes every v1 `flexo:project:*` entry and the `flexo:currentProject` pointer, naming the
- * projects in ONE warning notification. Display names come FROM THE KEYS — nothing is parsed,
- * so a corrupt entry is reported exactly as well as an intact one, and no v1 value is ever
- * interpreted (LOCKED #3: projects are a clean slate; no migration code of any kind).
+ * The one boot-time sweep of v1 localStorage. Two groups, both REMOVED and never read:
  *
- * Runs every boot; a no-op once the keys are gone.
+ * 1. **Projects** — every `flexo:project:*` entry plus the `flexo:currentProject` pointer,
+ *    named in ONE warning notification. Display names come FROM THE KEYS — nothing is
+ *    parsed, so a corrupt entry is reported exactly as well as an intact one, and no v1
+ *    value is ever interpreted (LOCKED #3: projects are a clean slate).
+ * 2. **{@link DEAD_V1_KEYS}** — the abandoned shell-layout keys, silently (they are
+ *    layout preferences, not the user's work, so a notice would be noise).
+ *
+ * Runs every boot; a no-op once the keys are gone. Every OTHER `flexo:*` key is live v2
+ * state and must survive untouched.
  */
-export function purgeV1ProjectKeys(): void {
+export function purgeV1Storage(): void {
   if (typeof localStorage === 'undefined') return;
+  for (const key of DEAD_V1_KEYS) localStorage.removeItem(key);
+
   const names: string[] = [];
   // Iterate high→low: removeItem reindexes localStorage, so descending is stable.
   for (let i = localStorage.length - 1; i >= 0; i--) {

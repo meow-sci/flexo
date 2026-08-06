@@ -18,8 +18,9 @@ import { $previewLighting, setPreviewLighting } from './settings';
  * the settings menu: a react-aria `Menu` owns pointer/keyboard for its items, so
  * a slider (or a Select) inside the collection is unsupported.
  *
- * Ranges/steps are copied verbatim from the main editor's `src/ui/ViewButton.tsx`
- * so both UIs agree on what each value means.
+ * Ranges/steps are copied verbatim from the main editor's lighting numerics — v1's
+ * `ViewButton` popover, now Settings ▸ Scene (`src/ui/settings/SceneSettings.tsx`) — so
+ * both UIs agree on what each value means.
  */
 export function LightingDialog({
   isOpen,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useStore } from '@nanostores/react';
 import type { Selection } from 'react-aria-components';
 import {
@@ -18,7 +18,6 @@ import { $partCatalog, $partCatalogLoading } from '../../state/partCatalogStore'
 import { $part, createLayer } from '../../state/editorStore';
 import { importBuiltInPart } from '../../state/partImport';
 import { revealLayer } from '../../state/layerStore';
-import { closeBrowserPopup, openBrowserPopup } from '../../state/loadProgressStore';
 import { PartPreview } from '../PartPreview';
 import { PreviewLoadProgress } from '../LoadProgress';
 import { BrowserLayout, BrowserPopup } from '../BrowserShell';
@@ -86,11 +85,6 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [targetLayer, setTargetLayer] = useState<string>(NEW_LAYER);
   const isPhone = useIsPhone();
-
-  useEffect(() => {
-    openBrowserPopup();
-    return closeBrowserPopup;
-  }, []);
 
   const allTags = [...new Set(catalog.flatMap((p) => p.editorTags))].sort((a, b) =>
     a.localeCompare(b),

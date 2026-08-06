@@ -90,18 +90,7 @@ export function trackDownload(label: string): DownloadTracker {
   };
 }
 
-/**
- * Number of open asset-browser popups (Add Part / Add SubPart), tracked so a browser can
- * tell whether it owns the foreground. The status bar's progress segment no longer hides
- * behind it — a browser's own preview-pane overlay and the segment may both show
- * (design-system-services §1.2 #6).
- */
-export const $browserPopupCount = atom(0);
-
-export function openBrowserPopup(): void {
-  $browserPopupCount.set($browserPopupCount.get() + 1);
-}
-
-export function closeBrowserPopup(): void {
-  $browserPopupCount.set(Math.max(0, $browserPopupCount.get() - 1));
-}
+// v1's `$browserPopupCount` is gone: its only reader was the workspace-wide load overlay,
+// which hid itself while a catalog browser was open. That overlay is now the status bar's
+// progress segment, and a browser's own preview-pane overlay may show alongside it
+// (design-system-services §1.2 #6) — leaving nothing to count.

@@ -4,7 +4,7 @@ import { ViewportDropZone } from './ui/ViewportDropZone';
 import { MarqueeOverlay } from './ui/MarqueeOverlay';
 import { ModeSidebar } from './ui/ModeSidebar';
 import { ModeFocusEditor } from './ui/ModeFocusEditor';
-import { MobileInspector } from './ui/MobileInspector';
+import { InspectorSheet } from './ui/shell/phone/InspectorSheet';
 import { ChainWindow } from './ui/chain/ChainWindow';
 import { ToolBarStrip, ToolBarWindow } from './ui/build/ToolBarWindow';
 import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys';
@@ -129,7 +129,7 @@ function App() {
 
           {/* Phone inspector: a FAB in the cell's corner opening a bottom sheet. The
               desktop inspector is the right sidebar below. */}
-          {isPhone && <MobileInspector />}
+          {isPhone && <InspectorSheet />}
         </div>
 
         {/* Floating windows mount here, as children of the BAND: their positions are

@@ -16,7 +16,10 @@ export {
 
 export { Button, button, type ButtonKitProps } from './Button';
 export { ToggleButton, ToggleButtonGroup, type ToggleButtonKitProps } from './ToggleButton';
-export { Toolbar, ToolbarSeparator, ToolbarButton } from './Toolbar';
+// No Toolbar export: every v1 consumer of the kit's react-aria `Toolbar` was a floating
+// toolbar on the §6.3 death list (EditorToolbar, SelectionToolbar, MultiSelectToolbar,
+// AnimToolbar, EngineToolbar, AssetsToolbar, MobileTopBar and the popover buttons). v2
+// chrome is the menubar, the status bar and docked sidebars, so the primitive went with them.
 
 export {
   Description,

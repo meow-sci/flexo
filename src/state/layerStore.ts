@@ -1,4 +1,4 @@
-import { persistentJSON } from '@nanostores/persistent';
+import { atom } from 'nanostores';
 import { deselectLayer } from './editorStore';
 
 /**
@@ -43,15 +43,18 @@ export const DEFAULT_LAYER_STATE: Readonly<LayerViewState> = {
 };
 
 /**
- * Map of layerId → view state. Entries are sparse (defaults filled on read), so a field
- * added to {@link LayerViewState} needs no migration — an old entry simply reads its
- * default.
+ * Map of layerId → view state. Entries are sparse (defaults filled on read by
+ * {@link layerViewState}), so a field added to {@link LayerViewState} needs no migration —
+ * an old entry simply reads its default.
  *
- * NOTE: the global key is transitional — P9.07 makes the project snapshot the only
- * persistence (`projectStore` already snapshots `layerView` per project, so nothing is
- * lost when the global mirror goes).
+ * **Per-project, snapshot-only.** This is a plain atom: the project snapshot
+ * (`projectStore.ProjectSnapshotV2.layerView`) is its ONE persistence, so hiding a layer in
+ * one project no longer leaks into the next one you open. v1 dual-persisted it to a global
+ * `flexo:layerView` key AND the snapshot, which meant the global key merely mirrored whichever
+ * project loaded last (census pm §3 "Quirk"). That key is simply abandoned — never read,
+ * never migrated (foundation §13).
  */
-export const $layerView = persistentJSON<Record<string, LayerViewState>>('flexo:layerView', {});
+export const $layerView = atom<Record<string, LayerViewState>>({});
 
 /** View state for a layer, filling in defaults for any unset fields. */
 export function layerViewState(view: Record<string, LayerViewState>, id: string): LayerViewState {

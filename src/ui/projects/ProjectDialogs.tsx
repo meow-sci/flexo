@@ -2,19 +2,23 @@ import { useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { Button, ConfirmDialog, Dialog, DialogHeader, Modal, TextField } from '../kit';
 import { TrashIcon } from '../layerIcons';
+import { deleteProject, openProject } from '../../state/projectStore';
 import {
+  $currentProjectId,
+  $projectIndex,
   $projectName,
-  deleteProject,
-  listProjects,
-  loadProject,
-  renameCurrentProject,
-  type ProjectSummary,
-} from '../../state/projectStore';
+  renameProject,
+} from '../../state/projectIndexStore';
+import type { ProjectMeta } from '../../state/projectDb';
 
 /**
  * The root-hosted project overlays (`DialogRoot` ids `'projects'` and `'rename-project'`).
- * Lifted out of the v1 `ProjectButton` popover verbatim so the menubar, the command
- * palette and the phone shell can all open them the same way.
+ *
+ * INTERIM: still the v1 list shape, now reading the reactive id-keyed index instead of
+ * re-parsing localStorage (the `setTick` hack is gone with it — `$projectIndex` refreshes on
+ * every mutation, in this tab and in any other). The rich Project Manager overlay (cards,
+ * search, sort, thumbnails, descriptions, duplicate, archive/share row actions) replaces this
+ * file in the same phase.
  *
  * Neither dialog enrolls in undo: project load/rename/delete are storage operations, not
  * document mutations.
@@ -25,14 +29,7 @@ function formatSavedAt(ms: number): string {
   return new Date(ms).toLocaleString();
 }
 
-/**
- * "Load Project" — every saved project with its SubPart count and save time, plus a
- * per-row delete behind a confirm.
- *
- * The `setTick` re-render below is deliberate v1 behaviour kept as-is: localStorage is
- * not reactive, so the list needs a nudge after a delete. The reactive, id-keyed project
- * index that replaces it is owned by the projects-storage phase — do not "fix" it here.
- */
+/** "Load Project" — every saved project with counts and save time, plus a delete confirm. */
 export function LoadProjectDialog({
   isOpen,
   onOpenChange,
@@ -40,11 +37,9 @@ export function LoadProjectDialog({
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const currentName = useStore($projectName);
-  // setTick re-renders to refresh the list after a delete (localStorage isn't reactive).
-  const [, setTick] = useState(0);
-  const [pendingDelete, setPendingDelete] = useState<ProjectSummary | null>(null);
-  const projects: ProjectSummary[] = isOpen ? listProjects() : [];
+  const currentId = useStore($currentProjectId);
+  const projects = useStore($projectIndex);
+  const [pendingDelete, setPendingDelete] = useState<ProjectMeta | null>(null);
 
   return (
     <Modal
@@ -61,10 +56,10 @@ export function LoadProjectDialog({
             <div className="p-2 text-sm text-fg-subtle">No saved projects yet.</div>
           ) : (
             projects.map((p) => {
-              const isCurrent = p.name === currentName;
+              const isCurrent = p.id === currentId;
               return (
                 <div
-                  key={p.name}
+                  key={p.id}
                   className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/[0.04]"
                 >
                   <div className="flex min-w-0 flex-1 flex-col">
@@ -73,7 +68,7 @@ export function LoadProjectDialog({
                       {isCurrent && <span className="ml-1 text-fg-subtle">(current)</span>}
                     </span>
                     <span className="truncate text-xs text-fg-subtle">
-                      {p.subPartCount} SubPart{p.subPartCount === 1 ? '' : 's'} ·{' '}
+                      {p.counts.subParts} SubPart{p.counts.subParts === 1 ? '' : 's'} ·{' '}
                       {formatSavedAt(p.savedAt)}
                     </span>
                   </div>
@@ -81,7 +76,7 @@ export function LoadProjectDialog({
                     size="sm"
                     isDisabled={isCurrent}
                     onPress={() => {
-                      loadProject(p.name);
+                      void openProject(p.id);
                       onOpenChange(false);
                     }}
                   >
@@ -107,12 +102,11 @@ export function LoadProjectDialog({
         isOpen={pendingDelete != null}
         onOpenChange={(open) => !open && setPendingDelete(null)}
         title={pendingDelete ? `Delete project “${pendingDelete.name}”?` : ''}
-        text="This permanently removes the saved project. This cannot be undone."
+        text="This permanently removes the saved project and its stored textures and meshes. This cannot be undone."
         confirmLabel="Delete"
         confirmVariant="danger"
         onConfirm={() => {
-          if (pendingDelete) deleteProject(pendingDelete.name);
-          setTick((t) => t + 1);
+          if (pendingDelete) void deleteProject(pendingDelete.id);
         }}
       />
     </Modal>
@@ -123,9 +117,8 @@ export function LoadProjectDialog({
  * "Rename Project" — a single text field seeded from the current project name. Enter or
  * the Rename button commits and closes.
  *
- * INTERIM: v1 rename semantics verbatim, including the silent same-name overwrite (a
- * rename onto an existing project's name clobbers it). The collision auto-suffix fix
- * belongs to the projects-storage phase, which owns that surface.
+ * A colliding name no longer clobbers the other project: `renameProject` auto-suffixes
+ * ("Rover" → "Rover 2") because storage keys on the project id, never on the name (D1).
  */
 export function RenameProjectDialog({
   isOpen,
@@ -135,9 +128,10 @@ export function RenameProjectDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const name = useStore($projectName);
+  const currentId = useStore($currentProjectId);
   const [draft, setDraft] = useState(name);
   const commit = () => {
-    renameCurrentProject(draft);
+    if (draft.trim()) void renameProject(currentId, draft);
     onOpenChange(false);
   };
 

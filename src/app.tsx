@@ -18,10 +18,8 @@ import { CommandPalette } from './ui/palette/CommandPalette';
 import { Sidebar } from './ui/shell/Sidebar';
 import { StatusBar } from './ui/status/StatusBar';
 import { useIsPhone } from './ui/kit';
-import { toast } from './ui/toast';
 import { ensureCatalogLoaded } from './state/catalogStore';
 import { ensurePartCatalogLoaded } from './state/partCatalogStore';
-import { consumeRemovedProjectsNotice } from './state/projectStore';
 import { showAboutOnFirstUse } from './state/aboutStore';
 // Side-effect import: registering every command + dynamic provider IS importing this
 // module (see src/ui/commands/index.ts). The menubar, the ⌘K palette, the phone MenuSheet
@@ -64,20 +62,10 @@ function App() {
     void ensurePartCatalogLoaded();
   }, []);
 
-  // Boot purged saved projects written by an incompatible schema version (see
-  // projectStore.PROJECT_SCHEMA_VERSION) — tell the user which ones vanished. The notice
-  // is consumed, so a remount never repeats it. Routed as a `warning`: an 8s amber status
-  // flash AND an unread notification-center entry, so the names survive being looked away
-  // from (v1 leaned on a 10s toast and lost them — design-system-services §2.5).
-  useEffect(() => {
-    const removed = consumeRemovedProjectsNotice();
-    if (removed.length === 0) return;
-    toast({
-      title: `Removed ${removed.length} incompatible saved project${removed.length === 1 ? '' : 's'}`,
-      description: `${removed.join(', ')} — saved by an older, incompatible version of flexo.`,
-      variant: 'warning',
-    });
-  }, []);
+  // NOTE the boot purge notices (v1 localStorage projects, schema-mismatched IDB rows,
+  // un-namespaced asset blobs) no longer need a mount effect to drain: boot posts them
+  // straight into the notification center via `notify()`, which outlives every remount and
+  // does not race the first-run About cover the way v1's toast did (design §9.3).
 
   // First-ever visit: greet the user with the About overlay (dialog id 'about'), then
   // remember it. Lives here rather than in AboutDialog because the dialog is only mounted

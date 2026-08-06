@@ -29,6 +29,7 @@ import {
 import { $part } from '../../state/editorStore';
 import { $assetUsage, openImportModel, type AssetUsage } from '../../state/customAssetStore';
 import { assetKeys, getAsset } from '../../state/assetDb';
+import { $currentProjectId } from '../../state/projectIndexStore';
 import {
   $assetManagerPrefs,
   setAssetManagerPrefs,
@@ -789,7 +790,7 @@ function ImportGlbSize({ importId }: { importId: string }) {
   const [size, setSize] = useState<number | null>(null);
   useEffect(() => {
     let cancelled = false;
-    getAsset(assetKeys.importGlb(importId))
+    getAsset(assetKeys.importGlb($currentProjectId.get(), importId))
       .then((blob) => {
         if (!cancelled) setSize(blob?.size ?? 0);
       })

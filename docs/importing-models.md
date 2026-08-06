@@ -267,8 +267,8 @@ handled it and is only telling you what it did.
   read from it. Reclaiming it is an explicit **Remove import**.
 - **Only descriptors go in the project snapshot.** `CustomMesh.imported: ImportedMeshSource`
   carries `importId`, `meshName`, `sourceFile`, `sourceNode`, `sourceMaterial`, `triangles`,
-  `vertices` and the optional `transparent` flag — lightweight enough for the localStorage
-  `ProjectSnapshot`, which is why the bytes live in `assetDb` instead.
+  `vertices` and the optional `transparent` flag — lightweight enough for the project
+  snapshot, which is why the bytes live in `assetDb` instead.
 - **Blob URLs are per session.** `importedMeshCache` registers `importId → blob:` on hydrate,
   loads missing batches out of IndexedDB on demand (`ensureImportAtlas`), frees one batch on
   removal (`releaseImportAtlas`) and all of them on project switch (`clearImportAtlases`).

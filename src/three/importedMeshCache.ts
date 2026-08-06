@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { assetKeys, getAsset } from '../state/assetDb';
+import { $currentProjectId } from '../state/projectIndexStore';
 import { getSubPartGeometry } from './MeshAtlasCache';
 
 /**
@@ -64,7 +65,7 @@ export function importAtlasUrl(importId: string): string | null {
 export async function ensureImportAtlas(importId: string): Promise<string | null> {
   const existing = atlasUrls.get(importId);
   if (existing) return existing;
-  const blob = await getAsset(assetKeys.importGlb(importId));
+  const blob = await getAsset(assetKeys.importGlb($currentProjectId.get(), importId));
   if (!blob) {
     console.warn(`flexo: imported model '${importId}' has no stored geometry`);
     return null;

@@ -12,10 +12,10 @@ import {
 } from './editorStore';
 import { closeChain } from './chainStore';
 import { resetModeForProjectLoad } from './modeStore';
-import { $layerView, type LayerViewState } from './layerStore';
-import { $cameraState, resetCamera, setCameraRestore, type CameraState } from './viewStore';
-import { $measurements, type LineMeasurement } from './measurementStore';
-import { $containers, type ReferenceContainer } from './containerStore';
+import { $layerView } from './layerStore';
+import { $cameraState, resetCamera, setCameraRestore } from './viewStore';
+import { $measurements } from './measurementStore';
+import { $containers } from './containerStore';
 import {
   createEmptyGameData,
   createEmptyPart,
@@ -27,138 +27,120 @@ import type { EditingPart } from '../ksa/types';
 import { envelopeToPart, type ProjectExportEnvelope } from './projectTransfer';
 import { status } from './statusStore';
 import { notify } from './notificationStore';
+import {
+  deleteProjectRecords,
+  deriveCounts,
+  getHistory,
+  getMeta,
+  getSnapshot,
+  getThumb,
+  listMeta,
+  newProjectId,
+  putHistory,
+  putMeta,
+  putSnapshot,
+  putThumb,
+  type ProjectHistoryRecord,
+  type ProjectId,
+  type ProjectMeta,
+  type ProjectSnapshotV2,
+} from './projectDb';
+import {
+  $autosaveHealth,
+  $currentProjectId,
+  $projectIndex,
+  $projectName,
+  $storageEstimate,
+  acquireProjectLock,
+  broadcastIndexChanged,
+  canWriteProject,
+  DEFAULT_PROJECT_NAME,
+  invalidateThumb,
+  readStoredProjectId,
+  refreshStorageEstimate,
+  releaseProjectLock,
+  reloadIndex,
+  setCurrentProjectId,
+  uniqueProjectName,
+} from './projectIndexStore';
+import { copyProjectAssets, deleteProjectAssets } from './assetDb';
 
 /**
- * PROJECTS — the editing experience is "project"-based. A project bundles all of
- * the workspace's working-set / document state and is persisted to localStorage so
- * a reload restores exactly what you were working on (camera excluded — that's
- * ephemeral and resets on load).
+ * PROJECTS — the editing experience is "project"-based. A project bundles the workspace's
+ * whole working set and is persisted so a reload restores exactly what you were working on.
  *
- * What a project captures (see {@link ProjectSnapshot}):
- *   - name (the project's identity, used in its localStorage key)
- *   - the full {@link EditingPart} document: partId, editorTags, layers,
- *     placements, connectors (each entity's layerId included)
- *   - per-layer view state (visibility/lock) from {@link $layerView}
- *   - the active layer (where new items land)
- *   - the undo/redo history (so undo survives a reload)
- * Selection, tool mode, snap, and camera are deliberately NOT captured — they're
- * ephemeral and start fresh.
+ * **Storage (v2, LOCKED #3 — design: design-projects-export.md §1).** Projects live in the
+ * IndexedDB database `flexo-projects` keyed by a stable {@link ProjectId} minted at create;
+ * the display name is pure metadata. `projectDb` owns the four record types
+ * (`meta` / `snapshots` / `history` / `thumbs`); `projectIndexStore` owns the reactive index,
+ * the current-id pointer, the multi-tab write lock and autosave health; THIS module owns the
+ * live-store side: what a snapshot is, how it is applied, autosave, boot, and the project
+ * lifecycle actions.
  *
- * Storage convention (one entry per project + a pointer to the current one):
- *   - `flexo:project:<name>`   → a JSON {@link ProjectSnapshot}
- *   - `flexo:currentProject`   → `{ name }`, read on boot to pick which to load
+ * What a project captures ({@link ProjectSnapshotV2} + its history record):
+ *   - the full {@link EditingPart} document: partId, editorTags, layers, placements,
+ *     connectors, colliders, seats, lights, kittens, custom assets, animations, GameData
+ *   - per-layer view state (visibility/lock/listed/opacity/collapsed) from `$layerView` —
+ *     as of v2 the snapshot is its ONLY persistence (the global `flexo:layerView` key is gone)
+ *   - the active layer, the camera, measurements and reference containers
+ *   - the undo/redo history, in its own record so undo still survives a reload (D4)
+ * Selection, tool mode, snap and seat view are deliberately NOT captured.
  *
- * Persistence is automatic: {@link startAutosave} subscribes to every store that
- * contributes to a project and writes a debounced snapshot whenever they change
- * (roughly the same granularity as an undo step). {@link hydrateProjectOnBoot} runs
- * once, synchronously, before React renders so all data is in place and there's no
- * second visual refresh.
+ * Persistence is automatic — {@link startAutosave} subscribes to every contributing store and
+ * writes on two debounces (snapshot+meta at 300 ms, the bulkier history at 1500 ms). There is
+ * no Save button anywhere, by design. {@link hydrateProjectOnBoot} runs once, AWAITED, before
+ * React renders, so the workspace still paints exactly once.
  *
- * No React / three.js imports — UI reads `$projectName` via `useStore`.
+ * No React / three.js imports — UI reads `$projectName` / `$projectIndex` via `useStore`.
  */
 
-const PROJECT_KEY_PREFIX = 'flexo:project:';
-const CURRENT_PROJECT_KEY = 'flexo:currentProject';
-
 /**
- * The version of the localStorage {@link ProjectSnapshot} format, stamped into every
- * saved project. It IS the compatibility contract: {@link sanitizeProjectStorage} keeps
- * a stored project iff it parses AND its `version` equals this number, and purges it at
- * boot otherwise (version mismatch or corruption — nothing else).
+ * The version of the persisted {@link ProjectSnapshotV2} format, stamped into every saved
+ * project's meta row. It IS the compatibility contract: {@link hydrateProjectOnBoot} keeps a
+ * stored project iff its snapshot loads AND its `schemaVersion` equals this number, and purges
+ * it (records + asset blobs) at boot otherwise — version mismatch or corruption, nothing else.
  *
  * Changing it:
- *  - A BACKWARDS-COMPATIBLE model change — a new field the live constructors can fill
- *    with a default that means what the old data meant — MUST NOT bump this. Bumping
- *    would delete every existing user's saved projects over an additive field;
- *    {@link normalizePart} fills the default on load instead.
+ *  - A BACKWARDS-COMPATIBLE model change — a new field the live constructors can fill with a
+ *    default that means what the old data meant — MUST NOT bump this. Bumping would delete
+ *    every existing user's saved projects over an additive field; {@link normalizePart} fills
+ *    the default on load instead.
  *  - A BREAKING change — an existing field's shape/meaning changes, or a new field whose
  *    default would silently mean the wrong thing — MUST bump this and append a
  *    `// vN: what broke` line below, so the log explains each purge event.
  *
  * Per the no-migration rule (AGENTS.md "project constitution") a mismatched snapshot is
  * DISCARDED, never converted — there is no upgrade path and none may be added.
+ *
+ * NOTE the v2 storage redesign did NOT bump this. The DOCUMENT model is untouched; what moved
+ * is the container (localStorage name-keyed entries → id-keyed IndexedDB records). v1 data is
+ * removed by {@link purgeV1ProjectKeys}, not by a version check, so bumping would purge
+ * nothing that the key purge does not already remove while destroying the only rows this
+ * constant can still protect: the new ones, going forward.
  */
 // v2: the version this became an enforced gate at; earlier builds stamped it but checked
 // the model shape instead, so any additive field purged every saved project.
 export const PROJECT_SCHEMA_VERSION = 2;
-export const DEFAULT_PROJECT_NAME = 'Untitled';
 
-/** The current project's name (its identity / localStorage key). Live working state. */
-export const $projectName = atom<string>(DEFAULT_PROJECT_NAME);
+export { DEFAULT_PROJECT_NAME, $projectName };
+export type { ProjectId, ProjectMeta, ProjectSnapshotV2 };
 
-/** Everything needed to fully restore a project's workspace. */
-export interface ProjectSnapshot {
-  version: number;
-  name: string;
-  part: EditingPart;
-  /** Per-layer visibility/lock (layerStore view state), keyed by layer id. */
-  layerView: Record<string, LayerViewState>;
-  /** Layer new items land in (clamped to a live layer on load). */
-  activeLayerId: string;
-  /** Undo/redo stacks so history survives a reload. */
-  history: HistorySnapshot;
-  /** Epoch millis of the last save — drives "most recent" ordering in the picker. */
-  savedAt: number;
-  /** Camera position/target/up — restored when the project loads. */
-  camera?: CameraState;
-  /** Placed measurement lines (editor aid; never written to the exported XML). */
-  measurements?: LineMeasurement[];
-  /** Placed reference containers (editor aid; never written to the exported XML). */
-  containers?: ReferenceContainer[];
-}
+/** v1's localStorage keys — read ONLY to delete them at boot (D6). No adoption, ever. */
+const V1_PROJECT_KEY_PREFIX = 'flexo:project:';
+const V1_CURRENT_PROJECT_KEY = 'flexo:currentProject';
 
-/** A lightweight project descriptor for the load-project list (no full document). */
-export interface ProjectSummary {
-  name: string;
-  savedAt: number;
-  partId: string;
-  subPartCount: number;
-}
+/** `?project=<id>` deep-open, stripped from the URL like `?load=` (design §1.4). */
+const PROJECT_PARAM = 'project';
 
-function projectKey(name: string): string {
-  return PROJECT_KEY_PREFIX + name;
-}
-
-function readSnapshotByKey(key: string): ProjectSnapshot | null {
-  const raw = localStorage.getItem(key);
-  if (!raw) return null;
-  try {
-    const snap = JSON.parse(raw) as ProjectSnapshot;
-    if (!snap || typeof snap.name !== 'string' || !snap.part) return null;
-    return snap;
-  } catch {
-    return null;
-  }
-}
-
-function readSnapshot(name: string): ProjectSnapshot | null {
-  return readSnapshotByKey(projectKey(name));
-}
-
-function writeCurrentPointer(name: string): void {
-  localStorage.setItem(CURRENT_PROJECT_KEY, JSON.stringify({ name }));
-}
-
-function readCurrentPointer(): string | null {
-  const raw = localStorage.getItem(CURRENT_PROJECT_KEY);
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw) as { name?: unknown };
-    return typeof parsed.name === 'string' ? parsed.name : null;
-  } catch {
-    return null;
-  }
-}
+// ── snapshot serialization ───────────────────────────────────────────────────
 
 /** Builds a snapshot of the current workspace from the live stores. */
-function serializeCurrentProject(): ProjectSnapshot {
+function serializeCurrentSnapshot(): ProjectSnapshotV2 {
   return {
     version: PROJECT_SCHEMA_VERSION,
-    name: $projectName.get(),
     part: $part.get(),
     layerView: $layerView.get(),
     activeLayerId: $activeLayerId.get(),
-    history: exportHistory(),
     savedAt: Date.now(),
     camera: $cameraState.get() ?? undefined,
     measurements: $measurements.get(),
@@ -205,89 +187,37 @@ function normalizePart(part: EditingPart): EditingPart {
   };
 }
 
+function normalizeSnapshot(snap: ProjectSnapshotV2): ProjectSnapshotV2 {
+  return { ...snap, part: normalizePart(snap.part) };
+}
+
 /**
- * Normalizes every EditingPart reachable from a snapshot: the live document plus the
- * part inside each undo/redo history entry (normal entries are { part, description,
- * detail }; legacy saves stored a bare EditingPart — handle whichever shape). History
- * needs it too, or the first undo would restore a part missing the added fields.
+ * Normalizes the part inside every undo/redo history entry — history needs it as much as the
+ * document does, or the first undo would restore a part missing the added fields. (Normal
+ * entries are `{ part, description, detail }`; a very old entry may be a bare EditingPart.)
  */
-function normalizeSnapshot(snap: ProjectSnapshot): ProjectSnapshot {
-  type HistoryEntry = HistorySnapshot['undo'][number];
-  const normalizeEntry = (e: HistoryEntry): HistoryEntry => ({
+function normalizeHistory(history: ProjectHistoryRecord | undefined): HistorySnapshot {
+  type Entry = HistorySnapshot['undo'][number];
+  const entry = (e: Entry): Entry => ({
     ...e,
     part: normalizePart(e.part ?? (e as unknown as EditingPart)),
   });
-  const history = snap.history ?? { undo: [], redo: [] };
   return {
-    ...snap,
-    part: normalizePart(snap.part),
-    history: {
-      undo: (history.undo ?? []).map(normalizeEntry),
-      redo: (history.redo ?? []).map(normalizeEntry),
-    },
+    undo: (history?.undo ?? []).map(entry),
+    redo: (history?.redo ?? []).map(entry),
   };
 }
 
-/** Display names of the projects the last purge removed, awaiting a user-facing notice. */
-let removedProjectNames: string[] = [];
-
 /**
- * The names of the projects {@link sanitizeProjectStorage} removed on this boot, handed
- * out ONCE and then cleared (so a remount can't re-notify). Empty when nothing was
- * purged. The UI turns this into a toast — this module stays React-free.
+ * Loads a snapshot into the live stores. Autosave is suspended for the duration so the
+ * cascade of store writes doesn't trigger a redundant save mid-load. The active layer is
+ * clamped to a layer that exists in the loaded document; selection is cleared (a fresh
+ * slate, like a normal page load). History is REPLACED wholesale (design §1.8).
  */
-export function consumeRemovedProjectsNotice(): string[] {
-  const names = removedProjectNames;
-  removedProjectNames = [];
-  return names;
-}
-
-/**
- * Boot-time cleanup: drop any `flexo:project:*` entry we can't honor. That is exactly two
- * cases — the entry isn't a readable snapshot (corrupt JSON / missing name or part), or it
- * was written against a different {@link PROJECT_SCHEMA_VERSION}, i.e. a build whose format
- * we don't migrate from. Everything else is KEPT and default-filled on load by
- * {@link normalizePart}. A dangling current-project pointer (now pointing at a removed
- * entry) is cleared too. Removed keys are reported in a single console.warn, and their
- * display names are kept for {@link consumeRemovedProjectsNotice}.
- */
-function sanitizeProjectStorage(): void {
-  const removed: string[] = [];
-  const names: string[] = [];
-  // Iterate high→low: removeItem reindexes localStorage, so descending is stable.
-  for (let i = localStorage.length - 1; i >= 0; i--) {
-    const key = localStorage.key(i);
-    if (!key || !key.startsWith(PROJECT_KEY_PREFIX)) continue;
-    const snap = readSnapshotByKey(key);
-    if (snap && snap.version === PROJECT_SCHEMA_VERSION) continue;
-    localStorage.removeItem(key);
-    removed.push(key);
-    // A corrupt entry has no readable name — fall back to the key's suffix.
-    names.push(snap?.name ?? key.slice(PROJECT_KEY_PREFIX.length));
-  }
-  const pointer = readCurrentPointer();
-  if (pointer != null && localStorage.getItem(projectKey(pointer)) == null) {
-    localStorage.removeItem(CURRENT_PROJECT_KEY);
-  }
-  removedProjectNames = names;
-  if (removed.length > 0) {
-    console.warn(
-      `flexo: removed ${removed.length} incompatible project(s) from localStorage (schema version mismatch or corrupt data):`,
-      removed,
-    );
-  }
-}
-
-/**
- * Loads a snapshot into the live stores. Autosave is suspended for the duration so
- * the cascade of store writes doesn't trigger a redundant save mid-load. The active
- * layer is clamped to a layer that exists in the loaded document; selection is
- * cleared (a fresh slate, like a normal page load).
- */
-function applyProjectSnapshot(snap: ProjectSnapshot): void {
+function applyProjectSnapshot(snap: ProjectSnapshotV2, history?: ProjectHistoryRecord): void {
   suspended = true;
   try {
-    importHistory(snap.history ?? { undo: [], redo: [] });
+    importHistory(normalizeHistory(history));
     $part.set(snap.part);
     const activeValid = snap.part.layers.some((l) => l.id === snap.activeLayerId);
     $activeLayerId.set(activeValid ? snap.activeLayerId : DEFAULT_LAYER_ID);
@@ -312,184 +242,139 @@ function applyProjectSnapshot(snap: ProjectSnapshot): void {
   }
 }
 
-/** Persists the current workspace to its `flexo:project:<name>` entry + pointer. */
-export function saveCurrentProject(): void {
-  const snap = serializeCurrentProject();
+// ── writing ──────────────────────────────────────────────────────────────────
+
+function byteLength(value: unknown): number {
   try {
-    localStorage.setItem(projectKey(snap.name), JSON.stringify(snap));
-    writeCurrentPointer(snap.name);
+    return JSON.stringify(value)?.length ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** The meta row for the current workspace, carrying over the immutable fields of `previous`. */
+function buildMeta(
+  id: ProjectId,
+  snap: ProjectSnapshotV2,
+  previous: ProjectMeta | undefined,
+  historyBytes: number,
+): ProjectMeta {
+  return {
+    id,
+    name: $projectName.get(),
+    description: previous?.description ?? '',
+    partId: snap.part.partId ?? '',
+    createdAt: previous?.createdAt ?? snap.savedAt,
+    savedAt: snap.savedAt,
+    schemaVersion: PROJECT_SCHEMA_VERSION,
+    counts: deriveCounts(snap.part),
+    bytes: {
+      snapshot: byteLength(snap),
+      history: historyBytes,
+      assets: previous?.bytes.assets ?? 0,
+    },
+    hasThumb: previous?.hasThumb ?? false,
+  };
+}
+
+/** Last written history size, so a snapshot-only save doesn't zero the meta's history bytes. */
+let lastHistoryBytes = 0;
+
+async function writeSnapshotAndMeta(): Promise<void> {
+  const id = $currentProjectId.get();
+  if (!id || !canWriteProject()) return;
+  const snap = serializeCurrentSnapshot();
+  await putSnapshot(id, snap);
+  await putMeta(buildMeta(id, snap, await getMeta(id), lastHistoryBytes));
+  await reloadIndex();
+  broadcastIndexChanged();
+}
+
+async function writeHistory(): Promise<void> {
+  const id = $currentProjectId.get();
+  if (!id || !canWriteProject()) return;
+  const history = exportHistory();
+  lastHistoryBytes = byteLength(history);
+  await putHistory(id, history);
+}
+
+/**
+ * Reports a failed IDB write. v1 stopped at a `console.warn`, so the user kept editing work
+ * that was no longer being saved with no sign anything was wrong (census pain #4). This is the
+ * loudest tier flexo has — a persistent danger status message AND one sticky notification,
+ * deduped so a failing quota can't spam the ring (design §1.3).
+ */
+function reportAutosaveFailure(err: unknown): void {
+  console.warn('flexo: failed to persist project', err);
+  if ($autosaveHealth.get() === 'failing') return;
+  $autosaveHealth.set('failing');
+  const estimate = $storageEstimate.get();
+  const quota = estimate
+    ? `Storage: ${(estimate.usage / 1e6).toFixed(0)} MB used of ~${(estimate.quota / 1e6).toFixed(0)} MB. `
+    : '';
+  const id = notify({
+    severity: 'danger',
+    title: 'Autosave failing — storage may be full',
+    body: `${quota}Your latest changes were not saved. Free space by deleting a project, or export archives as backups. ${String(err)}`,
+    actions: [
+      { label: 'Open Projects…', commandId: 'file.projects' },
+      { label: 'Retry now', commandId: 'project.retryAutosave' },
+    ],
+  });
+  status('Autosave failing — storage may be full', { severity: 'danger', notificationId: id });
+}
+
+function reportAutosaveRecovered(): void {
+  if ($autosaveHealth.get() === 'ok') return;
+  $autosaveHealth.set('ok');
+  status('Autosave recovered ✓', { severity: 'success' });
+}
+
+async function runWrite(write: () => Promise<void>): Promise<void> {
+  try {
+    await write();
+    reportAutosaveRecovered();
   } catch (err) {
-    // localStorage can throw (quota / private mode) — surface but don't crash editing.
-    console.warn('flexo: failed to persist project', err);
-    // v1 stopped at that console.warn, so the user kept editing work that was no longer
-    // being saved with no sign anything was wrong. This is the loudest tier flexo has: a
-    // red 10s status flash AND a sticky unread notification carrying the full error text
-    // (design-system-services §2.2 errors row, "newly surfaced").
-    //
-    // Called directly rather than through the `toast()` facade because `src/state/` may
-    // not import from `src/ui/` — state → state is the sanctioned spelling.
-    const id = notify({
-      severity: 'danger',
-      title: 'Autosave failed',
-      body: `Your latest changes were not saved — storage full? ${String(err)}`,
-    });
-    status('Autosave failed — your latest changes were not saved', {
-      severity: 'danger',
-      notificationId: id,
-    });
+    reportAutosaveFailure(err);
   }
 }
 
-/** Every saved project (most-recently-saved first), as lightweight summaries. */
-export function listProjects(): ProjectSummary[] {
-  const out: ProjectSummary[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (!key || !key.startsWith(PROJECT_KEY_PREFIX)) continue;
-    const snap = readSnapshotByKey(key);
-    if (!snap) continue;
-    out.push({
-      name: snap.name,
-      savedAt: snap.savedAt ?? 0,
-      partId: snap.part.partId ?? '',
-      subPartCount: snap.part.placements?.length ?? 0,
-    });
-  }
-  return out.sort((a, b) => b.savedAt - a.savedAt);
-}
-
-/** True when a project with this exact name is already saved. */
-export function projectExists(name: string): boolean {
-  return localStorage.getItem(projectKey(name)) != null;
-}
-
-/** Returns `base`, or `base 2`, `base 3`, … — the first name not already taken. */
-export function uniqueProjectName(base: string = DEFAULT_PROJECT_NAME): string {
-  if (!projectExists(base)) return base;
-  for (let n = 2; ; n++) {
-    const candidate = `${base} ${n}`;
-    if (!projectExists(candidate)) return candidate;
-  }
-}
-
-/**
- * Loads the named project into the workspace and makes it current. Returns false if
- * no such project exists (the workspace is left untouched).
- */
-export function loadProject(name: string): boolean {
-  const snap = readSnapshot(name);
-  if (!snap) return false;
-  try {
-    // Default-fill first: a same-version snapshot may predate an additive field.
-    applyProjectSnapshot(normalizeSnapshot(snap));
-  } catch (err) {
-    // Defensive backstop for staleness deeper than the normalizer's reach: never let one
-    // bad project crash boot. Discard it and fail.
-    suspended = false;
-    console.warn(`flexo: failed to load project "${name}" — removing it`, err);
-    localStorage.removeItem(projectKey(name));
-    return false;
-  }
-  $projectName.set(snap.name);
-  writeCurrentPointer(snap.name);
-  return true;
-}
-
-/**
- * Starts a fresh, empty project under `name` (made current and saved immediately).
- * Clears the document, history, and per-layer view state.
- */
-export function createProject(name: string): void {
-  const trimmed = name.trim() || DEFAULT_PROJECT_NAME;
-  suspended = true;
-  try {
-    newPart();
-    $layerView.set({});
-    resetCamera();
-  } finally {
-    suspended = false;
-  }
-  $projectName.set(trimmed);
-  saveCurrentProject();
-}
-
-/**
- * Opens a project decoded from a stateless share link (see projectShareLink.ts) as a
- * NEW saved project, switched-to and made current — the user's existing projects are
- * untouched. The shared project's name is made unique to avoid clobbering a same-named
- * local project. Reconstructed faithfully (no id remapping); camera/selection reset.
- */
-export function loadSharedProject(env: ProjectExportEnvelope): string {
-  const part = envelopeToPart(env);
-  const name = uniqueProjectName(env.projectName.trim() || 'Shared Project');
-  suspended = true;
-  try {
-    importHistory({ undo: [], redo: [] });
-    $part.set(part);
-    $activeLayerId.set(DEFAULT_LAYER_ID);
-    $layerView.set({});
-    $measurements.set([]);
-    $containers.set([]);
-    clearSelection();
-    resetCamera();
-  } finally {
-    suspended = false;
-  }
-  $projectName.set(name);
-  saveCurrentProject();
-  return name;
-}
-
-/**
- * Renames the current project, re-keying its localStorage entry (the old key is
- * removed). No-op when blank or unchanged.
- */
-export function renameCurrentProject(name: string): void {
-  const trimmed = name.trim();
-  const old = $projectName.get();
-  if (!trimmed || trimmed === old) return;
-  localStorage.removeItem(projectKey(old));
-  $projectName.set(trimmed);
-  saveCurrentProject();
-}
-
-/**
- * Deletes a saved project. If it's the current one, switches to the most recent
- * remaining project, or starts a fresh default project when none are left.
- */
-export function deleteProject(name: string): void {
-  localStorage.removeItem(projectKey(name));
-  if ($projectName.get() !== name) return;
-  const remaining = listProjects();
-  if (remaining.length > 0) loadProject(remaining[0].name);
-  else createProject(DEFAULT_PROJECT_NAME);
-}
-
-// ---------------------------------------------------------------------------
-// Autosave
+// ── autosave ─────────────────────────────────────────────────────────────────
 //
-// A debounced write fires whenever any store that contributes to a project
-// changes. `$part`, `$canUndo`, and `$canRedo` together cover every document +
-// history change (pushUndo/undo/redo all touch the flags and/or `$part`);
-// `$activeLayerId`, `$layerView`, and `$projectName` cover the rest. The debounce
-// collapses a gizmo drag (many per-frame `$part` writes) into a single save.
-// ---------------------------------------------------------------------------
+// A debounced write fires whenever any store that contributes to a project changes.
+// `$part`, `$canUndo` and `$canRedo` together cover every document + history change
+// (pushUndo/undo/redo all touch the flags and/or `$part`); `$activeLayerId`, `$layerView`
+// and `$projectName` cover the rest. The debounce collapses a gizmo drag (many per-frame
+// `$part` writes) into a single save. History gets its own, slower timer: it is the bulk of
+// the bytes, and a reload inside its window loses at most the last undo ENTRIES, never
+// document state (D4).
 
 const SAVE_DEBOUNCE_MS = 300;
+const HISTORY_DEBOUNCE_MS = 1500;
+
 let suspended = false;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
+let historyTimer: ReturnType<typeof setTimeout> | null = null;
 let autosaveStarted = false;
+/** Set by the scheduler, cleared by a thumbnail capture — drives the D15 cadence. */
+let dirtySinceCapture = false;
 
 function scheduleSave(): void {
   if (suspended) return;
+  dirtySinceCapture = true;
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     saveTimer = null;
-    saveCurrentProject();
+    void runWrite(writeSnapshotAndMeta);
   }, SAVE_DEBOUNCE_MS);
+  if (historyTimer) clearTimeout(historyTimer);
+  historyTimer = setTimeout(() => {
+    historyTimer = null;
+    void runWrite(writeHistory);
+  }, HISTORY_DEBOUNCE_MS);
 }
 
-function startAutosave(): void {
+export function startAutosave(): void {
   if (autosaveStarted) return;
   autosaveStarted = true;
   $part.subscribe(scheduleSave);
@@ -501,25 +386,391 @@ function startAutosave(): void {
   $cameraState.subscribe(scheduleSave);
   $measurements.subscribe(scheduleSave);
   $containers.subscribe(scheduleSave);
+  startThumbnailCadence();
+}
+
+/** Cancels the pending debounces and writes snapshot + meta + history NOW. */
+export async function flushAutosave(): Promise<void> {
+  if (saveTimer) {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+  }
+  if (historyTimer) {
+    clearTimeout(historyTimer);
+    historyTimer = null;
+  }
+  await runWrite(async () => {
+    await writeHistory();
+    await writeSnapshotAndMeta();
+  });
+}
+
+/** Writes every record for a project immediately, bypassing the debounce (create / import). */
+async function writeAllNow(): Promise<void> {
+  await runWrite(async () => {
+    await writeHistory();
+    await writeSnapshotAndMeta();
+  });
+}
+
+// ── thumbnails (P9.08 / design §1.6, D15) ────────────────────────────────────
+
+/**
+ * One-shot capture intent, consumed by `EditorScene` — the sanctioned intent-atom pattern
+ * (`$colliderFitRequest` / the camera-snap nonce). The scene is the only place with the built
+ * world geometry, so the store publishes an intent and the scene answers with a blob.
+ */
+export const $thumbnailRequest = atom<{ nonce: number } | null>(null);
+
+let thumbnailNonce = 0;
+
+/** Asks the scene for a fresh thumbnail of the current document. */
+export function requestThumbnail(): void {
+  thumbnailNonce += 1;
+  $thumbnailRequest.set({ nonce: thumbnailNonce });
 }
 
 /**
- * Loads the current project (or the most recent / a fresh default) into the stores
- * and starts autosave. Call ONCE, synchronously, before React renders so the whole
- * workspace is in place on first paint (no second visual refresh). localStorage is
- * synchronous, so no async wait is needed.
+ * Stores a captured thumbnail against a project and flags its meta row. Called by
+ * `EditorScene` once the offscreen render lands; `null` means "nothing to capture"
+ * (an empty document), which simply clears the request.
  */
-export function hydrateProjectOnBoot(): void {
-  // Purge corrupt / wrong-schema-version projects first so we never try to load one
-  // (which would crash the app). Anything removed is reported via console.warn and
-  // surfaced to the user by consumeRemovedProjectsNotice().
-  sanitizeProjectStorage();
-  const pointerName = readCurrentPointer();
-  const loaded = pointerName != null && loadProject(pointerName);
-  if (!loaded) {
-    const projects = listProjects();
-    if (projects.length > 0) loadProject(projects[0].name);
-    else createProject(DEFAULT_PROJECT_NAME);
+export async function storeThumbnail(id: ProjectId, blob: Blob | null): Promise<void> {
+  $thumbnailRequest.set(null);
+  dirtySinceCapture = false;
+  if (!blob || !id || !canWriteProject()) return;
+  try {
+    await putThumb(id, blob);
+    invalidateThumb(id);
+    const meta = await getMeta(id);
+    if (meta && !meta.hasThumb) await putMeta({ ...meta, hasThumb: true });
+    await reloadIndex();
+    broadcastIndexChanged();
+  } catch (err) {
+    console.warn('flexo: thumbnail store failed', err);
+  }
+}
+
+const THUMBNAIL_INTERVAL_MS = 60_000;
+let thumbnailCadenceStarted = false;
+
+/**
+ * The D15 cadence: tab-hide while dirty, and at most once a minute while dirty. Both are
+ * *conditional* — an idle project never captures, so this cannot turn the on-demand render
+ * loop continuous (foundation §14.5). Switch-away and post-create captures are requested
+ * explicitly by the lifecycle actions below.
+ */
+function startThumbnailCadence(): void {
+  if (thumbnailCadenceStarted || typeof document === 'undefined') return;
+  thumbnailCadenceStarted = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && dirtySinceCapture) requestThumbnail();
+  });
+  setInterval(() => {
+    if (dirtySinceCapture && document.visibilityState === 'visible') requestThumbnail();
+  }, THUMBNAIL_INTERVAL_MS);
+}
+
+// ── v1 purge (D6 — no adoption, ever) ────────────────────────────────────────
+
+/**
+ * Deletes every v1 `flexo:project:*` entry and the `flexo:currentProject` pointer, naming the
+ * projects in ONE warning notification. Display names come FROM THE KEYS — nothing is parsed,
+ * so a corrupt entry is reported exactly as well as an intact one, and no v1 value is ever
+ * interpreted (LOCKED #3: projects are a clean slate; no migration code of any kind).
+ *
+ * Runs every boot; a no-op once the keys are gone.
+ */
+export function purgeV1ProjectKeys(): void {
+  if (typeof localStorage === 'undefined') return;
+  const names: string[] = [];
+  // Iterate high→low: removeItem reindexes localStorage, so descending is stable.
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const key = localStorage.key(i);
+    if (!key || !key.startsWith(V1_PROJECT_KEY_PREFIX)) continue;
+    localStorage.removeItem(key);
+    names.push(key.slice(V1_PROJECT_KEY_PREFIX.length));
+  }
+  localStorage.removeItem(V1_CURRENT_PROJECT_KEY);
+  if (names.length === 0) return;
+  console.warn('flexo: removed v1 project storage (incompatible format):', names);
+  notify({
+    severity: 'warning',
+    title: `Projects from a previous flexo version were removed (incompatible format)`,
+    body: names.sort().join(', '),
+  });
+}
+
+// ── boot ─────────────────────────────────────────────────────────────────────
+
+function readProjectParam(): ProjectId | null {
+  if (typeof window === 'undefined') return null;
+  const value = new URL(window.location.href).searchParams.get(PROJECT_PARAM);
+  return value || null;
+}
+
+function clearProjectParam(): void {
+  const url = new URL(window.location.href);
+  url.searchParams.delete(PROJECT_PARAM);
+  window.history.replaceState({}, '', url.toString());
+}
+
+/**
+ * The boot schema purge (design §1.2): any project whose `schemaVersion` mismatches, or whose
+ * snapshot is missing or unreadable, is deleted with its records AND its asset blobs, and
+ * named in one warning notification. Everything kept is default-filled on load by
+ * {@link normalizePart} — preservation by versioning, never conversion (constitution).
+ *
+ * Returns the surviving rows.
+ */
+async function purgeIncompatibleProjects(): Promise<ProjectMeta[]> {
+  const rows = await listMeta();
+  const kept: ProjectMeta[] = [];
+  const removed: string[] = [];
+  for (const row of rows) {
+    let ok = row.schemaVersion === PROJECT_SCHEMA_VERSION;
+    if (ok) {
+      try {
+        const snap = await getSnapshot(row.id);
+        // A snapshot must at least carry a document with layers — anything less would crash
+        // applyProjectSnapshot, and a project that crashes boot is worse than one that is gone.
+        ok = !!snap && !!snap.part && Array.isArray(snap.part.layers);
+      } catch {
+        ok = false;
+      }
+    }
+    if (ok) {
+      kept.push(row);
+      continue;
+    }
+    removed.push(row.name || row.id);
+    await deleteProjectRecords(row.id).catch(() => {});
+    await deleteProjectAssets(row.id).catch(() => {});
+  }
+  if (removed.length > 0) {
+    console.warn('flexo: removed incompatible project(s) (schema version mismatch):', removed);
+    notify({
+      severity: 'warning',
+      title: `Removed ${removed.length} incompatible saved project${removed.length === 1 ? '' : 's'}`,
+      body: `${removed.sort().join(', ')} — saved by an older, incompatible version of flexo.`,
+    });
+  }
+  return kept;
+}
+
+/** Loads a stored project into the live stores. False when it can't be read. */
+async function loadProjectRecords(id: ProjectId, meta: ProjectMeta): Promise<boolean> {
+  try {
+    const snap = await getSnapshot(id);
+    if (!snap) return false;
+    applyProjectSnapshot(normalizeSnapshot(snap), await getHistory(id));
+  } catch (err) {
+    // Defensive backstop for staleness deeper than the normalizer's reach: never let one bad
+    // project crash boot. Discard it and fail (v1 semantics, now sweeping the blobs too).
+    suspended = false;
+    console.warn(`flexo: failed to load project "${meta.name}" — removing it`, err);
+    await deleteProjectRecords(id).catch(() => {});
+    await deleteProjectAssets(id).catch(() => {});
+    return false;
+  }
+  setCurrentProjectId(id);
+  $projectName.set(meta.name);
+  return true;
+}
+
+/**
+ * Restores the project this tab should open and starts autosave. Call ONCE, AWAITED, before
+ * React renders: IndexedDB is async, so boot awaits it and nothing paints until it resolves —
+ * which is what preserves v1's single-paint property (design §1.7, D3).
+ *
+ * Fallback ladder (census pm §1.6, preserved): `?project=<id>` → the `flexo:currentProjectId`
+ * pointer → the newest `savedAt` row → a fresh "Untitled".
+ */
+export async function hydrateProjectOnBoot(): Promise<void> {
+  void refreshStorageEstimate();
+  let rows: ProjectMeta[];
+  try {
+    rows = await purgeIncompatibleProjects();
+  } catch (err) {
+    // No IndexedDB at all (private mode / blocked): editing still works, nothing persists.
+    console.warn('flexo: project storage unavailable', err);
+    notify({
+      severity: 'danger',
+      title: 'Project storage unavailable',
+      body: `flexo could not open its project database, so nothing will be saved this session. ${String(err)}`,
+    });
+    $autosaveHealth.set('failing');
+    newPart();
+    startAutosave();
+    return;
+  }
+
+  const param = readProjectParam();
+  if (param) clearProjectParam();
+  const candidates = [param, readStoredProjectId()].filter((id): id is ProjectId => !!id);
+  const byId = new Map(rows.map((row) => [row.id, row]));
+
+  let opened = false;
+  for (const id of candidates) {
+    const meta = byId.get(id);
+    if (meta && (await loadProjectRecords(id, meta))) {
+      opened = true;
+      break;
+    }
+  }
+  if (!opened) {
+    const newest = [...rows].sort((a, b) => b.savedAt - a.savedAt)[0];
+    if (newest) opened = await loadProjectRecords(newest.id, newest);
+  }
+
+  await reloadIndex();
+  if (!opened) {
+    await createProject();
+  } else {
+    await acquireProjectLock($currentProjectId.get());
   }
   startAutosave();
+}
+
+// ── lifecycle actions (design §1.8 — none of these are undo steps) ───────────
+
+/**
+ * Starts a fresh, empty project: new id, unique name, cleared document/history/layer view,
+ * reset camera, saved immediately and switched to.
+ */
+export async function createProject(name?: string): Promise<ProjectId> {
+  const id = newProjectId();
+  const unique = uniqueProjectName(name ?? DEFAULT_PROJECT_NAME);
+  suspended = true;
+  try {
+    newPart();
+    importHistory({ undo: [], redo: [] });
+    $layerView.set({});
+    $measurements.set([]);
+    $containers.set([]);
+    resetCamera();
+  } finally {
+    suspended = false;
+  }
+  releaseProjectLock();
+  setCurrentProjectId(id);
+  $projectName.set(unique);
+  lastHistoryBytes = 0;
+  await writeAllNow();
+  await acquireProjectLock(id);
+  status(`New project “${unique}”`);
+  requestThumbnail();
+  return id;
+}
+
+/**
+ * Switches to a stored project. The outgoing project is flushed and thumbnailed first; the
+ * incoming one REPLACES the undo stacks wholesale (v1 semantics, design §1.8).
+ */
+export async function openProject(id: ProjectId): Promise<boolean> {
+  if (id === $currentProjectId.get()) return true;
+  const meta = await getMeta(id);
+  if (!meta) return false;
+  requestThumbnail();
+  // Let the scene answer the capture request before the document changes underneath it.
+  await Promise.resolve();
+  await flushAutosave();
+  releaseProjectLock();
+  const loaded = await loadProjectRecords(id, meta);
+  if (!loaded) {
+    await reloadIndex();
+    return false;
+  }
+  await acquireProjectLock(id);
+  await reloadIndex();
+  status(`Opened “${meta.name}”`);
+  return true;
+}
+
+/**
+ * Copies a project under a new id: snapshot + thumbnail + its asset blobs (the per-project
+ * namespace makes the asset ids collision-free, so no descriptor rewrite is needed). History
+ * is NOT copied — a duplicate is a new artifact with fresh stacks. Does not switch to it.
+ */
+export async function duplicateProject(id: ProjectId): Promise<ProjectId | null> {
+  if (id === $currentProjectId.get()) await flushAutosave();
+  const meta = await getMeta(id);
+  const snap = await getSnapshot(id);
+  if (!meta || !snap) return null;
+  const copyId = newProjectId();
+  const name = uniqueProjectName(`${meta.name} copy`);
+  const now = Date.now();
+  await putSnapshot(copyId, { ...snap, savedAt: now });
+  const thumb = meta.hasThumb ? await getThumb(id) : undefined;
+  if (thumb) await putThumb(copyId, thumb);
+  await copyProjectAssets(id, copyId);
+  await putMeta({
+    ...meta,
+    id: copyId,
+    name,
+    createdAt: now,
+    savedAt: now,
+    bytes: { ...meta.bytes, history: 0 },
+    hasThumb: !!thumb,
+  });
+  await reloadIndex();
+  broadcastIndexChanged();
+  return copyId;
+}
+
+/**
+ * Permanently deletes a project: its four records AND its asset blobs (the v1 orphan leak,
+ * census pain #11). Deleting the current project switches to the most recent remaining one,
+ * or starts a fresh default when none are left (v1 semantics).
+ */
+export async function deleteProject(id: ProjectId): Promise<void> {
+  const wasCurrent = id === $currentProjectId.get();
+  if (wasCurrent) releaseProjectLock();
+  await deleteProjectRecords(id);
+  await deleteProjectAssets(id);
+  invalidateThumb(id);
+  await reloadIndex();
+  broadcastIndexChanged();
+  if (!wasCurrent) return;
+  // $projectIndex is sorted savedAt desc by reloadIndex(), so [0] is the most recent.
+  const remaining = $projectIndex.get()[0];
+  if (remaining && (await loadProjectRecords(remaining.id, remaining))) {
+    await acquireProjectLock(remaining.id);
+    await reloadIndex();
+  } else {
+    await createProject();
+  }
+}
+
+/**
+ * Opens a project decoded from a stateless share link (see projectShareLink.ts) as a NEW
+ * saved project with a FRESH id, switched-to and made current — the user's existing projects
+ * are untouched. Reconstructed faithfully (no id remapping); camera/selection/history reset.
+ */
+export async function loadSharedProject(env: ProjectExportEnvelope): Promise<string> {
+  const part = envelopeToPart(env);
+  const id = newProjectId();
+  const name = uniqueProjectName(env.projectName.trim() || 'Shared Project');
+  suspended = true;
+  try {
+    importHistory({ undo: [], redo: [] });
+    $part.set(part);
+    $activeLayerId.set(DEFAULT_LAYER_ID);
+    $layerView.set({});
+    $measurements.set([]);
+    $containers.set([]);
+    clearSelection();
+    resetCamera();
+    resetModeForProjectLoad();
+  } finally {
+    suspended = false;
+  }
+  releaseProjectLock();
+  setCurrentProjectId(id);
+  $projectName.set(name);
+  lastHistoryBytes = 0;
+  await writeAllNow();
+  await acquireProjectLock(id);
+  requestThumbnail();
+  return name;
 }

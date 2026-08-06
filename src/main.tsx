@@ -5,7 +5,7 @@ import App from './app.tsx';
 import { toast } from './ui/toast';
 import { BuildIdMismatchDialog } from './ui/BuildIdMismatchDialog';
 import { checkBuildId } from './buildCheck';
-import { hydrateProjectOnBoot, loadSharedProject } from './state/projectStore';
+import { hydrateProjectOnBoot, loadSharedProject, purgeV1ProjectKeys } from './state/projectStore';
 import { clearShareParam, decodeSharePayload, readShareParam } from './state/projectShareLink';
 import { suppressAboutFirstUse } from './state/aboutStore';
 import { initCustomAssets } from './state/customAssetStore';
@@ -54,66 +54,84 @@ initEngineMode();
 // undone away. Same reasoning as the two above — wired from boot, never at module scope.
 initSurfaceMode();
 
-// Restore the current project into the editor stores BEFORE the first render, so
-// the workspace paints once with the right data (no second visual refresh).
-hydrateProjectOnBoot();
+/**
+ * The rest of boot is one async IIFE because project hydration is now AWAITED: projects live
+ * in IndexedDB (LOCKED #3), which is async, and the single-paint property is preserved by
+ * awaiting BEFORE `createRoot().render()` rather than by reading synchronously. Nothing
+ * renders until the workspace is in place; the HTML background shows for the few ms an IDB
+ * read takes (design-projects-export.md §1.7). Step ORDER is unchanged from v1.
+ */
+void (async () => {
+  // Delete v1's name-keyed localStorage projects, naming them in one notification. There is
+  // no adoption path and none may be added (DECISIONS #3 — projects are a clean slate).
+  purgeV1ProjectKeys();
 
-// Wire custom-asset hydration AFTER the project is loaded so the immediate
-// subscriber callback reads the real $part (not the initial empty part).
-initCustomAssets();
+  // Restore the current project into the editor stores BEFORE the first render, so
+  // the workspace paints once with the right data (no second visual refresh).
+  await hydrateProjectOnBoot();
 
-// Keep the active animation/joint/keyframe selection clamped across undo/redo.
-initAnimationStore();
+  // Wire custom-asset hydration AFTER the project is loaded so the immediate
+  // subscriber callback reads the real $part and $currentProjectId (blob keys are
+  // namespaced by the project id).
+  initCustomAssets();
 
-// Track held modifier keys for the status bar's hint segment (design-system-services §1.4;
-// §9 "boot order additions"). Idempotent, so StrictMode's double boot is harmless.
-initModifierListeners();
+  // Keep the active animation/joint/keyframe selection clamped across undo/redo.
+  initAnimationStore();
 
-// Track which surface owns focus, so the scoped hotkey registry can gate `surface:*`
-// bindings on it (design-system-services §4.2). Same idempotent-guard pattern.
-initHotkeyStore();
+  // Track held modifier keys for the status bar's hint segment (design-system-services §1.4;
+  // §9 "boot order additions"). Idempotent, so StrictMode's double boot is harmless.
+  initModifierListeners();
 
-// Push the persisted snap settings into the gizmo once, before the first drag: `$snap` is
-// ephemeral (it is the gizmo's live setting), so without this the magnet would read "on"
-// after a reload while nothing actually snapped (design-build-mode.md §4.1).
-applySnapToGizmo(false);
+  // Track which surface owns focus, so the scoped hotkey registry can gate `surface:*`
+  // bindings on it (design-system-services §4.2). Same idempotent-guard pattern.
+  initHotkeyStore();
 
-// Detect a share-link launch up front: it changes how the next two startup steps behave.
-const sharePayload = readShareParam();
+  // Push the persisted snap settings into the gizmo once, before the first drag: `$snap` is
+  // ephemeral (it is the gizmo's live setting), so without this the magnet would read "on"
+  // after a reload while nothing actually snapped (design-build-mode.md §4.1).
+  applySnapToGizmo(false);
 
-if (sharePayload) {
-  // Opening someone's shared project is an explicit "load this" action — don't ambush it
-  // with the build-mismatch reset prompt, and don't auto-show the intro. We skip the build
-  // check entirely (rather than just hiding its dialog) so the stored flexo_build_id is left
-  // untouched and the safety prompt still fires on the user's next ordinary visit. Likewise
-  // the intro stays unseen (flexo:aboutSeen unchanged) so it greets them next time.
-  suppressAboutFirstUse();
-} else {
-  checkBuildId();
-}
+  // Detect a share-link launch up front: it changes how the next two startup steps behave.
+  const sharePayload = readShareParam();
 
-// Reflect any previously-granted mods folder (async; updates the export UI when ready).
-void initModFolder();
+  if (sharePayload) {
+    // Opening someone's shared project is an explicit "load this" action — don't ambush it
+    // with the build-mismatch reset prompt, and don't auto-show the intro. We skip the build
+    // check entirely (rather than just hiding its dialog) so the stored flexo_build_id is left
+    // untouched and the safety prompt still fires on the user's next ordinary visit. Likewise
+    // the intro stays unseen (flexo:aboutSeen unchanged) so it greets them next time.
+    suppressAboutFirstUse();
+  } else {
+    checkBuildId();
+  }
 
-// Stateless share links (`?load=<payload>`): decode the project and open it as a NEW
-// project (the freshly-hydrated project stays untouched until this resolves). Async —
-// decompression needs the Zstd WASM module — so it lands a beat after first paint.
-if (sharePayload) {
-  void (async () => {
-    const result = await decodeSharePayload(sharePayload);
-    clearShareParam();
-    if (!result.ok) {
-      toast({ title: 'Could not open shared link', description: result.error, variant: 'danger' });
-      return;
-    }
-    const name = loadSharedProject(result.env);
-    toast({ title: 'Opened shared project', description: name, variant: 'success' });
-  })();
-}
+  // Reflect any previously-granted mods folder (async; updates the export UI when ready).
+  void initModFolder();
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-    <BuildIdMismatchDialog />
-  </StrictMode>,
-);
+  // Stateless share links (`?load=<payload>`): decode the project and open it as a NEW
+  // project (the freshly-hydrated project stays untouched until this resolves). Async —
+  // decompression needs the Zstd WASM module — so it lands a beat after first paint.
+  if (sharePayload) {
+    void (async () => {
+      const result = await decodeSharePayload(sharePayload);
+      clearShareParam();
+      if (!result.ok) {
+        toast({
+          title: 'Could not open shared link',
+          description: result.error,
+          variant: 'danger',
+        });
+        return;
+      }
+      const name = await loadSharedProject(result.env);
+      toast({ title: 'Opened shared project', description: name, variant: 'success' });
+    })();
+  }
+
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <App />
+      <BuildIdMismatchDialog />
+    </StrictMode>,
+  );
+})();

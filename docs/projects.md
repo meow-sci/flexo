@@ -1,63 +1,189 @@
 # Projects
 
-The editor is **project-based**: the whole workspace is a named project, autosaved to
-localStorage and restored on the next page load. Switching projects swaps the entire
-workspace. Implemented in `src/state/projectStore.ts`; the UI is the menubar's **project
-chip** plus the **File** menu, which open the root-hosted dialogs in
+The editor is **project-based**: the whole workspace is a project, autosaved to IndexedDB and
+restored on the next page load. Switching projects swaps the entire workspace. Implemented
+across three modules — `src/state/projectDb.ts` (the database), `src/state/projectIndexStore.ts`
+(the reactive index, the current-project pointer, the multi-tab lock, autosave health) and
+`src/state/projectStore.ts` (snapshots, autosave, boot, the lifecycle actions). The UI is the
+menubar's **project chip** plus the **File** menu, which open the root-hosted dialogs in
 `src/ui/projects/ProjectDialogs.tsx`.
+
+## Identity: a project is an id, not a name
+
+A project is minted with a **`ProjectId`** — `p_` plus 12 base36 characters — and keeps it for
+life. The display **name is pure metadata**: it is never a storage key, so renaming a project
+to a name another project already uses cannot overwrite that project. `renameProject` instead
+auto-suffixes ("Rover" → "Rover 2") and returns the name it actually applied.
 
 ## What a project captures
 
-A `ProjectSnapshot` bundles everything needed to fully restore a workspace — **except the
-camera**, which is ephemeral and resets on load:
+A `ProjectSnapshotV2` bundles everything needed to fully restore a workspace:
 
-- `name` — the project's identity (and its localStorage key suffix).
-- `part` — the full `EditingPart` document: `partId`, `editorTags`, `layers`,
-  `placements`, `connectors`, `colliders`, `ivaSeats`, `internalFlags` (each entity's
-  `layerId` included).
-- `layerView` — per-layer visibility/lock (the `$layerView` view state from `layerStore`).
+- `part` — the full `EditingPart` document: `partId`, `editorTags`, `layers`, `placements`,
+  `connectors`, `colliders`, `ivaSeats`, `lights`, `kittens`, custom assets, animations,
+  `gameData` (each entity's `layerId` included).
+- `layerView` — per-layer visibility/lock/listed/opacity/collapsed (the `$layerView` view state
+  from `layerStore`). The snapshot is now its **only** persistence: the old global
+  `flexo:layerView` key is gone, so these flags are per project.
 - `activeLayerId` — where new items land (clamped to a live layer on load).
-- `history` — the undo/redo stacks, via `exportHistory()` / `importHistory()` on
-  `editorStore`, so **undo survives a reload**.
-- `savedAt` — epoch millis, used to order the load-project list (most recent first).
+- `camera` — the orbit camera pose (`$cameraState`), restored on load via `setCameraRestore`.
+  (Older revisions of this doc claimed the camera was excluded; it is captured.)
+- `measurements` and `containers` — the editor aids.
+- `savedAt` — epoch millis.
 
-Selection, tool mode, and snap are intentionally **not** captured (fresh slate on load).
+The **undo/redo history** is captured too, but in its own record rather than inside the
+snapshot, so undo still survives a reload while the frequent snapshot write stays small.
 
-## Storage convention
+Selection, tool mode, snap and the seat view are intentionally **not** captured (fresh slate on
+load). Custom-asset *binaries* are not in the snapshot either — only their descriptors are; the
+bytes live in the separate `flexo-assets` database (see below).
 
-| Key | Value |
-|---|---|
-| `flexo:project:<name>` | a JSON `ProjectSnapshot` — one entry per saved project |
-| `flexo:currentProject` | `{ name }` — read on boot to pick which project to restore |
+## Storage — the `flexo-projects` database
 
-`listProjects()` enumerates the `flexo:project:` keys (reading each snapshot's own `name`,
-not the key, so it's robust to odd characters).
+`projectDb.ts` owns an IndexedDB database `flexo-projects` (version 1) with four object stores,
+all keyed by the `ProjectId`, so one project's records are addressable without reading any of
+the others:
+
+| Store       | Value                                             | Written by         |
+| ----------- | ------------------------------------------------- | ------------------ |
+| `meta`      | `ProjectMeta` — the whole project list             | every snapshot save |
+| `snapshots` | `ProjectSnapshotV2` — document + view state        | autosave, 300 ms   |
+| `history`   | `{ undo, redo }` — the undo/redo stacks            | autosave, 1500 ms  |
+| `thumbs`    | a `Blob` (`image/webp`, 384×216)                   | thumbnail capture  |
+
+`ProjectMeta` is what the project list renders without ever opening a snapshot: `id`, `name`,
+`description`, `partId`, `createdAt`, `savedAt`, `schemaVersion`, a `counts` breakdown
+(SubParts, connectors, colliders, seats, lights, kittens, animations, layers, custom
+textures/materials/meshes — derived by the pure `deriveCounts`), a `bytes`
+`{ snapshot, history, assets }` triple computed by the writer at save time, and `hasThumb`.
+`projectDb` is a dumb store: it stamps and derives nothing else, and imports no React or three.
+
+`deleteProjectRecords(id)` removes all four records in **one** transaction, so a crash
+mid-delete can never orphan a snapshot from its meta row.
+
+The **only** project key left in localStorage is `flexo:currentProjectId`, a raw id string
+naming the project this tab has open.
+
+## The reactive index
+
+`projectIndexStore` exposes `$projectIndex` (every `ProjectMeta`, sorted `savedAt` descending),
+`$currentProjectId`, `$projectName`, `$projectLock`, `$autosaveHealth` and `$storageEstimate`.
+Every mutation calls `reloadIndex()`, so the UI re-renders from a store instead of re-parsing
+storage when a dialog opens. Thumbnails are read through `loadThumb(id)` behind a 24-entry LRU
+so a scrolling list does not re-read the same blobs.
+
+## Multi-tab: a write lock plus a broadcast
+
+Two tabs on one project used to overwrite each other silently. Now:
+
+- **Web Locks** — opening a project takes an exclusive lock named `flexo:project:<id>`. A tab
+  that cannot get it goes `readonly`: autosave is suspended and a sticky warning notification
+  offers **Take over**, which steals the lock. The tab that *loses* a lock this way gets its own
+  sticky warning with a **Reload** action. Where the Web Locks API is missing the lock state is
+  `unsupported` — the tab writes anyway (v1 behavior) after one notification explaining the
+  single-tab constraint.
+- **BroadcastChannel `flexo:projects`** — any tab that changes a project row posts
+  `index-changed`, and every other tab reloads its index. So a project created, renamed or
+  deleted in one tab appears correctly in another without a refresh.
 
 ## Autosave
 
-`startAutosave()` subscribes to every store that contributes to a project — `$part`,
-`$canUndo`, `$canRedo`, `$activeLayerId`, `$layerView`, `$projectName` — and writes a
-**debounced** snapshot (300 ms) on any change. `$part` + the can-undo/redo flags together
-cover all document + history changes (every `pushUndo`/`undo`/`redo` touches them); the
-debounce collapses a gizmo drag's many per-frame `$part` writes into one save. A `suspended`
-flag prevents the cascade of store writes during a *load* from triggering a redundant save.
+`startAutosave()` subscribes to every store that contributes to a project — `$part`, `$canUndo`,
+`$canRedo`, `$activeLayerId`, `$layerView`, `$projectName`, `$cameraState`, `$measurements`,
+`$containers` — and runs **two** debounced writers:
+
+| Writer               | Debounce | Writes                    |
+| -------------------- | -------- | ------------------------- |
+| snapshot + meta row  | 300 ms   | `snapshots` + `meta`      |
+| undo/redo history    | 1500 ms  | `history`                 |
+
+`$part` plus the can-undo/redo flags together cover every document and history change (every
+`pushUndo`/`undo`/`redo` touches them); the debounce collapses a gizmo drag's many per-frame
+`$part` writes into one save. History gets the slower timer because it is the bulk of the bytes
+and a reload inside its window loses at most the last undo *entries*, never document state. A
+`suspended` flag keeps the cascade of store writes during a *load* from triggering a redundant
+save. `flushAutosave()` cancels both timers and writes everything now (project switch, or the
+**Retry now** notification action). There is no Save button anywhere, by design.
+
+**A failed write is loud.** v1 stopped at a `console.warn`, so editing quietly stopped being
+saved. Now `$autosaveHealth` flips to `failing` and flexo raises the loudest feedback it has: a
+danger status message plus **one** sticky danger notification (deduped, so a failing quota
+cannot spam the ring) carrying the storage estimate, the error text, and the actions **Open
+Projects…** and **Retry now**. A later successful write flips health back and posts
+"Autosave recovered ✓".
+
+## Thumbnails
+
+Only the 3D scene can draw the document, so `projectStore` publishes an intent —
+`$thumbnailRequest`, via `requestThumbnail()` — and `EditorScene` answers it. The scene renders
+**one** offscreen 384×216 frame into a `WebGLRenderTarget`: a frame-all of the drawn entities
+(hidden layers excluded) viewed from azimuth 45° / elevation 30°, with every editor aid (grids,
+gizmo, measurement and container layers, chain preview) hidden for the draw. The result is
+encoded as WebP at quality 0.8 and handed back to `storeThumbnail(id, blob)`, which writes the
+`thumbs` record and flags `hasThumb`. An empty document captures nothing.
+
+The visible canvas is untouched and the on-demand render loop is **not** flipped continuous:
+capture happens only on tab-hide while dirty, at most once a minute while dirty, and explicitly
+after create and before a project switch.
+
+## Custom-asset binaries are namespaced per project
+
+Asset blobs live in the separate `flexo-assets` database under **project-namespaced** keys:
+`pa:<projectId>:<kind>:<assetId>`. That prefix is what makes the three lifecycle operations one
+range query each — `listProjectBlobs`, `copyProjectAssets` (Duplicate) and
+`deleteProjectAssets` (Delete, which finally reclaims the bytes v1 leaked). `initCustomAssets`
+re-hydrates on `$currentProjectId` rather than the project name, so two projects sharing a
+display name can no longer skip the re-hydrate. See
+[custom-assets.md](./custom-assets.md).
 
 ## Boot restore (no double refresh)
 
-`hydrateProjectOnBoot()` is called **synchronously in `main.tsx` before
-`createRoot().render()`**. localStorage is synchronous, so it loads the current project
-(or the most recent, or a fresh `Untitled`) into the stores before the first paint — the
-workspace renders once, with the right data. Then it starts autosave.
+`main.tsx` runs boot as one async IIFE, because IndexedDB is async: `purgeV1ProjectKeys()` →
+`await hydrateProjectOnBoot()` → `initCustomAssets()` → `initAnimationStore()` → the
+modifier/hotkey/snap wiring → the share-link branch → `checkBuildId()` → `initModFolder()` →
+`createRoot().render()`. Nothing paints until hydration resolves, which is what preserves v1's
+single-paint property — the step order is otherwise unchanged.
+
+`hydrateProjectOnBoot()` purges incompatible projects (below), then walks a **fallback ladder**
+to decide what to open:
+
+1. `?project=<id>` in the URL (stripped from the address bar like `?load=`),
+2. the `flexo:currentProjectId` pointer,
+3. the newest `savedAt` row,
+4. a fresh "Untitled".
+
+It then takes the project's write lock and starts autosave. If IndexedDB cannot be opened at all
+(private mode, blocked storage), editing still works: flexo posts a danger notification saying
+nothing will be saved this session, marks autosave failing, and boots an empty part.
+
+### The three boot purges
+
+All three are surfaced through the **notification center** — never a toast, so the names survive
+being looked away from.
+
+1. **v1 project storage** (`purgeV1ProjectKeys`, run before hydration). Every localStorage
+   `flexo:project:*` entry and the `flexo:currentProject` pointer are deleted, and the project
+   names are listed in one warning notification. The names are read **from the keys**, with zero
+   parsing — a corrupt entry is reported exactly as well as an intact one, and no v1 value is
+   ever interpreted. v1 project data is deliberately not carried over; there is no adoption path
+   and none may be added.
+2. **Incompatible projects** (`purgeIncompatibleProjects`, inside hydration). A `meta` row whose
+   `schemaVersion !== PROJECT_SCHEMA_VERSION`, or whose snapshot is missing, unreadable, or not
+   a document with layers, is deleted along with its snapshot, history, thumbnail **and its
+   asset blobs**, and named in one warning notification.
+3. **Un-namespaced asset blobs** (`purgeUnprefixedAssetKeys`, run once by `initCustomAssets`).
+   Any `flexo-assets` key without a `pa:` prefix belonged to a v1 project that no longer exists,
+   so it is deleted and the count reported in a warning notification.
 
 ## Schema version & preservation
 
 Saved projects are the user's own work, so they survive app updates whenever compatibility
 allows. `PROJECT_SCHEMA_VERSION` (currently **2**, in `projectStore.ts`) is stamped into every
-snapshot and is the entire compatibility contract: `sanitizeProjectStorage()` runs first in
-`hydrateProjectOnBoot()` and drops a `flexo:project:*` entry **only** when it is corrupt or its
-stamped `version !== PROJECT_SCHEMA_VERSION`. Everything else is kept. (The old behavior — a
-strict structural check that purged every saved project on any *additive* model change — is
-gone.)
+project's meta row and is the entire compatibility contract: a stored project is kept iff its
+snapshot loads **and** its stamped `schemaVersion` equals this number. The constant did **not**
+change in the storage rework — the *document* model is untouched; what moved is the container
+(name-keyed localStorage entries → id-keyed IndexedDB records), and v1 data is removed by the
+key purge rather than by a version check.
 
 A kept snapshot is run through `normalizePart`, a template-driven normalizer that fills fields
 the snapshot is **missing** from the live constructors, at four sites: the `EditingPart` top
@@ -65,44 +191,54 @@ level (`createEmptyPart()`), `gameData` (`createEmptyGameData()`), each `subPart
 entry (`createSubPartGameData`), and each `customMeshes[].emissive` (`createGlow()`) — for the
 document *and* every undo/redo history entry. Values already present are never overwritten.
 This is default-filling of additive fields, **not** migration; the templates come from the live
-constructors, so there is no per-field upkeep. `loadProject`'s try/catch discard stays as the
-backstop for anything deeper than the normalizer reaches.
+constructors, so there is no per-field upkeep. `loadProjectRecords`' try/catch discard stays as
+the backstop for anything deeper than the normalizer reaches — a project that would crash boot
+is removed (records and blobs) rather than allowed to.
 
-So: an **additive** change (a new field with a safe constructor default) needs no version bump
-— old projects keep loading, and if the field sits deeper than an existing normalizer site,
-extend the normalizer. A **breaking** change (removed/renamed/retyped field, changed
-meaning/units) MUST bump `PROJECT_SCHEMA_VERSION`, which *is* the purge switch. The full rule
-lives in the project constitution in [AGENTS.md](../AGENTS.md).
-
-When a purge does happen, the removed project names are surfaced to the user at boot as a
-**warning**: an 8-second amber flash in the status bar's message channel **and** an unread
-entry in the notification center, so the names survive being looked away from (the UI drains
-them via `consumeRemovedProjectsNotice()`) — not just a `console.warn`.
-
-An **autosave write failure** (quota exceeded, private mode) is surfaced the same way at the
-loudest tier: a red status flash plus a sticky unread notification carrying the full error
-text. Before v2 this was a silent `console.warn` and editing simply stopped being saved.
+So: an **additive** change (a new field with a safe constructor default) needs no version bump —
+old projects keep loading, and if the field sits deeper than an existing normalizer site, extend
+the normalizer. A **breaking** change (removed/renamed/retyped field, changed meaning/units) MUST
+bump `PROJECT_SCHEMA_VERSION`, which *is* the purge switch. The full rule lives in the project
+constitution in [AGENTS.md](../AGENTS.md).
 
 ## Actions (projectStore exports)
 
-`saveCurrentProject()`, `loadProject(name)`, `createProject(name)`,
-`renameCurrentProject(name)`, `deleteProject(name)`, `listProjects()`,
-`projectExists(name)`, `uniqueProjectName(base?)`, `hydrateProjectOnBoot()`, and the
-`$projectName` atom (current project's name; UI reads it via `useStore`).
+`hydrateProjectOnBoot()`, `purgeV1ProjectKeys()`, `startAutosave()`, `flushAutosave()`,
+`createProject(name?)`, `openProject(id)`, `duplicateProject(id)`, `deleteProject(id)`,
+`loadSharedProject(env)`, `requestThumbnail()` / `storeThumbnail(id, blob)` / the
+`$thumbnailRequest` atom, `PROJECT_SCHEMA_VERSION`, plus re-exports of `$projectName` and
+`DEFAULT_PROJECT_NAME`. Names and metadata are `projectIndexStore`'s side:
+`uniqueProjectName(base?, exceptId?)`, `renameProject(id, name)`, `setProjectDescription`,
+`loadThumb`, `takeOverLock`. **None of these is an undo step** — project lifecycle is storage,
+not a document mutation.
 
-- **Create** starts an empty document/history/layer-view under a new name, saves it, makes
-  it current. The UI's "New Project" uses `uniqueProjectName('Untitled')` to avoid clobbering.
-- **Rename** re-keys storage (removes the old `flexo:project:<old>` entry).
-- **Delete** of the current project switches to the most-recent remaining project, or
-  starts a fresh default when none are left.
+- **Create** mints an id, uniquifies the name, clears document/history/layer view/aids, resets
+  the camera, writes every record immediately, takes the lock and requests a thumbnail.
+- **Open** thumbnails and flushes the outgoing project first, then replaces the undo stacks
+  wholesale with the incoming project's.
+- **Duplicate** copies the snapshot, the thumbnail and the asset blobs under a new id (asset ids
+  are unchanged — the namespace makes them collision-free, so no descriptor is rewritten).
+  History is **not** copied, and the copy is not switched to.
+- **Delete** removes the four records and the asset blobs. Deleting the current project switches
+  to the most-recent remaining one, or starts a fresh default when none are left.
+- **Load shared** (a `?load=` share link) opens the decoded project as a **new** saved project
+  with a fresh id; the user's existing projects are untouched.
+
+## The `.flexo.tar.gz` container
+
+`src/state/tarArchive.ts` is the archive primitive: a pure, hand-rolled USTAR packer/unpacker
+plus native gzip/gunzip helpers (`CompressionStream`), with no new dependency. Entry names are
+capped at USTAR's 100-byte `name` field and a longer one throws rather than truncating; only
+regular files are written or read. Nothing consumes it yet — the archive export/import dialogs
+land later in the same phase.
 
 ## The compact project codec
 
-`src/state/projectCodec.ts` is the single wire format for everything that serializes a
-document — the localStorage snapshot and the project export/import JSON alike. It encodes
-`EditingPart` into short keys (`p` placements, `c` connectors, `cl` colliders, `iv` IVA seats,
-`ifl` the per-SubPart-template `<Internal>` flags, `k` kittens, `a` animations, `m` custom
-meshes, …), omitting anything empty or at its default.
+`src/state/projectCodec.ts` is the wire format for the project export/import JSON and the share
+link. It encodes `EditingPart` into short keys (`p` placements, `c` connectors, `cl` colliders,
+`iv` IVA seats, `ifl` the per-SubPart-template `<Internal>` flags, `k` kittens, `a` animations,
+`m` custom meshes, …), omitting anything empty or at its default. (The stored snapshot is plain
+structured-cloneable data in IndexedDB and does not go through the codec.)
 
 `PROJECT_EXPORT_VERSION` is currently **8** (lights normalized out of `SubPartGameData` into
 first-class part entities). Import accepts **exactly** that version — older payloads are
@@ -132,20 +268,26 @@ Both dialogs are mounted once by `src/ui/shell/DialogRoot.tsx` and named by
 `dialogStore`'s `$openDialog` id — no dialog is owned by a trigger button any more:
 
 - **`'projects'`** (`LoadProjectDialog`) — every saved project with its SubPart count and
-  save time, load on click, per-row delete behind an inline confirm.
-- **`'rename-project'`** (`RenameProjectDialog`) — a small dialog with the v1 rename
-  semantics, run from **File ▸ Rename Project…** (`file.renameProject`).
+  save time, read straight from `$projectIndex`; load on click, per-row delete behind a
+  confirm that names what else goes with it (stored textures and meshes).
+- **`'rename-project'`** (`RenameProjectDialog`) — a small dialog that calls `renameProject`,
+  so a colliding name auto-suffixes instead of clobbering.
 
 **File ▸ New Project** (`file.new`) creates and switches. Autosave means there is no Save
-action and no Save item in the menu. The reactive project index, the archive export and the
-collision-safe rename are the project-storage phase's upgrades; what ships today is the v1
-behavior behind the new entry points.
+action and no Save item in the menu (⌘K's **Save** entry exists only so the reflex gets an
+"Autosaved ✓" answer). Three commands exist purely as notification-action targets and appear in
+no menu: `project.retryAutosave`, `project.takeOver` and `app.reload`. The rich Project Manager
+overlay — cards, search, sort, thumbnails, descriptions, duplicate, archive — replaces this
+interim list later in the same phase.
 
 ## Tests
 
-`src/state/projectStore.test.ts` covers the save→load round-trip (document, active layer,
-layer view, and history), stale-active-layer clamping, list ordering/summaries, create,
-rename re-keying, delete-current fallback, and unique-name generation. It also covers the
-schema-version contract: a snapshot missing additive fields is **kept** and default-filled by
-`normalizePart` (document + history entries), while a corrupt or version-mismatched snapshot is
-purged by `sanitizeProjectStorage()` and reported through `consumeRemovedProjectsNotice()`.
+`src/state/projectStore.test.ts` covers the save→load round-trip (document, active layer, layer
+view, and history), that history is stored in its own record and capped at `MAX_UNDO`, the two
+debounce timings, stale-active-layer clamping, index ordering with derived counts, create,
+auto-suffixing rename, delete-current fallback, blob sweeping on delete, duplicate (snapshot +
+blobs, no history, no switch), `openProject` replacing the undo stacks, the v1 key purge and the
+schema/corruption purge with their notices, the boot fallback ladder, `normalizePart`
+default-filling (document and history entries, never overwriting a present value), and the
+autosave-failure/recovery health flip. `src/state/projectDb.test.ts` covers `newProjectId` and
+`deriveCounts`; `src/state/tarArchive.test.ts` round-trips the USTAR + gzip codec.

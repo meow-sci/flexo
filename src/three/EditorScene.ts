@@ -172,6 +172,9 @@ import {
   kindVisibility,
 } from '../state/viewStore';
 import { computeSelectionBounds, computeVisibleWorldBounds } from '../measure/bounds';
+import { frameDistance } from './cameraFraming';
+import { $thumbnailRequest, storeThumbnail } from '../state/projectStore';
+import { $currentProjectId } from '../state/projectIndexStore';
 import { resolveInternal } from '../ksa/modExport';
 import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../state/layerStore';
 // The app's one user-facing feedback channel (a module function by design, since there is
@@ -650,6 +653,11 @@ export class EditorScene {
     // here — same intent → scene → store round trip as the collider fit (see ivaSeatStore).
     this.sub($ivaSeatAimRequest, (req) => {
       if (req) this.handleIvaSeatAim(req);
+    });
+    // Project thumbnails: only the scene can draw the document, so projectStore publishes a
+    // one-shot nonce and this answers with a WebP blob (design-projects-export.md §1.6, D15).
+    this.sub($thumbnailRequest, (req) => {
+      if (req) void this.captureThumbnail();
     });
     // Sitting in a seat: resolve the previewed seat id against the document and hand the
     // pose to the viewport (reconcile does the same on every document change, so a moved
@@ -1638,6 +1646,97 @@ export class EditorScene {
       new THREE.Vector3(bounds.center.x, bounds.center.y, bounds.center.z),
       new THREE.Vector3(bounds.size.x, bounds.size.y, bounds.size.z),
     );
+  }
+
+  /**
+   * Renders ONE offscreen 384×216 frame of the current document and hands it to
+   * `projectStore.storeThumbnail` as WebP (design-projects-export.md §1.6, D15).
+   *
+   * Deterministic framing, so a thumbnail never depends on where the user left the camera:
+   * frame-all of the drawn entities (the same {@link allEntityGroups} set Frame Selection
+   * falls back to, so hidden layers never inflate the box), viewed from azimuth 45° /
+   * elevation 30° at the fitted distance. An empty document captures NOTHING — the manager
+   * shows its ⬚ placeholder instead.
+   *
+   * Every editor aid is hidden for the draw: grids, the transform gizmo, measurement and
+   * container layers and the chain preview all live as scene-level siblings of `root`, so
+   * hiding every non-light sibling leaves exactly the Part plus its lighting.
+   *
+   * This is a single render into a `WebGLRenderTarget` — the visible canvas is untouched and
+   * the on-demand loop is NOT flipped continuous (foundation §14.5).
+   */
+  private async captureThumbnail(): Promise<void> {
+    const projectId = $currentProjectId.get();
+    const bounds = computeVisibleWorldBounds(this.allEntityGroups());
+    if (!bounds || !projectId) {
+      await storeThumbnail(projectId, null);
+      return;
+    }
+
+    const width = 384;
+    const height = 216;
+    const renderer = this.viewport.renderer;
+    const fov = this.viewport.camera.fov;
+    const camera = new THREE.PerspectiveCamera(fov, width / height, 0.01, 1_000_000);
+    const center = new THREE.Vector3(bounds.center.x, bounds.center.y, bounds.center.z);
+    const distance = frameDistance(bounds.size, fov, width / height);
+    const azimuth = Math.PI / 4;
+    const elevation = Math.PI / 6;
+    camera.position.set(
+      center.x + distance * Math.cos(elevation) * Math.sin(azimuth),
+      center.y + distance * Math.sin(elevation),
+      center.z + distance * Math.cos(elevation) * Math.cos(azimuth),
+    );
+    camera.lookAt(center);
+    camera.near = Math.max(distance * 0.01, 0.001);
+    camera.far = distance * 10;
+    camera.updateProjectionMatrix();
+
+    const hidden: THREE.Object3D[] = [];
+    for (const child of this.viewport.scene.children) {
+      if (child === this.root || (child as THREE.Light).isLight || !child.visible) continue;
+      child.visible = false;
+      hidden.push(child);
+    }
+
+    const target = new THREE.WebGLRenderTarget(width, height, { samples: 4 });
+    target.texture.colorSpace = THREE.SRGBColorSpace;
+    const pixels = new Uint8Array(width * height * 4);
+    try {
+      renderer.setRenderTarget(target);
+      renderer.render(this.viewport.scene, camera);
+      renderer.readRenderTargetPixels(target, 0, 0, width, height, pixels);
+    } finally {
+      renderer.setRenderTarget(null);
+      target.dispose();
+      for (const child of hidden) child.visible = true;
+      // The visible frame was never drawn over, but the renderer's target changed — take one
+      // ordinary on-demand frame so nothing depends on that assumption.
+      this.viewport.invalidate();
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      await storeThumbnail(projectId, null);
+      return;
+    }
+    // GL reads bottom-up; ImageData is top-down.
+    const image = ctx.createImageData(width, height);
+    const rowBytes = width * 4;
+    for (let y = 0; y < height; y++) {
+      image.data.set(
+        pixels.subarray((height - 1 - y) * rowBytes, (height - y) * rowBytes),
+        y * rowBytes,
+      );
+    }
+    ctx.putImageData(image, 0, 0);
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, 'image/webp', 0.8),
+    );
+    await storeThumbnail(projectId, blob);
   }
 
   /**

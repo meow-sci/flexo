@@ -15,10 +15,11 @@ vi.mock('../state/assetDb', () => {
   const store = new Map<string, Blob>();
   return {
     assetKeys: {
-      textureSource: (id: string) => `tex-src:${id}`,
-      textureKtx2: (id: string) => `tex-ktx2:${id}`,
-      meshGlb: (id: string) => `mesh-glb:${id}`,
-      emissivePaint: (id: string) => `emissive-paint:${id}`,
+      textureSource: (p: string, id: string) => `pa:${p}:tex-src:${id}`,
+      textureKtx2: (p: string, id: string) => `pa:${p}:tex-ktx2:${id}`,
+      meshGlb: (p: string, id: string) => `pa:${p}:mesh-glb:${id}`,
+      importGlb: (p: string, id: string) => `pa:${p}:import-glb:${id}`,
+      emissivePaint: (p: string, id: string) => `pa:${p}:emissive-paint:${id}`,
     },
     getAsset: async (key: string) => store.get(key) ?? null,
     putAsset: async (key: string, data: Blob | Uint8Array, type = '') => {
@@ -995,11 +996,23 @@ describe('buildCustomBundle — meshes sharing a GLOWING material share one comp
 
 describe('buildCustomBundle — image-backed material channels', () => {
   it('copies a strength-1 normal map and a packed ORM verbatim with channel-suffixed names', async () => {
-    const { __assetStore } = (await import('../state/assetDb')) as unknown as {
+    const { __assetStore, assetKeys } = (await import('../state/assetDb')) as unknown as {
       __assetStore: Map<string, Blob>;
+      assetKeys: { textureKtx2: (projectId: string, id: string) => string };
     };
-    __assetStore.set('tex-ktx2:tex_n1', new Blob([new Uint8Array([1, 1, 1, 1])]));
-    __assetStore.set('tex-ktx2:tex_orm1', new Blob([new Uint8Array([2, 2, 2, 2])]));
+    // Blob keys are project-namespaced now (design-projects-export §1.5): seed them through
+    // the same helper the exporter reads with, against the project this suite runs under.
+    const { $currentProjectId } = await import('../state/projectIndexStore');
+    $currentProjectId.set('p_modexporttest');
+    const projectId = $currentProjectId.get();
+    __assetStore.set(
+      assetKeys.textureKtx2(projectId, 'tex_n1'),
+      new Blob([new Uint8Array([1, 1, 1, 1])]),
+    );
+    __assetStore.set(
+      assetKeys.textureKtx2(projectId, 'tex_orm1'),
+      new Blob([new Uint8Array([2, 2, 2, 2])]),
+    );
 
     const part = partWithMaterialMeshes();
     part.customTextures.push(

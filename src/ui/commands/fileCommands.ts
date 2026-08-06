@@ -1,6 +1,7 @@
 import type { Command } from '../../state/commandStore';
 import { openDialog } from '../../state/dialogStore';
-import { createProject, uniqueProjectName } from '../../state/projectStore';
+import { createProject, flushAutosave } from '../../state/projectStore';
+import { takeOverLock, uniqueProjectName } from '../../state/projectIndexStore';
 import {
   $modFolder,
   forgetModFolder,
@@ -23,7 +24,7 @@ export const FILE_COMMANDS: Command[] = [
     menuPath: 'File',
     keywords: 'create blank empty workspace',
     // Autosave has already persisted the outgoing project, so this never prompts (v1 parity).
-    run: () => createProject(uniqueProjectName()),
+    run: () => void createProject(uniqueProjectName()),
   },
   {
     id: 'file.projects',
@@ -79,6 +80,28 @@ export const FILE_COMMANDS: Command[] = [
     title: 'Save',
     keywords: 'autosave save',
     run: () => toast({ title: 'Autosaved ✓' }),
+  },
+  // ── notification-action targets ────────────────────────────────────────────
+  // `notificationStore` rows hold command IDS, never callbacks (that is what keeps the store
+  // react-free), so the storage layer's [Retry now] / [Take over] / [Reload] buttons need
+  // real commands. None of them belongs in a menu.
+  {
+    id: 'project.retryAutosave',
+    title: 'Retry autosave now',
+    keywords: 'save storage quota retry',
+    run: () => void flushAutosave(),
+  },
+  {
+    id: 'project.takeOver',
+    title: 'Take over autosave for this project',
+    keywords: 'lock tab readonly take over',
+    run: () => void takeOverLock(),
+  },
+  {
+    id: 'app.reload',
+    title: 'Reload flexo',
+    keywords: 'refresh reload restart',
+    run: () => window.location.reload(),
   },
 ];
 

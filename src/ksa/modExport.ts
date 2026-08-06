@@ -32,6 +32,7 @@ import { bakeKittenSubMeshes } from '../three/kittenBake';
 import { getImportedRawGeometry } from '../three/importedMeshCache';
 import { getPrimaryTextureId, glowFor, type MeshGlow } from '../state/customAssetStore';
 import { assetKeys, getAsset } from '../state/assetDb';
+import { $currentProjectId } from '../state/projectIndexStore';
 import { $modelImportSettings, type KittenTextureExportSettings } from '../state/settingsStore';
 import { createZip, type ZipEntry } from '../util/zip';
 import { encodeImageToKtx2, makeSolidKtx2 } from '../ktx/encodeKtx2';
@@ -369,7 +370,7 @@ async function glowCacheKey(m: CustomMesh, baseKey: string): Promise<string> {
   const e = m.emissive!;
   let glowKey = `color:${e.color.r},${e.color.g},${e.color.b}`;
   if (e.shape === 'painted') {
-    const png = await getAsset(assetKeys.emissivePaint(m.id));
+    const png = await getAsset(assetKeys.emissivePaint($currentProjectId.get(), m.id));
     // No stored bitmap ⇒ glowFor falls back to the flat color, so the key must too.
     if (png) glowKey = `png:${hashBytes(new Uint8Array(await png.arrayBuffer()))}`;
   }
@@ -394,7 +395,7 @@ async function exportBaseImage(
     tex ??
     (material?.baseColor.kind === 'map' ? texById.get(material.baseColor.textureId) : undefined);
   if (mapTex) {
-    const src = await getAsset(assetKeys.textureSource(mapTex.id));
+    const src = await getAsset(assetKeys.textureSource($currentProjectId.get(), mapTex.id));
     if (src) return (await decodeImage(src)).levels[0];
   }
   const { width, height } = baseSizeFor(glow);
@@ -908,7 +909,7 @@ export async function buildCustomBundle(
       if (!t) return null;
       let rel = texPath.get(t.id);
       if (!rel) {
-        const blob = await getAsset(assetKeys.textureKtx2(t.id));
+        const blob = await getAsset(assetKeys.textureKtx2($currentProjectId.get(), t.id));
         if (!blob) return null;
         const suffix = CHANNEL_SUFFIX[t.channel ?? 'baseColor'];
         rel = `Textures/${sanitizeAssetToken(t.name)}_${sanitizeAssetToken(t.id)}_${suffix}.ktx2`;
@@ -920,7 +921,7 @@ export async function buildCustomBundle(
 
     /** The decoded base level of a stored texture's SOURCE image, or null. */
     const sourceLevel = async (texId: string): Promise<ImageLevel | null> => {
-      const src = await getAsset(assetKeys.textureSource(texId));
+      const src = await getAsset(assetKeys.textureSource($currentProjectId.get(), texId));
       return src ? (await decodeImage(src)).levels[0] : null;
     };
 
@@ -939,7 +940,9 @@ export async function buildCustomBundle(
         pending = (async () => {
           if (normal.strength === 1) return storedTexturePath(normal.textureId);
           const t = texById.get(normal.textureId);
-          const src = t ? await getAsset(assetKeys.textureSource(t.id)) : null;
+          const src = t
+            ? await getAsset(assetKeys.textureSource($currentProjectId.get(), t.id))
+            : null;
           if (!t || !src) return null;
           const prepared = prepareChannelImage(await decodeImage(src), 'normal', normal.strength);
           const pct = Math.round(normal.strength * 100);

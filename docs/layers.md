@@ -14,15 +14,17 @@ This split mirrors the rest of the editor (see [editor-state.md](./editor-state.
 | Layer **definitions** (`layers: Layer[]`, order, **color**) | `$part` document | ✅ | with the document |
 | Layer **membership** (`layerId` on each placement/connector/collider) | `$part` document | ✅ | with the document |
 | **Active** layer (where new items land) | `$activeLayerId` atom | ❌ | ❌ (ephemeral, like selection) |
-| **Visibility / opacity / lock / listed / collapsed** (per layer) | `$layerView` (`layerStore.ts`) | ❌ | ✅ (see the persistence note below) |
+| **Visibility / opacity / lock / listed / collapsed** (per layer) | `$layerView` (`layerStore.ts`) | ❌ | ✅ in the project snapshot (see the persistence note below) |
 
 The five view flags are presentation preferences, so they are persisted but kept out
 of undo history — toggling the eye never creates an undo step. This matches the
 grid/inspector view-pref pattern in [state-persistence.md](./state-persistence.md).
 
-Interim persistence state, verbatim: *layer view state is persisted globally
-(`flexo:layerView`) AND in the project snapshot; the global key is removed by the projects
-rework (P9).*
+**Per project, not global.** `$layerView` is a plain atom, and the project snapshot
+(`ProjectSnapshotV2.layerView`) is its ONE persistence — hiding a layer in one project no
+longer affects another. The former global `flexo:layerView` localStorage key is gone — it
+merely mirrored whichever project was saved last — and nothing reads or writes it any more
+(see [projects.md](./projects.md)).
 
 `Layer = { id, name, color? }` (`src/ksa/types.ts`). Array order in `part.layers` is the
 document order.
@@ -153,7 +155,8 @@ reset to Default by `newPart()`.
 
 ## View state — `src/state/layerStore.ts`
 
-`$layerView: Record<layerId, { visible, locked, listed, opacity, collapsed }>` (persistent).
+`$layerView: Record<layerId, { visible, locked, listed, opacity, collapsed }>` (a plain atom,
+persisted with the project snapshot).
 Entries are **sparse**: missing fields read their default from `DEFAULT_LAYER_STATE`
 (`{ visible: true, locked: false, listed: true, opacity: 1, collapsed: false }`), so a new
 layer needs no write until something is toggled and a newly added field needs no migration.

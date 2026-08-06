@@ -42,13 +42,13 @@ import {
   select,
   clearSelection,
 } from './editorStore';
-import { $projectName } from './projectStore';
+import { $currentProjectId } from './projectIndexStore';
 import { notify } from './notificationStore';
 import { status } from './statusStore';
 import { closeDialog, isDialogOpen, openDialog } from './dialogStore';
 import { $customCatalog } from './catalogStore';
 import { $modelImportSettings, $simulateGlass } from './settingsStore';
-import { assetKeys, deleteAsset, getAsset, putAsset } from './assetDb';
+import { assetKeys, deleteAsset, getAsset, purgeUnprefixedAssetKeys, putAsset } from './assetDb';
 import {
   buildPrimitiveGeometry,
   PRIMITIVE_FACE_KEYS,
@@ -107,6 +107,16 @@ import {
  *    face-config changes only rebuild the render cache.
  *  - KSA export uses one PbrMaterial per SubPart (the first face with a texture).
  */
+
+/**
+ * The project that owns every blob this module reads or writes. Blob keys are namespaced
+ * `pa:<projectId>:<kind>:<assetId>` (design-projects-export.md §1.5), and everything in here
+ * operates on the OPEN project, so the id is read at call time rather than threaded through
+ * forty signatures.
+ */
+function pid(): string {
+  return $currentProjectId.get();
+}
 
 // ── runtime blob URLs (not persisted) ───────────────────────────────────────
 let atlasUrl: string | null = null;
@@ -609,7 +619,8 @@ export async function glowFor(m: CustomMesh): Promise<MeshGlow | null> {
   if (!e) return null;
   const settings = glowCompositeOf(e);
   if (e.shape === 'painted') {
-    const png = glowPaintPreviews.get(m.id) ?? (await getAsset(assetKeys.emissivePaint(m.id)));
+    const png =
+      glowPaintPreviews.get(m.id) ?? (await getAsset(assetKeys.emissivePaint(pid(), m.id)));
     if (png) {
       const lvl = (await decodeImage(png)).levels[0];
       return { bitmap: { width: lvl.width, height: lvl.height, rgba: lvl.rgba }, settings };
@@ -635,7 +646,7 @@ async function faceBaseImage(
   const mapTexId =
     texId || (material?.baseColor.kind === 'map' ? material.baseColor.textureId : undefined);
   if (mapTexId) {
-    const src = await getAsset(assetKeys.textureSource(mapTexId));
+    const src = await getAsset(assetKeys.textureSource(pid(), mapTexId));
     if (src) return (await decodeImage(src)).levels[0];
   }
   const { width, height } = baseSizeFor(glow);
@@ -993,8 +1004,8 @@ async function createTextureAsset(
   const decoded = prepareChannelImage(await decodeImage(file, maxSize), channel);
   const ktx2 = await encodeImageToKtx2(decoded, { zstd: true });
 
-  await putAsset(assetKeys.textureSource(id), file, file.type || 'image/png');
-  await putAsset(assetKeys.textureKtx2(id), ktx2, 'image/ktx2');
+  await putAsset(assetKeys.textureSource(pid(), id), file, file.type || 'image/png');
+  await putAsset(assetKeys.textureKtx2(pid(), id), ktx2, 'image/ktx2');
 
   textureKtx2Urls.set(id, URL.createObjectURL(new Blob([ktx2.slice()], { type: 'image/ktx2' })));
   textureSrcUrls.set(id, URL.createObjectURL(file));
@@ -1027,11 +1038,11 @@ export async function addCustomTexture(
  * a derived cache of the source), updates the descriptor, and rebuilds the catalog.
  */
 export async function setTextureChannel(id: string, channel: TextureChannel): Promise<void> {
-  const src = await getAsset(assetKeys.textureSource(id));
+  const src = await getAsset(assetKeys.textureSource(pid(), id));
   if (!src) return;
   const decoded = prepareChannelImage(await decodeImage(src), channel);
   const ktx2 = await encodeImageToKtx2(decoded, { zstd: true });
-  await putAsset(assetKeys.textureKtx2(id), ktx2, 'image/ktx2');
+  await putAsset(assetKeys.textureKtx2(pid(), id), ktx2, 'image/ktx2');
   const old = textureKtx2Urls.get(id);
   if (old) URL.revokeObjectURL(old);
   textureKtx2Urls.set(id, URL.createObjectURL(new Blob([ktx2.slice()], { type: 'image/ktx2' })));
@@ -1074,8 +1085,8 @@ export async function replaceTextureImage(id: string, file: Blob): Promise<void>
   const decoded = prepareChannelImage(await decodeImage(file), existing.channel);
   const ktx2 = await encodeImageToKtx2(decoded, { zstd: true });
 
-  await putAsset(assetKeys.textureSource(id), file, file.type || 'image/png');
-  await putAsset(assetKeys.textureKtx2(id), ktx2, 'image/ktx2');
+  await putAsset(assetKeys.textureSource(pid(), id), file, file.type || 'image/png');
+  await putAsset(assetKeys.textureKtx2(pid(), id), ktx2, 'image/ktx2');
 
   revokeTexture(id);
   textureKtx2Urls.set(id, URL.createObjectURL(new Blob([ktx2.slice()], { type: 'image/ktx2' })));
@@ -1126,8 +1137,8 @@ export function removeCustomTexture(id: string): void {
     for (const mat of p.customMaterials) clearMaterialTextureRefs(mat, id);
   });
   revokeTexture(id);
-  void deleteAsset(assetKeys.textureSource(id));
-  void deleteAsset(assetKeys.textureKtx2(id));
+  void deleteAsset(assetKeys.textureSource(pid(), id));
+  void deleteAsset(assetKeys.textureKtx2(pid(), id));
   publishTextureUrls();
   void refreshCatalog();
 }
@@ -1169,8 +1180,8 @@ export function removeUnusedAssets(ids: readonly string[]): void {
   });
   for (const id of textureIds) {
     revokeTexture(id);
-    void deleteAsset(assetKeys.textureSource(id));
-    void deleteAsset(assetKeys.textureKtx2(id));
+    void deleteAsset(assetKeys.textureSource(pid(), id));
+    void deleteAsset(assetKeys.textureKtx2(pid(), id));
   }
   publishTextureUrls();
   void refreshCatalog();
@@ -1425,11 +1436,11 @@ async function attachImportedMaterial(
     // REUSE OF THE 'painted' SHAPE (plans/IMPORT_MODELS.md §3.4 called for a new 'map'
     // shape): an imported emissive is exactly what 'painted' already models — an RGBA
     // bitmap where rgb is the glow colour and a is the intensity, stored under
-    // assetKeys.emissivePaint(meshId). Reusing it means glowFor(), compositeGlow(),
+    // assetKeys.emissivePaint(projectId, meshId). Reusing it means glowFor(), compositeGlow(),
     // the editor material and the exporter all work unchanged, and the user can retouch
     // an imported glow in the existing paint dialog.
     const png = new Blob([spec.glowPng.slice()], { type: 'image/png' });
-    await putAsset(assetKeys.emissivePaint(descriptor.id), png, 'image/png');
+    await putAsset(assetKeys.emissivePaint(pid(), descriptor.id), png, 'image/png');
     const old = emissivePaintUrls.get(descriptor.id);
     if (old) URL.revokeObjectURL(old);
     emissivePaintUrls.set(descriptor.id, URL.createObjectURL(png));
@@ -1448,7 +1459,7 @@ async function attachImportedMaterial(
     const old = emissivePaintUrls.get(descriptor.id);
     if (old) URL.revokeObjectURL(old);
     emissivePaintUrls.delete(descriptor.id);
-    void deleteAsset(assetKeys.emissivePaint(descriptor.id));
+    void deleteAsset(assetKeys.emissivePaint(pid(), descriptor.id));
   }
 }
 
@@ -1520,7 +1531,11 @@ export async function importModelAsMeshes(
   fileName: string,
   materialPlan?: ImportMaterialPlan,
 ): Promise<void> {
-  await putAsset(assetKeys.importGlb(normalized.importId), normalized.glb, 'model/gltf-binary');
+  await putAsset(
+    assetKeys.importGlb(pid(), normalized.importId),
+    normalized.glb,
+    'model/gltf-binary',
+  );
   registerImportAtlas(normalized.importId, normalized.glb);
 
   const assets = materialPlan
@@ -1735,18 +1750,18 @@ export async function removeImport(importId: string): Promise<void> {
 
   for (const id of textureIds) {
     revokeTexture(id);
-    void deleteAsset(assetKeys.textureSource(id));
-    void deleteAsset(assetKeys.textureKtx2(id));
+    void deleteAsset(assetKeys.textureSource(pid(), id));
+    void deleteAsset(assetKeys.textureKtx2(pid(), id));
   }
   publishTextureUrls();
   for (const id of meshIds) {
     const url = emissivePaintUrls.get(id);
     if (url) URL.revokeObjectURL(url);
     emissivePaintUrls.delete(id);
-    void deleteAsset(assetKeys.emissivePaint(id));
+    void deleteAsset(assetKeys.emissivePaint(pid(), id));
   }
   publishEmissivePaintUrls();
-  void deleteAsset(assetKeys.importGlb(importId));
+  void deleteAsset(assetKeys.importGlb(pid(), importId));
   releaseImportAtlas(importId);
 
   await scheduleRebuild();
@@ -1865,7 +1880,11 @@ export async function replaceImport(
   const match = matchImportedMeshes(existing, normalized.meshes);
   const layerId = importBatchLayer(before, existing);
 
-  await putAsset(assetKeys.importGlb(normalized.importId), normalized.glb, 'model/gltf-binary');
+  await putAsset(
+    assetKeys.importGlb(pid(), normalized.importId),
+    normalized.glb,
+    'model/gltf-binary',
+  );
   registerImportAtlas(normalized.importId, normalized.glb);
 
   // "Update materials from file" OFF drops the translated plan entirely: no textures are
@@ -1961,18 +1980,18 @@ export async function replaceImport(
 
   for (const id of purgedTextureIds) {
     revokeTexture(id);
-    void deleteAsset(assetKeys.textureSource(id));
-    void deleteAsset(assetKeys.textureKtx2(id));
+    void deleteAsset(assetKeys.textureSource(pid(), id));
+    void deleteAsset(assetKeys.textureKtx2(pid(), id));
   }
   publishTextureUrls();
   for (const mesh of match.removed) {
     const url = emissivePaintUrls.get(mesh.id);
     if (url) URL.revokeObjectURL(url);
     emissivePaintUrls.delete(mesh.id);
-    void deleteAsset(assetKeys.emissivePaint(mesh.id));
+    void deleteAsset(assetKeys.emissivePaint(pid(), mesh.id));
   }
   publishEmissivePaintUrls();
-  void deleteAsset(assetKeys.importGlb(importId));
+  void deleteAsset(assetKeys.importGlb(pid(), importId));
   releaseImportAtlas(importId);
 
   await scheduleRebuild();
@@ -2153,7 +2172,7 @@ export async function setMeshGlowPainted(
   png: Blob,
   brushColor: RgbColor,
 ): Promise<void> {
-  await putAsset(assetKeys.emissivePaint(meshId), png, 'image/png');
+  await putAsset(assetKeys.emissivePaint(pid(), meshId), png, 'image/png');
   glowPaintPreviews.delete(meshId); // the bytes ARE the document's now
   const old = emissivePaintUrls.get(meshId);
   if (old) URL.revokeObjectURL(old);
@@ -2184,7 +2203,7 @@ export async function removeCustomMesh(id: string): Promise<void> {
   if (paintUrl) URL.revokeObjectURL(paintUrl);
   emissivePaintUrls.delete(id);
   publishEmissivePaintUrls();
-  void deleteAsset(assetKeys.emissivePaint(id));
+  void deleteAsset(assetKeys.emissivePaint(pid(), id));
   await scheduleRebuild();
 }
 
@@ -2198,10 +2217,10 @@ export async function removeCustomMesh(id: string): Promise<void> {
 async function ensureCurrentKtx2(id: string, stored: Blob): Promise<Blob> {
   const header = new Uint8Array(await stored.slice(0, 16).arrayBuffer());
   if (!isLegacySrgbKtx2(header)) return stored;
-  const src = await getAsset(assetKeys.textureSource(id));
+  const src = await getAsset(assetKeys.textureSource(pid(), id));
   if (!src) return stored;
   const ktx2 = await encodeImageToKtx2(await decodeImage(src), { zstd: true });
-  await putAsset(assetKeys.textureKtx2(id), ktx2, 'image/ktx2');
+  await putAsset(assetKeys.textureKtx2(pid(), id), ktx2, 'image/ktx2');
   return new Blob([ktx2.slice()], { type: 'image/ktx2' });
 }
 
@@ -2215,16 +2234,16 @@ export async function hydrateCustomAssets(): Promise<void> {
 
   const part = $part.get();
   for (const t of part.customTextures) {
-    const k = await getAsset(assetKeys.textureKtx2(t.id));
+    const k = await getAsset(assetKeys.textureKtx2(pid(), t.id));
     if (k) textureKtx2Urls.set(t.id, URL.createObjectURL(await ensureCurrentKtx2(t.id, k)));
-    const s = await getAsset(assetKeys.textureSource(t.id));
+    const s = await getAsset(assetKeys.textureSource(pid(), t.id));
     if (s) textureSrcUrls.set(t.id, URL.createObjectURL(s));
   }
   publishTextureUrls();
   // Reload painted-glow bitmaps (the 'whole' shape is regenerated from color/strength — no blob).
   for (const m of part.customMeshes) {
     if (m.emissive?.shape === 'painted') {
-      const png = await getAsset(assetKeys.emissivePaint(m.id));
+      const png = await getAsset(assetKeys.emissivePaint(pid(), m.id));
       if (png) emissivePaintUrls.set(m.id, URL.createObjectURL(png));
     }
   }
@@ -2241,14 +2260,31 @@ export async function hydrateCustomAssets(): Promise<void> {
  * Wires the custom-asset hydration into the project lifecycle. Must be called
  * once from main.tsx AFTER hydrateProjectOnBoot() so that the immediate
  * subscriber callback reads the already-populated $part (not the initial empty
- * createEmptyPart()). Calling it before hydrateProjectOnBoot() would hydrate
- * against the wrong part, and for projects whose name equals the default
- * ("Untitled") the $projectName atom would never re-fire (nanostores skips
- * same-value sets), so the real project's assets would never load.
+ * createEmptyPart()) AND the real {@link $currentProjectId} — blob keys are
+ * namespaced by it, so hydrating before the project is resolved would read an
+ * empty namespace and every custom asset would come back blank.
+ *
+ * The subscription is keyed on the project ID rather than v1's `$projectName`
+ * (design §1.5): ids are unique by construction, so two projects that happen to
+ * share a display name can no longer skip the re-hydrate.
  */
 export function initCustomAssets(): void {
   if (typeof indexedDB === 'undefined' || typeof window === 'undefined') return;
-  $projectName.subscribe(() => {
+  // Blobs written by a pre-v2 flexo have no `pa:<projectId>:` prefix and no project left to
+  // belong to (the v1 project keys are purged at boot). Per the constitution they are
+  // discarded, not adopted — with the standard user-visible notice.
+  void purgeUnprefixedAssetKeys()
+    .then((count) => {
+      if (count === 0) return;
+      console.warn(`flexo: removed ${count} un-namespaced asset binaries from a previous version`);
+      notify({
+        severity: 'warning',
+        title: 'Stored asset binaries from a previous flexo version were removed',
+        body: `${count} texture/mesh binar${count === 1 ? 'y' : 'ies'} belonged to projects that could not be carried over (incompatible format).`,
+      });
+    })
+    .catch((err) => console.warn('flexo: asset purge failed', err));
+  $currentProjectId.subscribe(() => {
     void hydrateCustomAssets().catch((err) =>
       console.warn('flexo: custom-asset hydrate failed', err),
     );

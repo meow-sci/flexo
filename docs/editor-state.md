@@ -460,8 +460,8 @@ Shift+click on pointer-down (before react-aria's own, anchorless extension runs)
 UI settings and user preferences that should survive page refresh use **localStorage persistence** via `@nanostores/persistent`. See [state-persistence.md](./state-persistence.md) for patterns on what to persist (panel visibility, tool modes, view settings) and what not to (transient selections).
 
 The whole editing workspace is also persisted as a **project** (document + layer view
-state + active layer + undo/redo history), autosaved to localStorage and restored on
-boot. See [projects.md](./projects.md).
+state + active layer + camera + editor aids + undo/redo history), autosaved to the
+`flexo-projects` IndexedDB database and restored on boot. See [projects.md](./projects.md).
 
 ## Tests
 `src/state/editorStore.test.ts` covers instance-id generation, add/remove/duplicate,

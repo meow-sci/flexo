@@ -189,14 +189,30 @@ you back at the orbit camera.
 ## Projects (workspace persistence)
 
 Beyond individual preference atoms, the **entire editing workspace** is persisted as a
-*project*: the `$part` document, per-layer view state, active layer, and the undo/redo
-history. This is a separate, hand-rolled localStorage layer (not `@nanostores/persistent`)
-because it bundles multiple stores under a named, switchable key and restores them before
-React renders. Project snapshots are **schema-versioned** (`PROJECT_SCHEMA_VERSION`): they are
-preserved across backwards-compatible model changes by default-filling the missing fields from
-the live constructors, and purged at boot (with a user-visible notice) only on a version bump
-or corruption — never migrated. See [projects.md](./projects.md) and the project constitution
-in [AGENTS.md](../AGENTS.md).
+*project*: the `$part` document, per-layer view state, active layer, camera, editor aids, and
+the undo/redo history. This is a separate, hand-rolled **IndexedDB** layer (not
+`@nanostores/persistent`) because it bundles multiple stores under a switchable project id and
+restores them before React renders. Project snapshots are **schema-versioned**
+(`PROJECT_SCHEMA_VERSION`): they are preserved across backwards-compatible model changes by
+default-filling the missing fields from the live constructors, and purged at boot (with a
+user-visible notice) only on a version bump or corruption — never migrated. See
+[projects.md](./projects.md) and the project constitution in [AGENTS.md](../AGENTS.md).
+
+### Where project data actually lives
+
+| Store | Key | Holds |
+| --- | --- | --- |
+| localStorage | `flexo:currentProjectId` | a raw `ProjectId` string — the **only** project key left in localStorage |
+| IndexedDB | `flexo-projects` | the projects themselves: `meta` / `snapshots` / `history` / `thumbs`, all keyed by project id |
+| IndexedDB | `flexo-assets` | custom-asset binaries under **project-namespaced** keys, `pa:<projectId>:<kind>:<assetId>` |
+| IndexedDB | `flexo-fs` | the granted mods-folder directory handle (`modFolderStore`) |
+
+Three localStorage keys are **retired and deliberately not migrated**: `flexo:project:<name>`
+(the v1 per-project snapshot entries) and `flexo:currentProject` (the v1 `{ name }` pointer),
+both deleted at boot with a user-visible warning notification per the "purged, never
+converted" rule; and `flexo:layerView` (the global per-layer view state), which is simply no
+longer read or written — that state now lives only inside the project snapshot, so it is per
+project.
 
 ## Related
 

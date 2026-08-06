@@ -1,5 +1,6 @@
 import type { Command } from '../../state/commandStore';
-import { listProjects, loadProject } from '../../state/projectStore';
+import { openProject } from '../../state/projectStore';
+import { $currentProjectId, $projectIndex } from '../../state/projectIndexStore';
 import { historyCommands } from './editCommands';
 import { modsFolderCommands } from './fileCommands';
 import { customMeshInstanceCommands } from './addCommands';
@@ -38,14 +39,22 @@ export const COMMAND_PROVIDERS: { id: string; commands: () => Command[] }[] = [
   { id: 'surface.pickMesh', commands: surfacePickCommands },
 ];
 
-/** Palette-only rows: "Open project: X" for every saved project except the current one. */
+/**
+ * Palette-only rows: "Open project: X" for every saved project except the current one. Rows
+ * come from the reactive `$projectIndex` (an in-memory array), so this provider is a pure map
+ * with no I/O at all — v1's `listProjects()` re-parsed every localStorage snapshot here.
+ */
 function projectCommands(): Command[] {
-  return listProjects().map((summary) => ({
-    id: `project:open:${summary.name}`,
-    title: `Open project: ${summary.name}`,
-    keywords: 'project open load switch',
-    run: () => {
-      loadProject(summary.name);
-    },
-  }));
+  const currentId = $currentProjectId.get();
+  return $projectIndex
+    .get()
+    .filter((meta) => meta.id !== currentId)
+    .map((meta) => ({
+      id: `project:open:${meta.id}`,
+      title: `Open project: ${meta.name}`,
+      keywords: 'project open load switch',
+      run: () => {
+        void openProject(meta.id);
+      },
+    }));
 }

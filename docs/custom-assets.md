@@ -263,12 +263,22 @@ same path as hand-authored ones. Nothing about them is a parallel universe.
   `removeImport`, `setMeshTransparent`, `hydrateCustomAssets`. All document
   mutations go through `mutate()`, which calls `pushUndo()` — so custom assets
   **enroll in undo/redo** (see [editor-state.md](editor-state.md)). Re-hydrates on
-  every `$projectName` change. Diffuse `blob:` URL is the catalog cache key
+  every `$currentProjectId` change (ids are unique, so two projects sharing a display name can
+  no longer skip the re-hydrate). Diffuse `blob:` URL is the catalog cache key
   (`materialId` left undefined) so replacing a texture busts `MaterialFactory`'s cache.
 - **`src/state/assetDb.ts`** — tiny promise-wrapped IndexedDB key→Blob store
-  (`flexo-assets`/`blobs`). `putAsset`/`getAsset`/`deleteAsset` + `assetKeys`
-  (`tex-src:<id>`, `tex-ktx2:<id>`, `mesh-glb:<id>`, `import-glb:<id>`,
-  `emissive-paint:<id>`). Binaries are too big for the localStorage `ProjectSnapshot`, so
+  (`flexo-assets`/`blobs`). `putAsset`/`getAsset`/`deleteAsset` + `assetKeys`, whose helpers
+  now take `(projectId, id)` and build a **project-namespaced** key:
+  `pa:<projectId>:<kind>:<assetId>`, where kind is `tex-src`, `tex-ktx2`, `mesh-glb`,
+  `import-glb` or `emissive-paint`. This module is the only place a blob-key literal appears,
+  and nothing outside it opens the database. The prefix makes each project's bytes one range
+  query, which is what the three lifecycle helpers are: `listProjectBlobs(projectId)`,
+  `copyProjectAssets(from, to)` — so a project's binaries **follow it through Duplicate**, asset
+  ids unchanged (the namespace makes them collision-free, so no descriptor is rewritten) — and
+  `deleteProjectAssets(projectId)`, so deleting a project **sweeps its blobs** instead of
+  leaking them. `purgeUnprefixedAssetKeys()` runs once at boot and discards any key without a
+  `pa:` prefix (v1 blobs whose project no longer exists), reporting the count in a warning
+  notification. Binaries are too big for the project snapshot, so
   only lightweight descriptors persist there; the bytes live here. **Generated mesh GLBs
   are not persisted** — they're cheap to regenerate from the primitive params. **Imported
   model GLBs are** (`import-glb:<importId>`, one per import batch): nothing can regenerate
@@ -720,8 +730,6 @@ design. Still deliberately out of scope:
   imported descriptor losslessly, ready for a future bundle format.
 - **Generated mesh GLBs not persisted** — regenerated from params each session (fine; cheap).
   Imported model GLBs are the exception (see `assetDb.ts` above).
-- **No per-project namespacing in IndexedDB** — all assets share one store (OK for
-  the current single-active-project model).
 - **Emissive masks export full-res** — KSA's own are 128–512 px BC4; shrinking painted
   masks on export is an easy byte win.
 

@@ -12,6 +12,7 @@ import { registerGlowPaintCancel } from '../state/surfaceModeStore';
 import { registerGlowPaintHandlers } from './glowPaintControls';
 import { $part } from '../state/editorStore';
 import { assetKeys, getAsset } from '../state/assetDb';
+import { $currentProjectId } from '../state/projectIndexStore';
 import { glowRampCss, hexToRgb, rgbToHex, sampleGlowRamp } from '../ktx/glowRamp';
 import type { CustomMesh } from '../ksa/types';
 
@@ -76,7 +77,7 @@ function PaintBody({ mesh, onClose }: { mesh: CustomMesh; onClose: () => void })
     ctx.clearRect(0, 0, SIZE, SIZE);
     let cancelled = false;
     void (async () => {
-      const blob = await getAsset(assetKeys.emissivePaint(mesh.id));
+      const blob = await getAsset(assetKeys.emissivePaint($currentProjectId.get(), mesh.id));
       if (cancelled || !blob) return;
       const bmp = await createImageBitmap(blob);
       if (!cancelled) ctx.drawImage(bmp, 0, 0, SIZE, SIZE);

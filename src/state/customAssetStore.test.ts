@@ -1,17 +1,26 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as THREE from 'three';
 
+/**
+ * The project every blob in this file is namespaced under. `customAssetStore` reads
+ * `$currentProjectId` at call time (blob keys are `pa:<projectId>:<kind>:<assetId>` — design
+ * §1.5), so the suite pins it once in `beforeEach` and spells the same id in its assertions.
+ */
+const TEST_PROJECT_ID = 'p_testproject';
+
 // In-memory stand-in for the IndexedDB blob store (happy-dom has no indexedDB). Mirrors
-// assetKeys so the import path's putAsset(assetKeys.importGlb(...)) is exercised for real.
+// assetKeys — including the project prefix — so the import path's
+// putAsset(assetKeys.importGlb(projectId, ...)) is exercised for real.
 vi.mock('./assetDb', () => {
   const store = new Map<string, Blob>();
+  const prefix = (projectId: string) => `pa:${projectId}:`;
   return {
     assetKeys: {
-      textureSource: (id: string) => `tex-src:${id}`,
-      textureKtx2: (id: string) => `tex-ktx2:${id}`,
-      meshGlb: (id: string) => `mesh-glb:${id}`,
-      importGlb: (id: string) => `import-glb:${id}`,
-      emissivePaint: (id: string) => `emissive-paint:${id}`,
+      textureSource: (p: string, id: string) => `${prefix(p)}tex-src:${id}`,
+      textureKtx2: (p: string, id: string) => `${prefix(p)}tex-ktx2:${id}`,
+      meshGlb: (p: string, id: string) => `${prefix(p)}mesh-glb:${id}`,
+      importGlb: (p: string, id: string) => `${prefix(p)}import-glb:${id}`,
+      emissivePaint: (p: string, id: string) => `${prefix(p)}emissive-paint:${id}`,
     },
     getAsset: async (key: string) => store.get(key),
     putAsset: async (key: string, data: Blob | Uint8Array, type = '') => {
@@ -19,6 +28,23 @@ vi.mock('./assetDb', () => {
     },
     deleteAsset: async (key: string) => {
       store.delete(key);
+    },
+    listProjectBlobs: async (projectId: string) =>
+      [...store.keys()].filter((key) => key.startsWith(prefix(projectId))),
+    deleteProjectAssets: async (projectId: string) => {
+      const doomed = [...store.keys()].filter((key) => key.startsWith(prefix(projectId)));
+      for (const key of doomed) store.delete(key);
+    },
+    copyProjectAssets: async (fromId: string, toId: string) => {
+      const source = [...store.entries()].filter(([key]) => key.startsWith(prefix(fromId)));
+      for (const [key, blob] of source) {
+        store.set(prefix(toId) + key.slice(prefix(fromId).length), blob);
+      }
+    },
+    purgeUnprefixedAssetKeys: async () => {
+      const stale = [...store.keys()].filter((key) => !key.startsWith('pa:'));
+      for (const key of stale) store.delete(key);
+      return stale.length;
     },
     __assetStore: store,
   };
@@ -129,9 +155,11 @@ import { normalizeImport, type NormalizedImport } from '../ksa/importNormalize';
 import type { ImportMaterialPlan, ImportMaterialSpec } from '../ksa/importMaterials';
 import type { CustomMesh } from '../ksa/types';
 import { assetKeys, getAsset } from './assetDb';
+import { $currentProjectId } from './projectIndexStore';
 
 beforeEach(() => {
   newPart();
+  $currentProjectId.set(TEST_PROJECT_ID);
 });
 
 /**
@@ -425,7 +453,7 @@ describe('importModelAsMeshes', () => {
         strength: 1,
         coverage: 1,
       });
-      expect(await getAsset(assetKeys.emissivePaint(m.id))).toBeInstanceOf(Blob);
+      expect(await getAsset(assetKeys.emissivePaint(TEST_PROJECT_ID, m.id))).toBeInstanceOf(Blob);
     }
   });
 
@@ -516,7 +544,7 @@ describe('removeImport', () => {
     expect(after.customTextures).toHaveLength(3);
     // Its binaries survive too.
     for (const t of after.customTextures) {
-      expect(await getAsset(assetKeys.textureSource(t.id))).toBeInstanceOf(Blob);
+      expect(await getAsset(assetKeys.textureSource(TEST_PROJECT_ID, t.id))).toBeInstanceOf(Blob);
     }
   });
 
@@ -534,7 +562,9 @@ describe('removeImport', () => {
     expect(after.placements).toHaveLength(3);
     expect(after.customMaterials).toHaveLength(1);
     expect(after.customTextures).toHaveLength(3);
-    expect(await getAsset(assetKeys.importGlb(second.importId))).toBeInstanceOf(Blob);
+    expect(await getAsset(assetKeys.importGlb(TEST_PROJECT_ID, second.importId))).toBeInstanceOf(
+      Blob,
+    );
   });
 
   it('deletes the batch GLB, the purged textures and the glow bitmaps from IndexedDB', async () => {
@@ -543,17 +573,21 @@ describe('removeImport', () => {
     const before = $part.get();
     const textureIds = before.customTextures.map((t) => t.id);
     const meshIds = before.customMeshes.map((m) => m.id);
-    expect(await getAsset(assetKeys.importGlb(normalized.importId))).toBeInstanceOf(Blob);
+    expect(
+      await getAsset(assetKeys.importGlb(TEST_PROJECT_ID, normalized.importId)),
+    ).toBeInstanceOf(Blob);
 
     await removeImport(normalized.importId);
 
-    expect(await getAsset(assetKeys.importGlb(normalized.importId))).toBeUndefined();
+    expect(
+      await getAsset(assetKeys.importGlb(TEST_PROJECT_ID, normalized.importId)),
+    ).toBeUndefined();
     for (const id of textureIds) {
-      expect(await getAsset(assetKeys.textureSource(id))).toBeUndefined();
-      expect(await getAsset(assetKeys.textureKtx2(id))).toBeUndefined();
+      expect(await getAsset(assetKeys.textureSource(TEST_PROJECT_ID, id))).toBeUndefined();
+      expect(await getAsset(assetKeys.textureKtx2(TEST_PROJECT_ID, id))).toBeUndefined();
     }
     for (const id of meshIds) {
-      expect(await getAsset(assetKeys.emissivePaint(id))).toBeUndefined();
+      expect(await getAsset(assetKeys.emissivePaint(TEST_PROJECT_ID, id))).toBeUndefined();
     }
   });
 
@@ -689,7 +723,7 @@ describe('replaceImport', () => {
     expect(p.customMeshes.every((m) => m.materialId === p.customMaterials[0]!.id)).toBe(true);
     // The orphaned textures' binaries go too.
     for (const id of oldTextureIds) {
-      expect(await getAsset(assetKeys.textureSource(id))).toBeUndefined();
+      expect(await getAsset(assetKeys.textureSource(TEST_PROJECT_ID, id))).toBeUndefined();
     }
   });
 
@@ -715,7 +749,7 @@ describe('replaceImport', () => {
     expect(p.customMeshes.every((m) => m.materialId === materialId)).toBe(true);
     expect(p.customMeshes.every((m) => m.imported!.importId === second.importId)).toBe(true);
     for (const id of textureIds) {
-      expect(await getAsset(assetKeys.textureSource(id))).toBeInstanceOf(Blob);
+      expect(await getAsset(assetKeys.textureSource(TEST_PROJECT_ID, id))).toBeInstanceOf(Blob);
     }
   });
 
@@ -761,8 +795,10 @@ describe('replaceImport', () => {
     const second = await synthesizeImport();
     await replaceImport(first.importId, second, { updateMaterials: false });
 
-    expect(await getAsset(assetKeys.importGlb(first.importId))).toBeUndefined();
-    expect(await getAsset(assetKeys.importGlb(second.importId))).toBeInstanceOf(Blob);
+    expect(await getAsset(assetKeys.importGlb(TEST_PROJECT_ID, first.importId))).toBeUndefined();
+    expect(await getAsset(assetKeys.importGlb(TEST_PROJECT_ID, second.importId))).toBeInstanceOf(
+      Blob,
+    );
   });
 
   it('leaves another import batch untouched', async () => {
@@ -779,7 +815,9 @@ describe('replaceImport', () => {
     expect(p.customMeshes.filter((m) => m.imported!.importId === second.importId)).toHaveLength(2);
     expect(p.customMaterials).toHaveLength(2);
     expect(p.customTextures).toHaveLength(6);
-    expect(await getAsset(assetKeys.importGlb(other.importId))).toBeInstanceOf(Blob);
+    expect(await getAsset(assetKeys.importGlb(TEST_PROJECT_ID, other.importId))).toBeInstanceOf(
+      Blob,
+    );
   });
 
   it('is a no-op for an unknown import id', async () => {

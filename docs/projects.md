@@ -138,7 +138,7 @@ display name can no longer skip the re-hydrate. See
 
 ## Boot restore (no double refresh)
 
-`main.tsx` runs boot as one async IIFE, because IndexedDB is async: `purgeV1ProjectKeys()` →
+`main.tsx` runs boot as one async IIFE, because IndexedDB is async: `purgeV1Storage()` →
 `await hydrateProjectOnBoot()` → `initCustomAssets()` → `initAnimationStore()` → the
 modifier/hotkey/snap wiring → the share-link branch → `checkBuildId()` → `initModFolder()` →
 `createRoot().render()`. Nothing paints until hydration resolves, which is what preserves v1's
@@ -161,12 +161,17 @@ nothing will be saved this session, marks autosave failing, and boots an empty p
 All three are surfaced through the **notification center** — never a toast, so the names survive
 being looked away from.
 
-1. **v1 project storage** (`purgeV1ProjectKeys`, run before hydration). Every localStorage
+1. **v1 localStorage** (`purgeV1Storage`, run before hydration). Every localStorage
    `flexo:project:*` entry and the `flexo:currentProject` pointer are deleted, and the project
    names are listed in one warning notification. The names are read **from the keys**, with zero
    parsing — a corrupt entry is reported exactly as well as an intact one, and no v1 value is
    ever interpreted. v1 project data is deliberately not carried over; there is no adoption path
-   and none may be added.
+   and none may be added. The same pass silently removes five other abandoned v1 keys, which
+   carry no user work and so raise no notice: the four shell-layout keys the single
+   `flexo:layout` replaced (`flexo:inspectorVisible`, `flexo:inspectorWidth`,
+   `flexo:inspectorFloatPos`, `flexo:animPreviewFloatPos`) and `flexo:layerView`, the former
+   global per-layer view state that now rides only the project snapshot. Removal, never
+   migration — their values are never read.
 2. **Incompatible projects** (`purgeIncompatibleProjects`, inside hydration). A `meta` row whose
    `schemaVersion !== PROJECT_SCHEMA_VERSION`, or whose snapshot is missing, unreadable, or not
    a document with layers, is deleted along with its snapshot, history, thumbnail **and its
@@ -207,10 +212,11 @@ constitution in [AGENTS.md](../AGENTS.md).
 
 ## Actions (projectStore exports)
 
-`hydrateProjectOnBoot()`, `purgeV1ProjectKeys()`, `startAutosave()`, `flushAutosave()`,
+`hydrateProjectOnBoot()`, `purgeV1Storage()`, `startAutosave()`, `flushAutosave()`,
 `createProject(name?)`, `openProject(id)`, `duplicateProject(id)`, `deleteProject(id)`,
-`loadSharedProject(env)`, `requestThumbnail()` / `storeThumbnail(id, blob)` / the
-`$thumbnailRequest` atom, `PROJECT_SCHEMA_VERSION`, plus re-exports of `$projectName` and
+`loadSharedProject(env)`, `loadProjectAsNew(env, opts)`, `requestThumbnail()` /
+`storeThumbnail(id, blob)` / the `$thumbnailRequest` atom, `PROJECT_SCHEMA_VERSION`, plus
+re-exports of `$projectName` and
 `DEFAULT_PROJECT_NAME`. Names and metadata are `projectIndexStore`'s side:
 `uniqueProjectName(base?, exceptId?)`, `renameProject(id, name)`, `setProjectDescription`,
 `loadThumb`, `takeOverLock`. **None of these is an undo step** — project lifecycle is storage,

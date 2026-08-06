@@ -140,16 +140,18 @@ through the old and new placements so the shape doesn't visually jump.
 
 ## Fitting
 
-**Add → Collider ▸ Fit to selection ▸ \<shape\>** wraps the selected placements (or the
-whole Part when nothing is selected); the inspector's **Fit to selection** button refits an
-existing collider in place, keeping its id and owner.
+**Add ▸ Collider ▸ Fit to Selection ▸ \<shape\>** wraps the selected placements (or the
+whole Part when nothing is selected); the left-sidebar collider card's **Fit to selection**
+button refits an existing collider in place, keeping its id and owner.
 
 `src/ksa/colliderFit.ts` is pure: it takes world-space sample points plus a frame
 quaternion and returns position + orientation + outer size. A cylinder/capsule lays its
 barrel along the longest axis of the oriented AABB, with the radius spanning the
 perpendicular plane; a sphere stays axis-aligned (an arbitrary rotation on a sphere is just
 noise in the XML). A tunable ±% margin covers Core's habit of shaving ~0.7% off a mesh
-AABB.
+AABB. Both fit preferences — **Fit margin** and **Orient to selection** — live in
+**Settings ▸ Viewport** (`$colliderSettings`, `flexo:colliders`); v1 persisted them with no UI
+at all.
 
 Fitting needs world geometry, which only exists in the three.js scene — and `src/state` /
 `src/ui` are deliberately three-free. So the menu publishes an intent
@@ -175,7 +177,8 @@ the Export dialog renders both together:
 
 ## Coverage check
 
-**Check** in the collider panel scores the whole collision volume against the part's
+**Tools ▸ Collider Coverage Check** (disabled until the Part has a collider; also the
+collider card's **Check** button) scores the whole collision volume against the part's
 sampled geometry (`src/measure/colliderCoverage.ts`, pure) and reports two numbers that
 pull in opposite directions:
 
@@ -193,12 +196,14 @@ per mesh (fast, far too coarse to trust a percentage from), per-vertex walks the
 buffer. The setting also drives fitting, where it matters for rotated/irregular geometry.
 
 Deliberately manual, never live: a vertex-precision sample of a real part is tens of
-thousands of points against every collider.
+thousands of points against every collider. The report renders as a card at the top of the
+left sidebar (`src/ui/build/CoveragePanel.tsx`) — the focus editor's tool-parameter slot —
+so the viewport's red dots and the numbers explaining them are on screen together.
 
 ## Layer
 
 A collider is an **ordinary layer citizen**, exactly like a SubPart placement or a
-connector: it lands on the active layer, appears in that layer's Assets section, moves
+connector: it lands on the active layer, appears under that layer in the Outliner, moves
 between layers via "Change Layer" (single row or whole selection), and rides the layer's
 visibility / opacity / lock. Group it with the geometry it wraps and one eye toggle hides
 the mesh and its collision volume together. `addPart` puts an imported Part's colliders on

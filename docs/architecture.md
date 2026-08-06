@@ -17,16 +17,39 @@ src/
               primitives in ui/kit/ (tailwind-variants styling). Read/write the
               store via @nanostores/react.
   app.tsx     The docked shell: column(MenuBar | PhoneTopBar, row(LeftSidebar,
-              ViewportHost, RightSidebar), StatusBar | CondensedStatusBar +
-              PhoneModeTabs), plus the single DialogRoot and the ⌘K CommandPalette.
-              Exactly TWO floating windows mount inside the workspace band — the
-              gizmo ToolBarWindow and the ChainWindow (design: foundation.md §6.2).
-              The v1 floating chrome named here before — the animation scrubber and
-              the texture panel — is gone: the scrubber's single v2 home is the
-              timeline dock's TransportBar (phone: the docked transport chip + the
-              fullscreen Timeline sheet), and the texture panel became Surface mode.
-  main.tsx    React root: <App /> + BuildIdMismatchDialog.
+              ViewportHost, RightSidebar), TimelineDock?, StatusBar |
+              ToolBarStrip + phone chips + CondensedStatusBar + PhoneModeTabs),
+              plus the single DialogRoot and the ⌘K CommandPalette. Exactly TWO
+              floating windows mount inside the workspace band — the gizmo
+              ToolBarWindow and the ChainWindow (foundation.md §6.2).
+  main.tsx    Boot, then the React root. Boot is an async IIFE because project
+              hydration is awaited (IndexedDB); nothing paints before it resolves.
 ```
+
+**`state/` — the shell services** (all ephemeral unless noted; none of them ever
+touches `$part`, so none of them can create an undo step):
+
+| Store | Owns |
+|---|---|
+| `modeStore.ts` | `$mode` (five modes), the single `$activeTool` slot, `setMode` choreography |
+| `layoutStore.ts` | `$layout` — sidebar widths/collapse, timeline dock, float positions (persisted, `flexo:layout`) |
+| `statusStore.ts` | the status bar's message slot, tool segment, advisories, progress, FPS report |
+| `notificationStore.ts` | the session-only notification ring (100 entries) behind the bell |
+| `modifierStore.ts` | held modifiers, hover context, the computed modifier hints |
+| `commandStore.ts` | the command registry + dynamic providers + the palette (persisted recents) |
+| `dialogStore.ts` | `$openDialog` — which of the 20 dialog ids is open |
+| `hotkeyStore.ts` | `$focusedSurface` / `$dialogOpen` / `$activeScopes` for the scoped registry |
+| `snapStore.ts` | snap enable + the two steps (persisted as three flat keys) |
+| `projectIndexStore.ts` | the reactive project metadata index, current-project pointer, write lock |
+
+Mode sub-state lives beside them in `dataModeStore` / `engineStore` / `surfaceModeStore` /
+`animationStore`, each registering its own enter/exit hooks with `modeStore` — the mode
+machine imports no feature store, so the dependency only ever points one way.
+
+**`ui/` subdirectories**: `kit/` (the primitive kit incl. `FloatingWindow`, `MenuBar`,
+`Sheet`, `DialogViewStack`, `zIndex.ts`), `shell/` (+ `shell/phone/`), `commands/`, `menu/`,
+`palette/`, `status/`, `hotkeys/`, `outliner/`, `build/`, `data/` (+ `data/sections/`),
+`engine/`, `surface/`, `animation/`, `assets/`, `chain/`, `projects/`, `settings/`.
 
 **Dependency rule:** `state/` and `ksa/` must never import `react` or `react-dom`
 — the editor core stays reusable and headlessly testable; `three/` and `ui/` are
@@ -46,7 +69,7 @@ hold divergent copies.
 
 ```
                  ┌─────────────── src/state/editorStore.ts ───────────────┐
-                 │  $part, $selectedIndex, $toolMode, $snap  (atoms)       │
+                 │  $part, $selection, $toolMode, $snap  (atoms)           │
                  │  addSubPart / updatePlacementTransform / undo … (fns)   │
                  └───────────▲───────────────────────────────▲────────────┘
                              │ useStore() / actions           │ subscribe() / actions
@@ -96,6 +119,15 @@ Three shell services sit between the UI and the stores, and each is a single dat
   `createRoot().render()`, and `initCustomAssets()` runs strictly after it so blob hydration
   reads the resolved `$currentProjectId`. Nothing may render ahead of that await — see
   [projects.md](./projects.md).
+- **The chrome is not the document.** Mode, layout, status messages, notifications and
+  floating-window state are view state: they never enter `$part`, never create an undo step,
+  and a mode switch never touches the document, the selection, the camera or the active layer.
+  The corollary is the rule for new features — if a change belongs in undo, it belongs in
+  `$part`; if it does not, it must not be written there to get persistence.
+- **The render loop is on-demand and must stay that way.** No chrome may force continuous
+  rendering; the FPS counter's opt-in is the only continuous mode, and it says so. Anything
+  that can change a pixel invalidates instead — see
+  [3d-workspace.md](./3d-workspace.md#rendering-is-on-demand).
 - Transforms convert between store and three.js **only** through
   `src/three/coords.ts` (see [coordinates.md](./coordinates.md)).
 - Numbers serialized to XML go through `formatG6` (see [xml-io.md](./xml-io.md)).
@@ -118,7 +150,8 @@ KSA 2026.7.9 made propellant flow explicit authored data (connector `<Capabiliti
 consumer `<FeedsFrom>`, part `<ConsumerFeedWiring>`, addressable `<Tank Id>` containers).
 It is ordinary `$part` document state throughout: modeled in `src/ksa/types.ts`,
 undo-tracked like every other mutation, remapped on import/paste as above, encoded by the
-project codec (wire version 4), and validated by the pure `src/ksa/engineValidation.ts`
+project codec (the `cp`/`fd`/`pl`/`tk`/`cfw` tokens added at wire version 4; the codec is at
+`PROJECT_EXPORT_VERSION` 9 today), and validated by the pure `src/ksa/engineValidation.ts`
 whose findings the Engine panel and the Export dialog both render. The pickable-options
 derivations (`src/state/feedTargets.ts`) are pure functions over `EditingPart` kept OUT of
 the component modules so React Fast Refresh survives. See
@@ -149,12 +182,33 @@ and [scope/plumbing-and-feeds.md](../scope/plumbing-and-feeds.md).
 - Tests: vitest (`happy-dom` env). See each doc for what's covered.
 
 ## Feature docs
-- [3D workspace](./3d-workspace.md)
-- [SubPart catalog & asset loading](./subpart-catalog.md)
-- [Editor state](./editor-state.md)
-- [Layers](./layers.md)
+
+**The shell and the editor core**
+
+- [UI shell](./ui-shell.md) — layout, modes, commands, status bar, floating windows, hotkeys, phone
+- [Editor state](./editor-state.md) — stores, actions, the undo/redo invariant
+- [3D workspace](./3d-workspace.md) — viewport, reconciliation, selection, gizmos, rendering
+- [Layers](./layers.md) — document vs view state, the Outliner
+- [State persistence](./state-persistence.md) — every localStorage key and what belongs there
+- [Projects](./projects.md) — IndexedDB projects, autosave, archives, share links
+
+**Authoring surfaces**
+
+- [Animation editor](./animation-editor.md) — clips, joints, the dopesheet, per-channel easing
+- [Engines](./engines.md) — Engine mode, the ported physics, plumbing, solid motors
+- [Action chains](./action-chains.md) — the ⇧⌘K chain window
+- [Colliders](./colliders.md) · [IVA seats](./iva-seats.md) · [Lights](./lights.md)
+- [Custom assets](./custom-assets.md) · [Importing models](./importing-models.md)
+
+**The KSA contract**
+
 - [Coordinate system & transforms](./coordinates.md)
 - [Part XML serialize/parse](./xml-io.md)
+- [SubPart catalog & asset loading](./subpart-catalog.md)
 - [Texturing](./texturing.md)
+- [KSA Part connector notes](./ksa-part-connector-notes.md)
+
+**Build & delivery**
+
 - [Asset pipeline & production build](./asset-pipeline.md)
 - [Wiki part preview mini app](./wiki-part-preview.md)

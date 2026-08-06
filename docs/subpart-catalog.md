@@ -50,8 +50,9 @@ Resolution rules per file:
 
 - `$catalog` (atom), `$catalogLoading` (atom), `$catalogIndex` (computed map).
 - `ensureCatalogLoaded()` loads once (idempotent); called from `App`'s effect.
-- The browser SubPart list (`src/ui/SubPartBrowser.tsx`) reads `$catalog`;
-  `EditorScene` reads `$catalogIndex` to build meshes.
+- The SubPart browser dialog (`src/ui/build/SubPartBrowserDialog.tsx`, dialog id
+  `'subpart-browser'`, **Add ▸ SubPart…**) reads `$catalog`; `EditorScene` reads
+  `$catalogIndex` to build meshes.
 
 ## Mesh extraction — `src/three/MeshAtlasCache.ts`
 

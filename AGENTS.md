@@ -57,6 +57,7 @@ Feature docs live in `docs/`. Read the relevant one before working on an area, a
 
 - [docs/ksa-part-connector-notes.md](docs/ksa-part-connector-notes.md) - notes on KSA Part connectors whose flags (independent, combinable toggles: Internal, ToSurface, FromSurface; empty = default mode) are hints for the vehicle editor on how to orient the Part when connecting it in surface mode or connector mode to the vehicle being built
 - [docs/architecture.md](docs/architecture.md) - module layering, data flow, the nanostores single-source-of-truth, key invariants
+- [docs/ui-shell.md](docs/ui-shell.md) - the v2 shell: the docked layout + `flexo:layout`, the five-mode machine (`setMode` as the single choreography point) and the single `$activeTool` slot, commands-as-data (`MENU_SPEC` → menubar + phone drill-down + ⌘K palette, `chordsFor` as the one chord source), the status bar's segments + the `toast()` routing table + the session-only notification centre, the two floating windows, the scoped hotkey registry + the 9-rung Escape ladder, the phone primitives, and the shell store table
 - [docs/3d-workspace.md](docs/3d-workspace.md) - the three.js viewport, scene reconciliation, selection, transform gizmos, lighting
 - [docs/subpart-catalog.md](docs/subpart-catalog.md) - how SubParts are discovered and how GLB meshes / textures are resolved
 - [docs/editor-state.md](docs/editor-state.md) - nanostores stores + actions, **undo/redo invariant**, two-way binding
@@ -73,7 +74,9 @@ Feature docs live in `docs/`. Read the relevant one before working on an area, a
 - [docs/importing-models.md](docs/importing-models.md) - importing a Blender/DCC `.glb`/`.gltf` as real KSA SubParts: the Blender recipe, the glTF→SubPart/placement/material mapping, the warning catalog, storage + export, and the deliberate limits
 - [docs/iva-seats.md](docs/iva-seats.md) - authoring interior camera vantage points: the `<IVASeat>` document model, the rotation ⇄ `<ForwardAxis>`/`<UpAxis>` convention, seat order as game data, the "sit in this seat" preview and its honest limits, and the per-SubPart-template `<Internal>` interior-only flag
 - [docs/lights.md](docs/lights.md) - part cast lights (`<Light>`) as first-class 3D entities: the normalized `PartLight` model (part-level AND SubPart-owned sites), the built-in Lights layer, the bulb + **+X** aim-cone markers, selection semantics ("one light per template → N markers, edits affect all")
-- [docs/action-chains.md](docs/action-chains.md) - the `⇧⌘K` action-chain palette (`⌘K` is now the command palette): composable transform/array steps over a frozen SubPart selection, the op semantics (count includes the original, iterated linear delta, the radial angle-step rule and +X default axis), the instance/ghost caps, and what the one-undo-step commit does and does NOT carry (no reference remapping, collision-skipping fresh ids)
+- [docs/action-chains.md](docs/action-chains.md) - the action-chain floating window (`⇧⌘K`; `⌘K` is now the command palette): composable transform/array steps over a frozen SubPart selection, the op semantics (count includes the original, iterated linear delta, the radial angle-step rule and +X default axis), the instance/ghost caps, and what the one-undo-step commit does and does NOT carry (no reference remapping, collision-skipping fresh ids)
+- [docs/animation-editor.md](docs/animation-editor.md) - Animation mode: clips/joints/keyframes vocabulary, the navigator + focus editor + bottom-docked dopesheet, per-channel `JointSegmentEasing` (absent channel = linear), rest-anchor preview honesty (imported KSA deploy clips are modelled DEPLOYED, so the anchor is the LAST keyframe) + spring-loaded scrub, `computeClipIssues` blockers vs warnings, the undo-enrollment table and the `$playheadSec` perf rule. Game contract stays in [scope/animation.md](scope/animation.md)
+- [docs/engines.md](docs/engines.md) - Engine mode and the ported KSA engine math: the combustor/nozzle/rocket/controller/gimbal model, reactions + mixture ratios, plumbing topology and feed wiring, solid motors, and what is impossible data-only
 
 # project constitution
 
@@ -175,6 +178,14 @@ Skipping any step is not acceptable.
 
 - **Use the `src/ui/kit/` primitives, not raw react-aria-components**: import Button/Modal/Popover/Select/etc. from `./kit` so styling stays centralized (the kit `<Popover>` already applies the standard `rounded-lg` rounding — don't override it). Reach for raw `react-aria-components` only for pieces the kit deliberately doesn't wrap (e.g. sectioned `GridList` collections).
 - **Prefer `GridList` over `ListBox`**: when rendering selectable lists, use react-aria's `GridList`/`GridListItem` rather than `ListBox`. `GridList` supports richer functionality — rows can embed interactive controls (buttons, menus, links) while still participating in single/multi selection and keyboard navigation.
+
+The v2 shell adds five rules that every new surface MUST obey (full detail in [docs/ui-shell.md](docs/ui-shell.md)):
+
+- **Commands, not ad-hoc buttons.** Every user-facing action registers in the command registry (`src/state/commandStore.ts`, defined under `src/ui/commands/`). The menubar, the phone drill-down, the ⌘K palette, the hotkey registry and the Help dialog all render from that one dataset, so an action wired directly to a button is invisible to four of the five.
+- **Dialogs open through `dialogStore.$openDialog`** and are mounted once at root by `src/ui/shell/DialogRoot.tsx`. Never give a dialog a controlled/uncontrolled dual API, never let a trigger button own its open state, and never stack a modal on a modal — a multi-step dialog uses the kit `DialogViewStack` or an inline destructive strip.
+- **No literal z-indexes.** Use the four tokens in `src/ui/kit/zIndex.ts` (`canvasOverlay` / `dock` / `float` / `overlay`); `src/ui/kit/zIndexLiterals.test.ts` enforces it.
+- **Transient feedback goes through the `toast()` facade** in `src/ui/toast.ts`, which routes into the status bar and the notification centre by severity. Never render a bespoke floating message, HUD or progress surface: the default answer for any new surface is **dock it**, and exactly two floating windows ship (the gizmo Tool bar and the Chain window).
+- **Hotkeys register in the scoped registry** (`src/ui/hotkeys/registry.ts`) with a `global` / `viewport` / `mode:*` / `tool:*` / `surface:*` scope — never a raw `window` listener. A pure-key behavior with no menu home still needs a documented synthetic id so Help and the conflict validator can see it, and Escape is ONE binding running the ordered ladder in `escLadder.ts`.
 
 # repository maintenance
 

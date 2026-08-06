@@ -344,13 +344,20 @@ interior-only is worse than not offering it.
 
 ### UI (`src/ui/`)
 
-- `CustomTextureDialog.tsx` — image upload (picker / drag-drop / paste) + a channel
+All three creation dialogs are mounted once by `shell/DialogRoot.tsx` and opened by a command
+— from the **Add** menu, the ⌘K palette, or the Asset Manager's `＋ New ▾`. None of them is
+owned by a trigger button.
+
+- `CustomTextureDialog.tsx` (dialog id `'upload-texture'`, **Add ▸ Upload Texture…**) — image
+  upload (picker / drag-drop / paste) + a channel
   picker ("This image is…" — base color / normal / grayscale / packed ORM) + encode.
-- `MaterialDialog.tsx` — create/edit a `CustomMaterial`: presets, base color
+- `MaterialDialog.tsx` (dialog id `'material'`, **Add ▸ New Material…**) — create/edit a
+  `CustomMaterial`: presets, base color
   (picker ⟷ image), metal/rough sliders, advanced maps (normal + strength, AO,
   packed ORM, grayscale rough/metal), and a live PBR preview sphere under the same
   RoomEnvironment/tonemapping as the viewport.
-- `CreateMeshDialog.tsx` — primitive picker, params, material + texture assignment.
+- `CreateMeshDialog.tsx` (dialog id `'create-mesh'`, **Add ▸ Primitive Mesh…**) — primitive
+  picker, params, material + texture assignment.
 - **Surface mode** (`5` / the mode switcher / "Edit Surface →" from Build) — the per-mesh
   surface editor, and the only one. Its RIGHT sidebar (`src/ui/surface/SurfaceSidebar.tsx`)
   is the mode primary: a pinned **mesh picker** listing every `CustomMesh` — primitives,

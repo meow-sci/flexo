@@ -28,7 +28,7 @@ contract, with `decomp/…:line` citations).
 
 ```
  .glb  /  .gltf + .bin + images
-   │  drag onto the 3D viewport (ViewportDropZone) or Add ▸ Import model…
+   │  drag onto the 3D viewport (ViewportDropZone) or Add ▸ Import Model…
    ▼
  loadModelFile()            GLTFLoader (+ DRACO / meshopt decoders)
    │                        multi-file drop → blob: URL map + LoadingManager URL modifier

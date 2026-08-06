@@ -67,7 +67,7 @@ Mirrors space-tape's `GameDataXmlSerializer.cs`. The popup-only metadata
         <Connector Id="_connector1"><Flags>ToSurface</Flags></Connector>  <!-- every connector; <Flags> only when set -->
         <Decoupler ConnectorId="_connector2" Force="750"/>
         <DockingPort ConnectorId="_connector3" LatchingImpulse="6000" PushoffForce="7000"/>
-        <EVADoor ConnectorId="_connector3"/>
+        <EVADoor ConnectorId="_connector3" SeatId="pilot"/>   <!-- SeatId only when linked -->
     </PartGameData>
 </Assets>
 ```
@@ -284,7 +284,7 @@ passthrough (`'IVASeat'` is in `KNOWN_PART_GAMEDATA_CHILDREN` only).
 ```xml
 <PartGameData Id="...">
     …
-    <IVASeat>                                  <!-- no Id attribute, ever -->
+    <IVASeat Id="pilot">                       <!-- only when the user authored an id -->
         <Position X="-0.45" Y="0.42" Z="-0.35"/>
         <ForwardAxis X="1" Y="0" Z="0"/>       <!-- ALWAYS all three axes (see below) -->
         <UpAxis X="0" Y="0" Z="-1"/>
@@ -306,8 +306,14 @@ Rules that differ from the rest of this document:
   through `src/ksa/ivaSeatAxes.ts` at the boundary; the emitted axes are always **unit**
   vectors (a non-unit `<UpAxis>` silently narrows the game's pitch clamp). Identity rotation
   emits `ForwardAxis X="1"` + `UpAxis Z="-1"` — Core's own authoring.
-- **No `Id` is emitted.** Core authors none, nothing references a seat by id, and
-  `TemplateDataBase.Id` shares the namespace `<FeedsFrom Container>` resolves against.
+- **`Id` is emitted only when the user authored one.** Since KSA 2026.8.3.5117 an
+  `<EVADoor SeatId>` names the `<IVASeat Id>` a hatch boards
+  (`EVADoor.ResolveAlignedSeats` matches the two, skipping empty ids), so a seat a hatch opens
+  onto MUST carry it — Core authors one on both capsule seats. flexo's editor-only `_seatN`
+  id is still **never** emitted: `TemplateDataBase.Id` shares the namespace
+  `<FeedsFrom Container>` resolves against, so only a deliberate, user-authored id belongs
+  there. Both halves of the link (`IvaSeat.ksaId`, `evaDoor.seatId`) are optional and are
+  omitted when unset, so an unlinked part round-trips byte-for-byte.
 - **A degenerate authored pair is dropped on import** (either vector ~zero, or the two
   parallel) with a console warning — the game would build a NaN camera rotation from it.
 

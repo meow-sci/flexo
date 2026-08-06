@@ -236,6 +236,14 @@ than react-aria's `useDragAndDrop`, because a layer here is a `GridListSection` 
 deliberately not a selectable row — and react-aria's collection DnD can only move items.
 `src/ui/outliner/layerReorder.ts` holds the pure index math (unit-tested).
 
+**Layers outside the Outliner.** Two shell surfaces carry layer state so it is never invisible
+(see [ui-shell.md](./ui-shell.md)): the status bar's **active-layer chip**
+(`Layer: <name> ▾`, Build and Animation only — clicking it opens a picker that runs
+`setActiveLayer`) and the **Select ▸ By Layer ▸** submenu, whose rows are minted by the
+`layers.select` command provider and run `selectLayerEntities`. A sibling `layers.activate`
+provider puts "Activate layer: <name>" in the ⌘K palette. All three read the same document
+`part.layers` order, so a rename or reorder moves them together.
+
 Below the layer list sits the collapsed **AIDS** section (`AidsSection.tsx`) — the collection
 of editor-only aids (line measurements, reference containers) plus the containment
 warn-precision toggle. Aids are not layer citizens: they have no `layerId` and are never

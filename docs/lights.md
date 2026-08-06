@@ -112,8 +112,8 @@ the preview pose into the document. Multi-select bulk drags lift owner-local lig
 into part space (`lightWorld`) for the shared pivot math and push them back down through the
 same context frames.
 
-The transform inspector shows a **dedicated light panel** (`LightHeader`,
-`src/ui/build/LightInspector.tsx`) instead of the generic position/rotation groups:
+The left sidebar's focus editor shows a **dedicated light card**
+(`src/ui/build/LightInspector.tsx`) instead of the generic position/rotation groups:
 
 - identity (`Light — Spot/Point`, `part-level` or `via <template> · N instance(s)`, and —
   when N > 1 — which instance edits are going through);
@@ -185,7 +185,9 @@ disc. FloodlightA therefore renders as what it is: a clean hemisphere.
 
 Illuminance spans orders of magnitude (Core ships an `Intensity = 10` spotlight and an
 `Intensity = 0.05` interior lamp), so the shells map `E` to screen brightness through a
-Reinhard curve `E / (E + E₀)`. `E₀` is the knee, and **View ▸ Exposure** picks how it is chosen:
+Reinhard curve `E / (E + E₀)`. `E₀` is the knee, and **Settings ▸ Scene ▸ Light exposure**
+picks how it is chosen (numeric preferences live in Settings; the View menu carries only the
+toggles and radios — foundation §10.7):
 
 - **Auto** (default) — per light, `E₀ = E(0.2·Range) / 3`. Every light spans the full gradient
   regardless of absolute intensity, so the dim interior lamp is as readable as the spotlight.
@@ -194,7 +196,7 @@ Reinhard curve `E / (E + E₀)`. `E₀` is the knee, and **View ▸ Exposure** p
   honest: a genuinely dim light looks dim, and at `E₀ = 1` Core's `Intensity = 0.05` interior
   lamp is nearly invisible — which is correct, and is exactly why Auto exists.
 
-**View ▸ Light coverage** chooses who draws it: `Selected` (default — only the selected light's
+**View ▸ Light Coverage ▸** chooses who draws it: `Selected` (default — only the selected light's
 context instance, so a multi-placement light doesn't stack N overlapping glows), `All`, or
 `Off`. It composes with the Lights layer: a hidden or faded layer hides/dims the coverage too.
 
@@ -219,7 +221,7 @@ context instance, so a multi-placement light doesn't stack N overlapping glows),
 ## Live lighting preview
 
 Coverage answers "how far does this reach"; it does not answer "what does the part look like lit
-by it". **View ▸ Preview lighting** (off by default) hangs a **real three.js light** off every
+by it". **View ▸ Live Light Preview** (off by default) hangs a **real three.js light** off every
 light marker, so the SubPart meshes are actually illuminated in the viewport — a spot's pool on a
 hull, the color a lamp throws onto its own housing, whether a fixture lights anything at all.
 
@@ -262,8 +264,11 @@ wireframe use, so the lit footprint and the wireframe cone describe the same con
 
 - **Capped at 16 light INSTANCES** (`MAX_PREVIEW_LIGHTS`), spent in document order — and a
   SubPart-owned light counts once per placement of its template, because that is how many lights
-  KSA instantiates. Past the cap the View menu says so ("previewing N of M light instances");
-  the remaining lights still draw markers and coverage.
+  KSA instantiates. Past the cap the **status bar** raises an advisory chip reading
+  `💡 <enabled>/<total>` and deep-linking Settings ▸ Scene
+  (`ui/status/advisoryWiring.ts` off `$lightPreviewCount`) — v1 buried the fact in the View
+  popover, where it was invisible unless the popover happened to be open. The remaining
+  lights still draw markers and coverage.
 - Toggling the preview (or adding/removing a light while it is on) changes the scene's light
   count, which makes three **re-link every shader program** — a visible hitch on a big part. That
   is the main reason the default is off.
@@ -277,8 +282,8 @@ wireframe use, so the lit footprint and the wireframe cone describe the same con
 
 ## Adding lights
 
-- **Add → Light → Spot light / Point light** — a part-level light at the origin, selected and
-  revealed immediately.
+- **Add ▸ Light ▸ Spot / Point** — a part-level light at the origin, selected and
+  revealed immediately (the command switches to Build mode first if you are elsewhere).
 - **Data mode ▸ \<template\> ▸ Lights ▸ + Light** — a light owned by that SubPart template
   (also reachable from the navigator's "＋ add data ▸ Add light" on an empty template). Each
   card has **"Select in 3D"**, which now genuinely works: Data mode is a sidebar, not a

@@ -324,7 +324,7 @@ behaviour change this replaced, and
 
 ### Hide interior (view toggle)
 
-`$hideInterior` (**View ▸ Visibility ▸ Hide interior**, persisted as `flexo:hideInterior`,
+`$hideInterior` (**View ▸ Hide Interior**, persisted as `flexo:hideInterior`,
 default **off**) hides every mesh whose resolved `<Internal>` is true, so the workspace shows
 the part exactly as the game renders it *outside* IVA. It is a pure view preference — flexo
 renders interior meshes normally the rest of the time, which is what you want while authoring
@@ -336,7 +336,7 @@ is visible AND the toggle does not hide it, and `applyLayerView` stays the only 
 
 `src/ksa/ivaSeatValidation.ts` grades every problem the way `colliderValidation` does, and
 the Export dialog renders them alongside the engine and collider issues. Like those, it is
-**advisory** — `ExportDialog` *displays* the issues; **nothing gates the export**.
+**advisory** — `ExportKsaDialog` *displays* the issues; **nothing gates the export**.
 
 | Severity  | Code                         | Rule                                                       |
 | --------- | ---------------------------- | ---------------------------------------------------------- |

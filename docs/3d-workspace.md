@@ -1,13 +1,36 @@
 # 3D Workspace
 
-The full-screen three.js viewport where SubParts are placed and manipulated.
-All code is under `src/three/`.
+The three.js viewport where SubParts are placed and manipulated. All code is under
+`src/three/`.
+
+## The viewport is a docked cell, not an overlay host
+
+The canvas lives in the middle cell of the v2 docked shell —
+`column( MenuBar, row( LeftSidebar, ViewportHost, RightSidebar ), TimelineDock?, StatusBar )`
+in `src/app.tsx` (see [ui-shell.md](./ui-shell.md)). It is a real flex sibling that gets
+exactly the remaining space, which is why **the orbit center is the visible center**: v1's
+click-through right panel overlaid the canvas and pushed the apparent center left.
+`Viewport`'s existing `ResizeObserver` handles every sidebar drag and dock collapse, so
+resizing chrome needs no three-layer code.
+
+Only four things are still absolutely positioned inside the cell, and all four are viewport
+furniture rather than app chrome: the **CSS2D label layer** (measurement labels, seat
+ordinals), the **`ViewportDropZone`** dashed `.glb` drop affordance (which wraps the canvas
+cell only — a drop on a sidebar does nothing), the imperative **stats.js FPS panel**, and the
+**marquee rectangle** (`src/ui/MarqueeOverlay.tsx`). They all sit at `z.canvasOverlay`
+(`src/ui/kit/zIndex.ts`); nothing in the viewport uses a literal z-index. The floating Tool bar
+and Chain windows are NOT in the cell — they are children of the workspace band, so their
+positions clamp to the whole band.
+
+The host keeps `tabIndex={-1}` and claims focus on pointerdown, which is load-bearing: that is
+what puts the `viewport` hotkey scope in play so arrow-key nudges and `W`/`S` work.
 
 ## Components
 
 | File | Responsibility |
 |---|---|
-| `Viewport.ts` | Renderer, scene, perspective camera, lights, reference grid, `OrbitControls`, render loop, resize. Also sets ACES tonemapping + sRGB output + `RoomEnvironment` IBL (see [texturing.md](./texturing.md)). |
+| `Viewport.ts` | Renderer, scene, perspective camera, fill lights, reference grid, `OrbitControls`, render loop, resize, and the seat-view camera mode. |
+| `SceneEnvironment.ts` | Per-renderer owner of environment IBL, tone mapping, exposure and background, driven by the `$lighting` store — see [Lighting / look](#lighting--look). |
 | `RenderLoop.ts` | The on-demand frame driver shared by the editor viewport and all three preview viewports — see [Rendering is on-demand](#rendering-is-on-demand). |
 | `EditorScene.ts` | Owns the `Viewport`; subscribes to the store and reconciles `SubPartObject`s; wires selection + gizmo. The bridge between state and scene. |
 | `SubPartObject.ts` | One placed SubPart: a `THREE.Group` (carrying `userData.instanceId`) holding the atlas mesh + its material. |
@@ -140,8 +163,11 @@ shape KSA can represent. It is the same trick `ContainerLayer` uses for referenc
 containers.
 
 A **SubPart-owned** collider is drawn once per placement of its template (KSA has no
-per-instance collider), positioned via `coords.colliderWorld`. Since no single object
-could unambiguously receive a drag, the gizmo is suppressed for those until Phase 3.
+per-instance collider), positioned via `coords.colliderWorld`. The gizmo still works on those:
+it attaches to the instance the user last clicked (`$colliderEditContext`, resolved by
+`colliderContextIndex`) and `colliderGizmoFrame` converts the drag back through that same
+placement — the `$lightEditContext` pattern, so the gizmo and the numeric fields can never
+disagree about which instance an edit goes through.
 
 ### The IVA seat marker
 
@@ -378,7 +404,7 @@ The armed-tool rung is fully generic: it runs `disarmTool()` on the single `$act
 so it cancels the marquee, the measure tool (pending point included) and exhaust placement
 without knowing anything about them. Seat view keeps its own rung further down, because its
 Escape must never be `preventDefault`ed. See
-[editor-state.md](./editor-state.md#the-transient-tools--one-slot-four-tenants) for the tenant
+[editor-state.md](./editor-state.md#the-transient-tools--one-slot-six-tenants) for the tenant
 table.
 
 ## Measure — the point-to-point tool
@@ -426,9 +452,22 @@ All XML/store ↔ three.js transform conversion is isolated in `coords.ts`. See
 
 ## Lighting / look
 
-`HemisphereLight` (low) + `DirectionalLight` (key) + `RoomEnvironment` PMREM
-environment for IBL reflections, with `ACESFilmicToneMapping`. Tune
-`renderer.toneMappingExposure` in `Viewport.ts`. See [texturing.md](./texturing.md).
+A `HemisphereLight` (low) plus a `DirectionalLight` (key) are baked into `Viewport.ts`; the
+look on top of them is **user state**, not a constant. `SceneEnvironment` owns it and reads
+the persisted `$lighting` store (`flexo:lighting`): the environment preset (a PMREM bake of
+three's `RoomEnvironment` for Studio, an equirect HDR for the other eight — loaded async and
+shared through `envCache`), environment intensity, tone-mapping mode
+(`aces` / `agx` / `neutral` / `linear`), exposure, sky background visibility and blur. Cheap
+renderer state is applied synchronously so exposure and tone mapping respond while a big HDR
+is still downloading, and a superseded load is discarded by a token check.
+
+The UI is split by kind, as everywhere else: the **View** menu carries the toggles and radios
+(Environment ▸, Show Sky Background, Scene Lighting…) and **Settings ▸ Scene** carries the
+numerics — and both write the same store. The Scene tab deliberately anchors right-of-center
+so at least half the canvas stays visible while sliders live-commit. HDR download progress
+lands in the status bar's progress segment. Each preview viewport
+(`PartPreviewViewport`, `ModelPreviewViewport`) owns its own `SceneEnvironment`, because PMREM
+output is renderer-specific. See [texturing.md](./texturing.md).
 
 ## Notes
 - `RenderLoop` drives rendering on demand (see above); `dispose()` cancels any

@@ -1,9 +1,11 @@
 # Action Chains
 
-A command-palette for repetitive placement: build an ordered list of steps, watch them
-preview live over the viewport, and commit the whole thing as **one undo step**. It is how
-you get four RCS blocks around a tank, a 6 × 4 solar-cell grid, or a fifteen-step helix
-without duplicating and nudging fifteen times.
+A step builder for repetitive placement, hosted in one of the two floating windows v2 ships
+(`⇧⌘K`): assemble an ordered list of steps, watch them preview live over the viewport, and
+commit the whole thing as **one undo step**. It is how you get four RCS blocks around a tank,
+a 6 × 4 solar-cell grid, or a fifteen-step helix without duplicating and nudging fifteen
+times. (It is not the ⌘K **command palette** — that is the app-wide command search; see
+[ui-shell.md](./ui-shell.md#3-commands-and-menus).)
 
 Action chains are **editor-only**. They create and move ordinary SubPart placements through
 the existing store paths, so there is no KSA game contract here and no `scope/` entry —
@@ -191,8 +193,8 @@ is what makes Cancel unconditionally safe.
 re-pressing the binding threw away a session without a word: **a session with ≥1 step is never
 discarded silently** — `beginActionChain()` raises a "Discard chain (N steps)?" confirm first. An
 EMPTY session is re-seeded from the current selection silently, and no session at all just opens
-one. The v1 `toggleChainPalette()` helper died with the floating SelectionToolbar that was its
-only caller — every entry point now goes through `beginActionChain()`.
+one. There is no toggle helper: **every** entry point goes through `beginActionChain()`, which
+is what makes the discard rule impossible to route around.
 
 **Build only.** A chain session exists in Build mode and nowhere else, so:
 

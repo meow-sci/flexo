@@ -137,7 +137,7 @@ pinned strip, the status bar's Data segment and the click-through. Contents are
 `(scope, section, card)` target, plus a blank Part Id and duplicate tank feed ids within one
 scope. `focusFinding(finding)` is the shared click-through — scope, then jump, then flash.
 
-### The transient tools — one slot, four tenants
+### The transient tools — one slot, six tenants
 
 A tool is layered ON TOP of a mode, never a mode of its own. Each one declares its rules
 once, at module scope in the store that owns its state, via `registerTool(id, def)`:
@@ -148,6 +148,12 @@ once, at module scope in the store that owns its state, via `registerTool(id, de
 | `seat-view` | all | **survives** (`survivesModeSwitch: true` — it is a camera state, not a mode-local affordance) | `Seat 2 / 4` plus the interactive `◀ ▶ ⓘ Exit` controls | rung **8** (never `preventDefault`ed — v1 contract) | `ivaStore.ts` |
 | `exhaust` | **Engine only** | auto-off (the mode disallows it, so `setMode` cancels it) | `Exhaust: NozzleB #2 · FX` | rung 5 | `engineStore.ts` |
 | `marquee` | all | cancels | `Box select — drag to select` → `…release to select` | rung 5 | `EditorScene.ts` |
+| `member-paint` | **Animation only** | auto-off | `Paint members → <joint>` | rung 5 | `animationStore.ts` |
+| `pivot-pick` | **Animation only** | auto-off | `Pick pivot point — click a surface` | rung 5 | `animationStore.ts` |
+
+`$pivotEditing` — Animation's `⊕ Edit pivot` gizmo mode — deliberately does NOT hold the
+slot (it is a gizmo routing change, not a pointer claim), but rung 5's `when` predicate
+covers it so one Escape still ends it.
 
 Two invariants fall out of the single slot and are worth stating plainly:
 
@@ -177,6 +183,25 @@ is enabled iff that string is in `$activeScopes`. See
 [3d-workspace.md](./3d-workspace.md#viewport-keys) for the viewport bindings and the Escape
 ladder.
 
+### The rest of the shell stores
+
+Five more stores in `src/state/` belong to the chrome rather than the document, and all five
+follow the same contract: **never in `$part`, never an undo step, never read by
+`src/three/`** except through an explicit intent atom.
+
+| Store | Atoms | Persistence |
+|---|---|---|
+| `layoutStore.ts` | `$layout` — `{left, right}` sidebar `{width, collapsed}`, `timeline {height, collapsed, hidden}`, `float` / `floatOrder` / `floatHidden`; plus `SIDEBAR_CLAMPS` (left 220–480, right 260–640) and `TIMELINE_MIN_HEIGHT` 120 | `flexo:layout` |
+| `statusStore.ts` | `$statusMessage` (ONE slot — a new message overwrites, never queues), `$lastStatusMessage`, `$toolStatus`, `$statusConfirm`, `$fpsReport`, `$advisories`, computed `$progress` | none |
+| `notificationStore.ts` | `$notifications` (ring of `NOTIFICATION_RING_MAX` = 100, newest first), `$unreadCount`, `$notificationCenterOpen`, `$notificationFocusId` | none — session-only |
+| `modifierStore.ts` | `$heldModifiers`, `$hoverContext`, computed `$modifierHints` over registered providers | none |
+| `commandStore.ts` | the command + provider registries, `$paletteOpen`, `$paletteRecents` (8 ids) | `flexo:paletteRecents` |
+| `dialogStore.ts` | `$openDialog` — `{id, params} \| null` over 20 `DialogId`s | none |
+
+`projectIndexStore.ts` sits alongside them but is backed by IndexedDB rather than
+localStorage — see [projects.md](./projects.md). Full behavioural detail for all of these is
+in [ui-shell.md](./ui-shell.md).
+
 Undo/redo stacks are module-private arrays (depth 50), not atoms. They're exposed
 for project persistence only via `exportHistory()` / `importHistory(snapshot)` (so
 undo survives a reload) — see [projects.md](./projects.md).
@@ -185,7 +210,7 @@ undo survives a reload) — see [projects.md](./projects.md).
 
 `addSubPart(templateId)`, `addPart(placements, connectors, tags)`, `addConnector()`,
 `setConnectorFlags(index, flags[])`, `removeSelected()`, `duplicateSelected()`,
-`selectPlacement(index)`, `updatePlacementTransform(index, {position,rotation,scale})`,
+`updatePlacementTransform(index, {position,rotation,scale})`,
 `updateSelectedTransform(t)`, `setPartId(id)`, `setEditorTags(tags)`,
 `setToolMode(mode)`, `setSnap(snap)`, `newPart()`, `pushUndo()`, `undo()`, `redo()`.
 
@@ -318,8 +343,9 @@ one of two patterns:
    start (gizmo drag-start; field focus). `updatePlacementTransform(s)`,
    `updateConnectorTransform`, `updateSelectedTransform`, `setPartId`, and the GameData
    field setters (`setDisplayName`, `setCustomMass`, `updateTank`, power `set*`,
-   `set*Force`) — all focus-pushed by their dialog field (`PartDataDialog` /
-   `GameDataSections` / `PreciseNumberInput`'s `onInteractionStart`).
+   `set*Force`) — all focus-pushed by the field itself, through
+   `PreciseNumberInput`/`NumberField`'s `onInteractionStart`, wherever Data mode's
+   `ui/data/sections/*` mounts it.
 
 `newPart()` clears both stacks (a new document has no history). Adding a `$part`
 mutator that picks neither pattern silently bypasses undo — that's a bug. The invariant
@@ -327,8 +353,11 @@ is also documented at the top of the undo/redo section in `editorStore.ts`.
 
 ## Selectors — `src/state/selectors.ts`
 
-`$selectedPlacement = computed([$part, $selectedIndex], …)` — the selected
-`SubPartPlacement` or `null`. Used by the inspector and gizmo attach logic.
+The read side of the selection is entirely derived. `$selectedPlacement`
+(`computed([$part, $selection], …)` — the primary SubPart or `null`) is what the inspector
+and the gizmo-attach logic read; the rest of the module is listed under
+["The selection"](#the-selection--stable-ids-never-indices) above. Nothing outside this
+module recomputes selection membership from `$part`.
 
 ## Two-way binding (gizmo ↔ inspector)
 
@@ -397,64 +426,55 @@ Shift+click on pointer-down (before react-aria's own, anchorless extension runs)
 - ranges are computed over the displayed row order with the layer sections flattened, so
   one range can span layers *and* entity kinds (`$selection` is one cross-kind list)
 
-## UI panels (`src/ui/`)
-- `SubPartBrowser.tsx` — filterable catalog list; click adds via `addSubPart`.
-- `outliner/OutlinerPanel.tsx` — the **Outliner**, Build mode's right sidebar: layer header
-  rows, entity rows grouped by kind with per-kind ⋮ menus, fuzzy search, the Aids section
-  (see [layers.md](./layers.md)). It replaced the v1 assets list, its toolbar and the
-  Layers button/popover.
-- `ui/build/BuildFocusEditor.tsx` — the **focus editor**, Build mode's left sidebar: one
-  card per focus (tool parameter → aid editor → multi-select panel → per-kind inspector →
-  empty cheat-card). The per-kind cards are `SubPartInspector` / `ConnectorInspector` /
-  `ColliderInspector` / `SeatInspector` / `LightInspector` / `KittenInspector`, over the
-  shared `TransformGroups` (position/rotation + a per-kind third group). It replaced the v1
-  `TransformInspector` + `FloatingInspector` + `SelectionToolbar` + `MultiSelectToolbar` +
-  the left-centre floating measurement/container editors.
-- `shell/MenuBar.tsx` — the docked menubar: the eight menus rendered from
-  `ui/menu/menuSpec.ts`, the mode switcher, the project chip and the undo/redo pair.
-  Every item runs a **command** (`state/commandStore.ts`, defined in `ui/commands/`);
-  there is no v1 `Toolbar.tsx` any more.
-- `shell/phone/PhoneTopBar.tsx` + `shell/phone/MenuSheet.tsx` — the phone's one-row bar
-  and its `☰` drill-down over that same `MENU_SPEC` (`ui/menu/MenuDrillDown.tsx`, shared
-  with the narrow-desktop `☰` collapse).
-- `shell/DialogRoot.tsx` — the single mount point for every overlay dialog, keyed by
-  `state/dialogStore.ts`'s `$openDialog` id. No dialog is owned by a trigger button.
-- `data/DataNavigator.tsx` + `data/DataScopeForm.tsx` + `data/sections/*` — **Data mode**,
-  the canonical GameData surface. The right sidebar is the scope navigator (pinned Part root
-  with section child rows, one row per SubPart template with content badges, the
-  "not data-capable" inventory, fuzzy search and the pinned validation strip); the left
-  sidebar is the scope form, whose sections cover every `gameData` / `subPartGameData` field
-  (see [xml-io.md](./xml-io.md)). The v1 **Part Data** and **SubPart Data** fullscreen modals
-  (`PartDataDialog` / `ManageTanksModal`) and their shared `GameDataSections.tsx` are
-  DELETED — Build's "SubPart Data →" is now a jump into this mode, not a dialog.
-  `ExportDialog.tsx` exports (dialog id `'export-ksa'`, File ▸ Export to KSA… / ⌘E).
-- `chain/ChainWindow.tsx` / `chain/ChainStepCard.tsx` — the **non-modal** action-chain
-  session (`⇧⌘K` / Edit ▸ Begin Action Chain… / the multi-select panel's Chain… / the ⌘K
-  palette; self-gates on `$chainSession`) and its per-step parameter cards. It is one of the
-  two floating windows v2 ships. Applying is one undo step; see
-  [action-chains.md](./action-chains.md).
-- `build/ToolBarWindow.tsx` — the other floating window: Move/Rotate/Scale, the **W/L**
-  gizmo-space toggle and the snap magnet + step popover. `ToolBarStrip` is its phone
-  variant, a pinned strip above the condensed status bar.
-- `ModeSidebar.tsx` — the right sidebar's body, one switch on `$mode` (it replaced v1's
-  `InspectorContent`). Build renders the Outliner; Animation and Engine render their
-  panels; Data renders the scope navigator; Surface shows an interim placeholder naming
-  where that surface still lives. On phone the same component is the **Panel sheet** (re-tap the active mode tab),
-  and `MobileInspector.tsx` is the **Inspector sheet** hosting `ModeFocusEditor` — the same
-  left/right split the desktop has.
-- `engine/*` — **Engine mode** (`$mode === 'engine'`, ephemeral state in `engineStore.ts`).
-  `EngineNavigator.tsx` is the right sidebar (scope select + define-new flow, `ModuleTree`
-  over the pure `moduleTreeModel`, `PerformanceCard` + `SolidThrustCurveCard`, the
-  always-mounted `IssuesSection`, `ExhaustSection`); `ModuleEditor.tsx` is the left sidebar
-  and shows exactly ONE module's fields, dispatching to `CombustorEditor` / `NozzleEditor`
-  (+ its `SolidNozzleEditor` variant) / `SolidMotorEditor` / `GrainSegmentEditor` /
-  `RocketEditor` / `ControllerEditor` / `GimbalEditor` / `FeedWiringEditor` /
-  `PropellantEditor`. Every editor is **scope-agnostic** — it takes a `templateId`
-  (`null` ⇒ `<PartGameData>`) and dispatches to the matching action family — which is why
-  Data mode's Wiring, Advanced and template-Engine sections render the SAME components
-  through `ModuleCardList.tsx` and can never diverge in capability. The v1
-  `EnginePanel` / `EngineToolbar` / `EngineSections` / `EngineIssuesPanel` are DELETED.
-  See [engines.md](./engines.md).
+## The UI surface map (`src/ui/`)
+
+Five surfaces, and every panel in the app belongs to exactly one of them. The shell mechanics
+— layout, mode machine, commands, status bar, hotkeys, phone — are documented in
+[ui-shell.md](./ui-shell.md); this is the state-layer's view of who reads what.
+
+**Right sidebar — the mode primary.** `ModeSidebar.tsx` is one switch on `$mode`:
+`outliner/OutlinerPanel.tsx` (Build) · `animation/AnimationSidebar.tsx` ·
+`data/DataNavigator.tsx` · `engine/EngineNavigator.tsx` · `surface/SurfaceSidebar.tsx`. Each
+reads its own mode sub-state store plus `$part`, and each is a collection view: the Outliner
+is the layers + entities tree ([layers.md](./layers.md)), the Data navigator is the scope
+list plus the validation strip, the Engine navigator is the module tree plus the live
+performance readout, the Surface sidebar is the mesh picker **and** (LOCKED) the material /
+glow / UV editor.
+
+**Left sidebar — the focus editor.** `ModeFocusEditor.tsx` switches the same way:
+`build/BuildFocusEditor.tsx` · `animation/AnimationFocusEditor.tsx` ·
+`data/DataScopeForm.tsx` · `engine/ModuleEditor.tsx` · `surface/SurfaceLeftPanel.tsx`.
+Content is a pure function of `(mode, focus)` where focus = selection ∪ mode sub-state ∪
+active aid ∪ armed tool — there is exactly ONE focus slot, which is what structurally ended
+v1's left-centre triple-booking. Build's per-kind cards are `SubPartInspector` /
+`ConnectorInspector` / `ColliderInspector` / `SeatInspector` / `LightInspector` /
+`KittenInspector`, all over the shared `TransformGroups`.
+
+**Status bar** — `status/StatusBar.tsx`, sixteen segments over `statusStore` +
+`notificationStore` + `modifierStore`. It is the only home for transient feedback: `toast()`
+is a facade that routes into those stores, and no component renders its own floating
+message surface.
+
+**Dialogs** — `shell/DialogRoot.tsx` mounts every overlay once and renders the one
+`dialogStore.$openDialog` names (20 ids, one open at a time, stacking banned). No dialog is
+owned by a trigger button, which is what retired v1's controlled/uncontrolled dual APIs.
+
+**Floating windows — exactly two**, both children of the workspace band:
+`build/ToolBarWindow.tsx` (Move/Rotate/Scale, the **W/L** gizmo-space toggle, the snap magnet
+and its step popover; `ToolBarStrip` is the phone variant) and `chain/ChainWindow.tsx` (the
+non-modal action-chain session, self-gating on `$chainSession` —
+[action-chains.md](./action-chains.md)). Positions live in `flexo:layout` → `float`.
+
+Two cross-cutting notes for the state layer:
+
+- **Engine editors are scope-agnostic.** Each takes a `templateId` (`null` ⇒
+  `<PartGameData>`) and dispatches to the matching action family, which is why Data mode's
+  Wiring / Advanced / template-Engine sections render the SAME components through
+  `ModuleCardList.tsx` and the two routes can never diverge in capability. See
+  [engines.md](./engines.md).
+- **Data mode is the canonical GameData surface** — `data/sections/*` covers every
+  `gameData` / `subPartGameData` field (see [xml-io.md](./xml-io.md)), and Build's
+  "SubPart Data →" is a mode jump, not a dialog.
 
 ## Persistence
 

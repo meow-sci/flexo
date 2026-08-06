@@ -64,8 +64,8 @@ import { notify, toast } from './toast';
  * 1. **The non-blocking policy** (foundation §10.6): a `block` finding NEVER disables either
  *    button; the primary relabels `Export anyway (N blockers)`. WIP exports are legitimate.
  * 2. **The single-source property** (census §5): everything shown and everything written
- *    comes from `expandGlassGlow` → `buildModContent` / `buildCustomBundle`. The preview is
- *    the shipped bytes.
+ *    comes from `buildMultiModContent` / `buildCustomBundle` (the former now owns
+ *    `expandGlassGlow`). The preview is the shipped bytes.
  * 3. **The write semantics**: non-overwrite `-N` suffixing for XML, binaries overwritten,
  *    `mod.toml` rebuilt from the folder listing — all owned by `writeModToFolder`, which
  *    this dialog calls and does not second-guess.

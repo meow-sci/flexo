@@ -589,7 +589,7 @@ export function subPartLightsFromRoot(root: Element): PartLight[] {
 /**
  * Parses a single <PartGameData> element into its editor tags, connector flags
  * (by id) and {@link PartGameData} block. The inverse of
- * {@link serializeGameData}; missing children/attributes fall back to defaults.
+ * {@link serializeGameDataXml}; missing children/attributes fall back to defaults.
  */
 export function parseGameDataElement(gd: Element): ParsedGameData {
   const game = createEmptyGameData();

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { DOMParser } from '@xmldom/xmldom';
 import type { Document as XmlDocument, Element as XmlElement } from '@xmldom/xmldom';
-import { serializeGameData, serializePart } from './partXmlSerializer';
+import { serializeGameDataXml, serializePartsXml, type TemplateRemap } from './partXmlSerializer';
 import { gameDataFromAssets } from './partXmlParser';
 import { seatAxesFromRotation } from './ivaSeatAxes';
 import type { Connector, EditingPart, IvaSeat, SubPartPlacement } from './types';
@@ -21,6 +21,17 @@ import {
   VEC3_ONE,
   VEC3_ZERO,
 } from './types';
+
+/**
+ * Single-entry calls through the multi-part serializers (MULTI_PART_PLAN P3.03). These pin
+ * invariant I8 — **single-part parity**: one entry must emit exactly the document flexo
+ * emitted before a project could hold more than one part, so every assertion below is
+ * unchanged from the single-part era.
+ */
+const serializePart = (part: EditingPart, remap: TemplateRemap = new Map()) =>
+  serializePartsXml([{ part, remap }]);
+const serializeGameData = (part: EditingPart, base = '', remap: TemplateRemap = new Map()) =>
+  serializeGameDataXml([{ part, remap }], base);
 
 function placement(p: Partial<SubPartPlacement>): SubPartPlacement {
   return {

@@ -9,7 +9,7 @@ import {
   parsePartPlacements,
   remapRawConnectorRefs,
 } from './partXmlParser';
-import { serializeGameData, serializePart } from './partXmlSerializer';
+import { serializeGameDataXml, serializePartsXml, type TemplateRemap } from './partXmlSerializer';
 import type { Connector, EditingPart, IvaSeat, RawXmlNode } from './types';
 import {
   DEFAULT_LAYER_ID,
@@ -30,6 +30,16 @@ import {
   KNOWN_EDITOR_TAGS,
 } from './types';
 import { readVendoredAsset } from './ksaTestAssets';
+
+/**
+ * Single-entry calls through the multi-part serializers (MULTI_PART_PLAN P3.03) — the
+ * round-trip fixtures below are all single-part, and one entry emits exactly the document
+ * the parser has always read back (invariant I8).
+ */
+const serializePart = (part: EditingPart, remap: TemplateRemap = new Map()) =>
+  serializePartsXml([{ part, remap }]);
+const serializeGameData = (part: EditingPart, base = '', remap: TemplateRemap = new Map()) =>
+  serializeGameDataXml([{ part, remap }], base);
 
 function editingPart(over: Partial<EditingPart>): EditingPart {
   return {

@@ -22,7 +22,7 @@ import type { PartCollider } from './types';
  *
  * Only custom SubParts actually placed in the Part are emitted — built-in/Core
  * SubParts are owned by KSA Core and must NOT be re-declared here. The Part.xml
- * (serializePart) references these via <SubPart InstanceOf="subPartId">.
+ * (serializePartsXml) references these via <SubPart InstanceOf="subPartId">.
  *
  * Paths are relative to the mod folder (e.g. "Meshes/Foo.glb", "Textures/Bar.ktx2"),
  * matching how Core references its own binaries.
@@ -144,40 +144,83 @@ function internalElement(doc: XmlDocument): XmlElement {
   return el;
 }
 
-export function serializeAssets(plan: AssetsPlan): string {
+/**
+ * Guards the global registries this file writes into: KSA registers `<PbrMaterial>` and
+ * `<SubPart>` by id across the WHOLE mod (a duplicate silently becomes a reference to the
+ * first), so two parts must never declare the same one. Unreachable under plan invariant I4
+ * (project-unique asset ids) plus the per-part `ns` in every export-variant id — this is the
+ * tripwire that turns a silent wrong-mesh bug into a loud failure.
+ */
+function claimId(seen: Set<string>, kind: string, id: string): void {
+  if (seen.has(id)) {
+    throw new Error(
+      `flexo export: duplicate <${kind} Id="${id}"> in the exported mod — KSA registers ${kind} ids globally, so this would silently collapse onto the first`,
+    );
+  }
+  seen.add(id);
+}
+
+/**
+ * Serializes N per-part plans into ONE `<Assets>` document — the mod's shared
+ * `<Base>Assets.xml`. Each plan contributes, in order, its `<MeshAtlas>` (when it declares
+ * custom geometry), its `<PbrMaterial>`s, its custom `<SubPart>`s and its reference
+ * `<SubPart>`s; plans follow one another in list order. Multiple `<MeshAtlas>` elements per
+ * file are first-class — `KSA/MeshAtlasFileReference.cs` `DoLoad()` registers each GLB mesh
+ * by NAME (first-wins), so one atlas per part is exactly how N parts ship their geometry.
+ */
+export function serializeAssets(plans: AssetsPlan[]): string {
   const doc = new DOMImplementation().createDocument(null, 'Assets', null);
   const assets = doc.documentElement!;
+  const materialIds = new Set<string>();
+  const subPartIds = new Set<string>();
 
-  // Reference-only SubParts (export variants) reuse built-in geometry, so a file with
-  // only those needs no MeshAtlas. Emit it only when custom geometry is declared.
-  if (plan.meshAtlasPath) {
-    const atlas = doc.createElement('MeshAtlas');
-    atlas.setAttribute('Path', plan.meshAtlasPath);
-    assets.appendChild(atlas);
-  }
-
-  // Materials first (Core lists PbrMaterials above the SubParts that use them).
-  // Channel order mirrors Core: Diffuse, Normal, AoRoughMetal, then Emissive.
-  for (const m of plan.materials ?? []) {
-    const mat = doc.createElement('PbrMaterial');
-    mat.setAttribute('Id', m.id);
-    const channels: Array<[string, string | undefined]> = [
-      ['Diffuse', m.diffusePath],
-      ['Normal', m.normalPath],
-      ['AoRoughMetal', m.aoRoughMetalPath],
-      ['Emissive', m.emissivePath],
-    ];
-    for (const [name, path] of channels) {
-      if (!path) continue;
-      const el = doc.createElement(name);
-      el.setAttribute('Path', path);
-      el.setAttribute('Category', 'Vessel');
-      mat.appendChild(el);
+  for (const plan of plans) {
+    // Reference-only SubParts (export variants) reuse built-in geometry, so a file with
+    // only those needs no MeshAtlas. Emit it only when custom geometry is declared.
+    if (plan.meshAtlasPath) {
+      const atlas = doc.createElement('MeshAtlas');
+      atlas.setAttribute('Path', plan.meshAtlasPath);
+      assets.appendChild(atlas);
     }
-    assets.appendChild(mat);
+
+    // Materials first (Core lists PbrMaterials above the SubParts that use them).
+    // Channel order mirrors Core: Diffuse, Normal, AoRoughMetal, then Emissive.
+    for (const m of plan.materials ?? []) {
+      claimId(materialIds, 'PbrMaterial', m.id);
+      const mat = doc.createElement('PbrMaterial');
+      mat.setAttribute('Id', m.id);
+      const channels: Array<[string, string | undefined]> = [
+        ['Diffuse', m.diffusePath],
+        ['Normal', m.normalPath],
+        ['AoRoughMetal', m.aoRoughMetalPath],
+        ['Emissive', m.emissivePath],
+      ];
+      for (const [name, path] of channels) {
+        if (!path) continue;
+        const el = doc.createElement(name);
+        el.setAttribute('Path', path);
+        el.setAttribute('Category', 'Vessel');
+        mat.appendChild(el);
+      }
+      assets.appendChild(mat);
+    }
+
+    appendSubParts(doc, assets, plan, subPartIds);
   }
 
+  const body = new XMLSerializer().serializeToString(doc);
+  return '<?xml version="1.0" encoding="utf-8"?>\n' + prettyXml(body) + '\n';
+}
+
+/** Appends one plan's custom `<SubPart>`s, then its reference (export-variant) `<SubPart>`s. */
+function appendSubParts(
+  doc: XmlDocument,
+  assets: XmlElement,
+  plan: AssetsPlan,
+  subPartIds: Set<string>,
+): void {
   for (const sp of plan.subParts) {
+    claimId(subPartIds, 'SubPart', sp.subPartId);
     const sub = doc.createElement('SubPart');
     sub.setAttribute('Id', sp.subPartId);
     // Glass surfaces (the kitten visor) render through KSA's translucent <PartModelGlass>
@@ -228,6 +271,7 @@ export function serializeAssets(plan: AssetsPlan): string {
   // authors Internal/Mesh/Material/RayTracing in CoreIVASpaceAAssets.xml and
   // Mesh/Material/ShadowCaster in CoreCommandAAssets.xml, and this order satisfies both.
   for (const sp of plan.referenceSubParts ?? []) {
+    claimId(subPartIds, 'SubPart', sp.subPartId);
     const sub = doc.createElement('SubPart');
     sub.setAttribute('Id', sp.subPartId);
     const model = doc.createElement('PartModel');
@@ -271,7 +315,4 @@ export function serializeAssets(plan: AssetsPlan): string {
     }
     assets.appendChild(sub);
   }
-
-  const body = new XMLSerializer().serializeToString(doc);
-  return '<?xml version="1.0" encoding="utf-8"?>\n' + prettyXml(body) + '\n';
 }

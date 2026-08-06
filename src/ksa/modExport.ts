@@ -11,7 +11,7 @@ import type {
 } from './types';
 import { isSubPartGameDataEmpty, meshKind } from './types';
 import type { PartCollider } from './types';
-import { serializeGameData, serializePart } from './partXmlSerializer';
+import { serializeGameDataXml, serializePartsXml } from './partXmlSerializer';
 import {
   serializeAssets,
   type AssetsMaterialPlan,
@@ -130,42 +130,92 @@ export function uniqueFileName(taken: Set<string>, base: string, ext: string): s
   }
 }
 
-export interface ModContent {
-  base: string;
+/** Everything one exported part contributes, resolved once and reused by every builder. */
+export interface MultiPartPlanEntry {
+  entryId: string;
+  name: string;
+  ns: string;
+  /**
+   * The part AFTER {@link expandGlassGlow} — the document the Part/GameData XML and the
+   * custom-asset bundle must BOTH see, or the placements and the geometry disagree.
+   */
+  part: EditingPart;
   /**
    * Built-in SubPart export variants this part needs (see {@link buildExportVariantMap}),
-   * keyed by original template id. Threaded into {@link buildCustomBundle} so the Assets XML
+   * keyed by original template id. Threaded into the bundle builder so the Assets XML
    * declares the same reference SubParts the Part/GameData XML now points at.
    */
   variants: Map<string, ExportVariant>;
+  /** `variantRemap(variants)` — the `originalTemplateId → variantId` map the serializers take. */
+  remap: Map<string, string>;
+  /** SubPart ids whose geometry is inset (the layered glassGlow glow layer). */
+  insetIds: Set<string>;
+}
+
+export interface MultiModContent {
+  base: string;
   partFile: string;
   partXml: string;
   gameDataFile: string;
   gameDataXml: string;
+  perPart: MultiPartPlanEntry[];
 }
 
 /**
- * Builds the desired filenames + XML bodies for a project (no conflict resolution).
- * Builds the export-variant map internally (from {@link catalog}) so the Part tree and the
- * GameData both reference the fresh variant ids — never the built-in SubPart ids — and
- * returns the variants so the Assets bundle can declare the matching reference SubParts.
- * This is the single source of truth shared by the export buttons AND the XML preview.
+ * Builds the desired filenames + XML bodies for a project's included parts (no conflict
+ * resolution): ONE `<Base>Part.xml` and ONE `<Base>GameData.xml` holding every part as
+ * siblings (MULTI_PART_PLAN P3.04).
+ *
+ * Per part it runs {@link expandGlassGlow} and builds the export-variant map (from
+ * {@link catalog}) so the Part tree and the GameData both reference the fresh variant ids —
+ * never the built-in SubPart ids — and returns both on the plan entry so the Assets bundle
+ * can declare the matching reference SubParts. This is the single source of truth shared by
+ * the export buttons AND the XML preview.
+ *
+ * `ns` is minted in the state layer ({@link NamedExportPart}) and only read here: this
+ * module may not touch stores, and one minting site is what keeps the preflight and the
+ * serializers from ever disagreeing about a part's namespace.
  */
-export function buildModContent(
-  part: EditingPart,
+export function buildMultiModContent(
+  parts: NamedExportPart[],
   projectName: string,
   catalog: ReadonlyMap<string, CatalogSubPart> = new Map(),
-): ModContent {
+): MultiModContent {
   const base = sanitizeBaseName(projectName);
-  const variants = buildExportVariantMap(part, catalog, base);
-  const remap = variantRemap(variants);
+  const perPart: MultiPartPlanEntry[] = [];
+  const seenNs = new Set<string>();
+  for (const { entryId, name, ns, part } of parts) {
+    // Unreachable: a duplicate `ns` among included parts is an export preflight BLOCKER
+    // (collectProjectExportIssues). Throwing here rather than emitting keeps a bypassed
+    // preflight from shipping two parts whose variant SubParts silently merge in KSA.
+    if (seenNs.has(ns)) {
+      throw new Error(
+        `flexo export: two parts share the export namespace '${ns}' — the preflight must block this`,
+      );
+    }
+    seenNs.add(ns);
+    // Layered 'glassGlow' visors expand into glass + inset-glow SubPart pairs; the augmented
+    // part is what BOTH the serializers below and the bundle builder consume.
+    const { part: expanded, insetIds } = expandGlassGlow(part);
+    const variants = buildExportVariantMap(expanded, catalog, base, ns);
+    perPart.push({
+      entryId,
+      name,
+      ns,
+      part: expanded,
+      variants,
+      remap: variantRemap(variants),
+      insetIds,
+    });
+  }
+  const entries = perPart.map(({ part, remap }) => ({ part, remap }));
   return {
     base,
-    variants,
     partFile: `${base}Part.xml`,
-    partXml: serializePart(part, remap),
+    partXml: serializePartsXml(entries),
     gameDataFile: `${base}GameData.xml`,
-    gameDataXml: serializeGameData(part, base, remap),
+    gameDataXml: serializeGameDataXml(entries, base),
+    perPart,
   };
 }
 
@@ -282,12 +332,17 @@ function hasSubPartGameData(part: EditingPart, templateId: string): boolean {
  * `ThumbnailRenderResources.AddDraw` that crashes KSA at startup, before the main menu. Adding a
  * `<Light>` to a custom mesh was enough to trigger it. See plans/FIX_EMISSIVES_BUG.md.
  *
- * Variant ids are namespaced by the project {@link base} (deterministic, so re-exports are stable).
+ * Variant ids are namespaced by the project {@link base} AND the per-part {@link ns} token
+ * (deterministic, so re-exports are stable). The `ns` segment is what keeps two parts of one
+ * project from minting the SAME variant id for a template they both place: KSA registers a
+ * `<SubPartGameData Id>` once GLOBALLY, so a shared variant id would merge part A's GameData
+ * onto part B's SubPart. Uniqueness of `ns` among included parts is a preflight blocker.
  */
 export function buildExportVariantMap(
   part: EditingPart,
   catalog: ReadonlyMap<string, CatalogSubPart>,
   base: string,
+  ns: string,
 ): Map<string, ExportVariant> {
   const out = new Map<string, ExportVariant>();
   // expandGlassGlow appends synthetic `_Glow` meshes to customMeshes before this runs, so they
@@ -322,7 +377,7 @@ export function buildExportVariantMap(
     }
     out.set(templateId, {
       originalId: templateId,
-      variantId: `flexo_${base}_${templateId}`,
+      variantId: `flexo_${base}_${ns}_${templateId}`,
       meshId: entry.meshNodeName,
       materialId: entry.materialId,
       colliders: entry.colliders ?? [],
@@ -716,7 +771,7 @@ const GLASS_GLOW_INSET = 0.99;
  * Expands a part for export so each placed 'glassGlow' visor becomes TWO SubParts at one transform —
  * the faithful KSA pattern (Core emits glass + opaque as sibling SubParts). For each such mesh we
  * append a synthetic '<id>_Glow' kitten mesh (opaque emissive, geometry inset) plus a parallel
- * placement at the original's transform. Returns the augmented part (fed to BOTH serializePart and
+ * placement at the original's transform. Returns the augmented part (fed to BOTH serializePartsXml and
  * buildCustomBundle so atlas/subparts/part-tree agree) + the set of subPartIds to inset. No-op
  * (original part + empty set) when there are no glassGlow visors.
  *
@@ -1162,12 +1217,16 @@ export async function buildCustomBundle(
 
   return {
     assetsFile: `${base}Assets.xml`,
-    assetsXml: serializeAssets({
-      meshAtlasPath,
-      materials,
-      subParts,
-      referenceSubParts,
-    }),
+    // One plan, one part — P3.07 splits the plan out of this function so N parts share one
+    // Assets document.
+    assetsXml: serializeAssets([
+      {
+        meshAtlasPath,
+        materials,
+        subParts,
+        referenceSubParts,
+      },
+    ]),
     binaries,
   };
 }
@@ -1184,16 +1243,22 @@ export async function buildModZip(
   kittenTex?: KittenTextureExportConfig,
   catalog: ReadonlyMap<string, CatalogSubPart> = new Map(),
 ): Promise<Blob> {
-  // Layered 'glassGlow' visors expand into glass + inset-glow SubPart pairs; feed the augmented
-  // part to BOTH the Part/GameData serializers and the bundle so placements + geometry agree.
-  const { part: expandedPart, insetIds } = expandGlassGlow(part);
-  const content = buildModContent(expandedPart, projectName, catalog);
+  // P3.07 replaces this single-part shim: the signature becomes `(parts: NamedExportPart[], …)`
+  // and the body runs `buildMultiCustomBundle` over every entry. Until then it exports exactly
+  // one part, wrapped here because `buildMultiModContent` (which now owns `expandGlassGlow`)
+  // only speaks `NamedExportPart`.
+  const content = buildMultiModContent(
+    [{ entryId: '', name: '', ns: partExportNs(part.partId), part }],
+    projectName,
+    catalog,
+  );
+  const entry = content.perPart[0];
   const bundle = await buildCustomBundle(
-    expandedPart,
+    entry.part,
     content.base,
     kittenTex,
-    content.variants,
-    insetIds,
+    entry.variants,
+    entry.insetIds,
   );
   const encoder = new TextEncoder();
   const xmlAssets = [content.partFile, content.gameDataFile];
@@ -1284,15 +1349,21 @@ export async function writeModToFolder(
   catalog: ReadonlyMap<string, CatalogSubPart> = new Map(),
 ): Promise<WriteResult> {
   const modDir = await modsDir.getDirectoryHandle(MOD_FOLDER_NAME, { create: true });
-  const { part: expandedPart, insetIds } = expandGlassGlow(part);
-  const content = buildModContent(expandedPart, projectName, catalog);
+  // Single-part shim, same as {@link buildModZip} — P3.07 gives this `NamedExportPart[]` and
+  // `buildMultiCustomBundle`. Non-overwrite naming and the mod.toml rebuild are untouched.
+  const content = buildMultiModContent(
+    [{ entryId: '', name: '', ns: partExportNs(part.partId), part }],
+    projectName,
+    catalog,
+  );
+  const entry = content.perPart[0];
 
   const bundle = await buildCustomBundle(
-    expandedPart,
+    entry.part,
     content.base,
     kittenTex,
-    content.variants,
-    insetIds,
+    entry.variants,
+    entry.insetIds,
   );
 
   const taken = new Set((await listFileNames(modDir)).map((n) => n.toLowerCase()));

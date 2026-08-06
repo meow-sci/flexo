@@ -7,8 +7,7 @@ import { $catalogIndex } from './catalogStore';
 import { $kittenTextureExport, $modelImportSettings } from './settingsStore';
 import {
   buildCustomBundle,
-  buildModContent,
-  expandGlassGlow,
+  buildMultiModContent,
   partExportNs,
   type NamedExportPart,
 } from '../ksa/modExport';
@@ -27,8 +26,8 @@ import type { partsForExport } from './partsStore';
  * This store closes both holes:
  *
  * - **Lazy per tab.** Nothing is built until a tab is FOCUSED. Part and GameData come from
- *   one cheap synchronous `buildModContent`; Assets runs the async bundle builder and only
- *   ever on the Assets tab.
+ *   one cheap synchronous `buildMultiModContent`; Assets runs the async bundle builder and
+ *   only ever on the Assets tab.
  * - **Memoized by an input stamp** — `(part, projectName, catalog, kittenTextureExport,
  *   decimateViewMeshes)`, compared by IDENTITY (every one of those is an immutable value
  *   replaced on change), so re-focusing a tab is free.
@@ -40,9 +39,8 @@ import type { partsForExport } from './partsStore';
  *   signal at each per-asset boundary, so the encode chain stops.
  *
  * **The single-source invariant is untouched** (census: export §5 invariant 1): the preview
- * runs `expandGlassGlow` → `buildModContent` / `buildCustomBundle`, the exact path
- * `writeModToFolder` and `buildModZip` run, so previewed bytes and shipped bytes are the
- * same bytes.
+ * runs `buildMultiModContent` / `buildCustomBundle`, the exact path `writeModToFolder` and
+ * `buildModZip` run, so previewed bytes and shipped bytes are the same bytes.
  *
  * **Layering (constitution)**: zero react / three imports. **Undo enrollment: NONE** —
  * read-only over the document.
@@ -128,10 +126,20 @@ export function currentStamp(): string {
 /** The in-flight Assets build, so a newer one (or a close) can abort it. */
 let assetsController: AbortController | null = null;
 
-/** Builds Part + GameData XML synchronously — one `buildModContent` produces both. */
+/**
+ * The parts this preview builds. **P3.08 replaces this with
+ * `toNamedExportParts(partsForExport())`** — until then the preview shows the ACTIVE part
+ * only, exactly as it did before parts existed. `expandGlassGlow` is no longer called here:
+ * `buildMultiModContent` owns it (P3.04), so calling it again would double the glow layer.
+ */
+function previewParts(): NamedExportPart[] {
+  const part = $part.get();
+  return [{ entryId: '', name: '', ns: partExportNs(part.partId), part }];
+}
+
+/** Builds Part + GameData XML synchronously — one `buildMultiModContent` produces both. */
 function buildXmlTabs(stamp: string): void {
-  const { part: expandedPart } = expandGlassGlow($part.get());
-  const content = buildModContent(expandedPart, $projectName.get(), $catalogIndex.get());
+  const content = buildMultiModContent(previewParts(), $projectName.get(), $catalogIndex.get());
   $exportPreview.setKey('part', { stamp, xml: content.partXml });
   $exportPreview.setKey('gamedata', { stamp, xml: content.gameDataXml });
 }
@@ -149,14 +157,15 @@ async function buildAssets(stamp: string): Promise<void> {
     builtAt: previous?.builtAt ?? 0,
   });
   try {
-    const { part: expandedPart, insetIds } = expandGlassGlow($part.get());
-    const content = buildModContent(expandedPart, $projectName.get(), $catalogIndex.get());
+    // P3.08 swaps this for `buildMultiCustomBundle(content, …)`, which loops every entry.
+    const content = buildMultiModContent(previewParts(), $projectName.get(), $catalogIndex.get());
+    const entry = content.perPart[0];
     const bundle = await buildCustomBundle(
-      expandedPart,
+      entry.part,
       content.base,
       $kittenTextureExport.get(),
-      content.variants,
-      insetIds,
+      entry.variants,
+      entry.insetIds,
       { signal: controller.signal },
     );
     // A build that lost the race (aborted, or superseded by a newer one) discards its

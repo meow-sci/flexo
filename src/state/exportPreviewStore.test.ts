@@ -13,16 +13,24 @@ let bundleCalls = 0;
 let releaseBundle: ((xml: string | null) => void) | null = null;
 
 vi.mock('../ksa/modExport', () => ({
-  expandGlassGlow: (part: unknown) => ({ part, insetIds: new Set<string>() }),
-  buildModContent: () => {
+  partExportNs: (partId: string) => partId,
+  buildMultiModContent: (parts: Array<{ part: unknown }>) => {
     contentCalls += 1;
     return {
       base: 'Mod',
-      variants: new Map(),
       partFile: 'ModPart.xml',
       partXml: `<Part n="${contentCalls}"/>`,
       gameDataFile: 'ModGameData.xml',
       gameDataXml: `<GameData n="${contentCalls}"/>`,
+      perPart: parts.map(({ part }) => ({
+        entryId: '',
+        name: '',
+        ns: '',
+        part,
+        variants: new Map(),
+        remap: new Map(),
+        insetIds: new Set<string>(),
+      })),
     };
   },
   buildCustomBundle: (

@@ -52,8 +52,15 @@ import { animGlbPath, animModuleId, isAnimationExportable } from './animationNam
  * The <Part> emits SubPart placements and Connector transforms (+ <Flags>).
  * Editor tags and all other GameData (display name, mass, tanks, power,
  * coupling) live on the separate <PartGameData> document — see
- * {@link serializeGameData}. (Connector <Flags> are emitted in BOTH documents,
+ * {@link serializeGameDataXml}. (Connector <Flags> are emitted in BOTH documents,
  * matching space-tape's serializers.)
+ *
+ * Both entry points take a LIST of parts and emit ONE `<Assets>` document
+ * (MULTI_PART_PLAN P3.03): an Assets file is a flat polymorphic list
+ * (`KSA/AssetBundle.cs` — `[XmlRoot("Assets")]` over `List<SerializedId>`), so N
+ * `<Part>` / `<PartGameData>` siblings in one file are first-class. Entry order is
+ * file order, and a single-entry call emits exactly the document flexo emitted
+ * before a project could hold more than one part (invariant I8).
  */
 
 const EPSILON = 1e-9;
@@ -103,23 +110,31 @@ function appendConnectorTokens(doc: XmlDocument, el: XmlElement, connector: Conn
  */
 export type TemplateRemap = ReadonlyMap<string, string>;
 
-const NO_REMAP: TemplateRemap = new Map();
-
-export function serializePart(part: EditingPart, templateRemap: TemplateRemap = NO_REMAP): string {
+/**
+ * Serializes N parts into ONE `<Assets>` document — the mod's shared `<Base>Part.xml`.
+ * Each entry contributes one `<Part>` element (its SubPart placements, then its
+ * connectors), in entry order.
+ */
+export function serializePartsXml(
+  entries: Array<{ part: EditingPart; remap: TemplateRemap }>,
+): string {
   const doc = new DOMImplementation().createDocument(null, 'Assets', null);
   const assets = doc.documentElement!; // 'Assets' root, created above
-  const partEl = doc.createElement('Part');
-  partEl.setAttribute('Id', part.partId);
 
-  for (const placement of part.placements) {
-    partEl.appendChild(buildSubPartElement(doc, placement, templateRemap));
+  for (const { part, remap } of entries) {
+    const partEl = doc.createElement('Part');
+    partEl.setAttribute('Id', part.partId);
+
+    for (const placement of part.placements) {
+      partEl.appendChild(buildSubPartElement(doc, placement, remap));
+    }
+
+    for (const connector of part.connectors) {
+      partEl.appendChild(buildConnectorElement(doc, connector));
+    }
+
+    assets.appendChild(partEl);
   }
-
-  for (const connector of part.connectors) {
-    partEl.appendChild(buildConnectorElement(doc, connector));
-  }
-
-  assets.appendChild(partEl);
 
   const body = new XMLSerializer().serializeToString(doc);
   return '<?xml version="1.0" encoding="utf-8"?>\n' + prettyXml(body) + '\n';
@@ -132,14 +147,63 @@ export function serializePart(part: EditingPart, templateRemap: TemplateRemap = 
  * tanks, batteries/generators/power-consumers, every connector's id (with
  * <Flags> only when set), and the optional decoupler/docking-port/EVA-door.
  * Each piece is omitted entirely when empty/default.
+ *
+ * One `<Assets>` document for N parts: per entry a `<PartGameData>` followed by that
+ * part's `<SubPartGameData>` blocks, then every part's `<FixedReaction>`s once each
+ * at the end (hoisted so two parts sharing a propellant declare it once —
+ * MULTI_PART_PLAN P3.05). `base` feeds the animation module ids and is shared by the
+ * whole file, exactly as it names the file itself.
  */
-export function serializeGameData(
-  part: EditingPart,
-  base = '',
-  templateRemap: TemplateRemap = NO_REMAP,
+export function serializeGameDataXml(
+  entries: Array<{ part: EditingPart; remap: TemplateRemap }>,
+  base: string,
 ): string {
   const doc = new DOMImplementation().createDocument(null, 'Assets', null);
   const assets = doc.documentElement!;
+
+  for (const { part, remap: templateRemap } of entries) {
+    appendPartGameData(doc, assets, part, base, templateRemap);
+  }
+
+  // User-authored propellants — top-level <FixedReaction> siblings of <PartGameData>
+  // (KSA registers them by Id; a combustor's <Reaction Id> resolves to one). Emitted ONCE
+  // per id across the whole file: two parts may legitimately carry the same reaction (a
+  // duplicated part, a shared custom propellant), and KSA registers by id — a second
+  // declaration is at best redundant. Divergent payloads under one id are a preflight
+  // blocker (collectProjectExportIssues), so plain first-wins is safe and deterministic
+  // by entry order.
+  const emittedReactions = new Set<string>();
+  for (const { part } of entries) {
+    for (const reaction of part.customReactions) {
+      if (emittedReactions.has(reaction.id)) continue;
+      // A Category="Solid" reaction missing its burn-rate law / pressure limits makes
+      // FixedReactionTemplate.Create() THROW, failing the whole mod load — never emit one.
+      if (!isCustomReactionExportable(reaction)) {
+        console.warn(
+          `flexo export: skipping solid reaction "${reaction.id}" — KSA refuses to load a ` +
+            `Category="Solid" FixedReaction without a valid <BurnRate> (a > 0, 0 <= n < 0.95), ` +
+            `<MinimumBurnPressure> (> 0), <MaxStablePressure> (> the minimum) and ` +
+            `<ExhaustCondensedFraction> (in [0, 1)).`,
+        );
+        continue;
+      }
+      emittedReactions.add(reaction.id);
+      assets.appendChild(buildFixedReactionElement(doc, reaction));
+    }
+  }
+
+  const body = new XMLSerializer().serializeToString(doc);
+  return '<?xml version="1.0" encoding="utf-8"?>\n' + prettyXml(body) + '\n';
+}
+
+/** Appends one part's `<PartGameData>` + its `<SubPartGameData>` blocks to `assets`. */
+function appendPartGameData(
+  doc: XmlDocument,
+  assets: XmlElement,
+  part: EditingPart,
+  base: string,
+  templateRemap: TemplateRemap,
+): void {
   const gd = doc.createElement('PartGameData');
   gd.setAttribute('Id', part.partId);
   const game: PartGameData = part.gameData;
@@ -300,23 +364,6 @@ export function serializeGameData(
 
   assets.appendChild(gd);
 
-  // User-authored propellants — top-level <FixedReaction> siblings of <PartGameData>
-  // (KSA registers them by Id; a combustor's <Reaction Id> resolves to one).
-  for (const reaction of part.customReactions) {
-    // A Category="Solid" reaction missing its burn-rate law / pressure limits makes
-    // FixedReactionTemplate.Create() THROW, failing the whole mod load — never emit one.
-    if (!isCustomReactionExportable(reaction)) {
-      console.warn(
-        `flexo export: skipping solid reaction "${reaction.id}" — KSA refuses to load a ` +
-          `Category="Solid" FixedReaction without a valid <BurnRate> (a > 0, 0 <= n < 0.95), ` +
-          `<MinimumBurnPressure> (> 0), <MaxStablePressure> (> the minimum) and ` +
-          `<ExhaustCondensedFraction> (in [0, 1)).`,
-      );
-      continue;
-    }
-    assets.appendChild(buildFixedReactionElement(doc, reaction));
-  }
-
   // SubPart-owned colliders and lights travel with the template, so they are emitted INTO
   // that template's <SubPartGameData> block (which templateRemap already routes onto the
   // export variant id). An owner with colliders/lights but no other GameData still needs a
@@ -376,9 +423,6 @@ export function serializeGameData(
     if (owned.length > 0) spdEl.appendChild(buildColliderElement(doc, owned));
     assets.appendChild(spdEl);
   }
-
-  const body = new XMLSerializer().serializeToString(doc);
-  return '<?xml version="1.0" encoding="utf-8"?>\n' + prettyXml(body) + '\n';
 }
 
 /**

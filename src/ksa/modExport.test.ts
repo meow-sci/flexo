@@ -76,17 +76,41 @@ vi.mock('../three/importedMeshCache', () => ({
 import {
   buildCustomBundle,
   buildExportVariantMap,
-  buildModContent,
   buildModZip,
+  buildMultiModContent,
   expandGlassGlow,
+  partExportNs,
   sanitizeBaseName,
   serializeModToml,
   uniqueFileName,
 } from './modExport';
-import { serializeGameData, serializePart } from './partXmlSerializer';
+import { serializeGameDataXml, serializePartsXml, type TemplateRemap } from './partXmlSerializer';
 import { serializeAssets } from './assetsXmlSerializer';
 import type { CatalogSubPart } from './catalog';
 import { animGlbPath } from './animationNaming';
+
+/**
+ * Single-part calls through the multi-part builders (MULTI_PART_PLAN P3.03/P3.04). They pin
+ * invariant I8 — **single-part parity** — so every assertion below is unchanged from the
+ * single-part era apart from the `ns` segment the variant ids gained (P3.04, accepted churn).
+ * `ns` is derived from the part's own KSA id exactly as `toNamedExportParts` mints it.
+ */
+const serializePart = (part: EditingPart, remap: TemplateRemap = new Map()) =>
+  serializePartsXml([{ part, remap }]);
+const serializeGameData = (part: EditingPart, base = '', remap: TemplateRemap = new Map()) =>
+  serializeGameDataXml([{ part, remap }], base);
+function buildModContent(
+  part: EditingPart,
+  projectName: string,
+  catalog: ReadonlyMap<string, CatalogSubPart> = new Map(),
+) {
+  const content = buildMultiModContent(
+    [{ entryId: 'pt_test', name: 'Part 1', ns: partExportNs(part.partId), part }],
+    projectName,
+    catalog,
+  );
+  return { ...content, variants: content.perPart[0].variants };
+}
 
 describe('sanitizeBaseName', () => {
   it('strips spaces and punctuation', () => {
@@ -363,13 +387,21 @@ function partWithBuiltinLight(): EditingPart {
   return part;
 }
 
+/** `partWithBuiltinLight()`'s namespace token — `sanitizeBaseName('fixme_part_id')`. */
+const LIGHT_NS = 'fixmepartid';
+
 describe('built-in SubPart GameData export variants (never redefine the built-in)', () => {
-  const VID = `flexo_MyLight_${SPOTLIGHT}`;
+  // flexo_<base>_<ns>_<templateId>: the `ns` segment is what stops two parts of one project
+  // from minting the same variant id for a template they both place (MULTI_PART_PLAN P3.04).
+  const VID = `flexo_MyLight_${LIGHT_NS}_${SPOTLIGHT}`;
 
   it('creates a variant for a placed built-in SubPart carrying GameData, reusing built-in mesh/material', () => {
-    const v = buildExportVariantMap(partWithBuiltinLight(), lightCatalog(), 'MyLight').get(
-      SPOTLIGHT,
-    )!;
+    const v = buildExportVariantMap(
+      partWithBuiltinLight(),
+      lightCatalog(),
+      'MyLight',
+      LIGHT_NS,
+    ).get(SPOTLIGHT)!;
     expect(v.variantId).toBe(VID); // one naming rule for every variant
     expect(v.meshId).toBe(SPOTLIGHT);
     expect(v.materialId).toBe('CoreElectricalA_Material');
@@ -383,7 +415,9 @@ describe('built-in SubPart GameData export variants (never redefine the built-in
       ...identityTransform(),
       layerId: 'default',
     });
-    expect(buildExportVariantMap(part, lightCatalog(), 'X').size).toBe(0);
+    expect(buildExportVariantMap(part, lightCatalog(), 'X', partExportNs(part.partId)).size).toBe(
+      0,
+    );
   });
 
   it('Part + GameData XML reference the variant id, never the built-in id', () => {
@@ -486,12 +520,18 @@ describe('custom-mesh SubParts never get an export variant', () => {
     const part = partWithCustomMeshGameData();
     // Guard the precondition that made the old catalog-membership test useless.
     expect(mergedCatalogWithCustomRod().has(CUSTOM_ROD)).toBe(true);
-    expect(buildExportVariantMap(part, mergedCatalogWithCustomRod(), 'Rod').size).toBe(0);
+    expect(
+      buildExportVariantMap(part, mergedCatalogWithCustomRod(), 'Rod', partExportNs(part.partId))
+        .size,
+    ).toBe(0);
   });
 
   it('mints no variant for a custom mesh carrying a SubPart-owned collider', () => {
     const part = partWithCustomMeshGameData(true);
-    expect(buildExportVariantMap(part, mergedCatalogWithCustomRod(), 'Rod').size).toBe(0);
+    expect(
+      buildExportVariantMap(part, mergedCatalogWithCustomRod(), 'Rod', partExportNs(part.partId))
+        .size,
+    ).toBe(0);
   });
 
   // Pins the RULE, not just its crash symptom: even if a custom catalog entry gained a
@@ -500,7 +540,8 @@ describe('custom-mesh SubParts never get an export variant', () => {
   it('mints no variant even when the custom catalog entry does carry a materialId', () => {
     const catalog = mergedCatalogWithCustomRod();
     catalog.set(CUSTOM_ROD, { ...catalog.get(CUSTOM_ROD)!, materialId: `${CUSTOM_ROD}_Material` });
-    expect(buildExportVariantMap(partWithCustomMeshGameData(), catalog, 'Rod').size).toBe(0);
+    const part = partWithCustomMeshGameData();
+    expect(buildExportVariantMap(part, catalog, 'Rod', partExportNs(part.partId)).size).toBe(0);
   });
 
   it('the Part places the custom SubPart id and its GameData hangs off the SAME id', () => {
@@ -605,7 +646,9 @@ function ivaCatalog(): Map<string, CatalogSubPart> {
 const CHAIR = 'CoreIVAPropA_Subpart_ChairA';
 const RAY_BLOCKER = 'CoreIVASpaceA_Subpart_MediumCapsuleARayBlocker';
 const WINDOW = 'CoreCommandA_Subpart_MediumCapsuleWindowA';
-const CHAIR_VARIANT = `flexo_MyShip_${CHAIR}`;
+// flexo_<base>_<ns>_<templateId> — base "MyShip" (the project) and ns "MyShip" (the part's
+// own KSA id, which these fixtures also set to 'MyShip').
+const CHAIR_VARIANT = `flexo_MyShip_MyShip_${CHAIR}`;
 
 function partWithIvaAndCore(): EditingPart {
   const part = createEmptyPart();
@@ -631,14 +674,16 @@ describe('<Internal> (interior-only) export variants', () => {
   it('leaves an untouched interior prop ALONE — no variant, so it keeps the built-in <Internal>', () => {
     // The whole point of Phase 0: flexo mirrors the game's own data unless the user says otherwise.
     const part = partWithIvaAndCore();
-    expect(buildExportVariantMap(part, ivaCatalog(), 'MyShip').size).toBe(0);
+    expect(
+      buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId)).size,
+    ).toBe(0);
     expect(serializePart(part, new Map())).toContain(`InstanceOf="${CHAIR}"`);
   });
 
   it('flagging an interior prop exterior mints a variant with no <Internal>', () => {
     const part = partWithIvaAndCore();
     part.internalFlags[CHAIR] = false;
-    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip');
+    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId));
     expect(variants.size).toBe(1); // the plain structural SubPart is untouched
     const v = variants.get(CHAIR)!;
     expect(v.variantId).toBe(CHAIR_VARIANT); // one naming rule for every variant
@@ -652,14 +697,18 @@ describe('<Internal> (interior-only) export variants', () => {
     const part = partWithIvaAndCore();
     part.internalFlags[CHAIR] = true; // already Internal in the catalog
     part.internalFlags['CoreStructuralA_Subpart_X'] = false; // already non-Internal
-    expect(buildExportVariantMap(part, ivaCatalog(), 'MyShip').size).toBe(0);
+    expect(
+      buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId)).size,
+    ).toBe(0);
   });
 
   it('flagging a plain built-in interior mints a variant that DOES carry <Internal>', () => {
     const part = partWithIvaAndCore();
     part.internalFlags['CoreStructuralA_Subpart_X'] = true;
-    const v = buildExportVariantMap(part, ivaCatalog(), 'MyShip').get('CoreStructuralA_Subpart_X')!;
-    expect(v.variantId).toBe('flexo_MyShip_CoreStructuralA_Subpart_X');
+    const v = buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId)).get(
+      'CoreStructuralA_Subpart_X',
+    )!;
+    expect(v.variantId).toBe('flexo_MyShip_MyShip_CoreStructuralA_Subpart_X');
     expect(v.internal).toBe(true);
   });
 
@@ -668,7 +717,7 @@ describe('<Internal> (interior-only) export variants', () => {
     // the shared built-in template — so the interior-only behaviour must survive the redeclaration.
     const part = partWithIvaAndCore();
     part.lights.push(createPartLight(CHAIR, '_light1'));
-    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip');
+    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId));
     expect(variants.get(CHAIR)!.internal).toBe(true);
     const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants);
     expect(bundle.assetsXml).toContain('<Internal>true</Internal>');
@@ -683,7 +732,9 @@ describe('<Internal> (interior-only) export variants', () => {
       ...identityTransform(),
       layerId: 'default',
     });
-    expect(buildExportVariantMap(part, ivaCatalog(), 'MyShip').size).toBe(1);
+    expect(
+      buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId)).size,
+    ).toBe(1);
   });
 
   it('produces no variants for a part that flags nothing', () => {
@@ -694,13 +745,13 @@ describe('<Internal> (interior-only) export variants', () => {
       ...identityTransform(),
       layerId: 'default',
     });
-    expect(buildExportVariantMap(part, ivaCatalog(), 'P').size).toBe(0);
+    expect(buildExportVariantMap(part, ivaCatalog(), 'P', partExportNs(part.partId)).size).toBe(0);
   });
 
   it('Part XML points flagged placements at the variant, normal placements unchanged', () => {
     const part = partWithIvaAndCore();
     part.internalFlags[CHAIR] = false;
-    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip');
+    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId));
     const remap = new Map([...variants.values()].map((v) => [v.originalId, v.variantId]));
     const xml = serializePart(part, remap);
     expect(xml).toContain(`InstanceOf="${CHAIR_VARIANT}"`);
@@ -711,7 +762,7 @@ describe('<Internal> (interior-only) export variants', () => {
   it('Assets XML declares the exterior-override variant (no Internal) even with no custom meshes', async () => {
     const part = partWithIvaAndCore();
     part.internalFlags[CHAIR] = false;
-    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip');
+    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId));
     const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants);
     expect(bundle.assetsFile).toBe('MyShipAssets.xml');
     expect(bundle.assetsXml).toContain(`<SubPart Id="${CHAIR_VARIANT}"`);
@@ -734,7 +785,7 @@ describe('<Internal> (interior-only) export variants', () => {
       layerId: 'default',
     });
     part.internalFlags[RAY_BLOCKER] = false; // any reason to redeclare will do
-    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip');
+    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId));
     expect(variants.get(RAY_BLOCKER)!.rayTracing).toBe('ShadowProxy');
     const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants);
     expect(bundle.assetsXml).toContain('<RayTracing>ShadowProxy</RayTracing>');
@@ -750,7 +801,7 @@ describe('<Internal> (interior-only) export variants', () => {
       layerId: 'default',
     });
     part.internalFlags[WINDOW] = true; // any reason to redeclare will do
-    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip');
+    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId));
     expect(variants.get(WINDOW)!.shadowCaster).toBe(false);
     const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants);
     // Dropping it would default the field back to KSA's `true` and start casting shadows.
@@ -760,7 +811,7 @@ describe('<Internal> (interior-only) export variants', () => {
   it('emits no <ShadowCaster> for a variant whose built-in authors none', async () => {
     const part = partWithIvaAndCore();
     part.internalFlags[CHAIR] = false;
-    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip');
+    const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId));
     expect(variants.get(CHAIR)!.shadowCaster).toBeNull();
     const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants);
     expect(bundle.assetsXml).not.toContain('ShadowCaster');
@@ -777,7 +828,9 @@ describe('<Internal> (interior-only) export variants', () => {
       ...identityTransform(),
       layerId: 'default',
     });
-    expect(buildExportVariantMap(part, ivaCatalog(), 'MyShip').size).toBe(0);
+    expect(
+      buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId)).size,
+    ).toBe(0);
   });
 
   it('end-to-end: buildModZip threads the catalog into both Part and Assets XML', async () => {
@@ -1155,7 +1208,9 @@ describe('custom-mesh <Internal> (interior-only)', () => {
     const part = partWithMaterialMeshes();
     part.internalFlags['flexo_button_a'] = true;
     // A custom mesh is absent from the catalog — flexo declares it itself, so it never needs one.
-    expect(buildExportVariantMap(part, ivaCatalog(), 'ButtonMod').size).toBe(0);
+    expect(
+      buildExportVariantMap(part, ivaCatalog(), 'ButtonMod', partExportNs(part.partId)).size,
+    ).toBe(0);
     const xml = (await buildCustomBundle(part, 'ButtonMod')).assetsXml!;
     expect(xml.match(/<Internal>true<\/Internal>/g)).toHaveLength(1);
     expect(subPartXml(xml, 'flexo_button_a')).toContain('<Internal>true</Internal>');
@@ -1364,7 +1419,9 @@ describe('export variants carry the built-in template’s own colliders forward'
     });
     // Without this, the collider would be emitted under the SHARED built-in id and merge
     // onto every other use of that SubPart in the game.
-    expect(buildExportVariantMap(part, lightCatalog(), 'X').size).toBe(0);
+    expect(buildExportVariantMap(part, lightCatalog(), 'X', partExportNs(part.partId)).size).toBe(
+      0,
+    );
     part.colliders.push({
       id: '_collider1',
       shape: 'Cylinder',
@@ -1372,31 +1429,38 @@ describe('export variants carry the built-in template’s own colliders forward'
       ...identityTransform(),
       layerId: DEFAULT_LAYER_ID,
     });
-    expect(buildExportVariantMap(part, lightCatalog(), 'X').size).toBe(1);
+    expect(buildExportVariantMap(part, lightCatalog(), 'X', partExportNs(part.partId)).size).toBe(
+      1,
+    );
   });
 
   it('copies the built-in geometry collider onto the variant (a variant inherits nothing else)', () => {
-    const v = buildExportVariantMap(partWithBuiltinLight(), catalogWithCollider(), 'MyLight').get(
-      SPOTLIGHT,
-    )!;
+    const v = buildExportVariantMap(
+      partWithBuiltinLight(),
+      catalogWithCollider(),
+      'MyLight',
+      LIGHT_NS,
+    ).get(SPOTLIGHT)!;
     expect(v.colliders).toEqual([BUILT_IN_BOX]);
   });
 
   it('declares them on the variant <SubPart> in the Assets XML, under a distinct component id', () => {
-    const xml = serializeAssets({
-      subParts: [],
-      referenceSubParts: [
-        {
-          subPartId: 'flexo_X_Variant',
-          meshId: SPOTLIGHT,
-          materialId: `${SPOTLIGHT}_Material`,
-          colliders: [BUILT_IN_BOX],
-          internal: false,
-          rayTracing: null,
-          shadowCaster: null,
-        },
-      ],
-    });
+    const xml = serializeAssets([
+      {
+        subParts: [],
+        referenceSubParts: [
+          {
+            subPartId: 'flexo_X_Variant',
+            meshId: SPOTLIGHT,
+            materialId: `${SPOTLIGHT}_Material`,
+            colliders: [BUILT_IN_BOX],
+            internal: false,
+            rayTracing: null,
+            shadowCaster: null,
+          },
+        ],
+      },
+    ]);
     expect(xml).toContain('<Collider Id="flexoInheritedColliders">');
     expect(xml).toContain('<Box Id="BoxCollider1">');
     expect(xml).toContain('<LengthX Cm="79.467"/>'); // sub-metre distances emit as Cm

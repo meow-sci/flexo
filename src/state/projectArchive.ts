@@ -15,6 +15,7 @@ import {
   type ProjectCounts,
   type ProjectId,
 } from './projectDb';
+import { randomId } from './ids';
 import { gunzip, gzip, gzipSupported, tarPack, tarUnpack } from './tarArchive';
 import {
   buildProjectExport,
@@ -368,9 +369,13 @@ export async function parseProjectArchive(
 
 // ── import ───────────────────────────────────────────────────────────────────
 
-/** A fresh 8-char token, matching `customAssetStore.shortId`'s shape. */
+/**
+ * A fresh 8-char token, matching `customAssetStore.shortId`'s shape. `randomId` rather than
+ * `crypto.randomUUID` — the latter is undefined outside a secure context (see ids.ts), which a
+ * phone on a plain-HTTP LAN URL hits.
+ */
 function shortId(): string {
-  return crypto.randomUUID().replace(/-/g, '').slice(0, 8);
+  return randomId().replace(/-/g, '').slice(0, 8);
 }
 
 function tableEntry(assets: AssetTable, kind: AssetKind, id: string): ArchiveAssetEntry | null {

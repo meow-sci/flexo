@@ -422,7 +422,12 @@ export async function duplicatePart(id: string): Promise<string | null> {
   // entry whose parked document is already gone (`snapshotParts()` would spread `undefined`).
   const entries = $partEntries.get();
   const index = entries.findIndex((entry) => entry.id === id);
-  if (index === -1) return null;
+  // Bailing here means the clone's re-minted blobs are already written but will never be
+  // registered to a part, and nothing else reclaims them (no orphan GC), so sweep them now.
+  if (index === -1) {
+    await assetSweeper?.(cloned);
+    return null;
+  }
   const source = entries[index];
 
   const newId = newPartEntryId();

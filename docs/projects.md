@@ -346,16 +346,21 @@ a share link passes `binaryAssets: null`, which is v1's drop-smuggled-meshes rul
 ## The compact project codec
 
 `src/state/projectCodec.ts` is the wire format for the project export/import JSON and the share
-link. It encodes `EditingPart` into short keys (`p` placements, `c` connectors, `cl` colliders,
-`iv` IVA seats, `ifl` the per-SubPart-template `<Internal>` flags, `k` kittens, `a` animations,
-`m` custom meshes, …), omitting anything empty or at its default. (The stored snapshot is plain
-structured-cloneable data in IndexedDB and does not go through the codec.)
+link. It encodes the project's every part into short keys — `pts` the part array in registry
+order and `ap` the active part's index, with `nm` (name), `ie` (include-in-export) and `vw`
+(the view row: visibility, opacity, offset) per entry around that part's own document (`p`
+placements, `c` connectors, `cl` colliders, `iv` IVA seats, `ifl` the per-SubPart-template
+`<Internal>` flags, `k` kittens, `a` animations, `m` custom meshes, …) — omitting anything
+empty or at its default. (The stored snapshot is plain structured-cloneable data in IndexedDB
+and does not go through the codec.)
 
-`PROJECT_EXPORT_VERSION` is currently **11** (`<Light>` layer id: `CLight.ly` — optional,
-absent meaning the old pinned Lights layer — became a **required** `CLight.l` naming ANY
-ordinary layer, now that lights are ordinary layer citizens like connectors and colliders; a
-v9 payload's lights would decode onto a layer id that no longer carries that meaning). The
-bump before that was v9, per-channel keyframe easing: `CKeyframe.es` values changed shape from
+`PROJECT_EXPORT_VERSION` is currently **11** (multi-part: `pts: CompactPartEntry[]` with
+`nm`/`pid`/`ie`/`vw`, `ap` = the active part's index, and the per-part keys moved off the
+root). The bump before that was v10, the `<Light>` layer id: `CLight.ly` — optional, absent
+meaning the old pinned Lights layer — became a **required** `CLight.l` naming ANY ordinary
+layer, now that lights are ordinary layer citizens like connectors and colliders; a v9
+payload's lights would decode onto a layer id that no longer carries that meaning. Before that
+was v9, per-channel keyframe easing: `CKeyframe.es` values changed shape from
 one `CEasing` to `{p?, r?, s?}`, plus the additive `CAnimation.cs` CubicSpline-approximated
 import flag. Import accepts **exactly** the current version — older payloads are
 rejected, never converted — and that mechanic is unchanged. What changed is the **bump

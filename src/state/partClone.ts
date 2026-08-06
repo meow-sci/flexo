@@ -127,6 +127,8 @@ export async function clonePartWithFreshAssets(
   // `subPartInstanceId` companions are placement instance ids, which stay put under I3.
 
   // ── the binaries ───────────────────────────────────────────────────────────
+  // The `mesh-glb` tier is deliberately NOT copied: no primitive GLB is ever stored, so the
+  // tier is reserved-but-unwritten (see `projectTransfer.ts`'s `meshBacking` note).
   for (const [oldId, newId] of textureIds) {
     await copyBlob(
       assetKeys.textureSource(projectId, oldId),

@@ -1,7 +1,8 @@
 import { atom, computed } from 'nanostores';
-import { createEmptyPart } from '../ksa/types';
+import { createEmptyPart, DEFAULT_LAYER_ID } from '../ksa/types';
 import type { EditingPart, Vec3 } from '../ksa/types';
-import { $activeLayerId, $part } from './editorStore';
+import { closeChain } from './chainStore';
+import { $activeLayerId, $part, clearSelection, exportHistory, importHistory } from './editorStore';
 import type { HistorySnapshot } from './editorStore';
 import { $layerView } from './layerStore';
 import type { LayerViewState } from './layerStore';
@@ -73,6 +74,19 @@ export const $activePartMeta = computed(
 const inactiveDocs = new Map<string, InactivePartDoc>();
 /** Parked undo/redo per part. I2: single writer = this module. */
 const inactiveHistories = new Map<string, HistorySnapshot>();
+
+/** The injected custom-asset blob sweep — see {@link registerPartAssetSweeper}. */
+let assetSweeper: ((doc: EditingPart) => Promise<void>) | null = null;
+
+/**
+ * Wires the custom-asset blob sweep {@link deletePart} runs on the part it destroys. Call ONCE
+ * at app startup. The dependency is inverted through this one slot because `customAssetStore`
+ * imports THIS module (`snapshotParts`), so importing it back would be a cycle — the same
+ * pattern, and the same reason, as `registerEditorAidStores` in `editorStore.ts`.
+ */
+export function registerPartAssetSweeper(fn: (doc: EditingPart) => Promise<void>): void {
+  assetSweeper = fn;
+}
 
 /**
  * Mints a part entry id: `pt_` + 10 random base36 characters. Editor-only and stable for the
@@ -188,4 +202,205 @@ export function initPartsForNewProject(): void {
   ]);
   $activePartId.set(id);
   bumpInactiveRevision();
+}
+
+// ── switching, CRUD and view state ───────────────────────────────────────────
+//
+// Every function below is lifecycle or view state, NEVER a document mutation: not one of them
+// calls `pushUndo` (I6). The two documents involved in a switch keep their own undo stacks,
+// which travel with them into and out of `inactiveHistories`.
+
+/** Immutably patches one entry. The single `$partEntries` write path for the setters below. */
+function updateEntry(id: string, patch: Partial<PartMetaEntry>): void {
+  $partEntries.set(
+    $partEntries.get().map((entry) => (entry.id === id ? { ...entry, ...patch } : entry)),
+  );
+}
+
+/** Re-derives one entry's chip counts from its document. Counts are meta, not persisted. */
+function refreshCounts(id: string, part: EditingPart): void {
+  updateEntry(id, { counts: deriveCounts(part) });
+}
+
+/** Parks the live active-part stores into the registry. Shared by switch / create / delete. */
+function parkActive(): void {
+  const activeId = $activePartId.get();
+  const part = $part.get();
+  inactiveDocs.set(activeId, {
+    part,
+    layerView: $layerView.get(),
+    activeLayerId: $activeLayerId.get(),
+  });
+  inactiveHistories.set(activeId, exportHistory());
+  refreshCounts(activeId, part);
+}
+
+/**
+ * Makes `id` the active part — a mini `applyProjectSnapshot` (`src/state/projectStore.ts`)
+ * minus the project-level state: park the outgoing document + history, hydrate the incoming
+ * one into the live stores. Returns false when `id` is already active or names no entry.
+ */
+export function switchPart(id: string): boolean {
+  if (id === $activePartId.get()) return false;
+  if (!$partEntries.get().some((entry) => entry.id === id)) return false;
+  parkActive();
+  const doc = inactiveDocs.get(id)!;
+  inactiveDocs.delete(id);
+  const history = inactiveHistories.get(id) ?? { undo: [], redo: [] };
+  inactiveHistories.delete(id);
+  $activePartId.set(id);
+  importHistory(history);
+  // The cascade: this one write reconciles the scene and re-clamps every mode sub-store,
+  // exactly as opening a project does.
+  $part.set(doc.part);
+  $activeLayerId.set(
+    doc.part.layers.some((l) => l.id === doc.activeLayerId) ? doc.activeLayerId : DEFAULT_LAYER_ID,
+  );
+  $layerView.set(doc.layerView);
+  clearSelection();
+  // An open action chain is seeded by instanceIds of the OUTGOING document, so it is
+  // meaningless here — same contract as a project load.
+  closeChain();
+  bumpInactiveRevision();
+  // Deliberate NON-actions, each one load-bearing:
+  // - No `pushUndo` — the part registry is never undoable (I6).
+  // - No `resetModeForProjectLoad()` — the mode survives a part switch BY DESIGN. Every mode
+  //   sub-store self-clamps on the `$part.set` above (`dataModeStore.ts:114-121`,
+  //   `animationStore.ts:1544-1598`, `surfaceModeStore.ts:199`, engine computeds), so the
+  //   editor's posture belongs to the session, not to the incoming part.
+  // - No camera touch — the viewport frame is the shared workspace, not part state.
+  // - No autosave suspension — every write above is synchronous, so the 300 ms / 1500 ms
+  //   debounced writers (`projectStore.ts`) only ever observe the final, consistent state.
+  return true;
+}
+
+/**
+ * Creates an empty part, makes it active, and returns its entry id. NO user feedback here:
+ * partsStore never imports `src/ui` — the command layer owns every toast.
+ */
+export function createPart(name?: string): string {
+  parkActive();
+  const id = newPartEntryId();
+  const part = createEmptyPart();
+  // Active id first: every entry published to $partEntries must already have a parked doc or be
+  // the active one, or a subscriber could see an entry snapshotParts() has no document for.
+  $activePartId.set(id);
+  $partEntries.set([
+    ...$partEntries.get(),
+    {
+      id,
+      name: uniquePartName(name),
+      visible: true,
+      opacity: 1,
+      offset: { x: 0, y: 0, z: 0 },
+      includeInExport: true,
+      counts: deriveCounts(part),
+    },
+  ]);
+  $activePartId.set(id);
+  importHistory({ undo: [], redo: [] });
+  $part.set(part);
+  $activeLayerId.set(DEFAULT_LAYER_ID);
+  $layerView.set({});
+  clearSelection();
+  closeChain();
+  bumpInactiveRevision();
+  return id;
+}
+
+/**
+ * Destroys a part, its parked history and its custom-asset blobs. Refuses when it would empty
+ * the project — the UI disables that control, but THIS guard is the authoritative one.
+ * Deleting the ACTIVE part switches to a neighbour first, so the doomed document is always
+ * parked by the time it is removed.
+ */
+export function deletePart(id: string): boolean {
+  const entries = $partEntries.get();
+  if (entries.length <= 1) return false;
+  const index = entries.findIndex((entry) => entry.id === id);
+  if (index === -1) return false;
+  // The fallback is the next entry, else the previous one — a switch parks the doomed doc.
+  if (id === $activePartId.get()) switchPart((entries[index + 1] ?? entries[index - 1]).id);
+  const doomed = inactiveDocs.get(id)!;
+  $partEntries.set($partEntries.get().filter((entry) => entry.id !== id));
+  inactiveDocs.delete(id);
+  inactiveHistories.delete(id);
+  bumpInactiveRevision();
+  // Fire-and-forget: the blob sweep is IndexedDB work with nothing to report, and the registry
+  // must not wait on it. I4 — asset ids are project-unique, so this part's assets are its own.
+  void assetSweeper?.(doomed.part);
+  return true;
+}
+
+/**
+ * Renames a part. An empty name keeps the current one; a taken name is auto-suffixed (" 2",
+ * " 3", …) so a rename can never collide with another entry — the same rule as `renameProject`
+ * (`src/state/projectIndexStore.ts`). Returns the name actually applied.
+ */
+export function renamePart(id: string, rawName: string): string {
+  const entries = $partEntries.get();
+  const current = entries.find((entry) => entry.id === id)!;
+  const trimmed = rawName.trim();
+  if (!trimmed) return current.name;
+  const taken = new Set(entries.filter((entry) => entry.id !== id).map((entry) => entry.name));
+  let applied = trimmed;
+  for (let n = 2; taken.has(applied); n++) applied = `${trimmed} ${n}`;
+  if (applied !== current.name) updateEntry(id, { name: applied });
+  return applied;
+}
+
+/**
+ * Moves a part one slot up (`-1`) or down (`1`) in the registry order — which is the dropdown
+ * order AND the order parts serialize in. A no-op at either end.
+ */
+export function movePart(id: string, dir: -1 | 1): void {
+  const entries = $partEntries.get();
+  const index = entries.findIndex((entry) => entry.id === id);
+  const target = index + dir;
+  if (index === -1 || target < 0 || target >= entries.length) return;
+  const next = [...entries];
+  next[index] = entries[target];
+  next[target] = entries[index];
+  $partEntries.set(next);
+}
+
+/** Ghost visibility while the part is inactive. View state (I6): never undo. */
+export function setPartVisible(id: string, visible: boolean): void {
+  updateEntry(id, { visible });
+}
+
+/** Ghost opacity, clamped to 0..1 (non-finite input falls back to fully opaque). View state (I6). */
+export function setPartOpacity(id: string, opacity: number): void {
+  const clamped = Number.isFinite(opacity) ? Math.min(1, Math.max(0, opacity)) : 1;
+  updateEntry(id, { opacity: clamped });
+}
+
+/**
+ * Workspace-only ghost offset in meters (D3 — never exported). A non-finite axis keeps its
+ * current value, so a half-typed number field can't wipe the offset. View state (I6).
+ */
+export function setPartOffset(id: string, offset: Vec3): void {
+  const current = $partEntries.get().find((entry) => entry.id === id)!.offset;
+  updateEntry(id, {
+    offset: {
+      x: Number.isFinite(offset.x) ? offset.x : current.x,
+      y: Number.isFinite(offset.y) ? offset.y : current.y,
+      z: Number.isFinite(offset.z) ? offset.z : current.z,
+    },
+  });
+}
+
+/** Whether Export to KSA emits this part (D4). View state (I6): never undo. */
+export function setPartIncludeInExport(id: string, includeInExport: boolean): void {
+  updateEntry(id, { includeInExport });
+}
+
+/**
+ * The included parts in registry order, with the entry id + display name each export builder
+ * needs to namespace and label them (I7). Excluded parts are invisible to export.
+ */
+export function partsForExport(): Array<{ entryId: string; name: string; part: EditingPart }> {
+  return snapshotParts()
+    .filter((entry) => entry.includeInExport)
+    .map((entry) => ({ entryId: entry.id, name: entry.name, part: entry.part }));
 }

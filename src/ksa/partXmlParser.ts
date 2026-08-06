@@ -6,7 +6,6 @@ import {
   DEFAULT_LAYER_ID,
   isSubPartGameDataEmpty,
   IVA_SEAT_LAYER_ID,
-  LIGHT_LAYER_ID,
 } from './types';
 import { SEAT_LOCAL_FORWARD, SEAT_LOCAL_UP, seatRotationFromAxes } from './ivaSeatAxes';
 import {
@@ -564,7 +563,9 @@ export function lightsFromElement(owner: Element, ownerTemplateId: string | null
     ...lightFromElement(el),
     id: `_light${i + 1}`,
     ownerTemplateId,
-    layerId: LIGHT_LAYER_ID,
+    // XML carries no layers: everything parsed lands on Default, exactly like the
+    // placements it sits with — an import then re-homes the whole Part.
+    layerId: DEFAULT_LAYER_ID,
   }));
 }
 

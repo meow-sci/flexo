@@ -58,7 +58,6 @@ import {
   IVA_SEAT_LAYER_ID,
   LAYER_COLORS,
   KITTEN_LAYER_ID,
-  LIGHT_LAYER_ID,
   createDefaultMaterial,
   createEmptyGameData,
   createSubPartGameData,
@@ -105,7 +104,10 @@ export const PROJECT_EXPORT_FORMAT = 'flexo-project';
 // {p?,r?,s?} (BREAKING: a v8 `es` value carries ONE easing meant for the whole pose, and
 // decoding it as a per-channel record would silently drop it to LINEAR motion), plus
 // additive CAnimation.cs (CubicSpline-approximated import flag).
-export const PROJECT_EXPORT_VERSION = 9;
+// v10: <Light> layer id — CLight.ly (optional, absent ⇒ the pinned Lights layer) becomes a
+// required CLight.l naming ANY ordinary layer; a v9 payload's lights would decode onto a
+// layer that no longer has that meaning.
+export const PROJECT_EXPORT_VERSION = 10;
 
 /**
  * COMPACT PROJECT CODEC — the single wire format for everything that serializes a
@@ -115,7 +117,7 @@ export const PROJECT_EXPORT_VERSION = 9;
  *
  * Three compaction tactics, in order of payoff:
  *  1. Drop defaults — identity transforms (pos 0 / rot 0 / scale 1), empty arrays,
- *     blank/null/false fields, and the always-constant connector/kitten layerId are
+ *     blank/null/false fields, and the always-constant kitten/IVA-seat layerId are
  *     simply absent and restored on decode.
  *  2. Round floats — every coordinate/angle is rounded to {@link PRECISION} decimals,
  *     killing `0.7071067811865476`-style noise that would otherwise dominate the bytes.
@@ -565,19 +567,19 @@ function decTank(c: CTank): Tank {
 
 /**
  * A cast light — a first-class part entity (like {@link CCollider}), not SubPart data.
- * `scale` is unused (pinned 1,1,1), so the shared CTransform encoder always omits it;
- * `layerId` is the constant LIGHT_LAYER_ID (`ly` is emitted only if it ever differed,
- * which the model forbids) — both restored on decode.
+ * `scale` is unused (pinned 1,1,1), so the shared CTransform encoder always omits it and
+ * decode restores (1,1,1). `layerId` names ANY ordinary layer and is always emitted, like
+ * a connector's or a collider's.
  */
 interface CLight extends CTransform {
   i: string; // id
+  l: string; // layerId
   rg: number; // rangeM
   in: number; // intensity
   co: Triple; // color [r,g,b] 0..1
   ia: number; // innerAngleRad
   oa: number; // outerAngleRad
   ot?: string; // ownerTemplateId (omitted ⇒ null ⇒ part-level)
-  ly?: string; // layerId (omitted at the constant LIGHT_LAYER_ID — always, in practice)
   pt?: 1; // type: present ⇒ Point (Spot is the default)
   rt?: 1; // rayTracing
 }
@@ -585,6 +587,7 @@ interface CLight extends CTransform {
 function encLight(l: PartLight): CLight {
   const o: CLight = {
     i: l.id,
+    l: l.layerId,
     rg: round(l.rangeM),
     in: round(l.intensity),
     co: [round(l.color.r), round(l.color.g), round(l.color.b)],
@@ -593,7 +596,6 @@ function encLight(l: PartLight): CLight {
     ...encTransform(l),
   };
   if (l.ownerTemplateId) o.ot = l.ownerTemplateId;
-  if (l.layerId !== LIGHT_LAYER_ID) o.ly = l.layerId;
   if (l.type === 'Point') o.pt = 1;
   if (l.rayTracing) o.rt = 1;
   return o;
@@ -611,7 +613,7 @@ function decLight(c: CLight): PartLight {
     innerAngleRad: num(c.ia),
     outerAngleRad: num(c.oa),
     rayTracing: !!c.rt,
-    layerId: c.ly ? str(c.ly) : LIGHT_LAYER_ID,
+    layerId: str(c.l),
     ...decTransform(c),
   };
 }

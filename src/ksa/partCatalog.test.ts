@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, it, expect } from 'vitest';
 import { DOMParser } from '@xmldom/xmldom';
 import { mergeGameData, parseGameDataFile, parsePartsFile, type CatalogPart } from './partCatalog';
-import { DEFAULT_LAYER_ID, createTank, IVA_SEAT_LAYER_ID, LIGHT_LAYER_ID } from './types';
+import { DEFAULT_LAYER_ID, createTank, IVA_SEAT_LAYER_ID } from './types';
 import {
   hasKsaAssets,
   ksaAsset,
@@ -440,7 +440,7 @@ describe('parseGameDataFile + mergeGameData', () => {
     const l = light.lights[0];
     expect(l.id).toBe('_light1');
     expect(l.ownerTemplateId).toBe('CoreElectricalA_Subpart_SpotlightA');
-    expect(l.layerId).toBe(LIGHT_LAYER_ID);
+    expect(l.layerId).toBe(DEFAULT_LAYER_ID);
     expect(l.type).toBe('Spot');
     expect(l.rangeM).toBe(5);
     expect(l.intensity).toBe(10);

@@ -21,12 +21,13 @@ import {
   addLight,
   addSubPart,
   clearSelection,
+  createLayer,
   newPart,
   select,
   selectLayerEntities,
   type EntityKind,
 } from './editorStore';
-import { DEFAULT_LAYER_ID, IVA_SEAT_LAYER_ID, LIGHT_LAYER_ID } from '../ksa/types';
+import { DEFAULT_LAYER_ID, IVA_SEAT_LAYER_ID } from '../ksa/types';
 
 /** Ids of the selected entities of one kind, in selection order. */
 const selectedIds = (kind: EntityKind): string[] =>
@@ -86,6 +87,9 @@ describe('layerStore — listed flag', () => {
   it('locking a layer prunes EVERY selectable kind, including colliders, IVA seats and lights', () => {
     addCollider('Box');
     addIvaSeat();
+    // A light is an ordinary layer citizen, so park it on its own layer to prove the prune
+    // is per-layer rather than "every light, whenever any layer locks".
+    const lamps = createLayer('Lamps'); // …which also makes it the active layer
     addLight(null);
 
     // Each kind is checked on its own so a pruning gap in one can't hide behind another.
@@ -106,13 +110,14 @@ describe('layerStore — listed flag', () => {
     expect(selectedIds('light')).toEqual(['_light1']);
     setLayerLocked(DEFAULT_LAYER_ID, true);
     expect(selectedIds('light')).toEqual(['_light1']); // a different layer — untouched
-    setLayerLocked(LIGHT_LAYER_ID, true);
+    setLayerLocked(lamps, true);
     expect(selectedIds('light')).toEqual([]);
   });
 
   it('selectLayerEntities selects a layer’s colliders, IVA seats and lights', () => {
     addCollider('Box');
     addIvaSeat();
+    const lamps = createLayer('Lamps'); // …which also makes it the active layer
     addLight(null);
     clearSelection();
 
@@ -124,8 +129,9 @@ describe('layerStore — listed flag', () => {
     selectLayerEntities(DEFAULT_LAYER_ID);
     expect(selectedIds('collider')).toEqual(['_collider1']);
     expect(selectedIds('ivaSeat')).toEqual([]);
+    expect(selectedIds('light')).toEqual([]);
 
-    selectLayerEntities(LIGHT_LAYER_ID);
+    selectLayerEntities(lamps);
     expect(selectedIds('light')).toEqual(['_light1']);
     expect(selectedIds('collider')).toEqual([]);
     expect(selectedIds('ivaSeat')).toEqual([]);

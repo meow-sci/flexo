@@ -1501,7 +1501,8 @@ export class EditorScene {
    * like {@link applyLightCoverage}:
    *
    *  - `$lightSettings.livePreview` — the global toggle (default off);
-   *  - the Lights layer's own visibility — a hidden layer means no illumination either
+   *  - the visibility of the layer the light itself is on — a hidden layer means no
+   *    illumination either
    *    (the marker groups are hidden too, and three skips a hidden subtree's lights, but
    *    this makes the rule explicit rather than a side effect of traversal);
    *  - the {@link planPreviewBudget} instance budget — at most

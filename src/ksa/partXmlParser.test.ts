@@ -28,7 +28,6 @@ import {
   createTank,
   IVA_SEAT_LAYER_ID,
   KNOWN_EDITOR_TAGS,
-  LIGHT_LAYER_ID,
 } from './types';
 import { readVendoredAsset } from './ksaTestAssets';
 
@@ -308,7 +307,7 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
   it('recovers SubPart-owned lights as flat PartLights (owner, transform, color, angles, ray tracing)', () => {
     expect(parsed.lights.map((l) => l.type)).toEqual(['Spot', 'Point']);
     expect(parsed.lights.every((l) => l.ownerTemplateId === TANK_TMPL)).toBe(true);
-    expect(parsed.lights.every((l) => l.layerId === LIGHT_LAYER_ID)).toBe(true);
+    expect(parsed.lights.every((l) => l.layerId === DEFAULT_LAYER_ID)).toBe(true);
     // Ids regenerated in document order — never read from the XML.
     expect(parsed.lights.map((l) => l.id)).toEqual(['_light1', '_light2']);
     const spot = parsed.lights[0];

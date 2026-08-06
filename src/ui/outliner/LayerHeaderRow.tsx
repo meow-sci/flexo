@@ -107,7 +107,7 @@ export function LayerHeaderRow({
   const filtering = shown !== total;
   const isBuiltIn = BUILT_IN_LAYER_IDS.includes(layer.id);
   // The Kittens layer cannot be deleted, so its destructive item empties it instead. Default
-  // and the other two entity-only layers stay fully protected.
+  // and the other entity-only layer stay fully protected.
   const isClearable = layer.id === KITTEN_LAYER_ID;
   const summary = summaries.find((s) => s.layer.id === layer.id);
   const countTitle = summary
@@ -173,14 +173,13 @@ export function LayerHeaderRow({
       e.preventDefault();
       moveSelectionToLayer(layer.id);
       // The pinned kinds cannot leave their own layer, so say so rather than silently
-      // moving two of the three things the user dragged (design §2.4).
+      // moving only some of the things the user dragged (design §2.4).
       const stayed = [...new Set(selection.map((r) => r.kind))].filter(
-        (kind) => kind === 'ivaSeat' || kind === 'light' || kind === 'kitten',
+        (kind) => kind === 'ivaSeat' || kind === 'kitten',
       );
       if (stayed.length > 0) {
         const words: Record<string, string> = {
           ivaSeat: 'Seats stay on IVA Seats',
-          light: 'Lights stay on Lights',
           kitten: 'Kittens stay on Kittens',
         };
         status(stayed.map((kind) => words[kind]).join(' · '), { severity: 'info' });
@@ -205,23 +204,35 @@ export function LayerHeaderRow({
       onDrop={onDrop}
     >
       <div className="flex items-center gap-0.5 px-1 py-(--density-row-py)">
-        <Tooltip content={isActive ? 'Active layer — new items land here' : 'Make active'}>
-          <Button
-            iconOnly
-            size="sm"
-            variant="ghost"
-            className="size-5 shrink-0"
-            aria-label={`Make ${layer.name} the active layer`}
-            aria-pressed={isActive}
-            onPress={() => setActiveLayer(layer.id)}
-          >
-            {isActive ? (
-              <CircleDot className="size-3.5 text-accent" />
-            ) : (
-              <Circle className="size-3 text-fg-subtle" />
-            )}
-          </Button>
-        </Tooltip>
+        {/*
+         * Only ordinary layers offer the active-layer radio. A pinned layer must never BE the
+         * active layer: `currentLayerId` redirects new entities to Default when it is, because
+         * anything landing on a pinned layer could never be moved off it (`isMoveTarget` refuses
+         * pinned targets). Rendering the radio here anyway would assert something the store
+         * deliberately overrides — the dot would fill, the tooltip would promise "new items land
+         * here", and they would silently land on Default instead. A spacer keeps the row aligned.
+         */}
+        {pinned ? (
+          <span className="size-5 shrink-0" aria-hidden />
+        ) : (
+          <Tooltip content={isActive ? 'Active layer — new items land here' : 'Make active'}>
+            <Button
+              iconOnly
+              size="sm"
+              variant="ghost"
+              className="size-5 shrink-0"
+              aria-label={`Make ${layer.name} the active layer`}
+              aria-pressed={isActive}
+              onPress={() => setActiveLayer(layer.id)}
+            >
+              {isActive ? (
+                <CircleDot className="size-3.5 text-accent" />
+              ) : (
+                <Circle className="size-3 text-fg-subtle" />
+              )}
+            </Button>
+          </Tooltip>
+        )}
 
         <Button
           iconOnly
@@ -241,8 +252,10 @@ export function LayerHeaderRow({
         ) : (
           <span
             className="min-w-0 flex-1 truncate text-xs font-medium uppercase tracking-wide text-fg-muted"
-            title="Click to make active · double-click to rename"
-            onClick={() => setActiveLayer(layer.id)}
+            title={
+              pinned ? 'Double-click to rename' : 'Click to make active · double-click to rename'
+            }
+            onClick={pinned ? undefined : () => setActiveLayer(layer.id)}
             onDoubleClick={() => setRenaming(true)}
           >
             {layer.name}

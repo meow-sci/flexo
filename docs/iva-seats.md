@@ -365,9 +365,10 @@ is a non-finite `rotation` — which is the rule that *is* there.
 ## Layer
 
 Seats live on the built-in, undeletable **IVA Seats** layer (`IVA_SEAT_LAYER_ID = 'ivaSeats'`),
-between Colliders and Kittens. Like the other built-in layers it can be hidden, locked and
-cleared but not deleted or renamed, and it is never serialized to KSA XML. See
-[layers.md](layers.md).
+one of the two entity-only pinned layers left after connectors, colliders and lights all
+became ordinary layer citizens (the other is Kittens). Like the other built-in layers it can
+be hidden, locked and cleared but not deleted or renamed, and it is never serialized to KSA
+XML. See [layers.md](layers.md).
 
 ## Persistence
 

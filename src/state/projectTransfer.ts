@@ -25,13 +25,12 @@ import {
   DEFAULT_PART_ID,
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
-  LIGHT_LAYER_ID,
   createDefaultLayer,
   createIvaSeatLayer,
   createKittenLayer,
-  createLightLayer,
   createDefaultMaterial,
   createSubPartGameData,
+  clampLayerIds,
   meshKind,
 } from '../ksa/types';
 import { remapRawConnectorRefs } from '../ksa/partXmlParser';
@@ -476,7 +475,9 @@ export function envelopeToPart(env: ProjectExportEnvelope): EditingPart {
     customReactions: d.customReactions ?? [],
   };
   ensureBuiltInLayers(part);
-  return part;
+  // A payload is only as trustworthy as whoever wrote it: an entity naming a layer the
+  // payload never carried would load invisible-but-live (see {@link clampLayerIds}).
+  return clampLayerIds(part);
 }
 
 /** Guarantees the undeletable built-in layers exist (in case a payload omitted any). */
@@ -484,7 +485,6 @@ function ensureBuiltInLayers(part: EditingPart): void {
   const has = (id: string) => part.layers.some((l) => l.id === id);
   if (!has(DEFAULT_LAYER_ID)) part.layers.unshift(createDefaultLayer());
   if (!has(IVA_SEAT_LAYER_ID)) part.layers.push(createIvaSeatLayer());
-  if (!has(LIGHT_LAYER_ID)) part.layers.push(createLightLayer());
   if (!has(KITTEN_LAYER_ID)) part.layers.push(createKittenLayer());
 }
 
@@ -495,8 +495,8 @@ function ensureBuiltInLayers(part: EditingPart): void {
  * imported kitten custom mesh) is rewritten through the new ids. Layer mapping: each
  * source layer that holds meshes — INCLUDING the source's Default — becomes a NEW layer
  * (keeping its name) so imported content never merges into the user's existing Default;
- * connectors and colliders follow their own source layer through the same mapping, and
- * kittens reuse the built-in Kittens layer.
+ * connectors, colliders and lights follow their own source layer through the same mapping,
+ * and kittens reuse the built-in Kittens layer.
  */
 export function mergeProjectImport(
   current: EditingPart,
@@ -703,11 +703,11 @@ export function mergeProjectImport(
     });
   }
 
-  // Lights — always on the built-in Lights layer, fresh _lightN ids. Nothing references
-  // a light by id (it is editor-only and never emitted to XML), so there is no ref map to
-  // thread through. `ownerTemplateId` IS a reference though: it names a SubPart TEMPLATE,
-  // and an imported kitten mesh gets a fresh template id, so route it through the same map
-  // the placements (and colliders) use.
+  // Lights — mirrored onto their source layer's imported twin, fresh _lightN ids. Nothing
+  // references a light by id (it is editor-only and never emitted to XML), so there is no
+  // ref map to thread through. `ownerTemplateId` IS a reference though: it names a SubPart
+  // TEMPLATE, and an imported kitten mesh gets a fresh template id, so route it through the
+  // same map the placements (and colliders) use.
   for (const src of data.lights ?? []) {
     if (src.ownerTemplateId && droppedTemplateIds.has(src.ownerTemplateId)) continue;
     part.lights.push({
@@ -725,7 +725,7 @@ export function mergeProjectImport(
       // Pinned, not copied: KSA ignores light scale and the model invariant is "always
       // (1,1,1)" — a hand-edited payload must not be able to smuggle one in.
       scale: { x: 1, y: 1, z: 1 },
-      layerId: LIGHT_LAYER_ID,
+      layerId: getOrCreateImportLayer(src.layerId),
     });
   }
 

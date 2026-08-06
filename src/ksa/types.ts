@@ -258,7 +258,11 @@ export interface PartLight extends Transform {
   outerAngleRad: number;
   /** <RayTracing>true</RayTracing> — IVA ray-traced list routing only. */
   rayTracing: boolean;
-  /** Always {@link LIGHT_LAYER_ID}; parity with the other layered entities. */
+  /**
+   * Id of the {@link Layer} this light belongs to (editor-only grouping). An ORDINARY
+   * layer, exactly like a placement's — a light is organized, hidden and locked alongside
+   * the SubParts it illuminates.
+   */
   layerId: string;
 }
 
@@ -366,13 +370,6 @@ export const KITTEN_LAYER_ID = 'kittens';
  */
 export const IVA_SEAT_LAYER_ID = 'ivaSeats';
 
-/**
- * Id of the built-in "Lights" layer. {@link PartLight}s always live here so the part's
- * cast lights can be hidden/locked separately from the meshes they sit on. Cannot be
- * deleted.
- */
-export const LIGHT_LAYER_ID = 'lights';
-
 /** The built-in Default layer (for SubParts) that every new Part starts with. */
 export function createDefaultLayer(): Layer {
   return { id: DEFAULT_LAYER_ID, name: 'Default' };
@@ -388,16 +385,10 @@ export function createIvaSeatLayer(): Layer {
   return { id: IVA_SEAT_LAYER_ID, name: 'IVA Seats' };
 }
 
-/** The built-in Lights layer that every new Part starts with. */
-export function createLightLayer(): Layer {
-  return { id: LIGHT_LAYER_ID, name: 'Lights' };
-}
-
 /** The built-in layers present in every Part (and never deletable). */
 export const BUILT_IN_LAYER_IDS: readonly string[] = [
   DEFAULT_LAYER_ID,
   IVA_SEAT_LAYER_ID,
-  LIGHT_LAYER_ID,
   KITTEN_LAYER_ID,
 ];
 
@@ -408,24 +399,21 @@ export const BUILT_IN_LAYER_IDS: readonly string[] = [
  * guards) filters through this ONE list so a newly added entity layer can't be forgotten at
  * one of the sites.
  *
- * Connectors and colliders are NOT here: they are ordinary layer citizens like placements
- * (they ship as part of the Part, so they belong in the same logical groupings as the
- * geometry). Only the kinds whose identity IS their layer stay pinned — IVA seats and
- * lights, whose rows are ordinals/markers rather than geometry, and kittens, which are
- * editor-only visual aides that never reach the export.
+ * Connectors, colliders and lights are NOT here: they are ordinary layer citizens like
+ * placements. Each of them ships INSIDE the Part, so each belongs in the same logical
+ * grouping as the geometry it attaches to, wraps or illuminates. Only two kinds stay
+ * pinned — IVA seats, whose array order IS the game's seat-cycle order so the layer's rows
+ * are ordinals rather than a grouping, and kittens, which are editor-only visual aides that
+ * never reach the export.
  */
-export const ENTITY_ONLY_LAYER_IDS: readonly string[] = [
-  IVA_SEAT_LAYER_ID,
-  LIGHT_LAYER_ID,
-  KITTEN_LAYER_ID,
-];
+export const ENTITY_ONLY_LAYER_IDS: readonly string[] = [IVA_SEAT_LAYER_ID, KITTEN_LAYER_ID];
 
 /**
  * Entity kinds that live on ORDINARY layers and can be moved between them — SubPart
- * placements, connectors and colliders. The union the "Change Layer" surfaces and
+ * placements, connectors, colliders and lights. The union the "Change Layer" surfaces and
  * {@link import('../state/editorStore').moveEntitiesToLayer} operate on.
  */
-export type LayerableKind = 'subpart' | 'connector' | 'collider';
+export type LayerableKind = 'subpart' | 'connector' | 'collider' | 'light';
 
 /**
  * One row of KSA's editor-tag registry (`<EditorTagDef>` in
@@ -1365,7 +1353,7 @@ export function createPartLight(ownerTemplateId: string | null, id: string): Par
     innerAngleRad: Math.PI / 8,
     outerAngleRad: Math.PI / 4,
     rayTracing: false,
-    layerId: LIGHT_LAYER_ID,
+    layerId: DEFAULT_LAYER_ID,
   };
 }
 
@@ -2279,6 +2267,50 @@ export interface EditingPart {
   customReactions: CustomReaction[];
 }
 
+/**
+ * Re-homes every ORDINARY-layer entity (the {@link LayerableKind} set: placements,
+ * connectors, colliders, lights) whose `layerId` names a layer that is NOT in
+ * `part.layers` onto {@link DEFAULT_LAYER_ID}. Pure, and returns `part` itself when every
+ * reference already resolves. Called on the two load boundaries — `normalizePart`
+ * (stored project snapshots + every undo/redo history entry) and `envelopeToPart`
+ * (share links / archives opened as a new project).
+ *
+ * **This is a repair, not a migration, and deliberately not version-gated.** It never
+ * converts one VALID value into another: a `layerId` naming an existing layer is left
+ * exactly as authored, so on a document whose layers are intact this function cannot do
+ * anything at all. What it rewrites is a reference that names NOTHING — a value that is
+ * present but unrepresentable, describing no state the editor can reach. That is why it
+ * may run inside `normalizePart`, whose rule is "never overwrite a present value": that
+ * rule exists to protect the user's authored choices, and a dangling id is not one.
+ *
+ * The failure it backstops is silent by construction. `buildOutlinerTree` only emits
+ * sections for layers that exist, so a dangling entity disappears from the Outliner while
+ * `layerViewState` default-fills its unknown id to visible/unlocked — it still renders,
+ * still picks in the viewport, is still swept by Select All, and `isMoveTarget` refuses
+ * to move it anywhere. Nothing in the UI can rescue it.
+ *
+ * Pinned kinds ({@link ENTITY_ONLY_LAYER_IDS}: IVA seats, kittens) are excluded — their
+ * layer is built-in and guaranteed present, and naming it is the CORRECT value for them.
+ */
+export function clampLayerIds(part: EditingPart): EditingPart {
+  const known = new Set(part.layers.map((l) => l.id));
+  let repaired = false;
+  const rehome = <T extends { layerId: string }>(list: T[]): T[] =>
+    list.map((e) => {
+      if (known.has(e.layerId)) return e;
+      repaired = true;
+      return { ...e, layerId: DEFAULT_LAYER_ID };
+    });
+  const next: EditingPart = {
+    ...part,
+    placements: rehome(part.placements),
+    connectors: rehome(part.connectors),
+    colliders: rehome(part.colliders),
+    lights: rehome(part.lights),
+  };
+  return repaired ? next : part;
+}
+
 export function createEmptyPart(): EditingPart {
   return {
     partId: DEFAULT_PART_ID,
@@ -2286,7 +2318,7 @@ export function createEmptyPart(): EditingPart {
     gameData: createEmptyGameData(),
     subPartGameData: [],
     internalFlags: {},
-    layers: [createDefaultLayer(), createIvaSeatLayer(), createLightLayer(), createKittenLayer()],
+    layers: [createDefaultLayer(), createIvaSeatLayer(), createKittenLayer()],
     placements: [],
     connectors: [],
     colliders: [],

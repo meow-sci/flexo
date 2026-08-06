@@ -17,6 +17,7 @@ import { $cameraState, resetCamera, setCameraRestore } from './viewStore';
 import { $measurements } from './measurementStore';
 import { $containers } from './containerStore';
 import {
+  clampLayerIds,
   createEmptyGameData,
   createEmptyPart,
   createGlow,
@@ -183,7 +184,10 @@ function serializeCurrentSnapshot(): ProjectSnapshotV2 {
 function normalizePart(part: EditingPart): EditingPart {
   const filled: EditingPart = { ...createEmptyPart(), ...part };
   const gameData = { ...createEmptyGameData(), ...filled.gameData };
-  return {
+  // The one place this function touches a value that IS present: an entity whose `layerId`
+  // names no layer in the document. That is a broken reference, not an authored choice —
+  // see {@link clampLayerIds} for why repairing it does not make this a migration.
+  return clampLayerIds({
     ...filled,
     gameData: {
       ...gameData,
@@ -205,7 +209,7 @@ function normalizePart(part: EditingPart): EditingPart {
     customMeshes: (filled.customMeshes ?? []).map((mesh) =>
       mesh.emissive ? { ...mesh, emissive: { ...createGlow(), ...mesh.emissive } } : mesh,
     ),
-  };
+  });
 }
 
 function normalizeSnapshot(snap: ProjectSnapshotV2): ProjectSnapshotV2 {

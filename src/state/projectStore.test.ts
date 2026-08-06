@@ -95,6 +95,7 @@ import {
   addConnector,
   addSubPart,
   createLayer,
+  deleteLayer,
   newPart,
   undo,
 } from './editorStore';
@@ -119,7 +120,14 @@ import {
   uniqueProjectName,
 } from './projectIndexStore';
 import { $notifications } from './notificationStore';
-import { DEFAULT_LAYER_ID, createGlow, createSubPartGameData } from '../ksa/types';
+import {
+  DEFAULT_LAYER_ID,
+  createGlow,
+  createPartLight,
+  createSubPartGameData,
+  identityTransform,
+} from '../ksa/types';
+import type { EditingPart } from '../ksa/types';
 import type { ProjectSnapshotV2 } from './projectDb';
 
 function snapshotOf(id: string): ProjectSnapshotV2 {
@@ -583,6 +591,99 @@ describe('normalization (default-fill, never conversion)', () => {
       strength: 0.9,
       coverage: 0.25,
     });
+  });
+
+  // This is the whole reason PROJECT_SCHEMA_VERSION did NOT move when the built-in Lights
+  // layer was removed: a snapshot carries BOTH the layer object and the lights that name
+  // it, so it loads with its contents intact — the layer is simply ordinary now.
+  it('loads a snapshot written when Lights was a built-in layer, demoting it to an ordinary one', async () => {
+    const id = await createProject('Lamps');
+    await flushAutosave();
+    const snap = structuredClone(snapshotOf(id)) as unknown as {
+      part: Record<string, unknown> & { layers: { id: string; name: string }[] };
+    };
+    snap.part.layers = [...snap.part.layers, { id: 'lights', name: 'Lights' }];
+    snap.part.lights = [{ ...createPartLight(null, '_light1'), layerId: 'lights' }];
+    db.snapshots.set(id, snap);
+
+    await createProject('Elsewhere');
+    await openProject(id);
+    const part = $part.get();
+    // Nothing purged, nothing converted: the layer and its light are both still there.
+    expect(part.layers.map((l) => l.id)).toContain('lights');
+    expect(part.lights.map((l) => l.id)).toEqual(['_light1']);
+    expect(part.lights[0].layerId).toBe('lights');
+
+    // …and it is now an ORDINARY layer, so the user can delete it and keep the light.
+    deleteLayer('lights', { mode: 'move-items', targetLayerId: DEFAULT_LAYER_ID });
+    expect($part.get().layers.map((l) => l.id)).not.toContain('lights');
+    expect($part.get().lights[0].layerId).toBe(DEFAULT_LAYER_ID);
+  });
+});
+
+// clampLayerIds — the backstop for a layerId that names nothing. A dangling id fails
+// SILENTLY (the entity vanishes from the Outliner while it still renders, still selects and
+// still refuses to be moved), so the repair happens on load, at every load boundary.
+describe('dangling layer ids', () => {
+  it('re-homes an entity whose layerId names no layer onto Default, and leaves valid ones alone', async () => {
+    const id = await createProject('Dangling');
+    const engines = createLayer('Engines'); // active — everything below lands here
+    addSubPart('Core.A');
+    addConnector();
+    await flushAutosave();
+
+    const snap = structuredClone(snapshotOf(id));
+    snap.part.placements[0].layerId = 'ghost-layer';
+    snap.part.lights = [
+      { ...createPartLight(null, '_light1'), layerId: 'ghost-layer' },
+      { ...createPartLight(null, '_light2'), layerId: engines },
+    ];
+    db.snapshots.set(id, snap);
+
+    await createProject('Elsewhere');
+    await openProject(id);
+    const part = $part.get();
+    expect(part.placements[0].layerId).toBe(DEFAULT_LAYER_ID);
+    expect(part.lights[0].layerId).toBe(DEFAULT_LAYER_ID);
+    // A layerId that RESOLVES is never rewritten — this is a repair, not a migration.
+    expect(part.connectors[0].layerId).toBe(engines);
+    expect(part.lights[1].layerId).toBe(engines);
+  });
+
+  it('leaves a pinned kind alone — its layer is built-in and naming it is correct', async () => {
+    const id = await createProject('Pinned');
+    await flushAutosave();
+
+    const snap = structuredClone(snapshotOf(id));
+    // Deliberately unreachable state: only the ordinary kinds are clamped, so a kitten is
+    // returned exactly as stored even when its layerId does not resolve.
+    snap.part.kittens = [
+      { ...identityTransform(), id: 'kitten_1', kind: 'hunter', layerId: 'ghost-layer' },
+    ];
+    db.snapshots.set(id, snap);
+
+    await createProject('Elsewhere');
+    await openProject(id);
+    expect($part.get().kittens[0].layerId).toBe('ghost-layer');
+  });
+
+  it('repairs the part inside every undo/redo history entry too', async () => {
+    const id = await createProject('DanglingHistory');
+    addSubPart('Core.A');
+    addSubPart('Core.B');
+    await flushAutosave();
+
+    const stale = structuredClone(db.history.get(id)) as { undo: { part: EditingPart }[] };
+    expect(stale.undo.length).toBeGreaterThan(0);
+    for (const entry of stale.undo) {
+      for (const p of entry.part.placements) p.layerId = 'ghost-layer';
+    }
+    db.history.set(id, stale);
+
+    await createProject('Elsewhere');
+    await openProject(id);
+    undo();
+    expect($part.get().placements.map((p) => p.layerId)).toEqual([DEFAULT_LAYER_ID]);
   });
 });
 

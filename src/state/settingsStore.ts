@@ -134,7 +134,7 @@ export function setLightSettings(patch: Partial<LightVizSettings>): void {
 export interface LightPreviewCount {
   /**
    * Preview lights currently in the scene. 0 when {@link LightVizSettings.livePreview}
-   * is off or the Lights layer is hidden; otherwise `min(total, MAX_PREVIEW_LIGHTS)`.
+   * is off or every light's own layer is hidden; otherwise `min(total, MAX_PREVIEW_LIGHTS)`.
    */
   enabled: number;
   /**

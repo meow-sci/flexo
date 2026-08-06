@@ -3,7 +3,6 @@ import {
   DEFAULT_LAYER_ID,
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
-  LIGHT_LAYER_ID,
   createEmptyPart,
   createCombustor,
   createPartLight,
@@ -723,6 +722,9 @@ describe('parseProjectImport', () => {
     // v8's `CKeyframe.es` values are single whole-pose easings; reading them as the v9
     // per-channel {p,r,s} record would silently load LINEAR motion. Rejected, never converted.
     expect(parseProjectImport(JSON.stringify({ f: PROJECT_EXPORT_FORMAT, v: 8 })).ok).toBe(false);
+    // v9 lights omit the layer token (it meant the now-deleted built-in Lights layer), so
+    // they would decode onto a layer that no longer has that meaning. Rejected too.
+    expect(parseProjectImport(JSON.stringify({ f: PROJECT_EXPORT_FORMAT, v: 9 })).ok).toBe(false);
   });
 
   it('backfills every optional field from a bare-marker payload', () => {
@@ -756,11 +758,35 @@ describe('envelopeToPart', () => {
     expect(part.animations[0].id).toBe('anim_src1');
     expect(part.gameData.decoupler?.connectorId).toBe('_connector1');
     // The undeletable built-in layers are present.
-    for (const id of [DEFAULT_LAYER_ID, IVA_SEAT_LAYER_ID, LIGHT_LAYER_ID, KITTEN_LAYER_ID]) {
+    for (const id of [DEFAULT_LAYER_ID, IVA_SEAT_LAYER_ID, KITTEN_LAYER_ID]) {
       expect(part.layers.some((l) => l.id === id)).toBe(true);
     }
     // Binary-backed assets always start empty.
     expect(part.customTextures).toEqual([]);
+  });
+
+  it('re-homes an entity whose layerId names no layer in the payload onto Default', () => {
+    const src = createEmptyPart();
+    src.layers.push({ id: 'layer1', name: 'Engines' }, { id: 'layer2', name: 'Lamps' });
+    src.placements.push({
+      instanceId: 'trussbara_1',
+      subPartTemplateId: 'Core.TrussBarA',
+      layerId: 'layer1',
+      ...t(1),
+    });
+    src.lights.push(
+      { ...createPartLight(null, '_light1'), layerId: 'layer1' },
+      { ...createPartLight(null, '_light2'), layerId: 'layer2' },
+    );
+    const env = buildProjectExport(src, 'S');
+    // A hand-edited / foreign payload: the entities name a layer it never carried.
+    env.data.layers = env.data.layers.filter((l) => l.id !== 'layer1');
+
+    const part = envelopeToPart(env);
+    expect(part.placements[0].layerId).toBe(DEFAULT_LAYER_ID);
+    expect(part.lights[0].layerId).toBe(DEFAULT_LAYER_ID);
+    // The light on the layer that DID survive keeps it — only broken references are touched.
+    expect(part.lights[1].layerId).toBe('layer2');
   });
 });
 
@@ -896,18 +922,13 @@ describe('light transfer', () => {
     const env = buildProjectExport(src, 'S');
     expect(env.data.lights.map((l) => l.id)).toEqual(['_light1', '_light2']);
     const part = envelopeToPart(env);
-    // No id remapping on this path — the payload's ids are already consistent.
+    // No id remapping on this path — the payload's ids are already consistent, and the
+    // layers come from the payload wholesale, so an ordinary light layer survives as-is.
     expect(part.lights).toEqual(src.lights);
-    expect(part.layers.map((l) => l.id)).toContain(LIGHT_LAYER_ID);
+    expect(part.lights.every((l) => l.layerId === DEFAULT_LAYER_ID)).toBe(true);
   });
 
-  it('restores the Lights layer when a payload omits it', () => {
-    const env = buildProjectExport(createEmptyPart(), 'S');
-    env.data.layers = env.data.layers.filter((l) => l.id !== LIGHT_LAYER_ID);
-    expect(envelopeToPart(env).layers.map((l) => l.id)).toContain(LIGHT_LAYER_ID);
-  });
-
-  it('appends pasted lights with fresh _lightN ids on the built-in Lights layer', () => {
+  it('appends pasted lights with fresh _lightN ids on their mirrored source layer', () => {
     const src = createEmptyPart();
     src.lights.push({
       ...createPartLight('CoreElectricalA_Subpart_SpotlightA', '_light1'),
@@ -922,12 +943,34 @@ describe('light transfer', () => {
     expect(part.lights.map((l) => l.id)).toEqual(['_light1', '_light2']);
     // A built-in SubPart owner is carried untouched (import never renames templates)…
     expect(part.lights[1].ownerTemplateId).toBe('CoreElectricalA_Subpart_SpotlightA');
-    // …with every field intact and the forced built-in layer.
+    // …with every field intact.
     expect(part.lights[1].position).toEqual({ x: 0.38, y: 0.21, z: 0 });
     expect(part.lights[1].color).toEqual({ r: 1, g: 0.5, b: 0.25 });
     expect(part.lights[1].rayTracing).toBe(true);
-    expect(part.lights.every((l) => l.layerId === LIGHT_LAYER_ID)).toBe(true);
+    // The destination's own light stays put; the imported one lands on the fresh mirror of
+    // the source's Default, never merging into the destination's Default (as a collider does).
+    expect(part.lights[0].layerId).toBe(DEFAULT_LAYER_ID);
+    expect(part.lights[1].layerId).not.toBe(DEFAULT_LAYER_ID);
+    expect(part.layers.some((l) => l.id === part.lights[1].layerId)).toBe(true);
     expect(summary.lights).toBe(1);
+  });
+
+  it('puts an imported light on the SAME layer as the SubParts it came in with', () => {
+    const src = createEmptyPart();
+    src.layers.push({ id: 'layer1', name: 'Engines' });
+    src.placements.push({
+      instanceId: 'trussbara_1',
+      subPartTemplateId: 'Core.TrussBarA',
+      layerId: 'layer1',
+      ...t(1),
+    });
+    src.lights.push({ ...createPartLight(null, '_light1'), layerId: 'layer1' });
+
+    const { part } = mergeProjectImport(createEmptyPart(), buildProjectExport(src, 'S'));
+    expect(part.lights[0].layerId).toBe(part.placements[0].layerId);
+    expect(part.layers.find((l) => l.id === part.lights[0].layerId)?.name).toBe('Engines');
+    // …and it is a real layer of the destination, never a dangling id.
+    expect(part.layers.some((l) => l.id === part.lights[0].layerId)).toBe(true);
   });
 });
 

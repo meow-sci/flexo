@@ -1698,6 +1698,7 @@ export function planImportRemoval(part: EditingPart, importId: string): ImportRe
       !part.placements.some((pl) => pl.layerId === id && !subPartIds.has(pl.subPartTemplateId)) &&
       !part.connectors.some((c) => c.layerId === id) &&
       !part.colliders.some((c) => c.layerId === id) &&
+      !part.lights.some((l) => l.layerId === id) &&
       !part.kittens.some((k) => k.layerId === id),
   );
 

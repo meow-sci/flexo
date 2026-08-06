@@ -148,7 +148,9 @@ function ActionsRow({ count, isDisabled }: { count: number; isDisabled: boolean 
   const byKind = useStore($selectionByKind);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const movable = byKind.subpart.length + byKind.connector.length + byKind.collider.length > 0;
+  const movable =
+    byKind.subpart.length + byKind.connector.length + byKind.collider.length + byKind.light.length >
+    0;
 
   if (confirmDelete) {
     return (
@@ -167,7 +169,7 @@ function ActionsRow({ count, isDisabled }: { count: number; isDisabled: boolean 
 
   return (
     <div className="flex flex-wrap gap-1 border-t border-border pt-2">
-      {/* SubParts, connectors and colliders can change layer; seats/lights/kittens are
+      {/* SubParts, connectors, colliders and lights can change layer; seats/kittens are
           pinned to their own built-ins, and are simply left where they are. */}
       {movable && <ChangeLayerButton isDisabled={isDisabled} />}
       {byKind.subpart.length > 0 && <InteriorButton isDisabled={isDisabled} />}

@@ -3,7 +3,6 @@ import {
   DEFAULT_LAYER_ID,
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
-  LIGHT_LAYER_ID,
   createEmptyPart,
   createSolidGrainSegment,
   createSolidMotor,
@@ -283,7 +282,8 @@ function richPart(): EditingPart {
   });
 
   // Lights are first-class part entities (v8): one SubPart-owned Spot with a non-identity
-  // transform, one part-level Point (identity transform → p/r omitted on the wire).
+  // transform parked on an ordinary custom layer, one part-level Point on Default (identity
+  // transform → p/r omitted on the wire).
   p.lights.push(
     {
       id: '_light1',
@@ -296,7 +296,7 @@ function richPart(): EditingPart {
       innerAngleRad: 0.392699,
       outerAngleRad: 0.785398,
       rayTracing: false,
-      layerId: LIGHT_LAYER_ID,
+      layerId: 'layer1',
     },
     {
       id: '_light2',
@@ -309,7 +309,7 @@ function richPart(): EditingPart {
       innerAngleRad: 0,
       outerAngleRad: 0,
       rayTracing: true,
-      layerId: LIGHT_LAYER_ID,
+      layerId: DEFAULT_LAYER_ID,
     },
   );
 
@@ -520,11 +520,11 @@ describe('projectCodec round-trip', () => {
     });
   });
 
-  // Per the no-migration rule a v8 envelope is REJECTED, never converted — so the
-  // marker must actually be 9, not just "whatever the constant says".
-  it('stamps wire version 9 (per-channel keyframe easing)', () => {
-    expect(PROJECT_EXPORT_VERSION).toBe(9);
-    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P')).v).toBe(9);
+  // Per the no-migration rule a v9 envelope is REJECTED, never converted — so the
+  // marker must actually be 10, not just "whatever the constant says".
+  it('stamps wire version 10 (<Light> layer id)', () => {
+    expect(PROJECT_EXPORT_VERSION).toBe(10);
+    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P')).v).toBe(10);
   });
 
   it('round-trips internalFlags and omits them when empty', () => {
@@ -582,11 +582,11 @@ describe('projectCodec round-trip', () => {
 
   // No migration, ever: a payload stamped with the previous version is rejected outright
   // rather than half-decoded (v7 carried lights inside `sg[].li` with a nested transform,
-  // which would decode silently wrong).
+  // and a v9 light omits the layer token entirely — both would decode silently wrong).
   it('rejects an older payload instead of converting it', () => {
     const current = encodeProject(buildProjectExport(createEmptyPart(), 'P'));
     expect(parseProjectObject(current).ok).toBe(true);
-    for (const v of [4, 6, 7]) {
+    for (const v of [4, 6, 7, 9]) {
       const older = parseProjectObject({ ...current, v });
       expect(older.ok).toBe(false);
       expect(older.ok === false && older.error).toContain('Unsupported project version');
@@ -751,8 +751,9 @@ describe('IVA seat codec', () => {
 });
 
 describe('light codec', () => {
-  it('round-trips both owners and types, restoring the constant layerId and pinned scale', () => {
+  it('round-trips both owners and types, keeping the layerId and restoring the pinned scale', () => {
     const p = createEmptyPart();
+    p.layers.push({ id: 'layer1', name: 'Engines' });
     p.lights.push(
       {
         id: '_light1',
@@ -767,7 +768,7 @@ describe('light codec', () => {
         innerAngleRad: 0.392599,
         outerAngleRad: 0.785398,
         rayTracing: false,
-        layerId: LIGHT_LAYER_ID,
+        layerId: 'layer1',
       },
       {
         id: '_light2',
@@ -780,17 +781,19 @@ describe('light codec', () => {
         innerAngleRad: 0,
         outerAngleRad: 0,
         rayTracing: true,
-        layerId: LIGHT_LAYER_ID,
+        layerId: DEFAULT_LAYER_ID,
       },
     );
     const back = decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.lights;
     expect(back).toEqual(p.lights);
-    expect(back.every((l) => l.layerId === LIGHT_LAYER_ID)).toBe(true);
+    // A light lives on ANY ordinary layer now, so the layer id is real data on the wire:
+    // a non-default one must survive the round-trip untouched (this is why v10 exists).
+    expect(back.map((l) => l.layerId)).toEqual(['layer1', DEFAULT_LAYER_ID]);
     // `scale` is unused, never serialized, and always decodes back to (1,1,1).
     expect(back.every((l) => l.scale.x === 1 && l.scale.y === 1 && l.scale.z === 1)).toBe(true);
   });
 
-  it('drops defaults from the wire form (layerId, null owner, identity transform, Spot, no RT)', () => {
+  it('drops defaults from the wire form (null owner, identity transform, Spot, no RT)', () => {
     expect(encodeProject(buildProjectExport(createEmptyPart(), 'P'))).not.toHaveProperty('li');
     const p = createEmptyPart();
     p.lights.push({
@@ -804,12 +807,14 @@ describe('light codec', () => {
       innerAngleRad: 0.392699,
       outerAngleRad: 0.785398,
       rayTracing: false,
-      layerId: LIGHT_LAYER_ID,
+      layerId: DEFAULT_LAYER_ID,
     });
     const c = encodeProject(buildProjectExport(p, 'P'));
-    // Identity transform + null owner + Spot + no ray tracing ⇒ scalar fields only.
+    // Identity transform + null owner + Spot + no ray tracing ⇒ scalar fields only —
+    // plus `l`, which is ALWAYS emitted (v10), exactly like a connector's or collider's.
     expect(c.li?.[0]).toEqual({
       i: '_light1',
+      l: DEFAULT_LAYER_ID,
       rg: 5,
       in: 10,
       co: [1, 1, 1],

@@ -217,7 +217,10 @@ export function EntityMenu({ row }: { row: OutlinerRow }) {
           </MenuItem>
         </>
       )}
-      {(row.kind === 'subpart' || row.kind === 'connector' || row.kind === 'collider') && (
+      {(row.kind === 'subpart' ||
+        row.kind === 'connector' ||
+        row.kind === 'collider' ||
+        row.kind === 'light') && (
         <ChangeLayerItem kind={row.kind} index={index} layerId={layerId} />
       )}
       <MenuItem variant="danger" onAction={remove}>
@@ -298,7 +301,7 @@ function SubPartItems({ index }: { index: number }) {
 
 /**
  * "Change Layer" submenu — the shared surface for every kind that lives on an ordinary layer
- * (SubParts, connectors, colliders). The entity-only built-in layers are filtered out because
+ * (SubParts, connectors, colliders, lights). The entity-only built-in layers are filtered out because
  * nothing else may live there, and the row's own layer is disabled.
  */
 function ChangeLayerItem({

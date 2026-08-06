@@ -11,7 +11,6 @@ import {
   DEFAULT_LAYER_ID,
   identityTransform,
   IVA_SEAT_LAYER_ID,
-  LIGHT_LAYER_ID,
 } from '../../ksa/types';
 import type { EditingPart } from '../../ksa/types';
 
@@ -93,7 +92,7 @@ describe('buildDataNavigator — template rows', () => {
       tanks: [createTank(), createTank()],
       solarPanels: [createSolarPanel()],
     });
-    part.lights.push({ ...createPartLight('TankB', '_light1'), layerId: LIGHT_LAYER_ID });
+    part.lights.push(createPartLight('TankB', '_light1'));
 
     const model = buildDataNavigator(part, []);
     expect(model.templates.map((t) => t.templateId)).toEqual(['TankB', 'NoseCone']);
@@ -169,10 +168,7 @@ describe('buildDataNavigator — non-capable inventory', () => {
       ...identityTransform(),
       layerId: IVA_SEAT_LAYER_ID,
     });
-    part.lights.push(
-      { ...createPartLight(null, '_light1'), layerId: LIGHT_LAYER_ID },
-      { ...createPartLight('TankB', '_light2'), layerId: LIGHT_LAYER_ID },
-    );
+    part.lights.push(createPartLight(null, '_light1'), createPartLight('TankB', '_light2'));
     part.kittens.push({
       id: 'kitten_1',
       kind: 'hunter',

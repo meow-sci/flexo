@@ -30,8 +30,8 @@ describe('deriveCounts', () => {
       lights: 0,
       kittens: 0,
       animations: 0,
-      // Default + IVA Seats + Lights + Kittens ship with every fresh document.
-      layers: 4,
+      // Default + IVA Seats + Kittens ship with every fresh document.
+      layers: 3,
       customTextures: 0,
       customMaterials: 0,
       customMeshes: 0,
@@ -60,7 +60,8 @@ describe('deriveCounts', () => {
       lights: 2,
       kittens: 1,
       animations: 2,
-      layers: 4,
+      // The three built-ins, untouched by the entity lists above.
+      layers: 3,
       customTextures: 1,
       customMaterials: 2,
       customMeshes: 3,

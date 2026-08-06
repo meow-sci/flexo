@@ -50,7 +50,7 @@ export interface OutlinerKindGroup {
 /** One layer's slice of the tree: its header state plus its (filtered) kind groups. */
 export interface OutlinerLayerSection {
   layer: Layer;
-  /** True for the entity-only built-ins (IVA Seats / Lights / Kittens) — they sort last. */
+  /** True for the entity-only built-ins (IVA Seats / Kittens) — they sort last. */
   pinned: boolean;
   view: LayerViewState;
   /** Entities on the layer, before search filtering — the count chip's denominator. */

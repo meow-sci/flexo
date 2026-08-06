@@ -8,7 +8,7 @@ the 3D scene subscribes with vanilla `subscribe()`, React reads via
 
 | Atom | Type | Meaning |
 |---|---|---|
-| `$part` | `EditingPart` | The whole part: `partId`, `editorTags`, `gameData` (display name, mass, tanks, power, coupling — the popup-only metadata with no 3D form), `layers[]`, `placements[]`, `connectors[]`, `colliders[]` (each carries a `layerId` naming an ordinary layer; connector `flags` is a `ConnectorFlag[]`). Treated as **immutable** — every mutation replaces it with a fresh object (so subscribers fire). |
+| `$part` | `EditingPart` | The whole part: `partId`, `editorTags`, `gameData` (display name, mass, tanks, power, coupling — the popup-only metadata with no 3D form), `layers[]`, `placements[]`, `connectors[]`, `colliders[]`, `lights[]` (each carries a `layerId` naming an ordinary layer — IVA seats and kittens are the only kinds pinned to a built-in one; connector `flags` is a `ConnectorFlag[]`). Treated as **immutable** — every mutation replaces it with a fresh object (so subscribers fire). |
 | `$selection` | `readonly SelectionRef[]` | **THE selection** — one ordered list of `{kind, id}` refs spanning every entity kind (`'subpart' \| 'connector' \| 'collider' \| 'ivaSeat' \| 'light' \| 'kitten'`). The LAST element is the primary. Ephemeral: never persisted, never undone, survives mode switches. See "The selection" below. |
 | `$lightEditContext` | `Record<string, number>` | Per light id, **which placement of its owner template** was last clicked. |
 | `$activeLayerId` | `string` | Layer new items land in. Ephemeral (not persisted, not undone); clamped to a live layer. See [layers.md](./layers.md). |
@@ -238,7 +238,8 @@ scale-mode drag is a deliberate no-op.
 **Light actions** (`part.lights`; see [lights.md](./lights.md)) — all enrolled in undo.
 **Discrete** (they `pushUndo()` themselves): `addLight(ownerTemplateId, seed?)` (appends a
 `createPartLight` default under a freshly generated `_lightN` id; the id, owner and layer are
-never seed-overridable), `removeLight(index)`,
+never seed-overridable — the id was just allocated, the owner is the explicit argument, and a
+new light lands on the **active layer**, like every other ordinary layer citizen), `removeLight(index)`,
 `setLightType(index, type)`, `setLightRayTracing(index, on)`, and
 `setLightOwner(index, ownerTemplateId, converted?)` (the re-home between `<PartGameData>` and a
 template's `<SubPartGameData>`; the caller supplies the frame-converted transform so the store

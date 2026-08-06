@@ -27,7 +27,10 @@ beforeEach(() => {
   newPart();
 });
 
-/** One entity of every selectable kind, each on its own (built-in or active) layer. */
+/**
+ * One entity of every selectable kind. SubParts, connectors, colliders and lights land on the
+ * ACTIVE layer (Default here); only seats and kittens go to their pinned built-in layer.
+ */
 function addOneOfEachKind(): void {
   addSubPart('Core.A');
   addConnector();

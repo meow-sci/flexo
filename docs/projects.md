@@ -263,7 +263,7 @@ top of it.
 {
   "format": "flexo-project-archive",
   "archiveVersion": 1,        // container LAYOUT version (exact-match)
-  "exportVersion": 9,         // PROJECT_EXPORT_VERSION of project.json (exact-match)
+  "exportVersion": 10,        // PROJECT_EXPORT_VERSION of project.json (exact-match)
   "name": "Rover-7", "description": "…",
   "savedAt": 1754300000000, "appBuildId": "abc123",
   "counts": { …ProjectMeta.counts… },
@@ -342,9 +342,13 @@ link. It encodes `EditingPart` into short keys (`p` placements, `c` connectors, 
 `m` custom meshes, …), omitting anything empty or at its default. (The stored snapshot is plain
 structured-cloneable data in IndexedDB and does not go through the codec.)
 
-`PROJECT_EXPORT_VERSION` is currently **9** (per-channel keyframe easing: `CKeyframe.es` values
-changed shape from one `CEasing` to `{p?, r?, s?}`, plus the additive `CAnimation.cs`
-CubicSpline-approximated import flag). Import accepts **exactly** that version — older payloads are
+`PROJECT_EXPORT_VERSION` is currently **10** (`<Light>` layer id: `CLight.ly` — optional,
+absent meaning the old pinned Lights layer — became a **required** `CLight.l` naming ANY
+ordinary layer, now that lights are ordinary layer citizens like connectors and colliders; a
+v9 payload's lights would decode onto a layer id that no longer carries that meaning). The
+bump before that was v9, per-channel keyframe easing: `CKeyframe.es` values changed shape from
+one `CEasing` to `{p?, r?, s?}`, plus the additive `CAnimation.cs` CubicSpline-approximated
+import flag. Import accepts **exactly** the current version — older payloads are
 rejected, never converted — and that mechanic is unchanged. What changed is the **bump
 policy**: an additive, backwards-compatible change **MUST NOT** bump it, because decode is
 total and tolerant (missing fields fall back to defaults, so an older same-version payload

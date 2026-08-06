@@ -3,7 +3,6 @@ import {
   DEFAULT_LAYER_ID,
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
-  LIGHT_LAYER_ID,
   createEmptyPart,
   identityTransform,
   type EditingPart,
@@ -14,7 +13,11 @@ import { buildOutlinerTree, type OutlinerLayerSection } from './outlinerTree';
 
 const EMPTY_CATALOG: ReadonlyMap<string, CatalogSubPart> = new Map();
 
-/** A document with one user layer and one entity of every kind on a sensible layer. */
+/**
+ * A document with one user layer and one entity of every kind on a sensible layer. Only IVA
+ * seats and kittens are pinned to a built-in layer; the light sits on the ordinary "Wings"
+ * layer alongside a SubPart, which is where a user's own drag would leave it.
+ */
 function fixture(): EditingPart {
   const part = createEmptyPart();
   part.layers.push({ id: 'layer1', name: 'Wings' });
@@ -63,7 +66,7 @@ function fixture(): EditingPart {
     innerAngleRad: 0.1,
     outerAngleRad: 0.5,
     rayTracing: false,
-    layerId: LIGHT_LAYER_ID,
+    layerId: 'layer1',
     ...identityTransform(),
   });
   part.kittens.push({
@@ -94,10 +97,9 @@ describe('buildOutlinerTree — layer partition', () => {
       DEFAULT_LAYER_ID,
       'layer1',
       IVA_SEAT_LAYER_ID,
-      LIGHT_LAYER_ID,
       KITTEN_LAYER_ID,
     ]);
-    expect(tree.map((s) => s.pinned)).toEqual([false, false, true, true, true]);
+    expect(tree.map((s) => s.pinned)).toEqual([false, false, true, true]);
   });
 
   it('leaves part.layers untouched (the partition is display-only)', () => {
@@ -109,7 +111,7 @@ describe('buildOutlinerTree — layer partition', () => {
 
   it('returns empty layers too, so the header can still be rendered', () => {
     const tree = build(createEmptyPart());
-    expect(tree).toHaveLength(4);
+    expect(tree).toHaveLength(3);
     expect(tree.every((s) => s.total === 0 && s.groups.length === 0)).toBe(true);
   });
 });
@@ -122,14 +124,35 @@ describe('buildOutlinerTree — kind grouping', () => {
       'CONNECTORS',
       'COLLIDERS',
     ]);
-    expect(section(tree, 'layer1').groups.map((g) => g.label)).toEqual(['SUBPARTS']);
+    // A light is an ordinary layer citizen, so it groups under the SAME section as the
+    // SubPart it illuminates, in KIND_DISPLAY_ORDER.
+    expect(section(tree, 'layer1').groups.map((g) => g.label)).toEqual(['SUBPARTS', 'LIGHTS']);
     expect(section(tree, IVA_SEAT_LAYER_ID).groups.map((g) => g.label)).toEqual(['IVA SEATS']);
+  });
+
+  it('re-homes a light onto any ordinary layer, which is what a header drop does', () => {
+    const part = fixture();
+    // Exactly what dragging the light row onto the Default header leaves behind.
+    part.lights[0].layerId = DEFAULT_LAYER_ID;
+    const tree = build(part);
+    expect(section(tree, 'layer1').groups.map((g) => g.label)).toEqual(['SUBPARTS']);
+    expect(section(tree, DEFAULT_LAYER_ID).groups.map((g) => g.label)).toEqual([
+      'SUBPARTS',
+      'CONNECTORS',
+      'COLLIDERS',
+      'LIGHTS',
+    ]);
+    expect(section(tree, DEFAULT_LAYER_ID).total).toBe(4);
+    // `pinned` is the flag the layer header consults before accepting an entity drop, so
+    // every layer a light can now live on is also a layer it can be dragged onto.
+    expect(section(tree, DEFAULT_LAYER_ID).pinned).toBe(false);
+    expect(section(tree, 'layer1').pinned).toBe(false);
   });
 
   it('keys every row as its `kind:id` selection ref', () => {
     const tree = build(fixture());
     expect(section(tree, DEFAULT_LAYER_ID).groups[0].rows[0].key).toBe('subpart:tank_2');
-    expect(section(tree, LIGHT_LAYER_ID).groups[0].rows[0].key).toBe('light:_light1');
+    expect(section(tree, 'layer1').groups[1].rows[0].key).toBe('light:_light1');
   });
 
   it('counts total across every kind on the layer', () => {
@@ -187,7 +210,7 @@ describe('buildOutlinerTree — row names and sub lines', () => {
   it('badges a light with its type and names its owner template', () => {
     const part = fixture();
     part.lights[0].ownerTemplateId = 'Core_Subpart_ElectricalA';
-    const row = section(build(part), LIGHT_LAYER_ID).groups[0].rows[0];
+    const row = section(build(part), 'layer1').groups[1].rows[0];
     expect(row.badges.lightType).toBe('Spot');
     expect(row.sub).toBe('Spot · via ElectricalA');
   });
@@ -250,7 +273,7 @@ describe('buildOutlinerTree — search', () => {
   it('drops a layer’s groups entirely when nothing on it matches', () => {
     const tree = build(fixture(), 'zzzz');
     expect(tree.every((s) => s.groups.length === 0 && s.shown === 0)).toBe(true);
-    expect(tree).toHaveLength(5); // headers stay — the panel decides what to draw
+    expect(tree).toHaveLength(4); // headers stay — the panel decides what to draw
   });
 });
 
@@ -267,7 +290,7 @@ describe('buildOutlinerTree — layer view state', () => {
     const tree = build(fixture(), '', view);
     const wings = section(tree, 'layer1');
     expect(wings.view.listed).toBe(false);
-    expect(wings.total).toBe(1);
+    expect(wings.total).toBe(2);
   });
 
   it('fills view-state defaults for a layer with no stored entry', () => {

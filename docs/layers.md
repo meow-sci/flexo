@@ -1,7 +1,7 @@
 # Layers
 
-Editor-only grouping of the things a Part is made of — SubParts, connectors and
-colliders — modeled on a graphics program's layers but tailored to Part building.
+Editor-only grouping of the things a Part is made of — SubParts, connectors, colliders
+and lights — modeled on a graphics program's layers but tailored to Part building.
 Layers organize the workspace; they have **no representation in KSA XML** and are
 never exported.
 
@@ -49,49 +49,48 @@ searching ignores it (a filtered Outliner always shows its matches).
 
 ### Ordinary layers vs. pinned kinds
 
-**SubParts, connectors and colliders are ordinary layer citizens** (`LayerableKind`):
+**SubParts, connectors, colliders and lights are ordinary layer citizens** (`LayerableKind`):
 they land on the active layer, mix freely on any layer, and can be moved between layers
 one at a time or in bulk. They are the things that ship inside the Part, so they belong
 in the same logical groupings the user builds the Part out of ("Engine bay", "Landing
 gear") — a layer can be hidden, faded, locked or swept with all of its geometry AND its
-attach nodes AND its collision volume at once.
+attach nodes AND its collision volume AND the lights that illuminate it at once.
 
-Three kinds are **pinned** to their own built-in layer (`ENTITY_ONLY_LAYER_IDS`) —
-nothing else may be moved onto those layers and they can never be moved off:
+Two kinds are **pinned** to their own built-in layer (`ENTITY_ONLY_LAYER_IDS`) —
+nothing else may be moved onto those layers and they can never be moved off. What stays
+pinned is a kind whose identity IS its layer:
 
 - **IVA Seats** (`IVA_SEAT_LAYER_ID = 'ivaSeats'`) — every `IvaSeat` (see
   [iva-seats.md](iva-seats.md)). Array order within `part.ivaSeats` is the in-game
   cycle order, so this layer's rows are ordinals, not names.
-- **Lights** (`LIGHT_LAYER_ID = 'lights'`) — every `PartLight` (see [lights.md](lights.md));
-  markers, not geometry, and one template light can render as N markers.
 - **Kittens** (`KITTEN_LAYER_ID = 'kittens'`) — editor-only visual aides that are never
   serialized to export at all.
 
 The **built-in** layers, all seeded by `createEmptyPart()` and never deletable
-(`BUILT_IN_LAYER_IDS`), are those three plus:
+(`BUILT_IN_LAYER_IDS`), are those two plus:
 
 - **Default** (`DEFAULT_LAYER_ID = 'default'`) — the starting active layer.
 
 ## Membership rules
 
-- New **SubParts** (`addSubPart`), **connectors** (`addConnector`) and **colliders**
-  (`addCollider`) all land in the **active layer** (`$activeLayerId`, clamped to an
-  existing layer; falls back to Default). **IVA seats**, **lights** and **kittens**
-  always land on their own pinned layer.
-- `addPart` puts an imported Part's SubParts, connectors AND colliders on ONE layer
-  (its `targetLayerId`, else the active layer), so one import is one logical group.
+- New **SubParts** (`addSubPart`), **connectors** (`addConnector`), **colliders**
+  (`addCollider`) and **lights** (`addLight`) all land in the **active layer**
+  (`$activeLayerId`, clamped to an existing layer; falls back to Default). **IVA seats**
+  and **kittens** always land on their own pinned layer.
+- `addPart` puts an imported Part's SubParts, connectors, colliders AND lights on ONE
+  layer (its `targetLayerId`, else the active layer), so one import is one logical group.
 - `duplicateSelected` / `duplicatePlacement` keep each copy in its source's layer;
   `pasteClipboard` does too, falling back to the active layer when the clipboard
   outlived the layer it was copied from.
 - The KSA XML parser assigns everything `DEFAULT_LAYER_ID` (XML has no layers);
   importing via `addPart` then re-homes it.
 - Project import (`mergeProjectImport`) mirrors each source layer as a NEW layer and
-  routes placements, connectors and colliders through that same mapping.
+  routes placements, connectors, colliders and lights through that same mapping.
 - The serializers ignore `layerId` entirely — export is unaffected.
 
 ## Transforms: what a group scale does to each kind
 
-Layer membership means a connector or collider can be swept into a bulk selection, so
+Layer membership means a connector, collider or light can be swept into a bulk selection, so
 the group-scale rules are kind-aware (`scalesWithGroup` / `groupScaledTransform` in
 `src/three/bulkTransform.ts`, mirrored by `scaleEverything`):
 
@@ -103,7 +102,9 @@ the group-scale rules are kind-aware (`scalesWithGroup` / `groupScaledTransform`
   `Part.Connector` to resolve nested/internal connections), not the size of anything
   drawn; re-grading it on a resize would silently change how the Part connects.
 - **IVA seats / lights** — position and rotation only; their write paths pin `scale`
-  to (1,1,1) because KSA has no size for either.
+  to (1,1,1) because KSA has no size for either. This is a per-kind write-path rule, not
+  a consequence of pinning — lights are ordinary layer citizens same as SubParts, but
+  still have nothing for a group scale to grow.
 
 ## Actions — `src/state/editorStore.ts`
 
@@ -125,23 +126,23 @@ All layer **document** mutations are discrete (self-record undo via `pushUndo()`
 - `setLayerColor(id, color | undefined)` → sets or clears the swatch; a no-change write is a
   no-op, so re-picking the current color never grows the history.
 - `duplicateLayer(id)` → copies the layer AND everything movable on it (SubParts,
-  connectors, colliders) in ONE undo step, inserts the copy after the source, makes it
-  active and selects the clones. Refused for the built-ins: Default is the fallback every
-  delete/move lands on, and the three entity-only layers are pinned, so a second copy of
+  connectors, colliders, lights) in ONE undo step, inserts the copy after the source, makes
+  it active and selects the clones. Refused for the built-ins: Default is the fallback every
+  delete/move lands on, and the two entity-only layers are pinned, so a second copy of
   either could not hold what its name promises. Ids come from the same generators
   `duplicateSelected` uses, so the two can never mint colliding ids.
 - `deleteLayer(id, { mode, targetLayerId })` → `'delete-items'` removes the layer's
-  placements/connectors/colliders; `'move-items'` reassigns them (to Default if the
-  target is invalid or pinned). Built-in layers (Default, IVA Seats, Lights, Kittens)
-  are protected. Active layer falls back to Default if it was deleted.
+  placements/connectors/colliders/lights; `'move-items'` reassigns them (to Default if the
+  target is invalid or pinned). Built-in layers (Default, IVA Seats, Kittens) are protected.
+  Active layer falls back to Default if it was deleted.
 - `clearLayer(id)` → empties a layer without deleting it (how the undeletable Kittens
   layer's **Clear Layer…** works).
 - `reorderLayers(orderedIds)` → reorders (must be a permutation of existing ids).
 - `moveEntityToLayer(kind, index, layerId)` → moves ONE row (`'subpart' | 'connector' |
-  'collider'`); the Outliner row menu's "Change Layer ▸".
-- `moveSelectionToLayer(layerId)` → moves every selected SubPart, connector and
-  collider in one undo step; pinned kinds in the selection stay where they are.
-  Both refuse the `ENTITY_ONLY_LAYER_IDS` layers.
+  'collider' | 'light'`); the Outliner row menu's "Change Layer ▸".
+- `moveSelectionToLayer(layerId)` → moves every selected SubPart, connector, collider and
+  light in one undo step; pinned kinds (IVA seats, kittens) in the selection stay where
+  they are. Both refuse the `ENTITY_ONLY_LAYER_IDS` layers.
 
 Ephemeral / selection helpers (no undo):
 
@@ -204,7 +205,7 @@ list, the assets toolbar, the Layers popover and the opacity popover-inside-a-po
 one react-aria `GridList` spanning every layer, so a multi-select — and a ⇧-range — crosses
 layers and kinds; row keys ARE `kind:id`, i.e. `SelectionRef`s.
 
-**Display partition**: ordinary layers first, the three pinned entity-only layers after.
+**Display partition**: ordinary layers first, the two pinned entity-only layers after.
 This is a *view* rule computed by `buildOutlinerTree` — `part.layers` keeps its document
 order, because reordering the document to match a cosmetic rule would be an undoable
 mutation. A pinned layer draws no kind subheader (it can only ever hold one kind).
@@ -253,7 +254,7 @@ exported. Activating a row makes that aid active, which opens its editor.
 
 `src/state/editorStore.test.ts` covers create/rename/color/duplicate/reorder/delete (both
 modes), clear, built-in protection, active-layer assignment + fallback on undo, the
-`moveEntityToLayer` / `moveSelectionToLayer` guards, and that connectors/colliders
+`moveEntityToLayer` / `moveSelectionToLayer` guards, and that connectors/colliders/lights
 follow the active (or import) layer. `src/three/bulkTransform.test.ts` covers the
 kind-aware group scale. `src/ui/outliner/outlinerTree.test.ts` covers the row model (the
 display partition, kind grouping, `shown/total`, the search semantics) and

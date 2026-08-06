@@ -8,7 +8,7 @@ import {
   type PlacementTransform,
 } from '../state/editorStore';
 import { setLayerLocked } from '../state/layerStore';
-import { DEFAULT_LAYER_ID, LIGHT_LAYER_ID, createEmptyPart } from '../ksa/types';
+import { DEFAULT_LAYER_ID, createEmptyPart } from '../ksa/types';
 import type { EditingPart, PartCollider, PartLight, SubPartPlacement } from '../ksa/types';
 import { colliderWorld, lightWorld } from './coords';
 import { applySelectionTransform, liftedSelectionRefs } from './selectionTransform';
@@ -65,7 +65,7 @@ function light(overrides: Partial<PartLight> = {}): PartLight {
     position: { x: 0, y: 0, z: 0 },
     rotation: { x: 0, y: 0, z: 0 },
     scale: { x: 1, y: 1, z: 1 },
-    layerId: LIGHT_LAYER_ID,
+    layerId: DEFAULT_LAYER_ID,
     ...overrides,
   };
 }

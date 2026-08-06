@@ -4,7 +4,7 @@ import { ENTITY_ONLY_LAYER_IDS } from '../../ksa/types';
  * Pure layer-reorder math for the Outliner's drag grip and its Move Up / Move Down menu
  * items (design: design-build-mode.md §2.2, §2.3.4).
  *
- * Reordering is defined over the **ordinary** partition only — the three pinned entity-only
+ * Reordering is defined over the **ordinary** partition only — the two pinned entity-only
  * layers always sort last in the DISPLAY and are neither drag sources nor drop targets — but
  * `reorderLayers` takes a permutation of the WHOLE `part.layers` array. These two functions
  * are the bridge, and they live outside the component because the off-by-one cases (drop on

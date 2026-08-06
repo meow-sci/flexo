@@ -151,7 +151,7 @@ consumer `<FeedsFrom>`, part `<ConsumerFeedWiring>`, addressable `<Tank Id>` con
 It is ordinary `$part` document state throughout: modeled in `src/ksa/types.ts`,
 undo-tracked like every other mutation, remapped on import/paste as above, encoded by the
 project codec (the `cp`/`fd`/`pl`/`tk`/`cfw` tokens added at wire version 4; the codec is at
-`PROJECT_EXPORT_VERSION` 9 today), and validated by the pure `src/ksa/engineValidation.ts`
+`PROJECT_EXPORT_VERSION` 10 today), and validated by the pure `src/ksa/engineValidation.ts`
 whose findings the Engine panel and the Export dialog both render. The pickable-options
 derivations (`src/state/feedTargets.ts`) are pure functions over `EditingPart` kept OUT of
 the component modules so React Fast Refresh survives. See

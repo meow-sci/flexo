@@ -49,13 +49,20 @@ document array: `EditingPart.lights: PartLight[]` (`src/ksa/types.ts`). A `PartL
   **built-in** template routes through the export-variant remap so Core's shared template is
   never mutated.
 
-## The Lights layer
+## Layers
 
-Every light lives on the built-in **Lights** layer (`LIGHT_LAYER_ID`, one of the
-entity-exclusive built-ins — see [layers.md](./layers.md)). Layer visibility hides the
-markers, the fade slider dims them, and **locking the layer both blocks 3D picking and prunes
-any selected lights** (the same `deselectLayer` contract every selectable kind must join — a
-kind left out keeps the gizmo attached to an entity the user just locked).
+A light is an **ordinary layer citizen** (`LayerableKind`), exactly like a SubPart, connector
+or collider — see [layers.md](./layers.md). A new light lands on the **active layer**
+(`addLight` reads `currentLayerId(part)`); duplicate and paste keep the source layer; an
+imported Part's lights land on the same layer as the SubParts they light. It can be moved to a
+different layer from the Outliner row menu's **Change Layer**, from the multi-select panel, or
+by dragging a selection onto a layer header — the same three surfaces every other kind uses.
+
+Layer visibility hides the markers, opacity fades them, and **locking a layer both blocks 3D
+picking and prunes any selected lights on it** (the same `deselectLayer` contract every
+selectable kind must join — a kind left out keeps the gizmo attached to an entity the user just
+locked). That contract is unchanged by lights leaving their old pinned layer; it now simply
+applies per-layer instead of to one fixed layer.
 
 ## Markers in the 3D workspace
 
@@ -90,14 +97,15 @@ Ctrl/Cmd/Shift-click toggles it within a cross-kind selection); the click also r
 **which instance** was hit in the `$lightEditContext` store atom — the highlight tints that
 context instance, the gizmo attaches to it, and it is the placement frame both the gizmo's
 write-back and the inspector's part-frame fields convert through (one atom, so they can never
-disagree). Selected lights participate in everything selection drives: the Outliner (a
-Lights section with one row per light, `via <template>` for subpart-owned ones), the dedicated
+disagree). Selected lights participate in everything selection drives: the Outliner (a `LIGHTS`
+kind-group in each layer's section, one row per light, `via <template>` for subpart-owned
+ones), the dedicated
 light inspector (below), keyboard nudge/rotate, delete/duplicate (a duplicate gets a fresh
 `_lightN` id and keeps its owner), and undo.
 
-Picking respects the layer rules: a hidden Lights layer blocks clicks (three.js raycasts
-invisible objects, so the guard is explicit), and a locked one rejects picks, prunes the
-selection, and suppresses the gizmo.
+Picking respects the layer rules: a hidden layer blocks clicks on the lights sitting on it
+(three.js raycasts invisible objects, so the guard is explicit), and a locked layer rejects
+picks, prunes the selection, and suppresses the gizmo.
 
 ## Gizmo editing and the light inspector
 
@@ -198,7 +206,7 @@ toggles and radios — foundation §10.7):
 
 **View ▸ Light Coverage ▸** chooses who draws it: `Selected` (default — only the selected light's
 context instance, so a multi-placement light doesn't stack N overlapping glows), `All`, or
-`Off`. It composes with the Lights layer: a hidden or faded layer hides/dims the coverage too.
+`Off`. It composes with layers: a light's own layer being hidden or faded hides/dims its coverage too.
 
 ### Honest limits
 
@@ -272,9 +280,9 @@ wireframe use, so the lit footprint and the wireframe cone describe the same con
 - Toggling the preview (or adding/removing a light while it is on) changes the scene's light
   count, which makes three **re-link every shader program** — a visible hitch on a big part. That
   is the main reason the default is off.
-- The preview composes with the Lights layer exactly as coverage does: a hidden Lights layer
-  means no preview illumination. Layer opacity does not apply (a light has no opacity), and
-  selecting a light does not tint its illumination green.
+- The preview composes with layers exactly as coverage does: a light on a hidden layer casts no
+  preview illumination. Layer opacity does not apply (a light has no opacity), and selecting a
+  light does not tint its illumination green.
 - Preview lights are **editor-only by construction**: they are children of the marker groups in
   `EditorScene`'s scene, and the three preview viewports (`PartPreviewViewport`,
   `SubPartPreviewViewport`, `ModelPreviewViewport`) plus the GLB exporter (`exportGlb.ts`) each

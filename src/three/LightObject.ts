@@ -455,8 +455,8 @@ export class LightObject {
 
   /**
    * Shows/hides the coverage children (boundary wire + falloff shells).
-   * `EditorScene` composes `$lightSettings.showVolumes` with the Lights layer's own
-   * visibility and calls this — it never touches `group.visible`, which `applyLayerView`
+   * `EditorScene` composes `$lightSettings.showVolumes` with the visibility of the layer
+   * the light is on and calls this — it never touches `group.visible`, which `applyLayerView`
    * owns exclusively.
    */
   setCoverageVisible(visible: boolean): void {
@@ -471,7 +471,7 @@ export class LightObject {
    * A per-object resource, created and released here rather than by an `EditorScene`
    * rebuild: only `markerSize` has no in-place path, and rebuilding every marker to flip
    * a global toggle would churn every geometry in the scene. `EditorScene` composes the
-   * `$lightSettings.livePreview` toggle with the Lights layer's visibility and the
+   * `$lightSettings.livePreview` toggle with the visibility of the light's layer and the
    * {@link import('./lightVolume').MAX_PREVIEW_LIGHTS} budget and calls this.
    *
    * Nothing else in the class touches it: {@link setLayerOpacity} and {@link applyTint}

@@ -7,18 +7,35 @@ import {
   putAsset,
   type AssetKind,
 } from './assetDb';
-import { getMeta, getSnapshot, getThumb, type ProjectCounts, type ProjectId } from './projectDb';
+import {
+  getMeta,
+  getSnapshot,
+  getThumb,
+  sumCounts,
+  type ProjectCounts,
+  type ProjectId,
+} from './projectDb';
 import { gunzip, gzip, gzipSupported, tarPack, tarUnpack } from './tarArchive';
 import {
   buildProjectExport,
   emptyAdoption,
+  mergeProjectImport,
   parseProjectImport,
   serializeProjectJson,
   type AssetAdoption,
   type ProjectExportEnvelope,
 } from './projectTransfer';
 import { PROJECT_EXPORT_VERSION } from './projectCodec';
-import { meshKind, type CustomMesh, type CustomTexture, type EditingPart } from '../ksa/types';
+import {
+  createEmptyPart,
+  DEFAULT_LAYER_ID,
+  meshKind,
+  type CustomMesh,
+  type CustomTexture,
+  type EditingPart,
+  type Vec3,
+} from '../ksa/types';
+import type { InactivePartDoc } from './partsStore';
 
 /**
  * The `.flexo.tar.gz` PROJECT ARCHIVE — flexo's portable, complete project container
@@ -79,6 +96,14 @@ export interface ArchiveAssetManifestEntry {
   sha256: string;
 }
 
+/** One part, as the manifest lists it — the import preview's whole source of truth for them. */
+export interface ArchiveManifestPart {
+  /** Display name at export time. */
+  name: string;
+  /** The KSA Part Id (`EditingPart.partId`) — what the part exports AS. */
+  partId: string;
+}
+
 export interface ArchiveManifest {
   format: typeof ARCHIVE_FORMAT;
   archiveVersion: number;
@@ -87,7 +112,10 @@ export interface ArchiveManifest {
   description: string;
   savedAt: number;
   appBuildId: string;
+  /** The project-wide totals — `sumCounts` over every part, not one part's tally. */
   counts: ProjectCounts;
+  /** Every part in the archive, in registry order (added additively — no version bump). */
+  parts: ArchiveManifestPart[];
   assets: ArchiveAssetManifestEntry[];
 }
 
@@ -187,7 +215,6 @@ export async function buildProjectArchive(
 
   abortIfRequested(signal);
   // Every part of the stored snapshot rides in the envelope, the active one flagged by index.
-  // P2.06 (MULTI_PART_PLAN) adds the manifest's per-part list + summed counts on top of this.
   const activeIndex = snapshot.parts.findIndex((p) => p.id === snapshot.activePartId);
   const envelope = buildProjectExport(snapshot.parts, meta.name, {
     includeBinaryBacked: true,
@@ -201,7 +228,10 @@ export async function buildProjectArchive(
     description: meta.description,
     savedAt: meta.savedAt,
     appBuildId: import.meta.env.VITE_BUILD_ID ?? 'dev',
-    counts: meta.counts,
+    // Derived from the snapshot rather than copied from `meta`, so the manifest can never
+    // disagree with the `project.json` sitting next to it in the same container.
+    counts: sumCounts(snapshot.parts.map((p) => p.part)),
+    parts: snapshot.parts.map((p) => ({ name: p.name, partId: p.part.partId })),
     assets: manifestAssets,
   };
 
@@ -278,6 +308,12 @@ export async function parseProjectArchive(
     return { ok: false, error: NOT_AN_ARCHIVE };
   }
   if (manifest?.format !== ARCHIVE_FORMAT) return { ok: false, error: NOT_AN_ARCHIVE };
+  // An ADDITIVE manifest field bumps neither version — but only because THIS reader
+  // default-fills it (see {@link ARCHIVE_VERSION} and the constitution's case 1). `parts`
+  // arrived after v1 shipped, so an archive written without it clears both gates below and
+  // reaches the import preview, which reads `manifest.parts` directly. Normalized here exactly
+  // the way `assets` is (`?? []`).
+  manifest = { ...manifest, parts: manifest.parts ?? [] };
 
   // Both versions are exact-match. flexo never converts formats — a mismatch is reported with
   // both numbers so the user knows which flexo to re-export from (design §4.1).
@@ -339,6 +375,30 @@ function shortId(): string {
 
 function tableEntry(assets: AssetTable, kind: AssetKind, id: string): ArchiveAssetEntry | null {
   return assets.find((entry) => entry.kind === kind && entry.id === id) ?? null;
+}
+
+/**
+ * Re-mints every `CustomMaterial.id` in `part` and rewrites the one reference to them
+ * (`CustomMesh.materialId`) — mutating in place, because `part` is the merge's own fresh copy.
+ *
+ * I4 (asset ids are project-unique) needs this for the import-as-NEW-PART path specifically:
+ * `mergeProjectImport` adds an incoming material only when the destination lacks its id, and
+ * that destination is always an EMPTY part here, so the dedupe can never fire and every
+ * material would keep its SOURCE id. Re-importing a project's own archive as parts would then
+ * put two different materials in one project under one id — a duplicate `<PbrMaterial Id>` at
+ * export. Textures, meshes and import batches already get fresh ids per entry
+ * ({@link planAssetAdoption} / `mergeProjectImport`); materials are the only family that does
+ * not. `'merge-into-active'` is deliberately NOT touched: there, dedupe-by-id into the active
+ * part is the intended semantics.
+ */
+function remintMaterialIds(part: EditingPart): void {
+  const ids = new Map(part.customMaterials.map((material) => [material.id, `mat_${shortId()}`]));
+  for (const material of part.customMaterials) {
+    material.id = ids.get(material.id) ?? material.id;
+  }
+  for (const mesh of part.customMeshes) {
+    if (mesh.materialId) mesh.materialId = ids.get(mesh.materialId) ?? mesh.materialId;
+  }
 }
 
 /**
@@ -485,30 +545,104 @@ async function copyBlobsVerbatim(projectId: ProjectId, assets: AssetTable): Prom
   }
 }
 
+/**
+ * Where an import lands (design §4.3 + `plans/MULTI_PART_PLAN.md` P2.06).
+ *
+ * - `'new'` — a faithful reconstruction as a fresh saved project, switched to, every part
+ *   included, blobs adopted verbatim (the new namespace makes their ids collision-free). Not
+ *   an undo step: it arrives as a project, not as an edit.
+ * - `'add-parts'` — every part of the payload joins the CURRENT project as its own new part,
+ *   each merged into an empty document so nothing existing is touched. Registry lifecycle, so
+ *   not an undo step either (I6).
+ * - `'merge-into-active'` — the additive paste: ONE part's content merged into the active
+ *   document as ONE undo step. Only offered for a single-part payload.
+ */
+export type ArchiveImportMode = 'new' | 'add-parts' | 'merge-into-active';
+
+/**
+ * One row on its way into `partsStore.addImportedParts` — spelled out here so this module's
+ * only compile-time reference to `partsStore` stays a type, and the value import stays dynamic.
+ */
+interface ImportedPartEntry {
+  name: string;
+  visible: boolean;
+  opacity: number;
+  offset: Vec3;
+  includeInExport: boolean;
+  doc: InactivePartDoc;
+}
+
 export interface ImportArchiveOptions {
-  mode: 'merge' | 'new';
+  mode: ArchiveImportMode;
   parsed: Extract<ArchiveParseResult, { ok: true }>;
   onProgress?: (done: number, total: number) => void;
 }
 
 /**
- * Applies a parsed archive (design §4.3).
+ * Adds EVERY part of an envelope to the current project as new parts, adopting `assets` into
+ * this project's id space along the way, and lands the user on the first one.
  *
- * - `merge` — additive into the CURRENT project as **one undo step**, with binary assets
- *   adopted under fresh ids and byte-identical textures deduped onto the ones already there.
- * - `new` — a faithful reconstruction as a fresh saved project, switched to, with the blobs
- *   adopted verbatim (the new namespace makes their ids collision-free). Not an undo step:
- *   it arrives as a project, not as an edit.
+ * Each entry is merged into a FRESH empty part rather than into anything existing, so the
+ * adoption plan is computed against an empty destination: nothing can dedupe onto a texture
+ * this part does not have, and every incoming asset id comes out fresh (I4). The merge mirrors
+ * each source layer into the new document, which is exactly why the parked view state starts
+ * empty — an unlisted layer view defaults to visible/unlocked.
+ *
+ * Shared by the archive path (`'add-parts'`) and the pasted-JSON path, which passes `[]`: a
+ * data-only payload has already had its binary-backed descriptors dropped at the parse
+ * boundary, so an empty table adopts nothing and the kitten meshes merge as pure data.
+ */
+export async function importEnvelopeAsParts(
+  envelope: ProjectExportEnvelope,
+  assets: AssetTable,
+  onProgress?: (done: number, total: number) => void,
+): Promise<string[]> {
+  const { $currentProjectId } = await import('./projectIndexStore');
+  const { hydrateCustomAssets } = await import('./customAssetStore');
+  const { addImportedParts, switchPart } = await import('./partsStore');
+
+  const projectId = $currentProjectId.get();
+  const entries: ImportedPartEntry[] = [];
+  for (const entry of envelope.parts) {
+    const destination = createEmptyPart();
+    const adoption = await planAssetAdoption(
+      projectId,
+      destination,
+      { textures: entry.data.customTextures, meshes: entry.data.customMeshes },
+      assets,
+    );
+    await copyAdoptedBlobs(projectId, entry.data.customMeshes, assets, adoption, onProgress);
+    const merged = mergeProjectImport(destination, entry, { adoption });
+    // The one asset family the merge cannot freshen on its own — see {@link remintMaterialIds}.
+    remintMaterialIds(merged.part);
+    entries.push({
+      name: entry.name,
+      visible: entry.visible,
+      opacity: entry.opacity,
+      offset: entry.offset,
+      includeInExport: entry.includeInExport,
+      doc: { part: merged.part, layerView: {}, activeLayerId: DEFAULT_LAYER_ID },
+    });
+  }
+  const ids = addImportedParts(entries);
+  // Re-publish blob URLs / re-register import atlases for the adopted descriptors, ONCE for the
+  // whole batch — hydration reads the entire registry, so every new part must be in it first.
+  await hydrateCustomAssets();
+  if (ids[0]) switchPart(ids[0]);
+  return ids;
+}
+
+/**
+ * Applies a parsed archive in one of the three {@link ArchiveImportMode}s.
  *
  * The store imports are deliberately dynamic: this module is otherwise pure enough to unit
- * test against fake IndexedDB, and `editorStore`/`projectStore` drag the whole editor in.
+ * test against fake IndexedDB, and `editorStore`/`projectStore`/`partsStore` drag the whole
+ * editor in.
  */
 export async function importArchive(
   opts: ImportArchiveOptions,
-): Promise<{ mode: 'merge' | 'new'; name: string }> {
+): Promise<{ mode: ArchiveImportMode; name: string }> {
   const { mode, parsed, onProgress } = opts;
-  const { $currentProjectId } = await import('./projectIndexStore');
-  const { hydrateCustomAssets } = await import('./customAssetStore');
 
   if (mode === 'new') {
     const { loadProjectAsNew } = await import('./projectStore');
@@ -524,11 +658,25 @@ export async function importArchive(
     return { mode, name: result.name };
   }
 
+  if (mode === 'add-parts') {
+    await importEnvelopeAsParts(parsed.envelope, parsed.assets, onProgress);
+    return { mode, name: parsed.manifest.name };
+  }
+
+  // 'merge-into-active' — the additive paste, unchanged. Defined ONLY for a single-part
+  // payload, because "merge N parts into one document" has no meaning. The dialog disables the
+  // destination (with the part count as the reason) and this is the AUTHORITATIVE guard — the
+  // same split `partsStore.deletePart` uses: a command or a test calling in here directly must
+  // be refused rather than silently dropping parts 2..N.
+  if (parsed.envelope.parts.length !== 1) {
+    throw new Error(
+      `“Merge into active part” takes a single-part source; this one has ${parsed.envelope.parts.length} parts. Import it as new parts instead.`,
+    );
+  }
+  const { $currentProjectId } = await import('./projectIndexStore');
+  const { hydrateCustomAssets } = await import('./customAssetStore');
   const { $part, importProjectData } = await import('./editorStore');
   const projectId = $currentProjectId.get();
-  // P2.06 (MULTI_PART_PLAN) replaces this branch with the real mode set ('add-parts' +
-  // 'merge-into-active'). Until then the merge is single-entry: only the envelope's FIRST
-  // part is merged into the active one.
   const entry = parsed.envelope.parts[0];
   const adoption = await planAssetAdoption(
     projectId,

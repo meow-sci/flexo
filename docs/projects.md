@@ -266,7 +266,8 @@ top of it.
   "exportVersion": 11,        // PROJECT_EXPORT_VERSION of project.json (exact-match)
   "name": "Rover-7", "description": "…",
   "savedAt": 1754300000000, "appBuildId": "abc123",
-  "counts": { …ProjectMeta.counts… },
+  "counts": { …sumCounts over every part… },
+  "parts": [{ "name": "Part 1", "partId": "rover_hab" }],   // the import preview's part list
   "assets": [
     { "kind": "tex-src", "id": "t_ab12", "path": "assets/tex-src/t_ab12",
       "bytes": 152330, "mime": "image/png", "sha256": "…" }
@@ -296,18 +297,26 @@ Parsing is total at the container level and exact at the two version gates, and 
 a message the dialog renders verbatim ("Not a flexo archive.", the version copy, "Archive is
 incomplete (missing …). Nothing was imported."). Nothing touches the workspace until it succeeds.
 
-Then one of two destinations:
+Then one of three destinations:
 
-- **Merge into the current project** (the default) — additive, with fresh collision-free ids and
-  every cross-reference rewritten, as **ONE undo step**. Binary assets are adopted into this
-  project's namespace under fresh ids before the document mutation, so undoing removes
-  descriptors and never bytes (the unchanged asset contract).
-- **Open as new project** — a faithful reconstruction (no remapping) as a fresh saved project,
-  switched to, with the blobs adopted verbatim under the new namespace. Not an undo step: it
-  arrives as a project, not as an edit.
+- **New project** — a faithful reconstruction (no remapping) as a fresh saved project, switched
+  to, with every part of the payload and the blobs adopted verbatim under the new namespace. Not
+  an undo step: it arrives as a project, not as an edit.
+- **Add as new part(s)** (the default) — every part of the payload joins the open project as its
+  own part, each merged into an EMPTY document so nothing already in the project is touched, and
+  the first one becomes active. Registry lifecycle, so not an undo step either. Binary assets are
+  adopted into this project's namespace under fresh ids (invariant I4 — asset ids are
+  project-unique).
+- **Merge into active part** — additive into the document you are editing, with fresh
+  collision-free ids and every cross-reference rewritten, as **ONE undo step**. Binary assets are
+  adopted before the document mutation, so undoing removes descriptors and never bytes (the
+  unchanged asset contract). Offered only for a single-part payload: merging N parts into one
+  document has no meaning, so the dialog disables the row and states the part count as the reason.
 
-**Texture dedup** (merge only): an incoming texture is compared against destination textures of
-the same channel with the same source byte length, by SHA-256. A match reuses the existing
+**Texture dedup** (merge-into-active only — an added part's destination is an empty document, so
+it has nothing to dedupe against and every asset id comes out fresh): an incoming texture is
+compared against destination textures of the same channel with the same source byte length, by
+SHA-256. A match reuses the existing
 texture id and copies no blob; the hash learned on the way is cached on the descriptor
 (`CustomTexture.sha256`, an additive optional field — no version moves for it). **Meshes and
 imports never dedup** — identity is load-bearing, two identical boxes are two SubParts — and an

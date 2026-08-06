@@ -5,9 +5,9 @@ import {
   Button,
   Dialog,
   DialogViewStack,
+  GridList,
+  GridListItem,
   Modal,
-  ToggleButton,
-  ToggleButtonGroup,
   cn,
   dangerBox,
   monoTextarea,
@@ -18,9 +18,17 @@ import {
 import { $projectIndex, uniqueProjectName } from '../../state/projectIndexStore';
 import { importProjectData } from '../../state/editorStore';
 import { loadProjectAsNew } from '../../state/projectStore';
-import { importArchive, parseProjectArchive } from '../../state/projectArchive';
-import type { ArchiveParseResult } from '../../state/projectArchive';
-import { parseProjectImport, type ProjectExportEnvelope } from '../../state/projectTransfer';
+import {
+  importArchive,
+  importEnvelopeAsParts,
+  parseProjectArchive,
+} from '../../state/projectArchive';
+import type { ArchiveImportMode, ArchiveParseResult } from '../../state/projectArchive';
+import {
+  parseProjectImport,
+  type ProjectExportData,
+  type ProjectExportEnvelope,
+} from '../../state/projectTransfer';
 import { setMode } from '../../state/modeStore';
 import { status } from '../../state/statusStore';
 import { toast } from '../toast';
@@ -28,17 +36,21 @@ import { formatBytes } from './projectFormat';
 
 /**
  * **Import Project…** (dialog id `'import-project'`, size M — design:
- * `plans/flexo_v2/design/design-projects-export.md` §4.3; foundation §10.9).
+ * `plans/flexo_v2/design/design-projects-export.md` §4.3; foundation §10.9;
+ * `plans/MULTI_PART_PLAN.md` P2.06).
  *
  * One flow for both containers — a `.flexo.tar.gz` archive (binaries included) or the plain
- * project JSON v1 could paste — and one destination choice:
+ * project JSON v1 could paste — and one destination choice out of three:
  *
- * - **Merge into current project** (default): additive, with fresh collision-free ids and
- *   every cross-reference rewritten, as **ONE undo step**. An archive's textures and meshes
- *   are adopted into this project's namespace; byte-identical textures dedupe onto the ones
- *   already here.
- * - **Open as new project**: a faithful reconstruction as a fresh saved project, switched to.
- *   Not an undo step — it arrives as a project, not as an edit.
+ * - **New project**: a faithful reconstruction as a fresh saved project, switched to, with
+ *   every part of the payload. Not an undo step — it arrives as a project, not as an edit.
+ * - **Add as new part(s)** (default): every part of the payload joins the open project as its
+ *   own part, each merged into an empty document so nothing already here is touched. An
+ *   archive's textures and meshes are adopted into this project's namespace under fresh ids.
+ * - **Merge into active part**: the additive paste — one payload part's content merged into
+ *   the active document as **ONE undo step**, byte-identical textures deduping onto the ones
+ *   already here. Offered only for a single-part payload, since merging N parts into one
+ *   document has no meaning.
  *
  * v1 accepted a pasted string and nothing else (census pain #8); the paste box is kept, and
  * drop / file-pick are added beside it.
@@ -73,7 +85,7 @@ type Pending =
 interface ImportNav {
   close: () => void;
   review: (pending: Pending) => void;
-  run: (pending: Pending, mode: 'merge' | 'new') => void;
+  run: (pending: Pending, mode: ArchiveImportMode) => void;
   back: () => void;
 }
 
@@ -234,12 +246,15 @@ function PickView() {
 function ReviewView({ pending }: { pending: Pending }) {
   const nav = use(ImportNavContext);
   const index = useStore($projectIndex);
-  const [destination, setDestination] = useState<'merge' | 'new'>('merge');
+  const [destination, setDestination] = useState<ArchiveImportMode>('add-parts');
 
   const env = pending.kind === 'archive' ? pending.parsed.envelope : pending.env;
-  // P2.06 (MULTI_PART_PLAN) replaces this preview with the manifest's per-part list and the
-  // three-way destination choice; until then it summarizes the envelope's FIRST part.
-  const data = env.parts[0].data;
+  // An archive states its parts in the manifest — the container's own inventory, readable
+  // without inflating anything. A pasted envelope carries the same two fields per entry.
+  const parts =
+    pending.kind === 'archive'
+      ? pending.parsed.manifest.parts
+      : env.parts.map((entry) => ({ name: entry.name, partId: entry.sourcePartId }));
   const assetBytes =
     pending.kind === 'archive'
       ? pending.parsed.assets.reduce((sum, asset) => sum + asset.bytes.length, 0)
@@ -250,14 +265,38 @@ function ReviewView({ pending }: { pending: Pending }) {
   void index;
   const newName = uniqueProjectName(projectNameOf(pending));
 
+  // Project-wide totals: a payload is N parts, so the summary line adds them up.
+  const total = (pick: (data: ProjectExportData) => number): number =>
+    env.parts.reduce((sum, entry) => sum + pick(entry.data), 0);
   const counts: [string, number][] = [
-    ['SubParts', data.placements.length],
-    ['connectors', data.connectors.length],
-    ['colliders', data.colliders.length],
-    ['seats', data.ivaSeats.length],
-    ['lights', data.lights.length],
-    ['animations', data.animations.length],
-    ['layers', data.layers.length],
+    ['SubParts', total((d) => d.placements.length)],
+    ['connectors', total((d) => d.connectors.length)],
+    ['colliders', total((d) => d.colliders.length)],
+    ['seats', total((d) => d.ivaSeats.length)],
+    ['lights', total((d) => d.lights.length)],
+    ['animations', total((d) => d.animations.length)],
+    ['layers', total((d) => d.layers.length)],
+  ];
+
+  // "Merge into active part" folds ONE part's content into the open document; with several
+  // parts on the wire there is no answer to "which one", so the row states why it is off.
+  const mergeBlocked = parts.length > 1 ? `source has ${parts.length} parts` : null;
+  const destinations: { id: ArchiveImportMode; label: string; detail: string }[] = [
+    {
+      id: 'new',
+      label: 'New project',
+      detail: `Becomes “${newName}” and opens it. Your current project is untouched, and this is not an undo step.`,
+    },
+    {
+      id: 'add-parts',
+      label: `Add as new part${parts.length === 1 ? '' : 's'}`,
+      detail: `Adds ${parts.length} part${parts.length === 1 ? '' : 's'} to the project you have open. Nothing already in it is touched.`,
+    },
+    {
+      id: 'merge-into-active',
+      label: 'Merge into active part',
+      detail: mergeBlocked ?? 'Adds everything to the part you are editing, as one undo step.',
+    },
   ];
 
   return (
@@ -276,26 +315,49 @@ function ReviewView({ pending }: { pending: Pending }) {
         {assetCount > 0 && ` · ${assetCount} assets (${formatBytes(assetBytes)})`}
       </p>
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1">
+        <span className="text-xs font-medium text-fg-muted">
+          {parts.length === 1 ? '1 part' : `${parts.length} parts`}
+        </span>
+        <ul className="flex flex-col gap-0.5 rounded-md border border-border p-2">
+          {parts.map((part, i) => (
+            <li key={i} className="flex items-baseline justify-between gap-3 text-xs">
+              <span className="truncate text-fg">{part.name}</span>
+              <span className="shrink-0 truncate font-mono text-[11px] text-fg-subtle">
+                {part.partId}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="flex flex-col gap-1">
         <span className="text-xs font-medium text-fg-muted">Destination</span>
-        <ToggleButtonGroup
-          size="md"
+        <GridList
+          aria-label="Destination"
           selectionMode="single"
+          selectionBehavior="replace"
           disallowEmptySelection
           selectedKeys={[destination]}
           onSelectionChange={(keys) => {
-            const next = [...keys][0];
-            if (next === 'merge' || next === 'new') setDestination(next);
+            if (keys === 'all') return;
+            const next = destinations.find((option) => keys.has(option.id));
+            if (next) setDestination(next.id);
           }}
         >
-          <ToggleButton id="merge">Merge into current project</ToggleButton>
-          <ToggleButton id="new">Open as new project</ToggleButton>
-        </ToggleButtonGroup>
-        <p className="text-xs leading-snug text-fg-subtle">
-          {destination === 'merge'
-            ? 'Adds everything to the project you have open, as one undo step.'
-            : `Becomes “${newName}” and opens it. Your current project is untouched, and this is not an undo step.`}
-        </p>
+          {destinations.map((option) => (
+            <GridListItem
+              key={option.id}
+              id={option.id}
+              textValue={option.label}
+              isDisabled={option.id === 'merge-into-active' && mergeBlocked !== null}
+              className="flex-col items-stretch gap-0.5"
+            >
+              <span className="text-sm text-fg">{option.label}</span>
+              <span className="text-xs leading-snug text-fg-subtle">{option.detail}</span>
+            </GridListItem>
+          ))}
+        </GridList>
       </div>
 
       <div className="flex justify-end gap-2">
@@ -322,7 +384,7 @@ function ImportingView({
   onDone,
 }: {
   pending: Pending;
-  mode: 'merge' | 'new';
+  mode: ArchiveImportMode;
   onDone: () => void;
 }) {
   const nav = use(ImportNavContext);
@@ -348,15 +410,22 @@ function ImportingView({
               if (live) setProgress({ done, total });
             },
           });
-          finish(mode, result.name);
-        } else if (mode === 'merge') {
-          // P2.06 (MULTI_PART_PLAN) makes this the 'merge-into-active' mode, gated on a
-          // single-part source; until then a pasted multi-part payload merges its first part.
+          finish(mode, result.name, pending.parsed.envelope.parts.length);
+        } else if (mode === 'merge-into-active') {
+          // A data-only payload brings no bytes, so the merge needs no adoption plan; the
+          // dialog only offers this destination for a single-part source.
           const summary = importProjectData(pending.env.parts[0]);
-          finish(mode, pending.env.projectName, summary.meshes);
+          finish(mode, pending.env.projectName, 1, summary.meshes);
+        } else if (mode === 'add-parts') {
+          // Same path the archive takes, with an empty asset table: the parse boundary already
+          // dropped every binary-backed descriptor a pasted payload could not carry.
+          await importEnvelopeAsParts(pending.env, [], (done, total) => {
+            if (live) setProgress({ done, total });
+          });
+          finish(mode, pending.env.projectName, pending.env.parts.length);
         } else {
           const created = await loadProjectAsNew(pending.env);
-          finish(mode, created.name);
+          finish(mode, created.name, pending.env.parts.length);
         }
         if (live) onDone();
       } catch (err) {
@@ -403,18 +472,33 @@ function ImportingView({
 }
 
 /** Success reporting + the §4.3 landing: Build mode, with the import's own layers revealed. */
-function finish(mode: 'merge' | 'new', name: string, meshes?: number): void {
+function finish(mode: ArchiveImportMode, name: string, parts: number, meshes?: number): void {
   setMode('build');
+  const plural = parts === 1 ? '' : 's';
   if (mode === 'new') {
     status(`Opened “${name}”`, { severity: 'success' });
-    toast({ title: 'Project imported', description: `Opened as “${name}”`, variant: 'success' });
+    toast({
+      title: 'Project imported',
+      description: `Opened as “${name}” with ${parts} part${plural}`,
+      variant: 'success',
+    });
+    return;
+  }
+  if (mode === 'add-parts') {
+    // Not an undo step: adding a part is registry lifecycle, not a document mutation (I6).
+    status(`Added ${parts} part${plural} from “${name}”`, { severity: 'success' });
+    toast({
+      title: 'Parts imported',
+      description: `${parts} part${plural} added from “${name}” — you are now editing the first.`,
+      variant: 'success',
+    });
     return;
   }
   toast({
     title: 'Project imported',
     description:
       meshes === undefined
-        ? `“${name}” merged into this project — one ⌘Z undoes all of it.`
+        ? `“${name}” merged into this part — one ⌘Z undoes all of it.`
         : `${meshes} SubParts merged — one ⌘Z undoes all of it.`,
     variant: 'success',
   });

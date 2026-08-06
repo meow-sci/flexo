@@ -1,13 +1,15 @@
 import { atom, computed } from 'nanostores';
-import { createEmptyPart, DEFAULT_LAYER_ID } from '../ksa/types';
+import { createEmptyPart, DEFAULT_LAYER_ID, DEFAULT_PART_ID } from '../ksa/types';
 import type { EditingPart, Vec3 } from '../ksa/types';
 import { closeChain } from './chainStore';
 import { $activeLayerId, $part, clearSelection, exportHistory, importHistory } from './editorStore';
 import type { HistorySnapshot } from './editorStore';
 import { $layerView } from './layerStore';
 import type { LayerViewState } from './layerStore';
+import { clonePartWithFreshAssets } from './partClone';
 import { deriveCounts } from './projectDb';
 import type { ProjectCounts, SavedPartEntry } from './projectDb';
+import { $currentProjectId } from './projectIndexStore';
 
 /**
  * The part registry — a project holds N Parts, but every editing surface stays
@@ -78,6 +80,9 @@ const inactiveHistories = new Map<string, HistorySnapshot>();
 /** The injected custom-asset blob sweep — see {@link registerPartAssetSweeper}. */
 let assetSweeper: ((doc: EditingPart) => Promise<void>) | null = null;
 
+/** The injected all-parts custom-asset hydrate — see {@link registerPartAssetHydrator}. */
+let assetHydrator: (() => Promise<void>) | null = null;
+
 /**
  * Wires the custom-asset blob sweep {@link deletePart} runs on the part it destroys. Call ONCE
  * at app startup. The dependency is inverted through this one slot because `customAssetStore`
@@ -86,6 +91,17 @@ let assetSweeper: ((doc: EditingPart) => Promise<void>) | null = null;
  */
 export function registerPartAssetSweeper(fn: (doc: EditingPart) => Promise<void>): void {
   assetSweeper = fn;
+}
+
+/**
+ * Wires the all-parts custom-asset hydrate {@link duplicatePart} runs once the copy is in the
+ * registry (its re-minted textures and painted-glow bitmaps need blob URLs before anything can
+ * render them). Call ONCE at app startup, next to {@link registerPartAssetSweeper} — and for
+ * the same reason: `customAssetStore` imports THIS module (`snapshotParts`), so importing
+ * `hydrateCustomAssets` back would close a cycle.
+ */
+export function registerPartAssetHydrator(fn: () => Promise<void>): void {
+  assetHydrator = fn;
 }
 
 /**
@@ -113,6 +129,17 @@ export function uniquePartName(base: string = 'Part', exceptId?: string): string
     const candidate = `${trimmed} ${n}`;
     if (!taken.has(candidate)) return candidate;
   }
+}
+
+/**
+ * `base` when nothing has it, else `base 2`, `base 3`, … — the keep-the-name-you-asked-for
+ * rule shared by {@link addImportedParts} and {@link duplicatePart}. Deliberately NOT
+ * {@link uniquePartName}, which always appends " 1" because it names a part nobody named.
+ */
+function firstFreeName(base: string, taken: ReadonlySet<string>): string {
+  let name = base;
+  for (let n = 2; taken.has(name); n++) name = `${base} ${n}`;
+  return name;
 }
 
 /** The parked document of an inactive part, or null — the active part has none (it is live). */
@@ -342,9 +369,7 @@ export function addImportedParts(
   const ids: string[] = [];
   for (const entry of entries) {
     const id = newPartEntryId();
-    const base = entry.name.trim() || 'Part';
-    let name = base;
-    for (let n = 2; taken.has(name); n++) name = `${base} ${n}`;
+    const name = firstFreeName(entry.name.trim() || 'Part', taken);
     taken.add(name);
     inactiveDocs.set(id, entry.doc);
     added.push({
@@ -361,6 +386,73 @@ export function addImportedParts(
   $partEntries.set([...$partEntries.get(), ...added]);
   bumpInactiveRevision();
   return ids;
+}
+
+/**
+ * Copies a part — document, custom assets and all — into a new entry right after it, and makes
+ * the COPY active (so the user lands where their next edit belongs). Returns the new entry id,
+ * or null when `id` names no entry — including one deleted while the clone was in flight.
+ *
+ * The copy's custom assets get a brand-new identity via {@link clonePartWithFreshAssets}
+ * (I4 — asset ids and custom-mesh SubPart ids are project-unique, so a shared id would alias
+ * blobs and collide at export), which is why this is the one async registry action.
+ *
+ * NO user feedback here: partsStore never imports `src/ui` — the command layer owns the toast.
+ */
+export async function duplicatePart(id: string): Promise<string | null> {
+  if (!$partEntries.get().some((entry) => entry.id === id)) return null;
+  // The active part composes from the LIVE stores — the same read as `parkActive`, without
+  // its writes: duplicating must not disturb the document being duplicated.
+  const doc =
+    id === $activePartId.get()
+      ? { part: $part.get(), layerView: $layerView.get(), activeLayerId: $activeLayerId.get() }
+      : inactiveDocs.get(id);
+  if (!doc) return null;
+
+  const cloned = await clonePartWithFreshAssets(doc.part, $currentProjectId.get());
+  // Two parts sharing a KSA Part Id is a P3 export-preflight blocker. Suffixing keeps the
+  // common case green; the placeholder is left alone, because it is already the "unset" value
+  // the user is expected to replace in Data ▸ Identity.
+  if (cloned.partId !== DEFAULT_PART_ID) cloned.partId = `${cloned.partId}_copy`;
+
+  // RACE: the clone above is async, so any registry read taken before it is stale — a second
+  // duplicate or a `deletePart` can land in that window. Everything below is built from THIS
+  // read: publishing a pre-await snapshot would drop the interleaved copy (leaving
+  // `$activePartId` naming an entry `$partEntries` no longer lists) or resurrect a deleted
+  // entry whose parked document is already gone (`snapshotParts()` would spread `undefined`).
+  const entries = $partEntries.get();
+  const index = entries.findIndex((entry) => entry.id === id);
+  if (index === -1) return null;
+  const source = entries[index];
+
+  const newId = newPartEntryId();
+  // Park BEFORE publishing the entry: every non-active `$partEntries` entry must already have a
+  // parked document, or a subscriber could see an entry `snapshotParts()` has no document for.
+  // No `inactiveHistories` entry either — a copy starts with an empty undo stack.
+  inactiveDocs.set(newId, {
+    part: cloned,
+    layerView: structuredClone(doc.layerView),
+    activeLayerId: doc.activeLayerId,
+  });
+  const name = firstFreeName(`${source.name} copy`, new Set(entries.map((entry) => entry.name)));
+  const next = [...entries];
+  next.splice(index + 1, 0, {
+    id: newId,
+    name,
+    visible: source.visible,
+    opacity: source.opacity,
+    offset: { ...source.offset },
+    includeInExport: source.includeInExport,
+    counts: deriveCounts(cloned),
+  });
+  $partEntries.set(next);
+
+  // The clone's textures and painted-glow bitmaps now exist under fresh keys with no blob URLs
+  // published for them; hydration reads the whole registry, so the entry must be in place first.
+  await assetHydrator?.();
+  bumpInactiveRevision();
+  switchPart(newId);
+  return newId;
 }
 
 /**

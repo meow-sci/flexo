@@ -43,7 +43,7 @@ import {
   clearSelection,
 } from './editorStore';
 import { $currentProjectId } from './projectIndexStore';
-import { registerPartAssetSweeper, snapshotParts } from './partsStore';
+import { registerPartAssetHydrator, registerPartAssetSweeper, snapshotParts } from './partsStore';
 import { notify } from './notificationStore';
 import { status } from './statusStore';
 import { closeDialog, isDialogOpen, openDialog } from './dialogStore';
@@ -2357,8 +2357,10 @@ export function initCustomAssets(): void {
       });
     })
     .catch((err) => console.warn('flexo: asset purge failed', err));
-  // Deleting a part destroys its binaries; partsStore holds the slot rather than the import.
+  // Deleting a part destroys its binaries; duplicating one mints fresh binaries that need blob
+  // URLs. partsStore holds both as slots rather than importing this module (one-way direction).
   registerPartAssetSweeper(sweepPartAssets);
+  registerPartAssetHydrator(hydrateCustomAssets);
   $currentProjectId.subscribe(() => {
     void hydrateCustomAssets().catch((err) =>
       console.warn('flexo: custom-asset hydrate failed', err),

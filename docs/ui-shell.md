@@ -217,7 +217,8 @@ one may be open, and **stacking is banned** — a dialog that needs a second ste
 a view before dismissing) or an inline destructive strip on the row. That is what retired
 v1's controlled/uncontrolled dual dialog APIs.
 
-The menubar's right cluster carries the project chip (→ Projects…), the compact ↶ ↷ pair
+The menubar's right cluster carries the part chip (→ the parts popover), the project chip
+(→ Projects…), the compact ↶ ↷ pair
 (disabled off `$canUndo` / `$canRedo`, tooltip = the step label) and the ⌘K button. The mode
 switcher is centered. Below ~900px the eight menus collapse into a single `☰` trigger
 rendering the same spec.
@@ -404,7 +405,7 @@ bespoke forks.
 
 | Primitive | File | Spec |
 | --- | --- | --- |
-| PhoneTopBar | `shell/phone/PhoneTopBar.tsx` | one slim row: `☰` · mode name · project chip · ↶ ↷ |
+| PhoneTopBar | `shell/phone/PhoneTopBar.tsx` | one slim row: `☰` · mode name · part+project chip · ↶ ↷ |
 | MenuSheet | `shell/phone/MenuSheet.tsx` | `☰` opens the SAME `MENU_SPEC` as a drill-down sheet — zero parallel menu wiring, so no feature loses its phone path |
 | ModeTabBar | `shell/phone/ModeTabBar.tsx` (pure) + `PhoneModeTabs.tsx` (wired) | bottom fixed bar, five tabs; tap switches, **re-tap the active tab opens its Panel sheet** |
 | Sheet | `kit/Sheet.tsx` | the one bottom-sheet primitive: detents `50` / `92` (dvh), drag grabber, down-only drag-dismiss |

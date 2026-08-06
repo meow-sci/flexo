@@ -61,7 +61,9 @@ export function PhoneTopBar() {
           variant="ghost"
           className="min-w-0 gap-1 px-2"
           aria-label={
-            partLabel ? `Part: ${partLabel} · Project: ${projectName}` : `Project: ${projectName}`
+            // Same separator as the visible label, so the visible text stays a substring of the
+            // accessible name (WCAG 2.5.3 Label in Name — voice control matches what you can read).
+            partLabel ? `Part: ${partLabel} — Project: ${projectName}` : `Project: ${projectName}`
           }
           onPress={() => runCommand('file.projects')}
         >

@@ -4,6 +4,7 @@ import { AboutDialog } from '../AboutDialog';
 import { HelpDialog } from '../hotkeys/HelpDialog';
 import { ProjectManagerDialog } from '../projects/ProjectManagerDialog';
 import { RenameProjectDialog } from '../projects/RenameProjectDialog';
+import { RenamePartDialog } from '../projects/RenamePartDialog';
 import { ExportArchiveDialog, type ExportArchiveParams } from '../projects/ExportArchiveDialog';
 import { ImportProjectDialog } from '../projects/ImportProjectDialog';
 import { ShareLinkDialog, type ShareLinkParams } from '../projects/ShareLinkDialog';
@@ -19,7 +20,8 @@ import { CreateMeshDialog } from '../CreateMeshDialog';
 import { MaterialDialog, type MaterialDialogParams } from '../MaterialDialog';
 import { GlowPaintDialog } from '../GlowPaintDialog';
 import { setMeshMaterial } from '../../state/customAssetStore';
-import { $modFolder, forgetModFolder } from '../../state/modFolderStore';
+import { ForgetModFolderConfirm } from '../ForgetModFolderConfirm';
+import { DeletePartConfirm } from '../projects/DeletePartConfirm';
 import { ConfirmDialog } from '../kit';
 import {
   discardChainAndRestart,
@@ -60,6 +62,9 @@ export function DialogRoot() {
       return <ProjectManagerDialog isOpen onOpenChange={dismiss} />;
     case 'rename-project':
       return <RenameProjectDialog isOpen onOpenChange={dismiss} />;
+    // Always the ACTIVE part — the dialog reads `$activePartMeta` itself, no params.
+    case 'part-rename':
+      return <RenamePartDialog isOpen onOpenChange={dismiss} />;
     case 'share-link':
       return (
         <ShareLinkDialog
@@ -166,28 +171,15 @@ export function DialogRoot() {
         />
       );
     }
-    // Forgetting the mods-folder grant (design-projects-export.md §7). `ConfirmDialog` is
-    // blessed here for the same reason as the chain confirm: the raiser is a MENU item, so
-    // this is a top-level confirm rather than one inside a dialog — and the consequence
-    // ("you'll re-pick the folder next export") needs more than the one truncated line an
-    // `InlineConfirmStrip` gives (foundation §14.3).
-    case 'forget-mod-folder-confirm': {
-      const name = $modFolder.get().name ?? 'mods';
-      return (
-        <ConfirmDialog
-          isOpen
-          onOpenChange={dismiss}
-          title={`Forget access to “${name}”?`}
-          text="flexo keeps no copy of the grant; you'll re-pick the folder next export. Nothing already written into the folder is touched."
-          confirmLabel="Forget"
-          confirmVariant="danger"
-          onConfirm={() => {
-            void forgetModFolder();
-            closeDialog();
-          }}
-        />
-      );
-    }
+    // Deleting the active part (plan: MULTI_PART_PLAN.md P4.02) and forgetting the mods-folder
+    // grant (design-projects-export.md §7). Both own their store read: a bare `.get()` in THIS
+    // body is cached by the React Compiler in an empty-dependency slot, and `DialogRoot` never
+    // unmounts — so the confirm would keep naming (and acting on) whatever was current the
+    // first time it opened. Each component subscribes with `useStore` instead.
+    case 'part-delete-confirm':
+      return <DeletePartConfirm onOpenChange={dismiss} />;
+    case 'forget-mod-folder-confirm':
+      return <ForgetModFolderConfirm onOpenChange={dismiss} />;
     // Hosts are added here as each dialog is rehosted onto dialogStore.
     default:
       return null;

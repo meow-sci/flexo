@@ -1,5 +1,6 @@
 import { registerCommandProvider, registerCommands } from '../../state/commandStore';
 import { FILE_COMMANDS } from './fileCommands';
+import { PART_COMMANDS } from './partCommands';
 import { EDIT_COMMANDS } from './editCommands';
 import { ADD_COMMANDS } from './addCommands';
 import { SELECT_COMMANDS } from './selectCommands';
@@ -24,6 +25,8 @@ import { COMMAND_PROVIDERS } from './providers';
  */
 registerCommands([
   ...FILE_COMMANDS,
+  // The part registry's File-menu section (plan: MULTI_PART_PLAN.md P4.01).
+  ...PART_COMMANDS,
   ...EDIT_COMMANDS,
   ...ADD_COMMANDS,
   ...SELECT_COMMANDS,

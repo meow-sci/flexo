@@ -75,6 +75,21 @@ const FILE_MENU: TopMenu = {
     command('file.exportProject'),
     command('file.shareLink'),
     separator,
+    // The part registry (plan: MULTI_PART_PLAN.md P4.03). A project holds N parts; this
+    // section is their lifecycle, the chip popover is the same actions on a surface.
+    command('part.new'),
+    {
+      kind: 'submenu',
+      id: 'file.switchPart',
+      label: 'Switch Part',
+      // Empty in a single-part project, and the renderer hides an empty submenu — so this row
+      // simply is not there until a second part exists.
+      entries: [{ kind: 'provider', providerId: 'parts' }],
+    },
+    command('part.rename'),
+    command('part.duplicate'),
+    command('part.delete'),
+    separator,
     command('file.exportKsa'),
     {
       kind: 'submenu',

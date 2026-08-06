@@ -47,7 +47,9 @@ export type DialogId =
   | 'glow-paint'
   | 'help'
   | 'about'
+  | 'part-rename'
   | 'chain-discard-confirm'
+  | 'part-delete-confirm'
   | 'forget-mod-folder-confirm';
 
 export interface OpenDialog {

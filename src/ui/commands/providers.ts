@@ -3,6 +3,7 @@ import { openProject } from '../../state/projectStore';
 import { $currentProjectId, $projectIndex } from '../../state/projectIndexStore';
 import { historyCommands } from './editCommands';
 import { modsFolderCommands } from './fileCommands';
+import { partSwitchCommands } from './partCommands';
 import { customMeshInstanceCommands } from './addCommands';
 import { layerActivateCommands, layerSelectCommands } from './selectCommands';
 import { seatCommands } from './toolsCommands';
@@ -28,6 +29,9 @@ export const COMMAND_PROVIDERS: { id: string; commands: () => Command[] }[] = [
   { id: 'seats', commands: seatCommands },
   { id: 'customMeshInstances', commands: customMeshInstanceCommands },
   { id: 'projects', commands: projectCommands },
+  // One "Switch to part: <name>" row per part, empty in a single-part project (which is what
+  // hides `File ▸ Switch Part ▸`) — plan: MULTI_PART_PLAN.md P4.01.
+  { id: 'parts', commands: partSwitchCommands },
   // The two interim `aids.*` providers are gone: the Outliner's Aids section
   // (`src/ui/outliner/AidsSection.tsx`) is the real home for the measurement and
   // reference-container lists, so a second copy under Tools would be a duplicate surface.

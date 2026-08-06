@@ -37,7 +37,7 @@ touches `$part`, so none of them can create an undo step):
 | `notificationStore.ts` | the session-only notification ring (100 entries) behind the bell |
 | `modifierStore.ts` | held modifiers, hover context, the computed modifier hints |
 | `commandStore.ts` | the command registry + dynamic providers + the palette (persisted recents) |
-| `dialogStore.ts` | `$openDialog` — which of the 20 dialog ids is open |
+| `dialogStore.ts` | `$openDialog` — which of the 22 dialog ids is open |
 | `hotkeyStore.ts` | `$focusedSurface` / `$dialogOpen` / `$activeScopes` for the scoped registry |
 | `snapStore.ts` | snap enable + the two steps (persisted as three flat keys) |
 | `projectIndexStore.ts` | the reactive project metadata index, current-project pointer, write lock |

@@ -211,7 +211,7 @@ palette and the status bar's chord tooltips all call it, so a label can never dr
 binding.
 
 **Dialogs are opened by commands**, which write `dialogStore.$openDialog = {id, params}`;
-`shell/DialogRoot.tsx` mounts the one dialog that id names. Twenty `DialogId`s exist, exactly
+`shell/DialogRoot.tsx` mounts the one dialog that id names. Twenty-two `DialogId`s exist, exactly
 one may be open, and **stacking is banned** — a dialog that needs a second step uses the kit
 `DialogViewStack` (a pushable `list → detail → confirm` stack with a back chevron; Escape pops
 a view before dismissing) or an inline destructive strip on the row. That is what retired
@@ -445,7 +445,7 @@ from.
 | `state/notificationStore.ts` | `$notifications`, `$unreadCount`, `$notificationCenterOpen`, `$notificationFocusId`; `notify()`, `dismiss()`, `markAllRead()`, `clearRead()` | no (session ring of 100) |
 | `state/modifierStore.ts` | `$heldModifiers`, `$hoverContext`, `$modifierHints`; `initModifierListeners()`, `registerModifierHints()` | no |
 | `state/commandStore.ts` | the command + provider registries, `runCommand`, `$paletteOpen`, `$paletteRecents` | `flexo:paletteRecents` |
-| `state/dialogStore.ts` | `$openDialog` over 20 `DialogId`s; `openDialog` / `closeDialog` / `isDialogOpen` | no |
+| `state/dialogStore.ts` | `$openDialog` over 22 `DialogId`s; `openDialog` / `closeDialog` / `isDialogOpen` | no |
 | `state/hotkeyStore.ts` | `$focusedSurface`, `$dialogOpen`, `$activeScopes`, `SURFACE_IDS` | no |
 | `state/snapStore.ts` | `$snapEnabled`, `$snapTranslateStep`, `$snapRotateStep`; `applySnapToGizmo(invert)` | three flat keys |
 | `state/projectIndexStore.ts` | the reactive project metadata index, current-project pointer, Web-Locks write lock, autosave health | IndexedDB + `flexo:currentProjectId` |

@@ -196,7 +196,7 @@ follow the same contract: **never in `$part`, never an undo step, never read by
 | `notificationStore.ts` | `$notifications` (ring of `NOTIFICATION_RING_MAX` = 100, newest first), `$unreadCount`, `$notificationCenterOpen`, `$notificationFocusId` | none — session-only |
 | `modifierStore.ts` | `$heldModifiers`, `$hoverContext`, computed `$modifierHints` over registered providers | none |
 | `commandStore.ts` | the command + provider registries, `$paletteOpen`, `$paletteRecents` (8 ids) | `flexo:paletteRecents` |
-| `dialogStore.ts` | `$openDialog` — `{id, params} \| null` over 20 `DialogId`s | none |
+| `dialogStore.ts` | `$openDialog` — `{id, params} \| null` over 22 `DialogId`s | none |
 
 `projectIndexStore.ts` sits alongside them but is backed by IndexedDB rather than
 localStorage — see [projects.md](./projects.md). Full behavioural detail for all of these is
@@ -457,7 +457,7 @@ is a facade that routes into those stores, and no component renders its own floa
 message surface.
 
 **Dialogs** — `shell/DialogRoot.tsx` mounts every overlay once and renders the one
-`dialogStore.$openDialog` names (20 ids, one open at a time, stacking banned). No dialog is
+`dialogStore.$openDialog` names (22 ids, one open at a time, stacking banned). No dialog is
 owned by a trigger button, which is what retired v1's controlled/uncontrolled dual APIs.
 
 **Floating windows — exactly two**, both children of the workspace band:

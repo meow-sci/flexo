@@ -1,6 +1,7 @@
 import { atom } from 'nanostores';
 import { clampSeatLook } from '../ksa/ivaLook';
 import type { Vec3 } from '../ksa/types';
+import { $part, activePartEntryId } from './editorStore';
 import { armTool, disarmTool, registerTool } from './modeStore';
 
 /**
@@ -56,6 +57,17 @@ export const $seatView = atom<string | null>(null);
 export const $seatLook = atom<Vec3 | null>(null);
 
 /**
+ * The part entry {@link enterSeatView} was called in, or `''` outside seat view.
+ *
+ * Seat ids are per-part namespaces (I3 — `plans/MULTI_PART_PLAN.md` §0.5): part B may hold a
+ * completely different seat under the SAME `_seat1` id, so "does the id still exist" is not
+ * enough to notice a part switch. Pairing the id with the part it was entered in is what
+ * makes the clamp below exit on EVERY switch rather than silently teleporting the camera into
+ * whichever seat the incoming part happens to number the same.
+ */
+let seatViewPartEntryId = '';
+
+/**
  * The camera teardown, with no knowledge of the tool slot. Idempotent, and deliberately
  * NOT a caller of `disarmTool` — it is the slot's own `onCancel`, so calling back into the
  * slot would either recurse or stomp the tool that just took the slot over.
@@ -64,6 +76,7 @@ function teardownSeatView(): void {
   if ($seatView.get() === null) return;
   $seatView.set(null);
   $seatLook.set(null);
+  seatViewPartEntryId = '';
 }
 
 /**
@@ -84,6 +97,7 @@ registerTool('seat-view', { survivesModeSwitch: true, onCancel: teardownSeatView
 export function enterSeatView(seatId: string): void {
   $seatLook.set(null);
   $seatView.set(seatId);
+  seatViewPartEntryId = activePartEntryId();
   armTool('seat-view');
 }
 
@@ -92,6 +106,29 @@ export function exitSeatView(): void {
   teardownSeatView();
   disarmTool('seat-view');
 }
+
+/**
+ * Ends seat view the moment its seat stops existing.
+ *
+ * `survivesModeSwitch` deliberately keeps the camera seated across a mode change, so nothing
+ * else was ever going to notice: before multi-part the seat could only vanish by being
+ * deleted or by a project load, and `EditorScene` handled that as it resolved the pose. A
+ * PART SWITCH is a third way, it happens through the same single `$part.set`, and it is the
+ * one where a surviving id is actively dangerous (see {@link seatViewPartEntryId}).
+ *
+ * Module scope, next to the {@link registerTool} call, so seat view's whole lifecycle is
+ * registered in one place and needs no boot wiring. The first (immediate) call is a no-op —
+ * nothing can be seated before the app has run.
+ */
+$part.subscribe((part) => {
+  const seatId = $seatView.get();
+  if (seatId === null) return;
+  if (seatViewPartEntryId !== activePartEntryId()) {
+    exitSeatView();
+    return;
+  }
+  if (!part.ivaSeats.some((seat) => seat.id === seatId)) exitSeatView();
+});
 
 /**
  * The direction the camera should point for a seat with these `axes`: the stored look, or

@@ -37,6 +37,17 @@ describe('buildDataNavigator — Part root', () => {
     expect(buildDataNavigator(part, []).part.label).toBe('Rover');
   });
 
+  // A multi-part project has to say WHICH part's data the pinned root scopes to; `null` is
+  // the single-part case and must reproduce the label above exactly (I8).
+  it('appends the registry part name, and falls back to it for an unnamed document', () => {
+    const part = named();
+    expect(buildDataNavigator(part, [], '', 'Part 2').part.label).toBe('rover_1 — Part 2');
+    expect(buildDataNavigator(part, [], '', 'rover_1').part.label).toBe('rover_1');
+    part.partId = '';
+    expect(buildDataNavigator(part, [], '', 'Part 2').part.label).toBe('Part 2');
+    expect(buildDataNavigator(part, [], '', null).part.label).toBe('(unnamed part)');
+  });
+
   it('badges tanks, power, coupling and wiring with the v1 count recipes', () => {
     const part = named();
     part.gameData.tanks.push(createTank(), createTank());

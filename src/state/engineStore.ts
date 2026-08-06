@@ -64,11 +64,27 @@ export function engineEntryFromKey(key: string): EngineEntry {
  * engineStore"), replacing the duplicated `shortLabel`/`entryLabel` pairs v1 kept in its engine
  * panel and its engine toolbar (census pain 7). `part` is taken so the part-scope entry can name the
  * document rather than saying "Part-level" twice in a row next to the part's own title.
+ *
+ * `partScopeName` is the ACTIVE part's registry display name in a multi-part project and
+ * `null` in a single-part one (`$partScopeName`, `src/state/partsStore.ts`). It is the last
+ * resort for an unnamed document AND — because the navigator lists only the active part's
+ * modules — is appended so the panel says WHICH part they belong to. Null keeps the label
+ * byte-identical to a pre-multi-part project (I8); the caller must pass it from a `useStore`
+ * subscription, never read the store here.
  */
-export function engineEntryLabel(entry: EngineEntry, part: EditingPart): string {
+export function engineEntryLabel(
+  entry: EngineEntry,
+  part: EditingPart,
+  partScopeName: string | null = null,
+): string {
   if (entry.kind === 'part') {
-    const name = part.gameData.displayName.trim() || part.partId.trim();
-    return name ? `Part-level (RCS / gas generator) — ${name}` : 'Part-level (RCS / gas generator)';
+    const name = part.gameData.displayName.trim() || part.partId.trim() || (partScopeName ?? '');
+    const base = name
+      ? `Part-level (RCS / gas generator) — ${name}`
+      : 'Part-level (RCS / gas generator)';
+    // Skipping the append when it would just repeat `name` — the same "only when it differs"
+    // rule the Data navigator's root row uses.
+    return partScopeName && partScopeName !== name ? `${base} — ${partScopeName}` : base;
   }
   return entry.templateId;
 }

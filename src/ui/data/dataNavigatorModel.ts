@@ -147,6 +147,22 @@ function sectionRows(
 }
 
 /**
+ * What the pinned Part root row calls the document.
+ *
+ * `partScopeName` is the ACTIVE part's registry display name in a multi-part project and
+ * `null` in a single-part one (`$partScopeName`, `src/state/partsStore.ts`): it is the last
+ * fallback for a document with neither a `displayName` nor a `partId`, and it is appended
+ * whenever it differs from what is already shown, so the row says WHICH part's data this is.
+ * Null reproduces the pre-multi-part label exactly (I8).
+ */
+function partRowLabel(part: EditingPart, partScopeName: string | null): string {
+  const named = part.gameData.displayName.trim() || part.partId.trim();
+  if (!partScopeName) return named || '(unnamed part)';
+  if (!named) return partScopeName;
+  return named === partScopeName ? named : `${named} — ${partScopeName}`;
+}
+
+/**
  * Builds the navigator's rows for `part`, dotted with `findings` and filtered by `query`.
  *
  * The Part root is NEVER filtered out (design §A3) — it is the scope you always need a way
@@ -158,13 +174,14 @@ export function buildDataNavigator(
   part: EditingPart,
   findings: readonly GameDataFinding[],
   query = '',
+  partScopeName: string | null = null,
 ): DataNavModel {
   const g = part.gameData;
   const partScope: DataScope = { kind: 'part' };
 
   const partRow: DataNavPartRow = {
     key: 'part',
-    label: g.displayName.trim() || part.partId.trim() || '(unnamed part)',
+    label: partRowLabel(part, partScopeName),
     sections: sectionRows(
       partScope,
       {

@@ -642,6 +642,27 @@ describe('engineStore — engineEntryLabel', () => {
     expect(engineEntryShortLabel({ kind: 'part' })).toBe('Part-level');
   });
 
+  // The navigator lists only the ACTIVE part's modules, so a multi-part project has to say
+  // which part that is. `null` is the single-part case and must read exactly as it did (I8).
+  it('appends the registry part name, and falls back to it for an unnamed document', () => {
+    const part = createEmptyPart();
+    part.partId = '';
+    expect(engineEntryLabel({ kind: 'part' }, part, 'Booster')).toBe(
+      'Part-level (RCS / gas generator) — Booster',
+    );
+    part.gameData.displayName = 'MMU';
+    expect(engineEntryLabel({ kind: 'part' }, part, 'Booster')).toBe(
+      'Part-level (RCS / gas generator) — MMU — Booster',
+    );
+    // No stutter when the document already carries the registry name.
+    expect(engineEntryLabel({ kind: 'part' }, part, 'MMU')).toBe(
+      'Part-level (RCS / gas generator) — MMU',
+    );
+    expect(engineEntryLabel({ kind: 'part' }, part, null)).toBe(
+      'Part-level (RCS / gas generator) — MMU',
+    );
+  });
+
   it('round-trips through the Select key sentinel', () => {
     expect(engineEntryKey({ kind: 'part' })).toBe('\0part');
     expect(engineEntryFromKey('\0part')).toEqual({ kind: 'part' });

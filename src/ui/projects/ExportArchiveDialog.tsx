@@ -173,6 +173,11 @@ function SummaryView() {
       <div className="flex flex-col gap-0.5">
         <span className="text-sm text-fg">{meta.name}</span>
         <span className="text-xs text-fg-subtle">{counts || 'empty project'}</span>
+        {/* The archive carries EVERY part, and `meta.counts` above is their sum — so a
+            multi-part project has to say how many documents that sum covers. */}
+        {meta.parts.length > 1 && (
+          <span className="text-xs text-fg-subtle">{meta.parts.length} parts</span>
+        )}
         <span className="text-xs text-fg-subtle">
           {meta.bytes.assets > 0
             ? `assets ≈ ${formatBytes(meta.bytes.assets)}`

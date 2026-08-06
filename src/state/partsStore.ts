@@ -2,7 +2,18 @@ import { atom, computed } from 'nanostores';
 import { createEmptyPart, DEFAULT_LAYER_ID, DEFAULT_PART_ID } from '../ksa/types';
 import type { EditingPart, Vec3 } from '../ksa/types';
 import { closeChain } from './chainStore';
-import { $activeLayerId, $part, clearSelection, exportHistory, importHistory } from './editorStore';
+import { clearCoverageReport } from './colliderStore';
+import {
+  $activeLayerId,
+  $colliderEditContext,
+  $lightEditContext,
+  $part,
+  $revealEntity,
+  clearSelection,
+  exportHistory,
+  importHistory,
+  setActivePartEntryId,
+} from './editorStore';
 import type { HistorySnapshot } from './editorStore';
 import { $layerView } from './layerStore';
 import type { LayerViewState } from './layerStore';
@@ -71,6 +82,28 @@ export const $activePartMeta = computed(
   [$partEntries, $activePartId],
   (entries, id) => entries.find((e) => e.id === id) ?? null,
 );
+
+/**
+ * The active part's registry display name — but ONLY in a multi-part project; `null` when the
+ * project holds a single part.
+ *
+ * THE gate every part-aware LABEL reads (the engine navigator's part scope, the Data
+ * navigator's pinned root, the Asset Manager's title). One place decides, so a one-part
+ * project reads exactly as it did before multi-part existed (I8) and the surfaces cannot
+ * drift from each other.
+ */
+export const $partScopeName = computed([$partEntries, $activePartMeta], (entries, meta) =>
+  entries.length > 1 ? (meta?.name ?? null) : null,
+);
+
+/**
+ * Mirrors the active entry id into `editorStore`, which stamps it onto the clipboard (D5 /
+ * P6.03) and hands it to `ivaStore`'s seat-view clamp (P6.02). Those modules cannot import
+ * THIS one — the import direction is one-way (see the header) and reversing it would evaluate
+ * this file inside `editorStore`'s temporal dead zone, because `$partsSnapshot` below reads
+ * `$part` at module scope. Subscribing here keeps the mirror honest with zero boot wiring.
+ */
+$activePartId.subscribe(setActivePartEntryId);
 
 /** I2: single writer = this module. */
 const inactiveDocs = new Map<string, InactivePartDoc>();
@@ -260,6 +293,22 @@ function refreshCounts(id: string, part: EditingPart): void {
   updateEntry(id, { counts: deriveCounts(part) });
 }
 
+/**
+ * Drops the four intent/ephemeral atoms the P6.06 audit (above {@link switchPart}) marks
+ * `cleared-here`. Each of them names something in the OUTGOING document — by an entity id the
+ * incoming part may reuse (I3), or as a measurement of geometry that is about to be replaced.
+ * Shared by {@link switchPart} and {@link createPart}: a brand-new part hydrates the same live
+ * stores, so a surviving `{ _light1: 2 }` would ambush the first light the user adds to it.
+ * `applyProjectSnapshot` calls it too — ids repeat across PROJECTS for the same reason they
+ * repeat across parts, so opening a project carries the identical hazard.
+ */
+export function clearPartScopedIntents(): void {
+  $revealEntity.set(null);
+  $colliderEditContext.set({});
+  $lightEditContext.set({});
+  clearCoverageReport();
+}
+
 /** Parks the live active-part stores into the registry. Shared by switch / create / delete. */
 function parkActive(): void {
   const activeId = $activePartId.get();
@@ -274,6 +323,35 @@ function parkActive(): void {
 }
 
 /**
+ * THE intent/ephemeral-atom audit (P6.06). Every un-namespaced atom that can hold an ACTIVE
+ * PART entity id was read together with its consumers; a stale id must be harmless, because
+ * ids are per-part namespaces (I3) and part B may reuse `_light1` / `_seat1` / `layer2`.
+ *
+ * | atom | verdict |
+ * |---|---|
+ * | `$dataScope` (`dataModeStore`) | clamped-by-self — `computed([…, $part])` falls back to the part scope when the template isn't placed; a surviving `templateId` is a CATALOG-global id, so a hit is genuinely correct |
+ * | `$surfaceMeshId` / `$surfaceFace` / `$faceDraft` (`surfaceModeStore`) | clamped-by-self — `$part.subscribe(clampSurfacePick)`; mesh ids are project-unique (I4), so a survivor really is this project's mesh |
+ * | animation set — `$activeAnimationId`, `$activeJointId`, `$editKeyframeId`, `$timelineSelection`, `$membersView`, `$playheadSec`, `$workingPivot` (`animationStore`) | clamped-by-self — the `$part.subscribe` clamp re-resolves all of them |
+ * | `$chainSession` (`chainStore`) | cleared-here — `closeChain()` below drops the whole session (seeds + ops) |
+ * | `$seatView` / `$seatLook` (`ivaStore`) | clamped-by-self — its own `$part.subscribe` exits when the seat is gone OR when the entry-time part id no longer matches, which is what makes part B's same-numbered seat exit too (P6.02) |
+ * | `$moduleFlash` (`engineStore`) | no-op-on-miss — keyed by FIELD name (`'mixtureRatio'`…), never an entity id |
+ * | `$colliderFitRequest` (`colliderStore`) | no-op-on-miss — `EditorScene`'s subscriber clears it synchronously, so it cannot outlive the switch |
+ * | `$coverageRequest` (`colliderStore`) | no-op-on-miss — a bare boolean, consumed synchronously |
+ * | `$ivaSeatAimRequest` (`ivaSeatStore`) | no-op-on-miss — consumed + cleared synchronously, and guarded by `part.ivaSeats[req.index]` |
+ * | `$surfaceRevealRequest` (`surfaceModeStore`) | no-op-on-miss — carries a project-unique mesh id; `MeshPicker` returns early when the row is missing |
+ * | `$dataFlash` (`dataModeStore`) | no-op-on-miss — a 600 ms tint that expires on its own timer; worst case one wrong mesh blinks |
+ * | `$revealEntity` (`editorStore`) | **cleared-here** — its only consumer is the Build-mode-only Outliner, so a reveal published from Data/Animation mode is never drained and would scroll to + flash part B's SAME-ID row on the next Build mount |
+ * | `$colliderEditContext` (`editorStore`) | **cleared-here** — see below |
+ * | `$lightEditContext` (`editorStore`) | **cleared-here** — see below |
+ * | `$coverageReport` (`colliderStore`) | **cleared-here** — holds no ids, but it is a MEASUREMENT of the outgoing document: its uncovered-point dots and percentage would keep rendering over part B and read as part B's score |
+ *
+ * The two `EditContext` records are the real I3 offenders: `_colliderN` / `_lightN` ids are
+ * minted per part, so `{ _light1: 2 }` set by clicking part A's third marker survives into
+ * part B and silently anchors the gizmo, the inspector's part-frame fields and the keyboard
+ * tools to a placement instance the user never picked in THIS document. Every reader clamps
+ * the index to the owner's placement count, so it can only ever be wrong, never a crash —
+ * and both maps are append-only, so clearing here also stops them growing all session.
+ *
  * Makes `id` the active part — a mini `applyProjectSnapshot` (`src/state/projectStore.ts`)
  * minus the project-level state: park the outgoing document + history, hydrate the incoming
  * one into the live stores. Returns false when `id` is already active or names no entry.
@@ -299,6 +377,7 @@ export function switchPart(id: string): boolean {
   // An open action chain is seeded by instanceIds of the OUTGOING document, so it is
   // meaningless here — same contract as a project load.
   closeChain();
+  clearPartScopedIntents();
   bumpInactiveRevision();
   // Deliberate NON-actions, each one load-bearing:
   // - No `pushUndo` — the part registry is never undoable (I6).
@@ -341,6 +420,7 @@ export function createPart(name?: string): string {
   $layerView.set({});
   clearSelection();
   closeChain();
+  clearPartScopedIntents();
   bumpInactiveRevision();
   return id;
 }

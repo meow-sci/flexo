@@ -29,6 +29,7 @@ import {
 import { $part } from '../../state/editorStore';
 import { $assetUsage, openImportModel, type AssetUsage } from '../../state/customAssetStore';
 import { assetKeys, getAsset } from '../../state/assetDb';
+import { $partScopeName } from '../../state/partsStore';
 import { $currentProjectId } from '../../state/projectIndexStore';
 import {
   $assetManagerPrefs,
@@ -134,7 +135,13 @@ const BROWSER_VIEW: DialogView = {
  * provider too, so a detail view three levels deep reaches the identical object.
  */
 function ManagerBody({ onClose }: { onClose: () => void }) {
-  const stack = useDialogViewStack(BROWSER_VIEW);
+  // Custom assets belong to ONE part (D1) and this dialog edits the ACTIVE one, so a
+  // multi-part project titles it with that part. Only the title is rebuilt — the root
+  // `element` stays the module const, so nothing under it re-mounts.
+  const partScopeName = useStore($partScopeName);
+  const stack = useDialogViewStack(
+    partScopeName ? { ...BROWSER_VIEW, title: `Assets — ${partScopeName}` } : BROWSER_VIEW,
+  );
 
   const nav: ManagerNav = {
     push: stack.push,
@@ -266,6 +273,8 @@ function AssetBrowser() {
   const usage = useStore($assetUsage);
   const prefs = useStore($assetManagerPrefs);
   const isPhone = useIsPhone();
+  // Null in a single-part project — the browser then reads exactly as before (I8).
+  const partScopeName = useStore($partScopeName);
   const [query, setQuery] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   /** The row currently showing its inline destructive strip (§5.1 undoable tier). */
@@ -398,7 +407,18 @@ function AssetBrowser() {
                 </Button>
               </div>
             ) : empty ? (
-              <CategoryEmpty category={category} />
+              <>
+                <CategoryEmpty category={category} />
+                {/* Assets are per-part (D1) and this browser reads `$part`, so in a
+                    multi-part project the empty library needs to say WHOSE it is. Gated on
+                    the library being empty outright, not just this category, so the copy is
+                    always true. */}
+                {partScopeName && items.length === 0 && batches.length === 0 && (
+                  <p className="px-4 pb-8 text-center text-xs text-fg-subtle">
+                    This part has no custom assets yet.
+                  </p>
+                )}
+              </>
             ) : (
               <>
                 {visible.length > 0 && (

@@ -9,6 +9,10 @@ import {
   seatLookDirection,
   type SeatAxes,
 } from './ivaStore';
+import { $activeTool } from './modeStore';
+import { $part, addIvaSeat, newPart } from './editorStore';
+import { $activePartId, createPart, initPartsForNewProject, switchPart } from './partsStore';
+import { $layerView } from './layerStore';
 import { IVA_UP_DOT_LIMIT } from '../ksa/ivaLook';
 import type { Vec3 } from '../ksa/types';
 
@@ -194,5 +198,64 @@ describe('ivaStore — reclampSeatLook', () => {
   it('is a no-op outside seat view', () => {
     reclampSeatLook(AXES);
     expect($seatLook.get()).toBeNull();
+  });
+});
+
+/**
+ * Seat view is the one tool that `survivesModeSwitch`, so nothing else was ever going to
+ * notice a part switch — and a switch is exactly when the seat it names stops being the seat
+ * it meant (`plans/MULTI_PART_PLAN.md` P6.02).
+ */
+describe('ivaStore — the part-switch clamp', () => {
+  beforeEach(() => {
+    newPart();
+    $layerView.set({});
+    initPartsForNewProject();
+    exitSeatView();
+  });
+
+  it('exits when the incoming part has no such seat, disarming the tool and dropping the look', () => {
+    addIvaSeat();
+    enterSeatView('_seat1');
+    nudgeSeatLook(0.3, 0.2, AXES);
+    expect($activeTool.get()).toBe('seat-view');
+
+    createPart(); // empty document — no seats at all
+
+    expect($seatView.get()).toBeNull();
+    expect($seatLook.get()).toBeNull();
+    expect($activeTool.get()).toBeNull();
+  });
+
+  // I3: entity ids are per-part namespaces, so `_seat1` in part B is a DIFFERENT seat that
+  // happens to be numbered the same. An id-existence check alone would keep the camera
+  // seated and silently teleport it into it.
+  it('exits even when the incoming part reuses the SAME seat id', () => {
+    const partA = $activePartId.get();
+    addIvaSeat();
+    const seatId = $part.get().ivaSeats[0].id;
+
+    createPart();
+    addIvaSeat();
+    expect($part.get().ivaSeats[0].id).toBe(seatId); // same id, a different seat
+
+    enterSeatView(seatId);
+    expect($seatView.get()).toBe(seatId);
+
+    // Back to part A, whose seat answers to that id too — an existence check alone would
+    // have left the camera seated, now looking out of a seat nobody asked for.
+    switchPart(partA);
+    expect($part.get().ivaSeats.some((seat) => seat.id === seatId)).toBe(true);
+    expect($seatView.get()).toBeNull();
+    expect($seatLook.get()).toBeNull();
+    expect($activeTool.get()).toBeNull();
+  });
+
+  it('keeps the seat when the document changes WITHIN the same part', () => {
+    addIvaSeat();
+    enterSeatView('_seat1');
+    addIvaSeat(); // a second seat — the first is untouched
+    expect($seatView.get()).toBe('_seat1');
+    expect($activeTool.get()).toBe('seat-view');
   });
 });

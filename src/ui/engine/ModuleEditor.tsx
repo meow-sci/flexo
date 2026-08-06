@@ -40,6 +40,7 @@ import {
   type EngineEntry,
   type EngineModuleRef,
 } from '../../state/engineStore';
+import { $partScopeName } from '../../state/partsStore';
 import { $allReactions } from '../../state/reactionStore';
 import { status } from '../../state/statusStore';
 import { openPanelSheet } from '../shell/phone/phoneSheets';
@@ -71,6 +72,8 @@ export function ModuleEditor() {
   const findings = useStore($engineFindings);
   const reactions = useStore($allReactions);
   const isPhone = useIsPhone();
+  // Null in a single-part project, so the header reads exactly as it did before (I8).
+  const partScopeName = useStore($partScopeName);
 
   const tree = buildModuleTree(
     part,
@@ -101,7 +104,7 @@ export function ModuleEditor() {
           {active
             ? `${MODULE_GROUP_LABEL[active.group]}${row?.label ? ` — ${row.label}` : ''}`
             : entry
-              ? engineEntryLabel(entry, part)
+              ? engineEntryLabel(entry, part, partScopeName)
               : 'Engine'}
         </span>
         <ScopeChipFor entry={entry} module={active} part={part} />
@@ -243,6 +246,7 @@ function EngineSummary({
 }) {
   const findings = useStore($engineFindings);
   const reactions = useStore($allReactions);
+  const partScopeName = useStore($partScopeName);
 
   if (!entry) {
     return (
@@ -268,7 +272,9 @@ function EngineSummary({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-fg">{engineEntryLabel(entry, part)}</span>
+        <span className="text-xs font-medium text-fg">
+          {engineEntryLabel(entry, part, partScopeName)}
+        </span>
         <span className="text-[11px] text-fg-subtle">
           {totalModuleCount(part, entry)} modules across {MODULE_TREE_GROUP_ORDER.length} groups
         </span>

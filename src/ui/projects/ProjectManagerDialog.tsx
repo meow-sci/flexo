@@ -569,6 +569,7 @@ function ProjectCardBody({
         <LockBadge id={meta.id} />
       </div>
       <CountsLine meta={meta} short />
+      <PartsLine meta={meta} />
       <span className="text-[11px] text-fg-subtle">saved {relativeTime(meta.savedAt, now)}</span>
       <div className="flex items-center gap-1">
         <Button size="sm" variant="secondary" className="flex-1" onPress={onOpen}>
@@ -605,8 +606,11 @@ function ProjectRowBody({
           <span className="truncate text-[11px] text-fg-subtle">{meta.description}</span>
         )}
       </div>
-      <div className="hidden min-w-0 flex-[2] sm:block">
+      {/* flex-col so the parts line stacks under the counts instead of trailing it inline;
+          in a single-part project `PartsLine` renders nothing and the row is unchanged. */}
+      <div className="hidden min-w-0 flex-[2] flex-col sm:flex">
         <CountsLine meta={meta} short />
+        <PartsLine meta={meta} />
       </div>
       <span className="hidden w-20 shrink-0 text-right text-[11px] text-fg-subtle sm:block">
         {relativeTime(meta.savedAt, now)}
@@ -805,6 +809,24 @@ function CountsLine({ meta, short }: { meta: ProjectMeta; short?: boolean }) {
       title={rows.map(([label, n]) => `${n} ${label}`).join('\n')}
     >
       {live.length === 0 ? 'empty' : shown.map(([label, n]) => `${n} ${label}`).join(' · ')}
+    </span>
+  );
+}
+
+/**
+ * `N parts`, with their names on hover — shown only for a MULTI-part project, because the
+ * `CountsLine` above already sums across every part and a one-part project has nothing to
+ * disambiguate (I8). Names are the registry display names, the same strings the part
+ * switcher and the fuzzy search use.
+ */
+function PartsLine({ meta }: { meta: ProjectMeta }) {
+  if (meta.parts.length <= 1) return null;
+  return (
+    <span
+      className="min-w-0 truncate text-[11px] text-fg-subtle"
+      title={meta.parts.map((part) => part.name).join('\n')}
+    >
+      {meta.parts.length} parts
     </span>
   );
 }

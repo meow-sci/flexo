@@ -41,6 +41,7 @@ import {
   select,
 } from '../../state/editorStore';
 import { setMode } from '../../state/modeStore';
+import { $partScopeName } from '../../state/partsStore';
 import { openInspectorSheet } from '../shell/phone/phoneSheets';
 import { focusViewport } from '../../three/viewportFocus';
 
@@ -68,10 +69,12 @@ export function DataNavigator() {
   const scope = useStore($dataScope);
   const search = useStore($dataSearch);
   const findings = useStore($gameDataFindings);
+  // Null in a single-part project, so the pinned root row reads exactly as before (I8).
+  const partScopeName = useStore($partScopeName);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(['part']));
   const [nonCapableOpen, setNonCapableOpen] = useState(false);
 
-  const model = buildDataNavigator(part, findings, search);
+  const model = buildDataNavigator(part, findings, search, partScopeName);
   const scopeKey = scopeToKey(scope);
 
   const toggle = (key: string) =>

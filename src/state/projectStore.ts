@@ -50,6 +50,7 @@ import {
 import {
   $activePartId,
   $partEntries,
+  clearPartScopedIntents,
   hydrateParts,
   inactiveHistoriesRecord,
   initPartsForNewProject,
@@ -302,6 +303,9 @@ function applyProjectSnapshot(snap: ProjectSnapshot, history?: ProjectHistoryRec
     // An open action chain is seeded by instanceIds from the OUTGOING document; loading
     // a project makes every one of them meaningless, so end the session with the selection.
     closeChain();
+    // Same reasoning for the intent atoms that name an entity by bare id (P6.06's audit): ids
+    // repeat across projects exactly as they repeat across parts.
+    clearPartScopedIntents();
     // A project is opened in Build with no tool armed (foundation §2.4) — the editor's
     // posture belongs to the session, not to the incoming document.
     resetModeForProjectLoad();

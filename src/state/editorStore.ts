@@ -316,8 +316,42 @@ export interface PartClipboard {
    * census's pain 5.
    */
   lights: PartLight[];
+  /**
+   * The part entry the copy was taken from ({@link activePartEntryId} at copy time). The
+   * clipboard is the ONE deliberate cross-part conduit (`plans/MULTI_PART_PLAN.md` D5), and
+   * {@link pasteClipboard} needs to know whether it is pasting back into the SAME document to
+   * decide whether a source `layerId` may be trusted — layer ids are per-part namespaces (I3).
+   */
+  sourcePartEntryId: string;
 }
 export const $clipboard = atom<PartClipboard | null>(null);
+
+// ---------------------------------------------------------------------------
+// THE ACTIVE PART ENTRY ID (mirror)
+// ---------------------------------------------------------------------------
+
+let _activePartEntryId = '';
+
+/**
+ * Mirrors `partsStore`'s `$activePartId` into this module. `partsStore` subscribes this at
+ * its own module scope, so the mirror is always current and needs no boot wiring.
+ *
+ * It is a mirror rather than a plain import because the `editorStore → partsStore` edge is
+ * closed: `partsStore` imports FROM here (its header states the one-way rule), and its
+ * module-scope `$partsSnapshot` computed reads `$part`, so an import back would evaluate
+ * `partsStore` inside this module's temporal dead zone and throw at boot.
+ *
+ * Before `partsStore` is loaded the mirror is `''` — the same value on both sides of every
+ * comparison, i.e. "one part", which is exactly the pre-multi-part behavior.
+ */
+export function setActivePartEntryId(id: string): void {
+  _activePartEntryId = id;
+}
+
+/** The active part entry id (see {@link setActivePartEntryId}). Never read in a render body. */
+export function activePartEntryId(): string {
+  return _activePartEntryId;
+}
 /** True once something has been copied — drives enable/disable of paste affordances. */
 export const $hasClipboard = computed($clipboard, (c) => c != null);
 /**
@@ -1822,8 +1856,17 @@ export function duplicateSelected(options?: { offset?: boolean }): void {
  * Layer a pasted entity lands on: the one it was copied from when that layer still
  * exists, else the active layer. The clipboard outlives layer deletion, so this is the
  * one guard that keeps a paste from stranding entities on a layer nothing lists.
+ *
+ * `crossPart` (the copy came from a DIFFERENT part entry) disables the id match entirely.
+ * Layer ids are sequential per part (`layer1`, `layer2`, … — {@link nextLayerId}), so part B
+ * routinely owns an UNRELATED layer under the source layer's id; honouring the match there
+ * would be a cross-part map keyed by a bare entity id, which I3 forbids
+ * (`plans/MULTI_PART_PLAN.md` §0.5). A cross-part paste therefore ALWAYS lands on the
+ * destination's active layer. It deliberately does not mirror the source layer the way
+ * project import does (`projectTransfer.ts`) — paste adds entities, not layers.
  */
-function pasteLayerId(part: EditingPart, sourceLayerId: string): string {
+function pasteLayerId(part: EditingPart, sourceLayerId: string, crossPart: boolean): string {
+  if (crossPart) return currentLayerId(part);
   return part.layers.some((l) => l.id === sourceLayerId) ? sourceLayerId : currentLayerId(part);
 }
 
@@ -1873,6 +1916,7 @@ export function copySelected(): number {
     // Sorted by index so a paste preserves the seats' relative cycle order.
     ivaSeats: [...seat].sort(order).map((i) => structuredClone(part.ivaSeats[i])),
     lights: [...lig].sort(order).map((i) => structuredClone(part.lights[i])),
+    sourcePartEntryId: activePartEntryId(),
   });
   return total;
 }
@@ -1896,10 +1940,15 @@ export function cutSelected(): number {
  * light keeps its original layer when that layer still exists, else falls back to the
  * active layer (see {@link pasteLayerId} — the clipboard can outlive the layer it was
  * copied from). Returns how many entities were pasted (0 when the clipboard is empty).
+ *
+ * Pasting into a DIFFERENT part than the copy came from is blessed (D5) and re-homes every
+ * non-pinned entity onto the destination's active layer; the two pinned kinds (IVA seats,
+ * kittens) keep their built-in layers as always. Cross-part or not, it stays ONE undo step.
  */
 export function pasteClipboard(): number {
   const clip = $clipboard.get();
   if (!clip) return 0;
+  const crossPart = clip.sourcePartEntryId !== activePartEntryId();
   const total =
     clip.placements.length +
     clip.connectors.length +
@@ -1927,7 +1976,7 @@ export function pasteClipboard(): number {
     const count = part.placements.filter(
       (p) => p.subPartTemplateId === src.subPartTemplateId,
     ).length;
-    const layerId = pasteLayerId(part, src.layerId);
+    const layerId = pasteLayerId(part, src.layerId, crossPart);
     const instanceId = `${base}_${count + 1}`;
     part.placements.push({
       instanceId,
@@ -1949,7 +1998,7 @@ export function pasteClipboard(): number {
       flags: [...src.flags],
       capabilities: [...src.capabilities],
       siblingIds: [...src.siblingIds],
-      layerId: pasteLayerId(part, src.layerId),
+      layerId: pasteLayerId(part, src.layerId, crossPart),
     });
     pasted.push({ kind: 'connector', id });
   }
@@ -1970,7 +2019,7 @@ export function pasteClipboard(): number {
     part.colliders.push({
       ...structuredClone(src),
       id,
-      layerId: pasteLayerId(part, src.layerId),
+      layerId: pasteLayerId(part, src.layerId, crossPart),
     });
     pasted.push({ kind: 'collider', id });
   }
@@ -1985,7 +2034,11 @@ export function pasteClipboard(): number {
   // `assignLight` keeps its scale at (1,1,1) on every later write.
   for (const src of clip.lights) {
     const id = nextLightId(part);
-    part.lights.push({ ...structuredClone(src), id, layerId: pasteLayerId(part, src.layerId) });
+    part.lights.push({
+      ...structuredClone(src),
+      id,
+      layerId: pasteLayerId(part, src.layerId, crossPart),
+    });
     pasted.push({ kind: 'light', id });
   }
   $part.set(part);

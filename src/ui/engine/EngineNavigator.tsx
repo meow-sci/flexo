@@ -21,6 +21,7 @@ import {
   engineEntryKey,
   engineEntryLabel,
 } from '../../state/engineStore';
+import { $partScopeName } from '../../state/partsStore';
 
 /**
  * **The Engine Navigator** — Engine mode's right sidebar (design:
@@ -47,6 +48,8 @@ export function EngineNavigator() {
   // "Add engine (thrust chamber) →") can open it from outside React without an effect
   // copying an intent into component state.
   const flow = useStore($engineDefineFlow);
+  // Null in a single-part project, so the labels below stay exactly as they were (I8).
+  const partScopeName = useStore($partScopeName);
 
   const engineTemplateIds = new Set(
     entries.flatMap((e) => (e.kind === 'subpart' ? [e.templateId] : [])),
@@ -69,7 +72,7 @@ export function EngineNavigator() {
           >
             {entries.map((entry) => {
               const key = engineEntryKey(entry);
-              const label = engineEntryLabel(entry, part);
+              const label = engineEntryLabel(entry, part, partScopeName);
               return (
                 <ListBoxItem key={key} id={key} textValue={label}>
                   <span className="flex min-w-0 flex-col">

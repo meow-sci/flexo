@@ -4060,3 +4060,99 @@ describe('per-part undo history', () => {
     expect(exportHistory()).toEqual(firstHistory);
   });
 });
+
+/**
+ * Copy in part A → paste in part B is the ONE deliberate cross-part conduit (D5). What makes
+ * it need its own rule is I3: layer ids are minted sequentially per part (`layer1`, `layer2`,
+ * …), so part B routinely owns an UNRELATED layer under the source layer's id and honouring
+ * that match would silently file the paste under a stranger's grouping.
+ */
+describe('cross-part clipboard paste', () => {
+  /** How many undo steps the editor is holding — the "exactly one step" assertions read this. */
+  const undoDepth = () => $historyList.get().filter((item) => item.stepsFromCurrent < 0).length;
+
+  beforeEach(() => {
+    newPart();
+    $layerView.set({});
+    initPartsForNewProject();
+  });
+
+  it('re-homes onto the ACTIVE layer when the destination part reuses the source layer id', () => {
+    const sourceLayer = createLayer('Struts'); // becomes active
+    addSubPart('Core.A');
+    select([{ kind: 'subpart', id: 'a_1' }]);
+    expect(copySelected()).toBe(1);
+    expect($part.get().placements[0].layerId).toBe(sourceLayer);
+
+    createPart();
+    // Part B's first user layer gets the SAME sequential id — a completely unrelated layer.
+    const collision = createLayer('Tanks');
+    expect(collision).toBe(sourceLayer);
+    const target = createLayer('Landing gear'); // becomes active
+    expect($activeLayerId.get()).toBe(target);
+
+    const before = undoDepth();
+    expect(pasteClipboard()).toBe(1);
+    expect($part.get().placements[0].layerId).toBe(target);
+    // The colliding layer is untouched — nothing was filed under it, and no mirror layer was
+    // invented for the source (that is project import's job, not paste's).
+    expect($part.get().layers.map((l) => l.id)).toEqual([
+      DEFAULT_LAYER_ID,
+      IVA_SEAT_LAYER_ID,
+      KITTEN_LAYER_ID,
+      collision,
+      target,
+    ]);
+
+    expect($undoDescription.get()).toBe('paste');
+    expect(undoDepth()).toBe(before + 1);
+    undo();
+    expect($part.get().placements).toHaveLength(0);
+  });
+
+  it('still keeps the source layer when the paste lands back in the SAME part', () => {
+    const sourceLayer = createLayer('Struts'); // becomes active
+    addSubPart('Core.A');
+    select([{ kind: 'subpart', id: 'a_1' }]);
+    copySelected();
+
+    const other = createLayer('Elsewhere'); // becomes active
+    expect($activeLayerId.get()).toBe(other);
+
+    const before = undoDepth();
+    expect(pasteClipboard()).toBe(1);
+    expect($part.get().placements[1].layerId).toBe(sourceLayer);
+
+    expect(undoDepth()).toBe(before + 1);
+    undo();
+    expect($part.get().placements).toHaveLength(1);
+  });
+
+  it('sends a cross-part paste to Default when the destination active layer is a pinned one', () => {
+    addSubPart('Core.A');
+    select([{ kind: 'subpart', id: 'a_1' }]);
+    copySelected();
+
+    createPart();
+    // The pinned entity-only layers can be made active, but nothing ordinary may land there.
+    setActiveLayer(KITTEN_LAYER_ID);
+    expect(pasteClipboard()).toBe(1);
+    expect($part.get().placements[0].layerId).toBe(DEFAULT_LAYER_ID);
+  });
+
+  it('keeps the pinned kinds on their built-in layers across parts', () => {
+    addIvaSeat();
+    addKitten('hunter');
+    select([
+      { kind: 'ivaSeat', id: '_seat1' },
+      { kind: 'kitten', id: 'kitten_1' },
+    ]);
+    expect(copySelected()).toBe(2);
+
+    createPart();
+    createLayer('Anything'); // becomes active — pinned kinds must ignore it
+    expect(pasteClipboard()).toBe(2);
+    expect($part.get().ivaSeats[0].layerId).toBe(IVA_SEAT_LAYER_ID);
+    expect($part.get().kittens[0].layerId).toBe(KITTEN_LAYER_ID);
+  });
+});

@@ -16,6 +16,7 @@ import { MenuSpecMenu } from '../menu/MenuSpecMenu';
 import { MenuDrillDown } from '../menu/MenuDrillDown';
 import { MENU_SPEC } from '../menu/menuSpec';
 import { ModeSwitcher } from './ModeSwitcher';
+import { PartSwitcher } from './PartSwitcher';
 import { chordsFor } from '../commands/chords';
 import { runCommand } from '../../state/commandStore';
 import { $canRedo, $canUndo, $redoDescription, $undoDescription } from '../../state/editorStore';
@@ -27,7 +28,7 @@ import { $projectName } from '../../state/projectStore';
  * region-rules table.
  *
  * Layout (foundation §3, FINAL_DESIGN_INDEX "Consolidated menubar tree"):
- * `[File … Help] ··center·· [mode switcher] ··right·· [project chip ▾] [↶] [↷] [⌘K]`.
+ * `[File … Help] ··center·· [mode switcher] ··right·· [part chip ▾] [project chip ▾] [↶] [↷] [⌘K]`.
  * Nothing else lives here — no burger, no Save (S12; autosave-only).
  *
  * The eight menus come straight from `MENU_SPEC`; below ~900px they collapse into a single
@@ -95,6 +96,9 @@ export function MenuBar() {
       <ModeSwitcher />
 
       <div className="flex items-center justify-end gap-0.5">
+        {/* Part before project: the active part is what every panel below is editing, so it is
+            the nearer-in scope of the two (plan: MULTI_PART_PLAN P4.04). */}
+        <PartSwitcher />
         <ProjectChip />
         <UndoRedo />
         <Button

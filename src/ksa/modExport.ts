@@ -84,6 +84,32 @@ export function sanitizeBaseName(projectName: string): string {
   return cleaned || 'Mod';
 }
 
+/**
+ * One part of a multi-part export, carrying the registry identity the builders need in
+ * addition to the document itself (MULTI_PART_PLAN P3.01 — "the gathering seam").
+ *
+ * Built by `exportPreviewStore.toNamedExportParts` from `partsStore.partsForExport()`; this
+ * layer may not read stores, so the mapping lives there and the shape lives here.
+ */
+export interface NamedExportPart {
+  /** Registry id (`pt_…`) — labels/telemetry only, NEVER serialized into the mod. */
+  entryId: string;
+  /** Display name ("Part 1") — issue prefixes and dialog chips only, never serialized. */
+  name: string;
+  /** Part namespace token — {@link partExportNs} of the part's KSA `partId`. */
+  ns: string;
+  part: EditingPart;
+}
+
+/**
+ * The per-part token that namespaces export-variant ids inside one mod
+ * (`flexo_<base>_<ns>_<templateId>`). Uniqueness among the included parts is a preflight
+ * blocker (`collectProjectExportIssues`), not an assumption.
+ */
+export function partExportNs(partId: string): string {
+  return sanitizeBaseName(partId);
+}
+
 /** Serializes mod.toml with the given asset filenames (matches KSA's format). */
 export function serializeModToml(assets: string[]): string {
   const list = assets.length === 0 ? '[]' : `[ ${assets.map((a) => `"${a}"`).join(', ')}]`;

@@ -5,7 +5,14 @@ import { $part } from './editorStore';
 import { $projectName } from './projectIndexStore';
 import { $catalogIndex } from './catalogStore';
 import { $kittenTextureExport, $modelImportSettings } from './settingsStore';
-import { buildCustomBundle, buildModContent, expandGlassGlow } from '../ksa/modExport';
+import {
+  buildCustomBundle,
+  buildModContent,
+  expandGlassGlow,
+  partExportNs,
+  type NamedExportPart,
+} from '../ksa/modExport';
+import type { partsForExport } from './partsStore';
 
 /**
  * **The Export dialog's XML preview** (design:
@@ -238,4 +245,21 @@ export function resetPreview(): void {
   assetsController?.abort();
   assetsController = null;
   $exportPreview.set({ tab: 'part' });
+}
+
+// ── the multi-part gathering seam (MULTI_PART_PLAN P3.01) ────────────────────
+
+/**
+ * `partsForExport()` → the export builders' input. The mapper lives in the state layer
+ * because `src/ksa/` may not import stores, and it is the ONE place that mints a part's
+ * namespace token, so the preflight and the serializers can never disagree about which `ns`
+ * a part exports under. Excluded parts never reach here (I7 / D4).
+ */
+export function toNamedExportParts(entries: ReturnType<typeof partsForExport>): NamedExportPart[] {
+  return entries.map(({ entryId, name, part }) => ({
+    entryId,
+    name,
+    ns: partExportNs(part.partId),
+    part,
+  }));
 }

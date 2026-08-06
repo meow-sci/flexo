@@ -24,10 +24,14 @@ import { validateColliders } from './colliderValidation';
 import { validateEngines } from './engineValidation';
 import { validateIvaSeats } from './ivaSeatValidation';
 import { validateLights } from './lightValidation';
+import { customToReactionData, indexReactionCatalog } from './reactionCatalog';
 import type { EngineIssueSource } from './engineValidation';
 import type { CatalogSubPart } from './catalog';
 import type { ReactionData } from './reactionCatalog';
-import type { EditingPart } from './types';
+import type { CustomReaction, EditingPart } from './types';
+// TYPE-only (the layering law above): `modExport` pulls in three + stores, so this module
+// may never take a value from it. `NamedExportPart.ns` is all the preflight needs.
+import type { NamedExportPart } from './modExport';
 import type { Mode } from '../state/modeStore';
 
 /**
@@ -64,6 +68,14 @@ export interface ExportIssue {
   code: string;
   message: string;
   jumpTarget?: ExportJumpTarget;
+  /**
+   * Which project part the issue belongs to — stamped by
+   * {@link collectProjectExportIssues}, absent from a bare {@link collectExportIssues} pass.
+   * A jump has to switch to that part first, so the dialog needs the registry id as well as
+   * the label. Cross-part blockers (which name two parts in their prose) carry neither.
+   */
+  partEntryId?: string;
+  partName?: string;
 }
 
 /** `EngineIssueSource` → the Engine-mode jump payload that opens the offending module. */
@@ -192,6 +204,176 @@ export function collectExportIssues(
         unplaced.map((m) => m.name).join(', '),
       jumpTarget: { mode: 'surface' },
     });
+  }
+
+  return issues;
+}
+
+// ── cross-part preflight (MULTI_PART_PLAN P3.02) ─────────────────────────────
+
+/** Deep clone with every object's keys sorted, so `JSON.stringify` is order-independent. */
+function stableClone(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableClone);
+  if (value !== null && typeof value === 'object') {
+    const source = value as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(source).sort()) out[key] = stableClone(source[key]);
+    return out;
+  }
+  return value;
+}
+
+/** Structural equality by key-sorted JSON — enough for the plain data a reaction holds. */
+function stableEqual(a: unknown, b: unknown): boolean {
+  return JSON.stringify(stableClone(a)) === JSON.stringify(stableClone(b));
+}
+
+/**
+ * The reaction index ONE part validates against: the core catalog with that part's own ids
+ * removed, plus that part's customs. Mirrors `reactionStore.$allReactions` — but per part.
+ *
+ * **This must never be a shared index.** `engineValidation.reactionFacts` prefers the
+ * INJECTED index and only falls back to `part.customReactions`, so handing every part the
+ * active part's `$allReactionIndex` would validate part B's combustors against part A's
+ * propellant payloads (same id, different chemistry ⇒ wrong pressure limits, wrong category).
+ */
+function reactionIndexFor(
+  part: EditingPart,
+  coreReactions: readonly ReactionData[],
+): Map<string, ReactionData> {
+  const ownIds = new Set(part.customReactions.map((r) => r.id));
+  return indexReactionCatalog([
+    ...coreReactions.filter((r) => !ownIds.has(r.id)),
+    ...part.customReactions.map(customToReactionData),
+  ]);
+}
+
+/**
+ * Every pre-flight issue for the WHOLE project: each included part's own pass (stamped with
+ * the part it came from), plus the blockers that only exist because one mod now ships N
+ * parts into the same registries.
+ *
+ * The cross-part checks guard the global uniqueness obligations in MULTI_PART_PLAN §3 —
+ * KSA's mod library registers `<Part>` ids, `<SubPart>` ids and `<FixedReaction>` ids
+ * globally, first-wins (`KSA/MeshAtlasFileReference.cs`, `KSA/AssetBundle.cs`), so a
+ * collision does not error at load, it silently ships the wrong asset.
+ *
+ * Pure, like the rest of this module: `coreReactions` is the CORE catalog only — pass
+ * `$reactionCatalog.get()`, never `$allReactions`, which has already merged the ACTIVE
+ * part's customs and would validate every other part against them.
+ */
+export function collectProjectExportIssues(
+  parts: readonly NamedExportPart[],
+  coreReactions: readonly ReactionData[],
+  catalog: ReadonlyMap<string, CatalogSubPart>,
+): ExportIssue[] {
+  const issues: ExportIssue[] = [];
+
+  if (parts.length === 0) {
+    issues.push({
+      severity: 'block',
+      area: 'part',
+      code: 'no-parts-included',
+      message: 'No parts are included in the export.',
+    });
+  }
+
+  // ── each part's own pass, against its OWN reaction set ────────────────────
+  for (const entry of parts) {
+    for (const issue of collectExportIssues(
+      entry.part,
+      reactionIndexFor(entry.part, coreReactions),
+      catalog,
+    )) {
+      issues.push({ ...issue, partEntryId: entry.entryId, partName: entry.name });
+    }
+  }
+
+  // ── duplicate Part Id: two <Part Id>/<PartGameData Id> siblings, first wins ─
+  const byPartId = new Map<string, NamedExportPart>();
+  for (const entry of parts) {
+    const first = byPartId.get(entry.part.partId);
+    if (!first) {
+      byPartId.set(entry.part.partId, entry);
+      continue;
+    }
+    issues.push({
+      severity: 'block',
+      area: 'part',
+      code: 'duplicate-part-id',
+      message:
+        `Parts '${first.name}' and '${entry.name}' both use the Part Id ` +
+        `'${entry.part.partId}'.`,
+    });
+  }
+
+  // ── Part Ids that differ but sanitize to the same variant namespace token ──
+  // `ns` IS `partExportNs(partId)` by construction (the mapper mints it), and it is what
+  // `buildMultiModContent` stamps into every export-variant id — so checking the token
+  // itself is what actually guarantees no two parts share a variant namespace.
+  const byNs = new Map<string, NamedExportPart>();
+  for (const entry of parts) {
+    const first = byNs.get(entry.ns);
+    if (!first) {
+      byNs.set(entry.ns, entry);
+      continue;
+    }
+    // Identical Part Ids are already reported above; don't say it twice.
+    if (first.part.partId === entry.part.partId) continue;
+    issues.push({
+      severity: 'block',
+      area: 'part',
+      code: 'part-id-collision',
+      message:
+        `Part Ids '${first.part.partId}' and '${entry.part.partId}' collide after ` +
+        `sanitization ('${entry.ns}').`,
+    });
+  }
+
+  // ── custom-mesh SubPart ids: project-unique by I4; this is the tripwire ────
+  const meshOwners = new Map<string, NamedExportPart>();
+  for (const entry of parts) {
+    for (const mesh of entry.part.customMeshes) {
+      const first = meshOwners.get(mesh.subPartId);
+      if (!first) {
+        meshOwners.set(mesh.subPartId, entry);
+        continue;
+      }
+      if (first.entryId === entry.entryId) continue;
+      issues.push({
+        severity: 'block',
+        area: 'asset',
+        code: 'duplicate-custom-mesh-id',
+        message:
+          `Custom mesh id '${mesh.subPartId}' is used by both '${first.name}' and ` +
+          `'${entry.name}'. Ids must be unique across the whole project.`,
+      });
+    }
+  }
+
+  // ── one <FixedReaction Id>, two different chemistries ─────────────────────
+  // Sharing an id is DELIBERATE: neither duplicate-part nor import-as-parts re-mints
+  // reaction ids, so two parts burning the same propellant emit it once (P3.05 dedupe).
+  // That only works while the payloads agree — divergence is the failure this blocks.
+  const reactionOwners = new Map<string, { entry: NamedExportPart; reaction: CustomReaction }>();
+  for (const entry of parts) {
+    for (const reaction of entry.part.customReactions) {
+      const first = reactionOwners.get(reaction.id);
+      if (!first) {
+        reactionOwners.set(reaction.id, { entry, reaction });
+        continue;
+      }
+      if (first.entry.entryId === entry.entryId) continue;
+      if (stableEqual(first.reaction, reaction)) continue;
+      issues.push({
+        severity: 'block',
+        area: 'engine',
+        code: 'reaction-id-conflict',
+        message:
+          `Propellant '${reaction.id}' is defined differently in '${first.entry.name}' and ` +
+          `'${entry.name}'. One mod can ship only one definition per reaction id.`,
+      });
+    }
   }
 
   return issues;

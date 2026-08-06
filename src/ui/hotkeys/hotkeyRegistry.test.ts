@@ -87,16 +87,16 @@ describe('1 — no duplicate keys inside one active scope set', () => {
   });
 
   it('accepts a lower-precedence collision — that is what precedence is for', () => {
-    // `surface:timeline` ← / → over the viewport nudge arrows (foundation §11.2).
-    const timelineArrows = fakeBinding({
-      id: 'transform.test.timelineStep',
-      keys: ['left', 'right'],
-      chords: [['←', '→']],
-      scope: 'surface:timeline',
-      overrides: ['transform.nudge.axis'],
-    });
-    expect(() => validateRegistry([...ALL_BINDINGS, timelineArrows])).not.toThrow();
+    // SHIPPED since P11B.09: `surface:timeline` ← / → over the viewport nudge arrows, and
+    // `F` over Frame Selection (foundation §11.2; design-animation-mode §12.2). The whole
+    // registry validating clean is the assertion; these two pairs are why it could not.
+    expect(() => validateRegistry(ALL_BINDINGS)).not.toThrow();
     expect(scopeRank('surface:timeline')).toBeGreaterThan(scopeRank('viewport'));
+    const arrows = ALL_BINDINGS.find((b) => b.id === 'timeline.stepFrame');
+    expect(arrows?.scope).toBe('surface:timeline');
+    expect(normalizeKeys(arrows!.keys)).toEqual(normalizeKeys(['left', 'right']));
+    const fit = ALL_BINDINGS.find((b) => b.id === 'timeline.fit');
+    expect(normalizeKeys(fit!.keys)).toContain('f');
   });
 
   it('rejects a same-rank collision even across two different surfaces of one set', () => {
@@ -176,6 +176,8 @@ const TOKEN_DISPLAY: Readonly<Record<string, string>> = {
   bracketright: ']',
   comma: ',',
   period: '.',
+  equal: '=',
+  minus: '-',
   space: 'Space',
   mod: 'mod',
   shift: 'shift',
@@ -223,7 +225,13 @@ describe('4 — every binding id resolves', () => {
 
   it.each(ALL_BINDINGS.map((binding) => [binding.id] as const))('%s', (id) => {
     const synthetic =
-      id.startsWith('transform.') || id.startsWith('mirror.') || SYNTHETIC.includes(id);
+      id.startsWith('transform.') ||
+      id.startsWith('mirror.') ||
+      // `anim.*` / `timeline.*` (P11B.09): playhead + column-selection keys that only mean
+      // anything with the dock focused, so the palette could not deliver them.
+      id.startsWith('anim.') ||
+      id.startsWith('timeline.') ||
+      SYNTHETIC.includes(id);
     expect(synthetic || getCommand(id) !== undefined).toBe(true);
   });
 

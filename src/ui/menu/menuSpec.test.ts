@@ -3,6 +3,7 @@ import { MENU_SPEC, type MenuEntry, type TopMenu } from './menuSpec';
 import { allCommands, allDynamicCommands, getCommand } from '../../state/commandStore';
 import { COMMAND_PROVIDERS } from '../commands/providers';
 import { chordsFor } from '../commands/chords';
+import { $mode } from '../../state/modeStore';
 // Side-effect import: registering every command IS importing this module.
 import '../commands';
 
@@ -323,7 +324,8 @@ describe('disabled stubs stay visible but never run', () => {
     // `view.displayFilters` graduated too: it is now a SUBMENU of six live per-kind
     // checkboxes (`view.displayFilter:*`) driving `$kindVisibility` — see its own test below.
     'view.motionTrails',
-    'window.timeline',
+    // `window.timeline` graduated with the timeline dock (P11B.01): it toggles
+    // `$layout.timeline.hidden` and is gated on Animation mode — see its own test below.
     // `window.toolbar` graduated with the Build-mode Tool bar: it now toggles the floating
     // window's `floatHidden` entry — see its own test below.
     // `window.notifications` graduated out of this list: the status-bar phase gave it a
@@ -368,6 +370,26 @@ describe('disabled stubs stay visible but never run', () => {
       (e) => (e as { commandId: string }).commandId,
     );
     expect(referenced).toContain('window.notifications');
+  });
+
+  it('window.timeline is live in Animation mode and toggles the dock', () => {
+    const command = getCommand('window.timeline');
+    $mode.set('build');
+    expect(command?.enabled?.()).toBe(false); // the dock only exists in Animation mode
+    $mode.set('animation');
+    expect(command?.enabled?.()).toBe(true);
+
+    const wasChecked = command?.checked?.();
+    command?.run(undefined);
+    expect(command?.checked?.()).toBe(!wasChecked);
+    command?.run(undefined);
+    expect(command?.checked?.()).toBe(wasChecked);
+    $mode.set('build');
+
+    const referenced = ALL_ENTRIES.filter((e) => e.kind === 'checkbox').map(
+      (e) => (e as { commandId: string }).commandId,
+    );
+    expect(referenced).toContain('window.timeline');
   });
 
   it('window.toolbar is live (the floating Tool bar exists) and toggles its visibility', () => {

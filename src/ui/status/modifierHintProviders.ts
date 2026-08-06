@@ -16,8 +16,10 @@ import { registerModifierHints } from '../../state/modifierStore';
  *
  * | Provider | Gesture | Owner |
  * |---|---|---|
- * | `timeline` ⌃ Snap to keys | keyframe drag snapping | Animation phase |
- * | `animation-pose` ⇧ Axis lock | pose-gizmo axis lock | Animation phase |
+ * | `animation-pose` ⇧ Axis lock | pose-gizmo axis lock | Animation phase (11D) |
+ *
+ * (`timeline` ⌃ Snap to keys · ⇧ marquee LANDED in P11B.06 and registers itself in
+ * `src/ui/animation/timelineActions.ts`, beside the gestures it describes.)
  *
  * (`⌥ Duplicate drag` LANDED in P5B.18 and lives on the `gizmo-drag` provider below,
  * beside the ⌃ snap-invert row it shares a gesture with.)

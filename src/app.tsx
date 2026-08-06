@@ -5,7 +5,6 @@ import { MarqueeOverlay } from './ui/MarqueeOverlay';
 import { ModeSidebar } from './ui/ModeSidebar';
 import { ModeFocusEditor } from './ui/ModeFocusEditor';
 import { MobileInspector } from './ui/MobileInspector';
-import { FloatingPreviewToolbar } from './ui/FloatingPreviewToolbar';
 import { ChainWindow } from './ui/chain/ChainWindow';
 import { ToolBarStrip, ToolBarWindow } from './ui/build/ToolBarWindow';
 import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys';
@@ -16,6 +15,7 @@ import { PhoneModeTabs } from './ui/shell/phone/PhoneModeTabs';
 import { DialogRoot } from './ui/shell/DialogRoot';
 import { CommandPalette } from './ui/palette/CommandPalette';
 import { Sidebar } from './ui/shell/Sidebar';
+import { TimelineDock } from './ui/animation/TimelineDock';
 import { StatusBar } from './ui/status/StatusBar';
 import { useIsPhone } from './ui/kit';
 import { ensureCatalogLoaded } from './state/catalogStore';
@@ -43,7 +43,7 @@ initModifierHintProviders();
 
 /**
  * The v2 docked shell (foundation.md §1):
- * `column( MenuBar, row( LeftSidebar, ViewportHost, RightSidebar ), StatusBar )`.
+ * `column( MenuBar, row( LeftSidebar, ViewportHost, RightSidebar ), TimelineDock?, StatusBar )`.
  *
  * Everything is a real flex sibling, so the canvas cell gets exactly the remaining
  * space and the orbit center IS the visible center — the v1 click-through RightPanel
@@ -125,25 +125,9 @@ function App() {
                 against the CELL, so everything clamps to the workspace by construction.
                 Each surface keeps self-gating exactly as before. ── */}
 
-          {/* On phone the animation scrubber pins to the top-centre of the cell so the clip
-              can be scrubbed/replayed without opening the inspector sheet over the 3D view.
-              The v1 selection toolbars that used to stack here are gone: the gizmo switcher
-              lives in the Tool bar window and the selection actions in the left focus card
-              and the Edit menu (foundation §6.3). */}
-          {isPhone && (
-            <div className="absolute left-1/2 top-2 flex -translate-x-1/2 flex-col items-center gap-2">
-              <FloatingPreviewToolbar />
-            </div>
-          )}
-
           {/* Phone inspector: a FAB in the cell's corner opening a bottom sheet. The
               desktop inspector is the right sidebar below. */}
           {isPhone && <MobileInspector />}
-
-          {/* Floating, draggable animation preview scrubber over the workspace while the
-              Animation editor has a clip open (desktop only — the phone variant pins into
-              the top-centre stack above). */}
-          {!isPhone && <FloatingPreviewToolbar />}
         </div>
 
         {/* Floating windows mount here, as children of the BAND: their positions are
@@ -173,6 +157,11 @@ function App() {
           </Sidebar>
         )}
       </div>
+
+      {/* The bottom-docked Animation timeline (foundation §1, §9; LOCKED #5): a real flex
+          sibling between the workspace band and the status bar, mounted only in Animation
+          mode. It self-gates on `$mode` + Window ▸ Timeline. */}
+      <TimelineDock />
 
       {!isPhone && <StatusBar />}
       {/* The Tool bar's phone variant: a pinned strip in the flex flow directly above the

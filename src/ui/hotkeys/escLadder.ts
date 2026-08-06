@@ -21,7 +21,7 @@ import { isTypingInField } from './typingGuard';
  * | 4 | gizmo drag cancel | registered rung (`TransformControls.reset()`) |
  * | 5 | armed transient tool cancel | registered rung |
  * | 6 | chain session cancel | registered rung (**never** preventDefault — v1 contract) |
- * | 7 | animation unwind: keyframe → joint | registered rung |
+ * | 7 | animation unwind: columns → pin → park → rest ⚓ → joint | registered rung |
  * | 8 | seat view exit | registered rung (**never** preventDefault — v1 contract) |
  * | 9 | nothing | Escape never clears the selection and is never globally preventDefault'ed |
  *

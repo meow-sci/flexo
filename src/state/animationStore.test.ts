@@ -25,8 +25,8 @@ import {
   $activeJointId,
   $editKeyframeId,
   $animClipboard,
-  $animPreviewU,
   $animPlaying,
+  $jointPoseClipboard,
   $animScrubbing,
   $isPoseEditing,
   $membersView,
@@ -40,6 +40,7 @@ import {
   addKeyframe,
   beginScrub,
   closeMembersView,
+  copyJointPose,
   copyKeyframes,
   duplicateAnimation,
   endScrub,
@@ -47,11 +48,13 @@ import {
   moveKeyframes,
   openMembersView,
   parkPlayhead,
+  pasteJointPose,
   pasteKeyframesAtPlayhead,
   pausePreview,
   removeJoint,
   removeKeyframe,
   removeKeyframes,
+  resetJointPoseToCurve,
   returnToRest,
   scrubTo,
   selectKeyframeForEditing,
@@ -77,7 +80,6 @@ beforeEach(() => {
   $activeAnimationId.set(null);
   $activeJointId.set(null);
   $editKeyframeId.set(null);
-  $animPreviewU.set(0);
   $animScrubbing.set(false);
   $animPlaying.set(false);
   clearSelection();
@@ -372,6 +374,51 @@ describe('animationStore — clip/joint/keyframe actions v2 (§4.3)', () => {
   });
 });
 
+describe('animationStore — per-joint column edits (§5.2 diamond menu)', () => {
+  it('resetJointPoseToCurve turns a ◆ back into a ◇ (one discrete undo step)', () => {
+    const { aid, jid } = setupDoor(); // columns at 0 and 1; the joint turns 90° at t=1
+    setAnimationDuration(aid, 2, 'keepTimes');
+    const mid = addKeyframe(aid, 2); // a third column at the far end
+    setJointPose(aid, mid, jid, tf({ rot: [0, Math.PI, 0] }));
+    // Now shove the MIDDLE column off the curve.
+    const kid = anim0().keyframes.find((k) => k.timeSec === 1)!.id;
+    setJointPose(aid, kid, jid, tf({ rot: [0, 0.1, 0] }));
+    expect(anim0().keyframes.find((k) => k.id === kid)!.poses[jid].rotation.y).toBeCloseTo(0.1);
+
+    const historyBefore = exportHistory().undo.length;
+    resetJointPoseToCurve(aid, kid, jid);
+
+    // On-curve between 0 and π at the halfway column ⇒ π/2, i.e. exactly a hold-through.
+    expect(anim0().keyframes.find((k) => k.id === kid)!.poses[jid].rotation.y).toBeCloseTo(
+      Math.PI / 2,
+      5,
+    );
+    expect(exportHistory().undo.length).toBe(historyBefore + 1);
+    undo();
+    expect(anim0().keyframes.find((k) => k.id === kid)!.poses[jid].rotation.y).toBeCloseTo(0.1);
+  });
+
+  it('copies and pastes ONE joint’s pose between columns (discrete)', () => {
+    const { aid, jid, kid } = setupDoor();
+    const restId = restKeyframeId(anim0());
+    expect(copyJointPose(aid, kid, jid)).toBe(true);
+    expect(pasteJointPose(aid, restId, jid)).toBe(true);
+    expect(anim0().keyframes.find((k) => k.id === restId)!.poses[jid].rotation.y).toBeCloseTo(
+      Math.PI / 2,
+    );
+    undo();
+    expect(anim0().keyframes.find((k) => k.id === restId)!.poses[jid].rotation.y).toBeCloseTo(0);
+  });
+
+  it('pasting with an empty clipboard is a no-op, not an undo step', () => {
+    const { aid, jid, kid } = setupDoor();
+    $jointPoseClipboard.set(null);
+    const before = exportHistory().undo.length;
+    expect(pasteJointPose(aid, kid, jid)).toBe(false);
+    expect(exportHistory().undo.length).toBe(before);
+  });
+});
+
 describe('animationStore — playback state machine (§10)', () => {
   /** A deploy-style clip: rest anchored on the LAST keyframe (imported KSA convention). */
   function setupDeploy() {
@@ -626,14 +673,15 @@ describe('animationStore — joint pivots', () => {
     $editKeyframeId.set(kid);
     $animScrubbing.set(true);
     $animPlaying.set(true);
-    $animPreviewU.set(0.5);
+    $playheadSec.set(0.5);
+    $playheadParked.set(true);
 
     setMode('build');
 
     expect($editKeyframeId.get()).toBe(null);
     expect($animPlaying.get()).toBe(false);
     expect($animScrubbing.get()).toBe(false);
-    expect($animPreviewU.get()).toBe(0);
+    expect($playheadParked.get()).toBe(false);
     // The clip + joint survive so returning to the mode lands where you left off (§2.4).
     expect($activeAnimationId.get()).toBe(aid);
     expect($activeJointId.get()).toBe(jid);

@@ -27,7 +27,8 @@ const EXEMPT_FILES = new Set(['zIndex.ts', 'zIndexLiterals.test.ts']);
 const ALLOWLIST = [
   // FloatingEditorPanel.tsx + FloatingInspector.tsx left with P5B.16/P5B.17 — the aid editors
   // and the selected-asset inspector now live in the docked left sidebar's focus slot.
-  'src/ui/FloatingPreviewToolbar.tsx',
+  // FloatingPreviewToolbar.tsx left with P11B.03 — playback lives in the timeline dock's
+  // TransportBar now, which takes its stacking from the docked shell.
   'src/ui/LoadProgress.tsx',
   // ManageTexturesPanel.tsx left with P8.24 — per-mesh surface editing is now the docked
   // Surface-mode right sidebar + left face card, which take their stacking from the shell.

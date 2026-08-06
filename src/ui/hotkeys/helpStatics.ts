@@ -27,11 +27,11 @@ export interface HelpStaticSection {
 }
 
 /**
- * Pointer gestures that ship TODAY. `⌥`-drag duplicate, the `⌃` snap invert and the
- * timeline's double-click insert are real design commitments but are NOT implemented yet, so
- * they are deliberately absent.
+ * Pointer gestures that ship TODAY. The rule is strict: a row may only describe a gesture
+ * that is actually implemented.
  *
- * EXTEND in P5B (⌥-drag duplicate, ⌃ snap invert), P11 (timeline gestures).
+ * EXTENDED in P11B.09 with the dopesheet's five gestures (design-animation-mode §12.4).
+ * Still absent: the pose-drag `X`/`Y`/`Z` axis lock, which lands with `PoseGizmo` in 11D.
  */
 export const POINTER_SECTION: HelpStaticSection = {
   title: 'Pointer & modifiers',
@@ -55,6 +55,26 @@ export const POINTER_SECTION: HelpStaticSection = {
     {
       chords: [['mod', 'click']],
       text: 'List rows — toggle one row, leaving the rest of the selection alone',
+    },
+    {
+      chords: [['drag']],
+      text: 'Timeline — drag the ruler or a track to scrub; drag a diamond to retime that column (every joint moves with it)',
+    },
+    {
+      chords: [['ctrl', 'drag']],
+      text: 'Timeline — while retiming, snap to the other keyframes, the playhead and the clip’s start/end instead of the ruler grid',
+    },
+    {
+      chords: [['shift', 'drag']],
+      text: 'Timeline — drag over the tracks to marquee-select columns (a plain drag still scrubs)',
+    },
+    {
+      chords: [['double-click']],
+      text: 'Timeline — double-click a track to insert a keyframe at that time',
+    },
+    {
+      chords: [['mod', 'wheel']],
+      text: 'Timeline — zoom about the pointer; ⇧-wheel or a horizontal wheel pans',
     },
   ],
 };

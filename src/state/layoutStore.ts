@@ -39,8 +39,14 @@ export interface LayoutState {
   left: SidebarLayout;
   /** Right sidebar (the mode primary). Clamp 260–640, default 340. */
   right: SidebarLayout;
-  /** Bottom-docked Animation timeline. Height clamp 120–50vh, default 220. */
-  timeline: { height: number; collapsed: boolean };
+  /**
+   * Bottom-docked Animation timeline. Height clamp 120–50vh, default 220.
+   *
+   * Two INDEPENDENT controls (design-animation-mode.md §5.1): `hidden` backs
+   * **Window ▸ Timeline** (✓ = shown — the `floatHidden` precedent), `collapsed` backs the
+   * transport's **⌄** control (the dock stays mounted as a 32px transport-only strip).
+   */
+  timeline: { height: number; collapsed: boolean; hidden: boolean };
   /** Per-window drag position, keyed by `FloatingWindow` id. `null` = default anchor (§6.4). */
   float: Record<string, FloatPos | null>;
   /** Float z-stack order, last = top (§6.3). Ids not present here render below any listed. */
@@ -52,7 +58,7 @@ export interface LayoutState {
 export const LAYOUT_DEFAULTS: LayoutState = {
   left: { width: 300, collapsed: false },
   right: { width: 340, collapsed: false },
-  timeline: { height: 220, collapsed: false },
+  timeline: { height: 220, collapsed: false, hidden: false },
   float: {},
   floatOrder: [],
   floatHidden: [],
@@ -76,7 +82,7 @@ function clampNum(v: number, min: number, max: number): number {
 }
 
 /** The timeline's max height in px: 50vh, or a fallback outside a `window` (SSR/tests). */
-function maxTimelineHeight(): number {
+export function maxTimelineHeight(): number {
   return typeof window !== 'undefined' ? Math.round(window.innerHeight / 2) : 600;
 }
 
@@ -107,11 +113,15 @@ function isTimelineLayout(v: unknown): v is { height: number; collapsed: boolean
   );
 }
 
-function sanitizeTimeline(raw: unknown): { height: number; collapsed: boolean } {
+function sanitizeTimeline(raw: unknown): LayoutState['timeline'] {
   if (!isTimelineLayout(raw)) return LAYOUT_DEFAULTS.timeline;
+  // `hidden` is read DEFENSIVELY, never migrated: a value stored before the flag existed
+  // simply lacks the key and defaults to "shown" (constitution — no migration, ever).
+  const hidden = (raw as Record<string, unknown>).hidden;
   return {
     height: clampNum(raw.height, TIMELINE_MIN_HEIGHT, maxTimelineHeight()),
     collapsed: raw.collapsed,
+    hidden: typeof hidden === 'boolean' ? hidden : false,
   };
 }
 
@@ -196,12 +206,19 @@ export function setTimelineHeight(px: number): void {
   $layout.set({ ...current, timeline: { ...current.timeline, height } });
 }
 
+/** The **⌄** control: collapse to the 32px transport-only strip, or expand again. */
 export function toggleTimeline(): void {
   const current = currentLayout();
   $layout.set({
     ...current,
     timeline: { ...current.timeline, collapsed: !current.timeline.collapsed },
   });
+}
+
+/** **Window ▸ Timeline**: unmount / remount the whole dock (independent of `collapsed`). */
+export function setTimelineHidden(hidden: boolean): void {
+  const current = currentLayout();
+  $layout.set({ ...current, timeline: { ...current.timeline, hidden } });
 }
 
 export function setFloatPos(id: string, pos: FloatPos | null): void {

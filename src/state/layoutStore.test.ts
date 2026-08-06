@@ -6,6 +6,8 @@ import {
   resetLayout,
   sanitizeLayout,
   setSidebarWidth,
+  setTimelineHeight,
+  setTimelineHidden,
   toggleSidebar,
   toggleTimeline,
 } from './layoutStore';
@@ -44,6 +46,44 @@ describe('toggleSidebar', () => {
 
     toggleSidebar('right');
     expect($layout.get().right).toEqual({ width: 400, collapsed: false });
+  });
+});
+
+describe('the timeline dock', () => {
+  it('defaults to 220px, expanded and shown', () => {
+    expect($layout.get().timeline).toEqual({ height: 220, collapsed: false, hidden: false });
+  });
+
+  it('clamps the height into [120, 50vh]', () => {
+    setTimelineHeight(10);
+    expect($layout.get().timeline.height).toBe(120);
+
+    setTimelineHeight(99999);
+    expect($layout.get().timeline.height).toBe(Math.round(window.innerHeight / 2));
+  });
+
+  it('collapse and hide are INDEPENDENT (the ⌄ control vs Window ▸ Timeline)', () => {
+    setTimelineHeight(300);
+    toggleTimeline();
+    expect($layout.get().timeline).toEqual({ height: 300, collapsed: true, hidden: false });
+
+    setTimelineHidden(true);
+    expect($layout.get().timeline).toEqual({ height: 300, collapsed: true, hidden: true });
+
+    toggleTimeline();
+    setTimelineHidden(false);
+    expect($layout.get().timeline).toEqual({ height: 300, collapsed: false, hidden: false });
+  });
+
+  it('reads a stored value that predates `hidden` as "shown" — defaulted, never migrated', () => {
+    expect(sanitizeLayout({ timeline: { height: 200, collapsed: true } }).timeline).toEqual({
+      height: 200,
+      collapsed: true,
+      hidden: false,
+    });
+    expect(
+      sanitizeLayout({ timeline: { height: 200, collapsed: true, hidden: 'yes' } }).timeline,
+    ).toEqual({ height: 200, collapsed: true, hidden: false });
   });
 });
 

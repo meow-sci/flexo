@@ -1,5 +1,12 @@
 import type { Command } from '../../state/commandStore';
-import { $layout, resetLayout, setFloatHidden, toggleSidebar } from '../../state/layoutStore';
+import {
+  $layout,
+  resetLayout,
+  setFloatHidden,
+  setTimelineHidden,
+  toggleSidebar,
+} from '../../state/layoutStore';
+import { $mode } from '../../state/modeStore';
 import { openDialog } from '../../state/dialogStore';
 import { openNotificationCenter } from '../../state/notificationStore';
 
@@ -31,10 +38,15 @@ export const WINDOW_COMMANDS: Command[] = [
     id: 'window.timeline',
     title: 'Timeline',
     menuPath: 'Window',
-    keywords: 'timeline dopesheet animation dock',
-    enabled: () => false,
-    disabledReason: 'The timeline dock arrives with the Animation-mode rework',
-    run: () => {},
+    keywords: 'timeline dopesheet animation dock keyframes',
+    // ✓ = shown. The dock ALSO self-gates on Animation mode, so an item checked here still
+    // renders nothing in Build — hence the mode gate on `enabled` (design-animation-mode
+    // §5.1; the `window.toolbar` `floatHidden` precedent).
+    enabled: () => $mode.get() === 'animation',
+    disabledReason: 'The timeline lives in Animation mode',
+    checked: () => !$layout.get().timeline.hidden,
+    keepOpen: true,
+    run: () => setTimelineHidden(!$layout.get().timeline.hidden),
   },
   {
     id: 'window.toolbar',

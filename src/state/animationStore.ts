@@ -49,14 +49,12 @@ export const $activeAnimationId = atom<string | null>(null);
 export const $activeJointId = atom<string | null>(null);
 /** The keyframe being posed (pins the preview to its time); null = free scrub. */
 export const $editKeyframeId = atom<string | null>(null);
-/** Free preview scrub position 0→1 (mapped to 0→duration). 0 = the t=0 keyframe. */
-export const $animPreviewU = atom<number>(0);
 /**
- * True while the user is actively dragging the preview scrubber. The viewport applies
- * the joint override ONLY while scrubbing (or editing a keyframe); otherwise SubParts
- * show their static modeled placement. This is what lets an imported KSA deploy clip —
- * whose rest is the DEPLOYED last keyframe — sit deployed at rest yet still fold to
- * stowed (t=0) while you drag, snapping back to the modeled pose on release.
+ * True while the user is actively dragging the playhead. The viewport applies the joint
+ * override while scrubbing (as it does while pinned, parked or playing); otherwise SubParts
+ * show their static modeled placement. This is what lets an imported KSA deploy clip — whose
+ * rest is the DEPLOYED last keyframe — sit deployed at rest yet still fold to stowed (t=0)
+ * while you drag, springing back to the modeled pose on release.
  */
 export const $animScrubbing = atom<boolean>(false);
 
@@ -89,10 +87,11 @@ export const $clipIssues = computed([$part], computeClipIssues);
 // ── v2 ephemeral atoms (never persisted, never undo; clamped by initAnimationStore) ──
 
 /**
- * The playhead, in SECONDS (design-animation-mode.md §4.1). Replaces the normalized
- * `$animPreviewU` — 11B re-points the preview onto it. HIGH FREQUENCY: every rAF tick of
- * playback writes it, so only leaf components / imperative canvas layers may subscribe
- * (§5.8 — the v1 `PreviewProgressLabel` FPS lesson is binding).
+ * The playhead, in SECONDS (design-animation-mode.md §4.1) — the ONE preview time source
+ * (`EditorScene.applyAnimationPreview` reads it directly; the v1 normalized `$animPreviewU`
+ * is gone). HIGH FREQUENCY: every rAF tick of playback writes it, so only leaf components /
+ * imperative canvas layers may subscribe (§5.8 — the v1 `PreviewProgressLabel` FPS lesson
+ * is binding).
  */
 export const $playheadSec = atom<number>(0);
 
@@ -167,16 +166,6 @@ export const $animDurationMode = persistentJSON<'rescale' | 'keepTimes'>(
 
 // ── playhead state machine (design §10) ───────────────────────────────────────
 
-/**
- * BRIDGE (deleted in 11B): mirrors `$playheadSec` into the v1 normalized `$animPreviewU`
- * the still-mounted v1 preview UI + `EditorScene` read. Every v2 playhead writer goes
- * through here so both representations can never disagree.
- */
-function syncLegacyPreviewU(sec: number): void {
-  const dur = $activeAnimation.get()?.durationSec ?? 0;
-  $animPreviewU.set(dur > 0 ? Math.min(1, Math.max(0, sec / dur)) : 0);
-}
-
 /** Clamps a time to the active clip's [0, duration]. */
 function clampToClip(sec: number): number {
   const dur = $activeAnimation.get()?.durationSec ?? 0;
@@ -196,7 +185,6 @@ export function selectKeyframeForEditing(animId: string, keyframeId: string): vo
   $editKeyframeId.set(keyframeId);
   $playheadSec.set(k.timeSec);
   $playheadParked.set(true);
-  syncLegacyPreviewU(k.timeSec);
 }
 
 /** PARK at `sec` (§10.1) and CLEAR the pin — a click elsewhere leaves the edited column. */
@@ -205,7 +193,6 @@ export function parkPlayhead(sec: number): void {
   $editKeyframeId.set(null);
   $playheadSec.set(t);
   $playheadParked.set(true);
-  syncLegacyPreviewU(t);
 }
 
 /**
@@ -219,8 +206,6 @@ export function returnToRest(): void {
   if ($animScrubbing.get()) $animScrubbing.set(false);
   const anim = $activeAnimation.get();
   $playheadSec.set(anim ? restAnchorTime(anim) : 0);
-  // v1 parity: the legacy scrubber springs back to its 0 end on release/stop.
-  if ($animPreviewU.get() !== 0) $animPreviewU.set(0);
 }
 
 // ── scrub session (drag on the ruler / a track) — §10.3 ───────────────────────
@@ -239,9 +224,7 @@ export function beginScrub(): void {
 }
 
 export function scrubTo(sec: number): void {
-  const t = clampToClip(sec);
-  $playheadSec.set(t);
-  syncLegacyPreviewU(t);
+  $playheadSec.set(clampToClip(sec));
 }
 
 /**
@@ -261,7 +244,6 @@ export function endScrub(): void {
     $editKeyframeId.set(pinKf.id);
     $playheadSec.set(pinKf.timeSec);
     $playheadParked.set(true);
-    syncLegacyPreviewU(pinKf.timeSec);
     return;
   }
   if ($animTransport.get().latched) {
@@ -271,7 +253,6 @@ export function endScrub(): void {
   if (o.parked) {
     $playheadSec.set(o.sec);
     $playheadParked.set(true);
-    syncLegacyPreviewU(o.sec);
     return;
   }
   returnToRest();
@@ -310,7 +291,6 @@ export function pausePreview(): void {
   const pinId = $editKeyframeId.get();
   const pin = pinId ? $activeAnimation.get()?.keyframes.find((k) => k.id === pinId) : null;
   if (pin && Math.abs(sec - pin.timeSec) > 1e-6) $editKeyframeId.set(null);
-  syncLegacyPreviewU(sec);
 }
 
 /** Transport preferences (§5.5) — persisted, never undo. */
@@ -390,7 +370,6 @@ export function playAnimationPreview(): void {
   if (sec >= anim.durationSec) sec = 0; // replay rather than sit at the end
   $animScrubbing.set(true);
   $playheadSec.set(sec);
-  syncLegacyPreviewU(sec);
   $animPlaying.set(true);
   let prevTs = 0;
   const tick = (ts: number) => {
@@ -406,7 +385,6 @@ export function playAnimationPreview(): void {
         sec = dur > 0 ? sec % dur : 0;
       } else {
         $playheadSec.set(dur);
-        syncLegacyPreviewU(dur);
         cancelPlayback();
         if ($animTransport.get().latched) {
           $animScrubbing.set(false);
@@ -418,7 +396,6 @@ export function playAnimationPreview(): void {
       }
     }
     $playheadSec.set(sec);
-    syncLegacyPreviewU(sec);
     playRaf = requestAnimationFrame(tick);
   };
   playRaf = requestAnimationFrame(tick);
@@ -465,8 +442,10 @@ export function addAnimation(name = 'Animation', mode: AnimationMode = 'actuate'
   $activeAnimationId.set(id);
   $activeJointId.set(null);
   $editKeyframeId.set(null);
-  $animPreviewU.set(0);
+  $timelineSelection.set([]);
   $animScrubbing.set(false);
+  $playheadParked.set(false);
+  $playheadSec.set(0);
   return id;
 }
 
@@ -978,6 +957,54 @@ export function setRestAnchor(animId: string, kfId: string): void {
     if (earliest && earliest.id === kfId) delete a.restKeyframeId;
     else a.restKeyframeId = kfId;
   });
+}
+
+// ── per-joint column edits (the diamond context menu, design §5.2) ───────────
+
+/** Single-joint pose clipboard for the diamond menu's Copy pose / Paste pose. Ephemeral. */
+export const $jointPoseClipboard = atom<Transform | null>(null);
+
+/**
+ * "Reset joint here to on-curve" (design §5.2): recomputes ONE joint's pose at a column
+ * from its NEIGHBOURING segment — the column itself is excluded from the sample, so the
+ * result is exactly where the joint would pass through if this column had never been
+ * inserted. Turns a ◆ back into a ◇ without touching any other joint or the column's time.
+ * DISCRETE → one undo step.
+ */
+export function resetJointPoseToCurve(animId: string, kfId: string, jointId: string): void {
+  const anim = findAnim($part.get(), animId);
+  const kf = anim?.keyframes.find((k) => k.id === kfId);
+  if (!anim || !kf || anim.keyframes.length < 2) return;
+  // Sample against a copy WITHOUT this column: `sampleJointLocal` clamps outside the range,
+  // so an end column resolves to its surviving neighbour's pose (the honest answer there).
+  const without: PartAnimation = {
+    ...anim,
+    keyframes: anim.keyframes.filter((k) => k.id !== kfId),
+  };
+  const onCurve = transformFromMatrix(sampleJointLocal(without, jointId, kf.timeSec));
+  mutate('reset pose', `${kf.timeSec.toFixed(2)}s`, (p) => {
+    const k = findAnim(p, animId)?.keyframes.find((x) => x.id === kfId);
+    if (k) k.poses[jointId] = onCurve;
+  });
+}
+
+/** Copies one joint's pose at a column into {@link $jointPoseClipboard}. No undo. */
+export function copyJointPose(animId: string, kfId: string, jointId: string): boolean {
+  const pose = findAnim($part.get(), animId)?.keyframes.find((k) => k.id === kfId)?.poses[jointId];
+  if (!pose) return false;
+  $jointPoseClipboard.set(cloneTransform(pose));
+  return true;
+}
+
+/** Pastes the copied single-joint pose onto a column. DISCRETE → one undo step. */
+export function pasteJointPose(animId: string, kfId: string, jointId: string): boolean {
+  const pose = $jointPoseClipboard.get();
+  if (!pose) return false;
+  mutate('paste pose', '', (p) => {
+    const k = findAnim(p, animId)?.keyframes.find((x) => x.id === kfId);
+    if (k) k.poses[jointId] = cloneTransform(pose);
+  });
+  return true;
 }
 
 /** Moves a keyframe in time (streaming; can't move the rest keyframe off t=0). */

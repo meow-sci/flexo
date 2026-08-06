@@ -110,14 +110,15 @@ import {
   $activeAnimationId,
   $activeJointId,
   $animPlaying,
-  $animPreviewU,
   $animScrubbing,
   $editKeyframeId,
+  $playheadParked,
+  $playheadSec,
   moveJointPivot,
   reorientJointPivot,
   setJointPose,
 } from '../state/animationStore';
-import { jointWorld, previewOverrideMatrix } from '../ksa/animationRig';
+import { jointWorld, previewOverrideMatrix, restAnchorTime } from '../ksa/animationRig';
 import type { PartAnimation } from '../ksa/types';
 import {
   $activeTool,
@@ -606,7 +607,8 @@ export class EditorScene {
     };
     this.sub($activeAnimationId, onPreviewChange);
     this.sub($activeJointId, onPreviewChange);
-    this.sub($animPreviewU, onPreviewChange);
+    this.sub($playheadSec, onPreviewChange);
+    this.sub($playheadParked, onPreviewChange);
     this.sub($animScrubbing, onPreviewChange);
     this.sub($animPlaying, onPreviewChange);
     this.sub($editKeyframeId, onPreviewChange);
@@ -872,21 +874,42 @@ export class EditorScene {
   }
 
   /**
-   * Drives the active animation's attached SubParts to the previewed pose in the
-   * viewport (editor-only; never mutates the document). The effective time is the
-   * edited keyframe's time when posing, else the scrub slider mapped to [0,duration].
-   * Each attached SubPart's group matrix is set to W_J(t)·W_J(0)⁻¹·placement (the same
-   * transform KSA will render); everything else stays at its static placement.
+   * True when the preview shows a POSED (non-rest) frame, which is what locks the placement
+   * gizmo against baking a previewed transform into the document (design §9.6).
    *
-   * Reconcile resets every group to its placement first (via setPlacement), so this
-   * just overlays the overrides on top; previously-overridden ids are reverted when
-   * the animation changes/clears.
+   * v2 keys the test on the **rest ANCHOR**, not on `u > 0` (design §10.1/§§10.2): at
+   * `restAnchorTime` the previewed scene equals the modeled part, so placements stay
+   * editable there — including on an imported deploy clip, whose anchor is the LAST
+   * keyframe and whose t=0 is the stowed pose (the v1 rule called that "rest" and got it
+   * exactly backwards).
    */
-  /** True when the preview shows a posed (non-rest) frame: editing a keyframe, or scrubbing past 0. */
   private isPreviewPosed(): boolean {
     if ($mode.get() !== 'animation') return false;
-    if ($editKeyframeId.get()) return true;
-    return $animScrubbing.get() && $animPreviewU.get() > 1e-6;
+    if (!this.animOverrideActive()) return false;
+    const anim = this.activeAnimation();
+    if (!anim) return false;
+    return Math.abs($playheadSec.get() - restAnchorTime(anim)) > 1e-6;
+  }
+
+  /** The clip the preview is driving, or null (animation atoms persist across modes). */
+  private activeAnimation(): PartAnimation | null {
+    if ($mode.get() !== 'animation') return null;
+    const animId = $activeAnimationId.get();
+    return (animId ? $part.get().animations.find((a) => a.id === animId) : null) ?? null;
+  }
+
+  /**
+   * The §10.1 gating rule: the joint override runs iff the playhead is deliberately held
+   * somewhere — PINNED to a column, PARKED, dragged (scrubbing) or playing. Otherwise the
+   * scene is the modeled part at its rest anchor.
+   */
+  private animOverrideActive(): boolean {
+    return (
+      $editKeyframeId.get() !== null ||
+      $playheadParked.get() ||
+      $animScrubbing.get() ||
+      $animPlaying.get()
+    );
   }
 
   /** True when any selected SubPart is attached to a joint of the active animation. */
@@ -920,6 +943,15 @@ export class EditorScene {
     );
   }
 
+  /**
+   * Drives the active clip's member SubParts to the previewed pose (editor-only; never
+   * mutates the document). Each member's group matrix becomes
+   * `W_J(t)·W_J(rest)⁻¹·placement` — the transform KSA itself will render — with `t` read
+   * from `$playheadSec` and `rest` from {@link restAnchorTime}.
+   *
+   * Reconcile resets every group to its placement first (via `setPlacement`), so this just
+   * overlays the overrides; previously-overridden ids are reverted at the top.
+   */
   private applyAnimationPreview(): void {
     const part = $part.get();
     const byId = new Map(part.placements.map((p) => [p.instanceId, p]));
@@ -933,29 +965,25 @@ export class EditorScene {
 
     // Preview only runs in Animation mode (its atoms persist across mode switches); in
     // every other mode parts show their static placements.
-    const animId = $mode.get() === 'animation' ? $activeAnimationId.get() : null;
-    const anim = animId ? part.animations.find((a) => a.id === animId) : null;
+    const anim = this.activeAnimation();
     if (!anim) {
       this.positionColliders(part); // back to static frames
       this.positionLights(part);
       return;
     }
-    const editKf = $editKeyframeId.get();
-    // Override only while actively posing a keyframe or dragging the scrubber; otherwise
+    // Override only while the playhead is pinned / parked / scrubbing / playing; otherwise
     // SubParts rest at their static modeled placement (an imported deploy clip's rest is
-    // its DEPLOYED last keyframe, so this keeps it shown deployed until you scrub).
-    if (!editKf && !$animScrubbing.get()) {
+    // its DEPLOYED last keyframe, so this keeps it shown deployed until you park or scrub).
+    if (!this.animOverrideActive()) {
       this.positionColliders(part);
       this.positionLights(part);
       return;
     }
     const posed = new Map<string, Transform>();
-    // A pin is SUSPENDED while playing (design §10.2): the preview follows the moving
-    // playhead, and the pin is restored the moment playback pauses/stops.
-    const pinned =
-      editKf && !$animPlaying.get() ? anim.keyframes.find((k) => k.id === editKf) : null;
-    const u = Math.min(1, Math.max(0, $animPreviewU.get()));
-    const t = pinned ? pinned.timeSec : u * anim.durationSec;
+    // ONE time source (design §10.1): every pin/park/step action keeps `$playheadSec` in
+    // step, which is also what makes "a pin is SUSPENDED while playing" (§10.2) automatic —
+    // playback moves the playhead and the pin simply stops being where it points.
+    const t = Math.min(Math.max(0, $playheadSec.get()), Math.max(0, anim.durationSec));
 
     for (const joint of anim.joints) {
       for (const instId of joint.memberInstanceIds) {

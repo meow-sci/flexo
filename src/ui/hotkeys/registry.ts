@@ -1,9 +1,31 @@
 import type { Keys, Options } from 'react-hotkeys-hook';
 import { $paletteOpen, closePalette, runCommand } from '../../state/commandStore';
 import { closeDialog, isDialogOpen } from '../../state/dialogStore';
-import { $activeScopes, $dialogOpen } from '../../state/hotkeyStore';
+import { $activeScopes, $dialogOpen, $focusedSurface } from '../../state/hotkeyStore';
 import { $chainSession } from '../../state/chainStore';
-import { $activeJointId, $editKeyframeId } from '../../state/animationStore';
+import {
+  $activeJointId,
+  $editKeyframeId,
+  $playheadParked,
+  $timelineSelection,
+  returnToRest,
+  stepPlayhead,
+  stepToKeyframe,
+} from '../../state/animationStore';
+import {
+  clearColumnSelection,
+  copySelectedColumns,
+  cutSelectedColumns,
+  deleteSelectedColumns,
+  fitClip,
+  fitSelection,
+  insertKeyframeAtPlayhead,
+  pasteColumnsAtPlayhead,
+  selectAllColumns,
+  snapPlayheadToKeyframe,
+  togglePlayback,
+  zoomTimelineAboutPlayhead,
+} from '../animation/timelineActions';
 import { $activeTool, $mode, disarmTool, MODES } from '../../state/modeStore';
 import { $seatView } from '../../state/ivaStore';
 import { $gizmoDragging, requestGizmoCancel } from '../../state/viewStore';
@@ -534,6 +556,159 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
     ],
   },
   {
+    // The Animation mode's transport keys (design-animation-mode.md §12.1). They STACK on
+    // the viewport scope, so W/S/A/D/Q/E and the nudge arrows keep acting on the placement
+    // selection while posing — unchanged from v1 (S8). `⇧K` stays deliberately UNBOUND.
+    //
+    // Every one carries the `!$dialogOpen` gate: `mode:*` survives an open dialog, and a
+    // transport that plays (or inserts a keyframe!) behind the Export dialog is exactly the
+    // C5 regression class the validator's rule 4 exists to catch.
+    title: 'Animation mode',
+    bindings: [
+      {
+        id: 'anim.playPause',
+        label: 'Play / pause the preview',
+        keys: 'space',
+        chords: [['Space']],
+        scope: 'mode:animation',
+        when: () => !$dialogOpen.get(),
+        run: () => togglePlayback(),
+      },
+      {
+        // `comma`/`period`, not `,`/`.`: `,` is react-hotkeys-hook's own alternatives
+        // delimiter. The nominal clash with `tool:exhaust`'s target stepping is resolved by
+        // precedence (tool > mode) and can only arise inside the Engine mode anyway.
+        id: 'anim.prevKeyframe',
+        label: 'Previous keyframe (parks + pins)',
+        keys: 'comma',
+        chords: [[',']],
+        scope: 'mode:animation',
+        when: () => !$dialogOpen.get(),
+        run: () => stepToKeyframe(-1),
+      },
+      {
+        id: 'anim.nextKeyframe',
+        label: 'Next keyframe (parks + pins)',
+        keys: 'period',
+        chords: [['.']],
+        scope: 'mode:animation',
+        when: () => !$dialogOpen.get(),
+        run: () => stepToKeyframe(1),
+      },
+      {
+        id: 'anim.insertKeyframe',
+        label: 'Insert a keyframe at the playhead',
+        keys: 'k',
+        chords: [['K']],
+        scope: 'mode:animation',
+        when: () => !$dialogOpen.get(),
+        run: () => insertKeyframeAtPlayhead(),
+      },
+    ],
+  },
+  {
+    // The dopesheet's own keys (design §12.2), live only while the dock has FOCUS — which is
+    // what lets `←`/`→` step frames over the viewport's nudge arrows and `F` fit the clip
+    // over Frame Selection, by precedence rather than a preventDefault fight. Clicking the
+    // viewport hands focus back and the viewport bindings return.
+    title: 'Timeline',
+    bindings: [
+      {
+        id: 'timeline.stepFrame',
+        label: 'Step the playhead one bake frame (1/30 s)',
+        keys: ['left', 'right'],
+        chords: [['←', '→']],
+        scope: 'surface:timeline',
+        when: () => !$dialogOpen.get(),
+        overrides: ['transform.nudge.axis'],
+        run: (e) => stepPlayhead(e.key === 'ArrowLeft' ? -1 : 1),
+      },
+      {
+        id: 'timeline.snapKeyframe',
+        label: 'Snap the playhead to the previous / next keyframe',
+        keys: ['shift+left', 'shift+right'],
+        chords: [['shift', '←', '→']],
+        scope: 'surface:timeline',
+        when: () => !$dialogOpen.get(),
+        overrides: ['transform.nudge.step'],
+        // Parks WITHOUT pinning — deliberately distinct from `,`/`.` (design §12.2).
+        run: (e) => snapPlayheadToKeyframe(e.key === 'ArrowLeft' ? -1 : 1),
+      },
+      {
+        id: 'timeline.selectAll',
+        label: 'Select all columns',
+        keys: 'mod+a',
+        chords: [['mod', 'A']],
+        scope: 'surface:timeline',
+        when: () => !$dialogOpen.get(),
+        run: () => selectAllColumns(),
+      },
+      {
+        id: 'timeline.selectNone',
+        label: 'Deselect all columns',
+        keys: 'alt+mod+a',
+        chords: [['alt', 'mod', 'A']],
+        scope: 'surface:timeline',
+        when: () => !$dialogOpen.get(),
+        run: () => clearColumnSelection(),
+      },
+      {
+        id: 'timeline.copy',
+        label: 'Copy the selected keyframes',
+        keys: 'mod+c',
+        chords: [['mod', 'C']],
+        scope: 'surface:timeline',
+        when: () => !$dialogOpen.get(),
+        run: () => copySelectedColumns(),
+      },
+      {
+        id: 'timeline.cut',
+        label: 'Cut the selected keyframes',
+        keys: 'mod+x',
+        chords: [['mod', 'X']],
+        scope: 'surface:timeline',
+        when: () => !$dialogOpen.get(),
+        run: () => cutSelectedColumns(),
+      },
+      {
+        id: 'timeline.paste',
+        label: 'Paste keyframes at the playhead',
+        keys: 'mod+v',
+        chords: [['mod', 'V']],
+        scope: 'surface:timeline',
+        when: () => !$dialogOpen.get(),
+        run: () => pasteColumnsAtPlayhead(),
+      },
+      {
+        id: 'timeline.delete',
+        label: 'Delete the selected keyframes',
+        keys: ['delete', 'backspace'],
+        chords: [['Delete'], ['Backspace']],
+        scope: 'surface:timeline',
+        when: () => !$dialogOpen.get(),
+        run: () => deleteSelectedColumns(),
+      },
+      {
+        id: 'timeline.zoom',
+        label: 'Zoom in / out about the playhead',
+        keys: ['equal', 'minus'],
+        chords: [['='], ['-']],
+        scope: 'surface:timeline',
+        when: () => !$dialogOpen.get(),
+        run: (e) => zoomTimelineAboutPlayhead(e.code === 'Minus' ? 1 / 1.3 : 1.3),
+      },
+      {
+        id: 'timeline.fit',
+        label: 'Fit the clip (⇧F fits the selected columns)',
+        keys: ['f', 'shift+f'],
+        chords: [['F'], ['shift', 'F']],
+        scope: 'surface:timeline',
+        when: () => !$dialogOpen.get(),
+        run: (e) => (e.shiftKey ? fitSelection() : fitClip()),
+      },
+    ],
+  },
+  {
     title: 'Lists',
     // The edit chords, mirrored onto the selection-carrying list surfaces so range-selecting
     // rows and pressing ⌫ keeps working after the viewport scope stopped covering collection
@@ -607,11 +782,13 @@ export const ALL_BINDINGS: HotkeyBinding[] = HOTKEY_GROUPS.flatMap((g) => g.bind
 //
 // | Binding (authoritative-table row)                                        | Owning phase |
 // |--------------------------------------------------------------------------|--------------|
-// | `mode:animation` `Space` · `,` `.` · `K` (transport / prev-next key /     | P11 (timeline) |
-// |   insert key at playhead)                                                 |              |
-// | `surface:timeline` `←→ ⇧←→ ⌘A ⌥⌘A ⌘C ⌘X ⌘V ⌫ = - F ⇧F Esc`                | P11          |
-// |   + `surface:members` edit mirrors                                        |              |
-// | ModeSwitcher / ModeTabBar attention dots                                  | P11 (draft clips; Engine blockers landed in P7) |
+// | `surface:members` edit mirrors                                            | P11C (Members view) |
+// | ModeSwitcher / ModeTabBar attention dots                                  | P11E (draft clips; Engine blockers landed in P7) |
+//
+// **Struck in P11B.09**: the `mode:animation` row (`Space` · `,`/`.` · `K`) and the
+// `surface:timeline` row (`←→ ⇧←→ ⌘A ⌥⌘A ⌘C ⌘X ⌘V ⌫ = - F ⇧F Esc`) are both live above.
+// The timeline's `Esc` is folded into Esc-ladder rung 7 rather than registered as a chord —
+// see the rung below for why.
 //
 // **Closed, not deferred**: `surface:palette` `↑↓ ↩ ⌘↩` stay component-local in
 // `CommandPalette` (the input owns DOM focus for the whole session) and are documented as a
@@ -678,18 +855,44 @@ registerEscRung({
 registerEscRung({
   rung: 7,
   id: 'anim.unwind',
-  label: 'Unwind: posed keyframe → active joint',
+  label: 'Unwind: columns → pin → park → rest ⚓ → active joint',
   when: () =>
     $mode.get() === 'animation' &&
-    ($editKeyframeId.get() !== null || $activeJointId.get() !== null),
+    (timelineColumnsSelected() ||
+      $editKeyframeId.get() !== null ||
+      $playheadParked.get() ||
+      $activeJointId.get() !== null),
+  // The design-animation-mode.md §10.3 / §12.3 ladder, which SUPERSEDES foundation §11.4's
+  // two-step summary. The timeline's own Esc (§12.2 "clear the column selection, then blur
+  // to the ladder") is folded in as the first step rather than registered as a separate
+  // rung: both only apply in Animation mode, and one rung keeps the ladder's nine integer
+  // positions intact.
   run: () => {
-    if ($editKeyframeId.get() !== null) $editKeyframeId.set(null);
-    else $activeJointId.set(null);
+    if (timelineColumnsSelected()) {
+      $timelineSelection.set([]);
+      return;
+    }
+    // 1) unpin but STAY parked at that time — leaving a keyframe is one step, not two.
+    if ($editKeyframeId.get() !== null) {
+      $editKeyframeId.set(null);
+      return;
+    }
+    // 2) parked ⇒ spring back to the modeled pose at the rest anchor.
+    if ($playheadParked.get()) {
+      returnToRest();
+      return;
+    }
+    // 3) finally the active joint. The mode itself NEVER exits via Esc, and Esc never
+    //    clears the placement selection (foundation §11.4 rung 9).
+    $activeJointId.set(null);
   },
-  // Deliberate change from v1's three-step unwind: the clip no longer closes on the third
-  // Escape — "the mode itself never exits via Esc" (foundation §11.4 rung 7).
   preventDefault: true,
 });
+
+/** Columns are selected AND the dock owns focus — the §12.2 half of rung 7. */
+function timelineColumnsSelected(): boolean {
+  return $focusedSurface.get() === 'timeline' && $timelineSelection.get().length > 0;
+}
 
 registerEscRung({
   rung: 8,

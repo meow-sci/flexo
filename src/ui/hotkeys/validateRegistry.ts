@@ -51,13 +51,28 @@ const SYNTHETIC_BINDING_IDS: readonly string[] = [
 ];
 
 /**
+ * `anim.*` (the Animation-mode transport keys) and `timeline.*` (the dopesheet surface) are
+ * synthetic for the same reason `transform.*` is: they act on the playhead and the column
+ * selection of a surface that must already be focused, so a palette row could not deliver
+ * them (11E adds the handful that CAN work from the palette — "Insert keyframe at playhead",
+ * "Play/Pause preview" — as real commands, and those bindings will be re-pointed at them).
+ * Help lists them from the bindings, under "Animation mode" and "Timeline".
+ */
+function isAnimationSyntheticId(id: string): boolean {
+  return id.startsWith('anim.') || id.startsWith('timeline.');
+}
+
+/**
  * `mirror.<surface>.<action>` — a list-surface edit mirror (`listSurfaceMirrors.ts`). It
  * needs its own id because two bindings can never share one (rule 2), but it runs the very
  * command its viewport twin does, so there is nothing extra to register.
  */
 function isSyntheticId(id: string): boolean {
   return (
-    id.startsWith('transform.') || id.startsWith('mirror.') || SYNTHETIC_BINDING_IDS.includes(id)
+    id.startsWith('transform.') ||
+    id.startsWith('mirror.') ||
+    isAnimationSyntheticId(id) ||
+    SYNTHETIC_BINDING_IDS.includes(id)
   );
 }
 

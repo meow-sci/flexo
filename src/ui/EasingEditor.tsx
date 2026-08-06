@@ -3,7 +3,7 @@ import { Select, ListBoxItem } from './kit';
 import {
   controlPointsOf,
   evalBezierPoints,
-  EASING_PRESETS,
+  matchingPreset,
   type BezierPoints,
 } from '../ksa/easing';
 import type { EasingConfig, EasingPreset } from '../ksa/types';
@@ -41,15 +41,6 @@ const PRESET_LABELS: Record<EasingPreset, string> = {
   easeOutSine: 'Ease Out · Sine',
   easeInOutSine: 'Ease In-Out · Sine',
 };
-
-/** The preset whose control points match `pts` (within ε), or null for a custom curve. */
-function matchingPreset(pts: BezierPoints): EasingPreset | null {
-  for (const name of PRESET_ORDER) {
-    const p = EASING_PRESETS[name];
-    if (pts.every((v, i) => Math.abs(v - p[i]) < 1e-4)) return name;
-  }
-  return null;
-}
 
 // Unit square → SVG user units. Curve (0,0) is bottom-left, (1,1) top-right.
 const S = 100;

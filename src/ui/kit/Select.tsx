@@ -51,7 +51,19 @@ export interface SelectKitProps<T extends object>
 
 /**
  * Dropdown select. Pass `items` + a child render fn (or static `ListBoxItem`s)
- * the react-aria way; selection is controlled via `selectedKey`/`onSelectionChange`.
+ * the react-aria way.
+ *
+ * Selection may be controlled EITHER way — both are real, supported react-aria
+ * APIs in react-aria-components 1.20, and both were verified to drive the
+ * trigger's displayed value:
+ *   - `selectedKey` + `onSelectionChange` (SingleSelection)
+ *   - `value` + `onChange`
+ * The codebase uses both; neither is deprecated and neither leaves the control
+ * uncontrolled. An earlier sweep in this refactor assumed `value`/`onChange`
+ * were inert DOM passthrough (SelectProps does extend GlobalDOMAttributes, so
+ * they typecheck either way) — that assumption was WRONG. Do not "fix" one
+ * spelling into the other on that basis.
+ *
  * Set `searchable` to add an in-dropdown filter field (keeps the same trigger styling).
  */
 export function Select<T extends object>({

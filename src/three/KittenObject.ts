@@ -49,6 +49,12 @@ export class KittenObject {
 
   /** Every per-instance material we own (for highlight + disposal). */
   private readonly materials: THREE.MeshStandardMaterial[];
+  /**
+   * Every per-instance BAKED geometry we own. {@link bakeGeometry} allocates a fresh
+   * BufferGeometry (fresh position/normal arrays, cloned uv/index) on every call and nothing
+   * caches it, so each kitten's geometry dies with the kitten.
+   */
+  private readonly geometries: THREE.BufferGeometry[];
   private readonly baseEmissive: {
     mat: THREE.MeshStandardMaterial;
     color: THREE.Color;
@@ -56,10 +62,16 @@ export class KittenObject {
   }[];
   private readonly opacityBases: MaterialOpacityBase[];
 
-  private constructor(id: string, kind: KittenKind, materials: THREE.MeshStandardMaterial[]) {
+  private constructor(
+    id: string,
+    kind: KittenKind,
+    materials: THREE.MeshStandardMaterial[],
+    geometries: THREE.BufferGeometry[],
+  ) {
     this.id = id;
     this.kind = kind;
     this.materials = materials;
+    this.geometries = geometries;
     this.baseEmissive = materials.map((mat) => ({
       mat,
       color: mat.emissive.clone(),
@@ -107,7 +119,12 @@ export class KittenObject {
       }
     }
 
-    const obj = new KittenObject(instance.id, kind, owned);
+    const obj = new KittenObject(
+      instance.id,
+      kind,
+      owned,
+      collectMeshes(baked).map((m) => m.geometry),
+    );
     obj.group.add(baked);
     obj.setInstance(instance);
     return obj;
@@ -142,9 +159,11 @@ export class KittenObject {
   }
 
   dispose(): void {
-    // Geometry and textures are shared/cached; only the per-instance materials
-    // (and the embedded clones) are owned here.
+    // Textures are shared/cached. The per-instance materials AND the per-instance baked
+    // geometry are owned here — `bakeMesh` allocates a fresh BufferGeometry per mesh and no
+    // cache holds it (the part-ify `subMeshCache` is a different, shared bake).
     for (const mat of this.materials) mat.dispose();
+    for (const geo of this.geometries) geo.dispose();
   }
 }
 

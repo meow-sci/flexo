@@ -35,6 +35,7 @@ import { TrajectoryLayer } from './TrajectoryLayer';
 import { MeasurementLayer } from './MeasurementLayer';
 import { ContainerLayer } from './ContainerLayer';
 import { ChainPreviewLayer } from './ChainPreviewLayer';
+import { GhostPartsLayer } from './GhostPartsLayer';
 import { $chainEval } from './chainEval';
 import { NozzleHandleObject } from './NozzleHandleObject';
 import {
@@ -195,6 +196,7 @@ import { $thumbnailRequest, storeThumbnail } from '../state/projectStore';
 import { $currentProjectId } from '../state/projectIndexStore';
 import { resolveInternal } from '../ksa/modExport';
 import { $layerView, isLayerLocked, isLayerVisible, layerViewState } from '../state/layerStore';
+import { $inactiveRevision, $partEntries } from '../state/partsStore';
 // The app's one user-facing feedback channel (a module function by design, since there is
 // no React context down here) — the scene has no other way to say "that did nothing, and
 // here is why".
@@ -300,6 +302,7 @@ export class EditorScene {
   private readonly measurements: MeasurementLayer;
   private readonly containers: ContainerLayer;
   private readonly chainPreview: ChainPreviewLayer;
+  private readonly ghostParts: GhostPartsLayer;
   private highlighted: SelectableObject[] = [];
   /** Placements currently wearing Data mode's scope tint (never a selected one). */
   private tinted: SubPartObject[] = [];
@@ -583,6 +586,15 @@ export class EditorScene {
     // Ghosts clone the built objects, so the layer reads them straight out of this
     // map — an instance still loading simply has no ghost until the build lands.
     this.chainPreview = new ChainPreviewLayer(this.viewport, (id) => this.objects.get(id));
+    // Inactive parts render as ghosts on `viewport.scene` — a SIBLING of `root`, never a child of
+    // it (MULTI_PART_PLAN.md I5), which is what excludes them from picking, marquee, frame-all and
+    // thumbnails for free. The catalog index is read lazily so the layer always sees the CURRENT
+    // one (it is replaced, not mutated, when `$catalogIndex` changes).
+    this.ghostParts = new GhostPartsLayer(
+      this.viewport.scene,
+      () => this.index,
+      () => this.viewport.invalidate(),
+    );
 
     const dom = this.viewport.renderer.domElement;
     dom.addEventListener('pointerdown', this.onPickPointerDown);
@@ -650,6 +662,10 @@ export class EditorScene {
     this.sub($catalogIndex, (index) => {
       this.index = index;
       this.reconcile($part.get());
+      // Ghosts resolve their built-in placements through this same index, and the Core catalog
+      // lands AFTER this scene is constructed — so a ghost built at boot has to be told the
+      // catalog arrived. It rebuilds only the parts that came up short.
+      this.ghostParts.onCatalogChanged();
     });
     // A custom template's geometry/texture can change in place (the catalog entry's
     // atlas/diffuse blob URL changes) while its placements keep the same template id.
@@ -674,6 +690,13 @@ export class EditorScene {
     // one subscription covers everything the ghosts react to — gizmo drags of a seed,
     // parameter typing, undo, session close (it goes null and the ghosts clear).
     this.sub($chainEval, () => this.chainPreview.refresh());
+    // Ghost parts (MULTI_PART_PLAN.md P5.04). Through `sub()` like everything else, so the
+    // on-demand loop is never forced continuous (I9). Rebuilds are keyed on `$inactiveRevision`
+    // — the one store that bumps whenever a parked document changes, INCLUDING the park/hydrate
+    // of a part switch, which is why no `$part` subscription is needed (and would be wrong: the
+    // active part never renders as a ghost). `$partEntries` only moves the cheap view knobs.
+    this.sub($inactiveRevision, () => this.ghostParts.refresh());
+    this.sub($partEntries, () => this.ghostParts.applyView());
     // Animation preview: re-apply the joint-driven transform override when the active
     // animation, scrub position, or edited keyframe changes ($part changes already
     // re-apply via reconcile). Fires immediately on subscribe (harmless no-op at rest).
@@ -1833,8 +1856,10 @@ export class EditorScene {
    * shows its ⬚ placeholder instead.
    *
    * Every editor aid is hidden for the draw: grids, the transform gizmo, measurement and
-   * container layers and the chain preview all live as scene-level siblings of `root`, so
-   * hiding every non-light sibling leaves exactly the Part plus its lighting.
+   * container layers, the chain preview and the inactive parts' `ghost-parts` group all live as
+   * scene-level siblings of `root`, so hiding every non-light sibling leaves exactly the ACTIVE
+   * Part plus its lighting. That is how a project thumbnail stays a picture of the part you are
+   * editing however many ghosts share the workspace (MULTI_PART_PLAN.md I5).
    *
    * This is a single render into a `WebGLRenderTarget` — the visible canvas is untouched and
    * the on-demand loop is NOT flipped continuous (foundation §14.5).
@@ -3220,6 +3245,7 @@ export class EditorScene {
     this.trajectories.dispose();
     this.root.remove(this.poseProxy);
     this.chainPreview.dispose();
+    this.ghostParts.dispose();
     this.root.remove(this.engineProxy);
     for (const handle of this.nozzleHandles.values()) {
       this.root.remove(handle.group);

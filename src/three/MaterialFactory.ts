@@ -191,6 +191,14 @@ export function buildGlowingFaceMaterial(
   // emissive uniform deliberately left black (free for the selection highlight); the glow is
   // ADDED from the mask in the shader patch — see normalMapPatch + SubPartObject.setSelected.
   applyKsaShaderPatches(mat, { normal: false, emissive: true });
+  // Both textures are built HERE from freshly composited buffers and nothing else references
+  // them, but three's `Material.dispose()` frees no textures — so hang their disposal off this
+  // material's own dispose event. `Material.copy()` carries no listeners, so the per-instance
+  // clones SubPartObject makes (which DO share these textures by reference) never trigger it.
+  mat.addEventListener('dispose', () => {
+    map.dispose();
+    emissiveMap.dispose();
+  });
   return mat;
 }
 

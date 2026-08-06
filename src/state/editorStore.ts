@@ -822,6 +822,33 @@ function remapRocket(rocket: Rocket, idMap: ReadonlyMap<string, string>): Rocket
 }
 
 /**
+ * The SubPart template ids that already own at least one of `entities` (colliders or
+ * lights) in the target document — the skip set for an import.
+ *
+ * A template-owned `<Collider>`/`<Light>` is a property of the SubPart TEMPLATE, not of
+ * the Part that places it: KSA registers `<SubPartGameData Id="T">` ONCE globally
+ * (`PartGameDataReference.OnDataLoad` → `PartTemplate.ApplyGameData`) and instantiates
+ * every module it holds at EVERY placement of T (`Part` ctor → `ModuleList.CreateModules`
+ * per SubPart instance). So importing a second Part that reuses T must NOT append a second
+ * copy — Core's `CoreElectricalA_Prefab_LightSmallA` and `…_LightSmallB` both place
+ * `CoreElectricalA_Subpart_SpotlightA`, and a naive append gave every spotlight in the
+ * document two coincident lights, one of them riding the OTHER import's placements.
+ * Duplicates are wrong in the viewport and in the exported XML alike (they serialize into
+ * one `<SubPartGameData>` block, doubling the lights in game).
+ *
+ * The set is snapshotted BEFORE the append loop so a template legitimately owning several
+ * entities still imports all of them; only a template the document ALREADY covers is
+ * skipped, so prior user edits win — the same rule `subPartGameData` uses below.
+ */
+function templatesAlreadyOwning(
+  entities: readonly { readonly ownerTemplateId: string | null }[],
+): ReadonlySet<string> {
+  const out = new Set<string>();
+  for (const e of entities) if (e.ownerTemplateId != null) out.add(e.ownerTemplateId);
+  return out;
+}
+
+/**
  * Applies an imported Part's GameData onto the project's part. Coupling bindings are
  * singular: filled only when not already set, remapping each binding's connector id
  * from the source's original id space through `connectorIdMap` (a binding whose
@@ -915,8 +942,11 @@ function applyImportedGameData(
   );
   // Colliders are a top-level list, not GameData: append with fresh ids on the SAME layer
   // the import's SubParts landed on (a collider belongs with the geometry it wraps).
-  // Nothing references a collider by id, so no map is threaded out.
+  // Nothing references a collider by id, so no map is threaded out. TEMPLATE-OWNED ones
+  // are skipped when the template already has some — see {@link templatesAlreadyOwning}.
+  const collidersOwned = templatesAlreadyOwning(target.colliders);
   for (const c of src.colliders) {
+    if (c.ownerTemplateId != null && collidersOwned.has(c.ownerTemplateId)) continue;
     target.colliders.push({
       ...structuredClone(c),
       id: nextColliderId(target),
@@ -937,8 +967,11 @@ function applyImportedGameData(
   // SubParts landed on (a light belongs with the geometry it lights). Nothing references a
   // light by id (flexo emits none), so no map is threaded out. Scale is re-pinned (1,1,1) —
   // KSA ignores light scale and the model invariant is "always pinned", so a hand-edited
-  // payload can't smuggle one in.
+  // payload can't smuggle one in. TEMPLATE-OWNED ones are skipped when the template
+  // already has some — see {@link templatesAlreadyOwning}.
+  const lightsOwned = templatesAlreadyOwning(target.lights);
   for (const l of src.lights) {
+    if (l.ownerTemplateId != null && lightsOwned.has(l.ownerTemplateId)) continue;
     target.lights.push({
       ...structuredClone(l),
       id: nextLightId(target),

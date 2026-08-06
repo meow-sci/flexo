@@ -955,6 +955,36 @@ describe('light transfer', () => {
     expect(summary.lights).toBe(1);
   });
 
+  it('skips a pasted light/collider whose owning template the destination already covers', () => {
+    // `<SubPartGameData Id="T">` is registered ONCE in KSA and its modules instantiate at
+    // every placement of T, so a paste that reuses a template the destination already has
+    // must NOT append a second copy — that doubles them in the viewport and on export.
+    const T = 'CoreElectricalA_Subpart_SpotlightA';
+    const src = createEmptyPart();
+    src.lights.push(createPartLight(T, '_light1'), createPartLight(null, '_light2'));
+    src.colliders.push({
+      id: '_collider1',
+      shape: 'Box',
+      ownerTemplateId: T,
+      ...identityTransform(),
+      layerId: DEFAULT_LAYER_ID,
+    });
+    const dest = createEmptyPart();
+    dest.lights.push(createPartLight(T, '_light1'));
+    dest.colliders.push({
+      id: '_collider1',
+      shape: 'Box',
+      ownerTemplateId: T,
+      ...identityTransform(),
+      layerId: DEFAULT_LAYER_ID,
+    });
+
+    const { part } = mergeProjectImport(dest, buildProjectExport(src, 'S'));
+    // The template-owned pair is skipped; the source's PART-level light still lands.
+    expect(part.lights.map((l) => l.ownerTemplateId)).toEqual([T, null]);
+    expect(part.colliders.map((c) => c.ownerTemplateId)).toEqual([T]);
+  });
+
   it('puts an imported light on the SAME layer as the SubParts it came in with', () => {
     const src = createEmptyPart();
     src.layers.push({ id: 'layer1', name: 'Engines' });

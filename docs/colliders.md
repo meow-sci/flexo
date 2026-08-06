@@ -207,7 +207,11 @@ connector: it lands on the active layer, appears under that layer in the Outline
 between layers via "Change Layer" (single row or whole selection), and rides the layer's
 visibility / opacity / lock. Group it with the geometry it wraps and one eye toggle hides
 the mesh and its collision volume together. `addPart` puts an imported Part's colliders on
-the same layer as its SubParts.
+the same layer as its SubParts — except a **template-owned** one whose template the document
+already covers, which is skipped so a second import that reuses the template can't double it
+(`templatesAlreadyOwning`; the rule and its rationale are written up in
+[lights.md](lights.md#one-light-per-template-no-matter-how-many-imports), which hits it
+hardest).
 
 Because a collider's `scale` IS its size in meters, it **participates fully in a group or
 whole-workspace scale** — its position and size both follow the part. (A connector, by

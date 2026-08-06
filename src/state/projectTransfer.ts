@@ -689,9 +689,12 @@ export function mergeProjectImport(
   // `<Collider>` COMPONENT id is, and flexo generates that at serialize time), so unlike
   // connectors there is no ref map to thread through. `ownerTemplateId` IS a reference
   // though: it names a SubPart TEMPLATE, and an imported kitten mesh gets a fresh
-  // template id, so route it through the same map the placements use.
+  // template id, so route it through the same map the placements use. A template the
+  // document ALREADY covers is skipped — see {@link templatesAlreadyOwning}.
+  const collidersOwned = templatesAlreadyOwning(part.colliders);
   for (const src of data.colliders ?? []) {
     if (src.ownerTemplateId && droppedTemplateIds.has(src.ownerTemplateId)) continue;
+    if (src.ownerTemplateId && collidersOwned.has(mapTemplateId(src.ownerTemplateId))) continue;
     part.colliders.push({
       id: nextColliderId(part),
       shape: src.shape,
@@ -707,9 +710,12 @@ export function mergeProjectImport(
   // references a light by id (it is editor-only and never emitted to XML), so there is no
   // ref map to thread through. `ownerTemplateId` IS a reference though: it names a SubPart
   // TEMPLATE, and an imported kitten mesh gets a fresh template id, so route it through the
-  // same map the placements (and colliders) use.
+  // same map the placements (and colliders) use. A template the document ALREADY covers
+  // is skipped — see {@link templatesAlreadyOwning}.
+  const lightsOwned = templatesAlreadyOwning(part.lights);
   for (const src of data.lights ?? []) {
     if (src.ownerTemplateId && droppedTemplateIds.has(src.ownerTemplateId)) continue;
+    if (src.ownerTemplateId && lightsOwned.has(mapTemplateId(src.ownerTemplateId))) continue;
     part.lights.push({
       id: nextLightId(part),
       type: src.type === 'Point' ? 'Point' : 'Spot',
@@ -1009,6 +1015,22 @@ function nextConnectorId(part: EditingPart): string {
     if (m) max = Math.max(max, Number.parseInt(m[1], 10));
   }
   return `_connector${max + 1}`;
+}
+
+/**
+ * The SubPart template ids that already own at least one of `entities` (colliders or
+ * lights) in the destination document — the skip set for an additive import. The twin of
+ * `editorStore.templatesAlreadyOwning`; see that doc comment for why a template-owned
+ * `<Collider>`/`<Light>` must never be appended twice (KSA registers `<SubPartGameData>`
+ * once globally and instantiates its modules at EVERY placement of the template, so a
+ * second copy doubles them in the viewport and in the exported XML alike).
+ */
+function templatesAlreadyOwning(
+  entities: readonly { readonly ownerTemplateId: string | null }[],
+): ReadonlySet<string> {
+  const out = new Set<string>();
+  for (const e of entities) if (e.ownerTemplateId != null) out.add(e.ownerTemplateId);
+  return out;
 }
 
 function nextColliderId(part: EditingPart): string {

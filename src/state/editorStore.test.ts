@@ -584,6 +584,62 @@ describe('editorStore', () => {
     expect($part.get().lights.map((l) => l.id)).toEqual(['_light1']);
   });
 
+  it('addPart does NOT re-add a template-owned light/collider the document already has', () => {
+    // Core's LightSmallA and LightSmallB both place `…_Subpart_SpotlightA`, whose
+    // <SubPartGameData> owns one <Light>. KSA registers that block ONCE and instantiates it
+    // at every placement, so the second import must reuse the light already in the document
+    // — appending a copy gave every spotlight two coincident lights, the extra one riding
+    // the other import's placements (and would double them in game on export too).
+    const owned = <T extends { ownerTemplateId: string | null }>(e: T): T => ({
+      ...e,
+      ownerTemplateId: 'Core.Spotlight',
+    });
+    const importOnce = (instanceId: string): void => {
+      addPart(
+        [{ ...placementOf(instanceId), subPartTemplateId: 'Core.Spotlight' }],
+        [],
+        [],
+        undefined,
+        undefined,
+        {
+          ...emptyImportedGameData(),
+          colliders: [owned(importedCollider('_collider1'))],
+          lights: [owned(importedLight('_light1'))],
+        },
+      );
+    };
+    importOnce('imp_1');
+    importOnce('imp_2');
+    const part = $part.get();
+    expect(part.placements).toHaveLength(2); // both placements DO land
+    expect(part.lights.map((l) => l.ownerTemplateId)).toEqual(['Core.Spotlight']);
+    expect(part.colliders.map((c) => c.ownerTemplateId)).toEqual(['Core.Spotlight']);
+  });
+
+  it('addPart still imports every light a single template owns, and all part-level ones', () => {
+    // The skip set is snapshotted BEFORE the append loop, so one import carrying two lights
+    // for the same template keeps both; part-level (unowned) entities are never deduped.
+    const owned = (id: string): PartLight => ({
+      ...importedLight(id),
+      ownerTemplateId: 'Core.Spotlight',
+    });
+    addPart([placementOf('imp_1')], [], [], undefined, undefined, {
+      ...emptyImportedGameData(),
+      lights: [owned('_light1'), owned('_light2'), importedLight('_light3')],
+    });
+    expect($part.get().lights.map((l) => l.ownerTemplateId)).toEqual([
+      'Core.Spotlight',
+      'Core.Spotlight',
+      null,
+    ]);
+    // A second part-level light from another import is NOT a template duplicate — it lands.
+    addPart([placementOf('imp_2')], [], [], undefined, undefined, {
+      ...emptyImportedGameData(),
+      lights: [importedLight('_light9')],
+    });
+    expect($part.get().lights).toHaveLength(4);
+  });
+
   it('addPart selects everything it imported — SubParts, connectors, colliders, seats and lights', () => {
     // Pre-existing entities of every kind: they must NOT end up in the post-import selection.
     addSubPart('Core.Old');
@@ -2515,11 +2571,18 @@ describe('importing a Part with colliders', () => {
   it('keeps ids collision-free across a second import and is undoable', () => {
     importWithColliders(IMPORTED);
     importWithColliders(IMPORTED);
+    // Only the PART-level cylinder repeats: the second `Puck` is owned by a template the
+    // document already covers, and KSA instantiates a template's colliders at every
+    // placement — so a second copy would double them. See templatesAlreadyOwning.
     expect($part.get().colliders.map((c) => c.id)).toEqual([
       '_collider1',
       '_collider2',
       '_collider3',
-      '_collider4',
+    ]);
+    expect($part.get().colliders.map((c) => c.ownerTemplateId)).toEqual([
+      null,
+      'CoreLandingA_Subpart_MediumFootA',
+      null,
     ]);
     undo();
     expect($part.get().colliders.map((c) => c.id)).toEqual(['_collider1', '_collider2']);

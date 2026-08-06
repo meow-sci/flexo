@@ -90,6 +90,20 @@ entity: editing the light affects every instance. A SubPart-owned light whose te
 placements renders once in the Part frame so it can be found and re-homed rather than
 silently vanishing.
 
+**One light per template, no matter how many imports.** Because the light belongs to the
+TEMPLATE, importing a second Part that reuses that template must not append a second copy:
+KSA registers `<SubPartGameData Id="T">` once globally and instantiates every module it holds
+at every placement of `T`, so a duplicate doubles the lights both in the viewport and in the
+exported XML. Both import paths therefore skip a template-owned light (or collider) whose
+template the document already covers — `templatesAlreadyOwning` in `editorStore.ts`
+(built-in Part import) and its twin in `projectTransfer.ts` (project paste); the existing
+entry wins, so prior user edits survive. Core exercises this with
+`CoreElectricalA_Prefab_LightSmallA` and `…_LightSmallB`, which both place
+`CoreElectricalA_Subpart_SpotlightA`: import both and you get ONE light drawn at all three
+spotlight placements. A template legitimately owning several lights still imports all of
+them (the skip set is snapshotted before the append loop), and part-level lights are never
+deduplicated.
+
 ## Selection
 
 Lights are the sixth `SelectableKind`. Clicking a marker selects the light (additive

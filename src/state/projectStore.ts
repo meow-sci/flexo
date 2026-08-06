@@ -120,7 +120,11 @@ import { copyProjectAssets, deleteProjectAssets } from './assetDb';
  */
 // v2: the version this became an enforced gate at; earlier builds stamped it but checked
 // the model shape instead, so any additive field purged every saved project.
-export const PROJECT_SCHEMA_VERSION = 2;
+// v3: per-channel keyframe easing — `AnimationKeyframe.easings` values change shape from
+// `EasingConfig` to `JointSegmentEasing` ({position?, rotation?, scale?}). A v2 snapshot's
+// single whole-pose easing has no channel keys, so it would default-fill to all-linear and
+// silently load the WRONG motion; `normalizePart` cannot reach inside keyframes to fix it.
+export const PROJECT_SCHEMA_VERSION = 3;
 
 export { DEFAULT_PROJECT_NAME, $projectName };
 export type { ProjectId, ProjectMeta, ProjectSnapshotV2 };

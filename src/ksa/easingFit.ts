@@ -1,8 +1,21 @@
 import * as THREE from 'three';
 import { matrixFromTransform, transformFromMatrix } from '../three/coords';
-import { evalBezierPoints, type BezierPoints } from './easing';
+import {
+  EASING_CHANNELS,
+  controlPointsOf,
+  evalBezierPoints,
+  normalizeSegmentEasing,
+  type BezierPoints,
+} from './easing';
 import { identityTransform } from './types';
-import type { AnimationKeyframe, PartAnimation, Transform } from './types';
+import type {
+  AnimationKeyframe,
+  EasingChannel,
+  EasingConfig,
+  JointSegmentEasing,
+  PartAnimation,
+  Transform,
+} from './types';
 
 /**
  * Reverse-fits a DENSE imported animation (one baked keyframe per ~fps frame, e.g.
@@ -33,6 +46,7 @@ const ROT_TOL_DEG = 2.5;
 const SCALE_TOL = 3e-3;
 const CONST_POS_EPS = 1e-5;
 const CONST_ROT_EPS = 5e-4; // rad (~0.03°)
+const CONST_SCALE_EPS = 1e-5;
 const HOLD_EPS = 0.002; // fraction of total motion treated as "not moving yet" (tight, so the
 // trimmed leading/trailing hold ramp carries negligible reconstruction error)
 const MIN_WINDOW_SAMPLES = 4;
@@ -130,11 +144,68 @@ function timeAtProgress(
   return times[hi];
 }
 
-/** One eased sub-segment [t0,t1] of a joint's active window, with its own bézier. */
-interface Segment {
+/** Per-channel bézier time-warps for one sub-segment; absent channel = linear. */
+type ChannelEasings = Partial<Record<EasingChannel, BezierPoints>>;
+
+/** The window-splitting oracle's output: a span plus its whole-pose scalarized fit. */
+interface SegmentSpan {
   t0: number;
   t1: number;
   easing: BezierPoints;
+}
+
+/** One eased sub-segment [t0,t1] of a joint's active window, fitted PER CHANNEL. */
+interface Segment {
+  t0: number;
+  t1: number;
+  channels: ChannelEasings;
+}
+
+const LINEAR_PTS: BezierPoints = [0, 0, 1, 1];
+
+/** {@link interpParts} with an independent alpha per channel — mirrors the rig sampler. */
+function interpPartsChannels(a: Parts, b: Parts, ch: ChannelEasings, u: number): Parts {
+  return {
+    pos: a.pos.clone().lerp(b.pos, evalBezierPoints(ch.position ?? LINEAR_PTS, u)),
+    quat: a.quat.clone().slerp(b.quat, evalBezierPoints(ch.rotation ?? LINEAR_PTS, u)),
+    scale: a.scale.clone().lerp(b.scale, evalBezierPoints(ch.scale ?? LINEAR_PTS, u)),
+  };
+}
+
+/**
+ * One channel's raw scalar progress across the dense trajectory, measured against the
+ * segment's own endpoints: position/scale project onto their net-displacement direction,
+ * rotation is the angle from the segment's start. Returns null when the channel does not
+ * move over this segment (net below its CONST epsilon) — such a channel stays ABSENT
+ * (linear), which is both correct and the storage discipline.
+ */
+function channelProgress(ch: EasingChannel, traj: Parts[], p0: Parts, p1: Parts): number[] | null {
+  if (ch === 'rotation') {
+    const total = angleBetween(p0.quat, p1.quat);
+    if (total < CONST_ROT_EPS) return null;
+    return traj.map((p) => angleBetween(p0.quat, p.quat));
+  }
+  const a0 = ch === 'position' ? p0.pos : p0.scale;
+  const a1 = ch === 'position' ? p1.pos : p1.scale;
+  const eps = ch === 'position' ? CONST_POS_EPS : CONST_SCALE_EPS;
+  const dir = a1.clone().sub(a0);
+  if (dir.length() < eps) return null;
+  dir.normalize();
+  return traj.map((p) => (ch === 'position' ? p.pos : p.scale).clone().sub(a0).dot(dir));
+}
+
+/** Fits each moving channel of [t0,t1] independently (LOCKED #8 per-channel easing). */
+function fitChannels(times: number[], traj: Parts[], t0: number, t1: number): ChannelEasings {
+  const p0 = sampleTraj(times, traj, t0);
+  const p1 = sampleTraj(times, traj, t1);
+  const out: ChannelEasings = {};
+  for (const ch of EASING_CHANNELS) {
+    const w = channelProgress(ch, traj, p0, p1);
+    if (!w) continue;
+    const pts = fitOneSegment(times, w, t0, t1);
+    if (!isLinear(pts)) out[ch] = pts;
+  }
+  return out;
 }
 
 const MAX_SEGMENT_DEPTH = 4;
@@ -198,8 +269,8 @@ function buildSegments(
   tb: number,
   lo: number,
   hi: number,
-): Segment[] {
-  const recurse = (t0: number, t1: number, depth: number): Segment[] => {
+): SegmentSpan[] {
+  const recurse = (t0: number, t1: number, depth: number): SegmentSpan[] => {
     const easing = fitOneSegment(times, w, t0, t1);
     const arcDeg =
       angleBetween(sampleTraj(times, traj, t0).quat, sampleTraj(times, traj, t1).quat) * RAD2DEG;
@@ -245,8 +316,12 @@ function reconstructEased(
   }
   let seg = segments[0];
   for (const s of segments) if (t >= s.t0 - TIME_EPS) seg = s;
-  const e = evalBezierPoints(seg.easing, (t - seg.t0) / (seg.t1 - seg.t0));
-  return interpParts(sampleTraj(times, traj, seg.t0), sampleTraj(times, traj, seg.t1), e);
+  return interpPartsChannels(
+    sampleTraj(times, traj, seg.t0),
+    sampleTraj(times, traj, seg.t1),
+    seg.channels,
+    (t - seg.t0) / (seg.t1 - seg.t0),
+  );
 }
 
 /** Worst-case position/rotation residual of the eased reconstruction vs the dense data. */
@@ -282,7 +357,14 @@ function fitJoint(jointId: string, times: number[], traj: Parts[]): JointFit {
     const ta = times[lo];
     const tb = times[hi];
     if (tb - ta < TIME_EPS) return null;
-    const segments = buildSegments(times, w, traj, ta, tb, lo, hi);
+    // Window splitting stays whole-pose (the scalarized dominant channel is the oracle);
+    // each resulting span is then fitted PER CHANNEL, and the gate below judges the
+    // per-channel reconstruction against the same tolerances (design §3 "Import fitter").
+    const segments: Segment[] = buildSegments(times, w, traj, ta, tb, lo, hi).map((s) => ({
+      t0: s.t0,
+      t1: s.t1,
+      channels: fitChannels(times, traj, s.t0, s.t1),
+    }));
     const r = easedResidual(times, traj, ta, tb, segments);
     const ok = r.pos <= POS_TOL && r.rot * RAD2DEG <= ROT_TOL_DEG && r.scale <= SCALE_TOL;
     if (ok) return { kind: 'eased', jointId, traj, ta, tb, segments };
@@ -497,6 +579,29 @@ export function subdivideEasing(full: BezierPoints, s0: number, s1: number): Bez
   return [Math.min(1, Math.max(0, nx1)), ny1, Math.min(1, Math.max(0, nx2)), ny2];
 }
 
+/**
+ * Splits one channel's easing exactly at time-fraction `s` ∈ (0,1) of its segment
+ * (De Casteljau; design-animation-mode.md §5.4). Returns null halves for linear results.
+ *
+ * Exactness argument (design §5.4): position/scale lerp is affine, and quaternion slerp
+ * along one geodesic satisfies `slerp(q0, slerp(q0,q1,ys), y′) = slerp(q0, q1, y′·ys)`,
+ * so re-easing each half against the on-curve midpoint pose reproduces the original
+ * composed motion identically — inserting a keyframe is motion-neutral.
+ */
+export function splitEasingConfigAt(
+  cfg: EasingConfig,
+  s: number,
+): { left: EasingConfig | null; right: EasingConfig | null } {
+  const pts = controlPointsOf(cfg);
+  // Subdividing the identity curve yields a re-parametrized identity whose control
+  // points are no longer the canonical [0,0,1,1] tuple — short-circuit so linear stays
+  // ABSENT (the storage discipline that keeps linear exports byte-identical).
+  if (isLinear(pts)) return { left: null, right: null };
+  const toCfg = (p: BezierPoints): EasingConfig | null =>
+    isLinear(p) ? null : { kind: 'cubicBezier', x1: p[0], y1: p[1], x2: p[2], y2: p[3] };
+  return { left: toCfg(subdivideEasing(pts, 0, s)), right: toCfg(subdivideEasing(pts, s, 1)) };
+}
+
 function isLinear(p: BezierPoints): boolean {
   return (
     Math.abs(p[0]) < 1e-4 &&
@@ -533,14 +638,48 @@ function poseAt(fit: JointFit, times: number[], t: number): Parts {
   return sampleTraj(times, fit.traj, t);
 }
 
+/** Per-joint outcome of the reverse fit, for the KSA import report (design §11.3 item 3). */
+export interface AnimationFitReport {
+  jointStats: {
+    jointId: string;
+    kind: 'const' | 'eased' | 'dense';
+    /** Channels that got a non-linear fit (eased joints only). */
+    easedChannels: EasingChannel[];
+  }[];
+  keyframesIn: number;
+  keyframesOut: number;
+}
+
+/** The channels a fitted joint actually eased, in canonical order. */
+function easedChannelsOf(fit: JointFit): EasingChannel[] {
+  if (fit.kind !== 'eased') return [];
+  const seen = new Set<EasingChannel>();
+  for (const seg of fit.segments)
+    for (const ch of EASING_CHANNELS) if (seg.channels[ch]) seen.add(ch);
+  return EASING_CHANNELS.filter((ch) => seen.has(ch));
+}
+
 /**
  * Compresses a dense {@link PartAnimation} (as produced by the GLB importer) into a
  * compact eased one. Returns the input unchanged when it's already compact (≤2
  * keyframes) or when nothing about it benefits from fitting.
  */
 export function fitAnimationEasing(anim: PartAnimation): PartAnimation {
+  return fitAnimationEasingDetailed(anim).anim;
+}
+
+/** {@link fitAnimationEasing} plus the per-joint fit stats the import report renders. */
+export function fitAnimationEasingDetailed(anim: PartAnimation): {
+  anim: PartAnimation;
+  report: AnimationFitReport;
+} {
   const dense = [...anim.keyframes].sort((a, b) => a.timeSec - b.timeSec);
-  if (dense.length <= 2) return anim;
+  if (dense.length <= 2) {
+    return {
+      anim,
+      report: { jointStats: [], keyframesIn: dense.length, keyframesOut: dense.length },
+    };
+  }
   const times = dense.map((k) => k.timeSec);
 
   const fits = anim.joints.map((j) =>
@@ -564,8 +703,18 @@ export function fitAnimationEasing(anim: PartAnimation): PartAnimation {
       for (const t of times) ctrl.add(round6(t));
     }
   }
+  const report: AnimationFitReport = {
+    jointStats: fits.map((f) => ({
+      jointId: f.jointId,
+      kind: f.kind,
+      easedChannels: easedChannelsOf(f),
+    })),
+    keyframesIn: times.length,
+    keyframesOut: times.length,
+  };
   const gtimes = [...ctrl].sort((a, b) => a - b);
-  if (gtimes.length >= times.length) return anim; // no compaction possible
+  if (gtimes.length >= times.length) return { anim, report }; // no compaction possible
+  report.keyframesOut = gtimes.length;
 
   const keyframes: AnimationKeyframe[] = gtimes.map((t, i) => ({
     id: `${anim.id}_kf${i}`,
@@ -584,19 +733,19 @@ export function fitAnimationEasing(anim: PartAnimation): PartAnimation {
       const seg = f.segments.find((s) => g0 >= s.t0 - TIME_EPS && g1 <= s.t1 + TIME_EPS);
       if (!seg) continue; // hold (outside the active window)
       const span = seg.t1 - seg.t0;
-      const sub = subdivideEasing(seg.easing, (g0 - seg.t0) / span, (g1 - seg.t0) / span);
-      if (!isLinear(sub)) {
-        const kf = keyframes[i];
-        (kf.easings ??= {})[f.jointId] = {
-          kind: 'cubicBezier',
-          x1: sub[0],
-          y1: sub[1],
-          x2: sub[2],
-          y2: sub[3],
-        };
+      // Each channel's own curve is subdivided over this global span independently.
+      const out: JointSegmentEasing = {};
+      for (const ch of EASING_CHANNELS) {
+        const pts = seg.channels[ch];
+        if (!pts) continue;
+        const sub = subdivideEasing(pts, (g0 - seg.t0) / span, (g1 - seg.t0) / span);
+        if (isLinear(sub)) continue;
+        out[ch] = { kind: 'cubicBezier', x1: sub[0], y1: sub[1], x2: sub[2], y2: sub[3] };
       }
+      const norm = normalizeSegmentEasing(out);
+      if (norm) (keyframes[i].easings ??= {})[f.jointId] = norm;
     }
   }
 
-  return { ...anim, keyframes };
+  return { anim: { ...anim, keyframes }, report };
 }

@@ -109,6 +109,7 @@ import { $activeContainerId, setActiveContainer } from '../state/containerStore'
 import {
   $activeAnimationId,
   $activeJointId,
+  $animPlaying,
   $animPreviewU,
   $animScrubbing,
   $editKeyframeId,
@@ -607,6 +608,7 @@ export class EditorScene {
     this.sub($activeJointId, onPreviewChange);
     this.sub($animPreviewU, onPreviewChange);
     this.sub($animScrubbing, onPreviewChange);
+    this.sub($animPlaying, onPreviewChange);
     this.sub($editKeyframeId, onPreviewChange);
     // Leaving/entering the Animation editor toggles the preview + pose gizmo on/off.
     this.sub($mode, onPreviewChange);
@@ -948,7 +950,10 @@ export class EditorScene {
       return;
     }
     const posed = new Map<string, Transform>();
-    const pinned = editKf ? anim.keyframes.find((k) => k.id === editKf) : null;
+    // A pin is SUSPENDED while playing (design §10.2): the preview follows the moving
+    // playhead, and the pin is restored the moment playback pauses/stops.
+    const pinned =
+      editKf && !$animPlaying.get() ? anim.keyframes.find((k) => k.id === editKf) : null;
     const u = Math.min(1, Math.max(0, $animPreviewU.get()));
     const t = pinned ? pinned.timeSec : u * anim.durationSec;
 

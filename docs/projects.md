@@ -178,12 +178,16 @@ being looked away from.
 ## Schema version & preservation
 
 Saved projects are the user's own work, so they survive app updates whenever compatibility
-allows. `PROJECT_SCHEMA_VERSION` (currently **2**, in `projectStore.ts`) is stamped into every
+allows. `PROJECT_SCHEMA_VERSION` (currently **3**, in `projectStore.ts`) is stamped into every
 project's meta row and is the entire compatibility contract: a stored project is kept iff its
 snapshot loads **and** its stamped `schemaVersion` equals this number. The constant did **not**
 change in the storage rework — the *document* model is untouched; what moved is the container
 (name-keyed localStorage entries → id-keyed IndexedDB records), and v1 data is removed by the
-key purge rather than by a version check.
+key purge rather than by a version check. It moved to **3** for per-channel keyframe easing:
+`AnimationKeyframe.easings` values changed shape from a single `EasingConfig` to a
+`JointSegmentEasing` (`{position?, rotation?, scale?}`), and a v2 snapshot's single whole-pose
+easing has no channel keys — it would default-fill to all-linear and silently load the WRONG
+motion, which `normalizePart` cannot reach inside keyframes to prevent.
 
 A kept snapshot is run through `normalizePart`, a template-driven normalizer that fills fields
 the snapshot is **missing** from the live constructors, at four sites: the `EditingPart` top
@@ -253,7 +257,7 @@ top of it.
 {
   "format": "flexo-project-archive",
   "archiveVersion": 1,        // container LAYOUT version (exact-match)
-  "exportVersion": 8,         // PROJECT_EXPORT_VERSION of project.json (exact-match)
+  "exportVersion": 9,         // PROJECT_EXPORT_VERSION of project.json (exact-match)
   "name": "Rover-7", "description": "…",
   "savedAt": 1754300000000, "appBuildId": "abc123",
   "counts": { …ProjectMeta.counts… },
@@ -332,8 +336,9 @@ link. It encodes `EditingPart` into short keys (`p` placements, `c` connectors, 
 `m` custom meshes, …), omitting anything empty or at its default. (The stored snapshot is plain
 structured-cloneable data in IndexedDB and does not go through the codec.)
 
-`PROJECT_EXPORT_VERSION` is currently **8** (lights normalized out of `SubPartGameData` into
-first-class part entities). Import accepts **exactly** that version — older payloads are
+`PROJECT_EXPORT_VERSION` is currently **9** (per-channel keyframe easing: `CKeyframe.es` values
+changed shape from one `CEasing` to `{p?, r?, s?}`, plus the additive `CAnimation.cs`
+CubicSpline-approximated import flag). Import accepts **exactly** that version — older payloads are
 rejected, never converted — and that mechanic is unchanged. What changed is the **bump
 policy**: an additive, backwards-compatible change **MUST NOT** bump it, because decode is
 total and tolerant (missing fields fall back to defaults, so an older same-version payload

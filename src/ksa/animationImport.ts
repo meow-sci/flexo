@@ -15,6 +15,12 @@ import type { CatalogAnimationModule, PartAnimation, Transform } from './types';
  * (an eased deploy comes in as ~fps keys). {@link import('./easingFit')} compresses
  * those back to a few eased keyframes; until then the dense form round-trips losslessly.
  *
+ * Sampler coverage: FLOAT accessors with LINEAR, STEP or CUBICSPLINE interpolation. KSA's
+ * `SampleType` enum allows all three; flexo has no tangent model, so a CUBICSPLINE sampler
+ * is decoded from its keyframe VALUES only (the middle element of each
+ * [inTangent, value, outTangent] triplet) and the clip is flagged
+ * {@link ImportedAnimation.cubicSplineApprox} — exact at the keys, approximated between.
+ *
  * Leaf/solar-tracking references come out in the ORIGINAL KSA instance-id space; the
  * editor regenerates instance ids on import, so {@link remapImportedAnimation} swaps
  * them via the old→new map the importer builds.
@@ -159,6 +165,12 @@ export interface ImportedAnimation {
    */
   restAtLastKeyframe: boolean;
   /**
+   * True when ANY sampler in the source GLB used CUBICSPLINE interpolation. flexo decoded
+   * only the keyframe VALUES (tangents dropped), so the in-between motion is approximated.
+   * Rides through to {@link import('./types').PartAnimation.cubicSplineApprox}.
+   */
+  cubicSplineApprox: boolean;
+  /**
    * Each animated member's Part-local transform at the rest keyframe, computed straight
    * from the GLB (== KSA's `EvaluateWorldMatrix(leaf, restTime)`), keyed by ORIGINAL
    * instance id. KSA positions animated SubParts SOLELY from the GLB and ignores their
@@ -216,12 +228,20 @@ export function decodeAnimationGlb(
     number,
     { translation?: Channel; rotation?: Channel; scale?: Channel }
   >();
+  let sawCubicSpline = false;
   for (const ch of anim.channels) {
     const s = anim.samplers[ch.sampler];
     if (!s) continue;
+    const rows = readAccessor(json, bin, s.output);
+    // CUBICSPLINE stores each key as an [inTangent, value, outTangent] triplet (3× the
+    // input count). flexo has no tangent model, so keep the VALUES and treat the segments
+    // as LINEAR — the keyframes are exact, the in-between motion is approximated. The
+    // clip is flagged so the import report + clip diagnostics can say so (design §11.3).
+    const cubic = s.interpolation === 'CUBICSPLINE';
+    if (cubic) sawCubicSpline = true;
     const channel: Channel = {
       times: readAccessor(json, bin, s.input).map((r) => r[0]),
-      values: readAccessor(json, bin, s.output),
+      values: cubic ? rows.filter((_, i) => i % 3 === 1) : rows,
       step: s.interpolation === 'STEP',
     };
     const entry = nodeChannels.get(ch.target.node) ?? {};
@@ -354,6 +374,7 @@ export function decodeAnimationGlb(
     keyframeTimes,
     joints,
     restAtLastKeyframe,
+    cubicSplineApprox: sawCubicSpline,
     memberRestPlacements,
     solarTracking: opts.module.solarTracking
       ? {
@@ -411,6 +432,7 @@ export function remapImportedAnimation(
     mode: imported.showDeployRetract ? 'deployRetract' : 'actuate',
     joints,
     keyframes,
+    ...(imported.cubicSplineApprox ? { cubicSplineApprox: true as const } : {}),
     solarTracking,
   };
 }

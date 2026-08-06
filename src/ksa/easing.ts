@@ -1,4 +1,4 @@
-import type { EasingConfig, EasingPreset } from './types';
+import type { EasingChannel, EasingConfig, EasingPreset, JointSegmentEasing } from './types';
 
 /**
  * CSS-style cubic-bézier easing — the shared representation for keyframe-segment
@@ -49,6 +49,47 @@ export function controlPointsOf(cfg: EasingConfig | undefined | null): BezierPoi
 export function isLinearEasing(cfg: EasingConfig | undefined | null): boolean {
   const [x1, y1, x2, y2] = controlPointsOf(cfg);
   return x1 === 0 && y1 === 0 && x2 === 1 && y2 === 1;
+}
+
+// ── per-channel segment easing (design-animation-mode.md §3) ─────────────────
+
+/** The three pose channels a segment can warp independently, in canonical order. */
+export const EASING_CHANNELS: readonly EasingChannel[] = ['position', 'rotation', 'scale'];
+
+/** True when every channel is absent or resolves to linear. */
+export function isLinearSegmentEasing(e: JointSegmentEasing | undefined | null): boolean {
+  if (!e) return true;
+  return EASING_CHANNELS.every((ch) => isLinearEasing(e[ch]));
+}
+
+/** Drops linear channels; undefined when all-absent (storage discipline, design §3). */
+export function normalizeSegmentEasing(
+  e: JointSegmentEasing | undefined,
+): JointSegmentEasing | undefined {
+  if (!e) return undefined;
+  const out: JointSegmentEasing = {};
+  for (const ch of EASING_CHANNELS) if (!isLinearEasing(e[ch])) out[ch] = e[ch];
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/** The same config on all three channels (linear ⇒ undefined) — the Uniform authoring path. */
+export function uniformSegmentEasing(cfg: EasingConfig): JointSegmentEasing | undefined {
+  if (isLinearEasing(cfg)) return undefined;
+  return { position: cfg, rotation: cfg, scale: cfg };
+}
+
+/**
+ * 'mixed' when the channels differ; otherwise the shared config (undefined = uniform linear).
+ * Structural equality = identical resolved control points (presets equal their tuples).
+ */
+export function segmentEasingUniform(
+  e: JointSegmentEasing | undefined,
+): EasingConfig | 'mixed' | undefined {
+  if (!e) return undefined;
+  const pts = EASING_CHANNELS.map((ch) => controlPointsOf(e[ch]));
+  const same = pts.every((p) => p.every((v, i) => v === pts[0][i]));
+  if (!same) return 'mixed';
+  return e.position ?? e.rotation ?? e.scale; // all equal; undefined only if all absent
 }
 
 /** Cubic Bernstein value with P0=0, P3=1: B(t)=3(1-t)²t·c1 + 3(1-t)t²·c2 + t³. */

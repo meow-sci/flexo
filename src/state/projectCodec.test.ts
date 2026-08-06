@@ -12,8 +12,12 @@ import {
   createTank,
   identityTransform,
   type CustomMesh,
+  type EasingConfig,
   type EditingPart,
+  type JointSegmentEasing,
+  type PartAnimation,
 } from '../ksa/types';
+import { uniformSegmentEasing } from '../ksa/easing';
 import { buildProjectExport, parseProjectObject } from './projectTransfer';
 import {
   PROJECT_EXPORT_FORMAT,
@@ -341,7 +345,7 @@ function richPart(): EditingPart {
         id: 'kf0',
         timeSec: 0,
         poses: { joint_a: identityTransform(), joint_b: identityTransform() },
-        easings: { joint_a: { kind: 'preset', preset: 'easeInOut' } },
+        easings: { joint_a: uniformSegmentEasing({ kind: 'preset', preset: 'easeInOut' })! },
       },
       {
         id: 'kf1',
@@ -350,7 +354,15 @@ function richPart(): EditingPart {
           joint_a: xf([0, 0, 0], [0, 0, 1.5], [1, 1, 1]),
           joint_b: xf([0, 0, 0], [0.75, 0, 0], [1, 1, 1]),
         },
-        easings: { joint_b: { kind: 'cubicBezier', x1: 0.25, y1: 0.1, x2: 0.25, y2: 1 } },
+        easings: {
+          joint_b: uniformSegmentEasing({
+            kind: 'cubicBezier',
+            x1: 0.25,
+            y1: 0.1,
+            x2: 0.25,
+            y2: 1,
+          })!,
+        },
       },
     ],
     restKeyframeId: 'kf1',
@@ -445,11 +457,74 @@ describe('projectCodec round-trip', () => {
     expect(c.sg?.[0].sm?.[0]).not.toHaveProperty('g');
   });
 
-  // Per the no-migration rule a v7 envelope is REJECTED, never converted — so the
-  // marker must actually be 8, not just "whatever the constant says".
-  it('stamps wire version 8 (lights as first-class part entities)', () => {
-    expect(PROJECT_EXPORT_VERSION).toBe(8);
-    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P')).v).toBe(8);
+  describe('per-channel keyframe easing (v9)', () => {
+    const easeIn: EasingConfig = { kind: 'preset', preset: 'easeIn' };
+    const bez: EasingConfig = { kind: 'cubicBezier', x1: 0.25, y1: 0.1, x2: 0.25, y2: 1 };
+
+    /** A one-joint clip whose rest keyframe carries `seg` for that joint. */
+    function clip(seg?: JointSegmentEasing, extra: Partial<PartAnimation> = {}): EditingPart {
+      const p = createEmptyPart();
+      p.animations.push({
+        id: 'a1',
+        name: 'A',
+        durationSec: 1,
+        mode: 'actuate',
+        joints: [{ id: 'j', name: 'J', parentJointId: null, memberInstanceIds: [] }],
+        keyframes: [
+          {
+            id: 'k0',
+            timeSec: 0,
+            poses: { j: identityTransform() },
+            ...(seg ? { easings: { j: seg } } : {}),
+          },
+          { id: 'k1', timeSec: 1, poses: { j: identityTransform() } },
+        ],
+        solarTracking: null,
+        ...extra,
+      });
+      return p;
+    }
+    const roundTrip = (p: EditingPart) =>
+      decodeProject(encodeProject(buildProjectExport(p, 'P'))).data.animations[0];
+    const wire = (p: EditingPart) => encodeProject(buildProjectExport(p, 'P')).a![0];
+
+    it('round-trips a uniform preset easing on all three channels', () => {
+      const seg = uniformSegmentEasing(easeIn)!;
+      expect(roundTrip(clip(seg)).keyframes[0].easings).toEqual({ j: seg });
+      expect(wire(clip(seg)).kf[0].es).toEqual({
+        j: { p: { e: 'easeIn' }, r: { e: 'easeIn' }, s: { e: 'easeIn' } },
+      });
+    });
+
+    it('round-trips channel-DIVERGENT easings (position preset, scale bézier)', () => {
+      const seg: JointSegmentEasing = { position: easeIn, scale: bez };
+      expect(roundTrip(clip(seg)).keyframes[0].easings).toEqual({ j: seg });
+      // rotation is absent (linear) and never reaches the wire
+      expect(wire(clip(seg)).kf[0].es!.j).not.toHaveProperty('r');
+    });
+
+    it('round-trips the cubicSplineApprox import flag', () => {
+      expect(roundTrip(clip(undefined, { cubicSplineApprox: true })).cubicSplineApprox).toBe(true);
+      expect(wire(clip(undefined, { cubicSplineApprox: true })).cs).toBe(1);
+      expect(roundTrip(clip()).cubicSplineApprox).toBeUndefined();
+      expect(wire(clip())).not.toHaveProperty('cs');
+    });
+
+    it('byte discipline: an all-linear clip carries NO `es` key at all', () => {
+      const linear: EasingConfig = { kind: 'preset', preset: 'linear' };
+      for (const seg of [undefined, {}, { position: linear, rotation: linear, scale: linear }]) {
+        const kf = wire(clip(seg)).kf[0];
+        expect(kf).not.toHaveProperty('es');
+        expect(roundTrip(clip(seg)).keyframes[0].easings).toBeUndefined();
+      }
+    });
+  });
+
+  // Per the no-migration rule a v8 envelope is REJECTED, never converted — so the
+  // marker must actually be 9, not just "whatever the constant says".
+  it('stamps wire version 9 (per-channel keyframe easing)', () => {
+    expect(PROJECT_EXPORT_VERSION).toBe(9);
+    expect(encodeProject(buildProjectExport(createEmptyPart(), 'P')).v).toBe(9);
   });
 
   it('round-trips internalFlags and omits them when empty', () => {

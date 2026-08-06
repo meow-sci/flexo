@@ -1,21 +1,31 @@
 import * as THREE from 'three';
 import { atom, computed } from 'nanostores';
+import { persistentJSON } from '@nanostores/persistent';
 import type {
   AnimationKeyframe,
   AnimationMode,
+  EasingChannel,
   EasingConfig,
   EditingPart,
+  JointSegmentEasing,
   PartAnimation,
   SolarTrackingSpec,
   Transform,
   Vec3,
 } from '../ksa/types';
 import { createPartAnimation, identityTransform, VEC3_ONE } from '../ksa/types';
-import { jointWorld, restAnchorTime, sampleJointLocal } from '../ksa/animationRig';
-import { isLinearEasing } from '../ksa/easing';
+import { BAKE_FPS, jointWorld, restAnchorTime, sampleJointLocal } from '../ksa/animationRig';
+import {
+  EASING_CHANNELS,
+  isLinearEasing,
+  normalizeSegmentEasing,
+  uniformSegmentEasing,
+} from '../ksa/easing';
+import { splitEasingConfigAt } from '../ksa/easingFit';
+import { computeClipIssues } from '../ksa/clipIssues';
 import { matrixFromTransform, transformFromMatrix } from '../three/coords';
 import { $mode, registerModeHooks } from './modeStore';
-import { $part, $selection, $toolMode, pushUndo } from './editorStore';
+import { $part, $selection, pushUndo } from './editorStore';
 
 /**
  * Document actions + ephemeral editor state for custom animations (see
@@ -70,18 +80,201 @@ export const $isPoseEditing = computed(
 );
 
 /**
- * Selects a keyframe for pose editing and auto-picks the 3D gizmo tool: Move for the
- * rest pivot (the {@link restAnchorTime} keyframe, so a drag relocates the rotation
- * anchor) and Rotate for any other pose (so a drag swings the joint). The user can
- * still switch tools afterwards.
+ * Per-clip export diagnostics, keyed by animation id (design §11.1). Derived purely from
+ * the document, so every surface — clip chips, the Clip card checklist, timeline hints, the
+ * mode attention dot, the export pre-flight — reads the same answer.
+ */
+export const $clipIssues = computed([$part], computeClipIssues);
+
+// ── v2 ephemeral atoms (never persisted, never undo; clamped by initAnimationStore) ──
+
+/**
+ * The playhead, in SECONDS (design-animation-mode.md §4.1). Replaces the normalized
+ * `$animPreviewU` — 11B re-points the preview onto it. HIGH FREQUENCY: every rAF tick of
+ * playback writes it, so only leaf components / imperative canvas layers may subscribe
+ * (§5.8 — the v1 `PreviewProgressLabel` FPS lesson is binding).
+ */
+export const $playheadSec = atom<number>(0);
+
+/**
+ * PARK state (§10.1): the playhead is deliberately held at `$playheadSec` and the posed
+ * preview override is shown. False ⇒ REST: the scene is the modeled part.
+ */
+export const $playheadParked = atom<boolean>(false);
+
+/** Selected timeline column (keyframe) ids — multi-select. */
+export const $timelineSelection = atom<string[]>([]);
+
+/** In-session keyframe clipboard; times are RELATIVE to the first copied column (§5.7). */
+export const $animClipboard = atom<{
+  columns: {
+    dt: number;
+    poses: Record<string, Transform>;
+    easings?: Record<string, JointSegmentEasing>;
+  }[];
+} | null>(null);
+
+/** A throwaway posing anchor (§9.4) — never exported, never part of the document. */
+export const $workingPivot = atom<{
+  kind: 'centroid' | 'subpart' | 'point';
+  position: Vec3;
+  sourceInstanceId?: string;
+} | null>(null);
+
+/** The explicit Pivot tool is armed (§9.4). */
+export const $pivotEditing = atom<boolean>(false);
+
+/** The right-sidebar Members takeover (§7). */
+export const $membersView = atom<{ open: boolean; targetJointId: string | null }>({
+  open: false,
+  targetJointId: null,
+});
+
+/** Timeline zoom/pan (§5.9). Ephemeral; re-fit on clip switch. */
+export const $timelineView = atom<{ startSec: number; pxPerSec: number }>({
+  startSec: 0,
+  pxPerSec: 200,
+});
+
+/** Joint-tree disclosure, shared by the navigator tree and the timeline header column. */
+export const $jointTreeCollapsed = atom<Record<string, boolean>>({});
+
+/** Normalized playhead for rig sampling (0 when no clip / zero duration). */
+export const $playheadU = computed([$playheadSec, $activeAnimation], (sec, anim) =>
+  anim && anim.durationSec > 0 ? Math.min(1, Math.max(0, sec / anim.durationSec)) : 0,
+);
+
+// ── persisted UI prefs (§4.2) ────────────────────────────────────────────────
+
+/** Transport preferences — loop / speed / latch (§5.5, §10.3). */
+export const $animTransport = persistentJSON<{
+  loop: boolean;
+  speed: 0.25 | 0.5 | 1 | 2;
+  latched: boolean;
+}>('flexo:animTransport', { loop: false, speed: 1, latched: false });
+
+/** Motion-trail display mode (§9.5). */
+export const $animTrails = persistentJSON<'selected' | 'all' | 'off'>(
+  'flexo:animTrails',
+  'selected',
+);
+
+/** Duration-edit behavior: rescale every keyframe time, or keep them and move the tail (§8.2). */
+export const $animDurationMode = persistentJSON<'rescale' | 'keepTimes'>(
+  'flexo:animDurationMode',
+  'rescale',
+);
+
+// ── playhead state machine (design §10) ───────────────────────────────────────
+
+/**
+ * BRIDGE (deleted in 11B): mirrors `$playheadSec` into the v1 normalized `$animPreviewU`
+ * the still-mounted v1 preview UI + `EditorScene` read. Every v2 playhead writer goes
+ * through here so both representations can never disagree.
+ */
+function syncLegacyPreviewU(sec: number): void {
+  const dur = $activeAnimation.get()?.durationSec ?? 0;
+  $animPreviewU.set(dur > 0 ? Math.min(1, Math.max(0, sec / dur)) : 0);
+}
+
+/** Clamps a time to the active clip's [0, duration]. */
+function clampToClip(sec: number): number {
+  const dur = $activeAnimation.get()?.durationSec ?? 0;
+  return Math.min(Math.max(0, sec), Math.max(0, dur));
+}
+
+/**
+ * PIN a column (§10.1 PINNED): parks the playhead at its time and attaches the pose gizmo.
+ * Deliberately does NOT touch `$toolMode` — v1's auto tool pick is replaced by pivot
+ * ROUTING at write-back (§9.4, lands in 11D), so selecting a keyframe never steals the
+ * user's tool.
  */
 export function selectKeyframeForEditing(animId: string, keyframeId: string): void {
-  $editKeyframeId.set(keyframeId);
-  const anim = $activeAnimation.get();
+  const anim = $part.get().animations.find((a) => a.id === animId);
   const k = anim?.keyframes.find((x) => x.id === keyframeId);
-  if (k && anim && $activeAnimationId.get() === animId) {
-    $toolMode.set(k.timeSec === restAnchorTime(anim) ? 'translate' : 'rotate');
+  if (!anim || !k) return;
+  $editKeyframeId.set(keyframeId);
+  $playheadSec.set(k.timeSec);
+  $playheadParked.set(true);
+  syncLegacyPreviewU(k.timeSec);
+}
+
+/** PARK at `sec` (§10.1) and CLEAR the pin — a click elsewhere leaves the edited column. */
+export function parkPlayhead(sec: number): void {
+  const t = clampToClip(sec);
+  $editKeyframeId.set(null);
+  $playheadSec.set(t);
+  $playheadParked.set(true);
+  syncLegacyPreviewU(t);
+}
+
+/**
+ * Return to REST ⚓ (§10.1): playback stopped, pin cleared, un-parked, playhead back at
+ * {@link restAnchorTime} — the scene shows the modeled part again.
+ */
+export function returnToRest(): void {
+  cancelPlayback();
+  $editKeyframeId.set(null);
+  $playheadParked.set(false);
+  if ($animScrubbing.get()) $animScrubbing.set(false);
+  const anim = $activeAnimation.get();
+  $playheadSec.set(anim ? restAnchorTime(anim) : 0);
+  // v1 parity: the legacy scrubber springs back to its 0 end on release/stop.
+  if ($animPreviewU.get() !== 0) $animPreviewU.set(0);
+}
+
+// ── scrub session (drag on the ruler / a track) — §10.3 ───────────────────────
+
+let scrubOrigin: { sec: number; parked: boolean; pinId: string | null } | null = null;
+
+/** Grabbing the playhead takes over playback (kept v1 semantic) and remembers the origin. */
+export function beginScrub(): void {
+  cancelPlayback();
+  scrubOrigin = {
+    sec: $playheadSec.get(),
+    parked: $playheadParked.get(),
+    pinId: $editKeyframeId.get(),
+  };
+  $animScrubbing.set(true);
+}
+
+export function scrubTo(sec: number): void {
+  const t = clampToClip(sec);
+  $playheadSec.set(t);
+  syncLegacyPreviewU(t);
+}
+
+/**
+ * Release: SPRING by default (back to the pin / the pre-drag park / REST ⚓), or LATCH at
+ * the release point when `$animTransport.latched`. **The pin always wins** — grabbing the
+ * scrubber to check the motion and letting go puts you exactly back into editing (the v1
+ * pin-loss, census pain 7, is dead).
+ */
+export function endScrub(): void {
+  $animScrubbing.set(false);
+  const o = scrubOrigin;
+  scrubOrigin = null;
+  if (!o) return;
+  const anim = $activeAnimation.get();
+  const pinKf = o.pinId ? anim?.keyframes.find((k) => k.id === o.pinId) : null;
+  if (pinKf) {
+    $editKeyframeId.set(pinKf.id);
+    $playheadSec.set(pinKf.timeSec);
+    $playheadParked.set(true);
+    syncLegacyPreviewU(pinKf.timeSec);
+    return;
   }
+  if ($animTransport.get().latched) {
+    $playheadParked.set(true);
+    return;
+  }
+  if (o.parked) {
+    $playheadSec.set(o.sec);
+    $playheadParked.set(true);
+    syncLegacyPreviewU(o.sec);
+    return;
+  }
+  returnToRest();
 }
 
 // ── preview playback ──────────────────────────────────────────────────────────
@@ -90,9 +283,9 @@ export function selectKeyframeForEditing(animId: string, keyframeId: string): vo
 let playRaf = 0;
 
 /**
- * Stops the auto-play loop but LEAVES the current scrub position/override in place — used
- * when the user grabs the slider mid-play to take over scrubbing manually (the slider's
- * own release then handles the spring-loaded snap-back).
+ * Stops the auto-play loop but LEAVES the current playhead/override in place — used when
+ * the user grabs the scrubber mid-play to take over manually (the release then handles the
+ * spring/latch reconciliation).
  */
 export function cancelPlayback(): void {
   if (playRaf) cancelAnimationFrame(playRaf);
@@ -101,13 +294,61 @@ export function cancelPlayback(): void {
 }
 
 /**
- * Stops playback AND snaps back to the modeled rest pose (scrubbing off, u→0) — exactly
- * the spring-loaded reset the preview slider performs on release. Safe to call when idle.
+ * Stop (⏹): cancel playback AND return to the modeled rest pose. Safe to call when idle;
+ * this is also the Animation-mode exit hook's teardown.
  */
 export function stopAnimationPreview(): void {
+  returnToRest();
+}
+
+/** Pause in place (§10.2): parks at the pause time; a pin at a DIFFERENT time is dropped. */
+export function pausePreview(): void {
   cancelPlayback();
+  const sec = $playheadSec.get();
+  $playheadParked.set(true);
   if ($animScrubbing.get()) $animScrubbing.set(false);
-  if ($animPreviewU.get() !== 0) $animPreviewU.set(0);
+  const pinId = $editKeyframeId.get();
+  const pin = pinId ? $activeAnimation.get()?.keyframes.find((k) => k.id === pinId) : null;
+  if (pin && Math.abs(sec - pin.timeSec) > 1e-6) $editKeyframeId.set(null);
+  syncLegacyPreviewU(sec);
+}
+
+/** Transport preferences (§5.5) — persisted, never undo. */
+export function setLoop(loop: boolean): void {
+  $animTransport.set({ ...$animTransport.get(), loop });
+}
+export function setSpeed(speed: 0.25 | 0.5 | 1 | 2): void {
+  $animTransport.set({ ...$animTransport.get(), speed });
+}
+export function setLatched(latched: boolean): void {
+  $animTransport.set({ ...$animTransport.get(), latched });
+}
+
+/** Steps the playhead by whole bake frames (1/30 s) and parks (§12.2 `←`/`→`). */
+export function stepPlayhead(frames: number): void {
+  parkPlayhead($playheadSec.get() + frames / BAKE_FPS);
+}
+
+/** Parks + PINS the previous/next column (§5.5 item 6 `,`/`.`); never wraps. */
+export function stepToKeyframe(dir: 1 | -1): void {
+  const anim = $activeAnimation.get();
+  if (!anim) return;
+  const sorted = [...anim.keyframes].sort((a, b) => a.timeSec - b.timeSec);
+  const now = $playheadSec.get();
+  const next =
+    dir === 1
+      ? sorted.find((k) => k.timeSec > now + 1e-6)
+      : [...sorted].reverse().find((k) => k.timeSec < now - 1e-6);
+  if (next) selectKeyframeForEditing(anim.id, next.id);
+}
+
+/** Opens the Members view (§7), defaulting its target to the active joint. */
+export function openMembersView(jointId?: string): void {
+  $membersView.set({ open: true, targetJointId: jointId ?? $activeJointId.get() });
+}
+
+export function closeMembersView(): void {
+  $membersView.set({ open: false, targetJointId: null });
 }
 
 /**
@@ -128,31 +369,57 @@ registerModeHooks('animation', {
 });
 
 /**
- * Plays the active animation's preview through once at real speed (u 0→1 over
- * `durationSec`), driving the spring-loaded scrubber, then resets to the rest pose. The
- * preview override anchors on {@link restAnchorTime} just like a manual drag, so an
+ * Plays the ACTIVE clip's preview (§10.2). Starts at `$playheadSec` when parked or pinned
+ * and at 0 from REST; advances at `$animTransport.speed`; `loop` wraps seamlessly. The pin
+ * is SUSPENDED (not cleared) — the preview follows the playhead and the pin is restored on
+ * pause/stop. Reaching the end with loop off either parks at the last keyframe (latched) or
+ * returns to rest (the v1 play-once-then-snap default).
+ *
+ * The preview override anchors on {@link restAnchorTime} just like a manual drag, so an
  * imported deploy clip (modeled at its deployed last keyframe) folds stowed→deployed and
- * snaps back to its modeled rest on completion. No-op if already playing the same clip or
- * the animation is missing / zero-length.
+ * snaps back to its modeled rest on completion. No-op when there is no clip or it is
+ * zero-length.
  */
-export function playAnimationPreview(animId: string): void {
-  const anim = $part.get().animations.find((a) => a.id === animId);
+export function playAnimationPreview(): void {
+  const anim = $activeAnimation.get();
   if (!anim || anim.durationSec <= 0) return;
+  const animId = anim.id;
   cancelPlayback();
-  $editKeyframeId.set(null); // unpin any edited keyframe; the timeline takes over
+  const parked = $playheadParked.get() || !!$editKeyframeId.get();
+  let sec = parked ? clampToClip($playheadSec.get()) : 0;
+  if (sec >= anim.durationSec) sec = 0; // replay rather than sit at the end
   $animScrubbing.set(true);
-  $animPreviewU.set(0);
+  $playheadSec.set(sec);
+  syncLegacyPreviewU(sec);
   $animPlaying.set(true);
-  const durMs = anim.durationSec * 1000;
-  let startTs = 0;
+  let prevTs = 0;
   const tick = (ts: number) => {
     if (!$animPlaying.get()) return; // stopped externally (stop already reset state)
-    if ($activeAnimationId.get() !== animId) return stopAnimationPreview(); // clip switched/closed
-    if (!startTs) startTs = ts;
-    const u = Math.min(1, (ts - startTs) / durMs);
-    $animPreviewU.set(u);
-    if (u < 1) playRaf = requestAnimationFrame(tick);
-    else stopAnimationPreview(); // reached the end → snap back to the modeled rest pose
+    if ($activeAnimationId.get() !== animId) return stopAnimationPreview(); // clip switched
+    if (!prevTs) prevTs = ts;
+    const { loop, speed } = $animTransport.get();
+    sec += ((ts - prevTs) / 1000) * speed;
+    prevTs = ts;
+    const dur = $activeAnimation.get()?.durationSec ?? anim.durationSec;
+    if (sec >= dur) {
+      if (loop) {
+        sec = dur > 0 ? sec % dur : 0;
+      } else {
+        $playheadSec.set(dur);
+        syncLegacyPreviewU(dur);
+        cancelPlayback();
+        if ($animTransport.get().latched) {
+          $animScrubbing.set(false);
+          $playheadParked.set(true);
+        } else {
+          returnToRest();
+        }
+        return;
+      }
+    }
+    $playheadSec.set(sec);
+    syncLegacyPreviewU(sec);
+    playRaf = requestAnimationFrame(tick);
   };
   playRaf = requestAnimationFrame(tick);
 }
@@ -203,6 +470,59 @@ export function addAnimation(name = 'Animation', mode: AnimationMode = 'actuate'
   return id;
 }
 
+/**
+ * Deep-clones a clip with FRESH ids for the animation, every joint and every keyframe —
+ * pose/easing maps and `parentJointId`/`restKeyframeId` are remapped through the old→new
+ * id maps. Members and solar tracking are copied verbatim (they name the same placements).
+ * Opens the copy. DISCRETE → one undo step.
+ */
+export function duplicateAnimation(animId: string): string | null {
+  const src = findAnim($part.get(), animId);
+  if (!src) return null;
+  const newAnimId = rid('anim');
+  const jointMap = new Map(src.joints.map((j) => [j.id, rid('joint')]));
+  const kfMap = new Map(src.keyframes.map((k) => [k.id, rid('kf')]));
+  const remapKeys = <T>(rec: Record<string, T>): Record<string, T> => {
+    const out: Record<string, T> = {};
+    for (const [jid, v] of Object.entries(rec)) {
+      const next = jointMap.get(jid);
+      if (next) out[next] = v;
+    }
+    return out;
+  };
+  const copy: PartAnimation = {
+    ...structuredClone(src),
+    id: newAnimId,
+    name: `${src.name} (copy)`,
+    joints: src.joints.map((j) => ({
+      ...structuredClone(j),
+      id: jointMap.get(j.id)!,
+      parentJointId: j.parentJointId ? (jointMap.get(j.parentJointId) ?? null) : null,
+    })),
+    keyframes: src.keyframes.map((k) => {
+      const clone = structuredClone(k);
+      const out: AnimationKeyframe = {
+        ...clone,
+        id: kfMap.get(k.id)!,
+        poses: remapKeys(clone.poses),
+      };
+      if (clone.easings) out.easings = remapKeys(clone.easings);
+      return out;
+    }),
+  };
+  if (src.restKeyframeId) {
+    const anchor = kfMap.get(src.restKeyframeId);
+    if (anchor) copy.restKeyframeId = anchor;
+    else delete copy.restKeyframeId;
+  }
+  mutate('duplicate animation', copy.name, (p) => p.animations.push(copy));
+  $activeAnimationId.set(newAnimId);
+  $activeJointId.set(null);
+  $editKeyframeId.set(null);
+  $timelineSelection.set([]);
+  return newAnimId;
+}
+
 export function removeAnimation(animId: string): void {
   const name = findAnim($part.get(), animId)?.name ?? '';
   mutate('remove animation', name, (p) => {
@@ -232,16 +552,33 @@ export function setAnimationMode(animId: string, mode: AnimationMode): void {
   });
 }
 
-/** Sets the duration (s); rescales every keyframe time proportionally to keep shape. */
-export function setAnimationDuration(animId: string, durationSec: number): void {
-  const dur = Math.max(0.01, durationSec);
-  // streaming: duration is typed in a numeric field (caller focus-pushes once)
+/**
+ * Sets the clip duration (s). STREAMING (the caller pushes undo at field focus).
+ *
+ * - `'rescale'` (default, v1 behavior): every keyframe time is scaled proportionally, so
+ *   the motion keeps its shape and just runs faster/slower.
+ * - `'keepTimes'`: keyframe times are untouched and only the tail moves; the value is
+ *   clamped up to the last keyframe's time so no column can fall outside the clip (§8.2).
+ *
+ * `mode` defaults to the persisted `flexo:animDurationMode` preference.
+ */
+export function setAnimationDuration(
+  animId: string,
+  durationSec: number,
+  mode: 'rescale' | 'keepTimes' = $animDurationMode.get(),
+): void {
+  const wanted = Math.max(0.01, durationSec);
   stream((p) => {
     const a = findAnim(p, animId);
     if (!a) return;
+    if (mode === 'keepTimes') {
+      const last = Math.max(0, ...a.keyframes.map((k) => k.timeSec));
+      a.durationSec = Math.max(wanted, last);
+      return;
+    }
     const old = a.durationSec;
-    if (old > 0) for (const k of a.keyframes) k.timeSec = (k.timeSec / old) * dur;
-    a.durationSec = dur;
+    if (old > 0) for (const k of a.keyframes) k.timeSec = (k.timeSec / old) * wanted;
+    a.durationSec = wanted;
     sortKeyframes(a);
   });
 }
@@ -361,25 +698,34 @@ function wouldCycle(anim: PartAnimation, jointId: string, parentId: string): boo
  * Attaches placements to a joint (removing them from any other joint in the SAME
  * animation so a SubPart isn't driven twice within one module).
  */
+/**
+ * Attaches placements to a joint (removing them from any other joint in the SAME animation
+ * so a SubPart isn't driven twice within one module).
+ *
+ * **Only SubPart placements can be members** — connectors and kittens can never be driven
+ * by a joint (a real KSA limitation, verified in the decomp). Ineligible ids are filtered
+ * out and returned as `skipped` so the caller can explain the skip.
+ */
 export function attachToJoint(
   animId: string,
   jointId: string,
   instanceIds: readonly string[],
-): void {
-  if (instanceIds.length === 0) return;
-  mutate(
-    'attach to joint',
-    `${instanceIds.length} part${instanceIds.length === 1 ? '' : 's'}`,
-    (p) => {
-      const a = findAnim(p, animId);
-      if (!a) return;
-      const set = new Set(instanceIds);
-      for (const j of a.joints)
-        j.memberInstanceIds = j.memberInstanceIds.filter((id) => !set.has(id));
-      const target = a.joints.find((j) => j.id === jointId);
-      if (target) target.memberInstanceIds.push(...instanceIds);
-    },
-  );
+): { attached: number; skipped: number } {
+  const part = $part.get();
+  const eligible = instanceIds.filter((id) => part.placements.some((p) => p.instanceId === id));
+  const skipped = instanceIds.length - eligible.length;
+  if (eligible.length === 0) return { attached: 0, skipped };
+  const jointName = findAnim(part, animId)?.joints.find((j) => j.id === jointId)?.name ?? 'joint';
+  mutate('attach to joint', jointName, (p) => {
+    const a = findAnim(p, animId);
+    if (!a) return;
+    const set = new Set(eligible);
+    for (const j of a.joints)
+      j.memberInstanceIds = j.memberInstanceIds.filter((id) => !set.has(id));
+    const target = a.joints.find((j) => j.id === jointId);
+    if (target) target.memberInstanceIds.push(...eligible);
+  });
+  return { attached: eligible.length, skipped };
 }
 
 export function detachFromJoint(animId: string, jointId: string, instanceId: string): void {
@@ -391,41 +737,247 @@ export function detachFromJoint(animId: string, jointId: string, instanceId: str
 
 // ── keyframes (poses) ─────────────────────────────────────────────────────────
 
+/** Two keyframe times closer than this are the same COLUMN (design §5.4). */
+const COLUMN_EPS_SEC = 0.001;
+
 /**
  * Inserts a keyframe at `timeSec` (clamped to >0), seeding each joint's pose from
  * the current curve at that time (so it starts on-path), selects it for editing,
  * and returns its id.
+ *
+ * MOTION-NEUTRAL (design §5.4): the incoming segment's easing is not dropped, it is
+ * SUBDIVIDED exactly — per joint, per channel — by {@link splitEasingConfigAt}, so the
+ * two halves reproduce the original curve through the on-curve pose we just sampled.
+ *
+ * A column already within {@link COLUMN_EPS_SEC} of `timeSec` makes this a NO-OP that
+ * returns (and pins) that column's id, pushing no undo step.
  */
 export function addKeyframe(animId: string, timeSec: number): string {
-  const id = rid('kf');
   const t = Math.max(0.001, timeSec);
+  const hit = findAnim($part.get(), animId)?.keyframes.find(
+    (k) => Math.abs(k.timeSec - t) < COLUMN_EPS_SEC,
+  );
+  if (hit) {
+    $editKeyframeId.set(hit.id);
+    return hit.id;
+  }
+  const id = rid('kf');
   mutate('add keyframe', `${t.toFixed(2)}s`, (p) => {
     const a = findAnim(p, animId);
     if (!a) return;
     const poses: Record<string, Transform> = {};
+    // Sampled with the ORIGINAL easing, BEFORE the insert mutates it — this is the
+    // on-curve seed the exact split is re-based against.
     for (const j of a.joints) poses[j.id] = transformFromMatrix(sampleJointLocal(a, j.id, t));
     a.keyframes.push({ id, timeSec: t, poses });
     sortKeyframes(a);
-    // Inserting into a segment halves the preceding keyframe's outgoing easing span —
-    // drop it so both sub-segments are linear through the on-curve pose we just
-    // sampled (re-author easing per sub-segment afterwards; see AnimationKeyframe).
+
     const idx = a.keyframes.findIndex((k) => k.id === id);
     const prev = idx > 0 ? a.keyframes[idx - 1] : null;
-    if (prev?.easings) delete prev.easings;
+    const next = idx < a.keyframes.length - 1 ? a.keyframes[idx + 1] : null;
+    if (prev?.easings && next) {
+      const s = (t - prev.timeSec) / (next.timeSec - prev.timeSec);
+      const inserted = a.keyframes[idx];
+      for (const [jointId, seg] of Object.entries(prev.easings)) {
+        const leftSeg: JointSegmentEasing = {};
+        const rightSeg: JointSegmentEasing = {};
+        for (const ch of EASING_CHANNELS) {
+          const cfg = seg[ch];
+          if (!cfg || isLinearEasing(cfg)) continue;
+          const { left, right } = splitEasingConfigAt(cfg, s);
+          if (left) leftSeg[ch] = left;
+          if (right) rightSeg[ch] = right;
+        }
+        if (Object.keys(leftSeg).length > 0) prev.easings[jointId] = leftSeg;
+        else delete prev.easings[jointId];
+        if (Object.keys(rightSeg).length > 0) (inserted.easings ??= {})[jointId] = rightSeg;
+      }
+      if (Object.keys(prev.easings).length === 0) delete prev.easings;
+    }
   });
   $editKeyframeId.set(id);
   return id;
 }
 
+/** The column whose composed pose equals the modeled placements (ABSENT ⇒ earliest). */
+function anchorKeyframeId(anim: PartAnimation): string | null {
+  if (anim.restKeyframeId && anim.keyframes.some((k) => k.id === anim.restKeyframeId))
+    return anim.restKeyframeId;
+  const earliest = [...anim.keyframes].sort((a, b) => a.timeSec - b.timeSec)[0];
+  return earliest?.id ?? null;
+}
+
+/**
+ * Removes a batch of columns in ONE undo step. Two columns are PROTECTED and counted as
+ * skipped (§5.6): the t=0 column (it pins the clip start) and the rest-anchor column (its
+ * pose IS the modeled geometry — re-anchor elsewhere first).
+ */
+export function removeKeyframes(
+  animId: string,
+  ids: readonly string[],
+): { removed: number; skipped: number } {
+  const anim = findAnim($part.get(), animId);
+  if (!anim || ids.length === 0) return { removed: 0, skipped: 0 };
+  const anchor = anchorKeyframeId(anim);
+  const unique = [...new Set(ids)];
+  const removable = new Set(
+    unique.filter((id) => {
+      const k = anim.keyframes.find((x) => x.id === id);
+      return !!k && k.timeSec !== 0 && k.id !== anchor;
+    }),
+  );
+  const skipped = unique.length - removable.size;
+  if (removable.size === 0) return { removed: 0, skipped };
+  mutate('remove keyframes', `${removable.size}`, (p) => {
+    const a = findAnim(p, animId);
+    if (a) a.keyframes = a.keyframes.filter((x) => !removable.has(x.id));
+  });
+  $timelineSelection.set($timelineSelection.get().filter((id) => !removable.has(id)));
+  const pin = $editKeyframeId.get();
+  if (pin && removable.has(pin)) $editKeyframeId.set(null);
+  return { removed: removable.size, skipped };
+}
+
+/** Single-column convenience over {@link removeKeyframes} (one exported surface). */
 export function removeKeyframe(animId: string, keyframeId: string): void {
-  mutate('remove keyframe', '', (p) => {
+  removeKeyframes(animId, [keyframeId]);
+}
+
+/**
+ * Retimes a set of columns by `dt` (STREAMING — the caller pushes undo at drag start).
+ * Relative offsets are preserved: `dt` is clamped to the tightest bound across the whole
+ * set so the group never deforms. The t=0 column is immovable and is dropped from the set
+ * (reported via `blocked` for the UI's refuse-shake).
+ */
+export function moveKeyframes(
+  animId: string,
+  ids: readonly string[],
+  dt: number,
+): { blocked: boolean } {
+  const anim = findAnim($part.get(), animId);
+  if (!anim) return { blocked: false };
+  const moving = ids
+    .map((id) => anim.keyframes.find((k) => k.id === id))
+    .filter((k): k is AnimationKeyframe => !!k && k.timeSec !== 0);
+  const blocked = moving.length !== ids.length;
+  if (moving.length === 0) return { blocked };
+  const lo = Math.min(...moving.map((k) => k.timeSec));
+  const hi = Math.max(...moving.map((k) => k.timeSec));
+  const clamped = Math.min(Math.max(dt, 0.001 - lo), anim.durationSec - hi);
+  const set = new Set(moving.map((k) => k.id));
+  stream((p) => {
     const a = findAnim(p, animId);
     if (!a) return;
-    const k = a.keyframes.find((x) => x.id === keyframeId);
-    if (!k || k.timeSec === 0) return; // never remove the rest (t=0) keyframe
-    a.keyframes = a.keyframes.filter((x) => x.id !== keyframeId);
+    for (const k of a.keyframes) if (set.has(k.id)) k.timeSec += clamped;
+    sortKeyframes(a);
   });
-  if ($editKeyframeId.get() === keyframeId) $editKeyframeId.set(null);
+  return { blocked };
+}
+
+// ── keyframe clipboard (§5.7) ────────────────────────────────────────────────
+
+/** Snapshots columns into {@link $animClipboard} with times relative to the first. No undo. */
+export function copyKeyframes(ids: readonly string[]): number {
+  const anim = $activeAnimation.get();
+  if (!anim) return 0;
+  const cols = anim.keyframes
+    .filter((k) => ids.includes(k.id))
+    .sort((a, b) => a.timeSec - b.timeSec);
+  if (cols.length === 0) {
+    $animClipboard.set(null);
+    return 0;
+  }
+  const t0 = cols[0].timeSec;
+  $animClipboard.set({
+    columns: cols.map((k) => ({
+      dt: k.timeSec - t0,
+      poses: structuredClone(k.poses),
+      ...(k.easings ? { easings: structuredClone(k.easings) } : {}),
+    })),
+  });
+  return cols.length;
+}
+
+/**
+ * Pastes the clipboard at the playhead in ONE undo step (§5.7): the first column lands at
+ * `$playheadSec`, the rest keep their relative offsets (clamped into (0, duration] — the
+ * clamp is reported). A target within 1 ms of an existing column REPLACES that column's
+ * poses/easings and keeps its id; otherwise a new column is created, seeded ON-CURVE for
+ * any joint the clipboard doesn't carry. Joints that no longer exist are dropped, so
+ * pasting across clips works by joint id.
+ */
+export function pasteKeyframesAtPlayhead(): { pasted: number; clamped: boolean } {
+  const clip = $animClipboard.get();
+  const anim = $activeAnimation.get();
+  if (!clip || clip.columns.length === 0 || !anim) return { pasted: 0, clamped: false };
+  const animId = anim.id;
+  const base = $playheadSec.get();
+  const jointIds = new Set(anim.joints.map((j) => j.id));
+  let clamped = false;
+  const targets = clip.columns.map((c) => {
+    const raw = base + c.dt;
+    const t = Math.min(anim.durationSec, Math.max(0.001, raw));
+    if (Math.abs(t - raw) > 1e-9) clamped = true;
+    return { t, col: c };
+  });
+  // On-curve seeds sampled from the PRE-mutation curve, so a pasted column never bends
+  // the joints it doesn't carry.
+  const seeds = new Map<number, Record<string, Transform>>();
+  for (const { t } of targets) {
+    if (seeds.has(t)) continue;
+    const poses: Record<string, Transform> = {};
+    for (const j of anim.joints) poses[j.id] = transformFromMatrix(sampleJointLocal(anim, j.id, t));
+    seeds.set(t, poses);
+  }
+
+  mutate('paste keys', `${targets.length}`, (p) => {
+    const a = findAnim(p, animId);
+    if (!a) return;
+    for (const { t, col } of targets) {
+      const poses: Record<string, Transform> = { ...structuredClone(seeds.get(t)!) };
+      for (const [jid, pose] of Object.entries(col.poses))
+        if (jointIds.has(jid)) poses[jid] = structuredClone(pose);
+      const easings: Record<string, JointSegmentEasing> = {};
+      for (const [jid, seg] of Object.entries(col.easings ?? {})) {
+        const norm = normalizeSegmentEasing(structuredClone(seg));
+        if (jointIds.has(jid) && norm) easings[jid] = norm;
+      }
+      const hit = a.keyframes.find((k) => Math.abs(k.timeSec - t) < COLUMN_EPS_SEC);
+      if (hit) {
+        hit.poses = poses;
+        if (Object.keys(easings).length) hit.easings = easings;
+        else delete hit.easings;
+        continue;
+      }
+      a.keyframes.push({
+        id: rid('kf'),
+        timeSec: t,
+        poses,
+        ...(Object.keys(easings).length ? { easings } : {}),
+      });
+    }
+    sortKeyframes(a);
+  });
+  return { pasted: targets.length, clamped };
+}
+
+/**
+ * Points {@link PartAnimation.restKeyframeId} at `kfId` — the column whose composed pose
+ * equals the modeled placements (§5.6). Pointing it at the EARLIEST column deletes the
+ * field instead, matching the "ABSENT ⇒ earliest" convention and keeping linear clips
+ * byte-clean on the wire. DISCRETE → one undo step.
+ */
+export function setRestAnchor(animId: string, kfId: string): void {
+  const anim = findAnim($part.get(), animId);
+  const kf = anim?.keyframes.find((k) => k.id === kfId);
+  if (!anim || !kf) return;
+  const earliest = [...anim.keyframes].sort((a, b) => a.timeSec - b.timeSec)[0];
+  mutate('re-anchor rest', `@${kf.timeSec.toFixed(2)}s`, (p) => {
+    const a = findAnim(p, animId);
+    if (!a) return;
+    if (earliest && earliest.id === kfId) delete a.restKeyframeId;
+    else a.restKeyframeId = kfId;
+  });
 }
 
 /** Moves a keyframe in time (streaming; can't move the rest keyframe off t=0). */
@@ -463,9 +1015,18 @@ export function setJointPose(
 
 // ── segment easing ─────────────────────────────────────────────────────────--
 
-/** Writes/clears one joint's outgoing easing on a keyframe (linear ⇒ delete the entry). */
-function applyEasing(k: AnimationKeyframe, jointId: string, cfg: EasingConfig): void {
-  if (isLinearEasing(cfg)) {
+/**
+ * Writes/clears one joint's outgoing PER-CHANNEL easing on a keyframe. An all-linear
+ * segment is stored as ABSENT (entry deleted, then the map itself when it empties) so
+ * exports stay byte-identical for linear clips and the data stays clean.
+ */
+function applySegmentEasing(
+  k: AnimationKeyframe,
+  jointId: string,
+  seg: JointSegmentEasing | undefined,
+): void {
+  const norm = normalizeSegmentEasing(seg);
+  if (!norm) {
     if (k.easings) {
       delete k.easings[jointId];
       if (Object.keys(k.easings).length === 0) delete k.easings;
@@ -473,7 +1034,12 @@ function applyEasing(k: AnimationKeyframe, jointId: string, cfg: EasingConfig): 
     return;
   }
   if (!k.easings) k.easings = {};
-  k.easings[jointId] = cfg;
+  k.easings[jointId] = norm;
+}
+
+/** Uniform-authoring shim: one config onto all three channels (linear ⇒ cleared). */
+function applyEasing(k: AnimationKeyframe, jointId: string, cfg: EasingConfig): void {
+  applySegmentEasing(k, jointId, uniformSegmentEasing(cfg));
 }
 
 /**
@@ -494,17 +1060,50 @@ export function setJointSegmentEasing(
   });
 }
 
-/** Sets the same easing on EVERY joint for the segment leaving `keyframeId` (discrete undo). */
+/**
+ * Sets ONE channel (or all three via `'uniform'`) of a joint's outgoing easing. STREAMING
+ * (the caller pushes undo at curve-drag start / preset change). Linear clears the channel;
+ * an all-linear segment is dropped entirely.
+ */
+export function setJointChannelEasing(
+  animId: string,
+  keyframeId: string,
+  jointId: string,
+  channel: EasingChannel | 'uniform',
+  cfg: EasingConfig,
+): void {
+  stream((p) => {
+    const k = findAnim(p, animId)?.keyframes.find((x) => x.id === keyframeId);
+    if (!k) return;
+    if (channel === 'uniform') {
+      applySegmentEasing(k, jointId, uniformSegmentEasing(cfg));
+      return;
+    }
+    const next: JointSegmentEasing = { ...k.easings?.[jointId] };
+    if (isLinearEasing(cfg)) delete next[channel];
+    else next[channel] = cfg;
+    applySegmentEasing(k, jointId, next);
+  });
+}
+
+/**
+ * Copies one easing set onto EVERY joint for the segment leaving `keyframeId` (discrete
+ * undo). Accepts either a full per-channel {@link JointSegmentEasing} or — for the v1
+ * uniform UI still mounted until 11C — a single {@link EasingConfig} applied to all three
+ * channels.
+ */
 export function setSegmentEasingAllJoints(
   animId: string,
   keyframeId: string,
-  cfg: EasingConfig,
+  easing: JointSegmentEasing | EasingConfig,
 ): void {
-  mutate('segment easing', isLinearEasing(cfg) ? 'linear' : 'eased', (p) => {
+  const seg: JointSegmentEasing | undefined =
+    'kind' in easing ? uniformSegmentEasing(easing) : normalizeSegmentEasing(easing);
+  mutate('segment easing', seg ? 'eased' : 'linear', (p) => {
     const a = findAnim(p, animId);
     const k = a?.keyframes.find((x) => x.id === keyframeId);
     if (!a || !k) return;
-    for (const j of a.joints) applyEasing(k, j.id, cfg);
+    for (const j of a.joints) applySegmentEasing(k, j.id, seg && structuredClone(seg));
   });
 }
 
@@ -602,6 +1201,32 @@ export function setJointPivot(
 }
 
 /**
+ * Snaps the joint's pivot POSITION to the centroid of the current viewport selection,
+ * keeping its orientation (§4.3). Routed through {@link setJointPivot} so the rest-geometry
+ * -preserving rebase is never reimplemented. DISCRETE → one undo step.
+ */
+export function setJointPivotToCentroid(jointId: string): void {
+  const animId = $activeAnimationId.get();
+  if (!animId) return;
+  setJointPivot(animId, jointId, selectionCentroidPose(), { orientation: false });
+}
+
+/**
+ * Snaps the joint's pivot POSITION to a picked Part-space point (the `pivot-pick` tool),
+ * keeping its orientation. DISCRETE → one undo step.
+ */
+export function setJointPivotPoint(jointId: string, worldPos: Vec3): void {
+  const animId = $activeAnimationId.get();
+  if (!animId) return;
+  setJointPivot(
+    animId,
+    jointId,
+    { position: { ...worldPos }, rotation: { x: 0, y: 0, z: 0 }, scale: { ...VEC3_ONE } },
+    { orientation: false },
+  );
+}
+
+/**
  * Streaming counterpart to {@link setJointPivot} for the Rest-pose Rotate gizmo:
  * re-bases the pivot to `worldFrame` (the gizmo proxy's Part-space frame; scale
  * stripped), letting a drag re-orient (and/or move) the pivot live without distorting
@@ -618,25 +1243,46 @@ export function reorientJointPivot(animId: string, jointId: string, worldFrame: 
 // ── ephemeral-state clamping (after undo/redo or external $part swaps) ─────────
 
 /**
- * Clamps the active animation/joint/keyframe ids to entities that still exist after
- * any `$part` change (undo/redo restores the document without touching these atoms).
- * Call once at app startup.
+ * Clamps every ephemeral animation atom to entities that still exist after any `$part`
+ * change (undo/redo and project swap restore the document without touching these atoms —
+ * design §4.3). Call once at app startup.
  */
 export function initAnimationStore(): void {
   $part.subscribe((part) => {
+    // (c) a working pivot picked off a placement dies with that placement, in any clip
+    const src = $workingPivot.get()?.sourceInstanceId;
+    if (src && !part.placements.some((p) => p.instanceId === src)) $workingPivot.set(null);
+
     const animId = $activeAnimationId.get();
     if (animId && !part.animations.some((a) => a.id === animId)) {
       $activeAnimationId.set(null);
       $activeJointId.set(null);
       $editKeyframeId.set(null);
+      $timelineSelection.set([]);
+      $membersView.set({ ...$membersView.get(), targetJointId: null });
+      $playheadSec.set(0);
+      $playheadParked.set(false);
       return;
     }
     const anim = animId ? part.animations.find((a) => a.id === animId) : null;
-    if (anim) {
-      if ($activeJointId.get() && !anim.joints.some((j) => j.id === $activeJointId.get()))
-        $activeJointId.set(null);
-      if ($editKeyframeId.get() && !anim.keyframes.some((k) => k.id === $editKeyframeId.get()))
-        $editKeyframeId.set(null);
+    if (!anim) return;
+    if ($activeJointId.get() && !anim.joints.some((j) => j.id === $activeJointId.get()))
+      $activeJointId.set(null);
+    if ($editKeyframeId.get() && !anim.keyframes.some((k) => k.id === $editKeyframeId.get()))
+      $editKeyframeId.set(null);
+    // (a) drop timeline-selected columns that no longer exist
+    const sel = $timelineSelection.get();
+    if (sel.length > 0) {
+      const alive = sel.filter((id) => anim.keyframes.some((k) => k.id === id));
+      if (alive.length !== sel.length) $timelineSelection.set(alive);
     }
+    // (b) the Members view stays OPEN but loses a deleted target joint
+    const mv = $membersView.get();
+    if (mv.targetJointId && !anim.joints.some((j) => j.id === mv.targetJointId))
+      $membersView.set({ ...mv, targetJointId: null });
+    // (d) keep the playhead inside the clip
+    const sec = $playheadSec.get();
+    const clamped = Math.min(Math.max(0, sec), Math.max(0, anim.durationSec));
+    if (clamped !== sec) $playheadSec.set(clamped);
   });
 }

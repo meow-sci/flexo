@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { matrixFromTransform } from '../three/coords';
-import { evalEasing, isLinearEasing } from './easing';
+import { evalEasing, isLinearSegmentEasing } from './easing';
 import { identityTransform } from './types';
 import type { PartAnimation, SubPartPlacement, Transform } from './types';
 
@@ -25,6 +25,15 @@ import type { PartAnimation, SubPartPlacement, Transform } from './types';
  * for placements ({@link matrixFromTransform}); glTF carries rotations as
  * quaternions in the shared KSA/three.js basis, so what the preview shows and what
  * KSA renders agree.
+ *
+ * EASING IS PER CHANNEL (design-animation-mode.md §3, DECISIONS #8). A keyframe's
+ * {@link import('./types').JointSegmentEasing} carries an independent cubic-bézier
+ * time-warp for `position`, `rotation` and `scale`, so one segment's sampler solves
+ * THREE alphas from the same linear progress; an absent channel is linear. A segment
+ * counts as "eased" for export densification when ANY channel is non-linear
+ * ({@link import('./easing').isLinearSegmentEasing}) — KSA plays only LINEAR/STEP
+ * samplers, so eased segments are baked to dense LINEAR keys at {@link BAKE_FPS}
+ * while all-linear segments stay sparse and byte-identical.
  */
 
 /** A plain-number glTF node (three.js-free) consumed by {@link buildAnimationGlb}. */
@@ -92,10 +101,12 @@ function poseParts(t: Transform): {
 /**
  * The joint's LOCAL pose components (relative to its parent) at time `t`: linearly
  * interpolating position/scale and slerping rotation between bracketing keyframes,
- * with the segment progress warped by that joint's per-segment easing. Clamps to the
- * end keyframes outside [0, lastTime] (mirroring KSA's clamp). At an EXACT keyframe
- * time the result is that keyframe's pose verbatim (easing(0)=0, slerp/lerp at 0),
- * which keeps export baking byte-identical for un-eased segments.
+ * with the segment progress warped INDEPENDENTLY PER CHANNEL by that joint's
+ * per-segment easing (position / rotation / scale each solve their own alpha; an
+ * absent channel stays linear). Clamps to the end keyframes outside [0, lastTime]
+ * (mirroring KSA's clamp). At an EXACT keyframe time the result is that keyframe's
+ * pose verbatim (easing(0)=0, easing(1)=1, slerp/lerp at the endpoints), which keeps
+ * export baking byte-identical for un-eased segments.
  */
 function sampleJointPartsLocal(
   anim: PartAnimation,
@@ -118,14 +129,17 @@ function sampleJointPartsLocal(
   const b = kfs[i + 1];
   const span = b.timeSec - a.timeSec;
   const linear = span > 0 ? (t - a.timeSec) / span : 0;
-  // Warp the segment progress by this joint's OUTGOING easing on keyframe `a`.
-  const alpha = evalEasing(a.easings?.[jointId], linear);
+  // Warp the segment progress by this joint's OUTGOING PER-CHANNEL easing on keyframe
+  // `a`: three independent alphas, one per channel. An absent channel stays linear —
+  // there is deliberately no cross-channel precedence or fallback.
+  const seg = a.easings?.[jointId];
   const pa = poseParts(poseOf(jointId, a));
   const pb = poseParts(poseOf(jointId, b));
   return {
-    pos: pa.pos.lerp(pb.pos, alpha),
-    quat: pa.quat.slerp(pb.quat, alpha), // three.js slerp takes the shortest path
-    scale: pa.scale.lerp(pb.scale, alpha),
+    pos: pa.pos.lerp(pb.pos, evalEasing(seg?.position, linear)),
+    // three.js slerp takes the shortest path
+    quat: pa.quat.slerp(pb.quat, evalEasing(seg?.rotation, linear)),
+    scale: pa.scale.lerp(pb.scale, evalEasing(seg?.scale, linear)),
   };
 }
 
@@ -141,7 +155,9 @@ export function sampleJointLocal(anim: PartAnimation, jointId: string, t: number
 /**
  * The per-joint set of times at which to bake its TRS channels: each eased segment is
  * subdivided to ~`fps` (dense LINEAR samples that reproduce the curve under KSA's
- * LINEAR playback); each linear segment contributes only its endpoint. For an
+ * LINEAR playback); each linear segment contributes only its endpoint. "Eased" means
+ * ANY of the segment's three channels is non-linear — a scale-only ease densifies the
+ * whole segment, because the three channels share one sample-time set. For an
  * all-linear joint this returns exactly the keyframe times (sparse, unchanged output).
  */
 function jointSampleTimes(
@@ -156,7 +172,7 @@ function jointSampleTimes(
     const a = kfs[i];
     const b = kfs[i + 1];
     const span = b.timeSec - a.timeSec;
-    if (span > 0 && !isLinearEasing(a.easings?.[joint.id])) {
+    if (span > 0 && !isLinearSegmentEasing(a.easings?.[joint.id])) {
       const n = Math.max(1, Math.ceil(span * fps));
       for (let s = 1; s < n; s++) times.push(a.timeSec + (span * s) / n);
     }

@@ -45,6 +45,7 @@ import {
   stopAnimationPreview,
 } from '../state/animationStore';
 import { isAnimationExportable } from '../ksa/animationNaming';
+import { segmentEasingUniform } from '../ksa/easing';
 import { EasingEditor } from './EasingEditor';
 import { PreviewScrubber } from './PreviewScrubber';
 import { NumberField } from './NumberField';
@@ -590,7 +591,10 @@ function PoseEditor({ anim }: { anim: PartAnimation }) {
   // pose exists for the joint to interpolate toward.
   const sorted = [...anim.keyframes].sort((a, b) => a.timeSec - b.timeSec);
   const hasNext = sorted.findIndex((k) => k.id === kf.id) < sorted.length - 1;
-  const easing = kf.easings?.[joint.id];
+  // v1 UI is uniform-only: 'mixed' (per-channel divergence) is unreachable until 11C
+  // rewires this panel, and reads as "custom" until then.
+  const uniform = segmentEasingUniform(kf.easings?.[joint.id]);
+  const easing = uniform === 'mixed' ? undefined : uniform;
 
   const commit = (mut: (t: ReturnType<typeof identityTransform>) => void) => {
     const next = {

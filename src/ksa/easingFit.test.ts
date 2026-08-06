@@ -2,9 +2,19 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import * as THREE from 'three';
 import { hasKsaAssets, ksaAsset } from './ksaTestAssets';
-import { fitAnimationEasing, subdivideEasing } from './easingFit';
-import { evalBezierPoints, controlPointsOf, type BezierPoints } from './easing';
-import { jointWorld } from './animationRig';
+import {
+  fitAnimationEasing,
+  fitAnimationEasingDetailed,
+  splitEasingConfigAt,
+  subdivideEasing,
+} from './easingFit';
+import {
+  evalBezierPoints,
+  controlPointsOf,
+  segmentEasingUniform,
+  type BezierPoints,
+} from './easing';
+import { jointWorld, sampleJointLocal } from './animationRig';
 import { decodeAnimationGlb, remapImportedAnimation, parseGlb } from './animationImport';
 import type { CatalogAnimationModule, PartAnimation, Transform } from './types';
 
@@ -71,6 +81,40 @@ describe('subdivideEasing', () => {
   });
 });
 
+describe('splitEasingConfigAt', () => {
+  it('returns null halves for a linear curve (nothing to store)', () => {
+    expect(splitEasingConfigAt({ kind: 'preset', preset: 'linear' }, 0.5)).toEqual({
+      left: null,
+      right: null,
+    });
+  });
+
+  it('the two halves compose back into the full curve (max err < 1e-4)', () => {
+    for (const cfg of [
+      { kind: 'preset', preset: 'easeInOut' } as const,
+      { kind: 'cubicBezier', x1: 0.34, y1: 1.4, x2: 0.64, y2: 1 } as const, // overshoot
+    ]) {
+      for (const s of [0.25, 0.5, 0.73]) {
+        const { left, right } = splitEasingConfigAt(cfg, s);
+        const full = controlPointsOf(cfg);
+        const ys = evalBezierPoints(full, s);
+        let maxErr = 0;
+        for (let i = 0; i <= 64; i++) {
+          const x = i / 64;
+          // Piecewise reconstruction: each half is renormalized to its own unit square,
+          // so the composed y is ys·left(x/s) before the split and ys+(1-ys)·right(…) after.
+          const recon =
+            x < s
+              ? ys * evalBezierPoints(controlPointsOf(left), x / s)
+              : ys + (1 - ys) * evalBezierPoints(controlPointsOf(right), (x - s) / (1 - s));
+          maxErr = Math.max(maxErr, Math.abs(evalBezierPoints(full, x) - recon));
+        }
+        expect(maxErr).toBeLessThan(1e-4);
+      }
+    }
+  });
+});
+
 describe('fitAnimationEasing — round-trip oracle', () => {
   const orig: BezierPoints = [0.42, 0, 0.58, 1]; // ease-in-out
 
@@ -79,7 +123,7 @@ describe('fitAnimationEasing — round-trip oracle', () => {
     const fitted = fitAnimationEasing(dense);
     expect(fitted.keyframes.length).toBe(2);
     const seg = [...fitted.keyframes].sort((a, b) => a.timeSec - b.timeSec)[0];
-    const recovered = controlPointsOf(seg.easings!['j']);
+    const recovered = controlPointsOf(seg.easings!['j'].rotation);
     for (let a = 0.1; a <= 0.9; a += 0.1) {
       expect(evalBezierPoints(recovered, a)).toBeCloseTo(evalBezierPoints(orig, a), 2);
     }
@@ -97,6 +141,93 @@ describe('fitAnimationEasing — round-trip oracle', () => {
     const dense = denseDoor((t) => Math.sin(t * Math.PI)); // 0 → 1 → 0
     const fitted = fitAnimationEasing(dense);
     expect(fitted.keyframes.length).toBe(dense.keyframes.length);
+  });
+});
+
+describe('fitAnimationEasing — per-channel fitting (LOCKED #8)', () => {
+  const easeIn: BezierPoints = [0.42, 0, 1, 1];
+  const easeOut: BezierPoints = [0, 0, 0.58, 1];
+
+  /** A dense clip whose POSITION eases easeIn while its ROTATION eases easeOut. */
+  function denseMixed(fps = 30): PartAnimation {
+    const keyframes = [];
+    for (let i = 0; i <= fps; i++) {
+      const t = i / fps;
+      keyframes.push({
+        id: `k${i}`,
+        timeSec: t,
+        poses: {
+          j: {
+            position: { x: 2 * evalBezierPoints(easeIn, t), y: 0, z: 0 },
+            rotation: { x: 0, y: (Math.PI / 2) * evalBezierPoints(easeOut, t), z: 0 },
+            scale: { x: 1, y: 1, z: 1 },
+          },
+        },
+      });
+    }
+    return {
+      id: 'anim',
+      name: 'Mixed',
+      durationSec: 1,
+      mode: 'actuate',
+      joints: [{ id: 'j', name: 'J', parentJointId: null, memberInstanceIds: ['panel'] }],
+      keyframes,
+      solarTracking: null,
+    };
+  }
+
+  it('recovers DIFFERENT curves per channel and re-bakes within tolerance', () => {
+    const dense = denseMixed();
+    const fitted = fitAnimationEasing(dense);
+    const seg = [...fitted.keyframes].sort((a, b) => a.timeSec - b.timeSec)[0];
+    const e = seg.easings!['j'];
+    expect(e.position).toBeTruthy();
+    expect(e.rotation).toBeTruthy();
+    expect(e.scale).toBeUndefined(); // scale never moves ⇒ stays linear/absent
+    // The two channels genuinely diverge (a uniform model could not express this).
+    expect(segmentEasingUniform(e)).toBe('mixed');
+    // At mid-time the position has covered ~32% of its travel while the rotation has
+    // covered ~68% of its arc — a single shared alpha could not produce both.
+    const pos = new THREE.Vector3();
+    const quat = new THREE.Quaternion();
+    sampleJointLocal(fitted, 'j', 0.5).decompose(pos, quat, new THREE.Vector3());
+    expect(pos.x / 2).toBeCloseTo(evalBezierPoints(easeIn, 0.5), 2);
+    const arc = 2 * Math.acos(Math.min(1, Math.abs(new THREE.Quaternion().dot(quat))));
+    expect(arc / (Math.PI / 2)).toBeCloseTo(evalBezierPoints(easeOut, 0.5), 2);
+
+    const ts = Array.from({ length: 41 }, (_, i) => i / 40);
+    const err = maxJointError(dense, fitted, ts);
+    expect(err.pos).toBeLessThan(4e-3); // POS_TOL
+    expect(err.deg).toBeLessThan(2.5); // ROT_TOL_DEG
+  });
+
+  it('fitAnimationEasingDetailed reports each joint kind + its eased channels', () => {
+    const dense = denseMixed();
+    // add a constant joint and a there-and-back wobble (which must stay dense)
+    dense.joints.push(
+      { id: 'jc', name: 'Const', parentJointId: null, memberInstanceIds: [] },
+      { id: 'jw', name: 'Wobble', parentJointId: null, memberInstanceIds: [] },
+    );
+    for (const k of dense.keyframes) {
+      k.poses.jc = tf(0);
+      k.poses.jw = tf(Math.sin(k.timeSec * Math.PI));
+    }
+    const { anim, report } = fitAnimationEasingDetailed(dense);
+    const byId = Object.fromEntries(report.jointStats.map((s) => [s.jointId, s]));
+    expect(byId.j.kind).toBe('eased');
+    expect(byId.j.easedChannels).toEqual(['position', 'rotation']);
+    expect(byId.jc.kind).toBe('const');
+    expect(byId.jc.easedChannels).toEqual([]);
+    expect(byId.jw.kind).toBe('dense');
+    // a dense joint pins every time, so nothing compacts — reported honestly
+    expect(report.keyframesIn).toBe(dense.keyframes.length);
+    expect(report.keyframesOut).toBe(dense.keyframes.length);
+    expect(anim.keyframes.length).toBe(dense.keyframes.length);
+  });
+
+  it('carries flexo-internal clip fields (cubicSplineApprox) through the fit', () => {
+    const dense: PartAnimation = { ...denseMixed(), cubicSplineApprox: true };
+    expect(fitAnimationEasing(dense).cubicSplineApprox).toBe(true);
   });
 });
 

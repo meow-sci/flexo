@@ -719,6 +719,9 @@ describe('parseProjectImport', () => {
     expect(parseProjectImport(JSON.stringify({ f: PROJECT_EXPORT_FORMAT, v: 999 })).ok).toBe(false);
     // v1 predates the 4892 reaction/tank key renames — rejected, never migrated.
     expect(parseProjectImport(JSON.stringify({ f: PROJECT_EXPORT_FORMAT, v: 1 })).ok).toBe(false);
+    // v8's `CKeyframe.es` values are single whole-pose easings; reading them as the v9
+    // per-channel {p,r,s} record would silently load LINEAR motion. Rejected, never converted.
+    expect(parseProjectImport(JSON.stringify({ f: PROJECT_EXPORT_FORMAT, v: 8 })).ok).toBe(false);
   });
 
   it('backfills every optional field from a bare-marker payload', () => {

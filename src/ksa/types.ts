@@ -2091,6 +2091,20 @@ export type EasingConfig =
   | { kind: 'preset'; preset: EasingPreset }
   | { kind: 'cubicBezier'; x1: number; y1: number; x2: number; y2: number };
 
+/** One interpolation channel of a joint pose. */
+export type EasingChannel = 'position' | 'rotation' | 'scale';
+
+/**
+ * Per-joint easing over the OUTGOING segment. Absent channel = linear.
+ * Uniform authoring writes the same config to all three channels; the UI
+ * renders "Uniform" when the three are structurally equal.
+ */
+export interface JointSegmentEasing {
+  position?: EasingConfig;
+  rotation?: EasingConfig;
+  scale?: EasingConfig;
+}
+
 /**
  * A snapshot of every joint's LOCAL frame (relative to its parent joint, or Part
  * space for root joints) at one point on the 0→durationSec timeline. The keyframe
@@ -2104,13 +2118,14 @@ export interface AnimationKeyframe {
   /** jointId → that joint's local frame at this time. Every joint has an entry. */
   poses: Record<string, Transform>;
   /**
-   * Optional easing for each joint over the OUTGOING segment [this kf → next kf].
-   * A missing jointId entry (or `linear`) means linear interpolation for that joint
-   * on this segment. Ignored on the final keyframe (it has no outgoing segment).
+   * Optional per-channel easing for each joint over the OUTGOING segment
+   * [this kf → next kf]. A missing jointId entry — or a {@link JointSegmentEasing}
+   * whose channel is absent/`linear` — means linear interpolation for that channel.
+   * Ignored on the final keyframe (it has no outgoing segment).
    * Stored per-joint because keyframe times are global but joints animate in
    * different sub-windows — on one segment joint A may ease while joint B holds.
    */
-  easings?: Record<string, EasingConfig>;
+  easings?: Record<string, JointSegmentEasing>;
 }
 
 /**
@@ -2155,6 +2170,12 @@ export interface PartAnimation {
    * top of an already-deployed part. Flexo-internal only — never serialized to KSA.
    */
   restKeyframeId?: string;
+  /**
+   * Set by the KSA importer when the source GLB used CUBICSPLINE samplers — flexo decoded
+   * only the keyframe VALUES, so the in-between motion is approximated (design §11.3).
+   * Flexo-internal diagnostic; never serialized to KSA. Absent = exact decode.
+   */
+  cubicSplineApprox?: true;
   /** Optional sun-tracking extension, or null. */
   solarTracking: SolarTrackingSpec | null;
 }

@@ -61,7 +61,7 @@ GameData schema (`KeyframeAnimationModule`) and the bone/transform math are unch
 **Easing / curves:**
 
 - KSA's only interpolation vocabulary is `SampleType {Linear, Step, CubicSpline}` from the glTF sampler `interpolation`. **No easing/bézier/tangent concept in the part-animation runtime.**
-- flexo's cubic-bézier easing is a **flexo-only authoring abstraction**, materialized by **baking eased segments to dense LINEAR samples at 30 fps**, and recovered on import by **reverse-fitting** LINEAR keys (gated to tol: pos 4 mm, rot 2.5°; else kept dense / lossless). flexo exports **only `interpolation: 'LINEAR'`**.
+- flexo's cubic-bézier easing is a **flexo-only authoring abstraction**, authored **PER CHANNEL** — an independent curve for `position`, `rotation` and `scale` on each joint-segment (`JointSegmentEasing` in `src/ksa/types.ts`; an absent channel is linear, and an all-linear segment is stored ABSENT so linear clips export byte-identically). It is materialized by **baking eased segments to dense LINEAR samples at 30 fps**, where a segment counts as eased when **ANY** channel is non-linear (`isLinearSegmentEasing`); the three channels share one sample-time set, so a scale-only ease densifies the whole segment. On import the curves are recovered by **per-channel reverse-fitting** against the same tolerances (pos 4 mm, rot 2.5°, scale 3e-3), with the per-joint dense-key fallback unchanged (kept losslessly when no fit passes the gate). flexo exports **only `interpolation: 'LINEAR'`**.
 
 **Rest-anchor assumption ("deploy clips are modeled deployed = last keyframe"):**
 
@@ -74,7 +74,7 @@ GameData schema (`KeyframeAnimationModule`) and the bone/transform math are unch
 
 1. **Directly-animated SubPart node = silent no-op** (a node with channels is excluded from `PartLookup`). Every mover MUST be a non-animated leaf under a joint.
 2. **Leaf must have non-empty `Name` === instance Id**, or it isn't registered — this is _why_ flexo hand-rolls the GLB exporter (three.js `GLTFExporter` prunes such nodes).
-3. **Importer interpolation coverage is partial**: flexo handles only FLOAT accessors + LINEAR/STEP. KSA _does_ support **CubicSpline** → a CubicSpline-authored clip would be mis-decoded (silent corruption, not an error). Pre-existing; unverifiable from snapshots (GLBs not shipped).
+3. **CubicSpline clips import APPROXIMATED, not corrupted** (was: silent corruption). KSA supports **CubicSpline** (`KeyframeAnimationData.cs` `SampleType {Linear, Step, CubicSpline}`); glTF stores such a sampler's output as `[inTangent, value, outTangent]` triplets (3× the input count). `decodeAnimationGlb` now **detects** `interpolation === 'CUBICSPLINE'`, keeps only the middle (VALUE) row of each triplet and treats the segments as LINEAR — so the keyframes are exact and only the in-between motion is approximated (the tangents are dropped; flexo has no tangent model). The clip is flagged `PartAnimation.cubicSplineApprox`, which feeds the KSA import report and the clip diagnostics (`computeClipIssues` → "clip imported with CubicSpline sampling — approximated"). Still unverifiable against a real asset from the snapshots (the `Animations/*.glb` are not shipped in the decomp); every shipped clip checked through flexo's mirror is LINEAR. flexo still handles FLOAT accessors only.
 4. Only `animations[0]` is read on both sides.
 5. Wrong rest anchor re-applies the deploy (the reason `restKeyframeId` exists).
 

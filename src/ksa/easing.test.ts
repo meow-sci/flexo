@@ -4,6 +4,11 @@ import {
   evalEasing,
   evalBezierPoints,
   isLinearEasing,
+  isLinearSegmentEasing,
+  normalizeSegmentEasing,
+  segmentEasingUniform,
+  uniformSegmentEasing,
+  EASING_CHANNELS,
   EASING_PRESETS,
 } from './easing';
 import type { EasingConfig } from './types';
@@ -61,6 +66,65 @@ describe('evalEasing', () => {
   it('falls back to linear on NaN / unknown control points', () => {
     expect(evalEasing({ kind: 'cubicBezier', x1: NaN, y1: 0, x2: 1, y2: 1 }, 0.3)).toBe(0.3);
     expect(isLinearEasing({ kind: 'cubicBezier', x1: NaN, y1: 0, x2: 1, y2: 1 })).toBe(true);
+  });
+});
+
+describe('per-channel segment easing helpers', () => {
+  const easeInOut: EasingConfig = { kind: 'preset', preset: 'easeInOut' };
+  const easeIn: EasingConfig = { kind: 'preset', preset: 'easeIn' };
+  const linear: EasingConfig = { kind: 'preset', preset: 'linear' };
+
+  it('enumerates exactly the three pose channels', () => {
+    expect(EASING_CHANNELS).toEqual(['position', 'rotation', 'scale']);
+  });
+
+  it('isLinearSegmentEasing: absent / all-linear true, one eased channel false', () => {
+    expect(isLinearSegmentEasing(undefined)).toBe(true);
+    expect(isLinearSegmentEasing(null)).toBe(true);
+    expect(isLinearSegmentEasing({})).toBe(true);
+    expect(isLinearSegmentEasing({ position: linear, rotation: linear, scale: linear })).toBe(true);
+    expect(isLinearSegmentEasing({ scale: easeInOut })).toBe(false);
+  });
+
+  it('normalizeSegmentEasing drops linear channels and collapses all-absent to undefined', () => {
+    expect(normalizeSegmentEasing(undefined)).toBeUndefined();
+    expect(normalizeSegmentEasing({})).toBeUndefined();
+    expect(normalizeSegmentEasing({ position: linear, rotation: linear })).toBeUndefined();
+    expect(normalizeSegmentEasing({ position: linear, rotation: easeIn })).toEqual({
+      rotation: easeIn,
+    });
+  });
+
+  it('uniformSegmentEasing writes all three channels, linear ⇒ undefined', () => {
+    expect(uniformSegmentEasing(linear)).toBeUndefined();
+    expect(
+      uniformSegmentEasing({ kind: 'cubicBezier', x1: 0, y1: 0, x2: 1, y2: 1 }),
+    ).toBeUndefined();
+    expect(uniformSegmentEasing(easeInOut)).toEqual({
+      position: easeInOut,
+      rotation: easeInOut,
+      scale: easeInOut,
+    });
+  });
+
+  it('segmentEasingUniform resolves shared configs, "mixed", and undefined', () => {
+    expect(segmentEasingUniform(undefined)).toBeUndefined();
+    expect(segmentEasingUniform({})).toBeUndefined();
+    expect(segmentEasingUniform(uniformSegmentEasing(easeInOut))).toEqual(easeInOut);
+    // presets compare by resolved control points, so a preset and its tuple are equal
+    const [x1, y1, x2, y2] = EASING_PRESETS.easeInOut;
+    expect(
+      segmentEasingUniform({
+        position: easeInOut,
+        rotation: { kind: 'cubicBezier', x1, y1, x2, y2 },
+        scale: easeInOut,
+      }),
+    ).toEqual(easeInOut);
+    expect(segmentEasingUniform({ position: easeInOut, rotation: easeIn, scale: easeInOut })).toBe(
+      'mixed',
+    );
+    // one absent channel is linear, so it differs from two eased ones
+    expect(segmentEasingUniform({ position: easeInOut, rotation: easeInOut })).toBe('mixed');
   });
 });
 

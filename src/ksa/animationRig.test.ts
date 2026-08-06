@@ -3,11 +3,19 @@ import * as THREE from 'three';
 import {
   buildAnimationRig,
   previewOverrideMatrix,
+  sampleJointLocal,
   type AnimRig,
   type AnimRigChannel,
 } from './animationRig';
+import { evalEasing, uniformSegmentEasing } from './easing';
 import { matrixFromTransform } from '../three/coords';
-import type { PartAnimation, SubPartPlacement, Transform } from './types';
+import type {
+  EasingConfig,
+  JointSegmentEasing,
+  PartAnimation,
+  SubPartPlacement,
+  Transform,
+} from './types';
 
 /** A Transform with identity defaults, overridden per-axis. */
 function tf(
@@ -188,7 +196,8 @@ describe('buildAnimationRig — kinematic chain (spider leg / FK)', () => {
 
 describe('buildAnimationRig — easing / export re-baking', () => {
   const placement = pl('panel_1', tf({ pos: [1, 0, 0] }));
-  function door(easing?: { kind: 'preset'; preset: 'easeInOut' }): PartAnimation {
+  const EASE_IN_OUT: EasingConfig = { kind: 'preset', preset: 'easeInOut' };
+  function door(easing?: JointSegmentEasing): PartAnimation {
     return {
       id: 'anim_door',
       name: 'Door',
@@ -209,12 +218,9 @@ describe('buildAnimationRig — easing / export re-baking', () => {
   });
 
   it('bakes an eased segment into dense LINEAR samples at ~fps', () => {
-    const rig = buildAnimationRig(
-      door({ kind: 'preset', preset: 'easeInOut' }),
-      [placement],
-      'MyPart',
-      { fps: 30 },
-    );
+    const rig = buildAnimationRig(door(uniformSegmentEasing(EASE_IN_OUT)), [placement], 'MyPart', {
+      fps: 30,
+    });
     const rot = rig.channels.find((c) => c.path === 'rotation')!;
     expect(rot.times.length).toBe(31); // ceil(1*30) subdivisions + 1
     expect(rot.times[0]).toBe(0);
@@ -222,7 +228,7 @@ describe('buildAnimationRig — easing / export re-baking', () => {
   });
 
   it('the dense-baked eased motion reconstructs the editor preview at every t', () => {
-    const anim = door({ kind: 'preset', preset: 'easeInOut' });
+    const anim = door(uniformSegmentEasing(EASE_IN_OUT));
     const rig = buildAnimationRig(anim, [placement], 'MyPart', { fps: 30 });
     // KSA replays the dense channels with LINEAR interpolation; that must match the
     // eased preview formula within the baking density tolerance.
@@ -237,12 +243,120 @@ describe('buildAnimationRig — easing / export re-baking', () => {
   });
 
   it('easing actually changes the motion vs. linear (lags before midpoint)', () => {
-    const eased = door({ kind: 'preset', preset: 'easeInOut' });
+    const eased = door(uniformSegmentEasing(EASE_IN_OUT));
     const linear = door();
     // ease-in-out lags linear in the first half — the panel has swept a smaller angle.
     const e = position(previewOverrideMatrix(eased, 'panel_1', 0.25, placement)!);
     const l = position(previewOverrideMatrix(linear, 'panel_1', 0.25, placement)!);
     // larger remaining x  ⇒ smaller swept angle
     expect(e[0]).toBeGreaterThan(l[0]);
+  });
+
+  // Regression pin for the per-channel flip (P11A.02/P11A.03): a UNIFORM segment must
+  // bake to exactly the values v1's single-alpha sampler produced.
+  it('a uniform eased segment bakes to the v1 single-alpha values (bit-for-bit)', () => {
+    const anim = door(uniformSegmentEasing(EASE_IN_OUT));
+    const rig = buildAnimationRig(anim, [placement], 'MyPart', { fps: 30 });
+    const rot = rig.channels.find((c) => c.path === 'rotation')!;
+    // v1 reference: ONE alpha from the shared config, applied to the whole pose.
+    const q0 = new THREE.Quaternion();
+    const q1 = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI / 2, 0, 'ZYX'));
+    rot.times.forEach((t, i) => {
+      const want = q0.clone().slerp(q1, evalEasing(EASE_IN_OUT, t));
+      const got = new THREE.Quaternion(
+        rot.values[i * 4],
+        rot.values[i * 4 + 1],
+        rot.values[i * 4 + 2],
+        rot.values[i * 4 + 3],
+      );
+      expect(Math.abs(got.dot(want))).toBeCloseTo(1, 12);
+    });
+  });
+});
+
+describe('sampleJointLocal — per-channel easing (three alphas)', () => {
+  // One joint that translates, rotates AND scales over [0,1], with a DIFFERENT easing
+  // per channel: position easeIn, rotation linear (absent), scale easeOut.
+  const easeIn: EasingConfig = { kind: 'preset', preset: 'easeIn' };
+  const easeOut: EasingConfig = { kind: 'preset', preset: 'easeOut' };
+  const anim: PartAnimation = {
+    id: 'anim_pc',
+    name: 'PerChannel',
+    durationSec: 1,
+    mode: 'actuate',
+    joints: [{ id: 'j', name: 'J', parentJointId: null, memberInstanceIds: ['m'] }],
+    keyframes: [
+      {
+        id: 'k0',
+        timeSec: 0,
+        poses: { j: tf() },
+        easings: { j: { position: easeIn, scale: easeOut } },
+      },
+      {
+        id: 'k1',
+        timeSec: 1,
+        poses: { j: tf({ pos: [4, 0, 0], rot: [0, Math.PI / 2, 0], scale: [3, 3, 3] }) },
+      },
+    ],
+    solarTracking: null,
+  };
+
+  it('warps each channel by its own curve (rotation stays linear when absent)', () => {
+    const t = 0.5;
+    const m = sampleJointLocal(anim, 'j', t);
+    const pos = new THREE.Vector3();
+    const quat = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+    m.decompose(pos, quat, scale);
+
+    expect(pos.x).toBeCloseTo(4 * evalEasing(easeIn, t), 10);
+    expect(scale.x).toBeCloseTo(1 + 2 * evalEasing(easeOut, t), 10);
+    // rotation: plain slerp at alpha = t (no warp)
+    const want = new THREE.Quaternion().slerp(
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI / 2, 0, 'ZYX')),
+      t,
+    );
+    expect(Math.abs(quat.dot(want))).toBeCloseTo(1, 10);
+    // and the eased channels genuinely DIFFER from linear (guards a silent no-op)
+    expect(pos.x).not.toBeCloseTo(2, 3);
+    expect(scale.x).not.toBeCloseTo(2, 3);
+  });
+
+  it('is the keyframe pose verbatim at exact keyframe times', () => {
+    expectMatrixClose(sampleJointLocal(anim, 'j', 0), matrixFromTransform(tf()));
+    expectMatrixClose(
+      sampleJointLocal(anim, 'j', 1),
+      matrixFromTransform(tf({ pos: [4, 0, 0], rot: [0, Math.PI / 2, 0], scale: [3, 3, 3] })),
+    );
+  });
+
+  it('densifies a scale-ONLY eased segment (eased = ANY channel non-linear)', () => {
+    const scaleOnly: PartAnimation = {
+      ...anim,
+      keyframes: [{ ...anim.keyframes[0], easings: { j: { scale: easeOut } } }, anim.keyframes[1]],
+    };
+    const rig = buildAnimationRig(scaleOnly, [pl('m', tf())], 'P', { fps: 30 });
+    for (const ch of rig.channels) expect(ch.times.length).toBe(31);
+  });
+
+  it('emits the Part root at identity TRS and omits a non-varying scale channel', () => {
+    const noScale: PartAnimation = {
+      ...anim,
+      keyframes: [
+        { id: 'k0', timeSec: 0, poses: { j: tf() } },
+        { id: 'k1', timeSec: 1, poses: { j: tf({ rot: [0, Math.PI / 2, 0] }) } },
+      ],
+    };
+    const rig = buildAnimationRig(noScale, [pl('m', tf())], 'P');
+    const root = rig.nodes[rig.roots[0]];
+    expect(root.name).toBe('P');
+    expect(root.translation).toEqual([0, 0, 0]);
+    expect(root.rotation).toEqual([0, 0, 0, 1]);
+    expect(root.scale).toEqual([1, 1, 1]);
+    expect(rig.channels.some((c) => c.path === 'scale')).toBe(false);
+    // but a varying scale DOES get a channel
+    expect(
+      buildAnimationRig(anim, [pl('m', tf())], 'P').channels.some((c) => c.path === 'scale'),
+    ).toBe(true);
   });
 });

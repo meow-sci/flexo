@@ -1,31 +1,72 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as THREE from 'three';
-import { $part, undo, redo, importHistory, clearSelection, select } from './editorStore';
+import {
+  $part,
+  undo,
+  redo,
+  exportHistory,
+  importHistory,
+  clearSelection,
+  select,
+} from './editorStore';
 import { $mode, setMode } from './modeStore';
+import { $toolMode } from './editorStore';
 import { createEmptyPart } from '../ksa/types';
 import type { PartAnimation, SubPartPlacement, Transform } from '../ksa/types';
 import { matrixFromTransform } from '../three/coords';
-import { jointWorld, previewOverrideMatrix } from '../ksa/animationRig';
+import {
+  jointWorld,
+  previewOverrideMatrix,
+  restAnchorTime,
+  sampleJointLocal,
+} from '../ksa/animationRig';
 import {
   $activeAnimationId,
   $activeJointId,
   $editKeyframeId,
+  $animClipboard,
   $animPreviewU,
   $animPlaying,
   $animScrubbing,
   $isPoseEditing,
+  $membersView,
+  $playheadParked,
+  $playheadSec,
+  $timelineSelection,
+  $workingPivot,
   addAnimation,
   addJoint,
   attachToJoint,
   addKeyframe,
+  beginScrub,
+  closeMembersView,
+  copyKeyframes,
+  duplicateAnimation,
+  endScrub,
+  initAnimationStore,
+  moveKeyframes,
+  openMembersView,
+  parkPlayhead,
+  pasteKeyframesAtPlayhead,
+  pausePreview,
+  removeJoint,
   removeKeyframe,
+  removeKeyframes,
+  returnToRest,
+  scrubTo,
+  selectKeyframeForEditing,
+  setJointChannelEasing,
   setJointPose,
   setJointParent,
   setAnimationDuration,
   setJointPivot,
+  setLatched,
+  setRestAnchor,
   moveJointPivot,
   setJointSegmentEasing,
   setSegmentEasingAllJoints,
+  stepPlayhead,
+  stepToKeyframe,
 } from './animationStore';
 
 const anim0 = () => $part.get().animations[0];
@@ -130,6 +171,7 @@ describe('animationStore', () => {
   });
 
   it('attaching to a joint moves the part off any other joint in the same animation', () => {
+    $part.set({ ...createEmptyPart(), placements: [pl('panel_1', tf())] });
     const aid = addAnimation('A');
     const j1 = addJoint(aid, 'J1');
     const j2 = addJoint(aid, 'J2');
@@ -187,6 +229,308 @@ describe('animationStore', () => {
     const jid = addJoint(aid, 'J');
     setJointParent(aid, jid, jid);
     expect(anim0().joints.find((j) => j.id === jid)!.parentJointId).toBeNull();
+  });
+});
+
+describe('animationStore — clip/joint/keyframe actions v2 (§4.3)', () => {
+  it('duplicateAnimation clones with fresh ids and remaps every reference (one undo step)', () => {
+    const { aid, jid, kid } = setupDoor();
+    setJointSegmentEasing(aid, restKeyframeId(anim0()), jid, {
+      kind: 'preset',
+      preset: 'easeInOut',
+    });
+    setRestAnchor(aid, kid);
+    const before = $part.get().animations.length;
+
+    const copyId = duplicateAnimation(aid)!;
+    const copy = $part.get().animations.find((a) => a.id === copyId)!;
+    const src = $part.get().animations.find((a) => a.id === aid)!;
+    expect($part.get().animations).toHaveLength(before + 1);
+    expect(copy.name).toBe('Door (copy)');
+    expect(copy.id).not.toBe(src.id);
+    expect(copy.joints[0].id).not.toBe(src.joints[0].id);
+    expect(copy.keyframes.map((k) => k.id)).not.toEqual(src.keyframes.map((k) => k.id));
+    // pose + easing maps are keyed by the NEW joint id, and the anchor points at the copy's kf
+    const copyJoint = copy.joints[0].id;
+    expect(copy.keyframes.every((k) => !!k.poses[copyJoint])).toBe(true);
+    const copyRest = copy.keyframes.find((k) => k.timeSec === 0)!;
+    expect(copyRest.easings?.[copyJoint]).toBeTruthy();
+    expect(copy.keyframes.some((k) => k.id === copy.restKeyframeId)).toBe(true);
+    // members are the same placements (verbatim)
+    expect(copy.joints[0].memberInstanceIds).toEqual(['panel_1']);
+    expect($activeAnimationId.get()).toBe(copyId);
+    undo();
+    expect($part.get().animations).toHaveLength(before);
+  });
+
+  it("setAnimationDuration 'keepTimes' leaves times alone and clamps to the last keyframe", () => {
+    const { aid } = setupDoor(); // keyframes at 0 and 1
+    setAnimationDuration(aid, 3, 'keepTimes');
+    expect(anim0().durationSec).toBeCloseTo(3);
+    expect(
+      anim0()
+        .keyframes.map((k) => k.timeSec)
+        .sort(),
+    ).toEqual([0, 1]);
+    setAnimationDuration(aid, 0.5, 'keepTimes'); // below the last keyframe → clamps up
+    expect(anim0().durationSec).toBeCloseTo(1);
+  });
+
+  it('removeKeyframes refuses t=0 and the rest anchor, and batches into ONE undo step', () => {
+    const { aid, kid } = setupDoor();
+    const mid = addKeyframe(aid, 0.5);
+    setRestAnchor(aid, kid); // deploy-style: the anchor is the LAST column
+    const restId = restKeyframeId(anim0());
+    const historyBefore = exportHistory().undo.length;
+
+    const res = removeKeyframes(aid, [restId, kid, mid]);
+    expect(res).toEqual({ removed: 1, skipped: 2 });
+    expect(
+      anim0()
+        .keyframes.map((k) => k.id)
+        .sort(),
+    ).toEqual([restId, kid].sort());
+    expect(exportHistory().undo.length).toBe(historyBefore + 1);
+  });
+
+  it('moveKeyframes keeps relative offsets under clamping and blocks t=0', () => {
+    const { aid } = setupDoor(); // duration 1, columns at 0 and 1
+    const a = addKeyframe(aid, 0.3);
+    const b = addKeyframe(aid, 0.5);
+    const restId = restKeyframeId(anim0());
+    const res = moveKeyframes(aid, [restId, a, b], 0.9); // clamped by b hitting duration
+    expect(res.blocked).toBe(true); // t=0 was in the set
+    const at = (id: string) => anim0().keyframes.find((k) => k.id === id)!.timeSec;
+    expect(at(restId)).toBe(0);
+    expect(at(b)).toBeCloseTo(1);
+    expect(at(b) - at(a)).toBeCloseTo(0.2); // offset preserved
+  });
+
+  it('copy/paste lands at the playhead, replaces collisions, and seeds missing joints', () => {
+    const { aid, jid, kid } = setupDoor();
+    const other = addJoint(aid, 'Other');
+    copyKeyframes([kid]);
+    expect($animClipboard.get()!.columns).toHaveLength(1);
+
+    $activeAnimationId.set(aid);
+    parkPlayhead(0.5);
+    const historyBefore = exportHistory().undo.length;
+    const res = pasteKeyframesAtPlayhead();
+    expect(res.pasted).toBe(1);
+    expect(exportHistory().undo.length).toBe(historyBefore + 1);
+    const pasted = anim0().keyframes.find((k) => Math.abs(k.timeSec - 0.5) < 1e-9)!;
+    // the copied joint's pose came from the clipboard verbatim…
+    expect(pasted.poses[jid].rotation.y).toBeCloseTo(Math.PI / 2);
+    // …and the joint the clipboard also carried stays on-curve
+    expect(pasted.poses[other]).toBeTruthy();
+
+    // pasting onto an existing column REPLACES it, keeping its id
+    parkPlayhead(0.5);
+    pasteKeyframesAtPlayhead();
+    expect(anim0().keyframes.filter((k) => Math.abs(k.timeSec - 0.5) < 1e-9)).toHaveLength(1);
+    expect(anim0().keyframes.find((k) => Math.abs(k.timeSec - 0.5) < 1e-9)!.id).toBe(pasted.id);
+  });
+
+  it('setRestAnchor stores the id, and deletes the field when pointed at the earliest', () => {
+    const { aid, kid } = setupDoor();
+    setRestAnchor(aid, kid);
+    expect(anim0().restKeyframeId).toBe(kid);
+    setRestAnchor(aid, restKeyframeId(anim0()));
+    expect(anim0().restKeyframeId).toBeUndefined();
+  });
+
+  it('setJointChannelEasing writes one channel at a time (streaming, no undo push)', () => {
+    const { aid, jid } = setupDoor();
+    const restId = restKeyframeId(anim0());
+    const historyBefore = exportHistory().undo.length;
+
+    setJointChannelEasing(aid, restId, jid, 'rotation', { kind: 'preset', preset: 'easeIn' });
+    let seg = anim0().keyframes.find((k) => k.id === restId)!.easings![jid];
+    expect(seg).toEqual({ rotation: { kind: 'preset', preset: 'easeIn' } });
+
+    setJointChannelEasing(aid, restId, jid, 'scale', { kind: 'preset', preset: 'easeOut' });
+    seg = anim0().keyframes.find((k) => k.id === restId)!.easings![jid];
+    expect(seg.position).toBeUndefined();
+    expect(seg.rotation).toEqual({ kind: 'preset', preset: 'easeIn' });
+    expect(seg.scale).toEqual({ kind: 'preset', preset: 'easeOut' });
+
+    setJointChannelEasing(aid, restId, jid, 'uniform', { kind: 'preset', preset: 'easeInOut' });
+    seg = anim0().keyframes.find((k) => k.id === restId)!.easings![jid];
+    expect(seg.position).toEqual({ kind: 'preset', preset: 'easeInOut' });
+    expect(seg.scale).toEqual({ kind: 'preset', preset: 'easeInOut' });
+
+    setJointChannelEasing(aid, restId, jid, 'uniform', { kind: 'preset', preset: 'linear' });
+    expect(anim0().keyframes.find((k) => k.id === restId)!.easings).toBeUndefined();
+    expect(exportHistory().undo.length).toBe(historyBefore); // streaming: no internal push
+  });
+
+  it('attachToJoint skips ids that are not SubPart placements (connectors/kittens)', () => {
+    const { aid, jid } = setupDoor();
+    const res = attachToJoint(aid, jid, ['panel_1', '_connector1']);
+    expect(res).toEqual({ attached: 1, skipped: 1 });
+    expect(anim0().joints.find((j) => j.id === jid)!.memberInstanceIds).toEqual(['panel_1']);
+  });
+});
+
+describe('animationStore — playback state machine (§10)', () => {
+  /** A deploy-style clip: rest anchored on the LAST keyframe (imported KSA convention). */
+  function setupDeploy() {
+    const { aid, jid, kid } = setupDoor();
+    setRestAnchor(aid, kid); // anchor = the t=1 column
+    $activeAnimationId.set(aid);
+    returnToRest(); // setupDoor's addKeyframe leaves a pin behind
+    return { aid, jid, kid };
+  }
+
+  it('selectKeyframeForEditing pins + parks and never writes $toolMode', () => {
+    const { aid, kid } = setupDoor();
+    $activeAnimationId.set(aid);
+    $toolMode.set('scale');
+    selectKeyframeForEditing(aid, kid);
+    expect($editKeyframeId.get()).toBe(kid);
+    expect($playheadSec.get()).toBeCloseTo(1);
+    expect($playheadParked.get()).toBe(true);
+    expect($toolMode.get()).toBe('scale'); // v1's auto tool pick is gone
+  });
+
+  it('parkPlayhead clears the pin and clamps to the clip', () => {
+    const { aid, kid } = setupDoor();
+    $activeAnimationId.set(aid);
+    selectKeyframeForEditing(aid, kid);
+    parkPlayhead(0.4);
+    expect($editKeyframeId.get()).toBeNull();
+    expect($playheadParked.get()).toBe(true);
+    expect($playheadSec.get()).toBeCloseTo(0.4);
+    parkPlayhead(99);
+    expect($playheadSec.get()).toBeCloseTo(1); // durationSec
+  });
+
+  it('a scrub that started PINNED re-pins on release — latched or not', () => {
+    for (const latched of [false, true]) {
+      const { aid, kid } = setupDoor();
+      $activeAnimationId.set(aid);
+      setLatched(latched);
+      selectKeyframeForEditing(aid, kid);
+      beginScrub();
+      scrubTo(0.2);
+      expect($animScrubbing.get()).toBe(true);
+      endScrub();
+      expect($editKeyframeId.get()).toBe(kid);
+      expect($playheadSec.get()).toBeCloseTo(1);
+      expect($playheadParked.get()).toBe(true);
+      expect($animScrubbing.get()).toBe(false);
+    }
+    setLatched(false);
+  });
+
+  it('parked + unlatched: release springs back to the pre-drag park time', () => {
+    const { aid } = setupDoor();
+    $activeAnimationId.set(aid);
+    parkPlayhead(0.6);
+    beginScrub();
+    scrubTo(0.1);
+    endScrub();
+    expect($playheadSec.get()).toBeCloseTo(0.6);
+    expect($playheadParked.get()).toBe(true);
+  });
+
+  it('un-parked + unlatched: release returns to the REST ANCHOR (not t=0)', () => {
+    const { aid } = setupDeploy();
+    expect(restAnchorTime(anim0())).toBeCloseTo(1);
+    beginScrub();
+    scrubTo(0.3);
+    endScrub();
+    expect($playheadParked.get()).toBe(false);
+    expect($playheadSec.get()).toBeCloseTo(1); // the modeled (deployed) end
+    expect($activeAnimationId.get()).toBe(aid);
+  });
+
+  it('latched + no pin: release parks at the release position', () => {
+    const { aid } = setupDoor();
+    $activeAnimationId.set(aid);
+    returnToRest(); // no pin
+    setLatched(true);
+    beginScrub();
+    scrubTo(0.35);
+    endScrub();
+    expect($playheadParked.get()).toBe(true);
+    expect($playheadSec.get()).toBeCloseTo(0.35);
+    setLatched(false);
+  });
+
+  it('pausePreview keeps a pin at its own time and drops one elsewhere', () => {
+    const { aid, kid } = setupDoor();
+    $activeAnimationId.set(aid);
+    selectKeyframeForEditing(aid, kid);
+    pausePreview(); // playhead is still at the pin time
+    expect($editKeyframeId.get()).toBe(kid);
+    $playheadSec.set(0.25);
+    pausePreview();
+    expect($editKeyframeId.get()).toBeNull();
+    expect($playheadParked.get()).toBe(true);
+  });
+
+  it('stepToKeyframe pins the neighbouring column and does not wrap', () => {
+    const { aid, kid } = setupDoor();
+    $activeAnimationId.set(aid);
+    const restId = restKeyframeId(anim0());
+    returnToRest(); // playhead at t=0
+    stepToKeyframe(1);
+    expect($editKeyframeId.get()).toBe(kid);
+    stepToKeyframe(1); // no later column — stays put
+    expect($editKeyframeId.get()).toBe(kid);
+    stepToKeyframe(-1);
+    expect($editKeyframeId.get()).toBe(restId);
+    stepToKeyframe(-1);
+    expect($editKeyframeId.get()).toBe(restId);
+  });
+
+  it('stepPlayhead moves by whole bake frames and parks', () => {
+    const { aid } = setupDoor();
+    $activeAnimationId.set(aid);
+    returnToRest();
+    stepPlayhead(3);
+    expect($playheadSec.get()).toBeCloseTo(3 / 30);
+    expect($playheadParked.get()).toBe(true);
+  });
+
+  it('members view opens on the active joint and closes clean', () => {
+    const { aid, jid } = setupDoor();
+    $activeAnimationId.set(aid);
+    $activeJointId.set(jid);
+    openMembersView();
+    expect($membersView.get()).toEqual({ open: true, targetJointId: jid });
+    closeMembersView();
+    expect($membersView.get()).toEqual({ open: false, targetJointId: null });
+  });
+});
+
+describe('animationStore — v2 atom clamping', () => {
+  it('drops dead keyframe ids, clamps the playhead, and clears a dead working pivot', () => {
+    initAnimationStore();
+    $part.set({ ...createEmptyPart(), placements: [pl('panel_1', tf({ pos: [1, 0, 0] }))] });
+    const aid = addAnimation('Door');
+    const jid = addJoint(aid, 'Hinge');
+    const kid = addKeyframe(aid, 1);
+    setAnimationDuration(aid, 2); // times rescale: the added column is now at t=2
+
+    $timelineSelection.set([restKeyframeId(anim0()), kid]);
+    $membersView.set({ open: true, targetJointId: jid });
+    $workingPivot.set({
+      kind: 'subpart',
+      position: { x: 0, y: 0, z: 0 },
+      sourceInstanceId: 'gone',
+    });
+    $playheadSec.set(2);
+
+    removeKeyframe(aid, kid);
+
+    expect($timelineSelection.get()).toEqual([restKeyframeId(anim0())]);
+    expect($workingPivot.get()).toBeNull();
+    expect($playheadSec.get()).toBeLessThanOrEqual(anim0().durationSec);
+
+    removeJoint(aid, jid);
+    expect($membersView.get()).toEqual({ open: true, targetJointId: null }); // stays OPEN
   });
 });
 
@@ -313,7 +657,12 @@ describe('animationStore — joint pivots', () => {
       const restId = restKeyframeId(anim0());
       setJointSegmentEasing(aid, restId, jid, { kind: 'preset', preset: 'easeInOut' });
       const rest = anim0().keyframes.find((k) => k.id === restId)!;
-      expect(rest.easings?.[jid]).toEqual({ kind: 'preset', preset: 'easeInOut' });
+      // uniform authoring writes the SAME config to all three channels (design §3)
+      expect(rest.easings?.[jid]).toEqual({
+        position: { kind: 'preset', preset: 'easeInOut' },
+        rotation: { kind: 'preset', preset: 'easeInOut' },
+        scale: { kind: 'preset', preset: 'easeInOut' },
+      });
     });
 
     it('clears the entry (and the map) when set to linear — keeps export byte-identical', () => {
@@ -336,17 +685,54 @@ describe('animationStore — joint pivots', () => {
       const restId = restKeyframeId(anim0());
       setSegmentEasingAllJoints(aid, restId, { kind: 'preset', preset: 'easeOut' });
       const rest = anim0().keyframes.find((k) => k.id === restId)!;
-      expect(rest.easings?.[hip]).toEqual({ kind: 'preset', preset: 'easeOut' });
-      expect(rest.easings?.[knee]).toEqual({ kind: 'preset', preset: 'easeOut' });
+      const eased = { kind: 'preset', preset: 'easeOut' };
+      expect(rest.easings?.[hip]).toEqual({ position: eased, rotation: eased, scale: eased });
+      expect(rest.easings?.[knee]).toEqual({ position: eased, rotation: eased, scale: eased });
     });
 
-    it('clears the preceding segment easing when a keyframe splits it', () => {
-      const { aid, jid } = setupDoor();
-      const restId = restKeyframeId(anim0());
-      setJointSegmentEasing(aid, restId, jid, { kind: 'preset', preset: 'easeInOut' });
-      addKeyframe(aid, 0.5); // splits the [0 → 1] segment
-      const rest = anim0().keyframes.find((k) => k.id === restId)!;
-      expect(rest.easings).toBeUndefined();
+    it('inserting a keyframe preserves the motion exactly (exact bézier split)', () => {
+      for (const cfg of [
+        { kind: 'preset', preset: 'easeInOut' } as const,
+        { kind: 'cubicBezier', x1: 0.34, y1: 1.4, x2: 0.64, y2: 1 } as const, // overshoot
+      ]) {
+        const { aid, jid, kid } = setupDoor();
+        // give the segment BOTH a position and a rotation delta so all channels matter
+        setJointPose(aid, kid, jid, tf({ pos: [0, 0.7, 0.3], rot: [0, Math.PI / 2, 0] }));
+        const restId = restKeyframeId(anim0());
+        setJointSegmentEasing(aid, restId, jid, cfg);
+
+        const ts = Array.from({ length: 97 }, (_, i) => i / 96);
+        const before = ts.map((t) => sampleJointLocal(anim0(), jid, t));
+        addKeyframe(aid, 0.37); // duration is 1s
+        const after = ts.map((t) => sampleJointLocal(anim0(), jid, t));
+
+        // the easing survived, split across the two sub-segments
+        const rest = anim0().keyframes.find((k) => k.id === restId)!;
+        expect(rest.easings?.[jid]).toBeTruthy();
+        expect(anim0().keyframes.find((k) => k.timeSec === 0.37)!.easings?.[jid]).toBeTruthy();
+
+        for (let i = 0; i < ts.length; i++) {
+          const pa = new THREE.Vector3();
+          const qa = new THREE.Quaternion();
+          const pb = new THREE.Vector3();
+          const qb = new THREE.Quaternion();
+          before[i].decompose(pa, qa, new THREE.Vector3());
+          after[i].decompose(pb, qb, new THREE.Vector3());
+          expect(pa.distanceTo(pb)).toBeLessThan(1e-5);
+          const deg = 2 * Math.acos(Math.min(1, Math.abs(qa.dot(qb)))) * (180 / Math.PI);
+          expect(deg).toBeLessThan(0.01);
+        }
+      }
+    });
+
+    it('addKeyframe within 1 ms of an existing column is a no-op returning its id', () => {
+      const { aid, kid } = setupDoor();
+      const historyBefore = exportHistory().undo.length;
+      const again = addKeyframe(aid, 1.0005);
+      expect(again).toBe(kid);
+      expect(anim0().keyframes).toHaveLength(2);
+      expect(exportHistory().undo.length).toBe(historyBefore);
+      expect($editKeyframeId.get()).toBe(kid);
     });
   });
 });

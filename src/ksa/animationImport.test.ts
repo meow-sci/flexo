@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
+import * as THREE from 'three';
+import { matrixFromTransform } from '../three/coords';
 import { buildAnimationRig, previewOverrideMatrix } from './animationRig';
 import { buildAnimationGlb } from './exportAnimationGlb';
 import { decodeAnimationGlb, remapImportedAnimation, parseGlb } from './animationImport';
@@ -106,6 +108,111 @@ describe('decodeAnimationGlb — export → decode round-trip', () => {
       subPartInstanceId: 'newfoot',
       excludeInstanceIds: [],
     });
+  });
+});
+
+describe('decodeAnimationGlb — CUBICSPLINE samplers (approximated, flagged)', () => {
+  /** Packs a hand-written glTF JSON + float payload into a 2-chunk binary GLB. */
+  function makeGlb(json: object, floats: number[]): ArrayBuffer {
+    const pad4 = (n: number) => (4 - (n % 4)) % 4;
+    const jsonBytes = new TextEncoder().encode(JSON.stringify(json));
+    const jsonLen = jsonBytes.length + pad4(jsonBytes.length);
+    const bin = new Float32Array(floats);
+    const binBytes = new Uint8Array(bin.buffer);
+    const total = 12 + 8 + jsonLen + 8 + binBytes.length;
+    const out = new Uint8Array(total);
+    const dv = new DataView(out.buffer);
+    dv.setUint32(0, 0x46546c67, true); // 'glTF'
+    dv.setUint32(4, 2, true);
+    dv.setUint32(8, total, true);
+    dv.setUint32(12, jsonLen, true);
+    dv.setUint32(16, 0x4e4f534a, true); // JSON
+    out.set(jsonBytes, 20);
+    out.fill(0x20, 20 + jsonBytes.length, 20 + jsonLen); // JSON pads with spaces
+    dv.setUint32(20 + jsonLen, binBytes.length, true);
+    dv.setUint32(24 + jsonLen, 0x004e4942, true); // BIN
+    out.set(binBytes, 28 + jsonLen);
+    return out.buffer;
+  }
+
+  const S = Math.SQRT1_2; // sin/cos 45° — a 90° turn about Y
+  const BOGUS = 9; // tangent slots: if the decoder read these, the pose would be garbage
+  const tangent = [BOGUS, BOGUS, BOGUS, BOGUS];
+  const floats = [
+    0,
+    1, // input times
+    // key 0 triplet: inTangent, VALUE (identity), outTangent
+    ...tangent,
+    0,
+    0,
+    0,
+    1,
+    ...tangent,
+    // key 1 triplet: inTangent, VALUE (90° about Y), outTangent
+    ...tangent,
+    0,
+    S,
+    0,
+    S,
+    ...tangent,
+  ];
+  const gltf = (interpolation: string, values: number[]) => ({
+    scene: 0,
+    scenes: [{ nodes: [0] }],
+    nodes: [
+      { name: 'Part', children: [1] },
+      { name: 'jt', children: [2] },
+      { name: 'foot_1', translation: [2, 0, 0] },
+    ],
+    buffers: [{ byteLength: values.length * 4 }],
+    bufferViews: [
+      { buffer: 0, byteOffset: 0, byteLength: 8 },
+      { buffer: 0, byteOffset: 8, byteLength: (values.length - 2) * 4 },
+    ],
+    accessors: [
+      { bufferView: 0, componentType: 5126, count: 2, type: 'SCALAR' },
+      { bufferView: 1, componentType: 5126, count: (values.length - 2) / 4, type: 'VEC4' },
+    ],
+    animations: [
+      {
+        samplers: [{ input: 0, output: 1, interpolation }],
+        channels: [{ sampler: 0, target: { node: 1, path: 'rotation' } }],
+      },
+    ],
+  });
+
+  it('decodes the keyframe VALUES (not the tangents) and flags the clip', () => {
+    const d = decodeAnimationGlb(makeGlb(gltf('CUBICSPLINE', floats), floats), {
+      instanceIds: new Set(['foot_1']),
+      module: MODULE,
+    })!;
+    expect(d.cubicSplineApprox).toBe(true);
+    expect(d.keyframeTimes).toEqual([0, 1]);
+    const q = (i: number) => {
+      const out = new THREE.Quaternion();
+      matrixFromTransform(d.joints[0].poses[i]).decompose(
+        new THREE.Vector3(),
+        out,
+        new THREE.Vector3(),
+      );
+      return out;
+    };
+    expect(Math.abs(q(0).dot(new THREE.Quaternion(0, 0, 0, 1)))).toBeCloseTo(1, 5);
+    expect(Math.abs(q(1).dot(new THREE.Quaternion(0, S, 0, S)))).toBeCloseTo(1, 5);
+    // the flag rides through the remap onto the document model
+    const remapped = remapImportedAnimation(d, new Map([['foot_1', 'foot_1']]), counterId());
+    expect(remapped.cubicSplineApprox).toBe(true);
+  });
+
+  it('a LINEAR clip is NOT flagged', () => {
+    const linear = [0, 1, 0, 0, 0, 1, 0, S, 0, S];
+    const d = decodeAnimationGlb(makeGlb(gltf('LINEAR', linear), linear), {
+      instanceIds: new Set(['foot_1']),
+      module: MODULE,
+    })!;
+    expect(d.cubicSplineApprox).toBe(false);
+    const remapped = remapImportedAnimation(d, new Map([['foot_1', 'foot_1']]), counterId());
+    expect(remapped.cubicSplineApprox).toBeUndefined();
   });
 });
 

@@ -20,8 +20,10 @@ import type {
   EulerXYZ,
   Generator,
   Gimbal,
+  EasingChannel,
   ImportedMeshSource,
   IvaSeat,
+  JointSegmentEasing,
   KittenInstance,
   KittenMeshSource,
   Layer,
@@ -62,6 +64,7 @@ import {
   createSubPartGameData,
   meshKind,
 } from '../ksa/types';
+import { normalizeSegmentEasing } from '../ksa/easing';
 import type { ProjectExportEnvelope } from './projectTransfer';
 
 /**
@@ -98,7 +101,11 @@ export const PROJECT_EXPORT_FORMAT = 'flexo-project';
 // its own `// vN:` line above. Bumping needlessly makes every payload already in the wild —
 // saved JSON files, pasted share links — unopenable.
 // Per the no-migration rule, older payloads are REJECTED on import, never converted.
-export const PROJECT_EXPORT_VERSION = 8;
+// v9: per-channel keyframe easing — CKeyframe.es values change shape from CEasing to
+// {p?,r?,s?} (BREAKING: a v8 `es` value carries ONE easing meant for the whole pose, and
+// decoding it as a per-channel record would silently drop it to LINEAR motion), plus
+// additive CAnimation.cs (CubicSpline-approximated import flag).
+export const PROJECT_EXPORT_VERSION = 9;
 
 /**
  * COMPACT PROJECT CODEC — the single wire format for everything that serializes a
@@ -1269,11 +1276,41 @@ function decEasing(c: CEasing): EasingConfig {
   return { kind: 'preset', preset: ('e' in c ? str(c.e, 'linear') : 'linear') as EasingPreset };
 }
 
+/** Per-channel easing: p=position, r=rotation, s=scale; absent channel = linear. */
+type CSegEasing = { p?: CEasing; r?: CEasing; s?: CEasing };
+
+/** Wire key ⇄ channel name; the ONE place the two orders are tied together. */
+const SEG_EASING_KEYS: readonly [keyof CSegEasing, EasingChannel][] = [
+  ['p', 'position'],
+  ['r', 'rotation'],
+  ['s', 'scale'],
+];
+
+function encSegEasing(seg: JointSegmentEasing): CSegEasing | undefined {
+  const norm = normalizeSegmentEasing(seg);
+  if (!norm) return undefined;
+  const o: CSegEasing = {};
+  for (const [key, ch] of SEG_EASING_KEYS) {
+    const cfg = norm[ch];
+    if (cfg) o[key] = encEasing(cfg);
+  }
+  return Object.keys(o).length ? o : undefined;
+}
+
+function decSegEasing(c: CSegEasing): JointSegmentEasing | undefined {
+  const seg: JointSegmentEasing = {};
+  for (const [key, ch] of SEG_EASING_KEYS) {
+    const e = c?.[key];
+    if (e && typeof e === 'object') seg[ch] = decEasing(e as CEasing);
+  }
+  return normalizeSegmentEasing(seg);
+}
+
 interface CKeyframe {
   id: string;
   t: number; // timeSec
   ps: Record<string, CTransform>; // poses keyed by jointId
-  es?: Record<string, CEasing>; // easings keyed by jointId
+  es?: Record<string, CSegEasing>; // easings keyed by jointId (per-channel since v9)
 }
 
 function encKeyframe(kf: AnimationKeyframe): CKeyframe {
@@ -1281,9 +1318,12 @@ function encKeyframe(kf: AnimationKeyframe): CKeyframe {
   for (const [jointId, pose] of Object.entries(kf.poses)) ps[jointId] = encTransform(pose);
   const o: CKeyframe = { id: kf.id, t: round(kf.timeSec), ps };
   if (kf.easings && Object.keys(kf.easings).length) {
-    const es: Record<string, CEasing> = {};
-    for (const [jointId, e] of Object.entries(kf.easings)) es[jointId] = encEasing(e);
-    o.es = es;
+    const es: Record<string, CSegEasing> = {};
+    for (const [jointId, seg] of Object.entries(kf.easings)) {
+      const enc = encSegEasing(seg);
+      if (enc) es[jointId] = enc;
+    }
+    if (Object.keys(es).length) o.es = es;
   }
   return o;
 }
@@ -1295,9 +1335,12 @@ function decKeyframe(c: CKeyframe): AnimationKeyframe {
   }
   const kf: AnimationKeyframe = { id: str(c.id), timeSec: num(c.t), poses };
   if (c.es && Object.keys(c.es).length) {
-    const easings: Record<string, EasingConfig> = {};
-    for (const [jointId, e] of Object.entries(c.es)) easings[jointId] = decEasing(e as CEasing);
-    kf.easings = easings;
+    const easings: Record<string, JointSegmentEasing> = {};
+    for (const [jointId, e] of Object.entries(c.es)) {
+      const seg = decSegEasing(e as CSegEasing);
+      if (seg) easings[jointId] = seg;
+    }
+    if (Object.keys(easings).length) kf.easings = easings;
   }
   return kf;
 }
@@ -1310,6 +1353,7 @@ interface CAnimation {
   j: CJoint[]; // joints
   kf: CKeyframe[]; // keyframes
   rk?: string; // restKeyframeId
+  cs?: 1; // cubicSplineApprox (imported from CUBICSPLINE samplers ⇒ approximated)
   st?: { dps: number; sub: string; ex: string[] }; // solarTracking
 }
 
@@ -1323,6 +1367,7 @@ function encAnimation(a: PartAnimation): CAnimation {
   };
   if (a.mode === 'deployRetract') o.dr = 1;
   if (a.restKeyframeId) o.rk = a.restKeyframeId;
+  if (a.cubicSplineApprox) o.cs = 1;
   if (a.solarTracking) {
     o.st = {
       dps: round(a.solarTracking.degreesPerSecond),
@@ -1342,6 +1387,7 @@ function decAnimation(c: CAnimation): PartAnimation {
     joints: arr<CJoint>(c.j).map(decJoint),
     keyframes: arr<CKeyframe>(c.kf).map(decKeyframe),
     ...(c.rk ? { restKeyframeId: str(c.rk) } : {}),
+    ...(c.cs ? { cubicSplineApprox: true as const } : {}),
     solarTracking: c.st
       ? {
           degreesPerSecond: num(c.st.dps),

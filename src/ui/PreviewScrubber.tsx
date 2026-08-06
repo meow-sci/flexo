@@ -6,10 +6,13 @@ import {
   $animScrubbing,
   $animPlaying,
   $editKeyframeId,
+  $playheadParked,
+  $playheadSec,
   playAnimationPreview,
   stopAnimationPreview,
   cancelPlayback,
 } from '../state/animationStore';
+import { restAnchorTime } from '../ksa/animationRig';
 import type { PartAnimation } from '../ksa/types';
 
 /**
@@ -37,13 +40,17 @@ export function PreviewScrubber({ anim, className }: { anim: PartAnimation; clas
           if ($animPlaying.get()) cancelPlayback();
           if (!$animScrubbing.get()) $animScrubbing.set(true);
           $editKeyframeId.set(null);
-          $animPreviewU.set(typeof v === 'number' ? v : v[0]);
+          const u = typeof v === 'number' ? v : v[0];
+          $animPreviewU.set(u);
+          $playheadSec.set(u * anim.durationSec); // keep the v2 playhead in step (11B takes over)
         }}
         onChangeEnd={() => {
           // Release → back to the modeled (static) pose; reset so the next grab starts at
           // the rest end (u=0) of the timeline.
           $animScrubbing.set(false);
           $animPreviewU.set(0);
+          $playheadParked.set(false);
+          $playheadSec.set(restAnchorTime(anim));
         }}
       />
       <Button
@@ -51,7 +58,7 @@ export function PreviewScrubber({ anim, className }: { anim: PartAnimation; clas
         variant="ghost"
         iconOnly
         aria-label={playing ? 'Stop preview' : 'Play preview once'}
-        onPress={() => (playing ? stopAnimationPreview() : playAnimationPreview(anim.id))}
+        onPress={() => (playing ? stopAnimationPreview() : playAnimationPreview())}
       >
         {playing ? <Square size={13} /> : <Play size={13} />}
       </Button>

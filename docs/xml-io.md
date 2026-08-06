@@ -67,7 +67,7 @@ Mirrors space-tape's `GameDataXmlSerializer.cs`. The popup-only metadata
         <Connector Id="_connector1"><Flags>ToSurface</Flags></Connector>  <!-- every connector; <Flags> only when set -->
         <Decoupler ConnectorId="_connector2" Force="750"/>
         <DockingPort ConnectorId="_connector3" LatchingImpulse="6000" PushoffForce="7000"/>
-        <EVADoor ConnectorId="_connector3" SeatId="pilot"/>   <!-- SeatId only when linked -->
+        <EVADoor SeatId="pilot"/>   <!-- SeatId is EVADoorTemplate's ONLY field; emitted only when linked -->
     </PartGameData>
 </Assets>
 ```

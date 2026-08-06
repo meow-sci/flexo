@@ -20,11 +20,24 @@ update, this is the checklist you diff against to find what breaks flexo.**
 
 ## Baseline game version
 
-|                      | Build            | Path                                                                                                                                                |
-| -------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Verified against** | `2026.8.3.5117`  | `/Users/asherwin/repos/meow-sci/ksa-game-assemblies/current` (decomp @ 5117) + `flexo-private-assets/assets` (Core XML @ 5117, re-encoded)          |
-| Previous baseline    | `2026.7.10.5056` | `ksa-game-assemblies_prev/current` (decomp @ 5056) + the `flexo-private-assets_prev` dir copy (also diffable via `ksa-game-assemblies` git history) |
-| Baseline before that | `2026.7.9.5018`  | `ksa-game-assemblies` git commit `3106557` (diff decomp via git history; the mirror \_prev copies go stale over time)                               |
+|                      | Build            | Path                                                                                                                                                              |
+| -------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Verified against** | `2026.8.3.5117`  | `ksa-game-assemblies_prev/current` (decomp @ 5117) + `flexo-private-assets/assets` (Core XML @ 5117, re-encoded); also `ksa-game-assemblies` git commit `2369a41` |
+| Previous baseline    | `2026.7.10.5056` | `ksa-game-assemblies` git commit `13595c1` (the mirror \_prev copies go stale over time — diff the decomp via git history)                                        |
+| Baseline before that | `2026.7.9.5018`  | `ksa-game-assemblies` git commit `3106557` (diff decomp via git history)                                                                                          |
+
+> ⚠️ **A NEWER, UNVETTED build sits in the working dir.** `ksa-game-assemblies/current` has
+> advanced to **`2026.8.5.5168`** (2026-08-05, revs 5118–5166), which pushed 5117 down into
+> `ksa-game-assemblies_prev/current` — the paths in the table above shifted accordingly. flexo's
+> baseline is still **5117**: nothing in this catalog has been re-verified against 5168, and the
+> v2 UI refactor deliberately did not re-baseline. `version.json` @ 5168 flags at least three
+> areas that will need the [GAME_UPDATE_CHECKLIST.md](GAME_UPDATE_CHECKLIST.md) treatment —
+> the ground-clutter asset-bundler rework (revs 5136–5138, 5157: KTX2-only clutter textures,
+> id-referenced clutter objects, clutter colliders, new `Opacity`/`Thickness` BC4 textures),
+> the solid-motor grain-size corrections + new `AreaReference` (revs 5124/5125), and the
+> `CoreFairingA` / `CoreUtilityA` asset imports (revs 5161/5166). Run the checklist before
+> claiming any 5168 verdict. Note: `EVADoorTemplate` **was** spot-checked at 5168 during the
+> P12.16 audit and is unchanged (still `SeatId`-only).
 
 Each snapshot holds `decomp/` (decompiled C#; schema lives in `[XmlType]`/`[XmlElement]`/
 `[XmlAttribute]` + public fields), `Content/Core/` (the shipped game-data XML + GLSL shaders),
@@ -288,8 +301,9 @@ now modeled**, so both rows are ✅ again; _Ground clutter_ → 🟡 (`<Collidea
 
 ### Open gaps from 5117 → [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md)
 
-The `5056 → 5117` review found **no BREAKING item**. Four gaps; **Q1, Q2 and Q4 are now FIXED**,
-Q3 remains 📋 OPEN:
+The `5056 → 5117` review found **no BREAKING item**. Four gaps from the review — **Q1, Q2 and Q4
+are now FIXED**, Q3 remains 📋 OPEN — plus **Q5**, a flexo-side invention found while closing Q1
+and fixed at the end of the v2 refactor:
 
 - **Q1 — `<EVADoor SeatId>` was dropped (🟡 MISSING-CAPABILITY) — ✅ FIXED.** Rev 5085 added
   `[XmlAttribute("SeatId")]` to `EVADoorTemplate`; Core authors it
@@ -313,6 +327,19 @@ Q3 remains 📋 OPEN:
   `wiring-feed-unresolvable` — each with `EngineIssue.source` so the findings surfaces jump to
   the offending module. Game-side sites and the two deliberate narrowings are tabulated in
   [engines.md](engines.md#what-changed-in-5117).
+- **Q5 — flexo emitted a `<EVADoor ConnectorId>` that is not in KSA's schema (🟡 FLEXO-SIDE
+  INVENTION) — ✅ FIXED (flexo v2 P12.16).** Found while closing Q1 and deliberately deferred by
+  Phase 6 (removing it changes exported bytes). Re-verified from the decompiled class at
+  **5117 and 5168**: `EVADoorTemplate` declares exactly one `[XmlAttribute]`, `SeatId`, and the
+  runtime `EVADoor` module (`EVADoor.CreateComponents`) copies only that — an EVA hatch is not
+  connector-bound, unlike `DecouplerTemplate`/`DockingPortTemplate` which really do carry
+  `ConnectorId`. Core authors `<EVADoor SeatId="…" />`
+  (`Content/Core/PartGameData.xml:670,674`). `XmlSerializer` discarded the unknown attribute so
+  it was inert in-game, but flexo was writing a nonexistent field into exported mod files and
+  showing a meaningless connector picker for the hatch. `EvaDoor` is now `{ seatId }` only;
+  parser, serializer, project codec, project merge and the Coupling section all follow.
+  **This changes exported bytes** for any part with an EVA door (one attribute fewer) — the only
+  export-byte change in the entire v2 refactor.
 - **Q3 — clutter `<Collideable>` → `<CollisionType>` (📝 SCHEMA-DRIFT, docs-only).** Rev 5099
   replaced `ClutterEcotypeReference`'s `[XmlElement("Collideable")] BoolReference` with
   `[XmlElement("CollisionType")] ClutterCollisionTypeReference` (`Value="None|PrimitiveList|Mesh"`,
@@ -327,10 +354,15 @@ Q3 remains 📋 OPEN:
 The `5018 → 5056` review found **one BREAKING** item, now **✅ FIXED**: the
 `<ReactionPlume>` re-homing of nozzle exhaust FX (rev 5022). Still **📋 OPEN** from 5056:
 
-- **P1 — reaction-keyed plume authoring (MISSING-CAPABILITY).** flexo round-trips keyed
-  `<ReactionPlume Reaction="…">` entries faithfully, but the editor's two selects only drive
-  the unkeyed `Default="true"` entry, so a keyed entry cannot be created or edited in the UI.
-  Core's SRB nozzle (`CorePropulsionCGameData.xml`) is the only shipped user.
+- **P1 — reaction-keyed plume authoring (MISSING-CAPABILITY) — ✅ FIXED (flexo v2 P7, decision
+  D15).** flexo always round-tripped keyed `<ReactionPlume Reaction="…">` entries faithfully,
+  but the editor's two selects only drove the unkeyed `Default="true"` entry, so a keyed entry
+  could not be created or edited. Engine mode's Nozzle editor now carries a **"Plume entries"**
+  disclosure over the FULL list (add / remove / re-key / per-entry exhaust + trail selects,
+  `src/ui/engine/NozzleEditor.tsx`), each mutation one discrete undo step through
+  `updateReactionPlumes` (`src/state/editorStore.ts`). The two headline selects remain the fast
+  path onto the default entry. Core's SRB nozzle (`CorePropulsionCGameData.xml`) is still the
+  only shipped user. See [engines.md](engines.md#what-changed-in-5056--reactionplume-breaking-and-nothing-else).
 - **P2 — `KSA.GlbImport` is an unmapped integration surface (📝 docs).** Rev 5025 brought the
   game's own `GlbToXmlUtility` in-tree. It is the authoritative reference for what flexo's
   `assetsXmlSerializer.ts` / `exportGlb.ts` emit and deserves either a scope row of its own or

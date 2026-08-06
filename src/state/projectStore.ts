@@ -189,10 +189,11 @@ function normalizePart(part: EditingPart): EditingPart {
       ...gameData,
       // Two additive fields live BELOW the constructor-spread level, so they need their own
       // default (they have no constructor of their own): `<EVADoor SeatId>` and
-      // `<IVASeat Id>`, both modeled in KSA 2026.8.3.5117.
-      evaDoor: gameData.evaDoor
-        ? { ...gameData.evaDoor, seatId: gameData.evaDoor.seatId ?? null }
-        : null,
+      // `<IVASeat Id>`, both modeled in KSA 2026.8.3.5117. `evaDoor` is rebuilt field-by-field
+      // rather than spread, so a snapshot written before P12.16 removed `EvaDoor.connectorId`
+      // does not carry that dead key back into memory — a snapshot is still LOADED, never
+      // converted (nothing reads the key either way; this just stops it being re-persisted).
+      evaDoor: gameData.evaDoor ? { seatId: gameData.evaDoor.seatId ?? null } : null,
     },
     ivaSeats: (filled.ivaSeats ?? []).map((seat) => ({ ...seat, ksaId: seat.ksaId ?? null })),
     subPartGameData: (filled.subPartGameData ?? []).map((spd) => ({

@@ -14,7 +14,8 @@
     "fmt:check": "oxfmt --check",
     "preview": "vite preview",
     "thumbs:partpreview": "node scripts/capture-part-thumbs.ts",
-    "test": "vitest run"
+    "test": "vitest run",
+    "smoke": "node scripts/smoke-v2.ts"
   },
   "dependencies": {
     "@bokuweb/zstd-wasm": "0.0.27",

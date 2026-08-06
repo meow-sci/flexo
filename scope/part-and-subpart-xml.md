@@ -5,7 +5,12 @@
 > other feature hangs off. Read alongside [docs/xml-io.md](../docs/xml-io.md) and
 > [docs/subpart-catalog.md](../docs/subpart-catalog.md) (the flexo-internal view).
 
-**Baseline:** re-vetted against KSA build **2026.7.10.5056** (decomp @ 5056 + shipped Core XML).
+**Baseline:** KSA build **2026.8.3.5117** — re-verified ✅ intact by the `5056 → 5117` review
+(`FULL_SCOPE.md` integration map: this row moved at 5117 only in that the vendored fixtures were
+re-synced from the 5117 mirror; the structure itself did not move). The last review that changed
+anything in this doc was the `5018 → 5056` one, which is why the sections below are written
+against 5056. This header line lagged the 5117 re-baseline and was corrected in the P12.16 scope
+audit.
 **Baseline status:** ✅ **CURRENT** — `<Diameter>` part-size + `<Control>` command marker modeled
 (and as of 4826 `<Diameter>` is **repeatable** — the extras round-trip via `extraDiametersM`, see
 [What changed in 4826](#what-changed-in-4826)); `KNOWN_EDITOR_TAGS` refreshed from the registry

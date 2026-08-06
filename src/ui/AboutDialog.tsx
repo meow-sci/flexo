@@ -1,4 +1,4 @@
-import { Modal, Dialog, DialogHeader, SectionTitle, useIsPhone } from './kit';
+import { Modal, Dialog, DialogHeader, Kbd, SectionTitle, useIsPhone } from './kit';
 
 /**
  * "About" overlay — project blurb, license, source link and asset attribution.
@@ -9,7 +9,13 @@ import { Modal, Dialog, DialogHeader, SectionTitle, useIsPhone } from './kit';
  * panel gets); edge-to-edge full screen on phones.
  *
  * The RocketWerkz / Dean Hall attribution and the MIT license text below are legally
- * load-bearing — do not trim them.
+ * load-bearing — do not trim them (they are carried over from v1 verbatim).
+ *
+ * **"What's new in flexo v2" IS the release-notes surface** (P12.19). v2's storage reset makes
+ * every v1 user a first-run user again, so About auto-opens for everyone exactly once — which
+ * is why there is no separate in-app changelog. Keep the section short and user-facing, and
+ * keep the two rebind callouts (⇧⌘K for the chain, F for frame-selection) in step with the
+ * Help dialog's rebind wording.
  */
 export function AboutDialog({
   isOpen,
@@ -59,6 +65,41 @@ export function AboutDialog({
                 <br />
                 There's a feature to either download the mod as a ZIP or you can grant access to
                 your mods folder and Flexo can directly write to the folder
+              </p>
+            </section>
+
+            <section className="flex flex-col gap-2">
+              <SectionTitle>What's new in flexo v2</SectionTitle>
+              <ul className="flex list-disc flex-col gap-1.5 pl-5 text-sm leading-relaxed text-fg-muted">
+                <li>
+                  <span className="text-fg">Five task modes</span> — Build, Animation, Data, Engine
+                  and Surface, on the number keys <Kbd>1</Kbd>–<Kbd>5</Kbd>.
+                </li>
+                <li>
+                  <span className="text-fg">A docked shell</span>: a real menubar, resizable and
+                  collapsible sidebars, a bottom-docked Animation timeline, and a status bar that
+                  absorbed every floating toast, HUD and progress bar — with a bell notification
+                  centre for anything you missed.
+                </li>
+                <li>
+                  <span className="text-fg">A command palette</span> on <Kbd>⌘K</Kbd>, searching
+                  every command in the app. Two rebinds came with it: the action chain moved to{' '}
+                  <Kbd>⇧⌘K</Kbd>, and <Kbd>F</Kbd> now frames the selection (the rotate step moved
+                  to <Kbd>[</Kbd> / <Kbd>]</Kbd>).
+                </li>
+                <li>
+                  <span className="text-fg">Projects</span>: a Project Manager on <Kbd>⌘O</Kbd>,
+                  per-project thumbnails, and <code>.flexo.tar.gz</code> archives that carry your
+                  custom-asset binaries with them. Projects saved in v1 are{' '}
+                  <span className="text-fg">not carried over</span> — v2 starts from a clean slate.
+                </li>
+                <li>
+                  <span className="text-fg">Full phone support</span> — bottom mode tabs plus
+                  sheets, with no features cut.
+                </li>
+              </ul>
+              <p className="text-sm leading-relaxed text-fg-muted">
+                Press <Kbd>?</Kbd> for all shortcuts.
               </p>
             </section>
 

@@ -840,10 +840,10 @@ function applyImportedGameData(
     if (id) game.dockingPort = { ...src.dockingPort, connectorId: id };
   }
   if (game.evaDoor == null && src.evaDoor) {
-    const id = connectorIdMap.get(src.evaDoor.connectorId);
-    // `seatId` names an <IVASeat Id>, which is user-authored game data (NOT the regenerated
-    // `_seatN`), so it carries across verbatim like every other authored id.
-    if (id) game.evaDoor = { connectorId: id, seatId: src.evaDoor.seatId };
+    // No connector to remap (the hatch is not connector-bound). `seatId` names an
+    // <IVASeat Id>, which is user-authored game data (NOT the regenerated `_seatN`), so it
+    // carries across verbatim like every other authored id.
+    game.evaDoor = { seatId: src.evaDoor.seatId };
   }
   // Part diameter + command marker: filled only when not already set. The extra
   // adapter size classes ride along with the primary (they're meaningless without it).
@@ -3186,16 +3186,14 @@ export function setDockingPortPushoffImpulse(pushoffImpulseNs: number): void {
   });
 }
 
-/** Discrete: enable/disable the EVA door. */
+/**
+ * Discrete: enable/disable the EVA door. The element's presence IS the hatch —
+ * `EVADoorTemplate` has no field but `SeatId` (decomp/KSA/EVADoorTemplate.cs), so there is
+ * nothing else to author when it is switched on.
+ */
 export function setEvaDoorEnabled(enabled: boolean): void {
   commitGameData('EVA door', enabled ? 'on' : 'off', (g) => {
-    g.evaDoor = enabled ? (g.evaDoor ?? { connectorId: '', seatId: null }) : null;
-  });
-}
-/** Discrete: bind the EVA door to a connector id. */
-export function setEvaDoorConnector(connectorId: string): void {
-  commitGameData('EVA connector', connectorId, (g) => {
-    if (g.evaDoor) g.evaDoor.connectorId = connectorId;
+    g.evaDoor = enabled ? (g.evaDoor ?? { seatId: null }) : null;
   });
 }
 

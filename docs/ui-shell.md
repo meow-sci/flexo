@@ -106,6 +106,15 @@ the status chip, the phone tab bar, the palette and the hotkey validator all ren
 The rule a user learns once: **right = what exists, left = what you are focused on.** Surface
 mode is the one sanctioned exception, and it is a locked design decision.
 
+**Mode switcher badges are attention dots, not counts** (`shell/ModeSwitcher.tsx`). A tab
+carries a dot when that mode has something *wrong* — engine blockers (`$engineBlockerCount`),
+draft animation clips — and carries nothing otherwise. This is a deliberate change from v1,
+where the toolbar's `Custom (N)` / `Engine (N)` / `Anim (N)` buttons showed live inventory
+counts: a count answers "how many exist", which the Outliner, the Asset Manager's per-kind
+rail badges and each mode's own navigator already answer better once you are there, whereas
+the thing worth interrupting you from another mode is a problem, not a population. The
+entry points themselves are all intact (`⇧⌘A` Asset Manager, `4` Engine, `2` Animation).
+
 ### 2.2 `setMode` is the single choreography point
 
 No component ever sets other stores on a mode switch. `setMode(next, payload?)` runs, in order:
@@ -412,6 +421,19 @@ sheet — which is the phone's only route to a command with no menu home.
 
 The phone frame, top to bottom: PhoneTopBar · viewport (with the selection FAB) ·
 `ToolBarStrip` · the Animation paint/transport chip · CondensedStatusBar · ModeTabBar.
+
+**Known open item — phone row density.** The Panel and Inspector sheets host the *identical*
+desktop panel components, which is what guarantees phone parity — but that also means they
+inherit the desktop chrome density: nothing anywhere overrides `--density-row-py` (0.25rem)
+below the `sm` breakpoint, so a list row's vertical padding on a phone is the same 4px it is
+in a desktop sidebar. Controls are already on the touch tier (`sm`, `h-7`) per §1.2, so this
+is row padding only, not control size. It is a **shell-wide** ergonomics question — it applies
+identically in all five modes — and the design corpus specifies a single value for the token
+with no phone variant, so v2 ships the one value deliberately rather than improvising a
+second. The fix, if real-device review wants one, is one media query in `src/index.css`
+raising `--density-row-py` under `(max-width: 639px)`; nothing else has to change. Not a
+parity gap: v1 had no docked sidebars on phone at all, so there is no v1 density to regress
+from.
 
 ## 8. Shell stores at a glance
 

@@ -123,7 +123,7 @@ function richPart(): EditingPart {
     latchingKineticEnergyJ: 50,
     pushoffImpulseNs: 25,
   };
-  p.gameData.evaDoor = { connectorId: '_connector1', seatId: null };
+  p.gameData.evaDoor = { seatId: null };
 
   // Part-level engine modules: a controller, a gas-generator rocket+combustor, gimbals.
   p.gameData.rocketControllers.push({

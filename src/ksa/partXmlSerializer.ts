@@ -255,8 +255,10 @@ export function serializeGameData(
     gd.appendChild(el);
   }
   if (game.evaDoor) {
+    // `EVADoorTemplate` carries ONLY `SeatId` (decomp/KSA/EVADoorTemplate.cs, verified at
+    // 5117 + 5168) — an EVA door is not connector-bound, so the element's presence IS the
+    // hatch and `SeatId` is the only attribute there is to write.
     const el = doc.createElement('EVADoor');
-    el.setAttribute('ConnectorId', game.evaDoor.connectorId);
     // `SeatId` only when authored: KSA's default is "" and `ResolveAlignedSeats` skips an
     // empty one, so an always-emitted `SeatId=""` would be noise Core does not write.
     if (game.evaDoor.seatId) el.setAttribute('SeatId', game.evaDoor.seatId);

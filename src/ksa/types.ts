@@ -616,7 +616,16 @@ export interface DockingPort {
 }
 
 /**
- * EVA hatch. Serialized as `<EVADoor ConnectorId SeatId/>`.
+ * EVA hatch. Serialized as `<EVADoor SeatId/>` — presence of the element is the whole
+ * "this part has a hatch" switch.
+ *
+ * ⚠️ **`EVADoorTemplate` has exactly ONE field.** `decomp/KSA/EVADoorTemplate.cs` declares
+ * `[XmlAttribute("SeatId")] string SeatId` and nothing else (verified at builds 5117 AND
+ * 5168), and `EVADoor.CreateComponents` copies only `SeatId`. Unlike `DecouplerTemplate`
+ * and `DockingPortTemplate`, an EVA door is **not bound to a connector** — flexo used to
+ * emit a `ConnectorId` attribute here, which was a flexo invention KSA's `XmlSerializer`
+ * silently discarded. It is gone (P12.16); Core authors `<EVADoor SeatId="…"/>`
+ * (`Content/Core/PartGameData.xml:670`).
  *
  * `SeatId` arrived with KSA 2026.8.3.5117's crew feature (rev 5085,
  * `EVADoorTemplate.SeatId`): it names the `<IVASeat Id>` this hatch is ALIGNED to, and
@@ -627,7 +636,6 @@ export interface DockingPort {
  * See scope/connectors-coordinates-iva.md.
  */
 export interface EvaDoor {
-  connectorId: string;
   /** `<EVADoor SeatId>` — the {@link IvaSeat.ksaId} this hatch opens onto; null ⇒ omitted. */
   seatId: string | null;
 }

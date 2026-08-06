@@ -344,9 +344,13 @@ side is Data mode's Coupling section: a seat picker that, on first use, mints th
 `ksaId` and points the door at it in ONE undo step (`setEvaDoorSeat`,
 `src/state/editorStore.ts`).
 
-⚠️ **A separate, still-open oddity found while closing Q1:** flexo emits
-`<EVADoor ConnectorId="…">`, but `EVADoorTemplate` has **no `ConnectorId` field** at 5056 or 5117. `XmlSerializer` ignores unknown attributes so it is inert, but it is a flexo-only
-invention rather than KSA schema — recorded in
+✅ **The `<EVADoor ConnectorId>` oddity found while closing Q1 is now FIXED (flexo v2 P12.16).**
+flexo emitted `<EVADoor ConnectorId="…">`, but `EVADoorTemplate` has **no `ConnectorId` field**
+— re-verified in the decompiled class at 5056, 5117 **and 5168**: its only `[XmlAttribute]` is
+`SeatId`, and the runtime `EVADoor` module holds no connector reference. An EVA hatch is not
+connector-bound (unlike `DecouplerTemplate`/`DockingPortTemplate`, which is where flexo copied
+the pattern from). The attribute, the `EvaDoor.connectorId` model field and the Coupling
+section's hatch connector picker are all removed; `EvaDoor` is now `{ seatId }` only. See
 [gamedata-modules.md](gamedata-modules.md#what-changed-in-5117).
 
 **Everything else in this area — re-verified INTACT.** `Control.cs`/`ControlTemplate.cs` are

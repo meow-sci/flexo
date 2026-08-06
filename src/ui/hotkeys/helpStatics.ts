@@ -58,6 +58,19 @@ export const POINTER_SECTION: HelpStaticSection = {
       chords: [['mod', 'click']],
       text: 'List rows — toggle one row, leaving the rest of the selection alone',
     },
+    // The two transform-gizmo drag modifiers (foundation §14.2, LOCKED #7). They are
+    // pointer-capture-local in `EditorScene` — `beginDuplicateDrag` reads ⌥ at drag START,
+    // `applySnapToGizmo` reads ⌃ DURING the drag — so they can never be registry bindings,
+    // which is exactly why they belong here. Their live counterparts are the `gizmo-drag`
+    // hints in `src/ui/status/modifierHintProviders.ts`; keep the two in step.
+    {
+      chords: [['alt', 'drag']],
+      text: 'Transform gizmo — hold ⌥ as the drag STARTS to duplicate the selection and drag the copies instead (one undo step)',
+    },
+    {
+      chords: [['ctrl', 'drag']],
+      text: 'Transform gizmo — hold ⌃ DURING a drag to invert the snap setting for that drag only',
+    },
     {
       chords: [['drag']],
       text: 'Timeline — drag the ruler or a track to scrub; drag a diamond to retime that column (every joint moves with it)',

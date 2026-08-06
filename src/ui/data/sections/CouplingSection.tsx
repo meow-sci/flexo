@@ -13,7 +13,6 @@ import {
   setDockingPortEnabled,
   setDockingPortLatchingKineticEnergy,
   setDockingPortPushoffImpulse,
-  setEvaDoorConnector,
   setEvaDoorEnabled,
   setEvaDoorSeat,
 } from '../../../state/editorStore';
@@ -34,6 +33,11 @@ import type { EditingPart } from '../../../ksa/types';
  *   way out. Picking a seat is ONE undo step that authors both halves of the link (the seat's
  *   `<IVASeat Id>` is minted if it has none) — a door pointing at an id no seat carries ships
  *   a hatch with no EVA button in-game.
+ *
+ * The EVA door has NO connector select: `EVADoorTemplate` carries only `SeatId`
+ * (decomp/KSA/EVADoorTemplate.cs, verified at 5117 + 5168), so unlike the decoupler and the
+ * docking port a hatch is not bound to a connector. flexo used to render one and emit a
+ * `ConnectorId` attribute the game never reads; both were removed in P12.16.
  *
  * `ConnectorSelect` semantics are preserved verbatim (census invariant 4): a stale or deleted
  * connector id stays selectable and labelled, never silently retargeted.
@@ -108,16 +112,7 @@ export function CouplingSection({ part, meta }: { part: EditingPart; meta: Secti
         <Switch isSelected={evaDoor != null} onChange={setEvaDoorEnabled}>
           EVA Door
         </Switch>
-        {evaDoor && (
-          <>
-            <ConnectorSelect
-              connectorIds={connectorIds}
-              value={evaDoor.connectorId}
-              onChange={setEvaDoorConnector}
-            />
-            <SeatSelect part={part} seatId={evaDoor.seatId} />
-          </>
-        )}
+        {evaDoor && <SeatSelect part={part} seatId={evaDoor.seatId} />}
       </div>
     </DataSection>
   );

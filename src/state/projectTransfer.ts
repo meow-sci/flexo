@@ -921,8 +921,8 @@ function mergeGameData(
       };
   }
   if (target.evaDoor == null && src.evaDoor) {
-    const id = connectorIdMap.get(src.evaDoor.connectorId);
-    if (id) target.evaDoor = { connectorId: id, seatId: src.evaDoor.seatId ?? null };
+    // Not connector-bound (`EVADoorTemplate` has only `SeatId`), so nothing to remap.
+    target.evaDoor = { seatId: src.evaDoor.seatId ?? null };
   }
   // Engine modules: append with every SubPart-instance reference remapped to the
   // freshly-generated instance ids (mirrors applyImportedGameData in editorStore).

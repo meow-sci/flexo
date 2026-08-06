@@ -677,8 +677,8 @@ export function parseGameDataElement(gd: Element): ParsedGameData {
   const eva = directChildren(gd, 'EVADoor')[0];
   if (eva) {
     game.evaDoor = {
-      connectorId: eva.getAttribute('ConnectorId') ?? '',
-      // `<EVADoor SeatId>` (KSA 5117) — the `<IVASeat Id>` this hatch is aligned to.
+      // `<EVADoor SeatId>` (KSA 5117) — the `<IVASeat Id>` this hatch is aligned to, and
+      // `EVADoorTemplate`'s ONLY field. The element's presence is the hatch itself.
       seatId: eva.getAttribute('SeatId') || null,
     };
   }

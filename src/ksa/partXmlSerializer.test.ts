@@ -258,7 +258,7 @@ describe('serializeGameData', () => {
         latchingKineticEnergyJ: 6000,
         pushoffImpulseNs: 7000,
       },
-      evaDoor: { connectorId: '_connector3', seatId: null },
+      evaDoor: { seatId: null },
     },
     subPartGameData: [
       {
@@ -525,7 +525,10 @@ describe('serializeGameData', () => {
     expect(child(dp, 'ConnectorId')!.getAttribute('Value')).toBe('_connector3');
     expect(child(dp, 'LatchingKineticEnergy')!.getAttribute('J')).toBe('6000');
     expect(child(dp, 'PushoffImpulse')!.getAttribute('Ns')).toBe('7000');
-    expect(tags(doc, 'EVADoor')[0].getAttribute('ConnectorId')).toBe('_connector3');
+    // `EVADoorTemplate` declares exactly ONE XmlAttribute, `SeatId`
+    // (decomp/KSA/EVADoorTemplate.cs @ 5117 + 5168) — flexo emitted a `ConnectorId`
+    // attribute that does not exist in the schema until P12.16 removed it.
+    expect(tags(doc, 'EVADoor')[0].hasAttribute('ConnectorId')).toBe(false);
     // KSA's `EVADoorTemplate.SeatId` default is "" — an unset link emits no attribute.
     expect(tags(doc, 'EVADoor')[0].hasAttribute('SeatId')).toBe(false);
   });
@@ -538,7 +541,7 @@ describe('serializeGameData', () => {
         editingPart({
           gameData: {
             ...createEmptyGameData(),
-            evaDoor: { connectorId: '_connector3', seatId: 'pilot' },
+            evaDoor: { seatId: 'pilot' },
           },
         }),
       ),
@@ -969,7 +972,7 @@ describe('serializeGameData IVA seats', () => {
 // reproduce both verbatim, and absent attributes must stay absent.
 describe('EVA door ⇄ IVA seat link (D17)', () => {
   const IMPORTED = `<Assets><PartGameData Id="P">
-      <EVADoor ConnectorId="_c1" SeatId="pilot" />
+      <EVADoor SeatId="pilot" />
       <IVASeat Id="pilot"><Position X="1" /><ForwardAxis X="1" /><UpAxis Z="-1" /></IVASeat>
     </PartGameData></Assets>`;
 
@@ -991,7 +994,7 @@ describe('EVA door ⇄ IVA seat link (D17)', () => {
   it('leaves both attributes absent when the source authored neither', () => {
     const doc = reexport(
       `<Assets><PartGameData Id="P">
-        <EVADoor ConnectorId="_c1" />
+        <EVADoor />
         <IVASeat><Position X="1" /><ForwardAxis X="1" /><UpAxis Z="-1" /></IVASeat>
       </PartGameData></Assets>`,
     );

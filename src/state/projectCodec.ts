@@ -400,7 +400,7 @@ interface CGameData {
   pc?: CPowerConsumer; // powerConsumer (one per part)
   dc?: { c: string; f: number }; // decoupler
   dp?: { c: string; ke: number; pi: number }; // dockingPort
-  ed?: { c: string; s?: string }; // evaDoor (c = connectorId, s = SeatId when authored)
+  ed?: { s?: string }; // evaDoor — presence = the hatch; s = SeatId when authored
   ct?: CController[]; // rocketControllers
   ro?: CRocket[]; // part-level rockets (gas generators)
   cb?: CCombustor[]; // part-level combustors
@@ -436,7 +436,7 @@ function encGameData(g: PartGameData): CGameData {
     };
   }
   if (g.evaDoor) {
-    o.ed = { c: g.evaDoor.connectorId };
+    o.ed = {};
     if (g.evaDoor.seatId) o.ed.s = g.evaDoor.seatId;
   }
   if (g.rocketControllers.length) o.ct = g.rocketControllers.map(encController);
@@ -475,7 +475,7 @@ function decGameData(c: CGameData | undefined): PartGameData {
         pushoffImpulseNs: num(c.dp.pi),
       }
     : null;
-  g.evaDoor = c.ed ? { connectorId: str(c.ed.c), seatId: c.ed.s ? str(c.ed.s) : null } : null;
+  g.evaDoor = c.ed ? { seatId: c.ed.s ? str(c.ed.s) : null } : null;
   g.rocketControllers = arr<CController>(c.ct).map(decController);
   g.rockets = arr<CRocket>(c.ro).map(decRocket);
   g.combustors = arr<CCombustor>(c.cb).map(decCombustor);

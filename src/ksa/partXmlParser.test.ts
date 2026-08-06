@@ -240,7 +240,7 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
       powerConsumer: { consumedWatts: 3, lightSwitch: true, lightIsActive: true },
       decoupler: { connectorId: '_c2', force: 750 },
       dockingPort: { connectorId: '_c3', latchingKineticEnergyJ: 6000, pushoffImpulseNs: 7000 },
-      evaDoor: { connectorId: '_c3', seatId: null },
+      evaDoor: { seatId: null },
     },
     subPartGameData: [
       {
@@ -354,7 +354,8 @@ describe('gameDataFromAssets (round-trip with serializeGameData)', () => {
       latchingKineticEnergyJ: 6000,
       pushoffImpulseNs: 7000,
     });
-    expect(parsed.gameData.evaDoor).toEqual({ connectorId: '_c3', seatId: null });
+    // `EVADoorTemplate` has ONLY `SeatId` — the hatch is not connector-bound.
+    expect(parsed.gameData.evaDoor).toEqual({ seatId: null });
   });
 
   it('recovers connector flags by id', () => {

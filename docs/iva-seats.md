@@ -403,6 +403,12 @@ EVA Door card:
   button, so the two are never separable.
 - A `seatId` that matches no seat stays selectable and labelled, like every other stale
   reference in flexo — it is never silently retargeted.
+- **The EVA Door card has no connector select**, unlike the Decoupler and Docking Port cards
+  beside it. `EVADoorTemplate` carries `SeatId` and nothing else (verified in the decompiled
+  class at KSA 5117 and 5168), so a hatch is not connector-bound: the element's presence *is*
+  the hatch. flexo used to render a picker here and emit an `<EVADoor ConnectorId>` attribute
+  that does not exist in KSA's schema; both were removed in v2 (see
+  [scope/gamedata-modules.md](../scope/gamedata-modules.md)).
 
 ## Deliberate limits
 

@@ -115,6 +115,7 @@ import {
   planImportRemoval,
   removeCustomMaterial,
   removeImport,
+  removeUnusedAssets,
   renameCustomTexture,
   replaceImport,
   setMeshGlowStreaming,
@@ -927,6 +928,46 @@ describe('surface-mode store additions', () => {
 
     undo();
     expect($part.get().customTextures[0].name).toBe('old');
+  });
+
+  it('removeUnusedAssets deletes only zero-use assets in one undo step', async () => {
+    const used = await addCustomMaterial('Steel', {
+      baseColor: { kind: 'map', textureId: 'tex_base' },
+    });
+    const orphanMaterial = await addCustomMaterial('Nobody');
+    $part.set({
+      ...$part.get(),
+      customTextures: [
+        { id: 'tex_base', name: 'base', width: 2, height: 2, channel: 'baseColor' },
+        { id: 'tex_face', name: 'face', width: 2, height: 2, channel: 'baseColor' },
+        { id: 'tex_orphan', name: 'orphan', width: 2, height: 2, channel: 'baseColor' },
+      ],
+      customMeshes: [
+        box({
+          materialId: used.id,
+          faceTextures: {
+            right: { textureId: 'tex_face', uvScale: { x: 1, y: 1 }, uvOffset: { x: 0, y: 0 } },
+          },
+        }),
+      ],
+    });
+    const before = undoDepth();
+
+    // The caller hands over everything it listed — including two assets that ARE in use.
+    removeUnusedAssets(['tex_base', 'tex_face', 'tex_orphan', used.id, orphanMaterial.id]);
+
+    expect(undoDepth()).toBe(before + 1);
+    const after = $part.get();
+    expect(after.customTextures.map((t) => t.id)).toEqual(['tex_base', 'tex_face']);
+    expect(after.customMaterials.map((m) => m.id)).toEqual([used.id]);
+
+    undo();
+    expect($part.get().customTextures.map((t) => t.id)).toEqual([
+      'tex_base',
+      'tex_face',
+      'tex_orphan',
+    ]);
+    expect($part.get().customMaterials).toHaveLength(2);
   });
 
   it('updateCustomMesh primitive patch keeps the placements and the subPartId', async () => {

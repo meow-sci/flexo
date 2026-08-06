@@ -1089,6 +1089,50 @@ export function removeCustomTexture(id: string): void {
   void refreshCatalog();
 }
 
+/**
+ * **Bulk orphan sweep** — the Asset Manager's "Delete all unused" (design:
+ * design-surface-assets.md §2.5). Takes a mixed list of texture and material ids and deletes
+ * exactly those that are genuinely unreferenced RIGHT NOW: a texture no face and no material
+ * channel points at, a material no mesh wears. Anything still in use is silently skipped, so
+ * a stale review list can never destroy a live asset.
+ *
+ * **ONE discrete undo step for every descriptor removed** — that is the whole reason this
+ * exists rather than a loop over `removeCustomTexture` / `removeCustomMaterial` at the call
+ * site (which would push N steps and make the takeback a chore). The blobs go immediately, as
+ * everywhere else: undo restores the entries, not the bytes.
+ *
+ * This is REVIEW, not collection. Automatic GC stays exactly what it was — reference counting
+ * on remove/replace-import ({@link planOrphanedAssets}); nothing here ever runs on its own.
+ */
+export function removeUnusedAssets(ids: readonly string[]): void {
+  const part = $part.get();
+  const usage = $assetUsage.get();
+  const wanted = new Set(ids);
+  const textures = part.customTextures.filter((t) => {
+    if (!wanted.has(t.id)) return false;
+    const use = usage.texture.get(t.id);
+    return !use || (use.faces.length === 0 && use.materials.length === 0);
+  });
+  const materials = part.customMaterials.filter(
+    (m) => wanted.has(m.id) && (usage.material.get(m.id)?.meshes.length ?? 0) === 0,
+  );
+  if (textures.length === 0 && materials.length === 0) return;
+
+  const textureIds = new Set(textures.map((t) => t.id));
+  const materialIds = new Set(materials.map((m) => m.id));
+  mutate('delete unused assets', String(textureIds.size + materialIds.size), (p) => {
+    p.customTextures = p.customTextures.filter((t) => !textureIds.has(t.id));
+    p.customMaterials = p.customMaterials.filter((m) => !materialIds.has(m.id));
+  });
+  for (const id of textureIds) {
+    revokeTexture(id);
+    void deleteAsset(assetKeys.textureSource(id));
+    void deleteAsset(assetKeys.textureKtx2(id));
+  }
+  publishTextureUrls();
+  void refreshCatalog();
+}
+
 // ── materials ────────────────────────────────────────────────────────────────
 
 /**

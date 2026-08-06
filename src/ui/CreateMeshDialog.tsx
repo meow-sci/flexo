@@ -28,10 +28,40 @@ interface CreateMeshDialogProps {
  * apply a custom texture. On confirm it becomes a custom SubPart template, is
  * placed in the scene, and selected. v1 = one texture stretched across the mesh.
  *
+ * This is the OVERLAY host (dialog id `'create-mesh'`, opened by Add ▸ Primitive Mesh…); its
+ * guts are {@link CreateMeshForm}, which the Asset Manager mounts as a pushed view in its own
+ * `DialogViewStack` — same component, two mounts, never a stacked modal (D1/D9).
+ *
  * Mounted only while open (see DialogRoot) so per-open state initializes via
  * useState with no reset effect.
  */
 export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
+  return (
+    <Modal
+      isOpen
+      onOpenChange={(v) => !v && onClose()}
+      isDismissable
+      variant="fullscreen"
+      className="max-w-md"
+    >
+      <Dialog>
+        <DialogHeader title="Create mesh" onClose={onClose} />
+        <CreateMeshForm onDone={onClose} onCancel={onClose} />
+      </Dialog>
+    </Modal>
+  );
+}
+
+/**
+ * The primitive-creation fields, host-agnostic (parity row 1.7): the kind toggle, the
+ * per-kind `ParamNumberField`s (`useNumberDraft` + `inputMode="url"`), the name, and the
+ * optional material / base-color texture seed.
+ *
+ * On confirm `addCustomMesh` creates the template AND places one instance on the active
+ * layer, selecting it — ONE discrete undo step. The manager stays open behind the popped
+ * view (add-and-stay), so the placement becomes visible when the dialog is dismissed.
+ */
+export function CreateMeshForm({ onDone, onCancel }: { onDone: () => void; onCancel: () => void }) {
   const part = useStore($part);
   // Base-color images only — data maps (normal/ORM/…) are picked inside a material.
   const textures = part.customTextures.filter((t) => t.channel === 'baseColor');
@@ -81,7 +111,7 @@ export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
         materialId: materialId || undefined,
       });
       toast({ title: 'Mesh created', description: name, variant: 'success' });
-      onClose();
+      onDone();
     } catch (err) {
       console.warn('mesh create failed', err);
       toast({
@@ -97,96 +127,89 @@ export function CreateMeshDialog({ onClose }: CreateMeshDialogProps) {
   const fields = PARAM_FIELDS[kind];
 
   return (
-    <Modal
-      isOpen
-      onOpenChange={(v) => !v && onClose()}
-      isDismissable
-      variant="fullscreen"
-      className="max-w-md"
-    >
-      <Dialog>
-        <DialogHeader title="Create mesh" onClose={onClose} />
-        <div className="flex flex-col gap-3 p-3">
-          <ToggleButtonGroup
-            selectionMode="single"
-            disallowEmptySelection
-            selectedKeys={[kind]}
-            onSelectionChange={(keys) => {
-              const k = [...keys][0] as PrimitiveKind | undefined;
-              if (k) changeKind(k);
-            }}
-          >
-            {PRIMITIVE_KINDS.map((k) => (
-              <ToggleButton key={k} id={k} size="sm">
-                {PRIMITIVE_LABELS[k]}
-              </ToggleButton>
-            ))}
-          </ToggleButtonGroup>
+    <div className="flex flex-col gap-3 overflow-y-auto p-3">
+      <ToggleButtonGroup
+        selectionMode="single"
+        disallowEmptySelection
+        selectedKeys={[kind]}
+        onSelectionChange={(keys) => {
+          const k = [...keys][0] as PrimitiveKind | undefined;
+          if (k) changeKind(k);
+        }}
+      >
+        {PRIMITIVE_KINDS.map((k) => (
+          <ToggleButton key={k} id={k} size="sm">
+            {PRIMITIVE_LABELS[k]}
+          </ToggleButton>
+        ))}
+      </ToggleButtonGroup>
 
-          <div className="grid grid-cols-2 gap-2">
-            {fields.map((f) => (
-              <ParamNumberField
-                // keyed by kind too: switching primitives remounts the field, discarding drafts
-                key={`${kind}-${f.key}`}
-                label={f.label}
-                value={params[f.key] ?? 0}
-                onCommit={(n) => setParams((p) => ({ ...p, [f.key]: n }))}
-              />
-            ))}
-          </div>
+      <div className="grid grid-cols-2 gap-2">
+        {fields.map((f) => (
+          <ParamNumberField
+            // keyed by kind too: switching primitives remounts the field, discarding drafts
+            key={`${kind}-${f.key}`}
+            label={f.label}
+            value={params[f.key] ?? 0}
+            onCommit={(n) => setParams((p) => ({ ...p, [f.key]: n }))}
+          />
+        ))}
+      </div>
 
-          <TextField label="Name" value={name} onChange={setName} size="sm" />
+      <TextField label="Name" value={name} onChange={setName} size="sm" />
 
-          {materials.length > 0 && (
-            <Select label="Material" value={materialId} onChange={(k) => setMaterialId(String(k))}>
-              <ListBoxItem id="">(none)</ListBoxItem>
-              {materials.map((m) => (
-                <ListBoxItem key={m.id} id={m.id}>
-                  {m.name}
-                </ListBoxItem>
-              ))}
-            </Select>
-          )}
+      {materials.length > 0 && (
+        <Select
+          label="Material"
+          selectedKey={materialId}
+          onSelectionChange={(k) => setMaterialId(String(k))}
+        >
+          <ListBoxItem id="">(none)</ListBoxItem>
+          {materials.map((m) => (
+            <ListBoxItem key={m.id} id={m.id}>
+              {m.name}
+            </ListBoxItem>
+          ))}
+        </Select>
+      )}
 
-          {textures.length > 0 ? (
-            <Select
-              label="Texture (image)"
-              value={textureId}
-              onChange={(k) => setTextureId(String(k))}
-            >
-              <ListBoxItem id="">(none)</ListBoxItem>
-              {textures.map((t) => (
-                <ListBoxItem key={t.id} id={t.id}>
-                  {t.name}
-                </ListBoxItem>
-              ))}
-            </Select>
-          ) : (
-            materials.length === 0 && (
-              <p className="text-xs text-fg-muted">
-                No materials or textures yet — create a material (color + metal/rough) or upload an
-                image, or just create the bare mesh.
-              </p>
-            )
-          )}
-          {materials.length > 0 && textures.length > 0 && (
-            <p className="text-[11px] leading-snug text-fg-subtle">
-              An image covers the faces; the material supplies color (where there’s no image),
-              metalness and roughness.
-            </p>
-          )}
+      {textures.length > 0 ? (
+        <Select
+          label="Texture (image)"
+          selectedKey={textureId}
+          onSelectionChange={(k) => setTextureId(String(k))}
+        >
+          <ListBoxItem id="">(none)</ListBoxItem>
+          {textures.map((t) => (
+            <ListBoxItem key={t.id} id={t.id}>
+              {t.name}
+            </ListBoxItem>
+          ))}
+        </Select>
+      ) : (
+        materials.length === 0 && (
+          <p className="text-xs text-fg-muted">
+            No materials or textures yet — create a material (color + metal/rough) or upload an
+            image, or just create the bare mesh.
+          </p>
+        )
+      )}
+      {materials.length > 0 && textures.length > 0 && (
+        <p className="text-[11px] leading-snug text-fg-subtle">
+          An image covers the faces; the material supplies color (where there’s no image), metalness
+          and roughness.
+        </p>
+      )}
 
-          <div className="flex justify-end gap-2">
-            <Button size="sm" variant="ghost" onPress={onClose}>
-              Cancel
-            </Button>
-            <Button size="sm" variant="primary" isDisabled={busy} onPress={submit}>
-              {busy ? 'Creating…' : 'Create mesh'}
-            </Button>
-          </div>
-        </div>
-      </Dialog>
-    </Modal>
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="ghost" onPress={onCancel}>
+          Cancel
+        </Button>
+        <Button size="sm" variant="primary" isDisabled={busy} onPress={submit}>
+          {busy ? 'Creating…' : 'Create mesh'}
+        </Button>
+      </div>
+    </div>
   );
 }
 

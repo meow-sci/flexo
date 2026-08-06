@@ -218,7 +218,11 @@ export function MaterialForm({
     <div className="flex flex-col gap-3 overflow-y-auto p-3">
       <MaterialPreview {...preview} />
 
-      <Select label="Preset" value={activePreset} onChange={(k) => applyPreset(String(k))}>
+      <Select
+        label="Preset"
+        selectedKey={activePreset}
+        onSelectionChange={(k) => applyPreset(String(k))}
+      >
         {activePreset === 'custom' && <ListBoxItem id="custom">Custom</ListBoxItem>}
         {MATERIAL_PRESETS.map((p) => (
           <ListBoxItem key={p.id} id={p.id}>
@@ -259,8 +263,8 @@ export function MaterialForm({
         {baseMode === 'map' && (
           <Select
             aria-label="Base color image"
-            value={baseTextureId}
-            onChange={(k) => setBaseTextureId(String(k))}
+            selectedKey={baseTextureId}
+            onSelectionChange={(k) => setBaseTextureId(String(k))}
           >
             {baseColorTextures.map((t) => (
               <ListBoxItem key={t.id} id={t.id} textValue={t.name}>
@@ -426,7 +430,7 @@ export function MapSelect({
 }) {
   const textureUrls = useStore($customTextureUrls);
   return (
-    <Select label={label} value={value} onChange={(k) => onChange(String(k))}>
+    <Select label={label} selectedKey={value} onSelectionChange={(k) => onChange(String(k))}>
       <ListBoxItem id="" textValue="(none)">
         (none)
       </ListBoxItem>

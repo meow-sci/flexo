@@ -92,8 +92,12 @@ function kindCaption(mesh: CustomMesh): string {
  * The per-kind dimension fields, from the SAME `PARAM_FIELDS` table the creation dialog
  * renders. Every field is a `PreciseNumberInput` (`useNumberDraft` + `inputMode="url"`) so
  * mid-edit values like `.06` and `-` stay typeable and Escape reverts the field.
+ *
+ * Exported because the Asset Manager's mesh detail view edits the same dimensions (design
+ * §2.2 "primitives: dimension fields (same editors as §1.3 Identity)") — two spellings of a
+ * commit that rebuilds the atlas is exactly how the two surfaces would come to disagree.
  */
-function PrimitiveParams({ mesh, spec }: { mesh: CustomMesh; spec: PrimitiveSpec }) {
+export function PrimitiveParams({ mesh, spec }: { mesh: CustomMesh; spec: PrimitiveSpec }) {
   const params = spec.params as unknown as Record<string, number>;
   return (
     <div className="grid grid-cols-2 gap-2">

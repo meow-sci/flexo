@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button, InlineConfirmStrip, Switch } from '../kit';
 import { SurfaceSection } from './SurfaceSection';
 import { openImportModel, removeImport, setMeshTransparent } from '../../state/customAssetStore';
+import { BYTE_DELETE_WARNING, IMPORT_REMOVAL_APPENDIX } from '../assets/bytePolicy';
 import type { CustomMesh, ImportedMeshSource } from '../../ksa/types';
 
 /**
@@ -48,16 +49,23 @@ export function ImportedSection({
         can&apos;t glow. Editor preview stays opaque.
       </p>
       {confirmRemove ? (
-        <InlineConfirmStrip
-          size="xs"
-          label={`Remove "${imported.sourceFile}"? This deletes the stored file bytes from this browser. Undo restores the entry, not the bytes — imported geometry has no other copy and cannot be recreated.`}
-          confirmLabel="Remove import"
-          onConfirm={() => {
-            setConfirmRemove(false);
-            void removeImport(imported.importId);
-          }}
-          onCancel={() => setConfirmRemove(false)}
-        />
+        // The strip's own label is one truncating line, so the irreversibility sentence goes
+        // ABOVE it in full — §14.3 requires it to be stated, which means readable.
+        <div className="flex flex-col gap-1 rounded-md border border-warning/40 bg-warning/10 p-1.5">
+          <p className="text-[11px] leading-snug text-warning">
+            {BYTE_DELETE_WARNING} {IMPORT_REMOVAL_APPENDIX}
+          </p>
+          <InlineConfirmStrip
+            size="xs"
+            label={`Remove “${imported.sourceFile}”?`}
+            confirmLabel="Remove import"
+            onConfirm={() => {
+              setConfirmRemove(false);
+              void removeImport(imported.importId);
+            }}
+            onCancel={() => setConfirmRemove(false)}
+          />
+        </div>
       ) : (
         <div className="flex flex-wrap gap-1">
           <Button

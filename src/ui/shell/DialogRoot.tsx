@@ -10,6 +10,7 @@ import { SettingsDialog, type SettingsDialogParams } from '../SettingsDialog';
 import { ScaleEverythingDialog } from '../ScaleEverythingDialog';
 import { SubPartBrowserDialog } from '../build/SubPartBrowserDialog';
 import { PartBrowserDialog } from '../build/PartBrowserDialog';
+import { AssetManagerDialog } from '../assets/AssetManagerDialog';
 import { CustomAssetsModal } from '../CustomAssetsModal';
 import { CustomTextureDialog } from '../CustomTextureDialog';
 import { CreateMeshDialog } from '../CreateMeshDialog';
@@ -80,6 +81,8 @@ export function DialogRoot() {
       return <SubPartBrowserDialog open onOpenChange={dismiss} />;
     case 'part-browser':
       return <PartBrowserDialog open onOpenChange={dismiss} />;
+    case 'asset-manager':
+      return <AssetManagerDialog isOpen onOpenChange={dismiss} />;
     case 'custom-assets':
       return <CustomAssetsModal isOpen onOpenChange={dismiss} />;
     // These three self-close via `onClose` rather than react-aria's `onOpenChange`.

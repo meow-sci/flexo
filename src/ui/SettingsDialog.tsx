@@ -194,9 +194,9 @@ export function SettingsDialog({
               size="sm"
               className="flex-1"
               aria-label="Tone mapping"
-              value={lighting.toneMapping}
+              selectedKey={lighting.toneMapping}
               items={TONE_MAPPING_MODES}
-              onChange={(k) => setLighting({ toneMapping: k as ToneMappingMode })}
+              onSelectionChange={(k) => setLighting({ toneMapping: k as ToneMappingMode })}
             >
               {(m) => (
                 <ListBoxItem id={m.id} textValue={m.label}>
@@ -259,8 +259,8 @@ export function SettingsDialog({
               size="sm"
               className="flex-1"
               aria-label="Light coverage exposure"
-              value={lightViz.exposureMode}
-              onChange={(k) =>
+              selectedKey={lightViz.exposureMode}
+              onSelectionChange={(k) =>
                 setLightSettings({ exposureMode: k as LightVizSettings['exposureMode'] })
               }
             >
@@ -290,8 +290,8 @@ export function SettingsDialog({
               size="sm"
               aria-label="Kitten mesh texture export mode"
               className="w-52"
-              value={kittenTex.mode}
-              onChange={(k) =>
+              selectedKey={kittenTex.mode}
+              onSelectionChange={(k) =>
                 setKittenTextureExport({ mode: k as KittenTextureExportSettings['mode'] })
               }
             >

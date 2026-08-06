@@ -37,6 +37,8 @@ export type DialogId =
   | 'export-ksa'
   | 'settings'
   | 'scale-everything'
+  | 'asset-manager'
+  // The v1 CustomAssetsModal, retired once the Asset Manager's last v1 surface dies.
   | 'custom-assets'
   | 'subpart-browser'
   | 'part-browser'

@@ -4,6 +4,7 @@ import { MODE_ICONS } from '../status/statusTokens';
 import { runCommand } from '../../state/commandStore';
 import { $mode, MODES } from '../../state/modeStore';
 import { $engineBlockerCount } from '../../state/engineStore';
+import { $draftClipCount } from '../../state/animationStore';
 
 /**
  * The menubar's centered mode switcher (design: foundation §2.2, §3 layout line) — five
@@ -24,13 +25,20 @@ import { $engineBlockerCount } from '../../state/engineStore';
  * **Attention dots** (foundation §2.2): each segment may carry a small dot fed by its own
  * area store. Engine's is the blocking-validation count — the replacement for v1's
  * "Engine (N)" toolbar button, which counted SCOPES and so told you nothing about whether the
- * part would load. Animation's draft-clip dot lands with P11.
+ * part would load. Animation's is the DRAFT-CLIP count (`$draftClipCount` over
+ * `computeClipIssues`): clips the exporter silently skips, which v1 announced only as a
+ * "(draft)" chip inside a panel you had to already be looking at (census pain 20).
+ *
+ * The two dots differ in tone on purpose: an Engine blocker means KSA refuses to LOAD the
+ * mod (danger), a draft clip means one clip is left out of an export that otherwise succeeds
+ * (warning) — the same severity split the export pre-flight draws.
  *
  * Undo enrollment: NONE — mode is view state (foundation §13).
  */
 export function ModeSwitcher() {
   const current = useStore($mode);
   const engineBlockers = useStore($engineBlockerCount);
+  const draftClips = useStore($draftClipCount);
 
   return (
     <ToggleButtonGroup
@@ -47,23 +55,37 @@ export function ModeSwitcher() {
     >
       {MODES.map((mode) => {
         const Icon = MODE_ICONS[mode.id];
-        const attention = mode.id === 'engine' && engineBlockers > 0;
+        const attention =
+          mode.id === 'engine' && engineBlockers > 0
+            ? {
+                tone: 'bg-danger',
+                note: `${engineBlockers} blocking issue${engineBlockers === 1 ? '' : 's'}`,
+              }
+            : mode.id === 'animation' && draftClips > 0
+              ? {
+                  tone: 'bg-warning',
+                  note: `${draftClips} draft clip${draftClips === 1 ? '' : 's'} won’t export`,
+                }
+              : null;
         return (
           <ToggleButton
             key={mode.id}
             id={mode.id}
             size="xs"
-            aria-label={
-              attention
-                ? `${mode.label} — ${engineBlockers} blocking issue${engineBlockers === 1 ? '' : 's'}`
-                : mode.label
-            }
+            aria-label={attention ? `${mode.label} — ${attention.note}` : mode.label}
             className="flex-none px-2"
           >
-            <span className="relative flex items-center justify-center">
+            {/* A native `title` on the icon span rather than a kit Tooltip: the group's
+                children must stay ToggleButtons for react-aria's roving focus. */}
+            <span
+              className="relative flex items-center justify-center"
+              title={attention ? attention.note : undefined}
+            >
               <Icon size={13} />
               {attention && (
-                <span className="absolute -right-1 -top-1 size-1.5 rounded-full bg-danger" />
+                <span
+                  className={`absolute -right-1 -top-1 size-1.5 rounded-full ${attention.tone}`}
+                />
               )}
             </span>
             <span className="hidden min-[1100px]:inline">{mode.label}</span>

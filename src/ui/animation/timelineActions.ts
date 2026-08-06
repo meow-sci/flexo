@@ -249,6 +249,17 @@ export function zoomTimelineAboutPlayhead(factor: number): void {
   zoomTimeline(factor, $playheadSec.get());
 }
 
+/**
+ * Sets the view ABSOLUTELY, clamped exactly like every other writer — the phone's pinch-zoom
+ * and two-finger pan, which move zoom and offset together in one gesture and so cannot be
+ * expressed as a `zoomTimeline` + `panTimeline` pair without fighting each other's clamps.
+ */
+export function setTimelineView(startSec: number, pxPerSec: number): void {
+  const anim = $activeAnimation.get();
+  if (!anim) return;
+  $timelineView.set(clampView(startSec, pxPerSec, anim.durationSec));
+}
+
 export function panTimeline(deltaSec: number): void {
   const anim = $activeAnimation.get();
   if (!anim) return;

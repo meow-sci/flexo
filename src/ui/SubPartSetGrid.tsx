@@ -61,6 +61,12 @@ export interface SubPartSetGridProps {
   /** Section collapse is host state so it survives a target switch, like the checked set. */
   collapsedLayers: ReadonlySet<string>;
   onToggleLayerCollapsed: (layerId: string) => void;
+  /**
+   * Rows to highlight briefly — "here is what just changed" (design §14 row 3). The phone's
+   * paint flow dismisses this grid's sheet while painting, so the ids toggled in the viewport
+   * are flashed when it comes back; the host owns how long the highlight lives.
+   */
+  flashIds?: ReadonlySet<string>;
 }
 
 /** Long-press that pulses a row's placement WITHOUT toggling it (touch hover-preview, §7.3). */
@@ -80,6 +86,7 @@ export function SubPartSetGrid(props: SubPartSetGridProps) {
     onClearFilters,
     collapsedLayers,
     onToggleLayerCollapsed,
+    flashIds,
   } = props;
   const part = useStore($part);
   const layerView = useStore($layerView);
@@ -186,7 +193,16 @@ export function SubPartSetGrid(props: SubPartSetGridProps) {
       disabledKeys={disabledKeys}
       disabledBehavior="all"
       onSelectionChange={onSelectionChange}
-      dependencies={[search, filter, targetJointId, ownership, checked, collapsedLayers, part]}
+      dependencies={[
+        search,
+        filter,
+        targetJointId,
+        ownership,
+        checked,
+        collapsedLayers,
+        part,
+        flashIds,
+      ]}
       className="flex flex-col gap-0.5 outline-none"
     >
       {({ section, rowsVisible }: (typeof visibleSections)[number]) => (
@@ -207,14 +223,22 @@ export function SubPartSetGrid(props: SubPartSetGridProps) {
               }}
             />
           </GridListHeader>
-          <Collection items={rowsVisible ? section.rows : []} dependencies={[checked, search]}>
+          <Collection
+            items={rowsVisible ? section.rows : []}
+            dependencies={[checked, search, flashIds]}
+          >
             {(row: SubPartSetSection['rows'][number]) => (
               <GridListItem
                 id={row.instanceId}
                 textValue={row.instanceId}
                 {...rowPointerHandlers(row.instanceId, row.disabled)}
                 className={(rp) =>
-                  cn(gridRowClass(rp), 'gap-1.5 py-(--density-row-py)', row.dimmed && 'opacity-40')
+                  cn(
+                    gridRowClass(rp),
+                    'gap-1.5 py-(--density-row-py)',
+                    row.dimmed && 'opacity-40',
+                    flashIds?.has(row.instanceId) && 'ring-1 ring-accent',
+                  )
                 }
               >
                 <Checkbox

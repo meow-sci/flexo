@@ -245,24 +245,28 @@ function CurveWidget({
         />
         {/* the easing curve */}
         <path d={curvePath} fill="none" stroke="var(--color-accent, #6ab)" strokeWidth={2} />
-        {/* draggable handles */}
+        {/* Draggable handles. Each is drawn at r=6 and grabbed through an INVISIBLE r=14
+            companion: the viewBox is 120 user units wide, so at the ~300px the phone
+            Inspector sheet gives it that hit circle is a ≥32px touch target (design §14 row
+            4) while the visible dot keeps its desktop size. */}
         {(
           [
             [h1, 0],
             [h2, 1],
           ] as const
         ).map(([h, idx]) => (
-          <circle
-            key={idx}
-            cx={h.x}
-            cy={h.y}
-            r={6}
-            className="cursor-grab"
-            fill="var(--color-accent, #6ab)"
-            stroke="white"
-            strokeWidth={1.5}
-            onPointerDown={onHandleDown(idx)}
-          />
+          <g key={idx} onPointerDown={onHandleDown(idx)} className="cursor-grab">
+            <circle cx={h.x} cy={h.y} r={14} fill="transparent" stroke="none" />
+            <circle
+              cx={h.x}
+              cy={h.y}
+              r={6}
+              fill="var(--color-accent, #6ab)"
+              stroke="white"
+              strokeWidth={1.5}
+              pointerEvents="none"
+            />
+          </g>
         ))}
       </svg>
     </div>

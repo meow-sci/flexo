@@ -8,6 +8,7 @@ import { layerActivateCommands, layerSelectCommands } from './selectCommands';
 import { seatCommands } from './toolsCommands';
 import { dataScopeCommands } from './dataCommands';
 import { surfacePickCommands } from './surfaceCommands';
+import { animationClipCommands } from './animationCommands';
 
 /**
  * Every dynamic command provider (design: foundation §4 "Dynamic providers"). Anything
@@ -37,6 +38,8 @@ export const COMMAND_PROVIDERS: { id: string; commands: () => Command[] }[] = [
   { id: 'data.scopeTemplate', commands: dataScopeCommands },
   // One "Edit surface: <mesh>" row per custom mesh, kitten submeshes included (D6).
   { id: 'surface.pickMesh', commands: surfacePickCommands },
+  // One "Open clip: <name>" row per animation clip (design-animation-mode.md §13).
+  { id: 'animation.openClip', commands: animationClipCommands },
 ];
 
 /**

@@ -16,6 +16,8 @@ import { DialogRoot } from './ui/shell/DialogRoot';
 import { CommandPalette } from './ui/palette/CommandPalette';
 import { Sidebar } from './ui/shell/Sidebar';
 import { TimelineDock } from './ui/animation/TimelineDock';
+import { PhoneTransportChip } from './ui/animation/PhoneTransportChip';
+import { PhonePaintChip } from './ui/animation/PhonePaintChip';
 import { StatusBar } from './ui/status/StatusBar';
 import { useIsPhone } from './ui/kit';
 import { ensureCatalogLoaded } from './state/catalogStore';
@@ -167,6 +169,12 @@ function App() {
       {/* The Tool bar's phone variant: a pinned strip in the flex flow directly above the
           condensed strip, rather than a floating window (foundation §12). */}
       {isPhone && <ToolBarStrip />}
+      {/* Animation's phone transport (design-animation-mode.md §14 row 1): a docked chip
+          above the condensed strip — mini play, clip name, live progress — whose ⤢ opens the
+          fullscreen Timeline sheet. It self-gates on `$mode === 'animation'`. Its slot is
+          shared with the member-paint chip, which takes over while painting is armed. */}
+      {isPhone && <PhonePaintChip />}
+      {isPhone && <PhoneTransportChip />}
       {/* The phone's condensed strip, with the five mode tabs docked below it as the last
           flex child of the frame (foundation §12). Re-tapping the active tab opens that
           mode's Panel sheet — the phone's route to the right-sidebar content. */}

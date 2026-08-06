@@ -62,7 +62,7 @@ import { insertKeyframeAtPlayhead } from './timelineActions';
  * writes it, and a wider subscription re-reconciles the whole bar (and its react-aria
  * Select/Menu subtrees) ~60×/s.
  */
-export function TransportBar() {
+export function TransportBar({ phone = false }: { phone?: boolean } = {}) {
   const anim = useStore($activeAnimation);
   const playing = useStore($animPlaying);
   const parked = useStore($playheadParked);
@@ -70,20 +70,32 @@ export function TransportBar() {
   const trails = useStore($animTrails);
   const collapsed = useStore($layout).timeline.collapsed;
   const disabled = !anim;
+  // The phone tier (design §14 row 1): the SAME bar at `md` control size with 44px rows,
+  // allowed to wrap onto a second line inside the Timeline sheet. Not a fork — one
+  // component, one set of store calls, two densities (foundation §12).
+  const size = phone ? ('md' as const) : ('xs' as const);
+  const touch = phone ? 'min-h-11' : undefined;
+  const icon = phone ? 16 : 13;
 
   return (
-    <div className="flex h-8 flex-none items-center gap-1 border-b border-border bg-panel px-1.5">
+    <div
+      className={cn(
+        'flex flex-none items-center gap-1 border-b border-border bg-panel px-1.5',
+        phone ? 'min-h-11 flex-wrap py-1' : 'h-8',
+      )}
+    >
       {/* 1 — play / pause. Play resumes from the parked/pinned time; pause parks in place. */}
       <Tooltip content={playing ? 'Pause (Space)' : 'Play (Space)'}>
         <Button
-          size="xs"
+          size={size}
           iconOnly
           variant="ghost"
+          className={touch}
           isDisabled={disabled}
           aria-label={playing ? 'Pause preview' : 'Play preview'}
           onPress={() => (playing ? pausePreview() : playAnimationPreview())}
         >
-          {playing ? <Pause size={13} /> : <Play size={13} />}
+          {playing ? <Pause size={icon} /> : <Play size={icon} />}
         </Button>
       </Tooltip>
 
@@ -91,13 +103,14 @@ export function TransportBar() {
       {(playing || parked) && (
         <Tooltip content="Stop and return to the modeled pose">
           <Button
-            size="xs"
+            size={size}
             iconOnly
             variant="ghost"
+            className={touch}
             aria-label="Stop preview"
             onPress={() => stopAnimationPreview()}
           >
-            <Square size={12} />
+            <Square size={icon - 1} />
           </Button>
         </Tooltip>
       )}
@@ -105,20 +118,20 @@ export function TransportBar() {
       {/* 3 — loop (persisted). */}
       <Tooltip content="Loop">
         <ToggleButton
-          size="xs"
+          size={size}
           aria-label="Loop preview"
-          className="w-6 flex-none"
+          className={cn('flex-none', phone ? 'min-h-11 w-11' : 'w-6')}
           isDisabled={disabled}
           isSelected={transport.loop}
           onChange={setLoop}
         >
-          <Repeat size={12} />
+          <Repeat size={icon - 1} />
         </ToggleButton>
       </Tooltip>
 
       {/* 4 — speed (persisted). */}
       <Select
-        size="xs"
+        size={phone ? 'md' : 'xs'}
         aria-label="Playback speed"
         className="w-16 flex-none"
         isDisabled={disabled}
@@ -136,40 +149,43 @@ export function TransportBar() {
       {/* 5 — to rest ⏮⚓. */}
       <Tooltip content="Show the modeled pose (rest anchor)">
         <Button
-          size="xs"
+          size={size}
           iconOnly
           variant="ghost"
+          className={touch}
           isDisabled={disabled}
           aria-label="Return to rest anchor"
           onPress={() => returnToRest()}
         >
-          <Anchor size={12} />
+          <Anchor size={icon - 1} />
         </Button>
       </Tooltip>
 
       {/* 6 — prev / next keyframe (parks + pins; never wraps). */}
       <Tooltip content="Previous keyframe (,)">
         <Button
-          size="xs"
+          size={size}
           iconOnly
           variant="ghost"
+          className={touch}
           isDisabled={disabled}
           aria-label="Previous keyframe"
           onPress={() => stepToKeyframe(-1)}
         >
-          <ChevronFirst size={13} />
+          <ChevronFirst size={icon} />
         </Button>
       </Tooltip>
       <Tooltip content="Next keyframe (.)">
         <Button
-          size="xs"
+          size={size}
           iconOnly
           variant="ghost"
+          className={touch}
           isDisabled={disabled}
           aria-label="Next keyframe"
           onPress={() => stepToKeyframe(1)}
         >
-          <ChevronLast size={13} />
+          <ChevronLast size={icon} />
         </Button>
       </Tooltip>
 
@@ -182,13 +198,13 @@ export function TransportBar() {
       {/* 8 — insert a keyframe at the playhead. */}
       <Tooltip content="Insert keyframe at the playhead (K)">
         <Button
-          size="xs"
+          size={size}
           variant="secondary"
-          className="flex-none px-2"
+          className={cn('flex-none px-2', touch)}
           isDisabled={disabled}
           onPress={() => insertKeyframeAtPlayhead()}
         >
-          <Plus size={12} /> Key
+          <Plus size={icon - 1} /> Key
         </Button>
       </Tooltip>
 
@@ -201,23 +217,28 @@ export function TransportBar() {
         }
       >
         <ToggleButton
-          size="xs"
+          size={size}
           aria-label="Latch the playhead"
-          className="w-6 flex-none"
+          className={cn('flex-none', phone ? 'min-h-11 w-11' : 'w-6')}
           isDisabled={disabled}
           isSelected={transport.latched}
           onChange={setLatched}
         >
-          {transport.latched ? <Lock size={12} /> : <LockOpen size={12} />}
+          {transport.latched ? <Lock size={icon - 1} /> : <LockOpen size={icon - 1} />}
         </ToggleButton>
       </Tooltip>
 
       {/* 10 — motion-trails mirror menu. It and View ▸ Motion Trails both write `$animTrails`,
           which `TrajectoryLayer` reads — one preference, two homes (§9.5, S15 mirror rule). */}
       <MenuTrigger>
-        <Button size="xs" variant="ghost" className="flex-none px-1.5" aria-label="Motion trails">
-          <Spline size={12} />
-          <ChevronDown size={10} />
+        <Button
+          size={size}
+          variant="ghost"
+          className={cn('flex-none px-1.5', touch)}
+          aria-label="Motion trails"
+        >
+          <Spline size={icon - 1} />
+          <ChevronDown size={icon - 3} />
         </Button>
         <Popover>
           <Menu
@@ -235,21 +256,24 @@ export function TransportBar() {
         </Popover>
       </MenuTrigger>
 
-      {/* 11 — collapse to the 32px transport-only strip. */}
-      <Tooltip content={collapsed ? 'Show the tracks' : 'Collapse to the transport strip'}>
-        <Button
-          size="xs"
-          iconOnly
-          variant="ghost"
-          aria-label={collapsed ? 'Expand the timeline' : 'Collapse the timeline'}
-          onPress={() => toggleTimeline()}
-        >
-          <ChevronDown
-            size={13}
-            className={cn('transition-transform', collapsed && 'rotate-180')}
-          />
-        </Button>
-      </Tooltip>
+      {/* 11 — collapse to the 32px transport-only strip. Desktop only: inside the phone's
+          fullscreen Timeline sheet there is no dock to collapse (the sheet's own ✕ closes). */}
+      {!phone && (
+        <Tooltip content={collapsed ? 'Show the tracks' : 'Collapse to the transport strip'}>
+          <Button
+            size="xs"
+            iconOnly
+            variant="ghost"
+            aria-label={collapsed ? 'Expand the timeline' : 'Collapse the timeline'}
+            onPress={() => toggleTimeline()}
+          >
+            <ChevronDown
+              size={13}
+              className={cn('transition-transform', collapsed && 'rotate-180')}
+            />
+          </Button>
+        </Tooltip>
+      )}
     </div>
   );
 }

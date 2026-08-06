@@ -1,6 +1,7 @@
-import { TextField } from './kit';
+import { Minus, Plus } from 'lucide-react';
+import { Button, TextField, useIsPhone } from './kit';
 import { fmt } from './format';
-import { useNumberDraft } from './numberDraft';
+import { clampNumber, trimFloatNoise, useNumberDraft } from './numberDraft';
 
 /**
  * A draft-aware numeric field with a short inline label. Free-types while focused (local
@@ -24,9 +25,27 @@ export function NumberField(props: {
   /** Arrow-key increment (default 1); Shift ⇒ ×10, Alt ⇒ ×0.1. */
   step?: number;
   isDisabled?: boolean;
+  /**
+   * Render `[−]`/`[+]` buttons beside the input **on phones** (foundation §12's census
+   * touch-gap rule; design-animation-mode.md §14 row 4). They are the touch equivalent of
+   * ArrowUp/ArrowDown — same `step`, same single-undo-step contract via `onInteractionStart`
+   * — for fields whose keyboard route does not exist on a phone. Desktop ignores the flag.
+   */
+  touchSteppers?: boolean;
 }) {
-  const { label, ariaLabel, value, onCommit, onInteractionStart, min, max, step, isDisabled } =
-    props;
+  const {
+    label,
+    ariaLabel,
+    value,
+    onCommit,
+    onInteractionStart,
+    min,
+    max,
+    step,
+    isDisabled,
+    touchSteppers,
+  } = props;
+  const isPhone = useIsPhone();
   const field = useNumberDraft({
     value,
     onCommit,
@@ -37,9 +56,28 @@ export function NumberField(props: {
     format: fmt,
   });
 
+  const bump = (direction: 1 | -1) => {
+    onInteractionStart?.();
+    const next = clampNumber(trimFloatNoise(value + direction * (step ?? 1)), min, max);
+    if (next !== value) onCommit(next);
+  };
+
   return (
     <label className="flex items-center gap-1">
       <span className="w-3 text-xs text-fg-subtle">{label}</span>
+      {touchSteppers && isPhone && (
+        <Button
+          iconOnly
+          size="sm"
+          variant="ghost"
+          className="size-11 shrink-0"
+          isDisabled={isDisabled}
+          aria-label={`Decrease ${ariaLabel ?? label}`}
+          onPress={() => bump(-1)}
+        >
+          <Minus className="size-4" />
+        </Button>
+      )}
       <TextField
         size="sm"
         // must inputMode="url" so negative numbers can be managed on mobile devices, numeric/decimal/integer dont show "-" key
@@ -49,6 +87,19 @@ export function NumberField(props: {
         isDisabled={isDisabled}
         {...field}
       />
+      {touchSteppers && isPhone && (
+        <Button
+          iconOnly
+          size="sm"
+          variant="ghost"
+          className="size-11 shrink-0"
+          isDisabled={isDisabled}
+          aria-label={`Increase ${ariaLabel ?? label}`}
+          onPress={() => bump(1)}
+        >
+          <Plus className="size-4" />
+        </Button>
+      )}
     </label>
   );
 }

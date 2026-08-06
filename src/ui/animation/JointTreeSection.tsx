@@ -19,6 +19,7 @@ import {
   TextField,
   Tooltip,
   cn,
+  useIsPhone,
   usePointerDrag,
 } from '../kit';
 import { revealEntity, select } from '../../state/editorStore';
@@ -40,6 +41,7 @@ import {
   setJointPivot,
   setJointPivotToCentroid,
 } from '../../state/animationStore';
+import { closePhoneSheets } from '../shell/phone/phoneSheets';
 import type { PartAnimation } from '../../ksa/types';
 import { buildDopeSheetModel, type DopeRow } from './dopeSheetModel';
 import { AnimSection } from './AnimSection';
@@ -75,6 +77,10 @@ export function JointTreeSection() {
   const [confirm, setConfirm] = useState<{ kind: 'delete' | 'detach'; jointId: string } | null>(
     null,
   );
+  // Touch has no hover, so the grip would be an invisible 12px target that competes with the
+  // sheet's own scroll. Re-parenting on the phone goes through the row ⋮ ▸ Re-parent… menu,
+  // which is kept for exactly this (design §14 row 2).
+  const isPhone = useIsPhone();
 
   const selectedIds = selected.map((s) => s.placement.instanceId);
   const rows = anim ? buildDopeSheetModel(anim, collapsed).rows : [];
@@ -151,18 +157,20 @@ export function JointTreeSection() {
               )}
               style={{ marginLeft: row.depth * 10 }}
             >
-              <button
-                type="button"
-                aria-label="Drag to re-parent"
-                className="shrink-0 touch-none text-fg-subtle opacity-0 hover:text-fg group-hover:opacity-100"
-                onPointerDown={(e) => {
-                  dragRef.current = { jointId: row.jointId, over: null };
-                  setDrag(dragRef.current);
-                  dragHandlers.onPointerDown(e);
-                }}
-              >
-                <GripVertical className="size-3" />
-              </button>
+              {!isPhone && (
+                <button
+                  type="button"
+                  aria-label="Drag to re-parent"
+                  className="shrink-0 touch-none text-fg-subtle opacity-0 hover:text-fg group-hover:opacity-100"
+                  onPointerDown={(e) => {
+                    dragRef.current = { jointId: row.jointId, over: null };
+                    setDrag(dragRef.current);
+                    dragHandlers.onPointerDown(e);
+                  }}
+                >
+                  <GripVertical className="size-3" />
+                </button>
+              )}
               {row.hasChildren ? (
                 <button
                   type="button"
@@ -435,6 +443,9 @@ function JointMenu({
             // joint active first — the menu can be opened on a row that is not.
             $activeJointId.set(joint.id);
             armPivotPick('joint');
+            // Phone: this tree lives in the Panel sheet, which covers the viewport the pick
+            // needs (design §14 row 6). The condensed status chip guides from here.
+            closePhoneSheets();
             break;
           case 'detachAll':
             // ≤5 goes straight through with an [Undo] flash; more raises the question.

@@ -24,6 +24,7 @@ import {
   duplicateAnimation,
   removeAnimation,
   renameAnimation,
+  selectAnimationClip,
   setRestAnchor,
 } from '../../state/animationStore';
 import { animGlbPath } from '../../ksa/animationNaming';
@@ -62,7 +63,10 @@ export function ClipsSection() {
 
   const open = (id: string) => {
     if ($activeAnimationId.get() === id) return; // D3: re-click does NOT close
-    $activeAnimationId.set(id);
+    // Through the store action, so this row and the palette's "Open clip: <name>" agree on
+    // what opening means — including dropping the previous clip's joint/keyframe focus, which
+    // names entities of a DIFFERENT skeleton.
+    selectAnimationClip(id);
     refitForClip();
   };
 

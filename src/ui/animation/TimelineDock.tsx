@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useStore } from '@nanostores/react';
 import { Plus } from 'lucide-react';
-import { Button, InlineConfirmStrip, ResizeHandle, cn } from '../kit';
+import { Button, InlineConfirmStrip, ResizeHandle, cn, useIsPhone } from '../kit';
 import { $mode } from '../../state/modeStore';
 import {
   $layout,
@@ -51,16 +51,22 @@ export function TimelineDock() {
   const anim = useStore($activeAnimation);
   const activeId = useStore($activeAnimationId);
   const confirm = useStore($timelineDeleteConfirm);
+  // Below 640px the timeline is the fullscreen sheet behind the transport chip
+  // (`PhoneTransportChip` / `PhoneTimelineSheet`, design §14 row 1) — a 120px dock plus the
+  // header column would leave no viewport at all. Same components, different host.
+  const isPhone = useIsPhone();
   const { height, collapsed, hidden } = layout.timeline;
   const inMode = mode === 'animation';
 
   // Clip switch → auto-fit + playhead to the new clip's anchor (design §5.9 / §6.1). Keyed
-  // on the id so it runs once per switch, not on every document edit.
+  // on the id so it runs once per switch, not on every document edit. Deliberately NOT gated
+  // on the phone check below: the phone sheet shows the same view atoms and wants the same
+  // fit, and this component stays mounted (returning null) either way.
   useEffect(() => {
     if (inMode && activeId) refitForClip();
   }, [activeId, inMode]);
 
-  if (!inMode || hidden) return null;
+  if (!inMode || hidden || isPhone) return null;
 
   return (
     <section

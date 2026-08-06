@@ -24,7 +24,7 @@ import {
 import { splitEasingConfigAt } from '../ksa/easingFit';
 import { computeClipIssues } from '../ksa/clipIssues';
 import { matrixFromTransform, transformFromMatrix } from '../three/coords';
-import { $mode, armTool, disarmTool, registerModeHooks, registerTool } from './modeStore';
+import { $mode, armTool, disarmTool, registerModeHooks, registerTool, setMode } from './modeStore';
 import { $part, $selection, pushUndo, type ToolMode } from './editorStore';
 
 /**
@@ -84,6 +84,19 @@ export const $isPoseEditing = computed(
  */
 export const $clipIssues = computed([$part], computeClipIssues);
 
+/**
+ * How many clips the exporter would SKIP — the number behind the mode switcher's attention
+ * dot and the export pre-flight's Animations block (design §11.1; foundation §2.2). A clip
+ * counts as a draft exactly when it carries a `blocker`, which `computeClipIssues` derives
+ * from the same three predicates as `isAnimationExportable`.
+ */
+export const $draftClipCount = computed(
+  $clipIssues,
+  (issues) =>
+    Object.values(issues).filter((list) => list.some((issue) => issue.severity === 'blocker'))
+      .length,
+);
+
 // ── v2 ephemeral atoms (never persisted, never undo; clamped by initAnimationStore) ──
 
 /**
@@ -136,8 +149,21 @@ export const $pivotPickTarget = atom<'joint' | 'working' | null>(null);
  */
 export const $poseDragActive = atom<boolean>(false);
 
-/** The live per-gesture axis lock, for the status hint. Null = free. Resets at drag end. */
+/**
+ * **The** per-gesture pose axis lock (§9.2): the status bar's hint reads it, and `PoseGizmo`
+ * both writes it (the `X`/`Y`/`Z` keys) and applies it (a subscription). Null = free; it
+ * resets at drag end and is never persisted.
+ */
 export const $poseDragLock = atom<{ axis: 'x' | 'y' | 'z'; space: 'local' | 'world' } | null>(null);
+
+/**
+ * The phone Tool bar's `[free|X|Y|Z]` segmented control (design §14 row 5) — touch has no
+ * `X`/`Y`/`Z` keys, so the lock needs a pointer route. It only reaches the joint-LOCAL tier;
+ * the world-axis second tap stays desktop-only, which §14 lists as a sanctioned reduction.
+ */
+export function setPoseAxisLock(axis: 'x' | 'y' | 'z' | null): void {
+  $poseDragLock.set(axis ? { axis, space: 'local' } : null);
+}
 
 /**
  * The §9.6 posed-placement lock, published by `EditorScene.updateSelection` (the scene→UI
@@ -379,6 +405,14 @@ export const $memberPaintTarget = computed(
 );
 
 /**
+ * Instance ids toggled by the CURRENT paint session, newest last (design §7.4 / §14 row 3).
+ * The Members grid flashes these rows when it comes back — on the phone the sheet is
+ * dismissed while painting, so "what did I just change?" has no other answer. Ephemeral, and
+ * cleared when a session is armed.
+ */
+export const $memberPaintChanges = atom<string[]>([]);
+
+/**
  * `member-paint` is an Animation-only tenant of the single `$activeTool` slot (foundation
  * §2.6 row 5): arming any other tool cancels it, a mode switch cancels it, and Esc rung 5
  * disarms it — all through the slot, so this only owns the teardown of its own hover state.
@@ -410,6 +444,8 @@ export function paintMemberOnTarget(instanceId: string): {
   if (!$part.get().placements.some((p) => p.instanceId === instanceId))
     return { result: 'not-a-subpart' };
   const owner = anim.joints.find((j) => j.memberInstanceIds.includes(instanceId));
+  const changed = $memberPaintChanges.get();
+  if (!changed.includes(instanceId)) $memberPaintChanges.set([...changed, instanceId]);
   if (owner?.id === target.id) {
     detachMembers(animId, [instanceId]);
     return { result: 'detached', jointName: target.name };
@@ -493,6 +529,15 @@ export function armPivotPick(target: 'joint' | 'working'): void {
  * flip the moment `$mode` leaves `'animation'`.
  */
 registerModeHooks('animation', {
+  /**
+   * The cross-mode jump payload (foundation §2.5): `{animationId}` — what the export
+   * pre-flight's draft rows and the palette's "Open clip: <name>" send when the editor is
+   * somewhere else. Entering with no payload keeps whatever clip was last open.
+   */
+  onEnter: (payload) => {
+    const animationId = (payload as { animationId?: string } | undefined)?.animationId;
+    if (animationId) selectAnimationClip(animationId);
+  },
   onExit: () => {
     $editKeyframeId.set(null); // end posing
     stopAnimationPreview(); // stop playback + spring back to the modeled rest pose
@@ -587,6 +632,30 @@ function sortKeyframes(anim: PartAnimation): void {
 }
 
 // ── animations ───────────────────────────────────────────────────────────────
+
+/**
+ * Opens a clip in the editor: makes it active and drops the joint/keyframe focus of the clip
+ * that was open (they name entities of a DIFFERENT skeleton). No-op for an unknown id, and
+ * never an undo step — which clip is open is view state.
+ */
+export function selectAnimationClip(animId: string): void {
+  if (!$part.get().animations.some((a) => a.id === animId)) return;
+  if ($activeAnimationId.get() === animId) return;
+  $activeAnimationId.set(animId);
+  $activeJointId.set(null);
+  $editKeyframeId.set(null);
+  $timelineSelection.set([]);
+}
+
+/**
+ * The jump form of {@link selectAnimationClip} (foundation §2.5): switches to Animation mode
+ * first when the caller is somewhere else — the export pre-flight's draft rows, the palette's
+ * "Open clip: <name>". `setMode` is a no-op when already in the mode, hence the branch.
+ */
+export function openAnimationClip(animId: string): void {
+  if ($mode.get() === 'animation') selectAnimationClip(animId);
+  else setMode('animation', { animationId: animId });
+}
 
 /** Creates an animation, makes it active, returns its id. */
 export function addAnimation(name = 'Animation', mode: AnimationMode = 'actuate'): string {

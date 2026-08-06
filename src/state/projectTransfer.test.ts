@@ -23,6 +23,7 @@ import {
   parseProjectImport,
   serializeProjectJson,
 } from './projectTransfer';
+import { $part, exportHistory, importHistory, importProjectData, undo } from './editorStore';
 
 /** A transform with all three components set to `n` (scale defaults to 1). */
 function t(n = 0, scale = 1) {
@@ -986,5 +987,146 @@ describe('<Internal> flag transfer', () => {
     dest.internalFlags['Core.Wing'] = true;
     const { part } = mergeProjectImport(dest, buildProjectExport(createEmptyPart(), 'S'));
     expect(part.internalFlags).toEqual({ 'Core.Wing': true });
+  });
+});
+
+/**
+ * **P11E.03 — the per-channel easing model rides project transfer verbatim.**
+ *
+ * `mergeProjectImport` moves whole `PartAnimation` objects (a `structuredClone` plus a fresh
+ * clip id and remapped member/solar refs), so the 11A schema change — per-channel
+ * `JointSegmentEasing` and the `cubicSplineApprox` import flag — needs no transfer code of its
+ * own. This suite is the REGRESSION that keeps it that way: a channel dropped in the codec or
+ * flattened in the clone would silently paste LINEAR motion, which is exactly the class of
+ * failure the constitution's "when in doubt it is breaking" rule exists for.
+ *
+ * The round trip is the real one: encode → JSON string → parse → additive paste through
+ * `importProjectData`, which is also where the ONE-undo-step contract lives.
+ */
+describe('project transfer carries per-channel easings + the CubicSpline flag (P11E.03)', () => {
+  /** A clip whose joint eases each channel DIFFERENTLY, plus the import flag and an anchor. */
+  function easedSource(): EditingPart {
+    const src = createEmptyPart();
+    src.partId = 'eased_part';
+    src.placements.push(
+      { instanceId: 'panel_1', subPartTemplateId: 'Core.Wing', layerId: DEFAULT_LAYER_ID, ...t(0) },
+      { instanceId: 'panel_2', subPartTemplateId: 'Core.Wing', layerId: DEFAULT_LAYER_ID, ...t(1) },
+    );
+    src.animations.push({
+      id: 'anim_eased',
+      name: 'Deploy',
+      durationSec: 2,
+      mode: 'deployRetract',
+      cubicSplineApprox: true,
+      restKeyframeId: 'kf1',
+      joints: [
+        { id: 'j_hinge', name: 'Hinge', parentJointId: null, memberInstanceIds: ['panel_1'] },
+        { id: 'j_strut', name: 'Strut', parentJointId: 'j_hinge', memberInstanceIds: ['panel_2'] },
+      ],
+      keyframes: [
+        {
+          id: 'kf0',
+          timeSec: 0,
+          poses: { j_hinge: identityTransform(), j_strut: identityTransform() },
+          easings: {
+            // Divergent per channel — the whole point of the 11A model.
+            j_hinge: {
+              position: { kind: 'preset', preset: 'easeInOutCubic' },
+              rotation: { kind: 'cubicBezier', x1: 0.2, y1: -0.3, x2: 0.8, y2: 1.4 },
+            },
+            // …and a joint that eases exactly one channel, with the other two absent.
+            j_strut: { scale: { kind: 'preset', preset: 'easeOut' } },
+          },
+        },
+        {
+          id: 'kf1',
+          timeSec: 2,
+          poses: { j_hinge: identityTransform(), j_strut: identityTransform() },
+        },
+      ],
+      solarTracking: null,
+    });
+    return src;
+  }
+
+  /** Encode → string → parse → the paste the Import Project dialog performs. */
+  function paste(dest: EditingPart, src: EditingPart) {
+    const parsed = parseProjectImport(serializeProjectJson(buildProjectExport(src, 'Eased')));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) throw new Error(parsed.error);
+    return mergeProjectImport(dest, parsed.env);
+  }
+
+  it('deep-equals the easing maps after a full encode → parse → paste round trip', () => {
+    const src = easedSource();
+    const { part } = paste(createEmptyPart(), src);
+
+    const anim = part.animations[0];
+    // A fresh clip id (re-pasting the same export must never collide)…
+    expect(anim.id).not.toBe('anim_eased');
+    // …but the JOINT ids — which the easing maps are KEYED BY — are untouched, so the maps
+    // are comparable verbatim.
+    expect(anim.joints.map((j) => j.id)).toEqual(['j_hinge', 'j_strut']);
+    const kf0 = anim.keyframes.find((k) => k.timeSec === 0)!;
+    expect(kf0.easings).toEqual(src.animations[0].keyframes[0].easings);
+    // Explicitly: the channels that were ABSENT are still absent (linear stays unstored).
+    expect(kf0.easings!.j_hinge.scale).toBeUndefined();
+    expect(kf0.easings!.j_strut.position).toBeUndefined();
+    expect(kf0.easings!.j_strut.rotation).toBeUndefined();
+    // The final column never carried easing and must not have grown one.
+    expect(anim.keyframes.find((k) => k.timeSec === 2)!.easings).toBeUndefined();
+  });
+
+  it('preserves cubicSplineApprox and the rest anchor, and remaps members', () => {
+    const dest = createEmptyPart();
+    // A colliding instance id forces the paste to regenerate ids — the case where a dropped
+    // remap would leave the joint driving nothing.
+    dest.placements.push({
+      instanceId: 'panel_1',
+      subPartTemplateId: 'Core.Wing',
+      layerId: DEFAULT_LAYER_ID,
+      ...t(0),
+    });
+
+    const { part } = paste(dest, easedSource());
+    const anim = part.animations[0];
+
+    expect(anim.cubicSplineApprox).toBe(true);
+    expect(anim.restKeyframeId).toBe('kf1');
+    expect(anim.keyframes.some((k) => k.id === anim.restKeyframeId)).toBe(true);
+
+    // Members point at placements that exist, and NOT at the destination's own panel_1.
+    const pasted = new Set(part.placements.slice(1).map((p) => p.instanceId));
+    const members = anim.joints.flatMap((j) => j.memberInstanceIds);
+    expect(members).toHaveLength(2);
+    expect(members.every((id) => pasted.has(id))).toBe(true);
+    // The chain survives the paste too (easings are meaningless without it).
+    expect(anim.joints[1].parentJointId).toBe('j_hinge');
+  });
+
+  it('pastes in exactly ONE undo step', () => {
+    $part.set(createEmptyPart());
+    importHistory({ undo: [], redo: [] });
+    const parsed = parseProjectImport(
+      serializeProjectJson(buildProjectExport(easedSource(), 'Eased')),
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) throw new Error(parsed.error);
+
+    importProjectData(parsed.env);
+    expect(exportHistory().undo).toHaveLength(1);
+
+    const kf0 = $part.get().animations[0].keyframes.find((k) => k.timeSec === 0)!;
+    expect(kf0.easings!.j_hinge.rotation).toEqual({
+      kind: 'cubicBezier',
+      x1: 0.2,
+      y1: -0.3,
+      x2: 0.8,
+      y2: 1.4,
+    });
+
+    // …and undoing it takes the whole paste — clip, easings and all — back out.
+    undo();
+    expect($part.get().animations).toHaveLength(0);
   });
 });

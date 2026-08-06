@@ -39,6 +39,8 @@ import {
   type ExportTab,
 } from '../state/exportPreviewStore';
 import { collectExportIssues, type ExportIssue, type IssueSeverity } from '../ksa/exportIssues';
+import { computeClipIssues } from '../ksa/clipIssues';
+import { openAnimationClip } from '../state/animationStore';
 import { MOD_FOLDER_NAME, buildModZip, sanitizeBaseName, writeModToFolder } from '../ksa/modExport';
 import { notify, toast } from './toast';
 
@@ -186,12 +188,14 @@ function PreFlight({ collapsed, onClose }: { collapsed: boolean; onClose: () => 
   const reactions = useStore($allReactionIndex);
   const catalog = useStore($catalogIndex);
   const issues = collectExportIssues(part, reactions, catalog);
-  if (issues.length === 0) {
+  const drafts = draftClips(part);
+  if (issues.length === 0 && drafts.length === 0) {
     return <p className="text-xs text-fg-subtle">Pre-flight found nothing to report.</p>;
   }
   return (
     <div className="flex flex-col gap-2">
       <SectionTitle>Pre-flight</SectionTitle>
+      <DraftClips drafts={drafts} onClose={onClose} />
       {(['block', 'warn', 'info'] as const).map((severity) => {
         const rows = issues.filter((i) => i.severity === severity);
         if (rows.length === 0) return null;
@@ -218,6 +222,64 @@ function PreFlight({ collapsed, onClose }: { collapsed: boolean; onClose: () => 
         );
       })}
     </div>
+  );
+}
+
+/**
+ * The clips the exporter will SKIP, with the reasons — the pre-flight's **Animations** block
+ * (design-animation-mode.md §11.1). It consumes the very function every in-mode surface reads
+ * (`computeClipIssues`, whose blockers mirror `isAnimationExportable`), so the dialog and the
+ * clip rows can never disagree about what "draft" means.
+ */
+function draftClips(part: Parameters<typeof computeClipIssues>[0]) {
+  const issues = computeClipIssues(part);
+  return part.animations
+    .map((anim) => ({
+      id: anim.id,
+      name: anim.name,
+      blockers: (issues[anim.id] ?? [])
+        .filter((issue) => issue.severity === 'blocker')
+        .map((issue) => issue.message),
+    }))
+    .filter((clip) => clip.blockers.length > 0);
+}
+
+/**
+ * Skipped clips are NOT export blockers (foundation §10.6's non-blocking policy is not even
+ * in play here — the mod writes fine, one clip is simply absent), so they get their own
+ * amber block instead of a row in the severity boxes, and the button never relabels for them.
+ * Each row is a jump link: close, switch to Animation mode, open that clip (§2.5).
+ */
+function DraftClips({
+  drafts,
+  onClose,
+}: {
+  drafts: ReturnType<typeof draftClips>;
+  onClose: () => void;
+}) {
+  if (drafts.length === 0) return null;
+  return (
+    <DisclosureSection
+      title={
+        <span className="text-warning">
+          🟨 {drafts.length} draft animation clip{drafts.length === 1 ? '' : 's'} — draft clips are
+          skipped
+        </span>
+      }
+      defaultExpanded={drafts.length <= 3}
+    >
+      <FindingsRows
+        findings={drafts.map((clip) => ({
+          clip,
+          message: `${clip.name}: ${clip.blockers.join(' · ')}  → Animation mode`,
+        }))}
+        tone="text-warning"
+        onSelect={(row) => {
+          onClose();
+          openAnimationClip(row.clip.id);
+        }}
+      />
+    </DisclosureSection>
   );
 }
 
@@ -367,7 +429,15 @@ function preflightSummary(
 ): string {
   const issues = collectExportIssues(part, reactions, catalog);
   const count = (severity: IssueSeverity) => issues.filter((i) => i.severity === severity).length;
-  return `Pre-flight at export: ${count('block')} blocking · ${count('warn')} warning · ${count('info')} note.`;
+  const drafts = draftClips(part);
+  return (
+    `Pre-flight at export: ${count('block')} blocking · ${count('warn')} warning · ${count('info')} note.` +
+    (drafts.length === 0
+      ? ''
+      : `\n${drafts.length} draft animation clip${drafts.length === 1 ? '' : 's'} skipped: ${drafts
+          .map((clip) => clip.name)
+          .join(', ')}.`)
+  );
 }
 
 /**

@@ -21,11 +21,9 @@ import {
   deleteSelectedColumns,
   fitClip,
   fitSelection,
-  insertKeyframeAtPlayhead,
   pasteColumnsAtPlayhead,
   selectAllColumns,
   snapPlayheadToKeyframe,
-  togglePlayback,
   zoomTimelineAboutPlayhead,
 } from '../animation/timelineActions';
 import { $activeTool, $mode, disarmTool, MODES } from '../../state/modeStore';
@@ -568,13 +566,15 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
     title: 'Animation mode',
     bindings: [
       {
+        // Command-backed (P11E.04): `Space`, the transport button and the palette row are
+        // ONE action with one enablement rule — the id is deliberately the command's.
         id: 'anim.playPause',
         label: 'Play / pause the preview',
         keys: 'space',
         chords: [['Space']],
         scope: 'mode:animation',
         when: () => !$dialogOpen.get(),
-        run: () => togglePlayback(),
+        run: () => runCommand('anim.playPause'),
       },
       {
         // `comma`/`period`, not `,`/`.`: `,` is react-hotkeys-hook's own alternatives
@@ -598,13 +598,14 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
         run: () => stepToKeyframe(1),
       },
       {
+        // Command-backed (P11E.04) — see `anim.playPause` above.
         id: 'anim.insertKeyframe',
         label: 'Insert a keyframe at the playhead',
         keys: 'k',
         chords: [['K']],
         scope: 'mode:animation',
         when: () => !$dialogOpen.get(),
-        run: () => insertKeyframeAtPlayhead(),
+        run: () => runCommand('anim.insertKeyframe'),
       },
     ],
   },
@@ -783,9 +784,12 @@ export const ALL_BINDINGS: HotkeyBinding[] = HOTKEY_GROUPS.flatMap((g) => g.bind
 //
 // **Implementers of later phases: delete your row as you land it.**
 //
-// | Binding (authoritative-table row)                                        | Owning phase |
-// |--------------------------------------------------------------------------|--------------|
-// | ModeSwitcher / ModeTabBar attention dots                                  | P11E (draft clips; Engine blockers landed in P7) |
+// **The ledger is EMPTY** — every row of the authoritative table is live above.
+//
+// **Struck in P11E.01**: the last row, "ModeSwitcher / ModeTabBar attention dots" (never a
+// chord — it rode this ledger as the switcher's remaining owed contribution). Engine's dot
+// landed in P7; Animation's draft-clip dot is now fed by `$draftClipCount`, so both switchers
+// carry theirs.
 //
 // **Struck in P11C.02**: the `surface:members` edit-mirror row — the docked Members view
 // stamps `data-surface="members"` and its six mirrors are live in the Lists group above.

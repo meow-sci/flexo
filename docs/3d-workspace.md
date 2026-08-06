@@ -45,7 +45,7 @@ kept next to the mutation, not sprinkled at call sites:
 
 | Source of change | How it invalidates |
 |---|---|
-| Any editor store (`$part`, selection, layers, settings, animation preview, …) | `EditorScene.sub()` — the ONLY way this class subscribes; it invalidates after each callback. **Never call `store.subscribe` directly here.** |
+| Any editor store (`$part`, selection, layers, settings, the animation playhead `$playheadSec` + its park/pin flags, …) | `EditorScene.sub()` — the ONLY way this class subscribes; it invalidates after each callback. **Never call `store.subscribe` directly here.** |
 | Async SubPart / kitten builds | explicit `viewport.invalidate()` in the `.then` — geometry lands long after the store change that asked for it |
 | Camera (orbit, pan, zoom, damping, snap, restore) | `OrbitControls`' `change` event. Damping keeps re-firing until it settles, so inertia still animates and then stops |
 | Any of the three `TransformControls` (selection gizmo, measurement endpoint, container) | their `change` event — covers hover-axis highlight, attach/detach and drag steps |
@@ -224,8 +224,9 @@ local +X. They differ from every other marker in three deliberate ways:
 - **Clicking one is not a document selection.** It routes to `setActiveNozzleRef` and leaves
   the mesh/connector selection untouched (the engine's own SubPart is usually what's
   selected while you place its exhaust). The gizmo still drags a *proxy*
-  (`engine-exhaust-proxy`), like the animation pose pivot — posed with both the position and
-  the orientation of the exhaust axis, which is what gives the rotate rings meaning.
+  (`engine-exhaust-proxy`), the same way `PoseGizmo` drags the animation `pose-proxy` — posed
+  with both the position and the orientation of the exhaust axis, which is what gives the
+  rotate rings meaning.
 
 ### Animation viewport layers
 

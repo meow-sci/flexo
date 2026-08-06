@@ -18,19 +18,36 @@ import { atom } from 'nanostores';
 
 export const $panelSheetOpen = atom(false);
 export const $inspectorSheetOpen = atom(false);
+/**
+ * The third slot: Animation mode's **fullscreen Timeline sheet** (foundation §12 Timeline
+ * row; design-animation-mode.md §14), opened from the docked transport chip. It shares the
+ * one-at-a-time rule with the other two — it covers the screen, so a Panel sheet under it
+ * would be unreachable — but it is deliberately its own atom, because playback and the
+ * playhead live in `animationStore` and survive the sheet closing.
+ */
+export const $timelineSheetOpen = atom(false);
 
 export function openPanelSheet(): void {
   $inspectorSheetOpen.set(false);
+  $timelineSheetOpen.set(false);
   $panelSheetOpen.set(true);
 }
 
 export function openInspectorSheet(): void {
   $panelSheetOpen.set(false);
+  $timelineSheetOpen.set(false);
   $inspectorSheetOpen.set(true);
 }
 
-/** Closes both — what a "go look at the viewport" action does (§A8 "Select in 3D"). */
+export function openTimelineSheet(): void {
+  $panelSheetOpen.set(false);
+  $inspectorSheetOpen.set(false);
+  $timelineSheetOpen.set(true);
+}
+
+/** Closes all three — what a "go look at the viewport" action does (§A8 "Select in 3D"). */
 export function closePhoneSheets(): void {
   $panelSheetOpen.set(false);
   $inspectorSheetOpen.set(false);
+  $timelineSheetOpen.set(false);
 }

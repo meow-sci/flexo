@@ -20,10 +20,11 @@ src/
               ViewportHost, RightSidebar), StatusBar | CondensedStatusBar +
               PhoneModeTabs), plus the single DialogRoot and the ⌘K CommandPalette.
               Exactly TWO floating windows mount inside the workspace band — the
-              gizmo ToolBarWindow and the ChainWindow (design: foundation.md §6.2);
-              the remaining legacy floating chrome (the animation scrubber, the
-              texture panel) is re-parented inside the viewport cell pending its
-              v2 rehost.
+              gizmo ToolBarWindow and the ChainWindow (design: foundation.md §6.2).
+              The v1 floating chrome named here before — the animation scrubber and
+              the texture panel — is gone: the scrubber's single v2 home is the
+              timeline dock's TransportBar (phone: the docked transport chip + the
+              fullscreen Timeline sheet), and the texture panel became Surface mode.
   main.tsx    React root: <App /> + BuildIdMismatchDialog.
 ```
 

@@ -81,6 +81,10 @@ export function AnimKeyframeCard({ anim }: { anim: PartAnimation }) {
             isDisabled={isRest0}
             min={0.001}
             max={anim.durationSec}
+            // One bake frame per press — the touch equivalent of `←`/`→` on the timeline,
+            // which the phone has no keyboard for (design §14 row 4).
+            step={1 / 30}
+            touchSteppers
             onInteractionStart={() => pushUndo('keyframe time', anim.name)}
             onCommit={(n) => setKeyframeTime(anim.id, kf.id, n)}
           />

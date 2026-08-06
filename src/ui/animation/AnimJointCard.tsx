@@ -13,6 +13,7 @@ import {
   TextField,
   Tooltip,
   cn,
+  useIsPhone,
 } from '../kit';
 import { NumberField } from '../NumberField';
 import { FocusCardHeader, focusCard } from '../build/FocusCardHeader';
@@ -49,6 +50,7 @@ import {
 import { anchorColumnId } from './dopeSheetModel';
 import { EasingCurveEditor } from './EasingCurveEditor';
 import { jointOptions } from './membershipModel';
+import { closePhoneSheets } from '../shell/phone/phoneSheets';
 import { templateCaption } from '../subPartSetModel';
 import { DEG2RAD, RAD2DEG, fmt } from '../format';
 
@@ -79,7 +81,16 @@ export function AnimJointCard({ anim, joint }: { anim: PartAnimation; joint: Ani
   const pivotEditing = useStore($pivotEditing);
   const pickTarget = useStore($pivotPickTarget);
   const workingPivot = useStore($workingPivot);
+  const isPhone = useIsPhone();
   const [nameDraft, setNameDraft] = useState<string | null>(null);
+
+  // Every 3D-arming control on this card has to get OUT OF THE WAY on a phone: the card lives
+  // in the Inspector sheet, which covers the viewport the tool is about to be used in
+  // (design §14 rows 5–6). The status chip then guides, and a tap completes.
+  const armInViewport = (arm: () => void) => () => {
+    arm();
+    if (isPhone) closePhoneSheets();
+  };
 
   const sorted = [...anim.keyframes].sort((a, b) => a.timeSec - b.timeSec);
   const index = sorted.findIndex((k) => k.id === pinId);
@@ -240,7 +251,11 @@ export function AnimJointCard({ anim, joint }: { anim: PartAnimation; joint: Ani
               size="xs"
               variant={pivotEditing ? 'primary' : 'ghost'}
               className="ml-auto"
-              onPress={() => setPivotEditing(!pivotEditing)}
+              onPress={
+                pivotEditing
+                  ? () => setPivotEditing(false)
+                  : armInViewport(() => setPivotEditing(true))
+              }
             >
               ⊕ Edit pivot
             </Button>
@@ -282,7 +297,7 @@ export function AnimJointCard({ anim, joint }: { anim: PartAnimation; joint: Ani
             <Button
               size="xs"
               variant={pickTarget === 'joint' ? 'primary' : 'ghost'}
-              onPress={() => armPivotPick('joint')}
+              onPress={armInViewport(() => armPivotPick('joint'))}
             >
               pick in 3D…
             </Button>
@@ -349,7 +364,7 @@ export function AnimJointCard({ anim, joint }: { anim: PartAnimation; joint: Ani
             <Button
               size="xs"
               variant={pickTarget === 'working' ? 'primary' : 'ghost'}
-              onPress={() => armPivotPick('working')}
+              onPress={armInViewport(() => armPivotPick('working'))}
             >
               Pick point…
             </Button>
@@ -432,7 +447,10 @@ function PoseNumerics({
           <NumberField
             key={a}
             label={a.toUpperCase()}
+            ariaLabel={`Position ${a.toUpperCase()}`}
             value={pose.position[a]}
+            step={POS_STEP}
+            touchSteppers
             onInteractionStart={start}
             onCommit={(n) => commit((t) => (t.position[a] = n))}
           />
@@ -443,7 +461,10 @@ function PoseNumerics({
           <NumberField
             key={a}
             label={a.toUpperCase()}
+            ariaLabel={`Rotation ${a.toUpperCase()}`}
             value={pose.rotation[a] * RAD2DEG}
+            step={ROT_STEP}
+            touchSteppers
             onInteractionStart={start}
             onCommit={(deg) => commit((t) => (t.rotation[a] = deg * DEG2RAD))}
           />
@@ -454,7 +475,10 @@ function PoseNumerics({
           <NumberField
             key={a}
             label={a.toUpperCase()}
+            ariaLabel={`Scale ${a.toUpperCase()}`}
             value={pose.scale[a]}
+            step={SCALE_STEP}
+            touchSteppers
             onInteractionStart={start}
             onCommit={(n) => commit((t) => (t.scale[a] = n))}
           />
@@ -498,7 +522,10 @@ function PivotNumerics({
           <NumberField
             key={a}
             label={a.toUpperCase()}
+            ariaLabel={`Pivot position ${a.toUpperCase()}`}
             value={world.position[a]}
+            step={POS_STEP}
+            touchSteppers
             onInteractionStart={() => pushUndo('move pivot', joint.name)}
             onCommit={(n) => {
               const delta: Vec3 = { x: 0, y: 0, z: 0 };
@@ -513,7 +540,10 @@ function PivotNumerics({
           <NumberField
             key={a}
             label={a.toUpperCase()}
+            ariaLabel={`Pivot orientation ${a.toUpperCase()}`}
             value={world.rotation[a] * RAD2DEG}
+            step={ROT_STEP}
+            touchSteppers
             onInteractionStart={() => pushUndo('reorient pivot', joint.name)}
             onCommit={(deg) => {
               const rotation = { ...world.rotation };
@@ -531,15 +561,30 @@ function PivotNumerics({
   );
 }
 
-/** A labelled XYZ triple — the shared shape of every numeric group on this card. */
+/**
+ * A labelled XYZ triple — the shared shape of every numeric group on this card.
+ *
+ * On a phone it stacks ONE axis per row: the touch steppers flanking each field need the
+ * width, and three of them across a 360px sheet would be under the 44px target.
+ */
 function AxisRow({ label, children }: { label: string; children: React.ReactNode }) {
+  const isPhone = useIsPhone();
   return (
     <div className="flex flex-col gap-1">
       <span className="text-[11px] text-fg-subtle">{label}</span>
-      <div className={cn('grid grid-cols-3 gap-1')}>{children}</div>
+      <div className={cn('grid gap-1', isPhone ? 'grid-cols-1' : 'grid-cols-3')}>{children}</div>
     </div>
   );
 }
+
+/**
+ * Step sizes for the pose/pivot numerics — the arrow keys AND the touch steppers (they are
+ * one increment by construction, so the two input routes can never disagree). Chosen for the
+ * units they carry: 10 cm, 5°, 0.1×. `⇧` multiplies by 10 and `⌥` by 0.1 as everywhere else.
+ */
+const POS_STEP = 0.1;
+const ROT_STEP = 5;
+const SCALE_STEP = 0.1;
 
 /** The dragged joint's own subtree — the cycle guard for the Parent select's options. */
 function descendants(anim: PartAnimation, jointId: string): Set<string> {

@@ -55,6 +55,7 @@ import {
   pausePreview,
   detachMembers,
   paintMemberOnTarget,
+  removeAnimation,
   removeJoint,
   removeKeyframe,
   reorderJoint,
@@ -79,6 +80,9 @@ import {
   setSegmentEasingAllJoints,
   stepPlayhead,
   stepToKeyframe,
+  $draftClipCount,
+  openAnimationClip,
+  selectAnimationClip,
 } from './animationStore';
 
 const anim0 = () => $part.get().animations[0];
@@ -1029,5 +1033,61 @@ describe('animationStore — the explicit pivot tool + anchor routing (§9.4)', 
     $workingPivot.set({ kind: 'point', position: { x: 1, y: 2, z: 3 } });
     $activeAnimationId.set(addAnimation('B'));
     expect($workingPivot.get()).toBeNull();
+  });
+});
+
+describe('animationStore — draft-clip surfacing + clip jumps (§11.1, P11E.01)', () => {
+  it('counts only clips the exporter would skip', () => {
+    // A rigged clip (joint with members, two keyframes, real duration) is exportable — no dot.
+    setupDoor();
+    expect($draftClipCount.get()).toBe(0);
+
+    // A brand-new clip is a draft three times over: no joint with members, one keyframe,
+    // zero duration. That is the mode dot's whole trigger.
+    const draft = addAnimation('Draft');
+    expect($draftClipCount.get()).toBe(1);
+
+    removeAnimation(draft);
+    expect($draftClipCount.get()).toBe(0);
+  });
+
+  it('a clip with a joint but no members stays a draft (the blocker mirrors the export gate)', () => {
+    const aid = addAnimation('NoMembers');
+    addJoint(aid, 'Hinge');
+    addKeyframe(aid, 1);
+    expect($draftClipCount.get()).toBe(1);
+  });
+
+  it('selectAnimationClip opens a clip and drops the previous clip’s joint/keyframe focus', () => {
+    const { aid, jid, kid } = setupDoor();
+    $activeJointId.set(jid);
+    selectKeyframeForEditing(aid, kid);
+    const other = addAnimation('Other');
+
+    selectAnimationClip(aid);
+    expect($activeAnimationId.get()).toBe(aid);
+    expect($activeJointId.get()).toBeNull();
+    expect($editKeyframeId.get()).toBeNull();
+    expect($timelineSelection.get()).toEqual([]);
+
+    // Unknown ids are ignored rather than blanking the editor.
+    selectAnimationClip('nope');
+    expect($activeAnimationId.get()).toBe(aid);
+    expect(other).toBeTruthy();
+  });
+
+  it('openAnimationClip switches into Animation mode and lands on the clip (the §2.5 jump)', () => {
+    const { aid } = setupDoor();
+    selectAnimationClip(aid);
+    const other = addAnimation('Other');
+    $mode.set('build');
+
+    openAnimationClip(aid);
+    expect($mode.get()).toBe('animation');
+    expect($activeAnimationId.get()).toBe(aid);
+
+    // Already in the mode: no re-entry needed, the clip still switches.
+    openAnimationClip(other);
+    expect($activeAnimationId.get()).toBe(other);
   });
 });

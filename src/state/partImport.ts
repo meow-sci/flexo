@@ -1,11 +1,13 @@
 import { addPart } from './editorStore';
+import { notify } from './notificationStore';
 import { toUrl } from '../ksa/catalog';
 import {
   decodeAnimationGlb,
   remapImportedAnimation,
   type ImportedAnimation,
 } from '../ksa/animationImport';
-import { fitAnimationEasing } from '../ksa/easingFit';
+import { fitAnimationEasingDetailed, type AnimationFitReport } from '../ksa/easingFit';
+import { EASING_CHANNELS } from '../ksa/easing';
 import type { PartAnimation, Transform } from '../ksa/types';
 import type { CatalogPart } from '../ksa/partCatalog';
 
@@ -57,19 +59,32 @@ export async function importBuiltInPart(
       : p;
   });
 
-  return addPart(
+  // What the fit did to each clip, collected during the id-remap pass and posted as one
+  // rich notification once the Part is in the document (design §11.3 item 3).
+  const fitEntries: AnimationImportEntry[] = [];
+
+  const layerId = addPart(
     importedPlacements,
     part.connectors,
     part.editorTags,
     targetLayerId,
     (idMap): PartAnimation[] =>
       decoded.map((d) => {
-        const fitted = fitAnimationEasing(remapImportedAnimation(d, idMap, makeId));
+        const { anim: fitted, report } = fitAnimationEasingDetailed(
+          remapImportedAnimation(d, idMap, makeId),
+        );
         // KSA deploy clips are modeled fully-deployed (their LAST keyframe), so anchor
         // the preview/export there instead of the stowed t=0 (see restKeyframeId docs).
-        if (!d.restAtLastKeyframe || fitted.keyframes.length === 0) return fitted;
-        const last = fitted.keyframes.reduce((a, b) => (b.timeSec > a.timeSec ? b : a));
-        return { ...fitted, restKeyframeId: last.id };
+        const anchored =
+          !d.restAtLastKeyframe || fitted.keyframes.length === 0
+            ? fitted
+            : {
+                ...fitted,
+                restKeyframeId: fitted.keyframes.reduce((a, b) => (b.timeSec > a.timeSec ? b : a))
+                  .id,
+              };
+        fitEntries.push({ anim: anchored, report });
+        return anchored;
       }),
     // Deep-clone so later edits to the imported part's GameData never mutate the
     // cached catalog entry (which can be imported again).
@@ -104,8 +119,77 @@ export async function importBuiltInPart(
       lights: part.lights,
     }),
   );
+
+  // ONE rich entry per import, and only when the Part actually brought clips (design §11.3
+  // item 3 / foundation §5.1 routing: `rich` = notification center only, sticky, bell pulses).
+  if (fitEntries.length > 0) {
+    notify({
+      severity: 'rich',
+      title: `Imported ${part.id}: ${fitEntries.length} animation clip${
+        fitEntries.length === 1 ? '' : 's'
+      }`,
+      body: buildAnimationImportReport(fitEntries),
+    });
+  }
+
+  return layerId;
 }
 
 function makeId(prefix: string): string {
   return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
+}
+
+/** One imported clip and what the reverse easing fit made of it. */
+export interface AnimationImportEntry {
+  anim: PartAnimation;
+  report: AnimationFitReport;
+}
+
+/**
+ * The Animations block of the import report (design §11.3 item 3) — a PURE string builder, so
+ * it is unit-testable without a fetch, a GLB or a document.
+ *
+ * Per clip it answers the four things a user needs after a KSA import: how big the rig is,
+ * how much of the baked ~30 fps stream survived as real keyframes (and which joints refused
+ * to fit and kept their dense keys losslessly), which channels came back EASED (the v2
+ * per-channel fit — LOCKED #8), and the two facts that change how the clip behaves in the
+ * editor: the rest anchor sitting at the final keyframe (a deploy clip, modeled deployed) and
+ * CubicSpline sampling having been approximated.
+ */
+export function buildAnimationImportReport(entries: readonly AnimationImportEntry[]): string {
+  return entries
+    .map(({ anim, report }) => {
+      const jointName = (id: string) => anim.joints.find((j) => j.id === id)?.name ?? id;
+      const lines = [
+        `${anim.name} — ${anim.joints.length} joint${anim.joints.length === 1 ? '' : 's'}, ` +
+          `${anim.keyframes.length} keyframe${anim.keyframes.length === 1 ? '' : 's'}` +
+          (report.keyframesIn > report.keyframesOut
+            ? ` (fitted from ${report.keyframesIn} baked keys)`
+            : ''),
+      ];
+
+      const dense = report.jointStats
+        .filter((s) => s.kind === 'dense')
+        .map((s) => jointName(s.jointId));
+      if (dense.length > 0) {
+        lines.push(`  dense keys kept (no curve fit): ${dense.join(', ')}`);
+      }
+
+      const eased = EASING_CHANNELS.map((channel) => ({
+        channel,
+        count: report.jointStats.filter((s) => s.easedChannels.includes(channel)).length,
+      })).filter((entry) => entry.count > 0);
+      lines.push(
+        eased.length > 0
+          ? `  eased channels: ${eased.map((e) => `${e.channel} ×${e.count}`).join(' · ')}`
+          : '  eased channels: none (all linear)',
+      );
+
+      if (anim.restKeyframeId) lines.push('  anchored at final keyframe (modeled deployed)');
+      if (anim.cubicSplineApprox) {
+        lines.push('  CubicSpline sampling — imported approximately (tangents dropped)');
+      }
+      return lines.join('\n');
+    })
+    .join('\n\n');
 }

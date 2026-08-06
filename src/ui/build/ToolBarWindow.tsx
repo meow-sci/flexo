@@ -25,9 +25,12 @@ import { $effectiveToolMode, $isExhaustPlacing } from '../../state/engineStore';
 import {
   $isPoseEditing,
   $pivotRouting,
+  $poseDragLock,
   $posedPlacementLock,
   poseToolMode,
+  setPoseAxisLock,
 } from '../../state/animationStore';
+import { AXIS_COLOR, type AxisKey } from '../status/axisColors';
 import { $hasSelection } from '../../state/selectors';
 import {
   $snapEnabled,
@@ -225,6 +228,11 @@ function ToolBarControls({ phone = false }: { phone?: boolean }) {
 
       <span aria-hidden className="mx-0.5 h-4 w-px shrink-0 bg-border" />
 
+      {/* Animation's touch axis lock (design-animation-mode.md §14 row 5): the phone has no
+          X/Y/Z keys, so the per-gesture lock gets a segmented control — present only while
+          there IS a pose target, and only on the phone strip. */}
+      {phone && isPoseEditing && <PoseAxisLock />}
+
       {phone ? snapToggle : <Tooltip content={<SnapHint />}>{snapToggle}</Tooltip>}
 
       <DialogTrigger>
@@ -246,6 +254,40 @@ function ToolBarControls({ phone = false }: { phone?: boolean }) {
         </Popover>
       </DialogTrigger>
     </div>
+  );
+}
+
+/**
+ * `[free|X|Y|Z]` — the touch equivalent of tapping `X`/`Y`/`Z` during a pose drag. It writes
+ * the SAME `$poseDragLock` the keys do (`setPoseAxisLock`), so the gizmo applies one lock from
+ * one place; it can be armed before the drag and it clears itself when the drag ends.
+ */
+function PoseAxisLock() {
+  const lock = useStore($poseDragLock);
+  const axes: AxisKey[] = ['x', 'y', 'z'];
+
+  return (
+    <ToggleButtonGroup
+      size="md"
+      className="w-auto"
+      aria-label="Pose axis lock"
+      selectionMode="single"
+      disallowEmptySelection
+      selectedKeys={[lock?.axis ?? 'free']}
+      onSelectionChange={(keys) => {
+        const next = [...keys][0];
+        setPoseAxisLock(next === 'free' || typeof next !== 'string' ? null : (next as AxisKey));
+      }}
+    >
+      <ToggleButton id="free" size="md" className="min-h-9 px-2 text-xs">
+        free
+      </ToggleButton>
+      {axes.map((axis) => (
+        <ToggleButton key={axis} id={axis} size="md" className="min-h-9 px-2">
+          <span style={{ color: AXIS_COLOR[axis] }}>{axis.toUpperCase()}</span>
+        </ToggleButton>
+      ))}
+    </ToggleButtonGroup>
   );
 }
 

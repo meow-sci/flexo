@@ -60,7 +60,10 @@ import {
   SUMMARY_H,
   fitClip,
   insertKeyframeAtPlayhead,
+  setTimelineView,
   zoomTimeline,
+  PX_PER_SEC_MAX,
+  PX_PER_SEC_MIN,
 } from './timelineActions';
 
 /**
@@ -86,6 +89,12 @@ import {
 const ROWS_TOP = RULER_H + SUMMARY_H;
 /** Half-height of a segment span's clickable band, px (see the deviation note below). */
 const SEGMENT_BAND = 4;
+/**
+ * Touch retime arming delay, ms (design §14 row 1: "long-press 250 ms + drag diamond =
+ * retime"). Without it a finger that lands on a diamond and slides while scrolling would
+ * silently retime a column — the one gesture on this surface that edits the document.
+ */
+const LONG_PRESS_MS = 250;
 
 interface Palette {
   fg: string;
@@ -143,7 +152,19 @@ function diamond(ctx: CanvasRenderingContext2D, x: number, y: number, r: number,
   else ctx.stroke();
 }
 
-export function DopeSheetCanvas({ anim }: { anim: PartAnimation }) {
+export function DopeSheetCanvas({
+  anim,
+  selectMode = false,
+}: {
+  anim: PartAnimation;
+  /**
+   * The phone sheet's `[☑ select]` header toggle (design §14 row 1) — the touch stand-in for
+   * the ⇧-marquee, which needs a modifier key. While on, a tap on a diamond TOGGLES its
+   * column in `$timelineSelection` instead of replacing the selection and pinning it. Desktop
+   * leaves it off and keeps ⌘-click / ⇧-drag.
+   */
+  selectMode?: boolean;
+}) {
   const view = useStore($timelineView);
   const selection = useStore($timelineSelection);
   const activeJointId = useStore($activeJointId);
@@ -172,7 +193,15 @@ export function DopeSheetCanvas({ anim }: { anim: PartAnimation }) {
     ids: string[];
     anchorTime: number;
     originalAnchorTime: number;
+    /** Touch gestures follow §14's table, not §5.3's pointer table (see `onPointerDown`). */
+    touch: boolean;
   } | null>(null);
+  /** Live touch points, for the two-finger pinch/pan gesture. */
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+  /** The in-flight pinch: the view at gesture start plus the time under the finger midpoint. */
+  const pinchRef = useRef<{ dist: number; pxPerSec: number; anchorSec: number } | null>(null);
+  /** The long-press that ARMS a touch retime. `armed` survives until the pointer lifts. */
+  const longPressRef = useRef<{ timer: number; armed: boolean }>({ timer: 0, armed: false });
 
   const model = buildDopeSheetModel(anim, collapsedMap);
 
@@ -287,12 +316,42 @@ export function DopeSheetCanvas({ anim }: { anim: PartAnimation }) {
   };
 
   // ── pointer gestures ───────────────────────────────────────────────────────
+
+  /** Starts (or restarts) the two-finger pinch/pan from the current pointer pair. */
+  const beginPinch = () => {
+    const geom = geomRef.current;
+    const points = [...pointersRef.current.values()];
+    if (!geom || points.length < 2) return;
+    const rect = hostRef.current?.getBoundingClientRect();
+    const midX = (points[0].x + points[1].x) / 2 - (rect?.left ?? 0);
+    pinchRef.current = {
+      dist: Math.max(1, Math.abs(points[0].x - points[1].x)),
+      pxPerSec: geom.pxPerSec,
+      anchorSec: geom.startSec + midX / geom.pxPerSec,
+    };
+  };
+
+  const clearLongPress = () => {
+    if (longPressRef.current.timer) window.clearTimeout(longPressRef.current.timer);
+    longPressRef.current = { timer: 0, armed: false };
+  };
+
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     hostRef.current?.focus();
     if (e.button !== 0) return;
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // A second finger ALWAYS wins: whatever single-pointer gesture was in flight is finished
+    // (a scrub releases cleanly) and the pair becomes pinch-zoom / two-finger pan (§14).
+    if (pointersRef.current.size >= 2) {
+      finishDrag();
+      clearLongPress();
+      beginPinch();
+      return;
+    }
     const hit = hitAt(e.clientX, e.clientY);
     if (!hit) return;
     e.currentTarget.setPointerCapture(e.pointerId);
+    const touch = e.pointerType === 'touch';
     const m = { shift: e.shiftKey, meta: e.metaKey || e.ctrlKey, ctrl: e.ctrlKey, alt: e.altKey };
     dragRef.current = {
       hit,
@@ -303,11 +362,24 @@ export function DopeSheetCanvas({ anim }: { anim: PartAnimation }) {
       ids: [],
       anchorTime: 0,
       originalAnchorTime: 0,
+      touch,
     };
+    // Touch: a diamond only becomes draggable after the long press (§14). Ruler and track
+    // taps/drags keep the desktop meaning — tap parks, drag scrubs.
+    clearLongPress();
+    if (touch && (hit.kind === 'diamond' || hit.kind === 'cluster')) {
+      longPressRef.current.timer = window.setTimeout(() => {
+        longPressRef.current.armed = true;
+      }, LONG_PRESS_MS);
+    }
     const intent = resolveGesture(hit, m, false);
     if (intent.kind === 'park') parkPlayhead(intent.timeSec);
     if (intent.kind === 'zoom-cluster') zoomIntoCluster(anim, intent.kfIds);
-    if (intent.kind === 'select-column') applySelect(intent.kfId, intent.mode, rowOf(hit));
+    if (intent.kind === 'select-column') {
+      // The phone's `[☑ select]` mode turns every plain tap into a membership toggle.
+      const mode = selectMode && intent.mode === 'replace' ? 'toggle' : intent.mode;
+      applySelect(intent.kfId, mode, rowOf(hit));
+    }
   };
 
   const applySelect = (
@@ -335,6 +407,27 @@ export function DopeSheetCanvas({ anim }: { anim: PartAnimation }) {
     const geom = geomRef.current;
     const drag = dragRef.current;
     if (!geom) return;
+
+    // ── two-finger pinch (zoom) / drag (pan), design §14 ─────────────────────
+    if (pointersRef.current.has(e.pointerId)) {
+      pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+    const pinch = pinchRef.current;
+    if (pinch && pointersRef.current.size >= 2) {
+      const [a, b] = [...pointersRef.current.values()];
+      const rect = hostRef.current?.getBoundingClientRect();
+      const dist = Math.max(1, Math.abs(a.x - b.x));
+      const midX = (a.x + b.x) / 2 - (rect?.left ?? 0);
+      const px = Math.min(
+        PX_PER_SEC_MAX,
+        Math.max(PX_PER_SEC_MIN, (pinch.pxPerSec * dist) / pinch.dist),
+      );
+      // Keep the time that was under the finger midpoint AT the midpoint: a pure spread
+      // zooms, a pure slide pans, and doing both at once behaves the way a map does.
+      setTimelineView(pinch.anchorSec - midX / px, px);
+      return;
+    }
+
     if (!drag) {
       const hover = hitAt(e.clientX, e.clientY);
       setHoverContext(
@@ -347,6 +440,16 @@ export function DopeSheetCanvas({ anim }: { anim: PartAnimation }) {
       (e.clientX - (hostRef.current?.getBoundingClientRect().left ?? 0)) / geom.pxPerSec;
 
     if (!drag.dragged && Math.abs(e.clientX - drag.startX) < DRAG_THRESHOLD_PX) return;
+    // A touch that started on a diamond drags NOTHING until the long press arms it, and a
+    // finger that moves first cancels the arming outright (§14) — so a scroll that happens
+    // to begin on a key can never retime it.
+    if (drag.touch && (drag.hit.kind === 'diamond' || drag.hit.kind === 'cluster')) {
+      if (!longPressRef.current.armed) {
+        if (longPressRef.current.timer) window.clearTimeout(longPressRef.current.timer);
+        longPressRef.current.timer = 0;
+        return;
+      }
+    }
     if (!drag.dragged) {
       drag.dragged = true;
       const intent = resolveGesture(drag.hit, mods(), true);
@@ -414,6 +517,14 @@ export function DopeSheetCanvas({ anim }: { anim: PartAnimation }) {
       `@${drag.originalAnchorTime.toFixed(2)}s → ${target.toFixed(2)}s · all joints` +
         (blocked ? ' · the clip-start keyframe stays put' : ''),
     );
+  };
+
+  /** Pointer up/cancel: drop the point, end the pinch when the pair breaks, finish the drag. */
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    pointersRef.current.delete(e.pointerId);
+    if (pointersRef.current.size < 2) pinchRef.current = null;
+    clearLongPress();
+    finishDrag();
   };
 
   const finishDrag = () => {
@@ -509,10 +620,13 @@ export function DopeSheetCanvas({ anim }: { anim: PartAnimation }) {
     <div
       ref={hostRef}
       tabIndex={-1}
-      className="relative min-h-0 flex-1 overflow-hidden outline-none"
+      // `touch-none`: the pinch/pan/long-press gestures below are ours, so the browser must
+      // not also scroll or page-zoom while a finger is on the dopesheet.
+      className="relative min-h-0 flex-1 touch-none overflow-hidden outline-none"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={finishDrag}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
       onLostPointerCapture={finishDrag}
       onKeyDown={onKeyDown}
       onDoubleClick={onDoubleClick}

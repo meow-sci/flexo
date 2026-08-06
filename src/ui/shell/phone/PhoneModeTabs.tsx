@@ -6,6 +6,7 @@ import { MODE_ICONS } from '../../status/statusTokens';
 import { runCommand } from '../../../state/commandStore';
 import { $mode, MODES } from '../../../state/modeStore';
 import { $engineBlockerCount } from '../../../state/engineStore';
+import { $draftClipCount } from '../../../state/animationStore';
 
 /**
  * The phone's bottom **mode tab bar**, wired (design: foundation §12 — phone parity is
@@ -27,6 +28,7 @@ export function PhoneModeTabs() {
   const mode = useStore($mode);
   const panelOpen = useStore($panelSheetOpen);
   const engineBlockers = useStore($engineBlockerCount);
+  const draftClips = useStore($draftClipCount);
 
   const tabs: ModeTabSpec[] = MODES.map((entry) => {
     const Icon = MODE_ICONS[entry.id];
@@ -34,8 +36,11 @@ export function PhoneModeTabs() {
       id: entry.id,
       label: entry.label,
       icon: <Icon size={18} />,
-      // Foundation §2.2's attention dot, same data as the desktop switcher's.
-      attention: entry.id === 'engine' && engineBlockers > 0,
+      // Foundation §2.2's attention dot, same data as the desktop switcher's: Engine's
+      // blocking validations and Animation's draft clips (the ones the exporter skips).
+      attention:
+        (entry.id === 'engine' && engineBlockers > 0) ||
+        (entry.id === 'animation' && draftClips > 0),
     };
   });
 

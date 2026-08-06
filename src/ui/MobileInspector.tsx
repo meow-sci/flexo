@@ -10,6 +10,7 @@ import {
 import { $selectionCount } from './../state/selectors';
 import { $dataScope } from '../state/dataModeStore';
 import { $mode } from '../state/modeStore';
+import { $activeAnimation, $activeJointId, $editKeyframeId } from '../state/animationStore';
 
 /**
  * The phone **Inspector sheet** (foundation §12 Sheet row; design-build-mode.md §11 item 2)
@@ -25,7 +26,10 @@ import { $mode } from '../state/modeStore';
  * gets from the arrows and `W`/`S`.
  *
  * In **Data mode the FAB carries the scope name** rather than the selection count (design
- * §A8): what the sheet will show is the scope, and the selection is not what drives it.
+ * §A8): what the sheet will show is the scope, and the selection is not what drives it. In
+ * **Animation mode it carries the focus context** — the active joint's name, or `kf @1.2s`
+ * for a pinned column (design-animation-mode.md §14 row 4) — for the same reason: the focus
+ * editor there answers to the clip, not to the placement selection.
  *
  * The open flag lives in `phoneSheets` rather than in local state because Data mode hands the
  * two sheets back and forth — a navigator row opens this one, `‹ Scopes` goes back, and
@@ -41,8 +45,18 @@ export function MobileInspector() {
   const selectedCount = useStore($selectionCount);
   const mode = useStore($mode);
   const scope = useStore($dataScope);
+  const anim = useStore($activeAnimation);
+  const jointId = useStore($activeJointId);
+  const pinId = useStore($editKeyframeId);
 
-  const scopeLabel = mode === 'data' ? (scope.kind === 'part' ? 'Part' : scope.templateId) : null;
+  const scopeLabel =
+    mode === 'data'
+      ? scope.kind === 'part'
+        ? 'Part'
+        : scope.templateId
+      : mode === 'animation'
+        ? animationFocusLabel(anim, jointId, pinId)
+        : null;
 
   return (
     <>
@@ -88,4 +102,26 @@ export function MobileInspector() {
       </Sheet>
     </>
   );
+}
+
+/**
+ * The Animation FAB's badge text: the joint being posed, else the pinned column's time, else
+ * the clip. Null (⇒ the generic "Inspector") only when no clip is open, which is exactly when
+ * the focus editor shows its mode cheat-card.
+ */
+function animationFocusLabel(
+  anim: {
+    name: string;
+    joints: { id: string; name: string }[];
+    keyframes: { id: string; timeSec: number }[];
+  } | null,
+  jointId: string | null,
+  pinId: string | null,
+): string | null {
+  if (!anim) return null;
+  const joint = anim.joints.find((j) => j.id === jointId);
+  if (joint) return joint.name;
+  const pinned = anim.keyframes.find((k) => k.id === pinId);
+  if (pinned) return `kf @${pinned.timeSec.toFixed(2)}s`;
+  return anim.name;
 }

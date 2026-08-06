@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { Brush, ChevronDown, ChevronLeft, ChevronRight, Info, Plus, X } from 'lucide-react';
 import {
@@ -14,12 +14,14 @@ import {
   Tooltip,
   DialogTrigger,
   panelChrome,
+  useIsPhone,
 } from '../kit';
 import { $part } from '../../state/editorStore';
 import {
   $activeAnimation,
   $clipIssues,
   $memberHoverId,
+  $memberPaintChanges,
   $membersView,
   addJoint,
   attachToJoint,
@@ -28,6 +30,7 @@ import {
   openMembersView,
 } from '../../state/animationStore';
 import { $activeTool, armTool, disarmTool } from '../../state/modeStore';
+import { closePhoneSheets } from '../shell/phone/phoneSheets';
 import { status, undoStatusAction } from '../../state/statusStore';
 import { SubPartSetGrid } from '../SubPartSetGrid';
 import type { SubPartSetFilter } from '../subPartSetModel';
@@ -54,6 +57,10 @@ export function MembersView() {
   const part = useStore($part);
   const issues = useStore($clipIssues);
   const activeTool = useStore($activeTool);
+  const isPhone = useIsPhone();
+  // Rows changed by the last paint session, flashed once when the grid comes back into view
+  // (design §14 row 3 — on the phone the sheet was dismissed while painting).
+  const painted = useStore($memberPaintChanges);
   // Host-owned grid state: deliberately NOT keyed on the target joint, so switching targets
   // preserves it (the one-session multi-joint rig requirement, §7.2).
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
@@ -65,6 +72,14 @@ export function MembersView() {
   const ownership = ownershipOf(anim);
   const conflictClips = conflictClipsOf(part.animations, anim, issues[anim?.id ?? ''] ?? []);
   const painting = activeTool === 'member-paint';
+
+  // Clearing a nanostore, not component state — so this is a legal effect (and the store is
+  // what carries the ids across the sheet dismiss/reopen the phone flow performs).
+  useEffect(() => {
+    if (painted.length === 0) return;
+    const timer = window.setTimeout(() => $memberPaintChanges.set([]), 1600);
+    return () => window.clearTimeout(timer);
+  }, [painted]);
 
   const checkedList = [...checked].filter((id) => part.placements.some((p) => p.instanceId === id));
   const checkedAssigned = checkedList.filter((id) => ownership.has(id)).length;
@@ -101,31 +116,45 @@ export function MembersView() {
       data-surface="members"
       className={`${panelChrome} flex h-full min-h-0 flex-col gap-1.5 p-(--density-panel-p)`}
     >
-      <div className="flex items-center gap-1">
+      {/* Phone: the view is a PUSHED view inside the Panel sheet, so its header is one
+          full-width `‹ Members` back row (foundation §12 "stacked views become pushed sheet
+          views"). Desktop keeps the icon + title + ✕ takeover header. */}
+      {isPhone ? (
         <Button
-          iconOnly
-          size="xs"
+          size="sm"
           variant="ghost"
-          className="size-6"
-          aria-label="Back to joints"
+          className="min-h-11 justify-start gap-1 px-1 font-medium"
           onPress={closeMembersView}
         >
-          <ChevronLeft className="size-4" />
+          <ChevronLeft className="size-4" /> Members
         </Button>
-        <span className="flex-1 text-xs font-medium uppercase tracking-wide text-fg-muted">
-          Members
-        </span>
-        <Button
-          iconOnly
-          size="xs"
-          variant="ghost"
-          className="size-6"
-          aria-label="Close members"
-          onPress={closeMembersView}
-        >
-          <X className="size-4" />
-        </Button>
-      </div>
+      ) : (
+        <div className="flex items-center gap-1">
+          <Button
+            iconOnly
+            size="xs"
+            variant="ghost"
+            className="size-6"
+            aria-label="Back to joints"
+            onPress={closeMembersView}
+          >
+            <ChevronLeft className="size-4" />
+          </Button>
+          <span className="flex-1 text-xs font-medium uppercase tracking-wide text-fg-muted">
+            Members
+          </span>
+          <Button
+            iconOnly
+            size="xs"
+            variant="ghost"
+            className="size-6"
+            aria-label="Close members"
+            onPress={closeMembersView}
+          >
+            <X className="size-4" />
+          </Button>
+        </div>
+      )}
 
       {!anim ? (
         <p className="px-1 text-xs text-fg-subtle">Open a clip to edit its joint membership.</p>
@@ -209,7 +238,17 @@ export function MembersView() {
                 size="xs"
                 variant={painting ? 'primary' : 'secondary'}
                 isDisabled={!target}
-                onPress={() => (painting ? disarmTool('member-paint') : armTool('member-paint'))}
+                onPress={() => {
+                  if (painting) {
+                    disarmTool('member-paint');
+                    return;
+                  }
+                  $memberPaintChanges.set([]);
+                  armTool('member-paint');
+                  // Phone: painting needs the VIEWPORT, so arming dismisses the sheet and the
+                  // pinned `PhonePaintChip` takes over until Done (design §14 row 3).
+                  if (isPhone) closePhoneSheets();
+                }}
               >
                 <Brush className="size-3" /> Paint in 3D
               </Button>
@@ -235,6 +274,7 @@ export function MembersView() {
                 else next.add(layerId);
                 setCollapsedLayers(next);
               }}
+              flashIds={new Set(painted)}
               onRowHover={(id) => $memberHoverId.set(id)}
               onRowFlash={(id) => flashMember(id)}
               onClearFilters={() => {

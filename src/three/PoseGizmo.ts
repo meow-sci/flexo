@@ -77,6 +77,19 @@ const MAX_SCREEN_PX = 160;
  */
 const GUIDE_HALF_LENGTH = 12;
 
+/**
+ * Touch hit-target growth (design §14 row 5: "ring/handle hit targets scale ×1.6 on touch").
+ *
+ * Implemented as extra RAYS rather than bigger geometry: scaling the subtree would move the
+ * rings outwards, so a tap on the drawn ring would start missing it. Instead a touch pick
+ * casts the centre ray plus a ring of {@link TOUCH_RAYS} rays at {@link TOUCH_PAD_PX} around
+ * it, which grows every handle's effective target — torus, stem, disc and cube alike — by the
+ * same pad without touching what is drawn. The pad is ~0.6× a handle's ~10px on-screen
+ * thickness, i.e. the ×1.6 the design asks for.
+ */
+const TOUCH_PAD_PX = 6;
+const TOUCH_RAYS = 8;
+
 const AXES: AxisKey[] = ['x', 'y', 'z'];
 const UNIT: Record<AxisKey, THREE.Vector3> = {
   x: new THREE.Vector3(1, 0, 0),
@@ -135,8 +148,9 @@ export class PoseGizmo {
     onKeyDown: (e: KeyboardEvent) => void;
   } | null = null;
 
-  /** The per-gesture axis lock (§9.2). Reset at drag end, never persisted. */
+  /** The per-gesture axis lock (§9.2), mirrored from `$poseDragLock`. Reset at drag end. */
   private lock: { axis: AxisKey; space: 'local' | 'world' } | null = null;
+  private readonly stopLockSub: () => void;
 
   private readonly ray = new THREE.Raycaster();
   private readonly pointer = new THREE.Vector2();
@@ -172,6 +186,11 @@ export class PoseGizmo {
     this.guide.renderOrder = RENDER_ORDER;
     this.guide.visible = false;
     this.group.add(this.guide);
+
+    // `$poseDragLock` IS the lock (P11E.07): the X/Y/Z keys below and the phone's segmented
+    // control both write it, and this subscription is the only thing that applies it — so the
+    // two input routes can never drift apart. nanostores fires immediately with `null`.
+    this.stopLockSub = $poseDragLock.subscribe((next) => this.syncLock(next));
 
     const dom = viewport.renderer.domElement;
     dom.addEventListener('pointerdown', this.onPointerDown);
@@ -262,6 +281,7 @@ export class PoseGizmo {
 
   dispose(): void {
     if (this.drag) this.endDrag();
+    this.stopLockSub();
     const dom = this.viewport.renderer.domElement;
     dom.removeEventListener('pointerdown', this.onPointerDown);
     dom.removeEventListener('pointermove', this.onPointerMove);
@@ -426,25 +446,42 @@ export class PoseGizmo {
 
   // ── picking ────────────────────────────────────────────────────────────────
 
-  private pick(clientX: number, clientY: number): THREE.Mesh | null {
+  private pick(clientX: number, clientY: number, touch = false): THREE.Mesh | null {
     if (!this.group.visible || !this.target) return null;
     const dom = this.viewport.renderer.domElement;
     const rect = dom.getBoundingClientRect();
-    this.pointer.set(
-      ((clientX - rect.left) / rect.width) * 2 - 1,
-      -((clientY - rect.top) / rect.height) * 2 + 1,
-    );
-    this.ray.setFromCamera(this.pointer, this.viewport.camera);
     const visible = this.handles.filter((mesh) => isVisibleInTree(mesh, this.group));
-    const hits = this.ray.intersectObjects(visible, false);
-    return (hits[0]?.object as THREE.Mesh | undefined) ?? null;
+    if (visible.length === 0) return null;
+
+    const castAt = (x: number, y: number): THREE.Mesh | null => {
+      this.pointer.set(
+        ((x - rect.left) / rect.width) * 2 - 1,
+        -((y - rect.top) / rect.height) * 2 + 1,
+      );
+      this.ray.setFromCamera(this.pointer, this.viewport.camera);
+      return (this.ray.intersectObjects(visible, false)[0]?.object as THREE.Mesh) ?? null;
+    };
+
+    const direct = castAt(clientX, clientY);
+    if (direct || !touch) return direct;
+    // Fat-finger pass: a ring of rays one pad out, nearest-first by construction (the ring is
+    // uniform, so whichever handle it meets is the one closest to the fingertip).
+    for (let i = 0; i < TOUCH_RAYS; i++) {
+      const angle = (i / TOUCH_RAYS) * Math.PI * 2;
+      const hit = castAt(
+        clientX + Math.cos(angle) * TOUCH_PAD_PX,
+        clientY + Math.sin(angle) * TOUCH_PAD_PX,
+      );
+      if (hit) return hit;
+    }
+    return null;
   }
 
   // ── the drag ───────────────────────────────────────────────────────────────
 
   private readonly onPointerDown = (e: PointerEvent): void => {
     if (e.button !== 0 || this.drag || !this.target) return;
-    const mesh = this.pick(e.clientX, e.clientY);
+    const mesh = this.pick(e.clientX, e.clientY, e.pointerType === 'touch');
     if (!mesh) return;
     const handle = mesh.userData.poseHandle as PoseHandle;
     e.preventDefault();
@@ -517,8 +554,7 @@ export class PoseGizmo {
     const dom = this.viewport.renderer.domElement;
     if (dom.hasPointerCapture(drag.pointerId)) dom.releasePointerCapture(drag.pointerId);
     this.drag = null;
-    this.lock = null;
-    $poseDragLock.set(null);
+    $poseDragLock.set(null); // → syncLock clears `this.lock` and hides the guide
     $poseDragActive.set(false);
     this.guide.visible = false;
     this.callbacks.onDraggingChanged(false);
@@ -710,19 +746,33 @@ export class PoseGizmo {
     e.preventDefault();
     e.stopPropagation();
     const axis = key as AxisKey;
-    if (!this.lock || this.lock.axis !== axis) this.lock = { axis, space: 'local' };
-    else if (this.lock.space === 'local') this.lock = { axis, space: 'world' };
-    else this.lock = null;
-    $poseDragLock.set(this.lock ? { axis: this.lock.axis, space: this.lock.space } : null);
+    const next =
+      !this.lock || this.lock.axis !== axis
+        ? ({ axis, space: 'local' } as const)
+        : this.lock.space === 'local'
+          ? ({ axis, space: 'world' } as const)
+          : null;
+    // The atom is the lock: writing it runs `syncLock`, which re-seeds the gesture.
+    $poseDragLock.set(next);
+  }
+
+  /**
+   * Applies a lock published on `$poseDragLock` (from the keys or from the phone control) and
+   * re-seeds the gesture against the NEW axis, so the lock takes effect from here rather than
+   * snapping the pose by whatever the old axis had accumulated.
+   */
+  private syncLock(next: { axis: AxisKey; space: 'local' | 'world' } | null): void {
+    if (next?.axis === this.lock?.axis && next?.space === this.lock?.space) return;
+    this.lock = next;
     if (!this.lock) this.guide.visible = false;
-    // Re-seed the gesture against the NEW axis so the lock takes effect from here, rather
-    // than snapping the pose by whatever the old axis had accumulated.
-    const seed = this.sample(this.drag.handle, this.drag.startQuat);
+    const drag = this.drag;
+    if (!drag) return;
+    const seed = this.sample(drag.handle, drag.startQuat);
     if (seed) {
-      this.drag.grabPoint.copy(seed.point);
-      this.drag.grabScalar = seed.scalar;
+      drag.grabPoint.copy(seed.point);
+      drag.grabScalar = seed.scalar;
     }
-    this.drag.startMatrix.decompose(this.drag.startPos, this.drag.startQuat, this.drag.startScale);
+    drag.startMatrix.decompose(drag.startPos, drag.startQuat, drag.startScale);
     this.viewport.invalidate();
   }
 }

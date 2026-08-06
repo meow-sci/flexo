@@ -33,7 +33,7 @@ export function composeTw<T extends object>(
 }
 
 /**
- * Row styling for the app's standalone `GridList`s (Assets list, Mesh Picker):
+ * Row styling for the app's standalone `GridList`s (the Outliner, the SubPart set grid):
  * accent ring when selected, subtle hover otherwise, dimmed when disabled.
  * Compose call-site extras via `cn(gridRowClass(rp), …)`.
  */

@@ -50,7 +50,7 @@ export interface StatusMessage {
  * status segment rather than its own floating bar.
  */
 export interface ToolStatus {
-  toolId: 'measure' | 'seat-view' | 'exhaust' | 'marquee' | 'chain';
+  toolId: 'measure' | 'seat-view' | 'exhaust' | 'marquee' | 'member-paint' | 'chain';
   /** A lucide icon NAME — resolved UI-side, so this module imports no react. */
   icon: string;
   /** The live instruction, e.g. `'Measure — click first point'`. */

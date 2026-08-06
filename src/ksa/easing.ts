@@ -34,7 +34,8 @@ export const EASING_PRESETS: Record<EasingPreset, BezierPoints> = {
 /**
  * The preset whose control points match `pts` (within ε), or null for a custom curve.
  * Lives here rather than in the editor widget because the dopesheet's segment labels
- * (design §5.2), the Easing cards and `EasingEditor`'s dropdown all need the same answer.
+ * (design §5.2), the Easing cards and the curve editor's preset dropdown all need the same
+ * answer.
  */
 export function matchingPreset(pts: BezierPoints): EasingPreset | null {
   for (const [name, p] of Object.entries(EASING_PRESETS) as [EasingPreset, BezierPoints][]) {

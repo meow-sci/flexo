@@ -718,6 +718,7 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
       ...registerListSurfaceEditMirrors('outliner'),
       ...registerListSurfaceEditMirrors('data-navigator'),
       ...registerListSurfaceEditMirrors('engine-tree'),
+      ...registerListSurfaceEditMirrors('members'),
       {
         // The Outliner's own search. Scoped to the panel, so ⌘F stays the browser's Find
         // everywhere else — and so it can never fight the field-local keys of another list.
@@ -782,8 +783,10 @@ export const ALL_BINDINGS: HotkeyBinding[] = HOTKEY_GROUPS.flatMap((g) => g.bind
 //
 // | Binding (authoritative-table row)                                        | Owning phase |
 // |--------------------------------------------------------------------------|--------------|
-// | `surface:members` edit mirrors                                            | P11C (Members view) |
 // | ModeSwitcher / ModeTabBar attention dots                                  | P11E (draft clips; Engine blockers landed in P7) |
+//
+// **Struck in P11C.02**: the `surface:members` edit-mirror row — the docked Members view
+// stamps `data-surface="members"` and its six mirrors are live in the Lists group above.
 //
 // **Struck in P11B.09**: the `mode:animation` row (`Space` · `,`/`.` · `K`) and the
 // `surface:timeline` row (`←→ ⇧←→ ⌘A ⌥⌘A ⌘C ⌘X ⌘V ⌫ = - F ⇧F Esc`) are both live above.

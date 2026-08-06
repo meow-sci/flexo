@@ -107,14 +107,19 @@ import {
 } from '../state/measurementStore';
 import { $activeContainerId, setActiveContainer } from '../state/containerStore';
 import {
+  $activeAnimation,
   $activeAnimationId,
   $activeJointId,
   $animPlaying,
   $animScrubbing,
   $editKeyframeId,
+  $memberHoverId,
+  $memberPaintTarget,
+  $membersView,
   $playheadParked,
   $playheadSec,
   moveJointPivot,
+  paintMemberOnTarget,
   reorientJointPivot,
   setJointPose,
 } from '../state/animationStore';
@@ -137,7 +142,7 @@ import {
   pickSurfaceMesh,
 } from '../state/surfaceModeStore';
 import { applyFaceUvTransforms, buildPrimitiveGeometry } from './primitives';
-import { status } from '../state/statusStore';
+import { status, undoStatusAction } from '../state/statusStore';
 import {
   $activeEngineEntry,
   $activeNozzleRef,
@@ -190,6 +195,15 @@ import { toast } from '../ui/toast';
  * selected" (design §A2).
  */
 const DATA_TINT_STRENGTH = 0.4;
+
+/**
+ * Membership tint strengths (design-animation-mode.md §7.6). Three readable classes on the
+ * one emissive channel: the target joint's members, everyone else's, and the pulse under the
+ * Members row your pointer is on.
+ */
+const MEMBER_TINT_TARGET = 0.55;
+const MEMBER_TINT_OTHER = 0.22;
+const MEMBER_TINT_HOVER = 1;
 
 /**
  * Plural nouns for the "this kind carries no SubPart data" status message Data mode posts
@@ -348,6 +362,10 @@ export class EditorScene {
   private suppressPickMeasure = false;
   private suppressPickSeatView = false;
   private suppressPickMarquee = false;
+  private suppressPickPaint = false;
+
+  /** SubParts currently wearing a membership tint (design-animation-mode.md §7.6). */
+  private membershipTinted: SubPartObject[] = [];
 
   /**
    * The marquee drag in flight (design-build-mode.md §1.4), or null. `boxes` is snapshotted
@@ -542,13 +560,28 @@ export class EditorScene {
     // SLOT rather than `$measureTool`, so arming any other tool tears the pick down through
     // exactly one path. The picking flow below is otherwise verbatim v1.
     this.sub($activeTool, (tool) => {
+      // `member-paint` (design-animation-mode.md §7.4) is the third tenant and suppresses
+      // picking on the same contract: while it holds the slot, clicks belong to the tool, so
+      // normal selection and gizmo picking stand down and the canvas wears a brush cursor.
+      const painting = tool === 'member-paint';
+      if (painting !== this.suppressPickPaint) {
+        this.suppressPickPaint = painting;
+        this.applySelectionSuppression();
+        this.updateSelection(); // detach the gizmo / re-attach it on disarm
+        this.applyMembershipTint();
+      }
       const picking = tool === 'measure';
-      if (picking === this.suppressPickMeasure) return;
-      this.suppressPickMeasure = picking;
-      this.applySelectionSuppression();
-      dom.style.cursor = picking ? 'crosshair' : '';
-      if (!picking) this.cancelPendingMeasurement();
+      if (picking !== this.suppressPickMeasure) {
+        this.suppressPickMeasure = picking;
+        this.applySelectionSuppression();
+        if (!picking) this.cancelPendingMeasurement();
+      }
+      dom.style.cursor = picking ? 'crosshair' : painting ? 'cell' : '';
     });
+    // The membership tints follow the view, its target joint and the hovered row — invalidate
+    // on state change only, never a continuous loop (guardrail 10).
+    this.sub($membersView, () => this.applyMembershipTint());
+    this.sub($memberHoverId, () => this.applyMembershipTint());
     // Editing a measurement, editing a container, and selecting a mesh are all
     // mutually exclusive, so only one gizmo is ever active at a time.
     this.sub($activeMeasurementId, (id) => {
@@ -869,7 +902,8 @@ export class EditorScene {
       this.suppressPickDrag ||
         this.suppressPickMeasure ||
         this.suppressPickSeatView ||
-        this.suppressPickMarquee,
+        this.suppressPickMarquee ||
+        this.suppressPickPaint,
     );
   }
 
@@ -2040,6 +2074,9 @@ export class EditorScene {
     // scope goes back to the TINT — or of the Surface-mode pick, back to its FACE tint —
     // rather than to its base emissive. `applyFaceHighlight` re-runs `applyDataTint` itself.
     this.applyFaceHighlight();
+    // …and, after the Data/Surface tints have settled, the Animation-mode membership tints
+    // (the three are mutually exclusive in practice — each is gated on its own mode).
+    this.applyMembershipTint();
     this.measurements.refresh();
     // Recompute container out-of-bounds warnings here too: this runs after
     // reconcile (so removed meshes are already gone) and inside the async SubPart
@@ -2153,7 +2190,9 @@ export class EditorScene {
     const jointId = $activeJointId.get();
     const anim = animId ? $part.get().animations.find((a) => a.id === animId) : undefined;
     const joint = anim?.joints.find((j) => j.id === jointId);
-    if ($mode.get() !== 'animation' || !anim || !joint) {
+    // Hidden while member-paint is armed: the clicks belong to painting, so the joint
+    // affordances step out of the way (design-animation-mode.md §9.3).
+    if ($mode.get() !== 'animation' || !anim || !joint || $activeTool.get() === 'member-paint') {
       this.pivotHelper.visible = false;
       return;
     }
@@ -2759,11 +2798,19 @@ export class EditorScene {
   }
 
   private readonly onPickPointerDown = (e: PointerEvent): void => {
-    if ($activeTool.get() !== 'measure') return;
+    const tool = $activeTool.get();
+    if (tool !== 'measure' && tool !== 'member-paint') return;
     this.pickPointerDown = { x: e.clientX, y: e.clientY };
   };
 
   private readonly onPickPointerUp = (e: PointerEvent): void => {
+    if ($activeTool.get() === 'member-paint') {
+      const down = this.pickPointerDown;
+      this.pickPointerDown = null;
+      if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) return; // orbit drag
+      this.paintMemberAt(e);
+      return;
+    }
     if ($activeTool.get() !== 'measure') return;
     const down = this.pickPointerDown;
     this.pickPointerDown = null;
@@ -2788,6 +2835,97 @@ export class EditorScene {
       setMeasureTool('none');
     }
   };
+
+  /**
+   * ONE member-paint click (design-animation-mode.md §7.4). Resolves the pick through the
+   * SAME rule as plain selection, then routes SubParts to `paintMemberOnTarget` (assign /
+   * unassign / reassign, one discrete undo step each) and explains every refusal:
+   *
+   * - a locked layer refuses (matching selection's own guard);
+   * - a hidden layer never gets here (three.js raycasts invisible objects, so the guard is
+   *   explicit, exactly as it is in the selection callback);
+   * - a connector / kitten / collider / seat / light says WHY it cannot be a member — that is
+   *   the KSA limitation, not a flexo choice (§7.5);
+   * - empty space does nothing at all: no deselect surprise while painting.
+   */
+  private paintMemberAt(e: PointerEvent): void {
+    const picked = this.selection.pickAt(e.clientX, e.clientY);
+    if (!picked || picked.kind === 'nozzle') return;
+    if (picked.kind !== 'subpart') {
+      status(`${NON_CAPABLE_NOUN[picked.kind]} can never be joint members — KSA animates SubParts`);
+      return;
+    }
+    const part = $part.get();
+    const placement = part.placements.find((p) => p.instanceId === picked.id);
+    if (!placement) return;
+    if (isLayerLocked(placement.layerId)) {
+      status('Layer is locked — unlock it to change membership', { severity: 'warning' });
+      return;
+    }
+    if (!isLayerVisible(placement.layerId)) return;
+    const outcome = paintMemberOnTarget(picked.id);
+    switch (outcome.result) {
+      case 'attached':
+        status(`${picked.id} → ${outcome.jointName}`, {
+          severity: 'success',
+          action: undoStatusAction(),
+        });
+        break;
+      case 'reassigned':
+        status(`${picked.id}: ${outcome.fromJointName} → ${outcome.jointName}`, {
+          severity: 'success',
+          action: undoStatusAction(),
+        });
+        break;
+      case 'detached':
+        status(`${picked.id} removed from ${outcome.jointName}`, {
+          severity: 'success',
+          action: undoStatusAction(),
+        });
+        break;
+      case 'not-a-subpart':
+        status('Only SubParts can be joint members', { severity: 'warning' });
+        break;
+      default:
+        status('Pick a target joint first', { severity: 'warning' });
+    }
+  }
+
+  /**
+   * The membership tint pass (design-animation-mode.md §7.6). Runs while the Members view is
+   * open OR `member-paint` is armed: the target joint's members get the strong tint, every
+   * other joint's members a weak one, and the hovered row's placement the full highlight.
+   *
+   * It reuses the emissive tint pipeline `applyDataTint` uses (a second mechanism would fight
+   * it for the same uniform) and, like that pass, never downgrades a genuinely SELECTED
+   * object. Invalidation is subscription-driven — nothing here forces continuous rendering.
+   */
+  private applyMembershipTint(): void {
+    const on =
+      $mode.get() === 'animation' &&
+      ($membersView.get().open || $activeTool.get() === 'member-paint');
+    const selected = new Set(this.selectedObjects());
+    const wanted = new Map<SubPartObject, number>();
+    if (on) {
+      const anim = $activeAnimation.get();
+      const targetId = $memberPaintTarget.get();
+      const hoverId = $memberHoverId.get();
+      for (const joint of anim?.joints ?? []) {
+        const strength = joint.id === targetId ? MEMBER_TINT_TARGET : MEMBER_TINT_OTHER;
+        for (const id of joint.memberInstanceIds) {
+          const obj = this.objects.get(id);
+          if (obj && !selected.has(obj)) wanted.set(obj, strength);
+        }
+      }
+      const hovered = hoverId ? this.objects.get(hoverId) : undefined;
+      if (hovered && !selected.has(hovered)) wanted.set(hovered, MEMBER_TINT_HOVER);
+    }
+    for (const obj of this.membershipTinted) {
+      if (!wanted.has(obj) && !selected.has(obj)) obj.setTint(0);
+    }
+    for (const [obj, strength] of wanted) obj.setTint(strength);
+    this.membershipTinted = [...wanted.keys()];
+  }
 
   /** Raycasts the pointer against part meshes, snapping to the nearest face vertex. */
   private pickWorldPoint(e: PointerEvent): Vec3 | null {

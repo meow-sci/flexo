@@ -18,6 +18,7 @@ import {
   $activeJointId,
   $animPlaying,
   $animScrubbing,
+  $easingFocusChannel,
   $editKeyframeId,
   $jointTreeCollapsed,
   $playheadSec,
@@ -466,7 +467,9 @@ export function DopeSheetCanvas({ anim }: { anim: PartAnimation }) {
     if (hit.kind === 'segment') {
       const jointId = jointOfRow(hit.rowIndex);
       if (jointId) $activeJointId.set(jointId);
-      // TODO(11C): focus the left sidebar's Easing card on this joint/segment.
+      // …and open the left Joint card's Easing block on the Uniform tab (design §5.3): the
+      // pin the insert above just set is what makes that block render for THIS segment.
+      $easingFocusChannel.set('uniform');
     }
   };
 

@@ -24,8 +24,7 @@ import { atom } from 'nanostores';
  * Every root-hosted dialog. Adding a dialog = add its id here AND a case in
  * `DialogRoot.tsx`; there is no other registration step and no dynamic id.
  *
- * Deliberately ABSENT: `MeshPickerModal`, which stays local to the animation toolbar until
- * the Animation phase. `'import-review'` carries no `params` — its payload (picked files,
+ * `'import-review'` carries no `params` — its payload (picked files,
  * replace target) rides `$importModelRequest` in `src/state/customAssetStore.ts`, whose id
  * also remounts the dialog body on every open.
  */

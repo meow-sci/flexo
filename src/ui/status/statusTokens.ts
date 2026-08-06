@@ -1,6 +1,7 @@
 import {
   Boxes,
   BoxSelect,
+  Brush,
   Eye,
   Flame,
   Palette,
@@ -42,6 +43,7 @@ export const TOOL_ICONS: Record<string, LucideIcon> = {
   Ruler,
   Flame,
   BoxSelect,
+  Brush,
 };
 
 /** The message channel's 2px leading severity dot (§1.2 #5). */

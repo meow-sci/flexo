@@ -3,6 +3,7 @@ import { BuildFocusEditor } from './build/BuildFocusEditor';
 import { DataScopeForm } from './data/DataScopeForm';
 import { ModuleEditor } from './engine/ModuleEditor';
 import { SurfaceLeftPanel } from './surface/SurfaceLeftPanel';
+import { AnimationFocusEditor } from './animation/AnimationFocusEditor';
 import { $mode } from '../state/modeStore';
 
 /**
@@ -13,8 +14,9 @@ import { $mode } from '../state/modeStore';
  * The framework is shared by all five modes: each contributes a ruleset that answers *what am
  * I focused on, and what can I do to it?* as a pure function of `(mode, focus)` — tool
  * parameter card, then the focus card, then a mode cheat-card when nothing applies. Build's
- * ruleset is {@link BuildFocusEditor} (§7.1) and Data's is {@link DataScopeForm} (§7.3);
- * Animation (§7.2), Engine (§7.4) and Surface (§7.5) land with their own phases.
+ * ruleset is {@link BuildFocusEditor} (§7.1), Data's is {@link DataScopeForm} (§7.3),
+ * Animation's is {@link AnimationFocusEditor} (§7.2), Engine's is {@link ModuleEditor} (§7.4)
+ * and Surface's is {@link SurfaceLeftPanel} (§7.5) — every mode now answers.
  *
  * **Undo enrollment: NONE** — the mode is view state (foundation §13).
  */
@@ -30,13 +32,7 @@ export function ModeFocusEditor() {
   // Surface's ruleset is the picked FACE (plus the selection inspector and the read-only
   // built-in surface card beneath it) — §7.5.
   if (mode === 'surface') return <SurfaceLeftPanel />;
-
-  // INTERIM: Animation keeps its editors in the right sidebar / dialogs until its own phase
-  // builds a left ruleset. RULE ZERO — nothing is removed, so an empty slot costs the user no
-  // feature.
-  return (
-    <p className="p-(--density-panel-p) text-xs text-fg-subtle">
-      Nothing focused — this mode&rsquo;s focus editor arrives in a later phase.
-    </p>
-  );
+  // Animation's ruleset is the clip / joint / keyframe focus stack, plus the armed tool's
+  // parameter card above it (§7.2, design-animation-mode.md §8).
+  return <AnimationFocusEditor />;
 }

@@ -5,6 +5,7 @@ import { $part } from '../../state/editorStore';
 import { $measurePending } from '../../state/measurementStore';
 import { $activeNozzleTarget, nozzleTargetLabel } from '../../state/engineStore';
 import { $activeTool, $marqueeRect } from '../../state/modeStore';
+import { $memberPaintTarget } from '../../state/animationStore';
 
 /**
  * Feeds the status bar's tool segment (`statusStore.$toolStatus`) from the single
@@ -26,8 +27,24 @@ import { $activeTool, $marqueeRect } from '../../state/modeStore';
  */
 
 const $derivedToolStatus = computed(
-  [$activeTool, $seatView, $part, $activeNozzleTarget, $measurePending, $marqueeRect],
-  (activeTool, seatId, part, nozzleTarget, measurePending, marqueeRect): ToolStatus | null => {
+  [
+    $activeTool,
+    $seatView,
+    $part,
+    $activeNozzleTarget,
+    $measurePending,
+    $marqueeRect,
+    $memberPaintTarget,
+  ],
+  (
+    activeTool,
+    seatId,
+    part,
+    nozzleTarget,
+    measurePending,
+    marqueeRect,
+    paintTargetId,
+  ): ToolStatus | null => {
     switch (activeTool) {
       case 'seat-view': {
         const index = part.ivaSeats.findIndex((seat) => seat.id === seatId);
@@ -74,8 +91,25 @@ const $derivedToolStatus = computed(
           kbdHints: [['Esc']],
         };
 
-      // `member-paint` / `pivot-pick` are Animation-mode tools that do not exist yet
-      // (foundation §2.6 rows 5–6); their segments land with that phase.
+      case 'member-paint': {
+        // The target joint is the Members view's, falling back to the active joint (the phone
+        // flow arms paint and dismisses the sheet) — design-animation-mode.md §7.4.
+        const joint = paintTargetId
+          ? (part.animations.flatMap((a) => a.joints).find((j) => j.id === paintTargetId)?.name ??
+            null)
+          : null;
+        return {
+          toolId: 'member-paint',
+          icon: 'Brush',
+          text: joint
+            ? `Paint members → ${joint} · click SubParts to toggle`
+            : 'Paint members — pick a target joint first',
+          kbdHints: [['Esc']],
+        };
+      }
+
+      // `pivot-pick` is the Animation-mode tool that does not exist yet (foundation §2.6
+      // row 6); its segment lands with P11D.
       default:
         return null;
     }

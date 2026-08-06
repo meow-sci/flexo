@@ -365,15 +365,16 @@ live commits, arrow steps and all — collapses into one undo step.
 ## List selection — `src/ui/rangeSelect.ts`
 
 The app's multi-select lists — the **Outliner** (`ui/outliner/OutlinerPanel.tsx`, the
-sectioned SubParts/connectors/colliders/seats/lights/kittens tree) and the anim-mode **Mesh
-Picker** (`MeshPickerModal.tsx`) — carry the usual desktop-list gestures: click
+sectioned SubParts/connectors/colliders/seats/lights/kittens tree) and the **SubPart Set
+Grid** (`ui/SubPartSetGrid.tsx`, the layer-sectioned picker behind Animation mode's docked
+Members view) — carry the usual desktop-list gestures: click
 replaces, Cmd/Ctrl+click toggles one row, Cmd/Ctrl+A takes everything selectable,
 Shift+arrows extend by a row, and **Shift+click extends across every row in between**.
 
 Only the last one is ours. react-aria's `SelectionManager.extendSelection` reads the
 range anchor off the `Selection` object it handed to `onSelectionChange` — and both
 lists are **controlled** (the Outliner from the selection store, the
-picker from local state), so what comes back down is a freshly built plain `Set` with
+grid from its host's checked set), so what comes back down is a freshly built plain `Set` with
 no `anchorKey`. react-aria then anchors on the clicked row itself and a Shift+click
 degenerates into "add the one row you clicked", which is the bug behind issue #5.
 

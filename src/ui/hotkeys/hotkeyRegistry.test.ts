@@ -282,11 +282,17 @@ describe('6 — list-surface edit mirrors', () => {
   };
 
   it('keeps the registry valid when a FURTHER surface registers them', () => {
-    // `outliner` (P5A), `data-navigator` (P6) and `engine-tree` (P7) are already in
-    // ALL_BINDINGS; the next surface to stamp itself must not disturb the conflict validator
-    // either.
-    const mirrors = registerListSurfaceEditMirrors('members');
+    // `outliner` (P5A), `data-navigator` (P6), `engine-tree` (P7) and `members` (P11C) are
+    // already in ALL_BINDINGS; the next surface to stamp itself must not disturb the conflict
+    // validator either.
+    const mirrors = registerListSurfaceEditMirrors('glow-paint');
     expect(() => validateRegistry([...ALL_BINDINGS, ...mirrors])).not.toThrow();
+  });
+
+  it('registers the Members view mirrors (P11C.02 struck the deferred row)', () => {
+    expect(ALL_BINDINGS.filter((b) => b.scope === 'surface:members')).toHaveLength(
+      Object.keys(COMMANDS).length,
+    );
   });
 
   it('delegates to commands that exist, and never mirrors ⌘A', () => {

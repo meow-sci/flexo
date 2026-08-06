@@ -90,6 +90,36 @@ function sameTransform(a: Transform | undefined, b: Transform | undefined): bool
   );
 }
 
+/**
+ * WHICH channels a joint's pose changes on, between two columns — the keyframe card's
+ * `pos rot scale` chips (design §8.4). Same ε as the ◆/◇ rule above, so a chip and a solid
+ * diamond can never disagree about whether the joint moved.
+ */
+export function poseChannelDiff(
+  previous: Transform | undefined,
+  here: Transform | undefined,
+): { position: boolean; rotation: boolean; scale: boolean } {
+  const near = (x: number, y: number) => Math.abs(x - y) <= POSE_EPS;
+  if (!previous || !here) return { position: !!here !== !!previous, rotation: false, scale: false };
+  return {
+    position: !(
+      near(previous.position.x, here.position.x) &&
+      near(previous.position.y, here.position.y) &&
+      near(previous.position.z, here.position.z)
+    ),
+    rotation: !(
+      near(previous.rotation.x, here.rotation.x) &&
+      near(previous.rotation.y, here.rotation.y) &&
+      near(previous.rotation.z, here.rotation.z)
+    ),
+    scale: !(
+      near(previous.scale.x, here.scale.x) &&
+      near(previous.scale.y, here.scale.y) &&
+      near(previous.scale.z, here.scale.z)
+    ),
+  };
+}
+
 /** The label for one joint's outgoing easing at a column (see {@link DopeSegment}). */
 function segmentLabel(kf: AnimationKeyframe, jointId: string): DopeSegment {
   const uniform = segmentEasingUniform(kf.easings?.[jointId]);

@@ -1,8 +1,7 @@
 import { useStore } from '@nanostores/react';
 import { OutlinerPanel } from './outliner/OutlinerPanel';
 import { DataNavigator } from './data/DataNavigator';
-import { AnimToolbar } from './AnimToolbar';
-import { AnimationPanel } from './AnimationPanel';
+import { AnimationSidebar } from './animation/AnimationSidebar';
 import { EngineNavigator } from './engine/EngineNavigator';
 import { SurfaceSidebar } from './surface/SurfaceSidebar';
 import { $mode } from '../state/modeStore';
@@ -26,9 +25,8 @@ export function ModeSidebar() {
   if (mode === 'animation') {
     return (
       <div className="flex h-full min-h-0 flex-col gap-2">
-        <AnimToolbar />
         <div className="min-h-0 flex-1">
-          <AnimationPanel />
+          <AnimationSidebar />
         </div>
       </div>
     );

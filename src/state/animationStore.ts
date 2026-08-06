@@ -24,7 +24,7 @@ import {
 import { splitEasingConfigAt } from '../ksa/easingFit';
 import { computeClipIssues } from '../ksa/clipIssues';
 import { matrixFromTransform, transformFromMatrix } from '../three/coords';
-import { $mode, registerModeHooks } from './modeStore';
+import { $mode, disarmTool, registerModeHooks, registerTool } from './modeStore';
 import { $part, $selection, pushUndo } from './editorStore';
 
 /**
@@ -128,6 +128,18 @@ export const $membersView = atom<{ open: boolean; targetJointId: string | null }
   open: false,
   targetJointId: null,
 });
+
+/**
+ * The instance id whose placement is PULSING because its Members-view row is hovered (or was
+ * just tapped on touch) — design §7.6. Ephemeral; EditorScene subscribes and invalidates.
+ */
+export const $memberHoverId = atom<string | null>(null);
+
+/**
+ * Which channel tab the left Easing card opens on (§6.3's ✎ buttons, and the dopesheet's
+ * segment double-click). `'uniform'` is the default view.
+ */
+export const $easingFocusChannel = atom<EasingChannel | 'uniform'>('uniform');
 
 /** Timeline zoom/pan (§5.9). Ephemeral; re-fit on clip switch. */
 export const $timelineView = atom<{ startSec: number; pxPerSec: number }>({
@@ -327,8 +339,62 @@ export function openMembersView(jointId?: string): void {
   $membersView.set({ open: true, targetJointId: jointId ?? $activeJointId.get() });
 }
 
+/** Closes the view and disarms member painting with it (design §7.4). */
 export function closeMembersView(): void {
   $membersView.set({ open: false, targetJointId: null });
+  disarmTool('member-paint');
+  $memberHoverId.set(null);
+}
+
+/**
+ * The joint member painting writes to: the Members view's target while it is open, else the
+ * active joint (the phone flow arms paint and dismisses the sheet — design §7.4/§14).
+ */
+export const $memberPaintTarget = computed(
+  [$membersView, $activeJointId],
+  (view, activeJointId) => view.targetJointId ?? activeJointId,
+);
+
+/**
+ * `member-paint` is an Animation-only tenant of the single `$activeTool` slot (foundation
+ * §2.6 row 5): arming any other tool cancels it, a mode switch cancels it, and Esc rung 5
+ * disarms it — all through the slot, so this only owns the teardown of its own hover state.
+ */
+registerTool('member-paint', {
+  allowedModes: ['animation'],
+  onCancel: () => $memberHoverId.set(null),
+});
+
+/**
+ * One paint click (design §7.4): unassigned → attach to the target, already on the target →
+ * detach, on another joint → REASSIGN (one `attachToJoint` call — its within-clip exclusivity
+ * does the move). Each outcome is exactly ONE discrete undo step, so undo peels click by
+ * click. The caller composes the status flash from the returned verdict.
+ */
+export function paintMemberOnTarget(instanceId: string): {
+  result: 'attached' | 'detached' | 'reassigned' | 'no-target' | 'not-a-subpart';
+  jointName?: string;
+  fromJointName?: string;
+} {
+  const animId = $activeAnimationId.get();
+  const anim = $activeAnimation.get();
+  const targetId = $memberPaintTarget.get();
+  const target = anim?.joints.find((j) => j.id === targetId);
+  if (!animId || !anim || !target) return { result: 'no-target' };
+  // Guardrail 4, restated at the last possible moment: only SubPart PLACEMENTS can be
+  // members. The viewport router refuses non-SubParts before it gets here, so this is the
+  // belt-and-braces answer for any other caller.
+  if (!$part.get().placements.some((p) => p.instanceId === instanceId))
+    return { result: 'not-a-subpart' };
+  const owner = anim.joints.find((j) => j.memberInstanceIds.includes(instanceId));
+  if (owner?.id === target.id) {
+    detachMembers(animId, [instanceId]);
+    return { result: 'detached', jointName: target.name };
+  }
+  attachToJoint(animId, target.id, [instanceId]);
+  return owner
+    ? { result: 'reassigned', jointName: target.name, fromJointName: owner.name }
+    : { result: 'attached', jointName: target.name };
 }
 
 /**
@@ -345,6 +411,7 @@ registerModeHooks('animation', {
   onExit: () => {
     $editKeyframeId.set(null); // end posing
     stopAnimationPreview(); // stop playback + spring back to the modeled rest pose
+    closeMembersView(); // the takeover (and member painting with it) is mode-local
   },
 });
 
@@ -711,6 +778,49 @@ export function detachFromJoint(animId: string, jointId: string, instanceId: str
   mutate('detach from joint', instanceId, (p) => {
     const j = findAnim(p, animId)?.joints.find((x) => x.id === jointId);
     if (j) j.memberInstanceIds = j.memberInstanceIds.filter((id) => id !== instanceId);
+  });
+}
+
+/**
+ * Detaches a BATCH of instance ids from whichever joint of the clip owns each — the Members
+ * view's `[Unassign N]` and "Detach all". Membership is exclusive within a clip, so sweeping
+ * every joint is both correct and idempotent. ONE discrete undo step; returns how many ids
+ * were actually members.
+ */
+export function detachMembers(animId: string, instanceIds: readonly string[]): number {
+  const anim = findAnim($part.get(), animId);
+  if (!anim || instanceIds.length === 0) return 0;
+  const wanted = new Set(instanceIds);
+  const removed = anim.joints.reduce(
+    (n, j) => n + j.memberInstanceIds.filter((id) => wanted.has(id)).length,
+    0,
+  );
+  if (removed === 0) return 0;
+  mutate('detach members', `${removed}`, (p) => {
+    const a = findAnim(p, animId);
+    if (!a) return;
+    for (const j of a.joints)
+      j.memberInstanceIds = j.memberInstanceIds.filter((id) => !wanted.has(id));
+  });
+  return removed;
+}
+
+/**
+ * Moves a joint in DOCUMENT order, which is also the dopesheet's row order and the export
+ * order — the navigator tree's drop-between-rows gesture (design §6.2). `beforeJointId` names
+ * the joint the dragged one lands in front of; `null` appends. DISCRETE → one undo step.
+ */
+export function reorderJoint(animId: string, jointId: string, beforeJointId: string | null): void {
+  if (jointId === beforeJointId) return;
+  mutate('reorder joint', '', (p) => {
+    const a = findAnim(p, animId);
+    if (!a) return;
+    const from = a.joints.findIndex((j) => j.id === jointId);
+    if (from < 0) return;
+    const [moved] = a.joints.splice(from, 1);
+    const before = beforeJointId ? a.joints.findIndex((j) => j.id === beforeJointId) : -1;
+    if (before < 0) a.joints.push(moved);
+    else a.joints.splice(before, 0, moved);
   });
 }
 

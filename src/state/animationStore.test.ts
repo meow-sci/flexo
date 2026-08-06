@@ -51,8 +51,12 @@ import {
   pasteJointPose,
   pasteKeyframesAtPlayhead,
   pausePreview,
+  detachMembers,
+  paintMemberOnTarget,
   removeJoint,
   removeKeyframe,
+  reorderJoint,
+  reorientJointPivot,
   removeKeyframes,
   resetJointPoseToCurve,
   returnToRest,
@@ -782,5 +786,113 @@ describe('animationStore — joint pivots', () => {
       expect(exportHistory().undo.length).toBe(historyBefore);
       expect($editKeyframeId.get()).toBe(kid);
     });
+  });
+});
+
+describe('animationStore — membership batch ops + member painting (§7)', () => {
+  it('detachMembers strips a batch off whatever joint owns each, in ONE undo step', () => {
+    $part.set({
+      ...createEmptyPart(),
+      placements: [pl('a', tf()), pl('b', tf()), pl('c', tf())],
+    });
+    const aid = addAnimation('A');
+    const j1 = addJoint(aid, 'J1');
+    const j2 = addJoint(aid, 'J2');
+    attachToJoint(aid, j1, ['a', 'b']);
+    attachToJoint(aid, j2, ['c']);
+
+    const removed = detachMembers(aid, ['b', 'c']);
+    expect(removed).toBe(2);
+    const byId = (id: string) => anim0().joints.find((j) => j.id === id)!.memberInstanceIds;
+    expect(byId(j1)).toEqual(['a']);
+    expect(byId(j2)).toEqual([]);
+
+    undo(); // ONE step puts both back
+    expect(anim0().joints.find((j) => j.id === j1)!.memberInstanceIds).toEqual(['a', 'b']);
+    expect(anim0().joints.find((j) => j.id === j2)!.memberInstanceIds).toEqual(['c']);
+  });
+
+  it('paint reassignment is exclusive within the clip and reverts in ONE undo', () => {
+    $part.set({ ...createEmptyPart(), placements: [pl('panel_1', tf())] });
+    const aid = addAnimation('A');
+    const jointA = addJoint(aid, 'A');
+    const jointB = addJoint(aid, 'B');
+    attachToJoint(aid, jointB, ['panel_1']);
+    $activeAnimationId.set(aid);
+    $activeJointId.set(jointA); // the paint target
+    $membersView.set({ open: false, targetJointId: null });
+
+    const outcome = paintMemberOnTarget('panel_1');
+    expect(outcome).toMatchObject({ result: 'reassigned', jointName: 'A', fromJointName: 'B' });
+    const members = (id: string) => anim0().joints.find((j) => j.id === id)!.memberInstanceIds;
+    expect(members(jointB)).toEqual([]);
+    expect(members(jointA)).toEqual(['panel_1']);
+
+    undo();
+    expect(anim0().joints.find((j) => j.id === jointB)!.memberInstanceIds).toEqual(['panel_1']);
+    expect(anim0().joints.find((j) => j.id === jointA)!.memberInstanceIds).toEqual([]);
+  });
+
+  it('painting an id already on the target DETACHES it; an unowned id attaches', () => {
+    $part.set({ ...createEmptyPart(), placements: [pl('panel_1', tf())] });
+    const aid = addAnimation('A');
+    const jid = addJoint(aid, 'J');
+    $activeAnimationId.set(aid);
+    $activeJointId.set(jid);
+    $membersView.set({ open: false, targetJointId: null });
+
+    expect(paintMemberOnTarget('panel_1').result).toBe('attached');
+    expect(anim0().joints[0].memberInstanceIds).toEqual(['panel_1']);
+    expect(paintMemberOnTarget('panel_1').result).toBe('detached');
+    expect(anim0().joints[0].memberInstanceIds).toEqual([]);
+  });
+
+  it('reorderJoint splices DOCUMENT order (one discrete undo step)', () => {
+    const aid = addAnimation('A');
+    const j1 = addJoint(aid, 'One');
+    const j2 = addJoint(aid, 'Two');
+    const j3 = addJoint(aid, 'Three');
+    expect(anim0().joints.map((j) => j.id)).toEqual([j1, j2, j3]);
+
+    reorderJoint(aid, j3, j1); // drop "Three" ahead of "One"
+    expect(anim0().joints.map((j) => j.id)).toEqual([j3, j1, j2]);
+    reorderJoint(aid, j3, null); // null appends
+    expect(anim0().joints.map((j) => j.id)).toEqual([j1, j2, j3]);
+
+    undo();
+    expect(anim0().joints.map((j) => j.id)).toEqual([j3, j1, j2]);
+  });
+});
+
+describe('animationStore — numeric pivot edits at the rest anchor (§8.3)', () => {
+  it('re-orienting the pivot at a NON-zero anchor leaves the rest geometry exactly put', () => {
+    const { aid, jid, kid } = setupDoor(); // panel at x=1, keyframes at 0 and 1
+    setRestAnchor(aid, kid); // the anchor is now the LAST keyframe (an imported deploy clip)
+    expect(restAnchorTime(anim0())).toBeCloseTo(1);
+
+    const placement = tf({ pos: [1, 0, 0] });
+    const restBefore = previewOverrideMatrix(anim0(), 'panel_1', 1, placement)!;
+
+    // What the Joint card's "Pivot orientation (°)" field does: compose the entered Euler
+    // into a Part-space frame at the joint's current rest position and rebase onto it.
+    const world = jointWorld(anim0(), jid, restAnchorTime(anim0()));
+    const pos = new THREE.Vector3().setFromMatrixPosition(world);
+    reorientJointPivot(aid, jid, {
+      position: { x: pos.x, y: pos.y, z: pos.z },
+      rotation: { x: 0, y: Math.PI / 3, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+    });
+
+    // The pivot really moved…
+    expectMatrixClose(
+      jointWorld(anim0(), jid, restAnchorTime(anim0())),
+      matrixFromTransform({
+        position: { x: pos.x, y: pos.y, z: pos.z },
+        rotation: { x: 0, y: Math.PI / 3, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+      }),
+    );
+    // …and the modeled (anchor) geometry did not budge.
+    expectMatrixClose(previewOverrideMatrix(anim0(), 'panel_1', 1, placement)!, restBefore);
   });
 });

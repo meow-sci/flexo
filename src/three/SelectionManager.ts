@@ -72,12 +72,22 @@ export class SelectionManager {
     const moved = Math.hypot(e.clientX - this.downX, e.clientY - this.downY);
     if (moved > 4) return; // treat as a drag, not a click
 
+    const additive = e.metaKey || e.ctrlKey || e.shiftKey;
+    this.onSelect(this.pickAt(e.clientX, e.clientY), additive);
+  };
+
+  /**
+   * Resolves the entity under a client-space point, or null for empty space. Shared with the
+   * tools that do their OWN click routing while selection is suppressed (member painting,
+   * design-animation-mode.md §7.4) — one raycast + resolve rule, so a tool can never disagree
+   * with plain selection about what was clicked.
+   */
+  pickAt(clientX: number, clientY: number): Selectable | null {
     const rect = this.domElement.getBoundingClientRect();
-    this.pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    this.pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    this.pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+    this.pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
     this.raycaster.setFromCamera(this.pointer, this.camera);
 
-    const additive = e.metaKey || e.ctrlKey || e.shiftKey;
     const hits = this.raycaster.intersectObjects(this.root.children, true);
     // The face group travels WITH the hit, so it has to be read here rather than re-derived:
     // the entity's `userData.selectable` says nothing about which triangle was under the
@@ -99,8 +109,8 @@ export class SelectionManager {
     // They only exist while the Engine designer is placing exhaust, so nothing else is
     // shadowed by this rule.
     const nozzle = resolved.find((s) => s.kind === 'nozzle');
-    this.onSelect(nozzle ?? resolved[0] ?? null, additive);
-  };
+    return nozzle ?? resolved[0] ?? null;
+  }
 
   dispose(): void {
     this.domElement.removeEventListener('pointerdown', this.handlePointerDown);

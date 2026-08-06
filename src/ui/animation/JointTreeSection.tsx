@@ -36,6 +36,7 @@ import {
   renameJoint,
   reorderJoint,
   setJointParent,
+  armPivotPick,
   setJointPivot,
   setJointPivotToCentroid,
 } from '../../state/animationStore';
@@ -429,6 +430,12 @@ function JointMenu({
           case 'pivotCentroid':
             setJointPivotToCentroid(joint.id);
             break;
+          case 'pivotPick':
+            // The pick writes to the ACTIVE joint (design §9.4 item 3), so make this row's
+            // joint active first — the menu can be opened on a row that is not.
+            $activeJointId.set(joint.id);
+            armPivotPick('joint');
+            break;
           case 'detachAll':
             // ≤5 goes straight through with an [Undo] flash; more raises the question.
             if (joint.memberInstanceIds.length > 5) onConfirm('detach');
@@ -486,9 +493,7 @@ function JointMenu({
             <MenuItem id="pivotCentroid" isDisabled={single.length === 0}>
               To selection centroid
             </MenuItem>
-            <MenuItem id="pivotPick" isDisabled>
-              Pick in 3D… (soon)
-            </MenuItem>
+            <MenuItem id="pivotPick">Pick in 3D…</MenuItem>
           </Menu>
         </Popover>
       </SubmenuTrigger>

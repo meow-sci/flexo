@@ -145,7 +145,15 @@ export function initModifierListeners(): void {
 
 /** One "holding this key would do that" line. */
 export interface ModifierHint {
-  mod: keyof HeldModifiers;
+  /**
+   * Which held modifier brightens the row. `'none'` is for a live gesture that has NO
+   * modifier key — the pose gizmo's per-gesture `X`/`Y`/`Z` axis lock (design-animation-mode
+   * §9.2) is one, and the roster's rule is that only real gestures may be advertised, so the
+   * segment has to be able to say it without inventing a modifier for it.
+   */
+  mod: keyof HeldModifiers | 'none';
+  /** Key tokens rendered instead of the modifier glyph. Required when `mod === 'none'`. */
+  keys?: string[];
   label: string;
   /** Ascending — the segment renders the lowest few. */
   priority: number;

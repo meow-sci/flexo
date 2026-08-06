@@ -32,6 +32,7 @@ import {
   $animPlaying,
   $animScrubbing,
   $animTrails,
+  $posedPlacementLock,
   $animTransport,
   $editKeyframeId,
   $playheadParked,
@@ -211,7 +212,8 @@ export function TransportBar() {
         </ToggleButton>
       </Tooltip>
 
-      {/* 10 — motion-trails mirror menu (mirrors View ▸ Motion Trails; wired in 11D). */}
+      {/* 10 — motion-trails mirror menu. It and View ▸ Motion Trails both write `$animTrails`,
+          which `TrajectoryLayer` reads — one preference, two homes (§9.5, S15 mirror rule). */}
       <MenuTrigger>
         <Button size="xs" variant="ghost" className="flex-none px-1.5" aria-label="Motion trails">
           <Spline size={12} />
@@ -292,6 +294,9 @@ function StateChip() {
   const parked = useStore($playheadParked);
   const scrubbing = useStore($animScrubbing);
   const pinId = useStore($editKeyframeId);
+  // §9.6: whether the posed preview is actually LOCKING anything right now — the scene
+  // publishes it, and the chip's tooltip says so rather than leaving the user to discover it.
+  const locked = useStore($posedPlacementLock);
 
   if (!anim) {
     return (
@@ -324,9 +329,11 @@ function StateChip() {
         posed ? 'text-warning' : 'text-fg-muted',
       )}
       title={
-        posed
-          ? 'Posed preview — placements are locked until you return to the rest anchor'
-          : 'The scene equals the modeled part'
+        locked
+          ? 'Posed preview — the selected animated placements are locked until you return to the rest anchor'
+          : posed
+            ? 'Posed preview — selecting an animated SubPart will lock its placement gizmo'
+            : 'The scene equals the modeled part'
       }
     >
       {pinId && !playing ? '● ' : ''}

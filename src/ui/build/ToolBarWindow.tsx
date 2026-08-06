@@ -22,7 +22,12 @@ import {
   type ToolMode,
 } from '../../state/editorStore';
 import { $effectiveToolMode, $isExhaustPlacing } from '../../state/engineStore';
-import { $isPoseEditing } from '../../state/animationStore';
+import {
+  $isPoseEditing,
+  $pivotRouting,
+  $posedPlacementLock,
+  poseToolMode,
+} from '../../state/animationStore';
 import { $hasSelection } from '../../state/selectors';
 import {
   $snapEnabled,
@@ -113,8 +118,18 @@ export function ToolBarStrip() {
 function ToolBarControls({ phone = false }: { phone?: boolean }) {
   // $effectiveToolMode, never $toolMode: exhaust placement clamps Scale→Move, and the
   // switcher must show the tool the gizmo is ACTUALLY in (v1 SelectionToolbar rule).
-  const mode = useStore($effectiveToolMode);
+  const rawMode = useStore($effectiveToolMode);
   const isExhaustPlacing = useStore($isExhaustPlacing);
+  const isPoseEditing = useStore($isPoseEditing);
+  // §9.4: at the rest anchor a drag relocates the HINGE, and a pivot stays unit-scaled — so
+  // Scale is disabled there and the switcher shows the tool the drag will actually perform.
+  const pivotRouting = useStore($pivotRouting);
+  // §9.6: the posed-preview lock. The POSE gizmo stays live (that is the whole point of
+  // being parked off the anchor), so the tools are only dead when they would drive the
+  // placement selection.
+  const posedLock = useStore($posedPlacementLock);
+  const mode = poseToolMode(rawMode, pivotRouting);
+  const lockedForPlacements = posedLock && !isPoseEditing;
   const space = useStore($gizmoSpace);
   const snapEnabled = useStore($snapEnabled);
   // The kit's ToggleButton scale is `md | xs`; `md` is the 36px touch size (§14.4).
@@ -157,32 +172,48 @@ function ToolBarControls({ phone = false }: { phone?: boolean }) {
 
   return (
     <div className="flex flex-1 items-center gap-1">
-      <ToggleButtonGroup
-        size={size}
-        className="w-auto"
-        aria-label="Transform tool"
-        selectionMode="single"
-        disallowEmptySelection
-        selectedKeys={[mode]}
-        onSelectionChange={(keys) => {
-          const next = [...keys][0];
-          if (next) setToolMode(next as ToolMode);
-        }}
+      {/* A native `title` on the WRAPPER, not a kit Tooltip on the buttons: a disabled
+          react-aria ToggleButton is not hoverable, so a TooltipTrigger would never fire on
+          exactly the rows that need to explain themselves (design §9.6). */}
+      <span
+        title={
+          lockedForPlacements
+            ? 'Locked while a posed preview is shown (this SubPart is animated)'
+            : pivotRouting
+              ? 'At the rest anchor a drag relocates the hinge; a pivot stays unit-scaled, so Scale is unavailable'
+              : undefined
+        }
       >
-        {TOOLS.map(({ mode: id, label, Icon }) => (
-          <ToggleButton
-            key={id}
-            id={id}
-            size={size}
-            className={touch}
-            // A nozzle placement is a point plus a direction — nothing to scale.
-            isDisabled={isExhaustPlacing && id === 'scale'}
-          >
-            <Icon size={phone ? 14 : 12} />
-            {!phone && label}
-          </ToggleButton>
-        ))}
-      </ToggleButtonGroup>
+        <ToggleButtonGroup
+          size={size}
+          className="w-auto"
+          aria-label="Transform tool"
+          selectionMode="single"
+          disallowEmptySelection
+          selectedKeys={[mode]}
+          onSelectionChange={(keys) => {
+            const next = [...keys][0];
+            if (next) setToolMode(next as ToolMode);
+          }}
+        >
+          {TOOLS.map(({ mode: id, label, Icon }) => (
+            <ToggleButton
+              key={id}
+              id={id}
+              size={size}
+              className={touch}
+              // A nozzle placement is a point plus a direction — nothing to scale; a pivot is
+              // unit-scaled by definition; and nothing at all is draggable under the posed lock.
+              isDisabled={
+                lockedForPlacements || ((isExhaustPlacing || pivotRouting) && id === 'scale')
+              }
+            >
+              <Icon size={phone ? 14 : 12} />
+              {!phone && label}
+            </ToggleButton>
+          ))}
+        </ToggleButtonGroup>
+      </span>
 
       {phone ? (
         spaceGroup

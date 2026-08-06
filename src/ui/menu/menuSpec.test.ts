@@ -257,7 +257,10 @@ describe('menu transcription (authoritative tree)', () => {
       '  Lights',
       '  Kittens',
       '  Measurement Aids',
-      'Motion Trails',
+      'Motion Trails ▸',
+      '  Selected Joint',
+      '  All Joints',
+      '  Off',
       '─',
       'Measurement Overlays ▸',
       '  Bounding Box',
@@ -315,37 +318,22 @@ describe('menu transcription (authoritative tree)', () => {
   });
 });
 
-describe('disabled stubs stay visible but never run', () => {
-  /** Every command the plan marks [stub] — visible, disabled, owned by a later phase. */
-  const STUBS = [
-    // `view.frameSelection` / `view.resetCamera` graduated out of this list: the camera
-    // phase gave them real targets (`frameCamera()` / `resetCamera()`). `tool.marquee`
-    // graduated with the Build-mode selection phase: it arms the real box-select tool.
-    // `view.displayFilters` graduated too: it is now a SUBMENU of six live per-kind
-    // checkboxes (`view.displayFilter:*`) driving `$kindVisibility` — see its own test below.
-    'view.motionTrails',
-    // `window.timeline` graduated with the timeline dock (P11B.01): it toggles
-    // `$layout.timeline.hidden` and is gated on Animation mode — see its own test below.
-    // `window.toolbar` graduated with the Build-mode Tool bar: it now toggles the floating
-    // window's `floatHidden` entry — see its own test below.
-    // `window.notifications` graduated out of this list: the status-bar phase gave it a
-    // real target (it opens the notification center) — see its own test below.
-  ];
-
-  it.each(STUBS)('%s is disabled and explains why', (id) => {
-    const cmd = getCommand(id);
-    expect(cmd).toBeDefined();
-    expect(cmd?.enabled?.()).toBe(false);
-    expect(cmd?.disabledReason).toBeTruthy();
-  });
-
-  it('keeps every stub reachable from a menu (disabled items stay visible)', () => {
-    const referenced = new Set(
-      ALL_ENTRIES.filter(
-        (e) => e.kind !== 'separator' && e.kind !== 'submenu' && e.kind !== 'provider',
-      ).map((e) => (e as { commandId: string }).commandId),
-    );
-    for (const id of STUBS) expect(referenced.has(id)).toBe(true);
+describe('every menu row is live — the stub list is empty', () => {
+  /**
+   * There are no `[stub]` commands left. `view.motionTrails` was the last one and graduated
+   * in P11D.05: it is now a SUBMENU of three live radios (`view.motionTrails:*`) driving
+   * `$animTrails` and the `TrajectoryLayer` — see its own test below. (`view.frameSelection`
+   * / `view.resetCamera` graduated with the camera phase, `tool.marquee` with Build-mode
+   * selection, `view.displayFilters` into six per-kind checkboxes, `window.timeline` with the
+   * timeline dock, `window.toolbar` with the Tool bar, `window.notifications` with the status
+   * bar.) A future stub goes back here WITH its disabled-and-explains-why test.
+   */
+  it('references no unknown command ids', () => {
+    for (const entry of ALL_ENTRIES) {
+      if (entry.kind === 'separator' || entry.kind === 'submenu' || entry.kind === 'provider')
+        continue;
+      expect(getCommand((entry as { commandId: string }).commandId)).toBeDefined();
+    }
   });
 
   it('View ▸ Display Filters rows are live and toggle their kind', () => {

@@ -29,6 +29,9 @@ import { planPreviewBudget } from './lightVolume';
 import { SelectionManager } from './SelectionManager';
 import { marqueeHits, type ScreenAabb } from './marqueeSelect';
 import { TransformGizmo } from './TransformGizmo';
+import { PoseGizmo } from './PoseGizmo';
+import { JointMarkerLayer } from './JointMarkerLayer';
+import { TrajectoryLayer } from './TrajectoryLayer';
 import { MeasurementLayer } from './MeasurementLayer';
 import { ContainerLayer } from './ContainerLayer';
 import { ChainPreviewLayer } from './ChainPreviewLayer';
@@ -112,15 +115,23 @@ import {
   $activeJointId,
   $animPlaying,
   $animScrubbing,
+  $animTrails,
   $editKeyframeId,
   $memberHoverId,
   $memberPaintTarget,
   $membersView,
+  $pivotEditing,
+  $pivotPickTarget,
+  $pivotRouting,
   $playheadParked,
   $playheadSec,
+  $posedPlacementLock,
+  $workingPivot,
   moveJointPivot,
   paintMemberOnTarget,
+  poseToolMode,
   reorientJointPivot,
+  setJointPivotPoint,
   setJointPose,
 } from '../state/animationStore';
 import { jointWorld, previewOverrideMatrix, restAnchorTime } from '../ksa/animationRig';
@@ -328,11 +339,16 @@ export class EditorScene {
    */
   private readonly poseProxy = new THREE.Group();
   /**
-   * Always-on marker at the active joint's REST pivot (the rotation anchor) while the
-   * Animations editor is open, so it's obvious where attached parts swing from (and that
-   * a fresh joint's pivot sits at the origin until moved). Non-pickable, read-only.
+   * The animation-specific pose gizmo (design-animation-mode.md §9.2, LOCKED #8). It drives
+   * {@link poseProxy} exactly as {@link TransformGizmo} would, but with rings sized to the
+   * joint, a screen-space free-drag disc and per-gesture axis locks. TransformControls stays
+   * for Build/Engine and never attaches for posing any more.
    */
-  private readonly pivotHelper = new THREE.AxesHelper(0.4);
+  private readonly poseGizmo: PoseGizmo;
+  /** Pickable markers for every joint of the open clip, at the rest anchor (§9.3). */
+  private readonly jointMarkers: JointMarkerLayer;
+  /** Read-only motion trails per animated joint (§9.5). */
+  private readonly trajectories: TrajectoryLayer;
 
   /**
    * Engine designer: ONE marker per nozzle exhaust placement of the open engine (both
@@ -399,10 +415,6 @@ export class EditorScene {
     this.root.add(this.pivot);
     this.poseProxy.name = 'pose-proxy';
     this.root.add(this.poseProxy);
-    this.pivotHelper.name = 'joint-pivot';
-    this.pivotHelper.visible = false;
-    this.pivotHelper.raycast = () => {}; // never selectable / pickable
-    this.root.add(this.pivotHelper);
     this.engineProxy.name = 'engine-exhaust-proxy';
     this.root.add(this.engineProxy);
 
@@ -418,6 +430,13 @@ export class EditorScene {
         // A nozzle-exhaust handle is not a document entity — clicking one re-targets the
         // exhaust gizmo and deliberately leaves the mesh/connector selection alone (the
         // engine's own SubPart usually IS what's selected while you place its exhaust).
+        // A joint marker is not a document entity either (design §9.3): clicking one
+        // ACTIVATES that joint — the tree row, the timeline row and the left card all follow
+        // `$activeJointId` — and deliberately leaves the placement selection alone.
+        if (selected.kind === 'joint') {
+          $activeJointId.set(selected.id);
+          return;
+        }
         if (selected.kind === 'nozzle') {
           const ref = this.nozzleRefs.get(selected.id);
           if (ref) setActiveNozzleRef(ref);
@@ -535,6 +554,33 @@ export class EditorScene {
       },
     });
 
+    // The pose gizmo mirrors TransformGizmo's contract exactly — ONE undo push at drag
+    // start, streaming `onChange`, orbit + picking suppressed for the duration — so posing
+    // keeps the invariants v1 established while getting handles built for the job (§9.2).
+    this.poseGizmo = new PoseGizmo(this.viewport, {
+      onDragStart: (mode) => {
+        const pose = this.poseEditTarget();
+        if (!pose) return;
+        // The label is the OPERATION, because at the rest anchor a drag relocates the hinge
+        // rather than posing it (§9.4). Undo history must say which one it was.
+        if ($pivotRouting.get()) {
+          pushUndo(mode === 'rotate' ? 'reorient pivot' : 'move pivot', pose.joint.name);
+          return;
+        }
+        pushUndo('pose', `${pose.joint.name} @ ${pose.kf.timeSec.toFixed(2)}s`);
+      },
+      onChange: () => this.handlePoseGizmoChange(),
+      onDraggingChanged: (dragging) => {
+        this.suppressPickDrag = dragging;
+        this.viewport.controls.enabled = !dragging;
+        $gizmoDragging.set(dragging); // Escape ladder rung 4
+        this.applySelectionSuppression();
+        if (!dragging) this.updateSelection(); // re-snap the proxy to the committed pose
+      },
+    });
+    this.jointMarkers = new JointMarkerLayer(this.viewport, this.root);
+    this.trajectories = new TrajectoryLayer(this.viewport);
+
     this.measurements = new MeasurementLayer(this.viewport, () =>
       this.selectedObjects().map((o) => o.group),
     );
@@ -570,11 +616,15 @@ export class EditorScene {
         this.updateSelection(); // detach the gizmo / re-attach it on disarm
         this.applyMembershipTint();
       }
-      const picking = tool === 'measure';
+      // `pivot-pick` (§9.4) shares the measure tool's suppression: one click belongs to the
+      // tool, so selection and gizmo picking stand down and the canvas wears a crosshair.
+      const picking = tool === 'measure' || tool === 'pivot-pick';
+      // Keyed on the MEASURE tool, not on `picking`: arming pivot-pick straight off a
+      // half-placed measurement must still remove that half measurement.
+      if (tool !== 'measure') this.cancelPendingMeasurement();
       if (picking !== this.suppressPickMeasure) {
         this.suppressPickMeasure = picking;
         this.applySelectionSuppression();
-        if (!picking) this.cancelPendingMeasurement();
       }
       dom.style.cursor = picking ? 'crosshair' : painting ? 'cell' : '';
     });
@@ -638,6 +688,28 @@ export class EditorScene {
       this.applyAnimationPreview();
       this.updateSelection(); // re-evaluate gizmo suppression for posed animated parts
     };
+    // The three animation viewport layers (§9.1 affordance flags). Markers and trails are
+    // pure functions of the document + the open clip/joint, so they rebuild here and NEVER
+    // on the playhead — the trail layer subscribes `$playheadSec` itself, imperatively, and
+    // moves only its bead (guardrail 10).
+    const onAnimLayersChange = () => {
+      this.jointMarkers.refresh();
+      this.trajectories.refresh();
+    };
+    this.sub($activeAnimationId, onAnimLayersChange);
+    this.sub($activeJointId, onAnimLayersChange);
+    this.sub($mode, onAnimLayersChange);
+    this.sub($part, onAnimLayersChange);
+    this.sub($animTrails, () => this.trajectories.refresh());
+    this.sub($activeTool, () => this.jointMarkers.refresh());
+    this.sub($workingPivot, () => {
+      this.jointMarkers.refresh();
+      this.updateSelection(); // the pose gizmo rotates about the working pivot (§9.2)
+    });
+    this.sub($pivotEditing, () => {
+      this.jointMarkers.refresh();
+      this.updateSelection();
+    });
     this.sub($activeAnimationId, onPreviewChange);
     this.sub($activeJointId, onPreviewChange);
     this.sub($playheadSec, onPreviewChange);
@@ -744,6 +816,9 @@ export class EditorScene {
       // Scale never takes the local pivot orientation (see repositionPivot), so switching
       // tool can change how the bulk pivot must sit.
       if (!this.gizmo.isDragging && this.attachedObject === this.pivot) this.repositionPivot();
+      // …and the POSE gizmo has its own handle sets, so `T` has to reach it too (it also
+      // applies the §9.4 pivot clamp, which is why it goes through updateSelection).
+      if (!this.poseGizmo.isDragging && this.poseGizmo.attached) this.updateSelection();
     });
     // W/L: the handles' frame (design-build-mode.md §4.2). Re-seats the bulk pivot too —
     // in `local` it adopts the primary entity's orientation.
@@ -776,7 +851,11 @@ export class EditorScene {
     // change, which is fine and v1-consistent (undoing it restores the same state) — the
     // stack is never popped behind the user's back.
     this.sub($gizmoCancel, (cmd) => {
-      if (cmd && this.gizmo.isDragging) this.gizmo.cancelDrag();
+      if (!cmd) return;
+      if (this.gizmo.isDragging) this.gizmo.cancelDrag();
+      // The pose gizmo restores its OWN drag-start frame and streams it back (§9.2) — same
+      // rung, same contract, no undo-stack surgery.
+      if (this.poseGizmo.isDragging) this.poseGizmo.cancelDrag();
     });
   }
 
@@ -2061,7 +2140,6 @@ export class EditorScene {
 
   /** Syncs the selection highlight and gizmo attachment to the current selection. */
   private updateSelection(): void {
-    this.updatePivotHelper(); // before any early-return below; tracks the pivot live during drags
     // "Coverage on the selected light" is selection-driven, so it re-applies here too —
     // before the mid-drag early-return, so it also tracks a change of edit context.
     this.applyLightCoverage();
@@ -2086,18 +2164,21 @@ export class EditorScene {
     this.containers.refresh();
 
     // Gizmo attachment — never re-attach mid-drag (it would reset the drag).
-    if (this.gizmo.isDragging) return;
+    if (this.gizmo.isDragging || this.poseGizmo.isDragging) return;
 
-    // Pose-editing takes precedence: when a joint + keyframe are active, the gizmo
-    // edits the joint's pose via an empty proxy positioned at the joint's world frame.
+    // Pose-editing takes precedence: when a joint + keyframe are active, the ANIMATION
+    // gizmo (§9.2) edits the joint's pose via an empty proxy positioned at the joint's
+    // world frame. TransformControls detaches entirely — it is Build/Engine's gizmo now.
     const poseTarget = this.poseEditTarget();
     if (poseTarget) {
       const m = jointWorld(poseTarget.anim, poseTarget.joint.id, poseTarget.kf.timeSec);
       m.decompose(this.poseProxy.position, this.poseProxy.quaternion, this.poseProxy.scale);
       this.poseProxy.updateMatrixWorld(true);
-      this.attachGizmo(this.poseProxy);
+      this.applyPoseGizmo(poseTarget);
+      this.attachGizmo(null);
       return;
     }
+    this.poseGizmo.attach(null);
 
     // Engine designer: when the exhaust gizmo is on, attach it to a proxy posed at the
     // targeted nozzle's exhaust POINT and AXIS, so Move relocates the point and Rotate
@@ -2132,6 +2213,10 @@ export class EditorScene {
     // group sits at its animated transform — suppress the gizmo so a drag can't write
     // the posed transform back as the static placement. At rest (t=0) it's safe.
     const previewLocked = this.isPreviewPosed() && this.selectedIsAnimated();
+    // Publish it (§9.6): the status bar's persistent message, the Tool bar's disabled state
+    // and the transport chip all read this one answer, so the lock is legible instead of
+    // silent (census pain 8). The scene→UI report pattern (foundation §13).
+    if ($posedPlacementLock.get() !== previewLocked) $posedPlacementLock.set(previewLocked);
     // Sitting in a seat: the gizmo would render at (or inside) the camera and there is
     // nothing to aim it with — the whole viewport is the preview.
     if (anyLocked || previewLocked || $seatView.get() !== null) {
@@ -2180,29 +2265,46 @@ export class EditorScene {
   }
 
   /**
-   * Positions the always-on pivot marker at the active joint's REST world frame while the
-   * Animations editor is open with a joint selected; hides it otherwise. Read-only — safe
-   * under the preview lock and during drags. Driven from {@link updateSelection} (which
-   * runs on preview, selection, $part, and drag-end changes).
+   * Attaches + configures the pose gizmo for the pinned joint (§9.2): amber handles when the
+   * drag is routed to the pivot, rotation about the working pivot when one is set, and rings
+   * sized to the member set's bounding sphere at the pinned time.
    */
-  private updatePivotHelper(): void {
-    const animId = $activeAnimationId.get();
-    const jointId = $activeJointId.get();
-    const anim = animId ? $part.get().animations.find((a) => a.id === animId) : undefined;
-    const joint = anim?.joints.find((j) => j.id === jointId);
-    // Hidden while member-paint is armed: the clicks belong to painting, so the joint
-    // affordances step out of the way (design-animation-mode.md §9.3).
-    if ($mode.get() !== 'animation' || !anim || !joint || $activeTool.get() === 'member-paint') {
-      this.pivotHelper.visible = false;
-      return;
+  private applyPoseGizmo(target: {
+    anim: PartAnimation;
+    joint: PartAnimation['joints'][number];
+    kf: PartAnimation['keyframes'][number];
+  }): void {
+    const pivotRouting = $pivotRouting.get();
+    this.poseGizmo.setStyle(pivotRouting ? 'pivot' : 'pose');
+    this.poseGizmo.setMode(poseToolMode($effectiveToolMode.get(), pivotRouting));
+    const working = $workingPivot.get();
+    this.poseGizmo.setPivotPoint(
+      working
+        ? new THREE.Vector3(working.position.x, working.position.y, working.position.z)
+        : null,
+    );
+    this.poseGizmo.setRadius(this.memberRadius(target.joint.memberInstanceIds));
+    this.poseGizmo.attach(this.poseProxy);
+  }
+
+  /**
+   * The bounding-sphere radius of a joint's member meshes AS CURRENTLY DRAWN (the preview
+   * override has already posed them), which is what makes the rotate rings wrap the geometry
+   * they swing. Falls back to a sane default for a joint with no members yet.
+   */
+  private memberRadius(memberInstanceIds: readonly string[]): number {
+    const box = new THREE.Box3();
+    let any = false;
+    for (const id of memberInstanceIds) {
+      const obj = this.objects.get(id);
+      if (!obj) continue;
+      const objBox = new THREE.Box3().setFromObject(obj.group);
+      if (objBox.isEmpty()) continue;
+      box.union(objBox);
+      any = true;
     }
-    const pos = new THREE.Vector3();
-    const quat = new THREE.Quaternion();
-    jointWorld(anim, joint.id, 0).decompose(pos, quat, new THREE.Vector3());
-    this.pivotHelper.position.copy(pos);
-    this.pivotHelper.quaternion.copy(quat);
-    this.pivotHelper.scale.setScalar(1); // strip any pivot scale; always a clean unit frame
-    this.pivotHelper.visible = true;
+    if (!any) return 0.5;
+    return Math.max(1e-3, box.getSize(new THREE.Vector3()).length() / 2);
   }
 
   /** Streams a gizmo change back to the store (single entity) or all selected (bulk). */
@@ -2302,12 +2404,17 @@ export class EditorScene {
   }
 
   /**
-   * Writes a pose-gizmo drag back to the joint's local pose. The proxy's local matrix
-   * is the joint's world frame (root is at identity), so the new local pose is
-   * parentWorld(t)⁻¹ · proxy. At the rest keyframe with the Move tool this is a PIVOT
-   * move — the delta is applied to every keyframe (the rotation anchor relocates with
-   * no mesh jump); otherwise it sets just this keyframe's pose. STREAMING (drag-start
-   * pushed undo once).
+   * Writes a pose-gizmo drag back to the document. The proxy's local matrix is the joint's
+   * world frame (the root is at identity), so the new local pose is
+   * `parentWorld(t)⁻¹ · proxy`. STREAMING — the drag start pushed the single undo step.
+   *
+   * **The §9.4 routing, and the death of v1's t=0 special case.** When the pinned column is
+   * the REST ANCHOR (`$pivotRouting`) there is no meaningful "pose" — the composed pose there
+   * equals the modeled placements — so Move relocates the hinge (`moveJointPivot`, rigid,
+   * geometry-invariant at every t) and Rotate re-bases it (`reorientJointPivot`). Scale is
+   * absent there (a pivot stays unit-scaled) and the gizmo degrades it to Move. Every other
+   * column, including t=0 on an imported deploy clip, is a plain pose edit — which is exactly
+   * the inconsistency census §4.6 recorded, now gone.
    */
   private handlePoseGizmoChange(): void {
     const target = this.poseEditTarget();
@@ -2324,24 +2431,22 @@ export class EditorScene {
     const newLocal = parentWorld.invert().multiply(proxyWorld);
     const t = transformFromMatrix(newLocal);
 
-    if (kf.timeSec === 0) {
-      // The rest pose IS the pivot. Move relocates the anchor; Rotate re-orients it.
-      // Both preserve the t=0 geometry and rigidly carry t>0 motion; scale is ignored
-      // (a pivot must stay unit-scaled), so a scale drag at rest is a no-op.
-      if ($toolMode.get() === 'translate') {
+    if ($pivotRouting.get()) {
+      const mode = poseToolMode($effectiveToolMode.get(), true);
+      if (mode === 'translate') {
         const cur = kf.poses[joint.id]?.position ?? { x: 0, y: 0, z: 0 };
         moveJointPivot(anim.id, joint.id, {
           x: t.position.x - cur.x,
           y: t.position.y - cur.y,
           z: t.position.z - cur.z,
         });
-      } else if ($toolMode.get() === 'rotate') {
+      } else if (mode === 'rotate') {
         // proxyWorld is the pivot's Part-space frame; rebase converts to parent-local.
         reorientJointPivot(anim.id, joint.id, transformFromMatrix(proxyWorld));
       }
-    } else {
-      setJointPose(anim.id, kf.id, joint.id, t);
+      return;
     }
+    setJointPose(anim.id, kf.id, joint.id, t);
   }
 
   /**
@@ -2589,8 +2694,10 @@ export class EditorScene {
 
   private readonly onMarqueePointerDown = (e: PointerEvent): void => {
     if (e.button !== 0 || this.marquee) return;
-    // Never steal the pointer from a gizmo drag, a measurement pick or seat view.
+    // Never steal the pointer from a gizmo drag, a measurement pick or seat view — nor from
+    // a pose-gizmo handle the pointer is already over (its own listener runs after this one).
     if (this.suppressPickDrag || this.suppressPickMeasure || this.suppressPickSeatView) return;
+    if (this.poseGizmo.hitTest(e.clientX, e.clientY)) return;
     const armed = $activeTool.get() === 'marquee';
     // Another tool holds the slot: its gesture wins (single-slot invariant, foundation §2.6).
     if (!armed && $activeTool.get() !== null) return;
@@ -2799,11 +2906,18 @@ export class EditorScene {
 
   private readonly onPickPointerDown = (e: PointerEvent): void => {
     const tool = $activeTool.get();
-    if (tool !== 'measure' && tool !== 'member-paint') return;
+    if (tool !== 'measure' && tool !== 'member-paint' && tool !== 'pivot-pick') return;
     this.pickPointerDown = { x: e.clientX, y: e.clientY };
   };
 
   private readonly onPickPointerUp = (e: PointerEvent): void => {
+    if ($activeTool.get() === 'pivot-pick') {
+      const down = this.pickPointerDown;
+      this.pickPointerDown = null;
+      if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) return; // orbit drag
+      this.pickPivotPointAt(e);
+      return;
+    }
     if ($activeTool.get() === 'member-paint') {
       const down = this.pickPointerDown;
       this.pickPointerDown = null;
@@ -2837,6 +2951,72 @@ export class EditorScene {
   };
 
   /**
+   * ONE `pivot-pick` click (design-animation-mode.md §9.4 item 3): the world-space point on
+   * whatever mesh surface was clicked becomes either the ACTIVE JOINT's real pivot
+   * (`setJointPivotPoint` — position only, discrete undo, rest-anchored like every other
+   * pivot op) or the throwaway WORKING pivot. One click, then the tool disarms itself.
+   */
+  private pickPivotPointAt(e: PointerEvent): void {
+    const target = $pivotPickTarget.get();
+    const point = this.pickSurfacePoint(e);
+    if (!point) {
+      status('Click a mesh surface to place the pivot', { severity: 'warning' });
+      return;
+    }
+    if (target === 'working') {
+      $workingPivot.set({ kind: 'point', position: point });
+      status(
+        `Working pivot at (${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`,
+      );
+      disarmTool('pivot-pick');
+      return;
+    }
+    const jointId = $activeJointId.get();
+    if (!jointId) {
+      status('Select a joint first', { severity: 'warning' });
+      disarmTool('pivot-pick');
+      return;
+    }
+    const name = this.activeAnimation()?.joints.find((j) => j.id === jointId)?.name ?? 'joint';
+    setJointPivotPoint(jointId, point);
+    status(`Pivot of ${name} moved to the picked point`, {
+      severity: 'success',
+      action: undoStatusAction(),
+    });
+    disarmTool('pivot-pick');
+  }
+
+  /**
+   * The raw world point under the cursor on a PART mesh — no vertex snapping (that is the
+   * measure tool's rule, not the pivot's) and no editor furniture: a joint marker is drawn in
+   * the same root, so it is filtered out rather than allowed to place a pivot on itself.
+   */
+  private pickSurfacePoint(e: PointerEvent): Vec3 | null {
+    const dom = this.viewport.renderer.domElement;
+    const rect = dom.getBoundingClientRect();
+    this.raycaster.setFromCamera(
+      new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1,
+      ),
+      this.viewport.camera,
+    );
+    for (const hit of this.raycaster.intersectObjects(this.root.children, true)) {
+      let kind: string | undefined;
+      for (let node: THREE.Object3D | null = hit.object; node; node = node.parent) {
+        const selectable = node.userData?.selectable as { kind?: string } | undefined;
+        if (selectable) {
+          kind = selectable.kind;
+          break;
+        }
+      }
+      if (kind === 'joint' || kind === 'nozzle') continue;
+      return { x: hit.point.x, y: hit.point.y, z: hit.point.z };
+    }
+    return null;
+  }
+
+  /**
    * ONE member-paint click (design-animation-mode.md §7.4). Resolves the pick through the
    * SAME rule as plain selection, then routes SubParts to `paintMemberOnTarget` (assign /
    * unassign / reassign, one discrete undo step each) and explains every refusal:
@@ -2850,7 +3030,9 @@ export class EditorScene {
    */
   private paintMemberAt(e: PointerEvent): void {
     const picked = this.selection.pickAt(e.clientX, e.clientY);
-    if (!picked || picked.kind === 'nozzle') return;
+    // Neither is a document entity, and both are absent while painting anyway (the joint
+    // markers are removed, the nozzle handles are Engine-mode furniture).
+    if (!picked || picked.kind === 'nozzle' || picked.kind === 'joint') return;
     if (picked.kind !== 'subpart') {
       status(`${NON_CAPABLE_NOUN[picked.kind]} can never be joint members — KSA animates SubParts`);
       return;
@@ -3002,9 +3184,10 @@ export class EditorScene {
     this.unsubscribers.length = 0;
     this.selection.dispose();
     this.gizmo.dispose();
+    this.poseGizmo.dispose();
+    this.jointMarkers.dispose();
+    this.trajectories.dispose();
     this.root.remove(this.poseProxy);
-    this.root.remove(this.pivotHelper);
-    this.pivotHelper.dispose();
     this.chainPreview.dispose();
     this.root.remove(this.engineProxy);
     for (const handle of this.nozzleHandles.values()) {

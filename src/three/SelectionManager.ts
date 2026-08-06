@@ -2,10 +2,12 @@ import * as THREE from 'three';
 
 /**
  * What a hit object resolves to: a SubPart instance, connector, collider, IVA seat, kitten,
- * light, or an Engine-designer nozzle-exhaust handle (`id` = the nozzle target key).
+ * light, an Engine-designer nozzle-exhaust handle (`id` = the nozzle target key), or an
+ * Animation-mode joint marker (`id` = the joint id — not a document entity, it activates the
+ * joint; design-animation-mode.md §9.3).
  */
 export interface Selectable {
-  kind: 'subpart' | 'connector' | 'collider' | 'ivaSeat' | 'kitten' | 'light' | 'nozzle';
+  kind: 'subpart' | 'connector' | 'collider' | 'ivaSeat' | 'kitten' | 'light' | 'nozzle' | 'joint';
   id: string;
   /**
    * Which VISUAL of a multi-instance entity was hit. Only SubPart-owned colliders and
@@ -109,7 +111,13 @@ export class SelectionManager {
     // They only exist while the Engine designer is placing exhaust, so nothing else is
     // shadowed by this rule.
     const nozzle = resolved.find((s) => s.kind === 'nozzle');
-    return nozzle ?? resolved[0] ?? null;
+    // Joint markers win over distance for the same reason (design §9.3): a joint's rest frame
+    // usually sits INSIDE the geometry it swings, so honouring depth order would make the
+    // marker unclickable. Their pick volume is a ~12px screen-space sphere, so the priority
+    // only applies within that radius. Nozzle handles keep the higher precedence — the two
+    // never coexist (one is Engine mode, the other Animation).
+    const joint = resolved.find((s) => s.kind === 'joint');
+    return nozzle ?? joint ?? resolved[0] ?? null;
   }
 
   dispose(): void {

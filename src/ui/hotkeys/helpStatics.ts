@@ -30,8 +30,10 @@ export interface HelpStaticSection {
  * Pointer gestures that ship TODAY. The rule is strict: a row may only describe a gesture
  * that is actually implemented.
  *
- * EXTENDED in P11B.09 with the dopesheet's five gestures (design-animation-mode §12.4).
- * Still absent: the pose-drag `X`/`Y`/`Z` axis lock, which lands with `PoseGizmo` in 11D.
+ * EXTENDED in P11B.09 with the dopesheet's five gestures (design-animation-mode §12.4) and in
+ * P11D.02 with the pose gizmo's drag-local gestures — the `X`/`Y`/`Z` axis lock is a
+ * pointer-capture-local listener rather than a registry binding (design §12.1), which is
+ * exactly the kind of key this section exists to document.
  */
 export const POINTER_SECTION: HelpStaticSection = {
   title: 'Pointer & modifiers',
@@ -75,6 +77,18 @@ export const POINTER_SECTION: HelpStaticSection = {
     {
       chords: [['mod', 'wheel']],
       text: 'Timeline — zoom about the pointer; ⇧-wheel or a horizontal wheel pans',
+    },
+    {
+      chords: [['drag']],
+      text: 'Pose gizmo — drag a ring to rotate about the joint pivot, the centre disc to move in the camera plane, a stem or handle for one axis',
+    },
+    {
+      chords: [['X'], ['Y'], ['Z']],
+      text: 'Pose gizmo — DURING a drag, lock the gesture to that joint-local axis; tap the same letter again for the world axis, a third time to free it',
+    },
+    {
+      chords: [['ctrl', 'drag']],
+      text: 'Pose gizmo — invert the snap setting for this drag only',
     },
   ],
 };

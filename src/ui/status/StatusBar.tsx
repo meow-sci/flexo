@@ -6,6 +6,7 @@ import { StatusChipButton, StatusDivider } from './StatusChip';
 import { MessageChannel } from './MessageChannel';
 import { NotificationBell } from './NotificationBell';
 import { ToolSegment } from './ToolSegment';
+import { PosedLockSegment } from './PosedLockSegment';
 import { DataSegment } from './DataSegment';
 import { EngineSegment } from './EngineSegment';
 import { SurfaceSegment } from './SurfaceSegment';
@@ -51,6 +52,7 @@ export function StatusBar() {
         <EngineSegment />
         <SurfaceSegment />
         <ToolSegment />
+        <PosedLockSegment />
         <SelectionReadout />
       </div>
 

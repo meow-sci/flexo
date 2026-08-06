@@ -253,7 +253,16 @@ const VIEW_MENU: TopMenu = {
       label: 'Display Filters',
       entries: DISPLAY_FILTER_KINDS.map((kind) => checkbox(`view.displayFilter:${kind}`)),
     },
-    command('view.motionTrails'),
+    {
+      kind: 'submenu',
+      id: 'view.motionTrails',
+      label: 'Motion Trails',
+      entries: [
+        radio('view.motionTrails:selected'),
+        radio('view.motionTrails:all'),
+        radio('view.motionTrails:off'),
+      ],
+    },
     separator,
     {
       kind: 'submenu',

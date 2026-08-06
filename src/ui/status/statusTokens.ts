@@ -2,6 +2,7 @@ import {
   Boxes,
   BoxSelect,
   Brush,
+  Crosshair,
   Eye,
   Flame,
   Palette,
@@ -9,6 +10,7 @@ import {
   Rocket,
   Ruler,
   Table2,
+  Target,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { Severity } from '../../state/statusStore';
@@ -44,6 +46,8 @@ export const TOOL_ICONS: Record<string, LucideIcon> = {
   Flame,
   BoxSelect,
   Brush,
+  Crosshair,
+  Target,
 };
 
 /** The message channel's 2px leading severity dot (§1.2 #5). */

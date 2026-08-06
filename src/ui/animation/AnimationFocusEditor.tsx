@@ -1,5 +1,5 @@
 import { useStore } from '@nanostores/react';
-import { Brush, Film, Target } from 'lucide-react';
+import { Brush, Crosshair, Film, Target } from 'lucide-react';
 import { Button, Kbd } from '../kit';
 import { FocusCardHeader, focusCard } from '../build/FocusCardHeader';
 import { $activeTool } from '../../state/modeStore';
@@ -9,6 +9,7 @@ import {
   $editKeyframeId,
   $memberPaintTarget,
   $pivotEditing,
+  $pivotPickTarget,
   $timelineSelection,
   addAnimation,
 } from '../../state/animationStore';
@@ -44,6 +45,7 @@ export function AnimationFocusEditor() {
   return (
     <div className="flex flex-col gap-2 p-(--density-panel-p)">
       {tool === 'member-paint' && <PaintToolCard />}
+      {tool === 'pivot-pick' && <PivotPickToolCard />}
       {pivotEditing && <PivotToolCard />}
       {!anim ? (
         <CheatCard />
@@ -78,14 +80,34 @@ function PaintToolCard() {
   );
 }
 
-/** The Edit-pivot arming card. Its 3D handles land with the pose tooling (design §9.4). */
+/** The Edit-pivot arming card (design §9.4): the gizmo is amber and relocates the hinge. */
 function PivotToolCard() {
   return (
     <div className={focusCard}>
       <FocusCardHeader icon={Target} title="Edit pivot" subtitle="anchored at the rest keyframe" />
       <p className="text-[11px] text-fg-subtle">
-        Pivot edits happen at the rest anchor — the one frame where they are well defined. The
-        numeric fields below move the hinge without changing the rendered geometry.
+        Pivot edits happen at the rest anchor — the one frame where they are well defined. The amber
+        handles and the numeric fields below move the hinge without changing the rendered geometry
+        at any time. <Kbd>Esc</Kbd> when you’re done.
+      </p>
+    </div>
+  );
+}
+
+/** The `pivot-pick` tool card — one click on a surface, then the tool disarms itself (§9.4). */
+function PivotPickToolCard() {
+  const target = useStore($pivotPickTarget);
+  return (
+    <div className={focusCard}>
+      <FocusCardHeader
+        icon={Crosshair}
+        title="Pick pivot point"
+        subtitle={target === 'working' ? '→ working pivot' : '→ joint pivot'}
+      />
+      <p className="text-[11px] text-fg-subtle">
+        Click any mesh surface in the viewport to place the{' '}
+        {target === 'working' ? 'throwaway posing anchor' : 'joint’s pivot (position only)'}.{' '}
+        <Kbd>Esc</Kbd> cancels.
       </p>
     </div>
   );

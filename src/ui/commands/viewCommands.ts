@@ -28,6 +28,8 @@ import {
   type BoundsMode,
   type MeasurementUnit,
 } from '../../state/measurementStore';
+import { $mode } from '../../state/modeStore';
+import { $animTrails } from '../../state/animationStore';
 
 /**
  * View menu commands (design: foundation §3 "View").
@@ -122,6 +124,30 @@ const lightCoverageCommands: Command[] = COVERAGE_MODES.map(({ id, label }) => (
   checked: () => lightSettings().showVolumes === id,
   keepOpen: true,
   run: () => setLightSettings({ showVolumes: id }),
+}));
+
+/**
+ * **View ▸ Motion Trails** (design-animation-mode.md §9.5) — the three-way radio that drives
+ * `TrajectoryLayer`, mirrored by the transport bar's `↝` menu (both write `$animTrails`, the
+ * S15 mirror-chip rule). Animation-mode only: outside it there is no clip to trail, and the
+ * rows stay VISIBLE-but-disabled with the reason, per the menubar's discoverability rule.
+ */
+const motionTrailCommands: Command[] = (
+  [
+    { id: 'selected', label: 'Selected Joint' },
+    { id: 'all', label: 'All Joints' },
+    { id: 'off', label: 'Off' },
+  ] as const
+).map(({ id, label }) => ({
+  id: `view.motionTrails:${id}`,
+  title: label,
+  menuPath: 'View ▸ Motion Trails',
+  keywords: `motion trail trajectory animation path ${id}`,
+  enabled: () => $mode.get() === 'animation',
+  disabledReason: 'Motion trails are an Animation-mode overlay',
+  checked: () => $animTrails.get() === id,
+  keepOpen: true,
+  run: () => $animTrails.set(id),
 }));
 
 const boundsModeCommands: Command[] = BOUNDS_MODES.map(({ id, label }) => ({
@@ -231,15 +257,7 @@ export const VIEW_COMMANDS: Command[] = [
     run: () => setLightSettings({ livePreview: !lightSettings().livePreview }),
   },
   ...displayFilterCommands,
-  {
-    id: 'view.motionTrails',
-    title: 'Motion Trails',
-    menuPath: 'View',
-    keywords: 'motion trail trajectory animation path',
-    enabled: () => false,
-    disabledReason: 'Motion trails arrive with the Animation-mode rework',
-    run: () => {},
-  },
+  ...motionTrailCommands,
   {
     id: 'view.bbox',
     title: 'Bounding Box',

@@ -24,8 +24,8 @@ import {
 import { splitEasingConfigAt } from '../ksa/easingFit';
 import { computeClipIssues } from '../ksa/clipIssues';
 import { matrixFromTransform, transformFromMatrix } from '../three/coords';
-import { $mode, disarmTool, registerModeHooks, registerTool } from './modeStore';
-import { $part, $selection, pushUndo } from './editorStore';
+import { $mode, armTool, disarmTool, registerModeHooks, registerTool } from './modeStore';
+import { $part, $selection, pushUndo, type ToolMode } from './editorStore';
 
 /**
  * Document actions + ephemeral editor state for custom animations (see
@@ -122,6 +122,29 @@ export const $workingPivot = atom<{
 
 /** The explicit Pivot tool is armed (§9.4). */
 export const $pivotEditing = atom<boolean>(false);
+
+/**
+ * Which pivot the armed `pivot-pick` tool will write the clicked surface point to (§9.4
+ * item 3): the active JOINT's real pivot, or the throwaway WORKING pivot. Null whenever the
+ * tool is not armed — the tool's `onCancel` clears it, so the two can never disagree.
+ */
+export const $pivotPickTarget = atom<'joint' | 'working' | null>(null);
+
+/**
+ * True while a {@link PoseGizmo} drag is in flight — the ephemeral flag the status bar's
+ * modifier-hint provider keys the `X/Y/Z lock axis · ⌃ temp snap` row off (§9.2, §13).
+ */
+export const $poseDragActive = atom<boolean>(false);
+
+/** The live per-gesture axis lock, for the status hint. Null = free. Resets at drag end. */
+export const $poseDragLock = atom<{ axis: 'x' | 'y' | 'z'; space: 'local' | 'world' } | null>(null);
+
+/**
+ * The §9.6 posed-placement lock, published by `EditorScene.updateSelection` (the scene→UI
+ * report pattern): the preview shows a POSED frame AND the selection contains something the
+ * animation drives, so the placement gizmo is detached. v1 did this silently — census pain 8.
+ */
+export const $posedPlacementLock = atom<boolean>(false);
 
 /** The right-sidebar Members takeover (§7). */
 export const $membersView = atom<{ open: boolean; targetJointId: string | null }>({
@@ -397,6 +420,68 @@ export function paintMemberOnTarget(instanceId: string): {
     : { result: 'attached', jointName: target.name };
 }
 
+// ── pivot editing (design §9.4) ───────────────────────────────────────────────
+
+/**
+ * **Is a pose-gizmo drag a PIVOT edit right now?** (§9.4 anchor-column routing.)
+ *
+ * The answer is one rule and one rule only: *the pinned column IS the rest anchor*. There is
+ * no meaningful "pose" there — the composed pose at the anchor equals the modeled placements
+ * — so Move relocates the hinge and Rotate re-orients it, with or without the explicit
+ * `⊕ Edit pivot` tool armed. This is what kills v1's three disagreeing t=0 sites (census
+ * §4.6): on an imported deploy clip the anchor is the LAST keyframe, and selecting t=0 there
+ * now pose-edits the stowed keyframe like any other column (no silent rebase).
+ */
+export const $pivotRouting = computed(
+  [$mode, $activeAnimation, $editKeyframeId],
+  (mode, anim, pinId) =>
+    mode === 'animation' && !!anim && pinId !== null && pinId === anchorKeyframeId(anim),
+);
+
+/**
+ * Scale has nothing to drive on a pivot — a pivot stays unit-scaled (kept invariant) — so it
+ * degrades to Move while the drag is routed there, exactly as it degrades while placing an
+ * exhaust. ONE rule, called by both the gizmo and the Tool bar, so the displayed tool can
+ * never disagree with what a drag does.
+ */
+export function poseToolMode(mode: ToolMode, pivotRouting: boolean): ToolMode {
+  return pivotRouting && mode === 'scale' ? 'translate' : mode;
+}
+
+/**
+ * Arms the explicit `⊕ Edit pivot` tool (§9.4): parks + PINS the playhead on the rest-anchor
+ * column — the only frame where a pivot edit is well defined — and flips the gizmo to its
+ * amber handle set. A joint switch deliberately KEEPS it armed (rigging several hinges in a
+ * row); a clip switch, a pin moved off the anchor, and leaving the mode all disarm.
+ */
+export function setPivotEditing(on: boolean): void {
+  if (!on) {
+    $pivotEditing.set(false);
+    return;
+  }
+  const anim = $activeAnimation.get();
+  if (!anim) return;
+  const anchor = anchorKeyframeId(anim);
+  if (anchor) selectKeyframeForEditing(anim.id, anchor);
+  $pivotEditing.set(true);
+}
+
+/**
+ * `pivot-pick` is the second Animation-only tenant of the single `$activeTool` slot
+ * (foundation §2.6 row 6). Arming any other tool, a mode switch and Esc rung 5 all cancel it
+ * through the slot; this owns only the teardown of its own target discriminator.
+ */
+registerTool('pivot-pick', {
+  allowedModes: ['animation'],
+  onCancel: () => $pivotPickTarget.set(null),
+});
+
+/** Arms `pivot-pick` for one click, aimed at the joint's real pivot or the working pivot. */
+export function armPivotPick(target: 'joint' | 'working'): void {
+  $pivotPickTarget.set(target);
+  armTool('pivot-pick');
+}
+
 /**
  * Leaving Animation mode (design: foundation.md §2.4). Registered here rather than driven
  * from the UI so it runs on EVERY route out of the mode — the switcher, the status chip,
@@ -412,6 +497,9 @@ registerModeHooks('animation', {
     $editKeyframeId.set(null); // end posing
     stopAnimationPreview(); // stop playback + spring back to the modeled rest pose
     closeMembersView(); // the takeover (and member painting with it) is mode-local
+    $pivotEditing.set(false); // the pivot tool is mode-local too (§9.4)
+    $workingPivot.set(null); // a throwaway anchor never survives the mode (§4.1)
+    $posedPlacementLock.set(false);
   },
 });
 
@@ -1385,6 +1473,22 @@ export function reorientJointPivot(animId: string, jointId: string, worldFrame: 
  * design §4.3). Call once at app startup.
  */
 export function initAnimationStore(): void {
+  // A working pivot belongs to ONE joint on ONE clip (design §4.1): switching either makes
+  // the throwaway anchor meaningless, so it is dropped rather than silently re-used.
+  $activeJointId.subscribe(() => {
+    if ($workingPivot.get() !== null) $workingPivot.set(null);
+  });
+  $activeAnimationId.subscribe(() => {
+    if ($workingPivot.get() !== null) $workingPivot.set(null);
+    if ($pivotEditing.get()) $pivotEditing.set(false); // a clip switch disarms (§9.4)
+  });
+  // The explicit pivot tool only means anything ON the anchor column, which is exactly what
+  // `$pivotRouting` tests — so moving the pin anywhere else disarms it rather than leaving an
+  // amber gizmo that would pose instead of relocating the hinge.
+  $editKeyframeId.subscribe(() => {
+    if ($pivotEditing.get() && !$pivotRouting.get()) $pivotEditing.set(false);
+  });
+
   $part.subscribe((part) => {
     // (c) a working pivot picked off a placement dies with that placement, in any clip
     const src = $workingPivot.get()?.sourceInstanceId;

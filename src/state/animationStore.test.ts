@@ -32,6 +32,8 @@ import {
   $membersView,
   $playheadParked,
   $playheadSec,
+  $pivotEditing,
+  $pivotRouting,
   $timelineSelection,
   $workingPivot,
   addAnimation,
@@ -67,6 +69,9 @@ import {
   setJointParent,
   setAnimationDuration,
   setJointPivot,
+  setJointPivotPoint,
+  setPivotEditing,
+  poseToolMode,
   setLatched,
   setRestAnchor,
   moveJointPivot,
@@ -894,5 +899,135 @@ describe('animationStore — numeric pivot edits at the rest anchor (§8.3)', ()
     );
     // …and the modeled (anchor) geometry did not budge.
     expectMatrixClose(previewOverrideMatrix(anim0(), 'panel_1', 1, placement)!, restBefore);
+  });
+});
+
+describe('animationStore — the explicit pivot tool + anchor routing (§9.4)', () => {
+  /**
+   * The pain-6 kill, in data form. On a deploy-style clip (anchor = the LAST keyframe, the
+   * pose the part is MODELED in) a pivot edit must leave the modeled geometry exactly where
+   * it is, and re-centre the authored motion on the new hinge everywhere else. v1 anchored
+   * these ops on t=0 — the STOWED pose on such a clip — so the modeled part jumped.
+   *
+   * NOTE the invariant is "unchanged AT THE REST ANCHOR", not "at every t": rebasing
+   * conjugates the whole curve (`W'(t)·W'(rest)⁻¹ = B·W(t)·W(rest)⁻¹·B⁻¹`), which is what
+   * makes the door swing about the new hinge instead of the old one. The plan text's "every
+   * sampled t" only holds for a joint that never rotates.
+   */
+  it('setJointPivotPoint rebases pos-only at the ANCHOR of a deploy-style clip', () => {
+    const { aid, jid, kid } = setupDoor(); // panel at x=1, columns at t=0 and t=1
+    setRestAnchor(aid, kid); // the clip is now modeled DEPLOYED, like a KSA deploy import
+    expect(restAnchorTime(anim0())).toBeCloseTo(1);
+    $activeAnimationId.set(aid);
+
+    const placement = tf({ pos: [1, 0, 0] });
+    const modeled = previewOverrideMatrix(anim0(), 'panel_1', 1, placement)!;
+    const orientationBefore = new THREE.Quaternion().setFromRotationMatrix(
+      jointWorld(anim0(), jid, restAnchorTime(anim0())),
+    );
+
+    // What one `pivot-pick` click does: the clicked surface point becomes the pivot.
+    setJointPivotPoint(jid, { x: 1, y: 0.5, z: 0 });
+
+    // The hinge really moved…
+    expect(positionOf(jointWorld(anim0(), jid, restAnchorTime(anim0())))).toEqual([
+      expect.closeTo(1, 5),
+      expect.closeTo(0.5, 5),
+      expect.closeTo(0, 5),
+    ]);
+    // …its ORIENTATION did not (the pick is position-only)…
+    const orientationAfter = new THREE.Quaternion().setFromRotationMatrix(
+      jointWorld(anim0(), jid, restAnchorTime(anim0())),
+    );
+    expect(orientationAfter.angleTo(orientationBefore)).toBeCloseTo(0, 5);
+    // …and the MODELED (anchor) geometry did not budge, which is the whole point.
+    expectMatrixClose(previewOverrideMatrix(anim0(), 'panel_1', 1, placement)!, modeled);
+  });
+
+  it('anchors the pivot edit on restAnchorTime, not on t=0 (the census §4.6 fix)', () => {
+    const { aid, jid, kid } = setupDoor();
+    setRestAnchor(aid, kid);
+    $activeAnimationId.set(aid);
+    const placement = tf({ pos: [1, 0, 0] });
+    const stowedBefore = previewOverrideMatrix(anim0(), 'panel_1', 0, placement)!;
+
+    setJointPivotPoint(jid, { x: 1, y: 0.5, z: 0 });
+
+    // The STOWED end (t=0) is free to move — it is not the anchor on this clip. Asserting it
+    // moved is what proves the op is anchored at the last keyframe rather than at t=0.
+    const stowedAfter = previewOverrideMatrix(anim0(), 'panel_1', 0, placement)!;
+    const before = new THREE.Vector3().setFromMatrixPosition(stowedBefore);
+    const after = new THREE.Vector3().setFromMatrixPosition(stowedAfter);
+    expect(after.distanceTo(before)).toBeGreaterThan(1e-3);
+  });
+
+  it('setJointPivotPoint is a single undo step', () => {
+    const { aid, jid } = setupDoor();
+    $activeAnimationId.set(aid);
+    const before = jointPoses(anim0(), jid);
+    setJointPivotPoint(jid, { x: 0, y: 1, z: 0 });
+    expect(jointPoses(anim0(), jid)).not.toEqual(before);
+    undo();
+    expectPosesClose(jointPoses(anim0(), jid), before);
+  });
+
+  it('routes a gizmo drag to the PIVOT only when the pin is the rest anchor', () => {
+    const { aid, jid, kid } = setupDoor();
+    $activeAnimationId.set(aid);
+    $activeJointId.set(jid);
+    setMode('animation');
+
+    // Default anchor = t=0: pinning it routes to the pivot…
+    selectKeyframeForEditing(aid, restKeyframeId(anim0()));
+    expect($pivotRouting.get()).toBe(true);
+    // …and pinning any other column is a plain pose edit.
+    selectKeyframeForEditing(aid, kid);
+    expect($pivotRouting.get()).toBe(false);
+
+    // On a deploy-style clip the answer INVERTS — which is exactly the v1 t=0 trap, gone.
+    setRestAnchor(aid, kid);
+    selectKeyframeForEditing(aid, kid);
+    expect($pivotRouting.get()).toBe(true);
+    selectKeyframeForEditing(aid, restKeyframeId(anim0()));
+    expect($pivotRouting.get()).toBe(false);
+    setMode('build');
+  });
+
+  it('arming Edit pivot parks + pins on the rest anchor, even when it is the last column', () => {
+    const { aid, jid, kid } = setupDoor();
+    setRestAnchor(aid, kid);
+    $activeAnimationId.set(aid);
+    $activeJointId.set(jid);
+    setMode('animation');
+    parkPlayhead(0);
+
+    setPivotEditing(true);
+    expect($editKeyframeId.get()).toBe(kid);
+    expect($playheadSec.get()).toBeCloseTo(1);
+    expect($pivotRouting.get()).toBe(true);
+    expect($pivotEditing.get()).toBe(true);
+    setMode('build');
+    expect($pivotEditing.get()).toBe(false); // mode exit disarms (§9.4)
+  });
+
+  it('degrades Scale to Move while a drag is routed to the pivot (pivots stay unit-scaled)', () => {
+    expect(poseToolMode('scale', true)).toBe('translate');
+    expect(poseToolMode('scale', false)).toBe('scale');
+    expect(poseToolMode('rotate', true)).toBe('rotate');
+  });
+
+  it('clears the working pivot when the joint or the clip changes', () => {
+    initAnimationStore();
+    const aid = addAnimation('A');
+    const j1 = addJoint(aid, 'J1');
+    addJoint(aid, 'J2');
+
+    $workingPivot.set({ kind: 'point', position: { x: 1, y: 2, z: 3 } });
+    $activeJointId.set(j1);
+    expect($workingPivot.get()).toBeNull();
+
+    $workingPivot.set({ kind: 'point', position: { x: 1, y: 2, z: 3 } });
+    $activeAnimationId.set(addAnimation('B'));
+    expect($workingPivot.get()).toBeNull();
   });
 });

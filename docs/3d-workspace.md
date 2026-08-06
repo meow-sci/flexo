@@ -21,7 +21,10 @@ All code is under `src/three/`.
 | `Grid.ts` | Origin grid (XZ plane) + colored axes (1 cell = 1 m). |
 | `AxisGizmo.ts` | Corner **X/Y/Z** orientation triad, drawn in a second scissored pass over a finished frame (private scene + ortho camera, so it never affects framing/bounds). Not used by the editor viewport — it is opt-in via `PartPreviewViewport`'s `axisGizmo` option, which only the `partpreview` mini app sets. Colors come from `axisColors.ts`, shared with that app's HTML dimension readout. See [wiki-part-preview.md](./wiki-part-preview.md). |
 | `SelectionManager.ts` | Raycast click-to-select (fires on pointerup only when the pointer barely moved, so orbit/gizmo drags aren't clicks). |
-| `TransformGizmo.ts` | Wraps `TransformControls` (translate/rotate/scale); disables orbit while dragging; emits transform changes. |
+| `TransformGizmo.ts` | Wraps `TransformControls` (translate/rotate/scale); disables orbit while dragging; emits transform changes. **Build and Engine only** — posing uses `PoseGizmo`. |
+| `PoseGizmo.ts` | The animation-specific pose gizmo: rings sized to the joint, a screen-space free-drag disc, axis stems/handles, per-gesture `X`/`Y`/`Z` axis locks and working-pivot rotation. Drives the same `pose-proxy` object `TransformGizmo` used to. See [Animation viewport layers](#animation-viewport-layers). |
+| `JointMarkerLayer.ts` | A pickable marker per joint of the open clip, drawn at the joint's rest frame at `restAnchorTime`, plus the `◇` working-pivot glyph. |
+| `TrajectoryLayer.ts` | Read-only motion trails: the member-set centroid path per animated joint, keyframe ticks, the anchor ring and a playhead bead. |
 | `ViewportCanvas.tsx` | React glue: mounts `EditorScene` into a div in a `useEffect`, disposes on unmount (StrictMode-safe). |
 
 ## Rendering is on-demand
@@ -223,6 +226,58 @@ local +X. They differ from every other marker in three deliberate ways:
   selected while you place its exhaust). The gizmo still drags a *proxy*
   (`engine-exhaust-proxy`), like the animation pose pivot — posed with both the position and
   the orientation of the exhaust axis, which is what gives the rotate rings meaning.
+
+### Animation viewport layers
+
+Animation mode adds three layers, all off in every other mode (`$mode` gates each). They are
+described in full in `plans/flexo_v2/design/design-animation-mode.md` §9; the parts that
+matter for this file are the ones that touch the gizmo contract and the render loop.
+
+- **`PoseGizmo`** replaces `TransformControls` for posing. It is flexo's only hand-built
+  gizmo, because posing a hinge is a different job from placing a SubPart: **Rotate** draws
+  three rings whose radius is the member set's bounding-sphere radius (clamped 0.3–3 m AND
+  24–160 px, so they wrap a big panel and stay grabbable on a small bracket) plus an outer
+  camera-plane ring; **Move** draws a central free-drag disc that translates in the camera
+  plane — multi-axis in one gesture — plus three axis stems; **Scale** draws three axis
+  handles and a centre uniform handle. Handle geometry is unit-sized and the whole subtree is
+  SCALED, so a camera move is one `scale.setScalar`, not a rebuild.
+  - It keeps the gizmo contract verbatim: **one `pushUndo` at drag start**, streaming writes
+    after, orbit disabled and picking suppressed for the duration, `⌃` inverts the snap
+    setting for that drag only, and Escape (ladder rung 4) restores the drag-start frame
+    rather than popping the undo step.
+  - **Per-gesture axis lock**: tapping `X`/`Y`/`Z` mid-drag locks the gesture to that
+    joint-LOCAL axis, the same letter again to the WORLD axis, a third time frees it, with a
+    coloured guide line through the gizmo. The listener is attached at drag start and removed
+    at drag end — pointer-capture-local, deliberately not a hotkey-registry binding.
+  - **Working pivot**: with `$workingPivot` set, a rotation is computed about that point
+    (`ΔW = T(p)·R·T(p)⁻¹·W_joint`) and written back as the joint pose; translation ignores it.
+  - The gizmo does not touch the document. `EditorScene.handlePoseGizmoChange` decides what
+    the new frame MEANS: at the rest-anchor column (`$pivotRouting`) Move is `moveJointPivot`
+    and Rotate is `reorientJointPivot` (Scale is absent — a pivot stays unit-scaled, so it
+    degrades to Move and the Tool bar disables it); every other column is a plain
+    `setJointPose`. That routing is the fix for v1's t=0 special case, which disagreed with
+    `restAnchorTime` on any imported KSA deploy clip.
+- **`JointMarkerLayer`** draws every joint of the open clip at `jointWorld(anim, joint,
+  restAnchorTime(anim))` — the modelled frame, which is what puts the marker ON the geometry
+  for a deploy import. Inactive joints are screen-constant octahedra; the active one is a
+  0.4-unit axis triad with a CSS2D name label. The markers live in `EditorScene.root` because
+  that is what `SelectionManager` raycasts: a hit resolves to `kind: 'joint'` and simply sets
+  `$activeJointId`, changing no selection. Their pick volume is an invisible ~12 px sphere, and
+  `SelectionManager` lets a joint hit win over distance (the nozzle-handle rule) since a
+  pivot usually sits inside the mesh it swings. The set is **rebuilt/removed**, never hidden —
+  three.js raycasts invisible objects.
+- **`TrajectoryLayer`** draws the member-set CENTROID path per animated joint (a pure hinge's
+  origin never moves, so an origin-only trail would draw nothing for the commonest rig), with
+  keyframe ticks, a ringed anchor tick and a playhead bead. It lives on `viewport.scene`, so
+  it is never pickable. Curves rebuild only on document / clip / joint / preference change;
+  the high-frequency `$playheadSec` is subscribed IMPERATIVELY inside the layer and moves only
+  the bead. `View ▸ Motion Trails ▸ Selected / All / Off` and the transport `↝` menu both write
+  the persisted `flexo:animTrails`.
+
+While a posed preview locks the placement gizmo (the selection contains something the clip
+drives and the playhead is off the rest anchor), `EditorScene` publishes
+`$posedPlacementLock`, and the status bar says so with a click action back to rest — v1
+detached the gizmo silently.
 
 ### Chain preview ghosts
 

@@ -41,10 +41,12 @@ export function ModifierHints() {
             <span
               className={cn(
                 'flex items-center gap-1',
-                held[hint.mod] ? 'text-accent' : 'text-fg-muted',
+                hint.mod !== 'none' && held[hint.mod] ? 'text-accent' : 'text-fg-muted',
               )}
             >
-              <Kbd>{keyLabel(hint.mod)}</Kbd>
+              {(hint.keys ?? [keyLabel(hint.mod as keyof typeof held)]).map((token) => (
+                <Kbd key={token}>{token}</Kbd>
+              ))}
               <span>{hint.label}</span>
             </span>
           </span>

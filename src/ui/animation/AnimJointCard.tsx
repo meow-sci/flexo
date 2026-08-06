@@ -22,7 +22,9 @@ import { status, undoStatusAction } from '../../state/statusStore';
 import {
   $editKeyframeId,
   $pivotEditing,
+  $pivotPickTarget,
   $workingPivot,
+  armPivotPick,
   attachToJoint,
   detachFromJoint,
   moveJointPivot,
@@ -33,6 +35,7 @@ import {
   setJointPivot,
   setJointPivotToCentroid,
   setJointPose,
+  setPivotEditing,
   setSegmentEasingAllJoints,
 } from '../../state/animationStore';
 import { jointWorld, restAnchorTime } from '../../ksa/animationRig';
@@ -74,6 +77,7 @@ export function AnimJointCard({ anim, joint }: { anim: PartAnimation; joint: Ani
   const selected = useStore($selectedPlacements);
   const singlePlacement = useStore($selectedPlacement);
   const pivotEditing = useStore($pivotEditing);
+  const pickTarget = useStore($pivotPickTarget);
   const workingPivot = useStore($workingPivot);
   const [nameDraft, setNameDraft] = useState<string | null>(null);
 
@@ -231,12 +235,12 @@ export function AnimJointCard({ anim, joint }: { anim: PartAnimation; joint: Ani
           <span className="flex items-center gap-0.5 text-[11px] text-fg-subtle">
             (rest frame <Anchor className="size-3" aria-hidden /> @{fmt(anchorT)}s)
           </span>
-          <Tooltip content="Arm the pivot tool — the gizmo relocates the hinge instead of posing it (3D handles land with the pose tooling).">
+          <Tooltip content="Arm the pivot tool — parks on the rest anchor and turns the pose gizmo amber, so a drag relocates the hinge instead of posing it.">
             <Button
               size="xs"
               variant={pivotEditing ? 'primary' : 'ghost'}
               className="ml-auto"
-              onPress={() => $pivotEditing.set(!pivotEditing)}
+              onPress={() => setPivotEditing(!pivotEditing)}
             >
               ⊕ Edit pivot
             </Button>
@@ -274,8 +278,12 @@ export function AnimJointCard({ anim, joint }: { anim: PartAnimation; joint: Ani
           >
             centroid
           </Button>
-          <Tooltip content="Clicking a surface to place the pivot arrives with the pose tooling">
-            <Button size="xs" variant="ghost" isDisabled>
+          <Tooltip content="Click any mesh surface in the viewport to put the pivot there (position only) · Esc cancels">
+            <Button
+              size="xs"
+              variant={pickTarget === 'joint' ? 'primary' : 'ghost'}
+              onPress={() => armPivotPick('joint')}
+            >
               pick in 3D…
             </Button>
           </Tooltip>
@@ -337,8 +345,12 @@ export function AnimJointCard({ anim, joint }: { anim: PartAnimation; joint: Ani
               </Menu>
             </Popover>
           </MenuTrigger>
-          <Tooltip content="Clicking a point in 3D arrives with the pose tooling">
-            <Button size="xs" variant="ghost" isDisabled>
+          <Tooltip content="Click any mesh surface in the viewport to pose about that point — the joint's real pivot is untouched · Esc cancels">
+            <Button
+              size="xs"
+              variant={pickTarget === 'working' ? 'primary' : 'ghost'}
+              onPress={() => armPivotPick('working')}
+            >
               Pick point…
             </Button>
           </Tooltip>

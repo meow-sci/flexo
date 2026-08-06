@@ -6,9 +6,11 @@ import { $chainSession } from '../../state/chainStore';
 import {
   $activeJointId,
   $editKeyframeId,
+  $pivotEditing,
   $playheadParked,
   $timelineSelection,
   returnToRest,
+  setPivotEditing,
   stepPlayhead,
   stepToKeyframe,
 } from '../../state/animationStore';
@@ -829,14 +831,26 @@ registerEscRung({
 registerEscRung({
   rung: 5,
   id: 'tool.cancel',
-  label: 'Cancel the armed tool',
+  label: 'Cancel the armed tool (or the pivot tool)',
   // Fully generic since P5B.25–27: EVERY transient tool is a tenant of the single
   // `$activeTool` slot, so one `disarmTool()` runs whichever `onCancel` is registered —
   // the marquee's rect teardown, the measure tool's half-placed pick + crosshair, exhaust
-  // placement's gizmo. Seat view is the one tool NOT cancelled here: it has its own rung
-  // (8) because its contract is "never preventDefault".
-  when: () => $activeTool.get() !== null && $activeTool.get() !== 'seat-view',
-  run: () => disarmTool(),
+  // placement's gizmo, `pivot-pick`'s target. Seat view is the one tool NOT cancelled here:
+  // it has its own rung (8) because its contract is "never preventDefault".
+  //
+  // `⊕ Edit pivot` rides this rung WITHOUT holding the slot (design-animation-mode.md §9.4):
+  // it is a mode of the pose gizmo, not a pointer tool, but its Esc contract is the tool
+  // contract — so it unwinds here, after any armed tool, and always before the animation
+  // unwind of rung 7.
+  when: () =>
+    ($activeTool.get() !== null && $activeTool.get() !== 'seat-view') || $pivotEditing.get(),
+  run: () => {
+    if ($activeTool.get() !== null && $activeTool.get() !== 'seat-view') {
+      disarmTool();
+      return;
+    }
+    setPivotEditing(false);
+  },
   preventDefault: true,
 });
 

@@ -5,7 +5,13 @@ import { $part } from '../../state/editorStore';
 import { $measurePending } from '../../state/measurementStore';
 import { $activeNozzleTarget, nozzleTargetLabel } from '../../state/engineStore';
 import { $activeTool, $marqueeRect } from '../../state/modeStore';
-import { $memberPaintTarget } from '../../state/animationStore';
+import {
+  $activeAnimation,
+  $activeJointId,
+  $memberPaintTarget,
+  $pivotEditing,
+  $pivotPickTarget,
+} from '../../state/animationStore';
 
 /**
  * Feeds the status bar's tool segment (`statusStore.$toolStatus`) from the single
@@ -35,6 +41,10 @@ const $derivedToolStatus = computed(
     $measurePending,
     $marqueeRect,
     $memberPaintTarget,
+    $pivotPickTarget,
+    $pivotEditing,
+    $activeAnimation,
+    $activeJointId,
   ],
   (
     activeTool,
@@ -44,6 +54,10 @@ const $derivedToolStatus = computed(
     measurePending,
     marqueeRect,
     paintTargetId,
+    pivotPickTarget,
+    pivotEditing,
+    activeAnim,
+    activeJointId,
   ): ToolStatus | null => {
     switch (activeTool) {
       case 'seat-view': {
@@ -108,10 +122,34 @@ const $derivedToolStatus = computed(
         };
       }
 
-      // `pivot-pick` is the Animation-mode tool that does not exist yet (foundation §2.6
-      // row 6); its segment lands with P11D.
-      default:
-        return null;
+      case 'pivot-pick':
+        // Foundation §2.6 row 6, verbatim — with the TARGET spelled out, because the same
+        // tool serves the joint's real pivot and the throwaway working one (§9.4).
+        return {
+          toolId: 'pivot-pick',
+          icon: 'Crosshair',
+          text:
+            pivotPickTarget === 'working'
+              ? 'Pick working pivot — click a surface'
+              : 'Pick pivot point — click a surface',
+          kbdHints: [['Esc']],
+        };
+
+      default: {
+        // Not a `$activeTool` tenant: `⊕ Edit pivot` is a MODE of the pose gizmo, not a
+        // pointer tool (it has no click gesture of its own), so it renders in the same
+        // segment without occupying the slot — design §9.4 item 1(c).
+        if (!pivotEditing) return null;
+        const joint = activeAnim?.joints.find((j) => j.id === activeJointId);
+        return {
+          toolId: 'pivot-edit',
+          icon: 'Target',
+          text: joint
+            ? `Edit pivot — ${joint.name} · drag to relocate the hinge`
+            : 'Edit pivot — select a joint',
+          kbdHints: [['Esc']],
+        };
+      }
     }
   },
 );

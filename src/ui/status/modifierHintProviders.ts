@@ -1,4 +1,5 @@
 import { registerModifierHints } from '../../state/modifierStore';
+import { $poseDragActive } from '../../state/animationStore';
 
 /**
  * The modifier-hint providers flexo ships TODAY (design:
@@ -11,12 +12,8 @@ import { registerModifierHints } from '../../state/modifierStore';
  * modifiers verified in the v1 code (additive click-select in `SelectionManager`, and the
  * shift-range/toggle selection in the list hooks).
  *
- * **Not registered here, on purpose** — each lands with the phase that builds its gesture,
- * registered next to the gesture itself so the two can never drift apart:
- *
- * | Provider | Gesture | Owner |
- * |---|---|---|
- * | `animation-pose` ⇧ Axis lock | pose-gizmo axis lock | Animation phase (11D) |
+ * (`animation-pose` LANDED in P11D.02 and is registered below — the pose gizmo's per-gesture
+ * axis lock is a real gesture now, so the deferred row is struck from this table.)
  *
  * (`timeline` ⌃ Snap to keys · ⇧ marquee LANDED in P11B.06 and registers itself in
  * `src/ui/animation/timelineActions.ts`, beside the gestures it describes.)
@@ -94,6 +91,32 @@ export function initModifierHintProviders(): void {
   // here would mean inventing a "no modifier" row the segment has no way to render. The
   // Surface status segment (`SurfaceSegment.tsx`) carries `mesh: … · face …` instead, which
   // is where the click's RESULT is visible.
+
+  // The pose gizmo's drag-local gestures (design-animation-mode.md §9.2, §13). Advertised
+  // ONLY while a pose drag is actually in flight: X/Y/Z do nothing outside one (they are a
+  // pointer-capture-local listener, deliberately not registry bindings), so showing the row
+  // at rest would be exactly the lie this roster forbids.
+  //
+  // The axis lock has no modifier of its own, which is what `mod: 'none'` + explicit `keys`
+  // are for — advertising it as ⌥-something would be a lie about which key does the work.
+  const poseHints = () =>
+    $poseDragActive.get()
+      ? [
+          {
+            mod: 'none' as const,
+            keys: ['X', 'Y', 'Z'],
+            label: 'lock axis (local → world → free)',
+            priority: 1,
+          },
+          { mod: 'ctrl' as const, label: 'Snap (invert while dragging)', priority: 2 },
+        ]
+      : [];
+  registerModifierHints('animation-pose', poseHints);
+  // `$modifierHints` is a `computed` over (hover, selection, dialog, registry nonce), so a
+  // provider whose answer depends on anything else has to make the registry itself change.
+  // Re-registering bumps the nonce — the sanctioned way to add a dependency without widening
+  // `HintContext` for one gesture.
+  $poseDragActive.subscribe(() => registerModifierHints('animation-pose', poseHints));
 
   // The list hooks: ⇧ extends a range from the anchor (grow-only), ⌘/⌃ toggles one row.
   registerModifierHints('list', (ctx) =>

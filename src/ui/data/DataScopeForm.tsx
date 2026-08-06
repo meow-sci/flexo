@@ -123,7 +123,7 @@ function PartSections({ part }: { part: EditingPart }) {
       <PowerSection part={part} meta={meta('power')} />
       <CouplingSection part={part} meta={meta('coupling')} />
       <WiringSection part={part} meta={meta('wiring')} />
-      <AdvancedSection part={part} meta={meta('advanced')} />
+      <AdvancedSection meta={meta('advanced')} />
       <PassthroughViewer
         rootTag="PartGameData"
         unknownAttrs={g.unknownAttrs}

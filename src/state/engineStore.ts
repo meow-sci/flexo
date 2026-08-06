@@ -61,8 +61,8 @@ export function engineEntryFromKey(key: string): EngineEntry {
 
 /**
  * The ONE label helper for an engine scope (design §6.2 "single label helper in
- * engineStore"), replacing v1's duplicated `shortLabel`/`entryLabel` pairs in `EnginePanel`
- * and `EngineToolbar` (census pain 7). `part` is taken so the part-scope entry can name the
+ * engineStore"), replacing the duplicated `shortLabel`/`entryLabel` pairs v1 kept in its engine
+ * panel and its engine toolbar (census pain 7). `part` is taken so the part-scope entry can name the
  * document rather than saying "Part-level" twice in a row next to the part's own title.
  */
 export function engineEntryLabel(entry: EngineEntry, part: EditingPart): string {

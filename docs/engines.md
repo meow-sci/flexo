@@ -91,15 +91,42 @@ the project's `customReactions` (custom wins on id).
 
 ## Authoring UX
 
-- **Sidebar designer** (Engine mode — `$mode === 'engine'`, `EnginePanel`/`EngineToolbar`):
-  entered from the mode switcher (or `4`), the Add menu ("Define Engine…") or the Assets
-  toolbar "Engine (N)" button. `X` toggles the exhaust-placement tool while the mode is
-  active; leaving the mode kills the exhaust handles.
-  Pick/define an engine, watch the **live SL/vacuum thrust + Isp**, edit the
-  chamber/nozzle/FX (picking a mixture reaction exposes an **O/F mixture-ratio** field,
-  defaulted and bounded by the reaction's LUT rows — KSA refuses to load a ratio-less
-  mixture combustor, and the UI warns), place the exhaust with a **3D gizmo** ("Place
-  exhaust in 3D"), wire the controller + gimbals, and author custom propellants.
+- **Engine mode** (`$mode === 'engine'`, entered from the mode switcher, `4`, or the Add
+  menu's "Define Engine…") is a **two-panel designer**, and it is deliberately
+  self-sufficient: everything an engine needs to fire in-game is authorable without leaving
+  it.
+  - **Right — the Engine Navigator** (`src/ui/engine/EngineNavigator.tsx`): the engine-scope
+    select, **Define new engine ▸** (Liquid rocket / RCS thruster / Solid motor / SRB preset
+    (legacy)), the **module tree**, the live **Performance** card, an always-visible
+    **ISSUES** section, and the **Exhaust** chips.
+    - *Define new engine* picks a **template**, not a placement: a template placed N times is
+      one row with an instance sub-pick that only decides which placement the controller
+      references. Each kind is ONE undo step.
+    - The *module tree* has eight fixed groups — Combustors · Nozzles · Solid motor ·
+      Rockets · Controllers · Feed wiring · Gimbals · Custom propellants. The last four are
+      always part-level whatever scope is open, and wear a `[Part]` chip that says so. Rows
+      carry a caption (a combustor's propellant, a nozzle's exit ⌀, a rocket's core) and a
+      ⚠ dot when validation names them; the ⋮ menu offers Duplicate / Copy id / Remove, and
+      a nozzle also offers "Show exhaust handle". Feed wiring additionally lists a synthetic
+      `⚠ unwired: <consumer>` row per consumer that needs an entry, plus **Auto-wire**.
+    - *ISSUES* is always mounted and says **"no issues"** when the part is clean. Clicking a
+      finding opens its scope, focuses its module and flashes the offending field.
+    - *Performance* aggregates over the selected `<Rocket>`'s chamber+nozzle pairs (Σ thrust,
+      Σ mass flow, `Isp = ΣF / (g0·Σṁ)`), with a per-pair breakdown when there is more than
+      one; a scope with no `<Rocket>` falls back to the first combustor + first nozzle.
+  - **Left — the Module Editor** (`src/ui/engine/ModuleEditor.tsx`): exactly ONE module's
+    fields at a time, with a header carrying its scope chip (`[Template ×N]` / `[Part]`) and
+    the same ⋮ menu. With nothing focused it is the engine summary: module counts, the first
+    blocker with a jump, the solid-motor-vs-SRB-preset guidance, and quick actions.
+  - Picking a mixture reaction exposes an **O/F mixture-ratio** field, defaulted and bounded
+    by the reaction's LUT rows with a micro-slider spanning them and a tick at the default —
+    KSA refuses to load a ratio-less mixture combustor, and the UI warns. A nozzle's
+    **area ratio** renders EMPTY when unset (KSA's default is NaN and it refuses to load),
+    rather than as a misleading `0`.
+  - `X` toggles the exhaust-placement tool while the mode is active, `,` / `.` cycle the
+    target handle, `Esc` disarms; leaving the mode kills the exhaust handles.
+  - The propellant picker is searchable and grouped — **project propellants first**, then the
+    catalog by category — and a just-authored custom propellant appears in it immediately.
 - **Two engine SCOPES, both first-class** (`$engineEntries` in `engineStore.ts`). KSA allows
   engine hardware under `<PartGameData>` and `<SubPartGameData>` alike
   (`PartTemplate.RocketNozzles`), and stock uses both:
@@ -107,9 +134,11 @@ the project's `customReactions` (custom wins on id).
   - the **part itself** — how stock authors an RCS battery (the MMU puts its whole set of
     nozzles on the part) and gas-generator cycles. Listed as "Part-level (RCS / gas
     generator)" whenever `part.gameData` carries any combustor, nozzle or solid motor.
-    Its editors are the primary panel content there; the "Gas generator (advanced)"
-    disclosure stays only under a SubPart engine, where it genuinely is advanced.
-- **Data mode sections** (the same `EngineSections.tsx` components, no 3D): the
+    Its modules are the tree's contents there; part-level combustors/nozzles/rockets on a
+    part whose engine lives on a SubPart (a gas-generator cycle) are edited under
+    **Data ▸ Part ▸ Advanced**.
+- **Data mode sections** (the same `src/ui/engine/*Editor.tsx` components, rendered as a
+  card list instead of one-at-a-time): the
   thrust-chamber editors under **Data ▸ \<template\> ▸ Engine**, and the controllers, feed
   wiring and gimbals under **Data ▸ Part ▸ Wiring** with the solid motor and gas generator
   under **Data ▸ Part ▸ Advanced**. Each carries an "Open in Engine mode →" link, and the

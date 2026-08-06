@@ -19,12 +19,20 @@ export function PreciseNumberInput(props: {
   max?: number;
   /** Arrow-key increment (default 1); Shift ⇒ ×10, Alt ⇒ ×0.1. */
   step?: number;
+  /**
+   * How the committed value renders while the field is not being edited. The one real use is
+   * a NON-FINITE stored value that must read as EMPTY rather than as a plausible number —
+   * KSA's `AreaRatio` defaults to NaN and refuses to load, so the nozzle editor shows the gap
+   * instead of a misleading `0`.
+   */
+  format?: (n: number) => string;
   className?: string;
   isDisabled?: boolean;
   'aria-label': string;
 }) {
-  const { value, onCommit, onInteractionStart, min, max, step, className, isDisabled } = props;
-  const field = useNumberDraft({ value, onCommit, onInteractionStart, min, max, step });
+  const { value, onCommit, onInteractionStart, min, max, step, format, className, isDisabled } =
+    props;
+  const field = useNumberDraft({ value, onCommit, onInteractionStart, min, max, step, format });
 
   return (
     <TextField

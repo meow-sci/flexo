@@ -79,7 +79,7 @@ const FIELD_LABEL = 'text-xs text-fg-subtle';
 /**
  * A label above a control, stacked so the same markup works at every sidebar width and in a
  * phone sheet. Moved here from the v1 part-data section file — it is a primitive, and a
- * primitive living in a feature file is what made `EngineSections` import the Part-Data
+ * primitive living in a feature file is what made v1's engine sections import the Part-Data
  * dialog (design-data-engine-modes.md §C1 "kills the utility-in-feature-file debt").
  */
 export function Field({ label, children }: { label: string; children: React.ReactNode }) {

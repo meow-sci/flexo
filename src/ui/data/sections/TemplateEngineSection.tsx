@@ -1,22 +1,19 @@
 import { DataSection } from '../DataSection';
 import type { SectionMeta } from '../sectionMeta';
 import { EngineModeBanner, EngineModeLink } from '../EngineModeLink';
-import { SubPartEngineSection } from '../../EngineSections';
-import { createSubPartGameData, type SubPartGameData } from '../../../ksa/types';
+import { ModuleCardList } from '../../engine/ModuleCardList';
+import type { SubPartGameData } from '../../../ksa/types';
 
 /**
  * **Engine (thrust chamber)** (template scope) — the combustors, nozzles, solid hardware and
  * `<Rocket>` bindings that travel with the mesh (design: §A4.2 Engine, D11; census §1.2).
  *
- * When the template has no `<SubPartGameData>` yet, a synthetic empty entry is handed to the
- * body so its "+ Combustor" button has something to render against — the real entry is
- * created lazily by the editorStore action on first edit. That is v1's behaviour, kept.
+ * The body is the SAME editor set Engine mode focuses one module at a time, rendered as a card
+ * list in this scope's document order (D11). A template with no `<SubPartGameData>` yet simply
+ * shows empty groups: the real entry is created lazily by the store action behind the first
+ * `＋`, which is v1's behaviour kept.
  *
- * TODO(P7.18): the body is the v1 `SubPartEngineSection`. P7 swaps it for the same
- * `CombustorEditor` / `NozzleEditor` / `RocketEditor` components Engine mode renders (D11), at
- * which point the cross-link banner stops being the only thing tying the two views together.
- *
- * **Undo enrollment**: unchanged v1 semantics inside the hosted component.
+ * **Undo enrollment**: discrete adds/removes push internally; field edits stream.
  */
 export function TemplateEngineSection({
   templateId,
@@ -27,8 +24,6 @@ export function TemplateEngineSection({
   spd: SubPartGameData | undefined;
   meta: SectionMeta;
 }) {
-  const engineSpd = spd ?? createSubPartGameData(templateId);
-
   return (
     <DataSection
       sectionId="engine"
@@ -40,7 +35,16 @@ export function TemplateEngineSection({
         scope={{ kind: 'sub', templateId }}
         text="This hardware is also editable in Engine mode, with live thrust and Isp."
       />
-      <SubPartEngineSection spd={engineSpd} />
+      <ModuleCardList
+        templateId={templateId}
+        groups={['combustor', 'nozzle', 'solidMotor', 'grain', 'solidNozzle', 'rocket']}
+      />
+      {spd === undefined && (
+        <p className="text-[11px] leading-snug text-fg-subtle">
+          This template carries no data yet — adding the first module creates its
+          <code> &lt;SubPartGameData&gt;</code> entry.
+        </p>
+      )}
     </DataSection>
   );
 }

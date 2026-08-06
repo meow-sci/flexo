@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import { ListBoxItem, SectionTitle, Select, noteBox } from '../kit';
+import { ListBoxItem, SectionTitle, Select, cn, noteBox } from '../kit';
 import { SolidThrustCurveCard } from './SolidThrustCurveCard';
 import {
   computePerformance,
@@ -180,6 +180,36 @@ function Metric({ label, value, hint }: { label: string; value: string; hint?: s
     <div className="flex items-baseline justify-between gap-2" title={hint}>
       <span className="text-xs text-fg-subtle">{label}</span>
       <span className="font-mono text-sm tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+/**
+ * The two-number headline on its own (design §B8): thrust and Isp, pinned to the bottom of the
+ * phone Panel sheet so they stay visible while scrolling the module tree.
+ *
+ * Renders nothing when there are no numbers — a hint has no business in a one-line footer, and
+ * the full card above it already explains why.
+ */
+export function PerformanceHeadline({ className }: { className?: string }) {
+  const part = useStore($part);
+  const entry = useStore($activeEngineEntry);
+  const reactions = useStore($allReactionIndex);
+  const selection = useStore($rocketReadoutSel);
+
+  const rockets = rocketsInScope(part, entry);
+  const effective = rockets.some((r) => r.id === selection) ? selection : FIRST_PAIR_ROCKET;
+  const result = computePerformance(part, entry, effective, reactions);
+  if (result.kind !== 'ok') return null;
+
+  return (
+    <div
+      className={cn(
+        'shrink-0 border-t border-border bg-panel px-2 py-1 font-mono text-xs tabular-nums text-fg',
+        className,
+      )}
+    >
+      {(result.thrustVacN / 1000).toFixed(1)} kN vac · Isp {result.ispVac.toFixed(1)} s
     </div>
   );
 }

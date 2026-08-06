@@ -81,6 +81,23 @@ const GROUP_TITLES: Readonly<Record<ModuleTreeGroupId, string>> = {
   propellants: 'Custom propellants',
 };
 
+/**
+ * The singular name of one module — the left editor's header title and the summary card's
+ * count rows. Kept beside the group titles so the two spellings can never drift.
+ */
+export const MODULE_GROUP_LABEL: Readonly<Record<EngineModuleGroup, string>> = {
+  combustor: 'Combustor',
+  nozzle: 'Nozzle',
+  solidMotor: 'Solid motor',
+  grain: 'Grain segment',
+  solidNozzle: 'Solid nozzle',
+  rocket: 'Rocket',
+  controller: 'Controller',
+  wiring: 'Feed wiring',
+  gimbal: 'Gimbal',
+  propellant: 'Custom propellant',
+};
+
 /** Which module groups each tree group draws its rows from, in row order. */
 const GROUP_SOURCES: Readonly<Record<ModuleTreeGroupId, readonly EngineModuleGroup[]>> = {
   combustors: ['combustor'],
@@ -284,6 +301,19 @@ export function buildModuleTree(
       ),
     };
   });
+}
+
+/** The built row for one module ref, or null — the left editor's header reads its label here. */
+export function findModuleRow(
+  groups: readonly ModuleTreeGroup[],
+  ref: EngineModuleRef,
+): ModuleTreeRow | null {
+  const key = moduleRefKey(ref);
+  for (const group of groups) {
+    const row = group.rows.find((r) => r.key === key);
+    if (row) return row;
+  }
+  return null;
 }
 
 /** The `＋` button's target group for a tree group (the first source that can be added to). */

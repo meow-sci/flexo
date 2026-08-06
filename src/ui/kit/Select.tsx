@@ -41,6 +41,12 @@ export interface SelectKitProps<T extends object>
   searchable?: boolean;
   /** Placeholder/label for the in-dropdown search field (searchable selects only). */
   searchPlaceholder?: string;
+  /**
+   * Match rule for the in-dropdown search (searchable selects only). Defaults to
+   * case-insensitive substring; pass `fuzzyAny`-style matching where a list is long enough
+   * that "hydro" should find "Hydrogen + Oxygen" (the reaction picker, design §B5).
+   */
+  filter?: (textValue: string, inputValue: string) => boolean;
 }
 
 /**
@@ -58,6 +64,7 @@ export function Select<T extends object>({
   popoverClassName,
   searchable,
   searchPlaceholder,
+  filter,
   ...props
 }: SelectKitProps<T>) {
   const { contains } = useFilter({ sensitivity: 'base' });
@@ -77,7 +84,7 @@ export function Select<T extends object>({
           // Autocomplete wraps the ListBox so the SearchField filters it with virtual
           // focus (type in the field, arrow into the results). Mounts fresh each open, so
           // the query resets when the popover closes.
-          <Autocomplete filter={contains}>
+          <Autocomplete filter={filter ?? contains}>
             <SearchField
               size={size === 'sm' ? 'sm' : 'md'}
               autoFocus

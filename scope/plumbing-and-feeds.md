@@ -50,7 +50,8 @@ only when all three agree:
 | `src/state/feedTargets.ts`            | `feedTargetsOf` / `consumerOptionsOf` / `unwiredConsumersOf` — the pickable options + the auto-wire candidate set.                          |
 | `src/state/editorStore.ts`            | `setConnectorCapabilities`, `setCombustorFeeds`/`Plumbing` (+ part-level), the `ConsumerFeedWiring` actions, `autoWireUnwiredConsumers`.    |
 | `src/ui/FeedsField.tsx`               | The `<FeedsFrom>` list editor.                                                                                                              |
-| `src/ui/EngineSections.tsx`           | `ConsumerFeedWiringSection`, plumbing/feeds inside `CombustorFields`.                                                                       |
+| `src/ui/engine/FeedWiringEditor.tsx`  | The `<ConsumerFeedWiring>` editor (Engine mode's Feed wiring group AND Data ▸ Part ▸ Wiring — one component, two entrances).                |
+| `src/ui/engine/CombustorEditor.tsx`   | The plumbing class select + the combustor's `<FeedsFrom>` list.                                                                             |
 | `src/ui/build/ConnectorInspector.tsx` | The connector Capabilities switch row.                                                                                                      |
 
 ## Game-side anchors (`decomp/KSA/`)

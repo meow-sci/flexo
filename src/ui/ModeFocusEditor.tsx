@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/react';
 import { BuildFocusEditor } from './build/BuildFocusEditor';
 import { DataScopeForm } from './data/DataScopeForm';
+import { ModuleEditor } from './engine/ModuleEditor';
 import { $mode } from '../state/modeStore';
 
 /**
@@ -23,8 +24,10 @@ export function ModeFocusEditor() {
   // Data's ruleset is not a selection inspector: the LEFT panel shows the GameData form for
   // the scope the right navigator picked (foundation §7.3).
   if (mode === 'data') return <DataScopeForm />;
+  // Engine's ruleset is the module the right tree focused — exactly one at a time (§7.4).
+  if (mode === 'engine') return <ModuleEditor />;
 
-  // INTERIM: the remaining three modes keep their editors in the right sidebar / dialogs
+  // INTERIM: the remaining two modes keep their editors in the right sidebar / dialogs
   // until their own phases build a left ruleset. RULE ZERO — nothing is removed, so an empty slot
   // costs the user no feature.
   return (

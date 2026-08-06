@@ -104,6 +104,31 @@ lives here. All of it is **ephemeral view state: never persisted, never an undo 
 | `$dataFlash` / `flashPlacements` / `flashConnector` / `clearFlash` | The one-shot ~600 ms flash behind row hovers, scope chips and the Coupling section's "Show →" eye. Two id spaces, because placements and connector markers highlight through different scene paths. |
 | `initDataMode()` | Registers the entry ladder (jump payload → surviving scope → selected SubPart's template → Part) plus the reaction-catalog preload. Exit has NO effects: the scope must survive for the return trip. |
 
+### Engine mode's sub-state — `src/state/engineStore.ts`
+
+Engine mode's designer state, all of it **ephemeral: never serialized, never an undo step**.
+Every reference into `$part` is re-resolved on read, so a removed module or placement degrades
+to a sane fallback instead of editing the wrong thing.
+
+| Export | Meaning |
+|---|---|
+| `$activeEngineEntry` / `activateEngine(entry)` | The open engine SCOPE — a SubPart template or the part itself (`PART_ENGINE_ENTRY_KEY = '\0part'`). `activateEngine` also resets the module focus, since a module ref is indexed WITHIN a scope. |
+| `engineEntryLabel` / `engineEntryShortLabel` / `engineEntryKey` / `engineEntryFromKey` | The ONE label + key helpers (v1 duplicated them across two components). |
+| `$activeModule` / `$activeModuleClamped` / `focusModule(ref)` | Which module the LEFT editor shows: `{group, scope, index}`. The clamped read returns null once the index falls out of range, which is what makes removing the focused module fall back to the summary card instead of rendering over `undefined`. |
+| `engineModuleCount(part, entry, group, scope)` | The one place that knows which `$part` list backs each module group. |
+| `$activeNozzleRef` / `$resolvedNozzleTargets` / `$activeNozzleTarget` / `cycleExhaustTarget(±1)` | The exhaust handles: nozzle × flavor × placement × channel, exactly one active. `,` / `.` walk them in chip order. |
+| `$isExhaustPlacing` / `$effectiveToolMode` / `setExhaustPlacing` / `toggleExhaustPlacing` | Exhaust placement's tenancy of the single `$activeTool` slot, plus the Scale→Move clamp the Tool bar displays truthfully. |
+| `$engineFindings` / `$engineBlockerCount` / `moduleRefForIssue` / `focusEngineIssue` | `validateEngines` over the live catalog, the mode-switcher attention dot, and the click-through that opens a finding's scope, focuses its module and flashes the field. |
+| `$moduleFlash` / `flashModuleField(key)` | The nonce'd field-flash intent the editors consume (`mixtureRatio`, `exhaustDirection`, `defaultPressure`, `reactionId`, `areaRatio`). |
+| `$rocketReadoutSel` / `FIRST_PAIR_ROCKET` | Which `<Rocket>` the Performance card aggregates over. |
+| `$engineDefineFlow` / `requestDefineNewEngine` / `$engineTreeCollapsed` / `jumpToEngineGroup` | The define-new pushed view and the tree's collapse state — in the store, not in component state, so a cross-mode jump can open or reveal them without an effect writing state. |
+| `initEngineMode()` | Registers the entry ladder (jump payload → surviving scope → selected SubPart's template → the single scope → empty) plus the reaction + solid-curve preloads. **`enterEngineMode` / `exitEngineMode` are GONE** — `setMode('engine', payload)` is the single choreography point, and exit needs no hook (the refs are retained for the return trip, `setMode` cancels the tool, and `EditorScene` disposes the handles on `$mode`). |
+
+Engine document mutations stay in `editorStore`: `addEngine` / `addRcsEngine` /
+`addSolidEngine` / `addSrbEngine` are ONE-undo-step composites, `duplicateEngineModule(ref, templateId)`
+clones and re-ids a module, and `updateReactionPlumes(locator, plumes)` is the discrete setter
+behind the nozzle editor's `<ReactionPlume>` list.
+
 ### The findings pipeline — `src/state/gameDataFindings.ts`
 
 `$gameDataFindings` is one derived list feeding all three validation surfaces: the navigator's
@@ -416,12 +441,19 @@ Shift+click on pointer-down (before react-aria's own, anchorless extension runs)
   where that surface still lives. On phone the same component is the **Panel sheet** (re-tap the active mode tab),
   and `MobileInspector.tsx` is the **Inspector sheet** hosting `ModeFocusEditor` — the same
   left/right split the desktop has.
-- `EnginePanel.tsx` / `EngineToolbar.tsx` — the full-sidebar **Engine Designer**
-  (`$mode === 'engine'`, ephemeral atoms in `engineStore.ts`) with a live
-  thrust/Isp readout; `EngineSections.tsx` holds the reusable combustor/nozzle/controller/
-  gimbal/propellant editors. Data mode's Wiring, Advanced and template Engine sections host
-  those same components for one phase (marked `TODO(P7.18)`) until Engine mode's rebuild
-  turns them into shared editors. See [engines.md](./engines.md).
+- `engine/*` — **Engine mode** (`$mode === 'engine'`, ephemeral state in `engineStore.ts`).
+  `EngineNavigator.tsx` is the right sidebar (scope select + define-new flow, `ModuleTree`
+  over the pure `moduleTreeModel`, `PerformanceCard` + `SolidThrustCurveCard`, the
+  always-mounted `IssuesSection`, `ExhaustSection`); `ModuleEditor.tsx` is the left sidebar
+  and shows exactly ONE module's fields, dispatching to `CombustorEditor` / `NozzleEditor`
+  (+ its `SolidNozzleEditor` variant) / `SolidMotorEditor` / `GrainSegmentEditor` /
+  `RocketEditor` / `ControllerEditor` / `GimbalEditor` / `FeedWiringEditor` /
+  `PropellantEditor`. Every editor is **scope-agnostic** — it takes a `templateId`
+  (`null` ⇒ `<PartGameData>`) and dispatches to the matching action family — which is why
+  Data mode's Wiring, Advanced and template-Engine sections render the SAME components
+  through `ModuleCardList.tsx` and can never diverge in capability. The v1
+  `EnginePanel` / `EngineToolbar` / `EngineSections` / `EngineIssuesPanel` are DELETED.
+  See [engines.md](./engines.md).
 
 ## Persistence
 

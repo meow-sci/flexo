@@ -1,8 +1,21 @@
 import { useStore } from '@nanostores/react';
 import type { Selection } from 'react-aria-components';
 import { AlertTriangle, ChevronDown, ChevronRight, MoreVertical, Plus, Zap } from 'lucide-react';
-import { Button, GridList, GridListItem, Menu, MenuItem, MenuTrigger, Popover, cn } from '../kit';
+import {
+  Button,
+  GridList,
+  GridListItem,
+  Menu,
+  MenuItem,
+  MenuTrigger,
+  Popover,
+  SubmenuTrigger,
+  cn,
+  useIsPhone,
+} from '../kit';
 import { PartScopeChip } from '../data/ScopeChip';
+import { addBlankPropellant, cloneShippedPropellant } from './propellantCreate';
+import { addModule, removeModule, solidMotorCount } from './moduleActions';
 import {
   addGroupOf,
   buildModuleTree,
@@ -10,46 +23,13 @@ import {
   type ModuleTreeGroup,
   type ModuleTreeRow,
   type UnwiredRow,
-  scopeOfGroup,
 } from './moduleTreeModel';
 import {
   $part,
-  addCombustor,
   addConsumerFeedWiring,
-  addCustomReaction,
-  addNozzle,
-  addPartCombustor,
-  addPartNozzle,
-  addPartRocket,
-  addPartSolidGrainSegment,
-  addPartSolidMotor,
-  addPartSolidNozzle,
-  addRocket,
-  addRocketController,
-  addSubPartSolidGrainSegment,
-  addSubPartSolidMotor,
-  addSubPartSolidNozzle,
   autoWireUnwiredConsumers,
   duplicateEngineModule,
-  removeCombustor,
-  removeConsumerFeedWiring,
-  removeCustomReaction,
-  removeGimbal,
-  removeNozzle,
-  removePartCombustor,
-  removePartNozzle,
-  removePartRocket,
-  removePartSolidGrainSegment,
-  removePartSolidMotor,
-  removePartSolidNozzle,
-  removeRocket,
-  removeRocketController,
-  removeSubPartSolidGrainSegment,
-  removeSubPartSolidMotor,
-  removeSubPartSolidNozzle,
   undo,
-  type EngineModuleGroup,
-  type EngineModuleRef,
 } from '../../state/editorStore';
 import {
   $activeEngineEntry,
@@ -66,6 +46,7 @@ import {
 } from '../../state/engineStore';
 import { $allReactions } from '../../state/reactionStore';
 import { status } from '../../state/statusStore';
+import { openInspectorSheet } from '../shell/phone/phoneSheets';
 
 /**
  * **The module tree** — the Engine navigator's middle block (design:
@@ -86,6 +67,7 @@ import { status } from '../../state/statusStore';
  */
 export function ModuleTree() {
   const part = useStore($part);
+  const isPhone = useIsPhone();
   const entry = useStore($activeEngineEntry);
   const findings = useStore($engineFindings);
   const active = useStore($activeModuleClamped);
@@ -115,7 +97,12 @@ export function ModuleTree() {
     const key = [...selection][0];
     if (key === undefined) return;
     for (const item of items) {
-      if (item.type === 'row' && item.key === key) focusModule(item.row.ref);
+      if (item.type === 'row' && item.key === key) {
+        focusModule(item.row.ref);
+        // Phone: the two sheets share one slot, so picking a module hands off from the Panel
+        // sheet (this tree) to the Inspector sheet (its editor) — design §B8.
+        if (isPhone) openInspectorSheet();
+      }
     }
   };
 
@@ -130,7 +117,7 @@ export function ModuleTree() {
         selectedKeys={active ? new Set([moduleRefKey(active)]) : new Set<string>()}
         disabledKeys={items.flatMap((i) => (i.type === 'row' ? [] : [i.key]))}
         onSelectionChange={onSelectionChange}
-        dependencies={[part, findings, collapsed, active, reactions]}
+        dependencies={[part, findings, collapsed, active, reactions, isPhone]}
         className="flex flex-col gap-0.5 overflow-auto outline-none"
       >
         {(item: TreeItem) => (
@@ -144,7 +131,7 @@ export function ModuleTree() {
                 onToggle={() => toggleEngineTreeGroup(item.group.id)}
               />
             ) : item.type === 'row' ? (
-              <ModuleRow row={item.row} entry={entry} />
+              <ModuleRow row={item.row} entry={entry} isPhone={isPhone} />
             ) : (
               <UnwiredRowView row={item.row} />
             )}
@@ -279,22 +266,7 @@ function AddButton({ group, entry }: { group: ModuleTreeGroup; entry: EngineEntr
       </AddMenu>
     );
   }
-  if (group.id === 'propellants') {
-    // The two creation paths get their full editor in P7.17; a blank propellant is the one
-    // this list can honestly offer today.
-    return (
-      <Button
-        iconOnly
-        size="xs"
-        variant="ghost"
-        className="size-4 shrink-0"
-        aria-label="Add a blank propellant"
-        onPress={() => addModule('propellant', entry)}
-      >
-        <Plus size={12} />
-      </Button>
-    );
-  }
+  if (group.id === 'propellants') return <AddPropellantMenu />;
   // Gimbals are keyed to a placement, so there is no context-free "add one" — the editor's
   // instance picker is the only honest entry point (design §B4.9).
   if (group.id === 'gimbals') return null;
@@ -314,6 +286,46 @@ function AddButton({ group, entry }: { group: ModuleTreeGroup; entry: EngineEntr
   );
 }
 
+/**
+ * The custom-propellant `＋▾` (design §B4.10 "Creation paths"): clone a shipped propellant —
+ * the workflow that actually produces a sane gas table — or start blank. Both are ONE undo
+ * step and focus the new module (`propellantCreate`).
+ */
+function AddPropellantMenu() {
+  return (
+    <AddMenu label="Add propellant">
+      <SubmenuTrigger>
+        <MenuItem density="dense">Clone a shipped propellant…</MenuItem>
+        <Popover className="max-h-72 w-64 overflow-auto">
+          <CloneMenuBody />
+        </Popover>
+      </SubmenuTrigger>
+      <MenuItem density="dense" onAction={() => addBlankPropellant($allReactions.get())}>
+        Blank propellant
+      </MenuItem>
+    </AddMenu>
+  );
+}
+
+/** Mounted by its Popover, so the catalog list is rebuilt (never frozen) on each open. */
+function CloneMenuBody() {
+  const catalog = useStore($allReactions);
+  return (
+    <Menu aria-label="Clone a shipped propellant">
+      {catalog.map((reaction) => (
+        <MenuItem
+          key={reaction.id}
+          density="dense"
+          textValue={reaction.name}
+          onAction={() => cloneShippedPropellant(reaction, catalog)}
+        >
+          {reaction.name}
+        </MenuItem>
+      ))}
+    </Menu>
+  );
+}
+
 function AddMenu({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <MenuTrigger>
@@ -329,9 +341,29 @@ function AddMenu({ label, children }: { label: string; children: React.ReactNode
   );
 }
 
-function ModuleRow({ row, entry }: { row: ModuleTreeRow; entry: EngineEntry | null }) {
+function ModuleRow({
+  row,
+  entry,
+  isPhone,
+}: {
+  row: ModuleTreeRow;
+  entry: EngineEntry | null;
+  isPhone: boolean;
+}) {
   return (
-    <div className="flex w-full min-w-0 items-center gap-1 pl-5">
+    <div
+      className="flex w-full min-w-0 items-center gap-1 pl-5"
+      // Phone: the hand-off must fire even when the row is ALREADY the focused module —
+      // `onSelectionChange` does not, so re-tapping the open module would do nothing (§B8).
+      // The row's own buttons (⋮) keep their tap.
+      onPointerUp={
+        isPhone
+          ? (event) => {
+              if (!(event.target as Element).closest?.('button')) openInspectorSheet();
+            }
+          : undefined
+      }
+    >
       <IssueDot level={row.issue} />
       <span className="min-w-0 flex-1 truncate text-xs text-fg">{row.label}</span>
       <span className="shrink-0 truncate text-[11px] text-fg-subtle">{row.caption}</span>
@@ -439,148 +471,4 @@ function UnwiredRowView({ row }: { row: UnwiredRow }) {
       <span className="shrink-0 text-[11px] text-fg-subtle">wire it →</span>
     </button>
   );
-}
-
-// ── the add/remove action tables ────────────────────────────────────────────
-
-function solidMotorCount(part: ReturnType<typeof $part.get>, entry: EngineEntry | null): number {
-  if (entry?.kind === 'part') return part.gameData.solidMotors.length;
-  if (entry?.kind === 'subpart') {
-    return (
-      part.subPartGameData.find((s) => s.subPartTemplateId === entry.templateId)?.solidMotors
-        .length ?? 0
-    );
-  }
-  return 0;
-}
-
-/**
- * Adds a default module of `group` at the open scope and focuses it. Every branch is an
- * EXISTING discrete editorStore action — the tree adds no new mutation of its own, so undo
- * behavior is whatever those actions already guarantee.
- */
-function addModule(
-  group: EngineModuleGroup,
-  entry: EngineEntry | null,
-  kind: 'engine' | 'thruster' = 'engine',
-): void {
-  const templateId = entry?.kind === 'subpart' ? entry.templateId : null;
-  const before = countOf(group, entry);
-  if (group === 'controller') addRocketController(kind);
-  else if (group === 'wiring') addConsumerFeedWiring();
-  else if (group === 'propellant') {
-    addCustomReaction({
-      id: uniquePropellantId($part.get().customReactions.map((r) => r.id)),
-      name: 'New propellant',
-      category: 'Monopropellant',
-      reactants: [],
-      lut: [],
-      burnRate: null,
-      minimumBurnPressurePa: null,
-      maxStablePressurePa: null,
-      exhaustCondensedFraction: null,
-    });
-  } else if (templateId) {
-    const add = SUB_ADD[group];
-    add?.(templateId);
-  } else {
-    const add = PART_ADD[group];
-    add?.();
-  }
-  focusModule({ group, scope: scopeOfGroup(group, entry), index: before });
-}
-
-const SUB_ADD: Partial<Record<EngineModuleGroup, (templateId: string) => void>> = {
-  combustor: addCombustor,
-  nozzle: addNozzle,
-  rocket: addRocket,
-  solidMotor: addSubPartSolidMotor,
-  grain: addSubPartSolidGrainSegment,
-  solidNozzle: addSubPartSolidNozzle,
-};
-
-const PART_ADD: Partial<Record<EngineModuleGroup, () => void>> = {
-  combustor: addPartCombustor,
-  nozzle: addPartNozzle,
-  rocket: addPartRocket,
-  solidMotor: addPartSolidMotor,
-  grain: addPartSolidGrainSegment,
-  solidNozzle: addPartSolidNozzle,
-};
-
-const SUB_REMOVE: Partial<Record<EngineModuleGroup, (templateId: string, index: number) => void>> =
-  {
-    combustor: removeCombustor,
-    nozzle: removeNozzle,
-    rocket: removeRocket,
-    solidMotor: removeSubPartSolidMotor,
-    grain: removeSubPartSolidGrainSegment,
-    solidNozzle: removeSubPartSolidNozzle,
-  };
-
-const PART_REMOVE: Partial<Record<EngineModuleGroup, (index: number) => void>> = {
-  combustor: removePartCombustor,
-  nozzle: removePartNozzle,
-  rocket: removePartRocket,
-  solidMotor: removePartSolidMotor,
-  grain: removePartSolidGrainSegment,
-  solidNozzle: removePartSolidNozzle,
-};
-
-function removeModule(ref: EngineModuleRef, entry: EngineEntry | null): void {
-  const part = $part.get();
-  if (ref.group === 'controller') return removeRocketController(ref.index);
-  if (ref.group === 'wiring') return removeConsumerFeedWiring(ref.index);
-  if (ref.group === 'gimbal') {
-    const gimbal = part.gameData.gimbals[ref.index];
-    if (gimbal) removeGimbal(gimbal.subPartInstanceId);
-    return;
-  }
-  if (ref.group === 'propellant') {
-    const reaction = part.customReactions[ref.index];
-    if (reaction) removeCustomReaction(reaction.id);
-    return;
-  }
-  if (ref.scope === 'sub' && entry?.kind === 'subpart') {
-    SUB_REMOVE[ref.group]?.(entry.templateId, ref.index);
-    return;
-  }
-  PART_REMOVE[ref.group]?.(ref.index);
-}
-
-function countOf(group: EngineModuleGroup, entry: EngineEntry | null): number {
-  const part = $part.get();
-  const g = part.gameData;
-  if (group === 'controller') return g.rocketControllers.length;
-  if (group === 'wiring') return g.consumerFeedWiring.length;
-  if (group === 'gimbal') return g.gimbals.length;
-  if (group === 'propellant') return part.customReactions.length;
-  const owner =
-    entry?.kind === 'subpart'
-      ? part.subPartGameData.find((s) => s.subPartTemplateId === entry.templateId)
-      : g;
-  if (!owner) return 0;
-  switch (group) {
-    case 'combustor':
-      return owner.combustors.length;
-    case 'nozzle':
-      return owner.nozzles.length;
-    case 'solidMotor':
-      return owner.solidMotors.length;
-    case 'grain':
-      return owner.solidGrainSegments.length;
-    case 'solidNozzle':
-      return owner.solidNozzles.length;
-    default:
-      return owner.rockets.length;
-  }
-}
-
-/** `Propellant`, `Propellant2`, … — the same uniquing idiom the module ids use. */
-function uniquePropellantId(taken: string[]): string {
-  const set = new Set(taken);
-  if (!set.has('Propellant')) return 'Propellant';
-  let n = 2;
-  while (set.has(`Propellant${n}`)) n++;
-  return `Propellant${n}`;
 }

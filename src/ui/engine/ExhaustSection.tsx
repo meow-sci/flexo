@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/react';
 import { Crosshair } from 'lucide-react';
-import { Kbd, SectionTitle, Switch, ToggleButton, ToggleButtonGroup } from '../kit';
+import { Kbd, SectionTitle, Switch, ToggleButton, ToggleButtonGroup, cn, useIsPhone } from '../kit';
+import { closePhoneSheets } from '../shell/phone/phoneSheets';
 import {
   $activeNozzleTarget,
   $isExhaustPlacing,
@@ -33,6 +34,7 @@ export function ExhaustSection() {
   const targets = useStore($resolvedNozzleTargets);
   const active = useStore($activeNozzleTarget);
   const placing = useStore($isExhaustPlacing);
+  const isPhone = useIsPhone();
 
   if (targets.length === 0) return null;
   const shared = active !== null && active.instanceCount > 1;
@@ -45,45 +47,22 @@ export function ExhaustSection() {
       </div>
 
       <div className="px-1">
-        <Switch isSelected={placing} onChange={setExhaustPlacing}>
+        <Switch
+          isSelected={placing}
+          onChange={(on) => {
+            setExhaustPlacing(on);
+            // Phone: arming from the Panel sheet must reveal the viewport it is about to
+            // point at (design §B8) — the sheet is exactly what would hide the handles.
+            if (on && isPhone) closePhoneSheets();
+          }}
+        >
           <span className="inline-flex items-center gap-1">
             <Crosshair size={13} /> Place exhaust in 3D
           </span>
         </Switch>
       </div>
 
-      {targets.length > 1 && (
-        <ToggleButtonGroup
-          className="max-h-24 w-auto flex-wrap gap-1 overflow-y-auto px-1"
-          aria-label="Nozzle to place"
-          selectionMode="single"
-          disallowEmptySelection
-          selectedKeys={active ? [active.key] : []}
-          onSelectionChange={(keys) => {
-            const key = [...keys][0];
-            const target = targets.find((t) => t.key === key);
-            if (target) setActiveNozzleRef(target.ref);
-          }}
-        >
-          {/* flex-none: ToggleButton is flex-1 for segmented controls, which would stretch a
-              lone wrapped chip to full width. */}
-          {targets.map((t) => (
-            <ToggleButton
-              key={t.key}
-              id={t.key}
-              size="xs"
-              className="flex-none"
-              aria-label={
-                t.ref.scope === 'subpart' && t.ref.instanceId
-                  ? `${nozzleTargetLabel(t)} on ${t.ref.instanceId}`
-                  : nozzleTargetLabel(t)
-              }
-            >
-              {nozzleTargetLabel(t)}
-            </ToggleButton>
-          ))}
-        </ToggleButtonGroup>
-      )}
+      {targets.length > 1 && <ExhaustTargetChips className="max-h-24 px-1" />}
 
       {shared && (
         <p className="px-1 text-[11px] leading-snug text-fg-subtle">
@@ -105,5 +84,50 @@ export function ExhaustSection() {
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * The chip list on its own — one chip per resolved handle, exactly one active.
+ *
+ * Extracted so the phone's re-targeting sheet (design §B8: tap the exhaust chip in the
+ * CondensedStatusBar) renders the IDENTICAL control the navigator does, rather than a second
+ * list that could disagree with the viewport's handles.
+ */
+export function ExhaustTargetChips({ className }: { className?: string }) {
+  const targets = useStore($resolvedNozzleTargets);
+  const active = useStore($activeNozzleTarget);
+
+  return (
+    <ToggleButtonGroup
+      className={cn('w-auto flex-wrap gap-1 overflow-y-auto', className)}
+      aria-label="Nozzle to place"
+      selectionMode="single"
+      disallowEmptySelection
+      selectedKeys={active ? [active.key] : []}
+      onSelectionChange={(keys) => {
+        const key = [...keys][0];
+        const target = targets.find((t) => t.key === key);
+        if (target) setActiveNozzleRef(target.ref);
+      }}
+    >
+      {/* flex-none: ToggleButton is flex-1 for segmented controls, which would stretch a lone
+          wrapped chip to full width. */}
+      {targets.map((t) => (
+        <ToggleButton
+          key={t.key}
+          id={t.key}
+          size="xs"
+          className="flex-none"
+          aria-label={
+            t.ref.scope === 'subpart' && t.ref.instanceId
+              ? `${nozzleTargetLabel(t)} on ${t.ref.instanceId}`
+              : nozzleTargetLabel(t)
+          }
+        >
+          {nozzleTargetLabel(t)}
+        </ToggleButton>
+      ))}
+    </ToggleButtonGroup>
   );
 }

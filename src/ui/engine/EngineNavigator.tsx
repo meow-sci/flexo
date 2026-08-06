@@ -1,7 +1,7 @@
 import { useStore } from '@nanostores/react';
-import { Button, ListBoxItem, Select, panelChrome } from '../kit';
+import { Button, ListBoxItem, Select, panelChrome, useIsPhone } from '../kit';
 import { ModuleTree } from './ModuleTree';
-import { PerformanceCard } from './PerformanceCard';
+import { PerformanceCard, PerformanceHeadline } from './PerformanceCard';
 import { IssuesSection } from './IssuesSection';
 import { ExhaustSection } from './ExhaustSection';
 import {
@@ -40,6 +40,7 @@ import {
  */
 export function EngineNavigator() {
   const part = useStore($part);
+  const isPhone = useIsPhone();
   const entries = useStore($engineEntries);
   const active = useStore($activeEngineEntry);
   // The define-new flow is STORE state, so a cross-mode jump (`Add ▸ Define Engine…`, Data's
@@ -100,9 +101,17 @@ export function EngineNavigator() {
       ) : (
         <>
           <ModuleTree />
-          <PerformanceCard />
+          {/* Phone: the headline is the sheet's sticky footer so thrust and Isp stay visible
+              while scrolling the tree (§B8); the full card stays where it is on desktop. */}
+          {!isPhone && <PerformanceCard />}
           <IssuesSection />
           <ExhaustSection />
+          {isPhone && (
+            <>
+              <PerformanceCard />
+              <PerformanceHeadline className="sticky bottom-0" />
+            </>
+          )}
         </>
       )}
     </div>

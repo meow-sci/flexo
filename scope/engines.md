@@ -28,21 +28,21 @@ moved — so `enginePhysics.ts` needed one new port (`sliceLutAtMixtureRatio`), 
 
 ## Flexo modules
 
-| Path                                                          | Role                                                                                                                                             |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/ksa/enginePhysics.ts`                                    | The verbatim port. `predictPerformance()` + LUT lookup + mixture SliceAt, Mach solve, separation clamp, thrust. Pure numeric.                    |
-| `src/ksa/reactionCatalog.ts`                                  | Loads/parses `Reactions.xml` → Fixed (1-D) / Mixture (2-D O/F×lnP) gas LUTs; custom-reaction ⇄ catalog conversion.                               |
-| `src/state/engineStore.ts`                                    | Ephemeral Engine Designer state (engine SCOPE — SubPart template or part —, instance, targeted `NozzleRef`, exhaust gizmo). Not in undo/`$part`. |
-| `src/state/reactionStore.ts`                                  | Loaded catalog + Core ∪ project custom reactions (`$allReactionIndex`).                                                                          |
-| `src/ksa/solidMotorPhysics.ts`                                | Verbatim port of the solid-motor grain regression: `TrySampleThrustCurve` + `ResizeNozzles` + the burn-rate law + two-phase efficiency.          |
-| `src/ksa/grainGeometryCatalog.ts`                             | Parses `GrainGeometries.xml` (burn-area-vs-depth profiles) + `SolidPropellants.xml` (`<StorageDensity KgPerM3>`).                                |
-| `src/state/solidCurveStore.ts`                                | Loaded grain profiles + solid densities (`$grainIndex`, `$hasSolidCurveData`), preloaded on Engine-mode entry.                                   |
-| `src/ui/EnginePanel.tsx`                                      | Full-sidebar designer; `PerformanceReadout` calls `predictPerformance`.                                                                          |
-| `src/ui/EngineSections.tsx`                                   | Modal section editors (combustor / nozzle / controllers / gimbals / custom propellants).                                                         |
-| `src/ui/EngineToolbar.tsx`, `src/three/NozzleHandleObject.ts` | Engine-mode toolbar; the per-nozzle 3D exhaust handles (amber physics / cyan FX).                                                                |
-| `src/three/coords.ts` (`exhaust*`)                            | Exhaust location/direction ⇄ owner assembly frame. **Location takes owner scale, direction does not** — see the frame gotcha below.              |
-| `src/ksa/engineValidation.ts`                                 | Load-time rules KSA enforces, plus the non-unit-`ExhaustDirection` thrust-multiplier warning.                                                    |
-| `src/ksa/types.ts`                                            | Engine type defs (`Combustor`, `DeLavalNozzle`, `Rocket`, `RocketController`, `Gimbal`, `SubPartIdRef`, `CustomReaction`, `KNOWN_REACTIONS`).    |
+| Path                                             | Role                                                                                                                                                                                                                |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/ksa/enginePhysics.ts`                       | The verbatim port. `predictPerformance()` + LUT lookup + mixture SliceAt, Mach solve, separation clamp, thrust. Pure numeric.                                                                                       |
+| `src/ksa/reactionCatalog.ts`                     | Loads/parses `Reactions.xml` → Fixed (1-D) / Mixture (2-D O/F×lnP) gas LUTs; custom-reaction ⇄ catalog conversion.                                                                                                  |
+| `src/state/engineStore.ts`                       | Ephemeral Engine Designer state (engine SCOPE — SubPart template or part —, focused module, targeted `NozzleRef`, exhaust tool). Not in undo/`$part`.                                                               |
+| `src/state/reactionStore.ts`                     | Loaded catalog + Core ∪ project custom reactions (`$allReactionIndex`).                                                                                                                                             |
+| `src/ksa/solidMotorPhysics.ts`                   | Verbatim port of the solid-motor grain regression: `TrySampleThrustCurve` + `ResizeNozzles` + the burn-rate law + two-phase efficiency.                                                                             |
+| `src/ksa/grainGeometryCatalog.ts`                | Parses `GrainGeometries.xml` (burn-area-vs-depth profiles) + `SolidPropellants.xml` (`<StorageDensity KgPerM3>`).                                                                                                   |
+| `src/state/solidCurveStore.ts`                   | Loaded grain profiles + solid densities (`$grainIndex`, `$hasSolidCurveData`), preloaded on Engine-mode entry.                                                                                                      |
+| `src/ui/engine/EngineNavigator.tsx`              | Engine mode's right sidebar: scope select, define-new flow, module tree, `PerformanceCard` (calls `predictPerformance`), ISSUES, exhaust chips.                                                                     |
+| `src/ui/engine/ModuleEditor.tsx` + `*Editor.tsx` | The per-module field editors (combustor / nozzle / solid trio / rocket / controller / gimbal / feed wiring / custom propellant). Scope-agnostic, so Data mode renders the SAME components via `ModuleCardList.tsx`. |
+| `src/three/NozzleHandleObject.ts`                | The per-nozzle 3D exhaust handles (amber physics / cyan FX).                                                                                                                                                        |
+| `src/three/coords.ts` (`exhaust*`)               | Exhaust location/direction ⇄ owner assembly frame. **Location takes owner scale, direction does not** — see the frame gotcha below.                                                                                 |
+| `src/ksa/engineValidation.ts`                    | Load-time rules KSA enforces, plus the non-unit-`ExhaustDirection` thrust-multiplier warning.                                                                                                                       |
+| `src/ksa/types.ts`                               | Engine type defs (`Combustor`, `DeLavalNozzle`, `Rocket`, `RocketController`, `Gimbal`, `SubPartIdRef`, `CustomReaction`, `KNOWN_REACTIONS`).                                                                       |
 
 ## Game-side anchors (`decomp/KSA/`) — the ported math
 
@@ -265,9 +265,12 @@ exported engine lost it in-game.
 Serializer: `src/ksa/partXmlSerializer.ts` emits one `<ReactionPlume>` per entry, omitting
 `Reaction` on the unkeyed fallback and `Default` when false. Persistence:
 `projectCodec.ts` swapped the `ve`/`pt` scalars for an `rp[]` array. The editor's two selects
-(`src/ui/EngineSections.tsx`) drive the DEFAULT entry via the `defaultReactionPlume` /
-`withDefaultReactionPlume` helpers, so reaction-keyed entries round-trip untouched but are not
-yet authorable in the UI (**gap P1**).
+(`src/ui/engine/NozzleEditor.tsx`) drive the DEFAULT entry via the `defaultReactionPlume` /
+`withDefaultReactionPlume` helpers — the fast path — and its **"Plume entries" disclosure**
+authors the FULL list (per row: Default switch ⟷ reaction select, plume select, trail select,
+remove; "+ Entry") through the discrete `updateReactionPlumes(locator, plumes)` action in
+`src/state/editorStore.ts`. **Gap P1 ✅ CLOSED** — reaction-keyed entries are now authorable,
+not merely round-tripped.
 
 **Everything else engine-side re-verified INTACT.** `DeLavalNozzleConfig.cs`,
 `CombustorConfig.cs`, `GasProperties.cs`, `NozzlePerformance.cs`, `RocketDesign.cs`,
@@ -447,7 +450,7 @@ id; it is now `['DefaultPlumeTrail']`.
   re-export. Modeled end-to-end: `DeLavalNozzle.plumeTrailId` + `PLUME_TRAIL_IDS`
   (`src/ksa/types.ts`), parse (`partXmlParser.ts` `nozzleFromElement`), emit after
   `<VolumetricExhaust>` (`partXmlSerializer.ts` `buildNozzleElement`), project codec (`pt`),
-  nozzle UI select (`src/ui/EngineSections.tsx`). New nozzles default to none (game schema
+  nozzle UI select (`src/ui/engine/NozzleEditor.tsx`). New nozzles default to none (game schema
   default; Core's RCS carries none).
 - ✅ **Ported math intact.** `DeLavalNozzleConfig.cs`, `CombustorConfig.cs`, `GasProperties.cs`,
   `CombustionTable.cs`, `NozzlePerformance.cs`, `RocketDesign.cs`, `EngineDesigner.cs`, and
@@ -531,6 +534,7 @@ that's tank data, see [gamedata-modules.md](gamedata-modules.md#what-changed-in-
 - ✅ `Combustion.xml` + `CorePropulsionBGameData.xml` unchanged.
 - 🟡 Only `<Diameter M="1"/>` added to 5 engine `<PartGameData>` blocks — editor-only VAB size filter; flexo drops it (covered in the part-size gap). Optional: sum per-chamber thrust to match KSA's new part-aggregate tooltip.
 
-> Housekeeping (resolved in the 4892 pass): the "stray NUL byte" in `src/ui/EngineSections.tsx`
+> Housekeeping (resolved in the 4892 pass): the "stray NUL byte" in the v1 `EngineSections.tsx`
+> (since split into `src/ui/engine/*`)
 > was actually two intentional `'\0root'`/`'\0none'` sentinel ids written as raw bytes; they are
 > now spelled with `\0` escapes so the file greps as text while keeping the non-colliding sentinels.

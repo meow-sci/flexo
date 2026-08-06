@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { useStore } from '@nanostores/react';
-import { AlertTriangle, Check, ChevronDown, Lock, Magnet, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, Crosshair, Lock, Magnet, X } from 'lucide-react';
 import { Button, Chip, cn, Dialog, Sheet } from '../../kit';
 import { NotificationBell } from '../../status/NotificationBell';
 import { FindingsList } from '../../data/FindingsList';
+import { ExhaustTargetChips } from '../../engine/ExhaustSection';
 import { closePhoneSheets } from './phoneSheets';
 import { MODE_ICONS, SEVERITY_DOT, SEVERITY_TEXT, TOOL_ICONS } from '../../status/statusTokens';
 import { $mode, MODES } from '../../../state/modeStore';
@@ -22,6 +23,12 @@ import { disarmTool } from '../../../state/modeStore';
 import { $selectionCount } from '../../../state/selectors';
 import { $snapEnabled, toggleSnap } from '../../../state/snapStore';
 import { $gameDataFindings, focusFinding } from '../../../state/dataModeStore';
+import {
+  $activeNozzleTarget,
+  $isExhaustPlacing,
+  $resolvedNozzleTargets,
+  nozzleTargetLabel,
+} from '../../../state/engineStore';
 
 /**
  * The phone's status strip (design: `plans/flexo_v2/design/design-system-services.md` §8.1;
@@ -51,6 +58,7 @@ export function CondensedStatusBar() {
   return (
     <div className="relative flex min-h-11 flex-none items-center gap-1 border-t border-border bg-panel px-1 text-xs text-fg-muted">
       <ModeOrToolChip />
+      <ExhaustTargetChip />
       <LayerChip />
       <DataIssueChip />
       <PhoneMessageChannel />
@@ -59,6 +67,50 @@ export function CondensedStatusBar() {
       <NotificationBell className="min-h-11 px-2" iconSize={16} />
       <ProgressUnderline />
     </div>
+  );
+}
+
+/**
+ * The Engine-mode exhaust re-targeting chip (design-data-engine-modes.md §B8).
+ *
+ * The mode/tool chip beside it keeps its foundation §12 role — tapping it CANCELS the armed
+ * tool, which is the phone's Escape — so re-targeting gets its own chip rather than stealing
+ * that tap. It opens the SAME chip list the navigator shows, as a 50% sheet, because on phone
+ * the Panel sheet is dismissed while placing and the viewport handles are all that is left.
+ *
+ * Absent unless exhaust placement is armed with more than one handle to choose between.
+ */
+function ExhaustTargetChip() {
+  const placing = useStore($isExhaustPlacing);
+  const targets = useStore($resolvedNozzleTargets);
+  const active = useStore($activeNozzleTarget);
+  const [open, setOpen] = useState(false);
+
+  if (!placing || targets.length < 2) return null;
+
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="min-h-11 min-w-0 shrink-0 gap-1 px-2"
+        aria-label="Choose which exhaust handle to place"
+        onPress={() => setOpen(true)}
+      >
+        <Crosshair size={16} className="shrink-0" />
+        <span className="max-w-[10ch] truncate">
+          {active ? nozzleTargetLabel(active) : 'Exhaust'}
+        </span>
+        <ChevronDown size={14} className="shrink-0 text-fg-subtle" />
+      </Button>
+
+      {/* Mounted only while open, so the chip list re-resolves its targets on every open. */}
+      <Sheet isOpen={open} onOpenChange={setOpen} detent="50" ariaLabel="Exhaust handle">
+        <Dialog className="min-h-0 flex-1 overflow-y-auto p-2">
+          <ExhaustTargetChips />
+        </Dialog>
+      </Sheet>
+    </>
   );
 }
 

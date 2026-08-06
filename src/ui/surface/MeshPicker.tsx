@@ -36,7 +36,7 @@ import { KITTEN_KINDS, KITTEN_LABELS, meshKind, type CustomMesh } from '../../ks
  * because the modal was the only manager; v2's picker is where you see everything). Rows that
  * are placed ZERO times stay visible with a ⚠ chip, which is the fix for the v1
  * invisible-template bug AND the silent export drop (pains #14/#15): a template with no
- * placements simply is not shipped by `buildCustomBundle`, and nothing used to say so.
+ * placements simply is not shipped by `buildMultiCustomBundle`, and nothing used to say so.
  *
  * **Undo enrollment: NONE of its own.** `＋` runs `addSubPart`, which pushes its own single
  * "add subpart" step; picking a mesh is mode sub-state and is never undoable.

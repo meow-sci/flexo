@@ -240,7 +240,7 @@ export function setKittenTextureExport(patch: Partial<KittenTextureExportSetting
  * dialog (all four), `planImportMaterials` +
  * `createImportMaterialAssets` ({@link ModelImportSettings.maxTextureSize} → `decodeImage`'s
  * `maxSize`, so the analysis estimate and the encoded .ktx2 agree), and
- * `modExport.buildCustomBundle` ({@link ModelImportSettings.decimateViewMeshes} → the `_VM`
+ * `modExport.buildMultiCustomBundle` ({@link ModelImportSettings.decimateViewMeshes} → the `_VM`
  * triangle budget).
  */
 export interface ModelImportSettings {

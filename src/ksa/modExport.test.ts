@@ -74,15 +74,17 @@ vi.mock('../three/importedMeshCache', () => ({
   }),
 }));
 import {
-  buildCustomBundle,
   buildExportVariantMap,
   buildModZip,
+  buildMultiCustomBundle,
   buildMultiModContent,
   expandGlassGlow,
   partExportNs,
   sanitizeBaseName,
   serializeModToml,
   uniqueFileName,
+  type ExportVariant,
+  type KittenTextureExportConfig,
 } from './modExport';
 import { serializeGameDataXml, serializePartsXml, type TemplateRemap } from './partXmlSerializer';
 import { serializeAssets } from './assetsXmlSerializer';
@@ -110,6 +112,54 @@ function buildModContent(
     catalog,
   );
   return { ...content, variants: content.perPart[0].variants };
+}
+/** Single-part `buildModZip`, wrapped exactly as `toNamedExportParts` wraps one part. */
+function zipOnePart(
+  part: EditingPart,
+  projectName: string,
+  catalog: ReadonlyMap<string, CatalogSubPart> = new Map(),
+) {
+  return buildModZip(
+    [{ entryId: 'pt_test', name: 'Part 1', ns: partExportNs(part.partId), part }],
+    projectName,
+    undefined,
+    catalog,
+  );
+}
+/**
+ * Single-part `buildMultiCustomBundle` — one plan entry, so these tests exercise the exact
+ * production merge path (path-dedupe + `serializeAssets(plans)`) the export buttons and the
+ * preview store run. The XML/GameData fields are inert here: the bundle builder reads only
+ * `base` and `perPart`.
+ */
+function bundleOnePart(
+  part: EditingPart,
+  base: string,
+  kittenTex?: KittenTextureExportConfig,
+  variants: Map<string, ExportVariant> = new Map(),
+  insetIds: ReadonlySet<string> = new Set(),
+) {
+  return buildMultiCustomBundle(
+    {
+      base,
+      partFile: '',
+      partXml: '',
+      gameDataFile: '',
+      gameDataXml: '',
+      perPart: [
+        {
+          entryId: 'pt_test',
+          name: 'Part 1',
+          ns: partExportNs(part.partId),
+          part,
+          variants,
+          remap: new Map(),
+          insetIds: new Set(insetIds),
+        },
+      ],
+    },
+    kittenTex,
+  );
 }
 
 describe('sanitizeBaseName', () => {
@@ -205,7 +255,7 @@ describe('animation export', () => {
   it('the bundle ships the Animations/*.glb at the path the XML references', async () => {
     const part = partWithDoorAnimation();
     const base = sanitizeBaseName('My Part');
-    const bundle = await buildCustomBundle(part, base);
+    const bundle = await bundleOnePart(part, base);
     const entry = bundle.binaries.find((b) => b.path === animGlbPath(base, part.animations[0]));
     expect(entry).toBeTruthy();
     const dv = new DataView(entry!.data.buffer, entry!.data.byteOffset, entry!.data.byteLength);
@@ -213,7 +263,7 @@ describe('animation export', () => {
   });
 
   it('exports animations even with no custom meshes (Core-only animated part)', async () => {
-    const bundle = await buildCustomBundle(partWithDoorAnimation(), 'MyPart');
+    const bundle = await bundleOnePart(partWithDoorAnimation(), 'MyPart');
     expect(bundle.assetsFile).toBeNull(); // no custom SubParts → no Assets XML
     expect(bundle.binaries.length).toBe(1); // …but the animation glb still ships
   });
@@ -236,7 +286,7 @@ describe('animation export', () => {
     const part = createEmptyPart();
     part.animations.push(createPartAnimation('anim_x', 'Empty'));
     expect(serializeGameData(part, 'P')).not.toContain('KeyframeAnimationModule');
-    expect((await buildCustomBundle(part, 'P')).binaries).toHaveLength(0);
+    expect((await bundleOnePart(part, 'P')).binaries).toHaveLength(0);
   });
 });
 
@@ -273,9 +323,9 @@ function partWithKittenMeshes(): EditingPart {
   return part;
 }
 
-describe('buildCustomBundle — part-ified kitten textures', () => {
+describe('buildMultiCustomBundle — part-ified kitten textures', () => {
   it('reference mode emits absolute <Diffuse>/<Normal>/<AoRoughMetal> and copies no kitten textures', async () => {
-    const bundle = await buildCustomBundle(partWithKittenMeshes(), 'KittenMod', {
+    const bundle = await bundleOnePart(partWithKittenMeshes(), 'KittenMod', {
       mode: 'reference',
       contentCorePath: 'C:\\KSA\\Content\\Core',
     });
@@ -303,7 +353,7 @@ describe('buildCustomBundle — part-ified kitten textures', () => {
     }));
     vi.stubGlobal('fetch', fetchMock);
     try {
-      const bundle = await buildCustomBundle(partWithKittenMeshes(), 'KittenMod', {
+      const bundle = await bundleOnePart(partWithKittenMeshes(), 'KittenMod', {
         mode: 'bundle',
         contentCorePath: '',
       });
@@ -334,7 +384,7 @@ describe('SubPart light GameData export', () => {
 
     const gameDataXml = serializeGameData(part, 'KittenMod');
     const partXml = serializePart(part);
-    const bundle = await buildCustomBundle(part, 'KittenMod', REF_TEX);
+    const bundle = await bundleOnePart(part, 'KittenMod', REF_TEX);
 
     // GameData carries the light, keyed by the SubPart template id.
     expect(gameDataXml).toContain(`<SubPartGameData Id="${lampId}"`);
@@ -434,7 +484,7 @@ describe('built-in SubPart GameData export variants (never redefine the built-in
 
   it('Assets XML declares the variant reusing the built-in Mesh + Material (ships no binaries)', async () => {
     const content = buildModContent(partWithBuiltinLight(), 'MyLight', lightCatalog());
-    const bundle = await buildCustomBundle(
+    const bundle = await bundleOnePart(
       partWithBuiltinLight(),
       content.base,
       undefined,
@@ -450,7 +500,7 @@ describe('built-in SubPart GameData export variants (never redefine the built-in
   });
 
   it('end-to-end zip never emits a <SubPartGameData> for the built-in id', async () => {
-    const blob = await buildModZip(partWithBuiltinLight(), 'MyLight', undefined, lightCatalog());
+    const blob = await zipOnePart(partWithBuiltinLight(), 'MyLight', lightCatalog());
     const text = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()));
     expect(text).toContain(`<SubPartGameData Id="${VID}"`);
     expect(text).not.toContain(`<SubPartGameData Id="${SPOTLIGHT}"`);
@@ -556,7 +606,7 @@ describe('custom-mesh SubParts never get an export variant', () => {
   it('the Assets XML declares the SubPart exactly ONCE, with a <Material> and the _VM view mesh', async () => {
     const part = partWithCustomMeshGameData();
     const content = buildModContent(part, 'Rod', mergedCatalogWithCustomRod());
-    const bundle = await buildCustomBundle(part, content.base, undefined, content.variants);
+    const bundle = await bundleOnePart(part, content.base, undefined, content.variants);
     const xml = bundle.assetsXml!;
     expect(xml.match(/<SubPart Id=/g)).toHaveLength(1);
     expect(xml).toContain(`<SubPart Id="${CUSTOM_ROD}"`);
@@ -571,12 +621,12 @@ describe('every exported <PartModel> carries a <Material>', () => {
   it('holds for a glowing custom mesh with GameData (the crash case)', async () => {
     const part = partWithCustomMeshGameData();
     const content = buildModContent(part, 'Rod', mergedCatalogWithCustomRod());
-    const bundle = await buildCustomBundle(part, content.base, undefined, content.variants);
+    const bundle = await bundleOnePart(part, content.base, undefined, content.variants);
     expectEveryPartModelHasMaterial(bundle.assetsXml!);
   });
 
   it('holds for a bare mesh with no glow, texture or material', async () => {
-    const bundle = await buildCustomBundle(partWithMaterialMeshes(), 'ButtonMod');
+    const bundle = await bundleOnePart(partWithMaterialMeshes(), 'ButtonMod');
     expectEveryPartModelHasMaterial(bundle.assetsXml!);
   });
 });
@@ -719,7 +769,7 @@ describe('<Internal> (interior-only) export variants', () => {
     part.lights.push(createPartLight(CHAIR, '_light1'));
     const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId));
     expect(variants.get(CHAIR)!.internal).toBe(true);
-    const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants);
+    const bundle = await bundleOnePart(part, 'MyShip', undefined, variants);
     expect(bundle.assetsXml).toContain('<Internal>true</Internal>');
   });
 
@@ -763,7 +813,7 @@ describe('<Internal> (interior-only) export variants', () => {
     const part = partWithIvaAndCore();
     part.internalFlags[CHAIR] = false;
     const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId));
-    const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants);
+    const bundle = await bundleOnePart(part, 'MyShip', undefined, variants);
     expect(bundle.assetsFile).toBe('MyShipAssets.xml');
     expect(bundle.assetsXml).toContain(`<SubPart Id="${CHAIR_VARIANT}"`);
     expect(bundle.assetsXml).toContain(`<PartModel Id="${CHAIR_VARIANT}_Model"`);
@@ -787,7 +837,7 @@ describe('<Internal> (interior-only) export variants', () => {
     part.internalFlags[RAY_BLOCKER] = false; // any reason to redeclare will do
     const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId));
     expect(variants.get(RAY_BLOCKER)!.rayTracing).toBe('ShadowProxy');
-    const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants);
+    const bundle = await bundleOnePart(part, 'MyShip', undefined, variants);
     expect(bundle.assetsXml).toContain('<RayTracing>ShadowProxy</RayTracing>');
   });
 
@@ -803,7 +853,7 @@ describe('<Internal> (interior-only) export variants', () => {
     part.internalFlags[WINDOW] = true; // any reason to redeclare will do
     const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId));
     expect(variants.get(WINDOW)!.shadowCaster).toBe(false);
-    const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants);
+    const bundle = await bundleOnePart(part, 'MyShip', undefined, variants);
     // Dropping it would default the field back to KSA's `true` and start casting shadows.
     expect(bundle.assetsXml).toContain('<ShadowCaster>false</ShadowCaster>');
   });
@@ -813,7 +863,7 @@ describe('<Internal> (interior-only) export variants', () => {
     part.internalFlags[CHAIR] = false;
     const variants = buildExportVariantMap(part, ivaCatalog(), 'MyShip', partExportNs(part.partId));
     expect(variants.get(CHAIR)!.shadowCaster).toBeNull();
-    const bundle = await buildCustomBundle(part, 'MyShip', undefined, variants);
+    const bundle = await bundleOnePart(part, 'MyShip', undefined, variants);
     expect(bundle.assetsXml).not.toContain('ShadowCaster');
   });
 
@@ -836,7 +886,7 @@ describe('<Internal> (interior-only) export variants', () => {
   it('end-to-end: buildModZip threads the catalog into both Part and Assets XML', async () => {
     const part = partWithIvaAndCore();
     part.internalFlags[CHAIR] = false;
-    const blob = await buildModZip(part, 'MyShip', undefined, ivaCatalog());
+    const blob = await zipOnePart(part, 'MyShip', ivaCatalog());
     const text = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()));
     expect(text).toContain('flexo-parts/MyShipAssets.xml');
     expect(text).toContain(`InstanceOf="${CHAIR_VARIANT}"`);
@@ -846,7 +896,7 @@ describe('<Internal> (interior-only) export variants', () => {
 
 describe('buildModZip', () => {
   it('produces a zip archive containing the flexo-parts entries', async () => {
-    const blob = await buildModZip(createEmptyPart(), 'Project1');
+    const blob = await zipOnePart(createEmptyPart(), 'Project1');
     expect(blob.type).toBe('application/zip');
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const text = new TextDecoder('latin1').decode(bytes);
@@ -861,7 +911,7 @@ describe('buildModZip', () => {
   });
 
   it('includes the Animations/*.glb entry for an animated part', async () => {
-    const blob = await buildModZip(partWithDoorAnimation(), 'My Part');
+    const blob = await zipOnePart(partWithDoorAnimation(), 'My Part');
     const text = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()));
     expect(text).toContain(
       `flexo-parts/${animGlbPath('MyPart', partWithDoorAnimation().animations[0])}`,
@@ -902,9 +952,9 @@ function partWithMaterialMeshes(): EditingPart {
   return part;
 }
 
-describe('buildCustomBundle — uniform-channel CustomMaterial (red metallic button)', () => {
+describe('buildMultiCustomBundle — uniform-channel CustomMaterial (red metallic button)', () => {
   it('emits solid BaseColor + ORM texels and ONE shared PbrMaterial for both meshes', async () => {
-    const bundle = await buildCustomBundle(partWithMaterialMeshes(), 'ButtonMod');
+    const bundle = await bundleOnePart(partWithMaterialMeshes(), 'ButtonMod');
     const paths = bundle.binaries.map((b) => b.path);
 
     // Uniform channels become 1×1 solids: pure-red diffuse + ORM (AO 255, rough 0.15→38=0x26, metal 255).
@@ -943,7 +993,7 @@ describe('buildCustomBundle — uniform-channel CustomMaterial (red metallic but
       strength: 0.5,
       coverage: 1,
     };
-    const bundle = await buildCustomBundle(part, 'ButtonMod');
+    const bundle = await bundleOnePart(part, 'ButtonMod');
     const xml = bundle.assetsXml!;
     // A glow lives on the MESH, so a glowing mesh can't share the plain material entry: its
     // <Diffuse> has the glow composited in. It gets a second <PbrMaterial> named after the first
@@ -990,9 +1040,9 @@ function subPartMaterialId(xml: string, subPartId: string): string {
 // texture bytes per glowing mesh — a 6-material glTF whose emissive material covered 80 primitives
 // exported 85 <PbrMaterial> and 177 texture files (414 MB, 19 distinct payloads). KSA keys textures
 // by path, so those copies were also 80 GPU textures in-game for one image.
-describe('buildCustomBundle — meshes sharing a GLOWING material share one composite', () => {
+describe('buildMultiCustomBundle — meshes sharing a GLOWING material share one composite', () => {
   it('emits ONE <PbrMaterial> + ONE composited pair for two meshes glowing identically', async () => {
-    const bundle = await buildCustomBundle(partWithSharedGlowingMaterial(), 'ButtonMod');
+    const bundle = await bundleOnePart(partWithSharedGlowingMaterial(), 'ButtonMod');
     const xml = bundle.assetsXml!;
     const paths = bundle.binaries.map((b) => b.path);
 
@@ -1013,7 +1063,7 @@ describe('buildCustomBundle — meshes sharing a GLOWING material share one comp
   it('forks per DIVERGING glow: a different strength is a different composite', async () => {
     const part = partWithSharedGlowingMaterial();
     part.customMeshes[1].emissive!.strength = 0.9;
-    const bundle = await buildCustomBundle(part, 'ButtonMod');
+    const bundle = await bundleOnePart(part, 'ButtonMod');
     const xml = bundle.assetsXml!;
     const paths = bundle.binaries.map((b) => b.path);
 
@@ -1037,7 +1087,7 @@ describe('buildCustomBundle — meshes sharing a GLOWING material share one comp
     // composite is byte-identical and only its glow identity decides whether it is shared.
     for (const m of part.customMeshes)
       m.emissive = { shape: 'whole', color: { r: 10, g: 255, b: 10 }, strength: 0.6, coverage: 1 };
-    const bundle = await buildCustomBundle(part, 'KittenMod', REF);
+    const bundle = await bundleOnePart(part, 'KittenMod', REF);
     const xml = bundle.assetsXml!;
     expect(xml.match(/<PbrMaterial /g)).toHaveLength(1);
     expect(bundle.binaries.filter((b) => b.path.endsWith('_Emissive.ktx2'))).toHaveLength(1);
@@ -1047,7 +1097,7 @@ describe('buildCustomBundle — meshes sharing a GLOWING material share one comp
   });
 });
 
-describe('buildCustomBundle — image-backed material channels', () => {
+describe('buildMultiCustomBundle — image-backed material channels', () => {
   it('copies a strength-1 normal map and a packed ORM verbatim with channel-suffixed names', async () => {
     const { __assetStore, assetKeys } = (await import('../state/assetDb')) as unknown as {
       __assetStore: Map<string, Blob>;
@@ -1075,7 +1125,7 @@ describe('buildCustomBundle — image-backed material channels', () => {
     part.customMaterials[0].normal = { textureId: 'tex_n1', strength: 1 };
     part.customMaterials[0].ormPacked = { textureId: 'tex_orm1' };
 
-    const bundle = await buildCustomBundle(part, 'ButtonMod');
+    const bundle = await bundleOnePart(part, 'ButtonMod');
     const xml = bundle.assetsXml!;
     expect(xml).toContain('<Normal Path="Textures/Bumps_texn1_Normal.ktx2"');
     expect(xml).toContain('<AoRoughMetal Path="Textures/Packed_texorm1_AoRoughMetal.ktx2"');
@@ -1124,7 +1174,7 @@ const REF = { mode: 'reference', contentCorePath: 'C:\\KSA\\Content\\Core' } as 
 
 describe('visor glass tint + glow export', () => {
   it('a plain visor exports through the glass path with its real diffuse and no emissive', async () => {
-    const bundle = await buildCustomBundle(partWithVisor({}), 'VisorMod', REF);
+    const bundle = await bundleOnePart(partWithVisor({}), 'VisorMod', REF);
     expect(bundle.assetsXml).toContain('<PartModelGlass');
     expect(bundle.assetsXml).toContain('Kitty_Helmet_Visor_A.ktx2');
     expect(bundle.assetsXml).not.toContain('<Emissive');
@@ -1132,7 +1182,7 @@ describe('visor glass tint + glow export', () => {
 
   it('a glass-tinted visor emits a generated solid diffuse and stays on the glass path (no emissive)', async () => {
     const part = partWithVisor({ surface: 'glass', glass: { tint: { r: 200, g: 30, b: 30 } } });
-    const bundle = await buildCustomBundle(part, 'VisorMod', REF);
+    const bundle = await bundleOnePart(part, 'VisorMod', REF);
     expect(bundle.assetsXml).toContain('<PartModelGlass');
     expect(bundle.assetsXml).not.toContain('<Emissive');
     // A generated solid tint diffuse is bundled for this subpart, not the stock visor texture.
@@ -1147,7 +1197,7 @@ describe('visor glass tint + glow export', () => {
       surface: 'glow',
       emissive: { shape: 'whole', color: { r: 255, g: 180, b: 0 }, strength: 0.7, coverage: 1 },
     });
-    const bundle = await buildCustomBundle(part, 'VisorMod', REF);
+    const bundle = await bundleOnePart(part, 'VisorMod', REF);
     expect(bundle.assetsXml).toContain('<Emissive');
     expect(bundle.assetsXml).not.toContain('<PartModelGlass');
     expect(bundle.binaries.some((b) => b.path.endsWith('_Emissive.ktx2'))).toBe(true);
@@ -1181,7 +1231,7 @@ describe('visor glass tint + glow export', () => {
       emissive: { shape: 'whole', color: { r: 10, g: 255, b: 10 }, strength: 0.6, coverage: 1 },
     });
     const { part: expanded, insetIds } = expandGlassGlow(part);
-    const bundle = await buildCustomBundle(expanded, 'VisorMod', REF, new Map(), insetIds);
+    const bundle = await bundleOnePart(expanded, 'VisorMod', REF, new Map(), insetIds);
     expect(bundle.assetsXml).toContain('<PartModelGlass'); // the shell
     expect(bundle.assetsXml).toContain('<PartModel '); // the opaque glow layer
     expect(bundle.assetsXml).toContain('<Emissive');
@@ -1211,7 +1261,7 @@ describe('custom-mesh <Internal> (interior-only)', () => {
     expect(
       buildExportVariantMap(part, ivaCatalog(), 'ButtonMod', partExportNs(part.partId)).size,
     ).toBe(0);
-    const xml = (await buildCustomBundle(part, 'ButtonMod')).assetsXml!;
+    const xml = (await bundleOnePart(part, 'ButtonMod')).assetsXml!;
     expect(xml.match(/<Internal>true<\/Internal>/g)).toHaveLength(1);
     expect(subPartXml(xml, 'flexo_button_a')).toContain('<Internal>true</Internal>');
     expect(subPartXml(xml, 'flexo_plinth_b')).not.toContain('<Internal>');
@@ -1220,7 +1270,7 @@ describe('custom-mesh <Internal> (interior-only)', () => {
   it('IGNORES the flag on a glass mesh — <PartModelGlass> has no <Internal> field in KSA', async () => {
     const part = partWithVisor({});
     part.internalFlags['flexo_hunter_visor_a'] = true;
-    const bundle = await buildCustomBundle(part, 'VisorMod', REF);
+    const bundle = await bundleOnePart(part, 'VisorMod', REF);
     expect(bundle.assetsXml).toContain('<PartModelGlass');
     expect(bundle.assetsXml).not.toContain('<Internal>');
   });
@@ -1233,7 +1283,7 @@ describe('custom-mesh <Internal> (interior-only)', () => {
     });
     part.internalFlags['flexo_hunter_visor_a'] = true;
     const { part: expanded, insetIds } = expandGlassGlow(part);
-    const bundle = await buildCustomBundle(expanded, 'VisorMod', REF, new Map(), insetIds);
+    const bundle = await bundleOnePart(expanded, 'VisorMod', REF, new Map(), insetIds);
     expect(bundle.assetsXml).toContain('flexo_hunter_visor_a_Glow'); // the opaque layer is there…
     expect(bundle.assetsXml).not.toContain('<Internal>'); // …and it is NOT marked interior-only
   });
@@ -1295,9 +1345,9 @@ function partWithImportedMeshes(overrides: Partial<CustomMesh>[] = [{}]): Editin
   return part;
 }
 
-describe('buildCustomBundle — imported glTF SubParts', () => {
+describe('buildMultiCustomBundle — imported glTF SubParts', () => {
   it('ships the geometry in the atlas and a complete <PbrMaterial> + <SubPart> + <MeshView>', async () => {
-    const bundle = await buildCustomBundle(partWithImportedMeshes(), 'PodMod');
+    const bundle = await bundleOnePart(partWithImportedMeshes(), 'PodMod');
 
     // Geometry: the imported mesh is a node in the shared atlas, paired with its _VM view mesh.
     const atlas = bundle.binaries.find((b) => b.path.endsWith('_MeshAtlas.glb'))!;
@@ -1324,7 +1374,7 @@ describe('buildCustomBundle — imported glTF SubParts', () => {
   });
 
   it('interns ONE <PbrMaterial> for two imported meshes sharing a CustomMaterial', async () => {
-    const bundle = await buildCustomBundle(partWithImportedMeshes([{}, {}]), 'PodMod');
+    const bundle = await bundleOnePart(partWithImportedMeshes([{}, {}]), 'PodMod');
     const xml = bundle.assetsXml!;
     expect(xml.match(/<PbrMaterial /g)).toHaveLength(1);
     expect(xml.match(/<Material Id="flexo_PaintedMetal_paint_Material"/g)).toHaveLength(2);
@@ -1339,7 +1389,7 @@ describe('buildCustomBundle — imported glTF SubParts', () => {
         emissive: { shape: 'whole', color: { r: 255, g: 120, b: 0 }, strength: 0.75, coverage: 1 },
       },
     ]);
-    const bundle = await buildCustomBundle(part, 'PodMod');
+    const bundle = await bundleOnePart(part, 'PodMod');
     const xml = bundle.assetsXml!;
     // A glowing mesh gets its own material (the diffuse has the glow baked in), and both halves
     // of the composite ship under one content-addressed name.
@@ -1361,7 +1411,7 @@ describe('buildCustomBundle — imported glTF SubParts', () => {
       { emissive: { shape: 'whole', color: { r: 0, g: 255, b: 255 }, strength: 0.6, coverage: 1 } },
     ]);
     part.customMeshes[0].imported!.transparent = true;
-    const bundle = await buildCustomBundle(part, 'PodMod');
+    const bundle = await bundleOnePart(part, 'PodMod');
     const xml = bundle.assetsXml!;
     expect(xml).toContain('<PartModelGlass Id="flexo_RcsPod_Part0_ab12cd_Model"');
     expect(xml).not.toContain('<PartModel ');
@@ -1376,7 +1426,7 @@ describe('buildCustomBundle — imported glTF SubParts', () => {
     const part = partWithImportedMeshes([{}, {}]);
     part.customMeshes[1].imported!.meshName = 'flexo_missing_mesh';
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const bundle = await buildCustomBundle(part, 'PodMod');
+    const bundle = await bundleOnePart(part, 'PodMod');
     warn.mockRestore();
     const xml = bundle.assetsXml!;
     // The survivor is fully exported; the dead one appears nowhere (a <SubPart> pointing at a

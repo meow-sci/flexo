@@ -2,7 +2,7 @@ import type { PartAnimation } from './types';
 
 /**
  * Deterministic names shared by the GameData XML emitter ({@link serializeGameDataXml})
- * and the export bundle ({@link buildCustomBundle}) so the `<KeyframeAnimation Path>`
+ * and the export bundle ({@link buildMultiCustomBundle}) so the `<KeyframeAnimation Path>`
  * always matches the emitted `Animations/*.glb`. Kept dependency-free (no three.js)
  * so the XML serializer can import it.
  */

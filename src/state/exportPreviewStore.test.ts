@@ -33,14 +33,7 @@ vi.mock('../ksa/modExport', () => ({
       })),
     };
   },
-  buildCustomBundle: (
-    _part: unknown,
-    _base: string,
-    _tex: unknown,
-    _variants: unknown,
-    _inset: unknown,
-    opts?: { signal?: AbortSignal },
-  ) => {
+  buildMultiCustomBundle: (_content: unknown, _tex: unknown, opts?: { signal?: AbortSignal }) => {
     bundleCalls += 1;
     const n = bundleCalls;
     return new Promise((resolve, reject) => {

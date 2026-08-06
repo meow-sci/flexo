@@ -189,7 +189,7 @@ export function collectExportIssues(
 
   // ── custom meshes that will not ship (design D10; the P8.27 hand-off) ──────
   // The SAME zero-placement rule as `customAssetStore.$unplacedCustomMeshes` and the export
-  // skip in `modExport.buildCustomBundle` (`meshes = customMeshes.filter(placed.has(...))`).
+  // skip in `modExport.buildMultiCustomBundle` (`meshes = customMeshes.filter(placed.has(...))`).
   // Restated rather than imported: this module may not read a store's computed.
   const placedTemplates = new Set(part.placements.map((p) => p.subPartTemplateId));
   const unplaced = part.customMeshes.filter((m) => !placedTemplates.has(m.subPartId));

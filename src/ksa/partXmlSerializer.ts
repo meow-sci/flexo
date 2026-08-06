@@ -1010,7 +1010,7 @@ function buildFixedReactionElement(doc: XmlDocument, reaction: CustomReaction): 
 
 /**
  * Builds a `<KeyframeAnimationModule>` for one animation: the `<KeyframeAnimation
- * Path/Id>` reference (path matches what {@link buildCustomBundle} writes) plus an
+ * Path/Id>` reference (path matches what {@link buildMultiCustomBundle} writes) plus an
  * optional `<SolarTracking>` child. `ShowDeployRetract="true"` is emitted only in
  * deploy/retract mode (its absence gives KSA's Actuate slider).
  */

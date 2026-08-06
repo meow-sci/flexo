@@ -485,7 +485,7 @@ export const $assetUsage = computed([$part], (part): AssetUsage => {
 
 /**
  * Custom meshes with ZERO placements. They are templates, not orphans — but the mod export
- * silently drops them (`buildCustomBundle` ships only PLACED meshes), which v1 never said
+ * silently drops them (`buildMultiCustomBundle` ships only PLACED meshes), which v1 never said
  * anywhere (census pain #14). The picker and the Asset Manager render a ⚠ "won't export"
  * chip off this, and P10's export pre-flight re-derives the identical zero-placement rule.
  */

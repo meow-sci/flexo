@@ -17,7 +17,7 @@ import type { PartCollider } from './types';
  *
  * Materials are first-class and SHARED: multiple SubParts may reference one
  * <PbrMaterial Id> — exactly Core's pattern (one pack material serves every
- * SubPart in the pack). buildCustomBundle (modExport) dedupes identical resolved
+ * SubPart in the pack). buildMultiCustomBundle (modExport) dedupes identical resolved
  * channel sets into one entry.
  *
  * Only custom SubParts actually placed in the Part are emitted — built-in/Core
@@ -33,7 +33,7 @@ import type { PartCollider } from './types';
  * KSA dereferences all three with no null check — both the thumbnail renderer
  * (ThumbnailRenderResources.AddDraw) and every placed part
  * (PartModel.WriteInstancesToGpu) — so a partial material crashes the game.
- * buildCustomBundle resolves uniform channels into 1×1 solid textures.
+ * buildMultiCustomBundle resolves uniform channels into 1×1 solid textures.
  */
 export interface AssetsMaterialPlan {
   /** <PbrMaterial Id>. MUST be project-unique and never a Core id — KSA dedupes

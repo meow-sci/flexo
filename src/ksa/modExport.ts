@@ -15,6 +15,7 @@ import { serializeGameDataXml, serializePartsXml } from './partXmlSerializer';
 import {
   serializeAssets,
   type AssetsMaterialPlan,
+  type AssetsPlan,
   type AssetsSubPartPlan,
   type ReferenceSubPartPlan,
 } from './assetsXmlSerializer';
@@ -772,7 +773,7 @@ const GLASS_GLOW_INSET = 0.99;
  * the faithful KSA pattern (Core emits glass + opaque as sibling SubParts). For each such mesh we
  * append a synthetic '<id>_Glow' kitten mesh (opaque emissive, geometry inset) plus a parallel
  * placement at the original's transform. Returns the augmented part (fed to BOTH serializePartsXml and
- * buildCustomBundle so atlas/subparts/part-tree agree) + the set of subPartIds to inset. No-op
+ * buildMultiCustomBundle so atlas/subparts/part-tree agree) + the set of subPartIds to inset. No-op
  * (original part + empty set) when there are no glassGlow visors.
  *
  * DELIBERATELY KITTEN-ONLY. An IMPORTED mesh may also export as glass (`imported.transparent`),
@@ -853,14 +854,21 @@ export interface CustomBundle {
   binaries: { path: string; data: Uint8Array }[];
 }
 
+/** One part's contribution to a mod's Assets document, plus the binaries it references. */
+interface PartBundlePlan {
+  /** `null` when the part declares neither custom SubParts nor export variants. */
+  plan: AssetsPlan | null;
+  binaries: { path: string; data: Uint8Array }[];
+}
+
 /**
- * Builds the custom-asset bundle for a project: a geometry mesh-atlas GLB (one named
+ * Builds ONE part's custom-asset contribution: a geometry mesh-atlas GLB (one named
  * node per custom SubPart actually placed), the diffuse .ktx2 for each referenced
- * custom texture, and the Assets XML that declares the MeshAtlas/PbrMaterial/SubPart.
- * The Assets XML also declares the export variants (`variants` — built-in SubParts whose
- * `<Internal>` flag the user overrode AND ones that carry GameData), which reuse built-in
- * Mesh/Material and ship no binaries. Returns an empty bundle (animations only) when neither custom SubParts nor
- * variants are present.
+ * custom texture, and the `<MeshAtlas>/<PbrMaterial>/<SubPart>` PLAN the Assets XML is
+ * serialized from. The plan also declares the export variants (`entry.variants` — built-in
+ * SubParts whose `<Internal>` flag the user overrode AND ones that carry GameData), which
+ * reuse built-in Mesh/Material and ship no binaries. The plan is `null` (binaries only —
+ * animations still ship) when neither custom SubParts nor variants are present.
  *
  * The .ktx2 bytes come from IndexedDB (encoded at upload time); the atlas GLB is generated
  * fresh, per mesh source — primitives from their stored params, kitten submeshes from the
@@ -873,15 +881,18 @@ export interface CustomBundle {
  * XML preview actually stops the KTX2 encode chain instead of merely discarding its result.
  * It is CONTROL FLOW ONLY: an un-aborted build emits byte-identical output, and the KSA
  * game contract is untouched.
+ *
+ * Every id it mints is already project-unique — the bundle token carries a mesh id's random
+ * suffix (I4), variant ids carry the part's `ns` — so N parts' plans merge into one Assets
+ * document without a rename pass ({@link buildMultiCustomBundle}).
  */
-export async function buildCustomBundle(
-  part: EditingPart,
+async function buildPartBundlePlan(
+  entry: MultiPartPlanEntry,
   base: string,
   kittenTex: KittenTextureExportConfig = DEFAULT_KITTEN_TEXTURE_EXPORT,
-  variants: Map<string, ExportVariant> = new Map(),
-  insetIds: ReadonlySet<string> = new Set(),
   opts?: { signal?: AbortSignal },
-): Promise<CustomBundle> {
+): Promise<PartBundlePlan> {
+  const { part, variants, insetIds } = entry;
   /** Throws `AbortError` when the caller has cancelled; a no-op without a signal. */
   const checkAborted = (): void => {
     if (opts?.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
@@ -913,9 +924,9 @@ export async function buildCustomBundle(
     shadowCaster: v.shadowCaster,
   }));
 
-  // Nothing to declare → no Assets XML, but still ship any animation glbs above.
+  // Nothing to declare → no Assets plan, but still ship any animation glbs above.
   if (meshes.length === 0 && referenceSubParts.length === 0) {
-    return { assetsFile: null, assetsXml: null, binaries };
+    return { plan: null, binaries };
   }
 
   // Custom geometry (primitive/kitten/imported meshes) → build the mesh-atlas GLB, its textures,
@@ -1216,50 +1227,84 @@ export async function buildCustomBundle(
   }
 
   return {
-    assetsFile: `${base}Assets.xml`,
-    // One plan, one part — P3.07 splits the plan out of this function so N parts share one
-    // Assets document.
-    assetsXml: serializeAssets([
-      {
-        meshAtlasPath,
-        materials,
-        subParts,
-        referenceSubParts,
-      },
-    ]),
+    plan: { meshAtlasPath, materials, subParts, referenceSubParts },
+    binaries,
+  };
+}
+
+/** True when two emitted binaries are the same bytes (length first, then content). */
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+/**
+ * The multi-part custom-asset bundle: every included part's plan serialized as siblings into
+ * ONE `<Base>Assets.xml` (`KSA/AssetBundle.cs` — an Assets file is a flat
+ * `List<SerializedId>`, so N `<MeshAtlas>` / `<PbrMaterial>` / `<SubPart>` entries per file
+ * are first-class), plus the union of their binaries.
+ *
+ * Parts are built SEQUENTIALLY, not in parallel: each one is already an internally-parallel
+ * encode chain, and serial order keeps the abort check meaningful (a cancelled Assets preview
+ * stops at the next part boundary rather than after every part has finished).
+ *
+ * **Binary paths dedupe by path, and a repeat MUST be byte-identical.** Every generated path
+ * is per-part unique by construction (the bundle token carries a mesh id's random suffix, and
+ * texture/material names carry their own ids — I4), so the only repeat possible is a kitten
+ * texture copied verbatim in 'bundle' mode, which two parts fetch from the SAME game asset
+ * (`Textures/<basename>.ktx2`). Equal bytes ⇒ keep the first and drop the copy; anything else
+ * would mean one part's asset silently overwriting another's, so it throws instead.
+ */
+export async function buildMultiCustomBundle(
+  content: MultiModContent,
+  kittenTex: KittenTextureExportConfig = DEFAULT_KITTEN_TEXTURE_EXPORT,
+  opts?: { signal?: AbortSignal },
+): Promise<CustomBundle> {
+  const plans: AssetsPlan[] = [];
+  const binaries: { path: string; data: Uint8Array }[] = [];
+  const byPath = new Map<string, Uint8Array>();
+  for (const entry of content.perPart) {
+    if (opts?.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+    const built = await buildPartBundlePlan(entry, content.base, kittenTex, opts);
+    if (built.plan) plans.push(built.plan);
+    for (const binary of built.binaries) {
+      const existing = byPath.get(binary.path);
+      if (existing === undefined) {
+        byPath.set(binary.path, binary.data);
+        binaries.push(binary);
+        continue;
+      }
+      if (!sameBytes(existing, binary.data)) {
+        throw new Error(
+          `flexo export: two parts emit DIFFERENT bytes at '${binary.path}' — one would overwrite the other`,
+        );
+      }
+    }
+  }
+  return {
+    assetsFile: plans.length > 0 ? `${content.base}Assets.xml` : null,
+    assetsXml: plans.length > 0 ? serializeAssets(plans) : null,
     binaries,
   };
 }
 
 /**
  * Builds a downloadable zip containing `flexo-parts/` with a fresh mod.toml, the
- * project's Part + GameData XML, and — when custom SubParts are placed — an Assets
- * XML plus the referenced Meshes/*.glb and Textures/*.ktx2. Filenames are the
- * un-suffixed desired names (a zip is always a clean slate).
+ * project's Part + GameData XML — every included part as siblings in both — and, when custom
+ * SubParts are placed, an Assets XML plus the referenced Meshes/*.glb and Textures/*.ktx2.
+ * Filenames are the un-suffixed desired names (a zip is always a clean slate).
  */
 export async function buildModZip(
-  part: EditingPart,
+  parts: NamedExportPart[],
   projectName: string,
   kittenTex?: KittenTextureExportConfig,
   catalog: ReadonlyMap<string, CatalogSubPart> = new Map(),
 ): Promise<Blob> {
-  // P3.07 replaces this single-part shim: the signature becomes `(parts: NamedExportPart[], …)`
-  // and the body runs `buildMultiCustomBundle` over every entry. Until then it exports exactly
-  // one part, wrapped here because `buildMultiModContent` (which now owns `expandGlassGlow`)
-  // only speaks `NamedExportPart`.
-  const content = buildMultiModContent(
-    [{ entryId: '', name: '', ns: partExportNs(part.partId), part }],
-    projectName,
-    catalog,
-  );
-  const entry = content.perPart[0];
-  const bundle = await buildCustomBundle(
-    entry.part,
-    content.base,
-    kittenTex,
-    entry.variants,
-    entry.insetIds,
-  );
+  const content = buildMultiModContent(parts, projectName, catalog);
+  const bundle = await buildMultiCustomBundle(content, kittenTex);
   const encoder = new TextEncoder();
   const xmlAssets = [content.partFile, content.gameDataFile];
   if (bundle.assetsFile) xmlAssets.push(bundle.assetsFile);
@@ -1343,28 +1388,14 @@ export interface WriteResult {
  */
 export async function writeModToFolder(
   modsDir: FileSystemDirectoryHandle,
-  part: EditingPart,
+  parts: NamedExportPart[],
   projectName: string,
   kittenTex?: KittenTextureExportConfig,
   catalog: ReadonlyMap<string, CatalogSubPart> = new Map(),
 ): Promise<WriteResult> {
   const modDir = await modsDir.getDirectoryHandle(MOD_FOLDER_NAME, { create: true });
-  // Single-part shim, same as {@link buildModZip} — P3.07 gives this `NamedExportPart[]` and
-  // `buildMultiCustomBundle`. Non-overwrite naming and the mod.toml rebuild are untouched.
-  const content = buildMultiModContent(
-    [{ entryId: '', name: '', ns: partExportNs(part.partId), part }],
-    projectName,
-    catalog,
-  );
-  const entry = content.perPart[0];
-
-  const bundle = await buildCustomBundle(
-    entry.part,
-    content.base,
-    kittenTex,
-    entry.variants,
-    entry.insetIds,
-  );
+  const content = buildMultiModContent(parts, projectName, catalog);
+  const bundle = await buildMultiCustomBundle(content, kittenTex);
 
   const taken = new Set((await listFileNames(modDir)).map((n) => n.toLowerCase()));
   const partFile = uniqueFileName(taken, `${content.base}Part`, 'xml');

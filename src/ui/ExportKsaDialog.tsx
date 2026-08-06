@@ -3,6 +3,7 @@ import { useStore } from '@nanostores/react';
 import { Download, ExternalLink, FolderInput, FolderSync, RefreshCw } from 'lucide-react';
 import {
   Button,
+  Chip,
   CopyDownloadBar,
   Dialog,
   DialogHeader,
@@ -16,10 +17,12 @@ import {
   warningBox,
 } from './kit';
 import { FindingsRows } from './data/FindingsList';
-import { $part, select, type EntityKind } from '../state/editorStore';
+import { select, type EntityKind } from '../state/editorStore';
+import { $partsSnapshot, exportEntriesFrom, switchPart } from '../state/partsStore';
+import type { SavedPartEntry } from '../state/projectDb';
 import { $projectName } from '../state/projectStore';
 import { $catalogIndex } from '../state/catalogStore';
-import { $allReactionIndex } from '../state/reactionStore';
+import { $reactionCatalog } from '../state/reactionStore';
 import { $kittenTextureExport, $modelImportSettings } from '../state/settingsStore';
 import { MODES, setMode } from '../state/modeStore';
 import { openDialog } from '../state/dialogStore';
@@ -35,13 +38,24 @@ import {
   $exportPreview,
   buildTab,
   resetPreview,
+  toNamedExportParts,
   watchExportInputs,
   type ExportTab,
 } from '../state/exportPreviewStore';
-import { collectExportIssues, type ExportIssue, type IssueSeverity } from '../ksa/exportIssues';
+import {
+  collectProjectExportIssues,
+  type ExportIssue,
+  type IssueSeverity,
+} from '../ksa/exportIssues';
 import { computeClipIssues } from '../ksa/clipIssues';
 import { openAnimationClip } from '../state/animationStore';
-import { MOD_FOLDER_NAME, buildModZip, sanitizeBaseName, writeModToFolder } from '../ksa/modExport';
+import {
+  MOD_FOLDER_NAME,
+  buildModZip,
+  sanitizeBaseName,
+  writeModToFolder,
+  type NamedExportPart,
+} from '../ksa/modExport';
 import { notify, toast } from './toast';
 
 /**
@@ -64,7 +78,7 @@ import { notify, toast } from './toast';
  * 1. **The non-blocking policy** (foundation §10.6): a `block` finding NEVER disables either
  *    button; the primary relabels `Export anyway (N blockers)`. WIP exports are legitimate.
  * 2. **The single-source property** (census §5): everything shown and everything written
- *    comes from `buildMultiModContent` / `buildCustomBundle` (the former now owns
+ *    comes from `buildMultiModContent` / `buildMultiCustomBundle` (the former owns
  *    `expandGlassGlow`). The preview is the shipped bytes.
  * 3. **The write semantics**: non-overwrite `-N` suffixing for XML, binaries overwritten,
  *    `mod.toml` rebuilt from the folder listing — all owned by `writeModToFolder`, which
@@ -133,9 +147,47 @@ function ExportBody({ onClose }: { onClose: () => void }) {
             Inspect XML
           </ToggleButton>
         </ToggleButtonGroup>
+        <ExportScope />
       </div>
       {view === 'deliver' ? <DeliverMode onClose={onClose} /> : <InspectMode onClose={onClose} />}
     </>
+  );
+}
+
+// ── the exported parts ───────────────────────────────────────────────────────
+
+/**
+ * The included parts of a registry snapshot, as the export builders' input — the P3.01
+ * gathering seam, applied to a store READ rather than to `partsForExport()`: a zero-argument
+ * store reader called in a render body would be memoized by the React Compiler against a
+ * dependency it cannot see (`$partsSnapshot` exists for exactly this).
+ */
+function namedPartsOf(snapshot: readonly SavedPartEntry[]): NamedExportPart[] {
+  return toNamedExportParts(exportEntriesFrom(snapshot));
+}
+
+/**
+ * What this export covers: "Exporting N of M parts" with a chip per included part, in both
+ * modes — one mod, N parts, all three files (D4). Deliberately NOT editable here: the
+ * include flag is a per-part row control in the part dropdown, so this line reports and the
+ * registry decides.
+ */
+function ExportScope() {
+  const snapshot = useStore($partsSnapshot);
+  const included = snapshot.filter((entry) => entry.includeInExport);
+  const excluded = snapshot.length - included.length;
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-fg-muted">
+      <span>
+        Exporting {included.length} of {snapshot.length} part{snapshot.length === 1 ? '' : 's'}
+      </span>
+      {included.map((entry) => (
+        <Chip key={entry.id}>{entry.name}</Chip>
+      ))}
+      {excluded > 0 && (
+        <span className="text-fg-subtle">({excluded} excluded — toggle in the part list)</span>
+      )}
+    </div>
   );
 }
 
@@ -172,23 +224,92 @@ function jumpToIssue(issue: ExportIssue, onClose: () => void): void {
   const target = issue.jumpTarget;
   if (!target) return;
   onClose();
+  // The issue may belong to an INACTIVE part, whose entities no mode can focus until it is
+  // hydrated — so the jump switches parts first (`partEntryId` is stamped by
+  // `collectProjectExportIssues` for exactly this; cross-part issues carry none).
+  if (issue.partEntryId) switchPart(issue.partEntryId);
   setMode(target.mode, target.focus);
   const entity = (target.focus as { entity?: { kind: EntityKind; id: string } } | undefined)
     ?.entity;
   if (entity) select([{ kind: entity.kind, id: entity.id }]);
 }
 
+/** One part's slice of a findings list. Cross-part findings land in the `Project` group. */
+interface PartGroup<T> {
+  key: string;
+  label: string;
+  rows: T[];
+}
+
+/**
+ * Groups findings by the part they belong to, **`Project` first**: a cross-part blocker (two
+ * parts sharing a Part Id, a divergent propellant) is about the mod as a whole and names both
+ * parts in its own prose, so it must not hide under either one.
+ *
+ * Keyed by `partEntryId`, never by the display name (invariant I3 — anything project-wide keys
+ * by the registry id): two parts may legitimately share a name, and a rename must not reshuffle
+ * React keys. `partName` is the label and nothing else.
+ *
+ * Part groups follow first-appearance order, which is registry order — `collectProjectExportIssues`
+ * walks `parts` in order. Single-group lists render bare (invariant I8: a one-part project
+ * looks exactly like it did before parts existed).
+ */
+function groupByPart<T extends { partEntryId?: string; partName?: string }>(
+  rows: readonly T[],
+): PartGroup<T>[] {
+  const project = rows.filter((row) => row.partEntryId === undefined);
+  const groups: PartGroup<T>[] =
+    project.length > 0 ? [{ key: 'project', label: 'Project', rows: project }] : [];
+  const byPart = new Map<string, T[]>();
+  for (const row of rows) {
+    if (row.partEntryId === undefined) continue;
+    const existing = byPart.get(row.partEntryId);
+    if (existing) existing.push(row);
+    else byPart.set(row.partEntryId, [row]);
+  }
+  for (const [entryId, list] of byPart) {
+    groups.push({ key: `part:${entryId}`, label: list[0].partName ?? entryId, rows: list });
+  }
+  return groups;
+}
+
+/** A findings group's sub-header — omitted entirely when the list has only one group. */
+function GroupedFindings<T>({
+  groups,
+  children,
+}: {
+  groups: readonly PartGroup<T>[];
+  children: (group: PartGroup<T>) => React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      {groups.map((group) => (
+        <div key={group.key} className="flex flex-col gap-1">
+          {groups.length > 1 && <SectionTitle>{group.label}</SectionTitle>}
+          {children(group)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /**
  * The three severity boxes. Disclosures, so a noisy part cannot bury the controls below it
  * (pain #1): a box with more than three issues — and every box in Inspect mode or on a
  * phone — starts collapsed to its count line.
+ *
+ * The pre-flight is PROJECT-wide: every included part is validated (against its OWN custom
+ * reactions merged over the core catalog — hence `$reactionCatalog`, not `$allReactionIndex`,
+ * which merges the ACTIVE part's), plus the cross-part checks, and each box groups its rows
+ * by part.
  */
 function PreFlight({ collapsed, onClose }: { collapsed: boolean; onClose: () => void }) {
-  const part = useStore($part);
-  const reactions = useStore($allReactionIndex);
+  const snapshot = useStore($partsSnapshot);
+  const coreReactions = useStore($reactionCatalog);
   const catalog = useStore($catalogIndex);
-  const issues = collectExportIssues(part, reactions, catalog);
-  const drafts = draftClips(part);
+  const parts = namedPartsOf(snapshot);
+  const issues = collectProjectExportIssues(parts, coreReactions, catalog);
+  const drafts = draftClips(parts);
   if (issues.length === 0 && drafts.length === 0) {
     return <p className="text-xs text-fg-subtle">Pre-flight found nothing to report.</p>;
   }
@@ -209,15 +330,19 @@ function PreFlight({ collapsed, onClose }: { collapsed: boolean; onClose: () => 
             }
             defaultExpanded={!collapsed && rows.length <= 3}
           >
-            <FindingsRows
-              findings={rows.map((issue) => ({
-                issue,
-                message: `${issue.message}${jumpLabel(issue)}`,
-              }))}
-              tone={SEVERITY_TONE[severity]}
-              canSelect={(row) => row.issue.jumpTarget !== undefined}
-              onSelect={(row) => jumpToIssue(row.issue, onClose)}
-            />
+            <GroupedFindings groups={groupByPart(rows)}>
+              {(group) => (
+                <FindingsRows
+                  findings={group.rows.map((issue) => ({
+                    issue,
+                    message: `${issue.message}${jumpLabel(issue)}`,
+                  }))}
+                  tone={SEVERITY_TONE[severity]}
+                  canSelect={(row) => row.issue.jumpTarget !== undefined}
+                  onSelect={(row) => jumpToIssue(row.issue, onClose)}
+                />
+              )}
+            </GroupedFindings>
           </DisclosureSection>
         );
       })}
@@ -230,18 +355,26 @@ function PreFlight({ collapsed, onClose }: { collapsed: boolean; onClose: () => 
  * (design-animation-mode.md §11.1). It consumes the very function every in-mode surface reads
  * (`computeClipIssues`, whose blockers mirror `isAnimationExportable`), so the dialog and the
  * clip rows can never disagree about what "draft" means.
+ *
+ * Runs over EVERY included part, stamped with the part it came from: a draft clip in an
+ * inactive part is just as skipped, and must not vanish from the summary because the user
+ * happens to be editing a different part.
  */
-function draftClips(part: Parameters<typeof computeClipIssues>[0]) {
-  const issues = computeClipIssues(part);
-  return part.animations
-    .map((anim) => ({
-      id: anim.id,
-      name: anim.name,
-      blockers: (issues[anim.id] ?? [])
-        .filter((issue) => issue.severity === 'blocker')
-        .map((issue) => issue.message),
-    }))
-    .filter((clip) => clip.blockers.length > 0);
+function draftClips(parts: readonly NamedExportPart[]) {
+  return parts.flatMap((entry) => {
+    const issues = computeClipIssues(entry.part);
+    return entry.part.animations
+      .map((anim) => ({
+        id: anim.id,
+        name: anim.name,
+        partEntryId: entry.entryId,
+        partName: entry.name,
+        blockers: (issues[anim.id] ?? [])
+          .filter((issue) => issue.severity === 'blocker')
+          .map((issue) => issue.message),
+      }))
+      .filter((clip) => clip.blockers.length > 0);
+  });
 }
 
 /**
@@ -268,17 +401,23 @@ function DraftClips({
       }
       defaultExpanded={drafts.length <= 3}
     >
-      <FindingsRows
-        findings={drafts.map((clip) => ({
-          clip,
-          message: `${clip.name}: ${clip.blockers.join(' · ')}  → Animation mode`,
-        }))}
-        tone="text-warning"
-        onSelect={(row) => {
-          onClose();
-          openAnimationClip(row.clip.id);
-        }}
-      />
+      <GroupedFindings groups={groupByPart(drafts)}>
+        {(group) => (
+          <FindingsRows
+            findings={group.rows.map((clip) => ({
+              clip,
+              message: `${clip.name}: ${clip.blockers.join(' · ')}  → Animation mode`,
+            }))}
+            tone="text-warning"
+            onSelect={(row) => {
+              onClose();
+              // Same rule as `jumpToIssue`: the clip may live in an inactive part.
+              switchPart(row.clip.partEntryId);
+              openAnimationClip(row.clip.id);
+            }}
+          />
+        )}
+      </GroupedFindings>
     </DisclosureSection>
   );
 }
@@ -287,16 +426,17 @@ function DraftClips({
 
 function DeliverMode({ onClose }: { onClose: () => void }) {
   const isPhone = useIsPhone();
-  const part = useStore($part);
+  const snapshot = useStore($partsSnapshot);
   const projectName = useStore($projectName);
   const catalog = useStore($catalogIndex);
-  const reactions = useStore($allReactionIndex);
+  const coreReactions = useStore($reactionCatalog);
   const folder = useStore($modFolder);
   const kittenTex = useStore($kittenTextureExport);
   const [busy, setBusy] = useState(false);
 
+  const parts = namedPartsOf(snapshot);
   const base = sanitizeBaseName(projectName);
-  const blockers = collectExportIssues(part, reactions, catalog).filter(
+  const blockers = collectProjectExportIssues(parts, coreReactions, catalog).filter(
     (i) => i.severity === 'block',
   ).length;
   const unsupported = folder.status === 'unsupported';
@@ -317,7 +457,7 @@ function DeliverMode({ onClose }: { onClose: () => void }) {
       }
       // The builder owns every write semantic: `-N` suffixing, binary overwrite,
       // mod.toml rebuilt from the folder listing.
-      const result = await writeModToFolder(dir, part, projectName, kittenTex, catalog);
+      const result = await writeModToFolder(dir, parts, projectName, kittenTex, catalog);
       status(`${result.partFile} + GameData → ${dir.name}/${MOD_FOLDER_NAME} ✓`, {
         severity: 'success',
       });
@@ -330,7 +470,7 @@ function DeliverMode({ onClose }: { onClose: () => void }) {
         body:
           `${dir.name}/${MOD_FOLDER_NAME}\n${written}\n\n` +
           `mod.toml lists ${result.assets.length} XML file${result.assets.length === 1 ? '' : 's'}.\n` +
-          preflightSummary(part, reactions, catalog),
+          preflightSummary(parts, coreReactions, catalog),
       });
     } catch (err) {
       console.warn('mod folder export failed', err);
@@ -349,7 +489,7 @@ function DeliverMode({ onClose }: { onClose: () => void }) {
     setBusy(true);
     const job = trackJob('Building mod zip');
     try {
-      const blob = await buildModZip(part, projectName, kittenTex, catalog);
+      const blob = await buildModZip(parts, projectName, kittenTex, catalog);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = url;
@@ -423,13 +563,13 @@ function DeliverMode({ onClose }: { onClose: () => void }) {
 
 /** The pre-flight counts, frozen into the "Export complete" notification body. */
 function preflightSummary(
-  part: Parameters<typeof collectExportIssues>[0],
-  reactions: Parameters<typeof collectExportIssues>[1],
-  catalog: Parameters<typeof collectExportIssues>[2],
+  parts: Parameters<typeof collectProjectExportIssues>[0],
+  coreReactions: Parameters<typeof collectProjectExportIssues>[1],
+  catalog: Parameters<typeof collectProjectExportIssues>[2],
 ): string {
-  const issues = collectExportIssues(part, reactions, catalog);
+  const issues = collectProjectExportIssues(parts, coreReactions, catalog);
   const count = (severity: IssueSeverity) => issues.filter((i) => i.severity === severity).length;
-  const drafts = draftClips(part);
+  const drafts = draftClips(parts);
   return (
     `Pre-flight at export: ${count('block')} blocking · ${count('warn')} warning · ${count('info')} note.` +
     (drafts.length === 0

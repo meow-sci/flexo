@@ -169,7 +169,7 @@ export interface MeshAtlasOptions {
   /**
    * Max triangles in an emitted `<id>_VM` view mesh; anything above it is simplified down
    * (render meshes are never touched). Undefined ⇒ never decimate. See VIEW-MESH COST in the
-   * file header for why this matters in-game; `buildCustomBundle` sets the shipped default.
+   * file header for why this matters in-game; `buildMultiCustomBundle` sets the shipped default.
    */
   viewMeshBudget?: number;
 }

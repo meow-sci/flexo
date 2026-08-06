@@ -547,12 +547,31 @@ export function setPartIncludeInExport(id: string, includeInExport: boolean): vo
   updateEntry(id, { includeInExport });
 }
 
+/** One included part as the export builders want it: the document plus its registry identity. */
+export interface ExportPartEntry {
+  entryId: string;
+  name: string;
+  part: EditingPart;
+}
+
 /**
- * The included parts in registry order, with the entry id + display name each export builder
- * needs to namespace and label them (I7). Excluded parts are invisible to export.
+ * THE gathering rule (I7): which parts a registry snapshot exports, in registry order, with
+ * the entry id + display name each export builder needs to namespace and label them. Excluded
+ * parts are invisible to export.
+ *
+ * Split out of {@link partsForExport} so a React surface holding a snapshot from
+ * `$partsSnapshot` can apply the very same filter+map — a zero-argument store reader called in
+ * a render body would be memoized by the React Compiler against a dependency it cannot see.
+ * One rule, one place: a future extra filter or sort cannot desync the dialog from the preview
+ * store and the writers.
  */
-export function partsForExport(): Array<{ entryId: string; name: string; part: EditingPart }> {
-  return snapshotParts()
+export function exportEntriesFrom(snapshot: readonly SavedPartEntry[]): ExportPartEntry[] {
+  return snapshot
     .filter((entry) => entry.includeInExport)
     .map((entry) => ({ entryId: entry.id, name: entry.name, part: entry.part }));
+}
+
+/** {@link exportEntriesFrom} over the live registry. */
+export function partsForExport(): ExportPartEntry[] {
+  return exportEntriesFrom(snapshotParts());
 }

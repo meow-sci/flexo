@@ -6,12 +6,12 @@ import { $projectName } from './projectIndexStore';
 import { $catalogIndex } from './catalogStore';
 import { $kittenTextureExport, $modelImportSettings } from './settingsStore';
 import {
-  buildCustomBundle,
+  buildMultiCustomBundle,
   buildMultiModContent,
   partExportNs,
   type NamedExportPart,
 } from '../ksa/modExport';
-import type { partsForExport } from './partsStore';
+import { $activePartId, $inactiveRevision, $partEntries, partsForExport } from './partsStore';
 
 /**
  * **The Export dialog's XML preview** (design:
@@ -28,19 +28,21 @@ import type { partsForExport } from './partsStore';
  * - **Lazy per tab.** Nothing is built until a tab is FOCUSED. Part and GameData come from
  *   one cheap synchronous `buildMultiModContent`; Assets runs the async bundle builder and
  *   only ever on the Assets tab.
- * - **Memoized by an input stamp** — `(part, projectName, catalog, kittenTextureExport,
- *   decimateViewMeshes)`, compared by IDENTITY (every one of those is an immutable value
- *   replaced on change), so re-focusing a tab is free.
+ * - **Memoized by an input stamp** — `(part, partEntries, activePartId, inactiveRevision,
+ *   projectName, catalog, kittenTextureExport, decimateViewMeshes)`, compared by IDENTITY
+ *   (every one of those is an immutable value replaced on change), so re-focusing a tab is
+ *   free. The exported PARTS list is derived from the first four (see {@link StampInputs}).
  * - **Stale, not re-run.** While the dialog is open, a change to those inputs does not
  *   rebuild the Assets XML; it flips `stale`, and the UI offers `Project changed —
  *   [Rebuild]`. Part/GameData are cheap, so they simply re-derive.
  * - **Actually abortable.** The in-flight bundle build holds an `AbortController` that a
- *   new build, a rebuild or closing the dialog aborts — `buildCustomBundle` checks the
- *   signal at each per-asset boundary, so the encode chain stops.
+ *   new build, a rebuild or closing the dialog aborts — `buildMultiCustomBundle` checks the
+ *   signal at each per-part and per-asset boundary, so the encode chain stops.
  *
  * **The single-source invariant is untouched** (census: export §5 invariant 1): the preview
- * runs `buildMultiModContent` / `buildCustomBundle`, the exact path `writeModToFolder` and
- * `buildModZip` run, so previewed bytes and shipped bytes are the same bytes.
+ * runs `buildMultiModContent` / `buildMultiCustomBundle` over `partsForExport()`, the exact
+ * path `writeModToFolder` and `buildModZip` run, so previewed bytes and shipped bytes are the
+ * same bytes — for every included part, not just the active one.
  *
  * **Layering (constitution)**: zero react / three imports. **Undo enrollment: NONE** —
  * read-only over the document.
@@ -76,26 +78,58 @@ export const $exportPreview = map<ExportPreviewState>({ tab: 'part' });
 // ── the input stamp ──────────────────────────────────────────────────────────
 
 interface StampInputs {
-  part: unknown;
   projectName: string;
   catalog: unknown;
   kittenTex: unknown;
   decimate: boolean;
+  // ── the stable identity tokens the exported PARTS list is derived from ─────
+  //
+  // The parts list is deliberately NOT a field here: `partsForExport()` allocates a fresh
+  // array (and fresh wrapper objects) on every call, so it can never be identity-compared,
+  // and a field nothing compares would be a trap for a future editor (`a.parts === b.parts`
+  // would pin the preview permanently stale). It is read on demand instead — {@link readParts},
+  // called only by the builders. These four tokens are what it is a pure function of: the
+  // ACTIVE part's document, the registry list, which entry is active, and a counter
+  // bumped whenever a parked (inactive) document changes.
+  //
+  // Registry META edits ride `$partEntries` too — renaming a part, or nudging a ghost's
+  // opacity/offset, marks the Assets preview stale even though the exported bytes are
+  // identical. That over-invalidation is deliberate and cheap: a preview rebuild is lazy (only
+  // a FOCUSED tab builds) and memoized by this very stamp, and `stale` only offers the user a
+  // [Rebuild] button rather than running one.
+  part: unknown;
+  partEntries: unknown;
+  activePartId: string;
+  inactiveRevision: number;
+}
+
+/**
+ * The parts to build, read fresh at build time (never stamped — see {@link StampInputs}).
+ * Only the builders call it, so the per-mutation `markStaleIfChanged` tick allocates nothing.
+ */
+function readParts(): NamedExportPart[] {
+  return toNamedExportParts(partsForExport());
 }
 
 function readInputs(): StampInputs {
   return {
-    part: $part.get(),
     projectName: $projectName.get(),
     catalog: $catalogIndex.get(),
     kittenTex: $kittenTextureExport.get(),
     decimate: $modelImportSettings.get().decimateViewMeshes,
+    part: $part.get(),
+    partEntries: $partEntries.get(),
+    activePartId: $activePartId.get(),
+    inactiveRevision: $inactiveRevision.get(),
   };
 }
 
 function sameInputs(a: StampInputs, b: StampInputs): boolean {
   return (
     a.part === b.part &&
+    a.partEntries === b.partEntries &&
+    a.activePartId === b.activePartId &&
+    a.inactiveRevision === b.inactiveRevision &&
     a.projectName === b.projectName &&
     a.catalog === b.catalog &&
     a.kittenTex === b.kittenTex &&
@@ -127,19 +161,12 @@ export function currentStamp(): string {
 let assetsController: AbortController | null = null;
 
 /**
- * The parts this preview builds. **P3.08 replaces this with
- * `toNamedExportParts(partsForExport())`** — until then the preview shows the ACTIVE part
- * only, exactly as it did before parts existed. `expandGlassGlow` is no longer called here:
+ * Builds Part + GameData XML synchronously — one `buildMultiModContent` produces both, with
+ * every included part as siblings inside each. `expandGlassGlow` is NOT called here:
  * `buildMultiModContent` owns it (P3.04), so calling it again would double the glow layer.
  */
-function previewParts(): NamedExportPart[] {
-  const part = $part.get();
-  return [{ entryId: '', name: '', ns: partExportNs(part.partId), part }];
-}
-
-/** Builds Part + GameData XML synchronously — one `buildMultiModContent` produces both. */
 function buildXmlTabs(stamp: string): void {
-  const content = buildMultiModContent(previewParts(), $projectName.get(), $catalogIndex.get());
+  const content = buildMultiModContent(readParts(), $projectName.get(), $catalogIndex.get());
   $exportPreview.setKey('part', { stamp, xml: content.partXml });
   $exportPreview.setKey('gamedata', { stamp, xml: content.gameDataXml });
 }
@@ -157,17 +184,10 @@ async function buildAssets(stamp: string): Promise<void> {
     builtAt: previous?.builtAt ?? 0,
   });
   try {
-    // P3.08 swaps this for `buildMultiCustomBundle(content, …)`, which loops every entry.
-    const content = buildMultiModContent(previewParts(), $projectName.get(), $catalogIndex.get());
-    const entry = content.perPart[0];
-    const bundle = await buildCustomBundle(
-      entry.part,
-      content.base,
-      $kittenTextureExport.get(),
-      entry.variants,
-      entry.insetIds,
-      { signal: controller.signal },
-    );
+    const content = buildMultiModContent(readParts(), $projectName.get(), $catalogIndex.get());
+    const bundle = await buildMultiCustomBundle(content, $kittenTextureExport.get(), {
+      signal: controller.signal,
+    });
     // A build that lost the race (aborted, or superseded by a newer one) discards its
     // result rather than stomping the current preview.
     if (controller.signal.aborted || assetsController !== controller) return;
@@ -239,6 +259,9 @@ export function markStaleIfChanged(): void {
 export function watchExportInputs(): () => void {
   const unsubscribes = [
     $part.listen(markStaleIfChanged),
+    $partEntries.listen(markStaleIfChanged),
+    $activePartId.listen(markStaleIfChanged),
+    $inactiveRevision.listen(markStaleIfChanged),
     $projectName.listen(markStaleIfChanged),
     $catalogIndex.listen(markStaleIfChanged),
     $kittenTextureExport.listen(markStaleIfChanged),

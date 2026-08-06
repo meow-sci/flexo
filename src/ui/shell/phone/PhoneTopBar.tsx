@@ -7,6 +7,7 @@ import { runCommand } from '../../../state/commandStore';
 import { $canRedo, $canUndo } from '../../../state/editorStore';
 import { $projectName } from '../../../state/projectStore';
 import { $mode, MODES } from '../../../state/modeStore';
+import { $activePartMeta, $partEntries } from '../../../state/partsStore';
 
 /**
  * The phone's one slim top row (design: `plans/flexo_v2/design/foundation.md` §12 phone
@@ -29,8 +30,14 @@ export function PhoneTopBar() {
   const projectName = useStore($projectName);
   const canUndo = useStore($canUndo);
   const canRedo = useStore($canRedo);
+  const partEntries = useStore($partEntries);
+  const activePart = useStore($activePartMeta);
 
   const modeLabel = MODES.find((entry) => entry.id === mode)?.label ?? '';
+  // Multi-part projects prefix the chip with the part being edited (MULTI_PART_PLAN P4.06).
+  // A single-part project reads exactly as before — the switcher only earns the space once
+  // there is something to switch to.
+  const partLabel = partEntries.length > 1 ? (activePart?.name ?? null) : null;
 
   return (
     <>
@@ -53,10 +60,20 @@ export function PhoneTopBar() {
           size="sm"
           variant="ghost"
           className="min-w-0 gap-1 px-2"
-          aria-label={`Project: ${projectName}`}
+          aria-label={
+            partLabel ? `Part: ${partLabel} · Project: ${projectName}` : `Project: ${projectName}`
+          }
           onPress={() => runCommand('file.projects')}
         >
           <FolderOpen size={14} className="shrink-0" />
+          {/* Each half truncates at the chip's existing `max-w`, so a long part name can
+              never squeeze the project out (or the row off the phone). */}
+          {partLabel !== null && (
+            <>
+              <span className="max-w-[12ch] truncate">{partLabel}</span>
+              <span className="shrink-0 text-fg-muted">—</span>
+            </>
+          )}
           <span className="max-w-[12ch] truncate">{projectName}</span>
         </Button>
 

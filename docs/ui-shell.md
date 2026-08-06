@@ -321,9 +321,9 @@ bar. They are left-sidebar and Edit-menu material; the Tool bar holds gizmo *par
 
 `src/ui/hotkeys/registry.ts` holds every binding in ONE table, `ALL_BINDINGS`. There are no
 off-registry bindings: a pure-key behavior with no menu home carries a documented synthetic id
-(prefixes `transform.`, `mirror.`, `anim.`, `timeline.`, plus `esc.ladder`, `chain.apply`,
-`outliner.search`, `glowPaint.undo`, `glowPaint.redo`) so Help and the conflict validator still
-see it.
+(prefixes `transform.`, `mirror.`, `anim.`, `timeline.`, `part.activate`, plus `esc.ladder`,
+`chain.apply`, `outliner.search`, `glowPaint.undo`, `glowPaint.redo`) so Help and the conflict
+validator still see it.
 
 ```ts
 type Scope = 'global' | 'viewport' | `mode:${Mode}` | `tool:${Tool}` | `surface:${SurfaceId}`;

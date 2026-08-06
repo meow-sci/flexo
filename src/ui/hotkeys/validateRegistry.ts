@@ -66,11 +66,18 @@ function isAnimationSyntheticId(id: string): boolean {
  * `mirror.<surface>.<action>` — a list-surface edit mirror (`listSurfaceMirrors.ts`). It
  * needs its own id because two bindings can never share one (rule 2), but it runs the very
  * command its viewport twin does, so there is nothing extra to register.
+ *
+ * `part.activate<n>` — the `⌥1`…`⌥9` part chords (MULTI_PART_PLAN P4.05). They are
+ * POSITIONAL, so as commands they would be nine palette rows that are dead in most projects
+ * and duplicate the `parts` provider (one "Switch to part: <name>" row per part that really
+ * exists) in the rest. Help lists them from the bindings, under "Everywhere". The two chords
+ * that DO name an action — `⌥.` / `⌥,` — are the real `part.next` / `part.prev` commands.
  */
 function isSyntheticId(id: string): boolean {
   return (
     id.startsWith('transform.') ||
     id.startsWith('mirror.') ||
+    id.startsWith('part.activate') ||
     isAnimationSyntheticId(id) ||
     SYNTHETIC_BINDING_IDS.includes(id)
   );

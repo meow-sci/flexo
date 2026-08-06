@@ -107,6 +107,19 @@ export function partSwitchCommands(): Command[] {
   }));
 }
 
+/**
+ * Positional activation, for the `⌥1`…`⌥9` chords (P4.05): slot `index` in `$partEntries`
+ * order, or nothing at all when the project holds fewer parts than that.
+ *
+ * It lives HERE rather than in the hotkey registry because the toast is the command layer's
+ * job (this module's header rule) — the chords are just another surface onto the same
+ * switch-and-report as the `File ▸ Switch Part` rows.
+ */
+export function activatePartAtIndex(index: number): void {
+  const entry = $partEntries.get()[index];
+  if (entry) activatePart(entry.id);
+}
+
 /** The display name of a part entry — for feedback only, never an identity. */
 function partName(id: string): string {
   return $partEntries.get().find((entry) => entry.id === id)?.name ?? 'Part';

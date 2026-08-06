@@ -27,6 +27,8 @@ import {
   zoomTimelineAboutPlayhead,
 } from '../animation/timelineActions';
 import { $activeTool, $mode, disarmTool, MODES } from '../../state/modeStore';
+import { $partEntries } from '../../state/partsStore';
+import { activatePartAtIndex } from '../commands/partCommands';
 import { $seatView } from '../../state/ivaStore';
 import { $gizmoDragging, requestGizmoCancel } from '../../state/viewStore';
 import { rotateSelectionAroundPair } from '../../three/rotateSelection';
@@ -507,6 +509,58 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
     ],
   },
   {
+    // The part registry's chords (plan: `plans/MULTI_PART_PLAN.md` P4.05). All `global` — a
+    // part switch is an app-level move like a mode switch, not a viewport gesture — so Help
+    // lists them under "Everywhere"; this group title is source organization only (Help
+    // buckets by SCOPE), which is why every label names its slot in full.
+    //
+    // `⌥`-modified throughout, so none of them can shadow the bare mode digits `1`–`5` or the
+    // viewport's `[` / `]` rotate step. Spelled by PHYSICAL key exactly like `⌥[` above:
+    // react-hotkeys-hook matches `event.code` (`Digit1` folds to `1`, `Comma`/`Period` stay
+    // as spelled), while on macOS ⌥1 / ⌥, / ⌥. PRODUCE `¡` / `≤` / `≥` — characters no key
+    // string could name. `comma` is also what keeps a literal `,` from being read as the
+    // library's own alternatives delimiter.
+    title: 'Parts',
+    bindings: [
+      // ⌥1 … ⌥9 — jump straight to a slot in `$partEntries` order. Documented SYNTHETIC ids
+      // (`validateRegistry`'s `part.activate` prefix): they are POSITIONAL, so as palette rows
+      // they would be nine mostly-dead entries duplicating the `parts` provider, which already
+      // offers the real thing — one "Switch to part: <name>" row per part that exists.
+      ...Array.from(
+        { length: 9 },
+        (_, index): HotkeyBinding => ({
+          id: `part.activate${index + 1}`,
+          label: `Switch to part ${index + 1}`,
+          keys: `alt+${index + 1}`,
+          chords: [['alt', `${index + 1}`]],
+          scope: 'global',
+          when: partChordsLive,
+          // Feedback (the "Editing: <name>" flash, skipped when nothing changed) belongs to
+          // the command layer — see `partCommands.activatePartAtIndex`.
+          run: () => activatePartAtIndex(index),
+        }),
+      ),
+      {
+        id: 'part.next',
+        label: 'Next part',
+        keys: 'alt+period',
+        chords: [['alt', '.']],
+        scope: 'global',
+        when: partChordsLive,
+        run: () => runCommand('part.next'),
+      },
+      {
+        id: 'part.prev',
+        label: 'Previous part',
+        keys: 'alt+comma',
+        chords: [['alt', ',']],
+        scope: 'global',
+        when: partChordsLive,
+        run: () => runCommand('part.prev'),
+      },
+    ],
+  },
+  {
     title: 'Modes',
     // Digits `1`–`5` in `MODES` order, one binding each. They are `global` (a mode switch is
     // an app-level move, not a viewport gesture) but carry the `when` gate the design spells
@@ -774,6 +828,18 @@ export const HOTKEY_GROUPS: HotkeyGroup[] = [
 
 /** Flattened bindings, for the component that wires `useHotkeys` per binding. */
 export const ALL_BINDINGS: HotkeyBinding[] = HOTKEY_GROUPS.flatMap((g) => g.bindings);
+
+/**
+ * The gate every Parts chord shares: never behind an overlay dialog (switching the edited
+ * part invisibly is the C5 regression class, exactly as for the mode digits), and never in a
+ * single-part project, where all eleven chords would be dead keys.
+ *
+ * Not required by the validator's rule 4 — these are all modified keys — but the registry is
+ * where "this chord does nothing right now" is expressed.
+ */
+function partChordsLive(): boolean {
+  return !$dialogOpen.get() && $partEntries.get().length > 1;
+}
 
 // ── DEFERRED bindings ledger ─────────────────────────────────────────────────
 //

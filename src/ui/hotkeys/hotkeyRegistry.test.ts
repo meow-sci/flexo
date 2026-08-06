@@ -237,6 +237,9 @@ describe('4 — every binding id resolves', () => {
       // `anim.insertKeyframe` ARE real commands (Animation menu + palette), and only the
       // three below stayed key-only.
       id.startsWith('timeline.') ||
+      // `part.activate<n>` (MULTI_PART_PLAN P4.05): the ⌥1…⌥9 slot chords are positional, so
+      // they have no command — the `parts` provider owns palette switching by NAME.
+      id.startsWith('part.activate') ||
       SYNTHETIC.includes(id);
     expect(synthetic || getCommand(id) !== undefined).toBe(true);
   });

@@ -41,6 +41,25 @@ function isSupported(): boolean {
   return typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function';
 }
 
+/**
+ * The ONE spelling of the grant state (design: design-projects-export.md §7 status row).
+ * Rendered by BOTH surfaces that manage the grant — `File ▸ Mods Folder ▸`'s disabled info
+ * row and the Export dialog's inline row — so the two can never describe the same state
+ * differently.
+ */
+export function modFolderStatusLabel({ status, name }: ModFolderState): string {
+  switch (status) {
+    case 'ready':
+      return `✓ “${name ?? 'mods'}” — ready`;
+    case 'needs-permission':
+      return `⚠ “${name ?? 'mods'}” — needs re-grant`;
+    case 'unsupported':
+      return 'Folder access unsupported in this browser';
+    case 'none':
+      return 'Not set';
+  }
+}
+
 // --- IndexedDB key/value (single store, single key) -------------------------
 
 function openDb(): Promise<IDBDatabase> {

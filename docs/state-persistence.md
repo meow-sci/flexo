@@ -209,6 +209,11 @@ user-visible notice) only on a version bump or corruption — never migrated. Se
 | IndexedDB | `flexo-assets` | custom-asset binaries under **project-namespaced** keys, `pa:<projectId>:<kind>:<assetId>` |
 | IndexedDB | `flexo-fs` | the granted mods-folder directory handle (`modFolderStore`) |
 
+The Export to KSA dialog adds **no** persisted key: `exportPreviewStore`'s per-tab XML memos are
+session state that dies with the dialog (`resetPreview()` on close), and the mods-folder grant it
+manages is the `flexo-fs` handle above — the one database `nukeAndReload` keeps unless the user
+opts into clearing it.
+
 Two more preference keys belong to the project surfaces themselves: **`flexo:projectManagerView`**
 (`{view: 'grid' | 'list', sort: 'saved' | 'created' | 'name' | 'size'}` — the Project Manager's
 layout, deliberately NOT including the search query, which is per-session) and

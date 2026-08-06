@@ -157,8 +157,69 @@ GameData files under `/ksa/`; `vite/ksaAssets.ts` copies the existing ones into
   **The capture, re-emit and connector-ref remap semantics are UNCHANGED** — the viewer reads
   the same `RawXmlNode` data the parser already produced, and `src/ksa/` was not touched to
   add it, so export output is byte-identical to before the viewer existed.
-- `src/ui/ExportDialog.tsx` / `src/ksa/modExport.ts`: write/zip the per-project
-  `Part.xml` + `GameData.xml`.
+- `src/ui/ExportKsaDialog.tsx` / `src/ksa/modExport.ts`: write/zip the per-project
+  `Part.xml` + `GameData.xml`. The dialog's **Inspect XML** mode previews exactly the bytes
+  the mod ships (same `expandGlassGlow` → `buildModContent` path), built lazily per tab by
+  `src/state/exportPreviewStore.ts` — see "The Export to KSA dialog" below.
+
+## The Export to KSA dialog
+
+`src/ui/ExportKsaDialog.tsx` (dialog id `'export-ksa'`, `⌘E`, **File ▸ Export to KSA…**) is
+the one delivery surface. It is mounted by `DialogRoot` and opened only by the
+`file.exportKsa` command — no trigger button owns its state.
+
+**Two modes on one toggle.**
+
+- **Deliver mod** — the pre-flight, the mods-folder grant row, the export-shaping settings as
+  read-only chips, and the two delivery actions in a **pinned footer** (so a noisy pre-flight
+  can never scroll the buttons out of reach).
+- **Inspect XML** — Part / GameData / Assets in a read-only mono textarea with the shared kit
+  `CopyDownloadBar` (Copy + `Download .xml`, named `<base><Tab>.xml`).
+
+**The pre-flight is one issue model.** `src/ksa/exportIssues.ts` `collectExportIssues(part,
+reactions, catalog)` folds the basic trio (empty Part Id, duplicate instance ids, no SubParts)
+and the four shared validators — `validateEngines`, `validateColliders`, `validateIvaSeats`,
+`validateLights` — into `{severity, area, code, message, jumpTarget?}`, plus one `info` row
+naming custom meshes that have no placements and therefore will not ship. The validators
+themselves are untouched and still shared with Data/Engine mode. The three severities render as
+three disclosure boxes (`block` / `warn` / `info`), collapsed to their count line when a box
+holds more than three issues (and always on phones). A row whose issue names a scope is a
+**jump link**: it closes the dialog and calls `modeStore.setMode(mode, focus)` — Engine for an
+engine module, Data ▸ Identity for a blank Part Id, Build (selecting the light) for a light.
+
+**Blockers never gate the export.** A `block` finding relabels the primary button
+`Export anyway (N blockers)`; both buttons stay enabled. Shipping a work-in-progress part is a
+legitimate thing to do, and the pre-flight's job is to explain, not to refuse.
+
+**The XML preview is lazy** (`src/state/exportPreviewStore.ts`). Nothing is built until a tab is
+focused; Part + GameData come from one cheap synchronous `buildModContent`, and the Assets
+bundle — the full KTX2 encode / GLB atlas / kitten bake chain — runs ONLY on the Assets tab.
+Results are memoized by an input stamp over `(part, projectName, catalog, kittenTextureExport,
+decimateViewMeshes)`. A change to any of those does not silently re-run the encode: the tab
+shows `Project changed — [Rebuild]`, and a rebuild aborts the in-flight build through the
+`AbortSignal` `buildCustomBundle` now accepts. Closing the dialog aborts and drops every memo.
+None of this changes a byte of output — the preview and the shipped mod come from the same
+builders (the single-source invariant).
+
+**Delivery.** `Export to mods folder` calls `getWritableModFolder()` (which may prompt inline —
+the button press is the user gesture) and then `writeModToFolder`, whose semantics are
+untouched: existing XML is never overwritten (`-N` suffixing), binaries are overwritten,
+`mod.toml` is rebuilt from the folder listing. Success posts a status flash plus a sticky
+*rich* "Export complete" notification listing the written files and the pre-flight counts at
+export time; failure posts a `danger` notification with the full, untruncated message.
+`Download mod zip` needs no permission at all and is promoted to the primary button on a
+browser without the File System Access API (iOS), where the folder button is hidden entirely.
+
+**The grant lifecycle has one implementation and two surfaces.** `modFolderStore` owns the
+handle (IndexedDB `flexo-fs/handles/modsDir`, passive `queryPermission` on boot) and
+`modFolderStatusLabel()` owns its wording; the dialog's inline row shows it with
+Choose / Change / Re-grant, and **File ▸ Mods Folder ▸** shows the same label as a disabled
+info row over `Choose Folder…`, `Re-grant Access` (only while `needs-permission`) and
+`Forget Folder…` (only while a folder is set), which confirms before dropping the grant.
+
+**Export-shaping preferences** (kitten texture mode, `_VM` decimation) are read-only chips that
+deep-link to Settings ▸ Import & Export with a `returnTo`, so glancing at a preference re-opens
+this dialog instead of losing it.
 
 ## Tests
 - `partXmlSerializer.test.ts` — transform/axis omission + G6 formatting; tags on

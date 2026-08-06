@@ -416,6 +416,17 @@ interior-only is worse than not offering it.
   home for the four sticky import preferences (up axis, max texture size, bake scale,
   **decimate view meshes — labelled "affects export"**) and the kitten texture export mode +
   Content/Core path.
+- `ExportKsaDialog.tsx` — **File ▸ Export to KSA…** (`⌘E`). Two things here matter to custom
+  assets. Its **Inspect XML ▸ Assets** tab is the only place `buildCustomBundle` runs for a
+  preview, and it runs **only when that tab is focused** — v1 re-encoded every KTX2 on every
+  document change for as long as the dialog was open. Later changes flip a
+  `Project changed — [Rebuild]` chip instead of re-encoding, and a rebuild aborts the previous
+  chain through the `AbortSignal` `buildCustomBundle` accepts (`src/state/exportPreviewStore.ts`;
+  output bytes are unchanged). Its **Deliver mod** mode shows the kitten-texture mode and the
+  `_VM` decimation switch as read-only chips deep-linking to Settings ▸ Import & Export, and its
+  pre-flight lists custom meshes with **no placements** as an `info` row, because those are
+  exactly the meshes `buildCustomBundle` skips. Full description in
+  [xml-io.md](xml-io.md#the-export-to-ksa-dialog).
 - The **post-import summary** — a sticky *rich* entry in the notification center
   (`src/ui/status/ImportReportBody.tsx`, registered under the `'import-report'` kind in
   `notificationBodies.tsx`), posted by `customAssetStore.postImportReport()` from both

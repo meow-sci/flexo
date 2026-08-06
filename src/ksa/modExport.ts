@@ -786,6 +786,12 @@ export interface CustomBundle {
  * shared bake, IMPORTED meshes from the raw (untangented, indexed) geometry of their import
  * batch's stored GLB. Every SubPart, whatever its source, ends up as one node in ONE atlas
  * with one `<PbrMaterial>` and one decimated `<id>_VM` picking mesh.
+ *
+ * `opts.signal` makes the build **abortable** — checked at the per-asset boundaries below
+ * (each animation GLB, the atlas build, each SubPart's textures), so cancelling the Assets
+ * XML preview actually stops the KTX2 encode chain instead of merely discarding its result.
+ * It is CONTROL FLOW ONLY: an un-aborted build emits byte-identical output, and the KSA
+ * game contract is untouched.
  */
 export async function buildCustomBundle(
   part: EditingPart,
@@ -793,13 +799,19 @@ export async function buildCustomBundle(
   kittenTex: KittenTextureExportConfig = DEFAULT_KITTEN_TEXTURE_EXPORT,
   variants: Map<string, ExportVariant> = new Map(),
   insetIds: ReadonlySet<string> = new Set(),
+  opts?: { signal?: AbortSignal },
 ): Promise<CustomBundle> {
+  /** Throws `AbortError` when the caller has cancelled; a no-op without a signal. */
+  const checkAborted = (): void => {
+    if (opts?.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+  };
   const binaries: { path: string; data: Uint8Array }[] = [];
 
   // Animations export independently of custom meshes (a Core-only part can still be
   // animated): one Animations/<id>.glb per exportable animation, path-matched to the
   // <KeyframeAnimation Path> emitted in the GameData XML.
   for (const anim of part.animations) {
+    checkAborted();
     if (!isAnimationExportable(anim)) continue;
     const rig = buildAnimationRig(anim, part.placements, part.partId);
     binaries.push({ path: animGlbPath(base, anim), data: buildAnimationGlb(rig) });
@@ -844,6 +856,7 @@ export async function buildCustomBundle(
     const nodes = (
       await Promise.all(
         meshes.map(async (m) => {
+          checkAborted();
           switch (meshKind(m)) {
             case 'kitten': {
               // Always bundle the baked geometry (KSA can't skin the source gltf); clone the
@@ -888,6 +901,7 @@ export async function buildCustomBundle(
       meshAtlasPath = undefined; // every mesh failed to resolve — declare no atlas at all
     } else {
       try {
+        checkAborted();
         binaries.push({
           path: meshAtlasPath,
           data: await buildMeshAtlasGlb(nodes, { viewMeshBudget: viewMeshBudget() }),
@@ -1023,6 +1037,7 @@ export async function buildCustomBundle(
     });
 
     for (const m of meshes) {
+      checkAborted();
       if (!emitted.has(m.subPartId)) continue; // geometry failed to resolve (warned above)
       // Part-ified kitten submesh: full PBR from the KSA .ktx2 (referenced/bundled), or a generated
       // solid tint diffuse (glass) / glow textures (emissive) per the visor surface mode.

@@ -55,7 +55,12 @@ export function DisclosureSection({
           )}
         </AriaButton>
       </Heading>
-      <AriaDisclosurePanel className="flex flex-col gap-3 border-t border-border px-3 py-3">
+      {/*
+        `[&[hidden]]:hidden` is load-bearing: react-aria hides the collapsed panel with the
+        `hidden` ATTRIBUTE, whose UA `display:none` a `flex` utility class overrides — which
+        left every collapsed section rendering an empty bordered strip.
+      */}
+      <AriaDisclosurePanel className="flex flex-col gap-3 border-t border-border px-3 py-3 [&[hidden]]:hidden">
         {children}
       </AriaDisclosurePanel>
     </AriaDisclosure>

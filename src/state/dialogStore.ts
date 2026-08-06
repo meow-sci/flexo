@@ -48,7 +48,8 @@ export type DialogId =
   | 'glow-paint'
   | 'help'
   | 'about'
-  | 'chain-discard-confirm';
+  | 'chain-discard-confirm'
+  | 'forget-mod-folder-confirm';
 
 export interface OpenDialog {
   id: DialogId;

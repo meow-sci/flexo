@@ -7,7 +7,7 @@ import { RenameProjectDialog } from '../projects/RenameProjectDialog';
 import { ExportArchiveDialog, type ExportArchiveParams } from '../projects/ExportArchiveDialog';
 import { ImportProjectDialog } from '../projects/ImportProjectDialog';
 import { ShareLinkDialog, type ShareLinkParams } from '../projects/ShareLinkDialog';
-import { ExportDialog } from '../ExportDialog';
+import { ExportKsaDialog } from '../ExportKsaDialog';
 import { SettingsDialog, type SettingsDialogParams } from '../SettingsDialog';
 import { ScaleEverythingDialog } from '../ScaleEverythingDialog';
 import { SubPartBrowserDialog } from '../build/SubPartBrowserDialog';
@@ -19,6 +19,7 @@ import { CreateMeshDialog } from '../CreateMeshDialog';
 import { MaterialDialog, type MaterialDialogParams } from '../MaterialDialog';
 import { GlowPaintDialog } from '../GlowPaintDialog';
 import { setMeshMaterial } from '../../state/customAssetStore';
+import { $modFolder, forgetModFolder } from '../../state/modFolderStore';
 import { ConfirmDialog } from '../kit';
 import {
   discardChainAndRestart,
@@ -78,7 +79,7 @@ export function DialogRoot() {
     case 'import-project':
       return <ImportProjectDialog isOpen onOpenChange={dismiss} />;
     case 'export-ksa':
-      return <ExportDialog isOpen onOpenChange={dismiss} />;
+      return <ExportKsaDialog isOpen onOpenChange={dismiss} />;
     case 'settings':
       return (
         <SettingsDialog
@@ -162,6 +163,28 @@ export function DialogRoot() {
             closeDialog();
           }}
           onCancel={params.leavingBuild ? keepChainInBuild : undefined}
+        />
+      );
+    }
+    // Forgetting the mods-folder grant (design-projects-export.md §7). `ConfirmDialog` is
+    // blessed here for the same reason as the chain confirm: the raiser is a MENU item, so
+    // this is a top-level confirm rather than one inside a dialog — and the consequence
+    // ("you'll re-pick the folder next export") needs more than the one truncated line an
+    // `InlineConfirmStrip` gives (foundation §14.3).
+    case 'forget-mod-folder-confirm': {
+      const name = $modFolder.get().name ?? 'mods';
+      return (
+        <ConfirmDialog
+          isOpen
+          onOpenChange={dismiss}
+          title={`Forget access to “${name}”?`}
+          text="flexo keeps no copy of the grant; you'll re-pick the folder next export. Nothing already written into the folder is touched."
+          confirmLabel="Forget"
+          confirmVariant="danger"
+          onConfirm={() => {
+            void forgetModFolder();
+            closeDialog();
+          }}
         />
       );
     }

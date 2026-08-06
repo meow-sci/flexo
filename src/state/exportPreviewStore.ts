@@ -1,0 +1,241 @@
+import { map } from 'nanostores';
+import { $part } from './editorStore';
+// `$projectName` is imported from its OWNER (`projectIndexStore`) rather than through
+// `projectStore`'s re-export: this store needs the atom, not the persistence engine.
+import { $projectName } from './projectIndexStore';
+import { $catalogIndex } from './catalogStore';
+import { $kittenTextureExport, $modelImportSettings } from './settingsStore';
+import { buildCustomBundle, buildModContent, expandGlassGlow } from '../ksa/modExport';
+
+/**
+ * **The Export dialog's XML preview** (design:
+ * `plans/flexo_v2/design/design-projects-export.md` §6.2 + §11 store sketch; decision D11).
+ *
+ * v1 rebuilt the ENTIRE custom-asset bundle — every KTX2 encode, every GLB atlas, every
+ * kitten bake — in an effect that re-ran on every document, project-name, catalog or
+ * settings change for as long as the export dialog stayed open, even while the user was
+ * looking at the Part tab and would never open Assets (census: export §1.1.b "perf note",
+ * pain #2). Cancellation only suppressed the `setState`; the work still ran to completion.
+ *
+ * This store closes both holes:
+ *
+ * - **Lazy per tab.** Nothing is built until a tab is FOCUSED. Part and GameData come from
+ *   one cheap synchronous `buildModContent`; Assets runs the async bundle builder and only
+ *   ever on the Assets tab.
+ * - **Memoized by an input stamp** — `(part, projectName, catalog, kittenTextureExport,
+ *   decimateViewMeshes)`, compared by IDENTITY (every one of those is an immutable value
+ *   replaced on change), so re-focusing a tab is free.
+ * - **Stale, not re-run.** While the dialog is open, a change to those inputs does not
+ *   rebuild the Assets XML; it flips `stale`, and the UI offers `Project changed —
+ *   [Rebuild]`. Part/GameData are cheap, so they simply re-derive.
+ * - **Actually abortable.** The in-flight bundle build holds an `AbortController` that a
+ *   new build, a rebuild or closing the dialog aborts — `buildCustomBundle` checks the
+ *   signal at each per-asset boundary, so the encode chain stops.
+ *
+ * **The single-source invariant is untouched** (census: export §5 invariant 1): the preview
+ * runs `expandGlassGlow` → `buildModContent` / `buildCustomBundle`, the exact path
+ * `writeModToFolder` and `buildModZip` run, so previewed bytes and shipped bytes are the
+ * same bytes.
+ *
+ * **Layering (constitution)**: zero react / three imports. **Undo enrollment: NONE** —
+ * read-only over the document.
+ */
+
+export type ExportTab = 'part' | 'gamedata' | 'assets';
+
+export interface XmlPreview {
+  stamp: string;
+  xml: string;
+}
+
+export interface AssetsPreview {
+  stamp: string;
+  /** `null` = the project has no custom assets or variants (the explanatory placeholder). */
+  xml: string | null;
+  building: boolean;
+  /** An input changed since this build; the UI offers a manual rebuild. */
+  stale: boolean;
+  /** `Date.now()` at completion — the "⟳ built …" caption. */
+  builtAt: number;
+}
+
+export interface ExportPreviewState {
+  tab: ExportTab;
+  part?: XmlPreview;
+  gamedata?: XmlPreview;
+  assets?: AssetsPreview;
+}
+
+export const $exportPreview = map<ExportPreviewState>({ tab: 'part' });
+
+// ── the input stamp ──────────────────────────────────────────────────────────
+
+interface StampInputs {
+  part: unknown;
+  projectName: string;
+  catalog: unknown;
+  kittenTex: unknown;
+  decimate: boolean;
+}
+
+function readInputs(): StampInputs {
+  return {
+    part: $part.get(),
+    projectName: $projectName.get(),
+    catalog: $catalogIndex.get(),
+    kittenTex: $kittenTextureExport.get(),
+    decimate: $modelImportSettings.get().decimateViewMeshes,
+  };
+}
+
+function sameInputs(a: StampInputs, b: StampInputs): boolean {
+  return (
+    a.part === b.part &&
+    a.projectName === b.projectName &&
+    a.catalog === b.catalog &&
+    a.kittenTex === b.kittenTex &&
+    a.decimate === b.decimate
+  );
+}
+
+let stampSeq = 0;
+let stampInputs: StampInputs | null = null;
+let stampValue = '';
+
+/**
+ * A token for the current build inputs. Identity-compared and then NAMED, rather than
+ * hashed: `$part` is a whole immutable document (hashing it every keystroke would cost more
+ * than the preview) and the catalog is a Map. Same inputs ⇒ same token, every time.
+ */
+export function currentStamp(): string {
+  const inputs = readInputs();
+  if (stampInputs === null || !sameInputs(stampInputs, inputs)) {
+    stampInputs = inputs;
+    stampValue = `stamp:${++stampSeq}`;
+  }
+  return stampValue;
+}
+
+// ── building ─────────────────────────────────────────────────────────────────
+
+/** The in-flight Assets build, so a newer one (or a close) can abort it. */
+let assetsController: AbortController | null = null;
+
+/** Builds Part + GameData XML synchronously — one `buildModContent` produces both. */
+function buildXmlTabs(stamp: string): void {
+  const { part: expandedPart } = expandGlassGlow($part.get());
+  const content = buildModContent(expandedPart, $projectName.get(), $catalogIndex.get());
+  $exportPreview.setKey('part', { stamp, xml: content.partXml });
+  $exportPreview.setKey('gamedata', { stamp, xml: content.gameDataXml });
+}
+
+async function buildAssets(stamp: string): Promise<void> {
+  assetsController?.abort();
+  const controller = new AbortController();
+  assetsController = controller;
+  const previous = $exportPreview.get().assets;
+  $exportPreview.setKey('assets', {
+    stamp,
+    xml: previous?.xml ?? null,
+    building: true,
+    stale: false,
+    builtAt: previous?.builtAt ?? 0,
+  });
+  try {
+    const { part: expandedPart, insetIds } = expandGlassGlow($part.get());
+    const content = buildModContent(expandedPart, $projectName.get(), $catalogIndex.get());
+    const bundle = await buildCustomBundle(
+      expandedPart,
+      content.base,
+      $kittenTextureExport.get(),
+      content.variants,
+      insetIds,
+      { signal: controller.signal },
+    );
+    // A build that lost the race (aborted, or superseded by a newer one) discards its
+    // result rather than stomping the current preview.
+    if (controller.signal.aborted || assetsController !== controller) return;
+    $exportPreview.setKey('assets', {
+      stamp,
+      xml: bundle.assetsXml,
+      building: false,
+      stale: false,
+      builtAt: Date.now(),
+    });
+  } catch (err) {
+    if ((err as Error)?.name === 'AbortError') return;
+    if (assetsController !== controller) return;
+    console.warn('assets XML preview build failed', err);
+    $exportPreview.setKey('assets', {
+      stamp,
+      xml: null,
+      building: false,
+      stale: false,
+      builtAt: Date.now(),
+    });
+  } finally {
+    if (assetsController === controller) assetsController = null;
+  }
+}
+
+/**
+ * Focuses `tab` and builds it if its memo is missing or stamped stale. `force` is the
+ * `[Rebuild]` button: it aborts the in-flight Assets build and starts a fresh one.
+ *
+ * **DEVIATION (logged)**: the plan's sketch takes `{signal}`. The AbortController is owned
+ * HERE instead — the plan's own semantics ("a new build ABORTS the in-flight one via its
+ * AbortController") require the store to hold it, and no caller has a signal of its own.
+ */
+export function buildTab(tab: ExportTab, opts?: { force?: boolean }): void | Promise<void> {
+  const stamp = currentStamp();
+  $exportPreview.setKey('tab', tab);
+  if (tab === 'assets') {
+    const current = $exportPreview.get().assets;
+    const fresh = current !== undefined && current.stamp === stamp && !current.stale;
+    if (fresh && !opts?.force) return;
+    if (current?.building && !opts?.force) return;
+    return buildAssets(stamp);
+  }
+  const current = $exportPreview.get()[tab];
+  if (current !== undefined && current.stamp === stamp && !opts?.force) return;
+  buildXmlTabs(stamp);
+}
+
+/**
+ * Re-checks the stamp against what is built. Part/GameData re-derive (a synchronous
+ * serialize); the Assets XML is merely flagged `stale` — rebuilding it is a full texture
+ * encode and must stay the user's decision (design §6.2).
+ */
+export function markStaleIfChanged(): void {
+  const stamp = currentStamp();
+  const state = $exportPreview.get();
+  if (state.part !== undefined && state.part.stamp !== stamp) buildXmlTabs(stamp);
+  if (state.assets !== undefined && state.assets.stamp !== stamp && !state.assets.stale) {
+    $exportPreview.setKey('assets', { ...state.assets, stale: true });
+  }
+}
+
+/**
+ * Subscribes {@link markStaleIfChanged} to every stamp input for as long as the dialog is
+ * open. Returns the unsubscribe. (Lives here rather than in the dialog so the set of inputs
+ * is defined exactly once, beside `currentStamp`.)
+ */
+export function watchExportInputs(): () => void {
+  const unsubscribes = [
+    $part.listen(markStaleIfChanged),
+    $projectName.listen(markStaleIfChanged),
+    $catalogIndex.listen(markStaleIfChanged),
+    $kittenTextureExport.listen(markStaleIfChanged),
+    $modelImportSettings.listen(markStaleIfChanged),
+  ];
+  return () => {
+    for (const off of unsubscribes) off();
+  };
+}
+
+/** Dialog close: aborts any in-flight build and drops every memo. */
+export function resetPreview(): void {
+  assetsController?.abort();
+  assetsController = null;
+  $exportPreview.set({ tab: 'part' });
+}

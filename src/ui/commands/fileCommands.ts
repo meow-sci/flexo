@@ -4,7 +4,7 @@ import { createProject, flushAutosave } from '../../state/projectStore';
 import { $currentProjectId, takeOverLock, uniqueProjectName } from '../../state/projectIndexStore';
 import {
   $modFolder,
-  forgetModFolder,
+  modFolderStatusLabel,
   pickModFolder,
   requestModFolderPermission,
 } from '../../state/modFolderStore';
@@ -126,18 +126,13 @@ export const FILE_COMMANDS: Command[] = [
  * keeps them out of the palette when they are not actionable.
  */
 export function modsFolderCommands(): Command[] {
-  const { status, name } = $modFolder.get();
+  const state = $modFolder.get();
+  const { status } = state;
   const rows: Command[] = [
     {
       id: 'modsFolder.status',
-      title:
-        status === 'ready'
-          ? `✓ ${name ?? 'Mods folder'}`
-          : status === 'needs-permission'
-            ? 'Needs re-grant'
-            : status === 'unsupported'
-              ? 'Not supported by this browser'
-              : 'Not set',
+      // One spelling of the grant state, shared with the Export dialog's inline row.
+      title: modFolderStatusLabel(state),
       menuPath: 'File ▸ Mods Folder',
       // A read-only info row: always visible, never runnable.
       enabled: () => false,
@@ -167,10 +162,9 @@ export function modsFolderCommands(): Command[] {
       title: 'Forget Folder…',
       menuPath: 'File ▸ Mods Folder',
       keywords: 'clear revoke mods',
-      // The projects/export phase refines this submenu (and gives it the confirm view);
-      // dropping the grant is instantly redoable via Choose Folder…, so it goes straight
-      // through for now (§14.3: undoable + tiny ⇒ no confirm).
-      run: () => void forgetModFolder(),
+      // Not undoable from flexo's side — the browser grant is gone and only a fresh native
+      // picker can restore it — so §14.3 requires a confirm that states the consequence.
+      run: () => openDialog({ id: 'forget-mod-folder-confirm' }),
     });
   }
   return rows;

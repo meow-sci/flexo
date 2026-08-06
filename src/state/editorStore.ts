@@ -1988,7 +1988,8 @@ export interface ChainCommitEntry {
  * second `bolt_2`). One odd id from a single Duplicate is a known, tolerated quirk; a
  * chain mass-produces up to 500 placements in ONE gesture, where the same formula would
  * stamp out colliding ids wholesale and only surface much later as the pre-export
- * duplicate-id warning in `ExportDialog.tsx`. Existing duplicate paths are untouched.
+ * duplicate-id blocker in the export pre-flight (`src/ksa/exportIssues.ts`). Existing
+ * duplicate paths are untouched.
  */
 function nextChainInstanceId(part: EditingPart, templateId: string): string {
   const base = lastSegmentLower(templateId);

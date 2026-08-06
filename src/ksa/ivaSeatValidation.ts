@@ -238,7 +238,7 @@ export function validateIvaSeats(
 
 /**
  * True when any issue is `block`-severity — i.e. the Part would export, but the seat is broken
- * in game. Advisory only: nothing gates the export on it (`ExportDialog` merely DISPLAYS
+ * in game. Advisory only: nothing gates the export on it (the export pre-flight merely DISPLAYS
  * blocking issues, same as `colliderValidation`'s), so this is a convenience predicate for
  * callers that want to headline the worst severity present.
  */

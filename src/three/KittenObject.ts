@@ -40,6 +40,12 @@ function bakeMesh(mesh: THREE.Mesh, material: THREE.Material, id: string): THREE
 export class KittenObject {
   readonly group = new THREE.Group();
   readonly id: string;
+  /**
+   * The kitten this object's baked head/eye textures were built for. Kitten ids are
+   * per-part namespaces (MULTI_PART_PLAN.md I3), so `EditorScene.reconcileKittens`
+   * re-checks this before reusing an object for a surviving id.
+   */
+  readonly kind: KittenKind;
 
   /** Every per-instance material we own (for highlight + disposal). */
   private readonly materials: THREE.MeshStandardMaterial[];
@@ -50,8 +56,9 @@ export class KittenObject {
   }[];
   private readonly opacityBases: MaterialOpacityBase[];
 
-  private constructor(id: string, materials: THREE.MeshStandardMaterial[]) {
+  private constructor(id: string, kind: KittenKind, materials: THREE.MeshStandardMaterial[]) {
     this.id = id;
+    this.kind = kind;
     this.materials = materials;
     this.baseEmissive = materials.map((mat) => ({
       mat,
@@ -100,7 +107,7 @@ export class KittenObject {
       }
     }
 
-    const obj = new KittenObject(instance.id, owned);
+    const obj = new KittenObject(instance.id, kind, owned);
     obj.group.add(baked);
     obj.setInstance(instance);
     return obj;

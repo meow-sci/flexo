@@ -26,6 +26,13 @@ import { applyMaterialOpacity, captureOpacityBase, type MaterialOpacityBase } fr
 export class SubPartObject {
   readonly group = new THREE.Group();
   readonly instanceId: string;
+  /**
+   * The template this object's geometry + materials were built from. Instance ids are
+   * per-part namespaces (MULTI_PART_PLAN.md I3) — two parts may both hold `trussbara_1`
+   * bound to DIFFERENT templates — so `EditorScene.reconcile` re-checks this before
+   * reusing an object for a surviving id.
+   */
+  readonly templateId: string;
 
   private readonly materials: THREE.MeshStandardMaterial[];
   private readonly baseEmissives: Array<{ color: THREE.Color; intensity: number }>;
@@ -35,10 +42,12 @@ export class SubPartObject {
 
   private constructor(
     instanceId: string,
+    templateId: string,
     mesh: THREE.Mesh,
     materials: THREE.MeshStandardMaterial[],
   ) {
     this.instanceId = instanceId;
+    this.templateId = templateId;
     this.mesh = mesh;
     this.baseGeometry = mesh.geometry;
     this.materials = materials;
@@ -86,7 +95,12 @@ export class SubPartObject {
       materials.length === 1 ? materials[0] : materials;
     const mesh = new THREE.Mesh(geometry, matArg);
     mesh.userData.selectable = { kind: 'subpart', id: placement.instanceId };
-    const obj = new SubPartObject(placement.instanceId, mesh, materials);
+    const obj = new SubPartObject(
+      placement.instanceId,
+      placement.subPartTemplateId,
+      mesh,
+      materials,
+    );
     obj.setPlacement(placement);
     return obj;
   }

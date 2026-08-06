@@ -653,8 +653,8 @@ export class EditorScene {
     });
     // A custom template's geometry/texture can change in place (the catalog entry's
     // atlas/diffuse blob URL changes) while its placements keep the same template id.
-    // reconcile() never rebuilds existing objects, so dispose the affected ones and
-    // let reconcile re-create them from the fresh entry.
+    // reconcile() rebuilds an existing object only when its template id changes; here the id
+    // stays the same, so dispose the affected ones and let reconcile re-create them fresh.
     this.sub($customCatalog, (custom) => {
       const customIds = new Set(custom.map((c) => c.id));
       const part = $part.get();
@@ -891,9 +891,18 @@ export class EditorScene {
     // Add new objects; update transforms of existing ones.
     for (const placement of part.placements) {
       const existing = this.objects.get(placement.instanceId);
-      if (existing) {
+      if (existing && existing.templateId === placement.subPartTemplateId) {
         existing.setPlacement(placement);
         continue;
+      }
+      if (existing) {
+        // A surviving id is NOT a surviving mesh: instance ids are per-part namespaces
+        // (MULTI_PART_PLAN.md I3), so part A and part B may both hold `trussbara_1`
+        // bound to DIFFERENT templates. Drop the stale object (the removal loop above)
+        // and fall through to the create path, which rebuilds it from the new template.
+        this.root.remove(existing.group);
+        existing.dispose();
+        this.objects.delete(placement.instanceId);
       }
       if (this.building.has(placement.instanceId)) continue;
 
@@ -905,8 +914,12 @@ export class EditorScene {
         .then((obj) => {
           this.building.delete(placement.instanceId);
           const latest = $part.get().placements.find((p) => p.instanceId === placement.instanceId);
-          if (!latest) {
-            obj.dispose(); // removed while loading
+          if (!latest || latest.subPartTemplateId !== placement.subPartTemplateId) {
+            obj.dispose(); // removed — or the id now names another template (I3) — while loading
+            // The reconcile that retargeted this id was gated out of creating the replacement by
+            // `building` above. Now that the slot is free, kick one: without it the instance
+            // renders nothing until some unrelated store write happens to reconcile again.
+            if (latest) this.reconcile($part.get());
             return;
           }
           obj.setPlacement(latest);
@@ -1121,9 +1134,17 @@ export class EditorScene {
     }
     for (const kitten of part.kittens) {
       const existing = this.kittenObjects.get(kitten.id);
-      if (existing) {
+      if (existing && existing.kind === kitten.kind) {
         existing.setInstance(kitten);
         continue;
+      }
+      if (existing) {
+        // The SubPart reuse branch's guard, keyed on `kind`: kitten ids are per-part
+        // namespaces (I3), so `_kitten1` can be Hunter in one part and Polaris in another,
+        // and the head/eye textures are baked per KIND — `setInstance` only moves the group.
+        this.root.remove(existing.group);
+        existing.dispose();
+        this.kittenObjects.delete(kitten.id);
       }
       if (this.kittenBuilding.has(kitten.id)) continue;
       this.kittenBuilding.add(kitten.id);
@@ -1133,6 +1154,7 @@ export class EditorScene {
           const latest = $part.get().kittens.find((k) => k.id === kitten.id);
           if (!latest || latest.kind !== kitten.kind) {
             obj.dispose(); // removed or changed kind while loading
+            if (latest) this.reconcile($part.get()); // as above: rebuild under the new kind
             return;
           }
           obj.setInstance(latest);
@@ -1245,6 +1267,9 @@ export class EditorScene {
     for (const connector of part.connectors) {
       const existing = this.connectorObjects.get(connector.id);
       if (existing) {
+        // No template-change guard needed (I3): a connector's visual is the same cube +
+        // arrow for every connector — only the global size varies, and a size change
+        // rebuilds every object — so `setConnector` (transform) covers a same-id swap.
         existing.setConnector(connector);
         continue;
       }
@@ -1272,6 +1297,9 @@ export class EditorScene {
     part.ivaSeats.forEach((seat, index) => {
       const existing = this.seatObjects.get(seat.id);
       if (existing) {
+        // No template-change guard needed (I3): every seat marker is built identically
+        // from the global settings, so transform + badge index is all a same-id swap
+        // (one part's `_seat1` replaced by another's) can possibly change.
         existing.setSeat(seat);
         existing.setIndex(index);
         return;
@@ -1304,6 +1332,9 @@ export class EditorScene {
     }
 
     for (const collider of part.colliders) {
+      // No template-change guard needed (I3): the visual COUNT is re-derived from the
+      // owners every pass, and `ColliderObject.setCollider` (via positionColliders below)
+      // already rebuilds its geometry when `shape` — or a capsule's aspect — changes.
       const wanted = this.colliderOwners(part, collider).length || 1;
       let objs = this.colliderObjects.get(collider.id);
       if (!objs) {
@@ -1377,6 +1408,9 @@ export class EditorScene {
     }
 
     for (const light of part.lights) {
+      // No template-change guard needed (I3): the visual COUNT is re-derived from the
+      // owners every pass, and `LightObject.setLight` (via positionLights below) already
+      // rebuilds the aim cone on a `type` retype and the wire geometry on a shape change.
       const wantedCount = this.lightOwners(part, light).length || 1;
       let objs = this.lightObjects.get(light.id);
       if (!objs) {

@@ -187,6 +187,17 @@ export function deleteProjectAssets(projectId: string): Promise<void> {
 }
 
 /**
+ * Deletes an explicit list of keys — the per-PART sweep (`customAssetStore.sweepPartAssets`,
+ * run when a part is deleted). A part owns a SUBSET of its project's namespace (blob keys
+ * carry no part segment — invariant I4, `plans/MULTI_PART_PLAN.md` §0.5), so unlike
+ * {@link deleteProjectAssets} there is no range to sweep: the caller enumerates the keys from
+ * that part's own descriptors and hands them here.
+ */
+export async function deleteAssetKeys(keys: string[]): Promise<void> {
+  for (const key of keys) await deleteAsset(key);
+}
+
+/**
  * Copies every blob from one project's namespace into another's, asset ids unchanged
  * (Duplicate). The namespace is what makes the ids collision-free, so the copied descriptors
  * need no rewrite.

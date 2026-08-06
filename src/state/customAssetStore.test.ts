@@ -29,6 +29,9 @@ vi.mock('./assetDb', () => {
     deleteAsset: async (key: string) => {
       store.delete(key);
     },
+    deleteAssetKeys: async (keys: string[]) => {
+      for (const key of keys) store.delete(key);
+    },
     listProjectBlobs: async (projectId: string) =>
       [...store.keys()].filter((key) => key.startsWith(prefix(projectId))),
     deleteProjectAssets: async (projectId: string) => {
@@ -130,11 +133,14 @@ import { $historyList, $part, newPart, undo } from './editorStore';
 import { $customCatalog } from './catalogStore';
 import {
   $assetUsage,
+  $customTextureUrls,
   $unplacedCustomMeshes,
   addCustomMaterial,
+  addCustomTexture,
   clearMeshFaceConfig,
   copyFaceConfigToAll,
   customMeshRenderCache,
+  hydrateCustomAssets,
   importModelAsMeshes,
   makeKittenMeshPart,
   matchImportedMeshes,
@@ -147,9 +153,11 @@ import {
   setMeshGlowStreaming,
   setMeshMaterial,
   setMeshTransparent,
+  sweepPartAssets,
   updateCustomMaterial,
   updateCustomMesh,
 } from './customAssetStore';
+import { createPart, initPartsForNewProject, snapshotParts } from './partsStore';
 import { analyzeImport, DEFAULT_IMPORT_OPTIONS } from '../ksa/importPlan';
 import { normalizeImport, type NormalizedImport } from '../ksa/importNormalize';
 import type { ImportMaterialPlan, ImportMaterialSpec } from '../ksa/importMaterials';
@@ -1079,5 +1087,46 @@ describe('surface-mode store additions', () => {
     $part.set({ ...$part.get(), customMeshes: [box({ faceTextures: { right: cfg, top: cfg } })] });
     await clearMeshFaceConfig('mesh_1', 'right');
     expect(Object.keys($part.get().customMeshes[0].faceTextures)).toEqual(['top']);
+  });
+});
+
+/**
+ * Custom assets are PER-PART (D1) but their blob keys are project-namespaced with no part
+ * segment (I4), so the runtime URL maps hold the union of every part's assets while every
+ * deleter stays scoped to exactly one document. See MULTI_PART_PLAN.md P1.07.
+ */
+describe('multi-part custom assets', () => {
+  /** Part 1 (parked) and Part 2 (active), each carrying one texture of its own. */
+  async function twoPartFixture() {
+    initPartsForNewProject();
+    const texA = await addCustomTexture(new Blob([new Uint8Array([1, 2, 3])]), 'alpha');
+    createPart();
+    const texB = await addCustomTexture(new Blob([new Uint8Array([4, 5, 6])]), 'beta');
+    return { texA, texB };
+  }
+
+  it('hydration produces object URLs for EVERY part, not just the active one', async () => {
+    const { texA, texB } = await twoPartFixture();
+
+    await hydrateCustomAssets();
+
+    // The inactive part's texture is the point: a part switch never re-hydrates blobs, so
+    // without the all-parts union its surfaces would render with no image at all.
+    expect(Object.keys($customTextureUrls.get()).sort()).toEqual([texA.id, texB.id].sort());
+  });
+
+  it('sweepPartAssets deletes exactly one part of blobs and URLs', async () => {
+    const { texA, texB } = await twoPartFixture();
+    await hydrateCustomAssets();
+    const partA = snapshotParts()[0].part;
+    expect(partA.customTextures.map((t) => t.id)).toEqual([texA.id]);
+
+    await sweepPartAssets(partA);
+
+    expect(await getAsset(assetKeys.textureSource(TEST_PROJECT_ID, texA.id))).toBeUndefined();
+    expect(await getAsset(assetKeys.textureKtx2(TEST_PROJECT_ID, texA.id))).toBeUndefined();
+    expect(await getAsset(assetKeys.textureSource(TEST_PROJECT_ID, texB.id))).toBeDefined();
+    expect(await getAsset(assetKeys.textureKtx2(TEST_PROJECT_ID, texB.id))).toBeDefined();
+    expect(Object.keys($customTextureUrls.get())).toEqual([texB.id]);
   });
 });

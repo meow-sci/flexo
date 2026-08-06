@@ -43,12 +43,20 @@ import {
   clearSelection,
 } from './editorStore';
 import { $currentProjectId } from './projectIndexStore';
+import { registerPartAssetSweeper, snapshotParts } from './partsStore';
 import { notify } from './notificationStore';
 import { status } from './statusStore';
 import { closeDialog, isDialogOpen, openDialog } from './dialogStore';
 import { $customCatalog } from './catalogStore';
 import { $modelImportSettings, $simulateGlass } from './settingsStore';
-import { assetKeys, deleteAsset, getAsset, purgeUnprefixedAssetKeys, putAsset } from './assetDb';
+import {
+  assetKeys,
+  deleteAsset,
+  deleteAssetKeys,
+  getAsset,
+  purgeUnprefixedAssetKeys,
+  putAsset,
+} from './assetDb';
 import {
   buildPrimitiveGeometry,
   PRIMITIVE_FACE_KEYS,
@@ -1123,6 +1131,7 @@ function clearMaterialTextureRefs(mat: CustomMaterial, textureId: string): void 
   if (mat.normal?.textureId === textureId) delete mat.normal;
 }
 
+/** ACTIVE part only, and correct: each part owns its own assets (D1/I4) — never snapshotParts(). */
 export function removeCustomTexture(id: string): void {
   const name = $part.get().customTextures.find((t) => t.id === id)?.name ?? '';
   mutate('remove texture', name, (p) => {
@@ -1157,6 +1166,8 @@ export function removeCustomTexture(id: string): void {
  *
  * This is REVIEW, not collection. Automatic GC stays exactly what it was — reference counting
  * on remove/replace-import ({@link planOrphanedAssets}); nothing here ever runs on its own.
+ *
+ * ACTIVE part only, and correct: each part owns its own assets (D1/I4) — never snapshotParts().
  */
 export function removeUnusedAssets(ids: readonly string[]): void {
   const part = $part.get();
@@ -2226,6 +2237,21 @@ async function ensureCurrentKtx2(id: string, stored: Blob): Promise<Blob> {
 }
 
 // ── hydration on project load ─────────────────────────────────────────────────
+/**
+ * Rebuilds every runtime blob URL and import atlas the open project needs, for **ALL of its
+ * parts** — not just the active one (`plans/MULTI_PART_PLAN.md` P1.07). The three URL maps and
+ * the import-atlas registry hold the UNION of every part's `customTextures` / `customMeshes` /
+ * import batches, which is what makes them safe to iterate wholesale on the next project switch.
+ *
+ * Why the union rather than the active document: a part switch only writes `$part`, it never
+ * re-hydrates blobs, so the incoming part's textures and imported GLBs would have no object URLs
+ * — surface mode and the scene would render blank. Ghost rendering needs the same union.
+ * Asset ids are project-unique (I4), so no two parts can collide in these maps.
+ *
+ * `$customCatalog` / {@link customMeshRenderCache} are deliberately NOT part of that union —
+ * they stay the ACTIVE part's render set (I1); see the `$part.subscribe` in
+ * {@link initCustomAssets}.
+ */
 export async function hydrateCustomAssets(): Promise<void> {
   for (const id of [...textureKtx2Urls.keys(), ...textureSrcUrls.keys()]) revokeTexture(id);
   publishTextureUrls();
@@ -2233,28 +2259,73 @@ export async function hydrateCustomAssets(): Promise<void> {
   emissivePaintUrls.clear();
   clearImportAtlases();
 
-  const part = $part.get();
-  for (const t of part.customTextures) {
-    const k = await getAsset(assetKeys.textureKtx2(pid(), t.id));
-    if (k) textureKtx2Urls.set(t.id, URL.createObjectURL(await ensureCurrentKtx2(t.id, k)));
-    const s = await getAsset(assetKeys.textureSource(pid(), t.id));
-    if (s) textureSrcUrls.set(t.id, URL.createObjectURL(s));
+  const parts = snapshotParts().map((entry) => entry.part);
+  for (const part of parts) {
+    for (const t of part.customTextures) {
+      const k = await getAsset(assetKeys.textureKtx2(pid(), t.id));
+      if (k) textureKtx2Urls.set(t.id, URL.createObjectURL(await ensureCurrentKtx2(t.id, k)));
+      const s = await getAsset(assetKeys.textureSource(pid(), t.id));
+      if (s) textureSrcUrls.set(t.id, URL.createObjectURL(s));
+    }
   }
   publishTextureUrls();
   // Reload painted-glow bitmaps (the 'whole' shape is regenerated from color/strength — no blob).
-  for (const m of part.customMeshes) {
-    if (m.emissive?.shape === 'painted') {
-      const png = await getAsset(assetKeys.emissivePaint(pid(), m.id));
-      if (png) emissivePaintUrls.set(m.id, URL.createObjectURL(png));
+  for (const part of parts) {
+    for (const m of part.customMeshes) {
+      if (m.emissive?.shape === 'painted') {
+        const png = await getAsset(assetKeys.emissivePaint(pid(), m.id));
+        if (png) emissivePaintUrls.set(m.id, URL.createObjectURL(png));
+      }
     }
   }
   publishEmissivePaintUrls();
   // Re-register every import batch's geometry GLB (the only copy — nothing regenerates it)
   // BEFORE the rebuild, which resolves imported meshes out of those blob URLs by name.
   const importIds = new Set<string>();
-  for (const m of part.customMeshes) if (m.imported) importIds.add(m.imported.importId);
+  for (const part of parts) {
+    for (const m of part.customMeshes) if (m.imported) importIds.add(m.imported.importId);
+  }
   for (const importId of importIds) await ensureImportAtlas(importId);
   await scheduleRebuild();
+}
+
+/**
+ * Deletes every custom-asset binary owned by ONE part document, and drops its live runtime
+ * URLs — the sweep `partsStore.deletePart` runs on the part it destroys. Wired in through
+ * {@link registerPartAssetSweeper} from {@link initCustomAssets} because the import direction is
+ * one-way: this module imports `partsStore`, never the reverse.
+ *
+ * Safe under **I4** (`plans/MULTI_PART_PLAN.md` §0.5): blob keys are `pa:<projectId>:<kind>:<id>`
+ * with no part segment, and asset ids are project-unique — no sibling part can name any of these
+ * ids, so sweeping exactly this document's keys can never orphan another part's texture, mesh or
+ * import batch.
+ */
+export async function sweepPartAssets(doc: EditingPart): Promise<void> {
+  const projectId = pid();
+  const keys: string[] = [];
+  for (const t of doc.customTextures) {
+    keys.push(assetKeys.textureSource(projectId, t.id), assetKeys.textureKtx2(projectId, t.id));
+    revokeTexture(t.id);
+  }
+  const importIds = new Set<string>();
+  for (const m of doc.customMeshes) {
+    keys.push(assetKeys.meshGlb(projectId, m.id));
+    // Unconditional, like removeCustomMesh/removeImport: a painted->whole/off flip keeps the blob
+    // around for undo (setMeshGlow), so keying on the CURRENT shape would orphan it. Deleting a
+    // key that was never written is a no-op.
+    keys.push(assetKeys.emissivePaint(projectId, m.id));
+    const paintUrl = emissivePaintUrls.get(m.id);
+    if (paintUrl) URL.revokeObjectURL(paintUrl);
+    emissivePaintUrls.delete(m.id);
+    if (m.imported) importIds.add(m.imported.importId);
+  }
+  for (const importId of importIds) {
+    keys.push(assetKeys.importGlb(projectId, importId));
+    releaseImportAtlas(importId);
+  }
+  publishTextureUrls();
+  publishEmissivePaintUrls();
+  await deleteAssetKeys(keys);
 }
 
 /**
@@ -2285,6 +2356,8 @@ export function initCustomAssets(): void {
       });
     })
     .catch((err) => console.warn('flexo: asset purge failed', err));
+  // Deleting a part destroys its binaries; partsStore holds the slot rather than the import.
+  registerPartAssetSweeper(sweepPartAssets);
   $currentProjectId.subscribe(() => {
     void hydrateCustomAssets().catch((err) =>
       console.warn('flexo: custom-asset hydrate failed', err),
@@ -2295,6 +2368,11 @@ export function initCustomAssets(): void {
   // the restored — or any newly added — instances render nothing until reload. Watch
   // for a mesh-set/geometry/face-texture change the runtime hasn't applied yet and
   // rebuild. Cheap no-op on unrelated $part changes (transform edits, etc.).
+  //
+  // ACTIVE PART ONLY, deliberately (I1): unlike the blob URLs, which hydrateCustomAssets holds
+  // as the all-parts union, `$customCatalog` and customMeshRenderCache ARE the active part's
+  // render set. A part switch writes `$part`, which lands here and rebuilds them for the
+  // incoming document — inactive parts contribute nothing to either.
   $part.subscribe((part) => {
     if (internalCustomChange) return; // our own helpers rebuild explicitly
     if (meshSignature(part) !== appliedMeshSig) {

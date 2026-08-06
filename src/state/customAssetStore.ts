@@ -304,6 +304,7 @@ function shortId(): string {
   return crypto.randomUUID().replace(/-/g, '').slice(0, 8);
 }
 
+/** Asset-id-safe token: KSA ids are referenced by string from XML, so keep them alphanumeric. */
 function sanitizeIdent(name: string): string {
   const cleaned = name.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   return cleaned || 'Asset';

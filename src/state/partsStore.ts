@@ -1,8 +1,12 @@
 import { atom, computed } from 'nanostores';
+import { createEmptyPart } from '../ksa/types';
 import type { EditingPart, Vec3 } from '../ksa/types';
+import { $activeLayerId, $part } from './editorStore';
 import type { HistorySnapshot } from './editorStore';
+import { $layerView } from './layerStore';
 import type { LayerViewState } from './layerStore';
-import type { ProjectCounts } from './projectDb';
+import { deriveCounts } from './projectDb';
+import type { ProjectCounts, SavedPartEntry } from './projectDb';
 
 /**
  * The part registry — a project holds N Parts, but every editing surface stays
@@ -111,4 +115,77 @@ export function parkHistories(byPart: Record<string, HistorySnapshot>): void {
 /** The parked histories as a plain record, for persistence. */
 export function inactiveHistoriesRecord(): Record<string, HistorySnapshot> {
   return Object.fromEntries(inactiveHistories);
+}
+
+function bumpInactiveRevision(): void {
+  $inactiveRevision.set($inactiveRevision.get() + 1);
+}
+
+/**
+ * SavedPartEntry[] in $partEntries order. Active part composes from the LIVE stores;
+ * inactive parts from inactiveDocs. Pure read — mutates nothing.
+ */
+export function snapshotParts(): SavedPartEntry[] {
+  const activeId = $activePartId.get();
+  return $partEntries.get().map((meta) => {
+    const doc =
+      meta.id === activeId
+        ? { part: $part.get(), layerView: $layerView.get(), activeLayerId: $activeLayerId.get() }
+        : inactiveDocs.get(meta.id)!;
+    // counts are derived, not persisted — SavedPartEntry deliberately has none.
+    const { counts: _counts, ...persisted } = meta;
+    return { ...persisted, ...doc };
+  });
+}
+
+/**
+ * Rebuilds the whole registry from a loaded snapshot: REPLACES both module maps, fills
+ * `$partEntries` (counts derived), parks every non-active entry's document and points
+ * `$activePartId` at `activeId`. The ACTIVE entry's document is NOT hydrated here — the caller
+ * publishes it into `$part` / `$layerView` / `$activeLayerId` (`applyProjectSnapshot`).
+ */
+export function hydrateParts(parts: readonly SavedPartEntry[], activeId: string): void {
+  inactiveDocs.clear();
+  inactiveHistories.clear();
+  const entries: PartMetaEntry[] = [];
+  for (const entry of parts) {
+    entries.push({
+      id: entry.id,
+      name: entry.name,
+      visible: entry.visible,
+      opacity: entry.opacity,
+      offset: entry.offset,
+      includeInExport: entry.includeInExport,
+      counts: deriveCounts(entry.part),
+    });
+    if (entry.id === activeId) continue;
+    inactiveDocs.set(entry.id, {
+      part: entry.part,
+      layerView: entry.layerView,
+      activeLayerId: entry.activeLayerId,
+    });
+  }
+  $partEntries.set(entries);
+  $activePartId.set(activeId);
+  bumpInactiveRevision();
+}
+
+/** Resets the registry to the one empty "Part 1" a brand-new project starts with. */
+export function initPartsForNewProject(): void {
+  inactiveDocs.clear();
+  inactiveHistories.clear();
+  const id = newPartEntryId();
+  $partEntries.set([
+    {
+      id,
+      name: 'Part 1',
+      visible: true,
+      opacity: 1,
+      offset: { x: 0, y: 0, z: 0 },
+      includeInExport: true,
+      counts: deriveCounts(createEmptyPart()),
+    },
+  ]);
+  $activePartId.set(id);
+  bumpInactiveRevision();
 }

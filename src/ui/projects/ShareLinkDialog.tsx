@@ -75,7 +75,11 @@ function ShareBody({ projectId, onClose }: { projectId?: string; onClose: () => 
     void getSnapshot(id)
       .then((snapshot) => {
         if (!live) return;
-        if (snapshot?.part) setStored(snapshot.part);
+        // P2 (MULTI_PART_PLAN) replaces this with the multi-part envelope — a share link is
+        // still single-part, so the stored project's ACTIVE part is what travels.
+        const active =
+          snapshot?.parts.find((p) => p.id === snapshot.activePartId) ?? snapshot?.parts[0];
+        if (active) setStored(active.part);
         else setLoadError('That project could not be read from storage.');
       })
       .catch((err) => live && setLoadError(String(err)));

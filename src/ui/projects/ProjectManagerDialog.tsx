@@ -139,7 +139,9 @@ function ManagerBody({ onClose }: { onClose: () => void }) {
   const current = projects.find((p) => p.id === currentId) ?? null;
   const others = projects.filter((p) => p.id !== currentId);
   const matching = query.trim()
-    ? others.filter((p) => fuzzyAny(query, p.name, p.description, p.partId))
+    ? others.filter((p) =>
+        fuzzyAny(query, p.name, p.description, ...p.parts.flatMap((x) => [x.name, x.partId])),
+      )
     : others;
   const sorted = sortProjects(matching, prefs.sort);
 
@@ -307,12 +309,20 @@ function CurrentCard({
             <span>saved {relativeTime(meta.savedAt, now)}</span>
             <span>·</span>
             <span>created {new Date(meta.createdAt).toLocaleDateString()}</span>
-            {meta.partId && (
-              <>
-                <span>·</span>
-                <span className="font-mono">{meta.partId}</span>
-              </>
-            )}
+            {/* One part → its KSA export id, as before; many → how many there are. */}
+            {meta.parts.length === 1
+              ? meta.parts[0].partId && (
+                  <>
+                    <span>·</span>
+                    <span className="font-mono">{meta.parts[0].partId}</span>
+                  </>
+                )
+              : meta.parts.length > 1 && (
+                  <>
+                    <span>·</span>
+                    <span>{meta.parts.length} parts</span>
+                  </>
+                )}
           </div>
         </div>
       </div>

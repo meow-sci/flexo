@@ -418,7 +418,16 @@ export function registerEditorAidStores(opts: {
   _setMeasurements = opts.setMeasurements;
 }
 
-/** An entry in the undo or redo stack: the document snapshot plus a human-readable label. */
+/**
+ * An entry in the undo or redo stack: the document snapshot plus a human-readable label.
+ *
+ * KNOWN, ACCEPTED: the entry also snapshots the project-level editor aids (`containers` /
+ * `measurements` — the only non-`$part` undo participants). Undo stacks are per part
+ * (`plans/MULTI_PART_PLAN.md` §P1.04(6), Appendix B item 8), so undoing in part A restores the
+ * aids as they were when A's entry was pushed, which can be older than aid edits made while
+ * part B was active. Rare and self-healing (redo/further edits win); rebasing parked stacks or
+ * evicting the aids from undo would both be worse.
+ */
 export interface HistoryEntry {
   part: EditingPart;
   containers: ReferenceContainer[];
@@ -468,6 +477,7 @@ export const $historyList = atom<HistoryListItem[]>([]);
  * If you add a `$part` mutator and pick neither pattern, that change silently
  * bypasses undo — a bug. Keep docs/editor-state.md and AGENTS.md in sync.
  */
+// Per PART by construction: each part carries its own stacks (plans/MULTI_PART_PLAN.md §P1.04).
 const MAX_UNDO = 50;
 const undoStack: HistoryEntry[] = [];
 const redoStack: HistoryEntry[] = [];

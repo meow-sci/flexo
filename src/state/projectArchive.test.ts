@@ -51,6 +51,7 @@ const { tarUnpack, gunzip, gzip, tarPack } = await import('./tarArchive');
 const { deriveCounts } = await import('./projectDb');
 
 const PROJECT = 'p_test00000001';
+const PART_ENTRY = 'pt_test00001';
 
 function texture(id: string) {
   return { id, name: id, width: 4, height: 4, channel: 'baseColor' as const };
@@ -61,19 +62,30 @@ function seedProject(part: EditingPart): void {
     id: PROJECT,
     name: 'Rover-7',
     description: 'crew rover',
-    partId: part.partId,
+    parts: [{ id: PART_ENTRY, name: 'Part 1', partId: part.partId }],
     createdAt: 1,
     savedAt: 2,
-    schemaVersion: 2,
+    schemaVersion: 4,
     counts: deriveCounts(part),
     bytes: { snapshot: 0, history: 0, assets: 0 },
     hasThumb: false,
   });
   snapshots.set(PROJECT, {
-    version: 2,
-    part,
-    layerView: {},
-    activeLayerId: 'default',
+    version: 4,
+    parts: [
+      {
+        id: PART_ENTRY,
+        name: 'Part 1',
+        visible: true,
+        opacity: 1,
+        offset: { x: 0, y: 0, z: 0 },
+        includeInExport: true,
+        part,
+        layerView: {},
+        activeLayerId: 'default',
+      },
+    ],
+    activePartId: PART_ENTRY,
     savedAt: 2,
   });
 }

@@ -1,4 +1,4 @@
-import type { EditingPart } from '../ksa/types';
+import type { EditingPart, Vec3 } from '../ksa/types';
 import type { LayerViewState } from './layerStore';
 import type { HistorySnapshot } from './editorStore';
 import type { CameraState } from './viewStore';
@@ -15,7 +15,7 @@ import type { ReferenceContainer } from './containerStore';
  * | store       | value                                                  | written by         |
  * |-------------|--------------------------------------------------------|--------------------|
  * | `meta`      | {@link ProjectMeta} — the whole Project Manager list    | every snapshot save |
- * | `snapshots` | {@link ProjectSnapshotV2} — document + view state       | autosave, 300 ms   |
+ * | `snapshots` | {@link ProjectSnapshot} — every part + view state       | autosave, 300 ms   |
  * | `history`   | {@link ProjectHistoryRecord} — the undo/redo stacks     | autosave, 1500 ms  |
  * | `thumbs`    | `Blob` (image/webp 384×216)                             | thumbnail capture  |
  *
@@ -59,11 +59,13 @@ export interface ProjectMeta {
   name: string;
   /** Plain text, ~500-char soft cap (enforced UI-side). Empty when never written. */
   description: string;
-  partId: string;
+  /** One tiny row per part (D6 ids/names + the KSA export id) — meta loads in bulk. */
+  parts: Array<{ id: string; name: string; partId: string }>;
   createdAt: number;
   savedAt: number;
   /** `PROJECT_SCHEMA_VERSION` at write time — the boot purge gate (design §1.2). */
   schemaVersion: number;
+  /** The AGGREGATE across every part ({@link sumCounts}), not one part's tally. */
   counts: ProjectCounts;
   /** Sizes for the manager's storage readouts; assets is the summed blob length. */
   bytes: { snapshot: number; history: number; assets: number };
@@ -85,16 +87,37 @@ export interface ProjectCounts {
 }
 
 /**
- * The v2 snapshot: everything needed to restore a workspace EXCEPT the undo/redo history,
- * which lives in its own record (D4 — so the 300 ms autosave write stays small).
+ * One saved part: its registry meta, its document, and the per-part view state that travels
+ * with it (layers are per-part, so `layerView`/`activeLayerId` live here rather than at
+ * snapshot level). Deliberately carries no `counts` — those are derived on load.
  */
-export interface ProjectSnapshotV2 {
-  version: number;
+export interface SavedPartEntry {
+  id: string;
+  name: string;
+  visible: boolean;
+  opacity: number;
+  offset: Vec3;
+  includeInExport: boolean;
   part: EditingPart;
   /** Per-layer visibility/lock/listed/opacity/collapsed, keyed by layer id. */
   layerView: Record<string, LayerViewState>;
   /** Layer new items land in (clamped to a live layer on load). */
   activeLayerId: string;
+}
+
+/**
+ * The snapshot: everything needed to restore a workspace EXCEPT the undo/redo history, which
+ * lives in its own record (D4 — so the 300 ms autosave write stays small).
+ *
+ * `camera`/`measurements`/`containers` stay project-level: they are workspace aids in the
+ * shared world frame, not part documents (`plans/MULTI_PART_PLAN.md` §P1.02).
+ */
+export interface ProjectSnapshot {
+  version: number;
+  /** Ordered, length ≥ 1. */
+  parts: SavedPartEntry[];
+  /** Names one of `parts[i].id`. */
+  activePartId: string;
   savedAt: number;
   camera?: CameraState;
   measurements?: LineMeasurement[];
@@ -102,13 +125,18 @@ export interface ProjectSnapshotV2 {
 }
 
 /**
- * The undo/redo stacks, capped at `editorStore.MAX_UNDO` by `importHistory` on the way back
- * in. Structurally the {@link HistorySnapshot} `exportHistory()` produces — spelled out here
- * so the storage layer's value shapes read on their own.
+ * One part's undo/redo stacks, capped at `editorStore.MAX_UNDO` by `importHistory` on the way
+ * back in. Structurally the {@link HistorySnapshot} `exportHistory()` produces — spelled out
+ * here so the storage layer's value shapes read on their own.
  */
-export interface ProjectHistoryRecord {
+export interface PersistedPartHistory {
   undo: HistorySnapshot['undo'];
   redo: HistorySnapshot['redo'];
+}
+
+/** Every part's stacks, keyed by part entry id — undo is per part (§P1.04). */
+export interface ProjectHistoryRecord {
+  byPart: Record<string, PersistedPartHistory>;
 }
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -161,12 +189,12 @@ export function listMeta(): Promise<ProjectMeta[]> {
 
 // ── snapshot / history / thumb ────────────────────────────────────────────────
 
-export function putSnapshot(id: ProjectId, snap: ProjectSnapshotV2): Promise<void> {
+export function putSnapshot(id: ProjectId, snap: ProjectSnapshot): Promise<void> {
   return tx('snapshots', 'readwrite').then(request<void>((s) => s.put(snap, id)));
 }
 
-export function getSnapshot(id: ProjectId): Promise<ProjectSnapshotV2 | undefined> {
-  return tx('snapshots', 'readonly').then(request<ProjectSnapshotV2 | undefined>((s) => s.get(id)));
+export function getSnapshot(id: ProjectId): Promise<ProjectSnapshot | undefined> {
+  return tx('snapshots', 'readonly').then(request<ProjectSnapshot | undefined>((s) => s.get(id)));
 }
 
 export function putHistory(id: ProjectId, history: ProjectHistoryRecord): Promise<void> {
@@ -223,4 +251,29 @@ export function deriveCounts(part: EditingPart): ProjectCounts {
     customMaterials: part.customMaterials.length,
     customMeshes: part.customMeshes.length,
   };
+}
+
+/**
+ * The project-wide totals: {@link deriveCounts} per part, added field by field. A meta row's
+ * `counts` is this aggregate — one project, N parts, one summary line.
+ */
+export function sumCounts(parts: readonly EditingPart[]): ProjectCounts {
+  const total: ProjectCounts = {
+    subParts: 0,
+    connectors: 0,
+    colliders: 0,
+    seats: 0,
+    lights: 0,
+    kittens: 0,
+    animations: 0,
+    layers: 0,
+    customTextures: 0,
+    customMaterials: 0,
+    customMeshes: 0,
+  };
+  for (const part of parts) {
+    const counts = deriveCounts(part);
+    for (const key of Object.keys(total) as (keyof ProjectCounts)[]) total[key] += counts[key];
+  }
+  return total;
 }

@@ -186,7 +186,10 @@ export async function buildProjectArchive(
   }
 
   abortIfRequested(signal);
-  const envelope = buildProjectExport(snapshot.part, meta.name, { includeBinaryBacked: true });
+  // P2 (MULTI_PART_PLAN) replaces this with the multi-part envelope — the wire format is still
+  // single-part, so the archive carries the stored snapshot's ACTIVE part.
+  const active = snapshot.parts.find((p) => p.id === snapshot.activePartId) ?? snapshot.parts[0];
+  const envelope = buildProjectExport(active.part, meta.name, { includeBinaryBacked: true });
   const manifest: ArchiveManifest = {
     format: ARCHIVE_FORMAT,
     archiveVersion: ARCHIVE_VERSION,

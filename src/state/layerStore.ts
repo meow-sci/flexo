@@ -48,7 +48,7 @@ export const DEFAULT_LAYER_STATE: Readonly<LayerViewState> = {
  * an old entry simply reads its default.
  *
  * **Per-project, snapshot-only.** This is a plain atom: the project snapshot
- * (`projectStore.ProjectSnapshotV2.layerView`) is its ONE persistence, so hiding a layer in
+ * (`projectDb.SavedPartEntry.layerView`) is its ONE persistence, so hiding a layer in
  * one project no longer leaks into the next one you open. v1 dual-persisted it to a global
  * `flexo:layerView` key AND the snapshot, which meant the global key merely mirrored whichever
  * project loaded last (census pm §3 "Quirk"). That key is simply abandoned — never read,

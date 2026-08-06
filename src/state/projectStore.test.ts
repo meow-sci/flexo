@@ -128,10 +128,23 @@ import {
   identityTransform,
 } from '../ksa/types';
 import type { EditingPart } from '../ksa/types';
-import type { ProjectSnapshotV2 } from './projectDb';
+import type { PersistedPartHistory, ProjectHistoryRecord, ProjectSnapshot } from './projectDb';
+import type { SavedPartEntry } from './projectDb';
 
-function snapshotOf(id: string): ProjectSnapshotV2 {
-  return db.snapshots.get(id) as ProjectSnapshotV2;
+function snapshotOf(id: string): ProjectSnapshot {
+  return db.snapshots.get(id) as ProjectSnapshot;
+}
+
+/** The stored snapshot's active part — every single-part assertion below reads it. */
+function activePartOf(id: string): SavedPartEntry {
+  const snap = snapshotOf(id);
+  return snap.parts.find((p) => p.id === snap.activePartId)!;
+}
+
+/** The active part's stored undo/redo stacks (history is keyed `byPart` as of schema v4). */
+function activeHistoryOf(id: string): PersistedPartHistory {
+  const record = db.history.get(id) as ProjectHistoryRecord;
+  return record.byPart[snapshotOf(id).activePartId];
 }
 
 beforeEach(() => {
@@ -187,15 +200,14 @@ describe('project persistence', () => {
     addSubPart('Core.A');
     await flushAutosave();
     expect(snapshotOf(id)).not.toHaveProperty('history');
-    expect((db.history.get(id) as { undo: unknown[] }).undo.length).toBeGreaterThan(0);
+    expect(activeHistoryOf(id).undo.length).toBeGreaterThan(0);
   });
 
   it('caps the persisted history at MAX_UNDO', async () => {
     const id = await createProject('Deep');
     for (let i = 0; i < 60; i++) addSubPart('Core.A');
     await flushAutosave();
-    const history = db.history.get(id) as { undo: unknown[] };
-    expect(history.undo.length).toBeLessThanOrEqual(50);
+    expect(activeHistoryOf(id).undo.length).toBeLessThanOrEqual(50);
   });
 
   it('writes the snapshot at 300 ms and the history at 1500 ms', async () => {
@@ -223,7 +235,9 @@ describe('project persistence', () => {
   it('clamps a stale active layer to Default on load', async () => {
     const id = await createProject('Stale');
     await flushAutosave();
-    db.snapshots.set(id, { ...snapshotOf(id), activeLayerId: 'ghost-layer' });
+    const stale = structuredClone(snapshotOf(id));
+    stale.parts[0].activeLayerId = 'ghost-layer';
+    db.snapshots.set(id, stale);
 
     await createProject('Elsewhere');
     await openProject(id);
@@ -260,7 +274,7 @@ describe('project persistence', () => {
     expect(db.meta.has(second)).toBe(true);
     // The previous project is untouched.
     expect(db.meta.has(first)).toBe(true);
-    expect((snapshotOf(first) as ProjectSnapshotV2).part.placements.length).toBe(1);
+    expect(activePartOf(first).part.placements.length).toBe(1);
   });
 
   it('renaming onto a taken name auto-suffixes and never touches the other project', async () => {
@@ -313,7 +327,7 @@ describe('project persistence', () => {
     expect(copy).toBeTruthy();
     expect($currentProjectId.get()).toBe(source); // still on the original
     expect(db.meta.get(copy!)!.name).toBe('Rover copy');
-    expect(snapshotOf(copy!).part.placements.length).toBe(1);
+    expect(activePartOf(copy!).part.placements.length).toBe(1);
     expect(db.history.has(copy!)).toBe(false);
     expect(assetBlobs.has(`pa:${copy}:tex-src:t1`)).toBe(true);
   });
@@ -496,16 +510,19 @@ describe('normalization (default-fill, never conversion)', () => {
     await flushAutosave();
 
     const stale = structuredClone(snapshotOf(id)) as unknown as {
-      part: Record<string, unknown> & {
-        gameData: Record<string, unknown>;
-        subPartGameData: Record<string, unknown>[];
-        customMeshes: Record<string, unknown>[];
-      };
+      parts: {
+        part: Record<string, unknown> & {
+          gameData: Record<string, unknown>;
+          subPartGameData: Record<string, unknown>[];
+          customMeshes: Record<string, unknown>[];
+        };
+      }[];
     };
-    stale.part.subPartGameData = [
+    const stalePart = stale.parts[0].part;
+    stalePart.subPartGameData = [
       createSubPartGameData('Core.A') as unknown as Record<string, unknown>,
     ];
-    stale.part.customMeshes = [
+    stalePart.customMeshes = [
       {
         id: 'mesh_1',
         name: 'Lamp',
@@ -515,10 +532,10 @@ describe('normalization (default-fill, never conversion)', () => {
       },
     ] as unknown as Record<string, unknown>[];
     // One stripped field at each of the four levels the normalizer covers.
-    delete stale.part.kittens; // EditingPart
-    delete stale.part.gameData.rocketControllers; // PartGameData
-    delete stale.part.subPartGameData[0].solidMotors; // SubPartGameData entry
-    delete (stale.part.customMeshes[0].emissive as Record<string, unknown>).coverage;
+    delete stalePart.kittens; // EditingPart
+    delete stalePart.gameData.rocketControllers; // PartGameData
+    delete stalePart.subPartGameData[0].solidMotors; // SubPartGameData entry
+    delete (stalePart.customMeshes[0].emissive as Record<string, unknown>).coverage;
     db.snapshots.set(id, stale);
 
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -543,10 +560,11 @@ describe('normalization (default-fill, never conversion)', () => {
     await flushAutosave();
 
     const stale = structuredClone(db.history.get(id)) as {
-      undo: { part: Record<string, unknown> }[];
+      byPart: Record<string, { undo: { part: Record<string, unknown> }[] }>;
     };
-    expect(stale.undo.length).toBeGreaterThan(0);
-    for (const entry of stale.undo) delete entry.part.kittens;
+    const stacks = stale.byPart[snapshotOf(id).activePartId];
+    expect(stacks.undo.length).toBeGreaterThan(0);
+    for (const entry of stacks.undo) delete entry.part.kittens;
     db.history.set(id, stale);
 
     await createProject('Elsewhere');
@@ -562,13 +580,14 @@ describe('normalization (default-fill, never conversion)', () => {
     addSubPart('Core.A');
     await flushAutosave();
     const snap = structuredClone(snapshotOf(id)) as unknown as {
-      part: Record<string, unknown> & { gameData: Record<string, unknown> };
+      parts: { part: Record<string, unknown> & { gameData: Record<string, unknown> } }[];
     };
-    snap.part.partId = 'MyPart';
-    snap.part.editorTags = ['tag-a'];
-    snap.part.gameData.displayName = 'Lander';
-    snap.part.gameData.controllable = true;
-    snap.part.customMeshes = [
+    const stored = snap.parts[0].part;
+    stored.partId = 'MyPart';
+    stored.editorTags = ['tag-a'];
+    stored.gameData.displayName = 'Lander';
+    stored.gameData.controllable = true;
+    stored.customMeshes = [
       {
         id: 'mesh_1',
         name: 'Lamp',
@@ -600,10 +619,11 @@ describe('normalization (default-fill, never conversion)', () => {
     const id = await createProject('Lamps');
     await flushAutosave();
     const snap = structuredClone(snapshotOf(id)) as unknown as {
-      part: Record<string, unknown> & { layers: { id: string; name: string }[] };
+      parts: { part: Record<string, unknown> & { layers: { id: string; name: string }[] } }[];
     };
-    snap.part.layers = [...snap.part.layers, { id: 'lights', name: 'Lights' }];
-    snap.part.lights = [{ ...createPartLight(null, '_light1'), layerId: 'lights' }];
+    const stored = snap.parts[0].part;
+    stored.layers = [...stored.layers, { id: 'lights', name: 'Lights' }];
+    stored.lights = [{ ...createPartLight(null, '_light1'), layerId: 'lights' }];
     db.snapshots.set(id, snap);
 
     await createProject('Elsewhere');
@@ -633,8 +653,8 @@ describe('dangling layer ids', () => {
     await flushAutosave();
 
     const snap = structuredClone(snapshotOf(id));
-    snap.part.placements[0].layerId = 'ghost-layer';
-    snap.part.lights = [
+    snap.parts[0].part.placements[0].layerId = 'ghost-layer';
+    snap.parts[0].part.lights = [
       { ...createPartLight(null, '_light1'), layerId: 'ghost-layer' },
       { ...createPartLight(null, '_light2'), layerId: engines },
     ];
@@ -657,7 +677,7 @@ describe('dangling layer ids', () => {
     const snap = structuredClone(snapshotOf(id));
     // Deliberately unreachable state: only the ordinary kinds are clamped, so a kitten is
     // returned exactly as stored even when its layerId does not resolve.
-    snap.part.kittens = [
+    snap.parts[0].part.kittens = [
       { ...identityTransform(), id: 'kitten_1', kind: 'hunter', layerId: 'ghost-layer' },
     ];
     db.snapshots.set(id, snap);
@@ -673,9 +693,12 @@ describe('dangling layer ids', () => {
     addSubPart('Core.B');
     await flushAutosave();
 
-    const stale = structuredClone(db.history.get(id)) as { undo: { part: EditingPart }[] };
-    expect(stale.undo.length).toBeGreaterThan(0);
-    for (const entry of stale.undo) {
+    const stale = structuredClone(db.history.get(id)) as {
+      byPart: Record<string, { undo: { part: EditingPart }[] }>;
+    };
+    const stacks = stale.byPart[snapshotOf(id).activePartId];
+    expect(stacks.undo.length).toBeGreaterThan(0);
+    for (const entry of stacks.undo) {
       for (const p of entry.part.placements) p.layerId = 'ghost-layer';
     }
     db.history.set(id, stale);

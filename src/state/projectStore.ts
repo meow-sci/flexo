@@ -30,7 +30,6 @@ import { status } from './statusStore';
 import { notify } from './notificationStore';
 import {
   deleteProjectRecords,
-  deriveCounts,
   getHistory,
   getMeta,
   getSnapshot,
@@ -41,11 +40,23 @@ import {
   putMeta,
   putSnapshot,
   putThumb,
+  sumCounts,
   type ProjectHistoryRecord,
   type ProjectId,
   type ProjectMeta,
-  type ProjectSnapshotV2,
+  type ProjectSnapshot,
+  type SavedPartEntry,
 } from './projectDb';
+import {
+  $activePartId,
+  $partEntries,
+  hydrateParts,
+  inactiveHistoriesRecord,
+  initPartsForNewProject,
+  newPartEntryId,
+  parkHistories,
+  snapshotParts,
+} from './partsStore';
 import {
   $autosaveHealth,
   $currentProjectId,
@@ -78,13 +89,15 @@ import { copyProjectAssets, deleteProjectAssets } from './assetDb';
  * live-store side: what a snapshot is, how it is applied, autosave, boot, and the project
  * lifecycle actions.
  *
- * What a project captures ({@link ProjectSnapshotV2} + its history record):
+ * What a project captures ({@link ProjectSnapshot} + its history record) — per PART, since a
+ * project holds N of them (`plans/MULTI_PART_PLAN.md`), plus which one is active:
  *   - the full {@link EditingPart} document: partId, editorTags, layers, placements,
  *     connectors, colliders, seats, lights, kittens, custom assets, animations, GameData
  *   - per-layer view state (visibility/lock/listed/opacity/collapsed) from `$layerView` —
  *     as of v2 the snapshot is its ONLY persistence (the global `flexo:layerView` key is gone)
- *   - the active layer, the camera, measurements and reference containers
- *   - the undo/redo history, in its own record so undo still survives a reload (D4)
+ *   - the active layer
+ * …and project-wide: the camera, measurements and reference containers, and the undo/redo
+ * history keyed by part, in its own record so undo still survives a reload (D4).
  * Selection, tool mode, snap and seat view are deliberately NOT captured.
  *
  * Persistence is automatic — {@link startAutosave} subscribes to every contributing store and
@@ -96,7 +109,7 @@ import { copyProjectAssets, deleteProjectAssets } from './assetDb';
  */
 
 /**
- * The version of the persisted {@link ProjectSnapshotV2} format, stamped into every saved
+ * The version of the persisted {@link ProjectSnapshot} format, stamped into every saved
  * project's meta row. It IS the compatibility contract: {@link hydrateProjectOnBoot} keeps a
  * stored project iff its snapshot loads AND its `schemaVersion` equals this number, and purges
  * it (records + asset blobs) at boot otherwise — version mismatch or corruption, nothing else.
@@ -125,10 +138,12 @@ import { copyProjectAssets, deleteProjectAssets } from './assetDb';
 // `EasingConfig` to `JointSegmentEasing` ({position?, rotation?, scale?}). A v2 snapshot's
 // single whole-pose easing has no channel keys, so it would default-fill to all-linear and
 // silently load the WRONG motion; `normalizePart` cannot reach inside keyframes to fix it.
-export const PROJECT_SCHEMA_VERSION = 3;
+// v4: multi-part — snapshot is parts: SavedPartEntry[] + activePartId; layerView/activeLayerId
+// moved per-part; history keyed byPart (plans/MULTI_PART_PLAN.md)
+export const PROJECT_SCHEMA_VERSION = 4;
 
 export { DEFAULT_PROJECT_NAME, $projectName };
-export type { ProjectId, ProjectMeta, ProjectSnapshotV2 };
+export type { ProjectId, ProjectMeta, ProjectSnapshot };
 
 /** v1's localStorage keys — read ONLY to delete them at boot (D6). No adoption, ever. */
 const V1_PROJECT_KEY_PREFIX = 'flexo:project:';
@@ -156,12 +171,11 @@ const PROJECT_PARAM = 'project';
 // ── snapshot serialization ───────────────────────────────────────────────────
 
 /** Builds a snapshot of the current workspace from the live stores. */
-function serializeCurrentSnapshot(): ProjectSnapshotV2 {
+function serializeCurrentSnapshot(): ProjectSnapshot {
   return {
     version: PROJECT_SCHEMA_VERSION,
-    part: $part.get(),
-    layerView: $layerView.get(),
-    activeLayerId: $activeLayerId.get(),
+    parts: snapshotParts(),
+    activePartId: $activePartId.get(),
     savedAt: Date.now(),
     camera: $cameraState.get() ?? undefined,
     measurements: $measurements.get(),
@@ -212,25 +226,53 @@ function normalizePart(part: EditingPart): EditingPart {
   });
 }
 
-function normalizeSnapshot(snap: ProjectSnapshotV2): ProjectSnapshotV2 {
-  return { ...snap, part: normalizePart(snap.part) };
+/**
+ * Default-fills one saved part's registry meta the same way {@link normalizePart} fills its
+ * document: a field a stored entry lacks gets the constructor default, a field it carries wins.
+ */
+function normalizeSavedPart(entry: SavedPartEntry): SavedPartEntry {
+  const offset = entry.offset;
+  const axis = (value: number): number => (Number.isFinite(value) ? value : 0);
+  return {
+    id: entry.id || newPartEntryId(),
+    name: entry.name ?? 'Part',
+    visible: entry.visible ?? true,
+    opacity: Number.isFinite(entry.opacity) ? Math.min(1, Math.max(0, entry.opacity)) : 1,
+    offset: offset
+      ? { x: axis(offset.x), y: axis(offset.y), z: axis(offset.z) }
+      : { x: 0, y: 0, z: 0 },
+    includeInExport: entry.includeInExport ?? true,
+    part: normalizePart(entry.part),
+    layerView: entry.layerView ?? {},
+    activeLayerId: entry.activeLayerId || DEFAULT_LAYER_ID,
+  };
+}
+
+function normalizeSnapshot(snap: ProjectSnapshot): ProjectSnapshot {
+  const parts = snap.parts.map(normalizeSavedPart);
+  const activeExists = parts.some((p) => p.id === snap.activePartId);
+  return { ...snap, parts, activePartId: activeExists ? snap.activePartId : parts[0].id };
 }
 
 /**
- * Normalizes the part inside every undo/redo history entry — history needs it as much as the
- * document does, or the first undo would restore a part missing the added fields. (Normal
- * entries are `{ part, description, detail }`; a very old entry may be a bare EditingPart.)
+ * Normalizes the part inside every undo/redo history entry, for every part's stacks — history
+ * needs it as much as the document does, or the first undo would restore a part missing the
+ * added fields. Keys naming no part in the snapshot are harmless: they are never hydrated
+ * and die on the next write.
  */
-function normalizeHistory(history: ProjectHistoryRecord | undefined): HistorySnapshot {
+function normalizeHistory(
+  history: ProjectHistoryRecord | undefined,
+): Record<string, HistorySnapshot> {
   type Entry = HistorySnapshot['undo'][number];
-  const entry = (e: Entry): Entry => ({
-    ...e,
-    part: normalizePart(e.part ?? (e as unknown as EditingPart)),
-  });
-  return {
-    undo: (history?.undo ?? []).map(entry),
-    redo: (history?.redo ?? []).map(entry),
-  };
+  const entry = (e: Entry): Entry => ({ ...e, part: normalizePart(e.part) });
+  const byPart: Record<string, HistorySnapshot> = {};
+  for (const [id, stacks] of Object.entries(history?.byPart ?? {})) {
+    byPart[id] = {
+      undo: (stacks?.undo ?? []).map(entry),
+      redo: (stacks?.redo ?? []).map(entry),
+    };
+  }
+  return byPart;
 }
 
 /**
@@ -239,14 +281,21 @@ function normalizeHistory(history: ProjectHistoryRecord | undefined): HistorySna
  * clamped to a layer that exists in the loaded document; selection is cleared (a fresh
  * slate, like a normal page load). History is REPLACED wholesale (design §1.8).
  */
-function applyProjectSnapshot(snap: ProjectSnapshotV2, history?: ProjectHistoryRecord): void {
+function applyProjectSnapshot(snap: ProjectSnapshot, history?: ProjectHistoryRecord): void {
+  // The registry writes MUST sit inside this window — `$partEntries` and `$activePartId` are
+  // autosave triggers of their own (P1.04(5)).
   suspended = true;
   try {
-    importHistory(normalizeHistory(history));
-    $part.set(snap.part);
-    const activeValid = snap.part.layers.some((l) => l.id === snap.activeLayerId);
-    $activeLayerId.set(activeValid ? snap.activeLayerId : DEFAULT_LAYER_ID);
-    $layerView.set(snap.layerView ?? {});
+    const active = snap.parts.find((p) => p.id === snap.activePartId) ?? snap.parts[0];
+    hydrateParts(snap.parts, active.id);
+    // The active part's stacks go into the live editor; every other part's stay parked.
+    const { [active.id]: activeHistory, ...parked } = normalizeHistory(history);
+    parkHistories(parked);
+    importHistory(activeHistory ?? { undo: [], redo: [] });
+    $part.set(active.part);
+    const activeValid = active.part.layers.some((l) => l.id === active.activeLayerId);
+    $activeLayerId.set(activeValid ? active.activeLayerId : DEFAULT_LAYER_ID);
+    $layerView.set(active.layerView ?? {});
     $measurements.set(snap.measurements ?? []);
     $containers.set(snap.containers ?? []);
     clearSelection();
@@ -280,7 +329,7 @@ function byteLength(value: unknown): number {
 /** The meta row for the current workspace, carrying over the immutable fields of `previous`. */
 function buildMeta(
   id: ProjectId,
-  snap: ProjectSnapshotV2,
+  snap: ProjectSnapshot,
   previous: ProjectMeta | undefined,
   historyBytes: number,
 ): ProjectMeta {
@@ -288,11 +337,11 @@ function buildMeta(
     id,
     name: $projectName.get(),
     description: previous?.description ?? '',
-    partId: snap.part.partId ?? '',
+    parts: snap.parts.map((p) => ({ id: p.id, name: p.name, partId: p.part.partId })),
     createdAt: previous?.createdAt ?? snap.savedAt,
     savedAt: snap.savedAt,
     schemaVersion: PROJECT_SCHEMA_VERSION,
-    counts: deriveCounts(snap.part),
+    counts: sumCounts(snap.parts.map((p) => p.part)),
     bytes: {
       snapshot: byteLength(snap),
       history: historyBytes,
@@ -318,7 +367,11 @@ async function writeSnapshotAndMeta(): Promise<void> {
 async function writeHistory(): Promise<void> {
   const id = $currentProjectId.get();
   if (!id || !canWriteProject()) return;
-  const history = exportHistory();
+  // Every part's stacks in one record: the parked ones as they were left, the active one
+  // exported live. The byte accounting measures the whole record — no per-part split.
+  const history: ProjectHistoryRecord = {
+    byPart: { ...inactiveHistoriesRecord(), [$activePartId.get()]: exportHistory() },
+  };
   lastHistoryBytes = byteLength(history);
   await putHistory(id, history);
 }
@@ -367,12 +420,15 @@ async function runWrite(write: () => Promise<void>): Promise<void> {
 // ── autosave ─────────────────────────────────────────────────────────────────
 //
 // A debounced write fires whenever any store that contributes to a project changes.
-// `$part`, `$canUndo` and `$canRedo` together cover every document + history change
-// (pushUndo/undo/redo all touch the flags and/or `$part`); `$activeLayerId`, `$layerView`
-// and `$projectName` cover the rest. The debounce collapses a gizmo drag (many per-frame
-// `$part` writes) into a single save. History gets its own, slower timer: it is the bulk of
-// the bytes, and a reload inside its window loses at most the last undo ENTRIES, never
-// document state (D4).
+// `$part`, `$canUndo` and `$canRedo` together cover every document + history change of the
+// ACTIVE part (pushUndo/undo/redo all touch the flags and/or `$part`); `$activeLayerId`,
+// `$layerView` and `$projectName` cover the rest. `$partEntries` covers the part REGISTRY —
+// rename / reorder / visibility / opacity / offset / include-in-export / delete-inactive /
+// add-imported all flow through it and would otherwise never persist — and `$activePartId`
+// covers a switch with zero document edits (the new active pointer must still be saved).
+// The debounce collapses a gizmo drag (many per-frame `$part` writes) into a single save.
+// History gets its own, slower timer: it is the bulk of the bytes, and a reload inside its
+// window loses at most the last undo ENTRIES, never document state (D4).
 
 const SAVE_DEBOUNCE_MS = 300;
 const HISTORY_DEBOUNCE_MS = 1500;
@@ -405,6 +461,8 @@ export function startAutosave(): void {
   $part.subscribe(scheduleSave);
   $canUndo.subscribe(scheduleSave);
   $canRedo.subscribe(scheduleSave);
+  $partEntries.subscribe(scheduleSave);
+  $activePartId.subscribe(scheduleSave);
   $activeLayerId.subscribe(scheduleSave);
   $layerView.subscribe(scheduleSave);
   $projectName.subscribe(scheduleSave);
@@ -564,9 +622,15 @@ async function purgeIncompatibleProjects(): Promise<ProjectMeta[]> {
     if (ok) {
       try {
         const snap = await getSnapshot(row.id);
-        // A snapshot must at least carry a document with layers — anything less would crash
-        // applyProjectSnapshot, and a project that crashes boot is worse than one that is gone.
-        ok = !!snap && !!snap.part && Array.isArray(snap.part.layers);
+        // A snapshot must carry at least one part, each with a document with layers, and name
+        // an active one — anything less would crash applyProjectSnapshot, and a project that
+        // crashes boot is worse than one that is gone.
+        ok =
+          !!snap &&
+          Array.isArray(snap.parts) &&
+          snap.parts.length >= 1 &&
+          snap.parts.every((p) => p?.part && Array.isArray(p.part.layers)) &&
+          typeof snap.activePartId === 'string';
       } catch {
         ok = false;
       }
@@ -633,6 +697,7 @@ export async function hydrateProjectOnBoot(): Promise<void> {
     });
     $autosaveHealth.set('failing');
     newPart();
+    initPartsForNewProject();
     startAutosave();
     return;
   }
@@ -676,6 +741,7 @@ export async function createProject(name?: string): Promise<ProjectId> {
   suspended = true;
   try {
     newPart();
+    initPartsForNewProject();
     importHistory({ undo: [], redo: [] });
     $layerView.set({});
     $measurements.set([]);
@@ -809,6 +875,25 @@ export async function loadProjectAsNew(
   if (opts.adoptAssets) await opts.adoptAssets(id);
   suspended = true;
   try {
+    // P2 (MULTI_PART_PLAN) replaces this with the multi-part envelope — the wire format is
+    // still single-part, so the incoming document lands as the project's one part entry.
+    const entryId = newPartEntryId();
+    hydrateParts(
+      [
+        {
+          id: entryId,
+          name: 'Part 1',
+          visible: true,
+          opacity: 1,
+          offset: { x: 0, y: 0, z: 0 },
+          includeInExport: true,
+          part,
+          layerView: {},
+          activeLayerId: DEFAULT_LAYER_ID,
+        },
+      ],
+      entryId,
+    );
     importHistory({ undo: [], redo: [] });
     $part.set(part);
     $activeLayerId.set(DEFAULT_LAYER_ID);

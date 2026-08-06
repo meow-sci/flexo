@@ -445,6 +445,106 @@ rules from fighting it: the persisted **Hide interior** toggle (`$hideInterior`)
 seat-view marker suppression *compose* with the layer state (an entity draws iff its layer is
 visible AND nothing else hides it) instead of overwriting it.
 
+## Ghost parts (the project's other Parts)
+
+A project can hold several **Parts**, but exactly one is being edited: `partsStore` keeps that
+one live in `$part` and parks each of the others as an `InactivePartDoc`. The parked ones still
+draw — `GhostPartsLayer` renders each as a **ghost**, so a booster can be built against the
+stage it flies under. Do not confuse it with the [chain preview ghosts](#chain-preview-ghosts):
+those *clone* active objects and swap in an unlit translucent singleton, while a ghost part
+builds its own objects and keeps their real materials. Design: `plans/MULTI_PART_PLAN.md`
+Phase 5.
+
+Every editor visual hangs off `viewport.scene`, and only one of its children is the Part:
+
+```
+viewport.scene
+├─ HemisphereLight + DirectionalLight            Viewport.ts
+├─ flexo-grid                                    Grid.ts
+├─ flexo-part          = EditorScene.root        the ACTIVE part — placements, connectors,
+│                                                colliders, IVA seats, lights, kittens,
+│                                                joint-markers, and the gizmo proxies
+│                                                (bulk-pivot / pose-proxy /
+│                                                engine-exhaust-proxy)
+├─ ghost-parts         = GhostPartsLayer         one `ghost-part:<partEntryId>` group per
+│                                                INACTIVE part
+└─ measurements · containers · chain-preview · motion-trails · pose-gizmo · the
+   TransformControls helpers                     editor aids, never the Part
+```
+
+That `ghost-parts` is a **sibling** of `root` rather than a child is the whole enforcement
+mechanism for the exclusions below.
+
+### The ghost contract
+
+- A ghost renders an inactive part's **subpart placements** (built-in and custom meshes) and its
+  **kittens**, with real geometry and real materials. It deliberately EXCLUDES editor furniture:
+  connectors, colliders, IVA seats, light markers, joint markers and aids belong to the part you
+  are authoring, not to a scale reference.
+- It respects that part's **own** stored `layerView` — a layer hidden there stays hidden, and
+  that layer's opacity multiplies into the part's — and ignores the global **Hide interior** and
+  **Display Filters** toggles, which are the active part's view state. The rules are the pure,
+  three-free `ghostPlan.ts` (`planGhostItems`), so "what shows up in a ghost" is unit-testable
+  without a WebGL context; a hidden layer's entities are never built at all rather than built
+  and hidden.
+- Ghosts are never pickable, never selectable, never framed and never thumbnailed (I5, below).
+- Per-part controls, all `PartMetaEntry` view state and never undoable (I6): `visible` (the whole
+  `ghost-part:<id>` group), `opacity` (multiplied into every material through the same
+  `layerOpacity.ts` primitives the layer fade uses — so a faded ghost inherits exactly the layer
+  fade's sorting caveats and nothing worse), and `offset` (the group's position). The offset is
+  ghost-only: the ACTIVE part always sits at the origin, and the offset is never exported.
+- `EditorScene` drives it with two `sub()` subscriptions: `$inactiveRevision` → `refresh()`,
+  which rebuilds only the parts whose parked document identity changed (`parkActive()` mints a
+  fresh `InactivePartDoc` per park, so `===` is the whole diff), and `$partEntries` →
+  `applyView()`, which moves visibility/opacity/offset in place and allocates nothing. Editing
+  the active part therefore never rebuilds a ghost. Nothing here runs per frame and async builds
+  end in `viewport.invalidate()`, so on-demand rendering (I9) holds.
+
+### Why a ghost can never be picked, framed or captured (I5)
+
+| Surface | Why ghosts are out |
+|---|---|
+| Click-select | `SelectionManager` raycasts `this.root.children` |
+| Every other pick — `pickWorldPoint` (measure), `pickSurfacePoint`, `hitsSelectable` (the ⇧-drag test) | root-scoped raycasts too; `JointMarkerLayer` and `PoseGizmo` raycast only their own nodes, so no editor raycast is scene-wide |
+| Marquee | `EditorScene.marqueeBoxes` projects the ACTIVE entity maps, not the scene |
+| Frame Selection's frame-all fallback | `allEntityGroups()` walks those same maps |
+| Project thumbnail | `captureThumbnail` hides every non-light scene sibling of `root`, so the picture stays the part you are editing however many ghosts share the workspace |
+
+Belt and braces on top: `ghostify()` gives every node of a ghost subtree a shared no-op
+`raycast` and deletes its `userData.selectable`. Dropping the tag matters most — ids are
+per-part namespaces (I3), so a ghost's `_light1` is a *different* light from the active part's,
+and a stray hit must never resolve into the live selection.
+
+### Two non-obvious rules in the layer
+
+- **Builds are token-guarded per part.** Geometry loads asynchronously, so a fast part switch (or
+  a delete) can land a build for a part that is no longer a ghost. `buildPart` bumps a per-part
+  token on every start AND every `disposeBuild`, then re-checks it — together with "is this part
+  still inactive" and the layer's own `disposed` flag — before mounting anything; a superseded
+  build disposes what it built and mounts nothing. Without it, a switch spree leaks a whole
+  part's meshes per switch, and a build in flight at teardown would repopulate the map with
+  nothing left to free it.
+- **The catalog arriving rebuilds ghosts.** The Core catalog loads *after* `EditorScene` is
+  constructed and `$inactiveRevision` does not bump when it lands, so a ghost built at boot would
+  resolve no built-in template and render EMPTY forever after a page reload. The `$catalogIndex`
+  subscription therefore also calls `onCatalogChanged()`, which rebuilds only the builds flagged
+  `missingTemplate` — the index is replaced on every custom-mesh edit and every part switch too,
+  where a complete ghost has nothing to gain. `buildPart` re-checks the index identity after its
+  awaits for the same race in miniature (the catalog landing mid-build).
+
+### Disposal — materials always, geometry only when owned
+
+A ghost item frees its **materials unconditionally**: they are created fresh per build, exactly
+like `SubPartObject`'s per-instance material clones. Geometry is freed **only when the ghost owns
+it** — `buildMeshRenderData` returns a `geometryOwned` flag that is true only for a custom
+PRIMITIVE (rebuilt from its params on every call) and false for imported and part-ified-kitten
+geometry, which come from the process-wide `MeshAtlasCache` / kitten-bake caches that the ACTIVE
+part renders from as well; disposing one of those here would blank the live scene. A ghost kitten
+goes through `KittenObject` and frees exactly what that class owns (its per-instance bake),
+unchanged from the active path. The corollary is the cost model: one mesh + one material clone
+per ghost placement, and a ghost of a template this session has already seen uploads no new
+geometry or textures.
+
 ## Coordinate & transform mapping
 
 All XML/store ↔ three.js transform conversion is isolated in `coords.ts`. See

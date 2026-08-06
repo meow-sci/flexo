@@ -237,6 +237,252 @@ describe('buildProjectExport', () => {
   });
 });
 
+/**
+ * **The v11 multi-part envelope** (`plans/MULTI_PART_PLAN.md` P2.01). A transfer is the WHOLE
+ * project, not one part, and every rule this module already enforced now has to hold PER ENTRY:
+ * the deep copy, the unbacked-asset drop, the faithful reconstruction. The failure mode a
+ * one-part fixture cannot see is cross-talk — one part's edit, or one part's missing bytes,
+ * reaching another.
+ */
+describe('multi-part envelopes', () => {
+  /** A second source with its own ids, layers and GameData — nothing shared with `sourcePart`. */
+  function boosterPart(): EditingPart {
+    const p = createEmptyPart();
+    p.partId = 'booster_part';
+    p.layers.push({ id: 'layer9', name: 'Nozzles' });
+    p.placements.push({
+      instanceId: 'nozzle_1',
+      subPartTemplateId: 'Core.NozzleA',
+      layerId: 'layer9',
+      ...t(0),
+    });
+    p.connectors.push({
+      id: '_connector7',
+      flags: [],
+      capabilities: [],
+      siblingIds: [],
+      layerId: 'layer9',
+      ...t(0),
+    });
+    p.gameData.displayName = 'Booster';
+    p.gameData.customMass = 42;
+    return p;
+  }
+
+  /** Part 1 at every default; Part 2 hidden, dimmed, offset and excluded from export. */
+  function twoEnv(a: EditingPart, b: EditingPart, opts?: ProjectExportOptions) {
+    return buildProjectExport(
+      [
+        {
+          name: 'Core',
+          visible: true,
+          opacity: 1,
+          offset: { x: 0, y: 0, z: 0 },
+          includeInExport: true,
+          part: a,
+        },
+        {
+          name: 'Booster',
+          visible: false,
+          opacity: 0.35,
+          offset: { x: 1.5, y: -2, z: 0.25 },
+          includeInExport: false,
+          part: b,
+        },
+      ],
+      'Fleet',
+      opts,
+    );
+  }
+
+  it('buildProjectExport deep-copies EACH entry (a later source edit never reaches it)', () => {
+    const a = sourcePart();
+    const b = boosterPart();
+    const offset = { x: 1.5, y: -2, z: 0.25 };
+    const env = buildProjectExport(
+      [
+        {
+          name: 'Core',
+          visible: true,
+          opacity: 1,
+          offset: { x: 0, y: 0, z: 0 },
+          includeInExport: true,
+          part: a,
+        },
+        { name: 'Booster', visible: false, opacity: 0.35, offset, includeInExport: false, part: b },
+      ],
+      'Fleet',
+    );
+    const snapshot = structuredClone(env);
+
+    // Mutate both sources afterwards, at every depth an entry carries — top-level arrays,
+    // nested objects inside them, and the registry meta the entry copies by value.
+    a.placements.push({
+      instanceId: 'ghost_1',
+      subPartTemplateId: 'Core.Ghost',
+      layerId: DEFAULT_LAYER_ID,
+      ...t(9),
+    });
+    a.gameData.displayName = 'MUTATED';
+    a.gameData.batteries[0].capacityWh = 999;
+    a.animations[0].joints[0].memberInstanceIds.push('ghost_1');
+    a.layers.push({ id: 'layer3', name: 'Late' });
+    b.connectors[0].flags.push('Internal');
+    b.gameData.customMass = 0;
+    offset.x = 99;
+
+    expect(env).toEqual(snapshot);
+    // …and the entries share no structure with the sources or with each other.
+    expect(env.parts[0].data.gameData).not.toBe(a.gameData);
+    expect(env.parts[0].data.placements).not.toBe(a.placements);
+    expect(env.parts[1].data.connectors).not.toBe(b.connectors);
+    expect(env.parts[1].offset).not.toBe(offset);
+    expect(env.parts[0].data.layers).not.toBe(env.parts[1].data.layers);
+  });
+
+  /** An imported mesh + its placement + a texture and a material mapping it — all `suffix`ed. */
+  function binaryPart(suffix: string): EditingPart {
+    const p = createEmptyPart();
+    p.customTextures.push({
+      id: `tex_${suffix}`,
+      name: `T${suffix}`,
+      width: 4,
+      height: 4,
+      channel: 'baseColor',
+    });
+    p.customMaterials.push({
+      id: `mat_${suffix}`,
+      name: `M${suffix}`,
+      baseColor: { kind: 'map', textureId: `tex_${suffix}` },
+      metalness: { kind: 'value', value: 0 },
+      roughness: { kind: 'value', value: 0.5 },
+    });
+    p.customMeshes.push({
+      id: `mesh_${suffix}`,
+      name: `Pod ${suffix}`,
+      subPartId: `flexo_Pod_${suffix}`,
+      imported: {
+        importId: `imp_${suffix}`,
+        meshName: `flexo_Pod_${suffix}`,
+        sourceFile: 'pods.glb',
+        sourceNode: 'Pod',
+        sourceMaterial: 'Metal',
+        triangles: 128,
+        vertices: 66,
+      },
+      materialId: `mat_${suffix}`,
+      faceTextures: {},
+    });
+    p.placements.push({
+      instanceId: `pod_1`,
+      subPartTemplateId: `flexo_Pod_${suffix}`,
+      layerId: DEFAULT_LAYER_ID,
+      ...t(0),
+    });
+    return p;
+  }
+
+  it('drops unbacked assets PER ENTRY — one part losing its bytes never strips the other', () => {
+    const json = serializeProjectJson(
+      twoEnv(binaryPart('a'), binaryPart('b'), { includeBinaryBacked: true }),
+    );
+    /** What survives each entry when the container backs only `suffix`'s bytes. */
+    const parseBacking = (suffix: string) => {
+      const parsed = parseProjectImport(json, {
+        binaryAssets: [
+          { kind: 'import-glb', id: `imp_${suffix}` },
+          { kind: 'tex-src', id: `tex_${suffix}` },
+        ],
+      });
+      if (!parsed.ok) throw new Error(parsed.error);
+      return parsed.env.parts.map((entry) => ({
+        meshes: entry.data.customMeshes.map((m) => m.id),
+        textures: entry.data.customTextures.map((x) => x.id),
+        templates: entry.data.placements.map((p) => p.subPartTemplateId),
+        baseColor: entry.data.customMaterials[0].baseColor,
+      }));
+    };
+
+    // Backing only part A: A comes through whole (mesh, texture, placement, mapped material)…
+    const backedA = parseBacking('a');
+    expect(backedA[0]).toEqual({
+      meshes: ['mesh_a'],
+      textures: ['tex_a'],
+      templates: ['flexo_Pod_a'],
+      baseColor: { kind: 'map', textureId: 'tex_a' },
+    });
+    // …while B loses its descriptor, the placement that named its template, and its texture —
+    // and its material's dead channel is RESET, not left dangling.
+    expect(backedA[1].meshes).toEqual([]);
+    expect(backedA[1].textures).toEqual([]);
+    expect(backedA[1].templates).toEqual([]);
+    expect(backedA[1].baseColor.kind).toBe('color');
+
+    // Exactly mirrored when the table backs the OTHER part — the rule is per entry, not
+    // positional, so nothing here depends on which one comes first.
+    const backedB = parseBacking('b');
+    expect(backedB[1]).toEqual({
+      meshes: ['mesh_b'],
+      textures: ['tex_b'],
+      templates: ['flexo_Pod_b'],
+      baseColor: { kind: 'map', textureId: 'tex_b' },
+    });
+    expect(backedB[0].meshes).toEqual([]);
+    expect(backedB[0].templates).toEqual([]);
+  });
+
+  it('envelopeToParts rebuilds every part in order, with its view fields', () => {
+    const parts = envelopeToParts(twoEnv(sourcePart(), boosterPart()));
+    expect(parts.map((p) => p.name)).toEqual(['Core', 'Booster']);
+    expect(parts.map((p) => p.visible)).toEqual([true, false]);
+    expect(parts.map((p) => p.opacity)).toEqual([1, 0.35]);
+    expect(parts.map((p) => p.offset)).toEqual([
+      { x: 0, y: 0, z: 0 },
+      { x: 1.5, y: -2, z: 0.25 },
+    ]);
+    expect(parts.map((p) => p.includeInExport)).toEqual([true, false]);
+
+    // Each document is its own, ids verbatim (no remapping on this path) and never crossed.
+    expect(parts.map((p) => p.part.partId)).toEqual(['source_part', 'booster_part']);
+    expect(parts[0].part.placements.map((p) => p.instanceId)).toEqual([
+      'trussbara_1',
+      'trussbara_2',
+      'wing_1',
+    ]);
+    expect(parts[1].part.placements.map((p) => p.instanceId)).toEqual(['nozzle_1']);
+    expect(parts[1].part.connectors.map((c) => c.id)).toEqual(['_connector7']);
+    expect(parts[1].part.gameData.displayName).toBe('Booster');
+    // Part 1's layers stay Part 1's — layer ids are per-part namespaces (I3).
+    expect(parts[1].part.layers.map((l) => l.id)).toContain('layer9');
+    expect(parts[0].part.layers.map((l) => l.id)).not.toContain('layer9');
+  });
+
+  it('hasCustomAssets flags the project when ANY part carries a binary-backed asset', () => {
+    const withTexture = createEmptyPart();
+    withTexture.customTextures.push({
+      id: 'tex_1',
+      name: 'T',
+      width: 1,
+      height: 1,
+      channel: 'baseColor',
+    });
+    const withPrimitive = createEmptyPart();
+    withPrimitive.customMeshes.push(primitiveMesh());
+    const withImported = createEmptyPart();
+    withImported.customMeshes.push(importedMesh());
+    const withKitten = createEmptyPart();
+    withKitten.customMeshes.push(kittenMesh());
+    const clean = () => ({ part: createEmptyPart() });
+
+    expect(hasCustomAssets([])).toBe(false);
+    expect(hasCustomAssets([clean(), { part: withKitten }, clean()])).toBe(false);
+    // Any position counts — first, last or in the middle of the registry.
+    expect(hasCustomAssets([{ part: withPrimitive }, clean()])).toBe(true);
+    expect(hasCustomAssets([clean(), { part: withTexture }])).toBe(true);
+    expect(hasCustomAssets([clean(), { part: withImported }, clean()])).toBe(true);
+  });
+});
+
 describe('mergeProjectImport with custom materials', () => {
   it('adds materials not already present by id (re-pasting never duplicates)', () => {
     const src = sourcePart();

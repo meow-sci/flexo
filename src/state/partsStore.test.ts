@@ -15,6 +15,7 @@ import {
   $partEntries,
   createPart,
   deletePart,
+  duplicatePart,
   getInactiveDoc,
   inactiveHistoriesRecord,
   initPartsForNewProject,
@@ -37,12 +38,19 @@ import {
   $selection,
   addSubPart,
   createLayer,
+  exportHistory,
   newPart,
+  setPartId,
   undo,
 } from './editorStore';
 import { $chainSession, closeChain, openChain } from './chainStore';
 import { $layerView, setLayerOpacity } from './layerStore';
-import { createEmptyPart, DEFAULT_LAYER_ID } from '../ksa/types';
+import {
+  createEmptyPart,
+  DEFAULT_LAYER_ID,
+  DEFAULT_PART_ID,
+  identityTransform,
+} from '../ksa/types';
 import type { EditingPart } from '../ksa/types';
 
 /** The meta entry for `id` — every registry assertion below reads through it. */
@@ -287,6 +295,155 @@ describe('partsStore — deletePart', () => {
     expect(entryOf(revived).name).toBe('Part 2');
     expect($part.get().placements).toEqual([]);
     expect($canUndo.get()).toBe(false);
+  });
+});
+
+/**
+ * `duplicatePart` (P2.05). The registry half is what these pin: where the copy lands, what it
+ * is called, where the user ends up, and that the copy starts with an empty undo stack. The
+ * custom-asset half — five re-minted id families and their blob copies — is
+ * `clonePartWithFreshAssets`'s own suite (`partClone.test.ts`); the one case here proves this
+ * action really routes through it, using a KITTEN mesh so no binary is ever read.
+ */
+describe('partsStore — duplicatePart', () => {
+  it('lands the copy right after its source, switches to it, and starts it clean', async () => {
+    const a = $activePartId.get();
+    const b = createPart();
+    expect(switchPart(a)).toBe(true);
+
+    const engines = createLayer('Engines');
+    addSubPart('Core.A');
+    setLayerOpacity(engines, 0.4);
+    const sourceDoc = structuredClone($part.get());
+    const sourceView = $layerView.get();
+    const sourceUndo = exportHistory().undo.length;
+    expect(sourceUndo).toBeGreaterThan(0);
+
+    const copy = await duplicatePart(a);
+    expect(copy).not.toBeNull();
+
+    // Right AFTER the source, not appended at the end — B is still last.
+    expect($partEntries.get().map((e) => e.id)).toEqual([a, copy, b]);
+    // You land in the copy, holding an identical but independent document…
+    expect($activePartId.get()).toBe(copy);
+    expect($part.get()).toEqual(sourceDoc);
+    expect($part.get()).not.toBe(getInactiveDoc(a)!.part);
+    expect(entryOf(copy!).counts.subParts).toBe(1);
+    // …its own copy of the per-part layer view, and its active layer…
+    expect($layerView.get()).toEqual(sourceView);
+    expect($layerView.get()).not.toBe(sourceView);
+    expect($activeLayerId.get()).toBe(engines);
+    // …and an EMPTY undo stack: a copy has nothing to take back.
+    expect($canUndo.get()).toBe(false);
+    expect(undoDepth()).toBe(0);
+    // The source keeps its document and its own history untouched (I6 — never an undo step).
+    expect(getInactiveDoc(a)!.part).toEqual(sourceDoc);
+    expect(inactiveHistoriesRecord()[a].undo).toHaveLength(sourceUndo);
+    // The view flags are inherited from the source entry, not reset to the defaults.
+    setPartOpacity(a, 0.5);
+    setPartVisible(a, false);
+    setPartIncludeInExport(a, false);
+    const inherited = await duplicatePart(a);
+    expect(entryOf(inherited!)).toMatchObject({
+      opacity: 0.5,
+      visible: false,
+      includeInExport: false,
+    });
+  });
+
+  it('names the copy "<source> copy", then dedupes with " 2"', async () => {
+    const a = $activePartId.get();
+    expect(renamePart(a, 'Booster')).toBe('Booster');
+
+    const first = await duplicatePart(a);
+    expect(entryOf(first!).name).toBe('Booster copy');
+    const second = await duplicatePart(a);
+    expect(entryOf(second!).name).toBe('Booster copy 2');
+    expect($partEntries.get().map((e) => e.name)).toEqual([
+      'Booster',
+      'Booster copy 2',
+      'Booster copy',
+    ]);
+  });
+
+  it('suffixes the KSA Part Id ONLY when it is not the placeholder', async () => {
+    const a = $activePartId.get();
+    expect($part.get().partId).toBe(DEFAULT_PART_ID);
+
+    // The placeholder is the "unset" value the user is expected to replace — leave it alone.
+    await duplicatePart(a);
+    expect($part.get().partId).toBe(DEFAULT_PART_ID);
+    expect(getInactiveDoc(a)!.part.partId).toBe(DEFAULT_PART_ID);
+
+    // A real Part Id gets `_copy`: two parts sharing one is a P3 export-preflight blocker.
+    setPartId('booster');
+    const suffixed = await duplicatePart($activePartId.get());
+    expect($part.get().partId).toBe('booster_copy');
+    expect(getInactiveDoc(suffixed!)).toBeNull(); // the copy IS the active part now
+  });
+
+  it('duplicates an INACTIVE part from its parked document', async () => {
+    const a = $activePartId.get();
+    addSubPart('Core.A');
+    const b = createPart(); // parks A, active = B
+    addSubPart('Core.B');
+
+    const copy = await duplicatePart(a);
+    expect($partEntries.get().map((e) => e.id)).toEqual([a, copy, b]);
+    expect($activePartId.get()).toBe(copy);
+    // The copy carries A's document, not the one that happened to be live.
+    expect($part.get().placements.map((p) => p.subPartTemplateId)).toEqual(['Core.A']);
+    expect(getInactiveDoc(a)!.part.placements.map((p) => p.subPartTemplateId)).toEqual(['Core.A']);
+    expect(getInactiveDoc(b)!.part.placements.map((p) => p.subPartTemplateId)).toEqual(['Core.B']);
+  });
+
+  it("re-mints the copy's custom-asset ids and repoints its placements (I4)", async () => {
+    const a = $activePartId.get();
+    // A kitten submesh is pure data — it exercises the clone's id re-mint with no binary at all.
+    $part.set({
+      ...$part.get(),
+      customMeshes: [
+        {
+          id: 'mesh_k',
+          name: 'Hunter Suit',
+          subPartId: 'flexo_hunter_suit_src',
+          kitten: {
+            kind: 'hunter',
+            specKey: 'suit',
+            diffuse: 'Textures/Characters/Kitten_EMU_A.ktx2',
+          },
+          faceTextures: {},
+        },
+      ],
+      placements: [
+        {
+          instanceId: 'suit_1',
+          subPartTemplateId: 'flexo_hunter_suit_src',
+          layerId: DEFAULT_LAYER_ID,
+          ...identityTransform(),
+        },
+      ],
+    });
+
+    const copy = await duplicatePart(a);
+    const mesh = $part.get().customMeshes[0];
+    expect(copy).toBe($activePartId.get());
+    expect(mesh.id).not.toBe('mesh_k');
+    expect(mesh.subPartId).not.toBe('flexo_hunter_suit_src');
+    expect($part.get().placements[0].subPartTemplateId).toBe(mesh.subPartId);
+    // The placement instance id is a per-part namespace (I3) and stays exactly as it was.
+    expect($part.get().placements[0].instanceId).toBe('suit_1');
+    // The SOURCE keeps its own ids — a clone copies identity, it never moves it.
+    expect(getInactiveDoc(a)!.part.customMeshes[0].id).toBe('mesh_k');
+    expect(getInactiveDoc(a)!.part.customMeshes[0].subPartId).toBe('flexo_hunter_suit_src');
+  });
+
+  it('returns null for an id that names no entry, changing nothing', async () => {
+    const before = $partEntries.get();
+    const active = $activePartId.get();
+    expect(await duplicatePart('pt_nothing')).toBeNull();
+    expect($partEntries.get()).toBe(before);
+    expect($activePartId.get()).toBe(active);
   });
 });
 

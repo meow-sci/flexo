@@ -634,6 +634,160 @@ describe('projectCodec round-trip', () => {
   });
 });
 
+/**
+ * **The v11 multi-part envelope** (`plans/MULTI_PART_PLAN.md` P2.02). A project holds N parts,
+ * and the whole registry travels: per-part body, display name, KSA Part Id, the export toggle,
+ * the ghost view tuple, and which entry was active. The cases below use TWO structurally
+ * different bodies, because the failure this format can have is a body or a flag landing on
+ * the wrong entry — which a one-part fixture cannot see.
+ */
+describe('multi-part envelopes (v11)', () => {
+  /** A second body with its own ids, layers and GameData — nothing shared with `richPart()`. */
+  function boosterPart(): EditingPart {
+    const p = createEmptyPart();
+    p.partId = 'booster_part';
+    p.editorTags = ['Engines'];
+    p.layers.push({ id: 'layer9', name: 'Nozzles' });
+    p.placements.push({
+      instanceId: 'nozzle_1',
+      subPartTemplateId: 'Core.NozzleA',
+      layerId: 'layer9',
+      ...identityTransform(),
+    });
+    p.connectors.push({
+      id: '_connector7',
+      flags: [],
+      capabilities: [],
+      siblingIds: [],
+      layerId: 'layer9',
+      ...identityTransform(),
+    });
+    p.gameData.displayName = 'Booster';
+    p.gameData.customMass = 42;
+    return p;
+  }
+
+  /** Part 1 at every default; Part 2 hidden, dimmed, offset, excluded — and ACTIVE. */
+  function twoEnv(): ProjectExportEnvelope {
+    return buildProjectExport(
+      [
+        {
+          name: 'Core',
+          visible: true,
+          opacity: 1,
+          offset: { x: 0, y: 0, z: 0 },
+          includeInExport: true,
+          part: richPart(),
+        },
+        {
+          name: 'Booster',
+          visible: false,
+          opacity: 0.35,
+          offset: { x: 1.5, y: -2, z: 0.25 },
+          includeInExport: false,
+          part: boosterPart(),
+        },
+      ],
+      'Two Parts',
+      { activePartIndex: 1 },
+    );
+  }
+
+  it('round-trips both bodies, both sets of view state and the active index', () => {
+    const env = twoEnv();
+    const decoded = decodeProject(encodeProject(env));
+
+    expect(decoded.projectName).toBe('Two Parts');
+    expect(decoded.activePartIndex).toBe(1);
+    expect(decoded.parts).toHaveLength(2);
+    expect(decoded.parts.map((p) => p.name)).toEqual(['Core', 'Booster']);
+    expect(decoded.parts.map((p) => p.sourcePartId)).toEqual(['rich_part', 'booster_part']);
+    expect(decoded.parts.map((p) => p.includeInExport)).toEqual([true, false]);
+    expect(decoded.parts.map((p) => p.visible)).toEqual([true, false]);
+    expect(decoded.parts.map((p) => p.opacity)).toEqual([1, 0.35]);
+    expect(decoded.parts.map((p) => p.offset)).toEqual([
+      { x: 0, y: 0, z: 0 },
+      { x: 1.5, y: -2, z: 0.25 },
+    ]);
+
+    // Each body survives whole, and NEITHER leaked into the other.
+    expect(decoded.parts[0].data).toEqual(env.parts[0].data);
+    expect(decoded.parts[1].data).toEqual(env.parts[1].data);
+    expect(decoded.parts[0].data.placements.map((p) => p.instanceId)).toEqual([
+      'truss_1',
+      'wing_1',
+    ]);
+    expect(decoded.parts[1].data.placements.map((p) => p.instanceId)).toEqual(['nozzle_1']);
+    expect(decoded.parts[1].data.connectors.map((c) => c.id)).toEqual(['_connector7']);
+    expect(decoded.parts[1].data.gameData.displayName).toBe('Booster');
+  });
+
+  it('drops per-part defaults from the wire form and keeps the non-default tuple', () => {
+    const c = encodeProject(twoEnv());
+    expect(c.ap).toBe(1);
+    expect(c.pts).toHaveLength(2);
+    // Part 1 is entirely at its defaults: name + Part Id only, no view tuple, no export flag.
+    expect(c.pts[0].nm).toBe('Core');
+    expect(c.pts[0].pid).toBe('rich_part');
+    expect(c.pts[0]).not.toHaveProperty('ie');
+    expect(c.pts[0]).not.toHaveProperty('vw');
+    // Part 2 carries both, the tuple in [visible, opacity, x, y, z] order.
+    expect(c.pts[1].ie).toBe(0);
+    expect(c.pts[1].vw).toEqual([0, 0.35, 1.5, -2, 0.25]);
+    // A single-part project active on its only part carries no `ap` at all.
+    expect(encodeProject(oneEnv(createEmptyPart()))).not.toHaveProperty('ap');
+  });
+
+  it('decodes missing `vw` / `ie` / `nm` as the defaults', () => {
+    const decoded = decodeProject({
+      f: PROJECT_EXPORT_FORMAT,
+      v: PROJECT_EXPORT_VERSION,
+      pts: [{ pid: 'a' }, { nm: 'Named', vw: [0, 0.5, 3, 0, -1] }],
+    });
+    expect(decoded.parts).toHaveLength(2);
+    // No tokens at all ⇒ visible, opaque, at the origin, included, named by position.
+    expect(decoded.parts[0]).toMatchObject({
+      name: 'Part 1',
+      sourcePartId: 'a',
+      includeInExport: true,
+      visible: true,
+      opacity: 1,
+      offset: { x: 0, y: 0, z: 0 },
+    });
+    expect(decoded.parts[1]).toMatchObject({
+      name: 'Named',
+      sourcePartId: '',
+      includeInExport: true,
+      visible: false,
+      opacity: 0.5,
+      offset: { x: 3, y: 0, z: -1 },
+    });
+    // An absent `ap` means the first part.
+    expect(decoded.activePartIndex).toBe(0);
+  });
+
+  // No migration, ever. A v10 payload carried ONE part's keys at the ROOT and had no `pts`,
+  // so v11 would decode it as a project with nothing in it — the version gate has to stop it
+  // before the codec ever sees the shape.
+  it('rejects a v10-SHAPED payload at the version gate, naming both numbers', () => {
+    const result = parseProjectObject({
+      f: PROJECT_EXPORT_FORMAT,
+      v: 10,
+      n: 'Old Project',
+      pid: 'legacy_part',
+      tg: ['Structural'],
+      l: [{ i: DEFAULT_LAYER_ID, n: 'Default' }],
+      p: [{ i: 'truss_1', t: 'Core.TrussBarA', l: DEFAULT_LAYER_ID }],
+      g: { dn: 'Legacy' },
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toContain('v10;');
+    expect(result.error).toContain(`this flexo reads v${PROJECT_EXPORT_VERSION}`);
+    expect(result.error).toContain('flexo never converts formats');
+  });
+});
+
 describe('collider codec', () => {
   it('round-trips every shape, owner and size, restoring the constant layerId', () => {
     const p = createEmptyPart();

@@ -39,53 +39,82 @@ vi.mock('./projectDb', async (importOriginal) => {
   };
 });
 
+/**
+ * `hydrateCustomAssets` republishes blob URLs and rebuilds three.js geometry — neither exists
+ * under happy-dom. What the import path OWES it is a contract worth pinning, so the stub is a
+ * spy: exactly ONE call per import, made after every new part is already in the registry.
+ * (`projectArchive` reaches it through a dynamic import, so this factory only ever runs inside
+ * a test — long after the module body below has initialized.)
+ */
+const hydrateCustomAssets = vi.fn(async () => {});
+vi.mock('./customAssetStore', () => ({ hydrateCustomAssets }));
+
 const {
   ARCHIVE_VERSION,
   archiveFileName,
   buildProjectArchive,
+  importArchive,
   parseProjectArchive,
   planAssetAdoption,
   sha256Hex,
 } = await import('./projectArchive');
 const { tarUnpack, gunzip, gzip, tarPack } = await import('./tarArchive');
-const { deriveCounts } = await import('./projectDb');
+const { sumCounts } = await import('./projectDb');
+const { $part, newPart } = await import('./editorStore');
+const { $currentProjectId } = await import('./projectIndexStore');
+const { $activePartId, $partEntries, getInactiveDoc, initPartsForNewProject } =
+  await import('./partsStore');
 
 const PROJECT = 'p_test00000001';
-const PART_ENTRY = 'pt_test00001';
 
 function texture(id: string) {
   return { id, name: id, width: 4, height: 4, channel: 'baseColor' as const };
 }
 
+/** One part as the stored snapshot holds it: registry meta, document, per-part view state. */
+interface SeedPart {
+  part: EditingPart;
+  name?: string;
+  visible?: boolean;
+  opacity?: number;
+  offset?: { x: number; y: number; z: number };
+  includeInExport?: boolean;
+}
+
+/** The single-part project most cases here need. */
 function seedProject(part: EditingPart): void {
+  seedParts([{ part }]);
+}
+
+/** Seeds the stored records for an N-part project, `activeIndex` flagged as the active one. */
+function seedParts(entries: SeedPart[], activeIndex = 0): void {
+  const parts = entries.map((entry, i) => ({
+    id: `pt_test0000${i + 1}`,
+    name: entry.name ?? `Part ${i + 1}`,
+    visible: entry.visible ?? true,
+    opacity: entry.opacity ?? 1,
+    offset: entry.offset ?? { x: 0, y: 0, z: 0 },
+    includeInExport: entry.includeInExport ?? true,
+    part: entry.part,
+    layerView: {},
+    activeLayerId: 'default',
+  }));
   metas.set(PROJECT, {
     id: PROJECT,
     name: 'Rover-7',
     description: 'crew rover',
-    parts: [{ id: PART_ENTRY, name: 'Part 1', partId: part.partId }],
+    parts: parts.map((p) => ({ id: p.id, name: p.name, partId: p.part.partId })),
     createdAt: 1,
     savedAt: 2,
     schemaVersion: 4,
-    counts: deriveCounts(part),
+    counts: sumCounts(parts.map((p) => p.part)),
     bytes: { snapshot: 0, history: 0, assets: 0 },
     hasThumb: false,
   });
   snapshots.set(PROJECT, {
     version: 4,
-    parts: [
-      {
-        id: PART_ENTRY,
-        name: 'Part 1',
-        visible: true,
-        opacity: 1,
-        offset: { x: 0, y: 0, z: 0 },
-        includeInExport: true,
-        part,
-        layerView: {},
-        activeLayerId: 'default',
-      },
-    ],
-    activePartId: PART_ENTRY,
+    parts,
+    activePartId: parts[activeIndex].id,
     savedAt: 2,
   });
 }
@@ -176,6 +205,272 @@ describe('buildProjectArchive → parseProjectArchive', () => {
     thumbs.set(PROJECT, new Blob([new Uint8Array([7, 7])], { type: 'image/webp' }));
     const parsed = await parseProjectArchive(await buildProjectArchive(PROJECT));
     expect(parsed.ok && parsed.thumbnail?.size).toBe(2);
+  });
+});
+
+/**
+ * **Multi-part archives** (`plans/MULTI_PART_PLAN.md` P2.06). One container, N parts: the
+ * envelope carries every one, the manifest lists them for the import preview and sums their
+ * counts, and the three import modes decide where they land.
+ */
+describe('multi-part archives', () => {
+  /** A part with a texture, a material mapping it, one mesh and one placement — all `s`-keyed. */
+  function binaryPart(s: string, kind: 'primitive' | 'imported'): EditingPart {
+    const p = createEmptyPart();
+    p.partId = `part_${s}`;
+    p.customTextures.push(texture(`tex_${s}`));
+    p.customMaterials.push({
+      id: `mat_${s}`,
+      name: `M${s}`,
+      baseColor: { kind: 'map', textureId: `tex_${s}` },
+      metalness: { kind: 'value', value: 0 },
+      roughness: { kind: 'value', value: 0.5 },
+    });
+    p.customMeshes.push({
+      id: `mesh_${s}`,
+      name: `Pod ${s}`,
+      subPartId: `flexo_Pod_${s}`,
+      ...(kind === 'primitive'
+        ? { primitive: { kind: 'box' as const, params: { width: 1, height: 1, depth: 1 } } }
+        : {
+            imported: {
+              importId: `imp_${s}`,
+              meshName: `flexo_Pod_${s}`,
+              sourceFile: 'pods.glb',
+              sourceNode: 'Pod',
+              sourceMaterial: 'Metal',
+              triangles: 128,
+              vertices: 66,
+            },
+          }),
+      materialId: `mat_${s}`,
+      faceTextures: {
+        right: { textureId: `tex_${s}`, uvScale: { x: 1, y: 1 }, uvOffset: { x: 0, y: 0 } },
+      },
+    });
+    p.placements.push({
+      instanceId: 'pod_1',
+      subPartTemplateId: `flexo_Pod_${s}`,
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+      layerId: 'default',
+    });
+    return p;
+  }
+
+  const BYTES = {
+    tex_a: new Uint8Array([1, 1, 1]),
+    mesh_a: new Uint8Array([2, 2]),
+    tex_b: new Uint8Array([3, 3, 3, 3]),
+    imp_b: new Uint8Array([4]),
+  };
+
+  /** Part 1 ("Core", primitive) at every default; Part 2 ("Booster", imported) at none. */
+  function seedTwoParts(): { core: EditingPart; booster: EditingPart } {
+    const core = binaryPart('a', 'primitive');
+    const booster = binaryPart('b', 'imported');
+    seedParts(
+      [
+        { part: core, name: 'Core' },
+        {
+          part: booster,
+          name: 'Booster',
+          visible: false,
+          opacity: 0.4,
+          offset: { x: 1, y: -2, z: 0.5 },
+          includeInExport: false,
+        },
+      ],
+      1,
+    );
+    put('tex-src', 'tex_a', BYTES.tex_a, 'image/png');
+    put('mesh-glb', 'mesh_a', BYTES.mesh_a, 'model/gltf-binary');
+    put('tex-src', 'tex_b', BYTES.tex_b, 'image/png');
+    put('import-glb', 'imp_b', BYTES.imp_b, 'model/gltf-binary');
+    return { core, booster };
+  }
+
+  async function parseTwoPartArchive() {
+    const parsed = await parseProjectArchive(await buildProjectArchive(PROJECT));
+    if (!parsed.ok) throw new Error(parsed.error);
+    return parsed;
+  }
+
+  it('round-trips every part, every blob, the manifest part list and the summed counts', async () => {
+    const { core, booster } = seedTwoParts();
+    const parsed = await parseTwoPartArchive();
+
+    // The manifest's part list is the import preview's whole source of truth for them…
+    expect(parsed.manifest.parts).toEqual([
+      { name: 'Core', partId: 'part_a' },
+      { name: 'Booster', partId: 'part_b' },
+    ]);
+    // …and its counts are PROJECT-wide totals, not one part's tally.
+    expect(parsed.manifest.counts).toEqual(sumCounts([core, booster]));
+    expect(parsed.manifest.counts.subParts).toBe(2);
+    expect(parsed.manifest.counts.customTextures).toBe(2);
+    expect(parsed.manifest.counts.customMeshes).toBe(2);
+
+    // Every blob of every part rides along, bytes intact.
+    expect(parsed.assets.map((a) => `${a.kind}/${a.id}`).sort()).toEqual([
+      'import-glb/imp_b',
+      'mesh-glb/mesh_a',
+      'tex-src/tex_a',
+      'tex-src/tex_b',
+    ]);
+    for (const asset of parsed.assets) {
+      expect(asset.bytes).toEqual(BYTES[asset.id as keyof typeof BYTES]);
+    }
+
+    // Both parts, in registry order, with the active index and each one's view state.
+    const entries = parsed.envelope.parts;
+    expect(entries.map((e) => e.name)).toEqual(['Core', 'Booster']);
+    expect(entries.map((e) => e.sourcePartId)).toEqual(['part_a', 'part_b']);
+    expect(parsed.envelope.activePartIndex).toBe(1);
+    expect(entries[0]).toMatchObject({
+      visible: true,
+      opacity: 1,
+      offset: { x: 0, y: 0, z: 0 },
+      includeInExport: true,
+    });
+    expect(entries[1]).toMatchObject({
+      visible: false,
+      opacity: 0.4,
+      offset: { x: 1, y: -2, z: 0.5 },
+      includeInExport: false,
+    });
+    // Each part's binary-backed descriptors survive BECAUSE the container carries their bytes,
+    // and neither part's content crossed into the other.
+    expect(entries[0].data.customMeshes.map((m) => m.id)).toEqual(['mesh_a']);
+    expect(entries[1].data.customMeshes.map((m) => m.id)).toEqual(['mesh_b']);
+    expect(entries[0].data.customTextures.map((t) => t.id)).toEqual(['tex_a']);
+    expect(entries[1].data.customTextures.map((t) => t.id)).toEqual(['tex_b']);
+    expect(entries[0].data.customMeshes[0].faceTextures.right?.textureId).toBe('tex_a');
+    expect(entries[1].data.customMeshes[0].imported?.importId).toBe('imp_b');
+  });
+
+  describe('import modes', () => {
+    beforeEach(() => {
+      hydrateCustomAssets.mockClear();
+      $currentProjectId.set(PROJECT);
+      newPart();
+      initPartsForNewProject();
+    });
+
+    it("'add-parts' appends every part with fresh ids, copies its blobs, lands on the first", async () => {
+      seedTwoParts();
+      const parsed = await parseTwoPartArchive();
+      const existing = $partEntries.get()[0].id;
+      const blobsBefore = new Set(blobs.keys());
+
+      const result = await importArchive({ mode: 'add-parts', parsed });
+      expect(result).toEqual({ mode: 'add-parts', name: 'Rover-7' });
+
+      // Appended AFTER the project's own part, in the archive's registry order…
+      const entries = $partEntries.get();
+      expect(entries.map((e) => e.name)).toEqual(['Part 1', 'Core', 'Booster']);
+      expect(entries[0].id).toBe(existing);
+      // …with FRESH registry ids (a `pt_…` is project-internal and never travels)…
+      expect(entries.map((e) => e.id)).not.toContain('pt_test00001');
+      expect(new Set(entries.map((e) => e.id)).size).toBe(3);
+      // …the archive's per-part view meta carried across…
+      expect(entries[2]).toMatchObject({
+        visible: false,
+        opacity: 0.4,
+        offset: { x: 1, y: -2, z: 0.5 },
+        includeInExport: false,
+      });
+      // …and the user lands on the FIRST new part.
+      expect($activePartId.get()).toBe(entries[1].id);
+
+      // Every custom-asset id in both new parts is fresh and project-unique (I4) — this
+      // archive came from THIS project, so a kept id would alias the original's blobs.
+      const docs = [$part.get(), getInactiveDoc(entries[2].id)!.part];
+      const ids = docs.flatMap((d) => [
+        ...d.customTextures.map((t) => t.id),
+        ...d.customMaterials.map((m) => m.id),
+        ...d.customMeshes.flatMap((m) => [m.id, m.subPartId]),
+        ...d.customMeshes.flatMap((m) => (m.imported ? [m.imported.importId] : [])),
+      ]);
+      for (const stale of [
+        'tex_a',
+        'tex_b',
+        'mat_a',
+        'mat_b',
+        'mesh_a',
+        'mesh_b',
+        'imp_b',
+        'flexo_Pod_a',
+        'flexo_Pod_b',
+      ]) {
+        expect(ids).not.toContain(stale);
+      }
+      expect(new Set(ids).size).toBe(ids.length); // …and no two parts share one
+
+      // References follow the fresh ids, within each part.
+      const [docA, docB] = docs;
+      expect(docA.customMeshes[0].materialId).toBe(docA.customMaterials[0].id);
+      expect(docB.customMeshes[0].materialId).toBe(docB.customMaterials[0].id);
+      expect(docA.customMeshes[0].faceTextures.right?.textureId).toBe(docA.customTextures[0].id);
+      expect(docA.placements[0].subPartTemplateId).toBe(docA.customMeshes[0].subPartId);
+      expect(docB.placements[0].subPartTemplateId).toBe(docB.customMeshes[0].subPartId);
+      // `meshName` names geometry INSIDE the copied GLB and is deliberately not re-minted.
+      expect(docB.customMeshes[0].imported?.meshName).toBe('flexo_Pod_b');
+
+      // The bytes landed under those fresh ids — one new blob per adopted tier, contents intact.
+      const added = [...blobs.keys()].filter((k) => !blobsBefore.has(k));
+      expect(added).toHaveLength(4);
+      const idOf = (kind: string) =>
+        added.filter((k) => k.startsWith(`pa:${PROJECT}:${kind}:`)).map((k) => k.split(':').pop());
+      expect(idOf('tex-src').sort()).toEqual(
+        [docA.customTextures[0].id, docB.customTextures[0].id].sort(),
+      );
+      expect(idOf('mesh-glb')).toEqual([docA.customMeshes[0].id]);
+      expect(idOf('import-glb')).toEqual([docB.customMeshes[0].imported!.importId]);
+      expect(
+        new Uint8Array(
+          await blobs.get(`pa:${PROJECT}:tex-src:${docA.customTextures[0].id}`)!.arrayBuffer(),
+        ),
+      ).toEqual(BYTES.tex_a);
+
+      // ONE hydrate for the whole batch, run after both parts were already in the registry.
+      expect(hydrateCustomAssets).toHaveBeenCalledTimes(1);
+    });
+
+    // "Merge N parts into one document" has no meaning. The dialog disables the destination;
+    // THIS guard is the authoritative one, so a command or a test calling in directly is
+    // refused rather than silently dropping parts 2..N.
+    it("'merge-into-active' is REFUSED for a multi-part source", async () => {
+      seedTwoParts();
+      const parsed = await parseTwoPartArchive();
+      await expect(importArchive({ mode: 'merge-into-active', parsed })).rejects.toThrow(
+        'takes a single-part source; this one has 2 parts',
+      );
+      // Nothing was applied: no part was added and the active document is still empty.
+      expect($partEntries.get()).toHaveLength(1);
+      expect($part.get().customMeshes).toEqual([]);
+      expect(hydrateCustomAssets).not.toHaveBeenCalled();
+    });
+
+    it("'merge-into-active' still merges a SINGLE-part source into the active document", async () => {
+      const only = binaryPart('a', 'primitive');
+      seedParts([{ part: only, name: 'Core' }]);
+      put('tex-src', 'tex_a', BYTES.tex_a, 'image/png');
+      put('mesh-glb', 'mesh_a', BYTES.mesh_a, 'model/gltf-binary');
+      const parsed = await parseProjectArchive(await buildProjectArchive(PROJECT));
+      if (!parsed.ok) throw new Error(parsed.error);
+
+      await expect(importArchive({ mode: 'merge-into-active', parsed })).resolves.toEqual({
+        mode: 'merge-into-active',
+        name: 'Rover-7',
+      });
+      // It merged into the ACTIVE part — no new registry entry.
+      expect($partEntries.get()).toHaveLength(1);
+      expect($part.get().customMeshes).toHaveLength(1);
+      expect($part.get().placements).toHaveLength(1);
+      expect(hydrateCustomAssets).toHaveBeenCalledTimes(1);
+    });
   });
 });
 

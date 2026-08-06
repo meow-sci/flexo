@@ -48,7 +48,7 @@ create primitive ─▶ buildPrimitiveGeometry()           │           ▼
                                           EditorScene rebuilds via existing
                                           SubPartObject pipeline (no special-casing)
 
-export ─▶ buildCustomBundle() ─▶ Assets.xml + Meshes/*.glb + Textures/*.ktx2
+export ─▶ buildMultiCustomBundle() ─▶ Assets.xml + Meshes/*.glb + Textures/*.ktx2
                                   ─▶ zip download OR FS-Access folder write
 ```
 
@@ -191,7 +191,8 @@ loses the glow the previous file gave it.
 
 Because a replaced mesh keeps its original `subPartId` while its geometry lives under the new
 file's generated name, **`imported.meshName` is the only truthful mesh lookup key** — it is
-what `CatalogSubPart.meshNodeName`, `getImportedGeometry()` and `buildCustomBundle()` all use.
+what `CatalogSubPart.meshNodeName`, `getImportedGeometry()` and the export bundle builder all
+use.
 
 Binaries follow `removeImport`'s contract: the new GLB is written before the mutation, the old
 batch's GLB + every collected texture is deleted after, and `releaseImportAtlas()` frees the
@@ -246,12 +247,14 @@ same path as hand-authored ones. Nothing about them is a parallel universe.
 
 ### Assets XML
 
-- **`src/ksa/assetsXmlSerializer.ts`** — `serializeAssets(plan) → string`. Emits the
-  `<Assets>` doc that **defines** custom SubParts (mirroring Core's `*Assets.xml`):
-  one `<MeshAtlas>`, one `<PbrMaterial>` per textured SubPart, one `<SubPart>` per
-  custom mesh. Reuses `partXmlSerializer`'s `prettyXml`. Only custom SubParts
-  actually placed are emitted — built-in/Core SubParts are owned by KSA Core and must
-  **not** be re-declared.
+- **`src/ksa/assetsXmlSerializer.ts`** — `serializeAssets(plans: AssetsPlan[]) → string`.
+  Emits the `<Assets>` doc that **defines** custom SubParts (mirroring Core's `*Assets.xml`),
+  one plan per exported part and all of them as siblings in ONE file: per plan a
+  `<MeshAtlas>`, one `<PbrMaterial>` per textured SubPart, one `<SubPart>` per custom mesh.
+  Reuses `partXmlSerializer`'s `prettyXml`. Only custom SubParts actually placed are emitted —
+  built-in/Core SubParts are owned by KSA Core and must **not** be re-declared. `claimId`
+  throws if two plans ever declare the same `<SubPart>`/`<PbrMaterial>` id, which KSA would
+  silently collapse onto the first.
 
 ### State / orchestration
 
@@ -300,10 +303,15 @@ same path as hand-authored ones. Nothing about them is a parallel universe.
 
 ### Export plumbing (`src/ksa/modExport.ts`)
 
-- `buildCustomBundle(part, base)` — generates the combined mesh-atlas GLB (one node
-  per *placed* custom mesh), pulls each referenced diffuse `.ktx2` from IndexedDB
-  (deduped by texture id), synthesizes the shared Normal/ORM textures (see below),
-  and returns `{ assetsFile, assetsXml, binaries }`.
+- `buildMultiCustomBundle(content, kittenTex?, {signal}?)` — the orchestrator, over the
+  `MultiModContent` that `buildMultiModContent` planned. Per included part it builds that
+  part's combined mesh-atlas GLB (one node per *placed* custom mesh), pulls each referenced
+  diffuse `.ktx2` from IndexedDB (deduped by texture id) and synthesizes the shared Normal/ORM
+  textures (see below); it then serializes every part's plan as siblings into ONE
+  `<Base>Assets.xml` and returns `{ assetsFile, assetsXml, binaries }`. Parts are built
+  **sequentially**, so a cancelled preview stops at the next part boundary. Binaries dedupe by
+  path and a repeat must be **byte-identical** (only a verbatim-bundled kitten texture can
+  repeat) — differing bytes at one path throw rather than let one part overwrite another.
 - Geometry is resolved per `meshKind(m)` — primitives rebuild from their params, kitten
   submeshes clone the shared bake, and **imported meshes clone
   `getImportedRawGeometry()`**: the untangented, still-indexed copy of the import batch's
@@ -320,9 +328,19 @@ same path as hand-authored ones. Nothing about them is a parallel universe.
   per-face texture grid, so they take the "material verbatim" interning path: **N meshes
   sharing one `CustomMaterial` ship ONE `<PbrMaterial>`**, which is how a multi-object
   Blender import stays cheap.
-- `buildModZip` / `writeModToFolder` — both call `buildCustomBundle` and lay the
-  binaries out under `Meshes/` + `Textures/`. The FS-Access path is non-destructive
-  for XML (suffixes on collision) but **overwrites binaries** deterministically.
+- `buildModZip(parts, projectName, kittenTex?, catalog?)` /
+  `writeModToFolder(modsDir, parts, projectName, kittenTex?, catalog?)` — both take the
+  project's included parts as `NamedExportPart[]`, run `buildMultiModContent` +
+  `buildMultiCustomBundle`, and lay the binaries out under `Meshes/` + `Textures/` (+
+  `Animations/`). The FS-Access path is non-destructive for XML (suffixes on collision) but
+  **overwrites binaries** deterministically.
+- **One mod, N parts, one atlas each.** Every included part with custom meshes contributes its
+  own `<MeshAtlas>` to the shared `<Base>Assets.xml`; multiple atlases per file are legal
+  because KSA registers GLB meshes by NAME into one global first-wins registry. That is also
+  why every id here — mesh names, `_VM` names, `<SubPart>`/`<PartModel>`/`<PbrMaterial>` ids —
+  must be unique across the whole PROJECT, not per part; `assetsXmlSerializer.claimId` throws
+  if one ever repeats. See [scope/part-and-subpart-xml.md](../scope/part-and-subpart-xml.md)
+  ▸ *Multi-part export*.
 
 #### Interior-only meshes (`<Internal>`)
 
@@ -424,15 +442,16 @@ owned by a trigger button.
   **decimate view meshes — labelled "affects export"**) and the kitten texture export mode +
   Content/Core path.
 - `ExportKsaDialog.tsx` — **File ▸ Export to KSA…** (`⌘E`). Two things here matter to custom
-  assets. Its **Inspect XML ▸ Assets** tab is the only place `buildCustomBundle` runs for a
+  assets. Its **Inspect XML ▸ Assets** tab is the only place `buildMultiCustomBundle` runs for a
   preview, and it runs **only when that tab is focused** — v1 re-encoded every KTX2 on every
   document change for as long as the dialog was open. Later changes flip a
   `Project changed — [Rebuild]` chip instead of re-encoding, and a rebuild aborts the previous
-  chain through the `AbortSignal` `buildCustomBundle` accepts (`src/state/exportPreviewStore.ts`;
-  output bytes are unchanged). Its **Deliver mod** mode shows the kitten-texture mode and the
-  `_VM` decimation switch as read-only chips deep-linking to Settings ▸ Import & Export, and its
-  pre-flight lists custom meshes with **no placements** as an `info` row, because those are
-  exactly the meshes `buildCustomBundle` skips. Full description in
+  chain through the `AbortSignal` `buildMultiCustomBundle` accepts
+  (`src/state/exportPreviewStore.ts`; output bytes are unchanged). Its **Deliver mod** mode
+  shows the kitten-texture mode and the `_VM` decimation switch as read-only chips deep-linking
+  to Settings ▸ Import & Export, and its pre-flight lists custom meshes with **no placements**
+  as an `info` row, because those are exactly the meshes the bundle builder skips (per part).
+  Full description in
   [xml-io.md](xml-io.md#the-export-to-ksa-dialog).
 - The **post-import summary** — a sticky *rich* entry in the notification center
   (`src/ui/status/ImportReportBody.tsx`, registered under the `'import-report'` kind in
@@ -467,7 +486,7 @@ owned by a trigger button.
 describe a working style: **max texture size** (1024/2048/4096, default 2048 — it feeds
 `decodeImage`'s `maxSize` for BOTH the dialog's estimate and the encoded `.ktx2`, so the
 number shown is the number shipped), **up axis**, **bake scale into geometry** and
-**decimate view meshes** (read by `modExport.buildCustomBundle` for the `_VM` budget).
+**decimate view meshes** (read by `modExport.viewMeshBudget` for the `_VM` budget).
 
 Everything that describes ONE model stays dialog state and is deliberately NOT persisted:
 scale factor, name prefix, make double-sided, bake transforms to origin, and merge. A 0.01
@@ -625,7 +644,7 @@ single glTF mesh and KSA registers only one name.
 plain triangle loop over that array, run on every hover frame for every SubPart under the
 cursor, finishing with a read of `MeshAttribute.Normal` at the hit vertex. flexo primitives
 and kitten submeshes are tens to hundreds of triangles, but an **imported** model can be six
-figures. So `buildCustomBundle` passes `viewMeshBudget: 2000` and `exportGlb` simplifies any
+figures. So the bundle builder passes `viewMeshBudget: 2000` and `exportGlb` simplifies any
 over-budget `_VM` with meshopt: the simplifier returns a **reduced index buffer over the same
 vertex arrays**, so POSITION/NORMAL/TEXCOORD_0 ride along untouched, the mesh stays indexed,
 and the render mesh is never modified. Picking precision is the only trade; if the simplifier

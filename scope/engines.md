@@ -403,7 +403,7 @@ segments the motor's own `<FeedsFrom Container>` names.
 `Category="Solid"` **all four are mandatory and `Create()` THROWS without them**, failing
 the entire mod load — and flexo's category picker has always offered `Solid`. All four
 round-trip now; `reactionCatalog` parses them off the live `Reactions.xml` so cloning a
-shipped solid seeds them; and `serializeGameData` **skips** (with a warning) any solid
+shipped solid seeds them; and `serializeGameDataXml` **skips** (with a warning) any solid
 reaction failing `isCustomReactionExportable`. Core's reference values @ 5018:
 
 | Reaction     | a (m/s) | n    | min burn | max stable | condensed           |

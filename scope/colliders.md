@@ -39,7 +39,7 @@ already models.
 | `src/ksa/types.ts`                           | `ColliderShape`, `COLLIDER_SHAPES`, `PartCollider`, `EditingPart.colliders` (a collider sits on an ordinary editor layer — `LayerableKind`). |
 | `src/ksa/colliderSize.ts`                    | **The only place that knows the size ↔ `<LengthX\|Y\|Z>`/`<Radius>` mapping** and the per-shape `normalizeColliderSize` constraints.         |
 | `src/ksa/partXmlParser.ts`                   | `collidersFromElement` (serves all four authoring sites) + `subPartCollidersFromRoot`; `'Collider'` in both `KNOWN_*_GAMEDATA_CHILDREN`.     |
-| `src/ksa/partXmlSerializer.ts`               | `buildColliderElement` + `collidersByOwner`; owner grouping inside `serializeGameData`. `COLLIDER_COMPONENT_ID`.                             |
+| `src/ksa/partXmlSerializer.ts`               | `buildColliderElement` + `collidersByOwner`; owner grouping inside `serializeGameDataXml`. `COLLIDER_COMPONENT_ID`.                          |
 | `src/ksa/catalog.ts`                         | `CatalogSubPart.colliders` — geometry `<SubPart><Collider>`, used ONLY for the export-variant carry-forward.                                 |
 | `src/ksa/partCatalog.ts`                     | `CatalogPart.colliders` — geometry `<Part><Collider>` + `<PartGameData><Collider>` + the `<SubPartGameData><Collider>` of placed templates.  |
 | `src/ksa/modExport.ts`                       | `hasSubPartGameData` counts colliders (forces a variant); `ExportVariant.colliders`.                                                         |

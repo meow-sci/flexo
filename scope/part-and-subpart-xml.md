@@ -27,17 +27,17 @@ see [colliders.md](colliders.md). `<IVASeat>` has likewise moved out of the pass
 
 ## Flexo modules
 
-| Path                           | Role                                                                                                                                                                                            |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/ksa/types.ts`             | Domain model — `SubPartPlacement`, `Connector`/`ConnectorFlag`, `Transform`/`EulerXYZ`, `PartGameData`/`SubPartGameData`, `EditingPart`, and the hardcoded `KNOWN_EDITOR_TAGS` suggestion list. |
-| `src/ksa/partXmlParser.ts`     | Reads a `<Part>` (placements + connectors) and `<PartGameData>` (`parseGameDataElement`) back into the typed model. Inverse of the serializer.                                                  |
-| `src/ksa/partXmlSerializer.ts` | Emits `<Part>` (`serializePart`) + `<PartGameData>` (`serializeGameData`) from `EditingPart` by building a **fresh** DOM.                                                                       |
-| `src/ksa/catalog.ts`           | SubPart-template catalog loader: hardcoded `ASSET_FILES`; parses `<SubPart><PartModel>`/`<PartModelDynamic>` + `<MeshAtlas>`/`<PbrMaterial>`.                                                   |
-| `src/ksa/partCatalog.ts`       | Whole-`<Part>` catalog loader + `*GameData.xml` sibling merge (`GAMEDATA_FILES`, `mergeGameData`); unions editor tags + connector flags + module data per Part.                                 |
-| `src/state/partImport.ts`      | `importBuiltInPart`: drops a catalog Part (placements/connectors/editorTags/gameData/animations) into the editor.                                                                               |
-| `src/ui/EditorTagsField.tsx`   | Editor-tag combobox; suggests `KNOWN_EDITOR_TAGS`, allows freeform.                                                                                                                             |
-| `src/ui/PartBrowser.tsx`       | "Add Part" browser; searches catalog by `id` + `editorTags`.                                                                                                                                    |
-| `src/ui/PartDataDialog.tsx`    | Part Data dialog host (Identity → Part Id + `EditorTagsField`).                                                                                                                                 |
+| Path                           | Role                                                                                                                                                                                                  |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/ksa/types.ts`             | Domain model — `SubPartPlacement`, `Connector`/`ConnectorFlag`, `Transform`/`EulerXYZ`, `PartGameData`/`SubPartGameData`, `EditingPart`, and the hardcoded `KNOWN_EDITOR_TAGS` suggestion list.       |
+| `src/ksa/partXmlParser.ts`     | Reads a `<Part>` (placements + connectors) and `<PartGameData>` (`parseGameDataElement`) back into the typed model. Inverse of the serializer.                                                        |
+| `src/ksa/partXmlSerializer.ts` | Emits `<Part>` (`serializePartsXml`) + `<PartGameData>` (`serializeGameDataXml`) from `EditingPart` by building a **fresh** DOM. Both take **N parts** — see [Multi-part export](#multi-part-export). |
+| `src/ksa/catalog.ts`           | SubPart-template catalog loader: hardcoded `ASSET_FILES`; parses `<SubPart><PartModel>`/`<PartModelDynamic>` + `<MeshAtlas>`/`<PbrMaterial>`.                                                         |
+| `src/ksa/partCatalog.ts`       | Whole-`<Part>` catalog loader + `*GameData.xml` sibling merge (`GAMEDATA_FILES`, `mergeGameData`); unions editor tags + connector flags + module data per Part.                                       |
+| `src/state/partImport.ts`      | `importBuiltInPart`: drops a catalog Part (placements/connectors/editorTags/gameData/animations) into the editor.                                                                                     |
+| `src/ui/EditorTagsField.tsx`   | Editor-tag combobox; suggests `KNOWN_EDITOR_TAGS`, allows freeform.                                                                                                                                   |
+| `src/ui/PartBrowser.tsx`       | "Add Part" browser; searches catalog by `id` + `editorTags`.                                                                                                                                          |
+| `src/ui/PartDataDialog.tsx`    | Part Data dialog host (Identity → Part Id + `EditorTagsField`).                                                                                                                                       |
 
 ## Game-side anchors (NEW snapshot: `ksa-game-assemblies/current/`)
 
@@ -85,6 +85,76 @@ Consequences / what's STILL drop-on-round-trip (passthrough is scoped to GameDat
 - The geometry `<Part>` (placements/connectors), `<SubPart>` **templates** (mesh/material/atlas), and **top-level** `<Assets>` children other than `<PartGameData>`/`<SubPartGameData>`/`<FixedReaction>` are NOT passthrough — a new unmodeled element there still vanishes.
 - Within `<PartGameData>`, a `<SubPart>` child is "modeled" (gimbal overlay), so a `<SubPart>` carrying only non-gimbal unmodeled data isn't preserved. Mixed text+element content isn't preserved (game-data XML has none).
 - So each game update must still re-check this scope for added schema **outside** the GameData child/attr surface; inside it, additions now round-trip harmlessly until explicitly modeled.
+
+## Multi-part export
+
+One flexo project holds **N parts** and exports all of them into the same three files
+(`plans/MULTI_PART_PLAN.md` Phase 3). `<Base>Part.xml` carries N `<Part>` siblings;
+`<Base>GameData.xml` carries N `<PartGameData>` plus each part's `<SubPartGameData>` blocks
+plus the deduped `<FixedReaction>`s; `<Base>Assets.xml` carries each part's `<MeshAtlas>` /
+`<PbrMaterial>` / `<SubPart>` entries (see
+[custom-assets-and-mod-export.md](custom-assets-and-mod-export.md)). `<Base>` is
+`sanitizeBaseName(projectName)`.
+
+**Legality — an Assets file is a flat polymorphic list.** `decomp/KSA/AssetBundle.cs` declares
+`[XmlRoot("Assets")]` over a single `public List<SerializedId> Assets`, with `[XmlElement(…)]`
+entries for `Part`, `SubPart`, `PartGameData`, `SubPartGameData`, `MeshAtlas`, `PbrMaterial`,
+`FixedReaction`, … — so **multiple siblings of every element kind in one file are first-class**,
+in any order. Core itself ships multi-`<Part>` files and the monolithic `PartGameData.xml`, and
+flexo's own catalog parser already iterates them (`src/ksa/partCatalog.ts`).
+
+**Emitters.** `serializePartsXml(entries)` and `serializeGameDataXml(entries, base)`
+(`partXmlSerializer.ts`) each take an `Array<{ part, remap }>` and build ONE `<Assets>` document
+in entry order. `buildMultiModContent` (`src/ksa/modExport.ts`) is the single call site both the
+export buttons and the Inspect XML preview go through.
+
+**Export-variant ids carry a per-part namespace token.** A built-in SubPart export variant (the
+redeclaration described in
+[custom-assets-and-mod-export.md](custom-assets-and-mod-export.md) contract #19) is now
+`flexo_<base>_<ns>_<templateId>`, where `ns = partExportNs(part.partId)` =
+`sanitizeBaseName(partId)`. The `ns` segment exists because **KSA registers
+`<SubPartGameData Id="T">` ONCE GLOBALLY per template id** — `PartGameDataReference.OnDataLoad`
+(which `SubPartGameDataReference` inherits verbatim) tries `ModLibrary.Register(this)` and, on
+the duplicate, MERGES itself into the already-registered one via `ApplyGameData`; the `Part`
+ctor's `ModuleList.CreateModules` (`decomp/KSA/Part.cs:1220`) then instantiates every module
+the merged template holds at EVERY placement of `T` (the rationale comment lives at
+`src/state/editorStore.ts:834-852`, key sentence at `:839-840`; it is the same fact behind the
+multi-light-import fix). Without the token, two parts placing the same built-in template would
+mint the SAME variant id and part A's `<Light>`/tank/`<Collider>` would attach to part B's
+SubPart too. A duplicate `ns` among included parts is an export **blocker**
+(`collectProjectExportIssues`), and `buildMultiModContent` throws if one reaches it anyway.
+
+**`<FixedReaction>` is deduped first-wins, and its position in the document is irrelevant.**
+`serializeGameDataXml` hoists every part's custom propellants to the **END** of the file and
+emits each `Id` **once** across all parts (first entry wins). Position does not matter because
+reaction references resolve AFTER all mod data has loaded: `CombustorTemplate.Create(Part)`
+calls `SubstanceLibrary.GetReactionOrThrow(Reaction.Hash, Reaction.Id)`
+(`decomp/KSA/CombustorTemplate.cs:65-67`), and `SubstanceLibrary.LoadAll()` runs in the
+`Loading.Task("Substances")` block (`decomp/KSA/Program.cs:956-960`) — so a
+`<Combustor><Reaction Id>` may legally precede the `<FixedReaction>` it names. Registration is
+itself first-wins (`SerializedCollection.Register` → `ConcurrentDictionary.TryAdd`,
+`decomp/KSA/SerializedCollection.cs:20-34` — a second declaration under a live id is silently
+ignored), which is why flexo's own cross-part dedupe is first-wins too. Two parts declaring one
+id with **divergent** payloads is a preflight blocker (`collectProjectExportIssues`), so
+first-wins is never lossy. (A `Category="Solid"` reaction missing its burn-rate law is still
+skipped with a warning — see [engines.md](engines.md).)
+
+**Global uniqueness obligations** (each row names its guarantor):
+
+| Registered id                                                    | Guarantor                                                                                                      |
+| ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `<Part Id>` / `<PartGameData Id>`                                | preflight blocker on duplicate `partId`                                                                        |
+| Export-variant `<SubPart Id>` = `flexo_<base>_<ns>_<templateId>` | per-part `ns` token, preflight-unique                                                                          |
+| Custom-mesh `<SubPart Id>` / GLB mesh names / `_VM` names        | project-unique `subPartId` (plan invariant I4; `clonePartWithFreshAssets`, `src/state/partClone.ts`)           |
+| `<PartModel Id>` = `<subPartId>_Model` / `<variantId>_Model`     | follows the two rows above                                                                                     |
+| `<PbrMaterial Id>`                                               | mat-id- or bundleToken-suffixed (`modExport.ts`) — per-part unique already; asserted across parts by `claimId` |
+| `<FixedReaction Id>`                                             | cross-part dedupe of identical payloads; divergent duplicates are a preflight blocker                          |
+| `<KeyframeAnimationModule Id>` / GLB paths                       | anim-id suffix in `animToken` (`src/ksa/animationNaming.ts`) — random per clip                                 |
+| Texture file names                                               | texture-id / bundleToken suffixes (`modExport.ts`) — unique under I4                                           |
+
+`assetsXmlSerializer.claimId` is the tripwire under the `<SubPart>`/`<PbrMaterial>` rows: it
+**throws** on a duplicate id inside one exported mod rather than let KSA's silent first-wins
+registration ship the wrong mesh.
 
 ## Known gotchas
 
@@ -207,7 +277,7 @@ by modeling `<Collider>` — see [colliders.md](colliders.md).
   templates are rebuilt from the typed model, so importing one of those 2 prefabs and
   re-exporting DROPPED the collider. **Resolved by modeling `<Collider>` outright** rather
   than by raw `<Part>`-child passthrough: `collidersFromElement` reads all four authoring
-  sites into `EditingPart.colliders`, and `serializeGameData` normalises them back into the
+  sites into `EditingPart.colliders`, and `serializeGameDataXml` normalises them back into the
   GameData document (legal because `PartTemplate.ApplyGameData` merges `Components`
   additively). `<Collider>` moved OUT of the passthrough into both
   `KNOWN_*_GAMEDATA_CHILDREN` sets. See [colliders.md](colliders.md).

@@ -227,7 +227,10 @@ ported, and what is deliberately not:
   built-in template globally), **or** its wanted `<Internal>` **differs from the built-in's own**.
   An untouched interior prop now produces **no redeclaration at all** and keeps the built-in's own
   flags for free. The old interior-prop suffix is deleted — **one** naming rule,
-  `flexo_<base>_<id>`, for every variant.
+  `flexo_<base>_<ns>_<id>`, for every variant, where `ns = partExportNs(part.partId)` namespaces
+  the variant to ONE part of a multi-part mod (KSA registers `<SubPartGameData Id>` once
+  globally, so two parts sharing a variant id would merge their SubPart data — see
+  [part-and-subpart-xml.md](part-and-subpart-xml.md#multi-part-export)).
 - **A variant inherits NOTHING but the `<Mesh>`/`<Material>` it names**, so `ReferenceSubPartPlan`
   carries `<Internal>`, `<RayTracing>` (raw token, verbatim) and `<ShadowCaster>` forward from the
   catalogued built-in, plus the built-in `<SubPart>`'s own geometry `<Collider>`s. Dropping

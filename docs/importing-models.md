@@ -58,7 +58,7 @@ contract, with `decomp/…:line` citations).
    ▼
  existing machinery, unchanged:
    $customCatalog → customMeshRenderCache → SubPartObject             (editor render)
-   buildCustomBundle → MeshAtlas GLB + <PbrMaterial> + <SubPart> + <MeshView>   (mod export)
+   buildMultiCustomBundle → MeshAtlas GLB + <PbrMaterial> + <SubPart> + <MeshView>  (mod export)
 ```
 
 ## The Blender export recipe
@@ -220,7 +220,7 @@ hand-authored ones. Nothing about them is a parallel universe.
 | `src/ui/ViewportDropZone.tsx`      | Drag-and-drop onto the 3D workspace. Plain React drag handlers; opens the dialog pre-loaded.                                                                                             |
 | `src/ui/status/ImportReportBody.tsx` | The post-import summary, rendered as a sticky **rich notification-center entry** (kind `'import-report'`) — what was created, what a replace kept/removed (named), the non-blocking warnings, and the `[Open Asset Manager]` / `[Edit surfaces →]` actions. |
 | `src/state/customAssetStore.ts`    | `importModelAsMeshes`, `removeImport`, `replaceImport`, `matchImportedMeshes`, `planImportRemoval`, `setMeshTransparent`, and the catalog/render-cache `imported` branch.               |
-| `src/ksa/modExport.ts`             | The `imported` branch of `buildCustomBundle` (raw geometry) and the `_VM` triangle budget.                                                                                              |
+| `src/ksa/modExport.ts`             | The `imported` branch of the per-part bundle plan (raw geometry) and the `_VM` triangle budget.                                                                                         |
 | `src/ksa/exportGlb.ts`             | `buildMeshAtlasGlb` — used both for the import batch's internal atlas (`viewMeshes:false`) and the shipped mod atlas (with decimated `_VM` meshes).                                     |
 
 ## Warnings
@@ -288,8 +288,8 @@ handled it and is only telling you what it did.
 
 ## What an imported SubPart exports
 
-An imported mesh is just another `meshKind()` case in `buildCustomBundle`, so it ships exactly
-what a primitive does:
+An imported mesh is just another `meshKind()` case in the export bundle builder
+(`buildMultiCustomBundle`), so it ships exactly what a primitive does:
 
 - **One node in the shared `Meshes/<Name>_MeshAtlas.glb`**, named `<subPartId>`, built from
   `getImportedRawGeometry()` — the untangented, still-indexed copy of the batch's GLB. **Never**
@@ -300,7 +300,7 @@ what a primitive does:
   `Part.RayCastEgoSubPart` (`decomp/KSA/Part.cs:1854-1887`) → `Ray.RaycastWatertight`
   (`decomp/KSA/Ray.cs:194-213`), a plain triangle loop over the view mesh **de-indexed at load**
   into one `double3` (24 B) per index (`decomp/KSA/MeshReference.cs:87-95`) — per SubPart, per
-  hover frame. So `buildCustomBundle` passes `viewMeshBudget: 2000` and `exportGlb` replaces the
+  hover frame. So the bundle builder passes `viewMeshBudget: 2000` and `exportGlb` replaces the
   `_VM` index buffer with a meshopt-simplified one over the **same vertex arrays**: POSITION /
   NORMAL / TEXCOORD_0 ride along untouched, the mesh stays indexed, and the render mesh is never
   modified. Picking precision is the only trade; the user can turn decimation off, and a
@@ -401,7 +401,7 @@ preserve a single existing identity.
 
 Because a replaced mesh keeps its original `subPartId` while its geometry lives under the new
 file's generated name, **`imported.meshName` is the only truthful mesh lookup key** — it is what
-`CatalogSubPart.meshNodeName`, `getImportedGeometry()` and `buildCustomBundle()` all use.
+`CatalogSubPart.meshNodeName`, `getImportedGeometry()` and the export bundle builder all use.
 
 ### Remove import — and the undo caveat
 

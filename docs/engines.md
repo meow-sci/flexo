@@ -327,7 +327,7 @@ grain segments.
 
 ## XML I/O
 
-`serializeGameData` emits `<Rocket>`/`<Combustor>`/`<DeLavalNozzle>` and the solid trio
+`serializeGameDataXml` emits `<Rocket>`/`<Combustor>`/`<DeLavalNozzle>` and the solid trio
 `<SolidMotor>`/`<SolidMotorNozzle>`/`<SolidGrainSegment>` per SubPartGameData, the
 part-level controllers + gas-generator + `<SubPart Id><Gimbal>` overlays +
 `<ConsumerFeedWiring>`, and top-level `<FixedReaction>` for each custom propellant (a

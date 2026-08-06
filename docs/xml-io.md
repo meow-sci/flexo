@@ -1,14 +1,14 @@
 # Part XML Serialize / Parse
 
-Flexo exports the edited Part to KSA "Assets" Part XML and can parse a Part back
-(used by the coordinate calibration and future import). All XML uses built-in DOM
-APIs — `@xmldom/xmldom` (browser-compatible, also runs in node tests); no
-third-party XML library.
+Flexo exports the project's parts — **all of the included ones, into one set of files** — to
+KSA "Assets" Part XML, and can parse a Part back (used by the coordinate calibration and
+future import). All XML uses built-in DOM APIs — `@xmldom/xmldom` (browser-compatible, also
+runs in node tests); no third-party XML library.
 
 ## Serializer — `src/ksa/partXmlSerializer.ts`
 
-`serializePart(part: EditingPart): string` mirrors space-tape's
-`PartXmlSerializer.cs`:
+`serializePartsXml(entries: Array<{ part: EditingPart; remap: TemplateRemap }>): string`
+mirrors space-tape's `PartXmlSerializer.cs`, one `<Part>` element per entry:
 
 ```xml
 <?xml version="1.0" encoding="utf-8"?>
@@ -44,7 +44,7 @@ Rules (verified against Core XML + the C# serializer):
 - Built with `DOMImplementation` + `XMLSerializer`, then pretty-printed (4-space
   indent) by a small string pass (safe — no mixed text nodes).
 
-### GameData document — `serializeGameData(part): string`
+### GameData document — `serializeGameDataXml(entries, base): string`
 
 Mirrors space-tape's `GameDataXmlSerializer.cs`. The popup-only metadata
 (`EditingPart.gameData` + `editorTags`) plus connector flags:
@@ -81,6 +81,42 @@ gas-generator `<Rocket>`/`<Combustor>` + `<SubPart Id><Gimbal>` overlays, and to
 `<FixedReaction>` for custom propellants — all round-tripped by the parser. See
 [engines.md](engines.md) for the schema, units, and default-omission rules.
 
+### Both documents hold N parts
+
+A project holds **N parts** and exports all the included ones into the same two files, as
+siblings under one `<Assets>` root — legal because KSA's `AssetBundle` is a flat
+`List<SerializedId>` (`scope/part-and-subpart-xml.md` ▸ *Multi-part export*). Both entry
+points take the same `Array<{ part, remap }>` and emit in entry order:
+
+- `serializePartsXml(entries)` — N `<Part Id>` siblings, each with its placements then its
+  connectors.
+- `serializeGameDataXml(entries, base)` — per entry a `<PartGameData>` followed by that
+  part's `<SubPartGameData>` blocks, then **every part's `<FixedReaction>`s once each, hoisted
+  to the END of the file**. `base` names the file and feeds the animation module ids, so it is
+  shared by the whole document.
+
+The `<FixedReaction>` hoist is a **first-wins dedupe by `Id`**: two parts burning the same
+custom propellant (a duplicated part, a shared mixture) declare it once. Position is
+irrelevant — KSA resolves a `<Combustor><Reaction Id>` only after all mod data has loaded — and
+KSA's own registration is first-wins too, so a second declaration would be ignored anyway. Two
+parts defining one id with **different** chemistry is an export blocker, so nothing is lost.
+A `Category="Solid"` reaction missing its burn-rate law is still skipped with a warning.
+
+Export **variant ids carry a per-part namespace token**: `flexo_<base>_<ns>_<templateId>`,
+where `ns = partExportNs(part.partId)`. Without it, two parts placing the same built-in
+template would mint one variant id, and KSA — which registers `<SubPartGameData Id>` once
+globally — would attach part A's lights/tanks to part B's SubPart. `TemplateRemap` is the
+`originalTemplateId → variantId` map each entry carries into both serializers.
+
+The one call site is `buildMultiModContent(parts, projectName, catalog)` in
+`src/ksa/modExport.ts`: it runs `expandGlassGlow` + `buildExportVariantMap` per part and
+returns `{ base, partFile, partXml, gameDataFile, gameDataXml, perPart }`, shared by the
+export buttons AND the XML preview. Delivery takes `NamedExportPart[]` throughout —
+`buildModZip(parts, projectName, kittenTex?, catalog?)` and
+`writeModToFolder(modsDir, parts, projectName, kittenTex?, catalog?)` — and both call
+`buildMultiCustomBundle(content, kittenTex?)`, which merges every part's plan into ONE
+`<Base>Assets.xml` via `serializeAssets(plans)`.
+
 ### `[Flags]` enum bodies MUST be whitespace-separated (hard requirement)
 
 Any enum flexo emits as element text — `<Flags>`, `<Capabilities>`, `<RoleAffinity>` — is a
@@ -114,7 +150,7 @@ optional `parserImpl` lets tests inject `@xmldom/xmldom`'s `DOMParser`; the brow
 uses the global `DOMParser`. `connectorsFromPartElement` reads inline `<Flags>` via
 `parseConnectorFlags` (the `", "`-joined list → `ConnectorFlag[]`, unknowns dropped).
 `gameDataFromAssets(xmlText, partId, parserImpl?)` is the inverse of
-`serializeGameData`: it returns the `<PartGameData Id=partId>` block as
+`serializeGameDataXml` for ONE part: it returns the `<PartGameData Id=partId>` block as
 `{ editorTags, connectorFlags: Map<id, ConnectorFlag[]>, gameData: PartGameData }`
 (or `null` if absent), and underpins the serialize→parse round-trip tests.
 
@@ -158,9 +194,10 @@ GameData files under `/ksa/`; `vite/ksaAssets.ts` copies the existing ones into
   the same `RawXmlNode` data the parser already produced, and `src/ksa/` was not touched to
   add it, so export output is byte-identical to before the viewer existed.
 - `src/ui/ExportKsaDialog.tsx` / `src/ksa/modExport.ts`: write/zip the per-project
-  `Part.xml` + `GameData.xml`. The dialog's **Inspect XML** mode previews exactly the bytes
-  the mod ships (same `expandGlassGlow` → `buildModContent` path), built lazily per tab by
-  `src/state/exportPreviewStore.ts` — see "The Export to KSA dialog" below.
+  `Part.xml` + `GameData.xml`, holding every included part. The dialog's **Inspect XML** mode
+  previews exactly the bytes the mod ships (same `expandGlassGlow` → `buildMultiModContent`
+  path), built lazily per tab by `src/state/exportPreviewStore.ts` — see "The Export to KSA
+  dialog" below.
 
 ## The Export to KSA dialog
 
@@ -180,8 +217,14 @@ the one delivery surface. It is mounted by `DialogRoot` and opened only by the
 reactions, catalog)` folds the basic trio (empty Part Id, duplicate instance ids, no SubParts)
 and the four shared validators — `validateEngines`, `validateColliders`, `validateIvaSeats`,
 `validateLights` — into `{severity, area, code, message, jumpTarget?}`, plus one `info` row
-naming custom meshes that have no placements and therefore will not ship. The validators
-themselves are untouched and still shared with Data/Engine mode. The three severities render as
+naming custom meshes that have no placements and therefore will not ship. The dialog calls
+`collectProjectExportIssues(parts, coreReactions, catalog)`, which runs that per-part pass over
+every included part (tagging each issue with `partEntryId`/`partName`) and then adds the
+cross-part blockers that guard the mod's global id space: no parts included, duplicate
+`<Part Id>`, two Part Ids that sanitize to the same variant namespace `ns`, a custom-mesh
+SubPart id used by two parts, and one `<FixedReaction Id>` defined with different chemistry in
+two parts. The validators themselves are untouched and still shared with Data/Engine mode.
+The three severities render as
 three disclosure boxes (`block` / `warn` / `info`), collapsed to their count line when a box
 holds more than three issues (and always on phones). A row whose issue names a scope is a
 **jump link**: it closes the dialog and calls `modeStore.setMode(mode, focus)` — Engine for an
@@ -192,12 +235,16 @@ engine module, Data ▸ Identity for a blank Part Id, Build (selecting the light
 legitimate thing to do, and the pre-flight's job is to explain, not to refuse.
 
 **The XML preview is lazy** (`src/state/exportPreviewStore.ts`). Nothing is built until a tab is
-focused; Part + GameData come from one cheap synchronous `buildModContent`, and the Assets
+focused; Part + GameData come from one cheap synchronous `buildMultiModContent`, and the Assets
 bundle — the full KTX2 encode / GLB atlas / kitten bake chain — runs ONLY on the Assets tab.
-Results are memoized by an input stamp over `(part, projectName, catalog, kittenTextureExport,
-decimateViewMeshes)`. A change to any of those does not silently re-run the encode: the tab
-shows `Project changed — [Rebuild]`, and a rebuild aborts the in-flight build through the
-`AbortSignal` `buildCustomBundle` now accepts. Closing the dialog aborts and drops every memo.
+Results are memoized by an input stamp over `(part, partEntries, activePartId,
+inactiveRevision, projectName, catalog, kittenTextureExport, decimateViewMeshes)` — the first
+four being the identity tokens the exported parts list is a pure function of, since
+`partsForExport()` allocates a fresh array on every call and can never be identity-compared. A
+change to any of them does not silently re-run the encode: the tab shows
+`Project changed — [Rebuild]`, and a rebuild aborts the in-flight build through the
+`AbortSignal` `buildMultiCustomBundle` accepts (checked at each part boundary as well as each
+asset). Closing the dialog aborts and drops every memo.
 None of this changes a byte of output — the preview and the shipped mod come from the same
 builders (the single-source invariant).
 

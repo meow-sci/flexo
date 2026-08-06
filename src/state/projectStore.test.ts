@@ -97,9 +97,19 @@ import {
   createLayer,
   deleteLayer,
   newPart,
+  setPartId,
   undo,
 } from './editorStore';
-import { $layerView, setLayerLocked, toggleLayerVisible } from './layerStore';
+import { $layerView, setLayerLocked, setLayerOpacity, toggleLayerVisible } from './layerStore';
+import {
+  $activePartId,
+  $partEntries,
+  createPart,
+  deletePart,
+  renamePart,
+  setPartOpacity,
+  switchPart,
+} from './partsStore';
 import {
   createProject,
   deleteProject,
@@ -122,6 +132,8 @@ import {
 import { $notifications } from './notificationStore';
 import {
   DEFAULT_LAYER_ID,
+  DEFAULT_PART_ID,
+  createEmptyPart,
   createGlow,
   createPartLight,
   createSubPartGameData,
@@ -347,6 +359,162 @@ describe('project persistence', () => {
   });
 });
 
+/**
+ * Schema v4: a project holds N parts and the snapshot is a symmetric `parts[]`
+ * (`plans/MULTI_PART_PLAN.md` P1.02–P1.04). Layers are per-part, so `layerView` and
+ * `activeLayerId` ride each entry, and the undo stacks are keyed `byPart`.
+ */
+describe('multi-part projects', () => {
+  it('round-trips two parts with their own layer views, active layers and history', async () => {
+    const id = await createProject('Fleet');
+    const first = $activePartId.get();
+    const hull = createLayer('Hull'); // part 1's active layer
+    addSubPart('Core.A');
+    setLayerOpacity(hull, 0.5);
+
+    const second = createPart();
+    createLayer('Fins'); // pushes the layer counter along so part 2's ids differ from part 1's
+    const tanks = createLayer('Tanks');
+    addSubPart('Core.B');
+    addSubPart('Core.B');
+    toggleLayerVisible(tanks);
+    expect(tanks).not.toBe(hull);
+    await flushAutosave();
+
+    // Leave and come back.
+    await createProject('Scratch');
+    expect(await openProject(id)).toBe(true);
+
+    // The registry came back in order, with the SECOND part still active.
+    expect($partEntries.get().map((e) => e.id)).toEqual([first, second]);
+    expect($partEntries.get().map((e) => e.name)).toEqual(['Part 1', 'Part 2']);
+    expect($activePartId.get()).toBe(second);
+    expect($part.get().placements).toHaveLength(2);
+    expect($activeLayerId.get()).toBe(tanks);
+    expect($layerView.get()[tanks]?.visible).toBe(false);
+    expect($layerView.get()[hull]).toBeUndefined(); // view state is PER PART
+    expect($canUndo.get()).toBe(true);
+
+    // …and so did the parked part: document, per-part view state, and its own stacks.
+    expect(switchPart(first)).toBe(true);
+    expect($part.get().placements).toHaveLength(1);
+    expect($activeLayerId.get()).toBe(hull);
+    expect($layerView.get()[hull]?.opacity).toBe(0.5);
+    expect($layerView.get()[tanks]).toBeUndefined();
+    expect($canUndo.get()).toBe(true);
+    undo(); // the last thing part 1 did was place its SubPart
+    expect($part.get().placements).toEqual([]);
+  });
+
+  it('the meta row names every part and aggregates the counts', async () => {
+    const id = await createProject('Fleet');
+    const first = $activePartId.get();
+    setPartId('Booster');
+    addSubPart('Core.A');
+    const second = createPart();
+    renamePart(second, 'Nose');
+    addSubPart('Core.B');
+    addSubPart('Core.C');
+    await flushAutosave();
+
+    const meta = $projectIndex.get().find((row) => row.id === id)!;
+    expect(meta.parts).toEqual([
+      { id: first, name: 'Part 1', partId: 'Booster' },
+      { id: second, name: 'Nose', partId: DEFAULT_PART_ID },
+    ]);
+    // `counts` is the project-wide total (sumCounts), not the active part's tally.
+    expect(meta.counts.subParts).toBe(3);
+    expect(meta.counts.layers).toBe(createEmptyPart().layers.length * 2);
+  });
+
+  it('duplicate copies every part, not just the active one', async () => {
+    const source = await createProject('Fleet');
+    addSubPart('Core.A');
+    const second = createPart();
+    addSubPart('Core.B');
+    addSubPart('Core.C');
+    await flushAutosave();
+
+    const copy = await duplicateProject(source);
+    expect(copy).toBeTruthy();
+    const snap = snapshotOf(copy!);
+    expect(snap.parts.map((p) => p.part.placements.length)).toEqual([1, 2]);
+    expect(snap.activePartId).toBe(second);
+    expect($projectIndex.get().find((row) => row.id === copy)!.parts).toHaveLength(2);
+  });
+});
+
+/**
+ * The registry is view + lifecycle state, so most of it never touches `$part` — without
+ * `$partEntries` / `$activePartId` of their own in {@link startAutosave} these changes would
+ * never reach the snapshot (P1.04(5)). The first two cases below isolate one subscription each;
+ * a switch republishes `$part` as well, so that one pins the user-visible outcome — the whole
+ * swap lands in the next write — rather than which subscription carried it.
+ */
+describe('autosave — part registry triggers', () => {
+  it('a ghost view-state change alone writes a snapshot inside the 300 ms debounce', async () => {
+    await hydrateProjectOnBoot(); // autosave's subscriptions are wired by boot
+    const id = await createProject('Ghosting');
+    const first = $activePartId.get();
+    createPart();
+    await flushAutosave();
+    db.snapshots.delete(id);
+
+    vi.useFakeTimers();
+    try {
+      setPartOpacity(first, 0.5); // touches $partEntries and nothing else
+      await vi.advanceTimersByTimeAsync(320);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(snapshotOf(id).parts.find((p) => p.id === first)!.opacity).toBe(0.5);
+  });
+
+  it('deleting an inactive part schedules a write of its own', async () => {
+    await hydrateProjectOnBoot();
+    const id = await createProject('Sweep');
+    const first = $activePartId.get();
+    const second = createPart();
+    await flushAutosave();
+    expect(snapshotOf(id).parts).toHaveLength(2);
+
+    vi.useFakeTimers();
+    try {
+      expect(deletePart(first)).toBe(true); // inactive: no $part write to piggyback on
+      await vi.advanceTimersByTimeAsync(320);
+    } finally {
+      vi.useRealTimers();
+    }
+    // Worst case without this: the blobs are swept immediately, then a reload restores the
+    // part from a stale snapshot with its binaries already gone.
+    expect(snapshotOf(id).parts.map((p) => p.id)).toEqual([second]);
+  });
+
+  it('a part switch with no document edits of its own still persists the whole swap', async () => {
+    await hydrateProjectOnBoot();
+    const id = await createProject('Pointer');
+    const first = $activePartId.get();
+    const second = createPart();
+    addSubPart('Core.B'); // the document the switch is about to park
+    await flushAutosave();
+    expect(snapshotOf(id).activePartId).toBe(second);
+    db.snapshots.delete(id); // so the assertions below can only read the switch's own write
+
+    vi.useFakeTimers();
+    try {
+      expect(switchPart(first)).toBe(true);
+      await vi.advanceTimersByTimeAsync(320);
+    } finally {
+      vi.useRealTimers();
+    }
+    const snap = snapshotOf(id);
+    expect(snap.activePartId).toBe(first);
+    // …and the part that was switched away from serializes out of its PARKED document — the
+    // pointer moving without its document following would lose the edit on the next reload.
+    expect(snap.parts.find((p) => p.id === second)!.part.placements).toHaveLength(1);
+  });
+});
+
 describe('boot purge', () => {
   it('purges v1 localStorage projects, reporting names read from the keys', () => {
     localStorage.setItem('flexo:project:Old Rover', '{"anything":true}');
@@ -465,6 +633,92 @@ describe('boot purge', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await hydrateProjectOnBoot();
     warn.mockRestore();
+    expect($notifications.get()).toEqual([]);
+  });
+
+  it('purges a v3 single-part row rather than converting it', async () => {
+    const legacy = await createProject('Legacy');
+    await flushAutosave();
+    db.meta.get(legacy)!.schemaVersion = 3;
+    // The v3 snapshot shape, spelled out for the record — nothing ever reads it. D2 is a
+    // purge and there is no migration path to add (AGENTS.md constitution).
+    db.snapshots.set(legacy, {
+      version: 3,
+      part: createEmptyPart(),
+      layerView: {},
+      activeLayerId: DEFAULT_LAYER_ID,
+      savedAt: 0,
+    });
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await hydrateProjectOnBoot();
+    warn.mockRestore();
+
+    expect(db.meta.has(legacy)).toBe(false);
+    expect(db.snapshots.has(legacy)).toBe(false);
+    const notice = $notifications.get()[0];
+    expect(notice.severity).toBe('warning');
+    expect(notice.title).toContain('incompatible');
+    expect(notice.body).toContain('Legacy');
+  });
+
+  it('fails the v4 content probe when a snapshot carries no usable parts or no active one', async () => {
+    const empty = await createProject('EmptyParts');
+    await flushAutosave();
+    const notArray = await createProject('NotAnArray');
+    await flushAutosave();
+    const noLayers = await createProject('NoLayers');
+    await flushAutosave();
+    const noActive = await createProject('NoActiveId');
+    await flushAutosave();
+
+    const emptySnap = structuredClone(snapshotOf(empty)) as unknown as { parts: unknown };
+    emptySnap.parts = [];
+    db.snapshots.set(empty, emptySnap);
+    const notArraySnap = structuredClone(snapshotOf(notArray)) as unknown as { parts: unknown };
+    notArraySnap.parts = null;
+    db.snapshots.set(notArray, notArraySnap);
+    const noLayersSnap = structuredClone(snapshotOf(noLayers));
+    delete (noLayersSnap.parts[0].part as unknown as Record<string, unknown>).layers;
+    db.snapshots.set(noLayers, noLayersSnap);
+    // Parts intact, but nothing names which one is being edited.
+    const noActiveSnap = structuredClone(snapshotOf(noActive));
+    delete (noActiveSnap as unknown as Record<string, unknown>).activePartId;
+    db.snapshots.set(noActive, noActiveSnap);
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await hydrateProjectOnBoot();
+    warn.mockRestore();
+
+    // Each would crash applyProjectSnapshot, and a project that crashes boot is worse than
+    // one that is gone.
+    expect(db.meta.has(empty)).toBe(false);
+    expect(db.meta.has(notArray)).toBe(false);
+    expect(db.meta.has(noLayers)).toBe(false);
+    expect(db.meta.has(noActive)).toBe(false);
+  });
+
+  // THE self-purge regression guard: the probe used to require `snap.part`, which no v4
+  // snapshot has — every freshly saved project would delete itself on the next reload.
+  it('keeps a freshly saved multi-part v4 project across a reload', async () => {
+    const id = await createProject('Survivor');
+    addSubPart('Core.A');
+    createPart();
+    addSubPart('Core.B');
+    await flushAutosave();
+    localStorage.setItem('flexo:currentProjectId', id);
+    $notifications.set([]);
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await hydrateProjectOnBoot();
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+
+    expect(db.meta.has(id)).toBe(true);
+    expect(db.snapshots.has(id)).toBe(true);
+    expect($currentProjectId.get()).toBe(id);
+    expect($projectName.get()).toBe('Survivor');
+    expect($partEntries.get()).toHaveLength(2);
     expect($notifications.get()).toEqual([]);
   });
 });

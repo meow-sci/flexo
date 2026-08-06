@@ -297,7 +297,6 @@ export function createPart(name?: string): string {
       counts: deriveCounts(part),
     },
   ]);
-  $activePartId.set(id);
   importHistory({ undo: [], redo: [] });
   $part.set(part);
   $activeLayerId.set(DEFAULT_LAYER_ID);

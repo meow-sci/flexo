@@ -97,6 +97,7 @@ import {
   toggleGizmoSpace,
   addCombustor,
   addConnector,
+  exportHistory,
   importHistory,
   importProjectData,
   addCustomReaction,
@@ -196,6 +197,7 @@ import type {
   Transform,
 } from '../ksa/types';
 import { $layerView, setLayerLocked, toggleLayerVisible } from './layerStore';
+import { $activePartId, createPart, initPartsForNewProject, switchPart } from './partsStore';
 import type { ChainCommitEntry, ImportedGameData, PlacementTransform } from './editorStore';
 import {
   importModelAsMeshes,
@@ -4011,5 +4013,36 @@ describe('importProjectData (archive merge)', () => {
     expect(part.customTextures).toEqual([]);
     expect(part.customMeshes[0].faceTextures).toEqual({});
     expect(part.placements).toHaveLength(1);
+  });
+});
+
+/**
+ * The stacks belong to the DOCUMENT, so a part switch parks them with it and hands the
+ * incoming part its own (`plans/MULTI_PART_PLAN.md` P1.04/P1.05) — which is what makes
+ * `MAX_UNDO` a per-part cap rather than a project-wide one.
+ */
+describe('per-part undo history', () => {
+  it('part switch parks and restores history stacks losslessly', () => {
+    initPartsForNewProject();
+    const first = $activePartId.get();
+    addSubPart('Core.A');
+    addSubPart('Core.B');
+    undo(); // leave BOTH stacks loaded — a pending redo has to survive the trip too
+    const firstHistory = exportHistory();
+    expect(firstHistory.undo).toHaveLength(1);
+    expect(firstHistory.redo).toHaveLength(1);
+
+    const second = createPart();
+    expect(exportHistory()).toEqual({ undo: [], redo: [] });
+    addSubPart('Core.C');
+    const secondHistory = exportHistory();
+
+    // Round-trip twice: the stacks come back byte-for-byte, in both directions.
+    expect(switchPart(first)).toBe(true);
+    expect(exportHistory()).toEqual(firstHistory);
+    expect(switchPart(second)).toBe(true);
+    expect(exportHistory()).toEqual(secondHistory);
+    expect(switchPart(first)).toBe(true);
+    expect(exportHistory()).toEqual(firstHistory);
   });
 });

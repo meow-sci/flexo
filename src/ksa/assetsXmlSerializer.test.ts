@@ -338,3 +338,98 @@ describe('serializeAssets', () => {
     expect(xml).not.toContain('<PartModel Id="visor_Model"'); // visor must NOT be the opaque path
   });
 });
+
+// ── N plans in ONE Assets document (MULTI_PART_PLAN P3.03) ───────────────────
+//
+// One mod, one `<Base>Assets.xml`, N parts: an Assets file is a flat `List<SerializedId>`
+// (`KSA/AssetBundle.cs`) and `MeshAtlasFileReference.DoLoad()` registers each GLB mesh BY NAME
+// (first-wins), so one `<MeshAtlas>` per part is exactly how N parts ship their geometry.
+describe('serializeAssets — N plans in one <Assets>', () => {
+  /** One part's plan: its own atlas, its own material, its own custom SubPart. */
+  const planA = {
+    meshAtlasPath: 'Meshes/Fleet_a1b2_MeshAtlas.glb',
+    materials: [
+      {
+        id: 'a_Material',
+        diffusePath: 'Textures/Fleet_a1b2_BaseColor_ff0000.ktx2',
+        normalPath: 'Textures/Fleet_a1b2_FlatNormal.ktx2',
+        aoRoughMetalPath: 'Textures/Fleet_a1b2_NeutralORM.ktx2',
+      },
+    ],
+    subParts: [{ subPartId: 'flexo_hull_a1b2', materialId: 'a_Material' }],
+  };
+  /** The second part: its own atlas + material + custom SubPart, PLUS an export variant. */
+  const planB = {
+    meshAtlasPath: 'Meshes/Fleet_c3d4_MeshAtlas.glb',
+    materials: [
+      {
+        id: 'b_Material',
+        diffusePath: 'Textures/Fleet_c3d4_BaseColor_00ff00.ktx2',
+        normalPath: 'Textures/Fleet_c3d4_FlatNormal.ktx2',
+        aoRoughMetalPath: 'Textures/Fleet_c3d4_NeutralORM.ktx2',
+      },
+    ],
+    subParts: [{ subPartId: 'flexo_fin_c3d4', materialId: 'b_Material' }],
+    referenceSubParts: [
+      {
+        subPartId: 'flexo_Fleet_ShipB_CoreIVAPropA_Subpart_ChairA',
+        meshId: 'CoreIVAPropA_Subpart_ChairA',
+        materialId: 'CoreIVAPropA_Material',
+        internal: false,
+        rayTracing: null,
+        shadowCaster: null,
+      },
+    ],
+  };
+
+  it('emits one <MeshAtlas> per plan and merges every plan’s materials + SubParts, in plan order', () => {
+    const xml = serializeAssets([planA, planB]);
+    expect(xml.match(/<MeshAtlas /g)).toHaveLength(2);
+    expect(xml).toContain('<MeshAtlas Path="Meshes/Fleet_a1b2_MeshAtlas.glb"');
+    expect(xml).toContain('<MeshAtlas Path="Meshes/Fleet_c3d4_MeshAtlas.glb"');
+    // Both materials and all three SubParts (2 custom + 1 export variant) are siblings.
+    expect(xml.match(/<PbrMaterial /g)).toHaveLength(2);
+    expect(xml.match(/<SubPart Id=/g)).toHaveLength(3);
+    expect(xml).toContain('<Material Id="a_Material"/>');
+    expect(xml).toContain('<Material Id="b_Material"/>');
+    expect(xml).toContain('<SubPart Id="flexo_Fleet_ShipB_CoreIVAPropA_Subpart_ChairA"');
+    // Plan order is document order: everything of plan A precedes everything of plan B.
+    expect(xml.indexOf('Fleet_a1b2_MeshAtlas')).toBeLessThan(xml.indexOf('Fleet_c3d4_MeshAtlas'));
+    expect(xml.indexOf('<SubPart Id="flexo_hull_a1b2"')).toBeLessThan(
+      xml.indexOf('<SubPart Id="flexo_fin_c3d4"'),
+    );
+  });
+
+  // KSA registers <SubPart> and <PbrMaterial> ids across the WHOLE mod, first-wins — a
+  // duplicate does not error at load, it silently collapses onto the first. Unreachable under
+  // I4 + the per-part `ns`; this is the tripwire that makes a breach loud instead of silent.
+  it('throws on a duplicate <SubPart Id> across plans', () => {
+    expect(() =>
+      serializeAssets([planA, { ...planB, subParts: [{ ...planA.subParts[0] }] }]),
+    ).toThrow(/duplicate <SubPart Id="flexo_hull_a1b2">/);
+  });
+
+  it('throws when a reference SubPart collides with another plan’s custom SubPart', () => {
+    // The two kinds share ONE registry, so the guard must span both lists.
+    expect(() =>
+      serializeAssets([
+        planA,
+        {
+          ...planB,
+          referenceSubParts: [{ ...planB.referenceSubParts[0], subPartId: 'flexo_hull_a1b2' }],
+        },
+      ]),
+    ).toThrow(/duplicate <SubPart Id="flexo_hull_a1b2">/);
+  });
+
+  it('throws on a duplicate <PbrMaterial Id> across plans', () => {
+    expect(() =>
+      serializeAssets([planA, { ...planB, materials: [{ ...planA.materials[0] }] }]),
+    ).toThrow(/duplicate <PbrMaterial Id="a_Material">/);
+  });
+
+  it('allows a plan to repeat ids nothing else claims (no false positives)', () => {
+    // Two plans, disjoint ids — the guard must not fire on legitimate multi-part output.
+    expect(() => serializeAssets([planA, planB])).not.toThrow();
+  });
+});

@@ -11,11 +11,14 @@ let contentCalls = 0;
 let bundleCalls = 0;
 /** Resolves the pending mocked bundle build; set by the slow-build cases. */
 let releaseBundle: ((xml: string | null) => void) | null = null;
+/** Display names of the parts the last `buildMultiModContent` call received (D4 / I7). */
+let lastPartsBuilt: string[] = [];
 
 vi.mock('../ksa/modExport', () => ({
   partExportNs: (partId: string) => partId,
-  buildMultiModContent: (parts: Array<{ part: unknown }>) => {
+  buildMultiModContent: (parts: Array<{ part: unknown; name: string }>) => {
     contentCalls += 1;
+    lastPartsBuilt = parts.map((p) => p.name);
     return {
       base: 'Mod',
       partFile: 'ModPart.xml',
@@ -55,6 +58,14 @@ let autoResolve = true;
 
 const { $part } = await import('./editorStore');
 const { $projectName } = await import('./projectIndexStore');
+const {
+  $activePartId,
+  createPart,
+  initPartsForNewProject,
+  setPartIncludeInExport,
+  setPartOpacity,
+  switchPart,
+} = await import('./partsStore');
 const { $exportPreview, buildTab, currentStamp, markStaleIfChanged, resetPreview } =
   await import('./exportPreviewStore');
 
@@ -63,6 +74,7 @@ beforeEach(() => {
   bundleCalls = 0;
   autoResolve = true;
   releaseBundle = null;
+  lastPartsBuilt = [];
   resetPreview();
   $part.set(createEmptyPart());
 });
@@ -158,5 +170,75 @@ describe('buildTab — Assets', () => {
     releaseBundle?.('<Assets late="true"/>');
     await pending;
     expect($exportPreview.get()).toEqual({ tab: 'part' });
+  });
+});
+
+// ── the stamp is part-aware (MULTI_PART_PLAN P3.09) ──────────────────────────
+//
+// The exported parts list is NOT a stamp field (`partsForExport()` allocates a fresh array on
+// every call, so it can never be identity-compared); it is a pure function of four tokens the
+// stamp DOES hold — the active document, the registry list, which entry is active, and the
+// inactive-document revision. These pin that every way a project's exported bytes can change
+// reaches the preview.
+describe('the stamp across parts', () => {
+  let partOne = '';
+  let partTwo = '';
+
+  beforeEach(() => {
+    initPartsForNewProject();
+    partOne = $activePartId.get();
+    partTwo = createPart(); // "Part 2"; creating switches to it…
+    switchPart(partOne); // …so land back on part 1
+  });
+
+  it('goes stale when the user switches to another part', async () => {
+    await buildTab('assets');
+    expect($exportPreview.get().assets?.stale).toBe(false);
+    switchPart(partTwo);
+    markStaleIfChanged();
+    // Stale, NOT rebuilt: rebuilding is a full texture encode and stays the user's decision.
+    expect($exportPreview.get().assets?.stale).toBe(true);
+    expect(bundleCalls).toBe(1);
+  });
+
+  it('goes stale when a part leaves the export (D4)', async () => {
+    await buildTab('assets');
+    setPartIncludeInExport(partTwo, false);
+    markStaleIfChanged();
+    expect($exportPreview.get().assets?.stale).toBe(true);
+  });
+
+  it('goes stale on a mutation in the ACTIVE part’s document', async () => {
+    await buildTab('assets');
+    $part.set({ ...$part.get(), partId: 'renamed_part' });
+    markStaleIfChanged();
+    expect($exportPreview.get().assets?.stale).toBe(true);
+  });
+
+  // Registry META rides `$partEntries` too, so nudging a ghost's opacity marks the preview
+  // stale even though the exported bytes are identical. Deliberate over-invalidation
+  // (acknowledged in `StampInputs`): a rebuild is lazy, memoized, and only ever OFFERED.
+  it('also goes stale on a pure ghost-opacity change (accepted over-invalidation)', async () => {
+    await buildTab('assets');
+    setPartOpacity(partTwo, 0.4);
+    markStaleIfChanged();
+    expect($exportPreview.get().assets?.stale).toBe(true);
+  });
+
+  it('re-derives the cheap Part/GameData tabs on a switch instead of flagging them', () => {
+    buildTab('part');
+    expect(contentCalls).toBe(1);
+    switchPart(partTwo);
+    markStaleIfChanged();
+    expect(contentCalls).toBe(2);
+    expect($exportPreview.get().part?.xml).toBe('<Part n="2"/>');
+  });
+
+  it('builds every included part, and never an excluded one (D4 / I7)', () => {
+    buildTab('part');
+    expect(lastPartsBuilt).toEqual(['Part 1', 'Part 2']);
+    setPartIncludeInExport(partTwo, false);
+    markStaleIfChanged();
+    expect(lastPartsBuilt).toEqual(['Part 1']);
   });
 });

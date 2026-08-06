@@ -85,6 +85,7 @@ import {
   uniqueFileName,
   type ExportVariant,
   type KittenTextureExportConfig,
+  type NamedExportPart,
 } from './modExport';
 import { serializeGameDataXml, serializePartsXml, type TemplateRemap } from './partXmlSerializer';
 import { serializeAssets } from './assetsXmlSerializer';
@@ -1514,5 +1515,221 @@ describe('export variants carry the built-in template’s own colliders forward'
     expect(xml).toContain('<Collider Id="flexoInheritedColliders">');
     expect(xml).toContain('<Box Id="BoxCollider1">');
     expect(xml).toContain('<LengthX Cm="79.467"/>'); // sub-metre distances emit as Cm
+  });
+});
+
+// ── N parts through the real builders (MULTI_PART_PLAN P3.04/P3.07) ──────────
+
+/**
+ * `toNamedExportParts`-shaped wrapper for N parts: the registry identity export needs, with
+ * `ns` minted from each part's own KSA id exactly as the state layer mints it. `entryId` /
+ * `name` are labels — never serialized.
+ */
+function namedParts(...parts: EditingPart[]): NamedExportPart[] {
+  return parts.map((part, i) => ({
+    entryId: `pt_${i + 1}`,
+    name: `Part ${i + 1}`,
+    ns: partExportNs(part.partId),
+    part,
+  }));
+}
+
+/** The XML of one `<SubPart Id="…">` element (its own children only). */
+function subPartBody(xml: string, subPartId: string): string {
+  const from = xml.slice(xml.indexOf(`<SubPart Id="${subPartId}"`));
+  return from.slice(0, from.indexOf('</SubPart>'));
+}
+
+describe('multi-part export — one built-in template, one variant PER part', () => {
+  // KSA registers a <SubPartGameData Id> ONCE globally, so two parts that both redeclare the
+  // same built-in must land on DIFFERENT ids or part A's data merges onto part B's SubPart.
+  // The `ns` segment (`flexo_<base>_<ns>_<templateId>`) is what guarantees that.
+  const VARIANT_A = `flexo_Fleet_ShipA_${CHAIR}`;
+  const VARIANT_B = `flexo_Fleet_ShipB_${CHAIR}`;
+
+  /** Two parts placing the SAME Core chair, each needing a variant for a different reason. */
+  function fleet(): EditingPart[] {
+    const a = partWithIvaAndCore();
+    a.partId = 'ShipA';
+    a.internalFlags[CHAIR] = false; // exterior override → a variant that drops <Internal>
+    const b = partWithIvaAndCore();
+    b.partId = 'ShipB';
+    b.lights.push(createPartLight(CHAIR, '_light1')); // GameData → a variant that KEEPS <Internal>
+    return [a, b];
+  }
+
+  it('mints a distinct, ns-namespaced variant per part, each with its own <Internal>', () => {
+    const content = buildMultiModContent(namedParts(...fleet()), 'Fleet', ivaCatalog());
+    const [a, b] = content.perPart;
+    expect(a.variants.get(CHAIR)!.variantId).toBe(VARIANT_A);
+    expect(b.variants.get(CHAIR)!.variantId).toBe(VARIANT_B);
+    expect(a.variants.get(CHAIR)!.variantId).not.toBe(b.variants.get(CHAIR)!.variantId);
+    // Same template, opposite interior-only values — resolved per part, never shared.
+    expect(a.variants.get(CHAIR)!.internal).toBe(false);
+    expect(b.variants.get(CHAIR)!.internal).toBe(true);
+  });
+
+  it('points each part’s placement + GameData at ITS OWN variant, never the built-in', () => {
+    const content = buildMultiModContent(namedParts(...fleet()), 'Fleet', ivaCatalog());
+    expect(content.partXml).toContain(`InstanceOf="${VARIANT_A}"`);
+    expect(content.partXml).toContain(`InstanceOf="${VARIANT_B}"`);
+    expect(content.partXml).not.toContain(`InstanceOf="${CHAIR}"`); // the quote disambiguates
+    expect(content.gameDataXml).toContain(`<SubPartGameData Id="${VARIANT_B}"`);
+    expect(content.gameDataXml).toContain('<Light>');
+    expect(content.gameDataXml).not.toContain(`<SubPartGameData Id="${CHAIR}"`);
+  });
+
+  it('declares both variants in ONE Assets document, each carrying its own <Internal>', async () => {
+    const content = buildMultiModContent(namedParts(...fleet()), 'Fleet', ivaCatalog());
+    const xml = (await buildMultiCustomBundle(content)).assetsXml!;
+    expect(xml).toContain(`<SubPart Id="${VARIANT_A}"`);
+    expect(xml).toContain(`<SubPart Id="${VARIANT_B}"`);
+    // Exactly one interior-only flag in the whole file, and it belongs to part B.
+    expect(xml.match(/<Internal>true<\/Internal>/g)).toHaveLength(1);
+    expect(subPartBody(xml, VARIANT_B)).toContain('<Internal>true</Internal>');
+    expect(subPartBody(xml, VARIANT_A)).not.toContain('<Internal>');
+    // Both reuse the SAME built-in mesh + material — a variant duplicates no art.
+    expect(subPartBody(xml, VARIANT_A)).toContain(`<Mesh Id="${CHAIR}"`);
+    expect(subPartBody(xml, VARIANT_B)).toContain(`<Mesh Id="${CHAIR}"`);
+  });
+});
+
+/** A minimal exportable clip (one joint, two keyframes) driving `instanceId`. */
+function clip(id: string, instanceId: string): PartAnimation {
+  return {
+    id,
+    name: id,
+    durationSec: 1,
+    mode: 'deployRetract',
+    joints: [{ id: 'j', name: 'Hinge', parentJointId: null, memberInstanceIds: [instanceId] }],
+    keyframes: [
+      { id: 'k0', timeSec: 0, poses: { j: identityTransform() } },
+      {
+        id: 'k1',
+        timeSec: 1,
+        poses: {
+          j: {
+            position: { x: 0, y: 0, z: 0 },
+            rotation: { x: 0, y: Math.PI / 2, z: 0 },
+            scale: { x: 1, y: 1, z: 1 },
+          },
+        },
+      },
+    ],
+    solarTracking: null,
+  };
+}
+
+describe('buildModZip — two parts in one mod', () => {
+  it('ships one mod.toml + three XML files, and every part’s own binaries', async () => {
+    const a = partWithMaterialMeshes(); // primitives + a CustomMaterial
+    a.animations.push(clip('anim_a', 'flexo_button_a'));
+    const b = partWithImportedMeshes(); // an imported glTF SubPart
+    b.animations.push(clip('anim_b', 'pod_0'));
+    const blob = await buildModZip(namedParts(a, b), 'Fleet');
+    const text = new TextDecoder('latin1').decode(new Uint8Array(await blob.arrayBuffer()));
+    /** Zip entries are STORED, so a path appears verbatim in each local file header. */
+    const hasEntry = (path: string) => text.includes(`flexo-parts/${path}`);
+
+    // The three shared XML files (both parts are siblings INSIDE each) + the manifest.
+    for (const name of ['mod.toml', 'FleetPart.xml', 'FleetGameData.xml', 'FleetAssets.xml']) {
+      expect(hasEntry(name)).toBe(true);
+    }
+    expect(text).toContain('assets = [ "FleetPart.xml", "FleetGameData.xml", "FleetAssets.xml"]');
+    expect(text).toContain('<Part Id="ButtonMod"');
+    expect(text).toContain('<Part Id="PodMod"');
+
+    // ONE mesh atlas per custom-mesh-bearing part (the token carries a mesh id's random
+    // suffix, so the two never collide) …
+    expect(hasEntry('Meshes/Fleet_flexo_button_a_MeshAtlas.glb')).toBe(true);
+    expect(hasEntry('Meshes/Fleet_imp0_MeshAtlas.glb')).toBe(true);
+    // … each part's own animation glb, at the path its <KeyframeAnimation Path> names …
+    expect(hasEntry(animGlbPath('Fleet', a.animations[0]))).toBe(true);
+    expect(hasEntry(animGlbPath('Fleet', b.animations[0]))).toBe(true);
+    // … and the texture binaries each part's materials imply.
+    expect(hasEntry('Textures/Fleet_flexo_button_a_BaseColor_ff0000.ktx2')).toBe(true);
+    expect(hasEntry('Textures/Fleet_imp0_BaseColor_2850c8.ktx2')).toBe(true);
+    // DELIBERATELY a subset: a custom-mesh part also emits the synthetic flat-normal / ORM
+    // solids (and more as materials grow), so an exact entry count would be a churn magnet.
+  });
+});
+
+/** The one KSA texture BOTH kitten fixtures below copy verbatim in 'bundle' mode. */
+const SHARED_KITTEN_TEXTURE = 'Textures/Characters/Kitten_EMU_A.ktx2';
+const BUNDLE_TEX = { mode: 'bundle', contentCorePath: '' } as const;
+
+/** A part whose single part-ified kitten submesh reads {@link SHARED_KITTEN_TEXTURE}. */
+function partWithSharedKittenTexture(partId: string, subPartId: string): EditingPart {
+  const part = createEmptyPart();
+  part.partId = partId;
+  part.customMeshes.push({
+    id: `mesh_${subPartId}`,
+    name: subPartId,
+    subPartId,
+    kitten: { kind: 'hunter', specKey: 'suit', diffuse: SHARED_KITTEN_TEXTURE },
+    faceTextures: {},
+  });
+  part.placements.push({
+    instanceId: `${subPartId}_1`,
+    subPartTemplateId: subPartId,
+    ...identityTransform(),
+    layerId: 'default',
+  });
+  return part;
+}
+
+/** The two-part content both cases below build (fresh per test — fetch results differ). */
+function kittenFleet() {
+  return buildMultiModContent(
+    namedParts(
+      partWithSharedKittenTexture('ShipA', 'flexo_a_suit'),
+      partWithSharedKittenTexture('ShipB', 'flexo_b_suit'),
+    ),
+    'Fleet',
+  );
+}
+
+// The ONE binary path two parts can legitimately both emit: a kitten texture copied verbatim
+// out of the game's own Textures/ (every other path carries a per-part random id — I4).
+describe('buildMultiCustomBundle — a kitten texture two parts both bundle', () => {
+  it('dedupes the copy when the bytes are identical', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      arrayBuffer: async () => new Uint8Array([1, 2, 3, 4]).buffer,
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const bundle = await buildMultiCustomBundle(kittenFleet(), BUNDLE_TEX);
+      // Each part resolves the texture independently (its own `bundled` map) …
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      // … and the merge keeps ONE copy at the shared path.
+      expect(bundle.binaries.filter((b) => b.path === 'Textures/Kitten_EMU_A.ktx2')).toHaveLength(
+        1,
+      );
+      // Both parts' SubParts still reference it.
+      expect(bundle.assetsXml).toContain('<SubPart Id="flexo_a_suit"');
+      expect(bundle.assetsXml).toContain('<SubPart Id="flexo_b_suit"');
+      expect(bundle.assetsXml!.match(/<Diffuse Path="Textures\/Kitten_EMU_A\.ktx2"/g)).toHaveLength(
+        2,
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('throws when the two copies differ — one part would silently overwrite the other', async () => {
+    let n = 0;
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      arrayBuffer: async () => new Uint8Array([++n]).buffer,
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await expect(buildMultiCustomBundle(kittenFleet(), BUNDLE_TEX)).rejects.toThrow(
+        /DIFFERENT bytes at 'Textures\/Kitten_EMU_A\.ktx2'/,
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

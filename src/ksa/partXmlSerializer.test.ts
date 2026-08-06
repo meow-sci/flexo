@@ -7,6 +7,7 @@ import { seatAxesFromRotation } from './ivaSeatAxes';
 import type { Connector, EditingPart, IvaSeat, SubPartPlacement } from './types';
 import {
   createCombustor,
+  createCustomReaction,
   createDefaultLayer,
   createEmptyGameData,
   createNozzle,
@@ -86,6 +87,21 @@ function subPartById(doc: XmlDocument, id: string): XmlElement {
 /** First descendant element with the given tag, or null. */
 function child(el: XmlElement, tag: string): XmlElement | null {
   return el.getElementsByTagName(tag)[0] ?? null;
+}
+
+/**
+ * Tag names of the `<Assets>` root's DIRECT element children, in document order — the shape of
+ * the flat `List<SerializedId>` KSA deserializes (`KSA/AssetBundle.cs`). Text nodes (the
+ * pretty-printer's indentation) are skipped.
+ */
+function rootChildTags(doc: XmlDocument): string[] {
+  const kids = doc.documentElement!.childNodes;
+  const out: string[] = [];
+  for (let i = 0; i < kids.length; i++) {
+    const node = kids.item(i);
+    if (node && node.nodeType === 1) out.push((node as XmlElement).tagName);
+  }
+  return out;
 }
 
 describe('serializePart', () => {
@@ -1011,5 +1027,150 @@ describe('EVA door ⇄ IVA seat link (D17)', () => {
     );
     expect(tags(doc, 'EVADoor')[0].hasAttribute('SeatId')).toBe(false);
     expect(tags(doc, 'IVASeat')[0].hasAttribute('Id')).toBe(false);
+  });
+});
+
+// ── N parts in ONE Assets document (MULTI_PART_PLAN P3.03) ───────────────────
+//
+// An Assets file is a flat polymorphic list (`KSA/AssetBundle.cs` — `[XmlRoot("Assets")]` over
+// `List<SerializedId>`), so N `<Part>` / `<PartGameData>` / `<SubPartGameData>` /
+// `<FixedReaction>` siblings in one file are first-class (plan §0.3 fact 1). Everything above
+// pins single-entry parity (I8); everything here pins what N entries add: entry order, one
+// remap PER entry, per-part entity-id spaces (I3), and the hoisted reaction block.
+
+/** Both fixture parts place this ONE shared built-in template — through a per-part variant. */
+const SHARED_TEMPLATE = 'CoreElectricalA_Subpart_SpotlightA';
+/** `flexo_<base>_<ns>_<templateId>` for base "Fleet" and each part's own `ns` (P3.04). */
+const VARIANT_A = `flexo_Fleet_ShipA_${SHARED_TEMPLATE}`;
+const VARIANT_B = `flexo_Fleet_ShipB_${SHARED_TEMPLATE}`;
+
+/** The propellant BOTH parts declare, structurally identical in each (fresh objects). */
+function sharedReaction() {
+  return createCustomReaction('MyProp', 'My Propellant');
+}
+
+/**
+ * One fixture part: a placement + a `<Light>` on the shared template, its own `_connector1`
+ * (the SAME id in both parts — legal, ids are per-part namespaces) and the shared reaction.
+ */
+function fleetPart(partId: string, instanceId: string, rangeM: number, x: number): EditingPart {
+  return editingPart({
+    partId,
+    placements: [placement({ instanceId, subPartTemplateId: SHARED_TEMPLATE })],
+    connectors: [connector({ id: '_connector1', position: { x, y: 0, z: 0 } })],
+    lights: [{ ...createPartLight(SHARED_TEMPLATE, '_light1'), rangeM }],
+    customReactions: [sharedReaction()],
+  });
+}
+
+const shipA = fleetPart('ShipA', 'a_1', 5, 1);
+const shipB = fleetPart('ShipB', 'b_1', 9, -1);
+const fleetEntries = [
+  { part: shipA, remap: new Map([[SHARED_TEMPLATE, VARIANT_A]]) as TemplateRemap },
+  { part: shipB, remap: new Map([[SHARED_TEMPLATE, VARIANT_B]]) as TemplateRemap },
+];
+
+describe('serializePartsXml — N parts in one <Assets>', () => {
+  const doc = parse(serializePartsXml(fleetEntries));
+
+  it('emits one <Part> per entry, in ENTRY order', () => {
+    expect(tags(doc, 'Part').map((e) => e.getAttribute('Id'))).toEqual(['ShipA', 'ShipB']);
+    // Entry order IS file order: reversing the input reverses the document.
+    const reversed = parse(serializePartsXml([fleetEntries[1], fleetEntries[0]]));
+    expect(tags(reversed, 'Part').map((e) => e.getAttribute('Id'))).toEqual(['ShipB', 'ShipA']);
+  });
+
+  it('keeps each part’s placements inside its OWN <Part>', () => {
+    const [a, b] = tags(doc, 'Part');
+    expect(tags(a, 'SubPart').map((e) => e.getAttribute('Id'))).toEqual(['a_1']);
+    expect(tags(b, 'SubPart').map((e) => e.getAttribute('Id'))).toEqual(['b_1']);
+  });
+
+  it('remaps each part’s placement through ITS OWN variant map', () => {
+    // One shared built-in template, two variant ids — the `ns` segment is what keeps part B's
+    // SubPartGameData from merging onto part A's SubPart (KSA registers the id globally).
+    expect(subPartById(doc, 'a_1').getAttribute('InstanceOf')).toBe(VARIANT_A);
+    expect(subPartById(doc, 'b_1').getAttribute('InstanceOf')).toBe(VARIANT_B);
+    expect(serializePartsXml(fleetEntries)).not.toContain(`InstanceOf="${SHARED_TEMPLATE}"`);
+  });
+
+  // I3 — entity ids are unique only WITHIN one part. Two parts may both carry `_connector1`,
+  // and each `<Part>` is its own scope in KSA, so the collision is legal and must round-trip.
+  it('serializes colliding per-part connector ids as two independent connectors', () => {
+    const [a, b] = tags(doc, 'Part');
+    expect(tags(a, 'Connector').map((e) => e.getAttribute('Id'))).toEqual(['_connector1']);
+    expect(tags(b, 'Connector').map((e) => e.getAttribute('Id'))).toEqual(['_connector1']);
+    // Same id, different geometry — proof the two are not one merged element.
+    expect(child(tags(a, 'Connector')[0], 'Position')!.getAttribute('X')).toBe('1');
+    expect(child(tags(b, 'Connector')[0], 'Position')!.getAttribute('X')).toBe('-1');
+  });
+});
+
+describe('serializeGameDataXml — N parts in one <Assets>', () => {
+  const xml = serializeGameDataXml(fleetEntries, 'Fleet');
+  const doc = parse(xml);
+
+  it('emits one <PartGameData> per entry, in ENTRY order', () => {
+    expect(tags(doc, 'PartGameData').map((e) => e.getAttribute('Id'))).toEqual(['ShipA', 'ShipB']);
+    // Each part's connectors stay under its own <PartGameData>, colliding id and all (I3).
+    const [a, b] = tags(doc, 'PartGameData');
+    expect(tags(a, 'Connector').map((e) => e.getAttribute('Id'))).toEqual(['_connector1']);
+    expect(tags(b, 'Connector').map((e) => e.getAttribute('Id'))).toEqual(['_connector1']);
+  });
+
+  it('attaches each part’s <SubPartGameData> to ITS OWN remapped variant id', () => {
+    const blocks = tags(doc, 'SubPartGameData');
+    expect(blocks.map((e) => e.getAttribute('Id'))).toEqual([VARIANT_A, VARIANT_B]);
+    // The shared built-in template is NEVER redefined — that is the whole point of the ns.
+    expect(xml).not.toContain(`<SubPartGameData Id="${SHARED_TEMPLATE}">`);
+    // Each block carries its own part's light, unmerged.
+    expect(child(blocks[0], 'Range')!.getAttribute('Value')).toBe('5');
+    expect(child(blocks[1], 'Range')!.getAttribute('Value')).toBe('9');
+  });
+
+  it('emits an identical <FixedReaction> declared by BOTH parts exactly once', () => {
+    // KSA registers reactions by id, first-wins — a second declaration is at best redundant.
+    // Divergent payloads under one id are a preflight blocker, so first-wins is safe (P3.05).
+    expect(tags(doc, 'FixedReaction').map((e) => e.getAttribute('Id'))).toEqual(['MyProp']);
+  });
+
+  it('still emits a reaction only one part declares', () => {
+    const onlyB = editingPart({
+      ...shipB,
+      customReactions: [sharedReaction(), createCustomReaction('OnlyB', 'Only B')],
+    });
+    const both = parse(
+      serializeGameDataXml(
+        [fleetEntries[0], { part: onlyB, remap: fleetEntries[1].remap }],
+        'Fleet',
+      ),
+    );
+    expect(tags(both, 'FixedReaction').map((e) => e.getAttribute('Id'))).toEqual([
+      'MyProp',
+      'OnlyB',
+    ]);
+  });
+
+  // Nothing else pins the HOIST: the reactions are collected in a second pass after every
+  // part's blocks, so a regression that emitted them inline would still parse identically.
+  it('lays the file out as every part’s data first, then the reactions LAST', () => {
+    const onlyB = editingPart({
+      ...shipB,
+      customReactions: [sharedReaction(), createCustomReaction('OnlyB', 'Only B')],
+    });
+    const laid = parse(
+      serializeGameDataXml(
+        [fleetEntries[0], { part: onlyB, remap: fleetEntries[1].remap }],
+        'Fleet',
+      ),
+    );
+    expect(rootChildTags(laid)).toEqual([
+      'PartGameData', // ShipA
+      'SubPartGameData',
+      'PartGameData', // ShipB
+      'SubPartGameData',
+      'FixedReaction', // …then every reaction, hoisted to the end of the file
+      'FixedReaction',
+    ]);
   });
 });

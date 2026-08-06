@@ -530,9 +530,16 @@ function meshSignature(part: EditingPart): string {
   });
 }
 
-/** The mesh's material, or undefined when unassigned / dangling. */
-function materialFor(part: EditingPart, m: CustomMesh): CustomMaterial | undefined {
-  return m.materialId ? part.customMaterials.find((x) => x.id === m.materialId) : undefined;
+/**
+ * The mesh's material, or undefined when unassigned / dangling. Resolved against the part that
+ * OWNS the mesh — never "the active part": asset ids are project-unique (I4), so a ghost part's
+ * `materialId` would simply not exist in `$part.customMaterials`.
+ */
+function materialFor(
+  owner: Pick<EditingPart, 'customMaterials'>,
+  m: CustomMesh,
+): CustomMaterial | undefined {
+  return m.materialId ? owner.customMaterials.find((x) => x.id === m.materialId) : undefined;
 }
 
 /** The uniform value of a scalar channel; a mapped channel multiplies at 1 (three convention). */
@@ -665,18 +672,86 @@ async function faceBaseImage(
 }
 
 /**
- * Builds the render-cache entry + catalog entry for a part-ified kitten submesh:
- * the shared cached baked geometry (never disposed — SubPartObject treats render-cache
- * geometry as shared) + a KSA PBR material (DoubleSide, mirroring KittenObject).
+ * One custom mesh's renderable pair: geometry + the materials that dress it.
+ *
+ * Ownership is explicit because the geometry sources differ: a primitive's is built fresh on
+ * every call, while imported and kitten-baked geometry comes out of a process-wide cache that
+ * other renderers share and nothing ever disposes. Materials are ALWAYS created here, so the
+ * caller always disposes them.
  */
+export interface MeshRenderData {
+  geometry: THREE.BufferGeometry;
+  /** true → caller disposes (primitives); false → shared cache entry (imported, kitten). */
+  geometryOwned: boolean;
+  /** Always caller-owned creations → caller disposes. */
+  materials: THREE.MeshStandardMaterial[];
+}
+
+/**
+ * Builds one {@link CustomMesh}'s render data against the part that OWNS it — the single
+ * routine behind BOTH the active part's {@link customMeshRenderCache} and the ghost rendering
+ * of inactive parts (`plans/MULTI_PART_PLAN.md` P5.01).
+ *
+ * `owner` is what makes it reusable: a mesh's `materialId` resolves inside its own document,
+ * and asset ids are project-unique (I4), so resolving a ghost part's mesh against the ACTIVE
+ * `$part` would miss every time and render default gray. Texture URLs need no such parameter —
+ * the module's URL maps are keyed by the project-unique texture id and hydrated for ALL parts
+ * (see {@link hydrateCustomAssets}).
+ *
+ * `null` means "no resolvable geometry" (a missing blob, an unbuildable descriptor, a failed
+ * kitten bake) and is tolerated: the caller skips that mesh, matching the exporter's
+ * partial-failure stance.
+ */
+export async function buildMeshRenderData(
+  mesh: CustomMesh,
+  owner: Pick<EditingPart, 'customMaterials' | 'customTextures'>,
+): Promise<MeshRenderData | null> {
+  switch (meshKind(mesh)) {
+    case 'kitten':
+      return mesh.kitten ? buildKittenRenderData(mesh, mesh.kitten) : null;
+    case 'imported':
+      return mesh.imported ? buildImportedRenderData(mesh, owner, mesh.imported) : null;
+    case 'primitive':
+      return mesh.primitive ? buildPrimitiveRenderData(mesh, owner, mesh.primitive) : null;
+  }
+}
+
+/** Publishes one mesh's render data into the ACTIVE part's cache (I1 — ghosts never touch it). */
+function cacheRenderData(subPartId: string, render: MeshRenderData): void {
+  customMeshRenderCache.set(subPartId, { geometry: render.geometry, materials: render.materials });
+}
+
+/** A material's base-color .ktx2 blob URL, when its base color is an image and not a color. */
+function baseColorMapUrl(material: CustomMaterial | undefined): string | undefined {
+  return material?.baseColor.kind === 'map'
+    ? textureKtx2Urls.get(material.baseColor.textureId)
+    : undefined;
+}
+
+/**
+ * Render data for a part-ified kitten submesh: the shared cached baked geometry + a KSA PBR
+ * material (DoubleSide, mirroring KittenObject).
+ */
+async function buildKittenRenderData(
+  m: CustomMesh,
+  kitten: KittenMeshSource,
+): Promise<MeshRenderData | null> {
+  const geometry = await bakedKittenGeometry(kitten);
+  if (!geometry) return null;
+  const mat = await buildKittenSubMeshMaterial(m, kitten);
+  mat.side = THREE.DoubleSide;
+  // Geometry: kittenBake's shared per-kind bake cache, never disposed — NOT owned.
+  return { geometry, geometryOwned: false, materials: [mat] };
+}
+
+/** The catalog entry for a part-ified kitten submesh, plus the active part's cache fill. */
 async function buildKittenCatalogEntry(
+  part: EditingPart,
   m: CustomMesh,
   kitten: KittenMeshSource,
 ): Promise<CatalogSubPart> {
-  const geometry = await bakedKittenGeometry(kitten);
-  const mat = await buildKittenSubMeshMaterial(m, kitten);
-  mat.side = THREE.DoubleSide;
-  if (geometry) customMeshRenderCache.set(m.subPartId, { geometry, materials: [mat] });
+  const render = await buildMeshRenderData(m, part);
+  if (render) cacheRenderData(m.subPartId, render);
   return {
     id: m.subPartId,
     atlasUrl: atlasUrl!,
@@ -732,13 +807,9 @@ async function buildKittenSubMeshMaterial(
 }
 
 /**
- * Builds the render-cache entry + catalog entry for an IMPORTED glTF mesh.
- *
- * The batch's own normalized GLB IS the mesh atlas here (it holds one named mesh per imported
- * SubPart, exactly like a KSA `<MeshAtlas>`), so the entry points at that blob URL rather than
- * the shared primitive/kitten atlas — truthful, and it still resolves if the render cache ever
- * misses. Geometry comes from the shared MeshAtlasCache (tangents, node transform baked), so
- * imported SubParts render through the identical path as Core ones.
+ * Render data for an IMPORTED glTF mesh. Geometry comes from the shared MeshAtlasCache
+ * (tangents, node transform baked), so imported SubParts render through the identical path as
+ * Core ones.
  *
  * The surface goes through the SAME resolvers as a primitive's — `resolveMaterialChannels` +
  * `buildCustomMaterial`, and `glowFor` + `compositeGlow` + `buildGlowingFaceMaterial`
@@ -746,24 +817,17 @@ async function buildKittenSubMeshMaterial(
  * body of code. The only difference is that an imported mesh has no per-face grid: one
  * material for the whole mesh, exactly like a KSA `<PartModel>`.
  */
-async function buildImportedCatalogEntry(
-  part: EditingPart,
+async function buildImportedRenderData(
   m: CustomMesh,
+  owner: Pick<EditingPart, 'customMaterials'>,
   imported: ImportedMeshSource,
-): Promise<CatalogSubPart | null> {
-  const url = importAtlasUrl(imported.importId);
+): Promise<MeshRenderData | null> {
   const geometry = await getImportedGeometry(imported.importId, imported.meshName);
-  if (!url || !geometry) {
-    console.warn(`flexo: imported mesh '${m.name}' has no resolvable geometry — skipped`);
-    return null;
-  }
+  if (!geometry) return null;
 
-  const material = materialFor(part, m);
+  const material = materialFor(owner, m);
   const channels = material ? resolveMaterialChannels(material) : undefined;
-  const baseMapUrl =
-    material?.baseColor.kind === 'map'
-      ? textureKtx2Urls.get(material.baseColor.textureId)
-      : undefined;
+  const baseMapUrl = baseColorMapUrl(material);
   const glow = await glowFor(m);
 
   let mat: THREE.MeshStandardMaterial;
@@ -790,7 +854,30 @@ async function buildImportedCatalogEntry(
   } else {
     mat = makeFlatMaterial();
   }
-  customMeshRenderCache.set(m.subPartId, { geometry, materials: [mat] });
+  // Geometry: the shared importedMeshCache registry, never disposed — NOT owned.
+  return { geometry, geometryOwned: false, materials: [mat] };
+}
+
+/**
+ * The catalog entry for an IMPORTED glTF mesh, plus the active part's cache fill.
+ *
+ * The batch's own normalized GLB IS the mesh atlas here (it holds one named mesh per imported
+ * SubPart, exactly like a KSA `<MeshAtlas>`), so the entry points at that blob URL rather than
+ * the shared primitive/kitten atlas — truthful, and it still resolves if the render cache ever
+ * misses.
+ */
+async function buildImportedCatalogEntry(
+  part: EditingPart,
+  m: CustomMesh,
+  imported: ImportedMeshSource,
+): Promise<CatalogSubPart | null> {
+  const url = importAtlasUrl(imported.importId);
+  const render = url ? await buildMeshRenderData(m, part) : null;
+  if (!url || !render) {
+    console.warn(`flexo: imported mesh '${m.name}' has no resolvable geometry — skipped`);
+    return null;
+  }
+  cacheRenderData(m.subPartId, render);
   return {
     id: m.subPartId,
     atlasUrl: url,
@@ -802,28 +889,25 @@ async function buildImportedCatalogEntry(
     meshNodeName: imported.meshName,
     materialId: undefined,
     // Cache-busting key for the shared-material cache, exactly like the primitive path.
-    diffuseUrl: baseMapUrl,
+    diffuseUrl: baseColorMapUrl(materialFor(part, m)),
     sourceFile: '(imported)',
   };
 }
 
 /**
- * Builds the render-cache entry + catalog entry for a parametric primitive mesh: geometry with
- * the per-face UV transforms baked in, and one material per face group.
+ * Render data for a parametric primitive mesh: geometry with the per-face UV transforms baked
+ * in, and one material per face group.
  */
-async function buildPrimitiveCatalogEntry(
-  part: EditingPart,
+async function buildPrimitiveRenderData(
   m: CustomMesh,
-): Promise<CatalogSubPart | null> {
-  if (!m.primitive) {
-    console.warn(`flexo: custom mesh '${m.name}' has no geometry source — skipped`);
-    return null;
-  }
+  owner: Pick<EditingPart, 'customMaterials'>,
+  primitive: PrimitiveSpec,
+): Promise<MeshRenderData> {
   const ft = m.faceTextures;
-  const faceKeys = PRIMITIVE_FACE_KEYS[m.primitive.kind];
+  const faceKeys = PRIMITIVE_FACE_KEYS[primitive.kind];
 
   // Build geometry with UV transforms baked in.
-  const geometry = buildPrimitiveGeometry(m.primitive);
+  const geometry = buildPrimitiveGeometry(primitive);
   applyFaceUvTransforms(geometry, faceKeys, ft);
 
   // One material per face group. Resolution per face: the face's own texture overrides
@@ -832,7 +916,7 @@ async function buildPrimitiveCatalogEntry(
   // over the same resolved base so editor == export; meshes with neither material nor
   // face texture keep the legacy flat look.
   const glow = await glowFor(m);
-  const material = materialFor(part, m);
+  const material = materialFor(owner, m);
   const channels = material ? resolveMaterialChannels(material) : undefined;
   const materials: THREE.MeshStandardMaterial[] = [];
   for (const key of faceKeys) {
@@ -854,14 +938,9 @@ async function buildPrimitiveCatalogEntry(
       materials.push(gmat);
     } else if (material && channels) {
       const faceUrl = texId ? textureKtx2Urls.get(texId) : undefined;
-      const baseMapUrl =
-        faceUrl ??
-        (material.baseColor.kind === 'map'
-          ? textureKtx2Urls.get(material.baseColor.textureId)
-          : undefined);
       materials.push(
         await buildCustomMaterial({
-          mapUrl: baseMapUrl,
+          mapUrl: faceUrl ?? baseColorMapUrl(material),
           color: material.baseColor.kind === 'color' ? material.baseColor.color : undefined,
           wrap,
           ...channels,
@@ -873,7 +952,21 @@ async function buildPrimitiveCatalogEntry(
     }
   }
 
-  customMeshRenderCache.set(m.subPartId, { geometry, materials });
+  // Geometry: freshly built from the primitive params on every call — the caller OWNS it.
+  return { geometry, geometryOwned: true, materials };
+}
+
+/** The catalog entry for a parametric primitive mesh, plus the active part's cache fill. */
+async function buildPrimitiveCatalogEntry(
+  part: EditingPart,
+  m: CustomMesh,
+): Promise<CatalogSubPart | null> {
+  const render = await buildMeshRenderData(m, part);
+  if (!render) {
+    console.warn(`flexo: custom mesh '${m.name}' has no geometry source — skipped`);
+    return null;
+  }
+  cacheRenderData(m.subPartId, render);
 
   const primaryTexId = getPrimaryTextureId(m);
   return {
@@ -903,7 +996,7 @@ async function refreshCatalog(): Promise<void> {
         case 'imported':
           return m.imported ? buildImportedCatalogEntry(part, m, m.imported) : null;
         case 'kitten':
-          return m.kitten && atlasUrl ? buildKittenCatalogEntry(m, m.kitten) : null;
+          return m.kitten && atlasUrl ? buildKittenCatalogEntry(part, m, m.kitten) : null;
         case 'primitive':
           return atlasUrl ? buildPrimitiveCatalogEntry(part, m) : null;
       }

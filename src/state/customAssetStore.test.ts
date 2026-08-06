@@ -137,6 +137,7 @@ import {
   $unplacedCustomMeshes,
   addCustomMaterial,
   addCustomTexture,
+  buildMeshRenderData,
   clearMeshFaceConfig,
   copyFaceConfigToAll,
   customMeshRenderCache,
@@ -161,7 +162,7 @@ import { createPart, initPartsForNewProject, snapshotParts } from './partsStore'
 import { analyzeImport, DEFAULT_IMPORT_OPTIONS } from '../ksa/importPlan';
 import { normalizeImport, type NormalizedImport } from '../ksa/importNormalize';
 import type { ImportMaterialPlan, ImportMaterialSpec } from '../ksa/importMaterials';
-import type { CustomMesh } from '../ksa/types';
+import { createDefaultMaterial, type CustomMesh } from '../ksa/types';
 import { assetKeys, getAsset } from './assetDb';
 import { $currentProjectId } from './projectIndexStore';
 
@@ -1128,5 +1129,73 @@ describe('multi-part custom assets', () => {
     expect(await getAsset(assetKeys.textureSource(TEST_PROJECT_ID, texB.id))).toBeDefined();
     expect(await getAsset(assetKeys.textureKtx2(TEST_PROJECT_ID, texB.id))).toBeDefined();
     expect(Object.keys($customTextureUrls.get())).toEqual([texB.id]);
+  });
+});
+
+/**
+ * The per-mesh render builder the ACTIVE part's cache fill and the ghost layer share
+ * (MULTI_PART_PLAN.md P5.01). Two things must hold for a ghost to look right: geometry
+ * ownership has to be honest (the caller disposes only what it owns), and a mesh's material
+ * must resolve against the part that OWNS it — asset ids are project-unique (I4), so
+ * resolving a ghost's `materialId` against the active `$part` would miss every time.
+ */
+describe('buildMeshRenderData', () => {
+  const box = (over: Partial<CustomMesh> = {}): CustomMesh => ({
+    id: 'mesh_1',
+    name: 'Hull Box',
+    subPartId: 'flexo_HullBox_a1',
+    primitive: { kind: 'box', params: { width: 1, height: 1, depth: 1 } },
+    faceTextures: {},
+    ...over,
+  });
+
+  const noAssets = { customMaterials: [], customTextures: [] };
+
+  it('builds a primitive OWNED: fresh geometry per call, one material per face', async () => {
+    const render = (await buildMeshRenderData(box(), noAssets))!;
+
+    expect(render.geometryOwned).toBe(true);
+    expect(render.geometry.getAttribute('position')).toBeTruthy();
+    expect(render.materials).toHaveLength(6); // a box's six face groups
+
+    // "Owned" means built here, not handed out of a shared cache — two calls, two geometries.
+    const again = (await buildMeshRenderData(box(), noAssets))!;
+    expect(again.geometry).not.toBe(render.geometry);
+  });
+
+  it('builds an imported mesh NOT owned — the geometry is a shared cache entry', async () => {
+    await importModelAsMeshes(await synthesizeImport(), 'pod.glb');
+    const mesh = $part.get().customMeshes[0]!;
+
+    const render = (await buildMeshRenderData(mesh, $part.get()))!;
+
+    expect(render.geometryOwned).toBe(false);
+    expect(render.materials).toHaveLength(1); // one material per mesh — a KSA <PartModel>
+  });
+
+  it('resolves the material against the OWNER part, never the active $part', async () => {
+    const material = {
+      ...createDefaultMaterial('mat_ghost', 'Ghost Red'),
+      baseColor: { kind: 'color' as const, color: { r: 255, g: 0, b: 0 } },
+      metalness: { kind: 'value' as const, value: 1 },
+    };
+    const mesh = box({ materialId: material.id });
+    // The active part deliberately has NO materials at all — exactly a ghost's situation.
+    expect($part.get().customMaterials).toHaveLength(0);
+
+    const owned = (await buildMeshRenderData(mesh, {
+      customMaterials: [material],
+      customTextures: [],
+    }))!;
+    expect(owned.materials[0]!.metalness).toBe(1);
+    expect(owned.materials[0]!.color.getHex()).toBe(0xff0000);
+
+    // Same mesh, an owner that does not have the material: the flat fallback, not a throw.
+    const orphan = (await buildMeshRenderData(mesh, noAssets))!;
+    expect(orphan.materials[0]!.color.getHex()).toBe(0xbfc4cc);
+  });
+
+  it('returns null for a mesh with no geometry source, so a ghost can skip it', async () => {
+    expect(await buildMeshRenderData(box({ primitive: undefined }), noAssets)).toBeNull();
   });
 });

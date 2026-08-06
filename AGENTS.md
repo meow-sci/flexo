@@ -449,7 +449,7 @@ over `GLTFParser`), `src/ksa/importPlan.ts` (grouping + the warning catalog),
 `src/ksa/importMaterials.ts` (glTF → the five slots), `src/ksa/importNormalize.ts`
 (KSA-legal geometry + the batch atlas GLB), `src/ksa/importEstimates.ts` (VRAM/mod-size +
 warning severities), `src/three/importedMeshCache.ts` (`importId → blob:`; editor vs raw
-export geometry), `src/ui/ImportModelDialog.tsx`, and
+export geometry), `src/ui/assets/ImportReviewDialog.tsx`, and
 `customAssetStore.importModelAsMeshes` / `replaceImport` / `removeImport`.
 
 ### Current scope

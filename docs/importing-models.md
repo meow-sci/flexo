@@ -41,8 +41,9 @@ contract, with `decomp/…:line` citations).
  planImportMaterials()  ─▶  ImportTextureSpec[] + ImportMaterialSpec[]  (factors baked to pixels)
    │
    ▼
- ImportModelDialog  — preview · stats · VRAM/mod-size estimate · options · warnings
-   │                   NOTHING has touched the document yet
+ Import Review (Drop → Review → Importing)                                       
+   │               preview · stats · VRAM/mod-size estimate · options · warnings
+   │               NOTHING has touched the document yet
    ▼
  normalizeImport(plan, opts)
    │   bake node/mirror/skin transforms · strip unread attributes · force indices
@@ -63,8 +64,8 @@ contract, with `decomp/…:line` citations).
 ## The Blender export recipe
 
 File ▸ Export ▸ **glTF 2.0 (.glb/.gltf)**, format **glTF Binary (.glb)**. The same table is a
-"How to export from Blender" disclosure inside the import dialog (`BLENDER_RECIPE` in
-`ImportModelDialog.tsx`).
+"How to export from Blender" disclosure on the Import Review dialog's Drop view
+(`BLENDER_RECIPE` in `src/ui/assets/ImportReviewDialog.tsx`).
 
 | Section                 | Setting                                                                       | Why                                                                                                        |
 | ----------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
@@ -190,7 +191,7 @@ into the alpha — passes through unscaled; KSA adds that mask as WHITE, so a st
 may need the Emissive slider pulled back (and a matching `<Light>`) to read as a colour in-game.
 
 `alphaMode: BLEND` sets `ImportedMeshSource.transparent`, the opt-in `<PartModelGlass>` route
-(toggled per mesh afterwards in the per-mesh panel). `alphaMode: MASK` is a warning only — KSA's
+(toggled per mesh afterwards in Surface mode's Imported section). `alphaMode: MASK` is a warning only — KSA's
 part shader has no cutout.
 
 **Dedup.** Textures are keyed by an FNV-1a-64 hash of the **source bytes** + the channel + any
@@ -215,9 +216,9 @@ hand-authored ones. Nothing about them is a parallel universe.
 | `src/ksa/importEstimates.ts`       | The numbers and labels the dialog shows: image-header size reads, the size cap, VRAM/mod-size formulas, warning severities + grouping, scale presets. Pure, no three, no DOM.            |
 | `src/three/importedMeshCache.ts`   | `importId → blob:` registry over the stored atlas GLBs; `getImportedGeometry()` (editor, tangented) and `getImportedRawGeometry()` (export, untangented); per-batch and all-batch release. |
 | `src/three/ModelPreviewViewport.ts`| The dialog's read-only 3D preview: editor lighting/tonemapping, orbit, an adaptive metre grid, camera auto-framed on the bounding sphere. Shows the file's **own** glTF materials.       |
-| `src/ui/ImportModelDialog.tsx`     | The three-state modal (drop / review / importing) for both import and replace, driven by `$importModelRequest`. Mounted once in `app.tsx`.                                              |
+| `src/ui/assets/ImportReviewDialog.tsx` | **Import Review** — dialog id `'import-review'`, three views (Drop / Review / Importing) for both import and replace, with the D11 sticky-vs-per-import option split. Root-hosted by `DialogRoot`; its payload rides `$importModelRequest`. |
 | `src/ui/ViewportDropZone.tsx`      | Drag-and-drop onto the 3D workspace. Plain React drag handlers; opens the dialog pre-loaded.                                                                                             |
-| `src/ui/status/ImportReportBody.tsx` | The post-import summary (`$importReport`), rendered as a sticky **rich notification-center entry** — what was created, what a replace kept/removed (named), and the non-blocking warnings. |
+| `src/ui/status/ImportReportBody.tsx` | The post-import summary, rendered as a sticky **rich notification-center entry** (kind `'import-report'`) — what was created, what a replace kept/removed (named), the non-blocking warnings, and the `[Open Asset Manager]` / `[Edit surfaces →]` actions. |
 | `src/state/customAssetStore.ts`    | `importModelAsMeshes`, `removeImport`, `replaceImport`, `matchImportedMeshes`, `planImportRemoval`, `setMeshTransparent`, and the catalog/render-cache `imported` branch.               |
 | `src/ksa/modExport.ts`             | The `imported` branch of `buildCustomBundle` (raw geometry) and the `_VM` triangle budget.                                                                                              |
 | `src/ksa/exportGlb.ts`             | `buildMeshAtlasGlb` — used both for the import batch's internal atlas (`viewMeshes:false`) and the shipped mod atlas (with decimated `_VM` meshes).                                     |
@@ -368,19 +369,20 @@ Three consequences worth knowing:
 
 ## Managing imports
 
-The **Custom Assets** modal has an **Imported models** section: one card per import batch with its
-file name, SubPart / placement / triangle totals and the textures it is dressed in; a `GridList`
-of its SubParts (name, source object · source material, triangle count, add instance / manage /
-delete); and **Replace…** + **Remove import**.
+The **Asset Manager** (`⇧⌘A`, Window ▸ Asset Manager…) has an **Imported models** category that
+groups by batch: a header card with the file name, SubPart / placement / texture / material /
+triangle totals and the stored GLB size, then that batch's SubPart cards (thumbnail, name,
+provenance, usage chips, ⋮ actions). The header carries **Replace…** and **Remove import…**.
 
-The per-mesh panel (`ManageTexturesPanel`) gives an imported mesh material assignment and glow
-just like a primitive, plus a read-only **provenance block** (file / object / material / triangles
-/ vertices) and the **Render as glass** switch — but **no per-face texture grid**, because there
-are no primitive faces (the same gating kitten meshes already had).
+**Surface mode** (`5`) is where an imported mesh's surface is edited: the right sidebar gives it
+material assignment and glow just like a primitive, plus an **Imported** section with the
+read-only **provenance block** (file / object / material / triangles / vertices), the **Render as
+glass** switch, and the same **Replace… / Remove import…** pair. There is **no per-face texture
+grid**, because there are no primitive faces (the same gating kitten meshes already had).
 
 ### Replace (re-import in place)
 
-"Replace…" reopens the same import dialog in replace mode; the review step shows the match summary
+"Replace…" opens Import Review in replace mode; the Review view shows the match summary
 before anything is committed. **Matching is `(sourceNode, sourceMaterial)`** — the Blender object
 name × the material on it — because that pair is the only identity glTF carries across exports
 (mesh/material _indices_ reshuffle on every edit, and flexo's `subPartId` embeds a random suffix

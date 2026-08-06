@@ -435,6 +435,14 @@ function AssetBrowser() {
             <DetailStrip item={selected} part={part} usage={usage} />
           )}
         </div>
+
+        {/* Phone footer FAB-row (design §2.6): the rail's creation menu, reachable without
+            scrolling the chip row. */}
+        {isPhone && (
+          <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-3 py-2">
+            <NewAssetMenu />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -466,8 +474,15 @@ function CategoryRail({
       ))}
       <div className={horizontal ? 'w-px shrink-0 bg-border' : 'my-1 h-px bg-border'} />
       <RailRow row="unused" count={counts.unused} active={category === 'unused'} warn />
-      <div className={horizontal ? '' : 'flex-1'} />
-      <NewAssetMenu />
+      {/* On the phone the rail is a horizontally-scrolling chip row, so `＋ New` would sit
+          off the right edge behind six chips. It moves to the footer FAB-row instead
+          (design §2.6) — same menu component, mounted once either way. */}
+      {!horizontal && (
+        <>
+          <div className="flex-1" />
+          <NewAssetMenu />
+        </>
+      )}
     </div>
   );
 }

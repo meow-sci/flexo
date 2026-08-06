@@ -79,7 +79,20 @@ export function deleteAsset(key: string): Promise<void> {
   );
 }
 
-/** Key helpers so callers never hand-format the namespaced keys. */
+/**
+ * Key helpers so callers never hand-format the namespaced keys.
+ *
+ * **P9 prefixes these with `pa:<projectId>:`** — see design-projects-export.md §1.5 (the
+ * scheme's single owner); `listProjectBlobs(projectId)`, the boot purge of unprefixed keys,
+ * the project-delete range sweep and duplicate-copies-blobs all land there.
+ *
+ * That is a ONE-MODULE change **only for as long as this stays the only place the literals
+ * appear**. Every caller — thumbnails, glow paint, replace-image, the manager's size
+ * readouts, import review, the exporter — must route through `assetKeys.*` or a
+ * `customAssetStore` helper, and nothing outside this module may open the database. Audited
+ * by plan task P8.26; the greps to re-run are `tex-src:`, `tex-ktx2:`, `import-glb:`,
+ * `emissive-paint:` and `mesh-glb:` over `src/`.
+ */
 export const assetKeys = {
   textureSource: (id: string) => `tex-src:${id}`,
   textureKtx2: (id: string) => `tex-ktx2:${id}`,

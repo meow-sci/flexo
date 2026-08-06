@@ -34,9 +34,8 @@ import {
  * **Surface mode's Glow (emissive) section** (design: design-surface-assets.md §1.3 "Glow";
  * census custom-assets.md §1.11). The v1 inventory verbatim — modes, color, coverage,
  * emissive + the wash-out warning, the ramp editor with presets and import-from-image, the
- * paint-dialog entry and "Add Matching Light" — rehosted from the floating
- * `ManageTexturesPanel` into the docked sidebar (which is why `ManageTexturesPanel` imports
- * these components rather than keeping a second copy until it is deleted).
+ * paint-dialog entry and "Add Matching Light" — rehosted from the v1 floating per-mesh
+ * panel into the docked sidebar (foundation §6.3 death list).
  *
  * **The two sliders are deliberately independent**, because KSA's emissive can only ever ADD
  * WHITE (`MeshIndirect.frag:286` — `gammaToLinear(vec3(mask) * 1.25)`, no colour input on

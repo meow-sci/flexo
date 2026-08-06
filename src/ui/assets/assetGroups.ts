@@ -51,8 +51,8 @@ export interface ImportBatch {
 
 /**
  * Groups imported SubParts by their batch, in first-appearance order — ported verbatim from
- * the v1 `CustomAssetsModal.groupImports` (the modal dies in a later task, so the logic moves
- * here rather than being imported out of a corpse).
+ * the v1 custom-assets modal's `groupImports`, which is why it lives here rather than being
+ * imported out of a surface that no longer exists.
  *
  * The batch's textures are RESOLVED, not tagged: whatever its meshes' materials point at
  * today, which is what the user actually sees on them and stays truthful after a material

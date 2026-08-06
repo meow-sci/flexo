@@ -1,6 +1,7 @@
 import { useStore } from '@nanostores/react';
-import { Tooltip, cn } from '../kit';
+import { Button, Tooltip, cn, useIsPhone } from '../kit';
 import { SurfaceSection } from './SurfaceSection';
+import { openInspectorSheet } from '../shell/phone/phoneSheets';
 import { $surfaceFace, faceKeysFor, pickSurfaceFace } from '../../state/surfaceModeStore';
 import { FACE_LABELS } from '../../three/primitives';
 import type { CustomMesh } from '../../ksa/types';
@@ -16,9 +17,20 @@ import type { CustomMesh } from '../../ksa/types';
  *
  * **No document mutation happens here** — picking a face is mode sub-state and is never an
  * undo step (design §1.8 last row).
+ *
+ * **Phone hand-off**: the two sidebars are two sheets sharing one slot, so selecting a face
+ * in the Panel sheet closes it and opens the Inspector sheet on the Face card — the hand-off
+ * Data mode's navigator already makes (foundation §12; design-data-engine-modes §A8).
+ * Without it the selector would silently populate a surface the user cannot see.
+ *
+ * The chip GESTURES stay identical on both platforms (tapping the active chip deselects), so
+ * no phone user loses the whole-mesh view. Re-reaching the editor for an ALREADY-selected
+ * face — which fires no selection change and so cannot piggyback on the chips — is what the
+ * phone-only caption button is for.
  */
 export function FacesSection({ mesh }: { mesh: CustomMesh }) {
   const active = useStore($surfaceFace);
+  const isPhone = useIsPhone();
   const keys = faceKeysFor(mesh);
   if (keys.length <= 1) return null;
 
@@ -41,7 +53,10 @@ export function FacesSection({ mesh }: { mesh: CustomMesh }) {
                 )}
                 // Clicking the ACTIVE chip deselects (design §1.3 "clicking the active chip
                 // deselects"), which is how you get back to the whole-mesh tint.
-                onClick={() => pickSurfaceFace(selected ? null : key)}
+                onClick={() => {
+                  pickSurfaceFace(selected ? null : key);
+                  if (isPhone && !selected) openInspectorSheet();
+                }}
               >
                 <span>{FACE_LABELS[key] ?? key}</span>
                 {textured && <span className="text-accent">●</span>}
@@ -50,7 +65,19 @@ export function FacesSection({ mesh }: { mesh: CustomMesh }) {
           );
         })}
       </div>
-      <p className="text-[11px] leading-snug text-fg-subtle">(edits in the left Face card)</p>
+      {isPhone ? (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="self-start"
+          isDisabled={active === null}
+          onPress={openInspectorSheet}
+        >
+          Edit face in the Inspector sheet →
+        </Button>
+      ) : (
+        <p className="text-[11px] leading-snug text-fg-subtle">(edits in the left Face card)</p>
+      )}
     </SurfaceSection>
   );
 }

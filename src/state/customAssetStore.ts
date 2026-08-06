@@ -44,6 +44,8 @@ import {
 } from './editorStore';
 import { $projectName } from './projectStore';
 import { notify } from './notificationStore';
+import { status } from './statusStore';
+import { closeDialog, isDialogOpen, openDialog } from './dialogStore';
 import { $customCatalog } from './catalogStore';
 import { $modelImportSettings, $simulateGlass } from './settingsStore';
 import { assetKeys, deleteAsset, getAsset, putAsset } from './assetDb';
@@ -145,20 +147,19 @@ export const customMeshRenderCache = new Map<
   }
 >();
 
-/** Id of the custom mesh whose textures are currently being edited (null = panel closed). */
-export const $managingMeshId = atom<string | null>(null);
-
-export function setManagingMeshId(id: string | null): void {
-  $managingMeshId.set(id);
-}
-
 /**
- * An open request for the model-import dialog (null = closed). Ephemeral UI state, like the
- * two ids above: the dialog is mounted once in `app.tsx` and opened from THREE entry points —
- * the Add menu (with no files, so it shows its drop zone), a drag-drop onto the 3D viewport
- * (with the dropped files, so it goes straight to the review step), and "Replace…" on an
- * existing batch in the Custom Assets modal (which sets {@link replaceImportId}). `id` changes
- * on every open so the dialog body remounts with fresh per-import state.
+ * The payload for one opening of the **Import Review** dialog (`dialogStore` id
+ * `'import-review'`), or `null` when it is closed. Ephemeral UI state.
+ *
+ * The dialog itself is opened through `dialogStore` like every other overlay; this atom
+ * carries what `openDialog` deliberately does not type — the picked files and the replace
+ * target — and its `id` changes on every open, which is what REMOUNTS the dialog body so
+ * every per-import option starts at its default again (guardrail 13 / D11: "persist a
+ * preference, never a correction").
+ *
+ * Four entry points, one dialog: the Add menu (no files ⇒ the Drop view), a drag-drop onto
+ * the 3D viewport (files ⇒ straight to Review), the Asset Manager / Surface-mode
+ * "Replace…" on an existing batch (which sets {@link replaceImportId}), and the palette.
  */
 export interface ImportModelRequest {
   id: string;
@@ -173,25 +174,44 @@ export interface ImportModelRequest {
 
 export const $importModelRequest = atom<ImportModelRequest | null>(null);
 
+/** Opens Import Review with this payload. The dialog id and the payload move together. */
 export function openImportModel(files: File[] = [], replaceImportId?: string): void {
   $importModelRequest.set({ id: shortId(), files, replaceImportId });
-}
-
-export function closeImportModel(): void {
-  $importModelRequest.set(null);
+  openDialog({ id: 'import-review' });
 }
 
 /**
- * What one completed import or replace actually did, for the post-import summary.
+ * Records the files the user picked INSIDE the dialog, keeping the request `id` (so the body
+ * is not remounted and the per-import options the user has already set survive).
+ *
+ * Why the payload is written back at all: the dialog may be dismissed by a deep-link out of
+ * it — "affects export — Settings →" — and stacking is banned, so the only way the return
+ * leg can show the model again instead of an empty drop zone is for the request to carry it.
+ */
+export function setImportModelFiles(files: File[]): void {
+  const current = $importModelRequest.get();
+  if (current) $importModelRequest.set({ ...current, files });
+}
+
+/** Closes Import Review and drops its payload — the two can never disagree. */
+export function closeImportModel(): void {
+  $importModelRequest.set(null);
+  // Guarded: the payload may outlive its dialog (something else opened over it), and
+  // closing THAT dialog because the import request was dropped would be a bug.
+  if (isDialogOpen('import-review')) closeDialog();
+}
+
+/**
+ * What one completed import or replace actually did — the payload of the sticky **rich**
+ * notification-center entry ({@link postImportReport}), rendered by
+ * `src/ui/status/notificationBodies.tsx` (kind `'import-report'`) and never truncated.
  *
  * A status message holds one line; an import creates a layer, N SubParts, N placements, N
- * textures and N materials, and a REPLACE additionally destroys SubParts — the user has to be
- * able to read which ones. So the outcome is published as document-independent state AND
- * posted as a sticky RICH notification-center entry ({@link postImportReport}), whose body is
- * rendered by `src/ui/status/notificationBodies.tsx` and never truncated.
+ * textures and N materials, and a REPLACE additionally destroys SubParts — the user has to
+ * be able to read WHICH ones, which is why `removed` is a list of names and not a count.
  */
 export interface ImportReport {
-  /** Fresh per report, so the card remounts (and re-announces) for each one. */
+  /** Fresh per report, so two reports of the same file stay distinct entries. */
   id: string;
   mode: 'import' | 'replace';
   fileName: string;
@@ -207,36 +227,59 @@ export interface ImportReport {
   removed?: string[];
   /** Non-blocking warnings from the geometry + material passes, carried through verbatim. */
   warnings: ImportWarning[];
+  /**
+   * `CustomMesh.id` of the first SubPart this import created, if any — the target of the
+   * entry's "Edit surfaces →" action. Absent when a replace added nothing new.
+   */
+  firstMeshId?: string;
 }
 
 /**
- * The LAST import's outcome. Nothing renders it today — the report is shown by the
- * notification entry {@link postImportReport} posts — but it is deliberately kept as the
- * document-independent record of "what the last import did" for the import-pipeline rework
- * to build on (plan: P3.14 "keep `$importReport`; the CARD is what dies").
- */
-export const $importReport = atom<ImportReport | null>(null);
-
-export function dismissImportReport(): void {
-  $importReport.set(null);
-}
-
-/**
- * Publishes a finished import both ways: into the {@link $importReport} atom and as the
- * sticky rich notification that REPLACED the old floating `ImportReportCard`
- * (design-system-services §2.5).
+ * Publishes a finished import as the sticky RICH notification-center entry that replaced
+ * v1's floating `ImportReportCard` (design: design-surface-assets.md §3.4; foundation §5.1
+ * `rich` row), plus a one-line transient flash in the status channel.
  *
- * Sticky-until-dismissed and one entry PER import, so a second import no longer erases the
- * first report — the center keeps the history (`notificationStore` defaults `rich` to unread
- * + sticky, and the bell pulses).
+ * Two behaviours the card could not have: entries **accumulate** (a second import no longer
+ * erases the first report — the center keeps the history), and the entry carries **actions**,
+ * which are command ids resolved at render time rather than callbacks, so a mesh deleted
+ * before the button is pressed simply renders the action disabled.
+ *
+ * The body is DATA — strings, counts, arrays. The JSX lives in the UI-side rich-body
+ * registry, because `src/state/` may not import react (constitution).
  */
 function postImportReport(report: ImportReport): void {
-  $importReport.set(report);
+  const actions = [{ label: 'Open Asset Manager', commandId: 'window.assetManager' }];
+  // A dynamic-provider id (`surfaceCommands.surfacePickCommands`): `getCommand` resolves it
+  // through the provider, so the button disables itself once the mesh is gone.
+  if (report.firstMeshId) {
+    actions.push({ label: 'Edit surfaces →', commandId: `surface.pickMesh:${report.firstMeshId}` });
+  }
   notify({
     severity: 'rich',
-    title: `Import report — ${report.fileName}`,
+    title: `${report.mode === 'replace' ? 'Replaced' : 'Imported'} ${report.fileName}`,
     rich: { kind: 'import-report', payload: report },
+    actions,
   });
+  // `rich` is center-only by design, so the one-line summary is flashed separately —
+  // otherwise a finished import says nothing at all unless the bell is watched.
+  status(summarizeImportReport(report), { severity: 'success' });
+}
+
+/** The status channel's one-liner for a finished import (the center holds the detail). */
+function summarizeImportReport(report: ImportReport): string {
+  const parts = [`${report.fileName}:`];
+  if (report.mode === 'replace') {
+    parts.push(
+      `${report.matched ?? 0} kept, ${report.subParts} new, ${report.removed?.length ?? 0} removed`,
+    );
+  } else {
+    parts.push(`${plural(report.subParts, 'SubPart')}, ${plural(report.placements, 'placement')}`);
+  }
+  return parts.join(' ');
+}
+
+function plural(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? '' : 's'}`;
 }
 
 function shortId(): string {
@@ -1531,6 +1574,7 @@ export async function importModelAsMeshes(
     textures: assets.textures.length,
     materials: assets.materials.size,
     warnings: [...normalized.warnings, ...(materialPlan?.warnings ?? [])],
+    firstMeshId: meshes[0]?.id,
   });
 }
 
@@ -1661,7 +1705,8 @@ export function planImportRemoval(part: EditingPart, importId: string): ImportRe
  * are deleted from IndexedDB outright: the batch's geometry GLB, each purged texture's source +
  * `.ktx2`, and each removed mesh's painted-glow bitmap. Undo brings the descriptors back but
  * their geometry/textures are gone — imported geometry has no regenerable source, so a restored
- * mesh would render nothing. The confirm dialog in CustomAssetsModal says exactly this.
+ * mesh would render nothing. Every confirm that reaches here says exactly this — the one
+ * spelling lives in `src/ui/assets/bytePolicy.ts`.
  */
 export async function removeImport(importId: string): Promise<void> {
   const before = $part.get();
@@ -1942,6 +1987,9 @@ export async function replaceImport(
     matched: match.matched.length,
     removed: match.removed.map((m) => m.name),
     warnings: [...normalized.warnings, ...(applied?.warnings ?? [])],
+    // Prefer a NEW SubPart for the "Edit surfaces →" jump; a replace that added none still
+    // has the kept ones, whose surfaces are exactly what a re-import invites you to check.
+    firstMeshId: added[0]?.descriptor.id ?? match.matched[0]?.mesh.id,
   });
 }
 

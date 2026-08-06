@@ -202,14 +202,22 @@ function PaintBody({ mesh, onClose }: { mesh: CustomMesh; onClose: () => void })
   const underlayUrl = textureUrls[getPrimaryTextureId(mesh)];
 
   return (
-    <Modal isOpen onOpenChange={(v) => !v && requestClose()} isDismissable>
+    // S dialog → center on BOTH platforms (foundation §12 dialog mapping, S22). The phone
+    // difference is fit, not frame: the canvas is capped so the brush/intensity sliders and
+    // the Apply row stay on screen without scrolling on a short phone.
+    <Modal
+      isOpen
+      onOpenChange={(v) => !v && requestClose()}
+      isDismissable
+      className="max-h-[92vh] overflow-y-auto"
+    >
       {/* `data-surface` puts the painter in the `surface:glow-paint` hotkey scope, which is
           what makes ⌘Z step a STROKE instead of the document (foundation §11.1 precedence). */}
       <Dialog data-surface="glow-paint">
         <DialogHeader title={`Paint glow: ${mesh.name}`} onClose={requestClose} />
         <div className="flex flex-col gap-3 p-4">
           <div
-            className="relative aspect-square w-full overflow-hidden rounded-lg border border-border"
+            className="relative mx-auto aspect-square w-full max-w-[min(100%,45vh)] overflow-hidden rounded-lg border border-border"
             style={{ background: CHECKERBOARD, backgroundSize: '16px 16px' }}
           >
             {underlayUrl && (

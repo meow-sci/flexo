@@ -61,7 +61,7 @@ export const WINDOW_COMMANDS: Command[] = [
     menuPath: 'Window',
     keywords: 'assets textures meshes materials custom manager',
     // The ⇧⌘A chord and the Window-menu row both resolve through this one command id, so
-    // re-pointing it here is the whole migration off the v1 CustomAssetsModal.
+    // re-pointing it here was the whole migration off the v1 custom-assets modal.
     run: () => openDialog({ id: 'asset-manager' }),
   },
   {

@@ -400,7 +400,7 @@ Shift+click on pointer-down (before react-aria's own, anchorless extension runs)
 - `SubPartBrowser.tsx` — filterable catalog list; click adds via `addSubPart`.
 - `outliner/OutlinerPanel.tsx` — the **Outliner**, Build mode's right sidebar: layer header
   rows, entity rows grouped by kind with per-kind ⋮ menus, fuzzy search, the Aids section
-  (see [layers.md](./layers.md)). It replaced the v1 `AssetsList` + `AssetsToolbar` +
+  (see [layers.md](./layers.md)). It replaced the v1 assets list, its toolbar and the
   Layers button/popover.
 - `ui/build/BuildFocusEditor.tsx` — the **focus editor**, Build mode's left sidebar: one
   card per focus (tool parameter → aid editor → multi-select panel → per-kind inspector →

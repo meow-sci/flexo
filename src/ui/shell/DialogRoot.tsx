@@ -11,7 +11,7 @@ import { ScaleEverythingDialog } from '../ScaleEverythingDialog';
 import { SubPartBrowserDialog } from '../build/SubPartBrowserDialog';
 import { PartBrowserDialog } from '../build/PartBrowserDialog';
 import { AssetManagerDialog } from '../assets/AssetManagerDialog';
-import { CustomAssetsModal } from '../CustomAssetsModal';
+import { ImportReviewDialog } from '../assets/ImportReviewDialog';
 import { CustomTextureDialog } from '../CustomTextureDialog';
 import { CreateMeshDialog } from '../CreateMeshDialog';
 import { MaterialDialog, type MaterialDialogParams } from '../MaterialDialog';
@@ -83,8 +83,10 @@ export function DialogRoot() {
       return <PartBrowserDialog open onOpenChange={dismiss} />;
     case 'asset-manager':
       return <AssetManagerDialog isOpen onOpenChange={dismiss} />;
-    case 'custom-assets':
-      return <CustomAssetsModal isOpen onOpenChange={dismiss} />;
+    // Import Review owns its own dismissal (it is inert while committing) and reads its
+    // payload — the picked files, the replace target — from `$importModelRequest`.
+    case 'import-review':
+      return <ImportReviewDialog />;
     // These three self-close via `onClose` rather than react-aria's `onOpenChange`.
     case 'upload-texture':
       return <CustomTextureDialog onClose={closeDialog} />;

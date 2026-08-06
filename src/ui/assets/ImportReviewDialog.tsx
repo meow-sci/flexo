@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import type { Object3D } from 'three';
-import { AlertTriangle, Info, PackageOpen, Upload } from 'lucide-react';
+import { AlertTriangle, Info, PackageOpen, Pin, Upload } from 'lucide-react';
 import {
   Button,
   Dialog,
@@ -13,21 +13,25 @@ import {
   Switch,
   TextField,
   Tooltip,
+  cn,
+  useIsPhone,
   warningBox,
-} from './kit';
+} from '../kit';
 import {
   $importModelRequest,
   closeImportModel,
   importModelAsMeshes,
   matchImportedMeshes,
   replaceImport,
+  setImportModelFiles,
   type ImportMatchPlan,
-} from '../state/customAssetStore';
-import { $part } from '../state/editorStore';
-import type { CustomMesh } from '../ksa/types';
-import { $modelImportSettings, setModelImportSettings } from '../state/settingsStore';
-import { loadModelFile, type LoadedModel } from '../three/loadModelFile';
-import { ModelPreviewViewport } from '../three/ModelPreviewViewport';
+} from '../../state/customAssetStore';
+import { $part } from '../../state/editorStore';
+import { openDialog } from '../../state/dialogStore';
+import type { CustomMesh } from '../../ksa/types';
+import { $modelImportSettings, setModelImportSettings } from '../../state/settingsStore';
+import { loadModelFile, type LoadedModel } from '../../three/loadModelFile';
+import { ModelPreviewViewport } from '../../three/ModelPreviewViewport';
 import {
   analyzeImport,
   canMerge,
@@ -35,9 +39,9 @@ import {
   plannedTotals,
   type ImportOptions,
   type ImportPlan,
-} from '../ksa/importPlan';
-import { normalizeImport } from '../ksa/importNormalize';
-import { planImportMaterials, type ImportMaterialPlan } from '../ksa/importMaterials';
+} from '../../ksa/importPlan';
+import { normalizeImport } from '../../ksa/importNormalize';
+import { planImportMaterials, type ImportMaterialPlan } from '../../ksa/importMaterials';
 import {
   estimateImportCost,
   formatBytes,
@@ -46,45 +50,53 @@ import {
   SCALE_PRESETS,
   type WarningGroup,
   type WarningSeverity,
-} from '../ksa/importEstimates';
-import { VIEW_MESH_TRIANGLE_BUDGET } from '../ksa/modExport';
-import { fmt } from './format';
-import { useNumberDraft } from './numberDraft';
-import { toast } from './toast';
+} from '../../ksa/importEstimates';
+import { VIEW_MESH_TRIANGLE_BUDGET } from '../../ksa/modExport';
+import { fmt } from '../format';
+import { useNumberDraft } from '../numberDraft';
+import { toast } from '../toast';
 
 /**
- * Import a model (glTF/GLB) as KSA SubParts. Three states in ONE modal, no wizard chrome:
+ * **Import Review** (dialog id `'import-review'`, size L — design: design-surface-assets.md
+ * §3, D11; foundation §10.4). Three views, no wizard chrome:
  *
- *  1. DROP     — drop zone + file picker + the "How to export from Blender" recipe.
- *  2. REVIEW   — the parsed model: a 3D preview, what it will become (SubParts, placements,
- *                triangles, measured bounds, texture VRAM), the options, and every warning
- *                with its remedy. **Nothing has touched the document yet** — the file is
- *                parsed and analyzed in memory, and closing here leaves no trace.
- *  3. IMPORTING — normalize + texture encode + store writes, with a progress line, then the
- *                store selects the new placements and the dialog closes.
+ *  1. **Drop**      — drop zone + file picker + the "How to export from Blender" recipe.
+ *  2. **Review**    — the parsed model: a live 3D preview, the nine-stat grid, every warning
+ *                     with its remedy, the replace-match summary — and the options, split
+ *                     STRUCTURALLY into "This import only" and "Saved preferences 📌".
+ *                     **Nothing has touched the document yet**; closing here leaves no trace.
+ *  3. **Importing** — normalize + texture encode + store writes behind a phase line, then the
+ *                     store selects the new placements and the dialog closes. Undismissable.
  *
- * WHY THE REVIEW STEP EXISTS AT ALL: an import is a big, opinionated document mutation
- * (a layer, N SubParts, N textures, N materials, N placements) built from a file authored in
+ * WHY THE REVIEW VIEW EXISTS AT ALL: an import is a big, opinionated document mutation (a
+ * layer, N SubParts, N textures, N materials, N placements) built from a file authored in
  * another tool under conventions flexo can only guess at. Wrong units and a wrong up-axis are
- * the two most common Blender-export mistakes, and both produce a result that looks plausible
+ * the two most common Blender-export mistakes and both produce a result that looks plausible
  * and is wrong — so the dialog measures the bounding box, previews the correction, and lets
  * the user fix it BEFORE anything is committed.
  *
- * REPLACE MODE (`request.replaceImportId`, from "Replace…" on a batch in the Custom Assets
- * modal) runs the exact same three states against an EXISTING import batch: the review step
- * additionally shows how the new file matches up — which SubParts keep their identity, which
- * are new, and which are about to disappear — and the commit swaps that batch's geometry in
- * place instead of creating another one (see `customAssetStore.replaceImport`).
+ * **THE D11 SPLIT IS THE POINT OF THE REHOST.** v1 rendered all ten options as one flat
+ * column, so the sticky ones and the per-import ones were indistinguishable — and a 0.01
+ * scale left over from a millimetre model was the worst failure mode in the app. Here the two
+ * groups are separately titled and boxed, the sticky group carries a pin glyph, and Scale
+ * wears an amber `≠1` badge whenever it is not 1. Per-import state resets on EVERY open
+ * because the body is keyed by `$importModelRequest.id` — a structural guarantee, not a
+ * convention (guardrail 13).
  *
- * Mounted once in `app.tsx` and driven by `$importModelRequest`, because there are three entry
- * points (the Add menu, a drag-drop onto the 3D viewport, and "Replace…") and one dialog.
+ * REPLACE MODE (`request.replaceImportId`) runs the same three views against an EXISTING
+ * batch: Review additionally shows how the new file matches up — which SubParts keep their
+ * identity, which are new, and which are about to disappear, **named** — and the commit swaps
+ * that batch's geometry in place (`customAssetStore.replaceImport`).
+ *
+ * **Undo enrollment: NONE of its own.** `importModelAsMeshes` / `replaceImport` each write
+ * their binaries first and then run ONE `mutate()` — one discrete undo step per import.
  */
-export function ImportModelDialog() {
+export function ImportReviewDialog() {
   const request = useStore($importModelRequest);
   if (!request) return null;
-  // Keyed by the request id so every open starts with fresh per-import state.
+  // Keyed by the request id so every open starts with fresh per-import state (D11).
   return (
-    <ImportModelBody
+    <ImportReviewBody
       key={request.id}
       initialFiles={request.files}
       replaceImportId={request.replaceImportId}
@@ -93,7 +105,7 @@ export function ImportModelDialog() {
 }
 
 /** Re-analysis is cheap; re-parsing is not. Everything here derives from a parsed model. */
-function ImportModelBody({
+function ImportReviewBody({
   initialFiles,
   replaceImportId,
 }: {
@@ -102,15 +114,16 @@ function ImportModelBody({
 }) {
   const settings = useStore($modelImportSettings);
   const part = useStore($part);
+  const isPhone = useIsPhone();
   const [files, setFiles] = useState<File[]>(initialFiles);
   const [model, setModel] = useState<LoadedModel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [materialPlan, setMaterialPlan] = useState<ImportMaterialPlan | null>(null);
-  /** Non-null only during state 3; the message is the current phase. */
+  /** Non-null only during the Importing view; the message is the current phase. */
   const [importing, setImporting] = useState<string | null>(null);
   const [dropActive, setDropActive] = useState(false);
 
-  // Per-import options (the sticky ones live in $modelImportSettings — see settingsStore).
+  // ── "This import only" (D11): component state, never persisted, reset on every open ──
   const [namePrefix, setNamePrefix] = useState('');
   const [scale, setScale] = useState(1);
   const [bakeTransforms, setBakeTransforms] = useState(false);
@@ -121,7 +134,7 @@ function ImportModelBody({
 
   const fileInput = useRef<HTMLInputElement>(null);
 
-  // ── parse (state 1 → 2) ────────────────────────────────────────────────────
+  // ── parse (Drop → Review) ──────────────────────────────────────────────────
   //
   // The effect only WRITES state from its async callbacks; the reset (model/plan/error) is
   // done by whoever changes `files`, so nothing here cascades a render.
@@ -137,7 +150,7 @@ function ImportModelBody({
         console.error('flexo: model parse failed', err);
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
-        // The dialog stays open on its drop state so another file can be picked.
+        // The dialog stays open on its Drop view so another file can be picked.
         toast({ title: 'Could not read that model', description: message, variant: 'danger' });
       });
     return () => {
@@ -145,7 +158,7 @@ function ImportModelBody({
     };
   }, [files]);
 
-  /** State 1 is still working: files chosen, nothing parsed yet and nothing to report. */
+  /** The Drop view is still working: files chosen, nothing parsed yet and nothing to report. */
   const parsing = files.length > 0 && !model && !error;
 
   // Shared draft editing (see useNumberDraft); a zero/negative scale would degenerate the
@@ -205,7 +218,7 @@ function ImportModelBody({
   //
   // The batch being replaced, and how the parsed file lines up against it — the SAME
   // `matchImportedMeshes` the store commits with, run here on the plan's groups so the review
-  // step promises exactly what happens. Merging is deliberately not offered: it collapses
+  // view promises exactly what happens. Merging is deliberately not offered: it collapses
   // every object into ONE SubPart, which is a different granularity and could not preserve a
   // single existing SubPart identity.
   const existingBatch: CustomMesh[] = replaceImportId
@@ -233,6 +246,18 @@ function ImportModelBody({
     setMaterialPlan(null);
     setError(null);
     setFiles(picked);
+    // Mirror onto the request so a deep-link out and back re-parses this file rather than
+    // dropping the user on an empty drop zone (the id is untouched — no remount).
+    setImportModelFiles(picked);
+  };
+
+  /** `‹ Back` on the Review view: forget the parsed file and return to the Drop view. */
+  const backToDrop = () => {
+    setModel(null);
+    setMaterialPlan(null);
+    setError(null);
+    setFiles([]);
+    setImportModelFiles([]);
   };
 
   /** The VRAM/mod estimate and the encoded .ktx2 both depend on the cap — re-translate. */
@@ -255,7 +280,7 @@ function ImportModelBody({
     setError(null);
     setImporting('Translating materials…');
     try {
-      // Reuse the translation the review step already paid for; only re-run it if the user
+      // Reuse the translation the review view already paid for; only re-run it if the user
       // confirmed before it finished.
       const materials =
         materialPlan ??
@@ -279,45 +304,65 @@ function ImportModelBody({
         for (const mesh of normalized.meshes) mesh.geometry.dispose();
       }
       // The outcome is reported by the import-report notification (counts, removed SubParts,
-      // warnings — posted by customAssetStore); a success flash would say strictly less, twice.
+      // warnings — posted by customAssetStore) plus its one-line status flash.
       closeImportModel();
     } catch (err: unknown) {
       console.error('flexo: model import failed', err);
       const message = err instanceof Error ? err.message : String(err);
       setImporting(null);
       setError(message);
+      // `danger` ⇒ a red status flash AND a persistent unread notification-center entry.
       toast({ title: 'Import failed', description: message, variant: 'danger' });
     }
   };
 
+  const reviewing = !!(model && plan && totals);
+
   return (
     <Modal
       isOpen
+      // Closing mid-import would orphan half-written binaries, so Escape, the backdrop, the
+      // header ✕ and the back chevron are ALL inert while the Importing view runs.
       onOpenChange={(open) => !open && !importing && closeImportModel()}
       isDismissable={!importing}
-      variant="fullscreen"
-      className="max-w-4xl"
+      variant={isPhone ? 'cover' : 'fullscreen'}
+      className={isPhone ? undefined : 'max-w-4xl'}
     >
-      <Dialog>
-        {/* Closing mid-import would orphan half-written binaries, so the header/Escape/backdrop
-            routes are all inert while state 3 runs. */}
+      <Dialog className="min-h-0">
         <DialogHeader
-          title={replaceImportId ? 'Replace model' : 'Import model'}
+          title={
+            importing
+              ? replaceImportId
+                ? 'Replacing model…'
+                : 'Importing model…'
+              : replaceImportId
+                ? 'Replace model'
+                : 'Import model'
+          }
+          onBack={reviewing && !importing ? backToDrop : undefined}
           onClose={() => {
             if (!importing) closeImportModel();
           }}
         />
 
-        {model && plan && totals ? (
-          // State 3 freezes the options: they were captured when Import was pressed, so
-          // letting them look editable mid-run would lie about what is being created.
+        {reviewing && model && plan && totals ? (
+          // The Importing view freezes the options: they were captured when Import was
+          // pressed, so letting them look editable mid-run would lie about what is happening.
           <div
-            className={`flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 sm:flex-row ${
-              importing ? 'pointer-events-none opacity-60' : ''
-            }`}
+            className={cn(
+              'flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 sm:flex-row',
+              importing && 'pointer-events-none opacity-60',
+            )}
           >
             <div className="flex min-w-0 flex-1 flex-col gap-3">
-              <div className="h-56 shrink-0 overflow-hidden rounded-lg border border-border bg-panel-sunken sm:h-72">
+              {/* Phone: the preview is 40vh at the top of the scroll, then the stats strip
+                  and the two option accordions (design §3.2 "Phone"). */}
+              <div
+                className={cn(
+                  'shrink-0 overflow-hidden rounded-lg border border-border bg-panel-sunken',
+                  isPhone ? 'h-[40vh]' : 'h-56 sm:h-72',
+                )}
+              >
                 <ModelPreview scene={model.scene} scale={scale} upAxis={settings.upAxis} />
               </div>
               <p className="text-[11px] leading-snug text-fg-subtle">
@@ -330,103 +375,150 @@ function ImportModelBody({
               <Warnings groups={warnings} />
             </div>
 
-            <div className="flex w-full shrink-0 flex-col gap-3 sm:w-72">
-              <TextField
-                label="Name prefix"
-                size="sm"
-                value={namePrefix}
-                onChange={setNamePrefix}
-                placeholder="(none)"
-              />
-
-              <div className="flex flex-col gap-1">
+            <div className="flex w-full shrink-0 flex-col gap-3 sm:w-80">
+              <OptionGroup
+                title="This import only"
+                caption="Reset every time this dialog opens."
+                collapsible={isPhone}
+                defaultOpen
+              >
                 <TextField
-                  label="Scale"
+                  label="Name prefix"
                   size="sm"
-                  // must inputMode="url" so negative numbers can be managed on mobile devices, numeric/decimal/integer dont show "-" key
-                  inputMode="url"
-                  {...scaleField}
+                  value={namePrefix}
+                  onChange={setNamePrefix}
+                  placeholder="(none)"
                 />
-                <div className="flex gap-1">
-                  {SCALE_PRESETS.map((preset) => (
-                    <Tooltip key={preset.label} content={preset.hint}>
-                      <Button
-                        size="sm"
-                        variant={scale === preset.value ? 'primary' : 'secondary'}
-                        onPress={() => setScale(preset.value)}
-                      >
-                        {preset.label}
-                      </Button>
-                    </Tooltip>
-                  ))}
+
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-end gap-2">
+                    <TextField
+                      label="Scale"
+                      size="sm"
+                      className="flex-1"
+                      // must inputMode="url" so negative numbers can be managed on mobile
+                      // devices — numeric/decimal/integer don't show the "-" key
+                      inputMode="url"
+                      {...scaleField}
+                    />
+                    {scale !== 1 && (
+                      <Tooltip content="This model is being rescaled. Scale is never remembered between imports — it is a correction, not a preference.">
+                        <span className="mb-1 shrink-0 rounded border border-warning/50 bg-warning/10 px-1.5 py-0.5 font-mono text-[11px] text-warning">
+                          ≠1
+                        </span>
+                      </Tooltip>
+                    )}
+                  </div>
+                  <div className="flex gap-1">
+                    {SCALE_PRESETS.map((preset) => (
+                      <Tooltip key={preset.label} content={preset.hint}>
+                        <Button
+                          size="sm"
+                          variant={scale === preset.value ? 'primary' : 'secondary'}
+                          onPress={() => setScale(preset.value)}
+                        >
+                          {preset.label}
+                        </Button>
+                      </Tooltip>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              <Select
-                label="Up axis in the file"
-                size="sm"
-                selectedKey={settings.upAxis}
-                onSelectionChange={(key) =>
-                  setModelImportSettings({ upAxis: key === 'z' ? 'z' : 'y' })
-                }
-              >
-                <ListBoxItem id="y">Y-up (glTF / Blender default)</ListBoxItem>
-                <ListBoxItem id="z">Z-up (rotate −90° about X)</ListBoxItem>
-              </Select>
-
-              <Select
-                label="Max texture size"
-                size="sm"
-                selectedKey={String(settings.maxTextureSize)}
-                onSelectionChange={(key) => changeTextureCap(Number(key) as 1024 | 2048 | 4096)}
-              >
-                <ListBoxItem id="1024">1024 px</ListBoxItem>
-                <ListBoxItem id="2048">2048 px</ListBoxItem>
-                <ListBoxItem id="4096">4096 px (expensive)</ListBoxItem>
-              </Select>
-
-              <Switch isSelected={bakeTransforms} onChange={setBakeTransforms}>
-                Bake transforms to origin
-              </Switch>
-              <Switch
-                isSelected={settings.bakeScale}
-                onChange={(v) => setModelImportSettings({ bakeScale: v })}
-              >
-                Bake scale into geometry
-              </Switch>
-              <Switch isSelected={doubleSided} onChange={setDoubleSided}>
-                Make double-sided
-              </Switch>
-              <Switch
-                isSelected={settings.decimateViewMeshes}
-                onChange={(v) => setModelImportSettings({ decimateViewMeshes: v })}
-              >
-                Decimate view meshes
-              </Switch>
-              {mergeable && (
-                <Switch isSelected={merge} onChange={setMerge}>
-                  Merge into one SubPart
+                <Switch isSelected={bakeTransforms} onChange={setBakeTransforms}>
+                  Bake transforms to origin
                 </Switch>
-              )}
-              {replaceImportId && (
-                <>
-                  <Switch isSelected={updateMaterials} onChange={setUpdateMaterials}>
-                    Update materials from file
+                <Switch isSelected={doubleSided} onChange={setDoubleSided}>
+                  Make double-sided
+                </Switch>
+                {mergeable && (
+                  <Switch isSelected={merge} onChange={setMerge}>
+                    Merge into one SubPart
                   </Switch>
-                  <p className="text-[11px] leading-snug text-fg-subtle">
-                    Off keeps material edits you made in flexo — only the geometry is swapped.
-                  </p>
-                </>
-              )}
+                )}
+                {replaceImportId && (
+                  <>
+                    <Switch isSelected={updateMaterials} onChange={setUpdateMaterials}>
+                      Update materials from file
+                    </Switch>
+                    <p className="text-[11px] leading-snug text-fg-subtle">
+                      Off keeps material edits you made in flexo — only the geometry is swapped.
+                    </p>
+                  </>
+                )}
+              </OptionGroup>
+
+              <OptionGroup
+                title="Saved preferences"
+                pinned
+                caption="Remembered for the next import."
+                collapsible={isPhone}
+              >
+                <Select
+                  label="Up axis in the file"
+                  size="sm"
+                  selectedKey={settings.upAxis}
+                  onSelectionChange={(key) =>
+                    setModelImportSettings({ upAxis: key === 'z' ? 'z' : 'y' })
+                  }
+                >
+                  <ListBoxItem id="y">Y-up (glTF / Blender default)</ListBoxItem>
+                  <ListBoxItem id="z">Z-up (rotate −90° about X)</ListBoxItem>
+                </Select>
+
+                <Select
+                  label="Max texture size"
+                  size="sm"
+                  selectedKey={String(settings.maxTextureSize)}
+                  onSelectionChange={(key) => changeTextureCap(Number(key) as 1024 | 2048 | 4096)}
+                >
+                  <ListBoxItem id="1024">1024 px</ListBoxItem>
+                  <ListBoxItem id="2048">2048 px</ListBoxItem>
+                  <ListBoxItem id="4096">4096 px (expensive)</ListBoxItem>
+                </Select>
+
+                <Switch
+                  isSelected={settings.bakeScale}
+                  onChange={(v) => setModelImportSettings({ bakeScale: v })}
+                >
+                  Bake scale into geometry
+                </Switch>
+
+                <Switch
+                  isSelected={settings.decimateViewMeshes}
+                  onChange={(v) => setModelImportSettings({ decimateViewMeshes: v })}
+                >
+                  Decimate view meshes
+                </Switch>
+                <p className="text-[11px] leading-snug text-fg-subtle">
+                  Affects export —{' '}
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    className="h-auto px-1 py-0 underline"
+                    // The single editable home for all four of these is Settings ▸ Import &
+                    // Export (D4); this toggle writes the same store. Stacking is banned, so
+                    // this is a jump — `returnTo` brings the review back (the payload, files
+                    // included, is still on `$importModelRequest`, so nothing is re-picked).
+                    onPress={() =>
+                      openDialog({
+                        id: 'settings',
+                        params: { tab: 'import-export', returnTo: 'import-review' },
+                      })
+                    }
+                  >
+                    Settings →
+                  </Button>
+                </p>
+              </OptionGroup>
+
               <p className="text-[11px] leading-snug text-fg-subtle">
                 Objects always split by material — KSA binds one material per SubPart, so that part
-                isn’t a choice. Up-axis, texture size, scale baking and view-mesh decimation are
-                remembered for next time.
+                isn’t a choice.
               </p>
             </div>
           </div>
         ) : (
-          <DropStep
+          <DropView
             parsing={parsing}
             error={error}
             dropActive={dropActive}
@@ -493,9 +585,52 @@ function ImportModelBody({
   );
 }
 
-// ── state 1: drop ────────────────────────────────────────────────────────────
+/**
+ * One titled, boxed option group — the structural half of D11. The pinned group carries the
+ * pin glyph; on the phone both collapse into accordions with "This import only" open.
+ */
+function OptionGroup({
+  title,
+  caption,
+  pinned,
+  collapsible,
+  defaultOpen,
+  children,
+}: {
+  title: string;
+  caption: string;
+  pinned?: boolean;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const body = (
+    <div className="flex flex-col gap-2.5">
+      <p className="text-[11px] leading-snug text-fg-subtle">{caption}</p>
+      {children}
+    </div>
+  );
+  if (collapsible) {
+    return (
+      <DisclosureSection title={title} defaultExpanded={defaultOpen}>
+        {body}
+      </DisclosureSection>
+    );
+  }
+  return (
+    <section className="flex flex-col gap-2.5 rounded-lg border border-border bg-panel-sunken/40 p-2.5">
+      <h3 className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
+        {pinned && <Pin size={11} className="shrink-0" />}
+        {title}
+      </h3>
+      {body}
+    </section>
+  );
+}
 
-function DropStep({
+// ── the Drop view ────────────────────────────────────────────────────────────
+
+function DropView({
   parsing,
   error,
   dropActive,
@@ -516,9 +651,9 @@ function DropStep({
     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
       {replacing && (
         <p className="rounded-lg border border-border bg-panel p-2 text-xs leading-snug text-fg-muted">
-          Choose the re-exported file for this model. Objects that kept their name and material keep
-          their SubPart — with every placement, GameData block, animation and connector that
-          references it.
+          Choose the re-exported file for this model — matched by object and material name. Objects
+          that kept their name and material keep their SubPart, with every placement, GameData
+          block, animation and connector that references it.
         </p>
       )}
       <button
@@ -599,7 +734,7 @@ const BLENDER_RECIPE: readonly { section: string; setting: string }[] = [
   { section: 'Compression', setting: 'Draco off preferred (accepted either way)' },
 ];
 
-// ── state 2 pieces ───────────────────────────────────────────────────────────
+// ── Review-view pieces ───────────────────────────────────────────────────────
 
 function ModelPreview({
   scene,

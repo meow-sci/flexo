@@ -236,7 +236,8 @@ export function setKittenTextureExport(patch: Partial<KittenTextureExportSetting
  * apply the last model's fix-up to the next one — a 0.01 scale left over from a centimetre
  * export is the worst of these, because the result looks plausible and is 100× wrong.
  *
- * Consumers: `ImportModelDialog` (all four), `planImportMaterials` +
+ * Consumers: Settings ▸ Import & Export (the single editable home) and the Import Review
+ * dialog (all four), `planImportMaterials` +
  * `createImportMaterialAssets` ({@link ModelImportSettings.maxTextureSize} → `decodeImage`'s
  * `maxSize`, so the analysis estimate and the encoded .ktx2 agree), and
  * `modExport.buildCustomBundle` ({@link ModelImportSettings.decimateViewMeshes} → the `_VM`

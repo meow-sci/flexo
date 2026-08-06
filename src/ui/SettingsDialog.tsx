@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import {
   Modal,
@@ -8,7 +8,6 @@ import {
   Slider,
   Select,
   ListBoxItem,
-  TextField,
   Switch,
   Button,
   ConfirmDialog,
@@ -16,20 +15,19 @@ import {
 import {
   $connectorSettings,
   $ivaSeatSettings,
-  $kittenTextureExport,
   $lightSettings,
   $selectionHighlight,
   $showFpsCounter,
   DEFAULT_LIGHT_SETTINGS,
   setConnectorSettings,
   setIvaSeatSettings,
-  setKittenTextureExport,
   setLightSettings,
   setSelectionHighlight,
   setShowFpsCounter,
   type LightVizSettings,
 } from '../state/settingsStore';
-import type { KittenTextureExportSettings } from '../state/settingsStore';
+import { ImportExportSettings } from './settings/ImportExportSettings';
+import { openDialog, type DialogId } from '../state/dialogStore';
 import { $grids, setGrid, type Axis } from '../state/viewStore';
 import {
   $lighting,
@@ -42,11 +40,20 @@ import { PreciseNumberInput } from './PreciseNumberInput';
 import { nukeAndReload } from './nukeAndReload';
 
 /**
- * Deep-link payload. The tabbed Settings rewrite honours `tab`; this interim flat-section
- * version accepts and ignores it so callers can already be written against the real API.
+ * Deep-link payload. The tabbed Settings rewrite (foundation §10.7) turns these into real
+ * tabs; until then this flat-section dialog honours a `tab` by SCROLLING that section into
+ * view, which is what makes the deep-links already wired against it — Import Review's
+ * "Settings →" caption and the View menu's Scene rows — land somewhere true.
  */
 export interface SettingsDialogParams {
   tab?: string;
+  /**
+   * Dialog to RE-OPEN when this one closes. Stacking is banned (§10.1), so a deep-link out
+   * of another dialog necessarily dismisses it; this is the return leg. Import Review's
+   * "affects export — Settings →" caption is the first caller — without it, glancing at a
+   * preference would throw away a model the user had already parsed and configured.
+   */
+  returnTo?: DialogId;
 }
 
 const GRID_AXES: { axis: Axis; label: string }[] = [
@@ -70,16 +77,15 @@ const GRID_AXES: { axis: Axis; label: string }[] = [
 export function SettingsDialog({
   isOpen,
   onOpenChange,
+  params,
 }: {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Accepted and ignored until the tabbed rewrite lands. */
   params?: SettingsDialogParams;
 }) {
   const connectors = useStore($connectorSettings);
   const highlight = useStore($selectionHighlight);
   const ivaSeats = useStore($ivaSeatSettings);
-  const kittenTex = useStore($kittenTextureExport);
   const showFps = useStore($showFpsCounter);
   const grids = useStore($grids);
   const lighting = useStore($lighting);
@@ -89,17 +95,32 @@ export function SettingsDialog({
   const envHasSky = ENVIRONMENT_PRESETS.find((p) => p.id === lighting.environment)?.file != null;
   const [confirmReset, setConfirmReset] = useState(false);
   const [resetFsGrants, setResetFsGrants] = useState(false);
+  const importExportRef = useRef<HTMLDivElement>(null);
+
+  // A deep-link asks for one section; bring it into view. A DOM effect with no setState, so
+  // the Rules of React hold — and it re-runs if the same dialog is re-targeted.
+  useEffect(() => {
+    if (params?.tab !== 'import-export') return;
+    importExportRef.current?.scrollIntoView({ block: 'start' });
+  }, [params?.tab]);
+
+  /** Close, or hand the slot back to whoever deep-linked here (see `returnTo`). */
+  const returnTo = params?.returnTo;
+  const close = () => {
+    if (returnTo) openDialog({ id: returnTo });
+    else onOpenChange(false);
+  };
 
   return (
     <Modal
       isOpen={isOpen}
-      onOpenChange={onOpenChange}
+      onOpenChange={(open) => !open && close()}
       isDismissable
       variant="center"
       className="max-h-[85vh] w-full max-w-2xl"
     >
       <Dialog className="min-h-0">
-        <DialogHeader title="Settings" onClose={() => onOpenChange(false)} />
+        <DialogHeader title="Settings" onClose={close} />
         <div className="flex min-h-0 flex-col gap-3 overflow-auto p-4">
           <SectionTitle>Viewport</SectionTitle>
           <label className="flex items-center justify-between gap-3">
@@ -283,38 +304,13 @@ export function SettingsDialog({
             <b>Absolute</b> shades every light against the same reference, so a dim light looks dim.
           </p>
 
-          <SectionTitle>Kitten mesh textures (export)</SectionTitle>
-          <label className="flex items-center justify-between gap-3">
-            <span className="text-sm text-fg-muted">Source</span>
-            <Select
-              size="sm"
-              aria-label="Kitten mesh texture export mode"
-              className="w-52"
-              selectedKey={kittenTex.mode}
-              onSelectionChange={(k) =>
-                setKittenTextureExport({ mode: k as KittenTextureExportSettings['mode'] })
-              }
-            >
-              <ListBoxItem id="reference">Reference game install</ListBoxItem>
-              <ListBoxItem id="bundle">Bundle copies into mod</ListBoxItem>
-            </Select>
-          </label>
-          {kittenTex.mode === 'reference' && (
-            <label className="flex flex-col gap-1">
-              <span className="text-sm text-fg-muted">Content/Core path</span>
-              <TextField
-                aria-label="Game Content/Core folder path"
-                inputClassName="font-mono text-xs"
-                placeholder="C:\Program Files\Kitten Space Agency\Content\Core"
-                value={kittenTex.contentCorePath}
-                onChange={(v) => setKittenTextureExport({ contentCorePath: v })}
-              />
-              <span className="text-xs text-fg-subtle">
-                Kitten SubParts reference the game's own .ktx2 at this path (nothing copied into the
-                mod). Tied to this install location — switch to “Bundle” for a portable mod.
-              </span>
-            </label>
-          )}
+          {/* The single editable home for the sticky import prefs + the kitten texture
+              export mode (D4). Its own component so the tabbed IA can re-mount it. */}
+          <div ref={importExportRef}>
+            <div className="flex flex-col gap-3">
+              <ImportExportSettings />
+            </div>
+          </div>
 
           <SectionTitle>Danger zone</SectionTitle>
           <div className="flex items-center justify-between gap-3">

@@ -29,7 +29,8 @@ const ALLOWLIST = [
   // and the selected-asset inspector now live in the docked left sidebar's focus slot.
   'src/ui/FloatingPreviewToolbar.tsx',
   'src/ui/LoadProgress.tsx',
-  'src/ui/ManageTexturesPanel.tsx',
+  // ManageTexturesPanel.tsx left with P8.24 — per-mesh surface editing is now the docked
+  // Surface-mode right sidebar + left face card, which take their stacking from the shell.
   'src/ui/ViewportDropZone.tsx',
   // ChainPalette.tsx left with P5B.28 — the chain session now lives in a `FloatingWindow`,
   // which takes its stacking from the `z` ladder.

@@ -167,8 +167,9 @@ would re-run `GLTFExporter` over a multi-megabyte model on every rebuild.
 
 #### Replacing an import (re-import) — identity is preserved, arrangement is not touched
 
-"Replace…" on a batch in the Custom Assets modal reopens the **same** import dialog in replace
-mode (`$importModelRequest.replaceImportId`); its review step shows the match summary before
+"Replace…" — on a batch header in the Asset Manager, or in Surface mode's Imported section —
+opens the **same** Import Review dialog in replace mode
+(`$importModelRequest.replaceImportId`); its Review view shows the match summary before
 anything is committed.
 
 **Matching rule: `(imported.sourceNode, imported.sourceMaterial)`** — the Blender object name ×
@@ -328,28 +329,40 @@ interior-only is worse than not offering it.
   packed ORM, grayscale rough/metal), and a live PBR preview sphere under the same
   RoomEnvironment/tonemapping as the viewport.
 - `CreateMeshDialog.tsx` — primitive picker, params, material + texture assignment.
-- `ManageTexturesPanel.tsx` — per-mesh, gated on `meshKind()`: material assignment (+ edit /
-  new) and glow for primitive **and imported** meshes, visor surface for a kitten visor,
-  per-face texture + UV controls for primitives only (warns when faces mix textures). An
-  imported mesh instead gets a read-only **provenance block** (file / object / material /
-  triangles / vertices) and the **Render as glass** switch (`setMeshTransparent` →
-  `imported.transparent` → `<PartModelGlass>`) — export-only, since KSA's glass is one fixed
-  ~75%-opacity non-glowing shader there is no material of the user's to preview.
-- `CustomAssetsModal.tsx` — textures (channel select, delete), materials (swatch,
-  usage counts, edit, delete), meshes (add instance / manage / delete — **primitives only**
-  now), and **Imported models**: one card per import batch with its file name, SubPart /
-  placement / triangle totals and the textures it is dressed in; a `GridList` of its SubParts
-  (name, source object · source material, tri count, add instance / manage / delete); and
-  **Replace…** (reopens the import dialog in replace mode for that batch) + **Remove import**,
-  the latter confirmed with the exact inventory `planImportRemoval()` computed plus the
-  "deleted from browser storage, undo won't bring the bytes back" warning.
-- `ImportModelDialog.tsx` — the model importer's UI: **three states in one modal** —
-  _drop_ (drop zone + file picker + the "How to export from Blender" recipe), _review_
-  (3D preview, stats, options, warnings) and _importing_ (progress). **Nothing touches the
-  document until the user confirms**: the file is parsed and analyzed in memory, and
-  cancelling leaves no trace. Mounted once in `app.tsx` and driven by
-  `$importModelRequest`, because two entry points share it (below).
-  - The review step re-runs `analyzeImport()` on every scale / up-axis change — cheap, since
+- **Surface mode** (`5` / the mode switcher / "Edit Surface →" from Build) — the per-mesh
+  surface editor, and the only one. Its RIGHT sidebar (`src/ui/surface/SurfaceSidebar.tsx`)
+  is the mode primary: a pinned **mesh picker** listing every `CustomMesh` — primitives,
+  imported SubParts AND kitten submeshes — with a kind chip, its placement count and a ⚠ chip
+  on templates placed zero times (those are silently not exported), a `＋` per row that adds
+  an instance, and a `＋ New Mesh ▾` menu. Below it, the picked mesh's editor as sections,
+  gated on `meshKind()`: **Identity** (rename + the read-only `subPartId` + live primitive
+  dimension fields — the v1 store-only gap), **Material** (assign / edit / new, plus the
+  first-face-texture-wins warning), **Faces** (the chip row; primitives with >1 face key),
+  **Glow (emissive)**, **Visor surface** (a `kitten.transparent` visor), and **Imported** (a
+  read-only provenance block — file / object / material / triangles / vertices — the
+  **Render as glass** switch, and `Replace… / Remove import…`).
+  Its LEFT sidebar (`SurfaceLeftPanel.tsx`) is the focus editor: the **Face card** (texture,
+  wrap, UV scale/offset, Copy to all faces, Clear face) for the selected face, the standard
+  Build selection inspector beneath it, and a read-only **Built-in surface** card when the
+  selection is a Core SubPart.
+- `assets/AssetManagerDialog.tsx` — the **Asset Manager** (`⇧⌘A`, Window ▸ Asset Manager…):
+  one overlay over textures, materials, meshes and import batches, with a per-kind category
+  rail (no conflated count), fuzzy search, grid/list, sort, thumbnails from the shared
+  offscreen renderer (`src/three/assetThumbs.ts`), where-used chips from the `$assetUsage`
+  selector, an **⚠ Unused** review filter, and per-item detail views. **Imported models**
+  groups by batch: a header card with file name, SubPart / placement / texture / material /
+  triangle totals and the stored GLB size, carrying **Replace…** and **Remove import…** (the
+  latter confirmed with the exact inventory `planImportRemoval()` computed plus the byte
+  warning). Creation, per-item detail and every tier-3 confirm are **pushed views of one
+  `DialogViewStack`** — never a second modal; Import Model and Make Kitten Mesh are jumps.
+- `assets/ImportReviewDialog.tsx` — **Import Review** (dialog id `'import-review'`): three
+  views in one dialog — _Drop_ (drop zone + file picker + the "How to export from Blender"
+  recipe), _Review_ (3D preview, stats, warnings, options) and _Importing_ (phase line +
+  indeterminate bar, undismissable). **Nothing touches the document until the user
+  confirms**: the file is parsed and analyzed in memory, and cancelling leaves no trace. Its
+  payload — the picked files and any replace target — rides `$importModelRequest`, whose id
+  changes on every open so the body remounts with fresh per-import state.
+  - The Review view re-runs `analyzeImport()` on every scale / up-axis change — cheap, since
     it walks the already-parsed scene graph and never re-reads the file — while the
     expensive `planImportMaterials()` (image decodes) runs ONCE per (model, texture cap) and
     is handed straight to the import, so nothing is decoded twice.
@@ -361,32 +374,52 @@ interior-only is worse than not offering it.
     reads, the cap, the VRAM/mod formulas, warning grouping + severities, scale presets).
   - **Warnings** are `ImportPlan.warnings` + the material plan's, grouped by subject and
     styled by severity, each with its plain-English remedy.
+  - **The options are split into two labelled groups**, which is the structural fix for the
+    leftover-scale trap: **"This import only"** (name prefix, scale with an amber `≠1` badge
+    and the `SCALE_PRESETS` buttons, bake transforms, make double-sided, merge, and in
+    replace mode "Update materials from file") resets on every open; **"Saved preferences
+    📌"** (up axis, max texture size, bake scale, decimate view meshes) reads and writes
+    `$modelImportSettings`, and its decimate toggle is captioned "affects export" with a
+    deep-link to its single editable home, Settings ▸ Import & Export.
   - **Replace mode** (`$importModelRequest.replaceImportId`) adds the match summary to the
-    review step (kept / new / removed, with the removed SubParts named) and the **Update
+    Review view (kept / new / removed, with the removed SubParts named) and the **Update
     materials from file** switch; merging is not offered, since collapsing everything into
     one SubPart could not preserve a single existing identity.
+- `GlowPaintDialog.tsx` — the 512² glow paint canvas (dialog id `'glow-paint'`): soft radial
+  stamps painted through the ramp, a composited-diffuse underlay, per-stroke `⌘Z`/`⇧⌘Z` undo
+  at hotkey scope `surface:glow-paint` (the DOCUMENT's undo is untouched — Apply is the one
+  document step), a live 3D preview on stroke end through the shared `glowComposite` path,
+  and a dirty-discard confirm on Cancel/Esc.
+- `settings/ImportExportSettings.tsx` — **Settings ▸ Import & Export**, the single editable
+  home for the four sticky import preferences (up axis, max texture size, bake scale,
+  **decimate view meshes — labelled "affects export"**) and the kitten texture export mode +
+  Content/Core path.
 - The **post-import summary** — a sticky *rich* entry in the notification center
   (`src/ui/status/ImportReportBody.tsx`, registered under the `'import-report'` kind in
   `notificationBodies.tsx`), posted by `customAssetStore.postImportReport()` from both
-  `importModelAsMeshes()` and `replaceImport()` alongside the `$importReport` atom. It
-  reports what was created (SubParts / placements / textures / materials), and for a replace
-  the kept / removed counts with the **removed SubParts named**, plus the non-blocking
-  warnings. A one-line status message could not carry that, so there is no success flash for
-  an import. The entry is sticky (survives "Clear all", dismissed only by its ✕) and each
-  import posts its own, so the center keeps a history of the last imports.
+  `importModelAsMeshes()` and `replaceImport()`. It reports what was created (SubParts /
+  placements / textures / materials), and for a replace the kept / removed counts with the
+  **removed SubParts named**, plus the non-blocking warnings, and carries two actions —
+  `[Open Asset Manager]` and `[Edit surfaces →]` (which jumps to Surface mode with the first
+  imported mesh picked). A one-line status message could not carry that, so the flash beside
+  it is only the one-line summary. The entry is sticky (survives "Clear all", dismissed only
+  by its ✕) and each import posts its own, so the center keeps a history of the last imports.
 - `ViewportDropZone.tsx` — wraps the 3D workspace so dropping a `.glb`/`.gltf` (or a
-  multi-file `.gltf` set) opens the same dialog pre-loaded. Plain React drag handlers, not
-  three.js: `dragover` must `preventDefault()` or no `drop` fires, drags with no file are
-  ignored, and the affordance is a `pointer-events-none` overlay.
-- `src/three/ModelPreviewViewport.ts` — the dialog's preview: the editor's
+  multi-file `.gltf` set) opens Import Review straight on its Review view. Plain React drag
+  handlers, not three.js: `dragover` must `preventDefault()` or no `drop` fires, drags with
+  no file are ignored, and the affordance is a `pointer-events-none` overlay.
+- `src/three/ModelPreviewViewport.ts` — Import Review's preview: the editor's
   environment/tonemapping + orbit, an adaptive power-of-ten-metre grid for scale, camera
   auto-framed on the bounding sphere. It shows the loaded glTF with **its own** materials
   ("is this oriented, scaled and split the way I meant?"); the accurate surface preview is
   the editor viewport after import, which renders the real KSA channels. It clones the
   scene (SkeletonUtils) and never disposes geometry/materials it doesn't own.
 - entry points wired from the **Add** menu (`src/ui/commands/addCommands.ts`, rendered by
-  `src/ui/menu/menuSpec.ts`) — including **Import model…**, which opens `ImportModelDialog`
-  on its drop state.
+  `src/ui/menu/menuSpec.ts`) — including **Import Model…**, which opens Import Review on its
+  Drop view, and **Make Kitten Mesh ▸**, which part-ifies a kitten, auto-switches to Build
+  and flashes `<Kitten> meshes added ✓` with an `[Edit surfaces →]` action that lands on the
+  visor. The Asset Manager's `＋ New ▾` and the Surface picker's `＋ New Mesh ▾` run the same
+  command ids, so no entry point can diverge.
 
 #### Import settings — sticky vs per-import
 
@@ -584,8 +617,8 @@ failed export).
 ## Emissive (glow) + visor surface
 
 Shipped (see `plans/FEATURE_EMISSIVES_PLAN.md`). Per-mesh **glow**, and for the kitten **visor** a
-translucent **glass tint** — authored in the per-mesh panel (`ManageTexturesPanel` + the
-`GlowPaintDialog` paint canvas), previewed live, exported faithfully.
+translucent **glass tint** — authored in Surface mode's right sidebar (its Glow and Visor
+surface sections + the `GlowPaintDialog` paint canvas), previewed live, exported faithfully.
 
 **How KSA renders it (verified against the decompiled shaders — full write-up in
 [analysis/KSA_EMISSIVE_AND_LUT.md](../analysis/KSA_EMISSIVE_AND_LUT.md)):**
@@ -662,8 +695,8 @@ design. Still deliberately out of scope:
 
 - **Per-face textures export lossily.** The editor renders a different texture per
   face, but KSA gets ONE material per SubPart — export uses the first textured face
-  (the ManageTexturesPanel warns when faces mix textures). Faithful export would need
-  one SubPart per face group.
+  (Surface mode's Material section warns when faces mix textures). Faithful export would
+  need one SubPart per face group.
 - **ThinFilm (heat effects)** — the fifth PbrMaterial slot. It's a packed mask
   (R = re-entry iridescence, G = heat glow, B = frost) driven by runtime temperature
   and plumbed only through `<PartModelDynamic>`; invisible on a bench part. See the

@@ -2,12 +2,10 @@ import { useEffect } from 'react';
 import { ViewportCanvas } from './three/ViewportCanvas';
 import { ViewportDropZone } from './ui/ViewportDropZone';
 import { MarqueeOverlay } from './ui/MarqueeOverlay';
-import { ImportModelDialog } from './ui/ImportModelDialog';
 import { ModeSidebar } from './ui/ModeSidebar';
 import { ModeFocusEditor } from './ui/ModeFocusEditor';
 import { MobileInspector } from './ui/MobileInspector';
 import { FloatingPreviewToolbar } from './ui/FloatingPreviewToolbar';
-import { ManageTexturesPanel } from './ui/ManageTexturesPanel';
 import { ChainWindow } from './ui/chain/ChainWindow';
 import { ToolBarStrip, ToolBarWindow } from './ui/build/ToolBarWindow';
 import { GlobalHotkeys } from './ui/hotkeys/GlobalHotkeys';
@@ -158,9 +156,6 @@ function App() {
               Animation editor has a clip open (desktop only — the phone variant pins into
               the top-centre stack above). */}
           {!isPhone && <FloatingPreviewToolbar />}
-
-          {/* Floating per-mesh material editor (glow / visor surface / per-face textures). */}
-          <ManageTexturesPanel />
         </div>
 
         {/* Floating windows mount here, as children of the BAND: their positions are
@@ -211,10 +206,6 @@ function App() {
       {/* ⌘K: fuzzy search over the whole command registry. Desktop and phone alike —
           it is the phone's only way to reach a command with no menu home. */}
       <CommandPalette />
-
-      {/* Model import (preview + options + warnings). Mounted once for both entry points:
-          the Add menu and a drag-drop onto the viewport above. */}
-      <ImportModelDialog />
     </div>
   );
 }

@@ -19,9 +19,12 @@ import {
   KITTEN_KINDS,
   KITTEN_LABELS,
   meshKind,
+  type KittenKind,
   type LightType,
 } from '../../ksa/types';
 import { $mode, setMode } from '../../state/modeStore';
+import { status } from '../../state/statusStore';
+import { openMeshSurface } from '../surface/surfaceJump';
 import { toast } from '../toast';
 import type { EntityKind } from '../../state/editorStore';
 
@@ -133,16 +136,51 @@ const kittenCommands: Command[] = KITTEN_KINDS.map((kind) => ({
   },
 }));
 
+/**
+ * `Add ▸ Make Kitten Mesh ▸ <name>` — part-ifies a kitten into exportable SubParts (design:
+ * design-surface-assets.md §3.5; foundation S27; census §1.20). Also run, by these same ids,
+ * from the Asset Manager's `＋ New ▾` and the Surface-mode mesh picker (D1).
+ *
+ * The choreography: ONE undo step inside `makeKittenMeshPart` (a "<Kitten> Mesh" layer
+ * created + activated + revealed, one CustomMesh per submesh, identity placements selected)
+ * → **auto-switch to Build** (S27: an entity-creating command must land in the mode that
+ * edits the result) → a status flash whose action jumps to Surface mode with the VISOR
+ * submesh picked, because the visor is the only part-ified piece with authoring choices of
+ * its own (glass / glow / layered).
+ *
+ * The created meshes are found by DIFFING the document rather than by name: the store mints
+ * their ids, and a second part-ify of the same kitten would otherwise be indistinguishable
+ * from the first.
+ */
 const kittenMeshCommands: Command[] = KITTEN_KINDS.map((kind) => ({
   id: `add.kittenMesh:${kind}`,
   title: KITTEN_LABELS[kind],
   menuPath: 'Add ▸ Make Kitten Mesh',
   keywords: `kitten mesh bake exportable ${kind}`,
-  run: () =>
-    void makeKittenMeshPart(kind).catch((err) =>
-      console.error('flexo: make kitten mesh failed', err),
-    ),
+  run: () => void runMakeKittenMesh(kind),
 }));
+
+async function runMakeKittenMesh(kind: KittenKind): Promise<void> {
+  const before = new Set($part.get().customMeshes.map((m) => m.id));
+  try {
+    await makeKittenMeshPart(kind);
+  } catch (err) {
+    console.error('flexo: make kitten mesh failed', err);
+    toast({ title: 'Could not build the kitten meshes', variant: 'danger' });
+    return;
+  }
+  ensureBuildMode();
+  const created = $part.get().customMeshes.filter((m) => !before.has(m.id));
+  // Glass-capable submesh = the visor; fall back to the first created mesh so the action is
+  // never a dead button.
+  const jumpTo = created.find((m) => m.kitten?.transparent) ?? created[0];
+  status(`${KITTEN_LABELS[kind]} meshes added ✓`, {
+    severity: 'success',
+    action: jumpTo
+      ? { label: 'Edit surfaces →', run: () => openMeshSurface(jumpTo.id) }
+      : undefined,
+  });
+}
 
 export const ADD_COMMANDS: Command[] = [
   {
@@ -200,7 +238,7 @@ export const ADD_COMMANDS: Command[] = [
     title: 'Import Model…',
     menuPath: 'Add',
     keywords: 'glb gltf import model blender',
-    // Opens with no files, i.e. on its drop/pick step (see ImportModelDialog).
+    // Opens with no files, i.e. on Import Review's Drop view.
     run: () => openImportModel(),
   },
   {

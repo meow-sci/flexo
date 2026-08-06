@@ -24,9 +24,10 @@ import { atom } from 'nanostores';
  * Every root-hosted dialog. Adding a dialog = add its id here AND a case in
  * `DialogRoot.tsx`; there is no other registration step and no dynamic id.
  *
- * Deliberately ABSENT (they keep their v1 atoms until the import phase rehosts them):
- * `import-model` (`$importModelRequest`) in `src/state/customAssetStore.ts`, plus
- * `MeshPickerModal`, which stays local to the animation toolbar until the Animation phase.
+ * Deliberately ABSENT: `MeshPickerModal`, which stays local to the animation toolbar until
+ * the Animation phase. `'import-review'` carries no `params` — its payload (picked files,
+ * replace target) rides `$importModelRequest` in `src/state/customAssetStore.ts`, whose id
+ * also remounts the dialog body on every open.
  */
 export type DialogId =
   | 'projects'
@@ -38,8 +39,7 @@ export type DialogId =
   | 'settings'
   | 'scale-everything'
   | 'asset-manager'
-  // The v1 CustomAssetsModal, retired once the Asset Manager's last v1 surface dies.
-  | 'custom-assets'
+  | 'import-review'
   | 'subpart-browser'
   | 'part-browser'
   | 'create-mesh'

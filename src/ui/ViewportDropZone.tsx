@@ -11,7 +11,7 @@ import { openImportModel } from '../state/customAssetStore';
  *
  * Deliberately a React wrapper, not something inside the three.js layer: these are plain DOM
  * drag events on a div, `src/three/` owns no UI, and the drop just opens
- * {@link ImportModelDialog} with the files — nothing is imported until the user confirms.
+ * the Import Review dialog with the files — nothing is imported until the user confirms.
  *
  * `dragover` MUST call `preventDefault()` or the browser refuses the drop (and navigates to
  * the file instead). Drags that carry no file at all (text, a gizmo, a page element) are

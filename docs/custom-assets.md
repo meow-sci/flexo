@@ -269,6 +269,20 @@ same path as hand-authored ones. Nothing about them is a parallel universe.
   every `$currentProjectId` change (ids are unique, so two projects sharing a display name can
   no longer skip the re-hydrate). Diffuse `blob:` URL is the catalog cache key
   (`materialId` left undefined) so replacing a texture busts `MaterialFactory`'s cache.
+
+  **Assets belong to a part, ids belong to the project.** The descriptors are fields of
+  `EditingPart`, so each of a project's parts owns its own textures, materials, meshes and
+  reactions — there is no shared library, and cross-part reuse means duplicating the part. But
+  the blob namespace has no part segment (below) and KSA's `<SubPart>`/mesh-name registries are
+  global per mod, so `CustomTexture.id`, `CustomMaterial.id`, `CustomMesh.id`, `importId` and a
+  custom mesh's `subPartId` must be unique across the **whole project** (invariant I4). Fresh
+  authoring gets that from its random suffixes; duplicating a part re-mints all five families
+  and rewrites every reference through `src/state/partClone.ts`, whose header is the
+  per-family table of what moves, what points at it, and what is deliberately left alone
+  (`imported.meshName` above all). Two consequences here: `hydrateCustomAssets` publishes blob
+  URLs for **every part's** assets (a ghost part has to render too), while the deleters
+  `removeCustomTexture` / `removeUnusedAssets` stay ACTIVE-part scoped, which is correct
+  because each part owns its own. See [multi-part.md](./multi-part.md).
 - **`src/state/assetDb.ts`** — tiny promise-wrapped IndexedDB key→Blob store
   (`flexo-assets`/`blobs`). `putAsset`/`getAsset`/`deleteAsset` + `assetKeys`, whose helpers
   now take `(projectId, id)` and build a **project-namespaced** key:
@@ -279,7 +293,11 @@ same path as hand-authored ones. Nothing about them is a parallel universe.
   `copyProjectAssets(from, to)` — so a project's binaries **follow it through Duplicate**, asset
   ids unchanged (the namespace makes them collision-free, so no descriptor is rewritten) — and
   `deleteProjectAssets(projectId)`, so deleting a project **sweeps its blobs** instead of
-  leaking them. `purgeUnprefixedAssetKeys()` runs once at boot and discards any key without a
+  leaking them. `deleteAssetKeys(keys)` is the narrower sweep behind deleting one **part**
+  (`customAssetStore.sweepPartAssets`, wired into `partsStore` through a registration slot):
+  it removes exactly that part's texture, import and glow-bitmap keys, which is only safe
+  because asset ids are project-unique. `purgeUnprefixedAssetKeys()` runs once at boot and
+  discards any key without a
   `pa:` prefix (v1 blobs whose project no longer exists), reporting the count in a warning
   notification. Binaries are too big for the project snapshot, so
   only lightweight descriptors persist there; the bytes live here. **Generated mesh GLBs

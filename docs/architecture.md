@@ -26,8 +26,9 @@ src/
               hydration is awaited (IndexedDB); nothing paints before it resolves.
 ```
 
-**`state/` — the shell services** (all ephemeral unless noted; none of them ever
-touches `$part`, so none of them can create an undo step):
+**`state/` — the shell services** (all ephemeral unless noted; none of them creates an
+undo step. Only `partsStore` writes `$part` at all, and only by swapping one whole
+document for another — never by mutating one):
 
 | Store | Owns |
 |---|---|
@@ -41,6 +42,7 @@ touches `$part`, so none of them can create an undo step):
 | `hotkeyStore.ts` | `$focusedSurface` / `$dialogOpen` / `$activeScopes` for the scoped registry |
 | `snapStore.ts` | snap enable + the two steps (persisted as three flat keys) |
 | `projectIndexStore.ts` | the reactive project metadata index, current-project pointer, write lock |
+| `partsStore.ts` | the part registry — `$partEntries` / `$activePartId` plus the parked documents and undo histories of the parts that are not being edited |
 
 Mode sub-state lives beside them in `dataModeStore` / `engineStore` / `surfaceModeStore` /
 `animationStore`, each registering its own enter/exit hooks with `modeStore` — the mode
@@ -91,6 +93,30 @@ hold divergent copies.
 objects from state — it diffs `$part.placements` against a `Map<instanceId,
 SubPartObject>` and adds/removes/updates accordingly (async geometry/material loads
 are guarded against placements removed mid-load).
+
+### N Parts, one active
+
+A project holds several Parts and `$part` holds exactly one — the **active** part. A thin
+registry (`src/state/partsStore.ts`) wraps the surface above without changing any of it:
+
+```
+   partsStore   $partEntries (meta, ordered) · $activePartId
+                inactiveDocs / inactiveHistories (module-private maps)
+                     │  park ▲ / hydrate ▼ — switchPart() does both
+   ┌─────────────────▼─────────────────────────────────────────────┐
+   │ the active part: $part · $selection · $layerView ·             │
+   │ $activeLayerId · the undo stacks · every mode sub-store        │
+   └─────────────────┬─────────────────────────────────────────────┘
+                     │ $part.set(…)
+   EditorScene reconcile (root `flexo-part`, pickable) │ GhostPartsLayer
+                                                       │ (scene sibling, never pickable)
+```
+
+**Invariant I1 — the active-part surface is sacred.** No existing store changed shape for
+multi-part, and no consumer of `$part`, `$selection`, `$layerView`, `$activeLayerId` or any
+mode store learns about parts: a switch is one `$part.set` and the same self-clamping cascade
+a project open already ran. Only `partsStore`, persistence, export, the ghost layer and the
+switcher UI are part-aware. See [multi-part.md](./multi-part.md).
 
 ## Modes, commands and keys
 
@@ -191,6 +217,7 @@ and [scope/plumbing-and-feeds.md](../scope/plumbing-and-feeds.md).
 - [Layers](./layers.md) — document vs view state, the Outliner
 - [State persistence](./state-persistence.md) — every localStorage key and what belongs there
 - [Projects](./projects.md) — IndexedDB projects, autosave, archives, share links
+- [Multi-part projects](./multi-part.md) — N Parts per project: the registry, switching, ghosts, one mod
 
 **Authoring surfaces**
 

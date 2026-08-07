@@ -15,13 +15,15 @@
  *   5. timeline — Animation mode docks the timeline (its transport row)
  *   6. Export to KSA — ⌘E opens it, Escape closes it
  *   7. Projects — ⌘O opens it, Escape closes it
+ *   8. parts — ⌘K "New Part" adds one, ⌥1 goes back to it, the palette switches forward
  *
  * WHY DOM-ONLY: screenshots are noise under a live WebGL canvas, so every assertion is
  * a role/name or text query against react-aria's semantics. Accessible names come from
  * the shipped components (`src/ui/shell/MenuBar.tsx`, `src/ui/status/StatusBar.tsx`,
  * `src/ui/build/SubPartBrowserDialog.tsx`, `src/ui/outliner/OutlinerPanel.tsx`,
  * `src/ui/animation/TimelineDock.tsx`, `src/ui/ExportKsaDialog.tsx`,
- * `src/ui/projects/ProjectManagerDialog.tsx`) — if one is renamed, this fails, which is
+ * `src/ui/projects/ProjectManagerDialog.tsx`, `src/ui/shell/PartSwitcher.tsx`,
+ * `src/ui/palette/CommandPalette.tsx`) — if one is renamed, this fails, which is
  * the point.
  *
  * RUNTIME: vanilla **Node 24+** — `node scripts/smoke-v2.ts`, no transpiler and no
@@ -83,6 +85,25 @@ function modeChip(page: Page, mode: string) {
 /** Rows inside the Outliner's entity GridList (`aria-label="Outliner"`). */
 function outlinerRows(page: Page) {
   return page.getByRole('grid', { name: 'Outliner' }).getByRole('row')
+}
+
+/** The menubar's part chip — `aria-label="Part: <name>"` (PartSwitcher.tsx). */
+function partChip(page: Page, name: string) {
+  return page.getByRole('button', { name: `Part: ${name}` })
+}
+
+/**
+ * Runs one command through the ⌘K palette: open it, type a query that ranks the command
+ * first (the full title always does — the matcher is a subsequence match), press Enter.
+ * The palette's input is `role="combobox"` / `aria-label="Search commands"`.
+ */
+async function runFromPalette(page: Page, query: string): Promise<void> {
+  await page.keyboard.press('ControlOrMeta+KeyK')
+  const search = page.getByRole('combobox', { name: 'Search commands' })
+  await search.waitFor({ timeout: 15_000 })
+  await search.fill(query)
+  await search.press('Enter')
+  await search.waitFor({ state: 'hidden', timeout: 10_000 })
 }
 
 async function run(page: Page): Promise<void> {
@@ -172,6 +193,19 @@ async function run(page: Page): Promise<void> {
     await list.waitFor({ timeout: 20_000 })
     await page.keyboard.press('Escape')
     await list.waitFor({ state: 'hidden', timeout: 10_000 })
+  })
+
+  await step('parts — New Part, ⌥1 back to Part 1, palette switch to Part 2', async () => {
+    await partChip(page, 'Part 1').waitFor({ timeout: 15_000 })
+    await runFromPalette(page, 'New Part')
+    await partChip(page, 'Part 2').waitFor({ timeout: 15_000 })
+    // ⌥1 activates registry slot 1. Spelled by physical key: on macOS ⌥1 produces `¡`,
+    // and the binding matches the code (`registry.ts`, group "Parts").
+    await page.keyboard.press('Alt+Digit1')
+    await partChip(page, 'Part 1').waitFor({ timeout: 15_000 })
+    // The `parts` provider's row, which only exists once a project holds two parts.
+    await runFromPalette(page, 'Switch to part: Part 2')
+    await partChip(page, 'Part 2').waitFor({ timeout: 15_000 })
   })
 }
 

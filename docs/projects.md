@@ -17,22 +17,34 @@ auto-suffixes ("Rover" → "Rover 2") and returns the name it actually applied.
 
 ## What a project captures
 
-A `ProjectSnapshotV2` bundles everything needed to fully restore a workspace:
+A project holds **N Parts** ([multi-part.md](./multi-part.md)), so a `ProjectSnapshot` is a
+`parts: SavedPartEntry[]` array plus the `activePartId` naming which one was being edited, and
+the project-wide state around them. Each `SavedPartEntry` carries:
 
+- its registry meta — `id` (the `pt_…` entry id), `name`, and the ghost view flags `visible` /
+  `opacity` / `offset` / `includeInExport`. `counts` is deliberately absent: it is derived on
+  load.
 - `part` — the full `EditingPart` document: `partId`, `editorTags`, `layers`, `placements`,
   `connectors`, `colliders`, `ivaSeats`, `lights`, `kittens`, custom assets, animations,
   `gameData` (each entity's `layerId` included).
 - `layerView` — per-layer visibility/lock/listed/opacity/collapsed (the `$layerView` view state
-  from `layerStore`). The snapshot is now its **only** persistence: the old global
-  `flexo:layerView` key is gone, so these flags are per project.
+  from `layerStore`). Layers are per part, so this rides the entry rather than the snapshot. The
+  snapshot is its **only** persistence: the old global `flexo:layerView` key is gone.
 - `activeLayerId` — where new items land (clamped to a live layer on load).
+
+Three things stay project-level, because they are workspace aids in the shared world frame
+rather than part documents:
+
 - `camera` — the orbit camera pose (`$cameraState`), restored on load via `setCameraRestore`.
   (Older revisions of this doc claimed the camera was excluded; it is captured.)
 - `measurements` and `containers` — the editor aids.
 - `savedAt` — epoch millis.
 
 The **undo/redo history** is captured too, but in its own record rather than inside the
-snapshot, so undo still survives a reload while the frequent snapshot write stays small.
+snapshot, so undo still survives a reload while the frequent snapshot write stays small. It is
+keyed **by part**: `{ byPart: Record<partEntryId, {undo, redo}> }`, since each part carries its
+own stacks. Keys naming no part in the snapshot are harmless — they are never hydrated and die
+on the next write.
 
 Selection, tool mode, snap and the seat view are intentionally **not** captured (fresh slate on
 load). Custom-asset *binaries* are not in the snapshot either — only their descriptors are; the
@@ -47,16 +59,17 @@ the others:
 | Store       | Value                                             | Written by         |
 | ----------- | ------------------------------------------------- | ------------------ |
 | `meta`      | `ProjectMeta` — the whole project list             | every snapshot save |
-| `snapshots` | `ProjectSnapshotV2` — document + view state        | autosave, 300 ms   |
-| `history`   | `{ undo, redo }` — the undo/redo stacks            | autosave, 1500 ms  |
+| `snapshots` | `ProjectSnapshot` — every part + view state        | autosave, 300 ms   |
+| `history`   | `{ byPart }` — the undo/redo stacks, per part      | autosave, 1500 ms  |
 | `thumbs`    | a `Blob` (`image/webp`, 384×216)                   | thumbnail capture  |
 
 `ProjectMeta` is what the project list renders without ever opening a snapshot: `id`, `name`,
-`description`, `partId`, `createdAt`, `savedAt`, `schemaVersion`, a `counts` breakdown
-(SubParts, connectors, colliders, seats, lights, kittens, animations, layers, custom
-textures/materials/meshes — derived by the pure `deriveCounts`), a `bytes`
-`{ snapshot, history, assets }` triple computed by the writer at save time, and `hasThumb`.
-`projectDb` is a dumb store: it stamps and derives nothing else, and imports no React or three.
+`description`, `parts` (one tiny `{id, name, partId}` row per part), `createdAt`, `savedAt`,
+`schemaVersion`, a `counts` breakdown (SubParts, connectors, colliders, seats, lights, kittens,
+animations, layers, custom textures/materials/meshes — the pure `deriveCounts` per part, summed
+across the project by `sumCounts`), a `bytes` `{ snapshot, history, assets }` triple computed by
+the writer at save time, and `hasThumb`. `projectDb` is a dumb store: it stamps and derives
+nothing else, and imports no React or three.
 
 `deleteProjectRecords(id)` removes all four records in **one** transaction, so a crash
 mid-delete can never orphan a snapshot from its meta row.
@@ -89,17 +102,21 @@ Two tabs on one project used to overwrite each other silently. Now:
 ## Autosave
 
 `startAutosave()` subscribes to every store that contributes to a project — `$part`, `$canUndo`,
-`$canRedo`, `$activeLayerId`, `$layerView`, `$projectName`, `$cameraState`, `$measurements`,
-`$containers` — and runs **two** debounced writers:
+`$canRedo`, `$partEntries`, `$activePartId`, `$activeLayerId`, `$layerView`, `$projectName`,
+`$cameraState`, `$measurements`, `$containers` — and runs **two** debounced writers:
 
 | Writer               | Debounce | Writes                    |
 | -------------------- | -------- | ------------------------- |
 | snapshot + meta row  | 300 ms   | `snapshots` + `meta`      |
 | undo/redo history    | 1500 ms  | `history`                 |
 
-`$part` plus the can-undo/redo flags together cover every document and history change (every
-`pushUndo`/`undo`/`redo` touches them); the debounce collapses a gizmo drag's many per-frame
-`$part` writes into one save. History gets the slower timer because it is the bulk of the bytes
+`$part` plus the can-undo/redo flags together cover every document and history change of the
+**active** part (every `pushUndo`/`undo`/`redo` touches them); the debounce collapses a gizmo
+drag's many per-frame `$part` writes into one save. `$partEntries` covers the part registry —
+rename, reorder, the ghost view flags, include-in-export, deleting an inactive part and adding
+imported ones all flow through it and would otherwise never persist — and `$activePartId` covers
+a switch with zero document edits, whose only change is the new active pointer. History gets the
+slower timer because it is the bulk of the bytes
 and a reload inside its window loses at most the last undo *entries*, never document state. A
 `suspended` flag keeps the cascade of store writes during a *load* from triggering a redundant
 save. `flushAutosave()` cancels both timers and writes everything now (project switch, or the
@@ -173,9 +190,12 @@ being looked away from.
    global per-layer view state that now rides only the project snapshot. Removal, never
    migration — their values are never read.
 2. **Incompatible projects** (`purgeIncompatibleProjects`, inside hydration). A `meta` row whose
-   `schemaVersion !== PROJECT_SCHEMA_VERSION`, or whose snapshot is missing, unreadable, or not
-   a document with layers, is deleted along with its snapshot, history, thumbnail **and its
-   asset blobs**, and named in one warning notification.
+   `schemaVersion !== PROJECT_SCHEMA_VERSION` is deleted along with its snapshot, history,
+   thumbnail **and its asset blobs**, and named in one warning notification. So is one whose
+   snapshot is missing, unreadable, or fails the content probe: it must carry at least one part,
+   every part must have a document with a `layers` array, and `activePartId` must be a string.
+   Anything less would crash `applyProjectSnapshot`, and a project that crashes boot is worse
+   than one the user is told about.
 3. **Un-namespaced asset blobs** (`purgeUnprefixedAssetKeys`, run once by `initCustomAssets`).
    Any `flexo-assets` key without a `pa:` prefix belonged to a v1 project that no longer exists,
    so it is deleted and the count reported in a warning notification.
@@ -183,7 +203,7 @@ being looked away from.
 ## Schema version & preservation
 
 Saved projects are the user's own work, so they survive app updates whenever compatibility
-allows. `PROJECT_SCHEMA_VERSION` (currently **3**, in `projectStore.ts`) is stamped into every
+allows. `PROJECT_SCHEMA_VERSION` (currently **4**, in `projectStore.ts`) is stamped into every
 project's meta row and is the entire compatibility contract: a stored project is kept iff its
 snapshot loads **and** its stamped `schemaVersion` equals this number. The constant did **not**
 change in the storage rework — the *document* model is untouched; what moved is the container
@@ -192,13 +212,20 @@ key purge rather than by a version check. It moved to **3** for per-channel keyf
 `AnimationKeyframe.easings` values changed shape from a single `EasingConfig` to a
 `JointSegmentEasing` (`{position?, rotation?, scale?}`), and a v2 snapshot's single whole-pose
 easing has no channel keys — it would default-fill to all-linear and silently load the WRONG
-motion, which `normalizePart` cannot reach inside keyframes to prevent.
+motion, which `normalizePart` cannot reach inside keyframes to prevent. It moved to **4** for
+multi-part: the snapshot's single `part`/`layerView`/`activeLayerId` triple became
+`parts: SavedPartEntry[]` + `activePartId`, and the history record became `byPart`. There is no
+shape a v3 snapshot could default-fill into, so every pre-existing project was purged with the
+standard notice rather than converted.
 
-A kept snapshot is run through `normalizePart`, a template-driven normalizer that fills fields
-the snapshot is **missing** from the live constructors, at four sites: the `EditingPart` top
-level (`createEmptyPart()`), `gameData` (`createEmptyGameData()`), each `subPartGameData[]`
-entry (`createSubPartGameData`), and each `customMeshes[].emissive` (`createGlow()`) — for the
-document *and* every undo/redo history entry. Values already present are never overwritten.
+A kept snapshot is run through `normalizeSavedPart` per entry, which default-fills the registry
+meta (name, the ghost view flags, `includeInExport`, a fresh entry id when one is missing) and
+hands the document to `normalizePart`, a template-driven normalizer that fills fields the
+snapshot is **missing** from the live constructors, at four sites: the `EditingPart` top level
+(`createEmptyPart()`), `gameData` (`createEmptyGameData()`), each `subPartGameData[]` entry
+(`createSubPartGameData`), and each `customMeshes[].emissive` (`createGlow()`) — for every
+part's document *and* every undo/redo history entry of every part. `activePartId` is clamped to
+an entry that exists. Values already present are never overwritten.
 This is default-filling of additive fields, **not** migration; the templates come from the live
 constructors, so there is no per-field upkeep. `loadProjectRecords`' try/catch discard stays as
 the backstop for anything deeper than the normalizer reaches — a project that would crash boot
@@ -223,12 +250,13 @@ re-exports of `$projectName` and
 not a document mutation.
 
 - **Create** mints an id, uniquifies the name, clears document/history/layer view/aids, resets
-  the camera, writes every record immediately, takes the lock and requests a thumbnail.
-- **Open** thumbnails and flushes the outgoing project first, then replaces the undo stacks
-  wholesale with the incoming project's.
-- **Duplicate** copies the snapshot, the thumbnail and the asset blobs under a new id (asset ids
-  are unchanged — the namespace makes them collision-free, so no descriptor is rewritten).
-  History is **not** copied, and the copy is not switched to.
+  the part registry to one empty "Part 1", resets the camera, writes every record immediately,
+  takes the lock and requests a thumbnail.
+- **Open** thumbnails and flushes the outgoing project first, then replaces the registry and the
+  undo stacks wholesale with the incoming project's.
+- **Duplicate** copies the snapshot — every part in it — the thumbnail and the asset blobs under
+  a new id (asset ids are unchanged: the project namespace makes them collision-free, so no
+  descriptor is rewritten). History is **not** copied, and the copy is not switched to.
 - **Delete** removes the four records and the asset blobs. Deleting the current project switches
   to the most-recent remaining one, or starts a fresh default when none are left.
 - **Load shared** (a `?load=` share link) opens the decoded project as a **new** saved project
@@ -405,7 +433,8 @@ Every dialog is mounted once by `src/ui/shell/DialogRoot.tsx` and named by `dial
 
 - **`'projects'`** — the **Project Manager** (L cover, `⌘O`, `ProjectManagerDialog.tsx`).
   Grid or list of every project with thumbnail, description, counts, created/saved times and
-  size; fuzzy search over name + description + part id; sort by last saved / created / name /
+  size, plus an `N parts` line (names on hover) once a project holds more than one; fuzzy search
+  over name + description + every part's name and Part Id; sort by last saved / created / name /
   size (both persisted in `flexo:projectManagerView`). The current project is pinned as a wide
   card with a `CURRENT` chip and inline rename + description editing. Row actions: Open,
   Duplicate, Save As… (current only), Export archive…, Share…, Open in new tab, Delete. Deletion
@@ -445,10 +474,14 @@ reload in `finally`.
 view, and history), that history is stored in its own record and capped at `MAX_UNDO`, the two
 debounce timings, stale-active-layer clamping, index ordering with derived counts, create,
 auto-suffixing rename, delete-current fallback, blob sweeping on delete, duplicate (snapshot +
-blobs, no history, no switch), `openProject` replacing the undo stacks, the v1 key purge and the
-schema/corruption purge with their notices, the boot fallback ladder, `normalizePart`
-default-filling (document and history entries, never overwriting a present value), and the
-autosave-failure/recovery health flip. `src/state/projectDb.test.ts` covers `newProjectId` and
+blobs, no history, no switch — every part, not just the active one), `openProject` replacing the
+undo stacks, the v1 key purge and the schema/corruption purge with their notices, the boot
+fallback ladder, `normalizePart` default-filling (document and history entries, never
+overwriting a present value), and the autosave-failure/recovery health flip. A `multi-part`
+suite round-trips two parts with their own layer views and histories, checks the meta row's
+part list and aggregated counts, and asserts the three registry autosave triggers; the purge
+suite covers a v3 row being discarded rather than converted, the v4 content probe, and the
+regression guard that a freshly saved v4 project survives its own reload. `src/state/projectDb.test.ts` covers `newProjectId` and
 `deriveCounts`; `src/state/tarArchive.test.ts` round-trips the USTAR + gzip codec.
 
 `src/state/projectArchive.test.ts` round-trips a real archive over in-memory IndexedDB mocks:

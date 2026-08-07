@@ -20,11 +20,20 @@ The five view flags are presentation preferences, so they are persisted but kept
 of undo history — toggling the eye never creates an undo step. This matches the
 grid/inspector view-pref pattern in [state-persistence.md](./state-persistence.md).
 
-**Per project, not global.** `$layerView` is a plain atom, and the project snapshot
-(`ProjectSnapshotV2.layerView`) is its ONE persistence — hiding a layer in one project no
-longer affects another. The former global `flexo:layerView` localStorage key is gone — it
-merely mirrored whichever project was saved last — and nothing reads or writes it any more
-(see [projects.md](./projects.md)).
+**Per part, not global.** `$layerView` is a plain atom, and the project snapshot is its ONE
+persistence — hiding a layer in one project no longer affects another. The former global
+`flexo:layerView` localStorage key is gone — it merely mirrored whichever project was saved
+last — and nothing reads or writes it any more (see [projects.md](./projects.md)).
+
+Layers are **per part**, and so is their view state. A project holds N Parts, each with its own
+`layers[]` inside its own document, so `$layerView` and `$activeLayerId` are parked with the
+part being left and swapped in for the part being entered — one `SavedPartEntry.layerView` per
+part in the snapshot, never one for the project. Layer ids are per-part namespaces: part B
+routinely owns an unrelated layer with the same `layer2` id as part A's, which is exactly why a
+paste that crosses parts re-homes onto the destination's active layer instead of trusting the
+id (see [multi-part.md](./multi-part.md)). A ghost of an inactive part honours its **own**
+stored view state, so a layer hidden there stays hidden and its opacity multiplies into the
+part's ghost opacity.
 
 `Layer = { id, name, color? }` (`src/ksa/types.ts`). Array order in `part.layers` is the
 document order.
@@ -81,7 +90,9 @@ The **built-in** layers, all seeded by `createEmptyPart()` and never deletable
   layer (its `targetLayerId`, else the active layer), so one import is one logical group.
 - `duplicateSelected` / `duplicatePlacement` keep each copy in its source's layer;
   `pasteClipboard` does too, falling back to the active layer when the clipboard
-  outlived the layer it was copied from.
+  outlived the layer it was copied from — **unless the paste crosses parts**, where every
+  non-pinned entity is re-homed onto the active layer because a matching layer id in another
+  part means nothing.
 - The KSA XML parser assigns everything `DEFAULT_LAYER_ID` (XML has no layers);
   importing via `addPart` then re-homes it.
 - Project import (`mergeProjectImport`) mirrors each source layer as a NEW layer and

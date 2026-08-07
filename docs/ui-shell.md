@@ -186,15 +186,15 @@ interface Command {
 `registerCommand` **throws** on a duplicate id. Registration is a module-scope side effect of
 importing `src/ui/commands/`, which `app.tsx` does once, before anything renders — the
 menubar, the palette, the phone MenuSheet and the hotkey registry all resolve against it.
-The modules are grouped by menu: `fileCommands` · `editCommands` · `addCommands` ·
-`selectCommands` · `viewCommands` · `toolsCommands` · `windowCommands` · `helpCommands` ·
-`modeCommands`, plus three palette-only groups with no menu home (`dataCommands`,
-`surfaceCommands`, `animationCommands`).
+The modules are grouped by menu: `fileCommands` · `partCommands` · `editCommands` ·
+`addCommands` · `selectCommands` · `viewCommands` · `toolsCommands` · `windowCommands` ·
+`helpCommands` · `modeCommands`, plus three palette-only groups with no menu home
+(`dataCommands`, `surfaceCommands`, `animationCommands`).
 
 **Dynamic providers** contribute factory-generated commands re-evaluated on menu open and
-palette query. Ten are registered in `src/ui/commands/providers.ts`: `history`,
-`layers.select`, `layers.activate`, `seats`, `customMeshInstances`, `projects`, `modsFolder`,
-`data.scopeTemplate`, `surface.pickMesh`, `animation.openClip`.
+palette query. Eleven are registered in `src/ui/commands/providers.ts`: `history`,
+`layers.select`, `layers.activate`, `seats`, `customMeshInstances`, `projects`, `parts`,
+`modsFolder`, `data.scopeTemplate`, `surface.pickMesh`, `animation.openClip`.
 
 `src/ui/menu/menuSpec.ts` is the ordered menu tree — **eight menus** (File, Edit, Add, Select,
 View, Tools, Window, Help) built from five entry kinds (`command`, `checkbox`, `radio`,
@@ -217,11 +217,17 @@ one may be open, and **stacking is banned** — a dialog that needs a second ste
 a view before dismissing) or an inline destructive strip on the row. That is what retired
 v1's controlled/uncontrolled dual dialog APIs.
 
-The menubar's right cluster carries the part chip (→ the parts popover), the project chip
-(→ Projects…), the compact ↶ ↷ pair
+The menubar's right cluster is `[Part ▾][Project ▾][↶][↷][⌘K]`: the part chip (→ the parts
+popover, `shell/PartSwitcher.tsx`), the project chip (→ Projects…), the compact ↶ ↷ pair
 (disabled off `$canUndo` / `$canRedo`, tooltip = the step label) and the ⌘K button. The mode
 switcher is centered. Below ~900px the eight menus collapse into a single `☰` trigger
 rendering the same spec.
+
+The **File** menu grew a part-registry section between the project group and the export group:
+`New Part` · `Switch Part ▸` (the `parts` provider's rows — an empty submenu renders as
+nothing, so it simply is not there in a single-part project) · `Rename Part…` ·
+`Duplicate Part` · `Delete Part…`. `Next Part` / `Previous Part` are palette-only, and the
+popover's rows run the very same commands. See [multi-part.md](./multi-part.md).
 
 For the design-time reference tree — every item, its shortcut and its enable rule — see
 `plans/flexo_v2/design/FINAL_DESIGN_INDEX.md`.
@@ -352,6 +358,14 @@ A binding is enabled iff its scope string is in `hotkeyStore.$activeScopes`. The
   exclusion above exists only to keep BARE keys from fighting row navigation; the modifier
   chords were global in v1 and must keep working after range-selecting rows. A list's own `⌘A`
   keeps precedence.
+
+The registry's source groups are organizational only (Help buckets by **scope**), and the newest
+is **Parts**: `⌥1`–`⌥9` activate that slot in `$partEntries` order, `⌥.` is Next Part and `⌥,`
+Previous Part. All are `global` and share one `when` gate — no dialog open **and** more than one
+part — so they can neither be dead chords in a single-part project nor switch the edited part
+invisibly behind an overlay, which is the rule the bare mode digits already follow. They are
+spelled by physical key (`alt+1`, `alt+period`, `alt+comma`) because macOS turns ⌥1 into `¡`,
+and the nine positional ids are documented synthetics.
 
 **Precedence: surface > tool > mode > viewport > global** (`scopeRank` in `hotkeys/keys.ts`).
 The conflict map is built once at module init by grouping bindings on normalized keys; at

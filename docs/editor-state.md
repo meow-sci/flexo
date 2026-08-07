@@ -26,6 +26,32 @@ through.)
 Per-layer **visibility/lock** is NOT in `$part` — it's persisted view state in
 `src/state/layerStore.ts` (`$layerView`). See [layers.md](./layers.md).
 
+## The part registry — `src/state/partsStore.ts`
+
+A project holds N Parts and `$part` holds exactly one of them: the **active** part. The others
+are parked documents in a thin registry around the editing surface, and no store above changed
+shape to accommodate them (invariant I1 — only `partsStore`, persistence, export, the ghost
+layer and the switcher UI are part-aware).
+
+| Export | Meaning |
+| --- | --- |
+| `$partEntries` | `readonly PartMetaEntry[]` in registry order — per part: entry id (`pt_…`), display name, the ghost `visible`/`opacity`/`offset`, `includeInExport`, and derived `counts`. Meta only; never a document. |
+| `$activePartId` | Which entry `$part` currently holds. |
+| `$activePartMeta` / `$partScopeName` | The active entry, and its name **only in a multi-part project** (`null` otherwise) — the one gate every part-aware label reads, so a single-part project reads exactly as it did before. |
+| `$inactiveRevision` | Bumped whenever a parked document changes hands (switch / create / delete / duplicate / hydrate). The ghost layer's rebuild trigger. |
+| `snapshotParts()` / `$partsSnapshot` | Every part as a `SavedPartEntry[]` — active from the live stores, the rest from the parked map. The computed is the version a React body may read. |
+| `switchPart` · `createPart` · `duplicatePart` · `deletePart` · `renamePart` · `movePart` · `addImportedParts` | Lifecycle. `duplicatePart` is the one async action (it re-mints the copy's custom assets). |
+| `setPartVisible` · `setPartOpacity` · `setPartOffset` · `setPartIncludeInExport` | View state on the entry, never on the document. |
+| `partsForExport()` / `exportEntriesFrom(snapshot)` | The gathering rule for Export to KSA: included parts, registry order. |
+
+The parked documents (`InactivePartDoc = {part, layerView, activeLayerId}`) and the parked undo
+histories live in two module-private Maps that only this module writes (I2). Layers are per
+part, so a switch swaps `$layerView` and `$activeLayerId` along with `$part` — and entity ids
+are per-part namespaces (I3), so two parts may both contain `_light1` and nothing may key a
+cross-part map by a bare entity id. **None of these actions is an undo step** (I6). Full
+behaviour, including what a switch preserves and what it clears, is in
+[multi-part.md](./multi-part.md).
+
 ## The selection — stable ids, never indices
 
 `$selection` holds `SelectionRef = { kind: EntityKind; id: string }`, where `id` is the
@@ -311,7 +337,11 @@ Conventions:
 - **Clipboard** — `copySelected()` / `cutSelected()` / `pasteClipboard()`. All six kinds are
   carried, **lights included** (a v1 gap). `cutSelected` copies and deletes in ONE undo step
   labelled `'cut'`. Paste restores in place with regenerated ids, keeping each entity's
-  original layer where that layer still exists.
+  original layer where that layer still exists. The clipboard is also the one sanctioned
+  cross-part conduit: `copySelected` stamps it with the source part, and a paste into a
+  **different** part re-homes every non-pinned entity onto the destination's active layer
+  instead of trusting a layer-id match — layer ids are sequential, so an unrelated part
+  routinely owns the same `layer2` ([multi-part.md](./multi-part.md)). One undo step either way.
 - **Delete policy** — one rule (foundation §14.3): a small delete just happens and flashes an
   inline `[Undo]` in the status message channel; a large one (above the command's threshold)
   raises the status bar's inline confirm strip rather than a modal.
@@ -351,6 +381,13 @@ one of two patterns:
 `newPart()` clears both stacks (a new document has no history). Adding a `$part`
 mutator that picks neither pattern silently bypasses undo — that's a bug. The invariant
 is also documented at the top of the undo/redo section in `editorStore.ts`.
+
+**Undo stacks are per part.** A project holds N Parts and `$part` holds one of them, so the
+depth-50 stacks belong to the active part alone: switching parks them with that document and
+hydrates the incoming part's, and `⌘Z` can never reach into a part you are not editing. Part
+registry operations (create / switch / delete / duplicate / rename / reorder / the ghost view
+flags) are lifecycle and view state, so they are deliberately **not** undo steps — which is why
+deleting a part destroys its history and confirms first. See [multi-part.md](./multi-part.md).
 
 ## Selectors — `src/state/selectors.ts`
 
@@ -481,9 +518,10 @@ Two cross-cutting notes for the state layer:
 
 UI settings and user preferences that should survive page refresh use **localStorage persistence** via `@nanostores/persistent`. See [state-persistence.md](./state-persistence.md) for patterns on what to persist (panel visibility, tool modes, view settings) and what not to (transient selections).
 
-The whole editing workspace is also persisted as a **project** (document + layer view
-state + active layer + camera + editor aids + undo/redo history), autosaved to the
-`flexo-projects` IndexedDB database and restored on boot. See [projects.md](./projects.md).
+The whole editing workspace is also persisted as a **project** (every part's document + layer
+view state + active layer, plus the project-wide camera, editor aids and the per-part undo/redo
+history), autosaved to the `flexo-projects` IndexedDB database and restored on boot. See
+[projects.md](./projects.md).
 
 ## Tests
 `src/state/editorStore.test.ts` covers instance-id generation, add/remove/duplicate,

@@ -13,6 +13,8 @@ import {
   $activePartId,
   $inactiveRevision,
   $partEntries,
+  $partsSnapshot,
+  addImportedParts,
   createPart,
   deletePart,
   duplicatePart,
@@ -50,6 +52,7 @@ import {
   DEFAULT_LAYER_ID,
   DEFAULT_PART_ID,
   identityTransform,
+  isDefaultPartId,
 } from '../ksa/types';
 import type { EditingPart } from '../ksa/types';
 
@@ -109,7 +112,9 @@ describe('partsStore — createPart', () => {
     expect($activePartId.get()).toBe(second);
     expect(second).not.toBe(first);
     // A brand-new document, view state and history — nothing of the old part leaked through.
-    expect($part.get()).toEqual(createEmptyPart());
+    // The Part Id is the one exception: it is de-collided against the part already in the
+    // project, so it is the placeholder plus a counter rather than the bare placeholder.
+    expect($part.get()).toEqual({ ...createEmptyPart(), partId: `${DEFAULT_PART_ID}_2` });
     expect($layerView.get()).toEqual({});
     expect($activeLayerId.get()).toBe(DEFAULT_LAYER_ID);
     expect($canUndo.get()).toBe(false);
@@ -324,9 +329,10 @@ describe('partsStore — duplicatePart', () => {
 
     // Right AFTER the source, not appended at the end — B is still last.
     expect($partEntries.get().map((e) => e.id)).toEqual([a, copy, b]);
-    // You land in the copy, holding an identical but independent document…
+    // You land in the copy, holding an identical but independent document — bar the Part Id,
+    // which is de-collided against the two parts already in the project.
     expect($activePartId.get()).toBe(copy);
-    expect($part.get()).toEqual(sourceDoc);
+    expect($part.get()).toEqual({ ...sourceDoc, partId: `${DEFAULT_PART_ID}_3` });
     expect($part.get()).not.toBe(getInactiveDoc(a)!.part);
     expect(entryOf(copy!).counts.subParts).toBe(1);
     // …its own copy of the per-part layer view, and its active layer…
@@ -366,20 +372,52 @@ describe('partsStore — duplicatePart', () => {
     ]);
   });
 
-  it('suffixes the KSA Part Id ONLY when it is not the placeholder', async () => {
+  it('de-collides the KSA Part Id, counting the placeholder too', async () => {
     const a = $activePartId.get();
     expect($part.get().partId).toBe(DEFAULT_PART_ID);
 
-    // The placeholder is the "unset" value the user is expected to replace — leave it alone.
+    // The placeholder gets no `_copy` — it stays recognizably "unset" — but it DOES take the
+    // counter, because two parts sharing a Part Id is a P3 export-preflight blocker whether the
+    // shared id is a real one or the placeholder.
     await duplicatePart(a);
-    expect($part.get().partId).toBe(DEFAULT_PART_ID);
+    expect($part.get().partId).toBe(`${DEFAULT_PART_ID}_2`);
     expect(getInactiveDoc(a)!.part.partId).toBe(DEFAULT_PART_ID);
+    expect(isDefaultPartId($part.get().partId)).toBe(true); // still reads as unset
 
-    // A real Part Id gets `_copy`: two parts sharing one is a P3 export-preflight blocker.
+    // A real Part Id gets `_copy`.
     setPartId('booster');
     const suffixed = await duplicatePart($activePartId.get());
     expect($part.get().partId).toBe('booster_copy');
     expect(getInactiveDoc(suffixed!)).toBeNull(); // the copy IS the active part now
+  });
+
+  it('adds a counter when `_copy` itself is taken', async () => {
+    setPartId('booster');
+    await duplicatePart($activePartId.get()); // → booster_copy
+    expect($part.get().partId).toBe('booster_copy');
+
+    // Copying the ORIGINAL again would mint a second `booster_copy` — the exact collision that
+    // used to reach export as a `duplicate-part-id` block.
+    const source = $partEntries.get()[0].id;
+    await duplicatePart(source);
+    expect($part.get().partId).toBe('booster_copy_2');
+
+    await duplicatePart(source);
+    expect($part.get().partId).toBe('booster_copy_3');
+  });
+
+  it('never lets N created parts share a Part Id', () => {
+    createPart();
+    createPart();
+    createPart();
+    const ids = $partsSnapshot.get().map((entry) => entry.part.partId);
+    expect(ids).toEqual([
+      DEFAULT_PART_ID,
+      `${DEFAULT_PART_ID}_2`,
+      `${DEFAULT_PART_ID}_3`,
+      `${DEFAULT_PART_ID}_4`,
+    ]);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it('duplicates an INACTIVE part from its parked document', async () => {
@@ -539,5 +577,47 @@ describe('partsStore — a switch resets selection-tier state', () => {
     // Both are seeded by ids of the OUTGOING document, so both are meaningless here.
     expect($selection.get()).toEqual([]);
     expect($chainSession.get()).toBeNull();
+  });
+});
+
+describe('partsStore — Part Id de-collision on import', () => {
+  /** One `addImportedParts` row carrying `partId` — the rest of the doc is irrelevant here. */
+  function row(name: string, partId: string) {
+    return {
+      name,
+      visible: true,
+      opacity: 1,
+      offset: { x: 0, y: 0, z: 0 },
+      includeInExport: true,
+      doc: {
+        part: { ...createEmptyPart(), partId },
+        layerView: {},
+        activeLayerId: DEFAULT_LAYER_ID,
+      },
+    };
+  }
+
+  it('de-collides an imported Part Id against the parts already in the project', () => {
+    setPartId('booster');
+    addImportedParts([row('Booster', 'booster')]);
+    expect($partsSnapshot.get().map((e) => e.part.partId)).toEqual(['booster', 'booster_2']);
+  });
+
+  it('de-collides the incoming batch against ITSELF', () => {
+    // An envelope may legitimately carry two parts on the same id (e.g. both still unset), so
+    // seeding the taken-set from the project alone would let the batch collide with itself.
+    addImportedParts([row('A', 'tank'), row('B', 'tank'), row('C', 'tank')]);
+    expect($partsSnapshot.get().map((e) => e.part.partId)).toEqual([
+      DEFAULT_PART_ID,
+      'tank',
+      'tank_2',
+      'tank_3',
+    ]);
+  });
+
+  it('leaves a free Part Id exactly as imported', () => {
+    setPartId('booster');
+    addImportedParts([row('Tank', 'tank')]);
+    expect($partsSnapshot.get().map((e) => e.part.partId)).toEqual(['booster', 'tank']);
   });
 });

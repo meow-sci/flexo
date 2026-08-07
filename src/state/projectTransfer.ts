@@ -30,6 +30,7 @@ import {
   createKittenLayer,
   createDefaultMaterial,
   createSubPartGameData,
+  isDefaultPartId,
   clampLayerIds,
   meshKind,
 } from '../ksa/types';
@@ -585,7 +586,7 @@ export function mergeProjectImport(
   // Part Id: adopt the source's only when the destination still carries the placeholder
   // (i.e. importing into a fresh project) — so an Export→Import round-trip preserves it.
   // A destination that already has a real Part Id keeps it; additive paste never renames.
-  if ((!part.partId.trim() || part.partId === DEFAULT_PART_ID) && entry.sourcePartId.trim()) {
+  if ((!part.partId.trim() || isDefaultPartId(part.partId)) && entry.sourcePartId.trim()) {
     part.partId = entry.sourcePartId;
   }
 

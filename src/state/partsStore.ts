@@ -1,5 +1,5 @@
 import { atom, computed } from 'nanostores';
-import { createEmptyPart, DEFAULT_LAYER_ID, DEFAULT_PART_ID } from '../ksa/types';
+import { createEmptyPart, DEFAULT_LAYER_ID, DEFAULT_PART_ID, isDefaultPartId } from '../ksa/types';
 import type { EditingPart, Vec3 } from '../ksa/types';
 import { closeChain } from './chainStore';
 import { clearCoverageReport } from './colliderStore';
@@ -173,6 +173,37 @@ function firstFreeName(base: string, taken: ReadonlySet<string>): string {
   let name = base;
   for (let n = 2; taken.has(name); n++) name = `${base} ${n}`;
   return name;
+}
+
+/**
+ * Every KSA `<Part Id>` currently in the project — the active part's live id plus each parked
+ * doc's. Ids are the EXPORT namespace, not the editor one: unlike entity ids (I3, per-part) they
+ * must be unique project-wide, because a multi-part export writes N `<Part>` / `<PartGameData>`
+ * siblings into the same file and KSA takes the first of a duplicated id.
+ */
+function takenPartIds(exceptId?: string): Set<string> {
+  const activeId = $activePartId.get();
+  const out = new Set<string>();
+  for (const meta of $partEntries.get()) {
+    if (meta.id === exceptId) continue;
+    const part = meta.id === activeId ? $part.get() : inactiveDocs.get(meta.id)?.part;
+    if (part) out.add(part.partId);
+  }
+  return out;
+}
+
+/**
+ * `base` when free, else `base_2`, `base_3`, … — the Part Id counterpart of
+ * {@link firstFreeName}, and the one place the de-collision suffix is spelled.
+ *
+ * Underscore rather than a space because a Part Id is a KSA identifier that also feeds
+ * `partExportNs` (which sanitizes to `[A-Za-z0-9_]`); a space would sanitize away and re-collide
+ * in the variant namespace, tripping `part-id-collision` instead of `duplicate-part-id`.
+ */
+export function uniquePartId(base: string, taken: ReadonlySet<string>): string {
+  let id = base;
+  for (let n = 2; taken.has(id); n++) id = `${base}_${n}`;
+  return id;
 }
 
 /** The parked document of an inactive part, or null — the active part has none (it is live). */
@@ -399,6 +430,11 @@ export function createPart(name?: string): string {
   parkActive();
   const id = newPartEntryId();
   const part = createEmptyPart();
+  // Every new part starts on the same placeholder id, so the 2nd one onward would collide with
+  // the 1st and block export ('duplicate-part-id') until the user renamed it. Suffix instead —
+  // `isDefaultPartId` still reads the result as "unset", so nothing downstream mistakes
+  // `fixme_part_id_2` for an id the user chose.
+  part.partId = uniquePartId(part.partId, takenPartIds());
   // Active id first: every entry published to $partEntries must already have a parked doc or be
   // the active one, or a subscriber could see an entry snapshotParts() has no document for.
   $activePartId.set(id);
@@ -445,12 +481,19 @@ export function addImportedParts(
   }[],
 ): string[] {
   const taken = new Set($partEntries.get().map((entry) => entry.name));
+  // Part Ids de-collide on the same rule as names, and against the same running set: an envelope
+  // can carry two parts that already share an id, so seeding from the project alone would let the
+  // batch collide with itself. Mutating `entry.doc.part` is safe — the doc was built for this
+  // call by `entryToPart` and is not shared with the caller's payload.
+  const takenIds = takenPartIds();
   const added: PartMetaEntry[] = [];
   const ids: string[] = [];
   for (const entry of entries) {
     const id = newPartEntryId();
     const name = firstFreeName(entry.name.trim() || 'Part', taken);
     taken.add(name);
+    entry.doc.part.partId = uniquePartId(entry.doc.part.partId, takenIds);
+    takenIds.add(entry.doc.part.partId);
     inactiveDocs.set(id, entry.doc);
     added.push({
       id,
@@ -490,10 +533,6 @@ export async function duplicatePart(id: string): Promise<string | null> {
   if (!doc) return null;
 
   const cloned = await clonePartWithFreshAssets(doc.part, $currentProjectId.get());
-  // Two parts sharing a KSA Part Id is a P3 export-preflight blocker. Suffixing keeps the
-  // common case green; the placeholder is left alone, because it is already the "unset" value
-  // the user is expected to replace in Data ▸ Identity.
-  if (cloned.partId !== DEFAULT_PART_ID) cloned.partId = `${cloned.partId}_copy`;
 
   // RACE: the clone above is async, so any registry read taken before it is stale — a second
   // duplicate or a `deletePart` can land in that window. Everything below is built from THIS
@@ -509,6 +548,15 @@ export async function duplicatePart(id: string): Promise<string | null> {
     return null;
   }
   const source = entries[index];
+
+  // Two parts sharing a KSA Part Id is a P3 export-preflight blocker, so de-collide the copy's.
+  // `_copy` first (it reads as what it is), then a counter for the 2nd copy onward — `X_copy`,
+  // `X_copy_2`, … The placeholder gets no `_copy`: it is the "unset" value the user is expected
+  // to replace in Data ▸ Identity, so it stays recognizable as one (`isDefaultPartId`) and only
+  // takes the counter. Computed HERE, after the await, so it sees any part added in that window.
+  cloned.partId = isDefaultPartId(cloned.partId)
+    ? uniquePartId(DEFAULT_PART_ID, takenPartIds())
+    : uniquePartId(`${cloned.partId}_copy`, takenPartIds());
 
   const newId = newPartEntryId();
   // Park BEFORE publishing the entry: every non-active `$partEntries` entry must already have a

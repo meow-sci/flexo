@@ -189,7 +189,7 @@ silently ships the wrong asset. Every registered id therefore has a named guaran
 
 | Registered id | Guarantor |
 | --- | --- |
-| `<Part Id>` / `<PartGameData Id>` | preflight blocker on a duplicate `partId` |
+| `<Part Id>` / `<PartGameData Id>` | de-collided at add time (below), with a preflight blocker as the backstop |
 | Export-variant `<SubPart Id>` = `flexo_<base>_<ns>_<templateId>` | the per-part `ns` token (`partExportNs(partId)` = `sanitizeBaseName`), preflight-checked for collisions |
 | Custom-mesh `<SubPart Id>` · GLB mesh names · `_VM` names | I4 (project-unique `subPartId`, enforced by the clone re-mint) |
 | `<PartModel Id>` = `<subPartId>_Model` / `<variantId>_Model` | follows the two rows above |
@@ -209,6 +209,33 @@ part's own** reaction index, never a shared one — stamping `partEntryId`/`part
 issue. The dialog groups on that id (never on the name — two parts may share one), renders
 cross-part findings first under **Project**, and a jump to a fix switches to the owning part
 before setting the mode, since no mode can focus an entity that is not hydrated.
+
+### Part Ids are de-collided when a part is added
+
+A `<Part Id>` is the EXPORT namespace, not the editor one: unlike entity ids (I3, unique only
+within a part) it must be unique project-wide, because an export writes N `<Part>` /
+`<PartGameData>` siblings into one file and KSA takes the first of a duplicated id. So every path
+that adds a part suffixes its id until it is free, via `uniquePartId(base, taken)` in
+`partsStore.ts` — `base`, then `base_2`, `base_3`, …:
+
+| Path | Id it asks for |
+| --- | --- |
+| `createPart` | the placeholder — so N new parts are `fixme_part_id`, `fixme_part_id_2`, … |
+| `duplicatePart` | `<source>_copy`, then `<source>_copy_2` for the second copy of the same part. A source still on the placeholder gets no `_copy`, only the counter |
+| `addImportedParts` | the imported id, de-collided against the project **and against the rest of the incoming batch** (one envelope may carry two parts on the same id) |
+
+The suffix is an underscore, not a space: a Part Id also feeds `partExportNs` (which sanitizes to
+`[A-Za-z0-9_]`), so a space would sanitize away and re-collide in the variant namespace — trading
+a `duplicate-part-id` block for a `part-id-collision` one.
+
+The placeholder is counted like any other id, so `fixme_part_id_2` is a normal outcome. Anything
+asking "has the user set a real Part Id yet?" must therefore call **`isDefaultPartId(partId)`**
+(`src/ksa/types.ts`), which matches the placeholder and its `_N` forms — a bare
+`=== DEFAULT_PART_ID` is wrong from the second part onward. `mergeProjectImport`'s adopt-the-
+source-id rule is the live consumer.
+
+De-collision is a convenience, not the guarantee: the user can still rename two parts into a
+collision by hand, which is what the preflight blocker below is for.
 
 On top of the per-part passes, preflight adds five cross-part blockers: no parts included,
 duplicate `partId`, Part Ids that collide after sanitization, a custom-mesh `subPartId` used by
@@ -291,7 +318,8 @@ ported to phone.
 `src/state/partsStore.test.ts` covers init, create, the switch round-trip (document, layer view,
 active layer, revision bumps), undo isolation across a switch, delete (refusal at one part,
 active-part fallback, history destruction), rename/reorder/view setters and `partsForExport`
-filtering, plus `duplicatePart`'s placement, naming, empty history and `partId` suffixing.
+filtering, plus `duplicatePart`'s placement, naming, empty history and `partId` suffixing, and
+the Part Id de-collision across `createPart` / `duplicatePart` / `addImportedParts`.
 `src/state/partClone.test.ts` is the I4 proof: zero id overlap across all five families, every
 reference site rewritten, blobs copied under the new keys, and the deliberate non-remints left
 byte-identical. `src/state/projectStore.test.ts` covers the v4 round-trip with two parts,

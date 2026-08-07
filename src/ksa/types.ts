@@ -353,6 +353,18 @@ export interface Layer {
  */
 export const DEFAULT_PART_ID = 'fixme_part_id';
 
+/**
+ * True for the placeholder above AND for its de-collided forms (`fixme_part_id_2`, `_3`, …).
+ *
+ * A project may hold N parts and two `<Part Id>` siblings sharing an id is an export blocker, so
+ * `partsStore` suffixes every added part's id until it is free — including the placeholder. That
+ * makes a bare `partId === DEFAULT_PART_ID` test wrong for the 2nd part onward: use this instead
+ * anywhere "has the user set a real Part Id yet?" is the actual question.
+ */
+export function isDefaultPartId(partId: string): boolean {
+  return partId === DEFAULT_PART_ID || new RegExp(`^${DEFAULT_PART_ID}_\\d+$`).test(partId);
+}
+
 /** Id of the built-in "Default" layer. It always exists and cannot be deleted. */
 export const DEFAULT_LAYER_ID = 'default';
 

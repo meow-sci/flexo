@@ -171,9 +171,13 @@ function namedPartsOf(snapshot: readonly SavedPartEntry[]): NamedExportPart[] {
  * modes — one mod, N parts, all three files (D4). Deliberately NOT editable here: the
  * include flag is a per-part row control in the part dropdown, so this line reports and the
  * registry decides.
+ *
+ * Renders nothing in a single-part project: there is no scope question to answer, and the
+ * dialog must look exactly as it did before multi-part (MULTI_PART_PLAN.md I8).
  */
 function ExportScope() {
   const snapshot = useStore($partsSnapshot);
+  if (snapshot.length <= 1) return null;
   const included = snapshot.filter((entry) => entry.includeInExport);
   const excluded = snapshot.length - included.length;
   return (
@@ -661,7 +665,7 @@ const TAB_LABELS: Record<ExportTab, string> = {
 };
 
 const NO_ASSETS_PLACEHOLDER =
-  '(No Assets XML — this part references only built-in SubParts directly, so the mod ships just Part + GameData XML.)';
+  '(No Assets XML — every exported part references only built-in SubParts directly, so the mod ships just Part + GameData XML.)';
 
 function InspectMode({ onClose }: { onClose: () => void }) {
   const preview = useStore($exportPreview);

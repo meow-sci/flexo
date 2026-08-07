@@ -77,7 +77,7 @@ export function EngineNavigator() {
                 <ListBoxItem key={key} id={key} textValue={label}>
                   <span className="flex min-w-0 flex-col">
                     <span className="truncate">{label}</span>
-                    <span className="text-[11px] text-fg-subtle">
+                    <span data-subtitle className="text-[11px] text-fg-subtle">
                       {totalModuleCount(part, entry)} modules
                     </span>
                   </span>

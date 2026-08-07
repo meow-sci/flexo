@@ -177,7 +177,7 @@ Skipping any step is not acceptable.
 
 # UI design
 
-- **Use the `src/ui/kit/` primitives, not raw react-aria-components**: import Button/Modal/Popover/Select/etc. from `./kit` so styling stays centralized (the kit `<Popover>` already applies the standard `rounded-lg` rounding — don't override it). Reach for raw `react-aria-components` only for pieces the kit deliberately doesn't wrap (e.g. sectioned `GridList` collections).
+- **Use the `src/ui/kit/` primitives, not raw react-aria-components**: import Button/Modal/Popover/Select/etc. from `./kit` so styling stays centralized (the kit `<Popover>` already applies the standard `rounded-lg` rounding — don't override it). Reach for raw `react-aria-components` only for pieces the kit deliberately doesn't wrap (e.g. sectioned `GridList` collections, which style their own rows via `gridRowClass`). `ListBoxItem` is lint-enforced (`no-restricted-imports`): a raw one renders with no className at all — no hover/focus ring, no selection wash, and the browser's default type size instead of the Select trigger's.
 - **Prefer `GridList` over `ListBox`**: when rendering selectable lists, use react-aria's `GridList`/`GridListItem` rather than `ListBox`. `GridList` supports richer functionality — rows can embed interactive controls (buttons, menus, links) while still participating in single/multi selection and keyboard navigation.
 
 The v2 shell adds five rules that every new surface MUST obey (full detail in [docs/ui-shell.md](docs/ui-shell.md)):

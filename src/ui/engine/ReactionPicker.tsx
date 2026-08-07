@@ -189,7 +189,7 @@ function ReactionRow({ option }: { option: ReactionOption }) {
             </span>
           )}
         </span>
-        <span className="truncate text-[11px] text-fg-subtle">
+        <span data-subtitle className="truncate text-[11px] text-fg-subtle">
           {option.id}
           {option.defaultMixtureRatio != null && ` · O/F ${option.defaultMixtureRatio} default`}
         </span>

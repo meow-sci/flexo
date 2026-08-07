@@ -1,6 +1,5 @@
 import { useStore } from '@nanostores/react';
-import { ListBoxItem } from 'react-aria-components';
-import { Button, Select } from '../kit';
+import { Button, ListBoxItem, Select } from '../kit';
 import { TransformGroups } from './TransformGroups';
 import { CoveragePanel } from './CoveragePanel';
 import { $part, setColliderOwner, setColliderShape } from '../../state/editorStore';

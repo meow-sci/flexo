@@ -16,6 +16,24 @@
     // doesn't apply here.
     "unicorn/no-new-array": "off",
 
+    // A raw react-aria `ListBoxItem` renders with NO className at all: no hover/focus
+    // ring, no selection wash, no check, and the browser's default type size instead of
+    // the Select trigger's. Every dropdown option must come from the kit. (GridListItem
+    // is deliberately NOT restricted — the Outliner/SubPart grids style rows themselves
+    // via `gridRowClass`.)
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "react-aria-components",
+            "importNames": ["ListBoxItem"],
+            "message": "Import ListBoxItem from src/ui/kit — the raw one is unstyled."
+          }
+        ]
+      }
+    ],
+
     // React Compiler rules (eslint-plugin-react-hooks recommended-latest).
     // rules-of-hooks and exhaustive-deps are omitted here — covered by the
     // native react plugin above.
@@ -42,7 +60,9 @@
       // apply to a shared primitives library.
       "files": ["src/ui/kit/**/*.{ts,tsx}"],
       "rules": {
-        "react/only-export-components": "off"
+        "react/only-export-components": "off",
+        // The kit is where the raw react-aria primitives get wrapped.
+        "no-restricted-imports": "off"
       }
     }
   ]

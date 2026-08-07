@@ -15,9 +15,15 @@ import { Popover } from './Popover';
 import { ListBox } from './ListBox';
 import { SearchField } from './SearchField';
 
+/*
+ * Same metrics as `inputStyles` (Field.tsx) at every tier, and the same open/focus
+ * language: react-aria holds the trigger in `data-pressed` for as long as the popover
+ * is open, so `pressed:border-accent` is the select's version of an input's
+ * `focus:border-accent` — the control reads as "live" while you're picking.
+ */
 const trigger = tv({
   extend: focusRing,
-  base: 'flex w-full items-center justify-between gap-2 rounded-md border border-border bg-panel-sunken text-fg transition-colors hover:border-border-strong disabled:opacity-50',
+  base: 'flex w-full items-center justify-between gap-2 overflow-hidden rounded-md border border-border bg-panel-sunken text-fg transition-colors hover:border-border-strong pressed:border-accent disabled:opacity-50',
   variants: {
     size: {
       // Bars + sidebars only (design-system-services §7.2).
@@ -28,6 +34,13 @@ const trigger = tv({
   },
   defaultVariants: { size: 'md' },
 });
+
+/** Chevron + dropdown metrics per tier, so the popover matches the trigger it came from. */
+const SIZE_METRICS = {
+  xs: { chevron: 12, list: 'text-xs [--option-py:0.1875rem]' },
+  sm: { chevron: 13, list: 'text-xs [--option-py:0.25rem]' },
+  md: { chevron: 15, list: 'text-sm [--option-py:0.375rem]' },
+} as const;
 
 export interface SelectKitProps<T extends object>
   extends Omit<AriaSelectProps<T>, 'children'>, VariantProps<typeof trigger> {
@@ -80,6 +93,7 @@ export function Select<T extends object>({
   ...props
 }: SelectKitProps<T>) {
   const { contains } = useFilter({ sensitivity: 'base' });
+  const metrics = SIZE_METRICS[size ?? 'md'];
   return (
     <AriaSelect {...props} className={cn('flex flex-col gap-1', className)}>
       {label && <Label>{label}</Label>}
@@ -88,8 +102,14 @@ export function Select<T extends object>({
           trigger({ ...rp, size, className: cls }),
         )}
       >
-        <SelectValue className="flex-1 truncate text-left data-[placeholder]:text-fg-subtle" />
-        <ChevronsUpDown size={size === 'sm' ? 13 : 15} className="shrink-0 text-fg-subtle" />
+        {/*
+          react-aria renders the selected option's own children here, so a two-line option
+          (label + muted second line) would stack inside a one-line-tall trigger and spill
+          past its border. Mark the secondary line `data-subtitle` at the call site and it
+          shows in the list only; the trigger stays single-line.
+        */}
+        <SelectValue className="flex-1 truncate text-left data-[placeholder]:text-fg-subtle [&_[data-subtitle]]:hidden" />
+        <ChevronsUpDown size={metrics.chevron} className="shrink-0 text-fg-subtle" />
       </AriaButton>
       <Popover className={cn('w-(--trigger-width)', searchable && 'min-w-56', popoverClassName)}>
         {searchable ? (
@@ -98,7 +118,7 @@ export function Select<T extends object>({
           // the query resets when the popover closes.
           <Autocomplete filter={filter ?? contains}>
             <SearchField
-              size={size === 'sm' ? 'sm' : 'md'}
+              size={size ?? 'md'}
               autoFocus
               aria-label={searchPlaceholder ?? 'Search options'}
               placeholder={searchPlaceholder ?? 'Search…'}
@@ -106,16 +126,16 @@ export function Select<T extends object>({
             />
             <ListBox
               items={items}
-              className="max-h-[inherit] overflow-auto"
+              className={cn('max-h-[inherit] overflow-auto', metrics.list)}
               renderEmptyState={() => (
-                <div className="px-2 py-1.5 text-xs text-fg-subtle">No matches</div>
+                <div className="px-2 py-(--option-py) text-fg-subtle">No matches</div>
               )}
             >
               {children}
             </ListBox>
           </Autocomplete>
         ) : (
-          <ListBox items={items} className="max-h-[inherit] overflow-auto">
+          <ListBox items={items} className={cn('max-h-[inherit] overflow-auto', metrics.list)}>
             {children}
           </ListBox>
         )}

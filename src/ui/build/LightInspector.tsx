@@ -1,6 +1,5 @@
 import { useStore } from '@nanostores/react';
-import { ListBoxItem } from 'react-aria-components';
-import { ColorField, Field, SectionTitle, Select, Switch } from '../kit';
+import { ColorField, Field, ListBoxItem, SectionTitle, Select, Switch } from '../kit';
 import { Section } from './TransformGroups';
 import { PART_OWNER_KEY } from './ColliderInspector';
 import { NumberField } from '../NumberField';

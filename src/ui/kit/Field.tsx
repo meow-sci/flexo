@@ -13,9 +13,18 @@ import { tv } from 'tailwind-variants';
 import { Button } from './Button';
 import { cn, composeTw, focusRing } from './styles';
 
-/** Standalone numeric/text input surface, shared by TextField/NumberField. */
+/**
+ * Standalone numeric/text input surface, shared by TextField/NumberField/SearchField.
+ *
+ * Focus is styled off the NATIVE `:focus` (arbitrary variant), not the react-aria plugin's
+ * `focus:`. The plugin rewrites `focus:` to `[data-focused]` for any element carrying
+ * `data-rac`, and react-aria deliberately withholds `data-focused` from the input inside an
+ * `Autocomplete` (the searchable Select's filter field) because focus is virtually delegated
+ * to the list — which left that field with no accent border and Chrome's blue UA ring
+ * showing through the dead `focus:outline-none`.
+ */
 export const inputStyles = tv({
-  base: 'w-full min-w-0 rounded-md border border-border bg-panel-sunken text-fg transition-colors placeholder:text-fg-subtle hover:border-border-strong focus:border-accent focus:outline-none disabled:opacity-50',
+  base: 'w-full min-w-0 rounded-md border border-border bg-panel-sunken text-fg outline-none transition-colors placeholder:text-fg-subtle hover:border-border-strong [&:focus]:border-accent disabled:opacity-50',
   variants: {
     size: {
       // Bars + sidebars only (design-system-services §7.2).

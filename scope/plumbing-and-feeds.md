@@ -11,7 +11,7 @@
 > alongside [engines.md](engines.md), [connectors-coordinates-iva.md](connectors-coordinates-iva.md)
 > and [gamedata-modules.md](gamedata-modules.md).
 
-**Baseline:** re-verified against KSA build **2026.8.3.5117** (decomp @ 5117 + shipped Core XML);
+**Baseline:** re-verified against KSA build **2026.8.5.5168** (decomp @ 5168 + shipped Core XML);
 surface introduced at **2026.7.9.5018**.
 **Baseline status:** ✅ **CURRENT** — modeled end-to-end (parse, serialize, import/paste
 remapping, project codec v4, authoring UI, export pre-flight) by the 5018 upgrade.
@@ -187,6 +187,19 @@ template-local `Components` id and is never regenerated, so it passes through un
   surfaces warnings, not just blocking errors.
 - **`Parent` on a part-level consumer is legal** and needs no wiring (it defers to whatever
   places the _part_), so flexo's "unwired consumer" check only fires for SubPart-level ones.
+
+---
+
+## What changed in 5168
+
+**Verdict: ✅ NONE.** Every anchor in this doc is byte-identical at 5168:
+`ConsumerFeedWiring.cs`, `FeedsFromReference.cs`, `RocketCoreTemplate.cs`, and the
+`ConnectorCapability*` family. `PartTemplate.cs`'s `ResolveConsumerFeedPoints` /
+`ResolveConsumerFeeds` / `AddResolvedFeed` differ only by log line-numbers (the two added
+`[XmlElement]` mass types above shifted the file by two lines). The empty-`<Capabilities>` default
+of `Electricity|ServiceFluid`, the "passthrough does NOT cover MODELED elements" rule, load-bearing
+container `Id`s, whitespace-separated `[Flags]` bodies, and the capability token set including
+`DecouplerJoint` all stand unchanged.
 
 ---
 

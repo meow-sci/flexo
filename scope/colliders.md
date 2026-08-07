@@ -6,10 +6,24 @@
 > [part-and-subpart-xml.md](part-and-subpart-xml.md) (which owns the surrounding `<Part>` /
 > `<PartGameData>` document structure).
 
-**Baseline:** re-verified against KSA build **2026.8.3.5117** (`decomp/` + shipped `Content/Core`)
+**Baseline:** re-verified against KSA build **2026.8.5.5168** (`decomp/` + shipped `Content/Core`)
 and the real GLB meshes in `flexo-private-assets/assets/Meshes`.
 **Baseline status:** ✅ **MODELED** — closes the 4939 geometry-template `<Collider>` gap
 (gap **E** in [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md)).
+
+**5168:** schema INTACT, verdict **NONE**. `ColliderModule.cs`, `ColliderTemplate.cs` and the four
+`Box`/`Sphere`/`Cylinder`/`CapsuleColliderTemplate.cs` classes _do_ appear in the `5117 → 5168`
+decomp diff, but every hunk is **decompiler noise**: the Bepu DLLs were added to the snapshot
+(`ksa-game-assemblies` commit `a1c9eda`), so the `//IL_xxxx: Unknown result type (might be due to
+invalid IL or missing references)` comment blocks disappeared and `Shapes` now resolves to its
+fully-qualified `BepuPhysics.Collidables.Shapes`. No field, `[XmlElement]`, `[XmlAttribute]` or
+behaviour changed — `Collider2Asmb`, `LocationAsmb`, the `Transform.scale`-carries-size rule, the
+four authoring sites, and the zero-collider fallback all stand. Still exactly four analytic
+primitives; no `MeshColliderTemplate` appeared. Note rev 5157 added collider processing **to the
+ground-clutter path** and "support for multiple collider primitives per mesh" — that is
+`ClutterObjectTemplate`'s new `[XmlArray("Colliders")]`, which _reuses these same four template
+classes_ but does not change the part-collider surface (see
+[ground-clutter.md](ground-clutter.md#what-changed-in-5168)).
 
 **5117:** schema INTACT — `ColliderModule.cs` and all four
 `Box`/`Sphere`/`Cylinder`/`CapsuleColliderTemplate.cs` classes are absent from the

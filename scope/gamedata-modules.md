@@ -4,7 +4,7 @@
 > `<PartGameData>` / `<SubPartGameData>` documents. Each block maps to a KSA `*Template`
 > class. Engine modules have their own file ([engines.md](engines.md)).
 
-**Baseline:** re-vetted against KSA build **2026.8.3.5117** (decomp @ 5117 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.8.5.5168** (decomp @ 5168 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — 5117's added `<EVADoor SeatId>` is now modeled
 (`EvaDoor.seatId`, gap **Q1** CLOSED — see [What changed in 5117](#what-changed-in-5117)); every
 unit token, scale factor and module element form is byte-identical.
@@ -118,6 +118,33 @@ re-check the validator's strings alongside the two evaluators.
 
 On each game update, re-verify per the checklist item in
 [GAME_UPDATE_CHECKLIST.md](GAME_UPDATE_CHECKLIST.md) (grep anchors are listed there).
+
+## What changed in 5168
+
+**Verdict: ✅ INTACT.** Every module template flexo models is byte-identical at 5168:
+`BatteryTemplate`, `DockingPortTemplate`, `ControlTemplate`, `LightModule`, and the whole unit
+reference family (`EnergyReference`, `PowerReference`, `ImpulseReference`, `MassReference`,
+`DistanceReference`) — so the unit tokens and scale factors baked into
+`src/ksa/partXmlParser.ts` / `partXmlSerializer.ts` are unchanged. `Content/Core/Shaders/Lighting/`
+did not change either (`LightPrePass.comp` and `LightData.glsl` are both absent from the content
+diff), so the `lightFalloff.ts` port and `lightValidation.ts`'s quoted member names still hold.
+
+Two additions, neither of which reaches a part-authoring surface:
+
+- **`AreaReference` is new** (rev 5125) — `[XmlAttribute]` `Km2` / `M2` / `Cm2` / `Mm2`, summed
+  into m² exactly like the other `*Reference` unit classes. It is referenced from only two places
+  in the decomp, `VehicleEditor.cs` and `SolidGrainSegment.cs`, and **is not a field on any
+  template class**, so nothing in flexo's XML currently can or should emit it. Note it as the
+  established token set (`Km2`/`M2`/`Cm2`/`Mm2`) should a future build put an area on a template.
+- **`Decoupler` gained an `[XmlType(TypeName = "DecouplerData")] SaveData`** with a single
+  `[XmlAttribute] bool Enabled = true` (rev 5132, "let the player disable the decoupler module(s)
+  on a part, e.g. turning adapters into static fairings"). This is a `SaveDataBase` — **per-vehicle
+  save state, not part-template authoring** — and `DecouplerTemplate` itself is unchanged. flexo
+  authors part templates, so there is nothing to model. `Decoupler` also now implements the new
+  `IEnable`, and `Part.Sequenceable` became `HasEnabledModule<EngineController>() ||
+HasEnabledModule<Decoupler>()`; both are runtime-only.
+
+---
 
 ## What changed in 5117
 

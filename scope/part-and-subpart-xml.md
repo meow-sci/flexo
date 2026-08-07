@@ -5,12 +5,13 @@
 > other feature hangs off. Read alongside [docs/xml-io.md](../docs/xml-io.md) and
 > [docs/subpart-catalog.md](../docs/subpart-catalog.md) (the flexo-internal view).
 
-**Baseline:** KSA build **2026.8.3.5117** — re-verified ✅ intact by the `5056 → 5117` review
-(`FULL_SCOPE.md` integration map: this row moved at 5117 only in that the vendored fixtures were
-re-synced from the 5117 mirror; the structure itself did not move). The last review that changed
-anything in this doc was the `5018 → 5056` one, which is why the sections below are written
-against 5056. This header line lagged the 5117 re-baseline and was corrected in the P12.16 scope
-audit.
+**Baseline:** KSA build **2026.8.5.5168** — re-verified ✅ intact by the `5117 → 5168` review.
+`PartTemplate`/`SubPartTemplate`/`EditorTagDefinition` are byte-identical apart from two **added**
+`[XmlElement]`s on the `InertMasses` polymorphic list (`SolidOgiveMass` / `HollowOpenOgiveMass`,
+rev 5166), which flexo already carries through the GameData passthrough. The structure itself has
+not moved since the `5018 → 5056` review, which is why the sections below are written against
+5056; 5117 and 5168 each only re-synced the vendored fixtures. See
+[What changed in 5168](#what-changed-in-5168).
 **Baseline status:** ✅ **CURRENT** — `<Diameter>` part-size + `<Control>` command marker modeled
 (and as of 4826 `<Diameter>` is **repeatable** — the extras round-trip via `extraDiametersM`, see
 [What changed in 4826](#what-changed-in-4826)); `KNOWN_EDITOR_TAGS` refreshed from the registry
@@ -161,6 +162,40 @@ registration ship the wrong mesh.
 - Connector `<Flags>` live on `<PartGameData>`, **not** on the geometry `<Part>` — without the GameData merge, `ToSurface`/etc. are lost.
 - A `<Part>` with no matching `<PartGameData>` has no tags/modules → invisible in the part picker.
 - `DockingPort` parses only the current child-element form (`<ConnectorId Value>`, `<LatchingKineticEnergy J>`, `<PushoffImpulse Ns>`) — no legacy fallback; see [gamedata-modules.md](gamedata-modules.md).
+
+## What changed in 5168
+
+**Verdict: ✅ INTACT** (one catalog gap, now closed). `PartTemplate.cs`, `SubPartTemplate.cs` and
+`EditorTagDefinition.cs` carry no schema movement beyond two **added** `[XmlElement]`s on
+`PartTemplate.InertMasses` (rev 5166): `<SolidOgiveMass>` (`SolidOgiveMassTemplate`) and
+`<HollowOpenOgiveMass>` (`HollowOpenOgiveMassTemplate`), the "tangent ogive mass type" of the
+CoreFairingA import. Two sibling classes appeared alongside them — `AsmbRevolvedMassTemplate`
+(masses of revolution may now be a **sector** rather than a full circle, hence the `<Sweep>`
+elements new in `CoreFairingAGameData.xml`) and `HollowOpenOgiveMassTemplate`. flexo models only
+`<CustomMass>` out of this whole family; every other mass element rides the `<PartGameData>` /
+`<SubPartGameData>` `RawXmlNode` passthrough (`src/ksa/types.ts` documents the family by name), so
+the new ones round-trip untouched. **No parser change required.**
+
+`CoreEditorTagsGameData.xml` is unchanged, so the static `EDITOR_TAG_DEFS` / `KNOWN_EDITOR_TAGS`
+snapshot in `src/ksa/types.ts` still matches the registry.
+
+**The one real gap (MISSING-CAPABILITY, fixed in this review):** rev 5161 imported a brand-new Core
+part file — `CoreUtilityAAssets.xml` / `CoreUtilityAGameData.xml` (`CoreUtilityA_Prefab_LadderA`
+plus 11 `<SubPart>` templates, "not yet functional as ladders"), and added both to Core's
+`mod.toml`. flexo's part/SubPart catalog reads a **hand-maintained** list, `ASSET_FILES` in
+`src/ksa/catalog.ts`, which did not include it — so the new parts were silently absent from the
+Part and SubPart browsers with nothing failing. `CoreUtilityAAssets.xml` is now listed, and
+`src/ksa/catalog.test.ts` grew a drift guard that enumerates `Core*Assets.xml` in the live private
+tree and fails on any file `ASSET_FILES` omits, so the next such import cannot go missing quietly.
+
+**Fixtures:** only `PartGameData.xml` moved, and only in **values** — no schema. Two edits: the RCS
+retune of rev 5119 (`<MaxPressure>` 7→21 bar, `<ExitDiameter>` 0.02→0.03 m, `<ExpansionEfficiency>`
+0.13→0.5, `<MinimumPulseTime>` 0.008→0 s across the MMU thrusters) and a **part-frame convention
+change** on `KittenBackPackSubPart`: the origin moved from the jetpack to the kitten's **feet**, so
+every `<LocationAsmb>`, `<ExhaustLocation>` and `<FxExhaustLocation>` shifted by `Z -= 0.431`, and
+the capsule collider became a sphere. Re-synced via `cd scripts && bun run sync-fixtures`.
+
+---
 
 ## What changed in 5117
 

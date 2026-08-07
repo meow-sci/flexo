@@ -101,3 +101,25 @@ registry only drives autocomplete suggestions + their grouping (`KNOWN_EDITOR_TA
 ---
 
 **Enable/disable connectors:** Toggle with "Enable Connecting" in the Debug Editor to show/hide attachment UI. 
+
+## Connector orientation now drives flight control, not just attachment
+
+Since KSA build `2026.8.5.5168` (rev 5133, "Control From Here") a connector's **orientation** can
+become the vehicle's attitude reference frame, so getting it right matters beyond how parts snap
+together.
+
+Right-clicking a part that carries a `<Control/>` marker — or a specific docking port — lets the
+player shift the vehicle's control point onto it. The game then flies the vehicle in that frame:
+`Vehicle.Ctrl2Body` resolves to `ControlConnector?.Asmb2VehicleAsmb ?? ControlPart?.Asmb2VehicleAsmb
+?? Identity`, and `FlightComputer` computes all attitude error against it. With no selection it is
+identity, i.e. the root part — the behaviour that has always applied.
+
+The practical consequence for authoring: a docking port whose `<Connector>` rotation is off by 90°
+used to produce only a wrong attachment pose. Now, if a player controls from that port, it also
+produces a wrong navball — pitch/yaw/roll inputs come out rotated. Verify docking-port connector
+orientation in the 3D view (the connector gizmo's axes) before exporting.
+
+flexo emits nothing new for this: `<Control/>` is still a bare marker and the player's choice is
+stored per-vehicle in the save (`<ControlPartId>` / `<ControlConnectorId>` on `VehicleData`), never
+in a part template. See
+[scope/connectors-coordinates-iva.md](../scope/connectors-coordinates-iva.md#what-changed-in-5168).

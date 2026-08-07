@@ -83,6 +83,7 @@ export const ASSET_FILES = [
   'CoreServiceModuleAAssets.xml',
   'CoreIVAPropAAssets.xml',
   'CoreIVASpaceAAssets.xml',
+  'CoreUtilityAAssets.xml',
   'PartAssets.xml',
 ];
 

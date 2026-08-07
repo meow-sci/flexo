@@ -4,7 +4,7 @@
 > lets the user edit them, and re-exports animation GLBs that KSA's `KeyframeAnimationModule`
 > loads. The load-bearing integration is the **animation-GLB node-structure convention**.
 
-**Baseline:** re-verified against KSA build **2026.8.3.5117** (decomp @ 5117 + shipped Core XML);
+**Baseline:** re-verified against KSA build **2026.8.5.5168** (decomp @ 5168 + shipped Core XML);
 contract established at **2026.7.10.5056** and unchanged since.
 **Baseline status:** ✅ **INTACT** — but 5056 rewrote KSA's own GLB loader (rev 5034) to the
 semantics flexo already implemented, and in doing so made the scene ROOT node's transform
@@ -77,6 +77,25 @@ GameData schema (`KeyframeAnimationModule`) and the bone/transform math are unch
 3. **CubicSpline clips import APPROXIMATED, not corrupted** (was: silent corruption). KSA supports **CubicSpline** (`KeyframeAnimationData.cs` `SampleType {Linear, Step, CubicSpline}`); glTF stores such a sampler's output as `[inTangent, value, outTangent]` triplets (3× the input count). `decodeAnimationGlb` now **detects** `interpolation === 'CUBICSPLINE'`, keeps only the middle (VALUE) row of each triplet and treats the segments as LINEAR — so the keyframes are exact and only the in-between motion is approximated (the tangents are dropped; flexo has no tangent model). The clip is flagged `PartAnimation.cubicSplineApprox`, which feeds the KSA import report and the clip diagnostics (`computeClipIssues` → "clip imported with CubicSpline sampling — approximated"). Still unverifiable against a real asset from the snapshots (the `Animations/*.glb` are not shipped in the decomp); every shipped clip checked through flexo's mirror is LINEAR. flexo still handles FLOAT accessors only.
 4. Only `animations[0]` is read on both sides.
 5. Wrong rest anchor re-applies the deploy (the reason `restKeyframeId` exists).
+
+## What changed in 5168
+
+**Verdict: ✅ INTACT.** `KeyframeAnimationData.cs` — the GLB-loader contract flexo's
+`animationImport.ts` / `exportAnimationGlb.ts` are written against, including the scene-ROOT-node
+TRS handling from the rev-5034 loader fix — is **byte-identical** at 5168.
+
+`KeyframeAnimationModule.cs` changed by exactly one hunk, and it is runtime-only: the per-frame
+extension callback now takes `context.States` instead of a captured `Vehicle readOnlyVehicle`
+(`module.Extension?.Update(module, current.State.TimeCurrent, closestParent, context.States,
+context.Step.DeltaTime)`). That is rev 5133's "modules using the render vehicle position instead of
+the current physics position in their updates" fix. **No `[XmlElement]`/`[XmlAttribute]` moved**, so
+the `<KeyframeAnimationModule>` schema, the clip/keyframe shape, and the deployed-pose rest-anchor
+model are all unaffected.
+
+Connectors still cannot animate with joints — nothing in 5168 changes that, so the SubParts-only
+gate in the mesh picker remains correct.
+
+---
 
 ## What changed in 5117
 

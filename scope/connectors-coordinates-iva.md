@@ -7,7 +7,7 @@
 > `<Internal>` flag) and
 > [docs/ksa-part-connector-notes.md](../docs/ksa-part-connector-notes.md).
 
-**Baseline:** re-vetted against KSA build **2026.8.3.5117** (decomp @ 5117 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.8.5.5168** (decomp @ 5168 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — the coordinate calibration survived rev 5067's deletion of
 `Double3Ex.Up/Forward/Right` (the vectors moved to `Camera.ForwardView`/`RightView`/`UpView` with
 identical values), the connector/`<Internal>` contracts are byte-identical, and 5117's crew
@@ -296,6 +296,63 @@ follows the root part.
 8. **Interior geometry with no seat anywhere in the vehicle is invisible in EVERY camera mode** — `<Internal>` hides it outside IVA, and with no seat the IVA mode is never offered. This is the failure mode the deleted automatic rewrite used to mask.
 9. **`<IVASeat Id>` shares the feed-container id namespace** (`PartTemplate.AddResolvedFeed` scans every `Components[].Id`) **and, since 5117, is the target of `<EVADoor SeatId>`**. flexo models it as `IvaSeat.ksaId` and emits it only when the user authored one; ids minted by the "align this door to a seat" action (`setEvaDoorSeat`) are uniquified against that shared namespace — tank feed ids, solid grain-segment ids and the other seats' ids.
 10. **There is no in-game editor IVA preview.** The KSA vehicle editor has no IVA mode; the only in-game check is launch → **Shift+C** twice → **C** to cycle. This is why flexo ships its own seat preview (above) — and why that preview's honest limits matter.
+
+## What changed in 5168
+
+**Verdict: ✅ schema INTACT — but the vehicle _reference-orientation_ contract genuinely moved.**
+This is the one thing in 5168 that this doc had explicitly told future reviewers to watch for.
+
+**Unchanged, re-verified:** `QuaternionEx.cs` is byte-identical, so the `EULER_ORDER` calibration in
+`src/three/coords.ts` and its second consumer `src/ksa/ivaSeatAxes.ts` need no recalibration.
+`Part.Connector` still exposes `Asmb2VehicleAsmb` / `MatrixAsmb2VehicleAsmb` with the same
+definitions (`Part.cs:225-227`). `IVASeat.cs` (which nests `IVASeatTemplate`), `IVAController.cs`,
+`EVADoorTemplate.cs` and `DockingPortTemplate.cs` are all byte-identical — so `ivaLook.ts`'s
+line-for-line port, the two view clamps, the three `Vector3Reference` seat fields, and the
+load-bearing `<IVASeat Id>` / `<EVADoor SeatId>` link are all still accurate. `Part.cs` changed only
+in runtime module/UI code (`HasEnabledModule<T>`, the decoupler context-menu gate, part-window
+constants).
+
+**What moved — "Control From Here" (rev 5133).** This doc previously stated the contract as: the
+vehicle's attitude reference is the **root part**, because `VehicleEditor` pins the root to identity
+at launch and `FlightComputer.UpdateAttitudeTrackError` aims body **+X**. As of 5168 that is only
+the _default_. `Vehicle` gained:
+
+```csharp
+public Part?           ControlPart      { get; private set; }
+public Part.Connector? ControlConnector { get; private set; }
+public doubleQuat Ctrl2Body =>
+    ControlConnector?.Asmb2VehicleAsmb ?? ControlPart?.Asmb2VehicleAsmb ?? doubleQuat.Identity;
+```
+
+and `FlightComputer.ComputeControl` now drives attitude off the **control frame** rather than the
+body frame — `UpdateAttitudeError(in inputs, GetCtrl2Cci(in nav), GetCtrlRates(in nav))`, where
+`GetCtrl2Cci` is `Concatenate(nav.Ctrl2Body, nav.Body2Cci)` and `GetCtrlRates` is
+`nav.BodyRates.Transform(nav.Ctrl2Body.Inverse())`. `Vehicle.SetControlPart(part, connector)` only
+accepts a part carrying a `Control` module in its subtree, or a `DockingPort` whose `Connector`
+matches the supplied one.
+
+**Three things follow, and none of them is a flexo code change:**
+
+1. **No new authored schema.** `Control.cs` and `ControlTemplate.cs` are **byte-identical** — still
+   empty markers with no transform or control-point field. The chosen control point is persisted
+   **per vehicle**, not per part: `VehicleData` gained `[XmlElement("ControlPartId")] uint` and
+   `[XmlElement("ControlConnectorId")] string`, written in `Vehicle.cs:1154-1155` and resolved in
+   `CelestialSystem.DeserializeSave`. flexo authors part templates, never `vehicle.xml`, so it has
+   nothing to emit. The earlier grep-for-`controlpoint`/`referencetransform` guidance has now
+   fired — this is the feature it was watching for, and it landed on the vehicle save, not the part.
+2. **`Ctrl2Body` defaults to identity**, so a vehicle with no control part selected behaves exactly
+   as before: reference orientation follows the root part. flexo's viewport convention is unchanged.
+3. **Connector orientation is now load-bearing for flight control**, not just for snapping. If a
+   player picks "Control From Here" on a docking port flexo authored, that connector's
+   `Asmb2VehicleAsmb` _becomes_ the vehicle's attitude reference frame — so a mis-oriented
+   `<Connector>` now shows up as a wrong navball, not merely a wrong attachment pose. Worth
+   surfacing in [docs/ksa-part-connector-notes.md](../docs/ksa-part-connector-notes.md) and
+   [docs/coordinates.md](../docs/coordinates.md).
+
+Right-clicking another vehicle's docking port also now sets your target to _that port_ directly,
+which does not touch any authored surface.
+
+---
 
 ## What changed in 5117
 

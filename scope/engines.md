@@ -5,7 +5,7 @@
 > **BREAKING** for the live thrust/Isp readout. Read alongside [docs/engines.md](../docs/engines.md)
 > and [analysis/KSA_ENGINE_DETAILS.md](../analysis/KSA_ENGINE_DETAILS.md).
 
-**Baseline:** re-vetted against KSA build **2026.8.3.5117** (decomp @ 5117 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.8.5.5168** (decomp @ 5168 + shipped Core XML).
 **Baseline status:** ✅ **CURRENT** — at 5117 every verbatim-ported physics class is byte-identical
 and no engine template field moved; the one new item, the optional validator-parity gap **Q4**, is
 now **mirrored in flexo** (see [What changed in 5117](#what-changed-in-5117)).
@@ -165,6 +165,39 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
   `<Combustor>` (flexo's SRB recipe now burns APCP) — but there is still no solid-motor
   hardware (no grain-regression thrust curve; the propellant reservoir is still a liquid-style
   tank), so a true SRB is still not reproducible.
+
+## What changed in 5168
+
+**Verdict: ✅ CURRENT — every verbatim-ported class is byte-identical.** Re-confirmed with `cmp`
+against the 5168 decomp: `DeLavalNozzleConfig`, `CombustorConfig`, `GasProperties`,
+`NozzlePerformance`, `RocketDesign`, `RocketControllerData`, `EngineDesigner`, `RocketNozzleTemplate`,
+plus the reaction family (`ReactionTemplate`, `FixedReactionTable`, `MixtureReactionTable`) and the
+**entire solid-motor template + geometry set** (`SolidTemplate`, `SolidMotorTemplate`,
+`SolidMotorNozzleTemplate`, `SolidGrainSegmentTemplate`, `GrainGeometry`, `GrainGeometryTemplate`,
+`GrainGeometryTable`, `GrainGeometryLibrary`). So `enginePhysics.ts`, `solidMotorPhysics.ts`,
+`grainGeometryCatalog.ts` and `reactionCatalog.ts` need **no re-port**, and the constants
+`9.80665` / `8.31446261815324` / `101325` are untouched.
+
+Three changelog items that _sound_ like engine-contract movement and are not:
+
+- **rev 5124, "corrected the size of solid propellant grains built in to the nozzle segments for
+  size D and size E SRBs"** — a pure **Core data** retune, not a schema or math change. It lands in
+  `CorePropulsionCGameData.xml` as `<OuterRadius>` / `<Length>` / `<LocationAsmb>` value edits
+  (2 each). flexo reads those values live from the mirror; nothing is baked in.
+- **rev 5125, "added an AreaReference"** — a new unit-reference class used to print burning area in
+  the editor (`SolidGrainSegment.DrawGrainInfo` now formats via `AreaReference.ToNearest`). It sits
+  on **no** template, so it is not an authored surface. See
+  [gamedata-modules.md](gamedata-modules.md#what-changed-in-5168).
+- **rev 5125 solid-motor editor info** — `SolidMotor.TrySampleThrustCurve` changed signature from
+  `Span<float> thrustNewtons` to a `ThrustCurveSamples` ref-struct carrying **three** parallel spans
+  (`ThrustNewtons`, `IspSeconds`, `ChamberPressurePascals`). This is the game's own editor preview,
+  which flexo does not port — but it is worth recording against the still-open _solid thrust-curve
+  preview_ gap: if flexo ever builds that preview, KSA now shows Isp and chamber pressure alongside
+  thrust, and `ThrustCurveSamples.IsValid` requires `Length >= 2` with all three spans equal-length.
+
+Electric engines remain impossible data-only; nothing in 5168 opens a data path for them.
+
+---
 
 ## What changed in 5117
 

@@ -4,7 +4,7 @@
 > scale/placement aides (never exported) — a faithful three.js re-implementation of KSA's
 > Character rendering. The contract is a long list of asset/material/bone names + render quirks.
 
-**Baseline:** re-verified against KSA build **2026.8.3.5117** (decomp @ 5117 + shipped Core XML).
+**Baseline:** re-verified against KSA build **2026.8.5.5168** (decomp @ 5168 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — `CharacterAssets.xml` is byte-identical (md5 match),
 `KittenRenderable.cs` is identical, and the eye/glass shader merge (rev 4745) is a verbatim
 refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code change needed.
@@ -67,6 +67,30 @@ refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code
 5. Don't `computeVertexNormals()` (faceted helmet dome from seam-split verts).
 6. Attachment correction is required & order-sensitive.
 7. `Characters/` atlases stay raw **BC7** (for verbatim mod bundle-export); without BPTC/RGTC they fall back to flat.
+
+## What changed in 5168
+
+**Verdict: ✅ INTACT** (one additive asset element, not read by flexo).
+`CharacterRenderResources.cs` is byte-identical, and `CharacterAssets.xml` changed by exactly one
+line — `<CharacterGroundAnimations>` gained `<AnimRun Id="KittenAnimRunGlb"/>` alongside the
+existing `<AnimIdle>` / `<AnimWalk>` (rev 5128's Kitten Animation Controller; note `AnimWalk` and
+`AnimRun` currently point at the **same** clip). flexo's `kittenAssets.ts` does not read
+`<CharacterGroundAnimations>` at all — it resolves the fur/suit/head/eye materials and the
+`Head_M` / `Chest_M` socket bones — so the editor aide is unaffected. The material names and the
+embedded-`DefaultORM.png` redirect are unchanged.
+
+The rest of the 5128–5144 kitten work (`KittenLocomotion`, `LocomotionState`/`Mode`/`Command`/
+`Facts`, `CharacterControlInputs`, `KittenTuningWindow`) is **new runtime locomotion code** with no
+asset-schema or bone-hierarchy component, so it does not reach `KittenObject.ts` or the
+`kittenBake.ts` export path. `KittenRenderable.cs` / `AnimatedRenderable.cs` did change, but only
+to drive that locomotion state machine.
+
+One data note for anyone comparing kitten geometry: `PartGameData.xml`'s `KittenBackPackSubPart`
+moved its part-frame origin to the kitten's **feet** (everything shifted `Z -= 0.431`, and the
+collider capsule became a sphere). That is the MMU **part**, not the character mesh, so it does not
+touch flexo's kitten rendering — but it is why the vendored fixture moved.
+
+---
 
 ## What changed in 5117
 

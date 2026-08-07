@@ -4,7 +4,7 @@
 > data-only KSA mod that adds a celestial body with `<GroundClutter>` (cards/meshes scattered
 > on the terrain), using **no custom game code**. Reference scaffold for clutter modding.
 
-**Baseline:** re-verified against KSA build **2026.8.3.5117** (decomp @ 5117 + shipped Core XML).
+**Baseline:** re-verified against KSA build **2026.8.5.5168** (decomp @ 5168 + shipped Core XML).
 **Baseline status:** 🟡 **SCHEMA-DRIFT, scaffold unaffected (in-game re-check still pending)** —
 5117 (rev 5099) renamed the ecotype's `<Collideable Value>` to
 `<CollisionType Value="None|PrimitiveList|Mesh">` ahead of the Bepu physics integration. The
@@ -52,6 +52,58 @@ hand-authored mod XML + a build script).
 - **Opacity** cut where R < 0.5 (cutout cards).
 - First-wins + core-first load order, so a clutter mod can **add** a body & reuse textures by `Id`.
 - Loading is gated by the scenario's `<LoadFromLibrary>`.
+
+## What changed in 5168
+
+**Verdict: 🔴 BREAKING for the `ksa-mods/cartoon-moon/` scaffold.** Revs 5136-5138 and 5157
+reworked ground clutter end-to-end: it now loads through the **asset bundler**, the same path parts
+use. This is by far the largest contract movement in 5168, and it is entirely contained to this
+scaffold — **no part-editor code is involved**, which is why the overall 5168 verdict elsewhere is
+intact.
+
+What moved, class by class:
+
+- **`ClutterObjectReference` → `ClutterObjectTemplate`** (renamed _and_ re-homed). It is now a
+  `SerializedId` **top-level asset**, registered in `ModLibrary.AllClutterObjects` and declared in
+  an `<Assets>` bundle via the new `[XmlElement("ClutterObject", typeof(ClutterObjectTemplate))]` on
+  `AssetBundle`. It carries `[XmlAttribute("Atlas")] AtlasId`, an `[XmlArray("LODs")]` /
+  `[XmlArrayItem("LOD")]` list, and a new `[XmlArray("Colliders")]` with
+  `Box`/`Capsule`/`Cylinder`/`Sphere` items (rev 5157, reusing the part `ColliderTemplate` classes).
+- **The ecotype now references clutter objects by ID.** `ClutterEcotypeReference.ClutterObjects` is
+  a `List<ClutterObjectTemplate>` resolved in `OnDataLoad` via `ClutterObjects[i] = ClutterObjects[i].Get()`
+  (an `ModLibrary.Get<ClutterObjectTemplate>(Id)` lookup) — so `<ClutterObject>` under an `<Ecotype>`
+  is now an _id reference_, not an inline definition.
+- **The ecotype's `<Material>` list is gone from the schema.** `MaterialReferences` moved from
+  `[XmlElement("Material")]` to **`[XmlIgnore]`** and is now derived by the new
+  `PopulateMaterialReferences()`, which walks every LOD's materials and dedupes by hash. Authoring
+  `<Material>` on an ecotype is now silently ignored. `GroundClutterMaterial` became its own
+  top-level asset element instead.
+- **`<LOD><Mesh>` changed shape.** `GroundClutterLodReference.MeshFileReference`
+  (a `MeshAtlasFileReference`) became **`MeshIds`, a `List<SerializedReference>`** — meshes are now
+  resolved by id out of the object's atlas rather than each LOD naming its own atlas file. The
+  derived `MaterialReferencesCount` / `MeshesMaterialCount` helpers were replaced by an internal
+  `_atlasToLocalMaterial` remap, and `CastShadows` gained `[DefaultValue(true)]`.
+- **Exactly 5 LODs are now required** — `ClutterObjectTemplate.IsValid()` errors with
+  "defines N LODs. Exactly 5 are required".
+- **A real validation bug was fixed** (rev 5135): `ClutterEcotypeReference.IsValid()`'s uniform-scale
+  check went from `Collideable && (flag2 || !flag3)` to `Collideable && (!flag2 || !flag3)` — it was
+  previously rejecting uniform `MinScale` instead of non-uniform.
+- **Content:** every clutter asset was reprocessed through the bundler. Textures are now all KTX2
+  (diffuse now includes the alpha channel; new **Opacity** and **Thickness** BC4 maps), the
+  individual clutter model XMLs were removed, and Core's `mod.toml` now lists
+  `GroundClutter/GenericRockAssets.xml`, `GroundClutter/GrassAssets.xml` and
+  `GroundClutter/EarthTreesAssets.xml`. `Solid.frag` gained gamma correction keyed off diffuse alpha
+  because the bundler emits linear textures.
+
+**Consequence:** `scripts/build-cartoon-moon.ts` emits the 5117-era form — inline `<ClutterObject>`
+definitions inside the ecotype, per-LOD `<Mesh>` atlas paths, and ecotype-level `<Material Id/>`
+lists — none of which the 5168 loader accepts. Per the no-migration rule the generator must be
+**switched wholesale** to the new form (top-level `<ClutterObject Id Atlas>` assets + id references
+from the ecotype + 5 LODs + id-referenced meshes), not taught to emit both. Tracked as a gap in
+[plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md); the scaffold is a reference
+mod, not part of the editor, so this blocks nothing else.
+
+---
 
 ## What changed in 5117
 

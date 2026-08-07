@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { DOMParser } from '@xmldom/xmldom';
-import { parseAssetsFile, type CatalogSubPart } from './catalog';
-import { hasKsaAssets, ksaAsset, readVendoredAsset } from './ksaTestAssets';
+import { ASSET_FILES, parseAssetsFile, type CatalogSubPart } from './catalog';
+import { hasKsaAssets, KSA_ASSETS_DIR, ksaAsset, readVendoredAsset } from './ksaTestAssets';
 import { DEFAULT_LAYER_ID } from './types';
 
 function parseFile(name: string): CatalogSubPart[] {
@@ -208,5 +208,20 @@ describe('geometry <SubPart><Collider> (gap E — vendored fixtures)', () => {
   it('leaves `colliders` undefined for a template that authors none', () => {
     const battery = out.find((s) => s.id === 'CoreElectricalA_Subpart_RadialBatteryA')!;
     expect(battery.colliders).toBeUndefined();
+  });
+});
+
+// Catches the failure mode that 2026.8.5.5168 hit: KSA shipped a brand-new Core part
+// file (CoreUtilityAAssets.xml, the rev-5161 ladders) and flexo's hand-maintained
+// ASSET_FILES silently kept browsing the old set — no test failed, the new parts were
+// just absent from the Part/SubPart browsers. Enumerating the live tree makes the NEXT
+// such file fail here instead. Skipped without the private tree (open-source CI).
+describe.runIf(hasKsaAssets)('ASSET_FILES covers every Core part file in the live KSA tree', () => {
+  it('has no un-listed Core*Assets.xml', () => {
+    const live = readdirSync(KSA_ASSETS_DIR)
+      .filter((f) => /^Core.*Assets\.xml$/.test(f))
+      .sort();
+    expect(live.length).toBeGreaterThan(0);
+    expect(live.filter((f) => !ASSET_FILES.includes(f))).toEqual([]);
   });
 });

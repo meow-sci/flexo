@@ -1,7 +1,7 @@
 import { useStore } from '@nanostores/react';
 import { Maximize2, Pause, Play } from 'lucide-react';
 import { Button, cn } from '../kit';
-import { $mode } from '../../state/modeStore';
+import { $activeTool, $mode } from '../../state/modeStore';
 import {
   $activeAnimation,
   $animPlaying,
@@ -30,8 +30,14 @@ export function PhoneTransportChip() {
   const anim = useStore($activeAnimation);
   const playing = useStore($animPlaying);
   const sheetOpen = useStore($timelineSheetOpen);
+  // Same condition `PhonePaintChip` mounts on — the two share one slot, so exactly one of
+  // them renders (see the gate below).
+  const paintArmed = useStore($activeTool) === 'member-paint';
 
-  if (mode !== 'animation') return null;
+  // Member-paint TAKES this slot (the contract stated in `PhonePaintChip`) — it does not stack
+  // above it. Gating on the mode alone put four docked strips over the tab bar during the one
+  // session that most needs the viewport, squeezing it to 583px of 844.
+  if (mode !== 'animation' || paintArmed) return null;
 
   return (
     <>

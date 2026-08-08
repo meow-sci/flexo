@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { Button, Dialog, DialogHeader, Modal, dangerBox, noteBox } from '../kit';
 import { $activePartId, $partsSnapshot } from '../../state/partsStore';
@@ -103,6 +103,8 @@ function ShareBody({ projectId, onClose }: { projectId?: string; onClose: () => 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
+  const linkRef = useRef<HTMLPreElement>(null);
 
   const generate = async () => {
     if (!parts) return;
@@ -121,13 +123,31 @@ function ShareBody({ projectId, onClose }: { projectId?: string; onClose: () => 
     }
   };
 
+  /**
+   * `navigator.clipboard` is **undefined outside a secure context** (a phone on a plain-HTTP
+   * LAN URL), and iOS refuses a write that isn't inside a user gesture it recognises. Either
+   * way this used to `console.warn` and change nothing on screen — a silent dead button on the
+   * one flow that exists to hand a link to someone. So the failure path selects the link text
+   * instead and says so: OS long-press ▸ Copy is the touch route from there.
+   */
   const copy = async () => {
     if (!link) return;
     try {
+      if (!navigator.clipboard) throw new Error('clipboard unavailable');
       await navigator.clipboard.writeText(link);
       setCopied(true);
+      setCopyFailed(false);
     } catch (err) {
       console.warn('clipboard write failed', err);
+      setCopyFailed(true);
+      const pre = linkRef.current;
+      const selection = window.getSelection();
+      if (pre && selection) {
+        const range = document.createRange();
+        range.selectNodeContents(pre);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
     }
   };
 
@@ -162,7 +182,10 @@ function ShareBody({ projectId, onClose }: { projectId?: string; onClose: () => 
                 </div>
               ) : (
                 <>
-                  <pre className="max-h-48 overflow-auto rounded-md border border-border bg-panel-sunken p-2 font-mono text-[11px] leading-relaxed break-all whitespace-pre-wrap text-fg">
+                  <pre
+                    ref={linkRef}
+                    className="max-h-48 overflow-auto rounded-md border border-border bg-panel-sunken p-2 font-mono text-[11px] leading-relaxed break-all whitespace-pre-wrap text-fg select-all"
+                  >
                     {link}
                   </pre>
                   <div className="flex items-center justify-between gap-2">
@@ -183,6 +206,13 @@ function ShareBody({ projectId, onClose }: { projectId?: string; onClose: () => 
                       </Button>
                     </div>
                   </div>
+                  {copyFailed && (
+                    <p className="text-xs text-warning">
+                      This browser wouldn’t let the page write to the clipboard — the link above is
+                      selected, so long-press or right-click it and choose Copy. (Clipboard access
+                      needs an HTTPS page; a plain-http:// address never gets it.)
+                    </p>
+                  )}
                   {link.length > LONG_LINK_CHARS && (
                     <p className="text-xs text-warning">
                       Some browsers truncate URLs this long — consider an archive instead.

@@ -19,8 +19,18 @@ export function checkBuildId(): void {
   const current = import.meta.env.VITE_BUILD_ID;
   if (!current) return;
 
-  const previous = localStorage.getItem(STORAGE_KEY);
-  localStorage.setItem(STORAGE_KEY, current);
+  // `localStorage` THROWS (SecurityError) rather than being absent when Safari is set to block
+  // all cookies, and in some in-app webviews — both of which are phone situations. This runs
+  // inside boot, so an uncaught throw here would abort the rest of app startup over a signal
+  // that means nothing worse than "the app was redeployed". Same try/catch shape as
+  // `projectIndexStore`'s localStorage access.
+  let previous: string | null;
+  try {
+    previous = localStorage.getItem(STORAGE_KEY);
+    localStorage.setItem(STORAGE_KEY, current);
+  } catch {
+    return;
+  }
 
   if (previous !== null && previous !== current) {
     $buildMismatch.set(true);

@@ -55,13 +55,23 @@ export interface Command {
    * grayed-row reason. Set on the "visible but not implementable yet" stubs (foundation §3
    * keeps them VISIBLE for discoverability) and on any command whose disabled state is not
    * self-evident. A later phase clears it when it re-points the command's `run`.
+   *
+   * A THUNK when the reason depends on why it is disabled right now — a command gated on both
+   * the mode and the layout has two different true answers, and a single string would have to
+   * lie about one of them. Read it through {@link commandDisabledReason}.
    */
-  disabledReason?: string;
+  disabledReason?: string | (() => string);
   /** ✓ / ◉ state for View-menu-style items, evaluated at the same moments as `enabled`. */
   checked?: () => boolean;
   /** Palette ⌘↩ "run and keep the palette open" eligibility (design §3.4). */
   keepOpen?: boolean;
   run: (params?: unknown) => void;
+}
+
+/** Resolves {@link Command.disabledReason}, which may be a thunk. */
+export function commandDisabledReason(command: Command | undefined): string | undefined {
+  const reason = command?.disabledReason;
+  return typeof reason === 'function' ? reason() : reason;
 }
 
 const commands = new Map<CommandId, Command>();

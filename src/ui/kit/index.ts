@@ -73,7 +73,7 @@ export { TagGroup, TagList, Tag, Chip } from './Tag';
 export { Kbd } from './Kbd';
 export { IS_APPLE, keyLabel } from './keyDisplay';
 
-export { useIsPhone } from './useIsPhone';
+export { isPhoneViewport, useIsPhone } from './useIsPhone';
 export { usePointerDrag, type PointerDragOptions } from './usePointerDrag';
 export { ResizeHandle, type ResizeHandleProps } from './ResizeHandle';
 export { FloatingWindow, type FloatingWindowProps } from './FloatingWindow';

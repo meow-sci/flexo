@@ -1,4 +1,6 @@
 import type { Command } from '../../state/commandStore';
+import { isPhoneViewport } from '../kit';
+import { openPanelSheet } from '../shell/phone/phoneSheets';
 import { $mode, setMode } from '../../state/modeStore';
 import { $part } from '../../state/editorStore';
 import { status, undoStatusAction } from '../../state/statusStore';
@@ -97,6 +99,11 @@ export const ANIMATION_COMMANDS: Command[] = [
       // A cross-mode jump carries its context (foundation §2.5): switch first, then open.
       ensureMode();
       openMembersView();
+      // …and on a phone the Members view has no host until the Panel sheet is open — it
+      // renders only inside `AnimationSidebar`. Without this the command wrote the store and
+      // produced NO visible change at all; the view only appeared if the user happened to
+      // re-tap the active mode tab later. `PhonePaintChip` already pairs the two calls.
+      if (isPhoneViewport()) openPanelSheet();
     },
   },
   {

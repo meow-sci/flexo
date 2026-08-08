@@ -43,6 +43,7 @@ import {
   clearSelection,
 } from './editorStore';
 import { $currentProjectId } from './projectIndexStore';
+import { randomId } from './ids';
 import { registerPartAssetHydrator, registerPartAssetSweeper, snapshotParts } from './partsStore';
 import { notify } from './notificationStore';
 import { status } from './statusStore';
@@ -300,8 +301,9 @@ function plural(n: number, noun: string): string {
   return `${n} ${noun}${n === 1 ? '' : 's'}`;
 }
 
+/** `randomId`, never `crypto.randomUUID` — undefined outside a secure context (see ids.ts). */
 function shortId(): string {
-  return crypto.randomUUID().replace(/-/g, '').slice(0, 8);
+  return randomId().replace(/-/g, '').slice(0, 8);
 }
 
 /** Asset-id-safe token: KSA ids are referenced by string from XML, so keep them alphanumeric. */

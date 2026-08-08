@@ -156,10 +156,19 @@ export async function acquireProjectLock(id: ProjectId, steal = false): Promise<
     $projectLock.set('unsupported');
     if (!warnedUnsupported) {
       warnedUnsupported = true;
+      // Web Locks is SECURE-CONTEXT-ONLY, so the usual cause is the page's address, not the
+      // browser: a phone on a plain-http:// LAN URL gets `navigator.locks === undefined` in
+      // Safari and Chrome alike. Blaming "this browser" there sends the user hunting for a
+      // browser bug that isn't one, so say which it is.
+      const insecure = typeof window !== 'undefined' && !window.isSecureContext;
       notify({
         severity: 'warning',
         title: 'Multi-tab protection unavailable',
-        body: 'This browser has no Web Locks API, so flexo cannot tell when the same project is open in another tab. Keep flexo open in ONE tab — two tabs on one project overwrite each other.',
+        body:
+          (insecure
+            ? 'The Web Locks API is only available on secure pages (https:// or localhost), and this page is plain http://, so flexo cannot tell when the same project is open in another tab.'
+            : 'This browser has no Web Locks API, so flexo cannot tell when the same project is open in another tab.') +
+          ' Keep flexo open in ONE tab — two tabs on one project overwrite each other.',
       });
     }
     return;

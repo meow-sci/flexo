@@ -1,4 +1,6 @@
 import { addPart } from './editorStore';
+import { selectAnimationClip } from './animationStore';
+import { randomId } from './ids';
 import { notify } from './notificationStore';
 import { toUrl } from '../ksa/catalog';
 import {
@@ -120,6 +122,15 @@ export async function importBuiltInPart(
     }),
   );
 
+  // Open the first imported clip. Without this an import that brought animations left
+  // `$activeAnimationId` null, so every surface that renders the ACTIVE clip reported the
+  // opposite of what just happened — the desktop dock said "No animation clips — create one
+  // to start" and the phone transport chip said "No clip". On phone that chip is the only
+  // animation surface visible without opening a sheet, so a freshly imported clip looked
+  // like it had not imported at all. View state only: no undo step, and no mode switch —
+  // an import from Build mode stays in Build mode.
+  if (fitEntries.length > 0) selectAnimationClip(fitEntries[0].anim.id);
+
   // ONE rich entry per import, and only when the Part actually brought clips (design §11.3
   // item 3 / foundation §5.1 routing: `rich` = notification center only, sticky, bell pulses).
   if (fitEntries.length > 0) {
@@ -135,8 +146,14 @@ export async function importBuiltInPart(
   return layerId;
 }
 
+/**
+ * `randomId` rather than `crypto.randomUUID` — the latter is undefined outside a secure
+ * context (see ids.ts), which a phone on a plain-HTTP LAN URL hits. This one runs INSIDE
+ * `addPart`'s `buildAnimations` callback, so throwing here aborted the whole import before
+ * `$part.set`: the animated Part landed as nothing at all.
+ */
 function makeId(prefix: string): string {
-  return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
+  return `${prefix}_${randomId().replace(/-/g, '').slice(0, 8)}`;
 }
 
 /** One imported clip and what the reverse easing fit made of it. */

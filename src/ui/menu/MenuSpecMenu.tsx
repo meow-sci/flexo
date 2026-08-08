@@ -1,7 +1,13 @@
 import type { ReactNode } from 'react';
 import { Check, Circle } from 'lucide-react';
 import { Menu, MenuItem, MenuSeparator, MenuShortcut, Popover, SubmenuTrigger } from '../kit';
-import { getCommand, providerCommands, runCommand, type Command } from '../../state/commandStore';
+import {
+  getCommand,
+  providerCommands,
+  runCommand,
+  type Command,
+  commandDisabledReason,
+} from '../../state/commandStore';
 import { chordsFor } from '../commands/chords';
 import type { MenuEntry } from './menuSpec';
 
@@ -183,7 +189,7 @@ function commandItem(
     >
       <span
         className="flex min-w-0 flex-1 items-center gap-2"
-        title={disabled ? command.disabledReason : undefined}
+        title={disabled ? commandDisabledReason(command) : undefined}
       >
         {glyphColumn && (
           <span className="flex w-3.5 shrink-0 justify-center text-accent">

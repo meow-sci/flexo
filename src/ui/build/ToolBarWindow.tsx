@@ -211,8 +211,11 @@ function ToolBarControls({ phone = false }: { phone?: boolean }) {
                 lockedForPlacements || ((isExhaustPlacing || pivotRouting) && id === 'scale')
               }
             >
-              <Icon size={phone ? 14 : 12} />
-              {!phone && label}
+              {/* The phone drops the visible label to fit the strip — which also dropped the
+                  button's ACCESSIBLE NAME, leaving VoiceOver / Voice Control three unnamed
+                  buttons. On desktop the text still supplies it, so label only when hiding. */}
+              <Icon size={phone ? 14 : 12} aria-hidden />
+              {phone ? <span className="sr-only">{label}</span> : label}
             </ToggleButton>
           ))}
         </ToggleButtonGroup>

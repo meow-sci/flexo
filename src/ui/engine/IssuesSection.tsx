@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { AlertTriangle, Check, ChevronDown, ChevronRight } from 'lucide-react';
-import { cn } from '../kit';
+import { cn, isPhoneViewport } from '../kit';
+import { openInspectorSheet } from '../shell/phone/phoneSheets';
 import { FindingsList } from '../data/FindingsList';
 import { $engineFindings, focusEngineIssue } from '../../state/engineStore';
 
@@ -52,7 +53,16 @@ export function IssuesSection() {
       </button>
       {!clean && open && (
         <div className="max-h-40 overflow-auto px-1 pb-1">
-          <FindingsList findings={findings} onSelect={focusEngineIssue} />
+          {/* The jump's DESTINATION — the module editor — is the Inspector sheet on a phone,
+              so focusing without opening it changed `aria-selected` and nothing else: the tap
+              read as dead. Same pairing the module rows do. */}
+          <FindingsList
+            findings={findings}
+            onSelect={(finding) => {
+              focusEngineIssue(finding);
+              if (isPhoneViewport()) openInspectorSheet();
+            }}
+          />
         </div>
       )}
     </div>

@@ -12,6 +12,7 @@ import {
   recordRecent,
   runCommand,
   type Command,
+  commandDisabledReason,
 } from '../../state/commandStore';
 import { chordsFor } from '../commands/chords';
 import { MODES } from '../../state/modeStore';
@@ -202,7 +203,7 @@ function PaletteRowView({
 }) {
   const disabled = row.command.enabled?.() === false;
   const subtitle = row.command.menuPath ?? '';
-  const reason = disabled ? (row.command.disabledReason ?? 'unavailable') : '';
+  const reason = disabled ? (commandDisabledReason(row.command) ?? 'unavailable') : '';
 
   return (
     <>

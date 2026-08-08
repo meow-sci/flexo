@@ -1,6 +1,17 @@
 import { useStore } from '@nanostores/react';
 import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
-import { Button, Menu, MenuItem, MenuTrigger, Popover, ResizeHandle, Tooltip, cn } from '../kit';
+import {
+  Button,
+  Menu,
+  MenuItem,
+  MenuTrigger,
+  Popover,
+  ResizeHandle,
+  Tooltip,
+  cn,
+  isPhoneViewport,
+} from '../kit';
+import { openPanelSheet } from '../shell/phone/phoneSheets';
 import { $part } from '../../state/editorStore';
 import {
   $activeAnimationId,
@@ -130,7 +141,15 @@ export function TrackHeaderColumn({ anim }: { anim: PartAnimation }) {
                     type="button"
                     aria-label="No members"
                     className="shrink-0 text-warning"
-                    onClick={() => openMembersView(row.jointId)}
+                    // The Members view lives in `AnimationSidebar`, i.e. inside the PANEL
+                    // sheet on a phone — and this button is inside the TIMELINE sheet, a
+                    // different slot. Opening the panel is what makes the tap do anything
+                    // visible here; the two sheets are mutually exclusive, so this also
+                    // closes the timeline, which is the intended hand-off.
+                    onClick={() => {
+                      openMembersView(row.jointId);
+                      if (isPhoneViewport()) openPanelSheet();
+                    }}
                   >
                     <AlertTriangle size={11} />
                   </button>

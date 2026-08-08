@@ -17,7 +17,7 @@ import { SnapChip } from './SnapChip';
 import { AdvisoryChips } from './AdvisoryChips';
 import { ModifierHints } from './ModifierHints';
 import { FpsSegment } from './FpsSegment';
-import { getCommand, runCommand } from '../../state/commandStore';
+import { getCommand, runCommand, commandDisabledReason } from '../../state/commandStore';
 import { $mode, MODES } from '../../state/modeStore';
 import { $activeLayer, $layerSummaries } from '../../state/selectors';
 import { $layerView, layerViewState } from '../../state/layerStore';
@@ -127,7 +127,7 @@ function ModeMenuBody() {
                 hoverable, so a TooltipTrigger would never fire on the rows that need it. */}
             <span
               className="flex min-w-0 flex-1 items-center gap-2"
-              title={disabled ? command?.disabledReason : undefined}
+              title={disabled ? commandDisabledReason(command) : undefined}
             >
               <span className="flex w-3.5 shrink-0 justify-center text-accent">
                 {checked && <Check size={13} />}

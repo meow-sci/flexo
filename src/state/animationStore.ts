@@ -26,6 +26,7 @@ import { computeClipIssues } from '../ksa/clipIssues';
 import { matrixFromTransform, transformFromMatrix } from '../three/coords';
 import { $mode, armTool, disarmTool, registerModeHooks, registerTool, setMode } from './modeStore';
 import { $part, $selection, pushUndo, type ToolMode } from './editorStore';
+import { randomId } from './ids';
 
 /**
  * Document actions + ephemeral editor state for custom animations (see
@@ -603,8 +604,13 @@ export function playAnimationPreview(): void {
 
 // ── undo plumbing (mirrors customAssetStore.mutate, minus the atlas flag) ─────
 
+/**
+ * `randomId` rather than `crypto.randomUUID` — the latter is undefined outside a secure
+ * context (see ids.ts), which a phone on a plain-HTTP LAN URL hits. Every clip / joint /
+ * keyframe id comes through here, so the direct call broke ALL animation authoring there.
+ */
 function rid(prefix: string): string {
-  return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
+  return `${prefix}_${randomId().replace(/-/g, '').slice(0, 8)}`;
 }
 
 /** Discrete mutation: snapshot undo, clone, mutate, publish. */

@@ -14,6 +14,7 @@ import {
   SearchField,
   Tooltip,
   cn,
+  isPhoneViewport,
   useIsPhone,
 } from '../kit';
 import { FindingsList } from './FindingsList';
@@ -491,7 +492,16 @@ function ValidationStrip({ findings }: { findings: readonly GameDataFinding[] })
       </button>
       {open && (
         <div className="max-h-48 overflow-auto px-1 pb-1">
-          <FindingsList findings={findings} onSelect={focusFinding} />
+          {/* The scope form this jump targets is the Inspector sheet on a phone, so focusing
+              without opening it left the tap with no visible effect. Mirrors the row hand-off
+              a few lines up. */}
+          <FindingsList
+            findings={findings}
+            onSelect={(finding) => {
+              focusFinding(finding);
+              if (isPhoneViewport()) openInspectorSheet();
+            }}
+          />
         </div>
       )}
     </div>

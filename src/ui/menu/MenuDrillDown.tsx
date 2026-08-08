@@ -1,7 +1,13 @@
 import { useState, type ReactNode } from 'react';
 import { Check, ChevronLeft, ChevronRight, Circle } from 'lucide-react';
 import { Button, cn, MenuShortcut } from '../kit';
-import { getCommand, providerCommands, runCommand, type Command } from '../../state/commandStore';
+import {
+  getCommand,
+  providerCommands,
+  runCommand,
+  type Command,
+  commandDisabledReason,
+} from '../../state/commandStore';
 import { chordsFor } from '../commands/chords';
 import { MENU_SPEC, type MenuEntry } from './menuSpec';
 
@@ -60,6 +66,12 @@ interface Level {
   entries: MenuEntry[];
 }
 
+/**
+ * Checkbox commands whose "on" state is an ARMED VIEWPORT TOOL rather than a visible setting.
+ * They dismiss the menu surface instead of holding it open (see `activate`).
+ */
+const ARMS_A_VIEWPORT_TOOL = new Set(['tool.measure']);
+
 export function MenuDrillDown({ size, onDismiss, className }: MenuDrillDownProps) {
   const [stack, setStack] = useState<Level[]>([]);
   // Bumped after a toggle row runs, so the level's `checked()` predicates are re-read.
@@ -74,8 +86,16 @@ export function MenuDrillDown({ size, onDismiss, className }: MenuDrillDownProps
 
   function activate(row: CommandRow) {
     if (!runCommand(row.command.id)) return;
-    if (row.glyph) setRevision((value) => value + 1);
-    else onDismiss();
+    // A checkbox row normally KEEPS the surface open so its ✓ can be seen flip — right for
+    // View toggles. Wrong for a row that arms a VIEWPORT tool: the phone MenuSheet is 92dvh,
+    // so `Tools ▸ Measure Point-to-Point` armed the tool and then sat on top of the viewport
+    // the next two taps have to land in, with no ✕ and only a 68px backdrop sliver to escape
+    // through. Arming means "now go touch the model", so it dismisses like a command.
+    if (row.glyph && !ARMS_A_VIEWPORT_TOOL.has(row.command.id)) {
+      setRevision((value) => value + 1);
+    } else {
+      onDismiss();
+    }
   }
 
   return (
@@ -149,7 +169,10 @@ export function MenuDrillDown({ size, onDismiss, className }: MenuDrillDownProps
                   </span>
                 )}
               </span>
-              <MenuShortcut chords={chordsFor(row.command.id)} />
+              {/* `sm` is the PHONE host, which has no hardware keyboard — advertising
+                  `⌘A` / `⌥⌘A` / `B` there is instructions for a device the user isn't on.
+                  `xs` is the narrow-desktop ☰ popover, where the chords are real. */}
+              {size !== 'sm' && <MenuShortcut chords={chordsFor(row.command.id)} />}
             </Button>
           );
         })}
@@ -264,7 +287,7 @@ function commandRow(
     glyph: kind,
     checked: command.checked?.() === true,
     disabled,
-    reason: disabled ? command.disabledReason : undefined,
+    reason: disabled ? commandDisabledReason(command) : undefined,
   };
 }
 

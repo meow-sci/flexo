@@ -356,7 +356,17 @@ function ModuleRow({
       // Phone: the hand-off must fire even when the row is ALREADY the focused module —
       // `onSelectionChange` does not, so re-tapping the open module would do nothing (§B8).
       // The row's own buttons (⋮) keep their tap.
-      onPointerUp={
+      //
+      // `onClick`, NOT `onPointerUp` — and that is the whole difference between a working
+      // module editor and none at all. This div sits INSIDE the GridListItem, so a pointerup
+      // handler runs BEFORE react-aria's press completes: `openInspectorSheet()` sets
+      // `$panelSheetOpen = false`, which unmounts the sheet's ModalOverlay and the GridList
+      // inside it, so `onSelectionChange` → `focusModule()` never ran. Every engine module
+      // (nozzle, combustor, controller, gimbal, rocket, solid motor, grain) was unreachable
+      // by touch: the sheet swapped to the engine OVERVIEW and the row never even selected.
+      // Click fires after the press, which is why Data mode's identical hand-off works
+      // (`DataNavigator.tsx`'s row label).
+      onClick={
         isPhone
           ? (event) => {
               if (!(event.target as Element).closest?.('button')) openInspectorSheet();

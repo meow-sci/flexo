@@ -16,6 +16,7 @@ import {
   type ProjectId,
 } from './projectDb';
 import { randomId } from './ids';
+import { sha256HexSync } from '../util/sha256';
 import { gunzip, gzip, gzipSupported, tarPack, tarUnpack } from './tarArchive';
 import {
   buildProjectExport,
@@ -152,8 +153,21 @@ export interface BuildArchiveOptions {
 
 const HEX = '0123456789abcdef';
 
-/** Lowercase hex SHA-256. */
+/**
+ * Lowercase hex SHA-256, via `crypto.subtle` when the platform offers it and the pure-JS
+ * {@link sha256HexSync} otherwise.
+ *
+ * `crypto.subtle` is **undefined outside a secure context** (same story as `crypto.randomUUID`,
+ * see ids.ts), which a phone on a plain-HTTP LAN URL hits — and this runs once per stored blob
+ * on archive export, so it took the whole Export/Import Archive feature down there with a raw
+ * `Cannot read properties of undefined (reading 'digest')`. It failed only for projects that
+ * actually own custom assets, since the loop body never runs otherwise.
+ *
+ * The fallback is real SHA-256, not a cheaper dedup hash: `sha256` is a manifest field compared
+ * across devices, so both paths MUST agree byte for byte (`util/sha256.test.ts` pins that).
+ */
 export async function sha256Hex(bytes: Uint8Array): Promise<string> {
+  if (typeof crypto === 'undefined' || !crypto.subtle) return sha256HexSync(bytes);
   const digest = await crypto.subtle.digest('SHA-256', bytes.slice().buffer as ArrayBuffer);
   let out = '';
   for (const byte of new Uint8Array(digest)) out += HEX[byte >> 4] + HEX[byte & 15];

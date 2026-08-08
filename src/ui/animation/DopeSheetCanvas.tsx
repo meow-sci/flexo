@@ -199,7 +199,13 @@ export function DopeSheetCanvas({
   /** Live touch points, for the two-finger pinch/pan gesture. */
   const pointersRef = useRef(new Map<number, { x: number; y: number }>());
   /** The in-flight pinch: the view at gesture start plus the time under the finger midpoint. */
-  const pinchRef = useRef<{ dist: number; pxPerSec: number; anchorSec: number } | null>(null);
+  const pinchRef = useRef<{
+    dist: number;
+    pxPerSec: number;
+    anchorSec: number;
+    midY: number;
+    scrollTop: number;
+  } | null>(null);
   /** The long-press that ARMS a touch retime. `armed` survives until the pointer lifts. */
   const longPressRef = useRef<{ timer: number; armed: boolean }>({ timer: 0, armed: false });
 
@@ -328,6 +334,11 @@ export function DopeSheetCanvas({
       dist: Math.max(1, Math.abs(points[0].x - points[1].x)),
       pxPerSec: geom.pxPerSec,
       anchorSec: geom.startSec + midX / geom.pxPerSec,
+      // The VERTICAL half of the same gesture (see the scroll note in `onPointerMove`).
+      // Captured at gesture start so the scroll tracks the fingers absolutely instead of
+      // integrating per-move deltas, which drifts.
+      midY: (points[0].y + points[1].y) / 2,
+      scrollTop: $timelineScrollTop.get(),
     };
   };
 
@@ -425,6 +436,16 @@ export function DopeSheetCanvas({
       // Keep the time that was under the finger midpoint AT the midpoint: a pure spread
       // zooms, a pure slide pans, and doing both at once behaves the way a map does.
       setTimelineView(pinch.anchorSec - midX / px, px);
+      // …and the same slide VERTICALLY scrolls the tracks. Without this there was no touch
+      // route to `$timelineScrollTop` at all — it was written only by `onWheel`, and the host
+      // is `touch-none`, so on a phone every joint past the ~31 rows that fit was permanently
+      // unreachable. A one-finger drag is already spoken for (it scrubs the playhead), which
+      // is why this rides the two-finger gesture that already means "pan the view".
+      const maxScroll = Math.max(0, geom.rowCount * ROW_H - (size.h - ROWS_TOP));
+      const midY = (a.y + b.y) / 2;
+      $timelineScrollTop.set(
+        Math.min(maxScroll, Math.max(0, pinch.scrollTop - (midY - pinch.midY))),
+      );
       return;
     }
 

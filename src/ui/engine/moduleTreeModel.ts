@@ -321,6 +321,34 @@ export function addGroupOf(id: ModuleTreeGroupId): EngineModuleGroup {
   return GROUP_SOURCES[id][0];
 }
 
+/** Why the Gimbals `＋` has nothing to offer — the menu says this instead of going grey. */
+export type GimbalAddBlocker = 'no-scope' | 'no-placements' | 'all-taken';
+
+/**
+ * What the Gimbals `＋` can add to, for the OPEN engine scope. A `<Gimbal>` is keyed to one
+ * placed SubPart instance, so the candidates are placements that do not already have one:
+ * the open template's placements at a SubPart scope, every placement at the part scope
+ * (a part-level RCS/gas-generator engine names no template of its own).
+ *
+ * Returning a `blocker` rather than an empty list is the point — the tree's Gimbals group
+ * renders even when empty, so a `＋` that could only ever go grey is what taught people the
+ * group was read-only. The menu names the reason instead.
+ */
+export function gimbalCandidates(
+  part: EditingPart,
+  entry: EngineEntry | null,
+): { instanceIds: string[]; blocker: GimbalAddBlocker | null } {
+  if (!entry) return { instanceIds: [], blocker: 'no-scope' };
+  const scoped =
+    entry.kind === 'part'
+      ? part.placements
+      : part.placements.filter((p) => p.subPartTemplateId === entry.templateId);
+  if (scoped.length === 0) return { instanceIds: [], blocker: 'no-placements' };
+  const taken = new Set(part.gameData.gimbals.map((g) => g.subPartInstanceId));
+  const instanceIds = scoped.map((p) => p.instanceId).filter((id) => !taken.has(id));
+  return { instanceIds, blocker: instanceIds.length === 0 ? 'all-taken' : null };
+}
+
 /** Total module count in the open scope, for the summary card + the scope select caption. */
 export function totalModuleCount(part: EditingPart, entry: EngineEntry | null): number {
   let total = 0;

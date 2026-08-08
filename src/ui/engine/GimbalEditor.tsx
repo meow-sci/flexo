@@ -3,7 +3,7 @@ import { Field, ListBoxItem, Select, Switch } from '../kit';
 import { PreciseNumberInput } from '../PreciseNumberInput';
 import { InstanceScopeChip } from '../data/ScopeChip';
 import { $part, pushUndo, removeGimbal, setGimbal } from '../../state/editorStore';
-import { focusModule } from '../../state/engineStore';
+import { addGimbals } from './moduleActions';
 
 /**
  * **The gimbal editor** (design: design-data-engine-modes.md §B4.9, §A5) — one `<Gimbal>`, the
@@ -11,10 +11,13 @@ import { focusModule } from '../../state/engineStore';
  *
  * A gimbal is keyed to its placement, so the **instance chip IS the picker** (§A5): re-homing
  * the gimbal is picking a different instance from the chip, and hovering an option flashes
- * that placement in the viewport. That is why the tree's Gimbals group has no context-free
- * `＋` — an "add" with no instance would be meaningless — and why the add-select lives here,
- * offering only placements that do not already have one (`setGimbal` upserts by instance, so
- * two gimbals can never share a placement).
+ * that placement in the viewport. The add-select below it offers only placements that do not
+ * already have one (`setGimbal` upserts by instance, so two gimbals can never share a
+ * placement) — it is Data mode's entrance, where no engine scope is open to infer from.
+ *
+ * Engine mode's tree owns the other entrance: its Gimbals `＋` reads the instance off the
+ * OPEN engine instead of asking (`AddGimbalMenu`, `ModuleTree.tsx`). Both funnel through
+ * `addGimbals`, so a gimbal opens with the same angles whichever door you came in.
  *
  * **Undo enrollment**: the angle fields stream; re-homing pushes ONE step (the discrete
  * `removeGimbal` snapshots first, and the following `setGimbal` is streaming), and the
@@ -98,15 +101,7 @@ export function AddGimbalField({ instanceIds }: { instanceIds: readonly string[]
         aria-label="Add gimbal to instance"
         placeholder="Select a placement"
         value={null}
-        onChange={(k) => {
-          pushUndo('add gimbal', String(k));
-          setGimbal(String(k), { maxAngleYDeg: 5, maxAngleZDeg: 5 });
-          focusModule({
-            group: 'gimbal',
-            scope: 'part',
-            index: $part.get().gameData.gimbals.length - 1,
-          });
-        }}
+        onChange={(k) => addGimbals([String(k)])}
       >
         {instanceIds.map((id) => (
           <ListBoxItem key={id} id={id} textValue={id}>

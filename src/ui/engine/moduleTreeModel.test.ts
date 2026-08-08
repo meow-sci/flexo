@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   addGroupOf,
   buildModuleTree,
+  gimbalCandidates,
   MODULE_TREE_GROUP_ORDER,
   scopeOfGroup,
   totalModuleCount,
@@ -226,5 +227,41 @@ describe('moduleTreeModel helpers', () => {
     // chamber + nozzle + rocket (sub) + one part-level controller.
     expect(totalModuleCount(subPartEngine(), SUB)).toBe(4);
     expect(totalModuleCount(createEmptyPart(), null)).toBe(0);
+  });
+});
+
+describe('gimbalCandidates', () => {
+  it('offers the open template’s placements, and only those', () => {
+    const part = subPartEngine();
+    part.placements.push(placement('chamber_2'));
+    // A placement of a DIFFERENT template is not this engine's business.
+    part.placements.push(placement('tank_1', 'Core.Subpart.Tank'));
+    expect(gimbalCandidates(part, SUB)).toEqual({
+      instanceIds: ['chamber_1', 'chamber_2'],
+      blocker: null,
+    });
+  });
+
+  it('offers every placement at the part scope, which names no template', () => {
+    const part = subPartEngine();
+    part.placements.push(placement('tank_1', 'Core.Subpart.Tank'));
+    expect(gimbalCandidates(part, { kind: 'part' }).instanceIds).toEqual(['chamber_1', 'tank_1']);
+  });
+
+  it('skips placements that already have a gimbal', () => {
+    const part = subPartEngine();
+    part.placements.push(placement('chamber_2'));
+    part.gameData.gimbals.push(createGimbal('chamber_1'));
+    expect(gimbalCandidates(part, SUB).instanceIds).toEqual(['chamber_2']);
+  });
+
+  it('names WHY it is empty rather than just going quiet', () => {
+    const part = subPartEngine();
+    expect(gimbalCandidates(part, null).blocker).toBe('no-scope');
+    expect(
+      gimbalCandidates(part, { kind: 'subpart', templateId: 'Core.Subpart.Tank' }).blocker,
+    ).toBe('no-placements');
+    part.gameData.gimbals.push(createGimbal('chamber_1'));
+    expect(gimbalCandidates(part, SUB)).toEqual({ instanceIds: [], blocker: 'all-taken' });
   });
 });

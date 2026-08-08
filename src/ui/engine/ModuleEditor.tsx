@@ -18,7 +18,7 @@ import { SolidMotorEditor } from './SolidMotorEditor';
 import { GrainSegmentEditor } from './GrainSegmentEditor';
 import { RocketEditor } from './RocketEditor';
 import { ControllerEditor } from './ControllerEditor';
-import { AddGimbalField, GimbalEditor } from './GimbalEditor';
+import { GimbalEditor } from './GimbalEditor';
 import { FeedWiringEditor } from './FeedWiringEditor';
 import { PropellantEditor } from './PropellantEditor';
 import { addModule, removeModule } from './moduleActions';
@@ -265,9 +265,6 @@ function EngineSummary({
   );
   const nonEmpty = tree.filter((g) => g.rows.length > 0);
   const blocker = findings.find((f) => f.severity === 'block');
-  const hasGimbalCandidates = part.placements.some(
-    (p) => !part.gameData.gimbals.some((g) => g.subPartInstanceId === p.instanceId),
-  );
 
   return (
     <div className="flex flex-col gap-3">
@@ -321,14 +318,6 @@ function EngineSummary({
           <Crosshair size={13} /> Place exhaust in 3D
         </Button>
       </div>
-
-      {part.gameData.gimbals.length === 0 && hasGimbalCandidates && (
-        <AddGimbalField
-          instanceIds={part.placements
-            .filter((p) => !part.gameData.gimbals.some((g) => g.subPartInstanceId === p.instanceId))
-            .map((p) => p.instanceId)}
-        />
-      )}
     </div>
   );
 }

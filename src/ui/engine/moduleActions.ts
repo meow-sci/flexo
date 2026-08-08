@@ -14,6 +14,7 @@ import {
   addSubPartSolidGrainSegment,
   addSubPartSolidMotor,
   addSubPartSolidNozzle,
+  pushUndo,
   removeCombustor,
   removeConsumerFeedWiring,
   removeCustomReaction,
@@ -30,6 +31,7 @@ import {
   removeSubPartSolidGrainSegment,
   removeSubPartSolidMotor,
   removeSubPartSolidNozzle,
+  setGimbal,
   type EngineModuleGroup,
   type EngineModuleRef,
 } from '../../state/editorStore';
@@ -47,7 +49,7 @@ import { scopeOfGroup } from './moduleTreeModel';
  *
  * **Undo enrollment: NONE of its own** — every branch is an existing discrete action that
  * pushes its own single step (foundation §14.3's "≤5 undoable ⇒ no confirm" is what the
- * callers rely on).
+ * callers rely on). {@link addGimbals} is the ONE exception, and says why.
  */
 
 const SUB_ADD: Partial<Record<EngineModuleGroup, (templateId: string) => void>> = {
@@ -101,6 +103,38 @@ export function addModule(
   else if (templateId) SUB_ADD[group]?.(templateId);
   else PART_ADD[group]?.();
   focusModule({ group, scope, index: before });
+}
+
+/**
+ * The angle a gimbal added through the UI gets. `createGimbal`'s 0° is the XML default, but
+ * authoring a 0° gimbal produces hardware that cannot vector — never what "add a gimbal" meant.
+ */
+export const DEFAULT_GIMBAL_ANGLE_DEG = 5;
+
+/**
+ * Adds a `<Gimbal>` to each placement that lacks one and focuses the first new row. Returns
+ * how many were actually added, for the caller's toast.
+ *
+ * **Undo enrollment: ONE step for the whole batch** — the exception to this module's rule,
+ * because `setGimbal` is a streaming upsert with no push of its own, and because a bulk add
+ * that cost N undos to take back would be worse than no bulk add. The single-placement path
+ * goes through here too, so both surfaces open a gimbal with the same angles.
+ */
+export function addGimbals(instanceIds: readonly string[]): number {
+  const taken = new Set($part.get().gameData.gimbals.map((g) => g.subPartInstanceId));
+  const fresh = instanceIds.filter((id) => id && !taken.has(id));
+  if (fresh.length === 0) return 0;
+  pushUndo('add gimbal', fresh.length === 1 ? fresh[0] : `${fresh.length} placements`);
+  // Captured BEFORE the upserts: every one appends, so this is the first new row.
+  const index = $part.get().gameData.gimbals.length;
+  for (const id of fresh) {
+    setGimbal(id, {
+      maxAngleYDeg: DEFAULT_GIMBAL_ANGLE_DEG,
+      maxAngleZDeg: DEFAULT_GIMBAL_ANGLE_DEG,
+    });
+  }
+  focusModule({ group: 'gimbal', scope: 'part', index });
+  return fresh.length;
 }
 
 /** Removes the module a ref names, through the action family its scope belongs to. */

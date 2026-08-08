@@ -15,10 +15,12 @@ import {
 } from '../kit';
 import { PartScopeChip } from '../data/ScopeChip';
 import { addBlankPropellant, cloneShippedPropellant } from './propellantCreate';
-import { addModule, removeModule, solidMotorCount } from './moduleActions';
+import { addGimbals, addModule, removeModule, solidMotorCount } from './moduleActions';
 import {
   addGroupOf,
   buildModuleTree,
+  gimbalCandidates,
+  type GimbalAddBlocker,
   type IssueLevel,
   type ModuleTreeGroup,
   type ModuleTreeRow,
@@ -267,9 +269,7 @@ function AddButton({ group, entry }: { group: ModuleTreeGroup; entry: EngineEntr
     );
   }
   if (group.id === 'propellants') return <AddPropellantMenu />;
-  // Gimbals are keyed to a placement, so there is no context-free "add one" — the editor's
-  // instance picker is the only honest entry point (design §B4.9).
-  if (group.id === 'gimbals') return null;
+  if (group.id === 'gimbals') return <AddGimbalMenu entry={entry} />;
   const target = addGroupOf(group.id);
   return (
     <Button
@@ -285,6 +285,79 @@ function AddButton({ group, entry }: { group: ModuleTreeGroup; entry: EngineEntr
     </Button>
   );
 }
+
+/**
+ * The Gimbals `＋` (design §B4.9, amended). A `<Gimbal>` is keyed to a placed SubPart
+ * instance, which is why this group once had NO `＋` at all — but the tree renders empty
+ * groups precisely so their `＋` survives, so a permanently inert `Gimbals ⓪` row read as
+ * "this group is import-only". The instance is CONTEXT, not a question: the open engine
+ * already names the placements a gimbal could go on ({@link gimbalCandidates}).
+ *
+ * - one candidate ⇒ a plain `＋` that just adds it (the single-placement common case);
+ * - several ⇒ `＋▾` with **All N placements** first, because a template placed N times is a
+ *   cluster and a cluster you want to vector you want to vector whole;
+ * - none ⇒ still a `＋▾`, whose one disabled item NAMES the reason. Going grey is what
+ *   caused the confusion; a menu that answers "why not" does not.
+ *
+ * Re-homing an existing gimbal stays the editor's `[Instance: … ▾]` chip — that chip IS the
+ * picker, and this button never duplicates it.
+ */
+function AddGimbalMenu({ entry }: { entry: EngineEntry | null }) {
+  const part = useStore($part);
+  const { instanceIds, blocker } = gimbalCandidates(part, entry);
+
+  const add = (ids: readonly string[]) => {
+    const n = addGimbals(ids);
+    if (n === 0) return;
+    status(n === 1 ? `Gimbal added on ${ids[0]}` : `Gimbals added on ${n} placements`, {
+      severity: 'info',
+      action: { label: 'Undo', run: undo },
+    });
+  };
+
+  if (instanceIds.length === 1) {
+    return (
+      <Button
+        iconOnly
+        size="xs"
+        variant="ghost"
+        className="size-4 shrink-0"
+        aria-label={`Add a gimbal on ${instanceIds[0]}`}
+        onPress={() => add(instanceIds)}
+      >
+        <Plus size={12} />
+      </Button>
+    );
+  }
+
+  return (
+    <AddMenu label="Add gimbal">
+      {blocker ? (
+        <MenuItem density="dense" isDisabled>
+          {GIMBAL_BLOCKER_TEXT[blocker]}
+        </MenuItem>
+      ) : (
+        <>
+          <MenuItem density="dense" onAction={() => add(instanceIds)}>
+            All {instanceIds.length} placements
+          </MenuItem>
+          {instanceIds.map((id) => (
+            <MenuItem key={id} density="dense" textValue={id} onAction={() => add([id])}>
+              {id}
+            </MenuItem>
+          ))}
+        </>
+      )}
+    </AddMenu>
+  );
+}
+
+/** Why the Gimbals `＋` has nothing to offer, in the menu's own words. */
+const GIMBAL_BLOCKER_TEXT: Readonly<Record<GimbalAddBlocker, string>> = {
+  'no-scope': 'Open an engine first',
+  'no-placements': 'This engine decorates no placement yet',
+  'all-taken': 'Every placement here already has a gimbal',
+};
 
 /**
  * The custom-propellant `＋▾` (design §B4.10 "Creation paths"): clone a shipped propellant —

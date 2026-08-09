@@ -397,6 +397,20 @@ export function validateEngines(
   // side of "feeds from unknown container/connector". The consumer-side codes below cover a
   // consumer's OWN <FeedsFrom>; this covers the entries the Part answers `Parent="true"` with.
   part.gameData.consumerFeedWiring.forEach((entry, index) => {
+    // An entry with NO feed points is the silent one: `consumer-not-wired` below is satisfied
+    // by its mere existence, but `buildConsumerFeedWiringElement` drops it from the export
+    // (KSA logs "wires no feed points" for one that reaches it), so the consumer ships
+    // unwired and reaches no propellant. Without this the whole part validated clean.
+    if (entry.feeds.length === 0) {
+      warn(
+        'wiring-entry-no-feeds',
+        `The ConsumerFeedWiring entry for ${entry.consumerId || '(no consumer)'} wires no feed ` +
+          `points — flexo omits it from the export, so ${entry.consumerId || 'that consumer'} ` +
+          `still reaches no propellant. Add a feed point (a tank/grain container or a connector).`,
+        { templateId: null, module: 'wiring', index },
+      );
+      return;
+    }
     for (const feed of entry.feeds) {
       if (wiringFeedResolves(part, feed)) continue;
       const what =

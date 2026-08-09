@@ -300,11 +300,43 @@ describe('validateEngines — KSA logs and the part misbehaves (warnings)', () =
       feeds: [],
     });
     expect(has(p, 'consumer-not-wired')).toBe(false);
+    // …but an EMPTY one hands off to `wiring-entry-no-feeds` rather than going quiet: the
+    // export drops it, so the consumer is still unwired in the shipped XML.
+    expect(has(p, 'wiring-entry-no-feeds')).toBe(true);
 
     // …and so does an unscoped one (KSA's fallback lookup).
     p.gameData.consumerFeedWiring = [
       { consumerId: 'ThrustChamber', subPartInstanceId: null, feeds: [] },
     ];
+    expect(has(p, 'consumer-not-wired')).toBe(false);
+    expect(has(p, 'wiring-entry-no-feeds')).toBe(true);
+  });
+
+  // The gap that let a whole tutorial part validate clean while reaching no propellant:
+  // `consumer-not-wired` only checks that an entry EXISTS, and `buildConsumerFeedWiringElement`
+  // drops a feed-less one from the export.
+  it('flags a wiring entry that wires no feed points, and stops once it has one', () => {
+    const p = createEmptyPart();
+    p.placements.push(placement('chamber_1', 'Core.Chamber'));
+    p.subPartGameData.push({
+      ...createSubPartGameData('Core.Chamber'),
+      combustors: [createCombustor('ThrustChamber')],
+    });
+    p.gameData.tanks.push({ ...createTank(), id: 'fuel_main' });
+    p.gameData.consumerFeedWiring.push({
+      consumerId: 'ThrustChamber',
+      subPartInstanceId: 'chamber_1',
+      feeds: [],
+    });
+    const issue = validateEngines(p, REACTIONS).find((i) => i.code === 'wiring-entry-no-feeds')!;
+    expect(issue.severity).toBe('warn');
+    expect(issue.message).toContain('wires no feed points');
+    expect(issue.source).toEqual({ templateId: null, module: 'wiring', index: 0 });
+
+    p.gameData.consumerFeedWiring[0].feeds = [
+      { kind: 'container', containerId: 'fuel_main', subPartInstanceId: null },
+    ];
+    expect(has(p, 'wiring-entry-no-feeds')).toBe(false);
     expect(has(p, 'consumer-not-wired')).toBe(false);
   });
 

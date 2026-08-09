@@ -48,7 +48,7 @@ export function DataSection({
   issue?: IssueLevel;
   /** Force the initial state; defaults to "expanded iff the section has content". */
   defaultExpanded?: boolean;
-  /** Renders a `＋` in the header (an empty section's one-click way in). */
+  /** Renders a `＋` in the header (an empty section's one-click way in). Expands on use. */
   onAdd?: () => void;
   /** Trailing header control, e.g. an "Open in Engine mode →" link. */
   headerAction?: React.ReactNode;
@@ -91,7 +91,12 @@ export function DataSection({
             variant="ghost"
             className="size-5 shrink-0"
             aria-label={`Add to ${sectionDef(sectionId).label}`}
-            onPress={onAdd}
+            onPress={() => {
+              // Expand FIRST: an empty section is collapsed, so adding without opening it
+              // put the new card somewhere the user could not see or edit it.
+              setOpen(true);
+              onAdd();
+            }}
           >
             <Plus size={12} />
           </Button>

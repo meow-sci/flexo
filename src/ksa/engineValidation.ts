@@ -503,6 +503,60 @@ export function validateEngines(
     );
   }
 
+  // --- Gimbals (Gimbal.cs / GimbalController.RecomputeStaticData, decomp 2026.7.9) ---
+  //
+  // A `<Gimbal>` deflects the SubPart INSTANCE it sits on, and vectors only the nozzles that
+  // same SubPart carries (`RecomputeStaticData` walks `Gimbal.Parent.Modules.Get<RocketNozzle>()`).
+  // Both checks below LOAD fine and then vector nothing, which is the whole point of warning.
+  part.gameData.gimbals.forEach((gimbal, index) => {
+    const gimbalSource: EngineIssueSource = { templateId: null, module: 'gimbal', index };
+    if (gimbal.maxAngleYDeg === 0 && gimbal.maxAngleZDeg === 0) {
+      warn(
+        'gimbal-cannot-actuate',
+        `Gimbal on ${gimbal.subPartInstanceId} has both max angles at 0° — KSA's ` +
+          `Gimbal.CanActuate() is false, so it is not even built. Give it a max angle.`,
+        gimbalSource,
+      );
+      return;
+    }
+    const placement = part.placements.find((p) => p.instanceId === gimbal.subPartInstanceId);
+    if (!placement) return; // a dangling instance id is a different bug
+    const spd = part.subPartGameData.find(
+      (sp) => sp.subPartTemplateId === placement.subPartTemplateId,
+    );
+    const nozzles = [...(spd?.nozzles ?? []), ...(spd?.solidNozzles ?? [])];
+    if (nozzles.length === 0) {
+      warn(
+        'gimbal-vectors-nothing',
+        `Gimbal on ${gimbal.subPartInstanceId} sits on a SubPart that carries no nozzles, so it ` +
+          `vectors nothing (KSA collects a gimbal's nozzles from its OWN SubPart). Move it to ` +
+          `the placement the engine's nozzle lives on, or remove it.`,
+        gimbalSource,
+      );
+      return;
+    }
+    // KSA deflects about the SubPart's local Y and Z, and sizes the TVC authority with
+    // `new float3(0, sin(MaxAngleY), sin(MaxAngleZ))` — a zero X component, i.e. the model
+    // assumes thrust runs along the SubPart's local X. A thrust axis along local Y or Z makes
+    // one of the two rotations a roll about the thrust vector, which vectors nothing.
+    for (const nozzle of nozzles) {
+      const d = nozzle.exhaustDirection;
+      const len = Math.hypot(d.x, d.y, d.z);
+      if (len < UNIT_EPSILON) continue; // the zero-length case has its own finding
+      if (Math.abs(d.x) / len >= 0.5) continue;
+      warn(
+        'gimbal-thrust-axis-not-x',
+        `Gimbal on ${gimbal.subPartInstanceId} vectors nozzle ${nozzle.id}, whose ` +
+          `ExhaustDirection is not along the SubPart's local X — KSA deflects about local Y and ` +
+          `Z and sizes gimbal authority assuming thrust runs along local X, so at least one ` +
+          `axis of this gimbal will do nothing. Aim the nozzle along ±X in the SubPart's own ` +
+          `frame and rotate the PLACEMENT to point the engine.`,
+        gimbalSource,
+      );
+      break;
+    }
+  });
+
   // --- Solid reactions KSA refuses to load (FixedReactionTemplate.Create) ---
   part.customReactions.forEach((reaction, index) => {
     if (isCustomReactionExportable(reaction)) return;

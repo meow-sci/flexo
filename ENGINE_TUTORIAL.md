@@ -44,19 +44,31 @@ The Part Id is the mod entry id. Without it the export has nothing to name its f
 
 ### The axis you need to know
 
-KSA stacks parts along **X**: a connector faces its own local **+X**, and a stock engine bell
-fires along **−X** (so thrust pushes the part toward +X). +X is "forward / up the stack".
+KSA stacks parts along **X**: a connector faces its own local **+X**, a stock engine bell fires
+along **−X** (so thrust pushes the part toward +X), and a nozzle's default `ExhaustDirection` is
+already `−1, 0, 0`. +X is "forward / up the stack".
 
-flexo's **Cylinder** primitive is a `THREE.CylinderGeometry`, whose axis is **Y**. So every
-cylinder in this tutorial gets **Rotation Z = 90°** to lay its axis down onto X. Do not skip
-that — without it the engine fires out of the part's side.
+**A gimbal makes this binding, not cosmetic.** KSA deflects the gimballed SubPart about its own
+local **Y** and **Z**, and sizes the gimbal's steering authority from
+`float3(0, sin(MaxAngleY), sin(MaxAngleZ))` — a zero X component, i.e. it assumes the thrust
+runs along the SubPart's local **X**. Point the thrust along local Y or Z instead and one of the
+two gimbal axes becomes a roll about the thrust vector, which vectors nothing.
+
+So this tutorial uses **Box** primitives, whose **Width is the X axis**, laid out long-ways
+along X with **no rotation at all**. The nozzle's default −X exhaust is then correct as shipped,
+and the gimbal gets both axes.
+
+> Reach for the **Cylinder** primitive and you inherit `THREE.CylinderGeometry`, whose axis is
+> **Y**. Rotating the _placement_ 90° to lay it along X also rotates the SubPart's local frame,
+> which is exactly the trap above — the engine thrusts correctly and the gimbal half-works.
+> If you want round parts, model them axis-along-X in a real modeller and import the glTF.
 
 ## Step 3 — Make the engine bell mesh
 
 1. Press `1` (Build mode).
 2. **Add ▸ Primitive Mesh…**
-3. Click **Cylinder** in the shape row.
-4. Set **Radius (m)** `0.6`, **Height (m)** `1.2`, **Segments** `24`.
+3. Click **Box** in the shape row (it is the default).
+4. Set **Width (m)** `1.2`, **Height (m)** `1.2`, **Depth (m)** `1.2`.
 5. **Name** → `Bell`
 6. Click **Create mesh**.
 
@@ -64,24 +76,23 @@ The mesh is created _and placed_ at the origin in one action, and is selected. I
 appears in the Outliner — something like `flexo_bell_a1b2c3_1`. **Write it down; the gimbal
 step needs it.**
 
-7. In the left inspector, under **Rotation (°)**, set **Z** = `90`.
-
-The bell now spans X `−0.6 … +0.6`.
+Leave its transform alone. The bell spans X `−0.6 … +0.6`, and its local X is already the
+thrust axis.
 
 > The bell is the SubPart the engine hardware will live on, and the SubPart the gimbal will
-> rotate. It must be its own placement, separate from the body.
+> deflect. It must be its own placement, separate from the body — a gimbal vectors only the
+> nozzles carried by its **own** SubPart.
 
 ## Step 4 — Make the body mesh
 
 1. **Add ▸ Primitive Mesh…**
-2. Click **Cylinder**. Set **Radius (m)** `0.6`, **Height (m)** `2.5`, **Segments** `24`.
+2. Click **Box**. Set **Width (m)** `2.5`, **Height (m)** `1.2`, **Depth (m)** `1.2`.
 3. **Name** → `Body`
 4. Click **Create mesh**.
-5. Under **Rotation (°)**, set **Z** = `90`.
-6. Under **Position (m)**, set **X** = `1.85`.
+5. Under **Position (m)**, set **X** = `1.85`.
 
-The body now spans X `0.6 … 3.1` — flush against the bell's forward face, with the bell
-hanging off the aft end.
+The body now spans X `0.6 … 3.1` — flush against the bell's forward face, with the bell hanging
+off the aft end. No rotation on this one either.
 
 ## Step 5 — Add an attach node
 
@@ -202,6 +213,14 @@ While the entry is empty it reads **`ThrustChamber ← nothing`**.
 >
 > To move a gimbal to a different placement, use the `[Instance: … ▾]` chip at the top of the
 > editor — that chip is the picker.
+>
+> **Two rules decide whether a gimbal does anything**, and flexo warns about both:
+>
+> 1. It vectors only the nozzles on its **own** SubPart placement. A gimbal on the body here
+>    would deflect a box with no nozzle in it and steer nothing.
+> 2. That SubPart's thrust must run along its local **X** (see the top of this doc).
+>
+> Both angles at 0° is a third: KSA's `CanActuate()` is false and the gimbal is never built.
 
 ## Step 12 — Place the exhaust in 3D
 
@@ -210,10 +229,16 @@ While the entry is empty it reads **`ThrustChamber ← nothing`**.
      (or press `X`), or
    - the **⌖ Place this nozzle's exhaust in 3D** button at the bottom of the nozzle editor,
      which targets _this_ nozzle specifically and works from Data mode too.
-2. In the viewport, drag the handle to the mouth of the bell — around `−0.6` on X.
-3. Press `T` to switch the gizmo to **Rotate**, then re-aim the direction so it points aft.
-   Roll does nothing; the plume is axially symmetric in-game.
+2. In the viewport, drag the handle to the mouth of the bell — around `−0.6` on X. Only the
+   **location** needs moving.
+3. **Leave the direction alone.** It ships as `−1, 0, 0`, which is already aft and is the axis
+   the gimbal needs. If you do rotate it, keep it along ±X — `T` switches the gizmo to
+   **Rotate**, and roll does nothing (the plume is axially symmetric in-game).
 4. Press `Esc` when done.
+
+Check the nozzle editor's **Exhaust direction** still reads `−1 · 0 · 0` afterwards. A dragged
+rotation that leaves it at, say, `−0.02 · 0.99 · 0` is the thrust-axis trap from the top of this
+doc, and the Issues panel will say so.
 
 Notes:
 
@@ -251,14 +276,17 @@ In the Engine navigator:
 
 Common warnings and their fix:
 
-| Warning                                                       | Fix                                                 |
-| ------------------------------------------------------------- | --------------------------------------------------- |
-| `consumer … has no ConsumerFeedWiring wiring for it`          | Step 10 — click **wire it →**                       |
-| `The ConsumerFeedWiring entry … wires no feed points`         | Step 10 — the entry exists but is empty; add a feed |
-| `the ConsumerFeedWiring entry … feeds from unknown container` | The tank's **Feed id** is blank or misspelled       |
-| `nozzle … is referenced by no Rocket`                         | Open the **Rocket** module, add the nozzle          |
-| `rocket core … has no controller driving its Rocket`          | Open the **Controller**, add the rocket             |
-| `non-unit ExhaustDirection`                                   | Click **Normalize** on the nozzle's direction field |
+| Warning                                                           | Fix                                                           |
+| ----------------------------------------------------------------- | ------------------------------------------------------------- |
+| `consumer … has no ConsumerFeedWiring wiring for it`              | Step 10 — click **wire it →**                                 |
+| `The ConsumerFeedWiring entry … wires no feed points`             | Step 10 — the entry exists but is empty; add a feed           |
+| `the ConsumerFeedWiring entry … feeds from unknown container`     | The tank's **Feed id** is blank or misspelled                 |
+| `nozzle … is referenced by no Rocket`                             | Open the **Rocket** module, add the nozzle                    |
+| `rocket core … has no controller driving its Rocket`              | Open the **Controller**, add the rocket                       |
+| `non-unit ExhaustDirection`                                       | Click **Normalize** on the nozzle's direction field           |
+| `Gimbal on … sits on a SubPart that carries no nozzles`           | Move the gimbal to the engine's placement, or remove it       |
+| `Gimbal on … ExhaustDirection is not along the SubPart's local X` | Aim the nozzle along ±X; rotate the placement, not the vector |
+| `Gimbal on … has both max angles at 0°`                           | Give it a max angle — 0/0 is never built                      |
 
 ## Step 14 — Export
 
@@ -279,8 +307,8 @@ and `Textures/`. Existing XML is never overwritten and `mod.toml` accumulates.
 Part  flexo_tutorial_engine
 ├─ Connector  _connector1            +X attach node
 ├─ Tank       fuel_main              2.5 m × 0.6 m
-├─ Placement  flexo_body_…_1         body cylinder
-├─ Placement  flexo_bell_…_1         bell cylinder   ← engine + gimbal live here
+├─ Placement  flexo_body_…_1         body box, X 0.6…3.1, no rotation
+├─ Placement  flexo_bell_…_1         bell box, X −0.6…0.6  ← engine + gimbal live here
 │   ├─ <Combustor>      ThrustChamber   Hydrolox, MR 5.5, 75 bar, 40 % min throttle
 │   ├─ <DeLavalNozzle>  Nozzle          exit 1.1 m, AR 25, fires −X, plume EngineAMed
 │   └─ <Rocket>         Engine          core ThrustChamber → nozzle Nozzle
@@ -288,6 +316,12 @@ Part  flexo_tutorial_engine
 ├─ <ConsumerFeedWiring>     ThrustChamber → container fuel_main
 └─ <Gimbal>                 on flexo_bell_…_1, 8° / 8°, constrained to circle
 ```
+
+The gimbal lands in **both** exported documents, and needs to: `Part.xml` carries the bare
+`<Gimbal/>` declaration on the geometry `<SubPart>`, `GameData.xml` carries the angles. KSA
+builds the gimbal from the geometry one and merges the GameData copy onto it — a GameData
+`<Gimbal>` with no geometry counterpart is discarded silently. If you are reading an exported
+file and the gimbal does nothing in game, check `Part.xml` first.
 
 ## Variations
 
@@ -316,4 +350,6 @@ Part  flexo_tutorial_engine
   deployed-pose author is the only partial workaround.
 - **Minimum throttle 1.0 = on/off.** It is not "idle at 100 %".
 - **The gimbal rotates the whole SubPart placement**, not just the bell mesh — anything else on
-  that placement swings with it.
+  that placement swings with it, and it vectors only the nozzles that placement carries.
+- **A gimbal needs its SubPart's thrust along that SubPart's local X.** Rotating a placement to
+  aim an engine also rotates the frame the gimbal deflects in; aim the nozzle vector instead.

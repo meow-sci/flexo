@@ -397,6 +397,63 @@ describe('validateEngines — KSA logs and the part misbehaves (warnings)', () =
   });
 });
 
+describe('validateEngines — gimbals (Gimbal.cs / GimbalController.RecomputeStaticData)', () => {
+  /** A liquid engine on a placed SubPart, with a gimbal on that placement. */
+  function gimballed(exhaust = { x: -1, y: 0, z: 0 }) {
+    const p = createEmptyPart();
+    p.placements.push(placement('bell_1', 'Core.Bell'), placement('body_1', 'Core.Body'));
+    const spd = createSubPartGameData('Core.Bell');
+    spd.combustors.push(createCombustor('ThrustChamber'));
+    spd.nozzles.push({ ...createNozzle('Nozzle'), exhaustDirection: exhaust });
+    spd.rockets.push(createRocket('Engine', 'ThrustChamber', ['Nozzle']));
+    p.subPartGameData.push(spd);
+    p.gameData.rocketControllers.push(createRocketController('Engine', 'engine', ['Engine']));
+    p.gameData.gimbals.push({
+      subPartInstanceId: 'bell_1',
+      maxAngleYDeg: 8,
+      maxAngleZDeg: 8,
+      constrainToCircle: true,
+    });
+    return p;
+  }
+
+  it('is quiet for a gimbal on the nozzle-carrying SubPart, thrust along local X', () => {
+    const p = gimballed();
+    expect(has(p, 'gimbal-vectors-nothing')).toBe(false);
+    expect(has(p, 'gimbal-thrust-axis-not-x')).toBe(false);
+    expect(has(p, 'gimbal-cannot-actuate')).toBe(false);
+  });
+
+  // RecomputeStaticData walks `Gimbal.Parent.Modules.Get<RocketNozzle>()` — its OWN SubPart.
+  it('flags a gimbal on a SubPart that carries no nozzles', () => {
+    const p = gimballed();
+    p.gameData.gimbals[0].subPartInstanceId = 'body_1';
+    const issue = validateEngines(p, REACTIONS).find((i) => i.code === 'gimbal-vectors-nothing')!;
+    expect(issue.severity).toBe('warn');
+    expect(issue.source).toEqual({ templateId: null, module: 'gimbal', index: 0 });
+  });
+
+  // UpdateState rotates about local Y and Z; RecomputeStaticData sizes authority with
+  // `new float3(0, sin(MaxAngleY), sin(MaxAngleZ))` — thrust is assumed to lie along local X.
+  it('flags a thrust axis that is not the SubPart local X', () => {
+    const p = gimballed({ x: 0, y: 1, z: 0 }); // the "rotate the placement 90°" trap
+    expect(has(p, 'gimbal-thrust-axis-not-x')).toBe(true);
+  });
+
+  it('accepts +X as readily as −X, and tolerates a mostly-X vector', () => {
+    expect(has(gimballed({ x: 1, y: 0, z: 0 }), 'gimbal-thrust-axis-not-x')).toBe(false);
+    expect(has(gimballed({ x: -0.98, y: 0.2, z: 0 }), 'gimbal-thrust-axis-not-x')).toBe(false);
+  });
+
+  // Gimbal.CanActuate() — a 0/0 gimbal is never even built.
+  it('flags a 0/0 gimbal, and says nothing else about it', () => {
+    const p = gimballed();
+    p.gameData.gimbals[0] = { ...p.gameData.gimbals[0], maxAngleYDeg: 0, maxAngleZDeg: 0 };
+    expect(has(p, 'gimbal-cannot-actuate')).toBe(true);
+    expect(has(p, 'gimbal-thrust-axis-not-x')).toBe(false);
+  });
+});
+
 describe('validateEngines — reaction lookup fallbacks', () => {
   it('uses the part’s own custom reaction when the live catalog lacks the id', () => {
     const p = goodSolidPart();

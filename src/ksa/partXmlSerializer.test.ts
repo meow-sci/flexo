@@ -832,6 +832,58 @@ describe('serializeGameData', () => {
     expect(child(turboGimbal, 'ConstrainToCircle')).toBeNull(); // default true → omitted
   });
 
+  // THE bug behind "I built a gimbal and the game ignores it": KSA creates the gimbal from
+  // `PartInstance.Gimbal` (the GEOMETRY instance) and folds the GameData copy in with
+  // `Gimbal?.Apply(other)` — a null-conditional. A GameData overlay alone applies to nothing.
+  it('declares <Gimbal> on the geometry SubPart, not only in GameData', () => {
+    const gimballed = editingPart({
+      placements: [placement({ instanceId: 'bell_1' }), placement({ instanceId: 'body_1' })],
+      gameData: {
+        ...createEmptyGameData(),
+        gimbals: [
+          {
+            subPartInstanceId: 'bell_1',
+            maxAngleYDeg: 8,
+            maxAngleZDeg: 8,
+            constrainToCircle: true,
+          },
+        ],
+      },
+    });
+    const pdoc = parse(serializePart(gimballed));
+    const subs = tags(pdoc, 'SubPart');
+    const bell = subs.find((x) => x.getAttribute('Id') === 'bell_1')!;
+    const body = subs.find((x) => x.getAttribute('Id') === 'body_1')!;
+    // Bare declaration: the angles are the GameData overlay's job (Core ships the same pair).
+    expect(child(bell, 'Gimbal')).not.toBeNull();
+    expect(child(bell, 'Gimbal')!.childNodes.length).toBe(0);
+    expect(child(body, 'Gimbal')).toBeNull();
+    // …and the overlay still carries the angles.
+    const overlay = tags(parse(serializeGameData(gimballed)), 'SubPart').find((x) =>
+      child(x, 'Gimbal'),
+    )!;
+    expect(child(child(overlay, 'Gimbal')!, 'MaxAngleY')!.getAttribute('Degrees')).toBe('8');
+  });
+
+  it('omits the geometry declaration for a fixed (0/0) gimbal too, so the halves agree', () => {
+    const fixed = editingPart({
+      placements: [placement({ instanceId: 'bell_1' })],
+      gameData: {
+        ...createEmptyGameData(),
+        gimbals: [
+          {
+            subPartInstanceId: 'bell_1',
+            maxAngleYDeg: 0,
+            maxAngleZDeg: 0,
+            constrainToCircle: true,
+          },
+        ],
+      },
+    });
+    expect(tags(parse(serializePart(fixed)), 'Gimbal').length).toBe(0);
+    expect(tags(parse(serializeGameData(fixed)), 'Gimbal').length).toBe(0);
+  });
+
   it('does not emit a fixed (0/0) gimbal overlay', () => {
     const part2 = editingPart({
       gameData: {

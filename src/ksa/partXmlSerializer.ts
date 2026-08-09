@@ -125,8 +125,16 @@ export function serializePartsXml(
     const partEl = doc.createElement('Part');
     partEl.setAttribute('Id', part.partId);
 
+    // A `<Gimbal>` must be DECLARED here, on the geometry instance — `PartInstance.ApplyGameData`
+    // merges the GameData one with `Gimbal?.Apply(...)`, so without this the GameData block has
+    // nothing to apply to and the gimbal silently does not exist in game.
+    const gimballed = new Set(
+      part.gameData.gimbals.filter(gimbalIsExported).map((g) => g.subPartInstanceId),
+    );
     for (const placement of part.placements) {
-      partEl.appendChild(buildSubPartElement(doc, placement, remap));
+      partEl.appendChild(
+        buildSubPartElement(doc, placement, remap, gimballed.has(placement.instanceId)),
+      );
     }
 
     for (const connector of part.connectors) {
@@ -935,12 +943,22 @@ function buildControllerElement(doc: XmlDocument, c: RocketController): XmlEleme
   return el;
 }
 
+/**
+ * Whether a gimbal reaches the export at all — a fixed (0/0, default-constrained) one is a
+ * no-op in KSA and is dropped. The geometry DECLARATION and the GameData overlay must agree on
+ * this, or one half ships without the other and the pair stops meaning anything.
+ */
+function gimbalIsExported(g: Gimbal): boolean {
+  return (
+    Math.abs(g.maxAngleYDeg) > EPSILON || Math.abs(g.maxAngleZDeg) > EPSILON || !g.constrainToCircle
+  );
+}
+
 /** <SubPart Id="instanceId"><Gimbal>…</Gimbal></SubPart>, or null for a fixed (0/0) gimbal. */
 function buildGimbalSubPartElement(doc: XmlDocument, g: Gimbal): XmlElement | null {
+  if (!gimbalIsExported(g)) return null;
   const hasY = Math.abs(g.maxAngleYDeg) > EPSILON;
   const hasZ = Math.abs(g.maxAngleZDeg) > EPSILON;
-  // A 0/0 gimbal is a no-op in KSA; only emit when it actually actuates or constrains.
-  if (!hasY && !hasZ && g.constrainToCircle) return null;
   const sub = doc.createElement('SubPart');
   sub.setAttribute('Id', g.subPartInstanceId);
   const gimbal = doc.createElement('Gimbal');
@@ -1045,10 +1063,22 @@ function buildAnimationModuleElement(
   return mod;
 }
 
+/**
+ * `<SubPart Id InstanceOf><Transform/>[<Gimbal/>]</SubPart>` — one placed instance.
+ *
+ * **The `<Gimbal>` here is the DECLARATION, and it is load-bearing.** KSA builds the gimbal from
+ * `PartInstance.Gimbal` (`Gimbal.CreateComponents` reads `instance?.Gimbal`), and
+ * `PartInstance.ApplyGameData` folds the `<PartGameData>` copy in with `Gimbal?.Apply(other)` —
+ * a null-conditional, so a GameData `<Gimbal>` with no geometry counterpart is DISCARDED without
+ * a log. Core ships the pair the same way: an empty-but-present `<Gimbal>` (carrying only its
+ * pivot `<Transform>`) on the geometry instance, and the angles in `<PartGameData>`. flexo does
+ * not model the pivot, so the declaration is bare and the gimbal pivots on the SubPart origin.
+ */
 function buildSubPartElement(
   doc: XmlDocument,
   placement: SubPartPlacement,
   templateRemap: TemplateRemap,
+  hasGimbal: boolean,
 ): XmlElement {
   const el = doc.createElement('SubPart');
   el.setAttribute('Id', placement.instanceId);
@@ -1058,6 +1088,7 @@ function buildSubPartElement(
   );
   const transform = buildTransformElement(doc, placement);
   if (transform) el.appendChild(transform);
+  if (hasGimbal) el.appendChild(doc.createElement('Gimbal'));
   return el;
 }
 

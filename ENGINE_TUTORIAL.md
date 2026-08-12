@@ -325,6 +325,11 @@ file and the gimbal does nothing in game, check `Part.xml` first.
 
 ## Variations
 
+- **Or let the Engine Wizard do all of this.** `Add ▸ Engine Wizard…` walks the same ground in
+  one stepped dialog — geometry, modules, feed, gimbal, effects, mass and collider — and
+  commits the lot as a single undo step, with the `validateEngines` findings shown before you
+  commit. See [docs/engine-wizards.md](docs/engine-wizards.md). This tutorial is still worth
+  reading: it is where the reasoning behind each field lives.
 - **RCS thruster** — Step 7, choose **RCS thruster** instead. It authors a
   `<RocketThrusterController>` (pulsed) and sets the combustor to **Service** plumbing, which
   rides KSA's default `Electricity | ServiceFluid` and so reaches propellant without editing

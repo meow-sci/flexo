@@ -43,7 +43,7 @@ import {
   clearSelection,
 } from './editorStore';
 import { $currentProjectId } from './projectIndexStore';
-import { randomId } from './ids';
+import { shortId } from './ids';
 import { registerPartAssetHydrator, registerPartAssetSweeper, snapshotParts } from './partsStore';
 import { notify } from './notificationStore';
 import { status } from './statusStore';
@@ -301,13 +301,8 @@ function plural(n: number, noun: string): string {
   return `${n} ${noun}${n === 1 ? '' : 's'}`;
 }
 
-/** `randomId`, never `crypto.randomUUID` — undefined outside a secure context (see ids.ts). */
-function shortId(): string {
-  return randomId().replace(/-/g, '').slice(0, 8);
-}
-
 /** Asset-id-safe token: KSA ids are referenced by string from XML, so keep them alphanumeric. */
-function sanitizeIdent(name: string): string {
+export function sanitizeIdSegment(name: string): string {
   const cleaned = name.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
   return cleaned || 'Asset';
 }
@@ -1088,6 +1083,15 @@ function scheduleRebuild(): Promise<void> {
   return rebuilding;
 }
 
+/**
+ * Public wrapper over the private {@link scheduleRebuild}: the engine wizard awaits this
+ * after committing a part that created custom meshes, so their geometry is baked and the
+ * catalog published before the new SubPart placements render.
+ */
+export function rebuildCustomMeshes(): Promise<void> {
+  return scheduleRebuild();
+}
+
 // ── textures ─────────────────────────────────────────────────────────────────
 
 /**
@@ -1376,6 +1380,38 @@ function revokeTexture(id: string): void {
 }
 
 // ── meshes ───────────────────────────────────────────────────────────────────
+
+/**
+ * Builds the `CustomMesh` record {@link addCustomMesh} stores — pure, so the engine wizard can
+ * inline mesh creation into its single-undo-step commit without going through the store.
+ * `mint` supplies the 8-hex id suffix (production: {@link shortId}; tests: a counter).
+ */
+export function makePrimitiveCustomMesh(
+  name: string,
+  primitive: PrimitiveSpec,
+  mint: () => string,
+  textureId?: string,
+): CustomMesh {
+  const id = `mesh_${mint()}`;
+  const faceTextures: Partial<Record<string, FaceTextureConfig>> = {};
+  if (textureId) {
+    for (const key of PRIMITIVE_FACE_KEYS[primitive.kind]) {
+      faceTextures[key] = {
+        textureId,
+        uvScale: { x: 1, y: 1 },
+        uvOffset: { x: 0, y: 0 },
+      };
+    }
+  }
+  return {
+    id,
+    name: name.trim() || 'mesh',
+    subPartId: `flexo_${sanitizeIdSegment(name)}_${mint()}`,
+    primitive,
+    faceTextures,
+  };
+}
+
 export async function addCustomMesh(args: {
   name: string;
   primitive: PrimitiveSpec;
@@ -1384,24 +1420,7 @@ export async function addCustomMesh(args: {
   /** The {@link CustomMaterial} for the whole mesh (color/metal/rough/normal). */
   materialId?: string;
 }): Promise<CustomMesh> {
-  const id = `mesh_${shortId()}`;
-  const faceTextures: Partial<Record<string, FaceTextureConfig>> = {};
-  if (args.textureId) {
-    for (const key of PRIMITIVE_FACE_KEYS[args.primitive.kind]) {
-      faceTextures[key] = {
-        textureId: args.textureId,
-        uvScale: { x: 1, y: 1 },
-        uvOffset: { x: 0, y: 0 },
-      };
-    }
-  }
-  const mesh: CustomMesh = {
-    id,
-    name: args.name.trim() || 'mesh',
-    subPartId: `flexo_${sanitizeIdent(args.name)}_${shortId()}`,
-    primitive: args.primitive,
-    faceTextures,
-  };
+  const mesh = makePrimitiveCustomMesh(args.name, args.primitive, shortId, args.textureId);
   if (args.materialId) mesh.materialId = args.materialId;
   mutate('add mesh', mesh.name, (p) => {
     p.customMeshes.push(mesh);
@@ -1459,7 +1478,7 @@ export async function makeKittenMeshPart(kind: KittenKind): Promise<void> {
 
 /** Layer/instance-id base for an imported SubPart: lowercase, id-safe, never empty. */
 function instanceBase(name: string): string {
-  return sanitizeIdent(name).toLowerCase();
+  return sanitizeIdSegment(name).toLowerCase();
 }
 
 /**

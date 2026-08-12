@@ -871,6 +871,9 @@ export function withDefaultReactionPlume(
 /** KSA's default engine sound behavior id (the `<SoundEvent SoundId>` Core engines use). */
 export const DEFAULT_ENGINE_SOUND_ID = 'DefaultEngineSoundBehavior';
 
+/** `<Sound Id>` for RCS thrusters (stock `Content/Core/Sounds.xml:321`). */
+export const DEFAULT_RCS_SOUND_ID = 'DefaultRcsThruster';
+
 /** What a `<SoundEvent>` does when the nozzle activates. Mirrors KSA's RocketSoundAction. */
 export type RocketSoundAction = 'On' | 'Off' | 'None';
 

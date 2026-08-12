@@ -144,6 +144,7 @@ import {
   hydrateCustomAssets,
   importModelAsMeshes,
   makeKittenMeshPart,
+  makePrimitiveCustomMesh,
   matchImportedMeshes,
   planImportRemoval,
   removeCustomMaterial,
@@ -163,6 +164,7 @@ import { analyzeImport, DEFAULT_IMPORT_OPTIONS } from '../ksa/importPlan';
 import { normalizeImport, type NormalizedImport } from '../ksa/importNormalize';
 import type { ImportMaterialPlan, ImportMaterialSpec } from '../ksa/importMaterials';
 import { createDefaultMaterial, type CustomMesh } from '../ksa/types';
+import { PRIMITIVE_FACE_KEYS } from '../three/primitives';
 import { assetKeys, getAsset } from './assetDb';
 import { $currentProjectId } from './projectIndexStore';
 
@@ -1197,5 +1199,53 @@ describe('buildMeshRenderData', () => {
 
   it('returns null for a mesh with no geometry source, so a ghost can skip it', async () => {
     expect(await buildMeshRenderData(box({ primitive: undefined }), noAssets)).toBeNull();
+  });
+});
+
+describe('makePrimitiveCustomMesh', () => {
+  /** Deterministic stand-in for `shortId` so the minted ids are assertable. */
+  function counterMint(): () => string {
+    let n = 0;
+    return () => `id${++n}`;
+  }
+
+  it('builds exactly the CustomMesh field set addCustomMesh stores', () => {
+    const mesh = makePrimitiveCustomMesh(
+      'My Bell',
+      { kind: 'box', params: { width: 1, height: 1, depth: 1 } },
+      counterMint(),
+      'tex_1',
+    );
+    const face = { textureId: 'tex_1', uvScale: { x: 1, y: 1 }, uvOffset: { x: 0, y: 0 } };
+    // Two separate mints, in order: the mesh id first, then the SubPart id suffix.
+    expect(mesh).toEqual({
+      id: 'mesh_id1',
+      name: 'My Bell',
+      subPartId: 'flexo_My_Bell_id2',
+      primitive: { kind: 'box', params: { width: 1, height: 1, depth: 1 } },
+      faceTextures: Object.fromEntries(PRIMITIVE_FACE_KEYS.box.map((key) => [key, face])),
+    });
+    expect(Object.keys(mesh.faceTextures)).toEqual([...PRIMITIVE_FACE_KEYS.box]);
+    // The material is the caller's business — makePrimitiveCustomMesh never sets it.
+    expect('materialId' in mesh).toBe(false);
+  });
+
+  it('leaves faceTextures empty when no texture is given', () => {
+    const mesh = makePrimitiveCustomMesh(
+      'My Bell',
+      { kind: 'box', params: { width: 1, height: 1, depth: 1 } },
+      counterMint(),
+    );
+    expect(mesh.faceTextures).toEqual({});
+  });
+
+  it('falls back to "mesh" for a blank name, but still sanitizes the SubPart id', () => {
+    const mesh = makePrimitiveCustomMesh(
+      '   ',
+      { kind: 'box', params: { width: 1, height: 1, depth: 1 } },
+      counterMint(),
+    );
+    expect(mesh.name).toBe('mesh');
+    expect(mesh.subPartId).toBe('flexo_Asset_id2');
   });
 });

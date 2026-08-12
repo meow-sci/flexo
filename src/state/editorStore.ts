@@ -575,7 +575,7 @@ function clampActiveLayer(): void {
  * nothing in the UI could get it back. Clamping here rather than in {@link setActiveLayer}
  * catches every route into `$activeLayerId`, including one restored from a project snapshot.
  */
-function currentLayerId(part: EditingPart): string {
+export function currentLayerId(part: EditingPart): string {
   const active = $activeLayerId.get();
   if (ENTITY_ONLY_LAYER_IDS.includes(active)) return DEFAULT_LAYER_ID;
   return part.layers.some((l) => l.id === active) ? active : DEFAULT_LAYER_ID;
@@ -1528,8 +1528,11 @@ function nextIvaSeatId(part: EditingPart): string {
   return `_seat${max + 1}`;
 }
 
-/** Returns the next free "_connectorN" id (max existing N + 1). */
-function nextConnectorId(part: EditingPart): string {
+/**
+ * Returns the next free "_connectorN" id (max existing N + 1).
+ * Exported for the engine wizard (`src/ui/engine/wizard/wizardModel.ts`).
+ */
+export function nextConnectorId(part: EditingPart): string {
   let max = 0;
   for (const c of part.connectors) {
     const m = /^_connector(\d+)$/.exec(c.id);
@@ -2706,7 +2709,14 @@ export function setControllable(enabled: boolean): void {
 
 // --- SubPart GameData (per-template) ---
 
-function getOrCreateSubPartData(part: EditingPart, subPartTemplateId: string): SubPartGameData {
+/**
+ * The part's `SubPartGameData` for `subPartTemplateId`, created on first use.
+ * Exported for the engine wizard (`src/ui/engine/wizard/wizardModel.ts`).
+ */
+export function getOrCreateSubPartData(
+  part: EditingPart,
+  subPartTemplateId: string,
+): SubPartGameData {
   let spd = part.subPartGameData.find((s) => s.subPartTemplateId === subPartTemplateId);
   if (!spd) {
     spd = createSubPartGameData(subPartTemplateId);
@@ -3044,8 +3054,11 @@ export function updateLightTransform(index: number, t: PlacementTransform): void
 // that make them fire live on the part-level GameData below. Module ids are KSA-facing
 // and cross-referenced, so new ones get a readable, scope-unique id.
 
-/** Returns `base`, else `base2`, `base3`, … — the first not already in `taken`. */
-function uniqueModuleId(base: string, taken: Iterable<string>): string {
+/**
+ * Returns `base`, else `base2`, `base3`, … — the first not already in `taken`.
+ * Exported for the engine wizard (`src/ui/engine/wizard/wizardModel.ts`).
+ */
+export function uniqueModuleId(base: string, taken: Iterable<string>): string {
   const set = new Set(taken);
   if (!set.has(base)) return base;
   let n = 2;
@@ -3062,7 +3075,7 @@ function uniqueModuleId(base: string, taken: Iterable<string>): string {
  * `<SolidGrainSegment Id>` for the same reason (both are `Components` entries a
  * `<FeedsFrom Container>` resolves against).
  */
-function allEngineModuleIds(part: EditingPart): {
+export function allEngineModuleIds(part: EditingPart): {
   combustors: string[];
   nozzles: string[];
   rockets: string[];

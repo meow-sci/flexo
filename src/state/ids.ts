@@ -25,3 +25,14 @@ export function randomId(): string {
   const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
+
+/**
+ * Mints the 8-hex ids used by custom assets (`tex_…`, `mesh_…`, `mat_…`, SubPart suffixes).
+ *
+ * Built on {@link randomId}, never `crypto.randomUUID` — that is `undefined` outside a
+ * secure context (see {@link randomId}'s comment), so calling it directly would throw
+ * over a plain-HTTP LAN URL.
+ */
+export function shortId(): string {
+  return randomId().replace(/-/g, '').slice(0, 8);
+}

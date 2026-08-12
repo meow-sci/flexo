@@ -1,8 +1,30 @@
 # Engine Wizards — Implementation Plan
 
-Status: **PLANNED — implementation not started**
+Status: **IMPLEMENTED** (2026-08-12) — all three families ship; Phases W0–W7 complete.
 Authored: 2026-08-11 · KSA baseline: 2026.8.19.5261 (game-contract surface unchanged by this
 feature; see §1.6)
+
+Deviations from the plan as written, all deliberate:
+
+- `buildWizardPart` takes a fourth `layerId` argument instead of calling `currentLayerId(part)`
+  internally — that helper reads the `$activeLayerId` nanostore, and the model must stay a pure
+  function so the Review step's findings are computed on exactly the document Finish commits.
+- `applyEngineWizard` takes the finished `EditingPart` rather than the whole
+  `WizardBuildResult`, so `src/state` never imports from `src/ui`. It performs no post-set
+  clamps: `addEngine` and its neighbours perform none either, and the wizard only adds
+  entities, so no existing reference can go stale.
+- The candidate is built in the dialog's `goTo()` navigation handler, not in the render body
+  (it mints ids) and not in an effect (oxlint's `react-hooks-js/set-state-in-effect` forbids
+  it). Findings stay derived per render so they stay correct if the reaction catalog finishes
+  loading mid-review.
+- `StepReview` receives its performance headline as a prop; computing it inside the file would
+  mean exporting a helper beside a component, which breaks React Fast Refresh.
+- Two repairs the plan did not anticipate, both found in browser acceptance and both covered by
+  tests: `withGeometry` re-points a feed that named the wizard's own attach node when hosting
+  leaves generated geometry, and `withSegmentCount` re-divides the casing when the SRB segment
+  count changes.
+
+User-facing documentation: [docs/engine-wizards.md](../docs/engine-wizards.md).
 
 Three guided wizards — **Liquid rocket**, **Solid rocket booster (SRB)**, **RCS thruster** —
 that walk the user through a short sequence of steps and produce a **fully defined, exportable

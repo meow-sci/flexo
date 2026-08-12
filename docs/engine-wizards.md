@@ -76,7 +76,9 @@ Service-plumbed and needs no capability change at all.
 ### Grain & casing (SRB)
 
 Segment count, grain dimensions and wall material, plus an option to accept extra stacked case
-segments through a `SolidMotorCase` connector. The burn preview card is display-only.
+segments through a `SolidMotorCase` connector. The burn preview card is display-only. Changing
+the segment count re-divides the casing evenly, so the stack always fits inside it; every
+other grain dimension you set is left alone.
 
 ### Layout (RCS)
 

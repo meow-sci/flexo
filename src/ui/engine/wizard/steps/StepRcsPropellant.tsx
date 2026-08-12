@@ -45,7 +45,7 @@ export function StepRcsPropellant({ state, patch, reactions }: WizardStepProps<R
             step={0.1}
             description={
               bounds
-                ? `Tabulated between ${bounds.min} and ${bounds.max}; outside that KSA clamps to the table's edge.`
+                ? `Tabulated between ${round2(bounds.min)} and ${round2(bounds.max)}; outside that KSA clamps to the table's edge.`
                 : undefined
             }
           />
@@ -127,4 +127,9 @@ export function StepRcsPropellant({ state, patch, reactions }: WizardStepProps<R
       </div>
     </div>
   );
+}
+
+/** The LUT's ratio bounds are raw table edges — two decimals is all a helper line needs. */
+function round2(n: number): string {
+  return String(Math.round(n * 100) / 100);
 }

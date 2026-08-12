@@ -16,6 +16,7 @@ import {
   initSrbState,
   stepsFor,
   validateWizardStep,
+  withGeometry,
 } from './wizardModel';
 import type { LiquidWizardState, RcsWizardState, SrbWizardState } from './wizardModel';
 import { rcsLayout, srbGeometry, SRB_GEN_DEFAULTS } from './wizardGeometry';
@@ -765,5 +766,50 @@ describe('the built part serializes to the XML KSA expects', () => {
     expect(gameDataXml).toContain('<VolumetricExhaust Id="EngineAMed"');
     expect(gameDataXml).toContain('<CustomMass');
     expect(gameDataXml).toContain('<Collider');
+  });
+});
+
+describe('withGeometry (leaving generated geometry repairs an orphaned feed)', () => {
+  it('re-points the RCS default feed at a new tank when hosting moves to the part', () => {
+    const rcs = initRcsState(createEmptyPart());
+    expect(rcs.feed).toEqual({ kind: 'connector', connectorId: null });
+
+    const moved = withGeometry(rcs, { kind: 'part' });
+    expect(moved.geometry).toEqual({ kind: 'part' });
+    expect(moved.feed).toEqual({
+      kind: 'tank',
+      feedId: 'rcs_prop',
+      outerRadiusM: 0.15,
+      wallMaterialId: 'Aluminum.2014(s)',
+    });
+    // The Feed step would otherwise dead-end: a fresh part has no connector to pick either.
+    expect(validateWizardStep(moved, 'feed', createEmptyPart(), REACTION_FIXTURES)).toEqual([]);
+  });
+
+  it('re-points a liquid connector-node feed when hosting moves to a mesh template', () => {
+    const liquid = { ...initLiquidState(createEmptyPart()) };
+    liquid.feed = { kind: 'connector', connectorId: null };
+
+    const moved = withGeometry(liquid, { kind: 'template', templateId: 'Core.Tank' });
+    expect(moved.feed).toEqual({
+      kind: 'tank',
+      feedId: 'fuel_main',
+      shape: 'Cylindrical',
+      lengthM: 2.5,
+      outerRadiusM: 0.6,
+      wallMaterialId: 'Aluminum.2014(s)',
+    });
+  });
+
+  it('leaves a feed the user actually chose alone, and never repairs on the way back', () => {
+    const rcs = initRcsState(createEmptyPart());
+    const container = {
+      ...rcs,
+      feed: { kind: 'container' as const, containerId: 'service', subPartInstanceId: null },
+    };
+    expect(withGeometry(container, { kind: 'part' }).feed).toEqual(container.feed);
+    // Returning to generated geometry re-creates the attach node, so nothing needs repairing.
+    const back = withGeometry(withGeometry(rcs, { kind: 'part' }), { kind: 'generate' });
+    expect(back.geometry).toEqual({ kind: 'generate' });
   });
 });

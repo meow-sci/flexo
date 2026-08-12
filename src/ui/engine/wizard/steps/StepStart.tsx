@@ -10,7 +10,7 @@ import { isDefaultPartId } from '../../../../ksa/types';
 import type { EditingPart } from '../../../../ksa/types';
 import { defineTargetsOf } from '../../defineEngineModel';
 import { StepSection, WizardNumberField, WizardRow } from '../wizardFields';
-import { GEN_FIELDS, type WizardState } from '../wizardModel';
+import { GEN_FIELDS, withGeometry, type WizardState } from '../wizardModel';
 import { WIZARD_BOUNDS } from '../wizardPresets';
 import type { WizardStepProps } from './stepProps';
 
@@ -104,10 +104,12 @@ export function StepStart({ state, patch, part }: WizardStepProps<WizardState>) 
           selectedKeys={[geometryKey]}
           onSelectionChange={(keys) => {
             const k = [...keys][0];
-            if (k === 'generate') patch({ geometry: { kind: 'generate' } });
+            // Through `withGeometry`, not a bare `geometry` patch: leaving generated geometry
+            // orphans a feed that names the attach node the wizard was going to create.
+            if (k === 'generate') patch(withGeometry(state, { kind: 'generate' }));
             else if (k === 'template') {
-              patch({ geometry: { kind: 'template', templateId: selectedTemplateId } });
-            } else if (k === 'part') patch({ geometry: { kind: 'part' } });
+              patch(withGeometry(state, { kind: 'template', templateId: selectedTemplateId }));
+            } else if (k === 'part') patch(withGeometry(state, { kind: 'part' }));
           }}
         >
           <ToggleButton id="generate" size="sm">

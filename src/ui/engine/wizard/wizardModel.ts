@@ -504,6 +504,57 @@ export function initRcsState(part: EditingPart): RcsWizardState {
   };
 }
 
+/**
+ * Switches the geometry source, repairing the one piece of state the old source was the only
+ * reason to hold.
+ *
+ * A feed of `{kind: 'connector', connectorId: null}` means "the attach node the wizard is
+ * about to create", and that node only exists while the wizard is GENERATING geometry. Moving
+ * to a mesh template or to part level leaves it naming nothing — and on a fresh part there is
+ * no other connector to pick either, so the Feed step would dead-end on its own default. A new
+ * tank is the one propellant source that is always available, so that is where it lands.
+ *
+ * Only that repair happens here: everything else the user typed is theirs to keep.
+ */
+export function withGeometry<S extends WizardState>(state: S, geometry: WizardGeometrySource): S {
+  // The cast is the price of the generic: `repair` only ever rewrites `geometry` and `feed`,
+  // both of which it sets to a value valid for the family it was handed, so the result is
+  // still an `S`. Callers get their own family's type back, which is what the steps need.
+  return repair(state, geometry) as S;
+}
+
+function repair(state: WizardState, geometry: WizardGeometrySource): WizardState {
+  if (geometry.kind === 'generate') return { ...state, geometry };
+  // An SRB has no feed step at all — its motor draws from its own grain segments.
+  if (state.family === 'srb') return { ...state, geometry };
+  const orphaned = state.feed.kind === 'connector' && state.feed.connectorId === null;
+  if (!orphaned) return { ...state, geometry };
+  if (state.family === 'liquid') {
+    return {
+      ...state,
+      geometry,
+      feed: {
+        kind: 'tank',
+        feedId: 'fuel_main',
+        shape: 'Cylindrical',
+        lengthM: LIQUID_GEN_DEFAULTS.bodyLengthM,
+        outerRadiusM: LIQUID_GEN_DEFAULTS.bodyCrossM / 2,
+        wallMaterialId: DEFAULT_WALL_MATERIAL_ID,
+      },
+    };
+  }
+  return {
+    ...state,
+    geometry,
+    feed: {
+      kind: 'tank',
+      feedId: 'rcs_prop',
+      outerRadiusM: RCS_GEN_DEFAULTS.blockSizeM / 2,
+      wallMaterialId: DEFAULT_WALL_MATERIAL_ID,
+    },
+  };
+}
+
 // ── validation ───────────────────────────────────────────────────────────────
 
 function inRange(label: string, value: number, bound: WizardBound, unit: string): string | null {

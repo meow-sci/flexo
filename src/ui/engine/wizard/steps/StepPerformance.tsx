@@ -134,7 +134,7 @@ export function StepPerformance({ state, patch, reactions }: WizardStepProps<Liq
             step={0.1}
             description={
               bounds
-                ? `Tabulated between ${bounds.min} and ${bounds.max}; outside that KSA clamps to the table's edge.`
+                ? `Tabulated between ${round2(bounds.min)} and ${round2(bounds.max)}; outside that KSA clamps to the table's edge.`
                 : undefined
             }
           />
@@ -277,4 +277,9 @@ function Metric({ label, value }: { label: string; value: string }) {
       <span className="font-mono tabular-nums text-fg-muted">{value}</span>
     </div>
   );
+}
+
+/** The LUT's ratio bounds are raw table edges — two decimals is all a helper line needs. */
+function round2(n: number): string {
+  return String(Math.round(n * 100) / 100);
 }

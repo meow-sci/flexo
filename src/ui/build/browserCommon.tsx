@@ -9,10 +9,13 @@ import { Button } from '../kit';
  * - **result cap** — a search never silently truncates (census pain 6): when the match set
  *   is longer than {@link MAX_RESULTS} the list ends in a row saying how many of how many
  *   are shown and what to do about it;
- * - **commit gestures** — single click / arrow keys **preview only**; double-click, Enter
- *   and `[Add]` **add and stay** (multi-add is the primary flow); `[Add & Close]` is the
- *   explicit exit-committing action. A stray row click can no longer commit — that is the
- *   logged deliberate behavior change from v1 (foundation §10.10).
+ * - **commit gestures** — single click / arrow keys **preview only**; `[Add]` **adds and
+ *   stays** (multi-add is the primary flow); `[Add & Close]` is the explicit exit-committing
+ *   action. A stray row click can no longer commit — that is the logged deliberate behavior
+ *   change from v1 (foundation §10.10). Where the row shortcut (double-click / Enter) lands
+ *   is per-dialog, because the two catalogs are committed to differently: the **SubPart**
+ *   browser adds and stays (you place many), the **Part** browser adds and closes (importing
+ *   a whole Part is a one-shot act).
  */
 
 /**

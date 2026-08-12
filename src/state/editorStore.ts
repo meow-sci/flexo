@@ -2437,6 +2437,10 @@ function assignLight(l: PartLight | undefined, t: PlacementTransform): void {
  * approximate for rotated child joints — rotation doesn't commute with a
  * non-uniform scale — the same limitation as the multi-select gizmo's scale.)
  *
+ * PARAMETRIC PROPELLANT CONTAINERS (`<Tank>` / `<SolidGrainSegment>`, at BOTH the
+ * Part and the SubPart scope) scale too — see {@link scaleContainerGeometry} — as do the
+ * VAB `<Diameter>` size classes, snapped to the rack grid ({@link snapDiameterClass}).
+ *
  * Reference containers and ruler measurements are intentionally left untouched
  * (they are fixed size references / annotations, not part geometry).
  */
@@ -2470,7 +2474,90 @@ export function scaleEverything(factor: Vec3): void {
       for (const pose of Object.values(kf.poses)) pose.position = scalePos(pose.position);
     }
   }
+  // Parametric propellant containers, at both GameData scopes.
+  const axial = Math.abs(x);
+  // A mirror (negative factor) must never negate a radius — these are magnitudes.
+  const cylRadial = Math.sqrt(Math.abs(y * z));
+  const sphRadial = Math.cbrt(Math.abs(x * y * z));
+  const scaleTank = (t: Tank): void => {
+    scaleContainerGeometry(t, axial, t.shape === 'Spherical' ? sphRadial : cylRadial, scalePos);
+  };
+  const scaleGrain = (g: SolidGrainSegment): void => {
+    scaleContainerGeometry(g, axial, cylRadial, scalePos);
+  };
+  part.gameData.tanks.forEach(scaleTank);
+  part.gameData.solidGrainSegments.forEach(scaleGrain);
+  for (const spd of part.subPartGameData) {
+    spd.tanks.forEach(scaleTank);
+    spd.solidGrainSegments.forEach(scaleGrain);
+  }
+  // The VAB size classes track the part's mating cross-section, so they ride the same radial
+  // factor — then SNAP to the 0.5 m rack grid (1, 1.5, 2, 2.5…). A size class is a discrete
+  // bucket parts are matched by, not a measurement: a 2.03 m class matches nothing.
+  if (part.gameData.diameterM != null) {
+    part.gameData.diameterM = snapDiameterClass(part.gameData.diameterM * cylRadial);
+    // Snapping can collide two neighbouring classes (or an extra onto the primary), and the
+    // same rack listed twice is meaningless — keep the first of each.
+    const seen = new Set([part.gameData.diameterM]);
+    const extras: number[] = [];
+    for (const d of part.gameData.extraDiametersM) {
+      const snapped = snapDiameterClass(d * cylRadial);
+      if (seen.has(snapped)) continue;
+      seen.add(snapped);
+      extras.push(snapped);
+    }
+    part.gameData.extraDiametersM = extras;
+  }
   $part.set(part);
+}
+
+/**
+ * Snaps a scaled `<Diameter M>` onto the 0.5 m rack grid, never below the smallest bucket.
+ *
+ * Unlike a tank's dimensions this number is a MATCHING KEY, not a measurement: KSA filters the
+ * VAB rack by it, so a size class must land on a value other parts actually declare. (Core's
+ * sub-0.5 classes — 0.125 and 0.25, its probe hardware — are the one lossy case: scaling one up
+ * lands it on 0.5 rather than doubling.)
+ */
+function snapDiameterClass(diameterM: number): number {
+  return Math.max(0.5, Math.round(diameterM * 2) / 2);
+}
+
+/**
+ * Scales one parametric propellant container — a {@link Tank} shape or a
+ * {@link SolidGrainSegment}'s `<Grain>` — in place, as part of {@link scaleEverything}.
+ *
+ * These carry NO workspace geometry, and KSA reads the numbers straight off the XML
+ * (`CylindricalTankTemplate.GetTankGeometryPaf`, `SolidGrainSegment.CreateComponents`)
+ * without ever multiplying them by the owning SubPart's `<Scale>`. So a workspace resize
+ * that skipped them would leave a 2×-sized part holding its original propellant.
+ *
+ * AXES: both are modeled in KSA's part-axis frame with the cylinder axis on X
+ * (`TankGeometry.ComputeCylindricalTank` offsets its domes along `CentroidPaf.X`), so a
+ * `lengthM` rides the X factor and a cylinder's radius rides the CROSS-SECTION factor
+ * √(y·z) — the choice that makes the enclosed volume scale by exactly x·y·z. A sphere has
+ * no axis, so its radius rides ∛(x·y·z), the same volume rule. (`lengthM` is scaled even
+ * for a spherical tank, where KSA ignores it, so flipping the shape back later isn't stale.)
+ *
+ * WALL THICKNESS is deliberately NOT scaled: it is a manufacturing spec the author picked
+ * (2 mm of aluminium), not part geometry, and a resize must leave the number they typed alone.
+ * A scaled-up tank therefore gains propellant volume faster than shell mass — retune the
+ * thickness by hand in Part Data if that matters.
+ *
+ * `LocationAsmb` is a plain mass offset that must be scaled at BOTH scopes: KSA only
+ * ROTATES it on the way to the vehicle frame (`PartTree.RecomputeStaticMass` transforms the
+ * offset by a *quaternion* and adds the owner's position), so a SubPart's own scale never
+ * reaches it and can't stand in for the multiply.
+ */
+function scaleContainerGeometry(
+  c: { lengthM: number; outerRadiusM: number; locationAsmb: Vec3 },
+  axial: number,
+  radial: number,
+  scalePos: (p: Vec3) => Vec3,
+): void {
+  c.lengthM *= axial;
+  c.outerRadiusM *= radial;
+  c.locationAsmb = scalePos(c.locationAsmb);
 }
 
 /**

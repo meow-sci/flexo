@@ -44,9 +44,12 @@ function nextNewLayerName(layers: readonly Layer[]): string {
  * (`browserCommon`), over the Part catalog.
  *
  * What changed from v1:
- * - **preview-first**: a row click previews; double-click / Enter / `[Add]` import and stay,
- *   `[Add & Close]` imports and exits. An import is expensive and layer-creating, so an
+ * - **preview-first**: a row click previews; `[Add]` imports and stays, while double-click /
+ *   Enter / `[Add & Close]` import and exit. An import is expensive and layer-creating, so an
  *   accidental row click committing one was the worst instance of the v1 gesture ambiguity;
+ *   for the same reason the row shortcut is one-and-done here — importing a whole Part is a
+ *   deliberate one-shot act, unlike the SubPart browser where multi-add IS the flow and its
+ *   double-click stays open (`browserCommon`);
  * - **fuzzy** search over id AND `<EditorTag>`s (was substring);
  * - a **tag chip row** — every distinct editor tag as a toggle; active chips AND-filter,
  *   which is the browsable facet the census asked for;
@@ -125,9 +128,11 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
     if (selected) void importPart(selected);
   };
 
+  /** Import and dismiss — the `[Add & Close]` button AND the row double-click / Enter shortcut. */
+  const importAndClose = (p: CatalogPart) => void importPart(p).then(onClose);
+
   const addAndClose = () => {
-    if (!selected) return;
-    void importPart(selected).then(onClose);
+    if (selected) importAndClose(selected);
   };
 
   const listPane = (
@@ -145,7 +150,9 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
               // "replace": arrow keys move the actual selection (so keyboard navigation
               // drives the preview) and — with `onAction` present — react-aria routes a
               // MOUSE action to double-click and Enter only. That pairing IS the
-              // preview-first gesture model.
+              // preview-first gesture model. The action here is the FULL shortcut for
+              // `[Add & Close]`: a double-click that imported but left the popup sitting
+              // over the workspace made you dismiss it by hand every time.
               selectionBehavior="replace"
               selectedKeys={selectedId ? [selectedId] : []}
               onSelectionChange={onSelection}
@@ -157,7 +164,7 @@ function BrowserBody({ onClose }: { onClose: () => void }) {
                   ? undefined
                   : (key) => {
                       const p = catalog.find((c) => c.id === String(key));
-                      if (p) void importPart(p);
+                      if (p) importAndClose(p);
                     }
               }
               items={filtered}

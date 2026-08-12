@@ -6,9 +6,10 @@ import { toast } from './toast';
 
 /**
  * "Scale Everything" — multiplies the whole workspace (every part, connector,
- * kitten) AND every animation keyframe by per-axis factors around the origin,
- * in one undoable step. The animation-safe alternative to a multi-select resize,
- * which can't reach animation offsets and breaks animated parts when scaled.
+ * kitten), every animation keyframe, every parametric propellant container
+ * (`<Tank>` / `<SolidGrainSegment>`) AND the VAB `<Diameter>` size classes by per-axis
+ * factors around the origin, in one undoable step. The animation-safe alternative to a multi-select resize, which
+ * can't reach animation offsets and breaks animated parts when scaled.
  *
  * Root-hosted by `DialogRoot` under the dialog id `'scale-everything'`.
  */
@@ -65,8 +66,10 @@ export function ScaleEverythingDialog({
         <DialogHeader title="Scale Everything" onClose={close} />
         <div className="flex flex-col gap-4 p-4">
           <p className="text-sm text-fg-muted">
-            Multiplies the whole workspace — every part, connector, kitten, and all animation
-            keyframes — by these factors, around the origin. A single undoable step.
+            Multiplies the whole workspace — every part, connector, kitten, all animation keyframes,
+            and the tank / grain-segment dimensions in Part Data — by these factors, around the
+            origin. Diameter size classes follow, snapped to the nearest 0.5 m. A single undoable
+            step.
           </p>
 
           <label className="flex items-center justify-between gap-3">

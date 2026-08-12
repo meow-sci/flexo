@@ -184,8 +184,10 @@ import {
   KITTEN_LAYER_ID,
   createCombustor,
   createEmptyPart,
+  createSolidGrainSegment,
   createSolidMotor,
   createSubPartGameData,
+  createTank,
 } from '../ksa/types';
 import type {
   Connector,
@@ -2271,6 +2273,104 @@ describe('scaleEverything', () => {
       expect(after.y).toBeCloseTo(b.y * s, 6);
       expect(after.z).toBeCloseTo(b.z * s, 6);
     });
+  });
+
+  it('scales parametric propellant containers at both GameData scopes, radius/wall on the cross-section factor', () => {
+    const base = createEmptyPart();
+    $part.set({
+      ...base,
+      gameData: {
+        ...base.gameData,
+        // 2 m long, 0.5 m radius, 2 mm wall, offset 1 m up the stack.
+        tanks: [{ ...createTank(), id: 'fuel', locationAsmb: { x: 1, y: 0, z: 0 } }],
+        solidGrainSegments: [createSolidGrainSegment('Grain')],
+      },
+      subPartGameData: [
+        {
+          ...createSubPartGameData('T'),
+          tanks: [{ ...createTank(), id: 'rcs', shape: 'Spherical' }],
+        },
+      ],
+    });
+
+    scaleEverything({ x: 2, y: 2, z: 2 });
+
+    const g = $part.get().gameData;
+    expect(g.tanks[0].lengthM).toBe(4);
+    expect(g.tanks[0].outerRadiusM).toBe(1);
+    // Wall thickness is an authored manufacturing spec, not geometry — never rescaled.
+    expect(g.tanks[0].wallThicknessMm).toBe(2);
+    expect(g.tanks[0].locationAsmb).toEqual({ x: 2, y: 0, z: 0 });
+    expect(g.solidGrainSegments[0]).toMatchObject({
+      lengthM: 2,
+      outerRadiusM: 1,
+      wallThicknessMm: 6, // unchanged
+    });
+    // A SubPart's own <Scale> never reaches its tank numbers in KSA, so they scale here too.
+    expect($part.get().subPartGameData[0].tanks[0].outerRadiusM).toBe(1);
+  });
+
+  it('scales a tank so its enclosed volume follows x·y·z exactly under a non-uniform factor', () => {
+    const base = createEmptyPart();
+    const cyl = { ...createTank(), id: 'fuel' };
+    const sph = { ...createTank(), id: 'rcs', shape: 'Spherical' as const };
+    $part.set({ ...base, gameData: { ...base.gameData, tanks: [cyl, sph] } });
+    // Cylinder volume ∝ r²·L, sphere volume ∝ r³ — both must land on x·y·z = 12.
+    const cylVol = (t: { outerRadiusM: number; lengthM: number }) =>
+      t.outerRadiusM ** 2 * t.lengthM;
+    const sphVol = (t: { outerRadiusM: number }) => t.outerRadiusM ** 3;
+
+    scaleEverything({ x: 2, y: 3, z: 2 });
+
+    const [a, b] = $part.get().gameData.tanks;
+    expect(cylVol(a) / cylVol(cyl)).toBeCloseTo(12, 6);
+    expect(sphVol(b) / sphVol(sph)).toBeCloseTo(12, 6);
+  });
+
+  it('never negates a radius when an axis is mirrored', () => {
+    const base = createEmptyPart();
+    $part.set({
+      ...base,
+      gameData: {
+        ...base.gameData,
+        tanks: [{ ...createTank(), id: 'fuel', locationAsmb: { x: 0, y: 1, z: 0 } }],
+      },
+    });
+
+    scaleEverything({ x: 1, y: -1, z: 1 });
+
+    const t = $part.get().gameData.tanks[0];
+    expect(t.outerRadiusM).toBe(0.5);
+    expect(t.lengthM).toBe(2);
+    // The mass OFFSET is a position, so it does flip with the mirror.
+    expect(t.locationAsmb).toEqual({ x: 0, y: -1, z: 0 });
+  });
+
+  it('scales the VAB diameter size classes onto the 0.5 m rack grid, dropping collisions', () => {
+    const base = createEmptyPart();
+    $part.set({
+      ...base,
+      gameData: { ...base.gameData, diameterM: 1, extraDiametersM: [1.1, 2, 2.1, 3] },
+    });
+
+    // ×1.4 then snap: 1→1.5; the extras land on 1.5 (collides with the primary), 3, 3
+    // (collides with the previous extra) and 4.
+    scaleEverything({ x: 1.4, y: 1.4, z: 1.4 });
+
+    const g = $part.get().gameData;
+    expect(g.diameterM).toBe(1.5);
+    expect(g.extraDiametersM).toEqual([3, 4]);
+  });
+
+  it('never snaps a size class below the smallest rack bucket, and leaves it off when disabled', () => {
+    const base = createEmptyPart();
+    $part.set({ ...base, gameData: { ...base.gameData, diameterM: 1, extraDiametersM: [] } });
+    scaleEverything({ x: 0.1, y: 0.1, z: 0.1 });
+    expect($part.get().gameData.diameterM).toBe(0.5);
+
+    $part.set({ ...base, gameData: { ...base.gameData, diameterM: null } });
+    scaleEverything({ x: 2, y: 2, z: 2 });
+    expect($part.get().gameData.diameterM).toBeNull();
   });
 
   it('no-ops at factor 1 (no undo entry) and is a single undoable step otherwise', () => {

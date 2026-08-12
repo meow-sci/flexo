@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { validateEngines } from './engineValidation';
 import type { EngineIssue } from './engineValidation';
-import type { ReactionData } from './reactionCatalog';
+import { REACTION_FIXTURES } from './__fixtures__/reactionFixtures';
 import {
   createCombustor,
   createEmptyPart,
@@ -19,35 +19,7 @@ import {
 import type { ConnectorCapability, EditingPart } from './types';
 
 /** The reaction facts the solid-motor checks read, as the live catalog would supply them. */
-const REACTIONS: ReadonlyMap<string, ReactionData> = new Map<string, ReactionData>([
-  [
-    'APCP',
-    {
-      kind: 'Fixed',
-      id: 'APCP',
-      name: 'APCP',
-      category: 'Solid',
-      reactants: [],
-      lut: { rows: [] },
-      burnRate: { coefficientMPerS: 0.0045, exponent: 0.35 },
-      minimumBurnPressurePa: 1_500_000,
-      maxStablePressurePa: 15_000_000,
-      exhaustCondensedFraction: 0.336965,
-    },
-  ],
-  [
-    'Hydrolox',
-    {
-      kind: 'Mixture',
-      id: 'Hydrolox',
-      name: 'Hydrogen + Oxygen',
-      category: 'Bipropellant',
-      reactants: [],
-      mixtureLut: { ratios: [1], slices: [{ rows: [] }] },
-      defaultMixtureRatio: 5.5,
-    },
-  ],
-]);
+const REACTIONS = REACTION_FIXTURES;
 
 const codes = (issues: EngineIssue[]) => issues.map((i) => i.code);
 const has = (part: EditingPart, code: string) =>

@@ -3822,6 +3822,29 @@ export function removeGimbal(subPartInstanceId: string): void {
 }
 
 /**
+ * Discrete (ONE undo step): commits a document the **engine wizard** built whole —
+ * geometry, modules, feed wiring, gimbal, collider and mass in a single swap
+ * (`plans/ENGINE_WIZARD_PLAN.md` D3/§5.7).
+ *
+ * The wizard composes its result purely (`src/ui/engine/wizard/wizardModel.ts`
+ * `buildWizardPart`) precisely so the commit can be this: one `pushUndo`, one `$part.set`.
+ * Routing it through the individual `addCustomMesh` / `addSubPart` / `addConnector`
+ * mutators instead would push a dozen undo entries and make "undo the wizard" impossible.
+ *
+ * Selection is left alone: the wizard only ADDS entities, so no existing reference can go
+ * stale, and the dialog navigates into Engine mode straight after. Custom meshes created by
+ * the wizard are baked by the caller (`rebuildCustomMeshes()`), which is why this stays
+ * synchronous and free of `customAssetStore` imports.
+ *
+ * Takes the finished document rather than the wizard's result object so `src/state` never
+ * imports from `src/ui`.
+ */
+export function applyEngineWizard(part: EditingPart, detail: string): void {
+  pushUndo('engine wizard', detail);
+  $part.set(part);
+}
+
+/**
  * Discrete (one undo step): defines a complete, fires-in-game engine on a SubPart
  * template — a wired Combustor + DeLavalNozzle + Rocket on its SubPartGameData, plus
  * a part-level RocketEngineController referencing that rocket on the given placement

@@ -75,6 +75,7 @@ import {
   $undoDescription,
   addCollider,
   applyActionChain,
+  applyEngineWizard,
   removeCollider,
   addIvaSeat,
   addKittenAtSeat,
@@ -4256,5 +4257,63 @@ describe('cross-part clipboard paste', () => {
     expect(pasteClipboard()).toBe(2);
     expect($part.get().ivaSeats[0].layerId).toBe(IVA_SEAT_LAYER_ID);
     expect($part.get().kittens[0].layerId).toBe(KITTEN_LAYER_ID);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Engine wizard commit (plans/ENGINE_WIZARD_PLAN.md §5.7 / W4.3).
+// ---------------------------------------------------------------------------
+
+describe('applyEngineWizard', () => {
+  it('commits a wholly-built document in exactly ONE undo step', () => {
+    addSubPart('Core.Existing');
+    const before = structuredClone($part.get());
+    const historyBefore = $historyList.get().length;
+
+    // Stand-in for what `buildWizardPart` returns: several entity kinds at once, which is
+    // the whole point — a per-mutator route would have pushed one undo step for each.
+    const built = structuredClone(before);
+    built.customMeshes.push({
+      id: 'mesh_wiz',
+      name: 'Bell',
+      subPartId: 'flexo_Bell_wiz',
+      primitive: { kind: 'box', params: { width: 1.2, height: 1.2, depth: 1.2 } },
+      faceTextures: {},
+    });
+    built.placements.push({
+      instanceId: 'flexo_bell_wiz_1',
+      subPartTemplateId: 'flexo_Bell_wiz',
+      position: { x: 0, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+      layerId: DEFAULT_LAYER_ID,
+    });
+    built.connectors.push({
+      id: '_connector1',
+      position: { x: 3.1, y: 0, z: 0 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+      flags: [],
+      capabilities: [],
+      siblingIds: [],
+      layerId: DEFAULT_LAYER_ID,
+    });
+    built.editorTags.push('Engines');
+    built.gameData.customMass = 500;
+
+    applyEngineWizard(built, 'liquid · flexo_Bell_wiz');
+
+    expect($historyList.get().length).toBe(historyBefore + 1);
+    expect($historyList.get().find((h) => h.stepsFromCurrent === -1)?.detail).toBe(
+      'liquid · flexo_Bell_wiz',
+    );
+    expect($part.get().customMeshes).toHaveLength(1);
+    expect($part.get().editorTags).toContain('Engines');
+
+    undo();
+    expect($part.get()).toEqual(before);
+
+    redo();
+    expect($part.get()).toEqual(built);
   });
 });

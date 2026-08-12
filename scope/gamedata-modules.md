@@ -4,8 +4,10 @@
 > `<PartGameData>` / `<SubPartGameData>` documents. Each block maps to a KSA `*Template`
 > class. Engine modules have their own file ([engines.md](engines.md)).
 
-**Baseline:** re-vetted against KSA build **2026.8.5.5168** (decomp @ 5168 + shipped Core XML).
-**Baseline status:** ✅ **INTACT** — 5117's added `<EVADoor SeatId>` is now modeled
+**Baseline:** re-vetted against KSA build **2026.8.19.5261** (decomp @ 5261 + shipped Core XML).
+**Baseline status:** ✅ **INTACT** — 5261's added `<Light><DisableInIva>` is now modeled
+(`PartLight.disableInIva` — see [What changed in 5261](#what-changed-in-5261)); 5117's
+`<EVADoor SeatId>` is modeled
 (`EvaDoor.seatId`, gap **Q1** CLOSED — see [What changed in 5117](#what-changed-in-5117)); every
 unit token, scale factor and module element form is byte-identical.
 Historically: the electrical unit tokens (`J`/`W`), the `<DockingPort>`
@@ -118,6 +120,51 @@ re-check the validator's strings alongside the two evaluators.
 
 On each game update, re-verify per the checklist item in
 [GAME_UPDATE_CHECKLIST.md](GAME_UPDATE_CHECKLIST.md) (grep anchors are listed there).
+
+## What changed in 5261
+
+**Verdict: MISSING-CAPABILITY, ✅ FIXED in this review.** One added element, on a MODELED block.
+
+`LightModule.TemplateData` gained:
+
+```csharp
+[XmlElement("DisableInIva")]
+public bool DisableInIva = false;
+```
+
+It does **two** things, and the second is the surprising one:
+
+- `LightModule.OnFrame` skips the light when `Template.DisableInIva && viewport.Mode ==
+CameraMode.IVA` — it is hidden from the IVA view.
+- The new `LightModule.IsActive` property **short-circuits to `true`** when `DisableInIva` is set,
+  _before_ it consults `Parent.FullPart.LightSwitch` or the `PowerConsumers` state. So such a light
+  is always-on and **EC-free**, ignoring the part's inherited light switch and power budget.
+
+Core authors it on two new lights in `CoreIVASpaceAGameData.xml` — face-fill lights placed in front
+of each seated kitten, existing only for the crew-portrait camera added in rev 5193. Their own
+comment records the intent: _"Off while a player is actually seated in IVA … these are fill lights,
+not part of the cabin's power budget."_
+
+The same rev also gated the ray-traced and rasterized paths on `viewport == Program.MainViewport`,
+which is a rendering-side change with no schema surface.
+
+**flexo impact.** `<Light>` is a MODELED element, so the `<PartGameData>` `RawXmlNode` passthrough
+never covered it (passthrough covers _unmodeled_ children only) — importing a part with a
+`DisableInIva` light and re-exporting silently dropped the flag, turning a free, IVA-hidden fill
+light into an EC-consuming one that shines into the seated player's view. Now modeled end to end:
+`PartLight.disableInIva` (`src/ksa/types.ts`), parsed in `partXmlParser.ts`'s `lightFromElement`,
+emitted by `partXmlSerializer.ts`'s `buildLightElement` **only when true** (KSA's default is
+`false`), and persisted through `projectCodec.ts` (`dii`) and `projectTransfer.ts`. **No
+`PROJECT_SCHEMA_VERSION` bump:** the key is additive and its absence means `false`, which is exactly
+what pre-5261 projects meant — no stored value changes meaning. It is authoring-only in the editor:
+flexo's viewport is never an IVA camera, so the flag changes nothing on screen and no inspector
+control has been added yet.
+
+Also re-verified at 5261: `BatteryTemplate`, `DockingPortTemplate`, `ControlTemplate` (still an
+empty marker) and the whole unit-reference family are contract-identical. The `*Reference.cs`
+classes show large diffs, but they are **entirely** rev 5169's display refactor — `ToNearest` moved
+from an instance method to a static `SpanBuilder` one and the `INearestString` interface was
+deleted. Every **token → scale parse table** (`J`/`W`/`kg`/`m`/`m²`/…) is unchanged.
 
 ## What changed in 5168
 

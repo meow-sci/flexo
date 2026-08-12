@@ -6,10 +6,50 @@
 > [part-and-subpart-xml.md](part-and-subpart-xml.md) (which owns the surrounding `<Part>` /
 > `<PartGameData>` document structure).
 
-**Baseline:** re-verified against KSA build **2026.8.5.5168** (`decomp/` + shipped `Content/Core`)
+**Baseline:** re-verified against KSA build **2026.8.19.5261** (`decomp/` + shipped `Content/Core`)
 and the real GLB meshes in `flexo-private-assets/assets/Meshes`.
-**Baseline status:** ✅ **MODELED** — closes the 4939 geometry-template `<Collider>` gap
-(gap **E** in [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md)).
+**Baseline status:** 🟡 **MODELED, one primitive short.** The four analytic shapes are fully modeled
+(closing the 4939 geometry-template `<Collider>` gap **E**), but 5261 added a **fifth**,
+`<ConvexHull>` — gap **S1**, see [What changed in 5261](#what-changed-in-5261).
+
+## What changed in 5261
+
+**Verdict: MISSING-CAPABILITY (gap S1).** Rev 5185 ("Added asset bundler support for convex hull
+shapes"; "Added `MeshColliderTemplate` and `ConvexHullColliderTemplate`") broke the long-standing
+"there are exactly four analytic primitives, and there are NO collider meshes" invariant this doc
+records.
+
+- **`ColliderModule.Template` gained a fifth element type:**
+  `[XmlElement("ConvexHull", typeof(ConvexHullColliderTemplate))]`, alongside the existing
+  `Box`/`Capsule`/`Cylinder`/`Sphere`. Same `List<ColliderTemplate> Colliders` — so `<ConvexHull>`
+  is authorable anywhere the other four are, at both the part-level and SubPart-owned sites.
+- **`MeshColliderTemplate`** (new, abstract in practice) extends `ColliderTemplate` with
+  `[XmlElement("Mesh")] MeshReference Mesh` and `[XmlElement("Scale")] Vector3Reference? Scale`
+  (`ScaleValue` defaults to `double3.One`). `OnDataLoad` throws when `Mesh.Id` is empty. It is
+  **not directly authorable**: `ColliderModule` declares no `<Mesh>` element for it, and its
+  `CreateShapeInto` throws `"Mesh collider … cannot be registered with Bepu yet"`.
+- **`ConvexHullColliderTemplate`** extends it and is the authorable one. `EnsureBaseHull` feeds the
+  mesh's scaled position span to `ConvexHullHelper.CreateShape` and **throws** at load if the mesh
+  "has no volume. It needs to be a closed, non-degenerate solid."
+- **`ColliderTemplate` gained `[XmlIgnore] public virtual double3 ShapeOffsetCollider => double3.Zero`,**
+  and `Create` now places the collider at
+  `LocationAsmb.ToDouble3() + ShapeOffsetCollider.Transform(collider2Asmb)` — i.e. offset by the
+  hull's centroid. **For all four analytic primitives this is `double3.Zero`, so flexo's placement
+  math is unchanged.** The shape-creation signature also changed
+  (`CreateShapeInto(in ShapesUnlock unlock, double scale, …)`, plus a new `CreateScaledShape`),
+  and the primitives now multiply their dimensions by that `scale` — but the part path always
+  passes `1.0`; the scaled path is for ground clutter.
+- **Who authors it:** only `Content/Core/GroundClutter/GenericRockAssets.xml` today (the rocks'
+  collision hulls). No `<Part>`/`<PartGameData>` in Core uses one.
+
+**flexo impact (gap S1, 📋 OPEN).** `ColliderShape` in `src/ksa/types.ts:127` is a four-member union
+and `COLLIDER_SHAPES` a four-element list, so a part authoring `<ConvexHull>` parses to nothing and
+the element is dropped on export — colliders are MODELED, so the `RawXmlNode` passthrough does not
+cover them. Supporting it is real work rather than a field addition: it needs a mesh reference
+(pointing at a SubPart mesh or a custom-asset GLB), a viewport representation that is not one of
+the four analytic gizmos, and export-side validation that the referenced mesh is a closed solid —
+because KSA **throws at load** if it is not. Per the no-migration rule the fix adds the fifth
+member outright rather than gating it.
 
 **5168:** schema INTACT, verdict **NONE**. `ColliderModule.cs`, `ColliderTemplate.cs` and the four
 `Box`/`Sphere`/`Cylinder`/`CapsuleColliderTemplate.cs` classes _do_ appear in the `5117 → 5168`

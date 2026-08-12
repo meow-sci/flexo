@@ -17,9 +17,9 @@ schema/pose/falloff contract); game-side details in
 A `<Light>` is one entry of a GameData `Components` list (`LightModule.TemplateData`,
 `decomp/KSA/LightModule.cs`): `Type` (Spot/Point), a `Transform` (position + aim rotation —
 scale is parsed but **ignored**), `Range` (meters — illuminance is exactly 0 at `d ≥ Range`),
-`Intensity`, `Color`, the Spot half-angles `InnerAngle`/`OuterAngle` (radians), and
-`RayTracing`. A **Spot aims along its rotated local +X** — the same "facing = local +X"
-convention as flexo's connector and seat markers.
+`Intensity`, `Color`, the Spot half-angles `InnerAngle`/`OuterAngle` (radians),
+`RayTracing`, and (since KSA 5261) `DisableInIva`. A **Spot aims along its rotated local +X** —
+the same "facing = local +X" convention as flexo's connector and seat markers.
 
 `<Light>` is legal under **both** GameData sites, and Core authors both (plan §1.2):
 
@@ -31,7 +31,13 @@ convention as flexo's connector and seat markers.
 
 In-game, lights render only while the part's single light switch (if any) is on and powered —
 see the Power & Light Switch group in **Data mode ▸ Part ▸ Power** and
-`analysis/HOW_LIGHT_PARTS_WORK.md`.
+`analysis/HOW_LIGHT_PARTS_WORK.md`. **`<DisableInIva>true</DisableInIva>` opts out of both
+rules at once:** `LightModule.IsActive` short-circuits to `true` before it consults the light
+switch or the power consumers, so the light is always-on and EC-free — and `OnFrame` then skips
+it entirely while the camera is in IVA. Core uses it for the CoreIVASpaceA face-fill lights that
+exist only for the crew-portrait camera. flexo models the flag (`PartLight.disableInIva`) so it
+round-trips and persists, but has **no inspector control for it yet** and the editor viewport is
+never an IVA camera, so it changes nothing on screen.
 
 ## The normalized model
 
@@ -44,6 +50,8 @@ document array: `EditingPart.lights: PartLight[]` (`src/ksa/types.ts`). A `PartL
 - `scale` — **unused**: KSA ignores light scale; the store pins it to (1,1,1) and the
   serializer never emits it. A scale-mode edit on a light is a silent no-op (the seat rule).
 - `id` — editor-only (`_light1`, …), **never emitted** (Core authors no `<Light Id>`).
+- `disableInIva` — the 5261 flag above. Emitted **only when true** (KSA's default is `false`),
+  and persisted as the optional `dii` key in the project codec.
 - `ownerTemplateId: string | null` — which of the two XML sites it serializes to. The
   serializer re-groups by owner on export, so the emitted grammar is unchanged; a light on a
   **built-in** template routes through the export-variant remap so Core's shared template is

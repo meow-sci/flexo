@@ -660,6 +660,11 @@ function buildLightElement(doc: XmlDocument, light: PartLight): XmlElement {
     rt.appendChild(doc.createTextNode('true'));
     el.appendChild(rt);
   }
+  if (light.disableInIva) {
+    const dii = doc.createElement('DisableInIva');
+    dii.appendChild(doc.createTextNode('true'));
+    el.appendChild(dii);
+  }
   return el;
 }
 

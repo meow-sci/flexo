@@ -11,7 +11,7 @@
 > alongside [engines.md](engines.md), [connectors-coordinates-iva.md](connectors-coordinates-iva.md)
 > and [gamedata-modules.md](gamedata-modules.md).
 
-**Baseline:** re-verified against KSA build **2026.8.5.5168** (decomp @ 5168 + shipped Core XML);
+**Baseline:** re-verified against KSA build **2026.8.19.5261** (decomp @ 5261 + shipped Core XML);
 surface introduced at **2026.7.9.5018**.
 **Baseline status:** ✅ **CURRENT** — modeled end-to-end (parse, serialize, import/paste
 remapping, project codec v4, authoring UI, export pre-flight) by the 5018 upgrade.
@@ -189,6 +189,22 @@ template-local `Components` id and is never regenerated, so it passes through un
   places the _part_), so flexo's "unwired consumer" check only fires for SubPart-level ones.
 
 ---
+
+## What changed in 5261
+
+**Verdict: NONE.** `ConnectorCapability*`, `FeedsFromReference`, `ConsumerFeedWiring` and
+`RocketCoreTemplate` are all **byte-identical** to 5168. `PartTemplate`'s feed resolution
+(`ResolveConsumerFeedPoints` / `ResolveConsumerFeeds` / `AddResolvedFeed`) changed only in log line
+numbers and one `Span` slice rewritten by the decompiler. The empty-`<Capabilities>` default
+(`Electricity|ServiceFluid`), the whitespace-separated `[Flags]` bodies, the load-bearing container
+`Id`s, and the rule that passthrough does **not** cover MODELED elements all hold.
+
+Rev 5171 ("Fuel line hoses can now be bent and deformed in the editor by clicking on the fuel line
+connection and adding or removing nodes") looks like a plumbing change and is **not** part of this
+contract: it added `[XmlElement("Node")] List<FuelLinkNodeData> Nodes` to `FuelLinkData`, whose
+siblings are `[XmlAttribute("PartA")] uint PartALocalId` / `PartB` — i.e. it is **vehicle save
+data**, describing a hose routed between two placed parts in a specific vehicle, not anything a
+part template declares. flexo authors parts, not vehicles, so there is nothing to model.
 
 ## What changed in 5168
 

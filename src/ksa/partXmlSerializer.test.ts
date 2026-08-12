@@ -404,6 +404,24 @@ describe('serializeGameData', () => {
     expect(child(point, 'RayTracing')).toBeNull();
   });
 
+  it('emits <DisableInIva> only when set (KSA defaults it to false)', () => {
+    // Added in build 5261 (LightModule.TemplateData.DisableInIva). Core authors it on the
+    // CoreIVASpaceA seat face-fill lights; before flexo modeled it, a round-trip dropped it
+    // and those lights would start consuming EC and shining into the seated player's view.
+    const spd = tags(doc, 'SubPartGameData')[0];
+    const [spot, point] = tags(spd, 'Light');
+    expect(child(spot, 'DisableInIva')).toBeNull();
+    expect(child(point, 'DisableInIva')).toBeNull();
+
+    const withFlag = parse(
+      serializeGameData(
+        editingPart({ lights: [{ ...createPartLight(null, '_light1'), disableInIva: true }] }),
+      ),
+    );
+    const emitted = tags(tags(withFlag, 'PartGameData')[0], 'Light')[0];
+    expect(child(emitted, 'DisableInIva')!.textContent).toBe('true');
+  });
+
   it('emits a SubPart whose only data is a <Light> (an orphan light-only owner gets its own block)', () => {
     const SP = 'Custom_Subpart_Lamp';
     const lightOnly = parse(

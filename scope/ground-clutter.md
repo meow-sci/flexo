@@ -4,7 +4,7 @@
 > data-only KSA mod that adds a celestial body with `<GroundClutter>` (cards/meshes scattered
 > on the terrain), using **no custom game code**. Reference scaffold for clutter modding.
 
-**Baseline:** re-verified against KSA build **2026.8.5.5168** (decomp @ 5168 + shipped Core XML).
+**Baseline:** re-verified against KSA build **2026.8.19.5261** (decomp @ 5261 + shipped Core XML).
 **Baseline status:** 🟡 **SCHEMA-DRIFT, scaffold unaffected (in-game re-check still pending)** —
 5117 (rev 5099) renamed the ecotype's `<Collideable Value>` to
 `<CollisionType Value="None|PrimitiveList|Mesh">` ahead of the Bepu physics integration. The
@@ -52,6 +52,25 @@ hand-authored mod XML + a build script).
 - **Opacity** cut where R < 0.5 (cutout cards).
 - First-wins + core-first load order, so a clutter mod can **add** a body & reuse textures by `Id`.
 - Loading is gated by the scenario's `<LoadFromLibrary>`.
+
+## What changed in 5261
+
+**Verdict: gap R1 still OPEN, and slightly wider.** No new schema _shape_, but two content/feature
+revs extend what the scaffold must emit once R1 is addressed:
+
+- **Rev 5185** added asset-bundler support for **convex hull shapes** and gave the clutter rocks
+  convex-hull colliders. `ClutterObjectTemplate` gained
+  `[XmlArrayItem("ConvexHull", typeof(ConvexHullColliderTemplate))]` inside its `<Colliders>` array,
+  and `Content/Core/GroundClutter/GenericRockAssets.xml` is the only shipped file authoring one.
+  The same rev also **removed** the mesh-atlas rule that skipped loading meshes whose name starts
+  with `_` — the atlas now stores every mesh, because clutter references them to build its own data.
+  (The collider class itself is documented in [colliders.md](colliders.md#what-changed-in-5261).)
+- **Rev 5205** gave every tree except the tiny shrubs colliders, and fixed LOD distances not being
+  set beyond the defaults for tree types past 3.
+
+`GroundClutterReference` and its sibling schema classes are otherwise unchanged from 5168, so the
+fix framed there — switching `scripts/build-cartoon-moon.ts` wholesale to the bundler form — is
+still the whole of R1; it now just has an optional `<ConvexHull>` collider it _may_ emit.
 
 ## What changed in 5168
 

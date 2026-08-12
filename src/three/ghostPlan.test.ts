@@ -68,6 +68,7 @@ function partWithEverything(): EditingPart {
         innerAngleRad: 0.2,
         outerAngleRad: 0.5,
         rayTracing: false,
+        disableInIva: false,
         layerId: DEFAULT_LAYER_ID,
       },
     ],

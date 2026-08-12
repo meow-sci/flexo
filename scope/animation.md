@@ -4,7 +4,7 @@
 > lets the user edit them, and re-exports animation GLBs that KSA's `KeyframeAnimationModule`
 > loads. The load-bearing integration is the **animation-GLB node-structure convention**.
 
-**Baseline:** re-verified against KSA build **2026.8.5.5168** (decomp @ 5168 + shipped Core XML);
+**Baseline:** re-verified against KSA build **2026.8.19.5261** (decomp @ 5261 + shipped Core XML);
 contract established at **2026.7.10.5056** and unchanged since.
 **Baseline status:** ✅ **INTACT** — but 5056 rewrote KSA's own GLB loader (rev 5034) to the
 semantics flexo already implemented, and in doing so made the scene ROOT node's transform
@@ -77,6 +77,19 @@ GameData schema (`KeyframeAnimationModule`) and the bone/transform math are unch
 3. **CubicSpline clips import APPROXIMATED, not corrupted** (was: silent corruption). KSA supports **CubicSpline** (`KeyframeAnimationData.cs` `SampleType {Linear, Step, CubicSpline}`); glTF stores such a sampler's output as `[inTangent, value, outTangent]` triplets (3× the input count). `decodeAnimationGlb` now **detects** `interpolation === 'CUBICSPLINE'`, keeps only the middle (VALUE) row of each triplet and treats the segments as LINEAR — so the keyframes are exact and only the in-between motion is approximated (the tangents are dropped; flexo has no tangent model). The clip is flagged `PartAnimation.cubicSplineApprox`, which feeds the KSA import report and the clip diagnostics (`computeClipIssues` → "clip imported with CubicSpline sampling — approximated"). Still unverifiable against a real asset from the snapshots (the `Animations/*.glb` are not shipped in the decomp); every shipped clip checked through flexo's mirror is LINEAR. flexo still handles FLOAT accessors only.
 4. Only `animations[0]` is read on both sides.
 5. Wrong rest anchor re-applies the deploy (the reason `restKeyframeId` exists).
+
+## What changed in 5261
+
+**Verdict: NONE.** `KeyframeAnimationData.cs` and `KeyframeAnimationModule.cs` are both
+**byte-identical** to 5168, so the GLB-loader contract and the module schema are unmoved — including
+the rev-5034 rule that the scene ROOT node's own TRS contributes to `EvaluateWorldMatrix`, which
+`animationRig.ts` satisfies by emitting an identity root.
+
+The release added a large amount of _kitten_ animation (walk, jump, tumble, ladder climb — five new
+`<GltfFile>`s in `CharacterAssets.xml`), but that is the Character/skeletal system, an entirely
+separate path from the `KeyframeAnimation` module flexo authors; see
+[kittens.md](kittens.md#what-changed-in-5261). Connectors still cannot animate with joints, so the
+SubParts-only gate in flexo's mesh picker remains correct.
 
 ## What changed in 5168
 

@@ -353,6 +353,7 @@ const importedLight = (id: string): PartLight => ({
   innerAngleRad: Math.PI / 8,
   outerAngleRad: Math.PI / 4,
   rayTracing: false,
+  disableInIva: false,
   position: { x: 0, y: 0, z: 0 },
   rotation: { x: 0, y: 0, z: 0 },
   scale: { x: 1, y: 1, z: 1 },
@@ -564,6 +565,7 @@ describe('editorStore', () => {
           innerAngleRad: Math.PI / 8,
           outerAngleRad: Math.PI / 4,
           rayTracing: true,
+          disableInIva: false,
           position: { x: -0.275, y: 0, z: -0.8 },
           rotation: { x: 0, y: 0, z: 0 },
           scale: { x: 2, y: 2, z: 2 }, // hand-edited payload — must be re-pinned

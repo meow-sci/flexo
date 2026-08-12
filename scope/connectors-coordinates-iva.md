@@ -7,7 +7,7 @@
 > `<Internal>` flag) and
 > [docs/ksa-part-connector-notes.md](../docs/ksa-part-connector-notes.md).
 
-**Baseline:** re-vetted against KSA build **2026.8.5.5168** (decomp @ 5168 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.8.19.5261** (decomp @ 5261 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — the coordinate calibration survived rev 5067's deletion of
 `Double3Ex.Up/Forward/Right` (the vectors moved to `Camera.ForwardView`/`RightView`/`UpView` with
 identical values), the connector/`<Internal>` contracts are byte-identical, and 5117's crew
@@ -296,6 +296,41 @@ follows the root part.
 8. **Interior geometry with no seat anywhere in the vehicle is invisible in EVERY camera mode** — `<Internal>` hides it outside IVA, and with no seat the IVA mode is never offered. This is the failure mode the deleted automatic rewrite used to mask.
 9. **`<IVASeat Id>` shares the feed-container id namespace** (`PartTemplate.AddResolvedFeed` scans every `Components[].Id`) **and, since 5117, is the target of `<EVADoor SeatId>`**. flexo models it as `IvaSeat.ksaId` and emits it only when the user authored one; ids minted by the "align this door to a seat" action (`setEvaDoorSeat`) are uniquified against that shared namespace — tank feed ids, solid grain-segment ids and the other seats' ids.
 10. **There is no in-game editor IVA preview.** The KSA vehicle editor has no IVA mode; the only in-game check is launch → **Shift+C** twice → **C** to cycle. This is why flexo ships its own seat preview (above) — and why that preview's honest limits matter.
+
+## What changed in 5261
+
+**Verdict: NONE schema-side; gap R2 reinforced.**
+
+Re-verified byte-identical: `QuaternionEx.CreateFromXyzRadians` (the class lost `Slerp` and gained
+`GetTwistAboutAxis`, neither of which flexo ports), `IVASeatTemplate` and its three
+`Vector3Reference` fields, `IVAController`, `EVADoorTemplate`, `DockingPortTemplate`,
+`PartModelModule` (so `<Internal>` remains the only `[XmlElement("Internal")]` in the decomp, and
+`<ShadowCaster>`/`<RayTracing>` are unchanged), and `Control` / `ControlTemplate` — still empty
+markers with no transform or control-point field. `EULER_ORDER` in `coords.ts` and the line-for-line
+`ivaLook.ts` port therefore both stand.
+
+`IVASeat.cs` shows a 47-line diff that is **all rendering**: the game now draws the assigned kitten
+in its seat (`UpdateSeatedRenderable`, `SEATED_DOWN_OFFSET = -0.1`, `SEATED_SCALE = 0.5`, and a
+`SeatToAsmbRotation` built from the seat's own `ForwardAxis`/`UpAxis`) for the crew-portrait cameras
+added in rev 5193. No template field moved.
+
+**Three revs reinforce gap R2 — connector orientation is load-bearing, not cosmetic:**
+
+- **Rev 5202** added the surface flag to the aeroshroud surface-attach connectors.
+- **Revs 5238/5239** re-imported `CoreElectricalA`, `CoreFuelTankA`, `CorePassageA` and
+  `CorePropulsionA` explicitly _"to fix flipped connectors"_, and updated the Rocket and Gemini7
+  default vehicles _"to have right-side-up docking ports"_. The data change is visible in the
+  vendored fixtures as `<Rotation X="3.1416" Z="…"/>` → `<Rotation Z="…"/>`.
+- **Rev 5225** added a warning to the game's own GLB→XML importer _"to detect connectors with
+  suspicious orientations"_ — i.e. KSA now considers a mis-oriented connector a defect worth
+  flagging at author time.
+
+Together with rev 5133's "Control From Here" (which made a docking-port connector's frame able to
+_become_ the navball frame), this is the second build in a row where connector orientation became
+more load-bearing. flexo authors the same `<Rotation>` it always did, so nothing breaks — but the
+case for surfacing an orientation check in the connector inspector is stronger. Also of note:
+rev 5222 fixed the docking camera being upside-down and rev 5191 fixed it not rotating with the
+vehicle, both consistent with the docking-port frame flexo already models.
 
 ## What changed in 5168
 

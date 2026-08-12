@@ -5,8 +5,11 @@
 > **BREAKING** for the live thrust/Isp readout. Read alongside [docs/engines.md](../docs/engines.md)
 > and [analysis/KSA_ENGINE_DETAILS.md](../analysis/KSA_ENGINE_DETAILS.md).
 
-**Baseline:** re-vetted against KSA build **2026.8.5.5168** (decomp @ 5168 + shipped Core XML).
-**Baseline status:** ✅ **CURRENT** — at 5117 every verbatim-ported physics class is byte-identical
+**Baseline:** re-vetted against KSA build **2026.8.19.5261** (decomp @ 5261 + shipped Core XML).
+**Baseline status:** ✅ **CURRENT** — 5261 landed the first ported-math BREAK since 5056, in the
+solid-motor nozzle sizing; **re-ported in this review** (see
+[What changed in 5261](#what-changed-in-5261)). Every _other_ verbatim-ported class remains
+byte-identical
 and no engine template field moved; the one new item, the optional validator-parity gap **Q4**, is
 now **mirrored in flexo** (see [What changed in 5117](#what-changed-in-5117)).
 Historically: 5056 landed the first nozzle-schema BREAK since 4939:
@@ -165,6 +168,78 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
   `<Combustor>` (flexo's SRB recipe now burns APCP) — but there is still no solid-motor
   hardware (no grain-regression thrust curve; the propellant reservoir is still a liquid-style
   tank), so a true SRB is still not reproducible.
+
+## What changed in 5261
+
+**Verdict: BREAKING (✅ FIXED) on the solid-motor path; NONE elsewhere.**
+
+### `SolidMotor.ResizeNozzles` — the area-ratio clamps swapped precedence (rev 5173)
+
+The changelog line is _"Clarified which of the area ratio clamps win in the case where they cross
+each other."_ It is a real semantic change to a **verbatim-ported** function.
+
+Before 5261, the high bound came first and the low bound was clamped **into** it:
+
+```csharp
+float num3 = ComputeTotalThroatArea(num, MaxStablePressure, num2);
+MaxAreaRatioBound = num2 / num3;
+if (MaxAreaRatioBound < 1.2f) return "Stack too large for the nozzle";
+...
+MinAreaRatioBound = ((num7 < float.MaxValue) ? Math.Clamp(num2 / num7, 1.2f, MaxAreaRatioBound)
+                                            : MaxAreaRatioBound);
+```
+
+At 5261 the order is inverted and the rejection is **deleted**:
+
+```csharp
+MinAreaRatioBound = ((num6 < float.MaxValue) ? MathF.Max(num2 / num6, 1.2f) : 1.2f);
+float num7 = ComputeTotalThroatArea(num, MaxStablePressure, num2);
+MaxAreaRatioBound = MathF.Max(num2 / num7, MinAreaRatioBound);
+```
+
+Three consequences:
+
+1. **The low bound wins where they cross.** `MinAreaRatioBound` is now derived on its own and
+   `MaxAreaRatioBound` is raised to meet it, rather than the reverse.
+2. **The `1.2` fallback changed.** When neither the ignition nor the valley throat is finite, the
+   low bound is a flat `1.2`; it used to fall back to `MaxAreaRatioBound`.
+3. **`"Stack too large for the nozzle"` no longer exists.** A stack whose peak burning area demands
+   a ratio below `1.2` now simply runs at the `1.2` floor.
+
+Everything downstream (`num8` design throat, the `Math.Clamp(ManualAreaRatio ?? …)` selection, the
+per-nozzle `ThroatArea = ExitArea / areaRatio` write-back, and
+`PeakChamberPressure = MaxStablePressure * pow(peakThroat / (exit / ratio), 1/(1-n))`) is unchanged.
+
+**flexo impact.** `resizeNozzles` in `src/ksa/solidMotorPhysics.ts` was a faithful port of the OLD
+form, so it refused a thrust curve (`'stack-too-large'`) for motors the game now sizes happily —
+an oversized-grain design showed "preview unavailable" in the editor and would have flown fine.
+Re-ported to the 5261 ordering, and `'stack-too-large'` removed from the `ThrustCurveFailure` union
+outright (no back-compat, per the no-migration rule). Covered by a new `solidMotorPhysics.test.ts`
+case whose motor lands **exactly** on the `1.2` floor — the case the old code rejected.
+
+### Solid propellant re-formulation (rev 5173, data only)
+
+`Reactions.xml` re-formulated the double-base propellant "as a platonized variant to reduce its
+burn rate": `<BurnRate CoefficientMPerS>` 0.0024 → 0.0047, `Exponent` 0.65 → 0.3, and
+`<MinimumBurnPressure Bar>` 30 → 15. flexo reads these live from the private mirror
+(`reactionStore` / `solidCurveStore`), so curves move but no code does.
+
+### Re-verified intact
+
+Every other ported class is **byte-identical**: `DeLavalNozzleConfig`, `CombustorConfig`,
+`GasProperties`, `NozzlePerformance`, `RocketDesign`, `RocketNozzleTemplate`, the reaction family
+(`ReactionTemplate` / `FixedReactionTable` / `MixtureReactionTable` / `ReactionPlumeReference`),
+`RocketCoreTemplate`, `SolidTemplate`, `SolidGrainSegmentTemplate`, `GrainGeometry` /
+`GrainGeometryTable` / `GrainGeometryLibrary`, and every solid mass template. `EngineDesigner`'s
+37-line diff is entirely rev 5169's `ToNearest` display refactor.
+
+Two runtime-only changes worth recording because they _look_ like contract movement and are not:
+`RocketControllerData.ComputeFromCores` gained a `throttle` parameter and flipped its
+`MinimumThrottle` aggregate from `Math.Max` (seeded 0) to `Math.Min` (seeded 1) — that is a
+**vehicle-level** aggregation across cores which flexo does not port (flexo only parses/emits
+`<MinimumThrottle Value>` per combustor). And `RocketNozzle` gained an abstract `ThroatArea` plus
+`ThroatRadius`/`ThroatDensity`/`InletTemperature` on its FX state, feeding rev 5174's
+raymarch-into-the-nozzle exhaust — visual only.
 
 ## What changed in 5168
 

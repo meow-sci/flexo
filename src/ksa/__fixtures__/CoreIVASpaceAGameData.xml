@@ -26,6 +26,41 @@
             <ForwardAxis X="1" />
             <UpAxis Z="-1" />
         </IVASeat>
+
+        <!-- Face-fill lights, positioned in front of each seated kitten's face (seat Position offset
+             along its ForwardAxis/UpAxis) - roughly 0.35 forward of and 0.10 below the face, between
+             it and the portrait camera. Off while a player is actually seated in IVA (DisableInIva)
+             so it doesn't shine into their own view - on for external/portrait-camera views.
+             DisableInIva also makes the light always-on/EC-free, ignoring the part's inherited
+             LightSwitch/PowerConsumer - these are fill lights, not part of the cabin's power budget.
+
+             Intensity is inverse-square against Range, the same convention LightPrePass.comp uses,
+             so at this ~0.36m throw it needs to be far lower than a room light's. 2.0 predates these
+             lights actually reaching a viewport at all and blows the face out; 0.5 puts a mid-albedo
+             face near 0.8 linear. Needs in-game tuning. -->
+        <Light>
+            <Type>Point</Type>
+            <Transform>
+                <Position X="-0.10" Y="0.42" Z="-0.60" />
+            </Transform>
+            <Range Value="1.0" />
+            <Intensity Value="0.5" />
+            <Color R="1.0" G="0.95" B="0.85" />
+            <RayTracing>false</RayTracing>
+            <DisableInIva>true</DisableInIva>
+        </Light>
+
+        <Light>
+            <Type>Point</Type>
+            <Transform>
+                <Position X="-0.10" Y="-0.42" Z="-0.60" />
+            </Transform>
+            <Range Value="1.0" />
+            <Intensity Value="0.5" />
+            <Color R="1.0" G="0.95" B="0.85" />
+            <RayTracing>false</RayTracing>
+            <DisableInIva>true</DisableInIva>
+        </Light>
     </PartGameData>
 
 </Assets>

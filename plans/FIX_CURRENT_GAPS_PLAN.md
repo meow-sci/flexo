@@ -1,11 +1,205 @@
 # Plan — Fix flexo gaps from KSA updates (running)
 
-> **Latest review: `2026.8.3.5117` → `2026.8.5.5168` (see below). NO BREAKING gap on any
-> part-editor path.** Three items: the new Core part file missing from the catalog (R3) is
-> ✅ **FIXED** in the review itself; still 📋 OPEN are the ground-clutter asset-bundler rework,
-> which breaks the `cartoon-moon` scaffold (R1, scaffold-only) and the "Control From Here"
-> reference-orientation drift (R2, docs-only). The `5056 → 5117` review follows, then the earlier
-> ones as history.
+> **Latest review: `2026.8.5.5168` → `2026.8.19.5261` (see below). ONE BREAKING gap, ✅ FIXED
+> in the review itself** — KSA rev 5173 reordered the solid-motor area-ratio bounds and deleted
+> the "stack too large" rejection, and flexo's verbatim port had the old form. Also fixed: the
+> new `<Light><DisableInIva>` flag, which a round-trip silently dropped (S0/S3 detail below).
+> Still 📋 OPEN from 5261: the `<ConvexHull>` collider primitive (S1) and the `<Grab>` handhold
+> anchors (S2, currently passthrough-safe). Carried forward from 5168: the ground-clutter
+> asset-bundler rework (R1, scaffold-only) and the "Control From Here" reference-orientation
+> drift (R2, docs-only). Earlier reviews follow as history.
+
+---
+
+# 5261 review — `2026.8.5.5168` → `2026.8.19.5261`
+
+**Derived from:** the [scope/](../scope/FULL_SCOPE.md) catalog review — `diff -rq` of the two
+provided asset trees (`ksa-game-assemblies_prev/current` @ 5168 vs `ksa-game-assemblies/current`
+@ 5261), a sweep of all **244 changed `decomp/*.cs`** for `[XmlElement]` / `[XmlAttribute]` /
+`[XmlType]` / `[XmlIgnore]` hunks, and a `cmp` byte-identity check over every verbatim-ported
+class. `version.json` @ 5261 documents revs 5169–5258.
+
+5261 is a **very large release** — kitten EVA locomotion (walking, jumping, tumbling, ladders,
+grabbing), crew-portrait and resources gauges, per-canvas gauge visibility contexts, `SimTime`
+replaced by 128-bit `UniverseTime`, physics-bubble and per-vehicle parallel job batching, a cursor
+hover rework, and SOI departure-burn accuracy fixes — whose **entire XML schema delta is 8 files**,
+of which four reach flexo.
+
+**What the added/removed file lists flagged first:** `MeshColliderTemplate.cs` and
+`ConvexHullColliderTemplate.cs` appear in "Only in CURRENT", which
+[scope/colliders.md](../scope/colliders.md) had explicitly predicted as the shape a
+MISSING-CAPABILITY in that area would take. `SimTimeReference.cs` and `INearestString.cs` appear in
+"Only in PREVIOUS" — neither is a flexo dependency; the second is rev 5169's display refactor,
+which accounts for the entire (large) diff across the unit-reference family whose **parse tables
+are unchanged**.
+
+## Priority summary (5261)
+
+| # | Gap | Severity | Status | Scope doc |
+|---|---|---|---|---|
+| S0 | `SolidMotor.ResizeNozzles` re-ordered its area-ratio clamps (rev 5173) so the LOW bound wins where they cross, and **deleted** the `"Stack too large for the nozzle"` rejection; flexo's verbatim port had the pre-5261 ordering and refused thrust curves the game now sizes | BREAKING | ✅ **FIXED** (this review) | [engines](../scope/engines.md#what-changed-in-5261) |
+| S1 | `ColliderModule` gained a **fifth** primitive, `<ConvexHull>` (rev 5185) — the first backed by a mesh rather than an analytic shape; flexo's `ColliderShape` union has four members, so a part authoring one round-trips lossy | MISSING-CAPABILITY | 📋 **OPEN** | [colliders](../scope/colliders.md#what-changed-in-5261) |
+| S2 | `<Grab>` kitten-handhold anchors (rev 5203) declared on both `PartTemplate` and the GameData template; Core authors them only under `<PartGameData>` so the passthrough preserves them, but they are opaque to the editor and dropped if authored on a geometry `<Part>` | MISSING-CAPABILITY | 📋 **OPEN** | [part-and-subpart-xml](../scope/part-and-subpart-xml.md#what-changed-in-5261) |
+| S3 | `LightModule.TemplateData` gained `<DisableInIva>` (always-on, EC-free, hidden in IVA), live on Core's new CoreIVASpaceA face-fill lights; `<Light>` is MODELED so the passthrough never covered it and a round-trip dropped the flag | MISSING-CAPABILITY | ✅ **FIXED** (this review) | [gamedata-modules](../scope/gamedata-modules.md#what-changed-in-5261) |
+| S4 | Rev 5200's re-import dropped Core's last two `<ShadowCaster>false</ShadowCaster>`s, so no Core template authors the element; schema untouched, only a real-data test anchor moved | COSMETIC | ✅ **FIXED** (this review) | [part-and-subpart-xml](../scope/part-and-subpart-xml.md#what-changed-in-5261) |
+| — | Everything else | NONE | ✅ re-verified INTACT | — |
+
+### S0 — the solid-motor area-ratio clamps swapped precedence — ✅ FIXED
+
+**Severity: BREAKING.** This is the first change to a verbatim-ported physics function since 5056.
+
+Game-side (`decomp/KSA/SolidMotor.cs`, `ResizeNozzles`), before → after:
+
+```csharp
+// 5168
+float num3 = ComputeTotalThroatArea(num, MaxStablePressure, num2);
+MaxAreaRatioBound = num2 / num3;
+if (MaxAreaRatioBound < 1.2f) return "Stack too large for the nozzle";
+MinAreaRatioBound = ((num7 < float.MaxValue) ? Math.Clamp(num2 / num7, 1.2f, MaxAreaRatioBound)
+                                            : MaxAreaRatioBound);
+
+// 5261
+MinAreaRatioBound = ((num6 < float.MaxValue) ? MathF.Max(num2 / num6, 1.2f) : 1.2f);
+float num7 = ComputeTotalThroatArea(num, MaxStablePressure, num2);
+MaxAreaRatioBound = MathF.Max(num2 / num7, MinAreaRatioBound);
+```
+
+Three behavioural deltas: the **low bound wins** where the two cross (it used to be clamped into
+the high one); the no-finite-throat fallback is a flat `1.2` rather than `MaxAreaRatioBound`; and
+the **rejection is gone** — a stack whose peak burning area demands a ratio under `1.2` now runs at
+the `1.2` floor.
+
+**flexo target:** `src/ksa/solidMotorPhysics.ts`, `resizeNozzles()` (the `maxAreaRatioBound` /
+`minAreaRatioBound` derivation, ~L510–540) and the `ThrustCurveFailure` union (~L340).
+
+**Fix applied**, framed per the no-migration rule — the old ordering was **replaced**, not gated:
+
+- `minAreaRatioBound` is now `Math.max(totalExitArea / smallestThroat, SOLID_NOZZLE_MIN_AREA_RATIO)`,
+  falling back to `SOLID_NOZZLE_MIN_AREA_RATIO`;
+- `maxAreaRatioBound` is now `Math.max(totalExitArea / peakThroat, minAreaRatioBound)`, computed
+  after it;
+- `'stack-too-large'` was removed from `ThrustCurveFailure` entirely (no consumer outside the
+  module referenced it).
+
+No `PROJECT_SCHEMA_VERSION` bump — this is derived computation, nothing persisted.
+
+**Regression test:** `src/ksa/solidMotorPhysics.test.ts` gained "lets a stack too large for its
+nozzle run at the 1.2 floor instead of rejecting it" — a 40 m × 1.2 m-radius neutral grain on the
+seeded nozzle. It resolves to `areaRatio === 1.2` **exactly**, i.e. the min bound raised the max
+one, which is precisely the case the pre-5261 port returned `null` for.
+
+### S1 — `<ConvexHull>`, a fifth collider primitive — 📋 OPEN
+
+**Severity: MISSING-CAPABILITY.** Rev 5185 added
+`[XmlElement("ConvexHull", typeof(ConvexHullColliderTemplate))]` to `ColliderModule.Template`,
+alongside the four analytic shapes and in the same `List<ColliderTemplate>` — so it is authorable
+at every site the others are.
+
+- `MeshColliderTemplate` (new): `[XmlElement("Mesh")] MeshReference Mesh` +
+  `[XmlElement("Scale")] Vector3Reference? Scale`. **Not directly authorable** — no element in
+  `ColliderModule`, and `CreateShapeInto` throws `"cannot be registered with Bepu yet"`.
+- `ConvexHullColliderTemplate` extends it and is the authorable one; `ConvexHullHelper.CreateShape`
+  builds the hull at load and **throws** if the mesh "has no volume".
+- `ColliderTemplate` also gained `[XmlIgnore] virtual double3 ShapeOffsetCollider => double3.Zero`,
+  applied as `LocationAsmb + ShapeOffsetCollider.Transform(collider2Asmb)`. **Zero for all four
+  analytic primitives**, so flexo's existing placement math is untouched.
+- Only `Content/Core/GroundClutter/GenericRockAssets.xml` authors one today; no Core part does.
+
+**flexo targets:** `src/ksa/types.ts:127` (`ColliderShape` union) and `:133` (`COLLIDER_SHAPES`);
+collider parse/emit in `src/ksa/partXmlParser.ts` / `partXmlSerializer.ts`;
+`src/ksa/colliderFit.ts` / `colliderSize.ts` / `colliderValidation.ts`;
+`src/state/colliderStore.ts`; `src/three/ColliderObject.ts`;
+`src/ui/build/ColliderInspector.tsx`.
+
+**Fix (framed per the no-migration rule):** add the fifth member to `ColliderShape` outright. This
+is genuinely more than a field addition, which is why it is left open rather than folded into this
+review:
+
+1. Parse/emit `<ConvexHull>` with its `<Mesh>` id reference and optional `<Scale>` — the first
+   collider that references another asset, so it needs the same id-remap treatment on export that
+   mesh references already get (`src/ksa/idRemap.ts`, `modExport.ts`).
+2. Give it a viewport representation. The four analytic gizmos do not apply; the honest minimum is
+   drawing the referenced mesh's own hull, and `colliderFit.ts` / `colliderSize.ts` (which think in
+   `Transform.scale`) do not model it.
+3. Add export validation that the referenced mesh is a **closed, non-degenerate solid** — KSA
+   **throws at load** otherwise, which is a hard crash rather than a visual defect, so this belongs
+   in `colliderValidation.ts` and `exportIssues.ts`.
+
+Until then, the honest interim behaviour is what happens today: a `<ConvexHull>` on an imported
+part is silently dropped. If that is judged too quiet, the cheap intermediate step is a parse-time
+finding in `gameDataFindings.ts` naming the dropped element.
+
+### S2 — `<Grab>` handhold anchors are opaque to the editor — 📋 OPEN
+
+**Severity: MISSING-CAPABILITY, currently lossless.** Rev 5203 added `GrabTemplate`
+(`[XmlAttribute] Id` / `Hidden`; `[XmlElement] <Position>` / `<Normal>`, the latter defaulting to
+`(0,0,1)` and normalized) and declared `[XmlElement("Grab")] List<GrabTemplate> Grabs` on **both**
+`PartTemplate` and the GameData template, merged by `PartTemplate.ApplyGameData`.
+
+Core authors them only under `<PartGameData>`: five capsule spine handholds in
+`CoreCommandAGameData.xml`, and the ladder's three rungs plus two `Hidden="true"` park anchors in
+`CoreUtilityAGameData.xml`. That is inside flexo's `RawXmlNode` passthrough surface, so **they
+round-trip verbatim today** and appear in `src/ui/data/PassthroughViewer.tsx`.
+
+Open for two reasons: they are invisible to the editor (no marker, no inspector, no check that a
+`<Position>` lies on the mesh), and a `<Grab>` on the geometry `<Part>` — schema-legal, just not
+what Core does — falls outside the passthrough and **is dropped**.
+
+**flexo targets if modeled:** `src/ksa/types.ts` (a `PartGrab` shaped like the existing
+point-plus-direction records), parse/emit in `partXmlParser.ts` / `partXmlSerializer.ts`,
+and — because it is a point with a normal — the connector/seat marker machinery in
+`src/three/` is the natural template. Persisting it **would** need a `PROJECT_SCHEMA_VERSION`
+bump only if grabs currently stored as passthrough `RawXmlNode`s were re-homed into a typed field,
+since that changes the meaning of already-stored data; the boot purge in
+`src/state/projectStore.ts` handles it.
+
+### S3 — `<Light><DisableInIva>` was dropped on round-trip — ✅ FIXED
+
+**Severity: MISSING-CAPABILITY (silent data loss on real Core data).**
+`LightModule.TemplateData` gained `[XmlElement("DisableInIva")] public bool DisableInIva = false`.
+It hides the light from the IVA viewport **and** — via the new `LightModule.IsActive`, which
+short-circuits to `true` before consulting `LightSwitch` / `PowerConsumers` — makes it always-on
+and EC-free. Core authors it on two new face-fill lights in `CoreIVASpaceAGameData.xml`, added for
+the rev-5193 crew-portrait camera.
+
+`<Light>` is a **MODELED** element, so the `<PartGameData>` passthrough (unmodeled children only)
+never covered it: importing such a part and re-exporting turned a free, IVA-hidden fill light into
+an EC-consuming one shining into the seated player's view.
+
+**Fix applied** — modeled end to end:
+
+- `src/ksa/types.ts` — `PartLight.disableInIva: boolean`, defaulted `false` in `createPartLight`.
+- `src/ksa/partXmlParser.ts` — read in `lightFromElement`.
+- `src/ksa/partXmlSerializer.ts` — emitted in `buildLightElement` **only when true** (KSA's default
+  is `false`, matching how `<RayTracing>` is handled).
+- `src/state/projectCodec.ts` — persisted as the optional `dii` key; `src/state/projectTransfer.ts`
+  — carried across project import/paste.
+
+**No `PROJECT_SCHEMA_VERSION` bump:** the key is additive and its absence decodes to `false`, which
+is exactly what pre-5261 projects meant — no stored value changes meaning.
+
+Authoring-only for now: flexo's viewport is never an IVA camera, so the flag changes nothing on
+screen and no inspector control was added. `src/ui/build/LightInspector.tsx` /
+`src/ui/data/sections/LightsSection.tsx` are where a toggle would go if it is wanted.
+
+**Regression tests:** `partXmlSerializer.test.ts` gained "emits `<DisableInIva>` only when set", and
+`partXmlParser.test.ts`'s real-fixture seat test now asserts the two new Core face-fill lights parse
+with `disableInIva: true` while the original interior light stays `false`.
+
+### S4 — Core stopped authoring `<ShadowCaster>` — ✅ FIXED
+
+**Severity: COSMETIC.** Rev 5200 re-imported the command/fairing/landing/utility parts through the
+game's own GLB→XML tool, and the re-import dropped Core's only two
+`<ShadowCaster>false</ShadowCaster>` elements (the `CoreCommandA` medium-capsule windows). No Core
+template authors the element at 5261.
+
+The schema is **untouched** — `PartModelModule` is byte-identical and still declares
+`[XmlElement("ShadowCaster")] public bool ShadowCaster = true` — so flexo's parse/emit is unchanged
+and nothing regresses. The only casualty was the real-data anchor in `src/ksa/catalog.test.ts`,
+which asserted `window.shadowCaster === false` against `CoreCommandA_Subpart_MediumCapsuleWindowA`.
+It now asserts that **no** Core template authors one, so it flips back the moment a future
+re-import re-authors it. The inline-XML suite in the same file remains the capture coverage, and it
+runs without the private asset tree.
 
 ---
 

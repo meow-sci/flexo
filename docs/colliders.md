@@ -6,9 +6,20 @@ docking port with no collider never docks. This doc is the flexo-internal view; 
 contract (schema, Bepu semantics, runtime behaviour, gotchas) lives in
 [scope/colliders.md](../scope/colliders.md).
 
-> **KSA has no collider meshes.** A collision volume is a handful of analytic primitives —
-> **Cylinder, Box, Sphere, Capsule** — and nothing else. No convex hulls, no decimated
-> collision meshes. If a shape needs a hull, the answer is more primitives.
+> **flexo authors four analytic primitives** — **Cylinder, Box, Sphere, Capsule** — and nothing
+> else. If a shape needs a hull, the answer is more primitives.
+>
+> This used to be an absolute statement about the game ("KSA has no collider meshes"), and it is
+> no longer: **KSA build 5261 (rev 5185) added a fifth element, `<ConvexHull>`**, backed by a mesh
+> reference rather than an analytic shape (`ConvexHullColliderTemplate` extending
+> `MeshColliderTemplate`; `<Mesh>` id + optional `<Scale>`, hull built at load and **throwing** if
+> the mesh is not a closed solid). Only the ground-clutter rocks author one today, but it is
+> schema-legal on a part — and flexo does not model it, so a part carrying one round-trips lossy.
+> Tracked as gap **S1** in [plans/FIX_CURRENT_GAPS_PLAN.md](../plans/FIX_CURRENT_GAPS_PLAN.md);
+> the game-side detail is in
+> [scope/colliders.md](../scope/colliders.md#what-changed-in-5261). Note the sibling
+> `MeshColliderTemplate` is **not** authorable — it has no element in `ColliderModule` and its
+> shape creation throws "cannot be registered with Bepu yet".
 
 ## Document model
 

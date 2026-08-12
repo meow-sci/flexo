@@ -259,6 +259,15 @@ export interface PartLight extends Transform {
   /** <RayTracing>true</RayTracing> — IVA ray-traced list routing only. */
   rayTracing: boolean;
   /**
+   * `<DisableInIva>true</DisableInIva>` (since 5261). Hides the light from the IVA
+   * viewport, and makes it always-on / EC-free — `LightModule.IsActive` short-circuits
+   * to true before it ever consults the part's LightSwitch or PowerConsumer. Core uses it
+   * for the CoreIVASpaceA seat face-fill lights, which exist only for the portrait camera.
+   * KSA's default is false. Authoring-only in flexo: the editor viewport is never IVA, so
+   * it changes nothing on screen — it is modeled so it survives a round-trip.
+   */
+  disableInIva: boolean;
+  /**
    * Id of the {@link Layer} this light belongs to (editor-only grouping). An ORDINARY
    * layer, exactly like a placement's — a light is organized, hidden and locked alongside
    * the SubParts it illuminates.
@@ -1365,6 +1374,7 @@ export function createPartLight(ownerTemplateId: string | null, id: string): Par
     innerAngleRad: Math.PI / 8,
     outerAngleRad: Math.PI / 4,
     rayTracing: false,
+    disableInIva: false,
     layerId: DEFAULT_LAYER_ID,
   };
 }

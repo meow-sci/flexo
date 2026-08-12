@@ -341,7 +341,6 @@ export type ThrustCurveFailure =
   | 'no-segments'
   | 'no-nozzles'
   | 'no-burnable-grain'
-  | 'stack-too-large'
   | 'no-ignition'
   | 'degenerate';
 
@@ -511,8 +510,6 @@ function resizeNozzles(motor: MotorState): ThrustCurveFailure | null {
     totalExitArea,
   );
   if (peakThroat <= 0) return 'degenerate';
-  const maxAreaRatioBound = totalExitArea / peakThroat;
-  if (maxAreaRatioBound < SOLID_NOZZLE_MIN_AREA_RATIO) return 'stack-too-large';
 
   const ignitionArea = stackBurningArea(motor, 0);
   const ignitionThroat = computeTotalThroatArea(
@@ -531,13 +528,17 @@ function resizeNozzles(motor: MotorState): ThrustCurveFailure | null {
     ignitionThroat > 0 ? ignitionThroat : Number.MAX_VALUE,
     valleyThroat > 0 ? valleyThroat : Number.MAX_VALUE,
   );
+  // Since 5261 the LOW bound wins when the two cross: `MinAreaRatioBound` is derived on its
+  // own (floored at 1.2, and 1.2 flat when neither ignition nor valley throat is finite), then
+  // `MaxAreaRatioBound` is raised to meet it. Before 5261 the order was inverted — Max was
+  // computed first and Min clamped up to it, and a stack whose peak burning area needed a
+  // ratio under 1.2 was rejected outright ("Stack too large for the nozzle"). That rejection
+  // no longer exists: such a stack now simply runs at the 1.2 floor.
   const minAreaRatioBound =
     smallestThroat < Number.MAX_VALUE
-      ? Math.min(
-          Math.max(totalExitArea / smallestThroat, SOLID_NOZZLE_MIN_AREA_RATIO),
-          maxAreaRatioBound,
-        )
-      : maxAreaRatioBound;
+      ? Math.max(totalExitArea / smallestThroat, SOLID_NOZZLE_MIN_AREA_RATIO)
+      : SOLID_NOZZLE_MIN_AREA_RATIO;
+  const maxAreaRatioBound = Math.max(totalExitArea / peakThroat, minAreaRatioBound);
 
   const designThroat = computeTotalThroatArea(
     motor,

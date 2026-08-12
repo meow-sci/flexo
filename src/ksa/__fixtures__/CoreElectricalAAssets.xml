@@ -455,7 +455,7 @@
     <Connector Id="_connector18">
       <Transform>
         <Position X="-0.124" />
-        <Rotation X="3.1416" Z="3.1416" />
+        <Rotation Z="3.1416" />
       </Transform>
     </Connector>
     <Collider Id="Collider1">
@@ -563,7 +563,7 @@
     <Connector Id="_connector16">
       <Transform>
         <Position X="-0.1585" />
-        <Rotation X="3.1416" Z="3.1416" />
+        <Rotation Z="3.1416" />
         <Scale X="2" Y="2" Z="2" />
       </Transform>
     </Connector>

@@ -802,6 +802,7 @@ export function mergeProjectImport(
       innerAngleRad: src.innerAngleRad,
       outerAngleRad: src.outerAngleRad,
       rayTracing: !!src.rayTracing,
+      disableInIva: !!src.disableInIva,
       position: vec(src.position, 0),
       rotation: vec(src.rotation, 0),
       // Pinned, not copied: KSA ignores light scale and the model invariant is "always

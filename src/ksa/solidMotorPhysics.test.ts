@@ -171,6 +171,23 @@ describe('sampleThrustCurve — SolidMotor.TrySampleThrustCurve', () => {
     expect(long.peakThrustN).toBeGreaterThan(short.peakThrustN);
   });
 
+  it('lets a stack too large for its nozzle run at the 1.2 floor instead of rejecting it', () => {
+    // Build 5261 (rev 5200/5173) reordered SolidMotor.ResizeNozzles: MinAreaRatioBound is now
+    // derived first and floored at 1.2, then MaxAreaRatioBound is raised to meet it — the LOW
+    // bound wins where they cross. Before 5261 Max was computed first and a peak burning area
+    // demanding a ratio under 1.2 returned "Stack too large for the nozzle"; that rejection is
+    // gone. A very long, wide grain on the seeded nozzle is exactly that case.
+    const huge = sampleThrustCurve(
+      motorWith(NEUTRAL, {
+        segments: [{ outerRadiusM: 1.2, wallThicknessMm: 6, lengthM: 40, geometry: NEUTRAL }],
+      }),
+      16,
+    );
+    expect(huge).not.toBeNull();
+    expect(huge!.areaRatio).toBeGreaterThanOrEqual(1.2);
+    expect(huge!.peakThrustN).toBeGreaterThan(0);
+  });
+
   it('scales burn time with grain web thickness', () => {
     const thin = sampleThrustCurve(motorWith(NEUTRAL), 16)!;
     const thick = sampleThrustCurve(

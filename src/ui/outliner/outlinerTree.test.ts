@@ -66,6 +66,7 @@ function fixture(): EditingPart {
     innerAngleRad: 0.1,
     outerAngleRad: 0.5,
     rayTracing: false,
+    disableInIva: false,
     layerId: 'layer1',
     ...identityTransform(),
   });

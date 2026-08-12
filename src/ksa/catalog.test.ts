@@ -72,15 +72,16 @@ describe('catalog parsing (real Core XML)', () => {
     expect(blocker.rayTracing).toBe('ShadowProxy');
   });
 
-  it.runIf(hasKsaAssets)('captures an explicit <ShadowCaster>false</ShadowCaster>', () => {
-    // Core's only two authored ShadowCasters — the medium-capsule windows, both `false`.
+  it.runIf(hasKsaAssets)('leaves shadowCaster undefined across Core, which authors none', () => {
+    // Core's only two authored <ShadowCaster>false</ShadowCaster>s were the medium-capsule
+    // windows; build 5261 (rev 5200) re-imported the command parts and dropped both, so NO
+    // Core template authors the element anymore. The schema is untouched — PartModelModule
+    // still declares [XmlElement("ShadowCaster")], default true — so flexo keeps parsing and
+    // emitting it; the inline-XML suite below is now the only coverage of the capture itself.
+    // If a re-import ever re-authors one, this flips and the anchored assertion comes back.
     const command = parseFile('CoreCommandAAssets.xml');
-    const window = command.find((s) => s.id === 'CoreCommandA_Subpart_MediumCapsuleWindowA')!;
-    expect(window).toBeDefined();
-    expect(window.shadowCaster).toBe(false);
-    // Every other template authors none, so it must stay undefined (not `false`).
-    const door = command.find((s) => s.id === 'CoreCommandA_Subpart_MediumCapsuleServiceDoor')!;
-    expect(door.shadowCaster).toBeUndefined();
+    expect(command.find((s) => s.id === 'CoreCommandA_Subpart_MediumCapsuleWindowA')).toBeDefined();
+    expect(command.filter((s) => s.shadowCaster !== undefined)).toEqual([]);
   });
 });
 

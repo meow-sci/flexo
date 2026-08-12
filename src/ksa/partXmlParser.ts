@@ -541,6 +541,8 @@ function lightFromElement(el: Element): Omit<PartLight, 'id' | 'ownerTemplateId'
     innerAngleRad: readNum(directChildren(el, 'InnerAngle')[0], 'Value') ?? Math.PI / 8,
     outerAngleRad: readNum(directChildren(el, 'OuterAngle')[0], 'Value') ?? Math.PI / 4,
     rayTracing: directChildren(el, 'RayTracing')[0]?.textContent?.trim().toLowerCase() === 'true',
+    disableInIva:
+      directChildren(el, 'DisableInIva')[0]?.textContent?.trim().toLowerCase() === 'true',
   };
 }
 

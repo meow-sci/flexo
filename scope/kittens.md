@@ -4,8 +4,9 @@
 > scale/placement aides (never exported) — a faithful three.js re-implementation of KSA's
 > Character rendering. The contract is a long list of asset/material/bone names + render quirks.
 
-**Baseline:** re-verified against KSA build **2026.8.5.5168** (decomp @ 5168 + shipped Core XML).
-**Baseline status:** ✅ **INTACT** — `CharacterAssets.xml` is byte-identical (md5 match),
+**Baseline:** re-verified against KSA build **2026.8.19.5261** (decomp @ 5261 + shipped Core XML).
+**Baseline status:** ✅ **INTACT** — at 5261 `CharacterAssets.xml` gained five kitten **locomotion**
+clips and nothing else that flexo reads (see [What changed in 5261](#what-changed-in-5261));
 `KittenRenderable.cs` is identical, and the eye/glass shader merge (rev 4745) is a verbatim
 refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code change needed.
 
@@ -67,6 +68,28 @@ refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code
 5. Don't `computeVertexNormals()` (faceted helmet dome from seam-split verts).
 6. Attachment correction is required & order-sensitive.
 7. `Characters/` atlases stay raw **BC7** (for verbatim mod bundle-export); without BPTC/RGTC they fall back to flat.
+
+## What changed in 5261
+
+**Verdict: NONE.** Rev 5203 ("Kittens can now grab onto ladders and capsules", plus walk, jump and
+tumble animations) and rev 5233 added five `<GltfFile>` entries to `CharacterAssets.xml` and wired
+them onto the character: `<AnimLadder>`, `<AnimJump>`, `<AnimTumble>`, `<AnimJumpLand>`, and
+`<AnimWalk>` **re-pointed** from `KittenAnimRunGlb` to a new `KittenAnimWalkGlb`
+(`Characters/ANI_CHA_KSA_Kitten_Walk.glb`). All five GLBs are present in the private mirror.
+
+flexo reads none of them — `src/ksa/kittenAssets.ts` references no animation clip at all; the
+editor aide poses kittens from its own rig. Everything the contract does depend on is unchanged:
+the gltf material names, the `Head_M`/`Chest_M` socket bones and the `ATTACHMENT_CORRECTION`
+derivation, and the embedded-`DefaultORM.png` redirect. `KittenRenderable.cs` and
+`CharacterRenderResources.cs` changed only for the new locomotion state machine
+(`LocomotionState`/`KittenAnimInputs` parameters on `UpdateRenderData`) and the crew-portrait
+cameras. `ModelTranslucent.frag` and `Fur.frag` changed for the portrait lights (rev 5196/5230),
+not the kitten material contract.
+
+One adjacent note for the "Make Kitten Mesh" export path: `IVASeat` gained a seated-kitten
+renderable (`SEATED_DOWN_OFFSET = -0.1`, `SEATED_SCALE = 0.5`) so the game now draws kittens in
+their seats. That is game-side rendering; `IVASeatTemplate`'s three `Vector3Reference` fields and
+defaults are byte-identical, so flexo's seat authoring is unaffected.
 
 ## What changed in 5168
 

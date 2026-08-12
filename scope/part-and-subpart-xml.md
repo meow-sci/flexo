@@ -5,7 +5,9 @@
 > other feature hangs off. Read alongside [docs/xml-io.md](../docs/xml-io.md) and
 > [docs/subpart-catalog.md](../docs/subpart-catalog.md) (the flexo-internal view).
 
-**Baseline:** KSA build **2026.8.5.5168** — re-verified ✅ intact by the `5117 → 5168` review.
+**Baseline:** KSA build **2026.8.19.5261** — the document structure is unmoved, but `PartTemplate`
+gained one element, `<Grab>` (gap **S2**, see [What changed in 5261](#what-changed-in-5261)).
+Previously KSA build **2026.8.5.5168** — re-verified ✅ intact by the `5117 → 5168` review.
 `PartTemplate`/`SubPartTemplate`/`EditorTagDefinition` are byte-identical apart from two **added**
 `[XmlElement]`s on the `InertMasses` polymorphic list (`SolidOgiveMass` / `HollowOpenOgiveMass`,
 rev 5166), which flexo already carries through the GameData passthrough. The structure itself has
@@ -162,6 +164,60 @@ registration ship the wrong mesh.
 - Connector `<Flags>` live on `<PartGameData>`, **not** on the geometry `<Part>` — without the GameData merge, `ToSurface`/etc. are lost.
 - A `<Part>` with no matching `<PartGameData>` has no tags/modules → invisible in the part picker.
 - `DockingPort` parses only the current child-element form (`<ConnectorId Value>`, `<LatchingKineticEnergy J>`, `<PushoffImpulse Ns>`) — no legacy fallback; see [gamedata-modules.md](gamedata-modules.md).
+
+## What changed in 5261
+
+**Verdict: MISSING-CAPABILITY (gap S2, 📋 OPEN) + one COSMETIC test-anchor move.**
+
+### `<Grab>` — kitten handhold anchors (rev 5203)
+
+Rev 5203 ("Kittens can now grab onto ladders and capsules") added `GrabTemplate.cs`:
+
+```csharp
+public class GrabTemplate {
+    [XmlAttribute("Id")]     public string Id = string.Empty;
+    [XmlAttribute("Hidden")] public bool Hidden;
+    [XmlElement("Position")] public Vector3Reference? _positionRaw;   // default (0,0,0)
+    [XmlElement("Normal")]   public Vector3Reference? _normalRaw;     // default (0,0,1), normalized
+}
+```
+
+and declared it on **both** templates — `[XmlElement("Grab")] public List<GrabTemplate> Grabs` on
+`PartTemplate` (the geometry `<Part>`) and on the GameData template, merged by
+`PartTemplate.ApplyGameData` via `Grabs.AddRange(gameData.Grabs)` exactly like `Batteries`,
+`Diameters` and `SymmetryGroups`.
+
+Core authors them **only under `<PartGameData>`**:
+
+- `CoreCommandAGameData.xml` — five `<Grab Id="spine1".."spine5">` handholds along the capsule.
+- `CoreUtilityAGameData.xml` — the ladder's `rung1..rung3` plus `end_bottom` / `end_top`, both
+  `Hidden="true"` (park anchors rather than grabbable rungs).
+
+**flexo impact.** Because Core authors them on `<PartGameData>`, flexo's `RawXmlNode` passthrough
+captures and re-emits them verbatim — **nothing is lost on a round-trip today**, and they show up
+in `src/ui/data/PassthroughViewer.tsx`. Two reasons it is still an open gap: they are opaque to the
+editor (no gizmo, no inspector, no validation that a `<Position>` actually sits on the mesh), and a
+`<Grab>` authored on the **geometry `<Part>`** — schema-legal, just not something Core does — is
+outside the passthrough surface and **would be dropped**. Modeling it is a small, well-bounded
+addition (id + hidden flag + position + normal, i.e. a point-with-direction, the same shape the
+connector and IVA-seat editors already handle).
+
+### Core stopped authoring `<ShadowCaster>` (COSMETIC)
+
+Rev 5200 re-imported the command, fairing, landing and utility parts through the game's own
+GLB→XML tool. That re-import dropped Core's only two `<ShadowCaster>false</ShadowCaster>`
+elements (the `CoreCommandA` medium-capsule windows), so **no Core template authors the element
+anywhere** at 5261. The schema is untouched — `PartModelModule` is byte-identical and still
+declares `[XmlElement("ShadowCaster")] public bool ShadowCaster = true` — so flexo keeps parsing
+and emitting it unchanged. Only the real-data anchor in `src/ksa/catalog.test.ts` moved: it now
+asserts that no Core template authors one, and will flip back if a future re-import re-authors it.
+The inline-XML suite in the same file remains the capture coverage.
+
+`CoreEditorTagsGameData.xml` is unchanged, so the static `EDITOR_TAG_DEFS` / `KNOWN_EDITOR_TAGS`
+snapshot in `src/ksa/types.ts` needs no refresh. Five of the six vendored `__fixtures__` files were
+re-synced — values only, including rev 5238/5239's flipped-connector fixes
+(`<Rotation X= Z=>` → `<Rotation Z=>`) and rev 5190's removal of the placeholder landing-leg and
+solar-panel colliders.
 
 ## What changed in 5168
 

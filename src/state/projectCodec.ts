@@ -587,6 +587,7 @@ interface CLight extends CTransform {
   ot?: string; // ownerTemplateId (omitted ⇒ null ⇒ part-level)
   pt?: 1; // type: present ⇒ Point (Spot is the default)
   rt?: 1; // rayTracing
+  dii?: 1; // disableInIva
 }
 
 function encLight(l: PartLight): CLight {
@@ -603,6 +604,7 @@ function encLight(l: PartLight): CLight {
   if (l.ownerTemplateId) o.ot = l.ownerTemplateId;
   if (l.type === 'Point') o.pt = 1;
   if (l.rayTracing) o.rt = 1;
+  if (l.disableInIva) o.dii = 1;
   return o;
 }
 
@@ -618,6 +620,7 @@ function decLight(c: CLight): PartLight {
     innerAngleRad: num(c.ia),
     outerAngleRad: num(c.oa),
     rayTracing: !!c.rt,
+    disableInIva: !!c.dii,
     layerId: str(c.l),
     ...decTransform(c),
   };

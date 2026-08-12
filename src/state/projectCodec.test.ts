@@ -330,6 +330,7 @@ function richPart(): EditingPart {
       innerAngleRad: 0.392699,
       outerAngleRad: 0.785398,
       rayTracing: false,
+      disableInIva: false,
       layerId: 'layer1',
     },
     {
@@ -343,6 +344,7 @@ function richPart(): EditingPart {
       innerAngleRad: 0,
       outerAngleRad: 0,
       rayTracing: true,
+      disableInIva: false,
       layerId: DEFAULT_LAYER_ID,
     },
   );
@@ -957,6 +959,7 @@ describe('light codec', () => {
         innerAngleRad: 0.392599,
         outerAngleRad: 0.785398,
         rayTracing: false,
+        disableInIva: false,
         layerId: 'layer1',
       },
       {
@@ -970,6 +973,7 @@ describe('light codec', () => {
         innerAngleRad: 0,
         outerAngleRad: 0,
         rayTracing: true,
+        disableInIva: false,
         layerId: DEFAULT_LAYER_ID,
       },
     );
@@ -996,6 +1000,7 @@ describe('light codec', () => {
       innerAngleRad: 0.392699,
       outerAngleRad: 0.785398,
       rayTracing: false,
+      disableInIva: false,
       layerId: DEFAULT_LAYER_ID,
     });
     const c = encodeOne(p);

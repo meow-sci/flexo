@@ -1847,11 +1847,18 @@ describe('IVA seats', () => {
     expect(parsed.gameData.unknownChildren).toEqual([]);
     expect(parsed.lights.map((l) => [l.id, l.ownerTemplateId, l.type])).toEqual([
       ['_light1', null, 'Point'],
+      ['_light2', null, 'Point'],
+      ['_light3', null, 'Point'],
     ]);
     expect(parsed.lights[0].position).toEqual({ x: -0.275, y: 0, z: -0.8 });
     expect(parsed.lights[0].rangeM).toBe(1.5);
     expect(parsed.lights[0].intensity).toBe(0.05);
     expect(parsed.lights[0].color).toEqual({ r: 1, g: 0.9, b: 0.7 });
     expect(parsed.lights[0].rayTracing).toBe(true);
+    expect(parsed.lights[0].disableInIva).toBe(false);
+    // …and the two seat face-fill lights build 5261 added, which carry <DisableInIva>.
+    expect(parsed.lights.slice(1).map((l) => l.disableInIva)).toEqual([true, true]);
+    expect(parsed.lights[1].position).toEqual({ x: -0.1, y: 0.42, z: -0.6 });
+    expect(parsed.lights[2].position).toEqual({ x: -0.1, y: -0.42, z: -0.6 });
   });
 });

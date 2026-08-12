@@ -3,7 +3,7 @@
 
     <SubPartGameData Id="KittenBackPackSubPart">
         <CustomMass>
-            <LocationAsmb Z="-0.54792" />
+            <LocationAsmb Z="-0.49792" />
             <Mass Kg="50" />
             <!-- A solid rectangular prism, 0.211 x 0.274 x 0.483 -->
             <MassSpecificInertia Ixx="0.0256970833" Iyy="0.0231508333" Izz="0.0099664166" />
@@ -11,7 +11,7 @@
 
         <Tank Id="PropellantTank">
             <SphericalTank>
-                <LocationAsmb X="0" Y="0" Z="-0.431" />
+                <LocationAsmb X="0" Y="0" Z="-0.381" />
                 <Material Id="Aluminum.2014(s)" />
                 <OuterRadius M="0.276" />
                 <WallThickness Mm="4" />
@@ -651,7 +651,7 @@
                 <LocationAsmb X="0" Y="0" Z="-0.59" />
                 <Collider2Asmb X="-1.5708" Y="0" Z="0" />
                 <LengthY M="0.45" />
-                <Radius M="0.4" />
+                <Radius M="0.35" />
             </Capsule>
         </Collider>
     </PartGameData>

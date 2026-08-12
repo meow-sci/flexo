@@ -4,7 +4,7 @@
     <EditorTag Value="Electrical" />
     <EditorTag Value="NoFaceSnapping" />
     <Battery HasStatusLight="true">
-      <MaximumCapacity J="1000" />
+      <MaximumCapacity J="10000" />
     </Battery>
   </PartGameData>
 
@@ -12,7 +12,7 @@
     <EditorTag Value="Electrical" />
     <EditorTag Value="NoFaceSnapping" />
     <Battery HasStatusLight="true">
-      <MaximumCapacity J="3000" />
+      <MaximumCapacity J="30000" />
     </Battery>
   </PartGameData>
 
@@ -116,14 +116,14 @@
   <PartGameData Id="CoreElectricalA_Prefab_RadialBatteryA">
     <EditorTag Value="Electrical" />
     <Battery HasStatusLight="true">
-      <MaximumCapacity J="100" />
+      <MaximumCapacity J="1000" />
     </Battery>
   </PartGameData>
 
   <PartGameData Id="CoreElectricalA_Prefab_RadialBatteryB">
     <EditorTag Value="Electrical" />
     <Battery HasStatusLight="true">
-      <MaximumCapacity J="500" />
+      <MaximumCapacity J="5000" />
     </Battery>
   </PartGameData>
 
@@ -138,16 +138,6 @@
     <Connector Id="_connector5">
       <Flags>ToSurface</Flags>
     </Connector>
-
-    <Collider Id="Collider1">
-      <Box Id="BoxCollider1">
-        <LocationAsmb X="0" Y="0" Z="0.0719" />
-        <Collider2Asmb X="0" Y="0.0002" Z="0" />
-        <LengthX M="0.8" />
-        <LengthY M="0.7058" />
-        <LengthZ M="0.1689" />
-      </Box>
-    </Collider>
   </PartGameData>
 
   <PartGameData Id="CoreElectricalA_Prefab_SolarPanelB">
@@ -161,16 +151,6 @@
     <Connector Id="_connector6">
       <Flags>ToSurface</Flags>
     </Connector>
-
-    <Collider Id="Collider1">
-      <Box Id="BoxCollider1">
-        <LocationAsmb X="0.15" Y="0.0002" Z="-0.3" />
-        <Collider2Asmb X="0" Y="0.0046" Z="-0.0004" />
-        <LengthX M="0.5" />
-        <LengthY M="1.3" />
-        <LengthZ M="1" />
-      </Box>
-    </Collider>
   </PartGameData>
 
   <SubPartGameData Id="CoreElectricalA_Subpart_SolarPanelB_CellA">

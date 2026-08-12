@@ -194,6 +194,7 @@ const ADD_MENU: TopMenu = {
     },
     separator,
     command('add.defineEngine'),
+    command('add.engineWizard'),
   ],
 };
 

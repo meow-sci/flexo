@@ -8,6 +8,7 @@ import {
   GridListItem,
   Menu,
   MenuItem,
+  MenuSeparator,
   MenuTrigger,
   Popover,
   SectionTitle,
@@ -35,6 +36,7 @@ import {
   type EngineDefineKind,
   type EngineEntry,
 } from '../../state/engineStore';
+import { openDialog } from '../../state/dialogStore';
 
 /**
  * **"Define new engine ▸"** — the four-kind creation flow (design:
@@ -88,6 +90,20 @@ export function DefineEngineMenu({
               <KindLabel title={spec.title} description={spec.description} />
             </MenuItem>
           ))}
+          {/* The guided alternative to the four quick presets above — additive, it replaces
+              nothing (plan: ENGINE_WIZARD_PLAN.md D1). */}
+          <MenuSeparator />
+          <MenuItem
+            id="engine-wizard"
+            density="dense"
+            textValue="Engine wizard…"
+            onAction={() => openDialog({ id: 'engine-wizard' })}
+          >
+            <KindLabel
+              title="Engine wizard…"
+              description="Step-by-step: geometry, propellants, thrust, effects."
+            />
+          </MenuItem>
         </Menu>
       </Popover>
     </MenuTrigger>

@@ -42,6 +42,7 @@ export type DialogId =
   | 'subpart-browser'
   | 'part-browser'
   | 'create-mesh'
+  | 'engine-wizard'
   | 'upload-texture'
   | 'material'
   | 'glow-paint'

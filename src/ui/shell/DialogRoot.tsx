@@ -17,6 +17,7 @@ import { AssetManagerDialog } from '../assets/AssetManagerDialog';
 import { ImportReviewDialog } from '../assets/ImportReviewDialog';
 import { CustomTextureDialog } from '../CustomTextureDialog';
 import { CreateMeshDialog } from '../CreateMeshDialog';
+import { EngineWizardDialog } from '../engine/wizard/EngineWizardDialog';
 import { MaterialDialog, type MaterialDialogParams } from '../MaterialDialog';
 import { GlowPaintDialog } from '../GlowPaintDialog';
 import { setMeshMaterial } from '../../state/customAssetStore';
@@ -112,6 +113,11 @@ export function DialogRoot() {
       return <CustomTextureDialog onClose={closeDialog} />;
     case 'create-mesh':
       return <CreateMeshDialog onClose={closeDialog} />;
+    // One dialog, three engine families — `params.family` picks one, its absence means the
+    // wizard opens on its family chooser (plan: ENGINE_WIZARD_PLAN.md D1). The host parses
+    // the payload itself, so it stays opaque here.
+    case 'engine-wizard':
+      return <EngineWizardDialog params={open.params} onClose={closeDialog} />;
     case 'material': {
       const params = open.params as MaterialDialogParams | undefined;
       return (

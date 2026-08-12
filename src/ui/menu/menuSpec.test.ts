@@ -204,6 +204,7 @@ describe('menu transcription (authoritative tree)', () => {
       '  Banjo',
       '─',
       'Define Engine…',
+      'Engine Wizard…',
     ]);
   });
 

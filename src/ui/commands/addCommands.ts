@@ -267,6 +267,15 @@ export const ADD_COMMANDS: Command[] = [
     // ignored until P7 builds the picker.
     run: () => setMode('engine', { defineNew: true }),
   },
+  {
+    id: 'add.engineWizard',
+    title: 'Engine Wizard…',
+    menuPath: 'Add',
+    keywords: 'engine wizard guided liquid srb solid rcs thruster',
+    // Opens with no `family`, i.e. on the wizard's family chooser (plan:
+    // ENGINE_WIZARD_PLAN.md D1). An asset-style dialog: no mode switch, no selection.
+    run: () => openDialog({ id: 'engine-wizard' }),
+  },
 ];
 
 /**

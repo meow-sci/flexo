@@ -12,6 +12,7 @@ import {
 import { totalModuleCount } from './moduleTreeModel';
 import { $part } from '../../state/editorStore';
 import { setMode } from '../../state/modeStore';
+import { openDialog } from '../../state/dialogStore';
 import {
   $activeEngineEntry,
   $engineDefineFlow,
@@ -128,11 +129,14 @@ function EmptyState({ hasPlacements }: { hasPlacements: boolean }) {
       <div className="flex flex-col items-start gap-2 px-2 py-4">
         <p className="text-xs text-fg-subtle">
           Place a SubPart in Build mode first — an engine decorates a reused mesh, it adds no
-          geometry of its own.
+          geometry of its own. Or let the Engine Wizard generate the geometry for you.
         </p>
-        <Button size="sm" variant="secondary" onPress={() => setMode('build')}>
-          Go to Build
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="secondary" onPress={() => setMode('build')}>
+            Go to Build
+          </Button>
+          <EngineWizardButton />
+        </div>
       </div>
     );
   }
@@ -143,7 +147,23 @@ function EmptyState({ hasPlacements }: { hasPlacements: boolean }) {
         by a <span className="font-mono">&lt;Rocket&gt;</span> and driven by a controller — defining
         one authors all of it in a single undoable step.
       </p>
-      <DefineEngineMenu variant="button" label="Define new engine" />
+      <div className="flex flex-wrap gap-2">
+        <DefineEngineMenu variant="button" label="Define new engine" />
+        <EngineWizardButton />
+      </div>
     </div>
+  );
+}
+
+/**
+ * The guided alternative to {@link DefineEngineMenu}'s quick presets — it walks the same
+ * ground in steps and, unlike every other route into Engine mode, can generate its own
+ * geometry, which is why it also appears in the "no placements yet" empty state.
+ */
+function EngineWizardButton() {
+  return (
+    <Button size="sm" variant="secondary" onPress={() => openDialog({ id: 'engine-wizard' })}>
+      Engine wizard…
+    </Button>
   );
 }

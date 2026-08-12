@@ -1,19 +1,28 @@
 import { Checkbox, Switch, noteBox } from '../../../kit';
 import { StepSection, WizardNumberField, WizardRow } from '../wizardFields';
 import { WIZARD_BOUNDS } from '../wizardPresets';
-import type { LiquidWizardState } from '../wizardModel';
+import type { LiquidWizardState, SrbWizardState } from '../wizardModel';
 import type { WizardStepProps } from './stepProps';
 
 /**
  * **Step 4 — Gimbal** (`plans/ENGINE_WIZARD_PLAN.md` §7.4): thrust vectoring.
  *
+ * Walked by the two families that CAN gimbal — liquid and SRB, whose `gimbal` groups are the
+ * same four fields, so this renders one form for both. (RCS never gimbals: its nozzles
+ * deliberately point off local X, which is exactly what `gimbal-thrust-axis-not-x` calls out.)
+ *
  * A `<Gimbal>` names a PLACEMENT, so a template with no placement cannot be gimballed at all —
  * the step disables itself and says why rather than letting the user author an entry
  * `buildWizardPart` would have to drop.
  */
-export function StepGimbal({ state, patch, part }: WizardStepProps<LiquidWizardState>) {
+export function StepGimbal({
+  state,
+  patch,
+  part,
+}: WizardStepProps<LiquidWizardState | SrbWizardState>) {
   // Generated geometry always brings its own placement; only an existing template can be
-  // unplaced. (`part` geometry is not reachable for a liquid engine, but it is equally hostless.)
+  // unplaced. (`part` geometry is reachable for neither of these families, but it is equally
+  // hostless.)
   const geometry = state.geometry;
   const hostable =
     geometry.kind === 'generate' ||

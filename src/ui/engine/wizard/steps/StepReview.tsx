@@ -1,9 +1,6 @@
 import { Checkbox, dangerBox, noteBox } from '../../../kit';
 import { FindingsList } from '../../../data/FindingsList';
-import { resolveReactionLut } from '../../../../ksa/reactionCatalog';
-import { predictPerformance } from '../../../../ksa/enginePhysics';
 import type { EngineIssue } from '../../../../ksa/engineValidation';
-import { PA_PER_BAR } from '../../editorKit';
 import { StepSection } from '../wizardFields';
 import type { WizardBuildResult, WizardState } from '../wizardModel';
 import type { WizardStepProps } from './stepProps';
@@ -13,41 +10,32 @@ import type { WizardStepProps } from './stepProps';
  *
  * Everything shown here is computed on the SAME candidate document Finish commits — the dialog
  * builds it once and hands it down — so a green Review can never disagree with what lands in
- * the part.
+ * the part. The performance headline arrives the same way, for the same reason: the dialog
+ * computes it once and quotes the very same figures in the Finish toast.
  */
 
-/** The vacuum headline, or null when the catalog cannot supply a LUT for this reaction. */
-function headlineFor(
-  state: WizardState,
-  reactions: WizardStepProps<WizardState>['reactions'],
-): string | null {
-  if (state.family !== 'liquid') return null;
-  const reaction = reactions?.get(state.reactionId);
-  if (!reaction) return null;
-  const lut = resolveReactionLut(reaction, state.mixtureRatio);
-  if (!lut) return null;
-  const perf = predictPerformance({
-    lut,
-    maxPressurePa: state.chamberPressureBar * PA_PER_BAR,
-    exitDiameterM: state.exitDiameterM,
-    areaRatio: state.areaRatio,
-    thermalEfficiency: state.thermalEffPct / 100,
-    flowEfficiency: state.flowEffPct / 100,
-    expansionEfficiency: state.expansionEffPct / 100,
-  });
-  return `${(perf.thrustVacN / 1000).toFixed(1)} kN vac · Isp ${perf.ispVac.toFixed(1)} s · ${(
-    perf.thrustSLN / 1000
-  ).toFixed(1)} kN at sea level`;
-}
+/**
+ * The headline figures for a family, or `null` (the dialog's `wizardPerformance`) when they
+ * cannot be computed HONESTLY — the reaction catalog is still loading, the reaction is
+ * unknown, a mixture reaction has no ratio, the solid data files are not served, or the
+ * inputs never reach a choked flow. On `null` the section is not rendered at all; nothing
+ * here ever renders `NaN`.
+ */
+export type WizardPerformance =
+  | { family: 'liquid'; thrustVacN: number; thrustSLN: number; ispVacS: number }
+  /** Per nozzle — every nozzle in a block runs the same chamber, so total = ×`nozzleCount`. */
+  | { family: 'rcs'; thrustVacN: number; ispVacS: number; nozzleCount: number }
+  | { family: 'srb'; peakThrustN: number; burnSeconds: number; ispVacS: number };
 
 export function StepReview({
   state,
   patch,
-  reactions,
+  performance,
   result,
   findings,
   buildError,
 }: WizardStepProps<WizardState> & {
+  performance: WizardPerformance | null;
   result: WizardBuildResult | null;
   findings: EngineIssue[];
   buildError: string | null;
@@ -65,8 +53,6 @@ export function StepReview({
     return <div className={noteBox}>Nothing to review yet — go back and finish the steps.</div>;
   }
 
-  const headline = headlineFor(state, reactions);
-
   return (
     <div className="flex flex-col gap-4">
       <StepSection title="What you built">
@@ -82,9 +68,9 @@ export function StepReview({
         </div>
       </StepSection>
 
-      {headline !== null && (
+      {performance !== null && (
         <StepSection title="Performance">
-          <div className="font-mono text-sm tabular-nums text-fg">{headline}</div>
+          <div className="font-mono text-sm tabular-nums text-fg">{headlineOf(performance)}</div>
         </StepSection>
       )}
 
@@ -105,5 +91,26 @@ export function StepReview({
         </Checkbox>
       )}
     </div>
+  );
+}
+
+/** The Performance section's one line — a solid burns, so it reads as a curve, not a number. */
+function headlineOf(perf: WizardPerformance): string {
+  if (perf.family === 'srb') {
+    return (
+      `${(perf.peakThrustN / 1000).toFixed(1)} kN peak · ` +
+      `${perf.burnSeconds.toFixed(1)} s burn · Isp ${perf.ispVacS.toFixed(1)} s (vac)`
+    );
+  }
+  if (perf.family === 'rcs') {
+    const nozzles = `${perf.nozzleCount} ${perf.nozzleCount === 1 ? 'nozzle' : 'nozzles'}`;
+    return (
+      `${perf.thrustVacN.toFixed(0)} N vac per nozzle · Isp ${perf.ispVacS.toFixed(1)} s · ` +
+      `${(perf.thrustVacN * perf.nozzleCount).toFixed(0)} N over ${nozzles}`
+    );
+  }
+  return (
+    `${(perf.thrustVacN / 1000).toFixed(1)} kN vac · Isp ${perf.ispVacS.toFixed(1)} s · ` +
+    `${(perf.thrustSLN / 1000).toFixed(1)} kN at sea level`
   );
 }

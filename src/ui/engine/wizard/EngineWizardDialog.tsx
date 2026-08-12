@@ -18,10 +18,16 @@ import { validateEngines } from '../../../ksa/engineValidation';
 import { resolveReactionLut } from '../../../ksa/reactionCatalog';
 import type { ReactionData } from '../../../ksa/reactionCatalog';
 import { predictPerformance } from '../../../ksa/enginePhysics';
+import { sampleThrustCurve } from '../../../ksa/solidMotorPhysics';
+import { substanceIdOfPhase, type GrainGeometryTable } from '../../../ksa/grainGeometryCatalog';
 import { $part, applyEngineWizard, currentLayerId } from '../../../state/editorStore';
 import { rebuildCustomMeshes } from '../../../state/customAssetStore';
 import { $allReactionIndex, ensureReactionsLoaded } from '../../../state/reactionStore';
-import { ensureSolidCurveDataLoaded } from '../../../state/solidCurveStore';
+import {
+  $grainIndex,
+  $solidDensities,
+  ensureSolidCurveDataLoaded,
+} from '../../../state/solidCurveStore';
 import { setMode } from '../../../state/modeStore';
 import {
   activateEngine,
@@ -36,9 +42,13 @@ import { PA_PER_BAR } from '../editorKit';
 import {
   buildWizardPart,
   initLiquidState,
+  initRcsState,
+  initSrbState,
   stepsFor,
   validateWizardStep,
   type LiquidWizardState,
+  type RcsWizardState,
+  type SrbWizardState,
   type WizardBuildResult,
   type WizardFamily,
   type WizardState,
@@ -50,7 +60,13 @@ import { StepFeed } from './steps/StepFeed';
 import { StepGimbal } from './steps/StepGimbal';
 import { StepFx } from './steps/StepFx';
 import { StepStructure } from './steps/StepStructure';
-import { StepReview } from './steps/StepReview';
+import { StepReview, type WizardPerformance } from './steps/StepReview';
+import { WIZARD_BOUNDS } from './wizardPresets';
+import { StepSrbPropellant } from './steps/StepSrbPropellant';
+import { StepSrbGrain } from './steps/StepSrbGrain';
+import { StepSrbNozzle } from './steps/StepSrbNozzle';
+import { StepRcsLayout } from './steps/StepRcsLayout';
+import { StepRcsPropellant } from './steps/StepRcsPropellant';
 
 /**
  * **Engine Wizard** — the guided "build me a working engine" flow (plan:
@@ -79,8 +95,8 @@ const FINISH_LABELS: Readonly<Record<WizardFamily, string>> = {
 };
 
 /**
- * The chooser's cards. `available` is what `initialStateFor` can actually build today —
- * Phases W5/W6 flip the last two on by adding their `init*` calls (and nothing else here).
+ * The chooser's cards. `available` is what `initialStateFor` can actually build — all three
+ * families since Phases W5/W6, so nothing here is disabled and no "Coming soon" chip shows.
  */
 const FAMILY_CARDS: readonly {
   family: WizardFamily;
@@ -95,12 +111,12 @@ const FAMILY_CARDS: readonly {
   {
     family: 'srb',
     description: 'A real <SolidMotor>: grain segments, casing and a fixed nozzle.',
-    available: false,
+    available: true,
   },
   {
     family: 'rcs',
     description: 'A Service-plumbed pulsed block with a nozzle per direction.',
-    available: false,
+    available: true,
   },
 ];
 
@@ -120,7 +136,12 @@ interface ReviewBuild {
 export function EngineWizardDialog({ params, onClose }: { params?: unknown; onClose: () => void }) {
   const part = useStore($part);
   const reactions = useStore($allReactionIndex);
+  // The solid libraries, subscribed here and passed down: the SRB burn headline is the one
+  // number Review and the Finish toast must agree on, so both read the same snapshot.
+  const grains = useStore($grainIndex);
+  const densities = useStore($solidDensities);
   const isPhone = useIsPhone();
+  const solids: SolidCatalogs = { grains, densities };
 
   // `null` ⇒ the family chooser. The initializer is pure (a plain read of the live document)
   // and runs once, so `initLiquidState` is NOT re-run on every render.
@@ -164,6 +185,10 @@ export function EngineWizardDialog({ params, onClose }: { params?: unknown; onCl
    */
   const findings: EngineIssue[] =
     onReview && review?.result ? validateEngines(review.result.part, reactions) : [];
+
+  // Derived per render for the same reason, and only where it is read: the SRB figure walks
+  // a 256-step burn integration, which no keystroke on an earlier step should pay for.
+  const performance = state && onReview ? wizardPerformance(state, reactions, solids) : null;
 
   const buildCandidate = (next: WizardState): ReviewBuild => {
     try {
@@ -227,7 +252,9 @@ export function EngineWizardDialog({ params, onClose }: { params?: unknown; onCl
       setExhaustPlacing(true);
     }
     const name = built.part.gameData.displayName || built.part.partId;
-    const thrust = vacuumThrustSummary(state, reactions);
+    // Finish is reachable only from Review, so `performance` is the very figure the user
+    // just read there — the toast quotes it rather than re-deriving one.
+    const thrust = thrustSummary(performance);
     toast({
       title: `${FAMILY_LABELS[state.family]} created`,
       description: thrust ? `${name} · ${thrust}` : name,
@@ -286,34 +313,50 @@ export function EngineWizardDialog({ params, onClose }: { params?: unknown; onCl
       </GridList>
     );
   } else if (step) {
+    // Three steps are walked by EVERY family and are typed against the whole `WizardState`,
+    // so they take the state and the patch exactly as this component holds them.
+    const shared = { state, patch, part, reactions };
     if (step.id === 'review') {
       body = (
         <StepReview
-          state={state}
-          patch={patch}
-          part={part}
-          reactions={reactions}
+          {...shared}
+          performance={performance}
           result={review?.result ?? null}
           findings={findings}
           buildError={review?.error ?? null}
         />
       );
     } else if (step.id === 'start') {
-      body = <StepStart state={state} patch={patch} part={part} reactions={reactions} />;
+      body = <StepStart {...shared} />;
+    } else if (step.id === 'structure') {
+      body = <StepStructure {...shared} />;
+    } else if (step.id === 'fx') {
+      body = <StepFx {...shared} />;
     } else if (state.family === 'liquid') {
-      // The ONE narrowing cast in the wizard: the step components below are written against
-      // the liquid state, and `patch` is family-agnostic by construction.
-      const liquid = {
-        state,
-        patch: patch as WizardPatch<LiquidWizardState>,
-        part,
-        reactions,
-      };
-      if (step.id === 'performance') body = <StepPerformance {...liquid} />;
-      else if (step.id === 'feed') body = <StepFeed {...liquid} />;
-      else if (step.id === 'gimbal') body = <StepGimbal {...liquid} />;
-      else if (step.id === 'fx') body = <StepFx {...liquid} />;
-      else if (step.id === 'structure') body = <StepStructure {...liquid} />;
+      /*
+       * Below, each family narrows `state` ONCE and hands its own steps a props bag.
+       *
+       * The cast is the family boundary: `patch` is family-agnostic by construction (it
+       * shallow-merges into whatever state is held), but a `WizardPatch<WizardState>` cannot
+       * be handed to a component that declares `WizardPatch<LiquidWizardState>` — the
+       * parameter is contravariant. Steps SHARED by two families (feed, gimbal) declare the
+       * union they serve and therefore take the uncast `patch` straight from `shared`.
+       */
+      const own = { state, patch: patch as WizardPatch<LiquidWizardState>, part, reactions };
+      if (step.id === 'performance') body = <StepPerformance {...own} />;
+      else if (step.id === 'feed') body = <StepFeed {...shared} state={state} />;
+      else if (step.id === 'gimbal') body = <StepGimbal {...shared} state={state} />;
+    } else if (state.family === 'srb') {
+      const own = { state, patch: patch as WizardPatch<SrbWizardState>, part, reactions };
+      if (step.id === 'srb-propellant') body = <StepSrbPropellant {...own} />;
+      else if (step.id === 'srb-grain') body = <StepSrbGrain {...own} />;
+      else if (step.id === 'srb-nozzle') body = <StepSrbNozzle {...own} />;
+      else if (step.id === 'gimbal') body = <StepGimbal {...shared} state={state} />;
+    } else {
+      const own = { state, patch: patch as WizardPatch<RcsWizardState>, part, reactions };
+      if (step.id === 'rcs-layout') body = <StepRcsLayout {...own} />;
+      else if (step.id === 'rcs-propellant') body = <StepRcsPropellant {...own} />;
+      else if (step.id === 'feed') body = <StepFeed {...shared} state={state} />;
     }
   }
 
@@ -411,40 +454,162 @@ export function EngineWizardDialog({ params, onClose }: { params?: unknown; onCl
 }
 
 /**
- * The opening state for a family, or `null` when the wizard cannot build it yet — which is
- * what puts the chooser on screen (for no param at all, and for a family whose model has not
- * landed). Phases W5/W6 add their `init*` calls here and nothing else changes.
+ * The opening state for a family, or `null` when there is no family yet — which is what puts
+ * the chooser on screen. All three families are implemented (Phases W2, W5, W6).
  */
 function initialStateFor(family: WizardFamily | null, part: EditingPart): WizardState | null {
   if (family === 'liquid') return initLiquidState(part);
+  if (family === 'srb') return initSrbState(part);
+  if (family === 'rcs') return initRcsState(part);
   return null;
 }
 
 /**
- * The Finish toast's headline figure, or `null` when it cannot be computed honestly (the
- * catalog is still loading, the reaction is unknown, a mixture reaction has no ratio, or the
- * inputs cannot sustain a choked flow). Never renders `NaN`.
+ * The two Core libraries a solid burn preview needs. The dialog subscribes to them and hands
+ * the snapshot to {@link wizardPerformance}, so Review and the Finish toast can never quote
+ * two different numbers.
  */
-function vacuumThrustSummary(
+interface SolidCatalogs {
+  /** `$grainIndex` — grain id → profile. Legitimately empty when `/ksa/` is not served. */
+  grains: ReadonlyMap<string, GrainGeometryTable>;
+  /** `$solidDensities` — solid substance id → `<StorageDensity KgPerM3>`. */
+  densities: ReadonlyMap<string, number>;
+}
+
+/**
+ * The Review headline and the Finish toast's figure, computed off the wizard STATE (which
+ * already carries every input the build will use), or `null` when no figure can be computed
+ * HONESTLY. Pure — no stores, no minting — so the dialog may call it in its render body.
+ */
+function wizardPerformance(
   state: WizardState,
   reactions: ReadonlyMap<string, ReactionData> | undefined,
-): string | null {
-  if (state.family !== 'liquid') return null;
+  solids: SolidCatalogs,
+): WizardPerformance | null {
+  if (state.family === 'srb') return srbPerformance(state, reactions, solids);
+  return deLavalPerformance(state, reactions);
+}
+
+/**
+ * Liquid and RCS alike: an RCS thruster IS a De Laval nozzle on a combustor, so the same
+ * prediction applies — only the field the chamber pressure is spelled in differs.
+ */
+function deLavalPerformance(
+  state: LiquidWizardState | RcsWizardState,
+  reactions: ReadonlyMap<string, ReactionData> | undefined,
+): WizardPerformance | null {
   const reaction = reactions?.get(state.reactionId);
   if (!reaction) return null;
   const lut = resolveReactionLut(reaction, state.mixtureRatio);
   if (!lut) return null;
-  const performance = predictPerformance({
+  const perf = predictPerformance({
     lut,
-    maxPressurePa: state.chamberPressureBar * PA_PER_BAR,
+    maxPressurePa:
+      (state.family === 'rcs' ? state.maxPressureBar : state.chamberPressureBar) * PA_PER_BAR,
     exitDiameterM: state.exitDiameterM,
     areaRatio: state.areaRatio,
     thermalEfficiency: state.thermalEffPct / 100,
     flowEfficiency: state.flowEffPct / 100,
     expansionEfficiency: state.expansionEffPct / 100,
   });
-  if (!Number.isFinite(performance.thrustVacN) || performance.thrustVacN <= 0) return null;
-  return `${(performance.thrustVacN / 1000).toFixed(1)} kN vacuum`;
+  if (!(perf.thrustVacN > 0) || !Number.isFinite(perf.ispVac)) return null;
+  if (state.family === 'rcs') {
+    return {
+      family: 'rcs',
+      thrustVacN: perf.thrustVacN,
+      ispVacS: perf.ispVac,
+      nozzleCount: state.layout.nozzles.length,
+    };
+  }
+  if (!Number.isFinite(perf.thrustSLN)) return null;
+  return {
+    family: 'liquid',
+    thrustVacN: perf.thrustVacN,
+    thrustSLN: perf.thrustSLN,
+    ispVacS: perf.ispVac,
+  };
+}
+
+/**
+ * The solid burn headline, sampled through the same `SolidMotor.TrySampleThrustCurve` port
+ * Engine mode's card uses. Every degradation that card names — no grain library, a CUSTOM
+ * propellant with no `<StorageDensity>` to look up, a stack that never lights — lands on
+ * `null` here, and the headline is simply not rendered. flexo never invents a density, and
+ * the wizard never quotes a burn it could not sample.
+ */
+function srbPerformance(
+  state: SrbWizardState,
+  reactions: ReadonlyMap<string, ReactionData> | undefined,
+  solids: SolidCatalogs,
+): WizardPerformance | null {
+  const reaction = reactions?.get(state.reactionId);
+  if (!reaction || reaction.kind !== 'Fixed' || reaction.category !== 'Solid') return null;
+  if (
+    !reaction.burnRate ||
+    reaction.minimumBurnPressurePa == null ||
+    reaction.maxStablePressurePa == null
+  ) {
+    return null;
+  }
+  const density = solids.densities.get(substanceIdOfPhase(reaction.reactants[0]?.phaseId ?? ''));
+  if (!density) return null;
+  const geometry = solids.grains.get(state.grainGeometryId);
+  if (!geometry) return null;
+
+  // Guarded rather than clamped: Review renders on states the `srb-grain` step still blocks,
+  // and `Array.from({length})` over an unvalidated count is how a preview hangs the tab.
+  const count = state.grain.segmentCount;
+  const bound = WIZARD_BOUNDS.segmentCount;
+  if (!Number.isInteger(count) || count < bound.min || count > bound.max) return null;
+
+  const curve = sampleThrustCurve({
+    lut: reaction.lut,
+    thermalEfficiency: state.thermalEffPct / 100,
+    authoredChamberPressurePa: state.defaultPressureBar * PA_PER_BAR,
+    burnRate: reaction.burnRate,
+    minimumBurnPressurePa: reaction.minimumBurnPressurePa,
+    maxStablePressurePa: reaction.maxStablePressurePa,
+    exhaustCondensedFraction: reaction.exhaustCondensedFraction ?? 0,
+    storageDensityKgPerM3: density,
+    segments: Array.from({ length: count }, () => ({
+      outerRadiusM: state.grain.outerRadiusM,
+      wallThicknessMm: state.grain.wallThicknessMm,
+      lengthM: state.grain.lengthM,
+      geometry,
+    })),
+    nozzles: [
+      {
+        exitDiameterM: state.nozzle.exitDiameterM,
+        flowEfficiency: state.nozzle.flowEffPct / 100,
+        expansionEfficiency: state.nozzle.expansionEffPct / 100,
+      },
+    ],
+  });
+  if (!curve) return null;
+  if (!(curve.peakThrustN > 0) || !(curve.burnSeconds > 0) || !Number.isFinite(curve.vacuumIspS)) {
+    return null;
+  }
+  return {
+    family: 'srb',
+    peakThrustN: curve.peakThrustN,
+    burnSeconds: curve.burnSeconds,
+    ispVacS: curve.vacuumIspS,
+  };
+}
+
+/**
+ * The Finish toast's headline figure, or `null` when {@link wizardPerformance} could not
+ * compute one honestly (the catalog is still loading, the reaction is unknown, a mixture
+ * reaction has no ratio, the solid data files are not served, or the inputs never choke).
+ * Never renders `NaN` — the toast falls back to the part name alone.
+ */
+function thrustSummary(perf: WizardPerformance | null): string | null {
+  if (!perf) return null;
+  if (perf.family === 'srb') {
+    return `${(perf.peakThrustN / 1000).toFixed(1)} kN peak · ${perf.burnSeconds.toFixed(1)} s burn`;
+  }
+  if (perf.family === 'rcs') return `${perf.thrustVacN.toFixed(0)} N vacuum per nozzle`;
+  return `${(perf.thrustVacN / 1000).toFixed(1)} kN vacuum`;
 }
 
 /**

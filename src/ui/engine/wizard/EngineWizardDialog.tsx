@@ -1,4 +1,5 @@
 import { Button, Dialog, DialogHeader, Modal, noteBox } from '../../kit';
+import type { WizardFamily } from './wizardModel';
 
 /**
  * **Engine Wizard** — the guided "build me a working engine" flow (plan:
@@ -14,10 +15,6 @@ import { Button, Dialog, DialogHeader, Modal, noteBox } from '../../kit';
  * `applyEngineWizard` push in `editorStore` (decision D3); the dialog itself never writes
  * the document.
  */
-export type WizardFamily = 'liquid' | 'srb' | 'rcs';
-// TEMPORARY: a later phase moves `WizardFamily` to `wizardModel.ts` along with the rest of
-// the wizard's types.
-
 const FAMILY_LABELS: Readonly<Record<WizardFamily, string>> = {
   liquid: 'Liquid rocket',
   srb: 'Solid rocket booster',

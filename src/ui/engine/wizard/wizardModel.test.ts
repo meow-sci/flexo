@@ -17,6 +17,7 @@ import {
   stepsFor,
   validateWizardStep,
   withGeometry,
+  withSegmentCount,
 } from './wizardModel';
 import type { LiquidWizardState, RcsWizardState, SrbWizardState } from './wizardModel';
 import { rcsLayout, srbGeometry, SRB_GEN_DEFAULTS } from './wizardGeometry';
@@ -811,5 +812,38 @@ describe('withGeometry (leaving generated geometry repairs an orphaned feed)', (
     // Returning to generated geometry re-creates the attach node, so nothing needs repairing.
     const back = withGeometry(withGeometry(rcs, { kind: 'part' }), { kind: 'generate' });
     expect(back.geometry).toEqual({ kind: 'generate' });
+  });
+});
+
+describe('seeded defaults stay valid on a part that is not empty', () => {
+  it('picks a free feed id rather than colliding with an existing container', () => {
+    const part = createEmptyPart();
+    part.gameData.tanks.push({ ...createTank(), id: 'fuel_main' });
+    const state = initLiquidState(part);
+    expect(state.feed).toMatchObject({ kind: 'tank', feedId: 'fuel_main2' });
+    // The Feed step must not open already blocked.
+    expect(validateWizardStep(state, 'feed', part, REACTION_FIXTURES)).toEqual([]);
+  });
+});
+
+describe('withSegmentCount (grain length re-divides the casing)', () => {
+  it('splits the casing evenly and keeps the stack inside it', () => {
+    const srb = initSrbState(createEmptyPart());
+    expect(srb.grain.segmentCount).toBe(1);
+    expect(srb.grain.lengthM).toBe(2);
+
+    const three = withSegmentCount(srb, 3);
+    expect(three.grain.segmentCount).toBe(3);
+    expect(three.grain.lengthM).toBeCloseTo(srb.gen.casingLengthM / 3, 12);
+    expect(three.grain.lengthM * 3).toBeCloseTo(srb.gen.casingLengthM, 12);
+    // Everything else the user set is untouched.
+    expect(three.grain.outerRadiusM).toBe(srb.grain.outerRadiusM);
+    expect(three.grain.wallThicknessMm).toBe(srb.grain.wallThicknessMm);
+  });
+
+  it('leaves the length alone when the count is not a usable divisor', () => {
+    const srb = initSrbState(createEmptyPart());
+    expect(withSegmentCount(srb, 0).grain.lengthM).toBe(srb.grain.lengthM);
+    expect(withSegmentCount(srb, Number.NaN).grain.lengthM).toBe(srb.grain.lengthM);
   });
 });

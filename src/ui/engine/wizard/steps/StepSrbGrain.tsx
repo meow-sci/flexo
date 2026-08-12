@@ -15,6 +15,7 @@ import { $grainIndex, $solidDensities } from '../../../../state/solidCurveStore'
 import { PA_PER_BAR } from '../../editorKit';
 import { StepSection, WizardNumberField, WizardRow } from '../wizardFields';
 import { WALL_MATERIAL_IDS, WIZARD_BOUNDS } from '../wizardPresets';
+import { withSegmentCount } from '../wizardModel';
 import type { SrbWizardState } from '../wizardModel';
 import type { WizardStepProps } from './stepProps';
 
@@ -128,7 +129,9 @@ export function StepSrbGrain({ state, patch, reactions }: WizardStepProps<SrbWiz
           <WizardNumberField
             label="Segment count"
             value={grain.segmentCount}
-            onChange={(v) => patch({ grain: { ...grain, segmentCount: v } })}
+            // Through `withSegmentCount`, which re-divides the casing: keeping a 2 m segment
+            // while asking for three would stack 6 m of propellant inside a 2 m case.
+            onChange={(v) => patch(withSegmentCount(state, v))}
             min={WIZARD_BOUNDS.segmentCount.min}
             max={WIZARD_BOUNDS.segmentCount.max}
             step={1}

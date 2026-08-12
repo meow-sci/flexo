@@ -384,7 +384,7 @@ export function initLiquidState(part: EditingPart): LiquidWizardState {
     expansionEffPct: BALANCED.expansionEffPct,
     feed: {
       kind: 'tank',
-      feedId: 'fuel_main',
+      feedId: uniqueFeedId(part, 'fuel_main'),
       shape: 'Cylindrical',
       lengthM: LIQUID_GEN_DEFAULTS.bodyLengthM,
       outerRadiusM: LIQUID_GEN_DEFAULTS.bodyCrossM / 2,
@@ -516,6 +516,35 @@ export function initRcsState(part: EditingPart): RcsWizardState {
  *
  * Only that repair happens here: everything else the user typed is theirs to keep.
  */
+/**
+ * Changes the SRB's segment count, re-seeding the per-segment length to divide the casing
+ * evenly (§6.2 "grain dims default-link").
+ *
+ * The two are only linked at seed time — the length stays independently editable — but they
+ * have to be re-linked HERE, because leaving a 2 m segment length while asking for three
+ * segments stacks 6 m of propellant inside a 2 m case. The user's own length survives every
+ * other edit; it is specifically asking for a different number of segments that invalidates
+ * a length derived from the old one.
+ */
+export function withSegmentCount(state: SrbWizardState, segmentCount: number): SrbWizardState {
+  const divisible = Number.isFinite(segmentCount) && segmentCount > 0;
+  const lengthM = divisible ? state.gen.casingLengthM / segmentCount : state.grain.lengthM;
+  return { ...state, grain: { ...state.grain, segmentCount, lengthM } };
+}
+
+/**
+ * `base`, else `base2`, `base3`, … — the first container id not already on the part. A wizard
+ * run on a part that already has a `fuel_main` would otherwise open its Feed step already
+ * invalid, which reads as the wizard being broken rather than as a name clash.
+ */
+function uniqueFeedId(part: EditingPart, base: string): string {
+  const taken = new Set(feedTargetsOf(part).containers.map((c) => c.id));
+  if (!taken.has(base)) return base;
+  let n = 2;
+  while (taken.has(`${base}${n}`)) n++;
+  return `${base}${n}`;
+}
+
 export function withGeometry<S extends WizardState>(state: S, geometry: WizardGeometrySource): S {
   // The cast is the price of the generic: `repair` only ever rewrites `geometry` and `feed`,
   // both of which it sets to a value valid for the family it was handed, so the result is
@@ -957,6 +986,14 @@ export interface WizardBuildResult {
   detail: string;
 }
 
+/**
+ * Summary rows are prose, not data: a derived dimension like a casing divided into three
+ * segments is `0.6666666666666666` in the document and must not read that way in the tree.
+ */
+function num(n: number): string {
+  return String(Math.round(n * 1e4) / 1e4);
+}
+
 /** `addSubPart`'s instance-id base (`editorStore.ts:741`), replicated (it is module-private). */
 function lastSegmentLower(templateId: string): string {
   const seg = templateId.split('.').pop() ?? templateId;
@@ -1030,7 +1067,7 @@ function pushGeneratedBoxes(
     out.summary.push({
       kind: 'placement',
       id: instanceId,
-      note: `${mesh.name} at x ${box.position.x}`,
+      note: `${mesh.name} at x ${num(box.position.x)}`,
     });
   }
   return { hostTemplateId: templateIds[hostIndex], hostInstanceId: instanceIds[hostIndex] };
@@ -1089,7 +1126,7 @@ function pushGimbal(
   out.summary.push({
     kind: 'gimbal',
     id: hostInstanceId,
-    note: `${gimbal.maxYDeg}° Y · ${gimbal.maxZDeg}° Z`,
+    note: `${num(gimbal.maxYDeg)}° Y · ${num(gimbal.maxZDeg)}° Z`,
   });
 }
 
@@ -1123,8 +1160,8 @@ function pushAutoCollider(
     kind: 'collider',
     id: collider.id,
     note: barrel
-      ? `cylinder Ø ${extents.size.y} × ${extents.size.x} m along X`
-      : `box ${extents.size.x} × ${extents.size.y} × ${extents.size.z} m`,
+      ? `cylinder Ø ${num(extents.size.y)} × ${num(extents.size.x)} m along X`
+      : `box ${num(extents.size.x)} × ${num(extents.size.y)} × ${num(extents.size.z)} m`,
   });
 }
 
@@ -1132,7 +1169,7 @@ function pushAutoCollider(
 function pushCustomMass(part: EditingPart, dryMassKg: number | null, out: BuildAccum): void {
   if (dryMassKg === null) return;
   part.gameData.customMass = dryMassKg;
-  out.summary.push({ kind: 'mass', id: 'CustomMass', note: `${dryMassKg} kg` });
+  out.summary.push({ kind: 'mass', id: 'CustomMass', note: `${num(dryMassKg)} kg` });
 }
 
 /** Adds an editor tag if the part does not already carry it. */
@@ -1257,7 +1294,7 @@ function buildLiquidPart(
     summary.push({
       kind: 'tank',
       id: feedId,
-      note: `${tank.shape.toLowerCase()} · ${tank.outerRadiusM} m radius · ${tank.wallMaterialId}`,
+      note: `${tank.shape.toLowerCase()} · ${num(tank.outerRadiusM)} m radius · ${tank.wallMaterialId}`,
     });
   } else if (state.feed.kind === 'connector') {
     feed = { kind: 'connector', connectorId: state.feed.connectorId ?? wizardConnectorId ?? '' };
@@ -1286,7 +1323,7 @@ function buildLiquidPart(
   summary.push({
     kind: 'combustor',
     id: combId,
-    note: `${state.reactionId} · ${state.chamberPressureBar} bar · min throttle ${state.minThrottlePct} %`,
+    note: `${state.reactionId} · ${num(state.chamberPressureBar)} bar · min throttle ${num(state.minThrottlePct)} %`,
   });
 
   const nozzle: DeLavalNozzle = {
@@ -1310,7 +1347,7 @@ function buildLiquidPart(
   summary.push({
     kind: 'nozzle',
     id: nozId,
-    note: `Ø ${state.exitDiameterM} m · area ratio ${state.areaRatio}`,
+    note: `Ø ${num(state.exitDiameterM)} m · area ratio ${num(state.areaRatio)}`,
   });
 
   const rocket: Rocket = createRocket(rocketId, combId, [nozId]);
@@ -1465,8 +1502,8 @@ function buildSrbPart(
       kind: 'grain',
       id: grainId,
       note:
-        `${state.grain.lengthM} m · Ø ${2 * state.grain.outerRadiusM} m · ` +
-        `${state.grain.wallThicknessMm} mm ${state.grain.wallMaterialId}`,
+        `${num(state.grain.lengthM)} m · Ø ${num(2 * state.grain.outerRadiusM)} m · ` +
+        `${num(state.grain.wallThicknessMm)} mm ${state.grain.wallMaterialId}`,
     });
   });
 
@@ -1516,7 +1553,7 @@ function buildSrbPart(
   out.summary.push({
     kind: 'solid nozzle',
     id: nozId,
-    note: `Ø ${state.nozzle.exitDiameterM} m · no area ratio (KSA sizes the throat)`,
+    note: `Ø ${num(state.nozzle.exitDiameterM)} m · no area ratio (KSA sizes the throat)`,
   });
 
   const rocket: Rocket = createRocket(rocketId, motorId, [nozId]);
@@ -1655,7 +1692,7 @@ function buildRcsPart(
     out.summary.push({
       kind: 'tank',
       id: feedId,
-      note: `spherical · ${tank.outerRadiusM} m radius · ${tank.wallMaterialId}`,
+      note: `spherical · ${num(tank.outerRadiusM)} m radius · ${tank.wallMaterialId}`,
     });
   } else if (state.feed.kind === 'connector') {
     feed = { kind: 'connector', connectorId: state.feed.connectorId ?? wizardConnectorId ?? '' };
@@ -1685,7 +1722,7 @@ function buildRcsPart(
   out.summary.push({
     kind: 'combustor',
     id: combId,
-    note: `${state.reactionId} · Service · ${state.maxPressureBar} bar · ${state.minPulseMs} ms pulse`,
+    note: `${state.reactionId} · Service · ${num(state.maxPressureBar)} bar · ${num(state.minPulseMs)} ms pulse`,
   });
 
   // 7. One nozzle per layout row. The directions come straight from the layout presets, which
@@ -1710,7 +1747,7 @@ function buildRcsPart(
     out.summary.push({
       kind: 'nozzle',
       id: nozIds[i],
-      note: `Ø ${state.exitDiameterM} m · fires ${spec.direction.x} ${spec.direction.y} ${spec.direction.z}`,
+      note: `Ø ${num(state.exitDiameterM)} m · fires ${num(spec.direction.x)} ${num(spec.direction.y)} ${num(spec.direction.z)}`,
     });
   });
 

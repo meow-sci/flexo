@@ -91,6 +91,37 @@ export type WizardGeometrySource =
   /** RCS only — a part-level engine has no SubPart to hang modules off. */
   | { kind: 'part' };
 
+/**
+ * One editable generated-geometry dimension, as the `start` step renders it: which key of the
+ * family's `gen` group it writes, what to call it, and its unit chip.
+ */
+export interface GenFieldDef {
+  key: string;
+  label: string;
+  suffix: string;
+}
+
+/**
+ * The `gen` fields each family exposes, in render order (§7.1). Declared here rather than in
+ * the step so the step stays family-agnostic — it walks this table instead of branching on
+ * `state.family` three times. Every key names a member of that family's `Gen` interface in
+ * `wizardGeometry.ts`, and every value is metres.
+ */
+export const GEN_FIELDS: Readonly<Record<WizardFamily, readonly GenFieldDef[]>> = {
+  liquid: [
+    { key: 'bellWidthM', label: 'Bell length (X)', suffix: 'm' },
+    { key: 'bellCrossM', label: 'Bell cross-section', suffix: 'm' },
+    { key: 'bodyLengthM', label: 'Body length (X)', suffix: 'm' },
+    { key: 'bodyCrossM', label: 'Body cross-section', suffix: 'm' },
+  ],
+  srb: [
+    { key: 'nozzleBlockM', label: 'Nozzle block', suffix: 'm' },
+    { key: 'casingLengthM', label: 'Casing length (X)', suffix: 'm' },
+    { key: 'casingOuterRadiusM', label: 'Casing outer radius', suffix: 'm' },
+  ],
+  rcs: [{ key: 'blockSizeM', label: 'Block size', suffix: 'm' }],
+};
+
 export interface WizardIdentity {
   /** Applied only when the current part id is unset/default; blank ⇒ leave untouched. */
   partId: string;

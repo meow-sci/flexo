@@ -7,6 +7,7 @@
     "dev": "vite",
     "dev:partpreview": "vite apps/partpreview",
     "build": "tsc -b && vite build && vite build apps/partpreview",
+    "thumbs": "vite build apps/partpreview",
     "typecheck": "tsc -b",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",

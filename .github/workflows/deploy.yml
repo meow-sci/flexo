@@ -75,6 +75,11 @@ jobs:
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
+      # Defaults only, on purpose: thumbnail size (DEFAULT_THUMB_SIZE), turntable
+      # length (THUMB_COUNT), the angle-0 camera direction (DEFAULT_VIEW_DIR) and
+      # the part's own orientation (DEFAULT_PART_ROTATION_DEG) all live in
+      # apps/partpreview/src/thumbsSpec.ts, so the build has one knob each. Pass
+      # --width/--height/--view-dir/--rotate here only to override the build.
       - name: Capture part thumbnails
         run: pnpm run thumbs:partpreview
 

@@ -370,10 +370,10 @@ Requires **ffmpeg** on `PATH` for the GIFs (`brew install ffmpeg`,
 
 | | |
 | --- | --- |
-| **Angle 01** | Exactly the embed's default view — same camera direction `(1, 0.6, 1)`, same 90% aspect-aware fill — so a thumbnail and the iframe that replaces it agree. |
-| **Angles 02–10** | The **camera** orbited about world Y through the framed target, in 36° steps; `_06` is the back view. Object transforms are never touched, so the world-fixed key light sweeps across the part over the sequence (that reads as shape; the dominant studio IBL is soft). |
+| **Angle 01** | The embed's default view — same camera direction (`DEFAULT_VIEW_DIR`), same aspect-aware fill — so a thumbnail and the iframe that replaces it agree. Two knobs move it, and only for the capture: `--view-dir x,y,z` puts the camera somewhere else (the remaining angles follow), `--rotate x,y,z` turns the part itself. |
+| **Angles 02–NN** | The **camera** orbited about world Y through the framed target, in `THUMB_STEP_DEG` steps, so the half-way frame is the back view. Object transforms are never touched, so the world-fixed key light sweeps across the part over the sequence (that reads as shape; the dominant studio IBL is soft). |
 | **Look** | The mini app's default and nothing else: `DEFAULT_LIGHTING`, the procedural studio environment, opaque charcoal background, **no** connectors, **no** axis triad, **no** measurement box, no UI. |
-| **Size** | 250×250 by default; `--width`/`--height` for anything else. |
+| **Size** | `DEFAULT_THUMB_SIZE` square (currently 400×400) by default; `--width`/`--height` for anything else. That constant lives in `apps/partpreview/src/thumbsSpec.ts` and is the one knob the CI build honors — the deploy workflow runs the script with no flags. |
 | **The GIF** | The same frames, in the same order, at `THUMB_COUNT / --gif-seconds` fps (10 ÷ 4 s = 2.5 fps by default), looping forever. ffmpeg muxes it with a two-pass palette (`palettegen stats_mode=full` → `paletteuse dither=bayer`): one global palette over all frames, so colors don't crawl as the part spins, and an ordered dither that keeps a dark render from banding without shimmering. ~120 kB each, ~17 MB for the set. |
 
 ### How it works
@@ -396,13 +396,21 @@ test alike.
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--width`, `--height` | `250` | Canvas size in px. The first PNG's IHDR is verified against it, so a device-pixel-ratio surprise aborts the run instead of shipping wrong-sized images. |
+| `--width`, `--height` | `DEFAULT_THUMB_SIZE` (400) | Canvas size in px. The first PNG's IHDR is verified against it, so a device-pixel-ratio surprise aborts the run instead of shipping wrong-sized images. |
+| `--view-dir x,y,z` | `DEFAULT_VIEW_DIR` | World-space camera direction for angle 01, unnormalized — `y` is the elevation, the `x`/`z` ratio picks the starting side, and the distance still comes from the part's own framing. The turntable spins it about world Y, so a direction with no horizontal component (`0,1,0`) is rejected rather than silently rendering identical frames. Handy for auditing an orientation: `--parts <id> --no-gif --view-dir 1,0.25,1`. |
+| `--rotate x,y,z` | `0,0,0` | Rotates the **part** (XYZ Euler, degrees) before the camera frames it — the only way to change which way it FACES. `--rotate 0,0,90` stands a capsule modeled along +X nose-up. `--view-dir` cannot do this: the turntable orbits about world Y, so a part lying on its side reads that way from every angle. |
 | `--site-origin` | `https://meow.science.fail` | Origin the manifest URLs are built from. |
 | `--parts a,b,c` | all `part_ids` | Capture a subset (debugging). Unknown ids are a hard error. GIFs are still (re-)made for every part with a complete frame set on disk — it costs ~1.3 s and keeps every GIF consistent with its frames. |
 | `--skip-existing` | off | Skip parts whose 10 PNGs already exist, and parts whose GIF already exists — resumes a partial run. |
 | `--gif-seconds <s>` | `4` | Length of one full GIF loop, i.e. one revolution. The frame rate follows (`10 / s`). |
 | `--no-gif` | off | Skip GIF synthesis entirely; ffmpeg is then not needed. A previous run's `partgifs` entries are kept. |
 | `--verbose` | off | Forward every page console message, not just errors. |
+
+One 404 is normal and is now reported as a note rather than an error: the catalog fetches a
+`<Base>GameData.xml` sibling for every asset file, and `CoreIVAPropAAssets.xml` has none.
+Chromium's console line for it carries no URL, so the driver drops that message and reports
+404s from the network layer instead — absent GameData siblings as an expected-note, anything
+else as a `WARNING` naming the path.
 
 A part that loads but has **no renderable geometry** is reported and skipped without failing
 the run: `KittenBackPackPart`'s only placement instances `<SubPart Id="KittenBackPackSubPart"/>`,

@@ -25,7 +25,9 @@
  * `apt-get install ffmpeg`); `--no-gif` runs the PNG capture without it.
  *
  * FLAGS
- *   --width, --height <px>   canvas size (default 250 x 250)
+ *   --width, --height <px>   canvas size (default DEFAULT_THUMB_SIZE, square)
+ *   --view-dir x,y,z         camera direction for angle 0 (default 1,0.6,1)
+ *   --rotate x,y,z           rotate the PART itself, XYZ Euler degrees (default 0,0,0)
  *   --site-origin <origin>   origin for the manifest URLs (default meow.science.fail)
  *   --parts a,b,c            capture only these part ids (debugging)
  *   --skip-existing          skip a part whose 10 PNGs are already on disk
@@ -47,12 +49,21 @@ import {
   DEFAULT_GIF_SECONDS,
   DEFAULT_SITE_ORIGIN,
   DEFAULT_THUMB_SIZE,
+  DEFAULT_PART_ROTATION_DEG,
+  DEFAULT_VIEW_DIR,
   EMPTY_PART_ERROR,
   GIFS_DIR,
+  ROTATION_PARAM,
+  type RotationDeg,
   THUMB_COUNT,
   THUMBS_DIR,
+  VIEW_DIR_PARAM,
+  type ViewDir,
+  formatVec3,
   gifFileName,
   gifUrl,
+  parseRotationDeg,
+  parseViewDir,
   thumbFileName,
   thumbUrls,
 } from '../apps/partpreview/src/thumbsSpec.ts'
@@ -95,6 +106,8 @@ const { values } = parseArgs({
   options: {
     width: { type: 'string' },
     height: { type: 'string' },
+    'view-dir': { type: 'string' },
+    rotate: { type: 'string' },
     'site-origin': { type: 'string' },
     parts: { type: 'string' },
     'skip-existing': { type: 'boolean' },
@@ -113,6 +126,8 @@ if (values.help) {
       '',
       `  --width <px>            capture width  (default ${DEFAULT_THUMB_SIZE})`,
       `  --height <px>           capture height (default ${DEFAULT_THUMB_SIZE})`,
+      `  --view-dir x,y,z        camera direction for angle 0 (default ${formatVec3(DEFAULT_VIEW_DIR)})`,
+      `  --rotate x,y,z          rotate the part, XYZ Euler degrees (default ${formatVec3(DEFAULT_PART_ROTATION_DEG)})`,
       `  --site-origin <origin>  manifest URL origin (default ${DEFAULT_SITE_ORIGIN})`,
       '  --parts a,b,c           capture only these part ids',
       '  --skip-existing         skip parts whose PNGs (and GIF) already exist',
@@ -132,6 +147,31 @@ function intFlag(name: string, raw: string | undefined, fallback: number): numbe
   return n
 }
 
+/**
+ * An `x,y,z` camera-direction flag. Rejected loudly rather than silently reset:
+ * a typo'd direction would otherwise render the whole catalog from the default
+ * angle and look like the flag did nothing.
+ */
+function viewDirFlag(raw: string | undefined): ViewDir {
+  if (raw === undefined) return DEFAULT_VIEW_DIR
+  const dir = parseViewDir(raw)
+  if (!dir) {
+    die(
+      `--view-dir must be three finite numbers 'x,y,z' with a non-zero horizontal ` +
+        `component (the turntable spins about world Y), got '${raw}'`,
+    )
+  }
+  return dir
+}
+
+/** An `x,y,z` degrees flag. Any three finite numbers orient the part legally. */
+function rotationFlag(raw: string | undefined): RotationDeg {
+  if (raw === undefined) return DEFAULT_PART_ROTATION_DEG
+  const rot = parseRotationDeg(raw)
+  if (!rot) die(`--rotate must be three finite numbers 'x,y,z' in degrees, got '${raw}'`)
+  return rot
+}
+
 /** A positive (possibly fractional) seconds flag. */
 function secondsFlag(name: string, raw: string | undefined, fallback: number): number {
   if (raw === undefined) return fallback
@@ -142,6 +182,8 @@ function secondsFlag(name: string, raw: string | undefined, fallback: number): n
 
 const width = intFlag('width', values.width, DEFAULT_THUMB_SIZE)
 const height = intFlag('height', values.height, DEFAULT_THUMB_SIZE)
+const viewDir = viewDirFlag(values['view-dir'])
+const partRotation = rotationFlag(values.rotate)
 const siteOrigin = values['site-origin'] ?? DEFAULT_SITE_ORIGIN
 const skipExisting = values['skip-existing'] === true
 const gifSeconds = secondsFlag('gif-seconds', values['gif-seconds'], DEFAULT_GIF_SECONDS)
@@ -424,6 +466,11 @@ async function main(): Promise<void> {
 
   let captured = 0
   let skipped = 0
+  // Unique 404 paths seen by the page. Collected rather than printed inline: the
+  // catalog fetches every `<Base>GameData.xml` sibling speculatively and treats a
+  // miss as expected (src/ksa/partCatalog.ts loadGameData), so Chromium logs a
+  // contentless "Failed to load resource" for a file that is absent BY DESIGN.
+  const notFound = new Set<string>()
   const empty: string[] = []
   const failed: string[] = []
   let sizeChecked = false
@@ -433,11 +480,23 @@ async function main(): Promise<void> {
     // min(dpr, 2) pixel ratio ⇒ the canvas backing store is exactly width x height.
     const page = await browser.newPage({ viewport: { width, height } })
     page.on('pageerror', (err) => console.error(`  [page error] ${err.message}`))
+    page.on('response', (res) => {
+      if (res.status() !== 404) return
+      const path = new URL(res.url()).pathname
+      notFound.add(path)
+      if (verbose) console.error(`  [404] ${path}`)
+    })
     page.on('console', (msg: ConsoleMessage) => {
+      // The resource-404 console line carries no URL — the `response` handler
+      // above reports the same failure with one, so this would be pure noise.
+      if (!verbose && msg.text().startsWith('Failed to load resource')) return
       if (verbose || msg.type() === 'error') console.error(`  [page ${msg.type()}] ${msg.text()}`)
     })
 
-    const url = `${origin}${SERVE_BASE}apps/partpreview/capture.html?w=${width}&h=${height}`
+    const url =
+      `${origin}${SERVE_BASE}apps/partpreview/capture.html?w=${width}&h=${height}` +
+      `&${VIEW_DIR_PARAM}=${encodeURIComponent(formatVec3(viewDir))}` +
+      `&${ROTATION_PARAM}=${encodeURIComponent(formatVec3(partRotation))}`
     await page.goto(url, { waitUntil: 'domcontentloaded' })
     await page.waitForFunction(
       () => window.__flexoCapture?.ready === true || window.__flexoCapture?.error != null,
@@ -451,12 +510,15 @@ async function main(): Promise<void> {
     const pageCount = await page.evaluate(() => window.__flexoCapture?.count ?? 0)
     if (pageCount !== THUMB_COUNT) {
       throw new FatalError(
-        `built capture page renders ${pageCount} angles, this script expects ${THUMB_COUNT}`,
+        `built capture page renders ${pageCount} angles, this script expects ${THUMB_COUNT} — ` +
+          'dist/ is stale, rebuild it (`pnpm build`, or `pnpm exec vite build apps/partpreview` ' +
+          'for the mini app alone) and re-run',
       )
     }
 
     console.log(
-      `capturing ${targets.length} part(s) x ${THUMB_COUNT} angles at ${width}x${height} …`,
+      `capturing ${targets.length} part(s) x ${THUMB_COUNT} angles at ${width}x${height}, ` +
+        `view dir ${formatVec3(viewDir)}, part rotation ${formatVec3(partRotation)}° …`,
     )
 
     for (const [i, partId] of targets.entries()) {
@@ -543,6 +605,25 @@ async function main(): Promise<void> {
   manifest.partgifs = partgifs
   // Same format the previewManifest plugin writes: 2-space pretty + trailing newline.
   await writeFile(MANIFEST, `${JSON.stringify(manifest, null, 2)}\n`)
+
+  // 5. Absent files. An optional GameData sibling is normal; anything else is worth
+  //    seeing, though it is not fatal on its own — a part that fails to render is.
+  if (notFound.size > 0) {
+    const optional: string[] = []
+    const unexpected: string[] = []
+    for (const path of notFound) {
+      ;(path.endsWith('GameData.xml') ? optional : unexpected).push(path)
+    }
+    if (optional.length > 0) {
+      console.log(
+        `note: ${optional.length} optional GameData sibling(s) absent, as expected: ` +
+          optional.join(', '),
+      )
+    }
+    if (unexpected.length > 0) {
+      console.error(`WARNING: ${unexpected.length} request(s) 404'd: ${unexpected.join(', ')}`)
+    }
+  }
 
   console.log(
     `done in ${formatElapsed(startedAt)}: ${captured} captured, ${skipped} skipped, ` +

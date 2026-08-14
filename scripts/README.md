@@ -14,7 +14,7 @@ bun install
 
 ## capture-part-thumbs.ts (Node)
 
-Renders 10-angle PNG turntables (36° apart, 250×250 by default) of every
+Renders 10-angle PNG turntables (36° apart, `DEFAULT_THUMB_SIZE` square) of every
 built-in KSA Part out of the **built** part-preview mini app, muxes each set into
 an animated GIF, and patches its `manifest.json` with the `thumbs` / `partgifs`
 URLs:
@@ -28,8 +28,8 @@ One headless Chromium page (Playwright, from the root `node_modules`) drives the
 mini app's own `capture.html` + `PartPreviewViewport`, so a thumbnail always
 matches the live embed; **ffmpeg** (on `PATH`; checked before any rendering
 starts) turns each part's frames into a looping animation (4 s by default). Options
-(`--width`/`--height`, `--site-origin`, `--parts`, `--skip-existing`,
-`--gif-seconds`, `--no-gif`, `--verbose`) are documented in the script's header
+(`--width`/`--height`, `--view-dir x,y,z`, `--rotate x,y,z`, `--site-origin`, `--parts`,
+`--skip-existing`, `--gif-seconds`, `--no-gif`, `--verbose`) are documented in the script's header
 comment and under `--help`. Deliberately **not** part of `pnpm build`, and a
 later `vite build apps/partpreview` wipes its output. Context:
 [docs/wiki-part-preview.md](../docs/wiki-part-preview.md#part-thumbnails).

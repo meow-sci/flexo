@@ -20,10 +20,11 @@ import { computeSelectionBounds, type ComputedBounds } from '../measure/bounds';
 const MEASURE_COLOR = 0x6ee7ff;
 
 /**
- * The viewing direction {@link PartPreviewViewport.frame} places the camera on —
- * a three-quarter view from slightly above. Named because {@link
+ * The DEFAULT viewing direction {@link PartPreviewViewport.frame} places the
+ * camera on — a three-quarter view from slightly above. Named because {@link
  * PartPreviewViewport.setViewAzimuth} rotates exactly this vector, so the
  * turntable's first angle reproduces the default framing bit for bit.
+ * Overridable per viewport with {@link PartPreviewViewportOptions.viewDir}.
  */
 const FRAME_DIR = new THREE.Vector3(1, 0.6, 1).normalize();
 
@@ -60,6 +61,26 @@ export interface PartPreviewViewportOptions {
    * Default false — the in-app Part browser popup shows none.
    */
   axisGizmo?: boolean;
+  /**
+   * World-space direction the camera sits on relative to the framed part, as raw
+   * (unnormalized) `[x, y, z]`; only the direction matters, the distance always
+   * comes from `frame()`. Default {@link FRAME_DIR}, the three-quarter view from
+   * slightly above. A zero-length vector falls back to that default.
+   *
+   * The thumbnail capture's `--view-dir` is exactly this option — see
+   * apps/partpreview/src/thumbsSpec.ts.
+   */
+  viewDir?: readonly [number, number, number];
+  /**
+   * World-space XYZ Euler rotation, in DEGREES, applied to the whole assembled
+   * part (and its connector markers) before `frame()` measures it. Default
+   * `[0, 0, 0]` — identity, i.e. the part exactly as the game models it.
+   *
+   * This is the only way to change which way a part FACES: {@link viewDir} moves
+   * the camera, and the turntable orbits about world Y, so a part modeled lying
+   * on its side reads that way from every camera angle.
+   */
+  partRotationDeg?: readonly [number, number, number];
 }
 
 /**
@@ -108,6 +129,14 @@ export class PartPreviewViewport {
   private readonly zoomScratch = new THREE.Vector3();
   /** Scratch vector for {@link setViewAzimuth}. */
   private readonly azimuthScratch = new THREE.Vector3();
+  /** Normalized direction the camera is framed on; {@link FRAME_DIR} unless overridden. */
+  private readonly frameDir: THREE.Vector3;
+  /**
+   * Parent of every part object and connector marker, carrying {@link
+   * PartPreviewViewportOptions.partRotationDeg}. Always present (identity by
+   * default) so there is exactly one place parts get attached.
+   */
+  private readonly partRoot = new THREE.Group();
   /** The most recent {@link SceneEnvironment.apply}; awaited by {@link envApplied}. */
   private envPromise: Promise<void> = Promise.resolve();
 
@@ -125,6 +154,23 @@ export class PartPreviewViewport {
     this.reframeOnResize = options.reframeOnResize ?? false;
     this.onBounds = options.onBounds;
     this.axisGizmo = options.axisGizmo ? new AxisGizmo() : null;
+    // A degenerate vector would put the camera exactly on the orbit target, so it
+    // is not honored — the default view is always a valid one.
+    const viewDir = options.viewDir ? new THREE.Vector3(...options.viewDir) : null;
+    this.frameDir = viewDir && viewDir.lengthSq() > 0 ? viewDir.normalize() : FRAME_DIR.clone();
+    const rot = options.partRotationDeg;
+    if (rot) {
+      this.partRoot.rotation.set(
+        THREE.MathUtils.degToRad(rot[0]),
+        THREE.MathUtils.degToRad(rot[1]),
+        THREE.MathUtils.degToRad(rot[2]),
+      );
+      // frame() measures world matrices BEFORE anything renders, and a child's
+      // updateWorldMatrix composes against its parent's CURRENT matrixWorld — so
+      // this static rotation has to land now, not at the first frame.
+      this.partRoot.updateMatrixWorld(true);
+    }
+    this.scene.add(this.partRoot);
     this.scene.background = new THREE.Color(0x16171d);
 
     const w = host.clientWidth || 1;
@@ -195,7 +241,7 @@ export class PartPreviewViewport {
       const obj = new ConnectorObject(connector, size);
       obj.group.visible = this.showConnectors;
       this.connectorObjects.push(obj);
-      this.scene.add(obj.group);
+      this.partRoot.add(obj.group);
     }
 
     try {
@@ -213,7 +259,7 @@ export class PartPreviewViewport {
       for (const obj of built) {
         if (!obj) continue;
         this.objects.push(obj);
-        this.scene.add(obj.group);
+        this.partRoot.add(obj.group);
       }
       this.frame();
       // After the objects are in the scene (and framed, which needs their world
@@ -227,12 +273,12 @@ export class PartPreviewViewport {
 
   private clearObjects(): void {
     for (const obj of this.objects) {
-      this.scene.remove(obj.group);
+      this.partRoot.remove(obj.group);
       obj.dispose();
     }
     this.objects = [];
     for (const obj of this.connectorObjects) {
-      this.scene.remove(obj.group);
+      this.partRoot.remove(obj.group);
       obj.dispose();
     }
     this.connectorObjects = [];
@@ -335,7 +381,7 @@ export class PartPreviewViewport {
     }
 
     this.controls.target.copy(sphere.center);
-    this.camera.position.copy(sphere.center).addScaledVector(FRAME_DIR, distance);
+    this.camera.position.copy(sphere.center).addScaledVector(this.frameDir, distance);
     this.camera.near = Math.max(distance / 100, 0.001);
     this.camera.far = distance * 100;
     this.camera.updateProjectionMatrix();
@@ -371,8 +417,10 @@ export class PartPreviewViewport {
   // runs, or changes, in the interactive app.
 
   /**
-   * Places the camera on the framed sphere at {@link FRAME_DIR} rotated about world
-   * Y by `offsetRad`, keeping the elevation and the distance {@link frame} chose.
+   * Places the camera on the framed sphere at the configured view direction
+   * ({@link PartPreviewViewportOptions.viewDir}, default {@link FRAME_DIR}) rotated
+   * about world Y by `offsetRad`, keeping the elevation and the distance {@link
+   * frame} chose.
    *
    * Offset 0 therefore reproduces `frame()`'s pose exactly, so a turntable's first
    * angle IS the view the embed shows on load. Rotating the camera (rather than the
@@ -380,7 +428,7 @@ export class PartPreviewViewport {
    * key light sweeping across the part over a sequence.
    */
   setViewAzimuth(offsetRad: number): void {
-    const dir = this.azimuthScratch.copy(FRAME_DIR).applyAxisAngle(WORLD_UP, offsetRad);
+    const dir = this.azimuthScratch.copy(this.frameDir).applyAxisAngle(WORLD_UP, offsetRad);
     this.camera.position.copy(this.controls.target).addScaledVector(dir, this.framedDistance);
     this.controls.update();
     this.loop.invalidate();

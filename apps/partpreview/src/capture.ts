@@ -14,7 +14,8 @@
  * so only the part is in the frame.
  *
  * Debuggable by hand: `pnpm dev:partpreview`, open
- * `/flexo/apps/partpreview/capture.html?w=250&h=250`, then call
+ * `/flexo/apps/partpreview/capture.html?w=250&h=250` (add `&dir=1,0.6,1` for a
+ * different camera angle, `&rot=0,0,90` to stand the part up), then call
  * `await __flexoCapture.capturePart('<part_id>')` in devtools.
  */
 import { $catalogIndex, ensureCatalogLoaded } from '../../../src/state/catalogStore';
@@ -23,10 +24,18 @@ import { PartPreviewViewport } from '../../../src/three/PartPreviewViewport';
 import { $previewLighting } from './settings';
 import {
   type CaptureApi,
+  DEFAULT_PART_ROTATION_DEG,
   DEFAULT_THUMB_SIZE,
+  DEFAULT_VIEW_DIR,
   EMPTY_PART_ERROR,
+  parseRotationDeg,
+  parseViewDir,
+  ROTATION_PARAM,
+  type RotationDeg,
   THUMB_COUNT,
   THUMB_STEP_DEG,
+  VIEW_DIR_PARAM,
+  type ViewDir,
 } from './thumbsSpec';
 
 declare global {
@@ -45,6 +54,17 @@ function size(name: string): number {
 
 const width = size('w');
 const height = size('h');
+
+/**
+ * Camera direction for angle 0. An unparseable `?dir=` is IGNORED rather than
+ * fatal — the driver validates the flag before it ever builds this URL, so a bad
+ * value here can only come from someone poking at the page by hand.
+ */
+const viewDir: ViewDir = parseViewDir(params.get(VIEW_DIR_PARAM) ?? '') ?? DEFAULT_VIEW_DIR;
+
+/** Whole-part orientation, same ignore-if-unparseable rule as `?dir=`. */
+const partRotationDeg: RotationDeg =
+  parseRotationDeg(params.get(ROTATION_PARAM) ?? '') ?? DEFAULT_PART_ROTATION_DEG;
 
 const host = document.getElementById('host')!;
 // Sized BEFORE the viewport is constructed so the very first frame() already sees
@@ -104,6 +124,10 @@ async function boot(): Promise<void> {
       axisGizmo: false,
       // The same 95% aspect-aware framing the embed uses on load.
       fillFraction: 0.95,
+      // Angle 0's camera direction; the turntable spins it about world Y.
+      viewDir,
+      // The part's own orientation — the only knob that changes which way it faces.
+      partRotationDeg,
       // The host is at its final size already; a re-frame could only fight the
       // camera pose the turntable is about to set.
       reframeOnResize: false,

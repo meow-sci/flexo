@@ -74,13 +74,14 @@ jobs:
       - name: Install WebP tools
         run: sudo apt-get update && sudo apt-get install -y webp
 
-      # Defaults only, on purpose: thumbnail size (DEFAULT_THUMB_SIZE), turntable
+      # Render defaults only, on purpose: thumbnail size (DEFAULT_THUMB_SIZE), turntable
       # length (THUMB_COUNT), the angle-0 camera direction (DEFAULT_VIEW_DIR) and
       # the part's own orientation (DEFAULT_PART_ROTATION_DEG) all live in
-      # apps/partpreview/src/thumbsSpec.ts, so the build has one knob each. Pass
+      # apps/partpreview/src/thumbsSpec.ts, so the build has one knob each. Capture
+      # and img2webp are explicitly given this runner's four vCPUs below. Pass
       # --width/--height/--view-dir/--rotate here only to override the build.
       - name: Capture part thumbnails
-        run: pnpm run thumbs:partpreview
+        run: pnpm run thumbs:partpreview -- --jobs 4
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

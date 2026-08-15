@@ -38,8 +38,8 @@ bun copy-ksa-assets-to-private-repo.ts --target <dir>
 ### Node
 
 - `capture-part-thumbs.ts` — renders 18-angle static WebP turntables of every built-in
-  KSA Part out of the BUILT `dist/apps/partpreview/` (headless Chromium via the
-  root `playwright`, driving the mini app's own `capture.html` + viewport),
+  KSA Part out of the BUILT `dist/apps/partpreview/` (up to four parallel pages in
+  one headless Chromium via the root `playwright`, each driving `capture.html` + viewport),
   muxes each set into an animated WebP with **img2webp** (external binary, checked
   up front; `--no-turntable` opts out), and patches that app's `manifest.json` with
   the `thumbs` / `turntables` URLs. Must run AFTER `pnpm build`, and never before

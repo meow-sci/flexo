@@ -10,9 +10,9 @@
  * one animated turntable per part at `assets/turntables/<part_id>.webp` muxed by **img2webp**
  * (see ../apps/partpreview/src/thumbsSpec.ts, the shared naming/URL contract).
  *
- * HOW: one headless Chromium, one page (`capture.html`), one WebGL context and one
- * catalog parse for the WHOLE run; per part it is an asset fetch off a localhost
- * static server plus 18 small renders read back with `canvas.toDataURL`. The
+ * HOW: one headless Chromium runs up to four persistent `capture.html` pages in
+ * parallel, each with its own WebGL context and catalog. Each page pulls parts from
+ * a shared queue and renders its 18 angles sequentially. The
  * renderer is the app's own `PartPreviewViewport`, so a thumbnail cannot disagree
  * with what the live embed shows. Design + rationale: plans/PART_PREVIEW_THUMBS.md.
  *
@@ -31,6 +31,7 @@
  *   --rotate x,y,z           rotate the PART itself, XYZ Euler degrees (default 0,0,90)
  *   --site-origin <origin>   origin for the manifest URLs (default meow.science.fail)
  *   --parts a,b,c            capture only these part ids (debugging)
+ *   --jobs <count>           parallel capture/encoding workers (default min(vCPUs, 4))
  *   --skip-existing          skip a part whose 18 static WebPs are already on disk
  *   --turntable-seconds <s>  one full turntable loop, in seconds (default 4)
  *   --no-turntable           skip animated WebP synthesis (no img2webp needed)
@@ -100,8 +101,8 @@ const TURNTABLE_TIMEOUT_MS = 30_000
 /** img2webp's 0..100 lossy quality scale; high fidelity without PNG-like weight. */
 const TURNTABLE_WEBP_QUALITY = 92
 
-/** Concurrent img2webp processes. Each is small and independent. */
-const TURNTABLE_JOBS = Math.max(1, Math.min(4, availableParallelism()))
+/** Use every vCPU on the 4-core Pages runner by default without oversubscribing larger hosts. */
+const DEFAULT_JOBS = Math.max(1, Math.min(4, availableParallelism()))
 
 const execFileAsync = promisify(execFile)
 
@@ -115,6 +116,7 @@ const { values } = parseArgs({
     rotate: { type: 'string' },
     'site-origin': { type: 'string' },
     parts: { type: 'string' },
+    jobs: { type: 'string' },
     'skip-existing': { type: 'boolean' },
     'turntable-seconds': { type: 'string' },
     // Declared explicitly: this Node's parseArgs has no `--no-x` negation.
@@ -135,6 +137,7 @@ if (values.help) {
       `  --rotate x,y,z          rotate the part, XYZ Euler degrees (default ${formatVec3(DEFAULT_PART_ROTATION_DEG)})`,
       `  --site-origin <origin>  manifest URL origin (default ${DEFAULT_SITE_ORIGIN})`,
       '  --parts a,b,c           capture only these part ids',
+      `  --jobs <count>          parallel capture/encoding workers (default ${DEFAULT_JOBS})`,
       '  --skip-existing         skip parts whose static and animated WebPs exist',
       `  --turntable-seconds <s> length of one turntable loop (default ${DEFAULT_TURNTABLE_SECONDS})`,
       '  --no-turntable          skip animated WebP synthesis (no img2webp needed)',
@@ -190,6 +193,7 @@ const height = intFlag('height', values.height, DEFAULT_THUMB_SIZE)
 const viewDir = viewDirFlag(values['view-dir'])
 const partRotation = rotationFlag(values.rotate)
 const siteOrigin = values['site-origin'] ?? DEFAULT_SITE_ORIGIN
+const jobs = intFlag('jobs', values.jobs, DEFAULT_JOBS)
 const skipExisting = values['skip-existing'] === true
 const turntableSeconds = secondsFlag(
   'turntable-seconds',
@@ -378,7 +382,7 @@ async function synthesizeTurntables(
     }
   }
 
-  await Promise.all(Array.from({ length: TURNTABLE_JOBS }, worker))
+  await Promise.all(Array.from({ length: Math.min(jobs, partIds.length) }, worker))
   return { made, failed }
 }
 
@@ -512,7 +516,7 @@ async function main(): Promise<void> {
   // app's own parser), so the capture list is never re-derived from the XML.
   let targets = manifest.part_ids
   if (values.parts) {
-    const requested = values.parts.split(',').map((s) => s.trim()).filter(Boolean)
+    const requested = [...new Set(values.parts.split(',').map((s) => s.trim()).filter(Boolean))]
     const known = new Set(manifest.part_ids)
     const unknown = requested.filter((id) => !known.has(id))
     if (unknown.length > 0) die(`unknown part id(s): ${unknown.join(', ')}`)
@@ -538,128 +542,142 @@ async function main(): Promise<void> {
   const notFound = new Set<string>()
   const empty: string[] = []
   const failed: string[] = []
-  let sizeChecked = false
 
   try {
-    // Match the live viewport's capped Retina-class device pixel ratio. The host remains
-    // width×height CSS pixels, while renderer.setPixelRatio builds a 2× backing buffer.
-    const page = await browser.newPage({
+    const context = await browser.newContext({
       viewport: { width, height },
       deviceScaleFactor: THUMB_PIXEL_RATIO,
     })
-    page.on('pageerror', (err) => console.error(`  [page error] ${err.message}`))
-    page.on('response', (res) => {
-      if (res.status() !== 404) return
-      const path = new URL(res.url()).pathname
-      notFound.add(path)
-      if (verbose) console.error(`  [404] ${path}`)
-    })
-    page.on('console', (msg: ConsoleMessage) => {
-      // The resource-404 console line carries no URL — the `response` handler
-      // above reports the same failure with one, so this would be pure noise.
-      if (!verbose && msg.text().startsWith('Failed to load resource')) return
-      if (verbose || msg.type() === 'error') console.error(`  [page ${msg.type()}] ${msg.text()}`)
-    })
-
     const url =
       `${origin}${SERVE_BASE}apps/partpreview/capture.html?w=${width}&h=${height}` +
       `&${VIEW_DIR_PARAM}=${encodeURIComponent(formatVec3(viewDir))}` +
       `&${ROTATION_PARAM}=${encodeURIComponent(formatVec3(partRotation))}`
-    await page.goto(url, { waitUntil: 'domcontentloaded' })
-    await page.waitForFunction(
-      () => window.__flexoCapture?.ready === true || window.__flexoCapture?.error != null,
-      undefined,
-      { timeout: 120_000 },
+    const workerCount = Math.min(jobs, targets.length)
+    const pages = await Promise.all(
+      Array.from({ length: workerCount }, async (_, workerIndex) => {
+        // Each persistent page owns one WebGL context and processes one part at a time.
+        const page = await context.newPage()
+        const workerLabel = `worker ${workerIndex + 1}`
+        page.on('pageerror', (err) => console.error(`  [${workerLabel} page error] ${err.message}`))
+        page.on('response', (res) => {
+          if (res.status() !== 404) return
+          const path = new URL(res.url()).pathname
+          notFound.add(path)
+          if (verbose) console.error(`  [${workerLabel} 404] ${path}`)
+        })
+        page.on('console', (msg: ConsoleMessage) => {
+          // The response handler reports resource failures with a useful URL.
+          if (!verbose && msg.text().startsWith('Failed to load resource')) return
+          if (verbose || msg.type() === 'error') {
+            console.error(`  [${workerLabel} ${msg.type()}] ${msg.text()}`)
+          }
+        })
+
+        await page.goto(url, { waitUntil: 'domcontentloaded' })
+        await page.waitForFunction(
+          () => window.__flexoCapture?.ready === true || window.__flexoCapture?.error != null,
+          undefined,
+          { timeout: 120_000 },
+        )
+        const bootError = await page.evaluate(() => window.__flexoCapture?.error ?? null)
+        if (bootError) throw new FatalError(`${workerLabel} failed to boot: ${bootError}`)
+
+        const backing = await page.evaluate(() => {
+          const canvas = document.querySelector<HTMLCanvasElement>('#host canvas')
+          return {
+            devicePixelRatio: window.devicePixelRatio,
+            width: canvas?.width ?? 0,
+            height: canvas?.height ?? 0,
+          }
+        })
+        const backingWidth = width * THUMB_PIXEL_RATIO
+        const backingHeight = height * THUMB_PIXEL_RATIO
+        if (
+          backing.devicePixelRatio !== THUMB_PIXEL_RATIO ||
+          backing.width !== backingWidth ||
+          backing.height !== backingHeight
+        ) {
+          throw new FatalError(
+            `${workerLabel} backing buffer is ${backing.width}x${backing.height} at ` +
+              `${backing.devicePixelRatio}x, expected ${backingWidth}x${backingHeight} at ` +
+              `${THUMB_PIXEL_RATIO}x`,
+          )
+        }
+
+        const pageCount = await page.evaluate(() => window.__flexoCapture?.count ?? 0)
+        if (pageCount !== THUMB_COUNT) {
+          throw new FatalError(
+            `built capture page renders ${pageCount} angles, this script expects ${THUMB_COUNT} — ` +
+              'dist/ is stale, rebuild it (`pnpm build`, or ' +
+              '`pnpm exec vite build apps/partpreview` for the mini app alone) and re-run',
+          )
+        }
+        return page
+      }),
     )
-    const bootError = await page.evaluate(() => window.__flexoCapture?.error ?? null)
-    if (bootError) throw new FatalError(`capture page failed to boot: ${bootError}`)
-
-    const backing = await page.evaluate(() => {
-      const canvas = document.querySelector<HTMLCanvasElement>('#host canvas')
-      return {
-        devicePixelRatio: window.devicePixelRatio,
-        width: canvas?.width ?? 0,
-        height: canvas?.height ?? 0,
-      }
-    })
-    const backingWidth = width * THUMB_PIXEL_RATIO
-    const backingHeight = height * THUMB_PIXEL_RATIO
-    if (
-      backing.devicePixelRatio !== THUMB_PIXEL_RATIO ||
-      backing.width !== backingWidth ||
-      backing.height !== backingHeight
-    ) {
-      throw new FatalError(
-        `capture backing buffer is ${backing.width}x${backing.height} at ` +
-          `${backing.devicePixelRatio}x, expected ${backingWidth}x${backingHeight} at ` +
-          `${THUMB_PIXEL_RATIO}x`,
-      )
-    }
-
-    // Guards against a stale dist/ built before a thumbsSpec change.
-    const pageCount = await page.evaluate(() => window.__flexoCapture?.count ?? 0)
-    if (pageCount !== THUMB_COUNT) {
-      throw new FatalError(
-        `built capture page renders ${pageCount} angles, this script expects ${THUMB_COUNT} — ` +
-          'dist/ is stale, rebuild it (`pnpm build`, or `pnpm exec vite build apps/partpreview` ' +
-          'for the mini app alone) and re-run',
-      )
-    }
 
     console.log(
       `capturing ${targets.length} part(s) x ${THUMB_COUNT} angles at ${width}x${height}, ` +
         `supersampled from ${width * THUMB_PIXEL_RATIO}x${height * THUMB_PIXEL_RATIO}, ` +
-        `view dir ${formatVec3(viewDir)}, part rotation ${formatVec3(partRotation)}° …`,
+        `${workerCount} worker(s), view dir ${formatVec3(viewDir)}, ` +
+        `part rotation ${formatVec3(partRotation)}° …`,
     )
 
-    for (const [i, partId] of targets.entries()) {
-      if (skipExisting && (await hasCompleteSet(partId))) {
-        skipped++
-        continue
-      }
-      try {
-        const urls = await withTimeout(
-          page.evaluate((id: string) => window.__flexoCapture!.capturePart(id), partId),
-          PART_TIMEOUT_MS,
-        )
-        if (urls.length !== THUMB_COUNT) {
-          throw new Error(`expected ${THUMB_COUNT} images, got ${urls.length}`)
-        }
-        for (const [angle, dataUrl] of urls.entries()) {
-          const webp = decodeDataUrl(dataUrl, `${partId}_${angle + 1}`)
-          if (!sizeChecked) {
-            const info = webpInfo(webp)
-            const expectedWidth = width
-            const expectedHeight = height
-            if (info.width !== expectedWidth || info.height !== expectedHeight || info.animated) {
-              throw new FatalError(
-                `captured static WebP is ${info.width}x${info.height}, ` +
-                  `expected ${expectedWidth}x${expectedHeight} ` +
-                  '(format, device pixel ratio or host sizing is off)',
-              )
-            }
-            sizeChecked = true
+    const queue = [...targets]
+    let processed = 0
+    const captureWorker = async (page: (typeof pages)[number]): Promise<void> => {
+      let sizeChecked = false
+      for (;;) {
+        const partId = queue.shift()
+        if (partId === undefined) return
+        try {
+          if (skipExisting && (await hasCompleteSet(partId))) {
+            skipped++
+            continue
           }
-          await writeFile(join(THUMBS_OUT, thumbFileName(partId, angle)), webp)
+          const urls = await withTimeout(
+            page.evaluate((id: string) => window.__flexoCapture!.capturePart(id), partId),
+            PART_TIMEOUT_MS,
+          )
+          if (urls.length !== THUMB_COUNT) {
+            throw new Error(`expected ${THUMB_COUNT} images, got ${urls.length}`)
+          }
+          for (const [angle, dataUrl] of urls.entries()) {
+            const webp = decodeDataUrl(dataUrl, `${partId}_${angle + 1}`)
+            if (!sizeChecked) {
+              const info = webpInfo(webp)
+              if (info.width !== width || info.height !== height || info.animated) {
+                throw new FatalError(
+                  `captured static WebP is ${info.width}x${info.height}, ` +
+                    `expected ${width}x${height} ` +
+                    '(format, device pixel ratio or host sizing is off)',
+                )
+              }
+              sizeChecked = true
+            }
+            await writeFile(join(THUMBS_OUT, thumbFileName(partId, angle)), webp)
+          }
+          captured++
+        } catch (err) {
+          if (err instanceof FatalError) throw err
+          const message = err instanceof Error ? err.message : String(err)
+          // A mesh-less part is data, not a bug: no thumbs, no failure.
+          if (message.includes(EMPTY_PART_ERROR)) {
+            empty.push(partId)
+            console.log(`  no geometry, no thumbs: ${partId}`)
+          } else {
+            failed.push(partId)
+            console.error(`  FAILED ${partId}: ${message}`)
+          }
+        } finally {
+          processed++
+          if (processed % PROGRESS_EVERY === 0 || processed === targets.length) {
+            console.log(`  ${processed}/${targets.length} (${formatElapsed(startedAt)})`)
+          }
         }
-        captured++
-      } catch (err) {
-        if (err instanceof FatalError) throw err
-        const message = err instanceof Error ? err.message : String(err)
-        // A mesh-less part is data, not a bug: no thumbs, no failure. Anything
-        // else is a genuine problem and fails the run (and therefore CI).
-        if (message.includes(EMPTY_PART_ERROR)) {
-          empty.push(partId)
-          console.log(`  no geometry, no thumbs: ${partId}`)
-        } else {
-          failed.push(partId)
-          console.error(`  FAILED ${partId}: ${message}`)
-        }
-      }
-      if ((i + 1) % PROGRESS_EVERY === 0) {
-        console.log(`  ${i + 1}/${targets.length} (${formatElapsed(startedAt)})`)
       }
     }
+    await Promise.all(pages.map(captureWorker))
   } finally {
     await browser.close()
     await close()
@@ -678,9 +696,10 @@ async function main(): Promise<void> {
   const turntableFailures: string[] = []
   if (makeTurntables) {
     const turntableStart = performance.now()
+    const turntableWorkerCount = Math.min(jobs, complete.length)
     console.log(
       `synthesizing ${complete.length} animated WebP turntable(s), ` +
-        `${turntableSeconds}s per loop …`,
+        `${turntableSeconds}s per loop, ${turntableWorkerCount} worker(s) …`,
     )
     const result = await synthesizeTurntables(complete)
     turntablesMade = result.made

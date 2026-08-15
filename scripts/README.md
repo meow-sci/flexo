@@ -25,12 +25,13 @@ pnpm thumbs:partpreview   # → assets/thumbs/<part_id>_NN.webp + assets/turntab
 pnpm thumbs:partpreview:check # one fast static-only pass for CoreCouplingA_Prefab_DockingPort1WA
 ```
 
-One headless Chromium page (Playwright, from the root `node_modules`) drives the
-mini app's own `capture.html` + `PartPreviewViewport`, so a thumbnail always
-matches the live embed; **img2webp** (on `PATH`; checked before any rendering
-starts) turns each part's frames into a looping animation (4 s by default). Options
+One headless Chromium process runs up to four persistent pages in parallel, each
+driving the mini app's own `capture.html` + `PartPreviewViewport`, so thumbnails
+still match the live embed while using all four Pages-runner vCPUs. **img2webp**
+then runs with the same worker count and turns each part's frames into a looping
+animation (4 s by default). Options
 (`--width`/`--height`, `--view-dir x,y,z`, `--rotate x,y,z`, `--site-origin`, `--parts`,
-`--skip-existing`, `--turntable-seconds`, `--no-turntable`, `--verbose`) are documented in the script's header
+`--jobs`, `--skip-existing`, `--turntable-seconds`, `--no-turntable`, `--verbose`) are documented in the script's header
 comment and under `--help`. Deliberately **not** part of `pnpm build`, and a
 later `vite build apps/partpreview` wipes its output. Context:
 [docs/wiki-part-preview.md](../docs/wiki-part-preview.md#part-thumbnails).
@@ -38,6 +39,7 @@ later `vite build apps/partpreview` wipes its output. Context:
 Both static and animated outputs are 600×600 WebP. Each static frame starts as a 1200×1200
 WebGL render and is downsampled with high-quality browser filtering before WebP encoding; img2webp
 then muxes those 18 frames into the animated turntable without GIF's 256-color palette limit.
+`--jobs` controls both phases and defaults to the smaller of four or the available CPU count.
 
 ## build-cartoon-moon.ts (Bun)
 

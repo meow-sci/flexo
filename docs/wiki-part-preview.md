@@ -382,12 +382,12 @@ Requires **img2webp** on `PATH` for the animations (`brew install webp`,
 `scripts/capture-part-thumbs.ts` (a **vanilla Node 24** script — no Bun, no transpiler; see
 [scripts/README.md](../scripts/README.md)) serves the repo's `dist/` at
 `http://127.0.0.1:<port>/flexo/` exactly as production does, then drives **one** headless
-Chromium page through the whole run: `apps/partpreview/capture.html` — a second Vite input,
-a bare host div and no React — boots the catalogs once, builds one `PartPreviewViewport`,
-and exposes `window.__flexoCapture.capturePart(id)`, which loads the part and returns 18 WebP
-data URLs. One page, one WebGL context, one catalog parse, and the module-level
-geometry/material/texture caches make repeated SubParts free; per angle the cost is a single
-render plus `canvas.toDataURL`.
+Chromium process with up to four persistent worker pages: `apps/partpreview/capture.html` — a
+second Vite input, a bare host div and no React — boots one catalog and
+`PartPreviewViewport` per worker, then exposes `window.__flexoCapture.capturePart(id)`. Workers
+pull parts from a shared queue, keeping each mutable viewport sequential while rendering different
+parts concurrently. The default is `min(4, available CPU count)`, matching the four-vCPU Pages
+runner; each page retains its module-level geometry/material/texture caches across its assigned parts.
 
 The renderer is deliberately the app's **own** viewport code, so a thumbnail cannot drift
 from what the live embed shows. The names, the URL shape, the angle count and the
@@ -402,6 +402,7 @@ test alike.
 | `--rotate x,y,z` | `DEFAULT_PART_ROTATION_DEG` (`0,0,90`) | Rotates the **part** (XYZ Euler, degrees) before the camera frames it — the only way to change which way it FACES. The default stands parts modeled along +X nose-up. `--view-dir` cannot do this: the turntable orbits about world Y, so a part lying on its side reads that way from every angle. |
 | `--site-origin` | `https://meow.science.fail` | Origin the manifest URLs are built from. |
 | `--parts a,b,c` | all `part_ids` | Capture a subset (debugging). Unknown ids are a hard error. `pnpm thumbs:partpreview:check` applies this filter to `CoreCouplingA_Prefab_DockingPort1WA` and adds `--no-turntable` for a quick visual-quality pass. Without it, animated turntables are (re-)made for every part with a complete frame set on disk. |
+| `--jobs <count>` | `min(4, available CPUs)` | Parallel persistent Chromium capture pages, and later parallel img2webp processes. The effective capture count never exceeds the number of requested parts, so the one-part check still opens one page. Use `--jobs 1` for serial diagnostics. |
 | `--skip-existing` | off | Skip parts whose 18 static WebPs and animated WebP already exist — resumes a partial run. |
 | `--turntable-seconds <s>` | `4` | Length of one full animated WebP loop, i.e. one revolution. The frame duration follows (`seconds × 1000 / THUMB_COUNT`, rounded to whole milliseconds). |
 | `--no-turntable` | off | Skip animated WebP synthesis; img2webp is then not needed. Existing turntable files remain discoverable in the patched manifest. |

@@ -81,7 +81,7 @@ jobs:
       # and img2webp are explicitly given this runner's four vCPUs below. Pass
       # --width/--height/--view-dir/--rotate here only to override the build.
       - name: Capture part thumbnails
-        run: pnpm run thumbs:partpreview -- --jobs 4
+        run: pnpm run thumbs:partpreview --jobs 4
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

@@ -1,18 +1,18 @@
 /**
- * Captures PNG turntable thumbnails of every built-in KSA Part out of the BUILT
+ * Captures WebP turntable thumbnails of every built-in KSA Part out of the BUILT
  * part-preview mini app, and patches its `manifest.json` with their URLs.
  *
  *   pnpm build            # must run first — this script renders dist/, never src/
  *   pnpm thumbs:partpreview
- *   pnpm thumbs:partpreview:check # one representative part, PNGs only
+ *   pnpm thumbs:partpreview:check # one representative part, static frames only
  *
- * Output: `dist/apps/partpreview/assets/thumbs/<part_id>_NN.png`, NN = 01..10, plus
- * one animated turntable per part at `assets/gifs/<part_id>.gif` muxed by **ffmpeg**
+ * Output: `dist/apps/partpreview/assets/thumbs/<part_id>_NN.webp`, NN = 01..18, plus
+ * one animated turntable per part at `assets/turntables/<part_id>.webp` muxed by **img2webp**
  * (see ../apps/partpreview/src/thumbsSpec.ts, the shared naming/URL contract).
  *
  * HOW: one headless Chromium, one page (`capture.html`), one WebGL context and one
  * catalog parse for the WHOLE run; per part it is an asset fetch off a localhost
- * static server plus ten small renders read back with `canvas.toDataURL`. The
+ * static server plus 18 small renders read back with `canvas.toDataURL`. The
  * renderer is the app's own `PartPreviewViewport`, so a thumbnail cannot disagree
  * with what the live embed shows. Design + rationale: plans/PART_PREVIEW_THUMBS.md.
  *
@@ -22,18 +22,18 @@
  * built-ins only, and `.ts` extensions on relative imports. NOT a Bun script — the
  * older scripts here are, this one deliberately is not.
  *
- * REQUIRES `ffmpeg` on PATH for the GIFs (`brew install ffmpeg`,
- * `apt-get install ffmpeg`); `--no-gif` runs the PNG capture without it.
+ * REQUIRES `img2webp` on PATH for the turntables (`brew install webp`,
+ * `apt-get install webp`); `--no-turntable` runs the static capture without it.
  *
  * FLAGS
- *   --width, --height <px>   PNG size (internally rendered at 2x; default square)
+ *   --width, --height <px>   WebP size (internally rendered at 2x; default square)
  *   --view-dir x,y,z         camera direction for angle 0 (default 1,0.8,1)
  *   --rotate x,y,z           rotate the PART itself, XYZ Euler degrees (default 0,0,90)
  *   --site-origin <origin>   origin for the manifest URLs (default meow.science.fail)
  *   --parts a,b,c            capture only these part ids (debugging)
- *   --skip-existing          skip a part whose 10 PNGs are already on disk
- *   --gif-seconds <s>        one full GIF loop, in seconds (default 2)
- *   --no-gif                 skip GIF synthesis entirely (no ffmpeg needed)
+ *   --skip-existing          skip a part whose 18 static WebPs are already on disk
+ *   --turntable-seconds <s>  one full turntable loop, in seconds (default 4)
+ *   --no-turntable           skip animated WebP synthesis (no img2webp needed)
  *   --verbose                forward every page console message, not just errors
  */
 import { execFile } from 'node:child_process'
@@ -47,23 +47,23 @@ import { parseArgs, promisify } from 'node:util'
 import { chromium, type ConsoleMessage } from 'playwright'
 import {
   type CaptureApi,
-  DEFAULT_GIF_SECONDS,
+  DEFAULT_TURNTABLE_SECONDS,
   DEFAULT_SITE_ORIGIN,
   DEFAULT_THUMB_SIZE,
   DEFAULT_PART_ROTATION_DEG,
   DEFAULT_VIEW_DIR,
   EMPTY_PART_ERROR,
-  GIFS_DIR,
   ROTATION_PARAM,
   type RotationDeg,
   THUMB_COUNT,
   THUMB_PIXEL_RATIO,
   THUMBS_DIR,
+  TURNTABLES_DIR,
   VIEW_DIR_PARAM,
   type ViewDir,
   formatVec3,
-  gifFileName,
-  gifUrl,
+  turntableFileName,
+  turntableUrl,
   parseRotationDeg,
   parseViewDir,
   thumbFileName,
@@ -81,24 +81,27 @@ const DIST = join(REPO_ROOT, 'dist')
 const APP_DIST = join(DIST, 'apps', 'partpreview')
 const MANIFEST = join(APP_DIST, 'manifest.json')
 const THUMBS_OUT = join(APP_DIST, ...THUMBS_DIR.split('/'))
-const GIFS_OUT = join(APP_DIST, ...GIFS_DIR.split('/'))
+const TURNTABLES_OUT = join(APP_DIST, ...TURNTABLES_DIR.split('/'))
 
 /** Production serves `dist/` at this path; the capture server mirrors it exactly. */
 const SERVE_BASE = '/flexo/'
 
-/** Per-part budget for load + 10 renders. Generous: software WebGL is slow. */
+/** Per-part budget for load + 18 renders. Generous: software WebGL is slow. */
 const PART_TIMEOUT_MS = 60_000
 
 /** Progress line cadence, in parts. */
 const PROGRESS_EVERY = 10
 
-const DATA_URL_PREFIX = 'data:image/png;base64,'
+const DATA_URL_PREFIX = 'data:image/webp;base64,'
 
-/** Budget for one ffmpeg mux; a 400x400 10-frame GIF takes about 100 ms. */
-const FFMPEG_TIMEOUT_MS = 30_000
+/** Budget for one img2webp mux. */
+const TURNTABLE_TIMEOUT_MS = 30_000
 
-/** Concurrent ffmpeg processes. Each is tiny and short — this just keeps it snappy. */
-const FFMPEG_JOBS = Math.max(1, Math.min(4, availableParallelism()))
+/** img2webp's 0..100 lossy quality scale; high fidelity without PNG-like weight. */
+const TURNTABLE_WEBP_QUALITY = 92
+
+/** Concurrent img2webp processes. Each is small and independent. */
+const TURNTABLE_JOBS = Math.max(1, Math.min(4, availableParallelism()))
 
 const execFileAsync = promisify(execFile)
 
@@ -113,9 +116,9 @@ const { values } = parseArgs({
     'site-origin': { type: 'string' },
     parts: { type: 'string' },
     'skip-existing': { type: 'boolean' },
-    'gif-seconds': { type: 'string' },
+    'turntable-seconds': { type: 'string' },
     // Declared explicitly: this Node's parseArgs has no `--no-x` negation.
-    'no-gif': { type: 'boolean' },
+    'no-turntable': { type: 'boolean' },
     verbose: { type: 'boolean' },
     help: { type: 'boolean', short: 'h' },
   },
@@ -126,15 +129,15 @@ if (values.help) {
     [
       'Usage: node scripts/capture-part-thumbs.ts [options]   (run `pnpm build` first)',
       '',
-      `  --width <px>            PNG width, rendered internally at 2x  (default ${DEFAULT_THUMB_SIZE})`,
-      `  --height <px>           PNG height, rendered internally at 2x (default ${DEFAULT_THUMB_SIZE})`,
+      `  --width <px>            WebP width, rendered internally at 2x  (default ${DEFAULT_THUMB_SIZE})`,
+      `  --height <px>           WebP height, rendered internally at 2x (default ${DEFAULT_THUMB_SIZE})`,
       `  --view-dir x,y,z        camera direction for angle 0 (default ${formatVec3(DEFAULT_VIEW_DIR)})`,
       `  --rotate x,y,z          rotate the part, XYZ Euler degrees (default ${formatVec3(DEFAULT_PART_ROTATION_DEG)})`,
       `  --site-origin <origin>  manifest URL origin (default ${DEFAULT_SITE_ORIGIN})`,
       '  --parts a,b,c           capture only these part ids',
-      '  --skip-existing         skip parts whose PNGs (and GIF) already exist',
-      `  --gif-seconds <s>       length of one GIF loop (default ${DEFAULT_GIF_SECONDS})`,
-      '  --no-gif                skip GIF synthesis (no ffmpeg needed)',
+      '  --skip-existing         skip parts whose static and animated WebPs exist',
+      `  --turntable-seconds <s> length of one turntable loop (default ${DEFAULT_TURNTABLE_SECONDS})`,
+      '  --no-turntable          skip animated WebP synthesis (no img2webp needed)',
       '  --verbose               forward all page console output',
     ].join('\n'),
   )
@@ -188,8 +191,12 @@ const viewDir = viewDirFlag(values['view-dir'])
 const partRotation = rotationFlag(values.rotate)
 const siteOrigin = values['site-origin'] ?? DEFAULT_SITE_ORIGIN
 const skipExisting = values['skip-existing'] === true
-const gifSeconds = secondsFlag('gif-seconds', values['gif-seconds'], DEFAULT_GIF_SECONDS)
-const makeGifs = values['no-gif'] !== true
+const turntableSeconds = secondsFlag(
+  'turntable-seconds',
+  values['turntable-seconds'],
+  DEFAULT_TURNTABLE_SECONDS,
+)
+const makeTurntables = values['no-turntable'] !== true
 const verbose = values.verbose === true
 
 function die(message: string): never {
@@ -219,6 +226,7 @@ const MIME: Record<string, string> = {
   '.xml': 'application/xml',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.webp': 'image/webp',
   // .glb / .ktx2 / .hdr are fetched as bytes and don't care.
 }
 
@@ -283,7 +291,7 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-/** True when all THUMB_COUNT PNGs for `partId` are already on disk. */
+/** True when all THUMB_COUNT static WebPs for `partId` are already on disk. */
 async function hasCompleteSet(partId: string): Promise<boolean> {
   for (let i = 0; i < THUMB_COUNT; i++) {
     if (!(await exists(join(THUMBS_OUT, thumbFileName(partId, i))))) return false
@@ -291,63 +299,64 @@ async function hasCompleteSet(partId: string): Promise<boolean> {
   return true
 }
 
-// --- GIF synthesis (ffmpeg) ----------------------------------------------------
+// --- Animated WebP synthesis (img2webp) ---------------------------------------
 
-/** Verified BEFORE the capture starts — finding out after 40 s of rendering is rude. */
-async function requireFfmpeg(): Promise<void> {
+/** Verified BEFORE the capture starts — finding out after a full render is too late. */
+async function requireImg2Webp(): Promise<void> {
   try {
-    await execFileAsync('ffmpeg', ['-version'])
+    await execFileAsync('img2webp', ['-version'])
   } catch {
     die(
-      'ffmpeg not found on PATH — install it (macOS: `brew install ffmpeg`, ' +
-        'Debian/Ubuntu: `sudo apt-get install -y ffmpeg`) or pass --no-gif',
+      'img2webp not found on PATH — install WebP tools (macOS: `brew install webp`, ' +
+        'Debian/Ubuntu: `sudo apt-get install -y webp`) or pass --no-turntable',
+    )
+  }
+}
+
+/** Muxes one part's static WebP frames into an infinite-looping animated WebP. */
+async function synthesizeTurntable(partId: string): Promise<void> {
+  const frameDurationMs = Math.max(1, Math.round((turntableSeconds * 1000) / THUMB_COUNT))
+  const args = ['-loop', '0', '-sharp_yuv']
+  for (let i = 0; i < THUMB_COUNT; i++) {
+    args.push(
+      '-d',
+      String(frameDurationMs),
+      '-lossy',
+      '-q',
+      String(TURNTABLE_WEBP_QUALITY),
+      '-m',
+      '6',
+      join(THUMBS_OUT, thumbFileName(partId, i)),
+    )
+  }
+  const output = join(TURNTABLES_OUT, turntableFileName(partId))
+  args.push('-o', output)
+  await withTimeout(execFileAsync('img2webp', args), TURNTABLE_TIMEOUT_MS)
+  const info = webpInfo(await readFile(output))
+  const expectedDurationMs = frameDurationMs * THUMB_COUNT
+  if (
+    !info.animated ||
+    info.width !== width ||
+    info.height !== height ||
+    info.frameCount !== THUMB_COUNT ||
+    info.loopCount !== 0 ||
+    info.durationMs !== expectedDurationMs
+  ) {
+    throw new Error(
+      `invalid animated WebP: ${info.width}x${info.height}, ${info.frameCount} frames, ` +
+        `${info.durationMs}ms, loop ${info.loopCount ?? 'missing'}`,
     )
   }
 }
 
 /**
- * Muxes one part's PNG frames into a looping GIF of `gifSeconds` total.
- *
- * Two-pass palette (`palettegen` → `paletteuse`) because a 256-color GIF of a dark,
- * subtly shaded render is otherwise banded to death. `stats_mode=full` derives ONE
- * palette from every frame, so colors don't crawl as the turntable spins, and the
- * ordered `bayer` dither keeps inter-frame noise (and file size) down where a
- * diffusion dither would shimmer.
+ * Animates every part that has a complete frame set, a few independent processes at a time.
+ * Runs off disk so filtered and resumed captures stay consistent with prior complete frames.
  */
-async function synthesizeGif(partId: string): Promise<void> {
-  const fps = (THUMB_COUNT / gifSeconds).toFixed(6)
-  await withTimeout(
-    execFileAsync('ffmpeg', [
-      '-y',
-      '-loglevel',
-      'error',
-      '-framerate',
-      fps,
-      '-start_number',
-      '1',
-      // thumbFileName's zero-padded `_NN` suffix IS this pattern; part ids are
-      // [A-Za-z0-9_] so nothing here needs escaping.
-      '-i',
-      join(THUMBS_OUT, `${partId}_%02d.png`),
-      '-filter_complex',
-      '[0:v]split[a][b];[a]palettegen=stats_mode=full[p];[b][p]paletteuse=dither=bayer:bayer_scale=3',
-      // 0 = loop forever.
-      '-loop',
-      '0',
-      join(GIFS_OUT, gifFileName(partId)),
-    ]),
-    FFMPEG_TIMEOUT_MS,
-  )
-}
-
-/**
- * GIFs every part that has a complete frame set, FFMPEG_JOBS at a time.
- *
- * Runs off what is on disk rather than off this run's captures, so `--parts` and
- * `--skip-existing` runs still leave every part's GIF consistent with its frames.
- */
-async function synthesizeGifs(partIds: string[]): Promise<{ made: number; failed: string[] }> {
-  await mkdir(GIFS_OUT, { recursive: true })
+async function synthesizeTurntables(
+  partIds: string[],
+): Promise<{ made: number; failed: string[] }> {
+  await mkdir(TURNTABLES_OUT, { recursive: true })
   const queue = [...partIds]
   const failed: string[] = []
   let made = 0
@@ -356,38 +365,91 @@ async function synthesizeGifs(partIds: string[]): Promise<{ made: number; failed
     for (;;) {
       const partId = queue.shift()
       if (partId === undefined) return
-      if (skipExisting && (await exists(join(GIFS_OUT, gifFileName(partId))))) continue
+      if (skipExisting && (await exists(join(TURNTABLES_OUT, turntableFileName(partId))))) continue
       try {
-        await synthesizeGif(partId)
+        await synthesizeTurntable(partId)
         made++
       } catch (err) {
         failed.push(partId)
-        console.error(`  GIF FAILED ${partId}: ${err instanceof Error ? err.message : String(err)}`)
+        console.error(
+          `  TURNTABLE FAILED ${partId}: ${err instanceof Error ? err.message : String(err)}`,
+        )
       }
     }
   }
 
-  await Promise.all(Array.from({ length: FFMPEG_JOBS }, worker))
+  await Promise.all(Array.from({ length: TURNTABLE_JOBS }, worker))
   return { made, failed }
 }
 
-/** Decodes a `data:image/png;base64,…` payload, rejecting anything else. */
+/** Decodes a `data:image/webp;base64,…` payload, rejecting browser format fallback. */
 function decodeDataUrl(url: string, label: string): Buffer {
   if (!url.startsWith(DATA_URL_PREFIX)) {
-    throw new Error(`${label}: expected a PNG data URL, got '${url.slice(0, 32)}…'`)
+    throw new Error(`${label}: expected a WebP data URL, got '${url.slice(0, 32)}…'`)
   }
   return Buffer.from(url.slice(DATA_URL_PREFIX.length), 'base64')
 }
 
-/**
- * Reads a PNG's IHDR dimensions (8-byte signature, then a length + 'IHDR' chunk
- * whose first two uint32s are width and height).
- */
-function pngSize(png: Buffer): { width: number; height: number } {
-  if (png.length < 24 || png.toString('latin1', 12, 16) !== 'IHDR') {
-    throw new Error('not a PNG (no IHDR chunk)')
+interface WebpInfo {
+  width: number
+  height: number
+  animated: boolean
+  frameCount: number
+  loopCount: number | null
+  durationMs: number
+}
+
+function readUInt24LE(bytes: Buffer, offset: number): number {
+  return bytes[offset]! | (bytes[offset + 1]! << 8) | (bytes[offset + 2]! << 16)
+}
+
+/** Reads dimensions and animation metadata directly from a RIFF/WebP container. */
+function webpInfo(webp: Buffer): WebpInfo {
+  if (
+    webp.length < 20 ||
+    webp.toString('latin1', 0, 4) !== 'RIFF' ||
+    webp.toString('latin1', 8, 12) !== 'WEBP'
+  ) {
+    throw new Error('not a WebP RIFF container')
   }
-  return { width: png.readUInt32BE(16), height: png.readUInt32BE(20) }
+
+  let width = 0
+  let height = 0
+  let animated = false
+  let frameCount = 0
+  let loopCount: number | null = null
+  let durationMs = 0
+
+  for (let offset = 12; offset + 8 <= webp.length; ) {
+    const type = webp.toString('latin1', offset, offset + 4)
+    const size = webp.readUInt32LE(offset + 4)
+    const data = offset + 8
+    if (data + size > webp.length) throw new Error(`truncated WebP ${type} chunk`)
+
+    if (type === 'VP8X' && size >= 10) {
+      animated = (webp[data]! & 0x02) !== 0
+      width = readUInt24LE(webp, data + 4) + 1
+      height = readUInt24LE(webp, data + 7) + 1
+    } else if (type === 'VP8 ' && size >= 10 && width === 0) {
+      width = webp.readUInt16LE(data + 6) & 0x3fff
+      height = webp.readUInt16LE(data + 8) & 0x3fff
+    } else if (type === 'VP8L' && size >= 5 && width === 0) {
+      if (webp[data] !== 0x2f) throw new Error('invalid WebP lossless signature')
+      width = 1 + webp[data + 1]! + ((webp[data + 2]! & 0x3f) << 8)
+      height = 1 + (webp[data + 2]! >> 6) + (webp[data + 3]! << 2) +
+        ((webp[data + 4]! & 0x0f) << 10)
+    } else if (type === 'ANIM' && size >= 6) {
+      loopCount = webp.readUInt16LE(data + 4)
+    } else if (type === 'ANMF' && size >= 16) {
+      frameCount++
+      durationMs += readUInt24LE(webp, data + 12)
+    }
+
+    offset = data + size + (size & 1)
+  }
+
+  if (width < 1 || height < 1) throw new Error('WebP has no readable dimensions')
+  return { width, height, animated, frameCount, loopCount, durationMs }
 }
 
 /**
@@ -421,7 +483,8 @@ function formatElapsed(startedAt: number): string {
 interface Manifest {
   part_ids: string[]
   thumbs?: Record<string, string[]>
-  partgifs?: Record<string, string>
+  turntables?: Record<string, string>
+  partgifs?: unknown
   [key: string]: unknown
 }
 
@@ -438,7 +501,7 @@ async function main(): Promise<void> {
     }
   }
   // Checked up front, not after 40 s of rendering.
-  if (makeGifs) await requireFfmpeg()
+  if (makeTurntables) await requireImg2Webp()
 
   const manifest = JSON.parse(await readFile(MANIFEST, 'utf-8')) as Manifest
   if (!Array.isArray(manifest.part_ids) || manifest.part_ids.length === 0) {
@@ -563,21 +626,21 @@ async function main(): Promise<void> {
           throw new Error(`expected ${THUMB_COUNT} images, got ${urls.length}`)
         }
         for (const [angle, dataUrl] of urls.entries()) {
-          const png = decodeDataUrl(dataUrl, `${partId}_${angle + 1}`)
+          const webp = decodeDataUrl(dataUrl, `${partId}_${angle + 1}`)
           if (!sizeChecked) {
-            const size = pngSize(png)
+            const info = webpInfo(webp)
             const expectedWidth = width
             const expectedHeight = height
-            if (size.width !== expectedWidth || size.height !== expectedHeight) {
+            if (info.width !== expectedWidth || info.height !== expectedHeight || info.animated) {
               throw new FatalError(
-                `captured PNG is ${size.width}x${size.height}, ` +
+                `captured static WebP is ${info.width}x${info.height}, ` +
                   `expected ${expectedWidth}x${expectedHeight} ` +
-                  '(device pixel ratio or host sizing is off)',
+                  '(format, device pixel ratio or host sizing is off)',
               )
             }
             sizeChecked = true
           }
-          await writeFile(join(THUMBS_OUT, thumbFileName(partId, angle)), png)
+          await writeFile(join(THUMBS_OUT, thumbFileName(partId, angle)), webp)
         }
         captured++
       } catch (err) {
@@ -610,30 +673,34 @@ async function main(): Promise<void> {
     if (await hasCompleteSet(partId)) complete.push(partId)
   }
 
-  // 3. One animated turntable per part, muxed by ffmpeg.
-  let gifsMade = 0
-  const gifFailures: string[] = []
-  if (makeGifs) {
-    const gifStart = performance.now()
-    console.log(`synthesizing ${complete.length} GIF(s), ${gifSeconds}s per loop …`)
-    const result = await synthesizeGifs(complete)
-    gifsMade = result.made
-    gifFailures.push(...result.failed)
-    console.log(`  ${gifsMade} GIF(s) in ${formatElapsed(gifStart)}`)
+  // 3. One animated WebP turntable per part, muxed by img2webp.
+  let turntablesMade = 0
+  const turntableFailures: string[] = []
+  if (makeTurntables) {
+    const turntableStart = performance.now()
+    console.log(
+      `synthesizing ${complete.length} animated WebP turntable(s), ` +
+        `${turntableSeconds}s per loop …`,
+    )
+    const result = await synthesizeTurntables(complete)
+    turntablesMade = result.made
+    turntableFailures.push(...result.failed)
+    console.log(`  ${turntablesMade} turntable(s) in ${formatElapsed(turntableStart)}`)
   }
 
-  // 4. Patch the manifest: `thumbs` for every complete frame set, `partgifs` for
-  //    every GIF that exists (so --no-gif keeps whatever a previous run made).
+  // 4. Patch the manifest from files that actually exist. Drop the superseded
+  //    format-named GIF field rather than leaving stale metadata after a partial rerun.
   const thumbs: Record<string, string[]> = {}
-  const partgifs: Record<string, string> = {}
+  const turntables: Record<string, string> = {}
   for (const partId of complete) {
     thumbs[partId] = thumbUrls(siteOrigin, partId)
-    if (await exists(join(GIFS_OUT, gifFileName(partId)))) {
-      partgifs[partId] = gifUrl(siteOrigin, partId)
+    if (await exists(join(TURNTABLES_OUT, turntableFileName(partId)))) {
+      turntables[partId] = turntableUrl(siteOrigin, partId)
     }
   }
   manifest.thumbs = thumbs
-  manifest.partgifs = partgifs
+  manifest.turntables = turntables
+  delete manifest.partgifs
   // Same format the previewManifest plugin writes: 2-space pretty + trailing newline.
   await writeFile(MANIFEST, `${JSON.stringify(manifest, null, 2)}\n`)
 
@@ -659,12 +726,14 @@ async function main(): Promise<void> {
   console.log(
     `done in ${formatElapsed(startedAt)}: ${captured} captured, ${skipped} skipped, ` +
       `${empty.length} without geometry, ${failed.length} failed; manifest: ` +
-      `${Object.keys(thumbs).length} thumbs, ${Object.keys(partgifs).length} partgifs ` +
+      `${Object.keys(thumbs).length} thumbs, ${Object.keys(turntables).length} turntables ` +
       `(of ${manifest.part_ids.length} parts)`,
   )
   if (failed.length > 0) console.error(`failed part ids: ${failed.join(', ')}`)
-  if (gifFailures.length > 0) console.error(`failed GIF ids: ${gifFailures.join(', ')}`)
-  if (failed.length > 0 || gifFailures.length > 0) process.exitCode = 1
+  if (turntableFailures.length > 0) {
+    console.error(`failed turntable ids: ${turntableFailures.join(', ')}`)
+  }
+  if (failed.length > 0 || turntableFailures.length > 0) process.exitCode = 1
 }
 
 try {

@@ -437,17 +437,22 @@ export class PartPreviewViewport {
   }
 
   /**
-   * Renders one frame and reads the canvas back as a PNG data URL. When `outputSize`
+   * Renders one frame and reads the canvas back as an image data URL. When `outputSize`
    * is present, the WebGL backing buffer is synchronously downsampled through a 2D
    * canvas with high-quality filtering before encoding. This lets the thumbnail
-   * harness render at 2× device scale while keeping its 400×400 file contract.
+   * harness render at 2× device scale while controlling its final file dimensions.
    *
    * Synchronous by necessity: without `preserveDrawingBuffer` the drawing buffer is
    * only guaranteed to hold its contents until the task yields, so the render,
    * downsample and `toDataURL` must happen in the same task. Deliberately does NOT
    * go through {@link RenderLoop} for the same reason.
    */
-  renderToDataURL(outputSize?: { readonly width: number; readonly height: number }): string {
+  renderToDataURL(outputSize?: {
+    readonly width: number;
+    readonly height: number;
+    readonly type?: 'image/png' | 'image/webp';
+    readonly quality?: number;
+  }): string {
     this.renderFrame();
     const source = this.renderer.domElement;
     if (!outputSize) return source.toDataURL('image/png');
@@ -461,7 +466,7 @@ export class PartPreviewViewport {
     context.imageSmoothingEnabled = true;
     context.imageSmoothingQuality = 'high';
     context.drawImage(source, 0, 0, outputSize.width, outputSize.height);
-    return target.toDataURL('image/png');
+    return target.toDataURL(outputSize.type ?? 'image/png', outputSize.quality);
   }
 
   /**

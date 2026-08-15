@@ -1,19 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
-  DEFAULT_GIF_SECONDS,
+  DEFAULT_TURNTABLE_SECONDS,
   DEFAULT_THUMB_SIZE,
   DEFAULT_SITE_ORIGIN,
   DEFAULT_PART_ROTATION_DEG,
   DEFAULT_VIEW_DIR,
-  GIFS_DIR,
   PARTPREVIEW_BASE,
   THUMB_COUNT,
   THUMB_PIXEL_RATIO,
   THUMB_STEP_DEG,
+  THUMB_WEBP_QUALITY,
   THUMBS_DIR,
+  TURNTABLES_DIR,
   formatVec3,
-  gifFileName,
-  gifUrl,
+  turntableFileName,
+  turntableUrl,
   parseRotationDeg,
   parseViewDir,
   thumbFileName,
@@ -24,15 +25,19 @@ import {
 const PART = 'CoreCommandA_Prefab_MediumCapsuleVariantA';
 
 describe('thumb angle invariants', () => {
-  it('covers exactly one turntable revolution', () => {
+  it('uses 18 evenly spaced frames across exactly one revolution', () => {
+    expect(THUMB_COUNT).toBe(18);
+    expect(THUMB_STEP_DEG).toBe(20);
     expect(THUMB_COUNT * THUMB_STEP_DEG).toBe(360);
   });
 });
 
 describe('thumbnail resolution', () => {
-  it('supersamples a 400px output at the live viewport maximum device scale', () => {
-    expect(DEFAULT_THUMB_SIZE).toBe(400);
-    expect(DEFAULT_THUMB_SIZE * THUMB_PIXEL_RATIO).toBe(800);
+  it('supersamples a 600px output at the live viewport maximum device scale', () => {
+    expect(DEFAULT_THUMB_SIZE).toBe(600);
+    expect(DEFAULT_THUMB_SIZE * THUMB_PIXEL_RATIO).toBe(1200);
+    expect(THUMB_WEBP_QUALITY).toBeGreaterThan(0);
+    expect(THUMB_WEBP_QUALITY).toBeLessThanOrEqual(1);
   });
 });
 
@@ -40,10 +45,10 @@ describe('thumbFileName', () => {
   it('zero-pads the 1-based angle index', () => {
     // Derived from THUMB_COUNT, never hard-coded: the turntable length is a taste
     // call that gets retuned, and that must not break the naming contract's test.
-    expect(thumbFileName(PART, 0)).toBe(`${PART}_01.png`);
-    expect(thumbFileName(PART, 1)).toBe(`${PART}_02.png`);
+    expect(thumbFileName(PART, 0)).toBe(`${PART}_01.webp`);
+    expect(thumbFileName(PART, 1)).toBe(`${PART}_02.webp`);
     expect(thumbFileName(PART, THUMB_COUNT - 1)).toBe(
-      `${PART}_${String(THUMB_COUNT).padStart(2, '0')}.png`,
+      `${PART}_${String(THUMB_COUNT).padStart(2, '0')}.webp`,
     );
   });
 
@@ -57,7 +62,7 @@ describe('thumbFileName', () => {
 describe('thumbUrl', () => {
   it('composes origin + app base + thumbs dir + file name', () => {
     expect(thumbUrl(DEFAULT_SITE_ORIGIN, PART, 0)).toBe(
-      `https://meow.science.fail${PARTPREVIEW_BASE}${THUMBS_DIR}/${PART}_01.png`,
+      `https://meow.science.fail${PARTPREVIEW_BASE}${THUMBS_DIR}/${PART}_01.webp`,
     );
   });
 
@@ -69,32 +74,34 @@ describe('thumbUrl', () => {
 
   it('works for a local preview origin', () => {
     expect(thumbUrl('http://localhost:4173', PART, 5)).toBe(
-      `http://localhost:4173${PARTPREVIEW_BASE}${THUMBS_DIR}/${PART}_06.png`,
+      `http://localhost:4173${PARTPREVIEW_BASE}${THUMBS_DIR}/${PART}_06.webp`,
     );
   });
 });
 
-describe('gif naming', () => {
+describe('turntable naming', () => {
   it('is one file per part, no angle suffix', () => {
-    expect(gifFileName(PART)).toBe(`${PART}.gif`);
+    expect(turntableFileName(PART)).toBe(`${PART}.webp`);
   });
 
-  it('composes the manifest `partgifs` URL from its own directory', () => {
-    expect(gifUrl(DEFAULT_SITE_ORIGIN, PART)).toBe(
-      `https://meow.science.fail${PARTPREVIEW_BASE}${GIFS_DIR}/${PART}.gif`,
+  it('composes the manifest `turntables` URL from its own directory', () => {
+    expect(turntableUrl(DEFAULT_SITE_ORIGIN, PART)).toBe(
+      `https://meow.science.fail${PARTPREVIEW_BASE}${TURNTABLES_DIR}/${PART}.webp`,
     );
-    expect(gifUrl('https://meow.science.fail/', PART)).toBe(gifUrl(DEFAULT_SITE_ORIGIN, PART));
+    expect(turntableUrl('https://meow.science.fail/', PART)).toBe(
+      turntableUrl(DEFAULT_SITE_ORIGIN, PART),
+    );
   });
 
-  it('keeps GIFs out of the thumbnail directory', () => {
-    expect(GIFS_DIR).not.toBe(THUMBS_DIR);
+  it('keeps turntables out of the thumbnail directory', () => {
+    expect(TURNTABLES_DIR).not.toBe(THUMBS_DIR);
   });
 
   it('defaults to a loop long enough to read as motion', () => {
     // Deliberately not pinned to a specific value — the default is a taste call.
     // What must hold is that it yields a usable frame rate for THUMB_COUNT frames.
-    expect(DEFAULT_GIF_SECONDS).toBeGreaterThan(0);
-    const fps = THUMB_COUNT / DEFAULT_GIF_SECONDS;
+    expect(DEFAULT_TURNTABLE_SECONDS).toBeGreaterThan(0);
+    const fps = THUMB_COUNT / DEFAULT_TURNTABLE_SECONDS;
     expect(fps).toBeGreaterThanOrEqual(1);
     expect(fps).toBeLessThanOrEqual(30);
   });

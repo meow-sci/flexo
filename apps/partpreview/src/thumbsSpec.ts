@@ -17,22 +17,25 @@
  */
 
 // /** Thumbnails per part — a full turntable, evenly spaced. */
-export const THUMB_COUNT = 10;
+export const THUMB_COUNT = 18;
 
 // /** Degrees of camera azimuth between consecutive thumbnails (360 / THUMB_COUNT). */
-export const THUMB_STEP_DEG = 36;
+export const THUMB_STEP_DEG = 20;
 
 /** Default logical viewport size in CSS px (square), overridable with `--width` / `--height`. */
-export const DEFAULT_THUMB_SIZE = 400;
+export const DEFAULT_THUMB_SIZE = 600;
 
 /**
  * Capture backing-buffer scale, matching {@link PartPreviewViewport}'s maximum device-pixel
- * ratio. A 400 CSS-pixel live preview on a typical Retina-class display renders at 800×800;
+ * ratio. A 600 CSS-pixel live preview on a typical Retina-class display renders at 1200×1200;
  * headless Chromium must request the same scale explicitly or the render has one-quarter as many
  * samples and looks visibly pixelated beside the interactive viewport. The capture path then
- * downsamples this backing buffer to {@link DEFAULT_THUMB_SIZE} for the final PNG.
+ * downsamples this backing buffer to {@link DEFAULT_THUMB_SIZE} for the final WebP.
  */
 export const THUMB_PIXEL_RATIO = 2;
+
+/** Browser WebP encoder quality for the static frames, in the canvas API's 0..1 range. */
+export const THUMB_WEBP_QUALITY = 0.95;
 
 /** Three finite numbers — a view direction, or a rotation in degrees. */
 export type Vec3 = readonly [number, number, number];
@@ -125,14 +128,14 @@ export const PARTPREVIEW_BASE = '/flexo/apps/partpreview/';
 export const THUMBS_DIR = 'assets/thumbs';
 
 /** Animated-turntable directory, sibling of {@link THUMBS_DIR}, same lifecycle. */
-export const GIFS_DIR = 'assets/gifs';
+export const TURNTABLES_DIR = 'assets/turntables';
 
 /**
- * Seconds one GIF loop takes, i.e. all {@link THUMB_COUNT} frames — so the frame
- * rate is `THUMB_COUNT / seconds` (10 frames over 4 s = 2.5 fps). Overridable with
- * `--gif-seconds`.
+ * Seconds one animated WebP loop takes, i.e. all {@link THUMB_COUNT} frames — so the frame
+ * rate is `THUMB_COUNT / seconds` (18 frames over 4 s = 4.5 fps). Overridable with
+ * `--turntable-seconds`.
  */
-export const DEFAULT_GIF_SECONDS = 4;
+export const DEFAULT_TURNTABLE_SECONDS = 4;
 
 /**
  * Marks the one failure the driver must NOT treat as a bug: the part loaded, but
@@ -161,21 +164,21 @@ export interface CaptureApi {
   error: string | null;
   /** Angles {@link CaptureApi.capturePart} returns — must equal {@link THUMB_COUNT}. */
   readonly count: number;
-  /** Loads the part and renders every angle; resolves to PNG data URLs in order. */
+  /** Loads the part and renders every angle; resolves to WebP data URLs in order. */
   capturePart(partId: string): Promise<string[]>;
 }
 
-/** `<part_id>_NN.png` — NN is the 1-based, zero-padded angle index. */
+/** `<part_id>_NN.webp` — NN is the 1-based, zero-padded angle index. */
 export function thumbFileName(partId: string, angleIndex: number): string {
   if (!Number.isInteger(angleIndex) || angleIndex < 0 || angleIndex >= THUMB_COUNT) {
     throw new RangeError(`angleIndex out of range: ${angleIndex} (expected 0..${THUMB_COUNT - 1})`);
   }
-  return `${partId}_${String(angleIndex + 1).padStart(2, '0')}.png`;
+  return `${partId}_${String(angleIndex + 1).padStart(2, '0')}.webp`;
 }
 
-/** `<part_id>.gif` — the animated turntable built from that part's frames. */
-export function gifFileName(partId: string): string {
-  return `${partId}.gif`;
+/** `<part_id>.webp` — the animated turntable built from that part's frames. */
+export function turntableFileName(partId: string): string {
+  return `${partId}.webp`;
 }
 
 /** Trailing slashes on the origin are the one plausible caller typo. */
@@ -190,11 +193,11 @@ export function thumbUrl(siteOrigin: string, partId: string, angleIndex: number)
 }
 
 /**
- * Full production URL of one part's animated turntable — the manifest `partgifs`
+ * Full production URL of one part's animated turntable — the manifest `turntables`
  * value for that part.
  */
-export function gifUrl(siteOrigin: string, partId: string): string {
-  return `${normalizeOrigin(siteOrigin)}${PARTPREVIEW_BASE}${GIFS_DIR}/${gifFileName(partId)}`;
+export function turntableUrl(siteOrigin: string, partId: string): string {
+  return `${normalizeOrigin(siteOrigin)}${PARTPREVIEW_BASE}${TURNTABLES_DIR}/${turntableFileName(partId)}`;
 }
 
 /**

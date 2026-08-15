@@ -34,6 +34,7 @@ import {
   type RotationDeg,
   THUMB_COUNT,
   THUMB_STEP_DEG,
+  THUMB_WEBP_QUALITY,
   VIEW_DIR_PARAM,
   type ViewDir,
 } from './thumbsSpec';
@@ -92,14 +93,21 @@ const api: CaptureApi = {
     if (!part) throw new Error(`unknown part_id ${partId}`);
     await viewport.setPart(part, $catalogIndex.get());
     // setPart swallows load failures by design (a live embed degrades rather than
-    // breaks); a capture must not silently write ten pictures of nothing. The
+    // breaks); a capture must not silently write a full turntable of nothing. The
     // sentinel lets the driver tell "this part has no mesh" (fine) from "this part
     // failed to load" (a bug) — see EMPTY_PART_ERROR.
     if (!viewport.hasContent()) throw new Error(`${EMPTY_PART_ERROR}: ${partId}`);
     const urls: string[] = [];
     for (let i = 0; i < THUMB_COUNT; i++) {
       viewport.setViewAzimuth((i * THUMB_STEP_DEG * Math.PI) / 180);
-      urls.push(viewport.renderToDataURL({ width, height }));
+      urls.push(
+        viewport.renderToDataURL({
+          width,
+          height,
+          type: 'image/webp',
+          quality: THUMB_WEBP_QUALITY,
+        }),
+      );
     }
     return urls;
   },

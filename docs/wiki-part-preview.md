@@ -75,12 +75,12 @@ GET https://meow.science.fail/flexo/apps/partpreview/manifest.json
   "ksa_build": "2026.7.10.5056",
   "thumbs": {
     "CoreCommandA_Prefab_MediumCapsuleVariantA": [
-      "https://meow.science.fail/flexo/apps/partpreview/assets/thumbs/CoreCommandA_Prefab_MediumCapsuleVariantA_01.png",
-      "… 10 URLs in angle order …"
+      "https://meow.science.fail/flexo/apps/partpreview/assets/thumbs/CoreCommandA_Prefab_MediumCapsuleVariantA_01.webp",
+      "… 18 URLs in angle order …"
     ]
   },
-  "partgifs": {
-    "CoreCommandA_Prefab_MediumCapsuleVariantA": "https://meow.science.fail/flexo/apps/partpreview/assets/gifs/CoreCommandA_Prefab_MediumCapsuleVariantA.gif"
+  "turntables": {
+    "CoreCommandA_Prefab_MediumCapsuleVariantA": "https://meow.science.fail/flexo/apps/partpreview/assets/turntables/CoreCommandA_Prefab_MediumCapsuleVariantA.webp"
   }
 }
 ```
@@ -90,8 +90,8 @@ GET https://meow.science.fail/flexo/apps/partpreview/manifest.json
 | `part_ids`    | Every `part_id` the viewer accepts, `localeCompare`-sorted and deduplicated (143 at build `2026.7.10.5056`). Produced by the app's own parser — see [The manifest](#the-manifest).        |
 | `skybox_ids`  | Every `skybox_id` the viewer understands — all **nine** environment presets, `'room'` included. `'room'` is the procedural studio (no sky), i.e. the default; it is listed so a wiki can round-trip whatever value it read back into a URL. |
 | `ksa_build`   | The KSA build the catalog data was parsed from (the `build` field of the private asset tree's `version.json`), or `null` if unavailable. This is the **cache-busting handle**: when it changes, the game data changed, so re-fetch the manifest and invalidate any cached embed/thumbnail. |
-| `thumbs`      | **Optional.** Part id → the 10 full URLs of its pre-rendered turntable PNGs, in angle order (index 0 = the default view). Keys are `localeCompare`-sorted; a part with no renderable geometry has **no entry**, so always test for the key. Absent entirely from a plain build — see [Part thumbnails](#part-thumbnails). |
-| `partgifs`    | **Optional.** Part id → the full URL of that part's animated turntable GIF (one string, not an array): the same 10 frames played as a looping animation (4 s by default). Same key set as `thumbs` on a complete run, same optionality — always test for the key. |
+| `thumbs`      | **Optional.** Part id → the 18 full URLs of its pre-rendered static WebP turntable frames, in angle order (index 0 = the default view). Keys are `localeCompare`-sorted; a part with no renderable geometry has **no entry**, so always test for the key. Absent entirely from a plain build — see [Part thumbnails](#part-thumbnails). |
+| `turntables`  | **Optional.** Part id → the full URL of that part's animated WebP turntable (one string, not an array): the same 18 frames played as a looping animation (4 s by default). Same key set as `thumbs` on a complete run, same optionality — always test for the key. |
 
 ### 2. Embed a part
 
@@ -354,28 +354,28 @@ the viewer accepts.
 
 ## Part thumbnails
 
-Alongside the live embed, the build can produce **static PNG turntables**: 10 angles per
-part, 36° apart, at `dist/apps/partpreview/assets/thumbs/<part_id>_NN.png` (`NN` = `01`…`10`),
-plus **one animated GIF per part** at `assets/gifs/<part_id>.gif` — the same 10 frames as a
+Alongside the live embed, the build can produce **static WebP turntables**: 18 angles per
+part, 20° apart, at `dist/apps/partpreview/assets/thumbs/<part_id>_NN.webp` (`NN` = `01`…`18`),
+plus **one animated WebP per part** at `assets/turntables/<part_id>.webp` — the same 18 frames as a
 looping animation, 4 seconds per revolution by default. They exist so a wiki can show a grid of parts without booting 143 WebGL
 contexts.
 
 ```sh
 pnpm build                # always first — the capture renders dist/, not src/
-pnpm thumbs:partpreview   # ~42 s for all 143 parts on a laptop (GIFs included)
-pnpm thumbs:partpreview:check # fast PNG-only validation of one representative part
+pnpm thumbs:partpreview   # all static and animated WebPs
+pnpm thumbs:partpreview:check # fast static-only validation of one representative part
 ```
 
-Requires **ffmpeg** on `PATH` for the GIFs (`brew install ffmpeg`,
-`sudo apt-get install -y ffmpeg`); the script checks for it up front and `--no-gif` opts out.
+Requires **img2webp** on `PATH` for the animations (`brew install webp`,
+`sudo apt-get install -y webp`); the script checks for it up front and `--no-turntable` opts out.
 
 | | |
 | --- | --- |
 | **Angle 01** | The embed's default view — same camera direction (`DEFAULT_VIEW_DIR`), same aspect-aware fill — so a thumbnail and the iframe that replaces it agree. Two knobs move it, and only for the capture: `--view-dir x,y,z` puts the camera somewhere else (the remaining angles follow), `--rotate x,y,z` turns the part itself. |
 | **Angles 02–NN** | The **camera** orbited about world Y through the framed target, in `THUMB_STEP_DEG` steps, so the half-way frame is the back view. Object transforms are never touched, so the world-fixed key light sweeps across the part over the sequence (that reads as shape; the dominant studio IBL is soft). |
 | **Look** | The mini app's default and nothing else: `DEFAULT_LIGHTING`, the procedural studio environment, opaque charcoal background, **no** connectors, **no** axis triad, **no** measurement box, no UI. |
-| **Size** | `DEFAULT_THUMB_SIZE` square (currently 400×400) by default; `--width`/`--height` change the output size. Capture runs at `THUMB_PIXEL_RATIO` 2, producing an internal 800×800 WebGL frame that is downsampled with high-quality browser filtering before the 400×400 PNG is encoded. The live renderer uses the same capped 2× device pixel ratio. Headless Chromium otherwise runs at device scale 1; the old capture therefore used one-quarter as many samples and looked pixelated at the same output size. Those constants live in `apps/partpreview/src/thumbsSpec.ts`; the deploy workflow runs the script with no flags. GIFs consume the already-downsampled PNGs, so their dimensions and file budget remain unchanged. |
-| **The GIF** | The same frames, in the same order, at `THUMB_COUNT / --gif-seconds` fps (10 ÷ 4 s = 2.5 fps by default), looping forever. ffmpeg muxes it with a two-pass palette (`palettegen stats_mode=full` → `paletteuse dither=bayer`): one global palette over all frames, so colors don't crawl as the part spins, and an ordered dither that keeps a dark render from banding without shimmering. ~120 kB each, ~17 MB for the set. |
+| **Size** | Static and animated WebPs are 600×600 by default; `--width`/`--height` change both. Capture runs at `THUMB_PIXEL_RATIO` 2, producing an internal 1200×1200 WebGL frame that is downsampled with high-quality browser filtering before the 600×600 static WebP is encoded. The live renderer uses the same capped 2× device pixel ratio. The constants live in `apps/partpreview/src/thumbsSpec.ts`; the deploy workflow runs the script with no flags. |
+| **Animated WebP** | All 18 static frames, in the same order, at `THUMB_COUNT / --turntable-seconds` fps (18 ÷ 4 s = 4.5 fps by default), looping forever. `img2webp` uses lossy quality 92, maximum compression effort and sharp YUV conversion. Unlike GIF, animated WebP retains full-color frames rather than quantizing the entire render to a 256-color palette. |
 
 ### How it works
 
@@ -384,7 +384,7 @@ Requires **ffmpeg** on `PATH` for the GIFs (`brew install ffmpeg`,
 `http://127.0.0.1:<port>/flexo/` exactly as production does, then drives **one** headless
 Chromium page through the whole run: `apps/partpreview/capture.html` — a second Vite input,
 a bare host div and no React — boots the catalogs once, builds one `PartPreviewViewport`,
-and exposes `window.__flexoCapture.capturePart(id)`, which loads the part and returns 10 PNG
+and exposes `window.__flexoCapture.capturePart(id)`, which loads the part and returns 18 WebP
 data URLs. One page, one WebGL context, one catalog parse, and the module-level
 geometry/material/texture caches make repeated SubParts free; per angle the cost is a single
 render plus `canvas.toDataURL`.
@@ -397,14 +397,14 @@ test alike.
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--width`, `--height` | `DEFAULT_THUMB_SIZE` (400) | Final PNG dimensions. WebGL renders each axis at `THUMB_PIXEL_RATIO` (2) before a high-quality downsample, and the first PNG's IHDR is verified against the requested 400×400 default. |
-| `--view-dir x,y,z` | `DEFAULT_VIEW_DIR` | World-space camera direction for angle 01, unnormalized — `y` is the elevation, the `x`/`z` ratio picks the starting side, and the distance still comes from the part's own framing. The turntable spins it about world Y, so a direction with no horizontal component (`0,1,0`) is rejected rather than silently rendering identical frames. Handy for auditing an orientation: `--parts <id> --no-gif --view-dir 1,0.25,1`. |
+| `--width`, `--height` | `DEFAULT_THUMB_SIZE` (600) | Final static and animated WebP dimensions. WebGL renders each axis at `THUMB_PIXEL_RATIO` (2) before a high-quality downsample. The script verifies the 1200×1200 backing buffer, the static 600×600 RIFF dimensions, and each animated WebP's dimensions, frame count, duration and infinite loop. |
+| `--view-dir x,y,z` | `DEFAULT_VIEW_DIR` | World-space camera direction for angle 01, unnormalized — `y` is the elevation, the `x`/`z` ratio picks the starting side, and the distance still comes from the part's own framing. The turntable spins it about world Y, so a direction with no horizontal component (`0,1,0`) is rejected rather than silently rendering identical frames. Handy for auditing an orientation: `--parts <id> --no-turntable --view-dir 1,0.25,1`. |
 | `--rotate x,y,z` | `DEFAULT_PART_ROTATION_DEG` (`0,0,90`) | Rotates the **part** (XYZ Euler, degrees) before the camera frames it — the only way to change which way it FACES. The default stands parts modeled along +X nose-up. `--view-dir` cannot do this: the turntable orbits about world Y, so a part lying on its side reads that way from every angle. |
 | `--site-origin` | `https://meow.science.fail` | Origin the manifest URLs are built from. |
-| `--parts a,b,c` | all `part_ids` | Capture a subset (debugging). Unknown ids are a hard error. `pnpm thumbs:partpreview:check` applies this filter to `CoreCouplingA_Prefab_DockingPort1WA` and adds `--no-gif` for a quick visual-quality pass. Without `--no-gif`, GIFs are still (re-)made for every part with a complete frame set on disk — it costs ~1.3 s and keeps every GIF consistent with its frames. |
-| `--skip-existing` | off | Skip parts whose 10 PNGs already exist, and parts whose GIF already exists — resumes a partial run. |
-| `--gif-seconds <s>` | `4` | Length of one full GIF loop, i.e. one revolution. The frame rate follows (`10 / s`). |
-| `--no-gif` | off | Skip GIF synthesis entirely; ffmpeg is then not needed. A previous run's `partgifs` entries are kept. |
+| `--parts a,b,c` | all `part_ids` | Capture a subset (debugging). Unknown ids are a hard error. `pnpm thumbs:partpreview:check` applies this filter to `CoreCouplingA_Prefab_DockingPort1WA` and adds `--no-turntable` for a quick visual-quality pass. Without it, animated turntables are (re-)made for every part with a complete frame set on disk. |
+| `--skip-existing` | off | Skip parts whose 18 static WebPs and animated WebP already exist — resumes a partial run. |
+| `--turntable-seconds <s>` | `4` | Length of one full animated WebP loop, i.e. one revolution. The frame duration follows (`seconds × 1000 / THUMB_COUNT`, rounded to whole milliseconds). |
+| `--no-turntable` | off | Skip animated WebP synthesis; img2webp is then not needed. Existing turntable files remain discoverable in the patched manifest. |
 | `--verbose` | off | Forward every page console message, not just errors. |
 
 One 404 is normal and is now reported as a note rather than an error: the catalog fetches a
@@ -421,14 +421,14 @@ real bug, and CI must not publish a manifest with holes in it.
 
 ### Lifecycle — mind the order
 
-`vite build apps/partpreview` runs with `emptyOutDir`, which **wipes the thumbnails, the GIFs
+`vite build apps/partpreview` runs with `emptyOutDir`, which **wipes the thumbnails, the turntables
 and the patched manifest**. The order is always `pnpm build` → `pnpm thumbs:partpreview`,
 never the reverse, and never a mini-app rebuild afterwards. Consumers must therefore treat
-`thumbs` and `partgifs` as optional: a plain build emits a manifest without either.
+`thumbs` and `turntables` as optional: a plain build emits a manifest without either.
 `ksa_build` remains the cache-busting handle for both, exactly as for embeds.
 
 Production gets them because `.github/workflows/deploy.yml` installs Playwright's Chromium
-**and ffmpeg** (neither is on the runner image) and runs the capture **between** the build
+**and img2webp** (neither is on the runner image) and runs the capture **between** the build
 and the Pages upload — `dist/` only ever exists inside that job.
 
 Design + rejected alternatives (per-part navigation, headless-gl, a build plugin):
@@ -463,7 +463,7 @@ file.
 - **Built-in Parts only.** No custom or user-authored parts, no kittens, no animations, no
   IVA modes — the viewer resolves `part_id` against the Core Part catalog and nothing else.
 - **Thumbnails are a build-adjacent extra, not a service.** `pnpm thumbs:partpreview`
-  pre-renders PNGs into `dist/` after a build (see [Part thumbnails](#part-thumbnails));
+  pre-renders WebPs into `dist/` after a build (see [Part thumbnails](#part-thumbnails));
   there is no on-demand image endpoint, no transparent-background variant, and nothing is
   rendered server-side at request time.
 - **No deep links back into flexo.** The preview does not offer "open this part in the

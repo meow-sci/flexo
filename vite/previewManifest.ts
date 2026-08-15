@@ -35,18 +35,18 @@ export interface PreviewManifest {
   /**
    * Part id -> the full URLs of its turntable thumbnails, in angle order.
    *
-   * OPTIONAL and never written by this plugin: the PNGs are produced after the
+   * OPTIONAL and never written by this plugin: the static WebPs are produced after the
    * build by `pnpm thumbs:partpreview`, which patches this file in place (a plain
    * build therefore has no `thumbs`, and rebuilding the mini app wipes both the
    * images and the field). See plans/PART_PREVIEW_THUMBS.md §2.5.
    */
   thumbs?: Record<string, string[]>;
   /**
-   * Part id -> the full URL of its animated turntable GIF. Same optionality,
+   * Part id -> the full URL of its animated WebP turntable. Same optionality,
    * lifecycle and producer as {@link PreviewManifest.thumbs}; a part only appears
-   * here once ffmpeg has actually muxed its frames.
+   * here once img2webp has actually muxed its frames.
    */
-  partgifs?: Record<string, string>;
+  turntables?: Record<string, string>;
 }
 
 /**

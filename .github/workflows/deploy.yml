@@ -69,11 +69,10 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      # ffmpeg muxes the captured frames into one animated GIF per part. Not
-      # preinstalled on the Ubuntu runner image, and the capture step fails fast
-      # without it.
-      - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      # img2webp muxes the captured frames into one animated WebP per part. The
+      # capture step checks for it before rendering the catalog.
+      - name: Install WebP tools
+        run: sudo apt-get update && sudo apt-get install -y webp
 
       # Defaults only, on purpose: thumbnail size (DEFAULT_THUMB_SIZE), turntable
       # length (THUMB_COUNT), the angle-0 camera direction (DEFAULT_VIEW_DIR) and

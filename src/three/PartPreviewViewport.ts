@@ -139,6 +139,8 @@ export class PartPreviewViewport {
   private readonly partRoot = new THREE.Group();
   /** The most recent {@link SceneEnvironment.apply}; awaited by {@link envApplied}. */
   private envPromise: Promise<void> = Promise.resolve();
+  /** Reused 2D target for supersampled captures requested below the WebGL backing size. */
+  private captureCanvas: HTMLCanvasElement | null = null;
 
   /** Precise world bounds of the loaded part, recomputed on each {@link setPart}. */
   private partBounds: ComputedBounds | null = null;
@@ -435,16 +437,31 @@ export class PartPreviewViewport {
   }
 
   /**
-   * Renders one frame and reads the canvas back as a PNG data URL.
+   * Renders one frame and reads the canvas back as a PNG data URL. When `outputSize`
+   * is present, the WebGL backing buffer is synchronously downsampled through a 2D
+   * canvas with high-quality filtering before encoding. This lets the thumbnail
+   * harness render at 2× device scale while keeping its 400×400 file contract.
    *
    * Synchronous by necessity: without `preserveDrawingBuffer` the drawing buffer is
-   * only guaranteed to hold its contents until the task yields, so the render and
-   * the `toDataURL` must happen in the same task. Deliberately does NOT go through
-   * {@link RenderLoop} for the same reason.
+   * only guaranteed to hold its contents until the task yields, so the render,
+   * downsample and `toDataURL` must happen in the same task. Deliberately does NOT
+   * go through {@link RenderLoop} for the same reason.
    */
-  renderToDataURL(): string {
+  renderToDataURL(outputSize?: { readonly width: number; readonly height: number }): string {
     this.renderFrame();
-    return this.renderer.domElement.toDataURL('image/png');
+    const source = this.renderer.domElement;
+    if (!outputSize) return source.toDataURL('image/png');
+
+    const target = this.captureCanvas ?? document.createElement('canvas');
+    this.captureCanvas = target;
+    target.width = outputSize.width;
+    target.height = outputSize.height;
+    const context = target.getContext('2d');
+    if (!context) throw new Error('Could not create thumbnail downsample canvas');
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(source, 0, 0, outputSize.width, outputSize.height);
+    return target.toDataURL('image/png');
   }
 
   /**

@@ -99,7 +99,7 @@ const api: CaptureApi = {
     const urls: string[] = [];
     for (let i = 0; i < THUMB_COUNT; i++) {
       viewport.setViewAzimuth((i * THUMB_STEP_DEG * Math.PI) / 180);
-      urls.push(viewport.renderToDataURL());
+      urls.push(viewport.renderToDataURL({ width, height }));
     }
     return urls;
   },

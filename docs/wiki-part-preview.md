@@ -363,6 +363,7 @@ contexts.
 ```sh
 pnpm build                # always first — the capture renders dist/, not src/
 pnpm thumbs:partpreview   # ~42 s for all 143 parts on a laptop (GIFs included)
+pnpm thumbs:partpreview:check # fast PNG-only validation of one representative part
 ```
 
 Requires **ffmpeg** on `PATH` for the GIFs (`brew install ffmpeg`,
@@ -373,7 +374,7 @@ Requires **ffmpeg** on `PATH` for the GIFs (`brew install ffmpeg`,
 | **Angle 01** | The embed's default view — same camera direction (`DEFAULT_VIEW_DIR`), same aspect-aware fill — so a thumbnail and the iframe that replaces it agree. Two knobs move it, and only for the capture: `--view-dir x,y,z` puts the camera somewhere else (the remaining angles follow), `--rotate x,y,z` turns the part itself. |
 | **Angles 02–NN** | The **camera** orbited about world Y through the framed target, in `THUMB_STEP_DEG` steps, so the half-way frame is the back view. Object transforms are never touched, so the world-fixed key light sweeps across the part over the sequence (that reads as shape; the dominant studio IBL is soft). |
 | **Look** | The mini app's default and nothing else: `DEFAULT_LIGHTING`, the procedural studio environment, opaque charcoal background, **no** connectors, **no** axis triad, **no** measurement box, no UI. |
-| **Size** | `DEFAULT_THUMB_SIZE` square (currently 400×400) by default; `--width`/`--height` for anything else. That constant lives in `apps/partpreview/src/thumbsSpec.ts` and is the one knob the CI build honors — the deploy workflow runs the script with no flags. |
+| **Size** | `DEFAULT_THUMB_SIZE` square (currently 400×400) by default; `--width`/`--height` change the output size. Capture runs at `THUMB_PIXEL_RATIO` 2, producing an internal 800×800 WebGL frame that is downsampled with high-quality browser filtering before the 400×400 PNG is encoded. The live renderer uses the same capped 2× device pixel ratio. Headless Chromium otherwise runs at device scale 1; the old capture therefore used one-quarter as many samples and looked pixelated at the same output size. Those constants live in `apps/partpreview/src/thumbsSpec.ts`; the deploy workflow runs the script with no flags. GIFs consume the already-downsampled PNGs, so their dimensions and file budget remain unchanged. |
 | **The GIF** | The same frames, in the same order, at `THUMB_COUNT / --gif-seconds` fps (10 ÷ 4 s = 2.5 fps by default), looping forever. ffmpeg muxes it with a two-pass palette (`palettegen stats_mode=full` → `paletteuse dither=bayer`): one global palette over all frames, so colors don't crawl as the part spins, and an ordered dither that keeps a dark render from banding without shimmering. ~120 kB each, ~17 MB for the set. |
 
 ### How it works
@@ -396,11 +397,11 @@ test alike.
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `--width`, `--height` | `DEFAULT_THUMB_SIZE` (400) | Canvas size in px. The first PNG's IHDR is verified against it, so a device-pixel-ratio surprise aborts the run instead of shipping wrong-sized images. |
+| `--width`, `--height` | `DEFAULT_THUMB_SIZE` (400) | Final PNG dimensions. WebGL renders each axis at `THUMB_PIXEL_RATIO` (2) before a high-quality downsample, and the first PNG's IHDR is verified against the requested 400×400 default. |
 | `--view-dir x,y,z` | `DEFAULT_VIEW_DIR` | World-space camera direction for angle 01, unnormalized — `y` is the elevation, the `x`/`z` ratio picks the starting side, and the distance still comes from the part's own framing. The turntable spins it about world Y, so a direction with no horizontal component (`0,1,0`) is rejected rather than silently rendering identical frames. Handy for auditing an orientation: `--parts <id> --no-gif --view-dir 1,0.25,1`. |
-| `--rotate x,y,z` | `0,0,0` | Rotates the **part** (XYZ Euler, degrees) before the camera frames it — the only way to change which way it FACES. `--rotate 0,0,90` stands a capsule modeled along +X nose-up. `--view-dir` cannot do this: the turntable orbits about world Y, so a part lying on its side reads that way from every angle. |
+| `--rotate x,y,z` | `DEFAULT_PART_ROTATION_DEG` (`0,0,90`) | Rotates the **part** (XYZ Euler, degrees) before the camera frames it — the only way to change which way it FACES. The default stands parts modeled along +X nose-up. `--view-dir` cannot do this: the turntable orbits about world Y, so a part lying on its side reads that way from every angle. |
 | `--site-origin` | `https://meow.science.fail` | Origin the manifest URLs are built from. |
-| `--parts a,b,c` | all `part_ids` | Capture a subset (debugging). Unknown ids are a hard error. GIFs are still (re-)made for every part with a complete frame set on disk — it costs ~1.3 s and keeps every GIF consistent with its frames. |
+| `--parts a,b,c` | all `part_ids` | Capture a subset (debugging). Unknown ids are a hard error. `pnpm thumbs:partpreview:check` applies this filter to `CoreCouplingA_Prefab_DockingPort1WA` and adds `--no-gif` for a quick visual-quality pass. Without `--no-gif`, GIFs are still (re-)made for every part with a complete frame set on disk — it costs ~1.3 s and keeps every GIF consistent with its frames. |
 | `--skip-existing` | off | Skip parts whose 10 PNGs already exist, and parts whose GIF already exists — resumes a partial run. |
 | `--gif-seconds <s>` | `4` | Length of one full GIF loop, i.e. one revolution. The frame rate follows (`10 / s`). |
 | `--no-gif` | off | Skip GIF synthesis entirely; ffmpeg is then not needed. A previous run's `partgifs` entries are kept. |

@@ -4,6 +4,7 @@
  *
  *   pnpm build            # must run first — this script renders dist/, never src/
  *   pnpm thumbs:partpreview
+ *   pnpm thumbs:partpreview:check # one representative part, PNGs only
  *
  * Output: `dist/apps/partpreview/assets/thumbs/<part_id>_NN.png`, NN = 01..10, plus
  * one animated turntable per part at `assets/gifs/<part_id>.gif` muxed by **ffmpeg**
@@ -25,9 +26,9 @@
  * `apt-get install ffmpeg`); `--no-gif` runs the PNG capture without it.
  *
  * FLAGS
- *   --width, --height <px>   canvas size (default DEFAULT_THUMB_SIZE, square)
- *   --view-dir x,y,z         camera direction for angle 0 (default 1,0.6,1)
- *   --rotate x,y,z           rotate the PART itself, XYZ Euler degrees (default 0,0,0)
+ *   --width, --height <px>   PNG size (internally rendered at 2x; default square)
+ *   --view-dir x,y,z         camera direction for angle 0 (default 1,0.8,1)
+ *   --rotate x,y,z           rotate the PART itself, XYZ Euler degrees (default 0,0,90)
  *   --site-origin <origin>   origin for the manifest URLs (default meow.science.fail)
  *   --parts a,b,c            capture only these part ids (debugging)
  *   --skip-existing          skip a part whose 10 PNGs are already on disk
@@ -56,6 +57,7 @@ import {
   ROTATION_PARAM,
   type RotationDeg,
   THUMB_COUNT,
+  THUMB_PIXEL_RATIO,
   THUMBS_DIR,
   VIEW_DIR_PARAM,
   type ViewDir,
@@ -92,7 +94,7 @@ const PROGRESS_EVERY = 10
 
 const DATA_URL_PREFIX = 'data:image/png;base64,'
 
-/** Budget for one ffmpeg mux; a 250x250 10-frame GIF takes ~50 ms. */
+/** Budget for one ffmpeg mux; a 400x400 10-frame GIF takes about 100 ms. */
 const FFMPEG_TIMEOUT_MS = 30_000
 
 /** Concurrent ffmpeg processes. Each is tiny and short — this just keeps it snappy. */
@@ -124,8 +126,8 @@ if (values.help) {
     [
       'Usage: node scripts/capture-part-thumbs.ts [options]   (run `pnpm build` first)',
       '',
-      `  --width <px>            capture width  (default ${DEFAULT_THUMB_SIZE})`,
-      `  --height <px>           capture height (default ${DEFAULT_THUMB_SIZE})`,
+      `  --width <px>            PNG width, rendered internally at 2x  (default ${DEFAULT_THUMB_SIZE})`,
+      `  --height <px>           PNG height, rendered internally at 2x (default ${DEFAULT_THUMB_SIZE})`,
       `  --view-dir x,y,z        camera direction for angle 0 (default ${formatVec3(DEFAULT_VIEW_DIR)})`,
       `  --rotate x,y,z          rotate the part, XYZ Euler degrees (default ${formatVec3(DEFAULT_PART_ROTATION_DEG)})`,
       `  --site-origin <origin>  manifest URL origin (default ${DEFAULT_SITE_ORIGIN})`,
@@ -476,9 +478,12 @@ async function main(): Promise<void> {
   let sizeChecked = false
 
   try {
-    // deviceScaleFactor 1 (Playwright's default) + the viewport's
-    // min(dpr, 2) pixel ratio ⇒ the canvas backing store is exactly width x height.
-    const page = await browser.newPage({ viewport: { width, height } })
+    // Match the live viewport's capped Retina-class device pixel ratio. The host remains
+    // width×height CSS pixels, while renderer.setPixelRatio builds a 2× backing buffer.
+    const page = await browser.newPage({
+      viewport: { width, height },
+      deviceScaleFactor: THUMB_PIXEL_RATIO,
+    })
     page.on('pageerror', (err) => console.error(`  [page error] ${err.message}`))
     page.on('response', (res) => {
       if (res.status() !== 404) return
@@ -506,6 +511,28 @@ async function main(): Promise<void> {
     const bootError = await page.evaluate(() => window.__flexoCapture?.error ?? null)
     if (bootError) throw new FatalError(`capture page failed to boot: ${bootError}`)
 
+    const backing = await page.evaluate(() => {
+      const canvas = document.querySelector<HTMLCanvasElement>('#host canvas')
+      return {
+        devicePixelRatio: window.devicePixelRatio,
+        width: canvas?.width ?? 0,
+        height: canvas?.height ?? 0,
+      }
+    })
+    const backingWidth = width * THUMB_PIXEL_RATIO
+    const backingHeight = height * THUMB_PIXEL_RATIO
+    if (
+      backing.devicePixelRatio !== THUMB_PIXEL_RATIO ||
+      backing.width !== backingWidth ||
+      backing.height !== backingHeight
+    ) {
+      throw new FatalError(
+        `capture backing buffer is ${backing.width}x${backing.height} at ` +
+          `${backing.devicePixelRatio}x, expected ${backingWidth}x${backingHeight} at ` +
+          `${THUMB_PIXEL_RATIO}x`,
+      )
+    }
+
     // Guards against a stale dist/ built before a thumbsSpec change.
     const pageCount = await page.evaluate(() => window.__flexoCapture?.count ?? 0)
     if (pageCount !== THUMB_COUNT) {
@@ -518,6 +545,7 @@ async function main(): Promise<void> {
 
     console.log(
       `capturing ${targets.length} part(s) x ${THUMB_COUNT} angles at ${width}x${height}, ` +
+        `supersampled from ${width * THUMB_PIXEL_RATIO}x${height * THUMB_PIXEL_RATIO}, ` +
         `view dir ${formatVec3(viewDir)}, part rotation ${formatVec3(partRotation)}° …`,
     )
 
@@ -538,9 +566,12 @@ async function main(): Promise<void> {
           const png = decodeDataUrl(dataUrl, `${partId}_${angle + 1}`)
           if (!sizeChecked) {
             const size = pngSize(png)
-            if (size.width !== width || size.height !== height) {
+            const expectedWidth = width
+            const expectedHeight = height
+            if (size.width !== expectedWidth || size.height !== expectedHeight) {
               throw new FatalError(
-                `captured PNG is ${size.width}x${size.height}, expected ${width}x${height} ` +
+                `captured PNG is ${size.width}x${size.height}, ` +
+                  `expected ${expectedWidth}x${expectedHeight} ` +
                   '(device pixel ratio or host sizing is off)',
               )
             }

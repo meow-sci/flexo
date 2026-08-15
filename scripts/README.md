@@ -22,6 +22,7 @@ URLs:
 ```bash
 pnpm build                # first — the capture renders dist/, not src/
 pnpm thumbs:partpreview   # → assets/thumbs/<part_id>_NN.png + assets/gifs/<part_id>.gif
+pnpm thumbs:partpreview:check # one fast PNG-only pass for CoreCouplingA_Prefab_DockingPort1WA
 ```
 
 One headless Chromium page (Playwright, from the root `node_modules`) drives the
@@ -33,6 +34,11 @@ starts) turns each part's frames into a looping animation (4 s by default). Opti
 comment and under `--help`. Deliberately **not** part of `pnpm build`, and a
 later `vite build apps/partpreview` wipes its output. Context:
 [docs/wiki-part-preview.md](../docs/wiki-part-preview.md#part-thumbnails).
+
+The default PNG remains 400×400, but its WebGL frame is rendered into an 800×800 backing buffer
+and downsampled with high-quality browser filtering before encoding. That matches the sample count
+of a live preview on a typical 2× display without changing the thumbnail or GIF dimensions. The old
+headless capture ran at device scale 1 and encoded its 400×400 backing buffer directly.
 
 ## build-cartoon-moon.ts (Bun)
 

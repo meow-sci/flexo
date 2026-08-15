@@ -15,6 +15,7 @@
     "fmt:check": "oxfmt --check",
     "preview": "vite preview",
     "thumbs:partpreview": "node scripts/capture-part-thumbs.ts",
+    "thumbs:partpreview:check": "node scripts/capture-part-thumbs.ts --parts CoreCouplingA_Prefab_DockingPort1WA --no-gif",
     "test": "vitest run",
     "smoke": "node scripts/smoke-v2.ts"
   },

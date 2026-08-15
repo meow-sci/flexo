@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_GIF_SECONDS,
+  DEFAULT_THUMB_SIZE,
   DEFAULT_SITE_ORIGIN,
   DEFAULT_PART_ROTATION_DEG,
   DEFAULT_VIEW_DIR,
   GIFS_DIR,
   PARTPREVIEW_BASE,
   THUMB_COUNT,
+  THUMB_PIXEL_RATIO,
   THUMB_STEP_DEG,
   THUMBS_DIR,
   formatVec3,
@@ -24,6 +26,13 @@ const PART = 'CoreCommandA_Prefab_MediumCapsuleVariantA';
 describe('thumb angle invariants', () => {
   it('covers exactly one turntable revolution', () => {
     expect(THUMB_COUNT * THUMB_STEP_DEG).toBe(360);
+  });
+});
+
+describe('thumbnail resolution', () => {
+  it('supersamples a 400px output at the live viewport maximum device scale', () => {
+    expect(DEFAULT_THUMB_SIZE).toBe(400);
+    expect(DEFAULT_THUMB_SIZE * THUMB_PIXEL_RATIO).toBe(800);
   });
 });
 

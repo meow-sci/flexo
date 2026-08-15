@@ -22,8 +22,17 @@ export const THUMB_COUNT = 10;
 // /** Degrees of camera azimuth between consecutive thumbnails (360 / THUMB_COUNT). */
 export const THUMB_STEP_DEG = 36;
 
-/** Default capture size in px (square), overridable with `--width` / `--height`. */
+/** Default logical viewport size in CSS px (square), overridable with `--width` / `--height`. */
 export const DEFAULT_THUMB_SIZE = 400;
+
+/**
+ * Capture backing-buffer scale, matching {@link PartPreviewViewport}'s maximum device-pixel
+ * ratio. A 400 CSS-pixel live preview on a typical Retina-class display renders at 800×800;
+ * headless Chromium must request the same scale explicitly or the render has one-quarter as many
+ * samples and looks visibly pixelated beside the interactive viewport. The capture path then
+ * downsamples this backing buffer to {@link DEFAULT_THUMB_SIZE} for the final PNG.
+ */
+export const THUMB_PIXEL_RATIO = 2;
 
 /** Three finite numbers — a view direction, or a rotation in degrees. */
 export type Vec3 = readonly [number, number, number];

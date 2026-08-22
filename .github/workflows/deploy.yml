@@ -84,11 +84,13 @@ jobs:
       # and img2webp are explicitly given this runner's four vCPUs below. Pass
       # --width/--height/--view-dir/--rotate here only to override the build.
       #
-      # This step is SLOW here and that is expected: the runner has no GPU, so all
+      # A FULL render is slow here and that is expected: the runner has no GPU, so all
       # ~165 parts x 18 angles are drawn by SwiftShader on four vCPUs — roughly 24
-      # CPU-seconds per part, i.e. ~20 minutes wall clock fully saturated. The
+      # CPU-seconds per part, i.e. ~25 minutes wall clock fully saturated. The
       # per-part budget (--part-timeout, 300 s by default) is sized for that; raise
       # it rather than lowering the quality if the heaviest parts start timing out.
+      # Deciding what to render is nowhere near that: fingerprinting all 165 parts,
+      # asset-file hashes included, measures 0.3 s on this runner.
       # The capture is worth ~25 minutes of runner time, and most pushes here change
       # the main editor without touching a single rendered pixel. So key a cache on
       # the BUILT INPUTS the capture actually reads — the mini app's own bundle (which

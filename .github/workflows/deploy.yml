@@ -66,6 +66,9 @@ jobs:
       # these two steps must sit between Build and Upload: dist/ only exists in CI,
       # and a rebuild of the mini app would wipe them. See
       # plans/PART_PREVIEW_THUMBS.md §7.
+      # Not gated on the thumbnail cache hit below: if an earlier run failed partway,
+      # its cache entry is a PARTIAL set under the same key, and the capture then has
+      # real work to do on the very run that would have skipped this install.
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
@@ -86,8 +89,53 @@ jobs:
       # CPU-seconds per part, i.e. ~20 minutes wall clock fully saturated. The
       # per-part budget (--part-timeout, 300 s by default) is sized for that; raise
       # it rather than lowering the quality if the heaviest parts start timing out.
+      # The capture is worth ~25 minutes of runner time, and most pushes here change
+      # the main editor without touching a single rendered pixel. So key a cache on
+      # the BUILT INPUTS the capture actually reads — the mini app's own bundle (which
+      # is byte-identical across commits unless its render path changed; the build id
+      # is injected into the main app only), the KSA asset tree, the KTX2/Draco
+      # decoders and the HDRs it fetches from the main app's copy — plus the capture
+      # script, this workflow (it owns the render flags) and the lockfile (it pins
+      # Playwright's Chromium). Deliberately NOT keyed on `src/`: an editor-only
+      # commit leaves every one of these bytes identical and reuses the render.
+      - name: Compute thumbnail cache key
+        id: thumbs-key
+        run: |
+          set -euo pipefail
+          hash=$(
+            {
+              LC_ALL=C find dist/apps/partpreview dist/ksa dist/basis dist/draco dist/hdr \
+                -type f ! -name manifest.json \
+                -not -path 'dist/apps/partpreview/assets/thumbs/*' \
+                -not -path 'dist/apps/partpreview/assets/turntables/*' \
+                -print0 | LC_ALL=C sort -z | xargs -0 sha256sum
+              sha256sum scripts/capture-part-thumbs.ts .github/workflows/deploy.yml pnpm-lock.yaml
+            } | sha256sum | cut -d' ' -f1
+          )
+          echo "key=thumbs-v1-$hash" >> "$GITHUB_OUTPUT"
+          echo "part thumbnail cache key: thumbs-v1-$hash"
+
+      # Restored INTO the freshly built dist/, so it has to sit after Build (which
+      # empties dist/apps/partpreview) and before the capture. A restored set is
+      # complete and current by construction — the key covers everything that decides
+      # a pixel — so the capture below skips it wholesale and never boots Chromium.
+      - name: Restore rendered part thumbnails
+        id: thumbs-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            dist/apps/partpreview/assets/thumbs
+            dist/apps/partpreview/assets/turntables
+          # No restore-keys, ON PURPOSE: a near-miss must never seed --skip-existing
+          # with pixels rendered from different code or different KSA assets. A miss
+          # re-renders the whole catalog into an empty dist/, so stale files from a
+          # renamed or deleted part cannot accumulate either.
+          key: ${{ steps.thumbs-key.outputs.key }}
+
+      # Runs on a cache hit too: it is what patches manifest.json with the thumb and
+      # turntable URLs, and on a full hit that costs a second (no browser, no img2webp).
       - name: Capture part thumbnails
-        run: pnpm run thumbs:partpreview --jobs 4
+        run: pnpm run thumbs:partpreview --jobs 4 --skip-existing
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

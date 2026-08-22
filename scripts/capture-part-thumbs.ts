@@ -32,6 +32,7 @@
  *   --site-origin <origin>   origin for the manifest URLs (default meow.science.fail)
  *   --parts a,b,c            capture only these part ids (debugging)
  *   --jobs <count>           parallel capture/encoding workers (default min(vCPUs, 4))
+ *   --part-timeout <s>       per-part render budget, in seconds (default 300)
  *   --skip-existing          skip a part whose 18 static WebPs are already on disk
  *   --turntable-seconds <s>  one full turntable loop, in seconds (default 4)
  *   --no-turntable           skip animated WebP synthesis (no img2webp needed)
@@ -87,8 +88,15 @@ const TURNTABLES_OUT = join(APP_DIST, ...TURNTABLES_DIR.split('/'))
 /** Production serves `dist/` at this path; the capture server mirrors it exactly. */
 const SERVE_BASE = '/flexo/'
 
-/** Per-part budget for load + 18 renders. Generous: software WebGL is slow. */
-const PART_TIMEOUT_MS = 60_000
+/**
+ * Per-part budget for load + 18 renders, in seconds. Deliberately generous: CI has
+ * no GPU, so every pixel is drawn by SwiftShader on the runner's four shared vCPUs,
+ * and the heaviest parts (the tall CoreServiceModuleA height sets) need minutes of
+ * wall clock there while three sibling workers fight for the same cores. Override
+ * with `--part-timeout`; the point of the budget is to catch a HANG, not to police
+ * a slow host.
+ */
+const DEFAULT_PART_TIMEOUT_SECONDS = 300
 
 /** Progress line cadence, in parts. */
 const PROGRESS_EVERY = 10
@@ -117,6 +125,7 @@ const { values } = parseArgs({
     'site-origin': { type: 'string' },
     parts: { type: 'string' },
     jobs: { type: 'string' },
+    'part-timeout': { type: 'string' },
     'skip-existing': { type: 'boolean' },
     'turntable-seconds': { type: 'string' },
     // Declared explicitly: this Node's parseArgs has no `--no-x` negation.
@@ -138,6 +147,7 @@ if (values.help) {
       `  --site-origin <origin>  manifest URL origin (default ${DEFAULT_SITE_ORIGIN})`,
       '  --parts a,b,c           capture only these part ids',
       `  --jobs <count>          parallel capture/encoding workers (default ${DEFAULT_JOBS})`,
+      `  --part-timeout <s>      per-part render budget, in seconds (default ${DEFAULT_PART_TIMEOUT_SECONDS})`,
       '  --skip-existing         skip parts whose static and animated WebPs exist',
       `  --turntable-seconds <s> length of one turntable loop (default ${DEFAULT_TURNTABLE_SECONDS})`,
       '  --no-turntable          skip animated WebP synthesis (no img2webp needed)',
@@ -194,6 +204,9 @@ const viewDir = viewDirFlag(values['view-dir'])
 const partRotation = rotationFlag(values.rotate)
 const siteOrigin = values['site-origin'] ?? DEFAULT_SITE_ORIGIN
 const jobs = intFlag('jobs', values.jobs, DEFAULT_JOBS)
+const partTimeoutMs = Math.round(
+  secondsFlag('part-timeout', values['part-timeout'], DEFAULT_PART_TIMEOUT_SECONDS) * 1000,
+)
 const skipExisting = values['skip-existing'] === true
 const turntableSeconds = secondsFlag(
   'turntable-seconds',
@@ -553,67 +566,74 @@ async function main(): Promise<void> {
       `&${VIEW_DIR_PARAM}=${encodeURIComponent(formatVec3(viewDir))}` +
       `&${ROTATION_PARAM}=${encodeURIComponent(formatVec3(partRotation))}`
     const workerCount = Math.min(jobs, targets.length)
-    const pages = await Promise.all(
-      Array.from({ length: workerCount }, async (_, workerIndex) => {
-        // Each persistent page owns one WebGL context and processes one part at a time.
-        const page = await context.newPage()
-        const workerLabel = `worker ${workerIndex + 1}`
-        page.on('pageerror', (err) => console.error(`  [${workerLabel} page error] ${err.message}`))
-        page.on('response', (res) => {
-          if (res.status() !== 404) return
-          const path = new URL(res.url()).pathname
-          notFound.add(path)
-          if (verbose) console.error(`  [${workerLabel} 404] ${path}`)
-        })
-        page.on('console', (msg: ConsoleMessage) => {
-          // The response handler reports resource failures with a useful URL.
-          if (!verbose && msg.text().startsWith('Failed to load resource')) return
-          if (verbose || msg.type() === 'error') {
-            console.error(`  [${workerLabel} ${msg.type()}] ${msg.text()}`)
-          }
-        })
+    /**
+     * One persistent capture page: its own WebGL context and its own catalog parse,
+     * so building another one is expensive. Factored out because the straggler
+     * retry below needs a FRESH page — a page whose `capturePart` timed out is
+     * still rendering that part, and a second call would interleave with it.
+     */
+    const newCapturePage = async (workerIndex: number) => {
+      // Each persistent page owns one WebGL context and processes one part at a time.
+      const page = await context.newPage()
+      const workerLabel = `worker ${workerIndex + 1}`
+      page.on('pageerror', (err) => console.error(`  [${workerLabel} page error] ${err.message}`))
+      page.on('response', (res) => {
+        if (res.status() !== 404) return
+        const path = new URL(res.url()).pathname
+        notFound.add(path)
+        if (verbose) console.error(`  [${workerLabel} 404] ${path}`)
+      })
+      page.on('console', (msg: ConsoleMessage) => {
+        // The response handler reports resource failures with a useful URL.
+        if (!verbose && msg.text().startsWith('Failed to load resource')) return
+        if (verbose || msg.type() === 'error') {
+          console.error(`  [${workerLabel} ${msg.type()}] ${msg.text()}`)
+        }
+      })
 
-        await page.goto(url, { waitUntil: 'domcontentloaded' })
-        await page.waitForFunction(
-          () => window.__flexoCapture?.ready === true || window.__flexoCapture?.error != null,
-          undefined,
-          { timeout: 120_000 },
+      await page.goto(url, { waitUntil: 'domcontentloaded' })
+      await page.waitForFunction(
+        () => window.__flexoCapture?.ready === true || window.__flexoCapture?.error != null,
+        undefined,
+        { timeout: 120_000 },
+      )
+      const bootError = await page.evaluate(() => window.__flexoCapture?.error ?? null)
+      if (bootError) throw new FatalError(`${workerLabel} failed to boot: ${bootError}`)
+
+      const backing = await page.evaluate(() => {
+        const canvas = document.querySelector<HTMLCanvasElement>('#host canvas')
+        return {
+          devicePixelRatio: window.devicePixelRatio,
+          width: canvas?.width ?? 0,
+          height: canvas?.height ?? 0,
+        }
+      })
+      const backingWidth = width * THUMB_PIXEL_RATIO
+      const backingHeight = height * THUMB_PIXEL_RATIO
+      if (
+        backing.devicePixelRatio !== THUMB_PIXEL_RATIO ||
+        backing.width !== backingWidth ||
+        backing.height !== backingHeight
+      ) {
+        throw new FatalError(
+          `${workerLabel} backing buffer is ${backing.width}x${backing.height} at ` +
+            `${backing.devicePixelRatio}x, expected ${backingWidth}x${backingHeight} at ` +
+            `${THUMB_PIXEL_RATIO}x`,
         )
-        const bootError = await page.evaluate(() => window.__flexoCapture?.error ?? null)
-        if (bootError) throw new FatalError(`${workerLabel} failed to boot: ${bootError}`)
+      }
 
-        const backing = await page.evaluate(() => {
-          const canvas = document.querySelector<HTMLCanvasElement>('#host canvas')
-          return {
-            devicePixelRatio: window.devicePixelRatio,
-            width: canvas?.width ?? 0,
-            height: canvas?.height ?? 0,
-          }
-        })
-        const backingWidth = width * THUMB_PIXEL_RATIO
-        const backingHeight = height * THUMB_PIXEL_RATIO
-        if (
-          backing.devicePixelRatio !== THUMB_PIXEL_RATIO ||
-          backing.width !== backingWidth ||
-          backing.height !== backingHeight
-        ) {
-          throw new FatalError(
-            `${workerLabel} backing buffer is ${backing.width}x${backing.height} at ` +
-              `${backing.devicePixelRatio}x, expected ${backingWidth}x${backingHeight} at ` +
-              `${THUMB_PIXEL_RATIO}x`,
-          )
-        }
-
-        const pageCount = await page.evaluate(() => window.__flexoCapture?.count ?? 0)
-        if (pageCount !== THUMB_COUNT) {
-          throw new FatalError(
-            `built capture page renders ${pageCount} angles, this script expects ${THUMB_COUNT} — ` +
-              'dist/ is stale, rebuild it (`pnpm build`, or ' +
-              '`pnpm exec vite build apps/partpreview` for the mini app alone) and re-run',
-          )
-        }
-        return page
-      }),
+      const pageCount = await page.evaluate(() => window.__flexoCapture?.count ?? 0)
+      if (pageCount !== THUMB_COUNT) {
+        throw new FatalError(
+          `built capture page renders ${pageCount} angles, this script expects ${THUMB_COUNT} — ` +
+            'dist/ is stale, rebuild it (`pnpm build`, or ' +
+            '`pnpm exec vite build apps/partpreview` for the mini app alone) and re-run',
+        )
+      }
+      return page
+    }
+    const pages = await Promise.all(
+      Array.from({ length: workerCount }, (_, workerIndex) => newCapturePage(workerIndex)),
     )
 
     console.log(
@@ -623,8 +643,9 @@ async function main(): Promise<void> {
         `part rotation ${formatVec3(partRotation)}° …`,
     )
 
-    const queue = [...targets]
+    let queue: string[] = []
     let processed = 0
+    let passTotal = 0
     const captureWorker = async (page: (typeof pages)[number]): Promise<void> => {
       let sizeChecked = false
       for (;;) {
@@ -637,7 +658,7 @@ async function main(): Promise<void> {
           }
           const urls = await withTimeout(
             page.evaluate((id: string) => window.__flexoCapture!.capturePart(id), partId),
-            PART_TIMEOUT_MS,
+            partTimeoutMs,
           )
           if (urls.length !== THUMB_COUNT) {
             throw new Error(`expected ${THUMB_COUNT} images, got ${urls.length}`)
@@ -671,13 +692,44 @@ async function main(): Promise<void> {
           }
         } finally {
           processed++
-          if (processed % PROGRESS_EVERY === 0 || processed === targets.length) {
-            console.log(`  ${processed}/${targets.length} (${formatElapsed(startedAt)})`)
+          if (processed % PROGRESS_EVERY === 0 || processed === passTotal) {
+            console.log(`  ${processed}/${passTotal} (${formatElapsed(startedAt)})`)
           }
         }
       }
     }
-    await Promise.all(pages.map(captureWorker))
+
+    /** Drain `ids` through `workerPages`, resetting the shared queue + progress. */
+    const runPass = async (ids: string[], workerPages: typeof pages): Promise<void> => {
+      queue = [...ids]
+      processed = 0
+      passTotal = ids.length
+      await Promise.all(workerPages.map(captureWorker))
+    }
+
+    await runPass(targets, pages)
+
+    // A part that blows its budget on CI usually did so because four SwiftShader
+    // workers were fighting over four vCPUs — and a timed-out `capturePart` keeps
+    // rendering inside its page, stealing cores from everyone else, so a straggler
+    // tends to take its neighbours down with it. Give them one more run alone,
+    // uncontended, on a fresh page before failing the build over them.
+    if (failed.length > 0 && workerCount > 1) {
+      const stragglers = [...failed]
+      failed.length = 0
+      console.log(
+        `retrying ${stragglers.length} failed part(s) alone on a fresh page: ` +
+          `${stragglers.join(', ')} …`,
+      )
+      // The first-pass pages are done; close them so the retry has the host to itself.
+      await Promise.all(pages.map((page) => page.close()))
+      const retryPage = await newCapturePage(0)
+      try {
+        await runPass(stragglers, [retryPage])
+      } finally {
+        await retryPage.close()
+      }
+    }
   } finally {
     await browser.close()
     await close()

@@ -80,6 +80,12 @@ jobs:
       # apps/partpreview/src/thumbsSpec.ts, so the build has one knob each. Capture
       # and img2webp are explicitly given this runner's four vCPUs below. Pass
       # --width/--height/--view-dir/--rotate here only to override the build.
+      #
+      # This step is SLOW here and that is expected: the runner has no GPU, so all
+      # ~165 parts x 18 angles are drawn by SwiftShader on four vCPUs — roughly 24
+      # CPU-seconds per part, i.e. ~20 minutes wall clock fully saturated. The
+      # per-part budget (--part-timeout, 300 s by default) is sized for that; raise
+      # it rather than lowering the quality if the heaviest parts start timing out.
       - name: Capture part thumbnails
         run: pnpm run thumbs:partpreview --jobs 4
 

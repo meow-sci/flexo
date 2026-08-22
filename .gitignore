@@ -28,3 +28,5 @@ dist-ssr
 .env
 
 .tmp-*/
+# Per-part thumbnail fingerprints (scripts/capture-part-thumbs.ts --reconcile)
+.thumbs-cache/

@@ -30,6 +30,7 @@ import {
   EMPTY_PART_ERROR,
   parseRotationDeg,
   parseViewDir,
+  type PartRenderInputs,
   ROTATION_PARAM,
   type RotationDeg,
   THUMB_COUNT,
@@ -83,6 +84,32 @@ function fail(message: string): void {
 /** The single viewport, built once by {@link boot}. */
 let viewport: PartPreviewViewport | null = null;
 
+/**
+ * The SubPart template fields {@link SubPartObject.create} + {@link getSharedMaterial}
+ * actually read. The URL ones name files whose CONTENT the driver hashes as well;
+ * `meshNodeName` and `materialId` only pick within a file already covered.
+ */
+const TEMPLATE_URL_FIELDS = [
+  'atlasUrl',
+  'diffuseUrl',
+  'normalUrl',
+  'aoRoughMetalUrl',
+  'emissiveUrl',
+] as const;
+const TEMPLATE_FIELDS = [...TEMPLATE_URL_FIELDS, 'meshNodeName', 'materialId'] as const;
+
+/** JSON with object keys sorted, so a fingerprint cannot move with parse order. */
+function stableJson(value: unknown): string {
+  return JSON.stringify(value, (_key, val: unknown) => {
+    if (val === null || typeof val !== 'object' || Array.isArray(val)) return val;
+    const sorted: Record<string, unknown> = {};
+    for (const key of Object.keys(val as Record<string, unknown>).sort()) {
+      sorted[key] = (val as Record<string, unknown>)[key];
+    }
+    return sorted;
+  });
+}
+
 const api: CaptureApi = {
   ready: false,
   error: null,
@@ -110,6 +137,46 @@ const api: CaptureApi = {
       );
     }
     return urls;
+  },
+  renderInputs(): Record<string, PartRenderInputs> {
+    const templates = $catalogIndex.get();
+    const out: Record<string, PartRenderInputs> = {};
+    for (const [partId, part] of $partCatalogIndex.get()) {
+      const assetUrls = new Set<string>();
+      const placed = part.placements.map((placement) => {
+        const entry = templates.get(placement.subPartTemplateId);
+        // A placement whose template is missing renders nothing — but WHICH template
+        // is missing still has to be part of the fingerprint, or adding the template
+        // back would not re-render the part.
+        if (!entry) return `missing:${placement.subPartTemplateId}`;
+        const fields: Record<string, unknown> = {};
+        for (const field of TEMPLATE_FIELDS) {
+          const value = entry[field];
+          if (value === undefined) continue;
+          fields[field] = value;
+        }
+        for (const field of TEMPLATE_URL_FIELDS) {
+          const url = entry[field];
+          if (typeof url === 'string' && url !== '') assetUrls.add(url);
+        }
+        return stableJson(fields);
+      });
+      out[partId] = {
+        // Only what the renderer consumes: the template it places and where it sits.
+        // `instanceId`/`layerId` are editor bookkeeping and never reach a pixel.
+        placements: stableJson(
+          part.placements.map((placement) => ({
+            template: placement.subPartTemplateId,
+            position: placement.position,
+            rotation: placement.rotation,
+            scale: placement.scale,
+          })),
+        ),
+        templates: placed,
+        assetUrls: [...assetUrls].sort(),
+      };
+    }
+    return out;
   },
 };
 window.__flexoCapture = api;

@@ -157,6 +157,20 @@ export const EMPTY_PART_ERROR = 'flexo-capture: no renderable geometry';
  * the script that drives it share one definition instead of two hand-kept copies
  * (the driver could not import the page's own module anyway — that pulls in three).
  */
+/**
+ * Everything about one Part that decides its rendered PIXELS, as the capture page
+ * resolves it — the driver hashes this (plus the files the URLs point at) to decide
+ * what actually needs re-rendering. See `renderInputs`.
+ */
+export interface PartRenderInputs {
+  /** Placement list — template id + transform, in order. Sorted-key JSON. */
+  placements: string;
+  /** Per placement, the render-relevant fields of its SubPart template. Sorted-key JSON. */
+  templates: string[];
+  /** Every asset file those templates reference, deduped and sorted. */
+  assetUrls: string[];
+}
+
 export interface CaptureApi {
   /** False until the catalogs, the viewport and its environment are all ready. */
   ready: boolean;
@@ -166,6 +180,18 @@ export interface CaptureApi {
   readonly count: number;
   /** Loads the part and renders every angle; resolves to WebP data URLs in order. */
   capturePart(partId: string): Promise<string[]>;
+  /**
+   * Render inputs for every Part in the catalog, keyed by part id. Pure catalog
+   * lookups — nothing loads and nothing renders — so the driver can fingerprint the
+   * whole catalog off one booted page and skip the parts that cannot have changed.
+   *
+   * Deliberately NARROWER than the catalog records: `PartPreviewViewport.setPart`
+   * reads only the placements and, per placement, its template's mesh + texture
+   * fields, so GameData churn (fuel capacities, colliders, connector flags, lights)
+   * must not cost a re-render. Anything outside this set that moves a pixel is a
+   * KNOWN blind spot, cleared by bumping the driver's FINGERPRINT_VERSION.
+   */
+  renderInputs(): Record<string, PartRenderInputs>;
 }
 
 /** `<part_id>_NN.webp` — NN is the 1-based, zero-padded angle index. */

@@ -98,6 +98,11 @@ jobs:
       # script, this workflow (it owns the render flags) and the lockfile (it pins
       # Playwright's Chromium). Deliberately NOT keyed on `src/`: an editor-only
       # commit leaves every one of these bytes identical and reuses the render.
+      #
+      # This key is the FAST path only. When it misses, `restore-keys` falls back to
+      # the newest set we have and `--reconcile` re-renders per part — so a KSA update
+      # that moved five meshes costs five renders, not 165. Correctness there does not
+      # rest on this key at all; it rests on the per-part fingerprints.
       - name: Compute thumbnail cache key
         id: thumbs-key
         run: |
@@ -112,8 +117,8 @@ jobs:
               sha256sum scripts/capture-part-thumbs.ts .github/workflows/deploy.yml pnpm-lock.yaml
             } | sha256sum | cut -d' ' -f1
           )
-          echo "key=thumbs-v1-$hash" >> "$GITHUB_OUTPUT"
-          echo "part thumbnail cache key: thumbs-v1-$hash"
+          echo "key=thumbs-v2-$hash" >> "$GITHUB_OUTPUT"
+          echo "part thumbnail cache key: thumbs-v2-$hash"
 
       # Restored INTO the freshly built dist/, so it has to sit after Build (which
       # empties dist/apps/partpreview) and before the capture. A restored set is
@@ -126,16 +131,26 @@ jobs:
           path: |
             dist/apps/partpreview/assets/thumbs
             dist/apps/partpreview/assets/turntables
-          # No restore-keys, ON PURPOSE: a near-miss must never seed --skip-existing
-          # with pixels rendered from different code or different KSA assets. A miss
-          # re-renders the whole catalog into an empty dist/, so stale files from a
-          # renamed or deleted part cannot accumulate either.
+            .thumbs-cache/fingerprints.json
           key: ${{ steps.thumbs-key.outputs.key }}
+          # A prefix match is SAFE here only because --reconcile re-fingerprints every
+          # part against the restored set and re-renders whatever moved. The
+          # fingerprints file travels with the thumbs so that comparison has a baseline.
+          restore-keys: |
+            thumbs-v2-
 
-      # Runs on a cache hit too: it is what patches manifest.json with the thumb and
-      # turntable URLs, and on a full hit that costs a second (no browser, no img2webp).
+      # Runs on a hit too: it is what patches manifest.json with the thumb and turntable
+      # URLs. Exact hit means every input byte is identical, so --skip-existing settles
+      # it on disk in a second, no browser. Otherwise --reconcile boots ONE page, hashes
+      # each part's placements + templates + mesh/texture files, and renders the stale
+      # ones (see the INCREMENTAL note in scripts/capture-part-thumbs.ts).
       - name: Capture part thumbnails
-        run: pnpm run thumbs:partpreview --jobs 4 --skip-existing
+        run: |
+          if [ "${{ steps.thumbs-cache.outputs.cache-hit }}" = "true" ]; then
+            pnpm run thumbs:partpreview --jobs 4 --skip-existing
+          else
+            pnpm run thumbs:partpreview --jobs 4 --reconcile
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

@@ -22,6 +22,14 @@
  * built-ins only, and `.ts` extensions on relative imports. NOT a Bun script — the
  * older scripts here are, this one deliberately is not.
  *
+ * INCREMENTAL: `--reconcile` fingerprints every Part from the catalog the capture page
+ * already parsed — its placements, the render-relevant fields of each SubPart template
+ * it places, and the CONTENT of every mesh/texture file those name — folded together
+ * with a global render tag (the mini app's own bundle, the KTX2/Draco decoders, this
+ * run's flags). A part is re-rendered only when its fingerprint moves, so a KSA update
+ * that touches five parts costs five renders instead of 165. What the fingerprint does
+ * NOT cover is a deliberate blind spot, cleared by bumping FINGERPRINT_VERSION.
+ *
  * REQUIRES `img2webp` on PATH for the turntables (`brew install webp`,
  * `apt-get install webp`); `--no-turntable` runs the static capture without it.
  *
@@ -34,21 +42,24 @@
  *   --jobs <count>           parallel capture/encoding workers (default min(vCPUs, 4))
  *   --part-timeout <s>       per-part render budget, in seconds (default 300)
  *   --skip-existing          skip a part whose 18 static WebPs are already on disk
+ *   --reconcile              fingerprint the catalog and re-render only what changed
  *   --turntable-seconds <s>  one full turntable loop, in seconds (default 4)
  *   --no-turntable           skip animated WebP synthesis (no img2webp needed)
  *   --verbose                forward every page console message, not just errors
  */
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { createReadStream } from 'node:fs'
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { availableParallelism } from 'node:os'
-import { extname, join, resolve, sep } from 'node:path'
+import { dirname, extname, join, resolve, sep } from 'node:path'
 import { parseArgs, promisify } from 'node:util'
 import { chromium, type ConsoleMessage } from 'playwright'
 import {
   type CaptureApi,
+  type PartRenderInputs,
   DEFAULT_TURNTABLE_SECONDS,
   DEFAULT_SITE_ORIGIN,
   DEFAULT_THUMB_SIZE,
@@ -127,6 +138,7 @@ const { values } = parseArgs({
     jobs: { type: 'string' },
     'part-timeout': { type: 'string' },
     'skip-existing': { type: 'boolean' },
+    reconcile: { type: 'boolean' },
     'turntable-seconds': { type: 'string' },
     // Declared explicitly: this Node's parseArgs has no `--no-x` negation.
     'no-turntable': { type: 'boolean' },
@@ -149,6 +161,7 @@ if (values.help) {
       `  --jobs <count>          parallel capture/encoding workers (default ${DEFAULT_JOBS})`,
       `  --part-timeout <s>      per-part render budget, in seconds (default ${DEFAULT_PART_TIMEOUT_SECONDS})`,
       '  --skip-existing         skip parts whose static and animated WebPs exist',
+      '  --reconcile             fingerprint the catalog, re-render only what changed',
       `  --turntable-seconds <s> length of one turntable loop (default ${DEFAULT_TURNTABLE_SECONDS})`,
       '  --no-turntable          skip animated WebP synthesis (no img2webp needed)',
       '  --verbose               forward all page console output',
@@ -207,7 +220,10 @@ const jobs = intFlag('jobs', values.jobs, DEFAULT_JOBS)
 const partTimeoutMs = Math.round(
   secondsFlag('part-timeout', values['part-timeout'], DEFAULT_PART_TIMEOUT_SECONDS) * 1000,
 )
-const skipExisting = values['skip-existing'] === true
+const reconcile = values.reconcile === true
+// Reconcile decides staleness per part; the on-disk shortcut is what it then rides on,
+// both for the frames and for img2webp (it skips animations that already exist).
+const skipExisting = values['skip-existing'] === true || reconcile
 const turntableSeconds = secondsFlag(
   'turntable-seconds',
   values['turntable-seconds'],
@@ -314,6 +330,164 @@ async function hasCompleteSet(partId: string): Promise<boolean> {
     if (!(await exists(join(THUMBS_OUT, thumbFileName(partId, i))))) return false
   }
   return true
+}
+
+// --- Incremental fingerprints ---------------------------------------------------
+
+/**
+ * Bump to invalidate EVERY cached thumbnail. The fingerprint below covers what this
+ * script and {@link CaptureApi.renderInputs} know decides a pixel; anything else that
+ * moves one — a KSA default texture swapped underneath a material, an HDR environment
+ * file, an img2webp upgrade — is a deliberate blind spot, and this is its eviction
+ * switch (in CI, deleting the Actions cache entry does the same job).
+ */
+const FINGERPRINT_VERSION = 1
+
+/** Fingerprints live OUTSIDE dist/, which `pnpm build` empties. Cached alongside the thumbs in CI. */
+const FINGERPRINTS_FILE = join(REPO_ROOT, '.thumbs-cache', 'fingerprints.json')
+
+interface PartFingerprints {
+  version: number
+  /** The global tag every part fingerprint folds in. Recorded to make a mass re-render legible. */
+  renderTag: string
+  /** `empty` marks a part with no geometry: no files to check, but still a known-good state. */
+  parts: Record<string, { fp: string; empty?: true }>
+}
+
+/** One hash over a list of chunks, NUL-separated so concatenations cannot collide. */
+function sha256(...chunks: string[]): string {
+  const hash = createHash('sha256')
+  for (const chunk of chunks) hash.update(chunk).update('\0')
+  return hash.digest('hex')
+}
+
+const fileHashes = new Map<string, Promise<string>>()
+
+/**
+ * Content hash of one file, computed at most once per run — the mesh atlases are shared
+ * by dozens of parts, and the whole KSA tree is ~180 MB.
+ */
+function fileHash(path: string): Promise<string> {
+  let pending = fileHashes.get(path)
+  if (!pending) {
+    pending = (async () => {
+      try {
+        const hash = createHash('sha256')
+        for await (const chunk of createReadStream(path)) hash.update(chunk as Buffer)
+        return hash.digest('hex')
+      } catch {
+        // A referenced file that is absent is itself a fingerprint input: putting it
+        // back has to re-render the parts that name it.
+        return 'missing'
+      }
+    })()
+    fileHashes.set(path, pending)
+  }
+  return pending
+}
+
+/** Hash of every file under `dir`, paths included. Empty string when the tree is absent. */
+async function hashTree(dir: string, skip?: (rel: string) => boolean): Promise<string> {
+  let entries
+  try {
+    entries = await readdir(dir, { recursive: true, withFileTypes: true })
+  } catch {
+    return ''
+  }
+  const relPaths: string[] = []
+  for (const entry of entries) {
+    if (!entry.isFile()) continue
+    const rel = join(entry.parentPath, entry.name).slice(dir.length + 1)
+    if (skip?.(rel)) continue
+    relPaths.push(rel)
+  }
+  relPaths.sort()
+  const chunks: string[] = []
+  for (const rel of relPaths) chunks.push(rel, await fileHash(join(dir, rel)))
+  return sha256(...chunks)
+}
+
+/**
+ * The part-INDEPENDENT half of every fingerprint: the mini app's own bundle (which IS
+ * the renderer — `PartPreviewViewport`, the material factory, three.js and the shared
+ * thumbsSpec constants all land in it), the decoders it pulls at runtime, and the flags
+ * this run renders with. Changing any of them re-renders the whole catalog, correctly.
+ *
+ * `dist/hdr` is deliberately absent: the capture page uses the procedural studio
+ * environment, and switching that default is a bundle change. `dist/ksa` is absent too
+ * — it is hashed per FILE, per part, which is the entire point of the exercise.
+ */
+async function computeRenderTag(): Promise<string> {
+  const thumbsRel = THUMBS_DIR.split('/').join(sep) + sep
+  const turntablesRel = TURNTABLES_DIR.split('/').join(sep) + sep
+  const bundle = await hashTree(
+    APP_DIST,
+    (rel) => rel === 'manifest.json' || rel.startsWith(thumbsRel) || rel.startsWith(turntablesRel),
+  )
+  const basis = await hashTree(join(DIST, 'basis'))
+  const draco = await hashTree(join(DIST, 'draco'))
+  return sha256(
+    String(FINGERPRINT_VERSION),
+    bundle,
+    basis,
+    draco,
+    JSON.stringify({
+      width,
+      height,
+      viewDir,
+      partRotation,
+      turntableSeconds,
+      angles: THUMB_COUNT,
+      pixelRatio: THUMB_PIXEL_RATIO,
+      turntableQuality: TURNTABLE_WEBP_QUALITY,
+    }),
+  )
+}
+
+/** Maps an asset URL the page resolved (`/flexo/ksa/…`) back onto the file this run serves. */
+function assetPathForUrl(url: string): string | null {
+  let path: string
+  try {
+    path = url.startsWith('http') ? new URL(url).pathname : url
+    path = decodeURIComponent(path)
+  } catch {
+    return null
+  }
+  if (!path.startsWith(SERVE_BASE)) return null
+  const file = resolve(DIST, path.slice(SERVE_BASE.length))
+  return file === DIST || file.startsWith(DIST + sep) ? file : null
+}
+
+/** One part's pixels, as a hash: the render tag, its placements, its templates, their files. */
+async function partFingerprint(renderTag: string, inputs: PartRenderInputs): Promise<string> {
+  const assets: string[] = []
+  for (const url of inputs.assetUrls) {
+    const path = assetPathForUrl(url)
+    assets.push(url, path === null ? 'unresolved' : await fileHash(path))
+  }
+  return sha256(renderTag, inputs.placements, ...inputs.templates, ...assets)
+}
+
+/** Last run's fingerprints, or nothing at all if the file is absent, corrupt or superseded. */
+async function readFingerprints(): Promise<PartFingerprints['parts']> {
+  try {
+    const parsed = JSON.parse(await readFile(FINGERPRINTS_FILE, 'utf-8')) as PartFingerprints
+    if (parsed.version !== FINGERPRINT_VERSION) return {}
+    return typeof parsed.parts === 'object' && parsed.parts !== null ? parsed.parts : {}
+  } catch {
+    return {}
+  }
+}
+
+/** Written sorted so a git-tracked or cached copy diffs part by part. */
+async function writeFingerprints(renderTag: string, parts: PartFingerprints['parts']): Promise<void> {
+  const sorted: PartFingerprints['parts'] = {}
+  for (const partId of Object.keys(parts).sort((a, b) => a.localeCompare(b))) {
+    sorted[partId] = parts[partId]!
+  }
+  const file: PartFingerprints = { version: FINGERPRINT_VERSION, renderTag, parts: sorted }
+  await mkdir(dirname(FINGERPRINTS_FILE), { recursive: true })
+  await writeFile(FINGERPRINTS_FILE, `${JSON.stringify(file, null, 2)}\n`)
 }
 
 // --- Animated WebP synthesis (img2webp) ---------------------------------------
@@ -527,11 +701,11 @@ async function main(): Promise<void> {
 
   // The manifest IS the definition of "every built-in part" (it comes from the
   // app's own parser), so the capture list is never re-derived from the XML.
+  const knownPartIds = new Set(manifest.part_ids)
   let targets = manifest.part_ids
   if (values.parts) {
     const requested = [...new Set(values.parts.split(',').map((s) => s.trim()).filter(Boolean))]
-    const known = new Set(manifest.part_ids)
-    const unknown = requested.filter((id) => !known.has(id))
+    const unknown = requested.filter((id) => !knownPartIds.has(id))
     if (unknown.length > 0) die(`unknown part id(s): ${unknown.join(', ')}`)
     targets = requested
   }
@@ -549,14 +723,25 @@ async function main(): Promise<void> {
   const notFound = new Set<string>()
   const empty: string[] = []
   const failed: string[] = []
+  /** Fingerprint computed THIS run, per part considered. Written back only for good outcomes. */
+  const currentFp = new Map<string, string>()
+  /** Previous fingerprints, carried forward for parts this run does not consider. */
+  let fingerprints: PartFingerprints['parts'] | null = null
+  let renderTag = ''
 
-  // --skip-existing is resolved BEFORE anything boots. On a warm CI cache every
-  // part is already on disk, and launching Chromium to parse the catalog once per
+  // Plain --skip-existing is resolved BEFORE anything boots. On an exact CI cache hit
+  // every part is already on disk, and launching Chromium to parse the catalog once per
   // worker only to skip all 165 parts costs a minute of runner time for nothing.
-  const pending: string[] = []
-  for (const partId of targets) {
-    if (skipExisting && (await hasCompleteSet(partId))) skipped++
-    else pending.push(partId)
+  // --reconcile cannot take that shortcut: staleness is a fingerprint question, and the
+  // fingerprints come from the catalog only the page has parsed.
+  let pending: string[] = []
+  if (reconcile) {
+    pending = targets
+  } else {
+    for (const partId of targets) {
+      if (skipExisting && (await hasCompleteSet(partId))) skipped++
+      else pending.push(partId)
+    }
   }
 
   if (pending.length === 0) {
@@ -578,7 +763,6 @@ async function main(): Promise<void> {
         `${origin}${SERVE_BASE}apps/partpreview/capture.html?w=${width}&h=${height}` +
         `&${VIEW_DIR_PARAM}=${encodeURIComponent(formatVec3(viewDir))}` +
         `&${ROTATION_PARAM}=${encodeURIComponent(formatVec3(partRotation))}`
-      const workerCount = Math.min(jobs, pending.length)
       /**
        * One persistent capture page: its own WebGL context and its own catalog parse,
        * so building another one is expensive. Factored out because the straggler
@@ -645,18 +829,71 @@ async function main(): Promise<void> {
         }
         return page
       }
-      const pages = await Promise.all(
-        Array.from({ length: workerCount }, (_, workerIndex) => newCapturePage(workerIndex)),
-      )
+      // Page 1 first and alone: under --reconcile it answers what is even stale, and
+      // how many more pages are worth booting depends on that answer.
+      const firstPage = await newCapturePage(0)
 
-      console.log(
-        `capturing ${pending.length} part(s)` +
-          (skipped > 0 ? ` (${skipped} already on disk)` : '') +
-          ` x ${THUMB_COUNT} angles at ${width}x${height}, ` +
-          `supersampled from ${width * THUMB_PIXEL_RATIO}x${height * THUMB_PIXEL_RATIO}, ` +
-          `${workerCount} worker(s), view dir ${formatVec3(viewDir)}, ` +
-          `part rotation ${formatVec3(partRotation)}° …`,
-      )
+      if (reconcile) {
+        const fingerprintStart = performance.now()
+        renderTag = await computeRenderTag()
+        const inputs = await firstPage.evaluate(() => window.__flexoCapture!.renderInputs())
+        const previous = await readFingerprints()
+        // Carry the previous entries forward wholesale: a --parts run must not
+        // invalidate the rest of the catalog just by not looking at it.
+        fingerprints = { ...previous }
+        const stale: string[] = []
+        for (const partId of targets) {
+          const partInputs = inputs[partId]
+          // The manifest and the page read the same catalog, so a part the page does
+          // not know is a real inconsistency — render it and let the capture say so.
+          if (!partInputs) {
+            stale.push(partId)
+            continue
+          }
+          const fp = await partFingerprint(renderTag, partInputs)
+          currentFp.set(partId, fp)
+          const prev = previous[partId]
+          if (!prev || prev.fp !== fp) {
+            stale.push(partId)
+          } else if (!prev.empty && !(await hasCompleteSet(partId))) {
+            // Fingerprint matches but the frames are gone: a half-restored cache.
+            stale.push(partId)
+          } else {
+            skipped++
+          }
+        }
+        pending = stale
+        console.log(
+          `fingerprinted ${targets.length} part(s) in ${formatElapsed(fingerprintStart)}: ` +
+            `${pending.length} stale, ${skipped} current`,
+        )
+        // A re-rendered part's cached turntable is stale by definition, and step 3
+        // skips animations that already exist — so drop them now, not after the mux.
+        for (const partId of pending) {
+          await rm(join(TURNTABLES_OUT, turntableFileName(partId)), { force: true })
+        }
+      }
+
+      const workerCount = Math.max(1, Math.min(jobs, pending.length))
+      const pages = [
+        firstPage,
+        ...(await Promise.all(
+          Array.from({ length: workerCount - 1 }, (_, i) => newCapturePage(i + 1)),
+        )),
+      ]
+
+      if (pending.length === 0) {
+        console.log(`nothing to capture: every part is already current`)
+      } else {
+        console.log(
+          `capturing ${pending.length} part(s)` +
+            (skipped > 0 ? ` (${skipped} already current)` : '') +
+            ` x ${THUMB_COUNT} angles at ${width}x${height}, ` +
+            `supersampled from ${width * THUMB_PIXEL_RATIO}x${height * THUMB_PIXEL_RATIO}, ` +
+            `${workerCount} worker(s), view dir ${formatVec3(viewDir)}, ` +
+            `part rotation ${formatVec3(partRotation)}° …`,
+        )
+      }
 
       let queue: string[] = []
       let processed = 0
@@ -787,7 +1024,57 @@ async function main(): Promise<void> {
   // Same format the previewManifest plugin writes: 2-space pretty + trailing newline.
   await writeFile(MANIFEST, `${JSON.stringify(manifest, null, 2)}\n`)
 
-  // 5. Absent files. An optional GameData sibling is normal; anything else is worth
+  // 5. Orphans: files for parts the catalog no longer has. A miss on the CI cache key
+  //    renders into an empty dist/, but a --reconcile run inherits whatever the last
+  //    one left, so a renamed or deleted part would otherwise ship its old thumbs for
+  //    ever. Anything not named by a current part id goes.
+  let pruned = 0
+  const expected = new Map<string, Set<string>>([
+    [THUMBS_OUT, new Set<string>()],
+    [TURNTABLES_OUT, new Set<string>()],
+  ])
+  for (const partId of manifest.part_ids) {
+    for (let angle = 0; angle < THUMB_COUNT; angle++) {
+      expected.get(THUMBS_OUT)!.add(thumbFileName(partId, angle))
+    }
+    expected.get(TURNTABLES_OUT)!.add(turntableFileName(partId))
+  }
+  for (const [dir, names] of expected) {
+    let present: string[]
+    try {
+      present = await readdir(dir)
+    } catch {
+      continue // the turntables directory need not exist (--no-turntable)
+    }
+    for (const name of present) {
+      if (names.has(name)) continue
+      await rm(join(dir, name), { force: true })
+      pruned++
+    }
+  }
+  if (pruned > 0) console.log(`pruned ${pruned} file(s) for parts no longer in the catalog`)
+
+  // 6. Fingerprints, for the next --reconcile run. Only parts that reached a KNOWN-GOOD
+  //    state this run get an entry: a part that failed to render keeps whatever frames
+  //    it had, and must be reconsidered next time rather than declared current.
+  if (reconcile && fingerprints) {
+    const failedIds = new Set(failed)
+    const emptyIds = new Set(empty)
+    for (const partId of pending) {
+      const fp = currentFp.get(partId)
+      if (fp === undefined || failedIds.has(partId)) {
+        delete fingerprints[partId]
+        continue
+      }
+      fingerprints[partId] = emptyIds.has(partId) ? { fp, empty: true } : { fp }
+    }
+    for (const partId of Object.keys(fingerprints)) {
+      if (!knownPartIds.has(partId)) delete fingerprints[partId]
+    }
+    await writeFingerprints(renderTag, fingerprints)
+  }
+
+  // 7. Absent files. An optional GameData sibling is normal; anything else is worth
   //    seeing, though it is not fatal on its own — a part that fails to render is.
   if (notFound.size > 0) {
     const optional: string[] = []
@@ -807,7 +1094,8 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    `done in ${formatElapsed(startedAt)}: ${captured} captured, ${skipped} skipped, ` +
+    `done in ${formatElapsed(startedAt)}: ${captured} captured, ` +
+      `${skipped} ${reconcile ? 'current' : 'skipped'}, ` +
       `${empty.length} without geometry, ${failed.length} failed; manifest: ` +
       `${Object.keys(thumbs).length} thumbs, ${Object.keys(turntables).length} turntables ` +
       `(of ${manifest.part_ids.length} parts)`,

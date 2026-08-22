@@ -7,7 +7,11 @@ import {
   updateSelectedTransform,
   type PlacementTransform,
 } from '../../state/editorStore';
-import { colliderSizeLabels, type ColliderSizeLabel } from '../../ksa/colliderSize';
+import {
+  colliderSizeLabels,
+  setColliderSizeAxis,
+  type ColliderSizeLabel,
+} from '../../ksa/colliderSize';
 import type { ColliderShape } from '../../ksa/types';
 
 /**
@@ -97,7 +101,20 @@ export function TransformGroups({
       value={transform.scale[axis]}
       isDisabled={locked}
       onInteractionStart={() => pushUndo('scale', entityName)}
-      onCommit={(n) => commit((t) => (t.scale[axis] = n))}
+      onCommit={(n) =>
+        commit((t) => {
+          // A collider's size axes are COUPLED (a cylinder's X and Z are one diameter),
+          // and the store's normalize resolves the pair with max(). Writing the raw axis
+          // would leave the untouched sibling holding the old value and winning that max,
+          // so a shrink snapped straight back — the field looked uneditable. The edited
+          // axis has to drive its partners.
+          if (third.kind === 'colliderSize') {
+            t.scale = setColliderSizeAxis(third.shape, t.scale, axis, n);
+          } else {
+            t.scale[axis] = n;
+          }
+        })
+      }
     />
   );
 

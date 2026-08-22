@@ -6,6 +6,7 @@ import {
   DEFAULT_COLLIDER_SIZE_M,
   MIN_COLLIDER_SIZE_M,
   normalizeColliderSize,
+  setColliderSizeAxis,
 } from './colliderSize';
 import type { ColliderShape } from './types';
 import { COLLIDER_SHAPES } from './types';
@@ -129,5 +130,56 @@ describe('colliderDimensionNames', () => {
     for (const shape of COLLIDER_SHAPES) {
       expect(colliderDimensionNames(shape).length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('setColliderSizeAxis', () => {
+  it('shrinks a cylinder’s diameter (the coupled sibling must not win the normalize max)', () => {
+    // The inspector bug: writing X alone left Z at 2, and normalize's max(x, z) restored it.
+    expect(setColliderSizeAxis('Cylinder', { x: 2, y: 5, z: 2 }, 'x', 0.5)).toEqual({
+      x: 0.5,
+      y: 5,
+      z: 0.5,
+    });
+  });
+
+  it('shrinks a sphere’s diameter regardless of which axis carried the field', () => {
+    expect(setColliderSizeAxis('Sphere', { x: 3, y: 3, z: 3 }, 'x', 1)).toEqual({
+      x: 1,
+      y: 1,
+      z: 1,
+    });
+  });
+
+  it('leaves a cylinder’s height independent of its diameter', () => {
+    expect(setColliderSizeAxis('Cylinder', { x: 2, y: 5, z: 2 }, 'y', 0.25)).toEqual({
+      x: 2,
+      y: 0.25,
+      z: 2,
+    });
+  });
+
+  it('keeps a capsule’s height ≥ its diameter when the diameter grows past it', () => {
+    expect(setColliderSizeAxis('Capsule', { x: 1, y: 3, z: 1 }, 'x', 4)).toEqual({
+      x: 4,
+      y: 4,
+      z: 4,
+    });
+  });
+
+  it('writes a box axis without touching the others', () => {
+    expect(setColliderSizeAxis('Box', { x: 1, y: 2, z: 3 }, 'z', 0.5)).toEqual({
+      x: 1,
+      y: 2,
+      z: 0.5,
+    });
+  });
+
+  it('floors a degenerate entry like the plain normalize', () => {
+    expect(setColliderSizeAxis('Cylinder', { x: 2, y: 5, z: 2 }, 'x', 0)).toEqual({
+      x: MIN_COLLIDER_SIZE_M,
+      y: 5,
+      z: MIN_COLLIDER_SIZE_M,
+    });
   });
 });

@@ -183,3 +183,45 @@ export function colliderSizeLabels(
       return [dia, height, null];
   }
 }
+
+/**
+ * Writes ONE size axis the user actually edited, propagating it to the axes that shape
+ * ties to it, then normalizing.
+ *
+ * {@link normalizeColliderSize} alone is wrong for a field edit: it resolves a coupled
+ * pair with `max()`, so typing a SMALLER diameter into a cylinder/capsule/sphere leaves
+ * the untouched sibling holding the old value, the max picks the sibling, and the field
+ * snaps straight back — the size looks uneditable. The edited axis has to drive its
+ * partners instead of competing with them.
+ *
+ * Only the axes a shape exposes as fields ({@link colliderSizeLabels}) are meaningful
+ * inputs here; the coupled ones are derived.
+ */
+export function setColliderSizeAxis(
+  shape: ColliderShape,
+  size: Vec3,
+  axis: 'x' | 'y' | 'z',
+  value: number,
+): Vec3 {
+  const next: Vec3 = { ...size, [axis]: value };
+  switch (shape) {
+    case 'Box':
+      break;
+    case 'Sphere':
+      // One diameter, whichever field carried it.
+      next.x = value;
+      next.y = value;
+      next.z = value;
+      break;
+    case 'Cylinder':
+    case 'Capsule':
+      // X and Z are the same diameter; Y is the independent height. A capsule's height
+      // still floors at the diameter — normalizeColliderSize owns that clamp.
+      if (axis !== 'y') {
+        next.x = value;
+        next.z = value;
+      }
+      break;
+  }
+  return normalizeColliderSize(shape, next);
+}

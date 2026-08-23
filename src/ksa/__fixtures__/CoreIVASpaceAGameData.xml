@@ -38,7 +38,7 @@
              so at this ~0.36m throw it needs to be far lower than a room light's. 2.0 predates these
              lights actually reaching a viewport at all and blows the face out; 0.5 puts a mid-albedo
              face near 0.8 linear. Needs in-game tuning. -->
-        <Light>
+        <Light Id="Right">
             <Type>Point</Type>
             <Transform>
                 <Position X="-0.10" Y="0.42" Z="-0.60" />
@@ -50,7 +50,7 @@
             <DisableInIva>true</DisableInIva>
         </Light>
 
-        <Light>
+        <Light Id="Left">
             <Type>Point</Type>
             <Transform>
                 <Position X="-0.10" Y="-0.42" Z="-0.60" />

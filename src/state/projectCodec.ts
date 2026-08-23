@@ -39,6 +39,7 @@ import type {
   ReactionPlume,
   Rocket,
   RocketController,
+  RocketNozzleRef,
   RocketSoundAction,
   SolarPanel,
   SolidGrainSegment,
@@ -588,6 +589,7 @@ interface CLight extends CTransform {
   pt?: 1; // type: present ⇒ Point (Spot is the default)
   rt?: 1; // rayTracing
   dii?: 1; // disableInIva
+  ki?: string; // ksaId (omitted ⇒ null ⇒ the editor id is emitted as <Light Id>)
 }
 
 function encLight(l: PartLight): CLight {
@@ -605,6 +607,7 @@ function encLight(l: PartLight): CLight {
   if (l.type === 'Point') o.pt = 1;
   if (l.rayTracing) o.rt = 1;
   if (l.disableInIva) o.dii = 1;
+  if (l.ksaId) o.ki = l.ksaId;
   return o;
 }
 
@@ -612,6 +615,7 @@ function decLight(c: CLight): PartLight {
   const co = decVec(c.co, 0);
   return {
     id: str(c.i),
+    ksaId: c.ki ? str(c.ki) : null,
     type: c.pt ? 'Point' : 'Spot',
     ownerTemplateId: c.ot ? str(c.ot) : null,
     rangeM: num(c.rg),
@@ -642,6 +646,22 @@ function encRef(r: SubPartIdRef): CRef {
 
 function decRef(c: CRef | undefined): SubPartIdRef {
   return { id: str(c?.i), subPartInstanceId: c?.s ? str(c.s) : null };
+}
+
+/** A `<Rocket>`'s nozzle ref: a {@link CRef} plus `AreaRatioMultiplier`, omitted at its default 1. */
+interface CNozzleRef extends CRef {
+  m?: number; // areaRatioMultiplier
+}
+
+function encNozzleRef(r: RocketNozzleRef): CNozzleRef {
+  const o: CNozzleRef = encRef(r);
+  if (r.areaRatioMultiplier !== 1) o.m = round(r.areaRatioMultiplier);
+  return o;
+}
+
+function decNozzleRef(c: CNozzleRef | undefined): RocketNozzleRef {
+  const m = c?.m;
+  return { ...decRef(c), areaRatioMultiplier: typeof m === 'number' && m > 0 ? m : 1 };
 }
 
 /**
@@ -906,17 +926,17 @@ function decFeedWiring(c: CFeedWiring): ConsumerFeedWiring {
 interface CRocket {
   id: string;
   c: CRef; // core
-  n?: CRef[]; // nozzles
+  n?: CNozzleRef[]; // nozzles
 }
 
 function encRocket(r: Rocket): CRocket {
   const o: CRocket = { id: r.id, c: encRef(r.core) };
-  if (r.nozzles.length) o.n = r.nozzles.map(encRef);
+  if (r.nozzles.length) o.n = r.nozzles.map(encNozzleRef);
   return o;
 }
 
 function decRocket(c: CRocket): Rocket {
-  return { id: str(c.id), core: decRef(c.c), nozzles: arr<CRef>(c.n).map(decRef) };
+  return { id: str(c.id), core: decRef(c.c), nozzles: arr<CNozzleRef>(c.n).map(decNozzleRef) };
 }
 
 interface CController {

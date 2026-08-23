@@ -5,8 +5,11 @@
 > other feature hangs off. Read alongside [docs/xml-io.md](../docs/xml-io.md) and
 > [docs/subpart-catalog.md](../docs/subpart-catalog.md) (the flexo-internal view).
 
-**Baseline:** KSA build **2026.8.19.5261** — the document structure is unmoved, but `PartTemplate`
-gained one element, `<Grab>` (gap **S2**, see [What changed in 5261](#what-changed-in-5261)).
+**Baseline:** KSA build **2026.8.22.5348** — the document structure is unmoved, but `PartTemplate`
+swapped `<Decoupler>` (now a `Components` module, same wire form) for `<PrimarySequenceModule>`
+(gap **T3**) and `PartModelModule` gained `<Terrain>` (gap **T2**) — see
+[What changed in 5348](#what-changed-in-5348). At 5261 it gained `<Grab>` (gap **S2**, see
+[What changed in 5261](#what-changed-in-5261)).
 Previously KSA build **2026.8.5.5168** — re-verified ✅ intact by the `5117 → 5168` review.
 `PartTemplate`/`SubPartTemplate`/`EditorTagDefinition` are byte-identical apart from two **added**
 `[XmlElement]`s on the `InertMasses` polymorphic list (`SolidOgiveMass` / `HollowOpenOgiveMass`,
@@ -164,6 +167,56 @@ registration ship the wrong mesh.
 - Connector `<Flags>` live on `<PartGameData>`, **not** on the geometry `<Part>` — without the GameData merge, `ToSurface`/etc. are lost.
 - A `<Part>` with no matching `<PartGameData>` has no tags/modules → invisible in the part picker.
 - `DockingPort` parses only the current child-element form (`<ConnectorId Value>`, `<LatchingKineticEnergy J>`, `<PushoffImpulse Ns>`) — no legacy fallback; see [gamedata-modules.md](gamedata-modules.md).
+
+## What changed in 5348
+
+**`PartTemplate`'s element list moved by exactly two entries** (rev 5329):
+
+```diff
+-[XmlElement("Decoupler")]           public DecouplerTemplate? Decoupler;
++[XmlElement("PrimarySequenceModule")] public SubPartIdReference? PrimarySequenceModule;
+```
+
+- **`<Decoupler>` is not gone** — it became a `Components` module carrying
+  `[XmlType(TypeName = "Decoupler")]` with the same `ConnectorId` + `Force` attributes, so the wire
+  form is unchanged at both authoring sites. See
+  [gamedata-modules.md](gamedata-modules.md#what-changed-in-5348) for the two behavioural
+  consequences (it is repeatable now, and `ApplyGameData` appends rather than overrides).
+- **`<PrimarySequenceModule Id>` is new.** Sequencing moved from parts down to modules
+  (`ISequenced`), so a part with several sequenceable modules names its primary one. Core authors
+  it under `<PartGameData>` — `<PrimarySequenceModule Id="LESMotor"/>` on both LES prefabs in
+  `CorePropulsionAGameData.xml` — where flexo's `RawXmlNode` passthrough round-trips it verbatim.
+  It is dropped on a geometry `<Part>` and opaque to the editor: **gap T3**, the exact twin of
+  `<Grab>`/gap **S2**.
+
+**`PartModelModule.TemplateData` gained `[XmlElement("Terrain")] bool Terrain = false`** (rev 5336,
+"Glb nodes can now be marked as `_Terrain` and will have the terrain material applied"). `<PartModel>`
+is a MODELED element, so no passthrough covers it and an authored `<Terrain>` on a part would be
+dropped: **gap T2**. Only static objects author it today (`CoreLaunchPadCAssets.xml`), and it does
+not disturb the `<Internal>` uniqueness claim — `PartModelModule.cs`'s is still the only
+`[XmlElement("Internal")]` in the tree.
+
+**Static objects are a new top-level `<Assets>` family, out of scope.** `AssetBundle` gained
+`<StaticObject>` / `<StaticSubObject>` / `<StaticObjectGameData>` (rev 5328's launch-pad scenery)
+and `<ClutterObjectGameData>` (rev 5304). flexo never re-emits a whole Core `<Assets>` file, so
+there is nothing to silently drop on the part path; the clutter half is tracked in
+[ground-clutter.md](ground-clutter.md).
+
+**Editor part scaling is runtime, not schema.** Rev 5329's `IRescale` / `ScaleFactors` rescale a
+live part uniformly (0.5×–2×; `ScaleFactors(double3)` takes the **largest** axis) and
+`Part.ScaleTotal` changed from an additive quaternion-transformed composition to a plain
+component-wise product. No XML moved, and **rendering still uses the non-uniform
+`CreateScale(Scale)`**, so flexo's authored SubPart transforms are unaffected. Worth knowing: KSA's
+own GLB importer (`KSA.GlbImport/PartAssetBundler`) now warns on a non-uniform `_connector` or mesh
+node scale — "the simulation scales uniformly and will size this from the largest axis".
+
+Content-side, Core added a parachute bay and launch-escape tower, a second small SRB-C segment,
+`<Grab Id>` handrail anchors, and renamed the MMU's eight `<Rocket>`/`<RocketReference>` ids to
+`…Rocket` so they stop colliding with the thruster-controller ids — the same duplicate-id hygiene
+push that produced `<Light Id>`. Both vendored fixtures that moved (`PartGameData.xml`,
+`CoreIVASpaceAGameData.xml`) were re-synced.
+
+---
 
 ## What changed in 5261
 

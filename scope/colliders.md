@@ -6,11 +6,35 @@
 > [part-and-subpart-xml.md](part-and-subpart-xml.md) (which owns the surrounding `<Part>` /
 > `<PartGameData>` document structure).
 
-**Baseline:** re-verified against KSA build **2026.8.19.5261** (`decomp/` + shipped `Content/Core`)
+**Baseline:** re-verified against KSA build **2026.8.22.5348** (`decomp/` + shipped `Content/Core`)
 and the real GLB meshes in `flexo-private-assets/assets/Meshes`.
 **Baseline status:** 🟡 **MODELED, one primitive short.** The four analytic shapes are fully modeled
 (closing the 4939 geometry-template `<Collider>` gap **E**), but 5261 added a **fifth**,
 `<ConvexHull>` — gap **S1**, see [What changed in 5261](#what-changed-in-5261).
+
+## What changed in 5348
+
+**Nothing in the collider schema moved.** `ColliderModule.Template` still declares exactly the five
+`[XmlElement]` primitives 5261 left it with — `Box` / `Capsule` / `Cylinder` / `Sphere` /
+`ConvexHull` — so **gap S1** (flexo models the four analytic shapes, not the mesh-backed hull)
+stands unchanged, and still only ground clutter authors `<ConvexHull>`.
+
+The two real hunks are the new runtime rescale path (rev 5329): `ColliderModule` implements
+`IRescale`, rebuilding its Bepu shape through `ColliderTemplate.CreateOwnedShape(scale)` when a
+live part is scaled, and the placement formula was extracted verbatim into
+`ColliderTemplate.ComputeAuthoredLocationPartAsmb()`:
+
+```csharp
+LocationAsmb.ToDouble3() + ShapeOffsetCollider.Transform(QuaternionEx.CreateFromXyzRadians(Collider2Asmb))
+```
+
+— the same expression `Create` inlined before, so flexo's `colliderFit.ts` / `ColliderObject.ts`
+placement math is unmoved. Size is still carried in `Transform.scale`, the four XML authoring sites
+still normalise the same way, and `Vehicle`'s zero-collider fallback is unchanged. Core shrank one
+CoreCommandA cylinder collider (`<Radius M="0.5">` → `0.49`, rev 5341, "to help avoid binding") and
+added collider sets for the new parachute-bay SubParts — values only.
+
+---
 
 ## What changed in 5261
 

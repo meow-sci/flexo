@@ -209,8 +209,14 @@ function resolveCurve(
   }
 
   const rocket = owner.rockets.find((r) => r.core.id === motor.id);
-  const nozzles: SolidMotorNozzle[] = (rocket?.nozzles ?? []).flatMap((ref) =>
-    owner.solidNozzles.filter((n) => n.id === ref.id),
+  // Each binding `<Nozzle>` is kept alongside its template: `AreaRatioMultiplier` lives on the
+  // REFERENCE, not the `<SolidMotorNozzle>`, and the throat solve needs it.
+  const nozzles: { nozzle: SolidMotorNozzle; areaRatioMultiplier: number }[] = (
+    rocket?.nozzles ?? []
+  ).flatMap((ref) =>
+    owner.solidNozzles
+      .filter((n) => n.id === ref.id)
+      .map((nozzle) => ({ nozzle, areaRatioMultiplier: ref.areaRatioMultiplier })),
   );
   if (nozzles.length === 0) {
     return { curve: null, reason: 'no <Rocket> binds this motor to a solid nozzle yet.' };
@@ -226,10 +232,11 @@ function resolveCurve(
     exhaustCondensedFraction: reaction.exhaustCondensedFraction ?? 0,
     storageDensityKgPerM3: density,
     segments,
-    nozzles: nozzles.map((n) => ({
-      exitDiameterM: n.exitDiameterM,
-      flowEfficiency: n.flowEfficiency,
-      expansionEfficiency: n.expansionEfficiency,
+    nozzles: nozzles.map(({ nozzle, areaRatioMultiplier }) => ({
+      exitDiameterM: nozzle.exitDiameterM,
+      flowEfficiency: nozzle.flowEfficiency,
+      expansionEfficiency: nozzle.expansionEfficiency,
+      areaRatioMultiplier,
     })),
   });
   return {

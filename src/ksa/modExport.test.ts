@@ -389,7 +389,7 @@ describe('SubPart light GameData export', () => {
 
     // GameData carries the light, keyed by the SubPart template id.
     expect(gameDataXml).toContain(`<SubPartGameData Id="${lampId}"`);
-    expect(gameDataXml).toContain('<Light>');
+    expect(gameDataXml).toContain('<Light Id="_light1">');
     expect(gameDataXml).toContain('<Type>Spot</Type>');
     // The Part tree instantiates that template, and the Assets XML declares it — same id everywhere.
     expect(partXml).toContain(`InstanceOf="${lampId}"`);
@@ -475,7 +475,7 @@ describe('built-in SubPart GameData export variants (never redefine the built-in
     const content = buildModContent(partWithBuiltinLight(), 'MyLight', lightCatalog());
     // The <Light> moves onto a fresh variant SubPartGameData…
     expect(content.gameDataXml).toContain(`<SubPartGameData Id="${VID}"`);
-    expect(content.gameDataXml).toContain('<Light>');
+    expect(content.gameDataXml).toContain('<Light Id="_light1">');
     // …and the built-in SubPart is NEVER redefined (the reported bug).
     expect(content.gameDataXml).not.toContain(`<SubPartGameData Id="${SPOTLIGHT}"`);
     // The placement instantiates the variant, not the built-in.
@@ -601,7 +601,7 @@ describe('custom-mesh SubParts never get an export variant', () => {
     expect(content.partXml).toContain(`InstanceOf="${CUSTOM_ROD}"`);
     expect(content.partXml).not.toContain('InstanceOf="flexo_Rod_');
     expect(content.gameDataXml).toContain(`<SubPartGameData Id="${CUSTOM_ROD}"`);
-    expect(content.gameDataXml).toContain('<Light>');
+    expect(content.gameDataXml).toContain('<Light Id="_light1">');
   });
 
   it('the Assets XML declares the SubPart exactly ONCE, with a <Material> and the _VM view mesh', async () => {
@@ -1575,7 +1575,7 @@ describe('multi-part export — one built-in template, one variant PER part', ()
     expect(content.partXml).toContain(`InstanceOf="${VARIANT_B}"`);
     expect(content.partXml).not.toContain(`InstanceOf="${CHAIR}"`); // the quote disambiguates
     expect(content.gameDataXml).toContain(`<SubPartGameData Id="${VARIANT_B}"`);
-    expect(content.gameDataXml).toContain('<Light>');
+    expect(content.gameDataXml).toContain('<Light Id="_light1">');
     expect(content.gameDataXml).not.toContain(`<SubPartGameData Id="${CHAIR}"`);
   });
 

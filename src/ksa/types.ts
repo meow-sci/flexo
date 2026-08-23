@@ -233,8 +233,27 @@ export interface IvaSeat extends Transform {
  *  - `scale` → UNUSED. KSA ignores light scale; pinned (1,1,1), never emitted.
  */
 export interface PartLight extends Transform {
-  /** Editor-only document id, e.g. "_light1". NEVER emitted (Core authors no <Light Id>). */
+  /** Editor-only document id, e.g. "_light1". Also the fallback {@link ksaId} on export. */
   id: string;
+  /**
+   * `<Light Id>` — the module id KSA reads into `ModuleBase.TemplateDataBase.Id`. Preserved
+   * verbatim from an import; `null` when the source authored none (a light flexo created).
+   *
+   * ⚠️ **Every emitted `<Light>` carries an `Id`, always.** KSA 2026.8.22.5348 (rev 5329) added
+   * `PartTemplate.WarnOnDuplicateModuleIds`, which logs an Error for two Components of the same
+   * type sharing an `Id` — and `<Light>` is a Component (`LightModule.TemplateData` derives
+   * `ModuleBase.TemplateDataBase`, `XmlHelper` maps it by its `[XmlType]` name). Two id-less
+   * lights on one part both read `Id=""`, so they collide. Core reacted in the same build by
+   * naming every shipped light (`<Light Id="RightWindow">` in `CoreCommandAGameData.xml`,
+   * `Id="Right"`/`"Left"` in `CoreIVASpaceAGameData.xml`, `Id="PointLight"`/`"SpotLight"` in
+   * `PartAssets.xml`). The serializer therefore falls back to {@link id} (`_light1`, unique
+   * across the part's merged part-level + SubPart-owned list) when this is null.
+   *
+   * Unlike {@link IvaSeat.ksaId} that auto-fill is safe: nothing in KSA addresses a light by
+   * id, so an `_light1` in the Components id namespace can only be reached by a
+   * `<FeedsFrom Container="_light1">` no one would author.
+   */
+  ksaId: string | null;
   type: LightType;
   /**
    * `null` ⇒ part-level: emitted under `<PartGameData>`, transform in the Part's
@@ -980,8 +999,30 @@ export interface Rocket {
   id: string;
   /** `<Core Id [SubPartId]>` — the combustor. */
   core: SubPartIdRef;
-  /** `<Nozzle Id [SubPartId]>` (≥1 needed for thrust), repeatable. */
-  nozzles: SubPartIdRef[];
+  /** `<Nozzle Id [SubPartId] [AreaRatioMultiplier]>` (≥1 needed for thrust), repeatable. */
+  nozzles: RocketNozzleRef[];
+}
+
+/**
+ * A `<Rocket>`'s `<Nozzle>` entry. KSA 2026.8.22.5348 (rev 5329) promoted this from a plain
+ * `SubPartIdReference` to `RocketNozzleReference`, which adds one attribute.
+ */
+export interface RocketNozzleRef extends SubPartIdRef {
+  /**
+   * `<Nozzle AreaRatioMultiplier>` — SOLID motors only, KSA default `1`.
+   *
+   * A solid motor sizes its throats collectively: `SolidMotor.ResizeNozzles` sums the nozzles'
+   * *sizing* areas and solves one area ratio for the stack. Before 5348 the sizing area WAS the
+   * nozzle's exit area; now it is `SolidMotorNozzle.ThroatSizingArea` = `ExitArea / multiplier`,
+   * so a multiplier > 1 makes a nozzle claim less of the stack's throat and therefore run at a
+   * LARGER expansion ratio than its siblings. Core uses it to trim one of the three LES nozzles
+   * (`CorePropulsionAGameData.xml`, `CorePropulsionA_Prefab_LESA`: `AreaRatioMultiplier="1.0025"`).
+   *
+   * `RocketTemplate.CreateComponents` logs an Error for a non-1 multiplier on a liquid
+   * (De Laval) nozzle, and `RocketNozzleReference.OnDataLoad` resets a non-positive value to 1.
+   * flexo therefore only ever feeds it to {@link solidMotorPhysics}; see scope/engines.md.
+   */
+  areaRatioMultiplier: number;
 }
 
 /** Main engine (throttle + staging) vs RCS thruster (pulsed, control-mapped). */
@@ -1368,6 +1409,8 @@ export function createPowerConsumer(): PowerConsumer {
 export function createPartLight(ownerTemplateId: string | null, id: string): PartLight {
   return {
     id,
+    // A light flexo created has no authored `<Light Id>`; the serializer falls back to `id`.
+    ksaId: null,
     type: 'Spot',
     ownerTemplateId,
     ...identityTransform(),
@@ -1475,7 +1518,11 @@ export function createRocket(id: string, coreId = '', nozzleIds: string[] = []):
   return {
     id,
     core: { id: coreId, subPartInstanceId: null },
-    nozzles: nozzleIds.map((nid) => ({ id: nid, subPartInstanceId: null })),
+    nozzles: nozzleIds.map((nid) => ({
+      id: nid,
+      subPartInstanceId: null,
+      areaRatioMultiplier: 1,
+    })),
   };
 }
 

@@ -11,7 +11,7 @@
 > alongside [engines.md](engines.md), [connectors-coordinates-iva.md](connectors-coordinates-iva.md)
 > and [gamedata-modules.md](gamedata-modules.md).
 
-**Baseline:** re-verified against KSA build **2026.8.19.5261** (decomp @ 5261 + shipped Core XML);
+**Baseline:** re-verified against KSA build **2026.8.22.5348** (decomp @ 5348 + shipped Core XML);
 surface introduced at **2026.7.9.5018**.
 **Baseline status:** ✅ **CURRENT** — modeled end-to-end (parse, serialize, import/paste
 remapping, project codec v4, authoring UI, export pre-flight) by the 5018 upgrade.
@@ -187,6 +187,23 @@ template-local `Components` id and is never regenerated, so it passes through un
   surfaces warnings, not just blocking errors.
 - **`Parent` on a part-level consumer is legal** and needs no wiring (it defers to whatever
   places the _part_), so flexo's "unwired consumer" check only fires for SubPart-level ones.
+
+---
+
+## What changed in 5348
+
+**Nothing on the plumbing contract.** `ConnectorCapability*`, `FeedsFromReference`,
+`ConsumerFeedWiring` and `RocketCoreTemplate` are byte-identical; empty `<Capabilities>` still
+defaults to `Electricity|ServiceFluid`, `[Flags]` bodies are still whitespace-separated, and
+container `Id`s are still load-bearing. `PartTemplate.AddResolvedFeed`'s container check still
+scans every `Components[].Id` — which is now shared with `<Light Id>` (see
+[gamedata-modules.md](gamedata-modules.md#what-changed-in-5348)); flexo's auto-filled `_lightN` ids
+cannot collide with a real container name in practice, but the namespace is worth remembering.
+
+Rev 5326 reworked **vehicle power** onto `ElectricalCircuits` — the craft is partitioned once into
+groups of parts joined by `Electricity`-carrying connections and every consumer draws from its
+circuit's batteries. That is a runtime/perf change with no schema of its own; it does make the
+`Electricity` capability on a connector more load-bearing than before.
 
 ---
 

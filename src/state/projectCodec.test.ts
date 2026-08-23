@@ -4,6 +4,7 @@ import {
   IVA_SEAT_LAYER_ID,
   KITTEN_LAYER_ID,
   createEmptyPart,
+  createPartLight,
   createSolidGrainSegment,
   createSolidMotor,
   createSolidMotorNozzle,
@@ -171,7 +172,7 @@ function richPart(): EditingPart {
   p.gameData.rockets.push({
     id: 'GasGenerator',
     core: { id: 'GasGeneratorChamber', subPartInstanceId: null },
-    nozzles: [{ id: 'TurbineExhaustNozzle', subPartInstanceId: 'wing_1' }],
+    nozzles: [{ id: 'TurbineExhaustNozzle', subPartInstanceId: 'wing_1', areaRatioMultiplier: 1 }],
   });
   p.gameData.combustors.push({
     id: 'GasGeneratorChamber',
@@ -302,7 +303,7 @@ function richPart(): EditingPart {
       {
         id: 'Engine',
         core: { id: 'ThrustChamber', subPartInstanceId: null },
-        nozzles: [{ id: 'Nozzle', subPartInstanceId: null }],
+        nozzles: [{ id: 'Nozzle', subPartInstanceId: null, areaRatioMultiplier: 1 }],
       },
     ],
     solidMotors: [
@@ -330,6 +331,7 @@ function richPart(): EditingPart {
       innerAngleRad: 0.392699,
       outerAngleRad: 0.785398,
       rayTracing: false,
+      ksaId: null,
       disableInIva: false,
       layerId: 'layer1',
     },
@@ -344,6 +346,7 @@ function richPart(): EditingPart {
       innerAngleRad: 0,
       outerAngleRad: 0,
       rayTracing: true,
+      ksaId: null,
       disableInIva: false,
       layerId: DEFAULT_LAYER_ID,
     },
@@ -959,6 +962,7 @@ describe('light codec', () => {
         innerAngleRad: 0.392599,
         outerAngleRad: 0.785398,
         rayTracing: false,
+        ksaId: null,
         disableInIva: false,
         layerId: 'layer1',
       },
@@ -973,6 +977,7 @@ describe('light codec', () => {
         innerAngleRad: 0,
         outerAngleRad: 0,
         rayTracing: true,
+        ksaId: null,
         disableInIva: false,
         layerId: DEFAULT_LAYER_ID,
       },
@@ -984,6 +989,17 @@ describe('light codec', () => {
     expect(back.map((l) => l.layerId)).toEqual(['layer1', DEFAULT_LAYER_ID]);
     // `scale` is unused, never serialized, and always decodes back to (1,1,1).
     expect(back.every((l) => l.scale.x === 1 && l.scale.y === 1 && l.scale.z === 1)).toBe(true);
+  });
+
+  it('carries an authored <Light Id> and omits the key when there is none', () => {
+    const p = createEmptyPart();
+    p.lights.push(
+      { ...createPartLight(null, '_light1'), ksaId: 'RightWindow' },
+      createPartLight(null, '_light2'),
+    );
+    expect(roundTripOne(p).lights.map((l) => l.ksaId)).toEqual(['RightWindow', null]);
+    expect(encodeOne(p).li![0]).toHaveProperty('ki', 'RightWindow');
+    expect(encodeOne(p).li![1]).not.toHaveProperty('ki');
   });
 
   it('drops defaults from the wire form (null owner, identity transform, Spot, no RT)', () => {
@@ -1000,6 +1016,7 @@ describe('light codec', () => {
       innerAngleRad: 0.392699,
       outerAngleRad: 0.785398,
       rayTracing: false,
+      ksaId: null,
       disableInIva: false,
       layerId: DEFAULT_LAYER_ID,
     });

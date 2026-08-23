@@ -4,8 +4,11 @@
 > `<PartGameData>` / `<SubPartGameData>` documents. Each block maps to a KSA `*Template`
 > class. Engine modules have their own file ([engines.md](engines.md)).
 
-**Baseline:** re-vetted against KSA build **2026.8.19.5261** (decomp @ 5261 + shipped Core XML).
-**Baseline status:** ✅ **INTACT** — 5261's added `<Light><DisableInIva>` is now modeled
+**Baseline:** re-vetted against KSA build **2026.8.22.5348** (decomp @ 5348 + shipped Core XML).
+**Baseline status:** ✅ **INTACT** — 5348 made `<Light Id>` load-bearing
+(`PartTemplate.WarnOnDuplicateModuleIds`) and moved the decoupler into `Components` without moving
+its wire form; the id is now modeled as `PartLight.ksaId` and ALWAYS emitted — see
+[What changed in 5348](#what-changed-in-5348). 5261's added `<Light><DisableInIva>` is modeled
 (`PartLight.disableInIva` — see [What changed in 5261](#what-changed-in-5261)); 5117's
 `<EVADoor SeatId>` is modeled
 (`EvaDoor.seatId`, gap **Q1** CLOSED — see [What changed in 5117](#what-changed-in-5117)); every
@@ -121,6 +124,53 @@ re-check the validator's strings alongside the two evaluators.
 
 On each game update, re-verify per the checklist item in
 [GAME_UPDATE_CHECKLIST.md](GAME_UPDATE_CHECKLIST.md) (grep anchors are listed there).
+
+## What changed in 5348
+
+**`<Light Id>` became load-bearing — flexo now round-trips it and always emits one.**
+Rev 5329 added `PartTemplate.WarnOnDuplicateModuleIds` (`decomp/KSA/PartTemplate.cs`), which walks
+`Components` and logs an **Error** for any two entries of the same runtime type sharing an `Id`:
+
+> `Part <id> has two Light modules named '<id>'; give them distinct Ids`
+
+`<Light>` is a Components module — `LightModule.TemplateData` derives
+`ModuleBase.TemplateDataBase` (which has carried `[XmlAttribute] string Id = ""` all along), and
+`XmlHelper`'s static constructor maps every such class into `PartTemplate.Components` by its
+`[XmlType(TypeName)]`. flexo emitted every `<Light>` with **no** `Id`, so two lights on one part
+both read `Id=""` and collided; an authored `<Light Id>` was also dropped on import. Core reacted in
+the same build by naming every shipped light: `<Light Id="RightWindow">` / `Id="LeftWindow"`
+(`CoreCommandAGameData.xml`), `Id="Right"` / `Id="Left"` (`CoreIVASpaceAGameData.xml`),
+`Id="PointLight"` / `Id="SpotLight"` (`PartAssets.xml`).
+
+flexo's fix: `PartLight.ksaId` holds the authored id verbatim (`null` when there was none), and
+`buildLightElement` **always** writes `Id`, falling back to the editor document id (`_light1`, …,
+already unique across the part's merged part-level + SubPart-owned list). That auto-fill is safe
+in a way `IvaSeat.ksaId`'s would not be — nothing in KSA addresses a light by id, so an `_lightN`
+in the Components id namespace can only be reached by a `<FeedsFrom Container="_lightN">` no one
+would author. The four other Components element names (`<Tank>`, `<SolidGrainSegment>`,
+`<FuelPort>`, `<Decoupler>`) were re-checked: flexo already emits an `Id` on the tanks and grain
+segments, and never emits more than one decoupler.
+
+**The decoupler moved out of `PartTemplate` — the wire form did not.** `DecouplerTemplate.cs` was
+**deleted** and `PartTemplate` lost `[XmlElement("Decoupler")] DecouplerTemplate? Decoupler`. A
+decoupler is now `Decoupler.TemplateData : ModuleBase.TemplateDataBase` carrying
+`[XmlType(TypeName = "Decoupler")]` with the same two `[XmlAttribute]`s, `ConnectorId` and `Force`.
+`<Decoupler ConnectorId="…" Force="…"/>` therefore still parses identically under both `<Part>` and
+`<PartGameData>`, and flexo needed no change. Two behavioural consequences to know:
+
+- A decoupler is **repeatable** now — `Decoupler.CreateComponents` loops the whole `Components`
+  list instead of reading one nullable field.
+- `PartTemplate.ApplyGameData` **appends** (`Components.AddRange(gameData.Components)`) where it
+  used to override (`if (gameData.Decoupler != null) Decoupler = gameData.Decoupler`), so a part
+  that authors `<Decoupler>` in BOTH the geometry `<Part>` and its `<PartGameData>` now gets two.
+  flexo emits it only under `<PartGameData>`, so it is unaffected.
+
+`Decoupler` also gained `IRescale` (`Force = template.Force * scale.Area`) and `ISequenced`, both
+runtime-only. `LightModule` itself is otherwise unchanged — `DisableInIva` and the falloff/aim
+contract are byte-identical, and the one real hunk (`viewport == Program.MainViewport` dropped from
+the spot-light instance path) is renderer-side.
+
+---
 
 ## What changed in 5261
 

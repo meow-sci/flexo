@@ -37,6 +37,7 @@ import type {
   Rocket,
   RocketController,
   RocketControllerKind,
+  RocketNozzleRef,
   RocketSoundAction,
   SolarPanel,
   SolidGrainSegment,
@@ -526,6 +527,9 @@ function lightFromElement(el: Element): Omit<PartLight, 'id' | 'ownerTemplateId'
   const colorEl = directChildren(el, 'Color')[0];
   const transform = readTransform(el);
   return {
+    // `<Light Id>` — KSA's module id (`ModuleBase.TemplateDataBase.Id`). Core names every
+    // light since 5348 and duplicate Components ids now log an Error, so it is preserved.
+    ksaId: el.getAttribute('Id') || null,
     type,
     position: transform.position,
     rotation: transform.rotation,
@@ -552,10 +556,11 @@ function lightFromElement(el: Element): Omit<PartLight, 'id' | 'ownerTemplateId'
  * additively; nothing orders them semantically, but stable order keeps round-trips
  * byte-identical).
  *
- * The light ids are REGENERATED here (`_light1`, `_light2`, … — renumbered again by the
- * outer callers over the merged part-level + SubPart-owned list) and are never emitted:
- * an authored `<Light Id>` attribute is DROPPED — no shipped light authors one and
- * nothing in KSA addresses a light by id (see scope/gamedata-modules.md).
+ * The editor document ids are REGENERATED here (`_light1`, `_light2`, … — renumbered again
+ * by the outer callers over the merged part-level + SubPart-owned list). The authored
+ * `<Light Id>` is kept SEPARATELY in {@link PartLight.ksaId} and re-emitted verbatim; it
+ * became load-bearing in KSA 2026.8.22.5348, where duplicate Components ids log an Error
+ * (see scope/gamedata-modules.md).
  *
  * `ownerTemplateId` is the frame the light is expressed in: `null` for a Part-level
  * owner, else the SubPart template id.
@@ -1153,6 +1158,19 @@ function feedsFromElement(el: Element): FeedSource[] {
     .filter((f): f is FeedSource => f != null);
 }
 
+/**
+ * One `<Nozzle>` of a `<Rocket>` — a {@link refFromElement} plus KSA 5348's
+ * `RocketNozzleReference.AreaRatioMultiplier`. A missing or non-positive value is 1, exactly
+ * as `RocketNozzleReference.OnDataLoad` resolves it.
+ */
+function nozzleRefFromElement(el: Element): RocketNozzleRef {
+  const raw = Number(el.getAttribute('AreaRatioMultiplier'));
+  return {
+    ...refFromElement(el),
+    areaRatioMultiplier: Number.isFinite(raw) && raw > 0 ? raw : 1,
+  };
+}
+
 /** Parses a `<Core>`/`<Nozzle>`/`<RocketReference>` into a {@link SubPartIdRef}. */
 function refFromElement(el: Element | null | undefined): SubPartIdRef {
   return {
@@ -1278,7 +1296,7 @@ function rocketFromElement(el: Element): Rocket {
   return {
     id: el.getAttribute('Id') ?? '',
     core: refFromElement(directChildren(el, 'Core')[0]),
-    nozzles: directChildren(el, 'Nozzle').map(refFromElement),
+    nozzles: directChildren(el, 'Nozzle').map(nozzleRefFromElement),
   };
 }
 

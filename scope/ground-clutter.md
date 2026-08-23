@@ -4,7 +4,7 @@
 > data-only KSA mod that adds a celestial body with `<GroundClutter>` (cards/meshes scattered
 > on the terrain), using **no custom game code**. Reference scaffold for clutter modding.
 
-**Baseline:** re-verified against KSA build **2026.8.19.5261** (decomp @ 5261 + shipped Core XML).
+**Baseline:** re-verified against KSA build **2026.8.22.5348** (decomp @ 5348 + shipped Core XML).
 **Baseline status:** 🟡 **SCHEMA-DRIFT, scaffold unaffected (in-game re-check still pending)** —
 5117 (rev 5099) renamed the ecotype's `<Collideable Value>` to
 `<CollisionType Value="None|PrimitiveList|Mesh">` ahead of the Bepu physics integration. The
@@ -52,6 +52,29 @@ hand-authored mod XML + a build script).
 - **Opacity** cut where R < 0.5 (cutout cards).
 - First-wins + core-first load order, so a clutter mod can **add** a body & reuse textures by `Id`.
 - Loading is gated by the scenario's `<LoadFromLibrary>`.
+
+## What changed in 5348
+
+**Clutter objects gained mass, via a new GameData asset and a substance library** (revs 5304–5307),
+which widens gap **R1** again — the scaffold already does not load.
+
+- `AssetBundle` gained `[XmlElement("ClutterObjectGameData", typeof(ClutterObjectGameDataReference))]`,
+  a **separate GameData document** for clutter, mirroring how parts split assets from game data.
+  Core ships it as `Content/Core/GroundClutter/_GameData.xml`, plus a new
+  `GroundClutter/_Materials.xml` substance library; both are listed in `mod.toml`.
+- `ClutterObjectTemplate` gained a repeatable `[XmlElement("Substance")] List<ClutterSubstanceReference>`.
+  Each entry is `<Substance Id="Rock.Anorthosite"><Volume M3="3227"/></Substance>`;
+  `MassKg = Solid.StorageDensity * Volume.InMetersCubed()` and `GetMass(scale)` cubes the scale.
+- Rev 5307 makes destruction energy-gated (25 J/kg by default) and **logs a warning when a
+  collideable clutter object has no mass**, so a collideable object now needs a `<Substance>`.
+- Rev 5263 temporarily removed the three smallest shrub types (no colliders yet); rev 5345 fixed
+  two off-by-one errors that made the last object type and last scale in an ecotype exceedingly
+  rare, and raised the grass ecotype's object separation 1.3 → 1.45 m.
+
+Still scaffold-only — `ksa-mods/cartoon-moon/` and `scripts/build-cartoon-moon.ts` are the entire
+flexo surface, and no part-editor code is involved.
+
+---
 
 ## What changed in 5261
 

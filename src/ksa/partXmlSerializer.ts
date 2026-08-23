@@ -624,11 +624,17 @@ function buildTankShapeElement(doc: XmlDocument, tank: Tank): XmlElement {
  * <Light> with Type/Transform/Range/Intensity/Color, plus InnerAngle+OuterAngle for
  * Spots and <RayTracing> only when enabled. Matches KSA's LightModule schema:
  * Position aims/places the light, Rotation aims a Spot's cone; Scale is never emitted
- * (the engine ignores it). The <Transform> itself is omitted when identity. The
- * editor-only {@link PartLight.id} is NEVER emitted (Core authors no <Light Id>).
+ * (the engine ignores it). The <Transform> itself is omitted when identity.
+ *
+ * `Id` is ALWAYS emitted: the imported {@link PartLight.ksaId} when there is one, else the
+ * editor document id ({@link PartLight.id}, `_light1`…, unique across the part). KSA
+ * 2026.8.22.5348's `PartTemplate.WarnOnDuplicateModuleIds` logs an Error for two `<Light>`
+ * Components sharing an id, and two id-less lights both read `Id=""` — so a part with more
+ * than one light MUST name them. Core names every shipped light in the same build.
  */
 function buildLightElement(doc: XmlDocument, light: PartLight): XmlElement {
   const el = doc.createElement('Light');
+  el.setAttribute('Id', light.ksaId ?? light.id);
   const type = doc.createElement('Type');
   type.appendChild(doc.createTextNode(light.type));
   el.appendChild(type);
@@ -916,7 +922,7 @@ function buildConsumerFeedWiringElement(
   return el;
 }
 
-/** <Rocket Id><Core Id [SubPartId]/><Nozzle Id [SubPartId]/>…</Rocket>. */
+/** <Rocket Id><Core Id [SubPartId]/><Nozzle Id [SubPartId] [AreaRatioMultiplier]/>…</Rocket>. */
 function buildRocketElement(doc: XmlDocument, r: Rocket): XmlElement {
   const el = doc.createElement('Rocket');
   el.setAttribute('Id', r.id);
@@ -926,6 +932,11 @@ function buildRocketElement(doc: XmlDocument, r: Rocket): XmlElement {
   for (const nozzle of r.nozzles) {
     const nz = doc.createElement('Nozzle');
     setRefAttrs(nz, nozzle);
+    // `RocketNozzleReference.AreaRatioMultiplier` (KSA 5348), default 1 — omitted at the
+    // default so a part that never touches it stays byte-identical to its pre-5348 form.
+    if (nozzle.areaRatioMultiplier !== 1) {
+      nz.setAttribute('AreaRatioMultiplier', formatG6(nozzle.areaRatioMultiplier));
+    }
     el.appendChild(nz);
   }
   return el;

@@ -445,7 +445,10 @@ describe('part-level and SubPart-level <Light> parsing (direct GameData XML)', (
     ]);
   });
 
-  it('drops an authored <Light Id> attribute (editor ids are flexo-local, never emitted)', () => {
+  // KSA 2026.8.22.5348 (rev 5329) made `<Light Id>` matter: `<Light>` is a Components module
+  // and `PartTemplate.WarnOnDuplicateModuleIds` logs an Error for two of the same type sharing
+  // an id. The authored id rides `ksaId`, kept apart from the flexo-local document id.
+  it('preserves an authored <Light Id> in ksaId and re-emits it verbatim', () => {
     const parsed = gameDataFromAssets(
       `<Assets><PartGameData Id="P">
         <Light Id="Headlight"><Range Value="3" /></Light>
@@ -454,10 +457,24 @@ describe('part-level and SubPart-level <Light> parsing (direct GameData XML)', (
       new DOMParser(),
     )!;
     expect(parsed.lights[0].id).toBe('_light1');
-    // Re-export never writes an Id back.
+    expect(parsed.lights[0].ksaId).toBe('Headlight');
     const xml = serializeGameData(editingPart({ partId: 'P', lights: parsed.lights }));
-    expect(xml).toContain('<Light>');
-    expect(xml).not.toContain('<Light Id=');
+    expect(xml).toContain('<Light Id="Headlight">');
+  });
+
+  it('names an id-less light by its document id, so two lights never collide in-game', () => {
+    const parsed = gameDataFromAssets(
+      `<Assets><PartGameData Id="P">
+        <Light><Range Value="3" /></Light>
+        <Light><Range Value="4" /></Light>
+      </PartGameData></Assets>`,
+      'P',
+      new DOMParser(),
+    )!;
+    expect(parsed.lights.map((l) => l.ksaId)).toEqual([null, null]);
+    const xml = serializeGameData(editingPart({ partId: 'P', lights: parsed.lights }));
+    expect(xml).toContain('<Light Id="_light1">');
+    expect(xml).toContain('<Light Id="_light2">');
   });
 
   it('round-trips a part-level light back under <PartGameData>', () => {
@@ -476,7 +493,15 @@ describe('part-level and SubPart-level <Light> parsing (direct GameData XML)', (
       ],
     });
     const back = roundTrip(source);
-    expect(back.lights).toEqual(source.lights);
+    // An UNNAMED light exports under its document id, so it comes back with that id in
+    // `ksaId` — the one field the trip fills in rather than preserving. Everything else is
+    // identity, and the trip is a fixed point from here on (asserted below), which is what
+    // byte-stable re-export needs.
+    expect(back.lights).toEqual(source.lights.map((l) => ({ ...l, ksaId: l.ksaId ?? l.id })));
+    // …and re-exporting what came back emits byte-identical XML, so the trip is a fixed point.
+    expect(serializeGameData(editingPart({ partId: 'P', lights: back.lights }))).toBe(
+      serializeGameData(source),
+    );
   });
 });
 
@@ -502,7 +527,9 @@ describe('engine modules (round-trip with serializeGameData)', () => {
         {
           id: 'GasGenerator',
           core: { id: 'GasGeneratorChamber', subPartInstanceId: null },
-          nozzles: [{ id: 'TurbineExhaustNozzle', subPartInstanceId: 'turbo_2' }],
+          nozzles: [
+            { id: 'TurbineExhaustNozzle', subPartInstanceId: 'turbo_2', areaRatioMultiplier: 1 },
+          ],
         },
       ],
       // feeds/plumbing are not yet parsed or emitted (see partXmlParser TODOs); a
@@ -593,7 +620,7 @@ describe('engine modules (round-trip with serializeGameData)', () => {
           {
             id: 'Engine',
             core: { id: 'ThrustChamber', subPartInstanceId: null },
-            nozzles: [{ id: 'Nozzle', subPartInstanceId: null }],
+            nozzles: [{ id: 'Nozzle', subPartInstanceId: null, areaRatioMultiplier: 1 }],
           },
         ],
       },
@@ -1338,7 +1365,7 @@ describe('solid rocket motors round-trip', () => {
         {
           id: 'Motor',
           core: { id: 'MotorCore', subPartInstanceId: null },
-          nozzles: [{ id: 'Nozzle', subPartInstanceId: 'srb_thrust_1' }],
+          nozzles: [{ id: 'Nozzle', subPartInstanceId: 'srb_thrust_1', areaRatioMultiplier: 1 }],
         },
       ],
       solidMotors: [
@@ -1410,6 +1437,40 @@ describe('solid rocket motors round-trip', () => {
   // no AreaRatio slot at all, so emitting one would be an unknown element to KSA.
   it('never emits <AreaRatio> on a solid nozzle', () => {
     expect(serializeGameData(source)).not.toContain('AreaRatio');
+  });
+
+  // KSA 2026.8.22.5348 (rev 5329) promoted `<Rocket><Nozzle>` from a plain SubPartIdReference
+  // to `RocketNozzleReference`, which adds `AreaRatioMultiplier`. Core authors it on the LES
+  // motor (`CorePropulsionA_Prefab_LESA`), so dropping it is real data loss.
+  it('round-trips <Nozzle AreaRatioMultiplier> and omits it at the default 1', () => {
+    const parsed = gameDataFromAssets(
+      `<Assets><PartGameData Id="P">
+        <Rocket Id="Motor">
+          <Core Id="MotorCore" />
+          <Nozzle Id="Nozzle" SubPartId="a" />
+          <Nozzle Id="Nozzle" SubPartId="b" AreaRatioMultiplier="1.0025" />
+        </Rocket>
+      </PartGameData></Assets>`,
+      'P',
+      new DOMParser(),
+    )!;
+    expect(parsed.gameData.rockets[0].nozzles.map((n) => n.areaRatioMultiplier)).toEqual([
+      1, 1.0025,
+    ]);
+    const xml = serializeGameData(editingPart({ partId: 'P', gameData: { ...parsed.gameData } }));
+    expect(xml).toContain('<Nozzle Id="Nozzle" SubPartId="a"/>');
+    expect(xml).toContain('<Nozzle Id="Nozzle" SubPartId="b" AreaRatioMultiplier="1.0025"/>');
+  });
+
+  it('resolves a non-positive <Nozzle AreaRatioMultiplier> to 1, as RocketNozzleReference does', () => {
+    const parsed = gameDataFromAssets(
+      `<Assets><PartGameData Id="P">
+        <Rocket Id="Motor"><Core Id="C" /><Nozzle Id="N" AreaRatioMultiplier="0" /></Rocket>
+      </PartGameData></Assets>`,
+      'P',
+      new DOMParser(),
+    )!;
+    expect(parsed.gameData.rockets[0].nozzles[0].areaRatioMultiplier).toBe(1);
   });
 
   it('omits <Grain Id> when the motor takes the library default', () => {

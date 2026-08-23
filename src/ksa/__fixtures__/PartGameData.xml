@@ -22,9 +22,9 @@
         <!-- Part frame convention: origin at the kitten's FEET (the character mesh and animation clips are authored feet-at-origin, and the collider capsule's bottom tip sits at the origin). The jetpack sits at the chest, 0.431m up (Z=-0.431), so every nozzle location, the custom mass, and the tank are shifted by Z-=0.431 relative to their original jetpack-at-origin authoring - a uniform shift that preserves all thruster moment arms about the center of mass exactly. -->
         <RocketThrusterController Id="TranslateRight">
             <ControlMap CSV="TranslateRight" />
-            <RocketReference Id="TranslateRight" />
+            <RocketReference Id="TranslateRightRocket" />
         </RocketThrusterController>
-        <Rocket Id="TranslateRight">
+        <Rocket Id="TranslateRightRocket">
             <Core Id="TranslateRightCombustor" />
             <Nozzle Id="TranslateRight1" />
             <Nozzle Id="TranslateRight2" />
@@ -72,9 +72,9 @@
 
         <RocketThrusterController Id="TranslateLeft">
             <ControlMap CSV="TranslateLeft" />
-            <RocketReference Id="TranslateLeft" />
+            <RocketReference Id="TranslateLeftRocket" />
         </RocketThrusterController>
-        <Rocket Id="TranslateLeft">
+        <Rocket Id="TranslateLeftRocket">
             <Core Id="TranslateLeftCombustor" />
             <Nozzle Id="TranslateLeft1" />
             <Nozzle Id="TranslateLeft2" />
@@ -122,9 +122,9 @@
 
         <RocketThrusterController Id="TranslateDown">
             <ControlMap CSV="TranslateDown" />
-            <RocketReference Id="TranslateDown" />
+            <RocketReference Id="TranslateDownRocket" />
         </RocketThrusterController>
-        <Rocket Id="TranslateDown">
+        <Rocket Id="TranslateDownRocket">
             <Core Id="TranslateDownCombustor" />
             <Nozzle Id="TranslateDown1" />
             <Nozzle Id="TranslateDown2" />
@@ -204,9 +204,9 @@
 
         <RocketThrusterController Id="TranslateUp">
             <ControlMap CSV="TranslateUp" />
-            <RocketReference Id="TranslateUp" />
+            <RocketReference Id="TranslateUpRocket" />
         </RocketThrusterController>
-        <Rocket Id="TranslateUp">
+        <Rocket Id="TranslateUpRocket">
             <Core Id="TranslateUpCombustor" />
             <Nozzle Id="TranslateUp1" />
             <Nozzle Id="TranslateUp2" />
@@ -286,9 +286,9 @@
 
         <RocketThrusterController Id="TranslateBackward">
             <ControlMap CSV="TranslateBackward" />
-            <RocketReference Id="TranslateBackward" />
+            <RocketReference Id="TranslateBackwardRocket" />
         </RocketThrusterController>
-        <Rocket Id="TranslateBackward">
+        <Rocket Id="TranslateBackwardRocket">
             <Core Id="TranslateBackwardCombustor" />
             <Nozzle Id="TranslateBackward1" />
             <Nozzle Id="TranslateBackward2" />
@@ -368,9 +368,9 @@
 
         <RocketThrusterController Id="TranslateForward">
             <ControlMap CSV="TranslateForward" />
-            <RocketReference Id="TranslateForward" />
+            <RocketReference Id="TranslateForwardRocket" />
         </RocketThrusterController>
-        <Rocket Id="TranslateForward">
+        <Rocket Id="TranslateForwardRocket">
             <Core Id="TranslateForwardCombustor" />
             <Nozzle Id="TranslateForward1" />
             <Nozzle Id="TranslateForward2" />
@@ -450,9 +450,9 @@
 
         <RocketThrusterController Id="PitchDownRollLeftYawRight">
             <ControlMap CSV="PitchDown,RollLeft,YawRight" />
-            <RocketReference Id="PitchDownRollLeftYawRight" />
+            <RocketReference Id="PitchDownRollLeftYawRightRocket" />
         </RocketThrusterController>
-        <Rocket Id="PitchDownRollLeftYawRight">
+        <Rocket Id="PitchDownRollLeftYawRightRocket">
             <Core Id="PitchDownRollLeftYawRightCombustor" />
             <Nozzle Id="PitchDownRollLeftYawRight1" />
             <Nozzle Id="PitchDownRollLeftYawRight2" />
@@ -499,9 +499,9 @@
 
         <RocketThrusterController Id="PitchUpRollLeftYawLeft">
             <ControlMap CSV="PitchUp,RollLeft,YawLeft" />
-            <RocketReference Id="PitchUpRollLeftYawLeft" />
+            <RocketReference Id="PitchUpRollLeftYawLeftRocket" />
         </RocketThrusterController>
-        <Rocket Id="PitchUpRollLeftYawLeft">
+        <Rocket Id="PitchUpRollLeftYawLeftRocket">
             <Core Id="PitchUpRollLeftYawLeftCombustor" />
             <Nozzle Id="PitchUpRollLeftYawLeft1" />
             <Nozzle Id="PitchUpRollLeftYawLeft2" />
@@ -548,9 +548,9 @@
 
         <RocketThrusterController Id="PitchDownRollRightYawLeft">
             <ControlMap CSV="PitchDown,RollRight,YawLeft" />
-            <RocketReference Id="PitchDownRollRightYawLeft" />
+            <RocketReference Id="PitchDownRollRightYawLeftRocket" />
         </RocketThrusterController>
-        <Rocket Id="PitchDownRollRightYawLeft">
+        <Rocket Id="PitchDownRollRightYawLeftRocket">
             <Core Id="PitchDownRollRightYawLeftCombustor" />
             <Nozzle Id="PitchDownRollRightYawLeft1" />
             <Nozzle Id="PitchDownRollRightYawLeft2" />
@@ -597,9 +597,9 @@
 
         <RocketThrusterController Id="PitchUpRollRightYawRight">
             <ControlMap CSV="PitchUp,RollRight,YawRight" />
-            <RocketReference Id="PitchUpRollRightYawRight" />
+            <RocketReference Id="PitchUpRollRightYawRightRocket" />
         </RocketThrusterController>
-        <Rocket Id="PitchUpRollRightYawRight">
+        <Rocket Id="PitchUpRollRightYawRightRocket">
             <Core Id="PitchUpRollRightYawRightCombustor" />
             <Nozzle Id="PitchUpRollRightYawRight1" />
             <Nozzle Id="PitchUpRollRightYawRight2" />

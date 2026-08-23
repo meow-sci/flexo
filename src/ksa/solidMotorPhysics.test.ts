@@ -77,7 +77,14 @@ function motorWith(
     exhaustCondensedFraction: 0.33696528908145584,
     storageDensityKgPerM3: 1780,
     segments: [{ outerRadiusM: 0.6, wallThicknessMm: 6, lengthM: 4, geometry }],
-    nozzles: [{ exitDiameterM: 0.5, flowEfficiency: 0.95, expansionEfficiency: 0.98 }],
+    nozzles: [
+      {
+        exitDiameterM: 0.5,
+        flowEfficiency: 0.95,
+        expansionEfficiency: 0.98,
+        areaRatioMultiplier: 1,
+      },
+    ],
     ...overrides,
   };
 }
@@ -220,6 +227,47 @@ describe('sampleThrustCurve — SolidMotor.TrySampleThrustCurve', () => {
 
   it('refuses a sample count below two (KSA returns false there too)', () => {
     expect(sampleThrustCurve(motorWith(NEUTRAL), 1)).toBeNull();
+  });
+
+  // KSA 2026.8.22.5348 (rev 5329): `SolidMotor.ResizeNozzles` and `ComputeTotalThroatArea`
+  // apportion the stack's throat by `SolidMotorNozzle.ThroatSizingArea`
+  // (= `ExitArea / AreaRatioMultiplier`) instead of the raw exit area.
+  describe('<Nozzle AreaRatioMultiplier> — ThroatSizingArea', () => {
+    const nozzle = (areaRatioMultiplier: number) => ({
+      exitDiameterM: 0.5,
+      flowEfficiency: 0.95,
+      expansionEfficiency: 0.98,
+      areaRatioMultiplier,
+    });
+
+    // On a ONE-nozzle motor the multiplier divides out: it scales that nozzle's sizing area
+    // and the stack total by the same factor, so the throat it ends up with is unchanged. It
+    // is purely a way to apportion expansion BETWEEN siblings — which is how Core uses it.
+    it('is inert on a single-nozzle motor, whatever the multiplier', () => {
+      const plain = sampleThrustCurve(motorWith(NEUTRAL, { nozzles: [nozzle(1)] }), 32)!;
+      const scaled = sampleThrustCurve(motorWith(NEUTRAL, { nozzles: [nozzle(2)] }), 32)!;
+      expect(scaled.areaRatio).toBeCloseTo(plain.areaRatio, 9);
+      expect(scaled.peakThrustN).toBeCloseTo(plain.peakThrustN, 6);
+    });
+
+    it('shifts expansion onto the multiplied sibling, away from the others', () => {
+      const even = sampleThrustCurve(motorWith(NEUTRAL, { nozzles: [nozzle(1), nozzle(1)] }), 32)!;
+      const trimmed = sampleThrustCurve(
+        motorWith(NEUTRAL, { nozzles: [nozzle(1), nozzle(1.5)] }),
+        32,
+      )!;
+      // `areaRatio` reports nozzle 0, whose multiplier is 1 in both runs. Sibling 1 claiming
+      // `ExitArea / 1.5` of the sizing pool shrinks the pool, so the solved ratio — and with it
+      // nozzle 0's expansion — drops, while the trimmed sibling runs 1.5× that ratio.
+      expect(trimmed.areaRatio).toBeLessThan(even.areaRatio);
+      expect(trimmed.areaRatio).toBeCloseTo((even.areaRatio * (1 + 1 / 1.5)) / 2, 9);
+    });
+
+    it('treats a non-positive multiplier as 1, matching RocketNozzleReference.OnDataLoad', () => {
+      const guarded = sampleThrustCurve(motorWith(NEUTRAL, { nozzles: [nozzle(0)] }), 32)!;
+      const one = sampleThrustCurve(motorWith(NEUTRAL, { nozzles: [nozzle(1)] }), 32)!;
+      expect(guarded.areaRatio).toBeCloseTo(one.areaRatio, 9);
+    });
   });
 });
 

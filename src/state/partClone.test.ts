@@ -222,7 +222,7 @@ function maximalPart(): EditingPart {
         {
           id: 'Engine',
           core: { id: 'ThrustChamber', subPartInstanceId: 'panel_1' },
-          nozzles: [{ id: 'Nozzle', subPartInstanceId: 'poda_1' }],
+          nozzles: [{ id: 'Nozzle', subPartInstanceId: 'poda_1', areaRatioMultiplier: 1 }],
         },
       ],
     },
@@ -238,7 +238,7 @@ function maximalPart(): EditingPart {
   part.gameData.rockets.push({
     id: 'GasGenerator',
     core: { id: 'GasGeneratorChamber', subPartInstanceId: 'podb_1' },
-    nozzles: [{ id: 'TurbineExhaustNozzle', subPartInstanceId: null }],
+    nozzles: [{ id: 'TurbineExhaustNozzle', subPartInstanceId: null, areaRatioMultiplier: 1 }],
   });
   part.gameData.rocketControllers.push({
     id: 'LR91-AJ-3',
@@ -585,7 +585,9 @@ describe('clonePartWithFreshAssets — (f)/(g)/(h) what stays put', () => {
     expect(clone.gameData.gimbals).toEqual(source.gameData.gimbals);
     const rocket = clone.subPartGameData[0].rockets[0];
     expect(rocket.core).toEqual({ id: 'ThrustChamber', subPartInstanceId: 'panel_1' });
-    expect(rocket.nozzles).toEqual([{ id: 'Nozzle', subPartInstanceId: 'poda_1' }]);
+    expect(rocket.nozzles).toEqual([
+      { id: 'Nozzle', subPartInstanceId: 'poda_1', areaRatioMultiplier: 1 },
+    ]);
 
     // Exhaustively: every instance-scoped reference in the whole document, unchanged.
     const refs = instanceRefs(clone);

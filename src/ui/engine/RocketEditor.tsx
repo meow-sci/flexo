@@ -41,8 +41,10 @@ export function RocketEditor({ templateId, index }: { templateId: string | null;
   };
 
   const { coreIds, nozzleIds } = idPools(part, templateId);
+  // Spread over the existing entry: the picker only edits the id/scope, and an authored
+  // `AreaRatioMultiplier` must survive being re-pointed at another nozzle.
   const setNozzleRef = (i: number, ref: SubPartIdRef) =>
-    beginAnd({ nozzles: rocket.nozzles.map((n, j) => (j === i ? ref : n)) });
+    beginAnd({ nozzles: rocket.nozzles.map((n, j) => (j === i ? { ...n, ...ref } : n)) });
 
   const echoes = findings.filter(
     (f) =>
@@ -126,7 +128,12 @@ export function RocketEditor({ templateId, index }: { templateId: string | null;
           variant="ghost"
           className="self-start"
           onPress={() =>
-            beginAnd({ nozzles: [...rocket.nozzles, { id: '', subPartInstanceId: null }] })
+            beginAnd({
+              nozzles: [
+                ...rocket.nozzles,
+                { id: '', subPartInstanceId: null, areaRatioMultiplier: 1 },
+              ],
+            })
           }
         >
           + Nozzle ref

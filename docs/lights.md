@@ -49,7 +49,14 @@ document array: `EditingPart.lights: PartLight[]` (`src/ksa/types.ts`). A `PartL
   frame when `ownerTemplateId` is `null`, else the owning SubPart template's local frame).
 - `scale` — **unused**: KSA ignores light scale; the store pins it to (1,1,1) and the
   serializer never emits it. A scale-mode edit on a light is a silent no-op (the seat rule).
-- `id` — editor-only (`_light1`, …), **never emitted** (Core authors no `<Light Id>`).
+- `id` — the editor document id (`_light1`, …), unique across the part's whole light list.
+- `ksaId` — the authored `<Light Id>`, or `null` for a light flexo created. **Every emitted
+  `<Light>` carries an `Id`**: `ksaId` when there is one, else `id`. That is not cosmetic —
+  KSA 2026.8.22.5348 logs an Error for two `Components` modules of the same type sharing an id
+  (`PartTemplate.WarnOnDuplicateModuleIds`), and `<Light>` is such a module, so two id-less
+  lights on one part would collide. Core names every shipped light for the same reason. An
+  authored id round-trips verbatim; an unnamed light re-imports carrying its `_lightN` fallback,
+  which is why the second export of a round-tripped part is byte-identical to the first.
 - `disableInIva` — the 5261 flag above. Emitted **only when true** (KSA's default is `false`),
   and persisted as the optional `dii` key in the project codec.
 - `ownerTemplateId: string | null` — which of the two XML sites it serializes to. The

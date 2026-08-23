@@ -4,8 +4,11 @@
 > scale/placement aides (never exported) — a faithful three.js re-implementation of KSA's
 > Character rendering. The contract is a long list of asset/material/bone names + render quirks.
 
-**Baseline:** re-verified against KSA build **2026.8.19.5261** (decomp @ 5261 + shipped Core XML).
-**Baseline status:** ✅ **INTACT** — at 5261 `CharacterAssets.xml` gained five kitten **locomotion**
+**Baseline:** re-verified against KSA build **2026.8.22.5348** (decomp @ 5348 + shipped Core XML).
+**Baseline status:** 📝 **INTACT, one stale asset** — at 5348 `CharacterAssets.xml` re-pointed the
+MMU to a new `SK_KSA_MMU.glb`; the legacy `.gltf` flexo names still ships, so the aide loads but
+shows the retired model (gap **T4**, see [What changed in 5348](#what-changed-in-5348)).
+At 5261 `CharacterAssets.xml` gained five kitten **locomotion**
 clips and nothing else that flexo reads (see [What changed in 5261](#what-changed-in-5261));
 `KittenRenderable.cs` is identical, and the eye/glass shader merge (rev 4745) is a verbatim
 refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code change needed.
@@ -68,6 +71,34 @@ refactor that **confirms** flexo's cornea-hide + glass-tint assumptions. No code
 5. Don't `computeVertexNormals()` (faceted helmet dome from seam-split verts).
 6. Attachment correction is required & order-sensitive.
 7. `Characters/` atlases stay raw **BC7** (for verbatim mod bundle-export); without BPTC/RGTC they fall back to flat.
+
+## What changed in 5348
+
+**The MMU asset moved; the aide still loads the retired one.** `CharacterAssets.xml` re-pointed
+
+```diff
+ <GltfFile Id="KittenMMUGlb">
+-    <Source Path="Characters/KittenMMU/KSA_Cat_MMU.gltf"/>
++    <Source Path="Characters/KittenMMU/SK_KSA_MMU.glb"/>
+ </GltfFile>
+```
+
+and renamed the walk/run clips to the `ANI_CHA_KSA_Kitten_*` convention while adding moon-gravity,
+swimming, treading-water and seated-idle clips (revs 5268–5314). flexo's `kittenAssets.ts` still
+names `Characters/KittenMMU/KSA_Cat_MMU.gltf`, which **still ships** in the mirror — so the aide
+keeps working, it just renders the retired MMU model: **gap T4** (COSMETIC, editor-only). Following
+it needs the new GLB's mesh/material names checked in a browser first.
+
+Everything else re-verified: the body/helmet/visor paths, the gltf material names (`Kitty_Suit`,
+`KittyHead_mt`, `M_CHA_Kitten_Head`, `KittyEye_mt`, `Eyes_KittySklera_mt`), the `Head_M` / `Chest_M`
+socket bones and the embedded-`DefaultORM.png` redirect are all unchanged. flexo consumes no
+animation clip, so the new locomotion set is inert for it. `IVASeat` changed how the game **poses**
+a seated kitten (`SEATED_SCALE` 0.5 → 1.0, `SEATED_DOWN_OFFSET` replaced by
+`KittenLocomotionTuning.Current.SeatedOffset`, plus bone-tracked portrait cameras) — flexo renders
+no seated kitten, so nothing follows from it. The seat **basis** is unchanged; see
+[connectors-coordinates-iva.md](connectors-coordinates-iva.md#what-changed-in-5348).
+
+---
 
 ## What changed in 5261
 

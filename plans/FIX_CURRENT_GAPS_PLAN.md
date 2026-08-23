@@ -1,13 +1,175 @@
 # Plan — Fix flexo gaps from KSA updates (running)
 
-> **Latest review: `2026.8.5.5168` → `2026.8.19.5261` (see below). ONE BREAKING gap, ✅ FIXED
-> in the review itself** — KSA rev 5173 reordered the solid-motor area-ratio bounds and deleted
-> the "stack too large" rejection, and flexo's verbatim port had the old form. Also fixed: the
-> new `<Light><DisableInIva>` flag, which a round-trip silently dropped (S0/S3 detail below).
+> **Latest review: `2026.8.19.5261` → `2026.8.22.5348` (see below). NO BREAKING gap; the two
+> MISSING-CAPABILITY gaps that touched live data are ✅ FIXED in the review itself** — KSA rev 5329
+> made `<Light Id>` load-bearing (duplicate `Components` ids now log an Error, and flexo emitted
+> every light unnamed) and added `<Nozzle AreaRatioMultiplier>`, which re-apportions a solid
+> motor's throat and which Core authors on the launch-escape tower (T0/T5 below).
+> Newly 📋 OPEN from 5348: the `<Alpha>` material slot (T1), `<PartModel><Terrain>` (T2),
+> `<PrimarySequenceModule>` (T3, passthrough-safe), and the retired kitten MMU asset (T4).
 > Still 📋 OPEN from 5261: the `<ConvexHull>` collider primitive (S1) and the `<Grab>` handhold
-> anchors (S2, currently passthrough-safe). Carried forward from 5168: the ground-clutter
-> asset-bundler rework (R1, scaffold-only) and the "Control From Here" reference-orientation
-> drift (R2, docs-only). Earlier reviews follow as history.
+> anchors (S2, passthrough-safe). Carried forward from 5168: the ground-clutter asset-bundler
+> rework (R1, scaffold-only, widened again at 5348) and the "Control From Here"
+> reference-orientation drift (R2, docs-only). Earlier reviews follow as history.
+
+---
+
+# 5348 review — `2026.8.19.5261` → `2026.8.22.5348`
+
+**Derived from:** the [scope/](../scope/FULL_SCOPE.md) catalog review — `diff -rq` of the two
+provided asset trees (`ksa-game-assemblies_prev/current` @ 5261 vs `ksa-game-assemblies/current`
+@ 5348), a sweep of all **268 changed `decomp/*.cs`** for `[XmlElement]` / `[XmlAttribute]` /
+`[XmlType]` / `[XmlIgnore]` hunks, and a `cmp` byte-identity check over every verbatim-ported
+class. `version.json` @ 5348 documents revs 5262–5346.
+
+5348 is a **very large release** — ground-clutter collisions, destruction and substance-derived
+mass; crew-portrait bone-tracked cameras; kitten swimming and low-gravity locomotion; a clustered
+lighting VRAM rework; a **static-object** system with real launch-pad models; terrain
+double-precision anchoring; electrical **circuits**; uniform editor part scaling; and sequencing
+moved from parts down to modules — whose **entire XML schema delta is 13 declarations**, of which
+six reach flexo.
+
+**What the added/removed file lists flagged first:** `DecouplerTemplate.cs` appears in "Only in
+PREVIOUS", which reads as a breaking removal until you follow it — the class became
+`Decoupler.TemplateData` with `[XmlType(TypeName = "Decoupler")]` and the same two attributes, so
+the wire form never moved. `RocketNozzleReference.cs` in "Only in CURRENT" is the real find: it is
+the carrier of T5. The `StaticObject*` / `Clutter*Reference` additions are the two new top-level
+`<Assets>` families.
+
+## Priority summary (5348)
+
+| # | Gap | Severity | Status | Scope doc |
+|---|---|---|---|---|
+| T0 | `PartTemplate.WarnOnDuplicateModuleIds` (rev 5329) logs an **Error** for two `Components` of the same type sharing an `Id`. `<Light>` IS such a module and flexo emitted every one **unnamed**, so any part with two lights collided; an authored `<Light Id>` was also dropped on import. Core named every shipped light in the same build | MISSING-CAPABILITY | ✅ **FIXED** (this review) | [gamedata-modules](../scope/gamedata-modules.md#what-changed-in-5348) |
+| T5 | `RocketTemplate.Nozzles` became `List<RocketNozzleReference>`, adding `<Nozzle AreaRatioMultiplier>`; `SolidMotorNozzle.ThroatSizingArea` = `ExitArea / multiplier` and the stack-wide throat solve apportions by THAT. Core authors `1.0025` on a LES nozzle, so flexo both dropped it and mis-solved the stack | MISSING-CAPABILITY | ✅ **FIXED** (this review) | [engines](../scope/engines.md#what-changed-in-5348) |
+| T1 | `PbrMaterialReference` gained `[XmlElement("Alpha")] TextureReference AlphaMap` (rev 5334); flexo models five slots, so it cannot author an alpha-cutout material and would drop the slot off a copied Core material | MISSING-CAPABILITY | 📋 **OPEN** | [custom-assets-and-mod-export](../scope/custom-assets-and-mod-export.md#what-changed-in-5348) |
+| T2 | `PartModelModule.TemplateData` gained `[XmlElement("Terrain")] bool Terrain` (rev 5336); `<PartModel>` is MODELED so no passthrough covers it and an authored `<Terrain>` on a part is dropped | SCHEMA-DRIFT | 📋 **OPEN** | [part-and-subpart-xml](../scope/part-and-subpart-xml.md#what-changed-in-5348) |
+| T3 | `PartTemplate` gained `<PrimarySequenceModule Id>` (rev 5329, sequencing moved onto modules). Core authors it under `<PartGameData>` where the passthrough preserves it, but it is opaque to the editor and dropped on a geometry `<Part>` — the exact twin of S2 | MISSING-CAPABILITY | 📋 **OPEN** | [part-and-subpart-xml](../scope/part-and-subpart-xml.md#what-changed-in-5348) |
+| T4 | `CharacterAssets.xml` re-pointed the MMU from `KSA_Cat_MMU.gltf` to `SK_KSA_MMU.glb`; the legacy file still ships so flexo's kitten aide still loads, but it renders the retired model | COSMETIC | 📋 **OPEN** | [kittens](../scope/kittens.md#what-changed-in-5348) |
+| — | Everything else | NONE | ✅ re-verified INTACT | — |
+
+### T0 — `<Light Id>` became load-bearing — ✅ FIXED
+
+**Severity: MISSING-CAPABILITY**, with an in-game consequence: an Error in the log for any
+flexo-exported part carrying more than one light.
+
+Game-side, `PartTemplate.OnDataLoad` now ends with `WarnOnDuplicateModuleIds()`:
+
+```csharp
+if (!(a.GetType() != b.GetType()) && !(a.Id != b.Id))
+    log.Error($"Part {Id} has two {name} modules named '{a.Id}'; give them distinct Ids");
+```
+
+It walks `Components`. `XmlHelper`'s static constructor builds that list's element mapping by
+reflecting every `ModuleBase.TemplateDataBase` subclass and keying it on `[XmlType(TypeName)]`, so
+the Components element names are exactly five: `<Tank>`, `<SolidGrainSegment>`, `<FuelPort>`,
+`<Light>` and (new at 5348) `<Decoupler>`. `TemplateDataBase` has always carried
+`[XmlAttribute] string Id = ""`, so two unnamed lights are two modules named `""`.
+
+flexo emitted `<Light>` with no `Id` at all, and `lightsFromElement` explicitly discarded an
+authored one ("no shipped light authors one"). Both halves are now wrong: Core added
+`<Light Id="RightWindow">` / `"LeftWindow"` (`CoreCommandAGameData.xml`), `"Right"` / `"Left"`
+(`CoreIVASpaceAGameData.xml`) and `"PointLight"` / `"SpotLight"` (`PartAssets.xml`) in this build.
+
+**Fix (landed):**
+
+- `PartLight.ksaId: string | null` (`src/ksa/types.ts`) holds the authored id, `null` when absent.
+- `lightFromElement` reads `Id`; `buildLightElement` **always** writes one — `ksaId ?? id`, where
+  `id` is the `_lightN` document id, already unique across the part's merged light list.
+- Persisted as the optional `ki` key in the compact codec, carried by project transfer, and
+  default-filled in `projectStore.normalizePart` next to `IvaSeat.ksaId`.
+- The auto-fill is safe where a seat's would not be: nothing in KSA addresses a light by id, so an
+  `_lightN` entering the `Components` id namespace can only be reached by a
+  `<FeedsFrom Container="_lightN">` no one would author.
+- Round-trip is a fixed point: an unnamed light re-imports carrying its `_lightN` fallback, and the
+  second export is byte-identical to the first (asserted in `partXmlParser.test.ts`).
+
+The other four Components names were re-checked — flexo already emits an `Id` on `<Tank>` (when
+non-blank) and `<SolidGrainSegment>`, never emits `<FuelPort>`, and never emits more than one
+`<Decoupler>`.
+
+### T5 — `<Nozzle AreaRatioMultiplier>` re-apportions a solid stack's throat — ✅ FIXED
+
+**Severity: MISSING-CAPABILITY**, touching both round-trip fidelity and the ported physics.
+
+`RocketTemplate.Nozzles` was `List<SubPartIdReference>`; at 5348 it is
+`List<RocketNozzleReference>`, a subclass whose only addition is
+`[XmlAttribute] double AreaRatioMultiplier = 1.0` (non-positive values are reset to 1 in
+`OnDataLoad`). `SolidMotorNozzle` gained `ThroatSizingArea => Config.ExitArea / AreaRatioMultiplier`
+and `SolidMotor` switched both stack-wide routines onto it:
+
+```diff
+-num2 += ((SolidMotorNozzle)n).Config.ExitArea;              // ResizeNozzles total
++num2 += ((SolidMotorNozzle)n).ThroatSizingArea;
+-n.Config.ThroatArea = n.Config.ExitArea / num9;             // ResizeNozzles per-throat
++n.Config.ThroatArea = n.ThroatSizingArea / num9;
+-float num5 = n.Config.ExitArea / totalExitArea;             // ComputeTotalThroatArea weight
++float num5 = n.ThroatSizingArea / totalSizingArea;
+```
+
+Core authors it on `CorePropulsionA_Prefab_LESA` / `…LESB`:
+`<Nozzle Id="Nozzle" SubPartId="…NozzleA6" AreaRatioMultiplier="1.0025"/>`.
+
+**Fix (landed):**
+
+- `RocketNozzleRef extends SubPartIdRef` (`src/ksa/types.ts`) adds `areaRatioMultiplier`;
+  `Rocket.nozzles` is now `RocketNozzleRef[]`.
+- `nozzleRefFromElement` parses it with KSA's own non-positive guard; `buildRocketElement` emits it
+  **only when ≠ 1**, so a part that never touches it stays byte-identical to its pre-5348 form.
+- `solidMotorPhysics.ts` carries `ResolvedNozzle.throatSizingAreaM2` and uses it in `resizeNozzles`
+  (total, per-throat, and the peak-chamber-pressure denominator) and in `computeTotalThroatArea`.
+  `SolidMotorNozzleTemplate.Create`'s `exitArea / 12` seed still uses the RAW exit area, matching
+  the game's ordering (the multiplier reaches the nozzle later, in `RocketTemplate.CreateComponents`).
+- `SolidThrustCurveCard` keeps each binding `<Nozzle>` alongside its template so the multiplier
+  reaches the preview; the engine wizards author 1.
+- Persisted as the optional `m` key in the compact codec, preserved through paste/clone remaps and
+  the nozzle picker, and default-filled by `projectStore.normalizeRockets` — an absent number would
+  otherwise reach the serializer as `NaN`, which a boolean-shaped additive field never risks.
+
+Behaviour worth knowing: on a **one-nozzle** motor the multiplier divides out exactly (it scales
+that nozzle's sizing area and the stack total by the same factor). It only apportions expansion
+between siblings — a multiplier > 1 makes that nozzle claim less of the shared throat and run at a
+proportionally larger ratio, while its siblings run at a slightly smaller one.
+
+### T1 — `<PbrMaterial><Alpha>` — 📋 OPEN
+
+`PbrMaterialReference` gained `[XmlElement("Alpha")] TextureReference? AlphaMap` for the launch
+pad's gravel trim. flexo's `CustomMaterial` models five slots
+(`src/ksa/assetsXmlSerializer.ts`, `src/ui/MaterialDialog.tsx`). **Nothing is lost on a part path
+today**: Core authors `<Alpha>` only in `CoreLaunchPadBAssets.xml`, and `PartModel.PerDrawData`
+still binds exactly five texture indices, so the slot currently reaches only `StaticObject.frag`.
+Worth modeling when KSA wires alpha into the part pipeline, or when a user wants a cutout material;
+the change is one more `TextureReference` through `importMaterials` → `encodeKtx2` →
+`assetsXmlSerializer`, not a new mechanism.
+
+### T2 — `<PartModel><Terrain>` — 📋 OPEN
+
+`PartModelModule.TemplateData` gained `[XmlElement("Terrain")] [DefaultValue(false)] bool Terrain`,
+so a GLB node named `_Terrain` gets the terrain material. `<PartModel>` is MODELED end to end
+(`assetsXmlSerializer.ts` emits `Internal` / `Mesh` / `Material` / `RayTracing` / `ShadowCaster`),
+so no passthrough covers it and an authored `<Terrain>` would be dropped from an export variant.
+Only static objects author it today. The fix, when wanted, is one more optional bool alongside
+`shadowCaster` in `ExportVariantModel`.
+
+### T3 — `<PrimarySequenceModule>` — 📋 OPEN
+
+Sequencing moved from `Part.Sequence` down to per-module `ISequenced.Sequence`, so a part with more
+than one sequenceable module names its primary one:
+`<PrimarySequenceModule Id="LESMotor"/>`. It is a `SubPartIdReference` on `PartTemplate`, declared
+in the same slot `<Decoupler>` vacated. Core authors it only under `<PartGameData>`, where flexo's
+`RawXmlNode` passthrough round-trips it verbatim — so **nothing is lost today**, exactly as with
+`<Grab>`/S2. It is dropped on a geometry `<Part>` and invisible to the editor. Modeling it means a
+module-id picker (the ids it targets are `<RocketEngineController Id>`, `<Decoupler Id>`, … — the
+same namespace `<Light Id>` now shares), which is why it waits.
+
+### T4 — the kitten MMU asset moved — 📋 OPEN
+
+`CharacterAssets.xml`: `KittenMMUGlb` now sources `Characters/KittenMMU/SK_KSA_MMU.glb` instead of
+`KSA_Cat_MMU.gltf`. Both files ship in the 5348 mirror, so `kittenAssets.ts`'s hard-coded path
+still resolves and the Add ▸ Kitten aide keeps rendering — it just shows the retired MMU. Editor
+only: kittens are never exported as kittens. Following it needs the new GLB's mesh and material
+names verified in a browser first (the aide depends on exact material names), which is why it is
+not a blind path swap.
 
 ---
 

@@ -228,10 +228,22 @@ export interface SolidNozzleInput {
   exitDiameterM: number;
   flowEfficiency: number;
   expansionEfficiency: number;
+  /**
+   * The binding `<Nozzle AreaRatioMultiplier>` (KSA 5348), default 1 — see
+   * {@link RocketNozzleRef.areaRatioMultiplier}. It scales ONLY the nozzle's share of the
+   * stack's throat, never its exit area.
+   */
+  areaRatioMultiplier: number;
 }
 
 interface ResolvedNozzle {
   exitAreaM2: number;
+  /**
+   * `SolidMotorNozzle.ThroatSizingArea` = `ExitArea / AreaRatioMultiplier` — the area the
+   * stack-wide throat solve apportions by. Identical to {@link exitAreaM2} at the default
+   * multiplier of 1, which is what every nozzle authored before KSA 5348 uses.
+   */
+  throatSizingAreaM2: number;
   flowEfficiency: number;
   expansionEfficiency: number;
   /** Set by {@link resizeNozzles}; seeded at `exitArea / 12` like the template's `Create`. */
@@ -243,10 +255,14 @@ interface ResolvedNozzle {
 function resolveNozzle(input: SolidNozzleInput): ResolvedNozzle {
   const r = 0.5 * input.exitDiameterM;
   const exitAreaM2 = Math.PI * r * r;
+  const multiplier = input.areaRatioMultiplier > 0 ? input.areaRatioMultiplier : 1;
   return {
     exitAreaM2,
+    throatSizingAreaM2: exitAreaM2 / multiplier,
     flowEfficiency: input.flowEfficiency,
     expansionEfficiency: input.expansionEfficiency,
+    // `SolidMotorNozzleTemplate.Create` seeds the throat off the RAW exit area (the
+    // multiplier reaches the nozzle later, in `RocketTemplate.CreateComponents`).
     throatAreaM2: exitAreaM2 / SOLID_NOZZLE_DEFAULT_AREA_RATIO,
     twoPhaseEfficiency: 1,
   };
@@ -414,12 +430,12 @@ function solveConditionsForArea(
   return combustion;
 }
 
-/** `SolidMotor.ComputeTotalThroatArea(burningArea, pressure, totalExitArea)`. */
+/** `SolidMotor.ComputeTotalThroatArea(burningArea, pressure, totalSizingArea)`. */
 function computeTotalThroatArea(
   motor: MotorState,
   burningAreaM2: number,
   pressurePa: number,
-  totalExitAreaM2: number,
+  totalSizingAreaM2: number,
 ): number {
   if (burningAreaM2 <= 0 || pressurePa <= 0) return 0;
   const conditions = conditionsAtPressure(motor, pressurePa);
@@ -437,7 +453,8 @@ function computeTotalThroatArea(
   for (const nozzle of motor.nozzles) {
     const inletPressure = conditions.exit.pressure * nozzle.flowEfficiency;
     if (inletPressure <= 0) continue;
-    total += (nozzle.exitAreaM2 / totalExitAreaM2) * ((generation * cStar) / inletPressure);
+    total +=
+      (nozzle.throatSizingAreaM2 / totalSizingAreaM2) * ((generation * cStar) / inletPressure);
   }
   return total;
 }
@@ -499,15 +516,17 @@ function resizeNozzles(motor: MotorState): ThrustCurveFailure | null {
   if (peak <= 0) return 'no-burnable-grain';
   if (motor.nozzles.length === 0) return 'no-nozzles';
 
-  let totalExitArea = 0;
-  for (const nozzle of motor.nozzles) totalExitArea += nozzle.exitAreaM2;
-  if (totalExitArea <= 0) return 'degenerate';
+  // Since 5348 the stack apportions by `ThroatSizingArea`, not raw exit area — identical
+  // wherever every `<Nozzle AreaRatioMultiplier>` is its default 1.
+  let totalSizingArea = 0;
+  for (const nozzle of motor.nozzles) totalSizingArea += nozzle.throatSizingAreaM2;
+  if (totalSizingArea <= 0) return 'degenerate';
 
   const peakThroat = computeTotalThroatArea(
     motor,
     peak,
     motor.input.maxStablePressurePa,
-    totalExitArea,
+    totalSizingArea,
   );
   if (peakThroat <= 0) return 'degenerate';
 
@@ -516,13 +535,13 @@ function resizeNozzles(motor: MotorState): ThrustCurveFailure | null {
     motor,
     ignitionArea,
     motor.input.minimumBurnPressurePa * BOUND_PRESSURE_MARGIN,
-    totalExitArea,
+    totalSizingArea,
   );
   const valleyThroat = computeTotalThroatArea(
     motor,
     valleyBurningArea(motor),
     motor.input.minimumBurnPressurePa * QUENCH_PRESSURE_FRACTION * BOUND_PRESSURE_MARGIN,
-    totalExitArea,
+    totalSizingArea,
   );
   const smallestThroat = Math.min(
     ignitionThroat > 0 ? ignitionThroat : Number.MAX_VALUE,
@@ -536,24 +555,24 @@ function resizeNozzles(motor: MotorState): ThrustCurveFailure | null {
   // no longer exists: such a stack now simply runs at the 1.2 floor.
   const minAreaRatioBound =
     smallestThroat < Number.MAX_VALUE
-      ? Math.max(totalExitArea / smallestThroat, SOLID_NOZZLE_MIN_AREA_RATIO)
+      ? Math.max(totalSizingArea / smallestThroat, SOLID_NOZZLE_MIN_AREA_RATIO)
       : SOLID_NOZZLE_MIN_AREA_RATIO;
-  const maxAreaRatioBound = Math.max(totalExitArea / peakThroat, minAreaRatioBound);
+  const maxAreaRatioBound = Math.max(totalSizingArea / peakThroat, minAreaRatioBound);
 
   const designThroat = computeTotalThroatArea(
     motor,
     peak,
     motor.defaultChamberPressurePa,
-    totalExitArea,
+    totalSizingArea,
   );
   if (designThroat <= 0) return 'degenerate';
   const areaRatio = Math.min(
-    Math.max(totalExitArea / designThroat, minAreaRatioBound),
+    Math.max(totalSizingArea / designThroat, minAreaRatioBound),
     maxAreaRatioBound,
   );
 
   for (const nozzle of motor.nozzles) {
-    nozzle.throatAreaM2 = nozzle.exitAreaM2 / areaRatio;
+    nozzle.throatAreaM2 = nozzle.throatSizingAreaM2 / areaRatio;
     nozzle.twoPhaseEfficiency = twoPhaseEfficiency(
       motor.input.exhaustCondensedFraction,
       nozzle.exitAreaM2 / nozzle.throatAreaM2,
@@ -561,7 +580,7 @@ function resizeNozzles(motor: MotorState): ThrustCurveFailure | null {
   }
   motor.peakChamberPressurePa =
     motor.input.maxStablePressurePa *
-    Math.pow(peakThroat / (totalExitArea / areaRatio), 1 / (1 - motor.input.burnRate.exponent));
+    Math.pow(peakThroat / (totalSizingArea / areaRatio), 1 / (1 - motor.input.burnRate.exponent));
   return null;
 }
 

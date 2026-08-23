@@ -861,7 +861,7 @@ function remapRocket(rocket: Rocket, idMap: ReadonlyMap<string, string>): Rocket
   return {
     id: rocket.id,
     core: remapSubPartRef(rocket.core, idMap),
-    nozzles: rocket.nozzles.map((n) => remapSubPartRef(n, idMap)),
+    nozzles: rocket.nozzles.map((n) => ({ ...n, ...remapSubPartRef(n, idMap) })),
   };
 }
 

@@ -96,14 +96,22 @@ describe('validateEngines — KSA throws at load (blocking)', () => {
   it('flags a rocket that mixes a solid core with a liquid nozzle', () => {
     const p = goodSolidPart();
     p.gameData.nozzles.push(createNozzle('LiquidNozzle'));
-    p.gameData.rockets[0].nozzles.push({ id: 'LiquidNozzle', subPartInstanceId: null });
+    p.gameData.rockets[0].nozzles.push({
+      id: 'LiquidNozzle',
+      subPartInstanceId: null,
+      areaRatioMultiplier: 1,
+    });
     expect(has(p, 'rocket-mixes-solid-and-liquid')).toBe(true);
   });
 
   it('flags a rocket that mixes a liquid core with a solid nozzle', () => {
     const p = goodLiquidPart();
     p.gameData.solidNozzles.push(createSolidMotorNozzle('SolidNozzle'));
-    p.gameData.rockets[0].nozzles.push({ id: 'SolidNozzle', subPartInstanceId: null });
+    p.gameData.rockets[0].nozzles.push({
+      id: 'SolidNozzle',
+      subPartInstanceId: null,
+      areaRatioMultiplier: 1,
+    });
     expect(has(p, 'rocket-mixes-solid-and-liquid')).toBe(true);
   });
 

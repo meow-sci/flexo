@@ -794,6 +794,10 @@ export function mergeProjectImport(
     if (src.ownerTemplateId && lightsOwned.has(mapTemplateId(src.ownerTemplateId))) continue;
     part.lights.push({
       id: nextLightId(part),
+      // `<Light Id>` rides along verbatim — it names nothing outside its own part, so
+      // unlike a template id it needs no remap (a colliding pair would only be an
+      // in-game Error log, and the editor ids that back-fill it are already unique).
+      ksaId: src.ksaId ? String(src.ksaId) : null,
       type: src.type === 'Point' ? 'Point' : 'Spot',
       ownerTemplateId: src.ownerTemplateId ? mapTemplateId(src.ownerTemplateId) : null,
       rangeM: src.rangeM,
@@ -1056,7 +1060,7 @@ function remapRocket(rocket: Rocket, map: Map<string, string>): Rocket {
   return {
     id: rocket.id,
     core: remapRef(rocket.core, map),
-    nozzles: rocket.nozzles.map((n) => remapRef(n, map)),
+    nozzles: rocket.nozzles.map((n) => ({ ...n, ...remapRef(n, map) })),
   };
 }
 

@@ -24,7 +24,7 @@ import {
   createSubPartGameData,
   DEFAULT_LAYER_ID,
 } from '../ksa/types';
-import type { EditingPart } from '../ksa/types';
+import type { EditingPart, Rocket } from '../ksa/types';
 import { envelopeToParts, type ProjectExportEnvelope } from './projectTransfer';
 import { status } from './statusStore';
 import { notify } from './notificationStore';
@@ -196,6 +196,21 @@ function serializeCurrentSnapshot(): ProjectSnapshot {
  * the wrong thing) is by definition a BREAKING change: bump {@link PROJECT_SCHEMA_VERSION}
  * so those snapshots are purged instead (see AGENTS.md "project constitution").
  */
+/**
+ * Default-fills `<Nozzle AreaRatioMultiplier>` (modeled in KSA 2026.8.22.5348) on every
+ * `<Rocket>` nozzle reference. Additive and below the constructor-spread level, and unlike a
+ * boolean an absent number is NOT harmlessly falsy — it would reach the serializer as `NaN`.
+ */
+function normalizeRockets(rockets: Rocket[] | undefined): Rocket[] {
+  return (rockets ?? []).map((rocket) => ({
+    ...rocket,
+    nozzles: (rocket.nozzles ?? []).map((n) => ({
+      ...n,
+      areaRatioMultiplier: n.areaRatioMultiplier ?? 1,
+    })),
+  }));
+}
+
 function normalizePart(part: EditingPart): EditingPart {
   const filled: EditingPart = { ...createEmptyPart(), ...part };
   const gameData = { ...createEmptyGameData(), ...filled.gameData };
@@ -213,11 +228,16 @@ function normalizePart(part: EditingPart): EditingPart {
       // does not carry that dead key back into memory — a snapshot is still LOADED, never
       // converted (nothing reads the key either way; this just stops it being re-persisted).
       evaDoor: gameData.evaDoor ? { seatId: gameData.evaDoor.seatId ?? null } : null,
+      rockets: normalizeRockets(gameData.rockets),
     },
     ivaSeats: (filled.ivaSeats ?? []).map((seat) => ({ ...seat, ksaId: seat.ksaId ?? null })),
+    // `<Light Id>`, modeled in KSA 2026.8.22.5348 — additive, and below the constructor
+    // spread (a light has no constructor of its own), so it needs its own default here.
+    lights: (filled.lights ?? []).map((light) => ({ ...light, ksaId: light.ksaId ?? null })),
     subPartGameData: (filled.subPartGameData ?? []).map((spd) => ({
       ...createSubPartGameData(spd.subPartTemplateId ?? ''),
       ...spd,
+      rockets: normalizeRockets(spd.rockets),
     })),
     // A glow authored before coverage/strength were split would composite as an
     // all-or-nothing white blowout without its missing half.

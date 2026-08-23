@@ -456,8 +456,9 @@ describe('serializeGameData', () => {
     // The light is a DIRECT child of <PartGameData> — no <SubPartGameData> block exists.
     expect(lights[0].parentNode).toBe(gd2);
     expect(tags(doc2, 'SubPartGameData')).toHaveLength(0);
-    // The editor-only id is never emitted.
-    expect(lights[0].hasAttribute('Id')).toBe(false);
+    // Every emitted <Light> is named — the document id backs an unnamed light (5348's
+    // duplicate-Components-id Error).
+    expect(lights[0].getAttribute('Id')).toBe('_light1');
   });
 
   it('omits the <Transform> entirely for an identity-transform light', () => {
@@ -476,7 +477,7 @@ describe('serializeGameData', () => {
     );
     expect(xml).toContain(`<SubPartGameData Id="flexo_MyLight_${SP}">`);
     expect(xml).not.toContain(`<SubPartGameData Id="${SP}">`);
-    expect(xml).toContain('<Light>');
+    expect(xml).toContain('<Light Id="_light1">');
   });
 
   it('one orphan block carries BOTH an owned light and an owned collider', () => {
@@ -660,7 +661,7 @@ describe('serializeGameData', () => {
             {
               id: 'Engine',
               core: { id: 'ThrustChamber', subPartInstanceId: null },
-              nozzles: [{ id: 'Nozzle', subPartInstanceId: null }],
+              nozzles: [{ id: 'Nozzle', subPartInstanceId: null, areaRatioMultiplier: 1 }],
             },
           ],
         },
@@ -804,7 +805,9 @@ describe('serializeGameData', () => {
           {
             id: 'GasGenerator',
             core: { id: 'GasGeneratorChamber', subPartInstanceId: null },
-            nozzles: [{ id: 'TurbineExhaustNozzle', subPartInstanceId: 'turbo_2' }],
+            nozzles: [
+              { id: 'TurbineExhaustNozzle', subPartInstanceId: 'turbo_2', areaRatioMultiplier: 1 },
+            ],
           },
         ],
         combustors: [createCombustor('GasGeneratorChamber')],

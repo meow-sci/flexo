@@ -5,9 +5,12 @@
 > **BREAKING** for the live thrust/Isp readout. Read alongside [docs/engines.md](../docs/engines.md)
 > and [analysis/KSA_ENGINE_DETAILS.md](../analysis/KSA_ENGINE_DETAILS.md).
 
-**Baseline:** re-vetted against KSA build **2026.8.19.5261** (decomp @ 5261 + shipped Core XML).
-**Baseline status:** ✅ **CURRENT** — 5261 landed the first ported-math BREAK since 5056, in the
-solid-motor nozzle sizing; **re-ported in this review** (see
+**Baseline:** re-vetted against KSA build **2026.8.22.5348** (decomp @ 5348 + shipped Core XML).
+**Baseline status:** ✅ **CURRENT** — 5348 added `<Nozzle AreaRatioMultiplier>`
+(`RocketNozzleReference`), which re-apportions a solid stack's throat through
+`SolidMotorNozzle.ThroatSizingArea`; **modeled and re-ported in this review** (see
+[What changed in 5348](#what-changed-in-5348)). 5261 landed the first ported-math BREAK since 5056,
+in the solid-motor nozzle sizing; **re-ported then** (see
 [What changed in 5261](#what-changed-in-5261)). Every _other_ verbatim-ported class remains
 byte-identical
 and no engine template field moved; the one new item, the optional validator-parity gap **Q4**, is
@@ -168,6 +171,69 @@ substance phases flexo references only by phase-id string), `Content/Core/CorePr
   `<Combustor>` (flexo's SRB recipe now burns APCP) — but there is still no solid-motor
   hardware (no grain-regression thrust curve; the propellant reservoir is still a liquid-style
   tank), so a true SRB is still not reproducible.
+
+## What changed in 5348
+
+**`<Nozzle AreaRatioMultiplier>` — a new attribute that changes solid-motor physics.**
+Rev 5329 promoted `RocketTemplate.Nozzles` from `List<SubPartIdReference>` to
+`List<RocketNozzleReference>` (new `decomp/KSA/RocketNozzleReference.cs`), a subclass adding one
+field:
+
+```csharp
+[XmlAttribute] public double AreaRatioMultiplier = 1.0;   // OnDataLoad: <= 0 is reset to 1
+```
+
+It is not decoration. `SolidMotorNozzle` gained
+`ThroatSizingArea => Config.ExitArea / AreaRatioMultiplier`, and **both** stack-wide solids
+routines switched to it:
+
+| `SolidMotor.cs`            | before 5348            | at 5348                          |
+| -------------------------- | ---------------------- | -------------------------------- |
+| `ResizeNozzles` total      | `Σ Config.ExitArea`    | `Σ ThroatSizingArea`             |
+| `ResizeNozzles` per-throat | `ExitArea / ratio`     | `ThroatSizingArea / ratio`       |
+| `ComputeTotalThroatArea`   | `ExitArea / totalExit` | `ThroatSizingArea / totalSizing` |
+
+Because a solid motor solves ONE area ratio for the whole stack, the multiplier is a way to make
+one nozzle claim less of the shared throat and therefore run at a larger expansion ratio than its
+siblings. Core uses it that way on the launch-escape tower:
+
+```xml
+<Rocket Id="Motor">
+  <Core Id="MotorCore"/>
+  <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeBNozzleA5"/>
+  <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeBNozzleA6" AreaRatioMultiplier="1.0025"/>
+  <Nozzle Id="Nozzle" SubPartId="CorePropulsionA_Subpart_SRBSizeBNozzleA7"/>
+</Rocket>
+```
+
+`RocketTemplate.CreateComponents` calls `SetAuthoredAreaRatioMultiplier` only for a
+`SolidMotorNozzle` and logs an Error for a non-1 value on a De Laval nozzle. flexo models it as
+`RocketNozzleRef.areaRatioMultiplier` (parsed, emitted only when ≠ 1, persisted in the compact
+codec as `m`) and `solidMotorPhysics.ts` now carries `ResolvedNozzle.throatSizingAreaM2`. On a
+one-nozzle motor the factor divides out exactly; it only apportions between siblings.
+
+**`RocketControllerData.ComputeFromRocketTemplates` was DELETED — a citation move, not a break.**
+Rev 5340 "deleted the parallel universe of code that computes part characteristics from XML
+templates," instantiating a real `Part` and inspecting its game data instead. The surviving
+instance-side `ComputeFromRockets` is byte-identical and the physics it performs is the same chain
+(`ExitDiameter → area`, `area / AreaRatio → throat`, `ComputeConditions`, `ComputePerformance`), so
+`enginePhysics.ts` needs no re-port. `PartTemplate`'s tooltip helpers went with it.
+
+**A new NaN guard on the De Laval throat.** `DeLavalNozzleTemplate.Create` now routes through
+`DeLavalNozzle.ComputeThroatArea(exitArea, areaRatio)` = `areaRatio > 0 ? exitArea / areaRatio :
+exitArea`, so a NaN or zero `<AreaRatio>` degrades to ratio 1 rather than producing NaN thrust.
+`<AreaRatio>` remains **required** in practice and `engineValidation.ts`'s finding stays correct —
+ratio 1 is not a usable engine, it just no longer poisons the frame.
+
+Everything else re-verified byte-identical: `DeLavalNozzleConfig`, `CombustorConfig`,
+`GasProperties`, `NozzlePerformance`, `RocketDesign`, `EngineDesigner`, the whole reaction family
+and `GrainGeometryTemplate`. `SolidMotorNozzleTemplate.Create` still seeds `ThroatArea = exitArea /
+12`; `SolidMotorNozzle`/`DeLavalNozzle`/`RocketNozzle` otherwise gained only the `IRescale` path and
+a save-data block (`<SolidMotorNozzleData AreaRatioMultiplier>` is a vehicle-save record, not part
+XML). `Combustor`, `RocketCore`, `RocketControllerTemplate` and `GrainGeometryLibrary` changed by
+decompiler shape only.
+
+---
 
 ## What changed in 5261
 

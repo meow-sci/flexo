@@ -316,6 +316,15 @@ solid nozzle actually runs at is **not** the `exitArea / 12` its XML implies —
 re-derives the area ratio from the peak burning area at load, and previewing at the seed value
 would misreport thrust across the board.
 
+Since KSA 2026.8.22.5348 that stack-wide solve apportions the throat by each nozzle's
+**sizing area**, `exitArea / AreaRatioMultiplier`, rather than its raw exit area. The multiplier
+lives on the binding `<Rocket><Nozzle AreaRatioMultiplier>`, not on the `<SolidMotorNozzle>`, and
+defaults to 1 — flexo parses it, emits it only when it differs, and feeds it to the preview. On a
+one-nozzle motor it cancels out exactly; its purpose is to let one nozzle in a cluster claim less
+of the shared throat and so run at a larger expansion ratio than its siblings (Core trims one of
+the launch-escape tower's three nozzles by 1.0025 that way). It applies to solid nozzles only —
+KSA logs an error for a non-1 multiplier on a De Laval nozzle.
+
 The preview needs two Core data files served under `/ksa/` alongside `Reactions.xml`:
 `GrainGeometries.xml` (the burn-area-vs-depth profiles) and `SolidPropellants.xml` (the grain
 `<StorageDensity>`). Like the reaction catalog they are licensed content and may be absent —

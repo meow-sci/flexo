@@ -7,7 +7,7 @@
 > `<Internal>` flag) and
 > [docs/ksa-part-connector-notes.md](../docs/ksa-part-connector-notes.md).
 
-**Baseline:** re-vetted against KSA build **2026.8.19.5261** (decomp @ 5261 + shipped Core XML).
+**Baseline:** re-vetted against KSA build **2026.8.22.5348** (decomp @ 5348 + shipped Core XML).
 **Baseline status:** ✅ **INTACT** — the coordinate calibration survived rev 5067's deletion of
 `Double3Ex.Up/Forward/Right` (the vectors moved to `Camera.ForwardView`/`RightView`/`UpView` with
 identical values), the connector/`<Internal>` contracts are byte-identical, and 5117's crew
@@ -296,6 +296,35 @@ follows the root part.
 8. **Interior geometry with no seat anywhere in the vehicle is invisible in EVERY camera mode** — `<Internal>` hides it outside IVA, and with no seat the IVA mode is never offered. This is the failure mode the deleted automatic rewrite used to mask.
 9. **`<IVASeat Id>` shares the feed-container id namespace** (`PartTemplate.AddResolvedFeed` scans every `Components[].Id`) **and, since 5117, is the target of `<EVADoor SeatId>`**. flexo models it as `IvaSeat.ksaId` and emits it only when the user authored one; ids minted by the "align this door to a seat" action (`setEvaDoorSeat`) are uniquified against that shared namespace — tank feed ids, solid grain-segment ids and the other seats' ids.
 10. **There is no in-game editor IVA preview.** The KSA vehicle editor has no IVA mode; the only in-game check is launch → **Shift+C** twice → **C** to cycle. This is why flexo ships its own seat preview (above) — and why that preview's honest limits matter.
+
+## What changed in 5348
+
+**The seat basis is unchanged, despite a rewrite.** `IVASeat.SeatToAsmbRotation` was refactored
+into `GetSeatAxesAsmb(out forward, out right, out up)` plus a caller, but the matrix it builds is
+identical row-for-row:
+
+| row | before 5348                         | at 5348                              |
+| --- | ----------------------------------- | ------------------------------------ |
+| 1   | `normalize(forwardAsmb)`            | `forward`                            |
+| 2   | `cross(normalize(-up), fwd).norm()` | `right` (same expression)            |
+| 3   | `cross(fwd, right)`                 | `-up`, and `up = -cross(fwd, right)` |
+
+So `ivaSeatAxes.ts`'s `EULER_ORDER` calibration and the `ivaLook.ts` port both stand.
+`IVASeatTemplate`, `IVAController`, `EVADoorTemplate` and `DockingPortTemplate` are byte-identical,
+and `QuaternionEx.CreateFromXyzRadians` / `Double3Ex` are untouched. What DID change is how the
+game **poses a seated kitten** — `SEATED_SCALE` 0.5 → 1.0 and `SEATED_DOWN_OFFSET` (−0.1) replaced
+by `KittenLocomotionTuning.Current.SeatedOffset` — which flexo does not render.
+
+`Control` / `ControlTemplate` are still empty markers, `FlightComputer` still aims body **+X**, and
+`PartModelModule`'s is still the only `[XmlElement("Internal")]` in the tree (the new sibling is
+`<Terrain>` — see [part-and-subpart-xml.md](part-and-subpart-xml.md#what-changed-in-5348)). Gap
+**R2** (connector orientation is load-bearing for flight control) is reinforced again:
+`CoreServiceModuleAAssets.xml` flipped three more connector rotations `X="-1.5708"` → `X="1.5708"`,
+continuing the 5261 sweep. Rev 5329 also added the uniform editor part scale — runtime only, and
+`Part.Connector.SetScale` scales a connector's authored position/scale by `ScaleFactors.Scale`
+(largest axis) without touching the authored XML.
+
+---
 
 ## What changed in 5261
 

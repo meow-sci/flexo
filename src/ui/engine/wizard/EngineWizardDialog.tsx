@@ -582,6 +582,8 @@ function srbPerformance(
         exitDiameterM: state.nozzle.exitDiameterM,
         flowEfficiency: state.nozzle.flowEffPct / 100,
         expansionEfficiency: state.nozzle.expansionEffPct / 100,
+        // The wizard authors one nozzle and never a multiplier — KSA's default.
+        areaRatioMultiplier: 1,
       },
     ],
   });

@@ -17,6 +17,7 @@ import * as THREE from 'three';
 import { IcrpViewport } from './IcrpViewport';
 import { GroundPlane } from './GroundPlane';
 import { FootprintLayer } from './FootprintLayer';
+import { GhostObjectsLayer } from './GhostObjectsLayer';
 import { PieceObject } from './PieceObject';
 import { IcrpGizmo, type GizmoMode } from './IcrpGizmo';
 import { applyStaticBasis } from './basis';
@@ -25,6 +26,7 @@ import { readPlacementTransform } from '../../../../src/three/coords';
 import { ksaToThree } from './basis';
 import {
   $activeObject,
+  $project,
   $selection,
   beginGesture,
   endGesture,
@@ -43,6 +45,7 @@ export class StaticScene {
   private readonly root = new THREE.Group();
   private readonly ground: GroundPlane;
   private readonly footprints: FootprintLayer;
+  private readonly ghosts: GhostObjectsLayer;
   private readonly gizmo: IcrpGizmo;
   private readonly selectionMgr: SelectionManager;
   private readonly objects = new Map<string, PieceObject>();
@@ -61,6 +64,9 @@ export class StaticScene {
 
     this.footprints = new FootprintLayer();
     this.viewport.scene.add(this.footprints.group);
+
+    this.ghosts = new GhostObjectsLayer(() => this.viewport.invalidate());
+    this.root.add(this.ghosts.group);
 
     this.selectionMgr = new SelectionManager(
       this.viewport.camera,
@@ -117,6 +123,26 @@ export class StaticScene {
     this.sub($snap, () => this.applySnap());
     this.sub($activeObject, () => this.applyOverlays());
     this.sub($overlaysVisible, () => this.applyOverlays());
+    this.sub($project, () => this.applyGhosts());
+    this.sub($pieceIndex, () => this.applyGhosts());
+  }
+
+  private lastGhostKey = '';
+
+  /** Rebuilds ghosts only when the INACTIVE placements actually changed. */
+  private applyGhosts(): void {
+    const p = $project.get();
+    const inactive = p.objects.filter((o) => o.id !== p.activeObjectId);
+    const placements = inactive.flatMap((o) => o.placements);
+    const key = `${p.activeObjectId}|${inactive
+      .map(
+        (o) =>
+          `${o.id}:${o.placements.length}:${o.placements.map((pl) => pl.instanceId).join(',')}`,
+      )
+      .join(';')}`;
+    if (key === this.lastGhostKey) return;
+    this.lastGhostKey = key;
+    this.ghosts.update(placements, $pieceIndex.get());
   }
 
   private applyOverlays(): void {
@@ -474,6 +500,7 @@ export class StaticScene {
     this.objects.clear();
     this.gizmo.dispose();
     this.selectionMgr.dispose();
+    this.ghosts.dispose();
     this.footprints.dispose();
     this.ground.dispose();
     this.viewport.dispose();

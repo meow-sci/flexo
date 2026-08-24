@@ -64,6 +64,21 @@ against the NEW code/XML. Highest-value checks, by area:
   hardware with no error anywhere. Cross-check the two allow-lists in `partXmlParser.ts`
   (`KNOWN_PART_GAMEDATA_CHILDREN` / `KNOWN_SUBPART_GAMEDATA_CHILDREN`): everything in them is
   modeled and therefore unprotected.
+- **Static objects / ICRP** ([static-objects.md](static-objects.md),
+  [launch-sites.md](launch-sites.md)) — everything ICRP reads is MODELED (there is no
+  passthrough on this surface yet): diff `StaticObjectTemplate` / `StaticSubObjectTemplate` /
+  `StaticSubObjectInstance` / `StaticObjectGameDataReference` for new `[XmlElement]`s;
+  `StaticObjectModel.Bucket` + `StaticObject.frag` for new render buckets;
+  `StaticObjectAssetBundler`/`GlbColliders`/`GlbTransforms` for output-format drift (the
+  golden tests in `apps/icrp/src/ksa/staticXmlSerializer.test.ts` catch byte changes once the
+  fixtures are re-synced); `LocationReference.GetAxesCcf` + `ComputeBody2Cce` for the
+  X-up/Y-east/Z-north frame; `Vehicle.GetLaunchPadHeightAtDirCcf`, `UpdateStaticObjectCollider`
+  (300 m), `GroundClutterPlacementData` (max-4, +50 m) for the metre semantics;
+  `DecalModifierReference` (esp. whether `AltitudeOffset` is still consumed as metres);
+  `SystemTemplate`/`AssetBundle.OnDataLoad` for the first-wins body-drop rule D2 rests on;
+  and **hash the Core Earth block** in `Astronomicals.xml` — ICRP re-clones it per export, so
+  a changed block only needs a re-export, but the mini fixtures under
+  `apps/icrp/src/ksa/__fixtures__/` must be re-trimmed when the structure moves.
 - **Plumbing topology** ([plumbing-and-feeds.md](plumbing-and-feeds.md)) —
   `ConnectorCapabilityFlags` / `ConnectorCapability` / `ConnectorCapabilityExtensions`
   (especially the `ToCapability()` inversion and the `Intersect()` default),

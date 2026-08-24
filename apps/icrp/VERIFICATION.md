@@ -1,0 +1,24 @@
+# ICRP in-game verification runbook ([V] tasks — plans/ICRP_PLAN.md P8.05)
+
+Every game-contract fact ICRP builds on is decomp-verified, but **no third-party
+static-object mod has ever been loaded by KSA**. These checks need a human with the
+game (build 2026.8.22.5348+). Record results inline; the plan's design changes if one
+fails (fallbacks noted).
+
+**Setup**: build a mod in ICRP (`pnpm dev:icrp` → http://localhost:5173/flexo/apps/icrp/),
+Export mod… → download zip, unzip into `<Documents>/My Games/Kitten Space Agency/mods/<modId>/`
+(or `Content/<modId>/` next to Core for [V5b]), then **enable it in Settings → Mods**
+(new mods load disabled).
+
+| #   | Check                                            | How                                                                                                                                                                                                                                                                                                                                                                               | Result |
+| --- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| V1  | **Vessel-derived piece works as a static piece** | Place a Core vessel part (e.g. a truss) in an object, export in _extend-stock-pad_ mode (or with a site once V2 passes), launch at the pad: the mesh renders with Core textures and (if the SubPart had colliders) collides. Fact F12 (global mesh/material registries). _Fallback if it fails_: vessel pieces limited to mods that bundle re-exported GLBs (P5 custom pipeline). | ⏳     |
+| V2  | **New Earth site in the ICRP system**            | Export with a site on Earth; pick the ICRP system in the game's system picker; launch at the new site: object renders at the lat/lon, vessel spawns at GroundOffset+SurfaceHeight, clutter cleared inside FootprintRadius+50, decal flattens the terrain.                                                                                                                         | ⏳     |
+| V3  | **Retargeted stock site**                        | In the inline Earth, point `CCSFS LC-39A`'s `StaticObject=` at an ICRP object; verify the stock site shows the new complex in the ICRP system.                                                                                                                                                                                                                                    | ⏳     |
+| V4  | **Alpha + Terrain buckets**                      | An object using `CoreLaunchPadB_Subpart_GravelTrimA` (alpha blend) and `CoreLaunchPadC_Subpart_BaseGrassA` (terrain): gravel edges blend, grass skirt takes the planet ground look.                                                                                                                                                                                               | ⏳     |
+| V5  | **Inline-Earth texture resolution**              | (a) Id-only references (ICRP strips `Path=` from Id'd elements): Earth renders normally in the ICRP system from a `Documents/mods` install. (b) The 3 anonymous `../Core/`-rewritten paths resolve from a `Content/<mod>/` install. _Fallback if (a) fails_: rewrite everything `../Core/` and require the Content install.                                                       | ⏳     |
+| V6  | **Home body + site picker**                      | The ICRP system still starts at Earth (home body) and the launch-site picker lists the new landmarks on the body combo. _Fallback_: keep Earth `LoadFromLibrary` and use extend-stock-pad for Earth sites.                                                                                                                                                                        | ⏳     |
+
+Also worth eyeballing: the object at distance (no LOD exists for statics), night lighting
+(statics take sun + ambient only), and F11 — a landmark with `IsLaunchPad="false"` renders
+nothing (ICRP always writes `true`).

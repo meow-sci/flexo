@@ -1,0 +1,68 @@
+# Static objects (`apps/icrp` — launch pads / surface complexes)
+
+The KSA **static-object** contract ICRP builds on (introduced 2026.8.22.5348, revs
+5328–5336). Consumer: `apps/icrp/` (the ICRP mini app), NOT the flexo vessel editor.
+Full evidence with decomp citations: [analysis/icrp/KSA_STATIC_OBJECTS.md](../analysis/icrp/KSA_STATIC_OBJECTS.md)
+and [analysis/icrp/STATIC_ASSET_INVENTORY.md](../analysis/icrp/STATIC_ASSET_INVENTORY.md);
+plan: [plans/ICRP_PLAN.md](../plans/ICRP_PLAN.md) §0.3 (facts F1–F14).
+
+## Contract facts ICRP bakes in
+
+1. **Schema** (`AssetBundle.cs:32-34`): `<StaticObject>` = `StaticObjectTemplate`
+   (`<SubObject>`\* + `<PartModel>`\* + `<Collider>`\* + `GroundOffset`/`SurfaceHeight`/
+   `FootprintRadius` DistanceReferences, all-NaN = unset); `<StaticSubObject>` =
+   `<PartModel>`\* + `<Collider>`\* only; `<StaticObjectGameData>` merges via
+   `ApplyGameData` (**lists append, distances override only when set**,
+   `StaticObjectTemplate.cs:73-90`). Parser/serializer:
+   `apps/icrp/src/ksa/staticCatalog.ts`, `staticXmlSerializer.ts`.
+2. **`InstanceOf` resolves ONLY to `<StaticSubObject>`** (`ModLibrary.Get<StaticSubObjectTemplate>`,
+   `ModLibrary.cs:1284`) — never a Part/SubPart/StaticObject. Two levels, no nesting.
+3. **Transform** = the vessel `TransformReference` (Position metres, Rotation XYZ radians
+   via `CreateFromXyzRadians` ⇒ three `'ZYX'`, `S·R·T`). **`Scale` applies to visuals but
+   NOT colliders** (`StaticObject.cs:195-196, 234`). `<Scale>` must always carry X/Y/Z
+   (Vector3Reference missing-attr = 0) — inherited from flexo's serializer.
+4. **Assembly frame: +X = up (surface normal), +Y = east, +Z = north**
+   (`LocationReference.cs:148-177`, `ConstraintSim.cs:519-527`). The ONE mapping to three
+   lives in `apps/icrp/src/three/basis.ts`. Vessel parts stack along +X, so vessel meshes
+   stand upright unmodified.
+5. **`<PartModel>`/`<Collider>` are the vessel classes.** Static-only: `<Terrain>true</Terrain>`
+   (`PartModelModule.cs:43-44`) and `<PbrMaterial><Alpha>` (`PbrMaterialReference.cs:24-25`),
+   both consumed only by `StaticObjectModel.Bucket` (`:260`) — this closes flexo gaps
+   **T1**/**T2** for the static surface. Ignored for statics: RayTracing, ShadowCaster,
+   Internal, animation, lights, Emissive/ThinFilm (uploaded, never sampled), `<MeshView>`.
+6. **Render buckets** (`StaticObjectModel.cs:16-21,260`): Terrain → planet-ground sampling
+   (material textures ignored); Alpha → real blend (`alpha = alphaTex.r`, depth-test-no-write,
+   NOT a cutout); else opaque. ICRP mirrors: `apps/icrp/src/three/materials.ts` (incl. the
+   `.r`-not-`.g` alphaMap patch). Instancing unit = PartModel **Id** (duplicate ids collide
+   first-wins).
+7. **The three metres** — only consumers: `GroundOffset` lifts the whole frame
+   (`LocationReference.cs:175`); `SurfaceHeight` only feeds spawn height
+   (`Vehicle.GetLaunchPadHeightAtDirCcf:3935-3959`: `GroundOffset+SurfaceHeight` within
+   `FootprintRadius`); `FootprintRadius` also drives clutter exclusion `+50 m` for at most
+   **4** launch-pad landmarks per body (`GroundClutterPlacementData.cs:126-155`).
+8. **Physics** (`StaticObject.cs:175-201`, `ConstraintSim.cs:479-537`): one kinematic
+   compound per static; per vehicle only the **nearest** launch-pad landmark within
+   **300 m**; zero colliders ⇒ vessels fall through (ICRP preflight I4).
+9. **Bundler conventions** (`KSA.GlbImport/StaticObjectAssetBundler.cs`, `GlbColliders.cs`,
+   `GlbTransforms.cs`) — ICRP's export mirrors them byte-for-byte (golden tests): banner
+   comment, element order, `<Collider Id="Collider1">`, `M=`-only distances, empty
+   GroundOffset/SurfaceHeight/FootprintRadius on the asset, values in GameData.
+10. **Mesh/material registries are global by id, first-wins**
+    (`MeshAtlasFileReference.cs:25-49`), so a mod `<StaticSubObject>` may reference any
+    Core mesh/material by id with **no binaries** — ICRP's vessel-derived pieces
+    (`apps/icrp/src/ksa/modPlan.ts`) and the export-variant discipline both rest on this.
+    ⏳ pending in-game verification (**[V1]** in `apps/icrp/VERIFICATION.md`).
+
+## Break-surface (re-check on a game update)
+
+`D/KSA/`: `StaticObjectTemplate.cs`, `StaticSubObjectTemplate.cs`, `StaticSubObjectInstance.cs`,
+`StaticObjectGameDataReference.cs`, `StaticObject.cs`, `StaticObjectModel.cs`,
+`StaticObjectRenderer.cs`, `PartModelModule.cs`, `PbrMaterialReference.cs`,
+`TransformReference.cs`, `DistanceReference.cs`, `LocationReference.cs`,
+`Vehicle.cs` (`GetLaunchPadHeightAtDirCcf`), `ConstraintSim.cs` (`UpdateStaticObjectCollider`),
+`GroundClutterPlacementData.cs`, `MeshAtlasFileReference.cs`, `ModLibrary.cs` (static
+registries + `AttachGameData`). `D/KSA.GlbImport/`: `StaticObjectAssetBundler.cs`,
+`GlbColliders.cs`, `GlbTransforms.cs`, `PartInputSet.cs`, `ToolXml.cs`.
+`C/Core/`: `CoreLaunchPad{A,B,C}Assets.xml`, `CoreLaunchPadAGameData.xml` (vendored
+byte-identical in `src/ksa/__fixtures__/`, drift-tested), `Shaders/Mesh/StaticObject.{vert,frag}`,
+`DefaultAssets.xml:57-61`.

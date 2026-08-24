@@ -95,6 +95,11 @@ export class IcrpGizmo {
     return this.controls.dragging;
   }
 
+  /** The handle under the pointer ('X'/'Y'/'Z'/'XY'/…), or null. Debug/tests. */
+  get hoveredAxis(): string | null {
+    return (this.controls as unknown as { axis: string | null }).axis;
+  }
+
   cancelDrag(): void {
     this.controls.reset();
   }

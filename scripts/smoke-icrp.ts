@@ -14,7 +14,14 @@
  *   5. prefab import — opening the Core pad via Add shows 16 placements
  *   6. array — a radial array of 6 on a selected piece grows the count
  *   7. stock part import — a searched Part explodes into placements on a new layer
- *   8. export — the dialog opens, the Assets preview contains <StaticObject>
+ *   8. body drag — grabbing a piece slides the whole selection on the ground
+ *   9. pivot drag — dragging a gizmo arrow moves the group (regression: the
+ *      multi-select pivot must stream deltas into the document)
+ *  10. export — the dialog opens, the Assets preview contains <StaticObject>
+ *
+ * Steps 8–9 use the dev-only `window.__icrp` debug handle (installed by
+ * main.tsx under import.meta.env.DEV) to target the WebGL scene
+ * deterministically — the smoke always runs against the dev server.
  *
  * RUNTIME: vanilla Node 24+ (`node scripts/smoke-icrp.ts`) with the project-local
  * playwright devDependency.
@@ -146,6 +153,127 @@ async function run(page: Page): Promise<void> {
     await page.getByRole('button', { name: /Select contents of LF1W1HA/ }).waitFor({
       timeout: 5_000,
     })
+  })
+
+  /** Positions of the current selection, via the dev debug handle. */
+  const selectionPositions = () =>
+    page.evaluate(() => {
+      const w = window as unknown as {
+        __icrp: {
+          selection: () => string[]
+          placement: (id: string) => { transform: { position: unknown } } | undefined
+        }
+      }
+      return w.__icrp.selection().map((id) => w.__icrp.placement(id)?.transform.position)
+    })
+
+  await step('body drag slides the selection on the ground', async () => {
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('KeyW') // translate tool
+    // Re-select the imported part's layer and frame it.
+    await page.evaluate(() => {
+      const w = window as unknown as {
+        __icrp: {
+          project: () => { objects: { layers: { id: string }[] }[] }
+          selectLayer: (id: string) => void
+        }
+      }
+      const layer = w.__icrp.project().objects[0].layers.find((l) => l.id !== 'default')
+      if (layer) w.__icrp.selectLayer(layer.id)
+    })
+    await page.keyboard.press('f')
+    await delay(700)
+    const canvas = page.locator('canvas').first()
+    const cbox = (await canvas.boundingBox())!
+    const cx = cbox.x + cbox.width / 2
+    const cy = cbox.y + cbox.height / 2
+    // Find a spot that hits a piece but no gizmo handle.
+    let spot: { x: number; y: number } | null = null
+    for (const [dx, dy] of [[60, 0], [-60, 0], [40, 20], [-40, 20], [80, 0]]) {
+      const pick = await page.evaluate(
+        ([x, y]) =>
+          (window as unknown as { __icrp: { pickAt: (x: number, y: number) => unknown } }).__icrp.pickAt(
+            x,
+            y,
+          ),
+        [cx + dx, cy + dy],
+      )
+      if (!pick) continue
+      await page.mouse.move(cx + dx, cy + dy)
+      await delay(30)
+      const axis = await page.evaluate(
+        () => (window as unknown as { __icrp: { hoveredAxis: () => string | null } }).__icrp.hoveredAxis(),
+      )
+      if (!axis) {
+        spot = { x: cx + dx, y: cy + dy }
+        break
+      }
+    }
+    assert(spot !== null, 'no piece spot free of gizmo handles found')
+    const before = await selectionPositions()
+    await page.mouse.move(spot.x, spot.y)
+    await page.mouse.down()
+    await page.mouse.move(spot.x + 150, spot.y + 40, { steps: 12 })
+    await page.mouse.up()
+    await delay(400)
+    const after = await selectionPositions()
+    assert(JSON.stringify(before) !== JSON.stringify(after), 'body drag moved nothing')
+  })
+
+  await step('pivot arrow drag moves the group', async () => {
+    // Self-contained: the body-drag step may have narrowed the selection (a
+    // grab outside the selection selects just that piece — by design).
+    await page.evaluate(() => {
+      const w = window as unknown as {
+        __icrp: {
+          project: () => { objects: { layers: { id: string }[] }[] }
+          selectLayer: (id: string) => void
+        }
+      }
+      const layer = w.__icrp.project().objects[0].layers.find((l) => l.id !== 'default')
+      if (layer) w.__icrp.selectLayer(layer.id)
+    })
+    await page.keyboard.press('f')
+    await delay(700)
+    const canvas = page.locator('canvas').first()
+    const cbox = (await canvas.boundingBox())!
+    const pivot = await page.evaluate(
+      () =>
+        (
+          window as unknown as {
+            __icrp: { pivotScreen: () => { x: number; y: number; visible: boolean } | null }
+          }
+        ).__icrp.pivotScreen(),
+    )
+    assert(pivot !== null && pivot.visible, 'multi-select pivot not attached')
+    const px = cbox.x + pivot.x
+    const py = cbox.y + pivot.y
+    let hit: { x: number; y: number } | null = null
+    outer: for (const r of [35, 50, 65, 80, 95, 110]) {
+      for (let a = 0; a < 24; a++) {
+        const x = px + r * Math.cos((a / 24) * 2 * Math.PI)
+        const y = py + r * Math.sin((a / 24) * 2 * Math.PI)
+        await page.mouse.move(x, y)
+        await delay(15)
+        const axis = await page.evaluate(
+          () =>
+            (window as unknown as { __icrp: { hoveredAxis: () => string | null } }).__icrp.hoveredAxis(),
+        )
+        if (axis === 'X' || axis === 'Z') {
+          hit = { x, y }
+          break outer
+        }
+      }
+    }
+    assert(hit !== null, 'no pivot arrow handle found by hover-scan')
+    const before = await selectionPositions()
+    await page.mouse.move(hit.x, hit.y)
+    await page.mouse.down()
+    await page.mouse.move(hit.x + 120, hit.y + 50, { steps: 12 })
+    await page.mouse.up()
+    await delay(400)
+    const after = await selectionPositions()
+    assert(JSON.stringify(before) !== JSON.stringify(after), 'pivot drag moved nothing')
   })
 
   await step('export dialog previews the Assets XML', async () => {

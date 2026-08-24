@@ -138,6 +138,9 @@ export class StaticScene {
             if ($tool.get() === 'scale' && $keepGrounded.get()) this.regroundScaled();
             this.bottomsAtDragStart = null;
             endGesture();
+            // A pivot drag leaves the pivot translated/rotated/scaled; re-center
+            // it (and reset its scale) so the NEXT drag starts from identity.
+            this.applySelection();
           }
         },
       },
@@ -149,6 +152,11 @@ export class StaticScene {
     // its local transform is KSA-frame like everything else.
     this.pivot.name = 'multi-select-pivot';
     this.root.add(this.pivot);
+
+    // Grab-anywhere translate: pointer-dragging a PIECE BODY (not a gizmo
+    // handle) slides the selection on the ground plane — the manipulation
+    // everyone tries first; arrows stay for precise/vertical moves.
+    this.bindBodyDrag();
 
     // --- Store subscriptions (invalidate-after-callback, flexo's sub() idiom) ---
     this.sub($activeObject, () => this.reconcile());
@@ -591,9 +599,10 @@ export class StaticScene {
       this.gizmo.attach(single && getPlacement(single.instanceId) ? single.group : null);
       return;
     }
-    if (ids.size > 1 && $tool.get() !== 'select' && $tool.get() !== 'scale') {
+    if (ids.size > 1 && $tool.get() !== 'select') {
       // Pivot at the selection's three-space centroid, axis-aligned (world
-      // handles); scale is single-select only (colliders never scale, I3).
+      // handles). Scale on the pivot scales the GROUP about it — positions and
+      // visual scales together (colliders never scale, I3 — preflight warns).
       const box = new THREE.Box3();
       for (const id of ids) {
         const obj = this.objects.get(id);
@@ -637,15 +646,176 @@ export class StaticScene {
     );
   }
 
-  /** Escape ladder rung: cancel an in-flight gizmo drag. */
+  // --- Grab-anywhere ground drag -------------------------------------------------
+
+  private bodyDrag: {
+    pointerId: number;
+    /** three-space horizontal plane at the grab height. */
+    plane: THREE.Plane;
+    /** KSA-frame start transforms of every dragged placement. */
+    starts: Map<string, Transform>;
+    grab: THREE.Vector3;
+    moved: boolean;
+  } | null = null;
+
+  private bindBodyDrag(): void {
+    const el = this.viewport.renderer.domElement;
+    el.addEventListener('pointerdown', this.onBodyDragDown);
+    el.addEventListener('pointermove', this.onBodyDragMove);
+    el.addEventListener('pointerup', this.onBodyDragUp);
+    el.addEventListener('pointercancel', this.onBodyDragUp);
+  }
+
+  private unbindBodyDrag(): void {
+    const el = this.viewport.renderer.domElement;
+    el.removeEventListener('pointerdown', this.onBodyDragDown);
+    el.removeEventListener('pointermove', this.onBodyDragMove);
+    el.removeEventListener('pointerup', this.onBodyDragUp);
+    el.removeEventListener('pointercancel', this.onBodyDragUp);
+  }
+
+  private raycastGroundPoint(e: PointerEvent, plane: THREE.Plane): THREE.Vector3 | null {
+    const el = this.viewport.renderer.domElement;
+    const rect = el.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(ndc, this.viewport.camera);
+    const out = new THREE.Vector3();
+    return raycaster.ray.intersectPlane(plane, out) ? out : null;
+  }
+
+  private readonly onBodyDragDown = (e: PointerEvent): void => {
+    if (e.button !== 0) return;
+    // Translate tool only: select/rotate/scale keep piece-drags free for
+    // orbiting, and an additive (shift/cmd) click stays a SELECTION gesture.
+    if ($tool.get() !== 'translate') return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+    // A gizmo handle under the pointer wins — TransformControls owns that drag.
+    if (this.gizmo.hoveredAxis) return;
+    const hit = this.selectionMgr.pickAt(e.clientX, e.clientY);
+    if (!hit) return;
+    // Drag the existing selection when the grabbed piece is part of it;
+    // otherwise select the grabbed piece and drag just it.
+    let ids = $selection.get();
+    if (!ids.includes(hit.id)) {
+      $selection.set([hit.id]);
+      ids = [hit.id];
+    }
+    const starts = new Map<string, Transform>();
+    for (const id of ids) {
+      const pl = getPlacement(id);
+      if (pl) starts.set(id, structuredClone(pl.transform) as Transform);
+    }
+    if (starts.size === 0) return;
+    // Grab plane: horizontal at the grab piece's base height, so the piece
+    // slides with the cursor regardless of elevation.
+    const grabBox = this.worldBox(hit.id);
+    const planeY = grabBox && !grabBox.isEmpty() ? grabBox.min.y : 0;
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -planeY);
+    const grab = this.raycastGroundPoint(e, plane);
+    if (!grab) return;
+    this.bodyDrag = { pointerId: e.pointerId, plane, starts, grab, moved: false };
+    this.viewport.controls.enabled = false;
+    this.selectionMgr.setSuppressed(true);
+    try {
+      // Keep receiving moves outside the canvas.
+      this.viewport.renderer.domElement.setPointerCapture(e.pointerId);
+    } catch {
+      // capture is best-effort
+    }
+  };
+
+  private readonly onBodyDragMove = (e: PointerEvent): void => {
+    const drag = this.bodyDrag;
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    const here = this.raycastGroundPoint(e, drag.plane);
+    if (!here) return;
+    // three-space horizontal delta -> KSA east/north (basis: east = +X, north = -Z).
+    let dEast = here.x - drag.grab.x;
+    let dNorth = -(here.z - drag.grab.z);
+    if (!drag.moved && Math.hypot(dEast, dNorth) < 0.01) return;
+    if (!drag.moved) {
+      drag.moved = true;
+      beginGesture('Move');
+    }
+    const snap = $snap.get();
+    if (snap.enabled && snap.translateM > 0) {
+      dEast = Math.round(dEast / snap.translateM) * snap.translateM;
+      dNorth = Math.round(dNorth / snap.translateM) * snap.translateM;
+    }
+    for (const [id, start] of drag.starts) {
+      setPlacementTransform(id, {
+        ...start,
+        position: {
+          x: start.position.x,
+          y: start.position.y + dEast,
+          z: start.position.z + dNorth,
+        },
+      });
+    }
+  };
+
+  private readonly onBodyDragUp = (e: PointerEvent): void => {
+    const drag = this.bodyDrag;
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    this.bodyDrag = null;
+    this.viewport.controls.enabled = true;
+    this.selectionMgr.setSuppressed(false);
+    if (drag.moved) {
+      endGesture();
+      this.applySelection(); // re-center the pivot on the new position
+    }
+  };
+
+  /** Debug/tests: the pivot's world position projected to canvas pixels. */
+  debugPivotScreen(): { x: number; y: number; visible: boolean } {
+    const world = new THREE.Vector3();
+    this.pivot.updateMatrixWorld(true);
+    world.setFromMatrixPosition(this.pivot.matrixWorld);
+    const ndc = world.clone().project(this.viewport.camera);
+    const el = this.viewport.renderer.domElement;
+    return {
+      x: ((ndc.x + 1) / 2) * el.clientWidth,
+      y: ((1 - ndc.y) / 2) * el.clientHeight,
+      visible: this.gizmoOnPivot,
+    };
+  }
+
+  /** Debug/tests: gizmo hover axis. */
+  debugHoveredAxis(): string | null {
+    return this.gizmo.hoveredAxis;
+  }
+
+  /** Debug/tests: what a click at client coords resolves to. */
+  debugPickAt(clientX: number, clientY: number): unknown {
+    return this.selectionMgr.pickAt(clientX, clientY);
+  }
+
+  /** Escape ladder rung: cancel an in-flight gizmo OR body drag. */
   cancelDrag(): boolean {
-    if (!this.gizmo.isDragging) return false;
-    this.gizmo.cancelDrag();
-    return true;
+    if (this.gizmo.isDragging) {
+      this.gizmo.cancelDrag();
+      return true;
+    }
+    const drag = this.bodyDrag;
+    if (drag) {
+      // Restore the grabbed transforms, then close the gesture.
+      for (const [id, start] of drag.starts) setPlacementTransform(id, start);
+      this.bodyDrag = null;
+      this.viewport.controls.enabled = true;
+      this.selectionMgr.setSuppressed(false);
+      if (drag.moved) endGesture();
+      return true;
+    }
+    return false;
   }
 
   dispose(): void {
     this.disposed = true;
+    this.unbindBodyDrag();
     for (const unsub of this.unsubs) unsub();
     for (const obj of this.objects.values()) obj.dispose();
     this.objects.clear();

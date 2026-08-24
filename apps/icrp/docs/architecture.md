@@ -72,6 +72,17 @@ as one, so an imported part keeps its shape); **keep-grounded** (Arrange menu, d
 re-drops a scaled piece whose bottom sat on the ground before the scale gesture — inside
 the same undo step — while below-grade pieces (terrain skirts) are left alone.
 
+**Moving things** (three ways, all streaming into the document with one undo step):
+**grab-anywhere** — with the translate tool, pointer-dragging a piece BODY slides the whole
+selection on the ground plane (grabbing an unselected piece selects and drags just it;
+shift-click stays a selection gesture; snap applies; Escape cancels); the **gizmo** —
+single selection attaches it to the piece, multi selection to a centroid PIVOT whose
+translate/rotate/scale deltas replay onto every selected placement (group scale scales
+positions about the pivot and visual scales together — colliders never scale, preflight
+warns); and the **U/E/N fields** in the details panel. Dev builds hot-reload FULLY on
+store/scene module changes (`main.tsx` HMR guard) — the live scene subscribes to store
+instances at construction, and an HMR swap would silently split UI and scene state.
+
 ## Rendering
 
 `StaticScene` reconciles placements → `PieceObject`s (atlas geometry via flexo's

@@ -223,6 +223,15 @@ describe.runIf(hasKsaAssets)('ASSET_FILES covers every Core part file in the liv
       .filter((f) => /^Core.*Assets\.xml$/.test(f))
       .sort();
     expect(live.length).toBeGreaterThan(0);
-    expect(live.filter((f) => !ASSET_FILES.includes(f))).toEqual([]);
+    const unlisted = live.filter((f) => !ASSET_FILES.includes(f));
+    // A file is legitimately absent from the vessel SubPart catalog only when it
+    // declares no <Part>/<SubPart> at all — the static-object catalogs (consumed by
+    // apps/icrp's staticCatalog instead). Anything else unlisted is the rev-5161
+    // failure mode this guard exists for.
+    const wronglyUnlisted = unlisted.filter((f) => {
+      const text = readFileSync(ksaAsset(f), 'utf-8');
+      return /<(Part|SubPart)[\s>]/.test(text);
+    });
+    expect(wronglyUnlisted).toEqual([]);
   });
 });

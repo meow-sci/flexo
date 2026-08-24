@@ -17,7 +17,7 @@ function parse(xml: string): Document {
 
 /** A fresh element-factory document (matches the browser/@xmldom split). */
 function newDoc(): Document {
-  return new DOMImplementation().createDocument(null, null, null) as unknown as Document;
+  return new DOMImplementation().createDocument(null, '', null) as unknown as Document;
 }
 
 /**

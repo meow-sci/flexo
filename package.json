@@ -18,7 +18,8 @@
     "thumbs:partpreview": "node scripts/capture-part-thumbs.ts",
     "thumbs:partpreview:check": "node scripts/capture-part-thumbs.ts --parts CoreCouplingA_Prefab_DockingPort1WA --no-turntable",
     "test": "vitest run",
-    "smoke": "node scripts/smoke-v2.ts"
+    "smoke": "node scripts/smoke-v2.ts",
+    "smoke:icrp": "node scripts/smoke-icrp.ts"
   },
   "dependencies": {
     "@bokuweb/zstd-wasm": "0.0.27",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildModPlan, serializeIcrpModToml } from './modPlan';
+import { buildModPlan, serializeIcrpModToml, STOCK_PAD_ID } from './modPlan';
 import type { CatalogStaticPiece } from './staticCatalog';
 import type { IcrpProjectDoc } from '../state/docStore';
 import { identityTransform } from './types';
@@ -130,6 +130,23 @@ describe('buildModPlan', () => {
     p.objects[0].placements = [p.objects[0].placements[1]]; // only the collider-less tank
     const plan = buildModPlan(p, INDEX);
     expect(plan.issues.some((i) => i.message.includes('fall through'))).toBe(true);
+  });
+
+  it('extend-stock-pad: one GameData append targeting the Core prefab (fact L3)', () => {
+    const plan = buildModPlan(project(), INDEX, null, 'extend-stock-pad');
+    const gd = plan.files.find((f) => f.path === 'MyPadGameData.xml')!.data;
+    expect(gd).toContain(`<StaticObjectGameData Id="${STOCK_PAD_ID}">`);
+    // Placements append INSIDE the GameData (ApplyGameData appends lists).
+    expect(gd).toContain('<SubObject Id="a1" InstanceOf="CoreLaunchPadA_Subpart_PadA"/>');
+    expect(gd).toContain('<SubObject Id="t1" InstanceOf="icrp_MyPad_CoreFuelTankA_Subpart_Tank"/>');
+    // The Assets file declares only the vessel piece — no <StaticObject>.
+    const assets = plan.files.find((f) => f.path === 'MyPadAssets.xml')!.data;
+    expect(assets).not.toContain('<StaticObject ');
+    expect(assets).toContain('<StaticSubObject Id="icrp_MyPad_CoreFuelTankA_Subpart_Tank">');
+    // Set metres warn (they override the stock pad's at all five sites).
+    expect(plan.issues.some((i) => i.message.includes('OVERRIDE the stock pad'))).toBe(true);
+    // No systems entry.
+    expect(plan.files.find((f) => f.path === 'mod.toml')!.data).not.toContain('systems');
   });
 
   it('serializes systems into mod.toml when provided', () => {

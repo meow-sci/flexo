@@ -5,10 +5,22 @@
  */
 import { useEffect, useState } from 'react';
 import { useStore } from '@nanostores/react';
-import { Button, Dialog, DialogHeader, Modal, TextField } from '../../../../src/ui/kit';
+import {
+  Button,
+  Dialog,
+  DialogHeader,
+  Modal,
+  TextField,
+  ToggleButton,
+} from '../../../../src/ui/kit';
 import { createZip } from '../../../../src/util/zip';
 import { sanitizeBaseName } from '../../../../src/ksa/modExport';
-import { buildModPlan, type ModPlanResult, type SystemFilePlan } from '../ksa/modPlan';
+import {
+  buildModPlan,
+  type ExportMode,
+  type ModPlanResult,
+  type SystemFilePlan,
+} from '../ksa/modPlan';
 import { buildSystemXml } from '../ksa/systemXml';
 import { $pieceIndex } from '../state/catalogStore';
 import { ensureCorpusLoaded } from '../state/corpusStore';
@@ -29,6 +41,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
   const pieceIndex = useStore($pieceIndex);
   const [previewPath, setPreviewPath] = useState<string | null>(null);
   const [plan, setPlan] = useState<ModPlanResult | null>(null);
+  const [mode, setMode] = useState<ExportMode>('system-mod');
 
   // The plan build is async only because the <System> scenario needs the Core
   // celestial corpus (fetched once); everything else is pure/sync.
@@ -36,7 +49,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
     let stale = false;
     void (async () => {
       let system: SystemFilePlan | null = null;
-      if (project.sites.length > 0) {
+      if (mode === 'system-mod' && project.sites.length > 0) {
         const corpus = await ensureCorpusLoaded();
         if (corpus) {
           const modId = sanitizeBaseName(project.modName);
@@ -49,12 +62,12 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
           system = { fileName: `${modId.toLowerCase()}_system.xml`, xml: built.xml };
         }
       }
-      if (!stale) setPlan(buildModPlan(project, pieceIndex, system));
+      if (!stale) setPlan(buildModPlan(project, pieceIndex, system, mode));
     })();
     return () => {
       stale = true;
     };
-  }, [project, pieceIndex]);
+  }, [project, pieceIndex, mode]);
 
   const errors = plan?.issues.filter((i) => i.severity === 'error') ?? [];
   const warnings = plan?.issues.filter((i) => i.severity === 'warning') ?? [];
@@ -79,6 +92,28 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
             value={project.modName}
             onChange={(v) => $project.set({ ...$project.get(), modName: v })}
           />
+          <div className="flex items-center gap-1.5">
+            <ToggleButton
+              size="sm"
+              isSelected={mode === 'system-mod'}
+              onChange={() => setMode('system-mod')}
+            >
+              System mod (new sites)
+            </ToggleButton>
+            <ToggleButton
+              size="sm"
+              isSelected={mode === 'extend-stock-pad'}
+              onChange={() => setMode('extend-stock-pad')}
+            >
+              Extend stock pad
+            </ToggleButton>
+          </div>
+          {mode === 'extend-stock-pad' && (
+            <div className="text-[11px] text-fg-subtle">
+              Appends every object's placements onto Core's launch pad prefab — the additions appear
+              at ALL FIVE stock Earth sites (they share it). No system file is written.
+            </div>
+          )}
           {plan && (
             <>
               <div className="text-xs text-fg-muted">

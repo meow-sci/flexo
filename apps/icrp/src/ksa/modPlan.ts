@@ -50,6 +50,19 @@ export interface SystemFilePlan {
   xml: string;
 }
 
+/** How the mod places its objects in the world (plan D2/P8.02). */
+export type ExportMode =
+  /** New `<StaticObject>`s + a self-contained `<System>` with the project's sites. */
+  | 'system-mod'
+  /**
+   * No system: every object's placements/colliders APPEND onto the stock
+   * `CoreLaunchPadA_Prefab_LaunchPadA` via `<StaticObjectGameData>` (fact L3)
+   * — the additions appear at ALL FIVE stock Earth sites at once.
+   */
+  | 'extend-stock-pad';
+
+export const STOCK_PAD_ID = 'CoreLaunchPadA_Prefab_LaunchPadA';
+
 /**
  * Builds the full mod plan. `pieceIndex` resolves each placement's pieceId to
  * its catalog entry (origin decides reference-vs-declare); `system` carries the
@@ -60,6 +73,7 @@ export function buildModPlan(
   project: IcrpProjectDoc,
   pieceIndex: ReadonlyMap<string, CatalogStaticPiece>,
   system?: SystemFilePlan | null,
+  mode: ExportMode = 'system-mod',
 ): ModPlanResult {
   const issues: PreflightIssue[] = [];
   const modId = sanitizeBaseName(project.modName);
@@ -173,6 +187,33 @@ export function buildModPlan(
     });
   }
 
+  // --- Extend-stock-pad mode (plan P8.02) ----------------------------------------
+  if (mode === 'extend-stock-pad') {
+    if (project.sites.length > 0) {
+      issues.push({
+        severity: 'warning',
+        message:
+          'Extend-stock-pad mode ignores sites — the additions appear at the five stock ' +
+          'Earth pads; switch to system-mod to place new sites.',
+      });
+    }
+    const merged = objectPlansToStockGameData(project, instanceOf, issues);
+    const assetsNameX = `${modId}Assets.xml`;
+    const gameDataNameX = `${modId}GameData.xml`;
+    const filesX: ModFile[] = [
+      {
+        path: 'mod.toml',
+        data: serializeIcrpModToml(project.modName, [assetsNameX, gameDataNameX]),
+      },
+      {
+        path: assetsNameX,
+        data: serializeStaticAssetsXml({ materials: [], pieces: vesselPieces, objects: [] }),
+      },
+      { path: gameDataNameX, data: serializeStaticGameDataXml([merged]) },
+    ];
+    return { modId, files: filesX, issues, vesselPieceIds: vesselPieces.map((p) => p.id) };
+  }
+
   // --- Sites (plan P7.02 preflight) ----------------------------------------------
   const knownObjectIds = new Set(project.objects.map((o) => o.id));
   const sitesPerBody = new Map<string, number>();
@@ -243,6 +284,56 @@ export function buildModPlan(
   if (system && systemPath) files.push({ path: systemPath, data: system.xml });
 
   return { modId, files, issues, vesselPieceIds: vesselPieces.map((p) => p.id) };
+}
+
+/**
+ * Merges every object's placements/colliders into ONE GameData append targeting
+ * the stock pad. Metres are emitted only when the user set them (override
+ * semantics, F10) — from the FIRST object that sets each.
+ */
+function objectPlansToStockGameData(
+  project: IcrpProjectDoc,
+  instanceOf: ReadonlyMap<string, string>,
+  issues: PreflightIssue[],
+): StaticGameDataPlan {
+  const placements: StaticObjectPlan['placements'][number][] = [];
+  const colliders: IcrpProjectDoc['objects'][number]['objectColliders'] = [];
+  let groundOffsetM: number | null = null;
+  let surfaceHeightM: number | null = null;
+  let footprintRadiusM: number | null = null;
+  const seenInstanceIds = new Set<string>();
+  for (const obj of project.objects) {
+    for (const pl of obj.placements) {
+      let instanceId = pl.instanceId;
+      if (seenInstanceIds.has(instanceId)) instanceId = `${obj.id}_${instanceId}`;
+      seenInstanceIds.add(instanceId);
+      placements.push({
+        instanceId,
+        instanceOf: instanceOf.get(pl.pieceId) ?? pl.pieceId,
+        transform: pl.transform,
+      });
+    }
+    colliders.push(...obj.objectColliders);
+    groundOffsetM ??= obj.groundOffsetM;
+    surfaceHeightM ??= obj.surfaceHeightM;
+    footprintRadiusM ??= obj.footprintRadiusM;
+  }
+  if (groundOffsetM !== null || surfaceHeightM !== null || footprintRadiusM !== null) {
+    issues.push({
+      severity: 'warning',
+      message:
+        "Set metres OVERRIDE the stock pad's (0.2 / 1.5537 / 108.3) at all five sites — " +
+        'leave them unset to keep the stock values.',
+    });
+  }
+  return {
+    id: STOCK_PAD_ID,
+    groundOffsetM,
+    surfaceHeightM,
+    footprintRadiusM,
+    placements,
+    colliders,
+  };
 }
 
 /**

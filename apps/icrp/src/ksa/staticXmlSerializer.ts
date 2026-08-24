@@ -63,12 +63,18 @@ export interface StaticObjectPlan {
   colliders?: readonly PartCollider[];
 }
 
-/** The GameData metres for one object (null = omit → KSA reads unset). */
+/**
+ * The GameData for one object. Metres: null = omit (KSA reads unset).
+ * `placements`/`colliders` APPEND onto the targeted object via ApplyGameData
+ * (fact F10) — the extend-stock-pad mode targets a Core prefab id with them.
+ */
 export interface StaticGameDataPlan {
   id: string;
   groundOffsetM: number | null;
   surfaceHeightM: number | null;
   footprintRadiusM: number | null;
+  placements?: readonly StaticPlacementPlan[];
+  colliders?: readonly PartCollider[];
 }
 
 export interface StaticAssetsPlan {
@@ -194,6 +200,15 @@ export function serializeStaticGameDataXml(objects: readonly StaticGameDataPlan[
   const root = doc.documentElement!;
   for (const o of objects) {
     const gd = el(doc, 'StaticObjectGameData', { Id: o.id });
+    for (const p of o.placements ?? []) {
+      const sub = el(doc, 'SubObject', { Id: p.instanceId, InstanceOf: p.instanceOf });
+      const transform = buildTransformElement(doc, p.transform);
+      if (transform) sub.appendChild(transform);
+      gd.appendChild(sub);
+    }
+    if (o.colliders && o.colliders.length > 0) {
+      gd.appendChild(buildStaticColliderElement(doc, o.colliders));
+    }
     if (o.groundOffsetM !== null) gd.appendChild(distanceEl(doc, 'GroundOffset', o.groundOffsetM));
     if (o.surfaceHeightM !== null) {
       gd.appendChild(distanceEl(doc, 'SurfaceHeight', o.surfaceHeightM));

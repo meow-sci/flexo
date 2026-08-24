@@ -21,6 +21,11 @@ Flexo is a browser-based Part editor and viewer for the game [Kitten Space Agenc
 
 Press `?` in the app for all shortcuts.
 
+> **Re-export notice (2026-08-23):** parts exported before this date with a **non-uniform**
+> SubPart or Connector scale (e.g. 2 × 1 × 1) wrote a partial `<Scale X="2"/>`, which KSA reads
+> as (2, 0, 0) — the mesh renders blank in-game. Re-export those parts; flexo now always writes
+> all three `<Scale>` axes.
+
 ### Kitten Space Agency Part/SubPart information
 
 KSA is designed with the idea of SubParts and Parts, where SubParts are the actual meshes and textures and Parts are arrangements of SubParts defined with data and serialized to XML.

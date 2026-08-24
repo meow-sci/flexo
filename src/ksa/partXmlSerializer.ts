@@ -40,8 +40,15 @@ import { animGlbPath, animModuleId, isAnimationExportable } from './animationNam
  * space-tape's PartXmlSerializer.cs:
  *  - <Transform> omitted entirely when position=0, rotation=0, scale=1.
  *  - Each of <Position>/<Rotation>/<Scale> omitted when equal to its default
- *    (0 / 0 / 1) within EPSILON.
- *  - Each axis attribute omitted when equal to the default.
+ *    (0 / 0 / 1) — "equal" is judged on the G6-FORMATTED value, so float noise
+ *    that prints as the default never produces an element.
+ *  - <Position>/<Rotation>: each axis attribute omitted when equal to the default
+ *    (KSA's Vector3Reference also defaults a missing attribute to 0, so this is
+ *    lossless).
+ *  - <Scale>: when present, ALWAYS carries X, Y and Z. KSA's Vector3Reference
+ *    defaults a MISSING attribute to 0 — not 1 — and only substitutes
+ *    double3.One when the whole <Scale> element is absent, so `<Scale X="2"/>`
+ *    would load as (2, 0, 0) and collapse the mesh to a line.
  *  - Numbers formatted with .NET "G6" semantics (see formatG6).
  *  - Rotation is stored as Euler XYZ radians.
  *
@@ -1125,7 +1132,7 @@ function buildConnectorElement(doc: XmlDocument, connector: Connector): XmlEleme
 function buildTransformElement(doc: XmlDocument, t: Transform): XmlElement | null {
   const pos = buildVectorElement(doc, 'Position', t.position, 0);
   const rot = buildRotationElement(doc, t.rotation);
-  const scale = buildVectorElement(doc, 'Scale', t.scale, 1);
+  const scale = buildScaleElement(doc, t.scale);
 
   if (!pos && !rot && !scale) return null;
 
@@ -1136,22 +1143,51 @@ function buildTransformElement(doc: XmlDocument, t: Transform): XmlElement | nul
   return transform;
 }
 
-/** Builds e.g. <Position X="1.5" Z="-0.5"/>, omitting axes equal to `def`. */
+/**
+ * True when `v` prints as `def` under G6 — the emission decision must agree with the
+ * formatted output, so 1.0000001 (> EPSILON from 1, but printed "1") counts as default.
+ */
+function isDefaultAxis(v: number, def: number): boolean {
+  return Math.abs(v - def) <= EPSILON || formatG6(v) === formatG6(def);
+}
+
+/**
+ * Builds e.g. <Position X="1.5" Z="-0.5"/>, omitting axes equal to `def`. Only valid
+ * for vectors whose flexo default matches KSA's field default of 0 (Position/Rotation) —
+ * NEVER use it for <Scale>, see buildScaleElement.
+ */
 function buildVectorElement(
   doc: XmlDocument,
   name: string,
   v: Vec3,
   def: number,
 ): XmlElement | null {
-  const xDiff = Math.abs(v.x - def) > EPSILON;
-  const yDiff = Math.abs(v.y - def) > EPSILON;
-  const zDiff = Math.abs(v.z - def) > EPSILON;
+  const xDiff = !isDefaultAxis(v.x, def);
+  const yDiff = !isDefaultAxis(v.y, def);
+  const zDiff = !isDefaultAxis(v.z, def);
   if (!xDiff && !yDiff && !zDiff) return null;
 
   const el = doc.createElement(name);
   if (xDiff) el.setAttribute('X', formatG6(v.x));
   if (yDiff) el.setAttribute('Y', formatG6(v.y));
   if (zDiff) el.setAttribute('Z', formatG6(v.z));
+  return el;
+}
+
+/**
+ * Builds <Scale X Y Z/> with ALL THREE axes, or null when every axis prints as 1.
+ * KSA's `Vector3Reference` initialises X/Y/Z to 0 and `XmlSerializer` leaves an absent
+ * attribute at that initialiser; `TransformReference.ScaleValue` only falls back to
+ * `double3.One` when the element itself is missing. A partial `<Scale X="2"/>` therefore
+ * loads as (2, 0, 0): `CreateScale` goes singular, the normal matrix goes NaN and the
+ * SubPart/Connector vanishes in-game. Stock Content never omits a Scale axis.
+ */
+function buildScaleElement(doc: XmlDocument, v: Vec3): XmlElement | null {
+  if (isDefaultAxis(v.x, 1) && isDefaultAxis(v.y, 1) && isDefaultAxis(v.z, 1)) return null;
+  const el = doc.createElement('Scale');
+  el.setAttribute('X', formatG6(v.x));
+  el.setAttribute('Y', formatG6(v.y));
+  el.setAttribute('Z', formatG6(v.z));
   return el;
 }
 

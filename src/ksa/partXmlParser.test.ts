@@ -124,6 +124,20 @@ describe('parsePartPlacements (round-trip with serializer)', () => {
   it('throws on unknown part id', () => {
     expect(() => parsePartPlacements(xml, 'Nope', new DOMParser())).toThrow();
   });
+
+  it('warns on a partial <Scale> (older flexo output; KSA reads a missing axis as 0)', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const legacy = `<?xml version="1.0"?><Assets><Part Id="L"><SubPart Id="s" InstanceOf="T">
+        <Transform><Scale X="2"/></Transform></SubPart></Part></Assets>`;
+      const [p] = parsePartPlacements(legacy, 'L', new DOMParser());
+      expect(p.scale).toEqual({ x: 2, y: 1, z: 1 });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain('missing Y/Z');
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });
 
 describe('parseConnectorFlags', () => {

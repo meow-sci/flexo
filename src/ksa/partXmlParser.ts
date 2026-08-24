@@ -1049,6 +1049,20 @@ function readVec(transform: Element | null, tag: string, def: number): Vec3 {
     const raw = el.getAttribute(attr);
     return raw === null ? def : Number.parseFloat(raw);
   };
+  if (tag === 'Scale') {
+    // KSA's Vector3Reference defaults a MISSING attribute to 0 (not 1), so a partial
+    // <Scale> collapses the mesh in-game. Keep the lenient 1 (what the author meant) but
+    // don't hide it: such a file was written by a flexo build older than 2026-08-23.
+    const missing = ['X', 'Y', 'Z'].filter((a) => !el.hasAttribute(a));
+    if (missing.length > 0) {
+      const owner = transform.parentElement;
+      console.warn(
+        `flexo import: <${owner?.tagName ?? '?'} Id="${owner?.getAttribute('Id') ?? ''}"> has a ` +
+          `<Scale> missing ${missing.join('/')} — KSA reads a missing Scale axis as 0 and the ` +
+          `mesh collapses in-game; this file was probably written by an older flexo — re-export it.`,
+      );
+    }
+  }
   return { x: read('X'), y: read('Y'), z: read('Z') };
 }
 

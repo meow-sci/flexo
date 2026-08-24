@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { DOMParser } from '@xmldom/xmldom';
 import type { Document as XmlDocument, Element as XmlElement } from '@xmldom/xmldom';
 import { serializeGameDataXml, serializePartsXml, type TemplateRemap } from './partXmlSerializer';
-import { gameDataFromAssets } from './partXmlParser';
+import { gameDataFromAssets, parsePartPlacements } from './partXmlParser';
 import { seatAxesFromRotation } from './ivaSeatAxes';
 import type { Connector, EditingPart, IvaSeat, SubPartPlacement } from './types';
 import {
@@ -191,6 +191,81 @@ describe('serializePart', () => {
   });
 });
 
+/**
+ * KSA's `Vector3Reference` initialises X/Y/Z to 0 and `XmlSerializer` leaves an absent
+ * attribute at the initialiser; `TransformReference.ScaleValue` only substitutes
+ * `double3.One` when the whole `<Scale>` element is missing. `<Scale X="2"/>` therefore
+ * loads as (2, 0, 0) and the mesh collapses — every emitted <Scale> MUST carry X, Y and Z.
+ */
+describe('serializePart <Scale> always carries all three axes', () => {
+  const scaleOf = (scale: SubPartPlacement['scale']) => {
+    const doc = parse(serializePart(editingPart({ placements: [placement({ scale })] })));
+    return child(tags(doc, 'SubPart')[0], 'Scale');
+  };
+  const attrs = (el: XmlElement) => [
+    el.getAttribute('X'),
+    el.getAttribute('Y'),
+    el.getAttribute('Z'),
+  ];
+
+  it('(2, 1, 1) → X, Y and Z all present', () => {
+    expect(attrs(scaleOf({ x: 2, y: 1, z: 1 })!)).toEqual(['2', '1', '1']);
+  });
+
+  it('(1, 2, 3) → all three values', () => {
+    expect(attrs(scaleOf({ x: 1, y: 2, z: 3 })!)).toEqual(['1', '2', '3']);
+  });
+
+  it('(1, 1, 1) → no <Scale> element', () => {
+    expect(scaleOf({ x: 1, y: 1, z: 1 })).toBeNull();
+  });
+
+  it('(1.0000001, 1, 1) → no <Scale> (float noise that G6 prints as 1 is default)', () => {
+    expect(scaleOf({ x: 1.0000001, y: 1, z: 1 })).toBeNull();
+    expect(scaleOf({ x: 1.0000001, y: 0.9999999, z: 1.0000004 })).toBeNull();
+  });
+
+  it('(2.0000001, 1, 1) → <Scale X="2" Y="1" Z="1"/>', () => {
+    expect(attrs(scaleOf({ x: 2.0000001, y: 1, z: 1 })!)).toEqual(['2', '1', '1']);
+  });
+
+  it('round-trips a non-uniform scale: serialize → parse → serialize is stable', () => {
+    const part = editingPart({
+      placements: [placement({ instanceId: 'a', scale: { x: 2, y: 1, z: 0.25 } })],
+    });
+    const xml1 = serializePart(part);
+    const parsed = parsePartPlacements(xml1, 'P', new DOMParser());
+    expect(parsed[0].scale).toEqual({ x: 2, y: 1, z: 0.25 });
+    const xml2 = serializePart(editingPart({ placements: parsed }));
+    expect(xml2).toBe(xml1);
+  });
+
+  it('regression guard: no serialized <Scale> in the fixtures has fewer than three axes', () => {
+    const fixtures: SubPartPlacement['scale'][] = [
+      { x: 2, y: 1, z: 1 },
+      { x: 1, y: 2, z: 1 },
+      { x: 1, y: 1, z: 2 },
+      { x: 1, y: 2, z: 3 },
+      { x: 2, y: 2, z: 2 },
+      { x: 1.0000001, y: 1, z: 1 },
+      { x: 2.0000001, y: 1, z: 1 },
+      { x: 0.5, y: 1.0000001, z: 1 },
+    ];
+    const part = editingPart({
+      placements: fixtures.map((scale, i) => placement({ instanceId: `sp${i}`, scale })),
+      connectors: fixtures.map((scale, i) => connector({ id: `_c${i}`, scale })),
+    });
+    const doc = parse(serializePart(part));
+    const scales = tags(doc, 'Scale');
+    expect(scales.length).toBeGreaterThan(0);
+    for (const el of scales) {
+      expect(el.hasAttribute('X')).toBe(true);
+      expect(el.hasAttribute('Y')).toBe(true);
+      expect(el.hasAttribute('Z')).toBe(true);
+    }
+  });
+});
+
 function connector(c: Partial<Connector>): Connector {
   return {
     id: '_connector1',
@@ -234,7 +309,20 @@ describe('serializePart connectors', () => {
     const c = tags(doc, 'Connector').find((e) => e.getAttribute('Id') === '_connector2')!;
     expect(child(c, 'Position')!.getAttribute('X')).toBe('-1');
     expect(child(c, 'Rotation')!.getAttribute('X')).toBe('3.14159');
-    expect(child(c, 'Scale')!.getAttribute('X')).toBe('2');
+    const scale = child(c, 'Scale')!;
+    expect(scale.getAttribute('X')).toBe('2');
+    expect(scale.getAttribute('Y')).toBe('2');
+    expect(scale.getAttribute('Z')).toBe('2');
+  });
+
+  it('emits all three <Scale> axes for a NON-uniform connector scale', () => {
+    const doc2 = parse(
+      serializePart(editingPart({ connectors: [connector({ scale: { x: 2, y: 1, z: 0.5 } })] })),
+    );
+    const scale = child(tags(doc2, 'Connector')[0], 'Scale')!;
+    expect(scale.getAttribute('X')).toBe('2');
+    expect(scale.getAttribute('Y')).toBe('1');
+    expect(scale.getAttribute('Z')).toBe('0.5');
   });
 
   // .NET's XmlSerializationReader.ToEnum splits a [Flags] body with value.Split(null)

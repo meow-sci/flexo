@@ -448,8 +448,12 @@ function readImpulseNs(parent: Element, childTag: string): number {
   return sumUnitChild(parent, childTag, IMPULSE_TOKENS);
 }
 
-/** Reads a child `<Transform>` into a full {@link Transform} (identity when absent). */
-function readTransform(parent: Element): Transform {
+/**
+ * Reads a child `<Transform>` into a full {@link Transform} (identity when absent).
+ * Exported for ICRP (`apps/icrp`), whose `<SubObject>` placements carry the same
+ * `TransformReference` schema — including the partial-`<Scale>` warning in `readVec`.
+ */
+export function readTransform(parent: Element): Transform {
   const t = directChildren(parent, 'Transform')[0] ?? null;
   return {
     position: readVec(t, 'Position', 0),
@@ -1097,8 +1101,12 @@ function readPressurePa(el: Element | null | undefined): number | null {
   return value;
 }
 
-/** Sums a `DistanceReference`'s unit attributes into meters; null when none are set. */
-function readDistanceM(el: Element | null | undefined): number | null {
+/**
+ * Sums a `DistanceReference`'s unit attributes into meters; null when none are set.
+ * (KSA treats all-NaN as "unset"; a static object's GroundOffset/SurfaceHeight/
+ * FootprintRadius rely on that — exported for ICRP's `staticCatalog`.)
+ */
+export function readDistanceM(el: Element | null | undefined): number | null {
   if (!el) return null;
   const parts: [string, number][] = [
     ['Mm', 0.001],

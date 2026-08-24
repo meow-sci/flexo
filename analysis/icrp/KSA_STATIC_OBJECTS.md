@@ -4,6 +4,7 @@ All C# paths are relative to `/Users/asherwin/repos/meow-sci/ksa-game-assemblies
 All content paths are relative to `/Users/asherwin/repos/meow-sci/ksa-linux/Content/Core/`.
 
 Changelog provenance (`version.json`, build 2026.8.22.5348, revisions 5261→5348):
+
 - r5328 (2026-08-20, JPLRepoRocketWerkz): "Added static objects and static object rendering pipeline", "first real launchpad object model", "export of static objects to the glb to xml export tool".
 - r5330 (Dan Southon): statics take clustered lighting + SSAO, terrain cloud shadows + atmosphere ambient.
 - r5334: alpha map support (`<Alpha>` on PbrMaterial), CoreLaunchPadB alpha texture.
@@ -15,15 +16,15 @@ Changelog provenance (`version.json`, build 2026.8.22.5348, revisions 5261→534
 
 Registered in `KSA/AssetBundle.cs` (root `<Assets>`):
 
-| XML element | C# class | file |
-|---|---|---|
-| `<StaticObject>` | `StaticObjectTemplate` | AssetBundle.cs:32 → StaticObjectTemplate.cs |
-| `<StaticSubObject>` | `StaticSubObjectTemplate` | AssetBundle.cs:33 → StaticSubObjectTemplate.cs |
-| `<StaticObjectGameData>` | `StaticObjectGameDataReference : StaticObjectTemplate` | AssetBundle.cs:34 → StaticObjectGameDataReference.cs |
-| `<SubObject>` (child of StaticObject) | `StaticSubObjectInstance` | StaticObjectTemplate.cs:9-10 → StaticSubObjectInstance.cs |
-| `<PartModel>` | `PartModelModule.Template` (shared with vessel parts) | PartModelModule.cs:19 |
-| `<Collider>` | `ColliderModule.Template` (shared with vessel parts) | ColliderModule.cs:11-19 |
-| `<Transform>` | `TransformReference` (shared) | TransformReference.cs |
+| XML element                           | C# class                                               | file                                                      |
+| ------------------------------------- | ------------------------------------------------------ | --------------------------------------------------------- |
+| `<StaticObject>`                      | `StaticObjectTemplate`                                 | AssetBundle.cs:32 → StaticObjectTemplate.cs               |
+| `<StaticSubObject>`                   | `StaticSubObjectTemplate`                              | AssetBundle.cs:33 → StaticSubObjectTemplate.cs            |
+| `<StaticObjectGameData>`              | `StaticObjectGameDataReference : StaticObjectTemplate` | AssetBundle.cs:34 → StaticObjectGameDataReference.cs      |
+| `<SubObject>` (child of StaticObject) | `StaticSubObjectInstance`                              | StaticObjectTemplate.cs:9-10 → StaticSubObjectInstance.cs |
+| `<PartModel>`                         | `PartModelModule.Template` (shared with vessel parts)  | PartModelModule.cs:19                                     |
+| `<Collider>`                          | `ColliderModule.Template` (shared with vessel parts)   | ColliderModule.cs:11-19                                   |
+| `<Transform>`                         | `TransformReference` (shared)                          | TransformReference.cs                                     |
 
 Runtime (non-serialized): `StaticObject` (StaticObject.cs), `StaticObjectModel` (StaticObjectModel.cs), `StaticObjectRenderer` (StaticObjectRenderer.cs).
 
@@ -42,6 +43,7 @@ public class StaticObjectTemplate : SerializedId, IKeyed
     double GroundOffsetMeters / SurfaceHeightMeters / FootprintRadiusMeters  // NaN → 0.0 (:33-42)
 }
 ```
+
 - `Id` attribute inherited from `SerializedId`.
 - A StaticObject can carry its OWN `<PartModel>`s and `<Collider>`s directly (Models/Colliders) in addition to `<SubObject>` instances. The shipped launchpad uses only SubObjects + a prefab-level `<Collider>`.
 - `OnDataLoad` (:49-71): loads children, then `if (!_isGameData) ModLibrary.Register(this)`. So the Assets-file variant registers into `ModLibrary.AllStaticObjects`; the GameData variant does not register there.
@@ -55,6 +57,7 @@ public class StaticObjectTemplate : SerializedId, IKeyed
 [XmlElement("Collider")]  List<ColliderModule.Template> Colliders; // :12-13
 OnDataLoad → ModLibrary.Register(this)                              // :18-30
 ```
+
 No Transform, no GroundOffset etc. It is a pure reusable "prefab piece": meshes + colliders, in its own local Asmb frame. **It has NO `<SubObject>` list, so sub-objects cannot nest.**
 
 ### 1.3 `<SubObject Id InstanceOf>` — `StaticSubObjectInstance : IDataReference` (StaticSubObjectInstance.cs)
@@ -65,6 +68,7 @@ No Transform, no GroundOffset etc. It is a pure reusable "prefab piece": meshes 
 [XmlElement("Transform")] TransformReference? Transform;  // :13-14
 GetTemplate() => ModLibrary.Get<StaticSubObjectTemplate>(InstanceOf);   // :26-29
 ```
+
 - `InstanceOf` resolves **only** through `ModLibrary.Get<StaticSubObjectTemplate>` → `AllStaticSubObjects.Find(KeyHash)` (ModLibrary.cs:1284-1291). It **cannot** reference a `<Part>`, `<SubPart>`, or another `<StaticObject>` — those live in different collections (`AllParts`, `AllStaticObjects`). A missing id throws `NullReferenceException` (ModLibrary.cs:1288) which `StaticObject.Resolve` catches and logs "Static object 'X' references missing sub-object 'Y'" (StaticObject.cs:117-137), then skips it.
 - **No nesting of StaticObjects**: `StaticObjectTemplate` has no field referencing other StaticObjects; `StaticSubObjectTemplate` has no SubObject list. Hierarchy is exactly two levels: StaticObject → StaticSubObject instances.
 - The `Id` attribute of `<SubObject>` is unused at runtime (`IsValid()` only checks InstanceOf, :16-19). The bundler fills it with the glb mesh name (e.g. `..._PadGrateB2`).
@@ -78,6 +82,7 @@ GetTemplate() => ModLibrary.Get<StaticSubObjectTemplate>(InstanceOf);   // :26-2
 - Then `StaticObject.ResolveAll()` (ModLibrary.cs:1881).
 
 Shipped example (`CoreLaunchPadAGameData.xml`, complete file):
+
 ```xml
 <Assets>
 <StaticObjectGameData Id="CoreLaunchPadA_Prefab_LaunchPadA">
@@ -87,6 +92,7 @@ Shipped example (`CoreLaunchPadAGameData.xml`, complete file):
 </StaticObjectGameData>
 </Assets>
 ```
+
 Assets side (`CoreLaunchPadAAssets.xml`, generated) ends the StaticObject with empty `<GroundOffset />`, `<SurfaceHeight />`, `<FootprintRadius />` (all-NaN → not set), so the GameData values win. Split therefore mirrors Part/PartGameData: geometry/materials/colliders in the autogenerated Assets file, hand-tuned gameplay numbers in GameData.
 
 ### 1.5 ModLibrary registration / lookup (ModLibrary.cs)
@@ -102,6 +108,7 @@ Assets side (`CoreLaunchPadAAssets.xml`, generated) ends the StaticObject with e
 ## 2. Instance transform: units, axes, Euler order, scale
 
 `TransformReference` (TransformReference.cs):
+
 ```
 [XmlElement("Position")] Vector3Reference? _positionRaw;  // :8-9
 [XmlElement("Rotation")] Vector3Reference? _rotationRaw;  // :11-12
@@ -110,16 +117,20 @@ PositionValue => _positionRaw?.ToDouble3() ?? 0                              // 
 RotationValue => QuaternionEx.CreateFromXyzRadians(_rotationRaw) ?? Identity // :30-41
 ScaleValue    => _scaleRaw?.ToDouble3() ?? (1,1,1)                           // :43-54
 ```
+
 `Vector3Reference` = attributes `X`,`Y`,`Z` (doubles, default 0; Vector3Reference.cs:10-17). Position is **raw metres** (no unit attribute; the bundler writes `node.Translation` straight in, GlbTransforms.cs:15). Rotation is **radians**, XYZ Euler, via `QuaternionEx.CreateFromXyzRadians` (QuaternionEx.cs:179-192):
+
 ```
 w =  cx*cy*cz + sx*sy*sz
 x = -cx*sy*sz + cy*cz*sx
 y =  cx*cz*sy + sx*cy*sz
 z =  cx*cy*sz - sx*cz*sy
 ```
+
 (the standard "Rx then Ry then Rz" intrinsic-XYZ / extrinsic-ZYX composition used everywhere else in KSA — identical to SubPart `<Transform>` on vessel parts (`Part.TemplateBase.Transform`, Part.cs:206-207; `PartInstance.Transform`, PartInstance.cs:33-34) and to collider `Collider2Asmb`). Omitted axes serialize as absent attributes → 0 (bundler writes NaN which `NaNFilteringXmlWriter` drops, ToolXml.cs:52).
 
 **Scale IS supported for the visual models but NOT for colliders:**
+
 - Visual: `StaticObject.GetMatrix` (StaticObject.cs:228-235) = `CreateScale(Scale) * CreateFromQuaternion(Rot) * CreateTranslation(Pos)` (row-vector convention: scale, then rotate, then translate).
 - Colliders: `BuildCollisionShape` (StaticObject.cs:195-196) passes only `PositionValue`/`RotationValue` to `AddColliders`; scale is ignored (colliders are not rescaled).
 - The bundler only emits `<Scale>` when the glb node scale ≠ 1 (GlbTransforms.cs:18).
@@ -131,6 +142,7 @@ z =  cx*cy*sz - sx*cz*sy
 ## 3. Assembly frame ("Asmb") placement on the planet — coordinate convention
 
 `LocationReference` (LocationReference.cs):
+
 - `ForwardCcf` = unit radial from lat/lon (:45-50).
 - `GetAxesCcf` (:148-154):
   ```
@@ -161,6 +173,7 @@ For a glb→xml tool: the GLB is read verbatim (glTF node translation → Positi
 `StaticObjectTemplate.Models` / `StaticSubObjectTemplate.Models` are `List<PartModelModule.Template>` (StaticObjectTemplate.cs:13, StaticSubObjectTemplate.cs:10); Colliders are `List<ColliderModule.Template>` (:16 / :13). Same XML as vessel parts.
 
 `PartModelModule.Template` (PartModelModule.cs:19-46):
+
 ```
 [XmlElement("Mesh")]         MeshReference? Mesh;
 [XmlElement("Material")]     PbrMaterialReference? Material;
@@ -169,14 +182,17 @@ For a glb→xml tool: the GLB is read verbatim (glTF node translation → Positi
 [XmlElement("Internal")]     bool Internal = false;
 [XmlElement("Terrain")]      bool Terrain = false;        // :43-44  (the static-specific flag)
 ```
+
 `PbrMaterialReference` (PbrMaterialReference.cs:9-25): `<Diffuse>`, `<Normal>`, `<AoRoughMetal>`, `<Emissive>`, `<ThinFilm>`, **`<Alpha>`** (`AlphaMap`, :24-25). `AlphaMap` is read only by `StaticObjectModel` (StaticObjectModel.cs:260, :314); the vessel `PartModel` per-draw data has no alpha slot (PartModel.cs:459-463). `Terrain` is read only by `StaticObjectModel.Bucket` (StaticObjectModel.cs:260). So both are static-only in effect, though the schema accepts them on parts.
 
 What statics use from PartModel: `Mesh` (must be non-null — else error "has a PartModel 'X' with no mesh" and it is skipped, StaticObject.cs:148-163), `Material` (diffuse/normal/pbr/alpha), `Terrain`. **Ignored for statics**: `RayTracing` (only `RayTracers` list via OnDataLoad; static renderer never consults it), `ShadowCaster`, `Internal`; there is no animation, no `PartModelDynamic`, no lights, no highlight/selection state. Emissive and ThinFilm handles ARE uploaded (`EmissiveTextureIndex`, `TfiTextureIndex`, StaticObjectModel.cs:312-313) but **the fragment shader never samples them** (StaticObject.frag:283-294, 357-365) and `thinFilmInterference:false` is pushed (StaticObjectRenderer.cs:362). So emissive/TFI are dead for statics.
 
 Draw bucketing (StaticObjectModel.cs:16-21, :260):
+
 ```
 Bucket = Terrain ? OpaqueTerrain : (Material.AlphaMap != null ? Blended : Opaque)
 ```
+
 - `Opaque`, `OpaqueTerrain`: depth test+write, drawn in the pre-pass (`WriteCommandsPrePass`, StaticObjectRenderer.cs:367-379 using `PrePassIndirectFrag` = `Shaders/Mesh/MeshNormalIndirect.frag`, DefaultAssets.xml:61) and in the main colour pass right after `PartModelRenderer` (Program.cs:4237-4238).
 - `Blended`: `DepthTestNoWrite` (StaticObjectRenderer.cs:188), `BlendColorAlpha` (:189), drawn after `SuperMeshRenderSystem.RenderMainPass` (Program.cs:4241). Alpha = `texture(alpha).r` (frag:360-362). It is a real **alpha blend, not a cutout** — no discard, so blended pieces do not write depth and are not in the pre-pass (no SSAO/normal contribution).
 - `OpaqueTerrain` pipeline compiles the frag with `SAMPLE_TERRAIN` (StaticObjectRenderer.cs:136-139). It is only drawn when the nearby celestial has a planet-UBO slot and `IsBillboarded()` (:315). The frag ignores the material textures entirely and instead samples the planet's biome/colour/material cubemaps biplanarly at the fragment's world position (frag:142-246), uses the Hapke planet BRDF (frag:312-314), alpha forced 1.0 (frag:358). Slope/cliff materials are deliberately skipped (frag:117-123). This is how `CoreLaunchPadC_Subpart_BaseGrassA` (`<Terrain>true</Terrain>`, CoreLaunchPadCAssets.xml) blends into the ground.
@@ -203,11 +219,11 @@ Bucket = Terrain ? OpaqueTerrain : (Material.AlphaMap != null ? Blended : Opaque
 
 ## 6. GroundOffset / SurfaceHeight / FootprintRadius consumers
 
-| field | consumer | semantics |
-|---|---|---|
-| `GroundOffset` | LocationReference.cs:175 (render origin = surface + up·GroundOffset); ConstraintSim.cs:523 (static collider pose, same); Vehicle.cs:3954 | Lifts the whole Asmb frame (models AND colliders) above the terrain sample at lat/lon along the surface normal. Terrain height sampled at the landmark centre (`GetTerrainHeightFromDirCcf`, ConstraintSim.cs:501). |
-| `SurfaceHeight` | Vehicle.cs:3954 only | Height of the pad's standing surface above the Asmb origin. `GetLaunchPadHeightAtDirCcf` (Vehicle.cs:3935-3959) returns `GroundOffset + SurfaceHeight` if the spawn lat/lon is within `FootprintRadius` of a launch-pad landmark (great-circle chord × MeanRadius, :3951-3952), else 0. Added to the vessel's initial radial position (:3923) so the vessel spawns resting on the pad top instead of the terrain. Not used by physics/rendering. |
-| `FootprintRadius` | Vehicle.cs:3952 (spawn height test); GroundClutterPlacementData.cs:137-146 | Clutter exclusion: for up to **4** launch-pad landmarks (:134-137 `if (i >= 4) break`), an exclusion zone `float4(dirCcf, (FootprintRadius + 50) / MeanRadius)` is pushed to the clutter shader; skipped if FootprintRadius ≤ 0. `LocationReference.CLUTTER_CLEARANCE_METERS = 50f` (LocationReference.cs:31) is the 50 m pad (the constant is defined but the literal `50.0` is inlined at GroundClutterPlacementData.cs:143). Not used by collision. |
+| field             | consumer                                                                                                                                 | semantics                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GroundOffset`    | LocationReference.cs:175 (render origin = surface + up·GroundOffset); ConstraintSim.cs:523 (static collider pose, same); Vehicle.cs:3954 | Lifts the whole Asmb frame (models AND colliders) above the terrain sample at lat/lon along the surface normal. Terrain height sampled at the landmark centre (`GetTerrainHeightFromDirCcf`, ConstraintSim.cs:501).                                                                                                                                                                                                                                    |
+| `SurfaceHeight`   | Vehicle.cs:3954 only                                                                                                                     | Height of the pad's standing surface above the Asmb origin. `GetLaunchPadHeightAtDirCcf` (Vehicle.cs:3935-3959) returns `GroundOffset + SurfaceHeight` if the spawn lat/lon is within `FootprintRadius` of a launch-pad landmark (great-circle chord × MeanRadius, :3951-3952), else 0. Added to the vessel's initial radial position (:3923) so the vessel spawns resting on the pad top instead of the terrain. Not used by physics/rendering.       |
+| `FootprintRadius` | Vehicle.cs:3952 (spawn height test); GroundClutterPlacementData.cs:137-146                                                               | Clutter exclusion: for up to **4** launch-pad landmarks (:134-137 `if (i >= 4) break`), an exclusion zone `float4(dirCcf, (FootprintRadius + 50) / MeanRadius)` is pushed to the clutter shader; skipped if FootprintRadius ≤ 0. `LocationReference.CLUTTER_CLEARANCE_METERS = 50f` (LocationReference.cs:31) is the 50 m pad (the constant is defined but the literal `50.0` is inlined at GroundClutterPlacementData.cs:143). Not used by collision. |
 
 Not consumed anywhere else (grep across decomp confirms). The bundler never emits values for these (only empty elements), they are GameData-authored.
 
@@ -225,18 +241,21 @@ Not consumed anywhere else (grep across decomp confirms). The bundler never emit
 ## 8. GLB → XML bundler (`KSA.GlbImport/StaticObjectAssetBundler.cs`)
 
 Input discovery (`PartInputSet.FromDirectory`, PartInputSet.cs:31-49): files grouped by **stem = filename up to the first `_`** (:52-56). Per stem:
+
 - `<Stem>_MeshAtlas.glb` → MeshAtlasGlb (:63-65)
 - `*_Anim.glb` → animations (unused for statics)
 - any `.glb` whose name contains `_Prefab` → `PrefabGlbs` (:71-73) — each becomes one `<StaticObject>`
 - PNGs by substring (case-insensitive): `diffuse`, `normal`, `pbr`, `tfi` (+`tfi_heat`), `emissive`, `alpha` (:84-108)
 
 `Build(setPrefix, set)` (StaticObjectAssetBundler.cs:15-53) emits, in order:
+
 1. `<MeshAtlas Path="Meshes/<file>.glb" />` (:22-30)
 2. `<PbrMaterial Id="<Stem>_Material">` with `<Diffuse|Normal|AoRoughMetal|ThinFilm|Emissive|Alpha Path="Textures/<png-stem>.ktx2" Category="Vessel" />` (:55-102). Normal is a `TexturePowerReference`. One material per stem.
 3. One `<StaticSubObject>` per **top-level-eligible node** of the MeshAtlas glb: every node whose name does not start with `_` and does not end with `_VM` (:39-46). (Note: it iterates ALL nodes, not just roots, so any non-underscore, non-`_VM` node anywhere in the atlas becomes a sub-object; `_ColPrim`/`_Terrain` children are skipped by the `_` rule.)
 4. One `<StaticObject>` per prefab glb (:48-51).
 
 `SubObject(node)` (:104-130):
+
 ```xml
 <StaticSubObject Id="{node.Name}">
   <PartModel Id="{node.Name}_Model">
@@ -247,9 +266,11 @@ Input discovery (`PartInputSet.FromDirectory`, PartInputSet.cs:31-49): files gro
   <Collider Id="Collider1"> ... </Collider>   <!-- from DIRECT children named _ColPrim* (:198-215), omitted if none -->
 </StaticSubObject>
 ```
+
 Important: `<Mesh Id>` uses the **node** name, but `MeshAtlasFileReference` registers meshes by the glTF **mesh** name (MeshAtlasFileReference.cs:31-34, first-wins). Node name and mesh name must therefore match for sub-objects. The node's own transform in the atlas is ignored (mesh data is used as-is).
 
 `StaticObject(prefab)` (:132-178):
+
 ```xml
 <StaticObject Id="{prefab filename without .glb}">          <!-- e.g. CoreLaunchPadA_Prefab_LaunchPadA -->
   <SubObject Id="{meshName}" InstanceOf="{meshName with trailing [.digits] stripped}">
@@ -260,6 +281,7 @@ Important: `<Mesh Id>` uses the **node** name, but `MeshAtlasFileReference` regi
   <GroundOffset /><SurfaceHeight /><FootprintRadius />   <!-- empty; NaN attrs filtered -->
 </StaticObject>
 ```
+
 - For every node not starting with `_` that has a mesh: `Id = meshes[node.Mesh].Name`, `InstanceOf = Regex("[\.\d]+$") → ""` applied to that mesh name (:156-169, :217-227). So Blender-style duplicates `Foo.001`, `Foo1`, `Foo2` all instance `Foo`. (Beware: a base name legitimately ending in a digit, e.g. `PadB`, is fine, but `Pad2` would be stripped to `Pad`.)
 - Transform = `GlbTransforms.BuildTransform(node)` (GlbTransforms.cs:13-29): raw glTF node TRS (no parent composition — prefab instance nodes are assumed to be root-level), rotation quaternion → XYZ-radians via the game's own `TransformReference.RotationValue` setter (:66-74), components rounded to 8 decimals, zero components omitted, Scale omitted when ≈1 (ε=1e-5).
 - Prefab-level colliders: `_ColPrim*` nodes anywhere in the prefab, again using raw node-local TRS (no parent composition — `relativeTo = -1`).

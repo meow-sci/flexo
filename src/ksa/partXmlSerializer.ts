@@ -1128,8 +1128,13 @@ function buildConnectorElement(doc: XmlDocument, connector: Connector): XmlEleme
   return el;
 }
 
-/** Returns a <Transform> element, or null if the transform is identity. */
-function buildTransformElement(doc: XmlDocument, t: Transform): XmlElement | null {
+/**
+ * Returns a <Transform> element, or null if the transform is identity. Exported for
+ * ICRP (`apps/icrp`): static-object `<SubObject>` transforms share the exact same
+ * `TransformReference` emission rules — omit-at-identity, G6, and the all-three-axes
+ * `<Scale>` invariant (see {@link buildScaleElement}).
+ */
+export function buildTransformElement(doc: XmlDocument, t: Transform): XmlElement | null {
   const pos = buildVectorElement(doc, 'Position', t.position, 0);
   const rot = buildRotationElement(doc, t.rotation);
   const scale = buildScaleElement(doc, t.scale);

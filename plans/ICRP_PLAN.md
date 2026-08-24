@@ -1,6 +1,6 @@
 # ICRP PLAN — "Inanimate Carbon Rod Placer": a KSA static-object (launch complex) layout editor
 
-**Status**: ready for implementation · **Authored**: 2026-08-23 · **KSA baseline**: `2026.8.22.5348` (the build that introduced static objects, r5328–r5336) · **flexo baseline**: `main` @ `45eabaf`
+**Status**: v1 IMPLEMENTED on `feature/icrp` (2026-08-24 — see §0.10 for what shipped vs deferred) · **Authored**: 2026-08-23 · **KSA baseline**: `2026.8.22.5348` (the build that introduced static objects, r5328–r5336) · **flexo baseline**: `main` @ `45eabaf`
 
 **Codename**: ICRP (Inanimate Carbon Rod Placer). Product name TBD; the code uses `icrp` everywhere (folder, store prefixes, mod ids, persisted keys).
 
@@ -207,6 +207,26 @@ interface IcrpProject { schemaVersion: 1; objects: StaticObjectDoc[]; sites: Sit
 4. Run `pnpm fmt`, `pnpm lint`, `pnpm fmt:check`, `pnpm typecheck`, `pnpm test` (bare) before every commit; `pnpm build` must build both mini apps.
 5. In-game verification tasks are marked **[V]**; they cannot be done by a coding agent — leave a note in `apps/icrp/VERIFICATION.md` with the exact mod to drop into `<Documents>/mods/` and what to look for.
 6. Keep `apps/icrp/SHARED_IMPORTS.md` current (D1).
+
+### 0.9a Implementation status (2026-08-24)
+
+Shipped on `feature/icrp` (apps/icrp builds, 38 vitest tests + 7-step `pnpm smoke:icrp`
+all green; browser-verified renders/exports):
+
+| Phase | Status |
+|---|---|
+| P0 | ✅ assets synced (run locally against `ksa-linux/Content` — same build as Windows), fixtures + drift test, scaffold + build/deploy wiring |
+| P1 | ✅ domain (catalog/serializer byte-golden vs Core, basis + calibration tests) |
+| P2 | ✅ viewer (three buckets incl. Alpha `.r` patch + Terrain stand-in, selection, gizmo, ground/compass, ghosts of inactive objects) |
+| P3 | ✅ state (whole-project snapshot undo, N objects + switcher, IndexedDB autosave + hydration; **archives/share-links deferred**) |
+| P4 | ✅ ground ops (drop/rest), align/distribute, linear/radial/grid arrays, footprint/clutter/300 m/spawn overlays, gizmo grid+angle snap + ground lock; **anchors + drag-time snap markers + assemblies deferred** |
+| P5 | ✅ vessel SubParts as pieces (id-reference export, F12); **custom GLB import deferred** (flexo pipeline modules identified in §P5.02) |
+| P6 | ✅ metres inspector + auto-compute + preflight validation |
+| P7 | ✅ sites (panel, corpus body picker, decal with metres-in-`Km=`), systemXml (subagent, live-tree goldens) — **discovery: the stock `SolSystem.xml` is NOT a pure LoadFromLibrary list; it inlines ~45 bodies with 21 Id'd `Path=`s, so the texture rules run over every inline body (105 id-refs + 3 `../Core/` rewrites live-counted)**; `HomeBody` rides the row attributes onto the inline element |
+| P8 | ✅ zip export + preflight + previews + extend-stock-pad mode; **mods-folder direct write deferred** ([V] runbook in `apps/icrp/VERIFICATION.md`) |
+| P9 | ✅ scope docs (static-objects/launch-sites + FULL_SCOPE rows + checklist step), app docs, smoke test; **menubar/⌘K palette/hotkey registry/phone layout deferred** (plain toolbar + ad-hoc hotkeys shipped) |
+
+In-game checks [V1]–[V6] remain open (require a human with the game).
 
 ### 0.9 Phase map
 

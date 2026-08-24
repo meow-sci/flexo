@@ -55,5 +55,6 @@ plan: [plans/ICRP_PLAN.md](../plans/ICRP_PLAN.md) §0.3 (L1–L9) + §Phase 7.
 `Mod.cs`, `ModManifest.cs`, `ModLibrary.cs`, `FileReference.cs`, `VehicleLaunchMenu.cs`,
 `Vehicle.cs` (spawn), `Celestial.cs` (`GetTerrainHeightFromDirCcf`).
 `C/Core/`: `Astronomicals.xml` (the Earth block **hash** — ICRP stamps it per body override
-and re-clones on export; drift = re-export), `SolSystem.xml` (the stock LoadFromLibrary list),
+and re-clones on export; drift = re-export), `SolSystem.xml` (**mixed**: `LoadFromLibrary` rows AND ~45 inline bodies carrying 21 Id'd
+`Path=` attrs — the texture rules run over EVERY inline body in ICRP's output),
 `mod.toml`, `manifest.toml`, `Textures/Planets/_Decals/circle.dds`.

@@ -55,5 +55,7 @@ export async function loadProjectSnapshot(): Promise<IcrpProjectDoc | null> {
     return null;
   }
   if (!Array.isArray(project.objects) || project.objects.length === 0) return null;
+  // Additive fields default-fill (constitution: no migrations, no schema bump).
+  project.sites = Array.isArray(project.sites) ? project.sites : [];
   return project;
 }

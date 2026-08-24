@@ -65,6 +65,7 @@ import {
 import { addArrayCopies } from './state/docStore';
 import { gridArray, linearArray, radialArray } from './three/arrays';
 import { ExportDialog } from './ui/ExportDialog';
+import { SitesPanel } from './ui/SitesPanel';
 import { SceneCanvas } from './three/SceneCanvas';
 import { getScene } from './three/sceneHandle';
 import type { CatalogStaticObject } from './ksa/staticCatalog';
@@ -220,6 +221,7 @@ function importCatalogObject(obj: CatalogStaticObject): void {
       },
     ],
     activeObjectId: '', // fixed below
+    sites: [],
   });
   const p = $project.get();
   $project.set({ ...p, activeObjectId: p.objects[0].id });
@@ -675,7 +677,7 @@ export function App() {
   return (
     <div className="flex h-dvh flex-col bg-canvas text-fg">
       <Toolbar onExport={() => setExportOpen(true)} />
-      <ExportDialog isOpen={exportOpen} onClose={() => setExportOpen(false)} />
+      {exportOpen && <ExportDialog onClose={() => setExportOpen(false)} />}
       <div className="flex min-h-0 flex-1">
         <Library />
         <div className={cn('relative min-w-0 flex-1')}>
@@ -688,6 +690,7 @@ export function App() {
           <SelectionInspector />
           <ObjectInspector />
           <ObjectSwitcher />
+          <SitesPanel />
         </div>
       </div>
     </div>

@@ -43,13 +43,23 @@ export interface ModPlanResult {
   vesselPieceIds: string[];
 }
 
+/** The prebuilt `<System>` scenario (from `systemXml.ts`) when sites exist. */
+export interface SystemFilePlan {
+  /** File name under `systems/` (e.g. `mycomplex_system.xml`). */
+  fileName: string;
+  xml: string;
+}
+
 /**
  * Builds the full mod plan. `pieceIndex` resolves each placement's pieceId to
- * its catalog entry (origin decides reference-vs-declare).
+ * its catalog entry (origin decides reference-vs-declare); `system` carries the
+ * async-built `<System>` scenario when the project has sites (the caller owns
+ * the corpus fetch — this module stays pure/sync).
  */
 export function buildModPlan(
   project: IcrpProjectDoc,
   pieceIndex: ReadonlyMap<string, CatalogStaticPiece>,
+  system?: SystemFilePlan | null,
 ): ModPlanResult {
   const issues: PreflightIssue[] = [];
   const modId = sanitizeBaseName(project.modName);
@@ -163,11 +173,63 @@ export function buildModPlan(
     });
   }
 
+  // --- Sites (plan P7.02 preflight) ----------------------------------------------
+  const knownObjectIds = new Set(project.objects.map((o) => o.id));
+  const sitesPerBody = new Map<string, number>();
+  const landmarkIdsPerBody = new Map<string, Set<string>>();
+  for (const site of project.sites) {
+    sitesPerBody.set(site.bodyId, (sitesPerBody.get(site.bodyId) ?? 0) + 1);
+    const names = landmarkIdsPerBody.get(site.bodyId) ?? new Set<string>();
+    if (names.has(site.landmarkId)) {
+      issues.push({
+        severity: 'error',
+        message: `Duplicate landmark id '${site.landmarkId}' on ${site.bodyId}.`,
+      });
+    }
+    names.add(site.landmarkId);
+    landmarkIdsPerBody.set(site.bodyId, names);
+    if (!knownObjectIds.has(site.staticObjectId) && !site.staticObjectId.startsWith('Core')) {
+      issues.push({
+        severity: 'error',
+        message: `Site '${site.landmarkId}' points at unknown object '${site.staticObjectId}'.`,
+      });
+    }
+    if (!site.landmarkId.trim()) {
+      issues.push({ severity: 'error', message: 'A site has an empty landmark id.' });
+    }
+  }
+  for (const [bodyId, count] of sitesPerBody) {
+    if (count > 4) {
+      issues.push({
+        severity: 'warning',
+        message:
+          `${bodyId} has ${count} launch-pad sites — KSA clears ground clutter for at ` +
+          `most 4 per body (fact F8); the rest keep clutter inside their footprint.`,
+      });
+    }
+  }
+  if (project.sites.length > 0 && !system) {
+    issues.push({
+      severity: 'error',
+      message:
+        'Sites exist but no <System> scenario was built (Core Astronomicals/SolSystem ' +
+        'unavailable?) — the exported mod would have no way to place them.',
+    });
+  }
+
   // --- Files --------------------------------------------------------------------
   const assetsName = `${modId}Assets.xml`;
   const gameDataName = `${modId}GameData.xml`;
+  const systemPath = system ? `systems/${system.fileName}` : null;
   const files: ModFile[] = [
-    { path: 'mod.toml', data: serializeIcrpModToml(project.modName, [assetsName, gameDataName]) },
+    {
+      path: 'mod.toml',
+      data: serializeIcrpModToml(
+        project.modName,
+        [assetsName, gameDataName],
+        systemPath ? [systemPath] : [],
+      ),
+    },
     {
       path: assetsName,
       data: serializeStaticAssetsXml({
@@ -178,6 +240,7 @@ export function buildModPlan(
     },
     { path: gameDataName, data: serializeStaticGameDataXml(gameDataPlans) },
   ];
+  if (system && systemPath) files.push({ path: systemPath, data: system.xml });
 
   return { modId, files, issues, vesselPieceIds: vesselPieces.map((p) => p.id) };
 }

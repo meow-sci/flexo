@@ -20,6 +20,7 @@ import {
   type StaticObjectDoc,
   type Transform,
 } from '../ksa/types';
+import { defaultDecal, type Site } from '../ksa/siteTypes';
 
 export const ICRP_PROJECT_SCHEMA_VERSION = 1;
 
@@ -31,6 +32,8 @@ export interface IcrpProjectDoc {
   modName: string;
   objects: StaticObjectDoc[];
   activeObjectId: string;
+  /** Launch sites (plan P7.02) — exported as the mod's `<System>` scenario. */
+  sites: Site[];
 }
 
 function freshProject(): IcrpProjectDoc {
@@ -40,6 +43,7 @@ function freshProject(): IcrpProjectDoc {
     modName: 'my-complex',
     objects: [first],
     activeObjectId: first.id,
+    sites: [],
   };
 }
 
@@ -304,4 +308,37 @@ export function renameObject(objectId: string, name: string): void {
     ...p,
     objects: p.objects.map((o) => (o.id === objectId ? { ...o, name } : o)),
   });
+}
+
+// --- Sites (plan P7.02) ---------------------------------------------------------
+
+export function addSite(bodyId: string): string {
+  pushUndo('Add site');
+  const p = $project.get();
+  const site: Site = {
+    id: `site_${randomId().slice(0, 8)}`,
+    landmarkId: `Site ${p.sites.length + 1}`,
+    bodyId,
+    latDeg: 0,
+    lonDeg: 0,
+    staticObjectId: $activeObject.get().id,
+    decal: defaultDecal(),
+  };
+  $project.set({ ...p, sites: [...p.sites, site] });
+  return site.id;
+}
+
+/** Discrete site field edit (callers begin a gesture for typing sessions). */
+export function updateSite(siteId: string, patch: Partial<Omit<Site, 'id'>>): void {
+  const p = $project.get();
+  $project.set({
+    ...p,
+    sites: p.sites.map((s) => (s.id === siteId ? { ...s, ...patch } : s)),
+  });
+}
+
+export function removeSite(siteId: string): void {
+  pushUndo('Delete site');
+  const p = $project.get();
+  $project.set({ ...p, sites: p.sites.filter((s) => s.id !== siteId) });
 }

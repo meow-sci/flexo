@@ -46,6 +46,7 @@ function project(overrides: Partial<IcrpProjectDoc> = {}): IcrpProjectDoc {
       },
     ],
     activeObjectId: 'icrp_object_1',
+    sites: [],
     ...overrides,
   };
 }

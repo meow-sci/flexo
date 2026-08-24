@@ -3,12 +3,15 @@
  * preflight findings and per-file previews, downloads a zip. Reminder shown:
  * KSA appends new mods to manifest.toml DISABLED (fact L9).
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useStore } from '@nanostores/react';
 import { Button, Dialog, DialogHeader, Modal, TextField } from '../../../../src/ui/kit';
 import { createZip } from '../../../../src/util/zip';
-import { buildModPlan } from '../ksa/modPlan';
+import { sanitizeBaseName } from '../../../../src/ksa/modExport';
+import { buildModPlan, type ModPlanResult, type SystemFilePlan } from '../ksa/modPlan';
+import { buildSystemXml } from '../ksa/systemXml';
 import { $pieceIndex } from '../state/catalogStore';
+import { ensureCorpusLoaded } from '../state/corpusStore';
 import { $project } from '../state/docStore';
 
 function download(blob: Blob, filename: string): void {
@@ -20,15 +23,38 @@ function download(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-export function ExportDialog({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+/** Mount only while open (the plan effect runs for the dialog's lifetime). */
+export function ExportDialog({ onClose }: { onClose: () => void }) {
   const project = useStore($project);
   const pieceIndex = useStore($pieceIndex);
   const [previewPath, setPreviewPath] = useState<string | null>(null);
+  const [plan, setPlan] = useState<ModPlanResult | null>(null);
 
-  const plan = useMemo(
-    () => (isOpen ? buildModPlan(project, pieceIndex) : null),
-    [isOpen, project, pieceIndex],
-  );
+  // The plan build is async only because the <System> scenario needs the Core
+  // celestial corpus (fetched once); everything else is pure/sync.
+  useEffect(() => {
+    let stale = false;
+    void (async () => {
+      let system: SystemFilePlan | null = null;
+      if (project.sites.length > 0) {
+        const corpus = await ensureCorpusLoaded();
+        if (corpus) {
+          const modId = sanitizeBaseName(project.modName);
+          const built = buildSystemXml({
+            systemId: `${modId}_sol`,
+            displayName: `Sol — ${project.modName}`,
+            corpus,
+            sites: project.sites,
+          });
+          system = { fileName: `${modId.toLowerCase()}_system.xml`, xml: built.xml };
+        }
+      }
+      if (!stale) setPlan(buildModPlan(project, pieceIndex, system));
+    })();
+    return () => {
+      stale = true;
+    };
+  }, [project, pieceIndex]);
 
   const errors = plan?.issues.filter((i) => i.severity === 'error') ?? [];
   const warnings = plan?.issues.filter((i) => i.severity === 'warning') ?? [];
@@ -44,7 +70,7 @@ export function ExportDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
   };
 
   return (
-    <Modal isOpen={isOpen} onOpenChange={(open) => !open && onClose()} isDismissable>
+    <Modal isOpen onOpenChange={(open) => !open && onClose()} isDismissable>
       <Dialog className="w-[44rem] max-w-[90vw] p-4">
         <DialogHeader title="Export KSA mod" onClose={onClose} />
         <div className="flex flex-col gap-3 overflow-y-auto">
@@ -56,8 +82,8 @@ export function ExportDialog({ isOpen, onClose }: { isOpen: boolean; onClose: ()
           {plan && (
             <>
               <div className="text-xs text-fg-muted">
-                {project.objects.length} object(s) · {plan.vesselPieceIds.length} vessel-derived
-                piece(s) declared · install as{' '}
+                {project.objects.length} object(s) · {project.sites.length} site(s) ·{' '}
+                {plan.vesselPieceIds.length} vessel-derived piece(s) declared · install as{' '}
                 <code className="text-fg">
                   &lt;Documents&gt;/My Games/Kitten Space Agency/mods/{plan.modId}/
                 </code>{' '}

@@ -167,6 +167,34 @@ async function run(page: Page): Promise<void> {
       return w.__icrp.selection().map((id) => w.__icrp.placement(id)?.transform.position)
     })
 
+  /**
+   * The critical invariant a drag must uphold: every selected placement's
+   * RENDERED mesh sits exactly where the DOCUMENT says (three = [ksa.y, ksa.x,
+   * −ksa.z]). A doc-only assertion once passed while the meshes never moved.
+   */
+  const meshesMatchDoc = () =>
+    page.evaluate(() => {
+      const w = window as unknown as {
+        __icrp: {
+          selection: () => string[]
+          placement: (
+            id: string,
+          ) => { transform: { position: { x: number; y: number; z: number } } } | undefined
+          meshWorld: (id: string) => { x: number; y: number; z: number } | null
+        }
+      }
+      return w.__icrp.selection().every((id) => {
+        const doc = w.__icrp.placement(id)?.transform.position
+        const mesh = w.__icrp.meshWorld(id)
+        if (!doc || !mesh) return false
+        return (
+          Math.abs(mesh.x - doc.y) < 1e-6 &&
+          Math.abs(mesh.y - doc.x) < 1e-6 &&
+          Math.abs(mesh.z - -doc.z) < 1e-6
+        )
+      })
+    })
+
   await step('body drag slides the selection on the ground', async () => {
     await page.keyboard.press('Escape')
     await page.keyboard.press('KeyW') // translate tool
@@ -218,6 +246,7 @@ async function run(page: Page): Promise<void> {
     await delay(400)
     const after = await selectionPositions()
     assert(JSON.stringify(before) !== JSON.stringify(after), 'body drag moved nothing')
+    assert(await meshesMatchDoc(), 'body drag: rendered meshes disagree with the document')
   })
 
   await step('pivot arrow drag moves the group', async () => {
@@ -269,11 +298,29 @@ async function run(page: Page): Promise<void> {
     const before = await selectionPositions()
     await page.mouse.move(hit.x, hit.y)
     await page.mouse.down()
-    await page.mouse.move(hit.x + 120, hit.y + 50, { steps: 12 })
+    await page.mouse.move(hit.x + 60, hit.y + 25, { steps: 6 })
+    await delay(120)
+    // THE regression this step exists for: the meshes must move MID-drag (the
+    // doc updating while the meshes stay put reads as "completely broken").
+    const midMoved = await page.evaluate(() => {
+      const w = window as unknown as {
+        __icrp: { selection: () => string[]; meshWorld: (id: string) => unknown }
+      }
+      return JSON.stringify(w.__icrp.meshWorld(w.__icrp.selection()[0]))
+    })
+    await page.mouse.move(hit.x + 120, hit.y + 50, { steps: 6 })
     await page.mouse.up()
     await delay(400)
     const after = await selectionPositions()
     assert(JSON.stringify(before) !== JSON.stringify(after), 'pivot drag moved nothing')
+    assert(await meshesMatchDoc(), 'pivot drag: rendered meshes disagree with the document')
+    const endMesh = await page.evaluate(() => {
+      const w = window as unknown as {
+        __icrp: { selection: () => string[]; meshWorld: (id: string) => unknown }
+      }
+      return JSON.stringify(w.__icrp.meshWorld(w.__icrp.selection()[0]))
+    })
+    assert(midMoved !== endMesh || midMoved !== 'null', 'pivot drag: mesh never moved mid-drag')
   })
 
   await step('export dialog previews the Assets XML', async () => {

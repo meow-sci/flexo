@@ -36,6 +36,7 @@ import {
   endGesture,
   getPlacement,
   setPlacementTransform,
+  setPlacementTransformsBatch,
   transformPlacements,
 } from '../state/docStore';
 import { $pieceIndex } from '../state/catalogStore';
@@ -138,9 +139,12 @@ export class StaticScene {
             if ($tool.get() === 'scale' && $keepGrounded.get()) this.regroundScaled();
             this.bottomsAtDragStart = null;
             endGesture();
-            // A pivot drag leaves the pivot translated/rotated/scaled; re-center
-            // it (and reset its scale) so the NEXT drag starts from identity.
+            // Converge: every mesh takes the document transform exactly (the
+            // single-select echo-skip ends here), THEN re-center the pivot so
+            // the next drag starts from identity.
+            this.reconcile();
             this.applySelection();
+            this.viewport.invalidate();
           }
         },
       },
@@ -498,9 +502,18 @@ export class StaticScene {
     this.applySelection();
   }
 
+  /**
+   * Should reconcile SKIP writing the doc transform back onto this placement's
+   * mesh right now? ONLY for the single-select TransformControls drag, where
+   * the gizmo moves the MESH directly and a write-back would fight it.
+   *
+   * During a PIVOT drag the gizmo moves only the (invisible) pivot — the doc
+   * write-back IS how the meshes follow. Skipping them here was the
+   * "group drags update nothing until something else teleports it" bug.
+   */
   private isGizmoTarget(instanceId: string): boolean {
+    if (this.gizmoOnPivot) return false;
     const ids = $selection.get();
-    if (this.gizmoOnPivot) return ids.includes(instanceId);
     return ids.length === 1 && ids[0] === instanceId;
   }
 
@@ -575,17 +588,19 @@ export class StaticScene {
     this.pivotStart = { inverse: this.pivot.matrix.clone().invert(), placements };
   }
 
-  /** Streams pivotDelta ∘ startMatrix into each selected placement. */
+  /** Streams pivotDelta ∘ startMatrix into each selected placement (ONE store write). */
   private applyPivotDelta(): void {
     const start = this.pivotStart;
     if (!start) return;
     this.pivot.updateMatrix();
     const delta = this.pivot.matrix.clone().multiply(start.inverse);
     const scratch = new THREE.Matrix4();
+    const updates = new Map<string, Transform>();
     for (const [id, m0] of start.placements) {
       scratch.copy(delta).multiply(m0);
-      setPlacementTransform(id, transformFromMatrix(scratch));
+      updates.set(id, transformFromMatrix(scratch));
     }
+    setPlacementTransformsBatch(updates);
   }
 
   private applySelection(): void {
@@ -746,8 +761,9 @@ export class StaticScene {
       dEast = Math.round(dEast / snap.translateM) * snap.translateM;
       dNorth = Math.round(dNorth / snap.translateM) * snap.translateM;
     }
+    const updates = new Map<string, Transform>();
     for (const [id, start] of drag.starts) {
-      setPlacementTransform(id, {
+      updates.set(id, {
         ...start,
         position: {
           x: start.position.x,
@@ -756,6 +772,7 @@ export class StaticScene {
         },
       });
     }
+    setPlacementTransformsBatch(updates);
   };
 
   private readonly onBodyDragUp = (e: PointerEvent): void => {
@@ -766,7 +783,9 @@ export class StaticScene {
     this.selectionMgr.setSuppressed(false);
     if (drag.moved) {
       endGesture();
+      this.reconcile(); // converge meshes to the doc
       this.applySelection(); // re-center the pivot on the new position
+      this.viewport.invalidate();
     }
   };
 
@@ -792,6 +811,18 @@ export class StaticScene {
   /** Debug/tests: what a click at client coords resolves to. */
   debugPickAt(clientX: number, clientY: number): unknown {
     return this.selectionMgr.pickAt(clientX, clientY);
+  }
+
+  /**
+   * Debug/tests: the RENDERED mesh's world position (three space) for a
+   * placement — what the user actually sees, as opposed to the document.
+   */
+  debugMeshWorld(instanceId: string): { x: number; y: number; z: number } | null {
+    const obj = this.objects.get(instanceId);
+    if (!obj) return null;
+    obj.group.updateMatrixWorld(true);
+    const v = new THREE.Vector3().setFromMatrixPosition(obj.group.matrixWorld);
+    return { x: v.x, y: v.y, z: v.z };
   }
 
   /** Escape ladder rung: cancel an in-flight gizmo OR body drag. */

@@ -228,6 +228,22 @@ export function setPlacementTransform(instanceId: string, transform: Transform):
   }));
 }
 
+/**
+ * Streaming BATCH transform write — ONE store update for a whole group drag
+ * frame (a per-id loop would run the scene reconcile N times per frame).
+ * Callers own the gesture, exactly like {@link setPlacementTransform}.
+ */
+export function setPlacementTransformsBatch(updates: ReadonlyMap<string, Transform>): void {
+  if (updates.size === 0) return;
+  mutateActive((o) => ({
+    ...o,
+    placements: o.placements.map((pl) => {
+      const t = updates.get(pl.instanceId);
+      return t ? { ...pl, transform: t } : pl;
+    }),
+  }));
+}
+
 /** Reads one placement of the active object. */
 export function getPlacement(instanceId: string): Placement | undefined {
   return $activeObject.get().placements.find((pl) => pl.instanceId === instanceId);

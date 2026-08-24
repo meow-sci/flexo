@@ -16,6 +16,7 @@ declare global {
       pivotScreen: () => { x: number; y: number; visible: boolean } | null;
       hoveredAxis: () => string | null;
       pickAt: (clientX: number, clientY: number) => unknown;
+      meshWorld: (id: string) => { x: number; y: number; z: number } | null;
     };
   }
 }
@@ -29,5 +30,6 @@ export function installDebugHandle(): void {
     pivotScreen: () => getScene()?.debugPivotScreen() ?? null,
     hoveredAxis: () => getScene()?.debugHoveredAxis() ?? null,
     pickAt: (clientX: number, clientY: number) => getScene()?.debugPickAt(clientX, clientY),
+    meshWorld: (id: string) => getScene()?.debugMeshWorld(id) ?? null,
   };
 }

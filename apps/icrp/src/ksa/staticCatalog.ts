@@ -33,6 +33,13 @@ export const STATIC_ASSET_FILES = [
 export interface CatalogStaticPiece {
   /** `<StaticSubObject Id>`, e.g. "CoreLaunchPadA_Subpart_FootpathA". */
   id: string;
+  /**
+   * Where the piece comes from (plan D6): 'core-static' = a Core
+   * `<StaticSubObject>` (referenced by id on export, nothing declared);
+   * 'core-subpart' = a Core vessel `<SubPart>` (export declares a NEW
+   * `<StaticSubObject>` referencing the Core mesh/material by id — fact F12).
+   */
+  origin: 'core-static' | 'core-subpart';
   /** URL of the GLB mesh atlas holding the mesh node. */
   atlasUrl: string;
   /** Node name inside the atlas (= `<Mesh Id>`; Core keeps node name == mesh name). */
@@ -182,6 +189,7 @@ export function parseStaticAssetsFile(
       firstChildByTag(partModel, 'Terrain')?.textContent?.trim().toLowerCase() === 'true';
     out.pieces.push({
       id,
+      origin: 'core-static',
       atlasUrl: toUrl(atlasPath),
       meshNodeName: meshId,
       materialId,

@@ -21,7 +21,7 @@ import {
   Copy,
 } from 'lucide-react';
 import { useState } from 'react';
-import { Button, ToggleButton, cn } from '../../../src/ui/kit';
+import { Button, SearchField, ToggleButton, cn } from '../../../src/ui/kit';
 import { NumberField } from '../../../src/ui/NumberField';
 import { Vec3Field } from '../../../src/ui/Vec3Field';
 import {
@@ -46,6 +46,7 @@ import {
   $catalogReady,
   $staticObjects,
   $staticPieces,
+  $vesselPieces,
   ensureStaticCatalogLoaded,
 } from './state/catalogStore';
 import {
@@ -59,6 +60,7 @@ import {
 } from './state/toolStore';
 import { addArrayCopies } from './state/docStore';
 import { gridArray, linearArray, radialArray } from './three/arrays';
+import { ExportDialog } from './ui/ExportDialog';
 import { SceneCanvas } from './three/SceneCanvas';
 import { getScene } from './three/sceneHandle';
 import type { CatalogStaticObject } from './ksa/staticCatalog';
@@ -81,7 +83,7 @@ function ToolButton(props: { tool: Tool; icon: React.ReactNode; label: string })
   );
 }
 
-function Toolbar() {
+function Toolbar({ onExport }: { onExport: () => void }) {
   const depth = useStore($historyDepth);
   const snap = useStore($snap);
   const groundLock = useStore($groundLock);
@@ -184,6 +186,10 @@ function Toolbar() {
       >
         <Circle size={14} />
       </ToggleButton>
+      <div className="flex-1" />
+      <Button size="sm" onPress={onExport}>
+        Export mod…
+      </Button>
     </div>
   );
 }
@@ -218,8 +224,14 @@ function importCatalogObject(obj: CatalogStaticObject): void {
 
 function Library() {
   const pieces = useStore($staticPieces);
+  const vessel = useStore($vesselPieces);
   const objects = useStore($staticObjects);
   const ready = useStore($catalogReady);
+  const [query, setQuery] = useState('');
+  const q = query.trim().toLowerCase();
+  const vesselFiltered = q
+    ? vessel.filter((p) => p.id.toLowerCase().includes(q)).slice(0, 60)
+    : vessel.slice(0, 30);
   return (
     <div className="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-border bg-panel">
       <div className="px-3 pt-3 pb-1 text-xs font-semibold tracking-wide text-fg-muted uppercase">
@@ -257,6 +269,34 @@ function Library() {
           </span>
         </button>
       ))}
+      <div className="px-3 pt-3 pb-1 text-xs font-semibold tracking-wide text-fg-muted uppercase">
+        Vessel parts ({vessel.length})
+      </div>
+      <div className="px-2 pb-1">
+        <SearchField
+          size="sm"
+          aria-label="Search vessel parts"
+          placeholder="Search…"
+          value={query}
+          onChange={setQuery}
+        />
+      </div>
+      {vesselFiltered.map((piece) => (
+        <button
+          key={piece.id}
+          type="button"
+          className="mx-2 rounded px-2 py-1 text-left text-sm text-fg hover:bg-wash-hover"
+          onClick={() => addPlacement(piece.id)}
+        >
+          {piece.id.replace(/^Core[^_]*_Subpart_/, '')}
+          <span className="block text-xs text-fg-subtle">
+            {piece.id.split('_')[0].replace(/^Core/, '')} · {piece.colliders.length} colliders
+          </span>
+        </button>
+      ))}
+      {q === '' && vessel.length > 30 && (
+        <div className="px-3 py-1 text-[11px] text-fg-subtle">Search to see all…</div>
+      )}
     </div>
   );
 }
@@ -501,6 +541,7 @@ function ObjectInspector() {
 }
 
 export function App() {
+  const [exportOpen, setExportOpen] = useState(false);
   useEffect(() => {
     void ensureStaticCatalogLoaded();
     const onKey = (e: KeyboardEvent) => {
@@ -553,7 +594,8 @@ export function App() {
 
   return (
     <div className="flex h-dvh flex-col bg-canvas text-fg">
-      <Toolbar />
+      <Toolbar onExport={() => setExportOpen(true)} />
+      <ExportDialog isOpen={exportOpen} onClose={() => setExportOpen(false)} />
       <div className="flex min-h-0 flex-1">
         <Library />
         <div className={cn('relative min-w-0 flex-1')}>

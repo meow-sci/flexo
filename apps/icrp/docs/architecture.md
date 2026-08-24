@@ -37,7 +37,24 @@ One library, three origins: `core-static` (Core `<StaticSubObject>`s — referen
 export, never re-declared), `core-subpart` (Core vessel `<SubPart>`s — export declares a
 namespaced `<StaticSubObject>` referencing the Core mesh/material **by id**, no binaries;
 fact F12, in-game check [V1]), and `custom` (user GLBs — future work). Vessel parts stack
-along +X, so they stand upright in the static frame unmodified.
+along +X, so they stand upright in the static frame unmodified. Vessel pieces carry BOTH
+collider sets: the geometry-template shapes and the template's `<SubPartGameData>` shapes
+(harvested from the Part catalog — most vessel colliders live there). `<Internal>` interior
+props are included (KSA ignores the flag for statics, F6) but hidden from the browse list
+until searched.
+
+## Stock parts & layers
+
+A stock vessel `<Part>` imports **exploded** into its individual SubPart placements (exactly
+how flexo renders a Part — separate meshes, never merged), targeted into a NEW layer named
+after the part or any existing layer. Layers are editor-only grouping (never exported):
+visibility (hidden = unrendered + unpickable), an active layer for new placements, select-
+contents, move-selection-here. With the multi-select pivot gizmo (attach on >1 selection;
+drags replay the pivot delta onto every selected placement) a layer behaves like a movable
+primitive. PART-level colliders (the tanks' cylinders live under `<PartGameData><Collider>`)
+are localized onto the first imported placement (`three/partImport.ts`) and export composes
+them into the object-level `<Collider>` with the placement's CURRENT transform — collision
+follows wherever the pieces are moved. Scale is never composed (F4/I3).
 
 ## Rendering
 

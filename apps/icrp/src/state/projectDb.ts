@@ -8,6 +8,7 @@
  * with a console notice. Undo history is session-only in v1.
  */
 import { ICRP_PROJECT_SCHEMA_VERSION, type IcrpProjectDoc } from './docStore';
+import { DEFAULT_LAYER_ID, defaultLayer } from '../ksa/types';
 
 const DB_NAME = 'icrp-projects';
 const STORE = 'projects';
@@ -57,5 +58,13 @@ export async function loadProjectSnapshot(): Promise<IcrpProjectDoc | null> {
   if (!Array.isArray(project.objects) || project.objects.length === 0) return null;
   // Additive fields default-fill (constitution: no migrations, no schema bump).
   project.sites = Array.isArray(project.sites) ? project.sites : [];
+  for (const obj of project.objects) {
+    if (!Array.isArray(obj.layers) || obj.layers.length === 0) obj.layers = [defaultLayer()];
+    if (!obj.layers.some((l) => l.id === DEFAULT_LAYER_ID)) obj.layers.unshift(defaultLayer());
+    const layerIds = new Set(obj.layers.map((l) => l.id));
+    for (const pl of obj.placements) {
+      if (!layerIds.has(pl.layerId)) pl.layerId = DEFAULT_LAYER_ID;
+    }
+  }
   return project;
 }

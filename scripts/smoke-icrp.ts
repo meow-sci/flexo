@@ -13,7 +13,8 @@
  *   4. undo — ⌘Z removes it
  *   5. prefab import — opening the Core pad shows 16 placements
  *   6. array — a radial array of 6 on a selected piece grows the count
- *   7. export — the dialog opens, the Assets preview contains <StaticObject>
+ *   7. stock part import — a searched Part explodes into placements on a new layer
+ *   8. export — the dialog opens, the Assets preview contains <StaticObject>
  *
  * RUNTIME: vanilla Node 24+ (`node scripts/smoke-icrp.ts`) with the project-local
  * playwright devDependency.
@@ -116,6 +117,18 @@ async function run(page: Page): Promise<void> {
     await page.getByRole('button', { name: 'Apply array' }).click()
     await delay(500)
     assert((await placementCount(page)) === before + 5, 'radial array did not add 5 copies')
+  })
+
+  await step('stock part import explodes onto a new layer', async () => {
+    const before = await placementCount(page)
+    await page.getByRole('searchbox', { name: 'Search stock parts' }).fill('LF1W1HA')
+    await delay(300)
+    await page.locator('button', { hasText: /LF1W1HA/ }).first().click()
+    await delay(1500)
+    assert((await placementCount(page)) > before, 'part import added no placements')
+    await page.getByRole('button', { name: /Select contents of LF1W1HA/ }).waitFor({
+      timeout: 5_000,
+    })
   })
 
   await step('export dialog previews the Assets XML', async () => {

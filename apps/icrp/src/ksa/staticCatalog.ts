@@ -52,6 +52,12 @@ export interface CatalogStaticPiece {
   alphaUrl?: string;
   /** `<PartModel><Terrain>true</Terrain>` — the game swaps in the planet-ground look. */
   terrain: boolean;
+  /**
+   * The vessel `<Internal>` flag (interior/IVA prop). KSA IGNORES it for
+   * statics (fact F6) — the mesh renders — so these are legitimate pieces; the
+   * library merely badges them and keeps them out of the unsearched list.
+   */
+  internal?: boolean;
   /** Colliders authored on the piece (`ownerTemplateId` = the piece id). */
   colliders: PartCollider[];
   sourceFile: string;

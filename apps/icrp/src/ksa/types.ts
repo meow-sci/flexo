@@ -35,6 +35,20 @@ export type PieceSource =
   /** A user-imported GLB mesh + material bundled into the mod (P5). */
   | { kind: 'custom'; customMeshId: string; materialId: string };
 
+/** An editor-only grouping layer (never exported — KSA XML has no layers). */
+export interface LayerDef {
+  id: string;
+  name: string;
+  /** Hidden layers render nothing and are unpickable (view state, not undo-enrolled). */
+  visible: boolean;
+}
+
+export const DEFAULT_LAYER_ID = 'default';
+
+export function defaultLayer(): LayerDef {
+  return { id: DEFAULT_LAYER_ID, name: 'Default', visible: true };
+}
+
 /**
  * One placement of a piece inside a static object — exported as
  * `<SubObject Id InstanceOf><Transform/></SubObject>` (plan fact F3).
@@ -47,6 +61,15 @@ export interface Placement {
   /** KSA-frame transform. NOTE: `scale` applies to visuals only, never colliders (F4). */
   transform: Transform;
   layerId: string;
+  /**
+   * Placement-owned colliders, LOCAL to this placement's frame (scale = size in
+   * metres). Used by stock-part imports whose collision volume is authored
+   * PART-level (tanks!): the part colliders are localized onto one anchor
+   * placement so they follow it, and export composes them into the object-level
+   * `<Collider>` (a StaticSubObject template is shared — per-placement shapes
+   * cannot live there).
+   */
+  colliders?: PartCollider[];
 }
 
 /** One `<StaticObject>` (+ its `<StaticObjectGameData>` metres) — plan §0.5. */
@@ -55,6 +78,8 @@ export interface StaticObjectDoc {
   id: string;
   /** Editor display name (never exported). */
   name: string;
+  /** Grouping layers (always ≥ 1: the Default layer). */
+  layers: LayerDef[];
   placements: Placement[];
   /** Object-level colliders (Core's prefab-level `<Collider Id="Collider1">`). */
   objectColliders: PartCollider[];
@@ -69,6 +94,7 @@ export function createStaticObjectDoc(id: string, name: string): StaticObjectDoc
   return {
     id,
     name,
+    layers: [defaultLayer()],
     placements: [],
     objectColliders: [],
     groundOffsetM: null,

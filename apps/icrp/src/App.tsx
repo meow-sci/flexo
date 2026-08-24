@@ -48,11 +48,17 @@ import {
 } from './state/docStore';
 import {
   $catalogReady,
+  $pieceIndex,
   $staticObjects,
   $staticPieces,
+  $stockParts,
   $vesselPieces,
   ensureStaticCatalogLoaded,
 } from './state/catalogStore';
+import { $activeLayerId, importStockPart } from './state/docStore';
+import { preparePartImport } from './three/partImport';
+import { LayersPanel } from './ui/LayersPanel';
+import type { CatalogPart } from '../../../src/ksa/partCatalog';
 import {
   $groundLock,
   $overlaysVisible,
@@ -69,6 +75,7 @@ import { SitesPanel } from './ui/SitesPanel';
 import { SceneCanvas } from './three/SceneCanvas';
 import { getScene } from './three/sceneHandle';
 import type { CatalogStaticObject } from './ksa/staticCatalog';
+import { defaultLayer } from './ksa/types';
 import { randomId } from '../../../src/state/ids';
 
 const RAD2DEG = 180 / Math.PI;
@@ -208,6 +215,7 @@ function importCatalogObject(obj: CatalogStaticObject): void {
       {
         id: `icrp_object_${randomId().slice(0, 8)}`,
         name: obj.id,
+        layers: [defaultLayer()],
         placements: obj.placements.map((pl) => ({
           instanceId: pl.instanceId,
           pieceId: pl.instanceOf,
@@ -228,6 +236,92 @@ function importCatalogObject(obj: CatalogStaticObject): void {
   setTimeout(() => getScene()?.frameAll(), 300);
 }
 
+/** Imports a stock Part exploded into SubPart placements, reporting skips. */
+function runStockPartImport(part: CatalogPart, targetLayerId: string): void {
+  const index = $pieceIndex.get();
+  const pieceExists = (pieceId: string) => index.has(pieceId);
+  // Part-level colliders (tanks!) are localized onto the first placement so
+  // they follow it; template-owned ones already ride the piece templates.
+  const prepared = preparePartImport(part, pieceExists);
+  const result = importStockPart(
+    part,
+    targetLayerId === '__new__' ? { kind: 'new' } : { kind: 'existing', layerId: targetLayerId },
+    pieceExists,
+    prepared.anchorColliders,
+  );
+  if (result.skippedTemplates.length > 0 || prepared.droppedPartColliders > 0) {
+    console.warn(
+      `icrp import ${part.id}: skipped ${result.skippedTemplates.length} template(s) ` +
+        `(no mesh/material piece) [${result.skippedTemplates.join(', ')}]; dropped ` +
+        `${prepared.droppedPartColliders} part-level collider(s) (no importable placement).`,
+    );
+  }
+}
+
+function StockPartsSection() {
+  const parts = useStore($stockParts);
+  const activeObject = useStore($activeObject);
+  useStore($activeLayerId);
+  const [query, setQuery] = useState('');
+  const [target, setTarget] = useState('__new__');
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? parts
+        .filter(
+          (p) =>
+            p.id.toLowerCase().includes(q) || p.editorTags.some((t) => t.toLowerCase().includes(q)),
+        )
+        .slice(0, 60)
+    : parts.slice(0, 20);
+  const targetValid = target === '__new__' || activeObject.layers.some((l) => l.id === target);
+  return (
+    <>
+      <div className="px-3 pt-3 pb-1 text-xs font-semibold tracking-wide text-fg-muted uppercase">
+        Stock parts ({parts.length})
+      </div>
+      <div className="flex flex-col gap-1 px-2 pb-1">
+        <SearchField
+          size="sm"
+          aria-label="Search stock parts"
+          placeholder="Search parts…"
+          value={query}
+          onChange={setQuery}
+        />
+        <select
+          aria-label="Import into layer"
+          className="rounded border border-border bg-panel-sunken px-1.5 py-1 text-xs text-fg"
+          value={targetValid ? target : '__new__'}
+          onChange={(e) => setTarget(e.target.value)}
+        >
+          <option value="__new__">→ new layer (named after the part)</option>
+          {activeObject.layers.map((l) => (
+            <option key={l.id} value={l.id}>
+              → {l.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      {filtered.map((part) => (
+        <button
+          key={part.id}
+          type="button"
+          className="mx-2 rounded px-2 py-1 text-left text-sm text-fg hover:bg-wash-hover"
+          onClick={() => runStockPartImport(part, targetValid ? target : '__new__')}
+        >
+          {part.id.replace(/^Core[^_]*_Prefab_/, '')}
+          <span className="block text-xs text-fg-subtle">
+            {part.editorTags[0] ?? part.id.split('_')[0].replace(/^Core/, '')} ·{' '}
+            {part.placements.length} pieces
+          </span>
+        </button>
+      ))}
+      {q === '' && parts.length > 20 && (
+        <div className="px-3 py-1 text-[11px] text-fg-subtle">Search to see all…</div>
+      )}
+    </>
+  );
+}
+
 function Library() {
   const pieces = useStore($staticPieces);
   const vessel = useStore($vesselPieces);
@@ -235,9 +329,11 @@ function Library() {
   const ready = useStore($catalogReady);
   const [query, setQuery] = useState('');
   const q = query.trim().toLowerCase();
+  // Interior (IVA) props render fine as statics (fact F6) but only clutter a
+  // browse list — they surface via search.
   const vesselFiltered = q
     ? vessel.filter((p) => p.id.toLowerCase().includes(q)).slice(0, 60)
-    : vessel.slice(0, 30);
+    : vessel.filter((p) => !p.internal).slice(0, 30);
   return (
     <div className="flex w-64 shrink-0 flex-col overflow-y-auto border-r border-border bg-panel">
       <div className="px-3 pt-3 pb-1 text-xs font-semibold tracking-wide text-fg-muted uppercase">
@@ -296,13 +392,15 @@ function Library() {
         >
           {piece.id.replace(/^Core[^_]*_Subpart_/, '')}
           <span className="block text-xs text-fg-subtle">
-            {piece.id.split('_')[0].replace(/^Core/, '')} · {piece.colliders.length} colliders
+            {piece.id.split('_')[0].replace(/^Core/, '')}
+            {piece.internal ? ' · interior' : ''} · {piece.colliders.length} colliders
           </span>
         </button>
       ))}
       {q === '' && vessel.length > 30 && (
         <div className="px-3 py-1 text-[11px] text-fg-subtle">Search to see all…</div>
       )}
+      <StockPartsSection />
     </div>
   );
 }
@@ -688,6 +786,7 @@ export function App() {
             Selection
           </div>
           <SelectionInspector />
+          <LayersPanel />
           <ObjectInspector />
           <ObjectSwitcher />
           <SitesPanel />

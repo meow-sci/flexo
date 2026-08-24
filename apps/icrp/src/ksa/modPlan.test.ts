@@ -25,6 +25,7 @@ function project(overrides: Partial<IcrpProjectDoc> = {}): IcrpProjectDoc {
       {
         id: 'icrp_object_1',
         name: 'Pad',
+        layers: [{ id: 'default', name: 'Default', visible: true }],
         placements: [
           {
             instanceId: 'a1',
@@ -130,6 +131,34 @@ describe('buildModPlan', () => {
     p.objects[0].placements = [p.objects[0].placements[1]]; // only the collider-less tank
     const plan = buildModPlan(p, INDEX);
     expect(plan.issues.some((i) => i.message.includes('fall through'))).toBe(true);
+  });
+
+  it('composes placement-owned colliders into object-level shapes with the placement pose', () => {
+    const p = project();
+    p.objects[0].placements[0].transform = {
+      position: { x: 1, y: 2, z: 3 },
+      rotation: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+    };
+    p.objects[0].placements[0].colliders = [
+      {
+        id: 'CylinderCollider1',
+        shape: 'Cylinder',
+        ownerTemplateId: null,
+        position: { x: 0.5, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 2, z: 1 },
+        layerId: 'default',
+      },
+    ];
+    const plan = buildModPlan(p, INDEX);
+    const assets = plan.files.find((f) => f.path === 'MyPadAssets.xml')!.data;
+    // Object-level <Collider Id="Collider1"> holds the composed shape at 1.5/2/3.
+    const objBlock = /<StaticObject Id="icrp_object_1">[\s\S]*?<\/StaticObject>/.exec(assets)![0];
+    expect(objBlock).toContain('<Collider Id="Collider1">');
+    expect(objBlock).toContain('<Cylinder Id="a1_CylinderCollider10">');
+    expect(objBlock).toContain('<LocationAsmb X="1.5" Y="2" Z="3"/>');
+    expect(objBlock).toContain('<LengthY M="2"/>');
   });
 
   it('extend-stock-pad: one GameData append targeting the Core prefab (fact L3)', () => {

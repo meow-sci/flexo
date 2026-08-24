@@ -13,6 +13,7 @@
  * (fact F12) — no binaries ship. Pure module: no stores, no three.
  */
 import { sanitizeBaseName } from '../../../../src/ksa/modExport';
+import { colliderWorld } from '../../../../src/three/coords';
 import type { CatalogStaticPiece } from './staticCatalog';
 import type { IcrpProjectDoc } from '../state/docStore';
 import {
@@ -137,7 +138,8 @@ export function buildModPlan(
 
     // I4: an object with zero colliders anywhere = vessels fall through.
     const pieceColliders = obj.placements.some(
-      (pl) => (pieceIndex.get(pl.pieceId)?.colliders.length ?? 0) > 0,
+      (pl) =>
+        (pieceIndex.get(pl.pieceId)?.colliders.length ?? 0) > 0 || (pl.colliders?.length ?? 0) > 0,
     );
     if (!pieceColliders && obj.objectColliders.length === 0 && obj.placements.length > 0) {
       issues.push({
@@ -170,6 +172,25 @@ export function buildModPlan(
       });
     }
 
+    // Placement-owned colliders (part-level shapes from stock-part imports)
+    // compose into the object-level <Collider> with the placement's CURRENT
+    // transform — they follow the piece wherever it was moved. Scale is never
+    // composed (KSA, fact F4/I3): the collider's own scale IS its size.
+    const placementColliders = obj.placements.flatMap((pl) =>
+      (pl.colliders ?? []).map((c, i) => {
+        const world = colliderWorld(
+          { position: c.position, rotation: c.rotation, scale: c.scale },
+          pl.transform,
+        );
+        return {
+          ...c,
+          id: `${pl.instanceId}_${c.id}${i}`,
+          position: world.position,
+          rotation: world.rotation,
+        };
+      }),
+    );
+
     objectPlans.push({
       id: obj.id,
       placements: obj.placements.map((pl) => ({
@@ -177,7 +198,7 @@ export function buildModPlan(
         instanceOf: instanceOf.get(pl.pieceId) ?? pl.pieceId,
         transform: pl.transform,
       })),
-      colliders: obj.objectColliders,
+      colliders: [...obj.objectColliders, ...placementColliders],
     });
     gameDataPlans.push({
       id: obj.id,
@@ -312,6 +333,18 @@ function objectPlansToStockGameData(
         instanceOf: instanceOf.get(pl.pieceId) ?? pl.pieceId,
         transform: pl.transform,
       });
+      for (const [i, c] of (pl.colliders ?? []).entries()) {
+        const world = colliderWorld(
+          { position: c.position, rotation: c.rotation, scale: c.scale },
+          pl.transform,
+        );
+        colliders.push({
+          ...c,
+          id: `${instanceId}_${c.id}${i}`,
+          position: world.position,
+          rotation: world.rotation,
+        });
+      }
     }
     colliders.push(...obj.objectColliders);
     groundOffsetM ??= obj.groundOffsetM;

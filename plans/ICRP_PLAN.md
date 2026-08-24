@@ -226,6 +226,15 @@ all green; browser-verified renders/exports):
 | P8 | ✅ zip export + preflight + previews + extend-stock-pad mode; **mods-folder direct write deferred** ([V] runbook in `apps/icrp/VERIFICATION.md`) |
 | P9 | ✅ scope docs (static-objects/launch-sites + FULL_SCOPE rows + checklist step), app docs, smoke test; **menubar/⌘K palette/hotkey registry/phone layout deferred** (plain toolbar + ad-hoc hotkeys shipped) |
 
+Post-v1 additions (2026-08-24, user-requested): **stock `<Part>` import** — the flexo Part
+catalog (170 prefabs) imports exploded into individual SubPart placements targeting a new
+or existing **layer** (full layer system: visibility/active/select-contents/move-here;
+editor-only, never exported), with a **multi-select pivot gizmo** so an imported part moves
+as a unit; PART-level colliders (tanks) are localized onto an anchor placement and export
+composes them into object-level shapes with the placement's current transform; vessel
+pieces now also carry their `<SubPartGameData>` colliders (harvested via the Part catalog —
+they were silently missing before), and `<Internal>` props became importable pieces (F6).
+
 In-game checks [V1]–[V6] remain open (require a human with the game).
 
 ### 0.9 Phase map

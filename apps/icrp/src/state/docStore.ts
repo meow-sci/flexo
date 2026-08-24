@@ -15,7 +15,9 @@ import { atom, computed } from 'nanostores';
 import { randomId } from '../../../../src/state/ids';
 import {
   createStaticObjectDoc,
+  DEFAULT_LAYER_ID,
   identityTransform,
+  type LayerDef,
   type Placement,
   type StaticObjectDoc,
   type Transform,
@@ -24,7 +26,7 @@ import { defaultDecal, type Site } from '../ksa/siteTypes';
 
 export const ICRP_PROJECT_SCHEMA_VERSION = 1;
 
-export const DEFAULT_LAYER_ID = 'default';
+export { DEFAULT_LAYER_ID };
 
 export interface IcrpProjectDoc {
   schemaVersion: typeof ICRP_PROJECT_SCHEMA_VERSION;
@@ -56,6 +58,16 @@ export const $activeObject = computed($project, (p) => {
 
 /** Selected placement instanceIds (active object only). */
 export const $selection = atom<string[]>([]);
+
+/** The layer new placements land in (session state; clamped on object switch). */
+export const $activeLayerId = atom<string>(DEFAULT_LAYER_ID);
+
+function clampActiveLayer(): void {
+  const layers = $activeObject.get().layers;
+  if (!layers.some((l) => l.id === $activeLayerId.get())) {
+    $activeLayerId.set(DEFAULT_LAYER_ID);
+  }
+}
 
 // --- Undo/redo -----------------------------------------------------------------
 
@@ -162,11 +174,12 @@ function clampSelection(): void {
 export function addPlacement(pieceId: string, transform?: Transform): string {
   pushUndo('Add piece');
   const instanceId = `${pieceId.replace(/^.*_Subpart_/, '').toLowerCase()}_${randomId().slice(0, 8)}`;
+  clampActiveLayer();
   const placement: Placement = {
     instanceId,
     pieceId,
     transform: transform ?? identityTransform(),
-    layerId: DEFAULT_LAYER_ID,
+    layerId: $activeLayerId.get(),
   };
   mutateActive((o) => ({ ...o, placements: [...o.placements, placement] }));
   $selection.set([instanceId]);
@@ -286,6 +299,7 @@ export function switchObject(objectId: string): void {
   if (!p.objects.some((o) => o.id === objectId) || p.activeObjectId === objectId) return;
   $project.set({ ...p, activeObjectId: objectId });
   $selection.set([]);
+  clampActiveLayer();
 }
 
 export function removeObject(objectId: string): void {
@@ -341,4 +355,157 @@ export function removeSite(siteId: string): void {
   pushUndo('Delete site');
   const p = $project.get();
   $project.set({ ...p, sites: p.sites.filter((s) => s.id !== siteId) });
+}
+
+// --- Layers (editor-only grouping; never exported) ------------------------------
+
+export function addLayer(name: string): string {
+  pushUndo('New layer');
+  const layer: LayerDef = { id: `layer_${randomId().slice(0, 8)}`, name, visible: true };
+  mutateActive((o) => ({ ...o, layers: [...o.layers, layer] }));
+  $activeLayerId.set(layer.id);
+  return layer.id;
+}
+
+export function renameLayer(layerId: string, name: string): void {
+  pushUndo('Rename layer');
+  mutateActive((o) => ({
+    ...o,
+    layers: o.layers.map((l) => (l.id === layerId ? { ...l, name } : l)),
+  }));
+}
+
+/** Deletes a layer; its placements move to Default. The Default layer is permanent. */
+export function removeLayer(layerId: string): void {
+  if (layerId === DEFAULT_LAYER_ID) return;
+  pushUndo('Delete layer');
+  mutateActive((o) => ({
+    ...o,
+    layers: o.layers.filter((l) => l.id !== layerId),
+    placements: o.placements.map((pl) =>
+      pl.layerId === layerId ? { ...pl, layerId: DEFAULT_LAYER_ID } : pl,
+    ),
+  }));
+  clampActiveLayer();
+}
+
+/** Visibility is view state — mutates the doc (it persists) but is NOT an undo step. */
+export function setLayerVisible(layerId: string, visible: boolean): void {
+  mutateActive((o) => ({
+    ...o,
+    layers: o.layers.map((l) => (l.id === layerId ? { ...l, visible } : l)),
+  }));
+  // A hidden layer's placements can no longer be selected.
+  if (!visible) {
+    const hidden = new Set(
+      $activeObject
+        .get()
+        .placements.filter((pl) => pl.layerId === layerId)
+        .map((pl) => pl.instanceId),
+    );
+    $selection.set($selection.get().filter((id) => !hidden.has(id)));
+  }
+}
+
+/** Moves placements onto a layer (one undo step). */
+export function setPlacementsLayer(instanceIds: readonly string[], layerId: string): void {
+  if (instanceIds.length === 0) return;
+  pushUndo('Move to layer');
+  const ids = new Set(instanceIds);
+  mutateActive((o) => ({
+    ...o,
+    placements: o.placements.map((pl) => (ids.has(pl.instanceId) ? { ...pl, layerId } : pl)),
+  }));
+}
+
+/** Selects every (visible-layer) placement of a layer. */
+export function selectLayerContents(layerId: string): void {
+  $selection.set(
+    $activeObject
+      .get()
+      .placements.filter((pl) => pl.layerId === layerId)
+      .map((pl) => pl.instanceId),
+  );
+}
+
+// --- Stock-part import (plan follow-up: Parts as reusable primitives) -----------
+
+export interface StockPartImportResult {
+  imported: string[];
+  /** SubPart template ids skipped because no piece exists for them (no mesh/material). */
+  skippedTemplates: string[];
+  /** Part-level colliders dropped (they have no piece to ride; see the import UI note). */
+  droppedPartColliders: number;
+  layerId: string;
+}
+
+/**
+ * Imports a stock vessel `<Part>` as its individual SubPart placements (kept as
+ * separate pieces, exactly like flexo renders a Part) into a NEW layer named
+ * after the part or an existing one. One undo step; the copies are selected so
+ * the multi-select gizmo can move the whole part as a unit.
+ */
+export function importStockPart(
+  part: {
+    id: string;
+    placements: readonly {
+      instanceId: string;
+      subPartTemplateId: string;
+      position: Transform['position'];
+      rotation: Transform['rotation'];
+      scale: Transform['scale'];
+    }[];
+  },
+  target: { kind: 'new' } | { kind: 'existing'; layerId: string },
+  pieceExists: (pieceId: string) => boolean,
+  /**
+   * The part's PART-level colliders, already LOCALIZED into the frame of the
+   * first importable placement (see `three/partImport.ts` — the localization
+   * needs quaternion math, which stays out of state/).
+   */
+  anchorColliders?: readonly import('../ksa/types').PartCollider[],
+): StockPartImportResult {
+  pushUndo('Import part');
+
+  let layerId: string;
+  if (target.kind === 'new') {
+    // Short display name: "CoreFuelTankA_Prefab_LF1W1HA" → "LF1W1HA".
+    const name = part.id.replace(/^.*_Prefab_/, '') || part.id;
+    const layer: LayerDef = { id: `layer_${randomId().slice(0, 8)}`, name, visible: true };
+    mutateActive((o) => ({ ...o, layers: [...o.layers, layer] }));
+    layerId = layer.id;
+  } else {
+    layerId = target.layerId;
+  }
+  $activeLayerId.set(layerId);
+
+  const copies: Placement[] = [];
+  const skipped = new Set<string>();
+  for (const pl of part.placements) {
+    if (!pieceExists(pl.subPartTemplateId)) {
+      skipped.add(pl.subPartTemplateId);
+      continue;
+    }
+    copies.push({
+      instanceId: `${pl.instanceId}_${randomId().slice(0, 8)}`,
+      pieceId: pl.subPartTemplateId,
+      transform: {
+        position: { ...pl.position },
+        rotation: { ...pl.rotation },
+        scale: { ...pl.scale },
+      },
+      layerId,
+    });
+  }
+  if (copies.length > 0 && anchorColliders && anchorColliders.length > 0) {
+    copies[0].colliders = structuredClone(anchorColliders) as Placement['colliders'];
+  }
+  mutateActive((o) => ({ ...o, placements: [...o.placements, ...copies] }));
+  $selection.set(copies.map((c) => c.instanceId));
+  return {
+    imported: copies.map((c) => c.instanceId),
+    skippedTemplates: [...skipped],
+    droppedPartColliders: copies.length === 0 && anchorColliders ? anchorColliders.length : 0,
+    layerId,
+  };
 }

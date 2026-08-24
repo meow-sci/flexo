@@ -62,6 +62,23 @@ export class PieceObject {
     applyPlacement(this.group, placement.transform);
   }
 
+  /** Layer visibility: hides the group AND makes it unpickable (raycast noop). */
+  setVisible(visible: boolean): void {
+    if (this.group.visible === visible) return;
+    this.group.visible = visible;
+    const mesh = this.group.children[0] as THREE.Mesh | undefined;
+    if (mesh) {
+      if (visible) {
+        if (this.savedRaycast) mesh.raycast = this.savedRaycast;
+      } else {
+        this.savedRaycast = mesh.raycast;
+        mesh.raycast = () => {};
+      }
+    }
+  }
+
+  private savedRaycast: THREE.Mesh['raycast'] | null = null;
+
   setSelected(selected: boolean): void {
     if (selected) {
       this.material.emissive.copy(SELECT_EMISSIVE);

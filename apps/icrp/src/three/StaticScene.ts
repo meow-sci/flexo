@@ -22,7 +22,11 @@ import { PieceObject } from './PieceObject';
 import { IcrpGizmo, type GizmoMode } from './IcrpGizmo';
 import { applyStaticBasis } from './basis';
 import { SelectionManager } from '../../../../src/three/SelectionManager';
-import { readPlacementTransform } from '../../../../src/three/coords';
+import {
+  matrixFromTransform,
+  readPlacementTransform,
+  transformFromMatrix,
+} from '../../../../src/three/coords';
 import { ksaToThree } from './basis';
 import {
   $activeObject,
@@ -51,6 +55,12 @@ export class StaticScene {
   private readonly objects = new Map<string, PieceObject>();
   private readonly unsubs: Array<() => void> = [];
   private disposed = false;
+  private readonly pivot = new THREE.Object3D();
+  private gizmoOnPivot = false;
+  private pivotStart: {
+    inverse: THREE.Matrix4;
+    placements: Map<string, THREE.Matrix4>;
+  } | null = null;
 
   constructor(host: HTMLElement) {
     this.viewport = new IcrpViewport(host);
@@ -101,6 +111,10 @@ export class StaticScene {
       {
         onDragStart: () => beginGesture('Transform'),
         onChange: (obj) => {
+          if (obj === this.pivot) {
+            this.applyPivotDelta();
+            return;
+          }
           // Parent is the basis root, so the read-back is KSA-frame numbers.
           const id = (obj.userData.selectable as { id: string } | undefined)?.id;
           if (!id) return;
@@ -109,10 +123,21 @@ export class StaticScene {
         },
         onDraggingChanged: (dragging) => {
           this.selectionMgr.setSuppressed(dragging);
-          if (!dragging) endGesture();
+          if (dragging && this.gizmoOnPivot) this.capturePivotStart();
+          if (!dragging) {
+            this.pivotStart = null;
+            endGesture();
+          }
         },
       },
     );
+
+    // Multi-select pivot: an invisible handle at the selection centroid the
+    // gizmo attaches to; drags replay the pivot's delta onto every selected
+    // placement (translate + rotate-about-pivot). Child of the basis root, so
+    // its local transform is KSA-frame like everything else.
+    this.pivot.name = 'multi-select-pivot';
+    this.root.add(this.pivot);
 
     // --- Store subscriptions (invalidate-after-callback, flexo's sub() idiom) ---
     this.sub($activeObject, () => this.reconcile());
@@ -415,10 +440,13 @@ export class StaticScene {
       }
     }
 
+    const layerVisible = new Map(doc.layers.map((l) => [l.id, l.visible]));
+
     // Update survivors, create newcomers.
     for (const pl of doc.placements) {
       const existing = this.objects.get(pl.instanceId);
       if (existing) {
+        existing.setVisible(layerVisible.get(pl.layerId) ?? true);
         // Skip the write-back echo of the object currently being dragged: the
         // gizmo owns its transform mid-drag, and re-applying identical numbers
         // each frame would fight TransformControls.
@@ -440,6 +468,8 @@ export class StaticScene {
         if (stale) stale.dispose();
         this.objects.set(obj.instanceId, obj);
         obj.applyTransform(current);
+        const visible = $activeObject.get().layers.find((l) => l.id === current.layerId)?.visible;
+        obj.setVisible(visible ?? true);
         this.root.add(obj.group);
         this.applySelection();
         this.viewport.invalidate();
@@ -451,18 +481,68 @@ export class StaticScene {
 
   private isGizmoTarget(instanceId: string): boolean {
     const ids = $selection.get();
+    if (this.gizmoOnPivot) return ids.includes(instanceId);
     return ids.length === 1 && ids[0] === instanceId;
+  }
+
+  /** Snapshot at drag start: pivot pose + every selected placement's matrix. */
+  private capturePivotStart(): void {
+    this.pivot.updateMatrix();
+    const placements = new Map<string, THREE.Matrix4>();
+    for (const id of $selection.get()) {
+      const pl = getPlacement(id);
+      if (pl) placements.set(id, matrixFromTransform(pl.transform));
+    }
+    this.pivotStart = { inverse: this.pivot.matrix.clone().invert(), placements };
+  }
+
+  /** Streams pivotDelta ∘ startMatrix into each selected placement. */
+  private applyPivotDelta(): void {
+    const start = this.pivotStart;
+    if (!start) return;
+    this.pivot.updateMatrix();
+    const delta = this.pivot.matrix.clone().multiply(start.inverse);
+    const scratch = new THREE.Matrix4();
+    for (const [id, m0] of start.placements) {
+      scratch.copy(delta).multiply(m0);
+      setPlacementTransform(id, transformFromMatrix(scratch));
+    }
   }
 
   private applySelection(): void {
     const ids = new Set($selection.get());
     for (const [id, obj] of this.objects) obj.setSelected(ids.has(id));
+    if (this.gizmo.isDragging) return;
 
-    // Gizmo: attach on single selection (multi-select transform lands with P4).
-    const single = ids.size === 1 ? this.objects.get([...ids][0]) : undefined;
-    if (!this.gizmo.isDragging) {
+    if (ids.size === 1) {
+      const single = this.objects.get([...ids][0]);
+      this.gizmoOnPivot = false;
       this.gizmo.attach(single && getPlacement(single.instanceId) ? single.group : null);
+      return;
     }
+    if (ids.size > 1 && $tool.get() !== 'select' && $tool.get() !== 'scale') {
+      // Pivot at the selection's three-space centroid, axis-aligned (world
+      // handles); scale is single-select only (colliders never scale, I3).
+      const box = new THREE.Box3();
+      for (const id of ids) {
+        const obj = this.objects.get(id);
+        if (obj) box.expandByObject(obj.group);
+      }
+      if (!box.isEmpty()) {
+        const center = new THREE.Vector3();
+        box.getCenter(center);
+        // three world → the pivot's KSA-frame local (parent is the basis root).
+        this.pivot.position.set(center.y, center.x, -center.z);
+        this.pivot.rotation.set(0, 0, 0);
+        this.pivot.scale.set(1, 1, 1);
+        this.pivot.updateMatrix();
+        this.gizmoOnPivot = true;
+        this.gizmo.attach(this.pivot);
+        return;
+      }
+    }
+    this.gizmoOnPivot = false;
+    this.gizmo.attach(null);
   }
 
   private applyTool(): void {

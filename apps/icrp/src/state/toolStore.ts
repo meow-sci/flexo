@@ -35,3 +35,6 @@ export const $snap = persistentJSON<SnapState>('icrp:snap', {
 export function toggleSnap(): void {
   $snap.set({ ...$snap.get(), enabled: !$snap.get().enabled });
 }
+
+/** Site overlays (footprint disc, clutter/collider rings, spawn plane) visible? */
+export const $overlaysVisible = persistentJSON<boolean>('icrp:overlays', true);

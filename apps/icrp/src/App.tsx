@@ -6,8 +6,11 @@
 import { useEffect } from 'react';
 import { useStore } from '@nanostores/react';
 import {
+  ArrowDownToLine,
+  Circle,
   Frame,
   Grid3x3,
+  Layers,
   Magnet,
   Move,
   MousePointer2,
@@ -17,6 +20,7 @@ import {
   Trash2,
   Copy,
 } from 'lucide-react';
+import { useState } from 'react';
 import { Button, ToggleButton, cn } from '../../../src/ui/kit';
 import { NumberField } from '../../../src/ui/NumberField';
 import { Vec3Field } from '../../../src/ui/Vec3Field';
@@ -44,7 +48,17 @@ import {
   $staticPieces,
   ensureStaticCatalogLoaded,
 } from './state/catalogStore';
-import { $groundLock, $snap, $tool, setTool, toggleSnap, type Tool } from './state/toolStore';
+import {
+  $groundLock,
+  $overlaysVisible,
+  $snap,
+  $tool,
+  setTool,
+  toggleSnap,
+  type Tool,
+} from './state/toolStore';
+import { addArrayCopies } from './state/docStore';
+import { gridArray, linearArray, radialArray } from './three/arrays';
 import { SceneCanvas } from './three/SceneCanvas';
 import { getScene } from './three/sceneHandle';
 import type { CatalogStaticObject } from './ksa/staticCatalog';
@@ -71,6 +85,7 @@ function Toolbar() {
   const depth = useStore($historyDepth);
   const snap = useStore($snap);
   const groundLock = useStore($groundLock);
+  const overlays = useStore($overlaysVisible);
   const selection = useStore($selection);
   return (
     <div className="flex items-center gap-1.5 border-b border-border bg-panel px-2 py-1">
@@ -142,6 +157,33 @@ function Toolbar() {
       >
         <Trash2 size={14} />
       </Button>
+      <div className="mx-1 h-4 w-px bg-border" />
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-label="Drop to ground"
+        isDisabled={selection.length === 0}
+        onPress={() => getScene()?.dropToGround(selection)}
+      >
+        <ArrowDownToLine size={14} />
+      </Button>
+      <Button
+        size="sm"
+        variant="ghost"
+        aria-label="Rest on top"
+        isDisabled={selection.length === 0}
+        onPress={() => getScene()?.restOnTop(selection)}
+      >
+        <Layers size={14} />
+      </Button>
+      <ToggleButton
+        size="sm"
+        aria-label="Site overlays"
+        isSelected={overlays}
+        onChange={() => $overlaysVisible.set(!overlays)}
+      >
+        <Circle size={14} />
+      </ToggleButton>
     </div>
   );
 }
@@ -219,13 +261,160 @@ function Library() {
   );
 }
 
+function AlignPanel() {
+  const axes: Array<{ axis: 'east' | 'north' | 'up'; label: string }> = [
+    { axis: 'east', label: 'East' },
+    { axis: 'north', label: 'North' },
+    { axis: 'up', label: 'Up' },
+  ];
+  return (
+    <div className="flex flex-col gap-1.5 px-3 py-2">
+      <div className="text-xs font-semibold tracking-wide text-fg-muted uppercase">Align</div>
+      {axes.map(({ axis, label }) => (
+        <div key={axis} className="flex items-center gap-1">
+          <span className="w-10 text-xs text-fg-muted">{label}</span>
+          {(['min', 'center', 'max'] as const).map((mode) => (
+            <Button
+              key={mode}
+              size="sm"
+              variant="ghost"
+              onPress={() => getScene()?.alignSelection(axis, mode)}
+            >
+              {mode}
+            </Button>
+          ))}
+        </div>
+      ))}
+      <div className="flex items-center gap-1">
+        <span className="w-10 text-xs text-fg-muted">Spread</span>
+        <Button size="sm" variant="ghost" onPress={() => getScene()?.distributeSelection('east')}>
+          east
+        </Button>
+        <Button size="sm" variant="ghost" onPress={() => getScene()?.distributeSelection('north')}>
+          north
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ArrayPanel({ instanceId }: { instanceId: string }) {
+  const [kind, setKind] = useState<'linear' | 'radial' | 'grid'>('linear');
+  const [count, setCount] = useState(4);
+  const [dEast, setDEast] = useState(5);
+  const [dNorth, setDNorth] = useState(0);
+  const [rows, setRows] = useState(2);
+  const [cols, setCols] = useState(3);
+
+  const apply = () => {
+    const seed = getPlacement(instanceId);
+    if (!seed) return;
+    const transforms =
+      kind === 'linear'
+        ? linearArray(seed.transform, count, { x: 0, y: dEast, z: dNorth })
+        : kind === 'radial'
+          ? radialArray(seed.transform, count, { y: 0, z: 0 })
+          : gridArray(seed.transform, rows, cols, dEast || 5, dNorth || 5);
+    addArrayCopies(instanceId, transforms);
+  };
+
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-border px-3 py-2">
+      <div className="text-xs font-semibold tracking-wide text-fg-muted uppercase">Array</div>
+      <div className="flex items-center gap-1">
+        {(['linear', 'radial', 'grid'] as const).map((k) => (
+          <ToggleButton key={k} size="sm" isSelected={kind === k} onChange={() => setKind(k)}>
+            {k}
+          </ToggleButton>
+        ))}
+      </div>
+      {kind !== 'grid' && (
+        <NumberField
+          label="N"
+          ariaLabel="Total count"
+          value={count}
+          min={2}
+          max={64}
+          step={1}
+          onCommit={(v) => setCount(Math.round(v))}
+        />
+      )}
+      {kind === 'linear' && (
+        <>
+          <NumberField
+            label="E"
+            ariaLabel="East step (m)"
+            value={dEast}
+            step={0.5}
+            onCommit={setDEast}
+          />
+          <NumberField
+            label="N"
+            ariaLabel="North step (m)"
+            value={dNorth}
+            step={0.5}
+            onCommit={setDNorth}
+          />
+        </>
+      )}
+      {kind === 'radial' && (
+        <div className="text-[11px] text-fg-subtle">
+          Copies spin about the object origin (up axis); the seed's offset is the ring radius.
+        </div>
+      )}
+      {kind === 'grid' && (
+        <>
+          <NumberField
+            label="R"
+            ariaLabel="Rows"
+            value={rows}
+            min={1}
+            max={32}
+            step={1}
+            onCommit={(v) => setRows(Math.round(v))}
+          />
+          <NumberField
+            label="C"
+            ariaLabel="Columns"
+            value={cols}
+            min={1}
+            max={32}
+            step={1}
+            onCommit={(v) => setCols(Math.round(v))}
+          />
+          <NumberField
+            label="E"
+            ariaLabel="East spacing (m)"
+            value={dEast}
+            step={0.5}
+            onCommit={setDEast}
+          />
+          <NumberField
+            label="N"
+            ariaLabel="North spacing (m)"
+            value={dNorth}
+            step={0.5}
+            onCommit={setDNorth}
+          />
+        </>
+      )}
+      <Button size="sm" onPress={apply}>
+        Apply array
+      </Button>
+    </div>
+  );
+}
+
 function SelectionInspector() {
   const selection = useStore($selection);
   useStore($activeObject); // re-render on transform writes
   if (selection.length !== 1) {
     return (
-      <div className="px-3 py-2 text-sm text-fg-muted">
-        {selection.length === 0 ? 'Nothing selected' : `${selection.length} selected`}
+      <div>
+        <div className="px-3 py-2 text-sm text-fg-muted">
+          {selection.length === 0 ? 'Nothing selected' : `${selection.length} selected`}
+        </div>
+        {selection.length >= 2 && <AlignPanel />}
       </div>
     );
   }
@@ -271,6 +460,7 @@ function SelectionInspector() {
       <div className="text-[11px] text-fg-subtle">
         Pos axes: X=up · Y=east · Z=north (KSA frame). Scale never affects colliders.
       </div>
+      <ArrayPanel instanceId={placement.instanceId} />
     </div>
   );
 }
@@ -332,6 +522,12 @@ export function App() {
         getScene()?.frameSelection();
       } else if (e.key === 'g') {
         $groundLock.set(!$groundLock.get());
+      } else if (mod && e.key === 'ArrowDown' && e.shiftKey) {
+        e.preventDefault();
+        getScene()?.restOnTop($selection.get());
+      } else if (mod && e.key === 'ArrowDown') {
+        e.preventDefault();
+        getScene()?.dropToGround($selection.get());
       } else if (e.key === 'Escape') {
         if (!getScene()?.cancelDrag()) $selection.set([]);
       } else if (e.key === 'q') {

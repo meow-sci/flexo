@@ -90,6 +90,8 @@ export class IcrpViewport {
     const distance = frameDistance(size, this.camera.fov, this.camera.aspect);
     this.controls.target.copy(center);
     this.camera.position.copy(center).addScaledVector(dir, distance);
+    // Never frame from below the ground plane (a site is always viewed from above).
+    this.camera.position.y = Math.max(this.camera.position.y, distance * 0.25, 3);
     this.camera.lookAt(center);
     this.controls.update();
     this.invalidate();

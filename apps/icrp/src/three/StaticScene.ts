@@ -16,6 +16,7 @@
 import * as THREE from 'three';
 import { IcrpViewport } from './IcrpViewport';
 import { GroundPlane } from './GroundPlane';
+import { FootprintLayer } from './FootprintLayer';
 import { PieceObject } from './PieceObject';
 import { IcrpGizmo, type GizmoMode } from './IcrpGizmo';
 import { applyStaticBasis } from './basis';
@@ -29,9 +30,11 @@ import {
   endGesture,
   getPlacement,
   setPlacementTransform,
+  transformPlacements,
 } from '../state/docStore';
 import { $pieceIndex } from '../state/catalogStore';
-import { $tool, $groundLock, $snap } from '../state/toolStore';
+import { $tool, $groundLock, $snap, $overlaysVisible } from '../state/toolStore';
+import type { Transform } from '../ksa/types';
 
 export class StaticScene {
   readonly viewport: IcrpViewport;
@@ -39,6 +42,7 @@ export class StaticScene {
   /** The basis root: children are placed with raw KSA transforms (I1). */
   private readonly root = new THREE.Group();
   private readonly ground: GroundPlane;
+  private readonly footprints: FootprintLayer;
   private readonly gizmo: IcrpGizmo;
   private readonly selectionMgr: SelectionManager;
   private readonly objects = new Map<string, PieceObject>();
@@ -54,6 +58,9 @@ export class StaticScene {
 
     this.ground = new GroundPlane();
     this.viewport.scene.add(this.ground.group);
+
+    this.footprints = new FootprintLayer();
+    this.viewport.scene.add(this.footprints.group);
 
     this.selectionMgr = new SelectionManager(
       this.viewport.camera,
@@ -108,6 +115,175 @@ export class StaticScene {
     this.sub($tool, () => this.applyTool());
     this.sub($groundLock, () => this.applyTool());
     this.sub($snap, () => this.applySnap());
+    this.sub($activeObject, () => this.applyOverlays());
+    this.sub($overlaysVisible, () => this.applyOverlays());
+  }
+
+  private applyOverlays(): void {
+    const doc = $activeObject.get();
+    this.footprints.update(doc);
+    this.footprints.setVisible($overlaysVisible.get());
+  }
+
+  // --- Ground/stacking commands (plans/ICRP_PLAN.md P4.01) ----------------------
+
+  /** three-space world AABB of one placed piece (parented under the basis root). */
+  private worldBox(id: string): THREE.Box3 | null {
+    const obj = this.objects.get(id);
+    if (!obj) return null;
+    return new THREE.Box3().expandByObject(obj.group);
+  }
+
+  /**
+   * Applies a three-space vertical lift `dy` to a placement as a KSA up delta
+   * (three +Y == KSA +X, see basis.ts).
+   */
+  private liftedTransform(id: string, dy: number): Transform | null {
+    const pl = getPlacement(id);
+    if (!pl) return null;
+    return {
+      ...pl.transform,
+      position: { ...pl.transform.position, x: pl.transform.position.x + dy },
+    };
+  }
+
+  /** Drop to ground: each selected piece's AABB bottom lands on three Y=0. */
+  dropToGround(ids: readonly string[]): void {
+    const updates = new Map<string, Transform>();
+    for (const id of ids) {
+      const box = this.worldBox(id);
+      if (!box || box.isEmpty()) continue;
+      const t = this.liftedTransform(id, -box.min.y);
+      if (t) updates.set(id, t);
+    }
+    transformPlacements('Drop to ground', updates);
+  }
+
+  /**
+   * Rest on top: raycast down from the piece's bottom footprint (5 sample
+   * points) against the OTHER pieces; land on the highest hit (ground when
+   * nothing is underneath).
+   */
+  restOnTop(ids: readonly string[]): void {
+    const selected = new Set(ids);
+    const targets: THREE.Object3D[] = [];
+    for (const [id, obj] of this.objects) if (!selected.has(id)) targets.push(obj.group);
+    const raycaster = new THREE.Raycaster();
+    raycaster.ray.direction.set(0, -1, 0);
+
+    const updates = new Map<string, Transform>();
+    for (const id of ids) {
+      const box = this.worldBox(id);
+      if (!box || box.isEmpty()) continue;
+      const samples = [
+        new THREE.Vector3((box.min.x + box.max.x) / 2, 0, (box.min.z + box.max.z) / 2),
+        new THREE.Vector3(box.min.x, 0, box.min.z),
+        new THREE.Vector3(box.min.x, 0, box.max.z),
+        new THREE.Vector3(box.max.x, 0, box.min.z),
+        new THREE.Vector3(box.max.x, 0, box.max.z),
+      ];
+      let restY = 0; // ground
+      for (const p of samples) {
+        raycaster.ray.origin.set(p.x, box.min.y - 0.001, p.z);
+        raycaster.far = box.min.y + 1000;
+        for (const hit of raycaster.intersectObjects(targets, true)) {
+          restY = Math.max(restY, hit.point.y);
+          break; // nearest hit per sample is enough
+        }
+      }
+      const t = this.liftedTransform(id, restY - box.min.y);
+      if (t) updates.set(id, t);
+    }
+    transformPlacements('Rest on top', updates);
+  }
+
+  // --- Align / distribute (plans/ICRP_PLAN.md P4.04) ----------------------------
+
+  /**
+   * Aligns the selection on a KSA axis to the combined bounds' min/center/max.
+   * Axis mapping (basis.ts): up = three Y, east = three X, north = three −Z —
+   * deltas are computed in three space and written back as KSA deltas.
+   */
+  alignSelection(axis: 'east' | 'north' | 'up', mode: 'min' | 'center' | 'max'): void {
+    const ids = $selection.get();
+    if (ids.length < 2) return;
+    const threeAxis = axis === 'east' ? 'x' : axis === 'up' ? 'y' : 'z';
+    const boxes = new Map<string, THREE.Box3>();
+    const combined = new THREE.Box3();
+    for (const id of ids) {
+      const box = this.worldBox(id);
+      if (!box || box.isEmpty()) continue;
+      boxes.set(id, box);
+      combined.union(box);
+    }
+    if (boxes.size < 2) return;
+    const target =
+      mode === 'min'
+        ? combined.min[threeAxis]
+        : mode === 'max'
+          ? combined.max[threeAxis]
+          : (combined.min[threeAxis] + combined.max[threeAxis]) / 2;
+
+    const updates = new Map<string, Transform>();
+    for (const [id, box] of boxes) {
+      const value =
+        mode === 'min'
+          ? box.min[threeAxis]
+          : mode === 'max'
+            ? box.max[threeAxis]
+            : (box.min[threeAxis] + box.max[threeAxis]) / 2;
+      const dThree = target - value;
+      const pl = getPlacement(id);
+      if (!pl || dThree === 0) continue;
+      const dKsa =
+        axis === 'east'
+          ? { x: 0, y: dThree, z: 0 }
+          : axis === 'up'
+            ? { x: dThree, y: 0, z: 0 }
+            : { x: 0, y: 0, z: -dThree }; // north = three −Z
+      updates.set(id, {
+        ...pl.transform,
+        position: {
+          x: pl.transform.position.x + dKsa.x,
+          y: pl.transform.position.y + dKsa.y,
+          z: pl.transform.position.z + dKsa.z,
+        },
+      });
+    }
+    transformPlacements(`Align ${axis} ${mode}`, updates);
+  }
+
+  /** Distributes the selection's centers evenly between the two extremes on an axis. */
+  distributeSelection(axis: 'east' | 'north'): void {
+    const ids = $selection.get();
+    if (ids.length < 3) return;
+    const threeAxis = axis === 'east' ? 'x' : 'z';
+    const rows: { id: string; center: number }[] = [];
+    for (const id of ids) {
+      const box = this.worldBox(id);
+      if (!box || box.isEmpty()) continue;
+      rows.push({ id, center: (box.min[threeAxis] + box.max[threeAxis]) / 2 });
+    }
+    if (rows.length < 3) return;
+    rows.sort((a, b) => a.center - b.center);
+    const first = rows[0].center;
+    const step = (rows[rows.length - 1].center - first) / (rows.length - 1);
+    const updates = new Map<string, Transform>();
+    rows.forEach((row, i) => {
+      const dThree = first + step * i - row.center;
+      const pl = getPlacement(row.id);
+      if (!pl || dThree === 0) return;
+      const dKsa = axis === 'east' ? { x: 0, y: dThree, z: 0 } : { x: 0, y: 0, z: -dThree };
+      updates.set(row.id, {
+        ...pl.transform,
+        position: {
+          x: pl.transform.position.x + dKsa.x,
+          y: pl.transform.position.y + dKsa.y,
+          z: pl.transform.position.z + dKsa.z,
+        },
+      });
+    });
+    transformPlacements(`Distribute ${axis}`, updates);
   }
 
   private sub<T>(store: { subscribe(cb: (v: T) => void): () => void }, cb: () => void): void {
@@ -262,6 +438,7 @@ export class StaticScene {
     this.objects.clear();
     this.gizmo.dispose();
     this.selectionMgr.dispose();
+    this.footprints.dispose();
     this.ground.dispose();
     this.viewport.dispose();
   }

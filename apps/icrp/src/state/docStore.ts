@@ -216,6 +216,44 @@ export function getPlacement(instanceId: string): Placement | undefined {
   return $activeObject.get().placements.find((pl) => pl.instanceId === instanceId);
 }
 
+/**
+ * Batch discrete transform write (align/distribute/drop/rest): ONE undo step
+ * for the whole batch.
+ */
+export function transformPlacements(
+  description: string,
+  updates: ReadonlyMap<string, Transform>,
+): void {
+  if (updates.size === 0) return;
+  pushUndo(description);
+  mutateActive((o) => ({
+    ...o,
+    placements: o.placements.map((pl) => {
+      const t = updates.get(pl.instanceId);
+      return t ? { ...pl, transform: t } : pl;
+    }),
+  }));
+}
+
+/**
+ * Adds array copies of a seed placement (plans/ICRP_PLAN.md P4.05): one undo
+ * step, copies selected afterwards. Transforms come from `three/arrays.ts`.
+ */
+export function addArrayCopies(seedInstanceId: string, transforms: readonly Transform[]): string[] {
+  const seed = getPlacement(seedInstanceId);
+  if (!seed || transforms.length === 0) return [];
+  pushUndo('Array');
+  const copies: Placement[] = transforms.map((t) => ({
+    instanceId: `${seed.pieceId.replace(/^.*_Subpart_/, '').toLowerCase()}_${randomId().slice(0, 8)}`,
+    pieceId: seed.pieceId,
+    transform: structuredClone(t) as Transform,
+    layerId: seed.layerId,
+  }));
+  mutateActive((o) => ({ ...o, placements: [...o.placements, ...copies] }));
+  $selection.set([seedInstanceId, ...copies.map((c) => c.instanceId)]);
+  return copies.map((c) => c.instanceId);
+}
+
 // --- Object metres -------------------------------------------------------------
 
 export function setObjectMeters(

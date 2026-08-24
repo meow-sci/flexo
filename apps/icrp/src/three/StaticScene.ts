@@ -197,6 +197,42 @@ export class StaticScene {
     transformPlacements('Rest on top', updates);
   }
 
+  // --- Auto-computed metres (plans/ICRP_PLAN.md P6.01) --------------------------
+
+  /**
+   * SurfaceHeight suggestion: the highest piece top among pieces whose ground
+   * footprint contains the origin (where a vessel spawns), minus GroundOffset —
+   * falls back to the global top. Core's 1.5537 ≈ the PadGrate deck.
+   */
+  suggestSurfaceHeightM(): number | null {
+    let originTop: number | null = null;
+    let globalTop: number | null = null;
+    for (const [, obj] of this.objects) {
+      const box = new THREE.Box3().expandByObject(obj.group);
+      if (box.isEmpty()) continue;
+      globalTop = Math.max(globalTop ?? -Infinity, box.max.y);
+      const containsOrigin = box.min.x <= 0 && box.max.x >= 0 && box.min.z <= 0 && box.max.z >= 0;
+      if (containsOrigin) originTop = Math.max(originTop ?? -Infinity, box.max.y);
+    }
+    const top = originTop ?? globalTop;
+    return top === null ? null : Math.round(top * 10000) / 10000;
+  }
+
+  /** FootprintRadius suggestion: max horizontal reach of any piece AABB corner. */
+  suggestFootprintRadiusM(): number | null {
+    let r = 0;
+    for (const [, obj] of this.objects) {
+      const box = new THREE.Box3().expandByObject(obj.group);
+      if (box.isEmpty()) continue;
+      for (const x of [box.min.x, box.max.x]) {
+        for (const z of [box.min.z, box.max.z]) {
+          r = Math.max(r, Math.hypot(x, z));
+        }
+      }
+    }
+    return r === 0 ? null : Math.round(r * 10) / 10;
+  }
+
   // --- Align / distribute (plans/ICRP_PLAN.md P4.04) ----------------------------
 
   /**

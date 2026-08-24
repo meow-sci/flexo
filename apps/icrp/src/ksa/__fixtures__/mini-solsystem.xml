@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hand-trimmed from KSA 2026.8.22.5348 Core/SolSystem.xml: a STRUCTURAL
+     fixture for parseCelestialCorpus/buildSystemXml tests, NOT byte-synced with
+     the live tree (the runIf(hasKsaAssets) live-tree tests cover drift).
+     Root attributes, GalacticPlane, the Sol/Earth LoadFromLibrary rows and the
+     Rocket LoadVehicleFromLibrary block are copied verbatim from the real file
+     (the real system also inlines ~45 bodies — Ceres, Io, Titan, Neptune, … —
+     which this mini omits). -->
+<System Id="Sol">
+    <DisplayName Value="Solar System" />
+
+    <GalacticPlane>
+      <RightAscension Degrees="192.86" />
+      <Declination Degrees="27.13" />
+    </GalacticPlane>
+
+    <LoadFromLibrary Id="Sol"/>
+    <LoadFromLibrary Id="Earth" Parent="Sol" HomeBody="true"/>
+
+    <LoadVehicleFromLibrary Id="Rocket" Parent="Earth">
+        <Color R="0.33" G="0.95" B="0" />
+        <SituationRef InstanceOf="RocketStartingSituation"/>
+        <SoundEvent Action="Rcs" SoundId="DefaultRcsThruster"/>
+    </LoadVehicleFromLibrary>
+</System>

@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Hand-trimmed from KSA 2026.8.22.5348 Core/Astronomicals.xml: a STRUCTURAL
+     fixture for parseCelestialCorpus/buildSystemXml tests, NOT byte-synced with
+     the live tree (the runIf(hasKsaAssets) live-tree tests cover drift).
+     Fragments (Sol block, Earth orbit/rotation/texture slots, the CCSFS decal,
+     landmark/city rows) are copied verbatim from the real file. -->
+<Assets>
+    <StellarBody Id="Sol">
+        <MeanRadius Km="696342" />
+        <Mass Suns="1" />
+        <Color R="1" G="1" B="1" />
+        <Sunlight R="9" G="9" B="9" />
+    </StellarBody>
+
+    <AtmosphericBody Id="Earth" Parent="Sol">
+        <Orbit>
+            <SemiMajorAxis Km="1.495396277103892E+08" />
+            <Inclination Degrees="4.495777668608611E-03" />
+            <Eccentricity Value="1.657443784940060E-02" />
+            <LongitudeOfAscendingNode Degrees="2.001005464352027E+02" />
+            <ArgumentOfPeriapsis Degrees="2.647204271842132E+02" />
+            <TimeAtPeriapsis Seconds="3155415.2731954656" />
+        </Orbit>
+        <Rotation DefinitionFrame="Ecliptic">
+            <SiderealPeriod Hours="23.9344695944"/>
+            <Tilt Degrees="23.441522" />
+            <Azimuth Degrees="-0.363633" />
+            <InitialParentFacingLongitude Degrees="-118" />
+        </Rotation>
+
+        <MeshCollection Id="EarthScale"/>
+        <Diffuse Id="Earth_Diffuse" Path="Textures/Earth_Diffuse.ktx2" Category="Terrain"/>
+        <Normal Id="Earth_Normal" Path="Textures/Earth_Normal.ktx2" Category="TerrainHeight"/>
+        <Height Id="Earth_Height" Path="Textures/Earth_Height.ktx2" Category="TerrainHeight">
+            <Minimum Km="-10.930"/>
+            <Maximum Km="8.631"/>
+        </Height>
+
+        <Biomes>
+            <Biome IdMapIndex="0" Alias="Beach" />
+            <Biome IdMapIndex="4" Alias="Grass" />
+        </Biomes>
+        <Terrain>
+            <ProceduralModifiers>
+
+                <GradientScale Value="3.5" />
+
+                <Modifier Type="Decal" Name="LaunchSite_CCSFS-LC-39A" Biomes="Grass,Beach">
+                    <Amplitude Value="0" />
+                    <Order Value="9999" />
+
+                    <Radius Value="275" />
+                    <Rotation Degrees="0" />
+                    <Location Id = "CCSFS-LC-39A">
+                        <Latitude Degrees="28.60829876577433" />
+                        <Longitude Degrees="-80.60412690984597" />
+                    </Location>
+
+                    <AltitudeOffset Km="16.97" />
+                    <SmoothFactor Value="0.69" />
+                    <Additive Value="false" />
+
+                    <HeightMap Id="Circle" Path="Textures/Planets/_Decals/circle.dds" Category="TerrainHeight"/>
+                </Modifier>
+
+            </ProceduralModifiers>
+        </Terrain>
+        <Ocean>
+            <Level Km="0" />
+            <WindWaves>
+                <!-- The WindTexture is used to adjust wind speed and fetch locally, lerping between min and max-->
+                <WindTexture Path="Textures/Earth_Ocean_Wind.png" Category="Terrain"/>
+            </WindWaves>
+        </Ocean>
+        <City Id="Madrid">
+            <Latitude Degrees="40.4168" />
+            <Longitude Degrees="-3.7038" />
+        </City>
+        <Landmark Id="CCSFS LC-39A" IsLaunchPad="true" StaticObject="CoreLaunchPadA_Prefab_LaunchPadA">
+            <Latitude Degrees="28.60829876577433" />
+            <Longitude Degrees="-80.60412690984597" />
+        </Landmark>
+        <Landmark Id="VSFB LC-4" IsLaunchPad="true" StaticObject="CoreLaunchPadA_Prefab_LaunchPadA">
+            <Latitude Degrees="34.6320535004723" />
+            <Longitude Degrees="-120.6106513816658" />
+        </Landmark>
+    </AtmosphericBody>
+</Assets>

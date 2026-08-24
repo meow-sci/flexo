@@ -26,6 +26,7 @@
  * directory (`D/KSA/Mod.cs:389-392`) and miss.
  */
 import { XMLSerializer } from '@xmldom/xmldom';
+import type { Node as XmldomNode } from '@xmldom/xmldom';
 import { prettyXml } from '../../../../src/ksa/partXmlSerializer';
 import { directChildren } from '../../../../src/ksa/partXmlParser';
 import { buildDecalModifierElement, buildLandmarkElement } from './landmarkXml';
@@ -254,7 +255,9 @@ export function buildSystemXml(input: SystemXmlInput): SystemXmlResult {
   for (const body of inlineBodies.values()) rewriteTextureReferences(body, counts);
 
   stripWhitespaceText(doc);
-  const body = new XMLSerializer().serializeToString(doc as never);
+  // @xmldom's serializer walks the generic DOM interface, so it serializes
+  // browser-DOM documents too (the cast bridges the two type worlds only).
+  const body = new XMLSerializer().serializeToString(doc as unknown as XmldomNode);
   return {
     xml: '<?xml version="1.0" encoding="utf-8"?>\n' + prettyXml(body) + '\n',
     idRefs: counts.idRefs,

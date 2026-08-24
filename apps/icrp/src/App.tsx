@@ -29,15 +29,19 @@ import {
   $historyDepth,
   $project,
   $selection,
+  addObject,
   addPlacement,
   beginGesture,
   duplicatePlacements,
   endGesture,
   getPlacement,
   redo,
+  removeObject,
   removePlacements,
+  renameObject,
   resetProject,
   setObjectMeters,
+  switchObject,
   setPlacementTransform,
   undo,
   ICRP_PROJECT_SCHEMA_VERSION,
@@ -505,16 +509,72 @@ function SelectionInspector() {
   );
 }
 
+function ObjectSwitcher() {
+  const project = useStore($project);
+  const active = useStore($activeObject);
+  return (
+    <div className="flex flex-col gap-1 border-t border-border px-3 py-2">
+      <div className="text-xs font-semibold tracking-wide text-fg-muted uppercase">Objects</div>
+      {project.objects.map((o) => (
+        <div key={o.id} className="flex items-center gap-1">
+          <button
+            type="button"
+            className={cn(
+              'flex-1 truncate rounded px-2 py-0.5 text-left text-sm hover:bg-wash-hover',
+              o.id === active.id ? 'bg-wash-selected text-fg' : 'text-fg-muted',
+            )}
+            onClick={() => switchObject(o.id)}
+            onDoubleClick={() => {
+              const name = prompt('Object name', o.name);
+              if (name) renameObject(o.id, name);
+            }}
+          >
+            {o.name}
+            <span className="ml-1 text-[11px] text-fg-subtle">{o.placements.length}</span>
+          </button>
+          {project.objects.length > 1 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label={`Delete ${o.name}`}
+              onPress={() => removeObject(o.id)}
+            >
+              <Trash2 size={12} />
+            </Button>
+          )}
+        </div>
+      ))}
+      <Button size="sm" variant="ghost" onPress={() => addObject()}>
+        + New object
+      </Button>
+      <div className="text-[11px] text-fg-subtle">
+        Each object exports as one &lt;StaticObject&gt;; a launch site points at exactly one.
+      </div>
+    </div>
+  );
+}
+
 function ObjectInspector() {
   const obj = useStore($activeObject);
   const meters: Array<{
     key: 'groundOffsetM' | 'surfaceHeightM' | 'footprintRadiusM';
     label: string;
     aria: string;
+    suggest?: () => number | null;
   }> = [
     { key: 'groundOffsetM', label: 'G', aria: 'Ground offset (m)' },
-    { key: 'surfaceHeightM', label: 'S', aria: 'Surface height (m)' },
-    { key: 'footprintRadiusM', label: 'F', aria: 'Footprint radius (m)' },
+    {
+      key: 'surfaceHeightM',
+      label: 'S',
+      aria: 'Surface height (m)',
+      suggest: () => getScene()?.suggestSurfaceHeightM() ?? null,
+    },
+    {
+      key: 'footprintRadiusM',
+      label: 'F',
+      aria: 'Footprint radius (m)',
+      suggest: () => getScene()?.suggestFootprintRadiusM() ?? null,
+    },
   ];
   return (
     <div className="flex flex-col gap-2 border-t border-border px-3 py-2">
@@ -522,15 +582,35 @@ function ObjectInspector() {
         {obj.name} · {obj.placements.length} placements
       </div>
       {meters.map((m) => (
-        <NumberField
-          key={m.key}
-          label={m.label}
-          ariaLabel={m.aria}
-          value={obj[m.key] ?? 0}
-          step={0.1}
-          onInteractionStart={() => beginGesture(`Edit ${m.aria}`)}
-          onCommit={(v) => setObjectMeters(m.key, v)}
-        />
+        <div key={m.key} className="flex items-center gap-1">
+          <div className="flex-1">
+            <NumberField
+              label={m.label}
+              ariaLabel={m.aria}
+              value={obj[m.key] ?? 0}
+              step={0.1}
+              onInteractionStart={() => beginGesture(`Edit ${m.aria}`)}
+              onCommit={(v) => setObjectMeters(m.key, v)}
+            />
+          </div>
+          {m.suggest && (
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-label={`Auto ${m.aria}`}
+              onPress={() => {
+                const v = m.suggest!();
+                if (v !== null) {
+                  beginGesture(`Auto ${m.aria}`);
+                  setObjectMeters(m.key, v);
+                  endGesture();
+                }
+              }}
+            >
+              auto
+            </Button>
+          )}
+        </div>
       ))}
       <div className="text-[11px] text-fg-subtle">
         Ground offset lifts the whole object; surface height is where vessels spawn; footprint
@@ -607,6 +687,7 @@ export function App() {
           </div>
           <SelectionInspector />
           <ObjectInspector />
+          <ObjectSwitcher />
         </div>
       </div>
     </div>

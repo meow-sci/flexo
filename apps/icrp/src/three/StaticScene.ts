@@ -39,7 +39,7 @@ import {
   transformPlacements,
 } from '../state/docStore';
 import { $pieceIndex } from '../state/catalogStore';
-import { $tool, $groundLock, $snap, $overlaysVisible } from '../state/toolStore';
+import { $tool, $groundLock, $keepGrounded, $snap, $overlaysVisible } from '../state/toolStore';
 import type { Transform } from '../ksa/types';
 
 export class StaticScene {
@@ -61,6 +61,8 @@ export class StaticScene {
     inverse: THREE.Matrix4;
     placements: Map<string, THREE.Matrix4>;
   } | null = null;
+  /** Selected pieces' world-AABB bottoms at scale-drag start (keep-grounded). */
+  private bottomsAtDragStart: Map<string, number> | null = null;
 
   constructor(host: HTMLElement) {
     this.viewport = new IcrpViewport(host);
@@ -123,9 +125,18 @@ export class StaticScene {
         },
         onDraggingChanged: (dragging) => {
           this.selectionMgr.setSuppressed(dragging);
-          if (dragging && this.gizmoOnPivot) this.capturePivotStart();
+          if (dragging) {
+            if (this.gizmoOnPivot) this.capturePivotStart();
+            if ($tool.get() === 'scale') this.captureBottomsAtDragStart();
+          }
           if (!dragging) {
             this.pivotStart = null;
+            // Keep-grounded: a scaled piece whose bottom sat ON the ground
+            // before the drag is re-dropped (still inside the same gesture, so
+            // scale + re-ground undo as ONE step). Below-grade pieces (terrain
+            // skirts) had a negative bottom and are left alone.
+            if ($tool.get() === 'scale' && $keepGrounded.get()) this.regroundScaled();
+            this.bottomsAtDragStart = null;
             endGesture();
           }
         },
@@ -483,6 +494,66 @@ export class StaticScene {
     const ids = $selection.get();
     if (this.gizmoOnPivot) return ids.includes(instanceId);
     return ids.length === 1 && ids[0] === instanceId;
+  }
+
+  private captureBottomsAtDragStart(): void {
+    const bottoms = new Map<string, number>();
+    for (const id of $selection.get()) {
+      const box = this.worldBox(id);
+      if (box && !box.isEmpty()) bottoms.set(id, box.min.y);
+    }
+    this.bottomsAtDragStart = bottoms;
+  }
+
+  /** Re-grounds scaled pieces that were grounded before the drag (same gesture). */
+  private regroundScaled(): void {
+    const bottoms = this.bottomsAtDragStart;
+    if (!bottoms) return;
+    const updates = new Map<string, Transform>();
+    for (const [id, bottomBefore] of bottoms) {
+      if (Math.abs(bottomBefore) > 0.02) continue; // was not sitting on the ground
+      const box = this.worldBox(id);
+      if (!box || box.isEmpty()) continue;
+      const t = this.liftedTransform(id, -box.min.y);
+      if (t && Math.abs(box.min.y) > 1e-6) updates.set(id, t);
+    }
+    // Inside the still-open scale gesture — no extra undo step.
+    for (const [id, t] of updates) setPlacementTransform(id, t);
+  }
+
+  /**
+   * Drops newly added placements to the ground once their meshes land (adds
+   * are async — the GLB may still be loading). Quiet: no extra undo step (the
+   * add/import mutator owns the step; undoing it removes the placements).
+   */
+  groundWhenLoaded(ids: readonly string[]): void {
+    const deadline = Date.now() + 5000;
+    const tick = () => {
+      if (this.disposed || Date.now() > deadline) return;
+      const pending = ids.filter((id) => getPlacement(id) !== undefined);
+      if (pending.length === 0) return; // all gone (undone) — nothing to do
+      if (pending.every((id) => this.objects.has(id))) {
+        const updates = new Map<string, Transform>();
+        // Ground the GROUP as one: lift everything by the same delta so the
+        // lowest piece lands on the ground (an imported part keeps its shape).
+        let minBottom = Infinity;
+        for (const id of pending) {
+          const box = this.worldBox(id);
+          if (box && !box.isEmpty()) minBottom = Math.min(minBottom, box.min.y);
+        }
+        if (Number.isFinite(minBottom) && Math.abs(minBottom) > 1e-6) {
+          for (const id of pending) {
+            const t = this.liftedTransform(id, -minBottom);
+            if (t) updates.set(id, t);
+          }
+          for (const [id, t] of updates) setPlacementTransform(id, t);
+        }
+        this.viewport.invalidate();
+        return;
+      }
+      setTimeout(tick, 150);
+    };
+    setTimeout(tick, 150);
   }
 
   /** Snapshot at drag start: pivot pose + every selected placement's matrix. */

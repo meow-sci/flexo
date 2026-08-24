@@ -418,6 +418,13 @@ export function setPlacementsLayer(instanceIds: readonly string[], layerId: stri
   }));
 }
 
+/** Selects every placement on a visible layer. */
+export function selectAllVisible(): void {
+  const obj = $activeObject.get();
+  const visible = new Set(obj.layers.filter((l) => l.visible).map((l) => l.id));
+  $selection.set(obj.placements.filter((pl) => visible.has(pl.layerId)).map((pl) => pl.instanceId));
+}
+
 /** Selects every (visible-layer) placement of a layer. */
 export function selectLayerContents(layerId: string): void {
   $selection.set(

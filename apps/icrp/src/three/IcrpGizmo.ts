@@ -75,15 +75,12 @@ export class IcrpGizmo {
   }
 
   /**
-   * Ground lock (plan P4.01): shows only the handles that keep the piece on the
-   * ground plane — translate in KSA Y/Z (three X/Z) and rotate about up.
+   * Ground lock (plan P4.01, revised): only the ROTATE gizmo is masked (about-up
+   * spin only). Translate ALWAYS shows all three arrows — the vertical arrow is
+   * the elevation control, and hiding it left users unable to move things up.
    */
   setGroundLock(locked: boolean, mode: GizmoMode): void {
-    if (mode === 'translate') {
-      this.controls.showX = true;
-      this.controls.showZ = true;
-      this.controls.showY = !locked;
-    } else if (mode === 'rotate') {
+    if (mode === 'rotate') {
       this.controls.showY = true;
       this.controls.showX = !locked;
       this.controls.showZ = !locked;

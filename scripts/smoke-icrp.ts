@@ -7,11 +7,11 @@
  *   SMOKE_BASE=http://…/flexo/apps/icrp/ pnpm smoke:icrp   # already-running server
  *
  * WHAT IT COVERS (one assertion per step):
- *   1. boot — canvas + the toolbar's tool buttons
- *   2. catalog — the Core prefab row and the 10 static pieces appear
- *   3. place — clicking a piece row adds a placement (object inspector count)
+ *   1. boot — canvas + the menubar's menus + the toolbar's tool buttons
+ *   2. catalog — the Add dialog lists the Core prefab and static pieces
+ *   3. place — an Add-dialog piece row adds a placement (details inspector count)
  *   4. undo — ⌘Z removes it
- *   5. prefab import — opening the Core pad shows 16 placements
+ *   5. prefab import — opening the Core pad via Add shows 16 placements
  *   6. array — a radial array of 6 on a selected piece grows the count
  *   7. stock part import — a searched Part explodes into placements on a new layer
  *   8. export — the dialog opens, the Assets preview contains <StaticObject>
@@ -73,23 +73,37 @@ async function placementCount(page: Page): Promise<number> {
 async function run(page: Page): Promise<void> {
   await page.goto(BASE)
 
-  await step('boot: canvas + toolbar', async () => {
+  /** Opens the Add dialog fresh (Escape first in case something is focused). */
+  async function openAdd(): Promise<void> {
+    await page.keyboard.press('Escape')
+    await page.keyboard.press('KeyA')
+    await page.getByRole('searchbox', { name: 'Search catalog' }).waitFor({ timeout: 10_000 })
+  }
+
+  await step('boot: canvas + menubar + toolbar', async () => {
     await page.waitForSelector('canvas', { timeout: 30_000 })
-    for (const name of ['Select', 'Move', 'Rotate', 'Scale', 'Snap', 'Ground lock']) {
+    for (const name of ['File', 'Add', 'Edit', 'Arrange', 'View']) {
+      await page.getByRole('button', { name, exact: true }).first().waitFor({ timeout: 15_000 })
+    }
+    for (const name of ['Select', 'Move', 'Rotate', 'Scale']) {
       await page.getByRole('button', { name, exact: true }).first().waitFor({ timeout: 15_000 })
     }
   })
 
-  await step('catalog: prefab + pieces load', async () => {
+  await step('catalog: the Add dialog lists prefab + pieces', async () => {
+    await page.locator('text=/· \\d+ placements/').waitFor({ timeout: 20_000 })
+    await openAdd()
     await page
       .getByRole('button', { name: /CoreLaunchPadA_Prefab_LaunchPadA/ })
       .waitFor({ timeout: 20_000 })
-    await page.getByRole('button', { name: /BaseGrassA/ }).waitFor({ timeout: 10_000 })
+    await page.getByRole('button', { name: /BaseGrassA/ }).first().waitFor({ timeout: 10_000 })
+    await page.keyboard.press('Escape')
   })
 
   await step('place a piece', async () => {
     const before = await placementCount(page)
-    await page.getByRole('button', { name: /PadGrateB/ }).click()
+    await openAdd()
+    await page.getByRole('button', { name: /PadGrateB/ }).first().click()
     await delay(300)
     assert((await placementCount(page)) === before + 1, 'placement count did not grow')
   })
@@ -103,13 +117,15 @@ async function run(page: Page): Promise<void> {
   })
 
   await step('import the Core pad prefab (16 placements)', async () => {
+    await openAdd()
     await page.getByRole('button', { name: /CoreLaunchPadA_Prefab_LaunchPadA/ }).click()
     await delay(1000)
     assert((await placementCount(page)) === 16, 'prefab import did not yield 16 placements')
   })
 
   await step('radial array grows the count', async () => {
-    await page.getByRole('button', { name: /PipeSupportA/ }).click() // adds + selects a seed
+    await openAdd()
+    await page.getByRole('button', { name: /PipeSupportA/ }).first().click() // adds + selects
     await delay(300)
     const before = await placementCount(page)
     await page.getByRole('button', { name: 'radial', exact: true }).click()
@@ -121,7 +137,8 @@ async function run(page: Page): Promise<void> {
 
   await step('stock part import explodes onto a new layer', async () => {
     const before = await placementCount(page)
-    await page.getByRole('searchbox', { name: 'Search stock parts' }).fill('LF1W1HA')
+    await openAdd()
+    await page.getByRole('searchbox', { name: 'Search catalog' }).fill('LF1W1HA')
     await delay(300)
     await page.locator('button', { hasText: /LF1W1HA/ }).first().click()
     await delay(1500)

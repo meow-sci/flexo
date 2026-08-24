@@ -56,6 +56,22 @@ are localized onto the first imported placement (`three/partImport.ts`) and expo
 them into the object-level `<Collider>` with the placement's CURRENT transform — collision
 follows wherever the pieces are moved. Scale is never composed (F4/I3).
 
+## Shell (flexo-style)
+
+Top **menu bar** (File / Add / Edit / Arrange / View — kit `MenuBar`; menus re-evaluate
+enabled/checked per open) + the tool row. **Left sidebar = details** (selection transform in
+**U/E/N** vocabulary — Up is a first-class field; align/distribute; arrays; object metres).
+**Right sidebar = layers / objects / launch sites.** The catalog lives behind **Add ▸
+Piece / part…** (`A`): one searched dialog over prefabs, static pieces, stock parts (layer
+target select) and vessel pieces.
+
+**Vertical control**: the translate gizmo ALWAYS shows the vertical arrow (it is the
+elevation handle — ground lock only constrains rotation to about-up); newly added pieces
+and imported parts **auto-drop to the ground** once their meshes load (the group is lifted
+as one, so an imported part keeps its shape); **keep-grounded** (Arrange menu, default on)
+re-drops a scaled piece whose bottom sat on the ground before the scale gesture — inside
+the same undo step — while below-grade pieces (terrain skirts) are left alone.
+
 ## Rendering
 
 `StaticScene` reconciles placements → `PieceObject`s (atlas geometry via flexo's

@@ -15,8 +15,9 @@ export function setTool(tool: Tool): void {
 }
 
 /**
- * Ground lock (default ON): translate constrained to the ground plane (KSA Y/Z),
- * rotate constrained to about-up. `G` toggles.
+ * Ground lock (default ON): the ROTATE gizmo constrained to about-up (the
+ * ground-plane spin). Translate always shows all three arrows — the vertical
+ * arrow IS the elevation control (P4.01), so it is never hidden. `G` toggles.
  */
 export const $groundLock = persistentJSON<boolean>('icrp:groundLock', true);
 
@@ -38,3 +39,11 @@ export function toggleSnap(): void {
 
 /** Site overlays (footprint disc, clutter/collider rings, spawn plane) visible? */
 export const $overlaysVisible = persistentJSON<boolean>('icrp:overlays', true);
+
+/**
+ * Re-ground after scaling (default ON): when a scale gesture ends, any scaled
+ * piece whose bottom sat ON the ground beforehand is re-dropped so scaling
+ * never buries or floats it (below-grade pieces like terrain skirts are left
+ * alone).
+ */
+export const $keepGrounded = persistentJSON<boolean>('icrp:keepGrounded', true);

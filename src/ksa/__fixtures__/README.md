@@ -15,6 +15,10 @@ git-ignored and not present in open-source CI).
 | `CoreElectricalAGameData.xml` | Electrical `<PartGameData>` + `<SubPartGameData>` (the solar-cell `<SolarPanel>` data).                  |
 | `CoreIVASpaceAGameData.xml`   | The ONLY shipped `<IVASeat>` data — the two-seat `MediumCapsuleA` interior.                              |
 | `PartGameData.xml`            | Shared file holding the fuel-tank `<SubPartGameData>` `<Tank>` metadata (the duplicate-`Id` merge case). |
+| `CoreLaunchPadAAssets.xml`    | The static-object catalog: 8 `<StaticSubObject>`s + the `<StaticObject>` launch-pad prefab (ICRP).       |
+| `CoreLaunchPadAGameData.xml`  | The only shipped `<StaticObjectGameData>` (GroundOffset / SurfaceHeight / FootprintRadius).              |
+| `CoreLaunchPadBAssets.xml`    | `<PbrMaterial>` with the `<Alpha>` slot + the alpha-blended GravelTrim `<StaticSubObject>`.              |
+| `CoreLaunchPadCAssets.xml`    | The `<Terrain>true</Terrain>` BaseGrass `<StaticSubObject>` (planet-sampling render bucket).             |
 
 Consumed by [`src/ksa/partCatalog.test.ts`](../partCatalog.test.ts) via the
 `vendoredAsset` / `readVendoredAsset` helpers in [`src/ksa/ksaTestAssets.ts`](../ksaTestAssets.ts).

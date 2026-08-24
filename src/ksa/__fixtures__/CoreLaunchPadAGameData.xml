@@ -1,0 +1,7 @@
+<Assets>
+<StaticObjectGameData Id="CoreLaunchPadA_Prefab_LaunchPadA">
+    <GroundOffset M="0.2" />
+    <SurfaceHeight M="1.5537" />
+    <FootprintRadius M="108.3" />
+</StaticObjectGameData>
+</Assets>

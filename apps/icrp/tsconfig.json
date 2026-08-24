@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "../../node_modules/.tmp/tsconfig.icrp.tsbuildinfo"
+  },
+  // The ambient .d.ts files are listed explicitly: they are not imported by any
+  // module, so pulling ../../src code into this program (three.js viewport stack)
+  // would otherwise leave `three/addons/libs/*.module.js` untyped here.
+  "include": [
+    "src",
+    "../../src/vite-env.d.ts",
+    "../../src/three/mikktspace.module.d.ts",
+    "../../src/three/meshopt_simplifier.module.d.ts"
+  ]
+}

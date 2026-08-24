@@ -1,0 +1,8 @@
+/* Design tokens, Tailwind, and the reset shared with the main flexo app. */
+@import '../../../src/index.css';
+
+/* Tailwind v4 detects sources relative to the CSS file, so the shared kit and
+   this app's own sources — both outside this file's directory — must be named
+   explicitly (auto-detection is off in the shared sheet: docs prose breaks it). */
+@source '../../../src/ui/kit';
+@source '.';

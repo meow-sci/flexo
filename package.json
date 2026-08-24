@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:icrp": "vite apps/icrp",
     "dev:partpreview": "vite apps/partpreview",
-    "build": "tsc -b && vite build && vite build apps/partpreview",
+    "build": "tsc -b && vite build && vite build apps/partpreview && vite build apps/icrp",
     "thumbs": "vite build apps/partpreview",
     "typecheck": "tsc -b",
     "lint": "oxlint",

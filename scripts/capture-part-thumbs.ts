@@ -25,7 +25,8 @@
  * INCREMENTAL: `--reconcile` fingerprints every Part from the catalog the capture page
  * already parsed — its placements, the render-relevant fields of each SubPart template
  * it places, and the CONTENT of every mesh/texture file those name — folded together
- * with a global render tag (the mini app's own bundle, the KTX2/Draco decoders, this
+ * with a global render tag (the render SOURCES — not the bundle, which also carries the
+ * parser and editor — the render libraries, the KTX2/Draco decoders, this
  * run's flags). A part is re-rendered only when its fingerprint moves, so a KSA update
  * that touches five parts costs five renders instead of 165. What the fingerprint does
  * NOT cover is a deliberate blind spot, cleared by bumping FINGERPRINT_VERSION.
@@ -408,27 +409,63 @@ async function hashTree(dir: string, skip?: (rel: string) => boolean): Promise<s
 }
 
 /**
- * The part-INDEPENDENT half of every fingerprint: the mini app's own bundle (which IS
- * the renderer — `PartPreviewViewport`, the material factory, three.js and the shared
- * thumbsSpec constants all land in it), the decoders it pulls at runtime, and the flags
+ * The SOURCE that decides a pixel, given a part's inputs: the renderer (`src/three`:
+ * `PartPreviewViewport`, the material factory, the scene environment), the texture
+ * decode path, the bounds the camera frames, the mini app itself (thumbsSpec, the
+ * capture harness, its lighting defaults) and the lighting/environment presets.
+ * Hashed as sources, NOT as the built bundle: that bundle also carries the XML parser,
+ * the project stores and the editor UI, so hashing it re-rendered the whole catalog on
+ * every commit that touched any of them. The parser is covered at the right
+ * granularity already — its OUTPUT (`placements`, `templates`) is a per-part input —
+ * and nothing else outside this list draws. Anything that slips through is the
+ * {@link FINGERPRINT_VERSION} blind spot.
+ *
+ * Tests are skipped: they cannot change a pixel. Ordering within a directory does not
+ * matter either — every path is folded in with its hash.
+ */
+const RENDER_SOURCE_DIRS = ['src/three', 'src/ktx', 'src/measure', 'apps/partpreview/src']
+const RENDER_SOURCE_FILES = [
+  'src/assetBase.ts',
+  'src/state/environmentPresets.ts',
+  'src/state/lightingStore.ts',
+  'src/ksa/colliderSize.ts',
+  'src/ksa/ivaSeatAxes.ts',
+  'src/ksa/lightFalloff.ts',
+]
+/** The rendering libraries the sources above lean on; a bump re-renders everything, correctly. */
+const RENDER_PACKAGES = ['three', 'ktx-parse', '@bokuweb/zstd-wasm']
+
+function isTestSource(rel: string): boolean {
+  return /\.test\.tsx?$/.test(rel)
+}
+
+/**
+ * The part-INDEPENDENT half of every fingerprint: the render sources, the render
+ * libraries' pinned versions, the decoders the page pulls at runtime, and the flags
  * this run renders with. Changing any of them re-renders the whole catalog, correctly.
  *
  * `dist/hdr` is deliberately absent: the capture page uses the procedural studio
- * environment, and switching that default is a bundle change. `dist/ksa` is absent too
+ * environment, and switching that default is a source change. `dist/ksa` is absent too
  * — it is hashed per FILE, per part, which is the entire point of the exercise.
  */
 async function computeRenderTag(): Promise<string> {
-  const thumbsRel = THUMBS_DIR.split('/').join(sep) + sep
-  const turntablesRel = TURNTABLES_DIR.split('/').join(sep) + sep
-  const bundle = await hashTree(
-    APP_DIST,
-    (rel) => rel === 'manifest.json' || rel.startsWith(thumbsRel) || rel.startsWith(turntablesRel),
-  )
+  const sources: string[] = []
+  for (const dir of RENDER_SOURCE_DIRS) {
+    sources.push(dir, await hashTree(join(REPO_ROOT, dir), isTestSource))
+  }
+  for (const file of RENDER_SOURCE_FILES) {
+    sources.push(file, await fileHash(join(REPO_ROOT, file)))
+  }
+  const packages: string[] = []
+  for (const name of RENDER_PACKAGES) {
+    packages.push(name, await fileHash(join(REPO_ROOT, 'node_modules', name, 'package.json')))
+  }
   const basis = await hashTree(join(DIST, 'basis'))
   const draco = await hashTree(join(DIST, 'draco'))
   return sha256(
     String(FINGERPRINT_VERSION),
-    bundle,
+    ...sources,
+    ...packages,
     basis,
     draco,
     JSON.stringify({

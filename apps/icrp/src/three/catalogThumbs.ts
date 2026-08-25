@@ -18,6 +18,7 @@
  * the per-thumb material clones are.
  */
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { atom } from 'nanostores';
 import { getSubPartGeometry } from '../../../../src/three/MeshAtlasCache';
 import { applyPlacement } from '../../../../src/three/coords';
@@ -29,6 +30,15 @@ import type { PreviewEntry } from './CatalogPreviewViewport';
 export const $catalogThumbs = atom<Record<string, string>>({});
 
 const THUMB_SIZE = 96;
+
+/**
+ * Bumped whenever the thumb RENDERING changes (lighting, framing, size): it
+ * feeds the content signature, so every cache tier — static manifest,
+ * IndexedDB, generator inputs — invalidates together. v2: added the
+ * RoomEnvironment IBL (fully-metallic pieces — trusses! — render black
+ * without an environment map).
+ */
+const THUMB_STYLE_VERSION = 'v2';
 
 // --- Source 1: pre-generated manifest (build-time PNGs) ---------------------
 
@@ -96,6 +106,7 @@ interface Job {
 const queue: Job[] = [];
 const requested = new Set<string>();
 let renderer: THREE.WebGLRenderer | null = null;
+let envTexture: THREE.Texture | null = null;
 let scheduled = false;
 
 function schedule(): void {
@@ -120,14 +131,17 @@ function schedule(): void {
 
 /** The signature the caches key on — re-exported for the generator script. */
 export function catalogThumbSignature(entries: readonly PreviewEntry[]): string {
-  return entries
-    .map(
-      (e) =>
-        `${e.piece.atlasUrl}#${e.piece.meshNodeName}#${e.piece.diffuseUrl ?? ''}#${
-          e.piece.materialId ?? ''
-        }`,
-    )
-    .join('|');
+  return (
+    `${THUMB_STYLE_VERSION}|` +
+    entries
+      .map(
+        (e) =>
+          `${e.piece.atlasUrl}#${e.piece.meshNodeName}#${e.piece.diffuseUrl ?? ''}#${
+            e.piece.materialId ?? ''
+          }`,
+      )
+      .join('|')
+  );
 }
 
 /**
@@ -191,6 +205,11 @@ function getRenderer(): THREE.WebGLRenderer {
     renderer.setSize(THUMB_SIZE, THUMB_SIZE);
     renderer.setPixelRatio(1);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // IBL: metallic PBR is black without an environment. RoomEnvironment is
+    // procedural (no asset fetch) and reads neutral at 96 px.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    envTexture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    pmrem.dispose();
   }
   return renderer;
 }
@@ -211,15 +230,17 @@ async function drainOne(): Promise<void> {
 }
 
 async function renderThumb(entries: PreviewEntry[]): Promise<string | null> {
+  const r = getRenderer(); // also initializes the environment
   const scene = new THREE.Scene();
+  if (envTexture) scene.environment = envTexture;
   const root = new THREE.Group();
   applyStaticBasis(root);
   scene.add(root);
-  // Flat, bright studio lights — thumbs must read at 60 px, not match the viewport.
-  const sun = new THREE.DirectionalLight(0xfff4e0, 2.6);
+  // Bright studio key + fill on top of the IBL — thumbs must read at 60 px.
+  const sun = new THREE.DirectionalLight(0xfff4e0, 2.2);
   sun.position.set(200, 300, 150);
   scene.add(sun);
-  scene.add(new THREE.HemisphereLight(0xbcd4ff, 0x3a3d33, 1.6));
+  scene.add(new THREE.HemisphereLight(0xbcd4ff, 0x3a3d33, 0.8));
 
   const clones: THREE.Material[] = [];
   const meshes = await Promise.all(
@@ -260,7 +281,6 @@ async function renderThumb(entries: PreviewEntry[]): Promise<string | null> {
   camera.lookAt(sphere.center);
   camera.updateProjectionMatrix();
 
-  const r = getRenderer();
   r.render(scene, camera);
   const url = r.domElement.toDataURL('image/png');
   for (const m of clones) m.dispose();

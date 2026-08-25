@@ -51,7 +51,25 @@ plan: [plans/ICRP_PLAN.md](../plans/ICRP_PLAN.md) §0.3 (facts F1–F14).
     (`MeshAtlasFileReference.cs:25-49`), so a mod `<StaticSubObject>` may reference any
     Core mesh/material by id with **no binaries** — ICRP's vessel-derived pieces
     (`apps/icrp/src/ksa/modPlan.ts`) and the export-variant discipline both rest on this.
-    ⏳ pending in-game verification (**[V1]** in `apps/icrp/VERIFICATION.md`).
+    ⏳ pending in-game verification (**[V1]** in `apps/icrp/VERIFICATION.md`) —
+    2026-08-25 partial: a vessel truss piece as a static RENDERS in game (mesh + material
+    resolve, scale applies), see facts 11–12 for the look/shadow caveats.
+11. **Statics never CAST sun shadows** (engine limitation, verified in the 2026.8.22.5348
+    decomp): `StaticObjectModel.cs` has NO shadow-draw path — only `PartModel.cs` /
+    `PartModelDynamic.cs` (vessel renderers) feed `PartModelShadowCull` /
+    `BuildShadowDraws`, and `PartModelModule.Template.ShadowCaster` is a vessel-only
+    switch. Statics DO **receive** shadows (`StaticObject.frag` samples the terrain
+    shadow map, the vessel CSM, cloud shadows and celestial shadow). Core pads are flat
+    enough that this is invisible; a tall static (scaled truss) makes it obvious. No XML
+    can change it.
+12. **Metal-heavy vessel pieces read DARK as statics**: `StaticObject.frag` is full PBR —
+    a fully-metallic surface (trusses: PBR blue channel ≈ 1) has no diffuse response, so
+    its color is mostly environment/ambient reflection. In daylight the static ambient
+    path leaves such pieces near-black with a navy sky tint (user-verified screenshot,
+    2026-08-25); the same shading dynamics made ICRP's own thumbnails render metal black
+    until the RoomEnvironment IBL was added (`catalogThumbs.ts` v2). Whether KSA renders
+    the SAME piece brighter on a vessel in the same scene is an open in-game A/B ([V1b]).
+    Practical guidance: prefer low-metal pieces for statics, or expect dark steel.
 
 ## Break-surface (re-check on a game update)
 

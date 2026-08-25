@@ -68,11 +68,11 @@ react-aria's roving focus).
 Three **workspace modes** (`state/modeStore.ts`, keys `1`/`2`/`3` — flexo's answer to
 one-window complexity; view state, never undo-enrolled) swap BOTH sidebars:
 
-| Mode          | Left                                                        | Right                              | Scene                                             |
-| ------------- | ----------------------------------------------------------- | ---------------------------------- | ------------------------------------------------- |
-| **build**     | details (U/E/N transform, align, arrays, object metres)     | layers **with piece outliner**, objects, sites | colliders visible only via `C`, never pickable |
-| **colliders** | authoring (Add/Fit per shape) + collider inspector          | **collider outliner**, objects     | collider wires FORCED visible and pickable        |
-| **sites**     | object metres + how-sites-work explainer                    | launch sites, objects              | site overlays forced visible                      |
+| Mode          | Left                                                    | Right                                          | Scene                                          |
+| ------------- | ------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------- |
+| **build**     | details (U/E/N transform, align, arrays, object metres) | layers **with piece outliner**, objects, sites | colliders visible only via `C`, never pickable |
+| **colliders** | authoring (Add/Fit per shape) + collider inspector      | **collider outliner**, objects                 | collider wires FORCED visible and pickable     |
+| **sites**     | object metres + how-sites-work explainer                | launch sites, objects                          | site overlays forced visible                   |
 
 `setMode` is the single choreography point (leaving colliders clears the collider
 selection so a hidden selection can't hold the gizmo). Collider PICKING is colliders-mode
@@ -80,7 +80,7 @@ only — in build mode the wires (when toggled) never steal clicks from pieces.
 
 **Phone** (`useIsPhone`): the sidebars unmount and become overlay **drawers** toggled from
 the top bar's far-right buttons (backdrop tap closes); the top bar itself scrolls
-horizontally. Desktop is the primary target — phone is kept *usable*, not featureful.
+horizontally. Desktop is the primary target — phone is kept _usable_, not featureful.
 
 The catalog lives behind **Add ▸ Piece / part…** (`A`): one searched dialog over prefabs,
 static pieces, stock parts (layer target select) and vessel pieces.

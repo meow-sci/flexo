@@ -14,6 +14,7 @@ import {
   addArrayCopies,
   beginGesture,
   endGesture,
+  findPlacement,
   getPlacement,
   setObjectMeters,
   setPlacementTransform,
@@ -213,7 +214,9 @@ function ArrayPanel({ instanceId }: { instanceId: string }) {
 
 function SelectionInspector() {
   const selection = useStore($selection);
-  useStore($activeObject); // re-render on transform writes
+  // Derive from the SUBSCRIBED object — see findCollider's warning in docStore
+  // (a getPlacement() side-read is invisible to React Compiler memoization).
+  const obj = useStore($activeObject);
   if (selection.length !== 1) {
     return (
       <div>
@@ -244,7 +247,7 @@ function SelectionInspector() {
       </div>
     );
   }
-  const placement = getPlacement(selection[0]);
+  const placement = findPlacement(obj, selection[0]);
   if (!placement) return null;
   const t = placement.transform;
   const commit = (

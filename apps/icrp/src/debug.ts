@@ -9,8 +9,11 @@ import {
   $selection,
   getPlacement,
   selectLayerContents,
+  setPlacementTransform,
+  updateCollider,
   type ColliderRef,
 } from './state/docStore';
+import type { PartCollider, Transform } from './ksa/types';
 import { getScene } from './three/sceneHandle';
 
 declare global {
@@ -26,6 +29,9 @@ declare global {
       meshWorld: (id: string) => { x: number; y: number; z: number } | null;
       select: (ids: string[]) => void;
       selectCollider: (ref: ColliderRef | null) => void;
+      /** Out-of-band store writes (the gizmo's path) — stale-render regression tests. */
+      updateCollider: (ref: ColliderRef, patch: Partial<PartCollider>) => void;
+      setPlacementTransform: (id: string, t: Transform) => void;
     };
   }
 }
@@ -48,5 +54,7 @@ export function installDebugHandle(): void {
       $selection.set([]);
       $colliderSelection.set(ref);
     },
+    updateCollider: (ref: ColliderRef, patch: Partial<PartCollider>) => updateCollider(ref, patch),
+    setPlacementTransform: (id: string, t: Transform) => setPlacementTransform(id, t),
   };
 }

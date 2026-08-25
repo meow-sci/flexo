@@ -383,6 +383,29 @@ async function run(page: Page): Promise<void> {
     // The new collider shows as a selectable row in the outliner.
     await page.locator('button[aria-label^="Select collider BoxCollider"]').first()
       .waitFor({ timeout: 5_000 })
+    // STALE-RENDER regression (the "inspector doesn't follow the gizmo" bug):
+    // an out-of-band store write — exactly what the gizmo does — must update
+    // the inspector's size fields live, with NO reselect. React Compiler
+    // memoization hid side-band getCollider() reads; the fix derives from the
+    // subscribed object (docStore.findCollider).
+    await page.evaluate(() => {
+      const w = window as unknown as {
+        __icrp: {
+          project: () => {
+            objects: { placements: { instanceId: string; colliders?: { id: string }[] }[] }[]
+          }
+          updateCollider: (ref: unknown, patch: unknown) => void
+        }
+      }
+      const pl = w.__icrp.project().objects[0].placements.find((p) => p.colliders?.length)!
+      w.__icrp.updateCollider(
+        { owner: pl.instanceId, colliderId: pl.colliders![0].id },
+        { scale: { x: 7.5, y: 7.5, z: 7.5 } },
+      )
+    })
+    await delay(200)
+    const sizeShown = await page.locator('input[aria-label="Collider Length X"]').inputValue()
+    assert(sizeShown === '7.5', `collider size field stale after store write: '${sizeShown}'`)
     await page.keyboard.press('Escape') // deselect the collider
     await page.keyboard.press('1') // back to build mode
     await delay(200)
@@ -403,6 +426,25 @@ async function run(page: Page): Promise<void> {
       return w.__icrp.selection().length
     })
     assert(selCount === 1, `outliner row click selected ${selCount}, wanted 1`)
+    // STALE-RENDER regression, placement flavour: an out-of-band transform
+    // write must move the U position field live (docStore.findPlacement).
+    const uField = page.locator('input[aria-label$=" up"]').first()
+    await page.evaluate(() => {
+      const w = window as unknown as {
+        __icrp: {
+          selection: () => string[]
+          placement: (id: string) => { transform: { position: { x: number } } }
+          setPlacementTransform: (id: string, t: unknown) => void
+        }
+      }
+      const id = w.__icrp.selection()[0]
+      const t = JSON.parse(JSON.stringify(w.__icrp.placement(id).transform))
+      t.position.x = 4.25
+      w.__icrp.setPlacementTransform(id, t)
+    })
+    await delay(200)
+    const uShown = await uField.inputValue()
+    assert(uShown === '4.25', `U position field stale after store write: '${uShown}'`)
   })
 
   await step('export: Assets preview + always-shipped system scenario', async () => {

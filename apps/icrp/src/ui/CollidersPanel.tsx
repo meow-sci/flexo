@@ -13,7 +13,7 @@ import {
   $selection,
   beginGesture,
   duplicateColliderRef,
-  getCollider,
+  findCollider,
   removeCollider,
   updateCollider,
 } from '../state/docStore';
@@ -31,9 +31,12 @@ function shapeShort(shape: ColliderShape): string {
 
 function ColliderInspector() {
   const ref = useStore($colliderSelection);
-  useStore($activeObject);
+  // Derive from the SUBSCRIBED object (not a getCollider() side-read): React
+  // Compiler memoizes on visible dependencies, and a side-band read left the
+  // inspector frozen while the gizmo resized the collider.
+  const obj = useStore($activeObject);
   if (!ref) return null;
-  const collider = getCollider(ref);
+  const collider = findCollider(obj, ref);
   if (!collider) return null;
   const labels = colliderSizeLabels(collider.shape);
   const ownerLabel = ref.owner === null ? 'object level' : `on ${ref.owner}`;

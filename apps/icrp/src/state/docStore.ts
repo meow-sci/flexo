@@ -76,14 +76,24 @@ export interface ColliderRef {
 
 export const $colliderSelection = atom<ColliderRef | null>(null);
 
-/** Reads the collider a ref points at, or undefined. */
-export function getCollider(ref: ColliderRef): PartCollider | undefined {
-  const obj = $activeObject.get();
+/**
+ * PURE collider lookup. React components MUST use this with the object they
+ * got from `useStore($activeObject)` — a side-band {@link getCollider} read in
+ * render is invisible to React Compiler's dependency tracking, so the memoized
+ * JSX goes stale while the store (and the 3D scene) move on (the "inspector
+ * doesn't follow the gizmo" bug).
+ */
+export function findCollider(obj: StaticObjectDoc, ref: ColliderRef): PartCollider | undefined {
   const list =
     ref.owner === null
       ? obj.objectColliders
       : obj.placements.find((pl) => pl.instanceId === ref.owner)?.colliders;
   return list?.find((c) => c.id === ref.colliderId);
+}
+
+/** Reads the collider a ref points at, or undefined. NOT for render-time use — see {@link findCollider}. */
+export function getCollider(ref: ColliderRef): PartCollider | undefined {
+  return findCollider($activeObject.get(), ref);
 }
 
 function clampColliderSelection(): void {
@@ -276,9 +286,14 @@ export function setPlacementTransformsBatch(updates: ReadonlyMap<string, Transfo
   }));
 }
 
-/** Reads one placement of the active object. */
+/** PURE placement lookup — the render-time form (see {@link findCollider}'s warning). */
+export function findPlacement(obj: StaticObjectDoc, instanceId: string): Placement | undefined {
+  return obj.placements.find((pl) => pl.instanceId === instanceId);
+}
+
+/** Reads one placement of the active object. NOT for render-time use — see {@link findPlacement}. */
 export function getPlacement(instanceId: string): Placement | undefined {
-  return $activeObject.get().placements.find((pl) => pl.instanceId === instanceId);
+  return findPlacement($activeObject.get(), instanceId);
 }
 
 /**

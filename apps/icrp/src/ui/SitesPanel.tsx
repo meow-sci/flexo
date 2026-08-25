@@ -17,12 +17,15 @@ import {
   removeSite,
   updateSite,
 } from '../state/docStore';
-import { $bodyIds, ensureCorpusLoaded } from '../state/corpusStore';
+import { $bodyIds, $stockLandmarks, ensureCorpusLoaded } from '../state/corpusStore';
 import { defaultDecal, type Site } from '../ksa/siteTypes';
 
 function SiteRow({ site }: { site: Site }) {
   const project = useStore($project);
   const bodyIds = useStore($bodyIds);
+  const stockLandmarks = useStore($stockLandmarks);
+  const stockForBody = stockLandmarks.get(site.bodyId) ?? [];
+  const replacesStock = stockForBody.some((l) => l.id === site.landmarkId);
   const objectOptions = [
     ...project.objects.map((o) => ({ id: o.id, label: o.name })),
     { id: 'CoreLaunchPadA_Prefab_LaunchPadA', label: 'Core launch pad (stock)' },
@@ -94,6 +97,37 @@ function SiteRow({ site }: { site: Site }) {
       >
         {(item) => <ListBoxItem id={item.id}>{item.label}</ListBoxItem>}
       </Select>
+      {stockForBody.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="text-[11px] text-fg-subtle">Replace stock:</span>
+          {stockForBody
+            .filter((l) => l.isLaunchPad)
+            .map((l) => (
+              <button
+                key={l.id}
+                type="button"
+                className="rounded border border-border px-1.5 py-0.5 text-[11px] text-fg-muted hover:bg-wash-hover"
+                onClick={() => {
+                  pushUndo('Retarget stock site');
+                  updateSite(site.id, {
+                    landmarkId: l.id,
+                    latDeg: l.latDeg,
+                    lonDeg: l.lonDeg,
+                    // stock sites already ship a terrain decal
+                    decal: null,
+                  });
+                }}
+              >
+                {l.id}
+              </button>
+            ))}
+        </div>
+      )}
+      {replacesStock && (
+        <div className="text-[11px] text-accent">
+          Replaces the stock site's pad (same landmark id — retargeted, not duplicated).
+        </div>
+      )}
       <label className="flex items-center gap-1.5 text-xs text-fg-muted">
         <input
           type="checkbox"

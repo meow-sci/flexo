@@ -127,6 +127,26 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
                 </code>{' '}
                 — then ENABLE it in Settings → Mods (new mods load disabled).
               </div>
+              <div className="rounded border border-border bg-panel-sunken px-2 py-1 text-xs">
+                <div className="mb-0.5 font-semibold text-fg-muted">Placement in the world</div>
+                {project.sites.length === 0 ? (
+                  <div className="text-warning">
+                    No launch sites — objects export but are placed nowhere. Add sites in the right
+                    sidebar.
+                  </div>
+                ) : (
+                  project.sites.map((s) => {
+                    const obj = project.objects.find((o) => o.id === s.staticObjectId);
+                    return (
+                      <div key={s.id} className="text-fg-muted">
+                        <span className="text-fg">{s.landmarkId}</span> on {s.bodyId} (
+                        {s.latDeg.toFixed(2)}°, {s.lonDeg.toFixed(2)}°) →{' '}
+                        <span className="text-fg">{obj?.name ?? s.staticObjectId}</span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
               {errors.length > 0 && (
                 <div className="rounded border border-danger/40 bg-danger/10 px-2 py-1 text-xs text-danger">
                   {errors.map((e, i) => (

@@ -117,6 +117,17 @@ placement-owned colliders bake the scale before object-level composition
 (`ksa/colliderScale.ts`; per-axis exact for identity-rotated colliders and uniform scales,
 volume-preserving mean otherwise — documented approximation).
 
+## The linkage (object → world)
+
+An exported `<StaticObject>` appears in-game ONLY where a
+`<Landmark IsLaunchPad StaticObject="…">` names it — that landmark is what a **launch
+site** exports as, inside the mod's `<System>`. The export dialog shows every
+site→body→object binding and warns when objects are bound nowhere. A site whose name
+matches an EXISTING landmark on its body (the "Replace stock" chips list them with their
+coordinates) RETARGETS that landmark in place — landmark ids are first-wins per body, so
+appending a duplicate would be silently dropped by the game; retargeted stock sites keep
+Core's terrain decal (ICRP's is skipped).
+
 ## Export
 
 `ksa/modPlan.ts` (pure) plans `mod.toml` + `<Mod>Assets.xml` + `<Mod>GameData.xml`

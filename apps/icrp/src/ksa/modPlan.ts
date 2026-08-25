@@ -299,6 +299,31 @@ export function buildModPlan(
     });
   }
 
+  // THE LINKAGE: an exported <StaticObject> appears in-game only where a
+  // <Landmark IsLaunchPad StaticObject=…> names it. Silence here read as
+  // "the mod does nothing" — say it loudly.
+  if (project.sites.length === 0) {
+    issues.push({
+      severity: 'warning',
+      message:
+        'No launch sites defined — the exported objects are placed NOWHERE in the system. ' +
+        'Add a site in the Launch sites panel (right sidebar) and bind it to an object; ' +
+        'the site becomes a <Landmark StaticObject="…"> on its body.',
+    });
+  } else {
+    const referenced = new Set(project.sites.map((st) => st.staticObjectId));
+    for (const obj of project.objects) {
+      if (!referenced.has(obj.id) && obj.placements.length > 0) {
+        issues.push({
+          severity: 'warning',
+          message:
+            `Object '${obj.name}' is not bound to any launch site — it exports but appears ` +
+            `nowhere. Bind it in the Launch sites panel.`,
+        });
+      }
+    }
+  }
+
   // --- Files --------------------------------------------------------------------
   const assetsName = `${modId}Assets.xml`;
   const gameDataName = `${modId}GameData.xml`;

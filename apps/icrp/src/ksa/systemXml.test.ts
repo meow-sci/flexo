@@ -268,3 +268,60 @@ describe.runIf(hasKsaAssets)('buildSystemXml (live Core tree)', () => {
     expect(result.idRefs).toBe(83 + 1 + 21);
   });
 });
+
+describe('stock-site retargeting (matched landmark Id)', () => {
+  const site: Site = {
+    id: 's1',
+    landmarkId: 'CCSFS LC-39A', // exists in the mini Earth fixture
+    bodyId: 'Earth',
+    latDeg: 11.5,
+    lonDeg: -22.25,
+    staticObjectId: 'icrp_test_object',
+    decal: defaultDecal(),
+  };
+
+  it('retargets in place: no duplicate landmark, StaticObject + coords replaced, decal skipped', () => {
+    const corpus = parseMiniCorpus();
+    const before = parse(readMiniFixture('mini-astronomicals.xml'));
+    const beforeCount = Array.from(before.getElementsByTagName('Landmark')).length;
+
+    const result = buildSystemXml({
+      systemId: 'test_sol',
+      displayName: 'Test',
+      corpus,
+      sites: [site],
+    });
+    expect(result.retargetedLandmarks).toBe(1);
+    expect(result.addedLandmarks).toBe(0);
+
+    const out = parse(result.xml);
+    const landmarks = Array.from(out.getElementsByTagName('Landmark'));
+    // Same landmark COUNT as the fixture (replaced, not appended).
+    expect(landmarks).toHaveLength(beforeCount);
+    const target = landmarks.find((l) => l.getAttribute('Id') === 'CCSFS LC-39A')!;
+    expect(target.getAttribute('StaticObject')).toBe('icrp_test_object');
+    expect(target.getAttribute('IsLaunchPad')).toBe('true');
+    expect(directChildren(target, 'Latitude')[0].getAttribute('Degrees')).toBe('11.5');
+    expect(directChildren(target, 'Longitude')[0].getAttribute('Degrees')).toBe('-22.25');
+    // The retargeted stock site keeps Core's decal — ICRP's is NOT appended.
+    const decals = result.xml.match(/LaunchSite_CCSFS-LC-39A/g) ?? [];
+    expect(decals.length).toBeLessThanOrEqual(1); // only the fixture's own, if present
+  });
+
+  it('a NEW landmark id still appends (and counts as added)', () => {
+    const corpus = parseMiniCorpus();
+    const result = buildSystemXml({
+      systemId: 'test_sol',
+      displayName: 'Test',
+      corpus,
+      sites: [{ ...site, landmarkId: 'Meow LC-1' }],
+    });
+    expect(result.addedLandmarks).toBe(1);
+    expect(result.retargetedLandmarks).toBe(0);
+    const out = parse(result.xml);
+    const target = Array.from(out.getElementsByTagName('Landmark')).find(
+      (l) => l.getAttribute('Id') === 'Meow LC-1',
+    )!;
+    expect(target.getAttribute('StaticObject')).toBe('icrp_test_object');
+  });
+});

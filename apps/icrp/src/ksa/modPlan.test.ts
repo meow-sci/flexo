@@ -200,6 +200,38 @@ describe('buildModPlan', () => {
     expect(plan.files.find((f) => f.path === 'mod.toml')!.data).not.toContain('systems');
   });
 
+  it('warns loudly when objects are placed at no launch site (the linkage)', () => {
+    const system = { fileName: 'x_system.xml', xml: '<System/>' };
+    // Zero sites: the objects exist but appear nowhere.
+    const none = buildModPlan(project(), INDEX, system);
+    expect(none.issues.some((i) => i.message.includes('placed NOWHERE'))).toBe(true);
+    // A bound site silences it for that object; an unbound object still warns.
+    const p = project();
+    p.sites = [
+      {
+        id: 's1',
+        landmarkId: 'Meow LC-1',
+        bodyId: 'Earth',
+        latDeg: 1,
+        lonDeg: 2,
+        staticObjectId: 'icrp_object_1',
+        decal: null,
+      },
+    ];
+    const bound = buildModPlan(p, INDEX, system);
+    expect(bound.issues.some((i) => i.message.includes('placed NOWHERE'))).toBe(false);
+    expect(bound.issues.some((i) => i.message.includes('not bound to any launch site'))).toBe(
+      false,
+    );
+    p.objects.push({ ...structuredClone(p.objects[0]), id: 'icrp_object_2', name: 'Orphan' });
+    const orphan = buildModPlan(p, INDEX, system);
+    expect(
+      orphan.issues.some(
+        (i) => i.severity === 'warning' && i.message.includes("Object 'Orphan' is not bound"),
+      ),
+    ).toBe(true);
+  });
+
   it('serializes systems into mod.toml when provided', () => {
     expect(serializeIcrpModToml('X', ['A.xml'], ['systems/x_system.xml'])).toBe(
       'name = "X"\nassets = [ "A.xml" ]\nsystems = [ "systems/x_system.xml" ]\n',

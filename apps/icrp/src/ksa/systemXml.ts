@@ -100,6 +100,10 @@ export interface SystemXmlResult {
   idRefs: number;
   /** Anonymous `Path`-only elements re-rooted to `../Core/…`. */
   pathRewrites: number;
+  /** Landmarks ADDED as new sites. */
+  addedLandmarks: number;
+  /** Existing (stock) landmarks RETARGETED at an ICRP object (matched by Id). */
+  retargetedLandmarks: number;
 }
 
 /** Applies the P7.00 texture rules to one inline body subtree (see module doc). */
@@ -123,16 +127,31 @@ function rewriteTextureReferences(body: Element, counts: { idRefs: number; pathR
 }
 
 /**
- * Appends the site's `<Landmark>` adjacent to the body's existing landmark run
- * (Core keeps them last before the body's close tag, Astronomicals.xml:1869-1888),
- * or at the end of the body when it has none.
+ * Adds the site's `<Landmark>` — or RETARGETS an existing one. Landmark ids are
+ * first-wins per body (`CelestialTemplate` `_locationLookup`), so a duplicate
+ * would be silently dropped in-game; a site whose `landmarkId` matches an
+ * existing landmark therefore REPLACES that landmark's `StaticObject` (and
+ * IsLaunchPad + coordinates) in place — the "put my pad at CCSFS LC-39A" path.
+ * Returns whether it retargeted (caller counts + typically skips the decal:
+ * stock sites already ship one).
  */
-function appendLandmark(doc: Document, body: Element, site: Site): void {
-  const landmark = buildLandmarkElement(doc, site);
+function appendLandmark(doc: Document, body: Element, site: Site): boolean {
   const existing = directChildren(body, 'Landmark');
+  const match = existing.find((l) => l.getAttribute('Id') === site.landmarkId);
+  if (match) {
+    match.setAttribute('IsLaunchPad', 'true');
+    match.setAttribute('StaticObject', site.staticObjectId);
+    const lat = directChildren(match, 'Latitude')[0];
+    const lon = directChildren(match, 'Longitude')[0];
+    lat?.setAttribute('Degrees', String(site.latDeg));
+    lon?.setAttribute('Degrees', String(site.lonDeg));
+    return true;
+  }
+  const landmark = buildLandmarkElement(doc, site);
   const last = existing[existing.length - 1];
   if (last) body.insertBefore(landmark, last.nextSibling);
   else body.appendChild(landmark);
+  return false;
 }
 
 /**
@@ -241,11 +260,16 @@ export function buildSystemXml(input: SystemXmlInput): SystemXmlResult {
     inlineBodies.set(bodyId, clone);
   }
 
+  let addedLandmarks = 0;
+  let retargetedLandmarks = 0;
   for (const [bodyId, bodySites] of sitesByBody) {
     const body = inlineBodies.get(bodyId)!;
-    for (const site of bodySites) appendLandmark(doc, body, site);
     for (const site of bodySites) {
-      if (site.decal) appendDecal(doc, body, site);
+      const retargeted = appendLandmark(doc, body, site);
+      if (retargeted) retargetedLandmarks++;
+      else addedLandmarks++;
+      // A retargeted stock site already ships Core's terrain decal.
+      if (site.decal && !retargeted) appendDecal(doc, body, site);
     }
   }
 
@@ -261,6 +285,8 @@ export function buildSystemXml(input: SystemXmlInput): SystemXmlResult {
   return {
     xml: '<?xml version="1.0" encoding="utf-8"?>\n' + prettyXml(body) + '\n',
     idRefs: counts.idRefs,
+    addedLandmarks,
+    retargetedLandmarks,
     pathRewrites: counts.pathRewrites,
   };
 }

@@ -30,6 +30,11 @@ export const STATIC_ASSET_FILES = [
 ];
 
 /** One `<StaticSubObject>` piece template, resolved to renderable assets. */
+/** Human-short piece name for UI rows ("CoreLaunchPadA_Subpart_FootpathA" → "FootpathA"). */
+export function pieceShortName(pieceId: string): string {
+  return pieceId.replace(/^Core[^_]*_(Subpart|Prefab)_/, '');
+}
+
 export interface CatalogStaticPiece {
   /** `<StaticSubObject Id>`, e.g. "CoreLaunchPadA_Subpart_FootpathA". */
   id: string;

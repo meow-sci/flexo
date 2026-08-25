@@ -58,6 +58,7 @@ import {
   $overlaysVisible,
   $collidersVisible,
 } from '../state/toolStore';
+import { $mode } from '../state/modeStore';
 import type { PartCollider } from '../ksa/types';
 import type { Transform } from '../ksa/types';
 
@@ -220,6 +221,11 @@ export class StaticScene {
       this.colliderVis.setSelected($colliderSelection.get());
       this.applySelection();
     });
+    this.sub($mode, () => {
+      this.applyColliderVis();
+      this.applyOverlays();
+      this.applySelection();
+    });
   }
 
   /** True while the gizmo is dragging the SELECTED COLLIDER's visual. */
@@ -234,7 +240,14 @@ export class StaticScene {
     // holds one (TransformControls crashes updating a parentless object), then
     // re-attach to the freshly built visual via applySelection.
     if (this.draggingCollider) this.gizmo.attach(null);
-    this.colliderVis.update($activeObject.get(), $pieceIndex.get(), $collidersVisible.get());
+    const collidersMode = $mode.get() === 'colliders';
+    this.colliderVis.update(
+      $activeObject.get(),
+      $pieceIndex.get(),
+      // Colliders mode forces the wires on; the View toggle still works elsewhere.
+      $collidersVisible.get() || collidersMode,
+      collidersMode,
+    );
     this.colliderVis.setSelected($colliderSelection.get());
     if ($colliderSelection.get()) this.applySelection();
   }
@@ -379,7 +392,8 @@ export class StaticScene {
   private applyOverlays(): void {
     const doc = $activeObject.get();
     this.footprints.update(doc);
-    this.footprints.setVisible($overlaysVisible.get());
+    // Sites mode forces the site overlays on.
+    this.footprints.setVisible($overlaysVisible.get() || $mode.get() === 'sites');
   }
 
   // --- Ground/stacking commands (plans/ICRP_PLAN.md P4.01) ----------------------

@@ -49,19 +49,26 @@ export class ColliderVisLayer {
   /** Parent under the basis root (all placement math in KSA frame). */
   readonly group = new THREE.Group();
   private entries: Entry[] = [];
+  private pickable = true;
 
   constructor() {
     this.group.name = 'collider-vis';
   }
 
-  /** Full rebuild (collider counts are small; a diff is not worth the state). */
+  /**
+   * Full rebuild (collider counts are small; a diff is not worth the state).
+   * `pickable` = colliders-mode only: in build mode the wires render (when
+   * toggled on) but never steal clicks from pieces.
+   */
   update(
     doc: StaticObjectDoc,
     pieceIndex: ReadonlyMap<string, CatalogStaticPiece>,
     visible: boolean,
+    pickable: boolean,
   ): void {
     this.clear();
     this.group.visible = visible;
+    this.pickable = pickable;
     if (!visible) return;
 
     const placementFrame = (t: Transform): Transform => ({
@@ -123,7 +130,7 @@ export class ColliderVisLayer {
   ): void {
     const obj = new ColliderObject(collider);
     obj.setCollider(collider, worldOverride ?? undefined);
-    if (pickId) {
+    if (pickId && this.pickable) {
       // Re-point the selectable at OUR owner-encoded id (ColliderObject minted
       // its own from the raw collider id).
       const selectable = { kind: 'collider', id: pickId };

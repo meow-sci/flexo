@@ -7,7 +7,7 @@
 import { useEffect } from 'react';
 import { useStore } from '@nanostores/react';
 import { MapPin, Trash2 } from 'lucide-react';
-import { Button, ListBoxItem, Select, TextField } from '../../../../src/ui/kit';
+import { Button, ListBoxItem, Select, TextField, Tooltip } from '../../../../src/ui/kit';
 import { NumberField } from '../../../../src/ui/NumberField';
 import {
   $project,
@@ -41,14 +41,16 @@ function SiteRow({ site }: { site: Site }) {
           onFocus={() => beginGesture('Rename site')}
           onChange={(v) => updateSite(site.id, { landmarkId: v })}
         />
-        <Button
-          size="sm"
-          variant="ghost"
-          aria-label={`Delete site ${site.landmarkId}`}
-          onPress={() => removeSite(site.id)}
-        >
-          <Trash2 size={12} />
-        </Button>
+        <Tooltip content="Delete this launch site">
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-label={`Delete site ${site.landmarkId}`}
+            onPress={() => removeSite(site.id)}
+          >
+            <Trash2 size={12} />
+          </Button>
+        </Tooltip>
       </div>
       <Select
         aria-label="Body"
@@ -181,9 +183,11 @@ export function SitesPanel() {
       {project.sites.map((site) => (
         <SiteRow key={site.id} site={site} />
       ))}
-      <Button size="sm" variant="ghost" onPress={() => addSite('Earth')}>
-        + New site
-      </Button>
+      <Tooltip content="Add a launch site — a lat/lon on a body where this object spawns">
+        <Button size="sm" variant="ghost" onPress={() => addSite('Earth')}>
+          + New site
+        </Button>
+      </Tooltip>
       <div className="text-[11px] text-fg-subtle">
         Sites export as a self-contained system (a full copy of each body carrying sites — KSA mods
         cannot patch Core bodies). No heading exists: a complex faces up/east/north; rotate its

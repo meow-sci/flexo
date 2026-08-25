@@ -17,7 +17,9 @@
  *   8. body drag — grabbing a piece slides the whole selection on the ground
  *   9. pivot drag — dragging a gizmo arrow moves the group (regression: the
  *      multi-select pivot must stream deltas into the document)
- *  10. colliders — Fit Box on a selected piece opens the collider inspector
+ *  10. workspace modes — '2' enters colliders mode (outliner + authoring
+ *      panels swap in), Fit Box adds a collider, '1' returns to build; the
+ *      layers outliner selects an individual piece per row
  *  11. export — the dialog opens, the Assets preview contains <StaticObject>,
  *      and system-mod mode ALWAYS ships a systems/ scenario
  *
@@ -346,7 +348,12 @@ async function run(page: Page): Promise<void> {
     assert(midMoved !== endMesh || midMoved !== 'null', 'pivot drag: mesh never moved mid-drag')
   })
 
-  await step('collider fit + inspector', async () => {
+  await step('colliders MODE: switch (2), outliner lists, fit + inspector', async () => {
+    // Workspace modes (the UX revamp): collider authoring lives in the
+    // colliders mode's left panel; the right panel is the collider outliner.
+    await page.keyboard.press('2')
+    await delay(200)
+    await page.locator('text=/\\d+ editable · \\d+ built-in/').waitFor({ timeout: 5_000 })
     await page.evaluate(() => {
       const w = window as unknown as {
         __icrp: {
@@ -373,7 +380,29 @@ async function run(page: Page): Promise<void> {
         .objects[0].placements.reduce((n, p) => n + (p.colliders?.length ?? 0), 0)
     })
     assert(own > 0, 'fit added no placement-owned collider')
+    // The new collider shows as a selectable row in the outliner.
+    await page.locator('button[aria-label^="Select collider BoxCollider"]').first()
+      .waitFor({ timeout: 5_000 })
     await page.keyboard.press('Escape') // deselect the collider
+    await page.keyboard.press('1') // back to build mode
+    await delay(200)
+    await page.locator('text=Layers').first().waitFor({ timeout: 5_000 })
+  })
+
+  await step('layers outliner: pieces listed per layer, row click selects one', async () => {
+    // Expand the first layer's piece list and select an individual piece.
+    const expand = page.locator('button[aria-label^="Expand layer"]').first()
+    if (await expand.count()) await expand.click()
+    await delay(150)
+    const row = page.locator('button[aria-label^="Select piece"]').first()
+    await row.waitFor({ timeout: 5_000 })
+    await row.click()
+    await delay(200)
+    const selCount = await page.evaluate(() => {
+      const w = window as unknown as { __icrp: { selection: () => string[] } }
+      return w.__icrp.selection().length
+    })
+    assert(selCount === 1, `outliner row click selected ${selCount}, wanted 1`)
   })
 
   await step('export: Assets preview + always-shipped system scenario', async () => {

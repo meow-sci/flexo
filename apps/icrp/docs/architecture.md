@@ -56,14 +56,34 @@ are localized onto the first imported placement (`three/partImport.ts`) and expo
 them into the object-level `<Collider>` with the placement's CURRENT transform — collision
 follows wherever the pieces are moved. Scale is never composed (F4/I3).
 
-## Shell (flexo-style)
+## Shell (flexo-style): workspace modes
 
 Top **menu bar** (File / Add / Edit / Arrange / View — kit `MenuBar`; menus re-evaluate
-enabled/checked per open) + the tool row. **Left sidebar = details** (selection transform in
-**U/E/N** vocabulary — Up is a first-class field; align/distribute; arrays; object metres).
-**Right sidebar = layers / objects / launch sites.** The catalog lives behind **Add ▸
-Piece / part…** (`A`): one searched dialog over prefabs, static pieces, stock parts (layer
-target select) and vessel pieces.
+enabled/checked per open), the centered **mode switcher**, the tool row and the view
+toggles — every icon control carries a kit `Tooltip` and grows a text label on wide
+screens (mode labels ≥1100px, tool/toggle labels ≥1400px; the switcher's chips use native
+`title` spans because a `ToggleButtonGroup`'s children must stay ToggleButtons for
+react-aria's roving focus).
+
+Three **workspace modes** (`state/modeStore.ts`, keys `1`/`2`/`3` — flexo's answer to
+one-window complexity; view state, never undo-enrolled) swap BOTH sidebars:
+
+| Mode          | Left                                                        | Right                              | Scene                                             |
+| ------------- | ----------------------------------------------------------- | ---------------------------------- | ------------------------------------------------- |
+| **build**     | details (U/E/N transform, align, arrays, object metres)     | layers **with piece outliner**, objects, sites | colliders visible only via `C`, never pickable |
+| **colliders** | authoring (Add/Fit per shape) + collider inspector          | **collider outliner**, objects     | collider wires FORCED visible and pickable        |
+| **sites**     | object metres + how-sites-work explainer                    | launch sites, objects              | site overlays forced visible                      |
+
+`setMode` is the single choreography point (leaving colliders clears the collider
+selection so a hidden selection can't hold the gizmo). Collider PICKING is colliders-mode
+only — in build mode the wires (when toggled) never steal clicks from pieces.
+
+**Phone** (`useIsPhone`): the sidebars unmount and become overlay **drawers** toggled from
+the top bar's far-right buttons (backdrop tap closes); the top bar itself scrolls
+horizontally. Desktop is the primary target — phone is kept *usable*, not featureful.
+
+The catalog lives behind **Add ▸ Piece / part…** (`A`): one searched dialog over prefabs,
+static pieces, stock parts (layer target select) and vessel pieces.
 
 **The Add browser** reuses flexo's catalog-browser shell (`BrowserPopup` cover modal +
 draggable list | preview / details splits + preview-first gestures): kind CHIPS
@@ -84,7 +104,11 @@ the same undo step — while below-grade pieces (terrain skirts) are left alone.
 
 **Layers**: visibility (eye), **lock** (padlock — rendered but unpickable/undraggable),
 **isolate** (solo, second press restores), inline rename (double-click), select-contents,
-move-selection-here, active layer for new placements.
+move-selection-here, active layer for new placements. Each layer **expands (chevron) into
+a piece outliner** — click a row to select that single placement, ⌘/Ctrl/Shift-click to
+toggle it into the selection — so individual pieces are reachable without viewport
+clicking while the layer-level controls keep whole-group select/move. The active layer
+starts expanded.
 
 **Moving things** (three ways, all streaming into the document with one undo step):
 **grab-anywhere** — with the translate tool, pointer-dragging a piece BODY slides the whole
@@ -118,7 +142,10 @@ Three homes, one visual language (ColliderVisLayer on flexo's ColliderObject —
   details panel edits position/rotation/size per shape (`colliderSizeLabels`); Add and
   **Fit** buttons author them — Fit wraps the selected pieces' sampled geometry with a
   Box/Cylinder/Sphere/Capsule (flexo's `fitCollider`) and attaches to the first selected
-  piece. `C` toggles visibility.
+  piece (with nothing selected, Add creates an object-level collider). `C` toggles
+  visibility anywhere; **Colliders mode** (`2`) forces the wires visible + pickable and
+  swaps in the authoring/inspector panels (left) and the collider **outliner** (right:
+  object-level, per-placement, and read-only built-in groups).
 
 **Scaling just works** (no warnings): a scaled placement whose piece has template
 colliders is re-pointed at an auto-minted VARIANT `<StaticSubObject>` with the scale baked

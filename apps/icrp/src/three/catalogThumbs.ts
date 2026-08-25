@@ -136,19 +136,24 @@ export function catalogThumbSignature(entries: readonly PreviewEntry[]): string 
  * sources so every thumb is a FRESH data-URL render.
  */
 export function requestCatalogThumb(id: string, entries: PreviewEntry[], force = false): void {
-  if (requested.has(id) || entries.length === 0) return;
-  requested.add(id);
+  if (entries.length === 0) return;
   const sig = catalogThumbSignature(entries);
-  void (async () => {
-    if (force) {
-      queue.push({ id, entries, sig });
-      for (const entry of entries) {
-        void getSubPartGeometry(entry.piece.atlasUrl, entry.piece.meshNodeName).catch(() => {});
-        void getStaticMaterial(entry.piece).catch(() => {});
-      }
-      schedule();
-      return;
+  if (force) {
+    // Fresh render even if the palette already resolved this id from the
+    // manifest or IndexedDB (the generator must never re-save a stale source).
+    if (queue.some((j) => j.id === id)) return;
+    requested.add(id);
+    queue.push({ id, entries, sig });
+    for (const entry of entries) {
+      void getSubPartGeometry(entry.piece.atlasUrl, entry.piece.meshNodeName).catch(() => {});
+      void getStaticMaterial(entry.piece).catch(() => {});
     }
+    schedule();
+    return;
+  }
+  if (requested.has(id)) return;
+  requested.add(id);
+  void (async () => {
     // 1. Pre-generated PNG with a matching signature → static URL, no GPU.
     await manifestReady;
     if (manifest?.[id] === sig) {

@@ -46,6 +46,19 @@ bun copy-ksa-assets-to-private-repo.ts --target <dir>
   another `vite build apps/partpreview` (which empties the outDir). Flags are in
   the script header; feature docs:
   [`docs/wiki-part-preview.md`](../docs/wiki-part-preview.md#part-thumbnails).
+- `generate-icrp-thumbs.ts` (`pnpm thumbs:icrp`) — pre-renders the ICRP Library
+  palette's 96 px PNG thumbnails into `public/thumbs-icrp/` (gitignored —
+  licensed-asset renders) through the app's own pipeline in headless Chromium.
+  **Incremental**: `inputs.json` records a content hash per entry (catalog
+  signature + sha1 of every referenced GLB/texture under `KSA_ASSETS_DIR`);
+  reruns skip unchanged entries, remember failures, and prune orphans — a no-op
+  rerun takes seconds. Run after an asset sync; the app live-renders anything
+  missing, so this is an optimization, never a requirement.
+- `smoke-icrp-journey.ts` (`pnpm smoke:icrp-journey`) — the ICRP tank-farm
+  end-user journey asserted in a real browser (library palette add → magnetic
+  box-flush + connector-stack drags to exact coordinates → ⇧W re-orientation →
+  arrow nudge). Complements `smoke-icrp.ts` (`pnpm smoke:icrp`), which covers
+  the editor's feature surface step-by-step.
 
 ### Bun (legacy — do not add more)
 

@@ -43,8 +43,10 @@ declare global {
       setPlacementTransform: (id: string, t: Transform) => void;
       /** What the last body-drag move snapped with ('connector' | 'box' | null). */
       lastSnapKind: () => string | null;
-      /** Forces fresh renders of EVERY library thumb; returns [{id, sig}] (generator). */
-      thumbAll: () => { id: string; sig: string }[];
+      /** Library thumb inputs, NO rendering: [{id, sig, urls}] (generator). */
+      thumbInputs: () => { id: string; sig: string; urls: string[] }[];
+      /** Forces fresh renders of just these ids; returns how many were queued. */
+      thumbRender: (ids: string[]) => number;
       /** Current thumb map (id → data/static URL). */
       thumbs: () => Record<string, string>;
     };
@@ -72,7 +74,7 @@ export function installDebugHandle(): void {
     updateCollider: (ref: ColliderRef, patch: Partial<PartCollider>) => updateCollider(ref, patch),
     setPlacementTransform: (id: string, t: Transform) => setPlacementTransform(id, t),
     lastSnapKind: () => getScene()?.debugLastSnapKind() ?? null,
-    thumbAll: () => {
+    thumbInputs: () => {
       const entries = buildLibraryEntries({
         prefabs: $staticObjects.get(),
         parts: $stockParts.get(),
@@ -82,9 +84,37 @@ export function installDebugHandle(): void {
       const index = $pieceIndex.get();
       return entries.map((entry) => {
         const previews = previewEntriesFor(entry, index);
-        requestCatalogThumb(entry.id, previews, true);
-        return { id: entry.id, sig: catalogThumbSignature(previews) };
+        const urls = new Set<string>();
+        for (const e of previews) {
+          urls.add(e.piece.atlasUrl);
+          for (const u of [
+            e.piece.diffuseUrl,
+            e.piece.normalUrl,
+            e.piece.aoRoughMetalUrl,
+            e.piece.alphaUrl,
+          ]) {
+            if (u) urls.add(u);
+          }
+        }
+        return { id: entry.id, sig: catalogThumbSignature(previews), urls: [...urls].sort() };
       });
+    },
+    thumbRender: (ids: string[]) => {
+      const entries = buildLibraryEntries({
+        prefabs: $staticObjects.get(),
+        parts: $stockParts.get(),
+        staticPieces: $staticPieces.get(),
+        vesselPieces: $vesselPieces.get(),
+      });
+      const index = $pieceIndex.get();
+      const want = new Set(ids);
+      let queued = 0;
+      for (const entry of entries) {
+        if (!want.has(entry.id)) continue;
+        requestCatalogThumb(entry.id, previewEntriesFor(entry, index), true);
+        queued++;
+      }
+      return queued;
     },
     thumbs: () => $catalogThumbs.get(),
   };

@@ -88,7 +88,9 @@ grounded and selected with the Move tool armed. Parts land exploded on their OWN
 layer, which makes **double-click in the viewport = select the whole part** (it selects
 the piece's layer). Thumbnails are 96 px PNGs from `three/catalogThumbs.ts` — three
 sources, cheapest wins: build-time statics (`pnpm thumbs:icrp` →
-`public/thumbs-icrp/` + signature manifest, gitignored — licensed-asset renders),
+`public/thumbs-icrp/` + signature manifest, gitignored — licensed-asset renders;
+INCREMENTAL — reruns hash each entry's inputs (catalog signature + asset file
+contents) and skip unchanged/known-failed entries, so only an asset update pays),
 an IndexedDB session cache (the dev answer: first session renders live, later sessions
 are instant), then a live one-per-idle-tick shared offscreen renderer. The Add dialog
 (**Add ▸ Piece / part…**, `A`) stays for big-preview browsing with a layer-target

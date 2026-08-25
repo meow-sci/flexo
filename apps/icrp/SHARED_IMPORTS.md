@@ -11,19 +11,23 @@ extraction — everything listed here would become `packages/*`.
 
 ## Imported (shared) modules
 
-| Module                          | Used for                                                                |
-| ------------------------------- | ----------------------------------------------------------------------- |
-| `src/assetBase.ts`              | shared-asset base URL (`VITE_ASSET_BASE`)                               |
-| `src/ksa/catalog.ts`            | `toUrl`, `fetchXmlFile`, `parseAssetsFile` (vessel SubParts as pieces)  |
-| `src/ksa/partXmlParser.ts`      | `collidersFromElement`, transform/vec readers, RawXmlNode capture       |
-| `src/ksa/partXmlSerializer.ts`  | `prettyXml`, transform/collider/distance element builders               |
-| `src/ksa/formatG6.ts`           | .NET G6 number formatting                                               |
-| `src/ksa/types.ts`              | `Vec3`, `EulerXYZ`, `Transform`, `PartCollider`, `RawXmlNode`           |
-| `src/three/coords.ts`           | `applyPlacement` / `readPlacementTransform` (`EULER_ORDER 'ZYX'`)       |
-| `src/ksa/colliderSize.ts`       | `colliderDimensions` (collider scale ⇄ Length/Radius elements)          |
-| `src/ksa/ksaTestAssets.ts`      | vendored-fixture access (tests only)                                    |
-| `src/state/partCatalogStore.ts` | the stock vessel `<Part>` catalog (shared store, partpreview precedent) |
-| `src/ksa/partCatalog.ts`        | `CatalogPart` type (stock-part import)                                  |
+| Module                           | Used for                                                                |
+| -------------------------------- | ----------------------------------------------------------------------- |
+| `src/assetBase.ts`               | shared-asset base URL (`VITE_ASSET_BASE`)                               |
+| `src/ksa/catalog.ts`             | `toUrl`, `fetchXmlFile`, `parseAssetsFile` (vessel SubParts as pieces)  |
+| `src/ksa/partXmlParser.ts`       | `collidersFromElement`, transform/vec readers, RawXmlNode capture       |
+| `src/ksa/partXmlSerializer.ts`   | `prettyXml`, transform/collider/distance element builders               |
+| `src/ksa/formatG6.ts`            | .NET G6 number formatting                                               |
+| `src/ksa/types.ts`               | `Vec3`, `EulerXYZ`, `Transform`, `PartCollider`, `RawXmlNode`           |
+| `src/three/coords.ts`            | `applyPlacement` / `readPlacementTransform` (`EULER_ORDER 'ZYX'`)       |
+| `src/ksa/colliderSize.ts`        | `colliderDimensions` (collider scale ⇄ Length/Radius elements)          |
+| `src/ksa/ksaTestAssets.ts`       | vendored-fixture access (tests only)                                    |
+| `src/state/partCatalogStore.ts`  | the stock vessel `<Part>` catalog (shared store, partpreview precedent) |
+| `src/ksa/partCatalog.ts`         | `CatalogPart` type (stock-part import)                                  |
+| `src/ui/BrowserShell.tsx`        | catalog-browser cover modal + list/preview/details splits               |
+| `src/ui/build/browserCommon.tsx` | Add/Add&Close commit row, result cap                                    |
+| `src/ui/LoadProgress.tsx`        | preview-pane load progress (fed by the shared trackedLoad pipeline)     |
+| `src/ui/fuzzyMatch.ts`           | fuzzy search                                                            |
 
 ## Copied (not imported) modules
 

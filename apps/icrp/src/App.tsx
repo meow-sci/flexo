@@ -68,6 +68,9 @@ export function App() {
       } else if (e.key === 'c') {
         $collidersVisible.set(!$collidersVisible.get());
       } else if (e.key === 'a') {
+        // preventDefault: the dialog autofocuses its search field, and the same
+        // keystroke would otherwise type an 'a' into it.
+        e.preventDefault();
         $addOpen.set(true);
       } else if (mod && e.key === 'ArrowDown' && e.shiftKey) {
         e.preventDefault();

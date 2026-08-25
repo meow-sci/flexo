@@ -65,6 +65,16 @@ enabled/checked per open) + the tool row. **Left sidebar = details** (selection 
 Piece / part…** (`A`): one searched dialog over prefabs, static pieces, stock parts (layer
 target select) and vessel pieces.
 
+**The Add browser** reuses flexo's catalog-browser shell (`BrowserPopup` cover modal +
+draggable list | preview / details splits + preview-first gestures): kind CHIPS
+(all-active → click solos; solo → click restores), fuzzy search, single click = select +
+**3D preview** (`CatalogPreviewViewport` renders any entry — piece, prefab, or whole stock
+part — upright under the KSA basis with the editor's materials) + details pane
+(mesh/material/colliders/terrain/alpha for pieces; placements/metres for prefabs;
+tags/importable-count/layer target for parts); commit = double-click, Enter, or
+Add / Add & Close. NOTE: the kit Modal's default `center` variant clamps to `max-w-md` —
+any dialog with wide content must pick `fullscreen`/`cover` (the Export dialog bug).
+
 **Vertical control**: the translate gizmo ALWAYS shows the vertical arrow (it is the
 elevation handle — ground lock only constrains rotation to about-up); newly added pieces
 and imported parts **auto-drop to the ground** once their meshes load (the group is lifted

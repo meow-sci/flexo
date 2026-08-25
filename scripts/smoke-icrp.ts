@@ -89,6 +89,18 @@ async function run(page: Page): Promise<void> {
     await page.getByRole('searchbox', { name: 'Search catalog' }).waitFor({ timeout: 10_000 })
   }
 
+  /**
+   * Preview-first commit: click the row (select + preview), then Add & Close.
+   * Rows are GridList rows named by their title (react-aria textValue).
+   */
+  async function addFromCatalog(rowName: RegExp): Promise<void> {
+    await openAdd()
+    const row = page.getByRole('row', { name: rowName }).first()
+    await row.waitFor({ timeout: 20_000 })
+    await row.click()
+    await page.getByRole('button', { name: 'Add & Close' }).click()
+  }
+
   await step('boot: canvas + menubar + toolbar', async () => {
     await page.waitForSelector('canvas', { timeout: 30_000 })
     for (const name of ['File', 'Add', 'Edit', 'Arrange', 'View']) {
@@ -99,20 +111,30 @@ async function run(page: Page): Promise<void> {
     }
   })
 
-  await step('catalog: the Add dialog lists prefab + pieces', async () => {
+  await step('catalog: the Add dialog lists prefab + pieces, chips filter, preview on click', async () => {
     await page.locator('text=/· \\d+ placements/').waitFor({ timeout: 20_000 })
     await openAdd()
     await page
-      .getByRole('button', { name: /CoreLaunchPadA_Prefab_LaunchPadA/ })
+      .getByRole('row', { name: /CoreLaunchPadA_Prefab_LaunchPadA/ })
       .waitFor({ timeout: 20_000 })
-    await page.getByRole('button', { name: /BaseGrassA/ }).first().waitFor({ timeout: 10_000 })
+    // Chips narrow the list to one kind.
+    await page.getByRole('button', { name: 'Static pieces', exact: true }).click()
+    await page.getByRole('row', { name: /BaseGrassA/ }).first().waitFor({ timeout: 10_000 })
+    assert(
+      (await page.getByRole('row', { name: /CoreLaunchPadA_Prefab_LaunchPadA/ }).count()) === 0,
+      'chip filter did not hide prefabs',
+    )
+    // Single click = select + PREVIEW (a canvas appears in the preview pane).
+    await page.getByRole('row', { name: /BaseGrassA/ }).first().click()
+    await delay(600)
+    assert((await page.locator('canvas').count()) >= 2, 'no preview canvas after selecting a row')
+    await page.getByRole('button', { name: 'Static pieces', exact: true }).click() // restore
     await page.keyboard.press('Escape')
   })
 
-  await step('place a piece', async () => {
+  await step('place a piece (row select + Add & Close)', async () => {
     const before = await placementCount(page)
-    await openAdd()
-    await page.getByRole('button', { name: /PadGrateB/ }).first().click()
+    await addFromCatalog(/PadGrateB/)
     await delay(300)
     assert((await placementCount(page)) === before + 1, 'placement count did not grow')
   })
@@ -126,15 +148,13 @@ async function run(page: Page): Promise<void> {
   })
 
   await step('import the Core pad prefab (16 placements)', async () => {
-    await openAdd()
-    await page.getByRole('button', { name: /CoreLaunchPadA_Prefab_LaunchPadA/ }).click()
+    await addFromCatalog(/CoreLaunchPadA_Prefab_LaunchPadA/)
     await delay(1000)
     assert((await placementCount(page)) === 16, 'prefab import did not yield 16 placements')
   })
 
   await step('radial array grows the count', async () => {
-    await openAdd()
-    await page.getByRole('button', { name: /PipeSupportA/ }).first().click() // adds + selects
+    await addFromCatalog(/PipeSupportA/) // adds + selects
     await delay(300)
     const before = await placementCount(page)
     await page.getByRole('button', { name: 'radial', exact: true }).click()
@@ -149,7 +169,8 @@ async function run(page: Page): Promise<void> {
     await openAdd()
     await page.getByRole('searchbox', { name: 'Search catalog' }).fill('LF1W1HA')
     await delay(300)
-    await page.locator('button', { hasText: /LF1W1HA/ }).first().click()
+    await page.getByRole('row', { name: /LF1W1HA/ }).first().click()
+    await page.getByRole('button', { name: 'Add & Close' }).click()
     await delay(1500)
     assert((await placementCount(page)) > before, 'part import added no placements')
     await page.getByRole('button', { name: /Select contents of LF1W1HA/ }).waitFor({

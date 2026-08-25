@@ -99,10 +99,12 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Modal isOpen onOpenChange={(open) => !open && onClose()} isDismissable>
-      <Dialog className="w-[44rem] max-w-[90vw] p-4">
+    // `fullscreen` variant: the kit's default `center` modal clamps to max-w-md,
+    // which made 44rem content overflow the rendered popup (the reported bug).
+    <Modal isOpen onOpenChange={(open) => !open && onClose()} isDismissable variant="fullscreen">
+      <Dialog className="flex min-h-0 flex-1 flex-col p-4">
         <DialogHeader title="Export KSA mod" onClose={onClose} />
-        <div className="flex flex-col gap-3 overflow-y-auto">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
           <TextField
             label="Mod name"
             value={project.modName}
@@ -206,7 +208,7 @@ export function ExportDialog({ onClose }: { onClose: () => void }) {
                 ))}
               </div>
               {preview && (
-                <pre className="max-h-72 overflow-auto rounded bg-panel-sunken p-2 text-[11px] leading-4 text-fg-muted">
+                <pre className="min-h-0 flex-1 overflow-auto rounded bg-panel-sunken p-2 text-[11px] leading-4 text-fg-muted">
                   {preview.data}
                 </pre>
               )}
